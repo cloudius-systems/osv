@@ -65,4 +65,5 @@ start32:
     ljmpl $8, $start64
 .code64
 start64:
-    jmp start64
+    jmp main
+
