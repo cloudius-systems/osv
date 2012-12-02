@@ -18,4 +18,8 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	$(CXX) $(CXXFLAGS) -nostartfiles -static -nodefaultlibs -o $@ \
 	    $(^:%.ld=-T %.ld) -lsupc++
 
+clean:
+	find -name '*.[od]' | xargs rm
+	rm -f loader.elf loader.bin
+
 -include $(shell find -name '*.d')
