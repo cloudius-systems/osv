@@ -21,5 +21,8 @@ void VGAConsole::newline()
 	    buffer[row*ncols+col] = buffer[(row+1)*ncols+col];
 	}
     }
+    for (unsigned col = 0; col < ncols; ++col) {
+	buffer[(nrows - 1) * ncols + col] = 0x700;
+    }
     _col = 0;
 }
