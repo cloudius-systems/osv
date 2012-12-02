@@ -1,7 +1,7 @@
 #include "vga.hh"
 
 volatile unsigned short * const VGAConsole::buffer
-= reinterpret_cast<volatile unsigned short *>(0xa0000);
+= reinterpret_cast<volatile unsigned short *>(0xb8000);
 
 
 void VGAConsole::write(const char *str)
