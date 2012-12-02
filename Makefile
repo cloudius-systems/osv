@@ -1,5 +1,8 @@
 
-CXXFLAGS = -std=gnu++11 -lstdc++
+CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS)
+CFLAGS = $(autodepend)
+
+autodepend = -MD $(@.o=.d) -MT $@
 
 all: loader.bin
 
@@ -15,3 +18,4 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	$(CXX) $(CXXFLAGS) -nostartfiles -static -nodefaultlibs -o $@ \
 	    $(^:%.ld=-T %.ld) -lsupc++
 
+-include $(shell find -name '*.d')
