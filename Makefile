@@ -9,7 +9,10 @@ all: loader.bin
 loader.bin: loader.elf
 	objcopy -O elf32-i386 $^ $@
 
+fs = fs/fs.o
+
 drivers = drivers/vga.o
+drivers += $(fs)
 
 libc = libc/string/strcmp.o
 
