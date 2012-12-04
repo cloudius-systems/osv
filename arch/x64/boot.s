@@ -30,14 +30,24 @@ ident_pt_l2:
     .endr
 
 gdt_desc:
-    .short 0x1f
-    .long gdt-8
+    .short gdt_end - gdt - 1
+    .long gdt
 
 .align 8
-gdt:
+gdt = . - 8
     .quad 0x00af9b000000ffff # 64-bit code segment
     .quad 0x00cf93000000ffff # 64-bit data segment
     .quad 0x00cf9b000000ffff # 32-bit code segment
+tss_desc:
+    .quad 0x0000890000000067 # tss (two entries)
+    .quad 0
+gdt_end = .
+
+tss:	.rept 0x67
+	.byte 0
+	.endr
+
+tr:	.word     tss_desc - gdt
 
 .text
 
@@ -65,5 +75,11 @@ start32:
     ljmpl $8, $start64
 .code64
 start64:
+    mov $tss, %edx
+    movw %dx, tss_desc + 2
+    shr $16, %edx
+    movb %dl, tss_desc + 4
+    movb %dh, tss_desc + 7
+    ltr tr
     jmp main
 
