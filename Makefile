@@ -1,6 +1,6 @@
 
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS)
-CFLAGS = $(autodepend)
+CFLAGS = $(autodepend) -g -Wall
 
 autodepend = -MD $(@.o=.d) -MT $@
 
@@ -9,7 +9,7 @@ all: loader.bin
 loader.bin: loader.elf
 	objcopy -O elf32-i386 $^ $@
 
-fs = fs/fs.o
+fs = fs/fs.o fs/bootfs.o bootfs.o
 
 drivers = drivers/vga.o
 drivers += $(fs)
@@ -17,9 +17,19 @@ drivers += $(fs)
 libc = libc/string/strcmp.o
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
-		$(libc)
+		$(libc) bootfs.bin
 	$(CXX) $(CXXFLAGS) -nostartfiles -static -nodefaultlibs -o $@ \
-	    $(^:%.ld=-T %.ld) -lsupc++
+	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
+	     -lsupc++ libunwind.a -lstdc++
+
+jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
+jdkbase := $(jdk-jni.h:%/include/jni.h=%)
+
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest
+	scripts/mkbootfs.py -o $@ -d $@.d -m bootfs.manifest \
+		-D jdkbase=$(jdkbase)
+
+bootfs.o: bootfs.bin
 
 clean:
 	find -name '*.[od]' | xargs rm
