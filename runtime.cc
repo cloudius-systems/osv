@@ -8,8 +8,22 @@
 #include <unistd.h>
 #include <libunwind.h>
 #include <link.h>
+#include <stdio.h>
+#include <sys/poll.h>
+#include <sys/ioctl.h>
+#include <errno.h>
+#include <sys/uio.h>
+#include <wchar.h>
+#include <locale.h>
+#include <libintl.h>
+#include <ctype.h>
+#include <wctype.h>
+#include <langinfo.h>
+#include <stdarg.h>
 
 typedef unsigned char __guard;
+
+#define __alias(x) __attribute__((alias(x)))
 
 extern "C" {
     void __cxa_pure_virtual(void);
@@ -22,6 +36,47 @@ extern "C" {
                            char *path, size_t pathlen);
     int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
                               char *buf, size_t buf_len, unw_word_t *offp);
+    int __fxstat(int ver, int fd, struct stat *buf);
+    int __fxstat64(int ver, int fd, struct stat64 *buf);
+    void __stack_chk_fail(void);
+    void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function);
+    void __freelocale(__locale_t __dataset) __THROW;
+    __locale_t __duplocale(__locale_t __dataset) __THROW;
+    __locale_t __newlocale(int __category_mask, __const char *__locale,
+			   __locale_t __base) __THROW;
+    __locale_t __uselocale(__locale_t __dataset) __THROW;
+    char *__setlocale(int category, const char *locale);
+    char *setlocale(int category, const char *locale) __alias("__setlocale");
+    double __strtod_l(__const char *__restrict __nptr,
+		      char **__restrict __endptr, __locale_t __loc)
+	__THROW __nonnull ((1, 3));
+    int __iswctype_l(wint_t __wc, wctype_t __desc, __locale_t __locale)
+	__THROW;
+    wctype_t __wctype_l(__const char *__property, __locale_t __locale)
+	__THROW;
+    float __strtof_l(__const char *__restrict __nptr,
+		     char **__restrict __endptr, __locale_t __loc)
+	__THROW __nonnull((1, 3)) __wur;
+    char *__nl_langinfo_l(nl_item __item, __locale_t __l);
+    wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW;
+    wint_t __towupper_l(wint_t __wc, __locale_t __locale) __THROW;
+    int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
+		    __locale_t __loc) __THROW;
+    int __strcoll_l(__const char *__s1, __const char *__s2, __locale_t __l)
+	__THROW __attribute_pure__ __nonnull((1, 2, 3));
+    size_t __wcsftime_l(wchar_t *__restrict __s, size_t __maxsize,
+			__const wchar_t *__restrict __format,
+			__const struct tm *__restrict __tp,
+			__locale_t __loc) __THROW;
+    size_t __strftime_l(char *__restrict __s, size_t __maxsize,
+			__const char *__restrict __format,
+			__const struct tm *__restrict __tp,
+			__locale_t __loc) __THROW;
+    size_t __strxfrm_l(char *__dest, __const char *__src, size_t __n,
+		       __locale_t __l) __THROW __nonnull ((2, 4));
+    size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
+			 size_t __n, __locale_t __loc) __THROW;
+
 }
 
 void *__dso_handle;
@@ -38,8 +93,11 @@ void (*debug_write)(const char *msg) = ignore_debug_write;
 	    _x = true;					\
 	    debug_write("WARNING: unimplemented " msg);	\
 	}						\
+	abort();					\
     } while (0)
 
+
+#define UNIMPL(decl) decl { UNIMPLEMENTED(#decl); }
 
 void abort()
 {
@@ -257,3 +315,203 @@ int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
 {
     return 0;
 }
+
+FILE* stdin;
+FILE* stdout;
+FILE* stderr;
+
+const wchar_t* wmemchr(const wchar_t *s, wchar_t c, size_t n)
+{
+    UNIMPLEMENTED("wmemchr");
+}
+
+int ioctl(int fd, unsigned long request, ...)
+{
+    UNIMPLEMENTED("ioctl");
+}
+
+off64_t lseek64(int fd, off64_t offset, int whence)
+{
+    UNIMPLEMENTED("lseek64");
+}
+
+int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    UNIMPLEMENTED("poll");
+}
+
+int __fxstat(int ver, int fd, struct stat *buf)
+{
+    UNIMPLEMENTED("__fxstat");
+}
+
+int __fxstat64(int ver, int fd, struct stat64 *buf)
+{
+    UNIMPLEMENTED("__fxstat");
+}
+
+int *__errno_location()
+{
+    UNIMPLEMENTED("__errno_location");
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+{
+    UNIMPLEMENTED("readv");
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+    UNIMPLEMENTED("writev");
+}
+
+ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+    UNIMPLEMENTED("preadv");
+}
+
+ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+    UNIMPLEMENTED("pwritev");
+}
+
+ssize_t read(int fd, void *buf, size_t count)
+{
+    UNIMPLEMENTED("read");
+}
+
+int fclose(FILE *fp)
+{
+    UNIMPLEMENTED("fclose");
+}
+
+int fileno(FILE *fp)
+{
+    UNIMPLEMENTED("fileno");
+}
+
+FILE *fdopen(int fd, const char *mode)
+{
+    UNIMPLEMENTED("fdopen");
+}
+
+int fflush(FILE *fp)
+{
+    UNIMPLEMENTED("fflush");
+}
+
+ssize_t write(int fd, const void *buf, size_t count)
+{
+    UNIMPLEMENTED("write");
+}
+
+int fgetc(FILE *stream)
+{
+    UNIMPLEMENTED("fgetc");
+}
+
+char *fgets(char *s, int size, FILE *stream)
+{
+    UNIMPLEMENTED("fgets");
+}
+
+#undef getc
+int getc(FILE *stream)
+{
+    UNIMPLEMENTED("getc");
+}
+
+int getchar(void)
+{
+    UNIMPLEMENTED("getchar");
+}
+
+char *gets(char *s)
+{
+    UNIMPLEMENTED("gets");
+}
+
+int ungetc(int c, FILE *stream)
+{
+    UNIMPLEMENTED("ungetc");
+}
+
+UNIMPL(int fputc(int c, FILE *stream))
+UNIMPL(int fputs(const char *s, FILE *stream))
+#undef putc
+UNIMPL(int putc(int c, FILE *stream))
+UNIMPL(int putchar(int c))
+UNIMPL(int puts(const char *s))
+UNIMPL(size_t wcslen(const wchar_t *s))
+UNIMPL(int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n))
+UNIMPL(wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, size_t n))
+UNIMPL(int setvbuf(FILE *stream, char *buf, int mode, size_t size))
+UNIMPL(size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream))
+UNIMPL(size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream))
+UNIMPL(wint_t fgetwc(FILE *stream))
+UNIMPL(wint_t getwc(FILE *stream))
+UNIMPL(wint_t ungetwc(wint_t wc, FILE *stream))
+
+UNIMPL(int fseeko64(FILE *stream, off64_t offset, int whence))
+UNIMPL(wchar_t *wmemmove(wchar_t *dest, const wchar_t *src, size_t n))
+UNIMPL(size_t mbrtowc(wchar_t *pwc, const char *s, size_t n, mbstate_t *ps))
+UNIMPL(wchar_t *wmemset(wchar_t *wcs, wchar_t wc, size_t n))
+UNIMPL(off64_t ftell(FILE *stream))
+UNIMPL(FILE *fopen64(const char *path, const char *mode))
+UNIMPL(off64_t ftello64(FILE *stream))
+UNIMPL(wint_t fputwc(wchar_t wc, FILE *stream))
+UNIMPL(wint_t putwc(wchar_t wc, FILE *stream))
+UNIMPL(int wctob(wint_t c))
+UNIMPL(size_t wcsnrtombs(char *dest, const wchar_t **src, size_t nwc,
+                         size_t len, mbstate_t *ps))
+UNIMPL(wint_t btowc(int c))
+UNIMPL(size_t wcrtomb(char *s, wchar_t wc, mbstate_t *ps))
+UNIMPL(void __stack_chk_fail(void))
+UNIMPL(void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function))
+UNIMPL(void __freelocale(__locale_t __dataset) __THROW)
+UNIMPL(__locale_t __duplocale(__locale_t __dataset) __THROW)
+UNIMPL(__locale_t __newlocale(int __category_mask, __const char *__locale,
+			      __locale_t __base) __THROW)
+UNIMPL(long double strtold_l(__const char *__restrict __nptr,
+			     char **__restrict __endptr, __locale_t __loc))
+UNIMPL(double __strtod_l(__const char *__restrict __nptr,
+			 char **__restrict __endptr, __locale_t __loc)
+			 __THROW)
+UNIMPL(size_t mbsnrtowcs(wchar_t *dest, const char **src,
+                         size_t nms, size_t len, mbstate_t *ps))
+UNIMPL(size_t mbsrtowcs(wchar_t *dest, const char **src,
+			size_t len, mbstate_t *ps))
+UNIMPL(__locale_t __uselocale (__locale_t __dataset) __THROW)
+UNIMPL(char *__setlocale(int category, const char *locale))
+UNIMPL(char* textdomain (const char* domainname))
+UNIMPL(char* bindtextdomain (const char * domainname, const char * dirname))
+UNIMPL(int __iswctype_l(wint_t __wc, wctype_t __desc, __locale_t __locale)
+       __THROW)
+UNIMPL(float __strtof_l(__const char *__restrict __nptr,
+			char **__restrict __endptr, __locale_t __loc)
+       __THROW)
+UNIMPL(char *__nl_langinfo_l(nl_item __item, __locale_t __l))
+UNIMPL(int vsnprintf(char *str, size_t size, const char *format, va_list ap))
+UNIMPL(wctype_t __wctype_l(__const char *__property, __locale_t __locale)
+       __THROW)
+UNIMPL(size_t __ctype_get_mb_cur_max (void) __THROW)
+UNIMPL(wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW)
+UNIMPL(int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
+		       __locale_t __loc) __THROW)
+UNIMPL(wint_t __towupper_l(wint_t __wc, __locale_t __locale) __THROW)
+
+UNIMPL(int __strcoll_l(__const char *__s1, __const char *__s2, __locale_t __l)
+       __THROW)
+UNIMPL(size_t __wcsftime_l (wchar_t *__restrict __s, size_t __maxsize,
+			    __const wchar_t *__restrict __format,
+			    __const struct tm *__restrict __tp,
+			    __locale_t __loc) __THROW)
+UNIMPL(size_t __strftime_l (char *__restrict __s, size_t __maxsize,
+			    __const char *__restrict __format,
+			    __const struct tm *__restrict __tp,
+			    __locale_t __loc) __THROW)
+UNIMPL(size_t __strxfrm_l (char *__dest, __const char *__src, size_t __n,
+			   __locale_t __l) __THROW)
+UNIMPL(size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
+			    size_t __n, __locale_t __loc) __THROW)
+UNIMPL(int wcscmp(const wchar_t *s1, const wchar_t *s2))
