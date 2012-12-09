@@ -3,3 +3,5 @@
 *.d
 *.elf
 *.bin
+ctype-data.h
+gen-ctype-data

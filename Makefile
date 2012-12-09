@@ -11,7 +11,7 @@ loader.bin: loader.elf
 
 fs = fs/fs.o fs/bootfs.o bootfs.o
 
-drivers = drivers/vga.o
+drivers = drivers/vga.o drivers/console.o
 drivers += $(fs)
 
 libc = libc/string/strcmp.o
@@ -30,6 +30,11 @@ bootfs.bin: scripts/mkbootfs.py bootfs.manifest
 		-D jdkbase=$(jdkbase)
 
 bootfs.o: bootfs.bin
+
+runtime.o: ctype-data.h
+
+ctype-data.h: gen-ctype-data
+	./gen-ctype-data > $@
 
 clean:
 	find -name '*.[od]' | xargs rm

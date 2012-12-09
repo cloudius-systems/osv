@@ -20,6 +20,10 @@
 #include <wctype.h>
 #include <langinfo.h>
 #include <stdarg.h>
+#include <xlocale.h>
+#include <cassert>
+
+#define __LC_LAST 13
 
 typedef unsigned char __guard;
 
@@ -87,17 +91,22 @@ void ignore_debug_write(const char *msg)
 
 void (*debug_write)(const char *msg) = ignore_debug_write;
 
-#define UNIMPLEMENTED(msg) do {				\
+#define WARN(msg) do {					\
         static bool _x;					\
 	if (!_x) {					\
 	    _x = true;					\
 	    debug_write("WARNING: unimplemented " msg);	\
 	}						\
+    } while (0)
+
+#define UNIMPLEMENTED(msg) do {				\
+	WARN(msg);					\
 	abort();					\
     } while (0)
 
 
 #define UNIMPL(decl) decl { UNIMPLEMENTED(#decl); }
+#define IGN(decl) decl { WARN(#decl " (continuing)"); }
 
 void abort()
 {
@@ -107,7 +116,7 @@ void abort()
 
 void operator delete(void *)
 {
-    UNIMPLEMENTED("operator delete");
+    WARN("operator delete");
 }
 
 void __cxa_pure_virtual(void)
@@ -320,6 +329,19 @@ FILE* stdin;
 FILE* stdout;
 FILE* stderr;
 
+//    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),
+//    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
+//    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
+
+static unsigned short c_locale_array[384] = {
+#include "ctype-data.h"
+};
+
+static struct __locale_struct c_locale = {
+    { }, // __locales_data
+    c_locale_array + 128, // __ctype_b
+};
+
 const wchar_t* wmemchr(const wchar_t *s, wchar_t c, size_t n)
 {
     UNIMPLEMENTED("wmemchr");
@@ -461,17 +483,104 @@ UNIMPL(FILE *fopen64(const char *path, const char *mode))
 UNIMPL(off64_t ftello64(FILE *stream))
 UNIMPL(wint_t fputwc(wchar_t wc, FILE *stream))
 UNIMPL(wint_t putwc(wchar_t wc, FILE *stream))
-UNIMPL(int wctob(wint_t c))
+int wctob(wint_t c)
+{
+    WARN("trivial wctob");
+    return c <= 0x7f ? c : EOF;
+}
+
 UNIMPL(size_t wcsnrtombs(char *dest, const wchar_t **src, size_t nwc,
                          size_t len, mbstate_t *ps))
-UNIMPL(wint_t btowc(int c))
+wint_t btowc(int c)
+{
+    WARN("trivial btowc");
+    return c;
+}
+
 UNIMPL(size_t wcrtomb(char *s, wchar_t wc, mbstate_t *ps))
 UNIMPL(void __stack_chk_fail(void))
 UNIMPL(void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function))
 UNIMPL(void __freelocale(__locale_t __dataset) __THROW)
 UNIMPL(__locale_t __duplocale(__locale_t __dataset) __THROW)
-UNIMPL(__locale_t __newlocale(int __category_mask, __const char *__locale,
-			      __locale_t __base) __THROW)
+
+namespace {
+    bool all_categories(int category_mask)
+    {
+	return (category_mask | (1 << LC_ALL)) == (1 << __LC_LAST) - 1;
+    }
+}
+
+struct __locale_data
+{
+  const char *name;
+  const char *filedata;		/* Region mapping the file data.  */
+  off_t filesize;		/* Size of the file (and the region).  */
+  enum				/* Flavor of storage used for those.  */
+  {
+    ld_malloced,		/* Both are malloc'd.  */
+    ld_mapped,			/* name is malloc'd, filedata mmap'd */
+    ld_archive			/* Both point into mmap'd archive regions.  */
+  } alloc;
+
+  /* This provides a slot for category-specific code to cache data computed
+     about this locale.  That code can set a cleanup function to deallocate
+     the data.  */
+  struct
+  {
+    void (*cleanup) (struct __locale_data *);
+    union
+    {
+      void *data;
+      struct lc_time_data *time;
+      const struct gconv_fcts *ctype;
+    };
+  } __private;
+
+  unsigned int usage_count;	/* Counter for users.  */
+
+  int use_translit;		/* Nonzero if the mb*towv*() and wc*tomb()
+				   functions should use transliteration.  */
+
+  unsigned int nstrings;	/* Number of strings below.  */
+  union locale_data_value
+  {
+    const uint32_t *wstr;
+    const char *string;
+    unsigned int word;		/* Note endian issues vs 64-bit pointers.  */
+  }
+  values __flexarr;	/* Items, usually pointers into `filedata'.  */
+};
+
+__locale_t __newlocale(int category_mask, const char *locale, locale_t base)
+    __THROW
+{
+    if (category_mask == 1 << LC_ALL) {
+	category_mask = ((1 << __LC_LAST) - 1) & ~(1 << LC_ALL);
+    }
+    assert(locale);
+    if (base == &c_locale) {
+	base = NULL;
+    }
+    if ((base == NULL || all_categories(category_mask))
+	&& (category_mask == 0 || strcmp(locale, "C") == 0)) {
+	return &c_locale;
+    }
+    struct __locale_struct result = base ? *base : c_locale;
+    if (category_mask == 0) {
+	auto result_ptr = new __locale_struct;
+	*result_ptr = result;
+	auto ctypes = result_ptr->__locales[LC_CTYPE]->values;
+	result_ptr->__ctype_b = (const unsigned short *)
+	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_CLASS)].string + 128;
+	result_ptr->__ctype_tolower = (const int *)
+	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOLOWER)].string + 128;
+	result_ptr->__ctype_toupper = (const int *)
+	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)].string + 128;
+	return result_ptr;
+    }
+    abort();
+}
+
 UNIMPL(long double strtold_l(__const char *__restrict __nptr,
 			     char **__restrict __endptr, __locale_t __loc))
 UNIMPL(double __strtod_l(__const char *__restrict __nptr,
@@ -481,7 +590,12 @@ UNIMPL(size_t mbsnrtowcs(wchar_t *dest, const char **src,
                          size_t nms, size_t len, mbstate_t *ps))
 UNIMPL(size_t mbsrtowcs(wchar_t *dest, const char **src,
 			size_t len, mbstate_t *ps))
-UNIMPL(__locale_t __uselocale (__locale_t __dataset) __THROW)
+__locale_t __uselocale (__locale_t __dataset) __THROW
+{
+    WARN("__uselocale unimplemented");
+    return (__locale_t)__dataset;
+}
+
 UNIMPL(char *__setlocale(int category, const char *locale))
 UNIMPL(char* textdomain (const char* domainname))
 UNIMPL(char* bindtextdomain (const char * domainname, const char * dirname))
@@ -492,8 +606,28 @@ UNIMPL(float __strtof_l(__const char *__restrict __nptr,
        __THROW)
 UNIMPL(char *__nl_langinfo_l(nl_item __item, __locale_t __l))
 UNIMPL(int vsnprintf(char *str, size_t size, const char *format, va_list ap))
-UNIMPL(wctype_t __wctype_l(__const char *__property, __locale_t __locale)
-       __THROW)
+
+#define WCTDEF(x) { _IS##x, #x }
+
+static const struct { wctype_t mask; const char *name; } wct_names[] = {
+    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),
+    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
+    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
+    {}
+};
+
+wctype_t __wctype_l(__const char *__property, __locale_t __locale) __THROW
+{
+    WARN("trivial __wctype_l");
+    debug_write(__property);
+    for (auto n = wct_names; n->mask; ++n) {
+	if (strcmp(__property, n->name) == 0) {
+	    return n->mask;
+	}
+    }
+    return 0;
+}
+
 UNIMPL(size_t __ctype_get_mb_cur_max (void) __THROW)
 UNIMPL(wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW)
 UNIMPL(int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
