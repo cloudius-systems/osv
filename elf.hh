@@ -2,6 +2,7 @@
 #define ELF_HH
 
 #include "fs/fs.hh"
+#include <vector>
 
 namespace elf {
 
@@ -70,14 +71,27 @@ namespace elf {
 	Elf64_Half e_shstrndx; /* Section name string table index */
     };
 
+    struct Elf64_Phdr {
+	Elf64_Word p_type; /* Type of segment */
+	Elf64_Word p_flags; /* Segment attributes */
+	Elf64_Off p_offset; /* Offset in file */
+	Elf64_Addr p_vaddr; /* Virtual address in memory */
+	Elf64_Addr p_paddr; /* Reserved */
+	Elf64_Xword p_filesz; /* Size of segment in file */
+	Elf64_Xword p_memsz; /* Size of segment in memory */
+	Elf64_Xword p_align; /* Alignment of segment */
+    };
+
     class elf_file {
     public:
 	explicit elf_file(::file& f);
     private:
 	void load_elf_header();
+	void load_program_headers();
     private:
 	::file& _f;
 	Elf64_Ehdr _ehdr;
+	std::vector<Elf64_Phdr> _phdrs;
     };
 }
 

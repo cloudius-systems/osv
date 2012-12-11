@@ -15,6 +15,7 @@ namespace elf {
 	: _f(f)
     {
 	load_elf_header();
+	load_program_headers();
     }
 
     void elf_file::load_elf_header()
@@ -40,6 +41,19 @@ namespace elf {
 	    throw std::runtime_error("bad os abi");
 	}
 	debug_console->writeln("loaded elf header");
+    }
+
+    void elf_file::load_program_headers()
+    {
+	debug_console->writeln(fmt("program headers: %1%") % _ehdr.e_phnum);
+	_phdrs.resize(_ehdr.e_phnum);
+	for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
+	    _f.read(&_phdrs[i],
+		    _ehdr.e_phoff + i * _ehdr.e_phentsize,
+		    _ehdr.e_phentsize);
+	    debug_console->writeln(fmt("phdr %1%: vaddr %2$16x")
+				   % i % _phdrs[i].p_vaddr);
+	}
     }
 }
 
