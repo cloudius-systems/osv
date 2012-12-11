@@ -3,6 +3,7 @@
 #include "fs/bootfs.hh"
 #include <boost/format.hpp>
 #include <cctype>
+#include "elf.hh"
 //#include <locale>
 
 typedef boost::format fmt;
@@ -72,6 +73,7 @@ int main(int ac, char **av)
 #endif
 
     console.writeln(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
+    load_elf(*f);
     while (true)
 	;
 }
