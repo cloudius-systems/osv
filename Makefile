@@ -13,6 +13,7 @@ fs = fs/fs.o fs/bootfs.o bootfs.o
 
 drivers = drivers/vga.o drivers/console.o
 drivers += $(fs)
+drivers += mmu.o
 drivers += elf.o
 
 libc = libc/string/strcmp.o
