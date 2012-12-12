@@ -124,7 +124,7 @@ void __cxa_pure_virtual(void)
     abort();
 }
 
-static char malloc_buffer[1 << 24], *malloc_ptr = malloc_buffer;
+static char malloc_buffer[1 << 26], *malloc_ptr = malloc_buffer;
 
 void *malloc(size_t size)
 {
