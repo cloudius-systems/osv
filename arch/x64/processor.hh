@@ -62,11 +62,11 @@ namespace processor {
 	    asm volatile ("mov %0, %%cr8" : : "r"(r));
 	}
 
-	struct desc_ptr __attribute__((packed)) {
+	struct desc_ptr {
 	    desc_ptr(u16 limit, ulong addr) : limit(limit), addr(addr) {}
 	    u16 limit;
 	    ulong addr;
-	};
+	} __attribute__((packed));
 
 	inline void lgdt(const desc_ptr& ptr) {
 	    asm volatile ("lgdt %0" : : "m"(ptr));
