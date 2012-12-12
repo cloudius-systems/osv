@@ -71,6 +71,14 @@ namespace elf {
 	Elf64_Half e_shstrndx; /* Section name string table index */
     };
 
+    enum {
+        PT_NULL = 0, // Unused entry
+        PT_LOAD = 1, // Loadable segment
+        PT_DYNAMIC = 2, // Dynamic linking tables
+        PT_INTERP = 3, // Program interpreter path name
+        PT_NOTE = 4, // Note sections
+    };
+
     struct Elf64_Phdr {
 	Elf64_Word p_type; /* Type of segment */
 	Elf64_Word p_flags; /* Segment attributes */
@@ -85,9 +93,11 @@ namespace elf {
     class elf_file {
     public:
 	explicit elf_file(::file& f);
+	void load_segments();
     private:
 	void load_elf_header();
 	void load_program_headers();
+	void load_segment(const Elf64_Phdr& phdr);
     private:
 	::file& _f;
 	Elf64_Ehdr _ehdr;

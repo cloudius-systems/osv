@@ -1,5 +1,6 @@
 #include "elf.hh"
 #include "drivers/console.hh"
+#include "mmu.hh"
 #include <boost/format.hpp>
 #include <exception>
 
@@ -55,9 +56,34 @@ namespace elf {
 				   % i % _phdrs[i].p_vaddr);
 	}
     }
+
+    void elf_file::load_segment(const Elf64_Phdr& phdr)
+    {
+        mmu::mmap(_f, phdr.p_offset, phdr.p_memsz, phdr.p_align,
+                  phdr.p_vaddr & (phdr.p_align - 1), mmu::perm_rwx);
+    }
+
+    void elf_file::load_segments()
+    {
+        for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
+            auto &phdr = _phdrs[i];
+            switch (phdr.p_type) {
+            case PT_NULL:
+                break;
+            case PT_LOAD:
+                load_segment(phdr);
+                break;
+            default:
+                throw std::runtime_error("bad p_type");
+            }
+        }
+    }
+
 }
 
 void load_elf(file& f, unsigned long addr)
 {
     elf::elf_file ef(f);
+    // FIXME: don't ignore addr
+    ef.load_segments();
 }
