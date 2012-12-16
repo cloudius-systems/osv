@@ -31,12 +31,9 @@ namespace mmu {
 	boost::intrusive::set_member_hook<> _vma_list_hook;
     };
 
-    vma* mmap(file& file,
-	      f_offset offset,
-	      f_offset size,
-	      ulong align,
-	      ulong align_offset,
-	      unsigned perm);
+    vma* map_file(void* addr, size_t size, unsigned perm,
+                  file& file, f_offset offset);
+    vma* map_anon(void* addr, size_t size, unsigned perm);
 
 }
 

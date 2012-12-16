@@ -10,6 +10,7 @@ namespace elf {
     typedef unsigned int u32;
     typedef unsigned short u16;
     typedef unsigned char u8;
+    typedef unsigned long ulong;
 
     typedef u64 Elf64_Addr;
     typedef u64 Elf64_Off;
@@ -94,6 +95,7 @@ namespace elf {
     public:
 	explicit elf_file(::file& f);
 	void load_segments();
+        void set_base(void* base);
     private:
 	void load_elf_header();
 	void load_program_headers();
@@ -102,9 +104,10 @@ namespace elf {
 	::file& _f;
 	Elf64_Ehdr _ehdr;
 	std::vector<Elf64_Phdr> _phdrs;
+	void* _base;
     };
 }
 
-void load_elf(file& f, unsigned long addr = 64 << 20);
+void load_elf(file& f, void* addr = reinterpret_cast<void*>(64 << 20));
 
 #endif

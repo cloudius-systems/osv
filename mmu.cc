@@ -1,15 +1,16 @@
 #include "mmu.hh"
 #include "arch/x64/processor.hh"
 #include "drivers/console.hh"
+#include "exceptions.hh"
 #include <boost/format.hpp>
 
 extern Console* debug_console;
 
-namespace mmu {
+namespace {
+    typedef boost::format fmt;
+}
 
-    namespace {
-        typedef boost::format fmt;
-    }
+namespace mmu {
 
     namespace bi = boost::intrusive;
 
@@ -27,19 +28,6 @@ namespace mmu {
 					  &vma::_vma_list_hook>,
 			  bi::optimize_size<true>
 			  > vma_list;
-
-    void* do_align(void* addr, ulong align, ulong align_offset)
-    {
-	ulong a = reinterpret_cast<ulong>(addr);
-
-	a -= align_offset;
-	a = (a + (align - 1)) & ~(align - 1);
-	a += align_offset;
-
-	addr = reinterpret_cast<void*>(a);
-
-	return addr;
-    }
 
     typedef uint64_t pt_element;
     typedef uint64_t phys;
@@ -101,7 +89,6 @@ namespace mmu {
     void populate_page(void* addr)
     {
 	pt_element pte = processor::x86::read_cr3();
-	debug_console->writeln(fmt("cr3 %x") % pte);
         auto pt = phys_cast<pt_element>(pte_phys(pte));
         auto ptep = &pt[pt_index(addr, nlevels - 1)];
 	unsigned level = nlevels - 1;
@@ -128,28 +115,22 @@ namespace mmu {
 	}
     }
 
-    vma* mmap(file& file,
-	      f_offset offset,
-	      f_offset size,
-	      ulong align,
-	      ulong align_offset,
-	      unsigned perm)
+    vma* map_anon(void* addr, size_t size, unsigned perm)
     {
-	void* addr = reinterpret_cast<void*>(0x100000000000);
-	if (!vma_list.empty()) {
-	    auto last = vma_list.crbegin();
-	    addr = last->addr() + last->size();
-	}
+        vma* ret = new vma(addr, size);
+        vma_list.insert(*ret);
 
-	addr = do_align(addr, align, align_offset);
+        populate(*ret);
 
-	vma* ret = new vma(addr, size);
-	vma_list.insert(*ret);
+        return ret;
+    }
 
-	populate(*ret);
-	file.read(addr, offset, size);
-
-	return ret;
+    vma* map_file(void* addr, size_t size, unsigned perm,
+                  file& f, f_offset offset)
+    {
+        vma* ret = map_anon(addr, size, perm);
+        f.read(addr, offset, size);
+        return ret;
     }
 
     vma::vma(void* addr, ulong size)

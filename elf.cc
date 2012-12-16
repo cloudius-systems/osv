@@ -44,6 +44,11 @@ namespace elf {
 	debug_console->writeln("loaded elf header");
     }
 
+    void elf_file::set_base(void* base)
+    {
+        _base = base;
+    }
+
     void elf_file::load_program_headers()
     {
 	debug_console->writeln(fmt("program headers: %1%") % _ehdr.e_phnum);
@@ -59,13 +64,16 @@ namespace elf {
 
     void elf_file::load_segment(const Elf64_Phdr& phdr)
     {
-        mmu::mmap(_f, phdr.p_offset, phdr.p_memsz, phdr.p_align,
-                  phdr.p_vaddr & (phdr.p_align - 1), mmu::perm_rwx);
+        mmu::map_file(_base + phdr.p_vaddr, phdr.p_filesz, mmu::perm_rwx,
+                      _f, phdr.p_offset);
+        mmu::map_anon(_base + phdr.p_vaddr + phdr.p_filesz,
+                      phdr.p_memsz - phdr.p_filesz, mmu::perm_rwx);
     }
 
     void elf_file::load_segments()
     {
         for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
+            debug_console->writeln(fmt("loading segment %1%") % i);
             auto &phdr = _phdrs[i];
             switch (phdr.p_type) {
             case PT_NULL:
@@ -74,16 +82,19 @@ namespace elf {
                 load_segment(phdr);
                 break;
             default:
+                abort();
                 throw std::runtime_error("bad p_type");
             }
         }
+        abort();
     }
 
 }
 
-void load_elf(file& f, unsigned long addr)
+void load_elf(file& f, void* addr)
 {
     elf::elf_file ef(f);
-    // FIXME: don't ignore addr
+    ef.set_base(addr);
     ef.load_segments();
 }
+
