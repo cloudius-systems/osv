@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <xlocale.h>
 #include <cassert>
+#include "arch/x64/processor.hh"
 
 #define __LC_LAST 13
 
@@ -111,7 +112,7 @@ void (*debug_write)(const char *msg) = ignore_debug_write;
 void abort()
 {
     while (true)
-	;
+	processor::x86::halt_no_interrupts();
 }
 
 void operator delete(void *)

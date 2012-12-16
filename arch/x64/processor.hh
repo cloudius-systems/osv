@@ -151,6 +151,10 @@ namespace processor {
 	    asm volatile ("wrmsr" : : "c"(index), "a"(lo), "d"(hi));
 	}
 
+	inline void halt_no_interrupts() {
+	    asm volatile ("cli; hlt");
+	}
+
     };
 
 };
