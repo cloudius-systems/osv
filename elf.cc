@@ -86,6 +86,9 @@ namespace elf {
                 load_segment(phdr);
                 _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
                 break;
+            case PT_INTERP:
+            case PT_NOTE:
+                break;
             default:
                 abort();
                 throw std::runtime_error("bad p_type");
