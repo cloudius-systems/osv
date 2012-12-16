@@ -198,16 +198,13 @@ namespace elf {
         Elf64_Xword st_size; /* Size of object (e.g., common) */
     };
 
-    class elf_file {
+
+    class elf_object {
     public:
-	explicit elf_file(::file& f);
-	void load_segments();
+        elf_object();
 	void relocate();
         void set_base(void* base);
     private:
-	void load_elf_header();
-	void load_program_headers();
-	void load_segment(const Elf64_Phdr& phdr);
 	template <typename T>
         T* dynamic_ptr(unsigned tag);
         Elf64_Xword dynamic_val(unsigned tag);
@@ -218,13 +215,24 @@ namespace elf {
         Elf64_Dyn* _lookup(unsigned tag);
         Elf64_Xword symbol(unsigned idx);
         void relocate_rela();
-    private:
-	::file& _f;
+    protected:
 	Elf64_Ehdr _ehdr;
 	std::vector<Elf64_Phdr> _phdrs;
 	void* _base;
 	Elf64_Dyn* _dynamic_table;
     };
+
+    class elf_file : public elf_object {
+    public:
+        explicit elf_file(::file& f);
+        void load_elf_header();
+        void load_program_headers();
+        void load_segments();
+        void load_segment(const Elf64_Phdr& phdr);
+    private:
+        ::file& _f;
+    };
+
 }
 
 void load_elf(file& f, void* addr = reinterpret_cast<void*>(64 << 20));

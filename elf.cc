@@ -12,9 +12,13 @@ namespace {
 
 namespace elf {
 
+    elf_object::elf_object()
+        : _dynamic_table(nullptr)
+    {
+    }
+
     elf_file::elf_file(::file& f)
 	: _f(f)
-        , _dynamic_table(nullptr)
     {
 	load_elf_header();
 	load_program_headers();
@@ -45,7 +49,7 @@ namespace elf {
 	debug_console->writeln("loaded elf header");
     }
 
-    void elf_file::set_base(void* base)
+    void elf_object::set_base(void* base)
     {
         _base = base;
     }
@@ -101,27 +105,27 @@ namespace elf {
     }
 
     template <typename T>
-    T* elf_file::dynamic_ptr(unsigned tag)
+    T* elf_object::dynamic_ptr(unsigned tag)
     {
         return static_cast<T*>(_base + lookup(tag).d_un.d_ptr);
     }
 
-    Elf64_Xword elf_file::dynamic_val(unsigned tag)
+    Elf64_Xword elf_object::dynamic_val(unsigned tag)
     {
         return lookup(tag).d_un.d_val;
     }
 
-    const char* elf_file::dynamic_str(unsigned tag)
+    const char* elf_object::dynamic_str(unsigned tag)
     {
         return dynamic_ptr<const char>(DT_STRTAB) + dynamic_val(tag);
     }
 
-    bool elf_file::dynamic_exists(unsigned tag)
+    bool elf_object::dynamic_exists(unsigned tag)
     {
         return _lookup(tag);
     }
 
-    Elf64_Dyn* elf_file::_lookup(unsigned tag)
+    Elf64_Dyn* elf_object::_lookup(unsigned tag)
     {
         for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
             if (p->d_tag == tag) {
@@ -131,7 +135,7 @@ namespace elf {
         return nullptr;
     }
 
-    Elf64_Dyn& elf_file::lookup(unsigned tag)
+    Elf64_Dyn& elf_object::lookup(unsigned tag)
     {
         auto r = _lookup(tag);
         if (!r) {
@@ -141,7 +145,7 @@ namespace elf {
     }
 
     std::vector<const char *>
-    elf_file::dynamic_str_array(unsigned tag)
+    elf_object::dynamic_str_array(unsigned tag)
     {
         auto strtab = dynamic_ptr<const char>(DT_STRTAB);
         std::vector<const char *> r;
@@ -153,7 +157,7 @@ namespace elf {
         return r;
     }
 
-    Elf64_Xword elf_file::symbol(unsigned idx)
+    Elf64_Xword elf_object::symbol(unsigned idx)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
@@ -163,7 +167,7 @@ namespace elf {
         return 0;
     }
 
-    void elf_file::relocate_rela()
+    void elf_object::relocate_rela()
     {
         auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
         assert(dynamic_val(DT_RELAENT) == sizeof(Elf64_Rela));
@@ -193,7 +197,7 @@ namespace elf {
         }
     }
 
-    void elf_file::relocate()
+    void elf_object::relocate()
     {
         assert(!dynamic_exists(DT_REL));
         if (dynamic_exists(DT_RELA)) {
