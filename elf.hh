@@ -91,6 +91,64 @@ namespace elf {
 	Elf64_Xword p_align; /* Alignment of segment */
     };
 
+    enum {
+        DT_NULL = 0, // ignored Marks the end of the dynamic array
+        DT_NEEDED = 1, // d_val The string table offset of the name of a needed library.Dynamic table 15
+        DT_PLTRELSZ = 2, // d_val Total size, in bytes, of the relocation entries associated with
+          // the procedure linkage table.
+        DT_PLTGOT = 3, // d_ptr Contains an address associated with the linkage table. The
+          // speciﬁc meaning of this ﬁeld is processor-dependent.
+        DT_HASH = 4, // d_ptr Address of the symbol hash table, described below.
+        DT_STRTAB = 5, // d_ptr Address of the dynamic string table.
+        DT_SYMTAB = 6, // d_ptr Address of the dynamic symbol table.
+        DT_RELA = 7, // d_ptr Address of a relocation table with Elf64_Rela entries.
+        DT_RELASZ = 8, // d_val Total size, in bytes, of the DT_RELA relocation table.
+        DT_RELAENT = 9, // d_val Size, in bytes, of each DT_RELA relocation entry.
+        DT_STRSZ = 10, // d_val Total size, in bytes, of the string table.
+        DT_SYMENT = 11, // d_val Size, in bytes, of each symbol table entry.
+        DT_INIT = 12, // d_ptr Address of the initialization function.
+        DT_FINI = 13, // d_ptr Address of the termination function.
+        DT_SONAME = 14, // d_val The string table offset of the name of this shared object.
+        DT_RPATH = 15, // d_val The string table offset of a shared library search path string.
+        DT_SYMBOLIC = 16, // ignored The presence of this dynamic table entry modiﬁes the
+          // symbol resolution algorithm for references within the
+          // library. Symbols deﬁned within the library are used to
+          // resolve references before the dynamic linker searches the
+          // usual search path.
+        DT_REL = 17, // d_ptr Address of a relocation table with Elf64_Rel entries.
+        DT_RELSZ = 18, // d_val Total size, in bytes, of the DT_REL relocation table.
+        DT_RELENT = 19, // d_val Size, in bytes, of each DT_REL relocation entry.
+        DT_PLTREL = 20, // d_val Type of relocation entry used for the procedure linkage
+          // table. The d_val member contains either DT_REL or DT_RELA.
+        DT_DEBUG = 21, // d_ptr Reserved for debugger use.
+        DT_TEXTREL = 22, // ignored The presence of this dynamic table entry signals that the
+          // relocation table contains relocations for a non-writable
+          // segment.
+        DT_JMPREL = 23, // d_ptr Address of the relocations associated with the procedure
+          // linkage table.
+        DT_BIND_NOW = 24, // ignored The presence of this dynamic table entry signals that the
+          // dynamic loader should process all relocations for this object
+          // before transferring control to the program.
+        DT_INIT_ARRAY = 25, // d_ptr Pointer to an array of pointers to initialization functions.
+        DT_FINI_ARRAY = 26, // d_ptr Pointer to an array of pointers to termination functions.
+        DT_INIT_ARRAYSZ = 27, // d_val Size, in bytes, of the array of initialization functions.
+        DT_FINI_ARRAYSZ = 28, // d_val Size, in bytes, of the array of termination functions.
+        DT_LOOS = 0x60000000, // Deﬁnes a range of dynamic table tags that are reserved for
+          // environment-speciﬁc use.
+        DT_HIOS = 0x6FFFFFFF, //
+        DT_LOPROC = 0x70000000, // Deﬁnes a range of dynamic table tags that are reserved for
+          // processor-speciﬁc use.
+        DT_HIPROC = 0x7FFFFFFF, //
+    };
+
+    struct Elf64_Dyn {
+        Elf64_Sxword d_tag;
+        union {
+            Elf64_Xword d_val;
+            Elf64_Addr d_ptr;
+        } d_un;
+    };
+
     class elf_file {
     public:
 	explicit elf_file(::file& f);
@@ -105,6 +163,7 @@ namespace elf {
 	Elf64_Ehdr _ehdr;
 	std::vector<Elf64_Phdr> _phdrs;
 	void* _base;
+	Elf64_Dyn* _dynamic_table;
     };
 }
 

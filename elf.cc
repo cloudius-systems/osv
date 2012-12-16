@@ -14,6 +14,7 @@ namespace elf {
 
     elf_file::elf_file(::file& f)
 	: _f(f)
+        , _dynamic_table(nullptr)
     {
 	load_elf_header();
 	load_program_headers();
@@ -80,6 +81,10 @@ namespace elf {
                 break;
             case PT_LOAD:
                 load_segment(phdr);
+                break;
+            case PT_DYNAMIC:
+                load_segment(phdr);
+                _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
                 break;
             default:
                 abort();
