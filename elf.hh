@@ -79,6 +79,7 @@ namespace elf {
         PT_INTERP = 3, // Program interpreter path name
         PT_NOTE = 4, // Note sections
         PT_GNU_EH_FRAME = 0x6474e550, // Exception handling records
+        PT_GNU_STACK = 0x6474e551, // Stack permissions record
     };
 
     struct Elf64_Phdr {

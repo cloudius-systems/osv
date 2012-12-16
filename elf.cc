@@ -88,6 +88,7 @@ namespace elf {
                 break;
             case PT_INTERP:
             case PT_NOTE:
+            case PT_GNU_STACK:
                 break;
             case PT_GNU_EH_FRAME:
                 load_segment(phdr);
