@@ -233,6 +233,11 @@ namespace elf {
         ::file& _f;
     };
 
+    class elf_memory_image : public elf_object {
+    public:
+        explicit elf_memory_image(void* base);
+    };
+
 }
 
 void load_elf(file& f, void* addr = reinterpret_cast<void*>(64 << 20));

@@ -24,6 +24,15 @@ namespace elf {
 	load_program_headers();
     }
 
+    elf_memory_image::elf_memory_image(void* base)
+    {
+        set_base(base);
+        _ehdr = *static_cast<Elf64_Ehdr*>(base);
+        auto p = static_cast<Elf64_Phdr*>(base + _ehdr.e_phoff);
+        assert(_ehdr.e_phentsize == sizeof(*p));
+        _phdrs.assign(p, p + _ehdr.e_phnum);
+    }
+
     void elf_file::load_elf_header()
     {
 	_f.read(&_ehdr, 0, sizeof(_ehdr));
