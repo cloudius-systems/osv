@@ -98,7 +98,6 @@ namespace elf {
                 throw std::runtime_error("bad p_type");
             }
         }
-        abort();
     }
 
     template <typename T>
@@ -154,6 +153,54 @@ namespace elf {
         return r;
     }
 
+    Elf64_Xword elf_file::symbol(unsigned idx)
+    {
+        auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+        assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
+        auto nameidx = symtab[idx].st_name;
+        auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
+        debug_console->writeln(fmt("not looking up %1%(%2%)") % name % idx);
+        return 0;
+    }
+
+    void elf_file::relocate_rela()
+    {
+        auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
+        assert(dynamic_val(DT_RELAENT) == sizeof(Elf64_Rela));
+        unsigned nb = dynamic_val(DT_RELASZ) / sizeof(Elf64_Rela);
+        for (auto p = rela; p < rela + nb; ++p) {
+            auto info = p->r_info;
+            u32 sym = info >> 32;
+            u32 type = info & 0xffffffff;
+            void *addr = _base + p->r_offset;
+            auto addend = p->r_addend;
+            switch (type) {
+            case R_X86_64_NONE:
+                break;
+            case R_X86_64_64:
+                *static_cast<u64*>(addr) = symbol(sym) + addend;
+                break;
+            case R_X86_64_RELATIVE:
+                *static_cast<void**>(addr) = _base + addend;
+                break;
+            case R_X86_64_JUMP_SLOT:
+            case R_X86_64_GLOB_DAT:
+                *static_cast<u64*>(addr) = symbol(sym);
+                break;
+            default:
+                abort();
+            }
+        }
+    }
+
+    void elf_file::relocate()
+    {
+        assert(!dynamic_exists(DT_REL));
+        if (dynamic_exists(DT_RELA)) {
+            relocate_rela();
+        }
+    }
+
 }
 
 void load_elf(file& f, void* addr)
@@ -161,5 +208,7 @@ void load_elf(file& f, void* addr)
     elf::elf_file ef(f);
     ef.set_base(addr);
     ef.load_segments();
+    ef.relocate();
+    abort();
 }
 
