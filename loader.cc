@@ -4,6 +4,7 @@
 #include <boost/format.hpp>
 #include <cctype>
 #include "elf.hh"
+#include "exceptions.hh"
 //#include <locale>
 
 typedef boost::format fmt;
@@ -46,6 +47,8 @@ int main(int ac, char **av)
     }
 
     test_locale();
+    interrupt_descriptor_table idt;
+    idt.load_on_cpu();
 
     bootfs fs;
     file* f = fs.open("/usr/lib/libjvm.so");

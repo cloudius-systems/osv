@@ -16,9 +16,13 @@ drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
 
+objects = exceptions.o
+objects += entry.o
+
 libc = libc/string/strcmp.o
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
+        $(objects) \
 		$(libc) bootfs.bin
 	$(CXX) $(CXXFLAGS) -nostartfiles -static -nodefaultlibs -o $@ \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \

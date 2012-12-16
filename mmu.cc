@@ -168,3 +168,10 @@ namespace mmu {
         return _size;
     }
 }
+
+void page_fault(exception_frame *ef)
+{
+    auto addr = processor::x86::read_cr2();
+    debug_console->writeln(fmt("page fault @ %1$x") % addr);
+    abort();
+}
