@@ -6,8 +6,11 @@ autodepend = -MD $(@.o=.d) -MT $@
 
 all: loader.bin
 
-loader.bin: loader.elf
-	objcopy -O elf32-i386 $^ $@
+loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
+	$(LD) -nostartfiles -static -nodefaultlibs -o $@ \
+	    $(filter-out %.bin, $(^:%.ld=-T %.ld))
+
+arch/x64/boot32.o: loader.elf
 
 fs = fs/fs.o fs/bootfs.o bootfs.o
 
