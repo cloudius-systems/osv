@@ -159,6 +159,14 @@ namespace elf {
 	void load_elf_header();
 	void load_program_headers();
 	void load_segment(const Elf64_Phdr& phdr);
+	template <typename T>
+        T* dynamic_ptr(unsigned tag);
+        Elf64_Xword dynamic_val(unsigned tag);
+        const char* dynamic_str(unsigned tag);
+        bool dynamic_exists(unsigned tag);
+        std::vector<const char*> dynamic_str_array(unsigned tag);
+        Elf64_Dyn& lookup(unsigned tag);
+        Elf64_Dyn* _lookup(unsigned tag);
     private:
 	::file& _f;
 	Elf64_Ehdr _ehdr;

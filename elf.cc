@@ -100,6 +100,59 @@ namespace elf {
         abort();
     }
 
+    template <typename T>
+    T* elf_file::dynamic_ptr(unsigned tag)
+    {
+        return static_cast<T*>(_base + lookup(tag).d_un.d_ptr);
+    }
+
+    Elf64_Xword elf_file::dynamic_val(unsigned tag)
+    {
+        return lookup(tag).d_un.d_val;
+    }
+
+    const char* elf_file::dynamic_str(unsigned tag)
+    {
+        return dynamic_ptr<const char>(DT_STRTAB) + dynamic_val(tag);
+    }
+
+    bool elf_file::dynamic_exists(unsigned tag)
+    {
+        return _lookup(tag);
+    }
+
+    Elf64_Dyn* elf_file::_lookup(unsigned tag)
+    {
+        for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
+            if (p->d_tag == tag) {
+                return p;
+            }
+        }
+        return nullptr;
+    }
+
+    Elf64_Dyn& elf_file::lookup(unsigned tag)
+    {
+        auto r = _lookup(tag);
+        if (!r) {
+            throw std::runtime_error("missing tag");
+        }
+        return *r;
+    }
+
+    std::vector<const char *>
+    elf_file::dynamic_str_array(unsigned tag)
+    {
+        auto strtab = dynamic_ptr<const char>(DT_STRTAB);
+        std::vector<const char *> r;
+        for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
+            if (p->d_tag == tag) {
+                r.push_back(strtab + p->d_un.d_val);
+            }
+        }
+        return r;
+    }
+
 }
 
 void load_elf(file& f, void* addr)
