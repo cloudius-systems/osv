@@ -78,6 +78,7 @@ namespace elf {
         PT_DYNAMIC = 2, // Dynamic linking tables
         PT_INTERP = 3, // Program interpreter path name
         PT_NOTE = 4, // Note sections
+        PT_GNU_EH_FRAME = 0x6474e550, // Exception handling records
     };
 
     struct Elf64_Phdr {

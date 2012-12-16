@@ -89,6 +89,9 @@ namespace elf {
             case PT_INTERP:
             case PT_NOTE:
                 break;
+            case PT_GNU_EH_FRAME:
+                load_segment(phdr);
+                break;
             default:
                 abort();
                 throw std::runtime_error("bad p_type");
