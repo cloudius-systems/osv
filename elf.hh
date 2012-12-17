@@ -3,6 +3,7 @@
 
 #include "fs/fs.hh"
 #include <vector>
+#include <map>
 
 namespace elf {
 
@@ -204,6 +205,7 @@ namespace elf {
         elf_object();
 	void relocate();
         void set_base(void* base);
+        void set_dynamic_table(Elf64_Dyn* dynamic_table);
     private:
 	template <typename T>
         T* dynamic_ptr(unsigned tag);
@@ -222,14 +224,18 @@ namespace elf {
 	Elf64_Dyn* _dynamic_table;
     };
 
+    class program;
+
     class elf_file : public elf_object {
     public:
-        explicit elf_file(::file& f);
+        explicit elf_file(program& prog, ::file* f);
+        virtual ~elf_file();
         void load_elf_header();
         void load_program_headers();
         void load_segments();
         void load_segment(const Elf64_Phdr& phdr);
     private:
+        program& _prog;
         ::file& _f;
     };
 
@@ -238,8 +244,20 @@ namespace elf {
         explicit elf_memory_image(void* base);
     };
 
+    class program {
+    public:
+        explicit program(::filesystem& fs, void* base);
+        void add(std::string lib);
+        void add(std::string lib, elf_object* obj);
+        void* lookup(const char* symbol);
+    private:
+        ::filesystem& _fs;
+        void* _next_alloc;
+        std::map<std::string, elf_object*> _files;
+    };
 }
 
-void load_elf(file& f, void* addr = reinterpret_cast<void*>(64 << 20));
+void load_elf(std::string name, filesystem& fs,
+              void* addr = reinterpret_cast<void*>(64 << 20));
 
 #endif

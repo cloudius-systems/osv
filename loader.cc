@@ -76,7 +76,7 @@ int main(int ac, char **av)
 #endif
 
     console.writeln(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
-    load_elf(*f);
+    load_elf("/usr/lib/libjvm.so", fs);
     while (true)
 	;
 }

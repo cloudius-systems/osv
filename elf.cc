@@ -17,11 +17,17 @@ namespace elf {
     {
     }
 
-    elf_file::elf_file(::file& f)
-	: _f(f)
+    elf_file::elf_file(program& prog, ::file* f)
+	: _prog(prog)
+        , _f(*f)
     {
 	load_elf_header();
 	load_program_headers();
+    }
+
+    elf_file::~elf_file()
+    {
+        delete &_f;
     }
 
     elf_memory_image::elf_memory_image(void* base)
@@ -214,14 +220,37 @@ namespace elf {
         }
     }
 
+    program::program(::filesystem& fs, void* addr)
+        : _fs(fs)
+        , _next_alloc(addr)
+    {
+    }
+
+    void program::add(std::string name, elf_object* obj)
+    {
+        _files[name] = obj;
+    }
+
+    void program::add(std::string name)
+    {
+        if (!_files.count(name)) {
+            std::unique_ptr< ::file> f(_fs.open(name));
+            auto ef = new elf_file(*this, f.release());
+            ef->set_base(_next_alloc);
+            _files[name] = ef;
+            ef->load_segments();
+            ef->relocate();
+        }
+    }
 }
 
-void load_elf(file& f, void* addr)
+void load_elf(std::string name, ::filesystem& fs, void* addr)
 {
-    elf::elf_file ef(f);
-    ef.set_base(addr);
-    ef.load_segments();
-    ef.relocate();
+    elf::program prog(fs, addr);
+    // load the kernel statically as libc.so.6, since it provides the C library
+    // API to other objects.  see loader.ld for the base address.
+    prog.add("libc.so.6", new elf::elf_memory_image(reinterpret_cast<void*>(0x200000)));
+    prog.add(name);
     abort();
 }
 
