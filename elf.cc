@@ -86,7 +86,7 @@ namespace elf {
                                   [](Elf64_Phdr a, Elf64_Phdr b)
                                       { return a.p_type == PT_LOAD
                                             && a.p_vaddr < b.p_vaddr; });
-        _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1));
+        _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1)) - p->p_vaddr;
         auto q = std::min_element(_phdrs.begin(), _phdrs.end(),
                                   [](Elf64_Phdr a, Elf64_Phdr b)
                                       { return a.p_type == PT_LOAD
