@@ -16,6 +16,7 @@ file* bootfs::open(std::string name)
 	if (std::string(md->name) == name) {
 	    return new file(*this, *md);
 	}
+	++md;
     }
     throw -1; /* FIXME */
 }
