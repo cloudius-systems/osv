@@ -1,2 +1,3 @@
 [manifest]
 /usr/lib/libjvm.so: %(jdkbase)s/jre/lib/amd64/server/libjvm.so
+/usr/lib/libstdc++.so.6: /usr/lib64/libstdc++.so.6
