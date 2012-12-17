@@ -133,9 +133,27 @@ namespace mmu {
         return ret;
     }
 
+    namespace {
+        const ulong page_size = 4096;
+
+        void* align_down(void* ptr)
+        {
+            ulong v = reinterpret_cast<ulong>(ptr);
+            v &= ~(page_size - 1);
+            return reinterpret_cast<void*>(v);
+        }
+
+        void* align_up(void* ptr)
+        {
+            return align_down(ptr + page_size - 1);
+        }
+    }
+
+
     vma::vma(void* addr, ulong size)
-        : _addr(addr)
-        , _size(size)
+        : _addr(align_down(addr))
+        , _size(reinterpret_cast<ulong>(align_up(addr + size))
+                - reinterpret_cast<ulong>(_addr))
     {
     }
 
