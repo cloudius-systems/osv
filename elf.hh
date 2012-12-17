@@ -79,6 +79,7 @@ namespace elf {
         PT_DYNAMIC = 2, // Dynamic linking tables
         PT_INTERP = 3, // Program interpreter path name
         PT_NOTE = 4, // Note sections
+        PT_PHDR = 6, // program header
         PT_TLS = 7, // Thread local storage initial segment
         PT_GNU_EH_FRAME = 0x6474e550, // Exception handling records
         PT_GNU_STACK = 0x6474e551, // Stack permissions record

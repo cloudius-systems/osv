@@ -140,6 +140,7 @@ namespace elf {
                 break;
             case PT_INTERP:
             case PT_NOTE:
+            case PT_PHDR:
             case PT_GNU_STACK:
             case PT_GNU_RELRO:
                 break;
