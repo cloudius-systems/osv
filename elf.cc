@@ -141,6 +141,7 @@ namespace elf {
             case PT_INTERP:
             case PT_NOTE:
             case PT_GNU_STACK:
+            case PT_GNU_RELRO:
                 break;
             case PT_TLS:
                 _tls_segment = _base + phdr.p_vaddr;
