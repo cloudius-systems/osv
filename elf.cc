@@ -3,6 +3,7 @@
 #include "mmu.hh"
 #include <boost/format.hpp>
 #include <exception>
+#include <memory>
 
 extern Console *debug_console;
 
@@ -12,13 +13,14 @@ namespace {
 
 namespace elf {
 
-    elf_object::elf_object()
-        : _dynamic_table(nullptr)
+    elf_object::elf_object(program& prog)
+        : _prog(prog)
+        , _dynamic_table(nullptr)
     {
     }
 
     elf_file::elf_file(program& prog, ::file* f)
-	: _prog(prog)
+	: elf_object(prog)
         , _f(*f)
     {
 	load_elf_header();
@@ -30,7 +32,8 @@ namespace elf {
         delete &_f;
     }
 
-    elf_memory_image::elf_memory_image(void* base)
+    elf_memory_image::elf_memory_image(program& prog, void* base)
+        : elf_object(prog)
     {
         _ehdr = *static_cast<Elf64_Ehdr*>(base);
         auto p = static_cast<Elf64_Phdr*>(base + _ehdr.e_phoff);
@@ -247,6 +250,16 @@ namespace elf {
         }
     }
 
+    void elf_object::load_needed()
+    {
+        auto needed = dynamic_str_array(DT_NEEDED);
+        for (auto lib : needed) {
+            debug_console->writeln(fmt("needed: %1%") % lib);
+            _prog.add(lib);
+        }
+        abort();
+    }
+
     program::program(::filesystem& fs, void* addr)
         : _fs(fs)
         , _next_alloc(addr)
@@ -261,12 +274,13 @@ namespace elf {
     void program::add(std::string name)
     {
         if (!_files.count(name)) {
-            std::unique_ptr< ::file> f(_fs.open(name));
+            std::unique_ptr< ::file> f(_fs.open("/usr/lib/" + name));
             auto ef = new elf_file(*this, f.release());
             ef->set_base(_next_alloc);
             _files[name] = ef;
             ef->load_segments();
             _next_alloc = ef->end();
+            ef->load_needed();
             ef->relocate();
         }
     }
@@ -277,7 +291,7 @@ void load_elf(std::string name, ::filesystem& fs, void* addr)
     elf::program prog(fs, addr);
     // load the kernel statically as libc.so.6, since it provides the C library
     // API to other objects.  see loader.ld for the base address.
-    prog.add("libc.so.6", new elf::elf_memory_image(reinterpret_cast<void*>(0x200000)));
+    prog.add("libc.so.6", new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000)));
     prog.add(name);
     abort();
 }

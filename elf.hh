@@ -200,9 +200,12 @@ namespace elf {
     };
 
 
+    class program;
+
     class elf_object {
     public:
-        elf_object();
+        explicit elf_object(program& prog);
+	void load_needed();
 	void relocate();
         void set_base(void* base);
         void set_dynamic_table(Elf64_Dyn* dynamic_table);
@@ -219,14 +222,13 @@ namespace elf {
         Elf64_Xword symbol(unsigned idx);
         void relocate_rela();
     protected:
+        program& _prog;
 	Elf64_Ehdr _ehdr;
 	std::vector<Elf64_Phdr> _phdrs;
 	void* _base;
 	void* _end;
 	Elf64_Dyn* _dynamic_table;
     };
-
-    class program;
 
     class elf_file : public elf_object {
     public:
@@ -237,13 +239,12 @@ namespace elf {
         void load_segments();
         void load_segment(const Elf64_Phdr& phdr);
     private:
-        program& _prog;
         ::file& _f;
     };
 
     class elf_memory_image : public elf_object {
     public:
-        explicit elf_memory_image(void* base);
+        explicit elf_memory_image(program& prog, void* base);
     };
 
     class program {
