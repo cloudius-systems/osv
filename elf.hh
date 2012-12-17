@@ -258,6 +258,6 @@ namespace elf {
 }
 
 void load_elf(std::string name, filesystem& fs,
-              void* addr = reinterpret_cast<void*>(64 << 20));
+              void* addr = reinterpret_cast<void*>(0x100000000000UL));
 
 #endif
