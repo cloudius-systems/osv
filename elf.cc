@@ -130,7 +130,6 @@ namespace elf {
                 load_segment(phdr);
                 break;
             case PT_DYNAMIC:
-                load_segment(phdr);
                 _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
                 break;
             case PT_INTERP:
