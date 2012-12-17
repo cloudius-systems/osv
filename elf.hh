@@ -206,6 +206,7 @@ namespace elf {
 	void relocate();
         void set_base(void* base);
         void set_dynamic_table(Elf64_Dyn* dynamic_table);
+        void* end() const;
     private:
 	template <typename T>
         T* dynamic_ptr(unsigned tag);
@@ -221,6 +222,7 @@ namespace elf {
 	Elf64_Ehdr _ehdr;
 	std::vector<Elf64_Phdr> _phdrs;
 	void* _base;
+	void* _end;
 	Elf64_Dyn* _dynamic_table;
     };
 

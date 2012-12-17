@@ -32,11 +32,11 @@ namespace elf {
 
     elf_memory_image::elf_memory_image(void* base)
     {
-        set_base(base);
         _ehdr = *static_cast<Elf64_Ehdr*>(base);
         auto p = static_cast<Elf64_Phdr*>(base + _ehdr.e_phoff);
         assert(_ehdr.e_phentsize == sizeof(*p));
         _phdrs.assign(p, p + _ehdr.e_phnum);
+        set_base(base);
     }
 
     void elf_file::load_elf_header()
@@ -64,9 +64,37 @@ namespace elf {
 	debug_console->writeln("loaded elf header");
     }
 
+    namespace {
+
+    void* align(void* addr, ulong align, ulong offset)
+    {
+        ulong a = reinterpret_cast<ulong>(addr);
+        a -= offset;
+        a = (a + align - 1) & ~(align - 1);
+        a += offset;
+        return reinterpret_cast<void*>(a);
+    }
+
+    }
+
     void elf_object::set_base(void* base)
     {
-        _base = base;
+        auto p = std::min_element(_phdrs.begin(), _phdrs.end(),
+                                  [](Elf64_Phdr a, Elf64_Phdr b)
+                                      { return a.p_type == PT_LOAD
+                                            && a.p_vaddr < b.p_vaddr; });
+        _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1));
+        auto q = std::min_element(_phdrs.begin(), _phdrs.end(),
+                                  [](Elf64_Phdr a, Elf64_Phdr b)
+                                      { return a.p_type == PT_LOAD
+                                            && a.p_vaddr > b.p_vaddr; });
+        _end = _base + q->p_vaddr + q->p_memsz;
+        debug_console->writeln(fmt("base %p end %p") % _base % _end);
+    }
+
+    void* elf_object::end() const
+    {
+        return _end;
     }
 
     void elf_file::load_program_headers()
@@ -239,6 +267,7 @@ namespace elf {
             ef->set_base(_next_alloc);
             _files[name] = ef;
             ef->load_segments();
+            _next_alloc = ef->end();
             ef->relocate();
         }
     }
