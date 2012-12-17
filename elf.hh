@@ -79,6 +79,7 @@ namespace elf {
         PT_DYNAMIC = 2, // Dynamic linking tables
         PT_INTERP = 3, // Program interpreter path name
         PT_NOTE = 4, // Note sections
+        PT_TLS = 7, // Thread local storage initial segment
         PT_GNU_EH_FRAME = 0x6474e550, // Exception handling records
         PT_GNU_STACK = 0x6474e551, // Stack permissions record
     };
@@ -227,6 +228,8 @@ namespace elf {
 	std::vector<Elf64_Phdr> _phdrs;
 	void* _base;
 	void* _end;
+	void* _tls_segment;
+	ulong _tls_init_size, _tls_uninit_size;
 	Elf64_Dyn* _dynamic_table;
     };
 

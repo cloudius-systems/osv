@@ -15,6 +15,9 @@ namespace elf {
 
     elf_object::elf_object(program& prog)
         : _prog(prog)
+        , _tls_segment()
+        , _tls_init_size()
+        , _tls_uninit_size()
         , _dynamic_table(nullptr)
     {
     }
@@ -138,6 +141,11 @@ namespace elf {
             case PT_INTERP:
             case PT_NOTE:
             case PT_GNU_STACK:
+                break;
+            case PT_TLS:
+                _tls_segment = _base + phdr.p_vaddr;
+                _tls_init_size = phdr.p_filesz;
+                _tls_uninit_size = phdr.p_memsz - phdr.p_filesz;
                 break;
             case PT_GNU_EH_FRAME:
                 load_segment(phdr);
