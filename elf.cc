@@ -267,7 +267,6 @@ namespace elf {
             debug_console->writeln(fmt("needed: %1%") % lib);
             _prog.add(lib);
         }
-        abort();
     }
 
     program::program(::filesystem& fs, void* addr)
