@@ -64,7 +64,8 @@ namespace elf {
 	if (!(_ehdr.e_ident[EI_VERSION] == EV_CURRENT)) {
 	    throw std::runtime_error("bad elf version");
 	}
-	if (!(_ehdr.e_ident[EI_OSABI] == ELFOSABI_LINUX)) {
+	if (!(_ehdr.e_ident[EI_OSABI] == ELFOSABI_LINUX
+	      || _ehdr.e_ident[EI_OSABI] == 0)) {
 	    throw std::runtime_error("bad os abi");
 	}
 	debug_console->writeln("loaded elf header");
