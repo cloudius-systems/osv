@@ -223,6 +223,12 @@ namespace elf {
         return 0;
     }
 
+    Elf64_Xword elf_object::symbol_module(unsigned idx)
+    {
+        debug_console->writeln("not looking up symbol module");
+        return 0;
+    }
+
     void elf_object::relocate_rela()
     {
         auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
@@ -245,6 +251,12 @@ namespace elf {
                 break;
             case R_X86_64_JUMP_SLOT:
             case R_X86_64_GLOB_DAT:
+                *static_cast<u64*>(addr) = symbol(sym);
+                break;
+            case R_X86_64_DPTMOD64:
+                *static_cast<u64*>(addr) = symbol_module(sym);
+                break;
+            case R_X86_64_TPOFF64:
                 *static_cast<u64*>(addr) = symbol(sym);
                 break;
             default:

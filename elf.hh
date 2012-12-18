@@ -223,6 +223,7 @@ namespace elf {
         Elf64_Dyn& lookup(unsigned tag);
         Elf64_Dyn* _lookup(unsigned tag);
         Elf64_Xword symbol(unsigned idx);
+        Elf64_Xword symbol_module(unsigned idx);
         void relocate_rela();
     protected:
         program& _prog;
