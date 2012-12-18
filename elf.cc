@@ -313,7 +313,9 @@ void load_elf(std::string name, ::filesystem& fs, void* addr)
     elf::program prog(fs, addr);
     // load the kernel statically as libc.so.6, since it provides the C library
     // API to other objects.  see loader.ld for the base address.
-    prog.add("libc.so.6", new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000)));
+    auto core = new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000));
+    prog.add("libc.so.6", core);
+    prog.add("ld-linux-x86-64.so.2", core);
     prog.add(name);
     abort();
 }
