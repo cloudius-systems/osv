@@ -274,6 +274,9 @@ namespace elf {
             case R_X86_64_DPTMOD64:
                 *static_cast<u64*>(addr) = symbol_module(sym);
                 break;
+            case R_X86_64_DTPOFF64:
+                *static_cast<u64*>(addr) = symbol(sym);
+                break;
             case R_X86_64_TPOFF64:
                 *static_cast<u64*>(addr) = symbol(sym);
                 break;
