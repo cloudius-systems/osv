@@ -2,3 +2,4 @@
 /usr/lib/libjvm.so: %(jdkbase)s/jre/lib/amd64/server/libjvm.so
 /usr/lib/libstdc++.so.6: /usr/lib64/libstdc++.so.6
 /usr/lib/libm.so.6: /usr/lib64/libm.so.6
+/usr/lib/libgcc_s.so.1: /usr/lib64/libgcc_s.so.1
