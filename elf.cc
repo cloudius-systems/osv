@@ -337,6 +337,7 @@ void load_elf(std::string name, ::filesystem& fs, void* addr)
     auto core = new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000));
     prog.add("libc.so.6", core);
     prog.add("ld-linux-x86-64.so.2", core);
+    prog.add("libpthread.so.0", core);
     prog.add(name);
     abort();
 }
