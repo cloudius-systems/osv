@@ -117,12 +117,30 @@ namespace elf {
 	}
     }
 
+    namespace {
+
+    ulong page_size = 4096;
+
+    ulong align_down(ulong v)
+    {
+        return v & ~(page_size - 1);
+    }
+
+    ulong align_up(ulong v)
+    {
+        return align_down(v + page_size - 1);
+    }
+
+    }
+
     void elf_file::load_segment(const Elf64_Phdr& phdr)
     {
-        mmu::map_file(_base + phdr.p_vaddr, phdr.p_filesz, mmu::perm_rwx,
-                      _f, phdr.p_offset);
-        mmu::map_anon(_base + phdr.p_vaddr + phdr.p_filesz,
-                      phdr.p_memsz - phdr.p_filesz, mmu::perm_rwx);
+        ulong vstart = align_down(phdr.p_vaddr);
+        ulong filesz = align_up(phdr.p_vaddr + phdr.p_filesz) - vstart;
+        ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz) - vstart;
+        mmu::map_file(_base + vstart, filesz, mmu::perm_rwx,
+                      _f, align_down(phdr.p_offset));
+        mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::perm_rwx);
     }
 
     void elf_file::load_segments()
