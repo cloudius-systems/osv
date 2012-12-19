@@ -24,12 +24,16 @@ objects += entry.o
 
 libc = libc/string/strcmp.o
 
+libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
+libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
+libgcc_s.a = $(shell $(CXX) -static -print-libgcc-file-name)
+
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) \
 		$(libc) bootfs.bin
-	$(CXX) $(CXXFLAGS) -nostartfiles -static -nodefaultlibs -o $@ \
+	$(LD) -o $@ \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
-	     -lsupc++ libunwind.a -lstdc++
+	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) libunwind.a
 
 jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
 jdkbase := $(jdk-jni.h:%/include/jni.h=%)
