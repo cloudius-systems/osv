@@ -23,6 +23,10 @@ namespace elf {
     {
     }
 
+    elf_object::~elf_object()
+    {
+    }
+
     elf_file::elf_file(program& prog, ::file* f)
 	: elf_object(prog)
         , _f(*f)
@@ -44,6 +48,10 @@ namespace elf {
         assert(_ehdr.e_phentsize == sizeof(*p));
         _phdrs.assign(p, p + _ehdr.e_phnum);
         set_base(base);
+    }
+
+    void elf_memory_image::load_segment(const Elf64_Phdr& phdr)
+    {
     }
 
     void elf_file::load_elf_header()
@@ -144,7 +152,7 @@ namespace elf {
         mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::perm_rwx);
     }
 
-    void elf_file::load_segments()
+    void elf_object::load_segments()
     {
         for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
             debug_console->writeln(fmt("loading segment %1%") % i);
@@ -492,6 +500,7 @@ void load_elf(std::string name, ::filesystem& fs, void* addr)
     // load the kernel statically as libc.so.6, since it provides the C library
     // API to other objects.  see loader.ld for the base address.
     auto core = new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000));
+    core->load_segments();
     prog.add("libc.so.6", core);
     prog.add("ld-linux-x86-64.so.2", core);
     prog.add("libpthread.so.0", core);

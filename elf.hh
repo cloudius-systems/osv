@@ -212,12 +212,16 @@ namespace elf {
     class elf_object {
     public:
         explicit elf_object(program& prog);
+        virtual ~elf_object();
 	void load_needed();
 	void relocate();
         void set_base(void* base);
         void set_dynamic_table(Elf64_Dyn* dynamic_table);
         void* end() const;
         Elf64_Sym* lookup_symbol(const char* name);
+        void load_segments();
+    protected:
+        virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
 	template <typename T>
         T* dynamic_ptr(unsigned tag);
@@ -245,10 +249,10 @@ namespace elf {
     public:
         explicit elf_file(program& prog, ::file* f);
         virtual ~elf_file();
-        void load_elf_header();
         void load_program_headers();
-        void load_segments();
-        void load_segment(const Elf64_Phdr& phdr);
+        void load_elf_header();
+    protected:
+        virtual void load_segment(const Elf64_Phdr& phdr);
     private:
         ::file& _f;
     };
@@ -256,6 +260,8 @@ namespace elf {
     class elf_memory_image : public elf_object {
     public:
         explicit elf_memory_image(program& prog, void* base);
+    protected:
+        virtual void load_segment(const Elf64_Phdr& phdr);
     };
 
     class program {
