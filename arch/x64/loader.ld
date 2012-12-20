@@ -9,13 +9,18 @@ SECTIONS
 	 * insists on moving stuff around if we do.
 	 */
     . = 0x201000;
-    .text : { *(.text*) }
-    .rodata : { *(.rodata*) }
-    .eh_frame : { *(.eh_frame) }
-    init_array_start = .;
-    .init_array : { *(.init_array) }
-    init_array_end = .;
-    .data : { *(.data) }
-    .bss : { *(.bss) }
+    .dynamic : { *(.dynamic) } :dynamic :text
+    .text : { *(.text*) } :text
+    .rodata : { *(.rodata*) } :text
+    .eh_frame : { *(.eh_frame) } :text
+    .data : { *(.data) } :text
+    _init_array_start = .;
+    .init_array : { *(.init_array) } :text
+    _init_array_end = .;
+    .bss : { *(.bss) } :text
+}
+PHDRS {
+	text PT_LOAD FILEHDR PHDRS;
+	dynamic PT_DYNAMIC;
 }
 ENTRY(start32);
