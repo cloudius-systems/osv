@@ -32,6 +32,7 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) dummy-shlib.so \
 		$(libc) bootfs.bin
 	$(LD) -o $@ \
+		-Bdynamic --export-dynamic \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
 	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) libunwind.a
 
