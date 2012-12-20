@@ -4,6 +4,7 @@
 #include <boost/format.hpp>
 #include <exception>
 #include <memory>
+#include <string.h>
 
 extern Console *debug_console;
 
@@ -231,14 +232,13 @@ namespace elf {
         return r;
     }
 
-    Elf64_Xword elf_object::symbol(unsigned idx)
+    Elf64_Sym* elf_object::symbol(unsigned idx)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
         auto nameidx = symtab[idx].st_name;
         auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
-        debug_console->writeln(fmt("not looking up %1%(%2%)") % name % idx);
-        return 0;
+        return _prog.lookup(name);
     }
 
     Elf64_Xword elf_object::symbol_module(unsigned idx)
@@ -262,23 +262,23 @@ namespace elf {
             case R_X86_64_NONE:
                 break;
             case R_X86_64_64:
-                *static_cast<u64*>(addr) = symbol(sym) + addend;
+                *static_cast<u64*>(addr) = symbol(sym)->st_value + addend;
                 break;
             case R_X86_64_RELATIVE:
                 *static_cast<void**>(addr) = _base + addend;
                 break;
             case R_X86_64_JUMP_SLOT:
             case R_X86_64_GLOB_DAT:
-                *static_cast<u64*>(addr) = symbol(sym);
+                *static_cast<u64*>(addr) = symbol(sym)->st_value;
                 break;
             case R_X86_64_DPTMOD64:
                 *static_cast<u64*>(addr) = symbol_module(sym);
                 break;
             case R_X86_64_DTPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym);
+                *static_cast<u64*>(addr) = symbol(sym)->st_value;
                 break;
             case R_X86_64_TPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym);
+                *static_cast<u64*>(addr) = symbol(sym)->st_value;
                 break;
             default:
                 abort();
@@ -292,6 +292,39 @@ namespace elf {
         if (dynamic_exists(DT_RELA)) {
             relocate_rela();
         }
+    }
+
+    unsigned long
+    elf64_hash(const char *name)
+    {
+        unsigned long h = 0, g;
+        while (*name) {
+            h = (h << 4) + (unsigned char)(*name++);
+            if ((g = h & 0xf0000000)) {
+                h ^= g >> 24;
+            }
+            h  &=  0x0fffffff;
+        }
+        return h;
+    }
+
+    Elf64_Sym* elf_object::lookup_symbol(const char* name)
+    {
+        auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+        auto strtab = dynamic_ptr<char>(DT_STRTAB);
+        auto hashtab = dynamic_ptr<Elf64_Word>(DT_HASH);
+        auto nbucket = hashtab[0];
+        auto buckets = hashtab + 2;
+        auto chain = buckets + nbucket;
+        for (auto ent = buckets[elf64_hash(name) % nbucket];
+                ent != STN_UNDEF;
+                ent = chain[ent]) {
+            auto &sym = symtab[ent];
+            if (strcmp(name, &strtab[sym.st_name]) == 0) {
+                return &sym;
+            }
+        }
+        return nullptr;
     }
 
     void elf_object::load_needed()
@@ -326,6 +359,17 @@ namespace elf {
             ef->load_needed();
             ef->relocate();
         }
+    }
+
+    Elf64_Sym* program::lookup(const char* name)
+    {
+        // FIXME: correct lookup order?
+        for (auto name_module : _files) {
+            if (auto ret = name_module.second->lookup_symbol(name)) {
+                return ret;
+            }
+        }
+        abort();
     }
 }
 

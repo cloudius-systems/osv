@@ -147,6 +147,10 @@ namespace elf {
         DT_HIPROC = 0x7FFFFFFF, //
     };
 
+    enum {
+        STN_UNDEF = 0,
+    };
+
     struct Elf64_Dyn {
         Elf64_Sxword d_tag;
         union {
@@ -213,6 +217,7 @@ namespace elf {
         void set_base(void* base);
         void set_dynamic_table(Elf64_Dyn* dynamic_table);
         void* end() const;
+        Elf64_Sym* lookup_symbol(const char* name);
     private:
 	template <typename T>
         T* dynamic_ptr(unsigned tag);
@@ -222,7 +227,7 @@ namespace elf {
         std::vector<const char*> dynamic_str_array(unsigned tag);
         Elf64_Dyn& lookup(unsigned tag);
         Elf64_Dyn* _lookup(unsigned tag);
-        Elf64_Xword symbol(unsigned idx);
+        Elf64_Sym* symbol(unsigned idx);
         Elf64_Xword symbol_module(unsigned idx);
         void relocate_rela();
     protected:
@@ -258,7 +263,7 @@ namespace elf {
         explicit program(::filesystem& fs, void* base);
         void add(std::string lib);
         void add(std::string lib, elf_object* obj);
-        void* lookup(const char* symbol);
+        Elf64_Sym* lookup(const char* symbol);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
