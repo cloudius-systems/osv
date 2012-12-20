@@ -45,6 +45,7 @@ tr:	.word     tss_desc - gdt
 
 .globl start32
 start32:
+    mov %eax, elf_header
     lgdt gdt_desc
     mov $0x10, %eax
     mov %eax, %ds

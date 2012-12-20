@@ -11,6 +11,7 @@ multiboot:
 
 .global start32
 start32:
+	lea elf64_header, %eax
 	jmp *24+elf64_header
 
 .align 4096

@@ -32,7 +32,7 @@ namespace {
 
 }
 
-extern void (*init_array_start[])(void), (*init_array_end[])(void);
+elf::Elf64_Ehdr* elf_header;
 
 int main(int ac, char **av)
 {
@@ -42,7 +42,8 @@ int main(int ac, char **av)
     debug_write = console_debug_write;
     console.writeln("Loader Copyright 2013 Unnamed");
 
-    for (auto init = init_array_start; init < init_array_end; ++init) {
+    auto inittab = elf::get_init(elf_header);
+    for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
 	(*init)();
     }
 
