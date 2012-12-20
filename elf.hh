@@ -269,6 +269,13 @@ namespace elf {
         void* _next_alloc;
         std::map<std::string, elf_object*> _files;
     };
+
+    struct init_table {
+        void (**start)();
+        unsigned count;
+    };
+
+    init_table get_init(Elf64_Ehdr* header);
 }
 
 void load_elf(std::string name, filesystem& fs,

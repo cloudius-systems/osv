@@ -371,6 +371,119 @@ namespace elf {
         }
         abort();
     }
+
+    init_table get_init(Elf64_Ehdr* header)
+    {
+        void* pbase = static_cast<void*>(header);
+        void* base = pbase;
+        auto phdr = static_cast<Elf64_Phdr*>(pbase + header->e_phoff);
+        auto n = header->e_phnum;
+        bool base_adjusted = false;
+        for (auto i = 0; i < n; ++i, ++phdr) {
+            if (!base_adjusted && phdr->p_type == PT_LOAD) {
+                base_adjusted = true;
+                base -= phdr->p_vaddr;
+            }
+            if (phdr->p_type == PT_DYNAMIC) {
+                auto dyn = reinterpret_cast<Elf64_Dyn*>(phdr->p_vaddr);
+                unsigned ndyn = phdr->p_memsz / sizeof(*dyn);
+                init_table ret;
+                const Elf64_Rela* rela;
+                const Elf64_Rela* jmp;
+                const Elf64_Sym* symtab;
+                const Elf64_Word* hashtab;
+                const char* strtab;
+                unsigned nrela;
+                unsigned njmp;
+                for (auto d = dyn; d < dyn + ndyn; ++d) {
+                    switch (d->d_tag) {
+                    case DT_INIT_ARRAY:
+                        ret.start = reinterpret_cast<void (**)()>(d->d_un.d_ptr);
+                        break;
+                    case DT_INIT_ARRAYSZ:
+                        ret.count = d->d_un.d_val / sizeof(ret.start);
+                        break;
+                    case DT_RELA:
+                        rela = reinterpret_cast<const Elf64_Rela*>(d->d_un.d_ptr);
+                        break;
+                    case DT_RELASZ:
+                        nrela = d->d_un.d_val / sizeof(*rela);
+                        break;
+                    case DT_SYMTAB:
+                        symtab = reinterpret_cast<const Elf64_Sym*>(d->d_un.d_ptr);
+                        break;
+                    case DT_HASH:
+                        hashtab = reinterpret_cast<const Elf64_Word*>(d->d_un.d_ptr);
+                        break;
+                    case DT_STRTAB:
+                        strtab = reinterpret_cast<const char*>(d->d_un.d_ptr);
+                        break;
+                    case DT_JMPREL:
+                        jmp = reinterpret_cast<const Elf64_Rela*>(d->d_un.d_ptr);
+                        break;
+                    case DT_PLTRELSZ:
+                        njmp = d->d_un.d_val / sizeof(*jmp);
+                        break;
+                    }
+                }
+                auto nbucket = hashtab[0];
+                auto buckets = hashtab + 2;
+                auto chain = buckets + nbucket;
+                auto relocate_table = [=](const Elf64_Rela *rtab, unsigned n) {
+                    for (auto r = rtab; r < rtab + n; ++r) {
+                        auto info = r->r_info;
+                        u32 sym = info >> 32;
+                        u32 type = info & 0xffffffff;
+                        void *addr = base + r->r_offset;
+                        auto addend = r->r_addend;
+                        auto lookup = [=]() {
+                            auto name = strtab + symtab[sym].st_name;
+                            for (auto ent = buckets[elf64_hash(name) % nbucket];
+                                    ent != STN_UNDEF;
+                                    ent = chain[ent]) {
+                                auto &sym = symtab[ent];
+                                if (strcmp(name, &strtab[sym.st_name]) == 0) {
+                                    return &sym;
+                                }
+                            }
+                            abort();
+                        };
+                        switch (type) {
+                        case R_X86_64_NONE:
+                            break;
+                        case R_X86_64_64:
+                            *static_cast<u64*>(addr) = lookup()->st_value + addend;
+                            break;
+                        case R_X86_64_RELATIVE:
+                            *static_cast<void**>(addr) = base + addend;
+                            break;
+                        case R_X86_64_JUMP_SLOT:
+                        case R_X86_64_GLOB_DAT:
+                            *static_cast<u64*>(addr) = lookup()->st_value;
+                            break;
+                        case R_X86_64_DPTMOD64:
+                            abort();
+                            //*static_cast<u64*>(addr) = symbol_module(sym);
+                            break;
+                        case R_X86_64_DTPOFF64:
+                            *static_cast<u64*>(addr) = lookup()->st_value;
+                            break;
+                        case R_X86_64_TPOFF64:
+                            *static_cast<u64*>(addr) = lookup()->st_value;
+                            break;
+                        default:
+                            abort();
+                        }
+
+                    }
+                };
+                relocate_table(rela, nrela);
+                relocate_table(jmp, njmp);
+                return ret;
+            }
+        }
+        abort();
+    }
 }
 
 void load_elf(std::string name, ::filesystem& fs, void* addr)
