@@ -29,11 +29,14 @@ libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
 libgcc_s.a = $(shell $(CXX) -static -print-libgcc-file-name)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
-        $(objects) \
+        $(objects) dummy-shlib.so \
 		$(libc) bootfs.bin
 	$(LD) -o $@ \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
 	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) libunwind.a
+
+dummy-shlib.so: dummy-shlib.o
+	$(CXX) -nodefaultlibs -shared -o $@ $^
 
 jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
 jdkbase := $(jdk-jni.h:%/include/jni.h=%)
