@@ -364,15 +364,15 @@ namespace elf {
         auto bloom = reinterpret_cast<const Elf64_Xword*>(hashtab + 4);
         auto C = sizeof(*bloom) * 8;
         auto hashval = dl_new_hash(name);
-        if (!((bloom[(hashval / C) % maskwords] >> (hashval % C)) & 1)) {
-            return nullptr;
-        }
-        if (!((bloom[(hashval / C) >> shift2] >> (hashval % C)) & 1)) {
+        auto bword = bloom[(hashval / C) % maskwords];
+        auto hashbit1 = hashval % C;
+        auto hashbit2 = (hashval >> shift2) % C;
+        if ((bword >> hashbit1) == 0 || (bword >> hashbit2) == 0) {
             return nullptr;
         }
         auto buckets = reinterpret_cast<const Elf64_Word*>(bloom + maskwords);
         auto chains = buckets + nbucket - symndx;
-        auto idx = hashval % nbucket;
+        auto idx = buckets[hashval % nbucket];
         if (idx == 0) {
             return nullptr;
         }
@@ -383,7 +383,7 @@ namespace elf {
             if (strcmp(&strtab[symtab[idx].st_name], name) == 0) {
                 return &symtab[idx];
             }
-        } while ((chains[symndx + idx++] & 1) == 0);
+        } while ((chains[idx++] & 1) == 0);
         return nullptr;
     }
 
