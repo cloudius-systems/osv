@@ -651,5 +651,7 @@ UNIMPL(size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
 			    size_t __n, __locale_t __loc) __THROW)
 UNIMPL(int wcscmp(const wchar_t *s1, const wchar_t *s2))
 
+long timezone;
+
 #undef errno
 int __thread errno;
