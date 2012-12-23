@@ -4,6 +4,7 @@
 #include "fs/fs.hh"
 #include <vector>
 #include <map>
+#include <memory>
 
 namespace elf {
 
@@ -291,13 +292,15 @@ namespace elf {
 
     class program {
     public:
-        explicit program(::filesystem& fs, void* base);
+        explicit program(::filesystem& fs,
+                         void* base = reinterpret_cast<void*>(0x100000000000UL));
         void add(std::string lib);
         void add(std::string lib, elf_object* obj);
         Elf64_Sym* lookup(const char* symbol);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
+        std::unique_ptr<elf_object> _core;
         std::map<std::string, elf_object*> _files;
     };
 
@@ -308,8 +311,5 @@ namespace elf {
 
     init_table get_init(Elf64_Ehdr* header);
 }
-
-void load_elf(std::string name, filesystem& fs,
-              void* addr = reinterpret_cast<void*>(0x100000000000UL));
 
 #endif

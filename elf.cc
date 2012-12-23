@@ -411,7 +411,13 @@ namespace elf {
     program::program(::filesystem& fs, void* addr)
         : _fs(fs)
         , _next_alloc(addr)
+        , _core(new elf::elf_memory_image(*this, reinterpret_cast<void*>(0x200000)))
     {
+        _core->load_segments();
+        add("libc.so.6", _core.get());
+        add("ld-linux-x86-64.so.2", _core.get());
+        add("libpthread.so.0", _core.get());
+        add("libdl.so.2", _core.get());
     }
 
     void program::add(std::string name, elf_object* obj)
@@ -556,20 +562,6 @@ namespace elf {
         }
         abort();
     }
-}
 
-void load_elf(std::string name, ::filesystem& fs, void* addr)
-{
-    elf::program prog(fs, addr);
-    // load the kernel statically as libc.so.6, since it provides the C library
-    // API to other objects.  see loader.ld for the base address.
-    auto core = new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000));
-    core->load_segments();
-    prog.add("libc.so.6", core);
-    prog.add("ld-linux-x86-64.so.2", core);
-    prog.add("libpthread.so.0", core);
-    prog.add("libdl.so.2", core);
-    prog.add(name);
-    abort();
 }
 
