@@ -653,5 +653,8 @@ UNIMPL(int wcscmp(const wchar_t *s1, const wchar_t *s2))
 
 long timezone;
 
+char* __environ_array[1];
+char** environ = __environ_array;
+
 #undef errno
 int __thread errno;
