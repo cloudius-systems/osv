@@ -244,9 +244,16 @@ namespace elf {
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
-        auto nameidx = symtab[idx].st_name;
+        auto sym = &symtab[idx];
+        auto nameidx = sym->st_name;
         auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
-        return _prog.lookup(name);
+        auto ret = _prog.lookup(name);
+        auto binding = sym->st_info >> 4;
+        if (!ret && binding == STB_WEAK) {
+            ret = sym;
+        }
+        assert(ret);
+        return ret;
     }
 
     Elf64_Xword elf_object::symbol_module(unsigned idx)
@@ -431,7 +438,7 @@ namespace elf {
                 return ret;
             }
         }
-        abort();
+        return nullptr;
     }
 
     init_table get_init(Elf64_Ehdr* header)

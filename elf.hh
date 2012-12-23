@@ -198,6 +198,28 @@ namespace elf {
         R_X86_64_SIZE64 = 33, //  word64 Z + A
         };
 
+    enum {
+        STB_LOCAL = 0, //  Not visible outside the object ﬁle
+        STB_GLOBAL = 1, // Global symbol, visible to all object ﬁles
+        STB_WEAK = 2, // Global scope, but with lower precedence than global symbols
+        STB_LOOS = 10, // Environment-speciﬁc use
+        STB_HIOS = 12,
+        STB_LOPROC = 13, // Processor-speciﬁc use
+        STB_HIPROC = 15,
+    };
+
+    enum {
+        STT_NOTYPE = 0, // No type speciﬁed (e.g., an absolute symbol)
+        STT_OBJECT = 1, // Data object
+        STT_FUNC = 2, // Function entry point
+        STT_SECTION = 3, // Symbol is associated with a section
+        STT_FILE = 4, // Source ﬁle associated with the object ﬁle
+        STT_LOOS = 10, // Environment-speciﬁc use
+        STT_HIOS = 12,
+        STT_LOPROC = 13, // Processor-speciﬁc use
+        STT_HIPROC = 15,
+    };
+
     struct Elf64_Sym {
         Elf64_Word st_name; /* Symbol name */
         unsigned char st_info; /* Type and Binding attributes */
