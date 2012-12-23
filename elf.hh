@@ -145,6 +145,7 @@ namespace elf {
         DT_LOPROC = 0x70000000, // Deﬁnes a range of dynamic table tags that are reserved for
           // processor-speciﬁc use.
         DT_HIPROC = 0x7FFFFFFF, //
+        DT_GNU_HASH = 0x6ffffef5,
     };
 
     enum {
@@ -223,6 +224,8 @@ namespace elf {
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
+        Elf64_Sym* lookup_symbol_old(const char* name);
+        Elf64_Sym* lookup_symbol_gnu(const char* name);
 	template <typename T>
         T* dynamic_ptr(unsigned tag);
         Elf64_Xword dynamic_val(unsigned tag);

@@ -316,7 +316,7 @@ namespace elf {
         return h;
     }
 
-    Elf64_Sym* elf_object::lookup_symbol(const char* name)
+    Elf64_Sym* elf_object::lookup_symbol_old(const char* name)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -333,6 +333,60 @@ namespace elf {
             }
         }
         return nullptr;
+    }
+
+    uint_fast32_t
+    dl_new_hash(const char *s)
+    {
+        uint_fast32_t h = 5381;
+        for (unsigned char c = *s; c != '\0'; c = *++s) {
+            h = h * 33 + c;
+        }
+        return h & 0xffffffff;
+    }
+
+    Elf64_Sym* elf_object::lookup_symbol_gnu(const char* name)
+    {
+        auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+        auto strtab = dynamic_ptr<char>(DT_STRTAB);
+        auto hashtab = dynamic_ptr<Elf64_Word>(DT_GNU_HASH);
+        auto nbucket = hashtab[0];
+        auto symndx = hashtab[1];
+        auto maskwords = hashtab[2];
+        auto shift2 = hashtab[3];
+        auto bloom = reinterpret_cast<const Elf64_Xword*>(hashtab + 4);
+        auto C = sizeof(*bloom) * 8;
+        auto hashval = dl_new_hash(name);
+        if (!((bloom[(hashval / C) % maskwords] >> (hashval % C)) & 1)) {
+            return nullptr;
+        }
+        if (!((bloom[(hashval / C) >> shift2] >> (hashval % C)) & 1)) {
+            return nullptr;
+        }
+        auto buckets = reinterpret_cast<const Elf64_Word*>(bloom + maskwords);
+        auto chains = buckets + nbucket - symndx;
+        auto idx = hashval % nbucket;
+        if (idx == 0) {
+            return nullptr;
+        }
+        do {
+            if ((chains[idx] & ~1) != (hashval & ~1)) {
+                continue;
+            }
+            if (strcmp(&strtab[symtab[idx].st_name], name) == 0) {
+                return &symtab[idx];
+            }
+        } while ((chains[symndx + idx++] & 1) == 0);
+        return nullptr;
+    }
+
+    Elf64_Sym* elf_object::lookup_symbol(const char* name)
+    {
+        if (dynamic_exists(DT_GNU_HASH)) {
+            return lookup_symbol_gnu(name);
+        } else {
+            return lookup_symbol_old(name);
+        }
     }
 
     void elf_object::load_needed()
