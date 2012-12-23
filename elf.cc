@@ -252,7 +252,10 @@ namespace elf {
         if (!ret && binding == STB_WEAK) {
             ret = sym;
         }
-        assert(ret);
+        if (!ret) {
+            debug_console->writeln(fmt("failed looking up symbol %1%") % name);
+            abort();
+        }
         return ret;
     }
 
