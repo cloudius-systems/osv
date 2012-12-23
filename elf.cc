@@ -450,6 +450,18 @@ namespace elf {
         return nullptr;
     }
 
+    void* program::do_lookup_function(const char* name)
+    {
+        auto sym = lookup(name);
+        if (!sym) {
+            throw std::runtime_error("symbol not found");
+        }
+        if ((sym->st_info & 15) != STT_FUNC) {
+            throw std::runtime_error("symbol is not a function");
+        }
+        return reinterpret_cast<void*>(sym->st_value);
+    }
+
     init_table get_init(Elf64_Ehdr* header)
     {
         void* pbase = static_cast<void*>(header);

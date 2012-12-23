@@ -297,6 +297,10 @@ namespace elf {
         void add(std::string lib);
         void add(std::string lib, elf_object* obj);
         Elf64_Sym* lookup(const char* symbol);
+        template <typename T>
+        T* lookup_function(const char* symbol);
+    private:
+        void* do_lookup_function(const char* symbol);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
@@ -310,6 +314,13 @@ namespace elf {
     };
 
     init_table get_init(Elf64_Ehdr* header);
+
+    template <class T>
+    T*
+    program::lookup_function(const char* symbol)
+    {
+        return reinterpret_cast<T*>(do_lookup_function(symbol));
+    }
 }
 
 #endif
