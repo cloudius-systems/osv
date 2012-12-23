@@ -565,6 +565,7 @@ void load_elf(std::string name, ::filesystem& fs, void* addr)
     prog.add("libc.so.6", core);
     prog.add("ld-linux-x86-64.so.2", core);
     prog.add("libpthread.so.0", core);
+    prog.add("libdl.so.2", core);
     prog.add(name);
     abort();
 }

@@ -3,4 +3,3 @@
 /usr/lib/libstdc++.so.6: /usr/lib64/libstdc++.so.6
 /usr/lib/libm.so.6: /usr/lib64/libm.so.6
 /usr/lib/libgcc_s.so.1: /usr/lib64/libgcc_s.so.1
-/usr/lib/libdl.so.2: /usr/lib64/libdl.so.2
