@@ -22,6 +22,7 @@ drivers += elf.o
 objects = exceptions.o
 objects += entry.o
 objects += mutex.o
+objects += pthread.o
 
 libc = libc/string/strcmp.o
 
