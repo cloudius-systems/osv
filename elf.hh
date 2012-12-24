@@ -255,8 +255,8 @@ namespace elf {
         const char* dynamic_str(unsigned tag);
         bool dynamic_exists(unsigned tag);
         std::vector<const char*> dynamic_str_array(unsigned tag);
-        Elf64_Dyn& lookup(unsigned tag);
-        Elf64_Dyn* _lookup(unsigned tag);
+        Elf64_Dyn& dynamic_tag(unsigned tag);
+        Elf64_Dyn* _dynamic_tag(unsigned tag);
         Elf64_Sym* symbol(unsigned idx);
         Elf64_Xword symbol_module(unsigned idx);
         void relocate_rela();

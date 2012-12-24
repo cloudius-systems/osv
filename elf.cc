@@ -190,12 +190,12 @@ namespace elf {
     template <typename T>
     T* elf_object::dynamic_ptr(unsigned tag)
     {
-        return static_cast<T*>(_base + lookup(tag).d_un.d_ptr);
+        return static_cast<T*>(_base + dynamic_tag(tag).d_un.d_ptr);
     }
 
     Elf64_Xword elf_object::dynamic_val(unsigned tag)
     {
-        return lookup(tag).d_un.d_val;
+        return dynamic_tag(tag).d_un.d_val;
     }
 
     const char* elf_object::dynamic_str(unsigned tag)
@@ -205,10 +205,10 @@ namespace elf {
 
     bool elf_object::dynamic_exists(unsigned tag)
     {
-        return _lookup(tag);
+        return _dynamic_tag(tag);
     }
 
-    Elf64_Dyn* elf_object::_lookup(unsigned tag)
+    Elf64_Dyn* elf_object::_dynamic_tag(unsigned tag)
     {
         for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
             if (p->d_tag == tag) {
@@ -218,9 +218,9 @@ namespace elf {
         return nullptr;
     }
 
-    Elf64_Dyn& elf_object::lookup(unsigned tag)
+    Elf64_Dyn& elf_object::dynamic_tag(unsigned tag)
     {
-        auto r = _lookup(tag);
+        auto r = _dynamic_tag(tag);
         if (!r) {
             throw std::runtime_error("missing tag");
         }
