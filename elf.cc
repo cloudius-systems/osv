@@ -14,6 +14,45 @@ namespace {
 
 namespace elf {
 
+    namespace {
+
+    unsigned symbol_type(Elf64_Sym& sym)
+    {
+        return sym.st_info & 15;
+    }
+
+    unsigned symbol_binding(Elf64_Sym& sym)
+    {
+        return sym.st_info >> 4;
+    }
+
+    }
+
+    symbol_module::symbol_module(Elf64_Sym* _sym, elf_object* _obj)
+        : symbol(_sym)
+        , object(_obj)
+    {
+    }
+
+    void* symbol_module::relocated_addr() const
+    {
+        void* base = object->base();
+        if (symbol->st_shndx == SHN_UNDEF || symbol->st_shndx == SHN_ABS) {
+            base = 0;
+        }
+        switch (symbol_type(*symbol)) {
+        case STT_NOTYPE:
+            return reinterpret_cast<void*>(symbol->st_value);
+            break;
+        case STT_OBJECT:
+        case STT_FUNC:
+            return base + symbol->st_value;
+            break;
+        default:
+            abort();
+        }
+    }
+
     elf_object::elf_object(program& prog)
         : _prog(prog)
         , _tls_segment()
@@ -106,6 +145,11 @@ namespace elf {
                                             && a.p_vaddr > b.p_vaddr; });
         _end = _base + q->p_vaddr + q->p_memsz;
         debug_console->writeln(fmt("base %p end %p") % _base % _end);
+    }
+
+    void* elf_object::base() const
+    {
+        return _base;
     }
 
     void* elf_object::end() const
@@ -240,7 +284,7 @@ namespace elf {
         return r;
     }
 
-    Elf64_Sym* elf_object::symbol(unsigned idx)
+    symbol_module elf_object::symbol(unsigned idx)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
@@ -249,17 +293,17 @@ namespace elf {
         auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
         auto ret = _prog.lookup(name);
         auto binding = sym->st_info >> 4;
-        if (!ret && binding == STB_WEAK) {
-            ret = sym;
+        if (!ret.symbol && binding == STB_WEAK) {
+            return symbol_module(sym, this);
         }
-        if (!ret) {
+        if (!ret.symbol) {
             debug_console->writeln(fmt("failed looking up symbol %1%") % name);
             abort();
         }
         return ret;
     }
 
-    Elf64_Xword elf_object::symbol_module(unsigned idx)
+    Elf64_Xword elf_object::symbol_tls_module(unsigned idx)
     {
         debug_console->writeln("not looking up symbol module");
         return 0;
@@ -280,23 +324,23 @@ namespace elf {
             case R_X86_64_NONE:
                 break;
             case R_X86_64_64:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value + addend;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value + addend;
                 break;
             case R_X86_64_RELATIVE:
                 *static_cast<void**>(addr) = _base + addend;
                 break;
             case R_X86_64_JUMP_SLOT:
             case R_X86_64_GLOB_DAT:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             case R_X86_64_DPTMOD64:
-                *static_cast<u64*>(addr) = symbol_module(sym);
+                *static_cast<u64*>(addr) = symbol_tls_module(sym);
                 break;
             case R_X86_64_DTPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             case R_X86_64_TPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             default:
                 abort();
@@ -439,27 +483,27 @@ namespace elf {
         }
     }
 
-    Elf64_Sym* program::lookup(const char* name)
+    symbol_module program::lookup(const char* name)
     {
         // FIXME: correct lookup order?
         for (auto name_module : _files) {
-            if (auto ret = name_module.second->lookup_symbol(name)) {
-                return ret;
+            if (auto sym = name_module.second->lookup_symbol(name)) {
+                return symbol_module(sym, name_module.second);
             }
         }
-        return nullptr;
+        return symbol_module(nullptr, nullptr);
     }
 
     void* program::do_lookup_function(const char* name)
     {
         auto sym = lookup(name);
-        if (!sym) {
+        if (!sym.symbol) {
             throw std::runtime_error("symbol not found");
         }
-        if ((sym->st_info & 15) != STT_FUNC) {
+        if ((sym.symbol->st_info & 15) != STT_FUNC) {
             throw std::runtime_error("symbol is not a function");
         }
-        return reinterpret_cast<void*>(sym->st_value);
+        return sym.relocated_addr();
     }
 
     init_table get_init(Elf64_Ehdr* header)
