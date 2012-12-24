@@ -45,7 +45,7 @@ tr:	.word     tss_desc - gdt
 
 .globl start32
 start32:
-    mov %eax, elf_header
+    mov %eax, %ebp
     lgdt gdt_desc
     mov $0x10, %eax
     mov %eax, %ds
@@ -74,5 +74,11 @@ start64:
     movb %dl, tss_desc + 4
     movb %dh, tss_desc + 7
     ltr tr
+    lea .bss, %rdi
+    lea .edata, %rcx
+    sub %rdi, %rcx
+    xor %eax, %eax
+    rep stosb
+    mov %rbp, elf_header
     jmp main
 
