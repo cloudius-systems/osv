@@ -14,7 +14,7 @@ arch/x64/boot32.o: loader.elf
 
 fs = fs/fs.o fs/bootfs.o bootfs.o
 
-drivers = drivers/vga.o drivers/console.o
+drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
