@@ -1,6 +1,6 @@
-
-CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS)
-CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith
+INCLUDES = -I.
+CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(INMCLUDES)
+CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES)
 
 autodepend = -MD $(@.o=.d) -MT $@
 
