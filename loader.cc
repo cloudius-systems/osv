@@ -85,6 +85,11 @@ int main(int ac, char **av)
     JavaVMInitArgs vm_args;
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
+    auto JNI_CreateJavaVM
+        = prog.lookup_function<jint (JavaVM**, void**, void*)>("JNI_CreateJavaVM");
+    JavaVM* jvm = nullptr;
+    auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
+    debug_console->writeln(fmt("JNI_CreateJavaVM() returned %1%") % ret);
     while (true)
 	;
 }
