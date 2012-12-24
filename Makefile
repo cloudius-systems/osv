@@ -1,8 +1,11 @@
 
-CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS)
+CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes)
 CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith
 
+sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD $(@.o=.d) -MT $@
+
+do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 all: loader.bin
 
