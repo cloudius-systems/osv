@@ -4,6 +4,7 @@
 #include "fs/fs.hh"
 #include <vector>
 #include <map>
+#include <memory>
 
 namespace elf {
 
@@ -220,6 +221,17 @@ namespace elf {
         STT_HIPROC = 15,
     };
 
+    enum {
+        SHN_UNDEF = 0, // Used to mark an undeﬁned or meaningless section reference
+        SHN_LOPROC = 0xFF00, // Processor-speciﬁc use
+        SHN_HIPROC = 0xFF1F,
+        SHN_LOOS = 0xFF20, // Environment-speciﬁc use
+        SHN_HIOS = 0xFF3F,
+        SHN_ABS = 0xFFF1, // Indicates that the corresponding reference is an absolute value
+        SHN_COMMON = 0xFFF2, // Indicates a symbol that has been declared as a common block
+                             // (Fortran COMMON or C tentative declaration)
+    };
+
     struct Elf64_Sym {
         Elf64_Word st_name; /* Symbol name */
         unsigned char st_info; /* Type and Binding attributes */
@@ -229,8 +241,8 @@ namespace elf {
         Elf64_Xword st_size; /* Size of object (e.g., common) */
     };
 
-
     class program;
+    class symbol_module;
 
     class elf_object {
     public:
@@ -240,6 +252,7 @@ namespace elf {
 	void relocate();
         void set_base(void* base);
         void set_dynamic_table(Elf64_Dyn* dynamic_table);
+        void* base() const;
         void* end() const;
         Elf64_Sym* lookup_symbol(const char* name);
         void load_segments();
@@ -254,10 +267,10 @@ namespace elf {
         const char* dynamic_str(unsigned tag);
         bool dynamic_exists(unsigned tag);
         std::vector<const char*> dynamic_str_array(unsigned tag);
-        Elf64_Dyn& lookup(unsigned tag);
-        Elf64_Dyn* _lookup(unsigned tag);
-        Elf64_Sym* symbol(unsigned idx);
-        Elf64_Xword symbol_module(unsigned idx);
+        Elf64_Dyn& dynamic_tag(unsigned tag);
+        Elf64_Dyn* _dynamic_tag(unsigned tag);
+        symbol_module symbol(unsigned idx);
+        Elf64_Xword symbol_tls_module(unsigned idx);
         void relocate_rela();
     protected:
         program& _prog;
@@ -289,15 +302,29 @@ namespace elf {
         virtual void load_segment(const Elf64_Phdr& phdr);
     };
 
+    struct symbol_module {
+    public:
+        symbol_module(Elf64_Sym* sym, elf_object* object);
+        void* relocated_addr() const;
+        Elf64_Sym* symbol;
+        elf_object* object;
+    };
+
     class program {
     public:
-        explicit program(::filesystem& fs, void* base);
+        explicit program(::filesystem& fs,
+                         void* base = reinterpret_cast<void*>(0x100000000000UL));
         void add(std::string lib);
         void add(std::string lib, elf_object* obj);
-        Elf64_Sym* lookup(const char* symbol);
+        symbol_module lookup(const char* symbol);
+        template <typename T>
+        T* lookup_function(const char* symbol);
+    private:
+        void* do_lookup_function(const char* symbol);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
+        std::unique_ptr<elf_object> _core;
         std::map<std::string, elf_object*> _files;
     };
 
@@ -307,9 +334,13 @@ namespace elf {
     };
 
     init_table get_init(Elf64_Ehdr* header);
-}
 
-void load_elf(std::string name, filesystem& fs,
-              void* addr = reinterpret_cast<void*>(0x100000000000UL));
+    template <class T>
+    T*
+    program::lookup_function(const char* symbol)
+    {
+        return reinterpret_cast<T*>(do_lookup_function(symbol));
+    }
+}
 
 #endif

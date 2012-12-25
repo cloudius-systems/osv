@@ -1,8 +1,11 @@
 INCLUDES = -I.
-CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(INMCLUDES)
+CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
 CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES)
 
+sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD $(@.o=.d) -MT $@
+
+do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 all: loader.bin
 
@@ -21,6 +24,8 @@ drivers += elf.o
 
 objects = exceptions.o
 objects += entry.o
+objects += mutex.o
+objects += pthread.o
 
 libc = libc/string/strcmp.o
 

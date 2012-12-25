@@ -14,6 +14,45 @@ namespace {
 
 namespace elf {
 
+    namespace {
+
+    unsigned symbol_type(Elf64_Sym& sym)
+    {
+        return sym.st_info & 15;
+    }
+
+    unsigned symbol_binding(Elf64_Sym& sym)
+    {
+        return sym.st_info >> 4;
+    }
+
+    }
+
+    symbol_module::symbol_module(Elf64_Sym* _sym, elf_object* _obj)
+        : symbol(_sym)
+        , object(_obj)
+    {
+    }
+
+    void* symbol_module::relocated_addr() const
+    {
+        void* base = object->base();
+        if (symbol->st_shndx == SHN_UNDEF || symbol->st_shndx == SHN_ABS) {
+            base = 0;
+        }
+        switch (symbol_type(*symbol)) {
+        case STT_NOTYPE:
+            return reinterpret_cast<void*>(symbol->st_value);
+            break;
+        case STT_OBJECT:
+        case STT_FUNC:
+            return base + symbol->st_value;
+            break;
+        default:
+            abort();
+        }
+    }
+
     elf_object::elf_object(program& prog)
         : _prog(prog)
         , _tls_segment()
@@ -108,6 +147,11 @@ namespace elf {
         debug_console->writeln(fmt("base %p end %p") % _base % _end);
     }
 
+    void* elf_object::base() const
+    {
+        return _base;
+    }
+
     void* elf_object::end() const
     {
         return _end;
@@ -190,12 +234,12 @@ namespace elf {
     template <typename T>
     T* elf_object::dynamic_ptr(unsigned tag)
     {
-        return static_cast<T*>(_base + lookup(tag).d_un.d_ptr);
+        return static_cast<T*>(_base + dynamic_tag(tag).d_un.d_ptr);
     }
 
     Elf64_Xword elf_object::dynamic_val(unsigned tag)
     {
-        return lookup(tag).d_un.d_val;
+        return dynamic_tag(tag).d_un.d_val;
     }
 
     const char* elf_object::dynamic_str(unsigned tag)
@@ -205,10 +249,10 @@ namespace elf {
 
     bool elf_object::dynamic_exists(unsigned tag)
     {
-        return _lookup(tag);
+        return _dynamic_tag(tag);
     }
 
-    Elf64_Dyn* elf_object::_lookup(unsigned tag)
+    Elf64_Dyn* elf_object::_dynamic_tag(unsigned tag)
     {
         for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
             if (p->d_tag == tag) {
@@ -218,9 +262,9 @@ namespace elf {
         return nullptr;
     }
 
-    Elf64_Dyn& elf_object::lookup(unsigned tag)
+    Elf64_Dyn& elf_object::dynamic_tag(unsigned tag)
     {
-        auto r = _lookup(tag);
+        auto r = _dynamic_tag(tag);
         if (!r) {
             throw std::runtime_error("missing tag");
         }
@@ -240,7 +284,7 @@ namespace elf {
         return r;
     }
 
-    Elf64_Sym* elf_object::symbol(unsigned idx)
+    symbol_module elf_object::symbol(unsigned idx)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
@@ -249,14 +293,17 @@ namespace elf {
         auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
         auto ret = _prog.lookup(name);
         auto binding = sym->st_info >> 4;
-        if (!ret && binding == STB_WEAK) {
-            ret = sym;
+        if (!ret.symbol && binding == STB_WEAK) {
+            return symbol_module(sym, this);
         }
-        assert(ret);
+        if (!ret.symbol) {
+            debug_console->writeln(fmt("failed looking up symbol %1%") % name);
+            abort();
+        }
         return ret;
     }
 
-    Elf64_Xword elf_object::symbol_module(unsigned idx)
+    Elf64_Xword elf_object::symbol_tls_module(unsigned idx)
     {
         debug_console->writeln("not looking up symbol module");
         return 0;
@@ -277,23 +324,23 @@ namespace elf {
             case R_X86_64_NONE:
                 break;
             case R_X86_64_64:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value + addend;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value + addend;
                 break;
             case R_X86_64_RELATIVE:
                 *static_cast<void**>(addr) = _base + addend;
                 break;
             case R_X86_64_JUMP_SLOT:
             case R_X86_64_GLOB_DAT:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             case R_X86_64_DPTMOD64:
-                *static_cast<u64*>(addr) = symbol_module(sym);
+                *static_cast<u64*>(addr) = symbol_tls_module(sym);
                 break;
             case R_X86_64_DTPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             case R_X86_64_TPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym)->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             default:
                 abort();
@@ -408,7 +455,13 @@ namespace elf {
     program::program(::filesystem& fs, void* addr)
         : _fs(fs)
         , _next_alloc(addr)
+        , _core(new elf::elf_memory_image(*this, reinterpret_cast<void*>(0x200000)))
     {
+        _core->load_segments();
+        add("libc.so.6", _core.get());
+        add("ld-linux-x86-64.so.2", _core.get());
+        add("libpthread.so.0", _core.get());
+        add("libdl.so.2", _core.get());
     }
 
     void program::add(std::string name, elf_object* obj)
@@ -430,15 +483,27 @@ namespace elf {
         }
     }
 
-    Elf64_Sym* program::lookup(const char* name)
+    symbol_module program::lookup(const char* name)
     {
         // FIXME: correct lookup order?
         for (auto name_module : _files) {
-            if (auto ret = name_module.second->lookup_symbol(name)) {
-                return ret;
+            if (auto sym = name_module.second->lookup_symbol(name)) {
+                return symbol_module(sym, name_module.second);
             }
         }
-        return nullptr;
+        return symbol_module(nullptr, nullptr);
+    }
+
+    void* program::do_lookup_function(const char* name)
+    {
+        auto sym = lookup(name);
+        if (!sym.symbol) {
+            throw std::runtime_error("symbol not found");
+        }
+        if ((sym.symbol->st_info & 15) != STT_FUNC) {
+            throw std::runtime_error("symbol is not a function");
+        }
+        return sym.relocated_addr();
     }
 
     init_table get_init(Elf64_Ehdr* header)
@@ -553,19 +618,6 @@ namespace elf {
         }
         abort();
     }
-}
 
-void load_elf(std::string name, ::filesystem& fs, void* addr)
-{
-    elf::program prog(fs, addr);
-    // load the kernel statically as libc.so.6, since it provides the C library
-    // API to other objects.  see loader.ld for the base address.
-    auto core = new elf::elf_memory_image(prog, reinterpret_cast<void*>(0x200000));
-    core->load_segments();
-    prog.add("libc.so.6", core);
-    prog.add("ld-linux-x86-64.so.2", core);
-    prog.add("libpthread.so.0", core);
-    prog.add(name);
-    abort();
 }
 

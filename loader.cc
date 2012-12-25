@@ -5,6 +5,7 @@
 #include <cctype>
 #include "elf.hh"
 #include "exceptions.hh"
+#include <jni.h>
 //#include <locale>
 
 typedef boost::format fmt;
@@ -77,7 +78,18 @@ int main(int ac, char **av)
 #endif
 
     console.writeln(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
-    load_elf("libjvm.so", fs);
+    elf::program prog(fs);
+    prog.add("libjvm.so");
+    auto JNI_GetDefaultJavaVMInitArgs
+        = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");
+    JavaVMInitArgs vm_args;
+    vm_args.version = JNI_VERSION_1_6;
+    JNI_GetDefaultJavaVMInitArgs(&vm_args);
+    auto JNI_CreateJavaVM
+        = prog.lookup_function<jint (JavaVM**, void**, void*)>("JNI_CreateJavaVM");
+    JavaVM* jvm = nullptr;
+    auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
+    debug_console->writeln(fmt("JNI_CreateJavaVM() returned %1%") % ret);
     while (true)
 	;
 }

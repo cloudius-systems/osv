@@ -18,6 +18,7 @@ SECTIONS
     .init_array : { *(.init_array) } :text
     _init_array_end = .;
     .bss : { *(.bss) } :text
+    .edata = .;
 }
 PHDRS {
 	text PT_LOAD FILEHDR PHDRS;
