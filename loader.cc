@@ -1,5 +1,5 @@
 
-#include "drivers/vga.hh"
+#include "drivers/isa-serial.hh"
 #include "fs/bootfs.hh"
 #include <boost/format.hpp>
 #include <cctype>
@@ -37,7 +37,7 @@ elf::Elf64_Ehdr* elf_header;
 
 int main(int ac, char **av)
 {
-    VGAConsole console;
+    IsaSerialConsole console;
 
     debug_console = &console;
     debug_write = console_debug_write;

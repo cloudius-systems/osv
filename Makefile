@@ -1,6 +1,6 @@
-
-CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes)
-CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith
+INCLUDES = -I.
+CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
+CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES)
 ASFLAGS = -g
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
@@ -18,7 +18,7 @@ arch/x64/boot32.o: loader.elf
 
 fs = fs/fs.o fs/bootfs.o bootfs.o
 
-drivers = drivers/vga.o drivers/console.o
+drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
