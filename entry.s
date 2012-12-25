@@ -1,4 +1,16 @@
 
+.macro pushq_cfi reg
+	pushq \reg
+	.cfi_adjust_cfa_offset 8
+	.cfi_rel_offset \reg, 0
+.endm
+
+.macro popq_cfi reg
+	popq \reg
+	.cfi_adjust_cfa_offset -8
+	.cfi_restore \reg
+.endm
+
 .macro exception_entry name, handler, has_error_code
 	.global \name
 	\name :
@@ -7,71 +19,41 @@
 	.if \has_error_code == 0
 	pushq $0
 	.endif
-	.cfi_def_cfa rsp, 0
-	.cfi_rel_offset rip, 8
-	.cfi_rel_offset rsp, 32
-	pushq %rax
-	.cfi_adjust_cfa_offset 8
-	pushq %rbx
-	.cfi_adjust_cfa_offset 8
-	pushq %rcx
-	.cfi_adjust_cfa_offset 8
-	pushq %rdx
-	.cfi_adjust_cfa_offset 8
-	pushq %rsi
-	.cfi_adjust_cfa_offset 8
-	pushq %rdi
-	.cfi_adjust_cfa_offset 8
-	pushq %rbp
-	.cfi_adjust_cfa_offset 8
-	pushq %r8
-	.cfi_adjust_cfa_offset 8
-	pushq %r9
-	.cfi_adjust_cfa_offset 8
-	pushq %r10
-	.cfi_adjust_cfa_offset 8
-	pushq %r11
-	.cfi_adjust_cfa_offset 8
-	pushq %r12
-	.cfi_adjust_cfa_offset 8
-	pushq %r13
-	.cfi_adjust_cfa_offset 8
-	pushq %r14
-	.cfi_adjust_cfa_offset 8
-	pushq %r15
-	.cfi_adjust_cfa_offset 8
+	.cfi_def_cfa %rsp, 0
+	.cfi_offset %rip, 8
+	.cfi_offset %rsp, 32
+	pushq_cfi %rax
+	pushq_cfi %rbx
+	pushq_cfi %rcx
+	pushq_cfi %rdx
+	pushq_cfi %rsi
+	pushq_cfi %rdi
+	pushq_cfi %rbp
+	pushq_cfi %r8
+	pushq_cfi %r9
+	pushq_cfi %r10
+	pushq_cfi %r11
+	pushq_cfi %r12
+	pushq_cfi %r13
+	pushq_cfi %r14
+	pushq_cfi %r15
 	mov %rsp, %rdi
 	call \handler
-	popq %r15
-	.cfi_adjust_cfa_offset -8
-	popq %r14
-	.cfi_adjust_cfa_offset -8
-	popq %r13
-	.cfi_adjust_cfa_offset -8
-	popq %r12
-	.cfi_adjust_cfa_offset -8
-	popq %r11
-	.cfi_adjust_cfa_offset -8
-	popq %r10
-	.cfi_adjust_cfa_offset -8
-	popq %r9
-	.cfi_adjust_cfa_offset -8
-	popq %r8
-	.cfi_adjust_cfa_offset -8
-	popq %rbp
-	.cfi_adjust_cfa_offset -8
-	popq %rdi
-	.cfi_adjust_cfa_offset -8
-	popq %rsi
-	.cfi_adjust_cfa_offset -8
-	popq %rdx
-	.cfi_adjust_cfa_offset -8
-	popq %rcx
-	.cfi_adjust_cfa_offset -8
-	popq %rbx
-	.cfi_adjust_cfa_offset -8
-	popq %rax
-	.cfi_adjust_cfa_offset -8
+	popq_cfi %r15
+	popq_cfi %r14
+	popq_cfi %r13
+	popq_cfi %r12
+	popq_cfi %r11
+	popq_cfi %r10
+	popq_cfi %r9
+	popq_cfi %r8
+	popq_cfi %rbp
+	popq_cfi %rdi
+	popq_cfi %rsi
+	popq_cfi %rdx
+	popq_cfi %rcx
+	popq_cfi %rbx
+	popq_cfi %rax
 	iretq
 	.cfi_endproc
 .endm
@@ -83,6 +65,8 @@
 .macro exception_noerror_entry name, handler
 	exception_entry \name, \handler, 0
 .endm
+
+.cfi_sections .eh_frame,  .debug_frame
 
 .text
 
