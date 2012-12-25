@@ -54,6 +54,7 @@
 	popq_cfi %rcx
 	popq_cfi %rbx
 	popq_cfi %rax
+	add $8, %rsp
 	iretq
 	.cfi_endproc
 .endm
