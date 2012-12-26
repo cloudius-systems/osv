@@ -15,7 +15,7 @@ SECTIONS
     .eh_frame : { *(.eh_frame) } :text
     .data : { *(.data) } :text
     _init_array_start = .;
-    .init_array : { SORT_BY_INIT_PRIORITY(*(.init_array*)) } :text
+    .init_array : { *(SORT_BY_NAME(.init_array*)) } :text
     _init_array_end = .;
     .bss : { *(.bss) } :text
     .edata = .;
