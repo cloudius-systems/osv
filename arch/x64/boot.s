@@ -80,5 +80,6 @@ start64:
     xor %eax, %eax
     rep stosb
     mov %rbp, elf_header
+    call premain
     jmp main
 

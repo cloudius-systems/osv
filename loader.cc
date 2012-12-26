@@ -35,6 +35,16 @@ namespace {
 
 elf::Elf64_Ehdr* elf_header;
 
+extern "C" { void premain(); }
+
+void premain()
+{
+    auto inittab = elf::get_init(elf_header);
+    for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
+        (*init)();
+    }
+}
+
 int main(int ac, char **av)
 {
     IsaSerialConsole console;
@@ -42,11 +52,6 @@ int main(int ac, char **av)
     debug_console = &console;
     debug_write = console_debug_write;
     console.writeln("Loader Copyright 2013 Unnamed");
-
-    auto inittab = elf::get_init(elf_header);
-    for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
-	(*init)();
-    }
 
     test_locale();
     interrupt_descriptor_table idt;
