@@ -125,20 +125,6 @@ void __cxa_pure_virtual(void)
     abort();
 }
 
-static char malloc_buffer[1 << 26], *malloc_ptr = malloc_buffer;
-
-void *malloc(size_t size)
-{
-    size = (size + 7) & ~(size_t)7;
-    void* ret = malloc_ptr;
-    malloc_ptr += size;
-    return ret;
-}
-
-void free(void* ptr)
-{
-}
-
 void *memcpy(void *dest, const void *src, size_t n)
 {
     char* p = reinterpret_cast<char*>(dest);
