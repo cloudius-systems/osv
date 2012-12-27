@@ -36,6 +36,7 @@ objects += arch/x64/elf-dl.o
 objects += linux.o
 
 libc = libc/string/strcmp.o
+libc += libc/printf.o
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)

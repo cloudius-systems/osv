@@ -594,7 +594,6 @@ UNIMPL(float __strtof_l(__const char *__restrict __nptr,
 			char **__restrict __endptr, __locale_t __loc)
        __THROW)
 UNIMPL(char *__nl_langinfo_l(nl_item __item, __locale_t __l))
-UNIMPL(int vsnprintf(char *str, size_t size, const char *format, va_list ap))
 
 #define WCTDEF(x) { _IS##x, #x }
 
