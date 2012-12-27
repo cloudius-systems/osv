@@ -3,7 +3,6 @@
 #include "debug.hh"
 #include <boost/format.hpp>
 
-#define _GNU_SOURCE
 #include <unistd.h>
 #include <linux/unistd.h>
 
