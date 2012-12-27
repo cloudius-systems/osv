@@ -30,6 +30,7 @@ objects += mutex.o
 objects += pthread.o
 objects += mempool.o
 objects += arch/x64/elf-dl.o
+objects += linux.o
 
 libc = libc/string/strcmp.o
 
