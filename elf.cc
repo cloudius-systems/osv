@@ -1,12 +1,10 @@
 #include "elf.hh"
-#include "drivers/console.hh"
 #include "mmu.hh"
 #include <boost/format.hpp>
 #include <exception>
 #include <memory>
 #include <string.h>
-
-extern Console *debug_console;
+#include "debug.hh"
 
 namespace {
     typedef boost::format fmt;
@@ -96,7 +94,7 @@ namespace elf {
     void elf_file::load_elf_header()
     {
 	_f.read(&_ehdr, 0, sizeof(_ehdr));
-	debug_console->writeln(fmt("elf header: %1%") % _ehdr.e_ident);
+	debug(fmt("elf header: %1%") % _ehdr.e_ident);
 	if (!(_ehdr.e_ident[EI_MAG0] == '\x7f'
 	      && _ehdr.e_ident[EI_MAG1] == 'E'
 	      && _ehdr.e_ident[EI_MAG2] == 'L'
@@ -116,7 +114,7 @@ namespace elf {
 	      || _ehdr.e_ident[EI_OSABI] == 0)) {
 	    throw std::runtime_error("bad os abi");
 	}
-	debug_console->writeln("loaded elf header");
+	debug("loaded elf header");
     }
 
     namespace {
@@ -144,7 +142,7 @@ namespace elf {
                                       { return a.p_type == PT_LOAD
                                             && a.p_vaddr > b.p_vaddr; });
         _end = _base + q->p_vaddr + q->p_memsz;
-        debug_console->writeln(fmt("base %p end %p") % _base % _end);
+        debug(fmt("base %p end %p") % _base % _end);
     }
 
     void* elf_object::base() const
@@ -159,13 +157,13 @@ namespace elf {
 
     void elf_file::load_program_headers()
     {
-	debug_console->writeln(fmt("program headers: %1%") % _ehdr.e_phnum);
+	debug(fmt("program headers: %1%") % _ehdr.e_phnum);
 	_phdrs.resize(_ehdr.e_phnum);
 	for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
 	    _f.read(&_phdrs[i],
 		    _ehdr.e_phoff + i * _ehdr.e_phentsize,
 		    _ehdr.e_phentsize);
-	    debug_console->writeln(fmt("phdr %1%: vaddr %2$16x")
+	    debug(fmt("phdr %1%: vaddr %2$16x")
 				   % i % _phdrs[i].p_vaddr);
 	}
     }
@@ -199,7 +197,7 @@ namespace elf {
     void elf_object::load_segments()
     {
         for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
-            debug_console->writeln(fmt("loading segment %1%") % i);
+            debug(fmt("loading segment %1%") % i);
             auto &phdr = _phdrs[i];
             switch (phdr.p_type) {
             case PT_NULL:
@@ -297,7 +295,7 @@ namespace elf {
             return symbol_module(sym, this);
         }
         if (!ret.symbol) {
-            debug_console->writeln(fmt("failed looking up symbol %1%") % name);
+            debug(fmt("failed looking up symbol %1%") % name);
             abort();
         }
         return ret;
@@ -305,7 +303,7 @@ namespace elf {
 
     Elf64_Xword elf_object::symbol_tls_module(unsigned idx)
     {
-        debug_console->writeln("not looking up symbol module");
+        debug("not looking up symbol module");
         return 0;
     }
 
@@ -447,7 +445,7 @@ namespace elf {
     {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
-            debug_console->writeln(fmt("needed: %1%") % lib);
+            debug(fmt("needed: %1%") % lib);
             _prog.add(lib);
         }
     }

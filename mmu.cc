@@ -1,10 +1,8 @@
 #include "mmu.hh"
 #include "arch/x64/processor.hh"
-#include "drivers/console.hh"
+#include "debug.hh"
 #include "exceptions.hh"
 #include <boost/format.hpp>
-
-extern Console* debug_console;
 
 namespace {
     typedef boost::format fmt;
@@ -171,6 +169,6 @@ namespace mmu {
 void page_fault(exception_frame *ef)
 {
     auto addr = processor::x86::read_cr2();
-    debug_console->writeln(fmt("page fault @ %1$x") % addr);
+    debug(fmt("page fault @ %1$x") % addr);
     abort();
 }

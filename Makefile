@@ -26,6 +26,7 @@ objects = exceptions.o
 objects += entry.o
 objects += mutex.o
 objects += pthread.o
+objects += debug.o
 
 libc = libc/string/strcmp.o
 
