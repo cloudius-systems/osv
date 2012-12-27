@@ -27,6 +27,7 @@ objects += entry.o
 objects += mutex.o
 objects += pthread.o
 objects += debug.o
+objects += arch/x64/pci.o
 
 libc = libc/string/strcmp.o
 

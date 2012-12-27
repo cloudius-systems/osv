@@ -6,6 +6,7 @@
 #include "elf.hh"
 #include "exceptions.hh"
 #include "debug.hh"
+#include "arch/x64/pci.hh"
 #include <jni.h>
 //#include <locale>
 
@@ -77,6 +78,8 @@ int main(int ac, char **av)
     auto JNI_CreateJavaVM
         = prog.lookup_function<jint (JavaVM**, void**, void*)>("JNI_CreateJavaVM");
     JavaVM* jvm = nullptr;
+
+    pci::pci_devices_print();
 
     auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
     debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
