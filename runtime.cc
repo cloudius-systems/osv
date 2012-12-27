@@ -23,12 +23,8 @@
 #include <xlocale.h>
 #include <cassert>
 #include "arch/x64/processor.hh"
-#include "drivers/console.hh"
+#include "debug.hh"
 #include <boost/format.hpp>
-
-typedef boost::format fmt;
-
-extern Console* debug_console;
 
 #define __LC_LAST 13
 
@@ -96,13 +92,13 @@ void ignore_debug_write(const char *msg)
 {
 }
 
-void (*debug_write)(const char *msg) = ignore_debug_write;
+void (*debug_write)(const char *msg) = ignore_debug_write; //replace w/ 'debug'
 
 #define WARN(msg) do {					\
         static bool _x;					\
 	if (!_x) {					\
 	    _x = true;					\
-	    debug_write("WARNING: unimplemented " msg);	\
+	    debug("WARNING: unimplemented " msg);	\
 	}						\
     } while (0)
 
@@ -652,7 +648,7 @@ long sysconf(int name)
     case _SC_NPROCESSORS_ONLN: return 1; // FIXME
     case _SC_NPROCESSORS_CONF: return 1; // FIXME
     }
-    debug_console->writeln(fmt("sysconf: unknown parameter %1%") % name);
+    debug(fmt("sysconf: unknown parameter %1%") % name);
     abort();
 }
 
