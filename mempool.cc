@@ -134,7 +134,6 @@ void* malloc_large(size_t size)
     for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
         auto header = &*i;
         page_range* ret_header;
-        assert(long(header->size) >= page_size);
         if (header->size >= size) {
             if (header->size == size) {
                 free_page_ranges.erase(i);
@@ -142,7 +141,6 @@ void* malloc_large(size_t size)
             } else {
                 void *v = header;
                 header->size -= size;
-                assert(long(header->size) >= page_size);
                 ret_header = new (v + header->size) page_range(size);
             }
             void* obj = ret_header;
