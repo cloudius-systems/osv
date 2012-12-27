@@ -348,13 +348,14 @@ namespace elf {
         }
     }
 
+    extern "C" { void __elf_resolve_pltgot(void); }
+
     void elf_object::relocate_pltgot()
     {
         auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
         auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
         for (auto p = rel; p < rel + nrel; ++p) {
             auto info = p->r_info;
-              u32 sym = info >> 32;
               u32 type = info & 0xffffffff;
               assert(type = R_X86_64_JUMP_SLOT);
               void *addr = _base + p->r_offset;
@@ -362,6 +363,25 @@ namespace elf {
               // make sure it is relocated relative to the object base.
               *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
         }
+        auto pltgot = dynamic_ptr<void*>(DT_PLTGOT);
+        // PLTGOT resolution has a special calling convention, with the symbol
+        // index and some word pushed on the stack, so we need an assembly
+        // stub to convert it back to the standard calling convention.
+        pltgot[1] = this;
+        pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
+    }
+
+    void* elf_object::resolve_pltgot(unsigned index)
+    {
+        auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
+        auto slot = rel[index];
+        auto info = slot.r_info;
+        u32 sym = info >> 32;
+        u32 type = info & 0xffffffff;
+        assert(type == R_X86_64_JUMP_SLOT);
+        void *addr = _base + slot.r_offset;
+        auto ret = *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
+        return reinterpret_cast<void*>(ret);
     }
 
     void elf_object::relocate()
@@ -640,3 +660,9 @@ namespace elf {
 
 }
 
+extern "C" { void* elf_resolve_pltgot(unsigned long index, elf::elf_object* obj); }
+
+void* elf_resolve_pltgot(unsigned long index, elf::elf_object* obj)
+{
+    obj->resolve_pltgot(index);
+}

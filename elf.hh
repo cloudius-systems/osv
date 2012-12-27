@@ -256,6 +256,7 @@ namespace elf {
         void* end() const;
         Elf64_Sym* lookup_symbol(const char* name);
         void load_segments();
+        void* resolve_pltgot(unsigned index);
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:

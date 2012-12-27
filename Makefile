@@ -29,6 +29,7 @@ objects += arch/x64/entry.o
 objects += mutex.o
 objects += pthread.o
 objects += mempool.o
+objects += arch/x64/elf-dl.o
 
 libc = libc/string/strcmp.o
 
