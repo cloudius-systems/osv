@@ -380,8 +380,8 @@ namespace elf {
         u32 type = info & 0xffffffff;
         assert(type == R_X86_64_JUMP_SLOT);
         void *addr = _base + slot.r_offset;
-        auto ret = *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
-        return reinterpret_cast<void*>(ret);
+        auto ret = *static_cast<void**>(addr) = symbol(sym).relocated_addr();
+        return ret;
     }
 
     void elf_object::relocate()
