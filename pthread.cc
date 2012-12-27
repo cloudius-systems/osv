@@ -25,6 +25,7 @@ pthread_key_t pthread_key_create()
         return ENOMEM;
     }
     *p = true;
+    return p - tsd_used_keys.begin();
 }
 
 void* pthread_getspecific(pthread_key_t key)
