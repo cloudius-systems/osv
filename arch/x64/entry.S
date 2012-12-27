@@ -1,5 +1,5 @@
 
-.include "arch/x64/cfi.s"
+#include "cfi.S"
 
 .macro exception_entry name, handler, has_error_code
 	.global \name

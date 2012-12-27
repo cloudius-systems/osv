@@ -1,5 +1,5 @@
 
-.include "arch/x64/cfi.s"
+#include "cfi.S"
 
 .text
 
