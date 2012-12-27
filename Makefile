@@ -4,7 +4,7 @@ CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror
 ASFLAGS = -g $(autodepend)
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
-autodepend = -MD $(@.o=.d) -MT $@
+autodepend = -MD $(@.o=.d) -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
