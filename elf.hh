@@ -272,6 +272,7 @@ namespace elf {
         symbol_module symbol(unsigned idx);
         Elf64_Xword symbol_tls_module(unsigned idx);
         void relocate_rela();
+        void relocate_pltgot();
     protected:
         program& _prog;
 	Elf64_Ehdr _ehdr;

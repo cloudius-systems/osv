@@ -348,11 +348,30 @@ namespace elf {
         }
     }
 
+    void elf_object::relocate_pltgot()
+    {
+        auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
+        auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
+        for (auto p = rel; p < rel + nrel; ++p) {
+            auto info = p->r_info;
+              u32 sym = info >> 32;
+              u32 type = info & 0xffffffff;
+              assert(type = R_X86_64_JUMP_SLOT);
+              void *addr = _base + p->r_offset;
+              // The JUMP_SLOT entry already points back to the PLT, just
+              // make sure it is relocated relative to the object base.
+              *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+        }
+    }
+
     void elf_object::relocate()
     {
         assert(!dynamic_exists(DT_REL));
         if (dynamic_exists(DT_RELA)) {
             relocate_rela();
+        }
+        if (dynamic_exists(DT_JMPREL)) {
+            relocate_pltgot();
         }
     }
 
