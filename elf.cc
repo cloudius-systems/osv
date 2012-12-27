@@ -662,5 +662,5 @@ extern "C" { void* elf_resolve_pltgot(unsigned long index, elf::elf_object* obj)
 
 void* elf_resolve_pltgot(unsigned long index, elf::elf_object* obj)
 {
-    obj->resolve_pltgot(index);
+    return obj->resolve_pltgot(index);
 }
