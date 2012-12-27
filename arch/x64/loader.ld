@@ -15,10 +15,27 @@ SECTIONS
     .eh_frame : { *(.eh_frame) } :text
     .data : { *(.data) } :text
     _init_array_start = .;
-    .init_array : { *(.init_array) } :text
+    .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
     _init_array_end = .;
     .bss : { *(.bss) } :text
     .edata = .;
+    .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
+    .debug_srcinfo 0 : { *(.debug_srcinfo) }
+    .debug_sfnames 0 : { *(.debug_sfnames) }
+    .debug_pubnames 0 : { *(.debug_pubnames) }
+    .debug_frame 0 : { *(.debug_frame) }
+    .debug_abbrev 0 : { *(.debug_abbrev) }
+    .debug_aranges 0 : { *(.debug_aranges) }
+    .debug_ranges 0 : { *(.debug_ranges) }
+    .debug_line 0 : { *(.debug_line) }
+    .debug_loc 0 : { *(.debug_loc) }
+    .debug_str 0 : { *(.debug_str) }
+    .debug_macinfo 0 : { *(.debug_macinfo) }
+    .debug_typenames 0 : { *(.debug_typenames) }
+    .debug_varnames 0 : { *(.debug_varnames) }
+    .debug_weaknames 0 : { *(.debug_weaknames) }
+    .gdb_index 0 : { *(.gdb_index) }
+    .comment : { *(.comment) }
 }
 PHDRS {
 	text PT_LOAD FILEHDR PHDRS;

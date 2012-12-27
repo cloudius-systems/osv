@@ -1,9 +1,11 @@
 INCLUDES = -I.
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
 CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES)
+ASFLAGS = -g $(autodepend.s)
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD $(@.o=.d) -MT $@
+autodepend.s = -MD $(@:.o=.d)
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
@@ -23,11 +25,13 @@ drivers += mmu.o
 drivers += elf.o
 
 objects = exceptions.o
-objects += entry.o
+objects += arch/x64/entry.o
 objects += mutex.o
 objects += pthread.o
 objects += debug.o
 objects += arch/x64/pci.o
+objects += mempool.o
+objects += arch/x64/elf-dl.o
 
 libc = libc/string/strcmp.o
 

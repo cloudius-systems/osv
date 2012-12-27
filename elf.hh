@@ -256,6 +256,7 @@ namespace elf {
         void* end() const;
         Elf64_Sym* lookup_symbol(const char* name);
         void load_segments();
+        void* resolve_pltgot(unsigned index);
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
@@ -272,6 +273,7 @@ namespace elf {
         symbol_module symbol(unsigned idx);
         Elf64_Xword symbol_tls_module(unsigned idx);
         void relocate_rela();
+        void relocate_pltgot();
     protected:
         program& _prog;
 	Elf64_Ehdr _ehdr;

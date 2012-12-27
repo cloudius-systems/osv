@@ -1,4 +1,5 @@
 #include "mmu.hh"
+#include "mempool.hh"
 #include "arch/x64/processor.hh"
 #include "debug.hh"
 #include "exceptions.hh"
@@ -62,11 +63,8 @@ namespace mmu {
 
     phys alloc_page()
     {
-	// FIXME: allocate pages, not bytes; wastefull
-	void *p = malloc(8191);
-	auto ret = virt_to_phys(p);
-	ret = (ret + 4095) & ~phys(4095);
-	return ret;
+	void *p = memory::alloc_page();
+	return virt_to_phys(p);
     }
 
     void allocate_intermediate_level(pt_element *ptep)

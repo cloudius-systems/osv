@@ -23,6 +23,12 @@
 #include <xlocale.h>
 #include <cassert>
 #include "arch/x64/processor.hh"
+#include "drivers/console.hh"
+#include <boost/format.hpp>
+
+typedef boost::format fmt;
+
+extern Console* debug_console;
 
 #define __LC_LAST 13
 
@@ -123,20 +129,6 @@ void operator delete(void *)
 void __cxa_pure_virtual(void)
 {
     abort();
-}
-
-static char malloc_buffer[1 << 26], *malloc_ptr = malloc_buffer;
-
-void *malloc(size_t size)
-{
-    size = (size + 7) & ~(size_t)7;
-    void* ret = malloc_ptr;
-    malloc_ptr += size;
-    return ret;
-}
-
-void free(void* ptr)
-{
 }
 
 void *memcpy(void *dest, const void *src, size_t n)
@@ -650,6 +642,19 @@ UNIMPL(size_t __strxfrm_l (char *__dest, __const char *__src, size_t __n,
 UNIMPL(size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
 			    size_t __n, __locale_t __loc) __THROW)
 UNIMPL(int wcscmp(const wchar_t *s1, const wchar_t *s2))
+
+long sysconf(int name)
+{
+    switch (name) {
+    case _SC_CLK_TCK: return CLOCKS_PER_SEC;
+    case _SC_PAGESIZE: return 4096; // FIXME
+    case _SC_THREAD_PROCESS_SHARED: return true;
+    case _SC_NPROCESSORS_ONLN: return 1; // FIXME
+    case _SC_NPROCESSORS_CONF: return 1; // FIXME
+    }
+    debug_console->writeln(fmt("sysconf: unknown parameter %1%") % name);
+    abort();
+}
 
 long timezone;
 
