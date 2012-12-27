@@ -3,7 +3,7 @@
 
 #include "console.hh"
 #include "vga.hh"
-#include "arch/x64/pci.hh"
+#include "drivers/pci.hh"
 
 class IsaSerialConsole : public Console {
 public:

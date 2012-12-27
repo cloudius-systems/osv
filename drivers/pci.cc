@@ -1,4 +1,4 @@
-#include "arch/x64/pci.hh"
+#include "drivers/pci.hh"
 #include "debug.hh"
 
 namespace pci {

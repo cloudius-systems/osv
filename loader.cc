@@ -6,7 +6,7 @@
 #include "elf.hh"
 #include "exceptions.hh"
 #include "debug.hh"
-#include "arch/x64/pci.hh"
+#include "drivers/pci.hh"
 #include <jni.h>
 //#include <locale>
 
