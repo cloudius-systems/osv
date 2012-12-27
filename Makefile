@@ -24,7 +24,7 @@ drivers += mmu.o
 drivers += elf.o
 
 objects = exceptions.o
-objects += entry.o
+objects += arch/x64/entry.o
 objects += mutex.o
 objects += pthread.o
 objects += mempool.o
