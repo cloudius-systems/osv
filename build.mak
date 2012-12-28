@@ -1,5 +1,6 @@
 
-INCLUDES = -I. -I$(src)
+arch = x64
+INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src)
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
 CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode))
 ASFLAGS = -g $(autodepend)

@@ -1,6 +1,6 @@
 #include "mmu.hh"
 #include "mempool.hh"
-#include "arch/x64/processor.hh"
+#include "processor.hh"
 #include "debug.hh"
 #include "exceptions.hh"
 #include <boost/format.hpp>

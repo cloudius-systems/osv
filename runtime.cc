@@ -22,7 +22,7 @@
 #include <stdarg.h>
 #include <xlocale.h>
 #include <cassert>
-#include "arch/x64/processor.hh"
+#include "processor.hh"
 #include "debug.hh"
 #include <boost/format.hpp>
 

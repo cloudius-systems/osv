@@ -1,6 +1,6 @@
 #include "exceptions.hh"
 #include "mmu.hh"
-#include "arch/x64/processor.hh"
+#include "processor.hh"
 
 extern "C" {
     void ex_de();

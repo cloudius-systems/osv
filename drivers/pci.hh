@@ -2,7 +2,7 @@
 #define ARCH_X86_PCI_H
 
 #include <stdint.h>
-#include "arch/x64/processor.hh"
+#include "processor.hh"
 
 namespace pci {
 
