@@ -114,7 +114,7 @@ void (*debug_write)(const char *msg) = ignore_debug_write; //replace w/ 'debug'
 void abort()
 {
     while (true)
-	processor::x86::halt_no_interrupts();
+	processor::halt_no_interrupts();
 }
 
 void operator delete(void *)

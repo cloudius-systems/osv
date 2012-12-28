@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 namespace processor {
-    namespace x86 {
 
 	typedef unsigned long ulong;
 	typedef uint8_t u8;
@@ -193,9 +192,6 @@ namespace processor {
 		asm volatile ("outl %0, %1"::"a" (val), "dN" (port));
 
 	}
-
-
-    };
 
 };
 

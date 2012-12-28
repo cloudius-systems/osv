@@ -84,7 +84,7 @@ namespace mmu {
 
     void populate_page(void* addr)
     {
-	pt_element pte = processor::x86::read_cr3();
+	pt_element pte = processor::read_cr3();
         auto pt = phys_cast<pt_element>(pte_phys(pte));
         auto ptep = &pt[pt_index(addr, nlevels - 1)];
 	unsigned level = nlevels - 1;
@@ -166,7 +166,7 @@ namespace mmu {
 
 void page_fault(exception_frame *ef)
 {
-    auto addr = processor::x86::read_cr2();
+    auto addr = processor::read_cr2();
     debug(fmt("page fault @ %1$x") % addr);
     abort();
 }

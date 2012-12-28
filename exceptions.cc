@@ -52,7 +52,7 @@ void interrupt_descriptor_table::add_entry(unsigned vec, void (*handler)())
     ulong addr = reinterpret_cast<ulong>(handler);
     idt_entry e = { };
     e.offset0 = addr;
-    e.selector = processor::x86::read_cs();
+    e.selector = processor::read_cs();
     e.ist = 0;
     e.type = type_intr_gate;
     e.s = s_special;
@@ -66,9 +66,9 @@ void interrupt_descriptor_table::add_entry(unsigned vec, void (*handler)())
 void
 interrupt_descriptor_table::load_on_cpu()
 {
-    processor::x86::desc_ptr d(sizeof(_idt) - 1,
+    processor::desc_ptr d(sizeof(_idt) - 1,
                                reinterpret_cast<ulong>(&_idt));
-    processor::x86::lidt(d);
+    processor::lidt(d);
 }
 #define DUMMY_HANDLER(x) \
      extern "C" void x(); void x() { abort(); }

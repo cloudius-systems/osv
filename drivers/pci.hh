@@ -13,29 +13,29 @@ namespace pci {
 	typedef uint64_t u64;
 
 	inline u8 inb(u16 port) {
-	    return processor::x86::inb(port);
+	    return processor::inb(port);
 	}
 
 	inline u16 inw(u16 port) {
-	    return processor::x86::inw(port);
+	    return processor::inw(port);
 	}
 
 	inline u32 inl(u16 port) {
-	    return processor::x86::inl(port);
+	    return processor::inl(port);
 	}
 
 	inline void outb(u8 val, u16 port) {
-		processor::x86::outb(val, port);
+		processor::outb(val, port);
 
     }
 
 	inline void outw(u16 val, u16 port) {
-		processor::x86::outw(val, port);
+		processor::outw(val, port);
 
     }
 
 	inline void outl(u32 val, u16 port) {
-		processor::x86::outl(val, port);
+		processor::outl(val, port);
 
     }
 
