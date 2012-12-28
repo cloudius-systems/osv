@@ -45,7 +45,6 @@ drivers += elf.o
 objects = exceptions.o
 objects += arch/x64/entry.o
 objects += mutex.o
-objects += pthread.o
 objects += debug.o
 objects += drivers/pci.o
 objects += mempool.o
@@ -54,6 +53,7 @@ objects += linux.o
 
 libc = libc/string/strcmp.o
 libc += libc/printf.o
+libc += libc/pthread.o
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
