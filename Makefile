@@ -10,5 +10,5 @@ $(submake): Makefile
 	mkdir -p $(dir $@)
 	echo 'mode = $(mode)' > $@
 	echo 'src = ../..' >> $@
-	echo 'VPATH =../..' >> $@
+	echo 'VPATH = ../..' >> $@
 	echo 'include ../../build.mak' >> $@
