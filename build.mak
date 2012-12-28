@@ -1,8 +1,11 @@
 
 INCLUDES = -I$(src)
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
-CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror
+CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode))
 ASFLAGS = -g $(autodepend)
+
+cflags-debug =
+cflags-release = -O2
 
 makedir = @mkdir -p $(dir $@) 
 
