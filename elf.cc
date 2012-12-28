@@ -559,13 +559,13 @@ namespace elf {
                 auto dyn = reinterpret_cast<Elf64_Dyn*>(phdr->p_vaddr);
                 unsigned ndyn = phdr->p_memsz / sizeof(*dyn);
                 init_table ret;
-                const Elf64_Rela* rela;
-                const Elf64_Rela* jmp;
-                const Elf64_Sym* symtab;
-                const Elf64_Word* hashtab;
-                const char* strtab;
-                unsigned nrela;
-                unsigned njmp;
+                const Elf64_Rela* rela = nullptr;
+                const Elf64_Rela* jmp = nullptr;
+                const Elf64_Sym* symtab = nullptr;
+                const Elf64_Word* hashtab = nullptr;
+                const char* strtab = nullptr;
+                unsigned nrela = 0;
+                unsigned njmp = 0;
                 for (auto d = dyn; d < dyn + ndyn; ++d) {
                     switch (d->d_tag) {
                     case DT_INIT_ARRAY:
