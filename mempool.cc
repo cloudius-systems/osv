@@ -1,4 +1,5 @@
 #include "mempool.hh"
+#include "ilog2.hh"
 #include <cassert>
 #include <cstdint>
 #include <new>
@@ -89,8 +90,8 @@ pool* pool::from_object(void* object)
     return header->owner;
 }
 
-// FIXME: compute 12
-malloc_pool malloc_pools[12] __attribute__((init_priority(12000)));
+malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size)]
+    __attribute__((init_priority(12000)));
 
 malloc_pool::malloc_pool()
     : pool(compute_object_size(this - malloc_pools))
