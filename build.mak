@@ -1,5 +1,5 @@
 
-INCLUDES = -I$(src)
+INCLUDES = -I. -I$(src)
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
 CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode))
 ASFLAGS = -g $(autodepend)
@@ -82,6 +82,9 @@ runtime.o: ctype-data.h
 
 ctype-data.h: gen-ctype-data
 	./gen-ctype-data > $@
+
+gen-ctype-data: gen-ctype-data.o
+	$(CXX) -o $@ $^
 
 clean:
 	find -name '*.[od]' | xargs rm
