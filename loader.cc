@@ -4,10 +4,13 @@
 #include <boost/format.hpp>
 #include <cctype>
 #include "elf.hh"
+#include "tls.hh"
+#include "msr.hh"
 #include "exceptions.hh"
 #include "debug.hh"
 #include "drivers/pci.hh"
 #include <jni.h>
+#include <string.h>
 //#include <locale>
 
 namespace {
@@ -26,11 +29,22 @@ namespace {
 
 elf::Elf64_Ehdr* elf_header;
 
+void setup_tls(elf::init_table inittab)
+{
+    static char tcb0[1 << 15] __attribute__((aligned(4096)));
+    assert(inittab.tls_size + sizeof(thread_control_block) <= sizeof(tcb0));
+    memcpy(tcb0, inittab.tls, inittab.tls_size);
+    auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls_size);
+    p->self = p;
+    processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<uint64_t>(p));
+}
+
 extern "C" { void premain(); }
 
 void premain()
 {
     auto inittab = elf::get_init(elf_header);
+    setup_tls(inittab);
     for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
         (*init)();
     }
