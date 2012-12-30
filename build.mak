@@ -54,6 +54,7 @@ objects += linux.o
 libc = libc/string/strcmp.o
 libc += libc/printf.o
 libc += libc/pthread.o
+libc += libc/fd.o
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
