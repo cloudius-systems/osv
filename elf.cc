@@ -550,6 +550,7 @@ namespace elf {
         auto phdr = static_cast<Elf64_Phdr*>(pbase + header->e_phoff);
         auto n = header->e_phnum;
         bool base_adjusted = false;
+        init_table ret;
         for (auto i = 0; i < n; ++i, ++phdr) {
             if (!base_adjusted && phdr->p_type == PT_LOAD) {
                 base_adjusted = true;
@@ -558,7 +559,6 @@ namespace elf {
             if (phdr->p_type == PT_DYNAMIC) {
                 auto dyn = reinterpret_cast<Elf64_Dyn*>(phdr->p_vaddr);
                 unsigned ndyn = phdr->p_memsz / sizeof(*dyn);
-                init_table ret;
                 const Elf64_Rela* rela = nullptr;
                 const Elf64_Rela* jmp = nullptr;
                 const Elf64_Sym* symtab = nullptr;
@@ -650,10 +650,12 @@ namespace elf {
                 };
                 relocate_table(rela, nrela);
                 relocate_table(jmp, njmp);
-                return ret;
+            } else if (phdr->p_type == PT_TLS) {
+                ret.tls = reinterpret_cast<void*>(phdr->p_vaddr);
+                ret.tls_size = phdr->p_memsz;
             }
         }
-        abort();
+        return ret;
     }
 
 }

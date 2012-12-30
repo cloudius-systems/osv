@@ -333,6 +333,8 @@ namespace elf {
     struct init_table {
         void (**start)();
         unsigned count;
+        void* tls;
+        size_t tls_size;
     };
 
     init_table get_init(Elf64_Ehdr* header);
