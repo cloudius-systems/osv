@@ -361,11 +361,6 @@ int __fxstat64(int ver, int fd, struct stat64 *buf)
     UNIMPLEMENTED("__fxstat");
 }
 
-int *__errno_location()
-{
-    UNIMPLEMENTED("__errno_location");
-}
-
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     UNIMPLEMENTED("readv");
@@ -656,5 +651,3 @@ long timezone;
 char* __environ_array[1];
 char** environ = __environ_array;
 
-#undef errno
-int __thread errno;
