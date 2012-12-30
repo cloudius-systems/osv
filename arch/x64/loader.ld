@@ -17,6 +17,8 @@ SECTIONS
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
     _init_array_end = .;
+    .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls
+    .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls
     .bss : { *(.bss) } :text
     .edata = .;
     .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
@@ -39,6 +41,7 @@ SECTIONS
 }
 PHDRS {
 	text PT_LOAD FILEHDR PHDRS;
+	tls PT_TLS;
 	dynamic PT_DYNAMIC;
 }
 ENTRY(start32);
