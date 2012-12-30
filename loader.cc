@@ -48,6 +48,7 @@ int main(int ac, char **av)
     idt.load_on_cpu();
 
     bootfs fs;
+    rootfs = &fs;
     file* f = fs.open("/usr/lib/libjvm.so");
     char buf[100];
     f->read(buf, 0, 100);

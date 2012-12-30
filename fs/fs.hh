@@ -17,4 +17,6 @@ public:
     virtual file *open(std::string name) = 0;
 };
 
+extern filesystem* rootfs;
+
 #endif

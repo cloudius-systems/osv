@@ -1,5 +1,7 @@
 #include "fs.hh"
 
+filesystem* rootfs;
+
 file::~file()
 {
 }
