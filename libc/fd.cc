@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "fs/fs.hh"
 #include "mutex.hh"
+#include "libc.hh"
 #include <assert.h>
 #include <algorithm>
 #include <mutex>
@@ -34,6 +35,9 @@ int open(const char* fname, int mode, ...)
 {
     assert(!(mode & O_APPEND));
     auto f = std::shared_ptr<file>(rootfs->open(fname));
+    if (!f) {
+        return libc_error(ENOENT);
+    }
     auto desc = std::shared_ptr<file_desc>(
                     new file_desc(f, mode & O_RDONLY, mode & O_WRONLY));
     std::lock_guard<mutex> guard(file_table_mutex);
