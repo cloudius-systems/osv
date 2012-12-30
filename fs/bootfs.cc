@@ -18,7 +18,7 @@ file* bootfs::open(std::string name)
 	}
 	++md;
     }
-    throw -1; /* FIXME */
+    return nullptr;
 }
 
 bootfs::file::file(bootfs& fs, metadata& md)
