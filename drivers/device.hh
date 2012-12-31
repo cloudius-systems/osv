@@ -1,5 +1,5 @@
-#ifndef DRIVER_H
-#define DRIVER_H
+#ifndef DEVICE_H
+#define DEVICE_H
 
 #include "arch/x64/processor.hh"
 #include "drivers/pci.hh"
