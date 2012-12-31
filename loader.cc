@@ -63,7 +63,7 @@ int main(int ac, char **av)
 
     bootfs fs;
     rootfs = &fs;
-    file* f = fs.open("/usr/lib/libjvm.so");
+    fileref f = fs.open("/usr/lib/libjvm.so");
     char buf[100];
     f->read(buf, 0, 100);
 

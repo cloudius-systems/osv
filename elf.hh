@@ -287,14 +287,14 @@ namespace elf {
 
     class elf_file : public elf_object {
     public:
-        explicit elf_file(program& prog, ::file* f);
+        explicit elf_file(program& prog, fileref f);
         virtual ~elf_file();
         void load_program_headers();
         void load_elf_header();
     protected:
         virtual void load_segment(const Elf64_Phdr& phdr);
     private:
-        ::file& _f;
+        ::fileref _f;
     };
 
     class elf_memory_image : public elf_object {

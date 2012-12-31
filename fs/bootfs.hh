@@ -6,7 +6,7 @@
 class bootfs : public filesystem {
 public:
     bootfs();
-    virtual ::file* open(std::string name);
+    virtual fileref open(std::string name);
 private:
     class file;
     struct metadata;

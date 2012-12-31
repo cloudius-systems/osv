@@ -8,17 +8,17 @@ bootfs::bootfs()
 {
 }
 
-file* bootfs::open(std::string name)
+fileref bootfs::open(std::string name)
 {
     metadata *md = reinterpret_cast<metadata *>(_base);
 
     while (md->name[0]) {
 	if (std::string(md->name) == name) {
-	    return new file(*this, *md);
+	    return fileref(new file(*this, *md));
 	}
 	++md;
     }
-    return nullptr;
+    return fileref();
 }
 
 bootfs::file::file(bootfs& fs, metadata& md)
