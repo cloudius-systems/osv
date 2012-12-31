@@ -2,11 +2,14 @@
 arch = x64
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src)
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
-CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode))
+CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode)) \
+	$(arch-cflags)
 ASFLAGS = -g $(autodepend)
 
 cflags-debug =
 cflags-release = -O2
+
+arch-cflags = -msse4.1
 
 define newline =
 
@@ -58,6 +61,7 @@ drivers += elf.o
 
 objects = exceptions.o
 objects += arch/x64/entry.o
+objects += arch/x64/math.o
 objects += mutex.o
 objects += debug.o
 objects += drivers/pci.o
