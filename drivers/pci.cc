@@ -1,5 +1,6 @@
 #include "drivers/pci.hh"
 #include "debug.hh"
+#include "drivers/device-factory.hh"
 
 namespace pci {
 
@@ -41,34 +42,52 @@ void pci_device_print(u8 bus, u8 slot, u8 func)
 
 	for (i = 0; i < 256; i ++) {
 	    val = read_pci_config_byte(bus, slot, func, i);
+	    // adds a new line every 16 bytes
 		debug(fmt("%02x ") % (unsigned int)val, (i % 16 == 15));
 	}
 }
 
 void pci_devices_print(void)
 {
-	unsigned bus, slot, func;
+	u16 bus, slot, func;
 
 	for (bus = 0; bus < 256; bus++) {
 		for (slot = 0; slot < 32; slot++) {
 			for (func = 0; func < 8; func++) {
-				u32 revision;
-				u8 header_type;
-
-				if ((revision = read_pci_config(bus, slot, func, PCI_CLASS_REVISION)) == 0xffffffff)
+				if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff)
 					continue;
 
 				pci_device_print(bus, slot, func);
 
 				// test for multiple functions
-				if (func == 0) {
-					header_type = read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE);
-					if (!(header_type & PCI_HEADER_MULTI_FUNC))
+				if (func == 0 &&
+					!(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
 						break;
-				}
 			}
 		}
 	}
+}
+
+void pci_device_enumeration(void)
+{
+    u16 bus, slot, func;
+    DeviceFactory* factory = DeviceFactory::Instance();
+
+
+    for (bus = 0; bus < 256; bus++)
+        for (slot = 0; slot < 32; slot++)
+            for (func = 0; func < 8; func++) {
+
+                if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff)
+                    continue;
+
+                    factory->AddDevice(bus, slot, func);
+
+                    // test for multiple functions
+                    if (func == 0 &&
+                        !(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
+                            break;
+            }
 }
 
 }

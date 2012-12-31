@@ -58,6 +58,7 @@ drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
+drivers += drivers/device.o drivers/device-factory.o
 
 objects = exceptions.o
 objects += arch/x64/entry.o
