@@ -64,9 +64,9 @@ namespace elf {
     {
     }
 
-    elf_file::elf_file(program& prog, ::file* f)
+    elf_file::elf_file(program& prog, ::fileref f)
 	: elf_object(prog)
-        , _f(*f)
+        , _f(f)
     {
 	load_elf_header();
 	load_program_headers();
@@ -74,7 +74,6 @@ namespace elf {
 
     elf_file::~elf_file()
     {
-        delete &_f;
     }
 
     elf_memory_image::elf_memory_image(program& prog, void* base)
@@ -93,7 +92,7 @@ namespace elf {
 
     void elf_file::load_elf_header()
     {
-	_f.read(&_ehdr, 0, sizeof(_ehdr));
+	_f->read(&_ehdr, 0, sizeof(_ehdr));
 	debug(fmt("elf header: %1%") % _ehdr.e_ident);
 	if (!(_ehdr.e_ident[EI_MAG0] == '\x7f'
 	      && _ehdr.e_ident[EI_MAG1] == 'E'
@@ -160,7 +159,7 @@ namespace elf {
 	debug(fmt("program headers: %1%") % _ehdr.e_phnum);
 	_phdrs.resize(_ehdr.e_phnum);
 	for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
-	    _f.read(&_phdrs[i],
+	    _f->read(&_phdrs[i],
 		    _ehdr.e_phoff + i * _ehdr.e_phentsize,
 		    _ehdr.e_phentsize);
 	    debug(fmt("phdr %1%: vaddr %2$16x")
@@ -190,7 +189,7 @@ namespace elf {
         ulong filesz = align_up(phdr.p_vaddr + phdr.p_filesz) - vstart;
         ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz) - vstart;
         mmu::map_file(_base + vstart, filesz, mmu::perm_rwx,
-                      _f, align_down(phdr.p_offset));
+                      *_f, align_down(phdr.p_offset));
         mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::perm_rwx);
     }
 
@@ -509,8 +508,8 @@ namespace elf {
     void program::add(std::string name)
     {
         if (!_files.count(name)) {
-            std::unique_ptr< ::file> f(_fs.open("/usr/lib/" + name));
-            auto ef = new elf_file(*this, f.release());
+            auto f(_fs.open("/usr/lib/" + name));
+            auto ef = new elf_file(*this, f);
             ef->set_base(_next_alloc);
             _files[name] = ef;
             ef->load_segments();

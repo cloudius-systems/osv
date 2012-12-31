@@ -12,9 +12,9 @@
 
 class file_desc {
 public:
-    explicit file_desc(std::shared_ptr<file> file, bool canread, bool canwrite);
+    explicit file_desc(fileref file, bool canread, bool canwrite);
 private:
-    std::shared_ptr<file> _file;
+    fileref _file;
     uint64_t _pos;
     bool _canread;
     bool _canwrite;
@@ -23,7 +23,7 @@ private:
 mutex file_table_mutex;
 std::vector<std::shared_ptr<file_desc>> file_table;
 
-file_desc::file_desc(std::shared_ptr<file> f, bool canread, bool canwrite)
+file_desc::file_desc(fileref f, bool canread, bool canwrite)
     : _file(f)
     , _pos()
     , _canread(canread)
@@ -34,7 +34,7 @@ file_desc::file_desc(std::shared_ptr<file> f, bool canread, bool canwrite)
 int open(const char* fname, int mode, ...)
 {
     assert(!(mode & O_APPEND));
-    auto f = std::shared_ptr<file>(rootfs->open(fname));
+    auto f = rootfs->open(fname);
     if (!f) {
         return libc_error(ENOENT);
     }
