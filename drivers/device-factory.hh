@@ -20,7 +20,7 @@ private:
    DeviceFactory& operator=(const DeviceFactory& f) {pinstance = f.pinstance; return *pinstance;};
 
    static DeviceFactory* pinstance;
-   std::unordered_set<const Device*, Device::hash, Device::equal> _drivers;
+   std::unordered_set<const Device*, Device::hash, Device::equal> _devices;
 };
 
 #endif
