@@ -20,6 +20,8 @@ fileref bootfs::do_open(std::string name)
     while (md->name[0]) {
 	if (std::string(md->name) == name) {
 	    return fileref(new file(*this, *md));
+	} else if (std::string(md->name).find(name + "/") == 0) {
+	    return fileref(new dir(*this, name + "/"));
 	}
 	++md;
     }
@@ -53,11 +55,6 @@ bootfs::dir::dir(bootfs& fs, std::string path)
 fileref bootfs::dir::open(std::string name)
 {
     return _fs.do_open(_path + name);
-}
-
-dirref bootfs::dir::subdir(std::string name)
-{
-    return new dir(_fs, _path + name + "/");
 }
 
 uint64_t bootfs::dir::size()

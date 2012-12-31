@@ -29,7 +29,7 @@ private:
 class dir : public file {
 public:
     virtual fileref open(std::string name) = 0;
-    virtual dirref subdir(std::string name);
+    dirref subdir(std::string name);
 };
 
 class filesystem {

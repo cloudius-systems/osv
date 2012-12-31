@@ -33,7 +33,6 @@ class bootfs::dir : public ::dir {
 public:
     dir(bootfs& fs, std::string path);
     virtual fileref open(std::string name);
-    virtual dirref subdir(std::string name);
     virtual uint64_t size();
     virtual void read(void* buffer, uint64_t offset, uint64_t len);
 private:
