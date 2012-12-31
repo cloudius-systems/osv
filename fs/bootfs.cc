@@ -53,7 +53,7 @@ bootfs::dir::dir(bootfs& fs, std::string path)
 {
 }
 
-fileref bootfs::dir::open(std::string name)
+fileref bootfs::dir::do_open(std::string name)
 {
     return _fs.do_open(_path + name);
 }

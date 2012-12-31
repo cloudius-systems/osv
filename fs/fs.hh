@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdint>
 #include <boost/intrusive_ptr.hpp>
+#include <unordered_map>
 
 class file;
 class dir;
@@ -24,12 +25,23 @@ private:
     unsigned _refs; // FIXME: make atomic
     friend void intrusive_ptr_add_ref(file* f) { f->ref(); }
     friend void intrusive_ptr_release(file* f) { f->unref(); }
+    friend class dir;
+private:
+    typedef std::pair<dirref, std::string> cache_key;
+    // FIXME: an intrusive container
+    typedef std::unordered_map<cache_key, fileref> cache_type;
+    static cache_type _cache;
+    friend struct std::hash<cache_key>;
 };
 
 class dir : public file {
 public:
-    virtual fileref open(std::string name) = 0;
+    fileref open(std::string name);
+    virtual fileref do_open(std::string name) = 0;
     dirref subdir(std::string name);
+private:
+    dirref _parent;
+    std::string _name;
 };
 
 class filesystem {
