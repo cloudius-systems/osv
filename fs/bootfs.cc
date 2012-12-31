@@ -5,12 +5,13 @@ extern char bootfs_start;
 
 bootfs::bootfs()
     : _base(&bootfs_start)
+    , _root(new dir(*this, "/"))
 {
 }
 
 dirref bootfs::root()
 {
-    return new dir(*this, "/");
+    return _root;
 }
 
 fileref bootfs::do_open(std::string name)

@@ -15,6 +15,7 @@ private:
     fileref do_open(std::string path);
 private:
     char* _base;
+    dirref _root;
     friend class file;
     friend class dir;
 };
