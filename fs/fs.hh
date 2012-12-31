@@ -6,8 +6,10 @@
 #include <boost/intrusive_ptr.hpp>
 
 class file;
+class dir;
 
 typedef boost::intrusive_ptr<file> fileref;
+typedef boost::intrusive_ptr<dir> dirref;
 
 class file {
 public:
@@ -24,10 +26,17 @@ private:
     friend void intrusive_ptr_release(file* f) { f->unref(); }
 };
 
+class dir : public file {
+public:
+    virtual fileref open(std::string name) = 0;
+    virtual dirref subdir(std::string name);
+};
+
 class filesystem {
 public:
     virtual ~filesystem();
-    virtual fileref open(std::string name) = 0;
+    virtual dirref root() = 0;
+    fileref open(std::string name);
 };
 
 extern filesystem* rootfs;

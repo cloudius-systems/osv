@@ -8,7 +8,12 @@ bootfs::bootfs()
 {
 }
 
-fileref bootfs::open(std::string name)
+dirref bootfs::root()
+{
+    return new dir(*this, "/");
+}
+
+fileref bootfs::do_open(std::string name)
 {
     metadata *md = reinterpret_cast<metadata *>(_base);
 
@@ -37,4 +42,30 @@ void bootfs::file::read(void* buffer, uint64_t offset, uint64_t len)
 	throw -1; /* FIXME */
     }
     std::memcpy(buffer, _fs._base + _md.offset + offset, len);
+}
+
+bootfs::dir::dir(bootfs& fs, std::string path)
+    : _fs(fs)
+    , _path(path)
+{
+}
+
+fileref bootfs::dir::open(std::string name)
+{
+    return _fs.do_open(_path + name);
+}
+
+dirref bootfs::dir::subdir(std::string name)
+{
+    return new dir(_fs, _path + name + "/");
+}
+
+uint64_t bootfs::dir::size()
+{
+    return 0;
+}
+
+void bootfs::dir::read(void* buffer, uint64_t offset, uint64_t len)
+{
+    throw -1; // FIXME
 }
