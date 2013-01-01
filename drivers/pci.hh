@@ -7,33 +7,12 @@
 
 namespace pci {
 
-
-	inline u8 inb(u16 port) {
-	    return processor::inb(port);
-	}
-
-	inline u16 inw(u16 port) {
-	    return processor::inw(port);
-	}
-
-	inline u32 inl(u16 port) {
-	    return processor::inl(port);
-	}
-
-	inline void outb(u8 val, u16 port) {
-		processor::outb(val, port);
-
-    }
-
-	inline void outw(u16 val, u16 port) {
-		processor::outw(val, port);
-
-    }
-
-	inline void outl(u32 val, u16 port) {
-		processor::outl(val, port);
-
-    }
+using processor::inb;
+using processor::inw;
+using processor::inl;
+using processor::outb;
+using processor::outw;
+using processor::outl;
 
 	enum pc_early_defines {
 	    PCI_CONFIG_ADDRESS = 0xcf8,
