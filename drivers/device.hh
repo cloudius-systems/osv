@@ -16,6 +16,8 @@ public:
     u16 getStatus();
     void setStatus(u16 s);
     void dumpConfig() const;
+    u16 getid() const {return _id;};
+    u16 getvid() const {return _vid;};
 
     friend std::ostream& operator <<(std::ostream& out, const Device &d);
     struct equal {
