@@ -19,7 +19,7 @@ Virtio::earlyInitChecks() {
         return false;
     }
 
-    debug(fmt("%s passed") % __FUNCTION__);
+    debug(fmt("%s passed. Subsystem: vid:%x:id:%x") % __FUNCTION__ % (u16)getSubsysVid() % (u16)getSubsysId());
     return true;
 }
 
