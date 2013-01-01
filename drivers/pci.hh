@@ -3,14 +3,10 @@
 
 #include <stdint.h>
 #include "processor.hh"
+#include "types.hh"
 
 namespace pci {
 
-	typedef unsigned long ulong;
-	typedef uint8_t u8;
-	typedef uint16_t u16;
-	typedef uint32_t u32;
-	typedef uint64_t u64;
 
 	inline u8 inb(u16 port) {
 	    return processor::inb(port);

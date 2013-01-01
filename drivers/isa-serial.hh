@@ -11,8 +11,8 @@ public:
     virtual void write(const char *str);
     virtual void newline();
 private:
-    static const pci::u16 ioport = 0x3f8;
-    pci::u8 lcr;
+    static const u16 ioport = 0x3f8;
+    u8 lcr;
     enum IsaSerialValues {
     	LCR_ADDRESS = 0x3,
     	LCR_DIVISOR_LATCH_ACCESS_BIT = 0x7,

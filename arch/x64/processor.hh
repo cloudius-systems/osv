@@ -1,15 +1,9 @@
 #ifndef ARCH_X86_PROCESSOR_H
 #define ARCH_X86_PROCESSOR_H
 
-#include <stdint.h>
+#include "types.hh"
 
 namespace processor {
-
-	typedef unsigned long ulong;
-	typedef uint8_t u8;
-	typedef uint16_t u16;
-	typedef uint32_t u32;
-	typedef uint64_t u64;
 
 	inline ulong read_cr0() {
 	    ulong r;
