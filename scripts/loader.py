@@ -1,8 +1,18 @@
 #!/usr/bin/python
 
 import gdb
+import re
+import os
 
-gdb.execute('add-symbol-file /usr/lib/jvm/java-1.7.0-openjdk.x86_64/jre/lib/amd64/server/libjvm.so 0x100000195410')
+text_addr = '?'
+libjvm = '/usr/lib/jvm/java-1.7.0-openjdk.x86_64/jre/lib/amd64/server/libjvm.so'
+for line in os.popen('readelf -WS ' + libjvm):
+    m = re.match(r'\s*\[ *\d+\]\s+([\.\w\d_]+)\s+\w+\s+([0-9a-f]+).*', line)
+    if m:
+        if m.group(1) == '.text':
+            text_addr = hex(int(m.group(2), 16) + 0x100000000000)
+
+gdb.execute('add-symbol-file %s %s' % (libjvm, text_addr))
 
 class Connect(gdb.Command):
     '''Connect to a local kvm instance at port :1234'''
