@@ -13,14 +13,15 @@ public:
     void AddDevice(u8 bus, u8 slot, u8 func);
 
     void DumpDevices();
+    void InitializeDrivers();
 
 private:
    DeviceFactory() {pinstance = 0;};
    DeviceFactory(const DeviceFactory& f) {};
-   DeviceFactory& operator=(const DeviceFactory& f) {pinstance = f.pinstance; return *pinstance;};
+   DeviceFactory& operator=(DeviceFactory& f) {pinstance = f.pinstance; return *pinstance;};
 
    static DeviceFactory* pinstance;
-   std::unordered_set<const Device*, Device::hash, Device::equal> _drivers;
+   std::unordered_set<Device*, Device::hash, Device::equal> _devices;
 };
 
 #endif

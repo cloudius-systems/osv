@@ -14,6 +14,9 @@
 #include <string.h>
 //#include <locale>
 
+#include "drivers/driver.hh"
+#include "drivers/driver-factory.hh"
+
 namespace {
 
     void test_locale()
@@ -112,6 +115,11 @@ int main(int ac, char **av)
     pci::pci_devices_print();
     pci::pci_device_enumeration();
     DeviceFactory::Instance()->DumpDevices();
+
+    Driver *d = new Driver(0x1af4, 0x1000);
+    DriverFactory::Instance()->RegisterDriver(d);
+
+    DeviceFactory::Instance()->InitializeDrivers();
 
     auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
     debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
