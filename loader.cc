@@ -59,7 +59,6 @@ int main(int ac, char **av)
     debug("Loader Copyright 2013 Unnamed");
 
     test_locale();
-    interrupt_descriptor_table idt;
     idt.load_on_cpu();
 
     bootfs fs;

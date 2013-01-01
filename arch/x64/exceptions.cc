@@ -2,6 +2,8 @@
 #include "mmu.hh"
 #include "processor.hh"
 
+interrupt_descriptor_table idt;
+
 extern "C" {
     void ex_de();
     void ex_db();

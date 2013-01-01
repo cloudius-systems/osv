@@ -61,6 +61,8 @@ private:
     idt_entry _idt[256];
 };
 
+extern interrupt_descriptor_table idt;
+
 extern "C" {
     void page_fault(exception_frame* ef);
 }
