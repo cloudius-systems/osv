@@ -14,7 +14,7 @@ void IsaSerialConsole::write(const char *str)
 
 void IsaSerialConsole::writeByte(const char letter)
 {
-	pci::u8 lsr;
+	u8 lsr;
 
 	do {
 		lsr = pci::inb(ioport + LSR_ADDRESS);
