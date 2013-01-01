@@ -60,6 +60,7 @@ int main(int ac, char **av)
 
     test_locale();
     idt.load_on_cpu();
+    processor::wrmsr(msr::IA32_APIC_BASE, 0xfee00000 | (3 << 10));
 
     bootfs fs;
     rootfs = &fs;
