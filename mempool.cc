@@ -36,7 +36,7 @@ pool::pool(unsigned size)
 
 pool::~pool()
 {
-    assert(!_free);
+    assert(_free.empty());
 }
 
 const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
@@ -50,26 +50,32 @@ pool::page_header* pool::to_header(free_object* object)
 
 void* pool::alloc()
 {
-    if (!_free) {
+    if (_free.empty()) {
         add_page();
     }
-    auto obj = _free;
-    ++to_header(obj)->nalloc;
-    _free = obj->next;
+    auto header = _free.begin();
+    auto obj = header->local_free;
+    ++header->nalloc;
+    header->local_free = obj->next;
+    if (!header->local_free) {
+        _free.erase(header);
+    }
     return obj;
 }
 
 void pool::add_page()
 {
     void* page = alloc_page();
-    auto header = static_cast<page_header*>(page);
+    auto header = new (page) page_header;
     header->owner = this;
     header->nalloc = 0;
+    header->local_free = nullptr;
     for (auto p = page + page_size - _size; p >= header + 1; p -= _size) {
         auto obj = static_cast<free_object*>(p);
-        obj->next = _free;
-        _free = obj;
+        obj->next = header->local_free;
+        header->local_free = obj;
     }
+    _free.push_back(*header);
 }
 
 void pool::free(void* object)
@@ -77,12 +83,15 @@ void pool::free(void* object)
     auto obj = static_cast<free_object*>(object);
     auto header = to_header(obj);
     if (!--header->nalloc) {
+        _free.erase(_free.iterator_to(*header));
         // FIXME: add hysteresis
         free_page(header);
-        _free = nullptr;
     } else {
-        obj->next = _free;
-        _free = obj;
+        if (!header->local_free) {
+            _free.push_front(*header);
+        }
+        obj->next = header->local_free;
+        header->local_free = obj;
     }
 }
 

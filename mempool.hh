@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <boost/intrusive/set.hpp>
+#include <boost/intrusive/list.hpp>
 
 namespace memory {
 
@@ -15,6 +16,8 @@ void free_page(void* page);
 void* alloc_page_range(size_t bytes);
 void free_page_range(void* start, size_t bytes);
 void setup_free_memory(void* start, size_t bytes);
+
+namespace bi = boost::intrusive;
 
 class pool {
 public:
@@ -31,16 +34,24 @@ private:
     static page_header* to_header(free_object* object);
 private:
     unsigned _size;
-    free_object* _free;
+
+    struct page_header {
+        pool* owner;
+        unsigned nalloc;
+        bi::list_member_hook<> free_link;
+        free_object* local_free;  // free objects in this page
+    };
+
+    typedef bi::list<page_header,
+                     bi::member_hook<page_header,
+                                     bi::list_member_hook<>,
+                                     &page_header::free_link>,
+                     bi::constant_time_size<false>
+                    > free_list_type;
+    free_list_type _free;
 public:
     static const size_t max_object_size;
     static const size_t min_object_size;
-};
-
-struct pool::page_header {
-    pool* owner;
-    unsigned nalloc;
-    free_object* free;
 };
 
 struct pool::free_object {
