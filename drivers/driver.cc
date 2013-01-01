@@ -1,15 +1,82 @@
 #include "drivers/driver.hh"
+#include "drivers/pci.hh"
 #include "debug.hh"
 
+using namespace pci;
+
 bool Driver::isPresent() {
-    return false;
+    return _present;
+}
+
+void
+Driver::setPresent(u8 bus, u8 slot, u8 func) {
+    _present = true;
+    _bus = bus;
+    _slot = slot;
+    _func = func;
 }
 
 u16 Driver::getStatus() {
-    return 0;
+    if (!_present) throw new InitException();
+
+    return read_pci_config_word(_bus,_slot,_func,PCI_STATUS_OFFSET);
 }
 
 void Driver::setStatus(u16 s) {
+    if (!_present) throw new InitException();
+
+    write_pci_config_word(_bus,_slot,_func,PCI_STATUS_OFFSET,s);
+}
+
+u8
+Driver::getRevision() {
+    if (!_present) throw new InitException();
+
+    return read_pci_config_byte(_bus,_slot,_func,PCI_CLASS_REVISION);
+
+}
+
+u16
+Driver::getSubsysId() {
+    if (!_present) throw new InitException();
+
+    return read_pci_config_word(_bus,_slot,_func,PCI_SUBSYSTEM_ID);
+}
+
+u16
+Driver::getSubsysVid() {
+    if (!_present) throw new InitException();
+
+    return read_pci_config_word(_bus,_slot,_func,PCI_SUBSYSTEM_VID);
+}
+
+bool
+Driver::getBusMaster() {
+    u16 command = read_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET);
+    return (command & (1 << PCI_BUS_MASTER_BIT));
+}
+
+void
+Driver::setBusMaster(bool master) {
+    u16 command = read_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET);
+    command = (master)? command |(1 << PCI_BUS_MASTER_BIT) :
+                        command & ~(1 << PCI_BUS_MASTER_BIT);
+    write_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET, command);
+}
+
+bool
+Driver::pciEnable() {
+    return _present;
+}
+
+bool
+Driver::allocateBARs() {
+    return true;
+}
+
+bool
+Driver::earlyInitChecks() {
+    return _present;
 }
 
 bool
@@ -17,6 +84,8 @@ Driver::Init(Device* dev) {
     if (!dev) return false;
 
     debug(fmt("Driver:Init %x:%x") % _vid % _id);
+
+    setBusMaster(true);
 
     return true;
 }

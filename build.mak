@@ -60,6 +60,7 @@ drivers += mmu.o
 drivers += elf.o
 drivers += drivers/device.o drivers/device-factory.o
 drivers += drivers/driver.o drivers/driver-factory.o
+drivers += drivers/virtio.o
 
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o

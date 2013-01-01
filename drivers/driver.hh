@@ -14,10 +14,13 @@ public:
     Driver(u16 vid, u16 id) :_id(id), _vid(vid) {};
 
     bool isPresent();
+    void setPresent(u8 bus, u8 slot, u8 func);
     u16 getStatus();
     void setStatus(u16 s);
-    void dumpConfig() const;
-    bool Init(Device *d);
+    bool getBusMaster();
+    void setBusMaster(bool m);
+    virtual void dumpConfig() const;
+    virtual bool Init(Device *d);
 
     friend std::ostream& operator <<(std::ostream& out, const Driver &d);
     struct equal {
@@ -33,10 +36,26 @@ public:
         }
     };
 
+    class InitException {
+        const char* what() const { return "uninitialized driver"; }
+    };
 
-private:
+
+    u8 getRevision();
+    u16 getSubsysId();
+    u16 getSubsysVid();
+
+
+protected:
+
+    bool pciEnable();
+    bool allocateBARs();
+    virtual bool earlyInitChecks();
+
     u16 _id;
     u16 _vid;
+    bool _present;
+    u8  _bus, _slot, _func;
 };
 
 #endif

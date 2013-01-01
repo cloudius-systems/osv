@@ -15,6 +15,12 @@ u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
 	return inl(PCI_CONFIG_DATA);
 }
 
+u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset)
+{
+    prepare_pci_config_access(bus, slot, func, offset);
+    return inw(PCI_CONFIG_DATA);
+}
+
 u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
 {
 	prepare_pci_config_access(bus, slot, func, offset);
@@ -26,6 +32,13 @@ void write_pci_config(u8 bus, u8 slot, u8 func, u8 offset, u32 val)
     prepare_pci_config_access(bus, slot, func, offset);
 	outl(val, PCI_CONFIG_DATA);
 }
+
+void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val)
+{
+    prepare_pci_config_access(bus, slot, func, offset);
+    outw(val, PCI_CONFIG_DATA);
+}
+
 
 void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
 {

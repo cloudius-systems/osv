@@ -18,6 +18,12 @@ public:
     void dumpConfig() const;
     u16 getid() const {return _id;};
     u16 getvid() const {return _vid;};
+    u8 getBus() const {return _bus;};
+    void setBus(u8 bus) {_bus = bus;};
+    u8 getSlot() const {return _slot;};
+    void setSlot(u8 slot) {_slot=slot;};
+    u8 getFunc() const {return _func;};
+    void setFunc(u8 func) {_func=func;};
 
     friend std::ostream& operator <<(std::ostream& out, const Device &d);
     struct equal {
@@ -37,6 +43,7 @@ public:
 private:
     u16 _id;
     u16 _vid;
+    u8 _bus, _slot, _func;
 };
 
 #endif

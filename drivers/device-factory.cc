@@ -9,7 +9,11 @@ void
 DeviceFactory::AddDevice(u8 bus, u8 slot, u8 func) {
     // read device id and vendor id
     u32 ids = read_pci_config(bus, slot, func, 0);
-    _devices.insert(new Device(ids>>16, ids & 0xffff));
+    Device* dev = new Device(ids>>16, ids & 0xffff);
+    dev->setBus(bus);
+    dev->setSlot(slot);
+    dev->setFunc(func);
+    _devices.insert(dev);
 }
 
 void
