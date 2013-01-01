@@ -14,7 +14,7 @@
 #include <string.h>
 //#include <locale>
 
-#include "drivers/driver.hh"
+#include "drivers/virtio.hh"
 #include "drivers/driver-factory.hh"
 
 namespace {
@@ -116,7 +116,7 @@ int main(int ac, char **av)
     pci::pci_device_enumeration();
     DeviceFactory::Instance()->DumpDevices();
 
-    Driver *d = new Driver(0x1af4, 0x1000);
+    Driver *d = new Virtio(0x1000);
     DriverFactory::Instance()->RegisterDriver(d);
 
     DeviceFactory::Instance()->InitializeDrivers();
