@@ -75,6 +75,7 @@ int main(int ac, char **av)
     f->read(buf, 0, 100);
 
     disable_pic();
+    processor::sti();
 
 #if 1
     if (std::isdigit('1'))
