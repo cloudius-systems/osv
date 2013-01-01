@@ -55,6 +55,7 @@ start32:
     mov %eax, %ss
     ljmp $0x18, $1f
 1:
+    and $~7, %esp
     mov $0x000007b8, %eax
     mov %eax, %cr4
     lea ident_pt_l4, %eax
