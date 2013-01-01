@@ -6,27 +6,27 @@
 struct exception_frame {
     typedef unsigned long ulong;
     typedef unsigned short u16;
-    ulong ss;
-    ulong rsp;
-    ulong rflags;
-    ulong cs;
-    ulong rip;
-    u16 error_code;
-    ulong rax;
-    ulong rbx;
-    ulong rcx;
-    ulong rdx;
-    ulong rsi;
-    ulong rdi;
-    ulong rbp;
-    ulong r8;
-    ulong r9;
-    ulong r10;
-    ulong r11;
-    ulong r12;
-    ulong r13;
-    ulong r14;
     ulong r15;
+    ulong r14;
+    ulong r13;
+    ulong r12;
+    ulong r11;
+    ulong r10;
+    ulong r9;
+    ulong r8;
+    ulong rbp;
+    ulong rdi;
+    ulong rsi;
+    ulong rdx;
+    ulong rcx;
+    ulong rbx;
+    ulong rax;
+    u16 error_code;
+    ulong rip;
+    ulong cs;
+    ulong rflags;
+    ulong rsp;
+    ulong ss;
 };
 
 class interrupt_descriptor_table {
