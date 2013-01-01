@@ -22,6 +22,7 @@ using processor::outl;
 	    PCI_FUNC_OFFSET    = 8,
 	    PCI_CONFIG_ADDRESS_ENABLE = 0x80000000,
 	    PCI_COMMAND_OFFSET = 0x4,
+	    PCI_BUS_MASTER_BIT = 0x2,
 	    PCI_STATUS_OFFSET  = 0x6,
 	    PCI_CLASS_REVISION = 0x8,
 	    PCI_CLASS_OFFSET   = 0xb,

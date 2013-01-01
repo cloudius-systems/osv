@@ -17,6 +17,8 @@ public:
     void setPresent(u8 bus, u8 slot, u8 func);
     u16 getStatus();
     void setStatus(u16 s);
+    bool getBusMaster();
+    void setBusMaster(bool m);
     virtual void dumpConfig() const;
     virtual bool Init(Device *d);
 

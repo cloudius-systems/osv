@@ -25,9 +25,10 @@ Virtio::earlyInitChecks() {
 
 bool
 Virtio::Init(Device* dev) {
-    if (!Driver::Init(dev)) return false;
 
     if (!earlyInitChecks()) return false;
+
+    if (!Driver::Init(dev)) return false;
 
     debug(fmt("Virtio:Init %x:%x") % _vid % _id);
 

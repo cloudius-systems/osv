@@ -51,6 +51,20 @@ Driver::getSubsysVid() {
 }
 
 bool
+Driver::getBusMaster() {
+    u16 command = read_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET);
+    return (command & (1 << PCI_BUS_MASTER_BIT));
+}
+
+void
+Driver::setBusMaster(bool master) {
+    u16 command = read_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET);
+    command = (master)? command |(1 << PCI_BUS_MASTER_BIT) :
+                        command & ~(1 << PCI_BUS_MASTER_BIT);
+    write_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET, command);
+}
+
+bool
 Driver::pciEnable() {
     return _present;
 }
@@ -70,6 +84,8 @@ Driver::Init(Device* dev) {
     if (!dev) return false;
 
     debug(fmt("Driver:Init %x:%x") % _vid % _id);
+
+    setBusMaster(true);
 
     return true;
 }
