@@ -196,6 +196,7 @@ void* alloc_page()
 
 void free_page(void* v)
 {
+    new (v) page_range(page_size);
     free_large(v + page_size);
 }
 
