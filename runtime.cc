@@ -117,11 +117,6 @@ void abort()
 	processor::halt_no_interrupts();
 }
 
-void operator delete(void *)
-{
-    WARN("operator delete");
-}
-
 void __cxa_pure_virtual(void)
 {
     abort();
