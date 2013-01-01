@@ -34,6 +34,7 @@ private:
     free_object* _free;
 public:
     static const size_t max_object_size;
+    static const size_t min_object_size;
 };
 
 struct pool::page_header {

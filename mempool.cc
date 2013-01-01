@@ -40,6 +40,7 @@ pool::~pool()
 }
 
 const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
+const size_t pool::min_object_size = sizeof(pool::free_object);
 
 pool::page_header* pool::to_header(free_object* object)
 {
@@ -233,10 +234,8 @@ extern "C" {
 
 void* malloc(size_t size)
 {
-    if (size == 0) {
-        size = 1;
-    }
     if (size <= memory::pool::max_object_size) {
+        size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         return memory::malloc_pools[n].alloc();
     } else {
