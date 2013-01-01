@@ -27,6 +27,7 @@ DriverFactory::InitializeDriver(Device* dev) {
     Driver *drv = lookup(dev->getvid(), dev->getid());
     if (!drv) return false;
 
+    drv->setPresent(dev->getBus(), dev->getSlot(), dev->getFunc());
     return drv->Init(dev);
 }
 
