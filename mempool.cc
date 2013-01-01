@@ -79,6 +79,7 @@ void pool::free(void* object)
     if (!--header->nalloc) {
         // FIXME: add hysteresis
         free_page(header);
+        _free = nullptr;
     } else {
         obj->next = _free;
         _free = obj;
