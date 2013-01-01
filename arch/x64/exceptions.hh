@@ -2,6 +2,7 @@
 #define EXCEPTIONS_HH
 
 #include <stdint.h>
+#include <functional>
 
 struct exception_frame {
     typedef unsigned long ulong;
@@ -33,6 +34,9 @@ class interrupt_descriptor_table {
 public:
     interrupt_descriptor_table();
     void load_on_cpu();
+    unsigned register_handler(std::function<void ()> handler);
+    void unregister_handler(unsigned vector);
+    void invoke_interrupt(unsigned vector);
 private:
     typedef uint8_t u8;
     typedef uint16_t u16;
@@ -59,6 +63,7 @@ private:
     } __attribute__((aligned(16)));
     void add_entry(unsigned vec, void (*handler)());
     idt_entry _idt[256];
+    std::function<void ()> _handlers[256];
 };
 
 extern interrupt_descriptor_table idt;

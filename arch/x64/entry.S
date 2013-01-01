@@ -79,3 +79,16 @@ exception_noerror_entry ex_mf, math_fault
 exception_error_entry ex_ac, alignment_check
 exception_noerror_entry ex_mc, machine_check
 exception_noerror_entry ex_xm, simd_exception
+
+.align 16
+.global interrupt_entry
+interrupt_entry:
+vector = 32
+.rept 256 - 32
+    .align 16
+    pushq $vector
+    jmp interrupt_entry_common
+    vector = vector + 1
+.endr
+
+exception_error_entry interrupt_entry_common, interrupt

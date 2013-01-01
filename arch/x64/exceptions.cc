@@ -1,6 +1,11 @@
 #include "exceptions.hh"
 #include "mmu.hh"
 #include "processor.hh"
+#include "interrupt.hh"
+#include <boost/format.hpp>
+#include "debug.hh"
+
+typedef boost::format fmt;
 
 interrupt_descriptor_table idt;
 
@@ -47,6 +52,11 @@ interrupt_descriptor_table::interrupt_descriptor_table()
     add_entry(17, ex_ac);
     add_entry(18, ex_mc);
     add_entry(19, ex_xm);
+
+    extern char interrupt_entry[];
+    for (unsigned i = 32; i < 256; ++i) {
+        add_entry(i, reinterpret_cast<void (*)()>(interrupt_entry + (i - 32) * 16));
+    }
 }
 
 void interrupt_descriptor_table::add_entry(unsigned vec, void (*handler)())
@@ -72,6 +82,57 @@ interrupt_descriptor_table::load_on_cpu()
                                reinterpret_cast<ulong>(&_idt));
     processor::lidt(d);
 }
+
+unsigned interrupt_descriptor_table::register_handler(std::function<void ()> handler)
+{
+    for (unsigned i = 32; i < 256; ++i) {
+        if (!_handlers[i]) {
+            _handlers[i] = handler;
+            return i;
+        }
+    }
+    abort();
+}
+
+void interrupt_descriptor_table::unregister_handler(unsigned vector)
+{
+    _handlers[vector] = std::function<void ()>();
+}
+
+void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
+{
+    _handlers[vector]();
+}
+
+extern "C" { void interrupt(exception_frame* frame); }
+
+void interrupt(exception_frame* frame)
+{
+    unsigned vector = frame->error_code;
+    debug(fmt("interrupt %x") % vector);
+    idt.invoke_interrupt(vector);
+    processor::wrmsr(0x80b, 0); // EOI
+}
+
+msi_interrupt_handler::msi_interrupt_handler(std::function<void ()> handler)
+    : _vector(idt.register_handler(handler))
+    , _handler(handler)
+{
+}
+
+msi_interrupt_handler::~msi_interrupt_handler()
+{
+    idt.unregister_handler(_vector);
+}
+
+msi_message msi_interrupt_handler::config()
+{
+    msi_message ret;
+    ret.addr = 0xfee00000;
+    ret.data = 0x4000 | _vector;
+    return ret;
+}
+
 #define DUMMY_HANDLER(x) \
      extern "C" void x(); void x() { abort(); }
 
