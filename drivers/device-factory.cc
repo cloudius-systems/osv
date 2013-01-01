@@ -1,4 +1,5 @@
 #include "drivers/device-factory.hh"
+#include "drivers/driver-factory.hh"
 #include "drivers/device.hh"
 #include "debug.hh"
 
@@ -15,4 +16,10 @@ void
 DeviceFactory::DumpDevices() {
     for (auto ii = _devices.begin() ; ii != _devices.end() ; ii++ )
          (*ii)->dumpConfig();
+}
+
+void
+DeviceFactory::InitializeDrivers() {
+    for (auto ii = _devices.begin() ; ii != _devices.end() ; ii++ )
+        DriverFactory::Instance()->InitializeDriver(*ii);
 }
