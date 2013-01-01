@@ -51,6 +51,12 @@ void premain()
     }
 }
 
+void disable_pic()
+{
+    outb(0xff, 0x21);
+    outb(0xff, 0xa1);
+}
+
 int main(int ac, char **av)
 {
     IsaSerialConsole console;
@@ -67,6 +73,8 @@ int main(int ac, char **av)
     fileref f = fs.open("/usr/lib/libjvm.so");
     char buf[100];
     f->read(buf, 0, 100);
+
+    disable_pic();
 
 #if 1
     if (std::isdigit('1'))
