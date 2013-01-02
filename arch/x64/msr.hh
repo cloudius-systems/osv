@@ -15,6 +15,11 @@ inline void wrmsr(msr index, u64 value)
     wrmsr(static_cast<u32>(index), value);
 }
 
+inline u64 rdmsr(msr index)
+{
+    return rdmsr(static_cast<u32>(index));
+}
+
 }
 
 #endif /* MSR_HH_ */
