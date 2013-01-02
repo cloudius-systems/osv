@@ -40,14 +40,15 @@ int open(const char* fname, int mode, ...)
     }
     auto desc = std::shared_ptr<file_desc>(
                     new file_desc(f, mode & O_RDONLY, mode & O_WRONLY));
-    std::lock_guard<mutex> guard(file_table_mutex);
-    auto p = std::find(file_table.begin(), file_table.end(),
-                       std::shared_ptr<file_desc>());
-    if (p == file_table.end()) {
-        file_table.push_back(desc);
-        p = file_table.end() - 1;
-    } else {
-        *p = desc;
-    }
-    return p - file_table.begin();
+    return with_lock(file_table_mutex, [&] {
+        auto p = std::find(file_table.begin(), file_table.end(),
+                           std::shared_ptr<file_desc>());
+        if (p == file_table.end()) {
+            file_table.push_back(desc);
+            p = file_table.end() - 1;
+        } else {
+            *p = desc;
+        }
+        return p - file_table.begin();
+    });
 }
