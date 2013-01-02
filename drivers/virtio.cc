@@ -31,6 +31,7 @@ Virtio::Init(Device* dev) {
     if (!Driver::Init(dev)) return false;
 
     debug(fmt("Virtio:Init %x:%x") % _vid % _id);
+    debug(fmt("Bar0 addr is %x") % getBar(0));
 
     return true;
 }

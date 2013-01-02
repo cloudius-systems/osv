@@ -44,7 +44,7 @@ public:
     u8 getRevision();
     u16 getSubsysId();
     u16 getSubsysVid();
-
+    u16 getBar(int n);
 
 protected:
 

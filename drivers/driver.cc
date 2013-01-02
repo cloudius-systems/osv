@@ -56,6 +56,12 @@ Driver::getBusMaster() {
     return (command & (1 << PCI_BUS_MASTER_BIT));
 }
 
+u16
+Driver::getBar(int n) {
+    return read_pci_config_word(_bus,_slot,_func, PCI_BAR0_ADDR + n*4);
+}
+
+
 void
 Driver::setBusMaster(bool master) {
     u16 command = read_pci_config_word(_bus,_slot,_func, PCI_COMMAND_OFFSET);
