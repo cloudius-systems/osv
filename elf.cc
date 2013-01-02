@@ -488,6 +488,11 @@ namespace elf {
         }
     }
 
+    tls_data elf_object::tls()
+    {
+        return tls_data{_tls_segment, _tls_init_size + _tls_uninit_size};
+    }
+
     program::program(::filesystem& fs, void* addr)
         : _fs(fs)
         , _next_alloc(addr)
@@ -498,6 +503,11 @@ namespace elf {
         add("ld-linux-x86-64.so.2", _core.get());
         add("libpthread.so.0", _core.get());
         add("libdl.so.2", _core.get());
+    }
+
+    tls_data program::tls()
+    {
+        return _core->tls();
     }
 
     void program::add(std::string name, elf_object* obj)
