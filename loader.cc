@@ -18,6 +18,11 @@
 #include "drivers/driver-factory.hh"
 #include "sched.hh"
 
+asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
+    ".byte 1 \n"
+    ".asciz \"scripts/loader.py\" \n"
+    ".popsection \n");
+
 namespace {
 
     void test_locale()
