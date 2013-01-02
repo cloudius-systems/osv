@@ -4,15 +4,28 @@ import gdb
 import re
 import os
 
+args = ''
 text_addr = '?'
 libjvm = '/usr/lib/jvm/java-1.7.0-openjdk.x86_64/jre/lib/amd64/server/libjvm.so'
+unwanted_sections = ['.text',
+                     '.note.stapsdt',
+                     '.gnu_debuglink',
+                     '.gnu_debugdata',
+                     '.shstrtab',
+                     ]
 for line in os.popen('readelf -WS ' + libjvm):
     m = re.match(r'\s*\[ *\d+\]\s+([\.\w\d_]+)\s+\w+\s+([0-9a-f]+).*', line)
     if m:
-        if m.group(1) == '.text':
-            text_addr = hex(int(m.group(2), 16) + 0x100000000000)
+        section = m.group(1)
+        if section == 'NULL':
+            continue
+        addr = hex(int(m.group(2), 16) + 0x100000000000)
+        if section == '.text':
+            text_addr = addr
+        if section not in unwanted_sections:
+            args += ' -s %s %s' % (section, addr)
 
-gdb.execute('add-symbol-file %s %s' % (libjvm, text_addr))
+gdb.execute('add-symbol-file %s %s %s' % (libjvm, text_addr, args))
 
 class Connect(gdb.Command):
     '''Connect to a local kvm instance at port :1234'''
