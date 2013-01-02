@@ -28,9 +28,11 @@ using processor::outl;
 	    PCI_CLASS_OFFSET   = 0xb,
 	    PCI_SUBCLASS_OFFSET= 0xa,
 	    PCI_HEADER_TYPE    = 0xe,
-	    PCI_SUBSYSTEM_ID   = 0x40,
-	    PCI_SUBSYSTEM_VID  = 0x42,
+	    PCI_SUBSYSTEM_ID   = 0x2e,
+	    PCI_SUBSYSTEM_VID  = 0x2c,
 	    PCI_HEADER_MULTI_FUNC = 0x80,
+	    PCI_BAR0_ADDR      = 0x10,
+	    PCI_CAPABILITIES_PTR = 0x34,
 	};
 
 	u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset);
