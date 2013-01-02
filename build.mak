@@ -71,6 +71,7 @@ objects += drivers/pci.o
 objects += mempool.o
 objects += arch/x64/elf-dl.o
 objects += linux.o
+objects += sched.o
 
 libc = libc/string/strcmp.o
 libc += libc/printf.o
