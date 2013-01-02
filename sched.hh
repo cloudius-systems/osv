@@ -32,6 +32,8 @@ private:
     void init_stack();
     void setup_tcb();
     void setup_tcb_main();
+    static void on_thread_stack(thread* t);
+    void switch_to_thread_stack();
 private:
     std::function<void ()> _func;
     thread_state _state;

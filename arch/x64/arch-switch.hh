@@ -7,6 +7,8 @@
 extern "C" {
 void thread_main(void);
 void thread_main_c(sched::thread* t);
+void stack_trampoline(sched::thread* t, void (*func)(sched::thread*),
+                      void** stacktop);
 }
 
 namespace sched {
@@ -35,6 +37,19 @@ void thread::init_stack()
     *--stacktop = this;
     *--stacktop = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;
+}
+
+void thread::switch_to_thread_stack()
+{
+    void** stacktop = reinterpret_cast<void**>(_stack + sizeof(_stack));
+    stack_trampoline(this, &thread::on_thread_stack, stacktop);
+}
+
+void thread::on_thread_stack(thread* t)
+{
+    t->_func();
+    t->_waiting = true;
+    schedule();
 }
 
 void thread::setup_tcb()

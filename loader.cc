@@ -157,7 +157,7 @@ int main(int ac, char **av)
 
 void main_thread(elf::program& prog)
 {
-    new thread([] { test_threads(); });
+    test_threads();
     prog.add("libjvm.so");
     auto JNI_GetDefaultJavaVMInitArgs
         = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");

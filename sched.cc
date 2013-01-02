@@ -34,7 +34,7 @@ void schedule()
 
 thread::thread(std::function<void ()> func, bool main)
     : _func(func)
-    , _on_runqueue(true)
+    , _on_runqueue(!main)
     , _waiting(false)
 {
     if (!main) {
@@ -44,7 +44,7 @@ thread::thread(std::function<void ()> func, bool main)
     } else {
         setup_tcb_main();
         s_current = this;
-        func();
+        switch_to_thread_stack();
         abort();
     }
 }
