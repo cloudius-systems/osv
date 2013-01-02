@@ -10,7 +10,7 @@ enum class msr : uint32_t {
 
 namespace processor {
 
-void wrmsr(msr index, u64 value)
+inline void wrmsr(msr index, u64 value)
 {
     wrmsr(static_cast<u32>(index), value);
 }
