@@ -32,6 +32,11 @@ Virtio::Init(Device* dev) {
 
     debug(fmt("Virtio:Init %x:%x") % _vid % _id);
 
+    _bars[0]->write(VIRTIO_PCI_STATUS, (u8)(VIRTIO_CONFIG_S_ACKNOWLEDGE |
+            VIRTIO_CONFIG_S_DRIVER));
+
+    _bars[0]->write(VIRTIO_PCI_STATUS, (u8)(VIRTIO_CONFIG_S_DRIVER_OK));
+
     return true;
 }
 
