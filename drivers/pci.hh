@@ -5,6 +5,8 @@
 #include "processor.hh"
 #include "types.hh"
 
+class Driver;
+
 namespace pci {
 
 using processor::inb;
@@ -44,6 +46,28 @@ using processor::outl;
 	void pci_device_print(u8 bus, u8 slot, u8 func);
 	void pci_devices_print(void);
 	void pci_device_enumeration(void);
+
+	class Bar {
+	public:
+	    Bar(int n, Driver* d);
+	    enum TYPE {
+	      BAR_TYPE = 1,
+	      BAR_IO = 0,
+	      BAR_MMIO = 1,
+	    };
+
+	    u32 read(u32 offset)  {return inl(offset);}
+	    u16 readw(u32 offset) {return inw(offset);}
+	    u8  readb(u32 offset) {return inb(offset);}
+	    void write(u32 offset, u32 val) {outl(val, offset);}
+	    void write(u32 offset, u16 val) {outw(val, offset);}
+	    void write(u32 offset, u8 val)  {outb(val, offset);}
+
+	private:
+	    u32 _addr;
+	    TYPE _type;
+	    u32 _size;
+	};
 
 };
 

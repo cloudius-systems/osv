@@ -8,13 +8,20 @@
 #include <unordered_map>
 
 using namespace processor;
+using namespace pci;
 
 class Driver {
 public:
-    Driver(u16 vid, u16 id) :_id(id), _vid(vid) {};
+    Driver(u16 vid, u16 id) :_id(id), _vid(vid), _present(false), _bus(0), _slot(0), _func(0)\
+           {for (int i=0;i<6;i++) _bars[i] = nullptr;};
+    virtual ~Driver() {for (int i=0;i<6;i++) if (_bars[i]) delete _bars[i];}
 
     bool isPresent();
     void setPresent(u8 bus, u8 slot, u8 func);
+    u8 getBus();
+    u8 getSlot();
+    u8 getFunc();
+
     u16 getStatus();
     void setStatus(u16 s);
     bool getBusMaster();
@@ -44,7 +51,8 @@ public:
     u8 getRevision();
     u16 getSubsysId();
     u16 getSubsysVid();
-    u16 getBar(int n);
+
+    void initBars();
 
 protected:
 
@@ -56,6 +64,7 @@ protected:
     u16 _vid;
     bool _present;
     u8  _bus, _slot, _func;
+    Bar* _bars[6];
 };
 
 #endif
