@@ -322,7 +322,7 @@ namespace elf {
     public:
         explicit program(::filesystem& fs,
                          void* base = reinterpret_cast<void*>(0x100000000000UL));
-        void add(std::string lib);
+        elf_object* add(std::string lib);
         void add(std::string lib, elf_object* obj);
         symbol_module lookup(const char* symbol);
         template <typename T>
@@ -336,6 +336,8 @@ namespace elf {
         std::unique_ptr<elf_object> _core;
         std::map<std::string, elf_object*> _files;
     };
+
+    program* get_program();
 
     struct init_table {
         void (**start)();
