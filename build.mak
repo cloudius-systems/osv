@@ -66,6 +66,7 @@ objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
+objects += arch/x64/arch-setup.o
 objects += mutex.o
 objects += debug.o
 objects += drivers/pci.o

@@ -1,5 +1,6 @@
 #include "mempool.hh"
 #include "ilog2.hh"
+#include "arch-setup.hh"
 #include <cassert>
 #include <cstdint>
 #include <new>
@@ -211,14 +212,35 @@ void free_page(void* v)
     free_large(v + page_size);
 }
 
-char initial_malloc_pool[1 << 26] __attribute__((aligned(4096)));
+void free_initial_memory_range(uintptr_t addr, size_t size)
+{
+    if (!size) {
+        return;
+    }
+    // avoid muddling things with null pointers
+    if (addr == 0) {
+        ++addr;
+        --size;
+    }
+    unsigned delta = ((addr + page_size - 1) & ~(page_size - 1)) - addr;
+    if (delta > size) {
+        return;
+    }
+    addr += delta;
+    size -= delta;
+    size &= ~(page_size - 1);
+    if (!size) {
+        return;
+    }
+    void* v = reinterpret_cast<void*>(addr);
+    new (v) page_range(size);
+    free_large(v + page_size);
+
+}
 
 void  __attribute__((constructor(12001))) setup()
 {
-    auto size = sizeof(initial_malloc_pool);
-    auto header = new (initial_malloc_pool) page_range(size);
-    void* v = header;
-    free_large(v + page_size);
+    arch_setup_free_memory();
 }
 
 }
