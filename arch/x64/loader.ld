@@ -19,7 +19,7 @@ SECTIONS
     _init_array_end = .;
     .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls
     .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls
-    .bss : { *(.bss) } :text
+    .bss : { *(.bss .bss.*) } :text
     .edata = .;
     .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
     .debug_srcinfo 0 : { *(.debug_srcinfo) }
