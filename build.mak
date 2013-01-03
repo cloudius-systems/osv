@@ -81,6 +81,7 @@ libc += libc/pthread.o
 libc += libc/file.o
 libc += libc/fd.o
 libc += libc/libc.o
+libc += libc/dlfcn.o
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
