@@ -523,6 +523,9 @@ namespace elf {
     {
         if (!_files.count(name)) {
             auto f(_fs.open("/usr/lib/" + name));
+            if (!f) {
+                return nullptr;
+            }
             auto ef = new elf_file(*this, f);
             ef->set_base(_next_alloc);
             _files[name] = ef;
