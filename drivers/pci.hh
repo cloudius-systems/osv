@@ -56,12 +56,12 @@ using processor::outl;
 	      BAR_MMIO = 1,
 	    };
 
-	    u32 read(u32 offset)  {return inl(offset);}
-	    u16 readw(u32 offset) {return inw(offset);}
-	    u8  readb(u32 offset) {return inb(offset);}
-	    void write(u32 offset, u32 val) {outl(val, offset);}
-	    void write(u32 offset, u16 val) {outw(val, offset);}
-	    void write(u32 offset, u8 val)  {outb(val, offset);}
+	    u32 read(u32 offset)  {return inl(_addr+offset);}
+	    u16 readw(u32 offset) {return inw(_addr+offset);}
+	    u8  readb(u32 offset) {return inb(_addr+offset);}
+	    void write(u32 offset, u32 val) {outl(val, _addr+offset);}
+	    void write(u32 offset, u16 val) {outw(val, _addr+offset);}
+	    void write(u32 offset, u8 val)  {outb(val, _addr+offset);}
 
 	private:
 	    u32 _addr;
