@@ -66,7 +66,6 @@ using processor::outl;
 	private:
 	    u32 _addr;
 	    TYPE _type;
-	    u32 _size;
 	};
 
 };
