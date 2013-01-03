@@ -41,6 +41,12 @@ tss:	.rept 0x67
 
 tr:	.word     tss_desc - gdt
 
+.bss
+
+.align 16
+. = . + 4096*4
+init_stack_top = .
+
 .text
 
 .globl start32
@@ -81,6 +87,7 @@ start64:
     xor %eax, %eax
     rep stosb
     mov %rbp, elf_header
+    lea init_stack_top, %rsp
     call premain
     jmp main
 
