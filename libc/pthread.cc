@@ -1,4 +1,5 @@
 #include "mutex.hh"
+#include "sched.hh"
 #include <pthread.h>
 #include <errno.h>
 #include <mutex>
@@ -37,4 +38,9 @@ int pthread_setspecific(pthread_key_t key, void* value)
 {
     tsd[key] = value;
     return 0;
+}
+
+pthread_t pthread_self()
+{
+    return reinterpret_cast<pthread_t>(sched::thread::current());
 }
