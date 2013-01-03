@@ -75,6 +75,9 @@ start32:
     ljmpl $8, $start64
 .code64
 start64:
+    .cfi_startproc simple
+    .cfi_def_cfa %rsp, 0
+    .cfi_undefined %rip
     mov $tss, %edx
     movw %dx, tss_desc + 2
     shr $16, %edx
@@ -90,4 +93,5 @@ start64:
     lea init_stack_top, %rsp
     call premain
     jmp main
+    .cfi_endproc
 
