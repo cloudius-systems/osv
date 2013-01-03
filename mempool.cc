@@ -8,6 +8,8 @@
 
 namespace memory {
 
+size_t phys_mem_size;
+
 // Memory allocation strategy
 //
 // The chief requirement is to be able to deduce the object size.

@@ -49,6 +49,7 @@ void arch_setup_free_memory()
     while (p < tmp + mb.mmap_length) {
         auto ent = static_cast<e820ent*>(p);
         if (ent->type == 1) {
+            memory::phys_mem_size += ent->size;
             if (ent->addr < edata) {
                 u64 adjust = std::min(edata - ent->addr, ent->size);
                 ent->addr += adjust;

@@ -11,6 +11,8 @@ using std::size_t;
 
 const size_t page_size = 4096;
 
+extern size_t phys_mem_size;
+
 void* alloc_page();
 void free_page(void* page);
 void* alloc_page_range(size_t bytes);
