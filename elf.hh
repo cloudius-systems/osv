@@ -244,6 +244,11 @@ namespace elf {
     class program;
     class symbol_module;
 
+    struct tls_data {
+        void* start;
+        size_t size;
+    };
+
     class elf_object {
     public:
         explicit elf_object(program& prog);
@@ -257,6 +262,7 @@ namespace elf {
         Elf64_Sym* lookup_symbol(const char* name);
         void load_segments();
         void* resolve_pltgot(unsigned index);
+        tls_data tls();
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
@@ -316,11 +322,12 @@ namespace elf {
     public:
         explicit program(::filesystem& fs,
                          void* base = reinterpret_cast<void*>(0x100000000000UL));
-        void add(std::string lib);
+        elf_object* add(std::string lib);
         void add(std::string lib, elf_object* obj);
         symbol_module lookup(const char* symbol);
         template <typename T>
         T* lookup_function(const char* symbol);
+        tls_data tls();
     private:
         void* do_lookup_function(const char* symbol);
     private:
@@ -329,6 +336,8 @@ namespace elf {
         std::unique_ptr<elf_object> _core;
         std::map<std::string, elf_object*> _files;
     };
+
+    program* get_program();
 
     struct init_table {
         void (**start)();

@@ -1,11 +1,14 @@
 #include "mempool.hh"
 #include "ilog2.hh"
+#include "arch-setup.hh"
 #include <cassert>
 #include <cstdint>
 #include <new>
 #include <boost/utility.hpp>
 
 namespace memory {
+
+size_t phys_mem_size;
 
 // Memory allocation strategy
 //
@@ -36,10 +39,11 @@ pool::pool(unsigned size)
 
 pool::~pool()
 {
-    assert(!_free);
+    assert(_free.empty());
 }
 
 const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
+const size_t pool::min_object_size = sizeof(pool::free_object);
 
 pool::page_header* pool::to_header(free_object* object)
 {
@@ -49,26 +53,32 @@ pool::page_header* pool::to_header(free_object* object)
 
 void* pool::alloc()
 {
-    if (!_free) {
+    if (_free.empty()) {
         add_page();
     }
-    auto obj = _free;
-    ++to_header(obj)->nalloc;
-    _free = obj->next;
+    auto header = _free.begin();
+    auto obj = header->local_free;
+    ++header->nalloc;
+    header->local_free = obj->next;
+    if (!header->local_free) {
+        _free.erase(header);
+    }
     return obj;
 }
 
 void pool::add_page()
 {
     void* page = alloc_page();
-    auto header = static_cast<page_header*>(page);
+    auto header = new (page) page_header;
     header->owner = this;
     header->nalloc = 0;
+    header->local_free = nullptr;
     for (auto p = page + page_size - _size; p >= header + 1; p -= _size) {
         auto obj = static_cast<free_object*>(p);
-        obj->next = _free;
-        _free = obj;
+        obj->next = header->local_free;
+        header->local_free = obj;
     }
+    _free.push_back(*header);
 }
 
 void pool::free(void* object)
@@ -76,11 +86,15 @@ void pool::free(void* object)
     auto obj = static_cast<free_object*>(object);
     auto header = to_header(obj);
     if (!--header->nalloc) {
+        _free.erase(_free.iterator_to(*header));
         // FIXME: add hysteresis
         free_page(header);
     } else {
-        obj->next = _free;
-        _free = obj;
+        if (!header->local_free) {
+            _free.push_front(*header);
+        }
+        obj->next = header->local_free;
+        header->local_free = obj;
     }
 }
 
@@ -196,17 +210,39 @@ void* alloc_page()
 
 void free_page(void* v)
 {
+    new (v) page_range(page_size);
     free_large(v + page_size);
 }
 
-char initial_malloc_pool[1 << 26] __attribute__((aligned(4096)));
+void free_initial_memory_range(uintptr_t addr, size_t size)
+{
+    if (!size) {
+        return;
+    }
+    // avoid muddling things with null pointers
+    if (addr == 0) {
+        ++addr;
+        --size;
+    }
+    unsigned delta = ((addr + page_size - 1) & ~(page_size - 1)) - addr;
+    if (delta > size) {
+        return;
+    }
+    addr += delta;
+    size -= delta;
+    size &= ~(page_size - 1);
+    if (!size) {
+        return;
+    }
+    void* v = reinterpret_cast<void*>(addr);
+    new (v) page_range(size);
+    free_large(v + page_size);
+
+}
 
 void  __attribute__((constructor(12001))) setup()
 {
-    auto size = sizeof(initial_malloc_pool);
-    auto header = new (initial_malloc_pool) page_range(size);
-    void* v = header;
-    free_large(v + page_size);
+    arch_setup_free_memory();
 }
 
 }
@@ -232,10 +268,8 @@ extern "C" {
 
 void* malloc(size_t size)
 {
-    if (size == 0) {
-        size = 1;
-    }
     if (size <= memory::pool::max_object_size) {
+        size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         return memory::malloc_pools[n].alloc();
     } else {

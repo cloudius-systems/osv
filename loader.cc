@@ -16,6 +16,12 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/driver-factory.hh"
+#include "sched.hh"
+
+asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
+    ".byte 1 \n"
+    ".asciz \"scripts/loader.py\" \n"
+    ".popsection \n");
 
 namespace {
 
@@ -60,6 +66,53 @@ void disable_pic()
     outb(0xff, 0xa1);
 }
 
+static int test_ctr;
+
+using sched::thread;
+
+struct test_threads_data {
+    thread* main;
+    thread* t1;
+    thread* t2;
+};
+
+void test_thread_1(test_threads_data& tt)
+{
+    while (test_ctr < 1000) {
+        thread::wait_until([&] { return (test_ctr % 2) == 0; });
+        ++test_ctr;
+        if (tt.t2) {
+            tt.t2->wake();
+        }
+    }
+    tt.t1 = nullptr;
+    tt.main->wake();
+}
+
+void test_thread_2(test_threads_data& tt)
+{
+    while (test_ctr < 1000) {
+        thread::wait_until([&] { return (test_ctr % 2) == 1; });
+        ++test_ctr;
+        if (tt.t1) {
+            tt.t1->wake();
+        }
+    }
+    tt.t2 = nullptr;
+    tt.main->wake();
+}
+
+void test_threads()
+{
+    test_threads_data tt;
+    tt.main = thread::current();
+    tt.t1 = new thread([&] { test_thread_1(tt); });
+    tt.t2 = new thread([&] { test_thread_2(tt); });
+
+    thread::wait_until([&] { return test_ctr >= 1000; });
+    debug("threading test succeeded");
+}
+
 int main(int ac, char **av)
 {
     IsaSerialConsole console;
@@ -102,6 +155,14 @@ int main(int ac, char **av)
 
     debug(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
     elf::program prog(fs);
+    sched::init(prog);
+    void main_thread(elf::program& prog);
+    new thread([&] { main_thread(prog); }, true);
+}
+
+void main_thread(elf::program& prog)
+{
+    test_threads();
     prog.add("libjvm.so");
     auto JNI_GetDefaultJavaVMInitArgs
         = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");

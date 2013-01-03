@@ -65,12 +65,15 @@ drivers += drivers/virtio.o
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o
 objects += arch/x64/math.o
+objects += arch/x64/apic.o
+objects += arch/x64/arch-setup.o
 objects += mutex.o
 objects += debug.o
 objects += drivers/pci.o
 objects += mempool.o
 objects += arch/x64/elf-dl.o
 objects += linux.o
+objects += sched.o
 
 libc = libc/string/strcmp.o
 libc += libc/printf.o
@@ -78,6 +81,7 @@ libc += libc/pthread.o
 libc += libc/file.o
 libc += libc/fd.o
 libc += libc/libc.o
+libc += libc/dlfcn.o
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)

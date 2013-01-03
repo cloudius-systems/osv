@@ -92,3 +92,24 @@ vector = 32
 .endr
 
 exception_error_entry interrupt_entry_common, interrupt
+
+.global thread_main
+thread_main:
+	.cfi_startproc simple
+	.cfi_def_cfa %rsp, 0
+	pop %rdi
+	call thread_main_c
+	.cfi_endproc
+
+.global stack_trampoline
+stack_trampoline:  # %rsi=arg, %rdi=func, %rdx=stack
+	.cfi_startproc simple
+	.cfi_def_cfa %rsp, 0
+	mov %rsp, -8(%rdx)
+	lea -8(%rdx), %rsp
+	.cfi_rel_offset %rsp, 0
+	call *%rsi
+	pop %rsp
+	.cfi_restore %rsp
+	ret
+	.cfi_endproc

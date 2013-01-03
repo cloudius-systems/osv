@@ -488,16 +488,30 @@ namespace elf {
         }
     }
 
+    tls_data elf_object::tls()
+    {
+        return tls_data{_tls_segment, _tls_init_size + _tls_uninit_size};
+    }
+
+    program* s_program;
+
     program::program(::filesystem& fs, void* addr)
         : _fs(fs)
         , _next_alloc(addr)
         , _core(new elf::elf_memory_image(*this, reinterpret_cast<void*>(0x200000)))
     {
         _core->load_segments();
+        assert(!s_program);
+        s_program = this;
         add("libc.so.6", _core.get());
         add("ld-linux-x86-64.so.2", _core.get());
         add("libpthread.so.0", _core.get());
         add("libdl.so.2", _core.get());
+    }
+
+    tls_data program::tls()
+    {
+        return _core->tls();
     }
 
     void program::add(std::string name, elf_object* obj)
@@ -505,10 +519,13 @@ namespace elf {
         _files[name] = obj;
     }
 
-    void program::add(std::string name)
+    elf_object* program::add(std::string name)
     {
         if (!_files.count(name)) {
             auto f(_fs.open("/usr/lib/" + name));
+            if (!f) {
+                return nullptr;
+            }
             auto ef = new elf_file(*this, f);
             ef->set_base(_next_alloc);
             _files[name] = ef;
@@ -517,6 +534,7 @@ namespace elf {
             ef->load_needed();
             ef->relocate();
         }
+        return _files[name];
     }
 
     symbol_module program::lookup(const char* name)
@@ -540,6 +558,11 @@ namespace elf {
             throw std::runtime_error("symbol is not a function");
         }
         return sym.relocated_addr();
+    }
+
+    program* get_program()
+    {
+        return s_program;
     }
 
     init_table get_init(Elf64_Ehdr* header)

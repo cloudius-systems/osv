@@ -41,6 +41,12 @@ tss:	.rept 0x67
 
 tr:	.word     tss_desc - gdt
 
+.bss
+
+.align 16
+. = . + 4096*4
+init_stack_top = .
+
 .text
 
 .globl start32
@@ -55,6 +61,7 @@ start32:
     mov %eax, %ss
     ljmp $0x18, $1f
 1:
+    and $~7, %esp
     mov $0x000007b8, %eax
     mov %eax, %cr4
     lea ident_pt_l4, %eax
@@ -68,6 +75,9 @@ start32:
     ljmpl $8, $start64
 .code64
 start64:
+    .cfi_startproc simple
+    .cfi_def_cfa %rsp, 0
+    .cfi_undefined %rip
     mov $tss, %edx
     movw %dx, tss_desc + 2
     shr $16, %edx
@@ -80,6 +90,9 @@ start64:
     xor %eax, %eax
     rep stosb
     mov %rbp, elf_header
+    mov %rbx, multiboot_info
+    lea init_stack_top, %rsp
     call premain
     jmp main
+    .cfi_endproc
 

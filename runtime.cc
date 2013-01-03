@@ -25,6 +25,7 @@
 #include "processor.hh"
 #include "debug.hh"
 #include <boost/format.hpp>
+#include "mempool.hh"
 
 #define __LC_LAST 13
 
@@ -636,6 +637,7 @@ long sysconf(int name)
     case _SC_THREAD_PROCESS_SHARED: return true;
     case _SC_NPROCESSORS_ONLN: return 1; // FIXME
     case _SC_NPROCESSORS_CONF: return 1; // FIXME
+    case _SC_PHYS_PAGES: return memory::phys_mem_size / memory::page_size;
     }
     debug(fmt("sysconf: unknown parameter %1%") % name);
     abort();
