@@ -20,7 +20,7 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
         for (auto obj : m) {
             dl_phdr_info info;
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());
-            std::string name = obj->soname();
+            std::string name = obj->pathname();
             info.dlpi_name = name.c_str();
             auto phdrs = obj->phdrs();
             // hopefully, the libc and osv types match:
