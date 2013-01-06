@@ -333,3 +333,15 @@ int sprintf(char* str, const char* format, ...)
     std::copy(out.begin(), out.end(), str);
     return out.length();
 }
+
+int snprintf(char* str, size_t n, const char* format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    auto out = strprintf(format, ap);
+    va_end(ap);
+    std::string trunc = out.substr(0, n - 1);
+    std::copy(out.begin(), out.end(), str);
+    return out.length();
+}
