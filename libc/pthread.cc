@@ -5,6 +5,7 @@
 #include <mutex>
 #include <vector>
 #include <algorithm>
+#include <string.h>
 
 namespace pthread_private {
 
@@ -43,4 +44,13 @@ int pthread_setspecific(pthread_key_t key, void* value)
 pthread_t pthread_self()
 {
     return reinterpret_cast<pthread_t>(sched::thread::current());
+}
+
+int pthread_mutex_init(pthread_mutex_t* __restrict m,
+        const pthread_mutexattr_t* __restrict attr)
+{
+    // FIXME: respect attr
+    memset(m, 0, sizeof(*m));
+    new (m) mutex;
+    return 0;
 }
