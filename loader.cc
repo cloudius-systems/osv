@@ -17,6 +17,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/driver-factory.hh"
 #include "sched.hh"
+#include "drivers/clock.hh"
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -181,6 +182,11 @@ void main_thread(elf::program& prog)
     DriverFactory::Instance()->RegisterDriver(d);
 
     DeviceFactory::Instance()->InitializeDrivers();
+
+    auto t1 = clock::get()->time();
+    auto t2 = clock::get()->time();
+    debug(fmt("clock@t1 %1%") % t1);
+    debug(fmt("clock@t2 %1%") % t2);
 
     auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
     debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);

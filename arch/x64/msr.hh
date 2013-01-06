@@ -51,6 +51,10 @@ enum class msr : uint32_t {
 
     IA32_APIC_BASE = 0x0000001b,
     IA32_FS_BASE = 0xc0000100,
+
+    KVM_WALL_CLOCK_NEW = 0x4b564d00,
+    KVM_SYSTEM_TIME_NEW = 0x4b564d01,
+
 };
 
 namespace processor {
