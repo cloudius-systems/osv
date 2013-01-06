@@ -51,8 +51,9 @@ namespace elf {
         }
     }
 
-    elf_object::elf_object(program& prog)
+    elf_object::elf_object(program& prog, std::string pathname)
         : _prog(prog)
+        , _pathname(pathname)
         , _tls_segment()
         , _tls_init_size()
         , _tls_uninit_size()
@@ -64,8 +65,8 @@ namespace elf {
     {
     }
 
-    elf_file::elf_file(program& prog, ::fileref f)
-	: elf_object(prog)
+    elf_file::elf_file(program& prog, ::fileref f, std::string pathname)
+	: elf_object(prog, pathname)
         , _f(f)
     {
 	load_elf_header();
@@ -77,7 +78,7 @@ namespace elf {
     }
 
     elf_memory_image::elf_memory_image(program& prog, void* base)
-        : elf_object(prog)
+        : elf_object(prog, "")
     {
         _ehdr = *static_cast<Elf64_Ehdr*>(base);
         auto p = static_cast<Elf64_Phdr*>(base + _ehdr.e_phoff);
@@ -508,6 +509,11 @@ namespace elf {
         return _phdrs;
     }
 
+    std::string elf_object::pathname()
+    {
+        return _pathname;
+    }
+
     program* s_program;
 
     program::program(::filesystem& fs, void* addr)
@@ -537,11 +543,12 @@ namespace elf {
     elf_object* program::add(std::string name)
     {
         if (!_files.count(name)) {
-            auto f(_fs.open("/usr/lib/" + name));
+            std::string pathname = "/usr/lib/" + name;
+            auto f(_fs.open(pathname));
             if (!f) {
                 return nullptr;
             }
-            auto ef = new elf_file(*this, f);
+            auto ef = new elf_file(*this, f, pathname);
             ef->set_base(_next_alloc);
             _files[name] = ef;
             ef->load_segments();

@@ -251,7 +251,7 @@ namespace elf {
 
     class elf_object {
     public:
-        explicit elf_object(program& prog);
+        explicit elf_object(program& prog, std::string pathname);
         virtual ~elf_object();
 	void load_needed();
 	void relocate();
@@ -265,6 +265,7 @@ namespace elf {
         tls_data tls();
         std::vector<Elf64_Phdr> phdrs();
         std::string soname();
+        std::string pathname();
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
@@ -284,6 +285,7 @@ namespace elf {
         void relocate_pltgot();
     protected:
         program& _prog;
+        std::string _pathname;
 	Elf64_Ehdr _ehdr;
 	std::vector<Elf64_Phdr> _phdrs;
 	void* _base;
@@ -295,7 +297,7 @@ namespace elf {
 
     class elf_file : public elf_object {
     public:
-        explicit elf_file(program& prog, fileref f);
+        explicit elf_file(program& prog, fileref f, std::string pathname);
         virtual ~elf_file();
         void load_program_headers();
         void load_elf_header();
