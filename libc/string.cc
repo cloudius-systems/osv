@@ -9,3 +9,13 @@ const char* strrchr(const char* s, int c)
     }
     return nullptr;
 }
+
+const char* strchr(const char* s, int c)
+{
+    do {
+        if (*s == c) {
+            return s;
+        }
+    } while (*s++);
+    return nullptr;
+}
