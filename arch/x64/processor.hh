@@ -197,6 +197,13 @@ namespace processor {
 	    asm volatile ("cli");
 	}
 
+	inline u64 rdtsc()
+	{
+	    u32 lo, hi;
+	    asm("rdtsc" : "=a"(lo), "=d"(hi));
+	    return lo | (u64(hi) << 32);
+	}
+
 };
 
 #endif
