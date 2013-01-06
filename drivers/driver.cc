@@ -76,6 +76,8 @@ Driver::allocateBARs() {
 
 bool
 Driver::earlyInitChecks() {
+    initBars();
+
     return _present;
 }
 
@@ -88,6 +90,30 @@ Driver::Init(Device* dev) {
     setBusMaster(true);
 
     return true;
+}
+
+void
+Driver::initBars() {
+    for (int i=0; i<6; i++)
+        _bars[i] = new Bar(i, this);
+}
+
+u8
+Driver::getBus() {
+    if (!_present) throw new InitException();
+    return _bus;
+}
+
+u8
+Driver::getSlot() {
+    if (!_present) throw new InitException();
+    return _slot;
+}
+
+u8
+Driver::getFunc() {
+    if (!_present) throw new InitException();
+    return _func;
 }
 
 void Driver::dumpConfig() const {
