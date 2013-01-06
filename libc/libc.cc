@@ -48,3 +48,9 @@ char* realpath(const char* path, char* resolved_path)
     strcpy(resolved_path, ret.c_str());
     return resolved_path;
 }
+
+char* getenv(const char* name)
+{
+    // no environment
+    return NULL;
+}
