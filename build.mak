@@ -77,6 +77,7 @@ objects += linux.o
 objects += sched.o
 
 libc = libc/string/strcmp.o
+libc += libc/string/strcpy.o
 libc += libc/printf.o
 libc += libc/pthread.o
 libc += libc/file.o
