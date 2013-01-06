@@ -472,11 +472,16 @@ namespace elf {
 
     Elf64_Sym* elf_object::lookup_symbol(const char* name)
     {
+        Elf64_Sym* sym;
         if (dynamic_exists(DT_GNU_HASH)) {
-            return lookup_symbol_gnu(name);
+            sym = lookup_symbol_gnu(name);
         } else {
-            return lookup_symbol_old(name);
+            sym = lookup_symbol_old(name);
         }
+        if (sym->st_shndx == SHN_UNDEF) {
+            sym = nullptr;
+        }
+        return sym;
     }
 
     void elf_object::load_needed()
