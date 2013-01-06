@@ -263,6 +263,8 @@ namespace elf {
         void load_segments();
         void* resolve_pltgot(unsigned index);
         tls_data tls();
+        std::vector<Elf64_Phdr> phdrs();
+        std::string soname();
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
@@ -328,6 +330,8 @@ namespace elf {
         template <typename T>
         T* lookup_function(const char* symbol);
         tls_data tls();
+        // run a function with all current modules as a parameter
+        void with_modules(std::function<void (std::vector<elf_object*>&)> f);
     private:
         void* do_lookup_function(const char* symbol);
     private:

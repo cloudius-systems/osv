@@ -498,6 +498,16 @@ namespace elf {
         return tls_data{_tls_segment, _tls_init_size + _tls_uninit_size};
     }
 
+    std::string elf_object::soname()
+    {
+        return dynamic_exists(DT_SONAME) ? dynamic_str(DT_SONAME) : std::string();
+    }
+
+    std::vector<Elf64_Phdr> elf_object::phdrs()
+    {
+        return _phdrs;
+    }
+
     program* s_program;
 
     program::program(::filesystem& fs, void* addr)
@@ -563,6 +573,16 @@ namespace elf {
             throw std::runtime_error("symbol is not a function");
         }
         return sym.relocated_addr();
+    }
+
+    void program::with_modules(std::function<void (std::vector<elf_object*>&)> f)
+    {
+        // FIXME: locking?
+        std::vector<elf_object*> tmp;
+        for (auto& name_module : _files) {
+            tmp.push_back(name_module.second);
+        }
+        f(tmp);
     }
 
     program* get_program()
