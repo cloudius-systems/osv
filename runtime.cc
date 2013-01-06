@@ -297,13 +297,6 @@ int mincore(void *addr, size_t length, unsigned char *vec)
     return 0;
 }
 
-int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
-                                    size_t size, void *data),
-                    void *data)
-{
-    return 0;
-}
-
 int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
                           char *buf, size_t buf_len, unw_word_t *offp)
 {
