@@ -4,6 +4,7 @@
 #include "debug.hh"
 #include "exceptions.hh"
 #include <boost/format.hpp>
+#include <string.h>
 
 namespace {
     typedef boost::format fmt;
@@ -110,7 +111,7 @@ namespace mmu {
 	}
     }
 
-    vma* map_anon(void* addr, size_t size, unsigned perm)
+    vma* map_anon_dontzero(void* addr, size_t size, unsigned perm)
     {
         vma* ret = new vma(addr, size);
         vma_list.insert(*ret);
@@ -120,10 +121,17 @@ namespace mmu {
         return ret;
     }
 
+    vma* map_anon(void* addr, size_t size, unsigned perm)
+    {
+        auto ret = map_anon_dontzero(addr, size, perm);
+        memset(addr, 0, size);
+        return ret;
+    }
+
     vma* map_file(void* addr, size_t size, unsigned perm,
                   file& f, f_offset offset)
     {
-        vma* ret = map_anon(addr, size, perm);
+        vma* ret = map_anon_dontzero(addr, size, perm);
         f.read(addr, offset, size);
         return ret;
     }
