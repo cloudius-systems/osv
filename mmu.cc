@@ -29,7 +29,6 @@ namespace mmu {
 			  > vma_list;
 
     typedef uint64_t pt_element;
-    typedef uint64_t phys;
     const unsigned nlevels = 4;
 
     template <typename T>

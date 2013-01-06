@@ -35,6 +35,8 @@ namespace mmu {
                   file& file, f_offset offset);
     vma* map_anon(void* addr, size_t size, unsigned perm);
 
+    typedef uint64_t phys;
+    phys virt_to_phys(void *virt);
 }
 
 #endif
