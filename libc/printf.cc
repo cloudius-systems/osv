@@ -82,6 +82,11 @@ struct arg_double : arg {
     virtual void consume(va_list ap) { val = va_arg(ap, double); }
 };
 
+struct arg_str: arg {
+    const char* val;
+    virtual void consume(va_list ap) { val = va_arg(ap, const char*); }
+};
+
 enum intlen {
     len_char,
     len_short,
@@ -103,8 +108,11 @@ std::string strprintf(const char* fmt, va_list ap)
     std::vector<std::unique_ptr<arg>> args;
     std::vector<std::function<std::string ()>> frags;
     unsigned lastpos = 0;
-    auto make_int_arg = [&] (int pos, intlen len = len_int) {
+    auto add_arg = [&] (int pos, arg* parg) {
         args.resize(std::max(size_t(pos), args.size()));
+        args[pos-1] = std::unique_ptr<arg>(parg);
+    };
+    auto make_int_arg = [&] (int pos, intlen len = len_int) {
         arg_intx* parg;
         switch (len) {
         case len_char: parg = new arg_char; break;
@@ -114,7 +122,7 @@ std::string strprintf(const char* fmt, va_list ap)
         case len_longlong: parg = new arg_longlong; break;
         default: abort();
         }
-        args[pos-1] = std::unique_ptr<arg>(parg);
+        add_arg(pos, parg);
         return parg;
     };
     while (*fmt) {
@@ -282,6 +290,12 @@ std::string strprintf(const char* fmt, va_list ap)
             }
             auto arg = make_int_arg(pos);
             frags.push_back([=] { char c = arg->val; return std::string(c, 1); });
+            break;
+        }
+        case 's': {
+            auto arg = new arg_str;
+            add_arg(pos, arg);
+            frags.push_back([=] { return std::string(arg->val); });
             break;
         }
         default:
