@@ -226,13 +226,14 @@ std::string strprintf(const char* fmt, va_list ap)
             if (lcount == 1) return len_long;
             return len_int;
         };
-        auto set_default_precision = [=, &precision_fn] (int prec) {
+        auto get_precision_or_default = [=] (int prec) -> std::function<int ()> {
             if (!has_precision) {
-                precision_fn = [=] { return prec; };
+                return [=] { return prec; };
             }
+            return precision_fn;
         };
         auto unsigned_conversion = [=, &frags] (unsigned base, const char* digits) {
-            set_default_precision(1);
+            auto precision_fn = get_precision_or_default(1);
             auto arg = make_int_arg(pos, int_size());
             frags.push_back([=] {
                 std::string ret;
@@ -250,7 +251,7 @@ std::string strprintf(const char* fmt, va_list ap)
         switch (*fmt++) {
         case 'd':
         case 'i': {
-            set_default_precision(1);
+            auto precision_fn = get_precision_or_default(1);
             auto arg = make_int_arg(pos, int_size());
             frags.push_back([=] {
                 std::string ret;
