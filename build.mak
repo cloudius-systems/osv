@@ -111,9 +111,17 @@ dummy-shlib.so: dummy-shlib.o
 javapath ?= $(shell readlink -f `which java`)
 jdkbase := $(javapath:%/jre/bin/java=%)
 
+
+#
+# Recent Debian and Ubuntu systems use (/usr)/lib/x86_64-linux-gnu for 64bit
+# libaries while Red Hat derived systems use (/usr)/lib64.
+#
+libdir=$(shell if [ -d "/lib/x86_64-linux-gnu" ]; then \
+	echo "lib/x86_64-linux-gnu"; else echo "lib64"; fi)
+
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
-		-D jdkbase=$(jdkbase)
+		-D jdkbase=$(jdkbase) -D libdir="lib/x86_64-linux-gnu"
 
 bootfs.o: bootfs.bin
 
