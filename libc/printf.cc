@@ -5,6 +5,7 @@
 #include <vector>
 #include <stdint.h>
 #include <cctype>
+#include <string.h>
 #include "debug.hh"
 
 namespace {
@@ -330,7 +331,7 @@ int sprintf(char* str, const char* format, ...)
     va_start(ap, format);
     auto out = strprintf(format, ap);
     va_end(ap);
-    std::copy(out.begin(), out.end(), str);
+    strcpy(str, out.c_str());
     return out.length();
 }
 
@@ -342,6 +343,6 @@ int snprintf(char* str, size_t n, const char* format, ...)
     auto out = strprintf(format, ap);
     va_end(ap);
     std::string trunc = out.substr(0, n - 1);
-    std::copy(out.begin(), out.end(), str);
+    strcpy(str, trunc.c_str());
     return out.length();
 }
