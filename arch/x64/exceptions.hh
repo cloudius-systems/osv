@@ -3,10 +3,9 @@
 
 #include <stdint.h>
 #include <functional>
+#include <types.hh>
 
 struct exception_frame {
-    typedef unsigned long ulong;
-    typedef unsigned short u16;
     ulong r15;
     ulong r14;
     ulong r13;
@@ -38,10 +37,6 @@ public:
     void unregister_handler(unsigned vector);
     void invoke_interrupt(unsigned vector);
 private:
-    typedef uint8_t u8;
-    typedef uint16_t u16;
-    typedef uint32_t u32;
-    typedef uint64_t u64;
     enum {
         type_intr_gate = 14,
     };

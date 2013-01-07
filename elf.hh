@@ -5,15 +5,9 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <types.hh>
 
 namespace elf {
-
-    typedef unsigned long u64;
-    typedef unsigned int u32;
-    typedef unsigned short u16;
-    typedef unsigned char u8;
-    typedef unsigned long ulong;
-
     typedef u64 Elf64_Addr;
     typedef u64 Elf64_Off;
     typedef u16 Elf64_Half;
