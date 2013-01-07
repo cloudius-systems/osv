@@ -4,10 +4,9 @@
 #include "fs/fs.hh"
 #include <stdint.h>
 #include <boost/intrusive/set.hpp>
+#include <types.hh>
 
 namespace mmu {
-
-    typedef unsigned long ulong;
     typedef uint64_t f_offset;
 
     enum {
