@@ -131,8 +131,14 @@ namespace mmu {
     vma* map_file(void* addr, size_t size, unsigned perm,
                   file& f, f_offset offset)
     {
+        auto fsize = f.size();
+        if (offset >= fsize) {
+            return map_anon(addr, size, perm);
+        }
         vma* ret = map_anon_dontzero(addr, size, perm);
-        f.read(addr, offset, size);
+        auto rsize = std::min(offset + size, fsize) - offset;
+        f.read(addr, offset, rsize);
+        memset(addr + rsize, 0, size - rsize);
         return ret;
     }
 
