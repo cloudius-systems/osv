@@ -127,7 +127,7 @@ int main(int ac, char **av)
 
     bootfs fs;
     rootfs = &fs;
-    fileref f = fs.open("/usr/lib/libjvm.so");
+    fileref f = fs.open("/usr/lib/jre/lib/server/libjvm.so");
     char buf[100];
     f->read(buf, 0, 100);
 
@@ -164,7 +164,7 @@ int main(int ac, char **av)
 void main_thread(elf::program& prog)
 {
     test_threads();
-    prog.add("/usr/lib/libjvm.so");
+    prog.add("/usr/lib/jre/lib/server/libjvm.so");
     auto JNI_GetDefaultJavaVMInitArgs
         = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");
     JavaVMInitArgs vm_args;
