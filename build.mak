@@ -16,7 +16,7 @@ define newline =
 
 endef
 
-quiet = $(if $V, $1, @echo ' ' $2 $(newline) @$1)
+quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
 makedir = $(call very-quiet, mkdir -p $(dir $@))
