@@ -490,7 +490,7 @@ namespace elf {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
             debug(fmt("needed: %1%") % lib);
-            _prog.add(lib);
+            _prog.add(std::string("/usr/lib") + lib);
         }
     }
 
@@ -543,12 +543,11 @@ namespace elf {
     elf_object* program::add(std::string name)
     {
         if (!_files.count(name)) {
-            std::string pathname = "/usr/lib/" + name;
-            auto f(_fs.open(pathname));
+            auto f(_fs.open(name));
             if (!f) {
                 return nullptr;
             }
-            auto ef = new elf_file(*this, f, pathname);
+            auto ef = new elf_file(*this, f, name);
             ef->set_base(_next_alloc);
             _files[name] = ef;
             ef->load_segments();
