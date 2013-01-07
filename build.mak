@@ -103,8 +103,13 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 dummy-shlib.so: dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
 
-jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
-jdkbase := $(jdk-jni.h:%/include/jni.h=%)
+#
+# Find the base directory of the java installation.  We figure it out based
+# on the path of the installed 'java' binary, but it can be manually overriden
+# on the make commandline by passing javapath manually.
+#
+javapath ?= $(shell readlink -f `which java`)
+jdkbase := $(javapath:%/jre/bin/java=%)
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
