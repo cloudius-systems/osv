@@ -16,7 +16,7 @@ define newline =
 
 endef
 
-quiet = $(if $V, $1, @echo ' ' $2 $(newline) @$1)
+quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
 makedir = $(call very-quiet, mkdir -p $(dir $@))
@@ -103,12 +103,25 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 dummy-shlib.so: dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
 
-jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
-jdkbase := $(jdk-jni.h:%/include/jni.h=%)
+#
+# Find the base directory of the java installation.  We figure it out based
+# on the path of the installed 'java' binary, but it can be manually overriden
+# on the make commandline by passing javapath manually.
+#
+javapath ?= $(shell readlink -f `which java`)
+jdkbase := $(javapath:%/jre/bin/java=%)
+
+
+#
+# Recent Debian and Ubuntu systems use (/usr)/lib/x86_64-linux-gnu for 64bit
+# libaries while Red Hat derived systems use (/usr)/lib64.
+#
+libdir=$(shell if [ -d "/lib/x86_64-linux-gnu" ]; then \
+	echo "lib/x86_64-linux-gnu"; else echo "lib64"; fi)
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
-		-D jdkbase=$(jdkbase)
+		-D jdkbase=$(jdkbase) -D libdir="lib/x86_64-linux-gnu"
 
 bootfs.o: bootfs.bin
 
@@ -121,7 +134,7 @@ gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
 clean:
-	find -name '*.[od]' | xargs rm
-	rm -f loader.elf loader.bin
+	find -name '*.[od]' | xargs rm -f
+	rm -f loader.elf loader.bin bootfs.bin
 
 -include $(shell find -name '*.d')

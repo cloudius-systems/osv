@@ -2,6 +2,6 @@
 /usr/lib/jre/lib/server/libjvm.so: %(jdkbase)s/jre/lib/amd64/server/libjvm.so
 /usr/lib/jre/lib/libverify.so: %(jdkbase)s/jre/lib/amd64/libverify.so
 /usr/lib/jre/lib/libjava.so: %(jdkbase)s/jre/lib/amd64/libjava.so
-/usr/lib/libstdc++.so.6: /usr/lib64/libstdc++.so.6
-/usr/lib/libm.so.6: /usr/lib64/libm.so.6
-/usr/lib/libgcc_s.so.1: /usr/lib64/libgcc_s.so.1
+/usr/lib/libstdc++.so.6: /usr/%(libdir)s/libstdc++.so.6
+/usr/lib/libm.so.6: /%(libdir)s/libm.so.6
+/usr/lib/libgcc_s.so.1: /%(libdir)s/libgcc_s.so.1
