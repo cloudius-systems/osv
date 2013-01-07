@@ -1,0 +1,3 @@
+[submodule "external/libunwind"]
+	path = external/libunwind
+	url = ../libunwind
