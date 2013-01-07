@@ -54,3 +54,26 @@ int pthread_mutex_init(pthread_mutex_t* __restrict m,
     new (m) mutex;
     return 0;
 }
+
+int pthread_mutex_lock(pthread_mutex_t *m)
+{
+    mutex* mm = reinterpret_cast<mutex*>(m);
+    mm->lock();
+    return 0;
+}
+
+int pthread_mutex_trylock(pthread_mutex_t *m)
+{
+    mutex* mm = reinterpret_cast<mutex*>(m);
+    if (!mm->try_lock()) {
+        return -EBUSY;
+    }
+    return 0;
+}
+
+int pthread_mutex_unlock(pthread_mutex_t *m)
+{
+    mutex* mm = reinterpret_cast<mutex*>(m);
+    mm->unlock();
+    return 0;
+}
