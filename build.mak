@@ -124,6 +124,6 @@ gen-ctype-data: gen-ctype-data.o
 
 clean:
 	find -name '*.[od]' | xargs rm
-	rm -f loader.elf loader.bin
+	rm -f loader.elf loader.bin bootfs.bin
 
 -include $(shell find -name '*.d')
