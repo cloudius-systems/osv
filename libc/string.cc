@@ -19,3 +19,12 @@ const char* strchr(const char* s, int c)
     } while (*s++);
     return nullptr;
 }
+
+char* stpcpy(char* p, const char* s)
+{
+    while (*s) {
+        *p++ = *s++;
+    }
+    *p = '\0';
+    return p;
+}
