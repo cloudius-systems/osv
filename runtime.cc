@@ -315,6 +315,13 @@ static unsigned short c_locale_array[384] = {
 #include "ctype-data.h"
 };
 
+__thread const unsigned short *thread_locale_array = c_locale_array;
+
+const unsigned short** __ctype_b_loc()
+{
+    return &thread_locale_array;
+}
+
 static struct __locale_struct c_locale = {
     { }, // __locales_data
     c_locale_array + 128, // __ctype_b
