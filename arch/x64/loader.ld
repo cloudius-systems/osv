@@ -19,8 +19,8 @@ SECTIONS
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
     _init_array_end = .;
-    .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls
-    .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls
+    .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls :text
+    .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls :text
     .bss : { *(.bss .bss.*) } :text
     .edata = .;
     .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
