@@ -1,0 +1,39 @@
+
+To build OSv
+============
+
+1) build the specially patched libunwind
+   -------------------------------------
+
+    cd ../libunwind
+    autoreconf -a
+    sh config.sh
+    make
+    cp ./src/.libs/libunwind.a ../osv/
+    cd ../osv
+
+
+2) build osv
+   ---------
+
+    make
+
+To run OSv
+==========
+
+1) start the binary in qemu
+   ------------------------
+
+    sh scripts/run.sh
+
+2) connect a debugger
+   ---------------------
+
+    c-a c
+    (qemu) gdbserver
+
+    In another terminal:
+
+    # gdb build/debug/loader.elf
+    (gdb) connect
+    (gdb) bt
