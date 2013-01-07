@@ -95,7 +95,7 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) dummy-shlib.so \
 		$(libc) bootfs.bin
 	$(call quiet, $(LD) -o $@ \
-		-Bdynamic --export-dynamic \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
 	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) $(src)/libunwind.a, \
 		LD $@)

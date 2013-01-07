@@ -11,8 +11,10 @@ SECTIONS
     . = 0x201000;
     .dynamic : { *(.dynamic) } :dynamic :text
     .text : { *(.text*) } :text
+    .eh_frame : { *(.eh_frame) } : text
     .rodata : { *(.rodata*) } :text
     .eh_frame : { *(.eh_frame) } :text
+    .eh_frame_hdr : { *(.eh_frame_hdr) } :text :eh_frame
     .data : { *(.data) } :text
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
@@ -43,5 +45,6 @@ PHDRS {
 	text PT_LOAD FILEHDR PHDRS;
 	tls PT_TLS;
 	dynamic PT_DYNAMIC;
+	eh_frame PT_GNU_EH_FRAME;
 }
 ENTRY(start32);
