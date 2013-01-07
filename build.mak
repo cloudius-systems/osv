@@ -123,7 +123,7 @@ gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
 clean:
-	find -name '*.[od]' | xargs rm
+	find -name '*.[od]' | xargs rm -f
 	rm -f loader.elf loader.bin bootfs.bin
 
 -include $(shell find -name '*.d')
