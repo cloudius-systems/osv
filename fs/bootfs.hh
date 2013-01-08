@@ -25,6 +25,7 @@ public:
     file(bootfs& fs, metadata& md);
     virtual uint64_t size();
     virtual void read(void* buffer, uint64_t offset, uint64_t len);
+    virtual void write(const void* buffer, uint64_t offset, uint64_t len);
 private:
     bootfs& _fs;
     metadata& _md;

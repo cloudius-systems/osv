@@ -72,4 +72,9 @@ dirref dir::subdir(std::string name)
     return boost::dynamic_pointer_cast<dir>(open(name));
 }
 
+void dir::write(const void* buffer, uint64_t offset, uint64_t len)
+{
+    abort();
+}
+
 file::cache_type file::_cache;

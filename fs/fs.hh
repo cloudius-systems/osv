@@ -18,6 +18,7 @@ public:
     virtual ~file();
     virtual uint64_t size() = 0;
     virtual void read(void *buffer, uint64_t offset, uint64_t len) = 0;
+    virtual void write(const void* buffer, uint64_t offset, uint64_t len) = 0;
 private:
     void ref();
     void unref();
@@ -39,6 +40,7 @@ public:
     fileref open(std::string name);
     virtual fileref do_open(std::string name) = 0;
     dirref subdir(std::string name);
+    virtual void write(const void* buffer, uint64_t offset, uint64_t len);
 private:
     dirref _parent;
     std::string _name;

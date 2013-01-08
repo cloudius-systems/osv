@@ -47,6 +47,11 @@ void bootfs::file::read(void* buffer, uint64_t offset, uint64_t len)
     std::memcpy(buffer, _fs._base + _md.offset + offset, len);
 }
 
+void bootfs::file::write(const void* buffer, uint64_t offset, uint64_t len)
+{
+    abort();
+}
+
 bootfs::dir::dir(bootfs& fs, std::string path)
     : _fs(fs)
     , _path(path)
