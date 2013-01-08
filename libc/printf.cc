@@ -347,3 +347,15 @@ int snprintf(char* str, size_t n, const char* format, ...)
     strcpy(str, trunc.c_str());
     return out.length();
 }
+
+int printf(const char* format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    auto out = strprintf(format, ap);
+    va_end(ap);
+
+    debug(out);
+    return out.length();
+}
