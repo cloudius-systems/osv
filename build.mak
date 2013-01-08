@@ -87,6 +87,7 @@ libc += libc/libc.o
 libc += libc/dlfcn.o
 libc += libc/time.o
 libc += libc/ctype.o
+libc += libc/signal.o
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
