@@ -40,3 +40,14 @@ const char* strstr(const char* haystack, const char* needle)
     }
     return p;
 }
+
+int strncasecmp(const char *s1, const char *s2, size_t n)
+{
+    while (n && *s1 && *s2 && tolower(*s1) == tolower(*s2)) {
+        ++s1, ++s2;
+    }
+    if (!n || (*s1 == *s2)) {
+        return 0;
+    }
+    return tolower(*s1) < tolower(*s2) ? -1 : 1;
+}
