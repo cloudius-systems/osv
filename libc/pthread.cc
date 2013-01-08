@@ -50,6 +50,11 @@ pthread_t pthread_self()
     return reinterpret_cast<pthread_t>(sched::thread::current());
 }
 
+mutex* from_libc(pthread_mutex_t* m)
+{
+    return reinterpret_cast<mutex*>(m);
+}
+
 int pthread_mutex_init(pthread_mutex_t* __restrict m,
         const pthread_mutexattr_t* __restrict attr)
 {
@@ -61,15 +66,13 @@ int pthread_mutex_init(pthread_mutex_t* __restrict m,
 
 int pthread_mutex_lock(pthread_mutex_t *m)
 {
-    mutex* mm = reinterpret_cast<mutex*>(m);
-    mm->lock();
+    from_libc(m)->lock();
     return 0;
 }
 
 int pthread_mutex_trylock(pthread_mutex_t *m)
 {
-    mutex* mm = reinterpret_cast<mutex*>(m);
-    if (!mm->try_lock()) {
+    if (!from_libc(m)->try_lock()) {
         return -EBUSY;
     }
     return 0;
@@ -77,8 +80,7 @@ int pthread_mutex_trylock(pthread_mutex_t *m)
 
 int pthread_mutex_unlock(pthread_mutex_t *m)
 {
-    mutex* mm = reinterpret_cast<mutex*>(m);
-    mm->unlock();
+    from_libc(m)->unlock();
     return 0;
 }
 
