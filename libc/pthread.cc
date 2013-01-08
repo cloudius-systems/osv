@@ -1,5 +1,6 @@
 #include "mutex.hh"
 #include "sched.hh"
+#include "signal.hh"
 #include <pthread.h>
 #include <errno.h>
 #include <mutex>
@@ -76,4 +77,9 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
     mutex* mm = reinterpret_cast<mutex*>(m);
     mm->unlock();
     return 0;
+}
+
+int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
+{
+    return sigprocmask(how, set, oldset);
 }
