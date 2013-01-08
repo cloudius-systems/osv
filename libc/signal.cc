@@ -33,6 +33,12 @@ int sigemptyset(sigset_t* sigset)
     return 0;
 }
 
+int sigfillset(sigset_t *sigset)
+{
+    from_libc(sigset)->mask.set();
+    return 0;
+}
+
 int sigaddset(sigset_t *sigset, int signum)
 {
     from_libc(sigset)->mask.set(signum);
