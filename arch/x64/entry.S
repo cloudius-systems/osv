@@ -105,6 +105,9 @@ thread_main:
 stack_trampoline:  # %rsi=arg, %rdi=func, %rdx=stack
 	.cfi_startproc simple
 	.cfi_def_cfa %rsp, 0
+	# align the stack at 16 bytes for sse
+	andq $-15, %rdx
+	sub $8, %rdx
 	mov %rsp, -8(%rdx)
 	lea -8(%rdx), %rsp
 	.cfi_rel_offset %rsp, 0
