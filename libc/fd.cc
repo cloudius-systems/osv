@@ -8,7 +8,8 @@
 #include <assert.h>
 #include <algorithm>
 #include <mutex>
-
+#include <sys/stat.h>
+#include <unistd.h>
 
 class file_desc {
 public:
@@ -51,4 +52,25 @@ int open(const char* fname, int mode, ...)
         }
         return p - file_table.begin();
     });
+}
+
+namespace {
+
+int do_stat1(fileref f, struct stat* buf)
+{
+    if (!f) {
+        return libc_error(ENOENT);
+    }
+    *buf = {};
+    buf->st_size = f->size();
+    // FIXME: stat missing fields
+    return 0;
+}
+
+}
+
+int __xstat(int ver, const char* path, struct stat* buf)
+{
+    assert(ver == 1);
+    return do_stat1(rootfs->open(path), buf);
 }
