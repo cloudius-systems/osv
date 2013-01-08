@@ -111,7 +111,7 @@ dummy-shlib.so: dummy-shlib.o
 jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
 jdkbase := $(jdk-jni.h:%/include/jni.h=%)
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest payload/hello_world.so
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase)
 
