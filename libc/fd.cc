@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include "fs/stdio.hh"
 #include "debug.hh"
+#include <string.h>
 
 class file_desc {
 public:
@@ -118,4 +119,12 @@ int mkdir(const char* path, mode_t mode)
 {
     debug("mkdir not implemented");
     return libc_error(EROFS);
+}
+
+char* getcwd(char* path, size_t size)
+{
+    if (size < 2) {
+        return libc_error_ptr<char>(ERANGE);
+    }
+    return strcpy(path, "/");
 }
