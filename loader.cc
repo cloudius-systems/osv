@@ -127,9 +127,6 @@ int main(int ac, char **av)
 
     bootfs fs;
     rootfs = &fs;
-    fileref f = fs.open("/usr/lib/jre/lib/server/libjvm.so");
-    char buf[100];
-    f->read(buf, 0, 100);
 
     disable_pic();
     processor::sti();
@@ -154,17 +151,34 @@ int main(int ac, char **av)
     //	;
 #endif
 
-    debug(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
     elf::program prog(fs);
     sched::init(prog);
     void main_thread(elf::program& prog);
     new thread([&] { main_thread(prog); }, true);
 }
 
-void main_thread(elf::program& prog)
+#define TESTSO_PATH	"/usr/lib/hello_world.so"
+
+void load_test(elf::program& prog)
 {
-    test_threads();
-    prog.add("/usr/lib/jre/lib/server/libjvm.so");
+    prog.add(TESTSO_PATH);
+
+    auto test_main
+        = prog.lookup_function<void (void)>("test_main");
+    test_main();
+}
+
+#define JVM_PATH	"/usr/lib/jre/lib/server/libjvm.so"
+
+void start_jvm(elf::program& prog)
+{
+    fileref f = rootfs->open(JVM_PATH);
+    char buf[100];
+    f->read(buf, 0, 100);
+    debug(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
+
+    prog.add(JVM_PATH);
+ 
     auto JNI_GetDefaultJavaVMInitArgs
         = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");
     JavaVMInitArgs vm_args;
@@ -173,6 +187,14 @@ void main_thread(elf::program& prog)
     auto JNI_CreateJavaVM
         = prog.lookup_function<jint (JavaVM**, void**, void*)>("JNI_CreateJavaVM");
     JavaVM* jvm = nullptr;
+
+    auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
+    debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
+}
+
+void main_thread(elf::program& prog)
+{
+    test_threads();
 
     pci::pci_devices_print();
     pci::pci_device_enumeration();
@@ -188,8 +210,8 @@ void main_thread(elf::program& prog)
     debug(fmt("clock@t1 %1%") % t1);
     debug(fmt("clock@t2 %1%") % t2);
 
-    auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
-    debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
+    start_jvm(prog);
+//    load_test(prog);
 
     while (true)
 	;

@@ -11,10 +11,6 @@ cflags-release = -O2
 
 arch-cflags = -msse4.1
 
-define newline =
-
-
-endef
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -26,7 +22,9 @@ build-c = $(CC) $(CFLAGS) -c -o $@ $<
 q-build-c = $(call quiet, $(build-c), CC $@)
 build-s = $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<
 q-build-s = $(call quiet, $(build-s), AS $@)
-
+build-so = $(CC) $(CFLAGS) -o $@ $^
+q-build-so = $(call quiet, $(build-c), CC $@)
+	
 %.o: %.cc
 	$(makedir)
 	$(q-build-cxx)
@@ -39,12 +37,17 @@ q-build-s = $(call quiet, $(build-s), AS $@)
 	$(makedir)
 	$(q-build-s)
 
+%.so: CFLAGS+=-fPIC -shared
+%.so: %.o
+	$(makedir)
+	$(q-build-so)
+
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-all: loader.bin
+all: loader.bin payload/hello_world.so
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
