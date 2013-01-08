@@ -10,6 +10,7 @@
 #include <mutex>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "fs/stdio.hh"
 
 class file_desc {
 public:
@@ -24,8 +25,21 @@ private:
     bool _canwrite;
 };
 
+struct file_table_type : std::vector<std::shared_ptr<file_desc>> {
+    file_table_type();
+};
+
 mutex file_table_mutex;
-std::vector<std::shared_ptr<file_desc>> file_table;
+
+file_table_type file_table;
+
+file_table_type::file_table_type()
+{
+    std::shared_ptr<file_desc> con { new file_desc(console_fileref, true, true) };
+    push_back(con); // 0
+    push_back(con); // 1
+    push_back(con); // 2
+}
 
 file_desc::file_desc(fileref f, bool canread, bool canwrite)
     : _file(f)
