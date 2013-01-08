@@ -84,6 +84,14 @@ std::shared_ptr<file_desc> get_fd(int fd)
     });
 }
 
+ssize_t write(int fd, const void* buffer, size_t len)
+{
+    auto desc = get_fd(fd);
+    desc->file()->write(buffer, desc->pos(), len);
+    desc->seek(desc->pos() + len);
+    return 0;
+}
+
 namespace {
 
 int do_stat1(fileref f, struct stat* buf)

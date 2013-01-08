@@ -402,11 +402,6 @@ int fflush(FILE *fp)
     UNIMPLEMENTED("fflush");
 }
 
-ssize_t write(int fd, const void *buf, size_t count)
-{
-    UNIMPLEMENTED("write");
-}
-
 int fgetc(FILE *stream)
 {
     UNIMPLEMENTED("fgetc");
