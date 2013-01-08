@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <limits>
 #include <sys/resource.h>
+#include <pwd.h>
 
 int libc_error(int err)
 {
@@ -154,5 +155,22 @@ int setrlimit(int resource, const struct rlimit *rlim)
 
 uid_t geteuid()
 {
+    return 0;
+}
+
+int getpwuid_r(uid_t uid, struct passwd *pwd,
+               char *buf, size_t buflen, struct passwd **result)
+{
+    auto alloc = [&](int n) { auto tmp = buf; buf += n; return tmp; };
+    auto save = [&](const char* s) { return strcpy(alloc(strlen(s) + 1), s); };
+
+    pwd->pw_name = save("osv");
+    pwd->pw_passwd = save("*");
+    pwd->pw_uid = 0;
+    pwd->pw_gid = 0;
+    pwd->pw_gecos = save("");
+    pwd->pw_dir = save("");
+    pwd->pw_shell = save("");
+    *result = pwd;
     return 0;
 }

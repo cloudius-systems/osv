@@ -26,6 +26,7 @@
 #include "debug.hh"
 #include <boost/format.hpp>
 #include "mempool.hh"
+#include <pwd.h>
 
 #define __LC_LAST 13
 
@@ -633,6 +634,7 @@ long sysconf(int name)
     case _SC_NPROCESSORS_ONLN: return 1; // FIXME
     case _SC_NPROCESSORS_CONF: return 1; // FIXME
     case _SC_PHYS_PAGES: return memory::phys_mem_size / memory::page_size;
+    case _SC_GETPW_R_SIZE_MAX: return 1024;
     }
     debug(fmt("sysconf: unknown parameter %1%") % name);
     abort();
