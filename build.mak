@@ -39,8 +39,7 @@ q-build-so = $(call quiet, $(build-c), CC $@)
 
 %.so: CFLAGS+=-fPIC -shared
 %.so: %.o
-	$(makedir)
-	$(q-build-so)
+	$(CC) $(CFLAGS) -o $@ $^
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
@@ -128,6 +127,7 @@ gen-ctype-data: gen-ctype-data.o
 
 clean:
 	find -name '*.[od]' | xargs rm -f
+	find -name '*.so' | xargs rm -f
 	rm -f loader.elf loader.bin bootfs.bin
 
 -include $(shell find -name '*.d')
