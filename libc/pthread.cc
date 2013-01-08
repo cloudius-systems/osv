@@ -16,11 +16,12 @@ namespace pthread_private {
 
     mutex tsd_key_mutex;
     std::vector<bool> tsd_used_keys(tsd_nkeys);
+    std::vector<void (*)(void*)> tsd_dtor(tsd_nkeys);
 }
 
 using namespace pthread_private;
 
-pthread_key_t pthread_key_create()
+int pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
 {
     std::lock_guard<mutex> guard(tsd_key_mutex);
     auto p = std::find(tsd_used_keys.begin(), tsd_used_keys.end(), false);
@@ -28,7 +29,9 @@ pthread_key_t pthread_key_create()
         return ENOMEM;
     }
     *p = true;
-    return p - tsd_used_keys.begin();
+    *key = p - tsd_used_keys.begin();
+    tsd_dtor[*key] = dtor;
+    return 0;
 }
 
 void* pthread_getspecific(pthread_key_t key)
