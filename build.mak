@@ -53,6 +53,7 @@ loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 arch/x64/boot32.o: loader.elf
 
 fs = fs/fs.o fs/bootfs.o bootfs.o
+fs += fs/stdio.o
 
 drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
 drivers += $(fs)
