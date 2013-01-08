@@ -10,3 +10,4 @@ libc += dlfcn.o
 libc += time.o
 libc += ctype.o
 libc += signal.o
+libc += mman.o
