@@ -5,6 +5,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <type_traits>
 #include <limits>
+#include <sys/resource.h>
 
 int libc_error(int err)
 {
@@ -127,4 +128,17 @@ long strtol(const char* s, char** e, int base)
 long long strtoll(const char* s, char** e, int base)
 {
     return strtoN<long long>(s, e, base);
+}
+
+int getrlimit(int resource, struct rlimit *rlim)
+{
+    auto set = [=] (rlim_t r) { rlim->rlim_cur = rlim->rlim_max = r; };
+    switch (resource) {
+    case RLIMIT_STACK:
+        set(64*1024); // FIXME: something realer
+        break;
+    default:
+        abort();
+    }
+    return 0;
 }
