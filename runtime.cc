@@ -638,6 +638,17 @@ long sysconf(int name)
     abort();
 }
 
+size_t confstr(int name, char* buf, size_t len)
+{
+    auto set = [=] (const char* v) { return snprintf(buf, len, "%s", v); };
+    switch (name) {
+    case _CS_GNU_LIBC_VERSION: return set("glibc 2.16");
+    case _CS_GNU_LIBPTHREAD_VERSION: return set("NPTL 2.16");
+    }
+    debug(fmt("confstr: unknown parameter %1%") % name);
+    abort();
+}
+
 long timezone;
 
 char* __environ_array[1];
