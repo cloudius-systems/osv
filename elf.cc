@@ -514,6 +514,18 @@ namespace elf {
         return _pathname;
     }
 
+    void elf_object::run_init_func()
+    {
+        if (!dynamic_exists(DT_INIT_ARRAY)) {
+            return;
+        }
+        auto inits = dynamic_ptr<void (*)()>(DT_INIT_ARRAY);
+        auto nr = dynamic_val(DT_INIT_ARRAYSZ) / sizeof(*inits);
+        for (auto i = 0u; i < nr; ++i) {
+            inits[i]();
+        }
+    }
+
     program* s_program;
 
     program::program(::filesystem& fs, void* addr)
@@ -554,6 +566,7 @@ namespace elf {
             _next_alloc = ef->end();
             ef->load_needed();
             ef->relocate();
+            ef->run_init_func();
         }
         return _files[name];
     }

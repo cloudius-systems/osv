@@ -260,6 +260,7 @@ namespace elf {
         std::vector<Elf64_Phdr> phdrs();
         std::string soname();
         std::string pathname();
+        void run_init_func();
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
     private:
