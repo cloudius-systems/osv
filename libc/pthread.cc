@@ -40,9 +40,9 @@ void* pthread_getspecific(pthread_key_t key)
     return tsd[key];
 }
 
-int pthread_setspecific(pthread_key_t key, void* value)
+int pthread_setspecific(pthread_key_t key, const void* value)
 {
-    tsd[key] = value;
+    tsd[key] = const_cast<void*>(value);
     return 0;
 }
 
