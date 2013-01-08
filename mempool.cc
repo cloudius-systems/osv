@@ -104,7 +104,7 @@ pool* pool::from_object(void* object)
     return header->owner;
 }
 
-malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size)]
+malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size) + 1]
     __attribute__((init_priority(12000)));
 
 malloc_pool::malloc_pool()
