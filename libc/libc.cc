@@ -137,8 +137,17 @@ int getrlimit(int resource, struct rlimit *rlim)
     case RLIMIT_STACK:
         set(64*1024); // FIXME: something realer
         break;
+    case RLIMIT_NOFILE:
+        set(1024*10); // FIXME: larger?
+        break;
     default:
         abort();
     }
+    return 0;
+}
+
+int setrlimit(int resource, const struct rlimit *rlim)
+{
+    // osv - no limits
     return 0;
 }
