@@ -5,6 +5,8 @@ class FILE;
 #include <fcntl.h>
 #include <string.h>
 #include <algorithm>
+#include <dirent.h>
+#include "libc.hh"
 
 class FILE {
 public:
@@ -14,7 +16,19 @@ private:
     int _fd;
 };
 
+class __dirstream {
+public:
+    explicit __dirstream(int fd);
+private:
+    int _fd;
+};
+
 FILE::FILE(int fd)
+    : _fd(fd)
+{
+}
+
+__dirstream::__dirstream(int fd)
     : _fd(fd)
 {
 }
@@ -42,4 +56,13 @@ FILE* fopen(const char* fname, const char* fmode)
         return nullptr;
     }
     return new FILE(fd);
+}
+
+DIR* opendir(const char* fname)
+{
+    auto fd = ::open(fname, O_RDONLY);
+    if (fd == -1) {
+        return libc_error_ptr<DIR>(ENOENT);
+    }
+    return new DIR(fd);
 }
