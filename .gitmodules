@@ -1,3 +1,6 @@
 [submodule "external/libunwind"]
 	path = external/libunwind
 	url = ../libunwind
+[submodule "external/openjdk.bin"]
+	path = external/openjdk.bin
+	url = ../openjdk.bin
