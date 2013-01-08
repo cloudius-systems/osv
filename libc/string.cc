@@ -1,4 +1,5 @@
 #include <string.h>
+#include <algorithm>
 
 const char* strrchr(const char* s, int c)
 {
@@ -26,5 +27,16 @@ char* stpcpy(char* p, const char* s)
         *p++ = *s++;
     }
     *p = '\0';
+    return p;
+}
+
+const char* strstr(const char* haystack, const char* needle)
+{
+    auto e1 = haystack + strlen(haystack);
+    auto e2 = needle + strlen(needle);
+    auto p = std::search(haystack, e1, needle, e2);
+    if (p == e1) {
+        return nullptr;
+    }
     return p;
 }
