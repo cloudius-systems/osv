@@ -14,6 +14,9 @@
 class file_desc {
 public:
     explicit file_desc(fileref file, bool canread, bool canwrite);
+    fileref file() { return _file; }
+    uint64_t pos() { return _pos; }
+    void seek(uint64_t pos) { _pos = pos; }
 private:
     fileref _file;
     uint64_t _pos;
