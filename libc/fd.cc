@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "fs/stdio.hh"
+#include "debug.hh"
 
 class file_desc {
 public:
@@ -111,4 +112,10 @@ int __xstat(int ver, const char* path, struct stat* buf)
 {
     assert(ver == 1);
     return do_stat1(rootfs->open(path), buf);
+}
+
+int mkdir(const char* path, mode_t mode)
+{
+    debug("mkdir not implemented");
+    return libc_error(EROFS);
 }
