@@ -151,3 +151,8 @@ int setrlimit(int resource, const struct rlimit *rlim)
     // osv - no limits
     return 0;
 }
+
+uid_t geteuid()
+{
+    return 0;
+}
