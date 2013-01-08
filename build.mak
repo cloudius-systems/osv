@@ -16,7 +16,7 @@ define newline =
 
 endef
 
-quiet = $(if $V, $1, @echo ' ' $2 $(newline) @$1)
+quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
 makedir = $(call very-quiet, mkdir -p $(dir $@))
@@ -124,7 +124,7 @@ gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
 clean:
-	find -name '*.[od]' | xargs rm
-	rm -f loader.elf loader.bin
+	find -name '*.[od]' | xargs rm -f
+	rm -f loader.elf loader.bin bootfs.bin
 
 -include $(shell find -name '*.d')
