@@ -7,6 +7,7 @@
 #include <vector>
 #include <algorithm>
 #include <string.h>
+#include <list>
 
 namespace pthread_private {
 
@@ -87,4 +88,97 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
 int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
 {
     return sigprocmask(how, set, oldset);
+}
+
+class cond_var {
+public:
+    void wait(mutex* user_mutex);
+    void wake_one();
+    void wake_all();
+private:
+    struct wait_record {
+        explicit wait_record() : t(sched::thread::current()) {}
+        sched::thread* t;
+    };
+private:
+    mutex _mutex;
+    std::list<wait_record*> _waiters;
+};
+
+cond_var* from_libc(pthread_cond_t* cond)
+{
+    return reinterpret_cast<cond_var*>(cond);
+}
+
+void cond_var::wait(mutex* user_mutex)
+{
+    wait_record wr;
+    with_lock(_mutex, [&] {
+        _waiters.push_back(&wr);
+    });
+    user_mutex->unlock();
+    sched::thread::wait_until([&] {
+        return with_lock(_mutex, [&] {
+            return !wr.t;
+        });
+    });
+    user_mutex->lock();
+}
+
+void cond_var::wake_one()
+{
+    with_lock(_mutex, [&] {
+        if (!_waiters.empty()) {
+            auto wr = _waiters.front();
+            _waiters.pop_front();
+            auto t = wr->t;
+            wr->t = nullptr;
+            t->wake();
+        }
+    });
+}
+
+void cond_var::wake_all()
+{
+    with_lock(_mutex, [&] {
+        while (!_waiters.empty()) {
+            auto wr = _waiters.front();
+            _waiters.pop_front();
+            auto t = wr->t;
+            wr->t = nullptr;
+            t->wake();
+        }
+    });
+}
+
+int pthread_cond_init(pthread_cond_t *__restrict cond,
+       const pthread_condattr_t *__restrict attr)
+{
+    new (cond) cond_var;
+    return 0;
+}
+
+int pthread_cond_destroy(pthread_cond_t* cond)
+{
+    from_libc(cond)->~cond_var();
+    return 0;
+}
+
+int pthread_cond_broadcast(pthread_cond_t *cond)
+{
+    from_libc(cond)->wake_all();
+    return 0;
+}
+
+int pthread_cond_signal(pthread_cond_t *cond)
+{
+    from_libc(cond)->wake_one();
+    return 0;
+}
+
+int pthread_cond_wait(pthread_cond_t *__restrict cond,
+       pthread_mutex_t *__restrict mutex)
+{
+    from_libc(cond)->wait(from_libc(mutex));
+    return 0;
 }
