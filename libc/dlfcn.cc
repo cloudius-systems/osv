@@ -13,7 +13,11 @@ void* dlopen(const char* filename, int flags)
 void* dlsym(void* handle, const char* name)
 {
     // FIXME: don't ignore handle
-    return elf::get_program()->lookup(name).relocated_addr();
+    auto sym = elf::get_program()->lookup(name);
+    if (!sym.object) {
+        return nullptr;
+    }
+    return sym.relocated_addr();
 }
 
 int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
