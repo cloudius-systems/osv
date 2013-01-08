@@ -23,7 +23,7 @@ q-build-c = $(call quiet, $(build-c), CC $@)
 build-s = $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<
 q-build-s = $(call quiet, $(build-s), AS $@)
 build-so = $(CC) $(CFLAGS) -o $@ $^
-q-build-so = $(call quiet, $(build-c), CC $@)
+q-build-so = $(call quiet, $(build-so), CC $@)
 	
 %.o: %.cc
 	$(makedir)
@@ -39,14 +39,17 @@ q-build-so = $(call quiet, $(build-c), CC $@)
 
 %.so: CFLAGS+=-fPIC -shared
 %.so: %.o
-	$(CC) $(CFLAGS) -o $@ $^
+	$(makedir)
+	$(q-build-so)
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-all: loader.bin payload/hello_world.so
+payload := payload/hello_world.so
+
+all: loader.bin $(payload)
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
@@ -101,7 +104,7 @@ dummy-shlib.so: dummy-shlib.o
 jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
 jdkbase := $(jdk-jni.h:%/include/jni.h=%)
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest payload/hello_world.so
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(payload)
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase)
 
