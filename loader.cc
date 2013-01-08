@@ -157,6 +157,17 @@ int main(int ac, char **av)
     new thread([&] { main_thread(prog); }, true);
 }
 
+#define TESTSO_PATH	"/usr/lib/hello_world.so"
+
+void load_test(elf::program& prog)
+{
+    prog.add(TESTSO_PATH);
+
+    auto test_main
+        = prog.lookup_function<void (void)>("test_main");
+    test_main();
+}
+
 #define JVM_PATH	"/usr/lib/jre/lib/server/libjvm.so"
 
 void start_jvm(elf::program& prog)
@@ -200,6 +211,7 @@ void main_thread(elf::program& prog)
     debug(fmt("clock@t2 %1%") % t2);
 
     start_jvm(prog);
+//    load_test(prog);
 
     while (true)
 	;
