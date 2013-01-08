@@ -79,18 +79,8 @@ objects += arch/x64/elf-dl.o
 objects += linux.o
 objects += sched.o
 
-libc = libc/string/strcmp.o
-libc += libc/string/strcpy.o
-libc += libc/string.o
-libc += libc/printf.o
-libc += libc/pthread.o
-libc += libc/file.o
-libc += libc/fd.o
-libc += libc/libc.o
-libc += libc/dlfcn.o
-libc += libc/time.o
-libc += libc/ctype.o
-libc += libc/signal.o
+include $(src)/libc/build.mak
+objects += $(addprefix libc/, $(libc))
 
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
@@ -98,7 +88,7 @@ libgcc_s.a = $(shell $(CXX) -static -print-libgcc-file-name)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) dummy-shlib.so \
-		$(libc) bootfs.bin
+		bootfs.bin
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \

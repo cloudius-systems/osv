@@ -1,0 +1,12 @@
+libc = string/strcmp.o
+libc += string/strcpy.o
+libc += string.o
+libc += printf.o
+libc += pthread.o
+libc += file.o
+libc += fd.o
+libc += libc.o
+libc += dlfcn.o
+libc += time.o
+libc += ctype.o
+libc += signal.o
