@@ -51,3 +51,9 @@ int strncasecmp(const char *s1, const char *s2, size_t n)
     }
     return tolower(*s1) < tolower(*s2) ? -1 : 1;
 }
+
+char* strdup(const char *s)
+{
+    auto p = static_cast<char*>(malloc(strlen(s)+1));
+    return strcpy(p, s);
+}
