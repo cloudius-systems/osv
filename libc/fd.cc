@@ -71,6 +71,19 @@ int open(const char* fname, int mode, ...)
     });
 }
 
+std::shared_ptr<file_desc> get_fd(int fd)
+{
+    if (fd < 0) {
+        return std::shared_ptr<file_desc>();
+    }
+    return with_lock(file_table_mutex, [=] {
+        if (size_t(fd) >= file_table.size()) {
+            return std::shared_ptr<file_desc>();
+        }
+        return file_table[fd];
+    });
+}
+
 namespace {
 
 int do_stat1(fileref f, struct stat* buf)
