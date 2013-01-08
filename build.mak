@@ -101,8 +101,8 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 dummy-shlib.so: dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
 
-jdk-jni.h := $(shell rpm -ql java-1.7.0-openjdk-devel | grep include/jni.h$$)
-jdkbase := $(jdk-jni.h:%/include/jni.h=%)
+jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
+                         -maxdepth 1 -type d -name 'java*')
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(payload)
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
