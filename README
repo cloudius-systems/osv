@@ -41,4 +41,5 @@ To run OSv
 
     # gdb build/debug/loader.elf
     (gdb) connect
+    (gdb) osv syms
     (gdb) bt
