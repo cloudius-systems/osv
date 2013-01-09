@@ -66,3 +66,29 @@ DIR* opendir(const char* fname)
     }
     return new DIR(fd);
 }
+
+int closedir(DIR* dir)
+{
+//	::close(dir->_fd);   once we implement close
+	delete dir;
+	return 0;
+}
+
+struct dirent *readdir(DIR* dir)
+{
+	static struct dirent entry, *result;	// XXX: tls?
+	int ret;
+
+	ret = readdir_r(dir, &entry, &result);
+	if (ret)
+		return libc_error_ptr<struct dirent>(ret);
+
+	errno = 0;
+	return result;
+}
+
+int readdir_r(DIR* dir, struct dirent* entry, struct dirent** result)
+{
+	*result = NULL;
+	return 0;
+}

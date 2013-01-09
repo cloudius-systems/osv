@@ -2,15 +2,20 @@
 To build OSv
 ============
 
+2) make sure all git submodules are uptodate
+   -----------------------------------------
+
+    git submodule update
+
 1) build the specially patched libunwind
    -------------------------------------
 
-    cd ../libunwind
+    cd external/libunwind
     autoreconf -a
     sh config.sh
     make
-    cp ./src/.libs/libunwind.a ../osv/
-    cd ../osv
+    cp ./src/.libs/libunwind.a ../..
+    cd ../..
 
 
 2) build osv
