@@ -330,12 +330,15 @@ namespace elf {
         // run a function with all current modules as a parameter
         void with_modules(std::function<void (std::vector<elf_object*>&)> f);
     private:
+        void add_debugger_obj(elf_object* obj);
         void* do_lookup_function(const char* symbol);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
         std::unique_ptr<elf_object> _core;
         std::map<std::string, elf_object*> _files;
+        // debugger interface
+        static elf_object* s_objs[100];
     };
 
     program* get_program();
