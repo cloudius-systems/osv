@@ -439,7 +439,13 @@ UNIMPL(int fputs(const char *s, FILE *stream))
 #undef putc
 UNIMPL(int putc(int c, FILE *stream))
 UNIMPL(int putchar(int c))
-UNIMPL(int puts(const char *s))
+
+int puts(const char *s)
+{
+	debug(s);
+	return 0;
+}
+
 UNIMPL(size_t wcslen(const wchar_t *s))
 UNIMPL(int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n))
 UNIMPL(wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, size_t n))
