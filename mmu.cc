@@ -175,6 +175,12 @@ namespace mmu {
         return v;
     }
 
+    void unmap(void* addr, size_t size)
+    {
+        vma tmp { reinterpret_cast<uintptr_t>(addr), size };
+        evacuate(&tmp);
+    }
+
     vma* map_anon_dontzero(uintptr_t start, uintptr_t end, unsigned perm)
     {
         vma* ret = new vma(start, end);
