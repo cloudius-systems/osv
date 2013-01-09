@@ -1,6 +1,7 @@
 #ifndef FS_HH
 #define FS_HH
 
+#include <dirent.h>
 #include <string>
 #include <cstdint>
 #include <boost/intrusive_ptr.hpp>
@@ -19,6 +20,7 @@ public:
     virtual uint64_t size() = 0;
     virtual void read(void *buffer, uint64_t offset, uint64_t len) = 0;
     virtual void write(const void* buffer, uint64_t offset, uint64_t len) = 0;
+    virtual int getdent(struct dirent *d, int idx);
 private:
     void ref();
     void unref();
