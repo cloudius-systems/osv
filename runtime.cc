@@ -226,7 +226,17 @@ char* gettext (const char* msgid)
 
 char* strerror(int err)
 {
-    return const_cast<char*>("strerror");
+	char buf[1024];
+	char *ret = buf;
+
+	sprintf(ret, "%d", err);
+	return ret;
+}
+
+void
+perror(const char* str)
+{
+    printf("%s: %s\n", str, strerror(errno));
 }
 
 namespace __cxxabiv1 {
