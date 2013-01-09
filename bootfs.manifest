@@ -1,8 +1,8 @@
 [manifest]
-/usr/lib/jre/lib/server/libjvm.so: %(jdkbase)s/jre/lib/amd64/server/libjvm.so
-/usr/lib/jre/lib/libverify.so: %(jdkbase)s/jre/lib/amd64/libverify.so
-/usr/lib/jre/lib/libjava.so: %(jdkbase)s/jre/lib/amd64/libjava.so
-/usr/lib/jre/lib/libzip.so: %(jdkbase)s/jre/lib/amd64/libzip.so
+/usr/lib/jvm/jre/lib/amd64/server/libjvm.so: %(jdkbase)s/jre/lib/amd64/server/libjvm.so
+/usr/lib/jvm/jre/lib/amd64/libverify.so: %(jdkbase)s/jre/lib/amd64/libverify.so
+/usr/lib/jvm/jre/lib/amd64/libjava.so: %(jdkbase)s/jre/lib/amd64/libjava.so
+/usr/lib/jvm/jre/lib/amd64/libzip.so: %(jdkbase)s/jre/lib/amd64/libzip.so
 /usr/lib/libstdc++.so.6: /usr/lib64/libstdc++.so.6
 /usr/lib/libm.so.6: /usr/lib64/libm.so.6
 /usr/lib/libgcc_s.so.1: /usr/lib64/libgcc_s.so.1
