@@ -11,3 +11,4 @@ libc += time.o
 libc += ctype.o
 libc += signal.o
 libc += mman.o
+libc += qsort.o
