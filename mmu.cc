@@ -21,13 +21,25 @@ namespace mmu {
 	}
     };
 
-    boost::intrusive::set<vma,
+    typedef boost::intrusive::set<vma,
 			  bi::compare<vma_compare>,
 			  bi::member_hook<vma,
 					  bi::set_member_hook<>,
 					  &vma::_vma_list_hook>,
 			  bi::optimize_size<true>
-			  > vma_list;
+			  > vma_list_base;
+
+    struct vma_list_type : vma_list_base {
+        vma_list_type() {
+            // insert markers for the edges of allocatable area
+            // simplifies searches
+            insert(*new vma(0, 0));
+            uintptr_t e = 0x800000000000;
+            insert(*new vma(e, e));
+        }
+    };
+
+    vma_list_type vma_list;
 
     typedef uint64_t pt_element;
     const unsigned nlevels = 4;
@@ -109,6 +121,37 @@ namespace mmu {
 	     addr += 4096) {
 	    populate_page(addr);
 	}
+    }
+
+    uintptr_t find_hole(uintptr_t start, uintptr_t size)
+    {
+        // FIXME: use lower_bound or something
+        auto p = vma_list.begin();
+        auto n = std::next(p);
+        while (n != vma_list.end()) {
+            if (start >= p->end() && start + size <= n->start()) {
+                return start;
+            }
+            if (p->end() >= start && n->start() - p->end() >= size) {
+                return p->end();
+            }
+            p = n;
+            ++n;
+        }
+        abort();
+    }
+
+    vma* reserve(void* hint, size_t size)
+    {
+        // look for a hole around 'hint'
+        auto start = reinterpret_cast<uintptr_t>(hint);
+        if (!start) {
+            start = 0x200000000000ul;
+        }
+        start = find_hole(start, size);
+        auto v = new vma(start, start + size);
+        vma_list.insert(*v);
+        return v;
     }
 
     vma* map_anon_dontzero(uintptr_t start, uintptr_t end, unsigned perm)

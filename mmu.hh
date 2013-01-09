@@ -32,6 +32,7 @@ namespace mmu {
 	boost::intrusive::set_member_hook<> _vma_list_hook;
     };
 
+    vma* reserve(void* hint, size_t size);
     vma* map_file(void* addr, size_t size, unsigned perm,
                   file& file, f_offset offset);
     vma* map_anon(void* addr, size_t size, unsigned perm);
