@@ -38,7 +38,6 @@ depends = StringIO.StringIO()
 if options.depends:
     depends = file(options.depends, 'w')
 out = file(options.output, 'w')
-print defines
 manifest = ConfigParser.SafeConfigParser()
 manifest.read(options.manifest)
 
