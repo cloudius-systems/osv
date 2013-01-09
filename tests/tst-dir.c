@@ -18,7 +18,7 @@ int test_main(void)
 
 	printf("testing readdir:\n");
 	while ((d = readdir(dir))) {
-		printf("name: %s, ino: %ld, off: %ld, reclen: %d, type %c\n",
+		printf("name: %s, ino: %ld, off: %ld, reclen: %d, type %d\n",
 			d->d_name, d->d_ino, d->d_off, d->d_reclen, d->d_type);
 	}
 
@@ -37,7 +37,7 @@ int test_main(void)
 		}
 		if (!d)
 			break;
-		printf("name: %s, ino: %ld, off: %ld, reclen: %d, type %c\n",
+		printf("name: %s, ino: %ld, off: %ld, reclen: %d, type %d\n",
 			d->d_name, d->d_ino, d->d_off, d->d_reclen, d->d_type);
 	} 
 

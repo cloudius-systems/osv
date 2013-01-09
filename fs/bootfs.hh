@@ -13,6 +13,7 @@ private:
     struct metadata;
 private:
     fileref do_open(std::string path);
+    int getdent(struct dirent *d, int idx);
 private:
     char* _base;
     dirref _root;
@@ -37,6 +38,7 @@ public:
     virtual fileref do_open(std::string name);
     virtual uint64_t size();
     virtual void read(void* buffer, uint64_t offset, uint64_t len);
+    virtual int getdent(struct dirent *d, int idx);
 private:
     bootfs& _fs;
     std::string _path;

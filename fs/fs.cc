@@ -54,6 +54,11 @@ fileref filesystem::open(std::string name)
     }
     return d->open(name.substr(s, name.npos));
 }
+    
+int file::getdent(struct dirent *d, int idx)
+{
+	return -1;
+}
 
 fileref dir::open(std::string name)
 {

@@ -7,6 +7,7 @@ class FILE;
 #include <algorithm>
 #include <dirent.h>
 #include "libc.hh"
+#include "fs/fs.hh"
 
 class FILE {
 public:
@@ -18,9 +19,11 @@ private:
 
 class __dirstream {
 public:
-    explicit __dirstream(int fd);
+    explicit __dirstream(fileref file);
+    fileref dir();
+    int idx = 0;
 private:
-    int _fd;
+    fileref _file;
 };
 
 FILE::FILE(int fd)
@@ -28,9 +31,14 @@ FILE::FILE(int fd)
 {
 }
 
-__dirstream::__dirstream(int fd)
-    : _fd(fd)
+__dirstream::__dirstream(fileref file)
+    : _file(file)
 {
+}
+
+fileref __dirstream::dir()
+{
+	return _file;
 }
 
 FILE* fopen(const char* fname, const char* fmode)
@@ -60,16 +68,16 @@ FILE* fopen(const char* fname, const char* fmode)
 
 DIR* opendir(const char* fname)
 {
-    auto fd = ::open(fname, O_RDONLY);
-    if (fd == -1) {
+    auto f = rootfs->open(fname);
+    if (!f) {
         return libc_error_ptr<DIR>(ENOENT);
     }
-    return new DIR(fd);
+    return new DIR(f);
 }
 
 int closedir(DIR* dir)
 {
-//	::close(dir->_fd);   once we implement close
+//	rootfs->close(dir->_file);   once we implement close
 	delete dir;
 	return 0;
 }
@@ -89,6 +97,12 @@ struct dirent *readdir(DIR* dir)
 
 int readdir_r(DIR* dir, struct dirent* entry, struct dirent** result)
 {
-	*result = NULL;
+	int ret;
+
+	ret = dir->dir()->getdent(entry, dir->idx++);
+	if (ret == 0)
+		*result = entry;
+	else
+		*result = NULL;
 	return 0;
 }

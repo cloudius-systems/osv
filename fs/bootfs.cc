@@ -29,6 +29,26 @@ fileref bootfs::do_open(std::string name)
     return fileref();
 }
 
+int bootfs::getdent(struct dirent *d, int idx)
+{
+    metadata *md = reinterpret_cast<metadata *>(_base);
+    int i = 0;
+
+    while (md[i].name[0]) {
+	if (i == idx) {
+	    strcpy(d->d_name, md[i].name);
+	    d->d_ino = idx;
+	    d->d_off = idx;
+	    d->d_reclen = 0;
+	    d->d_type = DT_UNKNOWN;
+	    return 0;
+	}
+	i++;
+    }
+
+    return -1;
+}
+
 bootfs::file::file(bootfs& fs, metadata& md)
     : _fs(fs), _md(md)
 {
@@ -71,4 +91,9 @@ uint64_t bootfs::dir::size()
 void bootfs::dir::read(void* buffer, uint64_t offset, uint64_t len)
 {
     throw -1; // FIXME
+}
+
+int bootfs::dir::getdent(struct dirent *d, int idx)
+{
+    return _fs.getdent(d, idx);
 }
