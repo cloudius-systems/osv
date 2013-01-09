@@ -25,6 +25,7 @@ namespace mmu {
 	uintptr_t end() const;
 	void* addr() const;
 	uintptr_t size() const;
+	void split(uintptr_t edge);
     private:
 	uintptr_t _start;
 	uintptr_t _end;

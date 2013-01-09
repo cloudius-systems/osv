@@ -5,6 +5,7 @@
 #include "exceptions.hh"
 #include <boost/format.hpp>
 #include <string.h>
+#include <iterator>
 
 namespace {
     typedef boost::format fmt;
@@ -141,6 +142,26 @@ namespace mmu {
         abort();
     }
 
+    bool contains(vma& x, vma& y)
+    {
+        return y.start() >= x.start() && y.end() <= x.end();
+    }
+
+    void evacuate(vma* v)
+    {
+        // FIXME: use equal_range or something
+        for (auto i = std::next(vma_list.begin());
+                i != std::prev(vma_list.end());
+                ++i) {
+            i->split(v->end());
+            i->split(v->start());
+            if (contains(*v, *i)) {
+                auto& dead = *i--;
+                vma_list.erase(dead);
+            }
+        }
+    }
+
     vma* reserve(void* hint, size_t size)
     {
         // look for a hole around 'hint'
@@ -157,6 +178,7 @@ namespace mmu {
     vma* map_anon_dontzero(uintptr_t start, uintptr_t end, unsigned perm)
     {
         vma* ret = new vma(start, end);
+        evacuate(ret);
         vma_list.insert(*ret);
 
         populate(*ret);
@@ -226,6 +248,16 @@ namespace mmu {
     uintptr_t vma::size() const
     {
         return _end - _start;
+    }
+
+    void vma::split(uintptr_t edge)
+    {
+        if (edge <= _start || edge >= _end) {
+            return;
+        }
+        vma* n = new vma(edge, _end);
+        _end = edge;
+        vma_list.insert(*n);
     }
 }
 
