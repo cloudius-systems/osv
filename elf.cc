@@ -94,7 +94,6 @@ namespace elf {
     void elf_file::load_elf_header()
     {
 	_f->read(&_ehdr, 0, sizeof(_ehdr));
-	debug(fmt("elf header: %1%") % _ehdr.e_ident);
 	if (!(_ehdr.e_ident[EI_MAG0] == '\x7f'
 	      && _ehdr.e_ident[EI_MAG1] == 'E'
 	      && _ehdr.e_ident[EI_MAG2] == 'L'
@@ -114,7 +113,6 @@ namespace elf {
 	      || _ehdr.e_ident[EI_OSABI] == 0)) {
 	    throw std::runtime_error("bad os abi");
 	}
-	debug("loaded elf header");
     }
 
     namespace {
@@ -142,7 +140,6 @@ namespace elf {
                                       { return a.p_type == PT_LOAD
                                             && a.p_vaddr > b.p_vaddr; });
         _end = _base + q->p_vaddr + q->p_memsz;
-        debug(fmt("base %p end %p") % _base % _end);
     }
 
     void* elf_object::base() const
@@ -157,14 +154,11 @@ namespace elf {
 
     void elf_file::load_program_headers()
     {
-	debug(fmt("program headers: %1%") % _ehdr.e_phnum);
 	_phdrs.resize(_ehdr.e_phnum);
 	for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
 	    _f->read(&_phdrs[i],
 		    _ehdr.e_phoff + i * _ehdr.e_phentsize,
 		    _ehdr.e_phentsize);
-	    debug(fmt("phdr %1%: vaddr %2$16x")
-				   % i % _phdrs[i].p_vaddr);
 	}
     }
 
@@ -197,7 +191,6 @@ namespace elf {
     void elf_object::load_segments()
     {
         for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
-            debug(fmt("loading segment %1%") % i);
             auto &phdr = _phdrs[i];
             switch (phdr.p_type) {
             case PT_NULL:
@@ -489,7 +482,6 @@ namespace elf {
     {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
-            debug(fmt("needed: %1%") % lib);
             _prog.add(std::string("/usr/lib") + lib);
         }
     }
