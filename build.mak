@@ -47,9 +47,9 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-payload := payload/hello_world.so
+tests := tests/tst-dir.so
 
-all: loader.bin $(payload)
+all: loader.bin $(tests)
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
@@ -104,7 +104,7 @@ dummy-shlib.so: dummy-shlib.o
 jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(payload)
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests)
 	$(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase)
 
