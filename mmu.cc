@@ -111,9 +111,9 @@ namespace mmu {
 	}
     }
 
-    vma* map_anon_dontzero(void* addr, size_t size, unsigned perm)
+    vma* map_anon_dontzero(uintptr_t start, uintptr_t end, unsigned perm)
     {
-        vma* ret = new vma(addr, size);
+        vma* ret = new vma(start, end);
         vma_list.insert(*ret);
 
         populate(*ret);
@@ -123,7 +123,8 @@ namespace mmu {
 
     vma* map_anon(void* addr, size_t size, unsigned perm)
     {
-        auto ret = map_anon_dontzero(addr, size, perm);
+        auto start = reinterpret_cast<uintptr_t>(addr);
+        auto ret = map_anon_dontzero(start, start + size, perm);
         memset(addr, 0, size);
         return ret;
     }
@@ -131,11 +132,12 @@ namespace mmu {
     vma* map_file(void* addr, size_t size, unsigned perm,
                   file& f, f_offset offset)
     {
+        auto start = reinterpret_cast<uintptr_t>(addr);
         auto fsize = f.size();
         if (offset >= fsize) {
             return map_anon(addr, size, perm);
         }
-        vma* ret = map_anon_dontzero(addr, size, perm);
+        vma* ret = map_anon_dontzero(start, start + size, perm);
         auto rsize = std::min(offset + size, fsize) - offset;
         f.read(addr, offset, rsize);
         memset(addr + rsize, 0, size - rsize);
@@ -143,37 +145,44 @@ namespace mmu {
     }
 
     namespace {
-        const ulong page_size = 4096;
+        const uintptr_t page_size = 4096;
 
-        void* align_down(void* ptr)
+        uintptr_t align_down(uintptr_t ptr)
         {
-            ulong v = reinterpret_cast<ulong>(ptr);
-            v &= ~(page_size - 1);
-            return reinterpret_cast<void*>(v);
+            return ptr & ~(page_size - 1);
         }
 
-        void* align_up(void* ptr)
+        uintptr_t align_up(uintptr_t ptr)
         {
             return align_down(ptr + page_size - 1);
         }
     }
 
 
-    vma::vma(void* addr, ulong size)
-        : _addr(align_down(addr))
-        , _size(reinterpret_cast<ulong>(align_up(addr + size))
-                - reinterpret_cast<ulong>(_addr))
+    vma::vma(uintptr_t start, uintptr_t end)
+        : _start(align_down(start))
+        , _end(align_up(end))
     {
+    }
+
+    uintptr_t vma::start() const
+    {
+        return _start;
+    }
+
+    uintptr_t vma::end() const
+    {
+        return _end;
     }
 
     void* vma::addr() const
     {
-        return _addr;
+        return reinterpret_cast<void*>(_start);
     }
 
-    ulong vma::size() const
+    uintptr_t vma::size() const
     {
-        return _size;
+        return _end - _start;
     }
 }
 

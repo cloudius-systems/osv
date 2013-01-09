@@ -20,12 +20,14 @@ namespace mmu {
 
     class vma {
     public:
-	vma(void* addr, ulong size);
+	vma(uintptr_t start, uintptr_t end);
+	uintptr_t start() const;
+	uintptr_t end() const;
 	void* addr() const;
-	ulong size() const;
+	uintptr_t size() const;
     private:
-	void* _addr;
-	ulong _size;
+	uintptr_t _start;
+	uintptr_t _end;
     public:
 	boost::intrusive::set_member_hook<> _vma_list_hook;
     };
