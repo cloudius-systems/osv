@@ -170,7 +170,7 @@ void load_test(elf::program& prog)
     	debug("FAIL");
 }
 
-#define JVM_PATH	"/usr/lib/jre/lib/server/libjvm.so"
+#define JVM_PATH	"/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
 
 void start_jvm(elf::program& prog)
 {

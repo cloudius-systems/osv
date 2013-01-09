@@ -86,7 +86,9 @@ void pool::free(void* object)
     auto obj = static_cast<free_object*>(object);
     auto header = to_header(obj);
     if (!--header->nalloc) {
-        _free.erase(_free.iterator_to(*header));
+        if (header->local_free) {
+            _free.erase(_free.iterator_to(*header));
+        }
         // FIXME: add hysteresis
         free_page(header);
     } else {
