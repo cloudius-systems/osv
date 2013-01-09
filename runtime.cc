@@ -258,22 +258,6 @@ namespace __cxxabiv1 {
 
 }
 
-
-void *mmap(void *addr, size_t length, int prot, int flags,
-	   int fd, off_t offset)
-{
-    if (fd != -1) {
-	abort();
-    }
-
-    return malloc(length);
-}
-
-int munmap(void *addr, size_t length)
-{
-    return 0;
-}
-
 int getpagesize()
 {
     return 4096;
