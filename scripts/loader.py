@@ -2,30 +2,39 @@
 
 import gdb
 import re
-import os
+import os, os.path
 
-args = ''
-text_addr = '?'
-libjvm = '/usr/lib/jvm/java-1.7.0-openjdk.x86_64/jre/lib/amd64/server/libjvm.so'
-unwanted_sections = ['.text',
-                     '.note.stapsdt',
-                     '.gnu_debuglink',
-                     '.gnu_debugdata',
-                     '.shstrtab',
-                     ]
-for line in os.popen('readelf -WS ' + libjvm):
-    m = re.match(r'\s*\[ *\d+\]\s+([\.\w\d_]+)\s+\w+\s+([0-9a-f]+).*', line)
-    if m:
-        section = m.group(1)
-        if section == 'NULL':
-            continue
-        addr = hex(int(m.group(2), 16) + 0x100000000000)
-        if section == '.text':
-            text_addr = addr
-        if section not in unwanted_sections:
-            args += ' -s %s %s' % (section, addr)
+def load_elf(path, base):
+    args = ''
+    text_addr = '?'
+    unwanted_sections = ['.text',
+                         '.note.stapsdt',
+                         '.gnu_debuglink',
+                         '.gnu_debugdata',
+                         '.shstrtab',
+                         ]
+    for line in os.popen('readelf -WS ' + path):
+        m = re.match(r'\s*\[ *\d+\]\s+([\.\w\d_]+)\s+\w+\s+([0-9a-f]+).*', line)
+        if m:
+            section = m.group(1)
+            if section == 'NULL':
+                continue
+            addr = hex(int(m.group(2), 16) + base)
+            if section == '.text':
+                text_addr = addr
+            if section not in unwanted_sections:
+                args += ' -s %s %s' % (section, addr)
 
-gdb.execute('add-symbol-file %s %s %s' % (libjvm, text_addr, args))
+    gdb.execute('add-symbol-file %s %s %s' % (path, text_addr, args))
+
+def translate(path):
+    '''given a path, try to find it on the host OS'''
+    name = os.path.basename(path)
+    for top in ['build/debug', 'external', '/usr']:
+        for root, dirs, files in os.walk(top):
+            if name in files:
+                return os.path.join(root, name)
+    return None
 
 class Connect(gdb.Command):
     '''Connect to a local kvm instance at port :1234'''
@@ -62,5 +71,22 @@ class osv_heap(gdb.Command):
         print page_range, page_range['size']
         self.show(node['right_'])
 
+class osv_syms(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv syms',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        p = gdb.lookup_global_symbol('elf::program::s_objs').value()
+        p = p.dereference().address
+        while long(p.dereference()):
+            obj = p.dereference().dereference()
+            base = long(obj['_base'])
+            path = obj['_pathname']['_M_dataplus']['_M_p'].string()
+            path = translate(path)
+            print path, hex(base)
+            load_elf(path, base)
+            p += 1
+
 osv()
 osv_heap()
+osv_syms()

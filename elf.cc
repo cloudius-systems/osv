@@ -564,11 +564,23 @@ namespace elf {
             _files[name] = ef;
             ef->load_segments();
             _next_alloc = ef->end();
+            add_debugger_obj(ef);
             ef->load_needed();
             ef->relocate();
             ef->run_init_func();
         }
         return _files[name];
+    }
+
+    elf_object* program::s_objs[100];
+
+    void program::add_debugger_obj(elf_object* obj)
+    {
+        auto p = s_objs;
+        while (*p) {
+            ++p;
+        }
+        *p = obj;
     }
 
     symbol_module program::lookup(const char* name)
