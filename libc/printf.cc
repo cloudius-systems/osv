@@ -164,7 +164,7 @@ std::string strprintf(const char* fmt, va_list ap)
         };
         unsigned pos = get_positional();
         bool alt_form = false;
-        bool zero_pad = false;
+        char pad_char = ' ';
         bool left_adjust = false;
         bool add_blank = false;
         bool add_sign = false;
@@ -174,7 +174,7 @@ std::string strprintf(const char* fmt, va_list ap)
         while (go) {
             switch (*fmt++) {
             case '#': alt_form = true; break;
-            case '0': zero_pad = true; break;
+            case '0': pad_char = '0'; break;
             case '-': left_adjust = true; break;
             case ' ': add_blank = true; break;
             case '+': add_sign = true; break;
@@ -183,7 +183,7 @@ std::string strprintf(const char* fmt, va_list ap)
             default: --fmt; go = false; break;
             }
         }
-        if (alt_form || zero_pad || left_adjust || add_blank || add_sign
+        if (alt_form || left_adjust || add_blank || add_sign
                 || thousands || alt_digits) {
             debug(boost::format("unimplemented format %1%") % orig);
         }
@@ -243,7 +243,7 @@ std::string strprintf(const char* fmt, va_list ap)
                     val /= base;
                 }
                 fill_right_to(ret, '0', precision_fn());
-                fill_right_to(ret, ' ', width_fn());
+                fill_right_to(ret, pad_char, width_fn());
                 std::reverse(ret.begin(), ret.end());
                 return ret;
             });
