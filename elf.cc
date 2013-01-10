@@ -206,14 +206,12 @@ namespace elf {
             case PT_PHDR:
             case PT_GNU_STACK:
             case PT_GNU_RELRO:
+            case PT_GNU_EH_FRAME:
                 break;
             case PT_TLS:
                 _tls_segment = _base + phdr.p_vaddr;
                 _tls_init_size = phdr.p_filesz;
                 _tls_uninit_size = phdr.p_memsz - phdr.p_filesz;
-                break;
-            case PT_GNU_EH_FRAME:
-                load_segment(phdr);
                 break;
             default:
                 abort();
