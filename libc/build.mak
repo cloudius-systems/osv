@@ -1,11 +1,13 @@
 libc = string/strcmp.o
 libc += string/strcpy.o
+libc += string/strlcpy.o
+libc += string/strlcat.o
 libc += string/strncmp.o
 libc += string.o
 libc += printf.o
 libc += pthread.o
+libc += dir.o
 libc += file.o
-libc += fd.o
 libc += libc.o
 libc += dlfcn.o
 libc += time.o

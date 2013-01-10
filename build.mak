@@ -57,8 +57,21 @@ loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 
 arch/x64/boot32.o: loader.elf
 
-fs = fs/fs.o fs/bootfs.o bootfs.o
-fs += fs/stdio.o
+fs = fs/fs.o bootfs.o
+
+fs +=	fs/vfs/main.o \
+	fs/vfs/vfs_conf.o \
+	fs/vfs/vfs_lookup.o \
+	fs/vfs/vfs_mount.o \
+	fs/vfs/vfs_vnode.o \
+	fs/vfs/vfs_task.o \
+	fs/vfs/vfs_syscalls.o
+
+fs +=	fs/ramfs/ramfs_vfsops.o \
+	fs/ramfs/ramfs_vnops.o
+
+fs +=	fs/devfs/devfs_vnops.o \
+	fs/devfs/device.o
 
 drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
 drivers += $(fs)
@@ -68,6 +81,8 @@ drivers += drivers/device.o drivers/device-factory.o
 drivers += drivers/driver.o drivers/driver-factory.o
 drivers += drivers/virtio.o
 drivers += drivers/clock.o drivers/kvmclock.o
+
+drivers += drivers/char/console.o
 
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o

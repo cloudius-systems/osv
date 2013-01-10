@@ -57,3 +57,15 @@ char* strdup(const char *s)
     auto p = static_cast<char*>(malloc(strlen(s)+1));
     return strcpy(p, s);
 }
+
+size_t
+strnlen(const char *str, size_t count)
+{
+    const char *tmp;
+
+
+    for (tmp = str; count-- && *tmp != '\0'; ++tmp)
+        ;
+    return (size_t)(tmp - str);
+}
+
