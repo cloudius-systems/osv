@@ -125,6 +125,8 @@ int do_stat1(fileref f, struct stat* buf)
     }
     *buf = {};
     buf->st_size = f->size();
+    // FIXME: could be a directory, but wait for hch's vfs work
+    buf->st_mode = S_IFREG;
     // FIXME: stat missing fields
     return 0;
 }
