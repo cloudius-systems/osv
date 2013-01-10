@@ -1,6 +1,3 @@
-#define __FILE_defined
-class FILE;
-
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -9,12 +6,10 @@ class FILE;
 #include "libc.hh"
 #include "fs/fs.hh"
 
-class FILE {
+class std_file : public _IO_FILE {
 public:
-    explicit FILE(int fd);
-    ~FILE();
-private:
-    int _fd;
+    explicit std_file(int fd);
+    ~std_file();
 };
 
 class __dirstream {
@@ -26,9 +21,9 @@ private:
     fileref _file;
 };
 
-FILE::FILE(int fd)
-    : _fd(fd)
+std_file::std_file(int fd)
 {
+    _fileno = fd;
 }
 
 __dirstream::__dirstream(fileref file)
@@ -63,7 +58,7 @@ FILE* fopen(const char* fname, const char* fmode)
     if (fd == -1) {
         return nullptr;
     }
-    return new FILE(fd);
+    return new std_file(fd);
 }
 
 DIR* opendir(const char* fname)
