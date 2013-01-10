@@ -89,7 +89,7 @@ N strtoN(const char* s, char** e, int base)
 
     auto convdigit = [=] (char c, int& digit) {
         if (isdigit(c)) {
-            digit = 'c' - '0';
+            digit = c - '0';
         } else if (isalpha(c)) {
             digit = tolower(c) - 'a' + 10;
         } else {
