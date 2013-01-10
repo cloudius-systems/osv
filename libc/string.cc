@@ -57,16 +57,3 @@ char* strdup(const char *s)
     auto p = static_cast<char*>(malloc(strlen(s)+1));
     return strcpy(p, s);
 }
-
-int strncmp(const char *s1, const char *s2, size_t n)
-{
-    while (n && *s1 && *s2 && tolower(*s1) == tolower(*s2)) {
-        ++s1;
-        ++s2;
-        --n;
-    }
-    if (n == 0) {
-        return 0;
-    }
-    return int(tolower(*s2)) - int(tolower(*s1));
-}

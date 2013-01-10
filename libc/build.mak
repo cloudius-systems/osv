@@ -1,5 +1,6 @@
 libc = string/strcmp.o
 libc += string/strcpy.o
+libc += string/strncmp.o
 libc += string.o
 libc += printf.o
 libc += pthread.o
