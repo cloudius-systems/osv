@@ -27,6 +27,7 @@
 #include <boost/format.hpp>
 #include "mempool.hh"
 #include <pwd.h>
+#include <fcntl.h>
 
 #define __LC_LAST 13
 
@@ -84,6 +85,12 @@ extern "C" {
     size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
 			 size_t __n, __locale_t __loc) __THROW;
 
+}
+
+int fcntl(int fd, int cmd, ...)
+{
+    debug("fcntl is stubbed out");
+    return 0;
 }
 
 void *__dso_handle;
