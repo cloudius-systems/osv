@@ -372,11 +372,6 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     UNIMPLEMENTED("pwritev");
 }
 
-ssize_t read(int fd, void *buf, size_t count)
-{
-    UNIMPLEMENTED("read");
-}
-
 int fclose(FILE *fp)
 {
     UNIMPLEMENTED("fclose");

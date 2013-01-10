@@ -94,6 +94,19 @@ ssize_t write(int fd, const void* buffer, size_t len)
     return 0;
 }
 
+ssize_t read(int fd, void *buf, size_t count)
+{
+    auto desc = get_fd(fd);
+    auto size = desc->file()->size();
+    if (desc->pos() >= size) {
+        return 0;
+    }
+    count = std::min(count, size - desc->pos());
+    desc->file()->read(buf, desc->pos(), count);
+    desc->seek(desc->pos() + count);
+    return count;
+}
+
 namespace {
 
 int do_stat1(fileref f, struct stat* buf)
