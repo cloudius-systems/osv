@@ -58,6 +58,9 @@ char* strdup(const char *s)
     return strcpy(p, s);
 }
 
+extern "C" char* __strdup(const char *s)
+    __attribute__((alias("strdup")));
+
 size_t
 strnlen(const char *str, size_t count)
 {
