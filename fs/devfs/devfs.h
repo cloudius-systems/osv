@@ -1,5 +1,5 @@
-/*-
- * Copyright (c) 2005-2007, Kohsuke Ohtani
+/*
+ * Copyright (c) 2007, Kohsuke Ohtani
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,28 +27,30 @@
  * SUCH DAMAGE.
  */
 
-/*
- * vfs_conf.c - File system configuration.
- */
+#ifndef _DEVFS_H
+#define _DEVFS_H
 
-#include <limits.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdio.h>
+#include <assert.h>
 
-#include "vfs.h"
+/* #define DEBUG_DEVFS 1 */
 
-extern struct vfsops ramfs_vfsops;
-extern struct vfsops devfs_vfsops;
+#ifdef DEBUG_DEVFS
+#define DPRINTF(a)	dprintf a
+#define ASSERT(e)	dassert(e)
+#else
+#define DPRINTF(a)	do {} while (0)
+#define ASSERT(e)
+#endif
 
-extern int ramfs_init(void);
-extern int devfs_init(void);
+#if CONFIG_FS_THREADS > 1
+#define malloc(s)		malloc_r(s)
+#define free(p)			free_r(p)
+#else
+#define mutex_init(m)		do {} while (0)
+#define mutex_destroy(m)	do {} while (0)
+#define mutex_lock(m)		do {} while (0)
+#define mutex_unlock(m)		do {} while (0)
+#define mutex_trylock(m)	do {} while (0)
+#endif
 
-/*
- * VFS switch table
- */
-const struct vfssw vfssw[] = {
-	{"ramfs",	ramfs_init,	&ramfs_vfsops},
-	{"devfs",	devfs_init,	&devfs_vfsops},
-	{NULL, fs_noop, NULL},
-};
+#endif /* !_DEVFS_H */

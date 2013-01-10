@@ -70,6 +70,9 @@ fs +=	fs/vfs/main.o \
 fs +=	fs/ramfs/ramfs_vfsops.o \
 	fs/ramfs/ramfs_vnops.o
 
+fs +=	fs/devfs/devfs_vnops.o \
+	fs/devfs/device.o
+
 drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
 drivers += $(fs)
 drivers += mmu.o
@@ -78,6 +81,8 @@ drivers += drivers/device.o drivers/device-factory.o
 drivers += drivers/driver.o drivers/driver-factory.o
 drivers += drivers/virtio.o
 drivers += drivers/clock.o drivers/kvmclock.o
+
+drivers += drivers/char/console.o
 
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2005-2007, Kohsuke Ohtani
+ * Copyright (c) 2005-2006, Kohsuke Ohtani
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,27 +28,46 @@
  */
 
 /*
- * vfs_conf.c - File system configuration.
+ * null.c - null device
  */
 
-#include <limits.h>
-#include <unistd.h>
+#include "../../fs/vfs/prex.h"
+#include "../../fs/devfs/device.h"
 #include <string.h>
 #include <stdio.h>
 
-#include "vfs.h"
+static int
+console_write(struct device *dev, const void *buf, size_t *count, int blkno)
+{
+#define LINE_MAX	1024
+	char output[LINE_MAX];
 
-extern struct vfsops ramfs_vfsops;
-extern struct vfsops devfs_vfsops;
+	strlcpy(output, buf, LINE_MAX);
+	printf("%s", output);
+	return 0;
+}
 
-extern int ramfs_init(void);
-extern int devfs_init(void);
-
-/*
- * VFS switch table
- */
-const struct vfssw vfssw[] = {
-	{"ramfs",	ramfs_init,	&ramfs_vfsops},
-	{"devfs",	devfs_init,	&devfs_vfsops},
-	{NULL, fs_noop, NULL},
+static struct devops console_devops = {
+	.open		= no_open,
+	.close		= no_close,
+	.read		= no_read,
+	.write		= console_write,
+	.ioctl		= no_ioctl,
+	.devctl		= no_devctl,
 };
+
+struct driver console_driver = {
+	.name		= "console",
+	.devops		= &console_devops,
+	.devsz		= 0,
+	.flags		= 0,
+};
+
+
+int
+console_init(void)
+{
+
+	device_create(&console_driver, "console", D_CHR);
+	return 0;
+}

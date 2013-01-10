@@ -517,68 +517,69 @@ char *getcwd(char *path, size_t size)
 	return 0;
 }
 
-#if 0
 /*
  * Duplicate a file descriptor
  */
-static int
-fs_dup(struct task *t, struct msg *msg)
+int dup(int oldfd)
 {
 	struct task *t = main_task;
 	file_t fp;
-	int old_fd, new_fd;
+	int newfd;
+	int error;
 
-	old_fd = msg->data[0];
-	if ((fp = task_getfp(t, old_fd)) == NULL)
-		return EBADF;
+	error = EBADF;
+	if ((fp = task_getfp(t, oldfd)) == NULL)
+		goto out_errno;
 
 	/* Find smallest empty slot as new fd. */
-	if ((new_fd = task_newfd(t)) == -1)
-		return EMFILE;
+	error = EMFILE;
+	if ((newfd = task_newfd(t)) == -1)
+		goto out_errno;
 
-	t->t_ofile[new_fd] = fp;
+	t->t_ofile[newfd] = fp;
 
 	/* Increment file reference */
 	vref(fp->f_vnode);
 	fp->f_count++;
 
-	msg->data[0] = new_fd;
-	return 0;
+	return newfd;
+out_errno:
+	errno = error;
+	return -1;
 }
 
 /*
  * Duplicate a file descriptor to a particular value.
  */
-static int
-fs_dup2(struct task *t, struct msg *msg)
+int dup2(int oldfd, int newfd)
 {
 	struct task *t = main_task;
 	file_t fp, org;
-	int old_fd, new_fd;
 	int error;
 
-	old_fd = msg->data[0];
-	new_fd = msg->data[1];
-	if (old_fd >= OPEN_MAX || new_fd >= OPEN_MAX)
-		return EBADF;
-	fp = t->t_ofile[old_fd];
+	error = EBADF;
+	if (oldfd >= OPEN_MAX || newfd >= OPEN_MAX)
+		goto out_errno;
+	fp = t->t_ofile[oldfd];
 	if (fp == NULL)
-		return EBADF;
-	org = t->t_ofile[new_fd];
+		goto out_errno;
+	org = t->t_ofile[newfd];
 	if (org != NULL) {
 		/* Close previous file if it's opened. */
 		error = sys_close(org);
 	}
-	t->t_ofile[new_fd] = fp;
+	t->t_ofile[newfd] = fp;
 
 	/* Increment file reference */
 	vref(fp->f_vnode);
 	fp->f_count++;
-
-	msg->data[0] = new_fd;
-	return 0;
+	return newfd;
+out_errno:
+	errno = error;
+	return -1;
 }
 
+#if 0
 /*
  * The file control system call.
  */
@@ -824,7 +825,19 @@ void mount_rootfs(void)
 		printf("failed to mount rootfs, error = %d\n", ret);
 	else
 		printf("mounted rootfs\n");
+
+	if (mkdir("/dev", 0755) < 0)
+		printf("failed to create /dev, error = %d\n", errno);
+
+	sys_mount("", "/dev", "devfs", 0, NULL);
+	if (ret)
+		printf("failed to mount devfs, error = %d\n", ret);
+	else
+		printf("mounted devfs\n");
+
 }
+
+int console_init(void);
 
 void
 vfs_init(void)
@@ -833,6 +846,7 @@ vfs_init(void)
 
 	vnode_init();
 	task_alloc(&main_task);
+	console_init();
 
 	/*
 	 * Initialize each file system.
@@ -845,6 +859,13 @@ vfs_init(void)
 
 	mount_rootfs();
 	unpack_bootfs();
+
+	if (open("/dev/console", O_RDWR, 0) != 0)
+		printf("failed to open console, error = %d\n", errno);
+	if (dup(0) != 1)
+		printf("failed to dup console (1)\n");
+	if (dup(0) != 2)
+		printf("failed to dup console (2)\n");
 }
 
 void sys_panic(const char *str)
