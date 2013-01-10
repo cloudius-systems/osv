@@ -12,16 +12,17 @@ int mprotect(void *addr, size_t len, int prot)
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
-    if (fd != -1) {
-        abort();
-    }
-
     std::unique_ptr<mmu::vma> v;
     if (!(flags & MAP_FIXED)) {
         v.reset(mmu::reserve(addr, length));
         addr = v->addr();
     }
-    mmu::map_anon(addr, length, 0);
+    if (fd == -1) {
+        mmu::map_anon(addr, length, 0);
+    } else {
+        file f(fd);
+        mmu::map_file(addr, length, 0, f, offset);
+    }
     v.release();
     return addr;
 }
