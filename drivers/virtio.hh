@@ -194,6 +194,14 @@ protected:
     unsigned vring_size(unsigned int num, unsigned long align);
     int vring_need_event(u16 event_idx, u16 new_idx, u16 old);
 
+    virtual bool get_device_feature_bit(int bit);
+    virtual void set_guest_feature_bit(int bit, bool on);
+    virtual void set_guest_features(u32 features);
+    void pci_conf_read(int offset, void* buf, int length);
+    void pci_conf_write(int offset, void* buf, int length);
+
+    void probe_virt_queues();
+
 private:
 };
 
