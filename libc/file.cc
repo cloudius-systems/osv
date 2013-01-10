@@ -21,9 +21,19 @@ private:
     fileref _file;
 };
 
+std_file* from_libc(FILE* file)
+{
+    return static_cast<std_file*>(file);
+}
+
 std_file::std_file(int fd)
 {
     _fileno = fd;
+}
+
+std_file::~std_file()
+{
+    ::close(_fileno);
 }
 
 __dirstream::__dirstream(fileref file)
@@ -80,6 +90,12 @@ char *fgets(char *s, int size, FILE *stream)
         *s = '\0';
     }
     return s == orig ? nullptr : orig;
+}
+
+int fclose(FILE* fp)
+{
+    delete from_libc(fp);
+    return 0;
 }
 
 DIR* opendir(const char* fname)

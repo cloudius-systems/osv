@@ -372,11 +372,6 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     UNIMPLEMENTED("pwritev");
 }
 
-int fclose(FILE *fp)
-{
-    UNIMPLEMENTED("fclose");
-}
-
 int fileno(FILE *fp)
 {
     UNIMPLEMENTED("fileno");
