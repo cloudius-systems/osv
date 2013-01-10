@@ -210,7 +210,7 @@ void main_thread(elf::program& prog)
     debug(fmt("clock@t1 %1%") % t1);
     debug(fmt("clock@t2 %1%") % t2);
 
-    load_test(prog);
+//    load_test(prog);
     start_jvm(prog);
 
     while (true)
