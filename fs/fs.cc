@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 
 file::file(int fd)
-    : _fd(fd)
+    : _fd(::dup(fd))
     , _refs(0)
 {
 }
