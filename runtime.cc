@@ -45,7 +45,6 @@ extern "C" {
                            char *path, size_t pathlen);
     int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
                               char *buf, size_t buf_len, unw_word_t *offp);
-    int __fxstat64(int ver, int fd, struct stat64 *buf);
     void __stack_chk_fail(void);
     void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function);
     void __freelocale(__locale_t __dataset) __THROW;
@@ -339,11 +338,6 @@ off64_t lseek64(int fd, off64_t offset, int whence)
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     UNIMPLEMENTED("poll");
-}
-
-int __fxstat64(int ver, int fd, struct stat64 *buf)
-{
-    UNIMPLEMENTED("__fxstat");
 }
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)

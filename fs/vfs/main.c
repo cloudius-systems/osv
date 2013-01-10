@@ -257,6 +257,11 @@ out_errno:
 	return -1;
 }
 
+struct stat64;
+// FIXME: assumes stat == stat64, may be incorrect for 32-bit port
+int __fxstat64(int ver, int fd, struct stat64 *st)
+    __attribute__((alias("__fxstat")));
+
 #if 0
 static int
 fs_opendir(struct task *t, struct open_msg *msg)
@@ -510,6 +515,11 @@ out_errno:
 	errno = error;
 	return -1;
 }
+
+struct stat64;
+// FIXME: assumes stat == stat64, may be incorrect for 32-bit port
+int __xstat64(int ver, const char *pathname, struct stat64 *st)
+    __attribute__((alias("__xstat")));
 
 char *getcwd(char *path, size_t size)
 {
