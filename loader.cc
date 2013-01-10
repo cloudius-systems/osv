@@ -1,6 +1,6 @@
 
 #include "drivers/isa-serial.hh"
-#include "fs/bootfs.hh"
+#include "fs/fs.hh"
 #include <boost/format.hpp>
 #include <cctype>
 #include "elf.hh"
@@ -51,6 +51,8 @@ void setup_tls(elf::init_table inittab)
 }
 
 extern "C" { void premain(); }
+
+extern "C" { void vfs_init(void); }
 
 void premain()
 {
@@ -125,8 +127,9 @@ int main(int ac, char **av)
     idt.load_on_cpu();
     processor::wrmsr(msr::IA32_APIC_BASE, 0xfee00000 | (3 << 10));
 
-    bootfs fs;
-    rootfs = &fs;
+    vfs_init();
+
+    filesystem fs;
 
     disable_pic();
     processor::sti();
@@ -174,11 +177,6 @@ void load_test(elf::program& prog)
 
 void start_jvm(elf::program& prog)
 {
-    fileref f = rootfs->open(JVM_PATH);
-    char buf[100];
-    f->read(buf, 0, 100);
-    debug(fmt("jvm: %1% bytes, contents %2% ") % f->size() % buf);
-
     prog.add(JVM_PATH);
  
     auto JNI_GetDefaultJavaVMInitArgs
