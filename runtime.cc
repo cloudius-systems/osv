@@ -402,11 +402,6 @@ int fgetc(FILE *stream)
     UNIMPLEMENTED("fgetc");
 }
 
-char *fgets(char *s, int size, FILE *stream)
-{
-    UNIMPLEMENTED("fgets");
-}
-
 #undef getc
 int getc(FILE *stream)
 {

@@ -61,6 +61,27 @@ FILE* fopen(const char* fname, const char* fmode)
     return new std_file(fd);
 }
 
+char *fgets(char *s, int size, FILE *stream)
+{
+    char* orig = s;
+    while (size > 1) {
+        int r = ::read(stream->_fileno, s, 1);
+        assert(r != -1);
+        if (r == 0) {
+            break;
+        }
+        ++s;
+        --size;
+        if (s[-1] == '\n') {
+            break;
+        }
+    }
+    if (size) {
+        *s = '\0';
+    }
+    return s == orig ? nullptr : orig;
+}
+
 DIR* opendir(const char* fname)
 {
     auto f = rootfs->open(fname);
