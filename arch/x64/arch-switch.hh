@@ -2,6 +2,7 @@
 #define ARCH_SWITCH_HH_
 
 #include "msr.hh"
+#include "barrier.hh"
 #include <string.h>
 
 extern "C" {
@@ -16,7 +17,11 @@ namespace sched {
 void thread::switch_to()
 {
     thread* old = current();
+    // writing to fs_base invalidates memory accesses, so surround with
+    // barriers
+    barrier();
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
+    barrier();
     asm volatile
         ("push %%rbp \n\t"
          "pushq $1f \n\t"
