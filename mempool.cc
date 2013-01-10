@@ -291,6 +291,9 @@ void* calloc(size_t nmemb, size_t size)
 
 void free(void* object)
 {
+    if (!object) {
+        return;
+    }
     if (reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1)) {
         return memory::pool::from_object(object)->free(object);
     } else {
