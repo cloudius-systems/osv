@@ -181,10 +181,12 @@ namespace elf {
     void elf_file::load_segment(const Elf64_Phdr& phdr)
     {
         ulong vstart = align_down(phdr.p_vaddr);
-        ulong filesz = align_up(phdr.p_vaddr + phdr.p_filesz) - vstart;
+        ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
+        ulong filesz = align_up(filesz_unaligned);
         ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz) - vstart;
         mmu::map_file(_base + vstart, filesz, mmu::perm_rwx,
                       *_f, align_down(phdr.p_offset));
+        memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
         mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::perm_rwx);
     }
 
