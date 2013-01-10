@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <new>
 #include <boost/utility.hpp>
+#include <string.h>
 
 namespace memory {
 
@@ -277,6 +278,15 @@ void* malloc(size_t size)
     } else {
         return memory::malloc_large(size);
     }
+}
+
+void* calloc(size_t nmemb, size_t size)
+{
+    // FIXME: check for overflow
+    auto n = nmemb * size;
+    auto p = malloc(n);
+    memset(p, 0, n);
+    return p;
 }
 
 void free(void* object)
