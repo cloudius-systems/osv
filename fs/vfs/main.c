@@ -167,6 +167,10 @@ out_errno:
 	return -1;
 }
 
+typedef uint64_t off64_t;
+off_t lseek64(int fd, off64_t offset, int whence)
+    __attribute__((alias("lseek")));
+
 ssize_t read(int fd, void *buf, size_t count)
 {
 	struct task *t = main_task;

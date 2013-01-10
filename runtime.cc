@@ -337,11 +337,6 @@ int ioctl(int fd, unsigned long request, ...)
     UNIMPLEMENTED("ioctl");
 }
 
-off64_t lseek64(int fd, off64_t offset, int whence)
-{
-    UNIMPLEMENTED("lseek64");
-}
-
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     UNIMPLEMENTED("poll");
