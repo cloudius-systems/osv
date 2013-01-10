@@ -73,6 +73,15 @@ int open(const char* fname, int mode, ...)
     });
 }
 
+int close(int fd)
+{
+    if (fd < 0 || unsigned(fd) >= file_table.size()) {
+        return libc_error(EBADF);
+    }
+    file_table[fd].reset();
+    return 0;
+}
+
 std::shared_ptr<file_desc> get_fd(int fd)
 {
     if (fd < 0) {
