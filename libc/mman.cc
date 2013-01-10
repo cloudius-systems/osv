@@ -27,6 +27,11 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     return addr;
 }
 
+extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
+                      int fd, off64_t offset)
+    __attribute__((alias("mmap")));
+
+
 int munmap(void *addr, size_t length)
 {
     mmu::unmap(addr, length);
