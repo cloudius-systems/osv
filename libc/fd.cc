@@ -73,6 +73,8 @@ int open(const char* fname, int mode, ...)
     });
 }
 
+int open64(const char* fname, int mode, ...) __attribute__((alias("open")));
+
 int close(int fd)
 {
     if (fd < 0 || unsigned(fd) >= file_table.size()) {
