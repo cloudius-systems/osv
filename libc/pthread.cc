@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string.h>
 #include <list>
+#include "debug.hh"
 
 namespace pthread_private {
 
@@ -180,5 +181,29 @@ int pthread_cond_wait(pthread_cond_t *__restrict cond,
        pthread_mutex_t *__restrict mutex)
 {
     from_libc(cond)->wait(from_libc(mutex));
+    return 0;
+}
+
+int pthread_attr_init(pthread_attr_t *attr)
+{
+    debug("pthread_attr_init stubbed out");
+    return 0;
+}
+
+int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
+{
+    // ignore - we don't have processes, so it makes no difference
+    return 0;
+}
+
+int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
+{
+    debug(fmt("pthread_attr_setstacksize(0x%x) stubbed out") % stacksize);
+    return 0;
+}
+
+int pthread_attr_setguardsize(pthread_attr_t *attr, size_t guardsize)
+{
+    debug(fmt("pthread_attr_setguardsize(0x%x) stubbed out") % guardsize);
     return 0;
 }
