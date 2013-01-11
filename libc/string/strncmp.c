@@ -30,6 +30,8 @@
 #include <sys/cdefs.h>
 #include <string.h>
 
+#undef strncmp
+
 int
 strncmp(s1, s2, n)
 	const char *s1, *s2;
