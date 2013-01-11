@@ -49,7 +49,15 @@ do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-dir.so
 
-all: loader.bin $(tests)
+all: loader.img loader.bin $(tests)
+
+boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
+	$(LD) -o $@ -T $^
+
+loader.img: boot.bin loader.elf
+	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
+	$(call quiet, dd if=loader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
+		DD $@ loader.elf)
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
