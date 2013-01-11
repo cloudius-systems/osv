@@ -254,7 +254,7 @@ int __fxstat(int ver, int fd, struct stat *st)
 	file_t fp;
 	int error;
 
-	errno = ENOSYS;
+	error = ENOSYS;
 	if (ver != 1)
 		goto out_errno;
 
@@ -538,7 +538,7 @@ int __xstat(int ver, const char *pathname, struct stat *st)
 	char path[PATH_MAX];
 	int error;
 
-	errno = ENOSYS;
+	error = ENOSYS;
 	if (ver != 1)
 		goto out_errno;
 
