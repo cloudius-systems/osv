@@ -49,6 +49,8 @@ do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-dir.so
 
+tests/tst-dir.so: tests/tst-dir.o
+
 all: loader.img loader.bin $(tests)
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
