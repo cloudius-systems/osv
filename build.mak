@@ -54,7 +54,7 @@ tests/tst-dir.so: tests/tst-dir.o
 all: loader.img loader.bin $(tests)
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
-	$(LD) -o $@ -T $^
+	$(call quiet, $(LD) -o $@ -T $^, LD $@)
 
 loader.img: boot.bin loader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
