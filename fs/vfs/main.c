@@ -44,8 +44,10 @@
 #include <errno.h>
 #include <signal.h>
 #define open __open_variadic
+#define fcntl __fcntl_variadic
 #include <fcntl.h>
 #undef open
+#undef fcntl
 
 #include "vfs.h"
 
@@ -629,22 +631,21 @@ out_errno:
 	return -1;
 }
 
-#if 0
 /*
  * The file control system call.
  */
-static int
-fs_fcntl(struct task *t, struct fcntl_msg *msg)
+int fcntl(int fd, int cmd, int arg)
 {
 	struct task *t = main_task;
 	file_t fp;
-	int arg, new_fd;
+	int new_fd;
+	int error;
 
-	if ((fp = task_getfp(t, msg->fd)) == NULL)
-		return EBADF;
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
 
-	arg = msg->arg;
-	switch (msg->cmd) {
+	switch (cmd) {
 	case F_DUPFD:
 		if (arg >= OPEN_MAX)
 			return EINVAL;
@@ -656,27 +657,23 @@ fs_fcntl(struct task *t, struct fcntl_msg *msg)
 		/* Increment file reference */
 		vref(fp->f_vnode);
 		fp->f_count++;
-		msg->arg = new_fd;
-		break;
+		return new_fd;
 	case F_GETFD:
-		msg->arg = fp->f_flags & FD_CLOEXEC;
-		break;
+		return fp->f_flags & FD_CLOEXEC;
 	case F_SETFD:
 		fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
-			(msg->arg & FD_CLOEXEC);
-		msg->arg = 0;
-		break;
-	case F_GETFL:
-	case F_SETFL:
-		msg->arg = -1;
-		break;
+			(arg & FD_CLOEXEC);
+		return 0;
 	default:
-		msg->arg = -1;
-		break;
+		printf("unsupported fcntl cmd 0x%x\n", cmd);
+		error = EINVAL;
+		goto out_errno;
 	}
 	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
-#endif
 
 /*
  * Check permission for file access

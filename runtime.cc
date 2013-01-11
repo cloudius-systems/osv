@@ -87,12 +87,6 @@ extern "C" {
 
 }
 
-int fcntl(int fd, int cmd, ...)
-{
-    debug("fcntl is stubbed out");
-    return 0;
-}
-
 void *__dso_handle;
 
 void ignore_debug_write(const char *msg)
