@@ -224,19 +224,27 @@ fs_ioctl(struct task *t, struct ioctl_msg *msg)
 
 	return sys_ioctl(fp, msg->request, msg->buf);
 }
+#endif
 
-static int
-fs_fsync(struct task *t, struct msg *msg)
+int fsync(int fd)
 {
 	struct task *t = main_task;
 	file_t fp;
+	int error;
 
-	if ((fp = task_getfp(t, msg->data[0])) == NULL)
-		return EBADF;
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
 
-	return sys_fsync(fp);
+	error = sys_fsync(fp);
+	if (error)
+		goto out_errno;
+	return 0;
+
+out_errno:
+	errno = error;
+	return -1;
 }
-#endif
 
 int __fxstat(int ver, int fd, struct stat *st)
 {
@@ -397,104 +405,130 @@ out_errno:
 	return -1;
 }
 
-#if 0
-static int
-fs_rmdir(struct task *t, struct path_msg *msg)
+int rmdir(const char *pathname)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
 	int error;
 
-	if (msg->path == NULL)
-		return ENOENT;
-	if ((error = task_conv(t, msg->path, VWRITE, path)) != 0)
-		return error;
+	error = ENOENT;
+	if (pathname == NULL)
+		goto out_errno;
+	if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
+		goto out_errno;
 
-	return sys_rmdir(path);
+	error = sys_rmdir(path);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
 
-static int
-fs_rename(struct task *t, struct path_msg *msg)
+int rename(const char *oldpath, const char *newpath)
 {
 	struct task *t = main_task;
 	char src[PATH_MAX];
 	char dest[PATH_MAX];
 	int error;
 
-	if (msg->path == NULL || msg->path2 == NULL)
-		return ENOENT;
+	error = ENOENT;
+	if (oldpath == NULL || newpath == NULL)
+		goto out_errno;
 
-	if ((error = task_conv(t, msg->path, VREAD, src)) != 0)
-		return error;
+	if ((error = task_conv(t, oldpath, VREAD, src)) != 0)
+		goto out_errno;
 
-	if ((error = task_conv(t, msg->path2, VWRITE, dest)) != 0)
-		return error;
+	if ((error = task_conv(t, newpath, VWRITE, dest)) != 0)
+		goto out_errno;
 
-	return sys_rename(src, dest);
+	error = sys_rename(src, dest);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
 
-static int
-fs_chdir(struct task *t, struct path_msg *msg)
+int chdir(const char *pathname)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
 	file_t fp;
 	int error;
 
-	if (msg->path == NULL)
-		return ENOENT;
-	if ((error = task_conv(t, msg->path, VREAD, path)) != 0)
-		return error;
+	error = ENOENT;
+	if (pathname == NULL)
+		goto out_errno;
 
 	/* Check if directory exits */
-	if ((error = sys_opendir(path, &fp)) != 0)
-		return error;
+//	if ((error = sys_opendir(path, &fp)) != 0)
+	if ((error = sys_open(path, O_RDONLY, 0, &fp)) != 0)
+		goto out_errno;
+
 	if (t->t_cwdfp)
-		sys_closedir(t->t_cwdfp);
+//		sys_closedir(t->t_cwdfp);
+		sys_close(t->t_cwdfp);
 	t->t_cwdfp = fp;
 	strlcpy(t->t_cwd, path, sizeof(t->t_cwd));
  	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
 
-static int
-fs_fchdir(struct task *t, struct msg *msg)
+int fchdir(int fd)
 {
 	struct task *t = main_task;
 	file_t fp;
-	int fd;
+	int error;
 
-	fd = msg->data[0];
+	error = EBADF;
 	if ((fp = task_getfp(t, fd)) == NULL)
-		return EBADF;
+		goto out_errno;
 
 	if (t->t_cwdfp)
-		sys_closedir(t->t_cwdfp);
+//		sys_closedir(t->t_cwdfp);
+		sys_close(t->t_cwdfp);
 	t->t_cwdfp = fp;
-	return sys_fchdir(fp, t->t_cwd);
+	error = sys_fchdir(fp, t->t_cwd);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
 
-static int
-fs_link(struct task *t, struct msg *msg)
+int link(const char *oldpath, const char *newpath)
 {
 	/* XXX */
-	return EPERM;
+	errno = EPERM;
+	return -1;
 }
 
-static int
-fs_unlink(struct task *t, struct path_msg *msg)
+int unlink(const char *pathname)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
 	int error;
 
-	if (msg->path == NULL)
-		return ENOENT;
-	if ((error = task_conv(t, msg->path, VWRITE, path)) != 0)
-		return error;
+	error = ENOENT;
+	if (pathname == NULL)
+		goto out_errno;
+	if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
+		goto out_errno;
 
-	return sys_unlink(path);
+	error = sys_unlink(path);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
-#endif
 
 int __xstat(int ver, const char *pathname, struct stat *st)
 {
@@ -642,30 +676,36 @@ fs_fcntl(struct task *t, struct fcntl_msg *msg)
 	}
 	return 0;
 }
+#endif
 
 /*
  * Check permission for file access
  */
-static int
-fs_access(struct task *t, struct path_msg *msg)
+int access(const char *pathname, int mode)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
-	int acc, mode, error = 0;
+	int acc, error = 0;
 
-	mode = msg->data[0];
 	acc = 0;
 	if (mode & R_OK)
 		acc |= VREAD;
 	if (mode & W_OK)
 		acc |= VWRITE;
 
-	if ((error = task_conv(t, msg->path, acc, path)) != 0)
-		return error;
+	if ((error = task_conv(t, pathname, acc, path)) != 0)
+		goto out_errno;
 
-	return sys_access(path, mode);
+	error = sys_access(path, mode);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
 
+#if 0
 static int
 fs_pipe(struct task *t, struct msg *msg)
 {
@@ -708,53 +748,69 @@ fs_pipe(struct task *t, struct msg *msg)
 	return ENOSYS;
 #endif
 }
+#endif
 
 /*
  * Return if specified file is a tty
  */
-static int
-fs_isatty(struct task *t, struct msg *msg)
+int isatty(int fd)
 {
 	struct task *t = main_task;
 	file_t fp;
 	int istty = 0;
+	int error;
 
-	if ((fp = task_getfp(t, msg->data[0])) == NULL)
-		return EBADF;
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
 
 	if (fp->f_vnode->v_flags & VISTTY)
 		istty = 1;
-	msg->data[0] = istty;
-	return 0;
+	return istty;
+out_errno:
+	errno = error;
+	return -1;
 }
 
-static int
-fs_truncate(struct task *t, struct path_msg *msg)
+int truncate(const char *pathname, off_t length)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
 	int error;
 
-	if (msg->path == NULL)
-		return ENOENT;
-	if ((error = task_conv(t, msg->path, VWRITE, path)) != 0)
-		return error;
+	error = ENOENT;
+	if (pathname == NULL)
+		goto out_errno;
+	if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
+		goto out_errno;
 
-	return sys_truncate(path, msg->data[0]);
+	error = sys_truncate(path, length);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
 
-static int
-fs_ftruncate(struct task *t, struct msg *msg)
+int ftruncate(int fd, off_t length)
 {
 	struct task *t = main_task;
 	file_t fp;
+	int error;
 
-	if ((fp = task_getfp(t, msg->data[0])) == NULL)
-		return EBADF;
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
 
-	return sys_ftruncate(fp, msg->data[1]);
+	error = sys_ftruncate(fp, length);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
-#endif
 
 int
 fs_noop(void)
