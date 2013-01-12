@@ -1,8 +1,9 @@
 
 arch = x64
-INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src)
+INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include
 CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
 CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode)) \
+	-U_FORTIFY_SOURCE -fno-stack-protector -Wformat=0 \
 	$(arch-cflags)
 ASFLAGS = -g $(autodepend)
 
@@ -113,6 +114,7 @@ objects += $(addprefix libc/, $(libc))
 libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
 libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
 libgcc_s.a = $(shell $(CXX) -static -print-libgcc-file-name)
+libgcc_eh.a = $(shell $(CXX) -static -print-file-name=libgcc_eh.a)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) dummy-shlib.so \
@@ -120,7 +122,7 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
-	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) $(src)/libunwind.a, \
+	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) $(libgcc_eh.a) $(src)/libunwind.a, \
 		LD $@)
 
 dummy-shlib.so: dummy-shlib.o
