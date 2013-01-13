@@ -103,14 +103,14 @@ void
 Virtio::pci_conf_write(int offset, void* buf, int length) {
     u8* ptr = reinterpret_cast<u8*>(buf);
     for (int i=0;i<length;i++)
-        _bars[0]->write(offset, ptr[i]);
+        _bars[0]->write(offset+i, ptr[i]);
 }
 
 void
 Virtio::pci_conf_read(int offset, void* buf, int length) {
     unsigned char* ptr = reinterpret_cast<unsigned char*>(buf);
     for (int i=0;i<length;i++)
-        ptr[i] = _bars[0]->readb(offset);
+        ptr[i] = _bars[0]->readb(offset+i);
 
 }
 
