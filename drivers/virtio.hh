@@ -199,6 +199,12 @@ protected:
     virtual void set_guest_features(u32 features);
     void pci_conf_read(int offset, void* buf, int length);
     void pci_conf_write(int offset, void* buf, int length);
+    u8 pci_conf_readb(int offset) {return _bars[0]->readb(offset);};
+    u16 pci_conf_readw(int offset) {return _bars[0]->readw(offset);};
+    u32 pci_conf_readl(int offset) {return _bars[0]->read(offset);};
+    void pci_conf_write(int offset, u8 val) {_bars[0]->write(offset, val);};
+    void pci_conf_write(int offset, u16 val) {_bars[0]->write(offset, val);};
+    void pci_conf_write(int offset, u32 val) {_bars[0]->write(offset, val);};
 
     void probe_virt_queues();
 

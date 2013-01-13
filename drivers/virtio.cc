@@ -111,7 +111,6 @@ Virtio::pci_conf_read(int offset, void* buf, int length) {
     unsigned char* ptr = reinterpret_cast<unsigned char*>(buf);
     for (int i=0;i<length;i++)
         ptr[i] = _bars[0]->readb(offset+i);
-
 }
 
 void
@@ -120,8 +119,8 @@ Virtio::probe_virt_queues() {
     u16 qsize;
 
     do {
-        pci_conf_write(VIRTIO_PCI_QUEUE_SEL, &queuesel, sizeof(queuesel));
-        pci_conf_read(VIRTIO_PCI_QUEUE_NUM, &qsize, sizeof(qsize));
+        pci_conf_write(VIRTIO_PCI_QUEUE_SEL, queuesel);
+        qsize = pci_conf_readw(VIRTIO_PCI_QUEUE_NUM);
         debug(fmt("queue %d, size %d") % queuesel % qsize);
 
         if (!qsize) break;
