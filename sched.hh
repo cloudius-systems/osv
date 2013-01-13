@@ -23,6 +23,8 @@ public:
     static void wait_until(Pred pred);
     void wake();
     static thread* current();
+    struct stack_info;
+    stack_info get_stack_info();
 private:
     void main();
     void switch_to();
@@ -44,6 +46,11 @@ private:
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend void schedule();
+};
+
+struct thread::stack_info {
+    void* begin;
+    size_t size;
 };
 
 thread* current();

@@ -95,6 +95,11 @@ void thread::stop_wait()
     _waiting = false;
 }
 
+thread::stack_info thread::get_stack_info()
+{
+    return stack_info { _stack, sizeof(_stack) };
+}
+
 void init(elf::program& prog)
 {
     tls = prog.tls();
