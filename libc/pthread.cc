@@ -23,12 +23,16 @@ namespace pthread_private {
     class pthread {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset);
-        static pthread* from_libc(pthread_t* p);
-        void to_libc(pthread_t* p);
-    private:
+        static pthread* from_libc(pthread_t p);
+        pthread_t to_libc();
         void* _retval;
         // must be initialized last
         sched::thread _thread;
+    };
+
+    struct thread_attr {
+        void* stack_begin;
+        size_t stack_size;
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset)
@@ -39,14 +43,27 @@ namespace pthread_private {
     {
     }
 
-    pthread* pthread::from_libc(pthread_t *p)
+    pthread* pthread::from_libc(pthread_t p)
     {
-        return reinterpret_cast<pthread*>(*p);
+        return reinterpret_cast<pthread*>(p);
     }
 
-    void pthread::to_libc(pthread_t *p)
+    static_assert(sizeof(thread_attr) <= sizeof(pthread_attr_t),
+            "thread_attr too big");
+
+    pthread_t pthread::to_libc()
     {
-        *reinterpret_cast<pthread**>(p) = this;
+        return reinterpret_cast<pthread_t>(this);
+    }
+
+    thread_attr* from_libc(pthread_attr_t* a)
+    {
+        return reinterpret_cast<thread_attr*>(a);
+    }
+
+    const thread_attr* from_libc(const pthread_attr_t* a)
+    {
+        return reinterpret_cast<const thread_attr*>(a);
     }
 }
 
@@ -58,7 +75,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     sigset_t sigset;
     sigprocmask(SIG_SETMASK, nullptr, &sigset);
     auto t = new pthread(start_routine, arg, sigset);
-    t->to_libc(thread);
+    *thread = t->to_libc();
     return 0;
 }
 
@@ -225,7 +242,21 @@ int pthread_cond_wait(pthread_cond_t *__restrict cond,
 
 int pthread_attr_init(pthread_attr_t *attr)
 {
-    debug("pthread_attr_init stubbed out");
+    new (attr) thread_attr;
+    return 0;
+}
+
+int pthread_attr_destroy(pthread_attr_t *attr)
+{
+    return 0;
+}
+
+int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr)
+{
+    auto t = pthread::from_libc(thread);
+    auto a = from_libc(attr);
+    a->stack_begin = t->_thread.get_stack_info().begin;
+    a->stack_size = t->_thread.get_stack_info().size;
     return 0;
 }
 
@@ -244,5 +275,14 @@ int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
 int pthread_attr_setguardsize(pthread_attr_t *attr, size_t guardsize)
 {
     debug(fmt("pthread_attr_setguardsize(0x%x) stubbed out") % guardsize);
+    return 0;
+}
+
+int pthread_attr_getstack(const pthread_attr_t * __restrict attr,
+                                void **stackaddr, size_t *stacksize)
+{
+    auto a = from_libc(attr);
+    *stackaddr = a->stack_begin;
+    *stacksize = a->stack_size;
     return 0;
 }
