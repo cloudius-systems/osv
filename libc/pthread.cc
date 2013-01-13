@@ -19,9 +19,48 @@ namespace pthread_private {
     mutex tsd_key_mutex;
     std::vector<bool> tsd_used_keys(tsd_nkeys);
     std::vector<void (*)(void*)> tsd_dtor(tsd_nkeys);
+
+    class pthread {
+    public:
+        explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset);
+        static pthread* from_libc(pthread_t* p);
+        void to_libc(pthread_t* p);
+    private:
+        void* _retval;
+        // must be initialized last
+        sched::thread _thread;
+    };
+
+    pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset)
+        : _thread([=] {
+                sigprocmask(SIG_SETMASK, &sigset, nullptr);
+                _retval = start(arg);
+            })
+    {
+    }
+
+    pthread* pthread::from_libc(pthread_t *p)
+    {
+        return reinterpret_cast<pthread*>(*p);
+    }
+
+    void pthread::to_libc(pthread_t *p)
+    {
+        *reinterpret_cast<pthread**>(p) = this;
+    }
 }
 
 using namespace pthread_private;
+
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+        void *(*start_routine) (void *), void *arg)
+{
+    sigset_t sigset;
+    sigprocmask(SIG_SETMASK, nullptr, &sigset);
+    auto t = new pthread(start_routine, arg, sigset);
+    t->to_libc(thread);
+    return 0;
+}
 
 int pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
 {
