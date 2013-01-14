@@ -15,6 +15,8 @@
 //#include <locale>
 
 #include "drivers/virtio.hh"
+#include "drivers/virtio-net.hh"
+
 #include "drivers/driver-factory.hh"
 #include "sched.hh"
 #include "drivers/clock.hh"
@@ -200,7 +202,7 @@ void main_thread(elf::program& prog)
     pci::pci_device_enumeration();
     DeviceFactory::Instance()->DumpDevices();
 
-    Driver *d = new Virtio(0x1000);
+    Driver *d = new VirtioNet();
     DriverFactory::Instance()->RegisterDriver(d);
 
     DeviceFactory::Instance()->InitializeDrivers();

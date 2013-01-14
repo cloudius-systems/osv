@@ -32,16 +32,13 @@ Virtio::Init(Device* dev) {
 
     debug(fmt("Virtio:Init %x:%x") % _vid % _id);
 
-    _bars[0]->write(VIRTIO_PCI_STATUS, (u8)(VIRTIO_CONFIG_S_ACKNOWLEDGE |
-            VIRTIO_CONFIG_S_DRIVER));
+    add_dev_status(VIRTIO_CONFIG_S_ACKNOWLEDGE | VIRTIO_CONFIG_S_DRIVER);
 
     probe_virt_queues();
 
     for (int i=0;i<32;i++)
         debug(fmt("%d:%d ") % i % get_device_feature_bit(i), false);
     debug(fmt("\n"), false);
-
-    _bars[0]->write(VIRTIO_PCI_STATUS, (u8)(VIRTIO_CONFIG_S_DRIVER_OK));
 
     return true;
 }
@@ -51,53 +48,69 @@ void Virtio::dumpConfig() const {
     debug(fmt("Virtio vid:id= %x:%x") % _vid % _id);
 }
 
-void
-Virtio::vring_init(struct vring *vr, unsigned int num, void *p, unsigned long align) {
-    vr->num = num;
-    vr->desc = reinterpret_cast<struct vring_desc*>(p);
-    vr->avail = reinterpret_cast<struct vring_avail*>(p) + num*sizeof(struct vring_desc);
-    vr->used = reinterpret_cast<struct vring_used*>(((unsigned long)&vr->avail->ring[num] + sizeof(u16) \
-        + align-1) & ~(align - 1));
-}
 
-unsigned
-Virtio::vring_size(unsigned int num, unsigned long align) {
-    return ((sizeof(struct vring_desc) * num + sizeof(u16) * (3 + num)
-         + align - 1) & ~(align - 1))
-        + sizeof(u16) * 3 + sizeof(struct vring_used_elem) * num;
-}
-
-/* The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX */
-/* Assuming a given event_idx value from the other size, if
- * we have just incremented index from old to new_idx,
- * should we trigger an event? */
-int
-Virtio::vring_need_event(u16 event_idx, u16 new_idx, u16 old) {
-    /* Note: Xen has similar logic for notification hold-off
-     * in include/xen/interface/io/ring.h with req_event and req_prod
-     * corresponding to event_idx + 1 and new_idx respectively.
-     * Note also that req_event and req_prod in Xen start at 1,
-     * event indexes in virtio start at 0. */
-    return (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old);
+u32
+Virtio::get_device_features(void) {
+    return (get_virtio_config(VIRTIO_PCI_HOST_FEATURES));
 }
 
 bool
 Virtio::get_device_feature_bit(int bit) {
-    u32 features = _bars[0]->read(VIRTIO_PCI_HOST_FEATURES);
-    return bool(features & (1 << bit));
-}
-
-void
-Virtio::set_guest_feature_bit(int bit, bool on) {
-    u32 features = _bars[0]->read(VIRTIO_PCI_GUEST_FEATURES);
-    features = (on)? features | (1 << bit) : features & ~(1 << bit);
-    _bars[0]->write(VIRTIO_PCI_GUEST_FEATURES, features);
+    return (get_virtio_config_bit(VIRTIO_PCI_HOST_FEATURES, bit));
 }
 
 void
 Virtio::set_guest_features(u32 features) {
-    _bars[0]->write(VIRTIO_PCI_GUEST_FEATURES, features);
+    set_virtio_config(VIRTIO_PCI_GUEST_FEATURES, features);
 }
+
+void
+Virtio::set_guest_feature_bit(int bit, bool on) {
+    set_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit, on);
+}
+
+u32
+Virtio::get_dev_status(void) {
+    return (get_virtio_config(VIRTIO_PCI_STATUS));
+}
+
+void
+Virtio::set_dev_status(u32 status) {
+    set_virtio_config(VIRTIO_PCI_STATUS, status);
+}
+
+void
+Virtio::add_dev_status(u32 status) {
+    set_dev_status(get_dev_status() | status);
+}
+
+void
+Virtio::del_dev_status(u32 status) {
+    set_dev_status(get_dev_status() & ~status);
+}
+
+u32 
+Virtio::get_virtio_config(int offset) {
+    return (_bars[0]->read(offset));
+}
+
+void
+Virtio::set_virtio_config(int offset, u32 val) {
+    _bars[0]->write(offset, val);
+}
+
+bool
+Virtio::get_virtio_config_bit(int offset, int bit){
+    return (get_virtio_config(offset) & (1 << bit));
+}
+
+void
+Virtio::set_virtio_config_bit(int offset, int bit, bool on) {
+    u32 val = get_virtio_config(offset);
+    u32 newval = ( val & ~(1 << bit) ) | ((int)(on)<<bit);
+    set_virtio_config(offset, newval);
+}
+
 
 void
 Virtio::pci_conf_write(int offset, void* buf, int length) {

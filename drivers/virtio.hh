@@ -1,9 +1,144 @@
 #ifndef VIRTIO_DRIVER_H
 #define VIRTIO_DRIVER_H
 
+#include <list>
+#include <string>
+
 #include "arch/x64/processor.hh"
 #include "drivers/pci.hh"
 #include "drivers/driver.hh"
+
+
+// Buffer descriptors in the ring
+class vring_desc {
+public:
+    enum {
+        // This marks a buffer as continuing via the next field.
+        VRING_DESC_F_NEXT=1,
+        // This marks a buffer as write-only (otherwise read-only).
+        VRING_DESC_F_WRITE=2,
+        // This means the buffer contains a list of buffer descriptors.
+        VRING_DESC_F_INDIRECT=4
+    };
+
+    u64 get_paddr(void) { return (_paddr); }
+    u32 get_len(void) { return (_len); }
+    u16 next_idx(void) { return (_next); }
+
+    // flags
+    bool is_chained(void) { return ((_flags & VRING_DESC_F_NEXT) == VRING_DESC_F_NEXT); };
+    bool is_write(void) { return ((_flags & VRING_DESC_F_WRITE) == VRING_DESC_F_WRITE); };
+    bool is_indirect(void) { return ((_flags & VRING_DESC_F_INDIRECT) == VRING_DESC_F_INDIRECT); };
+    
+private:
+    u64 _paddr;
+    u32 _len;
+    u16 _flags;
+    u16 _next;
+};
+
+// Guest to host
+class vring_avail{
+public:   
+    u16 _flags;
+    u16 _idx;
+    u16 _ring[];
+};
+
+class vring_used_elem {
+public:
+	// Index of start of used vring_desc chain. (u32 for padding reasons)
+	u32 _id;
+	// Number of descriptors in chain
+	u32 _len;
+};
+
+// Host to guest
+class vring_used {
+public:
+	u16 _flags;
+	u16 _idx;
+	vring_used_elem _used_elements[];
+};
+
+class vring {
+public:
+
+    // TODO: Convert to static methods
+    #define vring_used_event(vr) ((vr)->avail->ring[(vr)->num])
+    #define vring_avail_event(vr) (*(u16 *)&(vr)->used->ring[(vr)->num])
+   
+    vring(unsigned int num, void *p, unsigned long align)
+    {
+        _align = align;        
+        _num = num;
+        _desc = (vring_desc *)p;
+        _avail = (vring_avail *)(p + num*sizeof(vring_desc));
+        _used = (vring_used *)(((unsigned long)&_avail->_ring[num] + 
+                sizeof(u16) + align-1) & ~(align - 1));
+    }
+
+    virtual ~vring();
+
+    static unsigned size(unsigned int num, unsigned long align)
+    {
+        return (((sizeof(vring_desc) * num + sizeof(u16) * (3 + num)
+                 + align - 1) & ~(align - 1))
+                + sizeof(u16) * 3 + sizeof(vring_used_elem) * num);
+    }
+
+    unsigned size(void)
+    {
+        return (vring::size(_num, _align));
+    }
+
+    // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
+    // Assuming a given event_idx value from the other size, if
+    // we have just incremented index from old to new_idx,
+    // should we trigger an event?
+    static int need_event(u16 event_idx, u16 new_idx, u16 old)
+    {
+        // Note: Xen has similar logic for notification hold-off
+        // in include/xen/interface/io/ring.h with req_event and req_prod
+        // corresponding to event_idx + 1 and new_idx respectively.
+        // Note also that req_event and req_prod in Xen start at 1,
+        // event indexes in virtio start at 0.
+        return ( (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old) );
+    }
+
+private:
+    // Alignment
+    unsigned long _align;
+    // Total number of descriptors in ring
+    unsigned int _num;
+    // Flat list of chained descriptors
+    vring_desc *_desc;
+    // Available for host consumption
+    vring_avail *_avail;
+    // Available for guest consumption
+    vring_used *_used;
+};
+
+
+class virt_queue {
+public:
+private:    
+};
+
+class virtio_device {
+public:
+    virtio_device();
+    virtual ~virtio_device();
+    void probe_virt_queues(void);
+
+protected:
+    int _index;
+    u32 _device_id;
+    u32 _vendor_id;    
+
+    std::list<virt_queue *> _queues;
+};
+
 
 class Virtio : public Driver {
 public:
@@ -86,12 +221,6 @@ public:
     #define VIRTIO_PCI_CONFIG(dev)      ((dev)->msix_enabled ? 24 : 20)
 
     enum VIRTIO_VRING {
-        /* This marks a buffer as continuing via the next field. */
-        VRING_DESC_F_NEXT = 1,
-        /* This marks a buffer as write-only (otherwise read-only). */
-        VRING_DESC_F_WRITE = 2,
-        /* This means the buffer contains a list of buffer descriptors. */
-        VRING_DESC_F_INDIRECT = 4,
         /* The Host uses this in used->flags to advise the Guest: don't kick me when
          * you add a buffer.  It's unreliable, so it's simply an optimization.  Guest
          * will still kick if it's out of buffers. */
@@ -111,76 +240,7 @@ public:
         VIRTIO_RING_F_EVENT_IDX = 29,
     };
 
-    /* Virtio ring descriptors: 16 bytes.  These can chain together via "next". */
-    struct vring_desc {
-        /* Address (guest-physical). */
-        u64 addr;
-        /* Length. */
-        u32 len;
-        /* The flags as indicated above. */
-        u16 flags;
-        /* We chain unused descriptors via this, too */
-        u16 next;
-    };
 
-    struct vring_avail {
-        u16 flags;
-        u16 idx;
-        u16 ring[];
-    };
-
-    /* u32 is used here for ids for padding reasons. */
-    struct vring_used_elem {
-        /* Index of start of used descriptor chain. */
-        u32 id;
-        /* Total length of the descriptor chain which was used (written to) */
-        u32 len;
-    };
-
-    struct vring_used {
-        u16 flags;
-        u16 idx;
-        struct vring_used_elem ring[];
-    };
-
-    struct vring {
-        unsigned int num;
-
-        struct vring_desc *desc;
-
-        struct vring_avail *avail;
-
-        struct vring_used *used;
-    };
-
-    /* The standard layout for the ring is a continuous chunk of memory which looks
-     * like this.  We assume num is a power of 2.
-     *
-     * struct vring
-     * {
-     *  // The actual descriptors (16 bytes each)
-     *  struct vring_desc desc[num];
-     *
-     *  // A ring of available descriptor heads with free-running index.
-     *  __u16 avail_flags;
-     *  __u16 avail_idx;
-     *  __u16 available[num];
-     *  __u16 used_event_idx;
-     *
-     *  // Padding to the next align boundary.
-     *  char pad[];
-     *
-     *  // A ring of used descriptor heads with free-running index.
-     *  __u16 used_flags;
-     *  __u16 used_idx;
-     *  struct vring_used_elem used[num];
-     *  __u16 avail_event_idx;
-     * };
-     */
-    /* We publish the used event index at the end of the available ring, and vice
-     * versa. They are at the end for backwards compatibility. */
-    #define vring_used_event(vr) ((vr)->avail->ring[(vr)->num])
-    #define vring_avail_event(vr) (*(u16 *)&(vr)->used->ring[(vr)->num])
 
     Virtio(u16 id) : Driver(VIRTIO_VENDOR_ID, id) {};
     virtual void dumpConfig() const;
@@ -188,15 +248,29 @@ public:
 
 protected:
 
-    virtual bool earlyInitChecks();
-    void vring_init(struct vring *vr, unsigned int num, void *p,
-                    unsigned long align);
-    unsigned vring_size(unsigned int num, unsigned long align);
-    int vring_need_event(u16 event_idx, u16 new_idx, u16 old);
+    int index;
 
-    virtual bool get_device_feature_bit(int bit);
-    virtual void set_guest_feature_bit(int bit, bool on);
-    virtual void set_guest_features(u32 features);
+    virtual bool earlyInitChecks();
+    void probe_virt_queues();    
+
+    // guest/host features
+    u32 get_device_features(void);
+    bool get_device_feature_bit(int bit);
+    void set_guest_features(u32 features);
+    void set_guest_feature_bit(int bit, bool on);
+
+    // device status
+    u32 get_dev_status(void);
+    void set_dev_status(u32 status);
+    void add_dev_status(u32 status);
+    void del_dev_status(u32 status);
+
+    // access the virtio conf address space set by pci bar 0
+    u32 get_virtio_config(int offset);
+    void set_virtio_config(int offset, u32 val);
+    bool get_virtio_config_bit(int offset, int bit);
+    void set_virtio_config_bit(int offset, int bit, bool on);
+
     void pci_conf_read(int offset, void* buf, int length);
     void pci_conf_write(int offset, void* buf, int length);
     u8 pci_conf_readb(int offset) {return _bars[0]->readb(offset);};
@@ -205,8 +279,6 @@ protected:
     void pci_conf_write(int offset, u8 val) {_bars[0]->write(offset, val);};
     void pci_conf_write(int offset, u16 val) {_bars[0]->write(offset, val);};
     void pci_conf_write(int offset, u32 val) {_bars[0]->write(offset, val);};
-
-    void probe_virt_queues();
 
 private:
 };
