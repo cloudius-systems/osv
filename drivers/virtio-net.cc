@@ -8,7 +8,7 @@ namespace virtio {
 
 
     virtio_net::virtio_net()
-        : virtio_driver(0x1001)
+        : virtio_driver(VIRTIO_NET_DEVICE_ID)
     {
 
     }

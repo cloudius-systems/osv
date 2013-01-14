@@ -32,6 +32,10 @@ namespace virtio {
                                                                                network */
         };
 
+        enum {
+            VIRTIO_NET_DEVICE_ID=0x1000,
+        };
+
         
         virtio_net();
         virtual ~virtio_net();
