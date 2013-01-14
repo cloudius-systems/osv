@@ -7,3 +7,6 @@
 [submodule "external/gcc.bin"]
 	path = external/gcc.bin
 	url = ../gcc.bin
+[submodule "external/glibc.bin"]
+	path = external/glibc.bin
+	url = ../glibc.bin
