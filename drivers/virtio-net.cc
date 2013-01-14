@@ -3,27 +3,29 @@
 
 #include "debug.hh"
 
-using namespace pci;
+
+namespace virtio {
 
 
-VirtioNet::VirtioNet()
-    : Virtio(0x1000)
-{
+    virtio_net::virtio_net()
+        : virtio_driver(0x1001)
+    {
+
+    }
+
+    virtio_net::~virtio_net()
+    {
+
+    }
+
+    bool virtio_net::Init(Device *d)
+    {
+        virtio_driver::Init(d);
+        
+        add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+
+        return true;
+    }
 
 }
-
-VirtioNet::~VirtioNet()
-{
-
-}
-
-bool VirtioNet::Init(Device *d)
-{
-    Virtio::Init(d);
-    
-    add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
-
-    return true;
-}
-
 

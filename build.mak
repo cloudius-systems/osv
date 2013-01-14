@@ -91,6 +91,7 @@ drivers += elf.o
 drivers += drivers/device.o drivers/device-factory.o
 drivers += drivers/driver.o drivers/driver-factory.o
 drivers += drivers/virtio.o
+drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-net.o
 drivers += drivers/clock.o drivers/kvmclock.o
 
