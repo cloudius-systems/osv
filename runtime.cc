@@ -84,7 +84,7 @@ extern "C" {
 		       __locale_t __l) __THROW __nonnull ((2, 4));
     size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
 			 size_t __n, __locale_t __loc) __THROW;
-
+    int mallopt(int param, int value);
 }
 
 void *__dso_handle;
@@ -618,6 +618,12 @@ size_t confstr(int name, char* buf, size_t len)
     }
     debug(fmt("confstr: unknown parameter %1%") % name);
     abort();
+}
+
+int mallopt(int param, int value)
+{
+    debug(fmt("mallopt: unimplemented paramater  %1%") % param);
+    return 0;
 }
 
 long timezone;
