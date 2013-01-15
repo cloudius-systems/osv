@@ -412,7 +412,11 @@ int puts(const char *s)
 UNIMPL(size_t wcslen(const wchar_t *s))
 UNIMPL(int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n))
 UNIMPL(wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, size_t n))
-UNIMPL(int setvbuf(FILE *stream, char *buf, int mode, size_t size))
+int setvbuf(FILE *stream, char *buf, int mode, size_t size)
+{
+    debug("stub setvbuf()");
+    return 0;
+}
 UNIMPL(size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream))
 UNIMPL(size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream))
 UNIMPL(wint_t fgetwc(FILE *stream))
