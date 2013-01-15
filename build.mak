@@ -139,7 +139,8 @@ gccbase = $(src)/external/gcc.bin
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests)
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
-		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase), MKBOOTFS $@)
+		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
+		glibcbase=$(glibcbase), MKBOOTFS $@)
 
 bootfs.o: bootfs.bin
 
