@@ -32,10 +32,21 @@ namespace virtio {
     };
 
     // Guest to host
-    class vring_avail{
-    public:   
+    class vring_avail {
+    public:
+        enum {
+            // Mark that we do not need an interrupt for consuming a descriptor
+            // from the ring. Unrelieable so it's simply an optimization
+            VRING_AVAIL_F_NO_INTERRUPT=1
+        };
+
+        void disable_interrupt(void) { _flags |= VRING_AVAIL_F_NO_INTERRUPT; }
+        void enable_interrupt(void) { _flags = 0; }        
+       
         u16 _flags;
+        // Where we put the next descriptor
         u16 _idx;
+        // There may be no more entries than the queue size read from device
         u16 _ring[];
     };
 
@@ -43,13 +54,24 @@ namespace virtio {
     public:
         // Index of start of used vring_desc chain. (u32 for padding reasons)
         u32 _id;
-        // Number of descriptors in chain
+        // Total length of the descriptor chain which was used (written to)
         u32 _len;
     };
 
     // Host to guest
     class vring_used {
     public:
+
+        enum {
+            // The Host advise the Guest: don't kick me when
+            // you add a buffer.  It's unreliable, so it's simply an 
+            // optimization. Guest will still kick if it's out of buffers.
+            VRING_USED_F_NO_NOTIFY=1
+        };
+
+        void disable_interrupt(void) { _flags |= VRING_USED_F_NO_NOTIFY; }
+        void enable_interrupt(void) { _flags = 0; }
+        
         u16 _flags;
         u16 _idx;
         vring_used_elem _used_elements[];
@@ -59,14 +81,6 @@ namespace virtio {
     public:
 
         enum {
-            /* The Host uses this in used->flags to advise the Guest: don't kick me when
-             * you add a buffer.  It's unreliable, so it's simply an optimization.  Guest
-             * will still kick if it's out of buffers. */
-            VRING_USED_F_NO_NOTIFY = 1,
-            /* The Guest uses this in avail->flags to advise the Host: don't interrupt me
-             * when you consume a buffer.  It's unreliable, so it's simply an
-             * optimization.  */
-            VRING_AVAIL_F_NO_INTERRUPT = 1,
 
             /* We support indirect buffer descriptors */
             VIRTIO_RING_F_INDIRECT_DESC = 28,

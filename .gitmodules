@@ -4,3 +4,9 @@
 [submodule "external/openjdk.bin"]
 	path = external/openjdk.bin
 	url = ../openjdk.bin
+[submodule "external/gcc.bin"]
+	path = external/gcc.bin
+	url = ../gcc.bin
+[submodule "external/glibc.bin"]
+	path = external/glibc.bin
+	url = ../glibc.bin

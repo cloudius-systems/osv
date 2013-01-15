@@ -44,6 +44,7 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(q-build-so)
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
+sys-includes +=  $(gccbase)/usr/include -I$(glibcbase)/usr/include
 autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
@@ -114,10 +115,10 @@ objects += sched.o
 include $(src)/libc/build.mak
 objects += $(addprefix libc/, $(libc))
 
-libstdc++.a = $(shell $(CXX) -static -print-file-name=libstdc++.a)
-libsupc++.a = $(shell $(CXX) -static -print-file-name=libsupc++.a)
-libgcc_s.a = $(shell $(CXX) -static -print-libgcc-file-name)
-libgcc_eh.a = $(shell $(CXX) -static -print-file-name=libgcc_eh.a)
+libstdc++.a = $(shell find $(gccbase) -name libstdc++.a)
+libsupc++.a = $(shell find $(gccbase) -name libsupc++.a)
+libgcc_s.a = $(shell find $(gccbase) -name libgcc.a |  grep -v /32/)
+libgcc_eh.a = $(shell find $(gccbase) -name libgcc_eh.a |  grep -v /32/)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) dummy-shlib.so \
@@ -133,6 +134,8 @@ dummy-shlib.so: dummy-shlib.o
 
 jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
+glibcbase = $(src)/external/glibc.bin
+gccbase = $(src)/external/gcc.bin
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests)
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
