@@ -101,7 +101,9 @@ namespace virtio {
             _queues[queuesel++] = queue;
 
             // Tell host about pfn
-            pci_conf_write(VIRTIO_PCI_QUEUE_PFN, (u32)((u64)queue->get_paddr() >> VIRTIO_PCI_QUEUE_ADDR_SHIFT));
+            // TODO: Yak, this is a bug in the design, on large memory we'll have PFNs > 32 bit
+            // Dor to notify Rusty
+            pci_conf_write(VIRTIO_PCI_QUEUE_PFN, (u32)(queue->get_paddr() >> VIRTIO_PCI_QUEUE_ADDR_SHIFT));
 
             // Debug print
             debug(fmt("Queue[%d] -> size %d, paddr %x") % (queuesel-1) % qsize % queue->get_paddr());

@@ -15,7 +15,7 @@ namespace virtio {
             VRING_DESC_F_INDIRECT=4
         };
 
-        u64 get_paddr(void) { return (_paddr); }
+        u64 get_paddr(void);
         u32 get_len(void) { return (_len); }
         u16 next_idx(void) { return (_next); }
 
@@ -95,7 +95,7 @@ namespace virtio {
         vring(unsigned int num);
         virtual ~vring();
 
-        void * get_paddr(void);
+        u64 get_paddr(void);
         static unsigned get_size(unsigned int num, unsigned long align);
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
@@ -106,7 +106,7 @@ namespace virtio {
 
     private:
         // The physical of the physical address handed to the virtio device
-        void *_paddr;
+        void* _vring_ptr;
         
         // Total number of descriptors in ring
         unsigned int _num;

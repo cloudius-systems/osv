@@ -1,5 +1,6 @@
 #include <string.h>
 #include "mempool.hh"
+#include "mmu.hh"
 
 #include "drivers/virtio.hh"
 #include "drivers/virtio-vring.hh"
@@ -12,25 +13,25 @@ namespace virtio {
     {
         // Alloc enough pages for the vring...
         unsigned sz = VIRTIO_ALIGN(vring::get_size(num, VIRTIO_PCI_VRING_ALIGN));
-        _paddr = malloc(sz);
-        memset(_paddr, 0, sz);
+        _vring_ptr = malloc(sz);
+        memset(_vring_ptr, 0, sz);
         
         // Set up pointers        
         _num = num;
-        _desc = (vring_desc *)_paddr;
-        _avail = (vring_avail *)(_paddr + num*sizeof(vring_desc));
+        _desc = (vring_desc *)_vring_ptr;
+        _avail = (vring_avail *)(_vring_ptr + num*sizeof(vring_desc));
         _used = (vring_used *)(((unsigned long)&_avail->_ring[num] + 
                 sizeof(u16) + VIRTIO_PCI_VRING_ALIGN-1) & ~(VIRTIO_PCI_VRING_ALIGN-1));
     }
 
     vring::~vring()
     {
-        free(_paddr);
+        free(_vring_ptr);
     }
 
-    void * vring::get_paddr(void)
+    u64 vring::get_paddr(void)
     {
-        return (_paddr);
+        return mmu::virt_to_phys(_vring_ptr);
     }
 
     unsigned vring::get_size(unsigned int num, unsigned long align)
