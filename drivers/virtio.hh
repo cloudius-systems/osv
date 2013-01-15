@@ -1,29 +1,17 @@
 #ifndef VIRTIO_DRIVER_H
 #define VIRTIO_DRIVER_H
 
+#include <list>
+#include <string>
+
 #include "arch/x64/processor.hh"
 #include "drivers/pci.hh"
 #include "drivers/driver.hh"
 
-class Virtio : public Driver {
-public:
-    enum {
-        VIRTIO_VENDOR_ID = 0x1af4,
-        VIRTIO_PCI_ID_MIN = 0x1000,
-        VIRTIO_PCI_ID_MAX = 0x103f,
+#include "drivers/virtio-vring.hh"
 
-        VIRTIO_ID_NET     = 1,
-        VIRTIO_ID_BLOCK   = 2,
-        VIRTIO_ID_CONSOLE = 3,
-        VIRTIO_ID_RNG     = 4,
-        VIRTIO_ID_BALLOON = 5,
-        VIRTIO_ID_RPMSG   = 7,
-        VIRTIO_ID_SCSI    = 8,
-        VIRTIO_ID_9P      = 9,
-        VIRTIO_ID_RPROC_SERIAL = 11,
+namespace virtio {
 
-
-    };
 
     enum VIRTIO_CONFIG {
         /* Status byte for guest to report progress, and synchronize features. */
@@ -81,134 +69,88 @@ public:
 
     };
 
-    /* The remaining space is defined by each driver as the per-driver
-     * configuration space */
-    #define VIRTIO_PCI_CONFIG(dev)      ((dev)->msix_enabled ? 24 : 20)
+    #define VIRTIO_ALIGN(x) ((x + (VIRTIO_PCI_VRING_ALIGN-1)) & ~(VIRTIO_PCI_VRING_ALIGN-1))
 
-    enum VIRTIO_VRING {
-        /* This marks a buffer as continuing via the next field. */
-        VRING_DESC_F_NEXT = 1,
-        /* This marks a buffer as write-only (otherwise read-only). */
-        VRING_DESC_F_WRITE = 2,
-        /* This means the buffer contains a list of buffer descriptors. */
-        VRING_DESC_F_INDIRECT = 4,
-        /* The Host uses this in used->flags to advise the Guest: don't kick me when
-         * you add a buffer.  It's unreliable, so it's simply an optimization.  Guest
-         * will still kick if it's out of buffers. */
-        VRING_USED_F_NO_NOTIFY = 1,
-        /* The Guest uses this in avail->flags to advise the Host: don't interrupt me
-         * when you consume a buffer.  It's unreliable, so it's simply an
-         * optimization.  */
-        VRING_AVAIL_F_NO_INTERRUPT = 1,
+    const int max_virtqueues_nr = 64;
 
-        /* We support indirect buffer descriptors */
-        VIRTIO_RING_F_INDIRECT_DESC = 28,
+    class virtio_driver : public Driver {
+    public:    
+        
+        enum {
+            VIRTIO_VENDOR_ID = 0x1af4,
+            VIRTIO_PCI_ID_MIN = 0x1000,
+            VIRTIO_PCI_ID_MAX = 0x103f,
 
-        /* The Guest publishes the used index for which it expects an interrupt
-         * at the end of the avail ring. Host should ignore the avail->flags field. */
-        /* The Host publishes the avail index for which it expects a kick
-         * at the end of the used ring. Guest should ignore the used->flags field. */
-        VIRTIO_RING_F_EVENT_IDX = 29,
+            VIRTIO_ID_NET     = 1,
+            VIRTIO_ID_BLOCK   = 2,
+            VIRTIO_ID_CONSOLE = 3,
+            VIRTIO_ID_RNG     = 4,
+            VIRTIO_ID_BALLOON = 5,
+            VIRTIO_ID_RPMSG   = 7,
+            VIRTIO_ID_SCSI    = 8,
+            VIRTIO_ID_9P      = 9,
+            VIRTIO_ID_RPROC_SERIAL = 11,
+        };
+
+        // The remaining space is defined by each driver as the per-driver
+        // configuration space
+        #define VIRTIO_PCI_CONFIG(dev)      ((dev)->msix_enabled ? 24 : 20)
+
+        virtio_driver(u16 device_id);
+        virtual ~virtio_driver();
+                
+        virtual bool Init(Device *d);
+        virtual void dumpConfig() const;
+
+
+    protected:
+        
+        vring *_queues[max_virtqueues_nr];
+        int num_queues;
+
+        virtual bool earlyInitChecks(void);
+        bool probe_virt_queues(void);    
+        bool setup_features(void);
+
+        // Actual drivers should implement this
+        virtual u32 get_driver_features(void) { return (0); }      
+
+
+        ///////////////////
+        // Device access //
+        ///////////////////
+
+        // guest/host features physical access
+        u32 get_device_features(void);
+        bool get_device_feature_bit(int bit);
+        void set_guest_features(u32 features);
+        void set_guest_feature_bit(int bit, bool on);
+
+        // device status
+        u32 get_dev_status(void);
+        void set_dev_status(u32 status);
+        void add_dev_status(u32 status);
+        void del_dev_status(u32 status);
+
+        // access the virtio conf address space set by pci bar 0
+        u32 get_virtio_config(int offset);
+        void set_virtio_config(int offset, u32 val);
+        bool get_virtio_config_bit(int offset, int bit);
+        void set_virtio_config_bit(int offset, int bit, bool on);
+
+        void pci_conf_read(int offset, void* buf, int length);
+        void pci_conf_write(int offset, void* buf, int length);
+        u8 pci_conf_readb(int offset) {return _bars[0]->readb(offset);};
+        u16 pci_conf_readw(int offset) {return _bars[0]->readw(offset);};
+        u32 pci_conf_readl(int offset) {return _bars[0]->read(offset);};
+        void pci_conf_write(int offset, u8 val) {_bars[0]->write(offset, val);};
+        void pci_conf_write(int offset, u16 val) {_bars[0]->write(offset, val);};
+        void pci_conf_write(int offset, u32 val) {_bars[0]->write(offset, val);};
+
+    private:
     };
 
-    /* Virtio ring descriptors: 16 bytes.  These can chain together via "next". */
-    struct vring_desc {
-        /* Address (guest-physical). */
-        u64 addr;
-        /* Length. */
-        u32 len;
-        /* The flags as indicated above. */
-        u16 flags;
-        /* We chain unused descriptors via this, too */
-        u16 next;
-    };
-
-    struct vring_avail {
-        u16 flags;
-        u16 idx;
-        u16 ring[];
-    };
-
-    /* u32 is used here for ids for padding reasons. */
-    struct vring_used_elem {
-        /* Index of start of used descriptor chain. */
-        u32 id;
-        /* Total length of the descriptor chain which was used (written to) */
-        u32 len;
-    };
-
-    struct vring_used {
-        u16 flags;
-        u16 idx;
-        struct vring_used_elem ring[];
-    };
-
-    struct vring {
-        unsigned int num;
-
-        struct vring_desc *desc;
-
-        struct vring_avail *avail;
-
-        struct vring_used *used;
-    };
-
-    /* The standard layout for the ring is a continuous chunk of memory which looks
-     * like this.  We assume num is a power of 2.
-     *
-     * struct vring
-     * {
-     *  // The actual descriptors (16 bytes each)
-     *  struct vring_desc desc[num];
-     *
-     *  // A ring of available descriptor heads with free-running index.
-     *  __u16 avail_flags;
-     *  __u16 avail_idx;
-     *  __u16 available[num];
-     *  __u16 used_event_idx;
-     *
-     *  // Padding to the next align boundary.
-     *  char pad[];
-     *
-     *  // A ring of used descriptor heads with free-running index.
-     *  __u16 used_flags;
-     *  __u16 used_idx;
-     *  struct vring_used_elem used[num];
-     *  __u16 avail_event_idx;
-     * };
-     */
-    /* We publish the used event index at the end of the available ring, and vice
-     * versa. They are at the end for backwards compatibility. */
-    #define vring_used_event(vr) ((vr)->avail->ring[(vr)->num])
-    #define vring_avail_event(vr) (*(u16 *)&(vr)->used->ring[(vr)->num])
-
-    Virtio(u16 id) : Driver(VIRTIO_VENDOR_ID, id) {};
-    virtual void dumpConfig() const;
-    virtual bool Init(Device *d);
-
-protected:
-
-    virtual bool earlyInitChecks();
-    void vring_init(struct vring *vr, unsigned int num, void *p,
-                    unsigned long align);
-    unsigned vring_size(unsigned int num, unsigned long align);
-    int vring_need_event(u16 event_idx, u16 new_idx, u16 old);
-
-    virtual bool get_device_feature_bit(int bit);
-    virtual void set_guest_feature_bit(int bit, bool on);
-    virtual void set_guest_features(u32 features);
-    void pci_conf_read(int offset, void* buf, int length);
-    void pci_conf_write(int offset, void* buf, int length);
-    u8 pci_conf_readb(int offset) {return _bars[0]->readb(offset);};
-    u16 pci_conf_readw(int offset) {return _bars[0]->readw(offset);};
-    u32 pci_conf_readl(int offset) {return _bars[0]->read(offset);};
-    void pci_conf_write(int offset, u8 val) {_bars[0]->write(offset, val);};
-    void pci_conf_write(int offset, u16 val) {_bars[0]->write(offset, val);};
-    void pci_conf_write(int offset, u32 val) {_bars[0]->write(offset, val);};
-
-    void probe_virt_queues();
-
-private:
-};
+}
 
 #endif
+
