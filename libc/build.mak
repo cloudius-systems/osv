@@ -1,4 +1,7 @@
-libc = string/strcmp.o
+libc :=
+
+libc += getopt.o
+libc += string/strcmp.o
 libc += string/strcpy.o
 libc += string/strlcpy.o
 libc += string/strlcat.o
