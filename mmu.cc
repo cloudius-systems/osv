@@ -95,6 +95,25 @@ namespace mmu {
         return addr | 0x63;
     }
 
+    bool pte_large(pt_element pt)
+    {
+        return pt & (1 << 7);
+    }
+
+    void split_large_page(pt_element* ptep, unsigned level)
+    {
+        auto pte_orig = *ptep;
+        if (level == 1) {
+            pte_orig &= ~pt_element(1 << 7);
+        }
+        allocate_intermediate_level(ptep);
+        auto pt = phys_cast<pt_element>(pte_phys(*ptep));
+        for (auto i = 0; i < 512; ++i) {
+            pt[i] = pte_orig | (pt_element(i) << (12 + 9 * (level - 1)));
+        }
+        // FIXME: tlb flush
+    }
+
     void populate_page(void* addr)
     {
 	pt_element pte = processor::read_cr3();
@@ -104,6 +123,8 @@ namespace mmu {
 	while (level > 0) {
 	    if (!pte_present(*ptep)) {
 		allocate_intermediate_level(ptep);
+	    } else if (pte_large(*ptep)) {
+	        split_large_page(ptep, level);
 	    }
 	    pte = *ptep;
 	    --level;
