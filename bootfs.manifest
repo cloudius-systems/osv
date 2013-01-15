@@ -10,7 +10,7 @@
 /usr/lib/jvm/jre/lib/charsets.jar: %(jdkbase)s/jre/lib/charsets.jar
 /usr/lib/jvm/jre/lib/rhino.jar: %(jdkbase)s/jre/lib/rhino.jar
 /usr/lib/jvm/jre/lib/meta-index: %(jdkbase)s/jre/lib/meta-index
-/usr/lib/libstdc++.so.6: /usr/lib64/libstdc++.so.6
+/usr/lib/libstdc++.so.6: %(gccbase)s/usr/lib64/libstdc++.so.6
 /usr/lib/libm.so.6: /usr/lib64/libm.so.6
-/usr/lib/libgcc_s.so.1: /usr/lib64/libgcc_s.so.1
+/usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/tst-dir.so: ./tests/tst-dir.so
