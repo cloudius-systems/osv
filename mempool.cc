@@ -6,6 +6,7 @@
 #include <new>
 #include <boost/utility.hpp>
 #include <string.h>
+#include "libc/libc.hh"
 
 namespace memory {
 
@@ -271,6 +272,9 @@ extern "C" {
 
 void* malloc(size_t size)
 {
+    if ((ssize_t)size < 0)
+        return libc_error_ptr<void *>(ENOMEM);
+    
     if (size <= memory::pool::max_object_size) {
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
