@@ -876,6 +876,7 @@ void unpack_bootfs(void)
 		"/usr/lib/jvm/jre/lib",
 		"/usr/lib/jvm/jre/lib/amd64",
 		"/usr/lib/jvm/jre/lib/amd64/server",
+		"/tests",
 		NULL,
 	};
 

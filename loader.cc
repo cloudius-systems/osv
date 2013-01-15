@@ -12,6 +12,8 @@
 #include "drivers/device-factory.hh"
 #include <jni.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 //#include <locale>
 
 #include "drivers/virtio-net.hh"
@@ -162,17 +164,59 @@ int main(int ac, char **av)
     new thread([&] { main_thread(prog); }, true);
 }
 
-#define TESTSO_PATH	"/usr/lib/tst-dir.so"
-
-void load_test(elf::program& prog)
+void load_test(elf::program& prog, char *path)
 {
-    prog.add(TESTSO_PATH);
+    printf("running %s\n", path);
+
+    prog.add(path);
 
     auto test_main
-        = prog.lookup_function<int (void)>("test_main");
-    int ret = test_main();
+        = prog.lookup_function<int (int, const char **)>("main");
+    std::string str = "test";
+    const char *name = str.c_str();
+    int ret = test_main(1, &name);
     if (ret)
-    	debug("FAIL");
+        printf("failed.\n");
+    else
+        printf("ok.\n");
+}
+
+
+int load_tests(elf::program& prog)
+{
+#define TESTDIR		"/tests"
+    DIR *dir = opendir(TESTDIR);
+    char path[PATH_MAX];
+    struct dirent *d;
+    struct stat st;
+
+    if (!dir) {
+        perror("failed to open testdir");
+        return EXIT_FAILURE;
+    }
+
+    while ((d = readdir(dir))) {
+        if (strcmp(d->d_name, ".") == 0 ||
+            strcmp(d->d_name, "..") == 0)
+           continue;
+
+        snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
+        if (__xstat(1, path, &st) < 0) {
+            printf("failed to stat %s\n", path);
+            continue;
+        }
+        if (!S_ISREG(st.st_mode)) {
+            printf("ignoring %s, not a regular file\n", path);
+            continue;
+        }
+        load_test(prog, path);
+    }
+    if (closedir(dir) < 0) {
+        perror("failed to close testdir");
+        return EXIT_FAILURE;
+    }
+
+    return 0;
 }
 
 #define JVM_PATH	"/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
@@ -215,7 +259,7 @@ void main_thread(elf::program& prog)
     debug(fmt("clock@t1 %1%") % t1);
     debug(fmt("clock@t2 %1%") % t2);
 
-//    load_test(prog);
+//    load_tests(prog);
     start_jvm(prog);
 
     while (true)
