@@ -3,6 +3,7 @@
 #include "mutex.hh"
 #include <mutex>
 #include "debug.hh"
+#include "drivers/clockevent.hh"
 
 namespace sched {
 
@@ -24,7 +25,10 @@ void schedule()
     if (!p->_waiting) {
         return;
     }
-    assert(!runqueue.empty());
+    // FIXME: a proper idle mechanism
+    while (runqueue.empty()) {
+        barrier();
+    }
     thread* n = runqueue.front();
     runqueue.pop_front();
     assert(!n->_waiting);
@@ -98,6 +102,66 @@ void thread::stop_wait()
 thread::stack_info thread::get_stack_info()
 {
     return stack_info { _stack, sizeof(_stack) };
+}
+
+timer_list timers;
+
+timer_list::timer_list()
+{
+    clock_event->set_callback(this);
+}
+
+void timer_list::fired()
+{
+    timer& tmr = *_list.begin();
+    tmr._expired = true;
+    tmr._t.wake();
+}
+
+timer::timer(thread& t)
+    : _t(t)
+    , _expired()
+{
+}
+
+timer::~timer()
+{
+    cancel();
+}
+
+void timer::set(u64 time)
+{
+    _time = time;
+    // FIXME: locking
+    timers._list.insert(*this);
+    if (timers._list.iterator_to(*this) == timers._list.begin()) {
+        clock_event->set(time);
+    }
+};
+
+void timer::cancel()
+{
+    // FIXME: locking
+    timers._list.erase(*this);
+    _expired = false;
+    // even if we remove the first timer, allow it to expire rather than
+    // reprogramming the timer
+}
+
+bool timer::expired() const
+{
+    return _expired;
+}
+
+bool operator<(const timer& t1, const timer& t2)
+{
+    if (t1._time < t2._time) {
+        return true;
+    } else if (t1._time == t2._time) {
+        return &t1 < &t2;
+    } else {
+        return false;
+    }
 }
 
 void init(elf::program& prog)

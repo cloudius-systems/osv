@@ -5,6 +5,8 @@
 #include <functional>
 #include "tls.hh"
 #include "elf.hh"
+#include "drivers/clockevent.hh"
+#include <boost/intrusive/set.hpp>
 
 namespace sched {
 
@@ -54,6 +56,34 @@ struct thread::stack_info {
 };
 
 thread* current();
+
+namespace bi = boost::intrusive;
+
+class timer;
+
+class timer_list : private clock_event_callback {
+public:
+    timer_list();
+    virtual void fired();
+private:
+    friend class timer;
+    bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;
+};
+
+class timer : public bi::set_base_hook<> {
+public:
+    explicit timer(thread& t);
+    ~timer();
+    void set(u64 time);
+    bool expired() const;
+    void cancel();
+    friend bool operator<(const timer& t1, const timer& t2);
+private:
+    thread& _t;
+    bool _expired;
+    u64 _time;
+    friend class timer_list;
+};
 
 class wait_guard {
 public:
