@@ -7,7 +7,7 @@
 
 typedef boost::format fmt;
 
-interrupt_descriptor_table idt;
+interrupt_descriptor_table idt __attribute__((init_priority(20000)));
 
 extern "C" {
     void ex_de();
