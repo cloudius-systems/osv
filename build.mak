@@ -96,7 +96,7 @@ drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/clock.o drivers/kvmclock.o
-
+drivers += drivers/clockevent.o
 drivers += drivers/char/console.o
 
 objects = arch/x64/exceptions.o
