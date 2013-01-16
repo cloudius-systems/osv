@@ -63,6 +63,10 @@ using processor::outl;
 	    PCI_CAPABILITIES_PTR = 0x34,
 	};
 
+	enum pci_command_bits {
+	    PCI_COMMAND_INTX_DISABLE = (1 << 10),
+	};
+
 	//  Capability Register Offsets
 	enum pci_capabilities_offsets {
 	    PCI_CAP_OFF_ID      = 0x0,

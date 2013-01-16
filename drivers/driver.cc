@@ -54,6 +54,17 @@ void Driver::setStatus(u16 s) {
     write_pci_config_word(_bus,_slot,_func,PCI_STATUS_OFFSET,s);
 }
 
+u16 Driver::get_command(void)
+{
+    return (pci_readw(PCI_COMMAND_OFFSET));
+}
+
+void Driver::set_command(u16 c)
+{
+    pci_writew(PCI_COMMAND_OFFSET, c);
+}
+
+
 u8
 Driver::getRevision() {
     if (!_present) throw new InitException();
@@ -117,10 +128,16 @@ Driver::Init(Device* dev) {
 
     parse_pci_config();
 
-    debug(fmt("Driver:Init %x:%x") % _vid % _id);
-
     setBusMaster(true);
 
+    // Enable MSI-x
+    if (_have_msix) {
+        if (is_intx_enabled()) {
+            disable_intx();
+        }
+    }
+
+    debug(fmt("Driver initialized %x:%x") % _vid % _id);
     return true;
 }
 
@@ -208,6 +225,26 @@ bool Driver::parse_pci_msix(u8 off)
     debug(fmt("    msix_pba_offset: %1%") % _msix.msix_pba_offset);
 
     return true;
+}
+
+bool Driver::is_intx_enabled(void)
+{
+    u16 command = get_command();
+    return ( (command & PCI_COMMAND_INTX_DISABLE) == 0 );
+}
+
+void Driver::enable_intx(void)
+{
+    u16 command = get_command();
+    command &= ~PCI_COMMAND_INTX_DISABLE;
+    set_command(command);
+}
+
+void Driver::disable_intx(void)
+{
+    u16 command = get_command();
+    command |= PCI_COMMAND_INTX_DISABLE;
+    set_command(command);
 }
 
 u8 Driver::pci_readb(u8 offset)

@@ -50,6 +50,8 @@ public:
 
     u16 getStatus();
     void setStatus(u16 s);
+    u16 get_command(void);
+    void set_command(u16 c);
     bool getBusMaster();
     void setBusMaster(bool m);
     virtual void dumpConfig() const;
@@ -87,6 +89,13 @@ protected:
     bool pciEnable();
     bool allocateBARs();
     virtual bool earlyInitChecks();
+
+    // Enable/Disable intx assertions
+    bool is_intx_enabled(void);
+    // Enable intx assertion
+    // intx assertions should be disabled in order to use MSI-x
+    void enable_intx(void);
+    void disable_intx(void);
 
     // Parsing of extra capabilities
     virtual bool parse_pci_capabilities(void);
