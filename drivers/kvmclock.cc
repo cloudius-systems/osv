@@ -27,12 +27,12 @@ private:
     u64 wall_clock_boot();
     u64 system_time();
 private:
-    static __thread pvclock_wall_clock _wall;
-    static __thread pvclock_vcpu_time_info _sys;
+    static pvclock_wall_clock _wall;
+    static pvclock_vcpu_time_info _sys;  // FIXME: make percpu
 };
 
-__thread kvmclock::pvclock_wall_clock kvmclock::_wall;
-__thread kvmclock::pvclock_vcpu_time_info kvmclock::_sys;
+kvmclock::pvclock_wall_clock kvmclock::_wall;
+kvmclock::pvclock_vcpu_time_info kvmclock::_sys;
 
 kvmclock::kvmclock()
 {
