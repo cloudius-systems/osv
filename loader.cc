@@ -20,6 +20,8 @@
 #include "drivers/driver-factory.hh"
 #include "sched.hh"
 #include "drivers/clock.hh"
+#include "drivers/clockevent.hh"
+#include "barrier.hh"
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -161,6 +163,30 @@ int main(int ac, char **av)
     new thread([&] { main_thread(prog); }, true);
 }
 
+void test_clock_events()
+{
+    struct test_callback : public clock_event_callback {
+        test_callback() : n() {}
+        virtual void fired() { t[n++] = clock::get()->time(); }
+        unsigned n;
+        u64 t[20];
+    };
+    test_callback t;
+    clock_event_callback* old_callback = clock_event->callback();
+    clock_event->set_callback(&t);
+    for (unsigned i = 0; i < 10; ++i) {
+        clock_event->set(clock::get()->time() + 1000000);
+        while (t.n == i) {
+            barrier();
+        }
+    }
+    clock_event->set_callback(nullptr);
+    for (unsigned i = 0; i < 10; ++i) {
+        debug(fmt("clock_event: %d") % t.t[i]);
+    }
+    clock_event->set_callback(old_callback);
+}
+
 #define TESTSO_PATH	"/usr/lib/tst-dir.so"
 
 void load_test(elf::program& prog)
@@ -196,6 +222,7 @@ void start_jvm(elf::program& prog)
 void main_thread(elf::program& prog)
 {
     test_threads();
+    test_clock_events();
 
     pci::pci_devices_print();
     pci::pci_device_enumeration();
