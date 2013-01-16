@@ -4,6 +4,7 @@
 #include <mutex>
 #include "debug.hh"
 #include "drivers/clockevent.hh"
+#include "irqlock.hh"
 
 namespace sched {
 
@@ -29,8 +30,11 @@ void schedule()
     while (runqueue.empty()) {
         barrier();
     }
-    thread* n = runqueue.front();
-    runqueue.pop_front();
+    thread* n = with_lock(irq_lock, [] {
+        auto n = runqueue.front();
+        runqueue.pop_front();
+        return n;
+    });
     assert(!n->_waiting);
     n->_on_runqueue = false;
     n->switch_to();
@@ -65,14 +69,16 @@ void thread::prepare_wait()
 
 void thread::wake()
 {
-    if (!_waiting) {
-        return;
-    }
-    _waiting = false;
-    if (!_on_runqueue) {
-        _on_runqueue = true;
-        runqueue.push_back(this);
-    }
+    with_lock(irq_lock, [this] {
+        if (!_waiting) {
+            return;
+        }
+        _waiting = false;
+        if (!_on_runqueue) {
+            _on_runqueue = true;
+            runqueue.push_back(this);
+        }
+    });
 }
 
 void thread::main()
