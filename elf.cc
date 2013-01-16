@@ -322,7 +322,7 @@ namespace elf {
                 break;
             case R_X86_64_JUMP_SLOT:
             case R_X86_64_GLOB_DAT:
-                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
+                *static_cast<void**>(addr) = symbol(sym).relocated_addr();
                 break;
             case R_X86_64_DPTMOD64:
                 *static_cast<u64*>(addr) = symbol_tls_module(sym);
