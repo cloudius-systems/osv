@@ -38,6 +38,8 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(makedir)
 	$(q-build-s)
 
+tests/%.o: CFLAGS += -fPIC
+
 %.so: CFLAGS+=-fPIC -shared
 %.so: %.o
 	$(makedir)
