@@ -2,12 +2,17 @@
 #define MUTEX_HH
 
 #include <mutex>
+#include <list>
+#include "sched.hh"
 
 class mutex {
 public:
     void lock();
     bool try_lock();
     void unlock();
+private:
+    bool _locked;
+    std::list<sched::thread*> _waiters;
 };
 
 template <class Lock, class Func>

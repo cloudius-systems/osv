@@ -2,16 +2,34 @@
 
 void mutex::lock()
 {
-    // dummy - no threads yet
+    // FIXME: use atomics
+    if (!_locked) {
+        _locked = true;
+        return;
+    } else {
+        auto me = sched::thread::current();
+        _waiters.push_back(me);
+        sched::thread::wait_until([=] {
+            return !_locked && _waiters.front() == me;
+        });
+        _waiters.pop_front();
+    }
 }
 
 bool mutex::try_lock()
 {
-    // dummy - no threads yet
-    return true;
+    if (_locked) {
+        return false;
+    } else {
+        _locked = true;
+        return true;
+    }
 }
 
 void mutex::unlock()
 {
-    // dummy - no threads yet
+    _locked = false;
+    if (!_waiters.empty()) {
+        _waiters.front()->wake();
+    }
 }
