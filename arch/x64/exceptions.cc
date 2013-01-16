@@ -109,7 +109,6 @@ extern "C" { void interrupt(exception_frame* frame); }
 void interrupt(exception_frame* frame)
 {
     unsigned vector = frame->error_code;
-    debug(fmt("interrupt %x") % vector);
     idt.invoke_interrupt(vector);
     processor::wrmsr(0x80b, 0); // EOI
 }
