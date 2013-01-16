@@ -168,7 +168,7 @@ void load_test(elf::program& prog, char *path)
 {
     printf("running %s\n", path);
 
-    prog.add(path);
+    prog.add_object(path);
 
     auto test_main
         = prog.lookup_function<int (int, const char **)>("main");
@@ -223,7 +223,7 @@ int load_tests(elf::program& prog)
 
 void start_jvm(elf::program& prog)
 {
-    prog.add(JVM_PATH);
+    prog.add_object(JVM_PATH);
  
     auto JNI_GetDefaultJavaVMInitArgs
         = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");

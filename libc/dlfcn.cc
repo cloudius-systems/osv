@@ -5,7 +5,7 @@
 void* dlopen(const char* filename, int flags)
 {
     auto prog = elf::get_program();
-    elf::elf_object* obj = prog->add(filename);
+    elf::elf_object* obj = prog->add_object(filename);
     // FIXME: handle flags etc.
     return obj;
 }

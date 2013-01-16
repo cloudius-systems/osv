@@ -482,7 +482,7 @@ namespace elf {
     {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
-            _prog.add(std::string("/usr/lib") + lib);
+            _prog.add_object(std::string("/usr/lib") + lib);
         }
     }
 
@@ -528,10 +528,10 @@ namespace elf {
         _core->load_segments();
         assert(!s_program);
         s_program = this;
-        add("libc.so.6", _core.get());
-        add("ld-linux-x86-64.so.2", _core.get());
-        add("libpthread.so.0", _core.get());
-        add("libdl.so.2", _core.get());
+        set_object("libc.so.6", _core.get());
+        set_object("ld-linux-x86-64.so.2", _core.get());
+        set_object("libpthread.so.0", _core.get());
+        set_object("libdl.so.2", _core.get());
     }
 
     tls_data program::tls()
@@ -539,12 +539,12 @@ namespace elf {
         return _core->tls();
     }
 
-    void program::add(std::string name, elf_object* obj)
+    void program::set_object(std::string name, elf_object* obj)
     {
         _files[name] = obj;
     }
 
-    elf_object* program::add(std::string name)
+    elf_object* program::add_object(std::string name)
     {
         if (!_files.count(name)) {
             auto f(_fs.open(name));

@@ -321,8 +321,7 @@ namespace elf {
     public:
         explicit program(::filesystem& fs,
                          void* base = reinterpret_cast<void*>(0x100000000000UL));
-        elf_object* add(std::string lib);
-        void add(std::string lib, elf_object* obj);
+        elf_object* add_object(std::string lib);
         symbol_module lookup(const char* symbol);
         template <typename T>
         T* lookup_function(const char* symbol);
@@ -332,6 +331,7 @@ namespace elf {
     private:
         void add_debugger_obj(elf_object* obj);
         void* do_lookup_function(const char* symbol);
+        void set_object(std::string lib, elf_object* obj);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
