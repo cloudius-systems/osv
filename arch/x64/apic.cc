@@ -6,6 +6,7 @@ namespace processor {
 class x2apic : public apic_driver {
 public:
     explicit x2apic();
+    virtual void write(apicreg reg, u32 value);
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned cpu, unsigned vector);
     virtual void eoi();
@@ -36,6 +37,11 @@ void x2apic::eoi()
     wrmsr(msr::X2APIC_EOI, 0);
 }
 
+void x2apic::write(apicreg reg, u32 value)
+{
+    processor::wrmsr(0x800 + unsigned(reg) / 0x10, value);
+}
+
 apic_driver* create_apic_driver()
 {
     // FIXME: detect
@@ -43,5 +49,10 @@ apic_driver* create_apic_driver()
 }
 
 apic_driver* apic = create_apic_driver();
+
+void apic_driver::set_lvt(apiclvt source, unsigned vector)
+{
+    write(static_cast<apicreg>(source), vector);
+}
 
 }
