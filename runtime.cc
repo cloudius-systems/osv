@@ -123,101 +123,6 @@ void __cxa_pure_virtual(void)
     abort();
 }
 
-void *memcpy(void *dest, const void *src, size_t n)
-{
-    char* p = reinterpret_cast<char*>(dest);
-    const char* q = reinterpret_cast<const char*>(src);
-
-    while (n--) {
-	*p++ = *q++;
-    }
-    return dest;
-}
-
-void *memmove(void *dest, const void *src, size_t n)
-{
-    char* p = reinterpret_cast<char*>(dest);
-    const char* q = reinterpret_cast<const char*>(src);
-
-    if (p < q) {
-	while (n--) {
-	    *p++ = *q++;
-	}
-    } else {
-	p += n;
-	q += n;
-	while (n--) {
-	    *--p = *--q;
-	}
-    }
-    return dest;
-}
-
-void *memset(void *s, int c, size_t n)
-{
-    char* p = reinterpret_cast<char*>(s);
-
-    while (n--) {
-	*p++ = c;
-    }
-    return s;
-}
-
-int memcmp(const void *s1, const void *s2, size_t n)
-{
-    const unsigned char* p1 = reinterpret_cast<const unsigned char*>(s1);
-    const unsigned char* p2 = reinterpret_cast<const unsigned char*>(s2);
-
-    while (n) {
-	if (*p1 != *p2) {
-	    return int(*p1) - int(*p2);
-	}
-	++p1;
-	++p2;
-	--n;
-    }
-
-    return 0;
-}
-
-const void* memchr(const void *s, int c, size_t n)
-{
-    const unsigned char* p = reinterpret_cast<const unsigned char*>(s);
-
-    while (n--) {
-	if (*p == c) {
-	    return p;
-	}
-	++p;
-    }
-
-    return NULL;
-}
-
-size_t strlen(const char *s)
-{
-    size_t ret = 0;
-    while (*s++) {
-	++ret;
-    }
-    return ret;
-}
-
-char* strncpy(char* dest, const char* src, size_t n)
-{
-    char* p = dest;
-
-    while (n--) {
-        *p = *src;
-        if (!*src) {
-            break;
-        }
-        ++p;
-        ++src;
-    }
-    return dest;
-}
-
 char* gettext (const char* msgid)
 {
     return const_cast<char*>(msgid);
@@ -309,22 +214,10 @@ static unsigned short c_locale_array[384] = {
 #include "ctype-data.h"
 };
 
-__thread const unsigned short *thread_locale_array = c_locale_array;
-
-const unsigned short** __ctype_b_loc()
-{
-    return &thread_locale_array;
-}
-
 static struct __locale_struct c_locale = {
     { }, // __locales_data
     c_locale_array + 128, // __ctype_b
 };
-
-const wchar_t* wmemchr(const wchar_t *s, wchar_t c, size_t n)
-{
-    UNIMPLEMENTED("wmemchr");
-}
 
 int ioctl(int fd, unsigned long request, ...)
 {
@@ -409,9 +302,6 @@ int puts(const char *s)
 	return 0;
 }
 
-UNIMPL(size_t wcslen(const wchar_t *s))
-UNIMPL(int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n))
-UNIMPL(wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, size_t n))
 int setvbuf(FILE *stream, char *buf, int mode, size_t size)
 {
     debug("stub setvbuf()");
@@ -424,9 +314,7 @@ UNIMPL(wint_t getwc(FILE *stream))
 UNIMPL(wint_t ungetwc(wint_t wc, FILE *stream))
 
 UNIMPL(int fseeko64(FILE *stream, off64_t offset, int whence))
-UNIMPL(wchar_t *wmemmove(wchar_t *dest, const wchar_t *src, size_t n))
 UNIMPL(size_t mbrtowc(wchar_t *pwc, const char *s, size_t n, mbstate_t *ps))
-UNIMPL(wchar_t *wmemset(wchar_t *wcs, wchar_t wc, size_t n))
 UNIMPL(off64_t ftell(FILE *stream))
 UNIMPL(FILE *fopen64(const char *path, const char *mode))
 UNIMPL(off64_t ftello64(FILE *stream))
@@ -576,7 +464,6 @@ wctype_t __wctype_l(__const char *__property, __locale_t __locale) __THROW
     return 0;
 }
 
-UNIMPL(size_t __ctype_get_mb_cur_max (void) __THROW)
 UNIMPL(wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW)
 UNIMPL(int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
 		       __locale_t __loc) __THROW)
@@ -596,7 +483,6 @@ UNIMPL(size_t __strxfrm_l (char *__dest, __const char *__src, size_t __n,
 			   __locale_t __l) __THROW)
 UNIMPL(size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
 			    size_t __n, __locale_t __loc) __THROW)
-UNIMPL(int wcscmp(const wchar_t *s1, const wchar_t *s2))
 
 long sysconf(int name)
 {

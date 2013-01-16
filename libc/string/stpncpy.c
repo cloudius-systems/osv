@@ -9,24 +9,24 @@
 #define HIGHS (ONES * (UCHAR_MAX/2+1))
 #define HASZERO(x) (((x)-ONES) & ~(x) & HIGHS)
 
-size_t strlcpy(char *d, const char *s, size_t n)
+char *__stpncpy(char *__restrict d, const char *__restrict s, size_t n)
 {
-	char *d0 = d;
 	size_t *wd;
 	const size_t *ws;
 
-	if (!n--) goto finish;
 	if (((uintptr_t)s & ALIGN) == ((uintptr_t)d & ALIGN)) {
 		for (; ((uintptr_t)s & ALIGN) && n && (*d=*s); n--, s++, d++);
-		if (n && *s) {
-			wd=(void *)d; ws=(const void *)s;
-			for (; n>=sizeof(size_t) && !HASZERO(*ws);
-			       n-=sizeof(size_t), ws++, wd++) *wd = *ws;
-			d=(void *)wd; s=(const void *)ws;
-		}
+		if (!n || !*s) goto tail;
+		wd=(void *)d; ws=(const void *)s;
+		for (; n>=sizeof(size_t) && !HASZERO(*ws);
+		       n-=sizeof(size_t), ws++, wd++) *wd = *ws;
+		d=(void *)wd; s=(const void *)ws;
 	}
 	for (; n && (*d=*s); n--, s++, d++);
-	*d = 0;
-finish:
-	return d-d0 + strlen(s);
+tail:
+	memset(d, 0, n);
+	return d;
 }
+
+weak_alias(__stpncpy, stpncpy);
+
