@@ -72,7 +72,6 @@ void thread::wake()
     if (!_on_runqueue) {
         _on_runqueue = true;
         runqueue.push_back(this);
-        schedule();
     }
 }
 
