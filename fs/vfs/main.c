@@ -564,9 +564,35 @@ int __xstat64(int ver, const char *pathname, struct stat64 *st)
 char *getcwd(char *path, size_t size)
 {
 	struct task *t = main_task;
+	int len = strlen(t->t_cwd) + 1;
+	int error;
 
-	strlcpy(path, t->t_cwd, size);
-	return 0;
+	if (!path) {
+		if (!size)
+			size = len;
+		path = malloc(size);
+		if (!path) {
+			error = ENOMEM;
+			goto out_errno;
+		}
+	} else {
+		if (!size) {
+			error = EINVAL;
+			goto out_errno;
+		}
+	}
+
+	if (size < len) {
+		error = ERANGE;
+		goto out_errno;
+	}
+
+	memcpy(path, t->t_cwd, len);
+	return path;
+
+out_errno:
+	errno = error;
+	return NULL;
 }
 
 /*
@@ -850,6 +876,7 @@ void unpack_bootfs(void)
 		"/usr/lib/jvm/jre/lib",
 		"/usr/lib/jvm/jre/lib/amd64",
 		"/usr/lib/jvm/jre/lib/amd64/server",
+		"/tests",
 		NULL,
 	};
 

@@ -37,6 +37,35 @@ using processor::outl;
 	    PCI_CAPABILITIES_PTR = 0x34,
 	};
 
+	/* Capability Register Offsets */
+	enum pci_capabilities_offsets {
+	    PCI_CAP_OFF_ID      = 0x0,
+	    PCI_CAP_OFF_NEXT    = 0x1
+	};
+
+	enum pci_capabilities {
+	    PCI_CAP_PM          = 0x01,    // PCI Power Management
+	    PCI_CAP_AGP         = 0x02,    // AGP
+	    PCI_CAP_VPD         = 0x03,    // Vital Product Data
+	    PCI_CAP_SLOTID      = 0x04,    // Slot Identification
+	    PCI_CAP_MSI         = 0x05,    // Message Signaled Interrupts
+	    PCI_CAP_CHSWP       = 0x06,    // CompactPCI Hot Swap
+	    PCI_CAP_PCIX        = 0x07,    // PCI-X
+	    PCI_CAP_HT          = 0x08,    // HyperTransport
+	    PCI_CAP_VENDOR      = 0x09,    // Vendor Unique
+	    PCI_CAP_DEBUG       = 0x0a,    // Debug port
+	    PCI_CAP_CRES        = 0x0b,    // CompactPCI central resource control
+	    PCI_CAP_HOTPLUG     = 0x0c,    // PCI Hot-Plug
+	    PCI_CAP_SUBVENDOR   = 0x0d,    // PCI-PCI bridge subvendor ID
+	    PCI_CAP_AGP8X       = 0x0e,    // AGP 8x
+	    PCI_CAP_SECDEV      = 0x0f,    // Secure Device
+	    PCI_CAP_EXPRESS     = 0x10,    // PCI Express
+	    PCI_CAP_MSIX        = 0x11,    // MSI-X
+	    PCI_CAP_SATA        = 0x12,    // SATA
+	    PCI_CAP_PCIAF       = 0x13     // PCI Advanced Features
+	};
+
+
 	u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset);
     u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset);
 	u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset);

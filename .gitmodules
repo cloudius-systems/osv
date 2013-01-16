@@ -10,3 +10,6 @@
 [submodule "external/glibc.bin"]
 	path = external/glibc.bin
 	url = ../glibc.bin
+[submodule "external/glibc-testsuite"]
+	path = external/glibc-testsuite
+	url = ../glibc-testsuite

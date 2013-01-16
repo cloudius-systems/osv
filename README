@@ -5,9 +5,7 @@ To build OSv
 2) make sure all git submodules are uptodate
    -----------------------------------------
 
-    git submodule init external/openjdk.bin/
-    git submodule init external/libunwind
-    git submodule update
+    git submodule update --init
 
 1) build the specially patched libunwind
    -------------------------------------
@@ -19,8 +17,13 @@ To build OSv
     cp ./src/.libs/libunwind.a ../..
     cd ../..
 
+3) build the glibc test suite
 
-2) build osv
+   cd external/glibc-testsuite
+   make
+   cd ../..
+
+3) build osv
    ---------
 
     make

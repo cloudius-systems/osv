@@ -51,12 +51,11 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-tests := tests/tst-dir.so tests/tst-pthread.so
+tests := tests/tst-pthread.so
 
-tests/tst-dir.so: tests/tst-dir.o
 tests/tst-pthread.so: tests/tst-pthread.o
 
-all: loader.img loader.bin $(tests)
+all: loader.img loader.bin
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
@@ -117,6 +116,7 @@ objects += linux.o
 objects += sched.o
 
 include $(src)/libc/build.mak
+
 objects += $(addprefix libc/, $(libc))
 
 libstdc++.a = $(shell find $(gccbase) -name libstdc++.a)
@@ -143,7 +143,8 @@ gccbase = $(src)/external/gcc.bin
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests)
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
-		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase), MKBOOTFS $@)
+		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
+		glibcbase=$(glibcbase), MKBOOTFS $@)
 
 bootfs.o: bootfs.bin
 

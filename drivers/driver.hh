@@ -29,6 +29,8 @@ public:
     virtual void dumpConfig() const;
     virtual bool Init(Device *d);
 
+    bool parse_pci_config(void);
+
     friend std::ostream& operator <<(std::ostream& out, const Driver &d);
     struct equal {
       bool operator()(const Driver* d1, const Driver* d2) const
@@ -60,11 +62,27 @@ protected:
     bool allocateBARs();
     virtual bool earlyInitChecks();
 
+    // Parsing of extra capabilities
+    virtual bool parse_pci_capabilities(void);
+    virtual bool parse_pci_msix(void);
+
+    // Access to PCI address space
+    virtual u8 pci_readb(u8 offset);
+    virtual u16 pci_readw(u8 offset);
+    virtual u32 pci_readl(u8 offset);
+    virtual void pci_writeb(u8 offset, u8 val);
+    virtual void pci_writew(u8 offset, u16 val);
+    virtual void pci_writel(u8 offset, u32 val);
+
     u16 _id;
     u16 _vid;
     bool _present;
     u8  _bus, _slot, _func;
     Bar* _bars[6];
+
+    // MSI-X
+    bool _have_msix;
+
 };
 
 #endif

@@ -84,7 +84,7 @@ extern "C" {
 		       __locale_t __l) __THROW __nonnull ((2, 4));
     size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
 			 size_t __n, __locale_t __loc) __THROW;
-
+    int mallopt(int param, int value);
 }
 
 void *__dso_handle;
@@ -412,7 +412,11 @@ int puts(const char *s)
 UNIMPL(size_t wcslen(const wchar_t *s))
 UNIMPL(int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n))
 UNIMPL(wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, size_t n))
-UNIMPL(int setvbuf(FILE *stream, char *buf, int mode, size_t size))
+int setvbuf(FILE *stream, char *buf, int mode, size_t size)
+{
+    debug("stub setvbuf()");
+    return 0;
+}
 UNIMPL(size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream))
 UNIMPL(size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream))
 UNIMPL(wint_t fgetwc(FILE *stream))
@@ -618,6 +622,12 @@ size_t confstr(int name, char* buf, size_t len)
     }
     debug(fmt("confstr: unknown parameter %1%") % name);
     abort();
+}
+
+int mallopt(int param, int value)
+{
+    debug(fmt("mallopt: unimplemented paramater  %1%") % param);
+    return 0;
 }
 
 long timezone;

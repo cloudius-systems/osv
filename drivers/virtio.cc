@@ -52,10 +52,6 @@ namespace virtio {
 
     bool virtio_driver::Init(Device* dev)
     {
-        if (!earlyInitChecks()) {
-            return false;
-        }
-
         if (!Driver::Init(dev)) {
             return (false);
         }

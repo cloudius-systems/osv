@@ -84,7 +84,7 @@ void* secondary(void *ignore)
     return NULL;
 }
 
-int test_main(void)
+int main(void)
 {
     printf("starting pthread test\n");
     pthread_mutex_init(&mutex, NULL);
