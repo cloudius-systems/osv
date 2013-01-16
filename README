@@ -17,8 +17,13 @@ To build OSv
     cp ./src/.libs/libunwind.a ../..
     cd ../..
 
+3) build the glibc test suite
 
-2) build osv
+   cd external/glibc-testsuite
+   make
+   cd ../..
+
+3) build osv
    ---------
 
     make
