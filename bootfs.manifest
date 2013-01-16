@@ -14,3 +14,4 @@
 /usr/lib/libm.so.6: /usr/lib64/libm.so.6
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/tst-dir.so: ./tests/tst-dir.so
+/usr/lib/tst-pthread.so: ./tests/tst-pthread.so

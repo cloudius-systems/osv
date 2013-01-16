@@ -51,9 +51,10 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-tests := tests/tst-dir.so
+tests := tests/tst-dir.so tests/tst-pthread.so
 
 tests/tst-dir.so: tests/tst-dir.o
+tests/tst-pthread.so: tests/tst-pthread.o
 
 all: loader.img loader.bin $(tests)
 
