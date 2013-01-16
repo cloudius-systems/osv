@@ -159,7 +159,7 @@ int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
 
 class cond_var {
 public:
-    void wait(mutex* user_mutex);
+    int wait(mutex* user_mutex, sched::timer* tmr = nullptr);
     void wake_one();
     void wake_all();
 private:
@@ -177,19 +177,29 @@ cond_var* from_libc(pthread_cond_t* cond)
     return reinterpret_cast<cond_var*>(cond);
 }
 
-void cond_var::wait(mutex* user_mutex)
+int cond_var::wait(mutex* user_mutex, sched::timer* tmr)
 {
+    int ret = 0;
     wait_record wr;
     with_lock(_mutex, [&] {
         _waiters.push_back(&wr);
     });
     user_mutex->unlock();
     sched::thread::wait_until([&] {
-        return with_lock(_mutex, [&] {
-            return !wr.t;
-        });
+        return (tmr && tmr->expired())
+                || with_lock(_mutex, [&] { return !wr.t; });
     });
+    if (tmr && tmr->expired()) {
+        with_lock(_mutex, [&] {
+            auto p = std::find(_waiters.begin(), _waiters.end(), &wr); // FIXME: O(1)
+            if (p != _waiters.end()) {
+                _waiters.erase(p);
+            }
+        });
+        ret = ETIMEDOUT;
+    }
     user_mutex->lock();
+    return ret;
 }
 
 void cond_var::wake_one()
@@ -246,8 +256,16 @@ int pthread_cond_signal(pthread_cond_t *cond)
 int pthread_cond_wait(pthread_cond_t *__restrict cond,
        pthread_mutex_t *__restrict mutex)
 {
-    from_libc(cond)->wait(from_libc(mutex));
-    return 0;
+    return from_libc(cond)->wait(from_libc(mutex));
+}
+
+int pthread_cond_timedwait(pthread_cond_t *__restrict cond,
+                           pthread_mutex_t *__restrict mutex,
+                           const struct timespec* __restrict ts)
+{
+    sched::timer tmr(*sched::thread::current());
+    tmr.set(u64(ts->tv_sec) * 1000000000 + ts->tv_nsec);
+    return from_libc(cond)->wait(from_libc(mutex), &tmr);
 }
 
 int pthread_attr_init(pthread_attr_t *attr)
