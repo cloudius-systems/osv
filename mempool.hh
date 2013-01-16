@@ -27,6 +27,7 @@ public:
     ~pool();
     void* alloc();
     void free(void* object);
+    unsigned get_size();
     static pool* from_object(void* object);
 private:
     struct page_header;

@@ -68,6 +68,11 @@ void* pool::alloc()
     return obj;
 }
 
+unsigned pool::get_size()
+{
+    return _size;
+}
+
 void pool::add_page()
 {
     void* page = alloc_page();
@@ -197,6 +202,13 @@ void free_large(void* obj)
     }
 }
 
+unsigned large_object_size(void *obj)
+{
+    obj -= page_size;
+    auto header = static_cast<page_range*>(obj);
+    return header->size;
+}
+
 void* alloc_page()
 {
     assert(!free_page_ranges.empty());
@@ -291,6 +303,35 @@ void* calloc(size_t nmemb, size_t size)
     auto p = malloc(n);
     memset(p, 0, n);
     return p;
+}
+
+static size_t object_size(void *object)
+{
+    if (reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1)) {
+        return memory::pool::from_object(object)->get_size();
+    } else {
+        return memory::large_object_size(object);
+    }
+}
+
+void* realloc(void* object, size_t size)
+{
+    if (!object)
+        return malloc(size);
+    if (!size) {
+        free(object);
+        return NULL;
+    }
+
+    size_t old_size = object_size(object);
+    size_t copy_size = size > old_size ? old_size : size;
+    void* ptr = malloc(size);
+    if (ptr) {
+        memcpy(ptr, object, copy_size);
+        free(object);
+    }
+
+    return NULL;
 }
 
 void free(void* object)
