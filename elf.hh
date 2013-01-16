@@ -255,6 +255,7 @@ namespace elf {
         void* end() const;
         Elf64_Sym* lookup_symbol(const char* name);
         void load_segments();
+        void unload_segments();
         void* resolve_pltgot(unsigned index);
         tls_data tls();
         std::vector<Elf64_Phdr> phdrs();
@@ -263,6 +264,7 @@ namespace elf {
         void run_init_func();
     protected:
         virtual void load_segment(const Elf64_Phdr& segment) = 0;
+        virtual void unload_segment(const Elf64_Phdr& segment) = 0;
     private:
         Elf64_Sym* lookup_symbol_old(const char* name);
         Elf64_Sym* lookup_symbol_gnu(const char* name);
@@ -298,6 +300,7 @@ namespace elf {
         void load_elf_header();
     protected:
         virtual void load_segment(const Elf64_Phdr& phdr);
+        virtual void unload_segment(const Elf64_Phdr& phdr);
     private:
         ::fileref _f;
     };
@@ -307,6 +310,7 @@ namespace elf {
         explicit elf_memory_image(program& prog, void* base);
     protected:
         virtual void load_segment(const Elf64_Phdr& phdr);
+        virtual void unload_segment(const Elf64_Phdr& phdr);
     };
 
     struct symbol_module {
@@ -322,6 +326,7 @@ namespace elf {
         explicit program(::filesystem& fs,
                          void* base = reinterpret_cast<void*>(0x100000000000UL));
         elf_object* add_object(std::string lib);
+        void remove_object(std::string name);
         symbol_module lookup(const char* symbol);
         template <typename T>
         T* lookup_function(const char* symbol);

@@ -90,6 +90,10 @@ namespace elf {
     void elf_memory_image::load_segment(const Elf64_Phdr& phdr)
     {
     }
+    
+    void elf_memory_image::unload_segment(const Elf64_Phdr& phdr)
+    {
+    }
 
     void elf_file::load_elf_header()
     {
@@ -220,6 +224,30 @@ namespace elf {
                 throw std::runtime_error("bad p_type");
             }
         }
+    }
+
+    void elf_file::unload_segment(const Elf64_Phdr& phdr)
+    {
+        ulong vstart = align_down(phdr.p_vaddr);
+        ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
+        ulong filesz = align_up(filesz_unaligned);
+        ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz) - vstart;
+        mmu::unmap(_base + vstart, filesz);
+        mmu::unmap(_base + vstart + filesz, memsz - filesz);
+    }
+
+    void elf_object::unload_segments()
+    {
+        for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
+            auto &phdr = _phdrs[i];
+            switch (phdr.p_type) {
+            case PT_LOAD:
+                load_segment(phdr);
+                break;
+            default:
+                break;
+            }
+         }
     }
 
     template <typename T>
@@ -561,7 +589,18 @@ namespace elf {
             ef->relocate();
             ef->run_init_func();
         }
+
+        // TODO: we'll need to refcount the objects here or in the dl*() wrappers
         return _files[name];
+    }
+
+    void program::remove_object(std::string name)
+    {
+        auto ef = _files[name];
+
+	_files.erase(name);
+	ef->unload_segments();
+	delete ef;
     }
 
     elf_object* program::s_objs[100];

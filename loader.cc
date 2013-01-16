@@ -204,6 +204,8 @@ void load_test(elf::program& prog, char *path)
         printf("failed.\n");
     else
         printf("ok.\n");
+
+    prog.remove_object(path);
 }
 
 
