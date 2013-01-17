@@ -1,3 +1,4 @@
+#include <cstring>
 #include <iostream>
 #include <iomanip>
 #include "drivers/isa-serial.hh"
@@ -8,9 +9,13 @@ using namespace std;
 
 Debug* Debug::pinstance = 0;
 
-void Debug::out(const char* msg, bool lf) {
-  if (!_console) return;
-  (lf)? _console->writeln(msg):_console->write(msg);
+void Debug::out(const char* msg, bool lf)
+{
+    if (!_console)
+        return;
+    _console->write(msg, strlen(msg));
+    if (lf)
+        _console->newline();
 }
 
 void debug(const char *msg, bool lf)

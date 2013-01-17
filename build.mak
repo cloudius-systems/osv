@@ -94,7 +94,7 @@ fs +=	fs/ramfs/ramfs_vfsops.o \
 fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
-drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
+drivers = drivers/vga.o drivers/isa-serial.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
