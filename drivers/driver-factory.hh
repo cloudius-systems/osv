@@ -17,6 +17,8 @@ public:
 
     void DumpDrivers();
 
+    void Destroy();
+
 private:
    DriverFactory() {pinstance = 0;};
    DriverFactory(const DriverFactory& f) {};

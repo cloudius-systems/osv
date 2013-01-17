@@ -282,6 +282,8 @@ void main_thread(elf::program& prog)
 
     DeviceFactory::Instance()->InitializeDrivers();
 
+    DriverFactory::Instance()->Destroy();
+
     auto t1 = clock::get()->time();
     auto t2 = clock::get()->time();
     debug(fmt("clock@t1 %1%") % t1);

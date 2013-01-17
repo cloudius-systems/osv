@@ -37,3 +37,9 @@ DriverFactory::DumpDrivers() {
     for (auto ii = _drivers.begin() ; ii != _drivers.end() ; ii++ )
          (*ii)->dumpConfig();
 }
+
+void
+DriverFactory::Destroy() {
+    for (auto ii = _drivers.begin() ; ii != _drivers.end() ; ii++ )
+        delete *ii;
+}
