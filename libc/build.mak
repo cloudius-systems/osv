@@ -190,6 +190,10 @@ libc += string/wmemcpy.o
 libc += string/wmemmove.o
 libc += string/wmemset.o
 
+libc += temp/mkdtemp.o
+libc += temp/mkstemp.o
+libc += temp/mktemp.o
+
 libc += time/__asctime.o
 libc += time/__time_to_tm.o
 libc += time/__tm_to_time.o

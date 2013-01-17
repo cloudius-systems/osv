@@ -289,8 +289,8 @@ void main_thread(elf::program& prog)
     debug(fmt("clock@t1 %1%") % t1);
     debug(fmt("clock@t2 %1%") % t2);
 
-//    load_tests(prog);
-    start_jvm(prog);
+    load_tests(prog);
+//    start_jvm(prog);
 
     while (true)
 	;
