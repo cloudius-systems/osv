@@ -50,6 +50,7 @@
 #undef fcntl
 
 #include "vfs.h"
+#include "libc.h"
 
 #ifdef DEBUG_VFS
 int	vfs_debug = VFSDB_FLAGS;
@@ -270,11 +271,13 @@ out_errno:
 	errno = error;
 	return -1;
 }
+LFS64(__fxstat);
 
-struct stat64;
-// FIXME: assumes stat == stat64, may be incorrect for 32-bit port
-int __fxstat64(int ver, int fd, struct stat64 *st)
-    __attribute__((alias("__fxstat")));
+int fstat(int fd, struct stat *st)
+{
+	return __fxstat(1, fd, st);
+}
+LFS64(fstat);
 
 #if 0
 static int
@@ -555,19 +558,19 @@ out_errno:
 	errno = error;
 	return -1;
 }
+LFS64(__xstat);
 
-struct stat64;
-// FIXME: assumes stat == stat64, may be incorrect for 32-bit port
-int __xstat64(int ver, const char *pathname, struct stat64 *st)
-    __attribute__((alias("__xstat")));
+int stat(const char *pathname, struct stat *st)
+{
+	return __xstat(1, pathname, st);
+}
+LFS64(stat);
 
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {
 	return __xstat(ver, pathname, st);
 }
-
-int __lxstat64(int ver, const char *pathname, struct stat64 *st)
-    __attribute__((alias("__xstat")));
+LFS64(__lxstat);
 
 char *getcwd(char *path, size_t size)
 {
