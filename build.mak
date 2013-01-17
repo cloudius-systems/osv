@@ -1,10 +1,16 @@
 
 arch = x64
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include
-CXXFLAGS = -std=gnu++11 -lstdc++ $(CFLAGS) $(do-sys-includes) $(INCLUDES)
-CFLAGS = $(autodepend) -g -Wall -Wno-pointer-arith $(INCLUDES) -Werror $(cflags-$(mode)) \
-	-U_FORTIFY_SOURCE -fno-stack-protector -Wformat=0 \
-	$(arch-cflags)
+COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
+	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
+	$(arch-cflags) $(cflags-$(mode)) 
+
+CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
+CFLAGS = -std=gnu99 $(COMMON)
+
+# should be limited to files under libc/ eventually
+CFLAGS += -I $(src)/libc/internal
+
 ASFLAGS = -g $(autodepend)
 
 cflags-debug =
