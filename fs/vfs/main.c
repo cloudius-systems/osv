@@ -561,6 +561,14 @@ struct stat64;
 int __xstat64(int ver, const char *pathname, struct stat64 *st)
     __attribute__((alias("__xstat")));
 
+int __lxstat(int ver, const char *pathname, struct stat *st)
+{
+	return __xstat(ver, pathname, st);
+}
+
+int __lxstat64(int ver, const char *pathname, struct stat64 *st)
+    __attribute__((alias("__xstat")));
+
 char *getcwd(char *path, size_t size)
 {
 	struct task *t = main_task;
