@@ -9,7 +9,8 @@ CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
-CFLAGS += -I $(src)/libc/internal
+CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
+	-Wno-missing-braces -Wno-parentheses
 
 ASFLAGS = -g $(autodepend)
 

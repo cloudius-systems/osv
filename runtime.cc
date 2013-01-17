@@ -48,26 +48,16 @@ extern "C" {
                               char *buf, size_t buf_len, unw_word_t *offp);
     void __stack_chk_fail(void);
     void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function);
-    void __freelocale(__locale_t __dataset) __THROW;
-    __locale_t __duplocale(__locale_t __dataset) __THROW;
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
-    __locale_t __uselocale(__locale_t __dataset) __THROW;
-    char *__setlocale(int category, const char *locale);
-    char *setlocale(int category, const char *locale) __alias("__setlocale");
     double __strtod_l(__const char *__restrict __nptr,
 		      char **__restrict __endptr, __locale_t __loc)
 	__THROW __nonnull ((1, 3));
-    int __iswctype_l(wint_t __wc, wctype_t __desc, __locale_t __locale)
-	__THROW;
-    wctype_t __wctype_l(__const char *__property, __locale_t __locale)
-	__THROW;
     float __strtof_l(__const char *__restrict __nptr,
 		     char **__restrict __endptr, __locale_t __loc)
 	__THROW __nonnull((1, 3)) __wur;
     char *__nl_langinfo_l(nl_item __item, __locale_t __l);
     wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW;
-    wint_t __towupper_l(wint_t __wc, __locale_t __locale) __THROW;
     int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
 		    __locale_t __loc) __THROW;
     int __strcoll_l(__const char *__s1, __const char *__s2, __locale_t __l)
@@ -76,14 +66,6 @@ extern "C" {
 			__const wchar_t *__restrict __format,
 			__const struct tm *__restrict __tp,
 			__locale_t __loc) __THROW;
-    size_t __strftime_l(char *__restrict __s, size_t __maxsize,
-			__const char *__restrict __format,
-			__const struct tm *__restrict __tp,
-			__locale_t __loc) __THROW;
-    size_t __strxfrm_l(char *__dest, __const char *__src, size_t __n,
-		       __locale_t __l) __THROW __nonnull ((2, 4));
-    size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
-			 size_t __n, __locale_t __loc) __THROW;
     int mallopt(int param, int value);
 }
 
@@ -121,11 +103,6 @@ void abort()
 void __cxa_pure_virtual(void)
 {
     abort();
-}
-
-char* gettext (const char* msgid)
-{
-    return const_cast<char*>(msgid);
 }
 
 char* strerror(int err)
@@ -314,31 +291,13 @@ UNIMPL(wint_t getwc(FILE *stream))
 UNIMPL(wint_t ungetwc(wint_t wc, FILE *stream))
 
 UNIMPL(int fseeko64(FILE *stream, off64_t offset, int whence))
-UNIMPL(size_t mbrtowc(wchar_t *pwc, const char *s, size_t n, mbstate_t *ps))
 UNIMPL(off64_t ftell(FILE *stream))
 UNIMPL(FILE *fopen64(const char *path, const char *mode))
 UNIMPL(off64_t ftello64(FILE *stream))
 UNIMPL(wint_t fputwc(wchar_t wc, FILE *stream))
 UNIMPL(wint_t putwc(wchar_t wc, FILE *stream))
-int wctob(wint_t c)
-{
-    WARN("trivial wctob");
-    return c <= 0x7f ? c : EOF;
-}
-
-UNIMPL(size_t wcsnrtombs(char *dest, const wchar_t **src, size_t nwc,
-                         size_t len, mbstate_t *ps))
-wint_t btowc(int c)
-{
-    WARN("trivial btowc");
-    return c;
-}
-
-UNIMPL(size_t wcrtomb(char *s, wchar_t wc, mbstate_t *ps))
 UNIMPL(void __stack_chk_fail(void))
 UNIMPL(void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function))
-UNIMPL(void __freelocale(__locale_t __dataset) __THROW)
-UNIMPL(__locale_t __duplocale(__locale_t __dataset) __THROW)
 
 namespace {
     bool all_categories(int category_mask)
@@ -423,66 +382,13 @@ UNIMPL(long double strtold_l(__const char *__restrict __nptr,
 UNIMPL(double __strtod_l(__const char *__restrict __nptr,
 			 char **__restrict __endptr, __locale_t __loc)
 			 __THROW)
-UNIMPL(size_t mbsnrtowcs(wchar_t *dest, const char **src,
-                         size_t nms, size_t len, mbstate_t *ps))
-UNIMPL(size_t mbsrtowcs(wchar_t *dest, const char **src,
-			size_t len, mbstate_t *ps))
-__locale_t __uselocale (__locale_t __dataset) __THROW
-{
-    WARN("__uselocale unimplemented");
-    return (__locale_t)__dataset;
-}
-
-UNIMPL(char *__setlocale(int category, const char *locale))
-UNIMPL(char* textdomain (const char* domainname))
-UNIMPL(char* bindtextdomain (const char * domainname, const char * dirname))
-UNIMPL(int __iswctype_l(wint_t __wc, wctype_t __desc, __locale_t __locale)
-       __THROW)
 UNIMPL(float __strtof_l(__const char *__restrict __nptr,
 			char **__restrict __endptr, __locale_t __loc)
-       __THROW)
-UNIMPL(char *__nl_langinfo_l(nl_item __item, __locale_t __l))
-
-#define WCTDEF(x) { _IS##x, #x }
-
-static const struct { wctype_t mask; const char *name; } wct_names[] = {
-    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),
-    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
-    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
-    {}
-};
-
-wctype_t __wctype_l(__const char *__property, __locale_t __locale) __THROW
-{
-    WARN("trivial __wctype_l");
-    debug_write(__property);
-    for (auto n = wct_names; n->mask; ++n) {
-	if (strcmp(__property, n->name) == 0) {
-	    return n->mask;
-	}
-    }
-    return 0;
-}
-
-UNIMPL(wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW)
-UNIMPL(int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
-		       __locale_t __loc) __THROW)
-UNIMPL(wint_t __towupper_l(wint_t __wc, __locale_t __locale) __THROW)
-
-UNIMPL(int __strcoll_l(__const char *__s1, __const char *__s2, __locale_t __l)
        __THROW)
 UNIMPL(size_t __wcsftime_l (wchar_t *__restrict __s, size_t __maxsize,
 			    __const wchar_t *__restrict __format,
 			    __const struct tm *__restrict __tp,
 			    __locale_t __loc) __THROW)
-UNIMPL(size_t __strftime_l (char *__restrict __s, size_t __maxsize,
-			    __const char *__restrict __format,
-			    __const struct tm *__restrict __tp,
-			    __locale_t __loc) __THROW)
-UNIMPL(size_t __strxfrm_l (char *__dest, __const char *__src, size_t __n,
-			   __locale_t __l) __THROW)
-UNIMPL(size_t __wcsxfrm_l(wchar_t *__s1, __const wchar_t *__s2,
-			    size_t __n, __locale_t __loc) __THROW)
 
 long sysconf(int name)
 {
@@ -516,8 +422,5 @@ int mallopt(int param, int value)
     return 0;
 }
 
-long timezone;
-
 char* __environ_array[1];
 char** environ = __environ_array;
-
