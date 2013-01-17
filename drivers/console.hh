@@ -10,4 +10,10 @@ public:
     virtual void newline() = 0;
 };
 
+namespace console {
+
+void write(const char *msg, size_t len, bool lf);
+
+}
+
 #endif

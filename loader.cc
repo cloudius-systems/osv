@@ -124,9 +124,6 @@ void test_threads()
 
 int main(int ac, char **av)
 {
-    IsaSerialConsole console;
-
-    Debug::Instance()->setConsole(&console);
     debug("Loader Copyright 2013 Unnamed");
 
     test_locale();
