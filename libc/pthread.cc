@@ -314,3 +314,9 @@ int pthread_attr_getstack(const pthread_attr_t * __restrict attr,
     *stacksize = a->stack_size;
     return 0;
 }
+
+int pthread_setcancelstate(int state, int *oldstate)
+{
+    debug(fmt("pthread_setcancelstate stubbed out"));
+    return 0;
+}
