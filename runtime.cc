@@ -306,6 +306,13 @@ namespace {
     }
 }
 
+/*
+ * Note that libstdc++ pokes into this structure, even if it is declared privately in
+ * glibc, so we can't replace it with an opaque one.
+ *
+ * XXX: this defintion seems to be copied 1:1 from glibc, and should not stay in our
+ * code if we can avoid it.  Let's figure out how libstdc++ gets at it.
+ */
 struct __locale_data
 {
   const char *name;
