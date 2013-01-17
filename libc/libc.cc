@@ -126,6 +126,11 @@ long strtol(const char* s, char** e, int base)
     return strtoN<long>(s, e, base);
 }
 
+unsigned long strtoul(const char* s, char** e, int base)
+{
+    return strtoN<unsigned long>(s, e, base);
+}
+
 long long strtoll(const char* s, char** e, int base)
 {
     return strtoN<long long>(s, e, base);
