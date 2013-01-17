@@ -1,5 +1,6 @@
 #include "arch-setup.hh"
 #include "mempool.hh"
+#include "mmu.hh"
 #include "types.hh"
 #include <alloca.h>
 #include <string.h>
@@ -63,7 +64,7 @@ void arch_setup_free_memory()
                 excess = std::min(ent->size, excess);
                 ent->size -= excess;
             }
-            memory::free_initial_memory_range(ent->addr, ent->size);
+            mmu::free_initial_memory_range(ent->addr, ent->size);
         }
         p += ent->ent_size + 4;
     }

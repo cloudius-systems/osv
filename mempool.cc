@@ -231,17 +231,17 @@ void free_page(void* v)
     free_large(v + page_size);
 }
 
-void free_initial_memory_range(uintptr_t addr, size_t size)
+void free_initial_memory_range(void* addr, size_t size)
 {
     if (!size) {
         return;
     }
-    // avoid muddling things with null pointers
-    if (addr == 0) {
+    if (addr == nullptr) {
         ++addr;
         --size;
     }
-    auto delta = align_up(addr, page_size) - addr;
+    auto a = reinterpret_cast<uintptr_t>(addr);
+    auto delta = align_up(a, page_size) - a;
     if (delta > size) {
         return;
     }
@@ -251,9 +251,8 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
     if (!size) {
         return;
     }
-    void* v = reinterpret_cast<void*>(addr);
-    new (v) page_range(size);
-    free_large(v + page_size);
+    new (addr) page_range(size);
+    free_large(addr + page_size);
 
 }
 

@@ -41,6 +41,8 @@ namespace mmu {
 
     typedef uint64_t phys;
     phys virt_to_phys(void *virt);
+
+    void free_initial_memory_range(uintptr_t addr, size_t size);
 }
 
 #endif

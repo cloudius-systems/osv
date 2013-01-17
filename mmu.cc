@@ -286,6 +286,11 @@ namespace mmu {
         _end = edge;
         vma_list.insert(*n);
     }
+
+    void free_initial_memory_range(uintptr_t addr, size_t size)
+    {
+        memory::free_initial_memory_range(phys_cast<void>(addr), size);
+    }
 }
 
 void page_fault(exception_frame *ef)
