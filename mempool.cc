@@ -7,6 +7,7 @@
 #include <boost/utility.hpp>
 #include <string.h>
 #include "libc/libc.hh"
+#include "align.hh"
 
 namespace memory {
 
@@ -240,13 +241,13 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
         ++addr;
         --size;
     }
-    unsigned delta = ((addr + page_size - 1) & ~(page_size - 1)) - addr;
+    auto delta = align_up(addr, page_size) - addr;
     if (delta > size) {
         return;
     }
     addr += delta;
     size -= delta;
-    size &= ~(page_size - 1);
+    size = align_down(size, page_size);
     if (!size) {
         return;
     }
