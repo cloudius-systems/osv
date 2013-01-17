@@ -196,8 +196,7 @@ devfs_lookup(vnode_t dvp, char *name, vnode_t vp)
 	struct devinfo info;
 	int error, i;
 
-	printf("devfs_lookup:%s\n", name);
-//	DPRINTF(("devfs_lookup:%s\n", name));
+	DPRINTF(("devfs_lookup:%s\n", name));
 
 	if (*name == '\0')
 		return ENOENT;
