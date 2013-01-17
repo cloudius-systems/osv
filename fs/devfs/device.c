@@ -116,7 +116,7 @@ device_create(struct driver *drv, const char *name, int flags)
 	dev->flags = flags;
 	dev->active = 1;
 	dev->refcnt = 1;
-	dev->private = private;
+	dev->private_data = private;
 	dev->next = device_list;
 	device_list = dev;
 
@@ -149,9 +149,9 @@ static void *
 device_private(struct device *dev)
 {
 	assert(dev != NULL);
-	assert(dev->private != NULL);
+	assert(dev->private_data != NULL);
 
-	return dev->private;
+	return dev->private_data;
 }
 #endif
 

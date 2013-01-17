@@ -113,10 +113,9 @@ struct device {
 	int		flags;		/* D_* flags defined above */
 	int		active;		/* device has not been destroyed */
 	int		refcnt;		/* reference count */
-	void		*private;	/* private storage */
+	void		*private_data;	/* private storage */
 };
 
-__BEGIN_DECLS
 int	 device_open(const char *, int, struct device **);
 int	 device_close(struct device *);
 int	 device_read(struct device *, void *, size_t *, int);
@@ -128,7 +127,5 @@ int	enodev(void);
 int	nullop(void);
 
 struct device *	device_create(struct driver *drv, const char *name, int flags);
-
-__BEGIN_DECLS
 
 #endif /* !_DEVICE_H */
