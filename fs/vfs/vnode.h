@@ -35,6 +35,7 @@
 #include "file.h"
 #include "list.h"
 #include "dirent.h"
+#include "uio.h"
 
 struct vfsops;
 struct vnops;

@@ -81,6 +81,7 @@ arch/x64/boot32.o: loader.elf
 fs = fs/fs.o bootfs.o
 
 fs +=	fs/vfs/main.o \
+	fs/vfs/subr_uio.o \
 	fs/vfs/vfs_conf.o \
 	fs/vfs/vfs_lookup.o \
 	fs/vfs/vfs_mount.o \
