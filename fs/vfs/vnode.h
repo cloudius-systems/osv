@@ -68,7 +68,7 @@ struct vnode {
 	int		v_type;		/* vnode type */
 	int		v_flags;	/* vnode flag */
 	mode_t		v_mode;		/* file mode */
-	size_t		v_size;		/* file size */
+	off_t		v_size;		/* file size */
 	mutex_t		v_lock;		/* lock for this vnode */
 	int		v_nrlocks;	/* lock count (for debug) */
 	int		v_blkno;	/* block number */
@@ -97,10 +97,12 @@ struct vattr {
 #define	VWRITE	00002
 #define	VEXEC	00001
 
+#define IO_APPEND	0x0001
+
 typedef	int (*vnop_open_t)	(vnode_t, int);
 typedef	int (*vnop_close_t)	(vnode_t, file_t);
-typedef	int (*vnop_read_t)	(vnode_t, file_t, void *, size_t, size_t *);
-typedef	int (*vnop_write_t)	(vnode_t, file_t, const void *, size_t, size_t *);
+typedef	int (*vnop_read_t)	(struct vnode *, struct uio *, int);
+typedef	int (*vnop_write_t)	(struct vnode *, struct uio *, int);
 typedef	int (*vnop_seek_t)	(vnode_t, file_t, off_t, off_t);
 typedef	int (*vnop_ioctl_t)	(vnode_t, file_t, u_long, void *);
 typedef	int (*vnop_fsync_t)	(vnode_t, file_t);
@@ -145,8 +147,8 @@ struct vnops {
  */
 #define VOP_OPEN(VP, F)		   ((VP)->v_op->vop_open)(VP, F)
 #define VOP_CLOSE(VP, FP)	   ((VP)->v_op->vop_close)(VP, FP)
-#define VOP_READ(VP, FP, B, S, C)  ((VP)->v_op->vop_read)(VP, FP, B, S, C)
-#define VOP_WRITE(VP, FP, B, S, C) ((VP)->v_op->vop_write)(VP, FP, B, S, C)
+#define VOP_READ(VP, U, F)	   ((VP)->v_op->vop_read)(VP, U, F)
+#define VOP_WRITE(VP, U, F)	   ((VP)->v_op->vop_write)(VP, U, F)
 #define VOP_SEEK(VP, FP, OLD, NEW) ((VP)->v_op->vop_seek)(VP, FP, OLD, NEW)
 #define VOP_IOCTL(VP, FP, C, A)	   ((VP)->v_op->vop_ioctl)(VP, FP, C, A)
 #define VOP_FSYNC(VP, FP)	   ((VP)->v_op->vop_fsync)(VP, FP)

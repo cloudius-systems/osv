@@ -59,24 +59,25 @@ struct devinfo {
 #define D_PROT		0x00000008	/* protected device */
 #define D_TTY		0x00000010	/* tty device */
 
+typedef int (*devop_open_t)   (struct device *, int);
+typedef int (*devop_close_t)  (struct device *);
+typedef int (*devop_read_t)   (struct device *, struct uio *, int);
+typedef int (*devop_write_t)  (struct device *, struct uio *, int);
+typedef int (*devop_ioctl_t)  (struct device *, u_long, void *);
+typedef int (*devop_devctl_t) (struct device *, u_long, void *);
+
 /*
  * Device operations
  */
 struct devops {
-	int (*open)	(struct device *, int);
-	int (*close)	(struct device *);
-	int (*read)	(struct device *, void *, size_t *, int);
-	int (*write)	(struct device *, const void *, size_t *, int);
-	int (*ioctl)	(struct device *, u_long, void *);
-	int (*devctl)	(struct device *, u_long, void *);
+	devop_open_t	open;
+	devop_close_t	close;
+	devop_read_t	read;
+	devop_write_t	write;
+	devop_ioctl_t	ioctl;
+	devop_devctl_t	devctl;
 };
 
-typedef int (*devop_open_t)   (struct device *, int);
-typedef int (*devop_close_t)  (struct device *);
-typedef int (*devop_read_t)   (struct device *, void *, size_t *, int);
-typedef int (*devop_write_t)  (struct device *, const void  *, size_t *, int);
-typedef int (*devop_ioctl_t)  (struct device *, u_long, void *);
-typedef int (*devop_devctl_t) (struct device *, u_long, void *);
 
 #define	no_open		((devop_open_t)nullop)
 #define	no_close	((devop_close_t)nullop)
@@ -118,8 +119,8 @@ struct device {
 
 int	 device_open(const char *, int, struct device **);
 int	 device_close(struct device *);
-int	 device_read(struct device *, void *, size_t *, int);
-int	 device_write(struct device *, const void *, size_t *, int);
+int	 device_read(struct device *, struct uio *, int);
+int	 device_write(struct device *, struct uio *, int);
 int	 device_ioctl(struct device *, u_long, void *);
 int	 device_info(struct devinfo *);
 

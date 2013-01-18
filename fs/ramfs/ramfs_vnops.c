@@ -47,53 +47,11 @@
 
 #include "ramfs.h"
 
-#define ramfs_open	((vnop_open_t)vop_nullop)
-#define ramfs_close	((vnop_close_t)vop_nullop)
-static int ramfs_read	(vnode_t, file_t, void *, size_t, size_t *);
-static int ramfs_write	(vnode_t, file_t, const void *, size_t, size_t *);
-#define ramfs_seek	((vnop_seek_t)vop_nullop)
-#define ramfs_ioctl	((vnop_ioctl_t)vop_einval)
-#define ramfs_fsync	((vnop_fsync_t)vop_nullop)
-static int ramfs_readdir(vnode_t, file_t, struct dirent *);
-static int ramfs_lookup	(vnode_t, char *, vnode_t);
-static int ramfs_create	(vnode_t, char *, mode_t);
-static int ramfs_remove	(vnode_t, vnode_t, char *);
-static int ramfs_rename	(vnode_t, vnode_t, char *, vnode_t, vnode_t, char *);
-static int ramfs_mkdir	(vnode_t, char *, mode_t);
-static int ramfs_rmdir	(vnode_t, vnode_t, char *);
-#define ramfs_getattr	((vnop_getattr_t)vop_nullop)
-#define ramfs_setattr	((vnop_setattr_t)vop_nullop)
-#define ramfs_inactive	((vnop_inactive_t)vop_nullop)
-static int ramfs_truncate(vnode_t, off_t);
-
 
 #if CONFIG_FS_THREADS > 1
 static mutex_t ramfs_lock = MUTEX_INITIALIZER;
 #endif
 
-/*
- * vnode operations
- */
-struct vnops ramfs_vnops = {
-	ramfs_open,		/* open */
-	ramfs_close,		/* close */
-	ramfs_read,		/* read */
-	ramfs_write,		/* write */
-	ramfs_seek,		/* seek */
-	ramfs_ioctl,		/* ioctl */
-	ramfs_fsync,		/* fsync */
-	ramfs_readdir,		/* readdir */
-	ramfs_lookup,		/* lookup */
-	ramfs_create,		/* create */
-	ramfs_remove,		/* remove */
-	ramfs_rename,		/* remame */
-	ramfs_mkdir,		/* mkdir */
-	ramfs_rmdir,		/* rmdir */
-	ramfs_getattr,		/* getattr */
-	ramfs_setattr,		/* setattr */
-	ramfs_inactive,		/* inactive */
-	ramfs_truncate,		/* truncate */
-};
 
 struct ramfs_node *
 ramfs_allocate_node(char *name, int type)
@@ -331,57 +289,57 @@ ramfs_create(vnode_t dvp, char *name, mode_t mode)
 }
 
 static int
-ramfs_read(vnode_t vp, file_t fp, void *buf, size_t size, size_t *result)
+ramfs_read(struct vnode *vp, struct uio *uio, int ioflag)
 {
-	struct ramfs_node *np;
-	off_t off;
+	struct ramfs_node *np = vp->v_data;
+	size_t len;
 
-	*result = 0;
 	if (vp->v_type == VDIR)
 		return EISDIR;
 	if (vp->v_type != VREG)
 		return EINVAL;
+	if (uio->uio_offset < 0)
+		return EINVAL;
 
-	off = fp->f_offset;
-	if (off >= (off_t)vp->v_size)
+	if (uio->uio_resid == 0)
 		return 0;
 
-	if (vp->v_size - off < size)
-		size = vp->v_size - off;
+	if (uio->uio_offset >= (off_t)vp->v_size)
+		return 0;
 
-	np = vp->v_data;
-	memcpy(buf, np->rn_buf + off, size);
+	if (vp->v_size - uio->uio_offset < uio->uio_resid)
+		len = vp->v_size - uio->uio_offset;
+	else
+		len = uio->uio_resid;
 
-	fp->f_offset += size;
-	*result = size;
-	return 0;
+	return uiomove(np->rn_buf + uio->uio_offset, len, uio);
 }
 
 static int
-ramfs_write(vnode_t vp, file_t fp, const void *buf, size_t size, size_t *result)
+ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 {
-	struct ramfs_node *np;
-	off_t file_pos, end_pos;
-	void *new_buf;
-	size_t new_size;
+	struct ramfs_node *np = vp->v_data;
 
-	*result = 0;
 	if (vp->v_type == VDIR)
 		return EISDIR;
 	if (vp->v_type != VREG)
 		return EINVAL;
+	if (uio->uio_offset < 0)
+		return EINVAL;
 
-	np = vp->v_data;
-	/* Check if the file position exceeds the end of file. */
-	end_pos = vp->v_size;
-	file_pos = (fp->f_flags & O_APPEND) ? end_pos : fp->f_offset;
-	if (file_pos + size > (size_t)end_pos) {
+	if (uio->uio_resid == 0)
+		return 0;
+
+	if (ioflag & IO_APPEND)
+		uio->uio_offset = np->rn_size;
+
+	if (uio->uio_offset + uio->uio_resid > (size_t)vp->v_size) {
 		/* Expand the file size before writing to it */
-		end_pos = file_pos + size;
+		off_t end_pos = uio->uio_offset + uio->uio_resid;
 		if (end_pos > (off_t)np->rn_bufsize) {
 			// XXX: this could use a page level allocator
-			new_size = round_page(end_pos);
-			new_buf = malloc(new_size);
+			size_t new_size = round_page(end_pos);
+			void *new_buf = malloc(new_size);
 			if (!new_buf)
 				return EIO;
 			if (np->rn_size != 0) {
@@ -394,10 +352,7 @@ ramfs_write(vnode_t vp, file_t fp, const void *buf, size_t size, size_t *result)
 		np->rn_size = end_pos;
 		vp->v_size = end_pos;
 	}
-	memcpy(np->rn_buf + file_pos, buf, size);
-	fp->f_offset += size;
-	*result = size;
-	return 0;
+	return uiomove(np->rn_buf + uio->uio_offset, uio->uio_resid, uio);
 }
 
 static int
@@ -491,3 +446,37 @@ ramfs_init(void)
 {
 	return 0;
 }
+
+#define ramfs_open	((vnop_open_t)vop_nullop)
+#define ramfs_close	((vnop_close_t)vop_nullop)
+#define ramfs_seek	((vnop_seek_t)vop_nullop)
+#define ramfs_ioctl	((vnop_ioctl_t)vop_einval)
+#define ramfs_fsync	((vnop_fsync_t)vop_nullop)
+#define ramfs_getattr	((vnop_getattr_t)vop_nullop)
+#define ramfs_setattr	((vnop_setattr_t)vop_nullop)
+#define ramfs_inactive	((vnop_inactive_t)vop_nullop)
+
+/*
+ * vnode operations
+ */
+struct vnops ramfs_vnops = {
+	ramfs_open,		/* open */
+	ramfs_close,		/* close */
+	ramfs_read,		/* read */
+	ramfs_write,		/* write */
+	ramfs_seek,		/* seek */
+	ramfs_ioctl,		/* ioctl */
+	ramfs_fsync,		/* fsync */
+	ramfs_readdir,		/* readdir */
+	ramfs_lookup,		/* lookup */
+	ramfs_create,		/* create */
+	ramfs_remove,		/* remove */
+	ramfs_rename,		/* remame */
+	ramfs_mkdir,		/* mkdir */
+	ramfs_rmdir,		/* rmdir */
+	ramfs_getattr,		/* getattr */
+	ramfs_setattr,		/* setattr */
+	ramfs_inactive,		/* inactive */
+	ramfs_truncate,		/* truncate */
+};
+

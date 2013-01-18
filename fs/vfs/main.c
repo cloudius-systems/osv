@@ -177,6 +177,10 @@ off_t lseek64(int fd, off64_t offset, int whence)
 ssize_t read(int fd, void *buf, size_t count)
 {
 	struct task *t = main_task;
+	struct iovec iov = {
+		.iov_base	= buf,
+		.iov_len	= count,
+	};
 	file_t fp;
 	size_t bytes;
 	int error;
@@ -185,7 +189,7 @@ ssize_t read(int fd, void *buf, size_t count)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_read(fp, buf, count, &bytes);
+	error = sys_read(fp, &iov, 1, &bytes);
 	if (error)
 		goto out_errno;
 
@@ -198,6 +202,10 @@ out_errno:
 ssize_t write(int fd, const void *buf, size_t count)
 {
 	struct task *t = main_task;
+	struct iovec iov = {
+		.iov_base	= (void *)buf,
+		.iov_len	= count,
+	};
 	file_t fp;
 	size_t bytes;
 	int error;
@@ -206,7 +214,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_write(fp, buf, count, &bytes);
+	error = sys_write(fp, &iov, 1, &bytes);
 	if (error)
 		goto out_errno;
 	return bytes;

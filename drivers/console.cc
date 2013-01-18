@@ -1,6 +1,7 @@
 
 extern "C" {
 #include "../../fs/vfs/prex.h"
+#include "../../fs/vfs/uio.h"
 #include "../../fs/devfs/device.h"
 }
 
@@ -21,9 +22,16 @@ void write(const char *msg, size_t len, bool lf)
 }
 
 static int
-console_write(struct device *dev, const void *buf, size_t *count, int blkno)
+console_write(struct device *dev, struct uio *uio, int ioflag)
 {
-    console::write(reinterpret_cast<const char *>(buf), *count, false);
+    if (uio->uio_iovcnt != 1)
+        return EINVAL;
+    const void *buf = uio->uio_iov->iov_base;
+    size_t count = uio->uio_iov->iov_len;
+    console::write(reinterpret_cast<const char *>(buf), count, false);
+
+    uio->uio_resid -= count;
+    uio->uio_offset += count;
     return 0;
 }
 
