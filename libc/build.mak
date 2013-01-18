@@ -38,6 +38,8 @@ libc += ctype/wcswidth.o
 libc += ctype/wctrans.o
 libc += ctype/wcwidth.o
 
+libc += errno/strerror.o
+
 libc += locale/catclose.o
 libc += locale/catgets.o
 libc += locale/catopen.o

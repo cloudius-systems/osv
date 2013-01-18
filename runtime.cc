@@ -105,15 +105,6 @@ void __cxa_pure_virtual(void)
     abort();
 }
 
-char* strerror(int err)
-{
-	char buf[1024];
-	char *ret = buf;
-
-	sprintf(ret, "%d", err);
-	return ret;
-}
-
 void
 perror(const char* str)
 {
