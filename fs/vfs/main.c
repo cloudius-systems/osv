@@ -223,6 +223,47 @@ out_errno:
 	return -1;
 }
 
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	struct task *t = main_task;
+	file_t fp;
+	size_t bytes;
+	int error;
+
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
+
+	error = sys_read(fp, (struct iovec *)iov, iovcnt, &bytes);
+	if (error)
+		goto out_errno;
+
+	return bytes;
+out_errno:
+	errno = error;
+	return -1;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	struct task *t = main_task;
+	file_t fp;
+	size_t bytes;
+	int error;
+
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
+
+	error = sys_write(fp, (struct iovec *)iov, iovcnt, &bytes);
+	if (error)
+		goto out_errno;
+	return bytes;
+out_errno:
+	errno = error;
+	return -1;
+}
+
 #if 0
 static int
 fs_ioctl(struct task *t, struct ioctl_msg *msg)

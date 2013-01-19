@@ -207,16 +207,6 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     UNIMPLEMENTED("poll");
 }
 
-ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
-{
-    UNIMPLEMENTED("readv");
-}
-
-ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
-{
-    UNIMPLEMENTED("writev");
-}
-
 ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
     UNIMPLEMENTED("preadv");
