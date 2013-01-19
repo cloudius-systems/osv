@@ -207,16 +207,6 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
     UNIMPLEMENTED("poll");
 }
 
-ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
-{
-    UNIMPLEMENTED("preadv");
-}
-
-ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
-{
-    UNIMPLEMENTED("pwritev");
-}
-
 int fileno(FILE *fp)
 {
     UNIMPLEMENTED("fileno");

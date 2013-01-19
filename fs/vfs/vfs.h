@@ -97,8 +97,10 @@ extern const struct vfssw vfssw[];
 __BEGIN_DECLS
 int	 sys_open(char *path, int flags, mode_t mode, file_t *pfp);
 int	 sys_close(file_t fp);
-int	 sys_read(file_t fp, struct iovec *iov, size_t niov, size_t *count);
-int	 sys_write(file_t fp, struct iovec *iov, size_t niov, size_t *count);
+int	 sys_read(file_t fp, struct iovec *iov, size_t niov,
+		off_t offset, size_t *count);
+int	 sys_write(file_t fp, struct iovec *iov, size_t niov,
+		off_t offset, size_t *count);
 int	 sys_lseek(file_t fp, off_t off, int type, off_t * cur_off);
 int	 sys_ioctl(file_t fp, u_long request, void *buf);
 int	 sys_fstat(file_t fp, struct stat *st);

@@ -174,7 +174,7 @@ typedef uint64_t off64_t;
 off_t lseek64(int fd, off64_t offset, int whence)
     __attribute__((alias("lseek")));
 
-ssize_t read(int fd, void *buf, size_t count)
+ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
 	struct task *t = main_task;
 	struct iovec iov = {
@@ -189,7 +189,7 @@ ssize_t read(int fd, void *buf, size_t count)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_read(fp, &iov, 1, &bytes);
+	error = sys_read(fp, &iov, 1, offset, &bytes);
 	if (error)
 		goto out_errno;
 
@@ -199,7 +199,12 @@ out_errno:
 	return -1;
 }
 
-ssize_t write(int fd, const void *buf, size_t count)
+ssize_t read(int fd, void *buf, size_t count)
+{
+	return pread(fd, buf, count, -1);
+}
+
+ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
 	struct task *t = main_task;
 	struct iovec iov = {
@@ -214,9 +219,35 @@ ssize_t write(int fd, const void *buf, size_t count)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_write(fp, &iov, 1, &bytes);
+	error = sys_write(fp, &iov, 1, offset, &bytes);
 	if (error)
 		goto out_errno;
+	return bytes;
+out_errno:
+	errno = error;
+	return -1;
+}
+
+ssize_t write(int fd, const void *buf, size_t count)
+{
+	return pwrite(fd, buf, count, -1);
+}
+
+ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+	struct task *t = main_task;
+	file_t fp;
+	size_t bytes;
+	int error;
+
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
+
+	error = sys_read(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
+	if (error)
+		goto out_errno;
+
 	return bytes;
 out_errno:
 	errno = error;
@@ -225,26 +256,10 @@ out_errno:
 
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
-	struct task *t = main_task;
-	file_t fp;
-	size_t bytes;
-	int error;
-
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
-		goto out_errno;
-
-	error = sys_read(fp, (struct iovec *)iov, iovcnt, &bytes);
-	if (error)
-		goto out_errno;
-
-	return bytes;
-out_errno:
-	errno = error;
-	return -1;
+	return preadv(fd, iov, iovcnt, -1);
 }
 
-ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
 	struct task *t = main_task;
 	file_t fp;
@@ -255,13 +270,18 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_write(fp, (struct iovec *)iov, iovcnt, &bytes);
+	error = sys_write(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
 	if (error)
 		goto out_errno;
 	return bytes;
 out_errno:
 	errno = error;
 	return -1;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	return pwritev(fd, iov, iovcnt, -1);
 }
 
 #if 0

@@ -171,7 +171,8 @@ sys_close(file_t fp)
 }
 
 int
-sys_read(file_t fp, struct iovec *iov, size_t niov, size_t *count)
+sys_read(file_t fp, struct iovec *iov, size_t niov,
+		off_t offset, size_t *count)
 {
 	struct vnode *vp = fp->f_vnode;
 	struct uio *uio = NULL;
@@ -196,18 +197,23 @@ sys_read(file_t fp, struct iovec *iov, size_t niov, size_t *count)
 
 	vn_lock(vp);
 	uio->uio_rw = UIO_READ;
-	uio->uio_offset = fp->f_offset;
+	if (offset == -1)
+		uio->uio_offset = fp->f_offset;
+	else
+		uio->uio_offset = offset;
 	error = VOP_READ(vp, uio, 0);
 	if (!error) {
 		*count = bytes - uio->uio_resid;
-		fp->f_offset += *count;
+		if (offset == -1)
+			fp->f_offset += *count;
 	}
 	vn_unlock(vp);
 	return error;
 }
 
 int
-sys_write(file_t fp, struct iovec *iov, size_t niov, size_t *count)
+sys_write(file_t fp, struct iovec *iov, size_t niov,
+		off_t offset, size_t *count)
 {
 	struct vnode *vp = fp->f_vnode;
 	struct uio *uio = NULL;
@@ -235,11 +241,15 @@ sys_write(file_t fp, struct iovec *iov, size_t niov, size_t *count)
 
 	vn_lock(vp);
 	uio->uio_rw = UIO_WRITE;
-	uio->uio_offset = fp->f_offset;
+	if (offset == -1)
+		uio->uio_offset = fp->f_offset;
+	else
+		uio->uio_offset = offset;
 	error = VOP_WRITE(vp, uio, ioflags);
 	if (!error) {
 		*count = bytes - uio->uio_resid;
-		fp->f_offset += *count;
+		if (offset == -1)
+			fp->f_offset += *count;
 	}
 	vn_unlock(vp);
 	return error;
