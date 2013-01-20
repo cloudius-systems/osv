@@ -1,7 +1,13 @@
 #ifndef VIRTIO_VRING_H
 #define VIRTIO_VRING_H
 
+#include "drivers/virtio.hh"
+
+class sglist;
+
 namespace virtio {
+
+class virtio_driver;
 
     // Buffer descriptors in the ring
     class vring_desc {
@@ -24,7 +30,6 @@ namespace virtio {
         bool is_write(void) { return ((_flags & VRING_DESC_F_WRITE) == VRING_DESC_F_WRITE); };
         bool is_indirect(void) { return ((_flags & VRING_DESC_F_INDIRECT) == VRING_DESC_F_INDIRECT); };
         
-    private:
         u64 _paddr;
         u32 _len;
         u16 _flags;
@@ -41,13 +46,16 @@ namespace virtio {
         };
 
         void disable_interrupt(void) { _flags |= VRING_AVAIL_F_NO_INTERRUPT; }
-        void enable_interrupt(void) { _flags = 0; }        
+        void enable_interrupt(void) { _flags = 0;}
        
         u16 _flags;
         // Where we put the next descriptor
         u16 _idx;
         // There may be no more entries than the queue size read from device
         u16 _ring[];
+        // used event index is an optimization in order to get an interrupt from the host
+        // only when the value reaches this number
+        u16 used_event;
     };
 
     class vring_used_elem {
@@ -92,11 +100,19 @@ namespace virtio {
             VIRTIO_RING_F_EVENT_IDX = 29,
         };    
       
-        vring(unsigned int num);
+        vring(virtio_driver* const drv, u16 num, u16 q_index);
         virtual ~vring();
 
         u64 get_paddr(void);
         static unsigned get_size(unsigned int num, unsigned long align);
+
+        // Ring operations
+        bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
+        void* get_buf(int* len);
+        bool kick();
+        void disable_callback();
+        bool enable_callback();
+
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
         // Assuming a given event_idx value from the other size, if
@@ -105,6 +121,9 @@ namespace virtio {
         static int need_event(u16 event_idx, u16 new_idx, u16 old);
 
     private:
+        // Up pointer
+        virtio_driver* _drv;
+        u16 _q_index;
         // The physical of the physical address handed to the virtio device
         void* _vring_ptr;
         
@@ -122,4 +141,3 @@ namespace virtio {
 }
 
 #endif // VIRTIO_VRING_H
-
