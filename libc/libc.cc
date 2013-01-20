@@ -181,6 +181,21 @@ int getpwuid_r(uid_t uid, struct passwd *pwd,
     return 0;
 }
 
+struct passwd* getpwuid(uid_t uid)
+{
+    static struct passwd ret;
+    static char buf[300];
+    struct passwd *p;
+    int e;
+
+    e = getpwuid_r(uid, &ret, buf, sizeof(buf), &p);
+    if (e == 0) {
+        return &ret;
+    } else {
+        return libc_error_ptr<passwd>(e);
+    }
+}
+
 int uname(struct utsname* u)
 {
     // lie, to avoid confusing the payload.
