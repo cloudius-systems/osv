@@ -15,6 +15,7 @@ namespace pthread_private {
     const unsigned tsd_nkeys = 100;
 
     __thread void* tsd[tsd_nkeys];
+    pthread_t current_pthread;
 
     mutex tsd_key_mutex;
     std::vector<bool> tsd_used_keys(tsd_nkeys);
@@ -49,6 +50,7 @@ namespace pthread_private {
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset)
         : _stack(allocate_stack())
         , _thread([=] {
+                current_pthread = to_libc();
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
             }, _stack)
@@ -123,7 +125,7 @@ int pthread_setspecific(pthread_key_t key, const void* value)
 
 pthread_t pthread_self()
 {
-    return reinterpret_cast<pthread_t>(sched::thread::current());
+    return current_pthread;
 }
 
 mutex* from_libc(pthread_mutex_t* m)
