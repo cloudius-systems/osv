@@ -487,7 +487,7 @@ namespace elf {
         } else {
             sym = lookup_symbol_old(name);
         }
-        if (sym->st_shndx == SHN_UNDEF) {
+        if (sym && sym->st_shndx == SHN_UNDEF) {
             sym = nullptr;
         }
         return sym;
