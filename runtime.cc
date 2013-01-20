@@ -414,6 +414,11 @@ long sysconf(int name)
 
 size_t confstr(int name, char* buf, size_t len)
 {
+    char tmp[1];
+    if (!buf) {
+        buf = tmp;
+        len = 1;
+    }
     auto set = [=] (const char* v) { return snprintf(buf, len, "%s", v); };
     switch (name) {
     case _CS_GNU_LIBC_VERSION: return set("glibc 2.16");
