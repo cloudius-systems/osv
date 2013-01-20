@@ -75,7 +75,7 @@ struct page_range {
     boost::intrusive::set_member_hook<> member_hook;
 };
 
-void free_initial_memory_range(uintptr_t addr, size_t size);
+void free_initial_memory_range(void* addr, size_t size);
 
 }
 

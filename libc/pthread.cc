@@ -30,11 +30,15 @@ namespace pthread_private {
     class pthread {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset);
+        // FIXME: deallocate stack
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
         void* _retval;
+        sched::thread::stack_info _stack;
         // must be initialized last
         sched::thread _thread;
+    private:
+        sched::thread::stack_info allocate_stack();
     };
 
     struct thread_attr {
@@ -43,11 +47,18 @@ namespace pthread_private {
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset)
-        : _thread([=] {
+        : _stack(allocate_stack())
+        , _thread([=] {
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
-            })
+            }, _stack)
     {
+    }
+
+    sched::thread::stack_info pthread::allocate_stack()
+    {
+        size_t size = 64*1024;
+        return { new char[size], size };
     }
 
     pthread* pthread::from_libc(pthread_t p)

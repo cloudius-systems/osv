@@ -8,3 +8,9 @@
 /* TODO: add real locking */
 #define LOCK(x) ((void)(x))
 #define UNLOCK(x) ((void)(x))
+
+#undef LFS64_2
+#define LFS64_2(x, y) weak_alias(x, y)
+
+#undef LFS64
+#define LFS64(x) LFS64_2(x, x##64)

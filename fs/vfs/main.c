@@ -50,6 +50,7 @@
 #undef fcntl
 
 #include "vfs.h"
+#include "libc.h"
 
 #ifdef DEBUG_VFS
 int	vfs_debug = VFSDB_FLAGS;
@@ -173,9 +174,13 @@ typedef uint64_t off64_t;
 off_t lseek64(int fd, off64_t offset, int whence)
     __attribute__((alias("lseek")));
 
-ssize_t read(int fd, void *buf, size_t count)
+ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
 	struct task *t = main_task;
+	struct iovec iov = {
+		.iov_base	= buf,
+		.iov_len	= count,
+	};
 	file_t fp;
 	size_t bytes;
 	int error;
@@ -184,7 +189,7 @@ ssize_t read(int fd, void *buf, size_t count)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_read(fp, buf, count, &bytes);
+	error = sys_read(fp, &iov, 1, offset, &bytes);
 	if (error)
 		goto out_errno;
 
@@ -194,7 +199,41 @@ out_errno:
 	return -1;
 }
 
+ssize_t read(int fd, void *buf, size_t count)
+{
+	return pread(fd, buf, count, -1);
+}
+
+ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
+{
+	struct task *t = main_task;
+	struct iovec iov = {
+		.iov_base	= (void *)buf,
+		.iov_len	= count,
+	};
+	file_t fp;
+	size_t bytes;
+	int error;
+
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
+
+	error = sys_write(fp, &iov, 1, offset, &bytes);
+	if (error)
+		goto out_errno;
+	return bytes;
+out_errno:
+	errno = error;
+	return -1;
+}
+
 ssize_t write(int fd, const void *buf, size_t count)
+{
+	return pwrite(fd, buf, count, -1);
+}
+
+ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
 	struct task *t = main_task;
 	file_t fp;
@@ -205,13 +244,44 @@ ssize_t write(int fd, const void *buf, size_t count)
 	if ((fp = task_getfp(t, fd)) == NULL)
 		goto out_errno;
 
-	error = sys_write(fp, buf, count, &bytes);
+	error = sys_read(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
+	if (error)
+		goto out_errno;
+
+	return bytes;
+out_errno:
+	errno = error;
+	return -1;
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	return preadv(fd, iov, iovcnt, -1);
+}
+
+ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
+{
+	struct task *t = main_task;
+	file_t fp;
+	size_t bytes;
+	int error;
+
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
+
+	error = sys_write(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
 	if (error)
 		goto out_errno;
 	return bytes;
 out_errno:
 	errno = error;
 	return -1;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	return pwritev(fd, iov, iovcnt, -1);
 }
 
 #if 0
@@ -270,11 +340,13 @@ out_errno:
 	errno = error;
 	return -1;
 }
+LFS64(__fxstat);
 
-struct stat64;
-// FIXME: assumes stat == stat64, may be incorrect for 32-bit port
-int __fxstat64(int ver, int fd, struct stat64 *st)
-    __attribute__((alias("__fxstat")));
+int fstat(int fd, struct stat *st)
+{
+	return __fxstat(1, fd, st);
+}
+LFS64(fstat);
 
 #if 0
 static int
@@ -555,11 +627,19 @@ out_errno:
 	errno = error;
 	return -1;
 }
+LFS64(__xstat);
 
-struct stat64;
-// FIXME: assumes stat == stat64, may be incorrect for 32-bit port
-int __xstat64(int ver, const char *pathname, struct stat64 *st)
-    __attribute__((alias("__xstat")));
+int stat(const char *pathname, struct stat *st)
+{
+	return __xstat(1, pathname, st);
+}
+LFS64(stat);
+
+int __lxstat(int ver, const char *pathname, struct stat *st)
+{
+	return __xstat(ver, pathname, st);
+}
+LFS64(__lxstat);
 
 char *getcwd(char *path, size_t size)
 {

@@ -35,6 +35,7 @@
 #include "file.h"
 #include "list.h"
 #include "dirent.h"
+#include "uio.h"
 
 struct vfsops;
 struct vnops;
@@ -67,7 +68,7 @@ struct vnode {
 	int		v_type;		/* vnode type */
 	int		v_flags;	/* vnode flag */
 	mode_t		v_mode;		/* file mode */
-	size_t		v_size;		/* file size */
+	off_t		v_size;		/* file size */
 	mutex_t		v_lock;		/* lock for this vnode */
 	int		v_nrlocks;	/* lock count (for debug) */
 	int		v_blkno;	/* block number */
@@ -96,34 +97,12 @@ struct vattr {
 #define	VWRITE	00002
 #define	VEXEC	00001
 
-/*
- * vnode operations
- */
-struct vnops {
-	int (*vop_open)		(vnode_t, int);
-	int (*vop_close)	(vnode_t, file_t);
-	int (*vop_read)		(vnode_t, file_t, void *, size_t, size_t *);
-	int (*vop_write)	(vnode_t, file_t, const void *, size_t, size_t *);
-	int (*vop_seek)		(vnode_t, file_t, off_t, off_t);
-	int (*vop_ioctl)	(vnode_t, file_t, u_long, void *);
-	int (*vop_fsync)	(vnode_t, file_t);
-	int (*vop_readdir)	(vnode_t, file_t, struct dirent *);
-	int (*vop_lookup)	(vnode_t, char *, vnode_t);
-	int (*vop_create)	(vnode_t, char *, mode_t);
-	int (*vop_remove)	(vnode_t, vnode_t, char *);
-	int (*vop_rename)	(vnode_t, vnode_t, char *, vnode_t, vnode_t, char *);
-	int (*vop_mkdir)	(vnode_t, char *, mode_t);
-	int (*vop_rmdir)	(vnode_t, vnode_t, char *);
-	int (*vop_getattr)	(vnode_t, struct vattr *);
-	int (*vop_setattr)	(vnode_t, struct vattr *);
-	int (*vop_inactive)	(vnode_t);
-	int (*vop_truncate)	(vnode_t, off_t);
-};
+#define IO_APPEND	0x0001
 
 typedef	int (*vnop_open_t)	(vnode_t, int);
 typedef	int (*vnop_close_t)	(vnode_t, file_t);
-typedef	int (*vnop_read_t)	(vnode_t, file_t, void *, size_t, size_t *);
-typedef	int (*vnop_write_t)	(vnode_t, file_t, const void *, size_t, size_t *);
+typedef	int (*vnop_read_t)	(struct vnode *, struct uio *, int);
+typedef	int (*vnop_write_t)	(struct vnode *, struct uio *, int);
 typedef	int (*vnop_seek_t)	(vnode_t, file_t, off_t, off_t);
 typedef	int (*vnop_ioctl_t)	(vnode_t, file_t, u_long, void *);
 typedef	int (*vnop_fsync_t)	(vnode_t, file_t);
@@ -140,12 +119,36 @@ typedef	int (*vnop_inactive_t)	(vnode_t);
 typedef	int (*vnop_truncate_t)	(vnode_t, off_t);
 
 /*
+ * vnode operations
+ */
+struct vnops {
+	vnop_open_t		vop_open;
+	vnop_close_t		vop_close;
+	vnop_read_t		vop_read;
+	vnop_write_t		vop_write;
+	vnop_seek_t		vop_seek;
+	vnop_ioctl_t		vop_ioctl;
+	vnop_fsync_t		vop_fsync;
+	vnop_readdir_t		vop_readdir;
+	vnop_lookup_t		vop_lookup;
+	vnop_create_t		vop_create;
+	vnop_remove_t		vop_remove;
+	vnop_rename_t		vop_rename;
+	vnop_mkdir_t		vop_mkdir;
+	vnop_rmdir_t		vop_rmdir;
+	vnop_getattr_t		vop_getattr;
+	vnop_setattr_t		vop_setattr;
+	vnop_inactive_t		vop_inactive;
+	vnop_truncate_t		vop_truncate;
+};
+
+/*
  * vnode interface
  */
 #define VOP_OPEN(VP, F)		   ((VP)->v_op->vop_open)(VP, F)
 #define VOP_CLOSE(VP, FP)	   ((VP)->v_op->vop_close)(VP, FP)
-#define VOP_READ(VP, FP, B, S, C)  ((VP)->v_op->vop_read)(VP, FP, B, S, C)
-#define VOP_WRITE(VP, FP, B, S, C) ((VP)->v_op->vop_write)(VP, FP, B, S, C)
+#define VOP_READ(VP, U, F)	   ((VP)->v_op->vop_read)(VP, U, F)
+#define VOP_WRITE(VP, U, F)	   ((VP)->v_op->vop_write)(VP, U, F)
 #define VOP_SEEK(VP, FP, OLD, NEW) ((VP)->v_op->vop_seek)(VP, FP, OLD, NEW)
 #define VOP_IOCTL(VP, FP, C, A)	   ((VP)->v_op->vop_ioctl)(VP, FP, C, A)
 #define VOP_FSYNC(VP, FP)	   ((VP)->v_op->vop_fsync)(VP, FP)

@@ -8,7 +8,7 @@
 class IsaSerialConsole : public Console {
 public:
 	IsaSerialConsole();
-    virtual void write(const char *str);
+    virtual void write(const char *str, size_t len);
     virtual void newline();
 private:
     static const u16 ioport = 0x3f8;

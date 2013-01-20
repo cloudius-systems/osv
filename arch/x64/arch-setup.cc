@@ -1,5 +1,7 @@
 #include "arch-setup.hh"
 #include "mempool.hh"
+#include "mmu.hh"
+#include "processor.hh"
 #include "types.hh"
 #include <alloca.h>
 #include <string.h>
@@ -37,34 +39,95 @@ struct e820ent {
 
 multiboot_info_type* multiboot_info;
 
-void arch_setup_free_memory()
+void setup_temporary_phys_map()
 {
-    // copy to stack so we don't free it now
-    auto mb = *multiboot_info;
-    auto tmp = alloca(mb.mmap_length);
-    memcpy(tmp, reinterpret_cast<void*>(mb.mmap_addr), mb.mmap_length);
-    auto p = tmp;
-    ulong edata;
-    asm ("lea .edata, %0" : "=rm"(edata));
-    while (p < tmp + mb.mmap_length) {
+    // duplicate 1:1 mapping into phys_mem
+    u64 cr3 = processor::read_cr3();
+    auto pt = reinterpret_cast<u64*>(cr3);
+    // assumes phys_mem = 0xffff800000000000
+    pt[256] = pt[0];
+}
+
+void for_each_e820_entry(void* e820_buffer, unsigned size, void (*f)(e820ent e))
+{
+    auto p = e820_buffer;
+    while (p < e820_buffer + size) {
         auto ent = static_cast<e820ent*>(p);
         if (ent->type == 1) {
-            memory::phys_mem_size += ent->size;
-            if (ent->addr < edata) {
-                u64 adjust = std::min(edata - ent->addr, ent->size);
-                ent->addr += adjust;
-                ent->size -= adjust;
-            }
-            // FIXME: limit to mapped 1GB for now
-            // later map all of memory and free it too
-            u64 memtop = 1 << 30;
-            if (ent->addr + ent->size >= memtop) {
-                auto excess = ent->addr + ent->size - memtop;
-                excess = std::min(ent->size, excess);
-                ent->size -= excess;
-            }
-            memory::free_initial_memory_range(ent->addr, ent->size);
+            f(*ent);
         }
         p += ent->ent_size + 4;
     }
+}
+
+bool intersects(const e820ent& ent, u64 a)
+{
+    return a > ent.addr && a < ent.addr + ent.size;
+}
+
+e820ent truncate_below(e820ent ent, u64 a)
+{
+    u64 delta = a - ent.addr;
+    ent.addr += delta;
+    ent.size -= delta;
+    return ent;
+}
+
+e820ent truncate_above(e820ent ent, u64 a)
+{
+    u64 delta = ent.addr + ent.size - a;
+    ent.size -= delta;
+    return ent;
+}
+
+void arch_setup_free_memory()
+{
+    static constexpr u64 phys_mem = 0xffff800000000000;
+    static ulong edata;
+    asm ("movl $.edata, %0" : "=rm"(edata));
+    // copy to stack so we don't free it now
+    auto mb = *multiboot_info;
+    auto e820_buffer = alloca(mb.mmap_length);
+    auto e820_size = mb.mmap_length;
+    memcpy(e820_buffer, reinterpret_cast<void*>(mb.mmap_addr), e820_size);
+    for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
+        memory::phys_mem_size += ent.size;
+    });
+    constexpr u64 initial_map = 1 << 30; // 1GB mapped by startup code
+    setup_temporary_phys_map();
+
+    // setup all memory up to 1GB.  We can't free any more, because no
+    // page tables have been set up, so we can't reference the memory being
+    // freed.
+    for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
+        // can't free anything below edata, it's core code.
+        // FIXME: can free below 2MB.
+        if (ent.addr + ent.size <= edata) {
+            return;
+        }
+        if (intersects(ent, edata)) {
+            ent = truncate_below(ent, edata);
+        }
+        // ignore anything above 1GB, we haven't mapped it yet
+        if (intersects(ent, initial_map)) {
+            ent = truncate_above(ent, initial_map);
+        }
+        mmu::free_initial_memory_range(ent.addr, ent.size);
+    });
+    mmu::linear_map(phys_mem, 0, initial_map, initial_map);
+    // map the core
+    mmu::linear_map(0x200000, 0x200000, edata - 0x200000, 0x200000);
+    // now that we have some free memory, we can start mapping the rest
+    mmu::switch_to_runtime_page_table();
+    for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
+        // Ignore memory already freed above
+        if (ent.addr + ent.size <= initial_map) {
+            return;
+        }
+        if (intersects(ent, initial_map)) {
+            ent = truncate_below(ent, edata);
+        }
+        mmu::linear_map(phys_mem + ent.addr, ent.addr, ent.size, ~0);
+        mmu::free_initial_memory_range(ent.addr, ent.size);
+    });
 }
