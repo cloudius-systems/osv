@@ -135,9 +135,9 @@ namespace virtio {
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
 
-    private:
+        void test();
 
-        
+    private:
     };
 
 }
