@@ -60,6 +60,11 @@ char* getenv(const char* name)
     return NULL;
 }
 
+int putenv(char* string)
+{
+    return 0; // no environent
+}
+
 template <typename N>
 N strtoN(const char* s, char** e, int base)
 {
