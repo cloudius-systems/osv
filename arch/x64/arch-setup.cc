@@ -116,7 +116,7 @@ void arch_setup_free_memory()
     });
     mmu::linear_map(phys_mem, 0, initial_map, initial_map);
     // map the core
-    mmu::linear_map(0, 0, edata, 0x200000);
+    mmu::linear_map(0x200000, 0x200000, edata - 0x200000, 0x200000);
     // now that we have some free memory, we can start mapping the rest
     mmu::switch_to_runtime_page_table();
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
