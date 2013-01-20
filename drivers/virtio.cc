@@ -21,11 +21,18 @@ namespace virtio {
 
     virtio_driver::~virtio_driver()
     {
+        reset_host_side();
+
         for (int i=0; i < max_virtqueues_nr; i++) {
             if (NULL != _queues[i]) {
                 delete (_queues[i]);
             }
         }
+    }
+
+    void virtio_driver::reset_host_side() {
+        set_dev_status(0);
+        pci_conf_write(VIRTIO_PCI_QUEUE_PFN,(u32)0);
     }
 
     bool virtio_driver::earlyInitChecks()
@@ -58,6 +65,9 @@ namespace virtio {
 
         debug(fmt("Virtio:Init %x:%x") % _vid % _id);
 
+        //make sure the queue is reset
+        reset_host_side();
+
         // Acknowledge device
         add_dev_status(VIRTIO_CONFIG_S_ACKNOWLEDGE | VIRTIO_CONFIG_S_DRIVER);
 
@@ -71,6 +81,12 @@ namespace virtio {
         debug(fmt("\n"), false);
 #endif
 
+        return true;
+    }
+
+    bool virtio_driver::kick(int queue)
+    {
+        set_virtio_config(VIRTIO_PCI_QUEUE_NOTIFY, queue);
         return true;
     }
 
@@ -93,7 +109,7 @@ namespace virtio {
             }
 
             // Init a new queue
-            vring * queue = new vring(qsize);
+            vring * queue = new vring(this, qsize, queuesel);
             _queues[queuesel++] = queue;
 
             // Tell host about pfn

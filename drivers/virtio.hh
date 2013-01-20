@@ -102,6 +102,8 @@ namespace virtio {
         virtual bool Init(Device *d);
         virtual void dumpConfig() const;
 
+        bool kick(int queue);
+        void reset_host_side();
 
     protected:
         
