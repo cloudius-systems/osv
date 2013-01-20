@@ -7,6 +7,7 @@
 #include <limits>
 #include <sys/resource.h>
 #include <pwd.h>
+#include <sys/utsname.h>
 
 int libc_error(int err)
 {
@@ -177,5 +178,16 @@ int getpwuid_r(uid_t uid, struct passwd *pwd,
     pwd->pw_dir = save("");
     pwd->pw_shell = save("");
     *result = pwd;
+    return 0;
+}
+
+int uname(struct utsname* u)
+{
+    // lie, to avoid confusing the payload.
+    strcpy(u->sysname, "Linux");
+    strcpy(u->nodename, "home");
+    strcpy(u->release, "3.7");
+    strcpy(u->version, "#1 SMP");
+    strcpy(u->machine, "x86_64");
     return 0;
 }
