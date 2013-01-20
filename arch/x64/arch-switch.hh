@@ -38,7 +38,7 @@ void thread::switch_to()
 
 void thread::init_stack()
 {
-    void** stacktop = reinterpret_cast<void**>(_stack + sizeof(_stack));
+    void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
     *--stacktop = this;
     *--stacktop = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;
@@ -46,7 +46,7 @@ void thread::init_stack()
 
 void thread::switch_to_thread_stack()
 {
-    void** stacktop = reinterpret_cast<void**>(_stack + sizeof(_stack));
+    void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
     stack_trampoline(this, &thread::on_thread_stack, stacktop);
 }
 

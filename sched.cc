@@ -5,6 +5,7 @@
 #include "debug.hh"
 #include "drivers/clockevent.hh"
 #include "irqlock.hh"
+#include "align.hh"
 
 namespace sched {
 
@@ -40,10 +41,18 @@ void schedule()
     n->switch_to();
 }
 
-thread::thread(std::function<void ()> func, bool main)
+thread::stack_info::stack_info(void* _begin, size_t _size)
+    : begin(_begin), size(_size)
+{
+    auto end = align_down(begin + size, 16);
+    size = static_cast<char*>(end) - static_cast<char*>(begin);
+}
+
+thread::thread(std::function<void ()> func, stack_info stack, bool main)
     : _func(func)
     , _on_runqueue(!main)
     , _waiting(false)
+    , _stack(stack)
 {
     if (!main) {
         setup_tcb();
@@ -106,7 +115,7 @@ void thread::stop_wait()
 
 thread::stack_info thread::get_stack_info()
 {
-    return stack_info { _stack, sizeof(_stack) };
+    return _stack;
 }
 
 timer_list timers;

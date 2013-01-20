@@ -19,13 +19,19 @@ extern "C" {
 
 class thread {
 public:
-    explicit thread(std::function<void ()> func, bool main = false);
+    struct stack_info {
+        stack_info(void* begin, size_t size);
+        void* begin;
+        size_t size;
+    };
+public:
+    explicit thread(std::function<void ()> func, stack_info stack,
+            bool main = false);
     ~thread();
     template <class Pred>
     static void wait_until(Pred pred);
     void wake();
     static thread* current();
-    struct stack_info;
     stack_info get_stack_info();
 private:
     void main();
@@ -44,15 +50,10 @@ private:
     thread_control_block* _tcb;
     bool _on_runqueue;
     bool _waiting;
-    char _stack[64*1024] __attribute__((aligned(16)));
+    stack_info _stack;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend void schedule();
-};
-
-struct thread::stack_info {
-    void* begin;
-    size_t size;
 };
 
 thread* current();

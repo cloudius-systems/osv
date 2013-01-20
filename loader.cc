@@ -115,8 +115,9 @@ void test_threads()
 {
     test_threads_data tt;
     tt.main = thread::current();
-    tt.t1 = new thread([&] { test_thread_1(tt); });
-    tt.t2 = new thread([&] { test_thread_2(tt); });
+    char stk1[10000], stk2[10000];
+    tt.t1 = new thread([&] { test_thread_1(tt); }, { stk1, 10000 });
+    tt.t2 = new thread([&] { test_thread_2(tt); }, { stk2, 10000 });
 
     thread::wait_until([&] { return test_ctr >= 1000; });
     debug("threading test succeeded");
@@ -159,7 +160,8 @@ int main(int ac, char **av)
     elf::program prog(fs);
     sched::init(prog);
     void main_thread(elf::program& prog);
-    new thread([&] { main_thread(prog); }, true);
+    static char main_stack[64*1024];
+    new thread([&] { main_thread(prog); }, { main_stack, sizeof main_stack }, true);
 }
 
 void test_clock_events()
