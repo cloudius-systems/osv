@@ -7,6 +7,7 @@
 #include <limits>
 #include <sys/resource.h>
 #include <pwd.h>
+#include <sys/utsname.h>
 
 int libc_error(int err)
 {
@@ -57,6 +58,11 @@ char* getenv(const char* name)
 {
     // no environment
     return NULL;
+}
+
+int putenv(char* string)
+{
+    return 0; // no environent
 }
 
 template <typename N>
@@ -177,5 +183,31 @@ int getpwuid_r(uid_t uid, struct passwd *pwd,
     pwd->pw_dir = save("");
     pwd->pw_shell = save("");
     *result = pwd;
+    return 0;
+}
+
+struct passwd* getpwuid(uid_t uid)
+{
+    static struct passwd ret;
+    static char buf[300];
+    struct passwd *p;
+    int e;
+
+    e = getpwuid_r(uid, &ret, buf, sizeof(buf), &p);
+    if (e == 0) {
+        return &ret;
+    } else {
+        return libc_error_ptr<passwd>(e);
+    }
+}
+
+int uname(struct utsname* u)
+{
+    // lie, to avoid confusing the payload.
+    strcpy(u->sysname, "Linux");
+    strcpy(u->nodename, "home");
+    strcpy(u->release, "3.7");
+    strcpy(u->version, "#1 SMP");
+    strcpy(u->machine, "x86_64");
     return 0;
 }
