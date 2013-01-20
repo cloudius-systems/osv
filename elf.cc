@@ -330,7 +330,7 @@ namespace elf {
             case R_X86_64_NONE:
                 break;
             case R_X86_64_64:
-                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value + addend;
+                *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
                 break;
             case R_X86_64_RELATIVE:
                 *static_cast<void**>(addr) = _base + addend;
