@@ -279,7 +279,7 @@ void main_thread(elf::program& prog)
 
     DeviceFactory::Instance()->InitializeDrivers();
 
-    DriverFactory::Instance()->Destroy();
+    //DriverFactory::Instance()->Destroy();
 
     auto t1 = clock::get()->time();
     auto t2 = clock::get()->time();
