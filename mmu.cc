@@ -48,12 +48,12 @@ namespace mmu {
     template <typename T>
     T* phys_cast(phys pa)
     {
-	return reinterpret_cast<T*>(pa);
+	return reinterpret_cast<T*>(pa + 0xffff800000000000ull);
     }
 
     phys virt_to_phys(void *virt)
     {
-	return reinterpret_cast<phys>(virt);
+	return reinterpret_cast<phys>(virt) - 0xffff800000000000ull;
     }
 
     unsigned pt_index(void *virt, unsigned level)
@@ -287,9 +287,71 @@ namespace mmu {
         vma_list.insert(*n);
     }
 
+    unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
+
+    pt_element page_table_root;
+
+    void clamp(uintptr_t& vstart1, uintptr_t& vend1,
+               uintptr_t min, size_t max, size_t slop)
+    {
+        vstart1 &= ~(slop - 1);
+        vend1 |= (slop - 1);
+        vstart1 = std::max(vstart1, min);
+        vend1 = std::min(vend1, max);
+    }
+
+    unsigned pt_index(uintptr_t virt, unsigned level)
+    {
+        return pt_index(reinterpret_cast<void*>(virt), level);
+    }
+
+    void linear_map_level(pt_element& parent, uintptr_t vstart, uintptr_t vend,
+            phys delta, uintptr_t base_virt, size_t slop, unsigned level)
+    {
+        --level;
+        if (!(parent & 1)) {
+            allocate_intermediate_level(&parent);
+        }
+        pt_element* pt = phys_cast<pt_element>(pte_phys(parent));
+        pt_element step = pt_element(1) << (12 + level * 9);
+        auto idx = pt_index(vstart, level);
+        auto eidx = pt_index(vend, level);
+        base_virt += idx * step;
+        base_virt = (s64(base_virt) << 16) >> 16; // extend 47th bit
+        while (idx <= eidx) {
+            uintptr_t vstart1 = vstart, vend1 = vend;
+            clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
+            if (level < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
+                pt[idx] = (vstart1 + delta) | 0x67 | (level == 0 ? 0 : 0x80);
+            } else {
+                linear_map_level(pt[idx], vstart1, vend1, delta, base_virt, slop, level);
+            }
+            base_virt += step;
+            ++idx;
+        }
+    }
+
+    size_t page_size_level(unsigned level)
+    {
+        return size_t(1) << (12 + 9 * level);
+    }
+
+    void linear_map(uintptr_t virt, phys addr, size_t size, size_t slop)
+    {
+        slop = std::min(slop, page_size_level(nr_page_sizes - 1));
+        assert((virt & (slop - 1)) == (addr & (slop - 1)));
+        linear_map_level(page_table_root, virt, virt + size - 1,
+                addr - virt, 0, slop, 4);
+    }
+
     void free_initial_memory_range(uintptr_t addr, size_t size)
     {
         memory::free_initial_memory_range(phys_cast<void>(addr), size);
+    }
+
+    void switch_to_runtime_page_table()
+    {
+        processor::write_cr3(pte_phys(page_table_root));
     }
 }
 

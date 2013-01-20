@@ -42,7 +42,9 @@ namespace mmu {
     typedef uint64_t phys;
     phys virt_to_phys(void *virt);
 
+    void linear_map(uintptr_t virt, phys addr, size_t size, size_t slop);
     void free_initial_memory_range(uintptr_t addr, size_t size);
+    void switch_to_runtime_page_table();
 }
 
 #endif
