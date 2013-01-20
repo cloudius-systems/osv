@@ -264,8 +264,9 @@ void start_jvm(elf::program& prog)
     debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
 }
 
-void main_thread(elf::program& prog)
+void* do_main_thread(void* pprog)
 {
+    auto& prog = *static_cast<elf::program*>(pprog);
     test_threads();
     test_clock_events();
 
@@ -293,4 +294,13 @@ void main_thread(elf::program& prog)
 
     while (true)
 	;
+    return nullptr;
+}
+
+void main_thread(elf::program& prog)
+{
+    pthread_t pthread;
+    // run the payload in a pthread, so pthread_self() etc. work
+    pthread_create(&pthread, nullptr, do_main_thread, &prog);
+    sched::thread::wait_until([] { return false; });
 }
