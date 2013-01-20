@@ -59,7 +59,7 @@ namespace pthread_private {
 
     sched::thread::stack_info pthread::allocate_stack()
     {
-        size_t size = 64*1024;
+        size_t size = 1024*1024;
         return { new char[size], size };
     }
 
