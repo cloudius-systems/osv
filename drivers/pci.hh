@@ -1,3 +1,29 @@
+/* This header is BSD licensed so anyone can use the definitions to implement
+ * compatible drivers/servers.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of IBM nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL IBM OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE. */
+
 #ifndef ARCH_X86_PCI_H
 #define ARCH_X86_PCI_H
 
@@ -37,7 +63,11 @@ using processor::outl;
 	    PCI_CAPABILITIES_PTR = 0x34,
 	};
 
-	/* Capability Register Offsets */
+	enum pci_command_bits {
+	    PCI_COMMAND_INTX_DISABLE = (1 << 10),
+	};
+
+	//  Capability Register Offsets
 	enum pci_capabilities_offsets {
 	    PCI_CAP_OFF_ID      = 0x0,
 	    PCI_CAP_OFF_NEXT    = 0x1
@@ -96,6 +126,53 @@ using processor::outl;
 	    u32 _addr;
 	    TYPE _type;
 	};
+
+
+    //  MSI-X definitions
+    enum msix_pci_conf {
+        PCIR_MSIX_CTRL = 0x2,
+        PCIM_MSIXCTRL_MSIX_ENABLE = 0x8000,
+        PCIM_MSIXCTRL_FUNCTION_MASK = 0x4000,
+        PCIM_MSIXCTRL_TABLE_SIZE = 0x07FF,
+        PCIR_MSIX_TABLE = 0x4,
+        PCIR_MSIX_PBA = 0x8,
+        PCIM_MSIX_BIR_MASK = 0x7,
+        PCIM_MSIX_BIR_BAR_10 = 0,
+        PCIM_MSIX_BIR_BAR_14 = 1,
+        PCIM_MSIX_BIR_BAR_18 = 2,
+        PCIM_MSIX_BIR_BAR_1C = 3,
+        PCIM_MSIX_BIR_BAR_20 = 4,
+        PCIM_MSIX_BIR_BAR_24 = 5,
+        PCIM_MSIX_VCTRL_MASK = 0x1
+    };
+
+    //  Interesting values for PCI MSI-X
+    struct msix_vector {
+        u64 mv_address;         // Contents of address register.
+        u32 mv_data;            // Contents of data register.
+        int     mv_irq;
+    };
+
+    struct msix_table_entry {
+        u32   mte_vector; //  1-based index into msix_vectors array.
+        u32   mte_handlers;
+    };
+
+    struct pcicfg_msix {
+        u16 msix_ctrl;                          //  Message Control
+        u16 msix_msgnum;                        //  Number of messages
+        u8 msix_location;                       //  Offset of MSI-X capability registers.
+        u8 msix_table_bar;                      //  BAR containing vector table.
+        u8 msix_pba_bar;                        //  BAR containing PBA.
+        u32 msix_table_offset;
+        u32 msix_pba_offset;
+        int msix_alloc;                         //  Number of allocated vectors.
+        int msix_table_len;                     //  Length of virtual table.
+        struct msix_table_entry* msix_table;    //  Virtual table.
+        struct msix_vector* msix_vectors;       //  Array of allocated vectors.
+        Bar* msix_table_res;                    //  Resource containing vector table.
+        Bar* msix_pba_res;                      //  Resource containing PBA.
+    };
 
 };
 

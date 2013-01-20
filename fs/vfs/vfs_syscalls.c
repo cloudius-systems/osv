@@ -171,45 +171,86 @@ sys_close(file_t fp)
 }
 
 int
-sys_read(file_t fp, void *buf, size_t size, size_t *count)
+sys_read(file_t fp, struct iovec *iov, size_t niov,
+		off_t offset, size_t *count)
 {
-	vnode_t vp;
-	int error;
-
-	DPRINTF(VFSDB_SYSCALL, ("sys_read: fp=%x buf=%x size=%d\n",
-				(u_int)fp, (u_int)buf, size));
-
-	if ((fp->f_flags & FREAD) == 0)
-		return EBADF;
-	if (size == 0) {
-		*count = 0;
-		return 0;
-	}
-	vp = fp->f_vnode;
-	vn_lock(vp);
-	error = VOP_READ(vp, fp, buf, size, count);
-	vn_unlock(vp);
-	return error;
-}
-
-int
-sys_write(file_t fp, const void *buf, size_t size, size_t *count)
-{
-	vnode_t vp;
+	struct vnode *vp = fp->f_vnode;
+	struct uio *uio = NULL;
+	ssize_t bytes;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x buf=%x size=%d\n",
 				(u_int)fp, (u_int)buf, size));
 
-	if ((fp->f_flags & FWRITE) == 0)
+	if ((fp->f_flags & FREAD) == 0)
 		return EBADF;
-	if (size == 0) {
+
+	error = copyinuio(iov, niov, &uio);
+	if (error)
+		return error;
+
+	if (uio->uio_resid == 0) {
 		*count = 0;
 		return 0;
 	}
-	vp = fp->f_vnode;
+	bytes = uio->uio_resid;
+
 	vn_lock(vp);
-	error = VOP_WRITE(vp, fp, buf, size, count);
+	uio->uio_rw = UIO_READ;
+	if (offset == -1)
+		uio->uio_offset = fp->f_offset;
+	else
+		uio->uio_offset = offset;
+	error = VOP_READ(vp, uio, 0);
+	if (!error) {
+		*count = bytes - uio->uio_resid;
+		if (offset == -1)
+			fp->f_offset += *count;
+	}
+	vn_unlock(vp);
+	return error;
+}
+
+int
+sys_write(file_t fp, struct iovec *iov, size_t niov,
+		off_t offset, size_t *count)
+{
+	struct vnode *vp = fp->f_vnode;
+	struct uio *uio = NULL;
+	ssize_t bytes;
+	int ioflags = 0;
+	int error;
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x uio=%x niv=%zu\n",
+				(u_long)fp, (u_long)uio, niv));
+
+	if ((fp->f_flags & FWRITE) == 0)
+		return EBADF;
+	if (fp->f_flags & O_APPEND)
+		ioflags |= IO_APPEND;
+
+	error = copyinuio(iov, niov, &uio);
+	if (error)
+		return error;
+
+	if (uio->uio_resid == 0) {
+		*count = 0;
+		return 0;
+	}
+	bytes = uio->uio_resid;
+
+	vn_lock(vp);
+	uio->uio_rw = UIO_WRITE;
+	if (offset == -1)
+		uio->uio_offset = fp->f_offset;
+	else
+		uio->uio_offset = offset;
+	error = VOP_WRITE(vp, uio, ioflags);
+	if (!error) {
+		*count = bytes - uio->uio_resid;
+		if (offset == -1)
+			fp->f_offset += *count;
+	}
 	vn_unlock(vp);
 	return error;
 }

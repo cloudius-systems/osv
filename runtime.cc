@@ -105,15 +105,6 @@ void __cxa_pure_virtual(void)
     abort();
 }
 
-char* strerror(int err)
-{
-	char buf[1024];
-	char *ret = buf;
-
-	sprintf(ret, "%d", err);
-	return ret;
-}
-
 void
 perror(const char* str)
 {
@@ -167,6 +158,16 @@ int getpid()
     return 0;
 }
 
+uid_t getuid()
+{
+    return 0;
+}
+
+gid_t getgid()
+{
+    return 0;
+}
+
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
     memset(vec, 0x01, (length + getpagesize() - 1) / getpagesize());
@@ -204,26 +205,6 @@ int ioctl(int fd, unsigned long request, ...)
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     UNIMPLEMENTED("poll");
-}
-
-ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
-{
-    UNIMPLEMENTED("readv");
-}
-
-ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
-{
-    UNIMPLEMENTED("writev");
-}
-
-ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
-{
-    UNIMPLEMENTED("preadv");
-}
-
-ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
-{
-    UNIMPLEMENTED("pwritev");
 }
 
 int fileno(FILE *fp)

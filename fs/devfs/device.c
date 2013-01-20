@@ -48,6 +48,7 @@
 #include <string.h>
 
 #include "../vfs/prex.h"
+#include "../vfs/uio.h"
 #include "device.h"
 
 #define sched_lock()	do {} while (0)
@@ -116,7 +117,7 @@ device_create(struct driver *drv, const char *name, int flags)
 	dev->flags = flags;
 	dev->active = 1;
 	dev->refcnt = 1;
-	dev->private = private;
+	dev->private_data = private;
 	dev->next = device_list;
 	device_list = dev;
 
@@ -149,9 +150,9 @@ static void *
 device_private(struct device *dev)
 {
 	assert(dev != NULL);
-	assert(dev->private != NULL);
+	assert(dev->private_data != NULL);
 
-	return dev->private;
+	return dev->private_data;
 }
 #endif
 
@@ -280,14 +281,8 @@ device_close(struct device *dev)
 	return error;
 }
 
-/*
- * device_read - read from a device.
- *
- * Actual read count is set in "nbyte" as return.
- * Note: The size of one block is device dependent.
- */
 int
-device_read(struct device *dev, void *buf, size_t *count, int blkno)
+device_read(struct device *dev, struct uio *uio, int ioflags)
 {
 	struct devops *ops;
 	int error;
@@ -297,19 +292,14 @@ device_read(struct device *dev, void *buf, size_t *count, int blkno)
 
 	ops = dev->driver->devops;
 	assert(ops->read != NULL);
-	error = (*ops->read)(dev, buf, count, blkno);
+	error = (*ops->read)(dev, uio, ioflags);
 
 	device_release(dev);
 	return error;
 }
 
-/*
- * device_write - write to a device.
- *
- * Actual write count is set in "nbyte" as return.
- */
 int
-device_write(struct device *dev, const void *buf, size_t *count, int blkno)
+device_write(struct device *dev, struct uio *uio, int ioflags)
 {
 	struct devops *ops;
 	int error;
@@ -319,7 +309,7 @@ device_write(struct device *dev, const void *buf, size_t *count, int blkno)
 
 	ops = dev->driver->devops;
 	assert(ops->write != NULL);
-	error = (*ops->write)(dev, buf, count, blkno);
+	error = (*ops->write)(dev, uio, ioflags);
 
 	device_release(dev);
 	return error;

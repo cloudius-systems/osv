@@ -1,7 +1,5 @@
 libc :=
 
-libc += getopt.o
-
 libc += ctype/__ctype_b_loc.o
 libc += ctype/__ctype_get_mb_cur_max.o
 libc += ctype/__ctype_tolower_loc.o
@@ -39,6 +37,8 @@ libc += ctype/towctrans.o
 libc += ctype/wcswidth.o
 libc += ctype/wctrans.o
 libc += ctype/wcwidth.o
+
+libc += errno/strerror.o
 
 libc += locale/catclose.o
 libc += locale/catgets.o
@@ -98,6 +98,19 @@ libc += locale/wcsxfrm.o
 libc += locale/wcsxfrm_l.o
 libc += locale/wctrans_l.o
 libc += locale/wctype_l.o
+
+libc += misc/a64l.o
+libc += misc/basename.o
+libc += misc/dirname.o
+libc += misc/ffs.o
+libc += misc/get_current_dir_name.o
+libc += misc/gethostid.o
+libc += misc/getopt.o
+libc += misc/getopt_long.o
+libc += misc/getresuid.o
+libc += misc/getresgid.o
+libc += misc/getsubopt.o
+libc += misc/setdomainname.o
 
 libc += multibyte/btowc.o
 libc += multibyte/internal.o
@@ -190,6 +203,10 @@ libc += string/wmemcpy.o
 libc += string/wmemmove.o
 libc += string/wmemset.o
 
+libc += temp/mkdtemp.o
+libc += temp/mkstemp.o
+libc += temp/mktemp.o
+
 libc += time/__asctime.o
 libc += time/__time_to_tm.o
 libc += time/__tm_to_time.o
@@ -220,4 +237,3 @@ libc += time.o
 libc += signal.o
 libc += mman.o
 libc += qsort.o
-

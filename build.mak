@@ -81,6 +81,7 @@ arch/x64/boot32.o: loader.elf
 fs = fs/fs.o bootfs.o
 
 fs +=	fs/vfs/main.o \
+	fs/vfs/subr_uio.o \
 	fs/vfs/vfs_conf.o \
 	fs/vfs/vfs_lookup.o \
 	fs/vfs/vfs_mount.o \
@@ -94,7 +95,8 @@ fs +=	fs/ramfs/ramfs_vfsops.o \
 fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
-drivers = drivers/vga.o drivers/console.o drivers/isa-serial.o
+drivers :=
+drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
@@ -106,7 +108,6 @@ drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/clock.o drivers/kvmclock.o
 drivers += drivers/clockevent.o
-drivers += drivers/char/console.o
 
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o

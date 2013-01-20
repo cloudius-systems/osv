@@ -15,7 +15,7 @@ namespace virtio {
 
     virtio_blk::~virtio_blk()
     {
-
+        set_dev_status(0);
     }
 
     bool virtio_blk::Init(Device *d)

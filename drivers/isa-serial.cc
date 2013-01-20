@@ -4,12 +4,12 @@ IsaSerialConsole::IsaSerialConsole() {
 	reset();
 }
 
-void IsaSerialConsole::write(const char *str)
+void IsaSerialConsole::write(const char *str, size_t len)
 {
-    while (*str) {
+    while (len > 0) {
     	writeByte(*str++);
+        len--;
     }
-
 }
 
 void IsaSerialConsole::writeByte(const char letter)
