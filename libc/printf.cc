@@ -255,12 +255,16 @@ std::string strprintf(const char* fmt, va_list ap)
             auto arg = make_int_arg(pos, int_size());
             frags.push_back([=] {
                 std::string ret;
-                auto val = arg->val;
+                bool negative = arg->val < 0;
+                uintmax_t val = std::abs(arg->val);
                 while (val) {
                     ret.push_back('0' + val % 10);
                     val /= 10;
                 };
-                fill_right_to(ret, '0', precision_fn());
+                fill_right_to(ret, '0', precision_fn() - negative);
+                if (negative) {
+                    ret.push_back('-');
+                }
                 fill_right_to(ret, ' ', width_fn());
                 std::reverse(ret.begin(), ret.end());
                 return ret;
