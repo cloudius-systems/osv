@@ -256,13 +256,20 @@ void start_jvm(elf::program& prog)
     JavaVMInitArgs vm_args = {};
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
+    vm_args.nOptions = 1;
+    vm_args.options = new JavaVMOption[1];
+    vm_args.options[0].optionString = strdup("-Djava.class.path=/tests");
+
     auto JNI_CreateJavaVM
         = prog.lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
     JavaVM* jvm = nullptr;
     JNIEnv *env;
 
     auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
-    debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
+    assert(ret == 0);
+    auto mainclass = env->FindClass("Hello");
+    auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
+    env->CallStaticVoidMethod(mainclass, mainmethod, nullptr);
 }
 
 void* do_main_thread(void* pprog)
