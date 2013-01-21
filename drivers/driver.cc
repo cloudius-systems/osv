@@ -34,6 +34,11 @@ bool Driver::isPresent() {
     return _present;
 }
 
+Driver::~Driver() {
+    //todo - Better change the Bar allocation to live in the stack
+    for (int i=0;i<6;i++) if (_bars[i]) delete _bars[i];
+}
+
 void
 Driver::setPresent(u8 bus, u8 slot, u8 func) {
     _present = true;

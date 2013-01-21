@@ -284,19 +284,24 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 	return pwritev(fd, iov, iovcnt, -1);
 }
 
-#if 0
-static int
-fs_ioctl(struct task *t, struct ioctl_msg *msg)
+int ioctl(int fd, int request, unsigned long arg)
 {
 	struct task *t = main_task;
 	file_t fp;
+	int error;
 
-	if ((fp = task_getfp(t, msg->fd)) == NULL)
-		return EBADF;
+	error = EBADF;
+	if ((fp = task_getfp(t, fd)) == NULL)
+		goto out_errno;
 
-	return sys_ioctl(fp, msg->request, msg->buf);
+	error = sys_ioctl(fp, request, (void *)arg);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
 }
-#endif
 
 int fsync(int fd)
 {

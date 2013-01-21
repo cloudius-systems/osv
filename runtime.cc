@@ -105,12 +105,6 @@ void __cxa_pure_virtual(void)
     abort();
 }
 
-void
-perror(const char* str)
-{
-    printf("%s: %s\n", str, strerror(errno));
-}
-
 namespace __cxxabiv1 {
     std::terminate_handler __terminate_handler = abort;
 
@@ -180,10 +174,6 @@ int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
     return 0;
 }
 
-FILE* stdin;
-FILE* stdout;
-FILE* stderr;
-
 //    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),
 //    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
 //    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
@@ -197,86 +187,11 @@ static struct __locale_struct c_locale = {
     c_locale_array + 128, // __ctype_b
 };
 
-int ioctl(int fd, unsigned long request, ...)
-{
-    UNIMPLEMENTED("ioctl");
-}
-
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     UNIMPLEMENTED("poll");
 }
 
-int fileno(FILE *fp)
-{
-    UNIMPLEMENTED("fileno");
-}
-
-FILE *fdopen(int fd, const char *mode)
-{
-    UNIMPLEMENTED("fdopen");
-}
-
-int fflush(FILE *fp)
-{
-    UNIMPLEMENTED("fflush");
-}
-
-int fgetc(FILE *stream)
-{
-    UNIMPLEMENTED("fgetc");
-}
-
-#undef getc
-int getc(FILE *stream)
-{
-    UNIMPLEMENTED("getc");
-}
-
-int getchar(void)
-{
-    UNIMPLEMENTED("getchar");
-}
-
-char *gets(char *s)
-{
-    UNIMPLEMENTED("gets");
-}
-
-int ungetc(int c, FILE *stream)
-{
-    UNIMPLEMENTED("ungetc");
-}
-
-UNIMPL(int fputc(int c, FILE *stream))
-UNIMPL(int fputs(const char *s, FILE *stream))
-#undef putc
-UNIMPL(int putc(int c, FILE *stream))
-UNIMPL(int putchar(int c))
-
-int puts(const char *s)
-{
-	debug(s);
-	return 0;
-}
-
-int setvbuf(FILE *stream, char *buf, int mode, size_t size)
-{
-    debug("stub setvbuf()");
-    return 0;
-}
-UNIMPL(size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream))
-UNIMPL(size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream))
-UNIMPL(wint_t fgetwc(FILE *stream))
-UNIMPL(wint_t getwc(FILE *stream))
-UNIMPL(wint_t ungetwc(wint_t wc, FILE *stream))
-
-UNIMPL(int fseeko64(FILE *stream, off64_t offset, int whence))
-UNIMPL(off64_t ftell(FILE *stream))
-UNIMPL(FILE *fopen64(const char *path, const char *mode))
-UNIMPL(off64_t ftello64(FILE *stream))
-UNIMPL(wint_t fputwc(wchar_t wc, FILE *stream))
-UNIMPL(wint_t putwc(wchar_t wc, FILE *stream))
 UNIMPL(void __stack_chk_fail(void))
 UNIMPL(void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function))
 

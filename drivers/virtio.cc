@@ -22,7 +22,6 @@ namespace virtio {
     virtio_driver::~virtio_driver()
     {
         reset_host_side();
-
         for (int i=0; i < max_virtqueues_nr; i++) {
             if (NULL != _queues[i]) {
                 delete (_queues[i]);
@@ -31,6 +30,8 @@ namespace virtio {
     }
 
     void virtio_driver::reset_host_side() {
+        if (!isPresent()) return;
+
         set_dev_status(0);
         pci_conf_write(VIRTIO_PCI_QUEUE_PFN,(u32)0);
     }
