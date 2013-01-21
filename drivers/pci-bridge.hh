@@ -6,15 +6,15 @@
 
 namespace pci {
 
-	class pci_bridge: public pci_function {
-	public:
-		pci_bridge(u8 bus, u8 device, u8 func);
-		virtual ~pci_bridge();
+    class pci_bridge: public pci_function {
+    public:
+        pci_bridge(u8 bus, u8 device, u8 func);
+        virtual ~pci_bridge();
 
-		virtual bool parse_pci_config(void);
+        virtual bool parse_pci_config(void);
 
-	protected:
-	};
+    protected:
+    };
 
 }
 

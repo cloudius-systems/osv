@@ -32,13 +32,13 @@ using namespace pci;
 
 bool Driver::Init(pci_device* dev)
 {
-	_dev = dev;
+    _dev = dev;
     if (!dev) {
-    	return false;
+        return false;
     }
 
     if (!earlyInitChecks()) {
-    	return false;
+        return false;
     }
 
     _dev->set_bus_master(true);
@@ -46,7 +46,7 @@ bool Driver::Init(pci_device* dev)
     // Enable MSI-x
     if (_dev->is_msix()) {
         if (_dev->is_intx_enabled()) {
-        	_dev->disable_intx();
+            _dev->disable_intx();
         }
     }
 
@@ -56,13 +56,13 @@ bool Driver::Init(pci_device* dev)
 
 bool Driver::earlyInitChecks(void)
 {
-	// No init checks in Driver class
-	return (true);
+    // No init checks in Driver class
+    return (true);
 }
 
 void Driver::dump_config(void)
 {
-	// Todo: implement
+    // Todo: implement
 }
 
 std::ostream& operator << (std::ostream& out, const Driver& d) {

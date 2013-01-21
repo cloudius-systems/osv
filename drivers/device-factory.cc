@@ -9,17 +9,17 @@ DeviceFactory* DeviceFactory::pinstance = 0;
 
 void
 DeviceFactory::AddDevice(u8 bus, u8 slot, u8 func) {
-	// Add just the devices for now
-	if (pci_function::is_device(bus, slot, func)) {
-		pci_function* dev = new pci_device(bus, slot, func);
-		dev->parse_pci_config();
-		_devices.insert(dev);
-	}
+    // Add just the devices for now
+    if (pci_function::is_device(bus, slot, func)) {
+        pci_function* dev = new pci_device(bus, slot, func);
+        dev->parse_pci_config();
+        _devices.insert(dev);
+    }
 }
 
 void
 DeviceFactory::DumpDevices() {
-	debug("-----=[ Dumping Devices ]=-----");
+    debug("-----=[ Dumping Devices ]=-----");
     for (auto ii = _devices.begin() ; ii != _devices.end() ; ii++ )
          (*ii)->dump_config();
     debug("-----=[ End Dumping Devices ]=-----");

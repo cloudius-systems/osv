@@ -39,7 +39,7 @@ static inline void prepare_pci_config_access(u8 bus, u8 slot, u8 func, u8 offset
 u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
 {
     prepare_pci_config_access(bus, slot, func, offset);
-	return inl(PCI_CONFIG_DATA);
+    return inl(PCI_CONFIG_DATA);
 }
 
 u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset)
@@ -50,14 +50,14 @@ u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset)
 
 u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
 {
-	prepare_pci_config_access(bus, slot, func, offset);
-	return inb(PCI_CONFIG_DATA + (offset&3));
+    prepare_pci_config_access(bus, slot, func, offset);
+    return inb(PCI_CONFIG_DATA + (offset&3));
 }
 
 void write_pci_config(u8 bus, u8 slot, u8 func, u8 offset, u32 val)
 {
     prepare_pci_config_access(bus, slot, func, offset);
-	outl(val, PCI_CONFIG_DATA);
+    outl(val, PCI_CONFIG_DATA);
 }
 
 void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val)
@@ -70,42 +70,42 @@ void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val)
 void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
 {
     prepare_pci_config_access(bus, slot, func, offset);
-	outb(val, PCI_CONFIG_DATA + (offset&3));
+    outb(val, PCI_CONFIG_DATA + (offset&3));
 }
 
 void pci_device_print(u8 bus, u8 slot, u8 func)
 {
-	int i;
-	u8 val;
+    int i;
+    u8 val;
 
-	debug(fmt("Config space of: %02x:%02x:%02x") % (unsigned int)bus % (unsigned int)slot % (unsigned int)func);
+    debug(fmt("Config space of: %02x:%02x:%02x") % (unsigned int)bus % (unsigned int)slot % (unsigned int)func);
 
-	for (i = 0; i < 256; i ++) {
-	    val = read_pci_config_byte(bus, slot, func, i);
-	    // adds a new line every 16 bytes
-		debug(fmt("%02x ") % (unsigned int)val, (i % 16 == 15));
-	}
+    for (i = 0; i < 256; i ++) {
+        val = read_pci_config_byte(bus, slot, func, i);
+        // adds a new line every 16 bytes
+        debug(fmt("%02x ") % (unsigned int)val, (i % 16 == 15));
+    }
 }
 
 void pci_devices_print(void)
 {
-	u16 bus, slot, func;
+    u16 bus, slot, func;
 
-	for (bus = 0; bus < 256; bus++) {
-		for (slot = 0; slot < 32; slot++) {
-			for (func = 0; func < 8; func++) {
-				if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff)
-					continue;
+    for (bus = 0; bus < 256; bus++) {
+        for (slot = 0; slot < 32; slot++) {
+            for (func = 0; func < 8; func++) {
+                if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff)
+                    continue;
 
-				pci_device_print(bus, slot, func);
+                pci_device_print(bus, slot, func);
 
-				// test for multiple functions
-				if (func == 0 &&
-					!(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
-						break;
-			}
-		}
-	}
+                // test for multiple functions
+                if (func == 0 &&
+                    !(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
+                        break;
+            }
+        }
+    }
 }
 
 void pci_device_enumeration(void)

@@ -38,9 +38,9 @@ namespace virtio {
 
     bool virtio_driver::earlyInitChecks()
     {
-    	if (!Driver::earlyInitChecks()) {
-    		return false;
-    	}
+        if (!Driver::earlyInitChecks()) {
+            return false;
+        }
 
         u8 rev;
         if (_dev->get_revision_id() != VIRTIO_PCI_ABI_VERSION) {
