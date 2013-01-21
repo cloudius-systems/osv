@@ -6,12 +6,11 @@
 #include <errno.h>
 #include <time.h>
 #include <stdint.h>
-#include <sys/time.h>
 #include "libc.h"
 
 char *__mktemp(char *template)
 {
-	struct timeval tv;
+	struct timespec ts;
 	size_t i, l = strlen(template);
 	int retries = 10000;
 	unsigned long r;
@@ -22,8 +21,8 @@ char *__mktemp(char *template)
 		return template;
 	}
 	while (retries--) {
-		gettimeofday(&tv, NULL);
-		r = tv.tv_usec + (uintptr_t)&tv / 16 + (uintptr_t)template;
+		clock_gettime(CLOCK_REALTIME, &ts);
+		r = ts.tv_nsec + (uintptr_t)&ts / 16 + (uintptr_t)template;
 		for (i=1; i<=6; i++, r>>=4)
 			template[l-i] = 'A'+(r&15);
 		if (access(template, F_OK) < 0) return template;
