@@ -94,7 +94,8 @@ namespace virtio {
 
         // The remaining space is defined by each driver as the per-driver
         // configuration space
-        #define VIRTIO_PCI_CONFIG(dev)      ((dev)->msix_enabled ? 24 : 20)
+        // TODO 'have' doesn't means it is enabled, needs fixing (24 when enabled)
+        #define VIRTIO_PCI_CONFIG(drv)      ((drv)->_have_msix ? 20 : 20)
 
         virtio_driver(u16 device_id);
         virtual ~virtio_driver();
