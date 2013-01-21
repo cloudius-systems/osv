@@ -253,14 +253,15 @@ void start_jvm(elf::program& prog)
  
     auto JNI_GetDefaultJavaVMInitArgs
         = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");
-    JavaVMInitArgs vm_args;
+    JavaVMInitArgs vm_args = {};
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
     auto JNI_CreateJavaVM
-        = prog.lookup_function<jint (JavaVM**, void**, void*)>("JNI_CreateJavaVM");
+        = prog.lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
     JavaVM* jvm = nullptr;
+    JNIEnv *env;
 
-    auto ret = JNI_CreateJavaVM(&jvm, nullptr, &vm_args);
+    auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
     debug(fmt("JNI_CreateJavaVM() returned %1%") % ret);
 }
 
