@@ -2,7 +2,7 @@
 #define FACTORY_H
 
 #include "drivers/pci.hh"
-#include "drivers/device.hh"
+#include "drivers/pci-function.hh"
 #include <unordered_set>
 
 using namespace pci;
@@ -21,7 +21,7 @@ private:
    DeviceFactory& operator=(DeviceFactory& f) {pinstance = f.pinstance; return *pinstance;};
 
    static DeviceFactory* pinstance;
-   std::unordered_set<Device*, Device::hash, Device::equal> _devices;
+   std::unordered_set<pci_function*, pci_function::hash, pci_function::equal> _devices;
 };
 
 #endif

@@ -7,6 +7,8 @@
 #include "arch/x64/processor.hh"
 #include "drivers/pci.hh"
 #include "drivers/driver.hh"
+#include "drivers/pci-function.hh"
+#include "drivers/pci-device.hh"
 
 #include "drivers/virtio-vring.hh"
 
@@ -95,13 +97,13 @@ namespace virtio {
         // The remaining space is defined by each driver as the per-driver
         // configuration space
         // TODO 'have' doesn't means it is enabled, needs fixing (24 when enabled)
-        #define VIRTIO_PCI_CONFIG(drv)      ((drv)->_have_msix ? 20 : 20)
+        #define VIRTIO_PCI_CONFIG(_dev_)      ((_dev_)->is_msix() ? 20 : 20)
 
         virtio_driver(u16 device_id);
         virtual ~virtio_driver();
                 
-        virtual bool Init(Device *d);
-        virtual void dumpConfig() const;
+        virtual bool Init(pci_device *d);
+        virtual void dump_config(void);
 
         bool kick(int queue);
         void reset_host_side();
@@ -141,16 +143,19 @@ namespace virtio {
         bool get_virtio_config_bit(int offset, int bit);
         void set_virtio_config_bit(int offset, int bit, bool on);
 
+        // Access virtio config space
         void pci_conf_read(int offset, void* buf, int length);
         void pci_conf_write(int offset, void* buf, int length);
-        u8 pci_conf_readb(int offset) {return _bars[0]->readb(offset);};
-        u16 pci_conf_readw(int offset) {return _bars[0]->readw(offset);};
-        u32 pci_conf_readl(int offset) {return _bars[0]->read(offset);};
-        void pci_conf_write(int offset, u8 val) {_bars[0]->write(offset, val);};
-        void pci_conf_write(int offset, u16 val) {_bars[0]->write(offset, val);};
-        void pci_conf_write(int offset, u32 val) {_bars[0]->write(offset, val);};
+        u8 pci_conf_readb(int offset) {return _bar1->readb(offset);};
+        u16 pci_conf_readw(int offset) {return _bar1->readw(offset);};
+        u32 pci_conf_readl(int offset) {return _bar1->read(offset);};
+        void pci_conf_write(int offset, u8 val) {_bar1->write(offset, val);};
+        void pci_conf_write(int offset, u16 val) {_bar1->write(offset, val);};
+        void pci_conf_write(int offset, u32 val) {_bar1->write(offset, val);};
 
     private:
+
+        pci_bar *_bar1;
     };
 
 }

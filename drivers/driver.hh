@@ -29,7 +29,7 @@
 
 #include "arch/x64/processor.hh"
 #include "drivers/pci.hh"
-#include "drivers/device.hh"
+#include "drivers/pci-device.hh"
 #include <ostream>
 #include <unordered_map>
 
@@ -38,26 +38,12 @@ using namespace pci;
 
 class Driver {
 public:
-    Driver(u16 vid, u16 id) :_id(id), _vid(vid), _present(false), _bus(0), _slot(0), _func(0)\
-           {for (int i=0;i<6;i++) _bars[i] = nullptr;};
-    virtual ~Driver();
+    Driver(u16 vid, u16 id) : _id(id), _vid(vid), _dev(nullptr) {}
+    virtual ~Driver() {}
+    virtual bool Init(pci_device *d);
 
-    bool isPresent();
-    void setPresent(u8 bus, u8 slot, u8 func);
-    u8 getBus();
-    u8 getSlot();
-    u8 getFunc();
-
-    u16 getStatus();
-    void setStatus(u16 s);
-    u16 get_command(void);
-    void set_command(u16 c);
-    bool getBusMaster();
-    void setBusMaster(bool m);
-    virtual void dumpConfig() const;
-    virtual bool Init(Device *d);
-
-    bool parse_pci_config(void);
+    virtual bool earlyInitChecks(void);
+    virtual void dump_config(void);
 
     friend std::ostream& operator <<(std::ostream& out, const Driver &d);
     struct equal {
@@ -77,48 +63,12 @@ public:
         const char* what() const { return "uninitialized driver"; }
     };
 
-
-    u8 getRevision();
-    u16 getSubsysId();
-    u16 getSubsysVid();
-
-    void initBars();
-
 protected:
-
-    bool pciEnable();
-    bool allocateBARs();
-    virtual bool earlyInitChecks();
-
-    // Enable/Disable intx assertions
-    bool is_intx_enabled(void);
-    // Enable intx assertion
-    // intx assertions should be disabled in order to use MSI-x
-    void enable_intx(void);
-    void disable_intx(void);
-
-    // Parsing of extra capabilities
-    virtual bool parse_pci_capabilities(void);
-    virtual bool parse_pci_msix(u8 off);
-
-    // Access to PCI address space
-    virtual u8 pci_readb(u8 offset);
-    virtual u16 pci_readw(u8 offset);
-    virtual u32 pci_readl(u8 offset);
-    virtual void pci_writeb(u8 offset, u8 val);
-    virtual void pci_writew(u8 offset, u16 val);
-    virtual void pci_writel(u8 offset, u32 val);
 
     u16 _id;
     u16 _vid;
-    bool _present;
-    u8  _bus, _slot, _func;
-    Bar* _bars[6];
 
-    // MSI-X
-    bool _have_msix;
-    pcicfg_msix _msix;
-
+    pci_device *_dev;
 };
 
 #endif

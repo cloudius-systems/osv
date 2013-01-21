@@ -1,5 +1,6 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-net.hh"
+#include "drivers/pci-device.hh"
 
 #include "debug.hh"
 
@@ -17,7 +18,7 @@ namespace virtio {
     {
     }
 
-    bool virtio_net::Init(Device *d)
+    bool virtio_net::Init(pci_device *d)
     {
         virtio_driver::Init(d);
         

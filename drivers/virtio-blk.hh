@@ -29,6 +29,7 @@
 
 
 #include "drivers/virtio.hh"
+#include "drivers/pci-device.hh"
 
 namespace virtio {
 
@@ -131,7 +132,7 @@ namespace virtio {
         virtio_blk();
         virtual ~virtio_blk();
 
-        virtual bool Init(Device *d);
+        virtual bool Init(pci_device *d);
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
 

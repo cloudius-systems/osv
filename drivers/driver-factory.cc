@@ -21,21 +21,19 @@ DriverFactory::lookup(u16 id, u16 vid) {
 }
 
 bool
-DriverFactory::InitializeDriver(Device* dev) {
+DriverFactory::InitializeDriver(pci_device* dev) {
     if (!dev) return false;
-
-    Driver *drv = lookup(dev->getvid(), dev->getid());
+    Driver *drv = lookup(dev->get_vendor_id(), dev->get_device_id());
     if (!drv) return false;
-
-    drv->setPresent(dev->getBus(), dev->getSlot(), dev->getFunc());
     return drv->Init(dev);
 }
 
 
 void
 DriverFactory::DumpDrivers() {
+    debug("-----=[ Dumping Drivers ]=-----");
     for (auto ii = _drivers.begin() ; ii != _drivers.end() ; ii++ )
-         (*ii)->dumpConfig();
+         (*ii)->dump_config();
 }
 
 void
