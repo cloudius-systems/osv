@@ -15,7 +15,6 @@ namespace virtio {
 
     virtio_net::~virtio_net()
     {
-        set_dev_status(0);
     }
 
     bool virtio_net::Init(Device *d)

@@ -40,7 +40,7 @@ class Driver {
 public:
     Driver(u16 vid, u16 id) :_id(id), _vid(vid), _present(false), _bus(0), _slot(0), _func(0)\
            {for (int i=0;i<6;i++) _bars[i] = nullptr;};
-    virtual ~Driver() {for (int i=0;i<6;i++) if (_bars[i]) delete _bars[i];}
+    virtual ~Driver();
 
     bool isPresent();
     void setPresent(u8 bus, u8 slot, u8 func);

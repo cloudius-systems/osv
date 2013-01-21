@@ -282,7 +282,7 @@ void* do_main_thread(void* pprog)
 
     DeviceFactory::Instance()->InitializeDrivers();
 
-    //DriverFactory::Instance()->Destroy();
+    DriverFactory::Instance()->Destroy();
 
     auto t1 = clock::get()->time();
     auto t2 = clock::get()->time();
