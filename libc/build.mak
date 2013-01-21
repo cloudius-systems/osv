@@ -1,6 +1,6 @@
 libc :=
 
-libc += internal/floatscan.o
+#libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
 libc += internal/__lock.o

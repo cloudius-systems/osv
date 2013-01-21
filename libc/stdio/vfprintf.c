@@ -200,6 +200,7 @@ static char *fmt_u(uintmax_t x, char *s)
 	return s;
 }
 
+#ifdef HAVE_FLOAT_SUPPORT
 static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 {
 	uint32_t big[(LDBL_MAX_EXP+LDBL_MANT_DIG)/9+1];
@@ -430,6 +431,7 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 
 	return MAX(w, pl+l);
 }
+#endif /* HAVE_FLOAT_SUPPORT */
 
 static int getint(char **s) {
 	int i;
@@ -618,10 +620,12 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 			pad(f, ' ', w, p, fl^LEFT_ADJ);
 			l = w>p ? w : p;
 			continue;
+#ifdef HAVE_FLOAT_SUPPORT
 		case 'e': case 'f': case 'g': case 'a':
 		case 'E': case 'F': case 'G': case 'A':
 			l = fmt_fp(f, arg.f, w, p, fl, t);
 			continue;
+#endif
 		}
 
 		if (p < z-a) p = z-a;
