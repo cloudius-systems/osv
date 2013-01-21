@@ -289,6 +289,18 @@ void* do_main_thread(void* pprog)
     debug(fmt("clock@t1 %1%") % t1);
     debug(fmt("clock@t2 %1%") % t2);
 
+    timespec ts = {};
+    ts.tv_nsec = 100;
+    t1 = clock::get()->time();
+    nanosleep(&ts, nullptr);
+    t2 = clock::get()->time();
+    debug(fmt("nanosleep(100) -> %d") % (t2 - t1));
+    ts.tv_nsec = 100000;
+    t1 = clock::get()->time();
+    nanosleep(&ts, nullptr);
+    t2 = clock::get()->time();
+    debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
+
 //    load_tests(prog);
     start_jvm(prog);
 
