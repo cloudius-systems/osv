@@ -2,6 +2,7 @@
 #define VIRTIO_NET_DRIVER_H
 
 #include "drivers/virtio.hh"
+#include "drivers/pci-device.hh"
 
 namespace virtio {
 
@@ -40,7 +41,7 @@ namespace virtio {
         virtio_net();
         virtual ~virtio_net();
 
-        virtual bool Init(Device *d);
+        virtual bool Init(pci_device *d);
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_NET_F_CSUM) | (1 << VIRTIO_NET_F_MAC)); }
 

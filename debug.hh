@@ -1,3 +1,6 @@
+#ifndef DEBUG_H
+#define DEBUG_H
+
 #include <iostream>
 #include "boost/format.hpp"
 
@@ -22,3 +25,4 @@ void debug(const char *msg, bool lf=true);
 void debug(const boost::format& fmt, bool lf=true);
 void debug(std::string str, bool lf=true);
 
+#endif // DEBUG_H

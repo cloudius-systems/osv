@@ -113,7 +113,6 @@ void pci_device_enumeration(void)
     u16 bus, slot, func;
     DeviceFactory* factory = DeviceFactory::Instance();
 
-
     for (bus = 0; bus < 256; bus++)
         for (slot = 0; slot < 32; slot++)
             for (func = 0; func < 8; func++) {
@@ -129,14 +128,5 @@ void pci_device_enumeration(void)
                             break;
             }
 }
-
-Bar::Bar(int n, Driver* d) {
-    u32 bar = read_pci_config(d->getBus(), d->getSlot(), d->getFunc(), PCI_BAR0_ADDR + n*4);
-    _type = (bar & BAR_TYPE)? BAR_MMIO:BAR_IO;
-
-    _addr = (_type == BAR_MMIO)? bar & 0xfffffff0 : bar & 0xfffffffc;
-    debug(fmt("Device vid %x has io bar %d: addr=%x") % d->getSubsysVid() % n % _addr);
-}
-
 
 }

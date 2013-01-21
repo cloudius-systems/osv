@@ -3,7 +3,6 @@
 
 #include "drivers/pci.hh"
 #include "drivers/driver.hh"
-#include "drivers/device.hh"
 #include <unordered_set>
 
 using namespace pci;
@@ -13,7 +12,7 @@ public:
     static DriverFactory* Instance() {return (pinstance)? pinstance: (pinstance = new DriverFactory);};
     void RegisterDriver(Driver* d);
     Driver* lookup(u16 id, u16 vid);
-    bool InitializeDriver(Device* d);
+    bool InitializeDriver(pci_device* d);
 
     void DumpDrivers();
 

@@ -2,6 +2,8 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/virtio-vring.hh"
+#include "drivers/pci-function.hh"
+#include "drivers/pci-device.hh"
 
 #include "debug.hh"
 
@@ -9,8 +11,8 @@ using namespace pci;
 
 namespace virtio {
 
-    virtio_driver::virtio_driver(u16 device_id) 
-        : Driver(VIRTIO_VENDOR_ID, device_id)
+    virtio_driver::virtio_driver(u16 device_id)
+        : Driver(VIRTIO_VENDOR_ID, device_id), _bar1(nullptr)
     {
         for (int i=0; i < max_virtqueues_nr; i++) {
             _queues[i] = NULL;
@@ -30,41 +32,41 @@ namespace virtio {
     }
 
     void virtio_driver::reset_host_side() {
-        if (!isPresent()) return;
-
         set_dev_status(0);
         pci_conf_write(VIRTIO_PCI_QUEUE_PFN,(u32)0);
     }
 
     bool virtio_driver::earlyInitChecks()
     {
-        if (!Driver::earlyInitChecks()) {
-            return false;
-        }
+    	if (!Driver::earlyInitChecks()) {
+    		return false;
+    	}
 
         u8 rev;
-        if (getRevision() != VIRTIO_PCI_ABI_VERSION) {
+        if (_dev->get_revision_id() != VIRTIO_PCI_ABI_VERSION) {
             debug(fmt("Wrong virtio revision=%x") % rev);
             return false;
         }
 
-        if (_id < VIRTIO_PCI_ID_MIN || _id > VIRTIO_PCI_ID_MAX) {
+        u16 dev_id = _dev->get_device_id();
+
+        if (dev_id < VIRTIO_PCI_ID_MIN || dev_id > VIRTIO_PCI_ID_MAX) {
             debug(fmt("Wrong virtio dev id %x") % _id);
 
             return false;
         }
 
-        debug(fmt("%s passed. Subsystem: vid:%x:id:%x") % __FUNCTION__ % (u16)getSubsysVid() % (u16)getSubsysId());
+        debug(fmt("%s passed. Subsystem: vid:%x:id:%x") % __FUNCTION__ % (u16)_dev->get_subsystem_vid() % (u16)_dev->get_subsystem_id());
         return true;
     }
 
-    bool virtio_driver::Init(Device* dev)
+    bool virtio_driver::Init(pci_device* dev)
     {
         if (!Driver::Init(dev)) {
             return (false);
         }
 
-        debug(fmt("Virtio:Init %x:%x") % _vid % _id);
+        _bar1 = _dev->get_bar(1);
 
         //make sure the queue is reset
         reset_host_side();
@@ -75,7 +77,6 @@ namespace virtio {
         // Generic init of virtqueues
         probe_virt_queues();
         setup_features();
-
 #if 0
         for (int i=0;i<32;i++)
             debug(fmt("%d:%d ") % i % get_device_feature_bit(i), false);
@@ -140,10 +141,10 @@ namespace virtio {
 
     }
 
-    void virtio_driver::dumpConfig() const
+    void virtio_driver::dump_config()
     {
-        Driver::dumpConfig();
-        debug(fmt("Virtio vid:id= %x:%x") % _vid % _id);
+        Driver::dump_config();
+        debug(fmt("virtio_driver vid:id= %x:%x") % _vid % _id);
     }
 
 
@@ -189,12 +190,12 @@ namespace virtio {
 
     u32 virtio_driver::get_virtio_config(int offset)
     {
-        return (_bars[0]->read(offset));
+        return (_bar1->read(offset));
     }
 
     void virtio_driver::set_virtio_config(int offset, u32 val)
     {
-        _bars[0]->write(offset, val);
+        _bar1->write(offset, val);
     }
 
     bool virtio_driver::get_virtio_config_bit(int offset, int bit)
@@ -214,14 +215,14 @@ namespace virtio {
     {
         u8* ptr = reinterpret_cast<u8*>(buf);
         for (int i=0;i<length;i++)
-            _bars[0]->write(offset+i, ptr[i]);
+            _bar1->write(offset+i, ptr[i]);
     }
 
     void virtio_driver::pci_conf_read(int offset, void* buf, int length)
     {
         unsigned char* ptr = reinterpret_cast<unsigned char*>(buf);
         for (int i=0;i<length;i++)
-            ptr[i] = _bars[0]->readb(offset+i);
+            ptr[i] = _bar1->readb(offset+i);
     }
 
 }
