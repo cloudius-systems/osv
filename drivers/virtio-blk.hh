@@ -138,6 +138,8 @@ namespace virtio {
         void test();
 
     private:
+
+        virtio_blk_config _config;
     };
 
 }

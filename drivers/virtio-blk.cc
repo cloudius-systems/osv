@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include "debug.hh"
+#include "cdefs.hh"
 
 using namespace memory;
 
@@ -28,6 +29,11 @@ namespace virtio {
     {
         virtio_driver::Init(d);
         
+        pci_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(this),
+                      &_config.capacity,
+                      sizeof(_config.capacity));
+        debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
+
         add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
         return true;
