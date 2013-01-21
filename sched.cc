@@ -21,10 +21,12 @@ elf::tls_data tls;
 
 namespace sched {
 
-void schedule()
+void schedule_force();
+
+void schedule(bool yield)
 {
     thread* p = thread::current();
-    if (!p->_waiting) {
+    if (!p->_waiting && !yield) {
         return;
     }
     // FIXME: a proper idle mechanism
@@ -41,6 +43,18 @@ void schedule()
     if (n != thread::current()) {
         n->switch_to();
     }
+}
+
+void thread::yield()
+{
+    if (runqueue.empty()) {
+        return;
+    }
+    auto t = current();
+    runqueue.push_back(t);
+    t->_on_runqueue = true;
+    assert(!t->_waiting);
+    schedule(true);
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)

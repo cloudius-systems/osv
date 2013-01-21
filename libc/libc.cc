@@ -1,4 +1,5 @@
 #include "libc.hh"
+#include "sched.hh"
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -8,6 +9,7 @@
 #include <sys/resource.h>
 #include <pwd.h>
 #include <sys/utsname.h>
+#include <sched.h>
 
 int libc_error(int err)
 {
@@ -209,5 +211,11 @@ int uname(struct utsname* u)
     strcpy(u->release, "3.7");
     strcpy(u->version, "#1 SMP");
     strcpy(u->machine, "x86_64");
+    return 0;
+}
+
+int sched_yield()
+{
+    sched::thread::yield();
     return 0;
 }

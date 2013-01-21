@@ -11,7 +11,7 @@
 namespace sched {
 
 class thread;
-void schedule();
+void schedule(bool yield = false);
 
 extern "C" {
     void thread_main_c(thread* t);
@@ -32,6 +32,7 @@ public:
     static void wait_until(Pred pred);
     void wake();
     static void sleep_until(u64 abstime);
+    static void yield();
     static thread* current();
     stack_info get_stack_info();
 private:
@@ -54,7 +55,7 @@ private:
     stack_info _stack;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
-    friend void schedule();
+    friend void schedule(bool yield);
 };
 
 thread* current();
