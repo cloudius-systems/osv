@@ -709,11 +709,18 @@ out_errno:
 /*
  * Duplicate a file descriptor to a particular value.
  */
-int dup2(int oldfd, int newfd)
+int dup3(int oldfd, int newfd, int flags)
 {
 	struct task *t = main_task;
 	file_t fp, org;
 	int error;
+
+	/*
+	 * Don't allow any argument but O_CLOEXEC.  But we even ignore
+	 * that as we don't support exec() and thus don't care.
+	 */
+	if ((flags & ~O_CLOEXEC) != 0)
+		return -EINVAL;
 
 	error = EBADF;
 	if (oldfd >= OPEN_MAX || newfd >= OPEN_MAX)
@@ -735,6 +742,11 @@ int dup2(int oldfd, int newfd)
 out_errno:
 	errno = error;
 	return -1;
+}
+
+int dup2(int oldfd, int newfd)
+{
+	return dup3(oldfd, newfd, 0);
 }
 
 /*
