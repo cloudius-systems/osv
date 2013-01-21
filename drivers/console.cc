@@ -24,14 +24,20 @@ void write(const char *msg, size_t len, bool lf)
 static int
 console_write(struct device *dev, struct uio *uio, int ioflag)
 {
-    if (uio->uio_iovcnt != 1)
-        return EINVAL;
-    const void *buf = uio->uio_iov->iov_base;
-    size_t count = uio->uio_iov->iov_len;
-    console::write(reinterpret_cast<const char *>(buf), count, false);
+    while (uio->uio_resid > 0) {
+        struct iovec *iov = uio->uio_iov;
 
-    uio->uio_resid -= count;
-    uio->uio_offset += count;
+	if (iov->iov_len) {
+            console::write(reinterpret_cast<const char *>(iov->iov_base),
+                           iov->iov_len, false);
+        }
+
+        uio->uio_iov++;
+        uio->uio_iovcnt--;
+        uio->uio_resid -= iov->iov_len;
+        uio->uio_offset += iov->iov_len;
+    }
+
     return 0;
 }
 
