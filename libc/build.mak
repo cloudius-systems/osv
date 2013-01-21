@@ -353,3 +353,4 @@ libc += time.o
 libc += signal.o
 libc += mman.o
 libc += qsort.o
+libc += sem.o
