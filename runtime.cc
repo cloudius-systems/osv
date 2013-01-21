@@ -71,12 +71,6 @@ extern "C" {
 
 void *__dso_handle;
 
-void ignore_debug_write(const char *msg)
-{
-}
-
-void (*debug_write)(const char *msg) = ignore_debug_write; //replace w/ 'debug'
-
 #define WARN(msg) do {					\
         static bool _x;					\
 	if (!_x) {					\
