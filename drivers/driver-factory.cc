@@ -40,6 +40,9 @@ DriverFactory::DumpDrivers() {
 
 void
 DriverFactory::Destroy() {
-    for (auto ii = _drivers.begin() ; ii != _drivers.end() ; ii++ )
-        delete *ii;
+    for (auto ii = _drivers.begin() ; ii != _drivers.end() ; ii++ ) {
+        Driver* del_me = *ii;
+        ii = _drivers.erase(ii);
+        delete del_me;
+    }
 }
