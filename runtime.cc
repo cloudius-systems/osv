@@ -197,11 +197,6 @@ static struct __locale_struct c_locale = {
     c_locale_array + 128, // __ctype_b
 };
 
-int ioctl(int fd, unsigned long request, ...)
-{
-    UNIMPLEMENTED("ioctl");
-}
-
 int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
     UNIMPLEMENTED("poll");
