@@ -45,6 +45,10 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(makedir)
 	$(q-build-s)
 
+%.class: %.java
+	$(makedir)
+	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^,JAVAC $@)
+
 tests/%.o: CFLAGS += -fPIC
 
 %.so: CFLAGS+=-fPIC -shared
@@ -58,7 +62,9 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-tests := tests/tst-pthread.so
+tests := tests/tst-pthread.so tests/hello/Hello.class
+
+tests/hello/Hello.class: javabase=tests/hello
 
 tests/tst-pthread.so: tests/tst-pthread.o
 
