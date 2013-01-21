@@ -39,6 +39,7 @@ if options.depends:
     depends = file(options.depends, 'w')
 out = file(options.output, 'w')
 manifest = ConfigParser.SafeConfigParser()
+manifest.optionxform = str # avoid lowercasing
 manifest.read(options.manifest)
 
 depends.write('%s: \\\n' % (options.output,))
