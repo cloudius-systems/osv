@@ -110,6 +110,13 @@ void thread::wait()
     schedule();
 }
 
+void thread::sleep_until(u64 abstime)
+{
+    timer t(*current());
+    t.set(abstime);
+    wait_until([&] { return t.expired(); });
+}
+
 void thread::stop_wait()
 {
     _waiting = false;
