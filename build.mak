@@ -1,6 +1,6 @@
 
 arch = x64
-INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include
+INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/includes
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(arch-cflags) $(cflags-$(mode)) -mno-red-zone
