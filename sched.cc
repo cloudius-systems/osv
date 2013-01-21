@@ -38,7 +38,9 @@ void schedule()
     });
     assert(!n->_waiting);
     n->_on_runqueue = false;
-    n->switch_to();
+    if (n != thread::current()) {
+        n->switch_to();
+    }
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)
