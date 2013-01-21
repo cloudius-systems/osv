@@ -265,6 +265,12 @@ int setvbuf(FILE *stream, char *buf, int mode, size_t size)
     debug("stub setvbuf()");
     return 0;
 }
+
+void setbuf(FILE *stream, char *buf)
+{
+    debug("stub setvbuf()");
+}
+
 UNIMPL(size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream))
 UNIMPL(size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream))
 UNIMPL(wint_t fgetwc(FILE *stream))
