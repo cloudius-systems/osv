@@ -31,6 +31,7 @@ public:
     template <class Pred>
     static void wait_until(Pred pred);
     void wake();
+    static void sleep_until(u64 abstime);
     static thread* current();
     stack_info get_stack_info();
 private:

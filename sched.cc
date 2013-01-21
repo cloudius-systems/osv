@@ -38,7 +38,9 @@ void schedule()
     });
     assert(!n->_waiting);
     n->_on_runqueue = false;
-    n->switch_to();
+    if (n != thread::current()) {
+        n->switch_to();
+    }
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)
@@ -106,6 +108,13 @@ void thread::wait()
         return;
     }
     schedule();
+}
+
+void thread::sleep_until(u64 abstime)
+{
+    timer t(*current());
+    t.set(abstime);
+    wait_until([&] { return t.expired(); });
 }
 
 void thread::stop_wait()
