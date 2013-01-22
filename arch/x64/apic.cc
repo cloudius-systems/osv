@@ -17,8 +17,9 @@ apic_driver::~apic_driver()
 }
 
 x2apic::x2apic()
+    : _apic_base_lo(0xfee00000), _apic_base_hi(0)
 {
-    processor::wrmsr(msr::IA32_APIC_BASE, 0xfee00000 | (3 << 10));
+    processor::wrmsr(msr::IA32_APIC_BASE, _apic_base_lo | (3 << 10));
 }
 
 void x2apic::self_ipi(unsigned vector)
@@ -53,6 +54,29 @@ apic_driver* apic = create_apic_driver();
 void apic_driver::set_lvt(apiclvt source, unsigned vector)
 {
     write(static_cast<apicreg>(source), vector);
+}
+
+bool apic_driver::compose_msix(u8 vector, u8 dest_id, u64& out_address, u32& out_data)
+{
+    if (vector <= 15) {
+        return false;
+    }
+
+    u64 addr =
+        ( (u64)_apic_base_hi << 32 ) |
+        ( _apic_base_lo & 0xFFF00000 ) |
+        ( dest_id << 12 );
+
+    u32 data =
+        ( delivery_mode::FIXED_DELIVERY << msi_data_fields::MSI_DELIVERY_MODE ) |
+        ( level_assertion::MSI_ASSSERT << msi_data_fields::MSI_LEVEL_ASSERTION ) |
+        ( trigger_mode::TRIGGER_MODE_EDGE << msi_data_fields::MSI_TRIGGER_MODE ) |
+        vector;
+
+    out_address = addr;
+    out_data = data;
+
+    return true;
 }
 
 }

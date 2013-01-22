@@ -40,6 +40,33 @@ enum class apiclvt {
     lint1 = apicreg::LVT1,
 };
 
+enum class msi_data_fields {
+    MSI_VECTOR = 0,
+    MSI_DELIVERY_MODE = 8,
+    MSI_LEVEL_ASSERTION = 14,
+    MSI_TRIGGER_MODE = 15
+};
+
+enum class delivery_mode {
+    FIXED_DELIVERY = 0,
+    LOWPRI_DELIVERY = 1,
+    SMI_DELIVERY = 2,
+    NMI_DELIVERY = 4,
+    INIT_DELIVERY = 5,
+    EXTINT_DELIVERY = 7
+};
+
+// Care only if trigger_mode=level
+enum class level_assertion {
+    MSI_DEASSERT = 0,
+    MSI_ASSSERT = 1
+};
+
+enum class trigger_mode {
+    TRIGGER_MODE_EDGE = 0,
+    TRIGGER_MODE_LEVEL = 1
+};
+
 class apic_driver {
 public:
     virtual ~apic_driver();
@@ -48,6 +75,12 @@ public:
     virtual void eoi() = 0;
     virtual void write(apicreg reg, u32 value) = 0;
     void set_lvt(apiclvt reg, unsigned vector);
+    // vector should be above 31, below 15 will fail
+    // dest_id is the apic id, if using an io_apic.
+    bool compose_msix(u8 vector, u8 dest_id, u64& out_address, u32& out_data);
+protected:
+    u32 _apic_base_lo;
+    u32 _apic_base_hi;
 };
 
 extern apic_driver* apic;
