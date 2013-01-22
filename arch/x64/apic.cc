@@ -10,6 +10,12 @@ public:
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned cpu, unsigned vector);
     virtual void eoi();
+    // vector should be above 31, below 15 will fail
+    // dest_id is the apic id, if using an io_apic.
+    bool compose_msix(u8 vector, u8 dest_id, u64& out_address, u32& out_data);
+protected:
+    u32 _apic_base_lo;
+    u32 _apic_base_hi;
 };
 
 apic_driver::~apic_driver()
@@ -56,7 +62,7 @@ void apic_driver::set_lvt(apiclvt source, unsigned vector)
     write(static_cast<apicreg>(source), vector);
 }
 
-bool apic_driver::compose_msix(u8 vector, u8 dest_id, u64& out_address, u32& out_data)
+bool x2apic::compose_msix(u8 vector, u8 dest_id, u64& out_address, u32& out_data)
 {
     if (vector <= 15) {
         return false;
