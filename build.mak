@@ -128,6 +128,7 @@ objects += mempool.o
 objects += arch/x64/elf-dl.o
 objects += linux.o
 objects += sched.o
+objects += mmio.o
 
 objects += kern/sglist.o
 
