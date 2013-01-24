@@ -1,6 +1,6 @@
 .code16
 
-tmp = 0x8000
+tmp = 0x80000
 bootsect = 0x7c00
 target = 0x200000
 entry = 24+target
@@ -44,7 +44,7 @@ init:
 	mov %ax, %ds
 	mov %ax, %es
 	mov %ax, %ss
-	mov $tmp, %sp
+	mov $0x7c00, %sp
 read_disk:
 	lea int1342_struct, %si
 	mov $0x42, %ah
