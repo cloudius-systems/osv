@@ -1033,6 +1033,8 @@ void mount_rootfs(void)
 
 int console_init(void);
 
+int vfs_initialized;
+
 void
 vfs_init(void)
 {
@@ -1060,6 +1062,7 @@ vfs_init(void)
 		printf("failed to dup console (1)\n");
 	if (dup(0) != 2)
 		printf("failed to dup console (2)\n");
+	vfs_initialized = 1;
 }
 
 void sys_panic(const char *str)
