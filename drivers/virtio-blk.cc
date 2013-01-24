@@ -40,17 +40,38 @@ namespace virtio {
         return true;
     }
 
+    void virtio_blk::make_virtio_req(sglist* sg, u64 sector)
+    {
+        virtio_blk_outhdr* hdr = reinterpret_cast<virtio_blk_outhdr*>(malloc(sizeof(virtio_blk_outhdr)));
+        hdr->type = VIRTIO_BLK_T_OUT;
+        hdr->ioprio = 0;
+        hdr->sector = sector;
+
+        sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
+
+        virtio_blk_res* res = reinterpret_cast<virtio_blk_res*>(malloc(sizeof(virtio_blk_res)));
+        res->status = 0;
+        sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
+    }
+
     void virtio_blk::test() {
         int i;
-        sglist* sg = new sglist();
-        for (i=0;i<10;i++) {
+
+        debug("test virtio blk");
+
+        for (i=0;i<200;i++) {
+            sglist* sg = new sglist();
             void* buf = malloc(page_size);
             memset(buf, 0, page_size);
             sg->add(mmu::virt_to_phys(buf), page_size);
+            make_virtio_req(sg, i*8*512);
+            if (!_queues[0]->add_buf(sg,2,1,sg)) {
+                debug(fmt("virtio blk test - added too many %i, expected") % i);
+                break;
+            }
         }
-        debug("test virtio blk");
-        _queues[0]->add_buf(sg,0,i,nullptr);
-        _queues[0]->kick();
+
+         _queues[0]->kick();
         debug("test end");
     }
 
