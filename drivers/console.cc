@@ -41,12 +41,23 @@ console_write(struct device *dev, struct uio *uio, int ioflag)
     return 0;
 }
 
+static int
+console_ioctl(struct device *dev, u_long request, void *arg)
+{
+    switch (request) {
+    case 0x5401: // TCGETS
+        return 0;   // XXX: stubbing out to get libc into line buffering mode
+    default:
+        return -ENOTTY;
+    }
+}
+
 static struct devops console_devops = {
     .open	= no_open,
     .close	= no_close,
     .read	= no_read,
     .write	= console_write,
-    .ioctl	= no_ioctl,
+    .ioctl	= console_ioctl,
     .devctl	= no_devctl,
 };
 
