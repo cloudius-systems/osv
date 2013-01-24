@@ -113,25 +113,6 @@ void interrupt(exception_frame* frame)
     processor::wrmsr(0x80b, 0); // EOI
 }
 
-msi_interrupt_handler::msi_interrupt_handler(std::function<void ()> handler)
-    : _vector(idt.register_handler(handler))
-    , _handler(handler)
-{
-}
-
-msi_interrupt_handler::~msi_interrupt_handler()
-{
-    idt.unregister_handler(_vector);
-}
-
-msi_message msi_interrupt_handler::config()
-{
-    msi_message ret;
-    ret.addr = 0xfee00000;
-    ret.data = 0x4000 | _vector;
-    return ret;
-}
-
 #define DUMMY_HANDLER(x) \
      extern "C" void x(); void x() { abort(); }
 
