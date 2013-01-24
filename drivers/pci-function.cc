@@ -299,6 +299,162 @@ namespace pci {
         return (_have_msix);
     }
 
+    int pci_function::msix_get_num_entries(void)
+    {
+        if (!is_msix()) {
+            return (0);
+        }
+
+        return (_msix.msix_msgnum);
+    }
+
+    void pci_function::msix_mask_all(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        u16 ctrl = msix_get_control();
+        ctrl |= PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+    }
+
+    void pci_function::msix_unmask_all(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        u16 ctrl = msix_get_control();
+        ctrl &= ~PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+    }
+
+    bool pci_function::msix_mask_entry(int entry_id)
+    {
+        if (!is_msix()) {
+            return (false);
+        }
+
+        if (entry_id >= _msix.msix_msgnum) {
+            return (false);
+        }
+
+        mmioaddr_t entryaddr = msix_get_table() + (entry_id * MSIX_ENTRY_SIZE);
+        mmioaddr_t ctrl = entryaddr + (u8)MSIX_ENTRY_CONTROL;
+
+        u32 ctrl_data = mmio_getl(ctrl);
+        ctrl_data |= (1 << MSIX_ENTRY_CONTROL_MASK_BIT);
+        mmio_setl(ctrl, ctrl_data);
+
+        return (true);
+    }
+
+    bool pci_function::msix_unmask_entry(int entry_id)
+    {
+        if (!is_msix()) {
+            return (false);
+        }
+
+        if (entry_id >= _msix.msix_msgnum) {
+            return (false);
+        }
+
+        mmioaddr_t entryaddr = msix_get_table() + (entry_id * MSIX_ENTRY_SIZE);
+        mmioaddr_t ctrl = entryaddr + (u8)MSIX_ENTRY_CONTROL;
+
+        u32 ctrl_data = mmio_getl(ctrl);
+        ctrl_data &= ~(1 << MSIX_ENTRY_CONTROL_MASK_BIT);
+        mmio_setl(ctrl, ctrl_data);
+
+        return (true);
+    }
+
+    bool pci_function::msix_write_entry(int entry_id, u64 address, u32 data)
+    {
+        if (!is_msix()) {
+            return (false);
+        }
+
+        if (entry_id >= _msix.msix_msgnum) {
+            return (false);
+        }
+
+        mmioaddr_t entryaddr = msix_get_table() + (entry_id * MSIX_ENTRY_SIZE);
+
+        mmio_setq(entryaddr + (u8)MSIX_ENTRY_ADDR, address);
+        mmio_setl(entryaddr + (u8)MSIX_ENTRY_DATA, data);
+
+        return (true);
+    }
+
+    void pci_function::msix_enable(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        // mmap the msix bar into memory
+        pci_bar* msix_bar = get_bar(_msix.msix_table_bar + 1);
+        if (msix_bar == nullptr) {
+            return;
+        }
+
+        msix_bar->map();
+
+        // Disabled intx assertions which is turned on by default
+        disable_intx();
+
+        // Only after enabling msix, the access to the pci bar is permitted
+        // so we enable it while masking all interrupts in the msix ctrl reg
+        u16 ctrl = msix_get_control();
+        ctrl |= PCIM_MSIXCTRL_MSIX_ENABLE;
+        ctrl |= PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+
+        // Mask all individual entries
+        for (int i=0; i<_msix.msix_msgnum; i++) {
+            msix_mask_entry(i);
+        }
+
+        // After all individual entries are masked,
+        // Unmask the main block
+        ctrl &= ~PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+    }
+
+    void pci_function::msix_disable(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        u16 ctrl = msix_get_control();
+        ctrl &= ~PCIM_MSIXCTRL_MSIX_ENABLE;
+        msix_set_control(ctrl);
+    }
+
+    void pci_function::msix_set_control(u16 ctrl)
+    {
+        pci_writew(_msix.msix_location + PCIR_MSIX_CTRL, ctrl);
+    }
+
+    u16 pci_function::msix_get_control(void)
+    {
+        return (pci_readw(_msix.msix_location + PCIR_MSIX_CTRL));
+    }
+
+    mmioaddr_t pci_function::msix_get_table(void)
+    {
+        pci_bar* msix_bar = get_bar(_msix.msix_table_bar + 1);
+        if (msix_bar == nullptr) {
+            return (mmio_nullptr);
+        }
+
+        return ( reinterpret_cast<mmioaddr_t>(msix_bar->get_mmio() +
+                                              _msix.msix_table_offset) );
+    }
+
     u8 pci_function::pci_readb(u8 offset)
     {
         return read_pci_config_byte(_bus, _device, _func, offset);

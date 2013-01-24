@@ -108,7 +108,16 @@ namespace pci {
         PCIM_MSIX_BIR_BAR_1C = 3,
         PCIM_MSIX_BIR_BAR_20 = 4,
         PCIM_MSIX_BIR_BAR_24 = 5,
-        PCIM_MSIX_VCTRL_MASK = 0x1
+        PCIM_MSIX_VCTRL_MASK = 0x1,
+
+        // Entry offsets
+        MSIX_ENTRY_ADDR             = 0,
+        MSIX_ENTRY_ADDR_LO          = 0,
+        MSIX_ENTRY_ADDR_HI          = 4,
+        MSIX_ENTRY_DATA             = 8,
+        MSIX_ENTRY_CONTROL          = 12,
+        MSIX_ENTRY_SIZE             = 16,
+        MSIX_ENTRY_CONTROL_MASK_BIT = 0
     };
 
     //  Interesting values for PCI MSI-X
@@ -254,7 +263,19 @@ namespace pci {
         void set_interrupt_line(u8 irq);
         u8 get_interrupt_pin(void);
 
+        // Does this device support MSI-x
         bool is_msix(void);
+        int msix_get_num_entries(void);
+        void msix_mask_all(void);
+        void msix_unmask_all(void);
+        bool msix_mask_entry(int entry_id);
+        bool msix_unmask_entry(int entry_id);
+        bool msix_write_entry(int entry_id, u64 address, u32 data);
+
+        // Enable MSIx, start with all vectors masked
+        void msix_enable(void);
+        // Good for reset maybe, call disable and enable
+        void msix_disable(void);
 
         // Access to PCI address space
         virtual u8 pci_readb(u8 offset);
@@ -291,6 +312,11 @@ namespace pci {
         // Parsing of extra capabilities
         virtual bool parse_pci_capabilities(void);
         virtual bool parse_pci_msix(u8 off);
+
+        // Don't call if msix capability is not present
+        void msix_set_control(u16 ctrl);
+        u16 msix_get_control(void);
+        mmioaddr_t msix_get_table(void);
 
         // Position
         u8  _bus, _device, _func;
