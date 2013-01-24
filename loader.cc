@@ -189,14 +189,19 @@ void test_clock_events()
     clock_event->set_callback(old_callback);
 }
 
-void load_test(elf::program& prog, char *path)
+struct argblock {
+    int ac;
+    char** av;
+};
+
+void load_test(elf::program *prog, char *path)
 {
     printf("running %s\n", path);
 
-    prog.add_object(path);
+    prog->add_object(path);
 
     auto test_main
-        = prog.lookup_function<int (int, const char **)>("main");
+        = prog->lookup_function<int (int, const char **)>("main");
     std::string str = "test";
     const char *name = str.c_str();
     int ret = test_main(1, &name);
@@ -205,11 +210,11 @@ void load_test(elf::program& prog, char *path)
     else
         printf("ok.\n");
 
-    prog.remove_object(path);
+    prog->remove_object(path);
 }
 
 
-int load_tests(elf::program& prog)
+int load_tests(elf::program *prog, struct argblock *args)
 {
 #define TESTDIR		"/tests"
     DIR *dir = opendir(TESTDIR);
@@ -246,10 +251,15 @@ int load_tests(elf::program& prog)
     return 0;
 }
 
-struct argblock {
-    int ac;
-    char** av;
-};
+void run_main(elf::program *prog, struct argblock *args)
+{
+    auto av = args->av;
+    auto ac = args->ac;
+    prog->add_object(av[0]);
+    ++av, --ac;
+    auto main = prog->lookup_function<void (int, char**)>("main");
+    main(ac, av);
+}
 
 void* do_main_thread(void *_args)
 {
@@ -288,13 +298,8 @@ void* do_main_thread(void *_args)
     t2 = clock::get()->time();
     debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
 
-//    load_tests(prog);
-    auto av = args->av;
-    auto ac = args->ac;
-    prog->add_object(av[0]);
-    ++av, --ac;
-    auto main = prog->lookup_function<void (int, char**)>("main");
-    main(ac, av);
+//    load_tests(prog, args);
+    run_main(prog, args);
 
     while (true)
 	;
