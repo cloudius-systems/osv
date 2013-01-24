@@ -95,9 +95,9 @@ namespace pci {
     }
 
     pci_function::pci_function(u8 bus, u8 device, u8 func)
-        : _bus(bus), _device(device), _func(func)
+        : _bus(bus), _device(device), _func(func), _have_msix(false)
     {
-        parse_pci_config();
+
     }
 
     pci_function::~pci_function()
