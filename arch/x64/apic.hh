@@ -67,14 +67,27 @@ enum trigger_mode {
     TRIGGER_MODE_LEVEL = 1
 };
 
+struct msi_message {
+    msi_message() : _addr(0), _data(0) {}
+    u64 _addr;
+    u32 _data;
+};
+
 class apic_driver {
 public:
+    apic_driver() : _apic_base_lo(0xfee00000), _apic_base_hi(0) {}
     virtual ~apic_driver();
     virtual void self_ipi(unsigned vector) = 0;
     virtual void ipi(unsigned cpu, unsigned vector) = 0;
     virtual void eoi() = 0;
     virtual void write(apicreg reg, u32 value) = 0;
     void set_lvt(apiclvt reg, unsigned vector);
+    // vector should be above 31, below 15 will fail
+    // dest_id is the apic id, if using an io_apic.
+    msi_message compose_msix(u8 vector, u8 dest_id);
+protected:
+    u32 _apic_base_lo;
+    u32 _apic_base_hi;
 };
 
 extern apic_driver* apic;

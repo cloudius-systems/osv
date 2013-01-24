@@ -1,12 +1,15 @@
 #include "debug.hh"
+#include "mmio.hh"
 #include "pci.hh"
 #include "pci-function.hh"
 
 namespace pci {
 
     pci_bar::pci_bar(pci_function* dev, u8 pos)
-        : _dev(dev), _pos(pos), _addr_lo(0), _addr_hi(0), _addr_64(0), _addr_size(
-            0), _is_mmio(false), _is_64(false), _is_prefetchable(false)
+        : _dev(dev), _pos(pos),
+          _addr_lo(0), _addr_hi(0), _addr_64(0), _addr_size(0),
+          _addr_mmio(mmio_nullptr),
+          _is_mmio(false), _is_64(false), _is_prefetchable(false)
     {
         init();
     }
@@ -44,24 +47,57 @@ namespace pci {
 
     void pci_bar::test_bar_size(void)
     {
-#if 0
-        u32 val = _dev->pci_readl(_pos);
+        u32 lo_orig = _dev->pci_readl(_pos);
 
         // Size test
         _dev->pci_writel(_pos, 0xFFFFFFFF);
-        u32 bits = _dev->pci_readl(_pos);
-
-        // TODO: Implement
-
+        u32 lo = _dev->pci_readl(_pos);
         // Restore
-        _dev->pci_writel(_pos, val);
-#endif
+        _dev->pci_writel(_pos, lo_orig);
+
+        if (is_pio()) {
+            lo &= PCI_BAR_PIO_ADDR_MASK;
+        } else {
+            lo &= PCI_BAR_MEM_ADDR_LO_MASK;
+        }
+
+        u32 hi = 0xFFFFFFFF;
+
+        if (is_64()) {
+            u32 hi_orig = _dev->pci_readl(_pos+4);
+            _dev->pci_writel(_pos+4, 0xFFFFFFFF);
+            hi = _dev->pci_readl(_pos+4);
+            // Restore
+            _dev->pci_writel(_pos+4, hi_orig);
+        }
+
+        u64 bits = (u64)hi << 32 | lo;
+        _addr_size = ~bits + 1;
+    }
+
+    void pci_bar::map(void)
+    {
+        if (_is_mmio) {
+            _addr_mmio = mmio_map(get_addr64(), get_size());
+        }
+    }
+
+    void pci_bar::unmap(void)
+    {
+        if ((_is_mmio) && (_addr_mmio != mmio_nullptr)) {
+            mmio_unmap(_addr_mmio, get_size());
+        }
+    }
+
+    mmioaddr_t pci_bar::get_mmio(void)
+    {
+        return (_addr_mmio);
     }
 
     pci_function::pci_function(u8 bus, u8 device, u8 func)
-        : _bus(bus), _device(device), _func(func)
+        : _bus(bus), _device(device), _func(func), _have_msix(false)
     {
-        parse_pci_config();
+
     }
 
     pci_function::~pci_function()
@@ -263,6 +299,162 @@ namespace pci {
         return (_have_msix);
     }
 
+    int pci_function::msix_get_num_entries(void)
+    {
+        if (!is_msix()) {
+            return (0);
+        }
+
+        return (_msix.msix_msgnum);
+    }
+
+    void pci_function::msix_mask_all(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        u16 ctrl = msix_get_control();
+        ctrl |= PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+    }
+
+    void pci_function::msix_unmask_all(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        u16 ctrl = msix_get_control();
+        ctrl &= ~PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+    }
+
+    bool pci_function::msix_mask_entry(int entry_id)
+    {
+        if (!is_msix()) {
+            return (false);
+        }
+
+        if (entry_id >= _msix.msix_msgnum) {
+            return (false);
+        }
+
+        mmioaddr_t entryaddr = msix_get_table() + (entry_id * MSIX_ENTRY_SIZE);
+        mmioaddr_t ctrl = entryaddr + (u8)MSIX_ENTRY_CONTROL;
+
+        u32 ctrl_data = mmio_getl(ctrl);
+        ctrl_data |= (1 << MSIX_ENTRY_CONTROL_MASK_BIT);
+        mmio_setl(ctrl, ctrl_data);
+
+        return (true);
+    }
+
+    bool pci_function::msix_unmask_entry(int entry_id)
+    {
+        if (!is_msix()) {
+            return (false);
+        }
+
+        if (entry_id >= _msix.msix_msgnum) {
+            return (false);
+        }
+
+        mmioaddr_t entryaddr = msix_get_table() + (entry_id * MSIX_ENTRY_SIZE);
+        mmioaddr_t ctrl = entryaddr + (u8)MSIX_ENTRY_CONTROL;
+
+        u32 ctrl_data = mmio_getl(ctrl);
+        ctrl_data &= ~(1 << MSIX_ENTRY_CONTROL_MASK_BIT);
+        mmio_setl(ctrl, ctrl_data);
+
+        return (true);
+    }
+
+    bool pci_function::msix_write_entry(int entry_id, u64 address, u32 data)
+    {
+        if (!is_msix()) {
+            return (false);
+        }
+
+        if (entry_id >= _msix.msix_msgnum) {
+            return (false);
+        }
+
+        mmioaddr_t entryaddr = msix_get_table() + (entry_id * MSIX_ENTRY_SIZE);
+
+        mmio_setq(entryaddr + (u8)MSIX_ENTRY_ADDR, address);
+        mmio_setl(entryaddr + (u8)MSIX_ENTRY_DATA, data);
+
+        return (true);
+    }
+
+    void pci_function::msix_enable(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        // mmap the msix bar into memory
+        pci_bar* msix_bar = get_bar(_msix.msix_table_bar + 1);
+        if (msix_bar == nullptr) {
+            return;
+        }
+
+        msix_bar->map();
+
+        // Disabled intx assertions which is turned on by default
+        disable_intx();
+
+        // Only after enabling msix, the access to the pci bar is permitted
+        // so we enable it while masking all interrupts in the msix ctrl reg
+        u16 ctrl = msix_get_control();
+        ctrl |= PCIM_MSIXCTRL_MSIX_ENABLE;
+        ctrl |= PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+
+        // Mask all individual entries
+        for (int i=0; i<_msix.msix_msgnum; i++) {
+            msix_mask_entry(i);
+        }
+
+        // After all individual entries are masked,
+        // Unmask the main block
+        ctrl &= ~PCIM_MSIXCTRL_FUNCTION_MASK;
+        msix_set_control(ctrl);
+    }
+
+    void pci_function::msix_disable(void)
+    {
+        if (!is_msix()) {
+            return;
+        }
+
+        u16 ctrl = msix_get_control();
+        ctrl &= ~PCIM_MSIXCTRL_MSIX_ENABLE;
+        msix_set_control(ctrl);
+    }
+
+    void pci_function::msix_set_control(u16 ctrl)
+    {
+        pci_writew(_msix.msix_location + PCIR_MSIX_CTRL, ctrl);
+    }
+
+    u16 pci_function::msix_get_control(void)
+    {
+        return (pci_readw(_msix.msix_location + PCIR_MSIX_CTRL));
+    }
+
+    mmioaddr_t pci_function::msix_get_table(void)
+    {
+        pci_bar* msix_bar = get_bar(_msix.msix_table_bar + 1);
+        if (msix_bar == nullptr) {
+            return (mmio_nullptr);
+        }
+
+        return ( reinterpret_cast<mmioaddr_t>(msix_bar->get_mmio() +
+                                              _msix.msix_table_offset) );
+    }
+
     u8 pci_function::pci_readb(u8 offset)
     {
         return read_pci_config_byte(_bus, _device, _func, offset);
@@ -343,7 +535,8 @@ namespace pci {
         int bar_idx = 1;
         pci_bar *bar = get_bar(bar_idx);
         while (bar != nullptr) {
-            debug(fmt("    bar[%d]: addr=%x") % bar_idx % bar->get_addr64());
+            debug(fmt("    bar[%d]: %sbits addr=%x size=%x") % bar_idx %
+                (bar->is_64()?"64":"32") % bar->get_addr64() % bar->get_size());
             bar = get_bar(++bar_idx);
         }
 

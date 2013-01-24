@@ -4,6 +4,7 @@
 #include <map>
 #include <ostream>
 
+#include "mmio.hh"
 #include "types.hh"
 #include "processor.hh"
 #include "debug.hh"
@@ -60,6 +61,11 @@ namespace pci {
         u64 get_addr64(void) { return (_addr_64); }
         u64 get_size(void) { return (_addr_size); }
 
+        // map mmio region
+        void map(void);
+        void unmap(void);
+        mmioaddr_t get_mmio(void);
+
         // Access the pio bar
         u32 read(u32 offset)  { return (inl(_addr_lo + offset)); }
         u16 readw(u32 offset) { return (inw(_addr_lo + offset)); }
@@ -80,6 +86,7 @@ namespace pci {
         u32 _addr_lo, _addr_hi;
         u64 _addr_64;
         u64 _addr_size;
+        mmioaddr_t _addr_mmio;
 
         bool _is_mmio;
         bool _is_64;
@@ -95,25 +102,15 @@ namespace pci {
         PCIR_MSIX_TABLE = 0x4,
         PCIR_MSIX_PBA = 0x8,
         PCIM_MSIX_BIR_MASK = 0x7,
-        PCIM_MSIX_BIR_BAR_10 = 0,
-        PCIM_MSIX_BIR_BAR_14 = 1,
-        PCIM_MSIX_BIR_BAR_18 = 2,
-        PCIM_MSIX_BIR_BAR_1C = 3,
-        PCIM_MSIX_BIR_BAR_20 = 4,
-        PCIM_MSIX_BIR_BAR_24 = 5,
-        PCIM_MSIX_VCTRL_MASK = 0x1
-    };
 
-    //  Interesting values for PCI MSI-X
-    struct msix_vector {
-        u64 mv_address;         // Contents of address register.
-        u32 mv_data;            // Contents of data register.
-        int     mv_irq;
-    };
-
-    struct msix_table_entry {
-        u32   mte_vector; //  1-based index into msix_vectors array.
-        u32   mte_handlers;
+        // Entry offsets
+        MSIX_ENTRY_ADDR             = 0,
+        MSIX_ENTRY_ADDR_LO          = 0,
+        MSIX_ENTRY_ADDR_HI          = 4,
+        MSIX_ENTRY_DATA             = 8,
+        MSIX_ENTRY_CONTROL          = 12,
+        MSIX_ENTRY_SIZE             = 16,
+        MSIX_ENTRY_CONTROL_MASK_BIT = 0
     };
 
     struct pcicfg_msix {
@@ -124,12 +121,6 @@ namespace pci {
         u8 msix_pba_bar;                        //  BAR containing PBA.
         u32 msix_table_offset;
         u32 msix_pba_offset;
-        int msix_alloc;                         //  Number of allocated vectors.
-        int msix_table_len;                     //  Length of virtual table.
-        struct msix_table_entry* msix_table;    //  Virtual table.
-        struct msix_vector* msix_vectors;       //  Array of allocated vectors.
-        pci_bar* msix_table_res;                //  Resource containing vector table.
-        pci_bar* msix_pba_res;                  //  Resource containing PBA.
     };
 
     // Represents a PCI function (pci device, bridge or virtio device)
@@ -247,7 +238,19 @@ namespace pci {
         void set_interrupt_line(u8 irq);
         u8 get_interrupt_pin(void);
 
+        // Does this device support MSI-x
         bool is_msix(void);
+        int msix_get_num_entries(void);
+        void msix_mask_all(void);
+        void msix_unmask_all(void);
+        bool msix_mask_entry(int entry_id);
+        bool msix_unmask_entry(int entry_id);
+        bool msix_write_entry(int entry_id, u64 address, u32 data);
+
+        // Enable MSIx, start with all vectors masked
+        void msix_enable(void);
+        // Good for reset maybe, call disable and enable
+        void msix_disable(void);
 
         // Access to PCI address space
         virtual u8 pci_readb(u8 offset);
@@ -284,6 +287,11 @@ namespace pci {
         // Parsing of extra capabilities
         virtual bool parse_pci_capabilities(void);
         virtual bool parse_pci_msix(u8 off);
+
+        // Don't call if msix capability is not present
+        void msix_set_control(u16 ctrl);
+        u16 msix_get_control(void);
+        mmioaddr_t msix_get_table(void);
 
         // Position
         u8  _bus, _device, _func;
