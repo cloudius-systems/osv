@@ -23,7 +23,7 @@ int main(int ac, char **av)
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
     std::vector<JavaVMOption> options;
-    options.push_back(mkoption("-Djava.class.path=/tests"));
+    options.push_back(mkoption("-Djava.class.path=/java"));
     while (ac > 0 && av[0][0] == '-') {
         options.push_back(mkoption(av[0]));
         ++av, --ac;
