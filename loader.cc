@@ -10,7 +10,6 @@
 #include "debug.hh"
 #include "drivers/pci.hh"
 #include "drivers/device-factory.hh"
-#include <jni.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -123,6 +122,8 @@ void test_threads()
     debug("threading test succeeded");
 }
 
+elf::program* prog;
+
 int main(int ac, char **av)
 {
     debug("Loader Copyright 2013 Unnamed");
@@ -157,11 +158,11 @@ int main(int ac, char **av)
     //	;
 #endif
 
-    elf::program prog(fs);
-    sched::init(prog);
-    void main_thread(elf::program& prog);
+    prog = new elf::program(fs);
+    sched::init(*prog);
     static char main_stack[64*1024];
-    new thread([&] { main_thread(prog); }, { main_stack, sizeof main_stack }, true);
+    void main_thread(int ac, char** av);
+    new thread([&] { main_thread(ac, av); }, { main_stack, sizeof main_stack }, true);
 }
 
 void test_clock_events()
@@ -245,36 +246,14 @@ int load_tests(elf::program& prog)
     return 0;
 }
 
-#define JVM_PATH	"/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
+struct argblock {
+    int ac;
+    char** av;
+};
 
-void start_jvm(elf::program& prog)
+void* do_main_thread(void *_args)
 {
-    prog.add_object(JVM_PATH);
- 
-    auto JNI_GetDefaultJavaVMInitArgs
-        = prog.lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");
-    JavaVMInitArgs vm_args = {};
-    vm_args.version = JNI_VERSION_1_6;
-    JNI_GetDefaultJavaVMInitArgs(&vm_args);
-    vm_args.nOptions = 1;
-    vm_args.options = new JavaVMOption[1];
-    vm_args.options[0].optionString = strdup("-Djava.class.path=/tests");
-
-    auto JNI_CreateJavaVM
-        = prog.lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
-    JavaVM* jvm = nullptr;
-    JNIEnv *env;
-
-    auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
-    assert(ret == 0);
-    auto mainclass = env->FindClass("Hello");
-    auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
-    env->CallStaticVoidMethod(mainclass, mainmethod, nullptr);
-}
-
-void* do_main_thread(void* pprog)
-{
-    auto& prog = *static_cast<elf::program*>(pprog);
+    auto args = static_cast<argblock*>(_args);
     test_threads();
     test_clock_events();
 
@@ -310,18 +289,21 @@ void* do_main_thread(void* pprog)
     debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
 
 //    load_tests(prog);
-    start_jvm(prog);
+    prog->add_object("java.so");
+    auto main = prog->lookup_function<void (int, char**)>("main");
+    main(args->ac, args->av);
 
     while (true)
 	;
     return nullptr;
 }
 
-void main_thread(elf::program& prog)
+void main_thread(int ac, char **av)
 {
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
-    pthread_create(&pthread, nullptr, do_main_thread, &prog);
+    argblock args{ ac, av };
+    pthread_create(&pthread, nullptr, do_main_thread, &args);
     sched::thread::wait_until([] { return false; });
 }
 

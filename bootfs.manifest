@@ -17,4 +17,5 @@
 /tests/tst-malloc.so: ../../external/glibc-testsuite/build/debug/malloc/tst-malloc.so
 /tests/tst-getcwd.so: ../../external/glibc-testsuite/build/debug/io/tst-getcwd.so
 /tests/Hello.class: ./tests/hello/Hello.class
+/java.so: java.so
 #/tests/read01.so: ../../external/ltp/build/debug/syscalls/read/read01.so

@@ -157,7 +157,11 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests)
+java.so: java.o
+
+java.o: CXXFLAGS += -fPIC
+
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)
