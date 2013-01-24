@@ -21,7 +21,7 @@ private:
    static Debug* pinstance;
 };
 
-void debug(const char *msg, bool lf=true);
+extern "C" {void debug(const char *msg); }
 void debug(const boost::format& fmt, bool lf=true);
 void debug(std::string str, bool lf=true);
 

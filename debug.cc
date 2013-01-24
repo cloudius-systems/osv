@@ -9,17 +9,21 @@ using namespace std;
 
 Debug* Debug::pinstance = 0;
 
-void debug(const char *msg, bool lf)
+extern "C" {
+
+void debug(const char *msg)
 {
-    console::write(msg, strlen(msg), lf);
+    console::write(msg, strlen(msg), true);
+}
 }
 
 void debug(std::string str, bool lf)
 {
-    debug(str.c_str(), lf);
+    console::write(str.c_str(), str.length(), lf);
 }
 
-void debug(const boost::format& fmt, bool lf) {
+void debug(const boost::format& fmt, bool lf)
+{
     debug(fmt.str(), lf);
 }
 
