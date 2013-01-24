@@ -50,13 +50,10 @@ struct devinfo {
 
 /*
  * Device flags
- *
- * If D_PROT is set, the device can not be opened via devfs.
  */
 #define D_CHR		0x00000001	/* character device */
 #define D_BLK		0x00000002	/* block device */
 #define D_REM		0x00000004	/* removable device */
-#define D_PROT		0x00000008	/* protected device */
 #define D_TTY		0x00000010	/* tty device */
 
 typedef int (*devop_open_t)   (struct device *, int);
