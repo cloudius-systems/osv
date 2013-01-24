@@ -62,11 +62,12 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-tests := tests/tst-pthread.so tests/hello/Hello.class
+tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 
 tests/hello/Hello.class: javabase=tests/hello
 
 tests/tst-pthread.so: tests/tst-pthread.o
+tests/tst-ramdisk.so: tests/tst-ramdisk.o
 
 all: loader.img loader.bin
 
@@ -104,6 +105,7 @@ fs +=	fs/devfs/devfs_vnops.o \
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
+drivers += drivers/ramdisk.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
