@@ -129,12 +129,23 @@ class virtio_driver;
         
         // Total number of descriptors in ring
         unsigned int _num;
+
+        // Position of the next available descriptor
+        u16 _avail_head;
+        // Position of the used descriptor we've last seen
+        u16 _used_guest_head;
+        // The amount of avail descriptors we've added since last kick
+        u16 _avail_added;
+        u16 _avail_count;
+
         // Flat list of chained descriptors
         vring_desc *_desc;
         // Available for host consumption
         vring_avail *_avail;
         // Available for guest consumption
         vring_used *_used;
+        // cookies to store access to the upper layer pointers
+        void** _cookie;
     };
 
 
