@@ -102,13 +102,6 @@ namespace pci {
         PCIR_MSIX_TABLE = 0x4,
         PCIR_MSIX_PBA = 0x8,
         PCIM_MSIX_BIR_MASK = 0x7,
-        PCIM_MSIX_BIR_BAR_10 = 0,
-        PCIM_MSIX_BIR_BAR_14 = 1,
-        PCIM_MSIX_BIR_BAR_18 = 2,
-        PCIM_MSIX_BIR_BAR_1C = 3,
-        PCIM_MSIX_BIR_BAR_20 = 4,
-        PCIM_MSIX_BIR_BAR_24 = 5,
-        PCIM_MSIX_VCTRL_MASK = 0x1,
 
         // Entry offsets
         MSIX_ENTRY_ADDR             = 0,
@@ -120,18 +113,6 @@ namespace pci {
         MSIX_ENTRY_CONTROL_MASK_BIT = 0
     };
 
-    //  Interesting values for PCI MSI-X
-    struct msix_vector {
-        u64 mv_address;         // Contents of address register.
-        u32 mv_data;            // Contents of data register.
-        int     mv_irq;
-    };
-
-    struct msix_table_entry {
-        u32   mte_vector; //  1-based index into msix_vectors array.
-        u32   mte_handlers;
-    };
-
     struct pcicfg_msix {
         u16 msix_ctrl;                          //  Message Control
         u16 msix_msgnum;                        //  Number of messages
@@ -140,12 +121,6 @@ namespace pci {
         u8 msix_pba_bar;                        //  BAR containing PBA.
         u32 msix_table_offset;
         u32 msix_pba_offset;
-        int msix_alloc;                         //  Number of allocated vectors.
-        int msix_table_len;                     //  Length of virtual table.
-        struct msix_table_entry* msix_table;    //  Virtual table.
-        struct msix_vector* msix_vectors;       //  Array of allocated vectors.
-        pci_bar* msix_table_res;                //  Resource containing vector table.
-        pci_bar* msix_pba_res;                  //  Resource containing PBA.
     };
 
     // Represents a PCI function (pci device, bridge or virtio device)
