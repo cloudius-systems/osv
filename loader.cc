@@ -289,9 +289,12 @@ void* do_main_thread(void *_args)
     debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
 
 //    load_tests(prog);
-    prog->add_object("java.so");
+    auto av = args->av;
+    auto ac = args->ac;
+    prog->add_object(av[0]);
+    ++av, --ac;
     auto main = prog->lookup_function<void (int, char**)>("main");
-    main(args->ac, args->av);
+    main(ac, av);
 
     while (true)
 	;
