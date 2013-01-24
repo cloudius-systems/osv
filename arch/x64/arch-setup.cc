@@ -39,6 +39,24 @@ struct e820ent {
 
 multiboot_info_type* multiboot_info;
 
+extern char** __argv;
+extern int __argc;
+
+void parse_cmdline(multiboot_info_type& mb)
+{
+    auto p = reinterpret_cast<char*>(mb.cmdline);
+    char* cmdline = strdup(p);
+    static std::vector<char*> args;
+    char* save;
+    while ((p = strtok_r(cmdline, " \t\n", &save)) != nullptr) {
+        args.push_back(p);
+        cmdline = nullptr;
+    }
+    args.push_back(nullptr);
+    __argv = args.data();
+    __argc = args.size() - 1;
+}
+
 void setup_temporary_phys_map()
 {
     // duplicate 1:1 mapping into phys_mem
@@ -117,6 +135,8 @@ void arch_setup_free_memory()
     mmu::linear_map(phys_mem, 0, initial_map, initial_map);
     // map the core
     mmu::linear_map(0x200000, 0x200000, edata - 0x200000, 0x200000);
+    // get rid of the command line, before low memory is unmapped
+    parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
     mmu::switch_to_runtime_page_table();
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {

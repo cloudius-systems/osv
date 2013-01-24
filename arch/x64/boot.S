@@ -93,6 +93,8 @@ start64:
     mov %rbx, multiboot_info
     lea init_stack_top, %rsp
     call premain
+    mov __argc, %edi
+    mov __argv, %rsi
     jmp main
     .cfi_endproc
 

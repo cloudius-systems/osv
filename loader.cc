@@ -324,3 +324,6 @@ void main_thread(elf::program& prog)
     pthread_create(&pthread, nullptr, do_main_thread, &prog);
     sched::thread::wait_until([] { return false; });
 }
+
+int __argc;
+char** __argv;
