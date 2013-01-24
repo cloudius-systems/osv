@@ -2,10 +2,12 @@
 
 tmp = 0x80000
 bootsect = 0x7c00
+cmdline = 0x7e00
 target = 0x200000
 entry = 24+target
 
 mb_info = 0x1000
+mb_cmdline = (mb_info + 16)
 mb_mmap_len = (mb_info + 44)
 mb_mmap_addr = (mb_info + 48)
 
@@ -27,6 +29,14 @@ int1342_struct:
 lba:
 	.quad 128
 
+int1342_boot_struct: # for command line
+	.byte 0x10
+	.byte 0
+	.short 0x3f   # 31.5k
+	.short cmdline
+	.short 0
+	.quad 1
+
 xfer: .long target
 
 gdt:
@@ -45,6 +55,11 @@ init:
 	mov %ax, %es
 	mov %ax, %ss
 	mov $0x7c00, %sp
+	lea int1342_boot_struct, %si
+	mov $0x42, %ah
+	mov $0x80, %dl
+	int $0x13
+	movl $cmdline, mb_cmdline
 read_disk:
 	lea int1342_struct, %si
 	mov $0x42, %ah
