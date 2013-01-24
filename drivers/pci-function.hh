@@ -4,6 +4,7 @@
 #include <map>
 #include <ostream>
 
+#include "mmio.hh"
 #include "types.hh"
 #include "processor.hh"
 #include "debug.hh"
@@ -60,6 +61,11 @@ namespace pci {
         u64 get_addr64(void) { return (_addr_64); }
         u64 get_size(void) { return (_addr_size); }
 
+        // map mmio region
+        void map(void);
+        void unmap(void);
+        mmioaddr_t get_mmio(void);
+
         // Access the pio bar
         u32 read(u32 offset)  { return (inl(_addr_lo + offset)); }
         u16 readw(u32 offset) { return (inw(_addr_lo + offset)); }
@@ -80,6 +86,7 @@ namespace pci {
         u32 _addr_lo, _addr_hi;
         u64 _addr_64;
         u64 _addr_size;
+        mmioaddr_t _addr_mmio;
 
         bool _is_mmio;
         bool _is_64;

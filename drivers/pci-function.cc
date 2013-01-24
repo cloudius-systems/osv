@@ -1,12 +1,15 @@
 #include "debug.hh"
+#include "mmio.hh"
 #include "pci.hh"
 #include "pci-function.hh"
 
 namespace pci {
 
     pci_bar::pci_bar(pci_function* dev, u8 pos)
-        : _dev(dev), _pos(pos), _addr_lo(0), _addr_hi(0), _addr_64(0), _addr_size(
-            0), _is_mmio(false), _is_64(false), _is_prefetchable(false)
+        : _dev(dev), _pos(pos),
+          _addr_lo(0), _addr_hi(0), _addr_64(0), _addr_size(0),
+          _addr_mmio(mmio_nullptr),
+          _is_mmio(false), _is_64(false), _is_prefetchable(false)
     {
         init();
     }
@@ -70,6 +73,25 @@ namespace pci {
 
         u64 bits = (u64)hi << 32 | lo;
         _addr_size = ~bits + 1;
+    }
+
+    void pci_bar::map(void)
+    {
+        if (_is_mmio) {
+            _addr_mmio = mmio_map(get_addr64(), get_size());
+        }
+    }
+
+    void pci_bar::unmap(void)
+    {
+        if ((_is_mmio) && (_addr_mmio != mmio_nullptr)) {
+            mmio_unmap(_addr_mmio, get_size());
+        }
+    }
+
+    mmioaddr_t pci_bar::get_mmio(void)
+    {
+        return (_addr_mmio);
     }
 
     pci_function::pci_function(u8 bus, u8 device, u8 func)
