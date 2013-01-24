@@ -44,18 +44,32 @@ namespace pci {
 
     void pci_bar::test_bar_size(void)
     {
-#if 0
-        u32 val = _dev->pci_readl(_pos);
+        u32 lo_orig = _dev->pci_readl(_pos);
 
         // Size test
         _dev->pci_writel(_pos, 0xFFFFFFFF);
-        u32 bits = _dev->pci_readl(_pos);
-
-        // TODO: Implement
-
+        u32 lo = _dev->pci_readl(_pos);
         // Restore
-        _dev->pci_writel(_pos, val);
-#endif
+        _dev->pci_writel(_pos, lo_orig);
+
+        if (is_pio()) {
+            lo &= PCI_BAR_PIO_ADDR_MASK;
+        } else {
+            lo &= PCI_BAR_MEM_ADDR_LO_MASK;
+        }
+
+        u32 hi = 0xFFFFFFFF;
+
+        if (is_64()) {
+            u32 hi_orig = _dev->pci_readl(_pos+4);
+            _dev->pci_writel(_pos+4, 0xFFFFFFFF);
+            hi = _dev->pci_readl(_pos+4);
+            // Restore
+            _dev->pci_writel(_pos+4, hi_orig);
+        }
+
+        u64 bits = (u64)hi << 32 | lo;
+        _addr_size = ~bits + 1;
     }
 
     pci_function::pci_function(u8 bus, u8 device, u8 func)
