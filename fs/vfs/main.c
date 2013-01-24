@@ -979,8 +979,6 @@ void unpack_bootfs(void)
 	};
 
 	for (i = 0; dirs[i] != NULL; i++) {
-		printf("creating %s", dirs[i]);
-
 		if (mkdir(dirs[i], 0666) < 0) {
 			perror("mkdir");
 			sys_panic("foo");
@@ -989,8 +987,6 @@ void unpack_bootfs(void)
 
 	for (i = 0; md[i].name[0]; i++) {
 		int ret;
-
-		printf("unpacking %s", md[i].name);
 
 		fd = creat(md[i].name, 0666);
 		if (fd < 0) {
