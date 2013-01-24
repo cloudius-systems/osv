@@ -535,7 +535,8 @@ namespace pci {
         int bar_idx = 1;
         pci_bar *bar = get_bar(bar_idx);
         while (bar != nullptr) {
-            debug(fmt("    bar[%d]: addr=%x") % bar_idx % bar->get_addr64());
+            debug(fmt("    bar[%d]: %sbits addr=%x size=%x") % bar_idx %
+                (bar->is_64()?"64":"32") % bar->get_addr64() % bar->get_size());
             bar = get_bar(++bar_idx);
         }
 
