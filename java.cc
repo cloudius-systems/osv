@@ -6,6 +6,13 @@ extern elf::program* prog;
 
 #define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
 
+JavaVMOption mkoption(const char* s)
+{
+    JavaVMOption opt;
+    opt.optionString = strdup(s);
+    return opt;
+}
+
 int main(int ac, char **av)
 {
     prog->add_object(JVM_PATH);
@@ -15,9 +22,14 @@ int main(int ac, char **av)
     JavaVMInitArgs vm_args = {};
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
-    vm_args.nOptions = 1;
-    vm_args.options = new JavaVMOption[1];
-    vm_args.options[0].optionString = strdup("-Djava.class.path=/tests");
+    std::vector<JavaVMOption> options;
+    options.push_back(mkoption("-Djava.class.path=/tests"));
+    while (ac > 0 && av[0][0] == '-') {
+        options.push_back(mkoption(av[0]));
+        ++av, --ac;
+    }
+    vm_args.nOptions = options.size();
+    vm_args.options = options.data();
 
     auto JNI_CreateJavaVM
         = prog->lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
@@ -26,8 +38,15 @@ int main(int ac, char **av)
 
     auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
     assert(ret == 0);
-    auto mainclass = env->FindClass("Hello");
+    auto mainclass = env->FindClass(av[0]);
+    ++av, --ac;
+
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
-    env->CallStaticVoidMethod(mainclass, mainmethod, nullptr);
+    auto stringclass = env->FindClass("java/lang/String");
+    auto args = env->NewObjectArray(ac, stringclass, nullptr);
+    for (auto i = 0; i < ac; ++av) {
+        env->SetObjectArrayElement(args, i, env->NewStringUTF(av[i]));
+    }
+    env->CallStaticVoidMethod(mainclass, mainmethod, args);
 }
 
