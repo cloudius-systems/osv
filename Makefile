@@ -6,6 +6,12 @@ submake = $(out)/Makefile
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 
+# It's not practical to build large Java programs from make, because of
+# how Java does dependencies; so we use ant instead.  But we also cannot
+# call ant from the main makefile (build.mak), since make will have no
+# idea whether the target has changed or not.  So we call ant from here,
+# and then the main makefile can treat the build products (jars) as inputs
+
 all: $(submake)
 	$(call quiet, ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 	              -e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
