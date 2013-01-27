@@ -24,10 +24,14 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
 
-#include "drivers/pci.hh"
 #include "debug.hh"
-#include "drivers/device-factory.hh"
+
+#include "drivers/pci.hh"
 #include "drivers/driver.hh"
+#include "drivers/device.hh"
+#include "drivers/pci-function.hh"
+#include "drivers/pci-bridge.hh"
+#include "drivers/pci-device.hh"
 
 namespace pci {
 
@@ -111,21 +115,31 @@ void pci_devices_print(void)
 void pci_device_enumeration(void)
 {
     u16 bus, slot, func;
-    DeviceFactory* factory = DeviceFactory::Instance();
-
     for (bus = 0; bus < 256; bus++)
         for (slot = 0; slot < 32; slot++)
             for (func = 0; func < 8; func++) {
 
-                if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff)
+                if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff) {
                     continue;
+                }
 
-                    factory->AddDevice(bus, slot, func);
+                pci_function * dev = nullptr;
+                if (pci_function::is_bridge(bus, slot, func)) {
+                    dev = new pci_bridge(bus, slot, func);
+                } else {
+                    dev = new pci_device(bus, slot, func);
+                }
 
-                    // test for multiple functions
-                    if (func == 0 &&
-                        !(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
-                            break;
+                dev->parse_pci_config();
+
+                if (!device_manager::instance()->register_device(dev)) {
+                    delete (dev);
+                }
+
+                // test for multiple functions
+                if (func == 0 &&
+                    !(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
+                        break;
             }
 }
 

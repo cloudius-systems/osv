@@ -75,7 +75,7 @@ namespace virtio {
 
     const int max_virtqueues_nr = 64;
 
-    class virtio_driver : public Driver {
+    class virtio_driver : public hw_driver {
     public:    
         
         enum {
@@ -101,8 +101,13 @@ namespace virtio {
 
         virtio_driver(u16 device_id);
         virtual ~virtio_driver();
-                
-        virtual bool Init(pci_device *d);
+
+        virtual const std::string get_name(void) = 0;
+
+        // hw_driver interface
+        virtual bool hw_probe(void);
+        virtual bool load(void);
+        virtual bool unload(void) = 0;
         virtual void dump_config(void);
 
         bool kick(int queue);
@@ -112,14 +117,14 @@ namespace virtio {
         
         vring *_queues[max_virtqueues_nr];
         int num_queues;
+        u16 _device_id;
 
-        virtual bool earlyInitChecks(void);
+        virtual bool early_init_checks(void);
         bool probe_virt_queues(void);    
         bool setup_features(void);
 
         // Actual drivers should implement this
         virtual u32 get_driver_features(void) { return (0); }      
-
 
         ///////////////////
         // Device access //
@@ -153,8 +158,8 @@ namespace virtio {
         void pci_conf_write(int offset, u16 val) {_bar1->write(offset, val);};
         void pci_conf_write(int offset, u32 val) {_bar1->write(offset, val);};
 
-    private:
-
+        // Virtio device
+        pci_device *_dev;
         pci_bar *_bar1;
     };
 

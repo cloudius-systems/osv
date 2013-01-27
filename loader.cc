@@ -9,16 +9,15 @@
 #include "exceptions.hh"
 #include "debug.hh"
 #include "drivers/pci.hh"
-#include "drivers/device-factory.hh"
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 //#include <locale>
 
+#include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
 #include "drivers/virtio-blk.hh"
 
-#include "drivers/driver-factory.hh"
 #include "sched.hh"
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
@@ -275,21 +274,19 @@ void* do_main_thread(void *_args)
     test_threads();
     test_clock_events();
 
+    // Enumerate PCI devices
     pci::pci_devices_print();
     pci::pci_device_enumeration();
-    DeviceFactory::Instance()->DumpDevices();
 
-    Driver *vnet = new virtio::virtio_net();
-    DriverFactory::Instance()->RegisterDriver(vnet);
+    // List all devices
+    hw::device_manager::instance()->list_devices();
 
-    virtio::virtio_blk *vblk = new virtio::virtio_blk();
-    DriverFactory::Instance()->RegisterDriver(vblk);
-
-    DeviceFactory::Instance()->InitializeDrivers();
-
-    vblk->test();
-
-    DriverFactory::Instance()->Destroy();
+    // Initialize all drivers
+    hw::driver_manager* drvman = hw::driver_manager::instance();
+    drvman->register_driver(new virtio::virtio_blk());
+    drvman->register_driver(new virtio::virtio_net());
+    drvman->load_all();
+    drvman->list_drivers();
 
     auto t1 = clock::get()->time();
     auto t2 = clock::get()->time();
