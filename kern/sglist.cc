@@ -10,12 +10,13 @@ sglist::dump() {
 }
 
 bool
-sglist::add(u64 paddr, u32 len) {
+sglist::add(u64 paddr, u32 len, bool front) {
     if (_nsgs == max_sgs)
         return false;
 
     sg_node n(paddr, len);
-    _nodes.push_back(n);
+    auto ii = (front)? _nodes.begin() : _nodes.end();
+    _nodes.insert(ii, n);
     _nsgs++;
 
     return true;

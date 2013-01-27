@@ -129,12 +129,18 @@ namespace virtio {
                 u32 residual;
         };
         
+        struct virtio_blk_res {
+            u8 status;
+        };
+
         virtio_blk();
         virtual ~virtio_blk();
 
         virtual bool Init(pci_device *d);
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
+
+        void make_virtio_req(sglist* sg, u64 sector);
 
         void test();
 

@@ -19,7 +19,9 @@ public:
     sglist() : _nsgs(0), _max_sgs(max_sgs) {};
     sglist(int n) : _nsgs(n), _max_sgs(max_sgs) {};
 
-    bool add(u64 paddr, u32 len);
+    int get_sgs() {return _nsgs;}
+
+    bool add(u64 paddr, u32 len, bool front=false);
     void dump();
 
     std::list<struct sg_node> _nodes;

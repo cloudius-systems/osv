@@ -29,12 +29,22 @@ namespace virtio {
                 sizeof(u16) + VIRTIO_PCI_VRING_ALIGN-1) & ~(VIRTIO_PCI_VRING_ALIGN-1));
 
         // initialize the next pointer within the available ring
-        for (int i=0;i<num;i++) _avail->_ring[i] = i+1;
+        for (int i=0;i<num;i++) _desc[i]._next = i+1;
+        _desc[num-1]._next = 0;
+
+        _cookie = new void*[num];
+
+        _avail_head = 0;
+        _used_guest_head = 0;
+        _avail_added = 0;
+        _avail_count = num;
+
     }
 
     vring::~vring()
     {
         free(_vring_ptr);
+        delete [] _cookie;
     }
 
     u64 vring::get_paddr(void)
@@ -61,27 +71,30 @@ namespace virtio {
 
     bool
     vring::add_buf(sglist* sg, u16 out, u16 in, void* cookie) {
-        //if (_avail->count() < (in+out)) {
-            // what should I do?
-        //}
-
-        int i = 0;
-        vring_desc* desc = &_desc[_avail->_ring[_avail->_idx]];
-        for (auto ii = sg->_nodes.begin();i<in+out;ii++) {
-            desc->_flags = vring_desc::VRING_DESC_F_NEXT | (i>in)? vring_desc::VRING_DESC_F_WRITE:0;
-            desc->_paddr = (*ii)._paddr;
-            desc->_len = (*ii)._len;
-            desc->_next = _avail->_ring[_avail->_idx];
-            _avail->_idx++;
-            desc = &_desc[_avail->_ring[desc->_next]];
-            i++;
+        if (_avail_count < (in+out)) {
+            //make sure the interrupts get there
+            kick();
+            return false;
         }
-        desc->_flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
+        int i = 0, idx, prev_idx;
+        idx = prev_idx = _avail_head;
+        for (auto ii = sg->_nodes.begin();i<in+out;ii++) {
+            _desc[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
+            _desc[idx]._flags |= (i++>in)? vring_desc::VRING_DESC_F_WRITE:0;
+            _desc[idx]._paddr = (*ii)._paddr;
+            _desc[idx]._len = (*ii)._len;
+            prev_idx = idx;
+            idx = _avail->_ring[_desc[idx]._next];
+        }
+        _desc[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
+        _avail->_idx = _avail_head;
+        _cookie[_avail_head] = cookie;
 
-        //_avail->add(sg, in, out, cookie);
-        //used idx math
+        _avail_added += i;
+        _avail_count -= i;
+        _avail_head = idx;
 
         return true;
     }

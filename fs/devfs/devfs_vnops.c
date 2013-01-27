@@ -141,10 +141,7 @@ devfs_lookup(vnode_t dvp, char *name, vnode_t vp)
 	if (info.flags & D_TTY)
 		vp->v_flags |= VISTTY;
 
-	if (info.flags & D_PROT)
-		vp->v_flags |= VPROTDEV;
-	else
-		vp->v_mode = (mode_t)(S_IRUSR | S_IWUSR);
+	vp->v_mode = (mode_t)(S_IRUSR | S_IWUSR);
 	return 0;
 }
 

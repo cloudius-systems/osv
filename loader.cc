@@ -55,9 +55,12 @@ void setup_tls(elf::init_table inittab)
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<uint64_t>(p));
 }
 
-extern "C" { void premain(); }
+extern "C" {
+    void premain();
+    void vfs_init(void);
+    void ramdisk_init(void);
+}
 
-extern "C" { void vfs_init(void); }
 
 void premain()
 {
@@ -136,6 +139,7 @@ int main(int ac, char **av)
     idt.load_on_cpu();
 
     vfs_init();
+    ramdisk_init();
 
     filesystem fs;
 
@@ -278,10 +282,12 @@ void* do_main_thread(void *_args)
     Driver *vnet = new virtio::virtio_net();
     DriverFactory::Instance()->RegisterDriver(vnet);
 
-    Driver *vblk = new virtio::virtio_blk();
+    virtio::virtio_blk *vblk = new virtio::virtio_blk();
     DriverFactory::Instance()->RegisterDriver(vblk);
 
     DeviceFactory::Instance()->InitializeDrivers();
+
+    vblk->test();
 
     DriverFactory::Instance()->Destroy();
 
