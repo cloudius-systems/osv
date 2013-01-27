@@ -12,7 +12,8 @@ using namespace pci;
 namespace virtio {
 
     virtio_driver::virtio_driver(u16 device_id)
-        : Driver(VIRTIO_VENDOR_ID, device_id), _bar1(nullptr)
+        : hw_driver(),
+          _device_id(device_id), _dev(nullptr), _bar1(nullptr)
     {
         for (int i=0; i < max_virtqueues_nr; i++) {
             _queues[i] = NULL;
@@ -36,14 +37,10 @@ namespace virtio {
         pci_conf_write(VIRTIO_PCI_QUEUE_PFN,(u32)0);
     }
 
-    bool virtio_driver::earlyInitChecks()
+    bool virtio_driver::early_init_checks()
     {
-        if (!Driver::earlyInitChecks()) {
-            return false;
-        }
-
-        u8 rev;
-        if (_dev->get_revision_id() != VIRTIO_PCI_ABI_VERSION) {
+        u8 rev = _dev->get_revision_id();
+        if (rev != VIRTIO_PCI_ABI_VERSION) {
             debug(fmt("Wrong virtio revision=%x") % rev);
             return false;
         }
@@ -51,22 +48,35 @@ namespace virtio {
         u16 dev_id = _dev->get_device_id();
 
         if (dev_id < VIRTIO_PCI_ID_MIN || dev_id > VIRTIO_PCI_ID_MAX) {
-            debug(fmt("Wrong virtio dev id %x") % _id);
+            debug(fmt("Wrong virtio dev id %x") % _dev->get_device_id());
 
             return false;
         }
 
-        debug(fmt("%s passed. Subsystem: vid:%x:id:%x") % __FUNCTION__ % (u16)_dev->get_subsystem_vid() % (u16)_dev->get_subsystem_id());
+        // debug(fmt("%s passed. Subsystem: vid:%x:id:%x") % __FUNCTION__ % (u16)_dev->get_subsystem_vid() % (u16)_dev->get_subsystem_id());
         return true;
     }
 
-    bool virtio_driver::Init(pci_device* dev)
+
+    bool virtio_driver::hw_probe(void)
     {
-        if (!Driver::Init(dev)) {
+        _dev = dynamic_cast<pci_device *>(device_manager::instance()->
+            get_device(hw_device_id(VIRTIO_VENDOR_ID, _device_id)));
+        if (_dev == nullptr) {
             return (false);
         }
 
         _bar1 = _dev->get_bar(1);
+        if (_bar1 == nullptr) {
+            return (false);
+        }
+
+        return (early_init_checks());
+    }
+
+    bool virtio_driver::load(void)
+    {
+        _dev->set_bus_master(true);
 
         //make sure the queue is reset
         reset_host_side();
@@ -84,6 +94,12 @@ namespace virtio {
 #endif
 
         return true;
+    }
+
+    bool virtio_driver::unload(void)
+    {
+        // TODO: implement
+        return (true);
     }
 
     bool virtio_driver::kick(int queue)
@@ -143,10 +159,8 @@ namespace virtio {
 
     void virtio_driver::dump_config()
     {
-        Driver::dump_config();
-        debug(fmt("virtio_driver vid:id= %x:%x") % _vid % _id);
+        debug(fmt("virtio_driver vid:id= %x:%x") % _dev->get_vendor_id() % _dev->get_device_id());
     }
-
 
     u32 virtio_driver::get_device_features(void)
     {

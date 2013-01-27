@@ -136,7 +136,9 @@ namespace virtio {
         virtio_blk();
         virtual ~virtio_blk();
 
-        virtual bool Init(pci_device *d);
+        virtual const std::string get_name(void) { return "virtio-blk"; }
+        virtual bool load(void);
+        virtual bool unload(void);
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
 
