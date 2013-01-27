@@ -22,10 +22,16 @@ int main(int ac, char **av)
     JavaVMInitArgs vm_args = {};
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
+    std::string jarfile;
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=/java"));
     while (ac > 0 && av[0][0] == '-') {
-        options.push_back(mkoption(av[0]));
+        if (std::string(av[0]) == "-jar") {
+            ++av, --ac;
+            jarfile = av[0];
+        } else {
+            options.push_back(mkoption(av[0]));
+        }
         ++av, --ac;
     }
     vm_args.nOptions = options.size();
@@ -38,14 +44,28 @@ int main(int ac, char **av)
 
     auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
     assert(ret == 0);
-    auto mainclass = env->FindClass(av[0]);
-    ++av, --ac;
+    std::string mainclassname;
+    if (jarfile.empty()) {
+        mainclassname = av[0];
+        ++av, --ac;
+    } else {
+        mainclassname = "RunJar";
+    }
+    auto mainclass = env->FindClass(mainclassname.c_str());
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
     auto stringclass = env->FindClass("java/lang/String");
-    auto args = env->NewObjectArray(ac, stringclass, nullptr);
+    std::vector<std::string> newargs;
+    if (!jarfile.empty()) {
+        newargs.push_back(jarfile);
+    }
     for (auto i = 0; i < ac; ++av) {
-        env->SetObjectArrayElement(args, i, env->NewStringUTF(av[i]));
+        newargs.push_back(av[i]);
+    }
+
+    auto args = env->NewObjectArray(newargs.size(), stringclass, nullptr);
+    for (auto i = 0u; i < newargs.size(); ++i) {
+        env->SetObjectArrayElement(args, i, env->NewStringUTF(newargs[i].c_str()));
     }
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
 }

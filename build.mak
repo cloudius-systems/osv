@@ -66,6 +66,8 @@ tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 
 tests/hello/Hello.class: javabase=tests/hello
 
+RunJar.class: javabase=.
+
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
 
@@ -165,7 +167,7 @@ java.so: java.o
 
 java.o: CXXFLAGS += -fPIC
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)

@@ -20,4 +20,5 @@
 /tests/tst-ramdisk.so: ./tests/tst-ramdisk.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java.so
+/java/RunJar.class: ./RunJar.class
 #/tests/read01.so: ../../external/ltp/build/debug/syscalls/read/read01.so
