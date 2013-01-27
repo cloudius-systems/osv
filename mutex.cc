@@ -1,4 +1,5 @@
 #include "mutex.hh"
+#include "sched.hh"
 
 void mutex::lock()
 {

@@ -3,7 +3,10 @@
 
 #include <mutex>
 #include <list>
-#include "sched.hh"
+
+namespace sched {
+class thread;
+}
 
 class mutex {
 public:
