@@ -64,12 +64,23 @@ thread::stack_info::stack_info(void* _begin, size_t _size)
     size = static_cast<char*>(end) - static_cast<char*>(begin);
 }
 
+mutex thread_list_mutex;
+typedef bi::list<thread,
+                 bi::member_hook<thread,
+                                 bi::list_member_hook<>,
+                                 &thread::_thread_list_link>
+                > thread_list_type;
+thread_list_type thread_list;
+
 thread::thread(std::function<void ()> func, stack_info stack, bool main)
     : _func(func)
     , _on_runqueue(!main)
     , _waiting(false)
     , _stack(stack)
 {
+    with_lock(thread_list_mutex, [this] {
+        thread_list.push_back(*this);
+    });
     if (!main) {
         setup_tcb();
         init_stack();
@@ -84,6 +95,9 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
 
 thread::~thread()
 {
+    with_lock(thread_list_mutex, [this] {
+        thread_list.erase(thread_list.iterator_to(*this));
+    });
     debug("thread dtor");
 }
 

@@ -7,6 +7,8 @@
 #include "elf.hh"
 #include "drivers/clockevent.hh"
 #include <boost/intrusive/set.hpp>
+#include <boost/intrusive/list.hpp>
+#include "mutex.hh"
 
 namespace sched {
 
@@ -16,6 +18,8 @@ void schedule(bool yield = false);
 extern "C" {
     void thread_main_c(thread* t);
 };
+
+namespace bi = boost::intrusive;
 
 class thread {
 public:
@@ -56,11 +60,12 @@ private:
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend void schedule(bool yield);
+public:
+    // for the debugger
+    bi::list_member_hook<> _thread_list_link;
 };
 
 thread* current();
-
-namespace bi = boost::intrusive;
 
 class timer;
 
