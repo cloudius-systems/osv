@@ -7,7 +7,8 @@ submake = $(out)/Makefile
 quiet = $(if $V, $1, @echo " $2"; $1)
 
 all: $(submake)
-	ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) -e -f tests/bench/build.xml
+	$(call quiet, ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
+	              -e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
 	$(MAKE) -C $(dir $(submake)) $@
 
 $(submake): Makefile
