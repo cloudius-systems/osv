@@ -21,4 +21,5 @@
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java.so
 /java/RunJar.class: ./RunJar.class
+/bench.jar: tests/bench/bench.jar
 #/tests/read01.so: ../../external/ltp/build/debug/syscalls/read/read01.so

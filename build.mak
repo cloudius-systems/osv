@@ -63,6 +63,7 @@ autodepend = -MD -MT $@ -MP
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
+tests += tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
 

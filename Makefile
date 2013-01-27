@@ -1,11 +1,13 @@
 
 mode=debug
 
-submake = build/$(mode)/Makefile
+out = build/$(mode)
+submake = $(out)/Makefile
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 
 all: $(submake)
+	ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) -e -f tests/bench/build.xml
 	$(MAKE) -C $(dir $(submake)) $@
 
 $(submake): Makefile
