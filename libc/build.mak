@@ -46,6 +46,8 @@ libc += ctype/wcwidth.o
 
 libc += errno/strerror.o
 
+libc += exit/assert.o
+
 libc += locale/catclose.o
 libc += locale/catgets.o
 libc += locale/catopen.o
