@@ -61,4 +61,16 @@ namespace pci {
         debug(fmt("    subsys_vid:subsys_id %x:%x") % _subsystem_vid % _subsystem_id);
     }
 
+    bool pci_device::is_virtio_device(u8 bus, u8 device, u8 func)
+    {
+        u16 venid = read_pci_config_word(bus, device, func, PCI_CFG_VENDOR_ID);
+        u16 devid = read_pci_config_word(bus, device, func, PCI_CFG_DEVICE_ID);
+
+        if ( (venid == 0x1af4) && (devid >= 0x1000) ) {
+            return (true);
+        }
+
+        return false;
+    }
+
 }

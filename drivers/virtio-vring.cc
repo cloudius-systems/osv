@@ -4,7 +4,7 @@
 #include "kern/sglist.hh"
 #include "barrier.hh"
 
-#include "drivers/virtio.hh"
+#include "drivers/virtio-device.hh"
 #include "drivers/virtio-vring.hh"
 #include "debug.hh"
 
@@ -12,9 +12,9 @@ using namespace memory;
 
 namespace virtio {
 
-    vring::vring(virtio_driver* const drv, u16 num, u16 q_index)
+    vring::vring(virtio_device* const dev, u16 num, u16 q_index)
     {
-        _drv = drv;
+        _dev = dev;
         _q_index = q_index;
         // Alloc enough pages for the vring...
         unsigned sz = VIRTIO_ALIGN(vring::get_size(num, VIRTIO_PCI_VRING_ALIGN));
@@ -106,7 +106,7 @@ namespace virtio {
 
     bool
     vring::kick() {
-        _drv->kick(_q_index);
+        _dev->kick(_q_index);
         return true;
     }
 
