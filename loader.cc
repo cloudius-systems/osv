@@ -305,8 +305,8 @@ void* do_main_thread(void *_args)
     t2 = clock::get()->time();
     debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
 
-//    load_tests(prog, args);
-    run_main(prog, args);
+    load_tests(prog, args);
+//    run_main(prog, args);
 
     while (true)
 	;

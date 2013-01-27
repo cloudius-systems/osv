@@ -27,12 +27,15 @@
  * SUCH DAMAGE.
  */
 
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <../../fs/vfs/uio.h>
 #include <../../fs/devfs/device.h>
+#include "bio.h"
 
 struct ramdisk_softc {
 	char		*addr;		/* base address of image */
@@ -43,21 +46,32 @@ static int
 ramdisk_rdwr(struct device *dev, struct uio *uio, int ioflags)
 {
 	struct ramdisk_softc *sc = dev->private_data;
-	size_t len;
 
-	if (uio->uio_offset < 0)
-		return EINVAL;
-	if (uio->uio_resid == 0)
-		return 0;
-	if (uio->uio_offset > sc->size)
+	if (uio->uio_offset + uio->uio_resid > sc->size)
 		return EIO;
 
-	if (sc->size - uio->uio_offset < uio->uio_resid)
-		len = sc->size - uio->uio_offset;
-	else
-		len = uio->uio_resid;
+	return physio(dev, uio, ioflags);
+}
 
-	return uiomove(sc->addr + uio->uio_offset, len, uio);
+static void
+ramdisk_strategy(struct bio *bio)
+{
+	struct ramdisk_softc *sc = bio->bio_dev->private_data;
+
+	switch (bio->bio_cmd) {
+	case BIO_READ:
+		memcpy(bio->bio_data, sc->addr + bio->bio_offset,
+		       bio->bio_bcount);
+		break;
+	case BIO_WRITE:
+		memcpy(sc->addr + bio->bio_offset, bio->bio_data,
+		       bio->bio_bcount);
+		break;
+	default:
+		assert(0);
+	}
+
+	bio->bio_done(bio);
 }
 
 static struct devops ramdisk_devops = {
@@ -67,6 +81,7 @@ static struct devops ramdisk_devops = {
 	.write		= ramdisk_rdwr,
 	.ioctl		= no_ioctl,
 	.devctl		= no_devctl,
+	.strategy	= ramdisk_strategy,
 };
 
 struct driver ramdisk_driver = {
