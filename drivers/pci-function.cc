@@ -1,7 +1,10 @@
 #include "debug.hh"
 #include "mmio.hh"
 #include "pci.hh"
+#include "device.hh"
 #include "pci-function.hh"
+
+using namespace hw;
 
 namespace pci {
 
@@ -105,6 +108,21 @@ namespace pci {
         for (auto it = _bars.begin(); it != _bars.end(); it++) {
             delete (it->second);
         }
+    }
+
+    hw_device_id pci_function::get_id(void)
+    {
+        return (hw_device_id(_vendor_id, _device_id));
+    }
+
+    void pci_function::print(void)
+    {
+        dump_config();
+    }
+
+    void pci_function::reset(void)
+    {
+        // TODO: implement
     }
 
     bool pci_function::parse_pci_config(void)

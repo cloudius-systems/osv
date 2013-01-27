@@ -47,7 +47,6 @@ extern "C" {
     int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
                               char *buf, size_t buf_len, unw_word_t *offp);
     void __stack_chk_fail(void);
-    void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function);
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
     double __strtod_l(__const char *__restrict __nptr,
@@ -187,7 +186,6 @@ int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 }
 
 UNIMPL(void __stack_chk_fail(void))
-UNIMPL(void __assert_fail(const char * assertion, const char * file, unsigned int line, const char * function))
 
 namespace {
     bool all_categories(int category_mask)

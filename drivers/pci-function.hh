@@ -8,9 +8,11 @@
 #include "types.hh"
 #include "processor.hh"
 #include "debug.hh"
+#include "device.hh"
 
 using namespace processor;
 using namespace std;
+using namespace hw;
 
 namespace pci {
 
@@ -124,7 +126,7 @@ namespace pci {
     };
 
     // Represents a PCI function (pci device, bridge or virtio device)
-    class pci_function {
+    class pci_function : public hw_device {
     public:
 
         enum pci_function_cfg_offsets {
@@ -195,6 +197,11 @@ namespace pci {
 
         pci_function(u8 bus, u8 device, u8 func);
         virtual ~pci_function();
+
+        // Implement device interface
+        virtual hw_device_id get_id(void);
+        virtual void print(void);
+        virtual void reset(void);
 
         // Parses the PCI configuration space
         virtual bool parse_pci_config(void);

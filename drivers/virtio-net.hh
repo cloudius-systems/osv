@@ -41,7 +41,10 @@ namespace virtio {
         virtio_net();
         virtual ~virtio_net();
 
-        virtual bool Init(pci_device *d);
+        virtual const std::string get_name(void) { return "virtio-net"; }
+
+        virtual bool load(void);
+        virtual bool unload(void);
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_NET_F_CSUM) | (1 << VIRTIO_NET_F_MAC)); }
 

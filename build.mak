@@ -93,6 +93,7 @@ arch/x64/boot32.o: loader.elf
 fs = fs/fs.o bootfs.o
 
 fs +=	fs/vfs/main.o \
+	fs/vfs/kern_physio.o \
 	fs/vfs/subr_uio.o \
 	fs/vfs/vfs_conf.o \
 	fs/vfs/vfs_lookup.o \
@@ -113,8 +114,9 @@ drivers += drivers/ramdisk.o
 drivers += $(fs)
 drivers += mmu.o
 drivers += elf.o
-drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o drivers/device-factory.o
-drivers += drivers/driver.o drivers/driver-factory.o
+drivers += drivers/device.o
+drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
+drivers += drivers/driver.o
 drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-net.o

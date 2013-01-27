@@ -18,13 +18,18 @@ namespace virtio {
     {
     }
 
-    bool virtio_net::Init(pci_device *d)
+    bool virtio_net::load(void)
     {
-        virtio_driver::Init(d);
+        virtio_driver::load();
         
         add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
         return true;
+    }
+
+    bool virtio_net::unload(void)
+    {
+        return (true);
     }
 
 }

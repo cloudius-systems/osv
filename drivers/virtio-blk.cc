@@ -26,9 +26,9 @@ namespace virtio {
     }
 
 
-    bool virtio_blk::Init(pci_device *d)
+    bool virtio_blk::load(void)
     {
-        virtio_driver::Init(d);
+        virtio_driver::load();
         
         pci_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
                       &_config.capacity,
@@ -37,7 +37,15 @@ namespace virtio {
 
         add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
+        // Perform test
+        test();
+
         return true;
+    }
+
+    bool virtio_blk::unload(void)
+    {
+        return (true);
     }
 
     void virtio_blk::make_virtio_req(sglist* sg, u64 sector)

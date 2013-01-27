@@ -1,0 +1,22 @@
+
+All the files under the following directories are imported from musl:
+
+  arch
+  errno
+  string
+  ctype
+  exit
+  internal
+  locale
+  misc
+  multibyte
+  stdio
+  stdlib
+  temp
+  time
+
+the version came from git commit f05f59b804f83ff8443ba8c549d6be3ba79e71a6
+and have various local modification to deal with OSv specifics or our
+strict compiler warnings.
+
+All other files are native to OSv and written by Cloudius systems.
