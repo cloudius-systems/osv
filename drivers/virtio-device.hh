@@ -119,21 +119,19 @@ namespace virtio {
         void add_dev_status(u32 status);
         void del_dev_status(u32 status);
 
-        // access the virtio conf address space set by pci bar 0
-        u32 get_virtio_config(int offset);
-        void set_virtio_config(int offset, u32 val);
-        bool get_virtio_config_bit(int offset, int bit);
-        void set_virtio_config_bit(int offset, int bit, bool on);
+        // Access the virtio conf address space set by pci bar 1
+        bool get_virtio_config_bit(u32 offset, int bit);
+        void set_virtio_config_bit(u32 offset, int bit, bool on);
 
         // Access virtio config space
-        void pci_conf_read(int offset, void* buf, int length);
-        void pci_conf_write(int offset, void* buf, int length);
-        u8 pci_conf_readb(int offset) {return _bar1->readb(offset);};
-        u16 pci_conf_readw(int offset) {return _bar1->readw(offset);};
-        u32 pci_conf_readl(int offset) {return _bar1->read(offset);};
-        void pci_conf_write(int offset, u8 val) {_bar1->write(offset, val);};
-        void pci_conf_write(int offset, u16 val) {_bar1->write(offset, val);};
-        void pci_conf_write(int offset, u32 val) {_bar1->write(offset, val);};
+        void virtio_conf_read(u32 offset, void* buf, int length);
+        void virtio_conf_write(u32 offset, void* buf, int length);
+        u8 virtio_conf_readb(u32 offset) { return _bar1->readb(offset);};
+        u16 virtio_conf_readw(u32 offset) { return _bar1->readw(offset);};
+        u32 virtio_conf_readl(u32 offset) { return _bar1->read(offset);};
+        void virtio_conf_writeb(u32 offset, u8 val) { _bar1->write(offset, val);};
+        void virtio_conf_writew(u32 offset, u16 val) { _bar1->write(offset, val);};
+        void virtio_conf_writel(u32 offset, u32 val) { _bar1->write(offset, val);};
 
         bool kick(int queue);
         void reset_host_side();

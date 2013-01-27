@@ -48,7 +48,7 @@ namespace virtio {
     void virtio_device::reset_host_side()
     {
         set_dev_status(0);
-        pci_conf_write(VIRTIO_PCI_QUEUE_PFN,(u32)0);
+        virtio_conf_writel(VIRTIO_PCI_QUEUE_PFN,(u32)0);
     }
 
     void virtio_device::free_queues(void)
@@ -63,7 +63,7 @@ namespace virtio {
 
     bool virtio_device::kick(int queue)
     {
-        set_virtio_config(VIRTIO_PCI_QUEUE_NOTIFY, queue);
+        virtio_conf_writel(VIRTIO_PCI_QUEUE_NOTIFY, queue);
         return true;
     }
 
@@ -78,8 +78,8 @@ namespace virtio {
             }
 
             // Read queue size
-            pci_conf_write(VIRTIO_PCI_QUEUE_SEL, _num_queues);
-            qsize = pci_conf_readw(VIRTIO_PCI_QUEUE_NUM);
+            virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _num_queues);
+            qsize = virtio_conf_readw(VIRTIO_PCI_QUEUE_NUM);
             if (0 == qsize) {
                 break;
             }
@@ -91,7 +91,7 @@ namespace virtio {
             // Tell host about pfn
             // TODO: Yak, this is a bug in the design, on large memory we'll have PFNs > 32 bit
             // Dor to notify Rusty
-            pci_conf_write(VIRTIO_PCI_QUEUE_PFN, (u32)(queue->get_paddr() >> VIRTIO_PCI_QUEUE_ADDR_SHIFT));
+            virtio_conf_writel(VIRTIO_PCI_QUEUE_PFN, (u32)(queue->get_paddr() >> VIRTIO_PCI_QUEUE_ADDR_SHIFT));
 
             // Debug print
             debug(fmt("Queue[%d] -> size %d, paddr %x") % (_num_queues-1) % qsize % queue->get_paddr());
@@ -112,7 +112,7 @@ namespace virtio {
 
     u32 virtio_device::get_device_features(void)
     {
-        return (get_virtio_config(VIRTIO_PCI_HOST_FEATURES));
+        return (virtio_conf_readl(VIRTIO_PCI_HOST_FEATURES));
     }
 
     bool virtio_device::get_device_feature_bit(int bit)
@@ -122,7 +122,7 @@ namespace virtio {
 
     void virtio_device::set_guest_features(u32 features)
     {
-        set_virtio_config(VIRTIO_PCI_GUEST_FEATURES, features);
+        virtio_conf_writel(VIRTIO_PCI_GUEST_FEATURES, features);
     }
 
     void virtio_device::set_guest_feature_bit(int bit, bool on)
@@ -132,12 +132,12 @@ namespace virtio {
 
     u32 virtio_device::get_dev_status(void)
     {
-        return (get_virtio_config(VIRTIO_PCI_STATUS));
+        return (virtio_conf_readl(VIRTIO_PCI_STATUS));
     }
 
     void virtio_device::set_dev_status(u32 status)
     {
-        set_virtio_config(VIRTIO_PCI_STATUS, status);
+        virtio_conf_writel(VIRTIO_PCI_STATUS, status);
     }
 
     void virtio_device::add_dev_status(u32 status)
@@ -150,36 +150,26 @@ namespace virtio {
         set_dev_status(get_dev_status() & ~status);
     }
 
-    u32 virtio_device::get_virtio_config(int offset)
+    bool virtio_device::get_virtio_config_bit(u32 offset, int bit)
     {
-        return (_bar1->read(offset));
+        return (virtio_conf_readl(offset) & (1 << bit));
     }
 
-    void virtio_device::set_virtio_config(int offset, u32 val)
+    void virtio_device::set_virtio_config_bit(u32 offset, int bit, bool on)
     {
-        _bar1->write(offset, val);
-    }
-
-    bool virtio_device::get_virtio_config_bit(int offset, int bit)
-    {
-        return (get_virtio_config(offset) & (1 << bit));
-    }
-
-    void virtio_device::set_virtio_config_bit(int offset, int bit, bool on)
-    {
-        u32 val = get_virtio_config(offset);
+        u32 val = virtio_conf_readl(offset);
         u32 newval = ( val & ~(1 << bit) ) | ((int)(on)<<bit);
-        set_virtio_config(offset, newval);
+        virtio_conf_writel(offset, newval);
     }
 
-    void virtio_device::pci_conf_write(int offset, void* buf, int length)
+    void virtio_device::virtio_conf_write(u32 offset, void* buf, int length)
     {
         u8* ptr = reinterpret_cast<u8*>(buf);
         for (int i=0;i<length;i++)
             _bar1->write(offset+i, ptr[i]);
     }
 
-    void virtio_device::pci_conf_read(int offset, void* buf, int length)
+    void virtio_device::virtio_conf_read(u32 offset, void* buf, int length)
     {
         unsigned char* ptr = reinterpret_cast<unsigned char*>(buf);
         for (int i=0;i<length;i++)

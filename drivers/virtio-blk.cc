@@ -30,7 +30,7 @@ namespace virtio {
     {
         virtio_driver::load();
         
-        _dev->pci_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
+        _dev->virtio_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
                       &_config.capacity,
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
