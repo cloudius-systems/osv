@@ -1,13 +1,12 @@
 #ifndef VIRTIO_VRING_H
 #define VIRTIO_VRING_H
 
-#include "drivers/virtio.hh"
-
 class sglist;
 
 namespace virtio {
 
-class virtio_driver;
+class virtio_vring;
+class virtio_device;
 
     // Buffer descriptors in the ring
     class vring_desc {
@@ -100,7 +99,7 @@ class virtio_driver;
             VIRTIO_RING_F_EVENT_IDX = 29,
         };    
       
-        vring(virtio_driver* const drv, u16 num, u16 q_index);
+        vring(virtio_device* const dev, u16 num, u16 q_index);
         virtual ~vring();
 
         u64 get_paddr(void);
@@ -122,7 +121,7 @@ class virtio_driver;
 
     private:
         // Up pointer
-        virtio_driver* _drv;
+        virtio_device* _dev;
         u16 _q_index;
         // The physical of the physical address handed to the virtio device
         void* _vring_ptr;

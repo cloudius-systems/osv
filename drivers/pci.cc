@@ -32,6 +32,7 @@
 #include "drivers/pci-function.hh"
 #include "drivers/pci-bridge.hh"
 #include "drivers/pci-device.hh"
+#include "drivers/virtio-device.hh"
 
 namespace pci {
 
@@ -127,12 +128,24 @@ void pci_device_enumeration(void)
                 if (pci_function::is_bridge(bus, slot, func)) {
                     dev = new pci_bridge(bus, slot, func);
                 } else {
-                    dev = new pci_device(bus, slot, func);
+
+                    if (pci_device::is_virtio_device(bus, slot, func)) {
+                        dev = new virtio::virtio_device(bus, slot, func);
+                    } else {
+                        dev = new pci_device(bus, slot, func);
+                    }
                 }
 
-                dev->parse_pci_config();
+                bool parse_ok = dev->parse_pci_config();
+                if (!parse_ok) {
+                    debug(fmt("Error: couldn't parse device config space %x:%x.%")
+                        % bus % slot % func);
+                    break;
+                }
 
                 if (!device_manager::instance()->register_device(dev)) {
+                    debug(fmt("Error: couldn't register device %x:%x.%")
+                        % bus % slot % func);
                     delete (dev);
                 }
 

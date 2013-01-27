@@ -1,5 +1,6 @@
 
 arch = x64
+cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/includes
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
@@ -63,8 +64,11 @@ autodepend = -MD -MT $@ -MP
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
+tests += tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
+
+RunJar.class: javabase=.
 
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
@@ -78,7 +82,7 @@ loader.img: boot.bin loader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
 	$(call quiet, dd if=loader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD $@ loader.elf)
-	$(call quiet, $(src)/scripts/imgedit.py setargs $@ java.so Hello, IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
@@ -89,6 +93,7 @@ arch/x64/boot32.o: loader.elf
 fs = fs/fs.o bootfs.o
 
 fs +=	fs/vfs/main.o \
+	fs/vfs/kern_physio.o \
 	fs/vfs/subr_uio.o \
 	fs/vfs/vfs_conf.o \
 	fs/vfs/vfs_lookup.o \
@@ -112,7 +117,7 @@ drivers += elf.o
 drivers += drivers/device.o
 drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
 drivers += drivers/driver.o
-drivers += drivers/virtio.o
+drivers += drivers/virtio.o drivers/virtio-device.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
@@ -166,7 +171,7 @@ java.so: java.o
 
 java.o: CXXFLAGS += -fPIC
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)

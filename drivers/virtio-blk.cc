@@ -30,12 +30,12 @@ namespace virtio {
     {
         virtio_driver::load();
         
-        pci_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
+        _dev->virtio_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
                       &_config.capacity,
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
 
-        add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+        _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
         // Perform test
         test();
@@ -66,6 +66,7 @@ namespace virtio {
         int i;
 
         debug("test virtio blk");
+        vring* queue = _dev->get_virt_queue(0);
 
         for (i=0;i<200;i++) {
             sglist* sg = new sglist();
@@ -73,13 +74,13 @@ namespace virtio {
             memset(buf, 0, page_size);
             sg->add(mmu::virt_to_phys(buf), page_size);
             make_virtio_req(sg, i*8*512);
-            if (!_queues[0]->add_buf(sg,2,1,sg)) {
+            if (!queue->add_buf(sg,2,1,sg)) {
                 debug(fmt("virtio blk test - added too many %i, expected") % i);
                 break;
             }
         }
 
-         _queues[0]->kick();
+        queue->kick();
         debug("test end");
     }
 

@@ -22,7 +22,7 @@ namespace virtio {
     {
         virtio_driver::load();
         
-        add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+        _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
         return true;
     }
