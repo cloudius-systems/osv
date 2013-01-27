@@ -1,5 +1,6 @@
 
 arch = x64
+cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/includes
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
@@ -81,7 +82,7 @@ loader.img: boot.bin loader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
 	$(call quiet, dd if=loader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD $@ loader.elf)
-	$(call quiet, $(src)/scripts/imgedit.py setargs $@ java.so Hello, IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
