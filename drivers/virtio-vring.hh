@@ -54,7 +54,9 @@ class virtio_device;
         u16 _ring[];
         // used event index is an optimization in order to get an interrupt from the host
         // only when the value reaches this number
-        u16 used_event;
+        // FIXME: broken; can't put a field after a variable legth array.
+        // try mode=release
+        //u16 used_event;
     };
 
     class vring_used_elem {
