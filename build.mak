@@ -68,7 +68,7 @@ tests += tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
 
-RunJar.class: javabase=.
+java/RunJar.class: javabase=java
 
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
@@ -166,11 +166,11 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 
-java.so: java.o
+java/java.so: java/java.o
 
-java.o: CXXFLAGS += -fPIC
+java/java.o: CXXFLAGS += -fPIC
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so RunJar.class
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java/java.so java/RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)
