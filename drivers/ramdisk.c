@@ -33,8 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <../../fs/vfs/uio.h>
-#include <../../fs/devfs/device.h>
+#include <osv/device.h>
 #include "bio.h"
 
 struct ramdisk_softc {

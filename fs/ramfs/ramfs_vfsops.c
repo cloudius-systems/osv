@@ -27,10 +27,10 @@
  * SUCH DAMAGE.
  */
 
-#include "../vfs/vnode.h"
-#include "../vfs/mount.h"
-
 #include <errno.h>
+
+#include <osv/vnode.h>
+#include <osv/mount.h>
 
 #include "ramfs.h"
 

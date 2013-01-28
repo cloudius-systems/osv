@@ -30,16 +30,15 @@
 #ifndef _VFS_H
 #define _VFS_H
 
-#include "prex.h"
-#include "list.h"
 #include <sys/cdefs.h>
-#include "vnode.h"
-#include "file.h"
-#include "mount.h"
+#include <assert.h>
 #include <dirent.h>
 #include <limits.h>
 
-#include <assert.h>
+#include <osv/prex.h>
+#include <osv/file.h>
+#include <osv/mount.h>
+#include <osv/vnode.h>
 
 /* #define DEBUG_VFS 1 */
 

@@ -27,14 +27,9 @@
  * SUCH DAMAGE.
  */
 
-#include "prex.h"
 #include <sys/param.h>
 #include <sys/statvfs.h>
-#include "list.h"
 #include <sys/stat.h>
-#include "vnode.h"
-#include "mount.h"
-#include "file.h"
 
 #include <limits.h>
 #include <unistd.h>
@@ -50,7 +45,11 @@
 #undef open
 #undef fcntl
 
+#include <osv/prex.h>
+#include <osv/vnode.h>
+
 #include "vfs.h"
+
 #include "libc.h"
 
 #ifdef DEBUG_VFS

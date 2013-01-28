@@ -31,7 +31,6 @@
 #define _SYS_FILE_H_
 
 #include <sys/types.h>
-#include "vnode.h"
 
 struct vnode;
 

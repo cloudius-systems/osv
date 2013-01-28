@@ -30,8 +30,6 @@
  * vfs_task.c - Routines to manage the per task data.
  */
 
-#include "prex.h"
-#include "list.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -39,6 +37,7 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include <osv/prex.h>
 #include "vfs.h"
 
 /*

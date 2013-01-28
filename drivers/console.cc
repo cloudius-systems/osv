@@ -1,8 +1,7 @@
 
 extern "C" {
-#include "../../fs/vfs/prex.h"
-#include "../../fs/vfs/uio.h"
-#include "../../fs/devfs/device.h"
+#include <osv/prex.h>
+#include <osv/device.h>
 }
 
 #include "isa-serial.hh"

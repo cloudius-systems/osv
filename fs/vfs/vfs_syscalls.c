@@ -32,13 +32,8 @@
  *                  a VFS system call.
  */
 
-#include "prex.h"
 #include <sys/stat.h>
-#include "vnode.h"
-#include "file.h"
-#include "mount.h"
 #include <dirent.h>
-#include "list.h"
 
 #include <limits.h>
 #include <unistd.h>
@@ -48,6 +43,8 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#include <osv/prex.h>
+#include <osv/vnode.h>
 #include "vfs.h"
 
 int

@@ -3,14 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <../../fs/vfs/uio.h>
-#include <../../fs/devfs/device.h>
+#include <osv/device.h>
 #include "bio.h"
 
 static void
 physio_done(struct bio *bio)
 {
-	free(bio);
 }
 
 int
@@ -46,6 +44,7 @@ physio(struct device *dev, struct uio *uio, int ioflags)
 		bio->bio_bcount = uio->uio_resid;
 
 		dev->driver->devops->strategy(bio);
+		free(bio);
 
 	        uio->uio_iov++;
         	uio->uio_iovcnt--;

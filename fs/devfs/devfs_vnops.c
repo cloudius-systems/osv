@@ -31,13 +31,7 @@
  * devfs - device file system.
  */
 
-#include "../vfs/prex.h"
 #include <sys/stat.h>
-#include "../vfs/vnode.h"
-#include "../vfs/file.h"
-#include "../vfs/mount.h"
-
-#include "device.h"
 
 #include <ctype.h>
 #include <unistd.h>
@@ -47,6 +41,11 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <stdio.h>
+
+#include <osv/prex.h>
+#include <osv/device.h>
+#include <osv/vnode.h>
+#include <osv/mount.h>
 
 #include "devfs.h"
 
