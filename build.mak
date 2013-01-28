@@ -138,8 +138,7 @@ objects += arch/x64/elf-dl.o
 objects += linux.o
 objects += core/sched.o
 objects += core/mmio.o
-
-objects += kern/sglist.o
+objects += core/sglist.o
 
 include $(src)/libc/build.mak
 
