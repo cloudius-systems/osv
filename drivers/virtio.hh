@@ -22,8 +22,6 @@ namespace virtio {
     protected:
         u16 _device_id;
 
-        virtual bool early_init_checks(void);
-
         // Actual drivers should implement this
         virtual u32 get_driver_features(void) { return (0); }
         bool setup_features(void);

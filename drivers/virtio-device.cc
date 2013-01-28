@@ -37,8 +37,23 @@ namespace virtio {
             return (false);
         }
 
+        // Test whether bar1 is present
         _bar1 = get_bar(1);
         if (_bar1 == nullptr) {
+            return (false);
+        }
+
+        // Check ABI version
+        u8 rev = get_revision_id();
+        if (rev != VIRTIO_PCI_ABI_VERSION) {
+            debug(fmt("Wrong virtio revision=%x") % rev);
+            return (false);
+        }
+
+        // Check device ID
+        u16 dev_id = get_device_id();
+        if ((dev_id < VIRTIO_PCI_ID_MIN) || (dev_id > VIRTIO_PCI_ID_MAX)) {
+            debug(fmt("Wrong virtio dev id %x") % dev_id);
             return (false);
         }
 
