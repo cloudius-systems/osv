@@ -975,6 +975,7 @@ void unpack_bootfs(void)
 		"/usr/lib/jvm/jre/lib/amd64/server",
 		"/java",
 		"/tests",
+		"/tmp",
 		NULL,
 	};
 
