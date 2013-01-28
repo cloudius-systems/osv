@@ -104,6 +104,7 @@ int	 sys_write(file_t fp, struct iovec *iov, size_t niov,
 int	 sys_lseek(file_t fp, off_t off, int type, off_t * cur_off);
 int	 sys_ioctl(file_t fp, u_long request, void *buf);
 int	 sys_fstat(file_t fp, struct stat *st);
+int	 sys_fstatfs(struct file *fp, struct statfs *buf);
 int	 sys_fsync(file_t fp);
 int	 sys_ftruncate(file_t fp, off_t length);
 
@@ -122,6 +123,7 @@ int	 sys_rename(char *src, char *dest);
 int	 sys_unlink(char *path);
 int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);
+int	 sys_statfs(char *path, struct statfs *buf);
 int	 sys_truncate(char *path, off_t length);
 
 int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);

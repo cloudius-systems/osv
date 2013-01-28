@@ -366,6 +366,8 @@ libc += time/timegm.o
 libc += time/tzset.o
 libc += time/wcsftime.o
 
+libc += unistd/sleep.o
+
 libc += pthread.o
 libc += dir.o
 libc += libc.o

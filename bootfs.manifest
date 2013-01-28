@@ -17,6 +17,7 @@
 #/tests/tst-pthread.so: ./tests/tst-pthread.so
 /tests/tst-malloc.so: ../../external/glibc-testsuite/build/debug/malloc/tst-malloc.so
 /tests/tst-getcwd.so: ../../external/glibc-testsuite/build/debug/io/tst-getcwd.so
+/tests/tst-clock.so: ../../external/glibc-testsuite/build/debug/rt/tst-clock.so
 /tests/tst-ramdisk.so: ./tests/tst-ramdisk.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java.so
