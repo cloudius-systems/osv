@@ -22,36 +22,12 @@ namespace virtio {
         _dev->free_queues();
     }
 
-    bool virtio_driver::early_init_checks()
-    {
-        u8 rev = _dev->get_revision_id();
-        if (rev != VIRTIO_PCI_ABI_VERSION) {
-            debug(fmt("Wrong virtio revision=%x") % rev);
-            return false;
-        }
-
-        u16 dev_id = _dev->get_device_id();
-
-        if (dev_id < VIRTIO_PCI_ID_MIN || dev_id > VIRTIO_PCI_ID_MAX) {
-            debug(fmt("Wrong virtio dev id %x") % _dev->get_device_id());
-
-            return false;
-        }
-
-        // debug(fmt("%s passed. Subsystem: vid:%x:id:%x") % __FUNCTION__ % (u16)_dev->get_subsystem_vid() % (u16)_dev->get_subsystem_id());
-        return true;
-    }
-
-
     bool virtio_driver::hw_probe(void)
     {
         _dev = dynamic_cast<virtio_device *>(device_manager::instance()->
             get_device(hw_device_id(VIRTIO_VENDOR_ID, _device_id)));
-        if (_dev == nullptr) {
-            return (false);
-        }
 
-        return (early_init_checks());
+        return (_dev != nullptr);
     }
 
     bool virtio_driver::load(void)
