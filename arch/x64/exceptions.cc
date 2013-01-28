@@ -65,7 +65,8 @@ void interrupt_descriptor_table::add_entry(unsigned vec, void (*handler)())
     idt_entry e = { };
     e.offset0 = addr;
     e.selector = processor::read_cs();
-    e.ist = 0;
+    // We can't take interrupts on the main stack due to the x86-64 redzone
+    e.ist = 1;
     e.type = type_intr_gate;
     e.s = s_special;
     e.dpl = 0;
