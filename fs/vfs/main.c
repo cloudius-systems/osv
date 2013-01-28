@@ -29,6 +29,7 @@
 
 #include "prex.h"
 #include <sys/param.h>
+#include <sys/statvfs.h>
 #include "list.h"
 #include <sys/stat.h>
 #include "vnode.h"
@@ -689,6 +690,46 @@ out_errno:
 }
 weak_alias(__fstatfs, fstatfs);
 LFS64(fstatfs);
+
+static int
+statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
+{
+	dst->f_bsize = src->f_bsize;
+	dst->f_frsize = src->f_bsize;
+	dst->f_blocks = src->f_blocks;
+	dst->f_bfree = src->f_bfree;
+	dst->f_bavail = src->f_bavail;
+	dst->f_files = src->f_files;
+	dst->f_ffree = src->f_ffree;
+	dst->f_favail = 0;
+	dst->f_fsid = src->f_fsid.__val[0];
+	dst->f_flag = src->f_flags;
+	dst->f_namemax = src->f_namelen;
+	return 0;
+}
+
+int
+statvfs(const char *pathname, struct statvfs *buf)
+{
+	struct statfs st;
+
+	if (__statfs(pathname, &st) < 0)
+		return -1;
+	return statfs_to_statvfs(buf, &st);
+}
+LFS64(statvfs);
+
+int
+fstatvfs(int fd, struct statvfs *buf)
+{
+	struct statfs st;
+
+	if (__fstatfs(fd, &st) < 0)
+		return -1;
+	return statfs_to_statvfs(buf, &st);
+}
+LFS64(fstatvfs);
+
 
 char *getcwd(char *path, size_t size)
 {
