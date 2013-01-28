@@ -646,6 +646,50 @@ int __lxstat(int ver, const char *pathname, struct stat *st)
 }
 LFS64(__lxstat);
 
+int __statfs(const char *pathname, struct statfs *buf)
+{
+	struct task *t = main_task;
+	char path[PATH_MAX];
+	int error;
+
+	error = task_conv(t, pathname, 0, path);
+	if (error)
+		goto out_errno;
+
+	error = sys_statfs(path, buf);
+	if (error)
+		goto out_errno;
+	return 0;
+
+out_errno:
+	errno = error;
+	return -1;
+}
+weak_alias(__statfs, statfs);
+LFS64(statfs);
+
+int __fstatfs(int fd, struct statfs *buf)
+{
+	struct task *t = main_task;
+	struct file *fp;
+	int error;
+
+	error = EBADF;
+	fp = task_getfp(t, fd);
+	if (!fp)
+		goto out_errno;
+
+	error = sys_fstatfs(fp, buf);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
+}
+weak_alias(__fstatfs, fstatfs);
+LFS64(fstatfs);
+
 char *getcwd(char *path, size_t size)
 {
 	struct task *t = main_task;
