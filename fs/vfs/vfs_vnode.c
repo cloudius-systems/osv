@@ -31,11 +31,6 @@
  * vfs_vnode.c - vnode service
  */
 
-#include "prex.h"
-#include "list.h"
-#include "vnode.h"
-#include "mount.h"
-
 #include <limits.h>
 #include <unistd.h>
 #include <string.h>
@@ -43,6 +38,8 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include <osv/prex.h>
+#include <osv/vnode.h>
 #include "vfs.h"
 
 /*

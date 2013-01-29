@@ -27,13 +27,9 @@
  * SUCH DAMAGE.
  */
 
-#include "prex.h"
 #include <sys/param.h>
-#include "list.h"
+#include <sys/statvfs.h>
 #include <sys/stat.h>
-#include "vnode.h"
-#include "mount.h"
-#include "file.h"
 
 #include <limits.h>
 #include <unistd.h>
@@ -49,7 +45,11 @@
 #undef open
 #undef fcntl
 
+#include <osv/prex.h>
+#include <osv/vnode.h>
+
 #include "vfs.h"
+
 #include "libc.h"
 
 #ifdef DEBUG_VFS
@@ -646,6 +646,90 @@ int __lxstat(int ver, const char *pathname, struct stat *st)
 }
 LFS64(__lxstat);
 
+int __statfs(const char *pathname, struct statfs *buf)
+{
+	struct task *t = main_task;
+	char path[PATH_MAX];
+	int error;
+
+	error = task_conv(t, pathname, 0, path);
+	if (error)
+		goto out_errno;
+
+	error = sys_statfs(path, buf);
+	if (error)
+		goto out_errno;
+	return 0;
+
+out_errno:
+	errno = error;
+	return -1;
+}
+weak_alias(__statfs, statfs);
+LFS64(statfs);
+
+int __fstatfs(int fd, struct statfs *buf)
+{
+	struct task *t = main_task;
+	struct file *fp;
+	int error;
+
+	error = EBADF;
+	fp = task_getfp(t, fd);
+	if (!fp)
+		goto out_errno;
+
+	error = sys_fstatfs(fp, buf);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
+}
+weak_alias(__fstatfs, fstatfs);
+LFS64(fstatfs);
+
+static int
+statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
+{
+	dst->f_bsize = src->f_bsize;
+	dst->f_frsize = src->f_bsize;
+	dst->f_blocks = src->f_blocks;
+	dst->f_bfree = src->f_bfree;
+	dst->f_bavail = src->f_bavail;
+	dst->f_files = src->f_files;
+	dst->f_ffree = src->f_ffree;
+	dst->f_favail = 0;
+	dst->f_fsid = src->f_fsid.__val[0];
+	dst->f_flag = src->f_flags;
+	dst->f_namemax = src->f_namelen;
+	return 0;
+}
+
+int
+statvfs(const char *pathname, struct statvfs *buf)
+{
+	struct statfs st;
+
+	if (__statfs(pathname, &st) < 0)
+		return -1;
+	return statfs_to_statvfs(buf, &st);
+}
+LFS64(statvfs);
+
+int
+fstatvfs(int fd, struct statvfs *buf)
+{
+	struct statfs st;
+
+	if (__fstatfs(fd, &st) < 0)
+		return -1;
+	return statfs_to_statvfs(buf, &st);
+}
+LFS64(fstatvfs);
+
+
 char *getcwd(char *path, size_t size)
 {
 	struct task *t = main_task;
@@ -975,6 +1059,7 @@ void unpack_bootfs(void)
 		"/usr/lib/jvm/jre/lib/amd64/server",
 		"/java",
 		"/tests",
+		"/tmp",
 		NULL,
 	};
 

@@ -2,6 +2,7 @@
 #include <string.h>
 #include "libc.h"
 
+#undef __strdup
 char *__strdup(const char *s)
 {
 	size_t l = strlen(s);

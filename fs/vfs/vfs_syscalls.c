@@ -32,13 +32,8 @@
  *                  a VFS system call.
  */
 
-#include "prex.h"
 #include <sys/stat.h>
-#include "vnode.h"
-#include "file.h"
-#include "mount.h"
 #include <dirent.h>
-#include "list.h"
 
 #include <limits.h>
 #include <unistd.h>
@@ -48,6 +43,8 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#include <osv/prex.h>
+#include <osv/vnode.h>
 #include "vfs.h"
 
 int
@@ -765,6 +762,39 @@ sys_stat(char *path, struct stat *st)
 		return error;
 	error = vn_stat(vp, st);
 	vput(vp);
+	return error;
+}
+
+int
+sys_statfs(char *path, struct statfs *buf)
+{
+	struct vnode *vp;
+	int error;
+
+	memset(buf, 0, sizeof(*buf));
+
+	error = namei(path, &vp);
+	if (error)
+		return error;
+
+	error = VFS_STATFS(vp->v_mount, buf);
+	vput(vp);
+
+	return error;
+}
+
+int
+sys_fstatfs(struct file *fp, struct statfs *buf)
+{
+	struct vnode *vp = fp->f_vnode;
+	int error = 0;
+
+	memset(buf, 0, sizeof(*buf));
+
+	vn_lock(vp);
+	error = VFS_STATFS(vp->v_mount, buf);
+	vn_unlock(vp);
+
 	return error;
 }
 

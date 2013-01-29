@@ -35,9 +35,17 @@ tss_desc:
     .quad 0
 gdt_end = .
 
-tss:	.rept 0x67
-	.byte 0
-	.endr
+.align 8
+. = . + 4  # make sure tss_ist is aligned on a quad boundary
+
+.global tss
+.global tss_ist
+tss:
+	.long 0
+	.quad 0, 0, 0
+tss_ist:
+	.quad 0, interrupt_stack_top, 0, 0, 0, 0, 0, 0
+	.long 0, 0, 0
 
 tr:	.word     tss_desc - gdt
 
@@ -46,6 +54,10 @@ tr:	.word     tss_desc - gdt
 .align 16
 . = . + 4096*4
 init_stack_top = .
+
+. = . + 4096*10
+.global interrupt_stack_top
+interrupt_stack_top = .
 
 .text
 

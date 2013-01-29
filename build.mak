@@ -1,10 +1,11 @@
 
 arch = x64
 cmdline = java.so Hello
-INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/includes
+INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
+INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
-	$(arch-cflags) $(cflags-$(mode)) -mno-red-zone
+	$(arch-cflags) $(cflags-$(mode)) $(acpi-defines)
 
 CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
@@ -68,7 +69,7 @@ tests += tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
 
-RunJar.class: javabase=.
+java/RunJar.class: javabase=java
 
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
@@ -112,8 +113,8 @@ drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += drivers/ramdisk.o
 drivers += $(fs)
-drivers += mmu.o
-drivers += elf.o
+drivers += core/mmu.o
+drivers += core/elf.o
 drivers += drivers/device.o
 drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
 drivers += drivers/driver.o
@@ -123,6 +124,7 @@ drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/clock.o drivers/kvmclock.o
 drivers += drivers/clockevent.o
+drivers += drivers/acpi.o
 
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o
@@ -130,20 +132,27 @@ objects += arch/x64/math.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/arch-setup.o
-objects += mutex.o
-objects += debug.o
+objects += core/mutex.o
+objects += core/debug.o
 objects += drivers/pci.o
-objects += mempool.o
+objects += core/mempool.o
 objects += arch/x64/elf-dl.o
 objects += linux.o
-objects += sched.o
-objects += mmio.o
-
-objects += kern/sglist.o
+objects += core/sched.o
+objects += core/mmio.o
+objects += core/sglist.o
 
 include $(src)/libc/build.mak
 
 objects += $(addprefix libc/, $(libc))
+objects += $(acpi)
+
+acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
+
+acpi-source := $(shell find $(src)/external/acpica/source/components -type f -name '*.c')
+acpi = $(patsubst $(src)/%.c, %.o, $(acpi-source))
+
+$(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
 
 libstdc++.a = $(shell find $(gccbase) -name libstdc++.a)
 libsupc++.a = $(shell find $(gccbase) -name libsupc++.a)
@@ -167,11 +176,11 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 
-java.so: java.o
+java/java.so: java/java.o
 
-java.o: CXXFLAGS += -fPIC
+java/java.o: CXXFLAGS += -fPIC
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java.so RunJar.class
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java/java.so java/RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)

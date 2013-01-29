@@ -12,6 +12,8 @@ int mprotect(void *addr, size_t len, int prot)
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
+    // make use the payload isn't remapping physical memory
+    assert(reinterpret_cast<long>(addr) >= 0);
     std::unique_ptr<mmu::vma> v;
     if (!(flags & MAP_FIXED)) {
         v.reset(mmu::reserve(addr, length));

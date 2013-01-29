@@ -30,7 +30,7 @@
 #ifndef _RAMFS_H
 #define _RAMFS_H
 
-#include "../vfs/prex.h"
+#include <osv/prex.h>
 
 /* #define DEBUG_RAMFS 1 */
 

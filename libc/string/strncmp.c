@@ -1,5 +1,6 @@
 #include <string.h>
 
+#undef strncmp
 int strncmp(const char *_l, const char *_r, size_t n)
 {
 	const unsigned char *l=(void *)_l, *r=(void *)_r;

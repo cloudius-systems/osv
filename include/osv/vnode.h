@@ -30,12 +30,13 @@
 #ifndef _SYS_VNODE_H_
 #define _SYS_VNODE_H_
 
-#include "prex.h"
 #include <sys/stat.h>
+
+#include <osv/prex.h>
+#include <osv/uio.h>
 #include "file.h"
-#include "list.h"
+#include <osv/list.h>
 #include "dirent.h"
-#include "uio.h"
 
 struct vfsops;
 struct vnops;

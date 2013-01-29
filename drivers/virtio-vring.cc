@@ -1,7 +1,7 @@
 #include <string.h>
 #include "mempool.hh"
 #include "mmu.hh"
-#include "kern/sglist.hh"
+#include "sglist.hh"
 #include "barrier.hh"
 
 #include "drivers/virtio-device.hh"

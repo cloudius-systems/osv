@@ -34,8 +34,7 @@
 
 #include <sys/cdefs.h>
 #include <sys/statfs.h>
-#include "list.h"
-#include "vnode.h"
+#include <osv/vnode.h>
 
 /*
  * Mount data

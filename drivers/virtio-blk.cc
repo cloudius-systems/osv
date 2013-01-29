@@ -4,7 +4,7 @@
 
 #include "mempool.hh"
 #include "mmu.hh"
-#include "kern/sglist.hh"
+#include "sglist.hh"
 
 #include <string.h>
 #include "debug.hh"

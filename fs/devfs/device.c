@@ -47,9 +47,8 @@
 #include <assert.h>
 #include <string.h>
 
-#include "../vfs/prex.h"
-#include "../vfs/uio.h"
-#include "device.h"
+#include <osv/prex.h>
+#include <osv/device.h>
 
 #define sched_lock()	do {} while (0)
 #define sched_unlock()	do {} while (0)

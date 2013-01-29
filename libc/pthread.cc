@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string.h>
 #include <list>
+#include "mmu.hh"
 #include "debug.hh"
 
 namespace pthread_private {
@@ -60,7 +61,9 @@ namespace pthread_private {
     sched::thread::stack_info pthread::allocate_stack()
     {
         size_t size = 1024*1024;
-        return { new char[size], size };
+        auto vma = mmu::reserve(nullptr, size);
+        mmu::map_anon(vma->addr(), vma->size(), mmu::perm_rw);
+        return { vma->addr(), vma->size() };
     }
 
     pthread* pthread::from_libc(pthread_t p)

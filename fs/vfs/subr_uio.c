@@ -38,7 +38,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include "uio.h"
+#include <osv/uio.h>
 
 int
 uiomove(void *cp, int n, struct uio *uio)

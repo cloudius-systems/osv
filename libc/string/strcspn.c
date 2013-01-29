@@ -5,6 +5,7 @@
 
 char *__strchrnul(const char *, int);
 
+#undef strcspn
 size_t strcspn(const char *s, const char *c)
 {
 	const char *a = s;

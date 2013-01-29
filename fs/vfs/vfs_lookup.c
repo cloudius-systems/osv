@@ -31,13 +31,11 @@
  * vfs_lookup.c - vnode lookup function.
  */
 
-#include "vnode.h"
-#include "mount.h"
-
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
 
+#include <osv/vnode.h>
 #include "vfs.h"
 
 /*

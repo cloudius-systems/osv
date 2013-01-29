@@ -31,12 +31,7 @@
  * rmafs_vnops.c - vnode operations for RAM file system.
  */
 
-#include "../vfs/prex.h"
-
 #include <sys/stat.h>
-#include "../vfs/vnode.h"
-#include "../vfs/file.h"
-#include "../vfs/mount.h"
 #include <dirent.h>
 #include <sys/param.h>
 
@@ -44,6 +39,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+
+#include <osv/prex.h>
+#include <osv/vnode.h>
+#include <osv/file.h>
+#include <osv/mount.h>
 
 #include "ramfs.h"
 

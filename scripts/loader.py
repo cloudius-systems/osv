@@ -5,6 +5,9 @@ import re
 import os, os.path
 import struct
 
+build_dir = os.path.dirname(gdb.current_objfile().filename)
+external = build_dir + '/../../external'
+
 def load_elf(path, base):
     args = ''
     text_addr = '?'
@@ -31,7 +34,7 @@ def load_elf(path, base):
 def translate(path):
     '''given a path, try to find it on the host OS'''
     name = os.path.basename(path)
-    for top in ['build/debug', 'external', '/usr']:
+    for top in [build_dir, external, '/usr']:
         for root, dirs, files in os.walk(top):
             if name in files:
                 return os.path.join(root, name)

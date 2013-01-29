@@ -1,6 +1,8 @@
 
 #include "cfi.S"
 
+interrupt_stack_frame = 4096
+
 .macro exception_entry name, handler, has_error_code
 	.global \name
 	\name :
@@ -12,6 +14,7 @@
 	.cfi_def_cfa %rsp, 0
 	.cfi_offset %rip, 8
 	.cfi_offset %rsp, 32
+	subq $interrupt_stack_frame, tss_ist+8 # FIXME: assumes proper nesting of interrupts
 	pushq_cfi %rax
 	pushq_cfi %rbx
 	pushq_cfi %rcx
@@ -45,6 +48,7 @@
 	popq_cfi %rbx
 	popq_cfi %rax
 	add $8, %rsp
+	addq $interrupt_stack_frame, tss_ist+8 # FIXME: assumes proper nesting of interrupts
 	iretq
 	.cfi_endproc
 .endm

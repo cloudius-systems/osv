@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <string.h>
 
+#undef strsep
 char *strsep(char **str, const char *sep)
 {
 	char *s = *str, *end;

@@ -33,6 +33,8 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 
+#include <osv/uio.h>
+
 #define MAXDEVNAME	12
 #define DO_RWMASK	0x3
 
