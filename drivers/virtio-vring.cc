@@ -36,7 +36,7 @@ namespace virtio {
 
         _avail_head = 0;
         _used_guest_head = 0;
-        _avail_added = 0;
+        _avail_added_since_kick = 0;
         _avail_count = num;
 
     }
@@ -69,44 +69,98 @@ namespace virtio {
         return ( (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old) );
     }
 
+    // The convention is that out descriptors are at the beginning of the sg list
+    // TODO: add barriers
     bool
     vring::add_buf(sglist* sg, u16 out, u16 in, void* cookie) {
         if (_avail_count < (in+out)) {
             //make sure the interrupts get there
+            //it probably should force an exit to the host
             kick();
             return false;
         }
 
-        int i = 0, idx, prev_idx;
+        int i = 1, idx, prev_idx;
         idx = prev_idx = _avail_head;
-        for (auto ii = sg->_nodes.begin();i<in+out;ii++) {
+
+        //debug(fmt("\t%s: avail_head=%d, in=%d, out=%d") % __FUNCTION__ % _avail_head % in % out);
+        _cookie[idx] = cookie;
+
+        for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
             _desc[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
-            _desc[idx]._flags |= (i++>in)? vring_desc::VRING_DESC_F_WRITE:0;
+            _desc[idx]._flags |= (i>out)? vring_desc::VRING_DESC_F_WRITE:0;
             _desc[idx]._paddr = (*ii)._paddr;
             _desc[idx]._len = (*ii)._len;
             prev_idx = idx;
-            idx = _avail->_ring[_desc[idx]._next];
+            idx = _desc[idx]._next;
+            //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
         }
         _desc[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
-        _avail->_idx = _avail_head;
-        _cookie[_avail_head] = cookie;
-
-        _avail_added += i;
+        _avail_added_since_kick++;
         _avail_count -= i;
+
+        _avail->_ring[_avail->_idx] = _avail_head;
+        _avail->_idx = (_avail->_idx + 1) % _num;
+
         _avail_head = idx;
+
+        //debug(fmt("\t%s: avail_head=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
 
         return true;
     }
 
     void*
+    vring::get_used_desc(int *res)
+    {
+        vring_used_elem elem;
+        void* cookie = nullptr;
+        int i = 1;
+
+        // need to trim the free running counter w/ the array size
+        int used_ptr = _used_guest_head % _num;
+
+        if (_used_guest_head == _used->_idx) {
+            debug(fmt("get_used_desc: no avail buffers ptr=%d") % _used_guest_head);
+            return nullptr;
+        }
+
+        //debug(fmt("get used: guest head=%d use_elem[head].id=%d") % used_ptr % _used->_used_elements[used_ptr]._id);
+        elem = _used->_used_elements[used_ptr];
+        int idx = elem._id;
+
+        while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
+                idx = _desc[idx]._next;
+            i++;
+        }
+
+        *res = elem._len;
+        cookie = _cookie[elem._id];
+        _cookie[elem._id] = nullptr;
+
+        _used_guest_head++;
+        _avail_count += i;
+        _desc[elem._id]._next = _avail_head;
+        _avail_head = elem._id;
+
+        return cookie;
+    }
+
+    void*
     vring::get_buf(int* len) {
-        return nullptr;
+        void* cookie = nullptr;
+
+        while ((cookie = get_used_desc(len)) != nullptr) {
+            debug("get_buf got another");
+        }
+
+        return cookie;
     }
 
     bool
     vring::kick() {
         _dev->kick(_q_index);
+        _avail_added_since_kick = 0;
         return true;
     }
 

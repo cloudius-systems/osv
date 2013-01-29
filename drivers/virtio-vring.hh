@@ -120,6 +120,10 @@ class virtio_device;
         static int need_event(u16 event_idx, u16 new_idx, u16 old);
 
     private:
+
+        // Retrieve a descriptor chain from the used array and return it's cookie pointer
+        void* get_used_desc(int* res);
+
         // Up pointer
         virtio_device* _dev;
         u16 _q_index;
@@ -134,7 +138,7 @@ class virtio_device;
         // Position of the used descriptor we've last seen
         u16 _used_guest_head;
         // The amount of avail descriptors we've added since last kick
-        u16 _avail_added;
+        u16 _avail_added_since_kick;
         u16 _avail_count;
 
         // Flat list of chained descriptors
