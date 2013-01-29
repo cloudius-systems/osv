@@ -13,3 +13,6 @@
 [submodule "external/glibc-testsuite"]
 	path = external/glibc-testsuite
 	url = ../glibc-testsuite
+[submodule "external/acpica"]
+	path = external/acpica
+	url = ../acpica
