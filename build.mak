@@ -2,9 +2,10 @@
 arch = x64
 cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
+INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
-	$(arch-cflags) $(cflags-$(mode))
+	$(arch-cflags) $(cflags-$(mode)) $(acpi-defines)
 
 CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
@@ -123,6 +124,7 @@ drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/clock.o drivers/kvmclock.o
 drivers += drivers/clockevent.o
+drivers += drivers/acpi.o
 
 objects = arch/x64/exceptions.o
 objects += arch/x64/entry.o
@@ -143,6 +145,14 @@ objects += core/sglist.o
 include $(src)/libc/build.mak
 
 objects += $(addprefix libc/, $(libc))
+objects += $(acpi)
+
+acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
+
+acpi-source := $(shell find $(src)/external/acpica/source/components -type f -name '*.c')
+acpi = $(patsubst $(src)/%.c, %.o, $(acpi-source))
+
+$(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
 
 libstdc++.a = $(shell find $(gccbase) -name libstdc++.a)
 libsupc++.a = $(shell find $(gccbase) -name libsupc++.a)
