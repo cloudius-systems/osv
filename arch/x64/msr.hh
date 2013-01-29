@@ -50,6 +50,7 @@ enum class msr : uint32_t {
     X2APIC_SELF_IPI = 0x83f,
 
     IA32_APIC_BASE = 0x0000001b,
+    IA32_EFER = 0xc0000080,
     IA32_FS_BASE = 0xc0000100,
 
     KVM_WALL_CLOCK_NEW = 0x4b564d00,

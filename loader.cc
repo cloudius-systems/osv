@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "smp.hh"
 //#include <locale>
 
 #include "drivers/driver.hh"
@@ -136,6 +137,7 @@ int main(int ac, char **av)
 
     test_locale();
     idt.load_on_cpu();
+    smp_init();
 
     vfs_init();
     ramdisk_init();

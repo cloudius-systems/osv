@@ -110,3 +110,80 @@ start64:
     jmp main
     .cfi_endproc
 
+# The smp trampoline must be in the lower 1MB, so we manually relocate
+# it to address 0 by subtracting smpboot from any offset
+.data
+.global smpboot
+smpboot:
+.code16
+	lgdtl smpboot_gdt_desc-smpboot
+	mov smpboot_cr0-smpboot, %eax
+	btr $31, %eax # disable paging
+	mov %eax, %cr0
+	ljmp $0x18, $1f-smpboot
+1:
+.code32
+	mov $0x10, %eax
+	mov %eax, %ds
+	mov %eax, %es
+	mov %eax, %ss
+	mov %eax, %fs
+	mov %eax, %gs
+	mov smpboot_cr4-smpboot, %eax
+	mov %eax, %cr4
+	lea ident_pt_l4, %eax
+	mov %eax, %cr3
+	mov smpboot_efer-smpboot, %eax
+	mov smpboot_efer+4-smpboot, %edx
+	mov $0xc0000080, %ecx
+	wrmsr
+	mov smpboot_cr0-smpboot, %eax
+	#1: jmp 1b
+	mov %eax, %cr0 # now with paging
+	ljmp $8, $smpboot64
+
+smpboot_gdt_desc:
+	.short gdt_end - gdt - 1
+	.long gdt
+.global smpboot_cr0
+smpboot_cr0:
+	.long 0
+.global smpboot_cr4
+smpboot_cr4:
+	.long 0
+.global smpboot_efer
+smpboot_efer:
+	.quad 0
+
+.global smpboot_end
+smpboot_end = .
+
+.bss
+
+.align 16
+. = . + 4096 * 16
+smp_stack_top = .
+
+.data
+
+smp_stack_free: .quad smp_stack_top
+
+.bss
+# 'ltr' expects an available TSS, then marks it busy, so only one
+# can be loaded at a time
+trlock: .byte 0
+
+.text
+.code64
+
+smpboot64:
+1:
+	lock bts $0, trlock
+	pause
+	jc 1b
+	btrl $9, tss_desc+4
+	ltr tr
+	lock btc $0, trlock
+	mov $-512, %rsp
+	lock xadd %rsp, smp_stack_free
+	call smp_main

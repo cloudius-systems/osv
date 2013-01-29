@@ -132,6 +132,7 @@ objects += arch/x64/math.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/arch-setup.o
+objects += arch/x64/smp.o
 objects += core/mutex.o
 objects += core/debug.o
 objects += drivers/pci.o
