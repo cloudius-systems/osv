@@ -45,10 +45,15 @@ namespace mmu {
     typedef uint64_t pt_element;
     const unsigned nlevels = 4;
 
+    void* phys_to_virt(phys pa)
+    {
+        return reinterpret_cast<void*>(pa + 0xffff800000000000ull);
+    }
+
     template <typename T>
     T* phys_cast(phys pa)
     {
-	return reinterpret_cast<T*>(pa + 0xffff800000000000ull);
+	return static_cast<T*>(phys_to_virt(pa));
     }
 
     phys virt_to_phys(void *virt)
