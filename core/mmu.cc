@@ -50,12 +50,6 @@ namespace mmu {
         return reinterpret_cast<void*>(pa + 0xffff800000000000ull);
     }
 
-    template <typename T>
-    T* phys_cast(phys pa)
-    {
-	return static_cast<T*>(phys_to_virt(pa));
-    }
-
     phys virt_to_phys(void *virt)
     {
 	return reinterpret_cast<phys>(virt) - 0xffff800000000000ull;
