@@ -34,7 +34,7 @@
 #include <string.h>
 
 #include <osv/device.h>
-#include "bio.h"
+#include <osv/bio.h>
 
 struct ramdisk_softc {
 	char		*addr;		/* base address of image */

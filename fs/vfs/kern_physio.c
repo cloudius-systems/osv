@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include <osv/device.h>
-#include "bio.h"
+#include <osv/bio.h>
 
 static void
 physio_done(struct bio *bio)
