@@ -5,6 +5,7 @@ out = build/$(mode)
 submake = $(out)/Makefile
 
 quiet = $(if $V, $1, @echo " $2"; $1)
+silentant = $(if $V,, scripts/silentant.py)
 
 # It's not practical to build large Java programs from make, because of
 # how Java does dependencies; so we use ant instead.  But we also cannot
@@ -13,7 +14,7 @@ quiet = $(if $V, $1, @echo " $2"; $1)
 # and then the main makefile can treat the build products (jars) as inputs
 
 all: $(submake)
-	$(call quiet, ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
+	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 	              -e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
 	$(MAKE) -C $(dir $(submake)) $@
 
