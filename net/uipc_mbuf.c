@@ -32,6 +32,9 @@
 #include <net/netport.h>
 #include <sys/cdefs.h>
 
+#include "mbuf.h"
+#include "atomic.h"
+
 #if 0
 #include "opt_param.h"
 #include "opt_mbuf_stress_test.h"
@@ -43,7 +46,6 @@
 #include <sys/limits.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
-#include <sys/mbuf.h>
 #include <sys/sysctl.h>
 #include <sys/domain.h>
 #include <sys/protosw.h>

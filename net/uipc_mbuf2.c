@@ -60,8 +60,14 @@
  *	@(#)uipc_mbuf.c	8.4 (Berkeley) 2/14/95
  */
 
+#include <memory.h>
+#include <malloc.h>
+#include "netport.h"
+#include "queue.h"
+#include "mbuf.h"
+
+#if 0
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 /*#define PULLDOWN_DEBUG*/
 
@@ -75,8 +81,12 @@ __FBSDID("$FreeBSD$");
 
 #include <security/mac/mac_framework.h>
 
+#endif
+
+#if 0
 static MALLOC_DEFINE(M_PACKET_TAGS, MBUF_TAG_MEM_NAME,
     "packet-attached information");
+#endif
 
 /* can't call it m_dup(), as freebsd[34] uses m_dup() with different arg */
 static struct mbuf *m_dup1(struct mbuf *, int, int, int);
@@ -309,7 +319,7 @@ m_tag_free_default(struct m_tag *t)
 	if (t->m_tag_id == PACKET_TAG_MACLABEL)
 		mac_mbuf_tag_destroy(t);
 #endif
-	free(t, M_PACKET_TAGS);
+	free(t);
 }
 
 /* Get a packet tag structure along with specified data following. */
@@ -321,7 +331,7 @@ m_tag_alloc(uint32_t cookie, int type, int len, int wait)
 	MBUF_CHECKSLEEP(wait);
 	if (len < 0)
 		return NULL;
-	t = malloc(len + sizeof(struct m_tag), M_PACKET_TAGS, wait);
+	t = malloc(len + sizeof(struct m_tag));
 	if (t == NULL)
 		return NULL;
 	m_tag_setup(t, cookie, type, len);

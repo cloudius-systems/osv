@@ -34,9 +34,7 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
-#include <stdint.h>
-#include <stdio.h>
-#include <memory.h>
+#include "netport.h"
 #include "param.h"
 
 /* XXX: These includes suck. Sorry! */
@@ -357,15 +355,7 @@ struct mbstat {
 	u_long	sf_allocwait;	/* times sfbuf allocation had to wait */
 };
 
- /*
-  * flags to malloc.
-  */
- #define M_NOWAIT    0x0001      /* do not block */
- #define M_WAITOK    0x0002      /* ok to block */
- #define M_ZERO      0x0100      /* bzero the allocation */
- #define M_NOVM      0x0200      /* don't ask VM for pages */
- #define M_USE_RESERVE   0x0400      /* can alloc out of reserve memory */
- #define M_NODUMP    0x0800      /* don't dump pages in this allocation */
+ struct mbstat mbstat;
 
 /*
  * Flags specifying how an allocation should be made.
@@ -417,45 +407,6 @@ struct mbstat {
  *
  * The rest of it is defined in kern/kern_mbuf.c
  */
-
-/* OSv: FreeBSD uses zone for allocations */
-typedef int uma_zone_t;
-
-struct mbuf* uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
-{
-    return (NULL);
-}
-
-void
-uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
-{
-
-}
-
-void uma_zfree(uma_zone_t zone, void *item)
-{
-    uma_zfree_arg(zone, item, NULL);
-}
-
-static void
-zone_drain_wait(uma_zone_t zone, int waitok)
-{
-
-}
-
-void
-zone_drain(uma_zone_t zone)
-{
-
-    zone_drain_wait(zone, M_NOWAIT);
-}
-
-u_int32_t * uma_find_refcnt(uma_zone_t zone, void *item)
-{
-    return (NULL);
-}
-
-#define bzero(poi,len) memset(poi,0,len)
 
 extern uma_zone_t	zone_mbuf;
 extern uma_zone_t	zone_clust;
