@@ -80,7 +80,7 @@ namespace virtio {
             return false;
         }
 
-        int i = 1, idx, prev_idx;
+        int i = 0, idx, prev_idx;
         idx = prev_idx = _avail_head;
 
         //debug(fmt("\t%s: avail_head=%d, in=%d, out=%d") % __FUNCTION__ % _avail_head % in % out);
@@ -88,7 +88,7 @@ namespace virtio {
 
         for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
             _desc[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
-            _desc[idx]._flags |= (i>out)? vring_desc::VRING_DESC_F_WRITE:0;
+            _desc[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
             _desc[idx]._paddr = (*ii)._paddr;
             _desc[idx]._len = (*ii)._len;
             prev_idx = idx;
@@ -98,7 +98,7 @@ namespace virtio {
         _desc[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
         _avail_added_since_kick++;
-        _avail_count -= i;
+        _avail_count -= i+1;
 
         _avail->_ring[_avail->_idx] = _avail_head;
         _avail->_idx = (_avail->_idx + 1) % _num;
@@ -111,7 +111,7 @@ namespace virtio {
     }
 
     void*
-    vring::get_used_desc(int *res)
+    vring::get_buf()
     {
         vring_used_elem elem;
         void* cookie = nullptr;
@@ -134,7 +134,6 @@ namespace virtio {
             i++;
         }
 
-        *res = elem._len;
         cookie = _cookie[elem._id];
         _cookie[elem._id] = nullptr;
 
@@ -142,17 +141,6 @@ namespace virtio {
         _avail_count += i;
         _desc[elem._id]._next = _avail_head;
         _avail_head = elem._id;
-
-        return cookie;
-    }
-
-    void*
-    vring::get_buf(int* len) {
-        void* cookie = nullptr;
-
-        while ((cookie = get_used_desc(len)) != nullptr) {
-            debug("get_buf got another");
-        }
 
         return cookie;
     }

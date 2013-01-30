@@ -109,7 +109,7 @@ class virtio_device;
 
         // Ring operations
         bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
-        void* get_buf(int* len);
+        void* get_buf();
         bool kick();
         void disable_callback();
         bool enable_callback();
@@ -122,9 +122,6 @@ class virtio_device;
         static int need_event(u16 event_idx, u16 new_idx, u16 old);
 
     private:
-
-        // Retrieve a descriptor chain from the used array and return it's cookie pointer
-        void* get_used_desc(int* res);
 
         // Up pointer
         virtio_device* _dev;
