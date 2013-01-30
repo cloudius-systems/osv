@@ -39,11 +39,14 @@
 
 /* XXX: These includes suck. Sorry! */
 #include <sys/queue.h>
+
+#if 0
 #ifdef _KERNEL
 #include <sys/systm.h>
 #include <vm/uma.h>
 #ifdef WITNESS
 #include <sys/lock.h>
+#endif
 #endif
 #endif
 

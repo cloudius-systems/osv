@@ -38,6 +38,8 @@
 #ifndef _SYS_PARAM_H_
 #define _SYS_PARAM_H_
 
+#define _KERNEL
+
 #if 0
 #include <sys/_null.h>
 #endif
@@ -109,6 +111,7 @@
 #define MAXHOSTNAMELEN	256		/* max hostname size */
 #define SPECNAMELEN	63		/* max length of devicename */
 
+#if 0
 /* More types and definitions used throughout the kernel. */
 #ifdef _KERNEL
 #include <sys/cdefs.h>
@@ -116,6 +119,7 @@
 #ifndef LOCORE
 #include <sys/time.h>
 #include <sys/priority.h>
+#endif
 #endif
 
 #ifndef FALSE
