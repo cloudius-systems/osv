@@ -138,14 +138,15 @@ void pci_device_enumeration(void)
 
                 bool parse_ok = dev->parse_pci_config();
                 if (!parse_ok) {
-                    debug(fmt("Error: couldn't parse device config space %x:%x.%")
+                    debug(fmt("Error: couldn't parse device config space %x:%x.%x")
                         % bus % slot % func);
                     break;
                 }
 
                 if (!device_manager::instance()->register_device(dev)) {
-                    debug(fmt("Error: couldn't register device %x:%x.%")
+                    debug(fmt("Error: couldn't register device %x:%x.%x")
                         % bus % slot % func);
+                    //TODO: Need to beautify it as multiple instances of the device may exist
                     delete (dev);
                 }
 
