@@ -40,6 +40,7 @@
 
 #include <stdint.h>
 #include <pthread.h>
+#include <osv/list.h>
 
 /* bio_cmd */
 #define BIO_READ	0x01
@@ -78,6 +79,9 @@ struct bio {
 	int	bio_error;		/* Errno for BIO_ERROR. */
 	long	bio_resid;		/* Remaining I/O in bytes. */
 	void	(*bio_done)(struct bio *);
+
+
+	struct list	bio_list;
 
 	/*
 	 * I/O synchronization, probably should move out of the struct to

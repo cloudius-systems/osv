@@ -14,6 +14,7 @@ alloc_bio(void)
 		return NULL;
 	memset(bio, 0, sizeof(*bio));
 
+	list_init(&bio->bio_list);
 	pthread_mutex_init(&bio->bio_mutex, NULL);
 	pthread_cond_init(&bio->bio_wait, NULL);
 	return bio;
