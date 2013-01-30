@@ -160,6 +160,10 @@ namespace virtio {
     private:
 
         virtio_blk_config _config;
+
+        //maintains the virtio instance number for multiple drives
+        static int _instance;
+        int _id;
     };
 
 }

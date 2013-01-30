@@ -19,15 +19,17 @@ using namespace memory;
 
 namespace virtio {
 
+int virtio_blk::_instance = 0;
 
     virtio_blk::virtio_blk()
         : virtio_driver(VIRTIO_BLK_DEVICE_ID)
     {
-
+        _id = _instance++;
     }
 
     virtio_blk::~virtio_blk()
     {
+        //TODO: In theory maintain the list of free instances and gc it
     }
 
 
@@ -42,8 +44,11 @@ namespace virtio {
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-        // Perform test
-        test();
+        // Perform test if this isn't the boot image (test is destructive
+        if (_id > 0) {
+            debug(fmt("virtio blk: testing instance %d") % _id);
+            test();
+        }
 
         return true;
     }
