@@ -49,7 +49,7 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 
 %.class: %.java
 	$(makedir)
-	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^,JAVAC $@)
+	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^, JAVAC $@)
 
 tests/%.o: CFLAGS += -fPIC
 
