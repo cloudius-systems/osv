@@ -70,7 +70,7 @@ ramdisk_strategy(struct bio *bio)
 		assert(0);
 	}
 
-	bio->bio_done(bio);
+	biodone(bio);
 }
 
 static struct devops ramdisk_devops = {

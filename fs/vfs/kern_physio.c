@@ -6,9 +6,42 @@
 #include <osv/device.h>
 #include <osv/bio.h>
 
-static void
-physio_done(struct bio *bio)
+struct bio *
+alloc_bio(void)
 {
+	struct bio *bio = malloc(sizeof(*bio));
+	if (!bio)
+		return NULL;
+	memset(bio, 0, sizeof(*bio));
+
+	pthread_mutex_init(&bio->bio_mutex, NULL);
+	pthread_cond_init(&bio->bio_wait, NULL);
+	return bio;
+}
+
+void
+destroy_bio(struct bio *bio)
+{
+	pthread_cond_destroy(&bio->bio_wait);
+//	pthread_mutex_destroy(&bio->bio_mutex);
+	free(bio);
+}
+
+void
+biodone(struct bio *bio)
+{
+	void (*bio_done)(struct bio *);
+
+	pthread_mutex_lock(&bio->bio_mutex);
+	bio->bio_flags |= BIO_DONE;
+	bio_done = bio->bio_done;
+	if (!bio_done) {
+		pthread_cond_signal(&bio->bio_wait);
+		pthread_mutex_unlock(&bio->bio_mutex);
+	} else {
+		pthread_mutex_unlock(&bio->bio_mutex);
+		bio_done(bio);
+	}
 }
 
 int
@@ -27,24 +60,28 @@ physio(struct device *dev, struct uio *uio, int ioflags)
 		if (!iov->iov_len)
 			continue;
 
-		bio = malloc(sizeof(*bio));
+		bio = alloc_bio();
 		if (!bio)
 			return ENOMEM;
-		memset(bio, 0, sizeof(*bio));
+
 		if (uio->uio_rw == UIO_READ)
 			bio->bio_cmd = BIO_READ;
 		else
 			bio->bio_cmd = BIO_WRITE;
 
 		bio->bio_dev = dev;
-		bio->bio_done = physio_done;
-
 		bio->bio_data = iov->iov_base;
 		bio->bio_offset = uio->uio_offset;
 		bio->bio_bcount = uio->uio_resid;
 
 		dev->driver->devops->strategy(bio);
-		free(bio);
+
+		pthread_mutex_lock(&bio->bio_mutex);
+		while (!(bio->bio_flags & BIO_DONE))
+			pthread_cond_wait(&bio->bio_wait, &bio->bio_mutex);
+		pthread_mutex_unlock(&bio->bio_mutex);
+
+		destroy_bio(bio);
 
 	        uio->uio_iov++;
         	uio->uio_iovcnt--;
