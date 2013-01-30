@@ -109,10 +109,13 @@ fs +=	fs/ramfs/ramfs_vfsops.o \
 fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
+net = net/net.o
+
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += drivers/ramdisk.o
 drivers += $(fs)
+drivers += $(net)
 drivers += core/mmu.o
 drivers += core/elf.o
 drivers += drivers/device.o
