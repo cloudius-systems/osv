@@ -38,7 +38,9 @@
 #ifndef _SYS_PARAM_H_
 #define _SYS_PARAM_H_
 
+#if 0
 #include <sys/_null.h>
+#endif
 
 #define	BSD	199506		/* System version (year & month). */
 #define BSD4_3	1
@@ -92,7 +94,9 @@
  *
  * MAXCOMLEN should be >= sizeof(ac_comm) (see <acct.h>)
  */
+#if 0
 #include <sys/syslimits.h>
+#endif
 
 #define	MAXCOMLEN	19		/* max command name remembered */
 #define	MAXINTERP	PATH_MAX	/* max interpreter file name length */
@@ -127,10 +131,12 @@
 #include <sys/signal.h>
 #endif
 
+#if 0
 /* Machine type dependent parameters. */
 #include <machine/param.h>
 #ifndef _KERNEL
 #include <sys/limits.h>
+#endif
 #endif
 
 #ifndef DEV_BSHIFT

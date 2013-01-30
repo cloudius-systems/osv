@@ -34,6 +34,7 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
+#include <stdint.h>
 #include "param.h"
 
 /* XXX: These includes suck. Sorry! */
