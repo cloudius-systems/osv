@@ -38,12 +38,6 @@
 #ifndef _SYS_PARAM_H_
 #define _SYS_PARAM_H_
 
-#define _KERNEL
-
-#ifndef NULL
-#define NULL 0
-#endif
-
 #if 0
 #include <sys/_null.h>
 #endif

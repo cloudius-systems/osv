@@ -29,9 +29,10 @@
  *	@(#)uipc_mbuf.c	8.2 (Berkeley) 1/4/94
  */
 
+#include <net/netport.h>
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
+#if 0
 #include "opt_param.h"
 #include "opt_mbuf_stress_test.h"
 #include "opt_mbuf_profiling.h"
@@ -47,6 +48,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/domain.h>
 #include <sys/protosw.h>
 #include <sys/uio.h>
+#endif
 
 int	max_linkhdr;
 int	max_protohdr;
@@ -60,6 +62,7 @@ int	m_defragfailure;
 int	m_defragrandomfailures;
 #endif
 
+#if 0
 /*
  * sysctl(8) exported objects
  */
@@ -82,6 +85,7 @@ SYSCTL_INT(_kern_ipc, OID_AUTO, m_defragfailure, CTLFLAG_RD,
 	   &m_defragfailure, 0, "");
 SYSCTL_INT(_kern_ipc, OID_AUTO, m_defragrandomfailures, CTLFLAG_RW,
 	   &m_defragrandomfailures, 0, "");
+#endif
 #endif
 
 /*
