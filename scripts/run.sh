@@ -3,6 +3,7 @@ qemu-system-x86_64 \
 	-enable-kvm \
 	-cpu host,+x2apic \
 	-m 1G \
+	-smp 4 \
 	-chardev stdio,mux=on,id=stdio \
 	-mon chardev=stdio,mode=readline,default \
 	-device isa-serial,chardev=stdio \
