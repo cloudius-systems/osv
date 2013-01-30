@@ -64,7 +64,9 @@ namespace virtio {
              *   VIRTIO_BLK_T_BARRIER.  VIRTIO_BLK_T_FLUSH is a command of its own
              *   and may not be combined with any of the other flags.
              */
+        };
 
+        enum virtio_blk_request_type {
             VIRTIO_BLK_T_IN=0,
             VIRTIO_BLK_T_OUT=1,
             /* This bit says it's a scsi command, not an actual read or write. */
@@ -75,6 +77,9 @@ namespace virtio {
             VIRTIO_BLK_T_GET_ID=8,
             /* Barrier before this op. */
             VIRTIO_BLK_T_BARRIER=0x80000000,
+        };
+
+        enum virtio_blk_res_code {
             /* And this is the final byte of the write scatter-gather list. */
             VIRTIO_BLK_S_OK=0,
             VIRTIO_BLK_S_IOERR=1,
@@ -133,6 +138,12 @@ namespace virtio {
             u8 status;
         };
 
+        struct virtio_blk_req {
+            void* req_header;
+            sglist* payload;
+            virtio_blk_res* status;
+        };
+
         virtio_blk();
         virtual ~virtio_blk();
 
@@ -142,7 +153,7 @@ namespace virtio {
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
 
-        void make_virtio_req(sglist* sg, u64 sector);
+        virtio_blk_req* make_virtio_req(u64 sector, virtio_blk_request_type type, int val);
 
         void test();
 
