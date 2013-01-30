@@ -34,6 +34,8 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
+#include "param.h"
+
 /* XXX: These includes suck. Sorry! */
 #include <sys/queue.h>
 #ifdef _KERNEL
