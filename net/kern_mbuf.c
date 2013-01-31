@@ -25,9 +25,17 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+#include "netport.h"
+#include "uma_stub.h"
+#include "param.h"
+#include "mbuf.h"
+#include "errno.h"
 
+#include <sys/cdefs.h>
+
+
+
+#if 0
 #include "opt_param.h"
 
 #include <sys/param.h>
@@ -50,6 +58,7 @@ __FBSDID("$FreeBSD$");
 #include <vm/uma.h>
 #include <vm/uma_int.h>
 #include <vm/uma_dbg.h>
+#endif
 
 /*
  * In FreeBSD, Mbufs and Mbuf Clusters are allocated from UMA
@@ -102,6 +111,7 @@ int nmbjumbo9;			/* limits number of 9k jumbo clusters */
 int nmbjumbo16;			/* limits number of 16k jumbo clusters */
 struct mbstat mbstat;
 
+#if 0
 /*
  * tunable_mbinit() has to be run before init_maxsockets() thus
  * the SYSINIT order below is SI_ORDER_MIDDLE while init_maxsockets()
@@ -217,6 +227,8 @@ SYSCTL_PROC(_kern_ipc, OID_AUTO, nmbjumbo16, CTLTYPE_INT|CTLFLAG_RW,
 SYSCTL_STRUCT(_kern_ipc, OID_AUTO, mbstat, CTLFLAG_RD, &mbstat, mbstat,
     "Mbuf general information and statistics");
 
+#endif
+
 /*
  * Zones from which we allocate.
  */
@@ -240,10 +252,9 @@ static void	mb_dtor_pack(void *, int, void *);
 static int	mb_zinit_pack(void *, int, int);
 static void	mb_zfini_pack(void *, int);
 
-static void	mb_reclaim(void *);
-static void	mbuf_init(void *);
 static void    *mbuf_jumbo_alloc(uma_zone_t, int, uint8_t *, int);
 
+#if 0
 /* Ensure that MSIZE doesn't break dtom() - it must be a power of 2 */
 CTASSERT((((MSIZE - 1) ^ MSIZE) + 1) >> 1 == MSIZE);
 
@@ -251,8 +262,9 @@ CTASSERT((((MSIZE - 1) ^ MSIZE) + 1) >> 1 == MSIZE);
  * Initialize FreeBSD Network buffer allocation.
  */
 SYSINIT(mbuf, SI_SUB_MBUF, SI_ORDER_FIRST, mbuf_init, NULL);
-static void
-mbuf_init(void *dummy)
+#endif
+
+void mbuf_init(void *dummy)
 {
 
 	/*
@@ -324,6 +336,7 @@ mbuf_init(void *dummy)
 
 	/* uma_prealloc() goes here... */
 
+#if 0
 	/*
 	 * Hook event handler for low-memory situation, used to
 	 * drain protocols and push data back to the caches (UMA
@@ -331,6 +344,7 @@ mbuf_init(void *dummy)
 	 */
 	EVENTHANDLER_REGISTER(vm_lowmem, mb_reclaim, NULL,
 	    EVENTHANDLER_PRI_FIRST);
+#endif
 
 	/*
 	 * [Re]set counters and local statistics knobs.
@@ -361,11 +375,14 @@ mbuf_init(void *dummy)
 static void *
 mbuf_jumbo_alloc(uma_zone_t zone, int bytes, uint8_t *flags, int wait)
 {
-
+#if 0
 	/* Inform UMA that this allocator uses kernel_map/object. */
 	*flags = UMA_SLAB_KERNEL;
 	return ((void *)kmem_alloc_contig(kernel_map, bytes, wait,
 	    (vm_paddr_t)0, ~(vm_paddr_t)0, 1, 0, VM_MEMATTR_DEFAULT));
+#else
+	return (NULL);
+#endif
 }
 
 /*
@@ -687,10 +704,11 @@ m_pkthdr_init(struct mbuf *m, int how)
  * presently acquire some locks which raises the possibility of lock order
  * reversal.
  */
-static void
+void
 mb_reclaim(void *junk)
 {
-	struct domain *dp;
+#if 0
+    struct domain *dp;
 	struct protosw *pr;
 
 	WITNESS_WARN(WARN_GIANTOK | WARN_SLEEPOK | WARN_PANIC, NULL,
@@ -700,4 +718,5 @@ mb_reclaim(void *junk)
 		for (pr = dp->dom_protosw; pr < dp->dom_protoswNPROTOSW; pr++)
 			if (pr->pr_drain != NULL)
 				(*pr->pr_drain)();
+#endif
 }

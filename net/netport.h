@@ -25,58 +25,15 @@
 #endif
 
 /*
-  * flags to malloc.
-  */
- #define M_NOWAIT    0x0001      /* do not block */
- #define M_WAITOK    0x0002      /* ok to block */
- #define M_ZERO      0x0100      /* bzero the allocation */
- #define M_NOVM      0x0200      /* don't ask VM for pages */
- #define M_USE_RESERVE   0x0400      /* can alloc out of reserve memory */
- #define M_NODUMP    0x0800      /* don't dump pages in this allocation */
+* flags to malloc.
+*/
+#define M_NOWAIT    0x0001      /* do not block */
+#define M_WAITOK    0x0002      /* ok to block */
+#define M_ZERO      0x0100      /* bzero the allocation */
+#define M_NOVM      0x0200      /* don't ask VM for pages */
+#define M_USE_RESERVE   0x0400      /* can alloc out of reserve memory */
+#define M_NODUMP    0x0800      /* don't dump pages in this allocation */
 
-
-/* OSv: FreeBSD uses zone for allocations */
-typedef int uma_zone_t;
-
-static struct mbuf* uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
-{
-    return (NULL);
-}
-
-static __inline void *
-uma_zalloc(uma_zone_t zone, int flags)
-{
-    return uma_zalloc_arg(zone, NULL, flags);
-}
-
-
-static void
-uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
-{
-
-}
-
-static  void uma_zfree(uma_zone_t zone, void *item)
-{
-    uma_zfree_arg(zone, item, NULL);
-}
-
-static void
-zone_drain_wait(uma_zone_t zone, int waitok)
-{
-
-}
-
-static void
-zone_drain(uma_zone_t zone)
-{
-    zone_drain_wait(zone, M_NOWAIT);
-}
-
-static u_int32_t * uma_find_refcnt(uma_zone_t zone, void *item)
-{
-    return (NULL);
-}
 
 #define bzero(poi,len) memset(poi,0,len)
 
@@ -106,7 +63,6 @@ enum uio_seg {
     UIO_NOCOPY      /* don't copy, already in object */
 };
 
-
 enum    uio_rw { UIO_READ, UIO_WRITE };
 
 struct uio {
@@ -120,18 +76,5 @@ struct uio {
 };
 
 int uiomove(void *cp, int n, struct uio *uio);
-
-
-/*
- * Zones from which we allocate.
- */
-uma_zone_t  zone_mbuf;
-uma_zone_t  zone_clust;
-uma_zone_t  zone_pack;
-uma_zone_t  zone_jumbop;
-uma_zone_t  zone_jumbo9;
-uma_zone_t  zone_jumbo16;
-uma_zone_t  zone_ext_refcnt;
-
 
 #endif

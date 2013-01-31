@@ -109,7 +109,7 @@ fs +=	fs/ramfs/ramfs_vfsops.o \
 fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
-net = net/net.o net/uipc_mbuf.o net/uipc_mbuf2.o
+net = net/net.o net/kern_mbuf.o net/uipc_mbuf.o net/uipc_mbuf2.o net/uma_stub.o
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o

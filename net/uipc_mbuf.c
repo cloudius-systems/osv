@@ -32,6 +32,7 @@
 #include <net/netport.h>
 #include <sys/cdefs.h>
 
+#include "uma_stub.h"
 #include "mbuf.h"
 #include "atomic.h"
 

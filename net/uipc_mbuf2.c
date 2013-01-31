@@ -62,6 +62,8 @@
 
 #include <memory.h>
 #include <malloc.h>
+
+#include "uma_stub.h"
 #include "netport.h"
 #include "queue.h"
 #include "mbuf.h"

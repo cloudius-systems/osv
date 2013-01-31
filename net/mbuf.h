@@ -35,6 +35,7 @@
 #define	_SYS_MBUF_H_
 
 #include "netport.h"
+#include "uma_stub.h"
 #include "param.h"
 
 /* XXX: These includes suck. Sorry! */
@@ -408,6 +409,8 @@ struct mbstat {
  * The rest of it is defined in kern/kern_mbuf.c
  */
 
+void mbuf_init(void *dummy);
+
 extern uma_zone_t	zone_mbuf;
 extern uma_zone_t	zone_clust;
 extern uma_zone_t	zone_pack;
@@ -542,7 +545,7 @@ m_getclr(int how, short type)
 
 	args.flags = 0;
 	args.type = type;
-	m = uma_zalloc_arg(zone_mbuf, &args, how);
+	m = (struct mbuf*)uma_zalloc_arg(zone_mbuf, &args, how);
 	if (m != NULL)
 		bzero(m->m_data, MLEN);
 	return (m);
@@ -587,12 +590,12 @@ m_getjcl(int how, short type, int flags, int size)
 	args.flags = flags;
 	args.type = type;
 
-	m = uma_zalloc_arg(zone_mbuf, &args, how);
+	m = (struct mbuf*)uma_zalloc_arg(zone_mbuf, &args, how);
 	if (m == NULL)
 		return (NULL);
 
 	zone = m_getzone(size);
-	n = uma_zalloc_arg(zone, m, how);
+	n = (struct mbuf*)uma_zalloc_arg(zone, m, how);
 	if (n == NULL) {
 		uma_zfree(zone_mbuf, m);
 		return (NULL);
