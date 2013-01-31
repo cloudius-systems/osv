@@ -215,9 +215,9 @@ bool operator<(const timer& t1, const timer& t2)
     }
 }
 
-void init(elf::program& prog)
+void init(elf::tls_data tls_data)
 {
-    tls = prog.tls();
+    tls = tls_data;
 }
 
 }

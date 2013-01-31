@@ -168,7 +168,7 @@ int main(int ac, char **av)
 #endif
 
     prog = new elf::program(fs);
-    sched::init(*prog);
+    sched::init(prog->tls());
     static char main_stack[64*1024];
     void main_thread(int ac, char** av);
     new thread([&] { main_thread(ac, av); }, { main_stack, sizeof main_stack }, true);

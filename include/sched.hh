@@ -101,7 +101,7 @@ private:
     thread* _t;
 };
 
-void init(elf::program& prog);
+void init(elf::tls_data tls_data);
 
 template <class Pred>
 void thread::wait_until(Pred pred)
