@@ -1,6 +1,7 @@
 
 #include "drivers/isa-serial.hh"
 #include "fs/fs.hh"
+#include "net/net.hh"
 #include <boost/format.hpp>
 #include <cctype>
 #include "elf.hh"
@@ -143,6 +144,8 @@ int main(int ac, char **av)
     ramdisk_init();
 
     filesystem fs;
+
+    test_mbuf();
 
     disable_pic();
     processor::sti();
