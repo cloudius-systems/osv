@@ -747,8 +747,8 @@ namespace elf {
                 relocate_table(rela, nrela);
                 relocate_table(jmp, njmp);
             } else if (phdr->p_type == PT_TLS) {
-                ret.tls = reinterpret_cast<void*>(phdr->p_vaddr);
-                ret.tls_size = phdr->p_memsz;
+                ret.tls.start = reinterpret_cast<void*>(phdr->p_vaddr);
+                ret.tls.size = phdr->p_memsz;
             }
         }
         return ret;
