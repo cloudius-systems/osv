@@ -116,10 +116,12 @@ struct uma_zone {
     u_int32_t   uz_flags;   /* Flags inherited from kegs */
     u_int32_t   uz_size;    /* Size inherited from kegs */
 
+    /* zones can be nested (and called with multiple ctor?) */
+    struct uma_zone* master;
+
 };
 
 typedef struct uma_zone * uma_zone_t;
-
 
 /*
  * Backend page supplier routines
