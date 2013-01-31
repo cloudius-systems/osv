@@ -9,6 +9,9 @@
 
 namespace {
     typedef boost::format fmt;
+
+    constexpr uintptr_t page_size = 4096;
+
 }
 
 namespace mmu {
@@ -89,9 +92,16 @@ namespace mmu {
 	*ptep = pt_page | 0x63;
     }
 
-    pt_element make_pte(phys addr)
+    pt_element make_pte(phys addr, unsigned perm)
     {
-        return addr | 0x63;
+        pt_element pte = addr | 0x61;
+        if (perm & perm_write) {
+            pte |= 0x2;
+        }
+        if (!(perm * perm_exec)) {
+            pte |= pt_element(0x8000000000000000);
+        }
+        return pte;
     }
 
     bool pte_large(pt_element pt)
@@ -113,7 +123,12 @@ namespace mmu {
         // FIXME: tlb flush
     }
 
-    void populate_page(void* addr)
+    struct fill_page {
+    public:
+        virtual void fill(void* addr, uint64_t offset) = 0;
+    };
+
+    void populate_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
     {
 	pt_element pte = processor::read_cr3();
         auto pt = phys_cast<pt_element>(pte_phys(pte));
@@ -130,17 +145,21 @@ namespace mmu {
 	    pt = phys_cast<pt_element>(pte_phys(pte));
 	    ptep = &pt[pt_index(addr, level)];
 	}
-	*ptep = make_pte(alloc_page());
+	phys page = alloc_page();
+	fill.fill(phys_to_virt(page), offset);
+	*ptep = make_pte(page, perm);
     }
 
-    void populate(vma& vma)
+    void populate(vma& vma, fill_page& fill, unsigned perm)
     {
 	// FIXME: don't iterate all levels per page
 	// FIXME: use large pages
+        uint64_t offset = 0;
 	for (auto addr = vma.addr();
 	     addr < vma.addr() + vma.size();
 	     addr += 4096) {
-	    populate_page(addr);
+	    populate_page(addr, fill, offset, perm);
+	    offset += page_size;
 	}
     }
 
@@ -201,13 +220,37 @@ namespace mmu {
         evacuate(&tmp);
     }
 
-    vma* map_anon_dontzero(uintptr_t start, uintptr_t end, unsigned perm)
+    struct fill_anon_page : fill_page {
+        virtual void fill(void* addr, uint64_t offset) {
+            memset(addr, 0, page_size);
+        }
+    };
+
+    struct fill_file_page : fill_page {
+        fill_file_page(file& _f, uint64_t _off, uint64_t _len)
+            : f(_f), off(_off), len(_len) {}
+        virtual void fill(void* addr, uint64_t offset) {
+            offset += off;
+            unsigned toread = 0;
+            if (offset < len) {
+                toread = std::min(len - offset, page_size);
+               f.read(addr, offset, toread);
+            }
+            memset(addr + toread, 0, page_size - toread);
+        }
+        file& f;
+        uint64_t off;
+        uint64_t len;
+    };
+
+    vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
+            unsigned perm)
     {
         vma* ret = new vma(start, end);
         evacuate(ret);
         vma_list.insert(*ret);
 
-        populate(*ret);
+        populate(*ret, fill, perm);
 
         return ret;
     }
@@ -215,28 +258,20 @@ namespace mmu {
     vma* map_anon(void* addr, size_t size, unsigned perm)
     {
         auto start = reinterpret_cast<uintptr_t>(addr);
-        auto ret = map_anon_dontzero(start, start + size, perm);
-        memset(addr, 0, size);
-        return ret;
+        fill_anon_page zfill;
+        return allocate(start, start + size, zfill, perm);
     }
 
     vma* map_file(void* addr, size_t size, unsigned perm,
                   file& f, f_offset offset)
     {
         auto start = reinterpret_cast<uintptr_t>(addr);
-        auto fsize = f.size();
-        if (offset >= fsize) {
-            return map_anon(addr, size, perm);
-        }
-        vma* ret = map_anon_dontzero(start, start + size, perm);
-        auto rsize = std::min(offset + size, fsize) - offset;
-        f.read(addr, offset, rsize);
-        memset(addr + rsize, 0, size - rsize);
+        fill_file_page ffill(f, offset, f.size());
+        vma* ret = allocate(start, start + size, ffill, perm);
         return ret;
     }
 
     namespace {
-        const uintptr_t page_size = 4096;
 
         uintptr_t align_down(uintptr_t ptr)
         {
