@@ -26,15 +26,17 @@ namespace hw {
         _drivers.clear();
     }
 
-    void driver_manager::register_driver(hw_driver* drv)
+    bool driver_manager::register_driver(hw_driver* drv)
     {
         debug(fmt("Probing '%1%'... ") % drv->get_name(), false);
 
         if (drv->hw_probe()) {
             _drivers.insert(std::make_pair(drv->get_name(), drv));
             debug("OK!");
+            return (true);
         } else {
             debug("NOK");
+            return (false);
         }
     }
 
