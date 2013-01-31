@@ -17,16 +17,18 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
     void * ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
 
-    // Call init
-    if (zone->uz_init != NULL) {
-        if (zone->uz_init(ptr, zone->uz_size, flags) != 0) {
-            return (NULL);
-        }
-    }
+//    // Call init
+//    if (zone->uz_init != NULL) {
+//        if (zone->uz_init(ptr, zone->uz_size, flags) != 0) {
+//            free(ptr);
+//            return (NULL);
+//        }
+//    }
 
     // Call ctor
     if (zone->uz_ctor != NULL) {
         if (zone->uz_ctor(ptr, zone->uz_size, udata, flags) != 0) {
+            free(ptr);
             return (NULL);
         }
     }
@@ -45,6 +47,10 @@ void * uma_zalloc(uma_zone_t zone, int flags)
 
 void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 {
+    if (item == NULL) {
+        return;
+    }
+
     if (zone->uz_dtor) {
         zone->uz_dtor(item, zone->uz_size, udata);
     }

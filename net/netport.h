@@ -60,6 +60,10 @@ static __inline void panic(const char* msg)
     return;
 }
 
+#ifdef INVARIANTS
+#undef INVARIANTS
+#endif
+
 /* Segment flag values. */
 enum uio_seg {
     UIO_USERSPACE,      /* from user data space */
@@ -80,5 +84,7 @@ struct uio {
 };
 
 int uiomove(void *cp, int n, struct uio *uio);
+
+
 
 #endif
