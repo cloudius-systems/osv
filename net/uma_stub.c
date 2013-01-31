@@ -90,12 +90,12 @@ void uma_zone_set_allocf(uma_zone_t zone, uma_alloc allocf)
 
 int uma_zone_exhausted(uma_zone_t zone)
 {
-    return 1;
+    return 0;
 }
 
 int uma_zone_exhausted_nolock(uma_zone_t zone)
 {
-    return 1;
+    return 0;
 }
 
 u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item)
