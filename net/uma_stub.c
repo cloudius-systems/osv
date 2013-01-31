@@ -42,14 +42,14 @@ uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
             uma_dtor dtor, uma_init uminit, uma_fini fini,
             int align, u_int32_t flags)
 {
-    return 1;
+    return NULL;
 }
 
 
 uma_zone_t uma_zsecond_create(char *name, uma_ctor ctor, uma_dtor dtor,
             uma_init zinit, uma_fini zfini, uma_zone_t master)
 {
-    return 1;
+    return NULL;
 }
 
 

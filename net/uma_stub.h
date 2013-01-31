@@ -4,11 +4,6 @@
 #ifndef UMA_STUB_H
 #define UMA_STUB_H
 
-/* OSv: FreeBSD uses a slab allocator called uma
- * Let's workaround this for now... */
-
-typedef int uma_zone_t;
-
 /*
  * Item constructor
  *
@@ -100,6 +95,30 @@ typedef void (*uma_fini)(void *mem, int size);
  * bump reference counts or total counts of outstanding structures, etc.
  *
  */
+
+/* OSv: FreeBSD uses a slab allocator called uma
+ * Let's workaround this for now... */
+
+/*
+ * Zone management structure
+ *
+ * TODO: Optimize for cache line size
+ *
+ */
+struct uma_zone {
+    const char  *uz_name;   /* Text name of the zone */
+
+    uma_ctor    uz_ctor;    /* Constructor for each allocation */
+    uma_dtor    uz_dtor;    /* Destructor */
+    uma_init    uz_init;    /* Initializer for each item */
+    uma_fini    uz_fini;    /* Discards memory */
+
+    u_int32_t   uz_flags;   /* Flags inherited from kegs */
+    u_int32_t   uz_size;    /* Size inherited from kegs */
+
+};
+
+typedef struct uma_zone * uma_zone_t;
 
 
 /*
