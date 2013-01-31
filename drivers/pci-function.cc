@@ -317,7 +317,7 @@ namespace pci {
         return (_have_msix);
     }
 
-    int pci_function::msix_get_num_entries(void)
+    unsigned pci_function::msix_get_num_entries(void)
     {
         if (!is_msix()) {
             return (0);

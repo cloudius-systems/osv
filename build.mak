@@ -115,6 +115,7 @@ drivers += drivers/ramdisk.o
 drivers += $(fs)
 drivers += core/mmu.o
 drivers += core/elf.o
+drivers += core/interrupt.o
 drivers += drivers/device.o
 drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
 drivers += drivers/driver.o
