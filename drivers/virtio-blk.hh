@@ -144,10 +144,10 @@ namespace virtio {
             virtio_blk_res* status;
         };
 
-        virtio_blk();
+        virtio_blk(unsigned dev_idx=0);
         virtual ~virtio_blk();
 
-        virtual const std::string get_name(void) { return "virtio-blk"; }
+        virtual const std::string get_name(void) { return _driver_name; }
         virtual bool load(void);
         virtual bool unload(void);
 
@@ -159,6 +159,7 @@ namespace virtio {
 
     private:
 
+        std::string _driver_name;
         virtio_blk_config _config;
 
         //maintains the virtio instance number for multiple drives

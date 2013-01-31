@@ -6,6 +6,8 @@
 #include "mmu.hh"
 #include "sglist.hh"
 
+#include <sstream>
+#include <string>
 #include <string.h>
 #include "debug.hh"
 #include "cdefs.hh"
@@ -21,9 +23,13 @@ namespace virtio {
 
 int virtio_blk::_instance = 0;
 
-    virtio_blk::virtio_blk()
-        : virtio_driver(VIRTIO_BLK_DEVICE_ID)
+    virtio_blk::virtio_blk(unsigned dev_idx)
+        : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx)
     {
+        std::stringstream ss;
+        ss << "virtio-blk" << dev_idx;
+
+        _driver_name = ss.str();
         _id = _instance++;
     }
 
