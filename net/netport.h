@@ -7,6 +7,10 @@
 
 #include <sys/types.h>
 
+
+void* malloc(size_t size);
+void free(void* object);
+
 #ifndef _KERNEL
     #define _KERNEL
 #endif

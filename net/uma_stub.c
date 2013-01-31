@@ -15,7 +15,7 @@ u_int32_t uma_refcounts[1048576] = {0};
 
 void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
-    void * ptr = malloc(zone->uz_size);
+    void * ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
 
     // Call init
     if (zone->uz_init != NULL) {
@@ -129,14 +129,5 @@ int uma_zone_exhausted_nolock(uma_zone_t zone)
 
 u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item)
 {
-    /* OSv: Same ext data (Cluster) can be used by various mbuf structs, so
-     * use a refcnt on the data, the ctor of Cluster set this refcnt to 1
-     */
-
-    uint64_t addr = (uint64_t)item;
-    assert(addr < (1L<<32));
-
-    unsigned slot = (uint64_t)item >> 12;
-    /* Pray ref-count is smaller than 255 :) */
-    return ((u_int32_t *)&uma_refcounts[slot]);
+    return &(UMA_ITEM_HDR(zone, item))->refcnt;
 }
