@@ -547,7 +547,8 @@ namespace pci {
 
     void pci_function::dump_config(void)
     {
-        debug(fmt("vid:id = %x:%x") % _vendor_id % _device_id);
+        debug(fmt("[%x:%x.%x] vid:id = %x:%x") %
+            (u16)_bus % (u16)_device % (u16)_func % _vendor_id % _device_id);
 
         // PCI BARs
         int bar_idx = 1;
