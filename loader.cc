@@ -44,9 +44,11 @@ namespace {
 }
 
 elf::Elf64_Ehdr* elf_header;
+elf::tls_data tls_data;
 
 void setup_tls(elf::init_table inittab)
 {
+    tls_data = inittab.tls;
     static char tcb0[1 << 15] __attribute__((aligned(4096)));
     assert(inittab.tls.size + sizeof(thread_control_block) <= sizeof(tcb0));
     memcpy(tcb0, inittab.tls.start, inittab.tls.size);
@@ -138,6 +140,7 @@ int main(int ac, char **av)
     test_locale();
     idt.load_on_cpu();
     smp_init();
+    sched::init(tls_data);
 
     vfs_init();
     ramdisk_init();
@@ -168,7 +171,6 @@ int main(int ac, char **av)
 #endif
 
     prog = new elf::program(fs);
-    sched::init(prog->tls());
     static char main_stack[64*1024];
     void main_thread(int ac, char** av);
     new thread([&] { main_thread(ac, av); }, { main_stack, sizeof main_stack }, true);
