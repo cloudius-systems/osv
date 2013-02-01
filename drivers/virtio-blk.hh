@@ -155,6 +155,7 @@ namespace virtio {
 
         virtio_blk_req* make_virtio_req(u64 sector, virtio_blk_request_type type, int val);
 
+        void virtio_blk_isr();
         void test();
 
     private:

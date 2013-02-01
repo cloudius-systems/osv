@@ -1,6 +1,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-blk.hh"
 #include "drivers/pci-device.hh"
+#include "interrupt.hh"
 
 #include "mempool.hh"
 #include "mmu.hh"
@@ -9,6 +10,7 @@
 #include <sstream>
 #include <string>
 #include <string.h>
+#include <map>
 #include "debug.hh"
 #include "cdefs.hh"
 
@@ -18,6 +20,7 @@
 
 
 using namespace memory;
+using sched::thread;
 
 namespace virtio {
 
@@ -30,6 +33,7 @@ int virtio_blk::_instance = 0;
         ss << "virtio-blk" << dev_idx;
 
         _driver_name = ss.str();
+        debug(fmt("VIRTIO BLK INSTANCE %d") % dev_idx);
         _id = _instance++;
     }
 
@@ -38,6 +42,10 @@ int virtio_blk::_instance = 0;
         //TODO: In theory maintain the list of free instances and gc it
     }
 
+    void virtio_blk::virtio_blk_isr()
+    {
+        debug(fmt("GOT ISR WORKING, %d") % _driver_name);
+    }
 
     bool virtio_blk::load(void)
     {
@@ -47,6 +55,19 @@ int virtio_blk::_instance = 0;
                       &_config.capacity,
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
+
+        debug("Setup msix for virtio-blk");
+
+        msix_isr_list* isrs = new msix_isr_list;
+
+        void* stk1 = malloc(10000);
+        thread* isr = new thread([this] { this->virtio_blk_isr(); } , {stk1, 10000});
+
+        isrs->insert(std::make_pair(0, isr));
+
+        interrupt_manager::instance()->easy_register(_dev, *isrs);
+
+
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
