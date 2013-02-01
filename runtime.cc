@@ -28,6 +28,7 @@
 #include "mempool.hh"
 #include <pwd.h>
 #include <fcntl.h>
+#include "barrier.hh"
 
 #define __LC_LAST 13
 
@@ -101,13 +102,41 @@ void __cxa_pure_virtual(void)
 namespace __cxxabiv1 {
     std::terminate_handler __terminate_handler = abort;
 
-    int __cxa_guard_acquire(__guard*)
-    {
-	return 0;
+    namespace {
+        struct guard {
+            unsigned char initialized;
+            unsigned char lock;
+
+            int acquire() {
+                if (initialized) {
+                    return 0;
+                }
+                while (__sync_lock_test_and_set(&lock, 1)) {
+                    barrier();
+                }
+                if (initialized) {
+                    __sync_lock_release(&lock, 0);
+                    return 0;
+                }
+                return 1;
+            }
+
+            void release() {
+                initialized = 1;
+                __sync_lock_release(&lock, 0);
+            }
+        };
     }
 
-    void __cxa_guard_release(__guard*) _GLIBCXX_NOTHROW
+
+    int __cxa_guard_acquire(__guard* g)
     {
+        return reinterpret_cast<guard*>(g)->acquire();
+    }
+
+    void __cxa_guard_release(__guard* g) _GLIBCXX_NOTHROW
+    {
+        return reinterpret_cast<guard*>(g)->release();
     }
 
     void __cxa_guard_abort(__guard*) _GLIBCXX_NOTHROW

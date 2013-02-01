@@ -3,6 +3,21 @@
 #include "mmu.hh"
 #include "debug.hh"
 
+unsigned libc_prot_to_perm(int prot)
+{
+    unsigned perm = 0;
+    if (prot & PROT_READ) {
+        perm |= mmu::perm_read;
+    }
+    if (prot & PROT_WRITE) {
+        perm |= mmu::perm_write;
+    }
+    if (prot & PROT_EXEC) {
+        perm |= mmu::perm_exec;
+    }
+    return perm;
+}
+
 int mprotect(void *addr, size_t len, int prot)
 {
     debug("stub mprotect()");
@@ -20,10 +35,10 @@ void *mmap(void *addr, size_t length, int prot, int flags,
         addr = v->addr();
     }
     if (fd == -1) {
-        mmu::map_anon(addr, length, 0);
+        mmu::map_anon(addr, length, libc_prot_to_perm(prot));
     } else {
         file f(fd);
-        mmu::map_file(addr, length, 0, f, offset);
+        mmu::map_file(addr, length, libc_prot_to_perm(prot), f, offset);
     }
     v.release();
     return addr;

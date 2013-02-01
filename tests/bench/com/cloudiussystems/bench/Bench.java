@@ -2,14 +2,14 @@ package com.cloudiussystems.bench;
 
 public class Bench {
 	
-	static long measure(Benchmark b, int iterations) {
+	static long measure(Benchmark b, int iterations) throws Exception {
 		long t1 = System.nanoTime();
 		b.run(iterations);
 		long t2 = System.nanoTime();
 		return t2 - t1;
 	}
 	
-	static void test(Benchmark b) {
+	static void test(Benchmark b) throws Exception {
 		int iterations = 10000;
 		// warm things up
 		b.run(iterations);
@@ -20,7 +20,8 @@ public class Bench {
 		System.out.printf("%8d %s\n", t / iterations, b.getName());
 	}
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		test(new NanoTimeBench());
+		test(new ContextSwitchBench());
 	}
 }
