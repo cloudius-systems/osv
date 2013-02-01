@@ -288,6 +288,7 @@ void* do_main_thread(void *_args)
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
     drvman->register_driver(new virtio::virtio_blk(0));
+    drvman->register_driver(new virtio::virtio_blk(1));
     drvman->register_driver(new virtio::virtio_net());
     drvman->load_all();
     drvman->list_drivers();
