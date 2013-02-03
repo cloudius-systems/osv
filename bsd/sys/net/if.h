@@ -531,7 +531,7 @@ __END_DECLS
 
 #ifdef _KERNEL
 /* XXX - this should go away soon. */
-#include <net/if_var.h>
+#include <bsd/sys/net/if_var.h>
 #endif
 
 #endif /* !_NET_IF_H_ */

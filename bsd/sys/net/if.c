@@ -30,6 +30,10 @@
  * $FreeBSD$
  */
 
+#include <bsd/porting/netport.h>
+#include <bsd/sys/amd64/include/param.h>
+#include <bsd/sys/net/if.h>
+
 #if 0
 #include "opt_compat.h"
 #include "opt_inet6.h"
@@ -151,6 +155,7 @@ caddr_t (*carp_macmatch6_p)(struct ifnet *ifp, struct mbuf *m,
 #endif
 
 struct mbuf *(*tbr_dequeue_ptr)(struct ifaltq *, int) = NULL;
+
 
 /*
  * XXX: Style; these should be sorted alphabetically, and unprototyped
