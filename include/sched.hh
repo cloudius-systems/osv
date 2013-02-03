@@ -2,6 +2,7 @@
 #define SCHED_HH_
 
 #include "arch-thread-state.hh"
+#include "arch-cpu.hh"
 #include <functional>
 #include "tls.hh"
 #include "elf.hh"
@@ -11,6 +12,12 @@
 #include "mutex.hh"
 
 namespace sched {
+
+struct cpu {
+    struct arch_cpu arch;
+    static cpu* current();
+    void init_on_cpu();
+};
 
 class thread;
 void schedule(bool yield = false);
@@ -112,6 +119,15 @@ void thread::wait_until(Pred pred)
         me->wait();
     }
 }
+
+extern cpu __thread* current_cpu;
+
+inline cpu* cpu::current()
+{
+    return current_cpu;
+}
+
+extern std::vector<cpu*> cpus;
 
 }
 

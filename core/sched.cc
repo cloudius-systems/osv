@@ -11,6 +11,8 @@ namespace sched {
 
 std::list<thread*> runqueue;
 
+std::vector<cpu*> cpus;
+
 thread __thread * s_current;
 
 elf::tls_data tls;
