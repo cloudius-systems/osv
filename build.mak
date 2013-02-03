@@ -111,6 +111,7 @@ fs +=	fs/devfs/devfs_vnops.o \
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
+drivers += drivers/debug-console.o
 drivers += drivers/ramdisk.o
 drivers += $(fs)
 drivers += core/mmu.o
