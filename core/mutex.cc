@@ -34,3 +34,14 @@ void mutex::unlock()
         _waiters.front()->wake();
     }
 }
+
+void spinlock::lock()
+{
+    while (__sync_lock_test_and_set(&_locked, 1))
+        ;
+}
+
+void spinlock::unlock()
+{
+    __sync_lock_release(&_locked, 0);
+}

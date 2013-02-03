@@ -18,6 +18,15 @@ private:
     std::list<sched::thread*> _waiters;
 };
 
+// Use mutex instead, except where impossible
+class spinlock {
+public:
+    void lock();
+    void unlock();
+private:
+    bool _locked;
+};
+
 template <class Lock, class Func>
 auto with_lock(Lock& lock, Func func) -> decltype(func())
 {
