@@ -184,6 +184,6 @@ smpboot64:
 	btrl $9, tss_desc+4
 	ltr tr
 	lock btc $0, trlock
-	mov $-512, %rsp
+	mov $-4096, %rsp
 	lock xadd %rsp, smp_stack_free
 	call smp_main
