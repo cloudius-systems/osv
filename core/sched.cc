@@ -217,9 +217,11 @@ bool operator<(const timer& t1, const timer& t2)
     }
 }
 
-void init(elf::tls_data tls_data)
+void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
     tls = tls_data;
+    thread::stack_info stack { new char[4096*10], 4096*10 };
+    thread t{cont, stack, true};
 }
 
 }

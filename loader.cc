@@ -139,7 +139,12 @@ int main(int ac, char **av)
     test_locale();
     idt.load_on_cpu();
     smp_init();
-    sched::init(tls_data);
+    void main_cont(int ac, char** av);
+    sched::init(tls_data, [=] { main_cont(ac, av); });
+}
+
+void main_cont(int ac, char** av)
+{
     smp_launch();
 
     vfs_init();
@@ -171,9 +176,8 @@ int main(int ac, char **av)
 #endif
 
     prog = new elf::program(fs);
-    static char main_stack[64*1024];
     void main_thread(int ac, char** av);
-    new thread([&] { main_thread(ac, av); }, { main_stack, sizeof main_stack }, true);
+    main_thread(ac, av);
 }
 
 void test_clock_events()

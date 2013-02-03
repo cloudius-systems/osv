@@ -75,6 +75,7 @@ private:
     friend class wait_guard;
     friend void schedule(bool yield);
     friend void ::smp_main();
+    friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
@@ -116,7 +117,8 @@ private:
     thread* _t;
 };
 
-void init(elf::tls_data tls_data);
+// does not return - continues to @cont instead
+void init(elf::tls_data tls_data, std::function<void ()> cont);
 
 template <class Pred>
 void thread::wait_until(Pred pred)
