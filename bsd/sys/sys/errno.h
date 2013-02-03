@@ -38,12 +38,14 @@
 #ifndef _SYS_ERRNO_H_
 #define _SYS_ERRNO_H_
 
+#if 0
 #ifndef _KERNEL
 #include <sys/cdefs.h>
 __BEGIN_DECLS
 int *	__error(void);
 __END_DECLS
 #define	errno		(* __error())
+#endif
 #endif
 
 #define	EPERM		1		/* Operation not permitted */

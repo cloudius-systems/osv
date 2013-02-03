@@ -25,11 +25,11 @@
  * SUCH DAMAGE.
  */
 
-#include "netport.h"
-#include "uma_stub.h"
-#include "param.h"
-#include "mbuf.h"
-#include "errno.h"
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
+#include <bsd/sys/amd64/include/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/errno.h>
 
 #include <sys/cdefs.h>
 

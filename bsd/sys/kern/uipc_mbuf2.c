@@ -63,10 +63,10 @@
 #include <memory.h>
 #include <malloc.h>
 
-#include "uma_stub.h"
-#include "netport.h"
-#include "queue.h"
-#include "mbuf.h"
+#include <bsd/porting/uma_stub.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/queue.h>
 
 #if 0
 #include <sys/cdefs.h>

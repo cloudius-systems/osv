@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <assert.h>
-#include "param.h"
-#include "netport.h"
-#include "uma_stub.h"
+#include <bsd/sys/amd64/include/param.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
 
 /* Global zone structures */
 int uma_zone_num = 0;

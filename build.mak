@@ -109,13 +109,17 @@ fs +=	fs/ramfs/ramfs_vfsops.o \
 fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
-net = net/net.o net/kern_mbuf.o net/uipc_mbuf.o net/uipc_mbuf2.o net/uma_stub.o
+bsd = bsd/net.o  
+bsd += bsd/sys/kern/kern_mbuf.o
+bsd += bsd/sys/kern/uipc_mbuf.o
+bsd += bsd/sys/kern/uipc_mbuf2.o
+bsd += bsd/porting/uma_stub.o
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += drivers/ramdisk.o
 drivers += $(fs)
-drivers += $(net)
+drivers += $(bsd)
 drivers += core/mmu.o
 drivers += core/elf.o
 drivers += drivers/device.o

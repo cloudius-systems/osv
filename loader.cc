@@ -1,7 +1,7 @@
 
 #include "drivers/isa-serial.hh"
 #include "fs/fs.hh"
-#include "net/net.hh"
+#include <bsd/net.hh>
 #include <boost/format.hpp>
 #include <cctype>
 #include "elf.hh"

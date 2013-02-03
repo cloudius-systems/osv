@@ -1,8 +1,8 @@
 #include "debug.hh"
 
 extern "C" {
-    #include "mbuf.h"
-    #include "param.h"
+    #include <bsd/sys/sys/mbuf.h>
+    #include <bsd/sys/amd64/include/param.h>
 }
 
 extern void mbuf_init(void *dummy);

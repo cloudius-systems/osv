@@ -34,12 +34,12 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
-#include "netport.h"
-#include "uma_stub.h"
-#include "param.h"
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
+#include <bsd/sys/amd64/include/param.h>
 
 /* XXX: These includes suck. Sorry! */
-#include <sys/queue.h>
+#include <bsd/sys/sys/queue.h>
 
 #if 0
 #ifdef _KERNEL
