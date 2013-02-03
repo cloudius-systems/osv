@@ -72,10 +72,7 @@ void smp_init()
 
 void ap_bringup(sched::cpu* c)
 {
-    static spinlock tmp;
-    with_lock(tmp, [=] {
-        debug(fmt("bringup %x") % c->arch.apic_id);
-    });
+    debug(fmt("bringup %x") % c->arch.apic_id);
     __sync_fetch_and_add(&smp_processors, 1);
     abort();
 }
