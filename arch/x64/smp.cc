@@ -10,6 +10,7 @@ extern "C" {
 #include <boost/intrusive/parent_from_member.hpp>
 #include "debug.hh"
 #include "sched.hh"
+#include "barrier.hh"
 
 extern "C" { void smp_main(void); }
 
@@ -66,10 +67,26 @@ void smp_init()
     apic->write(apicreg::ICR, 0xc4500); // INIT
     apic->write(apicreg::ICR, 0xc4600); // SIPI
     apic->write(apicreg::ICR, 0xc4600); // SIPI
+    while (smp_processors != sched::cpus.size()) {
+        barrier();
+    }
 }
 
 void smp_main()
 {
+    apic->init_on_ap();
+    sched::cpu* cpu{};
+    for (auto p : sched::cpus) {
+        if (p->arch.apic_id == apic->id()) {
+            cpu = p;
+            break;
+        }
+    }
+    assert(cpu);
+    static spinlock tmp;
+    with_lock(tmp, [=] {
+        debug(fmt("cpu %d up") % cpu->arch.apic_id);
+    });
     __sync_fetch_and_add(&smp_processors, 1);
     abort();
 }
