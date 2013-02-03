@@ -30,6 +30,13 @@
 #ifndef	_SYS_BUF_RING_H_
 #define	_SYS_BUF_RING_H_
 
+#include <stdint.h>
+#include <porting/netport.h>
+#include <porting/sync_stub.h>
+#include <machine/atomic.h>
+#include <errno.h>
+
+
 #if 0
 #include <machine/cpu.h>
 #endif
@@ -42,6 +49,12 @@
 #include <sys/lock.h>
 #include <sys/mutex.h>
 #endif
+
+/* OSv: mtx is used for debugging the bufring, we don't need it */
+struct mtx {
+    int unused;
+};
+
 
 struct buf_ring {
 	volatile uint32_t	br_prod_head;
@@ -180,7 +193,8 @@ buf_ring_dequeue_mc(struct buf_ring *br)
 static __inline void *
 buf_ring_dequeue_sc(struct buf_ring *br)
 {
-	uint32_t cons_head, cons_next, cons_next_next;
+	uint32_t cons_head, cons_next;
+	/* uint32_t cons_next_next; */
 	uint32_t prod_tail;
 	void *buf;
 	
@@ -188,7 +202,7 @@ buf_ring_dequeue_sc(struct buf_ring *br)
 	prod_tail = br->br_prod_tail;
 	
 	cons_next = (cons_head + 1) & br->br_cons_mask;
-	cons_next_next = (cons_head + 2) & br->br_cons_mask;
+	/* cons_next_next = (cons_head + 2) & br->br_cons_mask; */
 	
 	if (cons_head == prod_tail) 
 		return (NULL);

@@ -34,9 +34,9 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
-#include <bsd/porting/netport.h>
-#include <bsd/porting/uma_stub.h>
-#include <bsd/sys/amd64/include/param.h>
+#include <porting/netport.h>
+#include <porting/uma_stub.h>
+#include <machine/param.h>
 
 /* XXX: These includes suck. Sorry! */
 #include <bsd/sys/sys/queue.h>

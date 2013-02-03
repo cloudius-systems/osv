@@ -25,14 +25,15 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 
 #include <sys/param.h>
+#if 0
 #include <sys/systm.h>
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 #include <sys/ktr.h>
+#endif
 #include <sys/buf_ring.h>
 
 
@@ -43,8 +44,15 @@ buf_ring_alloc(int count, struct malloc_type *type, int flags, struct mtx *lock)
 
 	KASSERT(powerof2(count), ("buf ring must be size power of 2"));
 	
+#if 0
 	br = malloc(sizeof(struct buf_ring) + count*sizeof(caddr_t),
 	    type, flags|M_ZERO);
+#endif
+
+	size_t sz = sizeof(struct buf_ring) + count*sizeof(caddr_t);
+	br = malloc(sz);
+	bzero(br, sz);
+
 	if (br == NULL)
 		return (NULL);
 #ifdef DEBUG_BUFRING
@@ -61,5 +69,8 @@ buf_ring_alloc(int count, struct malloc_type *type, int flags, struct mtx *lock)
 void
 buf_ring_free(struct buf_ring *br, struct malloc_type *type)
 {
-	free(br, type);
+#if 0
+    free(br, type);
+#endif
+    free(br);
 }

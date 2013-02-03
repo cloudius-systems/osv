@@ -32,9 +32,9 @@
 #include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
 
-#include <bsd/porting/uma_stub.h>
-#include <bsd/sys/sys/mbuf.h>
-#include <bsd/sys/amd64/include/atomic.h>
+#include <porting/uma_stub.h>
+#include <sys/mbuf.h>
+#include <machine/atomic.h>
 
 #if 0
 #include "opt_param.h"

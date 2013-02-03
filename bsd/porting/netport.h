@@ -85,6 +85,8 @@ struct uio {
 
 int uiomove(void *cp, int n, struct uio *uio);
 
-
+struct malloc_type {
+    int unused;
+};
 
 #endif
