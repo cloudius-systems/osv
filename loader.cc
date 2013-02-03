@@ -49,8 +49,7 @@ elf::tls_data tls_data;
 void setup_tls(elf::init_table inittab)
 {
     tls_data = inittab.tls;
-    static char tcb0[1 << 15] __attribute__((aligned(4096)));
-    assert(inittab.tls.size + sizeof(thread_control_block) <= sizeof(tcb0));
+    extern char tcb0[]; // defined by linker script
     memcpy(tcb0, inittab.tls.start, inittab.tls.size);
     auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls.size);
     p->self = p;
