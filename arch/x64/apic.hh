@@ -82,6 +82,7 @@ public:
     virtual void ipi(unsigned cpu, unsigned vector) = 0;
     virtual void eoi() = 0;
     virtual void write(apicreg reg, u32 value) = 0;
+    virtual u32 id() = 0;
     void set_lvt(apiclvt reg, unsigned vector);
     // vector should be above 31, below 15 will fail
     // dest_id is the apic id, if using an io_apic.
