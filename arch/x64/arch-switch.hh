@@ -61,12 +61,6 @@ void thread::init_stack()
     _state.rsp = stacktop;
 }
 
-void thread::switch_to_thread_stack()
-{
-    void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
-    stack_trampoline(this, &thread::on_thread_stack, stacktop);
-}
-
 void thread::on_thread_stack(thread* t)
 {
     t->_func();
@@ -82,11 +76,6 @@ void thread::setup_tcb()
     _tcb = static_cast<thread_control_block*>(p + tls.size);
     _tcb->self = _tcb;
     _tcb->tls_base = p;
-}
-
-void thread::setup_tcb_main()
-{
-    _tcb = reinterpret_cast<thread_control_block*>(processor::rdmsr(msr::IA32_FS_BASE));
 }
 
 void thread_main_c(thread* t)

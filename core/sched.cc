@@ -83,14 +83,13 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     with_lock(thread_list_mutex, [this] {
         thread_list.push_back(*this);
     });
+    setup_tcb();
+    init_stack();
     if (!main) {
-        setup_tcb();
-        init_stack();
         runqueue.push_back(this);
     } else {
-        setup_tcb_main();
         s_current = this;
-        switch_to_thread_stack();
+        switch_to_first();
         abort();
     }
 }
