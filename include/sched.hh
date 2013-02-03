@@ -11,15 +11,21 @@
 #include <boost/intrusive/list.hpp>
 #include "mutex.hh"
 
+extern "C" {
+void smp_main();
+};
+
 namespace sched {
+
+class thread;
 
 struct cpu {
     struct arch_cpu arch;
+    thread* bringup_thread;
     static cpu* current();
     void init_on_cpu();
 };
 
-class thread;
 void schedule(bool yield = false);
 
 extern "C" {
@@ -49,6 +55,7 @@ public:
 private:
     void main();
     void switch_to();
+    void switch_to_first();
     void prepare_wait();
     void wait();
     void stop_wait();
@@ -67,6 +74,7 @@ private:
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend void schedule(bool yield);
+    friend void ::smp_main();
 public:
     // for the debugger
     bi::list_member_hook<> _thread_list_link;

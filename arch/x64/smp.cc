@@ -68,6 +68,27 @@ void smp_init()
     smpboot_efer = rdmsr(msr::IA32_EFER);
     smpboot_cr3 = read_cr3();
     memcpy(mmu::phys_to_virt(0), smpboot, smpboot_end - smpboot);
+}
+
+void ap_bringup(sched::cpu* c)
+{
+    static spinlock tmp;
+    with_lock(tmp, [=] {
+        debug(fmt("bringup %x") % c->arch.apic_id);
+    });
+    __sync_fetch_and_add(&smp_processors, 1);
+    abort();
+}
+
+void smp_launch()
+{
+    for (auto c : sched::cpus) {
+        if (c->arch.apic_id == apic->id()) {
+            continue;
+        }
+        sched::thread::stack_info stack { new char[8192], 8192 };
+        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, stack);
+    }
     apic->write(apicreg::ICR, 0xc4500); // INIT
     apic->write(apicreg::ICR, 0xc4600); // SIPI
     apic->write(apicreg::ICR, 0xc4600); // SIPI
@@ -87,10 +108,5 @@ void smp_main()
         }
     }
     assert(cpu);
-    static spinlock tmp;
-    with_lock(tmp, [=] {
-        debug(fmt("cpu %d up") % cpu->arch.apic_id);
-    });
-    __sync_fetch_and_add(&smp_processors, 1);
-    abort();
+    cpu->bringup_thread->switch_to_first();
 }

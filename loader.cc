@@ -141,6 +141,7 @@ int main(int ac, char **av)
     idt.load_on_cpu();
     smp_init();
     sched::init(tls_data);
+    smp_launch();
 
     vfs_init();
     ramdisk_init();

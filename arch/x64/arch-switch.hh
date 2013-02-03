@@ -36,6 +36,23 @@ void thread::switch_to()
            "r10", "r11", "r12", "r13", "r14", "r15", "memory");
 }
 
+void thread::switch_to_first()
+{
+    // hack: manually remove from runqueue, not even threadsafe
+    runqueue.remove(this);
+    _on_runqueue = false;
+    barrier();
+    processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
+    barrier();
+    asm volatile
+        ("mov %0, %%rsp \n\t"
+         "ret"
+         :
+         : "c"(this->_state.rsp)
+         : "rbx", "rdx", "rsi", "rdi", "r8", "r9",
+           "r10", "r11", "r12", "r13", "r14", "r15", "memory");
+}
+
 void thread::init_stack()
 {
     void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
