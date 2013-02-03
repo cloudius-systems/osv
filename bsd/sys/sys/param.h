@@ -108,7 +108,7 @@
 #include <sys/errno.h>
 #ifndef LOCORE
 #include <sys/time.h>
-#include <sys/priority.h>
+// #include <sys/priority.h>
 #endif
 
 #ifndef FALSE

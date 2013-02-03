@@ -11,6 +11,15 @@
 void* malloc(size_t size);
 void free(void* object);
 
+/* Tracing... */
+#define CTR0(m, d)          (void)0
+#define CTR1(m, d, p1)          (void)0
+#define CTR2(m, d, p1, p2)      (void)0
+#define CTR3(m, d, p1, p2, p3)      (void)0
+#define CTR4(m, d, p1, p2, p3, p4)  (void)0
+#define CTR5(m, d, p1, p2, p3, p4, p5)  (void)0
+#define CTR6(m, d, p1, p2, p3, p4, p5, p6)  (void)0
+
 #ifndef _KERNEL
     #define _KERNEL
 #endif

@@ -50,12 +50,6 @@
 #include <sys/mutex.h>
 #endif
 
-/* OSv: mtx is used for debugging the bufring, we don't need it */
-struct mtx {
-    int unused;
-};
-
-
 struct buf_ring {
 	volatile uint32_t	br_prod_head;
 	volatile uint32_t	br_prod_tail;	
