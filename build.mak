@@ -109,10 +109,11 @@ fs +=	fs/ramfs/ramfs_vfsops.o \
 fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
-bsd = bsd/net.o  
+bsd  = bsd/net.o  
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
+bsd += bsd/sys/net/if.o
 bsd += bsd/porting/uma_stub.o
 
 drivers :=
