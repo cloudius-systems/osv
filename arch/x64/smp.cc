@@ -4,6 +4,12 @@
 #include "apic.hh"
 #include "mmu.hh"
 #include <string.h>
+extern "C" {
+#include "acpi.h"
+}
+#include <boost/intrusive/parent_from_member.hpp>
+#include "debug.hh"
+#include "sched.hh"
 
 extern "C" { void smp_main(void); }
 
@@ -16,8 +22,43 @@ using namespace processor;
 
 volatile unsigned smp_processors = 1;
 
+using boost::intrusive::get_parent_from_member;
+
+void parse_madt()
+{
+    auto st = AcpiInitializeTables(NULL, 0, false);
+    assert(st == AE_OK);
+    char madt_sig[] = ACPI_SIG_MADT;
+    ACPI_TABLE_HEADER* madt_header;
+    st = AcpiGetTable(madt_sig, 0, &madt_header);
+    assert(st == AE_OK);
+    auto madt = get_parent_from_member(madt_header, &ACPI_TABLE_MADT::Header);
+    void* subtable = madt + 1;
+    void* madt_end = static_cast<void*>(madt) + madt->Header.Length;
+    while (subtable != madt_end) {
+        auto s = static_cast<ACPI_SUBTABLE_HEADER*>(subtable);
+        switch (s->Type) {
+        case ACPI_MADT_TYPE_LOCAL_APIC: {
+            auto lapic = get_parent_from_member(s, &ACPI_MADT_LOCAL_APIC::Header);
+            if (!(lapic->LapicFlags & ACPI_MADT_ENABLED)) {
+                break;
+            }
+            auto c = new sched::cpu;
+            c->arch.apic_id = lapic->Id;
+            c->arch.acpi_id = lapic->ProcessorId;
+            debug(fmt("acpi %d apic %d") % c->arch.acpi_id % c->arch.apic_id);
+            sched::cpus.push_back(c);
+        }
+        default:
+            break;
+        }
+        subtable += s->Length;
+    }
+}
+
 void smp_init()
 {
+    parse_madt();
     smpboot_cr0 = read_cr0();
     smpboot_cr4 = read_cr4();
     smpboot_efer = rdmsr(msr::IA32_EFER);
