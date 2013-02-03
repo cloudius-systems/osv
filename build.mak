@@ -114,7 +114,7 @@ bsd  = bsd/net.o
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
-bsd += bsd/sys/net/if.o
+bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/porting/uma_stub.o
 
 drivers :=
