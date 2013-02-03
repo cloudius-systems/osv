@@ -160,15 +160,12 @@ smpboot_end = .
 
 .bss
 
-.align 16
-. = . + 4096 * 16
-smp_stack_top = .
+.global smpboot_cr3
+smpboot_cr3: .quad 0
 
-.data
+.global smp_stack_free
+smp_stack_free: .quad 0
 
-smp_stack_free: .quad smp_stack_top
-
-.bss
 # 'ltr' expects an available TSS, then marks it busy, so only one
 # can be loaded at a time
 trlock: .byte 0
@@ -177,6 +174,8 @@ trlock: .byte 0
 .code64
 
 smpboot64:
+	mov smpboot_cr3, %rax
+	mov %rax, %cr3
 1:
 	lock bts $0, trlock
 	pause
@@ -184,6 +183,10 @@ smpboot64:
 	btrl $9, tss_desc+4
 	ltr tr
 	lock btc $0, trlock
-	mov $-4096, %rsp
-	lock xadd %rsp, smp_stack_free
+	mov smp_stack_free, %rax
+1:
+	mov 4096(%rax), %rbx
+	lock cmpxchg %rbx, smp_stack_free
+	jnz 1b
+	lea 4096(%rax), %rsp
 	call smp_main

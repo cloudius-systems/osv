@@ -15,7 +15,8 @@ extern "C" {
 extern "C" { void smp_main(void); }
 
 extern u32 smpboot_cr0, smpboot_cr4;
-extern u64 smpboot_efer;
+extern u64 smpboot_efer, smpboot_cr3;
+extern init_stack* smp_stack_free;
 
 extern char smpboot[], smpboot_end[];
 
@@ -47,6 +48,8 @@ void parse_madt()
             auto c = new sched::cpu;
             c->arch.apic_id = lapic->Id;
             c->arch.acpi_id = lapic->ProcessorId;
+            c->arch.initstack.next = smp_stack_free;
+            smp_stack_free = &c->arch.initstack;
             debug(fmt("acpi %d apic %d") % c->arch.acpi_id % c->arch.apic_id);
             sched::cpus.push_back(c);
         }
@@ -63,6 +66,7 @@ void smp_init()
     smpboot_cr0 = read_cr0();
     smpboot_cr4 = read_cr4();
     smpboot_efer = rdmsr(msr::IA32_EFER);
+    smpboot_cr3 = read_cr3();
     memcpy(mmu::phys_to_virt(0), smpboot, smpboot_end - smpboot);
     apic->write(apicreg::ICR, 0xc4500); // INIT
     apic->write(apicreg::ICR, 0xc4600); // SIPI
