@@ -83,8 +83,8 @@ void smp_launch()
         if (c->arch.apic_id == apic->id()) {
             continue;
         }
-        sched::thread::stack_info stack { new char[8192], 8192 };
-        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, stack);
+        sched::thread::stack_info stack { new char[81920], 81920 };
+        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, stack, true);
     }
     apic->write(apicreg::ICR, 0xc4500); // INIT
     apic->write(apicreg::ICR, 0xc4600); // SIPI

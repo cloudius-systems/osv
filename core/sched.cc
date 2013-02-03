@@ -87,10 +87,6 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     init_stack();
     if (!main) {
         runqueue.push_back(this);
-    } else {
-        s_current = this;
-        switch_to_first();
-        abort();
     }
 }
 
@@ -221,6 +217,7 @@ void init(elf::tls_data tls_data, std::function<void ()> cont)
     tls = tls_data;
     thread::stack_info stack { new char[4096*10], 4096*10 };
     thread t{cont, stack, true};
+    t.switch_to_first();
 }
 
 }

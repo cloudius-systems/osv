@@ -38,12 +38,10 @@ void thread::switch_to()
 
 void thread::switch_to_first()
 {
-    // hack: manually remove from runqueue, not even threadsafe
-    runqueue.remove(this);
-    _on_runqueue = false;
     barrier();
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
     barrier();
+    s_current = this;
     asm volatile
         ("mov %0, %%rsp \n\t"
          "ret"
