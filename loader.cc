@@ -155,26 +155,6 @@ void main_cont(int ac, char** av)
     disable_pic();
     processor::sti();
 
-#if 1
-    if (std::isdigit('1'))
-	debug("isgidit(1) = ok");
-    else
-	debug("isgidit(1) = bad");
-    if (!std::isdigit('x'))
-	debug("isgidit(x) = ok");
-    else
-	debug("isgidit(x) = bad");
-#if 0
-    auto &fac = std::use_facet<std::ctype<char> >(std::locale("C"));
-    if (fac.is(std::ctype<char>::digit, '1'))
-	debug("facet works");
-    else
-	debug("facet !works");
-#endif
-    //while (true)
-    //	;
-#endif
-
     prog = new elf::program(fs);
     void main_thread(int ac, char** av);
     main_thread(ac, av);
