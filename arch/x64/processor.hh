@@ -77,6 +77,16 @@ namespace processor {
 	    asm volatile ("sidt %0" : "=m"(ptr));
 	}
 
+	inline void ltr(u16 tr) {
+	    asm volatile("ltr %0" : : "rm"(tr));
+	}
+
+	inline u16 str() {
+	    u16 tr;
+	    asm volatile("str %0" : "=rm"(tr));
+	    return tr;
+	}
+
 	inline u16 read_cs() {
 	    u16 r;
 	    asm volatile ("mov %%cs, %0" : "=rm"(r));
