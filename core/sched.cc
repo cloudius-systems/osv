@@ -110,6 +110,7 @@ void thread::prepare_wait()
 
 void thread::wake()
 {
+    irq_save_lock_type irq_lock;
     with_lock(irq_lock, [this] {
         if (!_waiting) {
             return;
