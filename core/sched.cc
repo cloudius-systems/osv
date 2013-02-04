@@ -9,8 +9,6 @@
 
 namespace sched {
 
-std::list<thread*> runqueue;
-
 std::vector<cpu*> cpus;
 
 thread __thread * s_current;
@@ -25,7 +23,7 @@ namespace sched {
 
 void schedule_force();
 
-void schedule(bool yield)
+void cpu::schedule(bool yield)
 {
     thread* p = thread::current();
     if (!p->_waiting && !yield) {
@@ -35,7 +33,7 @@ void schedule(bool yield)
     while (runqueue.empty()) {
         barrier();
     }
-    thread* n = with_lock(irq_lock, [] {
+    thread* n = with_lock(irq_lock, [this] {
         auto n = runqueue.front();
         runqueue.pop_front();
         return n;
@@ -47,16 +45,22 @@ void schedule(bool yield)
     }
 }
 
+void schedule(bool yield)
+{
+    cpu::current()->schedule(yield);
+}
+
 void thread::yield()
 {
-    if (runqueue.empty()) {
+    auto t = current();
+    // FIXME: what about other cpus?
+    if (t->_cpu->runqueue.empty()) {
         return;
     }
-    auto t = current();
-    runqueue.push_back(t);
+    t->_cpu->runqueue.push_back(t);
     t->_on_runqueue = true;
     assert(!t->_waiting);
-    schedule(true);
+    t->_cpu->schedule(true);
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)
@@ -87,7 +91,7 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     init_stack();
     if (!main) {
         _cpu = current()->tcpu(); // inherit creator's cpu
-        runqueue.push_back(this);
+        _cpu->runqueue.push_back(this);
     }
 }
 
@@ -113,7 +117,7 @@ void thread::wake()
         _waiting = false;
         if (!_on_runqueue) {
             _on_runqueue = true;
-            runqueue.push_back(this);
+            _cpu->runqueue.push_back(this);
         }
     });
 }

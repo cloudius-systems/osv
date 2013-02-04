@@ -23,8 +23,10 @@ class thread;
 struct cpu {
     struct arch_cpu arch;
     thread* bringup_thread;
+    std::list<thread*> runqueue;
     static cpu* current();
     void init_on_cpu();
+    void schedule(bool yield = false);
 };
 
 void schedule(bool yield = false);
@@ -74,7 +76,7 @@ private:
     cpu* _cpu;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
-    friend void schedule(bool yield);
+    friend void cpu::schedule(bool yield);
     friend void ::smp_main();
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
