@@ -14,6 +14,7 @@
 extern "C" {
 void smp_main();
 };
+void smp_launch();
 
 namespace sched {
 
@@ -52,6 +53,7 @@ public:
     static void yield();
     static thread* current();
     stack_info get_stack_info();
+    cpu* tcpu();
 private:
     void main();
     void switch_to();
@@ -69,10 +71,12 @@ private:
     bool _on_runqueue;
     bool _waiting;
     stack_info _stack;
+    cpu* _cpu;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend void schedule(bool yield);
     friend void ::smp_main();
+    friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
     // for the debugger
@@ -130,9 +134,14 @@ void thread::wait_until(Pred pred)
 
 extern cpu __thread* current_cpu;
 
+inline cpu* thread::tcpu()
+{
+    return _cpu;
+}
+
 inline cpu* cpu::current()
 {
-    return current_cpu;
+    return thread::current()->tcpu();
 }
 
 extern std::vector<cpu*> cpus;

@@ -86,6 +86,7 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     setup_tcb();
     init_stack();
     if (!main) {
+        _cpu = current()->tcpu(); // inherit creator's cpu
         runqueue.push_back(this);
     }
 }
