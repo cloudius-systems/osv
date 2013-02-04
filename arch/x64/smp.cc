@@ -81,6 +81,7 @@ void smp_launch()
 {
     for (auto c : sched::cpus) {
         if (c->arch.apic_id == apic->id()) {
+            c->arch.init_on_cpu();
             continue;
         }
         sched::thread::stack_info stack { new char[81920], 81920 };
@@ -105,5 +106,6 @@ void smp_main()
         }
     }
     assert(cpu);
+    cpu->arch.init_on_cpu();
     cpu->bringup_thread->switch_to_first();
 }

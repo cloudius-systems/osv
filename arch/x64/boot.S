@@ -30,24 +30,10 @@ gdt = . - 8
     .quad 0x00af9b000000ffff # 64-bit code segment
     .quad 0x00cf93000000ffff # 64-bit data segment
     .quad 0x00cf9b000000ffff # 32-bit code segment
-tss_desc:
-    .quad 0x0000890000000067 # tss (two entries)
-    .quad 0
 gdt_end = .
 
 .align 8
 . = . + 4  # make sure tss_ist is aligned on a quad boundary
-
-.global tss
-.global tss_ist
-tss:
-	.long 0
-	.quad 0, 0, 0
-tss_ist:
-	.quad 0, interrupt_stack_top, 0, 0, 0, 0, 0, 0
-	.long 0, 0, 0
-
-tr:	.word     tss_desc - gdt
 
 .bss
 
@@ -90,12 +76,6 @@ start64:
     .cfi_startproc simple
     .cfi_def_cfa %rsp, 0
     .cfi_undefined %rip
-    mov $tss, %edx
-    movw %dx, tss_desc + 2
-    shr $16, %edx
-    movb %dl, tss_desc + 4
-    movb %dh, tss_desc + 7
-    ltr tr
     lea .bss, %rdi
     lea .edata, %rcx
     sub %rdi, %rcx
@@ -176,13 +156,6 @@ trlock: .byte 0
 smpboot64:
 	mov smpboot_cr3, %rax
 	mov %rax, %cr3
-1:
-	lock bts $0, trlock
-	pause
-	jc 1b
-	btrl $9, tss_desc+4
-	ltr tr
-	lock btc $0, trlock
 	mov smp_stack_free, %rax
 1:
 	mov 4096(%rax), %rbx
