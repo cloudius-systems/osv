@@ -37,7 +37,6 @@ private:
     // Entry ids used by this vector
     std::list<unsigned> _entryids;
     unsigned _vector;
-    unsigned _num_entries;
 };
 
 

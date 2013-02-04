@@ -13,7 +13,7 @@ using namespace pci;
 interrupt_manager* interrupt_manager::_instance = nullptr;
 
 msix_vector::msix_vector(pci_function* dev)
-    : _dev(dev), _num_entries(0)
+    : _dev(dev)
 {
     _vector = idt.register_handler([this] { interrupt(); });
 }
