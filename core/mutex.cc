@@ -39,6 +39,18 @@ extern "C" void mutex_wait(mutex_t *mutex)
     spin_unlock(&mutex->_wait_lock);
 }
 
+extern "C" void mutex_lock(mutex_t *mutex)
+{
+    while (__sync_lock_test_and_set(&mutex->_locked, 1)) {
+        mutex_wait(mutex);
+    }
+}
+
+extern "C" bool mutex_trylock(mutex_t *mutex)
+{
+    return !__sync_lock_test_and_set(&mutex->_locked, 1);
+}
+
 extern "C" void mutex_unlock(mutex_t *mutex)
 {
     __sync_lock_release(&mutex->_locked, 0);
