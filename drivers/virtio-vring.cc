@@ -46,8 +46,13 @@ namespace virtio {
         msix_isr_list* isrs = new msix_isr_list;
         void* stk1 = malloc(10000);
         thread* isr = new thread([this] { this->interrupt(); } , {stk1, 10000});
-        isrs->insert(std::make_pair(0, isr));
+
+        isrs->insert(std::make_pair(_q_index, isr));
         interrupt_manager::instance()->easy_register(_dev, *isrs);
+
+        // Setup queue_id:entry_id 1:1 correlation...
+        _dev->virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _q_index);
+        _dev->virtio_conf_writel(VIRTIO_MSI_QUEUE_VECTOR, _q_index);
 
         enable_callback();
         _callback = nullptr;

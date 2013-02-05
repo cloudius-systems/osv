@@ -34,6 +34,8 @@ namespace virtio {
     {
         _dev->set_bus_master(true);
 
+        _dev->msix_enable();
+
         //make sure the queue is reset
         _dev->reset_host_side();
 
