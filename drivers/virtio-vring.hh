@@ -1,6 +1,8 @@
 #ifndef VIRTIO_VRING_H
 #define VIRTIO_VRING_H
 
+#include <functional>
+
 class sglist;
 
 namespace virtio {
@@ -113,6 +115,8 @@ class virtio_device;
         bool kick();
         void disable_callback();
         bool enable_callback();
+        void interrupt();
+        void register_callback(std::function<void ()> func) {_callback = func;};
 
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
@@ -148,6 +152,9 @@ class virtio_device;
         vring_used *_used;
         // cookies to store access to the upper layer pointers
         void** _cookie;
+        //callback function for upper layer virtio queues
+        std::function<void ()> _callback;
+        bool _callback_enabled;
     };
 
 

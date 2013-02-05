@@ -8,7 +8,11 @@
 #include "drivers/virtio-vring.hh"
 #include "debug.hh"
 
+#include "sched.hh"
+#include "interrupt.hh"
+
 using namespace memory;
+using sched::thread;
 
 namespace virtio {
 
@@ -39,6 +43,14 @@ namespace virtio {
         _avail_added_since_kick = 0;
         _avail_count = num;
 
+        msix_isr_list* isrs = new msix_isr_list;
+        void* stk1 = malloc(10000);
+        thread* isr = new thread([this] { this->interrupt(); } , {stk1, 10000});
+        isrs->insert(std::make_pair(0, isr));
+        interrupt_manager::instance()->easy_register(_dev, *isrs);
+
+        enable_callback();
+        _callback = nullptr;
     }
 
     vring::~vring()
@@ -154,13 +166,25 @@ namespace virtio {
 
     void
     vring::disable_callback() {
-
+        _callback_enabled = false;
     }
 
     bool
     vring::enable_callback() {
+        _callback_enabled = true;
         return true;
     }
 
+
+    void vring::interrupt() {
+        debug("vring::interrupt for the first time");
+
+        while (1) {
+            thread::wait_until([&] {return _callback_enabled; });
+            _callback_enabled = false;
+            debug("vring::interrupt - woke up");
+            if (_callback) _callback();
+        }
+    }
 
 };
