@@ -30,11 +30,6 @@
  * $FreeBSD$
  */
 
-#include <bsd/porting/netport.h>
-#include <bsd/sys/amd64/include/param.h>
-#include <bsd/sys/net/if.h>
-
-#if 0
 #include "opt_compat.h"
 #include "opt_inet6.h"
 #include "opt_inet.h"
@@ -99,14 +94,10 @@
 #include <compat/freebsd32/freebsd32.h>
 #endif
 
-
-#endif
-
 struct ifindex_entry {
 	struct  ifnet *ife_ifnet;
 };
 
-#if 0
 SYSCTL_NODE(_net, PF_LINK, link, CTLFLAG_RW, 0, "Link layers");
 SYSCTL_NODE(_net_link, 0, generic, CTLFLAG_RW, 0, "Generic link-management");
 
@@ -132,7 +123,6 @@ MALLOC_DEFINE(M_IFDESCR, "ifdescr", "ifnet descriptions");
 /* global sx for non-critical path ifdescr */
 static struct sx ifdescr_sx;
 SX_SYSINIT(ifdescr_sx, &ifdescr_sx, "ifnet descr");
-#endif
 
 void	(*bridge_linkstate_p)(struct ifnet *ifp);
 void	(*ng_ether_link_state_p)(struct ifnet *ifp, int state);
@@ -155,7 +145,6 @@ caddr_t (*carp_macmatch6_p)(struct ifnet *ifp, struct mbuf *m,
 #endif
 
 struct mbuf *(*tbr_dequeue_ptr)(struct ifaltq *, int) = NULL;
-
 
 /*
  * XXX: Style; these should be sorted alphabetically, and unprototyped

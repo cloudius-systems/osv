@@ -111,6 +111,7 @@ fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
 bsd  = bsd/net.o  
+bsd += bsd/sys/net/if.o  
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
