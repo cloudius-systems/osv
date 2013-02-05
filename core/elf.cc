@@ -497,7 +497,7 @@ namespace elf {
     {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
-            _prog.add_object(std::string("/usr/lib") + lib);
+            _prog.add_object(std::string("/usr/lib/") + lib);
         }
     }
 
