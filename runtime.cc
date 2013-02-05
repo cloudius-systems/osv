@@ -67,6 +67,8 @@ extern "C" {
 			__const struct tm *__restrict __tp,
 			__locale_t __loc) __THROW;
     int mallopt(int param, int value);
+    FILE *popen(const char *command, const char *type);
+    int pclose(FILE *stream);
 }
 
 void *__dso_handle;
@@ -349,6 +351,17 @@ int mallopt(int param, int value)
 {
     debug(fmt("mallopt: unimplemented paramater  %1%") % param);
     return 0;
+}
+
+FILE *popen(const char *command, const char *type)
+{
+    debug("popen not implemented");
+    return NULL;
+}
+
+int pclose(FILE *stream)
+{
+	return 0;
 }
 
 char* __environ_array[1];

@@ -48,6 +48,7 @@ namespace elf {
             return base + symbol->st_value;
             break;
         default:
+            debug(fmt("unknown relocation type %d") % symbol_type(*symbol));
             abort();
         }
     }
@@ -497,7 +498,9 @@ namespace elf {
     {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
-            _prog.add_object(std::string("/usr/lib") + lib);
+            auto fullpath = std::string("/usr/lib/") + lib;
+            if (_prog.add_object(fullpath) == nullptr)
+                debug(fmt("could not load %s") % fullpath);
         }
     }
 

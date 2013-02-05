@@ -352,6 +352,7 @@ libc += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
 libc += stdio/__fmodeflags.o
 libc += stdio/__fopen_rb_ca.o
+libc += stdio/__fprintf_chk.o
 libc += stdio/__lockfile.o
 libc += stdio/__overflow.o
 libc += stdio/__stdio_close.o
