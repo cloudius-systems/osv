@@ -24,10 +24,19 @@ struct cmutex {
 
 typedef struct cmutex mutex_t;
 
+#define MUTEX_INITIALIZER	{ 0, { 0, 0 }, { 0 } }
 
 void mutex_lock(mutex_t* m);
 bool mutex_trylock(mutex_t* m);
 void mutex_unlock(mutex_t* m);
+
+static __always_inline void mutex_init(mutex_t* m)
+{
+}
+
+static __always_inline void mutex_destroy(mutex_t* m)
+{
+}
 
 inline void spin_lock(spinlock_t *sl)
 {
