@@ -1,3 +1,6 @@
+
+#include <sys/cdefs.h>
+
 #include "drivers/virtio.hh"
 #include "drivers/virtio-blk.hh"
 #include "drivers/pci-device.hh"
@@ -12,7 +15,6 @@
 #include <string.h>
 #include <map>
 #include "debug.hh"
-#include "cdefs.hh"
 
 #include "sched.hh"
 #include "drivers/clock.hh"
@@ -51,7 +53,7 @@ int virtio_blk::_instance = 0;
     {
         virtio_driver::load();
         
-        _dev->virtio_conf_read(__offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
+        _dev->virtio_conf_read(offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
                       &_config.capacity,
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
