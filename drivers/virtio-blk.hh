@@ -163,10 +163,7 @@ namespace virtio {
         int make_virtio_request(struct bio*);
 
         void test();
-
         void response_worker();
-        void blk_callback();
-
         int size();
 
 
@@ -178,7 +175,6 @@ namespace virtio {
         //maintains the virtio instance number for multiple drives
         static int _instance;
         int _id;
-        bool _wake_response;
     };
 
 }

@@ -70,7 +70,6 @@ struct driver virtio_blk_driver = {
         _driver_name = ss.str();
         debug(fmt("VIRTIO BLK INSTANCE %d") % dev_idx);
         _id = _instance++;
-        _wake_response = false;
     }
 
     virtio_blk::~virtio_blk()
@@ -89,11 +88,11 @@ struct driver virtio_blk_driver = {
 
         void* stk1 = malloc(10000);
         thread* worker = new thread([this] { this->response_worker(); } , {stk1, 10000});
-        worker->wake();
+        worker->wake(); // just to keep gcc happy about unused var
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-        _dev->register_callback([this] { this->blk_callback();});
+        _dev->register_callback([this] { this->response_worker();});
 
         // Perform test if this isn't the boot image (test is destructive
         if (_id > 0) {
@@ -160,6 +159,8 @@ struct driver virtio_blk_driver = {
         debug(fmt(" Let the host know about the %d requests") % i);
         queue->kick();
 
+        sched::thread::current()->yield();
+
         debug(" read several requests");
         for (i=0;i<iterations;i++) {
             req = make_virtio_req(i*8, VIRTIO_BLK_T_IN,0);
@@ -176,39 +177,37 @@ struct driver virtio_blk_driver = {
         debug("test virtio blk end");
     }
 
-    void virtio_blk::blk_callback() {
-        _wake_response = true;
-        debug("virtio blk callback executed");
-    }
-
     void virtio_blk::response_worker() {
         vring* queue = _dev->get_virt_queue(0);
         virtio_blk_req* req;
 
         while (1) {
 
-            debug("\t ----> virtio_blk: response worker");
+            debug("\t ----> virtio_blk: response worker main loop");
 
-            thread::wait_until([&] { return _wake_response; });
-            _dev->enable_callback();
-            _wake_response = false;
-            debug("\t ----> debug - blk thread awken");
+            thread::wait_until([this] {
+                vring* queue = this->_dev->get_virt_queue(0);
+                return queue->used_ring_not_empy();
+            });
+
+            debug("\t ----> debug - blk thread awaken");
 
             int i = 0;
 
             while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
                 debug(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
 
-                /*  This is debug code to verify the read content, to be remove later on
-                if (reinterpret_cast<virtio_blk_outhdr*>(req->req_header)->type == VIRTIO_BLK_T_IN) {
-                    debug(fmt("\t verify that sector %d contains data %d") % (i*8) % i);
+                virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
+                //  This is debug code to verify the read content, to be remove later on
+                if (header->type == VIRTIO_BLK_T_IN) {
+                    debug(fmt("\t verify that sector %d contains data %d") % (int)header->sector % (int)(header->sector/8));
                     i++;
                     auto ii = req->payload->_nodes.begin();
                     ii++;
                     char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
                     debug(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
 
-                }*/
+                }
                 if (req->bio != nullptr) {
                     biodone(req->bio);
                     req->bio = nullptr;
