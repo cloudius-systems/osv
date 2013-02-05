@@ -111,14 +111,15 @@ fs +=	fs/devfs/devfs_vnops.o \
 	fs/devfs/device.o
 
 bsd  = bsd/net.o  
-bsd += bsd/sys/net/if.o  
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
 bsd += bsd/sys/kern/subr_bufring.o
+bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/porting/uma_stub.o
 bsd += bsd/porting/sync_stub.o
+bsd += bsd/sys/net/if.o  
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
