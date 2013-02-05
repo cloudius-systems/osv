@@ -14,19 +14,52 @@
 #include <string>
 #include <string.h>
 #include <map>
+#include <errno.h>
 #include "debug.hh"
 
 #include "sched.hh"
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 
+#include <osv/device.h>
+#include <osv/bio.h>
 
 using namespace memory;
 using sched::thread;
 
+
 namespace virtio {
 
 int virtio_blk::_instance = 0;
+
+
+struct virtio_blk_priv {
+    virtio_blk* drv;
+};
+
+static void
+virtio_blk_strategy(struct bio *bio)
+{
+    struct virtio_blk_priv *prv = reinterpret_cast<struct virtio_blk_priv*>(bio->bio_dev->private_data);
+
+    prv->drv->make_virtio_request(bio);
+}
+
+static struct devops virtio_blk_devops = {
+    .open       = no_open,
+    .close      = no_close,
+    .read       = no_read,
+    .write      = no_write,
+    .ioctl      = no_ioctl,
+    .devctl     = no_devctl,
+    .strategy   = virtio_blk_strategy,
+};
+
+struct driver virtio_blk_driver = {
+    .name       = "virtio_blk",
+    .devops     = &virtio_blk_devops,
+    .devsz      = sizeof(struct virtio_blk_priv),
+};
 
     virtio_blk::virtio_blk(unsigned dev_idx)
         : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx)
@@ -37,16 +70,12 @@ int virtio_blk::_instance = 0;
         _driver_name = ss.str();
         debug(fmt("VIRTIO BLK INSTANCE %d") % dev_idx);
         _id = _instance++;
+        _wake_response = false;
     }
 
     virtio_blk::~virtio_blk()
     {
         //TODO: In theory maintain the list of free instances and gc it
-    }
-
-    void virtio_blk::virtio_blk_isr()
-    {
-        debug(fmt("GOT ISR WORKING, %d") % _driver_name);
     }
 
     bool virtio_blk::load(void)
@@ -58,24 +87,25 @@ int virtio_blk::_instance = 0;
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
 
-        debug("Setup msix for virtio-blk");
-
-        msix_isr_list* isrs = new msix_isr_list;
-
         void* stk1 = malloc(10000);
-        thread* isr = new thread([this] { this->virtio_blk_isr(); } , {stk1, 10000});
-
-        isrs->insert(std::make_pair(0, isr));
-
-        interrupt_manager::instance()->easy_register(_dev, *isrs);
-
-
+        thread* worker = new thread([this] { this->response_worker(); } , {stk1, 10000});
+        worker->wake();
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+
+        _dev->register_callback([this] { this->blk_callback();});
 
         // Perform test if this isn't the boot image (test is destructive
         if (_id > 0) {
             debug(fmt("virtio blk: testing instance %d") % _id);
+
+            struct virtio_blk_priv* prv;
+            struct device *dev;
+
+            dev = device_create(&virtio_blk_driver, "vblk0", D_BLK);
+            prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+            prv->drv = this;
+
             test();
         }
 
@@ -87,6 +117,7 @@ int virtio_blk::_instance = 0;
         return (true);
     }
 
+    // to be removed soon once we move the test from here to the vfs layer
     virtio_blk::virtio_blk_req* virtio_blk::make_virtio_req(u64 sector, virtio_blk_request_type type, int val)
     {
         sglist* sg = new sglist();
@@ -94,7 +125,6 @@ int virtio_blk::_instance = 0;
         memset(buf, val, page_size);
         sg->add(mmu::virt_to_phys(buf), page_size);
 
-        virtio_blk_req* req = new virtio_blk_req;
         virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
         hdr->type = type;
         hdr->ioprio = 0;
@@ -107,10 +137,7 @@ int virtio_blk::_instance = 0;
         res->status = 0;
         sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
 
-        req->status = res;
-        req->req_header = hdr;
-        req->payload = sg;
-
+        virtio_blk_req* req = new virtio_blk_req(hdr, sg, res);
         return req;
     }
 
@@ -133,56 +160,134 @@ int virtio_blk::_instance = 0;
         debug(fmt(" Let the host know about the %d requests") % i);
         queue->kick();
 
-        debug(" Wait for the irq to be injected by sleeping 1 sec");
-        timespec ts = {};
-        ts.tv_sec = 1;
-        nanosleep(&ts, nullptr);
-
-        debug(" Collect the block write responses");
-        i = 0;
-        while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
-            debug(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
-
-            delete req->status;
-            delete reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
-            delete req->payload;
-        }
-
         debug(" read several requests");
         for (i=0;i<iterations;i++) {
             req = make_virtio_req(i*8, VIRTIO_BLK_T_IN,0);
             if (!queue->add_buf(req->payload,1,2,req)) {
                 break;
             }
+            queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+
         }
 
         debug(fmt(" Let the host know about the %d requests") % i);
         queue->kick();
 
-        debug(" Wait for the irq to be injected by sleeping 1 sec");
-        ts.tv_sec = 1;
-        nanosleep(&ts, nullptr);
-
-        debug(" Collect the block read responses");
-        i = 0;
-        while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
-            debug(fmt("\t got response:%d = %d ") % i % (int)req->status->status);
-
-            debug(fmt("\t verify that sector %d contains data %d") % (i*8) % i);
-            i++;
-            auto ii = req->payload->_nodes.begin();
-            ii++;
-            char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
-            debug(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
-
-            delete req->status;
-            delete reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
-            delete req->payload;
-        }
-
-
         debug("test virtio blk end");
     }
 
-}
+    void virtio_blk::blk_callback() {
+        _wake_response = true;
+        debug("virtio blk callback executed");
+    }
 
+    void virtio_blk::response_worker() {
+        vring* queue = _dev->get_virt_queue(0);
+        virtio_blk_req* req;
+
+        while (1) {
+
+            debug("\t ----> virtio_blk: response worker");
+
+            thread::wait_until([&] { return _wake_response; });
+            _dev->enable_callback();
+            _wake_response = false;
+            debug("\t ----> debug - blk thread awken");
+
+            int i = 0;
+
+            while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
+                debug(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
+
+                /*  This is debug code to verify the read content, to be remove later on
+                if (reinterpret_cast<virtio_blk_outhdr*>(req->req_header)->type == VIRTIO_BLK_T_IN) {
+                    debug(fmt("\t verify that sector %d contains data %d") % (i*8) % i);
+                    i++;
+                    auto ii = req->payload->_nodes.begin();
+                    ii++;
+                    char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
+                    debug(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
+
+                }*/
+                if (req->bio != nullptr) {
+                    biodone(req->bio);
+                    req->bio = nullptr;
+                }
+
+                delete req;
+            }
+
+        }
+
+    }
+
+    virtio_blk::virtio_blk_req::~virtio_blk_req()
+    {
+        if (req_header) delete reinterpret_cast<virtio_blk_outhdr*>(req_header);
+        if (payload) delete payload;
+        if (status) delete status;
+        if (bio) delete bio;
+    }
+
+
+    //todo: get it from the host
+    int virtio_blk::size() {
+        return 1024 * 1024 * 1024;
+    }
+
+    static const int page_size = 4096;
+    static const int sector_size = 512;
+
+    int virtio_blk::make_virtio_request(struct bio* bio)
+        {
+            if (!bio) return EIO;
+
+            if ((bio->bio_cmd & (BIO_READ | BIO_WRITE)) == 0)
+                return ENOTBLK;
+
+            virtio_blk_request_type type = (bio->bio_cmd == BIO_READ)? VIRTIO_BLK_T_IN:VIRTIO_BLK_T_OUT;
+            sglist* sg = new sglist();
+
+            // need to break a contiguous buffers that > 4k into several physical page mapping
+            // even if the virtual space is contiguous.
+            int len = 0;
+            int offset = bio->bio_offset;
+            while (len != bio->bio_bcount) {
+                int size = std::min((int)bio->bio_bcount - len, page_size);
+                if (offset + size > page_size)
+                    size = page_size - offset;
+                len += size;
+                sg->add(mmu::virt_to_phys(bio->bio_data + offset), size);
+                offset += size;
+            }
+
+            virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
+            hdr->type = type;
+            hdr->ioprio = 0;
+            hdr->sector = (int)bio->bio_offset / sector_size; //wait, isn't offset starts on page addr??
+
+            //push 'output' buffers to the beginning of the sg list
+            sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
+
+            virtio_blk_res* res = reinterpret_cast<virtio_blk_res*>(malloc(sizeof(virtio_blk_res)));
+            res->status = 0;
+            sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
+
+            virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
+            vring* queue = _dev->get_virt_queue(0);
+            int in = 1 , out = 1;
+            if (bio->bio_cmd == BIO_READ)
+                in += len/page_size + 1;
+            else
+                out += len/page_size + 1;
+            if (!queue->add_buf(req->payload,out,in,req)) {
+               //todo: free req;
+               return EBUSY;
+            }
+
+            queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+
+            return 0;
+        }
+
+}

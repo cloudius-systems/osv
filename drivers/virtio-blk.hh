@@ -30,6 +30,8 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
+#include <osv/bio.h>
+
 
 namespace virtio {
 
@@ -139,9 +141,13 @@ namespace virtio {
         };
 
         struct virtio_blk_req {
+            virtio_blk_req(void* req = nullptr, sglist* sg = nullptr, virtio_blk_res* res = nullptr, struct bio* b=nullptr)
+                :req_header(req), payload(sg), status(res), bio(b) {};
+            ~virtio_blk_req();
             void* req_header;
             sglist* payload;
             virtio_blk_res* status;
+            struct bio* bio;
         };
 
         virtio_blk(unsigned dev_idx=0);
@@ -154,9 +160,15 @@ namespace virtio {
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
 
         virtio_blk_req* make_virtio_req(u64 sector, virtio_blk_request_type type, int val);
+        int make_virtio_request(struct bio*);
 
-        void virtio_blk_isr();
         void test();
+
+        void response_worker();
+        void blk_callback();
+
+        int size();
+
 
     private:
 
@@ -166,6 +178,7 @@ namespace virtio {
         //maintains the virtio instance number for multiple drives
         static int _instance;
         int _id;
+        bool _wake_response;
     };
 
 }
