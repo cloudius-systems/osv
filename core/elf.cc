@@ -48,6 +48,7 @@ namespace elf {
             return base + symbol->st_value;
             break;
         default:
+            debug(fmt("unknown relocation type %d") % symbol_type(*symbol));
             abort();
         }
     }
