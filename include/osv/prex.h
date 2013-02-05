@@ -29,7 +29,6 @@ __BEGIN_DECLS
 typedef unsigned long   object_t;
 typedef unsigned long   task_t;
 typedef unsigned long   thread_t;
-typedef unsigned long   mutex_t;
 typedef unsigned long   cond_t;
 typedef unsigned long   sem_t;
 typedef unsigned long   device_t;

@@ -3,10 +3,7 @@
 
 #include <mutex>
 #include <list>
-
-namespace sched {
-class thread;
-}
+#include <osv/mutex.h>
 
 class mutex {
 public:
@@ -14,8 +11,7 @@ public:
     bool try_lock();
     void unlock();
 private:
-    bool _locked;
-    std::list<sched::thread*> _waiters;
+    mutex_t _mutex;
 };
 
 // Use mutex instead, except where impossible
@@ -24,7 +20,7 @@ public:
     void lock();
     void unlock();
 private:
-    bool _locked;
+    spinlock_t _lock;
 };
 
 template <class Lock, class Func>
