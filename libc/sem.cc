@@ -11,7 +11,7 @@ public:
     void wait();
 private:
     unsigned _val;
-    mutex _mtx;
+    spinlock _mtx;
     struct wait_record {
         sched::thread* owner;
     };
@@ -43,6 +43,7 @@ void semaphore::post()
 
 void semaphore::wait()
 {
+    bool wait = false;
     wait_record wr;
     wr.owner = nullptr;
     with_lock(_mtx, [&] {
@@ -51,9 +52,12 @@ void semaphore::wait()
         } else {
             wr.owner = sched::thread::current();
             _waiters.push_back(&wr);
+            wait = true;
         }
     });
-    sched::thread::wait_until([&] { return !wr.owner; });
+
+    if (wait)
+        sched::thread::wait_until([&] { return !wr.owner; });
 }
 
 semaphore* from_libc(sem_t* p)
