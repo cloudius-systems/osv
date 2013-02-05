@@ -32,6 +32,8 @@
 
 #include <sys/cdefs.h>
 
+__BEGIN_DECLS
+
 struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
@@ -77,5 +79,7 @@ list_remove(list_t node)
 	node->prev->next = node->next;
 	node->next->prev = node->prev;
 }
+
+__END_DECLS
 
 #endif /* !_SYS_LIST_H_ */

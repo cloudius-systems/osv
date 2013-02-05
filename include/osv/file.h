@@ -30,7 +30,10 @@
 #ifndef _SYS_FILE_H_
 #define _SYS_FILE_H_
 
+#include <sys/cdefs.h>
 #include <sys/types.h>
+
+__BEGIN_DECLS
 
 struct vnode;
 
@@ -44,5 +47,7 @@ struct file {
 	struct vnode	*f_vnode;	/* vnode */
 };
 typedef struct file *file_t;
+
+__END_DECLS
 
 #endif /* !_SYS_FILE_H_ */

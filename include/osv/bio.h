@@ -38,9 +38,12 @@
 #ifndef _SYS_BIO_H_
 #define	_SYS_BIO_H_
 
+#include <sys/cdefs.h>
 #include <stdint.h>
 #include <pthread.h>
 #include <osv/list.h>
+
+__BEGIN_DECLS
 
 /* bio_cmd */
 #define BIO_READ	0x01
@@ -95,5 +98,7 @@ struct bio *	alloc_bio(void);
 void		destroy_bio(struct bio *bio);
 
 void		biodone(struct bio *bio);
+
+__END_DECLS
 
 #endif /* !_SYS_BIO_H_ */

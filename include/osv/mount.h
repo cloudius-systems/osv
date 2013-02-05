@@ -36,6 +36,8 @@
 #include <sys/statfs.h>
 #include <osv/vnode.h>
 
+__BEGIN_DECLS
+
 /*
  * Mount data
  */
@@ -125,7 +127,6 @@ typedef int (*vfsop_statfs_t)(mount_t, struct statfs *);
 
 #define VFS_NULL		    ((void *)vfs_null)
 
-__BEGIN_DECLS
 int	mount(const char *, const char *, const char *, int, void *);
 int	umount(const char *);
 int	vfs_nullop(void);

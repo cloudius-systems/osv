@@ -30,13 +30,15 @@
 #ifndef _SYS_VNODE_H_
 #define _SYS_VNODE_H_
 
+#include <sys/cdefs.h>
 #include <sys/stat.h>
-
 #include <osv/prex.h>
 #include <osv/uio.h>
 #include "file.h"
 #include <osv/list.h>
 #include "dirent.h"
+
+__BEGIN_DECLS
 
 struct vfsops;
 struct vnops;
@@ -166,7 +168,6 @@ struct vnops {
 #define VOP_INACTIVE(VP)	   ((VP)->v_op->vop_inactive)(VP)
 #define VOP_TRUNCATE(VP, N)	   ((VP)->v_op->vop_truncate)(VP, N)
 
-__BEGIN_DECLS
 int	 vop_nullop(void);
 int	 vop_einval(void);
 vnode_t	 vn_lookup(struct mount *, char *);
@@ -181,6 +182,7 @@ void	 vref(vnode_t);
 void	 vrele(vnode_t);
 int	 vcount(vnode_t);
 void	 vflush(struct mount *);
+
 __END_DECLS
 
 #endif /* !_SYS_VNODE_H_ */
