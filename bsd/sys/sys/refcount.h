@@ -32,13 +32,8 @@
 #ifndef __SYS_REFCOUNT_H__
 #define __SYS_REFCOUNT_H__
 
+#include <porting/netport.h>
 #include <machine/atomic.h>
-
-#ifdef _KERNEL
-#include <sys/systm.h>
-#else
-#define	KASSERT(exp, msg)	/* */
-#endif
 
 static __inline void
 refcount_init(volatile u_int *count, u_int value)
