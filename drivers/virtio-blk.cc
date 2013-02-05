@@ -45,11 +45,25 @@ virtio_blk_strategy(struct bio *bio)
     prv->drv->make_virtio_request(bio);
 }
 
+static int
+virtio_blk_rdwr(struct device *dev, struct uio *uio, int ioflags)
+{
+//   XXX: need a size to check against here
+#if 0
+    struct virtio_blk_priv *prv =
+        reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+
+    if (uio->uio_offset + uio->uio_resid > sc->size)
+        return EIO;
+#endif
+    return physio(dev, uio, ioflags);
+}
+
 static struct devops virtio_blk_devops = {
     .open       = no_open,
     .close      = no_close,
-    .read       = no_read,
-    .write      = no_write,
+    .read       = virtio_blk_rdwr,
+    .write      = virtio_blk_rdwr,
     .ioctl      = no_ioctl,
     .devctl     = no_devctl,
     .strategy   = virtio_blk_strategy,

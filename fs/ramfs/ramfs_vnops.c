@@ -48,10 +48,7 @@
 #include "ramfs.h"
 
 
-#if CONFIG_FS_THREADS > 1
 static mutex_t ramfs_lock = MUTEX_INITIALIZER;
-#endif
-
 
 struct ramfs_node *
 ramfs_allocate_node(char *name, int type)

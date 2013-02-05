@@ -65,17 +65,6 @@ extern int vfs_debug;
 #define ASSERT(e)
 #endif
 
-#if CONFIG_FS_THREADS > 1
-#define malloc(s)		malloc_r(s)
-#define free(p)			free_r(p)
-#else
-#define mutex_init(m)		do {} while (0)
-#define mutex_destroy(m)	do {} while (0)
-#define mutex_lock(m)		do {} while (0)
-#define mutex_unlock(m)		do {} while (0)
-#define mutex_trylock(m)	do {} while (0)
-#endif
-
 #define OPEN_MAX	256
 
 /*
