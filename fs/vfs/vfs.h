@@ -82,7 +82,7 @@ extern int vfs_debug;
  * per task data
  */
 struct task {
-	struct list t_link;		/* hash link */
+	struct list_head t_link;	/* hash link */
 	task_t	    t_taskid;		/* task id */
 	char 	    t_cwd[PATH_MAX];	/* current working directory */
 	file_t	    t_cwdfp;		/* directory for cwd */

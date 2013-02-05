@@ -32,12 +32,12 @@
 
 #include <sys/cdefs.h>
 
-struct list {
-	struct list	*next;
-	struct list	*prev;
+struct list_head {
+	struct list_head *next;
+	struct list_head *prev;
 };
 
-typedef struct list *list_t;
+typedef struct list_head *list_t;
 
 #define list_init(head)		((head)->next = (head)->prev = (head))
 #define list_next(node)		((node)->next)

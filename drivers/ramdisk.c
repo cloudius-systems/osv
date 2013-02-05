@@ -39,7 +39,7 @@
 struct ramdisk_softc {
 	char		*addr;		/* base address of image */
 	size_t		size;		/* image size */
-	struct list	bio_list;
+	struct list_head bio_list;
 	pthread_mutex_t	bio_mutex;
 	pthread_cond_t	bio_wait;
 };
@@ -111,7 +111,7 @@ static void *ramdisk_thread_fn(void *arg)
 	pthread_mutex_lock(&sc->bio_mutex);
 	for (;;) {
 		while (!list_empty(&sc->bio_list)) {
-			struct list *l = list_first(&sc->bio_list);
+			struct list_head *l = list_first(&sc->bio_list);
 			struct bio *bio = list_entry(l, struct bio, bio_list);
 
 			list_remove(&bio->bio_list);

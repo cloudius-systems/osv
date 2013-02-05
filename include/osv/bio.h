@@ -81,7 +81,7 @@ struct bio {
 	void	(*bio_done)(struct bio *);
 
 
-	struct list	bio_list;
+	struct list_head	bio_list;
 
 	/*
 	 * I/O synchronization, probably should move out of the struct to

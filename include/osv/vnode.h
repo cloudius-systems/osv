@@ -62,7 +62,7 @@ enum {
  * appropriate lock.
  */
 struct vnode {
-	struct list	v_link;		/* link for hash list */
+	struct list_head v_link;	/* link for hash list */
 	struct mount	*v_mount;	/* mounted vfs pointer */
 	struct vnops	*v_op;		/* vnode operations */
 	int		v_refcnt;	/* reference count */

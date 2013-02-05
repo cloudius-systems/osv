@@ -40,7 +40,7 @@
  * Mount data
  */
 struct mount {
-	struct list	m_link;		/* link to next mount point */
+	struct list_head	m_link;		/* link to next mount point */
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
