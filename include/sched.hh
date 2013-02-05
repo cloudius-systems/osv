@@ -85,6 +85,7 @@ typedef bi::list<thread,
                 > runqueue_type;
 
 struct cpu {
+    unsigned id;
     struct arch_cpu arch;
     thread* bringup_thread;
     runqueue_type runqueue;

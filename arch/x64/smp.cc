@@ -37,6 +37,7 @@ void parse_madt()
     auto madt = get_parent_from_member(madt_header, &ACPI_TABLE_MADT::Header);
     void* subtable = madt + 1;
     void* madt_end = static_cast<void*>(madt) + madt->Header.Length;
+    unsigned idgen = 0;
     while (subtable != madt_end) {
         auto s = static_cast<ACPI_SUBTABLE_HEADER*>(subtable);
         switch (s->Type) {
@@ -46,6 +47,7 @@ void parse_madt()
                 break;
             }
             auto c = new sched::cpu;
+            c->id = idgen++;
             c->arch.apic_id = lapic->Id;
             c->arch.acpi_id = lapic->ProcessorId;
             c->arch.initstack.next = smp_stack_free;
