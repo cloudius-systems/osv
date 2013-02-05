@@ -48,14 +48,12 @@ virtio_blk_strategy(struct bio *bio)
 static int
 virtio_blk_rdwr(struct device *dev, struct uio *uio, int ioflags)
 {
-//   XXX: need a size to check against here
-#if 0
     struct virtio_blk_priv *prv =
         reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
 
-    if (uio->uio_offset + uio->uio_resid > sc->size)
+    if (uio->uio_offset + uio->uio_resid > prv->drv->size())
         return EIO;
-#endif
+
     return physio(dev, uio, ioflags);
 }
 
