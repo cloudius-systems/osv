@@ -10,6 +10,7 @@
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
 #include "mutex.hh"
+#include <atomic>
 
 extern "C" {
 void smp_main();
@@ -63,7 +64,7 @@ private:
     thread_state _state;
     thread_control_block* _tcb;
     bool _on_runqueue;
-    bool _waiting;
+    std::atomic_bool _waiting;
     stack_info _stack;
     cpu* _cpu;
     friend void thread_main_c(thread* t);

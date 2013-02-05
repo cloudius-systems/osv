@@ -110,16 +110,14 @@ void thread::prepare_wait()
 
 void thread::wake()
 {
+    // prevent two concurrent wakeups
+    if (!_waiting.exchange(false)) {
+        return;
+    }
     irq_save_lock_type irq_lock;
     with_lock(irq_lock, [this] {
-        if (!_waiting) {
-            return;
-        }
-        _waiting = false;
-        if (!_on_runqueue) {
-            _on_runqueue = true;
-            _cpu->runqueue.push_back(*this);
-        }
+        _on_runqueue = true;
+        _cpu->runqueue.push_back(*this);
     });
 }
 
