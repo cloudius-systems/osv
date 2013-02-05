@@ -4,7 +4,7 @@
 #include "fs/fs.hh"
 #include <stdint.h>
 #include <boost/intrusive/set.hpp>
-#include <types.hh>
+#include <osv/types.h>
 
 namespace mmu {
     typedef uint64_t f_offset;

@@ -1,7 +1,7 @@
 #ifndef MMIO_HH
 #define MMIO_HH
 
-#include "types.hh"
+#include <osv/types.h>
 
 typedef volatile void* mmioaddr_t;
 

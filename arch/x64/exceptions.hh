@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <functional>
-#include <types.hh>
+#include <osv/types.h>
 
 struct exception_frame {
     ulong r15;

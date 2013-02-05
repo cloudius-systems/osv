@@ -1,7 +1,7 @@
 #ifndef CLOCKEVENT_HH_
 #define CLOCKEVENT_HH_
 
-#include "types.hh"
+#include <osv/types.h>
 
 class clock_event_callback {
 public:

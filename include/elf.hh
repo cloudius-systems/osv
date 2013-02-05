@@ -5,7 +5,7 @@
 #include <vector>
 #include <map>
 #include <memory>
-#include <types.hh>
+#include <osv/types.h>
 
 namespace elf {
     typedef u64 Elf64_Addr;

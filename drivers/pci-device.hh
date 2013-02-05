@@ -1,7 +1,7 @@
 #ifndef PCI_DEVICE_H
 #define PCI_DEVICE_H
 
-#include "types.hh"
+#include <osv/types.h>
 #include "pci.hh"
 #include "pci-function.hh"
 

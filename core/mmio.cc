@@ -1,4 +1,4 @@
-#include "types.hh"
+#include <osv/types.h>
 #include "mmu.hh"
 #include "mmio.hh"
 

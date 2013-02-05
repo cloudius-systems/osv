@@ -1,7 +1,7 @@
 #ifndef CLOCK_HH_
 #define CLOCK_HH_
 
-#include "types.hh"
+#include <osv/types.h>
 
 class clock {
 public:

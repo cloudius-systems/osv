@@ -5,7 +5,7 @@
 #include <ostream>
 
 #include "mmio.hh"
-#include "types.hh"
+#include <osv/types.h>
 #include "processor.hh"
 #include "debug.hh"
 #include "device.hh"

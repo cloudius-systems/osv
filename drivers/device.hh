@@ -4,7 +4,7 @@
 #include <functional>
 #include <map>
 
-#include "types.hh"
+#include <osv/types.h>
 
 namespace hw {
 

@@ -1,5 +1,5 @@
 #include <math.h>
-#include "types.hh"
+#include <osv/types.h>
 
 // FIXME: check for sse4.1
 

@@ -1,7 +1,7 @@
 #ifndef ARCH_X86_PROCESSOR_H
 #define ARCH_X86_PROCESSOR_H
 
-#include "types.hh"
+#include <osv/types.h>
 
 namespace processor {
 

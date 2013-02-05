@@ -1,7 +1,7 @@
 #ifndef ALIGN_HH_
 #define ALIGN_HH_
 
-#include "types.hh"
+#include <osv/types.h>
 
 template <typename T>
 T align_down(T n, T alignment)
