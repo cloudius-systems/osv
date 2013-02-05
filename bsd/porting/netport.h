@@ -7,6 +7,7 @@
 
 #include <sys/types.h>
 
+#define PAGE_SIZE (4096)
 
 void* malloc(size_t size);
 void free(void* object);
@@ -97,5 +98,14 @@ int uiomove(void *cp, int n, struct uio *uio);
 struct malloc_type {
     int unused;
 };
+
+#define __printflike(m, n) __attribute__((format(printf,m,n)))
+/*
+ * Unusual type definitions.
+ */
+typedef __builtin_va_list   __va_list;  /* internally known to gcc */
+
+/* Max number conversion buffer length: a u_quad_t in base 2, plus NUL byte. */
+#define MAXNBUF (sizeof(intmax_t) * NBBY + 1)
 
 #endif

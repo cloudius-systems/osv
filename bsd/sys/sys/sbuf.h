@@ -31,7 +31,7 @@
 #ifndef _SYS_SBUF_H_
 #define	_SYS_SBUF_H_
 
-#include <sys/_types.h>
+#include <porting/netport.h>
 
 struct sbuf;
 typedef int (sbuf_drain_func)(void *, const char *, int);
@@ -85,8 +85,6 @@ void		 sbuf_delete(struct sbuf *);
 #ifdef _KERNEL
 struct uio;
 struct sbuf	*sbuf_uionew(struct sbuf *, struct uio *, int *);
-int		 sbuf_bcopyin(struct sbuf *, const void *, size_t);
-int		 sbuf_copyin(struct sbuf *, const void *, size_t);
 #endif
 __END_DECLS
 
