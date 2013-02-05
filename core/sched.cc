@@ -34,7 +34,7 @@ void cpu::schedule(bool yield)
         barrier();
     }
     thread* n = with_lock(irq_lock, [this] {
-        auto n = runqueue.front();
+        auto n = &runqueue.front();
         runqueue.pop_front();
         return n;
     });
@@ -57,7 +57,7 @@ void thread::yield()
     if (t->_cpu->runqueue.empty()) {
         return;
     }
-    t->_cpu->runqueue.push_back(t);
+    t->_cpu->runqueue.push_back(*t);
     t->_on_runqueue = true;
     assert(!t->_waiting);
     t->_cpu->schedule(true);
@@ -91,7 +91,7 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     init_stack();
     if (!main) {
         _cpu = current()->tcpu(); // inherit creator's cpu
-        _cpu->runqueue.push_back(this);
+        _cpu->runqueue.push_back(*this);
     }
 }
 
@@ -118,7 +118,7 @@ void thread::wake()
         _waiting = false;
         if (!_on_runqueue) {
             _on_runqueue = true;
-            _cpu->runqueue.push_back(this);
+            _cpu->runqueue.push_back(*this);
         }
     });
 }

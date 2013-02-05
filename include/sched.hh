@@ -73,14 +73,21 @@ private:
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
+    bi::list_member_hook<> _runqueue_link;
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
 };
 
+typedef bi::list<thread,
+                 bi::member_hook<thread,
+                                 bi::list_member_hook<>,
+                                 &thread::_runqueue_link>
+                > runqueue_type;
+
 struct cpu {
     struct arch_cpu arch;
     thread* bringup_thread;
-    std::list<thread*> runqueue;
+    runqueue_type runqueue;
     static cpu* current();
     void init_on_cpu();
     void schedule(bool yield = false);
