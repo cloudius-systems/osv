@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <osv/prex.h>
 #include <osv/uio.h>
+#include <osv/mutex.h>
 #include "file.h"
 #include <osv/list.h>
 #include "dirent.h"
