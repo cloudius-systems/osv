@@ -19,15 +19,7 @@ void smp_launch();
 namespace sched {
 
 class thread;
-
-struct cpu {
-    struct arch_cpu arch;
-    thread* bringup_thread;
-    std::list<thread*> runqueue;
-    static cpu* current();
-    void init_on_cpu();
-    void schedule(bool yield = false);
-};
+class cpu;
 
 void schedule(bool yield = false);
 
@@ -76,13 +68,22 @@ private:
     cpu* _cpu;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
-    friend void cpu::schedule(bool yield);
+    friend class cpu;
     friend void ::smp_main();
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
+};
+
+struct cpu {
+    struct arch_cpu arch;
+    thread* bringup_thread;
+    std::list<thread*> runqueue;
+    static cpu* current();
+    void init_on_cpu();
+    void schedule(bool yield = false);
 };
 
 thread* current();
