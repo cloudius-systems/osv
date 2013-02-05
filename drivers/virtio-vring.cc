@@ -113,7 +113,7 @@ namespace virtio {
         _desc[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
         _avail_added_since_kick++;
-        _avail_count -= i+1;
+        _avail_count -= i;
 
         _avail->_ring[_avail->_idx] = _avail_head;
         _avail->_idx = (_avail->_idx + 1) % _num;

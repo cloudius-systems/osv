@@ -158,7 +158,7 @@ struct driver virtio_blk_driver = {
         debug("test virtio blk");
         vring* queue = _dev->get_virt_queue(0);
         virtio_blk_req* req;
-        const int iterations = 10;
+        const int iterations = 100;
 
         debug(" write several requests");
         for (i=0;i<iterations;i++) {
@@ -213,7 +213,6 @@ struct driver virtio_blk_driver = {
                 //  This is debug code to verify the read content, to be remove later on
                 if (header->type == VIRTIO_BLK_T_IN) {
                     debug(fmt("\t verify that sector %d contains data %d") % (int)header->sector % (int)(header->sector/8));
-                    i++;
                     auto ii = req->payload->_nodes.begin();
                     ii++;
                     char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
