@@ -102,13 +102,13 @@ namespace virtio {
         _cookie[idx] = cookie;
 
         for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
+            //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
             _desc[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
             _desc[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
             _desc[idx]._paddr = (*ii)._paddr;
             _desc[idx]._len = (*ii)._len;
             prev_idx = idx;
             idx = _desc[idx]._next;
-            //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
         }
         _desc[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
@@ -120,7 +120,7 @@ namespace virtio {
 
         _avail_head = idx;
 
-        //debug(fmt("\t%s: avail_head=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
+        //debug(fmt("\t%s: _avail_idx=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
 
         return true;
     }
@@ -154,7 +154,7 @@ namespace virtio {
 
         _used_guest_head++;
         _avail_count += i;
-        _desc[elem._id]._next = _avail_head;
+        _desc[idx]._next = _avail_head;
         _avail_head = elem._id;
 
         return cookie;
