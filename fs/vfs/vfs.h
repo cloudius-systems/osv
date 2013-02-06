@@ -65,17 +65,6 @@ extern int vfs_debug;
 #define ASSERT(e)
 #endif
 
-#if CONFIG_FS_THREADS > 1
-#define malloc(s)		malloc_r(s)
-#define free(p)			free_r(p)
-#else
-#define mutex_init(m)		do {} while (0)
-#define mutex_destroy(m)	do {} while (0)
-#define mutex_lock(m)		do {} while (0)
-#define mutex_unlock(m)		do {} while (0)
-#define mutex_trylock(m)	do {} while (0)
-#endif
-
 #define OPEN_MAX	256
 
 /*
@@ -124,6 +113,7 @@ int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);
 int	 sys_statfs(char *path, struct statfs *buf);
 int	 sys_truncate(char *path, off_t length);
+ssize_t	 sys_readlink(char *path, char *buf, size_t bufsize);
 
 int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
 int	 sys_umount(char *path);

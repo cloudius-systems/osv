@@ -138,7 +138,6 @@ namespace virtio {
         void free_queues(void);
 
         void register_callback(std::function<void ()> func) {_queues[0]->register_callback(func);};
-        void enable_callback() {_queues[0]->enable_callback();};
 
     protected:
         vring* _queues[max_virtqueues_nr];

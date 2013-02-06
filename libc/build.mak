@@ -348,10 +348,14 @@ libc += multibyte/wcstombs.o
 libc += multibyte/wctob.o
 libc += multibyte/wctomb.o
 
+libc += signal/sigrtmax.o
+libc += signal/sigrtmin.o
+
 libc += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
 libc += stdio/__fmodeflags.o
 libc += stdio/__fopen_rb_ca.o
+libc += stdio/__fprintf_chk.o
 libc += stdio/__lockfile.o
 libc += stdio/__overflow.o
 libc += stdio/__stdio_close.o
@@ -492,6 +496,7 @@ libc += string/memmove.o
 libc += string/mempcpy.o
 libc += string/memrchr.o
 libc += string/memset.o
+libc += string/rawmemchr.o
 libc += string/rindex.o
 libc += string/stpcpy.o
 libc += string/stpncpy.o

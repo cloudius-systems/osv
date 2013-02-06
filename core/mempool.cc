@@ -341,7 +341,7 @@ void* realloc(void* object, size_t size)
         free(object);
     }
 
-    return NULL;
+    return ptr;
 }
 
 void free(void* object)

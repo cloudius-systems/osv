@@ -112,10 +112,8 @@ class virtio_device;
         // Ring operations
         bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
         void* get_buf();
+        bool used_ring_not_empy();
         bool kick();
-        void disable_callback();
-        bool enable_callback();
-        void interrupt();
         void register_callback(std::function<void ()> func) {_callback = func;};
 
 
@@ -154,7 +152,6 @@ class virtio_device;
         void** _cookie;
         //callback function for upper layer virtio queues
         std::function<void ()> _callback;
-        bool _callback_enabled;
     };
 
 

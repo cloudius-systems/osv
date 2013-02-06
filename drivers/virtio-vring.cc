@@ -45,7 +45,8 @@ namespace virtio {
 
         msix_isr_list* isrs = new msix_isr_list;
         void* stk1 = malloc(10000);
-        thread* isr = new thread([this] { this->interrupt(); } , {stk1, 10000});
+        _callback = nullptr;
+        thread* isr = new thread([this] { if (_callback) _callback(); } , {stk1, 10000});
 
         isrs->insert(std::make_pair(_q_index, isr));
         interrupt_manager::instance()->easy_register(_dev, *isrs);
@@ -53,9 +54,6 @@ namespace virtio {
         // Setup queue_id:entry_id 1:1 correlation...
         _dev->virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _q_index);
         _dev->virtio_conf_writel(VIRTIO_MSI_QUEUE_VECTOR, _q_index);
-
-        enable_callback();
-        _callback = nullptr;
     }
 
     vring::~vring()
@@ -104,25 +102,25 @@ namespace virtio {
         _cookie[idx] = cookie;
 
         for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
+            //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
             _desc[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
             _desc[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
             _desc[idx]._paddr = (*ii)._paddr;
             _desc[idx]._len = (*ii)._len;
             prev_idx = idx;
             idx = _desc[idx]._next;
-            //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
         }
         _desc[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
         _avail_added_since_kick++;
-        _avail_count -= i+1;
+        _avail_count -= i;
 
         _avail->_ring[_avail->_idx] = _avail_head;
         _avail->_idx = (_avail->_idx + 1) % _num;
 
         _avail_head = idx;
 
-        //debug(fmt("\t%s: avail_head=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
+        //debug(fmt("\t%s: _avail_idx=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
 
         return true;
     }
@@ -156,10 +154,15 @@ namespace virtio {
 
         _used_guest_head++;
         _avail_count += i;
-        _desc[elem._id]._next = _avail_head;
+        _desc[idx]._next = _avail_head;
         _avail_head = elem._id;
 
         return cookie;
+    }
+
+    bool vring::used_ring_not_empy()
+    {
+        return (_used_guest_head != _used->_idx);
     }
 
     bool
@@ -167,29 +170,6 @@ namespace virtio {
         _dev->kick(_q_index);
         _avail_added_since_kick = 0;
         return true;
-    }
-
-    void
-    vring::disable_callback() {
-        _callback_enabled = false;
-    }
-
-    bool
-    vring::enable_callback() {
-        _callback_enabled = true;
-        return true;
-    }
-
-
-    void vring::interrupt() {
-        debug("vring::interrupt for the first time");
-
-        while (1) {
-            thread::wait_until([&] {return _callback_enabled; });
-            _callback_enabled = false;
-            debug("vring::interrupt - woke up");
-            if (_callback) _callback();
-        }
     }
 
 };
