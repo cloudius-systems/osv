@@ -158,12 +158,17 @@ class osv_info_threads(gdb.Command):
     def invoke(self, arg, for_tty):
         for t in thread_list():
             with thread_context(t):
+                cpu = t['_cpu']
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
-                gdb.write('%s %s at %s:%s\n' % (ulong(t.address),
-                                                fr.function().name,
-                                                sal.symtab.filename,
-                                                sal.line))
+                gdb.write('%s cpu%s %s at %s:%s\n' %
+                          (ulong(t.address),
+                           cpu['arch']['acpi_id'],
+                           fr.function().name,
+                           sal.symtab.filename,
+                           sal.line
+                           )
+                          )
 
 class osv_thread(gdb.Command):
     def __init__(self):

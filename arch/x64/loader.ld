@@ -19,9 +19,14 @@ SECTIONS
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
     _init_array_end = .;
+    .tls_template_start = .;
     .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls :text
     .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls :text
+    .tls_template_size = . - .tls_template_start;
     .bss : { *(.bss .bss.*) } :text
+    . = ALIGN(64);
+    tcb0 = .;
+    . = . + .tls_template_size + 256;
     .edata = .;
     .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
     .debug_srcinfo 0 : { *(.debug_srcinfo) }

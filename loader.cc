@@ -45,13 +45,14 @@ namespace {
 }
 
 elf::Elf64_Ehdr* elf_header;
+elf::tls_data tls_data;
 
 void setup_tls(elf::init_table inittab)
 {
-    static char tcb0[1 << 15] __attribute__((aligned(4096)));
-    assert(inittab.tls_size + sizeof(thread_control_block) <= sizeof(tcb0));
-    memcpy(tcb0, inittab.tls, inittab.tls_size);
-    auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls_size);
+    tls_data = inittab.tls;
+    extern char tcb0[]; // defined by linker script
+    memcpy(tcb0, inittab.tls.start, inittab.tls.size);
+    auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls.size);
     p->self = p;
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<uint64_t>(p));
 }
@@ -139,6 +140,13 @@ int main(int ac, char **av)
     test_locale();
     idt.load_on_cpu();
     smp_init();
+    void main_cont(int ac, char** av);
+    sched::init(tls_data, [=] { main_cont(ac, av); });
+}
+
+void main_cont(int ac, char** av)
+{
+    smp_launch();
 
     vfs_init();
     ramdisk_init();
@@ -150,31 +158,9 @@ int main(int ac, char **av)
     disable_pic();
     processor::sti();
 
-#if 1
-    if (std::isdigit('1'))
-	debug("isgidit(1) = ok");
-    else
-	debug("isgidit(1) = bad");
-    if (!std::isdigit('x'))
-	debug("isgidit(x) = ok");
-    else
-	debug("isgidit(x) = bad");
-#if 0
-    auto &fac = std::use_facet<std::ctype<char> >(std::locale("C"));
-    if (fac.is(std::ctype<char>::digit, '1'))
-	debug("facet works");
-    else
-	debug("facet !works");
-#endif
-    //while (true)
-    //	;
-#endif
-
     prog = new elf::program(fs);
-    sched::init(*prog);
-    static char main_stack[64*1024];
     void main_thread(int ac, char** av);
-    new thread([&] { main_thread(ac, av); }, { main_stack, sizeof main_stack }, true);
+    main_thread(ac, av);
 }
 
 void test_clock_events()
@@ -288,7 +274,8 @@ void* do_main_thread(void *_args)
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
-    drvman->register_driver(new virtio::virtio_blk());
+    drvman->register_driver(new virtio::virtio_blk(0));
+    drvman->register_driver(new virtio::virtio_blk(1));
     drvman->register_driver(new virtio::virtio_net());
     drvman->load_all();
     drvman->list_drivers();

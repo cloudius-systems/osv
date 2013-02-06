@@ -9,9 +9,9 @@ using namespace pci;
 
 namespace virtio {
 
-    virtio_driver::virtio_driver(u16 device_id)
+    virtio_driver::virtio_driver(u16 device_id, unsigned dev_idx)
         : hw_driver(),
-          _device_id(device_id), _dev(nullptr)
+          _device_id(device_id), _dev(nullptr), _dev_idx(dev_idx)
     {
 
     }
@@ -25,7 +25,7 @@ namespace virtio {
     bool virtio_driver::hw_probe(void)
     {
         _dev = dynamic_cast<virtio_device *>(device_manager::instance()->
-            get_device(hw_device_id(VIRTIO_VENDOR_ID, _device_id)));
+            get_device(hw_device_id(VIRTIO_VENDOR_ID, _device_id), _dev_idx));
 
         return (_dev != nullptr);
     }
@@ -33,6 +33,8 @@ namespace virtio {
     bool virtio_driver::load(void)
     {
         _dev->set_bus_master(true);
+
+        _dev->msix_enable();
 
         //make sure the queue is reset
         _dev->reset_host_side();
@@ -69,7 +71,12 @@ namespace virtio {
 
     void virtio_driver::dump_config()
     {
-        debug(fmt("virtio_driver vid:id= %x:%x") % _dev->get_vendor_id() % _dev->get_device_id());
+        u8 B, D, F;
+        _dev->get_bdf(B, D, F);
+
+        debug(fmt("%s [%x:%x.%x] vid:id= %x:%x") % get_name() %
+            (u16)B % (u16)D % (u16)F %
+            _dev->get_vendor_id() % _dev->get_device_id());
     }
 
 

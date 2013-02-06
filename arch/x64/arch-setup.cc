@@ -2,7 +2,7 @@
 #include "mempool.hh"
 #include "mmu.hh"
 #include "processor.hh"
-#include "types.hh"
+#include <osv/types.h>
 #include <alloca.h>
 #include <string.h>
 

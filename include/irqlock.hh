@@ -9,6 +9,26 @@ public:
     static void unlock() { arch::irq_enable(); }
 };
 
+class irq_save_lock_type {
+public:
+    void lock();
+    void unlock();
+private:
+    arch::irq_flag _flags;
+};
+
+
+inline void irq_save_lock_type::lock()
+{
+    _flags.save();
+    arch::irq_disable();
+}
+
+inline void irq_save_lock_type::unlock()
+{
+    _flags.restore();
+}
+
 namespace {
 
 irq_lock_type irq_lock;

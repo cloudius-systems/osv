@@ -44,7 +44,7 @@ namespace hw {
             return (_instance);
         }
 
-        void register_driver(hw_driver* drv);
+        bool register_driver(hw_driver* drv);
         void load_all(void);
         void unload_all(void);
         void list_drivers(void);

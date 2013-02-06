@@ -13,7 +13,7 @@ CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
 CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
-	-Wno-missing-braces -Wno-parentheses
+	-Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable
 
 ASFLAGS = -g $(autodepend)
 
@@ -50,7 +50,7 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 
 %.class: %.java
 	$(makedir)
-	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^,JAVAC $@)
+	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^, JAVAC $@)
 
 tests/%.o: CFLAGS += -fPIC
 
@@ -123,11 +123,13 @@ bsd += bsd/sys/net/if.o
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
+drivers += drivers/debug-console.o
 drivers += drivers/ramdisk.o
 drivers += $(fs)
 drivers += $(bsd)
 drivers += core/mmu.o
 drivers += core/elf.o
+drivers += core/interrupt.o
 drivers += drivers/device.o
 drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
 drivers += drivers/driver.o

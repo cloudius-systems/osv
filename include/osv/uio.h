@@ -33,9 +33,12 @@
 #ifndef _UIO_H_
 #define	_UIO_H_
 
+#include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <limits.h>
+
+__BEGIN_DECLS
 
 enum	uio_rw { UIO_READ, UIO_WRITE };
 
@@ -55,5 +58,7 @@ struct uio {
 
 int	copyinuio(struct iovec *iovp, u_int iovcnt, struct uio **uiop);
 int	uiomove(void *cp, int n, struct uio *uio);
+
+__END_DECLS
 
 #endif /* !_UIO_H_ */

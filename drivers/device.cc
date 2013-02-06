@@ -22,22 +22,29 @@ namespace hw {
 
     bool device_manager::register_device(hw_device* dev)
     {
-        if (get_device(dev->get_id()) != nullptr) {
-            return (false);
-        }
-
         _devices.insert(std::make_pair(dev->get_id(), dev));
         return (true);
     }
 
-    hw_device* device_manager::get_device(hw_device_id id)
+    hw_device* device_manager::get_device(hw_device_id id, unsigned idx)
     {
-        auto it = _devices.find(id);
-        if (it == _devices.end()) {
-            return (nullptr);
+        auto ppp = _devices.equal_range(id);
+
+        unsigned cnt=0;
+        for (auto it=ppp.first; it!=ppp.second; ++it) {
+            if (cnt == idx) {
+                return ((*it).second);
+            }
+
+            cnt++;
         }
 
-        return (it->second);
+        return (nullptr);
+    }
+
+    unsigned device_manager::get_num_devices(hw_device_id id)
+    {
+        return _devices.count(id);
     }
 
     void device_manager::list_devices(void)

@@ -1,7 +1,7 @@
 #ifndef ARCH_X86_PROCESSOR_H
 #define ARCH_X86_PROCESSOR_H
 
-#include "types.hh"
+#include <osv/types.h>
 
 namespace processor {
 
@@ -75,6 +75,16 @@ namespace processor {
 
 	inline void sidt(desc_ptr& ptr) {
 	    asm volatile ("sidt %0" : "=m"(ptr));
+	}
+
+	inline void ltr(u16 tr) {
+	    asm volatile("ltr %0" : : "rm"(tr));
+	}
+
+	inline u16 str() {
+	    u16 tr;
+	    asm volatile("str %0" : "=rm"(tr));
+	    return tr;
 	}
 
 	inline u16 read_cs() {
@@ -204,6 +214,20 @@ namespace processor {
 	    return lo | (u64(hi) << 32);
 	}
 
+	struct task_state_segment {
+	    u32 reserved0;
+	    u64 rsp[3];
+	    u64 ist[8];   // ist[0] is reserved
+	    u32 reserved1;
+	    u32 reserved2;
+	    u16 reserved3;
+	    u16 io_bitmap_base;
+	} __attribute__((packed));
+
+	struct aligned_task_state_segment {
+	    u32 pad;  // force 64-bit structures to be aligned
+	    task_state_segment tss;
+	} __attribute__((packed, aligned(8)));
 };
 
 #endif

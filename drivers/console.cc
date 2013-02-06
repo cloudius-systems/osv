@@ -1,15 +1,15 @@
 
-extern "C" {
 #include <osv/prex.h>
 #include <osv/device.h>
-}
 
 #include "isa-serial.hh"
+#include "debug-console.hh"
 
 namespace console {
 
 // should eventually become a list of console device that we chose the best from
-IsaSerialConsole console;
+IsaSerialConsole serial_console;
+debug_console console(serial_console);
 
 void write(const char *msg, size_t len, bool lf)
 {

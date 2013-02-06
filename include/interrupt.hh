@@ -8,7 +8,7 @@
 #include "sched.hh"
 #include "drivers/pci.hh"
 #include "drivers/pci-function.hh"
-#include "types.hh"
+#include <osv/types.h>
 
 using namespace pci;
 
@@ -37,7 +37,6 @@ private:
     // Entry ids used by this vector
     std::list<unsigned> _entryids;
     unsigned _vector;
-    unsigned _num_entries;
 };
 
 

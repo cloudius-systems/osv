@@ -36,18 +36,27 @@ void thread::switch_to()
            "r10", "r11", "r12", "r13", "r14", "r15", "memory");
 }
 
+void thread::switch_to_first()
+{
+    barrier();
+    processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
+    barrier();
+    s_current = this;
+    asm volatile
+        ("mov %0, %%rsp \n\t"
+         "ret"
+         :
+         : "c"(this->_state.rsp)
+         : "rbx", "rdx", "rsi", "rdi", "r8", "r9",
+           "r10", "r11", "r12", "r13", "r14", "r15", "memory");
+}
+
 void thread::init_stack()
 {
     void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
     *--stacktop = this;
     *--stacktop = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;
-}
-
-void thread::switch_to_thread_stack()
-{
-    void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
-    stack_trampoline(this, &thread::on_thread_stack, stacktop);
 }
 
 void thread::on_thread_stack(thread* t)
@@ -65,11 +74,6 @@ void thread::setup_tcb()
     _tcb = static_cast<thread_control_block*>(p + tls.size);
     _tcb->self = _tcb;
     _tcb->tls_base = p;
-}
-
-void thread::setup_tcb_main()
-{
-    _tcb = reinterpret_cast<thread_control_block*>(processor::rdmsr(msr::IA32_FS_BASE));
 }
 
 void thread_main_c(thread* t)

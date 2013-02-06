@@ -36,11 +36,13 @@
 #include <sys/statfs.h>
 #include <osv/vnode.h>
 
+__BEGIN_DECLS
+
 /*
  * Mount data
  */
 struct mount {
-	struct list	m_link;		/* link to next mount point */
+	struct list_head	m_link;		/* link to next mount point */
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
@@ -125,7 +127,6 @@ typedef int (*vfsop_statfs_t)(mount_t, struct statfs *);
 
 #define VFS_NULL		    ((void *)vfs_null)
 
-__BEGIN_DECLS
 int	mount(const char *, const char *, const char *, int, void *);
 int	umount(const char *);
 int	vfs_nullop(void);

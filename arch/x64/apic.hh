@@ -1,7 +1,7 @@
 #ifndef APIC_HH_
 #define APIC_HH_
 
-#include "types.hh"
+#include <osv/types.h>
 
 namespace processor {
 
@@ -77,10 +77,12 @@ class apic_driver {
 public:
     apic_driver() : _apic_base_lo(0xfee00000), _apic_base_hi(0) {}
     virtual ~apic_driver();
+    virtual void init_on_ap() = 0;
     virtual void self_ipi(unsigned vector) = 0;
     virtual void ipi(unsigned cpu, unsigned vector) = 0;
     virtual void eoi() = 0;
     virtual void write(apicreg reg, u32 value) = 0;
+    virtual u32 id() = 0;
     void set_lvt(apiclvt reg, unsigned vector);
     // vector should be above 31, below 15 will fail
     // dest_id is the apic id, if using an io_apic.

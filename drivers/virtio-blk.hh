@@ -30,6 +30,8 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
+#include <osv/bio.h>
+
 
 namespace virtio {
 
@@ -64,7 +66,9 @@ namespace virtio {
              *   VIRTIO_BLK_T_BARRIER.  VIRTIO_BLK_T_FLUSH is a command of its own
              *   and may not be combined with any of the other flags.
              */
+        };
 
+        enum virtio_blk_request_type {
             VIRTIO_BLK_T_IN=0,
             VIRTIO_BLK_T_OUT=1,
             /* This bit says it's a scsi command, not an actual read or write. */
@@ -75,6 +79,9 @@ namespace virtio {
             VIRTIO_BLK_T_GET_ID=8,
             /* Barrier before this op. */
             VIRTIO_BLK_T_BARRIER=0x80000000,
+        };
+
+        enum virtio_blk_res_code {
             /* And this is the final byte of the write scatter-gather list. */
             VIRTIO_BLK_S_OK=0,
             VIRTIO_BLK_S_IOERR=1,
@@ -133,22 +140,41 @@ namespace virtio {
             u8 status;
         };
 
-        virtio_blk();
+        struct virtio_blk_req {
+            virtio_blk_req(void* req = nullptr, sglist* sg = nullptr, virtio_blk_res* res = nullptr, struct bio* b=nullptr)
+                :req_header(req), payload(sg), status(res), bio(b) {};
+            ~virtio_blk_req();
+            void* req_header;
+            sglist* payload;
+            virtio_blk_res* status;
+            struct bio* bio;
+        };
+
+        virtio_blk(unsigned dev_idx=0);
         virtual ~virtio_blk();
 
-        virtual const std::string get_name(void) { return "virtio-blk"; }
+        virtual const std::string get_name(void) { return _driver_name; }
         virtual bool load(void);
         virtual bool unload(void);
 
         virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
 
-        void make_virtio_req(sglist* sg, u64 sector);
+        virtio_blk_req* make_virtio_req(u64 sector, virtio_blk_request_type type, int val);
+        int make_virtio_request(struct bio*);
 
         void test();
+        void response_worker();
+        int size();
+
 
     private:
 
+        std::string _driver_name;
         virtio_blk_config _config;
+
+        //maintains the virtio instance number for multiple drives
+        static int _instance;
+        int _id;
     };
 
 }

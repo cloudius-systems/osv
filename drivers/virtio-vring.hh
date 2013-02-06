@@ -1,6 +1,8 @@
 #ifndef VIRTIO_VRING_H
 #define VIRTIO_VRING_H
 
+#include <functional>
+
 class sglist;
 
 namespace virtio {
@@ -109,10 +111,10 @@ class virtio_device;
 
         // Ring operations
         bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
-        void* get_buf(int* len);
+        void* get_buf();
+        bool used_ring_not_empy();
         bool kick();
-        void disable_callback();
-        bool enable_callback();
+        void register_callback(std::function<void ()> func) {_callback = func;};
 
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
@@ -122,6 +124,7 @@ class virtio_device;
         static int need_event(u16 event_idx, u16 new_idx, u16 old);
 
     private:
+
         // Up pointer
         virtio_device* _dev;
         u16 _q_index;
@@ -136,7 +139,7 @@ class virtio_device;
         // Position of the used descriptor we've last seen
         u16 _used_guest_head;
         // The amount of avail descriptors we've added since last kick
-        u16 _avail_added;
+        u16 _avail_added_since_kick;
         u16 _avail_count;
 
         // Flat list of chained descriptors
@@ -147,6 +150,8 @@ class virtio_device;
         vring_used *_used;
         // cookies to store access to the upper layer pointers
         void** _cookie;
+        //callback function for upper layer virtio queues
+        std::function<void ()> _callback;
     };
 
 

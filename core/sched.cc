@@ -9,7 +9,7 @@
 
 namespace sched {
 
-std::list<thread*> runqueue;
+std::vector<cpu*> cpus;
 
 thread __thread * s_current;
 
@@ -23,7 +23,7 @@ namespace sched {
 
 void schedule_force();
 
-void schedule(bool yield)
+void cpu::schedule(bool yield)
 {
     thread* p = thread::current();
     if (!p->_waiting && !yield) {
@@ -33,8 +33,8 @@ void schedule(bool yield)
     while (runqueue.empty()) {
         barrier();
     }
-    thread* n = with_lock(irq_lock, [] {
-        auto n = runqueue.front();
+    thread* n = with_lock(irq_lock, [this] {
+        auto n = &runqueue.front();
         runqueue.pop_front();
         return n;
     });
@@ -45,16 +45,22 @@ void schedule(bool yield)
     }
 }
 
+void schedule(bool yield)
+{
+    cpu::current()->schedule(yield);
+}
+
 void thread::yield()
 {
-    if (runqueue.empty()) {
+    auto t = current();
+    // FIXME: what about other cpus?
+    if (t->_cpu->runqueue.empty()) {
         return;
     }
-    auto t = current();
-    runqueue.push_back(t);
+    t->_cpu->runqueue.push_back(*t);
     t->_on_runqueue = true;
     assert(!t->_waiting);
-    schedule(true);
+    t->_cpu->schedule(true);
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)
@@ -81,15 +87,11 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     with_lock(thread_list_mutex, [this] {
         thread_list.push_back(*this);
     });
+    setup_tcb();
+    init_stack();
     if (!main) {
-        setup_tcb();
-        init_stack();
-        runqueue.push_back(this);
-    } else {
-        setup_tcb_main();
-        s_current = this;
-        switch_to_thread_stack();
-        abort();
+        _cpu = current()->tcpu(); // inherit creator's cpu
+        _cpu->runqueue.push_back(*this);
     }
 }
 
@@ -108,6 +110,7 @@ void thread::prepare_wait()
 
 void thread::wake()
 {
+    irq_save_lock_type irq_lock;
     with_lock(irq_lock, [this] {
         if (!_waiting) {
             return;
@@ -115,7 +118,7 @@ void thread::wake()
         _waiting = false;
         if (!_on_runqueue) {
             _on_runqueue = true;
-            runqueue.push_back(this);
+            _cpu->runqueue.push_back(*this);
         }
     });
 }
@@ -215,9 +218,12 @@ bool operator<(const timer& t1, const timer& t2)
     }
 }
 
-void init(elf::program& prog)
+void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
-    tls = prog.tls();
+    tls = tls_data;
+    thread::stack_info stack { new char[4096*10], 4096*10 };
+    thread t{cont, stack, true};
+    t.switch_to_first();
 }
 
 }

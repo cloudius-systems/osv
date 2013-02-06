@@ -1,6 +1,6 @@
 #include "clock.hh"
 #include "msr.hh"
-#include "types.hh"
+#include <osv/types.h>
 #include "mmu.hh"
 #include "string.h"
 

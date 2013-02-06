@@ -2,7 +2,7 @@
 #define SGLIST_H
 
 #include <list>
-#include "types.hh"
+#include <osv/types.h>
 
 class sglist {
 public:

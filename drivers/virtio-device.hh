@@ -137,6 +137,8 @@ namespace virtio {
         void reset_host_side();
         void free_queues(void);
 
+        void register_callback(std::function<void ()> func) {_queues[0]->register_callback(func);};
+
     protected:
         vring* _queues[max_virtqueues_nr];
         u32 _num_queues;

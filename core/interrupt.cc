@@ -13,7 +13,7 @@ using namespace pci;
 interrupt_manager* interrupt_manager::_instance = nullptr;
 
 msix_vector::msix_vector(pci_function* dev)
-    : _num_entries (0), _dev(dev)
+    : _dev(dev)
 {
     _vector = idt.register_handler([this] { interrupt(); });
 }
@@ -124,14 +124,14 @@ void interrupt_manager::easy_unregister(pci::pci_function* dev)
     }
 }
 
-assigned_vectors interrupt_manager::request_vectors(pci::pci_function* dev, int num_vectors)
+assigned_vectors interrupt_manager::request_vectors(pci::pci_function* dev, unsigned num_vectors)
 {
     assigned_vectors results;
     unsigned ctr=0;
 
     results._num = std::min(num_vectors, dev->msix_get_num_entries());
 
-    for (int i=0; i<results._num; i++) {
+    for (unsigned i=0; i<results._num; i++) {
         msix_vector * msix = new msix_vector(dev);
         unsigned vector = msix->get_vector();
         _vectors[vector] = msix;
@@ -149,6 +149,8 @@ bool interrupt_manager::assign_isr(unsigned vector, std::function<void ()> handl
     }
 
     _vectors[vector]->set_handler(handler);
+
+    return (true);
 }
 
 bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
@@ -161,14 +163,13 @@ bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
     msix_vector* msix = _vectors[vector];
     pci_function* dev = msix->get_pci_function();
 
-    u64 address;
-    u32 data;
+    msi_message msix_msg = apic->compose_msix(vector, 0);
 
-    if (!apic->compose_msix(vector, 0, address, data)) {
+    if (msix_msg._addr == 0) {
         return (false);
     }
 
-    if (!dev->msix_write_entry(entry_id, address, data)) {
+    if (!dev->msix_write_entry(entry_id, msix_msg._addr, msix_msg._data)) {
         return (false);
     }
 
@@ -178,7 +179,7 @@ bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
 
 void interrupt_manager::free_vectors(const assigned_vectors& vectors)
 {
-    for (int i=0; i<vectors._num; i++) {
+    for (unsigned i=0; i<vectors._num; i++) {
         unsigned vec = vectors._vectors[i];
         if (_vectors[vec] != nullptr) {
             delete _vectors[vec];
@@ -189,7 +190,7 @@ void interrupt_manager::free_vectors(const assigned_vectors& vectors)
 
 bool interrupt_manager::unmask_interrupts(const assigned_vectors& vectors)
 {
-    for (int i=0; i<vectors._num; i++) {
+    for (unsigned i=0; i<vectors._num; i++) {
         unsigned vec = vectors._vectors[i];
         msix_vector* msix = _vectors[vec];
         if (msix == nullptr) {

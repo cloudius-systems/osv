@@ -30,7 +30,7 @@
 #include <stdint.h>
 #include "pci-function.hh"
 #include "processor.hh"
-#include "types.hh"
+#include <osv/types.h>
 
 class Driver;
 

@@ -38,7 +38,12 @@
 #ifndef _SYS_BIO_H_
 #define	_SYS_BIO_H_
 
+#include <sys/cdefs.h>
 #include <stdint.h>
+#include <pthread.h>
+#include <osv/list.h>
+
+__BEGIN_DECLS
 
 /* bio_cmd */
 #define BIO_READ	0x01
@@ -77,6 +82,23 @@ struct bio {
 	int	bio_error;		/* Errno for BIO_ERROR. */
 	long	bio_resid;		/* Remaining I/O in bytes. */
 	void	(*bio_done)(struct bio *);
+
+
+	struct list_head	bio_list;
+
+	/*
+	 * I/O synchronization, probably should move out of the struct to
+	 * save space.
+	 */
+	pthread_mutex_t bio_mutex;
+	pthread_cond_t	bio_wait;
 };
+
+struct bio *	alloc_bio(void);
+void		destroy_bio(struct bio *bio);
+
+void		biodone(struct bio *bio);
+
+__END_DECLS
 
 #endif /* !_SYS_BIO_H_ */

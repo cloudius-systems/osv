@@ -6,10 +6,14 @@ namespace processor {
 class x2apic : public apic_driver {
 public:
     explicit x2apic();
+    virtual void init_on_ap();
     virtual void write(apicreg reg, u32 value);
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned cpu, unsigned vector);
     virtual void eoi();
+    virtual u32 id();
+private:
+    void enable();
 };
 
 apic_driver::~apic_driver()
@@ -18,6 +22,16 @@ apic_driver::~apic_driver()
 
 x2apic::x2apic()
     : apic_driver()
+{
+    enable();
+}
+
+void x2apic::init_on_ap()
+{
+    enable();
+}
+
+void x2apic::enable()
 {
     processor::wrmsr(msr::IA32_APIC_BASE, _apic_base_lo | (3 << 10));
 }
@@ -41,6 +55,11 @@ void x2apic::eoi()
 void x2apic::write(apicreg reg, u32 value)
 {
     processor::wrmsr(0x800 + unsigned(reg) / 0x10, value);
+}
+
+u32 x2apic::id()
+{
+    return processor::rdmsr(msr::X2APIC_ID);
 }
 
 apic_driver* create_apic_driver()

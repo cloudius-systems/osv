@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
+#include "mutex.hh"
 
 namespace memory {
 
@@ -36,6 +37,7 @@ private:
     void add_page();
     static page_header* to_header(free_object* object);
 private:
+    spinlock _lock;
     unsigned _size;
 
     struct page_header {

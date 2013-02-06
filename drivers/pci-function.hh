@@ -5,7 +5,7 @@
 #include <ostream>
 
 #include "mmio.hh"
-#include "types.hh"
+#include <osv/types.h>
 #include "processor.hh"
 #include "debug.hh"
 #include "device.hh"
@@ -247,7 +247,7 @@ namespace pci {
 
         // Does this device support MSI-x
         bool is_msix(void);
-        int msix_get_num_entries(void);
+        unsigned msix_get_num_entries(void);
         void msix_mask_all(void);
         void msix_unmask_all(void);
         bool msix_mask_entry(int entry_id);

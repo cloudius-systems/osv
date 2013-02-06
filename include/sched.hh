@@ -2,6 +2,7 @@
 #define SCHED_HH_
 
 #include "arch-thread-state.hh"
+#include "arch-cpu.hh"
 #include <functional>
 #include "tls.hh"
 #include "elf.hh"
@@ -10,9 +11,16 @@
 #include <boost/intrusive/list.hpp>
 #include "mutex.hh"
 
+extern "C" {
+void smp_main();
+};
+void smp_launch();
+
 namespace sched {
 
 class thread;
+class cpu;
+
 void schedule(bool yield = false);
 
 extern "C" {
@@ -39,17 +47,17 @@ public:
     static void yield();
     static thread* current();
     stack_info get_stack_info();
+    cpu* tcpu();
 private:
     void main();
     void switch_to();
+    void switch_to_first();
     void prepare_wait();
     void wait();
     void stop_wait();
     void init_stack();
     void setup_tcb();
-    void setup_tcb_main();
     static void on_thread_stack(thread* t);
-    void switch_to_thread_stack();
 private:
     std::function<void ()> _func;
     thread_state _state;
@@ -57,12 +65,32 @@ private:
     bool _on_runqueue;
     bool _waiting;
     stack_info _stack;
+    cpu* _cpu;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
-    friend void schedule(bool yield);
+    friend class cpu;
+    friend void ::smp_main();
+    friend void ::smp_launch();
+    friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
+    bi::list_member_hook<> _runqueue_link;
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
+};
+
+typedef bi::list<thread,
+                 bi::member_hook<thread,
+                                 bi::list_member_hook<>,
+                                 &thread::_runqueue_link>
+                > runqueue_type;
+
+struct cpu {
+    struct arch_cpu arch;
+    thread* bringup_thread;
+    runqueue_type runqueue;
+    static cpu* current();
+    void init_on_cpu();
+    void schedule(bool yield = false);
 };
 
 thread* current();
@@ -101,7 +129,8 @@ private:
     thread* _t;
 };
 
-void init(elf::program& prog);
+// does not return - continues to @cont instead
+void init(elf::tls_data tls_data, std::function<void ()> cont);
 
 template <class Pred>
 void thread::wait_until(Pred pred)
@@ -112,6 +141,20 @@ void thread::wait_until(Pred pred)
         me->wait();
     }
 }
+
+extern cpu __thread* current_cpu;
+
+inline cpu* thread::tcpu()
+{
+    return _cpu;
+}
+
+inline cpu* cpu::current()
+{
+    return thread::current()->tcpu();
+}
+
+extern std::vector<cpu*> cpus;
 
 }
 

@@ -8,7 +8,7 @@ namespace virtio {
 
     class virtio_driver : public hw_driver {
     public:    
-        virtio_driver(u16 device_id);
+        virtio_driver(u16 device_id, unsigned dev_idx=0);
         virtual ~virtio_driver();
 
         virtual const std::string get_name(void) = 0;
@@ -32,6 +32,9 @@ namespace virtio {
 
         // Virtio device
         virtio_device *_dev;
+        // The idx of the device, if there are more than one
+        // of the same type
+        unsigned _dev_idx;
     };
 
 }

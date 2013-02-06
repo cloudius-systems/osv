@@ -4,7 +4,7 @@
 #include <functional>
 #include <map>
 
-#include "types.hh"
+#include <osv/types.h>
 
 namespace hw {
 
@@ -60,7 +60,8 @@ namespace hw {
         bool register_device(hw_device* dev);
 
         // Retrieves from dictionary
-        hw_device* get_device(hw_device_id id);
+        hw_device* get_device(hw_device_id id, unsigned idx=0);
+        unsigned get_num_devices(hw_device_id id);
 
         // System wide operations
         void list_devices(void);
@@ -68,7 +69,7 @@ namespace hw {
 
     private:
         static device_manager* _instance;
-        std::map<hw_device_id, hw_device*> _devices;
+        std::multimap<hw_device_id, hw_device*> _devices;
     };
 
 }

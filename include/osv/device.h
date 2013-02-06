@@ -35,6 +35,8 @@
 
 #include <osv/uio.h>
 
+__BEGIN_DECLS
+
 #define MAXDEVNAME	12
 #define DO_RWMASK	0x3
 
@@ -132,5 +134,7 @@ int	nullop(void);
 int	physio(struct device *dev, struct uio *uio, int ioflags);
 
 struct device *	device_create(struct driver *drv, const char *name, int flags);
+
+__END_DECLS
 
 #endif /* !_DEVICE_H */

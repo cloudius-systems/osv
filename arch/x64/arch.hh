@@ -18,6 +18,20 @@ inline void irq_enable()
     processor::sti();
 }
 
+class irq_flag {
+public:
+    // need to clear the red zone when playing with the stack. also, can't
+    // use "m" constraint as it might be addressed relative to %rsp
+    void save() {
+        asm volatile("sub $128, %%rsp; pushfq; popq %0; add $128, %%rsp" : "=r"(_rflags));
+    }
+    void restore() {
+        asm volatile("sub $128, %%rsp; pushq %0; popfq; add $128, %%rsp" : : "r"(_rflags));
+    }
+private:
+    unsigned long _rflags;
+};
+
 }
 
 

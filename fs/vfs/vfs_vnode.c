@@ -62,7 +62,7 @@
  * All active (opened) vnodes are stored on this hash table.
  * They can be accessed by its path name.
  */
-static struct list vnode_table[VNODE_BUCKETS];
+static struct list_head vnode_table[VNODE_BUCKETS];
 
 /*
  * Global lock to access all vnodes and vnode table.
