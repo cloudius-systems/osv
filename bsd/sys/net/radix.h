@@ -33,15 +33,8 @@
 #ifndef _RADIX_H_
 #define	_RADIX_H_
 
-#ifdef _KERNEL
-#include <sys/_lock.h>
-#include <sys/_mutex.h>
-#include <sys/_rwlock.h>
-#endif
-
-#ifdef MALLOC_DECLARE
-MALLOC_DECLARE(M_RTABLE);
-#endif
+#include <porting/netport.h>
+#include <osv/mutex.h>
 
 /*
  * Radix search tree node layout.
@@ -68,11 +61,6 @@ struct radix_node {
 			struct	radix_node *rn_R;/* progeny */
 		} rn_node;
 	}		rn_u;
-#ifdef RN_DEBUG
-	int rn_info;
-	struct radix_node *rn_twin;
-	struct radix_node *rn_ybro;
-#endif
 };
 
 #define	rn_dupedkey	rn_u.rn_leaf.rn_Dupedkey
@@ -134,32 +122,24 @@ struct radix_node_head {
 		(struct radix_node *rn, struct radix_node_head *head);
 	struct	radix_node rnh_nodes[3];	/* empty tree for common case */
 #ifdef _KERNEL
-	struct	rwlock rnh_lock;		/* locks entire radix tree */
+	struct	cmutex rnh_lock;		/* locks entire radix tree */
 #endif
 };
 
-#ifndef _KERNEL
 #define R_Malloc(p, t, n) (p = (t) malloc((unsigned int)(n)))
-#define R_Zalloc(p, t, n) (p = (t) calloc(1,(unsigned int)(n)))
+#define R_Zalloc(p, t, n) (p = (t) malloc((unsigned int)(n)); bzero(p, (unsigned int)n))
 #define Free(p) free((char *)p);
-#else
-#define R_Malloc(p, t, n) (p = (t) malloc((unsigned long)(n), M_RTABLE, M_NOWAIT))
-#define R_Zalloc(p, t, n) (p = (t) malloc((unsigned long)(n), M_RTABLE, M_NOWAIT | M_ZERO))
-#define Free(p) free((caddr_t)p, M_RTABLE);
 
-#define	RADIX_NODE_HEAD_LOCK_INIT(rnh)	\
-    rw_init_flags(&(rnh)->rnh_lock, "radix node head", 0)
-#define	RADIX_NODE_HEAD_LOCK(rnh)	rw_wlock(&(rnh)->rnh_lock)
-#define	RADIX_NODE_HEAD_UNLOCK(rnh)	rw_wunlock(&(rnh)->rnh_lock)
-#define	RADIX_NODE_HEAD_RLOCK(rnh)	rw_rlock(&(rnh)->rnh_lock)
-#define	RADIX_NODE_HEAD_RUNLOCK(rnh)	rw_runlock(&(rnh)->rnh_lock)
-#define	RADIX_NODE_HEAD_LOCK_TRY_UPGRADE(rnh)	rw_try_upgrade(&(rnh)->rnh_lock)
+/* FIXME: This was an encapsulation for rwlock, now a mutex */
+#define	RADIX_NODE_HEAD_LOCK_INIT(rnh)	rnh=MUTEX_INITIALIZER;
+#define	RADIX_NODE_HEAD_LOCK(rnh)	mutex_lock(&(rnh))
+#define	RADIX_NODE_HEAD_UNLOCK(rnh)	mutex_unlock(&(rnh))
+#define	RADIX_NODE_HEAD_RLOCK(rnh)	mutex_lock(&(rnh))
+#define	RADIX_NODE_HEAD_RUNLOCK(rnh)	mutex_unlock(&(rnh))
 
-
-#define	RADIX_NODE_HEAD_DESTROY(rnh)	rw_destroy(&(rnh)->rnh_lock)
-#define	RADIX_NODE_HEAD_LOCK_ASSERT(rnh) rw_assert(&(rnh)->rnh_lock, RA_LOCKED)
-#define	RADIX_NODE_HEAD_WLOCK_ASSERT(rnh) rw_assert(&(rnh)->rnh_lock, RA_WLOCKED)
-#endif /* _KERNEL */
+#define	RADIX_NODE_HEAD_DESTROY(rnh)	    do{}while(0)
+#define	RADIX_NODE_HEAD_LOCK_ASSERT(rnh)    do{}while(0)
+#define	RADIX_NODE_HEAD_WLOCK_ASSERT(rnh)   do{}while(0)
 
 void	 rn_init(int);
 int	 rn_inithead(void **, int);
