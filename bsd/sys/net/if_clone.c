@@ -30,13 +30,10 @@
  * $FreeBSD$
  */
 
+#include <porting/netport.h>
+
 #include <sys/param.h>
-#include <sys/malloc.h>
 #include <sys/limits.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/kernel.h>
-#include <sys/systm.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
