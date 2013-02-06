@@ -7,6 +7,8 @@
 
 #include <sys/types.h>
 
+typedef __uint8_t   __sa_family_t;
+
 #define PAGE_SIZE (4096)
 
 void* malloc(size_t size);

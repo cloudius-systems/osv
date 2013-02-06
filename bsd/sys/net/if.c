@@ -38,7 +38,6 @@
 #include <sys/socketvar.h>
 #include <sys/protosw.h>
 #include <sys/refcount.h>
-#include <sys/rwlock.h>
 #include <sys/sockio.h>
 #include <sys/syslog.h>
 #include <sys/sysctl.h>
