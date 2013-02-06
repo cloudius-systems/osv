@@ -7,6 +7,8 @@
 
 #include <sys/types.h>
 
+#define log(x, fmt, ...) do {} while(0)
+
 #ifndef __BSD_VISIBLE
     #define __BSD_VISIBLE (1)
 #endif
@@ -28,7 +30,7 @@ void free(void* object);
 #define CTR6(m, d, p1, p2, p3, p4, p5, p6)  (void)0
 
 #ifndef _KERNEL
-    #define _KERNEL
+    #define _KERNEL do{}while(0)
 #endif
 
 #ifndef NULL

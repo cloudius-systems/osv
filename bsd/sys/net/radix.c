@@ -33,28 +33,10 @@
 /*
  * Routines to build and maintain radix trees for routing lookups.
  */
+#include <porting/netport.h>
+#include <osv/mutex.h>
 #include <sys/param.h>
-#ifdef	_KERNEL
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/rwlock.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/syslog.h>
 #include <net/radix.h>
-#include "opt_mpath.h"
-#ifdef RADIX_MPATH
-#include <net/radix_mpath.h>
-#endif
-#else /* !_KERNEL */
-#include <stdio.h>
-#include <strings.h>
-#include <stdlib.h>
-#define log(x, arg...)	fprintf(stderr, ## arg)
-#define panic(x)	fprintf(stderr, "PANIC: %s", x), exit(1)
-#define min(a, b) ((a) < (b) ? (a) : (b) )
-#include <net/radix.h>
-#endif /* !_KERNEL */
 
 static int	rn_walktree_from(struct radix_node_head *h, void *a, void *m,
 		    walktree_f_t *f, void *w);

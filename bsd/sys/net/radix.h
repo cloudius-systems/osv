@@ -127,15 +127,17 @@ struct radix_node_head {
 };
 
 #define R_Malloc(p, t, n) (p = (t) malloc((unsigned int)(n)))
-#define R_Zalloc(p, t, n) (p = (t) malloc((unsigned int)(n)); bzero(p, (unsigned int)n))
+#define R_Zalloc(p, t, n) do { p=(t)malloc((unsigned int)(n)); \
+                               bzero((void *)(p), (unsigned int)(n)); \
+                        } while (0)
 #define Free(p) free((char *)p);
 
 /* FIXME: This was an encapsulation for rwlock, now a mutex */
-#define	RADIX_NODE_HEAD_LOCK_INIT(rnh)	rnh=MUTEX_INITIALIZER;
-#define	RADIX_NODE_HEAD_LOCK(rnh)	mutex_lock(&(rnh))
-#define	RADIX_NODE_HEAD_UNLOCK(rnh)	mutex_unlock(&(rnh))
-#define	RADIX_NODE_HEAD_RLOCK(rnh)	mutex_lock(&(rnh))
-#define	RADIX_NODE_HEAD_RUNLOCK(rnh)	mutex_unlock(&(rnh))
+#define	RADIX_NODE_HEAD_LOCK_INIT(rnh)	bzero((void*)&rnh->rnh_lock, sizeof(struct cmutex))
+#define	RADIX_NODE_HEAD_LOCK(rnh)	mutex_lock(&rnh->rnh_lock)
+#define	RADIX_NODE_HEAD_UNLOCK(rnh)	mutex_unlock(&rnh->rnh_lock)
+#define	RADIX_NODE_HEAD_RLOCK(rnh)	mutex_lock(&rnh->rnh_lock)
+#define	RADIX_NODE_HEAD_RUNLOCK(rnh)	mutex_unlock(&rnh->rnh_lock)
 
 #define	RADIX_NODE_HEAD_DESTROY(rnh)	    do{}while(0)
 #define	RADIX_NODE_HEAD_LOCK_ASSERT(rnh)    do{}while(0)
