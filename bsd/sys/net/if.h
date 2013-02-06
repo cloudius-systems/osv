@@ -33,6 +33,7 @@
 #ifndef _NET_IF_H_
 #define	_NET_IF_H_
 
+#include <porting/netport.h>
 #include <sys/cdefs.h>
 
 #ifdef _KERNEL

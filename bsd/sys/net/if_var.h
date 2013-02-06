@@ -74,6 +74,7 @@ struct	route;
 struct	vnet;
 #endif
 
+#include <porting/netport.h>
 #include <sys/queue.h>		/* get TAILQ macros */
 
 #ifdef _KERNEL
@@ -82,16 +83,9 @@ struct	vnet;
 #include <sys/buf_ring.h>
 #include <net/vnet.h>
 #endif /* _KERNEL */
-#include <sys/lock.h>		/* XXX */
-#include <sys/mutex.h>		/* XXX */
-#include <sys/rwlock.h>		/* XXX */
-#include <sys/sx.h>		/* XXX */
-#include <sys/event.h>		/* XXX */
-#include <sys/_task.h>
+#include <sys/socket.h>
 
 #define	IF_DUNIT_NONE	-1
-
-#include <altq/if_altq.h>
 
 TAILQ_HEAD(ifnethead, ifnet);	/* we use TAILQs so that the order of */
 TAILQ_HEAD(ifaddrhead, ifaddr);	/* instantiation is preserved in the list */
@@ -175,7 +169,7 @@ struct ifnet {
 	struct	ifaddr	*if_addr;	/* pointer to link-level address */
 	void	*if_llsoftc;		/* link layer softc */
 	int	if_drv_flags;		/* driver-managed status flags */
-	struct  ifaltq if_snd;		/* output queue (includes altq) */
+	struct  ifqueue if_snd;		/* output queue */
 	const u_int8_t *if_broadcastaddr; /* linklevel broadcast bytestring */
 
 	void	*if_bridge;		/* bridge glue */
@@ -186,7 +180,7 @@ struct ifnet {
 	struct	ifprefixhead if_prefixhead; /* list of prefixes per if */
 	void	*if_afdata[AF_MAX];
 	int	if_afdata_initialized;
-	struct	rwlock if_afdata_lock;
+	void    *if_afdata_lock;
 	void    *if_linktask;	/* task for link change events */
 	struct	mtx if_addr_mtx;	/* mutex to protect address lists */
 
@@ -594,12 +588,6 @@ drbr_enqueue(struct ifnet *ifp, struct buf_ring *br, struct mbuf *m)
 {	
 	int error = 0;
 
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd)) {
-		IFQ_ENQUEUE(&ifp->if_snd, m, error);
-		return (error);
-	}
-#endif
 	error = buf_ring_enqueue(br, m);
 	if (error)
 		m_freem(m);
@@ -612,10 +600,6 @@ drbr_flush(struct ifnet *ifp, struct buf_ring *br)
 {
 	struct mbuf *m;
 
-#ifdef ALTQ
-	if (ifp != NULL && ALTQ_IS_ENABLED(&ifp->if_snd))
-		IFQ_PURGE(&ifp->if_snd);
-#endif	
 	while ((m = buf_ring_dequeue_sc(br)) != NULL)
 		m_freem(m);
 }
@@ -631,14 +615,6 @@ drbr_free(struct buf_ring *br, struct malloc_type *type)
 static __inline struct mbuf *
 drbr_dequeue(struct ifnet *ifp, struct buf_ring *br)
 {
-#ifdef ALTQ
-	struct mbuf *m;
-
-	if (ALTQ_IS_ENABLED(&ifp->if_snd)) {	
-		IFQ_DEQUEUE(&ifp->if_snd, m);
-		return (m);
-	}
-#endif
 	return (buf_ring_dequeue_sc(br));
 }
 
@@ -647,19 +623,6 @@ drbr_dequeue_cond(struct ifnet *ifp, struct buf_ring *br,
     int (*func) (struct mbuf *, void *), void *arg) 
 {
 	struct mbuf *m;
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd)) {
-		IFQ_LOCK(&ifp->if_snd);
-		IFQ_POLL_NOLOCK(&ifp->if_snd, m);
-		if (m != NULL && func(m, arg) == 0) {
-			IFQ_UNLOCK(&ifp->if_snd);
-			return (NULL);
-		}
-		IFQ_DEQUEUE_NOLOCK(&ifp->if_snd, m);
-		IFQ_UNLOCK(&ifp->if_snd);
-		return (m);
-	}
-#endif
 	m = buf_ring_peek(br);
 	if (m == NULL || func(m, arg) == 0)
 		return (NULL);
@@ -670,30 +633,18 @@ drbr_dequeue_cond(struct ifnet *ifp, struct buf_ring *br,
 static __inline int
 drbr_empty(struct ifnet *ifp, struct buf_ring *br)
 {
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd))
-		return (IFQ_IS_EMPTY(&ifp->if_snd));
-#endif
 	return (buf_ring_empty(br));
 }
 
 static __inline int
 drbr_needs_enqueue(struct ifnet *ifp, struct buf_ring *br)
 {
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd))
-		return (1);
-#endif
 	return (!buf_ring_empty(br));
 }
 
 static __inline int
 drbr_inuse(struct ifnet *ifp, struct buf_ring *br)
 {
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd))
-		return (ifp->if_snd.ifq_len);
-#endif
 	return (buf_ring_count(br));
 }
 #endif
@@ -873,8 +824,8 @@ int	ifpromisc(struct ifnet *, int);
 struct	ifnet *ifunit(const char *);
 struct	ifnet *ifunit_ref(const char *);
 
-void	ifq_init(struct ifaltq *, struct ifnet *ifp);
-void	ifq_delete(struct ifaltq *);
+void	ifq_init(struct ifqueue *, struct ifnet *ifp);
+void	ifq_delete(struct ifqueue *);
 
 int	ifa_add_loopback_route(struct ifaddr *, struct sockaddr *);
 int	ifa_del_loopback_route(struct ifaddr *, struct sockaddr *);
@@ -898,14 +849,6 @@ void	if_deregister_com_alloc(u_char type);
 
 #define IF_LLADDR(ifp)							\
     LLADDR((struct sockaddr_dl *)((ifp)->if_addr->ifa_addr))
-
-#ifdef DEVICE_POLLING
-enum poll_cmd {	POLL_ONLY, POLL_AND_CHECK_STATUS };
-
-typedef	int poll_handler_t(struct ifnet *ifp, enum poll_cmd cmd, int count);
-int    ether_poll_register(poll_handler_t *h, struct ifnet *ifp);
-int    ether_poll_deregister(struct ifnet *ifp);
-#endif /* DEVICE_POLLING */
 
 #endif /* _KERNEL */
 
