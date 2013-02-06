@@ -186,6 +186,11 @@ gid_t getgid()
     return 0;
 }
 
+gid_t getegid(void)
+{
+    return 0;
+}
+
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
     memset(vec, 0x01, (length + getpagesize() - 1) / getpagesize());
