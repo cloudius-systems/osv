@@ -16,7 +16,7 @@ namespace pthread_private {
     const unsigned tsd_nkeys = 100;
 
     __thread void* tsd[tsd_nkeys];
-    pthread_t current_pthread;
+    __thread pthread_t current_pthread;
 
     mutex tsd_key_mutex;
     std::vector<bool> tsd_used_keys(tsd_nkeys);
