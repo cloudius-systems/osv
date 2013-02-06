@@ -65,6 +65,9 @@ void parse_madt()
 void smp_init()
 {
     parse_madt();
+    for (auto c : sched::cpus) {
+        c->incoming_wakeups = new sched::cpu::incoming_wakeup_queue[sched::cpus.size()];
+    }
     smpboot_cr0 = read_cr0();
     smpboot_cr4 = read_cr4();
     smpboot_efer = rdmsr(msr::IA32_EFER);

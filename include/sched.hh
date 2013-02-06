@@ -11,6 +11,7 @@
 #include <boost/intrusive/list.hpp>
 #include "mutex.hh"
 #include <atomic>
+#include "osv/lockless-queue.hh"
 
 extern "C" {
 void smp_main();
@@ -79,6 +80,8 @@ private:
 public:
     thread* _joiner;
     bi::list_member_hook<> _runqueue_link;
+    // see cpu class
+    lockless_queue_link<thread> _wakeup_link;
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
 };
@@ -94,9 +97,13 @@ struct cpu {
     struct arch_cpu arch;
     thread* bringup_thread;
     runqueue_type runqueue;
+    // for each cpu, a list of threads that are migrating into this cpu:
+    typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
+    incoming_wakeup_queue* incoming_wakeups;
     static cpu* current();
     void init_on_cpu();
     void schedule(bool yield = false);
+    void handle_incoming_wakeups();
 };
 
 thread* current();

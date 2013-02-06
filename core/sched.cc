@@ -25,6 +25,8 @@ void schedule_force();
 
 void cpu::schedule(bool yield)
 {
+    // FIXME: drive by IPI
+    handle_incoming_wakeups();
     thread* p = thread::current();
     if (!p->_waiting && !yield) {
         return;
@@ -32,6 +34,7 @@ void cpu::schedule(bool yield)
     // FIXME: a proper idle mechanism
     while (runqueue.empty()) {
         barrier();
+        handle_incoming_wakeups();
     }
     thread* n = with_lock(irq_lock, [this] {
         auto n = &runqueue.front();
@@ -42,6 +45,18 @@ void cpu::schedule(bool yield)
     n->_on_runqueue = false;
     if (n != thread::current()) {
         n->switch_to();
+    }
+}
+
+void cpu::handle_incoming_wakeups()
+{
+    for (unsigned i = 0; i < cpus.size(); ++i) {
+        incoming_wakeup_queue q;
+        incoming_wakeups[i].copy_and_clear(q);
+        while (!q.empty()) {
+            runqueue.push_back(q.front());
+            q.pop_front_nonatomic();
+        }
     }
 }
 
@@ -116,11 +131,8 @@ void thread::wake()
     if (!_waiting.exchange(false)) {
         return;
     }
-    irq_save_lock_type irq_lock;
-    with_lock(irq_lock, [this] {
-        _on_runqueue = true;
-        _cpu->runqueue.push_back(*this);
-    });
+    _cpu->incoming_wakeups[cpu::current()->id].push_front(*this);
+    // FIXME: IPI
 }
 
 void thread::main()
