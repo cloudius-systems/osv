@@ -8,6 +8,7 @@ All the files under the following directories are imported from musl:
   exit
   internal
   locale
+  math
   misc
   multibyte
   stdio
@@ -16,7 +17,14 @@ All the files under the following directories are imported from musl:
   time
   unistd
 
-the version came from git commit f05f59b804f83ff8443ba8c549d6be3ba79e71a6
+With the exceptions of:
+
+  stdio/__fprintf_chk.c
+  string/rawmemchr.c
+
+which were written locally largely based on musl code.
+
+All imports are from musl.git commit f05f59b804f83ff8443ba8c549d6be3ba79e71a6
 and have various local modification to deal with OSv specifics or our
 strict compiler warnings.
 
