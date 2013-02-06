@@ -30,6 +30,8 @@
  * $FreeBSD$
  */
 
+#include <porting/netport.h>
+
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/sbuf.h>
@@ -44,8 +46,6 @@
 #include <sys/domain.h>
 #include <sys/priv.h>
 
-#include <machine/stdarg.h>
-#include <vm/uma.h>
 
 #include <net/if.h>
 #include <net/if_arp.h>
