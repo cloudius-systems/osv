@@ -493,6 +493,7 @@ libc += string/memmove.o
 libc += string/mempcpy.o
 libc += string/memrchr.o
 libc += string/memset.o
+libc += string/rawmemchr.o
 libc += string/rindex.o
 libc += string/stpcpy.o
 libc += string/stpncpy.o
