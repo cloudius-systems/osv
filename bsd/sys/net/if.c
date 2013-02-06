@@ -41,7 +41,6 @@
 #include <sys/sockio.h>
 #include <sys/syslog.h>
 #include <sys/sysctl.h>
-#include <sys/taskqueue.h>
 #include <sys/domain.h>
 #include <sys/jail.h>
 #include <sys/priv.h>
@@ -435,7 +434,9 @@ if_alloc(u_char type)
 	}
 
 	IF_ADDR_LOCK_INIT(ifp);
-	TASK_INIT(&ifp->if_linktask, 0, do_link_state_change, ifp);
+	/* OSv: Avoid using taksqueues */
+	/* TASK_INIT(&ifp->if_linktask, 0, do_link_state_change, ifp); */
+	ifp->if_linktask = (void*)0;
 	ifp->if_afdata_initialized = 0;
 	IF_AFDATA_LOCK_INIT(ifp);
 	TAILQ_INIT(&ifp->if_addrhead);
@@ -843,7 +844,9 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 	/*
 	 * Remove/wait for pending events.
 	 */
-	taskqueue_drain(taskqueue_swi, &ifp->if_linktask);
+
+	/* OSv: No taskqueue, no drain */
+	/* taskqueue_drain(taskqueue_swi, &ifp->if_linktask); */
 
 	/*
 	 * Remove routes and flush queues.
@@ -1891,7 +1894,9 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 
 	ifp->if_link_state = link_state;
 
-	taskqueue_enqueue(taskqueue_swi, &ifp->if_linktask);
+	/* FIXME: OSv: Not sure it's needed... */
+	do_link_state_change(ifp);
+	/* taskqueue_enqueue(taskqueue_swi, &ifp->if_linktask); */
 }
 
 static void
