@@ -49,6 +49,7 @@ public:
     static thread* current();
     stack_info get_stack_info();
     cpu* tcpu();
+    void join();
 private:
     void main();
     void switch_to();
@@ -58,6 +59,7 @@ private:
     void stop_wait();
     void init_stack();
     void setup_tcb();
+    void complete();
     static void on_thread_stack(thread* t);
 private:
     std::function<void ()> _func;
@@ -67,6 +69,7 @@ private:
     std::atomic_bool _waiting;
     stack_info _stack;
     cpu* _cpu;
+    bool _terminated;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
@@ -74,6 +77,7 @@ private:
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
+    thread* _joiner;
     bi::list_member_hook<> _runqueue_link;
     // for the debugger
     bi::list_member_hook<> _thread_list_link;

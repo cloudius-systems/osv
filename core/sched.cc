@@ -83,6 +83,8 @@ thread::thread(std::function<void ()> func, stack_info stack, bool main)
     , _on_runqueue(!main)
     , _waiting(false)
     , _stack(stack)
+    , _terminated(false)
+    , _joiner()
 {
     with_lock(thread_list_mutex, [this] {
         thread_list.push_back(*this);
@@ -149,6 +151,24 @@ void thread::sleep_until(u64 abstime)
 void thread::stop_wait()
 {
     _waiting = false;
+}
+
+void thread::complete()
+{
+    _waiting = true;
+    _terminated = true;
+    if (_joiner) {
+        _joiner->wake();
+    }
+    while (true) {
+        schedule();
+    }
+}
+
+void thread::join()
+{
+    _joiner = current();
+    wait_until([this] { return _terminated; });
 }
 
 thread::stack_info thread::get_stack_info()

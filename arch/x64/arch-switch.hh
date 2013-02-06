@@ -62,8 +62,7 @@ void thread::init_stack()
 void thread::on_thread_stack(thread* t)
 {
     t->_func();
-    t->_waiting = true;
-    schedule();
+    t->complete();
 }
 
 void thread::setup_tcb()
@@ -80,8 +79,7 @@ void thread_main_c(thread* t)
 {
     s_current = t;
     t->main();
-    t->_waiting = true;
-    schedule();
+    t->complete();
 }
 
 }
