@@ -98,10 +98,7 @@ struct driver virtio_blk_driver = {
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
 
-        void* stk1 = malloc(10000);
-        thread::attr attr;
-        attr.stack = {stk1, 10000};
-        thread* worker = new thread([this] { this->response_worker(); } , attr);
+        thread* worker = new thread([this] { this->response_worker(); });
         worker->wake(); // just to keep gcc happy about unused var
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);

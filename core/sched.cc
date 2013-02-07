@@ -86,12 +86,12 @@ void thread::yield()
 }
 
 thread::stack_info::stack_info()
-    : begin(), size()
+    : begin(malloc(65536)), size(65536), owned(true)
 {
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)
-    : begin(_begin), size(_size)
+    : begin(_begin), size(_size), owned(false)
 {
     auto end = align_down(begin + size, 16);
     size = static_cast<char*>(end) - static_cast<char*>(begin);
