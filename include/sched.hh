@@ -107,13 +107,18 @@ public:
     bi::list_member_hook<> _thread_list_link;
 };
 
-class timer_list : private clock_event_callback {
+class timer_list {
 public:
-    timer_list();
-    virtual void fired();
+    void fired();
 private:
     friend class timer;
     bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;
+    class callback_dispatch : private clock_event_callback {
+    public:
+        callback_dispatch();
+        virtual void fired();
+    };
+    static callback_dispatch _dispatch;
 };
 
 typedef bi::list<thread,
@@ -127,6 +132,7 @@ struct cpu {
     struct arch_cpu arch;
     thread* bringup_thread;
     runqueue_type runqueue;
+    timer_list timers;
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     incoming_wakeup_queue* incoming_wakeups;

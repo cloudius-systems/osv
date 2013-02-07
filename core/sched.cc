@@ -189,9 +189,7 @@ thread::stack_info thread::get_stack_info()
     return _stack;
 }
 
-timer_list timers;
-
-timer_list::timer_list()
+timer_list::callback_dispatch::callback_dispatch()
 {
     clock_event->set_callback(this);
 }
@@ -209,6 +207,13 @@ void timer_list::fired()
         clock_event->set(_list.begin()->_time);
     }
 }
+
+void timer_list::callback_dispatch::fired()
+{
+    cpu::current()->timers.fired();
+}
+
+timer_list::callback_dispatch timer_list::_dispatch;
 
 timer::timer(thread& t)
     : _t(t)
@@ -232,6 +237,7 @@ void timer::set(u64 time)
 {
     _time = time;
     with_lock(irq_lock, [=] {
+        auto& timers = _t._cpu->timers;
         timers._list.insert(*this);
         _t._active_timers.push_back(*this);
         if (timers._list.iterator_to(*this) == timers._list.begin()) {
@@ -247,7 +253,7 @@ void timer::cancel()
             return;
         }
         _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-        timers._list.erase(*this);
+        _t._cpu->timers._list.erase(*this);
         _expired = false;
     });
     // even if we remove the first timer, allow it to expire rather than
