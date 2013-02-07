@@ -109,8 +109,6 @@ VNET_DEFINE(LIST_HEAD(, if_clone), if_cloners);
 #define IFC_IFLIST_REMOVE(_ifc, _ifp)					\
 	LIST_REMOVE(_ifp, if_clones)
 
-static MALLOC_DEFINE(M_CLONE, "clone", "interface cloning framework");
-
 void
 vnet_if_clone_init(void)
 {
@@ -291,7 +289,8 @@ if_clone_attach(struct if_clone *ifc)
 	len = maxclone >> 3;
 	if ((len << 3) < maxclone)
 		len++;
-	ifc->ifc_units = malloc(len, M_CLONE, M_WAITOK | M_ZERO);
+	ifc->ifc_units = malloc(len);
+	bzero(ifc->ifc_units, len);
 	ifc->ifc_bmlen = len;
 	IF_CLONE_LOCK_INIT(ifc);
 	IF_CLONE_ADDREF(ifc);
@@ -344,7 +343,7 @@ if_clone_free(struct if_clone *ifc)
 	    ("%s: ifc_iflist not empty", __func__));
 
 	IF_CLONE_LOCK_DESTROY(ifc);
-	free(ifc->ifc_units, M_CLONE);
+	free(ifc->ifc_units);
 }
 
 /*
@@ -373,7 +372,8 @@ if_clone_list(struct if_clonereq *ifcr)
 	    V_if_cloners_count : ifcr->ifcr_count;
 	IF_CLONERS_UNLOCK();
 
-	outbuf = malloc(IFNAMSIZ*buf_count, M_CLONE, M_WAITOK | M_ZERO);
+	outbuf = malloc(IFNAMSIZ*buf_count);
+	bzero(outbuf, IFNAMSIZ*buf_count);
 
 	IF_CLONERS_LOCK();
 
@@ -396,7 +396,7 @@ done:
 	if (err == 0)
 		err = copyout(outbuf, dst, buf_count*IFNAMSIZ);
 	if (outbuf != NULL)
-		free(outbuf, M_CLONE);
+		free(outbuf);
 	return (err);
 }
 
