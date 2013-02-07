@@ -2,6 +2,7 @@
 #define LIBC_H
 
 #include <stdlib.h>
+#include <osv/mutex.h>
 #include "stdio.h"
 
 /* as long as we use the glibc header we'll need this hack */
@@ -20,7 +21,7 @@ struct __libc {
 	volatile int threads_minus_1;
 //	int canceldisable;
 	FILE *ofl_head;
-	int ofl_lock[2];
+	mutex_t ofl_lock;
 //	size_t tls_size;
 };
 
@@ -30,12 +31,10 @@ extern struct __libc __libc ATTR_LIBC_VISIBILITY;
 #define libc __libc
 
 /* Designed to avoid any overhead in non-threaded processes */
-void __lock(volatile int *) ATTR_LIBC_VISIBILITY;
-void __unlock(volatile int *) ATTR_LIBC_VISIBILITY;
 int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
 void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
-#define LOCK(x) (libc.threads_minus_1 ? (__lock(x),1) : ((void)(x),1))
-#define UNLOCK(x) (libc.threads_minus_1 ? (__unlock(x),1) : ((void)(x),1))
+#define LOCK(x) (libc.threads_minus_1 ? (mutex_lock(&(x)),1) : ((void)(x),1))
+#define UNLOCK(x) (libc.threads_minus_1 ? (mutex_unlock(&(x)),1) : ((void)(x),1))
 
 extern char **__environ;
 #define environ __environ

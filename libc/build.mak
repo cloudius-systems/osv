@@ -1,9 +1,8 @@
 libc :=
 
-#libc += internal/floatscan.o
+libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
-libc += internal/__lock.o
 libc += internal/shgetc.o
 
 libc += ctype/__ctype_get_mb_cur_max.o
@@ -100,6 +99,9 @@ libc += locale/strerror_l.o
 libc += locale/strfmon.o
 libc += locale/strftime_l.o
 libc += locale/strncasecmp_l.o
+libc += locale/strtod_l.o
+libc += locale/strtof_l.o
+libc += locale/strtold_l.o
 libc += locale/strxfrm.o
 libc += locale/strxfrm_l.o
 libc += locale/tolower_l.o
@@ -110,6 +112,7 @@ libc += locale/towupper_l.o
 libc += locale/uselocale.o
 libc += locale/wcscoll.o
 libc += locale/wcscoll_l.o
+libc += locale/wcsftime_l.o
 libc += locale/wcsxfrm.o
 libc += locale/wcsxfrm_l.o
 libc += locale/wctrans_l.o
@@ -490,6 +493,7 @@ libc += stdlib/llabs.o
 libc += stdlib/lldiv.o
 libc += stdlib/qsort.o
 libc += stdlib/strtol.o
+libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
 
 libc += string/bcmp.o

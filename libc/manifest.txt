@@ -23,6 +23,10 @@ With the following exceptions:
 
 1) written locally largely based on musl code:
 
+  locale/strtod_l.c
+  locale/strtof_l.c
+  locale/strtold_l.c
+  locale/wcsftime_l.c
   stdio/__fprintf_chk.c
   string/rawmemchr.c
 
