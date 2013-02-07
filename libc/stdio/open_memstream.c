@@ -78,7 +78,7 @@ FILE *open_memstream(char **bufp, size_t *sizep)
 	f->seek = ms_seek;
 	f->close = ms_close;
 
-	if (!libc.threaded) f->lock = -1;
+	if (!libc.threaded) f->lock_owner = STDIO_SINGLETHREADED;
 
 	OFLLOCK();
 	f->next = libc.ofl_head;

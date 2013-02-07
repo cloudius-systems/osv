@@ -6,8 +6,10 @@
 
 #define UNGET 8
 
-#define FFINALLOCK(f) ((f)->lock>=0 ? __lockfile((f)) : 0)
-#define FLOCK(f) int __need_unlock = ((f)->lock>=0 ? __lockfile((f)) : 0)
+#define FFINALLOCK(f) \
+	((f)->lock_owner != STDIO_SINGLETHREADED ? __lockfile((f)) : 0)
+#define FLOCK(f) \
+	int __need_unlock = ((f)->lock_owner != STDIO_SINGLETHREADED ? __lockfile((f)) : 0)
 #define FUNLOCK(f) if (__need_unlock) __unlockfile((f)); else
 
 #define F_PERM 1
@@ -17,6 +19,15 @@
 #define F_ERR 32
 #define F_SVB 64
 
+/*
+ * Note: this structure is layed out so that the fields which are accessed
+ * by the unlocked getc/putc macros is identical to glibc.  Make sure to
+ * consult glibc before changing the layout of any fields.  Adding new fields
+ * should be generally okay.
+ *
+ * See musl commit e3cd6c5c265cd481db6e0c5b529855d99f0bda30 for some more
+ * details.
+ */
 struct __FILE_s {
 	unsigned flags;
 	unsigned char *rpos, *rend;
@@ -36,7 +47,7 @@ struct __FILE_s {
 	short dummy3;
 	signed char mode;
 	signed char lbf;
-	int lock;
+	int dummy4;
 	int waiters;
 	void *cookie;
 	off_t off;
@@ -44,6 +55,15 @@ struct __FILE_s {
 	void *mustbezero_2;
 	unsigned char *shend;
 	off_t shlim, shcnt;
+
+	/*
+	 * Using magic -1 and 0 values for pthread_t fields is a dangerous
+	 * game, but with our implementation of pthread_t as a pointer
+	 * we'll get away with it for now.
+	 */
+#define STDIO_SINGLETHREADED	((pthread_t)-1)
+	pthread_t lock_owner;
+	mutex_t mutex;
 };
 
 size_t __stdio_read(FILE *, unsigned char *, size_t);

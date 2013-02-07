@@ -15,7 +15,7 @@ FILE *__fopen_rb_ca(const char *filename, FILE *f, unsigned char *buf, size_t le
 	f->read = __stdio_read;
 	f->seek = __stdio_seek;
 	f->close = __stdio_close;
-	f->lock = -1;
+	f->lock_owner = STDIO_SINGLETHREADED;
 
 	return f;
 }

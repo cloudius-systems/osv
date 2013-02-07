@@ -10,7 +10,7 @@ int vdprintf(int fd, const char *restrict fmt, va_list ap)
 	FILE f = {
 		.fd = fd, .lbf = EOF, .write = wrap_write,
 		.buf = (void *)fmt, .buf_size = 0,
-		.lock = -1
+		.lock_owner = STDIO_SINGLETHREADED,
 	};
 	return vfprintf(&f, fmt, ap);
 }

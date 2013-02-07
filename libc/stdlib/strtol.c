@@ -15,7 +15,7 @@ static unsigned long long strtox(const char *s, char **p, int base, unsigned lon
 		f.rend = (void *)-1;
 	else
 		f.rend = (unsigned char *)s+(size_t)-1/2;
-	f.lock = -1;
+	f.lock_owner = STDIO_SINGLETHREADED;
 	shlim(&f, 0);
 	unsigned long long y = __intscan(&f, base, 1, lim);
 	if (p) {

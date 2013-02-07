@@ -7,7 +7,7 @@ static long double strtox(const char *s, char **p, int prec)
 {
 	FILE f = {
 		.buf = (void *)s, .rpos = (void *)s,
-		.rend = (void *)-1, .lock = -1
+		.rend = (void *)-1, .lock_owner = STDIO_SINGLETHREADED,
 	};
 	shlim(&f, 0);
 	long double y = __floatscan(&f, prec, 1);

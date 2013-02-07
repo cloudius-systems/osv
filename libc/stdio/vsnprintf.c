@@ -18,7 +18,7 @@ int vsnprintf(char *restrict s, size_t n, const char *restrict fmt, va_list ap)
 {
 	int r;
 	char b;
-	FILE f = { .lbf = EOF, .write = sn_write, .lock = -1 };
+	FILE f = { .lbf = EOF, .write = sn_write, .lock_owner = STDIO_SINGLETHREADED };
 
 	if (n-1 > INT_MAX-1) {
 		if (n) {
