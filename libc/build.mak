@@ -113,6 +113,7 @@ libc += locale/towupper_l.o
 libc += locale/uselocale.o
 libc += locale/wcscoll.o
 libc += locale/wcscoll_l.o
+libc += locale/wcsftime_l.o
 libc += locale/wcsxfrm.o
 libc += locale/wcsxfrm_l.o
 libc += locale/wctrans_l.o

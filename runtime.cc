@@ -51,15 +51,6 @@ extern "C" {
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
     char *__nl_langinfo_l(nl_item __item, __locale_t __l);
-    wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW;
-    int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
-		    __locale_t __loc) __THROW;
-    int __strcoll_l(__const char *__s1, __const char *__s2, __locale_t __l)
-	__THROW __attribute_pure__ __nonnull((1, 2, 3));
-    size_t __wcsftime_l(wchar_t *__restrict __s, size_t __maxsize,
-			__const wchar_t *__restrict __format,
-			__const struct tm *__restrict __tp,
-			__locale_t __loc) __THROW;
     int mallopt(int param, int value);
     FILE *popen(const char *command, const char *type);
     int pclose(FILE *stream);
@@ -301,11 +292,6 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     }
     abort();
 }
-
-UNIMPL(size_t __wcsftime_l (wchar_t *__restrict __s, size_t __maxsize,
-			    __const wchar_t *__restrict __format,
-			    __const struct tm *__restrict __tp,
-			    __locale_t __loc) __THROW)
 
 long sysconf(int name)
 {
