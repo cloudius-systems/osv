@@ -61,7 +61,6 @@
 /*XXX*/
 #include <netinet/in.h>
 #include <netinet/in_var.h>
-#include <netinet/ip_carp.h>
 #ifdef INET6
 #include <netinet6/in6_var.h>
 #include <netinet6/in6_ifattach.h>
@@ -70,8 +69,6 @@
 #ifdef INET
 #include <netinet/if_ether.h>
 #endif
-
-#include <security/mac/mac_framework.h>
 
 #ifdef COMPAT_FREEBSD32
 #include <sys/mount.h>
@@ -82,53 +79,45 @@ struct ifindex_entry {
 	struct  ifnet *ife_ifnet;
 };
 
+#if 0
 SYSCTL_NODE(_net, PF_LINK, link, CTLFLAG_RW, 0, "Link layers");
 SYSCTL_NODE(_net_link, 0, generic, CTLFLAG_RW, 0, "Generic link-management");
 
 TUNABLE_INT("net.link.ifqmaxlen", &ifqmaxlen);
 SYSCTL_INT(_net_link, OID_AUTO, ifqmaxlen, CTLFLAG_RDTUN,
     &ifqmaxlen, 0, "max send queue size");
+#endif
 
 /* Log link state change events */
 static int log_link_state_change = 1;
 
+#if 0
 SYSCTL_INT(_net_link, OID_AUTO, log_link_state_change, CTLFLAG_RW,
 	&log_link_state_change, 0,
 	"log interface link state change events");
+#endif
 
 /* Interface description */
 static unsigned int ifdescr_maxlen = 1024;
+#if 0
 SYSCTL_UINT(_net, OID_AUTO, ifdescr_maxlen, CTLFLAG_RW,
 	&ifdescr_maxlen, 0,
 	"administrative maximum length for interface description");
 
 MALLOC_DEFINE(M_IFDESCR, "ifdescr", "ifnet descriptions");
+#endif
 
+#if 0
 /* global sx for non-critical path ifdescr */
 static struct sx ifdescr_sx;
 SX_SYSINIT(ifdescr_sx, &ifdescr_sx, "ifnet descr");
+#endif
 
 void	(*bridge_linkstate_p)(struct ifnet *ifp);
 void	(*ng_ether_link_state_p)(struct ifnet *ifp, int state);
 void	(*lagg_linkstate_p)(struct ifnet *ifp, int state);
-/* These are external hooks for CARP. */
-void	(*carp_linkstate_p)(struct ifnet *ifp);
-#if defined(INET) || defined(INET6)
-struct ifnet *(*carp_forus_p)(struct ifnet *ifp, u_char *dhost);
-int	(*carp_output_p)(struct ifnet *ifp, struct mbuf *m,
-    struct sockaddr *sa, struct rtentry *rt);
-#endif
-#ifdef INET
-int (*carp_iamatch_p)(struct ifnet *, struct in_ifaddr *, struct in_addr *,
-    u_int8_t **);
-#endif
-#ifdef INET6
-struct ifaddr *(*carp_iamatch6_p)(struct ifnet *ifp, struct in6_addr *taddr6);
-caddr_t (*carp_macmatch6_p)(struct ifnet *ifp, struct mbuf *m,
-    const struct in6_addr *taddr);
-#endif
 
-struct mbuf *(*tbr_dequeue_ptr)(struct ifaltq *, int) = NULL;
+struct mbuf *(*tbr_dequeue_ptr)(struct ifqueue *, int) = NULL;
 
 /*
  * XXX: Style; these should be sorted alphabetically, and unprototyped
@@ -199,9 +188,11 @@ struct sx ifnet_sxlock;
 static	if_com_alloc_t *if_com_alloc[256];
 static	if_com_free_t *if_com_free[256];
 
+#if 0
 MALLOC_DEFINE(M_IFNET, "ifnet", "interface internals");
 MALLOC_DEFINE(M_IFADDR, "ifaddr", "interface address");
 MALLOC_DEFINE(M_IFMADDR, "ether_multi", "link-level multicast address");
+#endif
 
 struct ifnet *
 ifnet_byindex_locked(u_short idx)
@@ -370,15 +361,16 @@ if_grow(void)
 	oldlim = V_if_indexlim;
 	IFNET_WUNLOCK();
 	n = (oldlim << 1) * sizeof(*e);
-	e = malloc(n, M_IFNET, M_WAITOK | M_ZERO);
+	e = malloc(n);
+	bzero(e, n);
 	IFNET_WLOCK();
 	if (V_if_indexlim != oldlim) {
-		free(e, M_IFNET);
+		free(e);
 		return;
 	}
 	if (V_ifindex_table != NULL) {
 		memcpy((caddr_t)e, (caddr_t)V_ifindex_table, n/2);
-		free((caddr_t)V_ifindex_table, M_IFNET);
+		free((caddr_t)V_ifindex_table);
 	}
 	V_if_indexlim <<= 1;
 	V_ifindex_table = e;
@@ -395,11 +387,12 @@ if_alloc(u_char type)
 	struct ifnet *ifp;
 	u_short idx;
 
-	ifp = malloc(sizeof(struct ifnet), M_IFNET, M_WAITOK|M_ZERO);
+	ifp = malloc(sizeof(struct ifnet));
+	bzero(ifp, sizeof(struct ifnet));
 	IFNET_WLOCK();
 	if (ifindex_alloc_locked(&idx) != 0) {
 		IFNET_WUNLOCK();
-		free(ifp, M_IFNET);
+		free(ifp);
 		return (NULL);
 	}
 	ifnet_setbyindex_locked(idx, IFNET_HOLD);
@@ -410,7 +403,7 @@ if_alloc(u_char type)
 	if (if_com_alloc[type] != NULL) {
 		ifp->if_l2com = if_com_alloc[type](type, ifp);
 		if (ifp->if_l2com == NULL) {
-			free(ifp, M_IFNET);
+			free(ifp);
 			ifindex_free(idx);
 			return (NULL);
 		}
@@ -452,15 +445,12 @@ if_free_internal(struct ifnet *ifp)
 		if_com_free[ifp->if_alloctype](ifp->if_l2com,
 		    ifp->if_alloctype);
 
-#ifdef MAC
-	mac_ifnet_destroy(ifp);
-#endif /* MAC */
 	if (ifp->if_description != NULL)
-		free(ifp->if_description, M_IFDESCR);
+		free(ifp->if_description);
 	IF_AFDATA_DESTROY(ifp);
 	IF_ADDR_LOCK_DESTROY(ifp);
 	ifq_delete(&ifp->if_snd);
-	free(ifp, M_IFNET);
+	free(ifp);
 }
 
 /*
@@ -612,7 +602,8 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 			socksize = sizeof(*sdl);
 		socksize = roundup2(socksize, sizeof(long));
 		ifasize = sizeof(*ifa) + 2 * socksize;
-		ifa = malloc(ifasize, M_IFADDR, M_WAITOK | M_ZERO);
+		ifa = malloc(ifasize);
+		bzero(ifa, ifasize);
 		ifa_init(ifa);
 		sdl = (struct sockaddr_dl *)(ifa + 1);
 		sdl->sdl_len = socksize;
@@ -912,15 +903,13 @@ if_addgroup(struct ifnet *ifp, const char *groupname)
 			return (EEXIST);
 		}
 
-	if ((ifgl = (struct ifg_list *)malloc(sizeof(struct ifg_list), M_TEMP,
-	    M_NOWAIT)) == NULL) {
+	if ((ifgl = (struct ifg_list *)malloc(sizeof(struct ifg_list))) == NULL) {
 	    	IFNET_WUNLOCK();
 		return (ENOMEM);
 	}
 
-	if ((ifgm = (struct ifg_member *)malloc(sizeof(struct ifg_member),
-	    M_TEMP, M_NOWAIT)) == NULL) {
-		free(ifgl, M_TEMP);
+	if ((ifgm = (struct ifg_member *)malloc(sizeof(struct ifg_member))) == NULL) {
+		free(ifgl);
 		IFNET_WUNLOCK();
 		return (ENOMEM);
 	}
@@ -930,10 +919,9 @@ if_addgroup(struct ifnet *ifp, const char *groupname)
 			break;
 
 	if (ifg == NULL) {
-		if ((ifg = (struct ifg_group *)malloc(sizeof(struct ifg_group),
-		    M_TEMP, M_NOWAIT)) == NULL) {
-			free(ifgl, M_TEMP);
-			free(ifgm, M_TEMP);
+		if ((ifg = (struct ifg_group *)malloc(sizeof(struct ifg_group))) == NULL) {
+			free(ifgl);
+			free(ifgm);
 			IFNET_WUNLOCK();
 			return (ENOMEM);
 		}
@@ -988,17 +976,17 @@ if_delgroup(struct ifnet *ifp, const char *groupname)
 
 	if (ifgm != NULL) {
 		TAILQ_REMOVE(&ifgl->ifgl_group->ifg_members, ifgm, ifgm_next);
-		free(ifgm, M_TEMP);
+		free(ifgm);
 	}
 
 	if (--ifgl->ifgl_group->ifg_refcnt == 0) {
 		TAILQ_REMOVE(&V_ifg_head, ifgl->ifgl_group, ifg_next);
 		EVENTHANDLER_INVOKE(group_detach_event, ifgl->ifgl_group);
-		free(ifgl->ifgl_group, M_TEMP);
+		free(ifgl->ifgl_group);
 	}
 	IFNET_WUNLOCK();
 
-	free(ifgl, M_TEMP);
+	free(ifgl);
 
 	EVENTHANDLER_INVOKE(group_change_event, groupname);
 
@@ -1032,18 +1020,18 @@ if_delgroups(struct ifnet *ifp)
 		if (ifgm != NULL) {
 			TAILQ_REMOVE(&ifgl->ifgl_group->ifg_members, ifgm,
 			    ifgm_next);
-			free(ifgm, M_TEMP);
+			free(ifgm);
 		}
 
 		if (--ifgl->ifgl_group->ifg_refcnt == 0) {
 			TAILQ_REMOVE(&V_ifg_head, ifgl->ifgl_group, ifg_next);
 			EVENTHANDLER_INVOKE(group_detach_event,
 			    ifgl->ifgl_group);
-			free(ifgl->ifgl_group, M_TEMP);
+			free(ifgl->ifgl_group);
 		}
 		IFNET_WUNLOCK();
 
-		free(ifgl, M_TEMP);
+		free(ifgl);
 
 		EVENTHANDLER_INVOKE(group_change_event, groupname);
 
@@ -1246,7 +1234,7 @@ ifa_free(struct ifaddr *ifa)
 
 	if (refcount_release(&ifa->ifa_refcnt)) {
 		mtx_destroy(&ifa->ifa_mtx);
-		free(ifa, M_IFADDR);
+		free(ifa);
 	}
 }
 
@@ -1651,8 +1639,6 @@ if_unroute(struct ifnet *ifp, int flag, int fam)
 			pfctlinput(PRC_IFDOWN, ifa->ifa_addr);
 	ifp->if_qflush(ifp);
 
-	if (ifp->if_carp)
-		(*carp_linkstate_p)(ifp);
 	rt_ifmsg(ifp);
 }
 
@@ -1673,8 +1659,6 @@ if_route(struct ifnet *ifp, int flag, int fam)
 	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link)
 		if (fam == PF_UNSPEC || (fam == ifa->ifa_addr->sa_family))
 			pfctlinput(PRC_IFUP, ifa->ifa_addr);
-	if (ifp->if_carp)
-		(*carp_linkstate_p)(ifp);
 	rt_ifmsg(ifp);
 #ifdef INET6
 	in6_if_up(ifp);
@@ -1724,8 +1708,6 @@ do_link_state_change(void *arg, int pending)
 	if ((ifp->if_type == IFT_ETHER || ifp->if_type == IFT_L2VLAN) &&
 	    IFP2AC(ifp)->ac_netgraph != NULL)
 		(*ng_ether_link_state_p)(ifp, link_state);
-	if (ifp->if_carp)
-		(*carp_linkstate_p)(ifp);
 	if (ifp->if_bridge)
 		(*bridge_linkstate_p)(ifp);
 	if (ifp->if_lagg)
@@ -1915,12 +1897,12 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		else if (ifr->ifr_buffer.length == 0)
 			descrbuf = NULL;
 		else {
-			descrbuf = malloc(ifr->ifr_buffer.length, M_IFDESCR,
-			    M_WAITOK | M_ZERO);
+			descrbuf = malloc(ifr->ifr_buffer.length);
+			bzero(descrbuf, ifr->ifr_buffer.length);
 			error = copyin(ifr->ifr_buffer.buffer, descrbuf,
 			    ifr->ifr_buffer.length - 1);
 			if (error) {
-				free(descrbuf, M_IFDESCR);
+				free(descrbuf);
 				break;
 			}
 		}
@@ -1931,7 +1913,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		sx_xunlock(&ifdescr_sx);
 
 		getmicrotime(&ifp->if_lastchange);
-		free(odescrbuf, M_IFDESCR);
+		free(odescrbuf);
 		break;
 
 	case SIOCGIFFIB:
@@ -2652,16 +2634,18 @@ if_allocmulti(struct ifnet *ifp, struct sockaddr *sa, struct sockaddr *llsa,
 	struct ifmultiaddr *ifma;
 	struct sockaddr *dupsa;
 
-	ifma = malloc(sizeof *ifma, M_IFMADDR, mflags |
-	    M_ZERO);
+	ifma = malloc(sizeof *ifma);
 	if (ifma == NULL)
 		return (NULL);
+	bzero(ifma, sizeof *ifma);
 
-	dupsa = malloc(sa->sa_len, M_IFMADDR, mflags);
+	dupsa = malloc(sa->sa_len);
 	if (dupsa == NULL) {
-		free(ifma, M_IFMADDR);
+		free(ifma);
 		return (NULL);
 	}
+	if (mflags & M_ZERO)
+	    bzero(dupsa, sa->sa_len);
 	bcopy(sa, dupsa, sa->sa_len);
 	ifma->ifma_addr = dupsa;
 
@@ -2674,12 +2658,14 @@ if_allocmulti(struct ifnet *ifp, struct sockaddr *sa, struct sockaddr *llsa,
 		return (ifma);
 	}
 
-	dupsa = malloc(llsa->sa_len, M_IFMADDR, mflags);
+	dupsa = malloc(llsa->sa_len);
 	if (dupsa == NULL) {
-		free(ifma->ifma_addr, M_IFMADDR);
-		free(ifma, M_IFMADDR);
+		free(ifma->ifma_addr);
+		free(ifma);
 		return (NULL);
 	}
+    if (mflags & M_ZERO)
+        bzero(dupsa, sa->sa_len);
 	bcopy(llsa, dupsa, llsa->sa_len);
 	ifma->ifma_lladdr = dupsa;
 
@@ -2702,9 +2688,9 @@ if_freemulti(struct ifmultiaddr *ifma)
 	    ("if_freemulti: protospec not NULL"));
 
 	if (ifma->ifma_lladdr != NULL)
-		free(ifma->ifma_lladdr, M_IFMADDR);
-	free(ifma->ifma_addr, M_IFMADDR);
-	free(ifma, M_IFMADDR);
+		free(ifma->ifma_lladdr);
+	free(ifma->ifma_addr);
+	free(ifma);
 }
 
 /*
@@ -2820,13 +2806,13 @@ if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
 	}
 
 	if (llsa != NULL)
-		free(llsa, M_IFMADDR);
+		free(llsa);
 
 	return (0);
 
 free_llsa_out:
 	if (llsa != NULL)
-		free(llsa, M_IFMADDR);
+		free(llsa);
 
 unlock_out:
 	IF_ADDR_WUNLOCK(ifp);
