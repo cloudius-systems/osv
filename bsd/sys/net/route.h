@@ -33,6 +33,12 @@
 #ifndef _NET_ROUTE_H_
 #define _NET_ROUTE_H_
 
+#include <porting/netport.h>
+#include <osv/mutex.h>
+
+void route_init(void);
+void vnet_route_init(const void *__unused);
+
 /*
  * Kernel resident routing tables.
  *
@@ -130,7 +136,7 @@ struct rtentry {
 	u_int	rt_fibnum;		/* which FIB */
 #ifdef _KERNEL
 	/* XXX ugly, user apps use this definition but don't have a mtx def */
-	struct	mtx rt_mtx;		/* mutex for routing entry */
+	struct	cmutex rt_mtx;		/* mutex for routing entry */
 #endif
 };
 
@@ -305,12 +311,11 @@ struct rt_addrinfo {
 #define RT_LINK_IS_UP(ifp)	(!((ifp)->if_capabilities & IFCAP_LINKSTATE) \
 				 || (ifp)->if_link_state == LINK_STATE_UP)
 
-#define	RT_LOCK_INIT(_rt) \
-	mtx_init(&(_rt)->rt_mtx, "rtentry", NULL, MTX_DEF | MTX_DUPOK)
-#define	RT_LOCK(_rt)		mtx_lock(&(_rt)->rt_mtx)
-#define	RT_UNLOCK(_rt)		mtx_unlock(&(_rt)->rt_mtx)
-#define	RT_LOCK_DESTROY(_rt)	mtx_destroy(&(_rt)->rt_mtx)
-#define	RT_LOCK_ASSERT(_rt)	mtx_assert(&(_rt)->rt_mtx, MA_OWNED)
+#define	RT_LOCK_INIT(_rt) bzero((void*)&(_rt)->rt_mtx, sizeof(struct cmutex))
+#define	RT_LOCK(_rt)		mutex_lock(&(_rt)->rt_mtx)
+#define	RT_UNLOCK(_rt)		mutex_unlock(&(_rt)->rt_mtx)
+#define	RT_LOCK_DESTROY(_rt)    do{}while(0)
+#define	RT_LOCK_ASSERT(_rt)     do{}while(0)
 
 #define	RT_ADDREF(_rt)	do {					\
 	RT_LOCK_ASSERT(_rt);					\

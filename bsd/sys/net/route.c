@@ -34,39 +34,22 @@
  * Which is the new name for an in kernel routing (next hop) table.	*
  ***********************************************************************/
 
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_route.h"
-#include "opt_mrouting.h"
-#include "opt_mpath.h"
+#include <porting/netport.h>
+#include <assert.h>
 
 #include <sys/param.h>
-#include <sys/systm.h>
 #include <sys/syslog.h>
-#include <sys/malloc.h>
 #include <sys/mbuf.h>
 #include <sys/socket.h>
-#include <sys/sysctl.h>
-#include <sys/syslog.h>
-#include <sys/sysproto.h>
-#include <sys/proc.h>
 #include <sys/domain.h>
-#include <sys/kernel.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <net/route.h>
 #include <net/vnet.h>
-#include <net/flowtable.h>
-
-#ifdef RADIX_MPATH
-#include <net/radix_mpath.h>
-#endif
 
 #include <netinet/in.h>
 #include <netinet/ip_mroute.h>
-
-#include <vm/uma.h>
 
 /* We use 4 bits in the mbuf flags, thus we are limited to 16 FIBS. */
 #define	RT_MAXFIBS	16
@@ -87,6 +70,8 @@
 #endif
 
 u_int rt_numfibs = RT_NUMFIBS;
+
+#if 0
 SYSCTL_UINT(_net, OID_AUTO, fibs, CTLFLAG_RD, &rt_numfibs, 0, "");
 /*
  * Allow the boot code to allow LESS than RT_MAXFIBS to be used.
@@ -98,6 +83,7 @@ SYSCTL_UINT(_net, OID_AUTO, fibs, CTLFLAG_RD, &rt_numfibs, 0, "");
  * address family).
  */
 TUNABLE_INT("net.fibs", &rt_numfibs);
+#endif
 
 /*
  * By default add routes to all fibs for new interfaces.
@@ -110,9 +96,12 @@ TUNABLE_INT("net.fibs", &rt_numfibs);
  * from the network stack context.
  */
 u_int rt_add_addr_allfibs = 1;
+
+#if 0
 SYSCTL_UINT(_net, OID_AUTO, add_addr_allfibs, CTLFLAG_RW,
     &rt_add_addr_allfibs, 0, "");
 TUNABLE_INT("net.add_addr_allfibs", &rt_add_addr_allfibs);
+#endif
 
 VNET_DEFINE(struct rtstat, rtstat);
 #define	V_rtstat	VNET(rtstat)
@@ -142,22 +131,12 @@ VNET_DEFINE(int, rttrash);		/* routes not in table but not freed */
 static VNET_DEFINE(uma_zone_t, rtzone);		/* Routing table UMA zone. */
 #define	V_rtzone	VNET(rtzone)
 
-/*
- * handler for net.my_fibnum
- */
-static int
-sysctl_my_fibnum(SYSCTL_HANDLER_ARGS)
-{
-        int fibnum;
-        int error;
- 
-        fibnum = curthread->td_proc->p_fibnum;
-        error = sysctl_handle_int(oidp, &fibnum, 0, req);
-        return (error);
-}
 
-SYSCTL_PROC(_net, OID_AUTO, my_fibnum, CTLTYPE_INT|CTLFLAG_RD,
-            NULL, 0, &sysctl_my_fibnum, "I", "default FIB of caller");
+/*
+ * FIXME:
+ * OSv: fibnum is saved per thread
+ */
+
 
 static __inline struct radix_node_head **
 rt_tables_get_rnh_ptr(int table, int fam)
@@ -188,8 +167,7 @@ rt_tables_get_rnh(int table, int fam)
  * route initialization must occur before ip6_init2(), which happenas at
  * SI_ORDER_MIDDLE.
  */
-static void
-route_init(void)
+void route_init(void)
 {
 	struct domain *dom;
 	int max_keylen = 0;
@@ -206,18 +184,21 @@ route_init(void)
 
 	rn_init(max_keylen);	/* init all zeroes, all ones, mask table */
 }
-SYSINIT(route_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, route_init, 0);
 
-static void
-vnet_route_init(const void *unused __unused)
+#if 0
+SYSINIT(route_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, route_init, 0);
+#endif
+
+void vnet_route_init(const void *__unused)
 {
 	struct domain *dom;
 	struct radix_node_head **rnh;
 	int table;
 	int fam;
 
-	V_rt_tables = malloc(rt_numfibs * (AF_MAX+1) *
-	    sizeof(struct radix_node_head *), M_RTABLE, M_WAITOK|M_ZERO);
+	size_t sz = rt_numfibs * (AF_MAX+1) * sizeof(struct radix_node_head *);
+	V_rt_tables = malloc(sz);
+	bzero((void *)V_rt_tables, sz);
 
 	V_rtzone = uma_zcreate("rtentry", sizeof(struct rtentry), NULL, NULL,
 	    NULL, NULL, UMA_ALIGN_PTR, 0);
@@ -236,50 +217,25 @@ vnet_route_init(const void *unused __unused)
 			 * AF_INET and AF_INET6 which don't need it anyhow).
 			 */
 			rnh = rt_tables_get_rnh_ptr(table, fam);
-			if (rnh == NULL)
-				panic("%s: rnh NULL", __func__);
+			assert(rnh != NULL);
 			dom->dom_rtattach((void **)rnh, dom->dom_rtoffset);
 		}
 	}
 }
+
+#if 0
 VNET_SYSINIT(vnet_route_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_FOURTH,
     vnet_route_init, 0);
-
-#ifdef VIMAGE
-static void
-vnet_route_uninit(const void *unused __unused)
-{
-	int table;
-	int fam;
-	struct domain *dom;
-	struct radix_node_head **rnh;
-
-	for (dom = domains; dom; dom = dom->dom_next) {
-		if (dom->dom_rtdetach == NULL)
-			continue;
-
-		for (table = 0; table < rt_numfibs; table++) {
-			fam = dom->dom_family;
-
-			if (table != 0 && fam != AF_INET6 && fam != AF_INET)
-				break;
-
-			rnh = rt_tables_get_rnh_ptr(table, fam);
-			if (rnh == NULL)
-				panic("%s: rnh NULL", __func__);
-			dom->dom_rtdetach((void **)rnh, dom->dom_rtoffset);
-		}
-	}
-}
-VNET_SYSUNINIT(vnet_route_uninit, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD,
-    vnet_route_uninit, 0);
 #endif
+
 
 #ifndef _SYS_SYSPROTO_H_
 struct setfib_args {
 	int     fibnum;
 };
 #endif
+
+#if 0
 int
 sys_setfib(struct thread *td, struct setfib_args *uap)
 {
@@ -288,6 +244,7 @@ sys_setfib(struct thread *td, struct setfib_args *uap)
 	td->td_proc->p_fibnum = uap->fibnum;
 	return (0);
 }
+#endif
 
 /*
  * Packet routing routines.
@@ -726,10 +683,10 @@ ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
 			if (satosin(rt_key(rt))->sin_addr.s_addr == INADDR_ANY)
 				not_found = 1;
 			break;
-		case AF_INET6:
-			if (IN6_IS_ADDR_UNSPECIFIED(&satosin6(rt_key(rt))->sin6_addr))
-				not_found = 1;
-			break;
+//		case AF_INET6:
+//			if (IN6_IS_ADDR_UNSPECIFIED(&satosin6(rt_key(rt))->sin6_addr))
+//				not_found = 1;
+//			break;
 		default:
 			break;
 		}
@@ -1054,9 +1011,6 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 {
 	int error = 0, needlock = 0;
 	register struct rtentry *rt;
-#ifdef FLOWTABLE
-	register struct rtentry *rt0;
-#endif
 	register struct radix_node *rn;
 	register struct radix_node_head *rnh;
 	struct ifaddr *ifa;
@@ -1213,73 +1167,6 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 		rt->rt_ifp = ifa->ifa_ifp;
 		rt->rt_rmx.rmx_weight = 1;
 
-#ifdef RADIX_MPATH
-		/* do not permit exactly the same dst/mask/gw pair */
-		if (rn_mpath_capable(rnh) &&
-			rt_mpath_conflict(rnh, rt, netmask)) {
-			if (rt->rt_ifa) {
-				ifa_free(rt->rt_ifa);
-			}
-			Free(rt_key(rt));
-			RT_LOCK_DESTROY(rt);
-			uma_zfree(V_rtzone, rt);
-			senderr(EEXIST);
-		}
-#endif
-
-#ifdef FLOWTABLE
-		rt0 = NULL;
-		/* "flow-table" only supports IPv6 and IPv4 at the moment. */
-		switch (dst->sa_family) {
-#ifdef INET6
-		case AF_INET6:
-#endif
-#ifdef INET
-		case AF_INET:
-#endif
-#if defined(INET6) || defined(INET)
-			rn = rnh->rnh_matchaddr(dst, rnh);
-			if (rn && ((rn->rn_flags & RNF_ROOT) == 0)) {
-				struct sockaddr *mask;
-				u_char *m, *n;
-				int len;
-				
-				/*
-				 * compare mask to see if the new route is
-				 * more specific than the existing one
-				 */
-				rt0 = RNTORT(rn);
-				RT_LOCK(rt0);
-				RT_ADDREF(rt0);
-				RT_UNLOCK(rt0);
-				/*
-				 * A host route is already present, so 
-				 * leave the flow-table entries as is.
-				 */
-				if (rt0->rt_flags & RTF_HOST) {
-					RTFREE(rt0);
-					rt0 = NULL;
-				} else if (!(flags & RTF_HOST) && netmask) {
-					mask = rt_mask(rt0);
-					len = mask->sa_len;
-					m = (u_char *)mask;
-					n = (u_char *)netmask;
-					while (len-- > 0) {
-						if (*n != *m)
-							break;
-						n++;
-						m++;
-					}
-					if (len == 0 || (*n < *m)) {
-						RTFREE(rt0);
-						rt0 = NULL;
-					}
-				}
-			}
-#endif/* INET6 || INET */
-		}
-#endif /* FLOWTABLE */
-
 		/* XXX mtu manipulation will be done in rnh_addaddr -- itojun */
 		rn = rnh->rnh_addaddr(ndst, netmask, rnh, rt->rt_nodes);
 		/*
@@ -1292,29 +1179,8 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 			Free(rt_key(rt));
 			RT_LOCK_DESTROY(rt);
 			uma_zfree(V_rtzone, rt);
-#ifdef FLOWTABLE
-			if (rt0 != NULL)
-				RTFREE(rt0);
-#endif
 			senderr(EEXIST);
 		} 
-#ifdef FLOWTABLE
-		else if (rt0 != NULL) {
-			switch (dst->sa_family) {
-#ifdef INET6
-			case AF_INET6:
-				flowtable_route_flush(V_ip6_ft, rt0);
-				break;
-#endif
-#ifdef INET
-			case AF_INET:
-				flowtable_route_flush(V_ip_ft, rt0);
-				break;
-#endif
-			}
-			RTFREE(rt0);
-		}
-#endif
 
 		/*
 		 * If this protocol has something to add to this then
@@ -1355,11 +1221,6 @@ rt_setgate(struct rtentry *rt, struct sockaddr *dst, struct sockaddr *gate)
 {
 	/* XXX dst may be overwritten, can we move this to below */
 	int dlen = SA_SIZE(dst), glen = SA_SIZE(gate);
-#ifdef INVARIANTS
-	struct radix_node_head *rnh;
-
-	rnh = rt_tables_get_rnh(rt->rt_fibnum, dst->sa_family);
-#endif
 
 	RT_LOCK_ASSERT(rt);
 	RADIX_NODE_HEAD_LOCK_ASSERT(rnh);
@@ -1456,7 +1317,7 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 	}
 	if (fibnum == -1) {
 		if (rt_add_addr_allfibs == 0 && cmd == (int)RTM_ADD) {
-			startfib = endfib = curthread->td_proc->p_fibnum;
+			startfib = endfib = 0;
 		} else {
 			startfib = 0;
 			endfib = rt_numfibs - 1;
@@ -1504,29 +1365,6 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 				/* this table doesn't exist but others might */
 				continue;
 			RADIX_NODE_HEAD_LOCK(rnh);
-#ifdef RADIX_MPATH
-			if (rn_mpath_capable(rnh)) {
-
-				rn = rnh->rnh_matchaddr(dst, rnh);
-				if (rn == NULL) 
-					error = ESRCH;
-				else {
-					rt = RNTORT(rn);
-					/*
-					 * for interface route the
-					 * rt->rt_gateway is sockaddr_intf
-					 * for cloning ARP entries, so
-					 * rt_mpath_matchgate must use the
-					 * interface address
-					 */
-					rt = rt_mpath_matchgate(rt,
-					    ifa->ifa_addr);
-					if (!rt) 
-						error = ESRCH;
-				}
-			}
-			else
-#endif
 			rn = rnh->rnh_lookup(dst, netmask, rnh);
 			error = (rn == NULL ||
 			    (rn->rn_flags & RNF_ROOT) ||
@@ -1560,22 +1398,6 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 			 * notify any listening routing agents of the change
 			 */
 			RT_LOCK(rt);
-#ifdef RADIX_MPATH
-			/*
-			 * in case address alias finds the first address
-			 * e.g. ifconfig bge0 192.0.2.246/24
-			 * e.g. ifconfig bge0 192.0.2.247/24
-			 * the address set in the route is 192.0.2.246
-			 * so we need to replace it with 192.0.2.247
-			 */
-			if (memcmp(rt->rt_ifa->ifa_addr,
-			    ifa->ifa_addr, ifa->ifa_addr->sa_len)) {
-				ifa_free(rt->rt_ifa);
-				ifa_ref(ifa);
-				rt->rt_ifp = ifa->ifa_ifp;
-				rt->rt_ifa = ifa;
-			}
-#endif
 			/* 
 			 * doing this for compatibility reasons
 			 */

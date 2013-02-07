@@ -35,7 +35,6 @@
 
 #include <porting/netport.h>
 #include <sys/cdefs.h>
-#include <machine/endian.h>
 
 /* Protocols common to RFC 1700, POSIX, and X/Open. */
 #define	IPPROTO_IP		0		/* dummy for IP */
