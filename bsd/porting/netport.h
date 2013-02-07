@@ -7,6 +7,10 @@
 
 #include <sys/types.h>
 
+#ifndef INET
+    #define INET (1)
+#endif
+
 #define panic(...) abort()
 
 #define log(x, fmt, ...) do {} while(0)
