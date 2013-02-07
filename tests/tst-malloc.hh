@@ -67,9 +67,8 @@ void test_alloc()
     test_locks t;
     t.die = t.free_finished = t.alloc_finished = false;
     t.main = sched::thread::current();
-    char stk1[10000], stk2[10000];
-    thread* t1 = new thread([&] { alloc_thread(t); }, { stk1, 10000 });
-    thread* t2 = new thread([&] { free_thread(t); }, { stk2, 10000 });
+    thread* t1 = new thread([&] { alloc_thread(t); });
+    thread* t2 = new thread([&] { free_thread(t); });
 
     debug("test alloc, going to sleep for 1 sec while threads are running");
     timespec ts = {};
