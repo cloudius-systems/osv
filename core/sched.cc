@@ -6,6 +6,7 @@
 #include "drivers/clockevent.hh"
 #include "irqlock.hh"
 #include "align.hh"
+#include "drivers/clock.hh"
 
 namespace sched {
 
@@ -197,9 +198,17 @@ timer_list::timer_list()
 
 void timer_list::fired()
 {
-    timer& tmr = *_list.begin();
-    tmr._expired = true;
-    tmr._t.wake();
+    auto now = clock::get()->time();
+    auto i = _list.begin();
+    while (i != _list.end() && i->_time < now) {
+        auto j = i++;
+        j->_expired = true;
+        j->_t.wake();
+        _list.erase(j);
+    }
+    if (!_list.empty()) {
+        clock_event->set(_list.begin()->_time);
+    }
 }
 
 timer::timer(thread& t)
