@@ -46,7 +46,9 @@ namespace virtio {
         msix_isr_list* isrs = new msix_isr_list;
         void* stk1 = malloc(10000);
         _callback = nullptr;
-        thread* isr = new thread([this] { if (_callback) _callback(); } , {stk1, 10000});
+        thread::attr attr;
+        attr.stack = {stk1, 10000};
+        thread* isr = new thread([this] { if (_callback) _callback(); }, attr);
 
         isrs->insert(std::make_pair(_q_index, isr));
         interrupt_manager::instance()->easy_register(_dev, *isrs);

@@ -36,11 +36,11 @@ namespace pthread_private {
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
         void* _retval;
-        sched::thread::stack_info _stack;
         // must be initialized last
         sched::thread _thread;
     private:
         sched::thread::stack_info allocate_stack();
+        sched::thread::attr attributes();
     };
 
     struct thread_attr {
@@ -49,13 +49,19 @@ namespace pthread_private {
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset)
-        : _stack(allocate_stack())
-        , _thread([=] {
+        : _thread([=] {
                 current_pthread = to_libc();
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
-            }, _stack)
+            }, attributes())
     {
+    }
+
+    sched::thread::attr pthread::attributes()
+    {
+        sched::thread::attr a;
+        a.stack = allocate_stack();
+        return a;
     }
 
     sched::thread::stack_info pthread::allocate_stack()

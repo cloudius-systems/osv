@@ -121,8 +121,11 @@ void test_threads()
     test_threads_data tt;
     tt.main = thread::current();
     tt.t1ok = tt.t2ok = true;
-    tt.t1 = new thread([&] { test_thread_1(tt); }, { new char[10000], 10000 });
-    tt.t2 = new thread([&] { test_thread_2(tt); }, { new char[10000], 10000 });
+    thread::attr attr1, attr2;
+    attr1.stack = { new char[10000], 10000 };
+    attr2.stack = { new char[10000], 10000 };
+    tt.t1 = new thread([&] { test_thread_1(tt); }, attr1);
+    tt.t2 = new thread([&] { test_thread_2(tt); }, attr2);
     thread::wait_until([&] { return test_ctr >= 1000; });
     tt.t1->join();
     tt.t2->join();

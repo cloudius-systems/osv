@@ -52,13 +52,15 @@ private:
 
 class thread {
 public:
+    class attr;
     struct stack_info {
+        stack_info();
         stack_info(void* begin, size_t size);
         void* begin;
         size_t size;
     };
 public:
-    explicit thread(std::function<void ()> func, stack_info stack,
+    explicit thread(std::function<void ()> func, attr attributes,
             bool main = false);
     ~thread();
     template <class Pred>
@@ -105,6 +107,10 @@ public:
     lockless_queue_link<thread> _wakeup_link;
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
+};
+
+struct thread::attr {
+    stack_info stack;
 };
 
 class timer_list {

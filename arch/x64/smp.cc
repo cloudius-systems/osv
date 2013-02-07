@@ -90,8 +90,9 @@ void smp_launch()
             sched::thread::current()->_cpu = c;
             continue;
         }
-        sched::thread::stack_info stack { new char[81920], 81920 };
-        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, stack, true);
+        sched::thread::attr attr;
+        attr.stack = { new char[81920], 81920 };
+        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
     }
     apic->write(apicreg::ICR, 0xc4500); // INIT
     apic->write(apicreg::ICR, 0xc4600); // SIPI

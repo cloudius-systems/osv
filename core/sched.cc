@@ -85,6 +85,11 @@ void thread::yield()
     t->_cpu->schedule(true);
 }
 
+thread::stack_info::stack_info()
+    : begin(), size()
+{
+}
+
 thread::stack_info::stack_info(void* _begin, size_t _size)
     : begin(_begin), size(_size)
 {
@@ -100,11 +105,11 @@ typedef bi::list<thread,
                 > thread_list_type;
 thread_list_type thread_list;
 
-thread::thread(std::function<void ()> func, stack_info stack, bool main)
+thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _on_runqueue(!main)
     , _waiting(false)
-    , _stack(stack)
+    , _stack(attr.stack)
     , _terminated(false)
     , _joiner()
 {
@@ -285,8 +290,9 @@ bool operator<(const timer& t1, const timer& t2)
 void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
     tls = tls_data;
-    thread::stack_info stack { new char[4096*10], 4096*10 };
-    thread t{cont, stack, true};
+    thread::attr attr;
+    attr.stack = { new char[4096*10], 4096*10 };
+    thread t{cont, attr, true};
     t.switch_to_first();
 }
 
