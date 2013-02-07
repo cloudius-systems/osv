@@ -26,6 +26,7 @@ With the following exceptions:
   locale/strtod_l.c
   locale/strtof_l.c
   locale/strtold_l.c
+  locale/wcsftime_l.c
   stdio/__fprintf_chk.c
   string/rawmemchr.c
 
