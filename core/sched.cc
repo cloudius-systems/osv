@@ -225,18 +225,20 @@ timer::~timer()
 void timer::set(u64 time)
 {
     _time = time;
-    // FIXME: locking
-    timers._list.insert(*this);
-    if (timers._list.iterator_to(*this) == timers._list.begin()) {
-        clock_event->set(time);
-    }
+    with_lock(irq_lock, [=] {
+        timers._list.insert(*this);
+        if (timers._list.iterator_to(*this) == timers._list.begin()) {
+            clock_event->set(time);
+        }
+    });
 };
 
 void timer::cancel()
 {
-    // FIXME: locking
-    timers._list.erase(*this);
-    _expired = false;
+    with_lock(irq_lock, [=] {
+        timers._list.erase(*this);
+        _expired = false;
+    });
     // even if we remove the first timer, allow it to expire rather than
     // reprogramming the timer
 }
