@@ -109,7 +109,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _on_runqueue(!main)
     , _waiting(false)
-    , _stack(attr.stack)
+    , _attr(attr)
     , _terminated(false)
     , _joiner()
 {
@@ -197,7 +197,7 @@ void thread::join()
 
 thread::stack_info thread::get_stack_info()
 {
-    return _stack;
+    return _attr.stack;
 }
 
 timer_list::callback_dispatch::callback_dispatch()

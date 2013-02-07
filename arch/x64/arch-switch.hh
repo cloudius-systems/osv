@@ -53,7 +53,8 @@ void thread::switch_to_first()
 
 void thread::init_stack()
 {
-    void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
+    auto& stack = _attr.stack;
+    void** stacktop = reinterpret_cast<void**>(stack.begin + stack.size);
     *--stacktop = this;
     *--stacktop = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;

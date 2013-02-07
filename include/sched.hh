@@ -61,6 +61,7 @@ public:
     };
     struct attr {
         stack_info stack;
+        bool pinned;
     };
 
 public:
@@ -93,7 +94,7 @@ private:
     thread_control_block* _tcb;
     bool _on_runqueue;
     std::atomic_bool _waiting;
-    stack_info _stack;
+    attr _attr;
     cpu* _cpu;
     bool _terminated;
     bi::list<timer> _active_timers;
