@@ -3,7 +3,6 @@ libc :=
 libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
-libc += internal/__lock.o
 libc += internal/shgetc.o
 
 libc += ctype/__ctype_get_mb_cur_max.o
