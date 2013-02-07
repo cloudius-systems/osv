@@ -202,8 +202,7 @@ void timer_list::fired()
     auto i = _list.begin();
     while (i != _list.end() && i->_time < now) {
         auto j = i++;
-        j->_expired = true;
-        j->_t.wake();
+        j->expire();
         _list.erase(j);
     }
     if (!_list.empty()) {
@@ -222,11 +221,19 @@ timer::~timer()
     cancel();
 }
 
+void timer::expire()
+{
+    _expired = true;
+    _t._active_timers.erase(_t._active_timers.iterator_to(*this));
+    _t.wake();
+}
+
 void timer::set(u64 time)
 {
     _time = time;
     with_lock(irq_lock, [=] {
         timers._list.insert(*this);
+        _t._active_timers.push_back(*this);
         if (timers._list.iterator_to(*this) == timers._list.begin()) {
             clock_event->set(time);
         }
@@ -239,6 +246,7 @@ void timer::cancel()
         if (_expired) {
             return;
         }
+        _t._active_timers.erase(_t._active_timers.iterator_to(*this));
         timers._list.erase(*this);
         _expired = false;
     });

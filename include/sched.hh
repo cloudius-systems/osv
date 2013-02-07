@@ -33,7 +33,7 @@ extern "C" {
 
 namespace bi = boost::intrusive;
 
-class timer : public bi::set_base_hook<> {
+class timer : public bi::set_base_hook<>, public bi::list_base_hook<> {
 public:
     explicit timer(thread& t);
     ~timer();
@@ -41,6 +41,8 @@ public:
     bool expired() const;
     void cancel();
     friend bool operator<(const timer& t1, const timer& t2);
+private:
+    void expire();
 private:
     thread& _t;
     bool _expired;
@@ -88,9 +90,11 @@ private:
     stack_info _stack;
     cpu* _cpu;
     bool _terminated;
+    bi::list<timer> _active_timers;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
+    friend class timer;
     friend void ::smp_main();
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
