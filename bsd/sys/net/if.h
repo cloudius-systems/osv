@@ -42,6 +42,7 @@
 
 void if_init(void *__unused);
 void vnet_if_init(const void *__unused);
+void if_attachdomain(void *dummy);
 
 #if __BSD_VISIBLE
 /*
@@ -108,8 +109,6 @@ struct if_data {
 	u_long	ifi_iqdrops;		/* dropped on input, this interface */
 	u_long	ifi_noproto;		/* destined for unsupported protocol */
 	u_long	ifi_hwassist;		/* HW offload capabilities, see IFCAP */
-	time_t	ifi_epoch;		/* uptime at attach or stat reset */
-	struct	timeval ifi_lastchange;	/* time of last administrative change */
 };
 
 /*-

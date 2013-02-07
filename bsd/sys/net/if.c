@@ -30,7 +30,9 @@
  * $FreeBSD$
  */
 
+#include <stddef.h>
 #include <porting/netport.h>
+#include <porting/sync_stub.h>
 #include <osv/mutex.h>
 
 #include <sys/param.h>
@@ -125,11 +127,9 @@ struct mbuf *(*tbr_dequeue_ptr)(struct ifqueue *, int) = NULL;
  * static functions should be prototyped. Currently they are sorted by
  * declaration order.
  */
-static void	if_attachdomain(void *);
 static void	if_attachdomain1(struct ifnet *);
 static int	ifconf(u_long, caddr_t);
 static void	if_freemulti(struct ifmultiaddr *);
-static void	if_init(void *);
 static void	if_grow(void);
 static void	if_route(struct ifnet *, int flag, int fam);
 static int	if_setflag(struct ifnet *, int, int, int *, int);
@@ -521,23 +521,17 @@ if_rele(struct ifnet *ifp)
 }
 
 void
-ifq_init(struct ifaltq *ifq, struct ifnet *ifp)
+ifq_init(struct ifqueue *ifq, struct ifnet *ifp)
 {
 	
 	mtx_init(&ifq->ifq_mtx, ifp->if_xname, "if send queue", MTX_DEF);
 
 	if (ifq->ifq_maxlen == 0) 
 		ifq->ifq_maxlen = ifqmaxlen;
-
-	ifq->altq_type = 0;
-	ifq->altq_disc = NULL;
-	ifq->altq_flags &= ALTQF_CANTCHANGE;
-	ifq->altq_tbr  = NULL;
-	ifq->altq_ifp  = ifp;
 }
 
 void
-ifq_delete(struct ifaltq *ifq)
+ifq_delete(struct ifqueue *ifq)
 {
 	mtx_destroy(&ifq->ifq_mtx);
 }
@@ -576,8 +570,6 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 
 	if_addgroup(ifp, IFG_ALL);
 
-	getmicrotime(&ifp->if_lastchange);
-	ifp->if_data.ifi_epoch = time_uptime;
 	ifp->if_data.ifi_datalen = sizeof(struct if_data);
 
 	KASSERT((ifp->if_transmit == NULL && ifp->if_qflush == NULL) ||
@@ -639,15 +631,17 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		if_attachdomain1(ifp);
 
 	EVENTHANDLER_INVOKE(ifnet_arrival_event, ifp);
+
+#if 0
 	if (IS_DEFAULT_VNET(curvnet))
 		devctl_notify("IFNET", ifp->if_xname, "ATTACH", NULL);
+#endif
 
 	/* Announce the interface. */
 	rt_ifannouncemsg(ifp, IFAN_ARRIVAL);
 }
 
-static void
-if_attachdomain(void *dummy)
+void if_attachdomain(void *dummy)
 {
 	struct ifnet *ifp;
 	int s;
@@ -657,8 +651,11 @@ if_attachdomain(void *dummy)
 		if_attachdomain1(ifp);
 	splx(s);
 }
+
+#if 0
 SYSINIT(domainifattach, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_SECOND,
     if_attachdomain, NULL);
+#endif
 
 static void
 if_attachdomain1(struct ifnet *ifp)
@@ -803,12 +800,6 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 	 * Remove routes and flush queues.
 	 */
 	if_down(ifp);
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(&ifp->if_snd))
-		altq_disable(&ifp->if_snd);
-	if (ALTQ_IS_ATTACHED(&ifp->if_snd))
-		altq_detach(&ifp->if_snd);
-#endif
 
 	if_purgeaddrs(ifp);
 
@@ -867,8 +858,12 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 	/* Announce that the interface is gone. */
 	rt_ifannouncemsg(ifp, IFAN_DEPARTURE);
 	EVENTHANDLER_INVOKE(ifnet_departure_event, ifp);
+
+#if 0
 	if (IS_DEFAULT_VNET(curvnet))
 		devctl_notify("IFNET", ifp->if_xname, "DETACH", NULL);
+#endif
+
 	if_delgroups(ifp);
 
 	/*
@@ -1762,14 +1757,10 @@ void
 if_qflush(struct ifnet *ifp)
 {
 	struct mbuf *m, *n;
-	struct ifaltq *ifq;
+	struct ifqueue *ifq;
 	
 	ifq = &ifp->if_snd;
 	IFQ_LOCK(ifq);
-#ifdef ALTQ
-	if (ALTQ_IS_ENABLED(ifq))
-		ALTQ_PURGE(ifq);
-#endif
 	n = ifq->ifq_head;
 	while ((m = n) != 0) {
 		n = m->m_act;

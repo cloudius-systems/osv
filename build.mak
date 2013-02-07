@@ -117,6 +117,7 @@ bsd += bsd/sys/kern/uipc_mbuf2.o
 bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
+bsd += bsd/porting/netport.o
 bsd += bsd/porting/uma_stub.o
 bsd += bsd/porting/sync_stub.o
 bsd += bsd/sys/net/radix.o  

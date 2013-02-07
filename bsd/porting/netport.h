@@ -121,6 +121,29 @@ typedef __builtin_va_list   __va_list;  /* internally known to gcc */
 #define MAXNBUF (sizeof(intmax_t) * NBBY + 1)
 
 
-#define copyout(kaddr, uaddr, len) (int)0; memcpy(uaddr, kaddr, len)
+int copyin(const void *uaddr, void *kaddr, size_t len);
+int copyout(const void *kaddr, void *uaddr, size_t len);
+int copystr(const void *kfaddr, void *kdaddr, size_t len, size_t *done);
+int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done);
+
+typedef __uint32_t  intrmask_t; /* Interrupt mask (spl, xxx_imask...) */
+
+/* Stubs for obsolete functions that used to be for interrupt management */
+static __inline void        spl0(void)      { return; }
+static __inline intrmask_t  splbio(void)        { return 0; }
+static __inline intrmask_t  splcam(void)        { return 0; }
+static __inline intrmask_t  splclock(void)      { return 0; }
+static __inline intrmask_t  splhigh(void)       { return 0; }
+static __inline intrmask_t  splimp(void)        { return 0; }
+static __inline intrmask_t  splnet(void)        { return 0; }
+static __inline intrmask_t  splsoftcam(void)    { return 0; }
+static __inline intrmask_t  splsoftclock(void)  { return 0; }
+static __inline intrmask_t  splsofttty(void)    { return 0; }
+static __inline intrmask_t  splsoftvm(void)     { return 0; }
+static __inline intrmask_t  splsofttq(void)     { return 0; }
+static __inline intrmask_t  splstatclock(void)  { return 0; }
+static __inline intrmask_t  spltty(void)        { return 0; }
+static __inline intrmask_t  splvm(void)     { return 0; }
+static __inline void        splx(intrmask_t ipl)   { return; }
 
 #endif

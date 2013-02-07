@@ -231,7 +231,6 @@ typedef void if_init_f_t(void *);
 #define	if_omcasts	if_data.ifi_omcasts
 #define	if_iqdrops	if_data.ifi_iqdrops
 #define	if_noproto	if_data.ifi_noproto
-#define	if_lastchange	if_data.ifi_lastchange
 
 /* for compatibility with other BSDs */
 #define	if_addrlist	if_addrhead
@@ -403,7 +402,7 @@ typedef void (*group_change_event_handler_t)(void *, const char *);
 EVENTHANDLER_DECLARE(group_change_event, group_change_event_handler_t);
 
 #define	IF_AFDATA_LOCK_INIT(ifp)	\
-	bzero(&(ifp)->if_afdata_lock, sizeof(ifp)->if_afdata_lock))
+	bzero(&(ifp)->if_afdata_lock, sizeof((ifp)->if_afdata_lock))
 
 #define	IF_AFDATA_WLOCK(ifp)	mutex_lock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_RLOCK(ifp)	mutex_lock(&(ifp)->if_afdata_lock)
@@ -411,7 +410,7 @@ EVENTHANDLER_DECLARE(group_change_event, group_change_event_handler_t);
 #define	IF_AFDATA_RUNLOCK(ifp)	mutex_unlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_LOCK(ifp)	IF_AFDATA_WLOCK(ifp)
 #define	IF_AFDATA_UNLOCK(ifp)	IF_AFDATA_WUNLOCK(ifp)
-#define	IF_AFDATA_TRYLOCK(ifp)	mutex_lock(&(ifp)->if_afdata_lock)
+#define	IF_AFDATA_TRYLOCK(ifp)	mutex_trylock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_DESTROY(ifp)	do{}while(0)
 
 #define	IF_AFDATA_LOCK_ASSERT(ifp)	do{}while(0)
