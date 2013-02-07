@@ -87,6 +87,7 @@ struct driver virtio_blk_driver = {
     virtio_blk::~virtio_blk()
     {
         //TODO: In theory maintain the list of free instances and gc it
+        // including the thread objects and their stack
     }
 
     bool virtio_blk::load(void)
@@ -117,7 +118,11 @@ struct driver virtio_blk_driver = {
             prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
             prv->drv = this;
 
-            test();
+            for (int i=0;i<2000;i++) {
+                debug(fmt("Running test %d") % i);
+                test();
+                //sched::thread::current()->yield();
+            }
         }
 
         return true;
@@ -128,6 +133,14 @@ struct driver virtio_blk_driver = {
         return (true);
     }
 
+    //temporal hack for the local version of virtio tests
+    extern "C" {
+    static void blk_bio_done(struct bio*bio) {
+        free(bio->bio_data);
+        destroy_bio(bio);
+    };
+    }
+
     // to be removed soon once we move the test from here to the vfs layer
     virtio_blk::virtio_blk_req* virtio_blk::make_virtio_req(u64 sector, virtio_blk_request_type type, int val)
     {
@@ -135,6 +148,14 @@ struct driver virtio_blk_driver = {
         void* buf = malloc(page_size);
         memset(buf, val, page_size);
         sg->add(mmu::virt_to_phys(buf), page_size);
+
+        struct bio* bio = alloc_bio();
+        if (!bio) {
+            debug("bio_alloc failed");
+            return nullptr;
+        }
+        bio->bio_data = buf;
+        bio->bio_done = blk_bio_done;
 
         virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
         hdr->type = type;
@@ -144,11 +165,11 @@ struct driver virtio_blk_driver = {
         //push 'output' buffers to the beginning of the sg list
         sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
 
-        virtio_blk_res* res = reinterpret_cast<virtio_blk_res*>(malloc(sizeof(virtio_blk_res)));
+        virtio_blk_res* res = new virtio_blk_res;
         res->status = 0;
         sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
 
-        virtio_blk_req* req = new virtio_blk_req(hdr, sg, res);
+        virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
         return req;
     }
 
@@ -179,7 +200,7 @@ struct driver virtio_blk_driver = {
             if (!queue->add_buf(req->payload,1,2,req)) {
                 break;
             }
-            queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+            if (i%2) queue->kick(); // should be out of the loop but I like plenty of irqs for the test
 
         }
 
@@ -279,7 +300,7 @@ struct driver virtio_blk_driver = {
             //push 'output' buffers to the beginning of the sg list
             sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
 
-            virtio_blk_res* res = reinterpret_cast<virtio_blk_res*>(malloc(sizeof(virtio_blk_res)));
+            virtio_blk_res* res = new virtio_blk_res;
             res->status = 0;
             sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
 
