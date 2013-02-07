@@ -22,6 +22,8 @@ namespace sched {
 
 class thread;
 class cpu;
+class timer;
+class timer_list;
 
 void schedule(bool yield = false);
 
@@ -30,6 +32,21 @@ extern "C" {
 };
 
 namespace bi = boost::intrusive;
+
+class timer : public bi::set_base_hook<> {
+public:
+    explicit timer(thread& t);
+    ~timer();
+    void set(u64 time);
+    bool expired() const;
+    void cancel();
+    friend bool operator<(const timer& t1, const timer& t2);
+private:
+    thread& _t;
+    bool _expired;
+    u64 _time;
+    friend class timer_list;
+};
 
 class thread {
 public:
@@ -86,6 +103,15 @@ public:
     bi::list_member_hook<> _thread_list_link;
 };
 
+class timer_list : private clock_event_callback {
+public:
+    timer_list();
+    virtual void fired();
+private:
+    friend class timer;
+    bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;
+};
+
 typedef bi::list<thread,
                  bi::member_hook<thread,
                                  bi::list_member_hook<>,
@@ -107,32 +133,6 @@ struct cpu {
 };
 
 thread* current();
-
-class timer;
-
-class timer_list : private clock_event_callback {
-public:
-    timer_list();
-    virtual void fired();
-private:
-    friend class timer;
-    bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;
-};
-
-class timer : public bi::set_base_hook<> {
-public:
-    explicit timer(thread& t);
-    ~timer();
-    void set(u64 time);
-    bool expired() const;
-    void cancel();
-    friend bool operator<(const timer& t1, const timer& t2);
-private:
-    thread& _t;
-    bool _expired;
-    u64 _time;
-    friend class timer_list;
-};
 
 class wait_guard {
 public:
