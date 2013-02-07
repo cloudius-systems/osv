@@ -81,6 +81,9 @@ void disable_pic()
 static int test_ctr;
 
 using sched::thread;
+// since it contains actual code it needs to be after the 'using' declaration
+#include "tests/tst-malloc.hh"
+
 
 struct test_threads_data {
     thread* main;
@@ -259,6 +262,9 @@ void run_main(elf::program *prog, struct argblock *args)
 void* do_main_thread(void *_args)
 {
     auto args = static_cast<argblock*>(_args);
+
+    //Tests malloc and free using threads.
+    test_alloc();
     test_threads();
     test_clock_events();
 
