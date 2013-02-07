@@ -374,6 +374,3 @@ void exit(int status)
     debug(fmt("program exited with status %d") % status);
     abort();
 }
-
-char* __environ_array[1];
-char** environ = __environ_array;
