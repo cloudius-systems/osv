@@ -6,7 +6,6 @@ libc += internal/libc.o
 libc += internal/__lock.o
 libc += internal/shgetc.o
 
-libc += ctype/__ctype_b_loc.o
 libc += ctype/__ctype_get_mb_cur_max.o
 libc += ctype/__ctype_tolower_loc.o
 libc += ctype/__ctype_toupper_loc.o
@@ -43,6 +42,15 @@ libc += ctype/towctrans.o
 libc += ctype/wcswidth.o
 libc += ctype/wctrans.o
 libc += ctype/wcwidth.o
+
+libc += env/__environ.o
+libc += env/clearenv.o
+libc += env/getenv.o
+libc += env/putenv.o
+libc += env/setenv.o
+libc += env/unsetenv.o
+
+libc += ctype/__ctype_b_loc.o
 
 libc += errno/strerror.o
 

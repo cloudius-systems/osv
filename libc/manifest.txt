@@ -5,6 +5,7 @@ All the files under the following directories are imported from musl:
   errno
   string
   ctype
+  env
   exit
   internal
   locale

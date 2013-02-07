@@ -37,6 +37,9 @@ void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
 #define LOCK(x) (libc.threads_minus_1 ? (__lock(x),1) : ((void)(x),1))
 #define UNLOCK(x) (libc.threads_minus_1 ? (__unlock(x),1) : ((void)(x),1))
 
+extern char **__environ;
+#define environ __environ
+
 #undef weak_alias
 #define weak_alias(old, new) \
 	extern __typeof(old) new __attribute__((weak, alias(#old)))

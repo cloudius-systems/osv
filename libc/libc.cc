@@ -56,17 +56,6 @@ char* realpath(const char* path, char* resolved_path)
     return resolved_path;
 }
 
-char* getenv(const char* name)
-{
-    // no environment
-    return NULL;
-}
-
-int putenv(char* string)
-{
-    return 0; // no environent
-}
-
 int getrlimit(int resource, struct rlimit *rlim)
 {
     auto set = [=] (rlim_t r) { rlim->rlim_cur = rlim->rlim_max = r; };
