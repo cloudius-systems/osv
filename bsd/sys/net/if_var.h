@@ -735,7 +735,7 @@ struct ifmultiaddr {
 #define	IFNET_LOCK_INIT() do {                          \
     bzero(&ifnet_rwmutex, sizeof(ifnet_rwmutex));       \
     bzero(&ifnet_sxmutex, sizeof(ifnet_sxmutex));       \
-}
+} while (0)
 
 #define	IFNET_WLOCK() mutex_lock(&ifnet_rwmutex); mutex_lock(&ifnet_sxmutex);
 

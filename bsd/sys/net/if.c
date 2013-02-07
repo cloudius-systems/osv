@@ -328,8 +328,7 @@ ifaddr_byindex(u_short idx)
  * parameters.
  */
 
-static void
-vnet_if_init(const void *unused __unused)
+void vnet_if_init(const void *__unused)
 {
 
 	TAILQ_INIT(&V_ifnet);
@@ -339,19 +338,22 @@ vnet_if_init(const void *unused __unused)
 	IFNET_WUNLOCK();
 	vnet_if_clone_init();
 }
+
+#if 0
 VNET_SYSINIT(vnet_if_init, SI_SUB_INIT_IF, SI_ORDER_SECOND, vnet_if_init,
     NULL);
+#endif
 
 /* ARGSUSED*/
-static void
-if_init(void *dummy __unused)
+void if_init(void *__unused)
 {
-
 	IFNET_LOCK_INIT();
 	if_clone_init();
 }
-SYSINIT(interfaces, SI_SUB_INIT_IF, SI_ORDER_FIRST, if_init, NULL);
 
+#if 0
+SYSINIT(interfaces, SI_SUB_INIT_IF, SI_ORDER_FIRST, if_init, NULL);
+#endif
 
 static void
 if_grow(void)
