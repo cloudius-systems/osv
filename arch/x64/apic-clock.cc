@@ -9,6 +9,7 @@ class apic_clock_events : public clock_event_driver {
 public:
     explicit apic_clock_events();
     ~apic_clock_events();
+    virtual void setup_on_cpu();
     virtual void set(u64 time);
 private:
     unsigned _vector;
@@ -17,13 +18,17 @@ private:
 apic_clock_events::apic_clock_events()
     : _vector(idt.register_handler([this] { _callback->fired(); }))
 {
-    processor::apic->write(apicreg::TMDCR, 0xb); // divide by 1
-    processor::apic->write(apicreg::TMICT, 0);
-    processor::apic->write(apicreg::LVTT, _vector); // one-shot
 }
 
 apic_clock_events::~apic_clock_events()
 {
+}
+
+void apic_clock_events::setup_on_cpu()
+{
+    processor::apic->write(apicreg::TMDCR, 0xb); // divide by 1
+    processor::apic->write(apicreg::TMICT, 0);
+    processor::apic->write(apicreg::LVTT, _vector); // one-shot
 }
 
 void apic_clock_events::set(u64 time)

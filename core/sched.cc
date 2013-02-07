@@ -64,6 +64,7 @@ void cpu::handle_incoming_wakeups()
 void cpu::init_on_cpu()
 {
     arch.init_on_cpu();
+    clock_event->setup_on_cpu();
 }
 
 void schedule(bool yield)

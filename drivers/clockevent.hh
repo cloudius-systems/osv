@@ -13,6 +13,7 @@ public:
 class clock_event_driver {
 public:
     virtual ~clock_event_driver();
+    virtual void setup_on_cpu() = 0;
     // set() is cpu-local: each processor has its own timer
     virtual void set(u64 time) = 0;
     void set_callback(clock_event_callback* callback);
