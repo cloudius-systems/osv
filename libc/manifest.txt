@@ -5,6 +5,7 @@ All the files under the following directories are imported from musl:
   errno
   string
   ctype
+  env
   exit
   internal
   locale
@@ -18,12 +19,17 @@ All the files under the following directories are imported from musl:
   time
   unistd
 
-With the exceptions of:
+With the following exceptions:
+
+1) written locally largely based on musl code:
 
   stdio/__fprintf_chk.c
   string/rawmemchr.c
 
-which were written locally largely based on musl code.
+2) imported from FreeBSD:
+
+  misc/realpath.c
+
 
 All imports are from musl.git commit f05f59b804f83ff8443ba8c549d6be3ba79e71a6
 and have various local modification to deal with OSv specifics or our

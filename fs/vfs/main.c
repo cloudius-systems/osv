@@ -646,6 +646,12 @@ int __lxstat(int ver, const char *pathname, struct stat *st)
 }
 LFS64(__lxstat);
 
+int lstat(const char *pathname, struct stat *st)
+{
+	return __lxstat(1, pathname, st);
+}
+LFS64(lstat);
+
 int __statfs(const char *pathname, struct statfs *buf)
 {
 	struct task *t = main_task;
