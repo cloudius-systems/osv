@@ -1,6 +1,6 @@
 libc :=
 
-#libc += internal/floatscan.o
+libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
 libc += internal/__lock.o
@@ -490,6 +490,7 @@ libc += stdlib/llabs.o
 libc += stdlib/lldiv.o
 libc += stdlib/qsort.o
 libc += stdlib/strtol.o
+libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
 
 libc += string/bcmp.o
