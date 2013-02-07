@@ -7,6 +7,8 @@
 
 class mutex {
 public:
+    mutex() { mutex_init(&_mutex); }
+    ~mutex() { mutex_destroy(&_mutex); }
     void lock();
     bool try_lock();
     void unlock();
