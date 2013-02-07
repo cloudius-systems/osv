@@ -61,6 +61,11 @@ void cpu::handle_incoming_wakeups()
     }
 }
 
+void cpu::init_on_cpu()
+{
+    arch.init_on_cpu();
+}
+
 void schedule(bool yield)
 {
     cpu::current()->schedule(yield);
