@@ -236,6 +236,9 @@ void timer::set(u64 time)
 void timer::cancel()
 {
     with_lock(irq_lock, [=] {
+        if (_expired) {
+            return;
+        }
         timers._list.erase(*this);
         _expired = false;
     });
