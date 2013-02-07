@@ -108,7 +108,8 @@ void tzset(void)
 
 void __tzset(void)
 {
-	static int lock[2], init;
+	static mutex_t lock;
+	static int init;
 	if (init) return;
 	LOCK(lock);
 	if (!init) tzset();

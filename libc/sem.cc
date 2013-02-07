@@ -1,6 +1,7 @@
 #include <semaphore.h>
 #include "sched.hh"
 #include "mutex.hh"
+#include "libc.hh"
 
 // FIXME: smp safety
 
@@ -9,6 +10,7 @@ public:
     explicit semaphore(unsigned val);
     void post();
     void wait();
+    bool trywait();
 private:
     unsigned _val;
     spinlock _mtx;
@@ -60,6 +62,19 @@ void semaphore::wait()
         sched::thread::wait_until([&] { return !wr.owner; });
 }
 
+bool semaphore::trywait()
+{
+    bool ok = false;
+    with_lock(_mtx, [&] {
+        if (_val > 0) {
+            --_val;
+            ok = true;
+        }
+    });
+
+    return ok;
+}
+
 semaphore* from_libc(sem_t* p)
 {
     return reinterpret_cast<semaphore*>(p);
@@ -80,5 +95,12 @@ int sem_post(sem_t* s)
 int sem_wait(sem_t* s)
 {
     from_libc(s)->wait();
+    return 0;
+}
+
+int sem_trywait(sem_t* s)
+{
+    if (!from_libc(s)->trywait())
+        return libc_error(EAGAIN);
     return 0;
 }

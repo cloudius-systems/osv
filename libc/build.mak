@@ -1,12 +1,10 @@
 libc :=
 
-#libc += internal/floatscan.o
+libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
-libc += internal/__lock.o
 libc += internal/shgetc.o
 
-libc += ctype/__ctype_b_loc.o
 libc += ctype/__ctype_get_mb_cur_max.o
 libc += ctype/__ctype_tolower_loc.o
 libc += ctype/__ctype_toupper_loc.o
@@ -43,6 +41,15 @@ libc += ctype/towctrans.o
 libc += ctype/wcswidth.o
 libc += ctype/wctrans.o
 libc += ctype/wcwidth.o
+
+libc += env/__environ.o
+libc += env/clearenv.o
+libc += env/getenv.o
+libc += env/putenv.o
+libc += env/setenv.o
+libc += env/unsetenv.o
+
+libc += ctype/__ctype_b_loc.o
 
 libc += errno/strerror.o
 
@@ -92,6 +99,9 @@ libc += locale/strerror_l.o
 libc += locale/strfmon.o
 libc += locale/strftime_l.o
 libc += locale/strncasecmp_l.o
+libc += locale/strtod_l.o
+libc += locale/strtof_l.o
+libc += locale/strtold_l.o
 libc += locale/strxfrm.o
 libc += locale/strxfrm_l.o
 libc += locale/tolower_l.o
@@ -102,6 +112,7 @@ libc += locale/towupper_l.o
 libc += locale/uselocale.o
 libc += locale/wcscoll.o
 libc += locale/wcscoll_l.o
+libc += locale/wcsftime_l.o
 libc += locale/wcsxfrm.o
 libc += locale/wcsxfrm_l.o
 libc += locale/wctrans_l.o
@@ -329,6 +340,7 @@ libc += misc/getopt_long.o
 libc += misc/getresuid.o
 libc += misc/getresgid.o
 libc += misc/getsubopt.o
+libc += misc/realpath.o
 libc += misc/setdomainname.o
 
 libc += multibyte/btowc.o
@@ -347,6 +359,9 @@ libc += multibyte/wcsrtombs.o
 libc += multibyte/wcstombs.o
 libc += multibyte/wctob.o
 libc += multibyte/wctomb.o
+
+libc += signal/sigrtmax.o
+libc += signal/sigrtmin.o
 
 libc += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
@@ -478,6 +493,7 @@ libc += stdlib/llabs.o
 libc += stdlib/lldiv.o
 libc += stdlib/qsort.o
 libc += stdlib/strtol.o
+libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
 
 libc += string/bcmp.o
@@ -493,6 +509,7 @@ libc += string/memmove.o
 libc += string/mempcpy.o
 libc += string/memrchr.o
 libc += string/memset.o
+libc += string/rawmemchr.o
 libc += string/rindex.o
 libc += string/stpcpy.o
 libc += string/stpncpy.o

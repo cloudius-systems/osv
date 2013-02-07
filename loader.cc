@@ -123,13 +123,12 @@ void test_threads()
 {
     test_threads_data tt;
     tt.main = thread::current();
-    char stk1[10000], stk2[10000];
     tt.t1ok = tt.t2ok = true;
-    tt.t1 = new thread([&] { test_thread_1(tt); }, { stk1, 10000 });
-    tt.t2 = new thread([&] { test_thread_2(tt); }, { stk2, 10000 });
+    tt.t1 = new thread([&] { test_thread_1(tt); });
+    tt.t2 = new thread([&] { test_thread_2(tt); });
     thread::wait_until([&] { return test_ctr >= 1000; });
-    delete tt.t1;
-    delete tt.t2;
+    tt.t1->join();
+    tt.t2->join();
     debug("threading test succeeded");
 }
 

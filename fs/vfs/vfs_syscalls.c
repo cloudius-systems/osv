@@ -825,3 +825,18 @@ sys_fchdir(file_t fp, char *cwd)
 	vn_unlock(dvp);
 	return 0;
 }
+
+ssize_t
+sys_readlink(char *path, char *buf, size_t bufsize)
+{
+	int error;
+	struct vnode *vp;
+
+	error = namei(path, &vp);
+	if (error)
+		return error;
+
+	/* no symlink support (yet) in OSv */
+	vput(vp);
+	return EINVAL;
+}

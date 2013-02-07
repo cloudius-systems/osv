@@ -646,6 +646,12 @@ int __lxstat(int ver, const char *pathname, struct stat *st)
 }
 LFS64(__lxstat);
 
+int lstat(const char *pathname, struct stat *st)
+{
+	return __lxstat(1, pathname, st);
+}
+LFS64(lstat);
+
 int __statfs(const char *pathname, struct statfs *buf)
 {
 	struct task *t = main_task;
@@ -1008,6 +1014,32 @@ int ftruncate(int fd, off_t length)
 		goto out_errno;
 
 	error = sys_ftruncate(fp, length);
+	if (error)
+		goto out_errno;
+	return 0;
+out_errno:
+	errno = error;
+	return -1;
+}
+
+ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
+{
+	struct task *t = main_task;
+	char path[PATH_MAX];
+	int error;
+
+	error = -EINVAL;
+	if (bufsize <= 0)
+		goto out_errno;
+
+	error = ENOENT;
+	if (pathname == NULL)
+		goto out_errno;
+	error = task_conv(t, pathname, VWRITE, path);
+	if (error)
+		goto out_errno;
+
+	error = sys_readlink(path, buf, bufsize);
 	if (error)
 		goto out_errno;
 	return 0;

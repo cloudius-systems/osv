@@ -128,7 +128,7 @@ class thread_context(object):
         self.new_frame = gdb.newest_frame()
         self.new_frame.select()
         self.running = (not long(thread['_on_runqueue'])
-                        and not long(thread['_waiting']))
+                        and not long(thread['_waiting']['_M_base']['_M_i']))
         self.old_rsp = ulong(gdb.parse_and_eval('$rsp').cast(ulong_type))
         self.old_rip = ulong(gdb.parse_and_eval('$rip').cast(ulong_type))
         self.old_rbp = ulong(gdb.parse_and_eval('$rbp').cast(ulong_type))
@@ -161,9 +161,13 @@ class osv_info_threads(gdb.Command):
                 cpu = t['_cpu']
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
-                gdb.write('%s cpu%s %s at %s:%s\n' %
+                status = 'rdy '
+                if long(t['_waiting']['_M_base']['_M_i']):
+                    status = 'wait'
+                gdb.write('%s cpu%s %s %s at %s:%s\n' %
                           (ulong(t.address),
                            cpu['arch']['acpi_id'],
+                           status,
                            fr.function().name,
                            sal.symtab.filename,
                            sal.line

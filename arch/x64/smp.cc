@@ -37,6 +37,7 @@ void parse_madt()
     auto madt = get_parent_from_member(madt_header, &ACPI_TABLE_MADT::Header);
     void* subtable = madt + 1;
     void* madt_end = static_cast<void*>(madt) + madt->Header.Length;
+    unsigned idgen = 0;
     while (subtable != madt_end) {
         auto s = static_cast<ACPI_SUBTABLE_HEADER*>(subtable);
         switch (s->Type) {
@@ -46,6 +47,7 @@ void parse_madt()
                 break;
             }
             auto c = new sched::cpu;
+            c->id = idgen++;
             c->arch.apic_id = lapic->Id;
             c->arch.acpi_id = lapic->ProcessorId;
             c->arch.initstack.next = smp_stack_free;
@@ -63,6 +65,9 @@ void parse_madt()
 void smp_init()
 {
     parse_madt();
+    for (auto c : sched::cpus) {
+        c->incoming_wakeups = new sched::cpu::incoming_wakeup_queue[sched::cpus.size()];
+    }
     smpboot_cr0 = read_cr0();
     smpboot_cr4 = read_cr4();
     smpboot_efer = rdmsr(msr::IA32_EFER);
@@ -81,12 +86,13 @@ void smp_launch()
 {
     for (auto c : sched::cpus) {
         if (c->arch.apic_id == apic->id()) {
-            c->arch.init_on_cpu();
+            c->init_on_cpu();
             sched::thread::current()->_cpu = c;
             continue;
         }
-        sched::thread::stack_info stack { new char[81920], 81920 };
-        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, stack, true);
+        sched::thread::attr attr;
+        attr.stack = { new char[81920], 81920 };
+        c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
     }
     apic->write(apicreg::ICR, 0xc4500); // INIT
     apic->write(apicreg::ICR, 0xc4600); // SIPI
@@ -107,7 +113,7 @@ void smp_main()
         }
     }
     assert(cpu);
-    cpu->arch.init_on_cpu();
+    cpu->init_on_cpu();
     cpu->bringup_thread->_cpu = cpu;
     cpu->bringup_thread->switch_to_first();
 }

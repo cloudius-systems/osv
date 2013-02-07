@@ -2,6 +2,7 @@
 #define MUTEX_H_
 
 #include <stdbool.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,6 +33,7 @@ void mutex_unlock(mutex_t* m);
 
 static __always_inline void mutex_init(mutex_t* m)
 {
+    memset(m, 0, sizeof(*m));
 }
 
 static __always_inline void mutex_destroy(mutex_t* m)
