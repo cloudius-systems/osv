@@ -50,12 +50,6 @@ extern "C" {
     void __stack_chk_fail(void);
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
-    double __strtod_l(__const char *__restrict __nptr,
-		      char **__restrict __endptr, __locale_t __loc)
-	__THROW __nonnull ((1, 3));
-    float __strtof_l(__const char *__restrict __nptr,
-		     char **__restrict __endptr, __locale_t __loc)
-	__THROW __nonnull((1, 3)) __wur;
     char *__nl_langinfo_l(nl_item __item, __locale_t __l);
     wint_t __towlower_l(wint_t __wc, __locale_t __locale) __THROW;
     int __wcscoll_l(__const wchar_t *__s1, __const wchar_t *__s2,
@@ -308,14 +302,6 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     abort();
 }
 
-UNIMPL(long double strtold_l(__const char *__restrict __nptr,
-			     char **__restrict __endptr, __locale_t __loc))
-UNIMPL(double __strtod_l(__const char *__restrict __nptr,
-			 char **__restrict __endptr, __locale_t __loc)
-			 __THROW)
-UNIMPL(float __strtof_l(__const char *__restrict __nptr,
-			char **__restrict __endptr, __locale_t __loc)
-       __THROW)
 UNIMPL(size_t __wcsftime_l (wchar_t *__restrict __s, size_t __maxsize,
 			    __const wchar_t *__restrict __format,
 			    __const struct tm *__restrict __tp,
