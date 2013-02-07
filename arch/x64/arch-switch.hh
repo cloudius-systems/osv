@@ -54,6 +54,12 @@ void thread::switch_to_first()
 void thread::init_stack()
 {
     auto& stack = _attr.stack;
+    if (!stack.size) {
+        stack.size = 65536;
+    }
+    if (!stack.begin) {
+        stack.begin = malloc(stack.size);
+    }
     void** stacktop = reinterpret_cast<void**>(stack.begin + stack.size);
     *--stacktop = this;
     *--stacktop = reinterpret_cast<void*>(thread_main);

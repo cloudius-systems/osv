@@ -86,7 +86,7 @@ void thread::yield()
 }
 
 thread::stack_info::stack_info()
-    : begin(malloc(65536)), size(65536), owned(true)
+    : begin(nullptr), size(0), owned(true)
 {
 }
 
