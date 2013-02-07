@@ -120,6 +120,7 @@ bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/porting/netport.o
 bsd += bsd/porting/uma_stub.o
 bsd += bsd/porting/sync_stub.o
+bsd += bsd/sys/net/if_llatbl.o  
 bsd += bsd/sys/net/radix.o  
 bsd += bsd/sys/net/route.o  
 bsd += bsd/sys/net/if_clone.o  
