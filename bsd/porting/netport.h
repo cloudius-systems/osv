@@ -7,6 +7,8 @@
 
 #include <sys/types.h>
 
+#define panic(...) abort()
+
 #define log(x, fmt, ...) do {} while(0)
 
 #ifndef __BSD_VISIBLE
@@ -17,8 +19,11 @@ typedef __uint8_t   __sa_family_t;
 
 #define PAGE_SIZE (4096)
 
+void abort(void);
 void* malloc(size_t size);
 void free(void* object);
+size_t strlcat(char *dst, const char *src, size_t siz);
+size_t strlcpy(char *dst, const char *src, size_t siz);
 
 /* Tracing... */
 #define CTR0(m, d)          (void)0
@@ -73,11 +78,6 @@ typedef uintptr_t __uintptr_t;
 #define __DEQUALIFY(type, var)  ((type)(__uintptr_t)(const volatile void *)(var))
 #endif
 
-static __inline void panic(const char* msg)
-{
-    return;
-}
-
 #ifdef INVARIANTS
 #undef INVARIANTS
 #endif
@@ -115,5 +115,8 @@ typedef __builtin_va_list   __va_list;  /* internally known to gcc */
 
 /* Max number conversion buffer length: a u_quad_t in base 2, plus NUL byte. */
 #define MAXNBUF (sizeof(intmax_t) * NBBY + 1)
+
+
+#define copyout(kaddr, uaddr, len) (int)0; memcpy(uaddr, kaddr, len)
 
 #endif
