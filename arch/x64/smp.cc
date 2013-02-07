@@ -92,6 +92,7 @@ void smp_launch()
         }
         sched::thread::attr attr;
         attr.stack = { new char[81920], 81920 };
+        attr.pinned = true;
         c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
     }
     apic->write(apicreg::ICR, 0xc4500); // INIT
