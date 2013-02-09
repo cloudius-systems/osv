@@ -145,6 +145,8 @@ objects += core/sched.o
 objects += core/mmio.o
 objects += core/sglist.o
 
+unittests:= tests/tst-hub.o
+
 include $(src)/libc/build.mak
 
 objects += $(addprefix libc/, $(libc))
@@ -163,7 +165,7 @@ libgcc_s.a = $(shell find $(gccbase) -name libgcc.a |  grep -v /32/)
 libgcc_eh.a = $(shell find $(gccbase) -name libgcc_eh.a |  grep -v /32/)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
-        $(objects) dummy-shlib.so \
+        $(objects) $(unittests) dummy-shlib.so \
 		bootfs.bin
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \

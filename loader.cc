@@ -23,6 +23,7 @@
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 #include "barrier.hh"
+#include "tests/tst-hub.hh"
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -77,8 +78,6 @@ void disable_pic()
     outb(0xff, 0x21);
     outb(0xff, 0xa1);
 }
-
-static int test_ctr;
 
 using sched::thread;
 // since it contains actual code it needs to be after the 'using' declaration
@@ -217,8 +216,9 @@ void* do_main_thread(void *_args)
     auto args = static_cast<argblock*>(_args);
 
     //Tests malloc and free using threads.
-    test_alloc();
-    test_threads();
+    unit_tests::tests::instance().execute_tests();
+    //test_alloc();
+    //test_threads();
     test_clock_events();
 
     // Enumerate PCI devices
