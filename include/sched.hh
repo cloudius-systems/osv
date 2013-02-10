@@ -131,7 +131,8 @@ private:
 typedef bi::list<thread,
                  bi::member_hook<thread,
                                  bi::list_member_hook<>,
-                                 &thread::_runqueue_link>
+                                 &thread::_runqueue_link>,
+                 bi::constant_time_size<true> // for load estimation
                 > runqueue_type;
 
 struct cpu {
