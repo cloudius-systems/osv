@@ -103,16 +103,19 @@ struct driver virtio_blk_driver = {
 
         _dev->register_callback([this] { this->response_worker();});
 
+
+        struct virtio_blk_priv* prv;
+        struct device *dev;
+        std::string dev_name("vblk");
+        dev_name += std::to_string(_id);
+
+        dev = device_create(&virtio_blk_driver, dev_name.c_str(), D_BLK);
+        prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+        prv->drv = this;
+
         // Perform test if this isn't the boot image (test is destructive
         if (_id > 0) {
             debug(fmt("virtio blk: testing instance %d") % _id);
-
-            struct virtio_blk_priv* prv;
-            struct device *dev;
-
-            dev = device_create(&virtio_blk_driver, "vblk0", D_BLK);
-            prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
-            prv->drv = this;
 
             for (int i=0;i<6;i++) {
                 debug(fmt("Running test %d") % i);
@@ -275,55 +278,70 @@ struct driver virtio_blk_driver = {
     static const int sector_size = 512;
 
     int virtio_blk::make_virtio_request(struct bio* bio)
-        {
-            if (!bio) return EIO;
+    {
+        if (!bio) return EIO;
 
-            if ((bio->bio_cmd & (BIO_READ | BIO_WRITE)) == 0)
-                return ENOTBLK;
+        int in = 1, out = 1, *buf_count;
+        virtio_blk_request_type type;
 
-            virtio_blk_request_type type = (bio->bio_cmd == BIO_READ)? VIRTIO_BLK_T_IN:VIRTIO_BLK_T_OUT;
-            sglist* sg = new sglist();
-
-            // need to break a contiguous buffers that > 4k into several physical page mapping
-            // even if the virtual space is contiguous.
-            int len = 0;
-            int offset = bio->bio_offset;
-            while (len != bio->bio_bcount) {
-                int size = std::min((int)bio->bio_bcount - len, page_size);
-                if (offset + size > page_size)
-                    size = page_size - offset;
-                len += size;
-                sg->add(mmu::virt_to_phys(bio->bio_data + offset), size);
-                offset += size;
-            }
-
-            virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
-            hdr->type = type;
-            hdr->ioprio = 0;
-            hdr->sector = (int)bio->bio_offset / sector_size; //wait, isn't offset starts on page addr??
-
-            //push 'output' buffers to the beginning of the sg list
-            sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
-
-            virtio_blk_res* res = new virtio_blk_res;
-            res->status = 0;
-            sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
-
-            virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
-            vring* queue = _dev->get_virt_queue(0);
-            int in = 1 , out = 1;
-            if (bio->bio_cmd == BIO_READ)
-                in += len/page_size + 1;
-            else
-                out += len/page_size + 1;
-            if (!queue->add_buf(req->payload,out,in,req)) {
-               //todo: free req;
-               return EBUSY;
-            }
-
-            queue->kick(); // should be out of the loop but I like plenty of irqs for the test
-
-            return 0;
+        switch (bio->bio_cmd) {
+        case BIO_READ:
+            type = VIRTIO_BLK_T_IN;
+            buf_count = &in;
+            break;
+        case BIO_WRITE:
+            type = VIRTIO_BLK_T_OUT;
+            buf_count = &out;
+            break;
+        default:
+            return ENOTBLK;
         }
+
+        sglist* sg = new sglist();
+
+        // need to break a contiguous buffers that > 4k into several physical page mapping
+        // even if the virtual space is contiguous.
+        int len = 0;
+        int offset = bio->bio_offset;
+        //todo fix hack that works around the zero offset issue
+        offset = 0xfff & reinterpret_cast<long>(bio->bio_data);
+        void *base = bio->bio_data;
+        while (len != bio->bio_bcount) {
+            int size = std::min((int)bio->bio_bcount - len, page_size);
+            if (offset + size > page_size)
+                size = page_size - offset;
+            len += size;
+            sg->add(mmu::virt_to_phys(base), size);
+            base += size;
+            offset = 0;
+            (*buf_count)++;
+        }
+
+        virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
+        hdr->type = type;
+        hdr->ioprio = 0;
+        // TODO - fix offset source
+        hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
+
+        //push 'output' buffers to the beginning of the sg list
+        sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
+
+        virtio_blk_res* res = new virtio_blk_res;
+        res->status = 0;
+        sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
+
+        virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
+        vring* queue = _dev->get_virt_queue(0);
+
+        if (!queue->add_buf(req->payload,out,in,req)) {
+            // TODO need to clea the bio
+            delete req;
+            return EBUSY;
+        }
+
+        queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+
+        return 0;
+    }
 
 }
