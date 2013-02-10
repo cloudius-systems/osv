@@ -79,7 +79,7 @@ void ap_bringup(sched::cpu* c)
 {
     debug(fmt("bringup %x") % c->arch.apic_id);
     __sync_fetch_and_add(&smp_processors, 1);
-    abort();
+    c->load_balance();
 }
 
 void smp_launch()
@@ -88,6 +88,9 @@ void smp_launch()
         if (c->arch.apic_id == apic->id()) {
             c->init_on_cpu();
             sched::thread::current()->_cpu = c;
+            sched::thread::attr attr;
+            attr.pinned = true;
+            new sched::thread([c] { c->load_balance(); }, attr);
             continue;
         }
         sched::thread::attr attr;

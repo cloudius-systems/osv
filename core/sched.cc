@@ -69,6 +69,39 @@ void cpu::init_on_cpu()
     clock_event->setup_on_cpu();
 }
 
+unsigned cpu::load()
+{
+    return runqueue.size();
+}
+
+void cpu::load_balance()
+{
+    timer tmr(*thread::current());
+    while (true) {
+        tmr.set(clock::get()->time() + 100000000);
+        thread::wait_until([&] { return tmr.expired(); });
+        if (runqueue.empty()) {
+            continue;
+        }
+        auto min = *std::min_element(cpus.begin(), cpus.end(),
+                [](cpu* c1, cpu* c2) { return c1->load() < c2->load(); });
+        if (min == this) {
+            continue;
+        }
+        with_lock(irq_lock, [this, min] {
+            if (runqueue.empty()) {
+                return;
+            }
+            auto& mig = runqueue.back();
+            runqueue.pop_back();
+            // we won't race with wake(), since we're not _waiting
+            mig._cpu = min;
+            min->incoming_wakeups[id].push_front(mig);
+            // FIXME: IPI
+        });
+    }
+}
+
 void schedule(bool yield)
 {
     cpu::current()->schedule(yield);

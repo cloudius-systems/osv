@@ -148,6 +148,8 @@ struct cpu {
     void init_on_cpu();
     void schedule(bool yield = false);
     void handle_incoming_wakeups();
+    void load_balance();
+    unsigned load();
 };
 
 thread* current();
