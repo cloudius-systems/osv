@@ -65,7 +65,7 @@ autodepend = -MD -MT $@ -MP
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
-tests += tests/bench/bench.jar
+tests += tests/tst-vblk.so tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -73,6 +73,7 @@ java/RunJar.class: javabase=java
 
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
+tests/tst-vblk.so: tests/tst-vblk.o
 
 all: loader.img loader.bin
 
