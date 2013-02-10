@@ -74,7 +74,7 @@ u64 kvmclock::system_time()
         if (_sys->tsc_shift >= 0) {
             time <<= _sys->tsc_shift;
         } else {
-            time >>= _sys->tsc_shift;
+            time >>= -_sys->tsc_shift;
         }
         asm("mul %1; shrd $32, %%rdx, %0"
                 : "+a"(time)
