@@ -278,18 +278,36 @@
 #define	MAX(a,b) (((a)>(b))?(a):(b))
 
 #ifdef _KERNEL
+
+#define __bswap64_const(_x)         \
+    (((_x) >> 56) |             \
+    (((_x) >> 40) & (0xffUL << 8)) |    \
+    (((_x) >> 24) & (0xffUL << 16)) |   \
+    (((_x) >> 8) & (0xffUL << 24)) |    \
+    (((_x) << 8) & (0xffUL << 32)) |    \
+    (((_x) << 24) & (0xffUL << 40)) |   \
+    (((_x) << 40) & (0xffUL << 48)) |   \
+    ((_x) << 56))
+
+#define __bswap32_const(_x)         \
+    (((_x) >> 24) |             \
+    (((_x) & (0xff << 16)) >> 8) |      \
+    (((_x) & (0xff << 8)) << 8) |       \
+    ((_x) << 24))
+
+#define __bswap16_const(_x) (__uint16_t)((_x) << 8 | (_x) >> 8)
+
+#define __htonl(x)  __bswap32_const(x)
+#define __htons(x)  __bswap16_const(x)
+#define __ntohl(x)  __bswap32_const(x)
+#define __ntohs(x)  __bswap16_const(x)
+
 /*
  * Basic byte order function prototypes for non-inline functions.
  */
 #ifndef LOCORE
 #ifndef _BYTEORDER_PROTOTYPED
 #define	_BYTEORDER_PROTOTYPED
-__BEGIN_DECLS
-__uint32_t	 htonl(__uint32_t);
-__uint16_t	 htons(__uint16_t);
-__uint32_t	 ntohl(__uint32_t);
-__uint16_t	 ntohs(__uint16_t);
-__END_DECLS
 #endif
 #endif
 

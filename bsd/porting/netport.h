@@ -7,6 +7,10 @@
 
 #include <sys/types.h>
 
+#ifndef time_uptime
+#define time_uptime (1)
+#endif
+
 #define __packed    __attribute__((__packed__))
 
 #ifndef INET

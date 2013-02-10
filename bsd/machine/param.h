@@ -291,33 +291,6 @@
 #define	MIN(a,b) (((a)<(b))?(a):(b))
 #define	MAX(a,b) (((a)>(b))?(a):(b))
 
-#ifdef _KERNEL
-/*
- * Basic byte order function prototypes for non-inline functions.
- */
-#ifndef LOCORE
-#ifndef _BYTEORDER_PROTOTYPED
-#define	_BYTEORDER_PROTOTYPED
-__BEGIN_DECLS
-__uint32_t	 htonl(__uint32_t);
-__uint16_t	 htons(__uint16_t);
-__uint32_t	 ntohl(__uint32_t);
-__uint16_t	 ntohs(__uint16_t);
-__END_DECLS
-#endif
-#endif
-
-#ifndef lint
-#ifndef _BYTEORDER_FUNC_DEFINED
-#define	_BYTEORDER_FUNC_DEFINED
-#define	htonl(x)	__htonl(x)
-#define	htons(x)	__htons(x)
-#define	ntohl(x)	__ntohl(x)
-#define	ntohs(x)	__ntohs(x)
-#endif /* !_BYTEORDER_FUNC_DEFINED */
-#endif /* lint */
-#endif /* _KERNEL */
-
 /*
  * Scale factor for scaled integers used to count %cpu time and load avgs.
  *

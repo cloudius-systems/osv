@@ -37,6 +37,8 @@
 #include <net/ethernet.h>
 #include <net/if_arp.h>
 
+void    arp_init(void);
+
 /*
  * Macro to map an IP multicast address to an Ethernet multicast address.
  * The high-order 25 bits of the Ethernet address are statically assigned,

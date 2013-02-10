@@ -34,6 +34,7 @@
 #define	_NETINET_IN_H_
 
 #include <porting/netport.h>
+#include <endian.h>
 #include <sys/cdefs.h>
 
 /* Protocols common to RFC 1700, POSIX, and X/Open. */

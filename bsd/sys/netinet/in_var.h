@@ -114,6 +114,7 @@ VNET_DECLARE(u_long, in_ifaddrhmask);		/* mask for hash table */
 #define INADDR_HASH(x) \
 	(&V_in_ifaddrhashtbl[INADDR_HASHVAL(x) & V_in_ifaddrhmask])
 
+#if 0
 extern	struct rwlock in_ifaddr_lock;
 
 #define	IN_IFADDR_LOCK_ASSERT()	rw_assert(&in_ifaddr_lock, RA_LOCKED)
@@ -123,6 +124,17 @@ extern	struct rwlock in_ifaddr_lock;
 #define	IN_IFADDR_WLOCK()	rw_wlock(&in_ifaddr_lock)
 #define	IN_IFADDR_WLOCK_ASSERT()	rw_assert(&in_ifaddr_lock, RA_WLOCKED)
 #define	IN_IFADDR_WUNLOCK()	rw_wunlock(&in_ifaddr_lock)
+#else
+
+#define IN_IFADDR_LOCK_ASSERT() do{}while(0)
+#define IN_IFADDR_RLOCK()   do{}while(0)
+#define IN_IFADDR_RLOCK_ASSERT()    do{}while(0)
+#define IN_IFADDR_RUNLOCK() do{}while(0)
+#define IN_IFADDR_WLOCK()   do{}while(0)
+#define IN_IFADDR_WLOCK_ASSERT()    do{}while(0)
+#define IN_IFADDR_WUNLOCK() do{}while(0)
+
+#endif
 
 /*
  * Macro for finding the internet address structure (in_ifaddr)

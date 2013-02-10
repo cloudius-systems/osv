@@ -36,25 +36,23 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
-#include "opt_inet.h"
+#include <porting/netport.h>
 
 #include <sys/param.h>
-#include <sys/kernel.h>
 #include <sys/queue.h>
 #include <sys/sysctl.h>
-#include <sys/systm.h>
 #include <sys/mbuf.h>
-#include <sys/malloc.h>
-#include <sys/proc.h>
 #include <sys/socket.h>
 #include <sys/syslog.h>
 
 #include <net/if.h>
 #include <net/if_dl.h>
 #include <net/if_types.h>
+
+#if 0
 #include <net/netisr.h>
+#endif
+
 #include <net/if_llc.h>
 #include <net/ethernet.h>
 #include <net/route.h>
@@ -64,21 +62,15 @@ __FBSDID("$FreeBSD$");
 #include <netinet/in_var.h>
 #include <net/if_llatbl.h>
 #include <netinet/if_ether.h>
-#if defined(INET)
-#include <netinet/ip_carp.h>
-#endif
-
-#include <net/if_arc.h>
-#include <net/iso88025.h>
-
-#include <security/mac/mac_framework.h>
 
 #define SIN(s) ((struct sockaddr_in *)s)
 #define SDL(s) ((struct sockaddr_dl *)s)
 
+#if 0
 SYSCTL_DECL(_net_link_ether);
 SYSCTL_NODE(_net_link_ether, PF_INET, inet, CTLFLAG_RW, 0, "");
 SYSCTL_NODE(_net_link_ether, PF_ARP, arp, CTLFLAG_RW, 0, "");
+#endif
 
 /* timer values */
 static VNET_DEFINE(int, arpt_keep) = (20*60);	/* once resolved, good for 20
@@ -100,6 +92,7 @@ static VNET_DEFINE(int, arp_maxhold) = 1;
 #define	V_arpstat		VNET(arpstat)
 #define	V_arp_maxhold		VNET(arp_maxhold)
 
+#if 0
 SYSCTL_VNET_INT(_net_link_ether_inet, OID_AUTO, max_age, CTLFLAG_RW,
 	&VNET_NAME(arpt_keep), 0,
 	"ARP entry lifetime in seconds");
@@ -121,22 +114,25 @@ SYSCTL_VNET_STRUCT(_net_link_ether_arp, OID_AUTO, stats, CTLFLAG_RW,
 SYSCTL_VNET_INT(_net_link_ether_inet, OID_AUTO, maxhold, CTLFLAG_RW,
 	&VNET_NAME(arp_maxhold), 0,
 	"Number of packets to hold per ARP entry");
+#endif
 
-static void	arp_init(void);
 void		arprequest(struct ifnet *,
 			struct in_addr *, struct in_addr *, u_char *);
-static void	arpintr(struct mbuf *);
+void	arpintr(struct mbuf *);
 static void	arptimer(void *);
 #ifdef INET
 static void	in_arpinput(struct mbuf *);
 #endif
 
+/* FIXME: OSv: netisr are needed, comment out for now */
+#if 0
 static const struct netisr_handler arp_nh = {
 	.nh_name = "arp",
 	.nh_handler = arpintr,
 	.nh_proto = NETISR_ARP,
 	.nh_policy = NETISR_POLICY_SOURCE,
 };
+#endif
 
 #ifdef AF_INET
 void arp_ifscrub(struct ifnet *ifp, uint32_t addr);
@@ -239,9 +235,6 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
 	MH_ALIGN(m, m->m_len);
 	ah = mtod(m, struct arphdr *);
 	bzero((caddr_t)ah, m->m_len);
-#ifdef MAC
-	mac_netinet_arp_send(ifp, m);
-#endif
 	ah->ar_pro = htons(ETHERTYPE_IP);
 	ah->ar_hln = ifp->if_addrlen;		/* hardware address length */
 	ah->ar_pln = sizeof(struct in_addr);	/* protocol address length */
@@ -325,7 +318,7 @@ retry:
 		if (!(la->la_flags & LLE_STATIC) &&
 		    time_uptime + la->la_preempt > la->la_expire) {
 			arprequest(ifp, NULL,
-			    &SIN(dst)->sin_addr, IF_LLADDR(ifp));
+			    &SIN(dst)->sin_addr, (u_char *)IF_LLADDR(ifp));
 
 			la->la_preempt--;
 		}
@@ -396,14 +389,15 @@ retry:
 
 		LLE_ADDREF(la);
 		la->la_expire = time_uptime;
-		canceled = callout_reset(&la->la_timer, hz * V_arpt_down,
+		/* FIXME: hz removed, the interface accepts seconds, not ticks */
+		canceled = callout_reset(&la->la_timer, V_arpt_down,
 		    arptimer, la);
 		if (canceled)
 			LLE_REMREF(la);
 		la->la_asked++;
 		LLE_WUNLOCK(la);
 		arprequest(ifp, NULL, &SIN(dst)->sin_addr,
-		    IF_LLADDR(ifp));
+		    (u_char *)IF_LLADDR(ifp));
 		return (error);
 	}
 done:
@@ -414,11 +408,13 @@ done:
 	return (error);
 }
 
+/* FIXME: OSv: this is the netisr */
+
 /*
  * Common length and type checks are done here,
  * then the protocol-specific routine is called.
  */
-static void
+void
 arpintr(struct mbuf *m)
 {
 	struct arphdr *ar;
@@ -483,6 +479,7 @@ static int log_arp_movements = 1;
 static int log_arp_permanent_modify = 1;
 static int allow_multicast = 0;
 
+#if 0
 SYSCTL_INT(_net_link_ether_inet, OID_AUTO, log_arp_wrong_iface, CTLFLAG_RW,
 	&log_arp_wrong_iface, 0,
 	"log arp packets arriving on the wrong interface");
@@ -494,6 +491,7 @@ SYSCTL_INT(_net_link_ether_inet, OID_AUTO, log_arp_permanent_modify, CTLFLAG_RW,
 	"log arp replies from MACs different than the one in the permanent arp entry");
 SYSCTL_INT(_net_link_ether_inet, OID_AUTO, allow_multicast, CTLFLAG_RW,
 	&allow_multicast, 0, "accept multicast addresses");
+#endif
 
 static void
 in_arpinput(struct mbuf *m)
@@ -565,14 +563,6 @@ in_arpinput(struct mbuf *m)
 		if (((bridged && ia->ia_ifp->if_bridge == ifp->if_bridge) ||
 		    ia->ia_ifp == ifp) &&
 		    itaddr.s_addr == ia->ia_addr.sin_addr.s_addr) {
-			ifa_ref(&ia->ia_ifa);
-			IN_IFADDR_RUNLOCK();
-			goto match;
-		}
-		if (ifp->if_carp != NULL &&
-		    (*carp_iamatch_p)(ifp, ia, &isaddr, &enaddr) &&
-		    itaddr.s_addr == ia->ia_addr.sin_addr.s_addr) {
-			carp_match = 1;
 			ifa_ref(&ia->ia_ifa);
 			IN_IFADDR_RUNLOCK();
 			goto match;
@@ -730,7 +720,7 @@ match:
 			LLE_ADDREF(la);
 			la->la_expire = time_uptime + V_arpt_keep;
 			canceled = callout_reset(&la->la_timer,
-			    hz * V_arpt_keep, arptimer, la);
+			    V_arpt_keep, arptimer, la);
 			if (canceled)
 				LLE_REMREF(la);
 		}
@@ -874,7 +864,7 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 
 	if (ntohl(IA_SIN(ifa)->sin_addr.s_addr) != INADDR_ANY) {
 		arprequest(ifp, &IA_SIN(ifa)->sin_addr,
-				&IA_SIN(ifa)->sin_addr, IF_LLADDR(ifp));
+				&IA_SIN(ifa)->sin_addr, (u_char *)IF_LLADDR(ifp));
 		/*
 		 * interface address is considered static entry
 		 * because the output of the arp utility shows
@@ -902,10 +892,13 @@ arp_ifinit2(struct ifnet *ifp, struct ifaddr *ifa, u_char *enaddr)
 	ifa->ifa_rtrequest = NULL;
 }
 
-static void
+void
 arp_init(void)
 {
-
-	netisr_register(&arp_nh);
+    /* FIXME: Uncomment when implemented */
+	// netisr_register(&arp_nh);
 }
+
+#if 0
 SYSINIT(arp, SI_SUB_PROTO_DOMAIN, SI_ORDER_ANY, arp_init, 0);
+#endif
