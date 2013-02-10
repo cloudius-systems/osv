@@ -430,9 +430,6 @@ void	if_start(struct ifnet *);
 #define	IFQ_ENQUEUE(ifq, m, err)					\
 do {									\
 	IF_LOCK(ifq);							\
-	if (ALTQ_IS_ENABLED(ifq))					\
-		ALTQ_ENQUEUE(ifq, m, NULL, err);			\
-	else {								\
 		if (_IF_QFULL(ifq)) {					\
 			m_freem(m);					\
 			(err) = ENOBUFS;				\
@@ -440,7 +437,6 @@ do {									\
 			_IF_ENQUEUE(ifq, m);				\
 			(err) = 0;					\
 		}							\
-	}								\
 	if (err)							\
 		(ifq)->ifq_drops++;					\
 	IF_UNLOCK(ifq);							\
@@ -450,8 +446,6 @@ do {									\
 do {									\
 	if (TBR_IS_ENABLED(ifq))					\
 		(m) = tbr_dequeue_ptr(ifq, ALTDQ_REMOVE);		\
-	else if (ALTQ_IS_ENABLED(ifq))					\
-		ALTQ_DEQUEUE(ifq, m);					\
 	else								\
 		_IF_DEQUEUE(ifq, m);					\
 } while (0)

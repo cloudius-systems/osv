@@ -6,6 +6,89 @@
 #include <memory.h>
 
 #include <sys/types.h>
+#include <sys/queue.h>
+
+/* FIXME: struct socket is here for compilation purposes only */
+
+/*-
+ * Locking key to struct socket:
+ * (a) constant after allocation, no locking required.
+ * (b) locked by SOCK_LOCK(so).
+ * (c) locked by SOCKBUF_LOCK(&so->so_rcv).
+ * (d) locked by SOCKBUF_LOCK(&so->so_snd).
+ * (e) locked by ACCEPT_LOCK().
+ * (f) not locked since integer reads/writes are atomic.
+ * (g) used only as a sleep/wakeup address, no value.
+ * (h) locked by global mutex so_global_mtx.
+ */
+struct socket {
+    int so_count;       /* (b) reference count */
+    short   so_type;        /* (a) generic type, see socket.h */
+    short   so_options;     /* from socket call, see socket.h */
+    short   so_linger;      /* time to linger while closing */
+    short   so_state;       /* (b) internal state flags SS_* */
+    int so_qstate;      /* (e) internal state flags SQ_* */
+    void    *so_pcb;        /* protocol control block */
+    struct  vnet *so_vnet;      /* network stack instance */
+    struct  protosw *so_proto;  /* (a) protocol handle */
+/*
+ * Variables for connection queuing.
+ * Socket where accepts occur is so_head in all subsidiary sockets.
+ * If so_head is 0, socket is not related to an accept.
+ * For head socket so_incomp queues partially completed connections,
+ * while so_comp is a queue of connections ready to be accepted.
+ * If a connection is aborted and it has so_head set, then
+ * it has to be pulled out of either so_incomp or so_comp.
+ * We allow connections to queue up based on current queue lengths
+ * and limit on number of queued connections for this socket.
+ */
+    struct  socket *so_head;    /* (e) back pointer to listen socket */
+    TAILQ_HEAD(, socket) so_incomp; /* (e) queue of partial unaccepted connections */
+    TAILQ_HEAD(, socket) so_comp;   /* (e) queue of complete unaccepted connections */
+    TAILQ_ENTRY(socket) so_list;    /* (e) list of unaccepted connections */
+    u_short so_qlen;        /* (e) number of unaccepted connections */
+    u_short so_incqlen;     /* (e) number of unaccepted incomplete
+                       connections */
+    u_short so_qlimit;      /* (e) max number queued connections */
+    short   so_timeo;       /* (g) connection timeout */
+    u_short so_error;       /* (f) error affecting connection */
+    struct  sigio *so_sigio;    /* [sg] information for async I/O or
+                       out of band data (SIGURG) */
+    u_long  so_oobmark;     /* (c) chars to oob mark */
+    TAILQ_HEAD(, aiocblist) so_aiojobq; /* AIO ops waiting on socket */
+
+    struct  ucred *so_cred;     /* (a) user credentials */
+    struct  label *so_label;    /* (b) MAC label for socket */
+    struct  label *so_peerlabel;    /* (b) cached MAC label for peer */
+    /* NB: generation count must not be first. */
+    int so_gencnt;     /* (h) generation count */
+    void    *so_emuldata;       /* (b) private data for emulators */
+    struct so_accf {
+        struct  accept_filter *so_accept_filter;
+        void    *so_accept_filter_arg;  /* saved filter args */
+        char    *so_accept_filter_str;  /* saved user args */
+    } *so_accf;
+    /*
+     * so_fibnum, so_user_cookie and friends can be used to attach
+     * some user-specified metadata to a socket, which then can be
+     * used by the kernel for various actions.
+     * so_user_cookie is used by ipfw/dummynet.
+     */
+    int so_fibnum;      /* routing domain for this socket */
+    uint32_t so_user_cookie;
+};
+
+/* pseudo-errors returned inside kernel to modify return to process */
+#define EJUSTRETURN (-2)        /* don't modify regs, just return */
+#define ENOIOCTL    (-3)        /* ioctl not handled by this layer */
+#define EDIRIOCTL   (-4)        /* do direct ioctl in GEOM */
+
+#define sx_slock(...) do{}while(0)
+#define sx_sunlock(...) do{}while(0)
+#define sx_xlock(...) do{}while(0)
+#define sx_xunlock(...) do{}while(0)
+
+#define getmicrotime(...) do{}while(0)
 
 #ifndef time_uptime
 #define time_uptime (1)

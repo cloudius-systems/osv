@@ -30,6 +30,7 @@
  * $FreeBSD$
  */
 
+#include <stdarg.h>
 #include <stddef.h>
 #include <porting/netport.h>
 #include <porting/sync_stub.h>
@@ -1689,7 +1690,7 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 	ifp->if_link_state = link_state;
 
 	/* FIXME: OSv: Not sure it's needed... */
-	do_link_state_change(ifp);
+	do_link_state_change(ifp, 0);
 	/* taskqueue_enqueue(taskqueue_swi, &ifp->if_linktask); */
 }
 
@@ -1713,10 +1714,12 @@ do_link_state_change(void *arg, int pending)
 	if (ifp->if_lagg)
 		(*lagg_linkstate_p)(ifp, link_state);
 
+#if 0
 	if (IS_DEFAULT_VNET(curvnet))
 		devctl_notify("IFNET", ifp->if_xname,
 		    (link_state == LINK_STATE_UP) ? "LINK_UP" : "LINK_DOWN",
 		    NULL);
+#endif
 	if (pending > 1)
 		if_printf(ifp, "%d link states coalesced\n", pending);
 	if (log_link_state_change)
@@ -2167,7 +2170,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		if (error)
 			return (error);
 		error = if_setlladdr(ifp,
-		    ifr->ifr_addr.sa_data, ifr->ifr_addr.sa_len);
+		    (const u_char *)ifr->ifr_addr.sa_data, ifr->ifr_addr.sa_len);
 		EVENTHANDLER_INVOKE(iflladdr_event, ifp);
 		break;
 
@@ -2529,8 +2532,6 @@ again:
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			struct sockaddr *sa = ifa->ifa_addr;
 
-			if (prison_if(curthread->td_ucred, sa) != 0)
-				continue;
 			addrs++;
 #ifdef COMPAT_43
 			if (cmd == OSIOCGIFCONF) {
