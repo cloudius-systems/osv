@@ -55,8 +55,10 @@ void cpu::handle_incoming_wakeups()
         incoming_wakeup_queue q;
         incoming_wakeups[i].copy_and_clear(q);
         while (!q.empty()) {
-            runqueue.push_back(q.front());
+            auto& t = q.front();
             q.pop_front_nonatomic();
+            t._on_runqueue = true;
+            runqueue.push_back(t);
         }
     }
 }
