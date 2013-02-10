@@ -24,30 +24,15 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#include <porting/netport.h>
+#include <porting/uma_stub.h>
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
-#include "opt_ddb.h"
-#include "opt_inet.h"
-#include "opt_inet6.h"
 
 #include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
 #include <sys/mbuf.h>
 #include <sys/syslog.h>
 #include <sys/sysctl.h>
 #include <sys/socket.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/rwlock.h>
-
-#ifdef DDB
-#include <ddb/ddb.h>
-#endif
-
-#include <vm/uma.h>
 
 #include <netinet/in.h>
 #include <net/if_llatbl.h>
@@ -57,10 +42,8 @@ __FBSDID("$FreeBSD$");
 #include <net/route.h>
 #include <net/vnet.h>
 #include <netinet/if_ether.h>
-#include <netinet6/in6_var.h>
-#include <netinet6/nd6.h>
-
-MALLOC_DEFINE(M_LLTABLE, "lltable", "link level address tables");
+// #include <netinet6/in6_var.h>
+// #include <netinet6/nd6.h>
 
 static VNET_DEFINE(SLIST_HEAD(, lltable), lltables);
 #define	V_lltables	VNET(lltables)
@@ -68,11 +51,12 @@ static VNET_DEFINE(SLIST_HEAD(, lltable), lltables);
 extern void arprequest(struct ifnet *, struct in_addr *, struct in_addr *,
 	u_char *);
 
-static void vnet_lltable_init(void);
-
+#if 0
 struct rwlock lltable_rwlock;
 RW_SYSINIT(lltable_rwlock, &lltable_rwlock, "lltable_rwlock");
-
+#else
+struct cmutex lltable_mtxlock;
+#endif
 /*
  * Dump arp state for a specific address family.
  */
@@ -195,7 +179,7 @@ lltable_free(struct lltable *llt)
 	}
 	IF_AFDATA_WUNLOCK(llt->llt_ifp);
 
-	free(llt, M_LLTABLE);
+	free(llt);
 }
 
 #if 0
@@ -253,7 +237,7 @@ lltable_init(struct ifnet *ifp, int af)
 	struct lltable *llt;
 	register int i;
 
-	llt = malloc(sizeof(struct lltable), M_LLTABLE, M_WAITOK);
+	llt = malloc(sizeof(struct lltable));
 
 	llt->llt_af = af;
 	llt->llt_ifp = ifp;
@@ -400,14 +384,16 @@ lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 	return (error);
 }
 
-static void
-vnet_lltable_init()
+void vnet_lltable_init()
 {
 
 	SLIST_INIT(&V_lltables);
 }
+
+#if 0
 VNET_SYSINIT(vnet_lltable_init, SI_SUB_PSEUDO, SI_ORDER_FIRST,
     vnet_lltable_init, NULL);
+#endif
 
 #ifdef DDB
 struct llentry_sa {

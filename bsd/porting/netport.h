@@ -7,6 +7,8 @@
 
 #include <sys/types.h>
 
+#define __packed    __attribute__((__packed__))
+
 #ifndef INET
     #define INET (1)
 #endif
