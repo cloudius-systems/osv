@@ -99,9 +99,6 @@ struct driver virtio_blk_driver = {
                       sizeof(_config.capacity));
         debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
 
-        thread* worker = new thread([this] { this->response_worker(); });
-        worker->wake(); // just to keep gcc happy about unused var
-
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
         _dev->register_callback([this] { this->response_worker();});
@@ -117,10 +114,14 @@ struct driver virtio_blk_driver = {
             prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
             prv->drv = this;
 
-            for (int i=0;i<2000;i++) {
+            for (int i=0;i<6;i++) {
                 debug(fmt("Running test %d") % i);
                 test();
-                //sched::thread::current()->yield();
+                timespec ts = {};
+                ts.tv_sec = 1;
+                nanosleep(&ts, nullptr);
+
+                sched::thread::current()->yield();
             }
         }
 
@@ -174,37 +175,42 @@ struct driver virtio_blk_driver = {
 
     void virtio_blk::test() {
         int i;
+        static bool is_write = true; // keep changing the type every call
 
         debug("test virtio blk");
         vring* queue = _dev->get_virt_queue(0);
         virtio_blk_req* req;
         const int iterations = 100;
 
-        debug(" write several requests");
-        for (i=0;i<iterations;i++) {
-            req = make_virtio_req(i*8, VIRTIO_BLK_T_OUT,i);
-            if (!queue->add_buf(req->payload,2,1,req)) {
-                break;
+        if (is_write) {
+            is_write = false;
+            debug(" write several requests");
+            for (i=0;i<iterations;i++) {
+                req = make_virtio_req(i*8, VIRTIO_BLK_T_OUT,i);
+                if (!queue->add_buf(req->payload,2,1,req)) {
+                    break;
+                }
             }
+
+            debug(fmt(" Let the host know about the %d requests") % i);
+            queue->kick();
+        } else {
+            is_write = true;
+            debug(" read several requests");
+            for (i=0;i<iterations;i++) {
+                req = make_virtio_req(i*8, VIRTIO_BLK_T_IN,0);
+                if (!queue->add_buf(req->payload,1,2,req)) {
+                    break;
+                }
+                if (i%2) queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+
+            }
+
+            debug(fmt(" Let the host know about the %d requests") % i);
+            queue->kick();
         }
 
-        debug(fmt(" Let the host know about the %d requests") % i);
-        queue->kick();
-
-        sched::thread::current()->yield();
-
-        debug(" read several requests");
-        for (i=0;i<iterations;i++) {
-            req = make_virtio_req(i*8, VIRTIO_BLK_T_IN,0);
-            if (!queue->add_buf(req->payload,1,2,req)) {
-                break;
-            }
-            if (i%2) queue->kick(); // should be out of the loop but I like plenty of irqs for the test
-
-        }
-
-        debug(fmt(" Let the host know about the %d requests") % i);
-        queue->kick();
+        //sched::thread::current()->yield();
 
         debug("test virtio blk end");
     }
@@ -215,14 +221,14 @@ struct driver virtio_blk_driver = {
 
         while (1) {
 
-            debug("\t ----> virtio_blk: response worker main loop");
+            debug("\t ----> virtio_blk: IRQ: response worker main loop");
 
             thread::wait_until([this] {
                 vring* queue = this->_dev->get_virt_queue(0);
-                return queue->used_ring_not_empy();
+                return queue->used_ring_not_empty();
             });
 
-            debug("\t ----> debug - blk thread awaken");
+            debug("\t ----> IRQ: debug - blk thread awaken");
 
             int i = 0;
 
