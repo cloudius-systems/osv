@@ -34,18 +34,9 @@
  * Loopback interface driver for protocol testing and timing.
  */
 
-#include "opt_atalk.h"
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_ipx.h"
-
+#include <porting/netport.h>
 #include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
 #include <sys/mbuf.h>
-#include <sys/module.h>
-#include <machine/bus.h>
-#include <sys/rman.h>
 #include <sys/socket.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
@@ -53,19 +44,14 @@
 #include <net/if.h>
 #include <net/if_clone.h>
 #include <net/if_types.h>
-#include <net/netisr.h>
+// #include <net/netisr.h>
 #include <net/route.h>
-#include <net/bpf.h>
+// #include <net/bpf.h>
 #include <net/vnet.h>
 
 #ifdef	INET
 #include <netinet/in.h>
 #include <netinet/in_var.h>
-#endif
-
-#ifdef IPX
-#include <netipx/ipx.h>
-#include <netipx/ipx_if.h>
 #endif
 
 #ifdef INET6
@@ -75,13 +61,6 @@
 #include <netinet6/in6_var.h>
 #include <netinet/ip6.h>
 #endif
-
-#ifdef NETATALK
-#include <netatalk/at.h>
-#include <netatalk/at_var.h>
-#endif
-
-#include <security/mac/mac_framework.h>
 
 #ifdef TINY_LOMTU
 #define	LOMTU	(1024+512)
@@ -107,25 +86,13 @@ static void	lo_clone_destroy(struct ifnet *);
 
 VNET_DEFINE(struct ifnet *, loif);	/* Used externally */
 
-#ifdef VIMAGE
-static VNET_DEFINE(struct ifc_simple_data, lo_cloner_data);
-static VNET_DEFINE(struct if_clone, lo_cloner);
-#define	V_lo_cloner_data	VNET(lo_cloner_data)
-#define	V_lo_cloner		VNET(lo_cloner)
-#endif
-
 IFC_SIMPLE_DECLARE(lo, 1);
 
 static void
 lo_clone_destroy(struct ifnet *ifp)
 {
 
-#ifndef VIMAGE
-	/* XXX: destroying lo0 will lead to panics. */
-	KASSERT(V_loif != ifp, ("%s: destroying lo0", __func__));
-#endif
-
-	bpfdetach(ifp);
+	// bpfdetach(ifp);
 	if_detach(ifp);
 	if_free(ifp);
 }
@@ -149,66 +116,22 @@ lo_clone_create(struct if_clone *ifc, int unit, caddr_t params)
 	    IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6;
 	ifp->if_hwassist = LO_CSUM_FEATURES | LO_CSUM_FEATURES6;
 	if_attach(ifp);
-	bpfattach(ifp, DLT_NULL, sizeof(u_int32_t));
+	// bpfattach(ifp, DLT_NULL, sizeof(u_int32_t));
 	if (V_loif == NULL)
 		V_loif = ifp;
 
 	return (0);
 }
 
-static void
-vnet_loif_init(const void *unused __unused)
+void vnet_loif_init(const void *__unused)
 {
-
-#ifdef VIMAGE
-	V_lo_cloner = lo_cloner;
-	V_lo_cloner_data = lo_cloner_data;
-	V_lo_cloner.ifc_data = &V_lo_cloner_data;
-	if_clone_attach(&V_lo_cloner);
-#else
 	if_clone_attach(&lo_cloner);
-#endif
 }
+
+#if 0
 VNET_SYSINIT(vnet_loif_init, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY,
     vnet_loif_init, NULL);
-
-#ifdef VIMAGE
-static void
-vnet_loif_uninit(const void *unused __unused)
-{
-
-	if_clone_detach(&V_lo_cloner);
-	V_loif = NULL;
-}
-VNET_SYSUNINIT(vnet_loif_uninit, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY,
-    vnet_loif_uninit, NULL);
 #endif
-
-static int
-loop_modevent(module_t mod, int type, void *data)
-{
-
-	switch (type) {
-	case MOD_LOAD:
-		break;
-
-	case MOD_UNLOAD:
-		printf("loop module unload - not possible for this module type\n");
-		return (EINVAL);
-
-	default:
-		return (EOPNOTSUPP);
-	}
-	return (0);
-}
-
-static moduledata_t loop_mod = {
-	"if_lo",
-	loop_modevent,
-	0
-};
-
-DECLARE_MODULE(if_lo, loop_mod, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY);
 
 int
 looutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
@@ -216,21 +139,11 @@ looutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
 {
 	u_int32_t af;
 	struct rtentry *rt = NULL;
-#ifdef MAC
-	int error;
-#endif
 
 	M_ASSERTPKTHDR(m); /* check if we have the packet header */
 
 	if (ro != NULL)
 		rt = ro->ro_rt;
-#ifdef MAC
-	error = mac_ifnet_check_transmit(ifp, m);
-	if (error) {
-		m_freem(m);
-		return (error);
-	}
-#endif
 
 	if (rt && rt->rt_flags & (RTF_REJECT|RTF_BLACKHOLE)) {
 		m_freem(m);
@@ -273,9 +186,6 @@ looutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
 #endif
 		m->m_pkthdr.csum_flags &= ~LO_CSUM_FEATURES6;
 		break;
-	case AF_IPX:
-	case AF_APPLETALK:
-		break;
 	default:
 		printf("looutput: af=%d unexpected\n", dst->sa_family);
 		m_freem(m);
@@ -304,10 +214,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 	m_tag_delete_nonpersistent(m);
 	m->m_pkthdr.rcvif = ifp;
 
-#ifdef MAC
-	mac_ifnet_create_mbuf(ifp, m);
-#endif
-
+#if 0
 	/*
 	 * Let BPF see incoming packet in the following manner:
 	 *  - Emulated packet loopback for a simplex interface
@@ -335,6 +242,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 			}
 		}
 	}
+#endif
 
 	/* Strip away media header */
 	if (hlen > 0) {
@@ -359,7 +267,9 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 	switch (af) {
 #ifdef INET
 	case AF_INET:
-		isr = NETISR_IP;
+	    /* FIXME: OSv: uncomment when netisr are enabled */
+		// isr = NETISR_IP;
+	    isr = 0;
 		break;
 #endif
 #ifdef INET6
@@ -385,7 +295,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 	}
 	ifp->if_ipackets++;
 	ifp->if_ibytes += m->m_pkthdr.len;
-	netisr_queue(isr, m);	/* mbuf is free'd on failure. */
+	// netisr_queue(isr, m);	/* mbuf is free'd on failure. */
 	return (0);
 }
 

@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 
+#define __NO_STRICT_ALIGNMENT
+
 /* FIXME: struct socket is here for compilation purposes only */
 
 /*-

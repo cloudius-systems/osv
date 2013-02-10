@@ -44,6 +44,8 @@ void if_init(void *__unused);
 void vnet_if_init(const void *__unused);
 void if_attachdomain(void *dummy);
 
+void vnet_loif_init(const void *__unused);
+
 #if __BSD_VISIBLE
 /*
  * <net/if.h> does not depend on <sys/time.h> on most other systems.  This
