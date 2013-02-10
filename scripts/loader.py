@@ -164,12 +164,18 @@ class osv_info_threads(gdb.Command):
                 status = 'rdy '
                 if long(t['_waiting']['_M_base']['_M_i']):
                     status = 'wait'
+                function = '??'
+                if fr.function():
+                    function = fr.function().name
+                fname = '??'
+                if sal.symtab:
+                    fname = sal.symtab.filename
                 gdb.write('%s cpu%s %s %s at %s:%s\n' %
                           (ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
-                           fr.function().name,
-                           sal.symtab.filename,
+                           function,
+                           fname,
                            sal.line
                            )
                           )
