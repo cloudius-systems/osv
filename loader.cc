@@ -132,15 +132,9 @@ void* do_main_thread(void *_args)
 
     //Tests malloc and free using threads.
     unit_tests::tests::instance().execute_tests();
-    //test_alloc();
-    //test_threads();
 
     // Enumerate PCI devices
-    pci::pci_devices_print();
     pci::pci_device_enumeration();
-
-    // List all devices
-    hw::device_manager::instance()->list_devices();
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
