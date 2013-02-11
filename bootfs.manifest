@@ -19,6 +19,7 @@
 /tests/tst-clock.so: ../../external/glibc-testsuite/build/debug/rt/tst-clock.so
 /tests/tst-ramdisk.so: ./tests/tst-ramdisk.so
 /tests/tst-ramdisk.so: ./tests/tst-vblk.so
+/testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
 /java/RunJar.class: java/RunJar.class

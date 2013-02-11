@@ -9,11 +9,7 @@
 #include "exceptions.hh"
 #include "debug.hh"
 #include "drivers/pci.hh"
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include "smp.hh"
-//#include <locale>
 
 #include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
@@ -144,63 +140,6 @@ struct argblock {
     char** av;
 };
 
-void load_test(elf::program *prog, char *path)
-{
-    printf("running %s\n", path);
-
-    prog->add_object(path);
-
-    auto test_main
-        = prog->lookup_function<int (int, const char **)>("main");
-    std::string str = "test";
-    const char *name = str.c_str();
-    int ret = test_main(1, &name);
-    if (ret)
-        printf("failed.\n");
-    else
-        printf("ok.\n");
-
-    prog->remove_object(path);
-}
-
-
-int load_tests(elf::program *prog, struct argblock *args)
-{
-#define TESTDIR		"/tests"
-    DIR *dir = opendir(TESTDIR);
-    char path[PATH_MAX];
-    struct dirent *d;
-    struct stat st;
-
-    if (!dir) {
-        perror("failed to open testdir");
-        return EXIT_FAILURE;
-    }
-
-    while ((d = readdir(dir))) {
-        if (strcmp(d->d_name, ".") == 0 ||
-            strcmp(d->d_name, "..") == 0)
-           continue;
-
-        snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
-        if (__xstat(1, path, &st) < 0) {
-            printf("failed to stat %s\n", path);
-            continue;
-        }
-        if (!S_ISREG(st.st_mode)) {
-            printf("ignoring %s, not a regular file\n", path);
-            continue;
-        }
-        load_test(prog, path);
-    }
-    if (closedir(dir) < 0) {
-        perror("failed to close testdir");
-        return EXIT_FAILURE;
-    }
-
-    return 0;
-}
-
 void run_main(elf::program *prog, struct argblock *args)
 {
     auto av = args->av;
@@ -253,7 +192,6 @@ void* do_main_thread(void *_args)
     t2 = clock::get()->time();
     debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
 
-//    load_tests(prog, args);
     run_main(prog, args);
 
     while (true)

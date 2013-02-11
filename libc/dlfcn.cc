@@ -20,6 +20,12 @@ void* dlsym(void* handle, const char* name)
     return sym.relocated_addr();
 }
 
+// osv-local function to dlclose by path, as we can't remove objects by handle yet.
+extern "C" void dlclose_by_path_np(const char* filename)
+{
+    elf::get_program()->remove_object(filename);
+}
+
 int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
                                     size_t size, void *data),
                     void *data)
