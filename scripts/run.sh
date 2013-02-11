@@ -1,6 +1,7 @@
 qemu-system-x86_64 \
 	-vnc :1 \
 	-enable-kvm \
+	-gdb tcp::1234,server,nowait \
 	-cpu host,+x2apic \
 	-m 1G \
 	-smp 4 \
