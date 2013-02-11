@@ -13,6 +13,15 @@
 #define hz (1)
 #endif
 
+#define MALLOC_DEFINE(...)
+
+#define SYSINIT(...)
+#define SYSUNINIT(...)
+#define SYSCTL_NODE(...)
+#define SYSCTL_UINT(...)
+#define SYSCTL_INT(...)
+#define TUNABLE_INT(...)
+
 #define __NO_STRICT_ALIGNMENT
 
 /* FIXME: struct socket is here for compilation purposes only */

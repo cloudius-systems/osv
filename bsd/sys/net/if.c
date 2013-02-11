@@ -83,33 +83,27 @@ struct ifindex_entry {
 	struct  ifnet *ife_ifnet;
 };
 
-#if 0
 SYSCTL_NODE(_net, PF_LINK, link, CTLFLAG_RW, 0, "Link layers");
 SYSCTL_NODE(_net_link, 0, generic, CTLFLAG_RW, 0, "Generic link-management");
 
 TUNABLE_INT("net.link.ifqmaxlen", &ifqmaxlen);
 SYSCTL_INT(_net_link, OID_AUTO, ifqmaxlen, CTLFLAG_RDTUN,
     &ifqmaxlen, 0, "max send queue size");
-#endif
 
 /* Log link state change events */
 static int log_link_state_change = 1;
 
-#if 0
 SYSCTL_INT(_net_link, OID_AUTO, log_link_state_change, CTLFLAG_RW,
 	&log_link_state_change, 0,
 	"log interface link state change events");
-#endif
 
 /* Interface description */
 static unsigned int ifdescr_maxlen = 1024;
-#if 0
 SYSCTL_UINT(_net, OID_AUTO, ifdescr_maxlen, CTLFLAG_RW,
 	&ifdescr_maxlen, 0,
 	"administrative maximum length for interface description");
 
 MALLOC_DEFINE(M_IFDESCR, "ifdescr", "ifnet descriptions");
-#endif
 
 #if 0
 /* global sx for non-critical path ifdescr */
@@ -192,11 +186,9 @@ struct cmutex ifnet_sxmutex;
 static	if_com_alloc_t *if_com_alloc[256];
 static	if_com_free_t *if_com_free[256];
 
-#if 0
 MALLOC_DEFINE(M_IFNET, "ifnet", "interface internals");
 MALLOC_DEFINE(M_IFADDR, "ifaddr", "interface address");
 MALLOC_DEFINE(M_IFMADDR, "ether_multi", "link-level multicast address");
-#endif
 
 struct ifnet *
 ifnet_byindex_locked(u_short idx)
@@ -339,22 +331,17 @@ void vnet_if_init(const void *__unused)
 	IFNET_WUNLOCK();
 	vnet_if_clone_init();
 }
-
-#if 0
 VNET_SYSINIT(vnet_if_init, SI_SUB_INIT_IF, SI_ORDER_SECOND, vnet_if_init,
     NULL);
-#endif
 
 /* ARGSUSED*/
 void if_init(void *__unused)
 {
+
 	IFNET_LOCK_INIT();
 	if_clone_init();
 }
-
-#if 0
 SYSINIT(interfaces, SI_SUB_INIT_IF, SI_ORDER_FIRST, if_init, NULL);
-#endif
 
 static void
 if_grow(void)
@@ -570,7 +557,9 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		    ifp->if_xname);
 
 	if_addgroup(ifp, IFG_ALL);
-
+	/* FIXME: OSv: uncomment these lines... */
+	// getmicrotime(&ifp->if_lastchange);
+	// ifp->if_data.ifi_epoch = time_uptime;
 	ifp->if_data.ifi_datalen = sizeof(struct if_data);
 
 	KASSERT((ifp->if_transmit == NULL && ifp->if_qflush == NULL) ||
@@ -652,11 +641,8 @@ void if_attachdomain(void *dummy)
 		if_attachdomain1(ifp);
 	splx(s);
 }
-
-#if 0
 SYSINIT(domainifattach, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_SECOND,
     if_attachdomain, NULL);
-#endif
 
 static void
 if_attachdomain1(struct ifnet *ifp)
