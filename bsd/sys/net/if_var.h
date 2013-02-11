@@ -34,6 +34,7 @@
 #define	_NET_IF_VAR_H_
 
 #include <osv/mutex.h>
+#include <net/if.h>
 
 /*
  * Structures defining a network interface, providing a packet

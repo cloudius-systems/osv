@@ -10,3 +10,8 @@ int _callout_stop_safe(struct callout *a, int b)
 {
     return 1;
 }
+
+void callout_init(struct callout *a, int v)
+{
+
+}

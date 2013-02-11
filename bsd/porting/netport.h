@@ -8,6 +8,11 @@
 #include <sys/types.h>
 #include <sys/queue.h>
 
+/* Defines how many ticks are in 1 minute */
+#ifndef hz
+#define hz (1)
+#endif
+
 #define __NO_STRICT_ALIGNMENT
 
 /* FIXME: struct socket is here for compilation purposes only */

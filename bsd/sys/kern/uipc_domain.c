@@ -29,8 +29,11 @@
  *	@(#)uipc_domain.c	8.2 (Berkeley) 10/18/93
  */
 
+#include <errno.h>
+#include <porting/netport.h>
+#include <porting/uma_stub.h>
+#include <porting/callout.h>
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/socket.h>
@@ -38,15 +41,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/domain.h>
 #include <sys/eventhandler.h>
 #include <sys/mbuf.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/socketvar.h>
-#include <sys/systm.h>
 
 #include <net/vnet.h>
 
-#include <vm/uma.h>
 
 /*
  * System initialization
@@ -60,12 +57,17 @@ __FBSDID("$FreeBSD$");
  * See DOMAIN_SET(9) for details on its use.
  */
 
+#if 0
 static void domaininit(void *);
 SYSINIT(domain, SI_SUB_PROTO_DOMAININIT, SI_ORDER_ANY, domaininit, NULL);
 
 static void domainfinalize(void *);
 SYSINIT(domainfin, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_FIRST, domainfinalize,
     NULL);
+#else
+void domaininit(void *);
+void domainfinalize(void *);
+#endif
 
 static struct callout pffast_callout;
 static struct callout pfslow_callout;
@@ -76,7 +78,8 @@ static void	pfslowtimo(void *);
 struct domain *domains;		/* registered protocol domains */
 int domain_init_status = 0;
 static struct mtx dom_mtx;		/* domain list lock */
-MTX_SYSINIT(domain, &dom_mtx, "domain list", MTX_DEF);
+/* FIXME: OSv: initialize this mutex properly... */
+// MTX_SYSINIT(domain, &dom_mtx, "domain list", MTX_DEF);
 
 /*
  * Dummy protocol specific user requests function pointer array.
@@ -149,9 +152,10 @@ protosw_init(struct protosw *pr)
 	DEFAULT(pu->pru_sense, pru_sense_null);
 	DEFAULT(pu->pru_shutdown, pru_shutdown_notsupp);
 	DEFAULT(pu->pru_sockaddr, pru_sockaddr_notsupp);
-	DEFAULT(pu->pru_sosend, sosend_generic);
-	DEFAULT(pu->pru_soreceive, soreceive_generic);
-	DEFAULT(pu->pru_sopoll, sopoll_generic);
+/* FIXME: OSv: uncomment this */
+//	DEFAULT(pu->pru_sosend, sosend_generic);
+//	DEFAULT(pu->pru_soreceive, soreceive_generic);
+//	DEFAULT(pu->pru_sopoll, sopoll_generic);
 #undef DEFAULT
 	if (pr->pr_init)
 		(*pr->pr_init)();
@@ -239,6 +243,10 @@ domain_add(void *data)
 	mtx_unlock(&dom_mtx);
 }
 
+/* FIXME: OSv: this was initially declared in uipc_socket */
+uma_zone_t socket_zone;
+int maxsockets = 256;
+
 static void
 socket_zone_change(void *tag)
 {
@@ -247,7 +255,7 @@ socket_zone_change(void *tag)
 }
 
 /* ARGSUSED*/
-static void
+void
 domaininit(void *dummy)
 {
 
@@ -274,7 +282,7 @@ domaininit(void *dummy)
 }
 
 /* ARGSUSED*/
-static void
+void
 domainfinalize(void *dummy)
 {
 
