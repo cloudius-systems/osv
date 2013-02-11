@@ -22,6 +22,7 @@ apic_driver::~apic_driver()
 
 void apic_driver::software_enable()
 {
+    write(apicreg::LVT0, 0);
     write(apicreg::SPIV, 0x1ff); // FIXME: allocate real vector
 }
 
@@ -29,6 +30,7 @@ x2apic::x2apic()
     : apic_driver()
 {
     enable();
+    software_enable();
 }
 
 void x2apic::init_on_ap()
