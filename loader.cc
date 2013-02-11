@@ -93,8 +93,6 @@ int main(int ac, char **av)
 
     test_locale();
     idt.load_on_cpu();
-    void test_clock_events();
-    test_clock_events(); // must be done before the scheduler is started
     smp_init();
     void main_cont(int ac, char** av);
     sched::init(tls_data, [=] { main_cont(ac, av); });
@@ -115,30 +113,6 @@ void main_cont(int ac, char** av)
     prog = new elf::program(fs);
     void main_thread(int ac, char** av);
     main_thread(ac, av);
-}
-
-void test_clock_events()
-{
-    struct test_callback : public clock_event_callback {
-        test_callback() : n() {}
-        virtual void fired() { t[n++] = clock::get()->time(); }
-        unsigned n;
-        u64 t[20];
-    };
-    test_callback t;
-    clock_event_callback* old_callback = clock_event->callback();
-    clock_event->set_callback(&t);
-    for (unsigned i = 0; i < 10; ++i) {
-        clock_event->set(clock::get()->time() + 1000000);
-        while (t.n == i) {
-            barrier();
-        }
-    }
-    clock_event->set_callback(nullptr);
-    for (unsigned i = 0; i < 10; ++i) {
-        debug(fmt("clock_event: %d") % t.t[i]);
-    }
-    clock_event->set_callback(old_callback);
 }
 
 struct argblock {
