@@ -88,6 +88,8 @@ public:
     // dest_id is the apic id, if using an io_apic.
     msi_message compose_msix(u8 vector, u8 dest_id);
 protected:
+    void software_enable();
+protected:
     u32 _apic_base_lo;
     u32 _apic_base_hi;
 };

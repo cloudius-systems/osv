@@ -20,6 +20,11 @@ apic_driver::~apic_driver()
 {
 }
 
+void apic_driver::software_enable()
+{
+    write(apicreg::SPIV, 0x1ff); // FIXME: allocate real vector
+}
+
 x2apic::x2apic()
     : apic_driver()
 {
@@ -34,6 +39,7 @@ void x2apic::init_on_ap()
 void x2apic::enable()
 {
     processor::wrmsr(msr::IA32_APIC_BASE, _apic_base_lo | (3 << 10));
+    software_enable();
 }
 
 void x2apic::self_ipi(unsigned vector)
