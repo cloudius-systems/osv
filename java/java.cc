@@ -13,7 +13,7 @@ JavaVMOption mkoption(const char* s)
     return opt;
 }
 
-int main(int ac, char **av)
+extern "C" int osv_main(int ac, char **av)
 {
     prog->add_object(JVM_PATH);
 
@@ -68,5 +68,6 @@ int main(int ac, char **av)
         env->SetObjectArrayElement(args, i, env->NewStringUTF(newargs[i].c_str()));
     }
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
+    return 0;
 }
 

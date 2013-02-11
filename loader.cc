@@ -207,8 +207,8 @@ void run_main(elf::program *prog, struct argblock *args)
     auto ac = args->ac;
     prog->add_object(av[0]);
     ++av, --ac;
-    auto main = prog->lookup_function<void (int, char**)>("main");
-    main(ac, av);
+    auto osv_main = prog->lookup_function<void (int, char**)>("osv_main");
+    osv_main(ac, av);
 }
 
 void* do_main_thread(void *_args)
