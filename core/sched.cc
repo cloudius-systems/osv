@@ -55,8 +55,10 @@ void cpu::handle_incoming_wakeups()
         incoming_wakeup_queue q;
         incoming_wakeups[i].copy_and_clear(q);
         while (!q.empty()) {
-            runqueue.push_back(q.front());
+            auto& t = q.front();
             q.pop_front_nonatomic();
+            t._on_runqueue = true;
+            runqueue.push_back(t);
         }
     }
 }
@@ -67,6 +69,39 @@ void cpu::init_on_cpu()
     clock_event->setup_on_cpu();
 }
 
+unsigned cpu::load()
+{
+    return runqueue.size();
+}
+
+void cpu::load_balance()
+{
+    timer tmr(*thread::current());
+    while (true) {
+        tmr.set(clock::get()->time() + 100000000);
+        thread::wait_until([&] { return tmr.expired(); });
+        if (runqueue.empty()) {
+            continue;
+        }
+        auto min = *std::min_element(cpus.begin(), cpus.end(),
+                [](cpu* c1, cpu* c2) { return c1->load() < c2->load(); });
+        if (min == this) {
+            continue;
+        }
+        with_lock(irq_lock, [this, min] {
+            if (runqueue.empty()) {
+                return;
+            }
+            auto& mig = runqueue.back();
+            runqueue.pop_back();
+            // we won't race with wake(), since we're not _waiting
+            mig._cpu = min;
+            min->incoming_wakeups[id].push_front(mig);
+            // FIXME: IPI
+        });
+    }
+}
+
 void schedule(bool yield)
 {
     cpu::current()->schedule(yield);
@@ -75,6 +110,8 @@ void schedule(bool yield)
 void thread::yield()
 {
     auto t = current();
+    // FIXME: drive by IPI
+    t->_cpu->handle_incoming_wakeups();
     // FIXME: what about other cpus?
     if (t->_cpu->runqueue.empty()) {
         return;
@@ -86,7 +123,7 @@ void thread::yield()
 }
 
 thread::stack_info::stack_info()
-    : begin(malloc(65536)), size(65536), owned(true)
+    : begin(nullptr), size(0), owned(true)
 {
 }
 
@@ -109,7 +146,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _on_runqueue(!main)
     , _waiting(false)
-    , _stack(attr.stack)
+    , _attr(attr)
     , _terminated(false)
     , _joiner()
 {
@@ -174,7 +211,14 @@ void thread::sleep_until(u64 abstime)
 
 void thread::stop_wait()
 {
-    _waiting = false;
+    if (!_waiting.exchange(false)) {
+        // someone woke us already, undo effects if any
+        _cpu->handle_incoming_wakeups();
+        if (_on_runqueue) {
+            _on_runqueue = false;
+            _cpu->runqueue.erase(_cpu->runqueue.iterator_to(*this));
+        }
+    }
 }
 
 void thread::complete()
@@ -197,7 +241,7 @@ void thread::join()
 
 thread::stack_info thread::get_stack_info()
 {
-    return _stack;
+    return _attr.stack;
 }
 
 timer_list::callback_dispatch::callback_dispatch()
@@ -246,6 +290,7 @@ void timer::expire()
 
 void timer::set(u64 time)
 {
+    _expired = false;
     _time = time;
     with_lock(irq_lock, [=] {
         auto& timers = _t._cpu->timers;

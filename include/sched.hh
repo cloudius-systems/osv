@@ -61,6 +61,7 @@ public:
     };
     struct attr {
         stack_info stack;
+        bool pinned;
     };
 
 public:
@@ -93,7 +94,7 @@ private:
     thread_control_block* _tcb;
     bool _on_runqueue;
     std::atomic_bool _waiting;
-    stack_info _stack;
+    attr _attr;
     cpu* _cpu;
     bool _terminated;
     bi::list<timer> _active_timers;
@@ -130,7 +131,8 @@ private:
 typedef bi::list<thread,
                  bi::member_hook<thread,
                                  bi::list_member_hook<>,
-                                 &thread::_runqueue_link>
+                                 &thread::_runqueue_link>,
+                 bi::constant_time_size<true> // for load estimation
                 > runqueue_type;
 
 struct cpu {
@@ -146,6 +148,8 @@ struct cpu {
     void init_on_cpu();
     void schedule(bool yield = false);
     void handle_incoming_wakeups();
+    void load_balance();
+    unsigned load();
 };
 
 thread* current();

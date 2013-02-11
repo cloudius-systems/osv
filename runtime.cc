@@ -326,7 +326,6 @@ size_t confstr(int name, char* buf, size_t len)
 
 int mallopt(int param, int value)
 {
-    debug(fmt("mallopt: unimplemented paramater  %1%") % param);
     return 0;
 }
 

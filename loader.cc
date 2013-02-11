@@ -9,11 +9,7 @@
 #include "exceptions.hh"
 #include "debug.hh"
 #include "drivers/pci.hh"
-#include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include "smp.hh"
-//#include <locale>
 
 #include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
@@ -115,91 +111,10 @@ void main_cont(int ac, char** av)
     main_thread(ac, av);
 }
 
-void test_clock_events()
-{
-    struct test_callback : public clock_event_callback {
-        test_callback() : n() {}
-        virtual void fired() { t[n++] = clock::get()->time(); }
-        unsigned n;
-        u64 t[20];
-    };
-    test_callback t;
-    clock_event_callback* old_callback = clock_event->callback();
-    clock_event->set_callback(&t);
-    for (unsigned i = 0; i < 10; ++i) {
-        clock_event->set(clock::get()->time() + 1000000);
-        while (t.n == i) {
-            barrier();
-        }
-    }
-    clock_event->set_callback(nullptr);
-    for (unsigned i = 0; i < 10; ++i) {
-        debug(fmt("clock_event: %d") % t.t[i]);
-    }
-    clock_event->set_callback(old_callback);
-}
-
 struct argblock {
     int ac;
     char** av;
 };
-
-void load_test(elf::program *prog, char *path)
-{
-    printf("running %s\n", path);
-
-    prog->add_object(path);
-
-    auto test_main
-        = prog->lookup_function<int (int, const char **)>("main");
-    std::string str = "test";
-    const char *name = str.c_str();
-    int ret = test_main(1, &name);
-    if (ret)
-        printf("failed.\n");
-    else
-        printf("ok.\n");
-
-    prog->remove_object(path);
-}
-
-
-int load_tests(elf::program *prog, struct argblock *args)
-{
-#define TESTDIR		"/tests"
-    DIR *dir = opendir(TESTDIR);
-    char path[PATH_MAX];
-    struct dirent *d;
-    struct stat st;
-
-    if (!dir) {
-        perror("failed to open testdir");
-        return EXIT_FAILURE;
-    }
-
-    while ((d = readdir(dir))) {
-        if (strcmp(d->d_name, ".") == 0 ||
-            strcmp(d->d_name, "..") == 0)
-           continue;
-
-        snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
-        if (__xstat(1, path, &st) < 0) {
-            printf("failed to stat %s\n", path);
-            continue;
-        }
-        if (!S_ISREG(st.st_mode)) {
-            printf("ignoring %s, not a regular file\n", path);
-            continue;
-        }
-        load_test(prog, path);
-    }
-    if (closedir(dir) < 0) {
-        perror("failed to close testdir");
-        return EXIT_FAILURE;
-    }
-
-    return 0;
-}
 
 void run_main(elf::program *prog, struct argblock *args)
 {
@@ -207,8 +122,8 @@ void run_main(elf::program *prog, struct argblock *args)
     auto ac = args->ac;
     prog->add_object(av[0]);
     ++av, --ac;
-    auto main = prog->lookup_function<void (int, char**)>("main");
-    main(ac, av);
+    auto osv_main = prog->lookup_function<void (int, char**)>("osv_main");
+    osv_main(ac, av);
 }
 
 void* do_main_thread(void *_args)
@@ -219,7 +134,6 @@ void* do_main_thread(void *_args)
     unit_tests::tests::instance().execute_tests();
     //test_alloc();
     //test_threads();
-    test_clock_events();
 
     // Enumerate PCI devices
     pci::pci_devices_print();
@@ -253,7 +167,6 @@ void* do_main_thread(void *_args)
     t2 = clock::get()->time();
     debug(fmt("nanosleep(100000) -> %d") % (t2 - t1));
 
-//    load_tests(prog, args);
     run_main(prog, args);
 
     while (true)
