@@ -1,6 +1,7 @@
 
 arch = x64
 cmdline = java.so Hello
+#cmdline = testrunner.so
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
@@ -65,7 +66,7 @@ autodepend = -MD -MT $@ -MP
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
-tests += tests/bench/bench.jar
+tests += tests/tst-vblk.so tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -73,6 +74,7 @@ java/RunJar.class: javabase=java
 
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
+tests/tst-vblk.so: tests/tst-vblk.o
 
 all: loader.img loader.bin
 
@@ -182,10 +184,13 @@ glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 
 java/java.so: java/java.o
-
 java/java.o: CXXFLAGS += -fPIC
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java/java.so java/RunJar.class
+tests/testrunner.so: tests/testrunner.o
+tests/testrunner.o: CXXFLAGS += -fPIC
+
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) \
+		tests/testrunner.so java/java.so java/RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)

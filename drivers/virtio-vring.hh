@@ -112,7 +112,8 @@ class virtio_device;
         // Ring operations
         bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
         void* get_buf();
-        bool used_ring_not_empy();
+        bool used_ring_not_empty();
+        bool avail_ring_not_empty();
         bool kick();
         void register_callback(std::function<void ()> func) {_callback = func;};
 

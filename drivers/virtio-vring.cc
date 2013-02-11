@@ -114,8 +114,8 @@ namespace virtio {
         _avail_added_since_kick++;
         _avail_count -= i;
 
-        _avail->_ring[_avail->_idx] = _avail_head;
-        _avail->_idx = (_avail->_idx + 1) % _num;
+        _avail->_ring[(_avail->_idx) % _num] = _avail_head;
+        _avail->_idx++;
 
         _avail_head = idx;
 
@@ -159,7 +159,12 @@ namespace virtio {
         return cookie;
     }
 
-    bool vring::used_ring_not_empy()
+    bool vring::avail_ring_not_empty()
+    {
+        return (_avail_count > 0);
+    }
+
+    bool vring::used_ring_not_empty()
     {
         return (_used_guest_head != _used->_idx);
     }
