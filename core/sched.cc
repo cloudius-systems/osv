@@ -246,6 +246,7 @@ void timer::expire()
 
 void timer::set(u64 time)
 {
+    _expired = false;
     _time = time;
     with_lock(irq_lock, [=] {
         auto& timers = _t._cpu->timers;
