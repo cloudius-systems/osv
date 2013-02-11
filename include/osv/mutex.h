@@ -21,6 +21,7 @@ static inline void spinlock_init(spinlock_t *sl)
 
 struct cmutex {
     bool _locked;
+    void *_owner;
     struct wait_list {
         struct waiter *first;
         struct waiter *last;
@@ -30,7 +31,7 @@ struct cmutex {
 
 typedef struct cmutex mutex_t;
 
-#define MUTEX_INITIALIZER	{ 0, { 0, 0 }, { 0 } }
+#define MUTEX_INITIALIZER	{}
 
 void mutex_lock(mutex_t* m);
 bool mutex_trylock(mutex_t* m);
