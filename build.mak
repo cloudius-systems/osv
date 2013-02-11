@@ -48,6 +48,10 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(makedir)
 	$(q-build-s)
 
+%.o: %.s
+	$(makedir)
+	$(q-build-s)
+
 %.class: %.java
 	$(makedir)
 	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^, JAVAC $@)
