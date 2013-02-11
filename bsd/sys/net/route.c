@@ -315,7 +315,10 @@ rtalloc1_fib(struct sockaddr *dst, int report, u_long ignflags,
 	struct radix_node *rn;
 	struct rtentry *newrt;
 	struct rt_addrinfo info;
+	/* FIXME: OSv: remove unused variables */
+#if 0
 	int err = 0, msgtype = RTM_MISS;
+#endif
 	int needlock;
 
 	KASSERT((fibnum < rt_numfibs), ("rtalloc1_fib: bad fibnum"));
@@ -371,7 +374,8 @@ miss:
 		 */
 		bzero(&info, sizeof(info));
 		info.rti_info[RTAX_DST] = dst;
-		rt_missmsg_fib(msgtype, &info, 0, err, fibnum);
+		/* FIXME: OSV: uncomment... */
+		// rt_missmsg_fib(msgtype, &info, 0, err, fibnum);
 	}	
 done:
 	if (newrt)
@@ -597,7 +601,8 @@ out:
 	info.rti_info[RTAX_GATEWAY] = gateway;
 	info.rti_info[RTAX_NETMASK] = netmask;
 	info.rti_info[RTAX_AUTHOR] = src;
-	rt_missmsg_fib(RTM_REDIRECT, &info, flags, error, fibnum);
+	/* FIXME: OSV: uncomment... */
+	// rt_missmsg_fib(RTM_REDIRECT, &info, flags, error, fibnum);
 	if (ifa != NULL)
 		ifa_free(ifa);
 }
@@ -622,9 +627,14 @@ rtioctl_fib(u_long req, caddr_t data, u_int fibnum)
 	 * prison-root to make it this far if raw sockets have been enabled
 	 * in jails.
 	 */
+
+    /* FIXME: OSv: remove */
+    return ENXIO;
+
 #ifdef INET
-	/* Multicast goop, grrr... */
-	return mrt_ioctl ? mrt_ioctl(req, data, fibnum) : EOPNOTSUPP;
+	/* FIXME: OSv: uncomment... */
+    /* Multicast goop, grrr... */
+	// return mrt_ioctl ? mrt_ioctl(req, data, fibnum) : EOPNOTSUPP;
 #else /* INET */
 	return ENXIO;
 #endif /* INET */
@@ -1409,7 +1419,8 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 			}
 			RT_ADDREF(rt);
 			RT_UNLOCK(rt);
-			rt_newaddrmsg_fib(cmd, ifa, error, rt, fibnum);
+			/* FIXME: osv - uncomment, notify sock layer */
+			// rt_newaddrmsg_fib(cmd, ifa, error, rt, fibnum);
 			RT_LOCK(rt);
 			RT_REMREF(rt);
 			if (cmd == RTM_DELETE) {
