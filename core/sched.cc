@@ -211,7 +211,14 @@ void thread::sleep_until(u64 abstime)
 
 void thread::stop_wait()
 {
-    _waiting = false;
+    if (!_waiting.exchange(false)) {
+        // someone woke us already, undo effects if any
+        _cpu->handle_incoming_wakeups();
+        if (_on_runqueue) {
+            _on_runqueue = false;
+            _cpu->runqueue.erase(_cpu->runqueue.iterator_to(*this));
+        }
+    }
 }
 
 void thread::complete()
