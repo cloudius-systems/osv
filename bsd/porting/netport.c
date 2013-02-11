@@ -24,3 +24,9 @@ int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
     // FIXME: implement
     return (0);
 }
+
+
+int priv_check(struct thread *td, int priv)
+{
+    return 1;
+}
