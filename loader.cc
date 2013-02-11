@@ -93,6 +93,8 @@ int main(int ac, char **av)
 
     test_locale();
     idt.load_on_cpu();
+    void test_clock_events();
+    test_clock_events(); // must be done before the scheduler is started
     smp_init();
     void main_cont(int ac, char** av);
     sched::init(tls_data, [=] { main_cont(ac, av); });
@@ -219,7 +221,6 @@ void* do_main_thread(void *_args)
     unit_tests::tests::instance().execute_tests();
     //test_alloc();
     //test_threads();
-    test_clock_events();
 
     // Enumerate PCI devices
     pci::pci_devices_print();
