@@ -10,34 +10,52 @@
 int main(int argc, char **argv)
 {
 	int fd;
-        char *wbuf,*rbuf;
+    char *wbuf,*rbuf,*origin;
+    int i;
 
-        // malloc is used since virt_to_phys doesn't work
-        // on stack addresses and virtio needs that
-        wbuf = malloc(BUF_SIZE);
-        rbuf = malloc(BUF_SIZE);
+    // malloc is used since virt_to_phys doesn't work
+    // on stack addresses and virtio needs that
+    wbuf = malloc(BUF_SIZE);
+    rbuf = malloc(BUF_SIZE);
+    origin = malloc(BUF_SIZE); //preserves the prev content for next boot..
 	
-        fd = open("/dev/vblk0", O_RDWR);
+    fd = open("/dev/vblk0", O_RDWR);
 	if (fd < 0) {
 		perror("open");
 		return 1;
 	}
 
-	memset(wbuf, 0xab, BUF_SIZE);
-	if (pwrite(fd, wbuf, BUF_SIZE, 0) != BUF_SIZE) {
-		perror("pwrite");
-		return 1;
+	for (i=0;i<100;i++) {
+
+        if (pread(fd, origin, BUF_SIZE, i) != BUF_SIZE) {
+            perror("pread, origin");
+            return 1;
+        }
+
+        memset(wbuf, i, BUF_SIZE);
+        if (pwrite(fd, wbuf, BUF_SIZE, i) != BUF_SIZE) {
+            perror("pwrite");
+            return 1;
+        }
+
+        memset(rbuf, i, BUF_SIZE);
+        if (pread(fd, rbuf, BUF_SIZE, i) != BUF_SIZE) {
+            perror("pread");
+            return 1;
+        }
+        if (memcmp(wbuf, wbuf, BUF_SIZE) != 0) {
+            fprintf(stderr, "read error %i\n", i);
+            return 1;
+        }
+
+        if (pwrite(fd, origin, BUF_SIZE, i) != BUF_SIZE) {
+            perror("pwrite origin");
+            return 1;
+        }
+
 	}
 
-	memset(rbuf, 0, BUF_SIZE);
-	if (pread(fd, rbuf, BUF_SIZE, 0) != BUF_SIZE) {
-		perror("pwrite");
-		return 1;
-	}
-	if (memcmp(wbuf, wbuf, BUF_SIZE) != 0) {
-		fprintf(stderr, "read error\n");
-		return 1;
-	}
+	fprintf(stdout, "vblk test passed\n");
 
 	close(fd);
 	return 0;
