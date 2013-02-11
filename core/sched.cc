@@ -110,6 +110,8 @@ void schedule(bool yield)
 void thread::yield()
 {
     auto t = current();
+    // FIXME: drive by IPI
+    t->_cpu->handle_incoming_wakeups();
     // FIXME: what about other cpus?
     if (t->_cpu->runqueue.empty()) {
         return;
