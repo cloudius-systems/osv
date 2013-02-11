@@ -715,9 +715,13 @@ if_purgeaddrs(struct ifnet *ifp)
 			ifr.ifra_addr = *ifa->ifa_addr;
 			if (ifa->ifa_dstaddr)
 				ifr.ifra_broadaddr = *ifa->ifa_dstaddr;
+#if 0
 			if (in_control(NULL, SIOCDIFADDR, (caddr_t)&ifr, ifp,
 			    NULL) == 0)
 				continue;
+#else
+			/* FIXME: OSv: disable forward ioctl to ip stack */
+#endif
 		}
 #endif /* INET */
 #ifdef INET6
@@ -805,7 +809,8 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 	if_purgeaddrs(ifp);
 
 #ifdef INET
-	in_ifdetach(ifp);
+	/* FIXME: OSv: uncomment... */
+	// in_ifdetach(ifp);
 #endif
 
 #ifdef INET6

@@ -363,6 +363,8 @@ struct radix_node_head *rt_tables_get_rnh(int, int);
 
 struct ifmultiaddr;
 
+/* FIXME: OSv: undef some function - used for sock layer notifications */
+#if 0
 void	 rt_ieee80211msg(struct ifnet *, int, void *, size_t);
 void	 rt_ifannouncemsg(struct ifnet *, int);
 void	 rt_ifmsg(struct ifnet *);
@@ -371,8 +373,15 @@ void	 rt_missmsg_fib(int, struct rt_addrinfo *, int, int, int);
 void	 rt_newaddrmsg(int, struct ifaddr *, int, struct rtentry *);
 void	 rt_newaddrmsg_fib(int, struct ifaddr *, int, struct rtentry *, int);
 void	 rt_newmaddrmsg(int, struct ifmultiaddr *);
-int	 rt_setgate(struct rtentry *, struct sockaddr *, struct sockaddr *);
-void 	 rt_maskedcopy(struct sockaddr *, struct sockaddr *, struct sockaddr *);
+#else
+#define rt_newaddrmsg(...) do{}while(0)
+#define rt_newmaddrmsg(...) do{}while(0)
+#define rt_ifannouncemsg(...) do{}while(0)
+#define rt_ifmsg(...) do{}while(0)
+#endif
+
+int  rt_setgate(struct rtentry *, struct sockaddr *, struct sockaddr *);
+void     rt_maskedcopy(struct sockaddr *, struct sockaddr *, struct sockaddr *);
 
 /*
  * Note the following locking behavior:
