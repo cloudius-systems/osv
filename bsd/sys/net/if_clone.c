@@ -109,6 +109,8 @@ VNET_DEFINE(LIST_HEAD(, if_clone), if_cloners);
 #define IFC_IFLIST_REMOVE(_ifc, _ifp)					\
 	LIST_REMOVE(_ifp, if_clones)
 
+MALLOC_DEFINE(M_CLONE, "clone", "interface cloning framework");
+
 void
 vnet_if_clone_init(void)
 {
