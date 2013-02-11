@@ -12,6 +12,7 @@ All the files under the following directories are imported from musl:
   math
   misc
   multibyte
+  setjmp
   signal
   stdio
   stdlib

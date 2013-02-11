@@ -360,6 +360,9 @@ libc += multibyte/wcstombs.o
 libc += multibyte/wctob.o
 libc += multibyte/wctomb.o
 
+libc += setjmp/setjmp.o
+libc += setjmp/longjmp.o
+
 libc += signal/sigrtmax.o
 libc += signal/sigrtmin.o
 
