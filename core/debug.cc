@@ -15,6 +15,11 @@ void debug(const char *msg)
 {
     console::write(msg, strlen(msg), true);
 }
+
+void debug_write(const char *msg, size_t len)
+{
+    console::write(msg, len, false);
+}
 }
 
 void debug(std::string str, bool lf)
