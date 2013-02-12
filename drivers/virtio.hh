@@ -22,8 +22,8 @@ namespace virtio {
     protected:
         u16 _device_id;
 
-        // Actual drivers should implement this
-        virtual u32 get_driver_features(void) { return (0); }
+        // Actual drivers should implement this on top of the basic ring features
+        virtual u32 get_driver_features(void) { return (1 << VIRTIO_RING_F_INDIRECT_DESC); }
         bool setup_features(void);
 
         ///////////////////
