@@ -35,8 +35,14 @@
 #include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
+#define LO_INITIALIZED  0x00010000  /* Lock has been initialized. */
+#define LO_RECURSABLE   0x00080000  /* Lock may recurse. */
+
 struct rwlock {
-    mutex_t _osv_mtx;
+    mutex_t _mutex;             /* Use a sleeping mutex */
+    u_int _rw_recurse;          /* Counter for recursion support */
+    u_int _lo_flags;            /* Allow threads to recursively acquire
+                                   exclusive locks for rw */
 };
 
 #define LOCK_FILE   __FILE__
@@ -51,8 +57,6 @@ struct rwlock {
 #define	rw_init(rw, name)	rw_init_flags((rw), (name), 0)
 void	rw_init_flags(struct rwlock *rw, const char *name, int opts);
 void	rw_destroy(struct rwlock *rw);
-void	rw_sysinit(void *arg);
-void	rw_sysinit_flags(void *arg);
 int	rw_wowned(struct rwlock *rw);
 void	_rw_wlock(struct rwlock *rw, const char *file, int line);
 int	_rw_try_wlock(struct rwlock *rw, const char *file, int line);
@@ -60,10 +64,6 @@ void	_rw_wunlock(struct rwlock *rw, const char *file, int line);
 void	_rw_rlock(struct rwlock *rw, const char *file, int line);
 int	_rw_try_rlock(struct rwlock *rw, const char *file, int line);
 void	_rw_runlock(struct rwlock *rw, const char *file, int line);
-void	_rw_wlock_hard(struct rwlock *rw, uintptr_t tid, const char *file,
-	    int line);
-void	_rw_wunlock_hard(struct rwlock *rw, uintptr_t tid, const char *file,
-	    int line);
 int	_rw_try_upgrade(struct rwlock *rw, const char *file, int line);
 void	_rw_downgrade(struct rwlock *rw, const char *file, int line);
 
@@ -86,17 +86,7 @@ void	_rw_downgrade(struct rwlock *rw, const char *file, int line);
 		rw_runlock(rw);						\
 } while (0)
 
-struct rw_args {
-	struct rwlock	*ra_rw;
-	const char 	*ra_desc;
-};
-
-struct rw_args_flags {
-	struct rwlock	*ra_rw;
-	const char 	*ra_desc;
-	int		ra_flags;
-};
-
+/* Disable static initialization */
 #define	RW_SYSINIT(name, rw, desc)
 #define	RW_SYSINIT_FLAGS(name, rw, desc, flags)
 
