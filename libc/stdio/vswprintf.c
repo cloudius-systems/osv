@@ -39,7 +39,7 @@ int vswprintf(wchar_t *restrict s, size_t n, const wchar_t *restrict fmt, va_lis
 	f.write = sw_write;
 	f.buf_size = sizeof buf;
 	f.buf = buf;
-	f.lock = -1;
+	f.lock_owner = STDIO_SINGLETHREADED;
 	f.cookie = &c;
 	if (!n) {
 		return -1;

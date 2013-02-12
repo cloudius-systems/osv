@@ -2,6 +2,7 @@
 #define MUTEX_H_
 
 #include <stdbool.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,18 +14,24 @@ struct cspinlock {
 
 typedef struct cspinlock spinlock_t;
 
+static inline void spinlock_init(spinlock_t *sl)
+{
+    sl->lock = false;
+}
+
 struct cmutex {
     bool _locked;
+    spinlock_t _wait_lock;
+    void *_owner;
     struct wait_list {
         struct waiter *first;
         struct waiter *last;
     } _wait_list;
-    spinlock_t _wait_lock;
 };
 
 typedef struct cmutex mutex_t;
 
-#define MUTEX_INITIALIZER	{ 0, { 0, 0 }, { 0 } }
+#define MUTEX_INITIALIZER	{}
 
 void mutex_lock(mutex_t* m);
 bool mutex_trylock(mutex_t* m);
@@ -32,6 +39,10 @@ void mutex_unlock(mutex_t* m);
 
 static __always_inline void mutex_init(mutex_t* m)
 {
+    m->_locked = false;
+    m->_wait_list.first = 0;
+    m->_wait_list.last = 0;
+    spinlock_init(&m->_wait_lock);
 }
 
 static __always_inline void mutex_destroy(mutex_t* m)

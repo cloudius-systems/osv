@@ -1,32 +1,20 @@
+#include <assert.h>
+#include <pthread.h>
 #include "stdio_impl.h"
-//#include "pthread_impl.h"
 
 int __lockfile(FILE *f)
 {
-#ifdef TODO
-	int owner, tid = __pthread_self()->tid;
-	if (f->lock == tid)
+	pthread_t self = pthread_self();
+	if (f->lock_owner == self)
 		return 0;
-	while ((owner = a_cas(&f->lock, 0, tid)))
-		__wait(&f->lock, &f->waiters, owner, 1);
-#endif
+	mutex_lock(&f->mutex);
+	f->lock_owner = self;
 	return 1;
 }
 
 void __unlockfile(FILE *f)
 {
-#ifdef TODO
-	a_store(&f->lock, 0);
-
-	/* The following read is technically invalid under situations
-	 * of self-synchronized destruction. Another thread may have
-	 * called fclose as soon as the above store has completed.
-	 * Nonetheless, since FILE objects always live in memory
-	 * obtained by malloc from the heap, it's safe to assume
-	 * the dereferences below will not fault. In the worst case,
-	 * a spurious syscall will be made. If the implementation of
-	 * malloc changes, this assumption needs revisiting. */
-
-	if (f->waiters) __wake(&f->lock, 1, 1);
-#endif
+	assert(f->lock_owner == pthread_self());
+	f->lock_owner = 0;
+	mutex_unlock(&f->mutex);
 }

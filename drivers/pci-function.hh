@@ -11,7 +11,6 @@
 #include "device.hh"
 
 using namespace processor;
-using namespace std;
 using namespace hw;
 
 namespace pci {

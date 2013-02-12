@@ -1,19 +1,21 @@
 #include "stdio_impl.h"
-#include "pthread_impl.h"
+#include <pthread.h>
 #include <limits.h>
 
 int ftrylockfile(FILE *f)
 {
-	int tid = pthread_self()->tid;
-	if (f->lock == tid) {
+	pthread_t self = pthread_self();
+
+	if (f->lock_owner == self) {
 		if (f->lockcount == LONG_MAX)
 			return -1;
 		f->lockcount++;
 		return 0;
 	}
-	if (f->lock < 0) f->lock = 0;
-	if (f->lock || a_cas(&f->lock, 0, tid))
+
+	if (!mutex_trylock(&f->mutex))
 		return -1;
+	f->lock_owner = self;
 	f->lockcount = 1;
 	return 0;
 }

@@ -109,7 +109,7 @@ FILE *fmemopen(void *restrict buf, size_t size, const char *restrict mode)
 	f->seek = mseek;
 	f->close = mclose;
 
-	if (!libc.threaded) f->lock = -1;
+	if (!libc.threaded) f->lock_owner = STDIO_SINGLETHREADED;
 
 	OFLLOCK();
 	f->next = libc.ofl_head;

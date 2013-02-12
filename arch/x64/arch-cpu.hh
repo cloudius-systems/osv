@@ -2,6 +2,7 @@
 #define ARCH_CPU_HH_
 
 #include "processor.hh"
+#include "exceptions.hh"
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -50,6 +51,7 @@ inline void arch_cpu::init_on_cpu()
 
     lgdt(desc_ptr(nr_gdt*8-1, reinterpret_cast<u64>(&gdt)));
     ltr(gdt_tss*8);
+    idt.load_on_cpu();
 }
 
 }

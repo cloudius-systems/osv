@@ -53,7 +53,14 @@ void thread::switch_to_first()
 
 void thread::init_stack()
 {
-    void** stacktop = reinterpret_cast<void**>(_stack.begin + _stack.size);
+    auto& stack = _attr.stack;
+    if (!stack.size) {
+        stack.size = 65536;
+    }
+    if (!stack.begin) {
+        stack.begin = malloc(stack.size);
+    }
+    void** stacktop = reinterpret_cast<void**>(stack.begin + stack.size);
     *--stacktop = this;
     *--stacktop = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;
@@ -62,8 +69,7 @@ void thread::init_stack()
 void thread::on_thread_stack(thread* t)
 {
     t->_func();
-    t->_waiting = true;
-    schedule();
+    t->complete();
 }
 
 void thread::setup_tcb()
@@ -80,8 +86,7 @@ void thread_main_c(thread* t)
 {
     s_current = t;
     t->main();
-    t->_waiting = true;
-    schedule();
+    t->complete();
 }
 
 }

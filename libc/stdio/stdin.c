@@ -9,7 +9,7 @@ static FILE f = {
 	.read = __stdio_read,
 	.seek = __stdio_seek,
 	.close = __stdio_close,
-	.lock = -1,
+	.lock_owner = STDIO_SINGLETHREADED,
 };
 FILE *const stdin = &f;
 FILE *const __stdin_used = &f;

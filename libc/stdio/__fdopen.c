@@ -50,7 +50,7 @@ FILE *__fdopen(int fd, const char *mode)
 	f->seek = __stdio_seek;
 	f->close = __stdio_close;
 
-	if (!libc.threaded) f->lock = -1;
+	if (!libc.threaded) f->lock_owner = STDIO_SINGLETHREADED;
 
 	/* Add new FILE to open file list */
 	OFLLOCK();

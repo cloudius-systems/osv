@@ -6,6 +6,7 @@
 #include "drivers/clockevent.hh"
 #include "irqlock.hh"
 #include "align.hh"
+#include "drivers/clock.hh"
 
 namespace sched {
 
@@ -25,6 +26,8 @@ void schedule_force();
 
 void cpu::schedule(bool yield)
 {
+    // FIXME: drive by IPI
+    handle_incoming_wakeups();
     thread* p = thread::current();
     if (!p->_waiting && !yield) {
         return;
@@ -32,6 +35,7 @@ void cpu::schedule(bool yield)
     // FIXME: a proper idle mechanism
     while (runqueue.empty()) {
         barrier();
+        handle_incoming_wakeups();
     }
     thread* n = with_lock(irq_lock, [this] {
         auto n = &runqueue.front();
@@ -45,6 +49,59 @@ void cpu::schedule(bool yield)
     }
 }
 
+void cpu::handle_incoming_wakeups()
+{
+    for (unsigned i = 0; i < cpus.size(); ++i) {
+        incoming_wakeup_queue q;
+        incoming_wakeups[i].copy_and_clear(q);
+        while (!q.empty()) {
+            auto& t = q.front();
+            q.pop_front_nonatomic();
+            t._on_runqueue = true;
+            runqueue.push_back(t);
+        }
+    }
+}
+
+void cpu::init_on_cpu()
+{
+    arch.init_on_cpu();
+    clock_event->setup_on_cpu();
+}
+
+unsigned cpu::load()
+{
+    return runqueue.size();
+}
+
+void cpu::load_balance()
+{
+    timer tmr(*thread::current());
+    while (true) {
+        tmr.set(clock::get()->time() + 100000000);
+        thread::wait_until([&] { return tmr.expired(); });
+        if (runqueue.empty()) {
+            continue;
+        }
+        auto min = *std::min_element(cpus.begin(), cpus.end(),
+                [](cpu* c1, cpu* c2) { return c1->load() < c2->load(); });
+        if (min == this) {
+            continue;
+        }
+        with_lock(irq_lock, [this, min] {
+            if (runqueue.empty()) {
+                return;
+            }
+            auto& mig = runqueue.back();
+            runqueue.pop_back();
+            // we won't race with wake(), since we're not _waiting
+            mig._cpu = min;
+            min->incoming_wakeups[id].push_front(mig);
+            // FIXME: IPI
+        });
+    }
+}
+
 void schedule(bool yield)
 {
     cpu::current()->schedule(yield);
@@ -53,6 +110,8 @@ void schedule(bool yield)
 void thread::yield()
 {
     auto t = current();
+    // FIXME: drive by IPI
+    t->_cpu->handle_incoming_wakeups();
     // FIXME: what about other cpus?
     if (t->_cpu->runqueue.empty()) {
         return;
@@ -63,8 +122,13 @@ void thread::yield()
     t->_cpu->schedule(true);
 }
 
+thread::stack_info::stack_info()
+    : begin(nullptr), size(0), owned(true)
+{
+}
+
 thread::stack_info::stack_info(void* _begin, size_t _size)
-    : begin(_begin), size(_size)
+    : begin(_begin), size(_size), owned(false)
 {
     auto end = align_down(begin + size, 16);
     size = static_cast<char*>(end) - static_cast<char*>(begin);
@@ -78,11 +142,13 @@ typedef bi::list<thread,
                 > thread_list_type;
 thread_list_type thread_list;
 
-thread::thread(std::function<void ()> func, stack_info stack, bool main)
+thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _on_runqueue(!main)
     , _waiting(false)
-    , _stack(stack)
+    , _attr(attr)
+    , _terminated(false)
+    , _joiner()
 {
     with_lock(thread_list_mutex, [this] {
         thread_list.push_back(*this);
@@ -110,17 +176,12 @@ void thread::prepare_wait()
 
 void thread::wake()
 {
-    irq_save_lock_type irq_lock;
-    with_lock(irq_lock, [this] {
-        if (!_waiting) {
-            return;
-        }
-        _waiting = false;
-        if (!_on_runqueue) {
-            _on_runqueue = true;
-            _cpu->runqueue.push_back(*this);
-        }
-    });
+    // prevent two concurrent wakeups
+    if (!_waiting.exchange(false)) {
+        return;
+    }
+    _cpu->incoming_wakeups[cpu::current()->id].push_front(*this);
+    // FIXME: IPI
 }
 
 void thread::main()
@@ -150,27 +211,64 @@ void thread::sleep_until(u64 abstime)
 
 void thread::stop_wait()
 {
-    _waiting = false;
+    if (!_waiting.exchange(false)) {
+        // someone woke us already, undo effects if any
+        _cpu->handle_incoming_wakeups();
+        if (_on_runqueue) {
+            _on_runqueue = false;
+            _cpu->runqueue.erase(_cpu->runqueue.iterator_to(*this));
+        }
+    }
+}
+
+void thread::complete()
+{
+    _waiting = true;
+    _terminated = true;
+    if (_joiner) {
+        _joiner->wake();
+    }
+    while (true) {
+        schedule();
+    }
+}
+
+void thread::join()
+{
+    _joiner = current();
+    wait_until([this] { return _terminated; });
 }
 
 thread::stack_info thread::get_stack_info()
 {
-    return _stack;
+    return _attr.stack;
 }
 
-timer_list timers;
-
-timer_list::timer_list()
+timer_list::callback_dispatch::callback_dispatch()
 {
     clock_event->set_callback(this);
 }
 
 void timer_list::fired()
 {
-    timer& tmr = *_list.begin();
-    tmr._expired = true;
-    tmr._t.wake();
+    auto now = clock::get()->time();
+    auto i = _list.begin();
+    while (i != _list.end() && i->_time < now) {
+        auto j = i++;
+        j->expire();
+        _list.erase(j);
+    }
+    if (!_list.empty()) {
+        clock_event->set(_list.begin()->_time);
+    }
 }
+
+void timer_list::callback_dispatch::fired()
+{
+    cpu::current()->timers.fired();
+}
+
+timer_list::callback_dispatch timer_list::_dispatch;
 
 timer::timer(thread& t)
     : _t(t)
@@ -183,21 +281,37 @@ timer::~timer()
     cancel();
 }
 
+void timer::expire()
+{
+    _expired = true;
+    _t._active_timers.erase(_t._active_timers.iterator_to(*this));
+    _t.wake();
+}
+
 void timer::set(u64 time)
 {
+    _expired = false;
     _time = time;
-    // FIXME: locking
-    timers._list.insert(*this);
-    if (timers._list.iterator_to(*this) == timers._list.begin()) {
-        clock_event->set(time);
-    }
+    with_lock(irq_lock, [=] {
+        auto& timers = _t._cpu->timers;
+        timers._list.insert(*this);
+        _t._active_timers.push_back(*this);
+        if (timers._list.iterator_to(*this) == timers._list.begin()) {
+            clock_event->set(time);
+        }
+    });
 };
 
 void timer::cancel()
 {
-    // FIXME: locking
-    timers._list.erase(*this);
-    _expired = false;
+    with_lock(irq_lock, [=] {
+        if (_expired) {
+            return;
+        }
+        _t._active_timers.erase(_t._active_timers.iterator_to(*this));
+        _t._cpu->timers._list.erase(*this);
+        _expired = false;
+    });
     // even if we remove the first timer, allow it to expire rather than
     // reprogramming the timer
 }
@@ -221,8 +335,9 @@ bool operator<(const timer& t1, const timer& t2)
 void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
     tls = tls_data;
-    thread::stack_info stack { new char[4096*10], 4096*10 };
-    thread t{cont, stack, true};
+    thread::attr attr;
+    attr.stack = { new char[4096*10], 4096*10 };
+    thread t{cont, attr, true};
     t.switch_to_first();
 }
 

@@ -1,6 +1,7 @@
 
 arch = x64
 cmdline = java.so Hello
+#cmdline = testrunner.so
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/bsd -I$(src)/bsd/sys
 INCLUDES += -I$(src)/external/acpica/source/include
@@ -48,6 +49,10 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(makedir)
 	$(q-build-s)
 
+%.o: %.s
+	$(makedir)
+	$(q-build-s)
+
 %.class: %.java
 	$(makedir)
 	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^, JAVAC $@)
@@ -66,7 +71,7 @@ autodepend = -MD -MT $@ -MP
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
-tests += tests/bench/bench.jar
+tests += tests/tst-vblk.so tests/bench/bench.jar
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -74,6 +79,7 @@ java/RunJar.class: javabase=java
 
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
+tests/tst-vblk.so: tests/tst-vblk.o
 
 all: loader.img loader.bin
 
@@ -169,6 +175,8 @@ objects += core/sched.o
 objects += core/mmio.o
 objects += core/sglist.o
 
+unittests:= tests/tst-hub.o
+
 include $(src)/libc/build.mak
 
 objects += $(addprefix libc/, $(libc))
@@ -187,7 +195,7 @@ libgcc_s.a = $(shell find $(gccbase) -name libgcc.a |  grep -v /32/)
 libgcc_eh.a = $(shell find $(gccbase) -name libgcc_eh.a |  grep -v /32/)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
-        $(objects) dummy-shlib.so \
+        $(objects) $(unittests) dummy-shlib.so \
 		bootfs.bin
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
@@ -204,10 +212,13 @@ glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 
 java/java.so: java/java.o
-
 java/java.o: CXXFLAGS += -fPIC
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) java/java.so java/RunJar.class
+tests/testrunner.so: tests/testrunner.o
+tests/testrunner.o: CXXFLAGS += -fPIC
+
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) \
+		tests/testrunner.so java/java.so java/RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase), MKBOOTFS $@)
