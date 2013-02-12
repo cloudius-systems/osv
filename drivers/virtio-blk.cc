@@ -344,4 +344,14 @@ struct driver virtio_blk_driver = {
         return 0;
     }
 
+    u32 virtio_blk::get_driver_features(void)
+    {
+        u32 base = virtio_driver::get_driver_features();
+        return (base | ( 1 << VIRTIO_BLK_F_SIZE_MAX)
+                     | ( 1 << VIRTIO_BLK_F_SEG_MAX)
+                     | ( 1 << VIRTIO_BLK_F_GEOMETRY)
+                     | ( 1 << VIRTIO_BLK_F_RO)
+                     | ( 1 << VIRTIO_BLK_F_BLK_SIZE));
+    }
+
 }
