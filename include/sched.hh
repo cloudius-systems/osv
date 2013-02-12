@@ -87,6 +87,8 @@ private:
     void init_stack();
     void setup_tcb();
     void complete();
+    void suspend_timers();
+    void resume_timers();
     static void on_thread_stack(thread* t);
 private:
     std::function<void ()> _func;
@@ -97,6 +99,7 @@ private:
     attr _attr;
     cpu* _cpu;
     bool _terminated;
+    bool _timers_need_reload;
     bi::list<timer> _active_timers;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
@@ -117,6 +120,8 @@ public:
 class timer_list {
 public:
     void fired();
+    void suspend(bi::list<timer>& t);
+    void resume(bi::list<timer>& t);
 private:
     friend class timer;
     bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;

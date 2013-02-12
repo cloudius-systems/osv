@@ -59,6 +59,9 @@ void cpu::handle_incoming_wakeups()
             q.pop_front_nonatomic();
             t._on_runqueue = true;
             runqueue.push_back(t);
+            with_lock(irq_lock, [&] {
+                t.resume_timers();
+            });
         }
     }
 }
@@ -95,6 +98,7 @@ void cpu::load_balance()
             auto& mig = runqueue.back();
             runqueue.pop_back();
             // we won't race with wake(), since we're not _waiting
+            mig.suspend_timers();
             mig._cpu = min;
             min->incoming_wakeups[id].push_front(mig);
             // FIXME: IPI
@@ -148,6 +152,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _waiting(false)
     , _attr(attr)
     , _terminated(false)
+    , _timers_need_reload()
     , _joiner()
 {
     with_lock(thread_list_mutex, [this] {
@@ -233,6 +238,28 @@ void thread::complete()
     }
 }
 
+void thread::suspend_timers()
+{
+    if (_timers_need_reload) {
+        return;
+    }
+    _timers_need_reload = true;
+    for (auto& t : _active_timers) {
+        _cpu->timers.suspend(t);
+    }
+}
+
+void thread::resume_timers()
+{
+    if (!_timers_need_reload) {
+        return;
+    }
+    _timers_need_reload = false;
+    for (auto& t : _active_timers) {
+        _cpu->timers.resume(t);
+    }
+}
+
 void thread::join()
 {
     _joiner = current();
@@ -259,6 +286,29 @@ void timer_list::fired()
         _list.erase(j);
     }
     if (!_list.empty()) {
+        clock_event->set(_list.begin()->_time);
+    }
+}
+
+// call with irq disabled
+void timer_list::suspend(bi::list<timer>& timers)
+{
+    for (auto& t : timers) {
+        assert(!t._expired);
+        _list.erase(_list.iterator_to(t));
+    }
+}
+
+// call with irq disabled
+void timer_list::resume(bi::list<timer>& timers)
+{
+    bool rearm = false;
+    for (auto& t : timers) {
+        assert(!t._expired);
+        auto i = _list.insert(t).first;
+        rearm |= i == _list.begin();
+    }
+    if (rearm) {
         clock_event->set(_list.begin()->_time);
     }
 }
@@ -309,7 +359,7 @@ void timer::cancel()
             return;
         }
         _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-        _t._cpu->timers._list.erase(*this);
+        _t._cpu->timers._list.erase(_t._cpu->timers._list.iterator_to(*this));
         _expired = false;
     });
     // even if we remove the first timer, allow it to expire rather than
