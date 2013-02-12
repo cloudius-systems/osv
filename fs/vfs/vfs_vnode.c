@@ -440,7 +440,6 @@ vnode_dump(void)
 
 			dprintf(" %08x %08x %s %6d %8d %s%s\n", (u_int)vp,
 				(u_int)mp, type[vp->v_type], vp->v_refcnt,
-				(u_int)vp->v_blkno,
 				(strlen(mp->m_path) == 1) ? "\0" : mp->m_path,
 				vp->v_path);
 		}
