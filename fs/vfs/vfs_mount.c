@@ -54,14 +54,9 @@ static struct list_head mount_list = LIST_INIT(mount_list);
 /*
  * Global lock to access mount point.
  */
-#if CONFIG_FS_THREADS > 1
 static mutex_t mount_lock = MUTEX_INITIALIZER;
 #define MOUNT_LOCK()	mutex_lock(&mount_lock)
 #define MOUNT_UNLOCK()	mutex_unlock(&mount_lock)
-#else
-#define MOUNT_LOCK()
-#define MOUNT_UNLOCK()
-#endif
 
 /*
  * Lookup file system.

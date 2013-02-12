@@ -69,15 +69,9 @@ static struct list_head vnode_table[VNODE_BUCKETS];
  * If a vnode is already locked, there is no need to
  * lock this global lock to access internal data.
  */
-#if CONFIG_FS_THREADS > 1
 static mutex_t vnode_lock = MUTEX_INITIALIZER;
 #define VNODE_LOCK()	mutex_lock(&vnode_lock)
 #define VNODE_UNLOCK()	mutex_unlock(&vnode_lock)
-#else
-#define VNODE_LOCK()
-#define VNODE_UNLOCK()
-#endif
-
 
 /*
  * Get the hash value from the mount point and path name.
