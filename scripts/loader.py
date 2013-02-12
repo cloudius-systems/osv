@@ -273,6 +273,11 @@ class osv_thread_apply_all(gdb.Command):
                 gdb.execute(arg, from_tty)
             gdb.write('\n')
 
+def continue_handler(event):
+    exit_thread_context()
+
+gdb.events.cont.connect(continue_handler)
+
 
 osv()
 osv_heap()
