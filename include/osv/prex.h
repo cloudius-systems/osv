@@ -24,7 +24,6 @@ __BEGIN_DECLS
 #define PAGE_MASK	(PAGE_SIZE-1)
 #define round_page(x)	(((x) + PAGE_MASK) & ~PAGE_MASK)
 
-
 size_t strlcat(char *dst, const char *src, size_t siz);
 size_t strlcpy(char *dst, const char *src, size_t siz);
 
