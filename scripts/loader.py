@@ -105,22 +105,27 @@ class osv_info(gdb.Command):
         gdb.Command.__init__(self, 'osv info', gdb.COMMAND_USER,
                              gdb.COMPLETE_COMMAND, True)
 
-def thread_list():
-    ret = []
-    thread_list = gdb.lookup_global_symbol('sched::thread_list').value()
-    root = thread_list['data_']['root_plus_size_']['root_']
-    node = root['next_']
-    thread_type = gdb.lookup_type('sched::thread')
-    void_ptr = gdb.lookup_type('void').pointer()
-    for f in thread_type.fields():
-        if f.name == '_thread_list_link':
-            link_offset = f.bitpos / 8
-    while node != root.address:
-        t = node.cast(void_ptr) - link_offset
-        t = t.cast(thread_type.pointer())
-        ret.append(t.dereference())
-        node = node['next_']
-    return ret
+class vmstate(object):
+    def __init__(self):
+        self.reload()
+    def reload(self):
+        self.load_thread_list()
+    def load_thread_list(self):
+        ret = []
+        thread_list = gdb.lookup_global_symbol('sched::thread_list').value()
+        root = thread_list['data_']['root_plus_size_']['root_']
+        node = root['next_']
+        thread_type = gdb.lookup_type('sched::thread')
+        void_ptr = gdb.lookup_type('void').pointer()
+        for f in thread_type.fields():
+            if f.name == '_thread_list_link':
+                link_offset = f.bitpos / 8
+        while node != root.address:
+            t = node.cast(void_ptr) - link_offset
+            t = t.cast(thread_type.pointer())
+            ret.append(t.dereference())
+            node = node['next_']
+        self.thread_list = ret
 
 class thread_context(object):
     def __init__(self, thread):
@@ -156,7 +161,8 @@ class osv_info_threads(gdb.Command):
         gdb.Command.__init__(self, 'osv info threads',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
-        for t in thread_list():
+        state = vmstate()
+        for t in state.thread_list:
             with thread_context(t):
                 cpu = t['_cpu']
                 fr = gdb.selected_frame()
@@ -199,7 +205,8 @@ class osv_thread_apply_all(gdb.Command):
         gdb.Command.__init__(self, 'osv thread apply all', gdb.COMMAND_USER,
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        for t in thread_list():
+        state = vmstate()
+        for t in state.thread_list:
             gdb.write('thread %s\n\n' % t.address)
             with thread_context(t):
                 gdb.execute(arg, from_tty)
