@@ -169,8 +169,11 @@ template <class Pred>
 void thread::wait_until(Pred pred)
 {
     thread* me = current();
-    wait_guard waiter(me);
-    while (!pred()) {
+    while (true) {
+        wait_guard waiter(me);
+        if (pred()) {
+            return;
+        }
         me->wait();
     }
 }
