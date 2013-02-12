@@ -18,6 +18,9 @@ fs +=	vfs/main.o \
 fs +=	ramfs/ramfs_vfsops.o \
 	ramfs/ramfs_vnops.o
 
+fs +=	romfs/romfs_vfsops.o \
+	romfs/romfs_vnops.o
+
 fs +=	devfs/devfs_vnops.o \
 	devfs/device.o
 fs +=	fatfs/fatfs_fat.o \
