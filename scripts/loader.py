@@ -75,14 +75,14 @@ class osv_heap(gdb.Command):
         print page_range, page_range['size']
         self.show(node['right_'])
 
-def ulong(x):
-    if x < 0:
-        print x
-        x += 1L << 64
-        print x
-    return x
-
 ulong_type = gdb.lookup_type('unsigned long')
+
+def ulong(x):
+    x = x.cast(ulong_type)
+    x = long(x)
+    if x < 0:
+        x += 1L << 64
+    return x
 
 class osv_syms(gdb.Command):
     def __init__(self):
@@ -105,11 +105,42 @@ class osv_info(gdb.Command):
         gdb.Command.__init__(self, 'osv info', gdb.COMMAND_USER,
                              gdb.COMPLETE_COMMAND, True)
 
+class cpu(object):
+    def __init__(self, cpu_thread):
+        self.load(cpu_thread)
+    def load(self, cpu_thread):
+        self.cpu_thread = cpu_thread
+        self.id = cpu_thread.num - 1
+        cur = gdb.selected_thread()
+        try:
+            self.cpu_thread.switch()
+            old = gdb.selected_frame()
+            try:
+                gdb.newest_frame().select()
+                self.rsp = ulong(gdb.parse_and_eval('$rsp'))
+                self.rbp = ulong(gdb.parse_and_eval('$rbp'))
+                self.rip = ulong(gdb.parse_and_eval('$rip'))
+            finally:
+                old.select()
+        finally:
+            cur.switch()
+        g_cpus = gdb.parse_and_eval('sched::cpus._M_impl._M_start')
+        self.obj = g_cpus + self.id
+
 class vmstate(object):
     def __init__(self):
         self.reload()
     def reload(self):
+        self.load_cpu_list()
         self.load_thread_list()
+    def load_cpu_list(self):
+        # cause gdb to initialize thread list
+        gdb.execute('info threads', False, True)
+        cpu_list = {}
+        for cpu_thread in gdb.selected_inferior().threads():
+            c = cpu(cpu_thread)
+            cpu_list[c.id] = c
+        self.cpu_list = cpu_list
     def load_thread_list(self):
         ret = []
         thread_list = gdb.lookup_global_symbol('sched::thread_list').value()
@@ -126,34 +157,46 @@ class vmstate(object):
             ret.append(t.dereference())
             node = node['next_']
         self.thread_list = ret
+    def cpu_from_thread(self, thread):
+        stack = thread['_attr']['stack']
+        stack_begin = ulong(stack['begin'])
+        stack_size = ulong(stack['size'])
+        for c in self.cpu_list.viewvalues():
+            if c.rsp > stack_begin and c.rsp <= stack_begin + stack_size:
+                return c
+        return None
 
 class thread_context(object):
-    def __init__(self, thread):
+    def __init__(self, thread, state):
         self.old_frame = gdb.selected_frame()
         self.new_frame = gdb.newest_frame()
         self.new_frame.select()
-        self.running = (not long(thread['_on_runqueue'])
-                        and not long(thread['_waiting']['_M_base']['_M_i']))
         self.old_rsp = ulong(gdb.parse_and_eval('$rsp').cast(ulong_type))
         self.old_rip = ulong(gdb.parse_and_eval('$rip').cast(ulong_type))
         self.old_rbp = ulong(gdb.parse_and_eval('$rbp').cast(ulong_type))
-        if not self.running:
+        self.running_cpu = state.cpu_from_thread(thread)
+        self.vm_thread = gdb.selected_thread()
+        if not self.running_cpu:
             self.old_frame.select()
             self.new_rsp = thread['_state']['rsp'].cast(ulong_type)
     def __enter__(self):
         self.new_frame.select()
-        if not self.running:
+        if not self.running_cpu:
             gdb.execute('set $rsp = %s' % (self.new_rsp + 16))
             inf = gdb.selected_inferior()
             stack = inf.read_memory(self.new_rsp, 16)
             (new_rip, new_rbp) = struct.unpack('qq', stack)
             gdb.execute('set $rip = %s' % (new_rip + 1))
             gdb.execute('set $rbp = %s' % new_rbp)
+        else:
+            self.running_cpu.cpu_thread.switch()
     def __exit__(self, *_):
-        if not self.running:
+        if not self.running_cpu:
             gdb.execute('set $rsp = %s' % self.old_rsp)
             gdb.execute('set $rip = %s' % self.old_rip)
             gdb.execute('set $rbp = %s' % self.old_rbp)
+        else:
+            self.vm_thread.switch()
         self.old_frame.select()
 
 class osv_info_threads(gdb.Command):
@@ -163,7 +206,7 @@ class osv_info_threads(gdb.Command):
     def invoke(self, arg, for_tty):
         state = vmstate()
         for t in state.thread_list:
-            with thread_context(t):
+            with thread_context(t, state):
                 cpu = t['_cpu']
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
@@ -208,7 +251,7 @@ class osv_thread_apply_all(gdb.Command):
         state = vmstate()
         for t in state.thread_list:
             gdb.write('thread %s\n\n' % t.address)
-            with thread_context(t):
+            with thread_context(t, state):
                 gdb.execute(arg, from_tty)
             gdb.write('\n')
 
