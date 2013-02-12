@@ -33,6 +33,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <porting/netport.h>
+#include <porting/rwlock.h>
 #include <porting/sync_stub.h>
 #include <osv/mutex.h>
 
@@ -171,10 +172,9 @@ VNET_DEFINE(struct ifindex_entry *, ifindex_table);
  * also to stablize it over long-running ioctls, without introducing priority
  * inversions and deadlocks.
  */
-// struct rwlock ifnet_rwlock;
-// struct sx ifnet_sxlock;
-struct cmutex ifnet_rwmutex;
-struct cmutex ifnet_sxmutex;
+
+struct rwlock ifnet_rwlock;
+
 
 /*
  * The allocation of network interfaces is a rather non-atomic affair; we

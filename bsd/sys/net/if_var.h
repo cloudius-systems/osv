@@ -33,7 +33,7 @@
 #ifndef	_NET_IF_VAR_H_
 #define	_NET_IF_VAR_H_
 
-#include <osv/mutex.h>
+#include <porting/rwlock.h>
 #include <net/if.h>
 
 /*
@@ -183,7 +183,7 @@ struct ifnet {
 	struct	ifprefixhead if_prefixhead; /* list of prefixes per if */
 	void	*if_afdata[AF_MAX];
 	int	if_afdata_initialized;
-	struct cmutex if_afdata_lock;
+	struct	rwlock if_afdata_lock;
 	void    *if_linktask;	/* task for link change events */
 	struct	mtx if_addr_mtx;	/* mutex to protect address lists */
 
@@ -232,6 +232,7 @@ typedef void if_init_f_t(void *);
 #define	if_omcasts	if_data.ifi_omcasts
 #define	if_iqdrops	if_data.ifi_iqdrops
 #define	if_noproto	if_data.ifi_noproto
+#define	if_lastchange	if_data.ifi_lastchange
 
 /* for compatibility with other BSDs */
 #define	if_addrlist	if_addrhead
@@ -403,21 +404,21 @@ typedef void (*group_change_event_handler_t)(void *, const char *);
 EVENTHANDLER_DECLARE(group_change_event, group_change_event_handler_t);
 
 #define	IF_AFDATA_LOCK_INIT(ifp)	\
-	bzero(&(ifp)->if_afdata_lock, sizeof((ifp)->if_afdata_lock))
+	rw_init(&(ifp)->if_afdata_lock, "if_afdata")
 
-#define	IF_AFDATA_WLOCK(ifp)	mutex_lock(&(ifp)->if_afdata_lock)
-#define	IF_AFDATA_RLOCK(ifp)	mutex_lock(&(ifp)->if_afdata_lock)
-#define	IF_AFDATA_WUNLOCK(ifp)	mutex_unlock(&(ifp)->if_afdata_lock)
-#define	IF_AFDATA_RUNLOCK(ifp)	mutex_unlock(&(ifp)->if_afdata_lock)
+#define	IF_AFDATA_WLOCK(ifp)	rw_wlock(&(ifp)->if_afdata_lock)
+#define	IF_AFDATA_RLOCK(ifp)	rw_rlock(&(ifp)->if_afdata_lock)
+#define	IF_AFDATA_WUNLOCK(ifp)	rw_wunlock(&(ifp)->if_afdata_lock)
+#define	IF_AFDATA_RUNLOCK(ifp)	rw_runlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_LOCK(ifp)	IF_AFDATA_WLOCK(ifp)
 #define	IF_AFDATA_UNLOCK(ifp)	IF_AFDATA_WUNLOCK(ifp)
-#define	IF_AFDATA_TRYLOCK(ifp)	mutex_trylock(&(ifp)->if_afdata_lock)
-#define	IF_AFDATA_DESTROY(ifp)	do{}while(0)
+#define	IF_AFDATA_TRYLOCK(ifp)	rw_try_wlock(&(ifp)->if_afdata_lock)
+#define	IF_AFDATA_DESTROY(ifp)	rw_destroy(&(ifp)->if_afdata_lock)
 
-#define	IF_AFDATA_LOCK_ASSERT(ifp)	do{}while(0)
-#define	IF_AFDATA_RLOCK_ASSERT(ifp)	do{}while(0)
-#define	IF_AFDATA_WLOCK_ASSERT(ifp)	do{}while(0)
-#define	IF_AFDATA_UNLOCK_ASSERT(ifp)	do{}while(0)
+#define	IF_AFDATA_LOCK_ASSERT(ifp)	rw_assert(&(ifp)->if_afdata_lock, RA_LOCKED)
+#define	IF_AFDATA_RLOCK_ASSERT(ifp)	rw_assert(&(ifp)->if_afdata_lock, RA_RLOCKED)
+#define	IF_AFDATA_WLOCK_ASSERT(ifp)	rw_assert(&(ifp)->if_afdata_lock, RA_WLOCKED)
+#define	IF_AFDATA_UNLOCK_ASSERT(ifp)	rw_assert(&(ifp)->if_afdata_lock, RA_UNLOCKED)
 
 int	if_handoff(struct ifqueue *ifq, struct mbuf *m, struct ifnet *ifp,
 	    int adjust);
@@ -725,27 +726,24 @@ struct ifmultiaddr {
 
 #ifdef _KERNEL
 
+extern	struct rwlock ifnet_rwlock;
 
-#define	IFNET_LOCK_INIT() do {                          \
-    bzero(&ifnet_rwmutex, sizeof(ifnet_rwmutex));       \
-    bzero(&ifnet_sxmutex, sizeof(ifnet_sxmutex));       \
-} while (0)
+#define IFNET_LOCK_INIT()   rw_init_flags(&ifnet_rwlock, "ifnet_rw",  RW_RECURSE)
+#define IFNET_WLOCK()       rw_wlock(&ifnet_rwlock)
+#define IFNET_WUNLOCK()     rw_wunlock(&ifnet_rwlock)
 
-#define	IFNET_WLOCK() mutex_lock(&ifnet_rwmutex); mutex_lock(&ifnet_sxmutex);
-
-#define	IFNET_WUNLOCK() mutex_unlock(&ifnet_rwmutex); mutex_unlock(&ifnet_sxmutex);
 /*
  * To assert the ifnet lock, you must know not only whether it's for read or
  * write, but also whether it was acquired with sleep support or not.
  */
-#define	IFNET_RLOCK_ASSERT()		do{}while(0)
-#define	IFNET_RLOCK_NOSLEEP_ASSERT()	do{}while(0)
-#define	IFNET_WLOCK_ASSERT() do {} while (0)
+#define	IFNET_RLOCK_ASSERT()		    rw_assert(&ifnet_rwlock, RA_RLOCKED)
+#define	IFNET_RLOCK_NOSLEEP_ASSERT()	rw_assert(&ifnet_rwlock, RA_RLOCKED)
+#define	IFNET_WLOCK_ASSERT()            rw_assert(&ifnet_rwlock, RA_WLOCKED)
 
-#define	IFNET_RLOCK()		mutex_lock(&ifnet_sxmutex)
-#define	IFNET_RLOCK_NOSLEEP()	mutex_lock(&ifnet_rwmutex);
-#define	IFNET_RUNLOCK()		mutex_unlock(&ifnet_sxmutex);
-#define	IFNET_RUNLOCK_NOSLEEP()	mutex_unlock(&ifnet_rwmutex);
+#define	IFNET_RLOCK()		            rw_rlock(&ifnet_rwlock)
+#define	IFNET_RLOCK_NOSLEEP()	        rw_rlock(&ifnet_rwlock)
+#define	IFNET_RUNLOCK()		            rw_runlock(&ifnet_rwlock)
+#define	IFNET_RUNLOCK_NOSLEEP()	        rw_runlock(&ifnet_rwlock)
 
 /*
  * Look up an ifnet given its index; the _ref variant also acquires a
