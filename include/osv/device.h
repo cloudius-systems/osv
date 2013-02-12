@@ -128,6 +128,9 @@ int	 device_write(struct device *, struct uio *, int);
 int	 device_ioctl(struct device *, u_long, void *);
 int	 device_info(struct devinfo *);
 
+int	 bdev_read(struct device *dev, struct uio *uio, int ioflags);
+int	 bdev_write(struct device *dev, struct uio *uio, int ioflags);
+
 int	enodev(void);
 int	nullop(void);
 

@@ -46,7 +46,7 @@ virtio_blk_strategy(struct bio *bio)
 }
 
 static int
-virtio_blk_rdwr(struct device *dev, struct uio *uio, int ioflags)
+virtio_blk_read(struct device *dev, struct uio *uio, int ioflags)
 {
     struct virtio_blk_priv *prv =
         reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
@@ -54,14 +54,26 @@ virtio_blk_rdwr(struct device *dev, struct uio *uio, int ioflags)
     if (uio->uio_offset + uio->uio_resid > prv->drv->size())
         return EIO;
 
-    return physio(dev, uio, ioflags);
+    return bdev_read(dev, uio, ioflags);
+}
+
+static int
+virtio_blk_write(struct device *dev, struct uio *uio, int ioflags)
+{
+    struct virtio_blk_priv *prv =
+        reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+
+    if (uio->uio_offset + uio->uio_resid > prv->drv->size())
+        return EIO;
+
+    return bdev_write(dev, uio, ioflags);
 }
 
 static struct devops virtio_blk_devops = {
     .open       = no_open,
     .close      = no_close,
-    .read       = virtio_blk_rdwr,
-    .write      = virtio_blk_rdwr,
+    .read       = virtio_blk_read,
+    .write      = virtio_blk_write,
     .ioctl      = no_ioctl,
     .devctl     = no_devctl,
     .strategy   = virtio_blk_strategy,

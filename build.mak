@@ -102,6 +102,7 @@ fs = fs/fs.o bootfs.o
 fs +=	fs/vfs/main.o \
 	fs/vfs/kern_physio.o \
 	fs/vfs/subr_uio.o \
+	fs/vfs/vfs_bdev.o \
 	fs/vfs/vfs_bio.o \
 	fs/vfs/vfs_conf.o \
 	fs/vfs/vfs_lookup.o \
