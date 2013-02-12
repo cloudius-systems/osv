@@ -21,12 +21,12 @@ static inline void spinlock_init(spinlock_t *sl)
 
 struct cmutex {
     bool _locked;
+    spinlock_t _wait_lock;
     void *_owner;
     struct wait_list {
         struct waiter *first;
         struct waiter *last;
     } _wait_list;
-    spinlock_t _wait_lock;
 };
 
 typedef struct cmutex mutex_t;
