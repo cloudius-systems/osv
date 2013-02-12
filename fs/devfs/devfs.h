@@ -36,10 +36,10 @@
 
 #ifdef DEBUG_DEVFS
 #define DPRINTF(a)	dprintf a
-#define ASSERT(e)	dassert(e)
 #else
 #define DPRINTF(a)	do {} while (0)
-#define ASSERT(e)
 #endif
+
+#define ASSERT(e)	assert(e)
 
 #endif /* !_DEVFS_H */

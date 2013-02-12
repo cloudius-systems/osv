@@ -59,11 +59,11 @@ extern int vfs_debug;
 #define VFSDB_FLAGS	0x00000013
 
 #define	DPRINTF(_m,X)	if (vfs_debug & (_m)) dprintf X
-#define ASSERT(e)	dassert(e)
 #else
 #define	DPRINTF(_m, X)
-#define ASSERT(e)
 #endif
+
+#define ASSERT(e)	assert(e)
 
 #define OPEN_MAX	256
 

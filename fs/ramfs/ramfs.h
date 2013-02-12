@@ -36,11 +36,11 @@
 
 #ifdef DEBUG_RAMFS
 #define DPRINTF(a)	dprintf a
-#define ASSERT(e)	dassert(e)
 #else
 #define DPRINTF(a)	do {} while (0)
-#define ASSERT(e)
 #endif
+
+#define ASSERT(e)	assert(e)
 
 /*
  * File/directory node for RAMFS
