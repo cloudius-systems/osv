@@ -253,6 +253,7 @@ void cond_var::wake_all()
 int pthread_cond_init(pthread_cond_t *__restrict cond,
        const pthread_condattr_t *__restrict attr)
 {
+    static_assert(sizeof(cond_var) <= sizeof(*cond), "cond_var overflow");
     new (cond) cond_var;
     return 0;
 }
