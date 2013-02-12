@@ -44,6 +44,7 @@
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
+#include <osv/device.h>
 #include "vfs.h"
 
 /*
@@ -98,14 +99,12 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 
 	/* Open device. NULL can be specified as a device. */
 	device = 0;
-#if HAVE_DEVICES
 	if (*dev != '\0') {
 		if (strncmp(dev, "/dev/", 5))
 			return ENOTBLK;
 		if ((error = device_open(dev + 5, DO_RDWR, &device)) != 0)
 			return error;
 	}
-#endif
 
 	MOUNT_LOCK();
 
@@ -114,7 +113,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	for (n = list_first(head); n != head; n = list_next(n)) {
 		mp = list_entry(n, struct mount, m_link);
 		if (!strcmp(mp->m_path, dir) ||
-		    (device && mp->m_dev == (dev_t)device)) {
+		    (device && mp->m_dev == device)) {
 			error = EBUSY;	/* Already mounted */
 			goto err1;
 		}
@@ -129,7 +128,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	mp->m_count = 0;
 	mp->m_op = fs->vs_op;
 	mp->m_flags = flags;
-	mp->m_dev = (dev_t)device;
+	mp->m_dev = device;
 	strlcpy(mp->m_path, dir, sizeof(mp->m_path));
 
 	/*
@@ -194,9 +193,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
  err2:
 	free(mp);
  err1:
-#if HAVE_DEVICES
 	device_close(device);
-#endif
 
 	MOUNT_UNLOCK();
 	return error;
@@ -246,10 +243,8 @@ sys_umount(char *path)
 	binval(mp->m_dev);
 #endif
 
-#if HAVE_DEVICES
 	if (mp->m_dev)
 		device_close(mp->m_dev);
-#endif
 	free(mp);
  out:
 	MOUNT_UNLOCK();
