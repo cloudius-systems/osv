@@ -33,12 +33,12 @@
 
 #include <sys/cdefs.h>
 
-#include <sys/param.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
 
-#include <net/if.h>
-#include <net/if_var.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_var.h>
 
 static int
 ifdead_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa,

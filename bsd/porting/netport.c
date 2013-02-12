@@ -1,9 +1,9 @@
 #include <errno.h>
 #include <memory.h>
 
-#include <porting/netport.h>
-#include <sys/socket.h>
-#include <net/if_var.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/net/if_var.h>
 
 int copyin(const void *uaddr, void *kaddr, size_t len)
 {

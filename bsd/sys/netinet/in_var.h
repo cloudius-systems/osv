@@ -33,9 +33,9 @@
 #ifndef _NETINET_IN_VAR_H_
 #define _NETINET_IN_VAR_H_
 
-#include <sys/queue.h>
-#include <sys/fnv_hash.h>
-#include <sys/tree.h>
+#include <bsd/sys/sys/queue.h>
+#include <bsd/sys/sys/fnv_hash.h>
+#include <bsd/sys/sys/tree.h>
 
 struct igmp_ifinfo;
 struct in_multi;

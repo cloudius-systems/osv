@@ -36,32 +36,30 @@
  */
 
 #include <sys/cdefs.h>
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/queue.h>
-#include <sys/sysctl.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/syslog.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/queue.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
 
-#include <net/if.h>
-#include <net/if_dl.h>
-#include <net/if_types.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_types.h>
 
 #if 0
 #include <net/netisr.h>
 #endif
 
-#include <net/if_llc.h>
-#include <net/ethernet.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if_llc.h>
+#include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <net/if_llatbl.h>
-#include <netinet/if_ether.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/net/if_llatbl.h>
+#include <bsd/sys/netinet/if_ether.h>
 
 #define SIN(s) ((struct sockaddr_in *)s)
 #define SDL(s) ((struct sockaddr_dl *)s)

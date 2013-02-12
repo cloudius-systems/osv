@@ -1,9 +1,9 @@
 #include "debug.hh"
 
 extern "C" {
-    #include <sys/eventhandler.h>
-    #include <sys/mbuf.h>
-    #include <machine/param.h>
+    #include <bsd/sys/sys/eventhandler.h>
+    #include <bsd/sys/sys/mbuf.h>
+    #include <bsd/machine/param.h>
 }
 
 extern void mbuf_init(void *dummy);

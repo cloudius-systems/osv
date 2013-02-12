@@ -33,9 +33,9 @@
 #ifndef _NETINET_IF_ETHER_H_
 #define _NETINET_IF_ETHER_H_
 
-#include <porting/netport.h>
-#include <net/ethernet.h>
-#include <net/if_arp.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/if_arp.h>
 
 void    arp_init(void);
 
@@ -121,7 +121,7 @@ int	arpresolve(struct ifnet *ifp, struct rtentry *rt,
 void	arp_ifinit(struct ifnet *, struct ifaddr *);
 void	arp_ifinit2(struct ifnet *, struct ifaddr *, u_char *);
 
-#include <sys/eventhandler.h>
+#include <bsd/sys/sys/eventhandler.h>
 typedef void (*llevent_arp_update_fn)(void *, struct llentry *);
 EVENTHANDLER_DECLARE(arp_update_event, llevent_arp_update_fn);
 

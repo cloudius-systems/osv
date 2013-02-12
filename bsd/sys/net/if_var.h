@@ -33,8 +33,8 @@
 #ifndef	_NET_IF_VAR_H_
 #define	_NET_IF_VAR_H_
 
-#include <porting/rwlock.h>
-#include <net/if.h>
+#include <bsd/porting/rwlock.h>
+#include <bsd/sys/net/if.h>
 
 /*
  * Structures defining a network interface, providing a packet
@@ -77,16 +77,13 @@ struct	route;
 struct	vnet;
 #endif
 
-#include <porting/netport.h>
-#include <sys/queue.h>		/* get TAILQ macros */
-
-#ifdef _KERNEL
-#include <sys/mbuf.h>
-#include <sys/eventhandler.h>
-#include <sys/buf_ring.h>
-#include <net/vnet.h>
-#endif /* _KERNEL */
-#include <sys/socket.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/queue.h>		/* get TAILQ macros */
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/eventhandler.h>
+#include <bsd/sys/sys/buf_ring.h>
+#include <bsd/sys/net/vnet.h>
+#include <bsd/sys/sys/socket.h>
 
 #define	IF_DUNIT_NONE	-1
 

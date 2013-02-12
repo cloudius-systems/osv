@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <machine/param.h>
+#include <bsd/machine/param.h>
 
 #ifndef UMA_STUB_H
 #define UMA_STUB_H

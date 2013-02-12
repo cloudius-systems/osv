@@ -31,7 +31,7 @@
 #ifndef _SYS_SBUF_H_
 #define	_SYS_SBUF_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 
 struct sbuf;
 typedef int (sbuf_drain_func)(void *, const char *, int);

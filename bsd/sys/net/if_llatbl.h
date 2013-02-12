@@ -24,15 +24,17 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <sys/cdefs.h>
-#include <porting/netport.h>
-#include <porting/callout.h>
 #include <osv/mutex.h>
+
+#include <bsd/porting/netport.h>
+#include <bsd/porting/callout.h>
+
+#include <sys/cdefs.h>
 
 #ifndef	_NET_IF_LLATBL_H_
 #define	_NET_IF_LLATBL_H_
 
-#include <netinet/in.h>
+#include <bsd/sys/netinet/in.h>
 
 void vnet_lltable_init();
 

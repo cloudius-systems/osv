@@ -32,26 +32,9 @@
 #include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
 
-#include <porting/uma_stub.h>
-#include <sys/mbuf.h>
-#include <machine/atomic.h>
-
-#if 0
-#include "opt_param.h"
-#include "opt_mbuf_stress_test.h"
-#include "opt_mbuf_profiling.h"
-
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/limits.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/sysctl.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-#include <sys/uio.h>
-#endif
+#include <bsd/porting/uma_stub.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/machine/atomic.h>
 
 int	max_linkhdr;
 int	max_protohdr;

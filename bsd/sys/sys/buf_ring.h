@@ -31,24 +31,11 @@
 #define	_SYS_BUF_RING_H_
 
 #include <stdint.h>
-#include <porting/netport.h>
-#include <porting/sync_stub.h>
-#include <machine/atomic.h>
 #include <errno.h>
 
-
-#if 0
-#include <machine/cpu.h>
-#endif
-
-#if defined(INVARIANTS) && !defined(DEBUG_BUFRING)
-#define DEBUG_BUFRING 1
-#endif
-
-#ifdef DEBUG_BUFRING
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#endif
+#include <bsd/porting/netport.h>
+#include <bsd/porting/sync_stub.h>
+#include <bsd/machine/atomic.h>
 
 struct buf_ring {
 	volatile uint32_t	br_prod_head;

@@ -1,4 +1,4 @@
-#include <porting/sync_stub.h>
+#include <bsd/porting/sync_stub.h>
 
 void mtx_init(struct mtx *m, const char *name, const char *type, int opts)
 {

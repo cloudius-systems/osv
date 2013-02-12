@@ -33,10 +33,11 @@
 /*
  * Routines to build and maintain radix trees for routing lookups.
  */
-#include <porting/netport.h>
 #include <osv/mutex.h>
-#include <sys/param.h>
-#include <net/radix.h>
+
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/net/radix.h>
 
 static int	rn_walktree_from(struct radix_node_head *h, void *a, void *m,
 		    walktree_f_t *f, void *w);

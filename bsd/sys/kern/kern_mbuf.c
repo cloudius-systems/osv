@@ -25,38 +25,13 @@
  * SUCH DAMAGE.
  */
 
-#include <porting/netport.h>
-#include <porting/uma_stub.h>
-#include <machine/param.h>
-#include <sys/mbuf.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
+#include <bsd/machine/param.h>
+#include <bsd/sys/sys/mbuf.h>
 #include <sys/errno.h>
 
 #include <sys/cdefs.h>
-
-#if 0
-#include "opt_param.h"
-
-#include <sys/param.h>
-#include <sys/malloc.h>
-#include <sys/systm.h>
-#include <sys/mbuf.h>
-#include <sys/domain.h>
-#include <sys/eventhandler.h>
-#include <sys/kernel.h>
-#include <sys/protosw.h>
-#include <sys/smp.h>
-#include <sys/sysctl.h>
-
-#include <security/mac/mac_framework.h>
-
-#include <vm/vm.h>
-#include <vm/vm_extern.h>
-#include <vm/vm_kern.h>
-#include <vm/vm_page.h>
-#include <vm/uma.h>
-#include <vm/uma_int.h>
-#include <vm/uma_dbg.h>
-#endif
 
 /*
  * In FreeBSD, Mbufs and Mbuf Clusters are allocated from UMA

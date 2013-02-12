@@ -33,7 +33,7 @@
 #define	_SYS_LIMITS_H_
 
 #include <sys/cdefs.h>
-#include <machine/_limits.h>
+#include <bsd/machine/_limits.h>
 
 #define	CHAR_BIT	__CHAR_BIT	/* number of bits in a char */
 

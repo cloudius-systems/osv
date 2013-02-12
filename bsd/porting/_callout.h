@@ -38,7 +38,7 @@
 #ifndef _SYS__CALLOUT_H
 #define	_SYS__CALLOUT_H
 
-#include <sys/queue.h>
+#include <bsd/sys/sys/queue.h>
 
 struct lock_object;
 

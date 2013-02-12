@@ -38,10 +38,6 @@
 #ifndef _SYS_PARAM_H_
 #define _SYS_PARAM_H_
 
-#if 0
-#include <sys/_null.h>
-#endif
-
 #define	BSD	199506		/* System version (year & month). */
 #define BSD4_3	1
 #define BSD4_4	1
@@ -95,7 +91,7 @@
  * MAXCOMLEN should be >= sizeof(ac_comm) (see <acct.h>)
  */
 #if 0
-#include <sys/syslimits.h>
+#include <bsd/sys/sys/syslimits.h>
 #endif
 
 #define	MAXCOMLEN	19		/* max command name remembered */
@@ -108,38 +104,6 @@
 #define	NOGROUP		65535		/* marker for empty group set member */
 #define MAXHOSTNAMELEN	256		/* max hostname size */
 #define SPECNAMELEN	63		/* max length of devicename */
-
-#if 0
-/* More types and definitions used throughout the kernel. */
-#ifdef _KERNEL
-#include <sys/cdefs.h>
-#include <sys/errno.h>
-#ifndef LOCORE
-#include <sys/time.h>
-#include <sys/priority.h>
-#endif
-#endif
-
-#ifndef FALSE
-#define	FALSE	0
-#endif
-#ifndef TRUE
-#define	TRUE	1
-#endif
-#endif
-
-#ifndef _KERNEL
-/* Signals. */
-#include <sys/signal.h>
-#endif
-
-#if 0
-/* Machine type dependent parameters. */
-#include <machine/param.h>
-#ifndef _KERNEL
-#include <sys/limits.h>
-#endif
-#endif
 
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */

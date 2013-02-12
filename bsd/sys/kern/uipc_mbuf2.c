@@ -61,29 +61,11 @@
  */
 
 #include <memory.h>
-#include <malloc.h>
 
 #include <bsd/porting/uma_stub.h>
 #include <bsd/porting/netport.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/queue.h>
-
-#if 0
-#include <sys/cdefs.h>
-
-/*#define PULLDOWN_DEBUG*/
-
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/mutex.h>
-
-#include <security/mac/mac_framework.h>
-
-#endif
 
 #if 0
 static MALLOC_DEFINE(M_PACKET_TAGS, MBUF_TAG_MEM_NAME,

@@ -33,7 +33,7 @@
 #ifndef _NET_ROUTE_H_
 #define _NET_ROUTE_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
 void route_init(void);
@@ -113,7 +113,7 @@ struct mbuf;
  * gateway rather than the ultimate destination.
  */
 #ifndef RNF_NORMAL
-#include <net/radix.h>
+#include <bsd/sys/net/radix.h>
 #ifdef RADIX_MPATH
 #include <net/radix_mpath.h>
 #endif
@@ -432,7 +432,7 @@ int	 rtrequest_fib(int, struct sockaddr *,
 	    struct sockaddr *, struct sockaddr *, int, struct rtentry **, u_int);
 int	 rtrequest1_fib(int, struct rt_addrinfo *, struct rtentry **, u_int);
 
-#include <sys/eventhandler.h>
+#include <bsd/sys/sys/eventhandler.h>
 typedef void (*rtevent_arp_update_fn)(void *, struct rtentry *, uint8_t *, struct sockaddr *);
 typedef void (*rtevent_redirect_fn)(void *, struct rtentry *, struct rtentry *, struct sockaddr *);
 /* route_arp_update_event is no longer generated; see arp_update_event */

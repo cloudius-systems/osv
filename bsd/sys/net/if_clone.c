@@ -30,23 +30,21 @@
  * $FreeBSD$
  */
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/limits.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/limits.h>
 #include <sys/types.h>
-#include <sys/socket.h>
+#include <bsd/sys/sys/socket.h>
 
-#include <net/if.h>
-#include <net/if_clone.h>
-#if 0
-#include <net/if_dl.h>
-#endif
-#include <net/if_types.h>
-#include <net/if_var.h>
-#include <net/radix.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_clone.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/radix.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
 static void	if_clone_free(struct if_clone *ifc);
 static int	if_clone_createif(struct if_clone *ifc, char *name, size_t len,

@@ -30,19 +30,19 @@
  */
 
 #include <errno.h>
-#include <porting/netport.h>
-#include <porting/uma_stub.h>
-#include <porting/callout.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
+#include <bsd/porting/callout.h>
 #include <sys/cdefs.h>
 
-#include <sys/param.h>
-#include <sys/socket.h>
-#include <sys/protosw.h>
-#include <sys/domain.h>
-#include <sys/eventhandler.h>
-#include <sys/mbuf.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/eventhandler.h>
+#include <bsd/sys/sys/mbuf.h>
 
-#include <net/vnet.h>
+#include <bsd/sys/net/vnet.h>
 
 
 /*

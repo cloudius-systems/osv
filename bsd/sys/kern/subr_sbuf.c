@@ -26,10 +26,10 @@
  * SUCH DAMAGE.
  */
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
-#include <sys/param.h>
-#include <sys/sbuf.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/sbuf.h>
 
 #include <stddef.h>
 #include <stdio.h>

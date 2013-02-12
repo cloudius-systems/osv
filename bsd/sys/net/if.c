@@ -32,52 +32,45 @@
 
 #include <stdarg.h>
 #include <stddef.h>
-#include <porting/netport.h>
-#include <porting/rwlock.h>
-#include <porting/sync_stub.h>
+
 #include <osv/mutex.h>
 
-#include <sys/param.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
+#include <bsd/porting/sync_stub.h>
+
+#include <bsd/sys/sys/param.h>
 #include <sys/types.h>
-#include <sys/sbuf.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/protosw.h>
-#include <sys/refcount.h>
-#include <sys/sockio.h>
-#include <sys/syslog.h>
-#include <sys/sysctl.h>
-#include <sys/domain.h>
-#include <sys/priv.h>
+#include <bsd/sys/sys/sbuf.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/refcount.h>
+#include <bsd/sys/sys/sockio.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/priv.h>
 
-
-#include <net/if.h>
-#include <net/if_arp.h>
-#include <net/if_clone.h>
-#include <net/if_dl.h>
-#include <net/if_types.h>
-#include <net/if_var.h>
-#include <net/radix.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_arp.h>
+#include <bsd/sys/net/if_clone.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/radix.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
 #if defined(INET) || defined(INET6)
 /*XXX*/
-#include <netinet/in.h>
-#include <netinet/in_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
 #ifdef INET6
 #include <netinet6/in6_var.h>
 #include <netinet6/in6_ifattach.h>
 #endif
 #endif
 #ifdef INET
-#include <netinet/if_ether.h>
-#endif
-
-#ifdef COMPAT_FREEBSD32
-#include <sys/mount.h>
-#include <compat/freebsd32/freebsd32.h>
+#include <bsd/sys/netinet/if_ether.h>
 #endif
 
 struct ifindex_entry {
@@ -1583,7 +1576,7 @@ done:
 	return (ifa);
 }
 
-#include <net/if_llatbl.h>
+#include <bsd/sys/net/if_llatbl.h>
 
 /*
  * Default action when installing a route with a Link Level gateway.

@@ -1,6 +1,6 @@
 #include <stdint.h>
-#include <porting/netport.h>
-#include <porting/rwlock.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
 
 void rw_init_flags(struct rwlock *rw, const char *name, int opts)
 {

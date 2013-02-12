@@ -33,11 +33,11 @@
 #ifndef _NET_IF_H_
 #define	_NET_IF_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
 #include <sys/time.h>
-#include <sys/socket.h>
-#include <sys/queue.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/queue.h>
 
 void if_init(void *__unused);
 void vnet_if_init(const void *__unused);
@@ -523,7 +523,7 @@ __END_DECLS
 
 #ifdef _KERNEL
 /* XXX - this should go away soon. */
-#include <net/if_var.h>
+#include <bsd/sys/net/if_var.h>
 #endif
 
 #endif /* !_NET_IF_H_ */

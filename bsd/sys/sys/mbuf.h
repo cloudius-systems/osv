@@ -34,22 +34,11 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
-#include <porting/netport.h>
-#include <porting/uma_stub.h>
-#include <machine/param.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
+#include <bsd/machine/param.h>
 
-/* XXX: These includes suck. Sorry! */
 #include <bsd/sys/sys/queue.h>
-
-#if 0
-#ifdef _KERNEL
-#include <sys/systm.h>
-#include <vm/uma.h>
-#ifdef WITNESS
-#include <sys/lock.h>
-#endif
-#endif
-#endif
 
 /*
  * Mbufs are of a single size, MSIZE (sys/param.h), which includes overhead.

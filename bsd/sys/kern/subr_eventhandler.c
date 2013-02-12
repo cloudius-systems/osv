@@ -26,23 +26,13 @@
 
 #include <sys/cdefs.h>
 
-#include <porting/netport.h>
-#include <porting/sync_stub.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/sync_stub.h>
 
-#include <sys/queue.h>
-#include <sys/param.h>
-
-#if 0
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/mutex.h>
-#include <sys/proc.h>
-#include <sys/systm.h>
-#endif
-
-#include <sys/eventhandler.h>
-#include <machine/atomic.h>
+#include <bsd/sys/sys/queue.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/eventhandler.h>
+#include <bsd/machine/atomic.h>
 
 #if 0
 static MALLOC_DEFINE(M_EVENTHANDLER, "eventhandler", "Event handler records");

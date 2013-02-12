@@ -8,7 +8,7 @@
 #ifndef _NET_ETHERNET_H_
 #define _NET_ETHERNET_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 
 /*
  * Some basic Ethernet constants.

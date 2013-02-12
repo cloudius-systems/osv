@@ -26,15 +26,8 @@
 
 #include <sys/cdefs.h>
 
-
-#include <sys/param.h>
-#if 0
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/malloc.h>
-#include <sys/ktr.h>
-#endif
-#include <sys/buf_ring.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/buf_ring.h>
 
 
 struct buf_ring *

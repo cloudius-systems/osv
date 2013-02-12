@@ -24,24 +24,22 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <porting/netport.h>
-#include <porting/uma_stub.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
 #include <sys/cdefs.h>
 
-#include <sys/param.h>
-#include <sys/mbuf.h>
-#include <sys/syslog.h>
-#include <sys/sysctl.h>
-#include <sys/socket.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
 
-#include <netinet/in.h>
-#include <net/if_llatbl.h>
-#include <net/if.h>
-#include <net/if_dl.h>
-#include <net/if_var.h>
-#include <net/route.h>
-#include <net/vnet.h>
-#include <netinet/if_ether.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/net/if_llatbl.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
+#include <bsd/sys/netinet/if_ether.h>
 // #include <netinet6/in6_var.h>
 // #include <netinet6/nd6.h>
 

@@ -33,7 +33,8 @@
 #ifndef _NETINET_IN_H_
 #define	_NETINET_IN_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
+
 #include <endian.h>
 #include <sys/cdefs.h>
 
@@ -89,7 +90,7 @@ typedef	__socklen_t	socklen_t;
 #define	_SOCKLEN_T_DECLARED
 #endif
 
-#include <sys/_sockaddr_storage.h>
+#include <bsd/sys/sys/_sockaddr_storage.h>
 
 /* Socket address, internet style. */
 struct sockaddr_in {

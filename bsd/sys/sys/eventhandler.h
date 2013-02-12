@@ -29,16 +29,9 @@
 #ifndef SYS_EVENTHANDLER_H
 #define SYS_EVENTHANDLER_H
 
-#include <porting/netport.h>
-#include <porting/sync_stub.h>
-#include <sys/queue.h>
-
-#if 0
-#include <sys/lock.h>
-#include <sys/ktr.h>
-#include <sys/mutex.h>
-#include <sys/queue.h>
-#endif
+#include <bsd/porting/netport.h>
+#include <bsd/porting/sync_stub.h>
+#include <bsd/sys/sys/queue.h>
 
 struct eventhandler_entry {
 	TAILQ_ENTRY(eventhandler_entry)	ee_link;

@@ -32,7 +32,7 @@
 #ifndef _SYS_RWLOCK_H_
 #define _SYS_RWLOCK_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
 struct rwlock {

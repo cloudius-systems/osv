@@ -34,32 +34,31 @@
  * Loopback interface driver for protocol testing and timing.
  */
 
-#include <porting/netport.h>
-#include <sys/param.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/sockio.h>
-#include <sys/sysctl.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/sockio.h>
 
-#include <net/if.h>
-#include <net/if_clone.h>
-#include <net/if_types.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_clone.h>
+#include <bsd/sys/net/if_types.h>
 // #include <net/netisr.h>
-#include <net/route.h>
+#include <bsd/sys/net/route.h>
 // #include <net/bpf.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/vnet.h>
 
 #ifdef	INET
-#include <netinet/in.h>
-#include <netinet/in_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
 #endif
 
 #ifdef INET6
 #ifndef INET
-#include <netinet/in.h>
+#include <bsd/sys/netinet/in.h>
 #endif
-#include <netinet6/in6_var.h>
-#include <netinet/ip6.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet/ip6.h>
 #endif
 
 #ifdef TINY_LOMTU

@@ -1,5 +1,5 @@
-#include <porting/netport.h>
-#include <porting/callout.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/callout.h>
 
 int callout_reset_on(struct callout *a, int b, void (*c)(void *), void *d, int e)
 {

@@ -34,22 +34,21 @@
  * Which is the new name for an in kernel routing (next hop) table.	*
  ***********************************************************************/
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 #include <assert.h>
 
-#include <sys/param.h>
-#include <sys/syslog.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/domain.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/domain.h>
 
-#include <net/if.h>
-#include <net/if_dl.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/ip_mroute.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip_mroute.h>
 
 /* We use 4 bits in the mbuf flags, thus we are limited to 16 FIBS. */
 #define	RT_MAXFIBS	16

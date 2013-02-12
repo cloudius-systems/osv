@@ -33,10 +33,10 @@
 #ifndef _SYS_SOCKET_H_
 #define	_SYS_SOCKET_H_
 
-#include <porting/netport.h>
+#include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
-#include <sys/_iovec.h>
-#include <machine/_align.h>
+#include <bsd/sys/sys/_iovec.h>
+#include <bsd/machine/_align.h>
 
 /*
  * Definitions related to sockets: types, address families, options.
@@ -291,7 +291,7 @@ struct sockproto {
 };
 #endif
 
-#include <sys/_sockaddr_storage.h>
+#include <bsd/sys/sys/_sockaddr_storage.h>
 
 #if __BSD_VISIBLE
 /*

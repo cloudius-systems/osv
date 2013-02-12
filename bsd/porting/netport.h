@@ -6,7 +6,7 @@
 #include <memory.h>
 
 #include <sys/types.h>
-#include <sys/queue.h>
+#include <bsd/sys/sys/queue.h>
 
 /* Defines how many ticks are in 1 minute */
 #ifndef hz

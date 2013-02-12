@@ -108,7 +108,6 @@
 #include <sys/errno.h>
 #ifndef LOCORE
 #include <sys/time.h>
-// #include <sys/priority.h>
 #endif
 
 #ifndef FALSE
@@ -119,13 +118,8 @@
 #endif
 #endif
 
-#ifndef _KERNEL
-/* Signals. */
-#include <sys/signal.h>
-#endif
-
 /* Machine type dependent parameters. */
-#include <machine/param.h>
+#include <bsd/machine/param.h>
 
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
