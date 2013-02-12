@@ -219,7 +219,7 @@ class osv_info_threads(gdb.Command):
                 fname = '??'
                 if sal.symtab:
                     fname = sal.symtab.filename
-                gdb.write('%s cpu%s %s %s at %s:%s\n' %
+                gdb.write('0x%x cpu%s %s %s at %s:%s\n' %
                           (ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
