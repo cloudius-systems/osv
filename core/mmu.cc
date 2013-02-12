@@ -55,7 +55,10 @@ namespace mmu {
 
     phys virt_to_phys(void *virt)
     {
-	return reinterpret_cast<phys>(virt) - 0xffff800000000000ull;
+        // For now, only allow non-mmaped areas.  Later, we can either
+        // bounce such addresses, or lock them in memory and translate
+        assert(reinterpret_cast<phys>(virt) >= 0xffff800000000000ull);
+        return reinterpret_cast<phys>(virt) - 0xffff800000000000ull;
     }
 
     unsigned pt_index(void *virt, unsigned level)
