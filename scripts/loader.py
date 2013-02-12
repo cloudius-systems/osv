@@ -222,6 +222,8 @@ class osv_info_threads(gdb.Command):
                 status = 'rdy '
                 if long(t['_waiting']['_M_base']['_M_i']):
                     status = 'wait'
+                if state.cpu_from_thread(t):
+                    status = 'run '
                 function = '??'
                 if fr.function():
                     function = fr.function().name

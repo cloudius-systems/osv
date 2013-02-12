@@ -157,7 +157,7 @@ namespace virtio {
         virtual bool load(void);
         virtual bool unload(void);
 
-        virtual u32 get_driver_features(void) { return ((1 << VIRTIO_BLK_F_SIZE_MAX)); }
+        virtual u32 get_driver_features(void);
 
         virtio_blk_req* make_virtio_req(u64 sector, virtio_blk_request_type type, int val);
         int make_virtio_request(struct bio*);

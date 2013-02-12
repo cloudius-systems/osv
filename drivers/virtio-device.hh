@@ -28,6 +28,14 @@ namespace virtio {
          * bits. */
         VIRTIO_TRANSPORT_F_START = 28,
         VIRTIO_TRANSPORT_F_END = 32,
+        /* We support indirect buffer descriptors */
+        VIRTIO_RING_F_INDIRECT_DESC = 28,
+        /* The Guest publishes the used index for which it expects an interrupt
+         * at the end of the avail ring. Host should ignore the avail->flags field. */
+        /* The Host publishes the avail index for which it expects a kick
+         * at the end of the used ring. Guest should ignore the used->flags field. */
+        VIRTIO_RING_F_EVENT_IDX = 29,
+
         /* Do we get callbacks when the ring is completely used, even if we've
          * suppressed them? */
         VIRTIO_F_NOTIFY_ON_EMPTY = 24,

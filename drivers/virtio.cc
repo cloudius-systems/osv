@@ -63,9 +63,15 @@ namespace virtio {
 
         u32 subset = dev_features & drv_features;
 
-        // Configure transport features
-        // TBD
-        return (subset == 1);
+        //notify the host about the features in used according
+        //to the virtio spec
+        for (int i=0;i<32;i++)
+            if (subset & (1 << i))
+                debug(fmt("%s: found feature intersec of bit %d") % __FUNCTION__ % i);
+
+        _dev->set_guest_features(subset);
+
+        return (subset != 0);
 
     }
 
