@@ -77,6 +77,8 @@ class osv_heap(gdb.Command):
 
 ulong_type = gdb.lookup_type('unsigned long')
 
+active_thread_context = None
+
 def ulong(x):
     x = x.cast(ulong_type)
     x = long(x)
@@ -199,11 +201,18 @@ class thread_context(object):
             self.vm_thread.switch()
         self.old_frame.select()
 
+def exit_thread_context():
+    global active_thread_context
+    if active_thread_context:
+        active_thread_context.__exit__()
+        active_thread_context = None
+
 class osv_info_threads(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv info threads',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
+        exit_thread_context()
         state = vmstate()
         for t in state.thread_list:
             with thread_context(t, state):
@@ -233,10 +242,18 @@ class osv_thread(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv thread', gdb.COMMAND_USER,
                              gdb.COMPLETE_COMMAND, True)
-    #def invoke(self, arg, for_tty):
-    #    for t in thread_list():
-    #        if t.address.cast(ulong_type) == long(arg, 0):
-    #            print 'match'
+    def invoke(self, arg, for_tty):
+        exit_thread_context()
+        state = vmstate()
+        thread = None
+        for t in state.thread_list:
+            if t.address.cast(ulong_type) == long(arg, 0):
+                thread = t
+        if not thread:
+            print 'Not found'
+            return
+        active_thread_context = thread_context(thread, state)
+        active_thread_context.__enter__()
 
 class osv_thread_apply(gdb.Command):
     def __init__(self):
@@ -248,6 +265,7 @@ class osv_thread_apply_all(gdb.Command):
         gdb.Command.__init__(self, 'osv thread apply all', gdb.COMMAND_USER,
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
+        exit_thread_context()
         state = vmstate()
         for t in state.thread_list:
             gdb.write('thread %s\n\n' % t.address)
