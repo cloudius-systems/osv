@@ -44,7 +44,7 @@ struct buf {
 	struct device	*b_dev;		/* device */
 	int		b_blkno;	/* block # on device */
 	mutex_t		b_lock;		/* lock for access */
-	char		*b_data;	/* pointer to data buffer */
+	void		*b_data;	/* pointer to data buffer */
 };
 
 /*
