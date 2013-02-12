@@ -360,6 +360,11 @@ libc += multibyte/wcstombs.o
 libc += multibyte/wctob.o
 libc += multibyte/wctomb.o
 
+libc += network/htonl.o
+libc += network/htons.o
+libc += network/ntohl.o
+libc += network/ntohs.o
+
 libc += setjmp/setjmp.o
 libc += setjmp/longjmp.o
 
