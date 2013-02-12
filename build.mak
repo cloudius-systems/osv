@@ -97,31 +97,10 @@ loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 
 arch/x64/boot32.o: loader.elf
 
-fs = fs/fs.o bootfs.o
-
-fs +=	fs/vfs/main.o \
-	fs/vfs/kern_physio.o \
-	fs/vfs/subr_uio.o \
-	fs/vfs/vfs_bdev.o \
-	fs/vfs/vfs_bio.o \
-	fs/vfs/vfs_conf.o \
-	fs/vfs/vfs_lookup.o \
-	fs/vfs/vfs_mount.o \
-	fs/vfs/vfs_vnode.o \
-	fs/vfs/vfs_task.o \
-	fs/vfs/vfs_syscalls.o
-
-fs +=	fs/ramfs/ramfs_vfsops.o \
-	fs/ramfs/ramfs_vnops.o
-
-fs +=	fs/devfs/devfs_vnops.o \
-	fs/devfs/device.o
-
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += drivers/debug-console.o
 drivers += drivers/ramdisk.o
-drivers += $(fs)
 drivers += core/mmu.o
 drivers += core/elf.o
 drivers += core/interrupt.o
@@ -136,7 +115,8 @@ drivers += drivers/clock.o drivers/kvmclock.o
 drivers += drivers/clockevent.o
 drivers += drivers/acpi.o
 
-objects = arch/x64/exceptions.o
+objects = bootfs.o
+objects += arch/x64/exceptions.o
 objects += arch/x64/entry.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
@@ -155,8 +135,10 @@ objects += core/sglist.o
 
 unittests:= tests/tst-hub.o
 
+include $(src)/fs/build.mak
 include $(src)/libc/build.mak
 
+objects += $(addprefix fs/, $(fs))
 objects += $(addprefix libc/, $(libc))
 objects += $(acpi)
 
