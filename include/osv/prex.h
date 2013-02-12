@@ -7,7 +7,6 @@
 
 __BEGIN_DECLS
 
-#define TASK_NULL	  ((task_t)0)
 #define	BSIZE	512		/* size of secondary block (bytes) */
 
 /*
@@ -25,13 +24,6 @@ __BEGIN_DECLS
 #define PAGE_MASK	(PAGE_SIZE-1)
 #define round_page(x)	(((x) + PAGE_MASK) & ~PAGE_MASK)
 
-
-typedef unsigned long   object_t;
-typedef unsigned long   task_t;
-typedef unsigned long   thread_t;
-typedef unsigned long   cond_t;
-typedef unsigned long   sem_t;
-typedef unsigned long   device_t;
 
 size_t strlcat(char *dst, const char *src, size_t siz);
 size_t strlcpy(char *dst, const char *src, size_t siz);

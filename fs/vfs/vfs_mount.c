@@ -86,7 +86,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	const struct vfssw *fs;
 	mount_t mp;
 	list_t head, n;
-	device_t device;
+	struct device *device;
 	vnode_t vp, vp_covered;
 	int error;
 
@@ -253,7 +253,7 @@ sys_umount(char *path)
 
 #if HAVE_DEVICES
 	if (mp->m_dev)
-		device_close((device_t)mp->m_dev);
+		device_close(mp->m_dev);
 #endif
 	free(mp);
  out:
