@@ -6,12 +6,10 @@ extern "C" {
     #include <bsd/machine/param.h>
 }
 
-extern void mbuf_init(void *dummy);
-
-void test_mbuf(void)
+void net_init(void)
 {
-    debug("A");
+    debug("Initializing network stack...");
     eventhandler_init(NULL);
     mbuf_init(NULL);
-    debug("B");
+    debug("Done!");
 }

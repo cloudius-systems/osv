@@ -1,7 +1,7 @@
 #ifndef NET_HH
 #define NET_HH
 
-void test_mbuf(void);
+void net_init(void);
 
 
 #endif // NET_HH

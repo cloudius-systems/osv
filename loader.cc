@@ -104,7 +104,7 @@ void main_cont(int ac, char** av)
 
     filesystem fs;
 
-    test_mbuf();
+    net_init();
 
     disable_pic();
     processor::sti();
