@@ -34,9 +34,7 @@
 #include <bsd/sys/sys/eventhandler.h>
 #include <bsd/machine/atomic.h>
 
-#if 0
-static MALLOC_DEFINE(M_EVENTHANDLER, "eventhandler", "Event handler records");
-#endif
+MALLOC_DEFINE(M_EVENTHANDLER, "eventhandler", "Event handler records");
 
 /* List of 'slow' lists */
 static TAILQ_HEAD(, eventhandler_list)	eventhandler_lists;
@@ -61,11 +59,8 @@ eventhandler_init(void * __unused)
     mtx_init(&eventhandler_mutex, "eventhandler", NULL, MTX_DEF);
     atomic_store_rel_int((volatile u_int *)&eventhandler_lists_initted, 1);
 }
-
-#if 0
 SYSINIT(eventhandlers, SI_SUB_EVENTHANDLER, SI_ORDER_FIRST, eventhandler_init,
     NULL);
-#endif
 
 /* 
  * Insertion is O(n) due to the priority scan, but optimises to O(1)
@@ -94,19 +89,13 @@ eventhandler_register_internal(struct eventhandler_list *list,
 	    mtx_unlock(&eventhandler_mutex);
 
 	    new_list = malloc(sizeof(struct eventhandler_list) +
-	            strlen(name) + 1);
-#if 0
-	    new_list = malloc(sizeof(struct eventhandler_list) +
-		strlen(name) + 1, M_EVENTHANDLER, M_WAITOK);
-#endif
+	    strlen(name) + 1);
+
 	    /* If someone else created it already, then use that one. */
 	    mtx_lock(&eventhandler_mutex);
 	    list = _eventhandler_find_list(name);
 	    if (list != NULL) {
 	        free(new_list);
-#if 0
-		free(new_list, M_EVENTHANDLER);
-#endif
 	    } else {
 		CTR2(KTR_EVH, "%s: creating list \"%s\"", __func__, name);
 		list = new_list;
@@ -154,10 +143,7 @@ eventhandler_register(struct eventhandler_list *list, const char *name,
     
     /* allocate an entry for this handler, populate it */
     eg = malloc(sizeof(struct eventhandler_entry_generic));
-#if 0
-    eg = malloc(sizeof(struct eventhandler_entry_generic), M_EVENTHANDLER,
-	M_WAITOK | M_ZERO);
-#endif
+	bzero(eg, sizeof(struct eventhandler_entry_generic));
     eg->func = func;
     eg->ee.ee_arg = arg;
     eg->ee.ee_priority = priority;
@@ -204,9 +190,6 @@ eventhandler_deregister(struct eventhandler_list *list, eventhandler_tag tag)
 	    CTR3(KTR_EVH, "%s: removing item %p from \"%s\"", __func__, ep,
 		list->el_name);
 	    TAILQ_REMOVE(&list->el_entries, ep, ee_link);
-#if 0
-	    free(ep, M_EVENTHANDLER);
-#endif
 	    free(ep);
 	} else {
 	    CTR3(KTR_EVH, "%s: marking item %p from \"%s\" as dead", __func__,
@@ -221,9 +204,6 @@ eventhandler_deregister(struct eventhandler_list *list, eventhandler_tag tag)
 	    while (!TAILQ_EMPTY(&list->el_entries)) {
 		ep = TAILQ_FIRST(&list->el_entries);
 		TAILQ_REMOVE(&list->el_entries, ep, ee_link);
-#if 0
-        free(ep, M_EVENTHANDLER);
-#endif
         free(ep);
 	    }
 	} else {
@@ -289,9 +269,6 @@ eventhandler_prune_list(struct eventhandler_list *list)
     TAILQ_FOREACH_SAFE(ep, &list->el_entries, ee_link, en) {
 	if (ep->ee_priority == EHE_DEAD_PRIORITY) {
 	    TAILQ_REMOVE(&list->el_entries, ep, ee_link);
-#if 0
-	    free(ep, M_EVENTHANDLER);
-#endif
 	    free(ep);
 	    pruned++;
 	}
