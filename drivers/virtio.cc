@@ -67,7 +67,7 @@ namespace virtio {
         //to the virtio spec
         for (int i=0;i<32;i++)
             if (subset & (1 << i))
-                debug(fmt("%s: found feature intersec of bit %d") % __FUNCTION__ % i);
+                virtio_d(fmt("%s: found feature intersec of bit %d") % __FUNCTION__ % i);
 
         if (subset & (1 << VIRTIO_RING_F_INDIRECT_DESC))
             _dev->set_indirect_buf_cap(true);
@@ -83,7 +83,7 @@ namespace virtio {
         u8 B, D, F;
         _dev->get_bdf(B, D, F);
 
-        debug(fmt("%s [%x:%x.%x] vid:id= %x:%x") % get_name() %
+        virtio_d(fmt("%s [%x:%x.%x] vid:id= %x:%x") % get_name() %
             (u16)B % (u16)D % (u16)F %
             _dev->get_vendor_id() % _dev->get_device_id());
     }
