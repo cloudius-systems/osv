@@ -87,103 +87,107 @@ namespace virtio {
     // TODO: add barriers
     bool
     vring::add_buf(sglist* sg, u16 out, u16 in, void* cookie) {
-        int desc_needed = in + out;
-        if (_dev->get_indirect_buf_cap())
-            desc_needed = 1;
+        return with_lock(_lock, [=] {
+            int desc_needed = in + out;
+            if (_dev->get_indirect_buf_cap())
+                desc_needed = 1;
 
-        if (_avail_count < desc_needed) {
-            //make sure the interrupts get there
-            //it probably should force an exit to the host
-            kick();
-            return false;
-        }
-
-        int i = 0, idx, prev_idx;
-        idx = _avail_head;
-
-        //debug(fmt("\t%s: avail_head=%d, in=%d, out=%d") % __FUNCTION__ % _avail_head % in % out);
-        _cookie[idx] = cookie;
-        vring_desc* descp = _desc;
-
-        if (_dev->get_indirect_buf_cap()) {
-            vring_desc* indirect = reinterpret_cast<vring_desc*>(malloc((in+out)*sizeof(vring_desc)));
-            if (!indirect)
+            if (_avail_count < desc_needed) {
+                //make sure the interrupts get there
+                //it probably should force an exit to the host
+                kick();
                 return false;
-            _desc[idx]._flags = vring_desc::VRING_DESC_F_INDIRECT;
-            _desc[idx]._paddr = mmu::virt_to_phys(indirect);
-            _desc[idx]._len = (in+out)*sizeof(vring_desc);
+            }
 
-            descp = indirect;
-            //initialize the next pointers
-            for (int j=0;j<in+out;j++) descp[j]._next = j+1;
-            //hack to make the logic below the for loop below act
-            //just as before
-            descp[in+out-1]._next = _desc[idx]._next;
-            idx = 0;
-        }
+            int i = 0, idx, prev_idx;
+            idx = _avail_head;
 
-        for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
-            //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
-            descp[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
-            descp[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
-            descp[idx]._paddr = (*ii)._paddr;
-            descp[idx]._len = (*ii)._len;
-            prev_idx = idx;
-            idx = descp[idx]._next;
-        }
-        descp[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
+            //debug(fmt("\t%s: avail_head=%d, in=%d, out=%d") % __FUNCTION__ % _avail_head % in % out);
+            _cookie[idx] = cookie;
+            vring_desc* descp = _desc;
 
-        _avail_added_since_kick++;
-        _avail_count -= desc_needed;
+            if (_dev->get_indirect_buf_cap()) {
+                vring_desc* indirect = reinterpret_cast<vring_desc*>(malloc((in+out)*sizeof(vring_desc)));
+                if (!indirect)
+                    return false;
+                _desc[idx]._flags = vring_desc::VRING_DESC_F_INDIRECT;
+                _desc[idx]._paddr = mmu::virt_to_phys(indirect);
+                _desc[idx]._len = (in+out)*sizeof(vring_desc);
 
-        _avail->_ring[(_avail->_idx) % _num] = _avail_head;
-        barrier();
-        _avail->_idx++;
-        _avail_head = idx;
+                descp = indirect;
+                //initialize the next pointers
+                for (int j=0;j<in+out;j++) descp[j]._next = j+1;
+                //hack to make the logic below the for loop below act
+                //just as before
+                descp[in+out-1]._next = _desc[idx]._next;
+                idx = 0;
+            }
 
-        //debug(fmt("\t%s: _avail->_idx=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
+            for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
+                //debug(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
+                descp[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
+                descp[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
+                descp[idx]._paddr = (*ii)._paddr;
+                descp[idx]._len = (*ii)._len;
+                prev_idx = idx;
+                idx = descp[idx]._next;
+            }
+            descp[prev_idx]._flags &= ~vring_desc::VRING_DESC_F_NEXT;
 
-        return true;
+            _avail_added_since_kick++;
+            _avail_count -= desc_needed;
+
+            _avail->_ring[(_avail->_idx) % _num] = _avail_head;
+            barrier();
+            _avail->_idx++;
+            _avail_head = idx;
+
+            //debug(fmt("\t%s: _avail->_idx=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
+
+            return true;
+        });
     }
 
     void*
     vring::get_buf()
     {
-        vring_used_elem elem;
-        void* cookie = nullptr;
-        int i = 1;
+        return with_lock(_lock, [=] {
+            vring_used_elem elem;
+            void* cookie = reinterpret_cast<void*>(0);
+            int i = 1;
 
-        // need to trim the free running counter w/ the array size
-        int used_ptr = _used_guest_head % _num;
+            // need to trim the free running counter w/ the array size
+            int used_ptr = _used_guest_head % _num;
 
-        barrier(); // Normalize the used fields of these descriptors
-        if (_used_guest_head == _used->_idx) {
-            debug(fmt("get_used_desc: no avail buffers ptr=%d") % _used_guest_head);
-            return nullptr;
-        }
-
-        //debug(fmt("get used: guest head=%d use_elem[head].id=%d") % used_ptr % _used->_used_elements[used_ptr]._id);
-        elem = _used->_used_elements[used_ptr];
-        int idx = elem._id;
-
-        if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
-            free(mmu::phys_to_virt(_desc[idx]._paddr));
-        } else
-            while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
-                idx = _desc[idx]._next;
-                i++;
+            barrier(); // Normalize the used fields of these descriptors
+            if (_used_guest_head == _used->_idx) {
+                debug(fmt("get_used_desc: no avail buffers ptr=%d") % _used_guest_head);
+                return reinterpret_cast<void*>(0);
             }
 
-        cookie = _cookie[elem._id];
-        _cookie[elem._id] = nullptr;
+            //debug(fmt("get used: guest head=%d use_elem[head].id=%d") % used_ptr % _used->_used_elements[used_ptr]._id);
+            elem = _used->_used_elements[used_ptr];
+            int idx = elem._id;
 
-        _used_guest_head++;
-        _avail_count += i;
-        barrier();
-        _desc[idx]._next = _avail_head;
-        _avail_head = elem._id;
+            if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
+                free(mmu::phys_to_virt(_desc[idx]._paddr));
+            } else
+                while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
+                    idx = _desc[idx]._next;
+                    i++;
+                }
 
-        return cookie;
+            cookie = _cookie[elem._id];
+            _cookie[elem._id] = reinterpret_cast<void*>(0);
+
+            _used_guest_head++;
+            _avail_count += i;
+            barrier();
+            _desc[idx]._next = _avail_head;
+            _avail_head = elem._id;
+
+            return cookie;
+        });
     }
 
     bool vring::avail_ring_not_empty()

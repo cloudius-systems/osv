@@ -2,6 +2,7 @@
 #define VIRTIO_VRING_H
 
 #include <functional>
+#include "mutex.hh"
 
 class sglist;
 
@@ -153,6 +154,8 @@ class virtio_device;
         void** _cookie;
         //callback function for upper layer virtio queues
         std::function<void ()> _callback;
+        //protects parallel get_bug /add_buf access, mainly the _avail_head variable
+        mutex _lock;
     };
 
 
