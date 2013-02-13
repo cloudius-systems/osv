@@ -12,7 +12,7 @@ public:
     void run()
     {
             // Comment it out to reduce output
-            //pci::pci_devices_print();
+            pci::pci_devices_print();
 
             // List all devices
             hw::device_manager::instance()->list_devices();

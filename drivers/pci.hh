@@ -34,6 +34,12 @@
 
 class Driver;
 
+#define pci_tag "pci"
+#define pci_d(fmt)   logger::instance()->log(pci_tag, logger::logger_debug, (fmt))
+#define pci_i(fmt)   logger::instance()->log(pci_tag, logger::logger_info, (fmt))
+#define pci_w(fmt)   logger::instance()->log(pci_tag, logger::logger_warn, (fmt))
+#define pci_e(fmt)   logger::instance()->log(pci_tag, logger::logger_error, (fmt))
+
 namespace pci {
 
 using processor::inb;
