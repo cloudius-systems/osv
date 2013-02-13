@@ -147,11 +147,14 @@ namespace virtio {
 
         void register_callback(std::function<void ()> func) {_queues[0]->register_callback(func);};
 
+        bool get_indirect_buf_cap() {return _cap_indirect_buf;}
+        void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
+
     protected:
         vring* _queues[max_virtqueues_nr];
         u32 _num_queues;
-
         pci_bar *_bar1;
+        bool _cap_indirect_buf;
     };
 
 }

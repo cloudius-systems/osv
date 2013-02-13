@@ -69,6 +69,9 @@ namespace virtio {
             if (subset & (1 << i))
                 debug(fmt("%s: found feature intersec of bit %d") % __FUNCTION__ % i);
 
+        if (subset & (1 << VIRTIO_RING_F_INDIRECT_DESC))
+            _dev->set_indirect_buf_cap(true);
+
         _dev->set_guest_features(subset);
 
         return (subset != 0);

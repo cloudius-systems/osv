@@ -9,7 +9,8 @@ using namespace pci;
 namespace virtio {
 
     virtio_device::virtio_device(u8 bus, u8 device, u8 func)
-        : pci_device(bus, device, func),  _num_queues(0), _bar1(nullptr)
+        : pci_device(bus, device, func),  _num_queues(0), _bar1(nullptr),
+          _cap_indirect_buf(false)
     {
         for (unsigned i=0; i < max_virtqueues_nr; i++) {
             _queues[i] = nullptr;
