@@ -47,7 +47,7 @@ struct mount {
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
 	char		m_path[PATH_MAX]; /* mounted path */
-	dev_t		m_dev;		/* mounted device */
+	struct device	*m_dev;		/* mounted device */
 	struct vnode	*m_root;	/* root vnode */
 	struct vnode	*m_covered;	/* vnode covered on parent fs */
 	void		*m_data;	/* private data for fs */

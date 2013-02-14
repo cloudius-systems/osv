@@ -59,11 +59,11 @@ extern int vfs_debug;
 #define VFSDB_FLAGS	0x00000013
 
 #define	DPRINTF(_m,X)	if (vfs_debug & (_m)) dprintf X
-#define ASSERT(e)	dassert(e)
 #else
 #define	DPRINTF(_m, X)
-#define ASSERT(e)
 #endif
+
+#define ASSERT(e)	assert(e)
 
 #define OPEN_MAX	256
 
@@ -72,7 +72,6 @@ extern int vfs_debug;
  */
 struct task {
 	struct list_head t_link;	/* hash link */
-	task_t	    t_taskid;		/* task id */
 	char 	    t_cwd[PATH_MAX];	/* current working directory */
 	file_t	    t_cwdfp;		/* directory for cwd */
 	file_t	    t_ofile[OPEN_MAX];	/* pointers to file structures of open files */
@@ -129,7 +128,7 @@ void	 task_delfd(struct task *t, int fd);
 
 int	 task_conv(struct task *t, const char *path, int mode, char *full);
 
-int	 sec_file_permission(task_t task, char *path, int mode);
+//int	 sec_file_permission(task_t task, char *path, int mode);
 int	 sec_vnode_permission(char *path);
 
 int	 namei(char *path, vnode_t *vpp);

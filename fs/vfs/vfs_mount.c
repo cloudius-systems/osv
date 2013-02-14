@@ -44,6 +44,7 @@
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
+#include <osv/device.h>
 #include "vfs.h"
 
 /*
@@ -54,14 +55,9 @@ static struct list_head mount_list = LIST_INIT(mount_list);
 /*
  * Global lock to access mount point.
  */
-#if CONFIG_FS_THREADS > 1
 static mutex_t mount_lock = MUTEX_INITIALIZER;
 #define MOUNT_LOCK()	mutex_lock(&mount_lock)
 #define MOUNT_UNLOCK()	mutex_unlock(&mount_lock)
-#else
-#define MOUNT_LOCK()
-#define MOUNT_UNLOCK()
-#endif
 
 /*
  * Lookup file system.
@@ -86,7 +82,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	const struct vfssw *fs;
 	mount_t mp;
 	list_t head, n;
-	device_t device;
+	struct device *device;
 	vnode_t vp, vp_covered;
 	int error;
 
@@ -103,14 +99,12 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 
 	/* Open device. NULL can be specified as a device. */
 	device = 0;
-#if HAVE_DEVICES
 	if (*dev != '\0') {
 		if (strncmp(dev, "/dev/", 5))
 			return ENOTBLK;
 		if ((error = device_open(dev + 5, DO_RDWR, &device)) != 0)
 			return error;
 	}
-#endif
 
 	MOUNT_LOCK();
 
@@ -119,7 +113,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	for (n = list_first(head); n != head; n = list_next(n)) {
 		mp = list_entry(n, struct mount, m_link);
 		if (!strcmp(mp->m_path, dir) ||
-		    (device && mp->m_dev == (dev_t)device)) {
+		    (device && mp->m_dev == device)) {
 			error = EBUSY;	/* Already mounted */
 			goto err1;
 		}
@@ -134,7 +128,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	mp->m_count = 0;
 	mp->m_op = fs->vs_op;
 	mp->m_flags = flags;
-	mp->m_dev = (dev_t)device;
+	mp->m_dev = device;
 	strlcpy(mp->m_path, dir, sizeof(mp->m_path));
 
 	/*
@@ -199,9 +193,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
  err2:
 	free(mp);
  err1:
-#if HAVE_DEVICES
 	device_close(device);
-#endif
 
 	MOUNT_UNLOCK();
 	return error;
@@ -251,10 +243,8 @@ sys_umount(char *path)
 	binval(mp->m_dev);
 #endif
 
-#if HAVE_DEVICES
 	if (mp->m_dev)
-		device_close((device_t)mp->m_dev);
-#endif
+		device_close(mp->m_dev);
 	free(mp);
  out:
 	MOUNT_UNLOCK();

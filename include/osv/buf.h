@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2007, Kohsuke Ohtani
+/*-
+ * Copyright (c) 2005-2007, Kohsuke Ohtani
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,19 +27,45 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _DEVFS_H
-#define _DEVFS_H
+#ifndef _SYS_BUF_H_
+#define _SYS_BUF_H_
 
-#include <assert.h>
+#include <sys/types.h>
+#include <sys/cdefs.h>
+#include <osv/list.h>
+#include <osv/mutex.h>
 
-/* #define DEBUG_DEVFS 1 */
+/*
+ * Buffer header
+ */
+struct buf {
+	struct list_head b_link;	/* link to block list */
+	int		b_flags;	/* see defines below */
+	struct device	*b_dev;		/* device */
+	int		b_blkno;	/* block # on device */
+	mutex_t		b_lock;		/* lock for access */
+	void		*b_data;	/* pointer to data buffer */
+};
 
-#ifdef DEBUG_DEVFS
-#define DPRINTF(a)	dprintf a
-#else
-#define DPRINTF(a)	do {} while (0)
-#endif
+/*
+ * These flags are kept in b_flags.
+ */
+#define	B_BUSY		0x00000001	/* I/O in progress. */
+#define	B_DELWRI	0x00000002	/* delay I/O until buffer reused. */
+#define	B_INVAL		0x00000004	/* does not contain valid info. */
+#define	B_READ		0x00000008	/* read buffer. */
+#define	B_DONE		0x00000010	/* I/O completed. */
 
-#define ASSERT(e)	assert(e)
+__BEGIN_DECLS
+struct buf *getblk(struct device *, int);
+int	bread(struct device *, int, struct buf **);
+int	bwrite(struct buf *);
+void	bdwrite(struct buf *);
+void	binval(struct device *);
+void	brelse(struct buf *);
+void	bflush(struct buf *);
+void	bio_sync(void);
+void	bio_init(void);
+__END_DECLS
 
-#endif /* !_DEVFS_H */
+#endif /* !_SYS_BUF_H_ */

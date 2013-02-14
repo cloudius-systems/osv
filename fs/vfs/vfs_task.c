@@ -51,7 +51,6 @@ task_alloc(struct task **pt)
 	if (!(t = malloc(sizeof(struct task))))
 		return ENOMEM;
 	memset(t, 0, sizeof(struct task));
-	t->t_taskid = 0;
 	strlcpy(t->t_cwd, "/", sizeof(t->t_cwd));
 	mutex_init(&t->t_lock);
 

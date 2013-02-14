@@ -25,7 +25,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	for (i=0;i<100;i++) {
+	for (i=0;i<100 * 512; i+=512) {
 
         if (pread(fd, origin, BUF_SIZE, i) != BUF_SIZE) {
             perror("pread, origin");

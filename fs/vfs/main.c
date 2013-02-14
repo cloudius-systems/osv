@@ -1145,6 +1145,7 @@ void mount_rootfs(void)
 }
 
 int console_init(void);
+void bio_init(void);
 
 int vfs_initialized;
 
@@ -1153,6 +1154,7 @@ vfs_init(void)
 {
 	const struct vfssw *fs;
 
+	bio_init();
 	vnode_init();
 	task_alloc(&main_task);
 	console_init();

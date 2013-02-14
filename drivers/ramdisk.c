@@ -48,14 +48,25 @@ struct ramdisk_softc {
 static pthread_t ramdisk_thread;
 
 static int
-ramdisk_rdwr(struct device *dev, struct uio *uio, int ioflags)
+ramdisk_read(struct device *dev, struct uio *uio, int ioflags)
 {
 	struct ramdisk_softc *sc = dev->private_data;
 
 	if (uio->uio_offset + uio->uio_resid > sc->size)
 		return EIO;
 
-	return physio(dev, uio, ioflags);
+	return bdev_read(dev, uio, ioflags);
+}
+
+static int
+ramdisk_write(struct device *dev, struct uio *uio, int ioflags)
+{
+	struct ramdisk_softc *sc = dev->private_data;
+
+	if (uio->uio_offset + uio->uio_resid > sc->size)
+		return EIO;
+
+	return bdev_write(dev, uio, ioflags);
 }
 
 static void
@@ -91,8 +102,8 @@ ramdisk_strategy(struct bio *bio)
 static struct devops ramdisk_devops = {
 	.open		= no_open,
 	.close		= no_close,
-	.read		= ramdisk_rdwr,
-	.write		= ramdisk_rdwr,
+	.read		= ramdisk_read,
+	.write		= ramdisk_write,
 	.ioctl		= no_ioctl,
 	.devctl		= no_devctl,
 	.strategy	= ramdisk_strategy,

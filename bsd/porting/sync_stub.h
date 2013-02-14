@@ -24,7 +24,7 @@ void mtx_unlock(struct mtx *mp);
 
 void mtx_assert(struct mtx *mp, int flag);
 
-// #define mtx_sleep(chan, mtx, pri, wmesg, timo) (void)0;
+#define mtx_sleep(chan, mtx, pri, wmesg, timo) (void)0;
 
 
 

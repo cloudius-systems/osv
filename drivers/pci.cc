@@ -24,6 +24,9 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
 
+#include <sstream>
+#include <iomanip>
+
 #include "debug.hh"
 
 #include "drivers/pci.hh"
@@ -80,15 +83,19 @@ void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
 
 void pci_device_print(u8 bus, u8 slot, u8 func)
 {
-    int i;
-    u8 val;
+    pci_d(fmt("Config space of: %02x:%02x:%02x") % (unsigned int)bus % (unsigned int)slot % (unsigned int)func);
 
-    debug(fmt("Config space of: %02x:%02x:%02x") % (unsigned int)bus % (unsigned int)slot % (unsigned int)func);
+    for (u8 i = 0; i < 16; i++) {
+        std::string row;
+        for (u8 j = 0; j < 16; j++) {
+            u8 val = read_pci_config_byte(bus, slot, func, i*16+j);
+            std::stringstream ss;
+            ss << std::setfill('0') << std::setw(2) << std::hex << (int)val;
+            row += ss.str();
+            row += " ";
+        }
 
-    for (i = 0; i < 256; i ++) {
-        val = read_pci_config_byte(bus, slot, func, i);
-        // adds a new line every 16 bytes
-        debug(fmt("%02x ") % (unsigned int)val, (i % 16 == 15));
+        pci_d(fmt("%s") % row.c_str());
     }
 }
 
@@ -138,13 +145,13 @@ void pci_device_enumeration(void)
 
                 bool parse_ok = dev->parse_pci_config();
                 if (!parse_ok) {
-                    debug(fmt("Error: couldn't parse device config space %x:%x.%x")
+                    pci_e(fmt("Error: couldn't parse device config space %x:%x.%x")
                         % bus % slot % func);
                     break;
                 }
 
                 if (!device_manager::instance()->register_device(dev)) {
-                    debug(fmt("Error: couldn't register device %x:%x.%x")
+                    pci_e(fmt("Error: couldn't register device %x:%x.%x")
                         % bus % slot % func);
                     //TODO: Need to beautify it as multiple instances of the device may exist
                     delete (dev);
