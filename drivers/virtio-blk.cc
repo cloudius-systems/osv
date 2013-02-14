@@ -92,7 +92,7 @@ struct driver virtio_blk_driver = {
         ss << "virtio-blk" << dev_idx;
 
         _driver_name = ss.str();
-        debug(fmt("VIRTIO BLK INSTANCE %d") % dev_idx);
+        virtio_i(fmt("VIRTIO BLK INSTANCE %d") % dev_idx);
         _id = _instance++;
     }
 
@@ -109,7 +109,7 @@ struct driver virtio_blk_driver = {
         _dev->virtio_conf_read(offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
                       &_config.capacity,
                       sizeof(_config.capacity));
-        debug(fmt("capacity of the device is %x") % (u64)_config.capacity);
+        virtio_i(fmt("capacity of the device is %x") % (u64)_config.capacity);
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
@@ -127,10 +127,10 @@ struct driver virtio_blk_driver = {
 
         // Perform test if this isn't the boot image (test is destructive
         if (_id > 0) {
-            debug(fmt("virtio blk: testing instance %d") % _id);
+            virtio_d(fmt("virtio blk: testing instance %d") % _id);
 
             for (int i=0;i<6;i++) {
-                debug(fmt("Running test %d") % i);
+                virtio_d(fmt("Running test %d") % i);
                 test();
                 timespec ts = {};
                 ts.tv_sec = 1;
@@ -166,7 +166,7 @@ struct driver virtio_blk_driver = {
 
         struct bio* bio = alloc_bio();
         if (!bio) {
-            debug("bio_alloc failed");
+            virtio_e(fmt("bio_alloc failed"));
             return nullptr;
         }
         bio->bio_data = buf;
@@ -192,14 +192,14 @@ struct driver virtio_blk_driver = {
         int i;
         static bool is_write = true; // keep changing the type every call
 
-        debug("test virtio blk");
+        virtio_d(fmt("test virtio blk"));
         vring* queue = _dev->get_virt_queue(0);
         virtio_blk_req* req;
         const int iterations = 100;
 
         if (is_write) {
             is_write = false;
-            debug(" write several requests");
+            virtio_d(fmt(" write several requests"));
             for (i=0;i<iterations;i++) {
                 req = make_virtio_req(i*8, VIRTIO_BLK_T_OUT,i);
                 if (!queue->add_buf(req->payload,2,1,req)) {
@@ -207,11 +207,11 @@ struct driver virtio_blk_driver = {
                 }
             }
 
-            debug(fmt(" Let the host know about the %d requests") % i);
+            virtio_d(fmt(" Let the host know about the %d requests") % i);
             queue->kick();
         } else {
             is_write = true;
-            debug(" read several requests");
+            virtio_d(fmt(" read several requests"));
             for (i=0;i<iterations;i++) {
                 req = make_virtio_req(i*8, VIRTIO_BLK_T_IN,0);
                 if (!queue->add_buf(req->payload,1,2,req)) {
@@ -221,13 +221,13 @@ struct driver virtio_blk_driver = {
 
             }
 
-            debug(fmt(" Let the host know about the %d requests") % i);
+            virtio_d(fmt(" Let the host know about the %d requests") % i);
             queue->kick();
         }
 
         //sched::thread::current()->yield();
 
-        debug("test virtio blk end");
+        virtio_d(fmt("test virtio blk end"));
     }
 
     void virtio_blk::response_worker() {
@@ -236,28 +236,26 @@ struct driver virtio_blk_driver = {
 
         while (1) {
 
-            debug("\t ----> virtio_blk: IRQ: response worker main loop");
-
             thread::wait_until([this] {
                 vring* queue = this->_dev->get_virt_queue(0);
                 return queue->used_ring_not_empty();
             });
 
-            debug("\t ----> IRQ: debug - blk thread awaken");
+            virtio_d(fmt("\t ----> IRQ: virtio_d - blk thread awaken"));
 
             int i = 0;
 
             while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
-                debug(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
+                virtio_d(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
 
                 virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
                 //  This is debug code to verify the read content, to be remove later on
                 if (header->type == VIRTIO_BLK_T_IN) {
-                    debug(fmt("\t verify that sector %d contains data %d") % (int)header->sector % (int)(header->sector/8));
+                    virtio_d(fmt("\t verify that sector %d contains data %d") % (int)header->sector % (int)(header->sector/8));
                     auto ii = req->payload->_nodes.begin();
                     ii++;
                     char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
-                    debug(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
+                    virtio_d(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
 
                 }
                 if (req->bio != nullptr) {

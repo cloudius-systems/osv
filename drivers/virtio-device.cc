@@ -9,7 +9,8 @@ using namespace pci;
 namespace virtio {
 
     virtio_device::virtio_device(u8 bus, u8 device, u8 func)
-        : pci_device(bus, device, func),  _num_queues(0), _bar1(nullptr)
+        : pci_device(bus, device, func),  _num_queues(0), _bar1(nullptr),
+          _cap_indirect_buf(false)
     {
         for (unsigned i=0; i < max_virtqueues_nr; i++) {
             _queues[i] = nullptr;
@@ -25,10 +26,9 @@ namespace virtio {
     {
         pci_device::dump_config();
 
-        debug(fmt("    virtio features: "), false);
+        virtio_i(fmt("    virtio features: "));
         for (int i=0;i<32;i++)
-            debug(fmt("%d") % get_device_feature_bit(i), false);
-        debug(fmt("\n"), false);
+            virtio_i(fmt(" %d ") % get_device_feature_bit(i));
     }
 
     bool virtio_device::parse_pci_config(void)
@@ -46,14 +46,14 @@ namespace virtio {
         // Check ABI version
         u8 rev = get_revision_id();
         if (rev != VIRTIO_PCI_ABI_VERSION) {
-            debug(fmt("Wrong virtio revision=%x") % rev);
+            virtio_e(fmt("Wrong virtio revision=%x") % rev);
             return (false);
         }
 
         // Check device ID
         u16 dev_id = get_device_id();
         if ((dev_id < VIRTIO_PCI_ID_MIN) || (dev_id > VIRTIO_PCI_ID_MAX)) {
-            debug(fmt("Wrong virtio dev id %x") % dev_id);
+            virtio_e(fmt("Wrong virtio dev id %x") % dev_id);
             return (false);
         }
 
@@ -109,7 +109,7 @@ namespace virtio {
             virtio_conf_writel(VIRTIO_PCI_QUEUE_PFN, (u32)(queue->get_paddr() >> VIRTIO_PCI_QUEUE_ADDR_SHIFT));
 
             // Debug print
-            debug(fmt("Queue[%d] -> size %d, paddr %x") % (_num_queues-1) % qsize % queue->get_paddr());
+            virtio_d(fmt("Queue[%d] -> size %d, paddr %x") % (_num_queues-1) % qsize % queue->get_paddr());
 
         } while (true);
 
