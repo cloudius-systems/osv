@@ -29,7 +29,7 @@ void cpu::schedule(bool yield)
     // FIXME: drive by IPI
     handle_incoming_wakeups();
     thread* p = thread::current();
-    if (!p->_waiting && !yield) {
+    if (p->_status.load() == thread::status::running && !yield) {
         return;
     }
     // FIXME: a proper idle mechanism
@@ -42,8 +42,9 @@ void cpu::schedule(bool yield)
         runqueue.pop_front();
         return n;
     });
-    assert(!n->_waiting);
-    n->_on_runqueue = false;
+    assert(n->_status.load() == thread::status::queued
+            || n->_status.load() == thread::status::running);
+    n->_status.store(thread::status::running);
     if (n != thread::current()) {
         n->switch_to();
     }
@@ -57,11 +58,11 @@ void cpu::handle_incoming_wakeups()
         while (!q.empty()) {
             auto& t = q.front();
             q.pop_front_nonatomic();
-            t._on_runqueue = true;
             runqueue.push_back(t);
             with_lock(irq_lock, [&] {
                 t.resume_timers();
             });
+            t._status.store(thread::status::queued);
         }
     }
 }
@@ -97,7 +98,9 @@ void cpu::load_balance()
             }
             auto& mig = runqueue.back();
             runqueue.pop_back();
-            // we won't race with wake(), since we're not _waiting
+            // we won't race with wake(), since we're not thread::waiting
+            assert(mig._status.load() == thread::status::queued);
+            mig._status.store(thread::status::waking);
             mig.suspend_timers();
             mig._cpu = min;
             min->incoming_wakeups[id].push_front(mig);
@@ -121,8 +124,8 @@ void thread::yield()
         return;
     }
     t->_cpu->runqueue.push_back(*t);
-    t->_on_runqueue = true;
-    assert(!t->_waiting);
+    assert(t->_status.load() == status::running);
+    t->_status.store(status::queued);
     t->_cpu->schedule(true);
 }
 
@@ -148,10 +151,8 @@ thread_list_type thread_list;
 
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
-    , _on_runqueue(!main)
-    , _waiting(false)
+    , _status(status::invalid)
     , _attr(attr)
-    , _terminated(false)
     , _timers_need_reload()
     , _joiner()
 {
@@ -161,8 +162,11 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     setup_tcb();
     init_stack();
     if (!main) {
+        _status.store(status::queued);
         _cpu = current()->tcpu(); // inherit creator's cpu
         _cpu->runqueue.push_back(*this);
+    } else {
+        _status.store(status::running);
     }
 }
 
@@ -176,13 +180,14 @@ thread::~thread()
 
 void thread::prepare_wait()
 {
-    _waiting = true;
+    assert(_status.load() == status::running);
+    _status.store(status::waiting);
 }
 
 void thread::wake()
 {
-    // prevent two concurrent wakeups
-    if (!_waiting.exchange(false)) {
+    status old_status = status::waiting;
+    if (!_status.compare_exchange_strong(old_status, status::waking)) {
         return;
     }
     _cpu->incoming_wakeups[cpu::current()->id].push_front(*this);
@@ -201,10 +206,7 @@ thread* thread::current()
 
 void thread::wait()
 {
-    if (!_waiting) {
-        return;
-    }
-    schedule();
+    schedule(true);
 }
 
 void thread::sleep_until(u64 abstime)
@@ -216,20 +218,19 @@ void thread::sleep_until(u64 abstime)
 
 void thread::stop_wait()
 {
-    if (!_waiting.exchange(false)) {
-        // someone woke us already, undo effects if any
-        _cpu->handle_incoming_wakeups();
-        if (_on_runqueue) {
-            _on_runqueue = false;
-            _cpu->runqueue.erase(_cpu->runqueue.iterator_to(*this));
-        }
+    status old_status = status::waiting;
+    if (_status.compare_exchange_strong(old_status, status::running)) {
+        return;
     }
+    while (_status.load() == status::waking) {
+        schedule(true);
+    }
+    assert(_status.load() == status::running);
 }
 
 void thread::complete()
 {
-    _waiting = true;
-    _terminated = true;
+    _status.store(status::terminated);
     if (_joiner) {
         _joiner->wake();
     }
@@ -244,9 +245,7 @@ void thread::suspend_timers()
         return;
     }
     _timers_need_reload = true;
-    for (auto& t : _active_timers) {
-        _cpu->timers.suspend(t);
-    }
+    _cpu->timers.suspend(_active_timers);
 }
 
 void thread::resume_timers()
@@ -255,15 +254,13 @@ void thread::resume_timers()
         return;
     }
     _timers_need_reload = false;
-    for (auto& t : _active_timers) {
-        _cpu->timers.resume(t);
-    }
+    _cpu->timers.resume(_active_timers);
 }
 
 void thread::join()
 {
     _joiner = current();
-    wait_until([this] { return _terminated; });
+    wait_until([this] { return _status.load() == status::terminated; });
 }
 
 thread::stack_info thread::get_stack_info()

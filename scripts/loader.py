@@ -4,9 +4,14 @@ import gdb
 import re
 import os, os.path
 import struct
+import json
 
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 external = build_dir + '/../../external'
+
+class status_enum_class(object):
+    pass
+status_enum = status_enum_class()
 
 def load_elf(path, base):
     args = ''
@@ -49,6 +54,12 @@ class Connect(gdb.Command):
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         gdb.execute('target remote :1234')
+        global status_enum
+        status_enum.running = gdb.parse_and_eval('sched::thread::running')
+        status_enum.waiting = gdb.parse_and_eval('sched::thread::waiting')
+        status_enum.queued = gdb.parse_and_eval('sched::thread::queued')
+        status_enum.waking = gdb.parse_and_eval('sched::thread::waking')
+        
 
 Connect()
 
@@ -220,8 +231,10 @@ class osv_info_threads(gdb.Command):
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
                 status = 'rdy '
-                if long(t['_waiting']['_M_base']['_M_i']):
+                if t['_status']['_M_i'] == status_enum.waiting:
                     status = 'wait'
+                elif t['_status']['_M_i'] == status_enum.waking:
+                    status = 'wake'
                 if state.cpu_from_thread(t):
                     status = 'run '
                 function = '??'

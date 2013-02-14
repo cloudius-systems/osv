@@ -94,11 +94,17 @@ private:
     std::function<void ()> _func;
     thread_state _state;
     thread_control_block* _tcb;
-    bool _on_runqueue;
-    std::atomic_bool _waiting;
+    enum class status {
+        invalid,
+        waiting,
+        running,
+        queued,
+        waking, // between waiting and queued
+        terminated,
+    };
+    std::atomic<status> _status;
     attr _attr;
     cpu* _cpu;
-    bool _terminated;
     bool _timers_need_reload;
     bi::list<timer> _active_timers;
     friend void thread_main_c(thread* t);
