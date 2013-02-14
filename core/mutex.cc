@@ -17,6 +17,11 @@ extern "C" void mutex_lock(mutex_t *mutex)
     w.thread = sched::thread::current();
 
     spin_lock(&mutex->_wait_lock);
+    if (mutex_trylock(mutex)) {
+        // mutex was unlocked just before we grabbed _wait_lock
+        spin_unlock(&mutex->_wait_lock);
+        return;
+    }
     if (!mutex->_wait_list.first) {
         mutex->_wait_list.first = &w;
     } else {
