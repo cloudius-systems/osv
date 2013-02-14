@@ -49,7 +49,7 @@ struct file;
 /*
  * Vnode types.
  */
-enum {
+enum vtype {
 	VNON,	    /* no type */
 	VREG,	    /* regular file  */
 	VDIR,	    /* directory */
