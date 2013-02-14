@@ -93,11 +93,13 @@ void cpu::load_balance()
             continue;
         }
         with_lock(irq_lock, [this, min] {
-            if (runqueue.empty()) {
+            auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
+                    [](thread& t) { return !t._attr.pinned; });
+            if (i == runqueue.rend()) {
                 return;
             }
-            auto& mig = runqueue.back();
-            runqueue.pop_back();
+            auto& mig = *i;
+            runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
             // we won't race with wake(), since we're not thread::waiting
             assert(mig._status.load() == thread::status::queued);
             mig._status.store(thread::status::waking);
