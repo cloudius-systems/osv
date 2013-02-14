@@ -87,6 +87,7 @@ class osv_heap(gdb.Command):
         self.show(node['right_'])
 
 ulong_type = gdb.lookup_type('unsigned long')
+timer_type = gdb.lookup_type('sched::timer')
 
 active_thread_context = None
 
@@ -218,6 +219,24 @@ def exit_thread_context():
         active_thread_context.__exit__()
         active_thread_context = None
 
+def show_thread_timers(t):
+    head = t['_active_timers']['data_']['root_plus_size_']['root_']
+    n = head['next_']
+    if n == head.address:
+        return
+    gdb.write('  timers:')
+    while n != head.address:
+        na = n.cast(ulong_type)
+        na -= timer_type.fields()[1].bitpos / 8
+        timer = na.cast(timer_type.pointer())
+        expired = ''
+        if timer['_expired']:
+            expired = '*'
+        expiration = long(timer['_time']) / 1.0e9
+        gdb.write(' %11.9f%s' % (expiration, expired))
+        n = n['next_']
+    gdb.write('\n')
+
 class osv_info_threads(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv info threads',
@@ -252,6 +271,7 @@ class osv_info_threads(gdb.Command):
                            sal.line
                            )
                           )
+                show_thread_timers(t)
 
 class osv_thread(gdb.Command):
     def __init__(self):
