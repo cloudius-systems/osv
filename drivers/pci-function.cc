@@ -98,7 +98,7 @@ namespace pci {
     }
 
     pci_function::pci_function(u8 bus, u8 device, u8 func)
-        : _bus(bus), _device(device), _func(func), _have_msix(false)
+        : _bus(bus), _device(device), _func(func), _have_msix(false), _msix_enabled(false)
     {
 
     }
@@ -439,6 +439,8 @@ namespace pci {
         // Unmask the main block
         ctrl &= ~PCIM_MSIXCTRL_FUNCTION_MASK;
         msix_set_control(ctrl);
+
+        _msix_enabled = true;
     }
 
     void pci_function::msix_disable(void)
@@ -450,6 +452,8 @@ namespace pci {
         u16 ctrl = msix_get_control();
         ctrl &= ~PCIM_MSIXCTRL_MSIX_ENABLE;
         msix_set_control(ctrl);
+
+        _msix_enabled = false;
     }
 
     void pci_function::msix_set_control(u16 ctrl)

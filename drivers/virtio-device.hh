@@ -103,8 +103,7 @@ namespace virtio {
 
         // The remaining space is defined by each driver as the per-driver
         // configuration space
-        // TODO 'have' doesn't means it is enabled, needs fixing (24 when enabled)
-        #define VIRTIO_PCI_CONFIG(_dev_)      ((_dev_)->is_msix() ? 20 : 20)
+        int virtio_pci_config_offset() {return (is_msix_enabled())? 24 : 20;}
 
         virtio_device(u8 bus, u8 device, u8 func);
         virtual ~virtio_device();

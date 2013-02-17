@@ -257,6 +257,7 @@ namespace pci {
         void msix_enable(void);
         // Good for reset maybe, call disable and enable
         void msix_disable(void);
+        bool is_msix_enabled() {return _msix_enabled;}
 
         // Access to PCI address space
         virtual u8 pci_readb(u8 offset);
@@ -317,6 +318,7 @@ namespace pci {
         // MSI-x
         bool _have_msix;
         pcicfg_msix _msix;
+        bool _msix_enabled;
     };
 }
 
