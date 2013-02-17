@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <byteswap.h>
 
+#undef htonl
 uint32_t htonl(uint32_t n)
 {
 	union { int i; char c; } u = { 1 };

@@ -1,6 +1,7 @@
 #include <netinet/in.h>
 #include <byteswap.h>
 
+#undef htons
 uint16_t htons(uint16_t n)
 {
 	union { int i; char c; } u = { 1 };
