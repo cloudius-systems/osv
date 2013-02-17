@@ -304,10 +304,8 @@ struct driver virtio_blk_driver = {
         if (bio) delete bio;
     }
 
-
-    //todo: get it from the host
     int virtio_blk::size() {
-        return 1024 * 1024 * 1024;
+        return _config.capacity * _config.blk_size;
     }
 
     static const int page_size = 4096;
