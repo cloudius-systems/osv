@@ -106,10 +106,7 @@ struct driver virtio_blk_driver = {
     {
         virtio_driver::load();
         
-        _dev->virtio_conf_read(offsetof(struct virtio_blk_config, capacity) + VIRTIO_PCI_CONFIG(_dev),
-                      &_config.capacity,
-                      sizeof(_config.capacity));
-        virtio_i(fmt("capacity of the device is %x") % (u64)_config.capacity);
+        read_config();
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
@@ -146,6 +143,35 @@ struct driver virtio_blk_driver = {
     bool virtio_blk::unload(void)
     {
         return (true);
+    }
+
+    bool virtio_blk::read_config()
+    {
+        //read all of the block config (including size, mce, topology,..) in one shot
+        _dev->virtio_conf_read(_dev->virtio_pci_config_offset(), &_config, sizeof(_config));
+
+        virtio_i(fmt("The capacity of the device is %d") % (u64)_config.capacity);
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
+            virtio_i(fmt("The size_max of the device is %d") % (u32)_config.size_max);
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
+            virtio_i(fmt("The seg_size of the device is %d") % (u32)_config.seg_max);
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
+            virtio_i(fmt("The cylinders count of the device is %d") % (u16)_config.geometry.cylinders);
+            virtio_i(fmt("The heads count of the device is %d") % (u32)_config.geometry.heads);
+            virtio_i(fmt("The sector count of the device is %d") % (u32)_config.geometry.sectors);
+        }
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
+            virtio_i(fmt("The block size of the device is %d") % (u32)_config.blk_size);
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
+            virtio_i(fmt("The physical_block_exp of the device is %d") % (u32)_config.physical_block_exp);
+            virtio_i(fmt("The alignment_offset of the device is %d") % (u32)_config.alignment_offset);
+            virtio_i(fmt("The min_io_size of the device is %d") % (u16)_config.min_io_size);
+            virtio_i(fmt("The opt_io_size of the device is %d") % (u32)_config.opt_io_size);
+        }
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
+            virtio_i(fmt("The write cache enable of the device is %d") % (u32)_config.wce);
+
+        return true;
     }
 
     //temporal hack for the local version of virtio tests
