@@ -22,7 +22,8 @@ logger::~logger()
 bool logger::parse_configuration(void)
 {
     // FIXME: read configuration from a file
-    add_tag("virtio-blk", logger_error);
+    add_tag("virtio", logger_info);
+    add_tag("virtio-blk", logger_info);
     add_tag("pci", logger_info);
 
     // Tests
