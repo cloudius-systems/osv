@@ -315,6 +315,12 @@ struct driver virtio_blk_driver = {
     {
         if (!bio) return EIO;
 
+        if (bio->bio_bcount/page_size + 1 > _config.seg_max) {
+            virtio_w(fmt("%s:request of size %d needs more segment than the max %d") %
+                    __FUNCTION__ % bio->bio_bcount % (u32)_config.seg_max);
+            return EIO;
+        }
+
         int in = 1, out = 1, *buf_count;
         virtio_blk_request_type type;
 
