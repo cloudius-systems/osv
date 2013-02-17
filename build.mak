@@ -1,7 +1,7 @@
 
 arch = x64
-cmdline = java.so Hello
-#cmdline = testrunner.so
+#cmdline = java.so Hello
+cmdline = testrunner.so
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
@@ -71,6 +71,7 @@ do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 tests += tests/tst-vblk.so tests/bench/bench.jar
+tests += tests/tst-bsd-evh.so 
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -79,6 +80,7 @@ java/RunJar.class: javabase=java
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
 tests/tst-vblk.so: tests/tst-vblk.o
+tests/tst-bsd-evh.so: tests/tst-bsd-evh.o
 
 all: loader.img loader.bin
 
