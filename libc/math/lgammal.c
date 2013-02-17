@@ -260,7 +260,7 @@ static long double sin_pi(long double x)
 }
 
 long double __lgammal_r(long double x, int *sg) {
-	long double t, y, z, nadj, p, p1, p2, q, r, w;
+	long double t, y, z, nadj = 0, p, p1, p2, q, r, w;
 	int i, ix;
 	uint32_t se, i0, i1;
 
