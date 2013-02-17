@@ -24,6 +24,7 @@ class thread;
 class cpu;
 class timer;
 class timer_list;
+class cpu_mask;
 
 void schedule(bool yield = false);
 
@@ -32,6 +33,82 @@ extern "C" {
 };
 
 namespace bi = boost::intrusive;
+
+const unsigned max_cpus = sizeof(unsigned long) * 8;
+
+class cpu_set {
+public:
+    explicit cpu_set() : _mask() {}
+    cpu_set(const cpu_set& other) : _mask(other._mask.load()) {}
+    void set(unsigned c) {
+        _mask.fetch_or(1UL << c);
+    }
+    void clear(unsigned c) {
+        _mask.fetch_and(~(1UL << c));
+    }
+    class iterator;
+    iterator begin() {
+        return iterator(*this);
+    }
+    iterator end() {
+        return iterator(*this, max_cpus);
+    }
+    cpu_set fetch_clear() {
+        cpu_set ret;
+        ret._mask = _mask.exchange(0);
+        return ret;
+    }
+    class iterator {
+    public:
+        explicit iterator(cpu_set& set)
+            : _set(set), _idx(0) {
+            advance();
+        }
+        explicit iterator(cpu_set& set, unsigned idx)
+            : _set(set), _idx(idx) {}
+        iterator(const iterator& other)
+            : _set(other._set), _idx(other._idx) {}
+        iterator& operator=(const iterator& other) {
+            if (this != &other) {
+                this->~iterator();
+                new (this) iterator(other);
+            }
+            return *this;
+        }
+        unsigned operator*() { return _idx; }
+        iterator& operator++() {
+            ++_idx;
+            advance();
+            return *this;
+        }
+        iterator operator++(int) {
+            iterator tmp(*this);
+            ++*this;
+            return tmp;
+        }
+        bool operator==(const iterator& other) const {
+            return _idx == other._idx;
+        }
+        bool operator!=(const iterator& other) const {
+            return _idx != other._idx;
+        }
+    private:
+        void advance() {
+            unsigned long tmp = _set._mask.load(std::memory_order_relaxed);
+            tmp &= ~((1UL << _idx) - 1);
+            if (tmp) {
+                _idx = __builtin_ctzl(tmp);
+            } else {
+                _idx = max_cpus;
+            }
+        }
+    private:
+        cpu_set& _set;
+        unsigned _idx;
+    };
+private:
+    std::atomic<unsigned long> _mask;
+};
 
 class timer : public bi::set_base_hook<>, public bi::list_base_hook<> {
 public:
