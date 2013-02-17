@@ -119,6 +119,8 @@ namespace virtio {
         bool get_device_feature_bit(int bit);
         void set_guest_features(u32 features);
         void set_guest_feature_bit(int bit, bool on);
+        u32 get_guest_features(void);
+        bool get_guest_feature_bit(int bit);
 
         // device status
         u32 get_dev_status(void);

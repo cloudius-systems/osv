@@ -145,6 +145,17 @@ namespace virtio {
         set_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit, on);
     }
 
+    u32 virtio_device::get_guest_features(void)
+    {
+        return (virtio_conf_readl(VIRTIO_PCI_GUEST_FEATURES));
+    }
+
+    bool virtio_device::get_guest_feature_bit(int bit)
+    {
+        return (get_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit));
+    }
+
+
     u32 virtio_device::get_dev_status(void)
     {
         return (virtio_conf_readl(VIRTIO_PCI_STATUS));
