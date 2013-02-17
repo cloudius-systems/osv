@@ -36,7 +36,6 @@
 struct eventhandler_entry {
 	TAILQ_ENTRY(eventhandler_entry)	ee_link;
 	int				ee_priority;
-#define	EHE_DEAD_PRIORITY	(-1)
 	void				*ee_arg;
 };
 
@@ -62,30 +61,22 @@ typedef struct eventhandler_entry	*eventhandler_tag;
 #define _EVENTHANDLER_INVOKE(name, list, ...) do {			\
 	struct eventhandler_entry *_ep;					\
 	struct eventhandler_entry_ ## name *_t;				\
+	struct eventhandler_list *_clone;                     \
 									\
 	KASSERT((list)->el_flags & EHL_INITTED,				\
  	   ("eventhandler_invoke: running non-inited list"));		\
 	EHL_LOCK_ASSERT((list), MA_OWNED);				\
-	(list)->el_runcount++;						\
-	KASSERT((list)->el_runcount > 0,				\
-	    ("eventhandler_invoke: runcount overflow"));		\
 	CTR0(KTR_EVH, "eventhandler_invoke(\"" __STRING(name) "\")");	\
-	TAILQ_FOREACH(_ep, &((list)->el_entries), ee_link) {		\
-		if (_ep->ee_priority != EHE_DEAD_PRIORITY) {		\
-			EHL_UNLOCK((list));				\
-			_t = (struct eventhandler_entry_ ## name *)_ep;	\
-			CTR1(KTR_EVH, "eventhandler_invoke: executing %p", \
- 			    (void *)_t->eh_func);			\
-			_t->eh_func(_ep->ee_arg , ## __VA_ARGS__);	\
-			EHL_LOCK((list));				\
-		}							\
+	/* FIXME: What if a user deregister a callback after clone? */  \
+	_clone = eventhandler_clone((list));       \
+    EHL_UNLOCK((list));                     \
+	TAILQ_FOREACH(_ep, &((_clone)->el_entries), ee_link) {		\
+        _t = (struct eventhandler_entry_ ## name *)_ep;	\
+        CTR1(KTR_EVH, "eventhandler_invoke: executing %p", \
+            (void *)_t->eh_func);			\
+        _t->eh_func(_ep->ee_arg , ## __VA_ARGS__);	\
 	}								\
-	KASSERT((list)->el_runcount > 0,				\
-	    ("eventhandler_invoke: runcount underflow"));		\
-	(list)->el_runcount--;						\
-	if ((list)->el_runcount == 0)					\
-		eventhandler_prune_list(list);				\
-	EHL_UNLOCK((list));						\
+	eventhandler_free_clone(_clone); \
 } while (0)
 
 /*
@@ -128,7 +119,8 @@ eventhandler_tag eventhandler_register(struct eventhandler_list *list,
 void	eventhandler_deregister(struct eventhandler_list *list,
 	    eventhandler_tag tag);
 struct eventhandler_list *eventhandler_find_list(const char *name);
-void	eventhandler_prune_list(struct eventhandler_list *list);
+struct eventhandler_list *eventhandler_clone(struct eventhandler_list *list);
+void eventhandler_free_clone(struct eventhandler_list *list);
 
 /*
  * Standard system event queues.

@@ -81,57 +81,49 @@ eventhandler_register_internal(struct eventhandler_list *list,
 
     /* Do we need to find/create the (slow) list? */
     if (list == NULL) {
-	/* look for a matching, existing list */
-	list = _eventhandler_find_list(name);
+        /* look for a matching, existing list */
+        list = _eventhandler_find_list(name);
 
-	/* Do we need to create the list? */
-	if (list == NULL) {
-	    mutex_unlock(&eventhandler_mutex);
+        /* Do we need to create the list? */
+        if (list == NULL) {
+            new_list = malloc(sizeof(struct eventhandler_list) +
+                strlen(name) + 1);
 
-	    new_list = malloc(sizeof(struct eventhandler_list) +
-	    strlen(name) + 1);
-
-	    /* If someone else created it already, then use that one. */
-	    mutex_lock(&eventhandler_mutex);
-	    list = _eventhandler_find_list(name);
-	    if (list != NULL) {
-	        free(new_list);
-	    } else {
-		CTR2(KTR_EVH, "%s: creating list \"%s\"", __func__, name);
-		list = new_list;
-		list->el_flags = 0;
-		list->el_runcount = 0;
-		bzero(&list->el_lock, sizeof(list->el_lock));
-		list->el_name = (char *)list + sizeof(struct eventhandler_list);
-		strcpy(list->el_name, name);
-		TAILQ_INSERT_HEAD(&eventhandler_lists, list, el_link);
-	    }
-	}
+            CTR2(KTR_EVH, "%s: creating list \"%s\"", __func__, name);
+            list = new_list;
+            list->el_flags = 0;
+            bzero(&list->el_lock, sizeof(list->el_lock));
+            list->el_name = (char *)list + sizeof(struct eventhandler_list);
+            strcpy(list->el_name, name);
+            TAILQ_INSERT_HEAD(&eventhandler_lists, list, el_link);
+        }
     }
+
+    /* If list not inialized, initalize it */
     if (!(list->el_flags & EHL_INITTED)) {
-	TAILQ_INIT(&list->el_entries);
-	mutex_init(&list->el_lock);
-	atomic_store_rel_int((volatile u_int *)&list->el_flags, EHL_INITTED);
+        TAILQ_INIT(&list->el_entries);
+        mutex_init(&list->el_lock);
+        atomic_store_rel_int((volatile u_int *)&list->el_flags, EHL_INITTED);
     }
-    mutex_unlock(&eventhandler_mutex);
 
-    KASSERT(epn->ee_priority != EHE_DEAD_PRIORITY,
-	("%s: handler for %s registered with dead priority", __func__, name));
+    mutex_unlock(&eventhandler_mutex);
 
     /* sort it into the list */
     CTR4(KTR_EVH, "%s: adding item %p (function %p) to \"%s\"", __func__, epn,
-	((struct eventhandler_entry_generic *)epn)->func, name);
+        ((struct eventhandler_entry_generic *)epn)->func, name);\
+
+    /* Insert the entry into the list */
     EHL_LOCK(list);
     TAILQ_FOREACH(ep, &list->el_entries, ee_link) {
-	if (ep->ee_priority != EHE_DEAD_PRIORITY &&
-	    epn->ee_priority < ep->ee_priority) {
-	    TAILQ_INSERT_BEFORE(ep, epn, ee_link);
-	    break;
-	}
+        if (epn->ee_priority < ep->ee_priority) {
+            TAILQ_INSERT_BEFORE(ep, epn, ee_link);
+            break;
+        }
     }
     if (ep == NULL)
-	TAILQ_INSERT_TAIL(&list->el_entries, epn, ee_link);
+        TAILQ_INSERT_TAIL(&list->el_entries, epn, ee_link);
     EHL_UNLOCK(list);
+
     return(epn);
 }
 
@@ -157,37 +149,24 @@ eventhandler_deregister(struct eventhandler_list *list, eventhandler_tag tag)
     struct eventhandler_entry	*ep = tag;
 
     EHL_LOCK_ASSERT(list, MA_OWNED);
+
     if (ep != NULL) {
-	/* remove just this entry */
-	if (list->el_runcount == 0) {
-	    CTR3(KTR_EVH, "%s: removing item %p from \"%s\"", __func__, ep,
-		list->el_name);
-	    TAILQ_REMOVE(&list->el_entries, ep, ee_link);
-	    free(ep);
-	} else {
-	    CTR3(KTR_EVH, "%s: marking item %p from \"%s\" as dead", __func__,
-		ep, list->el_name);
-	    ep->ee_priority = EHE_DEAD_PRIORITY;
-	}
-    } else {
-	/* remove entire list */
-	if (list->el_runcount == 0) {
-	    CTR2(KTR_EVH, "%s: removing all items from \"%s\"", __func__,
-		list->el_name);
-	    while (!TAILQ_EMPTY(&list->el_entries)) {
-		ep = TAILQ_FIRST(&list->el_entries);
-		TAILQ_REMOVE(&list->el_entries, ep, ee_link);
+        /* remove just this entry */
+        CTR3(KTR_EVH, "%s: removing item %p from \"%s\"", __func__, ep,
+            list->el_name);
+        TAILQ_REMOVE(&list->el_entries, ep, ee_link);
         free(ep);
+
+    } else {
+        /* remove entire list */
+	    CTR2(KTR_EVH, "%s: removing all items from \"%s\"", __func__,
+	        list->el_name);
+	    while (!TAILQ_EMPTY(&list->el_entries)) {
+            ep = TAILQ_FIRST(&list->el_entries);
+            TAILQ_REMOVE(&list->el_entries, ep, ee_link);
+            free(ep);
 	    }
-	} else {
-	    CTR2(KTR_EVH, "%s: marking all items from \"%s\" as dead",
-		__func__, list->el_name);
-	    TAILQ_FOREACH(ep, &list->el_entries, ee_link)
-		ep->ee_priority = EHE_DEAD_PRIORITY;
-	}
     }
-//    while (list->el_runcount > 0)
-//	    mutex_sleep(list, &list->el_lock, 0, "evhrm", 0);
     EHL_UNLOCK(list);
 }
 
@@ -202,14 +181,15 @@ _eventhandler_find_list(const char *name)
     /* FIXME OSv: we don't have an assertion */
     /* mutex_assert(&eventhandler_mutex, MA_OWNED); */
     TAILQ_FOREACH(list, &eventhandler_lists, el_link) {
-	if (!strcmp(name, list->el_name))
-	    break;
+        if (!strcmp(name, list->el_name))
+            break;
     }
     return (list);
 }
 
 /*
  * Lookup a "slow" list by name.  Returns with the list locked.
+ * Returns the list locked
  */
 struct eventhandler_list *
 eventhandler_find_list(const char *name)
@@ -229,27 +209,35 @@ eventhandler_find_list(const char *name)
     return(list);
 }
 
-/*
- * Prune "dead" entries from an eventhandler list.
- */
-void
-eventhandler_prune_list(struct eventhandler_list *list)
+struct eventhandler_list * eventhandler_clone(struct eventhandler_list *list)
 {
-    struct eventhandler_entry *ep, *en;
-    int pruned = 0;
+    struct eventhandler_list            *new_list;
+    struct eventhandler_entry           *ep;
+    struct eventhandler_entry           *eg;
 
-    CTR2(KTR_EVH, "%s: pruning list \"%s\"", __func__, list->el_name);
-    EHL_LOCK_ASSERT(list, MA_OWNED);
-    TAILQ_FOREACH_SAFE(ep, &list->el_entries, ee_link, en) {
-	if (ep->ee_priority == EHE_DEAD_PRIORITY) {
-	    TAILQ_REMOVE(&list->el_entries, ep, ee_link);
-	    free(ep);
-	    pruned++;
-	}
-    }
-    if (pruned > 0) {
-	    /* wakeup(list); */
-        /* OSv: make threads runnable */
+    new_list = malloc(sizeof(struct eventhandler_list));
+    bzero(new_list, sizeof(struct eventhandler_list));
+    TAILQ_INIT(&new_list->el_entries);
+
+    TAILQ_FOREACH(ep, &list->el_entries, ee_link) {
+        eg = malloc(sizeof(struct eventhandler_entry_generic));
+        bzero(eg, sizeof(struct eventhandler_entry_generic));
+        memcpy(eg, ep, sizeof(struct eventhandler_entry_generic));
+        TAILQ_INSERT_TAIL(&new_list->el_entries, eg, ee_link);
     }
 
+    return (new_list);
+}
+
+void eventhandler_free_clone(struct eventhandler_list *list)
+{
+    struct eventhandler_entry   *ep;
+
+    while (!TAILQ_EMPTY(&list->el_entries)) {
+        ep = TAILQ_FIRST(&list->el_entries);
+        TAILQ_REMOVE(&list->el_entries, ep, ee_link);
+        free(ep);
+    }
+
+    free(list);
 }
