@@ -560,6 +560,9 @@ namespace elf {
     void program::set_object(std::string name, elf_object* obj)
     {
         _files[name] = obj;
+        if (std::find(_modules.begin(), _modules.end(), obj) == _modules.end()) {
+            _modules.push_back(obj);
+        }
     }
 
     elf_object* program::add_object(std::string name)
@@ -572,6 +575,7 @@ namespace elf {
             auto ef = new elf_file(*this, f, name);
             ef->set_base(_next_alloc);
             _files[name] = ef;
+            _modules.push_back(ef);
             ef->load_segments();
             _next_alloc = ef->end();
             add_debugger_obj(ef);
@@ -589,6 +593,7 @@ namespace elf {
         auto ef = _files[name];
 
 	_files.erase(name);
+	_modules.erase(std::find(_modules.begin(), _modules.end(), ef));
 	ef->unload_segments();
 	delete ef;
     }
@@ -606,10 +611,9 @@ namespace elf {
 
     symbol_module program::lookup(const char* name)
     {
-        // FIXME: correct lookup order?
-        for (auto name_module : _files) {
-            if (auto sym = name_module.second->lookup_symbol(name)) {
-                return symbol_module(sym, name_module.second);
+        for (auto module : _modules) {
+            if (auto sym = module->lookup_symbol(name)) {
+                return symbol_module(sym, module);
             }
         }
         return symbol_module(nullptr, nullptr);
@@ -630,10 +634,7 @@ namespace elf {
     void program::with_modules(std::function<void (std::vector<elf_object*>&)> f)
     {
         // FIXME: locking?
-        std::vector<elf_object*> tmp;
-        for (auto& name_module : _files) {
-            tmp.push_back(name_module.second);
-        }
+        std::vector<elf_object*> tmp = _modules;
         f(tmp);
     }
 

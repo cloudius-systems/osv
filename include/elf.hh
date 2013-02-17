@@ -342,6 +342,7 @@ namespace elf {
         void* _next_alloc;
         std::unique_ptr<elf_object> _core;
         std::map<std::string, elf_object*> _files;
+        std::vector<elf_object*> _modules; // in priority order
         // debugger interface
         static elf_object* s_objs[100];
     };
