@@ -35,16 +35,14 @@ unsigned msix_vector::get_vector(void)
 
 void msix_vector::msix_unmask_entries(void)
 {
-    for (auto it=_entryids.begin(); it != _entryids.end(); it++) {
-        int entry_id = (int)*it;
+    for (auto entry_id : _entryids) {
         _dev->msix_unmask_entry(entry_id);
     }
 }
 
 void msix_vector::msix_mask_entries(void)
 {
-    for (auto it=_entryids.begin(); it != _entryids.end(); it++) {
-        int entry_id = (int)*it;
+    for (auto entry_id : _entryids) {
         _dev->msix_mask_entry(entry_id);
     }
 }
