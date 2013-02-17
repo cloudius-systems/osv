@@ -52,7 +52,8 @@ void cpu::schedule(bool yield)
 
 void cpu::handle_incoming_wakeups()
 {
-    for (unsigned i = 0; i < cpus.size(); ++i) {
+    cpu_set queues_with_wakes{incoming_wakeups_mask.fetch_clear()};
+    for (auto i : queues_with_wakes) {
         incoming_wakeup_queue q;
         incoming_wakeups[i].copy_and_clear(q);
         while (!q.empty()) {
@@ -106,6 +107,7 @@ void cpu::load_balance()
             mig.suspend_timers();
             mig._cpu = min;
             min->incoming_wakeups[id].push_front(mig);
+            min->incoming_wakeups_mask.set(id);
             // FIXME: IPI
         });
     }
@@ -192,7 +194,9 @@ void thread::wake()
     if (!_status.compare_exchange_strong(old_status, status::waking)) {
         return;
     }
-    _cpu->incoming_wakeups[cpu::current()->id].push_front(*this);
+    unsigned c = cpu::current()->id;
+    _cpu->incoming_wakeups[c].push_front(*this);
+    _cpu->incoming_wakeups_mask.set(c);
     // FIXME: IPI
 }
 

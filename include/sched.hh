@@ -231,6 +231,7 @@ struct cpu {
     timer_list timers;
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
+    cpu_set incoming_wakeups_mask;
     incoming_wakeup_queue* incoming_wakeups;
     static cpu* current();
     void init_on_cpu();
