@@ -151,33 +151,6 @@ eventhandler_register(struct eventhandler_list *list, const char *name,
     return (eventhandler_register_internal(list, name, &eg->ee));
 }
 
-#ifdef VIMAGE
-struct eventhandler_entry_generic_vimage
-{
-    struct eventhandler_entry		ee;
-    vimage_iterator_func_t		func;		/* Vimage iterator function. */
-    struct eventhandler_entry_vimage	v_ee;		/* Original func, arg. */
-};
-
-eventhandler_tag
-vimage_eventhandler_register(struct eventhandler_list *list, const char *name,
-    void *func, void *arg, int priority, vimage_iterator_func_t iterfunc)
-{
-    struct eventhandler_entry_generic_vimage	*eg;
-
-    /* allocate an entry for this handler, populate it */
-    eg = malloc(sizeof(struct eventhandler_entry_generic_vimage),
-	M_EVENTHANDLER, M_WAITOK | M_ZERO);
-    eg->func = iterfunc;
-    eg->v_ee.func = func;
-    eg->v_ee.ee_arg = arg;
-    eg->ee.ee_arg = &eg->v_ee;
-    eg->ee.ee_priority = priority;
-
-    return (eventhandler_register_internal(list, name, &eg->ee));
-}
-#endif
-
 void
 eventhandler_deregister(struct eventhandler_list *list, eventhandler_tag tag)
 {
