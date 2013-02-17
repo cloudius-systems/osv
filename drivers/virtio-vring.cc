@@ -99,7 +99,7 @@ namespace virtio {
                 return false;
             }
 
-            int i = 0, idx, prev_idx;
+            int i = 0, idx, prev_idx = -1;
             idx = _avail_head;
 
             virtio_d(fmt("\t%s: avail_head=%d, in=%d, out=%d") % __FUNCTION__ % _avail_head % in % out);
