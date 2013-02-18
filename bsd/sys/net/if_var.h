@@ -181,7 +181,6 @@ struct ifnet {
 	void	*if_afdata[AF_MAX];
 	int	if_afdata_initialized;
 	struct	rwlock if_afdata_lock;
-	void    *if_linktask;	/* task for link change events */
 	struct	mtx if_addr_mtx;	/* mutex to protect address lists */
 
 	LIST_ENTRY(ifnet) if_clones;	/* interfaces of a cloner */

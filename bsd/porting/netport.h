@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
 
+#define devctl_notify(...) do{}while(0)
+
 void getmicrotime(struct timeval *tvp);
 
 /* Defines how many ticks are in 1 second (nanoseconds) */

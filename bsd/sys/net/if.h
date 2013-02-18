@@ -33,9 +33,10 @@
 #ifndef _NET_IF_H_
 #define	_NET_IF_H_
 
+#include <time.h>
+
 #include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
-#include <sys/time.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/queue.h>
 

@@ -99,12 +99,6 @@ SYSCTL_UINT(_net, OID_AUTO, ifdescr_maxlen, CTLFLAG_RW,
 
 MALLOC_DEFINE(M_IFDESCR, "ifdescr", "ifnet descriptions");
 
-#if 0
-/* global sx for non-critical path ifdescr */
-static struct sx ifdescr_sx;
-SX_SYSINIT(ifdescr_sx, &ifdescr_sx, "ifnet descr");
-#endif
-
 void	(*bridge_linkstate_p)(struct ifnet *ifp);
 void	(*ng_ether_link_state_p)(struct ifnet *ifp, int state);
 void	(*lagg_linkstate_p)(struct ifnet *ifp, int state);
@@ -165,7 +159,6 @@ VNET_DEFINE(struct ifindex_entry *, ifindex_table);
  * also to stablize it over long-running ioctls, without introducing priority
  * inversions and deadlocks.
  */
-
 struct rwlock ifnet_rwlock;
 
 
@@ -396,18 +389,12 @@ if_alloc(u_char type)
 	}
 
 	IF_ADDR_LOCK_INIT(ifp);
-	/* OSv: Avoid using taksqueues */
-	/* TASK_INIT(&ifp->if_linktask, 0, do_link_state_change, ifp); */
-	ifp->if_linktask = (void*)0;
 	ifp->if_afdata_initialized = 0;
 	IF_AFDATA_LOCK_INIT(ifp);
 	TAILQ_INIT(&ifp->if_addrhead);
 	TAILQ_INIT(&ifp->if_prefixhead);
 	TAILQ_INIT(&ifp->if_multiaddrs);
 	TAILQ_INIT(&ifp->if_groups);
-#ifdef MAC
-	mac_ifnet_init(ifp);
-#endif
 	ifq_init(&ifp->if_snd, ifp);
 
 	refcount_init(&ifp->if_refcount, 1);	/* Index reference. */
@@ -550,9 +537,9 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		    ifp->if_xname);
 
 	if_addgroup(ifp, IFG_ALL);
-	/* FIXME: OSv: uncomment these lines... */
-	// getmicrotime(&ifp->if_lastchange);
-	// ifp->if_data.ifi_epoch = time_uptime;
+
+	getmicrotime(&ifp->if_lastchange);
+	ifp->if_data.ifi_epoch = time_uptime;
 	ifp->if_data.ifi_datalen = sizeof(struct if_data);
 
 	KASSERT((ifp->if_transmit == NULL && ifp->if_qflush == NULL) ||
@@ -564,9 +551,6 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 	}
 	
 	if (!vmove) {
-#ifdef MAC
-		mac_ifnet_create(ifp);
-#endif
 
 		/*
 		 * Create a Link Level name for this device.
@@ -615,10 +599,8 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 
 	EVENTHANDLER_INVOKE(ifnet_arrival_event, ifp);
 
-#if 0
 	if (IS_DEFAULT_VNET(curvnet))
 		devctl_notify("IFNET", ifp->if_xname, "ATTACH", NULL);
-#endif
 
 	/* Announce the interface. */
 	rt_ifannouncemsg(ifp, IFAN_ARRIVAL);
@@ -773,12 +755,6 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 			return; /* XXX this should panic as well? */
 	}
 
-	/*
-	 * Remove/wait for pending events.
-	 */
-
-	/* OSv: No taskqueue, no drain */
-	/* taskqueue_drain(taskqueue_swi, &ifp->if_linktask); */
 
 	/*
 	 * Remove routes and flush queues.
@@ -843,12 +819,8 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 	/* Announce that the interface is gone. */
 	rt_ifannouncemsg(ifp, IFAN_DEPARTURE);
 	EVENTHANDLER_INVOKE(ifnet_departure_event, ifp);
-
-#if 0
 	if (IS_DEFAULT_VNET(curvnet))
 		devctl_notify("IFNET", ifp->if_xname, "DETACH", NULL);
-#endif
-
 	if_delgroups(ifp);
 
 	/*
@@ -1673,9 +1645,8 @@ if_link_state_change(struct ifnet *ifp, int link_state)
 
 	ifp->if_link_state = link_state;
 
-	/* FIXME: OSv: Not sure it's needed... */
+	/* FIXME: Call async... */
 	do_link_state_change(ifp, 0);
-	/* taskqueue_enqueue(taskqueue_swi, &ifp->if_linktask); */
 }
 
 static void
@@ -1698,12 +1669,10 @@ do_link_state_change(void *arg, int pending)
 	if (ifp->if_lagg)
 		(*lagg_linkstate_p)(ifp, link_state);
 
-#if 0
 	if (IS_DEFAULT_VNET(curvnet))
 		devctl_notify("IFNET", ifp->if_xname,
 		    (link_state == LINK_STATE_UP) ? "LINK_UP" : "LINK_DOWN",
 		    NULL);
-#endif
 	if (pending > 1)
 		if_printf(ifp, "%d link states coalesced\n", pending);
 	if (log_link_state_change)
