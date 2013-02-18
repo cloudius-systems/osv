@@ -58,7 +58,7 @@ extern int vfs_debug;
 
 #define VFSDB_FLAGS	0x00000013
 
-#define	DPRINTF(_m,X)	if (vfs_debug & (_m)) dprintf X
+#define	DPRINTF(_m,X)	if (vfs_debug & (_m)) kprintf X
 #else
 #define	DPRINTF(_m, X)
 #endif

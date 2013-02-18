@@ -197,7 +197,7 @@ static double sin_pi(double x)
 
 double __lgamma_r(double x, int *signgamp)
 {
-	double t,y,z,nadj,p,p1,p2,p3,q,r,w;
+	double t,y,z,nadj=0,p,p1,p2,p3,q,r,w;
 	int32_t hx;
 	int i,lx,ix;
 

@@ -156,6 +156,7 @@ namespace virtio {
         virtual const std::string get_name(void) { return _driver_name; }
         virtual bool load(void);
         virtual bool unload(void);
+        bool read_config();
 
         virtual u32 get_driver_features(void);
 

@@ -47,6 +47,7 @@
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
+#include "debug.h"
 
 #include "vfs.h"
 
@@ -878,7 +879,7 @@ int fcntl(int fd, int cmd, int arg)
 			(arg & FD_CLOEXEC);
 		return 0;
 	default:
-		printf("unsupported fcntl cmd 0x%x\n", cmd);
+		kprintf("unsupported fcntl cmd 0x%x\n", cmd);
 		error = EINVAL;
 		goto out_errno;
 	}
@@ -1062,7 +1063,7 @@ static int
 fs_debug(struct task *t, struct msg *msg)
 {
 
-	dprintf("<File System Server>\n");
+	kprintf("<File System Server>\n");
 	vnode_dump();
 	mount_dump();
 	return 0;
@@ -1107,14 +1108,14 @@ void unpack_bootfs(void)
 
 		fd = creat(md[i].name, 0666);
 		if (fd < 0) {
-			printf("couldn't create %s: %d\n",
+			kprintf("couldn't create %s: %d\n",
 				md[i].name, errno);
 			sys_panic("foo");
 		}
 
 		ret = write(fd, &bootfs_start + md[i].offset, md[i].size);
 		if (ret != md[i].size) {
-			printf("write failed, ret = %d, errno = %d\n",
+			kprintf("write failed, ret = %d, errno = %d\n",
 				ret, errno);
 			sys_panic("foo");
 		}
@@ -1129,18 +1130,14 @@ void mount_rootfs(void)
 
 	ret = sys_mount("", "/", "ramfs", 0, NULL);
 	if (ret)
-		printf("failed to mount rootfs, error = %d\n", ret);
-	else
-		printf("mounted rootfs\n");
+		kprintf("failed to mount rootfs, error = %d\n", ret);
 
 	if (mkdir("/dev", 0755) < 0)
-		printf("failed to create /dev, error = %d\n", errno);
+		kprintf("failed to create /dev, error = %d\n", errno);
 
-	sys_mount("", "/dev", "devfs", 0, NULL);
+	ret = sys_mount("", "/dev", "devfs", 0, NULL);
 	if (ret)
-		printf("failed to mount devfs, error = %d\n", ret);
-	else
-		printf("mounted devfs\n");
+		kprintf("failed to mount devfs, error = %d\n", ret);
 
 }
 
@@ -1172,17 +1169,17 @@ vfs_init(void)
 	unpack_bootfs();
 
 	if (open("/dev/console", O_RDWR, 0) != 0)
-		printf("failed to open console, error = %d\n", errno);
+		kprintf("failed to open console, error = %d\n", errno);
 	if (dup(0) != 1)
-		printf("failed to dup console (1)\n");
+		kprintf("failed to dup console (1)\n");
 	if (dup(0) != 2)
-		printf("failed to dup console (2)\n");
+		kprintf("failed to dup console (2)\n");
 	vfs_initialized = 1;
 }
 
 void sys_panic(const char *str)
 {
-	printf(str);
+	kprintf(str);
 	while (1)
 		;
 }

@@ -160,6 +160,7 @@ objects += linux.o
 objects += core/sched.o
 objects += core/mmio.o
 objects += core/sglist.o
+objects += core/kprintf.o
 
 unittests:= tests/tst-hub.o
 

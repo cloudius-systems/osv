@@ -103,8 +103,7 @@ namespace virtio {
 
         // The remaining space is defined by each driver as the per-driver
         // configuration space
-        // TODO 'have' doesn't means it is enabled, needs fixing (24 when enabled)
-        #define VIRTIO_PCI_CONFIG(_dev_)      ((_dev_)->is_msix() ? 20 : 20)
+        int virtio_pci_config_offset() {return (is_msix_enabled())? 24 : 20;}
 
         virtio_device(u8 bus, u8 device, u8 func);
         virtual ~virtio_device();
@@ -120,6 +119,8 @@ namespace virtio {
         bool get_device_feature_bit(int bit);
         void set_guest_features(u32 features);
         void set_guest_feature_bit(int bit, bool on);
+        u32 get_guest_features(void);
+        bool get_guest_feature_bit(int bit);
 
         // device status
         u32 get_dev_status(void);
@@ -147,11 +148,14 @@ namespace virtio {
 
         void register_callback(std::function<void ()> func) {_queues[0]->register_callback(func);};
 
+        bool get_indirect_buf_cap() {return _cap_indirect_buf;}
+        void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
+
     protected:
         vring* _queues[max_virtqueues_nr];
         u32 _num_queues;
-
         pci_bar *_bar1;
+        bool _cap_indirect_buf;
     };
 
 }

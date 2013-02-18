@@ -208,8 +208,7 @@ int cond_var::wait(mutex* user_mutex, sched::timer* tmr)
     });
     user_mutex->unlock();
     sched::thread::wait_until([&] {
-        return (tmr && tmr->expired())
-                || with_lock(_mutex, [&] { return !wr.t; });
+        return (tmr && tmr->expired()) || !wr.t;
     });
     if (tmr && tmr->expired()) {
         with_lock(_mutex, [&] {

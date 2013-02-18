@@ -45,6 +45,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include <osv/device.h>
+#include "debug.h"
 #include "vfs.h"
 
 /*
@@ -86,9 +87,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	vnode_t vp, vp_covered;
 	int error;
 
-#ifdef DEBUG
-	dprintf("VFS: mounting %s at %s\n", fsname, dir);
-#endif
+	kprintf("VFS: mounting %s at %s\n", fsname, dir);
 
 	if (!dir || *dir == '\0')
 		return ENOENT;
@@ -381,13 +380,13 @@ mount_dump(void)
 
 	MOUNT_LOCK();
 
-	dprintf("mount_dump\n");
-	dprintf("dev      count root\n");
-	dprintf("-------- ----- --------\n");
+	kprintf("mount_dump\n");
+	kprintf("dev      count root\n");
+	kprintf("-------- ----- --------\n");
 	head = &mount_list;
 	for (n = list_first(head); n != head; n = list_next(n)) {
 		mp = list_entry(n, struct mount, m_link);
-		dprintf("%8x %5d %s\n", mp->m_dev, mp->m_count, mp->m_path);
+		kprintf("%8x %5d %s\n", mp->m_dev, mp->m_count, mp->m_path);
 	}
 	MOUNT_UNLOCK();
 }

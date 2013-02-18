@@ -4,9 +4,14 @@ import gdb
 import re
 import os, os.path
 import struct
+import json
 
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 external = build_dir + '/../../external'
+
+class status_enum_class(object):
+    pass
+status_enum = status_enum_class()
 
 def load_elf(path, base):
     args = ''
@@ -49,6 +54,12 @@ class Connect(gdb.Command):
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         gdb.execute('target remote :1234')
+        global status_enum
+        status_enum.running = gdb.parse_and_eval('sched::thread::running')
+        status_enum.waiting = gdb.parse_and_eval('sched::thread::waiting')
+        status_enum.queued = gdb.parse_and_eval('sched::thread::queued')
+        status_enum.waking = gdb.parse_and_eval('sched::thread::waking')
+        
 
 Connect()
 
@@ -76,6 +87,7 @@ class osv_heap(gdb.Command):
         self.show(node['right_'])
 
 ulong_type = gdb.lookup_type('unsigned long')
+timer_type = gdb.lookup_type('sched::timer')
 
 active_thread_context = None
 
@@ -207,6 +219,24 @@ def exit_thread_context():
         active_thread_context.__exit__()
         active_thread_context = None
 
+def show_thread_timers(t):
+    head = t['_active_timers']['data_']['root_plus_size_']['root_']
+    n = head['next_']
+    if n == head.address:
+        return
+    gdb.write('  timers:')
+    while n != head.address:
+        na = n.cast(ulong_type)
+        na -= timer_type.fields()[1].bitpos / 8
+        timer = na.cast(timer_type.pointer())
+        expired = ''
+        if timer['_expired']:
+            expired = '*'
+        expiration = long(timer['_time']) / 1.0e9
+        gdb.write(' %11.9f%s' % (expiration, expired))
+        n = n['next_']
+    gdb.write('\n')
+
 class osv_info_threads(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv info threads',
@@ -220,8 +250,10 @@ class osv_info_threads(gdb.Command):
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
                 status = 'rdy '
-                if long(t['_waiting']['_M_base']['_M_i']):
+                if t['_status']['_M_i'] == status_enum.waiting:
                     status = 'wait'
+                elif t['_status']['_M_i'] == status_enum.waking:
+                    status = 'wake'
                 if state.cpu_from_thread(t):
                     status = 'run '
                 function = '??'
@@ -239,6 +271,7 @@ class osv_info_threads(gdb.Command):
                            sal.line
                            )
                           )
+                show_thread_timers(t)
 
 class osv_thread(gdb.Command):
     def __init__(self):

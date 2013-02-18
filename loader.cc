@@ -76,12 +76,6 @@ void disable_pic()
     outb(0xff, 0xa1);
 }
 
-using sched::thread;
-// since it contains actual code it needs to be after the 'using' declaration
-#include "tests/tst-malloc.hh"
-#include "tests/tst-threads.hh"
-
-
 elf::program* prog;
 
 int main(int ac, char **av)

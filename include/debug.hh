@@ -51,6 +51,7 @@ private:
 
    // Returns severity, per tag, if doesn't exist return error as default
    logger_severity get_tag(const char* tag);
+   const char* loggable_severity(logger_severity severity);
 
    std::map<std::string, logger_severity> _log_level;
 
