@@ -118,6 +118,7 @@ bsd += bsd/sys/netinet/if_ether.o
 bsd += bsd/sys/net/if_llatbl.o  
 bsd += bsd/sys/net/radix.o  
 bsd += bsd/sys/net/route.o  
+bsd += bsd/sys/net/netisr.o  
 bsd += bsd/sys/net/if_dead.o  
 bsd += bsd/sys/net/if_clone.o  
 bsd += bsd/sys/net/if_loop.o  
