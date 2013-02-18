@@ -36,6 +36,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
     c->c_stopped = 0;
     c->c_state = CALLOUT_S_SCHEDULED;
 
+    // FIXME: Free this thread
     sched::thread* callout_thread = new sched::thread([=] {
 
         sched::timer t(*sched::thread::current());
