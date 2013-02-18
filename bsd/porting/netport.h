@@ -8,10 +8,8 @@
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
 
-/* Defines how many ticks are in 1 minute */
-#ifndef hz
-#define hz (1)
-#endif
+/* Defines how many ticks are in 1 second (nanoseconds) */
+#define hz (1000000000L)
 
 #define MALLOC_DEFINE(...)
 

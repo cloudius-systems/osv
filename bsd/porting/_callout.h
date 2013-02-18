@@ -38,24 +38,18 @@
 #ifndef _SYS__CALLOUT_H
 #define	_SYS__CALLOUT_H
 
-#include <bsd/sys/sys/queue.h>
-
-struct lock_object;
-
-SLIST_HEAD(callout_list, callout);
-TAILQ_HEAD(callout_tailq, callout);
+typedef enum {
+    CALLOUT_S_IDLE,
+    CALLOUT_S_SCHEDULED,
+    CALLOUT_S_COMPLETED,
+} callout_state_t;
 
 struct callout {
-	union {
-		SLIST_ENTRY(callout) sle;
-		TAILQ_ENTRY(callout) tqe;
-	} c_links;
-	int	c_time;				/* ticks to the event */
-	void	*c_arg;				/* function argument */
-	void	(*c_func)(void *);		/* function to call */
-	struct lock_object *c_lock;		/* lock to handle */
-	int	c_flags;			/* state of this entry */
-	volatile int c_cpu;			/* CPU we're scheduled on */
+    void *thread;                      /* OSv thread */
+    volatile callout_state_t c_state;  /* Callout state (OSv) */
+	int	c_flags;			           /* state of this entry */
+	volatile int c_cpu;			       /* CPU we're scheduled on (OSv ignore) */
+	volatile int c_stopped;            /* OSv: Mark to stop waiting */
 };
 
 #endif

@@ -38,6 +38,8 @@
 #ifndef _SYS_CALLOUT_H_
 #define _SYS_CALLOUT_H_
 
+#include <osv/types.h>
+#include <bsd/porting/netport.h>
 #include <bsd/porting/_callout.h>
 
 #define	CALLOUT_LOCAL_ALLOC	0x0001 /* was allocated from callfree */
@@ -48,11 +50,8 @@
 #define	CALLOUT_SHAREDLOCK	0x0020 /* callout lock held in shared mode */
 #define	CALLOUT_DFRMIGRATION	0x0040 /* callout in deferred migration mode */
 
-struct callout_handle {
-	struct callout *callout;
-};
+struct lock_object;
 
-#ifdef _KERNEL
 extern int ncallout;
 
 #define	callout_active(c)	((c)->c_flags & CALLOUT_ACTIVE)
@@ -67,7 +66,7 @@ void	_callout_init_lock(struct callout *, struct lock_object *, int);
 	_callout_init_lock((c), ((rw) != NULL) ? &(rw)->lock_object :	\
 	   NULL, (flags))
 #define	callout_pending(c)	((c)->c_flags & CALLOUT_PENDING)
-int	callout_reset_on(struct callout *, int, void (*)(void *), void *, int);
+int	callout_reset_on(struct callout *, u64, void (*)(void *), void *, int);
 #define	callout_reset(c, on_tick, fn, arg)				\
     callout_reset_on((c), (on_tick), (fn), (arg), (c)->c_cpu)
 #define	callout_reset_curcpu(c, on_tick, fn, arg)			\
@@ -81,7 +80,5 @@ int	_callout_stop_safe(struct callout *, int);
 void	callout_tick(void);
 int	callout_tickstofirst(int limit);
 extern void (*callout_new_inserted)(int cpu, int ticks);
-
-#endif
 
 #endif /* _SYS_CALLOUT_H_ */
