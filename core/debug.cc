@@ -66,13 +66,36 @@ bool logger::is_filtered(const char *tag, logger_severity severity)
     return (false);
 }
 
+const char* logger::loggable_severity(logger_severity severity)
+{
+    const char *ret = "-";
+    switch (severity) {
+    case logger_debug:
+        ret = "D";
+        break;
+    case logger_info:
+        ret = "I";
+        break;
+    case logger_warn:
+        ret = "W";
+        break;
+    case logger_error:
+        ret = "E";
+        break;
+    case logger_none:
+        break;
+    }
+
+    return (ret);
+}
+
 void logger::log(const char* tag, logger_severity severity, const boost::format& _fmt)
 {
     if (this->is_filtered(tag, severity)) {
         return;
     }
 
-    debug(fmt("[%s]: ") % tag, false);
+    debug(fmt("[%s/%s]: ") % loggable_severity(severity) % tag, false);
     debug(_fmt, true);
 }
 
