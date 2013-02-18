@@ -4,9 +4,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <memory.h>
+#include <time.h>
 
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
+
+void getmicrotime(struct timeval *tvp);
 
 /* Defines how many ticks are in 1 second (nanoseconds) */
 #define hz (1000000000L)
@@ -106,8 +109,6 @@ struct socket {
 #define sx_sunlock(...) do{}while(0)
 #define sx_xlock(...) do{}while(0)
 #define sx_xunlock(...) do{}while(0)
-
-#define getmicrotime(...) do{}while(0)
 
 #ifndef time_uptime
 #define time_uptime (1)
