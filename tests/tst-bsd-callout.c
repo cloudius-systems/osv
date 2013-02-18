@@ -1,6 +1,8 @@
+#include <time.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <bsd/porting/callout.h>
+#include <bsd/porting/netport.h>
 
 struct callout c1, c2;
 int ctr;
@@ -9,6 +11,9 @@ void aaa(void *unused)
 {
     ctr++;
     printf("TICK %d\n", ctr);
+    struct timeval t;
+    getmicrotime(&t);
+    printf("sec=%d msec=%d\n", t.tv_sec, t.tv_usec/1000);
     callout_reset(&c1, hz, aaa, NULL);
 }
 
