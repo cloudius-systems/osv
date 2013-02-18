@@ -64,11 +64,9 @@
 #define SIN(s) ((struct sockaddr_in *)s)
 #define SDL(s) ((struct sockaddr_dl *)s)
 
-#if 0
 SYSCTL_DECL(_net_link_ether);
 SYSCTL_NODE(_net_link_ether, PF_INET, inet, CTLFLAG_RW, 0, "");
 SYSCTL_NODE(_net_link_ether, PF_ARP, arp, CTLFLAG_RW, 0, "");
-#endif
 
 /* timer values */
 static VNET_DEFINE(int, arpt_keep) = (20*60);	/* once resolved, good for 20
@@ -97,7 +95,6 @@ VNET_DEFINE(u_long, in_ifaddrhmask);        /* mask for hash table */
 VNET_DEFINE(struct in_ifaddrhead, in_ifaddrhead);  /* first inet address */
 VNET_DEFINE(struct in_ifaddrhashhead *, in_ifaddrhashtbl); /* inet addr hash table  */
 
-#if 0
 SYSCTL_VNET_INT(_net_link_ether_inet, OID_AUTO, max_age, CTLFLAG_RW,
 	&VNET_NAME(arpt_keep), 0,
 	"ARP entry lifetime in seconds");
@@ -119,7 +116,6 @@ SYSCTL_VNET_STRUCT(_net_link_ether_arp, OID_AUTO, stats, CTLFLAG_RW,
 SYSCTL_VNET_INT(_net_link_ether_inet, OID_AUTO, maxhold, CTLFLAG_RW,
 	&VNET_NAME(arp_maxhold), 0,
 	"Number of packets to hold per ARP entry");
-#endif
 
 void		arprequest(struct ifnet *,
 			struct in_addr *, struct in_addr *, u_char *);
@@ -394,8 +390,7 @@ retry:
 
 		LLE_ADDREF(la);
 		la->la_expire = time_uptime;
-		/* FIXME: hz removed, the interface accepts seconds, not ticks */
-		canceled = callout_reset(&la->la_timer, V_arpt_down,
+		canceled = callout_reset(&la->la_timer, hz * V_arpt_down,
 		    arptimer, la);
 		if (canceled)
 			LLE_REMREF(la);
@@ -484,7 +479,6 @@ static int log_arp_movements = 1;
 static int log_arp_permanent_modify = 1;
 static int allow_multicast = 0;
 
-#if 0
 SYSCTL_INT(_net_link_ether_inet, OID_AUTO, log_arp_wrong_iface, CTLFLAG_RW,
 	&log_arp_wrong_iface, 0,
 	"log arp packets arriving on the wrong interface");
@@ -496,7 +490,6 @@ SYSCTL_INT(_net_link_ether_inet, OID_AUTO, log_arp_permanent_modify, CTLFLAG_RW,
 	"log arp replies from MACs different than the one in the permanent arp entry");
 SYSCTL_INT(_net_link_ether_inet, OID_AUTO, allow_multicast, CTLFLAG_RW,
 	&allow_multicast, 0, "accept multicast addresses");
-#endif
 
 static void
 in_arpinput(struct mbuf *m)
@@ -725,7 +718,7 @@ match:
 			LLE_ADDREF(la);
 			la->la_expire = time_uptime + V_arpt_keep;
 			canceled = callout_reset(&la->la_timer,
-			    V_arpt_keep, arptimer, la);
+			    hz * V_arpt_keep, arptimer, la);
 			if (canceled)
 				LLE_REMREF(la);
 		}
@@ -796,6 +789,7 @@ reply:
 #endif
 			if (!rt)
 				goto drop;
+
 			/*
 			 * Don't send proxies for nodes on the same interface
 			 * as this one came out of, or we'll get into a fight
@@ -918,7 +912,4 @@ arp_init(void)
     /* FIXME: Uncomment when implemented */
 	// netisr_register(&arp_nh);
 }
-
-#if 0
 SYSINIT(arp, SI_SUB_PROTO_DOMAIN, SI_ORDER_ANY, arp_init, 0);
-#endif

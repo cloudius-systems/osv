@@ -129,7 +129,6 @@ struct vnet {
  * When VIMAGE isn't compiled into the kernel, virtaulized SYSCTLs simply
  * become normal SYSCTLs.
  */
-#ifdef SYSCTL_OID
 #define	SYSCTL_VNET_INT(parent, nbr, name, access, ptr, val, descr)	\
 	SYSCTL_INT(parent, nbr, name, access, ptr, val, descr)
 #define	SYSCTL_VNET_PROC(parent, nbr, name, access, ptr, arg, handler,	\
@@ -146,7 +145,6 @@ struct vnet {
 #define	SYSCTL_VNET_UINT(parent, nbr, name, access, ptr, val, descr)	\
 	SYSCTL_UINT(parent, nbr, name, access, ptr, val, descr)
 #define	VNET_SYSCTL_ARG(req, arg1)
-#endif /* SYSCTL_OID */
 
 /*
  * When VIMAGE isn't compiled into the kernel, VNET_SYSINIT/VNET_SYSUNINIT

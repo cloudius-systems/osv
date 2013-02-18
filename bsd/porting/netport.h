@@ -16,8 +16,13 @@
 #define SYSINIT(...)
 #define SYSUNINIT(...)
 #define SYSCTL_NODE(...)
+#define SYSCTL_DECL(...)
 #define SYSCTL_UINT(...)
 #define SYSCTL_INT(...)
+#define SYSCTL_PROC(...)
+#define SYSCTL_OPAQUE(...)
+#define SYSCTL_STRING(...)
+#define SYSCTL_STRUCT(...)
 #define TUNABLE_INT(...)
 
 #define __NO_STRICT_ALIGNMENT
