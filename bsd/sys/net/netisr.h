@@ -33,6 +33,8 @@
 #ifndef _NET_NETISR_H_
 #define _NET_NETISR_H_
 
+void netisr_init(void *arg);
+
 /*
  * The netisr (network interrupt service routine) provides a deferred
  * execution evironment in which (generally inbound) network processing can

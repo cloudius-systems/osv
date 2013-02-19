@@ -33,23 +33,19 @@
 #ifndef _NET_NETISR_INTERNAL_H_
 #define	_NET_NETISR_INTERNAL_H_
 
+#include <bsd/porting/netport.h>
+
 #ifndef _WANT_NETISR_INTERNAL
 #error "no user-serviceable parts inside"
 #endif
 
-/*
- * These definitions are private to the netisr implementation, but provided
- * here for use by post-mortem crashdump analysis tools.  They should not be
- * used in any other context as they can and will change.  Public definitions
- * may be found in netisr.h.
- */
+/* OSv "softare interrupts" */
+typedef void(*netisr_osv_handler_t)(void*);
+typedef void* netisr_osv_cookie_t;
 
-#ifndef _KERNEL
-typedef void *netisr_handler_t;
-typedef void *netisr_m2flow_t;
-typedef void *netisr_m2cpuid_t;
-typedef void *netisr_drainedcpu_t;
-#endif
+netisr_osv_cookie_t netisr_osv_start_thread(netisr_osv_handler_t handler,
+                                            void* arg);
+void netisr_osv_sched(netisr_osv_cookie_t cookie);
 
 /*
  * Each protocol is described by a struct netisr_proto, which holds all
@@ -106,7 +102,7 @@ struct netisr_work {
  */
 struct netisr_workstream {
 	struct intr_event *nws_intr_event;	/* Handler for stream. */
-	void		*nws_swi_cookie;	/* swi(9) cookie for stream. */
+	netisr_osv_cookie_t nws_swi_cookie;	/* OSv: cookie for thread */
 	struct mtx	 nws_mtx;		/* Synchronize work. */
 	u_int		 nws_cpu;		/* CPU pinning. */
 	u_int		 nws_flags;		/* Wakeup flags. */
@@ -116,7 +112,7 @@ struct netisr_workstream {
 	 * Each protocol has per-workstream data.
 	 */
 	struct netisr_work	nws_work[NETISR_MAXPROT];
-} __aligned(CACHE_LINE_SIZE);
+};
 
 /*
  * Per-workstream flags.
