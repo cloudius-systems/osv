@@ -18,6 +18,11 @@ inline void irq_enable()
     processor::sti();
 }
 
+inline void wait_for_interrupt()
+{
+    processor::sti_hlt();
+}
+
 class irq_flag {
 public:
     // need to clear the red zone when playing with the stack. also, can't

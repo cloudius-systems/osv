@@ -158,6 +158,10 @@ namespace processor {
 	    asm volatile ("cli; hlt");
 	}
 
+	inline void sti_hlt() {
+	    asm volatile ("sti; hlt");
+	}
+
 	inline u8 inb (u16 port)
 	{
 		u8 r;
