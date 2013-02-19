@@ -154,6 +154,7 @@ public:
     stack_info get_stack_info();
     cpu* tcpu();
     void join();
+    unsigned long id(); // guaranteed unique over system lifetime
 private:
     void main();
     void switch_to();
@@ -184,6 +185,7 @@ private:
     cpu* _cpu;
     bool _timers_need_reload;
     bi::list<timer> _active_timers;
+    unsigned long _id;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
@@ -198,6 +200,7 @@ public:
     lockless_queue_link<thread> _wakeup_link;
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
+    static unsigned long _s_idgen;
 };
 
 class detached_thread : public thread {

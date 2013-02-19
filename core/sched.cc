@@ -152,6 +152,7 @@ typedef bi::list<thread,
                                  &thread::_thread_list_link>
                 > thread_list_type;
 thread_list_type thread_list;
+unsigned long thread::_s_idgen;
 
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
@@ -162,6 +163,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
 {
     with_lock(thread_list_mutex, [this] {
         thread_list.push_back(*this);
+        _id = _s_idgen++;
     });
     setup_tcb();
     init_stack();
