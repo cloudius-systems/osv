@@ -857,7 +857,7 @@ netisr_start_swi(void)
 	nwsp = &main_nws;
 	mtx_init(&nwsp->nws_mtx, "netisr_mtx", NULL, MTX_DEF);
 	nwsp->nws_cpu = 0;
-	netisr_osv_start_thread(swi_net, nwsp);
+	nwsp->nws_swi_cookie = netisr_osv_start_thread(swi_net, nwsp);
 }
 
 /*

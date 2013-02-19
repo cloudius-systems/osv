@@ -37,7 +37,7 @@ void netisr_osv_thread_wrapper(netisr_osv_handler_t handler, void* arg)
  * but we lay here the framework for per-cpu work */
 netisr_osv_cookie_t netisr_osv_start_thread(netisr_osv_handler_t handler, void* arg)
 {
-    sched::thread* t = new sched::thread([&] {
+    sched::thread* t = new sched::thread([=] {
         netisr_osv_thread_wrapper(handler, arg);
     });
 
@@ -49,4 +49,7 @@ void netisr_osv_sched(netisr_osv_cookie_t cookie)
     sched::thread* t = niosv_to_thread(cookie);
     netisr_osv_have_work = 1;
     t->wake();
+
+    /* FIXME: Cooperative threads... */
+    sched::thread::yield();
 }
