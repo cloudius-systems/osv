@@ -276,6 +276,11 @@ thread::stack_info thread::get_stack_info()
     return _attr.stack;
 }
 
+unsigned long thread::id()
+{
+    return _id;
+}
+
 timer_list::callback_dispatch::callback_dispatch()
 {
     clock_event->set_callback(this);
