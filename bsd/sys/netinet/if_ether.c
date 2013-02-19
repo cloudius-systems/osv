@@ -47,9 +47,7 @@
 #include <bsd/sys/net/if_dl.h>
 #include <bsd/sys/net/if_types.h>
 
-#if 0
-#include <net/netisr.h>
-#endif
+#include <bsd/sys/net/netisr.h>
 
 #include <bsd/sys/net/if_llc.h>
 #include <bsd/sys/net/ethernet.h>
@@ -119,21 +117,18 @@ SYSCTL_VNET_INT(_net_link_ether_inet, OID_AUTO, maxhold, CTLFLAG_RW,
 
 void		arprequest(struct ifnet *,
 			struct in_addr *, struct in_addr *, u_char *);
-void	arpintr(struct mbuf *);
+static void	arpintr(struct mbuf *);
 static void	arptimer(void *);
 #ifdef INET
 static void	in_arpinput(struct mbuf *);
 #endif
 
-/* FIXME: OSv: netisr are needed, comment out for now */
-#if 0
 static const struct netisr_handler arp_nh = {
 	.nh_name = "arp",
 	.nh_handler = arpintr,
 	.nh_proto = NETISR_ARP,
 	.nh_policy = NETISR_POLICY_SOURCE,
 };
-#endif
 
 #ifdef AF_INET
 void arp_ifscrub(struct ifnet *ifp, uint32_t addr);
@@ -408,13 +403,11 @@ done:
 	return (error);
 }
 
-/* FIXME: OSv: this is the netisr */
-
 /*
  * Common length and type checks are done here,
  * then the protocol-specific routine is called.
  */
-void
+static void
 arpintr(struct mbuf *m)
 {
 	struct arphdr *ar;
@@ -909,7 +902,6 @@ arp_ifinit2(struct ifnet *ifp, struct ifaddr *ifa, u_char *enaddr)
 void
 arp_init(void)
 {
-    /* FIXME: Uncomment when implemented */
-	// netisr_register(&arp_nh);
+	netisr_register(&arp_nh);
 }
 SYSINIT(arp, SI_SUB_PROTO_DOMAIN, SI_ORDER_ANY, arp_init, 0);
