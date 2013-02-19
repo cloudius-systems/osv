@@ -9,12 +9,13 @@ int ctr;
 
 void aaa(void *unused)
 {
+    callout_reset(&c1, hz/100, aaa, NULL);
+
     ctr++;
     printf("TICK %d\n", ctr);
     struct timeval t;
     getmicrotime(&t);
     printf("sec=%d msec=%d\n", t.tv_sec, t.tv_usec/1000);
-    callout_reset(&c1, hz, aaa, NULL);
 }
 
 void bbb(void *unused)
@@ -31,10 +32,10 @@ void test1(void)
     ctr = 0;
 
     callout_init(&c1, 1);
-    callout_reset(&c1, hz, aaa, NULL);
+    callout_reset(&c1, hz/100, aaa, NULL);
 
     callout_init(&c2, 1);
-    callout_reset(&c2, 10.1*hz, bbb, NULL);
+    callout_reset(&c2, 10*hz, bbb, NULL);
 
     sleep(11);
     printf("BSD Callout Test Done\n");

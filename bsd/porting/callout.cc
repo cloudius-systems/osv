@@ -10,7 +10,7 @@ extern "C" {
 
 sched::thread* callout_get_thread(struct callout *c)
 {
-    return reinterpret_cast<sched::thread*>(c->thread);
+    return reinterpret_cast<sched::detached_thread*>(c->thread);
 }
 
 void callout_set_thread(struct callout *c, sched::thread* t)
@@ -23,10 +23,11 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
     void *arg, int ignore_cpu)
 {
     u64 nanoseconds = to_ticks;
+    u64 cur_time = clock::get()->time();
     int result = 0;
 
     if ( (c->c_state == CALLOUT_S_SCHEDULED) &&
-         (callout_get_thread(c) != sched::thread::current()) ) {
+         (callout_get_thread(c) != sched::detached_thread::current()) ) {
 
         c->c_stopped = 1;
         callout_get_thread(c)->join();
@@ -37,10 +38,10 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
     c->c_state = CALLOUT_S_SCHEDULED;
 
     // FIXME: Free this thread
-    sched::thread* callout_thread = new sched::thread([=] {
+    sched::thread* callout_thread = new sched::detached_thread([=] {
 
         sched::timer t(*sched::thread::current());
-        t.set(clock::get()->time() + nanoseconds);
+        t.set(cur_time + nanoseconds);
         sched::thread::wait_until([&] { return ( (t.expired()) || (c->c_stopped) ); });
 
         if (c->c_stopped == 0) {
