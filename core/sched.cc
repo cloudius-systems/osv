@@ -7,6 +7,7 @@
 #include "irqlock.hh"
 #include "align.hh"
 #include "drivers/clock.hh"
+#include "interrupt.hh"
 
 namespace sched {
 
@@ -15,6 +16,10 @@ std::vector<cpu*> cpus;
 thread __thread * s_current;
 
 elf::tls_data tls;
+
+// currently the scheduler will poll right after an interrupt, so no
+// need to do anything.
+inter_processor_interrupt wakeup_ipi{[] {}};
 
 }
 
@@ -32,11 +37,11 @@ void cpu::schedule(bool yield)
     if (p->_status.load() == thread::status::running && !yield) {
         return;
     }
-    // FIXME: a proper idle mechanism
-    while (runqueue.empty()) {
-        barrier();
-        handle_incoming_wakeups();
+
+    if (runqueue.empty()) {
+        idle();
     }
+
     thread* n = with_lock(irq_lock, [this] {
         auto n = &runqueue.front();
         runqueue.pop_front();
@@ -48,6 +53,28 @@ void cpu::schedule(bool yield)
     if (n != thread::current()) {
         n->switch_to();
     }
+}
+
+void cpu::idle()
+{
+    do {
+        // spin for a bit before halting
+        for (unsigned ctr = 0; ctr < 100; ++ctr) {
+            // FIXME: can we pull threads from loaded cpus?
+            handle_incoming_wakeups();
+            if (!runqueue.empty()) {
+                return;
+            }
+        }
+        std::unique_lock<irq_lock_type> guard(irq_lock);
+        handle_incoming_wakeups();
+        if (!runqueue.empty()) {
+            return;
+        }
+        guard.release();
+        arch::wait_for_interrupt();
+        handle_incoming_wakeups(); // auto releases irq_lock
+    } while (runqueue.empty());
 }
 
 void cpu::handle_incoming_wakeups()
@@ -108,7 +135,9 @@ void cpu::load_balance()
             mig._cpu = min;
             min->incoming_wakeups[id].push_front(mig);
             min->incoming_wakeups_mask.set(id);
-            // FIXME: IPI
+            // FIXME: avoid if the cpu is alive and if the priority does not
+            // FIXME: warrant an interruption
+            wakeup_ipi.send(min);
         });
     }
 }
@@ -199,7 +228,11 @@ void thread::wake()
     unsigned c = cpu::current()->id;
     _cpu->incoming_wakeups[c].push_front(*this);
     _cpu->incoming_wakeups_mask.set(c);
-    // FIXME: IPI
+    // FIXME: avoid if the cpu is alive and if the priority does not
+    // FIXME: warrant an interruption
+    if (_cpu != current()->tcpu()) {
+        wakeup_ipi.send(_cpu);
+    }
 }
 
 void thread::main()
