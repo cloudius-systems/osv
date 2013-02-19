@@ -20,6 +20,7 @@
 #include "drivers/clockevent.hh"
 #include "barrier.hh"
 #include "tests/tst-hub.hh"
+#include "arch.hh"
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -141,8 +142,10 @@ void* do_main_thread(void *_args)
 
     run_main(prog, args);
 
-    while (true)
-	;
+    while (true) {
+        arch::wait_for_interrupt();
+    }
+
     return nullptr;
 }
 
