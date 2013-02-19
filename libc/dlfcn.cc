@@ -12,9 +12,17 @@ void* dlopen(const char* filename, int flags)
 
 void* dlsym(void* handle, const char* name)
 {
-    // FIXME: don't ignore handle
-    auto sym = elf::get_program()->lookup(name);
-    if (!sym.object) {
+    elf::symbol_module sym;
+    if (handle == RTLD_DEFAULT) {
+        sym = elf::get_program()->lookup(name);
+    } else if (handle == RTLD_NEXT) {
+        // FIXME: implement
+        abort();
+    } else {
+        auto obj = reinterpret_cast<elf::elf_object*>(handle);
+        sym = { obj->lookup_symbol(name), obj };
+    }
+    if (!sym.object || !sym.symbol) {
         return nullptr;
     }
     return sym.relocated_addr();
