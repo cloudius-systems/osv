@@ -200,6 +200,19 @@ public:
     bi::list_member_hook<> _thread_list_link;
 };
 
+class detached_thread : public thread {
+public:
+    explicit detached_thread(std::function<void ()> f);
+private:
+    ~detached_thread(); // require this to be a heap variable
+    class reaper;
+    friend class reaper;
+    static reaper* _s_reaper;
+    friend void init_detached_threads_reaper();
+};
+
+void init_detached_threads_reaper();
+
 class timer_list {
 public:
     void fired();
