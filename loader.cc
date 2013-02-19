@@ -92,6 +92,7 @@ int main(int ac, char **av)
 void main_cont(int ac, char** av)
 {
     smp_launch();
+    sched::init_detached_threads_reaper();
 
     vfs_init();
     ramdisk_init();

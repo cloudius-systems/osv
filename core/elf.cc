@@ -27,6 +27,12 @@ namespace elf {
 
     }
 
+    symbol_module::symbol_module()
+        : symbol()
+        , object()
+    {
+    }
+
     symbol_module::symbol_module(Elf64_Sym* _sym, elf_object* _obj)
         : symbol(_sym)
         , object(_obj)

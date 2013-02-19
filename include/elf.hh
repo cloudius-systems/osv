@@ -315,6 +315,7 @@ namespace elf {
 
     struct symbol_module {
     public:
+        symbol_module();
         symbol_module(Elf64_Sym* sym, elf_object* object);
         void* relocated_addr() const;
         Elf64_Sym* symbol;

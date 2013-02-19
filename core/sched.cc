@@ -385,6 +385,60 @@ bool operator<(const timer& t1, const timer& t2)
     }
 }
 
+class detached_thread::reaper {
+public:
+    reaper();
+    void reap();
+    void add_zombie(detached_thread* z);
+private:
+    mutex _mtx;
+    std::list<detached_thread*> _zombies;
+    thread _thread;
+};
+
+detached_thread::reaper::reaper()
+    : _mtx{}, _zombies{}, _thread([=] { reap(); })
+{
+}
+
+void detached_thread::reaper::reap()
+{
+    while (true) {
+        wait_until([=] { return !_zombies.empty(); }); // FIXME: locking?
+        with_lock(_mtx, [=] {
+            while (!_zombies.empty()) {
+                auto z = _zombies.front();
+                _zombies.pop_front();
+                z->join();
+            }
+        });
+    }
+}
+
+void detached_thread::reaper::add_zombie(detached_thread* z)
+{
+    with_lock(_mtx, [=] {
+        _zombies.push_back(z);
+        _thread.wake();
+    });
+}
+
+detached_thread::detached_thread(std::function<void ()> f)
+    : thread([=] { f(); _s_reaper->add_zombie(this); })
+{
+}
+
+detached_thread::~detached_thread()
+{
+}
+
+detached_thread::reaper *detached_thread::_s_reaper;
+
+void init_detached_threads_reaper()
+{
+    detached_thread::_s_reaper = new detached_thread::reaper;
+}
+
 void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
     tls = tls_data;
