@@ -200,3 +200,18 @@ bool interrupt_manager::unmask_interrupts(const assigned_vectors& vectors)
 
     return (true);
 }
+
+inter_processor_interrupt::inter_processor_interrupt(std::function<void ()> handler)
+    : _vector(idt.register_handler(handler))
+{
+}
+
+inter_processor_interrupt::~inter_processor_interrupt()
+{
+    idt.unregister_handler(_vector);
+}
+
+void inter_processor_interrupt::send(sched::cpu* cpu)
+{
+    apic->ipi(cpu->arch.apic_id, _vector);
+}

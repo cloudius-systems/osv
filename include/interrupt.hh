@@ -97,4 +97,13 @@ private:
     std::map<pci::pci_function *, assigned_vectors> _easy_dev2vectors;
 };
 
+class inter_processor_interrupt {
+public:
+    explicit inter_processor_interrupt(std::function<void ()>);
+    ~inter_processor_interrupt();
+    void send(sched::cpu* cpu);
+private:
+    unsigned _vector;
+};
+
 #endif /* INTERRUPT_HH_ */
