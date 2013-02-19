@@ -3,6 +3,7 @@
 #include <iomanip>
 #include "boost/format.hpp"
 #include "drivers/console.hh"
+#include "sched.hh"
 #include "debug.hh"
 
 using namespace std;
@@ -95,7 +96,8 @@ void logger::log(const char* tag, logger_severity severity, const boost::format&
         return;
     }
 
-    debug(fmt("[%s/%s]: ") % loggable_severity(severity) % tag, false);
+    unsigned long tid = sched::thread::current()->id();
+    debug(fmt("[%s/%d %s]: ") % loggable_severity(severity) % tid % tag, false);
     debug(_fmt, true);
 }
 
