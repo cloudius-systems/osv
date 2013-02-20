@@ -29,6 +29,8 @@ struct exception_frame {
     ulong ss;
 };
 
+extern __thread exception_frame* current_interrupt_frame;
+
 class interrupt_descriptor_table {
 public:
     interrupt_descriptor_table();

@@ -7,6 +7,7 @@
 
 typedef boost::format fmt;
 
+__thread exception_frame* current_interrupt_frame;
 interrupt_descriptor_table idt __attribute__((init_priority(20000)));
 
 extern "C" {
@@ -109,9 +110,14 @@ extern "C" { void interrupt(exception_frame* frame); }
 
 void interrupt(exception_frame* frame)
 {
+    // Rather that force the exception frame down the call stack,
+    // remember it in a global here.  This works because our interrupts
+    // don't nest.
+    current_interrupt_frame = frame;
     unsigned vector = frame->error_code;
     idt.invoke_interrupt(vector);
     processor::wrmsr(0x80b, 0); // EOI
+    current_interrupt_frame = nullptr;
 }
 
 #define DUMMY_HANDLER(x) \
