@@ -7,6 +7,8 @@
 
 __BEGIN_DECLS
 
+#define __packed        __attribute__((__packed__))
+
 #define	BSIZE	512		/* size of secondary block (bytes) */
 
 /*

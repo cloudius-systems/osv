@@ -20,3 +20,8 @@ fs +=	ramfs/ramfs_vfsops.o \
 
 fs +=	devfs/devfs_vnops.o \
 	devfs/device.o
+fs +=	fatfs/fatfs_fat.o \
+	fatfs/fatfs_node.o \
+	fatfs/fatfs_subr.o \
+	fatfs/fatfs_vfsops.o \
+	fatfs/fatfs_vnops.o
