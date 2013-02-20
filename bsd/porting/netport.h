@@ -9,6 +9,9 @@
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
 
+#define DECLARE_MODULE(...)
+#define MODULE_VERSION(...)
+
 #define devctl_notify(...) do{}while(0)
 
 void getmicrotime(struct timeval *tvp);
@@ -177,7 +180,10 @@ size_t strlcpy(char *dst, const char *src, size_t siz);
 #define M_NODUMP    0x0800      /* don't dump pages in this allocation */
 
 
-#define bzero(poi,len) memset(poi,0,len)
+#define bcopy(src, dst, len)    memcpy((dst), (src), (len))
+#define bzero(buf, size)    memset((buf), 0, (size))
+#define bcmp(b1, b2, len)   (memcmp((b1), (b2), (len)) != 0)
+
 
 typedef uintptr_t __uintptr_t;
 
