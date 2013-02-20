@@ -593,7 +593,7 @@ drbr_flush(struct ifnet *ifp, struct buf_ring *br)
 {
 	struct mbuf *m;
 
-	while ((m = buf_ring_dequeue_sc(br)) != NULL)
+	while ((m = (struct mbuf *)buf_ring_dequeue_sc(br)) != NULL)
 		m_freem(m);
 }
 
@@ -608,7 +608,7 @@ drbr_free(struct buf_ring *br, struct malloc_type *type)
 static __inline struct mbuf *
 drbr_dequeue(struct ifnet *ifp, struct buf_ring *br)
 {
-	return (buf_ring_dequeue_sc(br));
+	return ((struct mbuf *)buf_ring_dequeue_sc(br));
 }
 
 static __inline struct mbuf *
@@ -616,11 +616,11 @@ drbr_dequeue_cond(struct ifnet *ifp, struct buf_ring *br,
     int (*func) (struct mbuf *, void *), void *arg) 
 {
 	struct mbuf *m;
-	m = buf_ring_peek(br);
+	m = (struct mbuf *)buf_ring_peek(br);
 	if (m == NULL || func(m, arg) == 0)
 		return (NULL);
 
-	return (buf_ring_dequeue_sc(br));
+	return ((struct mbuf *)buf_ring_dequeue_sc(br));
 }
 
 static __inline int
