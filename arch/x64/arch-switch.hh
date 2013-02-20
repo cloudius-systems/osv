@@ -85,6 +85,7 @@ void thread::setup_tcb()
 void thread_main_c(thread* t)
 {
     s_current = t;
+    arch::irq_enable();
     t->main();
     t->complete();
 }

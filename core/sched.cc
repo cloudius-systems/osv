@@ -42,17 +42,16 @@ void cpu::schedule(bool yield)
         idle();
     }
 
-    thread* n = with_lock(irq_lock, [this] {
+    with_lock(irq_lock, [this] {
         auto n = &runqueue.front();
         runqueue.pop_front();
-        return n;
+        assert(n->_status.load() == thread::status::queued
+                || n->_status.load() == thread::status::running);
+        n->_status.store(thread::status::running);
+        if (n != thread::current()) {
+            n->switch_to();
+        }
     });
-    assert(n->_status.load() == thread::status::queued
-            || n->_status.load() == thread::status::running);
-    n->_status.store(thread::status::running);
-    if (n != thread::current()) {
-        n->switch_to();
-    }
 }
 
 void cpu::idle()
