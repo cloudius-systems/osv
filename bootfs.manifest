@@ -20,8 +20,9 @@
 #/tests/tst-ramdisk.so: ./tests/tst-ramdisk.so
 #/tests/tst-vblk.so: ./tests/tst-vblk.so
 #/tests/tst-bsd-evh.so: ./tests/tst-bsd-evh.so
-/tests/tst-bsd-callout.so: ./tests/tst-bsd-callout.so
+#/tests/tst-bsd-callout.so: ./tests/tst-bsd-callout.so
 #/tests/tst-bsd-netisr.so: ./tests/tst-bsd-netisr.so
+/tests/tst-bsd-netdriver.so: ./tests/tst-bsd-netdriver.so
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
