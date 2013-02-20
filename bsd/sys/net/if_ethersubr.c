@@ -711,6 +711,8 @@ static struct netisr_handler	ether_nh = {
 void ether_init(void *arg)
 {
 	netisr_register(&ether_nh);
+	/* call if_register_com_alloc(), don't act as a module */
+	if_register_com_alloc(IFT_ETHER, ether_alloc, ether_free);
 }
 SYSINIT(ether, SI_SUB_INIT_IF, SI_ORDER_ANY, ether_init, NULL);
 

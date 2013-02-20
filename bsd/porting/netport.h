@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
 
+void domaininit(void *dummy);
+
 #define DECLARE_MODULE(...)
 #define MODULE_VERSION(...)
 
