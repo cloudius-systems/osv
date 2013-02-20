@@ -155,7 +155,9 @@ void thread::yield()
     if (t->_cpu->runqueue.empty()) {
         return;
     }
-    t->_cpu->runqueue.push_back(*t);
+    with_lock(irq_lock, [t] {
+        t->_cpu->runqueue.push_back(*t);
+    });
     assert(t->_status.load() == status::running);
     t->_status.store(status::queued);
     t->_cpu->schedule(true);
@@ -198,7 +200,9 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     if (!main) {
         _status.store(status::queued);
         _cpu = current()->tcpu(); // inherit creator's cpu
-        _cpu->runqueue.push_back(*this);
+        with_lock(irq_lock, [this] {
+            _cpu->runqueue.push_back(*this);
+        });
     } else {
         _status.store(status::running);
     }
