@@ -45,7 +45,8 @@ int main(int argc, char **argv)
             perror("pread");
             return 1;
         }
-        if (memcmp(wbuf, wbuf, BUF_SIZE) != 0) {
+
+        if (memcmp(wbuf, rbuf, BUF_SIZE) != 0) {
             fprintf(stderr, "read error %i\n", i);
             return 1;
         }
