@@ -30,38 +30,35 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_inet.h"
-#include "opt_ipsec.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/mbuf.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
 #include <sys/time.h>
-#include <sys/kernel.h>
-#include <sys/sysctl.h>
-#include <sys/syslog.h>
 
-#include <net/if.h>
-#include <net/if_types.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_pcb.h>
-#include <netinet/in_systm.h>
-#include <netinet/in_var.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/ip_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_icmp.h>
+#include <bsd/sys/netinet/ip_var.h>
+#if 0
 #include <netinet/ip_options.h>
-#include <netinet/tcp.h>
+#include <bsd/sys/netinet/tcp.h>
 #include <netinet/tcp_var.h>
 #include <netinet/tcpip.h>
-#include <netinet/icmp_var.h>
+#endif
+#include <bsd/sys/netinet/icmp_var.h>
 
 #ifdef INET
 #ifdef IPSEC
@@ -69,9 +66,8 @@ __FBSDID("$FreeBSD$");
 #include <netipsec/key.h>
 #endif
 
-#include <machine/in_cksum.h>
+#include <bsd/machine/in_cksum.h>
 
-#include <security/mac/mac_framework.h>
 #endif /* INET */
 
 /*
@@ -128,11 +124,13 @@ SYSCTL_VNET_INT(_net_inet_icmp, OID_AUTO, reply_from_interface, CTLFLAG_RW,
 	&VNET_NAME(icmp_rfi), 0,
 	"ICMP reply from incoming interface for non-local packets");
 
+#if 0
 static VNET_DEFINE(int, icmp_quotelen) = 8;
 #define	V_icmp_quotelen			VNET(icmp_quotelen)
 SYSCTL_VNET_INT(_net_inet_icmp, OID_AUTO, quotelen, CTLFLAG_RW,
 	&VNET_NAME(icmp_quotelen), 0,
 	"Number of bytes from original packet to quote in ICMP reply");
+#endif
 
 /*
  * ICMP broadcast echo sysctl
@@ -153,6 +151,8 @@ static void	icmp_send(struct mbuf *, struct mbuf *);
 
 extern	struct protosw inetsw[];
 
+/* FIXME: OSV: sysctl_net_icmp_drop_redir() ignore redirects */
+#if 0
 static int
 sysctl_net_icmp_drop_redir(SYSCTL_HANDLER_ARGS)
 {
@@ -185,6 +185,7 @@ sysctl_net_icmp_drop_redir(SYSCTL_HANDLER_ARGS)
 SYSCTL_VNET_PROC(_net_inet_icmp, OID_AUTO, drop_redirect,
     CTLTYPE_INT|CTLFLAG_RW, 0, 0,
     sysctl_net_icmp_drop_redir, "I", "Ignore ICMP redirects");
+#endif
 
 /*
  * Kernel module interface for updating icmpstat.  The argument is an index
@@ -200,6 +201,8 @@ kmod_icmpstat_inc(int statnum)
 	(*((u_long *)&V_icmpstat + statnum))++;
 }
 
+/* FIXME: OSv - this is still unsupported */
+#if 0
 /*
  * Generate an error packet of type error
  * in response to bad packet ip.
@@ -348,6 +351,7 @@ stdreply:	icmpelen = max(8, min(V_icmp_quotelen, oip->ip_len - oiphlen));
 freeit:
 	m_freem(n);
 }
+#endif
 
 /*
  * Process a received ICMP message.
@@ -813,7 +817,13 @@ match:
 		 * add on any record-route or timestamp options.
 		 */
 		cp = (u_char *) (ip + 1);
+		/* FIXME: OSv - enable when we have ip options */
+#if 0
 		if ((opts = ip_srcroute(m)) == 0 &&
+#else
+		opts = 0;
+		if (opts &&
+#endif
 		    (opts = m_gethdr(M_DONTWAIT, MT_DATA))) {
 			opts->m_len = sizeof(struct in_addr);
 			mtod(opts, struct in_addr *)->s_addr = 0;

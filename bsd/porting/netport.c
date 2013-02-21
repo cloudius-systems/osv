@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <memory.h>
+#include <time.h>
 
 #include <bsd/porting/netport.h>
 #include <bsd/sys/sys/socket.h>
@@ -175,4 +176,25 @@ pru_sopoll_notsupp(struct socket *so, int events, struct ucred *cred,
 {
 
     return EOPNOTSUPP;
+}
+
+int ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps)
+{
+    struct timeval now;
+    getmicrotime(&now);
+    uint64_t now2 = now.tv_sec * hz + now.tv_usec;
+
+    /*
+     * Reset the last time and counter if this is the first call
+     * or more than a second has passed since the last update of
+     * lasttime.
+     */
+    if (lasttime->tv_sec == 0 || (u_int)(now2 - lasttime->tv_sec) >= hz) {
+        lasttime->tv_sec = now2;
+        *curpps = 1;
+        return (maxpps != 0);
+    } else {
+        (*curpps)++;        /* NB: ignore potential overflow */
+        return (maxpps < 0 || *curpps < maxpps);
+    }
 }

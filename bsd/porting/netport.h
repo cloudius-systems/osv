@@ -291,4 +291,23 @@ static __inline intrmask_t  spltty(void)        { return 0; }
 static __inline intrmask_t  splvm(void)     { return 0; }
 static __inline void        splx(intrmask_t ipl)   { return; }
 
+
+/*
+ * OSv: Copied from kern_time.c
+ *
+ * ppsratecheck(): packets (or events) per second limitation.
+ *
+ * Return 0 if the limit is to be enforced (e.g. the caller
+ * should drop a packet because of the rate limitation).
+ *
+ * maxpps of 0 always causes zero to be returned.  maxpps of -1
+ * always causes 1 to be returned; this effectively defeats rate
+ * limiting.
+ *
+ * Note that we maintain the struct timeval for compatibility
+ * with other bsd systems.  We reuse the storage and just monitor
+ * clock ticks for minimal overhead.
+ */
+int ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps);
+
 #endif
