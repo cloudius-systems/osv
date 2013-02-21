@@ -24,10 +24,10 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include <osv/mutex.h>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/callout.h>
+#include <bsd/porting/rwlock.h>
 
 #include <sys/cdefs.h>
 
@@ -46,21 +46,12 @@ struct rt_addrinfo;
 struct llentry;
 LIST_HEAD(llentries, llentry);
 
-#if 0
 extern struct rwlock lltable_rwlock;
 #define	LLTABLE_RLOCK()		rw_rlock(&lltable_rwlock)
 #define	LLTABLE_RUNLOCK()	rw_runlock(&lltable_rwlock)
 #define	LLTABLE_WLOCK()		rw_wlock(&lltable_rwlock)
 #define	LLTABLE_WUNLOCK()	rw_wunlock(&lltable_rwlock)
 #define	LLTABLE_LOCK_ASSERT()	rw_assert(&lltable_rwlock, RA_LOCKED)
-#else
-extern struct cmutex lltable_mtxlock;
-#define LLTABLE_RLOCK()     mutex_lock(&lltable_mtxlock)
-#define LLTABLE_RUNLOCK()   mutex_unlock(&lltable_mtxlock)
-#define LLTABLE_WLOCK()     mutex_lock(&lltable_mtxlock)
-#define LLTABLE_WUNLOCK()   mutex_unlock(&lltable_mtxlock)
-#define LLTABLE_LOCK_ASSERT()   do{}while(0)
-#endif
 
 /*
  * Code referencing llentry must at least hold
@@ -68,7 +59,7 @@ extern struct cmutex lltable_mtxlock;
  */
 struct llentry {
 	LIST_ENTRY(llentry)	 lle_next;
-	struct cmutex		 lle_lock;
+	struct rwlock		 lle_lock;
 	struct lltable		 *lle_tbl;
 	struct llentries	 *lle_head;
 	void			(*lle_free)(struct lltable *, struct llentry *);
@@ -100,7 +91,6 @@ struct llentry {
 	/* NB: struct sockaddr must immediately follow */
 };
 
-#if 0
 #define	LLE_WLOCK(lle)		rw_wlock(&(lle)->lle_lock)
 #define	LLE_RLOCK(lle)		rw_rlock(&(lle)->lle_lock)
 #define	LLE_WUNLOCK(lle)	rw_wunlock(&(lle)->lle_lock)
@@ -110,16 +100,6 @@ struct llentry {
 #define	LLE_LOCK_INIT(lle)	rw_init_flags(&(lle)->lle_lock, "lle", RW_DUPOK)
 #define	LLE_LOCK_DESTROY(lle)	rw_destroy(&(lle)->lle_lock)
 #define	LLE_WLOCK_ASSERT(lle)	rw_assert(&(lle)->lle_lock, RA_WLOCKED)
-#else
-#define LLE_WLOCK(lle)      mutex_lock(&(lle)->lle_lock)
-#define LLE_RLOCK(lle)      mutex_lock(&(lle)->lle_lock)
-#define LLE_WUNLOCK(lle)    mutex_unlock(&(lle)->lle_lock)
-#define LLE_RUNLOCK(lle)    mutex_unlock(&(lle)->lle_lock)
-#define LLE_DOWNGRADE(lle)  do{}while(0)
-#define LLE_LOCK_INIT(lle)  bzero(&(lle)->lle_lock, sizeof(struct cmutex))
-#define LLE_LOCK_DESTROY(lle)   do{}while(0)
-#define LLE_WLOCK_ASSERT(lle)   do{}while(0)
-#endif
 
 #define LLE_IS_VALID(lle)	(((lle) != NULL) && ((lle) != (void *)-1))
 
