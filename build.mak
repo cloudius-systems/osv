@@ -79,6 +79,7 @@ java/RunJar.class: javabase=java
 tests/tst-pthread.so: tests/tst-pthread.o
 tests/tst-ramdisk.so: tests/tst-ramdisk.o
 tests/tst-vblk.so: tests/tst-vblk.o
+tests/tst-fat.so: tests/tst-fat.o
 
 all: loader.img loader.bin
 
