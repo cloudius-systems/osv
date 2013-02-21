@@ -872,6 +872,7 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 	if (ntohl(IA_SIN(ifa)->sin_addr.s_addr) != INADDR_ANY) {
 		arprequest(ifp, &IA_SIN(ifa)->sin_addr,
 				&IA_SIN(ifa)->sin_addr, (u_char *)IF_LLADDR(ifp));
+#if 0
 		/*
 		 * interface address is considered static entry
 		 * because the output of the arp utility shows
@@ -886,6 +887,9 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 			    "entry for interface address\n");
 		else
 			LLE_RUNLOCK(lle);
+#else
+		lle = NULL;
+#endif
 	}
 	ifa->ifa_rtrequest = NULL;
 }

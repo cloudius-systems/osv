@@ -17,6 +17,9 @@
 /* Global ifnet */
 struct ifnet* pifp;
 
+/*
+ * This function should invoke ether_ioctl...
+ */
 static int
 lge_ioctl(struct ifnet        *ifp,
           u_long          command,
@@ -26,10 +29,20 @@ lge_ioctl(struct ifnet        *ifp,
     return (0);
 }
 
+/*
+ * Main transmit routine.
+ */
 static void
 lge_start(struct ifnet* ifp)
 {
+    struct mbuf     *m_head = NULL;
+
     TLOG("lge_start\n");
+
+    IF_DEQUEUE(&ifp->if_snd, m_head);
+    if (m_head != NULL) {
+        /* Send packet */
+    }
 }
 
 static void
@@ -103,7 +116,7 @@ int main(void)
      */
     if_attachdomain(NULL);
 
-    // set_address();
+    set_address();
     destroy_if();
 
     TLOG("BSD Net Driver Test\n");
