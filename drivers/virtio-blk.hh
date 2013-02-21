@@ -165,6 +165,9 @@ namespace virtio {
         void response_worker();
         int size();
 
+        void set_readonly() {_ro = true;}
+        bool is_readonly() {return _ro;}
+
     private:
 
         std::string _driver_name;
@@ -173,6 +176,7 @@ namespace virtio {
         //maintains the virtio instance number for multiple drives
         static int _instance;
         int _id;
+        bool _ro;
     };
 
 }

@@ -86,7 +86,7 @@ struct driver virtio_blk_driver = {
 };
 
     virtio_blk::virtio_blk(unsigned dev_idx)
-        : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx)
+        : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx), _ro(false)
     {
         std::stringstream ss;
         ss << "virtio-blk" << dev_idx;
@@ -155,6 +155,10 @@ struct driver virtio_blk_driver = {
         }
         if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
             virtio_i(fmt("The write cache enable of the device is %d") % (u32)_config.wce);
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
+            set_readonly();
+            virtio_i(fmt("Device is read only"));
+        }
 
         return true;
     }
@@ -233,6 +237,10 @@ struct driver virtio_blk_driver = {
             buf_count = &in;
             break;
         case BIO_WRITE:
+            if (is_readonly()) {
+                virtio_e("Error: block device is read only");
+                return EROFS;
+            }
             type = VIRTIO_BLK_T_OUT;
             buf_count = &out;
             break;
