@@ -12,6 +12,7 @@ int main(int argc, char **argv)
 	int fd;
     char *wbuf,*rbuf,*origin;
     int i;
+    int offset;
 
     // malloc is used since virt_to_phys doesn't work
     // on stack addresses and virtio needs that
@@ -25,21 +26,22 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	for (i=0;i<100 * 512; i+=512) {
+	for (i=0;i<100; i++) {
+	    offset = i * 512;
 
-        if (pread(fd, origin, BUF_SIZE, i) != BUF_SIZE) {
+        if (pread(fd, origin, BUF_SIZE, offset) != BUF_SIZE) {
             perror("pread, origin");
             return 1;
         }
 
         memset(wbuf, i, BUF_SIZE);
-        if (pwrite(fd, wbuf, BUF_SIZE, i) != BUF_SIZE) {
+        if (pwrite(fd, wbuf, BUF_SIZE, offset) != BUF_SIZE) {
             perror("pwrite");
             return 1;
         }
 
-        memset(rbuf, i, BUF_SIZE);
-        if (pread(fd, rbuf, BUF_SIZE, i) != BUF_SIZE) {
+        memset(rbuf, 0, BUF_SIZE);
+        if (pread(fd, rbuf, BUF_SIZE, offset) != BUF_SIZE) {
             perror("pread");
             return 1;
         }
@@ -48,7 +50,7 @@ int main(int argc, char **argv)
             return 1;
         }
 
-        if (pwrite(fd, origin, BUF_SIZE, i) != BUF_SIZE) {
+        if (pwrite(fd, origin, BUF_SIZE, offset) != BUF_SIZE) {
             perror("pwrite origin");
             return 1;
         }
