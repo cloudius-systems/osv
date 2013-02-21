@@ -8,6 +8,7 @@ extern "C" {
     #include <bsd/sys/net/netisr.h>
     #include <bsd/sys/net/if.h>
     #include <bsd/sys/netinet/if_ether.h>
+    #include <bsd/sys/netinet/in_pcb.h>
     #include <bsd/sys/net/ethernet.h>
     #include <bsd/sys/net/route.h>
     #include <bsd/machine/param.h>
@@ -24,6 +25,7 @@ void net_init(void)
     ether_init(NULL);
     if_init(NULL);
     vnet_if_init(NULL);
+    ipport_tick_init(NULL);
     domaininit(NULL);
     route_init();
     vnet_route_init();

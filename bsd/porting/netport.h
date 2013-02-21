@@ -6,8 +6,25 @@
 #include <memory.h>
 #include <time.h>
 
+#define intotcpcb(ip)   ((struct tcpcb *)(ip)->inp_ppcb)
+#define intotw(ip)  ((struct tcptw *)(ip)->inp_ppcb)
+#define sototcpcb(so)   (intotcpcb(sotoinpcb(so)))
+
+
+#ifndef _KERNEL
+    #define _KERNEL 1
+#endif
+
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
+
+/*
+ * User credential, some function use this as arguments,
+ * later on we'll have wrappers for them.
+ */
+struct ucred {
+    int __unused;
+};
 
 struct malloc_type;
 void    hashdestroy(void *, struct malloc_type *, u_long);
@@ -95,9 +112,11 @@ struct socket {
     u_long  so_oobmark;     /* (c) chars to oob mark */
     TAILQ_HEAD(, aiocblist) so_aiojobq; /* AIO ops waiting on socket */
 
+#if 0
     struct  ucred *so_cred;     /* (a) user credentials */
     struct  label *so_label;    /* (b) MAC label for socket */
     struct  label *so_peerlabel;    /* (b) cached MAC label for peer */
+#endif
     /* NB: generation count must not be first. */
     int so_gencnt;     /* (h) generation count */
     void    *so_emuldata;       /* (b) private data for emulators */
@@ -162,10 +181,6 @@ size_t strlcpy(char *dst, const char *src, size_t siz);
 #define CTR4(m, d, p1, p2, p3, p4)  (void)0
 #define CTR5(m, d, p1, p2, p3, p4, p5)  (void)0
 #define CTR6(m, d, p1, p2, p3, p4, p5, p6)  (void)0
-
-#ifndef _KERNEL
-    #define _KERNEL do{}while(0)
-#endif
 
 #ifndef NULL
     #define NULL (0)

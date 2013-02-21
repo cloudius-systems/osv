@@ -38,6 +38,7 @@
 #ifndef _NETINET_IN_PCB_H_
 #define _NETINET_IN_PCB_H_
 
+#include <stddef.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
 
@@ -48,6 +49,7 @@
 #include <bsd/sys/net/vnet.h>
 #include <bsd/porting/uma_stub.h>
 
+void ipport_tick_init(const void *unused);
 
 #define	in6pcb		inpcb	/* for KAME src sync over BSD*'s */
 #define	in6p_sp		inp_sp	/* for KAME src sync over BSD*'s */
@@ -642,8 +644,9 @@ struct inpcb *
 struct inpcb *
 	in_pcblookup_mbuf(struct inpcbinfo *, struct in_addr, u_int,
 	    struct in_addr, u_int, int, struct ifnet *, struct mbuf *);
-void	in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr,
-	    int, struct inpcb *(*)(struct inpcb *, int));
+void
+in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr faddr, int errno,
+    struct inpcb *(*notify)(struct inpcb *, int));
 void	in_pcbref(struct inpcb *);
 void	in_pcbrehash(struct inpcb *);
 void	in_pcbrehash_mbuf(struct inpcb *, struct mbuf *);
