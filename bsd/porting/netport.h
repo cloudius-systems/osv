@@ -6,6 +6,8 @@
 #include <memory.h>
 #include <time.h>
 
+#define FEATURE(...)
+
 #define intotcpcb(ip)   ((struct tcpcb *)(ip)->inp_ppcb)
 #define intotw(ip)  ((struct tcptw *)(ip)->inp_ppcb)
 #define sototcpcb(so)   (intotcpcb(sotoinpcb(so)))

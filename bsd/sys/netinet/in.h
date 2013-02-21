@@ -123,10 +123,8 @@ __END_DECLS
 
 #endif /* !_KERNEL && __BSD_VISIBLE */
 
-#if __POSIX_VISIBLE >= 200112
 #define	IPPROTO_RAW		255		/* raw IP packet */
 #define	INET_ADDRSTRLEN		16
-#endif
 
 #if __BSD_VISIBLE
 /*

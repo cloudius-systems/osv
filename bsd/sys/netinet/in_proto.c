@@ -30,25 +30,14 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_ipx.h"
-#include "opt_mrouting.h"
-#include "opt_ipsec.h"
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_sctp.h"
-#include "opt_mpath.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/socket.h>
-#include <sys/domain.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/queue.h>
-#include <sys/sysctl.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/queue.h>
 
 /*
  * While this file provides the domain and protocol switch tables for IPv4, it
@@ -57,24 +46,26 @@ __FBSDID("$FreeBSD$");
  * support compile out everything but these sysctl nodes.
  */
 #ifdef INET
-#include <net/if.h>
-#include <net/route.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
 #ifdef RADIX_MPATH
-#include <net/radix_mpath.h>
+#include <bsd/sys/net/radix_mpath.h>
 #endif
-#include <net/vnet.h>
+#include <bsd/sys/net/vnet.h>
 #endif /* INET */
 
 #if defined(INET) || defined(INET6)
-#include <netinet/in.h>
+#include <bsd/sys/netinet/in.h>
 #endif
 
 #ifdef INET
-#include <netinet/in_systm.h>
-#include <netinet/in_var.h>
-#include <netinet/ip.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_icmp.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_icmp.h>
+
+#if 0
 #include <netinet/igmp_var.h>
 #include <netinet/tcp.h>
 #include <netinet/tcp_timer.h>
@@ -82,6 +73,7 @@ __FBSDID("$FreeBSD$");
 #include <netinet/udp.h>
 #include <netinet/udp_var.h>
 #include <netinet/ip_encap.h>
+#endif
 
 /*
  * TCP/IP protocol family: IP, ICMP, UDP, TCP.
@@ -112,6 +104,52 @@ extern	struct domain inetdomain;
 	.pr_usrreqs =		&nousrreqs	\
 }
 
+/* FIXME: OSv: support RAW_IP and ICMP */
+struct protosw inetsw[] = {
+{
+    .pr_type =      SOCK_RAW,
+    .pr_domain =        &inetdomain,
+    .pr_protocol =      IPPROTO_RAW,
+    .pr_flags =     PR_ATOMIC|PR_ADDR,
+    .pr_input =     rip_input,
+    .pr_ctlinput =      rip_ctlinput,
+    .pr_ctloutput =     rip_ctloutput,
+    .pr_usrreqs =       &rip_usrreqs
+},
+{
+    .pr_type =      SOCK_RAW,
+    .pr_domain =        &inetdomain,
+    .pr_protocol =      IPPROTO_ICMP,
+    .pr_flags =     PR_ATOMIC|PR_ADDR|PR_LASTHDR,
+    .pr_input =     icmp_input,
+    .pr_ctloutput =     rip_ctloutput,
+    .pr_usrreqs =       &rip_usrreqs
+},
+/* Spacer n-times for loadable protocols. */
+IPPROTOSPACER,
+IPPROTOSPACER,
+IPPROTOSPACER,
+IPPROTOSPACER,
+IPPROTOSPACER,
+IPPROTOSPACER,
+IPPROTOSPACER,
+IPPROTOSPACER,
+/* raw wildcard */
+{
+    .pr_type =      SOCK_RAW,
+    .pr_domain =        &inetdomain,
+    .pr_flags =     PR_ATOMIC|PR_ADDR,
+    .pr_input =     rip_input,
+    .pr_ctloutput =     rip_ctloutput,
+    .pr_init =      rip_init,
+#ifdef VIMAGE
+    .pr_destroy =       rip_destroy,
+#endif
+    .pr_usrreqs =       &rip_usrreqs
+},
+};
+
+#if 0
 struct protosw inetsw[] = {
 {
 	.pr_type =		0,
@@ -334,6 +372,7 @@ IPPROTOSPACER,
 	.pr_usrreqs =		&rip_usrreqs
 },
 };
+#endif
 
 extern int in_inithead(void **, int);
 extern int in_detachhead(void **, int);
@@ -367,9 +406,6 @@ SYSCTL_NODE(_net_inet, IPPROTO_IP,	ip,	CTLFLAG_RW, 0,	"IP");
 SYSCTL_NODE(_net_inet, IPPROTO_ICMP,	icmp,	CTLFLAG_RW, 0,	"ICMP");
 SYSCTL_NODE(_net_inet, IPPROTO_UDP,	udp,	CTLFLAG_RW, 0,	"UDP");
 SYSCTL_NODE(_net_inet, IPPROTO_TCP,	tcp,	CTLFLAG_RW, 0,	"TCP");
-#ifdef SCTP
-SYSCTL_NODE(_net_inet, IPPROTO_SCTP,	sctp,	CTLFLAG_RW, 0,	"SCTP");
-#endif
 SYSCTL_NODE(_net_inet, IPPROTO_IGMP,	igmp,	CTLFLAG_RW, 0,	"IGMP");
 #ifdef IPSEC
 /* XXX no protocol # to use, pick something "reserved" */
