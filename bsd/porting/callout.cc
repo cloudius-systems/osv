@@ -6,6 +6,8 @@
 extern "C" {
     #include <bsd/porting/netport.h>
     #include <bsd/porting/callout.h>
+    #include <bsd/porting/rwlock.h>
+
 }
 
 sched::thread* callout_get_thread(struct callout *c)
@@ -45,7 +47,18 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
         sched::thread::wait_until([&] { return ( (t.expired()) || (c->c_stopped) ); });
 
         if (c->c_stopped == 0) {
+            if (c->c_is_rwlock == 1) {
+                rw_wlock(c->c_rwlock);
+            }
+
+            // Callout
             ftn(arg);
+
+            if ((c->c_flags & CALLOUT_RETURNUNLOCKED) == 0) {
+                if (c->c_is_rwlock == 1) {
+                    rw_wunlock(c->c_rwlock);
+                }
+            }
             c->c_state = CALLOUT_S_COMPLETED;
         }
     });
@@ -83,3 +96,11 @@ void callout_init(struct callout *c, int mpsafe)
     c->c_stopped = 0;
 }
 
+void callout_init_rw(struct callout *c, struct rwlock *rw, int flags)
+{
+    assert(rw != NULL);
+
+    callout_init(c, 1);
+    c->c_is_rwlock = 1;
+    c->c_flags = flags;
+}

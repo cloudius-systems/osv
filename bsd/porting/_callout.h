@@ -50,6 +50,8 @@ struct callout {
 	int	c_flags;			           /* state of this entry */
 	volatile int c_cpu;			       /* CPU we're scheduled on (OSv ignore) */
 	volatile int c_stopped;            /* OSv: Mark to stop waiting */
+	int c_is_rwlock;
+	struct rwlock *c_rwlock;
 };
 
 #endif
