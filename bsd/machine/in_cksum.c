@@ -38,15 +38,15 @@
  */
 
 #include <sys/cdefs.h>			/* RCS ID & Copyright macro defns */
-__FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
-#include <sys/mbuf.h>
-#include <sys/systm.h>
-#include <netinet/in_systm.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <machine/in_cksum.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/machine/in_cksum.h>
 
 /*
  * Checksum routine for Internet Protocol family headers
