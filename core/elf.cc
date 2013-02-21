@@ -353,7 +353,7 @@ namespace elf {
                 *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
                 break;
             case R_X86_64_TPOFF64:
-                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
+                *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - tls_data().size;
                 break;
             default:
                 abort();
@@ -746,7 +746,8 @@ namespace elf {
                             *static_cast<u64*>(addr) = lookup()->st_value;
                             break;
                         case R_X86_64_TPOFF64:
-                            *static_cast<u64*>(addr) = lookup()->st_value;
+                            // FIXME: assumes TLS segment comes before DYNAMIC segment
+                            *static_cast<u64*>(addr) = lookup()->st_value - ret.tls.size;
                             break;
                         default:
                             abort();
