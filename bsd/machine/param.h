@@ -35,8 +35,8 @@
  * $FreeBSD$
  */
 
-#ifndef _SYS_PARAM_H_
-#define _SYS_PARAM_H_
+#ifndef _SYS_MACHINE_PARAM_H_
+#define _SYS_MACHINE_PARAM_H_
 
 #define	BSD	199506		/* System version (year & month). */
 #define BSD4_3	1
@@ -287,4 +287,4 @@
  */
 #define __PAST_END(array, offset) (((__typeof__(*(array)) *)(array))[offset])
 
-#endif	/* _SYS_PARAM_H_ */
+#endif	/* _SYS_MACHINE_PARAM_H_ */
