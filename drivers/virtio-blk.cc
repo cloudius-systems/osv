@@ -178,7 +178,7 @@ struct driver virtio_blk_driver = {
 
             int i = 0;
 
-            while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
+            while((req = static_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
                 virtio_d(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
 
                 virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
