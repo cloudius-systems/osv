@@ -160,13 +160,10 @@ namespace virtio {
 
         virtual u32 get_driver_features(void);
 
-        virtio_blk_req* make_virtio_req(u64 sector, virtio_blk_request_type type, int val);
         int make_virtio_request(struct bio*);
 
-        void test();
         void response_worker();
         int size();
-
 
     private:
 

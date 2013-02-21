@@ -122,21 +122,6 @@ struct driver virtio_blk_driver = {
         prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
         prv->drv = this;
 
-        // Perform test if this isn't the boot image (test is destructive
-        if (_id > 0) {
-            virtio_d(fmt("virtio blk: testing instance %d") % _id);
-
-            for (int i=0;i<6;i++) {
-                virtio_d(fmt("Running test %d") % i);
-                test();
-                timespec ts = {};
-                ts.tv_sec = 1;
-                nanosleep(&ts, nullptr);
-
-                sched::thread::current()->yield();
-            }
-        }
-
         return true;
     }
 
@@ -172,88 +157,6 @@ struct driver virtio_blk_driver = {
             virtio_i(fmt("The write cache enable of the device is %d") % (u32)_config.wce);
 
         return true;
-    }
-
-    //temporal hack for the local version of virtio tests
-    extern "C" {
-    static void blk_bio_done(struct bio*bio) {
-        free(bio->bio_data);
-        destroy_bio(bio);
-    };
-    }
-
-    // to be removed soon once we move the test from here to the vfs layer
-    virtio_blk::virtio_blk_req* virtio_blk::make_virtio_req(u64 sector, virtio_blk_request_type type, int val)
-    {
-        sglist* sg = new sglist();
-        void* buf = malloc(page_size);
-        memset(buf, val, page_size);
-        sg->add(mmu::virt_to_phys(buf), page_size);
-
-        struct bio* bio = alloc_bio();
-        if (!bio) {
-            virtio_e(fmt("bio_alloc failed"));
-            return nullptr;
-        }
-        bio->bio_data = buf;
-        bio->bio_done = blk_bio_done;
-
-        virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
-        hdr->type = type;
-        hdr->ioprio = 0;
-        hdr->sector = sector;
-
-        //push 'output' buffers to the beginning of the sg list
-        sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
-
-        virtio_blk_res* res = new virtio_blk_res;
-        res->status = 0;
-        sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
-
-        virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
-        return req;
-    }
-
-    void virtio_blk::test() {
-        int i;
-        static bool is_write = true; // keep changing the type every call
-
-        virtio_d(fmt("test virtio blk"));
-        vring* queue = _dev->get_virt_queue(0);
-        virtio_blk_req* req;
-        const int iterations = 100;
-
-        if (is_write) {
-            is_write = false;
-            virtio_d(fmt(" write several requests"));
-            for (i=0;i<iterations;i++) {
-                req = make_virtio_req(i*8, VIRTIO_BLK_T_OUT,i);
-                if (!queue->add_buf(req->payload,2,1,req)) {
-                    break;
-                }
-            }
-
-            virtio_d(fmt(" Let the host know about the %d requests") % i);
-            queue->kick();
-        } else {
-            is_write = true;
-            virtio_d(fmt(" read several requests"));
-            for (i=0;i<iterations;i++) {
-                req = make_virtio_req(i*8, VIRTIO_BLK_T_IN,0);
-                if (!queue->add_buf(req->payload,1,2,req)) {
-                    break;
-                }
-                if (i%2) queue->kick(); // should be out of the loop but I like plenty of irqs for the test
-
-            }
-
-            virtio_d(fmt(" Let the host know about the %d requests") % i);
-            queue->kick();
-        }
-
-        //sched::thread::current()->yield();
-
-        virtio_d(fmt("test virtio blk end"));
     }
 
     void virtio_blk::response_worker() {
