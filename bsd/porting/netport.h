@@ -9,6 +9,15 @@
 #include <sys/types.h>
 #include <bsd/sys/sys/queue.h>
 
+struct malloc_type;
+void    hashdestroy(void *, struct malloc_type *, u_long);
+void    *hashinit(int count, struct malloc_type *type, u_long *hashmask);
+void    *hashinit_flags(int count, struct malloc_type *type,
+    u_long *hashmask, int flags);
+#define HASH_NOWAIT 0x00000001
+#define HASH_WAITOK 0x00000002
+
+
 void domaininit(void *dummy);
 
 #define DECLARE_MODULE(...)

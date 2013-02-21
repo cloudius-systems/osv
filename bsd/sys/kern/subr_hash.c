@@ -34,12 +34,10 @@
  *	@(#)kern_subr.c	8.3 (Berkeley) 1/21/94
  */
 
+#include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
 
 /*
  * General routine to allocate a hash table with control of memory flags.
@@ -61,12 +59,7 @@ hashinit_flags(int elements, struct malloc_type *type, u_long *hashmask,
 		continue;
 	hashsize >>= 1;
 
-	if (flags & HASH_NOWAIT)
-		hashtbl = malloc((u_long)hashsize * sizeof(*hashtbl),
-		    type, M_NOWAIT);
-	else
-		hashtbl = malloc((u_long)hashsize * sizeof(*hashtbl),
-		    type, M_WAITOK);
+	hashtbl = malloc((u_long)hashsize * sizeof(*hashtbl));
 
 	if (hashtbl != NULL) {
 		for (i = 0; i < hashsize; i++)
@@ -83,7 +76,7 @@ void *
 hashinit(int elements, struct malloc_type *type, u_long *hashmask)
 {
 
-	return (hashinit_flags(elements, type, hashmask, HASH_WAITOK));
+	return (hashinit_flags(elements, type, hashmask, 0));
 }
 
 void
@@ -94,7 +87,7 @@ hashdestroy(void *vhashtbl, struct malloc_type *type, u_long hashmask)
 	hashtbl = vhashtbl;
 	for (hp = hashtbl; hp <= &hashtbl[hashmask]; hp++)
 		KASSERT(LIST_EMPTY(hp), ("%s: hash not empty", __func__));
-	free(hashtbl, type);
+	free(hashtbl);
 }
 
 static const int primes[] = { 1, 13, 31, 61, 127, 251, 509, 761, 1021, 1531,
@@ -120,7 +113,7 @@ phashinit(int elements, struct malloc_type *type, u_long *nentries)
 		hashsize = primes[i];
 	}
 	hashsize = primes[i - 1];
-	hashtbl = malloc((u_long)hashsize * sizeof(*hashtbl), type, M_WAITOK);
+	hashtbl = malloc((u_long)hashsize * sizeof(*hashtbl));
 	for (i = 0; i < hashsize; i++)
 		LIST_INIT(&hashtbl[i]);
 	*nentries = hashsize;
