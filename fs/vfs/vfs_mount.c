@@ -45,7 +45,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include <osv/device.h>
-#include "debug.h"
+#include <osv/debug.h>
 #include "vfs.h"
 
 /*

@@ -32,6 +32,7 @@
 #include <osv/file.h>
 #include <osv/mount.h>
 #include <osv/buf.h>
+#include <osv/debug.h>
 
 #include <sys/stat.h>
 
@@ -41,9 +42,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <stdarg.h>
 
-#include "debug.h"
 #include "fatfs.h"
 
 static int fatfs_mount	(mount_t mp, char *dev, int flags, void *data);
