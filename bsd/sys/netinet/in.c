@@ -31,38 +31,27 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_mpath.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/sockio.h>
-#include <sys/malloc.h>
-#include <sys/priv.h>
-#include <sys/socket.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
-#include <sys/proc.h>
-#include <sys/sysctl.h>
-#include <sys/syslog.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/sockio.h>
+#include <bsd/sys/sys/priv.h>
+#include <bsd/sys/sys/socket.h>
 
-#include <net/if.h>
-#include <net/if_var.h>
-#include <net/if_arp.h>
-#include <net/if_dl.h>
-#include <net/if_llatbl.h>
-#include <net/if_types.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/if_arp.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_llatbl.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/in_pcb.h>
-#include <netinet/ip_var.h>
-#include <netinet/igmp_var.h>
-#include <netinet/udp.h>
-#include <netinet/udp_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/ip_var.h>
 
 static int in_mask2len(struct in_addr *);
 static void in_len2mask(struct in_addr *, int);
@@ -316,9 +305,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 	LIST_FOREACH(iap, INADDR_HASH(dst.s_addr), ia_hash) {
 		if (iap->ia_ifp == ifp &&
 		    iap->ia_addr.sin_addr.s_addr == dst.s_addr) {
-			if (td == NULL || prison_check_ip4(td->td_ucred,
-			    &dst) == 0)
-				ia = iap;
+			ia = iap;
 			break;
 		}
 	}
@@ -330,10 +317,6 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			iap = ifatoia(ifa);
 			if (iap->ia_addr.sin_family == AF_INET) {
-				if (td != NULL &&
-				    prison_check_ip4(td->td_ucred,
-				    &iap->ia_addr.sin_addr) != 0)
-					continue;
 				ia = iap;
 				break;
 			}
@@ -381,13 +364,13 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 	case SIOCSIFNETMASK:
 	case SIOCSIFDSTADDR:
 		if (ia == NULL) {
-			ia = (struct in_ifaddr *)
-				malloc(sizeof *ia, M_IFADDR, M_NOWAIT |
-				    M_ZERO);
+			ia = (struct in_ifaddr *)malloc(sizeof *ia);
 			if (ia == NULL) {
 				error = ENOBUFS;
 				goto out;
 			}
+
+			bzero(ia, sizeof(*ia));
 
 			ifa = &ia->ia_ifa;
 			ifa_init(ifa);
@@ -1262,7 +1245,8 @@ in_ifdetach(struct ifnet *ifp)
 {
 
 	in_pcbpurgeif0(&V_ripcbinfo, ifp);
-	in_pcbpurgeif0(&V_udbinfo, ifp);
+	/* FIXME: OSv - un-comment when UDP is enabled */
+	// in_pcbpurgeif0(&V_udbinfo, ifp);
 	in_purgemaddrs(ifp);
 }
 
@@ -1307,13 +1291,14 @@ in_purgemaddrs(struct ifnet *ifp)
 		LIST_REMOVE(inm, inm_link);
 		inm_release_locked(inm);
 	}
-	igmp_ifdetach(ifp);
+	/* FIXME: uncomment when igmp is enabled */
+	// igmp_ifdetach(ifp);
 
 	IN_MULTI_UNLOCK();
 }
 
-#include <net/if_dl.h>
-#include <netinet/if_ether.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/netinet/if_ether.h>
 
 struct in_llentry {
 	struct llentry		base;
@@ -1331,7 +1316,7 @@ in_lltable_free(struct lltable *llt, struct llentry *lle)
 {
 	LLE_WUNLOCK(lle);
 	LLE_LOCK_DESTROY(lle);
-	free(lle, M_LLTABLE);
+	free(lle);
 }
 
 static struct llentry *
@@ -1339,9 +1324,11 @@ in_lltable_new(const struct sockaddr *l3addr, u_int flags)
 {
 	struct in_llentry *lle;
 
-	lle = malloc(sizeof(struct in_llentry), M_LLTABLE, M_DONTWAIT | M_ZERO);
+	lle = malloc(sizeof(struct in_llentry));
 	if (lle == NULL)		/* NB: caller generates msg */
 		return NULL;
+
+	bzero(lle, sizeof(struct in_llentry));
 
 	/*
 	 * For IPv4 this will trigger "arpresolve" to generate
@@ -1570,9 +1557,6 @@ in_lltable_dump(struct lltable *llt, struct sysctl_req *wr)
 			/* skip deleted entries */
 			if ((lle->la_flags & LLE_DELETED) == LLE_DELETED)
 				continue;
-			/* Skip if jailed and not a valid IP of the prison. */
-			if (prison_if(wr->td->td_ucred, L3_ADDR(lle)) != 0)
-				continue;
 			/*
 			 * produce a msg made of:
 			 *  struct rt_msghdr;
@@ -1616,9 +1600,10 @@ in_lltable_dump(struct lltable *llt, struct sysctl_req *wr)
 			if (lle->la_flags & LLE_STATIC)
 				arpc.rtm.rtm_flags |= RTF_STATIC;
 			arpc.rtm.rtm_index = ifp->if_index;
-			error = SYSCTL_OUT(wr, &arpc, sizeof(arpc));
-			if (error)
-				break;
+			/* FIXME OSv: output as a response to sysreq */
+//			error = SYSCTL_OUT(wr, &arpc, sizeof(arpc));
+//			if (error)
+//				break;
 		}
 	}
 	return error;
@@ -1631,7 +1616,8 @@ in_domifattach(struct ifnet *ifp)
 	struct in_ifinfo *ii;
 	struct lltable *llt;
 
-	ii = malloc(sizeof(struct in_ifinfo), M_IFADDR, M_WAITOK|M_ZERO);
+	ii = malloc(sizeof(struct in_ifinfo));
+	bzero(ii, sizeof(struct in_ifinfo));
 
 	llt = lltable_init(ifp, AF_INET);
 	if (llt != NULL) {
@@ -1641,7 +1627,9 @@ in_domifattach(struct ifnet *ifp)
 	}
 	ii->ii_llt = llt;
 
-	ii->ii_igmp = igmp_domifattach(ifp);
+	/* FIXME: OSv - uncomment when igmp is enabled */
+	// ii->ii_igmp = igmp_domifattach(ifp);
+	ii->ii_igmp = NULL;
 
 	return ii;
 }
@@ -1651,7 +1639,8 @@ in_domifdetach(struct ifnet *ifp, void *aux)
 {
 	struct in_ifinfo *ii = (struct in_ifinfo *)aux;
 
-	igmp_domifdetach(ifp);
+	/* FIXME: OSv - uncomment when igmp is enabled */
+	// igmp_domifdetach(ifp);
 	lltable_free(ii->ii_llt);
-	free(ii, M_IFADDR);
+	free(ii);
 }

@@ -33,7 +33,8 @@
 #ifndef _NETINET_IP_VAR_H_
 #define	_NETINET_IP_VAR_H_
 
-#include <sys/queue.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/queue.h>
 
 /*
  * Overlay for ip header used by other protocols (tcp, udp).
@@ -129,7 +130,7 @@ struct	ipstat {
 
 #ifdef _KERNEL
 
-#include <net/vnet.h>
+#include <bsd/sys/net/vnet.h>
 
 /*
  * In-kernel consumers can use these accessor macros directly to update

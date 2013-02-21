@@ -38,17 +38,16 @@
 #ifndef _NETINET_IN_PCB_H_
 #define _NETINET_IN_PCB_H_
 
-#include <sys/queue.h>
-#include <sys/_lock.h>
-#include <sys/_mutex.h>
-#include <sys/_rwlock.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
 
-#ifdef _KERNEL
-#include <sys/lock.h>
-#include <sys/rwlock.h>
-#include <net/vnet.h>
-#include <vm/uma.h>
-#endif
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet6/in6.h>
+
+#include <bsd/sys/sys/queue.h>
+#include <bsd/sys/net/vnet.h>
+#include <bsd/porting/uma_stub.h>
+
 
 #define	in6pcb		inpcb	/* for KAME src sync over BSD*'s */
 #define	in6p_sp		inp_sp	/* for KAME src sync over BSD*'s */
@@ -388,7 +387,7 @@ struct inpcbgroup {
 	 * wildcard list in inpcbinfo.
 	 */
 	struct mtx		 ipg_lock;
-} __aligned(CACHE_LINE_SIZE);
+};
 
 #define INP_LOCK_INIT(inp, d, t) \
 	rw_init_flags(&(inp)->inp_lock, (t), RW_RECURSE |  RW_DUPOK)
@@ -422,12 +421,12 @@ void inp_lock_assert(struct inpcb *);
 void inp_unlock_assert(struct inpcb *);
 #else
 static __inline void
-inp_lock_assert(struct inpcb *inp __unused)
+inp_lock_assert(struct inpcb *inp)
 {
 }
 
 static __inline void
-inp_unlock_assert(struct inpcb *inp __unused)
+inp_unlock_assert(struct inpcb *inp)
 {
 }
 
