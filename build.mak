@@ -128,6 +128,12 @@ bsd += bsd/sys/net/if_dead.o
 bsd += bsd/sys/net/if_clone.o  
 bsd += bsd/sys/net/if_loop.o  
 bsd += bsd/sys/net/if.o  
+bsd += bsd/sys/netinet/in.o
+bsd += bsd/sys/netinet/in_pcb.o
+bsd += bsd/sys/netinet/in_proto.o
+bsd += bsd/sys/netinet/ip_icmp.o
+bsd += bsd/sys/netinet/raw_ip.o
+
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
