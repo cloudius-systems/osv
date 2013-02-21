@@ -9,7 +9,7 @@
 
 int main(int argc, char **argv)
 {
-	int fd;
+    int fd;
     char *wbuf,*rbuf,*origin;
     int i;
     int offset;
@@ -19,15 +19,15 @@ int main(int argc, char **argv)
     wbuf = malloc(BUF_SIZE);
     rbuf = malloc(BUF_SIZE);
     origin = malloc(BUF_SIZE); //preserves the prev content for next boot..
-	
-    fd = open("/dev/vblk0", O_RDWR);
-	if (fd < 0) {
-		perror("open");
-		return 1;
-	}
 
-	for (i=0;i<100; i++) {
-	    offset = i * 512;
+    fd = open("/dev/vblk0", O_RDWR);
+    if (fd < 0) {
+        perror("open");
+        return 1;
+    }
+
+    for (i=0;i<100; i++) {
+        offset = i * 512;
 
         if (pread(fd, origin, BUF_SIZE, offset) != BUF_SIZE) {
             perror("pread, origin");
@@ -55,10 +55,10 @@ int main(int argc, char **argv)
             return 1;
         }
 
-	}
+    }
 
-	fprintf(stdout, "vblk test passed\n");
+    fprintf(stdout, "vblk test passed\n");
 
-	close(fd);
-	return 0;
+    close(fd);
+    return 0;
 }
