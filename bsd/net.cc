@@ -2,6 +2,7 @@
 
 extern "C" {
     #include <bsd/porting/netport.h>
+    #include <bsd/sys/sys/libkern.h>
     #include <bsd/sys/sys/eventhandler.h>
     #include <bsd/sys/sys/mbuf.h>
     #include <bsd/sys/net/netisr.h>
@@ -15,6 +16,7 @@ extern "C" {
 void net_init(void)
 {
     debug("Initializing network stack...");
+    arc4_init();
     eventhandler_init(NULL);
     mbuf_init(NULL);
     netisr_init(NULL);

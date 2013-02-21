@@ -9,16 +9,15 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
+
+#include <bsd/porting/netport.h>
+#include <bsd/porting/sync_stub.h>
 
 #include <sys/types.h>
-#include <sys/param.h>
-#include <sys/kernel.h>
-#include <sys/random.h>
-#include <sys/libkern.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
 #include <sys/time.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/libkern.h>
 
 #define	ARC4_RESEED_BYTES 65536
 #define	ARC4_RESEED_SECONDS 300
@@ -31,6 +30,16 @@ static time_t arc4_t_reseed;
 static struct mtx arc4_mtx;
 
 static u_int8_t arc4_randbyte(void);
+
+uint8_t read_random_gen = 0;
+static int read_random(uint8_t* buf, int count)
+{
+    for (int i=0; i<count; i++) {
+        buf[i] = read_random_gen++;
+    }
+
+    return (count);
+}
 
 static __inline void
 arc4_swap(u_int8_t *a, u_int8_t *b)
@@ -57,7 +66,7 @@ arc4_randomstir (void)
 	 * device is not loaded -- MarkM.
 	 */
 	r = read_random(key, ARC4_KEYBYTES);
-	getmicrouptime(&tv_now);
+	getmicrotime(&tv_now);
 	mtx_lock(&arc4_mtx);
 	/* If r == 0 || -1, just use what was on the stack. */
 	if (r > 0) {
@@ -88,8 +97,7 @@ arc4_randomstir (void)
 /*
  * Initialize our S-box to its beginning defaults.
  */
-static void
-arc4_init(void)
+void arc4_init(void)
 {
 	int n;
 
@@ -129,7 +137,7 @@ arc4rand(void *ptr, u_int len, int reseed)
 	u_char *p;
 	struct timeval tv;
 
-	getmicrouptime(&tv);
+	getmicrotime(&tv);
 	if (reseed || 
 	   (arc4_numruns > ARC4_RESEED_BYTES) ||
 	   (tv.tv_sec > arc4_t_reseed))
