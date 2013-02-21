@@ -181,6 +181,9 @@ void route_init(void)
 		if (dom->dom_maxrtkey > max_keylen)
 			max_keylen = dom->dom_maxrtkey;
 
+	/* FIXME: Hack this for now, we don't have domains yet... */
+	max_keylen = sizeof(struct sockaddr_in);
+
 	rn_init(max_keylen);	/* init all zeroes, all ones, mask table */
 }
 
@@ -188,7 +191,7 @@ void route_init(void)
 SYSINIT(route_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, route_init, 0);
 #endif
 
-void vnet_route_init(const void *__unused)
+void vnet_route_init(void)
 {
 	struct domain *dom;
 	struct radix_node_head **rnh;

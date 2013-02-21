@@ -37,7 +37,7 @@
 #include <osv/mutex.h>
 
 void route_init(void);
-void vnet_route_init(const void *__unused);
+void vnet_route_init(void);
 
 /*
  * Kernel resident routing tables.

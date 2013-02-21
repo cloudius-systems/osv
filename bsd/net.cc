@@ -8,6 +8,7 @@ extern "C" {
     #include <bsd/sys/net/if.h>
     #include <bsd/sys/netinet/if_ether.h>
     #include <bsd/sys/net/ethernet.h>
+    #include <bsd/sys/net/route.h>
     #include <bsd/machine/param.h>
 }
 
@@ -22,6 +23,7 @@ void net_init(void)
     if_init(NULL);
     vnet_if_init(NULL);
     domaininit(NULL);
-    // if_attachdomain(NULL);
+    route_init();
+    vnet_route_init();
     debug("Done!");
 }

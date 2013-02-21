@@ -65,9 +65,9 @@ int create_if(void)
     return (0);
 }
 
-void destroy_id(void)
+void destroy_if(void)
 {
-    /* ether_ifdetach(pifp); */
+    ether_ifdetach(pifp);
     if_free(pifp);
 }
 
@@ -104,7 +104,7 @@ int main(void)
     if_attachdomain(NULL);
 
     // set_address();
-    destroy_id();
+    destroy_if();
 
     TLOG("BSD Net Driver Test\n");
     return (0);
