@@ -4,6 +4,9 @@
 #ifndef UMA_STUB_H
 #define UMA_STUB_H
 
+
+#define OSV_UMA_MAX_ZONES   (64)
+
 /*
  * Header we add to the end of each item
  */
@@ -210,6 +213,7 @@ uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
             uma_dtor dtor, uma_init uminit, uma_fini fini,
             int align, u_int32_t flags);
 
+void uma_zdestroy(uma_zone_t zone);
 
 /*
  * Definitions for uma_zcreate flags

@@ -6,7 +6,7 @@
 
 /* Global zone structures */
 int uma_zone_num = 0;
-struct uma_zone zones[16] = {0};
+struct uma_zone zones[OSV_UMA_MAX_ZONES] = {0};
 
 /* Ref counts for shared data, save a ref-count per page.
  * a hack until we have a slab allocator */
@@ -104,6 +104,7 @@ uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
 uma_zone_t uma_zsecond_create(char *name, uma_ctor ctor, uma_dtor dtor,
             uma_init zinit, uma_fini zfini, uma_zone_t master)
 {
+    assert(uma_zone_num < OSV_UMA_MAX_ZONES);
     uma_zone_t z = &zones[uma_zone_num++];
 
     z->uz_name = name;
@@ -136,4 +137,9 @@ int uma_zone_exhausted_nolock(uma_zone_t zone)
 u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item)
 {
     return &(UMA_ITEM_HDR(zone, item))->refcnt;
+}
+
+void uma_zdestroy(uma_zone_t zone)
+{
+    /* Do nothing */
 }
