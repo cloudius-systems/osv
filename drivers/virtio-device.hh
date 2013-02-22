@@ -146,8 +146,6 @@ namespace virtio {
         void reset_host_side();
         void free_queues(void);
 
-        void register_callback(std::function<void ()> func) {_queues[0]->register_callback(func);};
-
         bool get_indirect_buf_cap() {return _cap_indirect_buf;}
         void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
 

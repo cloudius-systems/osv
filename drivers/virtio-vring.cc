@@ -42,17 +42,6 @@ namespace virtio {
         _used_guest_head = 0;
         _avail_added_since_kick = 0;
         _avail_count = num;
-
-        msix_isr_list* isrs = new msix_isr_list;
-        _callback = nullptr;
-        thread* isr = new thread([this] { if (_callback) _callback(); });
-
-        isrs->insert(std::make_pair(_q_index, isr));
-        interrupt_manager::instance()->easy_register(_dev, *isrs);
-
-        // Setup queue_id:entry_id 1:1 correlation...
-        _dev->virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _q_index);
-        _dev->virtio_conf_writel(VIRTIO_MSI_QUEUE_VECTOR, _q_index);
     }
 
     vring::~vring()

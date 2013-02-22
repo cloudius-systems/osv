@@ -109,10 +109,13 @@ struct driver virtio_blk_driver = {
         
         read_config();
 
+        //register the single irq callback for the block
+        msix_isr_list* isrs = new msix_isr_list;
+        thread* isr = new thread([this] { this->response_worker(); });
+        isrs->insert(std::make_pair(0, isr));
+        interrupt_manager::instance()->easy_register(_dev, *isrs);
+
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
-
-        _dev->register_callback([this] { this->response_worker();});
-
 
         struct virtio_blk_priv* prv;
         struct device *dev;
