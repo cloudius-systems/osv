@@ -101,7 +101,13 @@ namespace virtio {
 
             // Init a new queue
             vring * queue = new vring(this, qsize, _num_queues);
-            _queues[_num_queues++] = queue;
+            _queues[_num_queues] = queue;
+
+            // Setup queue_id:entry_id 1:1 correlation...
+            virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _num_queues);
+            virtio_conf_writel(VIRTIO_MSI_QUEUE_VECTOR, _num_queues);
+
+            _num_queues++;
 
             // Tell host about pfn
             // TODO: Yak, this is a bug in the design, on large memory we'll have PFNs > 32 bit

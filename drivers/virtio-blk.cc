@@ -63,6 +63,7 @@ virtio_blk_write(struct device *dev, struct uio *uio, int ioflags)
     struct virtio_blk_priv *prv =
         reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
 
+    if (prv->drv->is_readonly()) return EROFS;
     if (uio->uio_offset + uio->uio_resid > prv->drv->size())
         return EIO;
 
@@ -86,7 +87,7 @@ struct driver virtio_blk_driver = {
 };
 
     virtio_blk::virtio_blk(unsigned dev_idx)
-        : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx)
+        : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx), _ro(false)
     {
         std::stringstream ss;
         ss << "virtio-blk" << dev_idx;
@@ -108,10 +109,14 @@ struct driver virtio_blk_driver = {
         
         read_config();
 
+        //register the single irq callback for the block
+        msix_isr_list* isrs = new msix_isr_list;
+        thread* isr = new thread([this] { this->response_worker(); });
+        isr->start();
+        isrs->insert(std::make_pair(0, isr));
+        interrupt_manager::instance()->easy_register(_dev, *isrs);
+
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
-
-        _dev->register_callback([this] { this->response_worker();});
-
 
         struct virtio_blk_priv* prv;
         struct device *dev;
@@ -155,6 +160,10 @@ struct driver virtio_blk_driver = {
         }
         if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
             virtio_i(fmt("The write cache enable of the device is %d") % (u32)_config.wce);
+        if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
+            set_readonly();
+            virtio_i(fmt("Device is read only"));
+        }
 
         return true;
     }
@@ -174,7 +183,7 @@ struct driver virtio_blk_driver = {
 
             int i = 0;
 
-            while((req = reinterpret_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
+            while((req = static_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
                 virtio_d(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
 
                 virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
@@ -187,10 +196,7 @@ struct driver virtio_blk_driver = {
                     virtio_d(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
 
                 }
-                if (req->bio != nullptr) {
-                    biodone(req->bio);
-                    req->bio = nullptr;
-                }
+                biodone(req->bio);
 
                 delete req;
             }
@@ -204,7 +210,6 @@ struct driver virtio_blk_driver = {
         if (req_header) delete reinterpret_cast<virtio_blk_outhdr*>(req_header);
         if (payload) delete payload;
         if (status) delete status;
-        if (bio) delete bio;
     }
 
     int virtio_blk::size() {
@@ -233,6 +238,12 @@ struct driver virtio_blk_driver = {
             buf_count = &in;
             break;
         case BIO_WRITE:
+            if (is_readonly()) {
+                virtio_e("Error: block device is read only");
+                bio->bio_flags |= BIO_ERROR | BIO_DONE;
+                biodone(bio);
+                return EROFS;
+            }
             type = VIRTIO_BLK_T_OUT;
             buf_count = &out;
             break;

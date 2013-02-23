@@ -2,6 +2,8 @@
 #define _DEBUG_H 1
 
 #include <sys/cdefs.h>
+#include <sys/types.h>
+#include <stdarg.h>
 
 __BEGIN_DECLS
 void debug(const char *msg);

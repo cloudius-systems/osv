@@ -123,8 +123,6 @@ class virtio_device;
         bool used_ring_not_empty();
         bool avail_ring_not_empty();
         bool kick();
-        void register_callback(std::function<void ()> func) {_callback = func;};
-
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
         // Assuming a given event_idx value from the other size, if
@@ -159,8 +157,6 @@ class virtio_device;
         vring_used *_used;
         // cookies to store access to the upper layer pointers
         void** _cookie;
-        //callback function for upper layer virtio queues
-        std::function<void ()> _callback;
         //protects parallel get_bug /add_buf access, mainly the _avail_head variable
         mutex _lock;
     };

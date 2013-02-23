@@ -2,6 +2,8 @@
  * A printf variant that prints directly to the kernel console.
  */
 
+#include <osv/debug.h>
+
 #include "../libc/stdio/stdio_impl.h"
 #include <assert.h>
 #include <limits.h>
@@ -9,7 +11,6 @@
 #include <errno.h>
 #include <stdint.h>
 #include <sys/uio.h>
-#include "debug.h"
 
 static size_t wrap_write(FILE *f, const unsigned char *buf, size_t len)
 {

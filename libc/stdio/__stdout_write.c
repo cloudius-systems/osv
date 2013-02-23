@@ -1,7 +1,7 @@
 #include "stdio_impl.h"
 #include <termios.h>
 #include <sys/ioctl.h>
-#include "debug.h"
+#include <osv/debug.h>
 
 extern int vfs_initialized;
 
