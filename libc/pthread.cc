@@ -55,6 +55,7 @@ namespace pthread_private {
                 _retval = start(arg);
             }, attributes())
     {
+        _thread.start();
     }
 
     sched::thread::attr pthread::attributes()

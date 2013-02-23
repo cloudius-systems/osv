@@ -145,6 +145,7 @@ public:
     explicit thread(std::function<void ()> func, attr attributes = attr(),
             bool main = false);
     ~thread();
+    void start();
     template <class Pred>
     static void wait_until(Pred pred);
     void wake();
@@ -174,6 +175,7 @@ private:
     thread_control_block* _tcb;
     enum class status {
         invalid,
+        unstarted,
         waiting,
         running,
         queued,

@@ -186,7 +186,7 @@ unsigned long thread::_s_idgen;
 
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
-    , _status(status::invalid)
+    , _status(status::unstarted)
     , _attr(attr)
     , _timers_need_reload()
     , _joiner()
@@ -198,11 +198,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     setup_tcb();
     init_stack();
     if (!main) {
-        _status.store(status::queued);
         _cpu = current()->tcpu(); // inherit creator's cpu
-        with_lock(irq_lock, [this] {
-            _cpu->runqueue.push_back(*this);
-        });
     } else {
         _status.store(status::running);
     }
@@ -214,6 +210,13 @@ thread::~thread()
         thread_list.erase(thread_list.iterator_to(*this));
     });
     debug("thread dtor");
+}
+
+void thread::start()
+{
+    assert(_status == status::unstarted);
+    _status.store(status::waiting);
+    wake();
 }
 
 void thread::prepare_wait()

@@ -79,6 +79,8 @@ public:
         t.main = sched::thread::current();
         sched::thread* t1 = new sched::thread([&] { alloc_thread(t); });
         sched::thread* t2 = new sched::thread([&] { free_thread(t); });
+        t1->start();
+        t2->start();
 
         debug("test alloc, going to sleep for 1 sec while threads are running");
         timespec ts = {};

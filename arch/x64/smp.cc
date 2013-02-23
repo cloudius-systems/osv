@@ -90,7 +90,7 @@ void smp_launch()
             sched::thread::current()->_cpu = c;
             sched::thread::attr attr;
             attr.pinned = true;
-            new sched::thread([c] { c->load_balance(); }, attr);
+            (new sched::thread([c] { c->load_balance(); }, attr))->start();
             continue;
         }
         sched::thread::attr attr;

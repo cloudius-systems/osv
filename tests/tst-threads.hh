@@ -51,6 +51,8 @@ public:
         tt.t1 = new sched::thread([&] { test_thread_1(tt); });
         tt.t2 = new sched::thread([&] { test_thread_2(tt); });
         tt.test_ctr = 0;
+        tt.t1->start();
+        tt.t2->start();
         sched::thread::wait_until([&] { return tt.test_ctr >= 1000; });
         tt.t1->join();
         tt.t2->join();
