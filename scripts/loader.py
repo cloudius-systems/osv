@@ -249,20 +249,14 @@ class osv_info_threads(gdb.Command):
                 cpu = t['_cpu']
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
-                status = 'rdy '
-                if t['_status']['_M_i'] == status_enum.waiting:
-                    status = 'wait'
-                elif t['_status']['_M_i'] == status_enum.waking:
-                    status = 'wake'
-                if state.cpu_from_thread(t):
-                    status = 'run '
+                status = str(t['_status']['_M_i']).replace('sched::thread::', '')
                 function = '??'
                 if fr.function():
                     function = fr.function().name
                 fname = '??'
                 if sal.symtab:
                     fname = sal.symtab.filename
-                gdb.write('0x%x cpu%s %s %s at %s:%s\n' %
+                gdb.write('0x%x cpu%s %-10s %s at %s:%s\n' %
                           (ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
