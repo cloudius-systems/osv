@@ -106,6 +106,7 @@ arch/x64/boot32.o: loader.elf
 bsd  = bsd/net.o  
 bsd += bsd/machine/in_cksum.o
 bsd += bsd/sys/libkern/arc4random.o
+bsd += bsd/sys/libkern/random.o
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
