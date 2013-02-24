@@ -30,40 +30,35 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_ipstealth.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/mbuf.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
 #include <sys/time.h>
-#include <sys/kernel.h>
-#include <sys/syslog.h>
-#include <sys/sysctl.h>
 
-#include <net/if.h>
-#include <net/if_types.h>
-#include <net/if_var.h>
-#include <net/if_dl.h>
-#include <net/route.h>
-#include <net/netisr.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/netisr.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
-#include <netinet/in_var.h>
-#include <netinet/ip.h>
-#include <netinet/in_pcb.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_options.h>
-#include <netinet/ip_icmp.h>
-#include <machine/in_cksum.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_options.h>
+#include <bsd/sys/netinet/ip_icmp.h>
+#include <bsd/machine/in_cksum.h>
 
-#include <sys/socketvar.h>
+#include <bsd/sys/sys/socketvar.h>
 
 static int	ip_dosourceroute = 0;
 SYSCTL_INT(_net_inet_ip, IPCTL_SOURCEROUTE, sourceroute, CTLFLAG_RW,
