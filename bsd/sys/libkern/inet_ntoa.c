@@ -28,12 +28,11 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
-#include <sys/systm.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/param.h>
 
-#include <netinet/in.h>
+#include <bsd/sys/netinet/in.h>
 
 char *
 inet_ntoa(struct in_addr ina)

@@ -25,14 +25,13 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
-#include <sys/ctype.h>
-#include <sys/limits.h>
-#include <sys/systm.h>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/limits.h>
+#include <bsd/sys/sys/ctype.h>
 
-#include <netinet/in.h>
+#include <bsd/sys/netinet/in.h>
 
 int
 inet_aton(const char *cp, struct in_addr *addr)
