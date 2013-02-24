@@ -15,6 +15,9 @@ extern "C" {
     #include <bsd/machine/param.h>
 }
 
+/* Generation of ip ids */
+void ip_initid(void);
+
 void net_init(void)
 {
     debug("Initializing network stack...");
@@ -26,6 +29,7 @@ void net_init(void)
     ether_init(NULL);
     if_init(NULL);
     vnet_if_init(NULL);
+    ip_initid();
     ipport_tick_init(NULL);
     domaininit(NULL);
     route_init();
