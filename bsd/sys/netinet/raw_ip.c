@@ -31,49 +31,40 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_ipsec.h"
+#include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
+#include <bsd/porting/rwlock.h>
 
-#include <sys/param.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/priv.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/rwlock.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/priv.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
+#include <bsd/sys/sys/sockbuf.h>
+
+#if 0
+
 #include <sys/signalvar.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sx.h>
-#include <sys/sysctl.h>
-#include <sys/systm.h>
+#endif
 
-#include <vm/uma.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <net/if.h>
-#include <net/route.h>
-#include <net/vnet.h>
-
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
-#include <netinet/in_pcb.h>
-#include <netinet/in_var.h>
-#include <netinet/if_ether.h>
-#include <netinet/ip.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_mroute.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/if_ether.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_mroute.h>
 
 #ifdef IPSEC
 #include <netipsec/ipsec.h>
 #endif /*IPSEC*/
-
-#include <security/mac/mac_framework.h>
 
 VNET_DEFINE(int, ip_defttl) = IPDEFTTL;
 SYSCTL_VNET_INT(_net_inet_ip, IPCTL_DEFTTL, ttl, CTLFLAG_RW,
@@ -190,8 +181,8 @@ rip_delhash(struct inpcb *inp)
 static void
 rip_zone_change(void *tag)
 {
-
-	uma_zone_set_max(V_ripcbinfo.ipi_zone, maxsockets);
+    /* FIXME: OSv */
+	// uma_zone_set_max(V_ripcbinfo.ipi_zone, maxsockets);
 }
 
 static int
@@ -305,14 +296,6 @@ rip_input(struct mbuf *m, int off)
 			continue;
 		if (inp->inp_faddr.s_addr != ip->ip_src.s_addr)
 			continue;
-		if (jailed_without_vnet(inp->inp_cred)) {
-			/*
-			 * XXX: If faddr was bound to multicast group,
-			 * jailed raw socket will drop datagram.
-			 */
-			if (prison_check_ip4(inp->inp_cred, &ip->ip_dst) != 0)
-				continue;
-		}
 		if (last != NULL) {
 			struct mbuf *n;
 
@@ -339,16 +322,6 @@ rip_input(struct mbuf *m, int off)
 		if (!in_nullhost(inp->inp_faddr) &&
 		    !in_hosteq(inp->inp_faddr, ip->ip_src))
 			continue;
-		if (jailed_without_vnet(inp->inp_cred)) {
-			/*
-			 * Allow raw socket in jail to receive multicast;
-			 * assume process had PRIV_NETINET_RAW at attach,
-			 * and fall through into normal filter path if so.
-			 */
-			if (!IN_MULTICAST(ntohl(ip->ip_dst.s_addr)) &&
-			    prison_check_ip4(inp->inp_cred, &ip->ip_dst) != 0)
-				continue;
-		}
 		/*
 		 * If this raw socket has multicast state, and we
 		 * have received a multicast, check if this socket
@@ -451,25 +424,6 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		ip->ip_p = inp->inp_ip_p;
 		ip->ip_len = m->m_pkthdr.len;
 		ip->ip_src = inp->inp_laddr;
-		if (jailed(inp->inp_cred)) {
-			/*
-			 * prison_local_ip4() would be good enough but would
-			 * let a source of INADDR_ANY pass, which we do not
-			 * want to see from jails. We do not go through the
-			 * pain of in_pcbladdr() for raw sockets.
-			 */
-			if (ip->ip_src.s_addr == INADDR_ANY)
-				error = prison_get_ip4(inp->inp_cred,
-				    &ip->ip_src);
-			else
-				error = prison_local_ip4(inp->inp_cred,
-				    &ip->ip_src);
-			if (error != 0) {
-				INP_RUNLOCK(inp);
-				m_freem(m);
-				return (error);
-			}
-		}
 		ip->ip_dst.s_addr = dst;
 		ip->ip_ttl = inp->inp_ip_ttl;
 	} else {
@@ -479,12 +433,6 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		}
 		INP_RLOCK(inp);
 		ip = mtod(m, struct ip *);
-		error = prison_check_ip4(inp->inp_cred, &ip->ip_src);
-		if (error != 0) {
-			INP_RUNLOCK(inp);
-			m_freem(m);
-			return (error);
-		}
 
 		/*
 		 * Don't allow both user specified and setsockopt options,
@@ -595,7 +543,7 @@ rip_ctloutput(struct socket *so, struct sockopt *sopt)
 		case MRT_API_CONFIG:
 		case MRT_ADD_BW_UPCALL:
 		case MRT_DEL_BW_UPCALL:
-			error = priv_check(curthread, PRIV_NETINET_MROUTE);
+			error = priv_check(NULL, PRIV_NETINET_MROUTE);
 			if (error != 0)
 				return (error);
 			error = ip_mrouter_get ? ip_mrouter_get(so, sopt) :
@@ -649,14 +597,14 @@ rip_ctloutput(struct socket *so, struct sockopt *sopt)
 			break ;
 
 		case IP_RSVP_ON:
-			error = priv_check(curthread, PRIV_NETINET_MROUTE);
+			error = priv_check(NULL, PRIV_NETINET_MROUTE);
 			if (error != 0)
 				return (error);
 			error = ip_rsvp_init(so);
 			break;
 
 		case IP_RSVP_OFF:
-			error = priv_check(curthread, PRIV_NETINET_MROUTE);
+			error = priv_check(NULL, PRIV_NETINET_MROUTE);
 			if (error != 0)
 				return (error);
 			error = ip_rsvp_done();
@@ -664,7 +612,7 @@ rip_ctloutput(struct socket *so, struct sockopt *sopt)
 
 		case IP_RSVP_VIF_ON:
 		case IP_RSVP_VIF_OFF:
-			error = priv_check(curthread, PRIV_NETINET_MROUTE);
+			error = priv_check(NULL, PRIV_NETINET_MROUTE);
 			if (error != 0)
 				return (error);
 			error = ip_rsvp_vif ?
@@ -683,7 +631,7 @@ rip_ctloutput(struct socket *so, struct sockopt *sopt)
 		case MRT_API_CONFIG:
 		case MRT_ADD_BW_UPCALL:
 		case MRT_DEL_BW_UPCALL:
-			error = priv_check(curthread, PRIV_NETINET_MROUTE);
+			error = priv_check(NULL, PRIV_NETINET_MROUTE);
 			if (error != 0)
 				return (error);
 			error = ip_mrouter_set ? ip_mrouter_set(so, sopt) :
@@ -895,14 +843,9 @@ rip_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 {
 	struct sockaddr_in *addr = (struct sockaddr_in *)nam;
 	struct inpcb *inp;
-	int error;
 
 	if (nam->sa_len != sizeof(*addr))
 		return (EINVAL);
-
-	error = prison_check_ip4(td->td_ucred, &addr->sin_addr);
-	if (error != 0)
-		return (error);
 
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("rip_bind: inp == NULL"));
@@ -995,6 +938,7 @@ rip_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 }
 #endif /* INET */
 
+#if 0
 static int
 rip_pcblist(SYSCTL_HANDLER_ARGS)
 {
@@ -1033,7 +977,7 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 	if (error)
 		return (error);
 
-	inp_list = malloc(n * sizeof *inp_list, M_TEMP, M_WAITOK);
+	inp_list = malloc(n * sizeof *inp_list);
 	if (inp_list == 0)
 		return (ENOMEM);
 
@@ -1092,13 +1036,14 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 		INP_INFO_RUNLOCK(&V_ripcbinfo);
 		error = SYSCTL_OUT(req, &xig, sizeof xig);
 	}
-	free(inp_list, M_TEMP);
+	free(inp_list);
 	return (error);
 }
 
 SYSCTL_PROC(_net_inet_raw, OID_AUTO/*XXX*/, pcblist,
     CTLTYPE_OPAQUE | CTLFLAG_RD, NULL, 0,
     rip_pcblist, "S,xinpcb", "List of active raw IP sockets");
+#endif
 
 #ifdef INET
 struct pr_usrreqs rip_usrreqs = {
