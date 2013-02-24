@@ -46,6 +46,7 @@ void domaininit(void *dummy);
 #define devctl_notify(...) do{}while(0)
 
 void getmicrotime(struct timeval *tvp);
+int tvtohz(struct timeval *tv);
 
 /* Defines how many ticks are in 1 second (nanoseconds) */
 #define hz (1000000000L)

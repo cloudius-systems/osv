@@ -247,3 +247,8 @@ int ratecheck(struct timeval *lasttime, const struct timeval *mininterval)
 
     return (rv);
 }
+
+int tvtohz(struct timeval *tv)
+{
+    return (tv->tv_sec*hz + tv->tv_usec);
+}

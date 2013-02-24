@@ -28,26 +28,26 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/sysctl.h>
-#include <sys/socket.h>
-#include <sys/mbuf.h>
-#include <sys/syslog.h>
-#include <sys/callout.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/callout.h>
+#include <bsd/porting/netport.h>
 
-#include <net/if.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/libkern.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/ip_var.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/mbuf.h>
+
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
+
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_icmp.h>
+#include <bsd/sys/netinet/ip_var.h>
 
 extern int	in_inithead(void **head, int off);
 #ifdef VIMAGE
