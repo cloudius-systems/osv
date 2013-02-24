@@ -52,9 +52,10 @@
 #include <bsd/sys/netinet/ip.h>
 #include <bsd/sys/netinet/ip_icmp.h>
 #include <bsd/sys/netinet/ip_var.h>
-#if 0
-#include <netinet/ip_options.h>
 #include <bsd/sys/netinet/tcp.h>
+#include <bsd/sys/netinet/ip_options.h>
+
+#if 0
 #include <netinet/tcp_var.h>
 #include <netinet/tcpip.h>
 #endif
@@ -124,13 +125,11 @@ SYSCTL_VNET_INT(_net_inet_icmp, OID_AUTO, reply_from_interface, CTLFLAG_RW,
 	&VNET_NAME(icmp_rfi), 0,
 	"ICMP reply from incoming interface for non-local packets");
 
-#if 0
 static VNET_DEFINE(int, icmp_quotelen) = 8;
 #define	V_icmp_quotelen			VNET(icmp_quotelen)
 SYSCTL_VNET_INT(_net_inet_icmp, OID_AUTO, quotelen, CTLFLAG_RW,
 	&VNET_NAME(icmp_quotelen), 0,
 	"Number of bytes from original packet to quote in ICMP reply");
-#endif
 
 /*
  * ICMP broadcast echo sysctl
@@ -201,8 +200,6 @@ kmod_icmpstat_inc(int statnum)
 	(*((u_long *)&V_icmpstat + statnum))++;
 }
 
-/* FIXME: OSv - this is still unsupported */
-#if 0
 /*
  * Generate an error packet of type error
  * in response to bad packet ip.
@@ -351,7 +348,6 @@ stdreply:	icmpelen = max(8, min(V_icmp_quotelen, oip->ip_len - oiphlen));
 freeit:
 	m_freem(n);
 }
-#endif
 
 /*
  * Process a received ICMP message.
