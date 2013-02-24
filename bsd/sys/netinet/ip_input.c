@@ -29,57 +29,41 @@
  *	@(#)ip_input.c	8.2 (Berkeley) 1/4/94
  */
 
+#include <bsd/porting/netport.h>
+
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_bootp.h"
-#include "opt_ipfw.h"
-#include "opt_ipstealth.h"
-#include "opt_ipsec.h"
-#include "opt_route.h"
-
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/mbuf.h>
-#include <sys/malloc.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 #include <sys/time.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/rwlock.h>
-#include <sys/syslog.h>
-#include <sys/sysctl.h>
 
-#include <net/pfil.h>
-#include <net/if.h>
-#include <net/if_types.h>
-#include <net/if_var.h>
-#include <net/if_dl.h>
-#include <net/route.h>
-#include <net/netisr.h>
-#include <net/vnet.h>
-#include <net/flowtable.h>
+#include <bsd/sys/net/pfil.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/netisr.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
-#include <netinet/in_var.h>
-#include <netinet/ip.h>
-#include <netinet/in_pcb.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_fw.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/ip_options.h>
-#include <machine/in_cksum.h>
-#include <netinet/ip_carp.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_icmp.h>
+#include <bsd/sys/netinet/ip_options.h>
+#include <bsd/machine/in_cksum.h>
 #ifdef IPSEC
 #include <netinet/ip_ipsec.h>
 #endif /* IPSEC */
 
-#include <sys/socketvar.h>
 
-#include <security/mac/mac_framework.h>
 
 #ifdef CTASSERT
 CTASSERT(sizeof(struct ip) == 20);
@@ -233,6 +217,7 @@ kmod_ipstat_dec(int statnum)
 	(*((u_long *)&V_ipstat + statnum))--;
 }
 
+#if 0
 static int
 sysctl_netinet_intr_queue_maxlen(SYSCTL_HANDLER_ARGS)
 {
@@ -270,6 +255,7 @@ sysctl_netinet_intr_queue_drops(SYSCTL_HANDLER_ARGS)
 SYSCTL_PROC(_net_inet_ip, IPCTL_INTRQDROPS, intr_queue_drops,
     CTLTYPE_INT|CTLFLAG_RD, 0, 0, sysctl_netinet_intr_queue_drops, "I",
     "Number of packets dropped from the IP input queue");
+#endif
 
 /*
  * IP initialization: fill in IP protocol switch table.
@@ -279,12 +265,15 @@ void
 ip_init(void)
 {
 	struct protosw *pr;
+	struct timeval tv;
 	int i;
 
-	V_ip_id = time_second & 0xffff;
+	getmicrotime(&tv);
+
+	V_ip_id = tv.tv_sec & 0xffff;
 
 	TAILQ_INIT(&V_in_ifaddrhead);
-	V_in_ifaddrhashtbl = hashinit(INADDR_NHASH, M_IFADDR, &V_in_ifaddrhmask);
+	V_in_ifaddrhashtbl = hashinit(INADDR_NHASH, 0, &V_in_ifaddrhmask);
 
 	/* Initialize IP reassembly queue. */
 	for (i = 0; i < IPREASS_NHASH; i++)
@@ -801,6 +790,7 @@ ipq_zone_change(void *tag)
 	}
 }
 
+#if 0
 static int
 sysctl_maxnipq(SYSCTL_HANDLER_ARGS)
 {
@@ -825,6 +815,7 @@ sysctl_maxnipq(SYSCTL_HANDLER_ARGS)
 SYSCTL_PROC(_net_inet_ip, OID_AUTO, maxfragpackets, CTLTYPE_INT|CTLFLAG_RW,
     NULL, 0, sysctl_maxnipq, "I",
     "Maximum number of IPv4 fragment reassembly queue entries");
+#endif
 
 /*
  * Take incoming datagram fragment and try to reassemble it into
@@ -1110,10 +1101,6 @@ found:
 	 */
 	m->m_pkthdr.csum_data =
 	    (m->m_pkthdr.csum_data & 0xffff) + (m->m_pkthdr.csum_data >> 16);
-#ifdef MAC
-	mac_ipq_reassemble(fp, m);
-	mac_ipq_destroy(fp);
-#endif
 
 	/*
 	 * Create header for new ip packet by modifying header of first
@@ -1599,8 +1586,8 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 {
 
 	if (inp->inp_socket->so_options & (SO_BINTIME | SO_TIMESTAMP)) {
-		struct bintime bt;
-
+#if 0
+        struct bintime bt;
 		bintime(&bt);
 		if (inp->inp_socket->so_options & SO_BINTIME) {
 			*mp = sbcreatecontrol((caddr_t) &bt, sizeof(bt),
@@ -1617,9 +1604,23 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 			if (*mp)
 				mp = &(*mp)->m_next;
 		}
+#else
+        /* FIXME: Osv - we don't support bintime just yet,
+         * so disable SO_BINTIME */
+
+		if (inp->inp_socket->so_options & SO_TIMESTAMP) {
+            struct timeval tv;
+
+            getmicrotime(&tv);
+            *mp = sbcreatecontrol((caddr_t) &tv, sizeof(tv),
+                SCM_TIMESTAMP, SOL_SOCKET);
+            if (*mp)
+                mp = &(*mp)->m_next;
+        }
+#endif
 	}
 	if (inp->inp_flags & INP_RECVDSTADDR) {
-		*mp = sbcreatecontrol((caddr_t) &ip->ip_dst,
+		*mp = (struct mbuf*)sbcreatecontrol((caddr_t) &ip->ip_dst,
 		    sizeof(struct in_addr), IP_RECVDSTADDR, IPPROTO_IP);
 		if (*mp)
 			mp = &(*mp)->m_next;
