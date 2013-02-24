@@ -136,6 +136,7 @@ bsd += bsd/sys/net/pfil.o
 bsd += bsd/sys/netinet/in.o
 bsd += bsd/sys/netinet/in_pcb.o
 bsd += bsd/sys/netinet/in_proto.o
+bsd += bsd/sys/netinet/ip_id.o
 bsd += bsd/sys/netinet/ip_icmp.o
 bsd += bsd/sys/netinet/ip_input.o
 bsd += bsd/sys/netinet/ip_output.o
