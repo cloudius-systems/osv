@@ -33,6 +33,8 @@
 #ifndef _SYS_PROTOSW_H_
 #define _SYS_PROTOSW_H_
 
+#include <bsd/porting/netport.h>
+
 /* Forward declare these structures referenced from prototypes below. */
 struct mbuf;
 struct thread;

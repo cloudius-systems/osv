@@ -62,6 +62,7 @@ void getmicrotime(struct timeval *tvp);
 #define SYSCTL_OPAQUE(...)
 #define SYSCTL_STRING(...)
 #define SYSCTL_STRUCT(...)
+#define SYSCTL_OID(...)
 #define TUNABLE_INT(...)
 
 #define __NO_STRICT_ALIGNMENT

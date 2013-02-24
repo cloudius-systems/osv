@@ -30,24 +30,16 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_param.h"
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
 
-#include <sys/param.h>
-#include <sys/aio.h> /* for aio_swake proto */
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/mbuf.h>
-#include <sys/mutex.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/resourcevar.h>
-#include <sys/signalvar.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sx.h>
-#include <sys/sysctl.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
+#include <bsd/sys/sys/libkern.h>
 
 /*
  * Function pointer set by the AIO routines so that the socket buffer code
@@ -63,7 +55,9 @@ u_long	sb_max = SB_MAX;
 u_long sb_max_adj =
        (quad_t)SB_MAX * MCLBYTES / (MSIZE + MCLBYTES); /* adjusted sb_max */
 
+#if 0
 static	u_long sb_efficiency = 8;	/* parameter for sbreserve() */
+#endif
 
 static void	sbdrop_internal(struct sockbuf *sb, int len);
 static void	sbflush_internal(struct sockbuf *sb);
@@ -123,13 +117,17 @@ socantrcvmore(struct socket *so)
 int
 sbwait(struct sockbuf *sb)
 {
-
+#if 0
 	SOCKBUF_LOCK_ASSERT(sb);
 
 	sb->sb_flags |= SB_WAIT;
 	return (msleep(&sb->sb_cc, &sb->sb_mtx,
 	    (sb->sb_flags & SB_NOINTR) ? PSOCK : PSOCK | PCATCH, "sbwait",
 	    sb->sb_timeo));
+#else
+	return (0);
+	/* FIXME: OSv todo - implement... */
+#endif
 }
 
 int
@@ -140,14 +138,10 @@ sblock(struct sockbuf *sb, int flags)
 	    ("sblock: flags invalid (0x%x)", flags));
 
 	if (flags & SBL_WAIT) {
-		if ((sb->sb_flags & SB_NOINTR) ||
-		    (flags & SBL_NOINTR)) {
-			sx_xlock(&sb->sb_sx);
-			return (0);
-		}
-		return (sx_xlock_sig(&sb->sb_sx));
+		rw_rlock(&sb->sb_rwlock);
+		return (0);
 	} else {
-		if (sx_try_xlock(&sb->sb_sx) == 0)
+		if (rw_try_rlock(&sb->sb_rwlock) == 0)
 			return (EWOULDBLOCK);
 		return (0);
 	}
@@ -156,8 +150,7 @@ sblock(struct sockbuf *sb, int flags)
 void
 sbunlock(struct sockbuf *sb)
 {
-
-	sx_xunlock(&sb->sb_sx);
+    rw_runlock(&sb->sb_rwlock);
 }
 
 /*
@@ -175,7 +168,9 @@ sbunlock(struct sockbuf *sb)
 void
 sowakeup(struct socket *so, struct sockbuf *sb)
 {
-	int ret;
+    /* FIXME: OSv: TODO: implement... */
+#if 0
+    int ret;
 
 	SOCKBUF_LOCK_ASSERT(sb);
 
@@ -204,6 +199,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 	if ((so->so_state & SS_ASYNC) && so->so_sigio != NULL)
 		pgsigio(&so->so_sigio, SIGIO, 0);
 	mtx_assert(SOCKBUF_MTX(sb), MA_NOTOWNED);
+#endif
 }
 
 /*
@@ -240,7 +236,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 int
 soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
 {
-	struct thread *td = curthread;
+	struct thread *td = NULL;
 
 	SOCKBUF_LOCK(&so->so_snd);
 	SOCKBUF_LOCK(&so->so_rcv);
@@ -265,6 +261,7 @@ bad:
 	return (ENOBUFS);
 }
 
+#if 0
 static int
 sysctl_handle_sb_max(SYSCTL_HANDLER_ARGS)
 {
@@ -280,7 +277,8 @@ sysctl_handle_sb_max(SYSCTL_HANDLER_ARGS)
 	sb_max_adj = (u_quad_t)sb_max * MCLBYTES / (MSIZE + MCLBYTES);
 	return (0);
 }
-	
+#endif
+
 /*
  * Allot mbufs to a sockbuf.  Attempt to scale mbmax so that mbcnt doesn't
  * become limiting if buffering efficiency is near the normal case.
@@ -289,6 +287,7 @@ int
 sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
     struct thread *td)
 {
+#if 0
 	rlim_t sbsize_limit;
 
 	SOCKBUF_LOCK_ASSERT(sb);
@@ -314,6 +313,8 @@ sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 	sb->sb_mbmax = min(cc * sb_efficiency, sb_max);
 	if (sb->sb_lowat > sb->sb_hiwat)
 		sb->sb_lowat = sb->sb_hiwat;
+#endif
+	/* FIXME: implement... */
 	return (1);
 }
 
@@ -335,10 +336,13 @@ sbreserve(struct sockbuf *sb, u_long cc, struct socket *so,
 void
 sbrelease_internal(struct sockbuf *sb, struct socket *so)
 {
-
+#if 0
 	sbflush_internal(sb);
 	(void)chgsbsize(so->so_cred->cr_uidinfo, &sb->sb_hiwat, 0,
 	    RLIM_INFINITY);
+#endif
+
+	/* FIXME: implement... */
 	sb->sb_mbmax = 0;
 }
 
@@ -1043,7 +1047,6 @@ sbtoxsockbuf(struct sockbuf *sb, struct xsockbuf *xsb)
 }
 
 /* This takes the place of kern.maxsockbuf, which moved to kern.ipc. */
-static int dummy;
 SYSCTL_INT(_kern, KERN_DUMMY, dummy, CTLFLAG_RW, &dummy, 0, "");
 SYSCTL_OID(_kern_ipc, KIPC_MAXSOCKBUF, maxsockbuf, CTLTYPE_ULONG|CTLFLAG_RW,
     &sb_max, 0, sysctl_handle_sb_max, "LU", "Maximum socket buffer size");
