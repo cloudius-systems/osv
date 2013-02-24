@@ -110,6 +110,7 @@ bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
 bsd += bsd/sys/kern/uipc_domain.o
+bsd += bsd/sys/kern/uipc_sockbuf.o
 bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
