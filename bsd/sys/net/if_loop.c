@@ -118,7 +118,7 @@ lo_clone_create(struct if_clone *ifc, int unit, caddr_t params)
 	return (0);
 }
 
-void vnet_loif_init(const void *__unused)
+void vnet_loif_init(void)
 {
 	if_clone_attach(&lo_cloner);
 }

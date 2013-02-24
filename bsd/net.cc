@@ -49,5 +49,8 @@ void net_init(void)
     /* IGMP */
     igmp_init();
     vnet_igmp_init();
+
+    /* Loopback */
+    vnet_loif_init();
     debug("Done!");
 }
