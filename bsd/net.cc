@@ -16,10 +16,12 @@ extern "C" {
     #include <bsd/sys/net/ethernet.h>
     #include <bsd/sys/net/route.h>
     #include <bsd/machine/param.h>
+
+    /* Generation of ip ids */
+    void ip_initid(void);
+
 }
 
-/* Generation of ip ids */
-void ip_initid(void);
 
 void net_init(void)
 {
