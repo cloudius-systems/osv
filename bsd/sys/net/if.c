@@ -44,6 +44,7 @@
 #include <bsd/sys/sys/sbuf.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 #include <bsd/sys/sys/protosw.h>
 #include <bsd/sys/sys/refcount.h>
 #include <bsd/sys/sys/sockio.h>
