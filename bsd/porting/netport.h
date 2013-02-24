@@ -98,6 +98,7 @@ void getmicrotime(struct timeval *tvp);
 typedef __uint8_t   __sa_family_t;
 
 #define PAGE_SIZE (4096)
+#define PAGE_MASK (PAGE_SIZE-1)
 
 void abort(void);
 void* malloc(size_t size);

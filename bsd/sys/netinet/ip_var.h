@@ -311,8 +311,9 @@ extern int	(*ip_dn_io_ptr)(struct mbuf **, int, struct ip_fw_args *);
 
 VNET_DECLARE(int, ip_do_randomid);
 #define	V_ip_do_randomid	VNET(ip_do_randomid)
+/* FIXME: OSv: A random id initialized with a mutex??? really... */
 #define	ip_newid()	((V_ip_do_randomid != 0) ? ip_randomid() : \
-			    htons(V_ip_id++))
+			    V_ip_id++)
 
 #endif /* _KERNEL */
 

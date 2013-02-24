@@ -30,59 +30,40 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_ipfw.h"
-#include "opt_ipsec.h"
-#include "opt_route.h"
-#include "opt_mbuf_stress_test.h"
-#include "opt_mpath.h"
-#include "opt_sctp.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/priv.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sysctl.h>
-#include <sys/ucred.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/priv.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 
-#include <net/if.h>
-#include <net/if_llatbl.h>
-#include <net/netisr.h>
-#include <net/pfil.h>
-#include <net/route.h>
-#include <net/flowtable.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_llatbl.h>
+#include <bsd/sys/net/netisr.h>
+#include <bsd/sys/net/pfil.h>
+#include <bsd/sys/net/route.h>
 #ifdef RADIX_MPATH
-#include <net/radix_mpath.h>
+#include <bsd/sys/net/radix_mpath.h>
 #endif
-#include <net/vnet.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
-#include <netinet/ip.h>
-#include <netinet/in_pcb.h>
-#include <netinet/in_var.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_options.h>
-#ifdef SCTP
-#include <netinet/sctp.h>
-#include <netinet/sctp_crc32.h>
-#endif
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_options.h>
 
 #ifdef IPSEC
 #include <netinet/ip_ipsec.h>
 #include <netipsec/ipsec.h>
 #endif /* IPSEC*/
 
-#include <machine/in_cksum.h>
-
-#include <security/mac/mac_framework.h>
+#include <bsd/machine/in_cksum.h>
 
 VNET_DEFINE(u_short, ip_id);
 
