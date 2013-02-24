@@ -7,6 +7,12 @@
 #include <memory.h>
 #include <time.h>
 
+#define wakeup_one(...)
+#define wakeup(...)
+struct knote {
+    int __unused;
+};
+
 #define priv_check_cred(...)        (0)
 #define priv_check(...)        (0)
 

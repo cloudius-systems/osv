@@ -342,7 +342,7 @@ sbrelease_internal(struct sockbuf *sb, struct socket *so)
 	    RLIM_INFINITY);
 #endif
 
-	/* FIXME: implement... */
+	/* FIXME: OSV implement... */
 	sb->sb_mbmax = 0;
 }
 

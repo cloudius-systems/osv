@@ -97,8 +97,6 @@ struct socket {
 	u_short	so_qlimit;		/* (e) max number queued connections */
 	short	so_timeo;		/* (g) connection timeout */
 	u_short	so_error;		/* (f) error affecting connection */
-	struct	sigio *so_sigio;	/* [sg] information for async I/O or
-					   out of band data (SIGURG) */
 	u_long	so_oobmark;		/* (c) chars to oob mark */
 	TAILQ_HEAD(, aiocblist) so_aiojobq; /* AIO ops waiting on socket */
 

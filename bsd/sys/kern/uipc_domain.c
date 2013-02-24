@@ -244,10 +244,6 @@ domain_add(void *data)
 	mtx_unlock(&dom_mtx);
 }
 
-/* FIXME: OSv: this was initially declared in uipc_socket */
-uma_zone_t socket_zone;
-int maxsockets = 256;
-
 static void
 socket_zone_change(void *tag)
 {
