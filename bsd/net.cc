@@ -7,6 +7,7 @@ extern "C" {
     #include <bsd/sys/sys/mbuf.h>
     #include <bsd/sys/net/netisr.h>
     #include <bsd/sys/net/if.h>
+    #include <bsd/sys/net/pfil.h>
     #include <bsd/sys/netinet/if_ether.h>
     #include <bsd/sys/netinet/in_pcb.h>
     #include <bsd/sys/net/ethernet.h>
@@ -29,5 +30,6 @@ void net_init(void)
     domaininit(NULL);
     route_init();
     vnet_route_init();
+    vnet_pfil_init();
     debug("Done!");
 }
