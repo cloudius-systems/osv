@@ -49,12 +49,9 @@ static VNET_DEFINE(SLIST_HEAD(, lltable), lltables);
 extern void arprequest(struct ifnet *, struct in_addr *, struct in_addr *,
 	u_char *);
 
-#if 0
 struct rwlock lltable_rwlock;
 RW_SYSINIT(lltable_rwlock, &lltable_rwlock, "lltable_rwlock");
-#else
-struct cmutex lltable_mtxlock;
-#endif
+
 /*
  * Dump arp state for a specific address family.
  */
@@ -384,7 +381,7 @@ lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 
 void vnet_lltable_init()
 {
-
+    rw_init(&lltable_rwlock, "lltable_rwlock");
 	SLIST_INIT(&V_lltables);
 }
 
