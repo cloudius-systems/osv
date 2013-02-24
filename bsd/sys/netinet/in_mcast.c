@@ -2902,16 +2902,13 @@ inm_print(const struct in_multi *inm)
 	}
 	printf("%s: --- end inm %p ---\n", __func__, inm);
 }
-
-#else /* !KTR */
+#endif /* KTR */
+#endif
 
 void
 inm_print(const struct in_multi *inm)
 {
 
 }
-
-#endif /* KTR */
-#endif
 
 RB_GENERATE(ip_msource_tree, ip_msource, ims_link, ip_msource_cmp);
