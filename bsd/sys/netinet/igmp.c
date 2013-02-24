@@ -48,36 +48,30 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/module.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/protosw.h>
-#include <sys/kernel.h>
-#include <sys/sysctl.h>
-#include <sys/ktr.h>
-#include <sys/condvar.h>
+#include <bsd/porting/netport.h>
 
-#include <net/if.h>
-#include <net/netisr.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/libkern.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/in_systm.h>
-#include <netinet/ip.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_options.h>
-#include <netinet/igmp.h>
-#include <netinet/igmp_var.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/netisr.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <machine/in_cksum.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_options.h>
+#include <bsd/sys/netinet/igmp.h>
+#include <bsd/sys/netinet/igmp_var.h>
 
-#include <security/mac/mac_framework.h>
+#include <bsd/machine/in_cksum.h>
+
 
 #ifndef KTR_IGMPV3
 #define KTR_IGMPV3 KTR_INET
@@ -131,9 +125,12 @@ static void	igmp_v3_process_group_timers(struct igmp_ifinfo *,
 static int	igmp_v3_merge_state_changes(struct in_multi *,
 		    struct ifqueue *);
 static void	igmp_v3_suppress_group_record(struct in_multi *);
+
+#if 0
 static int	sysctl_igmp_default_version(SYSCTL_HANDLER_ARGS);
 static int	sysctl_igmp_gsr(SYSCTL_HANDLER_ARGS);
 static int	sysctl_igmp_ifinfo(SYSCTL_HANDLER_ARGS);
+#endif
 
 static const struct netisr_handler igmp_nh = {
 	.nh_name = "igmp",
@@ -332,6 +329,7 @@ igmp_restore_context(struct mbuf *m)
 	return (m->m_pkthdr.flowid);
 }
 
+#if 0
 /*
  * Retrieve or set default IGMP version.
  *
@@ -467,6 +465,8 @@ out_locked:
 	return (error);
 }
 
+#endif
+
 /*
  * Dispatch an entire queue of pending packet chains
  * using the netisr.
@@ -566,10 +566,11 @@ igi_alloc_locked(/*const*/ struct ifnet *ifp)
 
 	IGMP_LOCK_ASSERT();
 
-	igi = malloc(sizeof(struct igmp_ifinfo), M_IGMP, M_NOWAIT|M_ZERO);
+	igi = malloc(sizeof(struct igmp_ifinfo));
 	if (igi == NULL)
 		goto out;
 
+	bzero(igi, sizeof(struct igmp_ifinfo));
 	igi->igi_ifp = ifp;
 	igi->igi_version = V_igmp_default_version;
 	igi->igi_flags = 0;
@@ -689,7 +690,7 @@ igi_delete_locked(const struct ifnet *ifp)
 			    ("%s: there are dangling in_multi references",
 			    __func__));
 
-			free(igi, M_IGMP);
+			free(igi);
 			return;
 		}
 	}
@@ -3574,8 +3575,7 @@ igmp_rec_type_to_str(const int type)
 }
 #endif
 
-static void
-igmp_init(void *unused __unused)
+void igmp_init(void)
 {
 
 	CTR1(KTR_IGMPV3, "%s: initializing", __func__);
@@ -3588,8 +3588,7 @@ igmp_init(void *unused __unused)
 }
 SYSINIT(igmp_init, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, igmp_init, NULL);
 
-static void
-igmp_uninit(void *unused __unused)
+void igmp_uninit(void)
 {
 
 	CTR1(KTR_IGMPV3, "%s: tearing down", __func__);
@@ -3603,8 +3602,7 @@ igmp_uninit(void *unused __unused)
 }
 SYSUNINIT(igmp_uninit, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, igmp_uninit, NULL);
 
-static void
-vnet_igmp_init(const void *unused __unused)
+void vnet_igmp_init(void)
 {
 
 	CTR1(KTR_IGMPV3, "%s: initializing", __func__);
@@ -3614,8 +3612,7 @@ vnet_igmp_init(const void *unused __unused)
 VNET_SYSINIT(vnet_igmp_init, SI_SUB_PSEUDO, SI_ORDER_ANY, vnet_igmp_init,
     NULL);
 
-static void
-vnet_igmp_uninit(const void *unused __unused)
+void vnet_igmp_uninit(void)
 {
 
 	CTR1(KTR_IGMPV3, "%s: tearing down", __func__);
@@ -3626,23 +3623,3 @@ vnet_igmp_uninit(const void *unused __unused)
 VNET_SYSUNINIT(vnet_igmp_uninit, SI_SUB_PSEUDO, SI_ORDER_ANY,
     vnet_igmp_uninit, NULL);
 
-static int
-igmp_modevent(module_t mod, int type, void *unused __unused)
-{
-
-    switch (type) {
-    case MOD_LOAD:
-    case MOD_UNLOAD:
-	break;
-    default:
-	return (EOPNOTSUPP);
-    }
-    return (0);
-}
-
-static moduledata_t igmp_mod = {
-    "igmp",
-    igmp_modevent,
-    0
-};
-DECLARE_MODULE(igmp, igmp_mod, SI_SUB_PSEUDO, SI_ORDER_ANY);

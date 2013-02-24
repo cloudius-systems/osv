@@ -116,7 +116,7 @@ CTASSERT(sizeof(struct igmpstat) == 168);
 #endif
 
 #ifdef _KERNEL
-#define IGMP_RANDOM_DELAY(X) (random() % (X) + 1)
+#define IGMP_RANDOM_DELAY(X) (bsd_random() % (X) + 1)
 
 #define IGMP_MAX_STATE_CHANGES		24 /* Max pending changes per group */
 

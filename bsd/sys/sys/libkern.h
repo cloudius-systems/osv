@@ -41,6 +41,9 @@
 #define	LIBKERN_BODY
 #endif
 
+u_long   bsd_random(void);
+void     bsd_srandom(u_long);
+
 /* Prototypes for non-quad routines. */
 void arc4_init(void);
 uint32_t arc4random(void);

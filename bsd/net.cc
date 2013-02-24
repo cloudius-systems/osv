@@ -1,6 +1,8 @@
 #include "debug.hh"
 
 extern "C" {
+    #include <sys/time.h>
+
     #include <bsd/porting/netport.h>
     #include <bsd/sys/sys/libkern.h>
     #include <bsd/sys/sys/eventhandler.h>
@@ -8,6 +10,7 @@ extern "C" {
     #include <bsd/sys/net/netisr.h>
     #include <bsd/sys/net/if.h>
     #include <bsd/sys/net/pfil.h>
+    #include <bsd/sys/netinet/igmp.h>
     #include <bsd/sys/netinet/if_ether.h>
     #include <bsd/sys/netinet/in_pcb.h>
     #include <bsd/sys/net/ethernet.h>
@@ -21,6 +24,11 @@ void ip_initid(void);
 void net_init(void)
 {
     debug("Initializing network stack...");
+
+    /* Random */
+    struct timeval tv;
+    bsd_srandom(tv.tv_sec ^ tv.tv_usec);
+
     arc4_init();
     eventhandler_init(NULL);
     mbuf_init(NULL);
@@ -35,5 +43,9 @@ void net_init(void)
     route_init();
     vnet_route_init();
     vnet_pfil_init();
+
+    /* IGMP */
+    igmp_init();
+    vnet_igmp_init();
     debug("Done!");
 }

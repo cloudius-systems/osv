@@ -30,23 +30,24 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include <sys/libkern.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/libkern.h>
 
 #define NSHUFF 50       /* to drop some "seed -> 1st value" linearity */
 
 static u_long randseed = 937186357; /* after srandom(1), NSHUFF counted */
 
 void
-srandom(seed)
+bsd_srandom(seed)
 	u_long seed;
 {
 	int i;
 
 	randseed = seed;
 	for (i = 0; i < NSHUFF; i++)
-		(void)random();
+		(void)bsd_random();
 }
 
 /*
@@ -55,7 +56,7 @@ srandom(seed)
  * [0, 2^31 - 1].
  */
 u_long
-random()
+bsd_random()
 {
 	register long x, hi, lo, t;
 

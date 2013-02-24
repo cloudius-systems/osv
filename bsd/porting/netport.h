@@ -241,4 +241,9 @@ static __inline void        splx(intrmask_t ipl)   { return; }
  */
 int ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps);
 
+/*
+ * ratecheck(): simple time-based rate-limit checking.
+ */
+int ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
+
 #endif
