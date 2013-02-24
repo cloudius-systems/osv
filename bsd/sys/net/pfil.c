@@ -29,28 +29,18 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/param.h>
-#include <sys/kernel.h>
-#include <sys/errno.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/rmlock.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/systm.h>
-#include <sys/condvar.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/proc.h>
-#include <sys/queue.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
 
-#include <net/if.h>
-#include <net/pfil.h>
+#include <bsd/sys/sys/param.h>
+#include <sys/errno.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/queue.h>
+
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/pfil.h>
 
 static struct mtx pfil_global_lock;
-
-MTX_SYSINIT(pfil_heads_lock, &pfil_global_lock, "pfil_head_list lock",
-  MTX_DEF);
 
 static int pfil_list_add(pfil_list_t *, struct packet_filter_hook *, int);
 
@@ -69,7 +59,6 @@ int
 pfil_run_hooks(struct pfil_head *ph, struct mbuf **mp, struct ifnet *ifp,
     int dir, struct inpcb *inp)
 {
-	struct rm_priotracker rmpt;
 	struct packet_filter_hook *pfh;
 	struct mbuf *m = *mp;
 	int rv = 0;
@@ -130,9 +119,9 @@ pfil_head_unregister(struct pfil_head *ph)
 	LIST_REMOVE(ph, ph_list);
 	PFIL_LIST_UNLOCK();
 	TAILQ_FOREACH_SAFE(pfh, &ph->ph_in, pfil_link, pfnext)
-		free(pfh, M_IFADDR);
+		free(pfh);
 	TAILQ_FOREACH_SAFE(pfh, &ph->ph_out, pfil_link, pfnext)
-		free(pfh, M_IFADDR);
+		free(pfh);
 	PFIL_LOCK_DESTROY(ph);
 	return (0);
 }
@@ -170,16 +159,14 @@ pfil_add_hook(int (*func)(void *, struct mbuf **, struct ifnet *, int,
 	int err;
 
 	if (flags & PFIL_IN) {
-		pfh1 = (struct packet_filter_hook *)malloc(sizeof(*pfh1), 
-		    M_IFADDR, (flags & PFIL_WAITOK) ? M_WAITOK : M_NOWAIT);
+		pfh1 = (struct packet_filter_hook *)malloc(sizeof(*pfh1));
 		if (pfh1 == NULL) {
 			err = ENOMEM;
 			goto error;
 		}
 	}
 	if (flags & PFIL_OUT) {
-		pfh2 = (struct packet_filter_hook *)malloc(sizeof(*pfh1),
-		    M_IFADDR, (flags & PFIL_WAITOK) ? M_WAITOK : M_NOWAIT);
+		pfh2 = (struct packet_filter_hook *)malloc(sizeof(*pfh1));
 		if (pfh2 == NULL) {
 			err = ENOMEM;
 			goto error;
@@ -211,9 +198,9 @@ locked_error:
 	PFIL_WUNLOCK(ph);
 error:
 	if (pfh1 != NULL)
-		free(pfh1, M_IFADDR);
+		free(pfh1);
 	if (pfh2 != NULL)
-		free(pfh2, M_IFADDR);
+		free(pfh2);
 	return (err);
 }
 
@@ -280,7 +267,7 @@ pfil_list_remove(pfil_list_t *list,
 	TAILQ_FOREACH(pfh, list, pfil_link)
 		if (pfh->pfil_func == func && pfh->pfil_arg == arg) {
 			TAILQ_REMOVE(list, pfh, pfil_link);
-			free(pfh, M_IFADDR);
+			free(pfh);
 			return (0);
 		}
 	return (ENOENT);
@@ -290,9 +277,10 @@ pfil_list_remove(pfil_list_t *list,
  * Stuff that must be initialized for every instance (including the first of
  * course).
  */
-static int
-vnet_pfil_init(const void *unused)
+int vnet_pfil_init(void)
 {
+    /* Initialize mutex */
+    mtx_init(&pfil_global_lock, "pfil_heads_lock", NULL, 0);
 
 	LIST_INIT(&V_pfil_head_list);
 	return (0);
@@ -301,8 +289,7 @@ vnet_pfil_init(const void *unused)
 /*
  * Called for the removal of each instance.
  */
-static int
-vnet_pfil_uninit(const void *unused)
+int vnet_pfil_uninit(void)
 {
 
 	/*  XXX should panic if list is not empty */

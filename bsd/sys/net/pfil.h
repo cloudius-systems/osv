@@ -32,16 +32,16 @@
 #ifndef _NET_PFIL_H_
 #define _NET_PFIL_H_
 
-#include <sys/systm.h>
-#include <sys/queue.h>
-#include <sys/_lock.h>
-#include <sys/_mutex.h>
-#include <sys/lock.h>
-#include <sys/rmlock.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
+#include <bsd/sys/sys/queue.h>
 
 struct mbuf;
 struct ifnet;
 struct inpcb;
+
+int vnet_pfil_init(void);
+int vnet_pfil_uninit(void);
 
 /*
  * The packet filter hooks are designed for anything to call them to
@@ -69,11 +69,7 @@ struct pfil_head {
 	pfil_list_t	ph_out;
 	int		ph_type;
 	int		ph_nhooks;
-#if defined( __linux__ ) || defined( _WIN32 )
-	rwlock_t	ph_mtx;
-#else
-	struct rmlock	ph_lock;
-#endif
+	struct rwlock	ph_lock;
 	union {
 		u_long		phu_val;
 		void		*phu_ptr;
@@ -97,12 +93,12 @@ struct pfil_head *pfil_head_get(int, u_long);
 
 #define	PFIL_HOOKED(p) ((p)->ph_nhooks > 0)
 #define	PFIL_LOCK_INIT(p) \
-    rm_init_flags(&(p)->ph_lock, "PFil hook read/write mutex", RM_RECURSE)
-#define	PFIL_LOCK_DESTROY(p) rm_destroy(&(p)->ph_lock)
-#define PFIL_RLOCK(p, t) rm_rlock(&(p)->ph_lock, (t))
-#define PFIL_WLOCK(p) rm_wlock(&(p)->ph_lock)
-#define PFIL_RUNLOCK(p, t) rm_runlock(&(p)->ph_lock, (t))
-#define PFIL_WUNLOCK(p) rm_wunlock(&(p)->ph_lock)
+    rw_init_flags(&(p)->ph_lock, "PFil hook read/write mutex", 0)
+#define	PFIL_LOCK_DESTROY(p) rw_destroy(&(p)->ph_lock)
+#define PFIL_RLOCK(p, t) rw_rlock(&(p)->ph_lock)
+#define PFIL_WLOCK(p) rw_wlock(&(p)->ph_lock)
+#define PFIL_RUNLOCK(p, t) rw_runlock(&(p)->ph_lock)
+#define PFIL_WUNLOCK(p) rw_wunlock(&(p)->ph_lock)
 #define PFIL_LIST_LOCK() mtx_lock(&pfil_global_lock)
 #define PFIL_LIST_UNLOCK() mtx_unlock(&pfil_global_lock)
 
