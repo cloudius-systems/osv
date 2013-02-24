@@ -34,15 +34,13 @@
 #ifndef _SYS_SOCKETVAR_H_
 #define _SYS_SOCKETVAR_H_
 
-#include <sys/queue.h>			/* for TAILQ macros */
-#include <sys/selinfo.h>		/* for struct selinfo */
-#include <sys/_lock.h>
-#include <sys/_mutex.h>
-#include <sys/_sx.h>
-#include <sys/sockbuf.h>
-#include <sys/sockstate.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/queue.h>			/* for TAILQ macros */
+#include <bsd/sys/sys/sockbuf.h>
+#include <bsd/sys/sys/sockstate.h>
 #ifdef _KERNEL
-#include <sys/sockopt.h>
+#include <bsd/sys/sys/sockopt.h>
 #endif
 
 struct vnet;
@@ -106,11 +104,13 @@ struct socket {
 
 	struct sockbuf so_rcv, so_snd;
 
+#if 0
 	struct	ucred *so_cred;		/* (a) user credentials */
 	struct	label *so_label;	/* (b) MAC label for socket */
 	struct	label *so_peerlabel;	/* (b) cached MAC label for peer */
+#endif
 	/* NB: generation count must not be first. */
-	so_gen_t so_gencnt;		/* (h) generation count */
+	int so_gencnt;		/* (h) generation count */
 	void	*so_emuldata;		/* (b) private data for emulators */
  	struct so_accf {
 		struct	accept_filter *so_accept_filter;

@@ -32,10 +32,10 @@
  */
 #ifndef _SYS_SOCKBUF_H_
 #define _SYS_SOCKBUF_H_
-#include <sys/selinfo.h>		/* for struct selinfo */
-#include <sys/_lock.h>
-#include <sys/_mutex.h>
-#include <sys/_sx.h>
+
+#include <bsd/porting/netport.h>
+#include <bsd/porting/sync_stub.h>
+#include <bsd/porting/rwlock.h>
 
 #define	SB_MAX		(2*1024*1024)	/* default for max chars in sockbuf */
 
@@ -78,9 +78,12 @@ struct	xsockbuf {
  * Variables for socket buffering.
  */
 struct	sockbuf {
+    /* FIXME: OSv - select still not supported */
+#if 0
 	struct	selinfo sb_sel;	/* process selecting read/write */
+#endif
 	struct	mtx sb_mtx;	/* sockbuf lock */
-	struct	sx sb_sx;	/* prevent I/O interlacing */
+	struct	rwlock sb_rwlock;	/* prevent I/O interlacing */
 	short	sb_state;	/* (c/d) socket state on sockbuf */
 #define	sb_startzero	sb_mb
 	struct	mbuf *sb_mb;	/* (c/d) the mbuf chain */

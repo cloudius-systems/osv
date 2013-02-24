@@ -37,6 +37,7 @@
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 #include <bsd/sys/sys/protosw.h>
 #include <bsd/sys/sys/domain.h>
 #include <bsd/sys/sys/eventhandler.h>
