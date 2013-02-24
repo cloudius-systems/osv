@@ -43,9 +43,8 @@
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_clone.h>
 #include <bsd/sys/net/if_types.h>
-// #include <net/netisr.h>
+#include <bsd/sys/net/netisr.h>
 #include <bsd/sys/net/route.h>
-// #include <net/bpf.h>
 #include <bsd/sys/net/vnet.h>
 
 #ifdef	INET
@@ -90,8 +89,6 @@ IFC_SIMPLE_DECLARE(lo, 1);
 static void
 lo_clone_destroy(struct ifnet *ifp)
 {
-
-	// bpfdetach(ifp);
 	if_detach(ifp);
 	if_free(ifp);
 }
@@ -115,7 +112,6 @@ lo_clone_create(struct if_clone *ifc, int unit, caddr_t params)
 	    IFCAP_HWCSUM | IFCAP_HWCSUM_IPV6;
 	ifp->if_hwassist = LO_CSUM_FEATURES | LO_CSUM_FEATURES6;
 	if_attach(ifp);
-	// bpfattach(ifp, DLT_NULL, sizeof(u_int32_t));
 	if (V_loif == NULL)
 		V_loif = ifp;
 
@@ -126,11 +122,9 @@ void vnet_loif_init(const void *__unused)
 {
 	if_clone_attach(&lo_cloner);
 }
-
-#if 0
 VNET_SYSINIT(vnet_loif_init, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY,
     vnet_loif_init, NULL);
-#endif
+
 
 int
 looutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
@@ -266,9 +260,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 	switch (af) {
 #ifdef INET
 	case AF_INET:
-	    /* FIXME: OSv: uncomment when netisr are enabled */
-		// isr = NETISR_IP;
-	    isr = 0;
+		isr = NETISR_IP;
 		break;
 #endif
 #ifdef INET6
@@ -294,7 +286,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 	}
 	ifp->if_ipackets++;
 	ifp->if_ibytes += m->m_pkthdr.len;
-	// netisr_queue(isr, m);	/* mbuf is free'd on failure. */
+	netisr_queue(isr, m);	/* mbuf is free'd on failure. */
 	return (0);
 }
 
