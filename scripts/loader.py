@@ -5,6 +5,7 @@ import re
 import os, os.path
 import struct
 import json
+from glob import glob
 
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 external = build_dir + '/../../external'
@@ -307,6 +308,13 @@ def continue_handler(event):
 
 gdb.events.cont.connect(continue_handler)
 
+def setup_libstdcxx():
+    gcc = external + '/gcc.bin'
+    sys.path += [gcc + '/usr/share/gdb/auto-load/usr/lib64',
+                 glob(gcc + '/usr/share/gcc-*/python')[0],
+                 ]
+    main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
+    execfile(main)
 
 osv()
 osv_heap()
@@ -316,3 +324,5 @@ osv_info_threads()
 osv_thread()
 osv_thread_apply()
 osv_thread_apply_all()
+
+setup_libstdcxx()
