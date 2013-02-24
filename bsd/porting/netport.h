@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <time.h>
 
@@ -64,6 +65,7 @@ void getmicrotime(struct timeval *tvp);
 #define SYSCTL_STRUCT(...)
 #define SYSCTL_OID(...)
 #define TUNABLE_INT(...)
+#define TUNABLE_ULONG(...)
 
 #define __NO_STRICT_ALIGNMENT
 
