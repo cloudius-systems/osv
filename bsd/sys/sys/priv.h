@@ -514,10 +514,14 @@
  * instead of the effective uid, and whether or not the check should be
  * allowed in jail.
  */
+
+#if 0
 struct thread;
 struct ucred;
 int	priv_check(struct thread *td, int priv);
 int	priv_check_cred(struct ucred *cred, int priv, int flags);
+#endif
+
 #endif
 
 #endif /* !_SYS_PRIV_H_ */

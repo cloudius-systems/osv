@@ -30,14 +30,6 @@ int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
     return (0);
 }
 
-
-int priv_check(struct thread *td, int priv)
-{
-    return 1;
-}
-
-
-
 /*
  * Some routines that return EOPNOTSUPP for entry points that are not
  * supported by a protocol.  Fill in as needed.

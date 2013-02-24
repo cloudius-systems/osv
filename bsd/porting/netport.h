@@ -7,6 +7,9 @@
 #include <memory.h>
 #include <time.h>
 
+#define priv_check_cred(...)        (0)
+#define priv_check(...)        (0)
+
 #define FEATURE(...)
 
 #define intotcpcb(ip)   ((struct tcpcb *)(ip)->inp_ppcb)
