@@ -82,12 +82,23 @@ void ap_bringup(sched::cpu* c)
     c->load_balance();
 }
 
-void smp_launch()
+sched::cpu* smp_initial_find_current_cpu()
 {
     for (auto c : sched::cpus) {
         if (c->arch.apic_id == apic->id()) {
-            c->init_on_cpu();
+            return c;
+        }
+    }
+    abort();
+}
+
+void smp_launch()
+{
+    auto boot_cpu = smp_initial_find_current_cpu();
+    for (auto c : sched::cpus) {
+        if (c == boot_cpu) {
             sched::thread::current()->_cpu = c;
+            c->init_on_cpu();
             sched::thread::attr attr;
             attr.pinned = true;
             (new sched::thread([c] { c->load_balance(); }, attr))->start();
@@ -109,13 +120,7 @@ void smp_launch()
 void smp_main()
 {
     apic->init_on_ap();
-    sched::cpu* cpu{};
-    for (auto p : sched::cpus) {
-        if (p->arch.apic_id == apic->id()) {
-            cpu = p;
-            break;
-        }
-    }
+    sched::cpu* cpu = smp_initial_find_current_cpu();
     assert(cpu);
     cpu->init_on_cpu();
     cpu->bringup_thread->_cpu = cpu;
