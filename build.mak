@@ -142,6 +142,7 @@ bsd += bsd/sys/netinet/ip_input.o
 bsd += bsd/sys/netinet/ip_output.o
 bsd += bsd/sys/netinet/ip_options.o
 bsd += bsd/sys/netinet/raw_ip.o
+bsd += bsd/sys/netinet/igmp.o
 
 
 drivers :=
