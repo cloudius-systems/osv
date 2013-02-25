@@ -100,6 +100,7 @@ public:
         // Test 1
         _test1_finished = false;
         thread* t1 = new thread([&] { rwlock_test1(); });
+        t1->start();
         _main->wait_until([&] { return (_test1_finished); });
         delete t1;
 
@@ -109,6 +110,8 @@ public:
         rw_init(&_test2_rwlock, "tst2");
         thread* t2_1 = new thread([&] { rwlock_test2_t1(); });
         thread* t2_2 = new thread([&] { rwlock_test2_t2(); });
+        t2_1->start();
+        t2_2->start();
         _main->wait_until([&] { return (_test2_t1_finished && _test2_t2_finished); });
         delete t2_1;
         delete t2_2;
