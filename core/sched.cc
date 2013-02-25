@@ -445,6 +445,7 @@ private:
 detached_thread::reaper::reaper()
     : _mtx{}, _zombies{}, _thread([=] { reap(); })
 {
+    _thread.start();
 }
 
 void detached_thread::reaper::reap()
