@@ -20,7 +20,6 @@ static inline void spinlock_init(spinlock_t *sl)
 }
 
 struct cmutex {
-    bool _locked;
     spinlock_t _wait_lock;
     void *_owner;
     struct wait_list {
@@ -39,7 +38,7 @@ void mutex_unlock(mutex_t* m);
 
 static __always_inline void mutex_init(mutex_t* m)
 {
-    m->_locked = false;
+    m->_owner = 0;
     m->_wait_list.first = 0;
     m->_wait_list.last = 0;
     spinlock_init(&m->_wait_lock);

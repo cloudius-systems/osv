@@ -9,16 +9,13 @@ struct waiter {
 
 extern "C" void mutex_lock(mutex_t *mutex)
 {
-    if (mutex_trylock(mutex)) {
-        return;
-    }
     struct waiter w;
 
     w.thread = sched::thread::current();
 
     spin_lock(&mutex->_wait_lock);
-    if (mutex_trylock(mutex)) {
-        // mutex was unlocked just before we grabbed _wait_lock
+    if (!mutex->_owner) {
+        mutex->_owner = w.thread;
         spin_unlock(&mutex->_wait_lock);
         return;
     }
@@ -44,12 +41,14 @@ extern "C" void mutex_lock(mutex_t *mutex)
 
 extern "C" bool mutex_trylock(mutex_t *mutex)
 {
-    if (!__sync_lock_test_and_set(&mutex->_locked, 1)) {
+    bool ret = false;
+    spin_lock(&mutex->_wait_lock);
+    if (!mutex->_owner) {
         mutex->_owner = sched::thread::current();
-        return true;
-    } else {
-        return false;
+        ret = true;
     }
+    spin_unlock(&mutex->_wait_lock);
+    return ret;
 }
 
 extern "C" void mutex_unlock(mutex_t *mutex)
@@ -60,7 +59,6 @@ extern "C" void mutex_unlock(mutex_t *mutex)
         mutex->_wait_list.first->thread->wake();
     } else {
         mutex->_owner = nullptr;
-        __sync_lock_release(&mutex->_locked, 0);
     }
     spin_unlock(&mutex->_wait_lock);
 }
