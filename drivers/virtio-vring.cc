@@ -184,6 +184,13 @@ namespace virtio {
         return (_avail_count > 0);
     }
 
+    bool vring::avail_ring_has_room(int descriptors)
+    {
+        if (_dev->get_indirect_buf_cap())
+            descriptors = 1;
+        return (_avail_count >= descriptors);
+    }
+
     bool vring::used_ring_not_empty()
     {
         return (_used_guest_head != _used->_idx);

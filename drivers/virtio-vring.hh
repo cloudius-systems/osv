@@ -122,6 +122,7 @@ class virtio_device;
         void* get_buf();
         bool used_ring_not_empty();
         bool avail_ring_not_empty();
+        bool avail_ring_has_room(int n);
         bool kick();
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
