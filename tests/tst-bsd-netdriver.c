@@ -10,6 +10,7 @@
 #include <bsd/sys/netinet/in_var.h>
 #include <bsd/sys/sys/sockio.h>
 #include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 
 /* Test log */
 #define TLOG(...) printf(__VA_ARGS__)
@@ -26,7 +27,21 @@ lge_ioctl(struct ifnet        *ifp,
           caddr_t         data)
 {
     TLOG("lge_ioctl\n");
-    return (0);
+
+    int error = 0;
+    switch(command) {
+    case SIOCSIFMTU:
+        break;
+    case SIOCSIFFLAGS:
+        break;
+    case SIOCADDMULTI:
+    case SIOCDELMULTI:
+        break;
+        error = ether_ioctl(ifp, command, data);
+        break;
+    }
+
+    return(error);
 }
 
 /*
@@ -42,6 +57,7 @@ lge_start(struct ifnet* ifp)
     IF_DEQUEUE(&ifp->if_snd, m_head);
     if (m_head != NULL) {
         /* Send packet */
+        TLOG("Process Packet!\n");
     }
 }
 
@@ -104,10 +120,8 @@ void set_address(void)
 
 }
 
-int main(void)
+void test_interface(void)
 {
-    TLOG("BSD Net Driver Test\n");
-
     create_if();
 
     /*
@@ -119,8 +133,24 @@ int main(void)
 
     set_address();
     destroy_if();
+}
 
-    TLOG("BSD Net Driver Test\n");
+void test_sockets(void)
+{
+    struct socket *s;
+    socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
+    soclose(s);
+}
+
+int main(void)
+{
+    TLOG("BSD Net Driver Test BEGIN\n");
+
+    // test_interface();
+
+    test_sockets();
+
+    TLOG("BSD Net Driver Test END\n");
     return (0);
 }
 
