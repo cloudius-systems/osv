@@ -7,6 +7,7 @@ extern "C" {
     #include <bsd/sys/sys/libkern.h>
     #include <bsd/sys/sys/eventhandler.h>
     #include <bsd/sys/sys/mbuf.h>
+    #include <bsd/sys/sys/domain.h>
     #include <bsd/sys/net/netisr.h>
     #include <bsd/sys/net/if.h>
     #include <bsd/sys/net/pfil.h>
@@ -20,6 +21,7 @@ extern "C" {
     /* Generation of ip ids */
     void ip_initid(void);
 
+    extern  struct domain inetdomain;
 }
 
 
@@ -39,12 +41,17 @@ void net_init(void)
     ether_init(NULL);
     if_init(NULL);
     vnet_if_init(NULL);
-    ip_initid();
-    ipport_tick_init(NULL);
-    domaininit(NULL);
+
     route_init();
     vnet_route_init();
     vnet_pfil_init();
+
+    ip_initid();
+    ipport_tick_init(NULL);
+
+    /* Initialize Domains */
+    domaininit(NULL);
+    OSV_DOMAIN_SET(inet);
 
     /* IGMP */
     igmp_init();
@@ -52,5 +59,12 @@ void net_init(void)
 
     /* Loopback */
     vnet_loif_init();
+
+    /*
+     * Let all domains know about this interface...
+     * (There are non configured at this moment)
+     */
+    if_attachdomain(NULL);
+
     debug("Done!");
 }

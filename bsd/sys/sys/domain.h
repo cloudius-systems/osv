@@ -83,6 +83,11 @@ void		vnet_domain_init(void *);
 void		vnet_domain_uninit(void *);
 #endif
 
+#define OSV_DOMAIN_SET(name)                    \
+    do {                                        \
+        domain_add(& name ## domain);           \
+        domain_init(& name ## domain);          \
+    } while(0);
 #define	DOMAIN_SET(name)						\
 	SYSINIT(domain_add_ ## name, SI_SUB_PROTO_DOMAIN,		\
 	    SI_ORDER_FIRST, domain_add, & name ## domain);		\
