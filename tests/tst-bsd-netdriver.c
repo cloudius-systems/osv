@@ -8,9 +8,12 @@
 #include <bsd/sys/net/if_types.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_icmp.h>
 #include <bsd/sys/sys/sockio.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
+#include <bsd/machine/in_cksum.h>
 
 /* Test log */
 #define TLOG(...) printf(__VA_ARGS__)
@@ -137,8 +140,47 @@ void test_interface(void)
 
 void test_sockets(void)
 {
+    /* ICMP Packet */
+    struct mbuf *m;
+    struct icmp *icp;
+    char *raw;
+    char *echo_payload = "ABCDEFGHIJ";
+
+    /* Socket Variables */
     struct socket *s;
+    struct sockaddr whereto;
+    struct sockaddr_in *to;
+    char *target = "127.0.0.1";
+
+    /* Create socket */
     socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
+
+    /* Setup address */
+    memset(&whereto, 0, sizeof(struct sockaddr));
+    whereto.sa_len = sizeof(struct sockaddr);
+    to = (struct sockaddr_in *)&whereto;
+    to->sin_family = AF_INET;
+    inet_aton(target, &to->sin_addr);
+
+    /* ICMP ECHO Packet */
+    m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
+    m->m_pkthdr.len = m->m_len = ICMP_MINLEN + 10;
+    icp = mtod(m, struct icmp *);
+    icp->icmp_type = ICMP_ECHO;
+    icp->icmp_code = 0;
+    icp->icmp_cksum = 0;
+    icp->icmp_seq = 0;
+    icp->icmp_id = 0xAABB;
+    raw = mtod(m, char *);
+    raw += ICMP_MINLEN;
+    bcopy(echo_payload, raw, 10);
+
+    /* FIXME: this actually fails since sockbuf is not ported properly
+     * sbspace() return 0 since it had been stubbed
+     */
+    sosend_dgram(s, &whereto, NULL, m, NULL, 0, NULL);
+    m_free(m);
+
     soclose(s);
 }
 
@@ -147,7 +189,6 @@ int main(void)
     TLOG("BSD Net Driver Test BEGIN\n");
 
     // test_interface();
-
     test_sockets();
 
     TLOG("BSD Net Driver Test END\n");
