@@ -14,8 +14,9 @@ extern "C" void mutex_lock(mutex_t *mutex)
     w.thread = sched::thread::current();
 
     spin_lock(&mutex->_wait_lock);
-    if (!mutex->_owner) {
+    if (!mutex->_owner || mutex->_owner == w.thread) {
         mutex->_owner = w.thread;
+        ++mutex->_depth;
         spin_unlock(&mutex->_wait_lock);
         return;
     }
@@ -43,8 +44,9 @@ extern "C" bool mutex_trylock(mutex_t *mutex)
 {
     bool ret = false;
     spin_lock(&mutex->_wait_lock);
-    if (!mutex->_owner) {
+    if (!mutex->_owner || mutex->_owner == sched::thread::current()) {
         mutex->_owner = sched::thread::current();
+        ++mutex->_depth;
         ret = true;
     }
     spin_unlock(&mutex->_wait_lock);
@@ -54,11 +56,16 @@ extern "C" bool mutex_trylock(mutex_t *mutex)
 extern "C" void mutex_unlock(mutex_t *mutex)
 {
     spin_lock(&mutex->_wait_lock);
-    if (mutex->_wait_list.first) {
-        mutex->_owner = mutex->_wait_list.first->thread;
-        mutex->_wait_list.first->thread->wake();
+    if (mutex->_depth == 1) {
+        if (mutex->_wait_list.first) {
+            mutex->_owner = mutex->_wait_list.first->thread;
+            mutex->_wait_list.first->thread->wake();
+        } else {
+            mutex->_owner = nullptr;
+            --mutex->_depth;
+        }
     } else {
-        mutex->_owner = nullptr;
+        --mutex->_depth;
     }
     spin_unlock(&mutex->_wait_lock);
 }
