@@ -112,6 +112,7 @@ int main(void)
 
     /*
      * Let all domains know about this interface...
+     * lo0 will be called twice...
      * (There are non configured at this moment)
      */
     if_attachdomain(NULL);
