@@ -70,7 +70,8 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
 
 int _callout_stop_safe(struct callout *c, int safe)
 {
-    assert(safe != 0);
+    // FIXME: handle safe != 0 properly...
+    // assert(safe != 0);
 
     c->c_stopped = 1;
     sched::thread* callout_thread = callout_get_thread(c);
