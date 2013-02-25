@@ -15,7 +15,7 @@ sched::thread* callout_get_thread(struct callout *c)
     return reinterpret_cast<sched::detached_thread*>(c->thread);
 }
 
-void callout_set_thread(struct callout *c, sched::thread* t)
+void callout_set_thread(struct callout *c, sched::detached_thread* t)
 {
     c->thread = reinterpret_cast<void*>(t);
 }
@@ -39,8 +39,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
     c->c_stopped = 0;
     c->c_state = CALLOUT_S_SCHEDULED;
 
-    // FIXME: Free this thread
-    sched::thread* callout_thread = new sched::detached_thread([=] {
+    sched::detached_thread* callout_thread = new sched::detached_thread([=] {
 
         sched::timer t(*sched::thread::current());
         t.set(cur_time + nanoseconds);
@@ -71,8 +70,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
 
 int _callout_stop_safe(struct callout *c, int safe)
 {
-    // FIXME: handle safe != 0 properly...
-    // assert(safe != 0);
+    assert(safe == 0);
 
     c->c_stopped = 1;
     sched::thread* callout_thread = callout_get_thread(c);

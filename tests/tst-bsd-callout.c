@@ -22,7 +22,7 @@ void bbb(void *unused)
 {
     // Stop aaa
     printf("SHUT-UP\n");
-    _callout_stop_safe(&c1, 1);
+    callout_stop(&c1);
 }
 
 void test1(void)
