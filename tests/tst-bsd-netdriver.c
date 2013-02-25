@@ -20,6 +20,8 @@
 
 /* Global ifnet */
 struct ifnet* pifp;
+char *if_ip = "198.0.0.4";
+
 
 /*
  * This function should invoke ether_ioctl...
@@ -114,13 +116,9 @@ void set_address(void)
 
     ia_addr.sin_family = AF_INET;
     ia_addr.sin_len = sizeof(struct sockaddr_in);
-    /* FIXME: use inet_addr when we have one */
-    ia_addr.sin_addr.s_addr = 0xAABBCCDD;
+    inet_aton(if_ip, &ia_addr.sin_addr);
 
-    /* This causes the arp module issue a broadcast an arp tell packet
-     * (Happen only if the interface was already up! */
     ether_ioctl(pifp, SIOCSIFADDR, (caddr_t)&ifa);
-
 }
 
 void test_interface(void)
@@ -150,7 +148,6 @@ void test_sockets(void)
     struct socket *s;
     struct sockaddr whereto;
     struct sockaddr_in *to;
-    char *target = "127.0.0.1";
 
     /* Create socket */
     socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
@@ -160,7 +157,7 @@ void test_sockets(void)
     whereto.sa_len = sizeof(struct sockaddr);
     to = (struct sockaddr_in *)&whereto;
     to->sin_family = AF_INET;
-    inet_aton(target, &to->sin_addr);
+    inet_aton(if_ip, &to->sin_addr);
 
     /* ICMP ECHO Packet */
     m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
@@ -187,7 +184,7 @@ int main(void)
 {
     TLOG("BSD Net Driver Test BEGIN\n");
 
-    // test_interface();
+    test_interface();
     test_sockets();
 
     TLOG("BSD Net Driver Test END\n");
