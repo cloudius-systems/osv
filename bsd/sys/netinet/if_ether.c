@@ -86,13 +86,6 @@ static VNET_DEFINE(int, arp_maxhold) = 1;
 #define	V_arpstat		VNET(arpstat)
 #define	V_arp_maxhold		VNET(arp_maxhold)
 
-/* FIXME: remove this...
- * Bring some defines from ip_input.c,
- * for not porting the ip stack and socket layer */
-VNET_DEFINE(u_long, in_ifaddrhmask);        /* mask for hash table */
-VNET_DEFINE(struct in_ifaddrhead, in_ifaddrhead);  /* first inet address */
-VNET_DEFINE(struct in_ifaddrhashhead *, in_ifaddrhashtbl); /* inet addr hash table  */
-
 SYSCTL_VNET_INT(_net_link_ether_inet, OID_AUTO, max_age, CTLFLAG_RW,
 	&VNET_NAME(arpt_keep), 0,
 	"ARP entry lifetime in seconds");
@@ -770,16 +763,8 @@ reply:
 				goto drop;
 
 			sin.sin_addr = itaddr;
-
-#if 0
 			/* XXX MRT use table 0 for arp reply  */
 			rt = in_rtalloc1((struct sockaddr *)&sin, 0, 0UL, 0);
-#else
-			/* FIXME: OSv: in_rtalloc1 implemented in in_rmx.c is implemented by
-			 * calling rtalloc1_fib directly (from route.c)
-			 */
-			rt = rtalloc1_fib((struct sockaddr *)&sin, 0, 0UL, 0);
-#endif
 			if (!rt)
 				goto drop;
 
@@ -805,16 +790,8 @@ reply:
 			 */
 			sin.sin_addr = isaddr;
 
-
-#if 0
 			/* XXX MRT use table 0 for arp checks */
-            rt = in_rtalloc1((struct sockaddr *)&sin, 0, 0UL, 0);
-#else
-            /* FIXME: OSv: in_rtalloc1 implemented in in_rmx.c is implemented by
-             * calling rtalloc1_fib directly (from route.c)
-             */
-            rt = rtalloc1_fib((struct sockaddr *)&sin, 0, 0UL, 0);
-#endif
+			rt = in_rtalloc1((struct sockaddr *)&sin, 0, 0UL, 0);
 			if (!rt)
 				goto drop;
 			if (rt->rt_ifp != ifp) {
@@ -872,7 +849,6 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 	if (ntohl(IA_SIN(ifa)->sin_addr.s_addr) != INADDR_ANY) {
 		arprequest(ifp, &IA_SIN(ifa)->sin_addr,
 				&IA_SIN(ifa)->sin_addr, (u_char *)IF_LLADDR(ifp));
-#if 0
 		/*
 		 * interface address is considered static entry
 		 * because the output of the arp utility shows
@@ -887,9 +863,6 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 			    "entry for interface address\n");
 		else
 			LLE_RUNLOCK(lle);
-#else
-		lle = NULL;
-#endif
 	}
 	ifa->ifa_rtrequest = NULL;
 }
@@ -906,6 +879,7 @@ arp_ifinit2(struct ifnet *ifp, struct ifaddr *ifa, u_char *enaddr)
 void
 arp_init(void)
 {
+
 	netisr_register(&arp_nh);
 }
 SYSINIT(arp, SI_SUB_PROTO_DOMAIN, SI_ORDER_ANY, arp_init, 0);
