@@ -179,7 +179,6 @@ void test_sockets(void)
      * sbspace() return 0 since it had been stubbed
      */
     sosend_dgram(s, &whereto, NULL, m, NULL, 0, NULL);
-    m_free(m);
 
     soclose(s);
 }

@@ -55,9 +55,7 @@ u_long	sb_max = SB_MAX;
 u_long sb_max_adj =
        (quad_t)SB_MAX * MCLBYTES / (MSIZE + MCLBYTES); /* adjusted sb_max */
 
-#if 0
 static	u_long sb_efficiency = 8;	/* parameter for sbreserve() */
-#endif
 
 static void	sbdrop_internal(struct sockbuf *sb, int len);
 static void	sbflush_internal(struct sockbuf *sb);
@@ -150,6 +148,7 @@ sblock(struct sockbuf *sb, int flags)
 void
 sbunlock(struct sockbuf *sb)
 {
+
     rw_runlock(&sb->sb_rwlock);
 }
 
@@ -287,9 +286,6 @@ int
 sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
     struct thread *td)
 {
-#if 0
-	rlim_t sbsize_limit;
-
 	SOCKBUF_LOCK_ASSERT(sb);
 
 	/*
@@ -301,21 +297,13 @@ sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 	 */
 	if (cc > sb_max_adj)
 		return (0);
-	if (td != NULL) {
-		PROC_LOCK(td->td_proc);
-		sbsize_limit = lim_cur(td->td_proc, RLIMIT_SBSIZE);
-		PROC_UNLOCK(td->td_proc);
-	} else
-		sbsize_limit = RLIM_INFINITY;
-	if (!chgsbsize(so->so_cred->cr_uidinfo, &sb->sb_hiwat, cc,
-	    sbsize_limit))
-		return (0);
-	sb->sb_mbmax = min(cc * sb_efficiency, sb_max);
-	if (sb->sb_lowat > sb->sb_hiwat)
-		sb->sb_lowat = sb->sb_hiwat;
-#endif
-	/* FIXME: implement... */
-	return (1);
+
+	sb->sb_hiwat = cc;
+
+    sb->sb_mbmax = min(cc * sb_efficiency, sb_max);
+    if (sb->sb_lowat > sb->sb_hiwat)
+        sb->sb_lowat = sb->sb_hiwat;
+    return (1);
 }
 
 int
@@ -336,13 +324,9 @@ sbreserve(struct sockbuf *sb, u_long cc, struct socket *so,
 void
 sbrelease_internal(struct sockbuf *sb, struct socket *so)
 {
-#if 0
-	sbflush_internal(sb);
-	(void)chgsbsize(so->so_cred->cr_uidinfo, &sb->sb_hiwat, 0,
-	    RLIM_INFINITY);
-#endif
 
-	/* FIXME: OSV implement... */
+	sbflush_internal(sb);
+	sb->sb_hiwat = 0;
 	sb->sb_mbmax = 0;
 }
 
