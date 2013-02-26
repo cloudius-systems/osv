@@ -32,6 +32,10 @@
 #ifndef _SYS_RWLOCK_H_
 #define _SYS_RWLOCK_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
@@ -100,5 +104,9 @@ void	_rw_downgrade(struct rwlock *rw, const char *file, int line);
 #define	RW_RECURSE	0x10
 
 #define	rw_assert(rw, what)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_SYS_RWLOCK_H_ */
