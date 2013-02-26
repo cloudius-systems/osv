@@ -8,6 +8,7 @@ struct mtx {
 };
 
 #define MTX_DEF     0x00000000  /* DEFAULT (sleep) lock */
+#define MTX_DUPOK   0x00000010   /* Don't check for duplicate acquires */
 
 #define MA_OWNED        (0x01)
 #define MA_NOTOWNED     (0x02)

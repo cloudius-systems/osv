@@ -136,7 +136,7 @@ struct rtentry {
 	u_int	rt_fibnum;		/* which FIB */
 #ifdef _KERNEL
 	/* XXX ugly, user apps use this definition but don't have a mtx def */
-	struct	cmutex rt_mtx;		/* mutex for routing entry */
+	struct	mtx rt_mtx;		/* mutex for routing entry */
 #endif
 };
 
@@ -311,11 +311,12 @@ struct rt_addrinfo {
 #define RT_LINK_IS_UP(ifp)	(!((ifp)->if_capabilities & IFCAP_LINKSTATE) \
 				 || (ifp)->if_link_state == LINK_STATE_UP)
 
-#define	RT_LOCK_INIT(_rt) bzero((void*)&(_rt)->rt_mtx, sizeof(struct cmutex))
-#define	RT_LOCK(_rt)		mutex_lock(&(_rt)->rt_mtx)
-#define	RT_UNLOCK(_rt)		mutex_unlock(&(_rt)->rt_mtx)
-#define	RT_LOCK_DESTROY(_rt)    do{}while(0)
-#define	RT_LOCK_ASSERT(_rt)     do{}while(0)
+#define	RT_LOCK_INIT(_rt) \
+	mtx_init(&(_rt)->rt_mtx, "rtentry", NULL, MTX_DEF | MTX_DUPOK)
+#define	RT_LOCK(_rt)		mtx_lock(&(_rt)->rt_mtx)
+#define	RT_UNLOCK(_rt)		mtx_unlock(&(_rt)->rt_mtx)
+#define	RT_LOCK_DESTROY(_rt)	mtx_destroy(&(_rt)->rt_mtx)
+#define	RT_LOCK_ASSERT(_rt)	mtx_assert(&(_rt)->rt_mtx, MA_OWNED)
 
 #define	RT_ADDREF(_rt)	do {					\
 	RT_LOCK_ASSERT(_rt);					\
@@ -363,8 +364,6 @@ struct radix_node_head *rt_tables_get_rnh(int, int);
 
 struct ifmultiaddr;
 
-/* FIXME: OSv: undef some function - used for sock layer notifications */
-#if 0
 void	 rt_ieee80211msg(struct ifnet *, int, void *, size_t);
 void	 rt_ifannouncemsg(struct ifnet *, int);
 void	 rt_ifmsg(struct ifnet *);
@@ -373,15 +372,8 @@ void	 rt_missmsg_fib(int, struct rt_addrinfo *, int, int, int);
 void	 rt_newaddrmsg(int, struct ifaddr *, int, struct rtentry *);
 void	 rt_newaddrmsg_fib(int, struct ifaddr *, int, struct rtentry *, int);
 void	 rt_newmaddrmsg(int, struct ifmultiaddr *);
-#else
-#define rt_newaddrmsg(...) do{}while(0)
-#define rt_newmaddrmsg(...) do{}while(0)
-#define rt_ifannouncemsg(...) do{}while(0)
-#define rt_ifmsg(...) do{}while(0)
-#endif
-
-int  rt_setgate(struct rtentry *, struct sockaddr *, struct sockaddr *);
-void     rt_maskedcopy(struct sockaddr *, struct sockaddr *, struct sockaddr *);
+int	 rt_setgate(struct rtentry *, struct sockaddr *, struct sockaddr *);
+void 	 rt_maskedcopy(struct sockaddr *, struct sockaddr *, struct sockaddr *);
 
 /*
  * Note the following locking behavior:

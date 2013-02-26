@@ -35,7 +35,7 @@
  ***********************************************************************/
 
 #include <bsd/porting/netport.h>
-#include <assert.h>
+#include <bsd/porting/sync_stub.h>
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
@@ -69,8 +69,6 @@
 #endif
 
 u_int rt_numfibs = RT_NUMFIBS;
-
-#if 0
 SYSCTL_UINT(_net, OID_AUTO, fibs, CTLFLAG_RD, &rt_numfibs, 0, "");
 /*
  * Allow the boot code to allow LESS than RT_MAXFIBS to be used.
@@ -82,7 +80,6 @@ SYSCTL_UINT(_net, OID_AUTO, fibs, CTLFLAG_RD, &rt_numfibs, 0, "");
  * address family).
  */
 TUNABLE_INT("net.fibs", &rt_numfibs);
-#endif
 
 /*
  * By default add routes to all fibs for new interfaces.
@@ -95,12 +92,9 @@ TUNABLE_INT("net.fibs", &rt_numfibs);
  * from the network stack context.
  */
 u_int rt_add_addr_allfibs = 1;
-
-#if 0
 SYSCTL_UINT(_net, OID_AUTO, add_addr_allfibs, CTLFLAG_RW,
     &rt_add_addr_allfibs, 0, "");
 TUNABLE_INT("net.add_addr_allfibs", &rt_add_addr_allfibs);
-#endif
 
 VNET_DEFINE(struct rtstat, rtstat);
 #define	V_rtstat	VNET(rtstat)
@@ -130,12 +124,24 @@ VNET_DEFINE(int, rttrash);		/* routes not in table but not freed */
 static VNET_DEFINE(uma_zone_t, rtzone);		/* Routing table UMA zone. */
 #define	V_rtzone	VNET(rtzone)
 
-
+#if 0
 /*
- * FIXME:
- * OSv: fibnum is saved per thread
+ * handler for net.my_fibnum
  */
+static int
+sysctl_my_fibnum(SYSCTL_HANDLER_ARGS)
+{
+        int fibnum;
+        int error;
+ 
+        fibnum = curthread->td_proc->p_fibnum;
+        error = sysctl_handle_int(oidp, &fibnum, 0, req);
+        return (error);
+}
 
+SYSCTL_PROC(_net, OID_AUTO, my_fibnum, CTLTYPE_INT|CTLFLAG_RD,
+            NULL, 0, &sysctl_my_fibnum, "I", "default FIB of caller");
+#endif
 
 static __inline struct radix_node_head **
 rt_tables_get_rnh_ptr(int table, int fam)
@@ -181,15 +187,9 @@ void route_init(void)
 		if (dom->dom_maxrtkey > max_keylen)
 			max_keylen = dom->dom_maxrtkey;
 
-	/* FIXME: Hack this for now, we don't have domains yet... */
-	max_keylen = sizeof(struct sockaddr_in);
-
 	rn_init(max_keylen);	/* init all zeroes, all ones, mask table */
 }
-
-#if 0
 SYSINIT(route_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, route_init, 0);
-#endif
 
 void vnet_route_init(void)
 {
@@ -219,17 +219,14 @@ void vnet_route_init(void)
 			 * AF_INET and AF_INET6 which don't need it anyhow).
 			 */
 			rnh = rt_tables_get_rnh_ptr(table, fam);
-			assert(rnh != NULL);
+			if (rnh == NULL)
+				panic("%s: rnh NULL", __func__);
 			dom->dom_rtattach((void **)rnh, dom->dom_rtoffset);
 		}
 	}
 }
-
-#if 0
 VNET_SYSINIT(vnet_route_init, SI_SUB_PROTO_DOMAIN, SI_ORDER_FOURTH,
     vnet_route_init, 0);
-#endif
-
 
 #ifndef _SYS_SYSPROTO_H_
 struct setfib_args {
@@ -317,10 +314,7 @@ rtalloc1_fib(struct sockaddr *dst, int report, u_long ignflags,
 	struct radix_node *rn;
 	struct rtentry *newrt;
 	struct rt_addrinfo info;
-	/* FIXME: OSv: remove unused variables */
-#if 0
 	int err = 0, msgtype = RTM_MISS;
-#endif
 	int needlock;
 
 	KASSERT((fibnum < rt_numfibs), ("rtalloc1_fib: bad fibnum"));
@@ -376,8 +370,7 @@ miss:
 		 */
 		bzero(&info, sizeof(info));
 		info.rti_info[RTAX_DST] = dst;
-		/* FIXME: OSV: uncomment... */
-		// rt_missmsg_fib(msgtype, &info, 0, err, fibnum);
+		rt_missmsg_fib(msgtype, &info, 0, err, fibnum);
 	}	
 done:
 	if (newrt)
@@ -603,8 +596,7 @@ out:
 	info.rti_info[RTAX_GATEWAY] = gateway;
 	info.rti_info[RTAX_NETMASK] = netmask;
 	info.rti_info[RTAX_AUTHOR] = src;
-	/* FIXME: OSV: uncomment... */
-	// rt_missmsg_fib(RTM_REDIRECT, &info, flags, error, fibnum);
+	rt_missmsg_fib(RTM_REDIRECT, &info, flags, error, fibnum);
 	if (ifa != NULL)
 		ifa_free(ifa);
 }
@@ -629,14 +621,9 @@ rtioctl_fib(u_long req, caddr_t data, u_int fibnum)
 	 * prison-root to make it this far if raw sockets have been enabled
 	 * in jails.
 	 */
-
-    /* FIXME: OSv: remove */
-    return ENXIO;
-
 #ifdef INET
-	/* FIXME: OSv: uncomment... */
-    /* Multicast goop, grrr... */
-	// return mrt_ioctl ? mrt_ioctl(req, data, fibnum) : EOPNOTSUPP;
+	/* Multicast goop, grrr... */
+	return mrt_ioctl ? mrt_ioctl(req, data, fibnum) : EOPNOTSUPP;
 #else /* INET */
 	return ENXIO;
 #endif /* INET */
@@ -1421,8 +1408,7 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 			}
 			RT_ADDREF(rt);
 			RT_UNLOCK(rt);
-			/* FIXME: osv - uncomment, notify sock layer */
-			// rt_newaddrmsg_fib(cmd, ifa, error, rt, fibnum);
+			rt_newaddrmsg_fib(cmd, ifa, error, rt, fibnum);
 			RT_LOCK(rt);
 			RT_REMREF(rt);
 			if (cmd == RTM_DELETE) {
