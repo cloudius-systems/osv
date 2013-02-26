@@ -2,6 +2,7 @@
 #define ARCH_HH_
 
 #include "processor.hh"
+#include "msr.hh"
 
 // namespace arch - architecture independent interface for architecture
 //                  dependent operations (e.g. irq_disable vs. cli)
@@ -33,11 +34,23 @@ public:
     void restore() {
         asm volatile("sub $128, %%rsp; pushq %0; popfq; add $128, %%rsp" : : "r"(_rflags));
     }
+    bool enabled() const {
+        return _rflags & 0x200;
+    }
 private:
     unsigned long _rflags;
 };
 
+extern bool tls_available() __attribute__((no_instrument_function));
+
+inline bool tls_available()
+{
+    unsigned a, d;
+    asm("rdmsr" : "=a"(a), "=d"(d) : "c"(msr::IA32_FS_BASE));
+    // don't call rdmsr, since we don't want function instrumentation
+    return a != 0 || d != 0;
 }
 
+}
 
 #endif /* ARCH_HH_ */

@@ -151,7 +151,7 @@ public:
     void wake();
     static void sleep_until(u64 abstime);
     static void yield();
-    static thread* current();
+    static thread* current() __attribute((no_instrument_function));
     stack_info get_stack_info();
     cpu* tcpu();
     void join();

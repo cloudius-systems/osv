@@ -1,12 +1,15 @@
 
 arch = x64
-#cmdline = java.so Hello
-cmdline = testrunner.so
+cmdline = java.so Hello
+#cmdline = testrunner.so
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
-	$(arch-cflags) $(cflags-$(mode)) $(acpi-defines)
+	$(arch-cflags) $(cflags-$(mode)) $(acpi-defines) $(tracing-flags)
+
+tracing-flags =
+#tracing-flags = -finstrument-functions -finstrument-functions-exclude-file-list=atomic,trace.cc
 
 CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
@@ -193,6 +196,7 @@ objects += core/sched.o
 objects += core/mmio.o
 objects += core/sglist.o
 objects += core/kprintf.o
+objects += core/trace.o
 
 unittests:= tests/tst-hub.o
 
