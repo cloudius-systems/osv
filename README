@@ -55,13 +55,9 @@ To run OSv
  Uncomment the "tracing-flags =" line in build.mak, and rebuild.
  Run the program until it aborts, then in gdb:
 
+ osv syms
  set pagination off
- set print elements 0
- set print array-indexes on
- set print pretty on
  set logging on
- print trace_log
- print trace_record_last._M_i % trace_max
+ osv trace
 
- gdb.txt will contain the the log, the last line contains the array index
- of the last trace entry, read backwards from there.
+ gdb.txt will contain the the trace.
