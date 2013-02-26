@@ -52,6 +52,7 @@
 #include <bsd/sys/netinet/in_var.h>
 #include <bsd/sys/netinet/in_pcb.h>
 #include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/igmp_var.h>
 
 static int in_mask2len(struct in_addr *);
 static void in_len2mask(struct in_addr *, int);
@@ -1291,8 +1292,7 @@ in_purgemaddrs(struct ifnet *ifp)
 		LIST_REMOVE(inm, inm_link);
 		inm_release_locked(inm);
 	}
-	/* FIXME: uncomment when igmp is enabled */
-	// igmp_ifdetach(ifp);
+	igmp_ifdetach(ifp);
 
 	IN_MULTI_UNLOCK();
 }
@@ -1627,9 +1627,7 @@ in_domifattach(struct ifnet *ifp)
 	}
 	ii->ii_llt = llt;
 
-	/* FIXME: OSv - uncomment when igmp is enabled */
-	// ii->ii_igmp = igmp_domifattach(ifp);
-	ii->ii_igmp = NULL;
+	ii->ii_igmp = igmp_domifattach(ifp);
 
 	return ii;
 }
@@ -1639,8 +1637,7 @@ in_domifdetach(struct ifnet *ifp, void *aux)
 {
 	struct in_ifinfo *ii = (struct in_ifinfo *)aux;
 
-	/* FIXME: OSv - uncomment when igmp is enabled */
-	// igmp_domifdetach(ifp);
+	igmp_domifdetach(ifp);
 	lltable_free(ii->ii_llt);
 	free(ii);
 }
