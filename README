@@ -48,3 +48,20 @@ To run OSv
     (gdb) connect
     (gdb) osv syms
     (gdb) bt
+
+
+ Tracing
+ =======
+ Uncomment the "tracing-flags =" line in build.mak, and rebuild.
+ Run the program until it aborts, then in gdb:
+
+ set pagination off
+ set print elements 0
+ set print array-indexes on
+ set print pretty on
+ set logging on
+ print trace_log
+ print trace_record_last._M_i % trace_max
+
+ gdb.txt will contain the the log, the last line contains the array index
+ of the last trace entry, read backwards from there.

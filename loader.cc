@@ -21,6 +21,7 @@
 #include "barrier.hh"
 #include "tests/tst-hub.hh"
 #include "arch.hh"
+#include "osv/trace.hh"
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -92,6 +93,7 @@ int main(int ac, char **av)
 void main_cont(int ac, char** av)
 {
     smp_launch();
+    enable_trace();
     sched::init_detached_threads_reaper();
 
     vfs_init();
