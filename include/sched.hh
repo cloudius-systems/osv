@@ -148,6 +148,10 @@ public:
     void start();
     template <class Pred>
     static void wait_until(Pred pred);
+    template <class Pred>
+    static void wait_until(mutex& mtx, Pred pred);
+    template <class Pred>
+    static void wait_until(mutex_t& mtx, Pred pred);
     void wake();
     static void sleep_until(u64 abstime);
     static void yield();
@@ -283,6 +287,36 @@ void thread::wait_until(Pred pred)
             return;
         }
         me->wait();
+    }
+}
+
+template <class Pred>
+void thread::wait_until(mutex& mtx, Pred pred)
+{
+    thread* me = current();
+    while (true) {
+        wait_guard waiter(me);
+        if (pred()) {
+            return;
+        }
+        mtx.unlock();
+        me->wait();
+        mtx.lock();
+    }
+}
+
+template <class Pred>
+void thread::wait_until(mutex_t& mtx, Pred pred)
+{
+    thread* me = current();
+    while (true) {
+        wait_guard waiter(me);
+        if (pred()) {
+            return;
+        }
+        mutex_unlock(&mtx);
+        me->wait();
+        mutex_lock(&mtx);
     }
 }
 
