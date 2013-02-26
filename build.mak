@@ -1,7 +1,7 @@
 
 arch = x64
-cmdline = java.so Hello
-#cmdline = testrunner.so
+#cmdline = java.so Hello
+cmdline = testrunner.so
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
@@ -74,6 +74,8 @@ do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 tests += tests/tst-vblk.so tests/tst-fat.so tests/tst-romfs.so tests/bench/bench.jar
+tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
+         tests/tst-bsd-netdriver.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -84,6 +86,10 @@ tests/tst-ramdisk.so: tests/tst-ramdisk.o
 tests/tst-vblk.so: tests/tst-vblk.o
 tests/tst-fat.so: tests/tst-fat.o
 tests/tst-romfs.so: tests/tst-romfs.o
+tests/tst-bsd-evh.so: tests/tst-bsd-evh.o
+tests/tst-bsd-callout.so: tests/tst-bsd-callout.o
+tests/tst-bsd-netisr.so: tests/tst-bsd-netisr.o
+tests/tst-bsd-netdriver.so: tests/tst-bsd-netdriver.o
 
 all: loader.img loader.bin
 
@@ -102,10 +108,61 @@ loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 
 arch/x64/boot32.o: loader.elf
 
+bsd  = bsd/net.o  
+bsd += bsd/machine/in_cksum.o
+bsd += bsd/sys/libkern/arc4random.o
+bsd += bsd/sys/libkern/random.o
+bsd += bsd/sys/libkern/inet_ntoa.o
+bsd += bsd/sys/libkern/inet_aton.o
+bsd += bsd/sys/kern/kern_mbuf.o
+bsd += bsd/sys/kern/uipc_mbuf.o
+bsd += bsd/sys/kern/uipc_mbuf2.o
+bsd += bsd/sys/kern/uipc_domain.o
+bsd += bsd/sys/kern/uipc_sockbuf.o
+bsd += bsd/sys/kern/uipc_socket.o
+bsd += bsd/sys/kern/subr_bufring.o
+bsd += bsd/sys/kern/subr_sbuf.o
+bsd += bsd/sys/kern/subr_eventhandler.o
+bsd += bsd/sys/kern/subr_hash.o
+bsd += bsd/porting/netport.o
+bsd += bsd/porting/netport1.o
+bsd += bsd/porting/uma_stub.o
+bsd += bsd/porting/sync_stub.o
+bsd += bsd/porting/rwlock.o
+bsd += bsd/porting/callout.o
+bsd += bsd/sys/netinet/if_ether.o  
+bsd += bsd/sys/net/if_ethersubr.o  
+bsd += bsd/sys/net/if_llatbl.o  
+bsd += bsd/sys/net/radix.o  
+bsd += bsd/sys/net/route.o  
+bsd += bsd/sys/net/raw_cb.o  
+bsd += bsd/sys/net/raw_usrreq.o  
+bsd += bsd/sys/net/rtsock.o  
+bsd += bsd/sys/net/netisr.o  
+bsd += bsd/sys/net/netisr1.o  
+bsd += bsd/sys/net/if_dead.o  
+bsd += bsd/sys/net/if_clone.o  
+bsd += bsd/sys/net/if_loop.o  
+bsd += bsd/sys/net/if.o  
+bsd += bsd/sys/net/pfil.o  
+bsd += bsd/sys/netinet/in.o
+bsd += bsd/sys/netinet/in_pcb.o
+bsd += bsd/sys/netinet/in_proto.o
+bsd += bsd/sys/netinet/in_mcast.o
+bsd += bsd/sys/netinet/in_rmx.o
+bsd += bsd/sys/netinet/ip_id.o
+bsd += bsd/sys/netinet/ip_icmp.o
+bsd += bsd/sys/netinet/ip_input.o
+bsd += bsd/sys/netinet/ip_output.o
+bsd += bsd/sys/netinet/ip_options.o
+bsd += bsd/sys/netinet/raw_ip.o
+bsd += bsd/sys/netinet/igmp.o
+
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += drivers/debug-console.o
 drivers += drivers/ramdisk.o
+drivers += $(bsd)
 drivers += core/mmu.o
 drivers += core/elf.o
 drivers += core/interrupt.o

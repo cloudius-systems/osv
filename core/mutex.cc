@@ -70,6 +70,11 @@ extern "C" void mutex_unlock(mutex_t *mutex)
     spin_unlock(&mutex->_wait_lock);
 }
 
+extern "C" bool mutex_owned(mutex_t* mutex)
+{
+    return (mutex->_owner == sched::thread::current());
+}
+
 void mutex::lock()
 {
     mutex_lock(&_mutex);
