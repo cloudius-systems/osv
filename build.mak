@@ -1,7 +1,7 @@
 
 arch = x64
-cmdline = java.so Hello
-#cmdline = testrunner.so
+#cmdline = java.so Hello
+cmdline = testrunner.so
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
@@ -132,6 +132,7 @@ bsd += bsd/sys/net/if_ethersubr.o
 bsd += bsd/sys/net/if_llatbl.o  
 bsd += bsd/sys/net/radix.o  
 bsd += bsd/sys/net/route.o  
+bsd += bsd/sys/net/rtsock.o  
 bsd += bsd/sys/net/netisr.o  
 bsd += bsd/sys/net/netisr1.o  
 bsd += bsd/sys/net/if_dead.o  
