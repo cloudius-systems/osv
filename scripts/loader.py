@@ -316,6 +316,49 @@ def setup_libstdcxx():
     main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
     execfile(main)
 
+def dump_trace():
+    from collections import defaultdict
+    trace_log = gdb.lookup_global_symbol('trace_log').value()
+    max_trace = gdb.parse_and_eval('max_trace')
+    last = gdb.lookup_global_symbol('trace_record_last').value()['_M_i']
+    indents = defaultdict(int)
+    for i in range(max_trace):
+        tr = trace_log[(last + i) % max_trace]
+        type = tr['type']
+        thread = ulong(tr['thread'])
+        if type == 0:
+            continue
+        elif type == 1:
+            annotation = '->'
+            indent = '  ' * indents[thread]
+            indents[thread] += 1
+        elif type == 2:
+            annotation = '<-'
+            indents[thread] -= 1
+            if indents[thread] < 0:
+                indents[thread] = 0
+            indent = '  ' * indents[thread]
+        else:
+            delta = 0
+            annotation = '??'
+        fn = tr['fn']
+        try:
+            block = gdb.block_for_pc(long(fn))
+            fn_name = block.function.print_name
+        except:
+            fn_name = '???'
+        gdb.write('0x%016x %s %s %s\n' % (thread,
+                                           indent,
+                                           annotation,
+                                           fn_name
+                                           ))
+
+class osv_trace(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv trace', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        dump_trace()
+
 osv()
 osv_heap()
 osv_syms()
@@ -324,5 +367,6 @@ osv_info_threads()
 osv_thread()
 osv_thread_apply()
 osv_thread_apply_all()
+osv_trace()
 
 setup_libstdcxx()
