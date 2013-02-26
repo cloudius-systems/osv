@@ -24,19 +24,18 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
-#include <bsd/porting/netport.h>
-#include <bsd/porting/callout.h>
-#include <bsd/porting/rwlock.h>
-
 #include <sys/cdefs.h>
 
 #ifndef	_NET_IF_LLATBL_H_
 #define	_NET_IF_LLATBL_H_
 
+#include <bsd/porting/netport.h>
+#include <bsd/porting/callout.h>
+#include <bsd/porting/rwlock.h>
+
 #include <bsd/sys/netinet/in.h>
 
-void vnet_lltable_init();
+void vnet_lltable_init(void);
 
 struct ifnet;
 struct sysctl_req;
@@ -166,6 +165,7 @@ struct lltable {
 	int			(*llt_dump)(struct lltable *,
 				    struct sysctl_req *);
 };
+MALLOC_DECLARE(M_LLTABLE);
 
 /*
  * flags to be passed to arplookup.

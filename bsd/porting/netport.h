@@ -63,6 +63,7 @@ int tvtohz(struct timeval *tv);
 #define hz (1000000000L)
 
 #define MALLOC_DEFINE(...)
+#define MALLOC_DECLARE(...)
 
 #define SYSINIT(...)
 #define SYSUNINIT(...)

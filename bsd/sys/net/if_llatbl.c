@@ -40,8 +40,12 @@
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/net/vnet.h>
 #include <bsd/sys/netinet/if_ether.h>
-// #include <netinet6/in6_var.h>
-// #include <netinet6/nd6.h>
+#if 0
+#include <netinet6/in6_var.h>
+#include <netinet6/nd6.h>
+#endif
+
+MALLOC_DEFINE(M_LLTABLE, "lltable", "link level address tables");
 
 static VNET_DEFINE(SLIST_HEAD(, lltable), lltables);
 #define	V_lltables	VNET(lltables)
@@ -384,11 +388,8 @@ void vnet_lltable_init()
     rw_init(&lltable_rwlock, "lltable_rwlock");
 	SLIST_INIT(&V_lltables);
 }
-
-#if 0
 VNET_SYSINIT(vnet_lltable_init, SI_SUB_PSEUDO, SI_ORDER_FIRST,
     vnet_lltable_init, NULL);
-#endif
 
 #ifdef DDB
 struct llentry_sa {
