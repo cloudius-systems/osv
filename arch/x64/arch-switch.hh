@@ -74,6 +74,7 @@ void thread::on_thread_stack(thread* t)
 
 void thread::setup_tcb()
 {
+    assert(tls.size);
     // FIXME: respect alignment
     void* p = malloc(sched::tls.size + sizeof(*_tcb));
     memset(p, 0, sched::tls.size);
