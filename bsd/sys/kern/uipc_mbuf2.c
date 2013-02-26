@@ -60,17 +60,11 @@
  *	@(#)uipc_mbuf.c	8.4 (Berkeley) 2/14/95
  */
 
-#include <memory.h>
+#include <bsd/porting/netport.h>
 
 #include <bsd/porting/uma_stub.h>
-#include <bsd/porting/netport.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/queue.h>
-
-#if 0
-static MALLOC_DEFINE(M_PACKET_TAGS, MBUF_TAG_MEM_NAME,
-    "packet-attached information");
-#endif
 
 /* can't call it m_dup(), as freebsd[34] uses m_dup() with different arg */
 static struct mbuf *m_dup1(struct mbuf *, int, int, int);

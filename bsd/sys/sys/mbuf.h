@@ -345,8 +345,6 @@ struct mbstat {
 	u_long	sf_allocwait;	/* times sfbuf allocation had to wait */
 };
 
- struct mbstat mbstat;
-
 /*
  * Flags specifying how an allocation should be made.
  *
@@ -399,6 +397,7 @@ struct mbstat {
  */
 
 void mbuf_init(void *dummy);
+void tunable_mbinit(void *dummy);
 
 extern uma_zone_t	zone_mbuf;
 extern uma_zone_t	zone_clust;

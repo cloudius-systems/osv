@@ -58,17 +58,10 @@
  * See DOMAIN_SET(9) for details on its use.
  */
 
-#if 0
-static void domaininit(void *);
 SYSINIT(domain, SI_SUB_PROTO_DOMAININIT, SI_ORDER_ANY, domaininit, NULL);
 
-static void domainfinalize(void *);
 SYSINIT(domainfin, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_FIRST, domainfinalize,
     NULL);
-#else
-void domaininit(void *);
-void domainfinalize(void *);
-#endif
 
 static struct callout pffast_callout;
 static struct callout pfslow_callout;
@@ -79,8 +72,6 @@ static void	pfslowtimo(void *);
 struct domain *domains;		/* registered protocol domains */
 int domain_init_status = 0;
 static struct mtx dom_mtx;		/* domain list lock */
-/* FIXME: OSv: initialize this mutex properly... */
-// MTX_SYSINIT(domain, &dom_mtx, "domain list", MTX_DEF);
 
 /*
  * Dummy protocol specific user requests function pointer array.
@@ -153,10 +144,10 @@ protosw_init(struct protosw *pr)
 	DEFAULT(pu->pru_sense, pru_sense_null);
 	DEFAULT(pu->pru_shutdown, pru_shutdown_notsupp);
 	DEFAULT(pu->pru_sockaddr, pru_sockaddr_notsupp);
-/* FIXME: OSv: uncomment this */
-//	DEFAULT(pu->pru_sosend, sosend_generic);
-//	DEFAULT(pu->pru_soreceive, soreceive_generic);
-//	DEFAULT(pu->pru_sopoll, sopoll_generic);
+	DEFAULT(pu->pru_sosend, sosend_generic);
+	DEFAULT(pu->pru_soreceive, soreceive_generic);
+	/* FIXME: OSv: uncomment this */
+	// DEFAULT(pu->pru_sopoll, sopoll_generic);
 #undef DEFAULT
 	if (pr->pr_init)
 		(*pr->pr_init)();
@@ -185,29 +176,6 @@ domain_init(void *arg)
 	if (max_datalen < 1)
 		panic("%s: max_datalen < 1", __func__);
 }
-
-#ifdef VIMAGE
-void
-vnet_domain_init(void *arg)
-{
-
-	/* Virtualized case is no different -- call init functions. */
-	domain_init(arg);
-}
-
-void
-vnet_domain_uninit(void *arg)
-{
-	struct domain *dp = arg;
-	struct protosw *pr;
-
-	for (pr = dp->dom_protosw; pr < dp->dom_protoswNPROTOSW; pr++)
-		if (pr->pr_destroy)
-			(*pr->pr_destroy)();
-	if (dp->dom_destroy)
-		(*dp->dom_destroy)();
-}
-#endif
 
 /*
  * Add a new protocol domain to the list of supported domains
@@ -255,6 +223,8 @@ socket_zone_change(void *tag)
 void
 domaininit(void *dummy)
 {
+
+    mtx_init(&dom_mtx, "domain list", 0, MTX_DEF);
 
 	/*
 	 * Before we do any setup, make sure to initialize the
