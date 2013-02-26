@@ -7,6 +7,8 @@
 #include <memory.h>
 #include <time.h>
 
+int osv_curtid(void);
+
 #define wakeup_one(...)
 #define wakeup(...)
 struct knote {

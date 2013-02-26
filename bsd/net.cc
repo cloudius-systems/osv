@@ -42,12 +42,17 @@ void net_init(void)
     if_init(NULL);
     vnet_if_init(NULL);
 
+    /* Routing */
     route_init();
     vnet_route_init();
+
+    rts_init();
+
     vnet_pfil_init();
 
     ip_initid();
     ipport_tick_init(NULL);
+
 
     /* Initialize Domains */
     domaininit(NULL);

@@ -36,6 +36,7 @@
 #include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
+void rts_init(void);
 void route_init(void);
 void vnet_route_init(void);
 
@@ -216,7 +217,7 @@ struct rt_msghdr {
 	u_short	rtm_index;	/* index for associated ifp */
 	int	rtm_flags;	/* flags, incl. kern & message, e.g. DONE */
 	int	rtm_addrs;	/* bitmask identifying sockaddrs in msg */
-	pid_t	rtm_pid;	/* identify sender */
+	int	rtm_pid;	/* identify sender */
 	int	rtm_seq;	/* for sender to identify action */
 	int	rtm_errno;	/* why failed */
 	int	rtm_fmask;	/* bitmask used in RTM_CHANGE message */

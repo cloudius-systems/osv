@@ -29,42 +29,30 @@
  *	@(#)rtsock.c	8.7 (Berkeley) 10/12/95
  * $FreeBSD$
  */
-#include "opt_compat.h"
-#include "opt_sctp.h"
-#include "opt_mpath.h"
-#include "opt_inet.h"
-#include "opt_inet6.h"
 
-#include <sys/param.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
-#include <sys/domain.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/priv.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/rwlock.h>
-#include <sys/signalvar.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sysctl.h>
-#include <sys/systm.h>
+#include <bsd/porting/netport.h>
 
-#include <net/if.h>
-#include <net/if_dl.h>
-#include <net/if_llatbl.h>
-#include <net/if_types.h>
-#include <net/netisr.h>
-#include <net/raw_cb.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/priv.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 
-#include <netinet/in.h>
-#include <netinet/if_ether.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_llatbl.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/netisr.h>
+#include <bsd/sys/net/raw_cb.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
+
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/if_ether.h>
 #ifdef INET6
-#include <netinet6/scope6_var.h>
+#include <bsd/sys/netinet6/scope6_var.h>
 #endif
 
 #if defined(INET) || defined(INET6)
@@ -72,76 +60,6 @@
 extern void sctp_addr_change(struct ifaddr *ifa, int cmd);
 #endif /* SCTP */
 #endif
-
-#ifdef COMPAT_FREEBSD32
-#include <sys/mount.h>
-#include <compat/freebsd32/freebsd32.h>
-
-struct if_data32 {
-	uint8_t	ifi_type;
-	uint8_t	ifi_physical;
-	uint8_t	ifi_addrlen;
-	uint8_t	ifi_hdrlen;
-	uint8_t	ifi_link_state;
-	uint8_t	ifi_spare_char1;
-	uint8_t	ifi_spare_char2;
-	uint8_t	ifi_datalen;
-	uint32_t ifi_mtu;
-	uint32_t ifi_metric;
-	uint32_t ifi_baudrate;
-	uint32_t ifi_ipackets;
-	uint32_t ifi_ierrors;
-	uint32_t ifi_opackets;
-	uint32_t ifi_oerrors;
-	uint32_t ifi_collisions;
-	uint32_t ifi_ibytes;
-	uint32_t ifi_obytes;
-	uint32_t ifi_imcasts;
-	uint32_t ifi_omcasts;
-	uint32_t ifi_iqdrops;
-	uint32_t ifi_noproto;
-	uint32_t ifi_hwassist;
-	int32_t	ifi_epoch;
-	struct	timeval32 ifi_lastchange;
-};
-
-struct if_msghdr32 {
-	uint16_t ifm_msglen;
-	uint8_t	ifm_version;
-	uint8_t	ifm_type;
-	int32_t	ifm_addrs;
-	int32_t	ifm_flags;
-	uint16_t ifm_index;
-	struct	if_data32 ifm_data;
-};
-
-struct if_msghdrl32 {
-	uint16_t ifm_msglen;
-	uint8_t	ifm_version;
-	uint8_t	ifm_type;
-	int32_t	ifm_addrs;
-	int32_t	ifm_flags;
-	uint16_t ifm_index;
-	uint16_t _ifm_spare1;
-	uint16_t ifm_len;
-	uint16_t ifm_data_off;
-	struct	if_data32 ifm_data;
-};
-
-struct ifa_msghdrl32 {
-	uint16_t ifam_msglen;
-	uint8_t	ifam_version;
-	uint8_t	ifam_type;
-	int32_t	ifam_addrs;
-	int32_t	ifam_flags;
-	uint16_t ifam_index;
-	uint16_t _ifam_spare1;
-	uint16_t ifam_len;
-	uint16_t ifam_data_off;
-	int32_t	ifam_metric;
-	struct	if_data32 ifam_data;
-};
-#endif /* COMPAT_FREEBSD32 */
 
 MALLOC_DEFINE(M_RTABLE, "routetbl", "routing tables");
 
@@ -164,7 +82,10 @@ static struct {
 } route_cb;
 
 struct mtx rtsock_mtx;
+
+#if 0
 MTX_SYSINIT(rtsock, &rtsock_mtx, "rtsock route_cb lock", MTX_DEF);
+#endif
 
 #define	RTSOCK_LOCK()	mtx_lock(&rtsock_mtx)
 #define	RTSOCK_UNLOCK()	mtx_unlock(&rtsock_mtx)
@@ -185,9 +106,6 @@ static int	rt_msg2(int type, struct rt_addrinfo *rtinfo,
 			caddr_t cp, struct walkarg *w);
 static int	rt_xaddrs(caddr_t cp, caddr_t cplim,
 			struct rt_addrinfo *rtinfo);
-static int	sysctl_dumpentry(struct radix_node *rn, void *vw);
-static int	sysctl_iflist(int af, struct walkarg *w);
-static int	sysctl_ifmalist(int af, struct walkarg *w);
 static int	route_output(struct mbuf *m, struct socket *so);
 static void	rt_setmetrics(u_long which, const struct rt_metrics *in,
 			struct rt_metrics_lite *out);
@@ -202,6 +120,7 @@ static struct netisr_handler rtsock_nh = {
 	.nh_policy = NETISR_POLICY_SOURCE,
 };
 
+#if 0
 static int
 sysctl_route_netisr_maxqlen(SYSCTL_HANDLER_ARGS)
 {
@@ -218,14 +137,17 @@ sysctl_route_netisr_maxqlen(SYSCTL_HANDLER_ARGS)
 SYSCTL_PROC(_net_route, OID_AUTO, netisr_maxqlen, CTLTYPE_INT|CTLFLAG_RW,
     0, 0, sysctl_route_netisr_maxqlen, "I",
     "maximum routing socket dispatch queue length");
+#endif
 
-static void
+void
 rts_init(void)
 {
-	int tmp;
-
+#if 0
+    int tmp;
 	if (TUNABLE_INT_FETCH("net.route.netisr_maxqlen", &tmp))
 		rtsock_nh.nh_qlimit = tmp;
+#endif
+	mtx_init(&rtsock_mtx, "rtsock route_cb lock", 0, MTX_DEF);
 	netisr_register(&rtsock_nh);
 }
 SYSINIT(rtsock, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, rts_init, 0);
@@ -303,9 +225,10 @@ rts_attach(struct socket *so, int proto, struct thread *td)
 	KASSERT(so->so_pcb == NULL, ("rts_attach: so_pcb != NULL"));
 
 	/* XXX */
-	rp = malloc(sizeof *rp, M_PCB, M_WAITOK | M_ZERO);
+	rp = malloc(sizeof *rp);
 	if (rp == NULL)
 		return ENOBUFS;
+	bzero(rp, sizeof *rp);
 
 	/*
 	 * The splnet() is necessary to block protocols from sending
@@ -316,13 +239,13 @@ rts_attach(struct socket *so, int proto, struct thread *td)
 	 */
 	s = splnet();
 	so->so_pcb = (caddr_t)rp;
-	so->so_fibnum = td->td_proc->p_fibnum;
+	so->so_fibnum = 0;
 	error = raw_attach(so, proto);
 	rp = sotorawcb(so);
 	if (error) {
 		splx(s);
 		so->so_pcb = NULL;
-		free(rp, M_PCB);
+		free(rp);
 		return error;
 	}
 	RTSOCK_LOCK();
@@ -443,123 +366,6 @@ static struct pr_usrreqs route_usrreqs = {
 	.pru_close =		rts_close,
 };
 
-#ifndef _SOCKADDR_UNION_DEFINED
-#define	_SOCKADDR_UNION_DEFINED
-/*
- * The union of all possible address formats we handle.
- */
-union sockaddr_union {
-	struct sockaddr		sa;
-	struct sockaddr_in	sin;
-	struct sockaddr_in6	sin6;
-};
-#endif /* _SOCKADDR_UNION_DEFINED */
-
-static int
-rtm_get_jailed(struct rt_addrinfo *info, struct ifnet *ifp,
-    struct rtentry *rt, union sockaddr_union *saun, struct ucred *cred)
-{
-
-	/* First, see if the returned address is part of the jail. */
-	if (prison_if(cred, rt->rt_ifa->ifa_addr) == 0) {
-		info->rti_info[RTAX_IFA] = rt->rt_ifa->ifa_addr;
-		return (0);
-	}
-
-	switch (info->rti_info[RTAX_DST]->sa_family) {
-#ifdef INET
-	case AF_INET:
-	{
-		struct in_addr ia;
-		struct ifaddr *ifa;
-		int found;
-
-		found = 0;
-		/*
-		 * Try to find an address on the given outgoing interface
-		 * that belongs to the jail.
-		 */
-		IF_ADDR_RLOCK(ifp);
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-			struct sockaddr *sa;
-			sa = ifa->ifa_addr;
-			if (sa->sa_family != AF_INET)
-				continue;
-			ia = ((struct sockaddr_in *)sa)->sin_addr;
-			if (prison_check_ip4(cred, &ia) == 0) {
-				found = 1;
-				break;
-			}
-		}
-		IF_ADDR_RUNLOCK(ifp);
-		if (!found) {
-			/*
-			 * As a last resort return the 'default' jail address.
-			 */
-			ia = ((struct sockaddr_in *)rt->rt_ifa->ifa_addr)->
-			    sin_addr;
-			if (prison_get_ip4(cred, &ia) != 0)
-				return (ESRCH);
-		}
-		bzero(&saun->sin, sizeof(struct sockaddr_in));
-		saun->sin.sin_len = sizeof(struct sockaddr_in);
-		saun->sin.sin_family = AF_INET;
-		saun->sin.sin_addr.s_addr = ia.s_addr;
-		info->rti_info[RTAX_IFA] = (struct sockaddr *)&saun->sin;
-		break;
-	}
-#endif
-#ifdef INET6
-	case AF_INET6:
-	{
-		struct in6_addr ia6;
-		struct ifaddr *ifa;
-		int found;
-
-		found = 0;
-		/*
-		 * Try to find an address on the given outgoing interface
-		 * that belongs to the jail.
-		 */
-		IF_ADDR_RLOCK(ifp);
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-			struct sockaddr *sa;
-			sa = ifa->ifa_addr;
-			if (sa->sa_family != AF_INET6)
-				continue;
-			bcopy(&((struct sockaddr_in6 *)sa)->sin6_addr,
-			    &ia6, sizeof(struct in6_addr));
-			if (prison_check_ip6(cred, &ia6) == 0) {
-				found = 1;
-				break;
-			}
-		}
-		IF_ADDR_RUNLOCK(ifp);
-		if (!found) {
-			/*
-			 * As a last resort return the 'default' jail address.
-			 */
-			ia6 = ((struct sockaddr_in6 *)rt->rt_ifa->ifa_addr)->
-			    sin6_addr;
-			if (prison_get_ip6(cred, &ia6) != 0)
-				return (ESRCH);
-		}
-		bzero(&saun->sin6, sizeof(struct sockaddr_in6));
-		saun->sin6.sin6_len = sizeof(struct sockaddr_in6);
-		saun->sin6.sin6_family = AF_INET6;
-		bcopy(&ia6, &saun->sin6.sin6_addr, sizeof(struct in6_addr));
-		if (sa6_recoverscope(&saun->sin6) != 0)
-			return (ESRCH);
-		info->rti_info[RTAX_IFA] = (struct sockaddr *)&saun->sin6;
-		break;
-	}
-#endif
-	default:
-		return (ESRCH);
-	}
-	return (0);
-}
-
 /*ARGSUSED*/
 static int
 route_output(struct mbuf *m, struct socket *so)
@@ -571,7 +377,6 @@ route_output(struct mbuf *m, struct socket *so)
 	struct rt_addrinfo info;
 	int len, error = 0;
 	struct ifnet *ifp = NULL;
-	union sockaddr_union saun;
 	sa_family_t saf = AF_UNSPEC;
 
 #define senderr(e) { error = e; goto flush;}
@@ -596,7 +401,7 @@ route_output(struct mbuf *m, struct socket *so)
 		info.rti_info[RTAX_DST] = NULL;
 		senderr(EPROTONOSUPPORT);
 	}
-	rtm->rtm_pid = curproc->p_pid;
+	rtm->rtm_pid = osv_curtid();
 	bzero(&info, sizeof(info));
 	info.rti_addrs = rtm->rtm_addrs;
 	if (rt_xaddrs((caddr_t)(rtm + 1), len + (caddr_t)rtm, &info)) {
@@ -788,13 +593,6 @@ route_output(struct mbuf *m, struct socket *so)
 		case RTM_GET:
 		report:
 			RT_LOCK_ASSERT(rt);
-			if ((rt->rt_flags & RTF_HOST) == 0
-			    ? jailed_without_vnet(curthread->td_ucred)
-			    : prison_if(curthread->td_ucred,
-			    rt_key(rt)) != 0) {
-				RT_UNLOCK(rt);
-				senderr(ESRCH);
-			}
 			info.rti_info[RTAX_DST] = rt_key(rt);
 			info.rti_info[RTAX_GATEWAY] = rt->rt_gateway;
 			info.rti_info[RTAX_NETMASK] = rt_mask(rt);
@@ -804,12 +602,6 @@ route_output(struct mbuf *m, struct socket *so)
 				if (ifp) {
 					info.rti_info[RTAX_IFP] =
 					    ifp->if_addr->ifa_addr;
-					error = rtm_get_jailed(&info, ifp, rt,
-					    &saun, curthread->td_ucred);
-					if (error != 0) {
-						RT_UNLOCK(rt);
-						senderr(error);
-					}
 					if (ifp->if_flags & IFF_POINTOPOINT)
 						info.rti_info[RTAX_BRD] =
 						    rt->rt_ifa->ifa_dstaddr;
@@ -972,6 +764,8 @@ static void
 rt_setmetrics(u_long which, const struct rt_metrics *in,
 	struct rt_metrics_lite *out)
 {
+    struct timeval tv;
+    getmicrotime(&tv);
 #define metric(f, e) if (which & (f)) out->e = in->e;
 	/*
 	 * Only these are stored in the routing entry since introduction
@@ -982,20 +776,22 @@ rt_setmetrics(u_long which, const struct rt_metrics *in,
 	/* Userland -> kernel timebase conversion. */
 	if (which & RTV_EXPIRE)
 		out->rmx_expire = in->rmx_expire ?
-		    in->rmx_expire - time_second + time_uptime : 0;
+		    in->rmx_expire - tv.tv_sec + time_uptime : 0;
 #undef metric
 }
 
 static void
 rt_getmetrics(const struct rt_metrics_lite *in, struct rt_metrics *out)
 {
+    struct timeval tv;
+    getmicrotime(&tv);
 #define metric(e) out->e = in->e;
 	bzero(out, sizeof(*out));
 	metric(rmx_mtu);
 	metric(rmx_weight);
 	/* Kernel -> userland timebase conversion. */
 	out->rmx_expire = in->rmx_expire ?
-	    in->rmx_expire - time_uptime + time_second : 0;
+	    in->rmx_expire - time_uptime + tv.tv_sec : 0;
 #undef metric
 }
 
@@ -1180,9 +976,8 @@ again:
 		if (rw->w_req) {
 			if (rw->w_tmemsize < len) {
 				if (rw->w_tmem)
-					free(rw->w_tmem, M_RTABLE);
-				rw->w_tmem = (caddr_t)
-					malloc(len, M_RTABLE, M_NOWAIT);
+					free(rw->w_tmem);
+				rw->w_tmem = (caddr_t)malloc(len);
 				if (rw->w_tmem)
 					rw->w_tmemsize = len;
 			}
@@ -1486,17 +1281,11 @@ rt_dispatch(struct mbuf *m, sa_family_t saf)
 		*(unsigned short *)(tag + 1) = saf;
 		m_tag_prepend(m, tag);
 	}
-#ifdef VIMAGE
-	if (V_loif)
-		m->m_pkthdr.rcvif = V_loif;
-	else {
-		m_freem(m);
-		return;
-	}
-#endif
+
 	netisr_queue(NETISR_ROUTE, m);	/* mbuf is free'd on failure. */
 }
 
+#if 0
 /*
  * This is used in dumping the kernel table via sysctl().
  */
@@ -1582,23 +1371,6 @@ sysctl_iflist_ifml(struct ifnet *ifp, struct rt_addrinfo *info,
 {
 	struct if_msghdrl *ifm;
 
-#ifdef COMPAT_FREEBSD32
-	if (w->w_req->flags & SCTL_MASK32) {
-		struct if_msghdrl32 *ifm32;
-
-		ifm32 = (struct if_msghdrl32 *)w->w_tmem;
-		ifm32->ifm_addrs = info->rti_addrs;
-		ifm32->ifm_flags = ifp->if_flags | ifp->if_drv_flags;
-		ifm32->ifm_index = ifp->if_index;
-		ifm32->_ifm_spare1 = 0;
-		ifm32->ifm_len = sizeof(*ifm32);
-		ifm32->ifm_data_off = offsetof(struct if_msghdrl32, ifm_data);
-
-		copy_ifdata32(&ifp->if_data, &ifm32->ifm_data);
-
-		return (SYSCTL_OUT(w->w_req, (caddr_t)ifm32, len));
-	}
-#endif
 	ifm = (struct if_msghdrl *)w->w_tmem;
 	ifm->ifm_addrs = info->rti_addrs;
 	ifm->ifm_flags = ifp->if_flags | ifp->if_drv_flags;
@@ -1647,26 +1419,6 @@ sysctl_iflist_ifaml(struct ifaddr *ifa, struct rt_addrinfo *info,
     struct walkarg *w, int len)
 {
 	struct ifa_msghdrl *ifam;
-
-#ifdef COMPAT_FREEBSD32
-	if (w->w_req->flags & SCTL_MASK32) {
-		struct ifa_msghdrl32 *ifam32;
-
-		ifam32 = (struct ifa_msghdrl32 *)w->w_tmem;
-		ifam32->ifam_addrs = info->rti_addrs;
-		ifam32->ifam_flags = ifa->ifa_flags;
-		ifam32->ifam_index = ifa->ifa_ifp->if_index;
-		ifam32->_ifam_spare1 = 0;
-		ifam32->ifam_len = sizeof(*ifam32);
-		ifam32->ifam_data_off =
-		    offsetof(struct ifa_msghdrl32, ifam_data);
-		ifam32->ifam_metric = ifa->ifa_metric;
-
-		copy_ifdata32(&ifa->ifa_ifp->if_data, &ifam32->ifam_data);
-
-		return (SYSCTL_OUT(w->w_req, (caddr_t)ifam32, len));
-	}
-#endif
 
 	ifam = (struct ifa_msghdrl *)w->w_tmem;
 	ifam->ifam_addrs = info->rti_addrs;
@@ -1883,7 +1635,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 }
 
 SYSCTL_NODE(_net, PF_ROUTE, routetable, CTLFLAG_RD, sysctl_rtsock, "");
-
+#endif
 /*
  * Definitions of protocols supported in the ROUTE domain.
  */

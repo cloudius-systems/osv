@@ -84,6 +84,9 @@
 #include <sys/types.h>
 #endif
 
+#define ALIGNBYTES (sizeof(int) - 1)
+#define ALIGN(p)   (((unsigned)(p) + _ALIGNBYTES) & ~_ALIGNBYTES)
+
 /*
  * Machine-independent constants (some used in following include files).
  * Redefined constants are from POSIX 1003.1 limits file.
