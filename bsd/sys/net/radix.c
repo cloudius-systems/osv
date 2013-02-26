@@ -36,6 +36,7 @@
 #include <osv/mutex.h>
 
 #include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/net/radix.h>
 

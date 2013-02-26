@@ -90,6 +90,7 @@ MALLOC_DEFINE(M_IPMSOURCE, "ip_msource",
  * any need for in_multi itself to be virtualized -- it is bound to an ifp
  * anyway no matter what happens.
  */
+/* FIXME: OSv - find a better place to initialize by calling mtx_init() */
 struct mtx in_multi_mtx = {0};
 
 /*

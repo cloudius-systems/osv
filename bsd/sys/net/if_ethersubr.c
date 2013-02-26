@@ -665,7 +665,6 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		}
 	}
 #endif
-
 	{
 		/*
 		 * If the frame received was not for our MAC address, set the
@@ -803,13 +802,14 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 	 */
 	switch (ether_type) {
 #ifdef INET
-#if 0
 	case ETHERTYPE_IP:
-		if ((m = ip_fastforward(m)) == NULL)
+#if 0
+	    /* FIXME: OSv - port ip fast forward to get perf gain */
+	    if ((m = ip_fastforward(m)) == NULL)
 			return;
-		isr = NETISR_IP;
-		break;
 #endif
+	    isr = NETISR_IP;
+		break;
 
 	case ETHERTYPE_ARP:
 		if (ifp->if_flags & IFF_NOARP) {

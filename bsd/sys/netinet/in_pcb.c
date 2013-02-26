@@ -222,8 +222,7 @@ in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
 	pcbinfo->ipi_zone = uma_zcreate(inpcbzone_name, sizeof(struct inpcb),
 	    NULL, NULL, inpcbzone_init, inpcbzone_fini, UMA_ALIGN_PTR,
 	    inpcbzone_flags);
-	// FIXME: OSv, uncomment when we have a slab allocator */
-	// uma_zone_set_max(pcbinfo->ipi_zone, maxsockets);
+	uma_zone_set_max(pcbinfo->ipi_zone, maxsockets);
 }
 
 /*
@@ -737,7 +736,7 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 		}
 		IF_ADDR_RUNLOCK(ifp);
 
-		error = EAFNOSUPPORT;
+		error = 0;
 		goto done;
 	}
 
@@ -1087,8 +1086,6 @@ in_pcbfree(struct inpcb *inp)
 #endif
 	inp->inp_vflag = 0;
 	inp->inp_flags2 |= INP_FREED;
-	/* FIXME: OSv - re-think user credentials */
-	// crfree(inp->inp_cred);
 #ifdef MAC
 	mac_inpcb_destroy(inp);
 #endif

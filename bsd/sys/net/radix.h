@@ -122,7 +122,7 @@ struct radix_node_head {
 		(struct radix_node *rn, struct radix_node_head *head);
 	struct	radix_node rnh_nodes[3];	/* empty tree for common case */
 #ifdef _KERNEL
-	struct	cmutex rnh_lock;		/* locks entire radix tree */
+	struct	rwlock rnh_lock;		/* locks entire radix tree */
 #endif
 };
 
@@ -132,16 +132,18 @@ struct radix_node_head {
                         } while (0)
 #define Free(p) free((char *)p);
 
-/* FIXME: This was an encapsulation for rwlock, now a mutex */
-#define	RADIX_NODE_HEAD_LOCK_INIT(rnh)	bzero((void*)&rnh->rnh_lock, sizeof(struct cmutex))
-#define	RADIX_NODE_HEAD_LOCK(rnh)	mutex_lock(&rnh->rnh_lock)
-#define	RADIX_NODE_HEAD_UNLOCK(rnh)	mutex_unlock(&rnh->rnh_lock)
-#define	RADIX_NODE_HEAD_RLOCK(rnh)	mutex_lock(&rnh->rnh_lock)
-#define	RADIX_NODE_HEAD_RUNLOCK(rnh)	mutex_unlock(&rnh->rnh_lock)
+#define	RADIX_NODE_HEAD_LOCK_INIT(rnh)	\
+    rw_init_flags(&(rnh)->rnh_lock, "radix node head", 0)
+#define	RADIX_NODE_HEAD_LOCK(rnh)	rw_wlock(&(rnh)->rnh_lock)
+#define	RADIX_NODE_HEAD_UNLOCK(rnh)	rw_wunlock(&(rnh)->rnh_lock)
+#define	RADIX_NODE_HEAD_RLOCK(rnh)	rw_rlock(&(rnh)->rnh_lock)
+#define	RADIX_NODE_HEAD_RUNLOCK(rnh)	rw_runlock(&(rnh)->rnh_lock)
+#define	RADIX_NODE_HEAD_LOCK_TRY_UPGRADE(rnh)	rw_try_upgrade(&(rnh)->rnh_lock)
 
-#define	RADIX_NODE_HEAD_DESTROY(rnh)	    do{}while(0)
-#define	RADIX_NODE_HEAD_LOCK_ASSERT(rnh)    do{}while(0)
-#define	RADIX_NODE_HEAD_WLOCK_ASSERT(rnh)   do{}while(0)
+
+#define	RADIX_NODE_HEAD_DESTROY(rnh)	rw_destroy(&(rnh)->rnh_lock)
+#define	RADIX_NODE_HEAD_LOCK_ASSERT(rnh) rw_assert(&(rnh)->rnh_lock, RA_LOCKED)
+#define	RADIX_NODE_HEAD_WLOCK_ASSERT(rnh) rw_assert(&(rnh)->rnh_lock, RA_WLOCKED)
 
 void	 rn_init(int);
 int	 rn_inithead(void **, int);

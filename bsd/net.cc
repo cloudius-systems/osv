@@ -10,6 +10,7 @@ extern "C" {
     #include <bsd/sys/sys/domain.h>
     #include <bsd/sys/net/netisr.h>
     #include <bsd/sys/net/if.h>
+    #include <bsd/sys/net/if_llatbl.h>
     #include <bsd/sys/net/pfil.h>
     #include <bsd/sys/netinet/igmp.h>
     #include <bsd/sys/netinet/if_ether.h>
@@ -37,6 +38,7 @@ void net_init(void)
     eventhandler_init(NULL);
     mbuf_init(NULL);
     netisr_init(NULL);
+    vnet_lltable_init();
     arp_init();
     ether_init(NULL);
     if_init(NULL);
