@@ -69,7 +69,8 @@
 CTASSERT(sizeof(struct ip) == 20);
 #endif
 
-struct	rwlock in_ifaddr_lock;
+/* FIXME: OSv - find a better place to initialize this mutex */
+struct	rwlock in_ifaddr_lock = {0};
 RW_SYSINIT(in_ifaddr_lock, &in_ifaddr_lock, "in_ifaddr_lock");
 
 VNET_DEFINE(int, rsvp_on);

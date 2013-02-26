@@ -101,20 +101,9 @@ void ip_initid(void)
 	array_ptr = 0;
 	size_t bits_sz = bitstr_size(65536);
 	id_array = (u_int16_t *) malloc(array_size * sizeof(u_int16_t));
-	id_bits = (bitstr_t *) malloc(bits_sz);
-	if (id_array == NULL || id_bits == NULL) {
-		/* Neither or both. */
-		if (id_array != NULL) {
-			free(id_array);
-			id_array = NULL;
-		}
-		if (id_bits != NULL) {
-			free(id_bits);
-			id_bits = NULL;
-		}
-	}
-
 	bzero(id_array, array_size * sizeof(u_int16_t));
+
+	id_bits = (bitstr_t *) malloc(bits_sz);
 	bzero(id_bits, bits_sz);
 }
 

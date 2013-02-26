@@ -813,13 +813,7 @@ match:
 		 * add on any record-route or timestamp options.
 		 */
 		cp = (u_char *) (ip + 1);
-		/* FIXME: OSv - enable when we have ip options */
-#if 0
 		if ((opts = ip_srcroute(m)) == 0 &&
-#else
-		opts = 0;
-		if (opts &&
-#endif
 		    (opts = m_gethdr(M_DONTWAIT, MT_DATA))) {
 			opts->m_len = sizeof(struct in_addr);
 			mtod(opts, struct in_addr *)->s_addr = 0;

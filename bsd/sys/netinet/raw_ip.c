@@ -181,8 +181,8 @@ rip_delhash(struct inpcb *inp)
 static void
 rip_zone_change(void *tag)
 {
-    /* FIXME: OSv */
-	// uma_zone_set_max(V_ripcbinfo.ipi_zone, maxsockets);
+
+	uma_zone_set_max(V_ripcbinfo.ipi_zone, maxsockets);
 }
 
 static int
@@ -977,7 +977,7 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 	if (error)
 		return (error);
 
-	inp_list = malloc(n * sizeof *inp_list);
+	inp_list = malloc(n * sizeof *inp_list, M_TEMP, M_WAITOK);
 	if (inp_list == 0)
 		return (ENOMEM);
 
@@ -1036,7 +1036,7 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 		INP_INFO_RUNLOCK(&V_ripcbinfo);
 		error = SYSCTL_OUT(req, &xig, sizeof xig);
 	}
-	free(inp_list);
+	free(inp_list, M_TEMP);
 	return (error);
 }
 

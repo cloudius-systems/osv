@@ -40,6 +40,7 @@ struct ucred {
     int __unused;
 };
 
+/* Implemented in bsd/sys/kern/subr_hash.c */
 struct malloc_type;
 void    hashdestroy(void *, struct malloc_type *, u_long);
 void    *hashinit(int count, struct malloc_type *type, u_long *hashmask);
