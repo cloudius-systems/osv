@@ -36,7 +36,11 @@ void net_init(void)
 
     arc4_init();
     eventhandler_init(NULL);
+
+    /* MBUF */
+    tunable_mbinit(NULL);
     mbuf_init(NULL);
+
     netisr_init(NULL);
     vnet_lltable_init();
     arp_init();

@@ -78,21 +78,22 @@
  *
  */
 
-int nmbclusters;		/* limits number of mbuf clusters */
-int nmbjumbop;			/* limits number of page size jumbo clusters */
-int nmbjumbo9;			/* limits number of 9k jumbo clusters */
-int nmbjumbo16;			/* limits number of 16k jumbo clusters */
+int nmbclusters = 0;		/* limits number of mbuf clusters */
+int nmbjumbop = 0;			/* limits number of page size jumbo clusters */
+int nmbjumbo9 = 0;			/* limits number of 9k jumbo clusters */
+int nmbjumbo16 = 0;			/* limits number of 16k jumbo clusters */
 struct mbstat mbstat;
 
-#if 0
 /*
  * tunable_mbinit() has to be run before init_maxsockets() thus
  * the SYSINIT order below is SI_ORDER_MIDDLE while init_maxsockets()
  * runs at SI_ORDER_ANY.
  */
-static void
+void
 tunable_mbinit(void *dummy)
 {
+
+    int maxusers = 256;
 
 	/* This has to be done before VM init. */
 	TUNABLE_INT_FETCH("kern.ipc.nmbclusters", &nmbclusters);
@@ -113,6 +114,7 @@ tunable_mbinit(void *dummy)
 }
 SYSINIT(tunable_mbinit, SI_SUB_TUNABLES, SI_ORDER_MIDDLE, tunable_mbinit, NULL);
 
+#if 0
 static int
 sysctl_nmbclusters(SYSCTL_HANDLER_ARGS)
 {
@@ -227,17 +229,12 @@ static void	mb_zfini_pack(void *, int);
 
 static void    *mbuf_jumbo_alloc(uma_zone_t, int, uint8_t *, int);
 
-#if 0
-/* Ensure that MSIZE doesn't break dtom() - it must be a power of 2 */
-CTASSERT((((MSIZE - 1) ^ MSIZE) + 1) >> 1 == MSIZE);
-
 /*
  * Initialize FreeBSD Network buffer allocation.
  */
 SYSINIT(mbuf, SI_SUB_MBUF, SI_ORDER_FIRST, mbuf_init, NULL);
-#endif
-
-void mbuf_init(void *dummy)
+void
+mbuf_init(void *dummy)
 {
 
 	/*
@@ -354,6 +351,8 @@ mbuf_jumbo_alloc(uma_zone_t zone, int bytes, uint8_t *flags, int wait)
 	return ((void *)kmem_alloc_contig(kernel_map, bytes, wait,
 	    (vm_paddr_t)0, ~(vm_paddr_t)0, 1, 0, VM_MEMATTR_DEFAULT));
 #else
+	/* OSv: We don't use an allocf function in the UMA allocator stub so this 
+	 * function isn't being called */
 	return (NULL);
 #endif
 }

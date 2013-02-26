@@ -144,7 +144,7 @@ static struct filterops sowrite_filtops = {
 uma_zone_t socket_zone;
 so_gen_t	so_gencnt;	/* generation count for sockets */
 
-int	maxsockets = 4096;
+int	maxsockets = 17408;
 
 MALLOC_DEFINE(M_SONAME, "soname", "socket name");
 MALLOC_DEFINE(M_PCB, "pcb", "protocol control block");
