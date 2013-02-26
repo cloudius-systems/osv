@@ -64,9 +64,9 @@
 #include <bsd/sys/netinet/ip.h>
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/ip_icmp.h>
+#include <bsd/sys/netinet/igmp_var.h>
 
 #if 0
-#include <netinet/igmp_var.h>
 #include <netinet/tcp.h>
 #include <netinet/tcp_timer.h>
 #include <netinet/tcp_var.h>
@@ -104,8 +104,23 @@ extern	struct domain inetdomain;
 	.pr_usrreqs =		&nousrreqs	\
 }
 
-/* FIXME: OSv: support RAW_IP and ICMP */
 struct protosw inetsw[] = {
+{
+    .pr_type =      0,
+    .pr_domain =        &inetdomain,
+    .pr_protocol =      IPPROTO_IP,
+    .pr_init =      ip_init,
+#ifdef VIMAGE
+    .pr_destroy =       ip_destroy,
+#endif
+    .pr_slowtimo =      ip_slowtimo,
+    .pr_drain =     ip_drain,
+    .pr_usrreqs =       &nousrreqs
+},
+/* UDP */
+IPPROTOSPACER,
+/* TCP */
+IPPROTOSPACER,
 {
     .pr_type =      SOCK_RAW,
     .pr_domain =        &inetdomain,
@@ -122,6 +137,26 @@ struct protosw inetsw[] = {
     .pr_protocol =      IPPROTO_ICMP,
     .pr_flags =     PR_ATOMIC|PR_ADDR|PR_LASTHDR,
     .pr_input =     icmp_input,
+    .pr_ctloutput =     rip_ctloutput,
+    .pr_usrreqs =       &rip_usrreqs
+},
+{
+    .pr_type =      SOCK_RAW,
+    .pr_domain =        &inetdomain,
+    .pr_protocol =      IPPROTO_IGMP,
+    .pr_flags =     PR_ATOMIC|PR_ADDR|PR_LASTHDR,
+    .pr_input =     igmp_input,
+    .pr_ctloutput =     rip_ctloutput,
+    .pr_fasttimo =      igmp_fasttimo,
+    .pr_slowtimo =      igmp_slowtimo,
+    .pr_usrreqs =       &rip_usrreqs
+},
+{
+    .pr_type =      SOCK_RAW,
+    .pr_domain =        &inetdomain,
+    .pr_protocol =      IPPROTO_RSVP,
+    .pr_flags =     PR_ATOMIC|PR_ADDR|PR_LASTHDR,
+    .pr_input =     rsvp_input,
     .pr_ctloutput =     rip_ctloutput,
     .pr_usrreqs =       &rip_usrreqs
 },
@@ -406,6 +441,9 @@ SYSCTL_NODE(_net_inet, IPPROTO_IP,	ip,	CTLFLAG_RW, 0,	"IP");
 SYSCTL_NODE(_net_inet, IPPROTO_ICMP,	icmp,	CTLFLAG_RW, 0,	"ICMP");
 SYSCTL_NODE(_net_inet, IPPROTO_UDP,	udp,	CTLFLAG_RW, 0,	"UDP");
 SYSCTL_NODE(_net_inet, IPPROTO_TCP,	tcp,	CTLFLAG_RW, 0,	"TCP");
+#ifdef SCTP
+SYSCTL_NODE(_net_inet, IPPROTO_SCTP,	sctp,	CTLFLAG_RW, 0,	"SCTP");
+#endif
 SYSCTL_NODE(_net_inet, IPPROTO_IGMP,	igmp,	CTLFLAG_RW, 0,	"IGMP");
 #ifdef IPSEC
 /* XXX no protocol # to use, pick something "reserved" */
