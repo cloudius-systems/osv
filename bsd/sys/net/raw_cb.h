@@ -34,7 +34,7 @@
 #ifndef _NET_RAW_CB_H_
 #define _NET_RAW_CB_H_
 
-#include <sys/queue.h>
+#include <bsd/sys/sys/queue.h>
 
 /*
  * Raw protocol interface control block.  Used to tie a socket to the generic

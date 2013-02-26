@@ -31,21 +31,18 @@
  * $FreeBSD$
  */
 
-#include <sys/param.h>
-#include <sys/domain.h>
-#include <sys/lock.h>
-#include <sys/kernel.h>
-#include <sys/malloc.h>
-#include <sys/mutex.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sysctl.h>
-#include <sys/systm.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/rwlock.h>
 
-#include <net/if.h>
-#include <net/raw_cb.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
+
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/raw_cb.h>
+#include <bsd/sys/net/vnet.h>
 
 /*
  * Routines to manage the raw protocol control blocks.
@@ -56,7 +53,11 @@
  *	redo address binding to allow wildcards
  */
 
-struct mtx rawcb_mtx;
+/*
+ * FIXME: OSV - find a good place to initialize this mutex
+ * mtx_init(&rawcb_mtx, "rawcb", MTX_DEF);
+ */
+struct mtx rawcb_mtx = {0};
 VNET_DEFINE(struct rawcb_list_head, rawcb_list);
 
 SYSCTL_NODE(_net, OID_AUTO, raw, CTLFLAG_RW, 0, "Raw socket infrastructure");
@@ -113,5 +114,5 @@ raw_detach(struct rawcb *rp)
 	mtx_lock(&rawcb_mtx);
 	LIST_REMOVE(rp, list);
 	mtx_unlock(&rawcb_mtx);
-	free((caddr_t)(rp), M_PCB);
+	free((caddr_t)(rp));
 }

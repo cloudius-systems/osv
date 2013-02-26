@@ -31,25 +31,18 @@
  * $FreeBSD$
  */
 
-#include <sys/param.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/mutex.h>
-#include <sys/priv.h>
-#include <sys/protosw.h>
-#include <sys/signalvar.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sx.h>
-#include <sys/systm.h>
+#include <bsd/porting/netport.h>
 
-#include <net/if.h>
-#include <net/raw_cb.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/priv.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 
-MTX_SYSINIT(rawcb_mtx, &rawcb_mtx, "rawcb", MTX_DEF);
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/raw_cb.h>
+#include <bsd/sys/net/vnet.h>
 
 /*
  * Initialize raw connection block q.
