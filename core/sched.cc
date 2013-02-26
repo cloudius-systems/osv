@@ -8,6 +8,7 @@
 #include "align.hh"
 #include "drivers/clock.hh"
 #include "interrupt.hh"
+#include "smp.hh"
 
 namespace sched {
 
@@ -489,6 +490,7 @@ void init_detached_threads_reaper()
 void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
     tls = tls_data;
+    smp_init();
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     thread t{cont, attr, true};

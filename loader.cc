@@ -86,7 +86,6 @@ int main(int ac, char **av)
 
     test_locale();
     idt.load_on_cpu();
-    smp_init();
     void main_cont(int ac, char** av);
     sched::init(tls_data, [=] { main_cont(ac, av); });
 }
