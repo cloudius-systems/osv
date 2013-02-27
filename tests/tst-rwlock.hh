@@ -30,6 +30,33 @@ public:
     bool _test2_t1_finished;
     bool _test2_t2_finished;
 
+    bool _test3_finished;
+
+    void rwlock_test3(void)
+    {
+        debug("rwlock_test3... ", false);
+
+        rwlock lock;
+        rw_init(&lock, "tst3");
+
+        if (rw_try_rlock(&lock)) {
+            rw_runlock(&lock);
+        }
+
+        rw_rlock(&lock);
+
+        if (rw_try_rlock(&lock)) {
+            rw_runlock(&lock);
+        }
+
+        rw_runlock(&lock);
+
+        debug("OK");
+
+        _test3_finished = true;
+        _main->wake();
+    }
+
     void rwlock_test2_t1(void)
     {
         for (int i=0; i<10; i++) {
@@ -115,6 +142,13 @@ public:
         _main->wait_until([&] { return (_test2_t1_finished && _test2_t2_finished); });
         delete t2_1;
         delete t2_2;
+
+        // Test 3
+        _test3_finished = false;
+        thread* t3 = new thread([&] { rwlock_test3(); });
+        t3->start();
+        _main->wait_until([&] { return (_test3_finished); });
+        delete t3;
     }
 };
 
