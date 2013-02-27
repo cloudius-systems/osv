@@ -90,6 +90,9 @@ public:
         t.die = true;
         t.main->wait_until([&] {return (t.alloc_finished && t.free_finished);});
 
+        t1->join();
+        t2->join();
+
         delete t1;
         delete t2;
         debug("Alloc test succeeded");
