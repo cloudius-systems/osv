@@ -52,16 +52,8 @@ static __always_inline void mutex_destroy(mutex_t* m)
 {
 }
 
-inline void spin_lock(spinlock_t *sl)
-{
-    while (__sync_lock_test_and_set(&sl->lock, 1))
-        ;
-}
-
-inline void spin_unlock(spinlock_t *sl)
-{
-    __sync_lock_release(&sl->lock, 0);
-}
+void spin_lock(spinlock_t *sl);
+void spin_unlock(spinlock_t *sl);
 
 #ifdef __cplusplus
 }
