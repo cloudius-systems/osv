@@ -83,6 +83,7 @@ semaphore* from_libc(sem_t* p)
 
 int sem_init(sem_t* s, int pshared, unsigned val)
 {
+    static_assert(sizeof(semaphore) <= sizeof(*s), "sem_t overflow");
     new (s) semaphore(val);
     return 0;
 }
