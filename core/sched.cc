@@ -229,7 +229,6 @@ thread::~thread()
     if (_attr.stack.deleter) {
         _attr.stack.deleter(_attr.stack.begin);
     }
-    debug("thread dtor");
 }
 
 void thread::start()
