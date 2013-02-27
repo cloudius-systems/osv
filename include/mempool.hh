@@ -37,7 +37,7 @@ private:
     void add_page();
     static page_header* to_header(free_object* object);
 private:
-    mutex _lock;
+    spinlock _lock;
     unsigned _size;
 
     struct page_header {

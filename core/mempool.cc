@@ -56,7 +56,7 @@ pool::page_header* pool::to_header(free_object* object)
 
 void* pool::alloc()
 {
-    std::lock_guard<mutex> guard(_lock);
+    std::lock_guard<spinlock> guard(_lock);
     if (_free.empty()) {
         add_page();
     }
@@ -92,7 +92,7 @@ void pool::add_page()
 
 void pool::free(void* object)
 {
-    std::lock_guard<mutex> guard(_lock);
+    std::lock_guard<spinlock> guard(_lock);
     auto obj = static_cast<free_object*>(object);
     auto header = to_header(obj);
     if (!--header->nalloc) {
@@ -146,7 +146,7 @@ struct addr_cmp {
 
 namespace bi = boost::intrusive;
 
-mutex free_page_ranges_lock;
+spinlock free_page_ranges_lock;
 bi::set<page_range,
         bi::compare<addr_cmp>,
         bi::member_hook<page_range,
@@ -159,7 +159,7 @@ void* malloc_large(size_t size)
     size = (size + page_size - 1) & ~(page_size - 1);
     size += page_size;
 
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
+    std::lock_guard<spinlock> guard(free_page_ranges_lock);
 
     for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
         auto header = &*i;
@@ -200,7 +200,7 @@ void free_large(void* obj)
     obj -= page_size;
     auto header = static_cast<page_range*>(obj);
 
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
+    std::lock_guard<spinlock> guard(free_page_ranges_lock);
 
     auto i = free_page_ranges.insert(*header).first;
     if (i != free_page_ranges.begin()) {
@@ -220,7 +220,7 @@ unsigned large_object_size(void *obj)
 
 void* alloc_page()
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
+    std::lock_guard<spinlock> guard(free_page_ranges_lock);
 
     assert(!free_page_ranges.empty());
     auto p = &*free_page_ranges.begin();
