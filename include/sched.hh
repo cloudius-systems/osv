@@ -246,11 +246,13 @@ typedef bi::list<thread,
                 > runqueue_type;
 
 struct cpu {
+    explicit cpu();
     unsigned id;
     struct arch_cpu arch;
     thread* bringup_thread;
     runqueue_type runqueue;
     timer_list timers;
+    thread idle_thread;
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     cpu_set incoming_wakeups_mask;
@@ -260,6 +262,7 @@ struct cpu {
     void schedule(bool yield = false);
     void handle_incoming_wakeups();
     void idle();
+    void do_idle();
     void load_balance();
     unsigned load();
 };

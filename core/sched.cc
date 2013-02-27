@@ -30,6 +30,14 @@ namespace sched {
 
 void schedule_force();
 
+const thread::attr idle_thread_attr{{}, true};
+
+cpu::cpu()
+    : idle_thread([this] { idle(); }, idle_thread_attr)
+{
+    idle_thread._cpu = this;
+}
+
 void cpu::schedule(bool yield)
 {
     // FIXME: drive by IPI
@@ -39,15 +47,11 @@ void cpu::schedule(bool yield)
         return;
     }
 
-    if (runqueue.empty()) {
-        idle();
-    }
-
     with_lock(irq_lock, [this] {
+        assert(!runqueue.empty());
         auto n = &runqueue.front();
         runqueue.pop_front();
-        assert(n->_status.load() == thread::status::queued
-                || n->_status.load() == thread::status::running);
+        assert(n->_status.load() == thread::status::queued);
         n->_status.store(thread::status::running);
         if (n != thread::current()) {
             n->switch_to();
@@ -55,7 +59,7 @@ void cpu::schedule(bool yield)
     });
 }
 
-void cpu::idle()
+void cpu::do_idle()
 {
     do {
         // spin for a bit before halting
@@ -77,6 +81,17 @@ void cpu::idle()
     } while (runqueue.empty());
 }
 
+void cpu::idle()
+{
+    while (true) {
+        do_idle();
+        // FIXME: we don't have an idle priority class yet. so
+        // FIXME: yield when we're done and let the scheduler pick
+        // FIXME: someone else
+        thread::yield();
+    }
+}
+
 void cpu::handle_incoming_wakeups()
 {
     cpu_set queues_with_wakes{incoming_wakeups_mask.fetch_clear()};
@@ -86,6 +101,7 @@ void cpu::handle_incoming_wakeups()
         while (!q.empty()) {
             auto& t = q.front();
             q.pop_front_nonatomic();
+            irq_save_lock_type irq_lock;
             runqueue.push_back(t);
             with_lock(irq_lock, [&] {
                 t.resume_timers();
