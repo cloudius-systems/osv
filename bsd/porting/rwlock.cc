@@ -45,28 +45,27 @@ void _rw_wunlock(struct rwlock *rw, const char *file, int line)
 
 void _rw_rlock(struct rwlock *rw, const char *file, int line)
 {
-    if (rw_wowned(rw)) {
-        rw->_rw_recurse++;
-    } else {
+    if (!rw_wowned(rw)) {
         mutex_lock(&rw->_mutex);
     }
+
+    rw->_rw_recurse++;
 }
 
 int _rw_try_rlock(struct rwlock *rw, const char *file, int line)
 {
-    if (rw_wowned(rw)) {
-        rw->_rw_recurse++;
-        return (1);
+    if (rw_wowned(rw) || mutex_trylock(&rw->_mutex)) {
+        ++rw->_rw_recurse;
+        return 1;
     }
-
-    return (mutex_trylock(&rw->_mutex));
+    return 0;
 }
 
 void _rw_runlock(struct rwlock *rw, const char *file, int line)
 {
-    if (rw->_rw_recurse > 0) {
-        rw->_rw_recurse--;
-    }
+    assert(rw_wowned(rw));
+
+    rw->_rw_recurse--;
 
     if (rw->_rw_recurse == 0) {
         mutex_unlock(&rw->_mutex);
