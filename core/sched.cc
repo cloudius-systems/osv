@@ -468,8 +468,8 @@ detached_thread::reaper::reaper()
 void detached_thread::reaper::reap()
 {
     while (true) {
-        wait_until(_mtx, [=] { return !_zombies.empty(); });
         with_lock(_mtx, [=] {
+            wait_until(_mtx, [=] { return !_zombies.empty(); });
             while (!_zombies.empty()) {
                 auto z = _zombies.front();
                 _zombies.pop_front();
