@@ -59,6 +59,7 @@ void thread::init_stack()
     }
     if (!stack.begin) {
         stack.begin = malloc(stack.size);
+        stack.deleter = free;
     }
     void** stacktop = reinterpret_cast<void**>(stack.begin + stack.size);
     *--stacktop = this;

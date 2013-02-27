@@ -181,12 +181,12 @@ void thread::yield()
 }
 
 thread::stack_info::stack_info()
-    : begin(nullptr), size(0), owned(true)
+    : begin(nullptr), size(0), deleter(nullptr)
 {
 }
 
 thread::stack_info::stack_info(void* _begin, size_t _size)
-    : begin(_begin), size(_size), owned(false)
+    : begin(_begin), size(_size), deleter(nullptr)
 {
     auto end = align_down(begin + size, 16);
     size = static_cast<char*>(end) - static_cast<char*>(begin);
@@ -226,6 +226,9 @@ thread::~thread()
     with_lock(thread_list_mutex, [this] {
         thread_list.erase(thread_list.iterator_to(*this));
     });
+    if (_attr.stack.deleter) {
+        _attr.stack.deleter(_attr.stack.begin);
+    }
     debug("thread dtor");
 }
 

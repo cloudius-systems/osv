@@ -134,7 +134,7 @@ public:
         stack_info(void* begin, size_t size);
         void* begin;
         size_t size;
-        bool owned; // by thread
+        void (*deleter)(void*);  // null: don't delete
     };
     struct attr {
         stack_info stack;
