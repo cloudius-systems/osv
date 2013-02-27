@@ -223,6 +223,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
 
 thread::~thread()
 {
+    join();
     with_lock(thread_list_mutex, [this] {
         thread_list.erase(thread_list.iterator_to(*this));
     });
