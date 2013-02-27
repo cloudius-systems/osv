@@ -474,6 +474,7 @@ void detached_thread::reaper::reap()
                 auto z = _zombies.front();
                 _zombies.pop_front();
                 z->join();
+                delete z;
             }
         });
     }
