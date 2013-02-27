@@ -13,7 +13,7 @@ public:
     bool trywait();
 private:
     unsigned _val;
-    spinlock _mtx;
+    std::unique_ptr<mutex> _mtx;
     struct wait_record {
         sched::thread* owner;
     };
@@ -22,12 +22,13 @@ private:
 
 semaphore::semaphore(unsigned val)
     : _val(val)
+    , _mtx(new mutex)
 {
 }
 
 void semaphore::post()
 {
-    auto wr = with_lock(_mtx, [this] () -> wait_record* {
+    auto wr = with_lock(*_mtx, [this] () -> wait_record* {
         if (_waiters.empty()) {
             ++_val;
             return nullptr;
@@ -48,7 +49,7 @@ void semaphore::wait()
     bool wait = false;
     wait_record wr;
     wr.owner = nullptr;
-    with_lock(_mtx, [&] {
+    with_lock(*_mtx, [&] {
         if (_val > 0) {
             --_val;
         } else {
@@ -65,7 +66,7 @@ void semaphore::wait()
 bool semaphore::trywait()
 {
     bool ok = false;
-    with_lock(_mtx, [&] {
+    with_lock(*_mtx, [&] {
         if (_val > 0) {
             --_val;
             ok = true;
