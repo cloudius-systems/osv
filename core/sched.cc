@@ -468,7 +468,7 @@ detached_thread::reaper::reaper()
 void detached_thread::reaper::reap()
 {
     while (true) {
-        wait_until([=] { return !_zombies.empty(); }); // FIXME: locking?
+        wait_until(_mtx, [=] { return !_zombies.empty(); });
         with_lock(_mtx, [=] {
             while (!_zombies.empty()) {
                 auto z = _zombies.front();
