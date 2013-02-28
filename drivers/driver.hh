@@ -6,8 +6,6 @@
 #include <map>
 #include <string>
 
-using namespace pci;
-
 namespace hw {
 
     class hw_driver {
