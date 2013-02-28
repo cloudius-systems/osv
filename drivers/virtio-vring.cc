@@ -187,7 +187,7 @@ namespace virtio {
     bool vring::avail_ring_has_room(int descriptors)
     {
         if (_dev->get_indirect_buf_cap())
-            descriptors = 1;
+            descriptors--;
         return (_avail_count >= descriptors);
     }
 

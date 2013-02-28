@@ -122,8 +122,12 @@ class virtio_device;
         void* get_buf();
         bool used_ring_not_empty();
         bool avail_ring_not_empty();
+        // when the available ring has x descriptors as room it means that
+        // x descriptors can be allocated while _num-x are available for the host
         bool avail_ring_has_room(int n);
         bool kick();
+        // Total number of descriptors in ring
+        int size() {return _num;}
 
         // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
         // Assuming a given event_idx value from the other size, if
