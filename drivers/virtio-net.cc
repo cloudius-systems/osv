@@ -60,7 +60,7 @@ namespace virtio {
         thread* isr = new thread([this] { this->receiver(); });
         isr->start();
         isrs->insert(std::make_pair(0, isr));
-        interrupt_manager::instance()->easy_register(_dev, *isrs);
+        _msi.easy_register(_dev, *isrs);
 
         fill_rx_ring();
 

@@ -59,14 +59,6 @@ public:
     interrupt_manager();
     virtual ~interrupt_manager();
 
-    static interrupt_manager * instance() {
-        if (_instance == nullptr) {
-            _instance = new interrupt_manager();
-        }
-
-        return (_instance);
-    }
-
     ////////////////////
     // Easy Interface //
     ////////////////////
@@ -91,7 +83,6 @@ public:
     bool unmask_interrupts(const assigned_vectors& vectors);
 
 private:
-    static interrupt_manager* _instance;
     msix_vector* _vectors[max_vectors];
     // Used by the easy interface
     std::map<pci::pci_function *, assigned_vectors> _easy_dev2vectors;

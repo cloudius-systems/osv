@@ -3,6 +3,7 @@
 
 #include "driver.hh"
 #include "virtio-device.hh"
+#include "interrupt.hh"
 
 namespace virtio {
 
@@ -26,6 +27,7 @@ namespace virtio {
 
         // Virtio device
         virtio_device *_dev;
+        interrupt_manager _msi;
     };
 
 }

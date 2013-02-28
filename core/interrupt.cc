@@ -10,8 +10,6 @@
 
 using namespace pci;
 
-interrupt_manager* interrupt_manager::_instance = nullptr;
-
 msix_vector::msix_vector(pci_function* dev)
     : _dev(dev)
 {
