@@ -36,52 +36,32 @@ void net_init(void)
     /* Random */
     struct timeval tv;
     bsd_srandom(tv.tv_sec ^ tv.tv_usec);
+    ip_initid();
 
+    tunable_mbinit(NULL);
+    // init_maxsockets(NULL);
     arc4_init();
     eventhandler_init(NULL);
-
-    /* MBUF */
-    tunable_mbinit(NULL);
     mbuf_init(NULL);
-
     netisr_init(NULL);
-    vnet_lltable_init();
-    arp_init();
-    ether_init(NULL);
     if_init(NULL);
     vnet_if_init(NULL);
-
-    /* Routing */
-    route_init();
-    vnet_route_init();
-
-    rts_init();
-
+    ether_init(NULL);
+    vnet_lltable_init();
+    igmp_init();
+    vnet_igmp_init();
     vnet_pfil_init();
-
-    ip_initid();
-    ipport_tick_init(NULL);
-
-
-    /* Initialize Domains */
     domaininit(NULL);
     OSV_DOMAIN_SET(inet);
     OSV_DOMAIN_SET(route);
-
-    /* IGMP */
-    igmp_init();
-    vnet_igmp_init();
-
+    rts_init();
+    route_init();
+    vnet_route_init();
+    ipport_tick_init(NULL);
+    arp_init();
     domainfinalize(NULL);
-
-    /* Loopback */
-    vnet_loif_init();
-
-    /*
-     * Let all domains know about this interface...
-     * (There are non configured at this moment)
-     */
     if_attachdomain(NULL);
+    vnet_loif_init();
 
     debug("Done!");
 }
