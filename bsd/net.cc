@@ -22,7 +22,10 @@ extern "C" {
     /* Generation of ip ids */
     void ip_initid(void);
 
+    /* AF_INET */
     extern  struct domain inetdomain;
+    /* AF_ROUTE */
+    extern  struct domain routedomain;
 }
 
 
@@ -63,6 +66,7 @@ void net_init(void)
     /* Initialize Domains */
     domaininit(NULL);
     OSV_DOMAIN_SET(inet);
+    OSV_DOMAIN_SET(route);
 
     /* IGMP */
     igmp_init();
