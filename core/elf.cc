@@ -598,10 +598,10 @@ namespace elf {
     {
         auto ef = _files[name];
 
-	_files.erase(name);
-	_modules.erase(std::find(_modules.begin(), _modules.end(), ef));
-	ef->unload_segments();
-	delete ef;
+        _files.erase(name);
+        _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
+        ef->unload_segments();
+        delete ef;
     }
 
     elf_object* program::s_objs[100];
