@@ -103,7 +103,7 @@ struct driver virtio_blk_driver = {
         thread* isr = new thread([this] { this->response_worker(); });
         isr->start();
         isrs->insert(std::make_pair(0, isr));
-        _msi.easy_register(_dev, *isrs);
+        _msi.easy_register(*isrs);
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 

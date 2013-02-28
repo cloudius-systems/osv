@@ -56,7 +56,7 @@ typedef std::map<unsigned, sched::thread *> msix_isr_list;
 class interrupt_manager {
 public:
 
-    interrupt_manager();
+    explicit interrupt_manager(pci::pci_function* dev);
     ~interrupt_manager();
 
     ////////////////////
@@ -67,14 +67,14 @@ public:
     // 2. Allocate vectors and assign ISRs
     // 3. Setup entries
     // 4. Unmask interrupts
-    bool easy_register(pci::pci_function* dev, msix_isr_list& isrs);
-    void easy_unregister(pci::pci_function* dev);
+    bool easy_register(msix_isr_list& isrs);
+    void easy_unregister();
 
     /////////////////////
     // Multi Interface //
     /////////////////////
 
-    assigned_vectors request_vectors(pci::pci_function* dev, unsigned num_vectors);
+    assigned_vectors request_vectors(unsigned num_vectors);
     void free_vectors(const assigned_vectors& vectors);
     bool assign_isr(unsigned vector, std::function<void ()> handler);
     // Multiple entry can be assigned the same vector
@@ -83,9 +83,10 @@ public:
     bool unmask_interrupts(const assigned_vectors& vectors);
 
 private:
+    pci::pci_function* _dev;
     msix_vector* _vectors[max_vectors];
     // Used by the easy interface
-    std::map<pci::pci_function *, assigned_vectors> _easy_dev2vectors;
+    assigned_vectors _easy_vectors;
 };
 
 class inter_processor_interrupt {

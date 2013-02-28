@@ -60,7 +60,8 @@ void msix_vector::interrupt(void)
     _handler();
 }
 
-interrupt_manager::interrupt_manager()
+interrupt_manager::interrupt_manager(pci::pci_function* dev)
+    : _dev(dev)
 {
     for (int i=0; i<256; i++) {
         _vectors[i] = nullptr;
@@ -72,11 +73,11 @@ interrupt_manager::~interrupt_manager()
 
 }
 
-bool interrupt_manager::easy_register(pci::pci_function* dev, msix_isr_list& isrs)
+bool interrupt_manager::easy_register(msix_isr_list& isrs)
 {
     unsigned n = isrs.size();
 
-    assigned_vectors assigned = request_vectors(dev, n);
+    assigned_vectors assigned = request_vectors(n);
 
     if (assigned._num != n) {
         free_vectors(assigned);
@@ -85,7 +86,7 @@ bool interrupt_manager::easy_register(pci::pci_function* dev, msix_isr_list& isr
 
     // Enable the device msix capability,
     // masks all interrupts...
-    dev->msix_enable();
+    _dev->msix_enable();
 
     int idx=0;
 
@@ -105,30 +106,27 @@ bool interrupt_manager::easy_register(pci::pci_function* dev, msix_isr_list& isr
     }
 
     // Save reference for assigned vectors
-    _easy_dev2vectors.insert(std::make_pair(dev, assigned));
+    _easy_vectors = assigned;
     unmask_interrupts(assigned);
 
     return (true);
 }
 
-void interrupt_manager::easy_unregister(pci::pci_function* dev)
+void interrupt_manager::easy_unregister()
 {
-    auto it = _easy_dev2vectors.find(dev);
-    if (it != _easy_dev2vectors.end()) {
-        free_vectors(it->second);
-        _easy_dev2vectors.erase(it);
-    }
+    free_vectors(_easy_vectors);
+    _easy_vectors = assigned_vectors{};
 }
 
-assigned_vectors interrupt_manager::request_vectors(pci::pci_function* dev, unsigned num_vectors)
+assigned_vectors interrupt_manager::request_vectors(unsigned num_vectors)
 {
     assigned_vectors results;
     unsigned ctr=0;
 
-    results._num = std::min(num_vectors, dev->msix_get_num_entries());
+    results._num = std::min(num_vectors, _dev->msix_get_num_entries());
 
     for (unsigned i=0; i<results._num; i++) {
-        msix_vector * msix = new msix_vector(dev);
+        msix_vector * msix = new msix_vector(_dev);
         unsigned vector = msix->get_vector();
         _vectors[vector] = msix;
 
@@ -157,7 +155,6 @@ bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
     }
 
     msix_vector* msix = _vectors[vector];
-    pci_function* dev = msix->get_pci_function();
 
     msi_message msix_msg = apic->compose_msix(vector, 0);
 
@@ -165,7 +162,7 @@ bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
         return (false);
     }
 
-    if (!dev->msix_write_entry(entry_id, msix_msg._addr, msix_msg._data)) {
+    if (!_dev->msix_write_entry(entry_id, msix_msg._addr, msix_msg._data)) {
         return (false);
     }
 

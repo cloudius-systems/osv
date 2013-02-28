@@ -12,6 +12,7 @@ namespace virtio {
     virtio_driver::virtio_driver(virtio_device* vdev)
         : hw_driver()
         , _dev(vdev)
+        , _msi(vdev)
     {
         _dev->set_bus_master(true);
 
