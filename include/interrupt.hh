@@ -57,7 +57,7 @@ class interrupt_manager {
 public:
 
     interrupt_manager();
-    virtual ~interrupt_manager();
+    ~interrupt_manager();
 
     ////////////////////
     // Easy Interface //
