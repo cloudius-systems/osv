@@ -68,6 +68,8 @@ void net_init(void)
     igmp_init();
     vnet_igmp_init();
 
+    domainfinalize(NULL);
+
     /* Loopback */
     vnet_loif_init();
 

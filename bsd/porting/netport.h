@@ -51,6 +51,7 @@ void    *hashinit_flags(int count, struct malloc_type *type,
 
 
 void domaininit(void *dummy);
+void domainfinalize(void *dummy);
 
 #define DECLARE_MODULE(...)
 #define MODULE_VERSION(...)
