@@ -125,6 +125,7 @@ bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
 bsd += bsd/porting/route.o
+bsd += bsd/porting/networking.o
 bsd += bsd/porting/netport.o
 bsd += bsd/porting/netport1.o
 bsd += bsd/porting/uma_stub.o
