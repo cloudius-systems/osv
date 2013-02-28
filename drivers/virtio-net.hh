@@ -212,11 +212,6 @@ namespace virtio {
                 u16 virtqueue_pairs;
         };
 
-        struct virtio_net_req {
-            virtio_net_hdr hdr;
-            sglist payload;
-        };
-
         explicit virtio_net(virtio_device* dev);
         virtual ~virtio_net();
 

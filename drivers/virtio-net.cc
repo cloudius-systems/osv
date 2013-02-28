@@ -66,6 +66,8 @@ namespace virtio {
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
+        thread *test = new thread([this] {this->tx_test();});
+        test->start();
     }
 
     virtio_net::~virtio_net()
@@ -128,6 +130,15 @@ namespace virtio {
             } frag;
       } un;
     } __attribute__((packed));
+
+    struct virtio_net_req {
+        virtio_net::virtio_net_hdr hdr;
+        sglist payload;
+        u8 *buffer;
+
+        virtio_net_req() :buffer(nullptr) {};
+        ~virtio_net_req() {if (buffer) delete buffer;}
+    };
 
     void virtio_net::receiver() {
         vring* queue = _dev->get_virt_queue(0);
@@ -229,8 +240,9 @@ namespace virtio {
         virtio_net_req *req = new virtio_net_req;
         req->payload.add(mmu::virt_to_phys(out), len);
         req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
+        req->buffer = (u8*)out;
 
-        if (!queue->add_buf(&req->payload,0,2,req)) {
+        if (!queue->add_buf(&req->payload,2,0,req)) {
             delete req;
             return false;
         }
@@ -250,6 +262,8 @@ namespace virtio {
             });
 
             virtio_net_d(fmt("\t %s: thread awaken") % __FUNCTION__);
+
+            tx_gc();
         }
     }
 
@@ -262,6 +276,7 @@ namespace virtio {
         while((req = static_cast<virtio_net_req*>(queue->get_buf())) != nullptr) {
             virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
 
+            delete req;
         }
     }
 
@@ -283,10 +298,21 @@ namespace virtio {
 
     void virtio_net::tx_test()
     {
+        int i = 0;
+
         while (1) {
             timespec ts = {};
             ts.tv_sec = 1;
             nanosleep(&ts, nullptr);
+
+            void* buf = malloc(page_size);
+            memset(buf, 0, 1000);
+            // set the src& dst to self
+            memcpy(buf, _config.mac, sizeof(_config.mac));
+            memcpy(buf+6, _config.mac, sizeof(_config.mac));
+
+            virtio_net_d(fmt("%s: sending packet %d") % __FUNCTION__ % i++);
+            tx(buf, 1000);
 
             sched::thread::current()->yield();
         }
