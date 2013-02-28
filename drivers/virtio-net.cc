@@ -56,11 +56,9 @@ namespace virtio {
         read_config();
 
         //register the 3 irq callback for the net
-        msix_isr_list* isrs = new msix_isr_list;
         thread* isr = new thread([this] { this->receiver(); });
         isr->start();
-        isrs->insert(std::make_pair(0, isr));
-        _msi.easy_register(*isrs);
+        _msi.easy_register({ { 0, isr } });
 
         fill_rx_ring();
 
