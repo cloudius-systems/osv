@@ -315,6 +315,8 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 		}
 	}
 
+	goto good;
+
 #if 0
        /*
 	* Bridges require special output handling.
@@ -347,6 +349,7 @@ bad:			if (m != NULL)
 	                m_freem(m);
 	            return (error);
 #endif
+	good:
 
 	/* Continue with link-layer output */
 	return ether_output_frame(ifp, m);
