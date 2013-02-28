@@ -336,6 +336,7 @@ namespace elf {
         void with_modules(std::function<void (std::vector<elf_object*>&)> f);
     private:
         void add_debugger_obj(elf_object* obj);
+        void del_debugger_obj(elf_object* obj);
         void* do_lookup_function(const char* symbol);
         void set_object(std::string lib, elf_object* obj);
     private:

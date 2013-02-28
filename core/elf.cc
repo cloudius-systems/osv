@@ -598,6 +598,7 @@ namespace elf {
     {
         auto ef = _files[name];
 
+        del_debugger_obj(ef);
         _files.erase(name);
         _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
         ef->unload_segments();
@@ -613,6 +614,20 @@ namespace elf {
             ++p;
         }
         *p = obj;
+    }
+
+    void program::del_debugger_obj(elf_object* obj)
+    {
+        auto p = s_objs;
+        while (*p && *p != obj) {
+            ++p;
+        }
+        if (!*p) {
+            return;
+        }
+        while ((p[0] = p[1]) != nullptr) {
+            ++p;
+        }
     }
 
     symbol_module program::lookup(const char* name)
