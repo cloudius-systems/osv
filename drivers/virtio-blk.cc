@@ -99,11 +99,9 @@ struct driver virtio_blk_driver = {
         read_config();
 
         //register the single irq callback for the block
-        msix_isr_list* isrs = new msix_isr_list;
         thread* isr = new thread([this] { this->response_worker(); });
         isr->start();
-        isrs->insert(std::make_pair(0, isr));
-        _msi.easy_register(*isrs);
+        _msi.easy_register({ { 0, isr } });
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 

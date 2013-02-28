@@ -9,6 +9,7 @@
 #include "drivers/pci.hh"
 #include "drivers/pci-function.hh"
 #include <osv/types.h>
+#include <initializer_list>
 
 // max vectors per request
 const int max_vectors = 256;
@@ -38,7 +39,10 @@ private:
 };
 
 // entry -> thread to wake
-typedef std::map<unsigned, sched::thread *> msix_isr_list;
+struct msix_binding {
+    unsigned entry;
+    sched::thread* thread;
+};
 
 class interrupt_manager {
 public:
@@ -54,7 +58,7 @@ public:
     // 2. Allocate vectors and assign ISRs
     // 3. Setup entries
     // 4. Unmask interrupts
-    bool easy_register(msix_isr_list& isrs);
+    bool easy_register(std::initializer_list<msix_binding> bindings);
     void easy_unregister();
 
     /////////////////////

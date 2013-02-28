@@ -70,9 +70,9 @@ interrupt_manager::~interrupt_manager()
 
 }
 
-bool interrupt_manager::easy_register(msix_isr_list& isrs)
+bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindings)
 {
-    unsigned n = isrs.size();
+    unsigned n = bindings.size();
 
     std::vector<msix_vector*> assigned = request_vectors(n);
 
@@ -87,15 +87,15 @@ bool interrupt_manager::easy_register(msix_isr_list& isrs)
 
     int idx=0;
 
-    for (auto it = isrs.begin(); it != isrs.end(); it++) {
+    for (auto binding : bindings) {
         msix_vector* vec = assigned[idx++];
-        sched::thread *isr = it->second;
+        sched::thread *isr = binding.thread;
         bool assign_ok = assign_isr(vec, [isr]{ isr->wake(); });
         if (!assign_ok) {
             free_vectors(assigned);
             return false;
         }
-        bool setup_ok = setup_entry(it->first, vec);
+        bool setup_ok = setup_entry(binding.entry, vec);
         if (!setup_ok) {
             free_vectors(assigned);
             return false;
