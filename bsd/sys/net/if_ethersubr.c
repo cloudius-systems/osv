@@ -912,7 +912,8 @@ ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 		if (lla[i] != 0)
 			break; 
 	if (i != ifp->if_addrlen)
-		if_printf(ifp, "Ethernet address: %6D\n", lla, ":");
+		printf("%s: ethernet address: %x:%x:%x:%x:%x:%x\n",
+		    ifp->if_xname, lla[0], lla[1], lla[2], lla[3], lla[4], lla[5]);
 }
 
 /*
