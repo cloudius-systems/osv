@@ -22,6 +22,11 @@ namespace hw {
             return (this->make32() < other.make32());
         }
 
+        bool operator==(const hw_device_id& other) const {
+            return _vendor_id == other._vendor_id
+                    && _device_id == other._device_id;
+        }
+
     private:
         u16 _vendor_id;
         u16 _device_id;
