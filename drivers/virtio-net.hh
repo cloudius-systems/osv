@@ -227,6 +227,11 @@ namespace virtio {
 
         void receiver();
         void fill_rx_ring();
+        bool tx(void *out, int len, bool flush = true);
+        void tx_gc_thread();
+        void tx_gc();
+
+        void tx_test();
 
         static hw_driver* probe(hw_device* dev);
     private:

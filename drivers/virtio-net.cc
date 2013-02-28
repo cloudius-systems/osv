@@ -57,9 +57,12 @@ namespace virtio {
 
         //register the 3 irq callback for the net
         msix_isr_list* isrs = new msix_isr_list;
-        thread* isr = new thread([this] { this->receiver(); });
-        isr->start();
-        isrs->insert(std::make_pair(0, isr));
+        thread* rx = new thread([this] { this->receiver(); });
+        thread* tx = new thread([this] { this->tx_gc_thread(); });
+        rx->start();
+        tx->start();
+        isrs->insert(std::make_pair(0, rx));
+        isrs->insert(std::make_pair(1, tx));
         _msi.easy_register(*isrs);
 
         fill_rx_ring();
@@ -96,6 +99,21 @@ namespace virtio {
             u16          h_proto;                /* packet type ID field */
     } __attribute__((packed));
 
+    struct iphdr {
+            u8    ihl:4,
+                    version:4;
+            u8    tos;
+            u16  tot_len;
+            u16  id;
+            u16  frag_off;
+            u8    ttl;
+            u8    protocol;
+            u16 check;
+            u32  saddr;
+            u32  daddr;
+            /*The options start here. */
+    } __attribute__((packed));
+
 
     struct icmphdr {
       u8          type;
@@ -112,30 +130,27 @@ namespace virtio {
                     u16  mtu;
             } frag;
       } un;
-    };
+    } __attribute__((packed));
 
     void virtio_net::receiver() {
         vring* queue = _dev->get_virt_queue(0);
 
         while (1) {
-            thread::wait_until([this] {
-                vring* queue = this->_dev->get_virt_queue(0);
-                virtio_net_d(fmt("\t ----> IRQ: woke in wait)until, cond=%d") % (int)queue->used_ring_not_empty());
+            thread::wait_until([this, queue] {
                 return queue->used_ring_not_empty();
             });
-
-            virtio_net_d(fmt("\t ----> IRQ: virtio_d - net thread awaken"));
 
             int i = 0;
             virtio_net_req * req;
 
             while((req = static_cast<virtio_net_req*>(queue->get_buf())) != nullptr) {
-                virtio_net_d(fmt("\t got hdr len:%d = %d ") % i++ % (int)req->hdr.hdr_len);
 
                 auto ii = req->payload._nodes.begin();
                 ii++;
                 char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
                 virtio_net_d(fmt("\t len=%d") % ii->_len);
+
+                virtio_net_d(fmt("\t got hdr len:%d = %d vaddr=%p") % i++ % (int)req->hdr.hdr_len % (void*)buf);
 
                 ethhdr* eh = reinterpret_cast<ethhdr*>(buf);
                 virtio_net_d(fmt("The src %x:%x:%x:%x:%x:%x dst %x:%x:%x:%x:%x:%x type %d ") %
@@ -153,6 +168,20 @@ namespace virtio {
                         (u32)eh->h_dest[5] %
                         (u32)eh->h_proto);
 
+                iphdr* ip = reinterpret_cast<iphdr*>(buf+sizeof(ethhdr));
+                virtio_net_d(fmt("tot_len = %d protocol=%d, saddr=%d:%d:%d:%d daddr=%d:%d:%d:%d") %
+                        (u32)ip->tot_len % (u32)ip->protocol % (ip->saddr & 0xff) % (ip->saddr >> 8 & 0xff) %
+                        (ip->saddr >> 16 & 0xff) % (ip->saddr >> 24 & 0xff) % (ip->daddr & 0xff) % (ip->daddr >> 8 & 0xff) %
+                        (ip->daddr >> 16 & 0xff) % (ip->daddr >> 24 & 0xff));
+
+                icmphdr* icmp = reinterpret_cast<icmphdr*>(buf+sizeof(ethhdr)+sizeof(iphdr));
+                virtio_net_d(fmt("icmp code=%d. type=%d") % (u32)icmp->code % (u32)icmp->type);
+
+            }
+
+            if (queue->avail_ring_has_room(queue->size()/2)) {
+                virtio_net_d(fmt("ring is less than half full, refill"));
+                fill_rx_ring();
             }
 
         }
@@ -166,6 +195,8 @@ namespace virtio {
         vring* queue = _dev->get_virt_queue(0);
         virtio_net_d(fmt("%s") % __FUNCTION__);
 
+        // it could have been a while (1) loop but it simplifies the allocation
+        // tracking
         while (queue->avail_ring_has_room(2)) {
             virtio_net_req *req = new virtio_net_req;
 
@@ -174,8 +205,6 @@ namespace virtio {
             req->payload.add(mmu::virt_to_phys(buf), page_size);
             req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
 
-            virtio_net_d(fmt("%s adding") % __FUNCTION__);
-
             if (!queue->add_buf(&req->payload,0,2,req)) {
                 delete req;
                 break;
@@ -183,6 +212,60 @@ namespace virtio {
         }
 
         queue->kick();
+    }
+
+    bool virtio_net::tx(void *out, int len, bool flush)
+    {
+        vring* queue = _dev->get_virt_queue(1);
+        virtio_net_d(fmt("%s") % __FUNCTION__);
+
+        if (!queue->avail_ring_has_room(2)) {
+            if (queue->used_ring_not_empty()) {
+                virtio_net_d(fmt("%s: gc tx buffers to clear space"));
+                tx_gc();
+            } else {
+                virtio_net_d(fmt("%s: no room") % __FUNCTION__);
+                return false;
+            }
+        }
+
+        virtio_net_req *req = new virtio_net_req;
+        req->payload.add(mmu::virt_to_phys(out), len);
+        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
+
+        if (!queue->add_buf(&req->payload,0,2,req)) {
+            delete req;
+            return false;
+        }
+
+        if (flush)
+            queue->kick();
+
+        return true;
+    }
+
+    void virtio_net::tx_gc_thread() {
+        vring* queue = _dev->get_virt_queue(1);
+
+        while (1) {
+            thread::wait_until([this, queue] {
+                return queue->used_ring_not_empty();
+            });
+
+            virtio_net_d(fmt("\t %s: thread awaken") % __FUNCTION__);
+        }
+    }
+
+    void virtio_net::tx_gc()
+    {
+        int i = 0;
+        virtio_net_req * req;
+        vring* queue = _dev->get_virt_queue(1);
+
+        while((req = static_cast<virtio_net_req*>(queue->get_buf())) != nullptr) {
+            virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
+
+        }
     }
 
     u32 virtio_net::get_driver_features(void)
@@ -200,4 +283,16 @@ namespace virtio {
         }
         return nullptr;
     }
+
+    void virtio_net::tx_test()
+    {
+        while (1) {
+            timespec ts = {};
+            ts.tv_sec = 1;
+            nanosleep(&ts, nullptr);
+
+            sched::thread::current()->yield();
+        }
+    }
+
 }
