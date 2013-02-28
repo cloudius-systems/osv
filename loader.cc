@@ -146,10 +146,6 @@ void* do_main_thread(void *_args)
 
     run_main(prog, args);
 
-    while (true) {
-        arch::wait_for_interrupt();
-    }
-
     return nullptr;
 }
 
