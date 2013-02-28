@@ -37,19 +37,6 @@ private:
     unsigned _vector;
 };
 
-
-// Used to communicate assigned vectors back to driver
-class assigned_vectors {
-public:
-    assigned_vectors() : _num(0) {
-        for (int i=0; i<max_vectors; i++) {
-            _vectors[i] = 0;
-        }
-    }
-    unsigned _vectors[max_vectors];
-    unsigned _num;
-};
-
 // entry -> thread to wake
 typedef std::map<unsigned, sched::thread *> msix_isr_list;
 
@@ -74,19 +61,18 @@ public:
     // Multi Interface //
     /////////////////////
 
-    assigned_vectors request_vectors(unsigned num_vectors);
-    void free_vectors(const assigned_vectors& vectors);
-    bool assign_isr(unsigned vector, std::function<void ()> handler);
+    std::vector<msix_vector*> request_vectors(unsigned num_vectors);
+    void free_vectors(const std::vector<msix_vector*>& vectors);
+    bool assign_isr(msix_vector*, std::function<void ()> handler);
     // Multiple entry can be assigned the same vector
-    bool setup_entry(unsigned entry_id, unsigned vector);
+    bool setup_entry(unsigned entry_id, msix_vector* vector);
     // unmasks all interrupts
-    bool unmask_interrupts(const assigned_vectors& vectors);
+    bool unmask_interrupts(const std::vector<msix_vector*>& vectors);
 
 private:
     pci::pci_function* _dev;
-    msix_vector* _vectors[max_vectors];
     // Used by the easy interface
-    assigned_vectors _easy_vectors;
+    std::vector<msix_vector*> _easy_vectors;
 };
 
 class inter_processor_interrupt {

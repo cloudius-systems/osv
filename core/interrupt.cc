@@ -63,9 +63,6 @@ void msix_vector::interrupt(void)
 interrupt_manager::interrupt_manager(pci::pci_function* dev)
     : _dev(dev)
 {
-    for (int i=0; i<256; i++) {
-        _vectors[i] = nullptr;
-    }
 }
 
 interrupt_manager::~interrupt_manager()
@@ -77,9 +74,9 @@ bool interrupt_manager::easy_register(msix_isr_list& isrs)
 {
     unsigned n = isrs.size();
 
-    assigned_vectors assigned = request_vectors(n);
+    std::vector<msix_vector*> assigned = request_vectors(n);
 
-    if (assigned._num != n) {
+    if (assigned.size() != n) {
         free_vectors(assigned);
         return (false);
     }
@@ -91,7 +88,7 @@ bool interrupt_manager::easy_register(msix_isr_list& isrs)
     int idx=0;
 
     for (auto it = isrs.begin(); it != isrs.end(); it++) {
-        unsigned vec = assigned._vectors[idx++];
+        msix_vector* vec = assigned[idx++];
         sched::thread *isr = it->second;
         bool assign_ok = assign_isr(vec, [isr]{ isr->wake(); });
         if (!assign_ok) {
@@ -115,47 +112,32 @@ bool interrupt_manager::easy_register(msix_isr_list& isrs)
 void interrupt_manager::easy_unregister()
 {
     free_vectors(_easy_vectors);
-    _easy_vectors = assigned_vectors{};
+    _easy_vectors.clear();
 }
 
-assigned_vectors interrupt_manager::request_vectors(unsigned num_vectors)
+std::vector<msix_vector*> interrupt_manager::request_vectors(unsigned num_vectors)
 {
-    assigned_vectors results;
-    unsigned ctr=0;
+    std::vector<msix_vector*> results;
 
-    results._num = std::min(num_vectors, _dev->msix_get_num_entries());
+    auto num = std::min(num_vectors, _dev->msix_get_num_entries());
 
-    for (unsigned i=0; i<results._num; i++) {
-        msix_vector * msix = new msix_vector(_dev);
-        unsigned vector = msix->get_vector();
-        _vectors[vector] = msix;
-
-        results._vectors[ctr++] = vector;
+    for (unsigned i = 0; i < num; ++i) {
+        results.push_back(new msix_vector(_dev));
     }
 
     return (results);
 }
 
-bool interrupt_manager::assign_isr(unsigned vector, std::function<void ()> handler)
+bool interrupt_manager::assign_isr(msix_vector* vector, std::function<void ()> handler)
 {
-    if (!_vectors[vector]) {
-        return (false);
-    }
-
-    _vectors[vector]->set_handler(handler);
+    vector->set_handler(handler);
 
     return (true);
 }
 
-bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
+bool interrupt_manager::setup_entry(unsigned entry_id, msix_vector* msix)
 {
-    // vector must be allocated
-    if (!_vectors[vector]) {
-        return (false);
-    }
-
-    msix_vector* msix = _vectors[vector];
-
+    auto vector = msix->get_vector();
     msi_message msix_msg = apic->compose_msix(vector, 0);
 
     if (msix_msg._addr == 0) {
@@ -170,26 +152,16 @@ bool interrupt_manager::setup_entry(unsigned entry_id, unsigned vector)
     return (true);
 }
 
-void interrupt_manager::free_vectors(const assigned_vectors& vectors)
+void interrupt_manager::free_vectors(const std::vector<msix_vector*>& vectors)
 {
-    for (unsigned i=0; i<vectors._num; i++) {
-        unsigned vec = vectors._vectors[i];
-        if (_vectors[vec] != nullptr) {
-            delete _vectors[vec];
-            _vectors[vec] = nullptr;
-        }
+    for (auto msix : vectors) {
+        delete msix;
     }
 }
 
-bool interrupt_manager::unmask_interrupts(const assigned_vectors& vectors)
+bool interrupt_manager::unmask_interrupts(const std::vector<msix_vector*>& vectors)
 {
-    for (unsigned i=0; i<vectors._num; i++) {
-        unsigned vec = vectors._vectors[i];
-        msix_vector* msix = _vectors[vec];
-        if (msix == nullptr) {
-            continue;
-        }
-
+    for (auto msix : vectors) {
         msix->msix_unmask_entries();
     }
 
