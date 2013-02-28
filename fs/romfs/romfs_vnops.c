@@ -375,7 +375,7 @@ romfs_read(struct vnode *vp, struct uio *uio, int ioflag)
 {
 	struct romfs_node *np = vp->v_data;
 	size_t len;
-	int ret;
+	int ret = 0;
 
 	if (vp->v_type == VDIR)
 		return EISDIR;
