@@ -43,15 +43,16 @@ namespace virtio {
     #define virtio_net_e(fmt)   logger::instance()->log(virtio_net_tag, logger::logger_error, (fmt))
 
 
-    virtio_net::virtio_net(unsigned dev_idx)
-        : virtio_driver(VIRTIO_NET_DEVICE_ID, dev_idx)
+    virtio_net::virtio_net(virtio_device* dev)
+        : virtio_driver(dev)
     {
         std::stringstream ss;
-        ss << "virtio-net" << dev_idx;
+        ss << "virtio-net";
 
         _driver_name = ss.str();
-        virtio_i(fmt("VIRTIO NET INSTANCE %d") % dev_idx);
+        virtio_i(fmt("VIRTIO NET INSTANCE"));
         _id = _instance++;
+        load();
     }
 
     virtio_net::~virtio_net()
@@ -202,4 +203,13 @@ namespace virtio {
         return (base | ( 1 << VIRTIO_NET_F_MAC));
     }
 
+    hw_driver* virtio_net::probe(hw_device* dev)
+    {
+        if (auto vdev = dynamic_cast<virtio_device*>(dev)) {
+            if (vdev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_NET_DEVICE_ID)) {
+                return new virtio_net(vdev);
+            }
+        }
+        return nullptr;
+    }
 }

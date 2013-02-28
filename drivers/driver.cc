@@ -18,50 +18,38 @@ namespace hw {
     driver_manager::~driver_manager()
     {
         unload_all();
-
-        for (auto it=_drivers.begin(); it != _drivers.end(); it++) {
-            delete(it->second);
-        }
-
-        _drivers.clear();
     }
 
-    bool driver_manager::register_driver(hw_driver* drv)
+    void driver_manager::register_driver(std::function<hw_driver* (hw_device*)> probe)
     {
-        debug(fmt("Probing '%1%'... ") % drv->get_name(), false);
-
-        if (drv->hw_probe()) {
-            _drivers.insert(std::make_pair(drv->get_name(), drv));
-            debug("OK!");
-            return (true);
-        } else {
-            debug("NOK");
-            return (false);
-        }
+        _probes.push_back(probe);
     }
 
     void driver_manager::load_all(void)
     {
-        for (auto it=_drivers.begin(); it != _drivers.end(); it++) {
-            hw_driver * drv = it->second;
-            debug(fmt("Loading Driver: '%1%'...") % drv->get_name());
-            drv->load();
-        }
+        auto dm = device_manager::instance();
+        dm->for_each_device([this] (hw_device* dev) {
+            for (auto probe : _probes) {
+                if (auto drv = probe(dev)) {
+                    _drivers.push_back(drv);
+                    break;
+                }
+            }
+        });
     }
 
     void driver_manager::unload_all(void)
     {
-        for (auto it=_drivers.begin(); it != _drivers.end(); it++) {
-            hw_driver * drv = it->second;
-            drv->unload();
+        for (auto drv : _drivers) {
+            delete drv;
         }
+        _drivers.clear();
     }
 
     void driver_manager::list_drivers(void)
     {
         debug("<list_drivers>");
-        for (auto it=_drivers.begin(); it != _drivers.end(); it++) {
-            hw_driver * drv = it->second;
+        for (auto drv : _drivers) {
             drv->dump_config();
         }
         debug("</list_drivers>");

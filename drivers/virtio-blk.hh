@@ -150,7 +150,7 @@ namespace virtio {
             struct bio* bio;
         };
 
-        virtio_blk(unsigned dev_idx=0);
+        explicit virtio_blk(virtio_device* dev);
         virtual ~virtio_blk();
 
         virtual const std::string get_name(void) { return _driver_name; }
@@ -168,6 +168,7 @@ namespace virtio {
         void set_readonly() {_ro = true;}
         bool is_readonly() {return _ro;}
 
+        static hw_driver* probe(hw_device* dev);
     private:
 
         std::string _driver_name;

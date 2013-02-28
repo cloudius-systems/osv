@@ -217,7 +217,7 @@ namespace virtio {
             sglist payload;
         };
 
-        virtio_net(unsigned dev_idx=0);
+        explicit virtio_net(virtio_device* dev);
         virtual ~virtio_net();
 
         virtual const std::string get_name(void) { return _driver_name; }
@@ -230,6 +230,7 @@ namespace virtio {
         void receiver();
         void fill_rx_ring();
 
+        static hw_driver* probe(hw_device* dev);
     private:
 
         std::string _driver_name;

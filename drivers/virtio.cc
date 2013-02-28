@@ -9,25 +9,16 @@ using namespace pci;
 
 namespace virtio {
 
-    virtio_driver::virtio_driver(u16 device_id, unsigned dev_idx)
-        : hw_driver(),
-          _device_id(device_id), _dev(nullptr), _dev_idx(dev_idx)
+    virtio_driver::virtio_driver(virtio_device* vdev)
+        : hw_driver()
+        , _dev(vdev)
     {
-
     }
 
     virtio_driver::~virtio_driver()
     {
         _dev->reset_host_side();
         _dev->free_queues();
-    }
-
-    bool virtio_driver::hw_probe(void)
-    {
-        _dev = dynamic_cast<virtio_device *>(device_manager::instance()->
-            get_device(hw_device_id(VIRTIO_VENDOR_ID, _device_id), _dev_idx));
-
-        return (_dev != nullptr);
     }
 
     bool virtio_driver::load(void)

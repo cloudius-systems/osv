@@ -86,15 +86,16 @@ struct driver virtio_blk_driver = {
     .devsz      = sizeof(struct virtio_blk_priv),
 };
 
-    virtio_blk::virtio_blk(unsigned dev_idx)
-        : virtio_driver(VIRTIO_BLK_DEVICE_ID, dev_idx), _ro(false)
+    virtio_blk::virtio_blk(virtio_device* vdev)
+        : virtio_driver(vdev), _ro(false)
     {
         std::stringstream ss;
-        ss << "virtio-blk" << dev_idx;
+        ss << "virtio-blk";
 
         _driver_name = ss.str();
-        virtio_i(fmt("VIRTIO BLK INSTANCE %d") % dev_idx);
+        virtio_i(fmt("VIRTIO BLK INSTANCE"));
         _id = _instance++;
+        load();
     }
 
     virtio_blk::~virtio_blk()
@@ -307,5 +308,16 @@ struct driver virtio_blk_driver = {
                      | ( 1 << VIRTIO_BLK_F_RO)
                      | ( 1 << VIRTIO_BLK_F_BLK_SIZE));
     }
+
+    hw_driver* virtio_blk::probe(hw_device* dev)
+    {
+        if (auto vdev = dynamic_cast<virtio_device*>(dev)) {
+            if (vdev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_BLK_DEVICE_ID)) {
+                return new virtio_blk(vdev);
+            }
+        }
+        return nullptr;
+    }
+
 
 }

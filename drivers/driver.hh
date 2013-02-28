@@ -3,7 +3,7 @@
 
 #include "drivers/pci.hh"
 #include "drivers/pci-device.hh"
-#include <map>
+#include <vector>
 #include <string>
 
 namespace hw {
@@ -14,10 +14,6 @@ namespace hw {
 
         // Drivers are indexed by their names
         virtual const std::string get_name(void) = 0;
-
-        // Probe for connected hw,
-        // return true if hw is found (query device_manager)
-        virtual bool hw_probe(void) = 0;
 
         // System wide events
         virtual bool load(void) = 0;
@@ -42,14 +38,15 @@ namespace hw {
             return (_instance);
         }
 
-        bool register_driver(hw_driver* drv);
+        void register_driver(std::function<hw_driver* (hw_device*)> probe);
         void load_all(void);
         void unload_all(void);
         void list_drivers(void);
 
     private:
         static driver_manager* _instance;
-        std::map<std::string, hw_driver*> _drivers;
+        std::vector<std::function<hw_driver* (hw_device*)>> _probes;
+        std::vector<hw_driver*> _drivers;
     };
 }
 
