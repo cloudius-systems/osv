@@ -52,19 +52,7 @@ namespace virtio {
         _driver_name = ss.str();
         virtio_i(fmt("VIRTIO NET INSTANCE"));
         _id = _instance++;
-        load();
-    }
 
-    virtio_net::~virtio_net()
-    {
-        //TODO: In theory maintain the list of free instances and gc it
-        // including the thread objects and their stack
-    }
-
-    bool virtio_net::load(void)
-    {
-        virtio_driver::load();
-        
         read_config();
 
         //register the 3 irq callback for the net
@@ -78,12 +66,12 @@ namespace virtio {
 
         _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-        return true;
     }
 
-    bool virtio_net::unload(void)
+    virtio_net::~virtio_net()
     {
-        return (true);
+        //TODO: In theory maintain the list of free instances and gc it
+        // including the thread objects and their stack
     }
 
     bool virtio_net::read_config()

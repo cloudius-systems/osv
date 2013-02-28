@@ -13,16 +13,6 @@ namespace virtio {
         : hw_driver()
         , _dev(vdev)
     {
-    }
-
-    virtio_driver::~virtio_driver()
-    {
-        _dev->reset_host_side();
-        _dev->free_queues();
-    }
-
-    bool virtio_driver::load(void)
-    {
         _dev->set_bus_master(true);
 
         _dev->msix_enable();
@@ -37,14 +27,12 @@ namespace virtio {
         _dev->probe_virt_queues();
 
         setup_features();
-
-        return true;
     }
 
-    bool virtio_driver::unload(void)
+    virtio_driver::~virtio_driver()
     {
-        // TODO: implement
-        return (true);
+        _dev->reset_host_side();
+        _dev->free_queues();
     }
 
     bool virtio_driver::setup_features(void)

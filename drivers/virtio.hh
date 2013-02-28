@@ -13,9 +13,6 @@ namespace virtio {
 
         virtual const std::string get_name(void) = 0;
 
-        // hw_driver interface
-        virtual bool load(void);
-        virtual bool unload(void) = 0;
         virtual void dump_config(void);
 
     protected:

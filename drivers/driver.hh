@@ -15,9 +15,6 @@ namespace hw {
         // Drivers are indexed by their names
         virtual const std::string get_name(void) = 0;
 
-        // System wide events
-        virtual bool load(void) = 0;
-        virtual bool unload(void) = 0;
         // virtual bool sleep(void) = 0;
         // virtual bool wake(void) = 0;
         // ...

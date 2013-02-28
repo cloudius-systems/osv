@@ -95,19 +95,7 @@ struct driver virtio_blk_driver = {
         _driver_name = ss.str();
         virtio_i(fmt("VIRTIO BLK INSTANCE"));
         _id = _instance++;
-        load();
-    }
 
-    virtio_blk::~virtio_blk()
-    {
-        //TODO: In theory maintain the list of free instances and gc it
-        // including the thread objects and their stack
-    }
-
-    bool virtio_blk::load(void)
-    {
-        virtio_driver::load();
-        
         read_config();
 
         //register the single irq callback for the block
@@ -127,13 +115,12 @@ struct driver virtio_blk_driver = {
         dev = device_create(&virtio_blk_driver, dev_name.c_str(), D_BLK);
         prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
         prv->drv = this;
-
-        return true;
     }
 
-    bool virtio_blk::unload(void)
+    virtio_blk::~virtio_blk()
     {
-        return (true);
+        //TODO: In theory maintain the list of free instances and gc it
+        // including the thread objects and their stack
     }
 
     bool virtio_blk::read_config()
