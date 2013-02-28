@@ -17,6 +17,10 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
     void * ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
 
+    if (flags & M_ZERO) {
+        bzero(ptr, zone->uz_size + UMA_ITEM_HDR_LEN);
+    }
+
     // Call init
     if (zone->uz_init != NULL) {
         if (zone->uz_init(ptr, zone->uz_size, flags) != 0) {
@@ -33,9 +37,6 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
         }
     }
 
-    if (flags & M_ZERO) {
-        bzero(ptr, zone->uz_size);
-    }
 
     return (ptr);
 }
