@@ -85,6 +85,7 @@ int ratecheck(struct timeval *lasttime, const struct timeval *mininterval)
     int rv = 0;
 
     getmicrotime(&tv);
+    delta = tv;
     timevalsub(&delta, lasttime);
 
     /*

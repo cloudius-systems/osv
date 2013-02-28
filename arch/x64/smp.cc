@@ -77,7 +77,6 @@ void smp_init()
 
 void ap_bringup(sched::cpu* c)
 {
-    debug(fmt("bringup %x") % c->arch.apic_id);
     __sync_fetch_and_add(&smp_processors, 1);
     c->idle_thread.start();
     c->load_balance();
