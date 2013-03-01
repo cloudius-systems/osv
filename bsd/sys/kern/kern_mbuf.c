@@ -93,7 +93,7 @@ void
 tunable_mbinit(void *dummy)
 {
 
-    int maxusers = 256;
+    int maxusers = 16;
 
 	/* This has to be done before VM init. */
 	TUNABLE_INT_FETCH("kern.ipc.nmbclusters", &nmbclusters);
