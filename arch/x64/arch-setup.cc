@@ -145,7 +145,7 @@ void arch_setup_free_memory()
             return;
         }
         if (intersects(ent, initial_map)) {
-            ent = truncate_below(ent, edata);
+            ent = truncate_below(ent, initial_map);
         }
         mmu::linear_map(phys_mem + ent.addr, ent.addr, ent.size, ~0);
         mmu::free_initial_memory_range(ent.addr, ent.size);
