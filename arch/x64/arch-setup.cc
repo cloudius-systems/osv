@@ -129,6 +129,8 @@ void arch_setup_free_memory()
         // ignore anything above 1GB, we haven't mapped it yet
         if (intersects(ent, initial_map)) {
             ent = truncate_above(ent, initial_map);
+        } else if (ent.addr >= initial_map) {
+            return;
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
