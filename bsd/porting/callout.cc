@@ -10,7 +10,7 @@ extern "C" {
 
 }
 
-sched::thread* callout_get_thread(struct callout *c)
+sched::detached_thread* callout_get_thread(struct callout *c)
 {
     return reinterpret_cast<sched::detached_thread*>(c->thread);
 }
@@ -21,10 +21,10 @@ void callout_set_thread(struct callout *c, sched::detached_thread* t)
 }
 
 
-int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
+int callout_reset_on(struct callout *c, u64 microseconds, void (*ftn)(void *),
     void *arg, int ignore_cpu)
 {
-    u64 nanoseconds = to_ticks;
+    u64 nanoseconds = microseconds*1000;
     u64 cur_time = clock::get()->time();
     int result = 0;
 
@@ -41,9 +41,9 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*ftn)(void *),
 
     sched::detached_thread* callout_thread = new sched::detached_thread([=] {
 
-        sched::timer t(*sched::thread::current());
+        sched::timer t(*sched::detached_thread::current());
         t.set(cur_time + nanoseconds);
-        sched::thread::wait_until([&] { return ( (t.expired()) || (c->c_stopped) ); });
+        sched::detached_thread::wait_until([&] { return ( (t.expired()) || (c->c_stopped) ); });
 
         if (c->c_stopped == 0) {
             if (c->c_is_rwlock == 1) {
@@ -73,7 +73,7 @@ int _callout_stop_safe(struct callout *c, int safe)
     assert(safe == 0);
 
     c->c_stopped = 1;
-    sched::thread* callout_thread = callout_get_thread(c);
+    sched::detached_thread* callout_thread = callout_get_thread(c);
 
     if (callout_thread) {
         callout_thread->wake();
