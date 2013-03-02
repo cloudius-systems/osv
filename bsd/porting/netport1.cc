@@ -13,11 +13,13 @@ int osv_curtid(void)
 }
 
 #define NANOSEC (1000000000L)
+#define MICROSEC (1000000L)
 
 void getmicrotime(struct timeval *tvp)
 {
     u64 ntm = clock::get()->time();
+    u64 utm = ntm / 1000L;
 
     tvp->tv_sec = ntm/NANOSEC;
-    tvp->tv_usec = (ntm - (tvp->tv_sec*NANOSEC))/1000;
+    tvp->tv_usec = (utm - (tvp->tv_sec*MICROSEC));
 }

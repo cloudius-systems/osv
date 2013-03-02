@@ -144,7 +144,7 @@ static struct filterops sowrite_filtops = {
 uma_zone_t socket_zone;
 so_gen_t	so_gencnt;	/* generation count for sockets */
 
-int	maxsockets = 17408;
+int	maxsockets = 256;
 
 MALLOC_DEFINE(M_SONAME, "soname", "socket name");
 MALLOC_DEFINE(M_PCB, "pcb", "protocol control block");
@@ -340,7 +340,7 @@ socreate(int dom, struct socket **aso, int type, int proto,
 	if ((prp->pr_domain->dom_family == PF_INET) ||
 	    (prp->pr_domain->dom_family == PF_INET6) ||
 	    (prp->pr_domain->dom_family == PF_ROUTE))
-		so->so_fibnum = RT_DEFAULT_FIB; /* FIXME: no idea how this affect the code */
+		so->so_fibnum = RT_DEFAULT_FIB;
 	else
 		so->so_fibnum = 0;
 	so->so_proto = prp;

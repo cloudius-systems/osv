@@ -1,5 +1,9 @@
 #include <stdio.h>
 
+#include <bsd/porting/netport.h>
+#include <bsd/porting/networking.h>
+#include <bsd/porting/route.h>
+
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_arp.h>
@@ -20,8 +24,16 @@
 
 /* Global ifnet */
 struct ifnet* pifp;
-char *if_ip = "198.0.0.4";
 
+static u_char if_eaddr[ETHER_ADDR_LEN] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
+static char *if_eaddr_cstr = "11:22:33:44:55:66";
+static char *gw_eaddr_cstr = "77:22:33:44:55:66";
+static char *if_name = "tst-netdriver";
+static char *if_name1 = "tst-netdriver0";
+static char *if_ip = "198.0.0.4";
+static char *if_gw = "198.0.0.1";
+static char *if_baddr = "198.0.0.255";
+static int masklen = 24;
 
 /*
  * This function should invoke ether_ioctl...
@@ -31,17 +43,30 @@ lge_ioctl(struct ifnet        *ifp,
           u_long          command,
           caddr_t         data)
 {
-    TLOG("lge_ioctl\n");
+    TLOG("lge_ioctl(%x)\n", command);
 
     int error = 0;
     switch(command) {
     case SIOCSIFMTU:
+        TLOG("SIOCSIFMTU\n");
         break;
     case SIOCSIFFLAGS:
+        TLOG("SIOCSIFFLAGS\n");
+        /* Change status ifup, ifdown */
+        if (ifp->if_flags & IFF_UP) {
+            ifp->if_drv_flags |= IFF_DRV_RUNNING;
+            TLOG("if_up\n");
+        } else {
+            ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
+            TLOG("if_down\n");
+        }
         break;
     case SIOCADDMULTI:
     case SIOCDELMULTI:
+        TLOG("SIOCDELMULTI\n");
         break;
+    default:
+        TLOG("redirecting to ether_ioctl()...\n");
         error = ether_ioctl(ifp, command, data);
         break;
     }
@@ -57,12 +82,11 @@ lge_start(struct ifnet* ifp)
 {
     struct mbuf     *m_head = NULL;
 
-    TLOG("lge_start\n");
+    TLOG("lge_start (transmit)\n");
 
     IF_DEQUEUE(&ifp->if_snd, m_head);
     if (m_head != NULL) {
-        /* Send packet */
-        TLOG("Process Packet!\n");
+        TLOG("*** processing packet! ***\n");
     }
 }
 
@@ -74,8 +98,6 @@ lge_init(void *xsc)
 
 int create_if(void)
 {
-    u_char eaddr[ETHER_ADDR_LEN] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
-
     printf("[~] Creating interface!\n");
     pifp = if_alloc(IFT_ETHER);
     if (pifp == NULL) {
@@ -83,10 +105,10 @@ int create_if(void)
         return (-1);
     }
 
-    if_initname(pifp, "test-net", 0);
+    if_initname(pifp, if_name, 0);
     pifp->if_mtu = ETHERMTU;
     pifp->if_softc = (void*)"Driver private softc";
-    pifp->if_flags = 0/* IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST */;
+    pifp->if_flags = IFF_BROADCAST /*| IFF_MULTICAST*/;
     pifp->if_ioctl = lge_ioctl;
     pifp->if_start = lge_start;
     pifp->if_init = lge_init;
@@ -94,7 +116,7 @@ int create_if(void)
     pifp->if_capabilities = 0/* IFCAP_RXCSUM */;
     pifp->if_capenable = pifp->if_capabilities;
 
-    ether_ifattach(pifp, eaddr);
+    ether_ifattach(pifp, if_eaddr);
 
     return (0);
 }
@@ -103,37 +125,6 @@ void destroy_if(void)
 {
     ether_ifdetach(pifp);
     if_free(pifp);
-}
-
-void set_address(void)
-{
-    struct  sockaddr_in ia_addr;
-    struct ifaddr ifa;
-    bzero(&ifa, sizeof(ifa));
-    bzero(&ia_addr, sizeof(ia_addr));
-
-    ifa.ifa_addr = (struct sockaddr*)&ia_addr;
-
-    ia_addr.sin_family = AF_INET;
-    ia_addr.sin_len = sizeof(struct sockaddr_in);
-    inet_aton(if_ip, &ia_addr.sin_addr);
-
-    ether_ioctl(pifp, SIOCSIFADDR, (caddr_t)&ifa);
-}
-
-void test_interface(void)
-{
-    create_if();
-
-    /*
-     * Let all domains know about this interface...
-     * lo0 will be called twice...
-     * (There are non configured at this moment)
-     */
-    if_attachdomain(NULL);
-
-    set_address();
-    destroy_if();
 }
 
 void test_sockets(void)
@@ -157,7 +148,7 @@ void test_sockets(void)
     whereto.sa_len = sizeof(struct sockaddr);
     to = (struct sockaddr_in *)&whereto;
     to->sin_family = AF_INET;
-    inet_aton(if_ip, &to->sin_addr);
+    inet_aton(if_gw, &to->sin_addr);
 
     /* ICMP ECHO Packet */
     m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
@@ -166,15 +157,14 @@ void test_sockets(void)
     icp->icmp_type = ICMP_ECHO;
     icp->icmp_code = 0;
     icp->icmp_cksum = 0;
-    icp->icmp_seq = 0;
     icp->icmp_id = 0xAABB;
+    icp->icmp_seq = 0;
     raw = mtod(m, char *);
     raw += ICMP_MINLEN;
     bcopy(echo_payload, raw, 10);
+    icp->icmp_cksum = in_cksum(m, 18);
 
-    /* FIXME: this actually fails since sockbuf is not ported properly
-     * sbspace() return 0 since it had been stubbed
-     */
+    /* Send an ICMP packet on our interface */
     sosend_dgram(s, &whereto, NULL, m, NULL, 0, NULL);
 
     soclose(s);
@@ -184,8 +174,21 @@ int main(void)
 {
     TLOG("BSD Net Driver Test BEGIN\n");
 
-    test_interface();
+    create_if();
+
+    osv_start_if(if_name1, if_ip, if_baddr, masklen);
+    osv_ifup(if_name1);
+
+    /* Add ARP */
+    osv_route_arp_add(if_name1, if_ip, if_eaddr_cstr);
+    osv_route_arp_add(if_name1, if_gw, gw_eaddr_cstr);
+
+    /* Add route */
+    osv_route_add_host(if_ip, if_gw);
+
+    /* Send ICMP Packet */
     test_sockets();
+    destroy_if();
 
     TLOG("BSD Net Driver Test END\n");
     return (0);

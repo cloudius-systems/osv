@@ -8,14 +8,11 @@
 int uma_zone_num = 0;
 struct uma_zone zones[OSV_UMA_MAX_ZONES] = {0};
 
-/* Ref counts for shared data, save a ref-count per page.
- * a hack until we have a slab allocator */
-u_int32_t uma_refcounts[1048576] = {0};
-
-
 void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
     void * ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
+
+    bzero(ptr, zone->uz_size + UMA_ITEM_HDR_LEN);
 
     // Call init
     if (zone->uz_init != NULL) {
@@ -33,9 +30,7 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
         }
     }
 
-    if (flags & M_ZERO) {
-        bzero(ptr, zone->uz_size);
-    }
+    UMA_ITEM_HDR(zone, ptr)->refcnt = 0;
 
     return (ptr);
 }
@@ -49,6 +44,10 @@ void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 {
     if (item == NULL) {
         return;
+    }
+
+    if (zone->uz_fini) {
+        zone->uz_fini(item, zone->uz_size);
     }
 
     if (zone->uz_dtor) {

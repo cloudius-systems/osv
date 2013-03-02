@@ -51,6 +51,7 @@ void    *hashinit_flags(int count, struct malloc_type *type,
 
 
 void domaininit(void *dummy);
+void domainfinalize(void *dummy);
 
 #define DECLARE_MODULE(...)
 #define MODULE_VERSION(...)
@@ -60,8 +61,8 @@ void domaininit(void *dummy);
 void getmicrotime(struct timeval *tvp);
 int tvtohz(struct timeval *tv);
 
-/* Defines how many ticks are in 1 second (nanoseconds) */
-#define hz (1000000000L)
+/* Defines how many ticks are in 1 second (microsec) */
+#define hz (1000000L)
 
 #define MALLOC_DEFINE(...)
 #define MALLOC_DECLARE(...)
