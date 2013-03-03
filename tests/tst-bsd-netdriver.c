@@ -1,5 +1,5 @@
 #include <stdio.h>
-
+#include <osv/debug.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/networking.h>
 #include <bsd/porting/route.h>
@@ -20,7 +20,7 @@
 #include <bsd/machine/in_cksum.h>
 
 /* Test log */
-#define TLOG(...) printf(__VA_ARGS__)
+#define TLOG(...) tprintf("tst-bsd-netdriver", logger_debug, __VA_ARGS__)
 
 /* Global ifnet */
 struct ifnet* pifp;
@@ -43,30 +43,30 @@ lge_ioctl(struct ifnet        *ifp,
           u_long          command,
           caddr_t         data)
 {
-    TLOG("lge_ioctl(%x)\n", command);
+    TLOG("lge_ioctl(%x)", command);
 
     int error = 0;
     switch(command) {
     case SIOCSIFMTU:
-        TLOG("SIOCSIFMTU\n");
+        TLOG("SIOCSIFMTU");
         break;
     case SIOCSIFFLAGS:
-        TLOG("SIOCSIFFLAGS\n");
+        TLOG("SIOCSIFFLAGS");
         /* Change status ifup, ifdown */
         if (ifp->if_flags & IFF_UP) {
             ifp->if_drv_flags |= IFF_DRV_RUNNING;
-            TLOG("if_up\n");
+            TLOG("if_up");
         } else {
             ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-            TLOG("if_down\n");
+            TLOG("if_down");
         }
         break;
     case SIOCADDMULTI:
     case SIOCDELMULTI:
-        TLOG("SIOCDELMULTI\n");
+        TLOG("SIOCDELMULTI");
         break;
     default:
-        TLOG("redirecting to ether_ioctl()...\n");
+        TLOG("redirecting to ether_ioctl()...");
         error = ether_ioctl(ifp, command, data);
         break;
     }
@@ -82,26 +82,26 @@ lge_start(struct ifnet* ifp)
 {
     struct mbuf     *m_head = NULL;
 
-    TLOG("lge_start (transmit)\n");
+    TLOG("lge_start (transmit)");
 
     IF_DEQUEUE(&ifp->if_snd, m_head);
     if (m_head != NULL) {
-        TLOG("*** processing packet! ***\n");
+        TLOG("*** processing packet! ***");
     }
 }
 
 static void
 lge_init(void *xsc)
 {
-    TLOG("lge_init\n");
+    TLOG("lge_init");
 }
 
 int create_if(void)
 {
-    printf("[~] Creating interface!\n");
+    TLOG("[~] Creating interface!");
     pifp = if_alloc(IFT_ETHER);
     if (pifp == NULL) {
-        printf("[-] if_alloc() failed!\n");
+        TLOG("[-] if_alloc() failed!");
         return (-1);
     }
 
@@ -172,7 +172,7 @@ void test_sockets(void)
 
 int main(void)
 {
-    TLOG("BSD Net Driver Test BEGIN\n");
+    TLOG("BSD Net Driver Test BEGIN");
 
     create_if();
 
@@ -190,7 +190,7 @@ int main(void)
     test_sockets();
     destroy_if();
 
-    TLOG("BSD Net Driver Test END\n");
+    TLOG("BSD Net Driver Test END");
     return (0);
 }
 
