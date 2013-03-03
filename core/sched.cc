@@ -174,9 +174,9 @@ void thread::yield()
     }
     with_lock(irq_lock, [t] {
         t->_cpu->runqueue.push_back(*t);
+        assert(t->_status.load() == status::running);
+        t->_status.store(status::queued);
     });
-    assert(t->_status.load() == status::running);
-    t->_status.store(status::queued);
     t->_cpu->schedule(true);
 }
 
