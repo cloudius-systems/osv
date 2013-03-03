@@ -1,6 +1,7 @@
 
 #include "mutex.hh"
 #include <sched.hh>
+#include "arch.hh"
 
 struct waiter {
     struct waiter*	next;
@@ -9,6 +10,7 @@ struct waiter {
 
 extern "C" void spin_lock(spinlock_t *sl)
 {
+    arch::irq_disable();
     while (__sync_lock_test_and_set(&sl->lock, 1))
         ;
 }
@@ -16,6 +18,7 @@ extern "C" void spin_lock(spinlock_t *sl)
 extern "C" void spin_unlock(spinlock_t *sl)
 {
     __sync_lock_release(&sl->lock, 0);
+    arch::irq_enable();
 }
 
 extern "C" void mutex_lock(mutex_t *mutex)
