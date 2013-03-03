@@ -514,6 +514,7 @@ void init(elf::tls_data tls_data, std::function<void ()> cont)
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     thread t{cont, attr, true};
+    t._cpu = smp_initial_find_current_cpu();
     t.switch_to_first();
 }
 
