@@ -6,7 +6,7 @@ INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/includ
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
-	$(arch-cflags) $(cflags-$(mode)) $(acpi-defines) $(tracing-flags)
+	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags)
 
 tracing-flags =
 #tracing-flags = -finstrument-functions -finstrument-functions-exclude-file-list=atomic,trace.cc
@@ -20,8 +20,7 @@ CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
 
 ASFLAGS = -g $(autodepend)
 
-cflags-debug =
-cflags-release = -O2
+include $(src)/conf/$(mode).mak
 
 arch-cflags = -msse4.1
 
