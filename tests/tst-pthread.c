@@ -113,6 +113,8 @@ int main(void)
         pthread_cond_wait(&cond, &mutex);
     }
     pthread_mutex_unlock(&mutex);
+    void* ret;
+    pthread_join(thread, &ret);
 
     printf("SUMMARY: %u tests / %u failures", tests_total, tests_failed);
     return tests_failed == 0 ? 0 : 1;
