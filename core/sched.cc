@@ -243,6 +243,7 @@ void thread::start()
 
 void thread::prepare_wait()
 {
+    preempt_disable();
     assert(_status.load() == status::running);
     _status.store(status::waiting);
 }
@@ -294,6 +295,7 @@ void thread::stop_wait()
     while (_status.load() == status::waking) {
         schedule(true);
     }
+    preempt_enable();
     assert(_status.load() == status::running);
 }
 
