@@ -268,6 +268,9 @@ struct cpu {
     unsigned load();
 };
 
+void preempt_disable();
+void preempt_enable();
+
 thread* current();
 
 class wait_guard {

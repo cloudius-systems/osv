@@ -16,6 +16,8 @@ std::vector<cpu*> cpus;
 
 thread __thread * s_current;
 
+unsigned __thread preempt_counter;
+
 elf::tls_data tls;
 
 // currently the scheduler will poll right after an interrupt, so no
@@ -338,6 +340,17 @@ thread::stack_info thread::get_stack_info()
 unsigned long thread::id()
 {
     return _id;
+}
+
+void preempt_disable()
+{
+    ++preempt_counter;
+}
+
+void preempt_enable()
+{
+    --preempt_counter;
+    // FIXME: may need to schedule() here if a high prio thread is waiting
 }
 
 timer_list::callback_dispatch::callback_dispatch()
