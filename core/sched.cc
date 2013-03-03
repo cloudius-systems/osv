@@ -102,11 +102,11 @@ void cpu::handle_incoming_wakeups()
             auto& t = q.front();
             q.pop_front_nonatomic();
             irq_save_lock_type irq_lock;
-            runqueue.push_back(t);
             with_lock(irq_lock, [&] {
+                t._status.store(thread::status::queued);
+                runqueue.push_back(t);
                 t.resume_timers();
             });
-            t._status.store(thread::status::queued);
         }
     }
 }
