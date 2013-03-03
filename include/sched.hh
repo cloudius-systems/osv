@@ -191,6 +191,7 @@ private:
     cpu* _cpu;
     bool _timers_need_reload;
     bi::list<timer> _active_timers;
+    arch_thread _arch;
     unsigned long _id;
     friend void thread_main_c(thread* t);
     friend class wait_guard;

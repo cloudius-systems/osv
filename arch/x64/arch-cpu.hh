@@ -23,15 +23,22 @@ enum  {
 
 namespace sched {
 
+class arch_cpu;
+class arch_thread;
+
 struct arch_cpu {
     arch_cpu();
     processor::aligned_task_state_segment atss;
     init_stack initstack;
-    char exception_stack[4096] __attribute__((aligned(16)));
     u32 apic_id;
     u32 acpi_id;
     u64 gdt[nr_gdt];
     void init_on_cpu();
+    void set_exception_stack(arch_thread* t);
+};
+
+struct arch_thread {
+    char exception_stack[4096] __attribute__((aligned(16)));
 };
 
 inline arch_cpu::arch_cpu()
@@ -42,7 +49,12 @@ inline arch_cpu::arch_cpu()
     gdt[gdt_tss] |= (tss_addr & 0x00ffffff) << 16;
     gdt[gdt_tss] |= (tss_addr & 0xff000000) << 32;
     gdt[gdt_tssx] = tss_addr >> 32;
-    atss.tss.ist[1] = reinterpret_cast<u64>(exception_stack + sizeof(exception_stack));
+}
+
+inline void arch_cpu::set_exception_stack(arch_thread* t)
+{
+    auto& s = t->exception_stack;
+    atss.tss.ist[1] = reinterpret_cast<u64>(s + sizeof(s));
 }
 
 inline void arch_cpu::init_on_cpu()

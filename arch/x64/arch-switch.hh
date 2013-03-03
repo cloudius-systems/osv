@@ -22,6 +22,7 @@ void thread::switch_to()
     barrier();
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
     barrier();
+    _cpu->arch.set_exception_stack(&_arch);
     asm volatile
         ("push %%rbp \n\t"
          "pushq $1f \n\t"
@@ -42,6 +43,7 @@ void thread::switch_to_first()
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
     barrier();
     s_current = this;
+    _cpu->arch.set_exception_stack(&_arch);
     asm volatile
         ("mov %0, %%rsp \n\t"
          "ret"
