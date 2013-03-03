@@ -19,6 +19,13 @@ extern "C" {
 //
 
 
+#define rw_tag "tst-rwlock"
+#define rw_d(...)   \
+    logger::instance()->log(rw_tag, logger_debug, __VA_ARGS__)
+
+/* netport.h has an implementation for log(...) */
+#undef log
+
 class test_rwlock : public unit_tests::vtest {
 public:
 
@@ -34,7 +41,7 @@ public:
 
     void rwlock_test3(void)
     {
-        debug("rwlock_test3... ", false);
+        rw_d("rwlock_test3... ");
 
         rwlock lock;
         rw_init(&lock, "tst3");
@@ -51,7 +58,7 @@ public:
 
         rw_runlock(&lock);
 
-        debug("OK");
+        rw_d("OK");
 
         _test3_finished = true;
         _main->wake();
@@ -60,12 +67,12 @@ public:
     void rwlock_test2_t1(void)
     {
         for (int i=0; i<10; i++) {
-            debug("T1 Locking...");
+            rw_d("T1 Locking...");
             rw_rlock(&_test2_rwlock);
-            debug("T1 Locked");
-            debug("  rwlock_test2_t1");
+            rw_d("T1 Locked");
+            rw_d("  rwlock_test2_t1");
             thread::current()->yield();
-            debug("T1 Unlocked");
+            rw_d("T1 Unlocked");
             rw_runlock(&_test2_rwlock);
         }
         _test2_t1_finished = true;
@@ -75,11 +82,11 @@ public:
     void rwlock_test2_t2(void)
     {
         for (int i=0; i<5; i++) {
-            debug("T2 Locking...");
+            rw_d("T2 Locking...");
             rw_wlock(&_test2_rwlock);
-            debug("T2 Locked");
-            debug("  rwlock_test2_t2");
-            debug("T2 Unlocked");
+            rw_d("T2 Locked");
+            rw_d("  rwlock_test2_t2");
+            rw_d("T2 Unlocked");
             rw_wunlock(&_test2_rwlock);
             thread::current()->yield();
         }
@@ -89,7 +96,7 @@ public:
 
     void rwlock_test1(void)
     {
-        debug("rwlock_test1... ", false);
+        rw_d("rwlock_test1... ");
 
         rwlock lock;
         rw_init(&lock, "tst1");
@@ -111,7 +118,7 @@ public:
 
         rw_destroy(&lock);
 
-        debug("OK");
+        rw_d("OK");
 
         _test1_finished = true;
         _main->wake();
@@ -119,7 +126,7 @@ public:
 
     void run()
     {
-        debug("Testing rwlock:");
+        rw_d("Testing rwlock:");
 
         // Init
         _main = thread::current();

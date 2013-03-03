@@ -32,6 +32,7 @@ bool logger::parse_configuration(void)
 
     // Tests
     add_tag("tst-eventlist", logger_none);
+    add_tag("tst-rwlock", logger_none);
 
     return (true);
 }
