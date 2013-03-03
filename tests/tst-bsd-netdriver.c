@@ -127,7 +127,7 @@ void destroy_if(void)
     if_free(pifp);
 }
 
-void test_sockets(void)
+void test_ping(void)
 {
     /* ICMP Packet */
     struct mbuf *m;
@@ -137,18 +137,33 @@ void test_sockets(void)
 
     /* Socket Variables */
     struct socket *s;
-    struct sockaddr whereto;
-    struct sockaddr_in *to;
+    struct sockaddr_in to, from;
+    int error = -1;
+    size_t sz = sizeof(struct sockaddr_in);
 
     /* Create socket */
-    socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
+    error = socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
+    if (error) {
+        TLOG("socreate() failed %d", error);
+    }
 
-    /* Setup address */
-    memset(&whereto, 0, sizeof(struct sockaddr));
-    whereto.sa_len = sizeof(struct sockaddr);
-    to = (struct sockaddr_in *)&whereto;
-    to->sin_family = AF_INET;
-    inet_aton(if_gw, &to->sin_addr);
+    /* Setup addresses */
+    bzero(&to, sz);
+    bzero(&from, sz);
+
+    to.sin_len = sz;
+    to.sin_family = AF_INET;
+    inet_aton(if_gw, &to.sin_addr);
+
+    from.sin_len = sz;
+    from.sin_family = AF_INET;
+    inet_aton(if_ip, &from.sin_addr);
+
+    /* Set source address */
+    error = sobind(s, (struct sockaddr *)&from, NULL);
+    if (error) {
+        TLOG("sobind() failed %d", error);
+    }
 
     /* ICMP ECHO Packet */
     m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
@@ -165,7 +180,10 @@ void test_sockets(void)
     icp->icmp_cksum = in_cksum(m, 18);
 
     /* Send an ICMP packet on our interface */
-    sosend_dgram(s, &whereto, NULL, m, NULL, 0, NULL);
+    error = sosend_dgram(s, (struct sockaddr *)&to, NULL, m, NULL, 0, NULL);
+    if (error) {
+        TLOG("sosend_dgram() failed %d", error);
+    }
 
     soclose(s);
 }
@@ -187,7 +205,7 @@ int main(void)
     osv_route_add_host(if_ip, if_gw);
 
     /* Send ICMP Packet */
-    test_sockets();
+    test_ping();
     destroy_if();
 
     TLOG("BSD Net Driver Test END");
