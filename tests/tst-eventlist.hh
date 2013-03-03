@@ -5,7 +5,7 @@
 #include "debug.hh"
 #include "tst-hub.hh"
 
-#define dbg_d(fmt)   logger::instance()->log("tst-eventlist", logger::logger_debug, (fmt))
+#define dbg_d(fmt)   logger::instance()->log("tst-eventlist", logger_debug, (fmt))
 
 class test_eventlist : public unit_tests::vtest {
 public:

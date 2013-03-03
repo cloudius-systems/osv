@@ -37,10 +37,10 @@ namespace virtio {
     int virtio_net::_instance = 0;
 
     #define virtio_net_tag "virtio-net"
-    #define virtio_net_d(fmt)   logger::instance()->log(virtio_net_tag, logger::logger_debug, (fmt))
-    #define virtio_net_i(fmt)   logger::instance()->log(virtio_net_tag, logger::logger_info, (fmt))
-    #define virtio_net_w(fmt)   logger::instance()->log(virtio_net_tag, logger::logger_warn, (fmt))
-    #define virtio_net_e(fmt)   logger::instance()->log(virtio_net_tag, logger::logger_error, (fmt))
+    #define virtio_net_d(fmt)   logger::instance()->log(virtio_net_tag, logger_debug, (fmt))
+    #define virtio_net_i(fmt)   logger::instance()->log(virtio_net_tag, logger_info, (fmt))
+    #define virtio_net_w(fmt)   logger::instance()->log(virtio_net_tag, logger_warn, (fmt))
+    #define virtio_net_e(fmt)   logger::instance()->log(virtio_net_tag, logger_error, (fmt))
 
 
     virtio_net::virtio_net(virtio_device* dev)

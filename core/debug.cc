@@ -1,10 +1,12 @@
 #include <cstring>
+#include <cstdarg>
 #include <iostream>
 #include <iomanip>
 #include "boost/format.hpp"
 #include "drivers/console.hh"
 #include "sched.hh"
 #include "debug.hh"
+#include "osv/debug.h"
 
 using namespace std;
 
@@ -44,7 +46,7 @@ void logger::add_tag(const char* tag, logger_severity severity)
     _log_level.insert(make_pair(tag, severity));
 }
 
-logger::logger_severity logger::get_tag(const char* tag)
+logger_severity logger::get_tag(const char* tag)
 {
     auto it = _log_level.find(tag);
     if (it == _log_level.end()) {
@@ -104,13 +106,33 @@ void logger::log(const char* tag, logger_severity severity, const boost::format&
 
 void logger::log(const char* tag, logger_severity severity, const char* _fmt, ...)
 {
+    va_list ap;
+    va_start(ap, _fmt);
+    this->log(tag, severity, _fmt, ap);
+    va_end(ap);
+}
+
+void logger::log(const char* tag, logger_severity severity, const char* _fmt, va_list ap)
+{
     if (this->is_filtered(tag, severity)) {
         return;
     }
 
-    // FIXME: implement...
+    unsigned long tid = sched::thread::current()->id();
+    kprintf("[%s/%d %s]: ", loggable_severity(severity), tid, tag);
+    vkprintf(_fmt, ap);
+    kprintf("\n");
 }
 
+extern "C" {
+void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
+{
+    va_list ap;
+    va_start(ap, _fmt);
+    logger::instance()->log(tag, severity, _fmt, ap);
+    va_end(ap);
+}
+}
 void debug(std::string str, bool lf)
 {
     console::write(str.c_str(), str.length(), lf);

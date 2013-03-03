@@ -4,6 +4,8 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <cstdarg>
+#include <osv/debug.h>
 #include "boost/format.hpp"
 
 typedef boost::format fmt;
@@ -12,15 +14,6 @@ class IsaSerialConsole;
 
 class logger {
 public:
-
-   enum logger_severity {
-        logger_debug = 0,
-        logger_info = 1,
-        logger_warn = 2,
-        logger_error = 3,
-        // Suppress output, even errors
-        logger_none = 4
-    };
 
     logger();
     virtual ~logger();
@@ -38,6 +31,7 @@ public:
     //
     void log(const char* tag, logger_severity severity, const boost::format& _fmt);
     void log(const char* tag, logger_severity severity, const char* _fmt, ...);
+    void log(const char* tag, logger_severity severity, const char* _fmt, va_list ap);
 
 private:
    static logger* _instance;

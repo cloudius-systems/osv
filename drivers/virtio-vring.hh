@@ -8,10 +8,10 @@
 class sglist;
 
 #define virtio_tag "virtio"
-#define virtio_d(fmt)   logger::instance()->log(virtio_tag, logger::logger_debug, (fmt))
-#define virtio_i(fmt)   logger::instance()->log(virtio_tag, logger::logger_info, (fmt))
-#define virtio_w(fmt)   logger::instance()->log(virtio_tag, logger::logger_warn, (fmt))
-#define virtio_e(fmt)   logger::instance()->log(virtio_tag, logger::logger_error, (fmt))
+#define virtio_d(fmt)   logger::instance()->log(virtio_tag, logger_debug, (fmt))
+#define virtio_i(fmt)   logger::instance()->log(virtio_tag, logger_info, (fmt))
+#define virtio_w(fmt)   logger::instance()->log(virtio_tag, logger_warn, (fmt))
+#define virtio_e(fmt)   logger::instance()->log(virtio_tag, logger_error, (fmt))
 
 namespace virtio {
 
