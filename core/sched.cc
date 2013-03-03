@@ -16,7 +16,7 @@ std::vector<cpu*> cpus;
 
 thread __thread * s_current;
 
-unsigned __thread preempt_counter;
+unsigned __thread preempt_counter = CONF_preempt ? 0 : 1;
 
 elf::tls_data tls;
 
