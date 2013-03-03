@@ -1,3 +1,31 @@
+/*-
+ * Copyright (c) 1988, 1993
+ *  The Regents of the University of California.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
 #include <stdio.h>
 #include <osv/debug.h>
 #include <bsd/porting/netport.h>
@@ -34,6 +62,91 @@ static char *if_ip = "198.0.0.4";
 static char *if_gw = "198.0.0.1";
 static char *if_baddr = "198.0.0.255";
 static int masklen = 24;
+
+/*
+ * Dump a byte into hex format.
+ */
+static void
+hexbyte(char *buf, uint8_t temp)
+{
+    uint8_t lo;
+    uint8_t hi;
+
+    lo = temp & 0xF;
+    hi = temp >> 4;
+
+    if (hi < 10)
+        buf[0] = '0' + hi;
+    else
+        buf[0] = 'A' + hi - 10;
+
+    if (lo < 10)
+        buf[1] = '0' + lo;
+    else
+        buf[1] = 'A' + lo - 10;
+}
+
+/*
+ * Display a region in traditional hexdump format.
+ */
+static void
+hexdump(const uint8_t *region, uint32_t len)
+{
+    const uint8_t *line;
+    char linebuf[128];
+    int i;
+    int x;
+    int c;
+
+    for (line = region; line < (region + len); line += 16) {
+
+        i = 0;
+
+        linebuf[i] = ' ';
+        hexbyte(linebuf + i + 1, ((line - region) >> 8) & 0xFF);
+        hexbyte(linebuf + i + 3, (line - region) & 0xFF);
+        linebuf[i + 5] = ' ';
+        linebuf[i + 6] = ' ';
+        i += 7;
+
+        for (x = 0; x < 16; x++) {
+          if ((line + x) < (region + len)) {
+            hexbyte(linebuf + i,
+                *(const u_int8_t *)(line + x));
+          } else {
+              linebuf[i] = '-';
+              linebuf[i + 1] = '-';
+            }
+            linebuf[i + 2] = ' ';
+            if (x == 7) {
+              linebuf[i + 3] = ' ';
+              i += 4;
+            } else {
+              i += 3;
+            }
+        }
+        linebuf[i] = ' ';
+        linebuf[i + 1] = '|';
+        i += 2;
+        for (x = 0; x < 16; x++) {
+            if ((line + x) < (region + len)) {
+                c = *(const u_int8_t *)(line + x);
+                /* !isprint(c) */
+                if ((c < ' ') || (c > '~'))
+                    c = '.';
+                linebuf[i] = c;
+            } else {
+                linebuf[i] = ' ';
+            }
+            i++;
+        }
+        linebuf[i] = '|';
+        linebuf[i + 1] = 0;
+        i += 2;
+        puts(linebuf);
+    }
+}
+
 
 /*
  * This function should invoke ether_ioctl...
@@ -80,13 +193,29 @@ lge_ioctl(struct ifnet        *ifp,
 static void
 lge_start(struct ifnet* ifp)
 {
-    struct mbuf     *m_head = NULL;
+    struct mbuf* m_head = NULL;
+    struct mbuf* m = NULL;
+    int frag_num = 1;
+    uint8_t* frag = 0;
 
     TLOG("lge_start (transmit)");
 
+    /* Process packets */
     IF_DEQUEUE(&ifp->if_snd, m_head);
-    if (m_head != NULL) {
+    while (m_head != NULL) {
         TLOG("*** processing packet! ***");
+
+        frag_num = 0;
+        /* Process fragments */
+        for (m = m_head; m != NULL; m = m->m_next) {
+            if (m->m_len != 0) {
+                frag = mtod(m, uint8_t*);
+                printf("Frag #%d len=%d:\n", ++frag_num, m->m_len);
+                hexdump(frag, m->m_len);
+            }
+        }
+
+        IF_DEQUEUE(&ifp->if_snd, m_head);
     }
 }
 
