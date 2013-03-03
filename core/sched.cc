@@ -20,8 +20,6 @@ unsigned __thread preempt_counter;
 
 elf::tls_data tls;
 
-// currently the scheduler will poll right after an interrupt, so no
-// need to do anything.
 inter_processor_interrupt wakeup_ipi{[] {}};
 
 }
@@ -44,21 +42,27 @@ void cpu::schedule(bool yield)
 {
     // FIXME: drive by IPI
     handle_incoming_wakeups();
-    thread* p = thread::current();
-    if (p->_status.load() == thread::status::running && !yield) {
-        return;
-    }
 
     with_lock(irq_lock, [this] {
-        assert(!runqueue.empty());
-        auto n = &runqueue.front();
-        runqueue.pop_front();
-        assert(n->_status.load() == thread::status::queued);
-        n->_status.store(thread::status::running);
-        if (n != thread::current()) {
-            n->switch_to();
-        }
+        reschedule_from_interrupt();
     });
+}
+
+void cpu::reschedule_from_interrupt()
+{
+    handle_incoming_wakeups();
+    thread* p = thread::current();
+    if (p->_status == thread::status::running) {
+        p->_status.store(thread::status::queued);
+        runqueue.push_back(*p);
+    }
+    auto n = &runqueue.front();
+    runqueue.pop_front();
+    assert(n->_status.load() == thread::status::queued);
+    n->_status.store(thread::status::running);
+    if (n != thread::current()) {
+        n->switch_to();
+    }
 }
 
 void cpu::do_idle()
@@ -261,6 +265,9 @@ void thread::wake()
     // FIXME: warrant an interruption
     if (_cpu != current()->tcpu()) {
         wakeup_ipi.send(_cpu);
+    } else if (arch::irq_enabled()) {
+        _cpu->schedule();
+        // We'll also reschedule at the end of an interrupt if needed
     }
 }
 
@@ -353,6 +360,13 @@ void preempt_enable()
 {
     --preempt_counter;
     // FIXME: may need to schedule() here if a high prio thread is waiting
+}
+
+void preempt()
+{
+    if (!preempt_counter) {
+        sched::cpu::current()->reschedule_from_interrupt();
+    }
 }
 
 timer_list::callback_dispatch::callback_dispatch()

@@ -266,8 +266,10 @@ struct cpu {
     void do_idle();
     void load_balance();
     unsigned load();
+    void reschedule_from_interrupt();
 };
 
+void preempt();
 void preempt_disable();
 void preempt_enable();
 

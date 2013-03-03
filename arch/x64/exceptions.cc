@@ -3,6 +3,7 @@
 #include "processor.hh"
 #include "interrupt.hh"
 #include <boost/format.hpp>
+#include "sched.hh"
 #include "debug.hh"
 
 typedef boost::format fmt;
@@ -117,7 +118,10 @@ void interrupt(exception_frame* frame)
     unsigned vector = frame->error_code;
     idt.invoke_interrupt(vector);
     processor::wrmsr(0x80b, 0); // EOI
+    // must call scheduler after EOI, or it may switch contexts and miss the EOI
     current_interrupt_frame = nullptr;
+    // FIXME: layering violation
+    sched::preempt();
 }
 
 #define DUMMY_HANDLER(x) \
