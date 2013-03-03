@@ -17,7 +17,6 @@ void osv_start_if(const char* if_name, const char* ip_addr,
     struct in_aliasreq ifra;
     struct sockaddr_in* addr = &ifra.ifra_addr;
     struct sockaddr_in* mask = &ifra.ifra_mask;
-    struct sockaddr_in* broadaddr= &ifra.ifra_broadaddr;
     struct ifnet* ifp;
 
     bzero(&ifra, sizeof(struct in_aliasreq));
@@ -30,11 +29,6 @@ void osv_start_if(const char* if_name, const char* ip_addr,
     inet_aton(ip_addr, &addr->sin_addr);
     addr->sin_family = AF_INET;
     addr->sin_len = sizeof(struct sockaddr_in);
-
-    /* Boardcast Addr */
-    inet_aton(bcast_addr, &addr->sin_addr);
-    broadaddr->sin_family = AF_INET;
-    broadaddr->sin_len = sizeof(struct sockaddr_in);
 
     /* Mask */
     mask->sin_addr.s_addr = htonl(~((1LL << (32 - masklen)) - 1) & 0xffffffff);
