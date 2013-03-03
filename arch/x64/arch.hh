@@ -41,6 +41,13 @@ private:
     unsigned long _rflags;
 };
 
+inline bool irq_enabled()
+{
+    irq_flag f;
+    f.save();
+    return f.enabled();
+}
+
 extern bool tls_available() __attribute__((no_instrument_function));
 
 inline bool tls_available()
