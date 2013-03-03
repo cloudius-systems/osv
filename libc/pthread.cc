@@ -35,6 +35,7 @@ namespace pthread_private {
         // FIXME: deallocate stack
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
+        int join(void*& retval);
         void* _retval;
         // must be initialized last
         sched::thread _thread;
@@ -73,6 +74,13 @@ namespace pthread_private {
         return { vma->addr(), vma->size() };
     }
 
+    int pthread::join(void*& retval)
+    {
+        _thread.join();
+        retval = _retval;
+        return 0;
+    }
+
     pthread* pthread::from_libc(pthread_t p)
     {
         return reinterpret_cast<pthread*>(p);
@@ -107,6 +115,11 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     auto t = new pthread(start_routine, arg, sigset);
     *thread = t->to_libc();
     return 0;
+}
+
+int pthread_join(pthread_t thread, void** retval)
+{
+    return pthread::from_libc(thread)->join(*retval);
 }
 
 int pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
