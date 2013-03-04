@@ -34,16 +34,19 @@ static const struct netisr_handler arp_nh = {
  */
 int main(void)
 {
-    printf("BSD NetISR Test\n");
+    int run_test=0;
 
-    netisr_register(&arp_nh);
-    netisr_dispatch(NETISR_ARP, (struct mbuf*)"A");
-    netisr_dispatch(NETISR_ARP, (struct mbuf*)"B");
-    netisr_dispatch(NETISR_ARP, (struct mbuf*)"C");
+    if (run_test) {
+        printf("BSD NetISR Test\n");
 
-    sleep(1);
+        netisr_register(&arp_nh);
+        netisr_dispatch(NETISR_ARP, (struct mbuf*)"A");
+        netisr_dispatch(NETISR_ARP, (struct mbuf*)"B");
+        netisr_dispatch(NETISR_ARP, (struct mbuf*)"C");
 
-    printf("BSD NetISR Test Done.\n");
+        sleep(1);
 
+        printf("BSD NetISR Test Done.\n");
+    }
     return (0);
 }
