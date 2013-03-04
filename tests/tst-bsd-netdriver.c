@@ -57,9 +57,10 @@
 /* Global ifnet */
 struct ifnet* pifp;
 
-static u_char if_eaddr[ETHER_ADDR_LEN] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
-static char *if_eaddr_cstr = "11:22:33:44:55:66";
-static char *gw_eaddr_cstr = "77:22:33:44:55:66";
+
+static u_char if_eaddr[ETHER_ADDR_LEN] = {0x84, 0xa6, 0xc9, 0x7e, 0xf5, 0x01};
+static char *if_eaddr_cstr = "84:a6:c9:7e:f5:01";
+static char *gw_eaddr_cstr = "84:a6:c9:7e:f5:02";
 static char *if_name = "tst-netdriver";
 static char *if_name1 = "tst-netdriver0";
 static char *if_ip = "198.0.0.4";
@@ -332,8 +333,8 @@ void fake_isr_fn(void *unused)
     struct ip* ip_h;
     struct icmp* icmp_h;
     void * buf;
-    char* hardcoded = "\x11\x22\x33\x44\x55\x66" /* DST */
-                      "\x77\x22\x33\x44\x55\x66" /* SRC */
+    char* hardcoded = "\x84\xa6\xc9\x7e\xf5\x01" /* DST */
+                      "\x84\xa6\xc9\x7e\xf5\x02" /* SRC */
                       "\x08\x00"                 /* protocol = ip */
                       /* IP */
                       "\x45\x00" /*     ver + tos  */
