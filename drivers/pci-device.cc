@@ -35,7 +35,7 @@ namespace pci {
                 break;
             }
 
-            bar * pbar = new bar((function *)this, pos);
+            bar * pbar = new bar(this, pos);
             add_bar(idx++, pbar);
 
             pos += pbar->is_64() ? 8 : 4;
