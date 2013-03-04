@@ -5,7 +5,7 @@
 void* dlopen(const char* filename, int flags)
 {
     auto prog = elf::get_program();
-    elf::elf_object* obj = prog->add_object(filename);
+    elf::object* obj = prog->add_object(filename);
     // FIXME: handle flags etc.
     return obj;
 }
@@ -19,10 +19,10 @@ void* dlsym(void* handle, const char* name)
         // FIXME: implement
         abort();
     } else {
-        auto obj = reinterpret_cast<elf::elf_object*>(handle);
+        auto obj = reinterpret_cast<elf::object*>(handle);
         sym = { obj->lookup_symbol(name), obj };
     }
-    if (!sym.object || !sym.symbol) {
+    if (!sym.obj || !sym.symbol) {
         return nullptr;
     }
     return sym.relocated_addr();
@@ -39,7 +39,7 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
                     void *data)
 {
     int ret = 0;
-    elf::get_program()->with_modules([=, &ret] (std::vector<elf::elf_object*>& m) {
+    elf::get_program()->with_modules([=, &ret] (std::vector<elf::object*>& m) {
         for (auto obj : m) {
             dl_phdr_info info;
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());

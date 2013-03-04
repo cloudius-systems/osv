@@ -243,10 +243,10 @@ namespace elf {
         size_t size;
     };
 
-    class elf_object {
+    class object {
     public:
-        explicit elf_object(program& prog, std::string pathname);
-        virtual ~elf_object();
+        explicit object(program& prog, std::string pathname);
+        virtual ~object();
 	void load_needed();
 	void relocate();
         void set_base(void* base);
@@ -292,10 +292,10 @@ namespace elf {
 	Elf64_Dyn* _dynamic_table;
     };
 
-    class elf_file : public elf_object {
+    class file : public object {
     public:
-        explicit elf_file(program& prog, fileref f, std::string pathname);
-        virtual ~elf_file();
+        explicit file(program& prog, fileref f, std::string pathname);
+        virtual ~file();
         void load_program_headers();
         void load_elf_header();
     protected:
@@ -305,9 +305,9 @@ namespace elf {
         ::fileref _f;
     };
 
-    class elf_memory_image : public elf_object {
+    class memory_image : public object {
     public:
-        explicit elf_memory_image(program& prog, void* base);
+        explicit memory_image(program& prog, void* base);
     protected:
         virtual void load_segment(const Elf64_Phdr& phdr);
         virtual void unload_segment(const Elf64_Phdr& phdr);
@@ -316,37 +316,37 @@ namespace elf {
     struct symbol_module {
     public:
         symbol_module();
-        symbol_module(Elf64_Sym* sym, elf_object* object);
+        symbol_module(Elf64_Sym* sym, object* object);
         void* relocated_addr() const;
         Elf64_Sym* symbol;
-        elf_object* object;
+        object* obj;
     };
 
     class program {
     public:
         explicit program(::filesystem& fs,
                          void* base = reinterpret_cast<void*>(0x100000000000UL));
-        elf_object* add_object(std::string lib);
+        object* add_object(std::string lib);
         void remove_object(std::string name);
         symbol_module lookup(const char* symbol);
         template <typename T>
         T* lookup_function(const char* symbol);
         tls_data tls();
         // run a function with all current modules as a parameter
-        void with_modules(std::function<void (std::vector<elf_object*>&)> f);
+        void with_modules(std::function<void (std::vector<object*>&)> f);
     private:
-        void add_debugger_obj(elf_object* obj);
-        void del_debugger_obj(elf_object* obj);
+        void add_debugger_obj(object* obj);
+        void del_debugger_obj(object* obj);
         void* do_lookup_function(const char* symbol);
-        void set_object(std::string lib, elf_object* obj);
+        void set_object(std::string lib, object* obj);
     private:
         ::filesystem& _fs;
         void* _next_alloc;
-        std::unique_ptr<elf_object> _core;
-        std::map<std::string, elf_object*> _files;
-        std::vector<elf_object*> _modules; // in priority order
+        std::unique_ptr<object> _core;
+        std::map<std::string, object*> _files;
+        std::vector<object*> _modules; // in priority order
         // debugger interface
-        static elf_object* s_objs[100];
+        static object* s_objs[100];
     };
 
     program* get_program();

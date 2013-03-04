@@ -29,19 +29,19 @@ namespace elf {
 
     symbol_module::symbol_module()
         : symbol()
-        , object()
+        , obj()
     {
     }
 
-    symbol_module::symbol_module(Elf64_Sym* _sym, elf_object* _obj)
+    symbol_module::symbol_module(Elf64_Sym* _sym, object* _obj)
         : symbol(_sym)
-        , object(_obj)
+        , obj(_obj)
     {
     }
 
     void* symbol_module::relocated_addr() const
     {
-        void* base = object->base();
+        void* base = obj->base();
         if (symbol->st_shndx == SHN_UNDEF || symbol->st_shndx == SHN_ABS) {
             base = 0;
         }
@@ -59,7 +59,7 @@ namespace elf {
         }
     }
 
-    elf_object::elf_object(program& prog, std::string pathname)
+    object::object(program& prog, std::string pathname)
         : _prog(prog)
         , _pathname(pathname)
         , _tls_segment()
@@ -69,24 +69,24 @@ namespace elf {
     {
     }
 
-    elf_object::~elf_object()
+    object::~object()
     {
     }
 
-    elf_file::elf_file(program& prog, ::fileref f, std::string pathname)
-	: elf_object(prog, pathname)
+    file::file(program& prog, ::fileref f, std::string pathname)
+	: object(prog, pathname)
         , _f(f)
     {
 	load_elf_header();
 	load_program_headers();
     }
 
-    elf_file::~elf_file()
+    file::~file()
     {
     }
 
-    elf_memory_image::elf_memory_image(program& prog, void* base)
-        : elf_object(prog, "")
+    memory_image::memory_image(program& prog, void* base)
+        : object(prog, "")
     {
         _ehdr = *static_cast<Elf64_Ehdr*>(base);
         auto p = static_cast<Elf64_Phdr*>(base + _ehdr.e_phoff);
@@ -95,15 +95,15 @@ namespace elf {
         set_base(base);
     }
 
-    void elf_memory_image::load_segment(const Elf64_Phdr& phdr)
+    void memory_image::load_segment(const Elf64_Phdr& phdr)
     {
     }
     
-    void elf_memory_image::unload_segment(const Elf64_Phdr& phdr)
+    void memory_image::unload_segment(const Elf64_Phdr& phdr)
     {
     }
 
-    void elf_file::load_elf_header()
+    void file::load_elf_header()
     {
 	_f->read(&_ehdr, 0, sizeof(_ehdr));
 	if (!(_ehdr.e_ident[EI_MAG0] == '\x7f'
@@ -136,7 +136,7 @@ namespace elf {
 
     }
 
-    void elf_object::set_base(void* base)
+    void object::set_base(void* base)
     {
         auto p = std::min_element(_phdrs.begin(), _phdrs.end(),
                                   [](Elf64_Phdr a, Elf64_Phdr b)
@@ -150,17 +150,17 @@ namespace elf {
         _end = _base + q->p_vaddr + q->p_memsz;
     }
 
-    void* elf_object::base() const
+    void* object::base() const
     {
         return _base;
     }
 
-    void* elf_object::end() const
+    void* object::end() const
     {
         return _end;
     }
 
-    void elf_file::load_program_headers()
+    void file::load_program_headers()
     {
 	_phdrs.resize(_ehdr.e_phnum);
 	for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
@@ -176,7 +176,7 @@ namespace elf {
 
     }
 
-    void elf_file::load_segment(const Elf64_Phdr& phdr)
+    void file::load_segment(const Elf64_Phdr& phdr)
     {
         ulong vstart = align_down(phdr.p_vaddr, page_size);
         ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
@@ -188,7 +188,7 @@ namespace elf {
         mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::perm_rwx);
     }
 
-    void elf_object::load_segments()
+    void object::load_segments()
     {
         for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
             auto &phdr = _phdrs[i];
@@ -220,7 +220,7 @@ namespace elf {
         }
     }
 
-    void elf_file::unload_segment(const Elf64_Phdr& phdr)
+    void file::unload_segment(const Elf64_Phdr& phdr)
     {
         ulong vstart = align_down(phdr.p_vaddr, page_size);
         ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
@@ -230,7 +230,7 @@ namespace elf {
         mmu::unmap(_base + vstart + filesz, memsz - filesz);
     }
 
-    void elf_object::unload_segments()
+    void object::unload_segments()
     {
         for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
             auto &phdr = _phdrs[i];
@@ -245,27 +245,27 @@ namespace elf {
     }
 
     template <typename T>
-    T* elf_object::dynamic_ptr(unsigned tag)
+    T* object::dynamic_ptr(unsigned tag)
     {
         return static_cast<T*>(_base + dynamic_tag(tag).d_un.d_ptr);
     }
 
-    Elf64_Xword elf_object::dynamic_val(unsigned tag)
+    Elf64_Xword object::dynamic_val(unsigned tag)
     {
         return dynamic_tag(tag).d_un.d_val;
     }
 
-    const char* elf_object::dynamic_str(unsigned tag)
+    const char* object::dynamic_str(unsigned tag)
     {
         return dynamic_ptr<const char>(DT_STRTAB) + dynamic_val(tag);
     }
 
-    bool elf_object::dynamic_exists(unsigned tag)
+    bool object::dynamic_exists(unsigned tag)
     {
         return _dynamic_tag(tag);
     }
 
-    Elf64_Dyn* elf_object::_dynamic_tag(unsigned tag)
+    Elf64_Dyn* object::_dynamic_tag(unsigned tag)
     {
         for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
             if (p->d_tag == tag) {
@@ -275,7 +275,7 @@ namespace elf {
         return nullptr;
     }
 
-    Elf64_Dyn& elf_object::dynamic_tag(unsigned tag)
+    Elf64_Dyn& object::dynamic_tag(unsigned tag)
     {
         auto r = _dynamic_tag(tag);
         if (!r) {
@@ -285,7 +285,7 @@ namespace elf {
     }
 
     std::vector<const char *>
-    elf_object::dynamic_str_array(unsigned tag)
+    object::dynamic_str_array(unsigned tag)
     {
         auto strtab = dynamic_ptr<const char>(DT_STRTAB);
         std::vector<const char *> r;
@@ -297,7 +297,7 @@ namespace elf {
         return r;
     }
 
-    symbol_module elf_object::symbol(unsigned idx)
+    symbol_module object::symbol(unsigned idx)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
@@ -316,13 +316,13 @@ namespace elf {
         return ret;
     }
 
-    Elf64_Xword elf_object::symbol_tls_module(unsigned idx)
+    Elf64_Xword object::symbol_tls_module(unsigned idx)
     {
         debug("not looking up symbol module");
         return 0;
     }
 
-    void elf_object::relocate_rela()
+    void object::relocate_rela()
     {
         auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
         assert(dynamic_val(DT_RELAENT) == sizeof(Elf64_Rela));
@@ -363,7 +363,7 @@ namespace elf {
 
     extern "C" { void __elf_resolve_pltgot(void); }
 
-    void elf_object::relocate_pltgot()
+    void object::relocate_pltgot()
     {
         auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
         auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
@@ -384,7 +384,7 @@ namespace elf {
         pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
     }
 
-    void* elf_object::resolve_pltgot(unsigned index)
+    void* object::resolve_pltgot(unsigned index)
     {
         auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
         auto slot = rel[index];
@@ -397,7 +397,7 @@ namespace elf {
         return ret;
     }
 
-    void elf_object::relocate()
+    void object::relocate()
     {
         assert(!dynamic_exists(DT_REL));
         if (dynamic_exists(DT_RELA)) {
@@ -422,7 +422,7 @@ namespace elf {
         return h;
     }
 
-    Elf64_Sym* elf_object::lookup_symbol_old(const char* name)
+    Elf64_Sym* object::lookup_symbol_old(const char* name)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -451,7 +451,7 @@ namespace elf {
         return h & 0xffffffff;
     }
 
-    Elf64_Sym* elf_object::lookup_symbol_gnu(const char* name)
+    Elf64_Sym* object::lookup_symbol_gnu(const char* name)
     {
         auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
         auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -486,7 +486,7 @@ namespace elf {
         return nullptr;
     }
 
-    Elf64_Sym* elf_object::lookup_symbol(const char* name)
+    Elf64_Sym* object::lookup_symbol(const char* name)
     {
         Elf64_Sym* sym;
         if (dynamic_exists(DT_GNU_HASH)) {
@@ -500,7 +500,7 @@ namespace elf {
         return sym;
     }
 
-    void elf_object::load_needed()
+    void object::load_needed()
     {
         auto needed = dynamic_str_array(DT_NEEDED);
         for (auto lib : needed) {
@@ -510,27 +510,27 @@ namespace elf {
         }
     }
 
-    tls_data elf_object::tls()
+    tls_data object::tls()
     {
         return tls_data{_tls_segment, _tls_init_size + _tls_uninit_size};
     }
 
-    std::string elf_object::soname()
+    std::string object::soname()
     {
         return dynamic_exists(DT_SONAME) ? dynamic_str(DT_SONAME) : std::string();
     }
 
-    std::vector<Elf64_Phdr> elf_object::phdrs()
+    std::vector<Elf64_Phdr> object::phdrs()
     {
         return _phdrs;
     }
 
-    std::string elf_object::pathname()
+    std::string object::pathname()
     {
         return _pathname;
     }
 
-    void elf_object::run_init_func()
+    void object::run_init_func()
     {
         if (!dynamic_exists(DT_INIT_ARRAY)) {
             return;
@@ -547,7 +547,7 @@ namespace elf {
     program::program(::filesystem& fs, void* addr)
         : _fs(fs)
         , _next_alloc(addr)
-        , _core(new elf::elf_memory_image(*this, reinterpret_cast<void*>(0x200000)))
+        , _core(new elf::memory_image(*this, reinterpret_cast<void*>(0x200000)))
     {
         _core->load_segments();
         assert(!s_program);
@@ -563,7 +563,7 @@ namespace elf {
         return _core->tls();
     }
 
-    void program::set_object(std::string name, elf_object* obj)
+    void program::set_object(std::string name, object* obj)
     {
         _files[name] = obj;
         if (std::find(_modules.begin(), _modules.end(), obj) == _modules.end()) {
@@ -571,14 +571,14 @@ namespace elf {
         }
     }
 
-    elf_object* program::add_object(std::string name)
+    object* program::add_object(std::string name)
     {
         if (!_files.count(name)) {
             auto f(_fs.open(name));
             if (!f) {
                 return nullptr;
             }
-            auto ef = new elf_file(*this, f, name);
+            auto ef = new file(*this, f, name);
             ef->set_base(_next_alloc);
             _files[name] = ef;
             _modules.push_back(ef);
@@ -605,9 +605,9 @@ namespace elf {
         delete ef;
     }
 
-    elf_object* program::s_objs[100];
+    object* program::s_objs[100];
 
-    void program::add_debugger_obj(elf_object* obj)
+    void program::add_debugger_obj(object* obj)
     {
         auto p = s_objs;
         while (*p) {
@@ -616,7 +616,7 @@ namespace elf {
         *p = obj;
     }
 
-    void program::del_debugger_obj(elf_object* obj)
+    void program::del_debugger_obj(object* obj)
     {
         auto p = s_objs;
         while (*p && *p != obj) {
@@ -652,10 +652,10 @@ namespace elf {
         return sym.relocated_addr();
     }
 
-    void program::with_modules(std::function<void (std::vector<elf_object*>&)> f)
+    void program::with_modules(std::function<void (std::vector<object*>&)> f)
     {
         // FIXME: locking?
-        std::vector<elf_object*> tmp = _modules;
+        std::vector<object*> tmp = _modules;
         f(tmp);
     }
 
@@ -782,9 +782,9 @@ namespace elf {
 
 }
 
-extern "C" { void* elf_resolve_pltgot(unsigned long index, elf::elf_object* obj); }
+extern "C" { void* elf_resolve_pltgot(unsigned long index, elf::object* obj); }
 
-void* elf_resolve_pltgot(unsigned long index, elf::elf_object* obj)
+void* elf_resolve_pltgot(unsigned long index, elf::object* obj)
 {
     return obj->resolve_pltgot(index);
 }
