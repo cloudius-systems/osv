@@ -27,11 +27,15 @@
  * SUCH DAMAGE.
  */
 #include <stdio.h>
+#include <unistd.h>
 #include <osv/debug.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/networking.h>
 #include <bsd/porting/route.h>
+#include <bsd/porting/callout.h>
 
+#include <bsd/sys/sys/param.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_arp.h>
@@ -62,6 +66,8 @@ static char *if_ip = "198.0.0.4";
 static char *if_gw = "198.0.0.1";
 static char *if_baddr = "198.0.0.255";
 static int masklen = 24;
+
+static struct callout fake_isr;
 
 /*
  * Dump a byte into hex format.
@@ -227,7 +233,7 @@ lge_init(void *xsc)
 
 int create_if(void)
 {
-    TLOG("[~] Creating interface!");
+    TLOG("[~] Creating interface...");
     pifp = if_alloc(IFT_ETHER);
     if (pifp == NULL) {
         TLOG("[-] if_alloc() failed!");
@@ -252,6 +258,7 @@ int create_if(void)
 
 void destroy_if(void)
 {
+    TLOG("[~] Destroying interface...");
     ether_ifdetach(pifp);
     if_free(pifp);
 }
@@ -314,13 +321,68 @@ void test_ping(void)
         TLOG("sosend_dgram() failed %d", error);
     }
 
+    /* Wait 5 seconds */
+    sleep(5);
+
     soclose(s);
+}
+
+void fake_isr_fn(void *unused)
+{
+    struct ip* ip_h;
+    struct icmp* icmp_h;
+    void * buf;
+    char* hardcoded = "\x11\x22\x33\x44\x55\x66" /* DST */
+                      "\x77\x22\x33\x44\x55\x66" /* SRC */
+                      "\x08\x00"                 /* protocol = ip */
+                      /* IP */
+                      "\x45\x00" /*     ver + tos  */
+                      "\x00\x26" /*     len */
+                      "\xDA\x6A" /*     id */
+                      "\x00\x00" /*     offset */
+                      "\x40\x01" /*     ttl + protocol */
+                      "\x14\x67" /*     checksum */
+                      "\xC6\x00\x00\x01"
+                      "\xC6\x00\x00\x04"
+                      /* ICMP */
+                      "\x00\x00" /* echo replay */
+                      "\xE1\xF5" /* csum */
+                      "\xBB\xAA\x00\x00" /* icmp_id */
+                      "\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4A"; /* payload */
+
+    struct mbuf* m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
+
+    buf = mtod(m, void *);
+    bcopy(hardcoded, buf, 52);
+    ip_h = (struct ip*)(buf + ETHER_HDR_LEN);
+    icmp_h = (struct icmp*)(buf + 34);
+
+    /* Skip IP checksum */
+    m->m_pkthdr.csum_flags = (CSUM_IP_CHECKED | CSUM_IP_VALID);
+    m->m_len = 52;
+    m->m_pkthdr.len = m->m_len;
+
+    /* Compute icmp checksum */
+    icmp_h->icmp_cksum = 0;
+    icmp_h->icmp_cksum = in_cksum_skip(m, 52, 34);
+
+    pifp->if_ipackets++;
+    m->m_pkthdr.rcvif = pifp;
+
+    (*pifp->if_input)(pifp, m);
 }
 
 int main(void)
 {
     TLOG("BSD Net Driver Test BEGIN");
 
+    /* Init Fake ISR */
+    callout_init(&fake_isr, 1);
+
+    /* Call our function after 1 second */
+    callout_reset(&fake_isr, 4*hz, fake_isr_fn, NULL);
+
+    /* Create interface */
     create_if();
 
     osv_start_if(if_name1, if_ip, if_baddr, masklen);
@@ -335,6 +397,10 @@ int main(void)
 
     /* Send ICMP Packet */
     test_ping();
+
+    /* Wait for async stuff */
+    sleep(8);
+
     destroy_if();
 
     TLOG("BSD Net Driver Test END");
