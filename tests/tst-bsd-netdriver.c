@@ -70,6 +70,8 @@ static int masklen = 24;
 
 static struct callout fake_isr;
 
+static void test1_inject(void *unused);
+
 /*
  * Dump a byte into hex format.
  */
@@ -264,7 +266,8 @@ void destroy_if(void)
     if_free(pifp);
 }
 
-void test_ping(void)
+/* Sends an echo request */
+void test1_echorequest(void)
 {
     /* ICMP Packet */
     struct mbuf *m;
@@ -277,6 +280,12 @@ void test_ping(void)
     struct sockaddr_in to, from;
     int error = -1;
     size_t sz = sizeof(struct sockaddr_in);
+
+    /* Init Fake ISR */
+    callout_init(&fake_isr, 1);
+
+    /* Call our function after 4 seconds */
+    callout_reset(&fake_isr, 4*hz, test1_inject, NULL);
 
     /* Create socket */
     error = socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
@@ -328,7 +337,8 @@ void test_ping(void)
     soclose(s);
 }
 
-void fake_isr_fn(void *unused)
+/* Injects an echo response */
+static void test1_inject(void *unused)
 {
     struct ip* ip_h;
     struct icmp* icmp_h;
@@ -377,12 +387,6 @@ int main(void)
 {
     TLOG("BSD Net Driver Test BEGIN");
 
-    /* Init Fake ISR */
-    callout_init(&fake_isr, 1);
-
-    /* Call our function after 1 second */
-    callout_reset(&fake_isr, 4*hz, fake_isr_fn, NULL);
-
     /* Create interface */
     create_if();
 
@@ -397,7 +401,7 @@ int main(void)
     osv_route_add_host(if_ip, if_gw);
 
     /* Send ICMP Packet */
-    test_ping();
+    test1_echorequest();
 
     /* Wait for async stuff */
     sleep(8);
