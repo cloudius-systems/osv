@@ -273,16 +273,6 @@ void  __attribute__((constructor(12001))) setup()
 
 }
 
-unsigned ilog2_roundup(size_t n)
-{
-    // FIXME: optimize
-    unsigned i = 0;
-    while (n > (size_t(1) << i)) {
-        ++i;
-    }
-    return i;
-}
-
 extern "C" {
     void* malloc(size_t size);
     void free(void* object);
