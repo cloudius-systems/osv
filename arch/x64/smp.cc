@@ -54,6 +54,7 @@ void parse_madt()
             smp_stack_free = &c->arch.initstack;
             debug(fmt("acpi %d apic %d") % c->arch.acpi_id % c->arch.apic_id);
             sched::cpus.push_back(c);
+            break;
         }
         default:
             break;
