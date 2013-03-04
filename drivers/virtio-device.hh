@@ -9,8 +9,6 @@
 
 #include "drivers/virtio-vring.hh"
 
-using namespace pci;
-
 namespace virtio {
 
     enum VIRTIO_CONFIG {
@@ -98,7 +96,7 @@ namespace virtio {
     const unsigned max_virtqueues_nr = 64;
 
 
-    class virtio_device: public pci_device {
+    class virtio_device: public pci::pci_device {
     public:
 
         // The remaining space is defined by each driver as the per-driver
@@ -152,7 +150,7 @@ namespace virtio {
     protected:
         vring* _queues[max_virtqueues_nr];
         u32 _num_queues;
-        pci_bar *_bar1;
+        pci::pci_bar *_bar1;
         bool _cap_indirect_buf;
     };
 
