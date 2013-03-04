@@ -82,7 +82,7 @@ namespace virtio {
         _dev->virtio_conf_read(_dev->virtio_pci_config_offset(), &_config, sizeof(_config));
 
         if (_dev->get_guest_feature_bit(VIRTIO_NET_F_MAC))
-            virtio_i(fmt("The mac addr of the device is %x:%x:%x:%x:%x:%x") %
+            virtio_net_i(fmt("The mac addr of the device is %x:%x:%x:%x:%x:%x") %
                     (u32)_config.mac[0] %
                     (u32)_config.mac[1] %
                     (u32)_config.mac[2] %
@@ -226,7 +226,6 @@ namespace virtio {
     bool virtio_net::tx(void *out, int len, bool flush)
     {
         vring* queue = _dev->get_virt_queue(1);
-        virtio_net_d(fmt("%s") % __FUNCTION__);
 
         if (!queue->avail_ring_has_room(2)) {
             if (queue->used_ring_not_empty()) {
@@ -262,8 +261,6 @@ namespace virtio {
             thread::wait_until([this, queue] {
                 return queue->used_ring_not_empty();
             });
-
-            virtio_net_d(fmt("\t %s: thread awaken") % __FUNCTION__);
 
             tx_gc();
         }
