@@ -383,6 +383,51 @@ static void test1_inject(void *unused)
     (*pifp->if_input)(pifp, m);
 }
 
+void test2_rcv_echorequest(void)
+{
+    struct ip* ip_h;
+    struct icmp* icmp_h;
+    void * buf;
+    char* hardcoded = "\x84\xa6\xc9\x7e\xf5\x01" /* DST */
+                      "\x84\xa6\xc9\x7e\xf5\x02" /* SRC */
+                      "\x08\x00"                 /* protocol = ip */
+                      /* IP */
+                      "\x45\x00" /*     ver + tos  */
+                      "\x00\x26" /*     len */
+                      "\xDA\x6A" /*     id */
+                      "\x00\x00" /*     offset */
+                      "\x40\x01" /*     ttl + protocol */
+                      "\x14\x67" /*     checksum */
+                      "\xC6\x00\x00\x01"
+                      "\xC6\x00\x00\x04"
+                      /* ICMP */
+                      "\x08\x00" /* echo request */
+                      "\x00\x00" /* csum */
+                      "\xBB\xAA\x00\x00" /* icmp_id */
+                      "\x41\x42\x43\x44\x45\x46\x47\x48\x49\x4A"; /* payload */
+
+    struct mbuf* m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
+
+    buf = mtod(m, void *);
+    bcopy(hardcoded, buf, 52);
+    ip_h = (struct ip*)(buf + ETHER_HDR_LEN);
+    icmp_h = (struct icmp*)(buf + 34);
+
+    /* Skip IP checksum */
+    m->m_pkthdr.csum_flags = (CSUM_IP_CHECKED | CSUM_IP_VALID);
+    m->m_len = 52;
+    m->m_pkthdr.len = m->m_len;
+
+    /* Compute icmp checksum */
+    icmp_h->icmp_cksum = 0;
+    icmp_h->icmp_cksum = in_cksum_skip(m, 52, 34);
+
+    pifp->if_ipackets++;
+    m->m_pkthdr.rcvif = pifp;
+
+    (*pifp->if_input)(pifp, m);
+}
+
 int main(void)
 {
     TLOG("BSD Net Driver Test BEGIN");
@@ -401,7 +446,12 @@ int main(void)
     osv_route_add_host(if_ip, if_gw);
 
     /* Send ICMP Packet */
-    test1_echorequest();
+    /* test1_echorequest(); */
+
+    /*
+     * Simulate an echo request packet that was received on our interface
+     */
+    test2_rcv_echorequest();
 
     /* Wait for async stuff */
     sleep(8);
