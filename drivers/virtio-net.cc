@@ -132,12 +132,12 @@ namespace virtio {
     } __attribute__((packed));
 
     struct virtio_net_req {
-        virtio_net::virtio_net_hdr *hdr;
+        struct virtio_net::virtio_net_hdr hdr;
         sglist payload;
         u8 *buffer;
 
         virtio_net_req() :buffer(nullptr) {};
-        ~virtio_net_req() {delete hdr; if (buffer) delete buffer;}
+        ~virtio_net_req() {if (buffer) delete buffer;}
     };
 
     void virtio_net::receiver() {
@@ -158,7 +158,7 @@ namespace virtio {
                 char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
                 virtio_net_d(fmt("\t len=%d") % ii->_len);
 
-                virtio_net_d(fmt("\t got hdr len:%d = %d vaddr=%p") % i++ % (int)req->hdr->hdr_len % (void*)buf);
+                virtio_net_d(fmt("\t got hdr len:%d = %d vaddr=%p") % i++ % (int)req->hdr.hdr_len % (void*)buf);
 
                 ethhdr* eh = reinterpret_cast<ethhdr*>(buf);
                 virtio_net_d(fmt("The src %x:%x:%x:%x:%x:%x dst %x:%x:%x:%x:%x:%x type %d ") %
@@ -209,11 +209,10 @@ namespace virtio {
         while (queue->avail_ring_has_room(2)) {
             virtio_net_req *req = new virtio_net_req;
 
-            req->hdr = new virtio_net_hdr;
             void* buf = malloc(page_size);
             memset(buf, 0, page_size);
             req->payload.add(mmu::virt_to_phys(buf), page_size);
-            req->payload.add(mmu::virt_to_phys(static_cast<void*>(req->hdr)), sizeof(struct virtio_net_hdr), true);
+            req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
 
             if (!queue->add_buf(&req->payload,0,2,req)) {
                 delete req;
@@ -241,9 +240,8 @@ namespace virtio {
 
         virtio_net_req *req = new virtio_net_req;
         req->payload.add(mmu::virt_to_phys(out), len);
-        req->hdr = new virtio_net_hdr;
-        req->hdr->hdr_len = ETH_ALEN + sizeof(iphdr);
-        req->payload.add(mmu::virt_to_phys(static_cast<void*>(req->hdr)), sizeof(struct virtio_net_hdr), true);
+        req->hdr.hdr_len = ETH_ALEN + sizeof(iphdr);
+        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
         req->buffer = (u8*)out;
 
         if (!queue->add_buf(&req->payload,2,0,req)) {
@@ -313,7 +311,8 @@ namespace virtio {
             memset(buf, 0, 1000);
             // set the src& dst to self
             memcpy(buf, _config.mac, sizeof(_config.mac));
-            memcpy(buf+6, _config.mac, sizeof(_config.mac));
+            //deliberate have offset so src != dst, just for this test
+            memcpy(buf+7, _config.mac, sizeof(_config.mac));
 
             virtio_net_d(fmt("%s: sending packet %d") % __FUNCTION__ % i++);
             tx(buf, 1000);
