@@ -15,9 +15,9 @@ using namespace hw;
 
 namespace pci {
 
-    class pci_function;
+    class function;
 
-    class pci_bar {
+    class bar {
     public:
 
         enum pci_bar_encoding_masks {
@@ -45,8 +45,8 @@ namespace pci {
             PCI_BAR_64BIT_ADDRESS        = 0x01
         };
 
-        pci_bar(pci_function* dev, u8 pos);
-        virtual ~pci_bar();
+        bar(function* dev, u8 pos);
+        virtual ~bar();
 
         // pos is the offset within the configuration space
         void test_bar_size(void);
@@ -80,7 +80,7 @@ namespace pci {
         void init(void);
 
         // To which pci_function it relates
-        pci_function* _dev;
+        function* _dev;
         // Offset to configuration space
         u8 _pos;
         // Base address
@@ -125,7 +125,7 @@ namespace pci {
     };
 
     // Represents a PCI function (pci device, bridge or virtio device)
-    class pci_function : public hw_device {
+    class function : public hw_device {
     public:
 
         enum pci_function_cfg_offsets {
@@ -194,8 +194,8 @@ namespace pci {
             PCI_CAP_PCIAF       = 0x13     // PCI Advanced Features
         };
 
-        pci_function(u8 bus, u8 device, u8 func);
-        virtual ~pci_function();
+        function(u8 bus, u8 device, u8 func);
+        virtual ~function();
 
         // Implement device interface
         virtual hw_device_id get_id(void);
@@ -270,22 +270,22 @@ namespace pci {
         // Capability parsing
         u8 find_capability(u8 cap_id);
 
-        pci_bar * get_bar(int idx);
-        void add_bar(int idx, pci_bar * bar);
+        bar * get_bar(int idx);
+        void add_bar(int idx, bar* bar);
 
         // Useful function to print device
         virtual void dump_config(void);
 
-        friend std::ostream& operator << (std::ostream& out, const pci_function &d);
+        friend std::ostream& operator << (std::ostream& out, const function &d);
         struct equal {
-            bool operator()(const pci_function* d1, const pci_function* d2) const
+            bool operator()(const function* d1, const function* d2) const
             {
                 return (d1->_device_id == d2->_device_id && d1->_vendor_id == d2->_vendor_id);
             }
         };
 
-        struct hash : std::unary_function< const pci_function*, std::size_t> {
-            std::size_t operator() ( const pci_function* const key ) const {
+        struct hash : std::unary_function< const function*, std::size_t> {
+            std::size_t operator() ( const function* const key ) const {
                 return (size_t)((key->_device_id<<16)+ key->_vendor_id);
             }
         };
@@ -313,7 +313,7 @@ namespace pci {
         u8 _lower_class_code;
 
         // Index -> PCI Bar
-        std::map<int, pci_bar *> _bars;
+        std::map<int, bar *> _bars;
 
         // MSI-x
         bool _have_msix;

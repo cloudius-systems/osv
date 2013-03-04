@@ -16,10 +16,10 @@ const int max_vectors = 256;
 
 class msix_vector {
 public:
-    msix_vector(pci::pci_function* dev);
+    msix_vector(pci::function* dev);
     virtual ~msix_vector();
 
-    pci::pci_function* get_pci_function(void);
+    pci::function* get_pci_function(void);
     unsigned get_vector(void);
     void msix_unmask_entries(void);
     void msix_mask_entries(void);
@@ -32,7 +32,7 @@ private:
     // Handler to invoke...
     std::function<void ()> _handler;
     // The device that owns this vector
-    pci::pci_function * _dev;
+    pci::function * _dev;
     // Entry ids used by this vector
     std::list<unsigned> _entryids;
     unsigned _vector;
@@ -47,7 +47,7 @@ struct msix_binding {
 class interrupt_manager {
 public:
 
-    explicit interrupt_manager(pci::pci_function* dev);
+    explicit interrupt_manager(pci::function* dev);
     ~interrupt_manager();
 
     ////////////////////
@@ -74,7 +74,7 @@ public:
     bool unmask_interrupts(const std::vector<msix_vector*>& vectors);
 
 private:
-    pci::pci_function* _dev;
+    pci::function* _dev;
     // Used by the easy interface
     std::vector<msix_vector*> _easy_vectors;
 };

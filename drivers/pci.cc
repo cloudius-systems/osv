@@ -131,11 +131,11 @@ void pci_device_enumeration(void)
                     continue;
                 }
 
-                pci_function * dev = nullptr;
-                if (pci_function::is_bridge(bus, slot, func)) {
-                    dev = new pci_bridge(bus, slot, func);
+                function * dev = nullptr;
+                if (function::is_bridge(bus, slot, func)) {
+                    dev = new bridge(bus, slot, func);
                 } else {
-                    dev = new pci_device(bus, slot, func);
+                    dev = new device(bus, slot, func);
                 }
 
                 bool parse_ok = dev->parse_pci_config();

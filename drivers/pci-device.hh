@@ -7,10 +7,10 @@
 
 namespace pci {
 
-    class pci_device: public pci_function {
+    class device: public function {
     public:
-        pci_device(u8 bus, u8 device, u8 func);
-        virtual ~pci_device();
+        device(u8 bus, u8 device, u8 func);
+        virtual ~device();
 
         // Parse configuration space of pci_device
         virtual bool parse_pci_config(void);

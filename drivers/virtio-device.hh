@@ -102,7 +102,7 @@ namespace virtio {
         // configuration space
         int virtio_pci_config_offset() {return (_dev.is_msix_enabled())? 24 : 20;}
 
-        explicit virtio_device(pci::pci_device& dev);
+        explicit virtio_device(pci::device& dev);
         virtual ~virtio_device();
 
         bool parse_pci_config(void);
@@ -146,12 +146,12 @@ namespace virtio {
         bool get_indirect_buf_cap() {return _cap_indirect_buf;}
         void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
 
-        pci::pci_device& pci_device() { return _dev; }
+        pci::device& pci_device() { return _dev; }
     protected:
-        pci::pci_device& _dev;
+        pci::device& _dev;
         vring* _queues[max_virtqueues_nr];
         u32 _num_queues;
-        pci::pci_bar *_bar1;
+        pci::bar *_bar1;
         bool _cap_indirect_buf;
     };
 

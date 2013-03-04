@@ -6,7 +6,7 @@
 
 namespace virtio {
 
-    virtio_device::virtio_device(pci::pci_device& dev)
+    virtio_device::virtio_device(pci::device& dev)
         : _dev(dev)
         ,  _num_queues(0)
         , _bar1(nullptr)

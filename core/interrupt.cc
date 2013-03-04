@@ -10,7 +10,7 @@
 
 using namespace pci;
 
-msix_vector::msix_vector(pci_function* dev)
+msix_vector::msix_vector(pci::function* dev)
     : _dev(dev)
 {
     _vector = idt.register_handler([this] { interrupt(); });
@@ -21,7 +21,7 @@ msix_vector::~msix_vector()
     idt.unregister_handler(_vector);
 }
 
-pci_function* msix_vector::get_pci_function(void)
+pci::function* msix_vector::get_pci_function(void)
 {
     return (_dev);
 }
@@ -60,7 +60,7 @@ void msix_vector::interrupt(void)
     _handler();
 }
 
-interrupt_manager::interrupt_manager(pci::pci_function* dev)
+interrupt_manager::interrupt_manager(pci::function* dev)
     : _dev(dev)
 {
 }
