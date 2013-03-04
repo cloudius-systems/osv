@@ -292,8 +292,10 @@ namespace virtio {
 
     hw_driver* virtio_net::probe(hw_device* dev)
     {
-        if (auto vdev = dynamic_cast<virtio_device*>(dev)) {
-            if (vdev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_NET_DEVICE_ID)) {
+        if (auto pci_dev = dynamic_cast<pci::pci_device*>(dev)) {
+            if (pci_dev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_NET_DEVICE_ID)) {
+                // FIXME: leak, pointless
+                auto vdev = new virtio_device(*pci_dev);
                 return new virtio_net(vdev);
             }
         }

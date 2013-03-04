@@ -20,8 +20,6 @@ namespace pci {
 
         virtual void dump_config(void);
 
-        static bool is_virtio_device(u8 bus, u8 device, u8 func);
-
     protected:
 
         u16 _subsystem_vid;

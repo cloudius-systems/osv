@@ -96,18 +96,17 @@ namespace virtio {
     const unsigned max_virtqueues_nr = 64;
 
 
-    class virtio_device: public pci::pci_device {
+    class virtio_device {
     public:
-
         // The remaining space is defined by each driver as the per-driver
         // configuration space
-        int virtio_pci_config_offset() {return (is_msix_enabled())? 24 : 20;}
+        int virtio_pci_config_offset() {return (_dev.is_msix_enabled())? 24 : 20;}
 
-        virtio_device(u8 bus, u8 device, u8 func);
+        explicit virtio_device(pci::pci_device& dev);
         virtual ~virtio_device();
 
-        virtual bool parse_pci_config(void);
-        virtual void dump_config(void);
+        bool parse_pci_config(void);
+        void dump_config(void);
 
         bool probe_virt_queues(void);
         vring* get_virt_queue(unsigned idx);
@@ -147,7 +146,9 @@ namespace virtio {
         bool get_indirect_buf_cap() {return _cap_indirect_buf;}
         void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
 
+        pci::pci_device& pci_device() { return _dev; }
     protected:
+        pci::pci_device& _dev;
         vring* _queues[max_virtqueues_nr];
         u32 _num_queues;
         pci::pci_bar *_bar1;

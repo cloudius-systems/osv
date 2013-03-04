@@ -12,11 +12,11 @@ namespace virtio {
     virtio_driver::virtio_driver(virtio_device* vdev)
         : hw_driver()
         , _dev(vdev)
-        , _msi(vdev)
+        , _msi(&vdev->pci_device())
     {
-        _dev->set_bus_master(true);
+        _dev->pci_device().set_bus_master(true);
 
-        _dev->msix_enable();
+        _dev->pci_device().msix_enable();
 
         //make sure the queue is reset
         _dev->reset_host_side();
@@ -61,11 +61,12 @@ namespace virtio {
     void virtio_driver::dump_config()
     {
         u8 B, D, F;
-        _dev->get_bdf(B, D, F);
+        _dev->pci_device().get_bdf(B, D, F);
 
         virtio_d(fmt("%s [%x:%x.%x] vid:id= %x:%x") % get_name() %
             (u16)B % (u16)D % (u16)F %
-            _dev->get_vendor_id() % _dev->get_device_id());
+            _dev->pci_device().get_vendor_id() %
+            _dev->pci_device().get_device_id());
     }
 
 

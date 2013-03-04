@@ -8,13 +8,16 @@ using namespace pci;
 
 namespace virtio {
 
-    virtio_device::virtio_device(u8 bus, u8 device, u8 func)
-        : pci_device(bus, device, func),  _num_queues(0), _bar1(nullptr),
-          _cap_indirect_buf(false)
+    virtio_device::virtio_device(pci::pci_device& dev)
+        : _dev(dev)
+        ,  _num_queues(0)
+        , _bar1(nullptr)
+        , _cap_indirect_buf(false)
     {
         for (unsigned i=0; i < max_virtqueues_nr; i++) {
             _queues[i] = nullptr;
         }
+        parse_pci_config();
     }
 
     virtio_device::~virtio_device()
@@ -24,7 +27,7 @@ namespace virtio {
 
     void virtio_device::dump_config(void)
     {
-        pci_device::dump_config();
+        _dev.dump_config();
 
         virtio_i(fmt("    virtio features: "));
         for (int i=0;i<32;i++)
@@ -33,25 +36,25 @@ namespace virtio {
 
     bool virtio_device::parse_pci_config(void)
     {
-        if (!pci_device::parse_pci_config()) {
+        if (!_dev.parse_pci_config()) {
             return (false);
         }
 
         // Test whether bar1 is present
-        _bar1 = get_bar(1);
+        _bar1 = _dev.get_bar(1);
         if (_bar1 == nullptr) {
             return (false);
         }
 
         // Check ABI version
-        u8 rev = get_revision_id();
+        u8 rev = _dev.get_revision_id();
         if (rev != VIRTIO_PCI_ABI_VERSION) {
             virtio_e(fmt("Wrong virtio revision=%x") % rev);
             return (false);
         }
 
         // Check device ID
-        u16 dev_id = get_device_id();
+        u16 dev_id = _dev.get_device_id();
         if ((dev_id < VIRTIO_PCI_ID_MIN) || (dev_id > VIRTIO_PCI_ID_MAX)) {
             virtio_e(fmt("Wrong virtio dev id %x") % dev_id);
             return (false);
