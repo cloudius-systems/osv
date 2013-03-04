@@ -4,8 +4,6 @@
 #include "virtio-device.hh"
 #include "virtio-vring.hh"
 
-using namespace pci;
-
 namespace virtio {
 
     virtio_device::virtio_device(pci::pci_device& dev)
