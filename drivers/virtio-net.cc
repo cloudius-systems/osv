@@ -43,7 +43,7 @@ namespace virtio {
     #define virtio_net_e(fmt)   logger::instance()->log(virtio_net_tag, logger_error, (fmt))
 
 
-    virtio_net::virtio_net(virtio_device* dev)
+    virtio_net::virtio_net(pci::device& dev)
         : virtio_driver(dev)
     {
         std::stringstream ss;
@@ -64,7 +64,7 @@ namespace virtio {
 
         fill_rx_ring();
 
-        _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+        add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
         thread *test = new thread([this] {this->tx_test();});
         test->start();
@@ -79,9 +79,9 @@ namespace virtio {
     bool virtio_net::read_config()
     {
         //read all of the net config  in one shot
-        _dev->virtio_conf_read(_dev->virtio_pci_config_offset(), &_config, sizeof(_config));
+        virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
-        if (_dev->get_guest_feature_bit(VIRTIO_NET_F_MAC))
+        if (get_guest_feature_bit(VIRTIO_NET_F_MAC))
             virtio_net_i(fmt("The mac addr of the device is %x:%x:%x:%x:%x:%x") %
                     (u32)_config.mac[0] %
                     (u32)_config.mac[1] %
@@ -141,7 +141,7 @@ namespace virtio {
     };
 
     void virtio_net::receiver() {
-        vring* queue = _dev->get_virt_queue(0);
+        vring* queue = get_virt_queue(0);
 
         while (1) {
             thread::wait_until([this, queue] {
@@ -201,7 +201,7 @@ namespace virtio {
 
     void virtio_net::fill_rx_ring()
     {
-        vring* queue = _dev->get_virt_queue(0);
+        vring* queue = get_virt_queue(0);
         virtio_net_d(fmt("%s") % __FUNCTION__);
 
         // it could have been a while (1) loop but it simplifies the allocation
@@ -225,7 +225,7 @@ namespace virtio {
 
     bool virtio_net::tx(void *out, int len, bool flush)
     {
-        vring* queue = _dev->get_virt_queue(1);
+        vring* queue = get_virt_queue(1);
 
         if (!queue->avail_ring_has_room(2)) {
             if (queue->used_ring_not_empty()) {
@@ -255,7 +255,7 @@ namespace virtio {
     }
 
     void virtio_net::tx_gc_thread() {
-        vring* queue = _dev->get_virt_queue(1);
+        vring* queue = get_virt_queue(1);
 
         while (1) {
             thread::wait_until([this, queue] {
@@ -270,7 +270,7 @@ namespace virtio {
     {
         int i = 0;
         virtio_net_req * req;
-        vring* queue = _dev->get_virt_queue(1);
+        vring* queue = get_virt_queue(1);
 
         while((req = static_cast<virtio_net_req*>(queue->get_buf())) != nullptr) {
             virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
@@ -289,9 +289,7 @@ namespace virtio {
     {
         if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
             if (pci_dev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_NET_DEVICE_ID)) {
-                // FIXME: leak, pointless
-                auto vdev = new virtio_device(*pci_dev);
-                return new virtio_net(vdev);
+                return new virtio_net(*pci_dev);
             }
         }
         return nullptr;

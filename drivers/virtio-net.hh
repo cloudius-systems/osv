@@ -212,7 +212,7 @@ namespace virtio {
                 u16 virtqueue_pairs;
         };
 
-        explicit virtio_net(virtio_device* dev);
+        explicit virtio_net(pci::device& dev);
         virtual ~virtio_net();
 
         virtual const std::string get_name(void) { return _driver_name; }

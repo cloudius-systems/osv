@@ -150,7 +150,7 @@ namespace virtio {
             struct bio* bio;
         };
 
-        explicit virtio_blk(virtio_device* dev);
+        explicit virtio_blk(pci::device& dev);
         virtual ~virtio_blk();
 
         virtual const std::string get_name(void) { return _driver_name; }

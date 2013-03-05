@@ -86,8 +86,8 @@ struct driver virtio_blk_driver = {
     sizeof(struct virtio_blk_priv),
 };
 
-virtio_blk::virtio_blk(virtio_device* vdev)
-    : virtio_driver(vdev), _ro(false)
+virtio_blk::virtio_blk(pci::device& pci_dev)
+    : virtio_driver(pci_dev), _ro(false)
 {
     std::stringstream ss;
     ss << "virtio-blk";
@@ -103,7 +103,7 @@ virtio_blk::virtio_blk(virtio_device* vdev)
     isr->start();
     _msi.easy_register({ { 0, isr } });
 
-    _dev->add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+    add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     struct virtio_blk_priv* prv;
     struct device *dev;
@@ -124,29 +124,29 @@ virtio_blk::~virtio_blk()
 bool virtio_blk::read_config()
 {
     //read all of the block config (including size, mce, topology,..) in one shot
-    _dev->virtio_conf_read(_dev->virtio_pci_config_offset(), &_config, sizeof(_config));
+    virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
     virtio_i(fmt("The capacity of the device is %d") % (u64)_config.capacity);
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
         virtio_i(fmt("The size_max of the device is %d") % (u32)_config.size_max);
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
         virtio_i(fmt("The seg_size of the device is %d") % (u32)_config.seg_max);
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
+    if (get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
         virtio_i(fmt("The cylinders count of the device is %d") % (u16)_config.geometry.cylinders);
         virtio_i(fmt("The heads count of the device is %d") % (u32)_config.geometry.heads);
         virtio_i(fmt("The sector count of the device is %d") % (u32)_config.geometry.sectors);
     }
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
         virtio_i(fmt("The block size of the device is %d") % (u32)_config.blk_size);
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
+    if (get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
         virtio_i(fmt("The physical_block_exp of the device is %d") % (u32)_config.physical_block_exp);
         virtio_i(fmt("The alignment_offset of the device is %d") % (u32)_config.alignment_offset);
         virtio_i(fmt("The min_io_size of the device is %d") % (u16)_config.min_io_size);
         virtio_i(fmt("The opt_io_size of the device is %d") % (u32)_config.opt_io_size);
     }
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
         virtio_i(fmt("The write cache enable of the device is %d") % (u32)_config.wce);
-    if (_dev->get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
+    if (get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
         set_readonly();
         virtio_i(fmt("Device is read only"));
     }
@@ -155,13 +155,13 @@ bool virtio_blk::read_config()
 }
 
 void virtio_blk::response_worker() {
-    vring* queue = _dev->get_virt_queue(0);
+    vring* queue = get_virt_queue(0);
     virtio_blk_req* req;
 
     while (1) {
 
         thread::wait_until([this] {
-            vring* queue = this->_dev->get_virt_queue(0);
+            vring* queue = get_virt_queue(0);
             return queue->used_ring_not_empty();
         });
 
@@ -271,7 +271,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
     sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
 
     virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
-    vring* queue = _dev->get_virt_queue(0);
+    vring* queue = get_virt_queue(0);
 
     if (!queue->add_buf(req->payload,out,in,req)) {
         // TODO need to clea the bio
@@ -298,9 +298,7 @@ hw_driver* virtio_blk::probe(hw_device* dev)
 {
     if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
         if (pci_dev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_BLK_DEVICE_ID)) {
-            // FIXME: leak, pointless
-            auto vdev = new virtio_device(*pci_dev);
-            return new virtio_blk(vdev);
+            return new virtio_blk(*pci_dev);
         }
     }
     return nullptr;

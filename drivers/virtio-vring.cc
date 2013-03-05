@@ -4,7 +4,7 @@
 #include "sglist.hh"
 #include "barrier.hh"
 
-#include "drivers/virtio-device.hh"
+#include "virtio.hh"
 #include "drivers/virtio-vring.hh"
 #include "debug.hh"
 
@@ -16,7 +16,7 @@ using sched::thread;
 
 namespace virtio {
 
-    vring::vring(virtio_device* const dev, u16 num, u16 q_index)
+    vring::vring(virtio_driver* const dev, u16 num, u16 q_index)
     {
         _dev = dev;
         _q_index = q_index;

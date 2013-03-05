@@ -35,7 +35,6 @@
 #include "drivers/pci-function.hh"
 #include "drivers/pci-bridge.hh"
 #include "drivers/pci-device.hh"
-#include "drivers/virtio-device.hh"
 
 namespace pci {
 
