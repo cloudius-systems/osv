@@ -9,6 +9,8 @@
 
 extern void dlclose_by_path_np(const char* filename);
 
+static unsigned nr_tests, nr_failures;
+
 void load_test(char *path, char *argv0)
 {
 	void *handle;
@@ -20,11 +22,14 @@ void load_test(char *path, char *argv0)
 	handle = dlopen(path, 0);
 	test_main = dlsym(handle, "main");
 
+	++nr_tests;
 	ret = test_main(1, &argv0);
-	if (ret)
+	if (ret) {
+	    ++nr_failures;
 		printf("failed.\n");
-	else
+	} else {
 		printf("ok.\n");
+	}
 
 	dlclose_by_path_np(path);
 }
@@ -64,6 +69,7 @@ int osv_main(int argc, char **argv)
 		perror("failed to close testdir");
 		return EXIT_FAILURE;
 	}
+	printf("All tests complete - %d/%d failures", nr_failures, nr_tests);
 
 	return 0;
 }
