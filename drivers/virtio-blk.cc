@@ -70,20 +70,20 @@ virtio_blk_write(struct device *dev, struct uio *uio, int ioflags)
     return bdev_write(dev, uio, ioflags);
 }
 
-static struct devops virtio_blk_devops = {
-    .open       = no_open,
-    .close      = no_close,
-    .read       = virtio_blk_read,
-    .write      = virtio_blk_write,
-    .ioctl      = no_ioctl,
-    .devctl     = no_devctl,
-    .strategy   = virtio_blk_strategy,
+static struct devops virtio_blk_devops {
+    no_open,
+    no_close,
+    virtio_blk_read,
+    virtio_blk_write,
+    no_ioctl,
+    no_devctl,
+    virtio_blk_strategy,
 };
 
 struct driver virtio_blk_driver = {
-    .name       = "virtio_blk",
-    .devops     = &virtio_blk_devops,
-    .devsz      = sizeof(struct virtio_blk_priv),
+    "virtio_blk",
+    &virtio_blk_devops,
+    sizeof(struct virtio_blk_priv),
 };
 
     virtio_blk::virtio_blk(virtio_device* vdev)
