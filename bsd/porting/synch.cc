@@ -51,9 +51,9 @@ private:
 synch_port* synch_port::_instance = nullptr;
 
 int synch_port::msleep(void *chan, struct mtx *mtx,
-    int priority, const char *wmesg, int timo_seconds)
+    int priority, const char *wmesg, int timo_hz)
 {
-    SYNCH_LOG("msleep chan=%x, mtx=%x, timo_seconds=%d", chan, mtx, timo_seconds);
+    SYNCH_LOG("msleep chan=%x, mtx=%x, timo_seconds=%d", chan, mtx, timo_hz);
 
     mutex_t *wait_lock = nullptr;
 
@@ -70,8 +70,8 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
     _evlist.insert(std::make_pair(chan, &wait));
     mutex_unlock(&_lock);
 
-    if (timo_seconds) {
-        u64 nanoseconds = timo_seconds*1000000000L;
+    if (timo_hz) {
+        u64 nanoseconds = timo_hz*(1000000000L/hz);
         u64 cur_time = clock::get()->time();
         sched::timer t(*sched::thread::current());
         t.set(cur_time + nanoseconds);

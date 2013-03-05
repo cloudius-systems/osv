@@ -45,7 +45,7 @@ public:
         for (int i=0; i<2; i++) {
             /* Wait on another channel, with a timeout... */
             dbg_d("test1 - waiting on event 234 with a timeout of 1 second");
-            msleep((void*)888, NULL, 0, "test1", 1);
+            msleep((void*)888, NULL, 0, "test1", 1 * hz);
             dbg_d("test1 - releasing event 123");
             wakeup_one((void*)567);
         }
@@ -79,7 +79,7 @@ public:
 
         /* Wait on another channel, with a timeout... */
         dbg_d("test1 - waiting on event 234 with a timeout of 1 second");
-        msleep((void*)234, NULL, 0, "test1", 1);
+        msleep((void*)234, NULL, 0, "test1", 1 * hz);
         dbg_d("test1 - releasing event 123");
         wakeup((void*)123);
 
