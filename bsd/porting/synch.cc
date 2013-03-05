@@ -1,4 +1,5 @@
 #include <map>
+#include <errno.h>
 #include "debug.hh"
 #include "drivers/clock.hh"
 #include "sched.hh"
@@ -78,6 +79,11 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         sched::thread::wait_until(wait_lock, [&] {
             return ( (t.expired()) || (wait._awake) );
         });
+
+        // msleep timeout
+        if (!wait._awake) {
+            return (EWOULDBLOCK);
+        }
 
     } else {
 
