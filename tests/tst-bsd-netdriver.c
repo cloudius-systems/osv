@@ -266,6 +266,37 @@ void destroy_if(void)
     if_free(pifp);
 }
 
+void test1_printrecv(struct sockaddr* from, struct mbuf* m_head)
+{
+    struct mbuf* m;
+    int frag_num = 0;
+    uint8_t *frag;
+    TLOG("[~] Printing Packet...");
+
+    for (m = m_head; m != NULL; m = m->m_next) {
+        if (m->m_len != 0) {
+            frag = mtod(m, uint8_t*);
+            printf("Frag #%d len=%d:\n", ++frag_num, m->m_len);
+            hexdump(frag, m->m_len);
+        }
+    }
+
+    m_free(m_head);
+}
+/* Try to read from the socket in test1 */
+void test1_recv(struct socket* s)
+{
+    struct sockaddr* from;
+    struct uio uio = {0};
+    uio.uio_resid = 52;
+    struct mbuf* m;
+
+    int rc = soreceive_dgram(s, &from, &uio, &m, NULL, NULL);
+    if (!rc) {
+        test1_printrecv(from, m);
+    }
+}
+
 /* Sends an echo request */
 void test1_echorequest(void)
 {
@@ -331,8 +362,7 @@ void test1_echorequest(void)
         TLOG("sosend_dgram() failed %d", error);
     }
 
-    /* Wait 5 seconds */
-    sleep(5);
+    test1_recv(s);
 
     soclose(s);
 }
@@ -446,12 +476,12 @@ int main(void)
     osv_route_add_host(if_ip, if_gw);
 
     /* Send ICMP Packet */
-    /* test1_echorequest(); */
+    test1_echorequest();
 
     /*
      * Simulate an echo request packet that was received on our interface
      */
-    test2_rcv_echorequest();
+    /* test2_rcv_echorequest(); */
 
     /* Wait for async stuff */
     sleep(8);
