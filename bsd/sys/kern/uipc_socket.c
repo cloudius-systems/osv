@@ -282,16 +282,8 @@ sodealloc(struct socket *so)
 	--numopensockets;	/* Could be below, but faster here. */
 	mtx_unlock(&so_global_mtx);
 
-/* FIXME: OSv, change this */
-#if 0
-	if (so->so_rcv.sb_hiwat)
-		(void)chgsbsize(so->so_cred->cr_uidinfo,
-		    &so->so_rcv.sb_hiwat, 0, RLIM_INFINITY);
-	if (so->so_snd.sb_hiwat)
-		(void)chgsbsize(so->so_cred->cr_uidinfo,
-		    &so->so_snd.sb_hiwat, 0, RLIM_INFINITY);
-#endif
-
+    so->so_rcv.sb_hiwat = 0;
+    so->so_snd.sb_hiwat = 0;
 
 #ifdef INET
 	/* FIXME: OSv - should this be supported? */
@@ -2346,12 +2338,12 @@ sosetopt(struct socket *so, struct sockopt *sopt)
 
 			/* assert(hz > 0); */
 			if (tv.tv_sec < 0 || tv.tv_sec > INT_MAX / hz ||
-			    tv.tv_usec < 0 || tv.tv_usec >= 1000000000) {
+			    tv.tv_usec < 0 || tv.tv_usec >= 1000000) {
 				error = EDOM;
 				goto bad;
 			}
 			/* assert(tick > 0); */
-			/* assert(ULONG_MAX - INT_MAX >= 1000000000); */
+			/* assert(ULONG_MAX - INT_MAX >= 1000000); */
 			val = (u_long)(tv.tv_sec * hz) + tv.tv_usec;
 			if (val > INT_MAX) {
 				error = EDOM;
