@@ -33,6 +33,7 @@
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
+#include <bsd/porting/synch.h>
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
@@ -115,17 +116,12 @@ socantrcvmore(struct socket *so)
 int
 sbwait(struct sockbuf *sb)
 {
-#if 0
+
 	SOCKBUF_LOCK_ASSERT(sb);
 
 	sb->sb_flags |= SB_WAIT;
-	return (msleep(&sb->sb_cc, &sb->sb_mtx,
-	    (sb->sb_flags & SB_NOINTR) ? PSOCK : PSOCK | PCATCH, "sbwait",
+	return (msleep(&sb->sb_cc, &sb->sb_mtx, 0, "sbwait",
 	    sb->sb_timeo));
-#else
-	return (0);
-	/* FIXME: OSv todo - implement... */
-#endif
 }
 
 int
@@ -198,6 +194,25 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 	if ((so->so_state & SS_ASYNC) && so->so_sigio != NULL)
 		pgsigio(&so->so_sigio, SIGIO, 0);
 	mtx_assert(SOCKBUF_MTX(sb), MA_NOTOWNED);
+#else
+	int ret = 0;
+    if (sb->sb_flags & SB_WAIT) {
+        sb->sb_flags &= ~SB_WAIT;
+        wakeup(&sb->sb_cc);
+    }
+    if (sb->sb_upcall != NULL) {
+        ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
+        if (ret == SU_ISCONNECTED) {
+            KASSERT(sb == &so->so_rcv,
+                ("SO_SND upcall returned SU_ISCONNECTED"));
+            soupcall_clear(so, SO_RCV);
+        }
+    } else
+        ret = SU_OK;
+    SOCKBUF_UNLOCK(sb);
+    if (ret == SU_ISCONNECTED)
+        soisconnected(so);
+    mtx_assert(SOCKBUF_MTX(sb), MA_NOTOWNED);
 #endif
 }
 
