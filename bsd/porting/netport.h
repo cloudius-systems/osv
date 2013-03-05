@@ -9,8 +9,6 @@
 
 int osv_curtid(void);
 
-#define wakeup_one(...)
-#define wakeup(...)
 struct knote {
     int __unused;
 };

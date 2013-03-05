@@ -106,6 +106,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 #include <bsd/porting/sync_stub.h>
+#include <bsd/porting/synch.h>
 
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
