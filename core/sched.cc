@@ -220,9 +220,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     });
     setup_tcb();
     init_stack();
-    if (!main) {
-        _cpu = current()->tcpu(); // inherit creator's cpu
-    } else {
+    if (main) {
         _status.store(status::running);
     }
 }
@@ -240,6 +238,7 @@ thread::~thread()
 
 void thread::start()
 {
+    _cpu = current()->tcpu();
     assert(_status == status::unstarted);
     _status.store(status::waiting);
     wake();
