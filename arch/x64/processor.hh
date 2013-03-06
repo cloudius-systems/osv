@@ -5,6 +5,36 @@
 
 namespace processor {
 
+constexpr ulong cr0_pe = 1u << 0;
+constexpr ulong cr0_mp = 1u << 1;
+constexpr ulong cr0_em = 1u << 2;
+constexpr ulong cr0_ts = 1u << 3;
+constexpr ulong cr0_et = 1u << 4;
+constexpr ulong cr0_ne = 1u << 5;
+constexpr ulong cr0_wp = 1u << 16;
+constexpr ulong cr0_am = 1u << 18;
+constexpr ulong cr0_nw = 1u << 29;
+constexpr ulong cr0_cd = 1u << 30;
+constexpr ulong cr0_pg = 1u << 31;
+
+constexpr ulong cr4_vme = 1u << 0;
+constexpr ulong cr4_pvi = 1u << 1;
+constexpr ulong cr4_tsd = 1u << 2;
+constexpr ulong cr4_de = 1u << 3;
+constexpr ulong cr4_pse = 1u << 4;
+constexpr ulong cr4_pae = 1u << 5;
+constexpr ulong cr4_mce = 1u << 6;
+constexpr ulong cr4_pge = 1u << 7;
+constexpr ulong cr4_pce = 1u << 8;
+constexpr ulong cr4_osfxsr = 1u << 9;
+constexpr ulong cr4_osxmmexcpt = 1u << 10;
+constexpr ulong cr4_vmxe = 1u << 13;
+constexpr ulong cr4_smxe = 1u << 14;
+constexpr ulong cr4_fsgsbase = 1u << 16;
+constexpr ulong cr4_pcide = 1u << 17;
+constexpr ulong cr4_osxsave = 1u << 18;
+constexpr ulong cr4_smep = 1u << 20;
+
 inline ulong read_cr0() {
     ulong r;
     asm volatile ("mov %%cr0, %0" : "=r"(r));
