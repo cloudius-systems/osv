@@ -10,7 +10,7 @@ public class Bench {
 	}
 	
 	static void test(Benchmark b) throws Exception {
-		int iterations = 1; //10000;
+		int iterations = 10000;
 		// warm things up
 		b.run(iterations);
 		while (measure(b, iterations) < 1000000000) {
@@ -23,12 +23,10 @@ public class Bench {
 	public static void main(String[] args) throws Exception {
 		test(new NanoTimeBench());
 		test(new ContextSwitchBench());
-		test(new SieveBench(100000));
-		// Note: To run a larger SieveBench test, do not remove the above
-		// short test - it is necessary to get JIT working (otherwise,
-		// since a large test will only have one iteration, the test will
-		// not be compiled. Also enabling the following test requires more
-		// memory:
-		// test(new SieveBench(200*1000000));
+		// large test requiring more memory:
+		//SieveBench small = new SieveBench(10000);
+		//System.out.println("Small SieveBench (warmup): "+measure(small, 10000)/1e9);
+		//SieveBench sb = new SieveBench(200*1000000);
+		//System.out.println("Large SieveBench: "+measure(sb, 1)/1e9);
 	}
 }
