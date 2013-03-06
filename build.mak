@@ -194,6 +194,7 @@ objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/arch-setup.o
 objects += arch/x64/smp.o
+objects += arch/x64/signal.o
 objects += core/mutex.o
 objects += core/eventlist.o
 objects += core/debug.o

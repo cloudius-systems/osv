@@ -23,6 +23,22 @@ sigset* thread_signals()
     return reinterpret_cast<sigset*>(thread_signal_mask);
 }
 
+void handle_segmentation_fault(ulong addr, exception_frame* ef)
+{
+    if (!pthread_self()) {
+        abort();
+    }
+    if (thread_signals()->mask[SIGSEGV]) {
+        // FIXME: need to find some other thread to deliver
+        // FIXME: the signal to
+        abort();
+    }
+    siginfo_t si;
+    si.si_signo = SIGSEGV;
+    si.si_addr = reinterpret_cast<void*>(addr);
+    arch::build_signal_frame(ef, si, signal_actions[SIGSEGV]);
+}
+
 }
 
 using namespace osv;

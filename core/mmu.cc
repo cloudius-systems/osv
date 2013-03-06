@@ -6,6 +6,7 @@
 #include <boost/format.hpp>
 #include <string.h>
 #include <iterator>
+#include "libc/signal.hh"
 
 namespace {
 
@@ -397,6 +398,6 @@ void switch_to_runtime_page_table()
 void page_fault(exception_frame *ef)
 {
     auto addr = processor::read_cr2();
-    debug(fmt("page fault @ %1$x") % addr);
-    abort();
+    // FIXME: handle fixable faults
+    osv::handle_segmentation_fault(addr, ef);
 }

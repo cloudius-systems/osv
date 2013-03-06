@@ -101,6 +101,51 @@ thread_main:
 	call thread_main_c
 	.cfi_endproc
 
+.global call_signal_handler_thunk
+call_signal_handler_thunk:
+        .cfi_startproc simple
+        .cfi_signal_frame
+        .cfi_def_cfa %rsp, 0
+        # stack contains a signal_frame
+        .cfi_offset %r15, 0x00
+        .cfi_offset %r14, 0x08
+        .cfi_offset %r13, 0x10
+        .cfi_offset %r12, 0x18
+        .cfi_offset %r11, 0x20
+        .cfi_offset %r10, 0x28
+        .cfi_offset %r9, 0x30
+        .cfi_offset %r8, 0x38
+        .cfi_offset %rbp, 0x40
+        .cfi_offset %rdi, 0x48
+        .cfi_offset %rsi, 0x50
+        .cfi_offset %rdx, 0x58
+        .cfi_offset %rcx, 0x60
+        .cfi_offset %rbx, 0x68
+        .cfi_offset %rax, 0x70
+        .cfi_offset %rip, 0x80
+        .cfi_offset %rsp, 0x98
+        mov %rsp, %rdi
+        call call_signal_handler
+        # FIXME: fpu
+        pop %r15
+        pop %r14
+        pop %r13
+        pop %r12
+        pop %r11
+        pop %r10
+        pop %r9
+        pop %r8
+        pop %rbp
+        pop %rdi
+        pop %rsi
+        pop %rdx
+        pop %rcx
+        pop %rbx
+        pop %rax
+        add $8, %rsp # error_core
+        iretq
+        .cfi_endproc
+
 .global stack_trampoline
 stack_trampoline:  # %rsi=arg, %rdi=func, %rdx=stack
 	.cfi_startproc simple

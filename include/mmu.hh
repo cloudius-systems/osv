@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <boost/intrusive/set.hpp>
 #include <osv/types.h>
+#include <functional>
 
 namespace mmu {
 

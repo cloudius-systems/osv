@@ -3,6 +3,7 @@
 
 #include <signal.h>
 #include <bitset>
+#include "exceptions.hh"
 
 namespace osv {
 
@@ -19,6 +20,14 @@ const sigset* from_libc(const sigset_t* s);
 
 sigset* thread_signals();
 
+void handle_segmentation_fault(ulong addr, exception_frame* ef);
+
+}
+
+namespace arch {
+    void build_signal_frame(exception_frame* ef,
+                 const siginfo_t& si,
+                 const struct sigaction& sa);
 }
 
 
