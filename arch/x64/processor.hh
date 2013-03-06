@@ -218,6 +218,39 @@ inline u64 rdtsc()
     return lo | (u64(hi) << 32);
 }
 
+struct fpu_state {
+    char x[512];
+    char extra[];
+};
+
+inline void fxsave(fpu_state* s)
+{
+    asm volatile("fxsaveq %0" : "=m"(*s));
+}
+
+inline void fxrstor(fpu_state* s)
+{
+    asm volatile("fxrstorq %0" : : "m"(*s));
+}
+
+inline void xsave(fpu_state* s, u64 mask)
+{
+    u32 a = mask, d = mask >> 32;
+    asm volatile("xsaveq %[fpu]" : [fpu]"=m"(*s) : "a"(a), "d"(d));
+}
+
+inline void xsaveopt(fpu_state* s, u64 mask)
+{
+    u32 a = mask, d = mask >> 32;
+    asm volatile("xsaveoptq %[fpu]" : [fpu]"=m"(*s) : "a"(a), "d"(d));
+}
+
+inline void xrstor(const fpu_state* s, u64 mask)
+{
+    u32 a = mask, d = mask >> 32;
+    asm volatile("xrstorq %[fpu]" : : [fpu]"m"(*s), "a"(a), "d"(d));
+}
+
 struct task_state_segment {
     u32 reserved0;
     u64 rsp[3];
