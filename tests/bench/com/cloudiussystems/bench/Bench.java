@@ -30,5 +30,6 @@ public class Bench {
 		// not be compiled. Also enabling the following test requires more
 		// memory:
 		// test(new SieveBench(200*1000000));
+		test(new NullPointerExceptionBench());
 	}
 }
