@@ -8,6 +8,7 @@
 #include <string.h>
 #include "libc/libc.hh"
 #include "align.hh"
+#include <debug.hh>
 
 namespace memory {
 
@@ -238,6 +239,53 @@ void* alloc_page()
 void free_page(void* v)
 {
     new (v) page_range(page_size);
+    free_large(v + page_size);
+}
+
+/* Allocate a huge page of a given size N (which must be a power of two)
+ * N bytes of contiguous physical memory whose address is a multiple of N.
+ * Memory allocated with alloc_huge_page() must be freed with free_huge_page(),
+ * not free(), as the memory is not preceded by a header.
+ */
+void* alloc_huge_page(size_t N)
+{
+    std::lock_guard<mutex> guard(free_page_ranges_lock);
+
+    for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
+        page_range *header = &*i;
+        if (header->size < N)
+            continue;
+        intptr_t v = (intptr_t) header;
+        // Find the the beginning of the last aligned area in the given
+        // page range. This will be our return value:
+        intptr_t ret = (v+header->size-N) & ~(N-1);
+        if (ret<v)
+            continue;
+        // endsize is the number of bytes in the page range *after* the
+        // N bytes we will return. calculate it before changing header->size
+        int endsize = v+header->size-ret-N;
+        // Make the original page range smaller, pointing to the part before
+        // our ret (if there's nothing before, remove this page range)
+        if (ret==v)
+            free_page_ranges.erase(*header);
+        else
+            header->size = ret-v;
+        // Create a new page range for the endsize part (if there is one)
+        if (endsize > 0) {
+            void *e = (void *)(ret+N);
+            new (e) page_range(endsize);
+            free_large(e + page_size);
+        }
+        // Return the middle 2MB part
+        return (void*) ret;
+    }
+    debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.") % N);
+    abort();
+}
+
+void free_huge_page(void* v, size_t N)
+{
+    new (v) page_range(N);
     free_large(v + page_size);
 }
 
