@@ -33,9 +33,9 @@
 #ifndef _SYS_SOCKET_H_
 #define	_SYS_SOCKET_H_
 
+#include <osv/uio.h>
 #include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
-#include <bsd/sys/sys/_iovec.h>
 #include <bsd/machine/_align.h>
 
 /*
