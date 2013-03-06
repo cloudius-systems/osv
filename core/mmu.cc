@@ -13,6 +13,8 @@ namespace {
 typedef boost::format fmt;
 
 constexpr uintptr_t page_size = 4096;
+constexpr int pte_per_page = 512;
+constexpr uintptr_t huge_page_size = page_size*pte_per_page; // 2 MB
 
 }
 
@@ -91,7 +93,7 @@ void allocate_intermediate_level(pt_element *ptep)
 {
     phys pt_page = alloc_page();
     pt_element* pt = phys_cast<pt_element>(pt_page);
-    for (auto i = 0; i < 512; ++i) {
+    for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = 0;
     }
     *ptep = pt_page | 0x63;
@@ -122,7 +124,7 @@ void split_large_page(pt_element* ptep, unsigned level)
     }
     allocate_intermediate_level(ptep);
     auto pt = phys_cast<pt_element>(pte_phys(*ptep));
-    for (auto i = 0; i < 512; ++i) {
+    for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = pte_orig | (pt_element(i) << (12 + 9 * (level - 1)));
     }
     // FIXME: tlb flush
@@ -132,6 +134,22 @@ struct fill_page {
 public:
     virtual void fill(void* addr, uint64_t offset) = 0;
 };
+
+void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
+{
+    if (level<4 && !pte_present(pte)){
+        // nothing
+    } else if (pte_large(pte)){
+        nhuge++;
+    } else if (level==0){
+        nsmall++;
+    } else {
+        pt_element* pt = phys_cast<pt_element>(pte_phys(pte));
+        for(int i=0; i<pte_per_page; ++i) {
+            debug_count_ptes(pt[i], level-1, nsmall, nhuge);
+        }
+    }
+}
 
 void populate_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
 {
@@ -155,17 +173,75 @@ void populate_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
     *ptep = make_pte(page, perm);
 }
 
+void populate_huge_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
+{
+    pt_element pte = processor::read_cr3();
+    auto pt = phys_cast<pt_element>(pte_phys(pte));
+    auto ptep = &pt[pt_index(addr, nlevels - 1)];
+    unsigned level = nlevels - 1;
+    while (level > 1) {
+        if (!pte_present(*ptep)) {
+            allocate_intermediate_level(ptep);
+        } else if (pte_large(*ptep)) {
+            split_large_page(ptep, level);
+        }
+        pte = *ptep;
+        --level;
+        pt = phys_cast<pt_element>(pte_phys(pte));
+        ptep = &pt[pt_index(addr, level)];
+    }
+    phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
+    uint64_t o=0;
+    for (int i=0; i<pte_per_page; i++){
+        fill.fill(phys_to_virt(page+o), offset+o);
+        o += page_size;
+    }
+    *ptep = make_pte(page, perm) | (1<<7);
+}
+
+/*
+ * populate() populates the page table with the entries it is (assumed to be)
+ * missing to span the given virtual-memory address range vma, and then
+ * pre-fills (using the given fill function) these pages and sets their
+ * permissions to the given ones. This is part of the mmap implementation.
+ *
+ * If full huge (2MB) pages fit inside this range, they are used for smaller
+ * page tables and better TLB efficiency. However, if the start or end address
+ * is not 2MB aligned, we will need to apply the fill and perm only to a part
+ * of a large page, in which case we must break the entire large page into its
+ * constitutive small (4K) pages.
+ *
+ * FIXME: It would be nicer to, instead of iterating on all levels per page as
+ * we do in populate_page/populate_huge_page, we walk once on the whole
+ * hiearchy, as in linear_map.
+ */
 void populate(vma& vma, fill_page& fill, unsigned perm)
 {
-    // FIXME: don't iterate all levels per page
-    // FIXME: use large pages
-    uint64_t offset = 0;
-    for (auto addr = vma.addr();
-         addr < vma.addr() + vma.size();
-         addr += 4096) {
-        populate_page(addr, fill, offset, perm);
-        offset += page_size;
-    }
+     // Find the largest 2MB-aligned range inside the given byte (or actually,
+    // 4K-aligned) range:
+    uintptr_t hp_start = ((vma.start()-1) & ~(huge_page_size-1)) + huge_page_size;
+    uintptr_t hp_end = (vma.end()) & ~(huge_page_size-1);
+
+    if (hp_start > vma.end())
+        hp_start = vma.end();
+    if (hp_end < vma.start())
+        hp_end = vma.start();
+
+    /* Step 1: Break up the partial huge page (if any) in the beginning of the
+     * address range, and populate the small pages.
+     *  TODO: it would be more efficient not to walk all the levels all the time */
+    for (auto addr = vma.start(); addr < hp_start; addr += page_size)
+        populate_page(reinterpret_cast<void*>(addr), fill, addr-vma.start(), perm);
+    /* Step 2: Populate the huge pages (if any) in the middle of the range */
+    for (auto addr = hp_start; addr < hp_end; addr += huge_page_size)
+        populate_huge_page(reinterpret_cast<void*>(addr), fill, addr-vma.start(), perm);
+    /* Step 3: Break up the partial huge page (if any) at the end of the range */
+    for (auto addr = hp_end; addr < vma.end(); addr += page_size)
+        populate_page(reinterpret_cast<void*>(addr), fill, addr-vma.start(), perm);
+    //size_t nsmall=0, nhuge=0;
+    //debug_count_ptes(processor::read_cr3(), 4, nsmall, nhuge);
+    //debug(fmt("after population, page table contains %ld small pages, %ld huge") % nsmall % nhuge);
+
 }
 
 uintptr_t find_hole(uintptr_t start, uintptr_t size)
@@ -222,6 +298,7 @@ vma* reserve(void* hint, size_t size)
 void unmap(void* addr, size_t size)
 {
     vma tmp { reinterpret_cast<uintptr_t>(addr), size };
+    // FIXME: also need to free the pages (small or huge) allocated to back this range.
     evacuate(&tmp);
 }
 
@@ -252,6 +329,10 @@ vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
         unsigned perm)
 {
     vma* ret = new vma(start, end);
+    // FIXME: also need to free the pages (small or huge) potentially allocated for this range.
+    // we'll have a complication if the original mapping included a huge page, but this mapping
+    // is smaller and only covers part of it - we'll need to break up the huge page and copy
+    // the small pages not covered by the new mapping to a new location.
     evacuate(ret);
     vma_list.insert(*ret);
 
