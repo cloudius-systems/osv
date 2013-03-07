@@ -13,8 +13,6 @@ extern "C" {
     #include <bsd/porting/sync_stub.h>
 }
 
-#undef log
-
 struct synch_thread {
     sched::thread* _thread;
     bool _awake;

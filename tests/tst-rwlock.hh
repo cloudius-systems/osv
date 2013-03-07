@@ -23,9 +23,6 @@ extern "C" {
 #define rw_d(...)   \
     logger::instance()->wrt(rw_tag, logger_debug, __VA_ARGS__)
 
-/* netport.h has an implementation for log(...) */
-#undef log
-
 class test_rwlock : public unit_tests::vtest {
 public:
 

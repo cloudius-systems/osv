@@ -12,8 +12,6 @@ extern "C" {
 #define dbg_d(...) \
     logger::instance()->wrt("tst-synch", logger_error, __VA_ARGS__)
 
-#undef log
-
 class test_synch : public unit_tests::vtest {
 public:
     test_synch() {}
