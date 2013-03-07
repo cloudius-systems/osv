@@ -278,3 +278,19 @@ void osv_route_arp_add(const char* if_name, const char* ip,
     sosend(s, 0, 0, m, 0, 0, NULL);
     soclose(s);
 }
+
+
+const char* osv_get_if_mac_addr(const char* if_name)
+{
+    struct ifnet* ifp;
+    struct ifaddr *ifa, *next;
+
+    ifp = ifunit_ref(if_name);
+
+    TAILQ_FOREACH_SAFE(ifa, &ifp->if_addrhead, ifa_link, next) {
+        if (ifa->ifa_addr->sa_family == AF_LINK)
+                break;
+    }
+
+    return ifa->ifa_addr->sa_data;
+}
