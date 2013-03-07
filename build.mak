@@ -81,7 +81,7 @@ do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 tests += tests/tst-vblk.so tests/tst-fat.so tests/tst-romfs.so tests/bench/bench.jar
 tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
-         tests/tst-bsd-netdriver.so
+         tests/tst-bsd-netdriver.so tests/tst-virtionet.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -96,6 +96,7 @@ tests/tst-bsd-evh.so: tests/tst-bsd-evh.o
 tests/tst-bsd-callout.so: tests/tst-bsd-callout.o
 tests/tst-bsd-netisr.so: tests/tst-bsd-netisr.o
 tests/tst-bsd-netdriver.so: tests/tst-bsd-netdriver.o
+tests/tst-virtionet.so: tests/tst-virtionet.o
 
 all: loader.img loader.bin
 
