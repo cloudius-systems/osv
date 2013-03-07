@@ -30,8 +30,8 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
-#include <osv/bio.h>
 
+struct bio;
 
 namespace virtio {
 
@@ -138,16 +138,6 @@ namespace virtio {
         
         struct virtio_blk_res {
             u8 status;
-        };
-
-        struct virtio_blk_req {
-            virtio_blk_req(void* req = nullptr, sglist* sg = nullptr, virtio_blk_res* res = nullptr, struct bio* b=nullptr)
-                :req_header(req), payload(sg), status(res), bio(b) {};
-            ~virtio_blk_req();
-            void* req_header;
-            sglist* payload;
-            virtio_blk_res* status;
-            struct bio* bio;
         };
 
         explicit virtio_blk(pci::device& dev);

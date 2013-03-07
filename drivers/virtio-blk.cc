@@ -25,7 +25,6 @@
 #include <osv/bio.h>
 
 using namespace memory;
-using sched::thread;
 
 
 namespace virtio {
@@ -99,7 +98,7 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     read_config();
 
     //register the single irq callback for the block
-    thread* isr = new thread([this] { this->response_worker(); });
+    sched::thread* isr = new sched::thread([this] { this->response_worker(); });
     isr->start();
     _msi.easy_register({ { 0, isr } });
 
@@ -154,13 +153,31 @@ bool virtio_blk::read_config()
     return true;
 }
 
+struct virtio_blk_req {
+    virtio_blk_req(void* req = nullptr, sglist* sg = nullptr, virtio_blk::virtio_blk_res* res = nullptr, struct bio* b=nullptr)
+                   :req_header(req), payload(sg), status(res), bio(b) {};
+    ~virtio_blk_req() {
+        if (req_header) delete reinterpret_cast<virtio_blk::virtio_blk_outhdr*>(req_header);
+        if (payload) delete payload;
+        if (status) delete status;
+    }
+
+
+    void* req_header;
+    sglist* payload;
+    virtio_blk::virtio_blk_res* status;
+    struct bio* bio;
+};
+
+
+
 void virtio_blk::response_worker() {
     vring* queue = get_virt_queue(0);
     virtio_blk_req* req;
 
     while (1) {
 
-        thread::wait_until([this] {
+        sched::thread::wait_until([this] {
             vring* queue = get_virt_queue(0);
             return queue->used_ring_not_empty();
         });
@@ -189,13 +206,6 @@ void virtio_blk::response_worker() {
 
     }
 
-}
-
-virtio_blk::virtio_blk_req::~virtio_blk_req()
-{
-    if (req_header) delete reinterpret_cast<virtio_blk_outhdr*>(req_header);
-    if (payload) delete payload;
-    if (status) delete status;
 }
 
 int virtio_blk::size() {
