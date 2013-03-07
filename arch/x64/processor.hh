@@ -35,6 +35,24 @@ constexpr ulong cr4_pcide = 1u << 17;
 constexpr ulong cr4_osxsave = 1u << 18;
 constexpr ulong cr4_smep = 1u << 20;
 
+struct cpuid_result {
+    u32 a, b, c, d;
+};
+
+inline cpuid_result cpuid(u32 function) {
+    cpuid_result r;
+    asm("cpuid" : "=a"(r.a), "=b"(r.b), "=c"(r.c), "=d"(r.d)
+                : "0"(function));
+    return r;
+}
+
+inline cpuid_result cpuid(u32 function, u32 subleaf) {
+    cpuid_result r;
+    asm("cpuid" : "=a"(r.a), "=b"(r.b), "=c"(r.c), "=d"(r.d)
+                : "0"(function), "2"(subleaf));
+    return r;
+}
+
 inline ulong read_cr0() {
     ulong r;
     asm volatile ("mov %%cr0, %0" : "=r"(r));
