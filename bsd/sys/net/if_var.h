@@ -36,6 +36,8 @@
 #include <bsd/porting/rwlock.h>
 #include <bsd/sys/net/if.h>
 
+__BEGIN_DECLS
+
 /*
  * Structures defining a network interface, providing a packet
  * transport mechanism (ala level 0 of the PUP protocols).
@@ -829,5 +831,7 @@ void	if_deregister_com_alloc(u_char type);
     LLADDR((struct sockaddr_dl *)((ifp)->if_addr->ifa_addr))
 
 #endif /* _KERNEL */
+
+__END_DECLS
 
 #endif /* !_NET_IF_VAR_H_ */

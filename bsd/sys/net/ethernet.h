@@ -370,6 +370,8 @@ struct ether_addr {
 
 #ifdef _KERNEL
 
+__BEGIN_DECLS
+
 struct ifnet;
 struct mbuf;
 struct route;
@@ -389,6 +391,8 @@ extern	char *ether_sprintf(const u_int8_t *);
 void	ether_vlan_mtap(struct bpf_if *, struct mbuf *,
 	    void *, u_int);
 struct mbuf  *ether_vlanencap(struct mbuf *, uint16_t);
+
+__END_DECLS
 
 #else /* _KERNEL */
 
