@@ -27,6 +27,9 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
 
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/if.h>
+
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
 #include "sglist.hh"
@@ -222,7 +225,9 @@ namespace virtio {
 
         void receiver();
         void fill_rx_ring();
-        bool tx(void *out, int len, bool flush = true);
+        bool tx_out(void *out, int len, bool flush = true);
+        bool tx(struct mbuf* m_head, bool flush = true);
+        void kick(int queue) {_queues[queue]->kick();}
         void tx_gc_thread();
         void tx_gc();
 
@@ -237,6 +242,7 @@ namespace virtio {
         //maintains the virtio instance number for multiple drives
         static int _instance;
         int _id;
+        struct ifnet* _ifn;
     };
 }
 

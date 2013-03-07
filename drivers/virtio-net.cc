@@ -1,4 +1,3 @@
-
 #include <sys/cdefs.h>
 
 #include "drivers/virtio.hh"
@@ -18,13 +17,16 @@
 #include "debug.hh"
 
 #include "sched.hh"
+
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 
 #include <osv/device.h>
+#include <bsd/sys/sys/sockio.h>
+#include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/if_types.h>
 
 using namespace memory;
-using sched::thread;
 
 // TODO list
 // irq thread affinity and tx affinity
@@ -37,11 +39,71 @@ namespace virtio {
     int virtio_net::_instance = 0;
 
     #define virtio_net_tag "virtio-net"
-    #define virtio_net_d(fmt)   logger::instance()->log(virtio_net_tag, logger_debug, (fmt))
-    #define virtio_net_i(fmt)   logger::instance()->log(virtio_net_tag, logger_info, (fmt))
-    #define virtio_net_w(fmt)   logger::instance()->log(virtio_net_tag, logger_warn, (fmt))
-    #define virtio_net_e(fmt)   logger::instance()->log(virtio_net_tag, logger_error, (fmt))
+    #define virtio_net_d(fmt)   logger::instance()->wrt(virtio_net_tag, logger_debug, (fmt))
+    #define virtio_net_i(fmt)   logger::instance()->wrt(virtio_net_tag, logger_info, (fmt))
+    #define virtio_net_w(fmt)   logger::instance()->wrt(virtio_net_tag, logger_warn, (fmt))
+    #define virtio_net_e(fmt)   logger::instance()->wrt(virtio_net_tag, logger_error, (fmt))
 
+    static int virtio_if_ioctl(
+            struct ifnet *ifp,
+            u_long command,
+            caddr_t data)
+    {
+        virtio_net_d(fmt("virtio_if_ioctl %x") % command);
+
+        int error = 0;
+        switch(command) {
+        case SIOCSIFMTU:
+            virtio_net_d(fmt("SIOCSIFMTU"));
+            break;
+        case SIOCSIFFLAGS:
+            virtio_net_d(fmt("SIOCSIFFLAGS"));
+            /* Change status ifup, ifdown */
+            if (ifp->if_flags & IFF_UP) {
+                ifp->if_drv_flags |= IFF_DRV_RUNNING;
+                virtio_net_d(fmt("if_up"));
+            } else {
+                ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
+                virtio_net_d(fmt("if_down"));
+            }
+            break;
+        case SIOCADDMULTI:
+        case SIOCDELMULTI:
+            virtio_net_d(fmt("SIOCDELMULTI"));
+            break;
+        default:
+            virtio_net_d(fmt("redirecting to ether_ioctl()..."));
+            error = ether_ioctl(ifp, command, data);
+            break;
+        }
+
+        return(error);
+    }
+    // Main transmit routine.
+    static void virtio_if_start(struct ifnet* ifp)
+    {
+        struct mbuf* m_head = NULL;
+        virtio_net* vnet = (virtio_net*)ifp->if_softc;
+
+        virtio_net_d(fmt("%s_start (transmit)") % __FUNCTION__);
+
+        /* Process packets */
+        IF_DEQUEUE(&ifp->if_snd, m_head);
+        while (m_head != NULL) {
+            virtio_net_d(fmt("*** processing packet! ***"));
+
+            vnet->tx(m_head, false);
+
+            IF_DEQUEUE(&ifp->if_snd, m_head);
+        }
+
+        vnet->kick(1);
+    }
+
+    static void virtio_if_init(void* xsc)
+    {
+        virtio_net_d(fmt("Virtio-net init"));
+    }
 
     virtio_net::virtio_net(pci::device& dev)
         : virtio_driver(dev)
@@ -56,24 +118,51 @@ namespace virtio {
         read_config();
 
         //register the 3 irq callback for the net
-        thread* rx = new thread([this] { this->receiver(); });
-        thread* tx = new thread([this] { this->tx_gc_thread(); });
+        sched::thread* rx = new sched::thread([this] { this->receiver(); });
+        sched::thread* tx = new sched::thread([this] { this->tx_gc_thread(); });
         rx->start();
         tx->start();
+        _msi.easy_register({ { 0, rx }, {1, tx }});
+
+        //initialize the BSD interface _if
+        _ifn = if_alloc(IFT_ETHER);
+        if (_ifn == NULL) {
+           //FIXME: need to handle this case - expand the above function not to allocate memory and
+           // do it within the constructor.
+           virtio_net_w(fmt("if_alloc failed!"));
+           return;
+        }
+
+        if_initname(_ifn, _driver_name.c_str(), _id);
+        _ifn->if_mtu = ETHERMTU;
+        _ifn->if_softc = static_cast<void*>(this);
+        _ifn->if_flags = IFF_BROADCAST /*| IFF_MULTICAST*/;
+        _ifn->if_ioctl = virtio_if_ioctl;
+        _ifn->if_start = virtio_if_start;
+        _ifn->if_init = virtio_if_init;
+        _ifn->if_snd.ifq_maxlen = _queues[1]->size();
+        _ifn->if_capabilities = 0/* IFCAP_RXCSUM */;
+        _ifn->if_capenable = _ifn->if_capabilities;
+
+        ether_ifattach(_ifn, _config.mac);
         _msi.easy_register({ { 0, rx }, {1, tx }});
 
         fill_rx_ring();
 
         add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-        thread *test = new thread([this] {this->tx_test();});
-        test->start();
+        //thread *test = new thread([this] {this->tx_test();});
+        //test->start();
     }
 
     virtio_net::~virtio_net()
     {
         //TODO: In theory maintain the list of free instances and gc it
         // including the thread objects and their stack
+
+        ether_ifdetach(_ifn);
+        if_free(_ifn);
+
     }
 
     bool virtio_net::read_config()
@@ -136,7 +225,7 @@ namespace virtio {
         sglist payload;
         u8 *buffer;
 
-        virtio_net_req() :buffer(nullptr) {};
+        virtio_net_req() :buffer(nullptr) {memset(&hdr,0,sizeof(hdr));};
         ~virtio_net_req() {if (buffer) delete buffer;}
     };
 
@@ -144,7 +233,7 @@ namespace virtio {
         vring* queue = get_virt_queue(0);
 
         while (1) {
-            thread::wait_until([this, queue] {
+            sched::thread::wait_until([this, queue] {
                 return queue->used_ring_not_empty();
             });
 
@@ -223,7 +312,47 @@ namespace virtio {
         queue->kick();
     }
 
-    bool virtio_net::tx(void *out, int len, bool flush)
+    bool virtio_net::tx(struct mbuf *m_head, bool flush)
+    {
+        vring* queue = get_virt_queue(1);
+        struct mbuf *m;
+        virtio_net_req *req = new virtio_net_req;
+
+        for (m = m_head; m != NULL; m = m->m_next) {
+            if (m->m_len != 0) {
+                virtio_net_d(fmt("Frag len=%d:") % m->m_len);
+                req->payload.add(mmu::virt_to_phys(m->m_data), m->m_len);
+            }
+        }
+
+        req->hdr.hdr_len = ETH_ALEN + sizeof(iphdr);
+        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
+        // leak for now ; req->buffer = (u8*)out;
+
+        if (!queue->avail_ring_has_room(req->payload.get_sgs())) {
+            if (queue->used_ring_not_empty()) {
+                virtio_net_d(fmt("%s: gc tx buffers to clear space"));
+                tx_gc();
+            } else {
+                virtio_net_d(fmt("%s: no room") % __FUNCTION__);
+                delete req;
+                return false;
+            }
+        }
+
+        if (!queue->add_buf(&req->payload, req->payload.get_sgs(),0,req)) {
+            delete req;
+            return false;
+        }
+
+        if (flush)
+            queue->kick();
+
+        return true;
+    }
+
+
+    bool virtio_net::tx_out(void *out, int len, bool flush)
     {
         vring* queue = get_virt_queue(1);
 
@@ -258,7 +387,7 @@ namespace virtio {
         vring* queue = get_virt_queue(1);
 
         while (1) {
-            thread::wait_until([this, queue] {
+            sched::thread::wait_until([this, queue] {
                 return queue->used_ring_not_empty();
             });
 
@@ -301,7 +430,7 @@ namespace virtio {
 
         while (1) {
             timespec ts = {};
-            ts.tv_sec = 1;
+            ts.tv_sec = 3;
             nanosleep(&ts, nullptr);
 
             void* buf = malloc(page_size);
@@ -312,7 +441,7 @@ namespace virtio {
             memcpy(buf+7, _config.mac, sizeof(_config.mac));
 
             virtio_net_d(fmt("%s: sending packet %d") % __FUNCTION__ % i++);
-            tx(buf, 1000);
+            tx_out(buf, 1000);
 
             sched::thread::current()->yield();
         }
