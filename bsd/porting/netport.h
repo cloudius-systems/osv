@@ -138,12 +138,9 @@ size_t strlcpy(char *dst, const char *src, size_t siz);
 
 #define KASSERT(exp,msg) do {} while (0)
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-#ifndef max
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#endif
+
+#define bsd_min(a, b) ((a) < (b) ? (a) : (b))
+#define bsd_max(a, b) ((a) > (b) ? (a) : (b))
 
 /*
 * flags to malloc.

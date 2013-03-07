@@ -711,7 +711,7 @@ number:
 
             if (!ladjust && padc == '0')
                 dwidth = width - tmp;
-            width -= tmp + max(dwidth, n);
+            width -= tmp + bsd_max(dwidth, n);
             dwidth -= n;
             if (!ladjust)
                 while (width-- > 0)

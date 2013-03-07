@@ -1172,7 +1172,7 @@ soreceive_rcvoob(struct socket *so, struct uio *uio, int flags)
 		goto bad;
 	do {
 		error = uiomove(mtod(m, void *),
-		    (int) min(uio->uio_resid, m->m_len), uio);
+		    (int) bsd_min(uio->uio_resid, m->m_len), uio);
 		m = m_free(m);
 	} while (uio->uio_resid && error == 0 && m);
 bad:
@@ -1783,7 +1783,7 @@ deliver:
 	KASSERT(sb->sb_mb != NULL, ("%s: sb_mb == NULL", __func__));
 
 	/* Fill uio until full or current end of socket buffer is reached. */
-	len = min(uio->uio_resid, sb->sb_cc);
+	len = bsd_min(uio->uio_resid, sb->sb_cc);
 	if (mp0 != NULL) {
 		/* Dequeue as many mbufs as possible. */
 		if (!(flags & MSG_PEEK) && len >= sb->sb_mb->m_len) {
@@ -2397,7 +2397,7 @@ sooptcopyout(struct sockopt *sopt, const void *buf, size_t len)
 	 * her.  Note that this interface is not idempotent; the entire
 	 * answer must generated ahead of time.
 	 */
-	valsize = min(len, sopt->sopt_valsize);
+	valsize = bsd_min(len, sopt->sopt_valsize);
 	sopt->sopt_valsize = valsize;
 	if (sopt->sopt_val != NULL) {
 		if (sopt->sopt_td != NULL)
@@ -2544,9 +2544,9 @@ soopt_getm(struct sockopt *sopt, struct mbuf **mp)
 			m_free(m);
 			return ENOBUFS;
 		}
-		m->m_len = min(MCLBYTES, sopt_size);
+		m->m_len = bsd_min(MCLBYTES, sopt_size);
 	} else {
-		m->m_len = min(MLEN, sopt_size);
+		m->m_len = bsd_min(MLEN, sopt_size);
 	}
 	sopt_size -= m->m_len;
 	*mp = m;
@@ -2566,9 +2566,9 @@ soopt_getm(struct sockopt *sopt, struct mbuf **mp)
 				m_freem(*mp);
 				return ENOBUFS;
 			}
-			m->m_len = min(MCLBYTES, sopt_size);
+			m->m_len = bsd_min(MCLBYTES, sopt_size);
 		} else {
-			m->m_len = min(MLEN, sopt_size);
+			m->m_len = bsd_min(MLEN, sopt_size);
 		}
 		sopt_size -= m->m_len;
 		m_prev->m_next = m;

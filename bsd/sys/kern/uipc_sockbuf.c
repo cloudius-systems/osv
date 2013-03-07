@@ -315,7 +315,7 @@ sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 
 	sb->sb_hiwat = cc;
 
-    sb->sb_mbmax = min(cc * sb_efficiency, sb_max);
+    sb->sb_mbmax = bsd_min(cc * sb_efficiency, sb_max);
     if (sb->sb_lowat > sb->sb_hiwat)
         sb->sb_lowat = sb->sb_hiwat;
     return (1);

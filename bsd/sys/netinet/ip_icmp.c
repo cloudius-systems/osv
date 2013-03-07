@@ -270,11 +270,11 @@ icmp_error(struct mbuf *n, int type, int code, uint32_t dest, int mtu)
 		if (n->m_len < oiphlen + tcphlen && 
 		    ((n = m_pullup(n, oiphlen + tcphlen)) == NULL))
 			goto freeit;
-		icmpelen = max(tcphlen, min(V_icmp_quotelen, oip->ip_len - oiphlen));
+		icmpelen = bsd_max(tcphlen, bsd_min(V_icmp_quotelen, oip->ip_len - oiphlen));
 	} else
-stdreply:	icmpelen = max(8, min(V_icmp_quotelen, oip->ip_len - oiphlen));
+stdreply:	icmpelen = bsd_max(8, bsd_min(V_icmp_quotelen, oip->ip_len - oiphlen));
 
-	icmplen = min(oiphlen + icmpelen, nlen);
+	icmplen = bsd_min(oiphlen + icmpelen, nlen);
 	if (icmplen < sizeof(struct ip))
 		goto freeit;
 
@@ -287,7 +287,7 @@ stdreply:	icmpelen = max(8, min(V_icmp_quotelen, oip->ip_len - oiphlen));
 #ifdef MAC
 	mac_netinet_icmp_reply(n, m);
 #endif
-	icmplen = min(icmplen, M_TRAILINGSPACE(m) - sizeof(struct ip) - ICMP_MINLEN);
+	icmplen = bsd_min(icmplen, M_TRAILINGSPACE(m) - sizeof(struct ip) - ICMP_MINLEN);
 	m_align(m, ICMP_MINLEN + icmplen);
 	m->m_len = ICMP_MINLEN + icmplen;
 
@@ -381,7 +381,7 @@ icmp_input(struct mbuf *m, int off)
 		ICMPSTAT_INC(icps_tooshort);
 		goto freeit;
 	}
-	i = hlen + min(icmplen, ICMP_ADVLENMIN);
+	i = hlen + bsd_min(icmplen, ICMP_ADVLENMIN);
 	if (m->m_len < i && (m = m_pullup(m, i)) == NULL)  {
 		ICMPSTAT_INC(icps_tooshort);
 		return;

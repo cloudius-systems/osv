@@ -1146,7 +1146,7 @@ igmp_input_v3_group_query(struct in_multi *inm, struct igmp_ifinfo *igi,
 		if (inm->inm_state == IGMP_G_QUERY_PENDING_MEMBER ||
 		    inm->inm_state == IGMP_SG_QUERY_PENDING_MEMBER) {
 			inm_clear_recorded(inm);
-			timer = min(inm->inm_timer, timer);
+			timer = bsd_min(inm->inm_timer, timer);
 		}
 		inm->inm_state = IGMP_G_QUERY_PENDING_MEMBER;
 		inm->inm_timer = IGMP_RANDOM_DELAY(timer);
@@ -1159,7 +1159,7 @@ igmp_input_v3_group_query(struct in_multi *inm, struct igmp_ifinfo *igi,
 	 * been received but a group-specific query is already pending.
 	 */
 	if (inm->inm_state == IGMP_G_QUERY_PENDING_MEMBER) {
-		timer = min(inm->inm_timer, timer);
+		timer = bsd_min(inm->inm_timer, timer);
 		inm->inm_timer = IGMP_RANDOM_DELAY(timer);
 		V_current_state_timers_running = 1;
 		return (retval);

@@ -556,7 +556,7 @@ m_copym(struct mbuf *m, int off0, int len, int wait)
 				n->m_pkthdr.len = len;
 			copyhdr = 0;
 		}
-		n->m_len = min(len, m->m_len - off);
+		n->m_len = bsd_min(len, m->m_len - off);
 		if (m->m_flags & M_EXT) {
 			n->m_data = m->m_data + off;
 			mb_dupcl(n, m);
@@ -804,7 +804,7 @@ m_copydata(const struct mbuf *m, int off, int len, caddr_t cp)
 	}
 	while (len > 0) {
 		KASSERT(m != NULL, ("m_copydata, length > size of mbuf chain"));
-		count = min(m->m_len - off, len);
+		count = bsd_min(m->m_len - off, len);
 		bcopy(mtod(m, caddr_t) + off, cp, count);
 		len -= count;
 		cp += count;
@@ -864,7 +864,7 @@ m_dup(struct mbuf *m, int how)
 
 		/* Copy data from original mbuf(s) into new mbuf */
 		while (n->m_len < nsize && m != NULL) {
-			int chunk = min(nsize - n->m_len, m->m_len - moff);
+			int chunk = bsd_min(nsize - n->m_len, m->m_len - moff);
 
 			bcopy(m->m_data + moff, n->m_data + n->m_len, chunk);
 			moff += chunk;
@@ -1025,7 +1025,7 @@ m_pullup(struct mbuf *n, int len)
 	}
 	space = &m->m_dat[MLEN] - (m->m_data + m->m_len);
 	do {
-		count = min(min(max(len, max_protohdr), space), n->m_len);
+		count = bsd_min(bsd_min(bsd_max(len, max_protohdr), space), n->m_len);
 		bcopy(mtod(n, caddr_t), mtod(m, caddr_t) + m->m_len,
 		  (u_int)count);
 		len -= count;
@@ -1073,7 +1073,7 @@ m_copyup(struct mbuf *n, int len, int dstoff)
 	m->m_data += dstoff;
 	space = &m->m_dat[MLEN] - (m->m_data + m->m_len);
 	do {
-		count = min(min(max(len, max_protohdr), space), n->m_len);
+		count = bsd_min(bsd_min(bsd_max(len, max_protohdr), space), n->m_len);
 		memcpy(mtod(m, caddr_t) + m->m_len, mtod(n, caddr_t),
 		    (unsigned)count);
 		len -= count;
@@ -1217,7 +1217,7 @@ m_devget(char *buf, int totlen, int off, struct ifnet *ifp,
 			len -= off;
 			off = 0;
 		}
-		m->m_len = len = min(totlen, len);
+		m->m_len = len = bsd_min(totlen, len);
 		if (copy)
 			copy(buf, mtod(m, caddr_t), (u_int)len);
 		else
@@ -1252,17 +1252,17 @@ m_copyback(struct mbuf *m0, int off, int len, c_caddr_t cp)
 			if (n == NULL)
 				goto out;
 			bzero(mtod(n, caddr_t), MLEN);
-			n->m_len = min(MLEN, len + off);
+			n->m_len = bsd_min(MLEN, len + off);
 			m->m_next = n;
 		}
 		m = m->m_next;
 	}
 	while (len > 0) {
 		if (m->m_next == NULL && (len > m->m_len - off)) {
-			m->m_len += min(len - (m->m_len - off),
+			m->m_len += bsd_min(len - (m->m_len - off),
 			    M_TRAILINGSPACE(m));
 		}
-		mlen = min (m->m_len - off, len);
+		mlen = bsd_min (m->m_len - off, len);
 		bcopy(cp, off + mtod(m, caddr_t), (u_int)mlen);
 		cp += mlen;
 		len -= mlen;
@@ -1275,7 +1275,7 @@ m_copyback(struct mbuf *m0, int off, int len, c_caddr_t cp)
 			n = m_get(M_DONTWAIT, m->m_type);
 			if (n == NULL)
 				break;
-			n->m_len = min(MLEN, len);
+			n->m_len = bsd_min(MLEN, len);
 			m->m_next = n;
 		}
 		m = m->m_next;
@@ -1319,7 +1319,7 @@ m_append(struct mbuf *m0, int len, c_caddr_t cp)
 		n = m_get(M_DONTWAIT, m->m_type);
 		if (n == NULL)
 			break;
-		n->m_len = min(MLEN, remainder);
+		n->m_len = bsd_min(MLEN, remainder);
 		bcopy(cp, mtod(n, caddr_t), n->m_len);
 		cp += n->m_len, remainder -= n->m_len;
 		m->m_next = n;
@@ -1352,7 +1352,7 @@ m_apply(struct mbuf *m, int off, int len,
 	}
 	while (len > 0) {
 		KASSERT(m != NULL, ("m_apply, offset > size of mbuf chain"));
-		count = min(m->m_len - off, len);
+		count = bsd_min(m->m_len - off, len);
 		rval = (*f)(arg, mtod(m, caddr_t) + off, count);
 		if (rval)
 			return (rval);
@@ -1723,7 +1723,7 @@ m_uiotombuf(struct uio *uio, int how, int len, int align, int flags)
 	 * the total data supplied by the uio.
 	 */
 	if (len > 0)
-		total = min(uio->uio_resid, len);
+		total = bsd_min(uio->uio_resid, len);
 	else
 		total = uio->uio_resid;
 
@@ -1738,14 +1738,14 @@ m_uiotombuf(struct uio *uio, int how, int len, int align, int flags)
 	 * Give us the full allocation or nothing.
 	 * If len is zero return the smallest empty mbuf.
 	 */
-	m = m_getm2(NULL, max(total + align, 1), how, MT_DATA, flags);
+	m = m_getm2(NULL, bsd_max(total + align, 1), how, MT_DATA, flags);
 	if (m == NULL)
 		return (NULL);
 	m->m_data += align;
 
 	/* Fill all mbufs with uio data and update header information. */
 	for (mb = m; mb != NULL; mb = mb->m_next) {
-		length = min(M_TRAILINGSPACE(mb), total - progress);
+		length = bsd_min(M_TRAILINGSPACE(mb), total - progress);
 
 		error = uiomove(mtod(mb, void *), length, uio);
 		if (error) {
@@ -1773,13 +1773,13 @@ m_mbuftouio(struct uio *uio, struct mbuf *m, int len)
 	int progress = 0;
 
 	if (len > 0)
-		total = min(uio->uio_resid, len);
+		total = bsd_min(uio->uio_resid, len);
 	else
 		total = uio->uio_resid;
 
 	/* Fill the uio with data from the mbufs. */
 	for (; m != NULL; m = m->m_next) {
-		length = min(m->m_len, total - progress);
+		length = bsd_min(m->m_len, total - progress);
 
 		error = uiomove(mtod(m, void *), length, uio);
 		if (error)
@@ -1930,7 +1930,7 @@ m_unshare(struct mbuf *m0, int how)
 		mfirst = n;
 		mlast = NULL;
 		for (;;) {
-			int cc = min(len, MCLBYTES);
+			int cc = bsd_min(len, MCLBYTES);
 			memcpy(mtod(n, caddr_t), mtod(m, caddr_t) + off, cc);
 			n->m_len = cc;
 			if (mlast != NULL)

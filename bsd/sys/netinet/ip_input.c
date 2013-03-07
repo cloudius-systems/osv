@@ -1417,7 +1417,7 @@ ip_forward(struct mbuf *m, int srcrt)
 		mcopy = NULL;
 	}
 	if (mcopy != NULL) {
-		mcopy->m_len = min(ip->ip_len, M_TRAILINGSPACE(mcopy));
+		mcopy->m_len = bsd_min(ip->ip_len, M_TRAILINGSPACE(mcopy));
 		mcopy->m_pkthdr.len = mcopy->m_len;
 		m_copydata(m, 0, mcopy->m_len, mtod(mcopy, caddr_t));
 	}
@@ -1540,7 +1540,7 @@ ip_forward(struct mbuf *m, int srcrt)
 		 */
 		if (mtu != 0) {
 			if (ia != NULL)
-				mtu = min(mtu, ia->ia_ifp->if_mtu);
+				mtu = bsd_min(mtu, ia->ia_ifp->if_mtu);
 		} else {
 			if (ia != NULL)
 				mtu = ia->ia_ifp->if_mtu;
