@@ -34,6 +34,7 @@ bool logger::parse_configuration(void)
     add_tag("tst-eventlist", logger_none);
     add_tag("tst-rwlock", logger_none);
     add_tag("tst-bsd-netdriver", logger_debug);
+    add_tag("tst-virtionet", logger_debug);
 
     return (true);
 }
@@ -95,7 +96,7 @@ const char* logger::loggable_severity(logger_severity severity)
     return (ret);
 }
 
-void logger::log(const char* tag, logger_severity severity, const boost::format& _fmt)
+void logger::wrt(const char* tag, logger_severity severity, const boost::format& _fmt)
 {
     if (this->is_filtered(tag, severity)) {
         return;
@@ -106,15 +107,15 @@ void logger::log(const char* tag, logger_severity severity, const boost::format&
     debug(_fmt, true);
 }
 
-void logger::log(const char* tag, logger_severity severity, const char* _fmt, ...)
+void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, ...)
 {
     va_list ap;
     va_start(ap, _fmt);
-    this->log(tag, severity, _fmt, ap);
+    this->wrt(tag, severity, _fmt, ap);
     va_end(ap);
 }
 
-void logger::log(const char* tag, logger_severity severity, const char* _fmt, va_list ap)
+void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, va_list ap)
 {
     if (this->is_filtered(tag, severity)) {
         return;
@@ -131,7 +132,7 @@ void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
 {
     va_list ap;
     va_start(ap, _fmt);
-    logger::instance()->log(tag, severity, _fmt, ap);
+    logger::instance()->wrt(tag, severity, _fmt, ap);
     va_end(ap);
 }
 }

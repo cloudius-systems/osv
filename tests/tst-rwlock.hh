@@ -21,7 +21,7 @@ extern "C" {
 
 #define rw_tag "tst-rwlock"
 #define rw_d(...)   \
-    logger::instance()->log(rw_tag, logger_debug, __VA_ARGS__)
+    logger::instance()->wrt(rw_tag, logger_debug, __VA_ARGS__)
 
 /* netport.h has an implementation for log(...) */
 #undef log

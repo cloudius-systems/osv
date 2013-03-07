@@ -29,9 +29,9 @@ public:
     // Interface for logging, these functions checks the filters and
     // calls the underlying debug functions.
     //
-    void log(const char* tag, logger_severity severity, const boost::format& _fmt);
-    void log(const char* tag, logger_severity severity, const char* _fmt, ...);
-    void log(const char* tag, logger_severity severity, const char* _fmt, va_list ap);
+    void wrt(const char* tag, logger_severity severity, const boost::format& _fmt);
+    void wrt(const char* tag, logger_severity severity, const char* _fmt, ...);
+    void wrt(const char* tag, logger_severity severity, const char* _fmt, va_list ap);
 
 private:
    static logger* _instance;

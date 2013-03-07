@@ -5,7 +5,7 @@
 #include "sched.hh"
 
 #define SYNCH_LOG(...) \
-    logger::instance()->log("bsd-synch", logger_error, __VA_ARGS__)
+    logger::instance()->wrt("bsd-synch", logger_error, __VA_ARGS__)
 
 extern "C" {
     #include <bsd/porting/netport.h>

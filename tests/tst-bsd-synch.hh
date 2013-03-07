@@ -10,7 +10,7 @@ extern "C" {
 }
 
 #define dbg_d(...) \
-    logger::instance()->log("tst-synch", logger_error, __VA_ARGS__)
+    logger::instance()->wrt("tst-synch", logger_error, __VA_ARGS__)
 
 #undef log
 
