@@ -25,6 +25,8 @@ void osv_start_if(const char* if_name, const char* ip_addr,
     strncpy(ifra.ifra_name, if_name, IFNAMSIZ);
     ifp = ifunit_ref(if_name);
 
+    // todo check for null
+
     /* IP Address */
     inet_aton(ip_addr, &addr->sin_addr);
     addr->sin_family = AF_INET;
