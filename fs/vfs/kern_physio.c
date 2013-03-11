@@ -29,12 +29,14 @@ destroy_bio(struct bio *bio)
 }
 
 void
-biodone(struct bio *bio)
+biodone(struct bio *bio, bool ok)
 {
 	void (*bio_done)(struct bio *);
 
 	pthread_mutex_lock(&bio->bio_mutex);
 	bio->bio_flags |= BIO_DONE;
+	if (!ok)
+		bio->bio_flags |= BIO_ERROR;
 	bio_done = bio->bio_done;
 	if (!bio_done) {
 		pthread_cond_signal(&bio->bio_wait);

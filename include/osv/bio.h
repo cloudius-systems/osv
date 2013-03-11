@@ -41,6 +41,7 @@
 #include <sys/cdefs.h>
 #include <stdint.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <osv/list.h>
 
 __BEGIN_DECLS
@@ -97,7 +98,7 @@ struct bio {
 struct bio *	alloc_bio(void);
 void		destroy_bio(struct bio *bio);
 
-void		biodone(struct bio *bio);
+void		biodone(struct bio *bio, bool ok);
 
 __END_DECLS
 

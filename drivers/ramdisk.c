@@ -85,7 +85,7 @@ ramdisk_io(struct ramdisk_softc *sc, struct bio *bio)
 		assert(0);
 	}
 
-	biodone(bio);
+	biodone(bio, true);
 }
 
 static void

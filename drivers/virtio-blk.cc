@@ -199,7 +199,7 @@ void virtio_blk::response_worker() {
                 virtio_d(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
 
             }
-            biodone(req->bio);
+            biodone(req->bio, true);
 
             delete req;
         }
@@ -236,8 +236,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
     case BIO_WRITE:
         if (is_readonly()) {
             virtio_e("Error: block device is read only");
-            bio->bio_flags |= BIO_ERROR | BIO_DONE;
-            biodone(bio);
+            biodone(bio, false);
             return EROFS;
         }
         type = VIRTIO_BLK_T_OUT;
