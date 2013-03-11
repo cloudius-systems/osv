@@ -12,24 +12,30 @@
 
 using namespace std;
 
+namespace lockfree {
+
 // TODO: can we use boost::intrusive::list instead of our own?
 template <class T>
 class linked_item {
 public:
     T value;
     linked_item<T> *next;
-    linked_item<T>(T val){
-        value = val;
-        next = nullptr;
-    }
-};
+    linked_item<T>() : next(nullptr) { }
+    linked_item<T>(T val) : value(val), next(nullptr) { }
+ };
 
 template <class T>
 class queue_mpsc {
+public:
     typedef linked_item<T> LT;
+private:
     atomic<LT*> pushlist;
     LT* poplist;
-
+    // currently, pop() when the queue is empty returns this "nothing".
+    // perhaps we should consider a different error mechanism.
+    T nothing;
+public:
+    queue_mpsc<T>(T nothing) : pushlist(nullptr), poplist(nullptr), nothing(nothing) { }
     inline void push(LT* item)
     {
         // We set up item to be the new head of the pushlist, pointing to the
@@ -38,11 +44,11 @@ class queue_mpsc {
         // Therefore we can only replace the head of the pushlist with a CAS,
         // atomically checking that the head is still what we set in
         // waiter->next, and changing the head.
-        // Note that while we have a loop here, it is lockfree - if we or
-        // the competing pusher are paused, the other one can make progress.
+        // Note that while we have a loop here, it is lockfree - if one
+        // competing pusher is paused, the other one can make progress.
         do {
-            item->next = pushlist.load();
-        } while (std::atomic_compare_exchange_strong(pushlist, item->next, item));
+            item->next = pushlist;
+        } while (!std::atomic_compare_exchange_weak(&pushlist, &item->next, item));
     }
 
     inline T pop(void)
@@ -67,9 +73,13 @@ class queue_mpsc {
             while(r){
                 if(!r->next)
                     return r->value;
+                LT *next = r->next;
                 r->next = poplist;
                 poplist = r;
+                r = next;
             }
+            // if we're still here, the queue is empty. return "nothing"
+            return nothing;
         }
     }
 
@@ -79,3 +89,4 @@ class queue_mpsc {
     }
 };
 
+}

@@ -6,6 +6,7 @@
 #include "tst-eventlist.hh"
 #include "tst-rwlock.hh"
 #include "tst-bsd-synch.hh"
+#include "tst-queue-mpsc.hh"
 
 using namespace unit_tests;
 
@@ -17,6 +18,7 @@ void tests::execute_tests() {
     test_eventlist evlist;
     test_rwlock rwlock;
     test_synch synch;
+    test_queue_mpsc q1;
 
     instance().register_test(&threads);
     instance().register_test(&malloc);
@@ -25,6 +27,7 @@ void tests::execute_tests() {
     instance().register_test(&evlist);
     instance().register_test(&rwlock);
     instance().register_test(&synch);
+    instance().register_test(&q1);
 
     instance().run();
 }
