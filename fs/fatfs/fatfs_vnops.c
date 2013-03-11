@@ -70,11 +70,7 @@ fat_rw_cluster(struct fatfsmount *fmp, u_long cluster, int rw)
 	bio->bio_bcount = fmp->sec_per_cl * SEC_SIZE;
 
 	bio->bio_dev->driver->devops->strategy(bio);
-
-	pthread_mutex_lock(&bio->bio_mutex);
-	while (!(bio->bio_flags & BIO_DONE))
-		pthread_cond_wait(&bio->bio_wait, &bio->bio_mutex);
-	pthread_mutex_unlock(&bio->bio_mutex);
+	bio_wait(bio);
 
 	destroy_bio(bio);
 	return 0;

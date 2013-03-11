@@ -29,6 +29,15 @@ destroy_bio(struct bio *bio)
 }
 
 void
+bio_wait(struct bio *bio)
+{
+	pthread_mutex_lock(&bio->bio_mutex);
+	while (!(bio->bio_flags & BIO_DONE))
+		pthread_cond_wait(&bio->bio_wait, &bio->bio_mutex);
+	pthread_mutex_unlock(&bio->bio_mutex);
+}
+
+void
 biodone(struct bio *bio, bool ok)
 {
 	void (*bio_done)(struct bio *);

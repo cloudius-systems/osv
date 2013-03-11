@@ -98,6 +98,7 @@ struct bio {
 struct bio *	alloc_bio(void);
 void		destroy_bio(struct bio *bio);
 
+void		bio_wait(struct bio *bio);
 void		biodone(struct bio *bio, bool ok);
 
 __END_DECLS

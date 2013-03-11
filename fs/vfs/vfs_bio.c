@@ -138,11 +138,7 @@ rw_buf(struct buf *bp, int rw)
 	bio->bio_bcount = BSIZE;
 
 	bio->bio_dev->driver->devops->strategy(bio);
-
-	pthread_mutex_lock(&bio->bio_mutex);
-	while (!(bio->bio_flags & BIO_DONE))
-		pthread_cond_wait(&bio->bio_wait, &bio->bio_mutex);
-	pthread_mutex_unlock(&bio->bio_mutex);
+	bio_wait(bio);
 
 	destroy_bio(bio);
 	return 0;
