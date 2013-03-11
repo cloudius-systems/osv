@@ -9,39 +9,33 @@
 class test_queue_mpsc : public unit_tests::vtest {
 
 public:
-    struct test_threads_data {
-        sched::thread* main;
-        sched::thread* t1;
-        bool t1ok;
-        sched::thread* t2;
-        bool t2ok;
-        int test_ctr;
+    struct info {
+        lockfree::queue_mpsc<int> *q;
+        int len;
+        lockfree::linked_item<int> *items;
     };
-
-    void test_thread_1(test_threads_data& tt)
+    void push_thread(struct info *in)
     {
-        while (tt.test_ctr < 1000) {
-            sched::thread::wait_until([&] { return (tt.test_ctr % 2) == 0; });
-            ++tt.test_ctr;
-            if (tt.t2ok) {
-                tt.t2->wake();
-            }
+        for(int i=0; i<in->len; i++){
+            in->items[i].value = i;
+            in->q->push(&in->items[i]);
         }
-        tt.t1ok = false;
-        tt.main->wake();
     }
 
-    void test_thread_2(test_threads_data& tt)
+    void pop_thread(struct info *in)
     {
-        while (tt.test_ctr < 1000) {
-            sched::thread::wait_until([&] { return (tt.test_ctr % 2) == 1; });
-            ++tt.test_ctr;
-            if (tt.t1ok) {
-                tt.t1->wake();
+        int sum=0, something=0, nothing=0;
+        while(something<in->len){
+            int n = in->q->pop();
+            if(n<0)
+                nothing++;
+            else {
+                something++;
+                sum+=n;
             }
         }
-        tt.t2ok = false;
-        tt.main->wake();
+
+        debug(fmt("pop_thread saw something %d times, nothing %d times. sum: %d") % something % nothing % sum);
     }
 
     void run()
@@ -59,10 +53,8 @@ public:
         assert(q.pop()==7);
         assert(q.pop()==-1);
         assert(q.isempty());
-
         debug("test3");
-
-        int len=10;
+        int len=1000;
         auto items = new lockfree::linked_item<int>[len];
         for(int i=0; i<len; i++){
             items[i].value = i*i;
@@ -75,20 +67,35 @@ public:
         assert(q.pop()==-1);
         assert(q.isempty());
         delete[] items;
-
-        test_threads_data tt;
-        tt.main = sched::thread::current();
-        tt.t1ok = tt.t2ok = true;
-        tt.t1 = new sched::thread([&] { test_thread_1(tt); });
-        tt.t2 = new sched::thread([&] { test_thread_2(tt); });
-        tt.test_ctr = 0;
-        tt.t1->start();
-        tt.t2->start();
-        sched::thread::wait_until([&] { return tt.test_ctr >= 1000; });
-        tt.t1->join();
-        tt.t2->join();
-        delete tt.t1;
-        delete tt.t2;
+        // A very basic multi-threaded test - 3 threads pushing, 1 popping
+        len=1000;
+        auto items1 = new lockfree::linked_item<int>[len];
+        auto items2 = new lockfree::linked_item<int>[len];
+        auto items3 = new lockfree::linked_item<int>[len];
+        struct info info1 = { &q, len, items1 };
+        struct info info2 = { &q, len, items2 };
+        struct info info3 = { &q, len, items3 };
+        struct info infop = { &q, len*3, nullptr };
+        auto t1 = new sched::thread([&] { push_thread(&info1); });
+        auto t2 = new sched::thread([&] { push_thread(&info2); });
+        auto t3 = new sched::thread([&] { push_thread(&info3); });
+        auto tp = new sched::thread([&] { pop_thread(&infop); });
+        tp->start();
+        t1->start();
+        t2->start();
+        t3->start();
+        t1->join();
+        t2->join();
+        t3->join();
+        tp->join();
+        debug(fmt("sum should be %d") % ((len-1)*len/2 * 3));
+        delete t1;
+        delete t2;
+        delete t3;
+        delete tp;
+        delete[] items1;
+        delete[] items2;
+        delete[] items3;
         debug("lockfree MPSC queue tests succeeded");
     }
 };
