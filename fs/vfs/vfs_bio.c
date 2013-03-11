@@ -126,6 +126,7 @@ static int
 rw_buf(struct buf *bp, int rw)
 {
 	struct bio *bio;
+	int ret;
 
 	bio = alloc_bio();
 	if (!bio)
@@ -138,10 +139,10 @@ rw_buf(struct buf *bp, int rw)
 	bio->bio_bcount = BSIZE;
 
 	bio->bio_dev->driver->devops->strategy(bio);
-	bio_wait(bio);
+	ret = bio_wait(bio);
 
 	destroy_bio(bio);
-	return 0;
+	return ret;
 }
 
 /*

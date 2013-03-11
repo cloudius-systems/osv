@@ -97,6 +97,7 @@ int
 physio(struct device *dev, struct uio *uio, int ioflags)
 {
 	struct bio *bio;
+	int ret;
 
 	if (uio->uio_offset < 0)
 		return EINVAL;
@@ -125,8 +126,10 @@ physio(struct device *dev, struct uio *uio, int ioflags)
 
 		dev->driver->devops->strategy(bio);
 
-		bio_wait(bio);
+		ret = bio_wait(bio);
 		destroy_bio(bio);
+		if (ret)
+			return ret;
 
 	        uio->uio_iov++;
         	uio->uio_iovcnt--;

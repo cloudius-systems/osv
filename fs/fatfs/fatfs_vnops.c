@@ -58,6 +58,7 @@ static int
 fat_rw_cluster(struct fatfsmount *fmp, u_long cluster, int rw)
 {
 	struct bio *bio;
+	int ret;
 
 	bio = alloc_bio();
 	if (!bio)
@@ -70,10 +71,10 @@ fat_rw_cluster(struct fatfsmount *fmp, u_long cluster, int rw)
 	bio->bio_bcount = fmp->sec_per_cl * SEC_SIZE;
 
 	bio->bio_dev->driver->devops->strategy(bio);
-	bio_wait(bio);
+	ret = bio_wait(bio);
 
 	destroy_bio(bio);
-	return 0;
+	return ret;
 }
 
 /*

@@ -28,13 +28,19 @@ destroy_bio(struct bio *bio)
 	free(bio);
 }
 
-void
+int
 bio_wait(struct bio *bio)
 {
+	int ret = 0;
+
 	pthread_mutex_lock(&bio->bio_mutex);
 	while (!(bio->bio_flags & BIO_DONE))
 		pthread_cond_wait(&bio->bio_wait, &bio->bio_mutex);
+	if (bio->bio_flags & BIO_ERROR)
+		ret = EIO;
 	pthread_mutex_unlock(&bio->bio_mutex);
+
+	return ret;
 }
 
 void
