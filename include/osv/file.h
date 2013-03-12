@@ -50,6 +50,8 @@ typedef enum {
 struct vnode;
 struct fileops;
 
+#define FDMAX       (0x4000)
+
 /*
  * File structure
  */
@@ -89,7 +91,31 @@ struct fileops {
 	fo_chmod_t  *fo_chmod;
 };
 
+extern struct fileops badfileops;
 extern struct fileops vfs_ops;
+extern struct fileops socketops;
+
+fo_chmod_t  invfo_chmod;
+
+/* Alloc an fd for fp */
+int fdalloc(struct file* fp, int *newfd);
+int fdset(int fd, struct file* fp);
+void fdfree(int fd);
+
+/*
+ * File descriptors reference count
+ */
+void fhold(struct file* fp);
+int fdrop(struct file* fp);
+
+/* Get fp from fd and increment refcount */
+int fget(int fd, struct file** fp);
+
+/* Allocate and initialize a file descriptor */
+int falloc_noinstall(struct file **resultfp);
+int falloc(struct file **resultfp, int *resultfd);
+void finit(struct file *fp, unsigned flags, filetype_t type,
+    void *opaque, struct fileops *ops);
 
 
 /*

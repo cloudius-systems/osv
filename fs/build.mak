@@ -4,6 +4,7 @@ fs :=
 fs +=	fs.o
 
 fs +=	vfs/main.o \
+	vfs/kern_descrip.o \
 	vfs/kern_physio.o \
 	vfs/subr_uio.o \
 	vfs/vfs_bdev.o \

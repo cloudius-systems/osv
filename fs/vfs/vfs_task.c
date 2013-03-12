@@ -52,66 +52,9 @@ task_alloc(struct task **pt)
 		return ENOMEM;
 	memset(t, 0, sizeof(struct task));
 	strlcpy(t->t_cwd, "/", sizeof(t->t_cwd));
-	mutex_init(&t->t_lock);
 
 	*pt = t;
 	return 0;
-}
-
-/*
- * Convert a file descriptor into a pointer
- * to a file structre.
- */
-file_t
-task_getfp(struct task *t, int fd)
-{
-
-	if (fd < 0 || fd >= OPEN_MAX)
-		return NULL;
-
-	return t->t_ofile[fd];
-}
-
-/*
- * Set file pointer for task/fd pair.
- */
-void
-task_setfp(struct task *t, int fd, file_t fp)
-{
-
-	t->t_ofile[fd] = fp;
-}
-
-/*
- * Get new file descriptor in the task.
- * Returns -1 if there is no empty slot.
- */
-int
-task_newfd(struct task *t)
-{
-	int fd;
-
-	/*
-	 * Find the smallest empty slot in the fd array.
-	 */
-	for (fd = 0; fd < OPEN_MAX; fd++) {
-		if (t->t_ofile[fd] == NULL)
-			break;
-	}
-	if (fd == OPEN_MAX)
-		return -1;	/* slot full */
-
-	return fd;
-}
-
-/*
- * Delete a file descriptor.
- */
-void
-task_delfd(struct task *t, int fd)
-{
-
-	t->t_ofile[fd] = NULL;
 }
 
 /*

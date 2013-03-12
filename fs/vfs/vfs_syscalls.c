@@ -48,10 +48,9 @@
 #include "vfs.h"
 
 int
-sys_open(char *path, int flags, mode_t mode, file_t *pfp)
+sys_open(char *path, int flags, mode_t mode, struct file *fp)
 {
 	vnode_t vp, dvp;
-	file_t fp;
 	char *filename;
 	int error;
 
@@ -119,25 +118,16 @@ sys_open(char *path, int flags, mode_t mode, file_t *pfp)
 			return error;
 		}
 	}
-	/* Setup file structure */
-	if (!(fp = malloc(sizeof(struct file)))) {
-		vput(vp);
-		return ENOMEM;
-	}
+
 	/* Request to file system */
 	if ((error = VOP_OPEN(vp, flags)) != 0) {
-		free(fp);
 		vput(vp);
 		return error;
 	}
-	memset(fp, 0, sizeof(struct file));
-	fp->f_flags = flags;
-	fp->f_count = 1;
-	fp->f_offset = 0;
+
+	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
 	fp->f_vnode = vp;
-	fp->f_ops = &vfs_ops;
-	fp->f_type = DTYPE_VNODE;
-	*pfp = fp;
+
 	vn_unlock(vp);
 	return 0;
 }
@@ -145,17 +135,7 @@ sys_open(char *path, int flags, mode_t mode, file_t *pfp)
 int
 sys_close(file_t fp)
 {
-	DPRINTF(VFSDB_SYSCALL, ("sys_close: fp=%x count=%d\n",
-				(u_int)fp, fp->f_count));
 
-	if (fp->f_count <= 0)
-		sys_panic("sys_close");
-
-	if (--fp->f_count > 0)
-		return 0;
-
-	fo_close(fp);
-	free(fp);
 	return 0;
 }
 
@@ -326,25 +306,31 @@ static int
 check_dir_empty(char *path)
 {
 	int error;
-	file_t fp;
+	struct file *fp;
 	struct dirent dir;
 
 	DPRINTF(VFSDB_SYSCALL, ("check_dir_empty\n"));
 
-	if ((error = sys_open(path, O_RDONLY, 0, &fp)) != 0)
+	error = falloc_noinstall(&fp);
+	if (error)
 		return error;
+
+	error = sys_open(path, O_RDONLY, 0, fp);
+	if (error)
+		goto out_fdrop;
+
 	do {
 		error = sys_readdir(fp, &dir);
 		if (error != 0 && error != EACCES)
 			break;
 	} while (!strcmp(dir.d_name, ".") || !strcmp(dir.d_name, ".."));
 
-	sys_close(fp);
-
 	if (error == ENOENT)
-		return 0;
+		error = 0;
 	else if (error == 0)
-		return EEXIST;
+		error = EEXIST;
+out_fdrop:
+	fdrop(fp);
 	return error;
 }
 

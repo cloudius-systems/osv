@@ -71,19 +71,14 @@ extern int vfs_debug;
  * per task data
  */
 struct task {
-	struct list_head t_link;	/* hash link */
 	char 	    t_cwd[PATH_MAX];	/* current working directory */
 	file_t	    t_cwdfp;		/* directory for cwd */
-	file_t	    t_ofile[OPEN_MAX];	/* pointers to file structures of open files */
-	int	    t_nopens;		/* number of opening files */
-	mutex_t	    t_lock;		/* lock for this task */
 };
 
 extern const struct vfssw vfssw[];
 
 __BEGIN_DECLS
-int	 sys_open(char *path, int flags, mode_t mode, file_t *pfp);
-int	 sys_close(file_t fp);
+int	 sys_open(char *path, int flags, mode_t mode, struct file *fp);
 int	 sys_read(file_t fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count);
 int	 sys_write(file_t fp, struct iovec *iov, size_t niov,
@@ -118,12 +113,6 @@ int	 sys_sync(void);
 
 
 int	 task_alloc(struct task **pt);
-
-file_t	 task_getfp(struct task *t, int fd);
-void	 task_setfp(struct task *t, int fd, file_t fp);
-int	 task_newfd(struct task *t);
-void	 task_delfd(struct task *t, int fd);
-
 int	 task_conv(struct task *t, const char *path, int mode, char *full);
 
 //int	 sec_file_permission(task_t task, char *path, int mode);

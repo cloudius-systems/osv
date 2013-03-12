@@ -63,15 +63,13 @@ int open(const char *pathname, int flags, mode_t mode)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
-	file_t fp;
+	struct file *fp;
 	int fd, error;
 	int acc;
 
-	/* Find empty slot for file descriptor. */
-	if ((fd = task_newfd(t)) == -1) {
-		errno = EMFILE;
-		return -1;
-	}
+	error = falloc(&fp, &fd);
+	if (error)
+		goto out_errno;
 
 	acc = 0;
 	switch (flags & O_ACCMODE) {
@@ -86,15 +84,19 @@ int open(const char *pathname, int flags, mode_t mode)
 		break;
 	}
 
-	if ((error = task_conv(t, pathname, acc, path)) != 0)
-		goto out_errno;
+	error = task_conv(t, pathname, acc, path);
+	if (error)
+		goto out_fput;
 
-	if ((error = sys_open(path, flags, mode, &fp)) != 0)
-		goto out_errno;
+	error = sys_open(path, flags, mode, fp);
+	if (error)
+		goto out_fput;
 
-	t->t_ofile[fd] = fp;
-	t->t_nopens++;
+	fdrop(fp);
 	return fd;
+
+out_fput:
+	fdrop(fp);
 out_errno:
 	errno = error;
 	return -1;
@@ -109,24 +111,17 @@ int creat(const char *pathname, mode_t mode)
 
 int close(int fd)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int error;
 
-	error = EBADF;
-
-	if (fd >= OPEN_MAX)
-		goto out_errno;
-	fp = t->t_ofile[fd];
-	if (fp == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
-	if ((error = sys_close(fp)) != 0)
-		goto out_errno;
-
-	t->t_ofile[fd] = NULL;
-	t->t_nopens--;
+	fdfree(fd);
+	fdrop(fp);
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -153,19 +148,21 @@ out_errno:
 
 off_t lseek(int fd, off_t offset, int whence)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	off_t org;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_lseek(fp, offset, whence, &org);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return org;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -177,24 +174,25 @@ off_t lseek64(int fd, off64_t offset, int whence)
 
 ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
-	struct task *t = main_task;
 	struct iovec iov = {
 		.iov_base	= buf,
 		.iov_len	= count,
 	};
-	file_t fp;
+	struct file *fp;
 	size_t bytes;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
-		goto out_errno;
-
-	error = sys_read(fp, &iov, 1, offset, &bytes);
+	error = fget(fd, &fp);
 	if (error)
 		goto out_errno;
 
+	error = sys_read(fp, &iov, 1, offset, &bytes);
+	fdrop(fp);
+
+	if (error)
+		goto out_errno;
 	return bytes;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -207,23 +205,25 @@ ssize_t read(int fd, void *buf, size_t count)
 
 ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
-	struct task *t = main_task;
 	struct iovec iov = {
 		.iov_base	= (void *)buf,
 		.iov_len	= count,
 	};
-	file_t fp;
+	struct file *fp;
 	size_t bytes;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_write(fp, &iov, 1, offset, &bytes);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return bytes;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -236,20 +236,21 @@ ssize_t write(int fd, const void *buf, size_t count)
 
 ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	size_t bytes;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
-		goto out_errno;
-
-	error = sys_read(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
+	error = fget(fd, &fp);
 	if (error)
 		goto out_errno;
 
+	error = sys_read(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
+	fdrop(fp);
+
+	if (error)
+		goto out_errno;
 	return bytes;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -262,19 +263,21 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 
 ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	size_t bytes;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_write(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return bytes;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -287,18 +290,20 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 
 int ioctl(int fd, int request, unsigned long arg)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_ioctl(fp, request, (void *)arg);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -306,15 +311,16 @@ out_errno:
 
 int fsync(int fd)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_fsync(fp);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return 0;
@@ -326,22 +332,24 @@ out_errno:
 
 int __fxstat(int ver, int fd, struct stat *st)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int error;
 
 	error = ENOSYS;
 	if (ver != 1)
 		goto out_errno;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_fstat(fp, st);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -357,18 +365,20 @@ LFS64(fstat);
 int
 ll_readdir(int fd, struct dirent *d)
 {
-	struct task *t = main_task;
 	int error;
-	file_t fp;
+	struct file *fp;
 
-	error = -EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_readdir(fp, d);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -381,7 +391,8 @@ fs_rewinddir(struct task *t, struct msg *msg)
 	struct task *t = main_task;
 	file_t fp;
 
-	if ((fp = task_getfp(t, msg->data[0])) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		return EBADF;
 
 	return sys_rewinddir(fp);
@@ -394,7 +405,8 @@ fs_seekdir(struct task *t, struct msg *msg)
 	file_t fp;
 	long loc;
 
-	if ((fp = task_getfp(t, msg->data[0])) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		return EBADF;
 	loc = msg->data[1];
 
@@ -409,7 +421,8 @@ fs_telldir(struct task *t, struct msg *msg)
 	long loc;
 	int error;
 
-	if ((fp = task_getfp(t, msg->data[0])) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		return EBADF;
 	loc = msg->data[1];
 
@@ -433,7 +446,6 @@ mkdir(const char *pathname, mode_t mode)
 	error = sys_mkdir(path, mode);
 	if (error)
 		goto out_errno;
-
 	return 0;
 out_errno:
 	errno = error;
@@ -491,21 +503,31 @@ int chdir(const char *pathname)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
-	file_t fp;
+	struct file *fp, *old = NULL;
 	int error;
 
 	error = ENOENT;
 	if (pathname == NULL)
 		goto out_errno;
 
-	/* Check if directory exits */
-	if ((error = sys_open(path, O_RDONLY, 0, &fp)) != 0)
+	error = falloc_noinstall(&fp);
+	if (error)
 		goto out_errno;
 
+	/* Check if directory exits */
+	error = sys_open(path, O_RDONLY, 0, fp);
+	if (error) {
+		fdrop(fp);
+		goto out_errno;
+	}
+
 	if (t->t_cwdfp)
-		sys_close(t->t_cwdfp);
+		old = t->t_cwdfp;
 	t->t_cwdfp = fp;
 	strlcpy(t->t_cwd, path, sizeof(t->t_cwd));
+
+	if (old)
+		fdrop(old);
  	return 0;
 out_errno:
 	errno = error;
@@ -515,20 +537,27 @@ out_errno:
 int fchdir(int fd)
 {
 	struct task *t = main_task;
-	file_t fp;
+	struct file *fp, *old = NULL;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	if (t->t_cwdfp)
-		sys_close(t->t_cwdfp);
-	t->t_cwdfp = fp;
+		old = t->t_cwdfp;
+
 	error = sys_fchdir(fp, t->t_cwd);
-	if (error)
+	if (error) {
+		fdrop(fp);
 		goto out_errno;
+	}
+
+	t->t_cwdfp = fp;
+	if (old)
+		fdrop(old);
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -619,7 +648,6 @@ int __statfs(const char *pathname, struct statfs *buf)
 	if (error)
 		goto out_errno;
 	return 0;
-
 out_errno:
 	errno = error;
 	return -1;
@@ -629,19 +657,20 @@ LFS64(statfs);
 
 int __fstatfs(int fd, struct statfs *buf)
 {
-	struct task *t = main_task;
 	struct file *fp;
 	int error;
 
-	error = EBADF;
-	fp = task_getfp(t, fd);
-	if (!fp)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_fstatfs(fp, buf);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -728,26 +757,22 @@ out_errno:
  */
 int dup(int oldfd)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int newfd;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, oldfd)) == NULL)
+	error = fget(oldfd, &fp);
+	if (error)
 		goto out_errno;
 
-	/* Find smallest empty slot as new fd. */
-	error = EMFILE;
-	if ((newfd = task_newfd(t)) == -1)
-		goto out_errno;
-
-	t->t_ofile[newfd] = fp;
-
-	/* Increment file reference */
-	fp->f_count++;
+	error = fdalloc(fp, &newfd);
+	if (error)
+		goto out_fdrop;
 
 	return newfd;
+
+out_fdrop:
+	fdrop(fp);
 out_errno:
 	errno = error;
 	return -1;
@@ -758,8 +783,7 @@ out_errno:
  */
 int dup3(int oldfd, int newfd, int flags)
 {
-	struct task *t = main_task;
-	file_t fp, org;
+	struct file *fp, *org = NULL;
 	int error;
 
 	/*
@@ -769,22 +793,27 @@ int dup3(int oldfd, int newfd, int flags)
 	if ((flags & ~O_CLOEXEC) != 0)
 		return -EINVAL;
 
-	error = EBADF;
-	if (oldfd >= OPEN_MAX || newfd >= OPEN_MAX)
+	error = fget(oldfd, &fp);
+	if (error)
 		goto out_errno;
-	fp = t->t_ofile[oldfd];
-	if (fp == NULL)
-		goto out_errno;
-	org = t->t_ofile[newfd];
-	if (org != NULL) {
-		/* Close previous file if it's opened. */
-		error = sys_close(org);
-	}
-	t->t_ofile[newfd] = fp;
 
-	/* Increment file reference */
-	fp->f_count++;
+	error = fget(newfd, &org);
+	/* ignore the error, newfd might not have an open file */
+
+	error = fdset(newfd, fp);
+	if (error) {
+		fdrop(fp);
+		if (org)
+			fdrop(org);
+		goto out_errno;
+	}
+
+	/* Close previous file if it's opened. */
+	if (org)
+		fdrop(org);
+
 	return newfd;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -800,39 +829,34 @@ int dup2(int oldfd, int newfd)
  */
 int fcntl(int fd, int cmd, int arg)
 {
-	struct task *t = main_task;
-	file_t fp;
-	int new_fd;
-	int error;
+	struct file *fp;
+	int ret = 0, error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	switch (cmd) {
 	case F_DUPFD:
-		if (arg >= OPEN_MAX)
-			return EINVAL;
-		/* Find smallest empty slot as new fd. */
-		if ((new_fd = task_newfd(t)) == -1)
-			return EMFILE;
-		t->t_ofile[new_fd] = fp;
-
-		/* Increment file reference */
-		fp->f_count++;
-		return new_fd;
+		// XXX: incorrect semantics, should only
+		// use file descriptors >= arg
+		ret = dup(fd);
 	case F_GETFD:
-		return fp->f_flags & FD_CLOEXEC;
+		ret = fp->f_flags & FD_CLOEXEC;
 	case F_SETFD:
-		fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
+		ret = fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
 			(arg & FD_CLOEXEC);
 		return 0;
 	default:
 		kprintf("unsupported fcntl cmd 0x%x\n", cmd);
 		error = EINVAL;
-		goto out_errno;
 	}
-	return 0;
+
+	fdrop(fp);
+	if (error)
+		goto out_errno;
+	return ret;
+
 out_errno:
 	errno = error;
 	return -1;
@@ -915,17 +939,18 @@ fs_pipe(struct task *t, struct msg *msg)
  */
 int isatty(int fd)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int istty = 0;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
-	if (fp->f_vnode->v_flags & VISTTY)
+	if (fp->f_vnode && fp->f_vnode->v_flags & VISTTY)
 		istty = 1;
+	fdrop(fp);
+
 	return istty;
 out_errno:
 	errno = error;
@@ -955,18 +980,20 @@ out_errno:
 
 int ftruncate(int fd, off_t length)
 {
-	struct task *t = main_task;
-	file_t fp;
+	struct file *fp;
 	int error;
 
-	error = EBADF;
-	if ((fp = task_getfp(t, fd)) == NULL)
+	error = fget(fd, &fp);
+	if (error)
 		goto out_errno;
 
 	error = sys_ftruncate(fp, length);
+	fdrop(fp);
+
 	if (error)
 		goto out_errno;
 	return 0;
+
 out_errno:
 	errno = error;
 	return -1;
