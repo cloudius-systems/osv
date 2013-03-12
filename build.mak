@@ -134,6 +134,7 @@ bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
+bsd += bsd/sys/kern/sys_socket.o
 bsd += bsd/porting/route.o
 bsd += bsd/porting/networking.o
 bsd += bsd/porting/netport.o
@@ -215,6 +216,7 @@ objects += core/mmio.o
 objects += core/sglist.o
 objects += core/kprintf.o
 objects += core/trace.o
+objects += core/fdesc.o
 
 unittests:= tests/tst-hub.o
 
