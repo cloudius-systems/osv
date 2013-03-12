@@ -30,95 +30,70 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/file.h>
-#include <sys/filedesc.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/sigio.h>
-#include <sys/signal.h>
-#include <sys/signalvar.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/filio.h>			/* XXX */
-#include <sys/sockio.h>
 #include <sys/stat.h>
-#include <sys/uio.h>
-#include <sys/ucred.h>
+#include <osv/file.h>
+#include <osv/uio.h>
+#include <osv/types.h>
 
-#include <net/if.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/libkern.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/filio.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
+#include <bsd/sys/sys/sockio.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <security/mac/mac_framework.h>
+int
+soo_init(struct file *fp)
+{
+    struct socket *so = fp->f_data;
+    so->fp = fp;
 
-struct fileops	socketops = {
-	.fo_read = soo_read,
-	.fo_write = soo_write,
-	.fo_truncate = soo_truncate,
-	.fo_ioctl = soo_ioctl,
-	.fo_poll = soo_poll,
-	.fo_kqfilter = soo_kqfilter,
-	.fo_stat = soo_stat,
-	.fo_close = soo_close,
-	.fo_chmod = invfo_chmod,
-	.fo_chown = invfo_chown,
-	.fo_flags = DFLAG_PASSABLE
-};
+    return 0;
+}
 
 /* ARGSUSED */
 int
-soo_read(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
+soo_read(struct file *fp, struct uio *uio, int flags)
 {
 	struct socket *so = fp->f_data;
 	int error;
 
-#ifdef MAC
-	error = mac_socket_check_receive(active_cred, so);
-	if (error)
-		return (error);
-#endif
 	error = soreceive(so, 0, uio, 0, 0, 0);
 	return (error);
 }
 
 /* ARGSUSED */
 int
-soo_write(struct file *fp, struct uio *uio, struct ucred *active_cred,
-    int flags, struct thread *td)
+soo_write(struct file *fp, struct uio *uio, int flags)
 {
 	struct socket *so = fp->f_data;
 	int error;
 
-#ifdef MAC
-	error = mac_socket_check_send(active_cred, so);
-	if (error)
-		return (error);
-#endif
-	error = sosend(so, 0, uio, 0, 0, 0, uio->uio_td);
+	error = sosend(so, 0, uio, 0, 0, 0, 0);
+#if 0
 	if (error == EPIPE && (so->so_options & SO_NOSIGPIPE) == 0) {
 		PROC_LOCK(uio->uio_td->td_proc);
 		tdsignal(uio->uio_td, SIGPIPE);
 		PROC_UNLOCK(uio->uio_td->td_proc);
 	}
+#endif
 	return (error);
 }
 
 int
-soo_truncate(struct file *fp, off_t length, struct ucred *active_cred,
-    struct thread *td)
+soo_truncate(struct file *fp, off_t length)
 {
 
 	return (EINVAL);
 }
 
 int
-soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
-    struct thread *td)
+soo_ioctl(struct file *fp, u_long cmd, void *data)
 {
 	struct socket *so = fp->f_data;
 	int error = 0;
@@ -181,6 +156,7 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 			*(int *)data = sbspace(&so->so_snd);
 		break;
 
+#if 0
 	case FIOSETOWN:
 		error = fsetown(*(int *)data, &so->so_sigio);
 		break;
@@ -196,6 +172,7 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 	case SIOCGPGRP:
 		*(int *)data = -fgetown(&so->so_sigio);
 		break;
+#endif
 
 	case SIOCATMARK:
 		/* Unlocked read. */
@@ -208,7 +185,7 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 		 * socket is unnecessary.
 		 */
 		if (IOCGROUP(cmd) == 'i')
-			error = ifioctl(so, cmd, data, td);
+			error = ifioctl(so, cmd, data, 0);
 		else if (IOCGROUP(cmd) == 'r') {
 			CURVNET_SET(so->so_vnet);
 			error = rtioctl_fib(cmd, data, so->so_fibnum);
@@ -216,7 +193,7 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 		} else {
 			CURVNET_SET(so->so_vnet);
 			error = ((*so->so_proto->pr_usrreqs->pru_control)
-			    (so, cmd, data, 0, td));
+			    (so, cmd, data, 0, 0));
 			CURVNET_RESTORE();
 		}
 		break;
@@ -225,36 +202,23 @@ soo_ioctl(struct file *fp, u_long cmd, void *data, struct ucred *active_cred,
 }
 
 int
-soo_poll(struct file *fp, int events, struct ucred *active_cred,
-    struct thread *td)
+soo_poll(struct file *fp, int events)
 {
+#if 0
 	struct socket *so = fp->f_data;
-#ifdef MAC
-	int error;
-
-	error = mac_socket_check_poll(active_cred, so);
-	if (error)
-		return (error);
+	return (sopoll(so, events, 0, 0));
 #endif
-	return (sopoll(so, events, fp->f_cred, td));
+	/* FIXME: OSv TODO Implement... */
+	return EBADF;
 }
 
 int
-soo_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
-    struct thread *td)
+soo_stat(struct file *fp, struct stat *ub)
 {
 	struct socket *so = fp->f_data;
-#ifdef MAC
-	int error;
-#endif
 
 	bzero((caddr_t)ub, sizeof (*ub));
 	ub->st_mode = S_IFSOCK;
-#ifdef MAC
-	error = mac_socket_check_stat(active_cred, so);
-	if (error)
-		return (error);
-#endif
 	/*
 	 * If SBS_CANTRCVMORE is set, but there's still data left in the
 	 * receive buffer, the socket is still readable.
@@ -268,8 +232,8 @@ soo_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
 	/* Unlocked read. */
 	if ((so->so_snd.sb_state & SBS_CANTSENDMORE) == 0)
 		ub->st_mode |= S_IWUSR | S_IWGRP | S_IWOTH;
-	ub->st_uid = so->so_cred->cr_uid;
-	ub->st_gid = so->so_cred->cr_gid;
+	ub->st_uid = 0;
+	ub->st_gid = 0;
 	return (*so->so_proto->pr_usrreqs->pru_sense)(so, ub);
 }
 
@@ -281,7 +245,7 @@ soo_stat(struct file *fp, struct stat *ub, struct ucred *active_cred,
  */
 /* ARGSUSED */
 int
-soo_close(struct file *fp, struct thread *td)
+soo_close(struct file *fp)
 {
 	int error = 0;
 	struct socket *so;
@@ -294,3 +258,15 @@ soo_close(struct file *fp, struct thread *td)
 		error = soclose(so);
 	return (error);
 }
+
+struct fileops socketops = {
+    .fo_init = soo_init,
+    .fo_read = soo_read,
+    .fo_write = soo_write,
+    .fo_truncate = soo_truncate,
+    .fo_ioctl = soo_ioctl,
+    .fo_poll = soo_poll,
+    .fo_stat = soo_stat,
+    .fo_close = soo_close,
+    .fo_chmod = invfo_chmod,
+};

@@ -54,6 +54,7 @@ struct vnet;
 typedef	u_quad_t so_gen_t;
 
 struct socket;
+struct file;
 
 /*-
  * Locking key to struct socket:
@@ -102,11 +103,6 @@ struct socket {
 
 	struct sockbuf so_rcv, so_snd;
 
-#if 0
-	struct	ucred *so_cred;		/* (a) user credentials */
-	struct	label *so_label;	/* (b) MAC label for socket */
-	struct	label *so_peerlabel;	/* (b) cached MAC label for peer */
-#endif
 	/* NB: generation count must not be first. */
 	int so_gencnt;		/* (h) generation count */
 	void	*so_emuldata;		/* (b) private data for emulators */
@@ -123,6 +119,9 @@ struct socket {
 	 */
 	int so_fibnum;		/* routing domain for this socket */
 	uint32_t so_user_cookie;
+	/* FIXME: this is done for poll,
+	 * make sure there's only 1 ref to a fp */
+	struct file* fp;
 };
 
 /*
