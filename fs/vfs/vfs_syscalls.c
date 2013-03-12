@@ -131,10 +131,12 @@ sys_open(char *path, int flags, mode_t mode, file_t *pfp)
 		return error;
 	}
 	memset(fp, 0, sizeof(struct file));
-	fp->f_vnode = vp;
 	fp->f_flags = flags;
-	fp->f_offset = 0;
 	fp->f_count = 1;
+	fp->f_offset = 0;
+	fp->f_vnode = vp;
+	fp->f_ops = &vfs_ops;
+	fp->f_type = DTYPE_VNODE;
 	*pfp = fp;
 	vn_unlock(vp);
 	return 0;
@@ -143,9 +145,6 @@ sys_open(char *path, int flags, mode_t mode, file_t *pfp)
 int
 sys_close(file_t fp)
 {
-	vnode_t vp;
-	int error;
-
 	DPRINTF(VFSDB_SYSCALL, ("sys_close: fp=%x count=%d\n",
 				(u_int)fp, fp->f_count));
 
@@ -155,13 +154,7 @@ sys_close(file_t fp)
 	if (--fp->f_count > 0)
 		return 0;
 
-	vp = fp->f_vnode;
-	vn_lock(vp);
-	if ((error = VOP_CLOSE(vp, fp)) != 0) {
-		vn_unlock(vp);
-		return error;
-	}
-	vput(vp);
+	fo_close(fp);
 	free(fp);
 	return 0;
 }
@@ -170,7 +163,6 @@ int
 sys_read(file_t fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
-	struct vnode *vp = fp->f_vnode;
 	struct uio *uio = NULL;
 	ssize_t bytes;
 	int error;
@@ -185,25 +177,18 @@ sys_read(file_t fp, struct iovec *iov, size_t niov,
 	if (error)
 		return error;
 
+	bytes = uio->uio_resid;
+
 	if (uio->uio_resid == 0) {
 		*count = 0;
 		return 0;
 	}
-	bytes = uio->uio_resid;
 
-	vn_lock(vp);
 	uio->uio_rw = UIO_READ;
-	if (offset == -1)
-		uio->uio_offset = fp->f_offset;
-	else
-		uio->uio_offset = offset;
-	error = VOP_READ(vp, uio, 0);
-	if (!error) {
-		*count = bytes - uio->uio_resid;
-		if (offset == -1)
-			fp->f_offset += *count;
-	}
-	vn_unlock(vp);
+	uio->uio_offset = offset;
+	fo_read(fp, uio, (offset == -1) ? 0 : FOF_OFFSET);
+	*count = bytes - uio->uio_resid;
+
 	return error;
 }
 
@@ -211,10 +196,8 @@ int
 sys_write(file_t fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
-	struct vnode *vp = fp->f_vnode;
 	struct uio *uio = NULL;
 	ssize_t bytes;
-	int ioflags = 0;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x uio=%x niv=%zu\n",
@@ -222,8 +205,6 @@ sys_write(file_t fp, struct iovec *iov, size_t niov,
 
 	if ((fp->f_flags & FWRITE) == 0)
 		return EBADF;
-	if (fp->f_flags & O_APPEND)
-		ioflags |= IO_APPEND;
 
 	error = copyinuio(iov, niov, &uio);
 	if (error)
@@ -233,21 +214,14 @@ sys_write(file_t fp, struct iovec *iov, size_t niov,
 		*count = 0;
 		return 0;
 	}
+
 	bytes = uio->uio_resid;
 
-	vn_lock(vp);
 	uio->uio_rw = UIO_WRITE;
-	if (offset == -1)
-		uio->uio_offset = fp->f_offset;
-	else
-		uio->uio_offset = offset;
-	error = VOP_WRITE(vp, uio, ioflags);
-	if (!error) {
-		*count = bytes - uio->uio_resid;
-		if (offset == -1)
-			fp->f_offset += *count;
-	}
-	vn_unlock(vp);
+	uio->uio_offset = offset;
+	fo_write(fp, uio, (offset == -1) ? 0 : FOF_OFFSET);
+	*count = bytes - uio->uio_resid;
+
 	return error;
 }
 
@@ -302,7 +276,6 @@ sys_lseek(file_t fp, off_t off, int type, off_t *origin)
 int
 sys_ioctl(file_t fp, u_long request, void *buf)
 {
-	vnode_t vp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_ioctl: fp=%x request=%x\n", fp, request));
@@ -310,10 +283,8 @@ sys_ioctl(file_t fp, u_long request, void *buf)
 	if ((fp->f_flags & (FREAD | FWRITE)) == 0)
 		return EBADF;
 
-	vp = fp->f_vnode;
-	vn_lock(vp);
-	error = VOP_IOCTL(vp, fp, request, buf);
-	vn_unlock(vp);
+	error = fo_ioctl(fp, request, buf);
+
 	DPRINTF(VFSDB_SYSCALL, ("sys_ioctl: comp error=%d\n", error));
 	return error;
 }
@@ -339,15 +310,12 @@ sys_fsync(file_t fp)
 int
 sys_fstat(file_t fp, struct stat *st)
 {
-	vnode_t vp;
 	int error = 0;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_fstat: fp=%x\n", fp));
 
-	vp = fp->f_vnode;
-	vn_lock(vp);
-	error = vn_stat(vp, st);
-	vn_unlock(vp);
+	error = fo_stat(fp, st);
+
 	return error;
 }
 
