@@ -248,6 +248,7 @@ class osv_info_threads(gdb.Command):
         for t in state.thread_list:
             with thread_context(t, state):
                 cpu = t['_cpu']
+		tid = t['_id']
                 fr = gdb.selected_frame()
                 sal = fr.find_sal()
                 status = str(t['_status']['_M_i']).replace('sched::thread::', '')
@@ -257,8 +258,8 @@ class osv_info_threads(gdb.Command):
                 fname = '??'
                 if sal.symtab:
                     fname = sal.symtab.filename
-                gdb.write('0x%x cpu%s %-10s %s at %s:%s\n' %
-                          (ulong(t.address),
+                gdb.write('%d (0x%x) cpu%s %-10s %s at %s:%s\n' %
+                          (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
                            function,
@@ -279,6 +280,9 @@ class osv_thread(gdb.Command):
         for t in state.thread_list:
             if t.address.cast(ulong_type) == long(arg, 0):
                 thread = t
+            with thread_context(t, state):
+	        if t['_id'] == long(arg, 0):
+                    thread = t
         if not thread:
             print 'Not found'
             return
