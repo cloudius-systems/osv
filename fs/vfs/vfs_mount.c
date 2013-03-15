@@ -51,7 +51,7 @@
 /*
  * List for VFS mount points.
  */
-static struct list_head mount_list = LIST_INIT(mount_list);
+static struct list_head mount_list = LIST_SINIT(mount_list);
 
 /*
  * Global lock to access mount point.

@@ -69,7 +69,7 @@ static mutex_t bio_lock = MUTEX_INITIALIZER;
 
 /* fixed set of buffers */
 static struct buf buf_table[NBUFS];
-static struct list_head free_list = LIST_INIT(free_list);
+static struct list_head free_list = LIST_SINIT(free_list);
 
 static sem_t free_sem;
 

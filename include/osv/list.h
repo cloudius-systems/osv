@@ -55,7 +55,7 @@ typedef struct list_head *list_t;
 #define list_entry(p, type, member) \
     ((type *)((char *)(p) - (unsigned long)(&((type *)0)->member)))
 
-#define LIST_INIT(head) { &(head), &(head) }
+#define LIST_SINIT(head) { &(head), &(head) }
 
 
 /*
