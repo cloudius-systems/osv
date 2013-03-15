@@ -34,7 +34,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <osv/mutex.h>
+#include <osv/poll.h>
 #include <osv/uio.h>
+#include <osv/list.h>
 
 __BEGIN_DECLS
 
@@ -63,7 +66,12 @@ struct file {
 	struct fileops	*f_ops;		/* file ops abstraction */
 	void		*f_data;	/* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
+	struct list_head f_plist;	/* poll requests */
+	mutex_t		f_lock;		/* lock */
 };
+
+#define FD_LOCK(fp)	mutex_lock(&(fp->f_lock))
+#define FD_UNLOCK(fp)	mutex_unlock(&(fp->f_lock))
 
 typedef struct file *file_t;
 

@@ -204,12 +204,8 @@ soo_ioctl(struct file *fp, u_long cmd, void *data)
 int
 soo_poll(struct file *fp, int events)
 {
-#if 0
 	struct socket *so = fp->f_data;
 	return (sopoll(so, events, 0, 0));
-#endif
-	/* FIXME: OSv TODO Implement... */
-	return EBADF;
 }
 
 int

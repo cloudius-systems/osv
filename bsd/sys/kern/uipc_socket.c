@@ -103,6 +103,7 @@
 #include <sys/cdefs.h>
 #include <stddef.h>
 
+#include <osv/poll.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 #include <bsd/porting/sync_stub.h>
@@ -2610,6 +2611,64 @@ soopt_mcopyout(struct sockopt *sopt, struct mbuf *m)
 	sopt->sopt_valsize = valsize;
 	return (0);
 }
+
+
+int
+sopoll(struct socket *so, int events, struct ucred *active_cred,
+    struct thread *td)
+{
+
+	/*
+	 * We do not need to set or assert curvnet as long as everyone uses
+	 * sopoll_generic().
+	 */
+	return (so->so_proto->pr_usrreqs->pru_sopoll(so, events, active_cred,
+	    td));
+}
+
+int
+sopoll_generic(struct socket *so, int events, struct ucred *active_cred,
+    struct thread *td)
+{
+	int revents = 0;
+
+	SOCKBUF_LOCK(&so->so_snd);
+	SOCKBUF_LOCK(&so->so_rcv);
+	if (events & (POLLIN | POLLRDNORM))
+		if (soreadabledata(so))
+			revents |= events & (POLLIN | POLLRDNORM);
+
+	if (events & (POLLOUT | POLLWRNORM))
+		if (sowriteable(so))
+			revents |= events & (POLLOUT | POLLWRNORM);
+
+	if (events & (POLLPRI | POLLRDBAND))
+		if (so->so_oobmark || (so->so_rcv.sb_state & SBS_RCVATMARK))
+			revents |= events & (POLLPRI | POLLRDBAND);
+
+	if ((events & POLLINIGNEOF) == 0) {
+		if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
+			revents |= events & (POLLIN | POLLRDNORM);
+			if (so->so_snd.sb_state & SBS_CANTSENDMORE)
+				revents |= POLLHUP;
+		}
+	}
+
+    if (revents == 0) {
+        if (events & (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND)) {
+            so->so_rcv.sb_flags |= SB_SEL;
+        }
+
+        if (events & (POLLOUT | POLLWRNORM)) {
+            so->so_snd.sb_flags |= SB_SEL;
+        }
+    }
+
+	SOCKBUF_UNLOCK(&so->so_rcv);
+	SOCKBUF_UNLOCK(&so->so_snd);
+	return (revents);
+}
+
 
 /*
  * Some routines that return EOPNOTSUPP for entry points that are not

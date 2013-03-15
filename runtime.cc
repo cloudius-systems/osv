@@ -202,11 +202,6 @@ static struct __locale_struct c_locale = {
     c_locale_array + 128, // __ctype_b
 };
 
-int poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-    UNIMPLEMENTED("poll");
-}
-
 UNIMPL(void __stack_chk_fail(void))
 
 namespace {

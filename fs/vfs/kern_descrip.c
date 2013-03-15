@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <osv/file.h>
+#include <osv/list.h>
+#include <osv/poll.h>
 #include <osv/debug.h>
 #include <osv/mutex.h>
 
@@ -133,6 +135,8 @@ int falloc_noinstall(struct file **resultfp)
 
 	fp->f_ops = &badfileops;
 	fp->f_count = 1;
+	list_init(&fp->f_plist);
+	mutex_init(&fp->f_lock);
 
 	*resultfp = fp;
 	return 0;
@@ -186,6 +190,8 @@ int fdrop(struct file *fp)
 		return 0;
 
 	fo_close(fp);
+	poll_drain(fp);
+	mutex_destroy(&fp->f_lock);
 	free(fp);
 	return 1;
 }
