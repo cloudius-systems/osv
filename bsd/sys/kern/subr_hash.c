@@ -35,6 +35,7 @@
  */
 
 #include <bsd/porting/netport.h>
+#include <bsd/sys/sys/queue.h>
 #include <sys/cdefs.h>
 
 #include <sys/param.h>

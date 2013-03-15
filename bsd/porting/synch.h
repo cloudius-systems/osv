@@ -1,7 +1,6 @@
 #ifndef _PORTING_SYNCH_H_
 #define _PORTING_SYNCH_H_
 
-#include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
 
 /* See the FreeBSD sleep(9) manual entry for usage */

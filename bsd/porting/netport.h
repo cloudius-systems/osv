@@ -29,7 +29,6 @@ struct knote {
 #endif
 
 #include <sys/types.h>
-#include <bsd/sys/sys/queue.h>
 
 /*
  * User credential, some function use this as arguments,
