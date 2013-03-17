@@ -34,7 +34,6 @@
 #define	_SYS_SOCKET_H_
 
 #include <osv/uio.h>
-#include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
 #include <bsd/machine/_align.h>
 
@@ -94,6 +93,10 @@ typedef	__uid_t		uid_t;
 #define	SOCK_RDM	4		/* reliably-delivered message */
 #endif
 #define	SOCK_SEQPACKET	5		/* sequenced packet stream */
+
+/* accept4 flags */
+#define SOCK_CLOEXEC    02000000
+#define SOCK_NONBLOCK   00004000
 
 /*
  * Option flags per-socket.
