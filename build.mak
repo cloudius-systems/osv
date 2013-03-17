@@ -131,6 +131,7 @@ bsd += bsd/sys/kern/uipc_domain.o
 bsd += bsd/sys/kern/uipc_sockbuf.o
 bsd += bsd/sys/kern/uipc_socket.o
 bsd += bsd/sys/kern/uipc_syscalls.o
+bsd += bsd/sys/kern/uipc_syscalls_wrap.o
 bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
