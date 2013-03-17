@@ -39,16 +39,10 @@ To run OSv
 2) connect a debugger
    ---------------------
 
-    c-a c
-    (qemu) gdbserver
-
-    In another terminal:
-
     # gdb build/debug/loader.elf
     (gdb) connect
     (gdb) osv syms
     (gdb) bt
-
 
  Tracing
  =======
@@ -61,3 +55,11 @@ To run OSv
  osv trace
 
  gdb.txt will contain the the trace.
+
+Running java benchmarks
+=======================
+
+After running "make", do
+    scripts/imgedit.py setargs build/debug/loader.img java.so -jar bench.jar
+
+and then run normally (sh scripts/run.sh).
