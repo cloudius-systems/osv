@@ -8,6 +8,7 @@
 #include "tst-bsd-synch.hh"
 #include "tst-queue-mpsc.hh"
 #include "tst-mmap.hh"
+#include "tst-sockets.hh"
 
 using namespace unit_tests;
 
@@ -21,6 +22,7 @@ void tests::execute_tests() {
     test_synch synch;
     test_queue_mpsc q1;
     test_mmap mmap;
+    test_sockets sockets;
 
     instance().register_test(&threads);
     instance().register_test(&malloc);
@@ -31,6 +33,7 @@ void tests::execute_tests() {
     instance().register_test(&synch);
     instance().register_test(&q1);
     instance().register_test(&mmap);
+    instance().register_test(&sockets);
 
     instance().run();
 }
