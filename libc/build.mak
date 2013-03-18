@@ -596,6 +596,7 @@ libc += time/localtime_r.o
 libc += time/mktime.o
 libc += time/strftime.o
 libc += time/strptime.o
+libc += time/time.o
 libc += time/timegm.o
 libc += time/tzset.o
 libc += time/wcsftime.o
