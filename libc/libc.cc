@@ -112,3 +112,13 @@ int sched_yield()
     sched::thread::yield();
     return 0;
 }
+
+int getloadavg(double loadavg[], int nelem)
+{
+    int i;
+
+    for (i = 0; i < nelem; i++)
+        loadavg[i] = 0.5;
+
+    return 0;
+}
