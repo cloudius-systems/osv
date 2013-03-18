@@ -154,7 +154,7 @@ void		 udp_init(void);
 void		 udp_destroy(void);
 #endif
 void		 udp_input(struct mbuf *, int);
-struct inpcb	*udp_notify(struct inpcb *inp, int errno);
+struct inpcb	*udp_notify(struct inpcb *inp, int errval);
 int		 udp_shutdown(struct socket *so);
 
 int udp_set_kernel_tunneling(struct socket *so, udp_tun_func_t f);

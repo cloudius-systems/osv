@@ -1194,7 +1194,7 @@ in_getpeeraddr(struct socket *so, struct sockaddr **nam)
 }
 
 void
-in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr faddr, int errno,
+in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr faddr, int errval,
     struct inpcb *(*notify)(struct inpcb *, int))
 {
 	struct inpcb *inp, *inp_temp;
@@ -1213,7 +1213,7 @@ in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr faddr, int errno,
 			INP_WUNLOCK(inp);
 			continue;
 		}
-		if ((*notify)(inp, errno))
+		if ((*notify)(inp, errval))
 			INP_WUNLOCK(inp);
 	}
 	INP_INFO_WUNLOCK(pcbinfo);

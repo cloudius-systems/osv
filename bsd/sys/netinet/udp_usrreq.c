@@ -36,63 +36,38 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
-#include "opt_ipfw.h"
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_ipsec.h"
+#include <bsd/porting/netport.h>
+#include <bsd/machine/in_cksum.h>
 
-#include <sys/param.h>
-#include <sys/domain.h>
-#include <sys/eventhandler.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/priv.h>
-#include <sys/proc.h>
-#include <sys/protosw.h>
-#include <sys/signalvar.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/sx.h>
-#include <sys/sysctl.h>
-#include <sys/syslog.h>
-#include <sys/systm.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/eventhandler.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
 
-#include <vm/uma.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
 
-#include <net/if.h>
-#include <net/route.h>
-
-#include <netinet/in.h>
-#include <netinet/in_pcb.h>
-#include <netinet/in_systm.h>
-#include <netinet/in_var.h>
-#include <netinet/ip.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip.h>
 #ifdef INET6
 #include <netinet/ip6.h>
 #endif
-#include <netinet/ip_icmp.h>
-#include <netinet/icmp_var.h>
-#include <netinet/ip_var.h>
-#include <netinet/ip_options.h>
+#include <bsd/sys/netinet/ip_icmp.h>
+#include <bsd/sys/netinet/icmp_var.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/ip_options.h>
 #ifdef INET6
 #include <netinet6/ip6_var.h>
 #endif
-#include <netinet/udp.h>
-#include <netinet/udp_var.h>
-
-#ifdef IPSEC
-#include <netipsec/ipsec.h>
-#include <netipsec/esp.h>
-#endif
-
-#include <machine/in_cksum.h>
-
-#include <security/mac/mac_framework.h>
+#include <bsd/sys/netinet/udp.h>
+#include <bsd/sys/netinet/udp_var.h>
 
 /*
  * UDP protocol implementation.
@@ -227,16 +202,6 @@ udp_discardcb(struct udpcb *up)
 
 	uma_zfree(V_udpcb_zone, up);
 }
-
-#ifdef VIMAGE
-void
-udp_destroy(void)
-{
-
-	in_pcbinfo_destroy(&V_udbinfo);
-	uma_zdestroy(V_udpcb_zone);
-}
-#endif
 
 #ifdef INET
 /*
@@ -627,7 +592,7 @@ badunlocked:
  * collect error status.
  */
 struct inpcb *
-udp_notify(struct inpcb *inp, int errno)
+udp_notify(struct inpcb *inp, int errval)
 {
 
 	/*
@@ -638,7 +603,7 @@ udp_notify(struct inpcb *inp, int errno)
 	 */
 	INP_LOCK_ASSERT(inp);
 
-	inp->inp_socket->so_error = errno;
+	inp->inp_socket->so_error = errval;
 	sorwakeup(inp->inp_socket);
 	sowwakeup(inp->inp_socket);
 	return (inp);
@@ -690,6 +655,7 @@ udp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 }
 #endif /* INET */
 
+#if 0
 static int
 udp_pcblist(SYSCTL_HANDLER_ARGS)
 {
@@ -839,6 +805,7 @@ SYSCTL_PROC(_net_inet_udp, OID_AUTO, getcred,
     CTLTYPE_OPAQUE|CTLFLAG_RW|CTLFLAG_PRISON, 0, 0,
     udp_getcred, "S,xucred", "Get the xucred of a UDP connection");
 #endif /* INET */
+#endif
 
 int
 udp_ctloutput(struct socket *so, struct sockopt *sopt)
@@ -1083,7 +1050,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
 			goto release;
 		}
 		error = in_pcbbind_setup(inp, (struct sockaddr *)&src,
-		    &laddr.s_addr, &lport, td->td_ucred);
+		    &laddr.s_addr, &lport, 0);
 		if (error)
 			goto release;
 	}
@@ -1104,14 +1071,6 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
 		}
 
 		/*
-		 * Jail may rewrite the destination address, so let it do
-		 * that before we use it.
-		 */
-		error = prison_remote_ip4(td->td_ucred, &sin->sin_addr);
-		if (error)
-			goto release;
-
-		/*
 		 * If a local address or port hasn't yet been selected, or if
 		 * the destination address needs to be rewritten due to using
 		 * a special INADDR_ constant, invoke in_pcbconnect_setup()
@@ -1128,8 +1087,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
 		    sin->sin_addr.s_addr == INADDR_BROADCAST) {
 			INP_HASH_LOCK_ASSERT(&V_udbinfo);
 			error = in_pcbconnect_setup(inp, addr, &laddr.s_addr,
-			    &lport, &faddr.s_addr, &fport, NULL,
-			    td->td_ucred);
+			    &lport, &faddr.s_addr, &fport, NULL, 0);
 			if (error)
 				goto release;
 
@@ -1142,12 +1100,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
 			    inp->inp_lport == 0) {
 				INP_WLOCK_ASSERT(inp);
 				INP_HASH_WLOCK_ASSERT(&V_udbinfo);
-				/*
-				 * Remember addr if jailed, to prevent
-				 * rebinding.
-				 */
-				if (prison_flag(td->td_ucred, PR_IP4))
-					inp->inp_laddr = laddr;
+				inp->inp_laddr = laddr;
 				inp->inp_lport = lport;
 				if (in_pcbinshash(inp) != 0) {
 					inp->inp_lport = 0;
@@ -1482,7 +1435,7 @@ udp_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 	KASSERT(inp != NULL, ("udp_bind: inp == NULL"));
 	INP_WLOCK(inp);
 	INP_HASH_WLOCK(&V_udbinfo);
-	error = in_pcbbind(inp, nam, td->td_ucred);
+	error = in_pcbbind(inp, nam, 0);
 	INP_HASH_WUNLOCK(&V_udbinfo);
 	INP_WUNLOCK(inp);
 	return (error);
@@ -1521,13 +1474,8 @@ udp_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
 		return (EISCONN);
 	}
 	sin = (struct sockaddr_in *)nam;
-	error = prison_remote_ip4(td->td_ucred, &sin->sin_addr);
-	if (error != 0) {
-		INP_WUNLOCK(inp);
-		return (error);
-	}
 	INP_HASH_WLOCK(&V_udbinfo);
-	error = in_pcbconnect(inp, nam, td->td_ucred);
+	error = in_pcbconnect(inp, nam, 0);
 	INP_HASH_WUNLOCK(&V_udbinfo);
 	if (error == 0)
 		soisconnected(so);

@@ -70,11 +70,11 @@
 #include <netinet/tcp.h>
 #include <netinet/tcp_timer.h>
 #include <netinet/tcp_var.h>
-#include <netinet/udp.h>
-#include <netinet/udp_var.h>
 #include <netinet/ip_encap.h>
 #endif
 
+#include <bsd/sys/netinet/udp.h>
+#include <bsd/sys/netinet/udp_var.h>
 /*
  * TCP/IP protocol family: IP, ICMP, UDP, TCP.
  */
@@ -117,9 +117,20 @@ struct protosw inetsw[] = {
     .pr_drain =     ip_drain,
     .pr_usrreqs =       &nousrreqs
 },
-/* UDP */
-IPPROTOSPACER,
-/* TCP */
+{
+    .pr_type =      SOCK_DGRAM,
+    .pr_domain =        &inetdomain,
+    .pr_protocol =      IPPROTO_UDP,
+    .pr_flags =     PR_ATOMIC|PR_ADDR,
+    .pr_input =     udp_input,
+    .pr_ctlinput =      udp_ctlinput,
+    .pr_ctloutput =     udp_ctloutput,
+    .pr_init =      udp_init,
+#ifdef VIMAGE
+    .pr_destroy =       udp_destroy,
+#endif
+    .pr_usrreqs =       &udp_usrreqs
+},/* TCP */
 IPPROTOSPACER,
 {
     .pr_type =      SOCK_RAW,

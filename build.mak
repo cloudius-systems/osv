@@ -173,6 +173,7 @@ bsd += bsd/sys/netinet/ip_output.o
 bsd += bsd/sys/netinet/ip_options.o
 bsd += bsd/sys/netinet/raw_ip.o
 bsd += bsd/sys/netinet/igmp.o
+bsd += bsd/sys/netinet/udp_usrreq.o
 bsd += bsd/sys/xdr/xdr.o
 bsd += bsd/sys/xdr/xdr_array.o
 bsd += bsd/sys/xdr/xdr_mem.o
