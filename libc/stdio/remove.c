@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
-#include "syscall.h"
 
 int remove(const char *path)
 {

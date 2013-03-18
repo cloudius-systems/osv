@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <time.h>
 #include "libc.h"
-#include "syscall.h"
 #include "atomic.h"
 
 #define MAXTRIES 100
