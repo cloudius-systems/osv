@@ -9,6 +9,7 @@
 #include <sys/resource.h>
 #include <pwd.h>
 #include <sys/utsname.h>
+#include <osv/debug.h>
 #include <sched.h>
 
 int libc_error(int err)
@@ -36,7 +37,17 @@ int getrlimit(int resource, struct rlimit *rlim)
     case RLIMIT_NOFILE:
         set(1024*10); // FIXME: larger?
         break;
+    case RLIMIT_CORE:
+        set(RLIM_INFINITY);
+        break;
+    case RLIMIT_NPROC:
+        set(RLIM_INFINITY);
+        break;
+    case RLIMIT_AS:
+        set(RLIM_INFINITY);
+        break;
     default:
+        kprintf("getrlimit: resource %d not supported\n", resource);
         abort();
     }
     return 0;
