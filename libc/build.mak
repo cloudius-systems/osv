@@ -337,11 +337,8 @@ libc += misc/get_current_dir_name.o
 libc += misc/gethostid.o
 libc += misc/getopt.o
 libc += misc/getopt_long.o
-libc += misc/getresuid.o
-libc += misc/getresgid.o
 libc += misc/getsubopt.o
 libc += misc/realpath.o
-libc += misc/setdomainname.o
 
 libc += multibyte/btowc.o
 libc += multibyte/internal.o
