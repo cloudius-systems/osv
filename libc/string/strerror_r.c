@@ -1,5 +1,16 @@
-#include <string.h>
+
+#include <sys/types.h>
 #include <errno.h>
+
+/*
+ * Glibc provides two incompatible versions of strerror_r and uses
+ * redirection magic for the XPG compliants ones in <string.h>,
+ * so we must avoid including that header as long as we use the glibc
+ * headers instead of the musl ones.
+ */
+extern char *strerror (int);
+extern size_t strlen (const char *);
+extern void *memcpy (void *__restrict, const void *__restrict, size_t);
 
 int strerror_r(int err, char *buf, size_t buflen)
 {
