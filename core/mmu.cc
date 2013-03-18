@@ -105,7 +105,7 @@ pt_element make_pte(phys addr, unsigned perm)
     if (perm & perm_write) {
         pte |= 0x2;
     }
-    if (!(perm * perm_exec)) {
+    if (!(perm & perm_exec)) {
         pte |= pt_element(0x8000000000000000);
     }
     return pte;
