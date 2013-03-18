@@ -6,7 +6,8 @@
 #include "tst-hub.hh"
 
 extern "C" {
-#include <bsd/porting/synch.h>
+    #include <bsd/porting/netport.h>
+    #include <bsd/porting/synch.h>
 }
 
 #define dbg_d(...) \

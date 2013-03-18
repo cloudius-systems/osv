@@ -10,9 +10,6 @@
 
 int osv_curtid(void);
 
-struct knote {
-    int __unused;
-};
 
 #define priv_check_cred(...)        (0)
 #define priv_check(...)        (0)
@@ -29,14 +26,6 @@ struct knote {
 #endif
 
 #include <sys/types.h>
-
-/*
- * User credential, some function use this as arguments,
- * later on we'll have wrappers for them.
- */
-struct ucred {
-    int __unused;
-};
 
 /* Implemented in bsd/sys/kern/subr_hash.c */
 struct malloc_type;

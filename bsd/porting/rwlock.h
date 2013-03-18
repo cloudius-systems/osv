@@ -36,7 +36,6 @@
 extern "C" {
 #endif
 
-#include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
 #define LO_INITIALIZED  0x00010000  /* Lock has been initialized. */
