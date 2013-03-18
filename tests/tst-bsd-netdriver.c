@@ -67,7 +67,6 @@ static char *if_name = "tst-netdriver";
 static char *if_name1 = "tst-netdriver0";
 static char *if_ip = "198.0.0.4";
 static char *if_gw = "198.0.0.1";
-static char *if_baddr = "198.0.0.255";
 static int masklen = 24;
 
 static struct callout fake_isr;
@@ -467,7 +466,7 @@ int main(void)
     /* Create interface */
     create_if();
 
-    osv_start_if(if_name1, if_ip, if_baddr, masklen);
+    osv_start_if(if_name1, if_ip, masklen);
     osv_ifup(if_name1);
 
     /* Add ARP */

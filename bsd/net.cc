@@ -67,7 +67,7 @@ void net_init(void)
     vnet_loif_init();
 
     /* Start the loopback device */
-    osv_start_if("lo0", "127.0.0.1", NULL, 24);
+    osv_start_if("lo0", "127.0.0.1", 24);
     osv_ifup("lo0");
 
 

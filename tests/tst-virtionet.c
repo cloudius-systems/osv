@@ -63,7 +63,6 @@ static char *gw_eaddr_cstr = "52:54:00:7b:65:17";
 static char *if_name1 = "virtio-net0";
 static char *if_ip = "198.0.0.4";
 static char *if_gw = "198.0.0.1";
-static char *if_baddr = "198.0.0.255";
 static int masklen = 24;
 
 /* Try to read from the socket in test1 */
@@ -145,7 +144,7 @@ int main(void)
     char if_addr_cstr[6+6];
     TLOG("Virtionet Driver Test BEGIN");
 
-    osv_start_if(if_name1, if_ip, if_baddr, masklen);
+    osv_start_if(if_name1, if_ip, masklen);
     osv_ifup(if_name1);
 
     if_addr = osv_get_if_mac_addr(if_name1);

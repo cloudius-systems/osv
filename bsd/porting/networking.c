@@ -11,8 +11,7 @@
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 
-void osv_start_if(const char* if_name, const char* ip_addr,
-    const char* bcast_addr, int masklen)
+void osv_start_if(const char* if_name, const char* ip_addr, int masklen)
 {
     struct in_aliasreq ifra;
     struct sockaddr_in* addr = &ifra.ifra_addr;
@@ -40,6 +39,8 @@ void osv_start_if(const char* if_name, const char* ip_addr,
     if_rele(ifp);
 }
 
+
+/* FIXME: Read flags first, then logical OR them with IFF_UP */
 void osv_ifup(const char* if_name)
 {
     struct ifreq ifr = {0};
