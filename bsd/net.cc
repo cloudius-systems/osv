@@ -4,6 +4,9 @@ extern "C" {
     #include <sys/time.h>
 
     #include <bsd/porting/netport.h>
+    #include <bsd/porting/networking.h>
+    #include <bsd/porting/route.h>
+
     #include <bsd/sys/sys/libkern.h>
     #include <bsd/sys/sys/eventhandler.h>
     #include <bsd/sys/sys/mbuf.h>
@@ -62,6 +65,11 @@ void net_init(void)
     domainfinalize(NULL);
     if_attachdomain(NULL);
     vnet_loif_init();
+
+    /* Start the loopback device */
+    osv_start_if("lo0", "127.0.0.1", NULL, 24);
+    osv_ifup("lo0");
+
 
     debug("Done!");
 }
