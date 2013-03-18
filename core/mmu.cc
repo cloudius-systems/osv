@@ -260,7 +260,6 @@ void unpopulate_page(void* addr)
             // it is ok to free pieces of a alloc_huge_page() with free_page()
             split_large_page(ptep, level);
         }
-        assert(!pte_large(*ptep));
         pte = *ptep;
         --level;
         pt = phys_cast<pt_element>(pte_phys(pte));
@@ -434,6 +433,110 @@ vma* map_file(void* addr, size_t size, unsigned perm,
     vma* ret = allocate(start, start + size, ffill, perm);
     return ret;
 }
+
+void change_perm(pt_element *ptep, unsigned int perm)
+{
+    if (perm & perm_write)
+        *ptep |= 0x2;
+    else
+        *ptep &= ~0x2;
+
+    if (!(perm & perm_exec))
+        *ptep |= pt_element(0x8000000000000000);
+    else
+        *ptep &= ~pt_element(0x8000000000000000);
+
+    // TODO: we ignore here perm & perm_read, breaking mmap()'s
+    // ability to set PROT_NONE, i.e., unaccessible memory.
+    // We could have zeroed the present bit in this case, but
+    // the problem is that if the present bit is unset, it also
+    // tells us (e.g., in unpopulate()) that the memory is
+    // unmapped. So to support !perm_read, we'll need to change
+    // the code....
+}
+
+int protect_page(void *addr, unsigned int perm)
+{
+    pt_element pte = processor::read_cr3();
+    auto pt = phys_cast<pt_element>(pte_phys(pte));
+    auto ptep = &pt[pt_index(addr, nlevels - 1)];
+    unsigned level = nlevels - 1;
+    while (level > 0) {
+        if (!pte_present(*ptep))
+            return 0;
+        else if (pte_large(*ptep)) {
+            // We're trying to change the protection of part of a huge page, so
+            // we need to split the huge page into small pages. This is fine
+            // because in in our implementation it is ok to free pieces of a
+            // alloc_huge_page() with free_page()
+            split_large_page(ptep, level);
+        }
+        pte = *ptep;
+        --level;
+        pt = phys_cast<pt_element>(pte_phys(pte));
+        ptep = &pt[pt_index(addr, level)];
+    }
+    if (!pte_present(*ptep))
+        return 0;
+    change_perm(ptep, perm);
+    return 1;
+}
+
+int protect_huge_page(void *addr, unsigned int perm)
+{
+    pt_element pte = processor::read_cr3();
+    auto pt = phys_cast<pt_element>(pte_phys(pte));
+    auto ptep = &pt[pt_index(addr, nlevels - 1)];
+    unsigned level = nlevels - 1;
+    while (level > 1) {
+        if (!pte_present(*ptep))
+            return 0;
+        else if (pte_large(*ptep))
+            split_large_page(ptep, level);
+        pte = *ptep;
+        --level;
+        pt = phys_cast<pt_element>(pte_phys(pte));
+        ptep = &pt[pt_index(addr, level)];
+    }
+    if (!pte_present(*ptep))
+        return 0;
+
+    if (pte_large(*ptep)){
+        change_perm(ptep, perm);
+        return 1;
+    } else {
+        int ret = 1;
+        pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
+        for(int i=0; i<pte_per_page; ++i)
+            if(pte_present(pt[i]))
+                change_perm(&pt[i], perm);
+            else
+                ret = 0;
+        return ret;
+    }
+}
+
+int protect(void *start, size_t size, unsigned int perm)
+{
+    void *end = start+size; // one byte after the end
+    void *hp_start = (void*) ((((uintptr_t)start-1) & ~(huge_page_size-1)) +
+            huge_page_size);
+    void *hp_end = (void*) ((uintptr_t)end & ~(huge_page_size-1));
+    if (hp_start > end)
+        hp_start = end;
+    if (hp_end < start)
+        hp_end = start;
+
+    int ret=1;
+    for (auto addr = start; addr < hp_start; addr += page_size)
+        ret &= protect_page(addr, perm);
+    for (auto addr = hp_start; addr < hp_end; addr += huge_page_size)
+        ret &= protect_huge_page(addr, perm);
+    for (auto addr = hp_end; addr < end; addr += page_size)
+        ret &= protect_page(addr, perm);
+    return ret;
+}
+
 
 namespace {
 

@@ -38,6 +38,28 @@ public:
         }
         munmap(buf, hugepagesize*9+4096);
 
+        // test mprotect. Fault-causing tests commented out until I write a
+        // framework for verifing these faults.
+        buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+//        debug("testing write ok");
+//        *(char*)buf = 0;
+//        debug("testing write failure");
+        mprotect(buf, 4096, PROT_READ);
+//        *(char*)buf = 0;
+        munmap(buf, 4096);
+        // test mprotect with part of huge page
+        buf = mmap(NULL, 3*hugepagesize, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        void *hp = (void*) (((uintptr_t)buf&~(hugepagesize-1))+hugepagesize);
+        mprotect(hp+4096, 4096, PROT_READ);
+//        debug("should be fine");
+//        *(char*)hp = 0; // should be fine
+//        debug("should be fine");
+//        *(char*)(hp+8192) = 0; // should be fine
+//        debug("should croak");
+//        *(char*)(hp+4096) = 0; // should croak
+        munmap(buf, 3*hugepagesize);
+
+
         // TODO: verify that mmapping more than available physical memory doesn't
         // panic just return -1 and ENOMEM.
         // TODO: verify that huge-page-sized allocations get a huge-page aligned address

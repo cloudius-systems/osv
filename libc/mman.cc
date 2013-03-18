@@ -20,7 +20,21 @@ unsigned libc_prot_to_perm(int prot)
 
 int mprotect(void *addr, size_t len, int prot)
 {
-    debug("stub mprotect()");
+    if(!(prot & PROT_READ)){
+        // FIXME: currently we do not implement PROT_NONE :( see change_perm()...
+        debug(fmt("mprotect(%x,%d,0x%x) - PROT_NONE unimplemented, using PROT_READ\n")%addr%len%prot,false);
+    }
+    if ((reinterpret_cast<intptr_t>(addr) & 4095) || (len & 4095)) {
+        // address not page aligned
+        errno = EINVAL;
+        return -1;
+    }
+    if (!mmu::protect(addr, len, libc_prot_to_perm(prot))) {
+        // NOTE: we return ENOMEM when part of the range was not mapped,
+        // but nevertheless, set the protection on the rest!
+        errno = ENOMEM;
+        return -1;
+    }
     return 0;
 }
 
