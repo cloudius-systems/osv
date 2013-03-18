@@ -54,6 +54,9 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/igmp_var.h>
 
+#include <bsd/sys/netinet/udp.h>
+#include <bsd/sys/netinet/udp_var.h>
+
 static int in_mask2len(struct in_addr *);
 static void in_len2mask(struct in_addr *, int);
 static int in_lifaddr_ioctl(struct socket *, u_long, caddr_t,
@@ -1246,8 +1249,7 @@ in_ifdetach(struct ifnet *ifp)
 {
 
 	in_pcbpurgeif0(&V_ripcbinfo, ifp);
-	/* FIXME: OSv - un-comment when UDP is enabled */
-	// in_pcbpurgeif0(&V_udbinfo, ifp);
+	in_pcbpurgeif0(&V_udbinfo, ifp);
 	in_purgemaddrs(ifp);
 }
 

@@ -63,9 +63,9 @@
 #include <bsd/sys/netinet/ip_var.h>
 #if 0
 #include <bsd/sys/netinet/tcp_var.h>
+#endif
 #include <bsd/sys/netinet/udp.h>
 #include <bsd/sys/netinet/udp_var.h>
-#endif
 #endif
 #ifdef INET
 #include <bsd/sys/netinet/in_var.h>
@@ -390,12 +390,10 @@ in_pcb_lport(struct inpcb *inp, struct in_addr *laddrp, u_short *lportp,
 	if (first == last)
 		dorandom = 0;
 
-	/* FIXME: OSv - undef when UDP is enabled */
-#if 0
 	/* Make sure to not include UDP packets in the count. */
 	if (pcbinfo != &V_udbinfo)
 		V_ipport_tcpallocs++;
-#endif
+
 	/*
 	 * Instead of having two loops further down counting up or down
 	 * make sure that first is always <= last and go with only one
@@ -574,7 +572,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 				 * being in use (for now).  This is better
 				 * than a panic, but not desirable.
 				 */
-/* FIXME: OSv: undef when we have TCP/UDP */
+/* FIXME: OSv: undef when we have TCP */
 #if 0
 				tw = intotw(t);
 				if (tw == NULL ||
