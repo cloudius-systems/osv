@@ -264,7 +264,7 @@ void thread::wake()
     // FIXME: warrant an interruption
     if (_cpu != current()->tcpu()) {
         wakeup_ipi.send(_cpu);
-    } else if (arch::irq_enabled()) {
+    } else if (arch::irq_enabled() && !preempt_counter) {
         _cpu->schedule();
         // We'll also reschedule at the end of an interrupt if needed
     }
