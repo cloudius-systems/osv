@@ -8,12 +8,9 @@
 #ifndef _NET_ETHERNET_H_
 #define _NET_ETHERNET_H_
 
-#include <bsd/porting/netport.h>
-
 void ether_init(void *arg);
 void* ether_alloc(u_char type, struct ifnet *ifp);
 void ether_free(void *com, u_char type);
-
 
 /*
  * Some basic Ethernet constants.

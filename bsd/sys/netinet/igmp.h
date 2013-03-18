@@ -37,8 +37,6 @@
 #ifndef _NETINET_IGMP_H_
 #define _NETINET_IGMP_H_
 
-#include <bsd/sys/netinet/in.h>
-
 void igmp_init(void);
 void igmp_uninit(void);
 void vnet_igmp_init(void);

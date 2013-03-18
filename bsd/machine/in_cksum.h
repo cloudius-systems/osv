@@ -37,6 +37,8 @@
 
 #include <sys/cdefs.h>
 
+#include <bsd/sys/sys/mbuf.h>
+
 #define in_cksum(m, len)	in_cksum_skip(m, len, 0)
 
 #if defined(IPVERSION) && (IPVERSION == 4)

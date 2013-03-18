@@ -33,10 +33,8 @@
 #ifndef _NETINET_IN_H_
 #define	_NETINET_IN_H_
 
-#include <bsd/porting/netport.h>
-
-#include <endian.h>
 #include <sys/cdefs.h>
+#include <bsd/machine/endian.h>
 
 /* Protocols common to RFC 1700, POSIX, and X/Open. */
 #define	IPPROTO_IP		0		/* dummy for IP */
@@ -73,7 +71,7 @@ typedef	uint16_t		in_port_t;
 #endif
 
 #ifndef _SA_FAMILY_T_DECLARED
-typedef	__sa_family_t		sa_family_t;
+typedef	uint8_t			sa_family_t;
 #define	_SA_FAMILY_T_DECLARED
 #endif
 

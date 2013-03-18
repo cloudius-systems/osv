@@ -33,11 +33,8 @@
 #ifndef _NETINET_IF_ETHER_H_
 #define _NETINET_IF_ETHER_H_
 
-#include <bsd/porting/netport.h>
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/if_arp.h>
-#include <bsd/sys/netinet/in.h>
-
 
 void    arp_init(void);
 

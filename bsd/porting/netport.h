@@ -10,7 +10,6 @@
 
 int osv_curtid(void);
 
-
 #define priv_check_cred(...)        (0)
 #define priv_check(...)        (0)
 
@@ -20,10 +19,6 @@ int osv_curtid(void);
 #define intotw(ip)  ((struct tcptw *)(ip)->inp_ppcb)
 #define sototcpcb(so)   (intotcpcb(sotoinpcb(so)))
 
-
-#ifndef _KERNEL
-    #define _KERNEL 1
-#endif
 
 #include <sys/types.h>
 
@@ -95,12 +90,6 @@ int tvtohz(struct timeval *tv);
 #define panic(...) abort()
 
 #define log(x, fmt, ...) do {} while(0)
-
-#ifndef __BSD_VISIBLE
-    #define __BSD_VISIBLE (1)
-#endif
-
-typedef __uint8_t   __sa_family_t;
 
 #define PAGE_SIZE (4096)
 #define PAGE_MASK (PAGE_SIZE-1)

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#define _KERNEL
+
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/net/netisr.h>
 

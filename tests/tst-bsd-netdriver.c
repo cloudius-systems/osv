@@ -30,6 +30,8 @@
 #include <unistd.h>
 #include <osv/debug.h>
 
+#define _KERNEL
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/networking.h>
 #include <bsd/porting/route.h>

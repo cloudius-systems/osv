@@ -33,7 +33,6 @@
 #ifndef _NET_ROUTE_H_
 #define _NET_ROUTE_H_
 
-#include <bsd/porting/netport.h>
 #include <osv/mutex.h>
 
 void rts_init(void);

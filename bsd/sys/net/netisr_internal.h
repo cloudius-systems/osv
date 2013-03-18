@@ -33,8 +33,6 @@
 #ifndef _NET_NETISR_INTERNAL_H_
 #define	_NET_NETISR_INTERNAL_H_
 
-#include <bsd/porting/netport.h>
-
 #ifndef _WANT_NETISR_INTERNAL
 #error "no user-serviceable parts inside"
 #endif

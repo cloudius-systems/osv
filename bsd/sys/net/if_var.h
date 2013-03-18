@@ -33,9 +33,6 @@
 #ifndef	_NET_IF_VAR_H_
 #define	_NET_IF_VAR_H_
 
-#include <bsd/porting/rwlock.h>
-#include <bsd/sys/net/if.h>
-
 __BEGIN_DECLS
 
 /*
@@ -79,13 +76,19 @@ struct	route;
 struct	vnet;
 #endif
 
-#include <bsd/porting/netport.h>
 #include <bsd/sys/sys/queue.h>		/* get TAILQ macros */
+
+#ifdef _KERNEL
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/eventhandler.h>
 #include <bsd/sys/sys/buf_ring.h>
 #include <bsd/sys/net/vnet.h>
+#endif /* _KERNEL */
+
+#include <bsd/sys/net/if.h>
 #include <bsd/sys/sys/socket.h>
+#include <bsd/porting/rwlock.h>
+#include <bsd/porting/sync_stub.h>
 
 #define	IF_DUNIT_NONE	-1
 

@@ -1,3 +1,6 @@
+
+#define _KERNEL
+
 #include <sys/cdefs.h>
 
 #include "drivers/virtio.hh"

@@ -307,6 +307,12 @@
 #ifndef LOCORE
 #ifndef _BYTEORDER_PROTOTYPED
 #define	_BYTEORDER_PROTOTYPED
+__BEGIN_DECLS
+__uint32_t	 htonl(__uint32_t);
+__uint16_t	 htons(__uint16_t);
+__uint32_t	 ntohl(__uint32_t);
+__uint16_t	 ntohs(__uint16_t);
+__END_DECLS
 #endif
 #endif
 

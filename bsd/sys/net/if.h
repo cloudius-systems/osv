@@ -33,12 +33,14 @@
 #ifndef _NET_IF_H_
 #define	_NET_IF_H_
 
-#include <time.h>
-
-#include <bsd/porting/netport.h>
 #include <sys/cdefs.h>
+
+#include <time.h>
 #include <bsd/sys/sys/socket.h>
+
+#ifdef _KERNEL
 #include <bsd/sys/sys/queue.h>
+#endif
 
 void if_init(void *__unused);
 void vnet_if_init(const void *__unused);

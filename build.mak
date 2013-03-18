@@ -5,7 +5,7 @@ cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
-	-U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
+	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
 	$(configuration)
 
@@ -253,6 +253,8 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
+
+bsd/%.o: COMMON += -D _KERNEL
 
 java/java.so: java/java.o
 java/java.o: CXXFLAGS += -fPIC

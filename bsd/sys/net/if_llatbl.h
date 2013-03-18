@@ -29,7 +29,6 @@
 #ifndef	_NET_IF_LLATBL_H_
 #define	_NET_IF_LLATBL_H_
 
-#include <bsd/porting/netport.h>
 #include <bsd/porting/callout.h>
 #include <bsd/porting/rwlock.h>
 
