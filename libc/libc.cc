@@ -9,6 +9,7 @@
 #include <sys/resource.h>
 #include <pwd.h>
 #include <sys/utsname.h>
+#include <sys/sysinfo.h>
 #include <osv/debug.h>
 #include <sched.h>
 
@@ -122,3 +123,10 @@ int getloadavg(double loadavg[], int nelem)
 
     return 0;
 }
+
+extern "C" int sysinfo(struct sysinfo *info)
+{
+    memset(info, 0, sizeof(struct sysinfo));
+    return 0;
+}
+
