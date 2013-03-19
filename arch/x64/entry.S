@@ -97,7 +97,7 @@ exception_error_entry interrupt_entry_common, interrupt
 thread_main:
 	.cfi_startproc simple
 	.cfi_def_cfa %rsp, 0
-	pop %rdi
+	mov %rbp, %rdi
 	call thread_main_c
 	.cfi_endproc
 
