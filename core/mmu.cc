@@ -99,6 +99,18 @@ void allocate_intermediate_level(pt_element *ptep)
     *ptep = pt_page | 0x63;
 }
 
+void free_intermediate_level(pt_element *ptep)
+{
+    phys page=pte_phys(*ptep);
+    assert(page);
+    pt_element *pt = phys_cast<pt_element>(page);
+    for (auto i = 0; i < pte_per_page; ++i) {
+        assert(pt[i]==0); // don't free a level which still has pages!
+    }
+    memory::free_page(phys_to_virt(page));
+    *ptep=0;
+}
+
 pt_element make_pte(phys addr, unsigned perm)
 {
     pt_element pte = addr | 0x61;
@@ -170,6 +182,7 @@ void populate_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
     }
     phys page = alloc_page();
     fill.fill(phys_to_virt(page), offset);
+    assert(pte_phys(*ptep)==0); // don't populate an already populated page!
     *ptep = make_pte(page, perm);
 }
 
@@ -195,6 +208,11 @@ void populate_huge_page(void* addr, fill_page& fill, uint64_t offset, unsigned p
     for (int i=0; i<pte_per_page; i++){
         fill.fill(phys_to_virt(page+o), offset+o);
         o += page_size;
+    }
+    if (pte_phys(*ptep)) {
+        assert(!pte_large(*ptep)); // don't populate an already populated page!
+        // held smallpages (already evacuated), now will be used for huge page
+        free_intermediate_level(ptep);
     }
     *ptep = make_pte(page, perm) | (1<<7);
 }
@@ -225,7 +243,7 @@ void populate(vma& vma, fill_page& fill, unsigned perm)
     if (hp_start > vma.end())
         hp_start = vma.end();
     if (hp_end < vma.start())
-        hp_end = vma.start();
+        hp_end = vma.end();
 
     /* Step 1: Break up the partial huge page (if any) in the beginning of the
      * address range, and populate the small pages.
@@ -265,10 +283,13 @@ void unpopulate_page(void* addr)
         pt = phys_cast<pt_element>(pte_phys(pte));
         ptep = &pt[pt_index(addr, level)];
     }
-    if (!pte_present(*ptep))
-        return;
-    *ptep &= ~1; // make not present
-    memory::free_page(phys_to_virt(pte_phys(*ptep)));
+    // Note: we free the page even if it is already marked "not present".
+    // evacuate() makes sure we are only called for allocated pages, and
+    // not-present may only mean mprotect(PROT_NONE).
+    phys page=pte_phys(*ptep);
+    assert(page); // evacuate() shouldn't call us twice for the same page.
+    memory::free_page(phys_to_virt(page));
+    *ptep = 0;
 }
 
 void unpopulate_huge_page(void* addr)
@@ -287,9 +308,14 @@ void unpopulate_huge_page(void* addr)
         pt = phys_cast<pt_element>(pte_phys(pte));
         ptep = &pt[pt_index(addr, level)];
     }
-    if (!pte_present(*ptep))
-        return;
-    if (pte_large(*ptep)){
+    if (!pte_present(*ptep)){
+        // Note: we free the page even if it is already marked "not present".
+        // evacuate() makes sure we are only called for allocated pages, and
+        // not-present may only mean mprotect(PROT_NONE).
+        phys page=pte_phys(*ptep);
+        assert(page); // evacuate() shouldn't call us twice for the same page.
+        memory::free_huge_page(phys_to_virt(page), huge_page_size);
+    } else if (pte_large(*ptep)){
         memory::free_huge_page(phys_to_virt(pte_phys(*ptep)), huge_page_size);
     } else {
         // We've previously allocated small pages here, not a huge pages.
@@ -300,7 +326,7 @@ void unpopulate_huge_page(void* addr)
             if (pte_present(pt[i]))
                 memory::free_page(phys_to_virt(pte_phys(pt[i])));
     }
-    *ptep &= ~1; // make not present
+    *ptep = 0;
 }
 
 /*
@@ -314,7 +340,7 @@ void unpopulate(vma& vma)
     if (hp_start > vma.end())
         hp_start = vma.end();
     if (hp_end < vma.start())
-        hp_end = vma.start();
+        hp_end = vma.end();
 
     for (auto addr = vma.start(); addr < hp_start; addr += page_size)
         unpopulate_page(reinterpret_cast<void*>(addr));
@@ -407,10 +433,11 @@ struct fill_file_page : fill_page {
 };
 
 vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
-        unsigned perm)
+        unsigned perm, bool evac)
 {
     vma* ret = new vma(start, end);
-    evacuate(ret);
+    if (evac)
+        evacuate(ret);
     vma_list.insert(*ret);
 
     populate(*ret, fill, perm);
@@ -418,19 +445,19 @@ vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
     return ret;
 }
 
-vma* map_anon(void* addr, size_t size, unsigned perm)
+vma* map_anon(void* addr, size_t size, unsigned perm, bool evac)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    return allocate(start, start + size, zfill, perm);
+    return allocate(start, start + size, zfill, perm, evac);
 }
 
 vma* map_file(void* addr, size_t size, unsigned perm,
-              file& f, f_offset offset)
+              file& f, f_offset offset, bool evac)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_file_page ffill(f, offset, f.size());
-    vma* ret = allocate(start, start + size, ffill, perm);
+    vma* ret = allocate(start, start + size, ffill, perm, evac);
     return ret;
 }
 
@@ -525,7 +552,7 @@ int protect(void *start, size_t size, unsigned int perm)
     if (hp_start > end)
         hp_start = end;
     if (hp_end < start)
-        hp_end = start;
+        hp_end = end;
 
     int ret=1;
     for (auto addr = start; addr < hp_start; addr += page_size)

@@ -70,7 +70,7 @@ namespace pthread_private {
     {
         size_t size = 1024*1024;
         auto vma = mmu::reserve(nullptr, size);
-        mmu::map_anon(vma->addr(), vma->size(), mmu::perm_rw);
+        mmu::map_anon(vma->addr(), vma->size(), mmu::perm_rw, false);
         return { vma->addr(), vma->size() };
     }
 
