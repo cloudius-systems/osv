@@ -1,5 +1,5 @@
 
-mode=debug
+mode=release
 
 out = build/$(mode)
 submake = $(out)/Makefile
