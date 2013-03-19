@@ -77,6 +77,7 @@ void *__dso_handle;
 
 void abort()
 {
+    kprintf("Aborted\n");
     while (true)
 	processor::halt_no_interrupts();
 }

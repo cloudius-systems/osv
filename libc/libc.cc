@@ -9,6 +9,8 @@
 #include <sys/resource.h>
 #include <pwd.h>
 #include <sys/utsname.h>
+#include <sys/sysinfo.h>
+#include <osv/debug.h>
 #include <sched.h>
 
 int libc_error(int err)
@@ -36,7 +38,17 @@ int getrlimit(int resource, struct rlimit *rlim)
     case RLIMIT_NOFILE:
         set(1024*10); // FIXME: larger?
         break;
+    case RLIMIT_CORE:
+        set(RLIM_INFINITY);
+        break;
+    case RLIMIT_NPROC:
+        set(RLIM_INFINITY);
+        break;
+    case RLIMIT_AS:
+        set(RLIM_INFINITY);
+        break;
     default:
+        kprintf("getrlimit: resource %d not supported\n", resource);
         abort();
     }
     return 0;
@@ -101,3 +113,20 @@ int sched_yield()
     sched::thread::yield();
     return 0;
 }
+
+int getloadavg(double loadavg[], int nelem)
+{
+    int i;
+
+    for (i = 0; i < nelem; i++)
+        loadavg[i] = 0.5;
+
+    return 0;
+}
+
+extern "C" int sysinfo(struct sysinfo *info)
+{
+    memset(info, 0, sizeof(struct sysinfo));
+    return 0;
+}
+

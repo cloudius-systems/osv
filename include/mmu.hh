@@ -40,6 +40,7 @@ vma* map_file(void* addr, size_t size, unsigned perm,
               file& file, f_offset offset);
 vma* map_anon(void* addr, size_t size, unsigned perm);
 void unmap(void* addr, size_t size);
+int protect(void *addr, size_t size, unsigned int perm);
 
 typedef uint64_t phys;
 phys virt_to_phys(void *virt);

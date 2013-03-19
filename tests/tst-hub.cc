@@ -7,6 +7,7 @@
 #include "tst-rwlock.hh"
 #include "tst-bsd-synch.hh"
 #include "tst-queue-mpsc.hh"
+#include "tst-mmap.hh"
 
 using namespace unit_tests;
 
@@ -19,6 +20,7 @@ void tests::execute_tests() {
     test_rwlock rwlock;
     test_synch synch;
     test_queue_mpsc q1;
+    test_mmap mmap;
 
     instance().register_test(&threads);
     instance().register_test(&malloc);
@@ -28,6 +30,7 @@ void tests::execute_tests() {
     instance().register_test(&rwlock);
     instance().register_test(&synch);
     instance().register_test(&q1);
+    instance().register_test(&mmap);
 
     instance().run();
 }

@@ -1,6 +1,7 @@
 #include <dlfcn.h>
 #include "elf.hh"
 #include <link.h>
+#include <osv/debug.h>
 
 void* dlopen(const char* filename, int flags)
 {
@@ -56,4 +57,11 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
         }
     });
     return ret;
+}
+
+extern "C" int dladdr(__const void *addr, Dl_info *info)
+{
+    kprintf("stub dladdr()\n");
+    errno = EINVAL;
+    return -1;
 }
