@@ -457,7 +457,7 @@ m_gettype(int size)
 static __inline uma_zone_t
 m_getzone(int size)
 {
-	uma_zone_t zone;
+	uma_zone_t zone = 0;
 
 	switch (size) {
 	case MSIZE:
@@ -478,8 +478,8 @@ m_getzone(int size)
 		zone = zone_jumbo16;
 		break;
 	default:
-		/* panic("%s: m_getjcl: invalid cluster type", __func__); */
-	    break;
+		panic("%s: m_getjcl: invalid cluster type", __func__);
+		break;
 	}
 
 	return (zone);
