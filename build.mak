@@ -9,8 +9,9 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
 	$(configuration)
 
-tracing-flags =
-#tracing-flags = -finstrument-functions -finstrument-functions-exclude-file-list=atomic,trace.cc
+tracing-flags-0 =
+tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=atomic,trace.cc
+tracing-flags = $(tracing-flags-$(conf-tracing))
 
 CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
