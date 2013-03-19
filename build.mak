@@ -65,7 +65,7 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(makedir)
 	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^, JAVAC $@)
 
-tests/%.o: CFLAGS += -fPIC
+tests/%.o: COMMON += -fPIC
 
 %.so: CFLAGS+=-fPIC -shared
 %.so: %.o
