@@ -84,7 +84,7 @@ class osv_heap(gdb.Command):
         page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
         page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
         self.show(node['left_'])
-        print page_range, page_range['size']
+        print '%s 0x%016x' % (page_range, page_range['size'])
         self.show(node['right_'])
 
 ulong_type = gdb.lookup_type('unsigned long')
