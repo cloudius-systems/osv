@@ -20,10 +20,6 @@ unsigned libc_prot_to_perm(int prot)
 
 int mprotect(void *addr, size_t len, int prot)
 {
-    if(!(prot & PROT_READ)){
-        // FIXME: currently we do not implement PROT_NONE :( see change_perm()...
-        debug(fmt("mprotect(%x,%d,0x%x) - PROT_NONE unimplemented, using PROT_READ\n")%addr%len%prot,false);
-    }
     if ((reinterpret_cast<intptr_t>(addr) & 4095) || (len & 4095)) {
         // address not page aligned
         errno = EINVAL;

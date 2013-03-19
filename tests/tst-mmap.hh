@@ -59,6 +59,22 @@ public:
 //        *(char*)(hp+4096) = 0; // should croak
         munmap(buf, 3*hugepagesize);
 
+        buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        //debug("testing read ok");
+        //char z = *(char*)buf;
+        //debug(fmt("ret %d")%z);
+        //debug("testing read with PROT_READ");
+        mprotect(buf, 4096, PROT_READ);
+        //z = *(char*)buf ;
+        //debug(fmt("ret %d")%z);
+        //debug("testing read with PROT_NONE");
+        mprotect(buf, 4096, PROT_NONE);
+        //debug("done mprotect");
+        //z = *(char*)buf ;  // should fault!
+        //debug(fmt("ret %d")%z);
+        munmap(buf, 4096);
+
+
 
         // TODO: verify that mmapping more than available physical memory doesn't
         // panic just return -1 and ENOMEM.

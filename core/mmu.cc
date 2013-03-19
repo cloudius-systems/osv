@@ -463,6 +463,15 @@ vma* map_file(void* addr, size_t size, unsigned perm,
 
 void change_perm(pt_element *ptep, unsigned int perm)
 {
+    // Note: in x86, if the present bit (0x1) is off, not only read is
+    // disallowed, but also write and exec. So in mprotect, if any
+    // permission is requested, we must also grant read permission.
+    // Linux does this too.
+    if (perm)
+        *ptep |= 0x1;
+    else
+        *ptep &= ~0x1;
+
     if (perm & perm_write)
         *ptep |= 0x2;
     else
@@ -472,14 +481,6 @@ void change_perm(pt_element *ptep, unsigned int perm)
         *ptep |= pt_element(0x8000000000000000);
     else
         *ptep &= ~pt_element(0x8000000000000000);
-
-    // TODO: we ignore here perm & perm_read, breaking mmap()'s
-    // ability to set PROT_NONE, i.e., unaccessible memory.
-    // We could have zeroed the present bit in this case, but
-    // the problem is that if the present bit is unset, it also
-    // tells us (e.g., in unpopulate()) that the memory is
-    // unmapped. So to support !perm_read, we'll need to change
-    // the code....
 }
 
 int protect_page(void *addr, unsigned int perm)
@@ -489,7 +490,7 @@ int protect_page(void *addr, unsigned int perm)
     auto ptep = &pt[pt_index(addr, nlevels - 1)];
     unsigned level = nlevels - 1;
     while (level > 0) {
-        if (!pte_present(*ptep))
+        if (!pte_phys(*ptep))
             return 0;
         else if (pte_large(*ptep)) {
             // We're trying to change the protection of part of a huge page, so
@@ -503,7 +504,7 @@ int protect_page(void *addr, unsigned int perm)
         pt = phys_cast<pt_element>(pte_phys(pte));
         ptep = &pt[pt_index(addr, level)];
     }
-    if (!pte_present(*ptep))
+    if (!pte_phys(*ptep))
         return 0;
     change_perm(ptep, perm);
     return 1;
@@ -525,7 +526,7 @@ int protect_huge_page(void *addr, unsigned int perm)
         pt = phys_cast<pt_element>(pte_phys(pte));
         ptep = &pt[pt_index(addr, level)];
     }
-    if (!pte_present(*ptep))
+    if (!pte_phys(*ptep))
         return 0;
 
     if (pte_large(*ptep)){
@@ -535,7 +536,7 @@ int protect_huge_page(void *addr, unsigned int perm)
         int ret = 1;
         pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
         for(int i=0; i<pte_per_page; ++i)
-            if(pte_present(pt[i]))
+            if(pte_phys(pt[i]))
                 change_perm(&pt[i], perm);
             else
                 ret = 0;
