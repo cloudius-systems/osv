@@ -9,4 +9,4 @@ qemu-system-x86_64 \
 	-mon chardev=stdio,mode=readline,default \
 	-device isa-serial,chardev=stdio \
 	-device virtio-net-pci \
-	-drive file=build/debug/loader.img,if=virtio,cache=unsafe
+	-drive file=build/release/loader.img,if=virtio,cache=unsafe
