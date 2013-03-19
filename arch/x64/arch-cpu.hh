@@ -3,6 +3,7 @@
 
 #include "processor.hh"
 #include "exceptions.hh"
+#include "mempool.hh"
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -39,6 +40,14 @@ struct arch_cpu {
 
 struct arch_thread {
     char exception_stack[4096] __attribute__((aligned(16)));
+};
+
+struct arch_fpu {
+    typedef processor::fpu_state fpu_state;
+    // FIXME: xsave and friends
+    void save() { processor::fxsave(s); }
+    void restore() { processor::fxrstor(s); }
+    fpu_state* s = static_cast<fpu_state*>(memory::alloc_page());
 };
 
 inline arch_cpu::arch_cpu()

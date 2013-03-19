@@ -194,6 +194,7 @@ private:
     bool _timers_need_reload;
     bi::list<timer> _active_timers;
     arch_thread _arch;
+    arch_fpu _fpu;
     unsigned long _id;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
@@ -268,7 +269,7 @@ struct cpu {
     void do_idle();
     void load_balance();
     unsigned load();
-    void reschedule_from_interrupt();
+    void reschedule_from_interrupt(bool preempt = false);
 };
 
 void preempt();

@@ -48,7 +48,7 @@ void cpu::schedule(bool yield)
     });
 }
 
-void cpu::reschedule_from_interrupt()
+void cpu::reschedule_from_interrupt(bool preempt)
 {
     handle_incoming_wakeups();
     thread* p = thread::current();
@@ -61,7 +61,14 @@ void cpu::reschedule_from_interrupt()
     assert(n->_status.load() == thread::status::queued);
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
+        if (preempt) {
+            asm volatile("clts");
+            p->_fpu.save();
+        }
         n->switch_to();
+        if (preempt) {
+            p->_fpu.restore();
+        }
     }
 }
 
@@ -364,7 +371,7 @@ void preempt_enable()
 void preempt()
 {
     if (!preempt_counter) {
-        sched::cpu::current()->reschedule_from_interrupt();
+        sched::cpu::current()->reschedule_from_interrupt(true);
     }
 }
 
