@@ -1,1 +1,1 @@
-conf-opt = -O2 -mno-red-zone
+conf-opt = -O2
