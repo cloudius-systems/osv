@@ -64,6 +64,8 @@ inline void arch_cpu::init_on_cpu()
     lgdt(desc_ptr(nr_gdt*8-1, reinterpret_cast<u64>(&gdt)));
     ltr(gdt_tss*8);
     idt.load_on_cpu();
+    write_cr4(cr4_de | cr4_pse | cr4_pae | cr4_pge | cr4_osfxsr
+            | cr4_osxmmexcpt | cr4_fsgsbase | cr4_osxsave);
 }
 
 }
