@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
+// FIXME: libc defines these as macros referring to non-existent inlines
+#undef strspn
+#undef strcspn
+
 char *fcvt(double x, int n, int *dp, int *sign)
 {
 	char tmp[1500];
