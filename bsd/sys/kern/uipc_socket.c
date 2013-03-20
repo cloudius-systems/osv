@@ -124,24 +124,6 @@
 static int	soreceive_rcvoob(struct socket *so, struct uio *uio,
 		    int flags);
 
-#if 0
-static struct filterops solisten_filtops = {
-	.f_isfd = 1,
-	.f_detach = filt_sordetach,
-	.f_event = filt_solisten,
-};
-static struct filterops soread_filtops = {
-	.f_isfd = 1,
-	.f_detach = filt_sordetach,
-	.f_event = filt_soread,
-};
-static struct filterops sowrite_filtops = {
-	.f_isfd = 1,
-	.f_detach = filt_sowdetach,
-	.f_event = filt_sowrite,
-};
-#endif
-
 uma_zone_t socket_zone;
 so_gen_t	so_gencnt;	/* generation count for sockets */
 
@@ -337,11 +319,6 @@ socreate(int dom, struct socket **aso, int type, int proto,
 	else
 		so->so_fibnum = 0;
 	so->so_proto = prp;
-	/* FIXME: OSv - We don't support select/poll yet */
-#if 0
-	knlist_init_mtx(&so->so_rcv.sb_sel.si_note, SOCKBUF_MTX(&so->so_rcv));
-	knlist_init_mtx(&so->so_snd.sb_sel.si_note, SOCKBUF_MTX(&so->so_snd));
-#endif
 	so->so_count = 1;
 	/*
 	 * Auto-sizing of socket buffers is managed by the protocols and
@@ -405,11 +382,6 @@ sonewconn(struct socket *head, int connstatus)
 	so->so_state = head->so_state | SS_NOFDREF;
 	so->so_fibnum = head->so_fibnum;
 	so->so_proto = head->so_proto;
-	/* FIXME: OSv - We don't support select/poll yet */
-#if 0
-	knlist_init_mtx(&so->so_rcv.sb_sel.si_note, SOCKBUF_MTX(&so->so_rcv));
-	knlist_init_mtx(&so->so_snd.sb_sel.si_note, SOCKBUF_MTX(&so->so_snd));
-#endif
 	VNET_SO_ASSERT(head);
 	if (soreserve(so, head->so_snd.sb_hiwat, head->so_rcv.sb_hiwat) ||
 	    (*so->so_proto->pr_usrreqs->pru_attach)(so, 0, NULL)) {
