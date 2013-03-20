@@ -7,6 +7,7 @@
 #include <string.h>
 #include <iterator>
 #include "libc/signal.hh"
+#include "align.hh"
 
 namespace {
 
@@ -163,39 +164,89 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
     }
 }
 
-void populate_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
+/*
+ * a page_range_operation implementation operates (via the operate() method)
+ * on a page-aligned byte range of virtual memory. The range is divided into a
+ * bulk of aligned huge pages (2MB pages), and if the beginning and end
+ * addresses aren't 2MB aligned, there are additional small pages (4KB pages).
+ * The appropriate method (set_small_page() or set_huge_page()) is called for
+ * each of these pages, to implement the operation.
+ * By supporting operations directly on whole huge pages, we allow for smaller
+ * pages and better TLB efficiency.
+ *
+ * TODO: Instead of walking the page table from its root for each page (small
+ * or huge), we can more efficiently walk the page table once calling
+ * small_page/huge_page for relevant page table entries (as well as avoid
+ * repeating the necessary allocation and split code, now repeated in
+ * all our small_page()/huge_page() implementations). See linear_map for
+ * an example on how to do this walk.
+ */
+class page_range_operation {
+public:
+    void operate(void *start, size_t size);
+    void operate(vma &vma){ operate((void*)vma.start(), vma.size()); }
+protected:
+    // offset is the offset of this page in the entire address range
+    // (in case the operation needs to know this).
+    virtual void small_page(pt_element *ptep, uintptr_t offset) = 0;
+    virtual void huge_page(pt_element *ptep, uintptr_t offset) = 0;
+    virtual bool should_allocate_intermediate() = 0;
+private:
+    void operate_page(bool huge, void *addr, uintptr_t offset);
+};
+
+void page_range_operation::operate(void *start, size_t size)
 {
-    pt_element pte = processor::read_cr3();
-    auto pt = phys_cast<pt_element>(pte_phys(pte));
-    auto ptep = &pt[pt_index(addr, nlevels - 1)];
-    unsigned level = nlevels - 1;
-    while (level > 0) {
-        if (!pte_present(*ptep)) {
-            allocate_intermediate_level(ptep);
-        } else if (pte_large(*ptep)) {
-            split_large_page(ptep, level);
-        }
-        pte = *ptep;
-        --level;
-        pt = phys_cast<pt_element>(pte_phys(pte));
-        ptep = &pt[pt_index(addr, level)];
+    start = align_down(start, page_size);
+    size = align_up(size, page_size);
+    void *end = start + size; // one byte after the end
+
+    // Find the largest 2MB-aligned range inside the given byte (or actually,
+    // 4K-aligned) range:
+    auto hp_start = align_up(start, huge_page_size);
+    auto hp_end = align_down(end, huge_page_size);
+
+    // Fix the hp_start/hp_end in degenerate cases so the following
+    // loops do the right thing.
+    if (hp_start > end) {
+        hp_start = end;
     }
-    phys page = alloc_page();
-    fill.fill(phys_to_virt(page), offset);
-    assert(pte_phys(*ptep)==0); // don't populate an already populated page!
-    *ptep = make_pte(page, perm);
+    if (hp_end < start) {
+        hp_end = end;
+    }
+
+    for (void *addr = start; addr < hp_start; addr += page_size) {
+        operate_page(false, addr, (uintptr_t)addr-(uintptr_t)start);
+    }
+    for (void *addr = hp_start; addr < hp_end; addr += huge_page_size) {
+        operate_page(true, addr, (uintptr_t)addr-(uintptr_t)start);
+    }
+    for (void *addr = hp_end; addr < end; addr += page_size) {
+        operate_page(false, addr, (uintptr_t)addr-(uintptr_t)start);
+    }
 }
 
-void populate_huge_page(void* addr, fill_page& fill, uint64_t offset, unsigned perm)
+void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
 {
     pt_element pte = processor::read_cr3();
     auto pt = phys_cast<pt_element>(pte_phys(pte));
     auto ptep = &pt[pt_index(addr, nlevels - 1)];
     unsigned level = nlevels - 1;
-    while (level > 1) {
+    unsigned stopat = huge ? 1 : 0;
+    while (level > stopat) {
         if (!pte_present(*ptep)) {
-            allocate_intermediate_level(ptep);
+            if (should_allocate_intermediate()) {
+                allocate_intermediate_level(ptep);
+            } else {
+                return;
+            }
         } else if (pte_large(*ptep)) {
+            // We're trying to change a small page out of a huge page (or
+            // in the future, potentially also 2 MB page out of a 1 GB),
+            // so we need to first split the large page into smaller pages.
+            // Our implementation ensures that it is ok to free pieces of a
+            // alloc_huge_page() with free_page(), so it is safe to do such a
+            // split.
             split_large_page(ptep, level);
         }
         pte = *ptep;
@@ -203,18 +254,11 @@ void populate_huge_page(void* addr, fill_page& fill, uint64_t offset, unsigned p
         pt = phys_cast<pt_element>(pte_phys(pte));
         ptep = &pt[pt_index(addr, level)];
     }
-    phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
-    uint64_t o=0;
-    for (int i=0; i<pte_per_page; i++){
-        fill.fill(phys_to_virt(page+o), offset+o);
-        o += page_size;
+    if(huge) {
+        huge_page(ptep, offset);
+    } else {
+        small_page(ptep, offset);
     }
-    if (pte_phys(*ptep)) {
-        assert(!pte_large(*ptep)); // don't populate an already populated page!
-        // held smallpages (already evacuated), now will be used for huge page
-        free_intermediate_level(ptep);
-    }
-    *ptep = make_pte(page, perm) | (1<<7);
 }
 
 /*
@@ -228,126 +272,146 @@ void populate_huge_page(void* addr, fill_page& fill, uint64_t offset, unsigned p
  * is not 2MB aligned, we will need to apply the fill and perm only to a part
  * of a large page, in which case we must break the entire large page into its
  * constitutive small (4K) pages.
- *
- * FIXME: It would be nicer to, instead of iterating on all levels per page as
- * we do in populate_page/populate_huge_page, we walk once on the whole
- * hiearchy, as in linear_map.
  */
-void populate(vma& vma, fill_page& fill, unsigned perm)
-{
-    // Find the largest 2MB-aligned range inside the given byte (or actually,
-    // 4K-aligned) range:
-    uintptr_t hp_start = ((vma.start()-1) & ~(huge_page_size-1)) + huge_page_size;
-    uintptr_t hp_end = (vma.end()) & ~(huge_page_size-1);
-
-    if (hp_start > vma.end())
-        hp_start = vma.end();
-    if (hp_end < vma.start())
-        hp_end = vma.end();
-
-    /* Step 1: Break up the partial huge page (if any) in the beginning of the
-     * address range, and populate the small pages.
-     *  TODO: it would be more efficient not to walk all the levels all the time */
-    for (auto addr = vma.start(); addr < hp_start; addr += page_size)
-        populate_page(reinterpret_cast<void*>(addr), fill, addr-vma.start(), perm);
-    /* Step 2: Populate the huge pages (if any) in the middle of the range */
-    for (auto addr = hp_start; addr < hp_end; addr += huge_page_size)
-        populate_huge_page(reinterpret_cast<void*>(addr), fill, addr-vma.start(), perm);
-    /* Step 3: Break up the partial huge page (if any) at the end of the range */
-    for (auto addr = hp_end; addr < vma.end(); addr += page_size)
-        populate_page(reinterpret_cast<void*>(addr), fill, addr-vma.start(), perm);
-    //size_t nsmall=0, nhuge=0;
-    //debug_count_ptes(processor::read_cr3(), 4, nsmall, nhuge);
-    //debug(fmt("after population, page table contains %ld small pages, %ld huge") % nsmall % nhuge);
-
-}
-
-void unpopulate_page(void* addr)
-{
-    pt_element pte = processor::read_cr3();
-    auto pt = phys_cast<pt_element>(pte_phys(pte));
-    auto ptep = &pt[pt_index(addr, nlevels - 1)];
-    unsigned level = nlevels - 1;
-    while (level > 0) {
-        if (!pte_present(*ptep))
-            return;
-        else if (pte_large(*ptep)) {
-            // This case means that part of a larger mmap was mmapped over,
-            // previously a huge page was mapped, and now we need to free some
-            // of the small pages composing it. Luckily, in our implementation
-            // it is ok to free pieces of a alloc_huge_page() with free_page()
-            split_large_page(ptep, level);
+class populate : public page_range_operation {
+private:
+    fill_page *fill;
+    unsigned int perm;
+public:
+    populate(fill_page *fill, unsigned int perm) : fill(fill), perm(perm) { }
+protected:
+    virtual void small_page(pt_element *ptep, uintptr_t offset){
+        phys page = alloc_page();
+        fill->fill(phys_to_virt(page), offset);
+        assert(pte_phys(*ptep)==0); // don't populate an already populated page!
+        *ptep = make_pte(page, perm);
+    }
+    virtual void huge_page(pt_element *ptep, uintptr_t offset){
+        phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
+        uint64_t o=0;
+        // Unfortunately, fill() is only coded for small-page-size chunks, we
+        // need to repeat it:
+        for (int i=0; i<pte_per_page; i++){
+            fill->fill(phys_to_virt(page+o), offset+o);
+            o += page_size;
         }
-        pte = *ptep;
-        --level;
-        pt = phys_cast<pt_element>(pte_phys(pte));
-        ptep = &pt[pt_index(addr, level)];
+        if (pte_phys(*ptep)) {
+            assert(!pte_large(*ptep)); // don't populate an already populated page!
+            // held smallpages (already evacuated), now will be used for huge page
+            free_intermediate_level(ptep);
+        }
+        *ptep = make_pte(page, perm) | (1<<7);
     }
-    // Note: we free the page even if it is already marked "not present".
-    // evacuate() makes sure we are only called for allocated pages, and
-    // not-present may only mean mprotect(PROT_NONE).
-    phys page=pte_phys(*ptep);
-    assert(page); // evacuate() shouldn't call us twice for the same page.
-    memory::free_page(phys_to_virt(page));
-    *ptep = 0;
-}
-
-void unpopulate_huge_page(void* addr)
-{
-    pt_element pte = processor::read_cr3();
-    auto pt = phys_cast<pt_element>(pte_phys(pte));
-    auto ptep = &pt[pt_index(addr, nlevels - 1)];
-    unsigned level = nlevels - 1;
-    while (level > 1) {
-        if (!pte_present(*ptep))
-            return;
-        else if (pte_large(*ptep))
-            split_large_page(ptep, level);
-        pte = *ptep;
-        --level;
-        pt = phys_cast<pt_element>(pte_phys(pte));
-        ptep = &pt[pt_index(addr, level)];
+    virtual bool should_allocate_intermediate(){
+        return true;
     }
-    if (!pte_present(*ptep)){
-        // Note: we free the page even if it is already marked "not present".
-        // evacuate() makes sure we are only called for allocated pages, and
-        // not-present may only mean mprotect(PROT_NONE).
-        phys page=pte_phys(*ptep);
-        assert(page); // evacuate() shouldn't call us twice for the same page.
-        memory::free_huge_page(phys_to_virt(page), huge_page_size);
-    } else if (pte_large(*ptep)){
-        memory::free_huge_page(phys_to_virt(pte_phys(*ptep)), huge_page_size);
-    } else {
-        // We've previously allocated small pages here, not a huge pages.
-        // We need to free them one by one - as they are not necessarily part
-        // of one huge page.
-        pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
-        for(int i=0; i<pte_per_page; ++i)
-            if (pte_present(pt[i]))
-                memory::free_page(phys_to_virt(pte_phys(pt[i])));
-    }
-    *ptep = 0;
-}
+};
 
 /*
  * Undo the operation of populate(), freeing memory allocated by populate()
  * and marking the pages non-present.
  */
-void unpopulate(vma& vma)
-{
-    uintptr_t hp_start = ((vma.start()-1) & ~(huge_page_size-1)) + huge_page_size;
-    uintptr_t hp_end = (vma.end()) & ~(huge_page_size-1);
-    if (hp_start > vma.end())
-        hp_start = vma.end();
-    if (hp_end < vma.start())
-        hp_end = vma.end();
+class unpopulate : public page_range_operation {
+protected:
+    virtual void small_page(pt_element *ptep, uintptr_t offset){
+        // Note: we free the page even if it is already marked "not present".
+        // evacuate() makes sure we are only called for allocated pages, and
+        // not-present may only mean mprotect(PROT_NONE).
+        phys page=pte_phys(*ptep);
+        assert(page); // evacuate() shouldn't call us twice for the same page.
+        memory::free_page(phys_to_virt(page));
+        *ptep = 0;
+    }
+    virtual void huge_page(pt_element *ptep, uintptr_t offset){
+        if (!pte_present(*ptep)) {
+            // Note: we free the page even if it is already marked "not present".
+            // evacuate() makes sure we are only called for allocated pages, and
+            // not-present may only mean mprotect(PROT_NONE).
+            phys page=pte_phys(*ptep);
+            assert(page); // evacuate() shouldn't call us twice for the same page.
+            memory::free_huge_page(phys_to_virt(page), huge_page_size);
+        } else if (pte_large(*ptep)) {
+            memory::free_huge_page(phys_to_virt(pte_phys(*ptep)), huge_page_size);
+        } else {
+            // We've previously allocated small pages here, not a huge pages.
+            // We need to free them one by one - as they are not necessarily part
+            // of one huge page.
+            pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
+            for(int i=0; i<pte_per_page; ++i)
+                if (pte_present(pt[i]))
+                    memory::free_page(phys_to_virt(pte_phys(pt[i])));
+        }
+        *ptep = 0;
+    }
+    virtual bool should_allocate_intermediate(){
+        return false;
+    }
+};
 
-    for (auto addr = vma.start(); addr < hp_start; addr += page_size)
-        unpopulate_page(reinterpret_cast<void*>(addr));
-    for (auto addr = hp_start; addr < hp_end; addr += huge_page_size)
-        unpopulate_huge_page(reinterpret_cast<void*>(addr));
-    for (auto addr = hp_end; addr < vma.end(); addr += page_size)
-        unpopulate_page(reinterpret_cast<void*>(addr));
+void change_perm(pt_element *ptep, unsigned int perm)
+{
+    // Note: in x86, if the present bit (0x1) is off, not only read is
+    // disallowed, but also write and exec. So in mprotect, if any
+    // permission is requested, we must also grant read permission.
+    // Linux does this too.
+    if (perm)
+        *ptep |= 0x1;
+    else
+        *ptep &= ~0x1;
+
+    if (perm & perm_write)
+        *ptep |= 0x2;
+    else
+        *ptep &= ~0x2;
+
+    if (!(perm & perm_exec))
+        *ptep |= pt_element(0x8000000000000000);
+    else
+        *ptep &= ~pt_element(0x8000000000000000);
+}
+
+class protection : public page_range_operation {
+private:
+    unsigned int perm;
+    bool success;
+public:
+    protection(unsigned int perm) : perm(perm), success(true) { }
+    bool getsuccess(){ return success; }
+protected:
+    virtual void small_page(pt_element *ptep, uintptr_t offset){
+         if (!pte_phys(*ptep)) {
+            success = false;
+            return;
+        }
+        change_perm(ptep, perm);
+     }
+    virtual void huge_page(pt_element *ptep, uintptr_t offset){
+        if (!pte_phys(*ptep)) {
+            success = false;
+        } else if (pte_large(*ptep)) {
+            change_perm(ptep, perm);
+        } else {
+            pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
+            for (int i=0; i<pte_per_page; ++i) {
+                if (pte_phys(pt[i])) {
+                    change_perm(&pt[i], perm);
+                } else {
+                    success = false;
+                }
+            }
+        }
+    }
+    virtual bool should_allocate_intermediate(){
+        success = false;
+        return false;
+    }
+};
+
+int protect(void *addr, size_t size, unsigned int perm)
+{
+    protection p(perm);
+    p.operate(addr, size);
+    return p.getsuccess();
 }
 
 uintptr_t find_hole(uintptr_t start, uintptr_t size)
@@ -383,7 +447,7 @@ void evacuate(vma* v)
         i->split(v->start());
         if (contains(*v, *i)) {
             auto& dead = *i--;
-            unpopulate(dead);
+            unpopulate().operate(dead);
             vma_list.erase(dead);
         }
     }
@@ -440,7 +504,7 @@ vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
         evacuate(ret);
     vma_list.insert(*ret);
 
-    populate(*ret, fill, perm);
+    populate(&fill, perm).operate((void*)start, end-start);
 
     return ret;
 }
@@ -458,110 +522,6 @@ vma* map_file(void* addr, size_t size, unsigned perm,
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_file_page ffill(f, offset, f.size());
     vma* ret = allocate(start, start + size, ffill, perm, evac);
-    return ret;
-}
-
-void change_perm(pt_element *ptep, unsigned int perm)
-{
-    // Note: in x86, if the present bit (0x1) is off, not only read is
-    // disallowed, but also write and exec. So in mprotect, if any
-    // permission is requested, we must also grant read permission.
-    // Linux does this too.
-    if (perm)
-        *ptep |= 0x1;
-    else
-        *ptep &= ~0x1;
-
-    if (perm & perm_write)
-        *ptep |= 0x2;
-    else
-        *ptep &= ~0x2;
-
-    if (!(perm & perm_exec))
-        *ptep |= pt_element(0x8000000000000000);
-    else
-        *ptep &= ~pt_element(0x8000000000000000);
-}
-
-int protect_page(void *addr, unsigned int perm)
-{
-    pt_element pte = processor::read_cr3();
-    auto pt = phys_cast<pt_element>(pte_phys(pte));
-    auto ptep = &pt[pt_index(addr, nlevels - 1)];
-    unsigned level = nlevels - 1;
-    while (level > 0) {
-        if (!pte_phys(*ptep))
-            return 0;
-        else if (pte_large(*ptep)) {
-            // We're trying to change the protection of part of a huge page, so
-            // we need to split the huge page into small pages. This is fine
-            // because in in our implementation it is ok to free pieces of a
-            // alloc_huge_page() with free_page()
-            split_large_page(ptep, level);
-        }
-        pte = *ptep;
-        --level;
-        pt = phys_cast<pt_element>(pte_phys(pte));
-        ptep = &pt[pt_index(addr, level)];
-    }
-    if (!pte_phys(*ptep))
-        return 0;
-    change_perm(ptep, perm);
-    return 1;
-}
-
-int protect_huge_page(void *addr, unsigned int perm)
-{
-    pt_element pte = processor::read_cr3();
-    auto pt = phys_cast<pt_element>(pte_phys(pte));
-    auto ptep = &pt[pt_index(addr, nlevels - 1)];
-    unsigned level = nlevels - 1;
-    while (level > 1) {
-        if (!pte_present(*ptep))
-            return 0;
-        else if (pte_large(*ptep))
-            split_large_page(ptep, level);
-        pte = *ptep;
-        --level;
-        pt = phys_cast<pt_element>(pte_phys(pte));
-        ptep = &pt[pt_index(addr, level)];
-    }
-    if (!pte_phys(*ptep))
-        return 0;
-
-    if (pte_large(*ptep)){
-        change_perm(ptep, perm);
-        return 1;
-    } else {
-        int ret = 1;
-        pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
-        for(int i=0; i<pte_per_page; ++i)
-            if(pte_phys(pt[i]))
-                change_perm(&pt[i], perm);
-            else
-                ret = 0;
-        return ret;
-    }
-}
-
-int protect(void *start, size_t size, unsigned int perm)
-{
-    void *end = start+size; // one byte after the end
-    void *hp_start = (void*) ((((uintptr_t)start-1) & ~(huge_page_size-1)) +
-            huge_page_size);
-    void *hp_end = (void*) ((uintptr_t)end & ~(huge_page_size-1));
-    if (hp_start > end)
-        hp_start = end;
-    if (hp_end < start)
-        hp_end = end;
-
-    int ret=1;
-    for (auto addr = start; addr < hp_start; addr += page_size)
-        ret &= protect_page(addr, perm);
-    for (auto addr = hp_start; addr < hp_end; addr += huge_page_size)
-        ret &= protect_huge_page(addr, perm);
-    for (auto addr = hp_end; addr < end; addr += page_size)
-        ret &= protect_page(addr, perm);
     return ret;
 }
 
