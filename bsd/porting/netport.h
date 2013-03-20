@@ -8,6 +8,8 @@
 #include <memory.h>
 #include <time.h>
 
+void init_maxsockets(void *ignored);
+
 int osv_curtid(void);
 
 #define priv_check_cred(...)        (0)

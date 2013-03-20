@@ -153,14 +153,12 @@ SYSCTL_INT(_kern_ipc, OID_AUTO, numopensockets, CTLFLAG_RD,
  * accept_mtx locks down per-socket fields relating to accept queues.  See
  * socketvar.h for an annotation of the protected fields of struct socket.
  */
-/* FIXME: OSv- Todo - initialize */
 struct mtx accept_mtx;
 
 /*
  * so_global_mtx protects so_gencnt, numopensockets, and the per-socket
  * so_gencnt field.
  */
-/* FIXME: OSv- Todo - initialize */
 static struct mtx so_global_mtx;
 
 /*
@@ -199,19 +197,22 @@ SYSCTL_PROC(_kern_ipc, OID_AUTO, maxsockets, CTLTYPE_INT|CTLFLAG_RW,
     &maxsockets, 0, sysctl_maxsockets, "IU",
     "Maximum number of sockets avaliable");
 
+#endif
 /*
  * Initialise maxsockets.  This SYSINIT must be run after
  * tunable_mbinit().
  */
-static void
+void
 init_maxsockets(void *ignored)
 {
 
+    mtx_init(&accept_mtx, "accept", NULL, MTX_DEF);
+    mtx_init(&so_global_mtx, "so_global", NULL, MTX_DEF);
+
 	TUNABLE_INT_FETCH("kern.ipc.maxsockets", &maxsockets);
-	maxsockets = imax(maxsockets, imax(maxfiles, nmbclusters));
+	maxsockets = 0x2000;
 }
 SYSINIT(param, SI_SUB_TUNABLES, SI_ORDER_ANY, init_maxsockets, NULL);
-#endif
 
 /*
  * Socket operation routines.  These routines are called by the routines in

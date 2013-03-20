@@ -42,7 +42,7 @@ void net_init(void)
     ip_initid();
 
     tunable_mbinit(NULL);
-    // init_maxsockets(NULL);
+    init_maxsockets(NULL);
     arc4_init();
     eventhandler_init(NULL);
     mbuf_init(NULL);
