@@ -608,20 +608,17 @@ soclose(struct socket *so)
 				goto drop;
 			}
 		}
-		/* FIXME: OSv -SO_LINGER is not supported */
-#if 0
 		if (so->so_options & SO_LINGER) {
 			if ((so->so_state & SS_ISDISCONNECTING) &&
 			    (so->so_state & SS_NBIO))
 				goto drop;
 			while (so->so_state & SS_ISCONNECTED) {
 				error = tsleep(&so->so_timeo,
-				    PSOCK | PCATCH, "soclos", so->so_linger * hz);
+				    0, "soclos", so->so_linger * hz);
 				if (error)
 					break;
 			}
 		}
-#endif
 	}
 
 drop:

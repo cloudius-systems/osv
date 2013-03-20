@@ -8,6 +8,8 @@
 int msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
      int timo);
 
+int tsleep(void *chan, int priority, const char *wmesg, int timo);
+
 void wakeup(void* chan);
 
 void wakeup_one(void* chan);

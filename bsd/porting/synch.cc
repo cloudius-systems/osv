@@ -141,6 +141,11 @@ extern "C" int msleep(void *chan, struct mtx *mtx, int priority, const char *wme
     return (synch_port::instance()->msleep(chan, mtx, priority, wmesg, timo));
 }
 
+extern "C" int tsleep(void *chan, int priority, const char *wmesg, int timo)
+{
+    return (msleep(chan, 0, priority, wmesg, timo));
+}
+
 extern "C" void wakeup(void* chan)
 {
     synch_port::instance()->wakeup(chan);
