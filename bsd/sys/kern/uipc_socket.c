@@ -574,13 +574,9 @@ sofree(struct socket *so)
 	 */
 	sbdestroy(&so->so_snd, so);
 	sbdestroy(&so->so_rcv, so);
-	/* FIXME: OSv - We don't support select/poll yet */
-#if 0
-	seldrain(&so->so_snd.sb_sel);
-	seldrain(&so->so_rcv.sb_sel);
-	knlist_destroy(&so->so_rcv.sb_sel.si_note);
-	knlist_destroy(&so->so_snd.sb_sel.si_note);
-#endif
+
+	poll_wake(so->fp, POLLSTANDARD);
+
 	sodealloc(so);
 }
 
@@ -2612,6 +2608,21 @@ soopt_mcopyout(struct sockopt *sopt, struct mbuf *m)
 	return (0);
 }
 
+/*
+ * sohasoutofband(): protocol notifies socket layer of the arrival of new
+ * out-of-band data, which will then notify socket consumers.
+ */
+void
+sohasoutofband(struct socket *so)
+{
+/* FIXME: OSv - handle OOB data */
+#if 0
+	if (so->so_sigio != NULL)
+		pgsigio(&so->so_sigio, SIGURG, 0);
+#endif
+
+	poll_wake(so->fp, (POLLPRI | POLLRDBAND));
+}
 
 int
 sopoll(struct socket *so, int events, struct ucred *active_cred,

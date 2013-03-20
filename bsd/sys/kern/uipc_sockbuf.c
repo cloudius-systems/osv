@@ -31,6 +31,8 @@
 
 #include <sys/cdefs.h>
 
+#include <osv/poll.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/synch.h>
@@ -148,6 +150,25 @@ sbunlock(struct sockbuf *sb)
     rw_runlock(&sb->sb_rwlock);
 }
 
+void so_wake_poll(struct socket *so, struct sockbuf *sb)
+{
+
+    /* Read */
+    if (&so->so_rcv == sb) {
+        if (soreadabledata(so))
+            poll_wake(so->fp, (POLLIN | POLLRDNORM));
+    }
+
+    /* Write */
+    if (&so->so_snd == sb) {
+        if (sowriteable(so))
+            poll_wake(so->fp, (POLLOUT | POLLWRNORM));
+    }
+
+	sb->sb_flags &= ~SB_SEL;
+
+}
+
 /*
  * Wakeup processes waiting on a socket buffer.  Do asynchronous notification
  * via SIGIO if the socket has the SS_ASYNC flag set.
@@ -163,20 +184,16 @@ sbunlock(struct sockbuf *sb)
 void
 sowakeup(struct socket *so, struct sockbuf *sb)
 {
-    /* FIXME: OSv: TODO: implement... */
-#if 0
-    int ret;
+	int ret = 0;
 
 	SOCKBUF_LOCK_ASSERT(sb);
 
-	selwakeuppri(&sb->sb_sel, PSOCK);
-	if (!SEL_WAITING(&sb->sb_sel))
-		sb->sb_flags &= ~SB_SEL;
+	so_wake_poll(so, sb);
+
 	if (sb->sb_flags & SB_WAIT) {
 		sb->sb_flags &= ~SB_WAIT;
 		wakeup(&sb->sb_cc);
 	}
-	KNOTE_LOCKED(&sb->sb_sel.si_note, 0);
 	if (sb->sb_upcall != NULL) {
 		ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
 		if (ret == SU_ISCONNECTED) {
@@ -186,34 +203,10 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 		}
 	} else
 		ret = SU_OK;
-	if (sb->sb_flags & SB_AIO)
-		aio_swake(so, sb);
 	SOCKBUF_UNLOCK(sb);
 	if (ret == SU_ISCONNECTED)
 		soisconnected(so);
-	if ((so->so_state & SS_ASYNC) && so->so_sigio != NULL)
-		pgsigio(&so->so_sigio, SIGIO, 0);
 	mtx_assert(SOCKBUF_MTX(sb), MA_NOTOWNED);
-#else
-	int ret = 0;
-    if (sb->sb_flags & SB_WAIT) {
-        sb->sb_flags &= ~SB_WAIT;
-        wakeup(&sb->sb_cc);
-    }
-    if (sb->sb_upcall != NULL) {
-        ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
-        if (ret == SU_ISCONNECTED) {
-            KASSERT(sb == &so->so_rcv,
-                ("SO_SND upcall returned SU_ISCONNECTED"));
-            soupcall_clear(so, SO_RCV);
-        }
-    } else
-        ret = SU_OK;
-    SOCKBUF_UNLOCK(sb);
-    if (ret == SU_ISCONNECTED)
-        soisconnected(so);
-    mtx_assert(SOCKBUF_MTX(sb), MA_NOTOWNED);
-#endif
 }
 
 /*
