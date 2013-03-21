@@ -196,20 +196,30 @@ page_range* merge(page_range* a, page_range* b)
     }
 }
 
-void free_large(void* obj)
+// Return a page range back to free_page_ranges. Note how the size of the
+// page range is range->size, but its start is at range itself.
+void free_page_range(page_range *range)
 {
-    obj -= page_size;
-    auto header = static_cast<page_range*>(obj);
-
     std::lock_guard<mutex> guard(free_page_ranges_lock);
 
-    auto i = free_page_ranges.insert(*header).first;
+    auto i = free_page_ranges.insert(*range).first;
     if (i != free_page_ranges.begin()) {
         i = free_page_ranges.iterator_to(*merge(&*boost::prior(i), &*i));
     }
     if (boost::next(i) != free_page_ranges.end()) {
         merge(&*i, &*boost::next(i));
     }
+}
+
+void free_page_range(void *addr, size_t size)
+{
+    new (addr) page_range(size);
+    free_page_range(static_cast<page_range*>(addr));
+}
+
+void free_large(void* obj)
+{
+    free_page_range(static_cast<page_range*>(obj - page_size));
 }
 
 unsigned large_object_size(void *obj)
@@ -238,8 +248,7 @@ void* alloc_page()
 
 void free_page(void* v)
 {
-    new (v) page_range(page_size);
-    free_large(v + page_size);
+    free_page_range(v, page_size);
 }
 
 /* Allocate a huge page of a given size N (which must be a power of two)
@@ -252,41 +261,41 @@ void* alloc_huge_page(size_t N)
     std::lock_guard<mutex> guard(free_page_ranges_lock);
 
     for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-        page_range *header = &*i;
-        if (header->size < N)
+        page_range *range = &*i;
+        if (range->size < N)
             continue;
-        intptr_t v = (intptr_t) header;
+        intptr_t v = (intptr_t) range;
         // Find the the beginning of the last aligned area in the given
         // page range. This will be our return value:
-        intptr_t ret = (v+header->size-N) & ~(N-1);
+        intptr_t ret = (v+range->size-N) & ~(N-1);
         if (ret<v)
             continue;
         // endsize is the number of bytes in the page range *after* the
         // N bytes we will return. calculate it before changing header->size
-        int endsize = v+header->size-ret-N;
+        int endsize = v+range->size-ret-N;
         // Make the original page range smaller, pointing to the part before
         // our ret (if there's nothing before, remove this page range)
         if (ret==v)
-            free_page_ranges.erase(*header);
+            free_page_ranges.erase(*range);
         else
-            header->size = ret-v;
+            range->size = ret-v;
         // Create a new page range for the endsize part (if there is one)
         if (endsize > 0) {
             void *e = (void *)(ret+N);
-            new (e) page_range(endsize);
-            free_large(e + page_size);
+            free_page_range(e, endsize);
         }
         // Return the middle 2MB part
         return (void*) ret;
     }
+    // TODO: instead of aborting, tell the caller of this failure and have
+    // it fall back to small pages instead.
     debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.") % N);
     abort();
 }
 
 void free_huge_page(void* v, size_t N)
 {
-    new (v) page_range(N);
-    free_large(v + page_size);
+    free_page_range(v, N);
 }
 
 void free_initial_memory_range(void* addr, size_t size)
@@ -309,8 +318,7 @@ void free_initial_memory_range(void* addr, size_t size)
     if (!size) {
         return;
     }
-    new (addr) page_range(size);
-    free_large(addr + page_size);
+    free_page_range(addr, size);
 
 }
 
