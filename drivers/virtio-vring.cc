@@ -138,7 +138,7 @@ namespace virtio {
     }
 
     void*
-    vring::get_buf()
+    vring::get_buf(u32 *len)
     {
         return with_lock(_lock, [=] {
             vring_used_elem elem;
@@ -157,6 +157,7 @@ namespace virtio {
             virtio_d(fmt("get used: guest head=%d use_elem[head].id=%d") % used_ptr % _used->_used_elements[used_ptr]._id);
             elem = _used->_used_elements[used_ptr];
             int idx = elem._id;
+            *len = elem._len;
 
             if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
                 free(mmu::phys_to_virt(_desc[idx]._paddr));

@@ -238,9 +238,10 @@ namespace virtio {
             });
 
             int i = 0;
+            u32 len;
             virtio_net_req * req;
 
-            while((req = static_cast<virtio_net_req*>(queue->get_buf())) != nullptr) {
+            while((req = static_cast<virtio_net_req*>(queue->get_buf(&len))) != nullptr) {
 
                 auto ii = req->payload._nodes.begin();
                 ii++;
@@ -398,10 +399,11 @@ namespace virtio {
     void virtio_net::tx_gc()
     {
         int i = 0;
+        u32 len;
         virtio_net_req * req;
         vring* queue = get_virt_queue(1);
 
-        while((req = static_cast<virtio_net_req*>(queue->get_buf())) != nullptr) {
+        while((req = static_cast<virtio_net_req*>(queue->get_buf(&len))) != nullptr) {
             virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
 
             delete req;

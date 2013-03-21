@@ -119,7 +119,7 @@ class virtio_driver;
 
         // Ring operations
         bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
-        void* get_buf();
+        void* get_buf(u32 *len);
         bool used_ring_not_empty();
         bool avail_ring_not_empty();
         // when the available ring has x descriptors as room it means that

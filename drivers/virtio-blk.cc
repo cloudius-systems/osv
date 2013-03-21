@@ -185,8 +185,9 @@ void virtio_blk::response_worker() {
         virtio_d(fmt("\t ----> IRQ: virtio_d - blk thread awaken"));
 
         int i = 0;
+        u32 len;
 
-        while((req = static_cast<virtio_blk_req*>(queue->get_buf())) != nullptr) {
+        while((req = static_cast<virtio_blk_req*>(queue->get_buf(&len))) != nullptr) {
             virtio_d(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
 
             virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
