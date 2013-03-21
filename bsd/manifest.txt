@@ -1,0 +1,20 @@
+FreeBSD Networking Stack.
+
+This directory has an OSv port of the FreeBSD networking stack, specifically: 
+- Interface management
+- Routing
+- Protocol stack
+- Socket layer
+
+Files under sys/ were taken from FreeBSD 9.0/ trunk revision r245665 (svn)
+With modifications so they can work in OSv.
+
+Files under machine/ can be found in FreeBSD at sys/amd64/include/
+This directory should be ditched eventually.
+
+The directory structure of FreeBSD is preserved, for ease of use.
+
+Files under the porting/ directory contain stubs, OSv implementations of the
+different utils and primitives the networking stack use and various wrappers.
+
+
