@@ -152,11 +152,10 @@ sys_close(file_t fp)
 	if (fp->f_count <= 0)
 		sys_panic("sys_close");
 
-	vp = fp->f_vnode;
-	if (--fp->f_count > 0) {
-		vrele(vp);
+	if (--fp->f_count > 0)
 		return 0;
-	}
+
+	vp = fp->f_vnode;
 	vn_lock(vp);
 	if ((error = VOP_CLOSE(vp, fp)) != 0) {
 		vn_unlock(vp);

@@ -793,7 +793,6 @@ int dup(int oldfd)
 	t->t_ofile[newfd] = fp;
 
 	/* Increment file reference */
-	vref(fp->f_vnode);
 	fp->f_count++;
 
 	return newfd;
@@ -832,7 +831,6 @@ int dup3(int oldfd, int newfd, int flags)
 	t->t_ofile[newfd] = fp;
 
 	/* Increment file reference */
-	vref(fp->f_vnode);
 	fp->f_count++;
 	return newfd;
 out_errno:
@@ -869,7 +867,6 @@ int fcntl(int fd, int cmd, int arg)
 		t->t_ofile[new_fd] = fp;
 
 		/* Increment file reference */
-		vref(fp->f_vnode);
 		fp->f_count++;
 		return new_fd;
 	case F_GETFD:
