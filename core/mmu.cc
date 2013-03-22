@@ -84,15 +84,9 @@ bool pte_present(pt_element pte)
     return pte & 1;
 }
 
-phys alloc_page()
-{
-    void *p = memory::alloc_page();
-    return virt_to_phys(p);
-}
-
 void allocate_intermediate_level(pt_element *ptep)
 {
-    phys pt_page = alloc_page();
+    phys pt_page = virt_to_phys(memory::alloc_page());
     pt_element* pt = phys_cast<pt_element>(pt_page);
     for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = 0;
@@ -281,9 +275,9 @@ public:
     populate(fill_page *fill, unsigned int perm) : fill(fill), perm(perm) { }
 protected:
     virtual void small_page(pt_element *ptep, uintptr_t offset){
-        phys page = alloc_page();
+        phys page = virt_to_phys(memory::alloc_page());
         fill->fill(phys_to_virt(page), offset);
-        assert(pte_phys(*ptep)==0); // don't populate an already populated page!
+        assert(*ptep==0); // don't populate an already populated page!
         *ptep = make_pte(page, perm);
     }
     virtual void huge_page(pt_element *ptep, uintptr_t offset){
@@ -295,7 +289,7 @@ protected:
             fill->fill(phys_to_virt(page+o), offset+o);
             o += page_size;
         }
-        if (pte_phys(*ptep)) {
+        if (*ptep) {
             assert(!pte_large(*ptep)); // don't populate an already populated page!
             // held smallpages (already evacuated), now will be used for huge page
             free_intermediate_level(ptep);
@@ -317,9 +311,8 @@ protected:
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
-        phys page=pte_phys(*ptep);
-        assert(page); // evacuate() shouldn't call us twice for the same page.
-        memory::free_page(phys_to_virt(page));
+        assert(*ptep); // evacuate() shouldn't call us twice for the same page.
+        memory::free_page(phys_to_virt(pte_phys(*ptep)));
         *ptep = 0;
     }
     virtual void huge_page(pt_element *ptep, uintptr_t offset){
@@ -327,19 +320,21 @@ protected:
             // Note: we free the page even if it is already marked "not present".
             // evacuate() makes sure we are only called for allocated pages, and
             // not-present may only mean mprotect(PROT_NONE).
-            phys page=pte_phys(*ptep);
-            assert(page); // evacuate() shouldn't call us twice for the same page.
-            memory::free_huge_page(phys_to_virt(page), huge_page_size);
+            assert(*ptep); // evacuate() shouldn't call us twice for the same page.
+            memory::free_huge_page(phys_to_virt(pte_phys(*ptep)),
+                    huge_page_size);
         } else if (pte_large(*ptep)) {
-            memory::free_huge_page(phys_to_virt(pte_phys(*ptep)), huge_page_size);
+            memory::free_huge_page(phys_to_virt(pte_phys(*ptep)),
+                    huge_page_size);
         } else {
             // We've previously allocated small pages here, not a huge pages.
             // We need to free them one by one - as they are not necessarily part
             // of one huge page.
             pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
-            for(int i=0; i<pte_per_page; ++i)
-                if (pte_present(pt[i]))
-                    memory::free_page(phys_to_virt(pte_phys(pt[i])));
+            for(int i=0; i<pte_per_page; ++i) {
+                assert(pt[i]); //  evacuate() shouldn't call us twice for the same page.
+                memory::free_page(phys_to_virt(pte_phys(pt[i])));
+            }
         }
         *ptep = 0;
     }
@@ -379,21 +374,21 @@ public:
     bool getsuccess(){ return success; }
 protected:
     virtual void small_page(pt_element *ptep, uintptr_t offset){
-         if (!pte_phys(*ptep)) {
+         if (!*ptep) {
             success = false;
             return;
         }
         change_perm(ptep, perm);
      }
     virtual void huge_page(pt_element *ptep, uintptr_t offset){
-        if (!pte_phys(*ptep)) {
+        if (!*ptep) {
             success = false;
         } else if (pte_large(*ptep)) {
             change_perm(ptep, perm);
         } else {
             pt_element* pt = phys_cast<pt_element>(pte_phys(*ptep));
             for (int i=0; i<pte_per_page; ++i) {
-                if (pte_phys(pt[i])) {
+                if (pt[i]) {
                     change_perm(&pt[i], perm);
                 } else {
                     success = false;

@@ -26,7 +26,7 @@ cpuid_bit cpuid_bits[] = {
     { 1, 'c', 20, &f::sse4_2 },
     { 1, 'c', 21, &f::x2apic },
     { 1, 'c', 24, &f::tsc_deadline },
-    { 1, 'c', 25, &f::xsave },
+    { 1, 'c', 27, &f::xsave },
     { 1, 'c', 28, &f::avx },
     { 1, 'c', 30, &f::rdrand },
     { 7, 'b', 0, &f::fsgsbase, 0 },
