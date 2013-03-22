@@ -363,7 +363,7 @@ check_dir_empty(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("check_dir_empty\n"));
 
-	if ((error = sys_opendir(path, &fp)) != 0)
+	if ((error = sys_open(path, O_RDONLY, 0, &fp)) != 0)
 		return error;
 	do {
 		error = sys_readdir(fp, &dir);
@@ -371,56 +371,12 @@ check_dir_empty(char *path)
 			break;
 	} while (!strcmp(dir.d_name, ".") || !strcmp(dir.d_name, ".."));
 
-	sys_closedir(fp);
+	sys_close(fp);
 
 	if (error == ENOENT)
 		return 0;
 	else if (error == 0)
 		return EEXIST;
-	return error;
-}
-
-int
-sys_opendir(char *path, file_t *file)
-{
-	vnode_t dvp;
-	file_t fp;
-	int error;
-
-	DPRINTF(VFSDB_SYSCALL, ("sys_opendir: path=%s\n", path));
-
-	if ((error = sys_open(path, O_RDONLY, 0, &fp)) != 0)
-		return error;
-
-	dvp = fp->f_vnode;
-	vn_lock(dvp);
-	if (dvp->v_type != VDIR) {
-		vn_unlock(dvp);
-		sys_close(fp);
-		return ENOTDIR;
-	}
-	vn_unlock(dvp);
-
-	*file = fp;
-	return 0;
-}
-
-int
-sys_closedir(file_t fp)
-{
-	vnode_t dvp;
-	int error;
-
-	DPRINTF(VFSDB_SYSCALL, ("sys_closedir: fp=%x\n", fp));
-
-	dvp = fp->f_vnode;
-	vn_lock(dvp);
-	if (dvp->v_type != VDIR) {
-		vn_unlock(dvp);
-		return EBADF;
-	}
-	vn_unlock(dvp);
-	error = sys_close(fp);
 	return error;
 }
 

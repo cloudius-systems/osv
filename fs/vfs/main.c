@@ -354,51 +354,6 @@ int fstat(int fd, struct stat *st)
 }
 LFS64(fstat);
 
-#if 0
-static int
-fs_opendir(struct task *t, struct open_msg *msg)
-{
-	struct task *t = main_task;
-	char path[PATH_MAX];
-	file_t fp;
-	int fd, error;
-
-	/* Find empty slot for file descriptor. */
-	if ((fd = task_newfd(t)) == -1)
-		return EMFILE;
-
-	/* Get the mounted file system and node */
-	if ((error = task_conv(t, msg->path, VREAD, path)) != 0)
-		return error;
-
-	if ((error = sys_opendir(path, &fp)) != 0)
-		return error;
-	t->t_ofile[fd] = fp;
-	msg->fd = fd;
-	return 0;
-}
-
-static int
-fs_closedir(struct task *t, struct msg *msg)
-{
-	struct task *t = main_task;
-	file_t fp;
-	int fd, error;
-
-	fd = msg->data[0];
-	if (fd >= OPEN_MAX)
-		return EBADF;
-	fp = t->t_ofile[fd];
-	if (fp == NULL)
-		return EBADF;
-
-	if ((error = sys_closedir(fp)) != 0)
-		return error;
-	t->t_ofile[fd] = NULL;
-	return 0;
-}
-#endif
-
 int
 ll_readdir(int fd, struct dirent *d)
 {
@@ -544,12 +499,10 @@ int chdir(const char *pathname)
 		goto out_errno;
 
 	/* Check if directory exits */
-//	if ((error = sys_opendir(path, &fp)) != 0)
 	if ((error = sys_open(path, O_RDONLY, 0, &fp)) != 0)
 		goto out_errno;
 
 	if (t->t_cwdfp)
-//		sys_closedir(t->t_cwdfp);
 		sys_close(t->t_cwdfp);
 	t->t_cwdfp = fp;
 	strlcpy(t->t_cwd, path, sizeof(t->t_cwd));
@@ -570,7 +523,6 @@ int fchdir(int fd)
 		goto out_errno;
 
 	if (t->t_cwdfp)
-//		sys_closedir(t->t_cwdfp);
 		sys_close(t->t_cwdfp);
 	t->t_cwdfp = fp;
 	error = sys_fchdir(fp, t->t_cwd);

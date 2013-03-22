@@ -95,8 +95,6 @@ int	 sys_fstatfs(struct file *fp, struct statfs *buf);
 int	 sys_fsync(file_t fp);
 int	 sys_ftruncate(file_t fp, off_t length);
 
-int	 sys_opendir(char *path, file_t * file);
-int	 sys_closedir(file_t fp);
 int	 sys_readdir(file_t fp, struct dirent *dirent);
 int	 sys_rewinddir(file_t fp);
 int	 sys_seekdir(file_t fp, long loc);
