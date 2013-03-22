@@ -150,9 +150,6 @@ namespace virtio {
         fill_rx_ring();
 
         add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
-
-        //thread *test = new thread([this] {this->tx_test();});
-        //test->start();
     }
 
     virtio_net::~virtio_net()
@@ -352,38 +349,6 @@ namespace virtio {
         return true;
     }
 
-
-    bool virtio_net::tx_out(void *out, int len, bool flush)
-    {
-        vring* queue = get_virt_queue(1);
-
-        if (!queue->avail_ring_has_room(2)) {
-            if (queue->used_ring_not_empty()) {
-                virtio_net_d(fmt("%s: gc tx buffers to clear space"));
-                tx_gc();
-            } else {
-                virtio_net_d(fmt("%s: no room") % __FUNCTION__);
-                return false;
-            }
-        }
-
-        virtio_net_req *req = new virtio_net_req;
-        req->payload.add(mmu::virt_to_phys(out), len);
-        req->hdr.hdr_len = ETH_ALEN + sizeof(iphdr);
-        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
-        req->buffer = (u8*)out;
-
-        if (!queue->add_buf(&req->payload,2,0,req)) {
-            delete req;
-            return false;
-        }
-
-        if (flush)
-            queue->kick();
-
-        return true;
-    }
-
     void virtio_net::tx_gc_thread() {
         vring* queue = get_virt_queue(1);
 
@@ -426,27 +391,5 @@ namespace virtio {
         return nullptr;
     }
 
-    void virtio_net::tx_test()
-    {
-        int i = 0;
-
-        while (1) {
-            timespec ts = {};
-            ts.tv_sec = 3;
-            nanosleep(&ts, nullptr);
-
-            void* buf = malloc(page_size);
-            memset(buf, 0, 1000);
-            // set the src& dst to self
-            memcpy(buf, _config.mac, sizeof(_config.mac));
-            //deliberate have offset so src != dst, just for this test
-            memcpy(buf+7, _config.mac, sizeof(_config.mac));
-
-            virtio_net_d(fmt("%s: sending packet %d") % __FUNCTION__ % i++);
-            tx_out(buf, 1000);
-
-            sched::thread::current()->yield();
-        }
-    }
-
 }
+

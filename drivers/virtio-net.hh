@@ -225,15 +225,12 @@ namespace virtio {
 
         void receiver();
         void fill_rx_ring();
-        bool tx_out(void *out, int len, bool flush = true);
         bool tx(struct mbuf* m_head, bool flush = true);
         void kick(int queue) {_queues[queue]->kick();}
         void tx_gc_thread();
         void tx_gc();
-
-        void tx_test();
-
         static hw_driver* probe(hw_device* dev);
+
     private:
 
         std::string _driver_name;
