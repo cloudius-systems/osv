@@ -27,10 +27,13 @@
  * SUCH DAMAGE.
  */
 #include <stdio.h>
+#include <unistd.h>
+
 #include <osv/debug.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/networking.h>
 #include <bsd/porting/route.h>
+#include <bsd/porting/callout.h>
 
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
@@ -52,7 +55,7 @@
 
 //static u_char if_eaddr[ETHER_ADDR_LEN] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
 //static char *if_eaddr_cstr = "11:22:33:44:55:66";
-static char *gw_eaddr_cstr = "77:22:33:44:55:66";
+static char *gw_eaddr_cstr = "52:54:00:7b:65:17";
 //static char *if_name = "virtio-net";
 static char *if_name1 = "virtio-net0";
 static char *if_ip = "198.0.0.4";
@@ -60,8 +63,19 @@ static char *if_gw = "198.0.0.1";
 static char *if_baddr = "198.0.0.255";
 static int masklen = 24;
 
+/* Try to read from the socket in test1 */
+void test1_recv(struct socket* s)
+{
+    struct sockaddr* from;
+    struct uio uio = {0};
+    uio.uio_resid = 52;
+    struct mbuf* m;
 
-void test_ping(void)
+    soreceive_dgram(s, &from, &uio, &m, NULL, NULL);
+}
+
+/* Sends an echo request */
+void test1_echorequest(void)
 {
     /* ICMP Packet */
     struct mbuf *m;
@@ -75,7 +89,6 @@ void test_ping(void)
     int error = -1;
     size_t sz = sizeof(struct sockaddr_in);
 
-    /* Create socket */
     error = socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
     if (error) {
         TLOG("socreate() failed %d", error);
@@ -115,9 +128,10 @@ void test_ping(void)
 
     /* Send an ICMP packet on our interface */
     error = sosend_dgram(s, (struct sockaddr *)&to, NULL, m, NULL, 0, NULL);
-    if (error) {
-        TLOG("sosend_dgram() failed %d", error);
-    }
+    TLOG("sosend_dgram() result is %s", error? "failure":"success");
+
+
+    test1_recv(s);
 
     soclose(s);
 }
@@ -145,7 +159,11 @@ int main(void)
     osv_route_add_host(if_ip, if_gw);
 
     /* Send ICMP Packet */
-    test_ping();
+    test1_echorequest();
+
+    /* Wait for async stuff */
+    sleep(8);
+
     //destroy_if();
 
     TLOG("Virtionet Driver Test END");
