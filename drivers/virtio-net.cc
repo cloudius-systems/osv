@@ -220,10 +220,10 @@ namespace virtio {
     struct virtio_net_req {
         struct virtio_net::virtio_net_hdr hdr;
         sglist payload;
-        u8 *buffer;
+        struct mbuf *m;
 
-        virtio_net_req() :buffer(nullptr) {memset(&hdr,0,sizeof(hdr));};
-        ~virtio_net_req() {if (buffer) delete buffer;}
+        virtio_net_req() :m(nullptr) {memset(&hdr,0,sizeof(hdr));};
+        ~virtio_net_req() {}
     };
 
     void virtio_net::receiver() {
@@ -242,10 +242,20 @@ namespace virtio {
 
                 auto ii = req->payload._nodes.begin();
                 ii++;
-                char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
-                virtio_net_d(fmt("\t len=%d") % ii->_len);
 
-                virtio_net_d(fmt("\t got hdr len:%d = %d vaddr=%p") % i++ % (int)req->hdr.hdr_len % (void*)buf);
+                struct mbuf *m = req->m;
+
+                u8* buf = mtod(m, u8*);
+
+                virtio_net_d(fmt("\t got hdr len:%d = %d, len= %d vaddr=%p") % i++ % (int)req->hdr.hdr_len % len % (void*)buf);
+
+                m->m_pkthdr.len = len;
+                m->m_pkthdr.rcvif = _ifn;
+                m->m_pkthdr.csum_flags = 0;
+                m->m_len = len;
+
+                _ifn->if_ipackets++;
+                (*_ifn->if_input)(_ifn, m);
 
                 ethhdr* eh = reinterpret_cast<ethhdr*>(buf);
                 virtio_net_d(fmt("The src %x:%x:%x:%x:%x:%x dst %x:%x:%x:%x:%x:%x type %d ") %
@@ -273,6 +283,7 @@ namespace virtio {
                 virtio_net_d(fmt("icmp code=%d. type=%d") % (u32)icmp->code % (u32)icmp->type);
 
                 delete req;
+                // TODO: who should free it? m_freem(m);
             }
 
             if (queue->avail_ring_has_room(queue->size()/2)) {
@@ -296,13 +307,26 @@ namespace virtio {
         while (queue->avail_ring_has_room(2)) {
             virtio_net_req *req = new virtio_net_req;
 
-            void* buf = malloc(page_size);
-            memset(buf, 0, page_size);
-            req->payload.add(mmu::virt_to_phys(buf), page_size);
+            struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, page_size);
+            if (!m)
+                break;
+
+            req->m = m;
+            u8 *mdata;
+            //int offset;
+
+            mdata = mtod(m, u8*);
+            //Better use the header withing the mbuf allocation like in freebsd
+            //offset = 0;
+            //struct virtio_net_hdr *hdr = static_cast<struct virtio_net_hdr*>(mdata);
+            //offset += sizeof(struct virtio_net_hdr);
+
+            req->payload.add(mmu::virt_to_phys(mdata), page_size);
             req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
 
-            if (!queue->add_buf(&req->payload,0,2,req)) {
+            if (!queue->add_buf(&req->payload,0,req->payload.get_sgs(),req)) {
                 delete req;
+                m_freem(m);
                 break;
             }
         }
@@ -372,6 +396,7 @@ namespace virtio {
             virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
 
             delete req;
+            if (req->m) m_freem(req->m);
         }
     }
 
