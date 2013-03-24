@@ -35,7 +35,7 @@ extern "C" {
     int osv_main(int ac, char **av);
 }
 
-int osv_main(int ac, char **av)
+int main(int ac, char **av)
 {
     constexpr unsigned nr_threads = 16;
     std::vector<sched::thread*> threads;
