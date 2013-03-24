@@ -56,8 +56,9 @@ void cpu::reschedule_from_interrupt(bool preempt)
         p->_status.store(thread::status::queued);
         runqueue.push_back(*p);
     }
-    auto n = &runqueue.front();
-    runqueue.pop_front();
+    auto ni = runqueue.begin();
+    auto n = &*ni;
+    runqueue.erase(ni);
     assert(n->_status.load() == thread::status::queued);
     n->_status.store(thread::status::running);
     if (n != thread::current()) {

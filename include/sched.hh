@@ -25,6 +25,7 @@ class cpu;
 class timer;
 class timer_list;
 class cpu_mask;
+class thread_runtime_compare;
 
 void schedule(bool yield = false);
 
@@ -196,16 +197,18 @@ private:
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned long _id;
+    u64 _vruntime;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
     friend class timer;
+    friend class thread_runtime_compare;
     friend void ::smp_main();
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);
 public:
     thread* _joiner;
-    bi::list_member_hook<> _runqueue_link;
+    bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
     // for the debugger
@@ -242,12 +245,20 @@ private:
     static callback_dispatch _dispatch;
 };
 
-typedef bi::list<thread,
-                 bi::member_hook<thread,
-                                 bi::list_member_hook<>,
-                                 &thread::_runqueue_link>,
-                 bi::constant_time_size<true> // for load estimation
-                > runqueue_type;
+class thread_runtime_compare {
+public:
+    bool operator()(const thread& t1, const thread& t2) {
+        return t1._vruntime < t2._vruntime;
+    }
+};
+
+typedef bi::rbtree<thread,
+                   bi::member_hook<thread,
+                                   bi::set_member_hook<>,
+                                   &thread::_runqueue_link>,
+                   bi::compare<thread_runtime_compare>,
+                   bi::constant_time_size<true> // for load estimation
+                  > runqueue_type;
 
 struct cpu {
     explicit cpu();
