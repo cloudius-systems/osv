@@ -131,7 +131,7 @@ void test1_echorequest(void)
     TLOG("sosend_dgram() result is %s", error? "failure":"success");
 
 
-    test1_recv(s);
+    //test1_recv(s);
 
     soclose(s);
 }
