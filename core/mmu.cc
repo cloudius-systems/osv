@@ -50,6 +50,10 @@ struct vma_list_type : vma_list_base {
 
 vma_list_type vma_list;
 
+// A fairly coarse-grained mutex serializing modifications to both
+// vma_list and the page table itself.
+mutex vma_list_mutex;
+
 typedef uint64_t pt_element;
 const unsigned nlevels = 4;
 
@@ -404,6 +408,7 @@ protected:
 
 int protect(void *addr, size_t size, unsigned int perm)
 {
+    std::lock_guard<mutex> guard(vma_list_mutex);
     protection p(perm);
     p.operate(addr, size);
     return p.getsuccess();
@@ -434,6 +439,7 @@ bool contains(vma& x, vma& y)
 
 void evacuate(vma* v)
 {
+    std::lock_guard<mutex> guard(vma_list_mutex);
     // FIXME: use equal_range or something
     for (auto i = std::next(vma_list.begin());
             i != std::prev(vma_list.end());
@@ -450,6 +456,7 @@ void evacuate(vma* v)
 
 vma* reserve(void* hint, size_t size)
 {
+    std::lock_guard<mutex> guard(vma_list_mutex);
     // look for a hole around 'hint'
     auto start = reinterpret_cast<uintptr_t>(hint);
     if (!start) {
@@ -494,6 +501,7 @@ struct fill_file_page : fill_page {
 vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
         unsigned perm, bool evac)
 {
+    std::lock_guard<mutex> guard(vma_list_mutex);
     vma* ret = new vma(start, end);
     if (evac)
         evacuate(ret);
