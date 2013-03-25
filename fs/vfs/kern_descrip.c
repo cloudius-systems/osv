@@ -12,11 +12,15 @@
 struct file *gfdt[FDMAX] = {0};
 
 /*
- * lock-free allocation of a file descriptor
+ * Allocate a file descriptor and assign fd to it atomically.
+ *
+ * Grabs a reference on fp if successful.
  */
 int fdalloc(struct file *fp, int *newfd)
 {
 	int fd;
+
+	fhold(fp);
 
 	for (fd = 0; fd < FDMAX; fd++) {
 		if (gfdt[fd])
@@ -27,17 +31,24 @@ int fdalloc(struct file *fp, int *newfd)
 		}
 	}
 
+	fdrop(fp);
 	return EMFILE;
 }
 
-/* Try to set a particular fp to another fd */
+/*
+ * Try to set assign a file pointer to a specific file descriptor.
+ * Grabs a reference to the file pointer if successful.
+ */
 int fdset(int fd, struct file *fp)
 {
 	struct file *orig;
 
+	fhold(fp);
 	orig = __sync_val_compare_and_swap(&gfdt[fd], NULL, fp);
-	if (orig != NULL)
+	if (orig != NULL) {
+		fdrop(fp);
 		return EBADF;
+	}
 	return 0;
 }
 
@@ -66,6 +77,10 @@ int fget(int fd, struct file **out_fp)
 	return 0;
 }
 
+/*
+ * Allocate a file structure without installing it into the descriptor
+ * table.  resultfp will have a single reference on a successful return.
+ */
 int falloc_noinstall(struct file **resultfp)
 {
 	struct file *fp;
@@ -83,6 +98,12 @@ int falloc_noinstall(struct file **resultfp)
 	return 0;
 }
 
+/*
+ * Allocate a file structure and install it into the descriptor table.
+ *
+ * resultfp will have two references to it, one permanent, and one
+ * to be dropped when the syscall returns.
+ */
 int falloc(struct file **resultfp, int *resultfd)
 {
 	struct file *fp;

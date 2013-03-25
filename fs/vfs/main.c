@@ -120,6 +120,7 @@ int close(int fd)
 
 	fdfree(fd);
 	fdrop(fp);
+	fdrop(fp);
 	return 0;
 
 out_errno:
@@ -769,6 +770,7 @@ int dup(int oldfd)
 	if (error)
 		goto out_fdrop;
 
+	fdrop(fp);
 	return newfd;
 
 out_fdrop:
@@ -812,6 +814,7 @@ int dup3(int oldfd, int newfd, int flags)
 	if (org)
 		fdrop(org);
 
+	fdrop(fp);
 	return newfd;
 
 out_errno:
