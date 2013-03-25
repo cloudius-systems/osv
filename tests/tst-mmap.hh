@@ -65,7 +65,6 @@ public:
     void run()
     {
         debug("Running mmap tests\n", false);
-        debug("test1");
         // Test that munmap actually recycles the physical memory allocated by mmap
         for (int i=0; i<1000; i++) {
             constexpr size_t size = 1<<20;
@@ -75,7 +74,6 @@ public:
             munmap(buf, size);
         }
         // Do the same for allocations large enough to use huge-pages
-        debug("test2");
         for (int i=0; i<100; i++) {
             constexpr size_t size = 30 * 1<<20;
             void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
@@ -86,7 +84,6 @@ public:
         // Test that we can override mmaps, without munmap, without leaking
         // physical memory. Mix in small page and huge page allocations for
         // more fun.
-        debug("test3");
         int hugepagesize = 1<<21;
         void *buf = mmap(NULL, hugepagesize*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
         assert(buf);
@@ -97,7 +94,6 @@ public:
         munmap(buf, hugepagesize*9+4096);
 
         // test mprotect making a read-only page.
-        debug("test4");
         buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
         mprotect(buf, 4096, PROT_READ);
         assert(!try_write(buf));
@@ -105,7 +101,6 @@ public:
 
         // test mprotect again, with part of huge page, and see that it only
         // modifies the desired part and not anything else
-        debug("test5");
         buf = mmap(NULL, 3*hugepagesize, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
         void *hp = (void*) (((uintptr_t)buf&~(hugepagesize-1))+hugepagesize);
         mprotect(hp+4096, 4096, PROT_READ);
@@ -115,26 +110,49 @@ public:
         munmap(buf, 3*hugepagesize);
 
         // test that mprotect with PROT_NONE disables even read
-        debug("test6");
         buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
         mprotect(buf, 4096, PROT_NONE);
         assert(!try_read(buf));
         munmap(buf, 4096);
 
+        // Tests similar to the above, but giving reduced permissions on
+        // mmap() itself instead of calling mprotect
+        buf = mmap(NULL, 4096, PROT_READ, MAP_ANONYMOUS, -1, 0);
+        assert(!try_write(buf));
+        munmap(buf, 4096);
+
+        buf = mmap(NULL, 4096, PROT_NONE, MAP_ANONYMOUS, -1, 0);
+        assert(!try_read(buf));
+        munmap(buf, 4096);
+
+        buf = mmap(NULL, 4096, PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        assert(try_write(buf));
+        munmap(buf, 4096);
+
+
         // Try successfully writing to an address, and immediately trying to
         // forbid it. If we don't TLB flush correctly, it might erroneously
         // succeed!
-        //debug("test7");
-        //buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
-        //*(char*)buf = 0; // write will succeed
-        //mprotect(buf, 4096, PROT_READ);
-        //assert(!try_write(buf));
-        //munmap(buf, 4096);
+        buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        *(char*)buf = 0; // write will succeed
+        mprotect(buf, 4096, PROT_READ);
+        assert(!try_write(buf));
+        munmap(buf, 4096);
+
+        // Test that mprotect() only hides memory, doesn't free it
+        buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+        *(char*)buf = 123;
+        mprotect(buf, 4096, PROT_NONE); // hide the memory - but don't unmap
+        mprotect(buf, 4096, PROT_READ); // get it back
+        assert(*(char*)buf == 123);
 
         // TODO: verify that mmapping more than available physical memory doesn't
         // panic just return -1 and ENOMEM.
         // TODO: verify that huge-page-sized allocations get a huge-page aligned address
         // (if addr=0). Not critical, though, just makes sense.
+        // TODO: verify that various calls to mmap() and munmap() (length=0, unaligned
+        // address, etc.) fail with EINVAL.
+        // TODO: test that mprotect() over malloc()ed memory (not just mmap()) works.
         debug("mmap tests succeeded\n", false);
     }
 };

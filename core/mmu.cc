@@ -106,15 +106,32 @@ void free_intermediate_level(pt_element *ptep)
     *ptep=0;
 }
 
+void change_perm(pt_element *ptep, unsigned int perm)
+{
+    // Note: in x86, if the present bit (0x1) is off, not only read is
+    // disallowed, but also write and exec. So in mprotect, if any
+    // permission is requested, we must also grant read permission.
+    // Linux does this too.
+    if (perm)
+        *ptep |= 0x1;
+    else
+        *ptep &= ~0x1;
+
+    if (perm & perm_write)
+        *ptep |= 0x2;
+    else
+        *ptep &= ~0x2;
+
+    if (!(perm & perm_exec))
+        *ptep |= pt_element(0x8000000000000000);
+    else
+        *ptep &= ~pt_element(0x8000000000000000);
+}
+
 pt_element make_pte(phys addr, unsigned perm)
 {
-    pt_element pte = addr | 0x61;
-    if (perm & perm_write) {
-        pte |= 0x2;
-    }
-    if (!(perm & perm_exec)) {
-        pte |= pt_element(0x8000000000000000);
-    }
+    pt_element pte = addr | 0x60;
+    change_perm(&pte, perm);
     return pte;
 }
 
@@ -134,7 +151,6 @@ void split_large_page(pt_element* ptep, unsigned level)
     for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = pte_orig | (pt_element(i) << (12 + 9 * (level - 1)));
     }
-    // FIXME: tlb flush
 }
 
 struct fill_page {
@@ -158,22 +174,28 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
     }
 }
 
+// TODO: we need to send a tlb_flush() request to all processors, not just
+// run it on this processor!!
+void tlb_flush()
+{
+   processor::write_cr3(processor::read_cr3());
+}
+
+
 /*
  * a page_range_operation implementation operates (via the operate() method)
  * on a page-aligned byte range of virtual memory. The range is divided into a
  * bulk of aligned huge pages (2MB pages), and if the beginning and end
  * addresses aren't 2MB aligned, there are additional small pages (4KB pages).
- * The appropriate method (set_small_page() or set_huge_page()) is called for
- * each of these pages, to implement the operation.
+ * The appropriate method (small_page() or huge_page()) is called for each of
+ * these pages, to implement the operation.
  * By supporting operations directly on whole huge pages, we allow for smaller
  * pages and better TLB efficiency.
  *
  * TODO: Instead of walking the page table from its root for each page (small
  * or huge), we can more efficiently walk the page table once calling
- * small_page/huge_page for relevant page table entries (as well as avoid
- * repeating the necessary allocation and split code, now repeated in
- * all our small_page()/huge_page() implementations). See linear_map for
- * an example on how to do this walk.
+ * small_page/huge_page for relevant page table entries. See linear_map for
+ * an example on how this walk can be done.
  */
 class page_range_operation {
 public:
@@ -218,6 +240,12 @@ void page_range_operation::operate(void *start, size_t size)
     for (void *addr = hp_end; addr < end; addr += page_size) {
         operate_page(false, addr, (uintptr_t)addr-(uintptr_t)start);
     }
+
+    // TODO: consider if instead of requesting a full TLB flush, we should
+    // instead try to make more judicious use of INVLPG - e.g., in
+    // split_large_page() and other specific places where we modify specific
+    // page table entries.
+    tlb_flush();
 }
 
 void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
@@ -257,15 +285,9 @@ void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
 
 /*
  * populate() populates the page table with the entries it is (assumed to be)
- * missing to span the given virtual-memory address range vma, and then
- * pre-fills (using the given fill function) these pages and sets their
- * permissions to the given ones. This is part of the mmap implementation.
- *
- * If full huge (2MB) pages fit inside this range, they are used for smaller
- * page tables and better TLB efficiency. However, if the start or end address
- * is not 2MB aligned, we will need to apply the fill and perm only to a part
- * of a large page, in which case we must break the entire large page into its
- * constitutive small (4K) pages.
+ * missing to span the given virtual-memory address range, and then pre-fills
+ * (using the given fill function) these pages and sets their permissions to
+ * the given ones. This is part of the mmap implementation.
  */
 class populate : public page_range_operation {
 private:
@@ -342,28 +364,6 @@ protected:
         return false;
     }
 };
-
-void change_perm(pt_element *ptep, unsigned int perm)
-{
-    // Note: in x86, if the present bit (0x1) is off, not only read is
-    // disallowed, but also write and exec. So in mprotect, if any
-    // permission is requested, we must also grant read permission.
-    // Linux does this too.
-    if (perm)
-        *ptep |= 0x1;
-    else
-        *ptep &= ~0x1;
-
-    if (perm & perm_write)
-        *ptep |= 0x2;
-    else
-        *ptep &= ~0x2;
-
-    if (!(perm & perm_exec))
-        *ptep |= pt_element(0x8000000000000000);
-    else
-        *ptep &= ~pt_element(0x8000000000000000);
-}
 
 class protection : public page_range_operation {
 private:
