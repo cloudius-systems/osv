@@ -96,6 +96,8 @@ int open(const char *pathname, int flags, mode_t mode)
 	return fd;
 
 out_fput:
+	fdfree(fd);
+	fdrop(fp);
 	fdrop(fp);
 out_errno:
 	errno = error;
