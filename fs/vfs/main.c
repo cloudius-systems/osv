@@ -808,20 +808,15 @@ int dup3(int oldfd, int newfd, int flags)
 	if (error)
 		goto out_errno;
 
+	/* FIXME: Should atomically close newfd or report error */
 	error = fget(newfd, &org);
-	/* ignore the error, newfd might not have an open file */
+	assert(error == 0);
 
 	error = fdset(newfd, fp);
 	if (error) {
 		fdrop(fp);
-		if (org)
-			fdrop(org);
 		goto out_errno;
 	}
-
-	/* Close previous file if it's opened. */
-	if (org)
-		fdrop(org);
 
 	fdrop(fp);
 	return newfd;
