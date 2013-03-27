@@ -81,8 +81,7 @@ int fget(int fd, struct file **out_fp)
 }
 
 /*
- * Allocate a file structure without installing it into the descriptor
- * table.  resultfp will have a single reference on a successful return.
+ * Allocate a file structure without installing it into the descriptor table.
  */
 int falloc_noinstall(struct file **resultfp)
 {
@@ -93,8 +92,6 @@ int falloc_noinstall(struct file **resultfp)
 		return ENOMEM;
 	memset(fp, 0, sizeof(*fp));
 
-	/* Start with a refcount of 1 */
-	fp->f_count = 1;
 	fp->f_ops = &badfileops;
 
 	*resultfp = fp;
@@ -103,9 +100,7 @@ int falloc_noinstall(struct file **resultfp)
 
 /*
  * Allocate a file structure and install it into the descriptor table.
- *
- * resultfp will have two references to it, one permanent, and one
- * to be dropped when the syscall returns.
+ * Holds a reference count when return successfully (via fdalloc())
  */
 int falloc(struct file **resultfp, int *resultfd)
 {
