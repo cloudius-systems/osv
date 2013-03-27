@@ -43,6 +43,9 @@ int fdset(int fd, struct file *fp)
 {
 	struct file *orig;
 
+	if (fd < 0 || fd >= FDMAX)
+	        return EBADF;
+
 	fhold(fp);
 	orig = __sync_val_compare_and_swap(&gfdt[fd], NULL, fp);
 	if (orig != NULL) {
