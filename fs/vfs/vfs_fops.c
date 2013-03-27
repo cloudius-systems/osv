@@ -60,6 +60,10 @@ static int vfs_write(struct file *fp, struct uio *uio, int flags)
 	bytes = uio->uio_resid;
 
 	vn_lock(vp);
+
+	if (fp->f_flags & O_APPEND)
+		ioflags |= IO_APPEND;
+
 	if ((flags & FOF_OFFSET) == 0)
 	        uio->uio_offset = fp->f_offset;
 
