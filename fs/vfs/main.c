@@ -794,8 +794,10 @@ int dup3(int oldfd, int newfd, int flags)
 	 * Don't allow any argument but O_CLOEXEC.  But we even ignore
 	 * that as we don't support exec() and thus don't care.
 	 */
-	if ((flags & ~O_CLOEXEC) != 0)
-		return -EINVAL;
+	if ((flags & ~O_CLOEXEC) != 0) {
+		error = EINVAL;
+		goto out_errno;
+	}
 
 	if (oldfd == newfd) {
 		error = EINVAL;
