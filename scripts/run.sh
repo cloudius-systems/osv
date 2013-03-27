@@ -1,3 +1,16 @@
+#!/bin/bash
+
+argc=$#
+if [ $argc -ne 1 ]; then
+	echo "run.sh: default to 'release'"
+	v="release"
+elif [[ "$1" != "release" && "$1" != "debug" ]]; then
+	echo "Usage: run.sh [debug|release]"
+	exit 1
+else
+	v=$1
+fi
+
 qemu-system-x86_64 \
 	-vnc :1 \
 	-enable-kvm \
@@ -9,4 +22,4 @@ qemu-system-x86_64 \
 	-mon chardev=stdio,mode=readline,default \
 	-device isa-serial,chardev=stdio \
 	-device virtio-net-pci \
-	-drive file=build/release/loader.img,if=virtio,cache=unsafe
+	-drive file=build/$v/loader.img,if=virtio,cache=unsafe
