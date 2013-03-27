@@ -113,17 +113,15 @@ int falloc(struct file **resultfp, int *resultfd)
 		return error;
 	
 	error = fdalloc(fp, &fd);
-	if (error)
-		goto out_free_fp;
+	if (error) {
+		fdrop(fp);
+		return error;
+	}
 
 	/* Result */
 	*resultfp = fp;
 	*resultfd = fd;
 	return 0;
-
-out_free_fp:
-	free(fp);
-	return error;
 }
 
 void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
