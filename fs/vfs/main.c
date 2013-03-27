@@ -797,6 +797,11 @@ int dup3(int oldfd, int newfd, int flags)
 	if ((flags & ~O_CLOEXEC) != 0)
 		return -EINVAL;
 
+	if (oldfd == newfd) {
+		error = EINVAL;
+		goto out_errno;
+	}
+
 	error = fget(oldfd, &fp);
 	if (error)
 		goto out_errno;
