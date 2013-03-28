@@ -93,6 +93,7 @@ int falloc_noinstall(struct file **resultfp)
 	memset(fp, 0, sizeof(*fp));
 
 	fp->f_ops = &badfileops;
+	fp->f_count = 1;
 
 	*resultfp = fp;
 	return 0;
@@ -100,7 +101,7 @@ int falloc_noinstall(struct file **resultfp)
 
 /*
  * Allocate a file structure and install it into the descriptor table.
- * Holds a reference count when return successfully (via fdalloc())
+ * Holds 2 references when return successfully.
  */
 int falloc(struct file **resultfp, int *resultfd)
 {
@@ -142,8 +143,8 @@ void fhold(struct file* fp)
 
 int fdrop(struct file *fp)
 {
-	if (__sync_fetch_and_sub(&fp->f_count, 1))
-        	return 0;
+	if (__sync_fetch_and_sub(&fp->f_count, 1) > 1)
+		return 0;
 
 	fo_close(fp);
 	free(fp);
