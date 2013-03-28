@@ -69,7 +69,7 @@ int fdclose(int fd)
 }
 
 /*
- * Try to set assign a file pointer to a specific file descriptor.
+ * Assigns a file pointer to a specific file descriptor.
  * Grabs a reference to the file pointer if successful.
  */
 int fdset(int fd, struct file *fp)
@@ -80,16 +80,14 @@ int fdset(int fd, struct file *fp)
 	        return EBADF;
 
 	fhold(fp);
-	mutex_lock(&gfdt_lock);
 
-	/* Make sure that no file pointer is currently installed on fd */
+	mutex_lock(&gfdt_lock);
 	orig = gfdt[fd];
 	if (orig != NULL) {
-		mutex_unlock(&gfdt_lock);
-		fdrop(fp);
-		return EBADF;
+		fdrop(orig);
 	}
 
+	/* Install new file structure in place */
 	gfdt[fd] = fp;
 	mutex_unlock(&gfdt_lock);
 

@@ -782,7 +782,7 @@ out_errno:
  */
 int dup3(int oldfd, int newfd, int flags)
 {
-	struct file *fp, *org = NULL;
+	struct file *fp;
 	int error;
 
 	/*
@@ -802,10 +802,6 @@ int dup3(int oldfd, int newfd, int flags)
 	error = fget(oldfd, &fp);
 	if (error)
 		goto out_errno;
-
-	/* FIXME: Should atomically close newfd or report error */
-	error = fget(newfd, &org);
-	assert(error == 0);
 
 	error = fdset(newfd, fp);
 	if (error) {
