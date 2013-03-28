@@ -9,7 +9,7 @@
  * Global file descriptors table - in OSv we have a single process so file
  * descriptors are maintained globally.
  */
-struct file *gfdt[FDMAX] = {0};
+struct file *gfdt[FDMAX] = {};
 
 /*
  * Allocate a file descriptor and assign fd to it atomically.
