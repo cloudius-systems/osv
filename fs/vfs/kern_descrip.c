@@ -83,13 +83,12 @@ int fdset(int fd, struct file *fp)
 
 	mutex_lock(&gfdt_lock);
 	orig = gfdt[fd];
-	if (orig != NULL) {
-		fdrop(orig);
-	}
-
 	/* Install new file structure in place */
 	gfdt[fd] = fp;
 	mutex_unlock(&gfdt_lock);
+
+	if (orig)
+		fdrop(orig);
 
 	return 0;
 }
