@@ -101,6 +101,7 @@ fo_chmod_t  invfo_chmod;
 int fdalloc(struct file* fp, int *newfd);
 int fdset(int fd, struct file* fp);
 void fdfree(int fd);
+int fdclose(int fd);
 
 /*
  * File descriptors reference count

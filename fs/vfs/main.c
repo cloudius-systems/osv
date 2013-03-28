@@ -96,9 +96,8 @@ int open(const char *pathname, int flags, mode_t mode)
 	return fd;
 
 out_fput:
-	fdfree(fd);
 	fdrop(fp);
-	fdrop(fp);
+	fdclose(fd);
 out_errno:
 	errno = error;
 	return -1;
@@ -113,16 +112,12 @@ int creat(const char *pathname, mode_t mode)
 
 int close(int fd)
 {
-	struct file *fp;
 	int error;
 
-	error = fget(fd, &fp);
+	error = fdclose(fd);
 	if (error)
 		goto out_errno;
 
-	fdfree(fd);
-	fdrop(fp);
-	fdrop(fp);
 	return 0;
 
 out_errno:

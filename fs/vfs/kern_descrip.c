@@ -4,12 +4,14 @@
 #include <string.h>
 #include <osv/file.h>
 #include <osv/debug.h>
+#include <osv/mutex.h>
 
 /*
  * Global file descriptors table - in OSv we have a single process so file
  * descriptors are maintained globally.
  */
 struct file *gfdt[FDMAX] = {};
+mutex_t gfdt_lock = MUTEX_INITIALIZER;
 
 /*
  * Allocate a file descriptor and assign fd to it atomically.
@@ -25,14 +27,45 @@ int fdalloc(struct file *fp, int *newfd)
 	for (fd = 0; fd < FDMAX; fd++) {
 		if (gfdt[fd])
 			continue;
-		if (__sync_val_compare_and_swap(&gfdt[fd], NULL, fp) == NULL) {
-			*newfd = fd;
-			return 0;
+
+		mutex_lock(&gfdt_lock);
+		/* Now that we hold the lock,
+		 * make sure the entry is still available */
+		if (gfdt[fd]) {
+			mutex_unlock(&gfdt_lock);
+			continue;
 		}
+
+		/* Install */
+		gfdt[fd] = fp;
+		*newfd = fd;
+		mutex_unlock(&gfdt_lock);
+
+		return 0;
 	}
 
 	fdrop(fp);
 	return EMFILE;
+}
+
+int fdclose(int fd)
+{
+	struct file* fp;
+
+	mutex_lock(&gfdt_lock);
+
+	fp = gfdt[fd];
+	if (fp == NULL) {
+		mutex_unlock(&gfdt_lock);
+		return EBADF;
+	}
+
+	gfdt[fd] = NULL;
+	mutex_unlock(&gfdt_lock);
+
+	fdrop(fp);
+
+	return 0;
 }
 
 /*
@@ -47,22 +80,26 @@ int fdset(int fd, struct file *fp)
 	        return EBADF;
 
 	fhold(fp);
-	orig = __sync_val_compare_and_swap(&gfdt[fd], NULL, fp);
+	mutex_lock(&gfdt_lock);
+
+	/* Make sure that no file pointer is currently installed on fd */
+	orig = gfdt[fd];
 	if (orig != NULL) {
+		mutex_unlock(&gfdt_lock);
 		fdrop(fp);
 		return EBADF;
 	}
+
+	gfdt[fd] = fp;
+	mutex_unlock(&gfdt_lock);
+
 	return 0;
 }
 
-void fdfree(int fd)
-{
-	struct file *fp;
-
-	fp = __sync_lock_test_and_set(&gfdt[fd], NULL);
-	assert(fp != NULL);
-}
-
+/*
+ * Retrieves a file structure from the gfdt and increases its refcount in a
+ * synchronized way, this ensures that a concurrent close will not interfere.
+ */
 int fget(int fd, struct file **out_fp)
 {
 	struct file *fp;
@@ -70,11 +107,16 @@ int fget(int fd, struct file **out_fp)
 	if (fd < 0 || fd >= FDMAX)
 	        return EBADF;
 
-	// XXX(hch): missing protection against concurrent fdtable modifications
+	mutex_lock(&gfdt_lock);
+
 	fp = gfdt[fd];
-	if (fp == NULL)
+	if (fp == NULL) {
+		mutex_unlock(&gfdt_lock);
 		return EBADF;
+	}
+
 	fhold(fp);
+	mutex_unlock(&gfdt_lock);
 
 	*out_fp = fp;
 	return 0;
