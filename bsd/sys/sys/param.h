@@ -109,9 +109,6 @@
 #ifdef _KERNEL
 #include <sys/cdefs.h>
 #include <sys/errno.h>
-#ifndef LOCORE
-#include <sys/time.h>
-#endif
 
 #ifndef FALSE
 #define	FALSE	0
