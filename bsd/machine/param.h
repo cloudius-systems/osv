@@ -250,8 +250,13 @@
 #define powerof2(x)	((((x)-1)&(x))==0)
 
 /* Macros for min/max. */
+#ifndef MIN
 #define	MIN(a,b) (((a)<(b))?(a):(b))
+#endif
+
+#ifndef MAX
 #define	MAX(a,b) (((a)>(b))?(a):(b))
+#endif
 
 /*
  * Scale factor for scaled integers used to count %cpu time and load avgs.
