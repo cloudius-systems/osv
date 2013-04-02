@@ -53,6 +53,12 @@ void cpu::reschedule_from_interrupt(bool preempt)
     handle_incoming_wakeups();
     auto now = clock::get()->time();
     thread* p = thread::current();
+    // avoid cycling through the runqueue if p still has the highest priority
+    if (p->_status == thread::status::running
+            && (runqueue.empty()
+                || p->_vruntime + now < runqueue.begin()->_vruntime)) {
+        return;
+    }
     p->_vruntime += now;
     if (p->_status == thread::status::running) {
         p->_status.store(thread::status::queued);
