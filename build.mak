@@ -279,3 +279,5 @@ gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
 -include $(shell find -name '*.d')
+
+.DELETE_ON_ERROR:

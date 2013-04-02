@@ -27,3 +27,5 @@ $(submake): Makefile
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
+
+.DELETE_ON_ERROR:
