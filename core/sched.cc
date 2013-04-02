@@ -22,6 +22,8 @@ elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{[] {}};
 
+constexpr u64 vruntime_bias = 4000000;
+
 }
 
 #include "arch-switch.hh"
@@ -56,7 +58,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     // avoid cycling through the runqueue if p still has the highest priority
     if (p->_status == thread::status::running
             && (runqueue.empty()
-                || p->_vruntime + now < runqueue.begin()->_vruntime)) {
+                || p->_vruntime + now < runqueue.begin()->_vruntime + vruntime_bias)) {
         return;
     }
     p->_vruntime += now;
