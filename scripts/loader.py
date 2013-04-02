@@ -258,13 +258,14 @@ class osv_info_threads(gdb.Command):
                 fname = '??'
                 if sal.symtab:
                     fname = sal.symtab.filename
-                gdb.write('%d (0x%x) cpu%s %-10s %s at %s:%s\n' %
+                gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12d\n' %
                           (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
                            function,
                            fname,
-                           sal.line
+                           sal.line,
+                           t['_vruntime'],
                            )
                           )
                 show_thread_timers(t)
