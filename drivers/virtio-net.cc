@@ -122,7 +122,6 @@ namespace virtio {
         sched::thread* tx = new sched::thread([this] { this->tx_gc_thread(); });
         rx->start();
         tx->start();
-        _msi.easy_register({ { 0, rx }, {1, tx }});
 
         //initialize the BSD interface _if
         _ifn = if_alloc(IFT_ETHER);
