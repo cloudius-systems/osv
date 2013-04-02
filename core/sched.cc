@@ -51,7 +51,9 @@ void cpu::schedule(bool yield)
 void cpu::reschedule_from_interrupt(bool preempt)
 {
     handle_incoming_wakeups();
+    auto now = clock::get()->time();
     thread* p = thread::current();
+    p->_vruntime += now;
     if (p->_status == thread::status::running) {
         p->_status.store(thread::status::queued);
         runqueue.push_back(*p);
@@ -59,6 +61,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     auto ni = runqueue.begin();
     auto n = &*ni;
     runqueue.erase(ni);
+    n->_vruntime -= now;
     assert(n->_status.load() == thread::status::queued);
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
@@ -220,6 +223,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _status(status::unstarted)
     , _attr(attr)
     , _timers_need_reload()
+    , _vruntime(clock::get()->time())
     , _joiner()
 {
     with_lock(thread_list_mutex, [this] {
@@ -229,6 +233,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     setup_tcb();
     init_stack();
     if (main) {
+        _vruntime = 0; // simulate the first schedule into this thread
         _status.store(status::running);
     }
 }
