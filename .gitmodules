@@ -16,3 +16,6 @@
 [submodule "external/acpica"]
 	path = external/acpica
 	url = ../acpica
+[submodule "external/misc.bin"]
+	path = external/misc.bin
+	url = ../misc.bin.git
