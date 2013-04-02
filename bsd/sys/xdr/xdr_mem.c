@@ -47,6 +47,7 @@ static char *sccsid = "@(#)xdr_mem.c	2.1 88/07/29 4.0 RPCSRC";
  */
 
 #include <sys/param.h>
+#include <arpa/inet.h>
 //#include <sys/systm.h>
 //#include <sys/malloc.h>
 

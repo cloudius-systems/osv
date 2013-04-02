@@ -176,17 +176,6 @@ typedef uintptr_t __uintptr_t;
 #undef INVARIANTS
 #endif
 
-
-#undef htonl
-#undef htons
-#undef ntohl
-#undef ntohs
-uint32_t	 htonl(uint32_t);
-uint16_t	 htons(uint16_t);
-uint32_t	 ntohl(uint32_t);
-uint16_t	 ntohs(uint16_t);
-
-
 struct malloc_type {
     int unused;
 };
