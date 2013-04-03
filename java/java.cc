@@ -22,18 +22,22 @@ extern "C" int osv_main(int ac, char **av)
     JavaVMInitArgs vm_args = {};
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
-    std::string jarfile;
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=/java"));
-    while (ac > 0 && av[0][0] == '-') {
-        if (std::string(av[0]) == "-jar") {
-            ++av, --ac;
-            jarfile = av[0];
-        } else {
-            options.push_back(mkoption(av[0]));
-        }
+    while (ac > 0 && av[0][0] == '-' && av[0] != std::string("-jar")) {
+        options.push_back(mkoption(av[0]));
         ++av, --ac;
     }
+    if (ac < 1) {
+        abort();
+    }
+    std::string mainclassname;
+    if (std::string(av[0]) == "-jar") {
+        mainclassname = "RunJar";
+    } else {
+        mainclassname = av[0];
+    }
+    ++av, --ac;
     vm_args.nOptions = options.size();
     vm_args.options = options.data();
 
@@ -44,21 +48,11 @@ extern "C" int osv_main(int ac, char **av)
 
     auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
     assert(ret == 0);
-    std::string mainclassname;
-    if (jarfile.empty()) {
-        mainclassname = av[0];
-        ++av, --ac;
-    } else {
-        mainclassname = "RunJar";
-    }
     auto mainclass = env->FindClass(mainclassname.c_str());
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
     auto stringclass = env->FindClass("java/lang/String");
     std::vector<std::string> newargs;
-    if (!jarfile.empty()) {
-        newargs.push_back(jarfile);
-    }
     for (auto i = 0; i < ac; ++i) {
         newargs.push_back(av[i]);
     }
