@@ -1047,10 +1047,12 @@ fs_debug(struct task *t, struct msg *msg)
 }
 #endif
 
+#define BOOTFS_PATH_MAX 112
+
 struct bootfs_metadata {
 	uint64_t size;
 	uint64_t offset;
-	char name[112];
+	char name[BOOTFS_PATH_MAX];
 };
 
 extern char bootfs_start;
@@ -1059,16 +1061,10 @@ void unpack_bootfs(void)
 {
 	struct bootfs_metadata *md = (struct bootfs_metadata *)&bootfs_start;
 	int fd, i;
-	const char *dirs[] = {	// XXX: derive from bootfs contents
-		"/usr",
-		"/usr/lib",
-		"/usr/lib/jvm",
-		"/usr/lib/jvm/jre",
-		"/usr/lib/jvm/jre/lib",
-		"/usr/lib/jvm/jre/lib/amd64",
-		"/usr/lib/jvm/jre/lib/amd64/server",
-		"/java",
-		"/tests",
+
+	// Empty directories to create. Other directories will be created
+	// automatically below.
+	const char *dirs[] = {
 		"/tmp",
 		NULL,
 	};
@@ -1083,18 +1079,29 @@ void unpack_bootfs(void)
 	for (i = 0; md[i].name[0]; i++) {
 		int ret;
 
+		// mkdir() directories needed for this path name, as necessary
+		char tmp[BOOTFS_PATH_MAX];
+		strncpy(tmp, md[i].name, BOOTFS_PATH_MAX);
+		for (char *p = tmp; *p; ++p) {
+		    if (*p == '/') {
+		        *p = '\0';
+		        mkdir(tmp, 0666);  // silently ignore errors and existing dirs
+		        *p = '/';
+		    }
+		}
+
 		fd = creat(md[i].name, 0666);
 		if (fd < 0) {
 			kprintf("couldn't create %s: %d\n",
 				md[i].name, errno);
-			sys_panic("foo");
+			sys_panic("unpack_bootfs failed");
 		}
 
 		ret = write(fd, &bootfs_start + md[i].offset, md[i].size);
 		if (ret != md[i].size) {
 			kprintf("write failed, ret = %d, errno = %d\n",
 				ret, errno);
-			sys_panic("foo");
+			sys_panic("unpack_bootfs failed");
 		}
 
 		close(fd);
