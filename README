@@ -31,18 +31,32 @@ To build OSv
 To run OSv
 ==========
 
-1) start the binary in qemu
-   ------------------------
 
     sh scripts/run.sh
 
-2) connect a debugger
-   ---------------------
+Debugging
+=========
 
-    # gdb build/debug/loader.elf
-    (gdb) connect
-    (gdb) osv syms
-    (gdb) bt
+To build with debugging symbols, and preemption off (to not confuse gdb),
+	make -j mode=debug conf-preempt=0
+
+To clean debugging build's results, use
+	make clean mode=debug
+
+To run the debugging build:
+	sh scripts/run.sh debug
+
+To connect a debugger to this run:
+	$ gdb build/debug/loader.elf
+	(gdb) connect
+	(gdb) osv syms
+	(gdb) bt
+
+To put a breakpoint early in the osv run, a useful trick is tell the vm to
+reboot after setting the breakpoint:
+	(gdb) hbreak function_name
+	(gdb) monitor system_reset
+	(gdb) c
 
  Tracing
  =======
