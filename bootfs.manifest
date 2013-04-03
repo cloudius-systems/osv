@@ -3,6 +3,7 @@
 /usr/lib/jvm/jre/lib/amd64/libverify.so: %(jdkbase)s/jre/lib/amd64/libverify.so
 /usr/lib/jvm/jre/lib/amd64/libjava.so: %(jdkbase)s/jre/lib/amd64/libjava.so
 /usr/lib/jvm/jre/lib/amd64/libzip.so: %(jdkbase)s/jre/lib/amd64/libzip.so
+/usr/lib/jvm/jre/lib/amd64/libnio.so: %(jdkbase)s/jre/lib/amd64/libnio.so
 /usr/lib/jvm/jre/lib/resources.jar: %(jdkbase)s/jre/lib/resources.jar
 /usr/lib/jvm/jre/lib/rt.jar: %(jdkbase)s/jre/lib/rt.jar
 /usr/lib/jvm/jre/lib/jsse.jar: %(jdkbase)s/jre/lib/jsse.jar
