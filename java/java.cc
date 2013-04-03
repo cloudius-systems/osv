@@ -59,7 +59,7 @@ extern "C" int osv_main(int ac, char **av)
     if (!jarfile.empty()) {
         newargs.push_back(jarfile);
     }
-    for (auto i = 0; i < ac; ++av) {
+    for (auto i = 0; i < ac; ++i) {
         newargs.push_back(av[i]);
     }
 
