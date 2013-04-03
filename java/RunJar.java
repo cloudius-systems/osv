@@ -20,9 +20,9 @@ public class RunJar {
 			try {
 				main.invoke(null, new Object[] { args });
 			} catch (InvocationTargetException ex) {
-				throw (Exception)ex.getCause();
+				throw ex.getCause();
 			}
-		} catch (Exception ex) {
+		} catch (Throwable ex) {
 			ex.printStackTrace();
 		}
 	}
