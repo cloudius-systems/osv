@@ -1,0 +1,47 @@
+#!/bin/bash
+
+TEMP=`getopt -o dm:c: --long debug,memsize:,vcpus: -n "$0" -- "$@"`
+if [ $? != 0 ]
+then
+	echo "Usage: $0 [-d] [-m memsize] [-c vcpus]" >&2
+	exit 1
+fi
+eval set -- "$TEMP"
+
+# default values that can be overriden by command-line arguments
+v=release
+memsize=1G
+vcpus=4
+
+while true
+do
+	case "$1" in
+	-d|--debug)
+		v=debug
+		shift;;
+	-m|--memsize)
+		memsize=$2
+		shift 2;;
+	-c|--vcpus)
+		vcpus=$2
+		shift 2;;
+	--)
+		shift
+		break;;
+	esac
+done
+
+
+
+qemu-system-x86_64 \
+	-vnc :1 \
+	-enable-kvm \
+	-gdb tcp::1234,server,nowait \
+	-cpu host,+x2apic \
+	-m $memsize \
+	-smp $vcpus \
+	-chardev stdio,mux=on,id=stdio \
+	-mon chardev=stdio,mode=readline,default \
+	-device isa-serial,chardev=stdio \
+	-device virtio-net-pci \
+	-drive file=build/$v/loader.img,if=virtio,cache=unsafe
