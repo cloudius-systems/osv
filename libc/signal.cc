@@ -23,20 +23,25 @@ sigset* thread_signals()
     return reinterpret_cast<sigset*>(thread_signal_mask);
 }
 
-void handle_segmentation_fault(ulong addr, exception_frame* ef)
+void generate_signal(siginfo_t &siginfo, exception_frame* ef)
 {
     if (!pthread_self()) {
         abort();
     }
-    if (thread_signals()->mask[SIGSEGV]) {
+    if (thread_signals()->mask[siginfo.si_signo]) {
         // FIXME: need to find some other thread to deliver
         // FIXME: the signal to
         abort();
     }
+    arch::build_signal_frame(ef, siginfo, signal_actions[siginfo.si_signo]);
+}
+
+void handle_segmentation_fault(ulong addr, exception_frame* ef)
+{
     siginfo_t si;
     si.si_signo = SIGSEGV;
     si.si_addr = reinterpret_cast<void*>(addr);
-    arch::build_signal_frame(ef, si, signal_actions[SIGSEGV]);
+    generate_signal(si, ef);
 }
 
 }

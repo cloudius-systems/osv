@@ -5,6 +5,7 @@
 #include <boost/format.hpp>
 #include "sched.hh"
 #include "debug.hh"
+#include <libc/signal.hh>
 
 typedef boost::format fmt;
 
@@ -124,10 +125,22 @@ void interrupt(exception_frame* frame)
     sched::preempt();
 }
 
-#define DUMMY_HANDLER(x) \
-     extern "C" void x(); void x() { abort(); }
+// Implement the various x86 exception handlers mentioned in arch/x64/entry.S.
+// Note page_fault() is implemented in core/mmu.cc.
 
-DUMMY_HANDLER(divide_error)
+extern "C" void divide_error(exception_frame *ef);
+void divide_error(exception_frame *ef)
+{
+    siginfo_t si;
+    si.si_signo = SIGFPE;
+    si.si_code = FPE_INTDIV;
+    osv::generate_signal(si, ef);
+}
+
+
+#define DUMMY_HANDLER(x) \
+     extern "C" void x(); void x() { debug("DUMMY_HANDLER for " #x " aborting."); abort(); }
+
 DUMMY_HANDLER(debug_exception)
 DUMMY_HANDLER(nmi)
 DUMMY_HANDLER(breakpoint)

@@ -20,6 +20,7 @@ const sigset* from_libc(const sigset_t* s);
 
 sigset* thread_signals();
 
+void generate_signal(siginfo_t &siginfo, exception_frame* ef);
 void handle_segmentation_fault(ulong addr, exception_frame* ef);
 
 }
