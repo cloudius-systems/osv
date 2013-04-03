@@ -253,6 +253,7 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
+miscbase = $(src)/external/misc.bin
 
 bsd/%.o: COMMON += -D _KERNEL
 
@@ -266,7 +267,7 @@ bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) \
 		tests/testrunner.so java/java.so java/RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
-		glibcbase=$(glibcbase), MKBOOTFS $@)
+		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
 bootfs.o: bootfs.bin
 
