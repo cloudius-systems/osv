@@ -100,7 +100,7 @@ unsigned interrupt_descriptor_table::register_handler(std::function<void ()> han
 
 void interrupt_descriptor_table::unregister_handler(unsigned vector)
 {
-    _handlers[vector] = std::function<void ()>();
+    _handlers[vector] = {};
 }
 
 void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
