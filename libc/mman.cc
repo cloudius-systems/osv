@@ -20,6 +20,14 @@ unsigned libc_prot_to_perm(int prot)
 
 int mprotect(void *addr, size_t len, int prot)
 {
+    // we don't support mprotecting() the linear map (e.g.., malloc() memory)
+    // because that could leave the linear map a mess.
+    if (reinterpret_cast<long>(addr) < 0) {
+        debug("mprotect() on linear map not supported");
+        errno = ENOTSUP;
+        return -1;
+    }
+
     if ((reinterpret_cast<intptr_t>(addr) & 4095) || (len & 4095)) {
         // address not page aligned
         errno = EINVAL;
