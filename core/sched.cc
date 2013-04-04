@@ -57,9 +57,13 @@ void cpu::reschedule_from_interrupt(bool preempt)
     auto now = clock::get()->time();
     thread* p = thread::current();
     // avoid cycling through the runqueue if p still has the highest priority
+    auto bias = vruntime_bias;
+    if (p->_borrow) {
+        bias /= 2;  // preempt threads on borrowed time sooner
+    }
     if (p->_status == thread::status::running
             && (runqueue.empty()
-                || p->_vruntime + now < runqueue.begin()->_vruntime + vruntime_bias)) {
+                || p->_vruntime + now < runqueue.begin()->_vruntime + bias)) {
         return;
     }
     p->_vruntime += now;
