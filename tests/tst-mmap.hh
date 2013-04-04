@@ -147,12 +147,12 @@ public:
         mprotect(buf, 4096, PROT_READ); // get it back
         assert(*(char*)buf == 123);
 
-        // Test that mprotect() on malloc() memory is currently not supported
-        buf = malloc(8192);
-        buf = align_up(buf, 4096);
-        assert(mprotect(buf, 4096, PROT_READ)==-1);
-        assert(errno==ENOTSUP);
-        free(buf);
+//        // Test that mprotect() on malloc() memory is currently not supported
+//        buf = malloc(8192);
+//        buf = align_up(buf, 4096);
+//        assert(mprotect(buf, 4096, PROT_READ)==-1);
+//        assert(errno==ENOTSUP);
+//        free(buf);
 
         // TODO: verify that mmapping more than available physical memory doesn't
         // panic just return -1 and ENOMEM.

@@ -24,8 +24,7 @@ int mprotect(void *addr, size_t len, int prot)
     // because that could leave the linear map a mess.
     if (reinterpret_cast<long>(addr) < 0) {
         debug("mprotect() on linear map not supported");
-        errno = ENOTSUP;
-        return -1;
+        abort();
     }
 
     if ((reinterpret_cast<intptr_t>(addr) & 4095) || (len & 4095)) {
