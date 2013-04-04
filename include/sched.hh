@@ -198,6 +198,7 @@ private:
     arch_fpu _fpu;
     unsigned long _id;
     u64 _vruntime;
+    u64 _borrow;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
@@ -248,7 +249,7 @@ private:
 class thread_runtime_compare {
 public:
     bool operator()(const thread& t1, const thread& t2) {
-        return t1._vruntime < t2._vruntime;
+        return t1._vruntime - t1._borrow < t2._vruntime - t2._borrow;
     }
 };
 
@@ -281,6 +282,7 @@ struct cpu {
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
+    void enqueue(thread& t);
 };
 
 void preempt();

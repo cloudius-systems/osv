@@ -23,6 +23,7 @@ elf::tls_data tls;
 inter_processor_interrupt wakeup_ipi{[] {}};
 
 constexpr u64 vruntime_bias = 4000000;
+constexpr u64 max_slice = 10000000;
 
 }
 
@@ -129,11 +130,23 @@ void cpu::handle_incoming_wakeups()
             irq_save_lock_type irq_lock;
             with_lock(irq_lock, [&] {
                 t._status.store(thread::status::queued);
-                runqueue.push_back(t);
+                enqueue(t);
                 t.resume_timers();
             });
         }
     }
+}
+
+void cpu::enqueue(thread& t)
+{
+    auto head = std::min(t._vruntime, thread::current()->_vruntime);
+    auto tail = head + max_slice * runqueue.size();
+    if (t._vruntime > tail) {
+        t._borrow = t._vruntime - tail;
+    } else {
+        t._borrow = 0;
+    }
+    runqueue.push_back(t);
 }
 
 void cpu::init_on_cpu()
