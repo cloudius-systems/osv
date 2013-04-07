@@ -249,6 +249,7 @@ void poll_uninstall(struct pollreq* p)
         FD_LOCK(fp);
         if (list_empty(&fp->f_plist)) {
             FD_UNLOCK(fp);
+            fdrop(fp);
             continue;
         }
 
