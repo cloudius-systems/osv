@@ -189,6 +189,12 @@ int fdrop(struct file *fp)
 	if (__sync_fetch_and_sub(&fp->f_count, 1) > 1)
 		return 0;
 
+	/* We are about to free this file structure, but we still do things with it
+	 * so we increase the refcount by one, fdrop may get called again
+	 * and we don't want to reach this point more than once.
+	 */
+
+	fhold(fp);
 	fo_close(fp);
 	poll_drain(fp);
 	mutex_destroy(&fp->f_lock);
