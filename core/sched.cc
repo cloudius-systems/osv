@@ -378,6 +378,10 @@ void thread::resume_timers()
 
 void thread::join()
 {
+    if (_status.load() == status::unstarted) {
+        // To allow destruction of a thread object before start().
+        return;
+    }
     _joiner = current();
     wait_until([this] { return _status.load() == status::terminated; });
 }
