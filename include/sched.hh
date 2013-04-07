@@ -285,7 +285,7 @@ struct cpu {
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
-    void enqueue(thread& t);
+    void enqueue(thread& t, u64 now);
 };
 
 void preempt();

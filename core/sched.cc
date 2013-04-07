@@ -69,7 +69,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     p->_vruntime += now;
     if (p->_status == thread::status::running) {
         p->_status.store(thread::status::queued);
-        enqueue(*p);
+        enqueue(*p, now);
     }
     auto ni = runqueue.begin();
     auto n = &*ni;
@@ -125,6 +125,10 @@ void cpu::idle()
 void cpu::handle_incoming_wakeups()
 {
     cpu_set queues_with_wakes{incoming_wakeups_mask.fetch_clear()};
+    if (!queues_with_wakes) {
+        return;
+    }
+    auto now = clock::get()->time();
     for (auto i : queues_with_wakes) {
         incoming_wakeup_queue q;
         incoming_wakeups[i].copy_and_clear(q);
@@ -134,16 +138,16 @@ void cpu::handle_incoming_wakeups()
             irq_save_lock_type irq_lock;
             with_lock(irq_lock, [&] {
                 t._status.store(thread::status::queued);
-                enqueue(t);
+                enqueue(t, now);
                 t.resume_timers();
             });
         }
     }
 }
 
-void cpu::enqueue(thread& t)
+void cpu::enqueue(thread& t, u64 now)
 {
-    auto head = std::min(t._vruntime, thread::current()->_vruntime);
+    auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
     auto tail = head + max_slice * runqueue.size();
     if (t._vruntime > tail) {
         t._borrow = t._vruntime - tail;
