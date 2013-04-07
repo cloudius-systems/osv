@@ -150,7 +150,7 @@ void cpu::enqueue(thread& t)
     } else {
         t._borrow = 0;
     }
-    runqueue.push_back(t);
+    runqueue.insert_unique(t);
 }
 
 void cpu::init_on_cpu()
