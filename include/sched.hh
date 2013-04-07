@@ -59,6 +59,9 @@ public:
         ret._mask = _mask.exchange(0);
         return ret;
     }
+    operator bool() const {
+        return _mask.load(std::memory_order_relaxed);
+    }
     class iterator {
     public:
         explicit iterator(cpu_set& set)
