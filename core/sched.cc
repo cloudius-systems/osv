@@ -69,7 +69,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     p->_vruntime += now;
     if (p->_status == thread::status::running) {
         p->_status.store(thread::status::queued);
-        runqueue.push_back(*p);
+        enqueue(*p);
     }
     auto ni = runqueue.begin();
     auto n = &*ni;
