@@ -248,7 +248,7 @@ private:
 
 class thread_runtime_compare {
 public:
-    bool operator()(const thread& t1, const thread& t2) {
+    bool operator()(const thread& t1, const thread& t2) const {
         return t1._vruntime - t1._borrow < t2._vruntime - t2._borrow;
     }
 };
