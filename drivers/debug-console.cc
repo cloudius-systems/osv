@@ -14,3 +14,8 @@ void debug_console::newline()
 {
     with_lock(_lock, [=] { _impl.newline(); });
 }
+
+char debug_console::readch()
+{
+    return with_lock(_lock, [=] { return _impl.readch(); });
+ }

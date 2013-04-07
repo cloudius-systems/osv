@@ -10,6 +10,7 @@ public:
 	IsaSerialConsole();
     virtual void write(const char *str, size_t len);
     virtual void newline();
+    virtual char readch();
 private:
     static const u16 ioport = 0x3f8;
     u8 lcr;
@@ -21,7 +22,14 @@ private:
         BAUD_GEN0_ADDRESS = 0x0,
         BAUD_GEN1_ADDRESS = 0x1,
         LSR_ADDRESS = 0x5,
+        LSR_RECEIVE_DATA_READY = 0x1,
+        LSR_OVERRUN = 0x2,
+        LSR_PARITY_ERROR = 0x4,
+        LSR_FRAME_ERROR = 0x8,
+        LSR_BREAK_INTERRUPT = 0x10,
         LSR_TRANSMIT_HOLD_EMPTY = 0x20,
+        LSR_TRANSMIT_EMPTY = 0x40,
+        LSR_FIFO_ERROR = 0x80,
     };
 
     void reset();

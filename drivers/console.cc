@@ -18,6 +18,16 @@ void write(const char *msg, size_t len, bool lf)
         console.newline();
 }
 
+void read(char *msg, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        msg[i] = console.readch();
+        write(&msg[i],1,false);
+        if (msg[i] == '\r')
+            break;
+    }
+}
+
 }
 
 static int

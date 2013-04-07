@@ -7,12 +7,14 @@ class Console {
 public:
     virtual ~Console() {}
     virtual void write(const char *str, size_t len) = 0;
+    virtual char readch() = 0;
     virtual void newline() = 0;
 };
 
 namespace console {
 
 void write(const char *msg, size_t len, bool lf);
+void read(char *msg, size_t len);
 
 }
 

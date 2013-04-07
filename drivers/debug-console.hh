@@ -12,6 +12,7 @@ public:
     explicit debug_console(Console& impl);
     virtual void write(const char *str, size_t len);
     virtual void newline();
+    virtual char readch();
 private:
     Console& _impl;
     spinlock _lock;

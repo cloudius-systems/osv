@@ -153,6 +153,11 @@ extern "C" {
         console::write(msg, strlen(msg), true);
     }
 
+    void readln(char *msg, size_t size)
+    {
+        console::read(msg, size);
+    }
+
     void debug_write(const char *msg, size_t len)
     {
         console::write(msg, len, false);
