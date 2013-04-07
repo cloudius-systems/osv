@@ -22,8 +22,8 @@ elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{[] {}};
 
-constexpr u64 vruntime_bias = 4000000;
-constexpr u64 max_slice = 10000000;
+constexpr u64 vruntime_bias = 4_ms;
+constexpr u64 max_slice = 10_ms;
 
 }
 
@@ -172,7 +172,7 @@ void cpu::load_balance()
 {
     timer tmr(*thread::current());
     while (true) {
-        tmr.set(clock::get()->time() + 100000000);
+        tmr.set(clock::get()->time() + 100_ms);
         thread::wait_until([&] { return tmr.expired(); });
         if (runqueue.empty()) {
             continue;
