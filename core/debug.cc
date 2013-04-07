@@ -29,6 +29,7 @@ bool logger::parse_configuration(void)
     add_tag("virtio-blk", logger_info);
     add_tag("virtio-net", logger_info);
     add_tag("pci", logger_info);
+    add_tag("poll", logger_info);
 
     // Tests
     add_tag("tst-eventlist", logger_none);

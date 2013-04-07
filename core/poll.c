@@ -46,7 +46,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
 
-#define dbg_d(...) tprintf("poll", logger_error, __VA_ARGS__)
+#define dbg_d(...) tprintf("poll", logger_debug, __VA_ARGS__)
 
 int poll_no_poll(int events)
 {
