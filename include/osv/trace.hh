@@ -5,6 +5,7 @@
 #include <tuple>
 #include <boost/format.hpp>
 #include <osv/types.h>
+#include <align.hh>
 
 void enable_trace();
 
@@ -134,6 +135,25 @@ struct signature_helper<arg0, args...> {
                     | (signature_helper<args...>::sig << 8);
 };
 
+template <size_t idx, size_t N, typename... args>
+struct serializer {
+    static size_t write(void* buffer, size_t offset, std::tuple<args...> as) {
+        auto arg = std::get<idx>(as);
+        typedef decltype(arg) argtype;
+        auto align = sizeof(argtype); // FIXME: want to use alignof here
+        offset = align_up(offset, align);
+        *static_cast<argtype*>(buffer + offset) = arg;
+        return serializer<idx + 1, N, args...>::write(buffer, offset + sizeof(argtype), as);
+    }
+};
+
+template <size_t N, typename... args>
+struct serializer<N, N, args...> {
+    static size_t write(void* buffer, size_t offset, std::tuple<args...> as) {
+        return offset;
+    }
+};
+
 class tracepoint_base {
 public:
     explicit tracepoint_base(const char* _name, const char* _format)
@@ -162,6 +182,9 @@ public:
         if (enabled) {
             std::cout << name << " " << format_tuple(format, as) << "\n";
         }
+    }
+    size_t serialize(void* buffer, std::tuple<s_args...> as) {
+        return serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
     }
     // Python struct style signature H=u16, I=u32, Q=u64 etc, packed into a
     // u64, lsb=first parameter
