@@ -324,12 +324,14 @@ void thread::wait_until(mutex& mtx, Pred pred)
 {
     thread* me = current();
     while (true) {
-        wait_guard waiter(me);
-        if (pred()) {
-            return;
+        {
+            wait_guard waiter(me);
+            if (pred()) {
+                return;
+            }
+            mtx.unlock();
+            me->wait();
         }
-        mtx.unlock();
-        me->wait();
         mtx.lock();
     }
 }
@@ -339,12 +341,14 @@ void thread::wait_until(mutex_t& mtx, Pred pred)
 {
     thread* me = current();
     while (true) {
-        wait_guard waiter(me);
-        if (pred()) {
-            return;
+        {
+            wait_guard waiter(me);
+            if (pred()) {
+                return;
+            }
+            mutex_unlock(&mtx);
+            me->wait();
         }
-        mutex_unlock(&mtx);
-        me->wait();
         mutex_lock(&mtx);
     }
 }
@@ -354,16 +358,17 @@ void thread::wait_until(mutex_t* mtx, Pred pred)
 {
     thread* me = current();
     while (true) {
-        wait_guard waiter(me);
-        if (pred()) {
-            return;
-        }
-        if (mtx) {
-            mutex_unlock(mtx);
-        }
+        {
+            wait_guard waiter(me);
+            if (pred()) {
+                return;
+            }
+            if (mtx) {
+                mutex_unlock(mtx);
+            }
 
-        me->wait();
-
+            me->wait();
+        }
         if (mtx) {
             mutex_lock(mtx);
         }
