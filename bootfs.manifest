@@ -27,6 +27,7 @@
 /tests/tst-bsd-netdriver.so: ./tests/tst-bsd-netdriver.so
 /tests/tst-virtionet.so: ./tests/tst-virtionet.so
 /tests/tst-fpu.so: ./tests/tst-fpu.so
+/tests/tst-tracepoint.so: ./tests/tst-tracepoint.so
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so

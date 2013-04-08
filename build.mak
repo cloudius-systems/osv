@@ -84,6 +84,7 @@ tests += tests/tst-vblk.so tests/tst-fat.so tests/tst-romfs.so tests/bench/bench
 tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
          tests/tst-bsd-netdriver.so tests/tst-virtionet.so
 tests += tests/tst-fpu.so
+tests += tests/tst-tracepoint.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -100,6 +101,7 @@ tests/tst-bsd-netisr.so: tests/tst-bsd-netisr.o
 tests/tst-bsd-netdriver.so: tests/tst-bsd-netdriver.o
 tests/tst-virtionet.so: tests/tst-virtionet.o
 tests/tst-fpu.so: tests/tst-fpu.o
+tests/tst-tracepoint.so: tests/tst-tracepoint.o
 
 all: loader.img loader.bin
 
