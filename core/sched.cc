@@ -276,6 +276,7 @@ thread::~thread()
     if (_attr.stack.deleter) {
         _attr.stack.deleter(_attr.stack.begin);
     }
+    free_tcb();
 }
 
 void thread::start()

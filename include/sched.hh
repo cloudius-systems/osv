@@ -175,6 +175,7 @@ private:
     void stop_wait();
     void init_stack();
     void setup_tcb();
+    void free_tcb();
     void complete();
     void suspend_timers();
     void resume_timers();

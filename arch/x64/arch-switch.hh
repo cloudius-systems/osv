@@ -93,6 +93,11 @@ void thread::setup_tcb()
     _tcb->tls_base = p;
 }
 
+void thread::free_tcb()
+{
+    free(_tcb->tls_base);
+}
+
 void thread_main_c(thread* t)
 {
     s_current = t;
