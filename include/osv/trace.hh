@@ -134,15 +134,24 @@ struct signature_helper<arg0, args...> {
                     | (signature_helper<args...>::sig << 8);
 };
 
+class tracepoint_base {
+public:
+    explicit tracepoint_base(const char* _name, const char* _format)
+        : name(_name), format(_format) {}
+    const char* name;
+    const char* format;
+    bool enabled = true;
+};
+
 template <typename... s_args,
           typename... r_args,
           typename assigner_type<storage_args<s_args...>, runtime_args<r_args...>>::type assign>
 class tracepointv<storage_args<s_args...>, runtime_args<r_args...>, assign>
+    : public tracepoint_base
 {
 public:
-    explicit tracepointv(const char* _name,
-                 const char* _format)
-        : name(_name), format(_format) {}
+    explicit tracepointv(const char* name, const char* format)
+        : tracepoint_base(name, format) {}
     void operator()(r_args... as) {
         trace_slow_path(assign(as...));
     }
@@ -156,9 +165,6 @@ public:
     u64 signature() const {
         return signature_helper<s_args...>::sig;
     }
-    const char* name;
-    const char* format;
-    bool enabled = true;
 };
 
 template <typename... args>
