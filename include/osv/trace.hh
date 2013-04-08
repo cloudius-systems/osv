@@ -4,6 +4,7 @@
 #include <iostream>
 #include <tuple>
 #include <boost/format.hpp>
+#include <osv/types.h>
 
 void enable_trace();
 
@@ -61,6 +62,78 @@ boost::format format_tuple(const char* fmt, std::tuple<args...> as)
     return format_tuple(format, as);
 }
 
+template <typename T>
+struct signature_char;
+
+template <>
+struct signature_char<char> {
+    static const char sig = 'c';
+};
+
+template <>
+struct signature_char<s8> {
+    static const char sig = 'b';
+};
+
+template <>
+struct signature_char<u8> {
+    static const char sig = 'B';
+};
+
+template <>
+struct signature_char<s16> {
+    static const char sig = 'h';
+};
+
+template <>
+struct signature_char<u16> {
+    static const char sig = 'H';
+};
+
+template <>
+struct signature_char<s32> {
+    static const char sig = 'i';
+};
+
+template <>
+struct signature_char<u32> {
+    static const char sig = 'I';
+};
+
+template <>
+struct signature_char<s64> {
+    static const char sig = 'q';
+};
+
+template <>
+struct signature_char<u64> {
+    static const char sig = 'Q';
+};
+
+template <>
+struct signature_char<bool> {
+    static const char sig = '?';
+};
+
+template <typename T>
+struct signature_char<T*> {
+    static const char sig = 'P';
+};
+
+template <typename... args>
+struct signature_helper;
+
+template <>
+struct signature_helper<> {
+    static const u64 sig = 0;
+};
+
+template <typename arg0, typename... args>
+struct signature_helper<arg0, args...> {
+    static const u64 sig = signature_char<arg0>::sig
+                    | (signature_helper<args...>::sig << 8);
+};
+
 template <typename... s_args,
           typename... r_args,
           typename assigner_type<storage_args<s_args...>, runtime_args<r_args...>>::type assign>
@@ -77,6 +150,11 @@ public:
         if (enabled) {
             std::cout << name << " " << format_tuple(format, as) << "\n";
         }
+    }
+    // Python struct style signature H=u16, I=u32, Q=u64 etc, packed into a
+    // u64, lsb=first parameter
+    u64 signature() const {
+        return signature_helper<s_args...>::sig;
     }
     const char* name;
     const char* format;
