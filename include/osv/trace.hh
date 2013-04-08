@@ -140,6 +140,7 @@ public:
         : name(_name), format(_format) {}
     const char* name;
     const char* format;
+    u64 sig;
     bool enabled = true;
 };
 
@@ -151,7 +152,9 @@ class tracepointv<storage_args<s_args...>, runtime_args<r_args...>, assign>
 {
 public:
     explicit tracepointv(const char* name, const char* format)
-        : tracepoint_base(name, format) {}
+        : tracepoint_base(name, format) {
+        sig = signature();
+    }
     void operator()(r_args... as) {
         trace_slow_path(assign(as...));
     }
