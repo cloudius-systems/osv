@@ -49,6 +49,7 @@ struct arch_fpu {
     void save() { processor::fxsave(s); }
     void restore() { processor::fxrstor(s); }
     fpu_state* s = static_cast<fpu_state*>(memory::alloc_page());
+    ~arch_fpu(){ memory::free_page(s); }
 };
 
 inline arch_cpu::arch_cpu()

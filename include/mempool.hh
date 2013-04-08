@@ -22,6 +22,8 @@ void* alloc_page_range(size_t bytes);
 void free_page_range(void* start, size_t bytes);
 void setup_free_memory(void* start, size_t bytes);
 
+void debug_memory_pool(size_t *total, size_t *contig);
+
 namespace bi = boost::intrusive;
 
 class pool {
