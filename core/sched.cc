@@ -289,6 +289,8 @@ void thread::start()
 
 void thread::prepare_wait()
 {
+    // After setting the thread's status to "waiting", we must not preempt it,
+    // as it is no longer in "running" state and therefore will not return.
     preempt_disable();
     assert(_status.load() == status::running);
     _status.store(status::waiting);
@@ -337,14 +339,18 @@ void thread::sleep_until(u64 abstime)
 
 void thread::stop_wait()
 {
+    // Can only re-enable preemption of this thread after it is no longer
+    // in "waiting" state (otherwise if preempted, it will not be scheduled
+    // in again - this is why we disabled preemption in prepare_wait.
     status old_status = status::waiting;
     if (_status.compare_exchange_strong(old_status, status::running)) {
+        preempt_enable();
         return;
     }
+    preempt_enable();
     while (_status.load() == status::waking) {
         schedule(true);
     }
-    preempt_enable();
     assert(_status.load() == status::running);
 }
 
