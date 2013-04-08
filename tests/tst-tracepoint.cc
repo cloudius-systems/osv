@@ -32,6 +32,12 @@ int main(int ac, char** av)
     trace_1(10, 20);
     debug(boost::format("trace_1 signature: %s") % signature_string(trace_1.signature()));
     assert(signature_string(trace_1.signature()) == "Iq");
+    struct {
+        u32 a0;
+        s64 a1;
+    } tmp = {};
+    auto size = trace_1.serialize(&tmp, std::make_tuple(u32(10), s64(20)));
+    assert(size == 16 && tmp.a0 == 10 && tmp.a1 == 20);
     trace_2(obj);
 }
 
