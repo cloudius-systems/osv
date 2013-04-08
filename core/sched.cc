@@ -33,7 +33,7 @@ namespace sched {
 
 void schedule_force();
 
-const thread::attr idle_thread_attr{{}, true};
+const thread::attr idle_thread_attr(true);
 
 cpu::cpu()
     : idle_thread([this] { idle(); }, idle_thread_attr)

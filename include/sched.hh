@@ -143,6 +143,7 @@ public:
     struct attr {
         stack_info stack;
         bool pinned;
+        attr(bool pinned = false) : pinned(pinned) { }
     };
 
 public:
