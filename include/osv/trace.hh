@@ -184,7 +184,7 @@ public:
     const char* name;
     const char* format;
     u64 sig;
-    bool enabled = true;
+    bool enabled = false;
     typedef boost::intrusive::list_member_hook<> tp_list_link_type;
     tp_list_link_type tp_list_link;
     static boost::intrusive::list<
