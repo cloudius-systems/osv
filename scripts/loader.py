@@ -194,15 +194,14 @@ class thread_context(object):
         if not self.running_cpu:
             self.old_frame.select()
             self.new_rsp = thread['_state']['rsp'].cast(ulong_type)
+            self.new_rip = thread['_state']['rip'].cast(ulong_type)
+            self.new_rbp = thread['_state']['rbp'].cast(ulong_type)
     def __enter__(self):
         self.new_frame.select()
         if not self.running_cpu:
-            gdb.execute('set $rsp = %s' % (self.new_rsp + 16))
-            inf = gdb.selected_inferior()
-            stack = inf.read_memory(self.new_rsp, 16)
-            (new_rip, new_rbp) = struct.unpack('qq', stack)
-            gdb.execute('set $rip = %s' % (new_rip + 1))
-            gdb.execute('set $rbp = %s' % new_rbp)
+            gdb.execute('set $rsp = %s' % self.new_rsp)
+            gdb.execute('set $rip = %s' % self.new_rip)
+            gdb.execute('set $rbp = %s' % self.new_rbp)
         else:
             self.running_cpu.cpu_thread.switch()
     def __exit__(self, *_):
@@ -250,14 +249,27 @@ class osv_info_threads(gdb.Command):
                 cpu = t['_cpu']
 		tid = t['_id']
                 fr = gdb.selected_frame()
+                # Non-running threads have always, by definition, just called
+                # a reschedule, and the stack trace is filled with reschedule
+                # related functions (switch_to, schedule, wait_until, etc.).
+                # Here we try to skip such functions and instead show a more
+                # interesting caller which initiated the wait.
+                fname = '??'
                 sal = fr.find_sal()
-                status = str(t['_status']['_M_i']).replace('sched::thread::', '')
-                function = '??'
+                while sal.symtab:
+                    fname = sal.symtab.filename
+                    b = os.path.basename(fname);
+                    if b=="arch-switch.hh" or b=="sched.cc" or b=="sched.hh" or b=="mutex.hh":
+                        fr = fr.older();
+                        sal = fr.find_sal();
+                    else:
+                        break;
+
                 if fr.function():
                     function = fr.function().name
-                fname = '??'
-                if sal.symtab:
-                    fname = sal.symtab.filename
+		else:
+                    function = '??'
+                status = str(t['_status']['_M_i']).replace('sched::thread::', '')
                 gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12d\n' %
                           (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
