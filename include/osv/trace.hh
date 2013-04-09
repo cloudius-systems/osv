@@ -6,8 +6,22 @@
 #include <boost/format.hpp>
 #include <osv/types.h>
 #include <align.hh>
+#include <sched.hh>
 
 void enable_trace();
+
+class tracepoint_base;
+
+struct trace_record {
+    tracepoint_base* tp;
+    sched::thread* thread;
+    union {
+        u8 buffer[80];  // FIXME: dynamic size
+        unsigned long align;
+    };
+};
+
+trace_record* allocate_trace_record();
 
 template <class storage_args, class runtime_args>
 class assigner_type;
@@ -180,7 +194,11 @@ public:
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
         if (enabled) {
-            std::cout << name << " " << format_tuple(format, as) << "\n";
+            auto tr = allocate_trace_record();
+            tr->tp = this;
+            tr->thread = sched::thread::current();
+            auto size = serialize(tr->buffer, as);
+            assert(size <= sizeof(tr->buffer));
         }
     }
     size_t serialize(void* buffer, std::tuple<s_args...> as) {
