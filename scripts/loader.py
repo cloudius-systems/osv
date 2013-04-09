@@ -375,7 +375,13 @@ def dump_trace():
             indent = '  ' * indents[thread]
             trace_function(indent, '<-', data)
         else:
-            pass # FIXME: standard tracepoint
+            format = tp['format'].string()
+            name = tp['name'].string()
+            gdb.write('0x%016x %-20s %s\n' % (thread,
+                                              name,
+                                              format % data,
+                                              )
+                      )
 
 class osv_trace(gdb.Command):
     def __init__(self):
