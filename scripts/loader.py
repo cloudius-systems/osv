@@ -194,15 +194,14 @@ class thread_context(object):
         if not self.running_cpu:
             self.old_frame.select()
             self.new_rsp = thread['_state']['rsp'].cast(ulong_type)
+            self.new_rip = thread['_state']['rip'].cast(ulong_type)
+            self.new_rbp = thread['_state']['rbp'].cast(ulong_type)
     def __enter__(self):
         self.new_frame.select()
         if not self.running_cpu:
-            gdb.execute('set $rsp = %s' % (self.new_rsp + 16))
-            inf = gdb.selected_inferior()
-            stack = inf.read_memory(self.new_rsp, 16)
-            (new_rip, new_rbp) = struct.unpack('qq', stack)
-            gdb.execute('set $rip = %s' % (new_rip + 1))
-            gdb.execute('set $rbp = %s' % new_rbp)
+            gdb.execute('set $rsp = %s' % self.new_rsp)
+            gdb.execute('set $rip = %s' % self.new_rip)
+            gdb.execute('set $rbp = %s' % self.new_rbp)
         else:
             self.running_cpu.cpu_thread.switch()
     def __exit__(self, *_):
