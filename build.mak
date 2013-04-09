@@ -270,7 +270,7 @@ java/java.o: CXXFLAGS += -fPIC
 tests/testrunner.so: tests/testrunner.o
 tests/testrunner.o: CXXFLAGS += -fPIC
 
-usr.img:
+usr.img: usr.manifest
 	$(call quiet, \
 		JDKBASE=$(jdkbase) \
 		GCCBASE=$(gccbase) \
