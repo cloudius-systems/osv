@@ -8,8 +8,10 @@
 #include <align.hh>
 #include <sched.hh>
 #include <boost/intrusive/list.hpp>
+#include <string>
 
 void enable_trace();
+void enable_tracepoint(std::string wildcard);
 
 class tracepoint_base;
 
@@ -178,6 +180,7 @@ public:
     ~tracepoint_base() {
         tp_list.erase(tp_list.iterator_to(*this));
     }
+    void enable();
     const char* name;
     const char* format;
     u64 sig;
