@@ -276,6 +276,7 @@ usr.img: usr.manifest
 	$(call quiet, \
 		JDKBASE=$(jdkbase) \
 		GCCBASE=$(gccbase) \
+		MISCBASE=$(miscbase) \
 		BUILDDIR="${@}.tmp" \
 		IMAGE="$@" \
 		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)

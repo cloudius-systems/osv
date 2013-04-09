@@ -12,4 +12,4 @@ lib/jvm/jre/lib/meta-index		JDKBASE/jre/lib/meta-index
 lib/jvm/jre/lib/currency.data		JDKBASE/jre/lib/currency.data
 lib/libstdc++.so.6			GCCBASE/usr/lib64/libstdc++.so.6
 lib/libgcc_s.so.1			GCCBASE/lib64/libgcc_s.so.1
-lib/libz.so.1				MISCBASE/lib64/libz.so.1
+lib/libz.so.1				MISCBASE/usr/lib64/libz.so.1
