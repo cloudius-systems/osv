@@ -321,42 +321,61 @@ def setup_libstdcxx():
     main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
     execfile(main)
 
+def sig_to_string(sig):
+    '''Convert a tracepoing signature encoded in a u64 to a string'''
+    ret = ''
+    while sig != 0:
+        ret += chr(sig & 255)
+        sig >>= 8
+    return ret
+
 def dump_trace():
     from collections import defaultdict
     trace_log = gdb.lookup_global_symbol('trace_log').value()
     max_trace = gdb.parse_and_eval('max_trace')
     last = gdb.lookup_global_symbol('trace_record_last').value()['_M_i']
     indents = defaultdict(int)
+    def lookup_tp(name):
+        tp_base = gdb.lookup_type('tracepoint_base')
+        return gdb.lookup_global_symbol(name).value().cast(tp_base)
+    tp_fn_entry = lookup_tp('trace_function_entry')
+    tp_fn_exit = lookup_tp('trace_function_exit')
+
     for i in range(max_trace):
         tr = trace_log[(last + i) % max_trace]
-        type = tr['type']
+        tp = tr['tp']
         thread = ulong(tr['thread'])
-        if type == 0:
+        tp_key = ulong(tp)
+        def trace_function(indent, annotation, data):
+            fn, caller = data
+            try:
+                block = gdb.block_for_pc(long(fn))
+                fn_name = block.function.print_name
+            except:
+                fn_name = '???'
+            gdb.write('0x%016x %s %s %s\n' % (thread,
+                                              indent,
+                                              annotation,
+                                              fn_name,
+                                              ))
+        if tp_key == 0:
             continue
-        elif type == 1:
-            annotation = '->'
+        sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
+        inf = gdb.selected_inferior()
+        buffer = inf.read_memory(tr['buffer'].address, struct.calcsize(sig))
+        data = struct.unpack(sig, buffer)
+        if tp == tp_fn_entry.address:
             indent = '  ' * indents[thread]
             indents[thread] += 1
-        elif type == 2:
-            annotation = '<-'
+            trace_function(indent, '->', data)
+        elif tp == tp_fn_exit.address:
             indents[thread] -= 1
             if indents[thread] < 0:
                 indents[thread] = 0
             indent = '  ' * indents[thread]
+            trace_function(indent, '<-', data)
         else:
-            delta = 0
-            annotation = '??'
-        fn = tr['fn']
-        try:
-            block = gdb.block_for_pc(long(fn))
-            fn_name = block.function.print_name
-        except:
-            fn_name = '???'
-        gdb.write('0x%016x %s %s %s\n' % (thread,
-                                           indent,
-                                           annotation,
-                                           fn_name
-                                           ))
+            pass # FIXME: standard tracepoint
 
 class osv_trace(gdb.Command):
     def __init__(self):
