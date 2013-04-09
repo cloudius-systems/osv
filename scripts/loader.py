@@ -249,14 +249,27 @@ class osv_info_threads(gdb.Command):
                 cpu = t['_cpu']
 		tid = t['_id']
                 fr = gdb.selected_frame()
+                # Non-running threads have always, by definition, just called
+                # a reschedule, and the stack trace is filled with reschedule
+                # related functions (switch_to, schedule, wait_until, etc.).
+                # Here we try to skip such functions and instead show a more
+                # interesting caller which initiated the wait.
+                fname = '??'
                 sal = fr.find_sal()
-                status = str(t['_status']['_M_i']).replace('sched::thread::', '')
-                function = '??'
+                while sal.symtab:
+                    fname = sal.symtab.filename
+                    b = os.path.basename(fname);
+                    if b=="arch-switch.hh" or b=="sched.cc" or b=="sched.hh" or b=="mutex.hh":
+                        fr = fr.older();
+                        sal = fr.find_sal();
+                    else:
+                        break;
+
                 if fr.function():
                     function = fr.function().name
-                fname = '??'
-                if sal.symtab:
-                    fname = sal.symtab.filename
+		else:
+                    function = '??'
+                status = str(t['_status']['_M_i']).replace('sched::thread::', '')
                 gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12d\n' %
                           (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
