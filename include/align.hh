@@ -5,18 +5,21 @@
 #include <stddef.h>
 
 template <typename T>
+inline
 T align_down(T n, T alignment)
 {
     return n & ~(alignment - 1);
 }
 
 template <typename T>
+inline
 T align_up(T n, T alignment)
 {
     return align_down(n + alignment - 1, alignment);
 }
 
 template <class T>
+inline
 T* align_down(T* ptr, size_t alignment)
 {
     auto n = reinterpret_cast<uintptr_t>(ptr);
@@ -25,6 +28,7 @@ T* align_down(T* ptr, size_t alignment)
 }
 
 template <class T>
+inline
 T* align_up(T* ptr, size_t alignment)
 {
     auto n = reinterpret_cast<uintptr_t>(ptr);
