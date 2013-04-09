@@ -1,0 +1,14 @@
+lib/jvm/jre/lib/amd64/server/libjvm.so	JDKBASE/jre/lib/amd64/server/libjvm.so
+lib/jvm/jre/lib/amd64/libverify.so	JDKBASE/jre/lib/amd64/libverify.so
+lib/jvm/jre/lib/amd64/libjava.so	JDKBASE/jre/lib/amd64/libjava.so
+lib/jvm/jre/lib/amd64/libzip.so		JDKBASE/jre/lib/amd64/libzip.so
+lib/jvm/jre/lib/resources.jar		JDKBASE/jre/lib/resources.jar
+lib/jvm/jre/lib/rt.jar			JDKBASE/jre/lib/rt.jar
+lib/jvm/jre/lib/jsse.jar		JDKBASE/jre/lib/jsse.jar
+lib/jvm/jre/lib/jce.jar			JDKBASE/jre/lib/jce.jar
+lib/jvm/jre/lib/charsets.jar		JDKBASE/jre/lib/charsets.jar
+lib/jvm/jre/lib/rhino.jar		JDKBASE/jre/lib/rhino.jar
+lib/jvm/jre/lib/meta-index		JDKBASE/jre/lib/meta-index
+lib/jvm/jre/lib/currency.data		JDKBASE/jre/lib/currency.data
+lib/libstdc++.so.6			GCCBASE/usr/lib64/libstdc++.so.6
+lib/libgcc_s.so.1			GCCBASE/lib64/libgcc_s.so.1

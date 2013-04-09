@@ -59,6 +59,7 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
+    void mount_usr(void);
     void ramdisk_init(void);
 }
 
@@ -142,6 +143,9 @@ void* do_main_thread(void *_args)
     drvman->register_driver(virtio::virtio_net::probe);
     drvman->load_all();
     drvman->list_drivers();
+
+
+    mount_usr();
 
     run_main(prog, args);
 

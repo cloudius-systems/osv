@@ -103,7 +103,7 @@ tests/tst-virtionet.so: tests/tst-virtionet.o
 tests/tst-fpu.so: tests/tst-fpu.o
 tests/tst-tracepoint.so: tests/tst-tracepoint.o
 
-all: loader.img loader.bin
+all: loader.img loader.bin usr.img
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
@@ -269,6 +269,14 @@ java/java.o: CXXFLAGS += -fPIC
 
 tests/testrunner.so: tests/testrunner.o
 tests/testrunner.o: CXXFLAGS += -fPIC
+
+usr.img:
+	$(call quiet, \
+		JDKBASE=$(jdkbase) \
+		GCCBASE=$(gccbase) \
+		BUILDDIR="${@}.tmp" \
+		IMAGE="$@" \
+		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) \
 		tests/testrunner.so java/java.so java/RunJar.class

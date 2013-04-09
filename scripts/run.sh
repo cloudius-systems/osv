@@ -22,4 +22,5 @@ qemu-system-x86_64 \
 	-mon chardev=stdio,mode=readline,default \
 	-device isa-serial,chardev=stdio \
 	-device virtio-net-pci \
-	-drive file=build/$v/loader.img,if=virtio,cache=unsafe
+	-drive file=build/$v/loader.img,if=virtio,cache=unsafe \
+	-drive file=build/$v/usr.img,if=virtio,cache=unsafe
