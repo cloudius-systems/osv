@@ -250,6 +250,7 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
+	    $(boost-libs) \
 	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) $(libgcc_eh.a) $(src)/libunwind.a, \
 		LD $@)
 
@@ -261,6 +262,7 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 miscbase = $(src)/external/misc.bin
+boost-libs := $(lastword $(sort $(wildcard /usr/lib*/libboost_program_options-mt.a)))
 
 bsd/%.o: COMMON += -D _KERNEL
 

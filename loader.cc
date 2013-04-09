@@ -3,6 +3,8 @@
 #include "fs/fs.hh"
 #include <bsd/net.hh>
 #include <boost/format.hpp>
+#include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
 #include <cctype>
 #include "elf.hh"
 #include "tls.hh"
@@ -91,8 +93,55 @@ int main(int ac, char **av)
     sched::init(tls_data, [=] { main_cont(ac, av); });
 }
 
+std::tuple<int, char**> parse_options(int ac, char** av)
+{
+    namespace bpo = boost::program_options;
+    namespace bpos = boost::program_options::command_line_style;
+
+    std::vector<const char*> args = { "osv" };
+
+    // due to https://svn.boost.org/trac/boost/ticket/6991, we can't terminate
+    // command line parsing on the executable name, so we need to look for it
+    // ourselves
+
+    auto nr_options = std::find_if(av, av + ac,
+                                   [](const char* arg) { return arg[0] != '-'; }) - av;
+    std::copy(av, av + nr_options, std::back_inserter(args));
+
+    bpo::options_description desc("osv options");
+    desc.add_options()
+        ("help", "show help text")
+        ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable")
+    ;
+    bpo::variables_map vars;
+    // don't allow --foo bar (require --foo=bar) so we can find the first non-option
+    // argument
+    int style = bpos::unix_style & ~(bpos::long_allow_next | bpos::short_allow_next);
+    bpo::store(bpo::parse_command_line(args.size(), args.data(), desc, style), vars);
+    bpo::notify(vars);
+
+    if (vars.count("help")) {
+        std::cout << desc << "\n";
+    }
+
+    if (vars.count("trace")) {
+        auto tv = vars["trace"].as<std::vector<std::string>>();
+        for (auto t : tv) {
+            std::vector<std::string> tmp;
+            boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
+            for (auto t : tmp) {
+                enable_tracepoint(t);
+            }
+        }
+    }
+    av += nr_options;
+    ac -= nr_options;
+    return std::make_tuple(ac, av);
+}
+
 void main_cont(int ac, char** av)
 {
+    std::tie(ac, av) = parse_options(ac, av);
     smp_launch();
     enable_trace();
     sched::init_detached_threads_reaper();
