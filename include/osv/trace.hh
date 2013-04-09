@@ -7,6 +7,7 @@
 #include <osv/types.h>
 #include <align.hh>
 #include <sched.hh>
+#include <boost/intrusive/list.hpp>
 
 void enable_trace();
 
@@ -171,11 +172,25 @@ struct serializer<N, N, args...> {
 class tracepoint_base {
 public:
     explicit tracepoint_base(const char* _name, const char* _format)
-        : name(_name), format(_format) {}
+        : name(_name), format(_format) {
+        tp_list.push_back(*this);
+    }
+    ~tracepoint_base() {
+        tp_list.erase(tp_list.iterator_to(*this));
+    }
     const char* name;
     const char* format;
     u64 sig;
     bool enabled = true;
+    typedef boost::intrusive::list_member_hook<> tp_list_link_type;
+    tp_list_link_type tp_list_link;
+    static boost::intrusive::list<
+        tracepoint_base,
+        boost::intrusive::member_hook<tracepoint_base,
+                                      tp_list_link_type,
+                                      &tracepoint_base::tp_list_link>,
+        boost::intrusive::constant_time_size<false>
+        > tp_list;
 };
 
 template <typename... s_args,

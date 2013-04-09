@@ -12,6 +12,8 @@ trace_record trace_log[max_trace];
 std::atomic<unsigned> trace_record_last;
 bool trace_enabled;
 
+typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority(4000)));
+
 void enable_trace()
 {
     trace_enabled = true;
