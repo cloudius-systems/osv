@@ -154,7 +154,7 @@ struct signature_helper<arg0, args...> {
 
 template <size_t idx, size_t N, typename... args>
 struct serializer {
-    static size_t write(void* buffer, size_t offset, std::tuple<args...> as) {
+    static void write(void* buffer, size_t offset, std::tuple<args...> as) {
         auto arg = std::get<idx>(as);
         typedef decltype(arg) argtype;
         auto align = std::min(sizeof(argtype), sizeof(long)); // FIXME: want to use alignof here
@@ -162,11 +162,19 @@ struct serializer {
         *static_cast<argtype*>(buffer + offset) = arg;
         return serializer<idx + 1, N, args...>::write(buffer, offset + sizeof(argtype), as);
     }
+    static size_t size(size_t offset) {
+        typedef typename std::tuple_element<idx, std::tuple<args...>>::type argtype;
+        auto align = std::min(sizeof(argtype), sizeof(long)); // FIXME: want to use alignof here
+        offset = align_up(offset, align);
+        return serializer<idx + 1, N, args...>::size(offset + sizeof(argtype));
+    }
 };
 
 template <size_t N, typename... args>
 struct serializer<N, N, args...> {
-    static size_t write(void* buffer, size_t offset, std::tuple<args...> as) {
+    static void write(void* buffer, size_t offset, std::tuple<args...> as) {
+    }
+    static size_t size(size_t offset) {
         return offset;
     }
 };
@@ -215,12 +223,15 @@ public:
             auto tr = allocate_trace_record();
             tr->tp = this;
             tr->thread = sched::thread::current();
-            auto size = serialize(tr->buffer, as);
-            assert(size <= sizeof(tr->buffer));
+            assert(size() <= sizeof(tr->buffer));
+            serialize(tr->buffer, as);
         }
     }
-    size_t serialize(void* buffer, std::tuple<s_args...> as) {
+    void serialize(void* buffer, std::tuple<s_args...> as) {
         return serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
+    }
+    size_t size() {
+        return serializer<0, sizeof...(s_args), s_args...>::size(0);
     }
     // Python struct style signature H=u16, I=u32, Q=u64 etc, packed into a
     // u64, lsb=first parameter
