@@ -15,16 +15,19 @@ void enable_tracepoint(std::string wildcard);
 
 class tracepoint_base;
 
-struct trace_record {
+struct trace_record_base {
     tracepoint_base* tp;
     sched::thread* thread;
+};
+
+struct trace_record : trace_record_base {
     union {
-        u8 buffer[80];  // FIXME: dynamic size
+        u8 buffer[80];
         unsigned long align;
     };
 };
 
-trace_record* allocate_trace_record();
+trace_record* allocate_trace_record(size_t size);
 
 template <class storage_args, class runtime_args>
 class assigner_type;
@@ -220,7 +223,7 @@ public:
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
         if (enabled) {
-            auto tr = allocate_trace_record();
+            auto tr = allocate_trace_record(size());
             tr->tp = this;
             tr->thread = sched::thread::current();
             assert(size() <= sizeof(tr->buffer));
