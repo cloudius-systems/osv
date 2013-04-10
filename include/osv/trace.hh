@@ -157,7 +157,7 @@ struct serializer {
     static size_t write(void* buffer, size_t offset, std::tuple<args...> as) {
         auto arg = std::get<idx>(as);
         typedef decltype(arg) argtype;
-        auto align = sizeof(argtype); // FIXME: want to use alignof here
+        auto align = std::min(sizeof(argtype), sizeof(long)); // FIXME: want to use alignof here
         offset = align_up(offset, align);
         *static_cast<argtype*>(buffer + offset) = arg;
         return serializer<idx + 1, N, args...>::write(buffer, offset + sizeof(argtype), as);
