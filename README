@@ -2,12 +2,15 @@
 To build OSv
 ============
 
-2) make sure all git submodules are uptodate
+0) Install perquisite packages:
+   yum install boost-static genromfs
+
+1) make sure all git submodules are uptodate
    -----------------------------------------
 
     git submodule update --init
 
-1) build the specially patched libunwind
+2) build the specially patched libunwind
    -------------------------------------
 
     cd external/libunwind
@@ -17,13 +20,13 @@ To build OSv
     cp ./src/.libs/libunwind.a ../..
     cd ../..
 
-3) build the glibc test suite
+4) build the glibc test suite
 
    cd external/glibc-testsuite
    make
    cd ../..
 
-3) build osv
+5) build osv
    ---------
 
     make
