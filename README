@@ -63,13 +63,42 @@ reboot after setting the breakpoint:
 
  Tracing
  =======
- Uncomment the "tracing-flags =" line in build.mak, and rebuild.
- Run the program until it aborts, then in gdb:
-
- osv syms
- set pagination off
- set logging on
- osv trace
+ To add a static tracepoint, use the following code:
+ 
+   tracepoint<u64, int> trace_foo("foo", "x=%x y=%d");
+   
+   ...
+   
+   
+   void foo(u64 x, int y)
+   {
+       trace_foo(x, y);
+       ...
+   }
+ 
+ Where
+ 
+   trace_foo: an internal identifier
+   "foo": a name for the tracepoint as will be visible in the log
+   <u64, int>: parameters for the tracepoint
+   "x=%x y=%d": format string for the tracepoint; size modifiers unneeded
+ 
+ To enable tracepoints at runtime, use the --trace= switch:
+ 
+   scripts/imgedit.py setargs  build/release/loader.img --trace=sched\* testrunner.so
+ 
+ you can use multiple --trace= switches, or a single one with commas.  Shell-style wildcards
+ allow enabling multiple tracepoints (as in the example). 
+ 
+ To trace all function entries/returns in the program, build with conf-tracing=1 (clean build
+ needed), and enable "function*" tracepoints, with --trace=.
+ 
+ To view a trace, connect with gdb, and:
+ 
+   (gdb) osv syms
+   (gdb) set pagination off
+   (gdb) set logging on
+   (gdb) osv trace
 
  gdb.txt will contain the the trace.
 
