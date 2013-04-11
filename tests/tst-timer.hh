@@ -13,20 +13,20 @@ public:
     {
         auto t1 = clock::get()->time();
         auto t2 = clock::get()->time();
-        debug(fmt("Timer test: clock@t1 %1%\n") % t1);
-        debug(fmt("Timer test: clock@t2 %1%\n") % t2);
+        debug("Timer test: clock@t1 %1%\n", t1);
+        debug("Timer test: clock@t2 %1%\n", t2);
 
         timespec ts = {};
         ts.tv_nsec = 100;
         t1 = clock::get()->time();
         nanosleep(&ts, nullptr);
         t2 = clock::get()->time();
-        debug(fmt("Timer test: nanosleep(100) -> %d\n") % (t2 - t1));
+        debug("Timer test: nanosleep(100) -> %d\n", t2 - t1);
         ts.tv_nsec = 100000;
         t1 = clock::get()->time();
         nanosleep(&ts, nullptr);
         t2 = clock::get()->time();
-        debug(fmt("Timer test: nanosleep(100000) -> %d\n") % (t2 - t1));
+        debug("Timer test: nanosleep(100000) -> %d\n", t2 - t1);
     }
 };
 
