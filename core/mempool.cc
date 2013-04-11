@@ -179,6 +179,8 @@ void* malloc_large(size_t size)
             return obj;
         }
     }
+    debug(fmt("malloc_large(): out of memory: can't find %d bytes. aborting.")
+            % size);
     abort();
 }
 
@@ -233,7 +235,11 @@ void* alloc_page()
 {
     std::lock_guard<mutex> guard(free_page_ranges_lock);
 
-    assert(!free_page_ranges.empty());
+    if(free_page_ranges.empty()) {
+        debug("alloc_page(): out of memory\n", false);
+        abort();
+    }
+
     auto p = &*free_page_ranges.begin();
     if (p->size == page_size) {
         free_page_ranges.erase(*p);
