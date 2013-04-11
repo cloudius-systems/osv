@@ -403,6 +403,7 @@ def dump_trace():
             trace_function(indent, '<-', data)
         else:
             format = tp['format'].string()
+            format = format.replace('%p', '0x%016x')
             name = tp['name'].string()
             gdb.write('0x%016x %-20s %s\n' % (thread,
                                               name,
