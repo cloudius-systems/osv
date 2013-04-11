@@ -31,10 +31,6 @@ bool test()
 
 typedef boost::format fmt;
 
-extern "C" {
-    int osv_main(int ac, char **av);
-}
-
 int main(int ac, char **av)
 {
     constexpr unsigned nr_threads = 16;

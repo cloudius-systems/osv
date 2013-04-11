@@ -34,7 +34,7 @@ void load_test(char *path, char *argv0)
 	dlclose_by_path_np(path);
 }
 
-int osv_main(int argc, char **argv)
+int main(int argc, char **argv)
 {
 #define TESTDIR		"/tests"
 	DIR *dir = opendir(TESTDIR);

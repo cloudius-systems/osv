@@ -170,10 +170,11 @@ void run_main(elf::program *prog, struct argblock *args)
 {
     auto av = args->av;
     auto ac = args->ac;
-    prog->add_object(av[0]);
+    auto obj = prog->add_object(av[0]);
     ++av, --ac;
-    auto osv_main = prog->lookup_function<void (int, char**)>("osv_main");
-    osv_main(ac, av);
+    auto main = obj->lookup<void (int, char**)>("main");
+    assert(main);
+    main(ac, av);
 }
 
 void* do_main_thread(void *_args)
