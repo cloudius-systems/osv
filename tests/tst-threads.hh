@@ -58,7 +58,7 @@ public:
         tt.t2->join();
         delete tt.t1;
         delete tt.t2;
-        debug("threading test succeeded");
+        debug("threading test succeeded\n");
     }
 };
 

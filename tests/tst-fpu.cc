@@ -40,7 +40,7 @@ int main(int ac, char **av)
     constexpr unsigned nr_threads = 16;
     std::vector<sched::thread*> threads;
 
-    debug("starting fpu test");
+    debug("starting fpu test\n");
     std::atomic<int> tests{}, fails{};
     for (unsigned i = 0; i < nr_threads; ++i) {
         auto t = new sched::thread([&] {

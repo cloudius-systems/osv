@@ -49,9 +49,9 @@ namespace hw {
 
     void device_manager::list_devices(void)
     {
-        debug("<list_devices>");
+        debug("<list_devices>\n");
         for_each_device([](hw_device* dev) { dev->print(); });
-        debug("</list_devices>");
+        debug("</list_devices>\n");
     }
 
     void device_manager::for_each_device(std::function<void (hw_device*)> func)

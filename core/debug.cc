@@ -158,7 +158,7 @@ extern "C" {
 
     void debug(const char *msg)
     {
-        console::write(msg, strlen(msg), true);
+        console::write(msg, strlen(msg), false);
     }
 
     void readln(char *msg, size_t size)

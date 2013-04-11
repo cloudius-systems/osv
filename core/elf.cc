@@ -318,7 +318,7 @@ symbol_module object::symbol(unsigned idx)
 
 Elf64_Xword object::symbol_tls_module(unsigned idx)
 {
-    debug("not looking up symbol module");
+    debug("not looking up symbol module\n");
     return 0;
 }
 

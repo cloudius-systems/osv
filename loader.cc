@@ -39,7 +39,7 @@ namespace {
 	auto &fac = std::use_facet<std::ctype<char>>(loc);
 	bool ok = fac.is(std::ctype_base::digit, '3')
 	    && !fac.is(std::ctype_base::digit, 'x');
-	debug(ok ? "locale works" : "locale fails");
+	debug(ok ? "locale works\n" : "locale fails\n");
 	//asm volatile ("1: jmp 1b");
     }
 
@@ -85,7 +85,7 @@ elf::program* prog;
 
 int main(int ac, char **av)
 {
-    debug("Loader Copyright 2013 Unnamed");
+    debug("Loader Copyright 2013 Unnamed\n");
 
     test_locale();
     idt.load_on_cpu();

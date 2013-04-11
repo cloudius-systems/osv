@@ -67,7 +67,7 @@ void *__dso_handle;
     } while (0)
 
 #define UNIMPLEMENTED(msg) do {				\
-	WARN(msg);					\
+	WARN(msg "\n");					\
 	abort();					\
     } while (0)
 
@@ -327,7 +327,7 @@ int mallopt(int param, int value)
 
 FILE *popen(const char *command, const char *type)
 {
-    debug("popen not implemented");
+    debug("popen not implemented\n");
     return NULL;
 }
 
@@ -338,6 +338,6 @@ int pclose(FILE *stream)
 
 void exit(int status)
 {
-    debug(fmt("program exited with status %d") % status);
+    debug(fmt("program exited with status %d\n") % status);
     abort();
 }

@@ -11,7 +11,7 @@ public:
     void run()
     {
         size_t total, newtotal, contig;
-        debug("testing leaks in malloc");
+        debug("testing leaks in malloc\n");
         memory::debug_memory_pool(&total, &contig);
         for (int i = 0; i < 100; i++) {
             memory::free_page(memory::alloc_page());
@@ -31,7 +31,7 @@ public:
             assert(newtotal>=total-4096);
         }
 
-        debug("testing leaks in threads");
+        debug("testing leaks in threads\n");
         memory::debug_memory_pool(&total, &contig);
         for(int i=0; i<100; i++){
             sched::thread *t = new sched::thread([] {});
@@ -50,7 +50,7 @@ public:
         memory::debug_memory_pool(&newtotal, &contig);
         assert(newtotal>=total-4096);
 
-        debug("leak testing done");
+        debug("leak testing done\n");
     }
 };
 

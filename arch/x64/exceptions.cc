@@ -139,7 +139,7 @@ void divide_error(exception_frame *ef)
 
 
 #define DUMMY_HANDLER(x) \
-     extern "C" void x(); void x() { debug("DUMMY_HANDLER for " #x " aborting."); abort(); }
+     extern "C" void x(); void x() { debug("DUMMY_HANDLER for " #x " aborting.\n"); abort(); }
 
 DUMMY_HANDLER(debug_exception)
 DUMMY_HANDLER(nmi)

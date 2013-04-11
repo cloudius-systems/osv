@@ -40,20 +40,20 @@ public:
 
     void run()
     {
-        debug("Running lockfree multi-producer single-consumer queue tests");
+        debug("Running lockfree multi-producer single-consumer queue tests\n");
         // Test trivial single-thread, queuing.
-        debug("test1");
+        debug("test1\n");
         lockfree::queue_mpsc<int> q(-1);
         assert(q.pop()==-1);
         assert(q.isempty());
-        debug("test2");
+        debug("test2\n");
         lockfree::linked_item<int> item(7);
         q.push(&item);
         assert(!q.isempty());
         assert(q.pop()==7);
         assert(q.pop()==-1);
         assert(q.isempty());
-        debug("test3");
+        debug("test3\n");
         int len=1000;
         auto items = new lockfree::linked_item<int>[len];
         for(int i=0; i<len; i++){

@@ -17,7 +17,7 @@ public:
             // List all devices
             hw::device_manager::instance()->list_devices();
 
-            debug("Devices test succeeded");
+            debug("Devices test succeeded\n");
     }
 };
 

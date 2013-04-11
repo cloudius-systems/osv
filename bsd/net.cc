@@ -34,7 +34,7 @@ extern "C" {
 
 void net_init(void)
 {
-    debug("Initializing network stack...");
+    debug("Initializing network stack...\n");
 
     /* Random */
     struct timeval tv;
@@ -73,5 +73,5 @@ void net_init(void)
      * Uncomment when osv_ifup is fixed
     osv_ifup("lo0"); */
 
-    debug("Done!");
+    debug("Done!\n");
 }

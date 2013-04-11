@@ -158,7 +158,7 @@ public:
         // Some special treatment for recursive mutex:
         if (owner.load() != current) {
             // TODO: Anything more sensible to do? exception?
-            debug("lockfree::mutex.unlock() of non-locked mutex");
+            debug("lockfree::mutex.unlock() of non-locked mutex\n");
             return;
         }
         assert(depth!=0);

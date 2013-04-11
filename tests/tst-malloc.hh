@@ -36,7 +36,7 @@ public:
                 i++;
                 allocme* mem = new allocme;
                 if (!mem) {
-                    debug("no mem!!!!!!!!!!!11");
+                    debug("no mem!!!!!!!!!!!11\n");
                     break;
                 }
                 mem->blah[0] = (char)i;
@@ -82,7 +82,7 @@ public:
         t1->start();
         t2->start();
 
-        debug("test alloc, going to sleep for 1 sec while threads are running");
+        debug("test alloc, going to sleep for 1 sec while threads are running\n");
         timespec ts = {};
         ts.tv_sec = 1;
         nanosleep(&ts, nullptr);
@@ -95,7 +95,7 @@ public:
 
         delete t1;
         delete t2;
-        debug("Alloc test succeeded");
+        debug("Alloc test succeeded\n");
     }
 };
 

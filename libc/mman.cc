@@ -23,7 +23,7 @@ int mprotect(void *addr, size_t len, int prot)
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
     // because that could leave the linear map a mess.
     if (reinterpret_cast<long>(addr) < 0) {
-        debug("mprotect() on linear map not supported");
+        debug("mprotect() on linear map not supported\n");
         abort();
     }
 
