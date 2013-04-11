@@ -69,7 +69,7 @@ int osv_main(int argc, char **argv)
 		perror("failed to close testdir");
 		return EXIT_FAILURE;
 	}
-	printf("All tests complete - %d/%d failures", nr_failures, nr_tests);
+	printf("All tests complete - %d/%d failures\n", nr_failures, nr_tests);
 
 	return 0;
 }
