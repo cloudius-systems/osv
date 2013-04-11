@@ -176,7 +176,7 @@ static int romfs_name_match(char *name, size_t len, struct buf **bpp,
 		blkno = bp->b_blkno + 1;
 		brelse(bp);
 
-		ret = bread(bp->b_dev, blkno, &bp);
+		ret = bread(bp->b_dev, blkno, bpp);
 	} while (!ret);
 
 	return ret;
