@@ -138,28 +138,6 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     return std::make_tuple(ac, av);
 }
 
-void main_cont(int ac, char** av)
-{
-    std::tie(ac, av) = parse_options(ac, av);
-    smp_launch();
-    enable_trace();
-    sched::init_detached_threads_reaper();
-
-    vfs_init();
-    ramdisk_init();
-
-    filesystem fs;
-
-    net_init();
-
-    disable_pic();
-    processor::sti();
-
-    prog = new elf::program(fs);
-    void main_thread(int ac, char** av);
-    main_thread(ac, av);
-}
-
 struct argblock {
     int ac;
     char** av;
@@ -198,8 +176,25 @@ void* do_main_thread(void *_args)
     return nullptr;
 }
 
-void main_thread(int ac, char **av)
+void main_cont(int ac, char** av)
 {
+    std::tie(ac, av) = parse_options(ac, av);
+    smp_launch();
+    enable_trace();
+    sched::init_detached_threads_reaper();
+
+    vfs_init();
+    ramdisk_init();
+
+    filesystem fs;
+
+    net_init();
+
+    disable_pic();
+    processor::sti();
+
+    prog = new elf::program(fs);
+
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
     argblock args{ ac, av };
