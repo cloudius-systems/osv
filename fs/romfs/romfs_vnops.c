@@ -255,9 +255,9 @@ romfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
 		next_pos = romfs_next(dip);
 
 		ret = romfs_name_match(name, len, &bp, offset, &found);
+		brelse(bp);
 		if (ret)
 			goto out_unlock;
-		brelse(bp);
 
 		if (found) {
 			ret = romfs_read_node(vp, pos);
