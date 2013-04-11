@@ -341,11 +341,24 @@ def sig_to_string(sig):
         sig >>= 8
     return ret
 
+def align_down(v, pagesize):
+    return v & ~(pagesize - 1)
+
+def align_up(v, pagesize):
+    return align_down(v + pagesize - 1, pagesize)
+
 def dump_trace():
     from collections import defaultdict
+    inf = gdb.selected_inferior()
     trace_log = gdb.lookup_global_symbol('trace_log').value()
-    max_trace = gdb.parse_and_eval('max_trace')
-    last = gdb.lookup_global_symbol('trace_record_last').value()['_M_i']
+    max_trace = ulong(gdb.parse_and_eval('max_trace'))
+    trace_log = inf.read_memory(trace_log.address, max_trace)
+    trace_page_size = ulong(gdb.parse_and_eval('trace_page_size'))
+    last = ulong(gdb.lookup_global_symbol('trace_record_last').value()['_M_i'])
+    last %= max_trace
+    pivot = align_up(last, trace_page_size)
+    trace_log = trace_log[pivot:] + trace_log[:pivot]
+    last += max_trace - pivot
     indents = defaultdict(int)
     def lookup_tp(name):
         tp_base = gdb.lookup_type('tracepoint_base')
@@ -353,11 +366,9 @@ def dump_trace():
     tp_fn_entry = lookup_tp('trace_function_entry')
     tp_fn_exit = lookup_tp('trace_function_exit')
 
-    for i in range(max_trace):
-        tr = trace_log[(last + i) % max_trace]
-        tp = tr['tp']
-        thread = ulong(tr['thread'])
-        tp_key = ulong(tp)
+    i = 0
+    while i < last:
+        tp_key, thread = struct.unpack('QQ', trace_log[i:i+16])
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
@@ -371,10 +382,14 @@ def dump_trace():
                                               fn_name,
                                               ))
         if tp_key == 0:
+            i = align_up(i, trace_page_size)
             continue
+        tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
         sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
-        inf = gdb.selected_inferior()
-        buffer = inf.read_memory(tr['buffer'].address, struct.calcsize(sig))
+        i += 16
+        size = struct.calcsize(sig)
+        buffer = trace_log[i:i+size]
+        i += size
         data = struct.unpack(sig, buffer)
         if tp == tp_fn_entry.address:
             indent = '  ' * indents[thread]
