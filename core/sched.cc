@@ -9,8 +9,15 @@
 #include "drivers/clock.hh"
 #include "interrupt.hh"
 #include "smp.hh"
+#include "osv/trace.hh"
 
 namespace sched {
+
+tracepoint<thread*> trace_switch("sched_switch", "to %p");
+tracepoint<> trace_wait("sched_wait", "");
+tracepoint<thread*> trace_wake("sched_wake", "wake %p");
+tracepoint<thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
+tracepoint<thread*> trace_queue("sched_queue", "thread=%p");
 
 std::vector<cpu*> cpus;
 
@@ -82,6 +89,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
             asm volatile("clts");
             p->_fpu.save();
         }
+        trace_switch(n);
         n->switch_to();
         if (preempt) {
             p->_fpu.restore();
@@ -147,6 +155,7 @@ void cpu::handle_incoming_wakeups()
 
 void cpu::enqueue(thread& t, u64 now)
 {
+    trace_queue(&t);
     auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
     auto tail = head + max_slice * runqueue.size();
     if (t._vruntime > tail) {
@@ -189,6 +198,7 @@ void cpu::load_balance()
                 return;
             }
             auto& mig = *i;
+            trace_migrate(&mig, min->id);
             runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
             // we won't race with wake(), since we're not thread::waiting
             assert(mig._status.load() == thread::status::queued);
@@ -298,6 +308,7 @@ void thread::prepare_wait()
 
 void thread::wake()
 {
+    trace_wake(this);
     status old_status = status::waiting;
     if (!_status.compare_exchange_strong(old_status, status::waking)) {
         return;
@@ -327,6 +338,7 @@ thread* thread::current()
 
 void thread::wait()
 {
+    trace_wait();
     schedule(true);
 }
 
