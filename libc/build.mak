@@ -339,6 +339,7 @@ libc += misc/getopt.o
 libc += misc/getopt_long.o
 libc += misc/getsubopt.o
 libc += misc/realpath.o
+libc += misc/backtrace.o
 
 libc += multibyte/btowc.o
 libc += multibyte/internal.o
