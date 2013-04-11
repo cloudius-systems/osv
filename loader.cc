@@ -204,6 +204,8 @@ void main_thread(int ac, char **av)
     // run the payload in a pthread, so pthread_self() etc. work
     argblock args{ ac, av };
     pthread_create(&pthread, nullptr, do_main_thread, &args);
+    void* retval;
+    pthread_join(pthread, &retval);
     sched::thread::wait_until([] { return false; });
 }
 
