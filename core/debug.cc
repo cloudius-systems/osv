@@ -148,6 +148,12 @@ void debug(const boost::format& fmt)
     debug(fmt.str());
 }
 
+template <>
+void debug(boost::format& fmt)
+{
+    debug(fmt.str());
+}
+
 extern "C" {
 
     void debug(const char *msg)
