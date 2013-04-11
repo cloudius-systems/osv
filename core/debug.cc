@@ -104,8 +104,9 @@ void logger::wrt(const char* tag, logger_severity severity, const boost::format&
     }
 
     unsigned long tid = sched::thread::current()->id();
-    debug(fmt("[%s/%d %s]: ") % loggable_severity(severity) % tid % tag, false);
-    debug(_fmt, true);
+    debug(fmt("[%s/%d %s]: ") % loggable_severity(severity) % tid % tag);
+    debug(_fmt);
+    debug("\n");
 }
 
 void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, ...)
@@ -137,14 +138,14 @@ void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
     va_end(ap);
 }
 }
-void debug(std::string str, bool lf)
+void debug(std::string str)
 {
-    console::write(str.c_str(), str.length(), lf);
+    console::write(str.c_str(), str.length(), false);
 }
 
-void debug(const boost::format& fmt, bool lf)
+void debug(const boost::format& fmt)
 {
-    debug(fmt.str(), lf);
+    debug(fmt.str());
 }
 
 extern "C" {

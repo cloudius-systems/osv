@@ -17,6 +17,6 @@ long syscall(long number, ...)
     case __NR_gettid: return gettid();
     }
 
-    debug(fmt("unimplemented syscall %d") % number);
+    debug(fmt("unimplemented syscall %d\n") % number);
     abort();
 }

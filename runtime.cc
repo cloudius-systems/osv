@@ -300,7 +300,7 @@ long sysconf(int name)
     case _SC_PHYS_PAGES: return memory::phys_mem_size / memory::page_size;
     case _SC_GETPW_R_SIZE_MAX: return 1024;
     }
-    debug(fmt("sysconf: unknown parameter %1%") % name);
+    debug(fmt("sysconf: unknown parameter %1%\n") % name);
     abort();
 }
 
@@ -316,7 +316,7 @@ size_t confstr(int name, char* buf, size_t len)
     case _CS_GNU_LIBC_VERSION: return set("glibc 2.16");
     case _CS_GNU_LIBPTHREAD_VERSION: return set("NPTL 2.16");
     }
-    debug(fmt("confstr: unknown parameter %1%") % name);
+    debug(fmt("confstr: unknown parameter %1%\n") % name);
     abort();
 }
 

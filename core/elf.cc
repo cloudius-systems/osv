@@ -54,7 +54,7 @@ void* symbol_module::relocated_addr() const
         return base + symbol->st_value;
         break;
     default:
-        debug(fmt("unknown relocation type %d") % symbol_type(*symbol));
+        debug(fmt("unknown relocation type %d\n") % symbol_type(*symbol));
         abort();
     }
 }
@@ -310,7 +310,7 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        debug(fmt("failed looking up symbol %1%") % name);
+        debug(fmt("failed looking up symbol %1%\n") % name);
         abort();
     }
     return ret;
@@ -506,7 +506,7 @@ void object::load_needed()
     for (auto lib : needed) {
         auto fullpath = std::string("/usr/lib/") + lib;
         if (_prog.add_object(fullpath) == nullptr)
-            debug(fmt("could not load %s") % fullpath);
+            debug(fmt("could not load %s\n") % fullpath);
     }
 }
 

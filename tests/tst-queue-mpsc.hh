@@ -35,7 +35,7 @@ public:
             }
         }
 
-        debug(fmt("pop_thread saw something %d times, nothing %d times. sum: %d") % something % nothing % sum);
+        debug(fmt("pop_thread saw something %d times, nothing %d times. sum: %d\n") % something % nothing % sum);
     }
 
     void run()
@@ -88,7 +88,7 @@ public:
         t2->join();
         t3->join();
         tp->join();
-        debug(fmt("sum should be %d") % ((len-1)*len/2 * 3));
+        debug(fmt("sum should be %d\n") % ((len-1)*len/2 * 3));
         delete t1;
         delete t2;
         delete t3;
@@ -96,7 +96,7 @@ public:
         delete[] items1;
         delete[] items2;
         delete[] items3;
-        debug("lockfree MPSC queue tests succeeded");
+        debug("lockfree MPSC queue tests succeeded\n");
     }
 };
 

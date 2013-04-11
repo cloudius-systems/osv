@@ -65,13 +65,13 @@ class test_mmap: public unit_tests::vtest {
 public:
     void run()
     {
-        debug("Running mmap tests\n", false);
+        debug("Running mmap tests\n");
         // Test that munmap actually recycles the physical memory allocated by mmap
         for (int i=0; i<1000; i++) {
             constexpr size_t size = 1<<20;
             void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
             if(!buf)
-                debug("mmap failed!\n",false);
+                debug("mmap failed!\n");
             munmap(buf, size);
         }
         // Do the same for allocations large enough to use huge-pages
@@ -79,7 +79,7 @@ public:
             constexpr size_t size = 30 * 1<<20;
             void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
             if(!buf)
-                debug("mmap failed!\n",false);
+                debug("mmap failed!\n");
             munmap(buf, size);
         }
         // Test that we can override mmaps, without munmap, without leaking
@@ -161,6 +161,6 @@ public:
         // TODO: verify that various calls to mmap() and munmap() (length=0, unaligned
         // address, etc.) fail with EINVAL.
         // TODO: test that mprotect() over malloc()ed memory (not just mmap()) works.
-        debug("mmap tests succeeded\n", false);
+        debug("mmap tests succeeded\n");
     }
 };

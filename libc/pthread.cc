@@ -332,13 +332,13 @@ int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
 
 int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
 {
-    debug(fmt("pthread_attr_setstacksize(0x%x) stubbed out") % stacksize);
+    debug(fmt("pthread_attr_setstacksize(0x%x) stubbed out\n") % stacksize);
     return 0;
 }
 
 int pthread_attr_setguardsize(pthread_attr_t *attr, size_t guardsize)
 {
-    debug(fmt("pthread_attr_setguardsize(0x%x) stubbed out") % guardsize);
+    debug(fmt("pthread_attr_setguardsize(0x%x) stubbed out\n") % guardsize);
     return 0;
 }
 
@@ -353,6 +353,6 @@ int pthread_attr_getstack(const pthread_attr_t * __restrict attr,
 
 int pthread_setcancelstate(int state, int *oldstate)
 {
-    debug(fmt("pthread_setcancelstate stubbed out"));
+    debug(fmt("pthread_setcancelstate stubbed out\n"));
     return 0;
 }

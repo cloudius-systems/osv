@@ -52,8 +52,8 @@ private:
 };
 
 extern "C" {void debug(const char *msg); }
-void debug(const boost::format& fmt, bool lf=true);
-void debug(std::string str, bool lf=true);
+void debug(const boost::format& fmt);
+void debug(std::string str);
 
 extern "C" {void readln(char *msg, size_t size); }
 

@@ -179,7 +179,7 @@ void* malloc_large(size_t size)
             return obj;
         }
     }
-    debug(fmt("malloc_large(): out of memory: can't find %d bytes. aborting.")
+    debug(fmt("malloc_large(): out of memory: can't find %d bytes. aborting.\n")
             % size);
     abort();
 }
@@ -236,7 +236,7 @@ void* alloc_page()
     std::lock_guard<mutex> guard(free_page_ranges_lock);
 
     if(free_page_ranges.empty()) {
-        debug("alloc_page(): out of memory\n", false);
+        debug("alloc_page(): out of memory\n");
         abort();
     }
 
@@ -295,7 +295,7 @@ void* alloc_huge_page(size_t N)
     }
     // TODO: instead of aborting, tell the caller of this failure and have
     // it fall back to small pages instead.
-    debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.") % N);
+    debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.\n") % N);
     abort();
 }
 

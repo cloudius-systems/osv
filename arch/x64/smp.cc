@@ -52,7 +52,7 @@ void parse_madt()
             c->arch.acpi_id = lapic->ProcessorId;
             c->arch.initstack.next = smp_stack_free;
             smp_stack_free = &c->arch.initstack;
-            debug(fmt("acpi %d apic %d") % c->arch.acpi_id % c->arch.apic_id);
+            debug(fmt("acpi %d apic %d\n") % c->arch.acpi_id % c->arch.apic_id);
             sched::cpus.push_back(c);
             break;
         }

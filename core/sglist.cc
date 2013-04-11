@@ -3,9 +3,9 @@
 
 void
 sglist::dump() {
-    debug(fmt("nsgs=%d, max=%d") % _nsgs % _max_sgs);
+    debug(fmt("nsgs=%d, max=%d\n") % _nsgs % _max_sgs);
     for (auto i = _nodes.begin(); i != _nodes.end(); i++) {
-        debug(fmt("\t paddr=%x, len=%d") % i->_paddr, i->_len);
+        debug(fmt("\t paddr=%x, len=%d\n") % i->_paddr % i->_len);
     }
 }
 

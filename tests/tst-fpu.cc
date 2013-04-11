@@ -25,7 +25,7 @@ bool test()
             }
         }
     }
-    debug(boost::format("3 -> %f") % sins[3]);
+    debug(boost::format("3 -> %f\n") % sins[3]);
     return !bad;
 }
 
@@ -56,6 +56,6 @@ int main(int ac, char **av)
         t->join();
         delete t;
     }
-    debug(fmt("fpu test done, %d/%d fails/tests") % fails % tests);
+    debug(fmt("fpu test done, %d/%d fails/tests\n") % fails % tests);
     return !fails ? 0 : 1;
 }
