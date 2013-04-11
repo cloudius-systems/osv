@@ -85,6 +85,7 @@ tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
          tests/tst-bsd-netdriver.so tests/tst-virtionet.so
 tests += tests/tst-fpu.so
 tests += tests/tst-tracepoint.so
+tests += tests/tst-unit-tests.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -102,6 +103,7 @@ tests/tst-bsd-netdriver.so: tests/tst-bsd-netdriver.o
 tests/tst-virtionet.so: tests/tst-virtionet.o
 tests/tst-fpu.so: tests/tst-fpu.o
 tests/tst-tracepoint.so: tests/tst-tracepoint.o
+tests/tst-unit-tests.so: tests/tst-hub.o
 
 all: loader.img loader.bin usr.img
 
@@ -223,8 +225,6 @@ objects += core/kprintf.o
 objects += core/trace.o
 objects += core/poll.o
 
-unittests:= tests/tst-hub.o
-
 include $(src)/fs/build.mak
 include $(src)/libc/build.mak
 
@@ -245,7 +245,7 @@ libgcc_s.a = $(shell find $(gccbase) -name libgcc.a |  grep -v /32/)
 libgcc_eh.a = $(shell find $(gccbase) -name libgcc_eh.a |  grep -v /32/)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
-        $(objects) $(unittests) dummy-shlib.so \
+        $(objects) dummy-shlib.so \
 		bootfs.bin
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \

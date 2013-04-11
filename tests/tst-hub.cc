@@ -40,3 +40,10 @@ void tests::execute_tests() {
 
     instance().run();
 }
+
+int main(int ac, char** av)
+{
+    unit_tests::tests::instance().execute_tests();
+    return 0;
+}
+

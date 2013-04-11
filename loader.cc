@@ -22,7 +22,6 @@
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 #include "barrier.hh"
-#include "tests/tst-hub.hh"
 #include "arch.hh"
 #include "osv/trace.hh"
 
@@ -180,9 +179,6 @@ void run_main(elf::program *prog, struct argblock *args)
 void* do_main_thread(void *_args)
 {
     auto args = static_cast<argblock*>(_args);
-
-    //Tests malloc and free using threads.
-    unit_tests::tests::instance().execute_tests();
 
     // Enumerate PCI devices
     pci::pci_device_enumeration();
