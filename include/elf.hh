@@ -263,6 +263,8 @@ public:
     std::string soname();
     std::string pathname();
     void run_init_func();
+    template <typename T = void>
+    T* lookup(const char* name);
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -365,6 +367,16 @@ T*
 program::lookup_function(const char* symbol)
 {
     return reinterpret_cast<T*>(do_lookup_function(symbol));
+}
+
+template <>
+void* object::lookup(const char* symbol);
+
+template <typename T>
+T*
+object::lookup(const char* symbol)
+{
+    return reinterpret_cast<T*>(lookup<void>(symbol));
 }
 
 }

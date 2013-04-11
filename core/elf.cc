@@ -73,6 +73,16 @@ object::~object()
 {
 }
 
+template <>
+void* object::lookup(const char* symbol)
+{
+    symbol_module sm{lookup_symbol(symbol), this};
+    if (!sm.symbol || sm.symbol->st_shndx == SHN_UNDEF) {
+        return nullptr;
+    }
+    return sm.relocated_addr();
+}
+
 file::file(program& prog, ::fileref f, std::string pathname)
 : object(prog, pathname)
     , _f(f)
