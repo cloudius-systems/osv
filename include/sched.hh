@@ -181,6 +181,11 @@ private:
     void suspend_timers();
     void resume_timers();
     static void on_thread_stack(thread* t);
+    template <class Mutex, class Pred>
+    static void do_wait_until(Mutex& mtx, Pred pred);
+    struct dummy_lock {};
+    friend void acquire(dummy_lock&) {}
+    friend void release(dummy_lock&) {}
 private:
     std::function<void ()> _func;
     thread_state _state;
@@ -307,73 +312,85 @@ private:
 // does not return - continues to @cont instead
 void init(elf::tls_data tls_data, std::function<void ()> cont);
 
+inline void acquire(mutex_t& mtx)
+{
+    mutex_lock(&mtx);
+}
+
+inline void release(mutex_t& mtx)
+{
+    mutex_unlock(&mtx);
+}
+
+inline void acquire(mutex_t* mtx)
+{
+    if (mtx) {
+        mutex_lock(mtx);
+    }
+}
+
+inline void release(mutex_t* mtx)
+{
+    if (mtx) {
+        mutex_unlock(mtx);
+    }
+}
+
+inline void acquire(mutex& mtx)
+{
+    mtx.lock();
+}
+
+inline void release(mutex& mtx)
+{
+    mtx.unlock();
+}
+
+template <class Mutex, class Pred>
+inline
+void thread::do_wait_until(Mutex& mtx, Pred pred)
+{
+    thread* me = current();
+    while (true) {
+        {
+            wait_guard waiter(me);
+            if (pred()) {
+                return;
+            }
+            release(mtx);
+            me->wait();
+        }
+        acquire(mtx);
+    }
+}
+
 template <class Pred>
+inline
 void thread::wait_until(Pred pred)
 {
-    thread* me = current();
-    while (true) {
-        wait_guard waiter(me);
-        if (pred()) {
-            return;
-        }
-        me->wait();
-    }
+    dummy_lock mtx;
+    do_wait_until(mtx, pred);
 }
 
 template <class Pred>
+inline
 void thread::wait_until(mutex& mtx, Pred pred)
 {
-    thread* me = current();
-    while (true) {
-        {
-            wait_guard waiter(me);
-            if (pred()) {
-                return;
-            }
-            mtx.unlock();
-            me->wait();
-        }
-        mtx.lock();
-    }
+    do_wait_until(mtx, pred);
 }
 
 template <class Pred>
+inline
 void thread::wait_until(mutex_t& mtx, Pred pred)
 {
-    thread* me = current();
-    while (true) {
-        {
-            wait_guard waiter(me);
-            if (pred()) {
-                return;
-            }
-            mutex_unlock(&mtx);
-            me->wait();
-        }
-        mutex_lock(&mtx);
-    }
+    do_wait_until(mtx, pred);
 }
 
 template <class Pred>
+inline
 void thread::wait_until(mutex_t* mtx, Pred pred)
 {
-    thread* me = current();
-    while (true) {
-        {
-            wait_guard waiter(me);
-            if (pred()) {
-                return;
-            }
-            if (mtx) {
-                mutex_unlock(mtx);
-            }
-
-            me->wait();
-        }
-        if (mtx) {
-            mutex_lock(mtx);
-        }
-    }
+    do_wait_until(mtx, pred);
 }
 
 extern cpu __thread* current_cpu;
