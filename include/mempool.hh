@@ -8,8 +8,6 @@
 
 namespace memory {
 
-using std::size_t;
-
 const size_t page_size = 4096;
 
 extern size_t phys_mem_size;
@@ -18,8 +16,6 @@ void* alloc_page();
 void free_page(void* page);
 void* alloc_huge_page(size_t bytes);
 void free_huge_page(void *page, size_t bytes);
-void* alloc_page_range(size_t bytes);
-void free_page_range(void* start, size_t bytes);
 void setup_free_memory(void* start, size_t bytes);
 
 void debug_memory_pool(size_t *total, size_t *contig);
