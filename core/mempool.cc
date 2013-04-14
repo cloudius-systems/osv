@@ -155,7 +155,7 @@ bi::set<page_range,
                        &page_range::member_hook>
        > free_page_ranges __attribute__((init_priority(12000)));
 
-void* malloc_large(size_t size)
+static void* malloc_large(size_t size)
 {
     size = (size + page_size - 1) & ~(page_size - 1);
     size += page_size;
@@ -184,7 +184,7 @@ void* malloc_large(size_t size)
     abort();
 }
 
-page_range* merge(page_range* a, page_range* b)
+static page_range* merge(page_range* a, page_range* b)
 {
     void* va = a;
     void* vb = b;
@@ -200,7 +200,7 @@ page_range* merge(page_range* a, page_range* b)
 
 // Return a page range back to free_page_ranges. Note how the size of the
 // page range is range->size, but its start is at range itself.
-void free_page_range(page_range *range)
+static void free_page_range(page_range *range)
 {
     std::lock_guard<mutex> guard(free_page_ranges_lock);
 
@@ -213,18 +213,18 @@ void free_page_range(page_range *range)
     }
 }
 
-void free_page_range(void *addr, size_t size)
+static void free_page_range(void *addr, size_t size)
 {
     new (addr) page_range(size);
     free_page_range(static_cast<page_range*>(addr));
 }
 
-void free_large(void* obj)
+static void free_large(void* obj)
 {
     free_page_range(static_cast<page_range*>(obj - page_size));
 }
 
-unsigned large_object_size(void *obj)
+static unsigned large_object_size(void *obj)
 {
     obj -= page_size;
     auto header = static_cast<page_range*>(obj);
