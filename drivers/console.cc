@@ -8,6 +8,7 @@
 #include "isa-serial.hh"
 #include "debug-console.hh"
 #include "drivers/clock.hh"
+#include <termios.h>
 
 namespace console {
 
@@ -35,6 +36,16 @@ void read(char *msg, size_t len)
 mutex console_mutex;
 std::queue<char> console_queue;
 std::list<sched::thread*> readers;
+termios tio = {
+    .c_iflag = 0,
+    .c_oflag = 0,
+    .c_cflag = 0,
+    .c_lflag = ECHO,
+    .c_line = 0,
+    .c_cc = {},
+    .c_ispeed = 0,
+    .c_ospeed = 0,
+};
 
 // hack, until we have ISA interrupts
 void console_poll()
@@ -65,6 +76,13 @@ console_read(struct device *dev, struct uio *uio, int ioflag)
             struct iovec *iov = uio->uio_iov;
             auto n = std::min(console_queue.size(), iov->iov_len);
             for (size_t i = 0; i < n; ++i) {
+                if (tio.c_lflag & ECHO) {
+                    char c = console_queue.front();
+                    if (c == '\r') {
+                        c = '\n';
+                    }
+                    write(&c, 1, false);
+                }
                 static_cast<char*>(iov->iov_base)[i] = console_queue.front();
                 console_queue.pop();
             }
@@ -108,6 +126,9 @@ console_ioctl(struct device *dev, u_long request, void *arg)
     switch (request) {
     case 0x5401: // TCGETS
         return 0;   // XXX: stubbing out to get libc into line buffering mode
+    case 0x5402: // TCSETS
+        tio = *static_cast<termios*>(arg);
+        return 0;
     default:
         return -ENOTTY;
     }
