@@ -2,6 +2,7 @@ lib/jvm/jre/lib/amd64/server/libjvm.so	JDKBASE/jre/lib/amd64/server/libjvm.so
 lib/jvm/jre/lib/amd64/libverify.so	JDKBASE/jre/lib/amd64/libverify.so
 lib/jvm/jre/lib/amd64/libjava.so	JDKBASE/jre/lib/amd64/libjava.so
 lib/jvm/jre/lib/amd64/libzip.so		JDKBASE/jre/lib/amd64/libzip.so
+lib/jvm/jre/lib/amd64/libnio.so		JDKBASE/jre/lib/amd64/libnio.so
 lib/jvm/jre/lib/resources.jar		JDKBASE/jre/lib/resources.jar
 lib/jvm/jre/lib/rt.jar			JDKBASE/jre/lib/rt.jar
 lib/jvm/jre/lib/jsse.jar		JDKBASE/jre/lib/jsse.jar
