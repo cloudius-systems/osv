@@ -161,6 +161,7 @@ sys_read(file_t fp, struct iovec *iov, size_t niov,
 
 	if (uio->uio_resid == 0) {
 		*count = 0;
+		free(uio);
 		return 0;
 	}
 
@@ -168,6 +169,7 @@ sys_read(file_t fp, struct iovec *iov, size_t niov,
 	uio->uio_offset = offset;
 	fo_read(fp, uio, (offset == -1) ? 0 : FOF_OFFSET);
 	*count = bytes - uio->uio_resid;
+	free(uio);
 
 	return error;
 }
@@ -192,6 +194,7 @@ sys_write(file_t fp, struct iovec *iov, size_t niov,
 
 	if (uio->uio_resid == 0) {
 		*count = 0;
+		free(uio);
 		return 0;
 	}
 
@@ -201,6 +204,7 @@ sys_write(file_t fp, struct iovec *iov, size_t niov,
 	uio->uio_offset = offset;
 	fo_write(fp, uio, (offset == -1) ? 0 : FOF_OFFSET);
 	*count = bytes - uio->uio_resid;
+	free(uio);
 
 	return error;
 }
