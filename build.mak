@@ -1,7 +1,8 @@
 
 arch = x64
-cmdline = java.so Hello
+cmdline = java.so -jar /usr/lib/jvm/jre/lib/rhino.jar
 #cmdline = testrunner.so
+#cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
