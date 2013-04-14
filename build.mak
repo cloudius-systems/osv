@@ -85,7 +85,7 @@ tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
          tests/tst-bsd-netdriver.so tests/tst-virtionet.so
 tests += tests/tst-fpu.so
 tests += tests/tst-tracepoint.so
-tests += tests/tst-unit-tests.so
+tests += tests/tst-hub.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -103,7 +103,7 @@ tests/tst-bsd-netdriver.so: tests/tst-bsd-netdriver.o
 tests/tst-virtionet.so: tests/tst-virtionet.o
 tests/tst-fpu.so: tests/tst-fpu.o
 tests/tst-tracepoint.so: tests/tst-tracepoint.o
-tests/tst-unit-tests.so: tests/tst-hub.o
+tests/tst-hub.so: tests/tst-hub.o
 
 all: loader.img loader.bin usr.img
 
