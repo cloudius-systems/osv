@@ -14,7 +14,7 @@ namespace console {
 
 // should eventually become a list of console device that we chose the best from
 IsaSerialConsole serial_console;
-debug_console console(serial_console);
+debug_console console;
 
 void write(const char *msg, size_t len, bool lf)
 {
@@ -156,6 +156,7 @@ struct driver console_driver = {
 extern "C" int
 console_init(void)
 {
+    console::console.set_impl(&console::serial_console);
     (new sched::thread(console_poll))->start();
     device_create(&console_driver, "console", D_CHR);
     return 0;

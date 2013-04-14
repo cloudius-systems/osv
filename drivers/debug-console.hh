@@ -9,13 +9,13 @@
 
 class debug_console : public Console {
 public:
-    explicit debug_console(Console& impl);
+    void set_impl(Console* impl);
     virtual void write(const char *str, size_t len);
     virtual void newline();
     virtual bool input_ready() override;
     virtual char readch();
 private:
-    Console& _impl;
+    Console* _impl;
     spinlock _lock;
 };
 
