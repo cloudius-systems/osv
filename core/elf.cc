@@ -246,7 +246,7 @@ void object::unload_segments()
         auto &phdr = _phdrs[i];
         switch (phdr.p_type) {
         case PT_LOAD:
-            load_segment(phdr);
+            unload_segment(phdr);
             break;
         default:
             break;
