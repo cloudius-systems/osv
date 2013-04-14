@@ -13,6 +13,12 @@ void IsaSerialConsole::write(const char *str, size_t len)
     }
 }
 
+bool IsaSerialConsole::input_ready()
+{
+    u8 lsr = pci::inb(ioport + LSR_ADDRESS);
+    return (lsr & LSR_RECEIVE_DATA_READY);
+}
+
 char IsaSerialConsole::readch()
 {
     u8 lsr;

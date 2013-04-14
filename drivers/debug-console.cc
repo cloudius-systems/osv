@@ -19,3 +19,8 @@ char debug_console::readch()
 {
     return with_lock(_lock, [=] { return _impl.readch(); });
  }
+
+bool debug_console::input_ready()
+{
+    return with_lock(_lock, [=] { return _impl.input_ready(); });
+}

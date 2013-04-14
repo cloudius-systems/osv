@@ -12,6 +12,7 @@ public:
     explicit debug_console(Console& impl);
     virtual void write(const char *str, size_t len);
     virtual void newline();
+    virtual bool input_ready() override;
     virtual char readch();
 private:
     Console& _impl;

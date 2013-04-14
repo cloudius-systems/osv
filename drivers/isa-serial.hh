@@ -10,6 +10,7 @@ public:
 	IsaSerialConsole();
     virtual void write(const char *str, size_t len);
     virtual void newline();
+    virtual bool input_ready() override;
     virtual char readch();
 private:
     static const u16 ioport = 0x3f8;

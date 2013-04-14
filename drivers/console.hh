@@ -7,6 +7,7 @@ class Console {
 public:
     virtual ~Console() {}
     virtual void write(const char *str, size_t len) = 0;
+    virtual bool input_ready() = 0;
     virtual char readch() = 0;
     virtual void newline() = 0;
 };
