@@ -1,7 +1,9 @@
 #include "isa-serial.hh"
 #include <string.h>
 
-IsaSerialConsole::IsaSerialConsole() {
+IsaSerialConsole::IsaSerialConsole(sched::thread* poll_thread)
+    : _irq(4, [=] { poll_thread->wake(); })
+{
 	reset();
 }
 
@@ -63,4 +65,10 @@ void IsaSerialConsole::reset() {
 	lcr = pci::inb(ioport + LCR_ADDRESS);
 	lcr &= ~(1 << LCR_DIVISOR_LATCH_ACCESS_BIT & LCR_DIVISOR_LATCH_ACCESS_BIT_HIGH);
     pci::outb(lcr, ioport + LCR_ADDRESS);
+
+    //  interrupt threshold
+    pci::outb(0, FCR_ADDRESS);
+
+    // enable interrupts
+    pci::outb(1, ioport + IER_ADDRESS);
 }

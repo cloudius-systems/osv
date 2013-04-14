@@ -13,7 +13,6 @@
 namespace console {
 
 // should eventually become a list of console device that we chose the best from
-IsaSerialConsole serial_console;
 debug_console console;
 
 void write(const char *msg, size_t len, bool lf)
@@ -50,13 +49,9 @@ termios tio = {
 // hack, until we have ISA interrupts
 void console_poll()
 {
-    sched::timer tmr(*sched::thread::current());
     while (true) {
-        while (!with_lock(console_mutex, [] { return console.input_ready(); })) {
-            tmr.set(clock::get()->time() + 10_ms);
-            sched::thread::wait_until([&] { return tmr.expired(); });
-        }
         with_lock(console_mutex, [] {
+            sched::thread::wait_until(console_mutex, [&] { return console.input_ready(); });
             console_queue.push(console.readch());
             for (auto t : readers) {
                 t->wake();
@@ -156,8 +151,10 @@ struct driver console_driver = {
 extern "C" int
 console_init(void)
 {
-    console::console.set_impl(&console::serial_console);
-    (new sched::thread(console_poll))->start();
+    auto console_poll_thread = new sched::thread(console_poll);
+    Console* serial_console = new IsaSerialConsole(console_poll_thread);
+    console_poll_thread->start();
+    console::console.set_impl(serial_console);
     device_create(&console_driver, "console", D_CHR);
     return 0;
 }

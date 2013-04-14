@@ -4,18 +4,23 @@
 #include "console.hh"
 #include "vga.hh"
 #include "drivers/pci.hh"
+#include "sched.hh"
+#include "interrupt.hh"
 
 class IsaSerialConsole : public Console {
 public:
-	IsaSerialConsole();
+	explicit IsaSerialConsole(sched::thread* consumer);
     virtual void write(const char *str, size_t len);
     virtual void newline();
     virtual bool input_ready() override;
     virtual char readch();
 private:
+    gsi_edge_interrupt _irq;
     static const u16 ioport = 0x3f8;
     u8 lcr;
     enum IsaSerialValues {
+        IER_ADDRESS = 1,
+        FCR_ADDRESS = 2,
     	LCR_ADDRESS = 0x3,
     	LCR_DIVISOR_LATCH_ACCESS_BIT = 0x7,
     	LCR_DIVISOR_LATCH_ACCESS_BIT_LOW = 0x0,
