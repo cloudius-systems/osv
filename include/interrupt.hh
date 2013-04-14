@@ -88,4 +88,13 @@ private:
     unsigned _vector;
 };
 
+class gsi_edge_interrupt {
+public:
+    explicit gsi_edge_interrupt(unsigned gsi, std::function<void ()> handler);
+    ~gsi_edge_interrupt();
+private:
+    unsigned _gsi;
+    unsigned _vector;
+};
+
 #endif /* INTERRUPT_HH_ */

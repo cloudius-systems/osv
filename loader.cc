@@ -13,6 +13,7 @@
 #include "debug.hh"
 #include "drivers/pci.hh"
 #include "smp.hh"
+#include "ioapic.hh"
 
 #include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
@@ -179,6 +180,7 @@ void* do_main_thread(void *_args)
 void main_cont(int ac, char** av)
 {
     std::tie(ac, av) = parse_options(ac, av);
+    ioapic::init();
     smp_launch();
     enable_trace();
     sched::init_detached_threads_reaper();
