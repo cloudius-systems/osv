@@ -34,7 +34,7 @@ void    *hashinit_flags(int count, struct malloc_type *type,
 #define HASH_NOWAIT 0x00000001
 #define HASH_WAITOK 0x00000002
 
-
+int read_random(void*, int);
 void domaininit(void *dummy);
 void domainfinalize(void *dummy);
 

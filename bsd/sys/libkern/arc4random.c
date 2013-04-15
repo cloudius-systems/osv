@@ -32,10 +32,10 @@ static struct mtx arc4_mtx;
 static u_int8_t arc4_randbyte(void);
 
 uint8_t read_random_gen = 0;
-static int read_random(uint8_t* buf, int count)
+int read_random(void* buf, int count)
 {
     for (int i=0; i<count; i++) {
-        buf[i] = read_random_gen++;
+        ((uint8_t *)buf)[i] = read_random_gen++;
     }
 
     return (count);
