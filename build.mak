@@ -132,6 +132,7 @@ bsd += bsd/sys/libkern/arc4random.o
 bsd += bsd/sys/libkern/random.o
 bsd += bsd/sys/libkern/inet_ntoa.o
 bsd += bsd/sys/libkern/inet_aton.o
+bsd += bsd/sys/kern/md5c.o
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
