@@ -670,8 +670,6 @@ netisr_queue_internal(u_int proto, struct mbuf *m, u_int cpuid)
 #ifdef NETISR_LOCKING
 	NETISR_LOCK_ASSERT();
 #endif
-	KASSERT(cpuid <= mp_maxid, ("%s: cpuid too big (%u, %u)", __func__,
-	    cpuid, mp_maxid));
 
 	dosignal = 0;
 	error = 0;

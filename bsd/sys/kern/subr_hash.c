@@ -77,7 +77,7 @@ void *
 hashinit(int elements, struct malloc_type *type, u_long *hashmask)
 {
 
-	return (hashinit_flags(elements, type, hashmask, 0));
+	return (hashinit_flags(elements, type, hashmask, HASH_WAITOK));
 }
 
 void
