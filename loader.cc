@@ -170,7 +170,7 @@ void* do_main_thread(void *_args)
     drvman->list_drivers();
 
 
-    mount_usr();
+    // mount_usr();
 
     run_main(prog, args);
 
