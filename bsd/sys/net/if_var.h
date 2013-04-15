@@ -81,7 +81,6 @@ struct	vnet;
 #ifdef _KERNEL
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/eventhandler.h>
-#include <bsd/sys/sys/buf_ring.h>
 #include <bsd/sys/net/vnet.h>
 #endif /* _KERNEL */
 
@@ -580,72 +579,6 @@ do {									\
 	IFQ_PURGE(ifq);							\
 } while (0)
 
-#ifdef _KERNEL
-static __inline int
-drbr_enqueue(struct ifnet *ifp, struct buf_ring *br, struct mbuf *m)
-{	
-	int error = 0;
-
-	error = buf_ring_enqueue(br, m);
-	if (error)
-		m_freem(m);
-
-	return (error);
-}
-
-static __inline void
-drbr_flush(struct ifnet *ifp, struct buf_ring *br)
-{
-	struct mbuf *m;
-
-	while ((m = (struct mbuf *)buf_ring_dequeue_sc(br)) != NULL)
-		m_freem(m);
-}
-
-static __inline void
-drbr_free(struct buf_ring *br, struct malloc_type *type)
-{
-
-	drbr_flush(NULL, br);
-	buf_ring_free(br, type);
-}
-
-static __inline struct mbuf *
-drbr_dequeue(struct ifnet *ifp, struct buf_ring *br)
-{
-	return ((struct mbuf *)buf_ring_dequeue_sc(br));
-}
-
-static __inline struct mbuf *
-drbr_dequeue_cond(struct ifnet *ifp, struct buf_ring *br,
-    int (*func) (struct mbuf *, void *), void *arg) 
-{
-	struct mbuf *m;
-	m = (struct mbuf *)buf_ring_peek(br);
-	if (m == NULL || func(m, arg) == 0)
-		return (NULL);
-
-	return ((struct mbuf *)buf_ring_dequeue_sc(br));
-}
-
-static __inline int
-drbr_empty(struct ifnet *ifp, struct buf_ring *br)
-{
-	return (buf_ring_empty(br));
-}
-
-static __inline int
-drbr_needs_enqueue(struct ifnet *ifp, struct buf_ring *br)
-{
-	return (!buf_ring_empty(br));
-}
-
-static __inline int
-drbr_inuse(struct ifnet *ifp, struct buf_ring *br)
-{
-	return (buf_ring_count(br));
-}
-#endif
 /*
  * 72 was chosen below because it is the size of a TCP/IP
  * header (40) + the minimum mss (32).
