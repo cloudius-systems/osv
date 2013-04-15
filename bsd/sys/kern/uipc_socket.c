@@ -104,6 +104,9 @@
 #include <stddef.h>
 
 #include <osv/poll.h>
+#include <osv/debug.h>
+#include <inttypes.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 #include <bsd/porting/sync_stub.h>
@@ -121,6 +124,8 @@
 #include <bsd/sys/net/route.h>
 
 #include <bsd/sys/net/vnet.h>
+
+#define uipc_d(...) tprintf("uipc_socket", logger_debug, __VA_ARGS__)
 
 static int	soreceive_rcvoob(struct socket *so, struct uio *uio,
 		    int flags);
@@ -237,6 +242,7 @@ soalloc(struct vnet *vnet)
 	so = uma_zalloc(socket_zone, M_NOWAIT | M_ZERO);
 	if (so == NULL)
 		return (NULL);
+	uipc_d("soalloc() so=%" PRIx64, (uint64_t)so);
 	SOCKBUF_LOCK_INIT(&so->so_snd, "so_snd");
 	SOCKBUF_LOCK_INIT(&so->so_rcv, "so_rcv");
 	rw_init(&so->so_snd.sb_rwlock, "so_snd_sx");
@@ -257,7 +263,7 @@ soalloc(struct vnet *vnet)
 static void
 sodealloc(struct socket *so)
 {
-
+	uipc_d("sodealloc() so=%" PRIx64, (uint64_t)so);
 	KASSERT(so->so_count == 0, ("sodealloc(): so_count %d", so->so_count));
 	KASSERT(so->so_pcb == NULL, ("sodealloc(): so_pcb != NULL"));
 
@@ -360,6 +366,8 @@ sonewconn(struct socket *head, int connstatus)
 {
 	struct socket *so;
 	int over;
+
+	uipc_d("sonewconn() head=%" PRIx64, (uint64_t)head);
 
 	ACCEPT_LOCK();
 	over = (head->so_qlen > 3 * head->so_qlimit / 2);
@@ -514,6 +522,7 @@ solisten_proto(struct socket *so, int backlog)
 void
 sofree(struct socket *so)
 {
+	uipc_d("sofree() so=%" PRIx64, (uint64_t)so);
 	struct protosw *pr = so->so_proto;
 	struct socket *head;
 
@@ -592,7 +601,7 @@ int
 soclose(struct socket *so)
 {
 	int error = 0;
-
+	uipc_d("soclose() so=%" PRIx64, (uint64_t)so);
 	KASSERT(!(so->so_state & SS_NOFDREF), ("soclose: SS_NOFDREF on enter"));
 
 	CURVNET_SET(so->so_vnet);
@@ -670,7 +679,7 @@ drop:
 void
 soabort(struct socket *so)
 {
-
+	uipc_d("soabort() so=%" PRIx64, (uint64_t)so);
 	/*
 	 * In as much as is possible, assert that no references to this
 	 * socket are held.  This is not quite the same as asserting that the
