@@ -26,9 +26,9 @@ void netisr_osv_thread_wrapper(netisr_osv_handler_t handler, void* arg)
 {
     while (1) {
         sched::thread::wait_until([&] { return (netisr_osv_have_work); });
+        netisr_osv_have_work = 0;
 
         handler(arg);
-        netisr_osv_have_work = 0;
     }
 }
 
