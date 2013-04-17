@@ -113,7 +113,9 @@ boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 
 loader.img: boot.bin loader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
-	$(call quiet, dd if=loader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
+	$(call very-quiet, cp loader.elf loader-stripped.elf)
+	$(call very-quiet, strip loader-stripped.elf)
+	$(call quiet, dd if=loader-stripped.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD $@ loader.elf)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
