@@ -1559,6 +1559,8 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 				tmpinp = inp;
 		}
 	}
+	if (tmpinp != NULL)
+		return (tmpinp);
 
 	/*
 	 * Then look for a wildcard match, if requested.
