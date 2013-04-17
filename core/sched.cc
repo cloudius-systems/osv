@@ -313,6 +313,7 @@ void thread::wake()
     if (!_status.compare_exchange_strong(old_status, status::waking)) {
         return;
     }
+    preempt_disable();
     unsigned c = cpu::current()->id;
     _cpu->incoming_wakeups[c].push_front(*this);
     _cpu->incoming_wakeups_mask.set(c);
@@ -324,6 +325,7 @@ void thread::wake()
         _cpu->schedule();
         // We'll also reschedule at the end of an interrupt if needed
     }
+    preempt_enable();
 }
 
 void thread::main()
