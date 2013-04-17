@@ -73,7 +73,7 @@ void test1_recv(struct socket* s)
     uio.uio_resid = 52;
     struct mbuf* m;
 
-    soreceive_dgram(s, &from, &uio, &m, NULL, NULL);
+    soreceive(s, &from, &uio, &m, NULL, NULL);
 }
 
 /* Sends an echo request */
@@ -129,8 +129,8 @@ void test1_echorequest(void)
     icp->icmp_cksum = in_cksum(m, 18);
 
     /* Send an ICMP packet on our interface */
-    error = sosend_dgram(s, (struct sockaddr *)&to, NULL, m, NULL, 0, NULL);
-    TLOG("sosend_dgram() result is %s", error? "failure":"success");
+    error = sosend(s, (struct sockaddr *)&to, NULL, m, NULL, 0, NULL);
+    TLOG("sosend() result is %s", error? "failure":"success");
 
 
     //test1_recv(s);
