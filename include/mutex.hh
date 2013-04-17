@@ -12,7 +12,8 @@ public:
     void lock();
     bool try_lock();
     void unlock();
-    unsigned getdepth() { return _mutex._depth; }
+    // getdepth() should only be used by the thread holding the lock
+    inline unsigned int getdepth() const { return _mutex._depth; }
 private:
     mutex_t _mutex;
 };
