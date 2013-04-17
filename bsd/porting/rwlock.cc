@@ -6,19 +6,11 @@
 
 void rw_init_flags(struct rwlock *rw, const char *name, int opts)
 {
-    u_int flags = 0;
-
-    if (opts & RW_RECURSE)
-        flags |= LO_RECURSABLE;
-
     mutex_init(&rw->_mutex);
-    rw->_rw_recurse = 0;
-    rw->_lo_flags = flags | LO_INITIALIZED;
 }
 
 void rw_destroy(struct rwlock *rw)
 {
-    assert(rw->_rw_recurse == 0);
     mutex_destroy(&rw->_mutex);
 }
 
@@ -45,31 +37,17 @@ void _rw_wunlock(struct rwlock *rw, const char *file, int line)
 
 void _rw_rlock(struct rwlock *rw, const char *file, int line)
 {
-    if (!rw_wowned(rw)) {
-        mutex_lock(&rw->_mutex);
-    }
-
-    rw->_rw_recurse++;
+    mutex_lock(&rw->_mutex);
 }
 
 int _rw_try_rlock(struct rwlock *rw, const char *file, int line)
 {
-    if (rw_wowned(rw) || mutex_trylock(&rw->_mutex)) {
-        ++rw->_rw_recurse;
-        return 1;
-    }
-    return 0;
+    return mutex_trylock(&rw->_mutex);
 }
 
 void _rw_runlock(struct rwlock *rw, const char *file, int line)
 {
-    assert(rw_wowned(rw));
-
-    rw->_rw_recurse--;
-
-    if (rw->_rw_recurse == 0) {
-        mutex_unlock(&rw->_mutex);
-    }
+    mutex_unlock(&rw->_mutex);
 }
 
 int _rw_try_upgrade(struct rwlock *rw, const char *file, int line)
