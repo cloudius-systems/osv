@@ -87,6 +87,7 @@ tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
 tests += tests/tst-fpu.so
 tests += tests/tst-tracepoint.so
 tests += tests/tst-hub.so
+tests += tests/tst-leak.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
