@@ -9,6 +9,7 @@
 #include "tst-queue-mpsc.hh"
 #include "tst-mmap.hh"
 #include "tst-sockets.hh"
+#include "tst-bsd-tcp1.hh"
 
 using namespace unit_tests;
 
@@ -23,6 +24,7 @@ void tests::execute_tests() {
     test_queue_mpsc q1;
     test_mmap mmap;
     test_sockets sockets;
+    test_bsd_tcp1 tcp1;
 
     instance().register_test(&threads);
     instance().register_test(&malloc);
@@ -34,6 +36,7 @@ void tests::execute_tests() {
     instance().register_test(&q1);
     instance().register_test(&mmap);
     instance().register_test(&sockets);
+    instance().register_test(&tcp1);
 
     instance().run();
 }
