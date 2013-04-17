@@ -12,14 +12,23 @@ int osv_curtid(void)
     return (sched::thread::current()->id());
 }
 
-#define NANOSEC (1000000000L)
-#define MICROSEC (1000000L)
+void ntm2tv(u64 ntm, struct timeval *tvp)
+{
+    u64 utm = ntm / 1000L;
+
+    tvp->tv_sec = ntm/TSECOND;
+    tvp->tv_usec = (utm - (tvp->tv_sec*TMILISECOND));
+}
 
 void getmicrotime(struct timeval *tvp)
 {
     u64 ntm = clock::get()->time();
-    u64 utm = ntm / 1000L;
+    ntm2tv(ntm, tvp);
+}
 
-    tvp->tv_sec = ntm/NANOSEC;
-    tvp->tv_usec = (utm - (tvp->tv_sec*MICROSEC));
+void getmicrouptime(struct timeval *tvp)
+{
+    /* FIXME: OSv - initialize time_uptime */
+    u64 ntm = clock::get()->time() - time_uptime;
+    ntm2tv(ntm, tvp);
 }

@@ -44,10 +44,16 @@ void domainfinalize(void *dummy);
 #define devctl_notify(...) do{}while(0)
 
 void getmicrotime(struct timeval *tvp);
+void getmicrouptime(struct timeval *tvp);
 int tvtohz(struct timeval *tv);
 
-/* Defines how many ticks are in 1 second (microsec) */
+#define TSECOND (1000000000L)
+#define TMILISECOND (1000000L)
+
+/* Defines how many ticks are in 1 second */
 #define hz (1000000L)
+#define ticks2ns(ticks) (ticks * (TSECOND / hz))
+#define ns2ticks(ns)    (ns / (TSECOND / hz))
 
 #define MALLOC_DEFINE(...)
 #define MALLOC_DECLARE(...)
