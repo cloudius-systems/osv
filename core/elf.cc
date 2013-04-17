@@ -192,10 +192,10 @@ void file::load_segment(const Elf64_Phdr& phdr)
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
     ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
-    mmu::map_file(_base + vstart, filesz, mmu::perm_rwx,
-                  *_f, align_down(phdr.p_offset, page_size), true);
+    mmu::map_file(_base + vstart, filesz, false, mmu::perm_rwx,
+                  *_f, align_down(phdr.p_offset, page_size));
     memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
-    mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::perm_rwx, true);
+    mmu::map_anon(_base + vstart + filesz, memsz - filesz, false, mmu::perm_rwx);
 }
 
 void object::load_segments()

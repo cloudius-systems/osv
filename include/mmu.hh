@@ -35,10 +35,9 @@ public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
 
-vma* reserve(void* hint, size_t size);
-vma* map_file(void* addr, size_t size, unsigned perm,
-              file& file, f_offset offset, bool evac);
-vma* map_anon(void* addr, size_t size, unsigned perm, bool evac);
+void* map_file(void* addr, size_t size, bool search, unsigned perm,
+              file& file, f_offset offset);
+void* map_anon(void* addr, size_t size, bool search, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);
 

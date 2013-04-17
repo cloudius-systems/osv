@@ -70,15 +70,13 @@ namespace pthread_private {
     sched::thread::stack_info pthread::allocate_stack()
     {
         size_t size = 1024*1024;
-        auto vma = mmu::reserve(nullptr, size);
-        mmu::map_anon(vma->addr(), vma->size(), mmu::perm_rw, false);
-        return { vma->addr(), vma->size() };
+        void *addr = mmu::map_anon(nullptr, size, true, mmu::perm_rw);
+        return { addr, size };
     }
 
     void pthread::free_stack(sched::thread::stack_info si)
     {
         mmu::unmap(si.begin, si.size);
-        // FIXME: free vma?
     }
 
     int pthread::join(void*& retval)

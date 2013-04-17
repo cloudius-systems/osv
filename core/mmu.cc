@@ -432,47 +432,33 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
     abort();
 }
 
-bool contains(vma& x, vma& y)
+bool contains(uintptr_t start, uintptr_t end, vma& y)
 {
-    return y.start() >= x.start() && y.end() <= x.end();
+    return y.start() >= start && y.end() <= end;
 }
 
-void evacuate(vma* v)
+void evacuate(uintptr_t start, uintptr_t end)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
     // FIXME: use equal_range or something
     for (auto i = std::next(vma_list.begin());
             i != std::prev(vma_list.end());
             ++i) {
-        i->split(v->end());
-        i->split(v->start());
-        if (contains(*v, *i)) {
+        i->split(end);
+        i->split(start);
+        if (contains(start, end, *i)) {
             auto& dead = *i--;
             unpopulate().operate(dead);
             vma_list.erase(dead);
+            delete &dead;
         }
     }
-}
-
-vma* reserve(void* hint, size_t size)
-{
-    std::lock_guard<mutex> guard(vma_list_mutex);
-    // look for a hole around 'hint'
-    auto start = reinterpret_cast<uintptr_t>(hint);
-    if (!start) {
-        start = 0x200000000000ul;
-    }
-    start = find_hole(start, size);
-    auto v = new vma(start, start + size);
-    vma_list.insert(*v);
-    return v;
 }
 
 void unmap(void* addr, size_t size)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
-    vma tmp { start, start+size };
-    evacuate(&tmp);
+    evacuate(start, start+size);
 }
 
 struct fill_anon_page : fill_page {
@@ -498,34 +484,43 @@ struct fill_file_page : fill_page {
     uint64_t len;
 };
 
-vma* allocate(uintptr_t start, uintptr_t end, fill_page& fill,
-        unsigned perm, bool evac)
+uintptr_t allocate(uintptr_t start, size_t size, bool search,
+                    fill_page& fill, unsigned perm)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
-    vma* ret = new vma(start, end);
-    if (evac)
-        evacuate(ret);
-    vma_list.insert(*ret);
 
-    populate(&fill, perm).operate((void*)start, end-start);
+    if (search) {
+        // search for unallocated hole around start
+        if (!start) {
+            start = 0x200000000000ul;
+        }
+        start = find_hole(start, size);
+    } else {
+        // we don't know if the given range is free, need to evacuate it first
+        evacuate(start, start+size);
+    }
 
-    return ret;
+    vma* v = new vma(start, start+size);
+    vma_list.insert(*v);
+
+    populate(&fill, perm).operate((void*)start, size);
+
+    return start;
 }
 
-vma* map_anon(void* addr, size_t size, unsigned perm, bool evac)
+void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    return allocate(start, start + size, zfill, perm, evac);
+    return (void*) allocate(start, size, search, zfill, perm);
 }
 
-vma* map_file(void* addr, size_t size, unsigned perm,
-              file& f, f_offset offset, bool evac)
+void* map_file(void* addr, size_t size, bool search, unsigned perm,
+              file& f, f_offset offset)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_file_page ffill(f, offset, f.size());
-    vma* ret = allocate(start, start + size, ffill, perm, evac);
-    return ret;
+    return (void*) allocate(start, size, search, ffill, perm);
 }
 
 

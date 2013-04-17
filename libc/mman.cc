@@ -48,21 +48,15 @@ void *mmap(void *addr, size_t length, int prot, int flags,
 
     // make use the payload isn't remapping physical memory
     assert(reinterpret_cast<long>(addr) >= 0);
-    std::unique_ptr<mmu::vma> v;
-    bool evacuate = true;
-    if (!(flags & MAP_FIXED)) {
-        v.reset(mmu::reserve(addr, length));
-        addr = v->addr();
-        evacuate = false; // New address range, no previous mapping to evacuate.
-    }
+
     if (fd == -1) {
-        mmu::map_anon(addr, length, libc_prot_to_perm(prot), evacuate);
+        return mmu::map_anon(addr, length, !(flags & MAP_FIXED),
+                libc_prot_to_perm(prot));
     } else {
         file f(fd);
-        mmu::map_file(addr, length, libc_prot_to_perm(prot), f, offset, evacuate);
+        return mmu::map_file(addr, length, !(flags & MAP_FIXED),
+                libc_prot_to_perm(prot), f, offset);
     }
-    v.release();
-    return addr;
 }
 
 extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
