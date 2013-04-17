@@ -657,6 +657,7 @@ drop:
 	SOCK_LOCK(so);
 	KASSERT((so->so_state & SS_NOFDREF) == 0, ("soclose: NOFDREF"));
 	so->so_state |= SS_NOFDREF;
+	so->fp = NULL;
 	sorele(so);
 	CURVNET_RESTORE();
 	return (error);
