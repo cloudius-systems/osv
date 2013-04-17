@@ -150,7 +150,6 @@ static void	icmp_send(struct mbuf *, struct mbuf *);
 
 extern	struct protosw inetsw[];
 
-/* FIXME: OSV: sysctl_net_icmp_drop_redir() ignore redirects */
 #if 0
 static int
 sysctl_net_icmp_drop_redir(SYSCTL_HANDLER_ARGS)

@@ -78,10 +78,6 @@ struct	xsockbuf {
  * Variables for socket buffering.
  */
 struct	sockbuf {
-    /* FIXME: OSv - select still not supported */
-#if 0
-	struct	selinfo sb_sel;	/* process selecting read/write */
-#endif
 	struct	mtx sb_mtx;	/* sockbuf lock */
 	struct	rwlock sb_rwlock;	/* prevent I/O interlacing */
 	short	sb_state;	/* (c/d) socket state on sockbuf */

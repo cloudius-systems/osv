@@ -178,8 +178,6 @@ _eventhandler_find_list(const char *name)
 {
     struct eventhandler_list	*list;
 
-    /* FIXME OSv: we don't have an assertion */
-    /* mutex_assert(&eventhandler_mutex, MA_OWNED); */
     TAILQ_FOREACH(list, &eventhandler_lists, el_link) {
         if (!strcmp(name, list->el_name))
             break;

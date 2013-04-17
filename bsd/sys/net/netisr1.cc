@@ -50,7 +50,5 @@ void netisr_osv_sched(netisr_osv_cookie_t cookie)
     sched::thread* t = niosv_to_thread(cookie);
     netisr_osv_have_work = 1;
     t->wake();
-
-    /* FIXME: Cooperative threads... */
     sched::thread::yield();
 }
