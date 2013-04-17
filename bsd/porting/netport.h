@@ -87,11 +87,13 @@ extern int tick;
 #define ENOIOCTL    (-3)        /* ioctl not handled by this layer */
 #define EDIRIOCTL   (-4)        /* do direct ioctl in GEOM */
 
+/* FIXME: TODO - Implement... */
 #define sx_slock(...) do{}while(0)
 #define sx_sunlock(...) do{}while(0)
 #define sx_xlock(...) do{}while(0)
 #define sx_xunlock(...) do{}while(0)
 
+/* FIXME: TODO - Implement... */
 #ifndef time_uptime
 #define time_uptime (1)
 #endif
