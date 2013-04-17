@@ -1,9 +1,12 @@
 #include <time.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <osv/debug.h>
 #include <bsd/porting/callout.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
+
+#define tdbg(...) tprintf("tst-bsd-callout", logger_error, __VA_ARGS__)
 
 struct callout c1, c2;
 int ctr;
@@ -13,22 +16,22 @@ void aaa(void *unused)
     callout_reset(&c1, hz/100, aaa, NULL);
 
     ctr++;
-    printf("TICK %d\n", ctr);
+    tdbg("TICK %d\n", ctr);
     struct timeval t;
     getmicrotime(&t);
-    printf("sec=%d msec=%d\n", t.tv_sec, t.tv_usec/1000);
+    tdbg("sec=%d msec=%d\n", t.tv_sec, t.tv_usec/1000);
 }
 
 void bbb(void *unused)
 {
     // Stop aaa
-    printf("SHUT-UP\n");
+    tdbg("SHUT-UP\n");
     callout_stop(&c1);
 }
 
 void test1(void)
 {
-    printf("BSD Callout Test1 - BEGIN\n");
+    tdbg("BSD Callout Test1 - BEGIN\n");
 
     ctr = 0;
 
@@ -39,7 +42,7 @@ void test1(void)
     callout_reset(&c2, 10*hz, bbb, NULL);
 
     sleep(11);
-    printf("BSD Callout Test1 - END\n");
+    tdbg("BSD Callout Test1 - END\n");
 }
 
 /********************** Test 2 **********************/
@@ -61,10 +64,10 @@ void t2_reset(void)
 
 void t2_print(void)
 {
-    printf("test2_ctr_a=%d\n", test2_ctr_a);
-    printf("test2_ctr_b=%d\n", test2_ctr_b);
-    printf("test2_ctr_(a+b)=%d\n", test2_ctr_a + test2_ctr_b);
-    printf("test2_ctr_shared=%d\n", test2_ctr_shared);
+    tdbg("test2_ctr_a=%d\n", test2_ctr_a);
+    tdbg("test2_ctr_b=%d\n", test2_ctr_b);
+    tdbg("test2_ctr_(a+b)=%d\n", test2_ctr_a + test2_ctr_b);
+    tdbg("test2_ctr_shared=%d\n", test2_ctr_shared);
 }
 
 void t2_a(void *unused)
@@ -106,7 +109,7 @@ void t2_b2(void *unused)
  */
 void test2(void)
 {
-    printf("BSD Callout Test2 - BEGIN\n");
+    tdbg("BSD Callout Test2 - BEGIN\n");
     mtx_init(&t2_lock, NULL, NULL, 0);
     t2_reset();
 
@@ -125,7 +128,7 @@ void test2(void)
     callout_stop(&t2b);
 
     /* Run test without mutex (unsynchronized access) */
-    printf("With No Mutex:\n");
+    tdbg("With No Mutex:\n");
     t2_print();
 
     /************
@@ -144,10 +147,10 @@ void test2(void)
     callout_stop(&t2b_mtx);
 
     /* Run test without mutex (unsynchronized access) */
-    printf("With Mutex:\n");
+    tdbg("With Mutex:\n");
     t2_print();
 
-    printf("BSD Callout Test2 - END\n");
+    tdbg("BSD Callout Test2 - END\n");
 }
 
 int main(int argc, char **argv)
