@@ -32,7 +32,7 @@ namespace pthread_private {
     class pthread {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset);
-        // FIXME: deallocate stack
+        ~pthread() { free_stack(_thread.get_stack_info()); }
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
         int join(void*& retval);
@@ -41,6 +41,7 @@ namespace pthread_private {
         sched::thread _thread;
     private:
         sched::thread::stack_info allocate_stack();
+        void free_stack(sched::thread::stack_info si);
         sched::thread::attr attributes();
     };
 
@@ -72,6 +73,12 @@ namespace pthread_private {
         auto vma = mmu::reserve(nullptr, size);
         mmu::map_anon(vma->addr(), vma->size(), mmu::perm_rw, false);
         return { vma->addr(), vma->size() };
+    }
+
+    void pthread::free_stack(sched::thread::stack_info si)
+    {
+        mmu::unmap(si.begin, si.size);
+        // FIXME: free vma?
     }
 
     int pthread::join(void*& retval)
