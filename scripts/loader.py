@@ -368,7 +368,7 @@ def dump_trace():
 
     i = 0
     while i < last:
-        tp_key, thread = struct.unpack('QQ', trace_log[i:i+16])
+        tp_key, thread, cpu = struct.unpack('QQI', trace_log[i:i+20])
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
@@ -376,17 +376,19 @@ def dump_trace():
                 fn_name = block.function.print_name
             except:
                 fn_name = '???'
-            gdb.write('0x%016x %s %s %s\n' % (thread,
-                                              indent,
-                                              annotation,
-                                              fn_name,
-                                              ))
+            gdb.write('0x%016x %2d %s %s %s\n' 
+                      % (thread,
+                         cpu,
+                         indent,
+                         annotation,
+                         fn_name,
+                         ))
         if tp_key == 0:
             i = align_up(i + 8, trace_page_size)
             continue
         tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
         sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
-        i += 16
+        i += 24
         size = struct.calcsize(sig)
         buffer = trace_log[i:i+size]
         i += size
@@ -406,10 +408,12 @@ def dump_trace():
             format = tp['format'].string()
             format = format.replace('%p', '0x%016x')
             name = tp['name'].string()
-            gdb.write('0x%016x %-20s %s\n' % (thread,
-                                              name,
-                                              format % data,
-                                              )
+            gdb.write('0x%016x %2d %-20s %s\n'
+                      % (thread,
+                         cpu,
+                         name,
+                         format % data,
+                         )
                       )
 
 def set_leak(val):

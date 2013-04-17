@@ -18,6 +18,7 @@ class tracepoint_base;
 struct trace_record_base {
     tracepoint_base* tp;
     sched::thread* thread;
+    unsigned cpu;
 };
 
 struct trace_record : trace_record_base {
@@ -223,11 +224,14 @@ public:
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
         if (enabled) {
+            sched::preempt_disable();
             auto tr = allocate_trace_record(size());
             tr->tp = this;
             tr->thread = sched::thread::current();
+            tr->cpu = tr->thread->tcpu()->id;
             assert(size() <= sizeof(tr->buffer));
             serialize(tr->buffer, as);
+            sched::preempt_enable();
         }
     }
     void serialize(void* buffer, std::tuple<s_args...> as) {
