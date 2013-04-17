@@ -104,9 +104,11 @@ void logger::wrt(const char* tag, logger_severity severity, const boost::format&
     }
 
     unsigned long tid = sched::thread::current()->id();
+    _lock.lock();
     debug(fmt("[%s/%d %s]: ") % loggable_severity(severity) % tid % tag);
     debug(_fmt);
     debug("\n");
+    _lock.unlock();
 }
 
 void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, ...)
@@ -124,9 +126,11 @@ void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, va
     }
 
     unsigned long tid = sched::thread::current()->id();
+    _lock.lock();
     kprintf("[%s/%d %s]: ", loggable_severity(severity), tid, tag);
     vkprintf(_fmt, ap);
     kprintf("\n");
+    _lock.unlock();
 }
 
 extern "C" {

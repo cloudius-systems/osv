@@ -6,6 +6,7 @@
 #include <string>
 #include <cstdarg>
 #include <osv/debug.h>
+#include "mutex.hh"
 #include "boost/format.hpp"
 
 typedef boost::format fmt;
@@ -49,6 +50,7 @@ private:
 
    std::map<std::string, logger_severity> _log_level;
 
+   mutex _lock;
 };
 
 extern "C" {void debug(const char *msg); }
