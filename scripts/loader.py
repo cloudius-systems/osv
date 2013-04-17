@@ -382,7 +382,7 @@ def dump_trace():
                                               fn_name,
                                               ))
         if tp_key == 0:
-            i = align_up(i, trace_page_size)
+            i = align_up(i + 8, trace_page_size)
             continue
         tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
         sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
