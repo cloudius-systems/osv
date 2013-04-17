@@ -1,6 +1,7 @@
 #include "elf.hh"
 #include <jni.h>
 #include <string.h>
+#include "debug.hh"
 
 extern elf::program* prog;
 
@@ -29,6 +30,7 @@ extern "C" int main(int ac, char **av)
         ++av, --ac;
     }
     if (ac < 1) {
+        debug("java.so: No class or jar given in command line. Aborting.\n");
         abort();
     }
     std::string mainclassname;
