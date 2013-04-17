@@ -390,6 +390,7 @@ def dump_trace():
         size = struct.calcsize(sig)
         buffer = trace_log[i:i+size]
         i += size
+        i = align_up(i, 8)
         data = struct.unpack(sig, buffer)
         if tp == tp_fn_entry.address:
             indent = '  ' * indents[thread]
