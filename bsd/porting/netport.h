@@ -112,8 +112,6 @@ extern int tick;
 #define PAGE_MASK (PAGE_SIZE-1)
 
 void abort(void);
-void* malloc(size_t size);
-void free(void* object);
 size_t strlcat(char *dst, const char *src, size_t siz);
 size_t strlcpy(char *dst, const char *src, size_t siz);
 
