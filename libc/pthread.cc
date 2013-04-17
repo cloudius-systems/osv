@@ -35,7 +35,7 @@ namespace pthread_private {
         ~pthread() { free_stack(_thread.get_stack_info()); }
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
-        int join(void*& retval);
+        int join(void** retval);
         void* _retval;
         // must be initialized last
         sched::thread _thread;
@@ -79,10 +79,12 @@ namespace pthread_private {
         mmu::unmap(si.begin, si.size);
     }
 
-    int pthread::join(void*& retval)
+    int pthread::join(void** retval)
     {
         _thread.join();
-        retval = _retval;
+        if (retval) {
+            *retval = _retval;
+        }
         return 0;
     }
 
@@ -124,7 +126,9 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 
 int pthread_join(pthread_t thread, void** retval)
 {
-    return pthread::from_libc(thread)->join(*retval);
+    int ret = pthread::from_libc(thread)->join(retval);
+    delete(pthread::from_libc(thread));
+    return ret;
 }
 
 int pthread_key_create(pthread_key_t* key, void (*dtor)(void*))

@@ -1,9 +1,16 @@
 #include "sched.hh"
 #include "debug.hh"
 #include <sys/mman.h>
+#include <pthread.h>
 
 namespace memory {
 extern bool tracker_enabled;
+}
+
+static void *donothing(void *arg)
+{
+    debug(".");
+    return NULL;
 }
 
 int main(int argc, char **argv)
@@ -44,6 +51,16 @@ int main(int argc, char **argv)
         t->join();
         delete t;
     }
+
+    debug("testing leaks in pthread_create");
+    for(int i=0; i<10; i++){
+        pthread_t t;
+        assert(pthread_create(&t, NULL, donothing, NULL) == 0);
+        assert(pthread_join(t, NULL) == 0);
+    }
+    debug("\n");
+
+
     debug("leak testing done. Please use 'osv leak show' in gdb to analyze results\n");
 
     memory::tracker_enabled = save_tracker_enabled;
