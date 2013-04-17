@@ -50,8 +50,6 @@ cpu::cpu()
 
 void cpu::schedule(bool yield)
 {
-    // FIXME: drive by IPI
-    handle_incoming_wakeups();
 
     with_lock(irq_lock, [this] {
         reschedule_from_interrupt();
@@ -223,17 +221,21 @@ void thread::yield()
 {
     auto t = current();
     // FIXME: drive by IPI
-    t->_cpu->handle_incoming_wakeups();
-    // FIXME: what about other cpus?
-    if (t->_cpu->runqueue.empty()) {
-        return;
-    }
-    with_lock(irq_lock, [t] {
+    bool resched = with_lock(irq_lock, [t] {
+        t->_cpu->handle_incoming_wakeups();
+        preempt_enable();
+        // FIXME: what about other cpus?
+        if (t->_cpu->runqueue.empty()) {
+            return false;
+        }
         t->_cpu->runqueue.push_back(*t);
         assert(t->_status.load() == status::running);
         t->_status.store(status::queued);
+        return true;
     });
-    t->_cpu->schedule(true);
+    if (resched) {
+        t->_cpu->schedule(true);
+    }
 }
 
 thread::stack_info::stack_info()
