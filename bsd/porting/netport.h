@@ -9,6 +9,12 @@
 #include <memory.h>
 #include <time.h>
 
+#define MOD_LOAD (1)
+#define MOD_UNLOAD (2)
+
+#define __predict_false(x) (x)
+#define __predict_true(x) (x)
+
 void init_maxsockets(void *ignored);
 
 int osv_curtid(void);
@@ -17,11 +23,6 @@ int osv_curtid(void);
 #define priv_check(...)        (0)
 
 #define FEATURE(...)
-
-#define intotcpcb(ip)   ((struct tcpcb *)(ip)->inp_ppcb)
-#define intotw(ip)  ((struct tcptw *)(ip)->inp_ppcb)
-#define sototcpcb(so)   (intotcpcb(sotoinpcb(so)))
-
 
 #include <sys/types.h>
 

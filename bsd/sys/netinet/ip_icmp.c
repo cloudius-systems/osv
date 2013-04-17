@@ -54,11 +54,8 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/tcp.h>
 #include <bsd/sys/netinet/ip_options.h>
-
-#if 0
-#include <netinet/tcp_var.h>
-#include <netinet/tcpip.h>
-#endif
+#include <bsd/sys/netinet/tcp_var.h>
+#include <bsd/sys/netinet/tcpip.h>
 #include <bsd/sys/netinet/icmp_var.h>
 
 #ifdef INET

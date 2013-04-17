@@ -61,9 +61,7 @@
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/in_pcb.h>
 #include <bsd/sys/netinet/ip_var.h>
-#if 0
 #include <bsd/sys/netinet/tcp_var.h>
-#endif
 #include <bsd/sys/netinet/udp.h>
 #include <bsd/sys/netinet/udp_var.h>
 #endif
@@ -374,15 +372,11 @@ in_pcb_lport(struct inpcb *inp, struct in_addr *laddrp, u_short *lportp,
 	 * use random port allocation only if the user allows it AND
 	 * ipport_tick() allows it.
 	 */
-#if 0
 	if (V_ipport_randomized &&
 		(!V_ipport_stoprandom || pcbinfo == &V_udbinfo))
 		dorandom = 1;
 	else
 		dorandom = 0;
-#else
-	dorandom = 0;
-#endif
 	/*
 	 * It makes no sense to do random port allocation if
 	 * we have the only port available.
@@ -533,7 +527,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 		laddr = sin->sin_addr;
 		if (lport) {
 			struct inpcb *t;
-			// struct tcptw *tw;
+			struct tcptw *tw;
 
 			/* GROSS */
 			if (ntohs(lport) <= V_ipport_reservedhigh &&
@@ -572,13 +566,10 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 				 * being in use (for now).  This is better
 				 * than a panic, but not desirable.
 				 */
-/* FIXME: OSv: undef when we have TCP */
-#if 0
 				tw = intotw(t);
 				if (tw == NULL ||
 				    (reuseport & tw->tw_so_options) == 0)
 					return (EADDRINUSE);
-#endif
 			} else if (t && (reuseport == 0 ||
 			    (t->inp_flags2 & INP_REUSEPORT) == 0)) {
 #ifdef INET6

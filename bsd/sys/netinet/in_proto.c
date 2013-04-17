@@ -65,11 +65,11 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/ip_icmp.h>
 #include <bsd/sys/netinet/igmp_var.h>
+#include <bsd/sys/netinet/tcp.h>
+#include <bsd/sys/netinet/tcp_timer.h>
+#include <bsd/sys/netinet/tcp_var.h>
 
 #if 0
-#include <netinet/tcp.h>
-#include <netinet/tcp_timer.h>
-#include <netinet/tcp_var.h>
 #include <netinet/ip_encap.h>
 #endif
 
@@ -130,8 +130,23 @@ struct protosw inetsw[] = {
     .pr_destroy =       udp_destroy,
 #endif
     .pr_usrreqs =       &udp_usrreqs
-},/* TCP */
-IPPROTOSPACER,
+},
+{
+	.pr_type =		SOCK_STREAM,
+	.pr_domain =		&inetdomain,
+	.pr_protocol =		IPPROTO_TCP,
+	.pr_flags =		PR_CONNREQUIRED|PR_IMPLOPCL|PR_WANTRCVD,
+	.pr_input =		tcp_input,
+	.pr_ctlinput =		tcp_ctlinput,
+	.pr_ctloutput =		tcp_ctloutput,
+	.pr_init =		tcp_init,
+#ifdef VIMAGE
+	.pr_destroy =		tcp_destroy,
+#endif
+	.pr_slowtimo =		tcp_slowtimo,
+	.pr_drain =		tcp_drain,
+	.pr_usrreqs =		&tcp_usrreqs
+},
 {
     .pr_type =      SOCK_RAW,
     .pr_domain =        &inetdomain,

@@ -18,6 +18,7 @@ extern "C" {
     #include <bsd/sys/netinet/igmp.h>
     #include <bsd/sys/netinet/if_ether.h>
     #include <bsd/sys/netinet/in_pcb.h>
+    #include <bsd/sys/netinet/cc.h>
     #include <bsd/sys/net/ethernet.h>
     #include <bsd/sys/net/route.h>
     #include <bsd/machine/param.h>
@@ -63,6 +64,7 @@ void net_init(void)
     ipport_tick_init(NULL);
     arp_init();
     domainfinalize(NULL);
+    cc_init();
     if_attachdomain(NULL);
     vnet_loif_init();
 
