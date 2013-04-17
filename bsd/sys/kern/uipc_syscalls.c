@@ -145,6 +145,7 @@ sys_bind(int s, struct sockaddr *sa, int namelen)
 {
 	int error;
 
+	sa->sa_len = namelen;
 	error = kern_bind(s, sa);
 	return (error);
 }
@@ -191,7 +192,7 @@ sys_listen(int s, int backlog)
 static int
 accept1(int s,
         struct sockaddr * name,
-        socklen_t namelen, int *out_fp)
+        socklen_t * namelen, int *out_fp)
 {
 	struct file *fp;
 	int error;
@@ -204,7 +205,7 @@ accept1(int s,
         return error;
     }
 
-	error = kern_accept(s, &name, &namelen, &fp, out_fp);
+	error = kern_accept(s, &name, namelen, &fp, out_fp);
 	fdrop(fp);
 
 	return (error);
@@ -357,7 +358,7 @@ done:
 int
 sys_accept(int s,
            struct sockaddr * name,
-           socklen_t namelen, int *out_fp)
+           socklen_t * namelen, int *out_fp)
 {
 
 	return (accept1(s, name, namelen, out_fp));
@@ -365,10 +366,11 @@ sys_accept(int s,
 
 /* ARGSUSED */
 int
-sys_connect(int s, struct sockaddr *sa)
+sys_connect(int s, struct sockaddr *sa, socklen_t len)
 {
 	int error;
 
+	sa->sa_len = len;
 	error = kern_connect(s, sa);
 	return (error);
 }

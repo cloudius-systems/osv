@@ -6,8 +6,8 @@
 int sys_socket(int domain, int type, int protocol, int *out_fd);
 int sys_bind(int s, struct sockaddr *sa, int namelen);
 int sys_listen(int s, int backlog);
-int sys_accept(int s, struct sockaddr * name, socklen_t namelen, int *out_fp);
-int sys_connect(int s, struct sockaddr *sa);
+int sys_accept(int s, struct sockaddr * name, socklen_t * namelen, int *out_fp);
+int sys_connect(int s, struct sockaddr *sa, socklen_t len);
 int sys_socketpair(int domain, int type, int protocol, int *rsv);
 int sys_sendto(int s, caddr_t buf, size_t  len, int flags, caddr_t to,
     int tolen, ssize_t* bytes);

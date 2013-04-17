@@ -15,7 +15,7 @@ int accept4(int fd, struct sockaddr *restrict addr, socklen_t *restrict len, int
 	/* In Release, this flag will be ignored */
 	assert(((flg & SOCK_CLOEXEC) == 0));
 
-	error = sys_accept(fd, addr, *len, &fd2);
+	error = sys_accept(fd, addr, len, &fd2);
 	if (error) {
 		errno = error;
 		return -1;
@@ -32,7 +32,7 @@ int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
 {
 	int fd2, error;
 
-	error = sys_accept(fd, addr, *len, &fd2);
+	error = sys_accept(fd, addr, len, &fd2);
 	if (error) {
 		errno = error;
 		return -1;
@@ -58,8 +58,7 @@ int connect(int fd, const struct sockaddr *addr, socklen_t len)
 {
 	int error;
 
-	/* FIXME: what to do with len? */
-	error = sys_connect(fd, (struct sockaddr *)addr);
+	error = sys_connect(fd, (struct sockaddr *)addr, len);
 	if (error) {
 		errno = error;
 		return -1;
