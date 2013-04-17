@@ -161,7 +161,7 @@ void cpu::enqueue(thread& t, u64 now)
     } else {
         t._borrow = 0;
     }
-    runqueue.insert_unique(t);
+    runqueue.insert_equal(t);
 }
 
 void cpu::init_on_cpu()
