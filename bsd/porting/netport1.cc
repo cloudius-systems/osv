@@ -5,6 +5,8 @@
 extern "C" {
     #include <time.h>
     #include <bsd/porting/netport.h>
+
+    int tick = 1;
 }
 
 int osv_curtid(void)
@@ -31,4 +33,10 @@ void getmicrouptime(struct timeval *tvp)
     /* FIXME: OSv - initialize time_uptime */
     u64 ntm = clock::get()->time() - time_uptime;
     ntm2tv(ntm, tvp);
+}
+
+int get_ticks(void)
+{
+    u64 ntm = clock::get()->time();
+    return (ns2ticks(ntm));
 }

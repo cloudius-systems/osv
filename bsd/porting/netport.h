@@ -47,6 +47,12 @@ void getmicrotime(struct timeval *tvp);
 void getmicrouptime(struct timeval *tvp);
 int tvtohz(struct timeval *tv);
 
+/* Returns the current time in ticks (there's hz ticks in 1 second) */
+int get_ticks(void);
+#define ticks (get_ticks())
+
+extern int tick;
+
 #define TSECOND (1000000000L)
 #define TMILISECOND (1000000L)
 
