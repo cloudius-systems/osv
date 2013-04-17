@@ -149,6 +149,10 @@ void run_main(elf::program *prog, struct argblock *args)
     auto av = args->av;
     auto ac = args->ac;
     auto obj = prog->add_object(av[0]);
+    if (!obj) {
+        debug("run_main(): cannot execute %s. Aborting.\n", av[0]);
+        abort();
+    }
     ++av, --ac;
     auto main = obj->lookup<void (int, char**)>("main");
     assert(main);
