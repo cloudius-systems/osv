@@ -42,13 +42,15 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/_callout.h>
 
+#define CALLOUT_SIGNATURE (36456283)
+
 #define	CALLOUT_LOCAL_ALLOC	0x0001 /* was allocated from callfree */
 #define	CALLOUT_ACTIVE		0x0002 /* callout is currently active */
 #define	CALLOUT_PENDING		0x0004 /* callout is waiting for timeout */
 #define	CALLOUT_MPSAFE		0x0008 /* callout handler is mp safe */
 #define	CALLOUT_RETURNUNLOCKED	0x0010 /* handler returns with mtx unlocked */
-#define	CALLOUT_SHAREDLOCK	0x0020 /* callout lock held in shared mode */
-#define	CALLOUT_DFRMIGRATION	0x0040 /* callout in deferred migration mode */
+#define	CALLOUT_COMPLETED	0x0020 /* callout thread finished */
+#define	CALLOUT_DISPATCHING	0x0040 /* callout handler currently is running */
 
 struct lock_object;
 
@@ -58,15 +60,12 @@ extern int ncallout;
 #define	callout_deactivate(c)	((c)->c_flags &= ~CALLOUT_ACTIVE)
 #define	callout_drain(c)	_callout_stop_safe(c, 1)
 void	callout_init(struct callout *, int);
-void	_callout_init_lock(struct callout *, struct lock_object *, int);
-#define	callout_init_mtx(c, mtx, flags)					\
-	_callout_init_lock((c), ((mtx) != NULL) ? &(mtx)->lock_object :	\
-	    NULL, (flags))
+void callout_init_mtx(struct callout *c, struct mtx *lock, int flags);
 void callout_init_rw(struct callout *c, struct rwlock *rw, int flags);
 #define	callout_pending(c)	((c)->c_flags & CALLOUT_PENDING)
 int	callout_reset_on(struct callout *, u64, void (*)(void *), void *, int);
 #define	callout_reset(c, on_tick, fn, arg)				\
-    callout_reset_on((c), (on_tick), (fn), (arg), (c)->c_cpu)
+    callout_reset_on((c), (on_tick), (fn), (arg), 0)
 #define	callout_reset_curcpu(c, on_tick, fn, arg)			\
     callout_reset_on((c), (on_tick), (fn), (arg), PCPU_GET(cpuid))
 int	callout_schedule(struct callout *, int);
