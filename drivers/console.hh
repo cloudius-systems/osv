@@ -15,7 +15,6 @@ public:
 namespace console {
 
 void write(const char *msg, size_t len, bool lf);
-void read(char *msg, size_t len);
 
 }
 

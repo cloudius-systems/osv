@@ -3,6 +3,7 @@
 #include <osv/device.h>
 #include <sched.hh>
 #include <queue>
+#include <deque>
 #include <vector>
 
 #include "isa-serial.hh"
@@ -22,41 +23,128 @@ void write(const char *msg, size_t len, bool lf)
         console.newline();
 }
 
-void read(char *msg, size_t len)
-{
-    for (size_t i = 0; i < len; i++) {
-        msg[i] = console.readch();
-        write(&msg[i],1,false);
-        if (msg[i] == '\r')
-            break;
-    }
-}
 
 mutex console_mutex;
+// characters available to be returned on read() from the console
 std::queue<char> console_queue;
+// who to wake when characters are added to console_queue
 std::list<sched::thread*> readers;
+
 termios tio = {
-    .c_iflag = 0,
+    .c_iflag = ICRNL,
     .c_oflag = 0,
     .c_cflag = 0,
-    .c_lflag = ECHO,
+    .c_lflag = ECHO | ECHOCTL | ICANON | ECHOE,
     .c_line = 0,
-    .c_cc = {},
+    .c_cc = {/*VINTR*/0, /*VQUIT*/0, /*VERASE*/'\177', /*VKILL*/0,
+            /*VEOF*/0, /*VTIME*/0, /*VMIN*/0, /*VSWTC*/0,
+            /*VSTART*/0, /*VSTOP*/0, /*VSUSP*/0, /*VEOL*/0,
+            /*VREPRINT*/0, /*VDISCARD*/0, /*VWERASE*/0,
+            /*VLNEXT*/0, /*VEOL2*/0},
     .c_ispeed = 0,
     .c_ospeed = 0,
 };
 
-// hack, until we have ISA interrupts
+// Console line discipline thread.
+//
+// The "line discipline" is an intermediate layer between a physical device
+// (here a serial port) and a character-device interface (here console_read())
+// implementing features such as input echo, line editing, etc. In OSv, this
+// is implemented in a thread, which is also responsible for read-ahead (input
+// characters are read, echoed and buffered even if no-one is yet reading).
+//
+// The code below implements a fixed line discipline (actually two - canonical
+// and non-canonical). We resisted the temptation to make the line discipline
+// a stand-alone pluggable object: In the early 1980s, 8th Edition Research
+// Unix experimented with pluggable line disciplines, providing improved
+// editing features such as CRT erase (backspace outputs backspace-space-
+// backspace), word erase, etc. These pluggable line-disciplines led to the
+// development of Unix "STREAMS". However, today, these concepts are all but
+// considered obsolete: In the mid 80s it was realized that these editing
+// features can better be implemented in userspace code - Contemporary shells
+// introduced sophisticated command-line editing (tcsh and ksh were both
+// announced in 1983), and the line-editing libraries appeared (GNU Readline,
+// in 1989). Posix's standardization of termios(3) also more-or-less set in
+// stone the features that Posix-compliant line discipline should support.
+//
+// We currently support only a subset of the termios(3) features, which we
+// considered most useful. More of the features can be added as needed.
+
+static inline bool isctrl(char c) {
+    return ((c<' ' && c!='\t' && c!='\n') || c=='\177');
+}
+// inputed characters not yet made available to read() in ICANON mode
+std::deque<char> line_buffer;
+
 void console_poll()
 {
     while (true) {
-        with_lock(console_mutex, [] {
-            sched::thread::wait_until(console_mutex, [&] { return console.input_ready(); });
-            console_queue.push(console.readch());
+        std::lock_guard<mutex> lock(console_mutex);
+        sched::thread::wait_until(console_mutex, [&] { return console.input_ready(); });
+        char c = console.readch();
+        if (c == '\r' && tio.c_iflag & ICRNL) {
+            c = '\n';
+        }
+        if (tio.c_lflag & ICANON) {
+            // canonical ("cooked") mode, where input is only made
+            // available to the reader after a newline (until then, the
+            // user can edit it with backspace, etc.).
+            if (c == '\n') {
+                if (tio.c_lflag && ECHO)
+                    console.write(&c, 1);
+                line_buffer.push_back('\n');
+                while (!line_buffer.empty()) {
+                    console_queue.push(line_buffer.front());
+                    line_buffer.pop_front();
+                }
+                for (auto t : readers) {
+                    t->wake();
+                }
+                continue; // already echoed
+            } else if (c == tio.c_cc[VERASE]) {
+                if (line_buffer.empty()) {
+                    continue; // do nothing, and echo nothing
+                }
+                char e = line_buffer.back();
+                line_buffer.pop_back();
+                if (tio.c_lflag && ECHO) {
+                    static const char eraser[] = {'\b',' ','\b','\b',' ','\b'};
+                    if (tio.c_lflag && ECHOE) {
+                        if (isctrl(e)) { // Erase the two characters ^X
+                            console.write(eraser, 6);
+                        } else {
+                            console.write(eraser, 3);
+                        }
+                    } else {
+                        if (isctrl(e)) {
+                            console.write(eraser+2, 2);
+                        } else {
+                            console.write(eraser, 1);
+                        }
+                    }
+                    continue; // already echoed
+                }
+            } else {
+                line_buffer.push_back(c);
+            }
+        } else {
+            // non-canonical ("cbreak") mode, where characters are made
+            // available for reading as soon as they are typed.
+            console_queue.push(c);
             for (auto t : readers) {
                 t->wake();
             }
-        });
+        }
+        if (tio.c_lflag & ECHO) {
+            if (isctrl(c) && (tio.c_lflag & ECHOCTL)) {
+                char out[2];
+                out[0] = '^';
+                out[1] = c^'@';
+                console.write(out, 2);
+            } else {
+                console.write(&c, 1);
+            }
+        }
     }
 }
 
@@ -71,13 +159,6 @@ console_read(struct device *dev, struct uio *uio, int ioflag)
             struct iovec *iov = uio->uio_iov;
             auto n = std::min(console_queue.size(), iov->iov_len);
             for (size_t i = 0; i < n; ++i) {
-                if (tio.c_lflag & ECHO) {
-                    char c = console_queue.front();
-                    if (c == '\r') {
-                        c = '\n';
-                    }
-                    write(&c, 1, false);
-                }
                 static_cast<char*>(iov->iov_base)[i] = console_queue.front();
                 console_queue.pop();
             }
