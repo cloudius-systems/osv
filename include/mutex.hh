@@ -12,6 +12,7 @@ public:
     void lock();
     bool try_lock();
     void unlock();
+    unsigned getdepth() { return _mutex._depth; }
 private:
     mutex_t _mutex;
 };
