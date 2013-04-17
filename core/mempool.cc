@@ -9,10 +9,30 @@
 #include "libc/libc.hh"
 #include "align.hh"
 #include <debug.hh>
+#include "alloctracker.hh"
 
 namespace memory {
 
 size_t phys_mem_size;
+
+// Optionally track living allocations, and the call chain which led to each
+// allocation. Don't set tracker_enabled before tracker is fully constructed.
+alloc_tracker tracker;
+bool tracker_enabled = false;
+static inline void tracker_remember(void *addr, size_t size)
+{
+    // Check if tracker_enabled is true, but expect (be quicker in the case)
+    // that it is false.
+    if (__builtin_expect(tracker_enabled, false)) {
+        tracker.remember(addr, size);
+    }
+}
+static inline void tracker_forget(void *addr)
+{
+    if (__builtin_expect(tracker_enabled, false)) {
+        tracker.forget(addr);
+    }
+}
 
 // Memory allocation strategy
 //
@@ -32,7 +52,6 @@ size_t phys_mem_size;
 // Objects that are exactly page sized, and allocated by alloc_page(), come
 // from the same pool as large objects, except they don't have a header
 // (since we know the size already).
-
 
 pool::pool(unsigned size)
     : _size(size)
@@ -243,11 +262,13 @@ void* alloc_page()
     auto p = &*free_page_ranges.begin();
     if (p->size == page_size) {
         free_page_ranges.erase(*p);
+        tracker_remember(p, page_size);
         return p;
     } else {
         p->size -= page_size;
         void* v = p;
         v += p->size;
+        tracker_remember(v, page_size);
         return v;
     }
 }
@@ -255,6 +276,7 @@ void* alloc_page()
 void free_page(void* v)
 {
     free_page_range(v, page_size);
+    tracker_forget(v);
 }
 
 /* Allocate a huge page of a given size N (which must be a power of two)
@@ -292,6 +314,9 @@ void* alloc_huge_page(size_t N)
         }
         // Return the middle 2MB part
         return (void*) ret;
+        // TODO: consider using tracker.remember() for each one of the small
+        // pages allocated. However, this would be inefficient, and since we
+        // only use alloc_huge_page in one place, maybe not worth it.
     }
     // TODO: instead of aborting, tell the caller of this failure and have
     // it fall back to small pages instead.
@@ -361,14 +386,16 @@ void* malloc(size_t size)
 {
     if ((ssize_t)size < 0)
         return libc_error_ptr<void *>(ENOMEM);
-    
+    void *ret;
     if (size <= memory::pool::max_object_size) {
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
-        return memory::malloc_pools[n].alloc();
+        ret = memory::malloc_pools[n].alloc();
     } else {
-        return memory::malloc_large(size);
+        ret = memory::malloc_large(size);
     }
+    memory::tracker_remember(ret, size);
+    return ret;
 }
 
 void* calloc(size_t nmemb, size_t size)
@@ -414,6 +441,7 @@ void free(void* object)
     if (!object) {
         return;
     }
+    memory::tracker_forget(object);
     if (reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1)) {
         return memory::pool::from_object(object)->free(object);
     } else {

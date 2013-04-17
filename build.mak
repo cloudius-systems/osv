@@ -218,6 +218,7 @@ objects += core/eventlist.o
 objects += core/debug.o
 objects += drivers/pci.o
 objects += core/mempool.o
+objects += core/alloctracker.o
 objects += arch/x64/elf-dl.o
 objects += linux.o
 objects += core/sched.o

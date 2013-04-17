@@ -411,11 +411,117 @@ def dump_trace():
                                               )
                       )
 
+def set_leak(val):
+    gdb.parse_and_eval('memory::tracker_enabled=%s' % val)
+
+def show_leak():
+    tracker = gdb.parse_and_eval('memory::tracker')
+    size_allocations = tracker['size_allocations']
+    allocations = tracker['allocations']
+    # Build a list of allocations to be sorted lexicographically by call chain
+    # and summarize allocations with the same call chain:
+    allocs = [];
+    for i in range(size_allocations) :
+        a = allocations[i]
+        addr = ulong(a['addr'])
+        if addr == 0 :
+            continue
+        nbacktrace = a['nbacktrace']
+        backtrace = a['backtrace']
+        callchain = []
+        for j in range(nbacktrace) :
+            callchain.append(backtrace[nbacktrace-1-j])
+        allocs.append((i, callchain))
+    allocs.sort(key=lambda entry: entry[1])
+    gdb.write('Allocations still in memory at this time (seq=%d):\n\n' % tracker['current_seq'])
+    total_size = 0
+    cur_n = 0
+    cur_total_size = 0
+    cur_total_seq = 0
+    cur_first_seq = -1
+    cur_last_seq = -1
+    cur_max_size = -1
+    cur_min_size = -1
+    for k, alloc in enumerate(allocs) :
+        i = alloc[0]
+        callchain = alloc[1]
+        seq = ulong(allocations[i]['seq'])
+        size = ulong(allocations[i]['size'])
+        total_size += size
+        cur_n += 1
+        cur_total_size += size
+        cur_total_seq += seq
+        if cur_first_seq<0 or seq<cur_first_seq :
+            cur_first_seq = seq
+        if cur_last_seq<0 or seq>cur_last_seq :
+            cur_last_seq = seq
+        if cur_min_size<0 or size<cur_min_size :
+            cur_min_size = size
+        if cur_max_size<0 or size>cur_max_size :
+            cur_max_size = size
+        # If the next entry has the same call chain, just continue summing
+        if k!=len(allocs)-1 and callchain==allocs[k+1][1] :
+            continue;
+        # We're done with a bunch of allocations with same call chain:
+        gdb.write('Found %d bytes in %d allocations [size ' % (cur_total_size, cur_n))
+        if cur_min_size != cur_max_size :
+            gdb.write('%d/%.1f/%d' % (cur_min_size, cur_total_size/cur_n, cur_max_size))
+        else :
+            gdb.write('%d' % cur_min_size)
+        gdb.write(', birth ')
+        if cur_first_seq != cur_last_seq :
+            gdb.write('%d/%.1f/%d' % (cur_first_seq, cur_total_seq/cur_n, cur_last_seq))
+        else :
+            gdb.write('%d' % cur_first_seq)
+        gdb.write(']\nfrom:\n')
+        cur_n = 0
+        cur_total_size = 0
+        cur_total_seq = 0
+        cur_first_seq = -1
+        cur_last_seq = -1
+        cur_max_size = -1
+        cur_min_size = -1
+        if len(callchain)==20 :
+            gdb.write('\t<deeper stack trace not remembered>\n')
+        for f in reversed(callchain) :
+            func_name = f
+            sal = gdb.find_pc_line(ulong(f))
+            try :
+                source = ' (%s:%s)' % (sal.symtab.filename, sal.line)
+            except :
+                source = ''
+            gdb.write('\t%s%s\n' % (func_name, source));
+        gdb.write('\n')
+
 class osv_trace(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         dump_trace()
+
+class osv_leak(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv leak', gdb.COMMAND_USER,
+                             gdb.COMPLETE_COMMAND, True)
+
+class osv_leak_show(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv leak show', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        show_leak()
+
+class osv_leak_on(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv leak on', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        set_leak('true')
+
+class osv_leak_off(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv leak off', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        set_leak('false')
+
 
 osv()
 osv_heap()
@@ -426,5 +532,9 @@ osv_thread()
 osv_thread_apply()
 osv_thread_apply_all()
 osv_trace()
+osv_leak()
+osv_leak_show()
+osv_leak_on()
+osv_leak_off()
 
 setup_libstdcxx()
