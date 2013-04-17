@@ -26,18 +26,3 @@ void mtx_assert(struct mtx *mp, int flag)
 {
 
 }
-
-void critical_enter(void)
-{
-
-}
-
-void critical_exit(void)
-{
-
-}
-
-void cpu_spinwait(void)
-{
-
-}
