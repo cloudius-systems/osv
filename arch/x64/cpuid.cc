@@ -1,5 +1,6 @@
 #include "cpuid.hh"
 #include "processor.hh"
+#include "xen.hh"
 
 namespace processor {
 
@@ -83,12 +84,26 @@ void process_cpuid_bit(features_type& features, const cpuid_bit& b)
     features.*(b.flag) = (w >> b.bit) & 1;
 }
 
+void process_xen_bits(features_type &features)
+{
+    signature sig = { 0x566e6558, 0x65584d4d, 0x4d4d566e };
+
+    for (unsigned base = 0x40000000; base < 0x40010000; base += 0x100) {
+        auto x = cpuid(base);
+        if (x.b != sig.b || x.c != sig.c || x.d != sig.d) {
+            continue;
+        }
+        xen::xen_init(features, base);
+        break;
+    }
+}
 
 void process_cpuid(features_type& features)
 {
     for (unsigned i = 0; i < nr_cpuid_bits; ++i) {
         process_cpuid_bit(features, cpuid_bits[i]);
     }
+    process_xen_bits(features);
 }
 
 }
