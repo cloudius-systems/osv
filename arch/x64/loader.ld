@@ -15,6 +15,7 @@ SECTIONS
     .rodata : { *(.rodata*) } :text
     .eh_frame : { *(.eh_frame) } :text
     .eh_frame_hdr : { *(.eh_frame_hdr) } :text :eh_frame
+    .note : { *(.note*) } :text :note
     .data : { *(.data) } :text
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
@@ -51,5 +52,6 @@ PHDRS {
 	tls PT_TLS;
 	dynamic PT_DYNAMIC;
 	eh_frame PT_GNU_EH_FRAME;
+	note PT_NOTE;
 }
 ENTRY(start32);
