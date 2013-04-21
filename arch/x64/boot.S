@@ -72,6 +72,7 @@ start32:
     mov %eax, %cr0
     ljmpl $8, $start64
 .code64
+.global start64
 start64:
     .cfi_startproc simple
     .cfi_def_cfa %rsp, 0

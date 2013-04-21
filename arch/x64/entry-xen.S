@@ -26,6 +26,13 @@ elfnote_str(XEN_ELFNOTE_LOADER, "generic")
 elfnote_str(XEN_ELFNOTE_FEATURES, "!writable_page_tables")
 elfnote_str(XEN_ELFNOTE_BSD_SYMTAB, "yes")
 
+.data
+
+# This hints where pre-mapped free memory exists.
+# We can then use it as the base for our stack pointer.
+.global xen_bootstrap_end
+xen_bootstrap_end: .quad 0
+
 .text
 .align 4096
 .globl hypercall_page
@@ -34,4 +41,8 @@ hypercall_page:
 .align 4096
 
 xen_start:
-        1: jmp 1b
+    mov $0x200000, %ebp  // elf header; FIXME: determine dynamically
+    mov %rsp, xen_bootstrap_end
+    mov %rsi, %rdi
+    call xen_init
+    jmp start64

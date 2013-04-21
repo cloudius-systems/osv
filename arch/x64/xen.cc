@@ -10,6 +10,9 @@
 
 shared_info_t *HYPERVISOR_shared_info;
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
+// make sure xen_start_info is not in .bss, or it will be overwritten
+// by init code, as xen_init() is called before .bss initialization
+struct start_info* xen_start_info __attribute__((section(".data")));
 
 namespace xen {
 
@@ -73,6 +76,7 @@ hvm_hypercall(unsigned type, struct xen_hvm_param *param)
 }
 
 struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
+extern void* xen_bootstrap_end;
 
 static bool xen_pci_enabled()
 {
@@ -159,5 +163,11 @@ void xen_init(processor::features_type &features, unsigned base)
 
         features.xen_pci = xen_pci_enabled();
         HYPERVISOR_shared_info = reinterpret_cast<shared_info_t *>(&xen_shared_info);
+}
+
+extern "C"
+void xen_init(struct start_info* si)
+{
+    xen_start_info = si;
 }
 }
