@@ -732,6 +732,9 @@ init_table get_init(Elf64_Ehdr* header)
             auto buckets = hashtab + 2;
             auto chain = buckets + nbucket;
             auto relocate_table = [=](const Elf64_Rela *rtab, unsigned n) {
+                if (!rtab) {
+                    return;
+                }
                 for (auto r = rtab; r < rtab + n; ++r) {
                     auto info = r->r_info;
                     u32 sym = info >> 32;
