@@ -61,3 +61,8 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 		*result = NULL;
 	return 0;
 }
+
+// FIXME: in 64bit dirent64 and dirent are identical, so it's safe to alias
+extern "C" int readdir64_r(DIR *dir, struct dirent64 *entry,
+		struct dirent64 **result)
+		__attribute__((alias("readdir_r")));
