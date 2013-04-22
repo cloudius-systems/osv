@@ -35,3 +35,11 @@
 /java.so: java/java.so
 /java/RunJar.class: java/RunJar.class
 /bench.jar: tests/bench/bench.jar
+/console/util.js: ../../console/util.js
+/console/autocomplete.js: ../../console/autocomplete.js
+/console/cd.js: ../../console/cd.js
+/console/pwd.js: ../../console/pwd.js
+/console/ls.js: ../../console/ls.js
+/console/cat.js: ../../console/cat.js
+/console/help.js: ../../console/help.js
+/console/cli.js: ../../console/cli.js
