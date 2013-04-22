@@ -623,6 +623,11 @@ void vma::split(uintptr_t edge)
 
 unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
 
+void set_nr_page_sizes(unsigned nr)
+{
+    nr_page_sizes = nr;
+}
+
 pt_element page_table_root;
 
 void clamp(uintptr_t& vstart1, uintptr_t& vend1,

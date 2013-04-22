@@ -58,6 +58,7 @@ T* phys_cast(phys pa)
 void linear_map(void* virt, phys addr, size_t size, size_t slop);
 void free_initial_memory_range(uintptr_t addr, size_t size);
 void switch_to_runtime_page_table();
+void set_nr_page_sizes(unsigned nr);
 
 void vpopulate(void* addr, size_t size);
 void vdepopulate(void* addr, size_t size);
