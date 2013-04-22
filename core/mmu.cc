@@ -199,8 +199,10 @@ void free_intermediate_level(hw_ptep ptep)
     for (auto i = 0; i < pte_per_page; ++i) {
         assert(pt.at(i).read().empty()); // don't free a level which still has pages!
     }
-    memory::free_page(pt.release());
+    auto v = pt.release();
     ptep.write(make_empty_pte());
+    // FIXME: flush tlb
+    memory::free_page(v);
 }
 
 void change_perm(hw_ptep ptep, unsigned int perm)
@@ -445,32 +447,40 @@ protected:
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
-        assert(!ptep.read().empty()); // evacuate() shouldn't call us twice for the same page.
-        memory::free_page(phys_to_virt(ptep.read().addr(false)));
+        pt_element pte = ptep.read();
+        assert(!pte.empty()); // evacuate() shouldn't call us twice for the same page.
         ptep.write(make_empty_pte());
+        // FIXME: tlb flush
+        memory::free_page(phys_to_virt(pte.addr(false)));
     }
     virtual void huge_page(hw_ptep ptep, uintptr_t offset){
-        if (!ptep.read().present()) {
+        pt_element pte = ptep.read();
+        ptep.write(make_empty_pte());
+        // FIXME: tlb flush
+        if (!pte.present()) {
             // Note: we free the page even if it is already marked "not present".
             // evacuate() makes sure we are only called for allocated pages, and
             // not-present may only mean mprotect(PROT_NONE).
-            assert(!ptep.read().empty()); // evacuate() shouldn't call us twice for the same page.
-            memory::free_huge_page(phys_to_virt(ptep.read().addr(true)),
+            assert(!pte.empty()); // evacuate() shouldn't call us twice for the same page.
+            memory::free_huge_page(phys_to_virt(pte.addr(true)),
                     huge_page_size);
-        } else if (ptep.read().large()) {
-            memory::free_huge_page(phys_to_virt(ptep.read().addr(true)),
+        } else if (pte.large()) {
+            memory::free_huge_page(phys_to_virt(pte.addr(true)),
                     huge_page_size);
         } else {
             // We've previously allocated small pages here, not a huge pages.
             // We need to free them one by one - as they are not necessarily part
             // of one huge page.
-            hw_ptep pt = follow(ptep.read());
+            hw_ptep pt = follow(pte);
             for(int i=0; i<pte_per_page; ++i) {
-                assert(pt.at(i).read().empty()); //  evacuate() shouldn't call us twice for the same page.
-                memory::free_page(phys_to_virt(pt.at(i).read().addr(false)));
+                assert(!pt.at(i).read().empty()); //  evacuate() shouldn't call us twice for the same page.
+                pt_element pte = pt.at(i).read();
+                // FIXME: tlb flush?
+                pt.at(i).write(make_empty_pte());
+                memory::free_page(phys_to_virt(pte.addr(false)));
             }
+            memory::free_page(pt.release());
         }
-        ptep.write(make_empty_pte());
     }
     virtual bool should_allocate_intermediate(){
         return false;
