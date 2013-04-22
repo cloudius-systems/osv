@@ -98,6 +98,27 @@ private:
     u64 x;
 };
 
+class hw_page_table;
+class hw_ptep;
+
+// a pointer to a pte mapped by hardware.  Needed for Xen which
+// makes those page tables read-only, and uses a hypercall to update
+// the contents.
+class hw_ptep {
+public:
+    hw_ptep(const hw_ptep& a) : p(a.p) {}
+    pt_element read() const { return *p; }
+    void write(pt_element pte) { *p = pte; }
+    hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
+    static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
+    // no longer using this as a page table
+    pt_element* release() { return p; }
+private:
+    hw_ptep(pt_element* ptep) : p(ptep) {}
+    pt_element* p;
+    friend class hw_pte_ref;
+};
+
 inline
 pt_element make_empty_pte()
 {
@@ -134,9 +155,9 @@ pt_element make_large_pte(phys addr,
     return make_pte(addr, true, perm);
 }
 
-pt_element* follow(pt_element pte)
+hw_ptep follow(pt_element pte)
 {
-    return phys_cast<pt_element>(pte.next_pt_addr());
+    return hw_ptep::force(phys_cast<pt_element>(pte.next_pt_addr()));
 }
 
 const unsigned nlevels = 4;
@@ -160,29 +181,30 @@ unsigned pt_index(void *virt, unsigned level)
     return (v >> (12 + level * 9)) & 511;
 }
 
-void allocate_intermediate_level(pt_element *ptep)
+void allocate_intermediate_level(hw_ptep ptep)
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
+    // since the pt is not yet mapped, we don't need to use hw_ptep
     pt_element* pt = phys_cast<pt_element>(pt_page);
     for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = make_empty_pte();
     }
-    *ptep = make_normal_pte(pt_page);
+    ptep.write(make_normal_pte(pt_page));
 }
 
-void free_intermediate_level(pt_element *ptep)
+void free_intermediate_level(hw_ptep ptep)
 {
-    pt_element *pt = follow(*ptep);
+    hw_ptep pt = follow(ptep.read());
     for (auto i = 0; i < pte_per_page; ++i) {
-        assert(pt[i].empty()); // don't free a level which still has pages!
+        assert(pt.at(i).read().empty()); // don't free a level which still has pages!
     }
-    memory::free_page(pt);
-    *ptep = make_empty_pte();
+    memory::free_page(pt.release());
+    ptep.write(make_empty_pte());
 }
 
-void change_perm(pt_element *ptep, unsigned int perm)
+void change_perm(hw_ptep ptep, unsigned int perm)
 {
-    pt_element pte = *ptep;
+    pt_element pte = ptep.read();
     // Note: in x86, if the present bit (0x1) is off, not only read is
     // disallowed, but also write and exec. So in mprotect, if any
     // permission is requested, we must also grant read permission.
@@ -190,22 +212,22 @@ void change_perm(pt_element *ptep, unsigned int perm)
     pte.set_present(perm);
     pte.set_writable(perm & perm_write);
     pte.set_nx(!(perm & perm_exec));
-    *ptep = pte;
+    ptep.write(pte);
 }
 
-void split_large_page(pt_element* ptep, unsigned level)
+void split_large_page(hw_ptep ptep, unsigned level)
 {
-    auto pte_orig = *ptep;
+    pt_element pte_orig = ptep.read();
     if (level == 1) {
         pte_orig.set_large(false);
     }
     allocate_intermediate_level(ptep);
-    auto pt = follow(*ptep);
+    auto pt = follow(ptep.read());
     for (auto i = 0; i < pte_per_page; ++i) {
         pt_element tmp = pte_orig;
         phys addend = phys(i) << (12 + 9 * (level - 1));
         tmp.set_addr(tmp.addr(level > 1) | addend, level > 1);
-        pt[i] = tmp;
+        pt.at(i).write(tmp);
     }
 }
 
@@ -223,9 +245,9 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
     } else if (level==0){
         nsmall++;
     } else {
-        pt_element* pt = follow(pte);
+        hw_ptep pt = follow(pte);
         for(int i=0; i<pte_per_page; ++i) {
-            debug_count_ptes(pt[i], level-1, nsmall, nhuge);
+            debug_count_ptes(pt.at(i).read(), level-1, nsmall, nhuge);
         }
     }
 }
@@ -289,8 +311,8 @@ public:
 protected:
     // offset is the offset of this page in the entire address range
     // (in case the operation needs to know this).
-    virtual void small_page(pt_element *ptep, uintptr_t offset) = 0;
-    virtual void huge_page(pt_element *ptep, uintptr_t offset) = 0;
+    virtual void small_page(hw_ptep ptep, uintptr_t offset) = 0;
+    virtual void huge_page(hw_ptep ptep, uintptr_t offset) = 0;
     virtual bool should_allocate_intermediate() = 0;
 private:
     void operate_page(bool huge, void *addr, uintptr_t offset);
@@ -339,17 +361,19 @@ void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
 {
     pt_element pte = pt_element::force(processor::read_cr3());
     auto pt = follow(pte);
-    auto ptep = &pt[pt_index(addr, nlevels - 1)];
+    auto ptep = pt.at(pt_index(addr, nlevels - 1));
     unsigned level = nlevels - 1;
     unsigned stopat = huge ? 1 : 0;
     while (level > stopat) {
-        if (!ptep->present()) {
+        pte = ptep.read();
+        if (!pte.present()) {
             if (should_allocate_intermediate()) {
                 allocate_intermediate_level(ptep);
+                pte = ptep.read();
             } else {
                 return;
             }
-        } else if (ptep->large()) {
+        } else if (pte.large()) {
             // We're trying to change a small page out of a huge page (or
             // in the future, potentially also 2 MB page out of a 1 GB),
             // so we need to first split the large page into smaller pages.
@@ -357,11 +381,11 @@ void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
             // alloc_huge_page() with free_page(), so it is safe to do such a
             // split.
             split_large_page(ptep, level);
+            pte = ptep.read();
         }
-        pte = *ptep;
         --level;
         pt = follow(pte);
-        ptep = &pt[pt_index(addr, level)];
+        ptep = pt.at(pt_index(addr, level));
     }
     if(huge) {
         huge_page(ptep, offset);
@@ -383,13 +407,13 @@ private:
 public:
     populate(fill_page *fill, unsigned int perm) : fill(fill), perm(perm) { }
 protected:
-    virtual void small_page(pt_element *ptep, uintptr_t offset){
+    virtual void small_page(hw_ptep ptep, uintptr_t offset){
         phys page = virt_to_phys(memory::alloc_page());
         fill->fill(phys_to_virt(page), offset);
-        assert(ptep->empty()); // don't populate an already populated page!
-        *ptep = make_normal_pte(page, perm);
+        assert(ptep.read().empty()); // don't populate an already populated page!
+        ptep.write(make_normal_pte(page, perm));
     }
-    virtual void huge_page(pt_element *ptep, uintptr_t offset){
+    virtual void huge_page(hw_ptep ptep, uintptr_t offset){
         phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
         uint64_t o=0;
         // Unfortunately, fill() is only coded for small-page-size chunks, we
@@ -398,12 +422,12 @@ protected:
             fill->fill(phys_to_virt(page+o), offset+o);
             o += page_size;
         }
-        if (!ptep->empty()) {
-            assert(!ptep->large()); // don't populate an already populated page!
+        if (!ptep.read().empty()) {
+            assert(!ptep.read().large()); // don't populate an already populated page!
             // held smallpages (already evacuated), now will be used for huge page
             free_intermediate_level(ptep);
         }
-        *ptep = make_large_pte(page, perm);
+        ptep.write(make_large_pte(page, perm));
     }
     virtual bool should_allocate_intermediate(){
         return true;
@@ -416,36 +440,36 @@ protected:
  */
 class unpopulate : public page_range_operation {
 protected:
-    virtual void small_page(pt_element *ptep, uintptr_t offset){
+    virtual void small_page(hw_ptep ptep, uintptr_t offset){
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
-        assert(!ptep->empty()); // evacuate() shouldn't call us twice for the same page.
-        memory::free_page(phys_to_virt(ptep->addr(false)));
-        *ptep = make_empty_pte();
+        assert(!ptep.read().empty()); // evacuate() shouldn't call us twice for the same page.
+        memory::free_page(phys_to_virt(ptep.read().addr(false)));
+        ptep.write(make_empty_pte());
     }
-    virtual void huge_page(pt_element *ptep, uintptr_t offset){
-        if (!ptep->present()) {
+    virtual void huge_page(hw_ptep ptep, uintptr_t offset){
+        if (!ptep.read().present()) {
             // Note: we free the page even if it is already marked "not present".
             // evacuate() makes sure we are only called for allocated pages, and
             // not-present may only mean mprotect(PROT_NONE).
-            assert(!ptep->empty()); // evacuate() shouldn't call us twice for the same page.
-            memory::free_huge_page(phys_to_virt(ptep->addr(true)),
+            assert(!ptep.read().empty()); // evacuate() shouldn't call us twice for the same page.
+            memory::free_huge_page(phys_to_virt(ptep.read().addr(true)),
                     huge_page_size);
-        } else if (ptep->large()) {
-            memory::free_huge_page(phys_to_virt(ptep->addr(true)),
+        } else if (ptep.read().large()) {
+            memory::free_huge_page(phys_to_virt(ptep.read().addr(true)),
                     huge_page_size);
         } else {
             // We've previously allocated small pages here, not a huge pages.
             // We need to free them one by one - as they are not necessarily part
             // of one huge page.
-            pt_element* pt = follow(*ptep);
+            hw_ptep pt = follow(ptep.read());
             for(int i=0; i<pte_per_page; ++i) {
-                assert(!pt[i].empty()); //  evacuate() shouldn't call us twice for the same page.
-                memory::free_page(phys_to_virt(pt[i].addr(false)));
+                assert(pt.at(i).read().empty()); //  evacuate() shouldn't call us twice for the same page.
+                memory::free_page(phys_to_virt(pt.at(i).read().addr(false)));
             }
         }
-        *ptep = make_empty_pte();
+        ptep.write(make_empty_pte());
     }
     virtual bool should_allocate_intermediate(){
         return false;
@@ -460,23 +484,23 @@ public:
     protection(unsigned int perm) : perm(perm), success(true) { }
     bool getsuccess(){ return success; }
 protected:
-    virtual void small_page(pt_element *ptep, uintptr_t offset){
-         if (ptep->empty()) {
+    virtual void small_page(hw_ptep ptep, uintptr_t offset){
+         if (ptep.read().empty()) {
             success = false;
             return;
         }
         change_perm(ptep, perm);
      }
-    virtual void huge_page(pt_element *ptep, uintptr_t offset){
-        if (ptep->empty()) {
+    virtual void huge_page(hw_ptep ptep, uintptr_t offset){
+        if (ptep.read().empty()) {
             success = false;
-        } else if (ptep->large()) {
+        } else if (ptep.read().large()) {
             change_perm(ptep, perm);
         } else {
-            pt_element* pt = follow(*ptep);
+            hw_ptep pt = follow(ptep.read());
             for (int i=0; i<pte_per_page; ++i) {
-                if (!pt[i].empty()) {
-                    change_perm(&pt[i], perm);
+                if (!pt.at(i).read().empty()) {
+                    change_perm(pt.at(i), perm);
                 } else {
                     success = false;
                 }
@@ -696,14 +720,14 @@ unsigned pt_index(uintptr_t virt, unsigned level)
     return pt_index(reinterpret_cast<void*>(virt), level);
 }
 
-void linear_map_level(pt_element& parent, uintptr_t vstart, uintptr_t vend,
+void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
         phys delta, uintptr_t base_virt, size_t slop, unsigned level)
 {
     --level;
-    if (!parent.present()) {
-        allocate_intermediate_level(&parent);
+    if (!parent.read().present()) {
+        allocate_intermediate_level(parent);
     }
-    pt_element* pt = follow(parent);
+    hw_ptep pt = follow(parent.read());
     phys step = phys(1) << (12 + level * 9);
     auto idx = pt_index(vstart, level);
     auto eidx = pt_index(vend, level);
@@ -713,9 +737,9 @@ void linear_map_level(pt_element& parent, uintptr_t vstart, uintptr_t vend,
         uintptr_t vstart1 = vstart, vend1 = vend;
         clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
         if (level < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
-            pt[idx] = make_pte(vstart1 + delta, level > 0);
+            pt.at(idx).write(make_pte(vstart1 + delta, level > 0));
         } else {
-            linear_map_level(pt[idx], vstart1, vend1, delta, base_virt, slop, level);
+            linear_map_level(pt.at(idx), vstart1, vend1, delta, base_virt, slop, level);
         }
         base_virt += step;
         ++idx;
@@ -732,7 +756,7 @@ void linear_map(void* _virt, phys addr, size_t size, size_t slop)
     uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
-    linear_map_level(page_table_root, virt, virt + size - 1,
+    linear_map_level(hw_ptep::force(&page_table_root), virt, virt + size - 1,
             addr - virt, 0, slop, 4);
 }
 
