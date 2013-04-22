@@ -15,7 +15,9 @@ silentant = $(if $V,, scripts/silentant.py)
 
 all: $(submake)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
-	              -e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
+		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
+	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/java) \
+		-e -f java/build.xml $(if $V,,-q), ANT java)
 	$(MAKE) -C $(dir $(submake)) $@
 
 $(submake): Makefile

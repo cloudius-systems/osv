@@ -304,7 +304,10 @@ usr.img: usr.manifest
 		IMAGE="$@" \
 		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) \
+jni = java/jni/balloon.so
+$(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
+
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(jni) \
 		tests/testrunner.so java/java.so java/RunJar.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
