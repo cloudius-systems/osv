@@ -96,6 +96,7 @@ private:
     }
 private:
     u64 x;
+    friend class hw_ptep;
 };
 
 class hw_page_table;
@@ -108,7 +109,7 @@ class hw_ptep {
 public:
     hw_ptep(const hw_ptep& a) : p(a.p) {}
     pt_element read() const { return *p; }
-    void write(pt_element pte) { *p = pte; }
+    void write(pt_element pte) { *const_cast<volatile u64*>(&p->x) = pte.x; }
     hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
     static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
     // no longer using this as a page table
