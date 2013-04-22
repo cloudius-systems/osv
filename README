@@ -3,7 +3,12 @@ To build OSv
 ============
 
 0) Install perquisite packages:
-   yum install boost-static genromfs
+
+   On Fedora:
+     yum install boost-static genromfs
+
+   On Debian:
+     apt-get install libboost-all-dev genromfs
 
 1) make sure all git submodules are uptodate
    -----------------------------------------
