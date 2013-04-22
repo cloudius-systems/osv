@@ -84,6 +84,7 @@ public:
     explicit inter_processor_interrupt(std::function<void ()>);
     ~inter_processor_interrupt();
     void send(sched::cpu* cpu);
+    void send_allbutself();
 private:
     unsigned _vector;
 };

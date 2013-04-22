@@ -136,6 +136,41 @@ int main(int argc, char **argv)
     assert(!try_write(buf));
     munmap(buf, 4096);
 
+    // Try the same, but in two separate processors: Processor 0 successfully
+    // writes to an address, processor 1 protects it, and then processor 0
+    // tries to write again (and should fail). For this test to succeed, we
+    // must correctly flush the TLB of all processors, not just the one
+    // running mprotect.
+    assert(sched::cpus.size() >= 2); // this test can't work without 2 cpus...
+    std::atomic_int state(0);
+    buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    sched::thread *t2 = nullptr;
+    sched::thread *t1 = new sched::thread([&]{
+        *(char*)buf = 0; // write will succeed
+        // wait for the t2 object to exist (not necessarily run)
+        sched::thread::wait_until([&] { return t2 != nullptr; });
+        // tell t2 to mprotect the buffer
+        state.store(1);
+        t2->wake();
+        // wait for t2 to mprotect
+        sched::thread::wait_until([&] { return state.load() == 2; });
+        // and see that it properly TLB flushed also t1's CPU
+        assert(!try_write(buf));
+
+    }, sched::thread::attr(sched::cpus[0]));
+    t2 = new sched::thread([&]{
+        // wait for t1 to asks us to mprotect
+        sched::thread::wait_until([&] { return state.load() == 1; });
+        mprotect(buf, 4096, PROT_READ);
+        state.store(2);
+        t1->wake();
+    }, sched::thread::attr(sched::cpus[1]));
+    t1->start();
+    t2->start();
+    delete t1; // also join()s the thread
+    delete t2;
+    munmap(buf, 4096);
+
     // Test that mprotect() only hides memory, doesn't free it
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
     *(char*)buf = 123;

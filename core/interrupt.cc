@@ -182,3 +182,7 @@ void inter_processor_interrupt::send(sched::cpu* cpu)
 {
     apic->ipi(cpu->arch.apic_id, _vector);
 }
+
+void inter_processor_interrupt::send_allbutself(){
+    apic->ipi_allbutself(_vector);
+}

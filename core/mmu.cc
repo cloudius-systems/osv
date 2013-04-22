@@ -8,6 +8,7 @@
 #include <iterator>
 #include "libc/signal.hh"
 #include "align.hh"
+#include "interrupt.hh"
 
 namespace {
 
@@ -178,13 +179,36 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
     }
 }
 
-// TODO: we need to send a tlb_flush() request to all processors, not just
-// run it on this processor!!
-void tlb_flush()
+
+void tlb_flush_this_processor()
 {
    processor::write_cr3(processor::read_cr3());
 }
 
+// tlb_flush() does TLB flush on *all* processors, not returning before all
+// processors confirm flushing their TLB. This is slow :(
+mutex tlb_flush_mutex;
+sched::thread *tlb_flush_waiter;
+std::atomic<int> tlb_flush_pendingconfirms;
+
+inter_processor_interrupt tlb_flush_ipi{[] {
+        tlb_flush_this_processor();
+        if (tlb_flush_pendingconfirms.fetch_add(-1) == 1) {
+            tlb_flush_waiter->wake();
+        }
+}};
+
+void tlb_flush()
+{
+    std::lock_guard<mutex> guard(tlb_flush_mutex);
+    tlb_flush_this_processor();
+    tlb_flush_waiter = sched::thread::current();
+    tlb_flush_pendingconfirms.store((int)sched::cpus.size() - 1);
+    tlb_flush_ipi.send_allbutself();
+    sched::thread::wait_until([] {
+            return tlb_flush_pendingconfirms.load() == 0;
+    });
+}
 
 /*
  * a page_range_operation implementation operates (via the operate() method)
@@ -249,6 +273,8 @@ void page_range_operation::operate(void *start, size_t size)
     // instead try to make more judicious use of INVLPG - e.g., in
     // split_large_page() and other specific places where we modify specific
     // page table entries.
+    // TODO: Consider if we're doing tlb_flush() too often, e.g., twice
+    // in one mmap which first does evacuate() and then allocate().
     tlb_flush();
 }
 
