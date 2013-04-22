@@ -29,6 +29,7 @@
 /tests/tst-fpu.so: ./tests/tst-fpu.so
 /tests/tst-tracepoint.so: ./tests/tst-tracepoint.so
 /tests/tst-leak.so: ./tests/tst-leak.so
+/tests/tst-mmap.so: ./tests/tst-mmap.so
 /tests/tst-hub.so: ./tests/tst-hub.so
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
