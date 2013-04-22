@@ -5,6 +5,7 @@
 #include <queue>
 #include <deque>
 #include <vector>
+#include <sys/ioctl.h>
 
 #include "isa-serial.hh"
 #include "debug-console.hh"
@@ -200,9 +201,10 @@ static int
 console_ioctl(struct device *dev, u_long request, void *arg)
 {
     switch (request) {
-    case 0x5401: // TCGETS
-        return 0;   // XXX: stubbing out to get libc into line buffering mode
-    case 0x5402: // TCSETS
+    case TCGETS:
+        *static_cast<termios*>(arg) = tio;
+        return 0;
+    case TCSETS:
         tio = *static_cast<termios*>(arg);
         return 0;
     default:
