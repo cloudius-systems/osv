@@ -179,13 +179,15 @@ void free_intermediate_level(pt_element *ptep)
 
 void change_perm(pt_element *ptep, unsigned int perm)
 {
+    pt_element pte = *ptep;
     // Note: in x86, if the present bit (0x1) is off, not only read is
     // disallowed, but also write and exec. So in mprotect, if any
     // permission is requested, we must also grant read permission.
     // Linux does this too.
-    ptep->set_present(perm);
-    ptep->set_writable(perm & perm_write);
-    ptep->set_nx(!(perm & perm_exec));
+    pte.set_present(perm);
+    pte.set_writable(perm & perm_write);
+    pte.set_nx(!(perm & perm_exec));
+    *ptep = pte;
 }
 
 void split_large_page(pt_element* ptep, unsigned level)
