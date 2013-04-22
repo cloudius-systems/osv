@@ -134,6 +134,11 @@ pt_element make_large_pte(phys addr,
     return make_pte(addr, true, perm);
 }
 
+pt_element* follow(pt_element pte)
+{
+    return phys_cast<pt_element>(pte.next_pt_addr());
+}
+
 const unsigned nlevels = 4;
 
 void* phys_to_virt(phys pa)
@@ -167,13 +172,11 @@ void allocate_intermediate_level(pt_element *ptep)
 
 void free_intermediate_level(pt_element *ptep)
 {
-    phys page = ptep->next_pt_addr();
-    assert(page);
-    pt_element *pt = phys_cast<pt_element>(page);
+    pt_element *pt = follow(*ptep);
     for (auto i = 0; i < pte_per_page; ++i) {
         assert(pt[i].empty()); // don't free a level which still has pages!
     }
-    memory::free_page(phys_to_virt(page));
+    memory::free_page(pt);
     *ptep = make_empty_pte();
 }
 
@@ -197,7 +200,7 @@ void split_large_page(pt_element* ptep, unsigned level)
         pte_orig.set_large(false);
     }
     allocate_intermediate_level(ptep);
-    auto pt = phys_cast<pt_element>(ptep->next_pt_addr());
+    auto pt = follow(*ptep);
     for (auto i = 0; i < pte_per_page; ++i) {
         pt_element tmp = pte_orig;
         phys addend = phys(i) << (12 + 9 * (level - 1));
@@ -220,7 +223,7 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
     } else if (level==0){
         nsmall++;
     } else {
-        pt_element* pt = phys_cast<pt_element>(pte.next_pt_addr());
+        pt_element* pt = follow(pte);
         for(int i=0; i<pte_per_page; ++i) {
             debug_count_ptes(pt[i], level-1, nsmall, nhuge);
         }
@@ -335,7 +338,7 @@ void page_range_operation::operate(void *start, size_t size)
 void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
 {
     pt_element pte = pt_element::force(processor::read_cr3());
-    auto pt = phys_cast<pt_element>(pte.next_pt_addr());
+    auto pt = follow(pte);
     auto ptep = &pt[pt_index(addr, nlevels - 1)];
     unsigned level = nlevels - 1;
     unsigned stopat = huge ? 1 : 0;
@@ -357,7 +360,7 @@ void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
         }
         pte = *ptep;
         --level;
-        pt = phys_cast<pt_element>(pte.next_pt_addr());
+        pt = follow(pte);
         ptep = &pt[pt_index(addr, level)];
     }
     if(huge) {
@@ -436,7 +439,7 @@ protected:
             // We've previously allocated small pages here, not a huge pages.
             // We need to free them one by one - as they are not necessarily part
             // of one huge page.
-            pt_element* pt = phys_cast<pt_element>(ptep->next_pt_addr());
+            pt_element* pt = follow(*ptep);
             for(int i=0; i<pte_per_page; ++i) {
                 assert(!pt[i].empty()); //  evacuate() shouldn't call us twice for the same page.
                 memory::free_page(phys_to_virt(pt[i].addr(false)));
@@ -470,7 +473,7 @@ protected:
         } else if (ptep->large()) {
             change_perm(ptep, perm);
         } else {
-            pt_element* pt = phys_cast<pt_element>(ptep->next_pt_addr());
+            pt_element* pt = follow(*ptep);
             for (int i=0; i<pte_per_page; ++i) {
                 if (!pt[i].empty()) {
                     change_perm(&pt[i], perm);
@@ -700,7 +703,7 @@ void linear_map_level(pt_element& parent, uintptr_t vstart, uintptr_t vend,
     if (!parent.present()) {
         allocate_intermediate_level(&parent);
     }
-    pt_element* pt = phys_cast<pt_element>(parent.next_pt_addr());
+    pt_element* pt = follow(parent);
     phys step = phys(1) << (12 + level * 9);
     auto idx = pt_index(vstart, level);
     auto eidx = pt_index(vend, level);
