@@ -31,10 +31,10 @@ std::queue<char> console_queue;
 std::list<sched::thread*> readers;
 
 termios tio = {
-    .c_iflag = ICRNL,
+    .c_iflag = 0 /* ICRNL */,
     .c_oflag = 0,
     .c_cflag = 0,
-    .c_lflag = ECHO | ECHOCTL | ICANON | ECHOE,
+    .c_lflag = 0 /* ECHO | ECHOCTL | ICANON | ECHOE */,
     .c_line = 0,
     .c_cc = {/*VINTR*/0, /*VQUIT*/0, /*VERASE*/'\177', /*VKILL*/0,
             /*VEOF*/0, /*VTIME*/0, /*VMIN*/0, /*VSWTC*/0,
