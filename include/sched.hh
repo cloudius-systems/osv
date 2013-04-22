@@ -142,8 +142,8 @@ public:
     };
     struct attr {
         stack_info stack;
-        bool pinned;
-        attr(bool pinned = false) : pinned(pinned) { }
+        cpu *pinned_cpu;
+        attr(cpu *pinned_cpu = nullptr) : pinned_cpu(pinned_cpu) { }
     };
 
 public:

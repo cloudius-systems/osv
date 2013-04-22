@@ -100,15 +100,14 @@ void smp_launch()
         if (c == boot_cpu) {
             sched::thread::current()->_cpu = c;
             c->init_on_cpu();
-            sched::thread::attr attr;
-            attr.pinned = true;
-            (new sched::thread([c] { c->load_balance(); }, attr))->start();
+            (new sched::thread([c] { c->load_balance(); },
+                    sched::thread::attr(c)))->start();
             c->idle_thread.start();
             continue;
         }
         sched::thread::attr attr;
         attr.stack = { new char[81920], 81920 };
-        attr.pinned = true;
+        attr.pinned_cpu = c;
         c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
     }
     apic->write(apicreg::ICR, 0xc4500); // INIT

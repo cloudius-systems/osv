@@ -38,14 +38,9 @@ constexpr u64 max_slice = 10_ms;
 
 namespace sched {
 
-void schedule_force();
-
-const thread::attr idle_thread_attr(true);
-
 cpu::cpu()
-    : idle_thread([this] { idle(); }, idle_thread_attr)
+    : idle_thread([this] { idle(); }, thread::attr(this))
 {
-    idle_thread._cpu = this;
 }
 
 void cpu::schedule(bool yield)
@@ -191,7 +186,7 @@ void cpu::load_balance()
         }
         with_lock(irq_lock, [this, min] {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-                    [](thread& t) { return !t._attr.pinned; });
+                    [](thread& t) { return !t._attr.pinned_cpu; });
             if (i == runqueue.rend()) {
                 return;
             }
@@ -293,7 +288,7 @@ thread::~thread()
 
 void thread::start()
 {
-    _cpu = current()->tcpu();
+    _cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
     assert(_status == status::unstarted);
     _status.store(status::waiting);
     wake();
