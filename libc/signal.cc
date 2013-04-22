@@ -25,10 +25,7 @@ sigset* thread_signals()
 
 void generate_signal(siginfo_t &siginfo, exception_frame* ef)
 {
-    if (!pthread_self()) {
-        abort();
-    }
-    if (thread_signals()->mask[siginfo.si_signo]) {
+    if (pthread_self() && thread_signals()->mask[siginfo.si_signo]) {
         // FIXME: need to find some other thread to deliver
         // FIXME: the signal to
         abort();
