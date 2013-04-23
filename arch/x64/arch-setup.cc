@@ -62,8 +62,8 @@ void setup_temporary_phys_map()
     // duplicate 1:1 mapping into phys_mem
     u64 cr3 = processor::read_cr3();
     auto pt = reinterpret_cast<u64*>(cr3);
-    // assumes phys_mem = 0xffff800000000000
-    pt[256] = pt[0];
+    // assumes phys_mem = 0xffffc00000000000
+    pt[256+128] = pt[0];
 }
 
 void for_each_e820_entry(void* e820_buffer, unsigned size, void (*f)(e820ent e))
