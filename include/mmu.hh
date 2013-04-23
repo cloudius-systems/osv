@@ -15,6 +15,12 @@ typedef uint64_t f_offset;
 
 static constexpr char* phys_mem = reinterpret_cast<char*>(0xffffc00000000000);
 
+inline unsigned pt_index(void *virt, unsigned level)
+{
+    auto v = reinterpret_cast<ulong>(virt);
+    return (v >> (12 + level * 9)) & 511;
+}
+
 enum {
     perm_read = 1,
     perm_write = 2,

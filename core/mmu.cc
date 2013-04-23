@@ -176,12 +176,6 @@ phys virt_to_phys(void *virt)
     return static_cast<char*>(virt) - phys_mem;
 }
 
-unsigned pt_index(void *virt, unsigned level)
-{
-    auto v = reinterpret_cast<ulong>(virt);
-    return (v >> (12 + level * 9)) & 511;
-}
-
 void allocate_intermediate_level(hw_ptep ptep)
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
