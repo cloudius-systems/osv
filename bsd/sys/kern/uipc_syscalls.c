@@ -203,7 +203,7 @@ accept1(int s,
 
 int
 kern_accept(int s, struct sockaddr **name,
-    socklen_t *namelen, struct file **fp, int *out_fp)
+    socklen_t *namelen, struct file **fp, int *out_fd)
 {
 	struct file *headfp, *nfp = NULL;
 	struct sockaddr *sa = NULL;
@@ -275,7 +275,7 @@ kern_accept(int s, struct sockaddr **name,
 	ACCEPT_UNLOCK();
 
 	/* An extra reference on `nfp' has been held for us by falloc(). */
-	*out_fp = fd;
+	*out_fd = fd;
 
 	/* FIXME: OSv - Implement... select/poll */
 #if 0
@@ -348,10 +348,10 @@ done:
 int
 sys_accept(int s,
            struct sockaddr * name,
-           socklen_t * namelen, int *out_fp)
+           socklen_t * namelen, int *out_fd)
 {
 
-	return (accept1(s, name, namelen, out_fp));
+	return (accept1(s, name, namelen, out_fd));
 }
 
 /* ARGSUSED */
