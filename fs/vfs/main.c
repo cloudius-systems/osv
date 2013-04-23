@@ -828,6 +828,7 @@ int dup2(int oldfd, int newfd)
 /*
  * The file control system call.
  */
+#define SETFL (O_APPEND | O_NONBLOCK)
 int fcntl(int fd, int cmd, int arg)
 {
 	struct file *fp;
@@ -849,6 +850,14 @@ int fcntl(int fd, int cmd, int arg)
 	case F_SETFD:
 		ret = fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
 			(arg & FD_CLOEXEC);
+		break;
+	case F_GETFL:
+		ret = fp->f_flags;
+		break;
+	case F_SETFL:
+		assert((arg & ~SETFL) == 0);
+		fp->f_flags = (fp->f_flags & ~SETFL) |
+			(arg & SETFL);
 		break;
 	default:
 		kprintf("unsupported fcntl cmd 0x%x\n", cmd);
