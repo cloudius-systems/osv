@@ -382,7 +382,7 @@ extern "C" {
 // allocated from a pool.
 // FIXME: be less wasteful
 
-void* malloc(size_t size)
+static inline void* std_malloc(size_t size)
 {
     if ((ssize_t)size < 0)
         return libc_error_ptr<void *>(ENOMEM);
@@ -416,7 +416,7 @@ static size_t object_size(void *object)
     }
 }
 
-void* realloc(void* object, size_t size)
+static inline void* std_realloc(void* object, size_t size)
 {
     if (!object)
         return malloc(size);
@@ -436,7 +436,7 @@ void* realloc(void* object, size_t size)
     return ptr;
 }
 
-void free(void* object)
+static inline void std_free(void* object)
 {
     if (!object) {
         return;
@@ -448,3 +448,20 @@ void free(void* object)
         return memory::free_large(object);
     }
 }
+
+void* malloc(size_t size)
+{
+    return std_malloc(size);
+}
+
+void* realloc(void* obj, size_t size)
+{
+    return std_realloc(obj, size);
+}
+
+void free(void* obj)
+{
+    return std_free(obj);
+}
+
+
