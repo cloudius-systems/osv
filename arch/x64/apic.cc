@@ -9,7 +9,8 @@ public:
     virtual void init_on_ap();
     virtual void write(apicreg reg, u32 value);
     virtual void self_ipi(unsigned vector);
-    virtual void ipi(unsigned cpu, unsigned vector);
+    virtual void ipi(unsigned apic_id, unsigned vector);
+    virtual void ipi_allbutself(unsigned vector);
     virtual void eoi();
     virtual u32 id();
 private:
@@ -49,11 +50,20 @@ void x2apic::self_ipi(unsigned vector)
     wrmsr(msr::X2APIC_SELF_IPI, vector);
 }
 
-void x2apic::ipi(unsigned cpu, unsigned vector)
+void x2apic::ipi(unsigned apic_id, unsigned vector)
 {
-    // FIXME: don't assume APIC ID == cpu number
-    wrmsr(msr::X2APIC_ICR, vector | (u64(cpu) << 32) | (1 << 14));
+    wrmsr(msr::X2APIC_ICR, vector | (u64(apic_id) << 32) | (1 << 14));
 }
+
+static constexpr unsigned APIC_SHORTHAND_SELF = 0x40000;
+static constexpr unsigned APIC_SHORTHAND_ALL =  0x80000;
+static constexpr unsigned APIC_SHORTHAND_ALLBUTSELF = 0xC0000;
+
+void x2apic::ipi_allbutself(unsigned vector)
+{
+    wrmsr(msr::X2APIC_ICR, vector | APIC_SHORTHAND_ALLBUTSELF | (1 << 14));
+}
+
 
 void x2apic::eoi()
 {
