@@ -35,6 +35,7 @@
 #include <sys/cdefs.h>
 
 #include <bsd/porting/netport.h>
+#include <bsd/uipc_syscalls.h>
 
 #include <fcntl.h>
 #include <osv/fcntl.h>
@@ -51,17 +52,6 @@
 #include <bsd/sys/sys/socketvar.h>
 #include <osv/uio.h>
 #include <bsd/sys/net/vnet.h>
-
-int kern_bind(int fd, struct sockaddr *sa);
-int kern_accept(int s, struct sockaddr **name,
-    socklen_t *namelen, struct file **fp, int *out_fp);
-int kern_connect(int fd, struct sockaddr *sa);
-int kern_sendit(int s, struct msghdr *mp, int flags,
-    struct mbuf *control, ssize_t *bytes);
-int kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize);
-int kern_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
-
-
 
 
 /* FIXME: OSv - implement... */

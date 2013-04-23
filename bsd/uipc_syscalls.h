@@ -1,8 +1,21 @@
 #ifndef UIPC_SYSCALLS_H
 #define UIPC_SYSCALLS_H
 
+#include <osv/file.h>
+#include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/socket.h>
 
+/* Private interface */
+int kern_bind(int fd, struct sockaddr *sa);
+int kern_accept(int s, struct sockaddr **name,
+    socklen_t *namelen, struct file **fp, int *out_fp);
+int kern_connect(int fd, struct sockaddr *sa);
+int kern_sendit(int s, struct msghdr *mp, int flags,
+    struct mbuf *control, ssize_t *bytes);
+int kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize);
+int kern_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
+
+/* FreeBSD Interface */
 int sys_socket(int domain, int type, int protocol, int *out_fd);
 int sys_bind(int s, struct sockaddr *sa, int namelen);
 int sys_listen(int s, int backlog);
