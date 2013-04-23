@@ -848,16 +848,20 @@ int fcntl(int fd, int cmd, int arg)
 		ret = fp->f_flags & FD_CLOEXEC;
 		break;
 	case F_SETFD:
+		FD_LOCK(fp);
 		fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
 			(arg & FD_CLOEXEC);
+		FD_UNLOCK(fp);
 		break;
 	case F_GETFL:
 		ret = fp->f_flags;
 		break;
 	case F_SETFL:
 		assert((arg & ~SETFL) == 0);
+		FD_LOCK(fp);
 		fp->f_flags = (fp->f_flags & ~SETFL) |
 			(arg & SETFL);
+		FD_UNLOCK(fp);
 		break;
 	default:
 		kprintf("unsupported fcntl cmd 0x%x\n", cmd);
