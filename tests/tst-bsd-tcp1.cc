@@ -1,6 +1,3 @@
-#ifndef TST_BSD_TCP1_H
-#define TST_BSD_TCP1_H
-
 #include "sched.hh"
 
 extern "C" {
@@ -17,7 +14,7 @@ extern "C" {
 #define LISTEN_PORT (5555)
 #define ITERATIONS (400)
 
-class test_bsd_tcp1 : public unit_tests::vtest {
+class test_bsd_tcp1 {
 public:
     test_bsd_tcp1() {}
     virtual ~test_bsd_tcp1() {}
@@ -103,7 +100,7 @@ public:
         }
 
         dbg_d("server: DONE");
-        return 1;
+        return 0;
     }
 
     int tcp_client(void)
@@ -156,35 +153,31 @@ public:
         }
 
         dbg_d("client: DONE");
-        return 1;
+        return 0;
     }
 
-    virtual void run(void)
+    int run(void)
     {
-        dbg_d("BSD TCP1 Test - Begin");
-
         _client_result = 0;
         _server_result = 0;
-        sched::thread * current = sched::thread::current();
 
-        sched::detached_thread *srv = new sched::detached_thread([&] {
+        sched::thread *srv = new sched::thread([&] {
             _server_result = tcp_server();
-            current->wake();
         });
-        sched::detached_thread *cli = new sched::detached_thread([&] {
+        sched::thread *cli = new sched::thread([&] {
             _client_result = tcp_client();
-            current->wake();
         });
 
         srv->start();
         sleep(1);
         cli->start();
 
-        sched::thread::wait_until([this] {
-            return (_client_result && _server_result);
-        });
+        cli->join();
+        srv->join();
+        delete(cli);
+        delete(srv);
 
-        dbg_d("BSD TCP1 Test - End");
+        return (_client_result + _server_result);
     }
 
 private:
@@ -192,8 +185,24 @@ private:
     int _server_result;
 };
 
+int main(int argc, char *argv[])
+{
+    dbg_d("BSD TCP1 Test - Begin");
+
+    test_bsd_tcp1 tcp1;
+    int rc = tcp1.run();
+
+    if (rc < 0) {
+        dbg_d("BSD TCP1 Test Failed");
+        return 1;
+    }
+
+    dbg_d("BSD TCP1 Test completed successfully!");
+    dbg_d("BSD TCP1 Test - End");
+
+    return 0;
+}
+
 #undef ITERATIONS
 #undef LISTEN_PORT
 #undef dbg_d
-
-#endif /* !TST_BSD_TCP1_H */
