@@ -124,28 +124,37 @@ public:
 
     int run(void)
     {
+        poller_result = 0;
+        connector_result = 0;
+
         dbg_d("POLL Test - Begin");
         memset(fds, 0, sizeof(fds));
 
-        sched::detached_thread* t1 = new sched::detached_thread([&] {
-            poller();
+        sched::thread* t1 = new sched::thread([&] {
+            poller_result = poller();
         });
 
-        sched::detached_thread* t2 = new sched::detached_thread([&] {
-            connector();
+        sched::thread* t2 = new sched::thread([&] {
+            connector_result = connector();
         });
 
         t1->start();
         sleep(1);
         t2->start();
 
-        sleep(10);
+        t1->join();
+        t2->join();
+        delete(t1);
+        delete(t2);
+
         dbg_d("POLL Test - End");
-        return 0;
+        return (poller_result + poller_result);
     }
 
 private:
     int fds[stup_maxfds];
+    int poller_result;
+    int connector_result;
 };
 
 #define UT_BUFLEN 512
@@ -237,25 +246,41 @@ public:
         }
 
         close(s);
+        dbg_d("udp_client() finished!");
         return 0;
     }
 
-    void run(void)
+    int run(void)
     {
-        sched::detached_thread* t1 = new sched::detached_thread([&] {
-            udp_server();
+        udp_server_result = 0;
+        udp_client_result = 0;
+
+        dbg_d("Simple UDP test - Begin");
+
+        sched::thread* t1 = new sched::thread([&] {
+            udp_server_result = udp_server();
         });
 
-        sched::detached_thread* t2 = new sched::detached_thread([&] {
-            udp_client();
+        sched::thread* t2 = new sched::thread([&] {
+            udp_client_result = udp_client();
         });
 
         t1->start();
         t2->start();
-        sleep(1);
+
+        t1->join();
+        t2->join();
+        delete(t1);
+        delete(t2);
+
+        dbg_d("Simple UDP test - End");
+
+        return (udp_client_result + udp_server_result);
     }
 
 private:
+    int udp_server_result;
+    int udp_client_result;
 };
 
 class socket_test_openclose {
@@ -283,7 +308,6 @@ public:
             return -1;
         }
 
-
         return 0;
     }
 
@@ -295,20 +319,31 @@ int main(int argc, char *argv[])
 {
     dbg_d("Sockets Test - Begin");
 
-#if 0
     /* Open - Close test */
     socket_test_openclose oc;
-    oc.run();
+    int rc1 = oc.run();
+    if (rc1 < 0) {
+        dbg_d("Open/close test failed!");
+        return 1;
+    }
 
     /* Simple UDP test */
     socket_test_simple_udp su;
-    su.run();
-#endif
+    int rc2 = su.run();
+    if (rc2 < 0) {
+        dbg_d("Simple udp test failed!");
+        return 1;
+    }
 
     /* Poll test */
     socket_test_udp_poll up;
-    up.run();
+    int rc3 = up.run();
+    if (rc3 < 0) {
+        dbg_d("UDP poll test failed!");
+        return 1;
+    }
 
+    dbg_d("All socket tests completed successfully!");
     dbg_d("Sockets Test - End");
 
     return 0;
