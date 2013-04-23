@@ -164,9 +164,9 @@ public:
     static void yield();
     static thread* current() __attribute((no_instrument_function));
     stack_info get_stack_info();
-    cpu* tcpu();
+    cpu* tcpu() __attribute__((no_instrument_function));
     void join();
-    unsigned long id(); // guaranteed unique over system lifetime
+    unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
 private:
     void main();
     void switch_to();
@@ -296,8 +296,8 @@ struct cpu {
 };
 
 void preempt();
-void preempt_disable();
-void preempt_enable();
+void preempt_disable() __attribute__((no_instrument_function));
+void preempt_enable() __attribute__((no_instrument_function));
 
 thread* current();
 
