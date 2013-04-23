@@ -182,11 +182,15 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
 
 void tlb_flush_this_processor()
 {
-   processor::write_cr3(processor::read_cr3());
+    // TODO: we can use page_table_root instead of read_cr3(), can be faster
+    // when shadow page tables are used.
+    processor::write_cr3(processor::read_cr3());
 }
 
 // tlb_flush() does TLB flush on *all* processors, not returning before all
-// processors confirm flushing their TLB. This is slow :(
+// processors confirm flushing their TLB. This is slow, but necessary for
+// correctness so that, for example, after mprotect() returns, no thread on
+// no cpu can write to the protected page.
 mutex tlb_flush_mutex;
 sched::thread *tlb_flush_waiter;
 std::atomic<int> tlb_flush_pendingconfirms;
@@ -200,8 +204,10 @@ inter_processor_interrupt tlb_flush_ipi{[] {
 
 void tlb_flush()
 {
-    std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_this_processor();
+    if (sched::cpus.size() == 1)
+        return;
+    std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_waiter = sched::thread::current();
     tlb_flush_pendingconfirms.store((int)sched::cpus.size() - 1);
     tlb_flush_ipi.send_allbutself();
