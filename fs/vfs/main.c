@@ -848,7 +848,7 @@ int fcntl(int fd, int cmd, int arg)
 		ret = fp->f_flags & FD_CLOEXEC;
 		break;
 	case F_SETFD:
-		ret = fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
+		fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
 			(arg & FD_CLOEXEC);
 		break;
 	case F_GETFL:
