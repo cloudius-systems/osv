@@ -21,6 +21,7 @@
 /tests/tst-clock.so: ../../external/glibc-testsuite/build/debug/rt/tst-clock.so
 /tests/tst-ramdisk.so: ./tests/tst-ramdisk.so
 /tests/tst-vblk.so: ./tests/tst-vblk.so
+/tests/tst-sockets.so: ./tests/tst-sockets.so
 /tests/tst-bsd-evh.so: ./tests/tst-bsd-evh.so
 /tests/tst-bsd-callout.so: ./tests/tst-bsd-callout.so
 /tests/tst-bsd-netisr.so: ./tests/tst-bsd-netisr.so

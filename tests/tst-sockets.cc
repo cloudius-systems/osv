@@ -1,6 +1,3 @@
-#ifndef TST_SOCKETS_H
-#define TST_SOCKETS_H
-
 #include "sched.hh"
 
 extern "C" {
@@ -12,14 +9,12 @@ extern "C" {
 #include <osv/poll.h>
 
 #include "debug.hh"
-#include "tst-hub.hh"
 
 #define dbg_d(...)   logger::instance()->wrt("tst-sockets", logger_error, __VA_ARGS__)
 
 const int stup_maxfds = 5;
 const int stup_fport = 5000;
 class socket_test_udp_poll {
-
 public:
     socket_test_udp_poll() {}
     virtual ~socket_test_udp_poll() {}
@@ -296,40 +291,31 @@ private:
 
 };
 
-//
-// Main tst-hub class
-//
-class test_sockets : public unit_tests::vtest {
-public:
-    test_sockets() {}
-    virtual ~test_sockets() {}
-
-    virtual void run(void)
-    {
-        dbg_d("Sockets Test - Begin");
+int main(int argc, char *argv[])
+{
+    dbg_d("Sockets Test - Begin");
 
 #if 0
-        /* Open - Close test */
-        socket_test_openclose oc;
-        oc.run();
+    /* Open - Close test */
+    socket_test_openclose oc;
+    oc.run();
 
-        /* Simple UDP test */
-        socket_test_simple_udp su;
-        su.run();
+    /* Simple UDP test */
+    socket_test_simple_udp su;
+    su.run();
 #endif
 
-        /* Poll test */
-        socket_test_udp_poll up;
-        up.run();
+    /* Poll test */
+    socket_test_udp_poll up;
+    up.run();
 
-        dbg_d("Sockets Test - End");
-    }
-};
+    dbg_d("Sockets Test - End");
+
+    return 0;
+}
 
 #undef UT_BUFLEN
 #undef UT_NPACK
 #undef UT_PORT
 
 #undef dbg_d
-
-#endif
