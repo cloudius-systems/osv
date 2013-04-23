@@ -228,7 +228,10 @@ public:
             auto tr = allocate_trace_record(size());
             tr->tp = this;
             tr->thread = sched::thread::current();
-            tr->cpu = tr->thread->tcpu()->id;
+            tr->cpu = -1;
+            if (tr->thread) {
+                tr->cpu = tr->thread->tcpu()->id;
+            }
             assert(size() <= sizeof(tr->buffer));
             serialize(tr->buffer, as);
             sched::preempt_enable();
