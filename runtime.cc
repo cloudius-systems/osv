@@ -1,3 +1,4 @@
+#include "sched.hh"
 #include <cstdlib>
 #include <cstring>
 #include <string.h>
@@ -295,8 +296,8 @@ long sysconf(int name)
     case _SC_CLK_TCK: return CLOCKS_PER_SEC;
     case _SC_PAGESIZE: return 4096; // FIXME
     case _SC_THREAD_PROCESS_SHARED: return true;
-    case _SC_NPROCESSORS_ONLN: return 1; // FIXME
-    case _SC_NPROCESSORS_CONF: return 1; // FIXME
+    case _SC_NPROCESSORS_ONLN: return sched::cpus.size();
+    case _SC_NPROCESSORS_CONF: return sched::cpus.size();
     case _SC_PHYS_PAGES: return memory::phys_mem_size / memory::page_size;
     case _SC_GETPW_R_SIZE_MAX: return 1024;
     }
