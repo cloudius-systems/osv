@@ -2,13 +2,14 @@
 
 #include "debug.hh"
 #include <boost/format.hpp>
+#include "sched.hh"
 
 #include <unistd.h>
 #include <linux/unistd.h>
 
 long gettid()
 {
-    return 0; // FIXME
+    return sched::thread::current()->id();
 }
 
 long syscall(long number, ...)
