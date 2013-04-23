@@ -76,9 +76,15 @@ void *__dso_handle;
 #define UNIMPL(decl) decl { UNIMPLEMENTED(#decl); }
 #define IGN(decl) decl { WARN(#decl " (continuing)"); }
 
+static bool already_aborted = false;
 void abort()
 {
-    kprintf("Aborted\n");
+    if (!already_aborted) {
+        // Since the debug() code is complex and might cause an additional
+        // abort, we need to prevent endless abort() nesting.
+        debug("Aborted\n");
+        already_aborted = true;
+    }
     while (true)
 	processor::halt_no_interrupts();
 }
