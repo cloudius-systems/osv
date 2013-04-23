@@ -842,12 +842,14 @@ int fcntl(int fd, int cmd, int arg)
 		// XXX: incorrect semantics, should only
 		// use file descriptors >= arg
 		ret = dup(fd);
+		break;
 	case F_GETFD:
 		ret = fp->f_flags & FD_CLOEXEC;
+		break;
 	case F_SETFD:
 		ret = fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
 			(arg & FD_CLOEXEC);
-		return 0;
+		break;
 	default:
 		kprintf("unsupported fcntl cmd 0x%x\n", cmd);
 		error = EINVAL;
