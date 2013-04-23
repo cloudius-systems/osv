@@ -100,7 +100,6 @@ e820ent truncate_above(e820ent ent, u64 a)
 
 void arch_setup_free_memory()
 {
-    static constexpr u64 phys_mem = 0xffff800000000000;
     static ulong edata;
     asm ("movl $.edata, %0" : "=rm"(edata));
     // copy to stack so we don't free it now
@@ -134,7 +133,7 @@ void arch_setup_free_memory()
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
-    mmu::linear_map(phys_mem, 0, initial_map, initial_map);
+    mmu::linear_map(reinterpret_cast<uintptr_t>(mmu::phys_mem), 0, initial_map, initial_map);
     // map the core
     mmu::linear_map(0x200000, 0x200000, edata - 0x200000, 0x200000);
     // get rid of the command line, before low memory is unmapped
@@ -149,7 +148,7 @@ void arch_setup_free_memory()
         if (intersects(ent, initial_map)) {
             ent = truncate_below(ent, initial_map);
         }
-        mmu::linear_map(phys_mem + ent.addr, ent.addr, ent.size, ~0);
+        mmu::linear_map(reinterpret_cast<uintptr_t>(mmu::phys_mem) + ent.addr, ent.addr, ent.size, ~0);
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
 }

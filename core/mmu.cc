@@ -60,15 +60,15 @@ const unsigned nlevels = 4;
 
 void* phys_to_virt(phys pa)
 {
-    return reinterpret_cast<void*>(pa + 0xffff800000000000ull);
+    return phys_mem + pa;
 }
 
 phys virt_to_phys(void *virt)
 {
     // For now, only allow non-mmaped areas.  Later, we can either
     // bounce such addresses, or lock them in memory and translate
-    assert(reinterpret_cast<phys>(virt) >= 0xffff800000000000ull);
-    return reinterpret_cast<phys>(virt) - 0xffff800000000000ull;
+    assert(virt >= phys_mem);
+    return static_cast<char*>(virt) - phys_mem;
 }
 
 unsigned pt_index(void *virt, unsigned level)
