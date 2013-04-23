@@ -649,8 +649,9 @@ size_t page_size_level(unsigned level)
     return size_t(1) << (12 + 9 * level);
 }
 
-void linear_map(uintptr_t virt, phys addr, size_t size, size_t slop)
+void linear_map(void* _virt, phys addr, size_t size, size_t slop)
 {
+    uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
     linear_map_level(page_table_root, virt, virt + size - 1,

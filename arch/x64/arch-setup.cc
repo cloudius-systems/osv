@@ -2,6 +2,7 @@
 #include "mempool.hh"
 #include "mmu.hh"
 #include "processor.hh"
+#include "elf.hh"
 #include <osv/types.h>
 #include <alloca.h>
 #include <string.h>
@@ -98,6 +99,8 @@ e820ent truncate_above(e820ent ent, u64 a)
     return ent;
 }
 
+extern elf::Elf64_Ehdr* elf_header;
+
 void arch_setup_free_memory()
 {
     static ulong edata;
@@ -133,9 +136,10 @@ void arch_setup_free_memory()
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
-    mmu::linear_map(reinterpret_cast<uintptr_t>(mmu::phys_mem), 0, initial_map, initial_map);
-    // map the core
-    mmu::linear_map(0x200000, 0x200000, edata - 0x200000, 0x200000);
+    mmu::linear_map(mmu::phys_mem, 0, initial_map, initial_map);
+    // map the core, loaded 1:1 by the boot loader
+    mmu::phys elf_phys = reinterpret_cast<mmu::phys>(elf_header);
+    mmu::linear_map(elf_header, elf_phys, edata - elf_phys, 0x200000);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
@@ -148,7 +152,7 @@ void arch_setup_free_memory()
         if (intersects(ent, initial_map)) {
             ent = truncate_below(ent, initial_map);
         }
-        mmu::linear_map(reinterpret_cast<uintptr_t>(mmu::phys_mem) + ent.addr, ent.addr, ent.size, ~0);
+        mmu::linear_map(mmu::phys_mem + ent.addr, ent.addr, ent.size, ~0);
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
 }
