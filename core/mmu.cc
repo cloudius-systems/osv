@@ -534,6 +534,18 @@ uintptr_t allocate(uintptr_t start, size_t size, bool search,
     return start;
 }
 
+void vpopulate(void* addr, size_t size)
+{
+    fill_anon_page fill;
+    populate(&fill, perm_rwx).operate(addr, size);
+}
+
+void vdepopulate(void* addr, size_t size)
+{
+    unpopulate().operate(addr, size);
+    tlb_flush();
+}
+
 void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
