@@ -182,6 +182,10 @@ void* do_main_thread(void *_args)
     return nullptr;
 }
 
+namespace pthread_private {
+    void init_detached_pthreads_reaper();
+}
+
 void main_cont(int ac, char** av)
 {
     std::tie(ac, av) = parse_options(ac, av);
@@ -190,6 +194,7 @@ void main_cont(int ac, char** av)
     memory::enable_debug_allocator();
     enable_trace();
     sched::init_detached_threads_reaper();
+    pthread_private::init_detached_pthreads_reaper();
 
     vfs_init();
     ramdisk_init();

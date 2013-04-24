@@ -60,6 +60,20 @@ int main(int argc, char **argv)
     }
     debug("\n");
 
+    debug("testing leaks in PTHREAD_CREATE_DETACHED");
+    for(int i=0; i<10; i++){
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        pthread_t t;
+        assert(pthread_create(&t, &attr, donothing, NULL) == 0);
+        pthread_attr_destroy(&attr);
+    }
+    // sleep enough time for the above threads to complete (TODO: use
+    // an atomic counter, wait_until and wake to ensure they all complete).
+    sleep(1);
+    debug("\n");
+
 
     debug("leak testing done. Please use 'osv leak show' in gdb to analyze results\n");
 
