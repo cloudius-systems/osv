@@ -106,6 +106,7 @@ extern struct fileops socketops;
 fo_chmod_t  invfo_chmod;
 
 /* Alloc an fd for fp */
+int _fdalloc(struct file *fp, int *newfd, int min_fd);
 int fdalloc(struct file* fp, int *newfd);
 int fdset(int fd, struct file* fp);
 void fdfree(int fd);

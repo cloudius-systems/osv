@@ -20,13 +20,13 @@ mutex_t gfdt_lock = MUTEX_INITIALIZER;
  *
  * Grabs a reference on fp if successful.
  */
-int fdalloc(struct file *fp, int *newfd)
+int _fdalloc(struct file *fp, int *newfd, int min_fd)
 {
 	int fd;
 
 	fhold(fp);
 
-	for (fd = 0; fd < FDMAX; fd++) {
+	for (fd = min_fd; fd < FDMAX; fd++) {
 		if (gfdt[fd])
 			continue;
 
@@ -48,6 +48,16 @@ int fdalloc(struct file *fp, int *newfd)
 
 	fdrop(fp);
 	return EMFILE;
+}
+
+/*
+ * Allocate a file descriptor and assign fd to it atomically.
+ *
+ * Grabs a reference on fp if successful.
+ */
+int fdalloc(struct file *fp, int *newfd)
+{
+	return (_fdalloc(fp, newfd, 0));
 }
 
 int fdclose(int fd)
