@@ -2,6 +2,7 @@
 #include "mempool.hh"
 #include "mmu.hh"
 #include "processor.hh"
+#include "elf.hh"
 #include <osv/types.h>
 #include <alloca.h>
 #include <string.h>
@@ -62,8 +63,8 @@ void setup_temporary_phys_map()
     // duplicate 1:1 mapping into phys_mem
     u64 cr3 = processor::read_cr3();
     auto pt = reinterpret_cast<u64*>(cr3);
-    // assumes phys_mem = 0xffff800000000000
-    pt[256] = pt[0];
+    // assumes phys_mem = 0xffffc00000000000
+    pt[256+128] = pt[0];
 }
 
 void for_each_e820_entry(void* e820_buffer, unsigned size, void (*f)(e820ent e))
@@ -98,9 +99,10 @@ e820ent truncate_above(e820ent ent, u64 a)
     return ent;
 }
 
+extern elf::Elf64_Ehdr* elf_header;
+
 void arch_setup_free_memory()
 {
-    static constexpr u64 phys_mem = 0xffff800000000000;
     static ulong edata;
     asm ("movl $.edata, %0" : "=rm"(edata));
     // copy to stack so we don't free it now
@@ -134,9 +136,10 @@ void arch_setup_free_memory()
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
-    mmu::linear_map(phys_mem, 0, initial_map, initial_map);
-    // map the core
-    mmu::linear_map(0x200000, 0x200000, edata - 0x200000, 0x200000);
+    mmu::linear_map(mmu::phys_mem, 0, initial_map, initial_map);
+    // map the core, loaded 1:1 by the boot loader
+    mmu::phys elf_phys = reinterpret_cast<mmu::phys>(elf_header);
+    mmu::linear_map(elf_header, elf_phys, edata - elf_phys, 0x200000);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
@@ -149,7 +152,7 @@ void arch_setup_free_memory()
         if (intersects(ent, initial_map)) {
             ent = truncate_below(ent, initial_map);
         }
-        mmu::linear_map(phys_mem + ent.addr, ent.addr, ent.size, ~0);
+        mmu::linear_map(mmu::phys_mem + ent.addr, ent.addr, ent.size, ~0);
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
 }

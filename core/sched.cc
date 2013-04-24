@@ -218,7 +218,6 @@ void thread::yield()
     // FIXME: drive by IPI
     bool resched = with_lock(irq_lock, [t] {
         t->_cpu->handle_incoming_wakeups();
-        preempt_enable();
         // FIXME: what about other cpus?
         if (t->_cpu->runqueue.empty()) {
             return false;

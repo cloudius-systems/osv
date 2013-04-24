@@ -46,9 +46,9 @@ u64 mmio_getq(mmioaddr_t addr)
 
 mmioaddr_t mmio_map(u64 paddr, size_t size_bytes)
 {
-    uintptr_t map_to = 0xffff800000000000ull + paddr;
+    char* map_to = mmu::phys_mem + paddr;
     linear_map(map_to, paddr, size_bytes, 4096);
-    return reinterpret_cast<mmioaddr_t>(map_to);
+    return map_to;
 }
 
 void mmio_unmap(mmioaddr_t addr, size_t size_bytes)

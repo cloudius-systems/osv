@@ -45,7 +45,6 @@ SECTIONS
     .debug_weaknames 0 : { *(.debug_weaknames) }
     .gdb_index 0 : { *(.gdb_index) }
     .comment : { *(.comment) }
-    phys_mem = 0xffff800000000000;
 }
 PHDRS {
 	text PT_LOAD FILEHDR PHDRS;

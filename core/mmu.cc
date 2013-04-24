@@ -14,9 +14,8 @@ namespace {
 
 typedef boost::format fmt;
 
-constexpr uintptr_t page_size = 4096;
 constexpr int pte_per_page = 512;
-constexpr uintptr_t huge_page_size = page_size*pte_per_page; // 2 MB
+constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
 
 }
 
@@ -60,15 +59,15 @@ const unsigned nlevels = 4;
 
 void* phys_to_virt(phys pa)
 {
-    return reinterpret_cast<void*>(pa + 0xffff800000000000ull);
+    return phys_mem + pa;
 }
 
 phys virt_to_phys(void *virt)
 {
     // For now, only allow non-mmaped areas.  Later, we can either
     // bounce such addresses, or lock them in memory and translate
-    assert(reinterpret_cast<phys>(virt) >= 0xffff800000000000ull);
-    return reinterpret_cast<phys>(virt) - 0xffff800000000000ull;
+    assert(virt >= phys_mem);
+    return static_cast<char*>(virt) - phys_mem;
 }
 
 unsigned pt_index(void *virt, unsigned level)
@@ -540,6 +539,22 @@ uintptr_t allocate(uintptr_t start, size_t size, bool search,
     return start;
 }
 
+void vpopulate(void* addr, size_t size)
+{
+    fill_anon_page fill;
+    with_lock(vma_list_mutex, [=, &fill] {
+        populate(&fill, perm_rwx).operate(addr, size);
+    });
+}
+
+void vdepopulate(void* addr, size_t size)
+{
+    with_lock(vma_list_mutex, [=] {
+        unpopulate().operate(addr, size);
+    });
+    tlb_flush();
+}
+
 void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
@@ -655,8 +670,9 @@ size_t page_size_level(unsigned level)
     return size_t(1) << (12 + 9 * level);
 }
 
-void linear_map(uintptr_t virt, phys addr, size_t size, size_t slop)
+void linear_map(void* _virt, phys addr, size_t size, size_t slop)
 {
+    uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
     linear_map_level(page_table_root, virt, virt + size - 1,
