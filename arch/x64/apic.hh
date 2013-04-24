@@ -81,6 +81,7 @@ public:
     virtual void self_ipi(unsigned vector) = 0;
     virtual void ipi(unsigned apic_id, unsigned vector) = 0;
     virtual void ipi_allbutself(unsigned vector) = 0;
+    virtual void nmi_allbutself() = 0;
     virtual void eoi() = 0;
     virtual void write(apicreg reg, u32 value) = 0;
     virtual u32 id() = 0;

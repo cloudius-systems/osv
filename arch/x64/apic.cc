@@ -11,6 +11,7 @@ public:
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned apic_id, unsigned vector);
     virtual void ipi_allbutself(unsigned vector);
+    virtual void nmi_allbutself();
     virtual void eoi();
     virtual u32 id();
 private:
@@ -64,6 +65,10 @@ void x2apic::ipi_allbutself(unsigned vector)
     wrmsr(msr::X2APIC_ICR, vector | APIC_SHORTHAND_ALLBUTSELF | (1 << 14));
 }
 
+void x2apic::nmi_allbutself()
+{
+    wrmsr(msr::X2APIC_ICR, APIC_SHORTHAND_ALLBUTSELF | (4 << 8) | (1 << 14));
+}
 
 void x2apic::eoi()
 {
