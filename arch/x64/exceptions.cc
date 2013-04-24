@@ -137,12 +137,17 @@ void divide_error(exception_frame *ef)
     osv::generate_signal(si, ef);
 }
 
+extern "C" void nmi(exception_frame* ef)
+{
+    while (true) {
+        processor::halt_no_interrupts();
+    }
+}
 
 #define DUMMY_HANDLER(x) \
      extern "C" void x(); void x() { debug("DUMMY_HANDLER for " #x " aborting.\n"); abort(); }
 
 DUMMY_HANDLER(debug_exception)
-DUMMY_HANDLER(nmi)
 DUMMY_HANDLER(breakpoint)
 DUMMY_HANDLER(overflow)
 DUMMY_HANDLER(bound_range_exceeded)

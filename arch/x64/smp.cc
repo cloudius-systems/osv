@@ -127,3 +127,10 @@ void smp_main()
     cpu->bringup_thread->_cpu = cpu;
     cpu->bringup_thread->switch_to_first();
 }
+
+void crash_other_processors()
+{
+    if (apic) {
+        apic->nmi_allbutself();
+    }
+}

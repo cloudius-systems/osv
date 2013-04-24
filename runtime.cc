@@ -30,6 +30,7 @@
 #include <pwd.h>
 #include <fcntl.h>
 #include "barrier.hh"
+#include "smp.hh"
 
 #define __LC_LAST 13
 
@@ -85,6 +86,7 @@ void abort()
         debug("Aborted\n");
         already_aborted = true;
     }
+    crash_other_processors();
     while (true)
 	processor::halt_no_interrupts();
 }
