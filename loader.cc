@@ -66,19 +66,20 @@ extern "C" {
 }
 
 
+void disable_pic()
+{
+    outb(0xff, 0x21);
+    outb(0xff, 0xa1);
+}
+
 void premain()
 {
+    disable_pic();
     auto inittab = elf::get_init(elf_header);
     setup_tls(inittab);
     for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
         (*init)();
     }
-}
-
-void disable_pic()
-{
-    outb(0xff, 0x21);
-    outb(0xff, 0xa1);
 }
 
 elf::program* prog;
@@ -196,7 +197,6 @@ void main_cont(int ac, char** av)
 
     net_init();
 
-    disable_pic();
     processor::sti();
 
     prog = new elf::program(fs);
