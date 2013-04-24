@@ -309,12 +309,6 @@ private:
     thread* _t;
 };
 
-class preempt_guard {
-public:
-    preempt_guard() { preempt_disable(); }
-    ~preempt_guard() { preempt_enable(); }
-};
-
 // does not return - continues to @cont instead
 void init(elf::tls_data tls_data, std::function<void ()> cont);
 
@@ -359,7 +353,6 @@ void thread::do_wait_until(Mutex& mtx, Pred pred)
     thread* me = current();
     while (true) {
         {
-            preempt_guard no_preempt;
             wait_guard waiter(me);
             if (pred()) {
                 return;
