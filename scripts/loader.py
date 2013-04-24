@@ -14,6 +14,14 @@ class status_enum_class(object):
     pass
 status_enum = status_enum_class()
 
+phys_mem = 0xffffc00000000000
+
+def pt_index(addr, level):
+    return (addr >> (12 + 9 * level)) & 511
+
+def phys_cast(addr, type):
+    return gdb.Value(addr + phys_mem).cast(type.pointer())
+
 def load_elf(path, base):
     args = ''
     text_addr = '?'
@@ -93,7 +101,8 @@ timer_type = gdb.lookup_type('sched::timer')
 active_thread_context = None
 
 def ulong(x):
-    x = x.cast(ulong_type)
+    if isinstance(x, gdb.Value):
+        x = x.cast(ulong_type)
     x = long(x)
     if x < 0:
         x += 1L << 64
@@ -576,6 +585,35 @@ class osv_leak_off(gdb.Command):
     def invoke(self, arg, from_tty):
         set_leak('false')
 
+class osv_pagetable(gdb.Command):
+    '''Commands for examining the page table'''
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv pagetable', gdb.COMMAND_USER,
+                             gdb.COMPLETE_COMMAND, True)
+
+class osv_pagetable_walk(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv pagetable walk',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        addr = gdb.parse_and_eval(arg)
+        addr = ulong(addr)
+        ptep = ulong(gdb.lookup_global_symbol('mmu::page_table_root').value().address)
+        level = 4
+        while level >= 0:
+            ptep1 = phys_cast(ptep, ulong_type)
+            pte = ulong(ptep1.dereference())
+            gdb.write('%016x %016x\n' % (ptep, pte))
+            if not pte & 1:
+                break
+            if level > 0 and pte & 0x80:
+                break
+            if level > 0:
+                pte &= ~ulong(0x80)
+            pte &= ~ulong(0x8000000000000fff)
+            level -= 1
+            ptep = pte + pt_index(addr, level) * 8
+
 
 osv()
 osv_heap()
@@ -591,5 +629,7 @@ osv_leak()
 osv_leak_show()
 osv_leak_on()
 osv_leak_off()
+osv_pagetable()
+osv_pagetable_walk()
 
 setup_libstdcxx()
