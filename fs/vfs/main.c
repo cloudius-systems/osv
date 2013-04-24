@@ -840,9 +840,9 @@ int fcntl(int fd, int cmd, int arg)
 
 	switch (cmd) {
 	case F_DUPFD:
-		// XXX: incorrect semantics, should only
-		// use file descriptors >= arg
-		ret = dup(fd);
+		error = _fdalloc(fp, &ret, arg);
+		if (error)
+			goto out_errno;
 		break;
 	case F_GETFD:
 		ret = fp->f_flags & FD_CLOEXEC;
