@@ -23,7 +23,7 @@ CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
 
 ASFLAGS = -g $(autodepend)
 
-configuration-defines = conf-preempt
+configuration-defines = conf-preempt conf-debug_memory
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))

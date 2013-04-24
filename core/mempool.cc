@@ -10,6 +10,8 @@
 #include "align.hh"
 #include <debug.hh>
 #include "alloctracker.hh"
+#include <atomic>
+#include "mmu.hh"
 
 namespace memory {
 
@@ -449,19 +451,109 @@ static inline void std_free(void* object)
     }
 }
 
+namespace dbg {
+
+// debug allocator - give each allocation a new virtual range, so that
+// any use-after-free will fault.
+
+bool enabled;
+
+// FIXME: we assume the debug memory space is infinite (which it nearly is)
+// and don't reuse space
+static const auto debug_base = reinterpret_cast<char*>(0xffffe00000000000);
+std::atomic<char*> free_area{debug_base};
+struct header {
+    explicit header(size_t sz) : size(sz), size2(sz) {
+        memset(fence, '$', sizeof fence);
+    }
+    ~header() {
+        assert(size == size2);
+        assert(std::all_of(fence, std::end(fence), [=](char c) { return c == '$'; }));
+    }
+    size_t size;
+    char fence[16];
+    size_t size2;
+};
+static const size_t pad_before = mmu::page_size;
+static const size_t pad_after = mmu::page_size;
+
 void* malloc(size_t size)
 {
+    if (!enabled) {
+        return std_malloc(size);
+    }
+
+    auto hsize = size + sizeof(header);
+    auto asize = align_up(hsize, mmu::page_size);
+    auto padded_size = pad_before + asize + pad_after;
+    void* v = free_area.fetch_add(padded_size, std::memory_order_relaxed);
+    v += pad_before;
+    mmu::vpopulate(v, asize);
+    auto h = new (v) header(size);
+    memset(v + hsize, '$', asize - hsize);
+    return h + 1;
+}
+
+void free(void* v)
+{
+    if (v < debug_base) {
+        return std_free(v);
+    }
+    auto h = static_cast<header*>(v) - 1;
+    auto size = h->size;
+    auto hsize = size + sizeof(header);
+    auto asize = align_up(hsize, mmu::page_size);
+    char* vv = reinterpret_cast<char*>(h);
+    assert(std::all_of(vv + hsize, vv  + asize, [=](char c) { return c == '$'; }));
+    h->~header();
+    mmu::vdepopulate(h, asize);
+}
+
+void* realloc(void* v, size_t size)
+{
+    auto h = static_cast<header*>(v) - 1;
+    void* n = malloc(size);
+    memcpy(n, v, h->size);
+    free(v);
+    return n;
+}
+
+}
+
+void* malloc(size_t size)
+{
+#if CONF_debug_memory == 0
     return std_malloc(size);
+#else
+    return dbg::malloc(size);
+#endif
 }
 
 void* realloc(void* obj, size_t size)
 {
+#if CONF_debug_memory == 0
     return std_realloc(obj, size);
+#else
+    return dbg::realloc(obj, size);
+#endif
 }
 
 void free(void* obj)
 {
+#if CONF_debug_memory == 0
     return std_free(obj);
+#else
+    return dbg::free(obj);
+#endif
 }
 
+namespace memory {
 
+void enable_debug_allocator()
+{
+#if CONF_debug_memory == 1
+    dbg::enabled = true;
+#endif
+}
+
+}

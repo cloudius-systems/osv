@@ -187,6 +187,7 @@ void main_cont(int ac, char** av)
     std::tie(ac, av) = parse_options(ac, av);
     ioapic::init();
     smp_launch();
+    memory::enable_debug_allocator();
     enable_trace();
     sched::init_detached_threads_reaper();
 
