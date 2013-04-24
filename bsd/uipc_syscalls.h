@@ -12,6 +12,7 @@ int kern_accept(int s, struct sockaddr **name,
 int kern_connect(int fd, struct sockaddr *sa);
 int kern_sendit(int s, struct msghdr *mp, int flags,
     struct mbuf *control, ssize_t *bytes);
+int kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes);
 int kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize);
 int kern_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
 
