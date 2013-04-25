@@ -11,6 +11,7 @@
 
 #define LISTEN_PORT (5555)
 #define ITERATIONS (400)
+const int buf_size = 512;
 
 class test_bsd_tcp1 {
 public:
@@ -23,7 +24,7 @@ public:
         int listen_s;
         int client_s;
         struct sockaddr_in laddr;
-        char buf[512] = {};
+        char buf[buf_size] = {};
         int i;
 
         /* Create listening socket */
@@ -65,8 +66,8 @@ public:
 
             dbg_d("server: got a connection!");
 
-            /* Read max 512 bytes */
-            int bytes = read(client_s, &buf, 512);
+            /* Read max buf_size bytes */
+            int bytes = read(client_s, &buf, buf_size);
             if (bytes < 0) {
                 dbg_d("server: read() failed!");
                 close(client_s);
@@ -105,7 +106,7 @@ public:
     {
         struct sockaddr_in raddr;
         const char * message = "This is a TCP message";
-        char replay[512];
+        char replay[buf_size];
 
         memset(&raddr, 0, sizeof(raddr));
         raddr.sin_family = AF_INET;
@@ -134,7 +135,7 @@ public:
                 return -1;
             }
 
-            int bytes2 = read(s, &replay, 512);
+            int bytes2 = read(s, &replay, buf_size);
             if (bytes2 < 0) {
                  dbg_d("client: read() failed!");
                  return -1;
