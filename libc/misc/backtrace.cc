@@ -20,9 +20,17 @@ static int backtrace(void **buffer, int size) {
 }
 #endif
 
+#if 0
 // An alternative, slightly more awkward but functioning implementation,
 // using the _Unwind* functions which are used by the GCC runtime and
 // supplied in libgcc_s.so). These also use libunwind.a internally, I believe.
+//
+// Unfortunately, while this implementation works nicely on our own code,
+// it fails miserably when java.so is running. Supposedly it sees some
+// unexpected frame pointers, but rather than let us see them and deal
+// with them in worker(), it fails in _Unwind_Backtrace before calling
+// worker(), I don't know why. So stay tuned for the third implementation,
+// below.
 #include <unwind.h>
 struct worker_arg {
     void **buffer;
@@ -56,4 +64,46 @@ int backtrace(void **buffer, int size)
     struct worker_arg arg { buffer, size, -1, 0 };
     _Unwind_Backtrace(worker, &arg);
     return arg.pos > 0 ? arg.pos : 0;
+}
+#endif
+
+// This is the third implementation of backtrace(), using gcc's builtins
+//__builtin_frame_address and __builtin_return_address. This is the ugliest
+// of the three implementation, because these builtins awkwardly require
+// constant arguments, so instead of a simple loop, we needed to resort
+// to ugly C-preprocessor hacks. This implementation also requires
+// compilation without -fomit-frame-pointer (currently our "release"
+// build is compiled with it, so use our "debug" build).
+//
+// The good thing about this implementation is that the gcc builtin
+// interface gives us a chance to ignore suspicious frame addresses before
+// continuing to investigate them - and thus allows us to also backtrace
+// when running Java code - some of it running from the heap and, evidently,
+// contains broken frame information.
+int backtrace(void **buffer, int size)
+{
+    for(unsigned int i = 0; i < (unsigned int) size; i++){
+        // Unfortunately, __builtin_return_address requires a constant argument
+        // so we resort to clever but ugly C-preprocessor hacks.
+        switch (i) {
+        // Officially, frame address == 0 means we reached the end of the call
+        // chain. But it can also be garbage, and we stop if we see suspicious
+        // frame addresses or return addresses (we must check the frame address
+        // before looking in it for the return address).
+#define sanepointer(x) ((unsigned long)(x)<<16>>16 == (unsigned long)(x))
+#define TRY(i) case i: { \
+        void *fa = __builtin_frame_address(i); \
+        if (!fa || (unsigned long)fa < 0x200000000000UL || !sanepointer(fa)) \
+            return i; \
+        void *ra = __builtin_return_address(i); \
+        if ((unsigned long)ra < 4096UL || (unsigned long)ra > 0x200000000000UL) \
+            return i; \
+        buffer[i] = ra; \
+        } break;
+#define TRY7(i) TRY(i) TRY(i+1) TRY(i+2) TRY(i+3) TRY(i+4) TRY(i+5) TRY(i+6)
+        TRY7(7*0) TRY7(7*1) TRY7(7*2) TRY7(7*3) TRY7(7*4) TRY7(7*5)
+        default: return i; // can happen if call is very deep and size > 42.
+        }
+    }
+    return size; // if we haven't returned yet, entire size was filled.
 }

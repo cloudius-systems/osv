@@ -59,13 +59,13 @@ void alloc_tracker::remember(void *addr, int size)
     // code or ununderstood address).
     static constexpr int N_USELESS_FUNCS_START = 2;
     static constexpr int N_USELESS_FUNCS_END = 1;
-    void **bt_from = bt+N_USELESS_FUNCS_START;
+    void **bt_from = bt + N_USELESS_FUNCS_START;
     n -= N_USELESS_FUNCS_START+N_USELESS_FUNCS_END;
     if(n > MAX_BACKTRACE) {
         bt_from += n - MAX_BACKTRACE;
         n = MAX_BACKTRACE;
     }
-    a->nbacktrace = n;
+    a->nbacktrace = n < 0 ? 0 : n;
     for (int i = 0; i < n; i++) {
         a->backtrace[i] = bt_from[i];
     }
