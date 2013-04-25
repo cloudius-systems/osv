@@ -1,10 +1,8 @@
 #include "sched.hh"
 
-extern "C" {
-    #include <bsd/sys/sys/socket.h>
-    #include <bsd/sys/netinet/in.h>
-    #include <bsd/include/arpa/inet.h>
-}
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "debug.hh"
 #include "tst-hub.hh"

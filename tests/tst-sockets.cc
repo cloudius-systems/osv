@@ -1,11 +1,8 @@
 #include "sched.hh"
 
-extern "C" {
-    #include <bsd/sys/sys/socket.h>
-    #include <bsd/sys/netinet/in.h>
-    #include <bsd/include/arpa/inet.h>
-}
-
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <osv/poll.h>
 
 #include "debug.hh"
@@ -34,7 +31,6 @@ public:
             si_me.sin_family = AF_INET;
             si_me.sin_port = htons(stup_fport + i);
             si_me.sin_addr.s_addr = htonl(INADDR_ANY);
-            si_me.sin_len = sizeof(struct sockaddr_in);
             if (bind(fds[i], (const sockaddr*)&si_me, sizeof(si_me)) == -1) {
                 dbg_d("poller() bind() failed %d", fds[i]);
                 return -1;
@@ -100,7 +96,6 @@ public:
             memset((char *) &si_other, 0, sizeof(si_other));
             si_other.sin_family = AF_INET;
             si_other.sin_port = htons(stup_fport+i);
-            si_other.sin_len = sizeof(struct sockaddr_in);
 
             if (inet_aton("127.0.0.1", &si_other.sin_addr)==0) {
                 dbg_d("connector() inet_aton() failed %d", s);
@@ -186,7 +181,6 @@ public:
         si_me.sin_family = AF_INET;
         si_me.sin_port = htons(UT_PORT);
         si_me.sin_addr.s_addr = htonl(INADDR_ANY);
-        si_me.sin_len = sizeof(struct sockaddr_in);
         if (bind(s, (const sockaddr*)&si_me, sizeof(si_me))==-1) {
             dbg_d("udp_server() bind() failed %d", s);
             return -1;
@@ -228,7 +222,6 @@ public:
         memset((char *) &si_other, 0, sizeof(si_other));
         si_other.sin_family = AF_INET;
         si_other.sin_port = htons(UT_PORT);
-        si_other.sin_len = sizeof(struct sockaddr_in);
 
         if (inet_aton("127.0.0.1", &si_other.sin_addr)==0) {
             dbg_d("udp_client() inet_aton() failed %d", s);
