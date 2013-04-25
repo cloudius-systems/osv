@@ -82,28 +82,19 @@ int backtrace(void **buffer, int size)
 // contains broken frame information.
 int backtrace(void **buffer, int size)
 {
-    for(unsigned int i = 0; i < (unsigned int) size; i++){
-        // Unfortunately, __builtin_return_address requires a constant argument
-        // so we resort to clever but ugly C-preprocessor hacks.
-        switch (i) {
-        // Officially, frame address == 0 means we reached the end of the call
-        // chain. But it can also be garbage, and we stop if we see suspicious
-        // frame addresses or return addresses (we must check the frame address
-        // before looking in it for the return address).
+    void *fa, *ra;
 #define sanepointer(x) ((unsigned long)(x)<<16>>16 == (unsigned long)(x))
-#define TRY(i) case i: { \
-        void *fa = __builtin_frame_address(i); \
-        if (!fa || (unsigned long)fa < 0x200000000000UL || !sanepointer(fa)) \
-            return i; \
-        void *ra = __builtin_return_address(i); \
-        if ((unsigned long)ra < 4096UL || (unsigned long)ra > 0x200000000000UL) \
-            return i; \
-        buffer[i] = ra; \
-        } break;
-#define TRY7(i) TRY(i) TRY(i+1) TRY(i+2) TRY(i+3) TRY(i+4) TRY(i+5) TRY(i+6)
-        TRY7(7*0) TRY7(7*1) TRY7(7*2) TRY7(7*3) TRY7(7*4) TRY7(7*5)
-        default: return i; // can happen if call is very deep and size > 42.
-        }
-    }
-    return size; // if we haven't returned yet, entire size was filled.
+#define TRY(i) \
+    if (i>=size) \
+        return size; \
+    fa = __builtin_frame_address(i); \
+    if (!fa || (unsigned long)fa < 0x200000000000UL || !sanepointer(fa)) \
+        return i; \
+    ra = __builtin_return_address(i); \
+    if ((unsigned long)ra < 4096UL || (unsigned long)ra > 0x200000000000UL) \
+        return i; \
+    buffer[i] = ra;
+#define TRY7(i) TRY(i+0) TRY(i+1) TRY(i+2) TRY(i+3) TRY(i+4) TRY(i+5) TRY(i+6)
+    TRY7(0) TRY7(7) TRY7(14) TRY7(21)   // get up to 28 levels of calls
+    return 28;
 }
