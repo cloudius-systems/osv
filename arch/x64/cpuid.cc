@@ -7,13 +7,23 @@ features_type features;
 
 namespace {
 
+struct signature {
+    u32 b;
+    u32 c;
+    u32 d;
+};
+
 struct cpuid_bit {
     unsigned leaf;
     char word;
     unsigned bit;
     bool features_type::*flag;
     unsigned subleaf;
+    signature* sign;
+};
 
+signature kvm_signature = {
+    0x4b4d564b, 0x564b4d56, 0x4d
 };
 
 typedef features_type f;
@@ -33,6 +43,9 @@ cpuid_bit cpuid_bits[] = {
     { 7, 'b', 9, &f::repmovsb, 0 },
     { 0x80000001, 'd', 26, &f::gbpage },
     { 0x80000007, 'd', 8, &f::invariant_tsc },
+    { 0x40000001, 'a', 0, &f::kvm_clocksource, 0, &kvm_signature },
+    { 0x40000001, 'a', 3, &f::kvm_clocksource2, 0, &kvm_signature },
+    { 0x40000001, 'a', 24, &f::kvm_clocksource_stable, 0, &kvm_signature },
 };
 
 constexpr unsigned nr_cpuid_bits = sizeof(cpuid_bits) / sizeof(*cpuid_bits);
@@ -40,11 +53,18 @@ constexpr unsigned nr_cpuid_bits = sizeof(cpuid_bits) / sizeof(*cpuid_bits);
 void process_cpuid_bit(const cpuid_bit& b)
 {
     bool subleaf = b.leaf == 7;
-    unsigned base = 0;
-    if (b.leaf >= 0x80000000) {
-        base = 0x80000000;
+    auto base = b.leaf & 0xf0000000;
+    auto s = b.sign;
+    if (s) {
+        auto x = cpuid(base);
+        if (x.b != s->b || x.c != s->c || x.d != s->d) {
+            return;
+        }
     }
     unsigned max = cpuid(base).a;
+    if (base == 0x40000000 && s == &kvm_signature && max == 0) {
+        max = 0x40000001; // workaround kvm bug
+    }
     if (b.leaf > max) {
         return;
     }

@@ -18,6 +18,9 @@ struct features_type {
     bool repmovsb;
     bool gbpage;
     bool invariant_tsc;
+    bool kvm_clocksource;
+    bool kvm_clocksource2;
+    bool kvm_clocksource_stable;
 };
 
 extern features_type features;
