@@ -94,6 +94,8 @@ int main(int ac, char **av)
     sched::init(tls_data, [=] { main_cont(ac, av); });
 }
 
+static bool opt_leak = false;
+
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
     namespace bpo = boost::program_options;
@@ -109,10 +111,11 @@ std::tuple<int, char**> parse_options(int ac, char** av)
                                    [](const char* arg) { return arg[0] != '-'; }) - av;
     std::copy(av, av + nr_options, std::back_inserter(args));
 
-    bpo::options_description desc("osv options");
+    bpo::options_description desc("osv options:\n");
     desc.add_options()
-        ("help", "show help text")
-        ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable")
+        ("help", "show help text\n")
+        ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable\n")
+        ("leak", "start leak detector after boot\n")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -123,6 +126,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("help")) {
         std::cout << desc << "\n";
+    }
+
+    if (vars.count("leak")) {
+        opt_leak = true;
     }
 
     if (vars.count("trace")) {
@@ -157,6 +164,12 @@ void run_main(elf::program *prog, struct argblock *args)
     ++av, --ac;
     auto main = obj->lookup<void (int, char**)>("main");
     assert(main);
+
+    if (opt_leak) {
+        debug("Enabling leak detector.\n");
+        memory::tracker_enabled = true;
+    }
+
     main(ac, av);
 }
 
