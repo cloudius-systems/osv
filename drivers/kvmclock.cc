@@ -3,6 +3,7 @@
 #include <osv/types.h>
 #include "mmu.hh"
 #include "string.h"
+#include "cpuid.hh"
 
 class kvmclock : public clock {
 private:
@@ -89,6 +90,8 @@ u64 kvmclock::system_time()
 
 static __attribute__((constructor)) void setup_kvmclock()
 {
-    // FIXME: cpuid
-    clock::register_clock(new kvmclock);
+    // FIXME: old clocksource too?
+    if (processor::features.kvm_clocksource2) {
+        clock::register_clock(new kvmclock);
+    }
 }
