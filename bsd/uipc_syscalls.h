@@ -35,4 +35,22 @@ int sys_setsockopt(int s, int level, int name, caddr_t val, int valsize);
 int sys_getsockopt(int s, int level, int name, void * __restrict val,
     socklen_t * __restrict avalsize);
 
+/* Linux Interface */
+int linux_socket(int domain, int type, int protocol, int *out_fd);
+int linux_bind(int s, void *name, int namelen);
+int linux_listen(int s, int backlog);
+int linux_accept(int s, struct sockaddr* name, socklen_t* namelen, int *out_fd);
+int linux_accept4(int s, struct sockaddr * name, socklen_t * namelen, int *out_fd, int flags);
+int linux_connect(int s, void *name, int namelen);
+int linux_sendmsg(int s, struct msghdr* msg, int flags, ssize_t* bytes);
+int linux_sendto(int s, void* buf, int len, int flags, void* to, int tolen, ssize_t *bytes);
+int linux_send(int s, caddr_t buf, size_t len, int flags, ssize_t* bytes);
+int linux_recvmsg(int s, struct msghdr *msg, int flags, ssize_t* bytes);
+int linux_recv(int s, caddr_t buf, int len, int flags, ssize_t* bytes);
+int linux_recvfrom(int s, void* buf, size_t len, int flags,
+	struct sockaddr * from, socklen_t * fromlen, ssize_t* bytes);
+int linux_shutdown(int s, int how);
+int linux_setsockopt(int s, int level, int name, caddr_t val, int valsize);
+int linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
+
 #endif /* !UIPC_SYSCALLS_H */
