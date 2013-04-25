@@ -107,6 +107,37 @@ reboot after setting the breakpoint:
 
  gdb.txt will contain the the trace.
 
+Leak Detection
+==============
+
+Memory allocation tracking can be enabled/disabled with the gdb commands
+"osv leak on", "osv leak off", but even easier is to add the "--leak"
+paramter to the loader, to have it start leak detection when entering the
+payload (not during OSv boot). For example:
+
+scripts/imgedit.py setargs build/debug/loader.img --leak java.so Try3
+	# runs Java class java/Try3.class with allocation tracking
+
+scripts/imgedit.py setargs build/debug/loader.img --leak tests/tst-leak.so
+	# runs tst-leak.so test with allocation tracking.
+
+Be sure to do this on the *debug* build, not *release* build, as our
+current implementation of backtrace() relies on frame pointers, which are
+omitted in our release build.
+
+Then run (scripts/run -d), wait till it ends, and then
+
+$ gdb build/debug/loader.elf
+(gdb) connect
+(gdb) osv syms
+(gdb) set logging on
+(gdb) set height 0
+(gdb) osv leak show
+
+Please note that "osv leak show" can take a L-O-N-G time - even a few
+minutes, especially when running Java, as it allocates myriads of objects
+that GDB will now have to inspect.
+
 Running java benchmarks
 =======================
 
