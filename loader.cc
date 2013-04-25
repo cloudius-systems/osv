@@ -13,6 +13,7 @@
 #include "debug.hh"
 #include "drivers/pci.hh"
 #include "smp.hh"
+#include "xen.hh"
 #include "ioapic.hh"
 
 #include "drivers/driver.hh"
@@ -79,8 +80,8 @@ extern "C" {
 
 void disable_pic()
 {
-    outb(0xff, 0x21);
-    outb(0xff, 0xa1);
+    // PIC not present in Xen
+    XENPV_ALTERNATIVE({ outb(0xff, 0x21); outb(0xff, 0xa1); }, {});
 }
 
 void premain()
