@@ -1,0 +1,97 @@
+Javascript CLI
+
+Intro
+=====
+
+The JS CLI can be found at the console/ directory, it provides an interactive 
+shell in OSv. It now works just with the qemu console but later it will 
+work over SSH as well, so the end user will be able interact with OSv.
+ 
+The general requirements for the CLI are:
+1. Linux compatibility of tools syntax
+2. Be user-friendly (help, tab completion, suggestions, etc..)
+3. Provide support for variables and flow control (gained from javascript)
+4. Multiple inputs: console, SSH, scripts
+
+OSv expose entries to Java code via JNI and most of the 
+initialization/configuration logic should be implemented In Javascript and 
+run on top of the Javascript CLI.
+
+The CLI is composed of (1) user interface that is similar to bash, and (2) a 
+set of tools and functions that are exposed for script writers.
+
+
+Commands
+========
+
+File System     - basic tools such as ls, cd, pwd, cat, and more.
+Networking      - ifconfig, ping, ifup, route, arp, etc...
+Monitoring      - jobs, vm, memory, and more.
+Configuration   - interface for configuring various OSv internals, 
+                  similar to a sysctl interface
+Execution       - run tests, run scripts
+
+The CLI role is 3-fold:
+
+1. Initialization 
+2. Configuration
+3. Monitoring
+
+
+Technical Stuff
+===============
+
+The Javascript engine we use is called rhino, it is written in Java and it
+makes it possible to access Java classes from Javascript, which is good for
+interaction with JNI exports.
+
+
+Command Internals
+=================
+
+To add a new command to the cli, edit cli.js and add a new command definition
+to the _commands global variable, example:
+
+_commands["cat"] = cat; 
+
+the cat object is defined (as a JS singleton variant) in cat.js and this is 
+it's content:
+
+var cat = {
+        
+    invokect: function(inp) {
+        // Prints the content of the file
+    },
+    
+    tab: function(inp) {
+        // Returns an array of possilbe completions
+    },
+
+};
+
+NOTE: To see the actual code, check out cat.js
+
+Command Interface
+=================
+
+Every command object should implement the following interface:
+
+init()          called before the object is accessed by the user, purpose is
+                for initialization, example: the cd command initalizes cwd.
+
+invoke(inp)     called when the user write the command name and execute it.
+                inp is an array of arguments
+
+tab(inp)        called when the context in the cli is the current command and
+                the user pressed TAB. see cat.ls or cd.ls for an example.
+                inp is an array of arguments.
+
+tab_final(found_match)
+                
+                called after tab has completed and possibly a single match have 
+                been found (tab completed), see cd.ls for an example
+
+help()          should print a helpful description for the command, called when 
+                the user execute "help cmd"
+
+
