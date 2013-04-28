@@ -487,7 +487,7 @@ int main(void)
     /* Wait for async stuff */
     sleep(8);
 
-    destroy_if();
+    // destroy_if();
 
     TLOG("BSD Net Driver Test END");
     return (0);
