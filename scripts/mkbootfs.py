@@ -46,9 +46,25 @@ depends.write('%s: \\\n' % (options.output,))
 
 files = dict([(f, manifest.get('manifest', f, vars = defines))
               for f in manifest.options('manifest')])
+
+def expand(items):
+    for name, hostname in items:
+        if name.endswith('/**') and hostname.endswith('/**'):
+            name = name[:-2]
+            hostname = hostname[:-2]
+            for dirpath, dirnames, filenames in os.walk(hostname):
+                for filename in filenames:
+                    relpath = dirpath[len(hostname):]
+                    yield (name + relpath + '/' + filename,
+                           hostname + relpath + '/' + filename)
+        else:
+            yield (name, hostname)
+
+files = list(expand(files.items()))
+
 pos = (len(files) + 1) * metadata_size
 
-for name, hostname in files.items():
+for name, hostname in files:
     size = os.stat(hostname).st_size
     metadata = struct.pack('QQ112s', size, pos, name)
     out.write(metadata)
@@ -57,7 +73,7 @@ for name, hostname in files.items():
 
 out.write(struct.pack('128s', ''))
 
-for name, hostname in files.items():
+for name, hostname in files:
     out.write(file(hostname).read())
 
 depends.write('\n\n')
