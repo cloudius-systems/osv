@@ -429,3 +429,82 @@ int pthread_setcancelstate(int state, int *oldstate)
     debug(fmt("pthread_setcancelstate stubbed out\n"));
     return 0;
 }
+
+int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
+{
+    // In Linux (the target ABI we're trying to emulate, PTHREAD_ONCE_INIT
+    // is 0. Our implementation sets it to 1 when intialization is in progress
+    // (so other threads calling the same pthread_once know to block), and
+    // to 2 when initialization has alread completed.
+    // The performance pthread_once isn't critical, so let's go with a simple
+    // implementation of one shared mutex and wait queue for all once_control
+    // (don't worry, the mutual exclusion is just on access to the waiter
+    // list, not on running init_routine()).
+
+    static mutex m;
+    static struct waiter {
+        sched::thread *thread;
+        pthread_once_t *once_control;
+        struct waiter *next;
+    } *waiterlist = nullptr;
+
+    m.lock();
+    if (*once_control == 2) {
+        // initialization has already completed - return immediately.
+        m.unlock();
+        return 0;
+    } else if (*once_control == 1) {
+        // initialization of this once_control is in progress in another
+        // thread, so wait until it completes.
+        struct waiter *w = (struct waiter *) malloc(sizeof(struct waiter));
+        w->thread = sched::thread::current();
+        w->once_control = once_control;
+        w->next = waiterlist;
+        waiterlist = w;
+        sched::thread::wait_until(m, [=] { return *once_control != 1; });
+        if (*once_control == 2) {
+            m.unlock();
+            return 0;
+        }
+        // If we're still here, it's the corner case that we waited for
+        // another thread that was doing the initialization, but that thread
+        // was canceled once_control is back to 0, and now we need to
+        // initialize in this thread. Fall through to the code below with the
+        // lock still taken.
+    } else if (*once_control != 0) {
+        // Unexpected value in once_control. Barf.
+        m.unlock();
+        return EINVAL;
+    }
+
+    // mark that we're initializing, and run the initialization routine.
+    *once_control = 1;
+    m.unlock();
+    init_routine();
+    // TODO: if init_routine() was canceled, return once_control back to 0!
+    m.lock();
+    *once_control = 2;
+    // wake up any other threads waiting for our initialization. We need to
+    // do this with the lock taken, as we are touching the waitlist.
+    for (struct waiter **p = &waiterlist; *p; p = &((*p)->next)) {
+        if ((*p)->once_control == once_control ) {
+            (*p)->thread->wake();
+            struct waiter *save = *p;
+            *p = (*p)->next;
+            free(save);
+            if (!*p) break;
+        }
+    }
+    m.unlock();
+    return 0;
+}
+
+// libstdc++ checks whether threads are compiled in using its
+// __gthread_active_p(), which (when compiled on Linux) just verifies
+// that pthread_cancel() is available. So we need it available, even
+// we don't intend to actually use it.
+int pthread_cancel(pthread_t thread)
+{
+    debug("pthread_cancel stubbed out\n");
+    return ESRCH;
+}
