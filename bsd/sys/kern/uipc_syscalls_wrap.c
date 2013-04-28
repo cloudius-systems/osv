@@ -110,7 +110,7 @@ ssize_t recvfrom(int fd, void *restrict buf, size_t len, int flags,
 		return -1;
 	}
 
-	return 0;
+	return bytes;
 }
 
 ssize_t recv(int fd, void *buf, size_t len, int flags)
@@ -124,7 +124,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 		return -1;
 	}
 
-	return 0;
+	return bytes;
 }
 
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
