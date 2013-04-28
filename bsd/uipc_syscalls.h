@@ -15,6 +15,7 @@ int kern_sendit(int s, struct msghdr *mp, int flags,
 int kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes);
 int kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize);
 int kern_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
+int kern_socketpair(int domain, int type, int protocol, int *rsv);
 
 /* FreeBSD Interface */
 int sys_socket(int domain, int type, int protocol, int *out_fd);

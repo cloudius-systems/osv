@@ -848,37 +848,27 @@ linux_getpeername(struct thread *td, struct linux_getpeername_args *args)
 	return (0);
 }
 
-struct linux_socketpair_args {
-	int domain;
-	int type;
-	int protocol;
-	l_uintptr_t rsv;
-};
+#endif
 
-static int
-linux_socketpair(struct thread *td, struct linux_socketpair_args *args)
+int
+linux_socketpair(int domain, int type, int protocol, int* rsv)
 {
-	struct socketpair_args /* {
-		int domain;
-		int type;
-		int protocol;
-		int *rsv;
-	} */ bsd_args;
 	int error, socket_flags;
-	int sv[2];
 
-	bsd_args.domain = linux_to_bsd_domain(args->domain);
-	if (bsd_args.domain != PF_LOCAL)
+	domain = linux_to_bsd_domain(domain);
+	if (domain != PF_LOCAL)
 		return (EAFNOSUPPORT);
 
-	socket_flags = args->type & ~LINUX_SOCK_TYPE_MASK;
+	socket_flags = type & ~LINUX_SOCK_TYPE_MASK;
 	if (socket_flags & ~(LINUX_SOCK_CLOEXEC | LINUX_SOCK_NONBLOCK))
 		return (EINVAL);
-	bsd_args.type = args->type & LINUX_SOCK_TYPE_MASK;
-	if (bsd_args.type < 0 || bsd_args.type > LINUX_SOCK_MAX)
+	type = type & LINUX_SOCK_TYPE_MASK;
+	if (type < 0 || type > LINUX_SOCK_MAX)
 		return (EINVAL);
 
-	if (args->protocol != 0 && args->protocol != PF_UNIX)
+	assert(protocol != PF_UNIX);
+
+	if (protocol != 0 && protocol != PF_UNIX)
 
 		/*
 		 * Use of PF_UNIX as protocol argument is not right,
@@ -888,36 +878,24 @@ linux_socketpair(struct thread *td, struct linux_socketpair_args *args)
 		 */
 		return (EPROTONOSUPPORT);
 	else
-		bsd_args.protocol = 0;
-	bsd_args.rsv = (int *)PTRIN(args->rsv);
-	error = kern_socketpair(td, bsd_args.domain, bsd_args.type,
-	    bsd_args.protocol, sv);
+		protocol = 0;
+	error = kern_socketpair(domain, type, protocol, rsv);
 	if (error)
 		return (error);
-	error = linux_set_socket_flags(td, sv[0], socket_flags);
+	error = linux_set_socket_flags(rsv[0], socket_flags);
 	if (error)
 		goto out;
-	error = linux_set_socket_flags(td, sv[1], socket_flags);
+	error = linux_set_socket_flags(rsv[1], socket_flags);
 	if (error)
 		goto out;
-
-	error = copyout(sv, bsd_args.rsv, 2 * sizeof(int));
 
 out:
 	if (error) {
-		(void)kern_close(td, sv[0]);
-		(void)kern_close(td, sv[1]);
+		(void)close(rsv[0]);
+		(void)close(rsv[1]);
 	}
 	return (error);
 }
-
-struct linux_send_args {
-	int s;
-	l_uintptr_t msg;
-	int len;
-	int flags;
-};
-#endif
 
 int
 linux_send(int s, caddr_t buf, size_t len, int flags, ssize_t* bytes)
