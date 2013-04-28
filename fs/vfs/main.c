@@ -829,6 +829,8 @@ int dup2(int oldfd, int newfd)
  * The file control system call.
  */
 #define SETFL (O_APPEND | O_NONBLOCK)
+#define SETFL_IGNORED (O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC)
+
 int fcntl(int fd, int cmd, int arg)
 {
 	struct file *fp;
@@ -857,6 +859,9 @@ int fcntl(int fd, int cmd, int arg)
 		ret = fp->f_flags;
 		break;
 	case F_SETFL:
+		/* Ignore flags */
+		arg &= ~SETFL_IGNORED;
+
 		assert((arg & ~SETFL) == 0);
 		FD_LOCK(fp);
 		fp->f_flags = (fp->f_flags & ~SETFL) |
