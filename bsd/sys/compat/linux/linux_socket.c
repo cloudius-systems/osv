@@ -787,38 +787,23 @@ linux_accept4(int s, struct sockaddr * name,
 	return (linux_accept_common(s, name, namelen, out_fd, flags));
 }
 
-/* FIXME: OSv - few functions have not been ported */
-#if 0
-struct linux_getsockname_args {
-	int s;
-	l_uintptr_t addr;
-	l_uintptr_t namelen;
-};
-
-static int
-linux_getsockname(struct thread *td, struct linux_getsockname_args *args)
+int
+linux_getsockname(int s, struct sockaddr *addr, socklen_t *addrlen)
 {
-	struct getsockname_args /* {
-		int	fdes;
-		struct sockaddr * __restrict asa;
-		socklen_t * __restrict alen;
-	} */ bsd_args;
 	int error;
 
-	bsd_args.fdes = args->s;
-	/* XXX: */
-	bsd_args.asa = (struct sockaddr * __restrict)PTRIN(args->addr);
-	bsd_args.alen = PTRIN(args->namelen);	/* XXX */
-	error = sys_getsockname(td, &bsd_args);
-	bsd_to_linux_sockaddr((struct sockaddr *)bsd_args.asa);
+	error = sys_getsockname(s, addr, addrlen);
+	bsd_to_linux_sockaddr(addr);
 	if (error)
 		return (error);
-	error = linux_sa_put(PTRIN(args->addr));
+	error = linux_sa_put((struct osockaddr *)addr);
 	if (error)
 		return (error);
 	return (0);
 }
 
+/* FIXME: OSv - few functions have not been ported */
+#if 0
 struct linux_getpeername_args {
 	int s;
 	l_uintptr_t addr;

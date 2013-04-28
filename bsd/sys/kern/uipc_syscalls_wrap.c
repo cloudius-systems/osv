@@ -20,6 +20,18 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 	return 0;
 }
 
+int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+	int error;
+
+	error = linux_getsockname(sockfd, addr, addrlen);
+	if (error) {
+		errno = error;
+		return -1;
+	}
+
+	return 0;
+}
 
 int accept4(int fd, struct sockaddr *restrict addr, socklen_t *restrict len, int flg)
 {
