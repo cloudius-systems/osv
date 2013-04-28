@@ -14,8 +14,9 @@
 void osv_start_if(const char* if_name, const char* ip_addr, int masklen)
 {
     struct in_aliasreq ifra;
-    struct sockaddr_in* addr = &ifra.ifra_addr;
-    struct sockaddr_in* mask = &ifra.ifra_mask;
+    struct sockaddr_in* addr      = &ifra.ifra_addr;
+    struct sockaddr_in* mask      = &ifra.ifra_mask;
+    struct sockaddr_in* broadcast = &ifra.ifra_broadaddr;
     struct ifnet* ifp;
 
     bzero(&ifra, sizeof(struct in_aliasreq));
@@ -34,7 +35,11 @@ void osv_start_if(const char* if_name, const char* ip_addr, int masklen)
     /* Mask */
     mask->sin_addr.s_addr = htonl(~((1LL << (32 - masklen)) - 1) & 0xffffffff);
     mask->sin_len = sizeof(struct sockaddr_in);
-
+    broadcast->sin_family      = AF_INET;
+    broadcast->sin_len         = sizeof(struct sockaddr_in);
+    broadcast->sin_addr.s_addr = (addr->sin_addr.s_addr &
+                                  mask->sin_addr.s_addr) |
+                                 ~mask->sin_addr.s_addr ;
     in_control(NULL, SIOCAIFADDR, (caddr_t)&ifra, ifp, NULL);
     if_rele(ifp);
 }
