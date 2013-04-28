@@ -33,9 +33,6 @@
 #ifndef _AMD64_LINUX_H_
 #define	_AMD64_LINUX_H_
 
-#define	PTRIN(v)	(void *)(uintptr_t)(v)
-#define	PTROUT(v)	(l_uintptr_t)(uintptr_t)(v)
-
 /*
  * Provide a separate set of types for the Linux types.
  */

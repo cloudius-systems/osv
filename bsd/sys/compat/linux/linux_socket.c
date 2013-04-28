@@ -596,7 +596,7 @@ linux_sendto_hdrincl(int s, void *buf, int len, int flags, void *to,
 	packet->ip_off = ntohs(packet->ip_off);
 
 	/* Prepare the msghdr and iovec structures describing the new packet */
-	bsd_msg.msg_name = PTRIN(to);
+	bsd_msg.msg_name = to;
 	bsd_msg.msg_namelen = tolen;
 	bsd_msg.msg_iov = aiov;
 	bsd_msg.msg_iovlen = 1;
@@ -675,7 +675,7 @@ linux_bind(int s, void *name, int namelen)
 	struct sockaddr *sa;
 	int error;
 
-	error = linux_getsockaddr(&sa, PTRIN(name), namelen);
+	error = linux_getsockaddr(&sa, name, namelen);
 	if (error)
 		return (error);
 
@@ -694,7 +694,7 @@ linux_connect(int s, void *name, int namelen)
 	u_int fflag;
 	int error;
 
-	error = linux_getsockaddr(&sa, PTRIN(name), namelen);
+	error = linux_getsockaddr(&sa, name, namelen);
 	if (error)
 		return (error);
 
@@ -762,7 +762,7 @@ linux_accept_common(int s, struct sockaddr * name,
 	if (error)
 		goto out;
 	if (name)
-		error = linux_sa_put(PTRIN(name));
+		error = linux_sa_put((struct osockaddr *)name);
 
 out:
 	if (error) {
@@ -923,13 +923,13 @@ linux_sendto(int s, void* buf, int len, int flags,
 		/* IP_HDRINCL set, tweak the packet before sending */
 		return (linux_sendto_hdrincl(s, buf, len, flags, to, tolen, bytes));
 
-	msg.msg_name = PTRIN(to);
+	msg.msg_name = to;
 	msg.msg_namelen = tolen;
 	msg.msg_iov = &aiov;
 	msg.msg_iovlen = 1;
 	msg.msg_control = NULL;
 	msg.msg_flags = 0;
-	aiov.iov_base = PTRIN(buf);
+	aiov.iov_base = buf;
 	aiov.iov_len = len;
 	error = linux_sendit(s, &msg, flags, NULL, bytes);
 	return (error);
