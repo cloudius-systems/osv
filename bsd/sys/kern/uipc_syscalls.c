@@ -195,14 +195,14 @@ accept1(int s,
         return error;
     }
 
-	error = kern_accept(s, &name, namelen, &fp, out_fp);
+	error = kern_accept(s, name, namelen, &fp, out_fp);
 	fdrop(fp);
 
 	return (error);
 }
 
 int
-kern_accept(int s, struct sockaddr **name,
+kern_accept(int s, struct sockaddr *name,
     socklen_t *namelen, struct file **fp, int *out_fd)
 {
 	struct file *headfp, *nfp = NULL;
@@ -213,9 +213,7 @@ kern_accept(int s, struct sockaddr **name,
 	u_int fflag;
 	int tmp;
 
-	if (name) {
-		*name = NULL;
-		if (*namelen < 0)
+	if ((name) && (*namelen < 0)) {
 			return (EINVAL);
 	}
 
@@ -295,26 +293,15 @@ kern_accept(int s, struct sockaddr **name,
 	(void) fo_ioctl(nfp, FIOASYNC, &tmp);
 	sa = 0;
 	error = soaccept(so, &sa);
-	if (error) {
-		/*
-		 * return a namelen of zero for older code which might
-		 * ignore the return value from accept.
-		 */
-		if (name)
-			*namelen = 0;
+	if (error)
 		goto noconnection;
-	}
-	if (sa == NULL) {
-		if (name)
-			*namelen = 0;
+	if (sa == NULL)
 		goto done;
-	}
 	if (name) {
 		/* check sa_len before it is destroyed */
 		if (*namelen > sa->sa_len)
 			*namelen = sa->sa_len;
-		*name = sa;
-		sa = NULL;
+		bcopy(sa, name, *namelen);
 	}
 noconnection:
 	if (sa)

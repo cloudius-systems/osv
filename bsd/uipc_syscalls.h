@@ -7,7 +7,7 @@
 
 /* Private interface */
 int kern_bind(int fd, struct sockaddr *sa);
-int kern_accept(int s, struct sockaddr **name,
+int kern_accept(int s, struct sockaddr *name,
     socklen_t *namelen, struct file **fp, int *out_fd);
 int kern_connect(int fd, struct sockaddr *sa);
 int kern_sendit(int s, struct msghdr *mp, int flags,
