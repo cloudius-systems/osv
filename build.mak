@@ -1,7 +1,7 @@
 
 arch = x64
-cmdline = java.so -jar /usr/lib/jvm/jre/lib/rhino.jar -f console/cli.js
-#cmdline = testrunner.so
+#cmdline = java.so -jar /usr/lib/jvm/jre/lib/rhino.jar -f console/cli.js
+cmdline = testrunner.so
 #cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -I$(src)/external/acpica/source/include
@@ -75,7 +75,7 @@ tests/%.o: COMMON += -fPIC
 	$(q-build-so)
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
-sys-includes +=  $(gccbase)/usr/include -I$(glibcbase)/usr/include
+sys-includes +=  $(gccbase)/usr/include $(glibcbase)/usr/include
 autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
@@ -90,7 +90,8 @@ tests += tests/tst-hub.so
 tests += tests/tst-leak.so tests/tst-mmap.so
 tests += tests/tst-sockets.so
 tests += tests/tst-bsd-tcp1.so
-
+# tests += tests/tst-ifconfig.so
+# tests += tests/tst-lsroute.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
