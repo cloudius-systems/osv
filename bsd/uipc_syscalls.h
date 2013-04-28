@@ -53,5 +53,6 @@ int linux_recvfrom(int s, void* buf, size_t len, int flags,
 int linux_shutdown(int s, int how);
 int linux_setsockopt(int s, int level, int name, caddr_t val, int valsize);
 int linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
+int linux_socketpair(int domain, int type, int protocol, int* rsv);
 
 #endif /* !UIPC_SYSCALLS_H */

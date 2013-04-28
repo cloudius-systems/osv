@@ -7,6 +7,19 @@
 
 #include "libc.h"
 
+int socketpair(int domain, int type, int protocol, int sv[2])
+{
+	int error;
+
+	error = linux_socketpair(domain, type, protocol, sv);
+	if (error) {
+		errno = error;
+		return -1;
+	}
+
+	return 0;
+}
+
 
 int accept4(int fd, struct sockaddr *restrict addr, socklen_t *restrict len, int flg)
 {
