@@ -39,8 +39,7 @@ To build OSv
 To run OSv
 ==========
 
-
-    sh scripts/run.sh
+    sh scripts/run
 
 Debugging
 =========
