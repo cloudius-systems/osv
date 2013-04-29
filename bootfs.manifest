@@ -6,6 +6,8 @@
 /usr/lib/jvm/jre/lib/amd64/libnio.so: %(jdkbase)s/jre/lib/amd64/libnio.so
 /usr/lib/jvm/jre/lib/amd64/libawt.so: %(jdkbase)s/jre/lib/amd64/libawt.so
 /usr/lib/jvm/jre/lib/amd64/headless/libmawt.so: %(jdkbase)s/jre/lib/amd64/headless/libmawt.so
+/usr/lib/jvm/jre/lib/amd64/libfontmanager.so: %(jdkbase)s/jre/lib/amd64/libfontmanager.so
+/usr/lib/jvm/jre/lib/amd64/libnet.so: %(jdkbase)s/jre/lib/amd64/libnet.so
 /usr/lib/jvm/jre/lib/resources.jar: %(jdkbase)s/jre/lib/resources.jar
 /usr/lib/jvm/jre/lib/rt.jar: %(jdkbase)s/jre/lib/rt.jar
 /usr/lib/jvm/jre/lib/jsse.jar: %(jdkbase)s/jre/lib/jsse.jar
