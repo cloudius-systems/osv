@@ -510,6 +510,71 @@ Elf64_Sym* object::lookup_symbol(const char* name)
     return sym;
 }
 
+unsigned object::symtab_len()
+{
+    if (dynamic_exists(DT_HASH)) {
+        auto hashtab = dynamic_ptr<Elf64_Word>(DT_HASH);
+        return hashtab[1];
+    }
+    auto hashtab = dynamic_ptr<Elf64_Word>(DT_GNU_HASH);
+    auto nbucket = hashtab[0];
+    auto symndx = hashtab[1];
+    auto maskwords = hashtab[2];
+    auto bloom = reinterpret_cast<const Elf64_Xword*>(hashtab + 4);
+    auto buckets = reinterpret_cast<const Elf64_Word*>(bloom + maskwords);
+    auto chains = buckets + nbucket - symndx;
+    unsigned len = 0;
+    for (unsigned b = 0; b < nbucket; ++b) {
+        auto idx = buckets[b];
+        if (idx == 0) {
+            continue;
+        }
+        do {
+            ++len;
+        } while ((chains[idx++] & 1) == 0);
+    }
+    return len;
+}
+
+dladdr_info object::lookup_addr(const void* addr)
+{
+    dladdr_info ret;
+    if (addr < _base || addr >= _end) {
+        return ret;
+    }
+    auto strtab = dynamic_ptr<char>(DT_STRTAB);
+    auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+    auto len = symtab_len();
+    symbol_module best;
+    for (unsigned i = 1; i < len; ++i) {
+        auto& sym = symtab[i];
+        auto type = sym.st_info & 15;
+        if (type != STT_OBJECT && type != STT_FUNC) {
+            continue;
+        }
+        auto bind = (sym.st_info >> 4) & 15;
+        if (bind != STB_GLOBAL && bind != STB_WEAK) {
+            continue;
+        }
+        symbol_module sm{&sym, this};
+        auto s_addr = sm.relocated_addr();
+        if (s_addr < addr) {
+            continue;
+        }
+        if (!best.symbol || sm.relocated_addr() < best.relocated_addr()) {
+            best = sm;
+        }
+    }
+    if (!best.symbol) {
+        return ret;
+    }
+    ret.fname = _pathname.c_str();
+    ret.base = _base;
+    ret.sym = strtab + best.symbol->st_name;
+    ret.addr = best.relocated_addr();
+    return ret;
+}
+
 void object::load_needed()
 {
     auto needed = dynamic_str_array(DT_NEEDED);
@@ -667,6 +732,17 @@ void program::with_modules(std::function<void (std::vector<object*>&)> f)
     // FIXME: locking?
     std::vector<object*> tmp = _modules;
     f(tmp);
+}
+
+dladdr_info program::lookup_addr(const void* addr)
+{
+    for (auto module : _modules) {
+        auto ret = module->lookup_addr(addr);
+        if (ret.fname) {
+            return ret;
+        }
+    }
+    return {};
 }
 
 program* get_program()

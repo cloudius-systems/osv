@@ -244,6 +244,14 @@ struct tls_data {
     size_t size;
 };
 
+struct dladdr_info {
+    dladdr_info() : fname{}, base{}, sym{}, addr{} {}
+    const char* fname;
+    void* base;
+    const char* sym;
+    void* addr;
+};
+
 class object {
 public:
     explicit object(program& prog, std::string pathname);
@@ -265,6 +273,7 @@ public:
     void run_init_func();
     template <typename T = void>
     T* lookup(const char* name);
+    dladdr_info lookup_addr(const void* addr);
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -283,6 +292,7 @@ private:
     Elf64_Xword symbol_tls_module(unsigned idx);
     void relocate_rela();
     void relocate_pltgot();
+    unsigned symtab_len();
 protected:
     program& _prog;
     std::string _pathname;
@@ -337,6 +347,7 @@ public:
     tls_data tls();
     // run a function with all current modules as a parameter
     void with_modules(std::function<void (std::vector<object*>&)> f);
+    dladdr_info lookup_addr(const void* addr);
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
