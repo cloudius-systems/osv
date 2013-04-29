@@ -207,6 +207,12 @@ int pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
     return 0;
 }
 
+int pthread_key_delete(pthread_key_t key)
+{
+    debug("pthread_key_delete stubbed out\n");
+    return EINVAL;
+}
+
 void* pthread_getspecific(pthread_key_t key)
 {
     return tsd[key];
@@ -240,6 +246,12 @@ int pthread_mutex_init(pthread_mutex_t* __restrict m,
     return 0;
 }
 
+int pthread_mutex_destroy(pthread_mutex_t *m)
+{
+    from_libc(m)->~mutex();
+    return 0;
+}
+
 int pthread_mutex_lock(pthread_mutex_t *m)
 {
     from_libc(m)->lock();
@@ -253,6 +265,14 @@ int pthread_mutex_trylock(pthread_mutex_t *m)
     }
     return 0;
 }
+
+int pthread_mutex_timedlock(pthread_mutex_t *m,
+        const struct timespec *abs_timeout)
+{
+    debug("pthread_mutex_timedlock stubbed out\n");
+    return EINVAL;
+}
+
 
 int pthread_mutex_unlock(pthread_mutex_t *m)
 {
@@ -507,4 +527,71 @@ int pthread_cancel(pthread_t thread)
 {
     debug("pthread_cancel stubbed out\n");
     return ESRCH;
+}
+
+int pthread_detach(pthread_t thread)
+{
+    debug("pthread_detach stubbed out\n");
+    return ESRCH;
+}
+
+int pthread_equal(pthread_t t1, pthread_t t2)
+{
+   return t1 == t2;
+}
+
+int pthread_mutexattr_init(pthread_mutexattr_t *attr)
+{
+    debug("pthread_mutexattr_init stubbed out\n");
+    return ENOMEM;
+}
+
+int pthread_mutexattr_destroy(pthread_mutexattr_t *attr)
+{
+    debug("pthread_mutexattr_destroy stubbed out\n");
+    return EINVAL;
+}
+
+int pthread_mutexattr_gettype(const pthread_mutexattr_t *attr, int *type)
+{
+    debug("pthread_mutexattr_getttype stubbed out\n");
+    return EINVAL;
+}
+
+int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type)
+{
+    debug("pthread_mutexattr_settype stubbed out\n");
+    return EINVAL;
+}
+
+void pthread_exit(void *retval)
+{
+    debug("pthread_exit stubbed out\n");
+    abort();
+}
+
+int sched_get_priority_max(int policy)
+{
+    debug("sched_get_priority_max stubbed out\n");
+    return EINVAL;
+}
+
+int sched_get_priority_min(int policy)
+{
+    debug("sched_get_priority_min stubbed out\n");
+    return EINVAL;
+}
+
+int pthread_setschedparam(pthread_t thread, int policy,
+        const struct sched_param *param)
+{
+    debug("pthread_setschedparam stubbed out\n");
+    return EINVAL;
+}
+
+int pthread_getschedparam(pthread_t thread, int *policy,
+        struct sched_param *param)
+{
+    debug("pthread_getschedparam stubbed out\n");
+    return EINVAL;
 }
