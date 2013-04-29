@@ -1,9 +1,9 @@
 #!/bin/bash
 
-TEMP=`getopt -o dm:c: --long debug,memsize:,vcpus: -n "$0" -- "$@"`
+TEMP=`getopt -o dm:c:e: --long debug,memsize:,vcpus:,execute: -n "$0" -- "$@"`
 if [ $? != 0 ]
 then
-	echo "Usage: $0 [-d] [-m memsize] [-c vcpus]" >&2
+	echo "Usage: $0 [-d] [-m memsize] [-c vcpus] [-e commandline]" >&2
 	exit 1
 fi
 eval set -- "$TEMP"
@@ -12,6 +12,7 @@ eval set -- "$TEMP"
 v=release
 memsize=1G
 vcpus=4
+execute=""
 
 while true
 do
@@ -25,13 +26,16 @@ do
 	-c|--vcpus)
 		vcpus=$2
 		shift 2;;
+	-e|--execute)
+		execute=$2
+		shift 2;;
 	--)
 		shift
 		break;;
 	esac
 done
 
-
+test -n "$execute" && scripts/imgedit.py setargs build/$v/loader.img $execute
 
 qemu-system-x86_64 \
 	-vnc :1 \
