@@ -32,6 +32,8 @@
 
 #include <assert.h>
 
+#include <osv/ioctl.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
 #include <bsd/porting/rwlock.h>
@@ -39,7 +41,6 @@
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/socket.h>
-#include <bsd/sys/sys/sockio.h>
 
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_arp.h>

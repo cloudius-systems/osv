@@ -39,13 +39,13 @@
 
 #include <fcntl.h>
 #include <osv/fcntl.h>
+#include <osv/ioctl.h>
 #include <errno.h>
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/porting/synch.h>
 #include <osv/file.h>
 
-#include <bsd/sys/sys/filio.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/protosw.h>
 #include <bsd/sys/sys/socket.h>

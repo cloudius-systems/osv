@@ -48,6 +48,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include <osv/debug.h>
+#include <osv/ioctl.h>
 
 #include "vfs.h"
 
@@ -286,16 +287,25 @@ ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 	return pwritev(fd, iov, iovcnt, -1);
 }
 
-int ioctl(int fd, int request, unsigned long arg)
+int ioctl(int fd, unsigned long int request, ...)
 {
 	struct file *fp;
 	int error;
+	va_list ap;
+	void* arg;
+
+	/* glibc ABI provides a variadic prototype for ioctl so we need to agree
+	 * with it, since we now include sys/ioctl.h
+	 * read the first argument and pass it to sys_ioctl() */
+	va_start(ap, request);
+	arg = va_arg(ap, void*);
+	va_end(ap);
 
 	error = fget(fd, &fp);
 	if (error)
 		goto out_errno;
 
-	error = sys_ioctl(fp, request, (void *)arg);
+	error = sys_ioctl(fp, request, arg);
 	fdrop(fp);
 
 	if (error)
