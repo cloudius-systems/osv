@@ -11,6 +11,12 @@ void* dlopen(const char* filename, int flags)
     return obj;
 }
 
+int dlclose(void* handle)
+{
+    debug("stub dlclose()\n");
+    return 0;
+}
+
 void* dlsym(void* handle, const char* name)
 {
     elf::symbol_module sym;
