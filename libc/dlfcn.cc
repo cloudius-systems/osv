@@ -67,7 +67,10 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
 
 extern "C" int dladdr(__const void *addr, Dl_info *info)
 {
-    kprintf("stub dladdr()\n");
-    errno = EINVAL;
-    return -1;
+    auto ei = elf::get_program()->lookup_addr(addr);
+    info->dli_fname = ei.fname;
+    info->dli_fbase = ei.base;
+    info->dli_sname = ei.sym;
+    info->dli_saddr = ei.addr;
+    return 0;
 }
