@@ -838,13 +838,14 @@ int dup2(int oldfd, int newfd)
 /*
  * The file control system call.
  */
-#define SETFL (O_APPEND | O_NONBLOCK)
+#define SETFL (O_APPEND | O_NONBLOCK | O_ASYNC)
 #define SETFL_IGNORED (O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC)
 
 int fcntl(int fd, int cmd, int arg)
 {
 	struct file *fp;
 	int ret = 0, error;
+	int tmp;
 
 	error = fget(fd, &fp);
 	if (error)
@@ -877,6 +878,13 @@ int fcntl(int fd, int cmd, int arg)
 		fp->f_flags = (fp->f_flags & ~SETFL) |
 			(arg & SETFL);
 		FD_UNLOCK(fp);
+
+		/* Sync nonblocking/async state with file flags */
+		tmp = fp->f_flags & FNONBLOCK;
+		fo_ioctl(fp, FIONBIO, &tmp);
+		tmp = fp->f_flags & FASYNC;
+		fo_ioctl(fp, FIOASYNC, &tmp);
+
 		break;
 	default:
 		kprintf("unsupported fcntl cmd 0x%x\n", cmd);
