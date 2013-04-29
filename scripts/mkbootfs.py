@@ -57,6 +57,9 @@ def expand(items):
                     relpath = dirpath[len(hostname):]
                     yield (name + relpath + '/' + filename,
                            hostname + relpath + '/' + filename)
+        elif '/&/' in name and hostname.endswith('/&'):
+            prefix, suffix = name.split('/&/', 1)
+            yield (prefix + '/' + suffix, hostname[:-1] + suffix)
         else:
             yield (name, hostname)
 
