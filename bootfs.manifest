@@ -55,3 +55,4 @@
 /console/tests.js: ../../console/tests.js
 /console/help.js: ../../console/help.js
 /console/cli.js: ../../console/cli.js
+/&/etc/hosts: ../../static/&
