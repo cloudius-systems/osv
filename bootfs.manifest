@@ -52,5 +52,6 @@
 /console/pwd.js: ../../console/pwd.js
 /console/ls.js: ../../console/ls.js
 /console/cat.js: ../../console/cat.js
+/console/tests.js: ../../console/tests.js
 /console/help.js: ../../console/help.js
 /console/cli.js: ../../console/cli.js
