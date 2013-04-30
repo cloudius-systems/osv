@@ -32,7 +32,7 @@
  * SUCH DAMAGE.
  *
  */
-
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -66,7 +66,7 @@ int poll_no_poll(int events)
 /* Drain the poll link list from the file... */
 void poll_drain(struct file* fp)
 {
-    dbg_d("poll_drain");
+    dbg_d("poll_drain(fp=0x%" PRIx64 ")", fp);
 
     list_t head, n, tmp;
     struct poll_link* pl;
@@ -146,7 +146,8 @@ int poll_wake(struct file* fp, int events)
 {
     if (!fp)
         return 0;
-    dbg_d("poll_wake(%d)", events);
+
+    dbg_d("poll_wake(fp=0x%" PRIx64 ", events=%d)", fp, events);
 
     list_t head, n;
     struct poll_link* pl;

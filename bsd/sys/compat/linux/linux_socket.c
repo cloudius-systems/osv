@@ -596,7 +596,7 @@ linux_sendto_hdrincl(int s, void *buf, int len, int flags, void *to,
 	packet->ip_off = ntohs(packet->ip_off);
 
 	/* Prepare the msghdr and iovec structures describing the new packet */
-	bsd_msg.msg_name = PTRIN(to);
+	bsd_msg.msg_name = to;
 	bsd_msg.msg_namelen = tolen;
 	bsd_msg.msg_iov = aiov;
 	bsd_msg.msg_iovlen = 1;
@@ -675,7 +675,7 @@ linux_bind(int s, void *name, int namelen)
 	struct sockaddr *sa;
 	int error;
 
-	error = linux_getsockaddr(&sa, PTRIN(name), namelen);
+	error = linux_getsockaddr(&sa, name, namelen);
 	if (error)
 		return (error);
 
@@ -694,7 +694,7 @@ linux_connect(int s, void *name, int namelen)
 	u_int fflag;
 	int error;
 
-	error = linux_getsockaddr(&sa, PTRIN(name), namelen);
+	error = linux_getsockaddr(&sa, name, namelen);
 	if (error)
 		return (error);
 
@@ -762,7 +762,7 @@ linux_accept_common(int s, struct sockaddr * name,
 	if (error)
 		goto out;
 	if (name)
-		error = linux_sa_put(PTRIN(name));
+		error = linux_sa_put((struct osockaddr *)name);
 
 out:
 	if (error) {
@@ -787,38 +787,23 @@ linux_accept4(int s, struct sockaddr * name,
 	return (linux_accept_common(s, name, namelen, out_fd, flags));
 }
 
-/* FIXME: OSv - few functions have not been ported */
-#if 0
-struct linux_getsockname_args {
-	int s;
-	l_uintptr_t addr;
-	l_uintptr_t namelen;
-};
-
-static int
-linux_getsockname(struct thread *td, struct linux_getsockname_args *args)
+int
+linux_getsockname(int s, struct sockaddr *addr, socklen_t *addrlen)
 {
-	struct getsockname_args /* {
-		int	fdes;
-		struct sockaddr * __restrict asa;
-		socklen_t * __restrict alen;
-	} */ bsd_args;
 	int error;
 
-	bsd_args.fdes = args->s;
-	/* XXX: */
-	bsd_args.asa = (struct sockaddr * __restrict)PTRIN(args->addr);
-	bsd_args.alen = PTRIN(args->namelen);	/* XXX */
-	error = sys_getsockname(td, &bsd_args);
-	bsd_to_linux_sockaddr((struct sockaddr *)bsd_args.asa);
+	error = sys_getsockname(s, addr, addrlen);
+	bsd_to_linux_sockaddr(addr);
 	if (error)
 		return (error);
-	error = linux_sa_put(PTRIN(args->addr));
+	error = linux_sa_put((struct osockaddr *)addr);
 	if (error)
 		return (error);
 	return (0);
 }
 
+/* FIXME: OSv - few functions have not been ported */
+#if 0
 struct linux_getpeername_args {
 	int s;
 	l_uintptr_t addr;
@@ -848,37 +833,27 @@ linux_getpeername(struct thread *td, struct linux_getpeername_args *args)
 	return (0);
 }
 
-struct linux_socketpair_args {
-	int domain;
-	int type;
-	int protocol;
-	l_uintptr_t rsv;
-};
+#endif
 
-static int
-linux_socketpair(struct thread *td, struct linux_socketpair_args *args)
+int
+linux_socketpair(int domain, int type, int protocol, int* rsv)
 {
-	struct socketpair_args /* {
-		int domain;
-		int type;
-		int protocol;
-		int *rsv;
-	} */ bsd_args;
 	int error, socket_flags;
-	int sv[2];
 
-	bsd_args.domain = linux_to_bsd_domain(args->domain);
-	if (bsd_args.domain != PF_LOCAL)
+	domain = linux_to_bsd_domain(domain);
+	if (domain != PF_LOCAL)
 		return (EAFNOSUPPORT);
 
-	socket_flags = args->type & ~LINUX_SOCK_TYPE_MASK;
+	socket_flags = type & ~LINUX_SOCK_TYPE_MASK;
 	if (socket_flags & ~(LINUX_SOCK_CLOEXEC | LINUX_SOCK_NONBLOCK))
 		return (EINVAL);
-	bsd_args.type = args->type & LINUX_SOCK_TYPE_MASK;
-	if (bsd_args.type < 0 || bsd_args.type > LINUX_SOCK_MAX)
+	type = type & LINUX_SOCK_TYPE_MASK;
+	if (type < 0 || type > LINUX_SOCK_MAX)
 		return (EINVAL);
 
-	if (args->protocol != 0 && args->protocol != PF_UNIX)
+	assert(protocol != PF_UNIX);
+
+	if (protocol != 0 && protocol != PF_UNIX)
 
 		/*
 		 * Use of PF_UNIX as protocol argument is not right,
@@ -888,36 +863,24 @@ linux_socketpair(struct thread *td, struct linux_socketpair_args *args)
 		 */
 		return (EPROTONOSUPPORT);
 	else
-		bsd_args.protocol = 0;
-	bsd_args.rsv = (int *)PTRIN(args->rsv);
-	error = kern_socketpair(td, bsd_args.domain, bsd_args.type,
-	    bsd_args.protocol, sv);
+		protocol = 0;
+	error = kern_socketpair(domain, type, protocol, rsv);
 	if (error)
 		return (error);
-	error = linux_set_socket_flags(td, sv[0], socket_flags);
+	error = linux_set_socket_flags(rsv[0], socket_flags);
 	if (error)
 		goto out;
-	error = linux_set_socket_flags(td, sv[1], socket_flags);
+	error = linux_set_socket_flags(rsv[1], socket_flags);
 	if (error)
 		goto out;
-
-	error = copyout(sv, bsd_args.rsv, 2 * sizeof(int));
 
 out:
 	if (error) {
-		(void)kern_close(td, sv[0]);
-		(void)kern_close(td, sv[1]);
+		(void)close(rsv[0]);
+		(void)close(rsv[1]);
 	}
 	return (error);
 }
-
-struct linux_send_args {
-	int s;
-	l_uintptr_t msg;
-	int len;
-	int flags;
-};
-#endif
 
 int
 linux_send(int s, caddr_t buf, size_t len, int flags, ssize_t* bytes)
@@ -945,13 +908,13 @@ linux_sendto(int s, void* buf, int len, int flags,
 		/* IP_HDRINCL set, tweak the packet before sending */
 		return (linux_sendto_hdrincl(s, buf, len, flags, to, tolen, bytes));
 
-	msg.msg_name = PTRIN(to);
+	msg.msg_name = to;
 	msg.msg_namelen = tolen;
 	msg.msg_iov = &aiov;
 	msg.msg_iovlen = 1;
 	msg.msg_control = NULL;
 	msg.msg_flags = 0;
-	aiov.iov_base = PTRIN(buf);
+	aiov.iov_base = buf;
 	aiov.iov_len = len;
 	error = linux_sendit(s, &msg, flags, NULL, bytes);
 	return (error);

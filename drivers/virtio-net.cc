@@ -25,7 +25,7 @@
 #include "drivers/clockevent.hh"
 
 #include <osv/device.h>
-#include <bsd/sys/sys/sockio.h>
+#include <osv/ioctl.h>
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/if_types.h>
 

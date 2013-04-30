@@ -32,10 +32,11 @@
 
 #include <sys/cdefs.h>
 
+#include <osv/ioctl.h>
+
 #include <bsd/porting/netport.h>
 
 #include <bsd/sys/sys/param.h>
-#include <bsd/sys/sys/sockio.h>
 #include <bsd/sys/sys/priv.h>
 #include <bsd/sys/sys/socket.h>
 

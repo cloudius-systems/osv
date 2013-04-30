@@ -39,13 +39,13 @@
 
 #include <fcntl.h>
 #include <osv/fcntl.h>
+#include <osv/ioctl.h>
 #include <errno.h>
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/porting/synch.h>
 #include <osv/file.h>
 
-#include <bsd/sys/sys/filio.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/protosw.h>
 #include <bsd/sys/sys/socket.h>
@@ -195,14 +195,14 @@ accept1(int s,
         return error;
     }
 
-	error = kern_accept(s, &name, namelen, &fp, out_fp);
+	error = kern_accept(s, name, namelen, &fp, out_fp);
 	fdrop(fp);
 
 	return (error);
 }
 
 int
-kern_accept(int s, struct sockaddr **name,
+kern_accept(int s, struct sockaddr *name,
     socklen_t *namelen, struct file **fp, int *out_fd)
 {
 	struct file *headfp, *nfp = NULL;
@@ -213,9 +213,7 @@ kern_accept(int s, struct sockaddr **name,
 	u_int fflag;
 	int tmp;
 
-	if (name) {
-		*name = NULL;
-		if (*namelen < 0)
+	if ((name) && (*namelen < 0)) {
 			return (EINVAL);
 	}
 
@@ -295,26 +293,15 @@ kern_accept(int s, struct sockaddr **name,
 	(void) fo_ioctl(nfp, FIOASYNC, &tmp);
 	sa = 0;
 	error = soaccept(so, &sa);
-	if (error) {
-		/*
-		 * return a namelen of zero for older code which might
-		 * ignore the return value from accept.
-		 */
-		if (name)
-			*namelen = 0;
+	if (error)
 		goto noconnection;
-	}
-	if (sa == NULL) {
-		if (name)
-			*namelen = 0;
+	if (sa == NULL)
 		goto done;
-	}
 	if (name) {
 		/* check sa_len before it is destroyed */
 		if (*namelen > sa->sa_len)
 			*namelen = sa->sa_len;
-		*name = sa;
-		sa = NULL;
+		bcopy(sa, name, *namelen);
 	}
 noconnection:
 	if (sa)
@@ -859,50 +846,33 @@ kern_getsockopt(int s,
 	return (error);
 }
 
-/* FIXME: OSv - Implement getsockopt... */
-#if 0
 /*
  * getsockname1() - Get socket name.
  */
 /* ARGSUSED */
-static int
-getsockname1(td, uap, compat)
-	struct thread *td;
-	struct getsockname_args /* {
-		int	fdes;
-		struct sockaddr * __restrict asa;
-		socklen_t * __restrict alen;
-	} */ *uap;
-	int compat;
+int
+getsockname1(int fdes, struct sockaddr * __restrict asa, socklen_t * __restrict alen)
 {
 	struct sockaddr *sa;
 	socklen_t len;
 	int error;
 
-	error = copyin(uap->alen, &len, sizeof(len));
-	if (error)
+	error = kern_getsockname(fdes, &sa, &len);
+	if (error) {
+		*alen = 0;
 		return (error);
-
-	error = kern_getsockname(td, uap->fdes, &sa, &len);
-	if (error)
-		return (error);
-
-	if (len != 0) {
-#ifdef COMPAT_OLDSOCK
-		if (compat)
-			((struct osockaddr *)sa)->sa_family = sa->sa_family;
-#endif
-		error = copyout(sa, uap->asa, (u_int)len);
 	}
-	free(sa, M_SONAME);
-	if (error == 0)
-		error = copyout(&len, uap->alen, sizeof(len));
+
+	*alen = len;
+	if (len != 0) {
+		bcopy(sa, asa, len);
+	}
+	free(sa);
 	return (error);
 }
 
 int
-kern_getsockname(struct thread *td, int fd, struct sockaddr **sa,
-    socklen_t *alen)
+kern_getsockname(int fd, struct sockaddr **sa, socklen_t *alen)
 {
 	struct socket *so;
 	struct file *fp;
@@ -912,8 +882,7 @@ kern_getsockname(struct thread *td, int fd, struct sockaddr **sa,
 	if (*alen < 0)
 		return (EINVAL);
 
-	AUDIT_ARG_FD(fd);
-	error = getsock_cap(td->td_proc->p_fd, fd, CAP_GETSOCKNAME, &fp, NULL);
+	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
 	so = fp->f_data;
@@ -933,22 +902,23 @@ kern_getsockname(struct thread *td, int fd, struct sockaddr **sa,
 		ktrsockaddr(*sa);
 #endif
 bad:
-	fdrop(fp, td);
+	fdrop(fp);
 	if (error && *sa) {
-		free(*sa, M_SONAME);
+		free(*sa);
 		*sa = NULL;
 	}
 	return (error);
 }
 
 int
-sys_getsockname(td, uap)
-	struct thread *td;
-	struct getsockname_args *uap;
+sys_getsockname(int fdes, struct sockaddr * __restrict asa, socklen_t * __restrict alen)
 {
 
-	return (getsockname1(td, uap, 0));
+	return (getsockname1(fdes, asa, alen));
 }
+
+/* FIXME: OSv - Implement getsockopt... */
+#if 0
 
 #ifdef COMPAT_OLDSOCK
 int

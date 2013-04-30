@@ -32,6 +32,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include <osv/ioctl.h>
 #include <osv/debug.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/networking.h>
@@ -48,7 +49,6 @@
 #include <bsd/sys/netinet/in_var.h>
 #include <bsd/sys/netinet/ip.h>
 #include <bsd/sys/netinet/ip_icmp.h>
-#include <bsd/sys/sys/sockio.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 #include <bsd/machine/in_cksum.h>

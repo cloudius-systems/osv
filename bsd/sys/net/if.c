@@ -35,6 +35,7 @@
 
 #include <osv/mutex.h>
 
+#include <osv/ioctl.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/sync_stub.h>
@@ -47,7 +48,6 @@
 #include <bsd/sys/sys/socketvar.h>
 #include <bsd/sys/sys/protosw.h>
 #include <bsd/sys/sys/refcount.h>
-#include <bsd/sys/sys/sockio.h>
 #include <bsd/sys/sys/domain.h>
 #include <bsd/sys/sys/priv.h>
 

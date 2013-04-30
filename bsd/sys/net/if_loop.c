@@ -34,11 +34,12 @@
  * Loopback interface driver for protocol testing and timing.
  */
 
+#include <osv/ioctl.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/socket.h>
-#include <bsd/sys/sys/sockio.h>
 
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_clone.h>

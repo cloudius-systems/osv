@@ -7,6 +7,31 @@
 
 #include "libc.h"
 
+int socketpair(int domain, int type, int protocol, int sv[2])
+{
+	int error;
+
+	error = linux_socketpair(domain, type, protocol, sv);
+	if (error) {
+		errno = error;
+		return -1;
+	}
+
+	return 0;
+}
+
+int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+	int error;
+
+	error = linux_getsockname(sockfd, addr, addrlen);
+	if (error) {
+		errno = error;
+		return -1;
+	}
+
+	return 0;
+}
 
 int accept4(int fd, struct sockaddr *restrict addr, socklen_t *restrict len, int flg)
 {
@@ -85,7 +110,7 @@ ssize_t recvfrom(int fd, void *restrict buf, size_t len, int flags,
 		return -1;
 	}
 
-	return 0;
+	return bytes;
 }
 
 ssize_t recv(int fd, void *buf, size_t len, int flags)
@@ -99,7 +124,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 		return -1;
 	}
 
-	return 0;
+	return bytes;
 }
 
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags)

@@ -23,6 +23,14 @@ sigset* thread_signals()
     return reinterpret_cast<sigset*>(thread_signal_mask);
 }
 
+inline bool is_sig_dfl(const struct sigaction &sa) {
+    return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_DFL);
+}
+
+inline bool is_sig_ign(const struct sigaction &sa) {
+    return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_IGN);
+}
+
 void generate_signal(siginfo_t &siginfo, exception_frame* ef)
 {
     if (pthread_self() && thread_signals()->mask[siginfo.si_signo]) {
@@ -30,7 +38,12 @@ void generate_signal(siginfo_t &siginfo, exception_frame* ef)
         // FIXME: the signal to
         abort();
     }
-    arch::build_signal_frame(ef, siginfo, signal_actions[siginfo.si_signo]);
+    if (is_sig_dfl(signal_actions[siginfo.si_signo])) {
+        // Our default is to abort the process
+        abort();
+    } else if(!is_sig_ign(signal_actions[siginfo.si_signo])) {
+        arch::build_signal_frame(ef, siginfo, signal_actions[siginfo.si_signo]);
+    }
 }
 
 void handle_segmentation_fault(ulong addr, exception_frame* ef)

@@ -35,14 +35,13 @@
 #include <osv/file.h>
 #include <osv/uio.h>
 #include <osv/types.h>
+#include <osv/ioctl.h>
 
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/protosw.h>
-#include <bsd/sys/sys/filio.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
-#include <bsd/sys/sys/sockio.h>
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/net/vnet.h>
@@ -184,9 +183,9 @@ soo_ioctl(struct file *fp, u_long cmd, void *data)
 		 * routing ioctls should have a different entry since a
 		 * socket is unnecessary.
 		 */
-		if (IOCGROUP(cmd) == 'i')
+		if (_IOC_TYPE(cmd) == 'i')
 			error = ifioctl(so, cmd, data, 0);
-		else if (IOCGROUP(cmd) == 'r') {
+		else if (_IOC_TYPE(cmd) == 'r') {
 			CURVNET_SET(so->so_vnet);
 			error = rtioctl_fib(cmd, data, so->so_fibnum);
 			CURVNET_RESTORE();
