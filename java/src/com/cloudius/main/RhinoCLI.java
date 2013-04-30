@@ -2,6 +2,8 @@ package com.cloudius.main;
 
 import java.io.*;
 
+import com.cloudius.tests.TCPEchoServerTest;
+
 import sun.org.mozilla.javascript.*;
 import sun.org.mozilla.javascript.tools.shell.*;
 
@@ -19,6 +21,7 @@ public class RhinoCLI {
             
             global.init(cx);
             Scriptable scope = ScriptableObject.getTopLevelScope(global);
+            ScriptableObject.defineClass(scope, TCPEchoServerTest.class);
             
             FileReader cli_js = new FileReader("/console/cli.js");
             cx.evaluateReader(scope, cli_js, "cli.js", 1, null);
