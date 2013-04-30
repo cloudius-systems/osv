@@ -39,6 +39,9 @@
 #include <bsd/sys/netinet/if_ether.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
+#include <bsd/sys/sys/sysctl.h>
+
+int sysctl_rtsock(SYSCTL_HANDLER_ARGS) ;
 
 /*
  * Routing message structure -
@@ -52,7 +55,7 @@ struct rt_msg {
 };
 
 /*
- * Convert an ASCII representation of an ethernet address to binary form.
+ * Convert an ASCII representation of an Ethernet address to binary form.
  */
 static struct ether_addr *
 ether_aton_r(const char *a, struct ether_addr *e)
@@ -293,4 +296,94 @@ const char* osv_get_if_mac_addr(const char* if_name)
     }
 
     return ifa->ifa_addr->sa_data;
+}
+
+/*
+ * Transfer functions to/from kernel space.
+ * XXX: rather untested at this point
+ */
+static int
+sysctl_old_kernel(struct sysctl_req *req, const void *p, size_t l)
+{
+	size_t i = 0;
+
+	if (req->oldptr) {
+		i = l;
+		if (req->oldlen <= req->oldidx)
+			i = 0;
+		else if (i > req->oldlen - req->oldidx)
+				i = req->oldlen - req->oldidx;
+		if (i > 0)
+			bcopy(p, (char *)req->oldptr + req->oldidx, i);
+	}
+	req->oldidx += l;
+	if (req->oldptr && i != l)
+		return (ENOMEM);
+	return (0);
+}
+
+static int
+sysctl_new_kernel(struct sysctl_req *req, void *p, size_t l)
+{
+	if (!req->newptr)
+		return (0);
+	if (req->newlen - req->newidx < l)
+		return (EINVAL);
+	bcopy((char *)req->newptr + req->newidx, p, l);
+	req->newidx += l;
+	return (0);
+}
+/*
+ * Our limited version of sysctl. The arguments are the same as with the
+ * standard sysctl(), however only  routing sysctls are currently supported
+ * (and not necessarily all of thym). This version assumes working in kernel 
+ * space.
+ *
+ * \param name      (input)  A mib (array) containing numbers defining the
+ *                           operation and arguments. The first three numbers
+ *                           are ignored.
+ * \param namelen   (input)  Number of elements in name
+ * \param old_buf   (output) 
+ * \param oldlenp   (inout)  Available length on input actual length on
+ *                           output    
+ * \param new_buf   (input)
+ * \param newlen    (input)
+ *
+ * \returns error code (see errno.h)
+ */
+int
+osv_sysctl(int *name, u_int namelen, void *old_buf,
+    size_t *oldlenp, void *new_buf, size_t newlen)
+{
+	int error = 0;
+	struct sysctl_req req;
+	bzero(&req, sizeof req);
+
+	req.td    = NULL;
+	req.flags = 0;
+
+	if (oldlenp) {
+		req.oldlen = *oldlenp;
+	}
+	req.validlen = req.oldlen;
+
+	if (old_buf) {
+		req.oldptr= old_buf;
+	}
+
+	if (new_buf != NULL) {
+		req.newlen = newlen;
+		req.newptr = new_buf;
+	}
+
+	req.oldfunc = sysctl_old_kernel;
+	req.newfunc = sysctl_new_kernel;
+	req.lock    = REQ_UNWIRED;
+
+	error = sysctl_rtsock(NULL, name + 2, namelen - 2, &req);
+	if (oldlenp) {
+		*oldlenp = req.oldidx;
+	}
+
+	return (error);
 }

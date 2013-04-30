@@ -1,4 +1,4 @@
-/*-
+/*
  * Copyright (c) 1988, 1991, 1993
  *	The Regents of the University of California.  All rights reserved.
  *
@@ -39,6 +39,7 @@
 #include <bsd/sys/sys/protosw.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
+#include <bsd/sys/sys/sysctl.h>
 
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_dl.h>
@@ -53,6 +54,10 @@
 #include <bsd/sys/netinet/if_ether.h>
 #ifdef INET6
 #include <bsd/sys/netinet6/scope6_var.h>
+#endif
+
+#if !defined(offsetoff)
+#define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
 #endif
 
 #if defined(INET) || defined(INET6)
@@ -91,7 +96,9 @@ MTX_SYSINIT(rtsock, &rtsock_mtx, "rtsock route_cb lock", MTX_DEF);
 #define	RTSOCK_UNLOCK()	mtx_unlock(&rtsock_mtx)
 #define	RTSOCK_LOCK_ASSERT()	mtx_assert(&rtsock_mtx, MA_OWNED)
 
+#if 0
 SYSCTL_NODE(_net, OID_AUTO, route, CTLFLAG_RD, 0, "");
+#endif
 
 struct walkarg {
 	int	w_tmemsize;
@@ -1285,11 +1292,10 @@ rt_dispatch(struct mbuf *m, sa_family_t saf)
 	netisr_queue(NETISR_ROUTE, m);	/* mbuf is free'd on failure. */
 }
 
-#if 0
 /*
  * This is used in dumping the kernel table via sysctl().
  */
-static int
+int
 sysctl_dumpentry(struct radix_node *rn, void *vw)
 {
 	struct walkarg *w = vw;
@@ -1299,10 +1305,12 @@ sysctl_dumpentry(struct radix_node *rn, void *vw)
 
 	if (w->w_op == NET_RT_FLAGS && !(rt->rt_flags & w->w_arg))
 		return 0;
+#if 0    
 	if ((rt->rt_flags & RTF_HOST) == 0
 	    ? jailed_without_vnet(w->w_req->td->td_ucred)
 	    : prison_if(w->w_req->td->td_ucred, rt_key(rt)) != 0)
 		return (0);
+#endif    
 	bzero((caddr_t)&info, sizeof(info));
 	info.rti_info[RTAX_DST] = rt_key(rt);
 	info.rti_info[RTAX_GATEWAY] = rt->rt_gateway;
@@ -1478,9 +1486,11 @@ sysctl_iflist(int af, struct walkarg *w)
 		while ((ifa = TAILQ_NEXT(ifa, ifa_link)) != NULL) {
 			if (af && af != ifa->ifa_addr->sa_family)
 				continue;
+#if 0                        
 			if (prison_if(w->w_req->td->td_ucred,
 			    ifa->ifa_addr) != 0)
 				continue;
+#endif                        
 			info.rti_info[RTAX_IFA] = ifa->ifa_addr;
 			info.rti_info[RTAX_NETMASK] = ifa->ifa_netmask;
 			info.rti_info[RTAX_BRD] = ifa->ifa_dstaddr;
@@ -1527,9 +1537,11 @@ sysctl_ifmalist(int af, struct walkarg *w)
 		TAILQ_FOREACH(ifma, &ifp->if_multiaddrs, ifma_link) {
 			if (af && af != ifma->ifma_addr->sa_family)
 				continue;
+#if 0                        
 			if (prison_if(w->w_req->td->td_ucred,
 			    ifma->ifma_addr) != 0)
 				continue;
+#endif                        
 			info.rti_info[RTAX_IFA] = ifma->ifma_addr;
 			info.rti_info[RTAX_GATEWAY] =
 			    (ifma->ifma_addr->sa_family != AF_LINK) ?
@@ -1555,8 +1567,8 @@ done:
 	IFNET_RUNLOCK();
 	return (error);
 }
-
-static int
+// struct sysctl_oid *oidp, void *arg1,	intptr_t arg2, struct sysctl_req *req
+int
 sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 {
 	int	*name = (int *)arg1;
@@ -1579,10 +1591,11 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	w.w_op = name[1];
 	w.w_arg = name[2];
 	w.w_req = req;
-
+#if 0
 	error = sysctl_wire_old_buffer(req, 0);
 	if (error)
 		return (error);
+#endif        
 	switch (w.w_op) {
 
 	case NET_RT_DUMP:
@@ -1609,7 +1622,11 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 		 * take care of routing entries
 		 */
 		for (error = 0; error == 0 && i <= lim; i++) {
-			rnh = rt_tables_get_rnh(req->td->td_proc->p_fibnum, i);
+#if 0                    
+                    rnh = rt_tables_get_rnh(req->td->td_proc->p_fibnum, i);
+#endif                    
+                    // Note: We only support a single fib for the moment
+			rnh = rt_tables_get_rnh(0, i);
 			if (rnh != NULL) {
 				RADIX_NODE_HEAD_RLOCK(rnh); 
 			    	error = rnh->rnh_walktree(rnh,
@@ -1630,10 +1647,10 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 		break;
 	}
 	if (w.w_tmem)
-		free(w.w_tmem, M_RTABLE);
+		free(w.w_tmem);
 	return (error);
 }
-
+#if 0
 SYSCTL_NODE(_net, PF_ROUTE, routetable, CTLFLAG_RD, sysctl_rtsock, "");
 #endif
 /*

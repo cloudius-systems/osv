@@ -37,6 +37,8 @@
 /tests/tst-leak.so: ./tests/tst-leak.so
 /tests/tst-mmap.so: ./tests/tst-mmap.so
 /tests/tst-hub.so: ./tests/tst-hub.so
+/tests/tst-lsroute.so: ./tests/tst-lsroute.so
+/tests/tst-ifconfig.so: ./tests/tst-ifconfig.so
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so

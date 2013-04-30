@@ -49,6 +49,7 @@
 
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/ip_mroute.h>
+#include <bsd/sys/netinet6/in6.h>
 
 /* We use 4 bits in the mbuf flags, thus we are limited to 16 FIBS. */
 #define	RT_MAXFIBS	16
@@ -682,10 +683,10 @@ ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
 			if (satosin(rt_key(rt))->sin_addr.s_addr == INADDR_ANY)
 				not_found = 1;
 			break;
-//		case AF_INET6:
-//			if (IN6_IS_ADDR_UNSPECIFIED(&satosin6(rt_key(rt))->sin6_addr))
-//				not_found = 1;
-//			break;
+		case AF_INET6:
+			if (IN6_IS_ADDR_UNSPECIFIED(&satosin6(rt_key(rt))->sin6_addr))
+				not_found = 1;
+			break;
 		default:
 			break;
 		}
