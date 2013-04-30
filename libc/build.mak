@@ -362,6 +362,16 @@ libc += network/htonl.o
 libc += network/htons.o
 libc += network/ntohl.o
 libc += network/ntohs.o
+libc += network/gethostbyname_r.o
+libc += network/gethostbyname2_r.o
+libc += network/gethostbyaddr_r.o
+libc += network/getaddrinfo.o
+libc += network/freeaddrinfo.o
+libc += network/getnameinfo.o
+libc += network/__dns.o
+libc += network/__ipparse.o
+libc += network/inet_pton.o
+libc += network/inet_ntop.o
 
 libc += setjmp/setjmp.o
 libc += setjmp/longjmp.o
@@ -605,6 +615,7 @@ libc += time/tzset.o
 libc += time/wcsftime.o
 
 libc += unistd/sleep.o
+libc += unistd/gethostname.o
 
 libc += pthread.o
 libc += dir.o
