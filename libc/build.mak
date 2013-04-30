@@ -577,9 +577,11 @@ libc += string/wmemcpy.o
 libc += string/wmemmove.o
 libc += string/wmemset.o
 
+libc += temp/__randname.o
 libc += temp/mkdtemp.o
 libc += temp/mkstemp.o
 libc += temp/mktemp.o
+libc += temp/mkostemps.o
 
 libc += time/__asctime.o
 libc += time/__time_to_tm.o

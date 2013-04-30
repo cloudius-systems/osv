@@ -37,7 +37,6 @@ void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
 #define UNLOCK(x) (libc.threads_minus_1 ? (mutex_unlock(&(x)),1) : ((void)(x),1))
 
 extern char **__environ;
-#define environ __environ
 
 #undef weak_alias
 #define weak_alias(old, new) \

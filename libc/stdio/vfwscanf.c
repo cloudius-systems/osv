@@ -1,7 +1,9 @@
+#define _GNU_SOURCE // avoid __REDIRECT(vfwscanf) in glibc headers
 #include "stdio_impl.h"
 #include "shgetc.h"
 #include "intscan.h"
 #include "floatscan.h"
+#include "libc.h"
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -307,3 +309,5 @@ match_fail:
 	FUNLOCK(f);
 	return matches;
 }
+
+weak_alias(vfwscanf,__isoc99_vfwscanf);

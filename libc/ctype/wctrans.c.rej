@@ -1,0 +1,21 @@
+--- ctype/wctrans.c
++++ ctype/wctrans.c
+@@ -3,14 +3,14 @@
+ 
+ wctrans_t wctrans(const char *class)
+ {
+-	if (!strcmp(class, "toupper")) return 1;
+-	if (!strcmp(class, "tolower")) return 2;
++	if (!strcmp(class, "toupper")) return (wctrans_t)1;
++	if (!strcmp(class, "tolower")) return (wctrans_t)2;
+ 	return 0;
+ }
+ 
+ wint_t towctrans(wint_t wc, wctrans_t trans)
+ {
+-	if (trans == 1) return towupper(wc);
+-	if (trans == 2) return towlower(wc);
++	if (trans == (wctrans_t)1) return towupper(wc);
++	if (trans == (wctrans_t)2) return towlower(wc);
+ 	return wc;
+ }

@@ -1,6 +1,6 @@
 #include <wctype.h>
 
-static unsigned char table[] = {
+static const unsigned char table[] = {
 #include "alpha.h"
 };
 

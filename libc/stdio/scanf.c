@@ -1,5 +1,6 @@
 #include "stdio.h"
 #include <stdarg.h>
+#include "libc.h"
 
 int scanf(const char *restrict fmt, ...)
 {
@@ -10,3 +11,5 @@ int scanf(const char *restrict fmt, ...)
 	va_end(ap);
 	return ret;
 }
+
+weak_alias(scanf,__isoc99_scanf);

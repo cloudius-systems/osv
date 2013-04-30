@@ -26,7 +26,7 @@ time_t __tm_to_time(struct tm *tm)
 	z100 = Q(z4, 25);
 	z400 = Q(z100, 4);
 	day += year*365 + z4 - z100 + z400 +
-		month[(int []){0,31,59,90,120,151,181,212,243,273,304,335}];
+		month[(const int []){0,31,59,90,120,151,181,212,243,273,304,334}];
 	return (long long)day*86400
 		+ tm->tm_hour*3600 + tm->tm_min*60 + tm->tm_sec
 		- -946684800; /* the dawn of time :) */

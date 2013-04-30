@@ -18,7 +18,7 @@ size_t wcsrtombs(char *restrict s, const wchar_t **restrict ws, size_t n, mbstat
 	size_t N = n, l;
 	if (!s) {
 		for (n=0, ws2=*ws; *ws2; ws2++) {
-			if (*ws2 >= 0x80) {
+			if (*ws2 >= 0x80u) {
 				l = wcrtomb(buf, *ws2, 0);
 				if (!(l+1)) return -1;
 				n += l;
@@ -27,7 +27,7 @@ size_t wcsrtombs(char *restrict s, const wchar_t **restrict ws, size_t n, mbstat
 		return n;
 	}
 	while (n>=4 && **ws) {
-		if (**ws >= 0x80) {
+		if (**ws >= 0x80u) {
 			l = wcrtomb(s, **ws, 0);
 			if (!(l+1)) return -1;
 			s += l;
@@ -39,7 +39,7 @@ size_t wcsrtombs(char *restrict s, const wchar_t **restrict ws, size_t n, mbstat
 		(*ws)++;
 	}
 	while (n && **ws) {
-		if (**ws >= 0x80) {
+		if (**ws >= 0x80u) {
 			l = wcrtomb(buf, **ws, 0);
 			if (!(l+1)) return -1;
 			if (l>n) return N-n;

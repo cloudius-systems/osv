@@ -1,4 +1,5 @@
 #include "stdio_impl.h"
+#include "libc.h"
 
 static size_t do_read(FILE *f, unsigned char *buf, size_t len)
 {
@@ -13,3 +14,5 @@ int vsscanf(const char *restrict s, const char *restrict fmt, va_list ap)
 	};
 	return vfscanf(&f, fmt, ap);
 }
+
+weak_alias(vsscanf,__isoc99_vsscanf);

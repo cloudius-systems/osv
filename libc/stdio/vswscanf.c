@@ -1,4 +1,6 @@
+#define _GNU_SOURCE // avoid __REDIRECT(vswscanf) in glibc headers
 #include "stdio_impl.h"
+#include "libc.h"
 #include <wchar.h>
 
 static size_t wstring_read(FILE *f, unsigned char *buf, size_t len)
@@ -34,3 +36,5 @@ int vswscanf(const wchar_t *restrict s, const wchar_t *restrict fmt, va_list ap)
 	};
 	return vfwscanf(&f, fmt, ap);
 }
+
+weak_alias(vswscanf,__isoc99_vswscanf);

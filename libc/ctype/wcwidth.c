@@ -1,10 +1,10 @@
 #include <wchar.h>
 
-static unsigned char table[] = {
+static const unsigned char table[] = {
 #include "nonspacing.h"
 };
 
-static unsigned char wtable[] = {
+static const unsigned char wtable[] = {
 #include "wide.h"
 };
 

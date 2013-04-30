@@ -41,6 +41,9 @@ int clock_gettime(clockid_t clk_id, struct timespec* ts)
     return 0;
 }
 
+extern "C"
+int __clock_gettime(clockid_t clk_id, struct timespec* ts) __attribute__((alias("clock_gettime")));
+
 int clock_getres(clockid_t clk_id, struct timespec* ts)
 {
     if (clk_id != CLOCK_REALTIME) {

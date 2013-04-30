@@ -1,7 +1,7 @@
 #include <wctype.h>
 #undef iswpunct
 
-static unsigned char table[] = {
+static const unsigned char table[] = {
 #include "punct.h"
 };
 

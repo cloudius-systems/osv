@@ -13,93 +13,88 @@
 
 size_t mbsrtowcs(wchar_t *restrict ws, const char **restrict src, size_t wn, mbstate_t *restrict st)
 {
-	unsigned c;
 	const unsigned char *s = (const void *)*src;
-	const wchar_t *wsorig = ws;
+	size_t wn0 = wn;
+	unsigned c = 0;
 
-	if (!st) st = (void *)&c, c = 0;
-	else c = *(unsigned *)st;
-
-	if (c) {
-		*(unsigned *)st = 0;
-		if (!ws) {
-			wn = 0;
+	if (st && (c = *(unsigned *)st)) {
+		if (ws) {
+			*(unsigned *)st = 0;
+			goto resume;
+		} else {
 			goto resume0;
 		}
-		goto resume;
 	}
 
-	if (!ws) for (wn=0;;) {
-		if (*s-SA >= SB-SA) {
-			while (((uintptr_t)s&3) && *s-1u<0x7f) s++, wn++;
-			while (!(( *(uint32_t*)s | *(uint32_t*)s-0x01010101) & 0x80808080)) s+=4, wn+=4;
-			while (*s-1u<0x7f) s++, wn++;
-			if (!*s) return wn;
-			if (*s-SA >= SB-SA) goto ilseq2;
+	if (!ws) for (;;) {
+		if (*s-1u < 0x7f && (uintptr_t)s%4 == 0) {
+			while (!(( *(uint32_t*)s | *(uint32_t*)s-0x01010101) & 0x80808080)) {
+				s += 4;
+				wn -= 4;
+			}
 		}
+		if (*s-1u < 0x7f) {
+			s++;
+			wn--;
+			continue;
+		}
+		if (*s-SA > SB-SA) break;
 		c = bittab[*s++-SA];
-		do {
 resume0:
-			if (OOB(c,*s)) goto ilseq2; s++;
-			c <<= 6; if (!(c&(1U<<31))) break;
-			if (*s++-0x80u >= 0x40) goto ilseq2;
-			c <<= 6; if (!(c&(1U<<31))) break;
-			if (*s++-0x80u >= 0x40) goto ilseq2;
-		} while (0);
-		wn++; c = 0;
-	}
-
-	while (wn) {
-		if (*s-SA >= SB-SA) {
-			if (wn >= 7) {
-				while (((uintptr_t)s&3) && *s-1u<0x7f) {
-					*ws++ = *s++;
-					wn--;
-				}
-				while (wn>=4 && !(( *(uint32_t*)s | *(uint32_t*)s-0x01010101) & 0x80808080)) {
-					*ws++ = *s++;
-					*ws++ = *s++;
-					*ws++ = *s++;
-					*ws++ = *s++;
-					wn -= 4;
-				}
+		if (OOB(c,*s)) { s--; break; }
+		s++;
+		if (c&(1U<<25)) {
+			if (*s-0x80u >= 0x40) { s-=2; break; }
+			s++;
+			if (c&(1U<<19)) {
+				if (*s-0x80u >= 0x40) { s-=3; break; }
+				s++;
 			}
-			while (wn && *s-1u<0x7f) {
-				*ws++ = *s++;
-				wn--;
-			}
-			if (!wn) break;
-			if (!*s) {
-				*ws = 0;
-				*src = 0;
-				return ws-wsorig;
-			}
-			if (*s-SA >= SB-SA) goto ilseq;
 		}
+		wn--;
+		c = 0;
+	} else for (;;) {
+		if (!wn) return wn0;
+		if (*s-1u < 0x7f && (uintptr_t)s%4 == 0) {
+			while (wn>=4 && !(( *(uint32_t*)s | *(uint32_t*)s-0x01010101) & 0x80808080)) {
+				*ws++ = *s++;
+				*ws++ = *s++;
+				*ws++ = *s++;
+				*ws++ = *s++;
+				wn -= 4;
+			}
+		}
+		if (*s-1u < 0x7f) {
+			*ws++ = *s++;
+			wn--;
+			continue;
+		}
+		if (*s-SA > SB-SA) break;
 		c = bittab[*s++-SA];
-		do {
 resume:
-			if (OOB(c,*s)) goto ilseq;
+		if (OOB(c,*s)) { s--; break; }
+		c = (c<<6) | *s++-0x80;
+		if (c&(1U<<31)) {
+			if (*s-0x80u >= 0x40) { s-=2; break; }
 			c = (c<<6) | *s++-0x80;
-			if (!(c&(1U<<31))) break;
-
-			if (*s-0x80u >= 0x40) goto ilseq;
-			c = (c<<6) | *s++-0x80;
-			if (!(c&(1U<<31))) break;
-
-			if (*s-0x80u >= 0x40) goto ilseq;
-			c = (c<<6) | *s++-0x80;
-		} while (0);
-
-		*ws++ = c; wn--; c = 0;
+			if (c&(1U<<31)) {
+				if (*s-0x80u >= 0x40) { s-=3; break; }
+				c = (c<<6) | *s++-0x80;
+			}
+		}
+		*ws++ = c;
+		wn--;
+		c = 0;
 	}
-	*src = (const void *)s;
-	return ws-wsorig;
-ilseq:
-	*src = (const void *)s;
-ilseq2:
-	/* enter permanently failing state */
-	*(unsigned *)st = FAILSTATE;
+
+	if (!c && !*s) {
+		if (ws) {
+			*ws = 0;
+			*src = 0;
+		}
+		return wn0-wn;
+	}
 	errno = EILSEQ;
+	if (ws) *src = (const void *)s;
 	return -1;
 }
