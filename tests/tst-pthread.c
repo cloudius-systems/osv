@@ -116,6 +116,6 @@ int main(void)
     void* ret;
     pthread_join(thread, &ret);
 
-    printf("SUMMARY: %u tests / %u failures", tests_total, tests_failed);
+    printf("SUMMARY: %u tests / %u failures\n", tests_total, tests_failed);
     return tests_failed == 0 ? 0 : 1;
 }
