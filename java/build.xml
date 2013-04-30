@@ -25,7 +25,7 @@
 
     <jar jarfile="${dist}/cloudius.jar" basedir="${build}" compress="false">
 	    <manifest>
-	    	<attribute name="Main-Class" value="com.cloudius.balloon.Balloon"/>
+	    	<attribute name="Main-Class" value="com.cloudius.main.RhinoCLI" />
 	    </manifest>
     </jar>
   </target>

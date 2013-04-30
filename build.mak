@@ -1,6 +1,6 @@
 
 arch = x64
-cmdline = java.so -jar /usr/lib/jvm/jre/lib/rhino.jar -f console/cli.js
+cmdline = java.so -jar /java/cloudius.jar
 #cmdline = testrunner.so
 #cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
