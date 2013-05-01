@@ -35,7 +35,7 @@ do
 	esac
 done
 
-test -n "$execute" && scripts/imgedit.py setargs build/$v/loader.img $execute
+test -n "$execute" && scripts/imgedit.py setargs build/$v/loader.img "$execute"
 
 qemu-system-x86_64 \
 	-vnc :1 \
