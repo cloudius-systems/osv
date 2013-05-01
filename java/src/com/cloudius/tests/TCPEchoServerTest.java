@@ -74,6 +74,7 @@ public class TCPEchoServerTest extends ScriptableObject {
             try {
                 System.out.println("[~] Client: connecting to server...");
                 Socket s = new Socket(InetAddress.getByName(_host), _port);
+                s.setSoTimeout(2000);
                 
                 BufferedReader in = new BufferedReader( 
                         new InputStreamReader(s.getInputStream()));
