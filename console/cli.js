@@ -8,6 +8,7 @@ load("/console/pwd.js");
 load("/console/ls.js");
 load("/console/cat.js");
 load("/console/help.js");
+load("/console/tests.js");
 
 // Commands
 var _commands = new Array();
@@ -16,6 +17,7 @@ _commands["cd"] = cd;
 _commands["pwd"] = pwd;
 _commands["cat"] = cat;
 _commands["help"] = help_cmd;
+_commands["test"] = test_cmd;
 
 // I/O
 var _reader = new BufferedReader( new InputStreamReader(System['in']) );

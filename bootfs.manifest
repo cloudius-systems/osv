@@ -37,12 +37,14 @@
 /tests/tst-leak.so: ./tests/tst-leak.so
 /tests/tst-mmap.so: ./tests/tst-mmap.so
 /tests/tst-hub.so: ./tests/tst-hub.so
+/tests/tst-lsroute.so: ./tests/tst-lsroute.so
+/tests/tst-ifconfig.so: ./tests/tst-ifconfig.so
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
 /java/RunJar.class: java/RunJar.class
-/bench.jar: tests/bench/bench.jar
-/cloudius.jar: java/cloudius.jar
+/java/bench.jar: tests/bench/bench.jar
+/java/cloudius.jar: java/cloudius.jar
 /usr/lib/jni/balloon.so: java/jni/balloon.so
 /console/util.js: ../../console/util.js
 /console/autocomplete.js: ../../console/autocomplete.js
@@ -50,5 +52,6 @@
 /console/pwd.js: ../../console/pwd.js
 /console/ls.js: ../../console/ls.js
 /console/cat.js: ../../console/cat.js
+/console/tests.js: ../../console/tests.js
 /console/help.js: ../../console/help.js
 /console/cli.js: ../../console/cli.js
