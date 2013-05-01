@@ -49,6 +49,7 @@
 #include <osv/vnode.h>
 #include <osv/debug.h>
 #include <osv/ioctl.h>
+#include <osv/trace.hh>
 
 #include "vfs.h"
 
@@ -58,11 +59,17 @@
 int	vfs_debug = VFSDB_FLAGS;
 #endif
 
+tracepoint<const char*, int> trace_open("open", "%s %x");
+tracepoint<int> trace_open_fd("open_fd", "%d");
+tracepoint<int> trace_open_err("open_ret", "%d");
+
 struct task *main_task;	/* we only have a single process */
 
 extern "C"
 int open(const char *pathname, int flags, mode_t mode)
 {
+	trace_open(pathname, flags);
+
 	struct task *t = main_task;
 	char path[PATH_MAX];
 	struct file *fp;
@@ -95,6 +102,7 @@ int open(const char *pathname, int flags, mode_t mode)
 		goto out_fput;
 
 	fdrop(fp);
+	trace_open_fd(fd);
 	return fd;
 
 out_fput:
@@ -102,6 +110,7 @@ out_fput:
 	fdclose(fd);
 out_errno:
 	errno = error;
+	trace_open_err(error);
 	return -1;
 }
 
@@ -602,12 +611,16 @@ out_errno:
 	return -1;
 }
 
+tracepoint<const char*> trace_stat("stat", "%s");
+tracepoint<int> trace_stat_err("stat_err", "%d");
+
 int __xstat(int ver, const char *pathname, struct stat *st)
 {
 	struct task *t = main_task;
 	char path[PATH_MAX];
 	int error;
 
+	trace_stat(pathname);
 	error = ENOSYS;
 	if (ver != 1)
 		goto out_errno;
@@ -619,9 +632,11 @@ int __xstat(int ver, const char *pathname, struct stat *st)
 	error = sys_stat(path, st);
 	if (error)
 		goto out_errno;
+	trace_stat_err(0);
 	return 0;
 
 out_errno:
+	trace_stat_err(error);
 	errno = error;
 	return -1;
 }
