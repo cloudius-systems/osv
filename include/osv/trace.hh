@@ -139,6 +139,11 @@ struct signature_char<T*> {
     static const char sig = 'P';
 };
 
+template <>
+struct signature_char<const char*> {
+    static const char sig = 'p';  // "pascal string"
+};
+
 template <typename... args>
 struct signature_helper;
 
@@ -158,6 +163,21 @@ struct object_serializer {
     void serialize(arg val, void* buffer) { *static_cast<arg*>(buffer) = val; }
     size_t size() { return sizeof(arg); }
     size_t alignment() { return std::min(sizeof(arg), sizeof(long)); } // FIXME: want to use alignof here
+};
+
+template <>
+struct object_serializer<const char*> {
+    static constexpr size_t max_len = 50;
+    void serialize(const char* val, void* _buffer) {
+        if (!val) {
+            val = "<null>";
+        }
+        auto buffer = static_cast<unsigned char*>(_buffer);
+        *buffer = std::min(max_len-1, strlen(val));
+        memcpy(buffer + 1, val, *buffer);
+    }
+    size_t size() { return max_len; }
+    size_t alignment() { return 1; }
 };
 
 template <size_t idx, size_t N, typename... args>

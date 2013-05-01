@@ -397,6 +397,7 @@ def sig_to_string(sig):
     while sig != 0:
         ret += chr(sig & 255)
         sig >>= 8
+    ret = ret.replace('p', '50p')
     return ret
 
 def align_down(v, pagesize):
