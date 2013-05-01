@@ -195,7 +195,7 @@ accept1(int s,
         return error;
     }
 
-	error = kern_accept(s, name, namelen, &fp, out_fd);
+	error = kern_accept(s, name, namelen, NULL, out_fd);
 	fdrop(fp);
 
 	return (error);
