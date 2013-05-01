@@ -53,7 +53,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
         return mmu::map_anon(addr, length, !(flags & MAP_FIXED),
                 libc_prot_to_perm(prot));
     } else {
-        file f(fd);
+        file_ f(fd);
         return mmu::map_file(addr, length, !(flags & MAP_FIXED),
                 libc_prot_to_perm(prot), f, offset);
     }

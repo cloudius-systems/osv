@@ -580,7 +580,7 @@ struct fill_anon_page : fill_page {
 };
 
 struct fill_file_page : fill_page {
-    fill_file_page(file& _f, uint64_t _off, uint64_t _len)
+    fill_file_page(file_& _f, uint64_t _off, uint64_t _len)
         : f(_f), off(_off), len(_len) {}
     virtual void fill(void* addr, uint64_t offset) {
         offset += off;
@@ -591,7 +591,7 @@ struct fill_file_page : fill_page {
         }
         memset(addr + toread, 0, page_size - toread);
     }
-    file& f;
+    file_& f;
     uint64_t off;
     uint64_t len;
 };
@@ -644,7 +644,7 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 }
 
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
-              file& f, f_offset offset)
+              file_& f, f_offset offset)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_file_page ffill(f, offset, f.size());

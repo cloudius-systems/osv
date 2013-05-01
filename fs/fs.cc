@@ -2,30 +2,30 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-file::file(int fd)
+file_::file_(int fd)
     : _fd(::dup(fd))
     , _refs(0)
 {
 }
 
-file::~file()
+file_::~file_()
 {
     close(_fd);
 }
 
-void file::ref()
+void file_::ref()
 {
     ++_refs;
 }
 
-void file::unref()
+void file_::unref()
 {
     if (!--_refs) {
         delete this;
     }
 }
 
-uint64_t file::size()
+uint64_t file_::size()
 {
     struct stat st;
 
@@ -33,13 +33,13 @@ uint64_t file::size()
     return st.st_size;
 }
 
-void file::read(void *buffer, uint64_t offset, uint64_t len)
+void file_::read(void *buffer, uint64_t offset, uint64_t len)
 {
     ::lseek(_fd, offset, SEEK_SET);
     ::read(_fd, buffer, len);
 }
 
-void file::write(const void* buffer, uint64_t offset, uint64_t len)
+void file_::write(const void* buffer, uint64_t offset, uint64_t len)
 {
     ::lseek(_fd, offset, SEEK_SET);
     ::write(_fd, buffer, len);
@@ -55,5 +55,5 @@ fileref filesystem::open(std::string name)
     if (fd < 0)
         return fileref();
 
-    return fileref(new file(fd));
+    return fileref(new file_(fd));
 }
