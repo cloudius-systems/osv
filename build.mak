@@ -23,6 +23,8 @@ CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
 
 ASFLAGS = -g $(autodepend)
 
+fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
+
 configuration-defines = conf-preempt conf-debug_memory
 
 configuration = $(foreach cf,$(configuration-defines), \

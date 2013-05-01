@@ -52,7 +52,7 @@
 
 #include "vfs.h"
 
-#include "libc.h"
+#include "libc/internal/libc.h"
 
 #ifdef DEBUG_VFS
 int	vfs_debug = VFSDB_FLAGS;
@@ -60,6 +60,7 @@ int	vfs_debug = VFSDB_FLAGS;
 
 struct task *main_task;	/* we only have a single process */
 
+extern "C"
 int open(const char *pathname, int flags, mode_t mode)
 {
 	struct task *t = main_task;
@@ -104,7 +105,7 @@ out_errno:
 	return -1;
 }
 
-int open64(const char *pathname, int flags, mode_t mode) __attribute__((alias("open")));
+extern "C" int open64(const char *pathname, int flags, ...) __attribute__((alias("open")));
 
 int creat(const char *pathname, mode_t mode)
 {
@@ -167,7 +168,7 @@ out_errno:
 	return -1;
 }
 
-typedef uint64_t off64_t;
+extern "C"
 off_t lseek64(int fd, off64_t offset, int whence)
     __attribute__((alias("lseek")));
 
@@ -362,14 +363,16 @@ out_errno:
 	errno = error;
 	return -1;
 }
-LFS64(__fxstat);
+int __fxstat64(int, int, struct stat64 *) __attribute__((weak, alias("__fxstat")));
 
+extern "C"
 int fstat(int fd, struct stat *st)
 {
 	return __fxstat(1, fd, st);
 }
-LFS64(fstat);
+int fstat64(int, struct stat64 *) __attribute__((weak, alias("fstat")));
 
+extern "C"
 int
 ll_readdir(int fd, struct dirent *d)
 {
@@ -622,26 +625,27 @@ out_errno:
 	errno = error;
 	return -1;
 }
-LFS64(__xstat);
+int __xstat64(int, const char *, struct stat64 *) __attribute__((weak, alias("__xstat")));
 
 int stat(const char *pathname, struct stat *st)
 {
 	return __xstat(1, pathname, st);
 }
-LFS64(stat);
+int stat64(const char *, struct stat64 *) __attribute__((weak, alias("stat")));
 
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {
 	return __xstat(ver, pathname, st);
 }
-LFS64(__lxstat);
+int __lxstat64(int, const char *, struct stat64 *) __attribute__((weak, alias("__lxstat")));
 
 int lstat(const char *pathname, struct stat *st)
 {
 	return __lxstat(1, pathname, st);
 }
-LFS64(lstat);
+int lstat64(const char *, struct stat64 *) __attribute__((weak, alias("lstat")));
 
+extern "C"
 int __statfs(const char *pathname, struct statfs *buf)
 {
 	struct task *t = main_task;
@@ -661,8 +665,9 @@ out_errno:
 	return -1;
 }
 weak_alias(__statfs, statfs);
-LFS64(statfs);
+int statfs64(const char *, struct statfs64 *) __attribute__((weak, alias("statfs")));
 
+extern "C"
 int __fstatfs(int fd, struct statfs *buf)
 {
 	struct file *fp;
@@ -684,7 +689,7 @@ out_errno:
 	return -1;
 }
 weak_alias(__fstatfs, fstatfs);
-LFS64(fstatfs);
+int fstatfs64(int, struct statfs64 *) __attribute__((weak, alias("fstatfs")));
 
 static int
 statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
@@ -712,7 +717,7 @@ statvfs(const char *pathname, struct statvfs *buf)
 		return -1;
 	return statfs_to_statvfs(buf, &st);
 }
-LFS64(statvfs);
+int statvfs64(const char *, struct statvfs64 *) __attribute__((weak, alias("statvfs")));
 
 int
 fstatvfs(int fd, struct statvfs *buf)
@@ -723,7 +728,7 @@ fstatvfs(int fd, struct statvfs *buf)
 		return -1;
 	return statfs_to_statvfs(buf, &st);
 }
-LFS64(fstatvfs);
+int fstatvfs64(int, struct statvfs64 *) __attribute__((weak, alias("statvfs")));
 
 
 char *getcwd(char *path, size_t size)
@@ -735,7 +740,7 @@ char *getcwd(char *path, size_t size)
 	if (!path) {
 		if (!size)
 			size = len;
-		path = malloc(size);
+		path = (char*)malloc(size);
 		if (!path) {
 			error = ENOMEM;
 			goto out_errno;
@@ -841,6 +846,7 @@ int dup2(int oldfd, int newfd)
 #define SETFL (O_APPEND | O_NONBLOCK | O_ASYNC)
 #define SETFL_IGNORED (O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC)
 
+extern "C"
 int fcntl(int fd, int cmd, int arg)
 {
 	struct file *fp;
@@ -1174,11 +1180,12 @@ void mount_usr(void)
 		kprintf("failed to mount romfs, error = %d\n", ret);
 }
 
-int console_init(void);
-void bio_init(void);
+extern "C" int console_init(void);
+extern "C" void bio_init(void);
 
 int vfs_initialized;
 
+extern "C"
 void
 vfs_init(void)
 {

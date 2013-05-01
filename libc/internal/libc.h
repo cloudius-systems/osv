@@ -39,8 +39,13 @@ void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
 extern char **__environ;
 
 #undef weak_alias
-#define weak_alias(old, new) \
-	extern __typeof(old) new __attribute__((weak, alias(#old)))
+#define __weak_alias(old, new) \
+	__typeof(old) new __attribute__((weak, alias(#old)))
+#ifdef __cplusplus
+#define weak_alias(old, new) extern "C" __weak_alias(old, new)
+#else
+#define weak_alias(old, new) extern __weak_alias(old, new)
+#endif
 
 #undef LFS64_2
 #define LFS64_2(x, y) weak_alias(x, y)
