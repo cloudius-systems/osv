@@ -53,7 +53,7 @@ void tracepoint_base::try_enable()
 
 trace_record* allocate_trace_record(size_t size)
 {
-    size += sizeof(trace_record_base);
+    size += sizeof(trace_record);
     size = align_up(size, sizeof(long));
     size_t p = trace_record_last.load(std::memory_order_relaxed);
     size_t pn;

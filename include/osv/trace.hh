@@ -15,16 +15,13 @@ void enable_tracepoint(std::string wildcard);
 
 class tracepoint_base;
 
-struct trace_record_base {
+struct trace_record {
     tracepoint_base* tp;
     sched::thread* thread;
     unsigned cpu;
-};
-
-struct trace_record : trace_record_base {
     union {
-        u8 buffer[80];
-        unsigned long align;
+        u8 buffer[0];
+        long align[0];
     };
 };
 
@@ -235,7 +232,6 @@ public:
             if (tr->thread) {
                 tr->cpu = tr->thread->tcpu()->id;
             }
-            assert(size() <= sizeof(tr->buffer));
             serialize(tr->buffer, as);
             sched::preempt_enable();
         }
