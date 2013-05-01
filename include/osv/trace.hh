@@ -188,6 +188,7 @@ public:
     explicit tracepoint_base(const char* _name, const char* _format)
         : name(_name), format(_format) {
         tp_list.push_back(*this);
+        try_enable();
     }
     ~tracepoint_base() {
         tp_list.erase(tp_list.iterator_to(*this));
@@ -206,6 +207,8 @@ public:
                                       &tracepoint_base::tp_list_link>,
         boost::intrusive::constant_time_size<false>
         > tp_list;
+private:
+    void try_enable();
 };
 
 template <typename... s_args,

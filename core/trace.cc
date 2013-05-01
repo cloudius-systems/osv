@@ -17,6 +17,8 @@ bool trace_enabled;
 
 typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority(4000)));
 
+std::vector<std::regex> enabled_tracepoint_regexs;
+
 void enable_trace()
 {
     trace_enabled = true;
@@ -27,6 +29,7 @@ void enable_tracepoint(std::string wildcard)
     wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("*"), std::string(".*"));
     wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
     std::regex re{wildcard};
+    enabled_tracepoint_regexs.push_back(re);
     for (auto& tp : tracepoint_base::tp_list) {
         if (std::regex_match(std::string(tp.name), re)) {
             tp.enable();
@@ -37,6 +40,15 @@ void enable_tracepoint(std::string wildcard)
 void tracepoint_base::enable()
 {
     enabled = true;
+}
+
+void tracepoint_base::try_enable()
+{
+    for (auto& re : enabled_tracepoint_regexs) {
+        if (std::regex_match(std::string(name), re)) {
+            enable();
+        }
+    }
 }
 
 trace_record* allocate_trace_record(size_t size)
