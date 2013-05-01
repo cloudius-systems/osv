@@ -153,21 +153,27 @@ struct signature_helper<arg0, args...> {
                     | (signature_helper<args...>::sig << 8);
 };
 
+template <typename arg>
+struct object_serializer {
+    void serialize(arg val, void* buffer) { *static_cast<arg*>(buffer) = val; }
+    size_t size() { return sizeof(arg); }
+    size_t alignment() { return std::min(sizeof(arg), sizeof(long)); } // FIXME: want to use alignof here
+};
+
 template <size_t idx, size_t N, typename... args>
 struct serializer {
     static void write(void* buffer, size_t offset, std::tuple<args...> as) {
         auto arg = std::get<idx>(as);
-        typedef decltype(arg) argtype;
-        auto align = std::min(sizeof(argtype), sizeof(long)); // FIXME: want to use alignof here
-        offset = align_up(offset, align);
-        *static_cast<argtype*>(buffer + offset) = arg;
-        return serializer<idx + 1, N, args...>::write(buffer, offset + sizeof(argtype), as);
+        object_serializer<decltype(arg)> s;
+        offset = align_up(offset, s.alignment());
+        s.serialize(arg, buffer + offset);
+        return serializer<idx + 1, N, args...>::write(buffer, offset + s.size(), as);
     }
     static size_t size(size_t offset) {
         typedef typename std::tuple_element<idx, std::tuple<args...>>::type argtype;
-        auto align = std::min(sizeof(argtype), sizeof(long)); // FIXME: want to use alignof here
-        offset = align_up(offset, align);
-        return serializer<idx + 1, N, args...>::size(offset + sizeof(argtype));
+        object_serializer<argtype> s;
+        offset = align_up(offset, s.alignment());
+        return serializer<idx + 1, N, args...>::size(offset + s.size());
     }
 };
 
