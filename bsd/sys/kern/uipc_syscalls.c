@@ -182,20 +182,20 @@ sys_listen(int s, int backlog)
 static int
 accept1(int s,
         struct sockaddr * name,
-        socklen_t * namelen, int *out_fp)
+        socklen_t * namelen, int *out_fd)
 {
 	struct file *fp;
 	int error;
 
 	if (name == NULL)
-		return (kern_accept(s, NULL, NULL, NULL, out_fp));
+		return (kern_accept(s, NULL, NULL, NULL, out_fd));
 
     error = getsock_cap(s, &fp, NULL);
     if (error) {
         return error;
     }
 
-	error = kern_accept(s, name, namelen, &fp, out_fp);
+	error = kern_accept(s, name, namelen, &fp, out_fd);
 	fdrop(fp);
 
 	return (error);
@@ -203,7 +203,7 @@ accept1(int s,
 
 int
 kern_accept(int s, struct sockaddr *name,
-    socklen_t *namelen, struct file **fp, int *out_fd)
+    socklen_t *namelen, struct file **out_fp, int *out_fd)
 {
 	struct file *headfp, *nfp = NULL;
 	struct sockaddr *sa = NULL;
@@ -319,12 +319,12 @@ noconnection:
 	 * a reference on nfp to the caller on success if they request it.
 	 */
 done:
-	if (fp != NULL) {
+	if (out_fp != NULL) {
 		if (error == 0) {
-			*fp = nfp;
+			*out_fp = nfp;
 			nfp = NULL;
 		} else
-			*fp = NULL;
+			*out_fp = NULL;
 	}
 	if (nfp != NULL)
 		fdrop(nfp);
