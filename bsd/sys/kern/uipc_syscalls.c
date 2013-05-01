@@ -184,19 +184,12 @@ accept1(int s,
         struct sockaddr * name,
         socklen_t * namelen, int *out_fd)
 {
-	struct file *fp;
 	int error;
 
 	if (name == NULL)
 		return (kern_accept(s, NULL, NULL, NULL, out_fd));
 
-    error = getsock_cap(s, &fp, NULL);
-    if (error) {
-        return error;
-    }
-
 	error = kern_accept(s, name, namelen, NULL, out_fd);
-	fdrop(fp);
 
 	return (error);
 }
