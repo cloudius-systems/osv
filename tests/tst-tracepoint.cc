@@ -14,6 +14,7 @@ struct test_object {
 tracepoint<unsigned, long> trace_1("tp1", "%d %d");
 tracepointv<storage_args<int, long>, runtime_args<test_object&>, test_object::unpack>
     trace_2("tp2", "%d %d");
+tracepoint<const char*, long, const char*> trace_string("tp3", "%s %d %s");
 
 
 std::string signature_string(u64 s)
@@ -40,5 +41,6 @@ int main(int ac, char** av)
     auto size = trace_1.size();
     assert(size == 16 && tmp.a0 == 10 && tmp.a1 == 20);
     trace_2(obj);
+    trace_string("foo", 6, "bar");
 }
 
