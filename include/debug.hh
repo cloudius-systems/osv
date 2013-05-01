@@ -6,7 +6,7 @@
 #include <string>
 #include <cstdarg>
 #include <osv/debug.h>
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include "boost/format.hpp"
 
 typedef boost::format fmt;

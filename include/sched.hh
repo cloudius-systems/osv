@@ -9,7 +9,7 @@
 #include "drivers/clockevent.hh"
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include <atomic>
 #include "osv/lockless-queue.hh"
 
@@ -153,8 +153,6 @@ public:
     void start();
     template <class Pred>
     static void wait_until(Pred pred);
-    template <class Pred>
-    static void wait_until(mutex& mtx, Pred pred);
     template <class Pred>
     static void wait_until(mutex_t& mtx, Pred pred);
     template <class Pred>
@@ -336,16 +334,6 @@ inline void release(mutex_t* mtx)
     }
 }
 
-inline void acquire(mutex& mtx)
-{
-    mtx.lock();
-}
-
-inline void release(mutex& mtx)
-{
-    mtx.unlock();
-}
-
 template <class Mutex, class Pred>
 inline
 void thread::do_wait_until(Mutex& mtx, Pred pred)
@@ -369,13 +357,6 @@ inline
 void thread::wait_until(Pred pred)
 {
     dummy_lock mtx;
-    do_wait_until(mtx, pred);
-}
-
-template <class Pred>
-inline
-void thread::wait_until(mutex& mtx, Pred pred)
-{
     do_wait_until(mtx, pred);
 }
 

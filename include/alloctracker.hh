@@ -9,7 +9,7 @@
 // the suspected leaks and/or other statistics about the leaving allocations.
 #ifndef INCLUDED_ALLOCTRACKER_H
 #define INCLUDED_ALLOCTRACKER_H
-#include <mutex.hh>
+#include <osv/mutex.h>
 #include <cstdint>
 
 namespace memory {

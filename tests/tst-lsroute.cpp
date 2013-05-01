@@ -26,7 +26,6 @@
  * SUCH DAMAGE.
  */
 
-extern "C" {
 #include <sys/param.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/sys/socket.h>
@@ -49,6 +48,7 @@ extern "C" {
 #include <termios.h>
 #include <unistd.h>
 
+extern "C" {
 # define NI_NUMERICHOST	1
 extern int getnameinfo (const struct sockaddr *__restrict __sa,
 			socklen_t __salen, char *__restrict __host,

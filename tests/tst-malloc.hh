@@ -1,7 +1,7 @@
 #ifndef __TST_MALLOC__
 #define __TST_MALLOC__
 
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include "sched.hh"
 #include "debug.hh"
 #include <random>
@@ -16,7 +16,7 @@ public:
     };
 
     struct test_locks {
-        ::mutex lock;
+        mutex lock;
         std::list<struct allocme*> lista;
         bool die;
         bool alloc_finished;

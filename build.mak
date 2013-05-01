@@ -225,6 +225,7 @@ objects += arch/x64/smp.o
 objects += arch/x64/signal.o
 objects += arch/x64/cpuid.o
 objects += core/mutex.o
+objects += core/condvar.o
 objects += core/eventlist.o
 objects += core/debug.o
 objects += drivers/pci.o

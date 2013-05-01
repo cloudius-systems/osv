@@ -1,4 +1,3 @@
-#include "mutex.hh"
 #include "sched.hh"
 #include "signal.hh"
 #include <pthread.h>
@@ -10,6 +9,8 @@
 #include <list>
 #include "mmu.hh"
 #include "debug.hh"
+
+#include <osv/mutex.h>
 
 namespace pthread_private {
 

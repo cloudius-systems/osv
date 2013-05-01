@@ -1,5 +1,4 @@
-
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include <sched.hh>
 #include "arch.hh"
 
@@ -8,20 +7,20 @@ struct waiter {
     sched::thread*	thread;
 };
 
-extern "C" void spin_lock(spinlock_t *sl)
+void spin_lock(spinlock_t *sl)
 {
     arch::irq_disable();
-    while (__sync_lock_test_and_set(&sl->lock, 1))
+    while (__sync_lock_test_and_set(&sl->_lock, 1))
         ;
 }
 
-extern "C" void spin_unlock(spinlock_t *sl)
+void spin_unlock(spinlock_t *sl)
 {
-    __sync_lock_release(&sl->lock, 0);
+    __sync_lock_release(&sl->_lock, 0);
     arch::irq_enable();
 }
 
-extern "C" void mutex_lock(mutex_t *mutex)
+void mutex_lock(mutex_t *mutex)
 {
     struct waiter w;
 
@@ -54,7 +53,7 @@ extern "C" void mutex_lock(mutex_t *mutex)
     spin_unlock(&mutex->_wait_lock);
 }
 
-extern "C" bool mutex_trylock(mutex_t *mutex)
+bool mutex_trylock(mutex_t *mutex)
 {
     bool ret = false;
     spin_lock(&mutex->_wait_lock);
@@ -67,7 +66,7 @@ extern "C" bool mutex_trylock(mutex_t *mutex)
     return ret;
 }
 
-extern "C" void mutex_unlock(mutex_t *mutex)
+void mutex_unlock(mutex_t *mutex)
 {
     spin_lock(&mutex->_wait_lock);
     if (mutex->_depth == 1) {
@@ -84,32 +83,7 @@ extern "C" void mutex_unlock(mutex_t *mutex)
     spin_unlock(&mutex->_wait_lock);
 }
 
-extern "C" bool mutex_owned(mutex_t* mutex)
+bool mutex_owned(mutex_t* mutex)
 {
     return (mutex->_owner == sched::thread::current());
-}
-
-void mutex::lock()
-{
-    mutex_lock(&_mutex);
-}
-
-bool mutex::try_lock()
-{
-    return mutex_trylock(&_mutex);
-}
-
-void mutex::unlock()
-{
-    mutex_unlock(&_mutex);
-}
-
-void spinlock::lock()
-{
-    spin_lock(&_lock);
-}
-
-void spinlock::unlock()
-{
-    spin_unlock(&_lock);
 }

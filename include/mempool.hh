@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
-#include "mutex.hh"
+#include <osv/mutex.h>
 
 namespace memory {
 

@@ -1,7 +1,8 @@
 #include <semaphore.h>
 #include "sched.hh"
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include "libc.hh"
+#include <list>
 
 // FIXME: smp safety
 

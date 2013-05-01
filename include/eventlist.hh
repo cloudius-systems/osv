@@ -5,7 +5,7 @@
 #include <string>
 #include <functional>
 
-#include "mutex.hh"
+#include <osv/mutex.h>
 
 typedef std::function<void ()> eventhandler;
 const int max_handlers = 32;

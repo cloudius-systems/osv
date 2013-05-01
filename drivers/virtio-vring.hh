@@ -2,7 +2,7 @@
 #define VIRTIO_VRING_H
 
 #include <functional>
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include "debug.hh"
 
 class sglist;

@@ -26,7 +26,6 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-extern "C" {
 #include <stdio.h>
 #include <unistd.h>
 #include <osv/debug.h>
@@ -54,7 +53,6 @@ extern "C" {
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 #include <bsd/machine/in_cksum.h>
-}
 
 #include <string>
 using std::string ;

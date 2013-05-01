@@ -1,6 +1,6 @@
 #include "sched.hh"
 #include <list>
-#include "mutex.hh"
+#include <osv/mutex.h>
 #include <mutex>
 #include "debug.hh"
 #include "drivers/clockevent.hh"

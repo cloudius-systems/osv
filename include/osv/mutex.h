@@ -8,18 +8,39 @@
 extern "C" {
 #endif
 
-struct cspinlock {
-    bool lock;
-};
+// Spin lock. Use mutex instead, except where impossible:
 
-typedef struct cspinlock spinlock_t;
+typedef struct spinlock {
+    bool _lock;
+#ifdef __cplusplus
+    // additional convenience methods for C++
+    inline void lock();
+    inline void unlock();
+#endif
+} spinlock_t;
 
 static inline void spinlock_init(spinlock_t *sl)
 {
-    sl->lock = false;
+    sl->_lock = false;
 }
+void spin_lock(spinlock_t *sl);
+void spin_unlock(spinlock_t *sl);
 
-struct cmutex {
+#ifdef __cplusplus
+void spinlock::lock()
+{
+    spin_lock(this);
+}
+void spinlock::unlock()
+{
+    spin_unlock(this);
+}
+#endif
+
+
+// Mutex:
+
+typedef struct mutex {
     spinlock_t _wait_lock;
     unsigned _depth;
     void *_owner;
@@ -27,9 +48,18 @@ struct cmutex {
         struct waiter *first;
         struct waiter *last;
     } _wait_list;
-};
-
-typedef struct cmutex mutex_t;
+#ifdef __cplusplus
+    // additional convenience methods for C++
+    inline mutex();
+    inline ~mutex();
+    inline void lock();
+    inline bool try_lock();
+    inline void unlock();
+    inline bool owned();
+    // getdepth() should only be used by the thread holding the lock
+    inline unsigned int getdepth() const { return _depth; }
+#endif
+} mutex_t;
 
 #define MUTEX_INITIALIZER	{}
 
@@ -52,10 +82,41 @@ static __always_inline void mutex_destroy(mutex_t* m)
 {
 }
 
-void spin_lock(spinlock_t *sl);
-void spin_unlock(spinlock_t *sl);
-
 #ifdef __cplusplus
+}
+
+mutex::mutex()
+{
+    mutex_init(this);
+}
+mutex::~mutex()
+{
+    mutex_destroy(this);
+}
+void mutex::lock()
+{
+    mutex_lock(this);
+}
+bool mutex::try_lock()
+{
+    return mutex_trylock(this);
+}
+void mutex::unlock()
+{
+    return mutex_unlock(this);
+}
+bool mutex::owned()
+{
+    return mutex_owned(this);
+}
+
+#include <mutex>
+
+template <class Lock, class Func>
+auto with_lock(Lock& lock, Func func) -> decltype(func())
+{
+    std::lock_guard<Lock> guard(lock);
+    return func();
 }
 #endif
 

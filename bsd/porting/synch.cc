@@ -1,4 +1,5 @@
 #include <map>
+#include <list>
 #include <errno.h>
 #include "debug.hh"
 #include "drivers/clock.hh"
