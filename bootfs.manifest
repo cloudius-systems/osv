@@ -19,6 +19,10 @@
 /usr/lib/libstdc++.so.6: %(gccbase)s/usr/lib64/libstdc++.so.6
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1
+/usr/lib/&/libfontconfig.so.1: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libfreetype.so.6: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
+/&/etc/fonts/fonts.conf: %(miscbase)s/&
 /tests/tst-pthread.so: ./tests/tst-pthread.so
 /tests/tst-malloc.so: ../../external/glibc-testsuite/build/debug/malloc/tst-malloc.so
 /tests/tst-getcwd.so: ../../external/glibc-testsuite/build/debug/io/tst-getcwd.so
