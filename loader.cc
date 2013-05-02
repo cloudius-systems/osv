@@ -219,6 +219,7 @@ void main_cont(int ac, char** av)
     processor::sti();
 
     prog = new elf::program(fs);
+    prog->set_search_path({"/", "/usr/lib"});
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
