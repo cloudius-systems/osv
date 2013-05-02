@@ -569,6 +569,7 @@ void evacuate(uintptr_t start, uintptr_t end)
 
 void unmap(void* addr, size_t size)
 {
+    size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     evacuate(start, start+size);
 }
@@ -638,6 +639,7 @@ void vdepopulate(void* addr, size_t size)
 
 void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 {
+    size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
     return (void*) allocate(start, size, search, zfill, perm);
@@ -646,6 +648,7 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
               file_& f, f_offset offset)
 {
+    size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_file_page ffill(f, offset, f.size());
     return (void*) allocate(start, size, search, ffill, perm);
