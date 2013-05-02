@@ -113,6 +113,8 @@ namei(char *path, vnode_t *vpp)
 				/* Not found */
 				vput(vp);
 				vput(dvp);
+				if (!error)
+					error = ENOENT;
 				return error;
 			}
 		}
