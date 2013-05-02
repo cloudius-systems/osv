@@ -373,6 +373,9 @@ libc += network/__ipparse.o
 libc += network/inet_pton.o
 libc += network/inet_ntop.o
 
+libc += prng/rand.o
+libc += prng/random.o
+
 libc += setjmp/setjmp.o
 libc += setjmp/longjmp.o
 

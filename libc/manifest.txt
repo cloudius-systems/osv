@@ -13,6 +13,7 @@ All the files under the following directories are imported from musl:
   misc
   multibyte
   network
+  prng
   setjmp
   signal
   stdio
