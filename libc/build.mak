@@ -396,6 +396,7 @@ libc += stdio/__string_read.o
 libc += stdio/__toread.o
 libc += stdio/__towrite.o
 libc += stdio/__uflow.o
+libc += stdio/__vfprintf_chk.o
 libc += stdio/asprintf.o
 libc += stdio/clearerr.o
 libc += stdio/dprintf.o
