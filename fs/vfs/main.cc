@@ -1085,6 +1085,12 @@ out_errno:
 	return -1;
 }
 
+int chmod(const char *pathname, mode_t mode)
+{
+	debug("stub chmod\n");
+	return 0;
+}
+
 int
 fs_noop(void)
 {
