@@ -94,6 +94,7 @@ tests += tests/tst-sockets.so
 tests += tests/tst-bsd-tcp1.so
 tests += tests/tst-ifconfig.so
 tests += tests/tst-lsroute.so
+tests += tests/tst-condvar.so
 
 tests/hello/Hello.class: javabase=tests/hello
 

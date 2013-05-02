@@ -75,6 +75,7 @@
 /tests/tst-hub.so: ./tests/tst-hub.so
 /tests/tst-lsroute.so: ./tests/tst-lsroute.so
 /tests/tst-ifconfig.so: ./tests/tst-ifconfig.so
+/tests/tst-condvar.so: ./tests/tst-condvar.so
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
