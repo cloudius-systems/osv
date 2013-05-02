@@ -11,6 +11,7 @@
 #include "debug.hh"
 
 #include <osv/mutex.h>
+#include <osv/condvar.h>
 
 namespace pthread_private {
 
@@ -286,87 +287,21 @@ int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
     return sigprocmask(how, set, oldset);
 }
 
-class cond_var {
-public:
-    int wait(mutex* user_mutex, sched::timer* tmr = nullptr);
-    void wake_one();
-    void wake_all();
-private:
-    struct wait_record {
-        explicit wait_record() : t(sched::thread::current()) {}
-        sched::thread* t;
-    };
-private:
-    mutex _mutex;
-    std::list<wait_record*> _waiters;
-};
-
-cond_var* from_libc(pthread_cond_t* cond)
+condvar* from_libc(pthread_cond_t* cond)
 {
-    return reinterpret_cast<cond_var*>(cond);
-}
-
-int cond_var::wait(mutex* user_mutex, sched::timer* tmr)
-{
-    int ret = 0;
-    wait_record wr;
-    with_lock(_mutex, [&] {
-        _waiters.push_back(&wr);
-    });
-    user_mutex->unlock();
-    sched::thread::wait_until([&] {
-        return (tmr && tmr->expired()) || !wr.t;
-    });
-    if (tmr && tmr->expired()) {
-        with_lock(_mutex, [&] {
-            auto p = std::find(_waiters.begin(), _waiters.end(), &wr); // FIXME: O(1)
-            if (p != _waiters.end()) {
-                _waiters.erase(p);
-            }
-        });
-        ret = ETIMEDOUT;
-    }
-    user_mutex->lock();
-    return ret;
-}
-
-void cond_var::wake_one()
-{
-    with_lock(_mutex, [&] {
-        if (!_waiters.empty()) {
-            auto wr = _waiters.front();
-            _waiters.pop_front();
-            auto t = wr->t;
-            wr->t = nullptr;
-            t->wake();
-        }
-    });
-}
-
-void cond_var::wake_all()
-{
-    with_lock(_mutex, [&] {
-        while (!_waiters.empty()) {
-            auto wr = _waiters.front();
-            _waiters.pop_front();
-            auto t = wr->t;
-            wr->t = nullptr;
-            t->wake();
-        }
-    });
+    return reinterpret_cast<condvar*>(cond);
 }
 
 int pthread_cond_init(pthread_cond_t *__restrict cond,
        const pthread_condattr_t *__restrict attr)
 {
-    static_assert(sizeof(cond_var) <= sizeof(*cond), "cond_var overflow");
-    new (cond) cond_var;
+    static_assert(sizeof(condvar) <= sizeof(*cond), "cond_var overflow");
+    memset(cond, 0, sizeof(*cond));
     return 0;
 }
 
 int pthread_cond_destroy(pthread_cond_t* cond)
 {
-    from_libc(cond)->~cond_var();
     return 0;
 }
 
@@ -538,7 +473,7 @@ int pthread_detach(pthread_t thread)
 
 int pthread_equal(pthread_t t1, pthread_t t2)
 {
-   return t1 == t2;
+    return t1 == t2;
 }
 
 int pthread_mutexattr_init(pthread_mutexattr_t *attr)
