@@ -633,6 +633,11 @@ program::program(::filesystem& fs, void* addr)
     set_object("libdl.so.2", _core.get());
 }
 
+void program::set_search_path(std::initializer_list<std::string> path)
+{
+    _search_path = path;
+}
+
 tls_data program::tls()
 {
     return _core->tls();
@@ -649,7 +654,17 @@ void program::set_object(std::string name, object* obj)
 object* program::add_object(std::string name)
 {
     if (!_files.count(name)) {
-        auto f(_fs.open(name));
+        fileref f;
+        if (name.find('/') == name.npos) {
+           for (auto dir : _search_path) {
+               f = _fs.open(dir + "/" + name);
+               if (f) {
+                   break;
+               }
+           }
+        } else {
+            f = _fs.open(name);
+        }
         if (!f) {
             return nullptr;
         }

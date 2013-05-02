@@ -348,6 +348,7 @@ public:
     // run a function with all current modules as a parameter
     void with_modules(std::function<void (std::vector<object*>&)> f);
     dladdr_info lookup_addr(const void* addr);
+    void set_search_path(std::initializer_list<std::string> path);
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
@@ -359,6 +360,7 @@ private:
     std::unique_ptr<object> _core;
     std::map<std::string, object*> _files;
     std::vector<object*> _modules; // in priority order
+    std::vector<std::string> _search_path;
     // debugger interface
     static object* s_objs[100];
 };
