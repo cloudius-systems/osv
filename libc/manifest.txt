@@ -32,6 +32,7 @@ With the following exceptions:
   locale/wcsftime_l.c
   stdio/__fprintf_chk.c
   stdio/__vfprintf_chk.c
+  string/__memcpy_chk.c
   string/rawmemchr.c
 
 2) imported from FreeBSD:

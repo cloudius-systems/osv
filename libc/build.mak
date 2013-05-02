@@ -516,6 +516,7 @@ libc += stdlib/strtol.o
 libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
 
+libc += string/__memcpy_chk.o
 libc += string/bcmp.o
 libc += string/bcopy.o
 libc += string/bzero.o
