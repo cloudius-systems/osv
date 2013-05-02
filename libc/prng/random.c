@@ -5,8 +5,10 @@
  * There is no warranty.
 */
 
+#define _BSD_SOURCE
 #include <stdlib.h>
 #include <stdint.h>
+#include <errno.h>
 #include "libc.h"
 
 /*
@@ -29,11 +31,23 @@ static uint32_t init[] = {
 0xc74a0364,0xae533cc4,0x04185faf,0x6de3b115,
 0x0cab8628,0xf043bfa4,0x398150e9,0x37521657};
 
-static int n = 31;
-static int i = 3;
-static int j = 0;
-static uint32_t *x = init+1;
+static struct random_data random_data = { 0, 0, (int32_t *)init + 1, 31, 3, 0, 0 };
 static mutex_t lock;
+
+static void decode_state(struct random_data *s, int *n, int *i, int *j, uint32_t **x) {
+	*n = s->rand_type;
+	*i = s->rand_deg;
+	*j = s->rand_sep;
+	*x = (uint32_t *)s->state;
+}
+
+static void encode_state(struct random_data *s, int *n, int *i, int *j, uint32_t **x) {
+	s->rand_type = *n;
+	s->rand_deg = *i;
+	s->rand_sep = *j;
+	s->state = (int32_t *)*x;
+}
+
 
 static uint32_t lcg31(uint32_t x) {
 	return (1103515245*x + 12345) & 0x7fffffff;
@@ -44,24 +58,36 @@ static uint64_t lcg64(uint64_t x) {
 }
 
 static void *savestate() {
+	int n, i, j;
+	uint32_t *x;
+
+	decode_state(&random_data, &n, &i, &j, &x);
 	x[-1] = (n<<16)|(i<<8)|j;
 	return x-1;
 }
 
 static void loadstate(uint32_t *state) {
+	int n, i, j;
+	uint32_t *x;
+
 	x = state+1;
 	n = x[-1]>>16;
 	i = (x[-1]>>8)&0xff;
 	j = x[-1]&0xff;
+	encode_state(&random_data, &n, &i, &j, &x);
 }
 
-static void __srandom(unsigned seed) {
+int srandom_r(unsigned seed, struct random_data *buf) {
+	int n, i, j;
+	uint32_t *x;
 	int k;
 	uint64_t s = seed;
 
+	decode_state(buf, &n, &i, &j, &x);
 	if (n == 0) {
 		x[0] = s;
-		return;
+		encode_state(buf, &n, &i, &j, &x);
+		return 0;
 	}
 	i = n == 31 || n == 7 ? 3 : 1;
 	j = 0;
@@ -71,21 +97,25 @@ static void __srandom(unsigned seed) {
 	}
 	/* make sure x contains at least one odd number */
 	x[0] |= 1;
+	encode_state(buf, &n, &i, &j, &x);
+	return 0;
 }
 
 void srandom(unsigned seed) {
 	LOCK(lock);
-	__srandom(seed);
+	srandom_r(seed, &random_data);
 	UNLOCK(lock);
 }
 
-char *initstate(unsigned seed, char *state, size_t size) {
-	void *old;
+int initstate_r(unsigned seed, char *state, size_t size, struct random_data *buf) {
+	int n, i, j;
+	uint32_t *x;
 
-	if (size < 8)
-		return 0;
-	LOCK(lock);
-	old = savestate();
+	if (size < 8) {
+		errno = EINVAL;
+		return -1;
+	}
+	decode_state(buf, &n, &i, &j, &x);
 	if (size < 32)
 		n = 0;
 	else if (size < 64)
@@ -97,9 +127,31 @@ char *initstate(unsigned seed, char *state, size_t size) {
 	else
 		n = 63;
 	x = (uint32_t*)state + 1;
-	__srandom(seed);
+	encode_state(buf, &n, &i, &j, &x);
+	return srandom_r(seed, buf);
+}
+
+char *initstate(unsigned seed, char *state, size_t size) {
+	void *old;
+
+	if (size < 8)
+		return 0;
+	LOCK(lock);
+	old = savestate();
+	if (initstate_r(seed, state, size, &random_data) == -1)
+		old = 0;
 	UNLOCK(lock);
 	return old;
+}
+
+int setstate_r(char *state, struct random_data *buf) {
+	int n, i, j;
+	uint32_t *x;
+
+	decode_state(buf, &n, &i, &j, &x);
+	x = (uint32_t *)state + 1;
+	encode_state(buf, &n, &i, &j, &x);
+	return 0;
 }
 
 char *setstate(char *state) {
@@ -112,10 +164,12 @@ char *setstate(char *state) {
 	return old;
 }
 
-long random(void) {
+int random_r(struct random_data *buf, int32_t *result) {
+	int n, i, j;
+	uint32_t *x;
 	long k;
 
-	LOCK(lock);
+	decode_state(buf, &n, &i, &j, &x);
 	if (n == 0) {
 		k = x[0] = lcg31(x[0]);
 		goto end;
@@ -127,6 +181,16 @@ long random(void) {
 	if (++j == n)
 		j = 0;
 end:
+	encode_state(buf, &n, &i, &j, &x);
+	*result = k;
+	return 0;
+}
+
+long random(void) {
+	int32_t k;
+
+	LOCK(lock);
+	random_r(&random_data, &k);
 	UNLOCK(lock);
 	return k;
 }
