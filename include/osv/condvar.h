@@ -11,7 +11,6 @@
 // convenience methods and functions, for which we need these headers:
 #include "sched.hh"
 
-extern "C" {
 #endif
 
 // Note: To be useful for implementing pthread's condition variables, the
@@ -43,10 +42,17 @@ typedef struct condvar {
     inline int wait(mutex_t *user_mutex, sched::timer *tmr = nullptr);
     inline void wake_one();
     inline void wake_all();
+    template <class Pred>
+    void wait_until(mutex& mtx, Pred pred);
 #endif
 } condvar_t;
 
 #define CONDVAR_INITIALIZER	{}
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration);
 void condvar_wake_one(condvar_t *condvar);
@@ -66,6 +72,17 @@ void condvar_t::wake_one() {
 void condvar_t::wake_all() {
     return condvar_wake_all(this);
 }
+
+template <class Pred>
+inline
+void condvar::wait_until(mutex& mtx, Pred pred)
+{
+    while (!pred()) {
+        wait(&mtx);
+    }
+}
+
+
 #endif
 
 #endif /* MUTEX_H_ */
