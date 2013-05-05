@@ -39,6 +39,7 @@ typedef struct condvar {
 
 #ifdef __cplusplus
     // In C++, for convenience also provide methods.
+    condvar() { memset(this, 0, sizeof *this); }
     inline int wait(mutex_t *user_mutex, sched::timer *tmr = nullptr);
     inline void wake_one();
     inline void wake_all();
