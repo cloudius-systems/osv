@@ -630,3 +630,4 @@ libc += time.o
 libc += signal.o
 libc += mman.o
 libc += sem.o
+libc += af_local.o

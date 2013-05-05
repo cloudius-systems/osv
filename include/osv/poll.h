@@ -78,6 +78,7 @@ struct pollfd {
 #define POLLERR     0x0008      /* some poll error occurred */
 #define POLLHUP     0x0010      /* file descriptor was "hung up" */
 #define POLLNVAL    0x0020      /* requested events "invalid" */
+#define POLLRDHUP   0x2000      /* Reader hung up */
 
 #define POLLSTANDARD    (POLLIN|POLLPRI|POLLOUT|POLLRDNORM|POLLRDBAND|\
              POLLWRBAND|POLLERR|POLLHUP|POLLNVAL)

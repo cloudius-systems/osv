@@ -5,6 +5,7 @@
 
 #include <bsd/uipc_syscalls.h>
 #include <osv/debug.h>
+#include "libc/af_local.h"
 
 #include "libc.h"
 
@@ -16,6 +17,9 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 
 	sock_d("socketpair(domain=%d, type=%d, protocol=%d)", domain, type,
 		protocol);
+
+	if (domain == AF_LOCAL)
+		return socketpair_af_local(type, protocol, sv);
 
 	error = linux_socketpair(domain, type, protocol, sv);
 	if (error) {
