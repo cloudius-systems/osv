@@ -75,6 +75,18 @@ int main(int ac, char** av)
 
     close(s[0]);
 
+    std::vector<int> sockets;
+    while (socketpair(AF_LOCAL, SOCK_STREAM, 0, s) == 0) {
+        sockets.push_back(s[0]);
+        sockets.push_back(s[1]);
+    }
+    auto nsock = sockets.size();
+    for (int s : sockets) {
+        close(s);
+    }
+    report(nsock > 100, "create many sockets");
+
+
     debug("SUMMARY: %d tests, %d failures", tests, fails);
 }
 
