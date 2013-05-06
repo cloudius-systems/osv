@@ -32,8 +32,8 @@ typedef struct condvar {
         // to be woken) towards newest. The ccondvar_wait structures
         // themselves are held on the stack of the waiting thread - so no
         // dynamic memory allocation is needed for this list.
-        ccondvar_waiter *oldest;
-        ccondvar_waiter *newest;
+        struct ccondvar_waiter *oldest;
+        struct ccondvar_waiter *newest;
     } waiters_fifo;
 
 #ifdef __cplusplus
