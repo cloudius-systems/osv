@@ -60,3 +60,18 @@ fileref falloc_noinstall()
     }
     return fileref(fp, false);
 }
+
+fdesc::fdesc(fileref f)
+{
+    int r = fdalloc(f.get(), &_fd);
+    if (r) {
+        throw r;
+    }
+}
+
+fdesc::~fdesc()
+{
+    if (_fd != -1) {
+        close(_fd);
+    }
+}

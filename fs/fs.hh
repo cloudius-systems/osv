@@ -29,4 +29,16 @@ class filesystem {};
 
 fileref falloc_noinstall(); // throws error
 
+class fdesc {
+public:
+    explicit fdesc() : _fd(-1) {}
+    explicit fdesc(int fd) : _fd(fd) {}
+    explicit fdesc(fileref f);
+    ~fdesc();
+    int get() { return _fd; }
+    int release() { int fd = -1; std::swap(fd, _fd); return fd; }
+private:
+    int _fd;
+};
+
 #endif
