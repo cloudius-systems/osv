@@ -424,6 +424,11 @@ void preempt_enable()
     // FIXME: may need to schedule() here if a high prio thread is waiting
 }
 
+unsigned int get_preempt_counter()
+{
+    return preempt_counter;
+}
+
 void preempt()
 {
     if (!preempt_counter) {

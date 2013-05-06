@@ -69,6 +69,7 @@
 /tests/tst-bsd-netdriver.so: ./tests/tst-bsd-netdriver.so
 /tests/tst-virtionet.so: ./tests/tst-virtionet.so
 /tests/tst-fpu.so: ./tests/tst-fpu.so
+/tests/tst-preempt.so: ./tests/tst-preempt.so
 /tests/tst-tracepoint.so: ./tests/tst-tracepoint.so
 /tests/tst-leak.so: ./tests/tst-leak.so
 /tests/tst-mmap.so: ./tests/tst-mmap.so

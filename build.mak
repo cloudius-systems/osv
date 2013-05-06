@@ -87,6 +87,7 @@ tests += tests/tst-vblk.so tests/tst-fat.so tests/tst-romfs.so tests/bench/bench
 tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so tests/tst-bsd-netisr.so \
          tests/tst-bsd-netdriver.so tests/tst-virtionet.so
 tests += tests/tst-fpu.so
+tests += tests/tst-preempt.so
 tests += tests/tst-tracepoint.so
 tests += tests/tst-hub.so
 tests += tests/tst-leak.so tests/tst-mmap.so
