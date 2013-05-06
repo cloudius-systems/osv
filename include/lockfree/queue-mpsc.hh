@@ -8,7 +8,8 @@
 //
 // Note that while there's just one concurrent consumer - it does not have
 // to always be the same thread or processor - it's just that the program
-// logic guarantees that in no case do two pop()s get called concurrently.
+// logic guarantees that in no case do two pop()s get called concurrently,
+// and the caller is responsible to ensure the appropriate memory ordering.
 //
 // This is one of the simplest, and most well-known (and often
 // reinvented) lock-free algorithm, and we actually have another
@@ -38,11 +39,7 @@ public:
     typedef linked_item<T> LT;
 private:
     std::atomic<LT*> pushlist;
-    // While poplist isn't used concurrently, we still want to allow it to
-    // be accessed from different threads, and when we read the pointer
-    // from poplist in one CPU we need the list it points to to also be
-    // visible (so-called "release/consume" memory ordering).
-    std::atomic<LT*> poplist;
+    LT* poplist;
 public:
     queue_mpsc<T>() : pushlist(nullptr), poplist(nullptr) { }
 
@@ -64,14 +61,13 @@ public:
 
     inline bool pop(T *result)
     {
-        LT *head = poplist.load(std::memory_order_consume);
-        if (head) {
+        if (poplist) {
             // The poplist (prepared by an earlier pop) is not empty, so pop
             // from it. We don't need any locking to access the poplist, as
             // it is only touched by pop operations, and our assumption (of a
             // single-consumer queue) is that pops cannot be concurrent.
-            *result = head->value;
-            poplist.store(head->next, std::memory_order_release);
+            *result = poplist->value;
+            poplist = poplist->next;
             return true;
         } else {
             // The poplist is empty. Atomically take the entire pushlist (pushers
@@ -88,20 +84,18 @@ public:
             // the last item (the oldest pushed item) as the result of the pop.
             while (r->next) {
                 LT *next = r->next;
-                r->next = head;
-                head = r;
+                r->next = poplist;
+                poplist = r;
                 r = next;
             }
             *result = r->value;
-            poplist.store(head, std::memory_order_release);
             return true;
         }
     }
 
     inline bool empty(void) const
     {
-           return (!poplist.load(std::memory_order_relaxed) &&
-                   !pushlist.load(std::memory_order_relaxed));
+           return (!poplist && !pushlist.load(std::memory_order_relaxed));
     }
 };
 
