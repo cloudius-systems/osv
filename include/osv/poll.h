@@ -39,6 +39,9 @@ __BEGIN_DECLS
  * This file is intended to be compatible with the traditional poll.h.
  */
 
+
+#if 0  // but it conflicts with <sys/poll.h>
+
 typedef unsigned int    nfds_t;
 
 /*
@@ -87,6 +90,16 @@ struct pollfd {
  * Request that poll() wait forever.
  */
 #define INFTIM      (-1)
+
+#else
+
+#include <sys/poll.h>
+#define POLLSTANDARD    (POLLIN|POLLPRI|POLLOUT|POLLRDNORM|POLLRDBAND|\
+             POLLWRBAND|POLLERR|POLLHUP|POLLNVAL)
+/* General FreeBSD extension (currently only supported for sockets): */
+#define POLLINIGNEOF    0x2000      /* like POLLIN, except ignore EOF */
+
+#endif
 
 /*
  * Each file descriptor saves a reference to an allocated poll request.
