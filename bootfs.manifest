@@ -8,6 +8,7 @@
 /usr/lib/jvm/&/jre/lib/amd64/headless/libmawt.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libfontmanager.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libnet.so: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/amd64/libjavajpeg.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/resources.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/rt.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/jsse.jar: %(jdkbase)s/&
@@ -22,6 +23,7 @@
 /usr/lib/&/libfontconfig.so.1: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libfreetype.so.6: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libjpeg.so.62: %(miscbase)s/usr/lib64/&
 /&/etc/fonts/fonts.conf: %(miscbase)s/&
 /&/etc/fonts/conf.d/20-unhint-small-vera.conf: %(miscbase)s/&
 /&/etc/fonts/conf.d/25-no-bitmap-fedora.conf: %(miscbase)s/&
