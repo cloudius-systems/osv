@@ -63,7 +63,22 @@ def expand(items):
         else:
             yield (name, hostname)
 
+def unsymlink(f):
+    try:
+        link = os.readlink(f)
+        if link.startswith('/'):
+            # try to find a match
+            base = os.path.dirname(f)
+            while not os.path.exists(base + link):
+                base = os.path.dirname(base)
+        else:
+            base = os.path.dirname(f) + '/'
+        return unsymlink(base + link)
+    except Exception:
+        return f
+
 files = list(expand(files.items()))
+files = [(x, unsymlink(y)) for (x, y) in files]
 
 pos = (len(files) + 1) * metadata_size
 
