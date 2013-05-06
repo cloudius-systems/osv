@@ -51,6 +51,7 @@ elf::tls_data tls_data;
 void setup_tls(elf::init_table inittab)
 {
     tls_data = inittab.tls;
+    memset(tls_data.start + tls_data.filesize, 0, tls_data.size - tls_data.filesize);
     extern char tcb0[]; // defined by linker script
     memcpy(tcb0, inittab.tls.start, inittab.tls.size);
     auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls.size);

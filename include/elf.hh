@@ -241,6 +241,7 @@ class symbol_module;
 
 struct tls_data {
     void* start;
+    size_t filesize;
     size_t size;
 };
 

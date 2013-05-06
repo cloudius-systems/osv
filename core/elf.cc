@@ -878,6 +878,7 @@ init_table get_init(Elf64_Ehdr* header)
             relocate_table(jmp, njmp);
         } else if (phdr->p_type == PT_TLS) {
             ret.tls.start = reinterpret_cast<void*>(phdr->p_vaddr);
+            ret.tls.filesize = phdr->p_filesz;
             ret.tls.size = phdr->p_memsz;
         }
     }
