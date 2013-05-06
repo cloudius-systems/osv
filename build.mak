@@ -76,6 +76,11 @@ tests/%.o: COMMON += -fPIC
 	$(makedir)
 	$(q-build-so)
 
+# Some .so's need to refer to libstdc++ so it will be linked at run time.
+# The majority of our .so don't actually need libstdc++, so didn't add it
+# by default.
+tests/tst-queue-mpsc.so: CFLAGS+=-lstdc++
+
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 sys-includes +=  $(gccbase)/usr/include $(glibcbase)/usr/include
 autodepend = -MD -MT $@ -MP
@@ -96,6 +101,7 @@ tests += tests/tst-bsd-tcp1.so
 tests += tests/tst-ifconfig.so
 tests += tests/tst-lsroute.so
 tests += tests/tst-condvar.so
+tests += tests/tst-queue-mpsc.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
