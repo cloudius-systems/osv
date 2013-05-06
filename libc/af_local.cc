@@ -10,6 +10,8 @@
 #include <sys/socket.h>
 #include <osv/fcntl.h>
 #include <osv/condvar.h>
+#include "fs/fs.hh"
+#include "libc.hh"
 
 struct af_local_buffer {
     static constexpr size_t max_buf = 8192;
@@ -237,26 +239,19 @@ int socketpair_af_local(int type, int proto, int sv[2])
     auto b2 = new af_local_buffer;
     std::unique_ptr<af_local> s1{new af_local(b1, b2)};
     std::unique_ptr<af_local> s2{new af_local(b2, b1)};
-    file* f1;
-    file* f2;
-    int r = falloc_noinstall(&f1);
-    if (r) goto out1;
-    r = falloc_noinstall(&f2);
-    if (r) goto out2;
-    finit(f1, FREAD|FWRITE, DTYPE_UNSPEC, s1.release(), &af_local_ops);
-    finit(f2, FREAD|FWRITE, DTYPE_UNSPEC, s2.release(), &af_local_ops);
-    r = fdalloc(f1, &sv[0]);
-    if (r) goto out3;
-    r = fdalloc(f2, &sv[1]);
-    if (r) goto out4;
-    fdrop(f1);
-    fdrop(f2);
-    return 0;
-out4:
-out3:
-out2:
-out1:
-    // FIXME: proper cleanup
-    abort();
+    try {
+        fileref f1{falloc_noinstall()};
+        fileref f2{falloc_noinstall()};
+        finit(f1.get(), FREAD|FWRITE, DTYPE_UNSPEC, s1.release(), &af_local_ops);
+        finit(f2.get(), FREAD|FWRITE, DTYPE_UNSPEC, s2.release(), &af_local_ops);
+        fdesc fd1(f1);
+        fdesc fd2(f2);
+        // all went well, user owns descriptors now
+        sv[0] = fd1.release();
+        sv[1] = fd2.release();
+        return 0;
+    } catch (int error) {
+        return libc_error(error);
+    }
 }
 
