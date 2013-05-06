@@ -2,58 +2,61 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-file_::file_(int fd)
-    : _fd(::dup(fd))
-    , _refs(0)
-{
-}
-
-file_::~file_()
-{
-    close(_fd);
-}
-
-void file_::ref()
-{
-    ++_refs;
-}
-
-void file_::unref()
-{
-    if (!--_refs) {
-        delete this;
-    }
-}
-
-uint64_t file_::size()
+uint64_t size(fileref f)
 {
     struct stat st;
-
-    ::__fxstat(1, _fd, &st);
+    int r = fo_stat(f.get(), &st);
+    assert(r == 0);
     return st.st_size;
 }
 
-void file_::read(void *buffer, uint64_t offset, uint64_t len)
+void read(fileref f, void *buffer, uint64_t offset, uint64_t len)
 {
-    ::lseek(_fd, offset, SEEK_SET);
-    ::read(_fd, buffer, len);
+    iovec iov{buffer, len};
+    // FIXME: breaks on 32-bit
+    uio data{&iov, 1, off_t(offset), ssize_t(len), UIO_READ};
+    int r = fo_read(f.get(), &data, FOF_OFFSET);
+    assert(r == 0);
+    assert(data.uio_resid == 0);
 }
 
-void file_::write(const void* buffer, uint64_t offset, uint64_t len)
+void write(fileref f, const void* buffer, uint64_t offset, uint64_t len)
 {
-    ::lseek(_fd, offset, SEEK_SET);
-    ::write(_fd, buffer, len);
+    iovec iov{const_cast<void*>(buffer), len};
+    // FIXME: breaks on 32-bit
+    uio data{&iov, 1, off_t(offset), ssize_t(len), UIO_WRITE};
+    int r = fo_write(f.get(), &data, FOF_OFFSET);
+    assert(r == 0);
+    assert(data.uio_resid == 0);
 }
 
-filesystem::~filesystem()
+fileref fileref_from_fd(int fd)
 {
-}
-
-fileref filesystem::open(std::string name)
-{
-    int fd = ::open(name.c_str(), O_RDONLY);
-    if (fd < 0)
+    file* fp;
+    if (fget(fd, &fp) == 0) {
+        return fileref(fp, false);
+    } else {
         return fileref();
+    }
+}
 
-    return fileref(new file_(fd));
+fileref fileref_from_fname(std::string fname)
+{
+    int fd = open(fname.c_str(), O_RDONLY);
+    if (fd == -1) {
+        return fileref();
+    }
+    auto f = fileref_from_fd(fd);
+    close(fd);
+    return f;
+}
+
+fileref falloc_noinstall()
+{
+    file* fp;
+    int ret = falloc_noinstall(&fp);
+    if (ret) {
+        throw ret;
+    }
+    return fileref(fp, false);
 }

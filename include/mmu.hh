@@ -46,7 +46,7 @@ public:
 };
 
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
-              file_& file, f_offset offset);
+              fileref file, f_offset offset);
 void* map_anon(void* addr, size_t size, bool search, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);

@@ -5,33 +5,28 @@
 #include <string>
 #include <cstdint>
 #include <boost/intrusive_ptr.hpp>
-#include <unordered_map>
+#include <osv/file.h>
 
-class file_;
+static inline void intrusive_ptr_add_ref(file *fp)
+{
+    fhold(fp);
+}
 
-typedef boost::intrusive_ptr<file_> fileref;
+static inline void intrusive_ptr_release(file *fp)
+{
+    fdrop(fp);
+}
 
-class file_ {
-public:
-    file_(int fd);
-    ~file_();
-    uint64_t size();
-    void read(void *buffer, uint64_t offset, uint64_t len);
-    void write(const void* buffer, uint64_t offset, uint64_t len);
-private:
-    void ref();
-    void unref();
-    int _fd;
-private:
-    unsigned _refs; // FIXME: make atomic
-    friend void intrusive_ptr_add_ref(file_* f) { f->ref(); }
-    friend void intrusive_ptr_release(file_* f) { f->unref(); }
-};
+typedef boost::intrusive_ptr<file> fileref;
 
-class filesystem {
-public:
-    virtual ~filesystem();
-    fileref open(std::string name);
-};
+fileref fileref_from_fd(int fd);
+fileref fileref_from_fname(std::string name);
+uint64_t size(fileref f);
+void read(fileref f, void *buffer, uint64_t offset, uint64_t len);
+void write(fileref f, const void* buffer, uint64_t offset, uint64_t len);
+
+class filesystem {};
+
+fileref falloc_noinstall(); // throws error
 
 #endif
