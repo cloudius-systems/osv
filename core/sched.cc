@@ -419,11 +419,22 @@ void thread::join()
     }
     _joiner = current();
     wait_until([this] { return _status.load() == status::terminated; });
+    // probably unneeded, but don't execute an std::function<> which may
+    // be deleting itself
+    auto cleanup = _cleanup;
+    if (cleanup) {
+        cleanup();
+    }
 }
 
 thread::stack_info thread::get_stack_info()
 {
     return _attr.stack;
+}
+
+void thread::set_cleanup(std::function<void ()> cleanup)
+{
+    _cleanup = cleanup;
 }
 
 unsigned long thread::id()

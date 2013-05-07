@@ -166,6 +166,7 @@ public:
     stack_info get_stack_info();
     cpu* tcpu() __attribute__((no_instrument_function));
     void join();
+    void set_cleanup(std::function<void ()> cleanup);
     unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
 private:
     void main();
@@ -209,6 +210,7 @@ private:
     unsigned long _id;
     u64 _vruntime;
     u64 _borrow;
+    std::function<void ()> _cleanup;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
