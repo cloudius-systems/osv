@@ -4,7 +4,7 @@
         simple example build file
     </description>
   <!-- set global properties for this build -->
-  <property name="src" location="src/"/>
+  <property name="src" location="cloudius/"/>
   <property name="build" location="${out}/classes"/>
   <property name="dist" location="${out}"/>
 
