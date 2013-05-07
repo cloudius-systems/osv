@@ -244,6 +244,11 @@ thread::stack_info::stack_info(void* _begin, size_t _size)
     size = static_cast<char*>(end) - static_cast<char*>(begin);
 }
 
+void thread::stack_info::default_deleter(thread::stack_info si)
+{
+    free(si.begin);
+}
+
 mutex thread_list_mutex;
 typedef bi::list<thread,
                  bi::member_hook<thread,
@@ -280,7 +285,7 @@ thread::~thread()
         thread_list.erase(thread_list.iterator_to(*this));
     });
     if (_attr.stack.deleter) {
-        _attr.stack.deleter(_attr.stack.begin);
+        _attr.stack.deleter(_attr.stack);
     }
     free_tcb();
 }

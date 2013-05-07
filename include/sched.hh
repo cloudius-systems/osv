@@ -138,7 +138,8 @@ public:
         stack_info(void* begin, size_t size);
         void* begin;
         size_t size;
-        void (*deleter)(void*);  // null: don't delete
+        void (*deleter)(stack_info si);  // null: don't delete
+        static void default_deleter(stack_info si);
     };
     struct attr {
         stack_info stack;
