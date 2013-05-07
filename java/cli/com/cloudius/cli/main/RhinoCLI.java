@@ -1,9 +1,9 @@
-package com.cloudius.main;
+package com.cloudius.cli.main;
 
 import java.io.*;
 
-import com.cloudius.tests.TCPEchoServerTest;
-import com.cloudius.util.ELFLoader;
+import com.cloudius.cli.tests.TCPEchoServerTest;
+import com.cloudius.cli.util.ELFLoader;
 
 import sun.org.mozilla.javascript.*;
 import sun.org.mozilla.javascript.tools.shell.*;

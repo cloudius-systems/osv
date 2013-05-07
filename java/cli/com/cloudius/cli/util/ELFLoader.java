@@ -1,13 +1,11 @@
-package com.cloudius.util;
-
-import java.util.*;
+package com.cloudius.cli.util;
 
 import sun.org.mozilla.javascript.NativeArray;
 import sun.org.mozilla.javascript.ScriptableObject;
 import sun.org.mozilla.javascript.annotations.JSFunction;
 
 import com.cloudius.util.Exec;
-import com.cloudius.main.RhinoCLI;
+import com.cloudius.cli.main.RhinoCLI;
 
 public class ELFLoader extends ScriptableObject {
 

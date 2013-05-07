@@ -1,6 +1,5 @@
-package com.cloudius.tests;
+package com.cloudius.cli.tests;
 import java.io.*;
-import java.lang.reflect.*;
 import java.net.*;
 
 import sun.org.mozilla.javascript.*;

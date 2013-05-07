@@ -33,7 +33,7 @@
     <jar jarfile="${dist}/cloudius.jar" basedir="${build-cloudius}" compress="false" />
     <jar jarfile="${dist}/cli.jar" basedir="${build-cli}" compress="false" >
       <manifest>
-        <attribute name="Main-Class" value="com.cloudius.main.RhinoCLI" />
+        <attribute name="Main-Class" value="com.cloudius.cli.main.RhinoCLI" />
         <attribute name="Class-Path" value="cloudius.jar" />
       </manifest>
     </jar>
