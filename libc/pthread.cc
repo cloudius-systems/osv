@@ -15,58 +15,6 @@
 
 namespace pthread_private {
 
-    // Because a pthread cannot pthread_join() itself (this will destroy
-    // the stack currently in use), provide a separate thread which joins
-    // exiting detached pthreads.
-    // This is code duplication from sched::detached_thread::reaper
-    // TODO: Have one class (and even one thread) do both.
-    class reaper {
-    public:
-        reaper();
-        void add_zombie(pthread_t z);
-    private:
-        void reap();
-        mutex _mtx;
-        std::list<pthread_t> _zombies;
-        sched::thread _thread;
-    };
-
-    reaper::reaper() : _mtx{}, _zombies{}, _thread([=] { reap(); })
-    {
-        _thread.start();
-    }
-
-    void reaper::reap()
-    {
-        while (true) {
-            with_lock(_mtx, [=] {
-                sched::thread::wait_until(_mtx,
-                        [=] { return !_zombies.empty(); });
-                while (!_zombies.empty()) {
-                    auto z = _zombies.front();
-                    _zombies.pop_front();
-                    pthread_join(z, nullptr);
-                }
-            });
-        }
-    }
-
-    void reaper::add_zombie(pthread_t z)
-    {
-        with_lock(_mtx, [=] {
-            _zombies.push_back(z);
-            _thread.wake();
-        });
-    }
-
-    reaper *s_reaper;
-
-    void init_detached_pthreads_reaper()
-    {
-        s_reaper = new reaper;
-    }
-
-
     const unsigned tsd_nkeys = 100;
 
     __thread void* tsd[tsd_nkeys];
@@ -115,14 +63,9 @@ namespace pthread_private {
                 current_pthread = to_libc();
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
-                if (attr && attr->detached) {
-                    // It would have been nice to just call pthread_join here,
-                    // but this would be messy because we'll free the stack we
-                    // are using now... So do this from another thread.
-                    pthread_private::s_reaper->add_zombie(current_pthread);
-                }
             }, attributes(attr ? *attr : thread_attr()))
     {
+        _thread.set_cleanup([=] { delete this; });
         _thread.start();
     }
 
@@ -130,6 +73,7 @@ namespace pthread_private {
     {
         sched::thread::attr a;
         a.stack = allocate_stack(attr);
+        a.detached = attr.detached;
         return a;
     }
 
@@ -153,6 +97,7 @@ namespace pthread_private {
 
     int pthread::join(void** retval)
     {
+        _thread.set_cleanup({});
         _thread.join();
         if (retval) {
             *retval = _retval;
