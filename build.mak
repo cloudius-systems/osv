@@ -71,7 +71,7 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 
 tests/%.o: COMMON += -fPIC
 
-%.so: CFLAGS+=-fPIC -shared
+%.so: COMMON += -fPIC -shared
 %.so: %.o
 	$(makedir)
 	$(q-build-so)
@@ -294,15 +294,6 @@ miscbase = $(src)/external/misc.bin
 boost-libs := $(lastword $(sort $(wildcard /usr/lib*/libboost_program_options-mt.a)))
 
 bsd/%.o: COMMON += -D _KERNEL
-
-java/jni/elf-loader.so: java/jni/elf-loader.o
-java/jni/elf-loader.o: CXXFLAGS += -fPIC
-
-java/java.so: java/java.o
-java/java.o: CXXFLAGS += -fPIC
-
-tests/testrunner.so: tests/testrunner.o
-tests/testrunner.o: CXXFLAGS += -fPIC
 
 usr.img: usr.manifest
 	$(call quiet, \
