@@ -6,6 +6,8 @@
 #include <string.h>
 #include "align.hh"
 #include "debug.hh"
+#include <stdlib.h>
+#include <unistd.h>
 
 namespace {
     typedef boost::format fmt;
@@ -650,23 +652,47 @@ void program::set_object(std::string name, object* obj)
     }
 }
 
+static std::string getcwd()
+{
+    auto r = ::getcwd(NULL, 0);
+    std::string rs = r;
+    free(r);
+    return rs;
+}
+
+static std::string canonicalize(std::string p)
+{
+    auto r = realpath(p.c_str(), NULL);
+    if (r) {
+        std::string rs = r;
+        free(r);
+        return rs;
+    } else {
+        return p;
+    }
+}
+
 object* program::add_object(std::string name)
 {
-    if (!_files.count(name)) {
-        fileref f;
-        if (name.find('/') == name.npos) {
-           for (auto dir : _search_path) {
-               f = fileref_from_fname(dir + "/" + name);
-               if (f) {
-                   break;
-               }
+    fileref f;
+    if (name.find('/') == name.npos) {
+       for (auto dir : _search_path) {
+           auto dname = canonicalize(dir + "/" + name);
+           f = fileref_from_fname(dname);
+           if (f) {
+               name = dname;
+               break;
            }
-        } else {
-            f = fileref_from_fname(name);
+       }
+    } else {
+        if (name[0] != '/') {
+            name = getcwd() + "/" + name;
         }
-        if (!f) {
-            return nullptr;
-        }
+        name = canonicalize(name);
+        f = fileref_from_fname(name);
+    }
+
+    if (!_files.count(name) && f) {
         auto ef = new file(*this, f, name);
         ef->set_base(_next_alloc);
         _files[name] = ef;
@@ -677,6 +703,11 @@ object* program::add_object(std::string name)
         ef->load_needed();
         ef->relocate();
         ef->run_init_func();
+        return ef;
+    }
+
+    if (!_files.count(name)) {
+        return nullptr;
     }
 
     // TODO: we'll need to refcount the objects here or in the dl*() wrappers
