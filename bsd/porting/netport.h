@@ -8,12 +8,22 @@
 #include <assert.h>
 #include <memory.h>
 #include <time.h>
+#include <pthread.h>
 
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
 
 #define __predict_false(x) (x)
 #define __predict_true(x) (x)
+
+#define        RFSTOPPED       (1<<17) /* leave child in a stopped state */
+
+struct proc {
+};
+
+struct thread {
+	pthread_t pthread;
+};
 
 void init_maxsockets(void *ignored);
 
