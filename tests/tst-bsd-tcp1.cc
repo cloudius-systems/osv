@@ -23,6 +23,7 @@ public:
     {
         int listen_s;
         int client_s;
+        int optval, error;
         struct sockaddr_in laddr;
         char buf[buf_size] = {};
         int i;
@@ -32,6 +33,15 @@ public:
         listen_s = socket(AF_INET, SOCK_STREAM, 0);
         if (listen_s < 0) {
             dbg_d("server: socket() failed!");
+            return -1;
+        }
+
+        /* Reuse bind address */
+        optval = 1;
+        error = setsockopt(listen_s, SOL_SOCKET, SO_REUSEADDR, &optval,
+            sizeof(optval));
+        if (error < 0) {
+            dbg_d("server: setsockopt(SO_REUSEADDR) failed, error=%d", error);
             return -1;
         }
 
