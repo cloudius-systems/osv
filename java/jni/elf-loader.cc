@@ -40,9 +40,9 @@ bool run_elf(int argc, char** argv, int *return_code)
 /*
  * Class:     com_cloudius_util_ELFLoader
  * Method:    run
- * Signature: (Ljava/util/List;)Z
+ * Signature: (Ljava/util/String;)Z
  */
-extern "C" JNIEXPORT jboolean JNICALL Java_com_cloudius_util_ELFLoader_run
+extern "C" JNIEXPORT jboolean JNICALL Java_com_cloudius_util_Exec_run
   (JNIEnv *env, jclass self, jobjectArray jargv)
 {
     char *argv[argc_max_arguments];

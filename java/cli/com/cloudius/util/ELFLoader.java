@@ -3,23 +3,16 @@ package com.cloudius.util;
 import java.util.*;
 
 import sun.org.mozilla.javascript.NativeArray;
-import sun.org.mozilla.javascript.NativeGlobal;
 import sun.org.mozilla.javascript.ScriptableObject;
 import sun.org.mozilla.javascript.annotations.JSFunction;
 
-import com.cloudius.Config;
+import com.cloudius.util.Exec;
 import com.cloudius.main.RhinoCLI;
 
 public class ELFLoader extends ScriptableObject {
 
     // Identifies the scriptable object
     private static final long serialVersionUID = 87664098764510039L;
-
-    static {
-        Config.loadJNI("elf-loader.so");
-    }
-
-    public native static boolean run(String[] argv);
 
     // The native function run() alters this member variable
     public static int _exitcode;
@@ -35,7 +28,7 @@ public class ELFLoader extends ScriptableObject {
             argv[i] = (String)js_argv.get(i);
         }
 
-        boolean success = run(argv);
+        boolean success = Exec.run(argv);
         if (success) {
             RhinoCLI._scope.put("_exitcode", RhinoCLI._scope, _exitcode);
         }
