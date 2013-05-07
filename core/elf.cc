@@ -579,9 +579,8 @@ void object::load_needed()
 {
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
-        auto fullpath = std::string("/usr/lib/") + lib;
-        if (_prog.add_object(fullpath) == nullptr)
-            debug(fmt("could not load %s\n") % fullpath);
+        if (_prog.add_object(lib) == nullptr)
+            debug(fmt("could not load %s\n") % lib);
     }
 }
 
