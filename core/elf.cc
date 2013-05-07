@@ -694,22 +694,22 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
 {
     fileref f;
     if (name.find('/') == name.npos) {
-       for (auto mod : _modules) {
-           if (name == mod->soname()) {
-               return mod;
-           }
-       }
-       std::vector<std::string> search_path;
-       search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
-       search_path.insert(search_path.end(), _search_path.begin(), _search_path.end());
-       for (auto dir : search_path) {
-           auto dname = canonicalize(dir + "/" + name);
-           f = fileref_from_fname(dname);
-           if (f) {
-               name = dname;
-               break;
-           }
-       }
+        for (auto mod : _modules) {
+            if (name == mod->soname()) {
+                return mod;
+            }
+        }
+        std::vector<std::string> search_path;
+        search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
+        search_path.insert(search_path.end(), _search_path.begin(), _search_path.end());
+        for (auto dir : search_path) {
+            auto dname = canonicalize(dir + "/" + name);
+            f = fileref_from_fname(dname);
+            if (f) {
+                name = dname;
+                break;
+            }
+        }
     } else {
         if (name[0] != '/') {
             name = getcwd() + "/" + name;
