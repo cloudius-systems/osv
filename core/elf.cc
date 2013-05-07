@@ -6,6 +6,10 @@
 #include <string.h>
 #include "align.hh"
 #include "debug.hh"
+#include <stdlib.h>
+#include <unistd.h>
+#include <boost/algorithm/string.hpp>
+#include <functional>
 
 namespace {
     typedef boost::format fmt;
@@ -575,13 +579,27 @@ dladdr_info object::lookup_addr(const void* addr)
     return ret;
 }
 
+static std::string dirname(std::string path)
+{
+    auto pos = path.rfind('/');
+    if (pos == path.npos) {
+        return "/";
+    }
+    return path.substr(0, pos);
+}
+
 void object::load_needed()
 {
+    std::vector<std::string> rpath;
+    if (dynamic_exists(DT_RPATH)) {
+        std::string rpath_str = dynamic_str(DT_RPATH);
+        boost::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
+        boost::split(rpath, rpath_str, boost::is_any_of(":"));
+    }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
-        auto fullpath = std::string("/usr/lib/") + lib;
-        if (_prog.add_object(fullpath) == nullptr)
-            debug(fmt("could not load %s\n") % fullpath);
+        if (_prog.add_object(lib, rpath) == nullptr)
+            debug(fmt("could not load %s\n") % lib);
     }
 }
 
@@ -628,6 +646,7 @@ program::program(::filesystem& fs, void* addr)
     assert(!s_program);
     s_program = this;
     set_object("libc.so.6", _core.get());
+    set_object("libm.so.6", _core.get());
     set_object("ld-linux-x86-64.so.2", _core.get());
     set_object("libpthread.so.0", _core.get());
     set_object("libdl.so.2", _core.get());
@@ -651,23 +670,55 @@ void program::set_object(std::string name, object* obj)
     }
 }
 
-object* program::add_object(std::string name)
+static std::string getcwd()
 {
-    if (!_files.count(name)) {
-        fileref f;
-        if (name.find('/') == name.npos) {
-           for (auto dir : _search_path) {
-               f = fileref_from_fname(dir + "/" + name);
-               if (f) {
-                   break;
-               }
-           }
-        } else {
-            f = fileref_from_fname(name);
+    auto r = ::getcwd(NULL, 0);
+    std::string rs = r;
+    free(r);
+    return rs;
+}
+
+static std::string canonicalize(std::string p)
+{
+    auto r = realpath(p.c_str(), NULL);
+    if (r) {
+        std::string rs = r;
+        free(r);
+        return rs;
+    } else {
+        return p;
+    }
+}
+
+object* program::add_object(std::string name, std::vector<std::string> extra_path)
+{
+    fileref f;
+    if (name.find('/') == name.npos) {
+        for (auto mod : _modules) {
+            if (name == mod->soname()) {
+                return mod;
+            }
         }
-        if (!f) {
-            return nullptr;
+        std::vector<std::string> search_path;
+        search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
+        search_path.insert(search_path.end(), _search_path.begin(), _search_path.end());
+        for (auto dir : search_path) {
+            auto dname = canonicalize(dir + "/" + name);
+            f = fileref_from_fname(dname);
+            if (f) {
+                name = dname;
+                break;
+            }
         }
+    } else {
+        if (name[0] != '/') {
+            name = getcwd() + "/" + name;
+        }
+        name = canonicalize(name);
+        f = fileref_from_fname(name);
+    }
+
+    if (!_files.count(name) && f) {
         auto ef = new file(*this, f, name);
         ef->set_base(_next_alloc);
         _files[name] = ef;
@@ -678,6 +729,11 @@ object* program::add_object(std::string name)
         ef->load_needed();
         ef->relocate();
         ef->run_init_func();
+        return ef;
+    }
+
+    if (!_files.count(name)) {
+        return nullptr;
     }
 
     // TODO: we'll need to refcount the objects here or in the dl*() wrappers
