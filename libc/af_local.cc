@@ -127,7 +127,7 @@ int af_local_buffer::write(uio* data)
     if (!data->uio_resid) {
         return 0;
     }
-    int err;
+    int err = 0;
     with_lock(mtx, [&] {
         int r;
         while ((r = write_events_unlocked()) == 0) {
