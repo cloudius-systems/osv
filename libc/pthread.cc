@@ -104,8 +104,9 @@ namespace pthread_private {
     struct thread_attr {
         void* stack_begin;
         size_t stack_size;
+        size_t guard_size;
         bool detached;
-        thread_attr() : stack_begin{}, stack_size{1<<20}, detached{false} {}
+        thread_attr() : stack_begin{}, stack_size{1<<20}, guard_size{4096}, detached{false} {}
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
@@ -139,6 +140,7 @@ namespace pthread_private {
         }
         size_t size = attr.stack_size;
         void *addr = mmu::map_anon(nullptr, size, true, mmu::perm_rw);
+        mmu::protect(addr, attr.guard_size, 0);
         sched::thread::stack_info si{addr, size};
         si.deleter = free_stack;
         return si;
@@ -372,7 +374,7 @@ int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
 
 int pthread_attr_setguardsize(pthread_attr_t *attr, size_t guardsize)
 {
-    debug(fmt("pthread_attr_setguardsize(0x%x) stubbed out\n") % guardsize);
+    from_libc(attr)->guard_size = guardsize;
     return 0;
 }
 
