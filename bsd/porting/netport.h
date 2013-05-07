@@ -13,6 +13,15 @@
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
 
+#define MAXCOMLEN       19 
+
+#define __offsetof(type, field)  __builtin_offsetof(type, field)
+
+#define __containerof(x, s, m) ({                                       \
+	const volatile __typeof(((s *)0)->m) *__x = (x);                \
+	__DEQUALIFY(s *, (const volatile char *)__x - __offsetof(s, m));\
+})
+
 #define __predict_false(x) (x)
 #define __predict_true(x) (x)
 
