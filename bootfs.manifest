@@ -82,6 +82,7 @@
 /tests/tst-condvar.so: ./tests/tst-condvar.so
 /tests/tst-queue-mpsc.so: ./tests/tst-queue-mpsc.so
 /&/tests/tst-af-local.so: ./&
+/&/tests/tst-bsd-taskqueue.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
