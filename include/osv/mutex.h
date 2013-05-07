@@ -14,6 +14,7 @@ typedef struct spinlock {
     bool _lock;
 #ifdef __cplusplus
     // additional convenience methods for C++
+    inline constexpr spinlock() : _lock(false) { }
     inline void lock();
     inline void unlock();
 #endif
