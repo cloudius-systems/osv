@@ -646,6 +646,7 @@ program::program(::filesystem& fs, void* addr)
     assert(!s_program);
     s_program = this;
     set_object("libc.so.6", _core.get());
+    set_object("libm.so.6", _core.get());
     set_object("ld-linux-x86-64.so.2", _core.get());
     set_object("libpthread.so.0", _core.get());
     set_object("libdl.so.2", _core.get());
