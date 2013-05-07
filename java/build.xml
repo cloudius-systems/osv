@@ -22,7 +22,9 @@
         description="compile the source " >
     <!-- Compile the java code from ${src} into ${build} -->
     <javac includeantruntime="false" srcdir="${src-cloudius}" destdir="${build-cloudius}"/>
-    <javac includeantruntime="false" srcdir="${src-cli}" destdir="${build-cli}"/>
+    <javac includeantruntime="false" srcdir="${src-cli}" destdir="${build-cli}">
+      <classpath path="${build-cloudius}" />
+    </javac>
   </target>
 
   <target name="dist" depends="compile"
