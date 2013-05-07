@@ -8,6 +8,8 @@
 #include "debug.hh"
 #include <stdlib.h>
 #include <unistd.h>
+#include <boost/algorithm/string.hpp>
+#include <functional>
 
 namespace {
     typedef boost::format fmt;
@@ -577,11 +579,26 @@ dladdr_info object::lookup_addr(const void* addr)
     return ret;
 }
 
+static std::string dirname(std::string path)
+{
+    auto pos = path.rfind('/');
+    if (pos == path.npos) {
+        return "/";
+    }
+    return path.substr(0, pos);
+}
+
 void object::load_needed()
 {
+    std::vector<std::string> rpath;
+    if (dynamic_exists(DT_RPATH)) {
+        std::string rpath_str = dynamic_str(DT_RPATH);
+        boost::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
+        boost::split(rpath, rpath_str, boost::is_any_of(":"));
+    }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
-        if (_prog.add_object(lib) == nullptr)
+        if (_prog.add_object(lib, rpath) == nullptr)
             debug(fmt("could not load %s\n") % lib);
     }
 }
@@ -672,11 +689,14 @@ static std::string canonicalize(std::string p)
     }
 }
 
-object* program::add_object(std::string name)
+object* program::add_object(std::string name, std::vector<std::string> extra_path)
 {
     fileref f;
     if (name.find('/') == name.npos) {
-       for (auto dir : _search_path) {
+       std::vector<std::string> search_path;
+       search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
+       search_path.insert(search_path.end(), _search_path.begin(), _search_path.end());
+       for (auto dir : search_path) {
            auto dname = canonicalize(dir + "/" + name);
            f = fileref_from_fname(dname);
            if (f) {

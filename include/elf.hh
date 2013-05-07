@@ -340,7 +340,7 @@ class program {
 public:
     explicit program(::filesystem& fs,
                      void* base = reinterpret_cast<void*>(0x100000000000UL));
-    object* add_object(std::string lib);
+    object* add_object(std::string lib, std::vector<std::string> extra_path = {});
     void remove_object(std::string name);
     symbol_module lookup(const char* symbol);
     template <typename T>
