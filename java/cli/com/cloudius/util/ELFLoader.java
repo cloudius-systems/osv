@@ -7,7 +7,6 @@ import sun.org.mozilla.javascript.NativeGlobal;
 import sun.org.mozilla.javascript.ScriptableObject;
 import sun.org.mozilla.javascript.annotations.JSFunction;
 
-import com.cloudius.Config;
 import com.cloudius.main.RhinoCLI;
 
 public class ELFLoader extends ScriptableObject {
@@ -16,7 +15,7 @@ public class ELFLoader extends ScriptableObject {
     private static final long serialVersionUID = 87664098764510039L;
 
     static {
-        Config.loadJNI("elf-loader.so");
+        System.load("/usr/lib/jni/elf-loader.so");
     }
 
     public native static boolean run(String[] argv);
