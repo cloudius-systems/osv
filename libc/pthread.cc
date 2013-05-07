@@ -87,7 +87,6 @@ namespace pthread_private {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
             bool detached);
-        ~pthread() { free_stack(_thread.get_stack_info()); }
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
         int join(void** retval);
@@ -96,7 +95,7 @@ namespace pthread_private {
         sched::thread _thread;
     private:
         sched::thread::stack_info allocate_stack();
-        void free_stack(sched::thread::stack_info si);
+        static void free_stack(sched::thread::stack_info si);
         sched::thread::attr attributes();
     };
 
@@ -135,7 +134,9 @@ namespace pthread_private {
     {
         size_t size = 1024*1024;
         void *addr = mmu::map_anon(nullptr, size, true, mmu::perm_rw);
-        return { addr, size };
+        sched::thread::stack_info si{addr, size};
+        si.deleter = free_stack;
+        return si;
     }
 
     void pthread::free_stack(sched::thread::stack_info si)
