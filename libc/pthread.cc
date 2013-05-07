@@ -83,10 +83,12 @@ namespace pthread_private {
         mutex mtx;
     };
 
+    struct thread_attr;
+
     class pthread {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
-            bool detached);
+            const thread_attr* attr);
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
         int join(void** retval);
@@ -94,45 +96,48 @@ namespace pthread_private {
         // must be initialized last
         sched::thread _thread;
     private:
-        sched::thread::stack_info allocate_stack();
+        sched::thread::stack_info allocate_stack(thread_attr attr);
         static void free_stack(sched::thread::stack_info si);
-        sched::thread::attr attributes();
+        sched::thread::attr attributes(thread_attr attr);
     };
 
     struct thread_attr {
         void* stack_begin;
         size_t stack_size;
         bool detached;
-        thread_attr() : detached(false) { }
+        thread_attr() : stack_begin{}, stack_size{1<<20}, detached{false} {}
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
-            bool detached)
+                     const thread_attr* attr)
             : _thread([=] {
                 current_pthread = to_libc();
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
-                if (detached) {
+                if (attr && attr->detached) {
                     // It would have been nice to just call pthread_join here,
                     // but this would be messy because we'll free the stack we
                     // are using now... So do this from another thread.
                     pthread_private::s_reaper->add_zombie(current_pthread);
                 }
-            }, attributes())
+            }, attributes(attr ? *attr : thread_attr()))
     {
         _thread.start();
     }
 
-    sched::thread::attr pthread::attributes()
+    sched::thread::attr pthread::attributes(thread_attr attr)
     {
         sched::thread::attr a;
-        a.stack = allocate_stack();
+        a.stack = allocate_stack(attr);
         return a;
     }
 
-    sched::thread::stack_info pthread::allocate_stack()
+    sched::thread::stack_info pthread::allocate_stack(thread_attr attr)
     {
-        size_t size = 1024*1024;
+        if (attr.stack_begin) {
+            return {attr.stack_begin, attr.stack_size};
+        }
+        size_t size = attr.stack_size;
         void *addr = mmu::map_anon(nullptr, size, true, mmu::perm_rw);
         sched::thread::stack_info si{addr, size};
         si.deleter = free_stack;
@@ -184,8 +189,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 {
     sigset_t sigset;
     sigprocmask(SIG_SETMASK, nullptr, &sigset);
-    bool detached = attr && pthread_private::from_libc(attr)->detached;
-    auto t = new pthread(start_routine, arg, sigset, detached);
+    auto t = new pthread(start_routine, arg, sigset, from_libc(attr));
     *thread = t->to_libc();
     return 0;
 }
@@ -362,7 +366,7 @@ int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
 
 int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
 {
-    debug(fmt("pthread_attr_setstacksize(0x%x) stubbed out\n") % stacksize);
+    from_libc(attr)->stack_size = stacksize;
     return 0;
 }
 
