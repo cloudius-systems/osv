@@ -37,3 +37,43 @@ bool run_elf(int argc, char** argv, int *return_code)
     return (true);
 }
 
+/*
+ * Class:     com_cloudius_util_ELFLoader
+ * Method:    run
+ * Signature: (Ljava/util/List;)Z
+ */
+extern "C" JNIEXPORT jboolean JNICALL Java_com_cloudius_util_ELFLoader_run
+  (JNIEnv *env, jclass self, jobjectArray jargv)
+{
+    char *argv[argc_max_arguments];
+
+    int argc = std::min(env->GetArrayLength(jargv), argc_max_arguments);
+    if (argc <= 0) {
+        return (JNI_FALSE);
+    }
+
+    for (int i=0; i<argc; i++) {
+        jstring string = (jstring)env->GetObjectArrayElement(jargv, i);
+        const char *c_utf = env->GetStringUTFChars(string, 0);
+        argv[i] = strdup(c_utf);
+        env->ReleaseStringUTFChars(string, c_utf);
+    }
+
+    int rc = -1;
+    bool success = run_elf(argc, argv, &rc);
+
+    // free argv
+    for (int i=0; i<argc; i++) {
+        free(argv[i]);
+    }
+
+    if (!success) {
+        return (JNI_FALSE);
+    }
+
+    // set the return code
+    jfieldID fid = env->GetStaticFieldID(self, "_exitcode", "I");
+    env->SetStaticIntField(self, fid, (int)rc);
+
+    return (JNI_TRUE);
+}

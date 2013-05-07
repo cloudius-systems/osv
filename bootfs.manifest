@@ -88,6 +88,7 @@
 /java/bench.jar: tests/bench/bench.jar
 /java/cloudius.jar: java/cloudius.jar
 /usr/lib/jni/balloon.so: java/jni/balloon.so
+/usr/lib/&/jni/elf-loader.so: java/&
 /console/util.js: ../../console/util.js
 /console/autocomplete.js: ../../console/autocomplete.js
 /console/cd.js: ../../console/cd.js

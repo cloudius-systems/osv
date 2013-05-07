@@ -295,6 +295,9 @@ boost-libs := $(lastword $(sort $(wildcard /usr/lib*/libboost_program_options-mt
 
 bsd/%.o: COMMON += -D _KERNEL
 
+java/jni/elf-loader.so: java/jni/elf-loader.o
+java/jni/elf-loader.o: CXXFLAGS += -fPIC
+
 java/java.so: java/java.o
 java/java.o: CXXFLAGS += -fPIC
 
@@ -310,7 +313,7 @@ usr.img: usr.manifest
 		IMAGE="$@" \
 		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
 
-jni = java/jni/balloon.so
+jni = java/jni/balloon.so java/jni/elf-loader.so
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(jni) \
