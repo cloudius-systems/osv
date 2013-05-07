@@ -1,5 +1,5 @@
-#ifndef MUTEX_HH
-#define MUTEX_HH
+#ifndef LOCKFREE_MUTEX_HH
+#define LOCKFREE_MUTEX_HH
 // A lock-free mutex implementation, based on the combination of two basic
 // techniques:
 // 1. Our lock-free multi-producer single-consumer queue technique
@@ -26,7 +26,7 @@
 //    lock() is keeping count>0.
 // 3. While one lock() is at (B), we cannot have another thread at (A) or (B):
 //    This is because in (B) we only pop() after picking a handoff, so other
-//    lock()s cannot reach (B) (the did not pick the handoff, we did), and
+//    lock()s cannot reach (B) (they did not pick the handoff, we did), and
 //    unlock cannot be at (A) because it only reaches (A) before making the
 //    handoff of after taking it back - and we know it didn't because we took
 //    the handoff.
@@ -59,14 +59,14 @@ private:
     std::atomic<sched::thread *> owner;
     unsigned int depth;
 public:
-    mutex() : count(0), depth(0), owner(nullptr), handoff(nullptr), sequence(0) { }
+    mutex() : count(0), waitqueue(), handoff(0), sequence(0), owner(nullptr), depth(0) { }
     ~mutex() { assert(count==0); }
 
     void lock()
     {
         sched::thread *current = sched::thread::current();
 
-        if (std::atomic_fetch_add(&count, 1) == 0) {
+        if (count.fetch_add(1) == 0) {
             // Uncontended case (no other thread is holding the lock, and no
             // concurrent lock() attempts). We got the lock.
             owner.store(current);
@@ -87,7 +87,18 @@ public:
         // If we're here still here the lock is owned by a different thread.
         // Put this thread in a waiting queue, so it will eventually be woken
         // when another thread releases the lock.
-        sched::wait_guard wait_guard(current); // mark the thread "waiting" now.
+
+        // Mark the thread "waiting" now with wait_guard(). The code from
+        // here until the schedule() below must be kept to a bare minimum:
+        // It will never be preempted (if we preempt a "waiting" thread, it
+        // will never come back), and it cannot run any code expecting a
+        // "running" thread - such as another wait_guard() or anything
+        // using one (mutexes, malloc, etc.). A good way to think about the
+        // situation is that between the wait_guard() and schedule(), the
+        // current thread is replaced by a new non-preemptable execution
+        // context with the code below.
+        sched::wait_guard wait_guard(current);
+
         linked_item<sched::thread *> waiter(current);
         waitqueue.push(&waiter);
 
@@ -95,34 +106,37 @@ public:
         // a concurrent unlock() the responsibility of waking somebody up:
         auto old_handoff = handoff.load();
         if (old_handoff) {
-             if (!waitqueue.isempty()){
-                if (std::atomic_compare_exchange_strong(&handoff, &old_handoff, 0U)) {
+             if (!waitqueue.empty()){
+                if (handoff.compare_exchange_strong(old_handoff, 0U)) {
                     // Note the explanation above about no concurrent pop()s also
                     // explains why we can be sure waitqueue is still not empty.
-                    auto thread = waitqueue.pop();
-                    assert(thread);
+                    sched::thread *thread;
+                    assert(waitqueue.pop(&thread));
                     assert(depth==0);
                     depth = 1;
                     owner.store(thread);
-                    thread->wake();
+                    if(thread!=current) {
+                        thread->wake();
+                        // Note that because of the wait_guard, preemption of
+                        // this thread is disabled, so the above wake() will
+                        // not reschedule current or change its state.
+                    }  else
+                        return; // got the lock ourselves
                 }
             }
         }
 
         // Wait until another thread wakes us up. When somebody wakes us,
         // they will set us to be the owner first.
-        while (true) {
-            if (owner.load() == current)
-                return;
-            current->wait(); // reschedule
-            // TODO: can spurious wakes happen? Maybe this loop isn't needed.
-        }
+        // TODO: perhaps check if owner isn't already current, in which case no need to reschedule?
+        current->tcpu()->schedule(true);
+        assert(owner.load()==current);
     }
 
     bool try_lock(){
         sched::thread *current = sched::thread::current();
         int zero = 0;
-        if (std::atomic_compare_exchange_strong(&count, &zero, 1)) {
+        if (count.compare_exchange_strong(zero, 1)) {
             // Uncontended case. We got the lock.
             owner.store(current);
             assert(depth==0);
@@ -141,8 +155,7 @@ public:
         // false), but the last chance is if we can accept a handoff - and if
         // we do, we got the lock.
         auto old_handoff = handoff.load();
-        if(!old_handoff &&
-                std::atomic_compare_exchange_strong(&handoff, &old_handoff, 0U)) {
+        if(!old_handoff && handoff.compare_exchange_strong(old_handoff, 0U)) {
             ++count;
             owner.store(current);
             assert(depth==0);
@@ -168,7 +181,7 @@ public:
         owner.store(nullptr);
 
         // If there is no waiting lock(), we're done. This is the easy case :-)
-        if (std::atomic_fetch_add(&count, -1) == 1)
+        if (count.fetch_add(-1) == 1)
             return;
 
         // Otherwise there is at least one concurrent lock(). Awaken one if
@@ -179,10 +192,11 @@ public:
         // another lock() queued itself - but if it did, wouldn't the next
         // iteration just pop and return?
         while(true) {
-            auto thread = waitqueue.pop();
-            if (thread) {
+            sched::thread *thread;
+            if (waitqueue.pop(&thread)) {
                 depth = 1;
                 owner.store(thread);
+                assert(thread!=current); // this thread isn't waiting, we know that :(
                 thread->wake();
                 return;
             }
@@ -193,24 +207,16 @@ public:
             handoff.store(ourhandoff);
             // If the queue is empty, the concurrent lock() is before adding
             // itself, and therefore will definitely find our handoff later.
-            if (waitqueue.isempty())
+            if (waitqueue.empty())
                 return;
             // A thread already appeared on the queue, let's try to take the
             // handoff ourselves and awaken it. If somebody else already took
             // the handoff, great, we're done - they are responsible now.
-            if (!std::atomic_compare_exchange_strong(&handoff, &ourhandoff, 0U))
+            if (!handoff.compare_exchange_strong(ourhandoff, 0U))
                 return;
         }
     }
 };
-
-
-template <class Lock, class Func>
-auto with_lock(Lock& lock, Func func) -> decltype(func())
-{
-    std::lock_guard<Lock> guard(lock);
-    return func();
-}
 
 }
 #endif

@@ -80,6 +80,7 @@ tests/%.o: COMMON += -fPIC
 # The majority of our .so don't actually need libstdc++, so didn't add it
 # by default.
 tests/tst-queue-mpsc.so: CFLAGS+=-lstdc++
+tests/tst-mutex.so: CFLAGS+=-lstdc++
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 sys-includes +=  $(gccbase)/usr/include $(glibcbase)/usr/include
@@ -96,6 +97,7 @@ tests += tests/tst-preempt.so
 tests += tests/tst-tracepoint.so
 tests += tests/tst-hub.so
 tests += tests/tst-leak.so tests/tst-mmap.so
+tests += tests/tst-mutex.so
 tests += tests/tst-sockets.so
 tests += tests/tst-bsd-tcp1.so
 tests += tests/tst-ifconfig.so
