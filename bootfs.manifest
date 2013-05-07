@@ -97,5 +97,6 @@
 /console/cat.js: ../../console/cat.js
 /console/tests.js: ../../console/tests.js
 /console/help.js: ../../console/help.js
+/console/run.js: ../../console/run.js
 /console/cli.js: ../../console/cli.js
 /&/etc/hosts: ../../static/&
