@@ -3,6 +3,7 @@ package com.cloudius.main;
 import java.io.*;
 
 import com.cloudius.tests.TCPEchoServerTest;
+import com.cloudius.util.ELFLoader;
 
 import sun.org.mozilla.javascript.*;
 import sun.org.mozilla.javascript.tools.shell.*;
@@ -24,6 +25,7 @@ public class RhinoCLI {
             global.init(cx);
             _scope = ScriptableObject.getTopLevelScope(global);
             ScriptableObject.defineClass(_scope, TCPEchoServerTest.class);
+            ScriptableObject.defineClass(_scope, ELFLoader.class);
             
             FileReader cli_js = new FileReader("/console/cli.js");
             cx.evaluateReader(_scope, cli_js, "cli.js", 1, null);
