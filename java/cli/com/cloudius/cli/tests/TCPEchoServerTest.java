@@ -1,12 +1,9 @@
 package com.cloudius.cli.tests;
+
 import java.io.*;
 import java.net.*;
 
-import sun.org.mozilla.javascript.*;
-import sun.org.mozilla.javascript.annotations.JSConstructor;
-import sun.org.mozilla.javascript.annotations.JSFunction;
-
-public class TCPEchoServerTest extends ScriptableObject {
+public class TCPEchoServerTest implements Test {
     
     private TCPEchoServer _server;
     private TCPEchoClient _client;
@@ -105,22 +102,6 @@ public class TCPEchoServerTest extends ScriptableObject {
         }
     }
     
-    private static final long serialVersionUID = 55505548787335642L;
-
-    @Override
-    public String getClassName() {
-        return "TCPEchoServerTest";
-    }
-    
-    @Override
-    public Object getDefaultValue(Class<?> typeHint) {
-        return toString();
-    }
-
-    @JSConstructor
-    public TCPEchoServerTest() { }
-
-    @JSFunction
     public boolean run() {
         
         try {

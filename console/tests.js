@@ -1,29 +1,28 @@
 importPackage(Packages.com.cloudius.tests);
 
-var unit_tests = new Array();
-unit_tests["TCPEchoServerTest"] = TCPEchoServerTest;
-
-
 var test_cmd = {
         
     init: function() {
-        this._test_names = new Array();
-        for (var test in unit_tests) {
-            this._test_names.push(test);
-        }
+        this._test_runner = new TestRunner();
+        this._test_runner.registerAllTests();
+        this._test_names = this._test_runner.getTestNames();
     },
-        
+    
     invoke: function(inp) {
         if (inp.length != 2) {
             print("test: no test specified");
             return;
         }
         
-        var classname = unit_tests[inp[1]];
-        var t = new classname();
+        var testname = inp[1];
         
-        print(">>> Running test " + inp[1] + "...");
-        var rc = t.run();
+        if (this._test_names.indexOf(testname) == -1) {
+            print("test: not a valid test");
+            return;
+        }
+        
+        print(">>> Running test " + testname + "...");
+        var rc = this._test_runner.run(testname);
         print(">>> Test completed " + (rc ? "successfully!" : "unsuccessfully..."));
     },
     
