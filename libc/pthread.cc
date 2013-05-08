@@ -24,13 +24,6 @@ namespace pthread_private {
     std::vector<bool> tsd_used_keys(tsd_nkeys);
     std::vector<void (*)(void*)> tsd_dtor(tsd_nkeys);
 
-    struct pmutex {
-        pmutex() : initialized(true) {}
-        // FIXME: use a data structure which supports zero-init natively
-        bool initialized; // for PTHREAD_MUTEX_INITIALIZER
-        mutex mtx;
-    };
-
     struct thread_attr;
 
     class pthread {
@@ -183,20 +176,18 @@ pthread_t pthread_self()
     return current_pthread;
 }
 
+static_assert(sizeof(mutex) <= sizeof(pthread_mutex_t), "mutex overflow");
+
 mutex* from_libc(pthread_mutex_t* m)
 {
-    auto p = reinterpret_cast<pmutex*>(m);
-    if (!p->initialized) {
-        new (p) pmutex;
-    }
-    return &p->mtx;
+    return reinterpret_cast<mutex*>(m);
 }
 
 int pthread_mutex_init(pthread_mutex_t* __restrict m,
         const pthread_mutexattr_t* __restrict attr)
 {
     // FIXME: respect attr
-    new (m) pmutex;
+    new (m) mutex;
     return 0;
 }
 
