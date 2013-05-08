@@ -1,5 +1,6 @@
 package com.cloudius.cli.tests;
 
+import java.io.File;
 import java.util.HashMap;
 
 import com.cloudius.cli.main.RhinoCLI;
@@ -46,9 +47,25 @@ public class TestRunner extends ScriptableObject {
         return rc;
     }
     
+    public void registerELFTests() {
+        File dir = new File("/tests");
+        File[] files = dir.listFiles();
+        for (File f: files) {
+            try {
+                if (f.getName().contains(".so")) {
+                    this.register(f.getName(), 
+                            new TestELF(f.getCanonicalPath().toString()));
+                }
+            } catch (Exception ex) {
+                // Do nothing
+            }
+        }
+    }
+    
     @JSFunction
     public void registerAllTests() {
         this.register("TCPEchoServerTest", new TCPEchoServerTest());
+        this.registerELFTests();
     }
     
     @JSFunction
