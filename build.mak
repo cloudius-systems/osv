@@ -133,8 +133,11 @@ loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 
 arch/x64/boot32.o: loader.elf
 
+bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
+
 bsd  = bsd/net.o  
 bsd += bsd/machine/in_cksum.o
+bsd += bsd/sys/crypto/sha2/sha2.o
 bsd += bsd/sys/libkern/arc4random.o
 bsd += bsd/sys/libkern/random.o
 bsd += bsd/sys/libkern/inet_ntoa.o
