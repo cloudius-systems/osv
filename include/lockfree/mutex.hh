@@ -52,14 +52,14 @@ namespace lockfree {
 class mutex {
 private:
     std::atomic<int> count;
+    // "owner" and "depth" are need for implementing a recursive mutex
+    unsigned int depth;
+    std::atomic<sched::thread *> owner;
     queue_mpsc<sched::thread *> waitqueue;
     std::atomic<unsigned int> handoff;
     unsigned int sequence;
-    // "owner" and "depth" are need for implementing a recursive mutex
-    std::atomic<sched::thread *> owner;
-    unsigned int depth;
 public:
-    mutex() : count(0), waitqueue(), handoff(0), sequence(0), owner(nullptr), depth(0) { }
+    mutex() : count(0), depth(0), owner(nullptr), waitqueue(), handoff(0), sequence(0) { }
     ~mutex() { assert(count==0); }
 
     void lock()
