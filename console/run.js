@@ -28,7 +28,7 @@ var run_cmd = {
             return -1;
         }
 
-        return _exitcode;
+        return 0;
     },
 
     invoke: function(inp) {

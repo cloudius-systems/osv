@@ -1,5 +1,7 @@
 package com.cloudius.cli.util;
 
+import java.io.IOException;
+
 import sun.org.mozilla.javascript.NativeArray;
 import sun.org.mozilla.javascript.ScriptableObject;
 import sun.org.mozilla.javascript.annotations.JSFunction;
@@ -12,9 +14,6 @@ public class ELFLoader extends ScriptableObject {
     // Identifies the scriptable object
     private static final long serialVersionUID = 87664098764510039L;
 
-    // The native function run() alters this member variable
-    public static int _exitcode;
-
     @JSFunction
     public boolean run()
     {
@@ -26,12 +25,13 @@ public class ELFLoader extends ScriptableObject {
             argv[i] = (String)js_argv.get(i);
         }
 
-        boolean success = Exec.run(argv);
-        if (success) {
-            RhinoCLI._scope.put("_exitcode", RhinoCLI._scope, _exitcode);
+        try {
+        	long exitcode = Exec.run(argv);
+        	RhinoCLI._scope.put("_exitcode", RhinoCLI._scope, exitcode);
+        	return true;
+        } catch (IOException e) {
+        	return false;
         }
-
-        return (success);
     }
 
     @Override

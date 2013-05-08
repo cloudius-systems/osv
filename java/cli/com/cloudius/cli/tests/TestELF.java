@@ -1,5 +1,7 @@
 package com.cloudius.cli.tests;
 
+import java.io.IOException;
+
 import com.cloudius.util.Exec;
 
 public class TestELF implements Test {
@@ -15,11 +17,10 @@ public class TestELF implements Test {
         String[] argv = new String[1];
         argv[0] = _elf_path;
         
-        boolean success = Exec.run(argv);
-        if (!success) {
-            return false;
+        try {
+        	return (Exec.run(argv) == 0);
+        } catch(IOException e) {
+        	return false;
         }
-        
-        return (Exec._exitcode == 0);
     }
 }

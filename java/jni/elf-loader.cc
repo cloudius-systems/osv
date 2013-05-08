@@ -1,15 +1,14 @@
-#include <algorithm>
+//#include <algorithm>
 #include "elf.hh"
 #include <jni.h>
+#include <stdlib.h>
 #include <string.h>
 
 extern elf::program* prog;
 
-const int argc_max_arguments = 256;
-
 bool run_elf(int argc, char** argv, int *return_code)
 {
-    if ((argc <= 0) || (argc > argc_max_arguments)) {
+    if (argc <= 0) {
         return (false);
     }
 
@@ -23,7 +22,6 @@ bool run_elf(int argc, char** argv, int *return_code)
        return (false);
     }
 
-    /* call main in a thread */
     int rc = main(argc, argv);
 
     /* cleanups */
@@ -37,20 +35,22 @@ bool run_elf(int argc, char** argv, int *return_code)
     return (true);
 }
 
-/*
- * Class:     com_cloudius_util_ELFLoader
- * Method:    run
- * Signature: (Ljava/util/String;)Z
- */
-extern "C" JNIEXPORT jboolean JNICALL Java_com_cloudius_util_Exec_run
+static jint throwIOException(JNIEnv *env, const char *message)
+{
+    jclass cls = env->FindClass("java/io/IOException");
+    // TODO: do something if !cls ?
+    return env->ThrowNew(cls, message);
+}
+
+extern "C" JNIEXPORT jint JNICALL Java_com_cloudius_util_Exec_run
   (JNIEnv *env, jclass self, jobjectArray jargv)
 {
-    char *argv[argc_max_arguments];
-
-    int argc = std::min(env->GetArrayLength(jargv), argc_max_arguments);
+    int argc = env->GetArrayLength(jargv);
     if (argc <= 0) {
-        return (JNI_FALSE);
+        throwIOException(env, "no command given");
     }
+
+    char **argv = (char**) malloc(argc * sizeof(char*));
 
     for (int i=0; i<argc; i++) {
         jstring string = (jstring)env->GetObjectArrayElement(jargv, i);
@@ -59,21 +59,18 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_cloudius_util_Exec_run
         env->ReleaseStringUTFChars(string, c_utf);
     }
 
-    int rc = -1;
+    int rc;
     bool success = run_elf(argc, argv, &rc);
 
     // free argv
     for (int i=0; i<argc; i++) {
         free(argv[i]);
     }
+    free(argv);
 
     if (!success) {
-        return (JNI_FALSE);
+        throwIOException(env, "couldn't run command");
     }
 
-    // set the return code
-    jfieldID fid = env->GetStaticFieldID(self, "_exitcode", "I");
-    env->SetStaticIntField(self, fid, (int)rc);
-
-    return (JNI_TRUE);
+    return rc;
 }
