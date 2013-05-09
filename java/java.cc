@@ -51,6 +51,10 @@ extern "C" int main(int ac, char **av)
     auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
     assert(ret == 0);
     auto mainclass = env->FindClass(mainclassname.c_str());
+    if (!mainclass) {
+        debug("java.so: Can't find class %s.\n", mainclassname);
+        abort();
+    }
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
     auto stringclass = env->FindClass("java/lang/String");
