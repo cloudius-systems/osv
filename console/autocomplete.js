@@ -8,7 +8,10 @@ function write_suggestions(arr, command)
             suggestion = command.tab_pretty(suggestion);
         }
         write_string(suggestion);
-        write_char('\t');
+        
+        if (i != arr.length-1) {
+            write_char('\t');
+        }
     }
     write_char('\n');
     flush();
