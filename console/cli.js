@@ -166,9 +166,9 @@ function tab()
             var last_idx = inp.length-1;
             var suggested = false;
             if (last_idx == 0) {
-                suggested = get_suggestions(results, "");
+                suggested = get_suggestions(results, "", cmd);
             } else {
-                suggested = get_suggestions(results, inp[last_idx]);
+                suggested = get_suggestions(results, inp[last_idx], cmd);
             }
             
             if (cmd.tab_final) {

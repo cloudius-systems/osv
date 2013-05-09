@@ -1,7 +1,16 @@
 // Pretty print suggestions
-function write_suggestions(arr)
+function write_suggestions(arr, command)
 {
-    write_string("\n" + arr.join("\t") + "\n");
+    write_char('\n');
+    for (var i=0; i < arr.length; i++) {
+        var suggestion = arr[i];
+        if ((command != undefined) && (command.tab_pretty)) {
+            suggestion = command.tab_pretty(suggestion);
+        }
+        write_string(suggestion);
+        write_char('\t');
+    }
+    write_char('\n');
     flush();
 }
 
@@ -33,7 +42,7 @@ function autocomplete(word)
     }
 }
 
-function get_suggestions(arr, partial)
+function get_suggestions(arr, partial, command)
 {
     // Find suggestions
     var suggestions = new Array();
@@ -49,7 +58,7 @@ function get_suggestions(arr, partial)
         return (true);
     } else if (suggestions.length > 1) {
         // FIXME: Find a common prefix for all suggestions if possible
-        write_suggestions(suggestions);
+        write_suggestions(suggestions, command);
     } else {
         beep();
     }

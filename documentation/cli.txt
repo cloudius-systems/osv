@@ -91,6 +91,12 @@ tab_final(found_match)
                 called after tab has completed and possibly a single match have 
                 been found (tab completed), see cd.ls for an example
 
+tab_pretty(arg)
+
+                called just before printing an autocompleted suggestion, 
+                used by commands to prettify their autocompletion output, 
+                used by the cd command
+
 help()          should print a helpful description for the command, called when 
                 the user execute "help cmd"
 
