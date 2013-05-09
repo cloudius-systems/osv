@@ -381,6 +381,14 @@ ctype-data.h: gen-ctype-data
 gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
+generated-headers = gen/include/bits/alltypes.h
+
+gen/include/bits/alltypes.h: $(src)/include/api/x86_64/bits/alltypes.h.sh
+	$(call very-quiet, mkdir -p $(dir $@))
+	$(call quiet, sh $^ > $@, GEN $@)
+
+$(src)/build.mak: $(generated-headers)
+
 -include $(shell find -name '*.d')
 
 .DELETE_ON_ERROR:
