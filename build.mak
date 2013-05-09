@@ -309,7 +309,7 @@ usr.img: usr.manifest
 		IMAGE="$@" \
 		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
 
-jni = java/jni/balloon.so java/jni/elf-loader.so
+jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(jni) \
