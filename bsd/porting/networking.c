@@ -12,7 +12,7 @@
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 
-void osv_start_if(const char* if_name, const char* ip_addr, int masklen)
+void osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
 {
     struct in_aliasreq ifra;
     struct sockaddr_in* addr      = &ifra.ifra_addr;
@@ -34,7 +34,7 @@ void osv_start_if(const char* if_name, const char* ip_addr, int masklen)
     addr->sin_len = sizeof(struct sockaddr_in);
 
     /* Mask */
-    mask->sin_addr.s_addr = htonl(~((1LL << (32 - masklen)) - 1) & 0xffffffff);
+    inet_aton(mask_addr, &mask->sin_addr);
     mask->sin_len = sizeof(struct sockaddr_in);
     broadcast->sin_family      = AF_INET;
     broadcast->sin_len         = sizeof(struct sockaddr_in);
