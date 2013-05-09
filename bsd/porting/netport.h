@@ -234,6 +234,9 @@ static __inline intrmask_t  spltty(void)        { return 0; }
 static __inline intrmask_t  splvm(void)     { return 0; }
 static __inline void        splx(intrmask_t ipl)   { return; }
 
+/* must match max_cpus in include/sched.hh */
+#define MAXCPU		(sizeof(unsigned long) * 8)
+
 
 /*
  * OSv: Copied from kern_time.c
