@@ -38,6 +38,14 @@ var test_cmd = {
         return this._test_names;
     },
     
+    tab_pretty: function(arg) {
+        if (arg.indexOf(".so") == -1) {
+            return "\x1B[31m"+arg+"\x1B[0m";
+        }
+        
+        return "\x1B[32m"+arg+"\x1B[0m";
+    },
+    
     tab_delim: function () {
         return ('\n');
     }
