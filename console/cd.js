@@ -39,7 +39,34 @@ var cd = {
     },
     
     tab: function(inp) {
-        return (ls.ls_dirs());
+        if (inp.length == 1) {
+            return (ls.ls_dirs());
+        }
+        
+        if (inp.length > 2) {
+            return ([]);
+        }
+        
+        arg = inp[1];
+        if (arg.indexOf('/') == -1) {
+            return (ls.ls_dirs());
+        }
+        
+        last_slash = arg.lastIndexOf('/');
+        dir = arg.substring(0, last_slash);
+        
+        dirs = ls.ls_dirs(dir);
+        arr = [];
+        for (var i=0; i<dirs.length; i++) {
+            arr[i] = dir + '/' + dirs[i];
+        }
+        
+        return (arr);
+    },
+    
+    tab_pretty: function(arg) {
+        last_slash = arg.lastIndexOf('/');
+        return (arg.substring(last_slash+1));
     },
     
     tab_final: function(found_match) {
