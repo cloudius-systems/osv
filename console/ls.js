@@ -1,8 +1,13 @@
 
 var ls = {
         
-    ls_dirs: function(inp) {
-        var dir = cd.cwd();
+    ls_dirs: function(subdir) {
+        var dir;
+        if (subdir != undefined) {
+            dir = File(cd.cwd(), subdir);
+        } else {
+            dir = cd.cwd();
+        }
         var filez = dir.listFiles();
         var results = new Array();
         for (var file in filez){
