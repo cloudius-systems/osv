@@ -4,6 +4,7 @@ import java.io.*;
 
 import com.cloudius.cli.tests.TestRunner;
 import com.cloudius.cli.util.ELFLoader;
+import com.cloudius.cli.util.Networking;
 
 import sun.org.mozilla.javascript.*;
 import sun.org.mozilla.javascript.tools.shell.*;
@@ -27,6 +28,7 @@ public class RhinoCLI {
             _scope = ScriptableObject.getTopLevelScope(global);
             ScriptableObject.defineClass(_scope, TestRunner.class);
             ScriptableObject.defineClass(_scope, ELFLoader.class);
+            ScriptableObject.defineClass(_scope, Networking.class);
             
             FileReader cli_js = new FileReader("/console/cli.js");
             _cx.evaluateReader(_scope, cli_js, "cli.js", 1, null);
