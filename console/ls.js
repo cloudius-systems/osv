@@ -7,7 +7,7 @@ var ls = {
         var results = new Array();
         for (var file in filez){
             if (filez[file].isDirectory()) {
-                results.push(filez[file].getName());
+                results.push(filez[file].getName() + "");
             }
         }
         
@@ -19,7 +19,7 @@ var ls = {
         var filez = dir.listFiles();
         var results = new Array();
         for (var file in filez){
-            results.push(filez[file].getName());
+            results.push(filez[file].getName() + "");
         }
         
         return (results);
