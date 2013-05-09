@@ -37,6 +37,10 @@ var test_cmd = {
         
         return this._test_names;
     },
+    
+    tab_delim: function () {
+        return ('\n');
+    }
 };
 
 
