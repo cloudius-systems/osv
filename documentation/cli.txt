@@ -97,7 +97,11 @@ tab_pretty(arg)
                 used by commands to prettify their autocompletion output, 
                 used by the cd command
 
+tab_delim()     allows commands to specify a delimiter between tab completion 
+                suggestions, the default is '\t' in case this function is not present
+                in the command interface.
+
 help()          should print a helpful description for the command, called when 
                 the user execute "help cmd"
 
-
+a

@@ -10,7 +10,11 @@ function write_suggestions(arr, command)
         write_string(suggestion);
         
         if (i != arr.length-1) {
-            write_char('\t');
+            var ch = '\t';
+            if ((command != undefined) && (command.tab_delim)) {
+                ch = command.tab_delim();
+            }
+            write_char(ch);
         }
     }
     write_char('\n');
