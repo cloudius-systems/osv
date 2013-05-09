@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <osv/ioctl.h>
 
 #include <bsd/porting/netport.h>
@@ -14,28 +15,43 @@
 
 int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
 {
-    int error;
+    int error, success;
     struct in_aliasreq ifra;
     struct sockaddr_in* addr      = &ifra.ifra_addr;
     struct sockaddr_in* mask      = &ifra.ifra_mask;
     struct sockaddr_in* broadcast = &ifra.ifra_broadaddr;
     struct ifnet* ifp;
 
+    if ((if_name == NULL) || (ip_addr == NULL) || (mask_addr == NULL)) {
+        return (EINVAL);
+    }
+
     bzero(&ifra, sizeof(struct in_aliasreq));
 
     /* IF Name */
     strncpy(ifra.ifra_name, if_name, IFNAMSIZ);
     ifp = ifunit_ref(if_name);
+    if (!ifp) {
+        return (ENOENT);
+    }
 
     // todo check for null
 
     /* IP Address */
-    inet_aton(ip_addr, &addr->sin_addr);
+    success = inet_aton(ip_addr, &addr->sin_addr);
+    if (!success) {
+        error = EINVAL;
+        goto out;
+    }
     addr->sin_family = AF_INET;
     addr->sin_len = sizeof(struct sockaddr_in);
 
     /* Mask */
-    inet_aton(mask_addr, &mask->sin_addr);
+    success = inet_aton(mask_addr, &mask->sin_addr);
+    if (!success) {
+        error = EINVAL;
+        goto out;
+    }
     mask->sin_len = sizeof(struct sockaddr_in);
     broadcast->sin_family      = AF_INET;
     broadcast->sin_len         = sizeof(struct sockaddr_in);
@@ -43,8 +59,9 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
                                   mask->sin_addr.s_addr) |
                                  ~mask->sin_addr.s_addr ;
     error = in_control(NULL, SIOCAIFADDR, (caddr_t)&ifra, ifp, NULL);
-    if_rele(ifp);
 
+out:
+    if_rele(ifp);
     return (error);
 }
 
@@ -53,15 +70,18 @@ int osv_ifup(const char* if_name)
     int error;
     struct ifreq ifr = {0};
 
-    strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
+    if (if_name == NULL) {
+        return (EINVAL);
+    }
 
+    strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
     error = ifioctl(NULL, SIOCGIFFLAGS, (caddr_t)&ifr, NULL);
     if (error) {
         return (error);
     }
 
     if (ifr.ifr_flags & IFF_UP) {
-        return 0;
+        return (0);
     }
 
     ifr.ifr_flags |= IFF_UP;
