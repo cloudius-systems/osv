@@ -4,9 +4,9 @@
 __BEGIN_DECLS
 
 /* Interface Functions */
-void osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr);
+int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr);
 
-void osv_ifup(const char* if_name);
+int osv_ifup(const char* if_name);
 
 __END_DECLS
 

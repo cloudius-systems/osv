@@ -12,8 +12,9 @@
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 
-void osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
+int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
 {
+    int error;
     struct in_aliasreq ifra;
     struct sockaddr_in* addr      = &ifra.ifra_addr;
     struct sockaddr_in* mask      = &ifra.ifra_mask;
@@ -41,11 +42,13 @@ void osv_start_if(const char* if_name, const char* ip_addr, const char* mask_add
     broadcast->sin_addr.s_addr = (addr->sin_addr.s_addr &
                                   mask->sin_addr.s_addr) |
                                  ~mask->sin_addr.s_addr ;
-    in_control(NULL, SIOCAIFADDR, (caddr_t)&ifra, ifp, NULL);
+    error = in_control(NULL, SIOCAIFADDR, (caddr_t)&ifra, ifp, NULL);
     if_rele(ifp);
+
+    return (error);
 }
 
-void osv_ifup(const char* if_name)
+int osv_ifup(const char* if_name)
 {
     int error;
     struct ifreq ifr = {0};
@@ -54,14 +57,15 @@ void osv_ifup(const char* if_name)
 
     error = ifioctl(NULL, SIOCGIFFLAGS, (caddr_t)&ifr, NULL);
     if (error) {
-        return;
+        return (error);
     }
 
     if (ifr.ifr_flags & IFF_UP) {
-        return;
+        return 0;
     }
 
     ifr.ifr_flags |= IFF_UP;
-    ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, NULL);
+    error = ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, NULL);
+    return (error);
 }
 
