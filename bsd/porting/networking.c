@@ -45,15 +45,23 @@ void osv_start_if(const char* if_name, const char* ip_addr, const char* mask_add
     if_rele(ifp);
 }
 
-
-/* FIXME: Read flags first, then logical OR them with IFF_UP */
 void osv_ifup(const char* if_name)
 {
+    int error;
     struct ifreq ifr = {0};
 
-    ifr.ifr_flags = IFF_UP;
     strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
 
+    error = ifioctl(NULL, SIOCGIFFLAGS, (caddr_t)&ifr, NULL);
+    if (error) {
+        return;
+    }
+
+    if (ifr.ifr_flags & IFF_UP) {
+        return;
+    }
+
+    ifr.ifr_flags |= IFF_UP;
     ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, NULL);
 }
 

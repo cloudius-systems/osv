@@ -70,10 +70,7 @@ void net_init(void)
 
     /* Start the loopback device */
     osv_start_if("lo0", "127.0.0.1", "255.0.0.0");
-    /* FIXME: osv_ifup runs over the existing interface flags (IFF_LOOPBACK)
-     * Luckily, the loopback interface starts when and address is set.
-     * Uncomment when osv_ifup is fixed
-    osv_ifup("lo0"); */
+    osv_ifup("lo0");
 
     debug("Done!\n");
 }
