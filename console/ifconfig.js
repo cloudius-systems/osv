@@ -1,8 +1,10 @@
 
 var ifconfig_cmd = {
         
+    // returns a boolean indicating a successful operation
     set_ip: function(ifname, ip, netmask) {
-        
+        var rc = networking_interface.set_ip(ifname, ip, netmask);
+        return rc;
     },
         
     invoke: function(inp) {
@@ -17,7 +19,10 @@ var ifconfig_cmd = {
         var mask = inp[4];
         var up_down_unused = inp[6];
         
-        set_ip(ifname, ip, mask);
+        var rc = this.set_ip(ifname, ip, mask);
+        if (!rc) {
+            print ("ifconfig: unable to set ip, wrong input");
+        }
     },
     
     help: function() {

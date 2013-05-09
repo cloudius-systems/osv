@@ -23,6 +23,9 @@ _commands["test"] = test_cmd;
 _commands["run"] = run_cmd;
 _commands["ifconfig"] = ifconfig_cmd;
 
+// Create interface to networking functions
+var networking_interface = new Networking();
+
 // I/O
 var _reader = new BufferedReader( new InputStreamReader(System['in']) );
 var _writer = new BufferedWriter( new OutputStreamWriter(System['out']));
