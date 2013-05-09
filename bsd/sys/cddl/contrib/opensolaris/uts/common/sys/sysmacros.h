@@ -380,7 +380,7 @@ extern unsigned char bcd_to_byte[256];
  * High order bit is 31 (or 63 in _LP64 kernel).
  */
 static __inline int
-highbit(ulong_t i)
+highbit(u_long i)
 {
 	register int h = 1;
 
