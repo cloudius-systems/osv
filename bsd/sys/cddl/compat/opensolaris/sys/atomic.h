@@ -30,7 +30,7 @@
 #define	_OPENSOLARIS_SYS_ATOMIC_H_
 
 #include <sys/types.h>
-#include <machine/atomic.h>
+#include <bsd/machine/atomic.h>
 
 #define	casptr(_a, _b, _c)	\
 	atomic_cmpset_ptr((volatile uintptr_t *)(_a), (uintptr_t)(_b), (uintptr_t) (_c))

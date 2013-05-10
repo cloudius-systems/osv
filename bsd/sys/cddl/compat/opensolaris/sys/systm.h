@@ -32,15 +32,13 @@
 #ifdef _KERNEL
 
 #include <sys/param.h>
-#include_next <sys/systm.h>
-
-#include <sys/string.h>
+#include <string.h>
 
 #define	PAGESIZE	PAGE_SIZE
 #define	PAGEOFFSET	(PAGESIZE - 1)
 #define	PAGEMASK	(~PAGEOFFSET)
 
-#define	delay(x)	pause("soldelay", (x))
+#define	delay(x)	do { } while (0)	// need to do something
 
 #endif	/* _KERNEL */
 

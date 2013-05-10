@@ -29,7 +29,7 @@
 #ifndef _OPENSOLARIS_SYS_LOCK_H_
 #define	_OPENSOLARIS_SYS_LOCK_H_
 
-#include_next <sys/lock.h>
+//#include_next <sys/lock.h>
 
 #ifdef _KERNEL
 

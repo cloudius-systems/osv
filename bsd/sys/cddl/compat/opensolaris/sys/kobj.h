@@ -38,7 +38,7 @@
 #ifdef AT_GID
 #undef AT_GID
 #endif
-#include <sys/vnode.h>
+//#include <sys/vnode.h>
 
 #define	KM_NOWAIT	0x01
 #define	KM_TMP		0x02

@@ -29,7 +29,7 @@
 #ifndef _OPENSOLARIS_SYS_TIME_H_
 #define	_OPENSOLARIS_SYS_TIME_H_
 
-#include_next <sys/time.h>
+#include <time.h>
 
 #define SEC		1
 #define MILLISEC	1000
@@ -46,7 +46,7 @@ typedef longlong_t	hrtime_t;
 	((ts)->tv_sec < INT64_MIN || (ts)->tv_sec > INT64_MAX)
 #endif
 
-#ifdef _KERNEL
+#if 0 //def _KERNEL
 static __inline hrtime_t
 gethrtime(void) {
 
@@ -62,12 +62,34 @@ gethrtime(void) {
 #define	gethrestime(ts)		getnanotime(ts)
 #define	gethrtime_waitfree()	gethrtime()
 
+#else
+
+#define CLOCK_UPTIME CLOCK_REALTIME	// XXX: hack, need better in-kernel timestamp
+
+static __inline hrtime_t gethrtime(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_UPTIME,&ts);
+	return (((u_int64_t) ts.tv_sec) * NANOSEC + ts.tv_nsec);
+}
+
+static __inline uint64_t gethrestime_sec(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_UPTIME,&ts);
+	return ((u_int64_t) ts.tv_sec);
+}
+
+#define	gethrestime(ts)		 clock_gettime(CLOCK_REALTIME, ts)
+
+
+#define	gethrestime(ts)		 clock_gettime(CLOCK_REALTIME, ts)
+
+#endif	/* _KERNEL */
+
 extern int nsec_per_tick;	/* nanoseconds per clock tick */
 
 static __inline int64_t
 ddi_get_lbolt64(void)
 {
-
 	return (gethrtime() / nsec_per_tick);
 }
 
@@ -78,14 +100,5 @@ ddi_get_lbolt(void)
 	return (ddi_get_lbolt64());
 }
 
-#else
-
-static __inline hrtime_t gethrtime(void) {
-	struct timespec ts;
-	clock_gettime(CLOCK_UPTIME,&ts);
-	return (((u_int64_t) ts.tv_sec) * NANOSEC + ts.tv_nsec);
-}
-
-#endif	/* _KERNEL */
 
 #endif	/* !_OPENSOLARIS_SYS_TIME_H_ */

@@ -29,15 +29,13 @@
 #ifndef _OPENSOLARIS_SYS_CRED_H_
 #define	_OPENSOLARIS_SYS_CRED_H_
 
+#include <bsd/porting/netport.h>
 #include <sys/param.h>
-#define	_WANT_UCRED
-#include <sys/ucred.h>
-#undef _WANT_UCRED
 
 typedef struct ucred cred_t;
 typedef struct ucred ucred_t;
 
-#ifdef _KERNEL
+#if 0 // def _KERNEL
 #define	CRED()		(curthread->td_ucred)
 
 /*

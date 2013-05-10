@@ -28,27 +28,12 @@
 #include <sys/param.h>
 #include <sys/string.h>
 #include <sys/kmem.h>
-#include <machine/stdarg.h>
+#include <stdarg.h>
 
 #define	IS_DIGIT(c)	((c) >= '0' && (c) <= '9')
 
 #define	IS_ALPHA(c)	\
 	(((c) >= 'a' && (c) <= 'z') || ((c) >= 'A' && (c) <= 'Z'))
-
-char *
-strpbrk(const char *s, const char *b)
-{
-	const char *p;
-
-	do {
-		for (p = b; *p != '\0' && *p != *s; ++p)
-			;
-		if (*p != '\0')
-			return ((char *)s);
-	} while (*s++);
-
-	return (NULL);
-}
 
 /*
  * Convert a string into a valid C identifier by replacing invalid

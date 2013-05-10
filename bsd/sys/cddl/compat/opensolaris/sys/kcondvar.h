@@ -29,34 +29,20 @@
 #ifndef _OPENSOLARIS_SYS_CONDVAR_H_
 #define	_OPENSOLARIS_SYS_CONDVAR_H_
 
-#include <sys/param.h>
-#include <sys/proc.h>
+#include <osv/condvar.h>
 
-#ifdef _KERNEL
-
-#include <sys/mutex.h>
-#include <sys/condvar.h>
-
-typedef struct cv	kcondvar_t;
+typedef struct condvar	kcondvar_t;
 
 typedef enum {
 	CV_DEFAULT,
 	CV_DRIVER
 } kcv_type_t;
 
-#define	zfs_cv_init(cv, name, type, arg)	do {			\
-	const char *_name;						\
-	ASSERT((type) == CV_DEFAULT);					\
-	for (_name = #cv; *_name != '\0'; _name++) {			\
-		if (*_name >= 'a' && *_name <= 'z')			\
-			break;						\
-	}								\
-	if (*_name == '\0')						\
-		_name = #cv;						\
-	cv_init((cv), _name);						\
-} while (0)
-#define	cv_init(cv, name, type, arg)	zfs_cv_init((cv), (name), (type), (arg))
-
-#endif	/* _KERNEL */
+#define cv_init(cv, name, type, arg)	memset(cv, 0, sizeof(*cv))
+#define cv_destroy(cv)			do { } while(0)
+#define cv_signal(cv)			condvar_wake_one(cv)
+#define cv_broadcast(cv)		condvar_wake_all(cv)
+#define cv_wait(cv, mutex)		condvar_wait(cv, mutex, 0)
+#define cv_timedwait(cv, mutex, tmo)	condvar_wait(cv, mutex, tmo)
 
 #endif	/* _OPENSOLARIS_SYS_CONDVAR_H_ */

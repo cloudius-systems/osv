@@ -216,11 +216,33 @@ bsd += bsd/sys/xdr/xdr.o
 bsd += bsd/sys/xdr/xdr_array.o
 bsd += bsd/sys/xdr/xdr_mem.o
 
+solaris :=
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_atomic.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_cmn_err.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kmem.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kobj.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
+
+$(solaris): CFLAGS+= \
+	-Wno-strict-aliasing \
+	-Wno-unknown-pragmas \
+	-Wno-unused-variable \
+	-Wno-switch \
+	-Wno-maybe-uninitialized \
+	-D_KERNEL \
+	-I$(src)/bsd/sys/cddl/compat/opensolaris \
+	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common \
+	-I$(src)/bsd/sys
+
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
 drivers += drivers/debug-console.o
 drivers += drivers/ramdisk.o
-drivers += $(bsd)
+drivers += $(bsd) $(solaris)
 drivers += core/mmu.o
 drivers += core/elf.o
 drivers += core/interrupt.o

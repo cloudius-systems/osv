@@ -30,6 +30,9 @@ extern "C" {
     extern  struct domain inetdomain;
     /* AF_ROUTE */
     extern  struct domain routedomain;
+
+    extern void system_taskq_init(void *arg);
+    extern void opensolaris_load(void *arg);
 }
 
 
@@ -46,11 +49,13 @@ void net_init(void)
     init_maxsockets(NULL);
     arc4_init();
     eventhandler_init(NULL);
+    opensolaris_load(NULL);
     mbuf_init(NULL);
     netisr_init(NULL);
     if_init(NULL);
     vnet_if_init(NULL);
     ether_init(NULL);
+    system_taskq_init(NULL);
     vnet_lltable_init();
     igmp_init();
     vnet_igmp_init();

@@ -25,18 +25,18 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 #include <sys/types.h>
+#if 0
 #include <sys/systm.h>
 #include <sys/kernel.h>
-#include <sys/systm.h>
 #include <sys/kthread.h>
 #include <sys/namei.h>
 #include <sys/proc.h>
 #include <sys/filedesc.h>
 #include <sys/fcntl.h>
 #include <sys/linker.h>
+#endif
 #include <sys/kobj.h>
 
 void
@@ -63,6 +63,7 @@ kobj_zalloc(size_t size, int flag)
 	return (p);
 }
 
+#if 0
 static void *
 kobj_open_file_vnode(const char *file)
 {
@@ -232,3 +233,4 @@ kobj_close_file(struct _buf *file)
 	}
 	kmem_free(file, sizeof(*file));
 }
+#endif

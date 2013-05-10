@@ -25,32 +25,15 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
 #include <sys/atomic.h>
 
-#ifdef _KERNEL
-#include <sys/kernel.h>
+#include <bsd/porting/sync_stub.h>
 
-struct mtx atomic_mtx;
-MTX_SYSINIT(atomic, &atomic_mtx, "atomic", MTX_DEF);
-#else
-#include <pthread.h>
-
-#define	mtx_lock(lock)		pthread_mutex_lock(lock)
-#define	mtx_unlock(lock)	pthread_mutex_unlock(lock)
-
-static pthread_mutex_t atomic_mtx;
-
-static __attribute__((constructor)) void
-atomic_init(void)
-{
-	pthread_mutex_init(&atomic_mtx, NULL);
-}
-#endif
+struct mtx atomic_mtx; // assume we do not need to initialize it in OSv
 
 #if !defined(__LP64__) && !defined(__mips_n32)
 void

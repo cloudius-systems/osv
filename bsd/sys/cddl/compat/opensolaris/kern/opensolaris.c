@@ -27,14 +27,13 @@
  */
 
 #include <sys/cdefs.h>
+#include <bsd/porting/netport.h>
+
 #include <sys/types.h>
-#include <sys/conf.h>
+#include <sys/time.h>
 #include <sys/cpuvar.h>
 #include <sys/errno.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
 #include <sys/misc.h>
-#include <sys/module.h>
 #include <sys/mutex.h>
 
 cpu_core_t	cpu_core[MAXCPU];
@@ -45,7 +44,7 @@ int		nsec_per_tick;
 /*
  *  OpenSolaris subsystem initialisation.
  */
-static void
+void
 opensolaris_load(void *dummy)
 {
 	int i;
@@ -67,7 +66,7 @@ opensolaris_load(void *dummy)
 
 SYSINIT(opensolaris_register, SI_SUB_OPENSOLARIS, SI_ORDER_FIRST, opensolaris_load, NULL);
 
-static void
+void
 opensolaris_unload(void)
 {
 	mutex_destroy(&cpu_lock);
@@ -75,8 +74,9 @@ opensolaris_unload(void)
 
 SYSUNINIT(opensolaris_unregister, SI_SUB_OPENSOLARIS, SI_ORDER_FIRST, opensolaris_unload, NULL);
 
+#if 0
 static int
-opensolaris_modevent(module_t mod __unused, int type, void *data __unused)
+opensolaris_modevent(module_t mod __unused2, int type, void *data __unused2)
 {
 	int error = 0;
 
@@ -101,3 +101,4 @@ opensolaris_modevent(module_t mod __unused, int type, void *data __unused)
 
 DEV_MODULE(opensolaris, opensolaris_modevent, NULL);
 MODULE_VERSION(opensolaris, 1);
+#endif

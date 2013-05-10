@@ -31,7 +31,7 @@
 
 #include <sys/param.h>
 
-#include_next <sys/mount.h>
+#include <osv/mount.h>
 
 #define	MS_FORCE	MNT_FORCE
 #define	MS_REMOUNT	MNT_UPDATE

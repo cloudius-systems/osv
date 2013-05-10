@@ -35,7 +35,7 @@
 #include <sys/mutex.h>
 #include <sys/dirent.h>
 #include <sys/extdirent.h>
-#include <sys/uio.h>
+#include <sys/solaris_uio.h>
 #include <sys/list.h>
 
 #ifdef	__cplusplus

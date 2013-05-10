@@ -29,7 +29,7 @@
 #ifndef _OPENSOLARIS_SYS_KSTAT_H_
 #define	_OPENSOLARIS_SYS_KSTAT_H_
 
-#include <sys/sysctl.h>
+#include <bsd/porting/netport.h>
 
 #define	KSTAT_TYPE_NAMED	1
 
@@ -38,7 +38,7 @@
 typedef struct kstat {
 	void	*ks_data;
 	u_int	 ks_ndata;
-#ifdef _KERNEL
+#if 0 //def _KERNEL
 	struct sysctl_ctx_list ks_sysctl_ctx;
 	struct sysctl_oid *ks_sysctl_root;
 #endif

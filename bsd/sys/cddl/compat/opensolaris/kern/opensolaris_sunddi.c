@@ -25,11 +25,8 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
 #include <sys/libkern.h>
 #include <sys/limits.h>
 #include <sys/misc.h>
@@ -51,12 +48,6 @@ ddi_strtol(const char *str, char **nptr, int base, long *result)
 int
 ddi_strtoul(const char *str, char **nptr, int base, unsigned long *result)
 {
-
-	if (str == hw_serial) {
-		*result = prison0.pr_hostid;
-		return (0);
-	}
-
 	*result = strtoul(str, nptr, base);
 	if (*result == 0)
 		return (EINVAL);
@@ -69,7 +60,7 @@ int
 ddi_strtoull(const char *str, char **nptr, int base, unsigned long long *result)
 {
 
-	*result = (unsigned long long)strtouq(str, nptr, base);
+	*result = (unsigned long long)strtoull(str, nptr, base);
 	if (*result == 0)
 		return (EINVAL);
 	else if (*result == ULLONG_MAX)
@@ -77,6 +68,7 @@ ddi_strtoull(const char *str, char **nptr, int base, unsigned long long *result)
 	return (0);
 }
 
+#if 0
 struct ddi_soft_state_item {
 	int	 ssi_item;
 	void	*ssi_data;
@@ -196,3 +188,4 @@ ddi_soft_state_fini(void **statep)
 
 	*statep = NULL;
 }
+#endif

@@ -29,7 +29,7 @@
 #ifndef _OPENSOLARIS_SYS_RANDOM_H_
 #define	_OPENSOLARIS_SYS_RANDOM_H_
 
-#include_next <sys/random.h>
+#include <bsd/porting/netport.h>
 
 #define	random_get_bytes(p, s)		read_random((p), (int)(s))
 #define	random_get_pseudo_bytes(p, s)	read_random((p), (int)(s))

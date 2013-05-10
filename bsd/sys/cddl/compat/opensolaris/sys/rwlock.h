@@ -29,12 +29,11 @@
 #ifndef _OPENSOLARIS_SYS_RWLOCK_H_
 #define	_OPENSOLARIS_SYS_RWLOCK_H_
 
-#include <sys/param.h>
-#include <sys/proc.h>
-#include <sys/lock.h>
-#include <sys/sx.h>
+#include <osv/mutex.h>
 
-#ifdef _KERNEL
+// get rid of the conflicting freebsd defintions
+#undef rw_init
+#undef rw_downgrade
 
 typedef enum {
 	RW_DEFAULT = 4		/* kernel default rwlock */
@@ -45,51 +44,35 @@ typedef enum {
 	RW_READER
 } krw_t;
 
-typedef	struct sx	krwlock_t;
+// try to get away with simply using a mutex for now
 
-#ifndef DEBUG
-#define	RW_FLAGS	(SX_DUPOK | SX_NOWITNESS)
-#else
-#define	RW_FLAGS	(SX_DUPOK)
-#endif
 
-#define	RW_READ_HELD(x)		(rw_read_held((x)))
-#define	RW_WRITE_HELD(x)	(rw_write_held((x)))
-#define	RW_LOCK_HELD(x)		(rw_lock_held((x)))
-#define	RW_ISWRITER(x)		(rw_iswriter(x))
+typedef	struct mutex	krwlock_t;
 
-#define	rw_init(lock, desc, type, arg)	do {				\
-	const char *_name;						\
-	ASSERT((type) == 0 || (type) == RW_DEFAULT);			\
-	KASSERT(((lock)->lock_object.lo_flags & LO_ALLMASK) !=		\
-	    LO_EXPECTED, ("lock %s already initialized", #lock));	\
-	bzero((lock), sizeof(struct sx));				\
-	for (_name = #lock; *_name != '\0'; _name++) {			\
-		if (*_name >= 'a' && *_name <= 'z')			\
-			break;						\
-	}								\
-	if (*_name == '\0')						\
-		_name = #lock;						\
-	sx_init_flags((lock), _name, RW_FLAGS);				\
-} while (0)
-#define	rw_destroy(lock)	sx_destroy(lock)
-#define	rw_enter(lock, how)	do {					\
-	if ((how) == RW_READER)						\
-		sx_slock(lock);						\
-	else /* if ((how) == RW_WRITER) */				\
-		sx_xlock(lock);						\
-} while (0)
-#define	rw_tryenter(lock, how)	((how) == RW_READER ? sx_try_slock(lock) : sx_try_xlock(lock))
-#define	rw_exit(lock)		sx_unlock(lock)
-#define	rw_downgrade(lock)	sx_downgrade(lock)
-#define	rw_tryupgrade(lock)	sx_try_upgrade(lock)
-#define	rw_read_held(lock)	((lock)->sx_lock != SX_LOCK_UNLOCKED && ((lock)->sx_lock & SX_LOCK_SHARED))
-#define	rw_write_held(lock)	sx_xlocked(lock)
-#define	rw_lock_held(lock)	(rw_read_held(lock) || rw_write_held(lock))
-#define	rw_iswriter(lock)	sx_xlocked(lock)
+#define	RW_READ_HELD(x)		(mutex_owned((x)))
+#define	RW_WRITE_HELD(x)	(mutex_owned((x)))
+#define	RW_LOCK_HELD(x)		(mutex_owned((x)))
+#define	RW_ISWRITER(x)		(1)
+
+#define	rw_init(lock, desc, type, arg) \
+	mutex_init(lock, desc, type, arg)
+#define	rw_enter(lock, how) \
+	mutex_lock(lock)
+#define	rw_tryenter(lock, how) \
+	mutex_trylock(lock)
+#define	rw_exit(lock) \
+	mutex_unlock(lock)
+#define	rw_downgrade(lock)	do { } while (0)
+#define	rw_tryupgrade(lock)	(1)
+#define	rw_read_held(lock)	(mutex_owned((x)))
+#define	rw_write_held(lock)	(mutex_owned((x)))
+#define	rw_lock_held(lock)	(mutex_owned((x)))
+#define	rw_iswriter(lock)	(1)
+#define rw_destroy(lock)	do { } while(0)
+
+#if 0
 /* TODO: Change to sx_xholder() once it is moved from kern_sx.c to sx.h. */
 #define	rw_owner(lock)		((lock)->sx_lock & SX_LOCK_SHARED ? NULL : (struct thread *)SX_OWNER((lock)->sx_lock))
-
-#endif	/* defined(_KERNEL) */
+#endif
 
 #endif	/* _OPENSOLARIS_SYS_RWLOCK_H_ */
