@@ -76,9 +76,9 @@ void virtio_driver::dump_config()
         _dev.get_vendor_id() %
         _dev.get_device_id());
 
-    virtio_i(fmt("    virtio features: "));
+    virtio_d(fmt("    virtio features: "));
     for (int i=0;i<32;i++)
-        virtio_i(fmt(" %d ") % get_device_feature_bit(i));
+        virtio_d(fmt(" %d ") % get_device_feature_bit(i));
 }
 
 bool virtio_driver::parse_pci_config(void)
