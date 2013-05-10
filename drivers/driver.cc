@@ -48,10 +48,8 @@ namespace hw {
 
     void driver_manager::list_drivers(void)
     {
-        debug("<list_drivers>\n");
         for (auto drv : _drivers) {
             drv->dump_config();
         }
-        debug("</list_drivers>\n");
     }
 }
