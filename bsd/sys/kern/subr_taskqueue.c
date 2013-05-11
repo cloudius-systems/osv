@@ -472,15 +472,10 @@ taskqueue_thread_loop(void *arg)
 	}
 	taskqueue_run_locked(tq);
 
-	abort(); // for now taskqueues should never go away
-
-#if 0
 	/* rendezvous with thread that asked us to terminate */
 	tq->tq_tcount--;
 	wakeup_one(tq->tq_threads);
 	TQ_UNLOCK(tq);
-	kthread_exit();
-#endif
 }
 
 void

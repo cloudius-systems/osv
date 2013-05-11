@@ -47,5 +47,6 @@ int main(int argc, char **argv)
 
 	taskqueue_drain(t, &task);
 
+	taskqueue_free(t);
 	return 0;
 }
