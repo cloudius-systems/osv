@@ -227,7 +227,9 @@ solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
 
-$(solaris): CFLAGS+= \
+solaris-tests += tests/tst-solaris-taskq.so
+
+$(solaris) $(solaris-tests): CFLAGS+= \
 	-Wno-strict-aliasing \
 	-Wno-unknown-pragmas \
 	-Wno-unused-variable \
@@ -237,6 +239,8 @@ $(solaris): CFLAGS+= \
 	-I$(src)/bsd/sys/cddl/compat/opensolaris \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common \
 	-I$(src)/bsd/sys
+
+tests += $(solaris-tests)
 
 drivers :=
 drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
