@@ -87,9 +87,10 @@
  *	  than the value of the indicated "avl_node_t *".
  */
 
+#include <bsd/porting/netport.h>
 #include <sys/types.h>
 #include <sys/param.h>
-#include <sys/stdint.h>
+#include <stdint.h>
 #include <sys/debug.h>
 #include <sys/avl.h>
 
