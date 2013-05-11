@@ -226,6 +226,7 @@ solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sysevent.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
