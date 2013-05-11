@@ -227,6 +227,10 @@ solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/nvpair_alloc_system.o
 
 solaris-tests += tests/tst-solaris-taskq.so
 
