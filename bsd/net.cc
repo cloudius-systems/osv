@@ -33,6 +33,7 @@ extern "C" {
 
     extern void system_taskq_init(void *arg);
     extern void opensolaris_load(void *arg);
+    extern void callb_init(void *arg);
 }
 
 
@@ -55,6 +56,7 @@ void net_init(void)
     if_init(NULL);
     vnet_if_init(NULL);
     ether_init(NULL);
+    callb_init(NULL);
     system_taskq_init(NULL);
     vnet_lltable_init();
     igmp_init();

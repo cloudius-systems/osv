@@ -23,6 +23,9 @@
  * Use is subject to license terms.
  */
 
+#include <bsd/porting/netport.h>
+#include <bsd/porting/synch.h>
+
 #include <sys/param.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -30,7 +33,7 @@
 #include <sys/systm.h>
 #include <sys/proc.h>
 #include <sys/mutex.h>
-#include <sys/condvar.h>
+#include <sys/kcondvar.h>
 #include <sys/callb.h>
 #include <sys/kmem.h>
 #include <sys/cmn_err.h>
@@ -38,7 +41,6 @@
 #include <sys/kobj.h>
 #include <sys/systm.h>	/* for delay() */
 #include <sys/taskq.h>  /* For TASKQ_NAMELEN */
-#include <sys/kernel.h>
 
 #define	CB_MAXNAME	TASKQ_NAMELEN
 
@@ -95,7 +97,7 @@ callb_cpr_t	callb_cprinfo_safe = {
  * Init all callb tables in the system.
  */
 void
-callb_init(void *dummy __unused)
+callb_init(void *dummy __unused2)
 {
 	callb_table.ct_busy = 0;	/* mark table open for additions */
 	mutex_init(&callb_safe_mutex, NULL, MUTEX_DEFAULT, NULL);
@@ -103,7 +105,7 @@ callb_init(void *dummy __unused)
 }
 
 void
-callb_fini(void *dummy __unused)
+callb_fini(void *dummy __unused2)
 {
 	callb_t *cp;
 	int i;
