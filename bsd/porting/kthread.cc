@@ -4,6 +4,7 @@
 #include <assert.h>
 #include "sched.hh"
 
+#include <bsd/porting/curthread.h>
 #include <bsd/porting/netport.h>
 #include <bsd/sys/sys/kthread.h>
 
@@ -27,4 +28,10 @@ void
 kthread_exit(void)
 {
     sched::thread::exit();
+}
+
+struct thread *
+get_curthread(void)
+{
+    return reinterpret_cast<struct thread *>(sched::thread::current());
 }
