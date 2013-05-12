@@ -304,7 +304,7 @@ void tlb_flush()
 class page_range_operation {
 public:
     void operate(void *start, size_t size);
-    void operate(vma &vma){ operate((void*)vma.start(), vma.size()); }
+    void operate(const vma &vma){ operate((void*)vma.start(), vma.size()); }
 protected:
     // offset is the offset of this page in the entire address range
     // (in case the operation needs to know this).
@@ -451,14 +451,8 @@ protected:
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
         // FIXME: tlb flush
-        if (!pte.present()) {
-            // Note: we free the page even if it is already marked "not present".
-            // evacuate() makes sure we are only called for allocated pages, and
-            // not-present may only mean mprotect(PROT_NONE).
-            assert(!pte.empty()); // evacuate() shouldn't call us twice for the same page.
-            memory::free_huge_page(phys_to_virt(pte.addr(true)),
-                    huge_page_size);
-        } else if (pte.large()) {
+        assert(!pte.empty()); // evacuate() shouldn't call us twice for the same page.
+        if (pte.large()) {
             memory::free_huge_page(phys_to_virt(pte.addr(true)),
                     huge_page_size);
         } else {
