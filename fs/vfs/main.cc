@@ -207,6 +207,8 @@ out_errno:
 	return -1;
 }
 
+ssize_t pread64(int, const void*, size_t, off_t) __attribute__((weak, alias("pread")));
+
 ssize_t read(int fd, void *buf, size_t count)
 {
 	return pread(fd, buf, count, -1);
@@ -237,6 +239,8 @@ out_errno:
 	errno = error;
 	return -1;
 }
+
+ssize_t pwrite64(int, const void*, size_t, off_t) __attribute__((weak, alias("pwrite")));
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
@@ -346,6 +350,12 @@ int fsync(int fd)
 out_errno:
 	errno = error;
 	return -1;
+}
+
+int fdatasync(int fd)
+{
+    // TODO: See if we can do less than fsync().
+    return fsync(fd);
 }
 
 int __fxstat(int ver, int fd, struct stat *st)
