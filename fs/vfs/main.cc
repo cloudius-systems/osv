@@ -207,7 +207,7 @@ out_errno:
 	return -1;
 }
 
-ssize_t pread64(int, const void*, size_t, off_t) __attribute__((weak, alias("pread")));
+ssize_t pread64(int, void*, size_t, off_t) __attribute__((weak, alias("pread")));
 
 ssize_t read(int fd, void *buf, size_t count)
 {
