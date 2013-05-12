@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <bsd/porting/networking.h>
+#include <bsd/porting/route.h>
 
 /*
  * Class:     com_cloudius_net_IFConfig
@@ -42,3 +43,23 @@ extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_IFConfig_if_1up
 
     env->ReleaseStringUTFChars(ifname, ifname_c);
 }
+
+/*
+ * Class:     com_cloudius_net_Arp
+ * Method:    add
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+ */
+extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_Arp_add
+  (JNIEnv *env, jclass self, jstring ifname, jstring macaddr, jstring ip)
+{
+    const char * ifname_c = env->GetStringUTFChars(ifname, 0);
+    const char * macaddr_c = env->GetStringUTFChars(macaddr, 0);
+    const char * ip_c = env->GetStringUTFChars(ip, 0);
+
+    osv_route_arp_add(ifname_c, ip_c, macaddr_c);
+
+    env->ReleaseStringUTFChars(ifname, ifname_c);
+    env->ReleaseStringUTFChars(macaddr, macaddr_c);
+    env->ReleaseStringUTFChars(ip, ip_c);
+}
+

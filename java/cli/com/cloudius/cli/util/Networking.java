@@ -2,6 +2,7 @@ package com.cloudius.cli.util;
 
 import java.io.IOException;
 
+import com.cloudius.net.Arp;
 import com.cloudius.net.IFConfig;
 
 import sun.org.mozilla.javascript.ScriptableObject;
@@ -32,6 +33,12 @@ public class Networking extends ScriptableObject {
         } catch (IOException e) {
             return false;
         }
+    }
+    
+    @JSFunction
+    public static void arp_add(String ifname, String macaddr, String ip)
+    {
+        Arp.add(ifname, macaddr, ip);
     }
     
     @Override

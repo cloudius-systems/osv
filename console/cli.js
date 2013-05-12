@@ -11,6 +11,7 @@ load("/console/help.js");
 load("/console/tests.js");
 load("/console/run.js");
 load("/console/ifconfig.js");
+load("/console/arp.js");
 
 // Commands
 var _commands = new Array();
@@ -22,6 +23,7 @@ _commands["help"] = help_cmd;
 _commands["test"] = test_cmd;
 _commands["run"] = run_cmd;
 _commands["ifconfig"] = ifconfig_cmd;
+_commands["arp"] = arp_cmd;
 
 // Create interface to networking functions
 var networking_interface = new Networking();

@@ -1,6 +1,8 @@
 #ifndef __NETPORT_ROUTE_H__
 #define __NETPORT_ROUTE_H__
 
+#include <sys/types.h>
+
 __BEGIN_DECLS
 /* Routing functions */
 void osv_route_add_host(const char* destination,
