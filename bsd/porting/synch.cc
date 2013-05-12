@@ -65,9 +65,11 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         wait_lock = &mtx->_mutex;
     }
 
-    mutex_lock(&_lock);
-    _evlist.insert(std::make_pair(chan, &wait));
-    mutex_unlock(&_lock);
+    if (chan) {
+        mutex_lock(&_lock);
+        _evlist.insert(std::make_pair(chan, &wait));
+        mutex_unlock(&_lock);
+    }
 
     if (timo_hz) {
         u64 nanoseconds = timo_hz*(1000000000L/hz);
@@ -145,6 +147,11 @@ extern "C" int msleep(void *chan, struct mtx *mtx, int priority, const char *wme
 extern "C" int tsleep(void *chan, int priority, const char *wmesg, int timo)
 {
     return (msleep(chan, 0, priority, wmesg, timo));
+}
+
+extern "C" void bsd_pause(const char *wmesg, int timo)
+{
+    msleep(0, 0, 0, wmesg, timo);
 }
 
 extern "C" void wakeup(void* chan)

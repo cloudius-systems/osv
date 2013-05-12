@@ -38,7 +38,7 @@
 #define	PAGEOFFSET	(PAGESIZE - 1)
 #define	PAGEMASK	(~PAGEOFFSET)
 
-#define	delay(x)	do { } while (0)	// need to do something
+#define	delay(x)	bsd_pause("soldelay", (x))
 
 #endif	/* _KERNEL */
 

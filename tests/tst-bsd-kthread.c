@@ -42,6 +42,6 @@ int main(int argc, char **argv)
 	 * Sleep a bit to wait for the thread to terminate.  Unfortunately the
 	 * BSD kthread interface has no nice way to wait for thread termination.
 	 */
-	tsleep(&error, 0, "kthread_test", 200);
+	bsd_pause("kthread_test", 200);
 	return 0;
 }
