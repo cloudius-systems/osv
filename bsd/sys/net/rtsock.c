@@ -1303,9 +1303,10 @@ sysctl_dumpentry(struct radix_node *rn, void *vw)
 	int error = 0, size;
 	struct rt_addrinfo info;
 
+#if 0    
 	if (w->w_op == NET_RT_FLAGS && !(rt->rt_flags & w->w_arg))
 		return 0;
-#if 0    
+    
 	if ((rt->rt_flags & RTF_HOST) == 0
 	    ? jailed_without_vnet(w->w_req->td->td_ucred)
 	    : prison_if(w->w_req->td->td_ucred, rt_key(rt)) != 0)
@@ -1373,6 +1374,7 @@ copy_ifdata32(struct if_data *src, struct if_data32 *dst)
 }
 #endif
 
+#if 0
 static int
 sysctl_iflist_ifml(struct ifnet *ifp, struct rt_addrinfo *info,
     struct walkarg *w, int len)
@@ -1391,6 +1393,7 @@ sysctl_iflist_ifml(struct ifnet *ifp, struct rt_addrinfo *info,
 
 	return (SYSCTL_OUT(w->w_req, (caddr_t)ifm, len));
 }
+#endif
 
 static int
 sysctl_iflist_ifm(struct ifnet *ifp, struct rt_addrinfo *info,
@@ -1421,7 +1424,7 @@ sysctl_iflist_ifm(struct ifnet *ifp, struct rt_addrinfo *info,
 
 	return (SYSCTL_OUT(w->w_req, (caddr_t)ifm, len));
 }
-
+#if 0
 static int
 sysctl_iflist_ifaml(struct ifaddr *ifa, struct rt_addrinfo *info,
     struct walkarg *w, int len)
@@ -1441,7 +1444,7 @@ sysctl_iflist_ifaml(struct ifaddr *ifa, struct rt_addrinfo *info,
 
 	return (SYSCTL_OUT(w->w_req, w->w_tmem, len));
 }
-
+#endif
 static int
 sysctl_iflist_ifam(struct ifaddr *ifa, struct rt_addrinfo *info,
     struct walkarg *w, int len)
@@ -1476,9 +1479,11 @@ sysctl_iflist(int af, struct walkarg *w)
 		len = rt_msg2(RTM_IFINFO, &info, NULL, w);
 		info.rti_info[RTAX_IFP] = NULL;
 		if (w->w_req && w->w_tmem) {
+#if 0            
 			if (w->w_op == NET_RT_IFLISTL)
 				error = sysctl_iflist_ifml(ifp, &info, w, len);
 			else
+#endif                
 				error = sysctl_iflist_ifm(ifp, &info, w, len);
 			if (error)
 				goto done;
@@ -1496,10 +1501,12 @@ sysctl_iflist(int af, struct walkarg *w)
 			info.rti_info[RTAX_BRD] = ifa->ifa_dstaddr;
 			len = rt_msg2(RTM_NEWADDR, &info, NULL, w);
 			if (w->w_req && w->w_tmem) {
+#if 0                
 				if (w->w_op == NET_RT_IFLISTL)
 					error = sysctl_iflist_ifaml(ifa, &info,
 					    w, len);
 				else
+#endif                    
 					error = sysctl_iflist_ifam(ifa, &info,
 					    w, len);
 				if (error)
@@ -1517,6 +1524,7 @@ done:
 	return (error);
 }
 
+#if 0
 static int
 sysctl_ifmalist(int af, struct walkarg *w)
 {
@@ -1567,6 +1575,7 @@ done:
 	IFNET_RUNLOCK();
 	return (error);
 }
+#endif
 // struct sysctl_oid *oidp, void *arg1,	intptr_t arg2, struct sysctl_req *req
 int
 sysctl_rtsock(SYSCTL_HANDLER_ARGS)
@@ -1599,13 +1608,15 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 	switch (w.w_op) {
 
 	case NET_RT_DUMP:
+#if 0        
 	case NET_RT_FLAGS:
+#endif        
 		if (af == 0) {			/* dump all tables */
 			i = 1;
 			lim = AF_MAX;
 		} else				/* dump only one table */
 			i = lim = af;
-
+#if 0
 		/*
 		 * take care of llinfo entries, the caller must
 		 * specify an AF
@@ -1618,6 +1629,7 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 				error = EINVAL;
 			break;
 		}
+#endif        
 		/*
 		 * take care of routing entries
 		 */
@@ -1638,13 +1650,17 @@ sysctl_rtsock(SYSCTL_HANDLER_ARGS)
 		break;
 
 	case NET_RT_IFLIST:
+#if 0        
 	case NET_RT_IFLISTL:
+#endif        
 		error = sysctl_iflist(af, &w);
 		break;
 
+#if 0        
 	case NET_RT_IFMALIST:
 		error = sysctl_ifmalist(af, &w);
 		break;
+#endif        
 	}
 	if (w.w_tmem)
 		free(w.w_tmem);
