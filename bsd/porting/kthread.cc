@@ -22,3 +22,9 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
     *newtdp = reinterpret_cast<struct thread *>(t);
     return 0;
 }
+
+void
+kthread_exit(void)
+{
+    sched::thread::exit();
+}
