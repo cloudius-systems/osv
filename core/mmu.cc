@@ -363,7 +363,7 @@ void page_range_operation::operate_page(bool huge, void *addr, uintptr_t offset)
     unsigned stopat = huge ? 1 : 0;
     while (level > stopat) {
         pte = ptep.read();
-        if (!pte.present()) {
+        if (pte.empty()) {
             if (should_allocate_intermediate()) {
                 allocate_intermediate_level(ptep);
                 pte = ptep.read();
