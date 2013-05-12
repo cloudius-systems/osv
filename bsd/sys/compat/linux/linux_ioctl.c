@@ -63,7 +63,7 @@ linux_ifconf(struct ifconf *ifc_p)
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
 	struct sbuf *sb;
-	int error, full = 0, valid_len, max_len;
+	int full = 0, valid_len, max_len;
 
 	max_len = MAXPHYS - 1;
 
@@ -79,8 +79,8 @@ linux_ifconf(struct ifconf *ifc_p)
 			}
 		}
 		IFNET_RUNLOCK();
-		return (error);
-	}
+		return (0);
+	}       
 
 	if (ifc_p->ifc_len <= 0) {
 		return (EINVAL);
@@ -141,7 +141,7 @@ again:
     memcpy(ifc_p->ifc_buf, sbuf_data(sb), ifc_p->ifc_len);
 	sbuf_delete(sb);
 
-	return (error);
+	return (0);
 }
 
 static void
