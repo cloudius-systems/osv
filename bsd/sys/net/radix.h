@@ -33,9 +33,6 @@
 #ifndef _RADIX_H_
 #define	_RADIX_H_
 
-#include <bsd/porting/netport.h>
-#include <osv/mutex.h>
-
 /*
  * Radix search tree node layout.
  */

@@ -307,6 +307,7 @@ struct uio;
 #define	SU_OK		0
 #define	SU_ISCONNECTED	1
 
+__BEGIN_DECLS
 /*
  * From uipc_socket and friends
  */
@@ -380,7 +381,7 @@ SYSCTL_DECL(_net_inet_accf);
 #endif
 int	accept_filt_generic_mod_event(module_t mod, int event, void *data);
 #endif
-
+__END_DECLS
 #endif /* _KERNEL */
 
 #endif /* !_SYS_SOCKETVAR_H_ */

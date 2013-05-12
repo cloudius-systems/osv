@@ -33,8 +33,6 @@
 #ifndef _NET_ROUTE_H_
 #define _NET_ROUTE_H_
 
-#include <osv/mutex.h>
-
 void rts_init(void);
 void route_init(void);
 void vnet_route_init(void);
