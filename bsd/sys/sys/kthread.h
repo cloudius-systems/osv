@@ -72,8 +72,8 @@ int     kproc_kthread_add(void (*)(void *), void *,
 int     kthread_add(void (*)(void *), void *,
 	    struct proc *, struct thread **,
 	    int flags, int pages, const char *, ...);
-#if 0
 void    kthread_exit(void) __dead2;
+#if 0
 int	kthread_resume(struct thread *);
 void	kthread_shutdown(void *, int);
 void	kthread_start(const void *);

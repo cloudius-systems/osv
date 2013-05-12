@@ -33,13 +33,14 @@
 #define __predict_false(x) (x)
 #define __predict_true(x) (x)
 
-#define        RFSTOPPED       (1<<17) /* leave child in a stopped state */
-
 struct proc {
 };
 
+/*
+ * We use this as a fake opaque C type for passing around sched::thread
+ * pointers in C code.
+ */
 struct thread {
-	pthread_t pthread;
 };
 
 void init_maxsockets(void *ignored);

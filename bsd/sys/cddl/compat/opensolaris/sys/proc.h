@@ -29,6 +29,7 @@
 #ifndef _OPENSOLARIS_SYS_PROC_H_
 #define	_OPENSOLARIS_SYS_PROC_H_
 
+#include <bsd/porting/curthread.h>
 #include <sys/param.h>
 #include <stdint.h>
 #include <sys/lock.h>
@@ -59,9 +60,6 @@ typedef struct proc	proc_t;
 
 extern struct proc *zfsproc;
 
-// horrible hack for ZIO, will fail for code not abusing curthread as a boolean true
-#define curthread	((kthread_t *)1)
-
 static __inline kthread_t *
 thread_create(caddr_t stk, size_t stksize, void (*proc)(void *), void *arg,
     size_t len, proc_t *pp, int state, pri_t pri)
@@ -76,8 +74,7 @@ thread_create(caddr_t stk, size_t stksize, void (*proc)(void *), void *arg,
 	ASSERT(len == 0);
 	ASSERT(state == TS_RUN);
 
-	error = kthread_add(proc, arg, NULL, &td, RFSTOPPED,
-	    0, "solthread %p", proc);
+	error = kthread_add(proc, arg, NULL, &td, 0, 0, "solthread %p", proc);
 	return (td);
 }
 

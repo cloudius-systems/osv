@@ -380,6 +380,17 @@ void thread::complete()
     }
 }
 
+/*
+ * Exit a thread.  Doesn't unwind any C++ ressources, and should
+ * only be used to implement higher level threading abstractions.
+ */
+void thread::exit()
+{
+    thread* t = current();
+
+    t->complete();
+}
+
 void thread::suspend_timers()
 {
     if (_timers_need_reload) {

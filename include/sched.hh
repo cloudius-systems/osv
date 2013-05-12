@@ -161,6 +161,7 @@ public:
     void wake();
     static void sleep_until(u64 abstime);
     static void yield();
+    static void exit() __attribute__((__noreturn__));
     static thread* current() __attribute((no_instrument_function));
     stack_info get_stack_info();
     cpu* tcpu() __attribute__((no_instrument_function));
@@ -176,7 +177,7 @@ private:
     void init_stack();
     void setup_tcb();
     void free_tcb();
-    void complete();
+    void complete() __attribute__((__noreturn__));
     void suspend_timers();
     void resume_timers();
     static void on_thread_stack(thread* t);

@@ -15,6 +15,7 @@ public class RunJar {
 			URLClassLoader ucl = new URLClassLoader(
 					new URL[] { new URL("file:///" + jarfile) },
 					new Object().getClass().getClassLoader());
+			Thread.currentThread().setContextClassLoader(ucl);
 			Class klass = ucl.loadClass(mainClass);
 			Method main = klass.getMethod("main", String[].class);
 			try {
