@@ -23,3 +23,22 @@ extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_IFConfig_set_1ip
     env->ReleaseStringUTFChars(ip, ip_c);
     env->ReleaseStringUTFChars(netmask, netmask_c);
 }
+
+/*
+ * Class:     com_cloudius_net_IFConfig
+ * Method:    if_up
+ * Signature: (Ljava/lang/String;)V
+ */
+extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_IFConfig_if_1up
+  (JNIEnv *env , jclass self, jstring ifname)
+{
+    const char * ifname_c = env->GetStringUTFChars(ifname, 0);
+
+    int error = osv_ifup(ifname_c);
+    if (error) {
+        jclass cls = env->FindClass("java/io/IOException");
+        env->ThrowNew(cls, "osv_ifup failed");
+    }
+
+    env->ReleaseStringUTFChars(ifname, ifname_c);
+}

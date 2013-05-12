@@ -23,6 +23,17 @@ public class Networking extends ScriptableObject {
         }
     }
     
+    @JSFunction
+    public static boolean if_up(String ifname)
+    {
+        try {
+            IFConfig.if_up(ifname);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+    
     @Override
     public String getClassName() {
         return "Networking";

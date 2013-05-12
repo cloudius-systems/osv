@@ -6,6 +6,11 @@ var ifconfig_cmd = {
         var rc = networking_interface.set_ip(ifname, ip, netmask);
         return rc;
     },
+    
+    if_up: function(ifname) {
+        var rc = networking_interface.if_up(ifname);
+        return rc;
+    },
         
     invoke: function(inp) {
         if (inp.length != 6) {
@@ -22,6 +27,11 @@ var ifconfig_cmd = {
         var rc = this.set_ip(ifname, ip, mask);
         if (!rc) {
             print ("ifconfig: unable to set ip, wrong input");
+        }
+        
+        rc = this.if_up(ifname);
+        if (!rc) {
+            print ("ifconfig: unable to ifup interface");
         }
     },
     

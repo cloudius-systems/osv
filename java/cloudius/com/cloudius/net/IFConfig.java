@@ -11,4 +11,7 @@ public class IFConfig {
     
     public native static void set_ip(String ifname, String ip, String netmask)
             throws IOException;
+    
+    public native static void if_up(String ifname) throws IOException;
+    
 }
