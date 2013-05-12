@@ -2281,7 +2281,7 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 				ifr->ifr_addr.sa_len = 16;
 #endif
 			break;
-
+#if 0
 		case OSIOCGIFADDR:
 			cmd = SIOCGIFADDR;
 			break;
@@ -2296,6 +2296,7 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 
 		case OSIOCGIFNETMASK:
 			cmd = SIOCGIFNETMASK;
+#endif            
 		}
 		error =  ((*so->so_proto->pr_usrreqs->pru_control)(so,
 								   cmd,
@@ -2305,13 +2306,13 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 		    ifp->if_ioctl != NULL)
 			error = (*ifp->if_ioctl)(ifp, cmd, data);
 		switch (ocmd) {
-
+#if 0
 		case OSIOCGIFADDR:
 		case OSIOCGIFDSTADDR:
 		case OSIOCGIFBRDADDR:
 		case OSIOCGIFNETMASK:
 			*(u_short *)&ifr->ifr_addr = ifr->ifr_addr.sa_family;
-
+#endif
 		}
 	}
 #endif /* COMPAT_43 */

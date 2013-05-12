@@ -3,6 +3,43 @@
 
 #include <sys/ioctl.h>
 
+#define SIOCBEGIN   0x8900
+#define SIOCEND     0x89ff
+
+/*
+ * Undef unsupported Linux ioctls.
+ */
+#undef SIOCADDRT
+#undef SIOCDELRT
+#undef SIOCRTMSG
+#undef SIOCGIFNAME
+#undef SIOCSIFLINK
+#undef SIOCGIFMEM
+#undef SIOCSIFMEM
+#undef SIOCSIFHWADDR
+#undef SIOCGIFENCAP
+#undef SIOCSIFENCAP
+#undef SIOCGIFSLAVE
+#undef SIOCSIFSLAVE
+#undef SIOCSIFPFLAsysGS
+#undef SIOCGIFPFLAGS
+#undef SIOCSIFHWBROADCAST
+#undef SIOCGIFCOUNT
+#undef SIOCGIFTXQLEN
+#undef SIOCSIFTXQLEN
+#undef SIOCDARP
+#undef SIOCGARP
+#undef SIOCSARP
+#undef SIOCDRARP
+#undef SIOCGRARP
+#undef SIOCSRARP
+#undef SIOCGIFMAP
+#undef SIOCSIFMAP
+#undef SIOCADDDLCI
+#undef SIOCDELDLCI
+#undef SIOCDEVPRIVATE
+#undef SIOCPROTOPRIVATE
+
 /* Generic file-descriptor ioctl's. */
 #define	FIOSETOWN	_IOW('f', 124, int)	/* set owner */
 #define	FIOGETOWN	_IOR('f', 123, int)	/* get owner */
