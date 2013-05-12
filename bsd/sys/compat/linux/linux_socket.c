@@ -306,7 +306,14 @@ bsd_to_linux_sockopt_level(int level)
 static int
 linux_to_bsd_ip_sockopt(int opt)
 {
-
+    /*
+     * Note: Negative opt values are used to pass BSD commands unchanged.
+     *       i.e. To use The BSD IP_ONESBCAST, which does not have a Linux
+     *       equivalent pass -IP_ONESBCAST to setsockopt().
+     */
+    if (opt < 0)
+        return -opt ;
+    
 	switch (opt) {
 	case LINUX_IP_TOS:
 		return (IP_TOS);
