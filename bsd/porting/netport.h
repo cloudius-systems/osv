@@ -38,8 +38,11 @@
 struct proc {
 };
 
+/*
+ * We use this as a fake opaque C type for passing around sched::thread
+ * pointers in C code.
+ */
 struct thread {
-	pthread_t pthread;
 };
 
 void init_maxsockets(void *ignored);
