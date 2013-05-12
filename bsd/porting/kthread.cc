@@ -13,7 +13,7 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
 		const char *fmt, ...)
 {
     assert(p == NULL);
-    assert(flags == RFSTOPPED);
+    assert(flags == 0);
     assert(pages == NULL);
 
     sched::thread* t = new sched::thread([=] { func(arg); });
