@@ -106,10 +106,22 @@ int rand_r (unsigned *);
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
 char *realpath (const char *__restrict, char *__restrict);
+
 long int random (void);
 void srandom (unsigned int);
 char *initstate (unsigned int, char *, size_t);
 char *setstate (char *);
+
+struct random_data {
+    int *fptr;
+    int *rptr;
+    int *state;
+    int rand_type;
+    int rand_deg;
+    int rand_sep;
+    int *end_ptr;
+};
+
 #endif
 
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE)
