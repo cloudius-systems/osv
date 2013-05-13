@@ -71,6 +71,7 @@ static __inline hrtime_t gethrtime(void) {
 	clock_gettime(CLOCK_UPTIME,&ts);
 	return (((u_int64_t) ts.tv_sec) * NANOSEC + ts.tv_nsec);
 }
+#define	gethrtime_waitfree()	gethrtime()
 
 static __inline uint64_t gethrestime_sec(void) {
 	struct timespec ts;
