@@ -12,6 +12,8 @@
 #define ElfW(type) Elf32_ ## type
 #endif
 
+__BEGIN_DECLS
+
 /* this is the same everywhere except alpha and s390 */
 typedef uint32_t Elf_Symndx;
 
@@ -42,5 +44,7 @@ struct r_debug {
 };
 
 int dl_iterate_phdr(int (*)(struct dl_phdr_info *, size_t, void *), void *);
+
+__END_DECLS
 
 #endif
