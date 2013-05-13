@@ -10,7 +10,7 @@ var route_options = [
 var route_cmd = {
         
     add_deafult_gw: function(gwaddr) {
-        print ("adding default gw " + gwaddr);
+        networking_interface.route_add_default(gwaddr);
     },
         
     init: function() {
