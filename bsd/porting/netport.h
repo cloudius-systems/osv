@@ -267,4 +267,6 @@ int ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps);
  */
 int ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 
+int get_cpuid(void);
+
 #endif
