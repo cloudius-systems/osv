@@ -201,8 +201,6 @@
 #define	PDROP	0x200	/* OR'd with pri to stop re-entry of interlock mutex */
 #define	PBDRY	0x400	/* for PCATCH stop is done on the user boundary */
 
-#define	NZERO	0		/* default "nice" */
-
 #define	NBBY	8		/* number of bits in a byte */
 #define	NBPW	sizeof(int)	/* number of bytes per word (integer) */
 

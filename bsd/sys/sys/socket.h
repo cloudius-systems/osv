@@ -36,6 +36,10 @@
 #include <osv/uio.h>
 #include <sys/cdefs.h>
 #include <bsd/machine/_align.h>
+#define __NEED___pid_t
+#define __NEED___gid_t
+#define __NEED___off_t
+#include <bits/alltypes.h>
 
 /*
  * Definitions related to sockets: types, address families, options.
