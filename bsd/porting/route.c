@@ -270,6 +270,9 @@ void osv_route_arp_add(const char* if_name, const char* ip,
 
     /* Get ifindex from name */
     ifp = ifunit_ref(if_name);
+    if (ifp == NULL) {
+        return;
+    }
     if_idx = ifp->if_index;
     if_rele(ifp);
 
