@@ -8,7 +8,9 @@ extern "C" {
 #define __NEED_size_t
 #include <bits/alltypes.h>
 
+#if 0
 int sysctl (int *, int, void *, size_t *, void *, size_t);
+#endif
 
 #ifdef __cplusplus
 }
