@@ -3,6 +3,7 @@ importPackage(java.lang);
 
 load("/console/util.js");
 load("/console/autocomplete.js");
+load("/console/optparse.js");
 load("/console/cd.js");
 load("/console/pwd.js");
 load("/console/ls.js");

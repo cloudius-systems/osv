@@ -101,6 +101,7 @@
 /usr/lib/&/jni/networking.so: java/&
 /console/util.js: ../../console/util.js
 /console/autocomplete.js: ../../console/autocomplete.js
+/console/optparse.js: ../../console/optparse.js
 /console/cd.js: ../../console/cd.js
 /console/pwd.js: ../../console/pwd.js
 /console/ls.js: ../../console/ls.js
