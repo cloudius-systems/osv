@@ -110,6 +110,7 @@
 /console/help.js: ../../console/help.js
 /console/run.js: ../../console/run.js
 /console/arp.js: ../../console/arp.js
+/console/route.js: ../../console/route.js
 /console/ifconfig.js: ../../console/ifconfig.js
 /console/cli.js: ../../console/cli.js
 /&/etc/hosts: ../../static/&
