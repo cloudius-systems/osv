@@ -4,8 +4,7 @@
 #include <boost/format.hpp>
 #include "sched.hh"
 
-#include <unistd.h>
-#include <linux/unistd.h>
+#include <syscall.h>
 
 long gettid()
 {
