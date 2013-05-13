@@ -239,6 +239,16 @@ solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/callb.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/fm.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/list.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/nvpair_alloc_system.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/adler32.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/deflate.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inffast.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inflate.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inftrees.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/opensolaris_crc32.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/trees.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod_subr.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zutil.o
 
 solaris-tests += tests/tst-solaris-taskq.so
 
