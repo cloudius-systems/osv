@@ -3,9 +3,21 @@ import subprocess
 import sys
 import argparse
 
+stty_params=None
+
+def stty_save():
+    global stty_params
+    p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE)
+    stty_params, err = p.communicate()
+    stty_params = stty_params.strip()
+    
+def stty_restore():
+    if (stty_params):
+        subprocess.call(["stty", stty_params])
+
 def cleanups():
     "cleanups after execution"
-    pass
+    stty_restore()
 
 def set_imgargs():
     if (not cmdargs.execute):
@@ -35,6 +47,10 @@ def start_osv():
         args += ["-device", "virtio-net-pci"]
         
     try:
+        # Save the current settings of the stty
+        stty_save()
+
+        # Launch qemu
         subprocess.call(["qemu-system-x86_64"] + args)
     except:
         pass
