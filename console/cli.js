@@ -168,7 +168,7 @@ function tab()
             var results = cmd.tab(inp);
             var last_idx = inp.length-1;
             var suggested = false;
-            if (last_idx == 0) {
+            if ((last_idx == 0) || (completed_word())) {
                 suggested = get_suggestions(results, "", cmd);
             } else {
                 suggested = get_suggestions(results, inp[last_idx], cmd);
