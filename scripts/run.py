@@ -22,11 +22,19 @@ def start_osv():
         "-chardev", "stdio,mux=on,id=stdio",
         "-mon", "chardev=stdio,mode=readline,default",
         "-device", "isa-serial,chardev=stdio",
-        "-device", "virtio-net-pci",
         "-drive", ("file=build/%s/loader.img,if=virtio,cache=unsafe" % opt_path),
         "-drive", ("file=build/%s/usr.img,if=virtio,cache=unsafe" % opt_path)]
-
-    subprocess.call(["qemu-system-x86_64"] + args)
+    
+    if (cmdargs.networking):
+        args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
+        args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
+    else:
+        args += ["-device", "virtio-net-pci"]
+        
+    try:
+        subprocess.call(["qemu-system-x86_64"] + args)
+    except:
+        pass
 
 def main():
     set_imgargs()
@@ -37,6 +45,8 @@ if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-d", "--debug", action="store_true", 
                         help="start debug version")
+    parser.add_argument("-n", "--networking", action="store_true",
+                        help="needs root. tap networking, specify interface")
     parser.add_argument("-m", "--memsize", action="store", default="1G",
                         help="specify memory: ex. 1G, 2G, ...")
     parser.add_argument("-c", "--vcpus", action="store", default="4",
