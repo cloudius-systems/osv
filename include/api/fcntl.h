@@ -154,7 +154,7 @@ ssize_t tee(int, int, size_t, unsigned);
 #endif
 
 #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
-#define open64 open
+//#define open64 open
 #define openat64 openat
 #define creat64 creat
 #define lockf64 lockf
