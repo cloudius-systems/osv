@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import com.cloudius.net.Arp;
 import com.cloudius.net.IFConfig;
+import com.cloudius.net.Route;
 
 import sun.org.mozilla.javascript.ScriptableObject;
 import sun.org.mozilla.javascript.annotations.JSFunction;
@@ -39,6 +40,12 @@ public class Networking extends ScriptableObject {
     public static void arp_add(String ifname, String macaddr, String ip)
     {
         Arp.add(ifname, macaddr, ip);
+    }
+    
+    @JSFunction
+    public static void route_add_default(String gw)
+    {
+        Route.add_default(gw);
     }
     
     @Override

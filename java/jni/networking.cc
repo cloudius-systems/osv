@@ -63,3 +63,17 @@ extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_Arp_add
     env->ReleaseStringUTFChars(ip, ip_c);
 }
 
+/*
+ * Class:     com_cloudius_net_Route
+ * Method:    add_default
+ * Signature: (Ljava/lang/String;)V
+ */
+extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_Route_add_1default
+  (JNIEnv *env, jclass self, jstring gw)
+{
+    const char * gw_c = env->GetStringUTFChars(gw, 0);
+
+    osv_route_add_network("0.0.0.0", "0.0.0.0", gw_c);
+
+    env->ReleaseStringUTFChars(gw, gw_c);
+}
