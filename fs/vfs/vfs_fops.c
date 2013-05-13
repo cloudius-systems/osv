@@ -1,5 +1,5 @@
 
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <osv/file.h>
 #include <fs/vfs/vfs.h>
