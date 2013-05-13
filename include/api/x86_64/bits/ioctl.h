@@ -157,6 +157,7 @@ struct winsize {
 #define SIOCSIFMEM      0x8920
 #define SIOCGIFMTU      0x8921
 #define SIOCSIFMTU      0x8922
+#define SIOCSIFNAME     0x8923
 #define SIOCSIFHWADDR   0x8924
 #define SIOCGIFENCAP    0x8925
 #define SIOCSIFENCAP    0x8926
