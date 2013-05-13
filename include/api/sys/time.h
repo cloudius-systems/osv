@@ -8,7 +8,8 @@ extern "C" {
 
 #include <sys/select.h>
 
-int gettimeofday (struct timeval *__restrict, void *__restrict);
+struct timezone;
+int gettimeofday (struct timeval *__restrict, struct timezone *__restrict);
 
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
