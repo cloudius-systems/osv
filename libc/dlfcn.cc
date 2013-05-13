@@ -41,6 +41,7 @@ extern "C" void dlclose_by_path_np(const char* filename)
     elf::get_program()->remove_object(filename);
 }
 
+extern "C"
 int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
                                     size_t size, void *data),
                     void *data)
@@ -65,7 +66,7 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
     return ret;
 }
 
-extern "C" int dladdr(__const void *addr, Dl_info *info)
+extern "C" int dladdr(void *addr, Dl_info *info)
 {
     auto ei = elf::get_program()->lookup_addr(addr);
     info->dli_fname = ei.fname;
