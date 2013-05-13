@@ -80,9 +80,8 @@ int osv_ifup(const char* if_name)
         return (error);
     }
 
-    if (ifr.ifr_flags & IFF_UP) {
-        return (0);
-    }
+    // FIXME: SIOCGIFFLAGS returns IFF_UP for some reason for virtio-net0
+    // on the first call to osv_ifup(), this should be investigated
 
     ifr.ifr_flags |= IFF_UP;
     error = ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, NULL);
