@@ -260,6 +260,22 @@ void osv_route_add_host(const char* destination,
     soclose(s);
 }
 
+void osv_route_add_network(const char* destination, const char* netmask,
+    const char* gateway)
+{
+    /* Create socket */
+    struct socket* s;
+    struct mbuf *m;
+
+    m = osv_route_rtmsg(RTM_ADD, destination, gateway, netmask,
+        (RTF_STATIC | RTF_UP | RTF_GATEWAY ) );
+
+    /* Send routing message */
+    socreate(PF_ROUTE, &s, SOCK_RAW, 0, NULL, NULL);
+    sosend(s, 0, 0, m, 0, 0, NULL);
+    soclose(s);
+}
+
 void osv_route_arp_add(const char* if_name, const char* ip,
     const char* macaddr)
 {

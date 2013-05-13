@@ -7,6 +7,8 @@ __BEGIN_DECLS
 /* Routing functions */
 void osv_route_add_host(const char* destination,
     const char* gateway);
+void osv_route_add_network(const char* destination, const char* netmask,
+    const char* gateway);
 
 void osv_route_arp_add(const char* ifname, const char* ip,
     const char* macaddr);
