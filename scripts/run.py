@@ -1,8 +1,11 @@
 #!/usr/bin/env python
-
 import subprocess
 import sys
 import argparse
+
+def cleanups():
+    "cleanups after execution"
+    pass
 
 def set_imgargs():
     if (not cmdargs.execute):
@@ -35,6 +38,8 @@ def start_osv():
         subprocess.call(["qemu-system-x86_64"] + args)
     except:
         pass
+    finally:
+        cleanups()
 
 def main():
     set_imgargs()
