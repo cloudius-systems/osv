@@ -16,7 +16,10 @@ union \1 \2;\
 #endif\
 /'
 
+#define __NEED_socklen_t
+
 TYPEDEF unsigned long size_t;
+#define _SIZE_T_DECLARED
 TYPEDEF long ssize_t;
 TYPEDEF long ptrdiff_t;
 TYPEDEF __builtin_va_list va_list;
@@ -32,11 +35,17 @@ TYPEDEF signed char int8_t;
 TYPEDEF short       int16_t;
 TYPEDEF int         int32_t;
 TYPEDEF long        int64_t;
+typedef long        __int64_t;
 
 TYPEDEF unsigned char      uint8_t;
 TYPEDEF unsigned short     uint16_t;
 TYPEDEF unsigned int       uint32_t;
 TYPEDEF unsigned long      uint64_t;
+
+#define _UINT16_T_DECLARED
+#define _UINT32_T_DECLARED
+
+#define _UINT8_T_DECLARED
 
 TYPEDEF unsigned short     __uint16_t;
 TYPEDEF unsigned int       __uint32_t;
@@ -90,6 +99,7 @@ TYPEDEF struct { union { int __i[14]; void *__p[7]; } __u; } pthread_rwlock_t;
 TYPEDEF struct { union { int __i[8]; void *__p[4]; } __u; } pthread_barrier_t;
 
 TYPEDEF long off_t;
+TYPEDEF long __off_t;
 
 TYPEDEF unsigned int mode_t;
 
@@ -109,6 +119,7 @@ TYPEDEF struct { unsigned long __bits[128/sizeof(long)]; } sigset_t;
 TYPEDEF struct __siginfo siginfo_t;
 
 TYPEDEF unsigned int socklen_t;
+#define _SOCKLEN_T_DECLARED
 TYPEDEF unsigned short sa_family_t;
 TYPEDEF unsigned short in_port_t;
 TYPEDEF unsigned int in_addr_t;
@@ -118,8 +129,17 @@ TYPEDEF struct __FILE_s FILE;
 
 TYPEDEF int nl_item;
 
-TYPEDEF struct __locale * locale_t;
+TYPEDEF struct __locale_struct * locale_t;
 
 STRUCT iovec { void *iov_base; size_t iov_len; };
+
+TYPEDEF uint32_t __gid_t;
+TYPEDEF uint32_t __pid_t;
+TYPEDEF uint32_t gid_t;
+TYPEDEF uint32_t pid_t;
+
+#define _PID_T_DECLARED
+#define _SSIZE_T_DECLARED
+#define _UID_T_DECLARED
 
 EOF
