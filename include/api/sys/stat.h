@@ -67,6 +67,10 @@ extern "C" {
 #define S_IRWXO 0007
 #endif
 
+#define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)
+
+#define S_BLKSIZE 512
+
 #define UTIME_NOW  0x3fffffff
 #define UTIME_OMIT 0x3ffffffe
 
