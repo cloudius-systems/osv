@@ -236,6 +236,7 @@ solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/unicode/u8_textprep.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/callb.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/fm.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/list.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/nvpair_alloc_system.o
 
