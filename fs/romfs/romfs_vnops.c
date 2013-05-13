@@ -79,6 +79,8 @@ static inline bool romfs_valid(struct romfs_mount *rmp, off_t pos)
 	return pos && pos < rmp->rm_maxsize;
 }
 
+typedef uint64_t daddr_t;
+
 static int romfs_namelen(struct buf **bpp, unsigned offset,
 		size_t *namelen)
 {
