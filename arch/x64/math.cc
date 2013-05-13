@@ -17,6 +17,7 @@ double floor(double v)
     return r;
 }
 
+extern "C"
 int __isnan(double v)
 {
     u64 r;
