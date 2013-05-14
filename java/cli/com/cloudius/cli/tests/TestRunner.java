@@ -66,6 +66,7 @@ public class TestRunner extends ScriptableObject {
     public void registerAllTests() {
         this.register("TCPEchoServerTest", new TCPEchoServerTest());
         this.register("TCPExternalCommunication", new TCPExternalCommunication());
+        this.register("TCPDownloadFile", new TCPDownloadFile());
         this.registerELFTests();
     }
     
