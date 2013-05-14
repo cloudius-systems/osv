@@ -274,5 +274,7 @@ for (var cmd in _commands) {
 
 update_prompt();
 
+load("/console/init.js");
+
 // Main loop
 main_loop();

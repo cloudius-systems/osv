@@ -113,4 +113,5 @@
 /console/route.js: ../../console/route.js
 /console/ifconfig.js: ../../console/ifconfig.js
 /console/cli.js: ../../console/cli.js
+/console/init.js: ../../console/init.js
 /&/etc/hosts: ../../static/&
