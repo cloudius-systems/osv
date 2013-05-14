@@ -135,7 +135,7 @@ namespace virtio {
            return;
         }
 
-        if_initname(_ifn, _driver_name.c_str(), _id);
+        if_initname(_ifn, "eth", _id);
         _ifn->if_mtu = ETHERMTU;
         _ifn->if_softc = static_cast<void*>(this);
         _ifn->if_flags = IFF_BROADCAST /*| IFF_MULTICAST*/;
