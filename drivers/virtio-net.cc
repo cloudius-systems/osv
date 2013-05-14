@@ -180,44 +180,6 @@ namespace virtio {
 
         return true;
     }
-    struct ethhdr {
-            unsigned char   h_dest[6];       /* destination eth addr */
-            unsigned char   h_source[6];     /* source ether addr    */
-            u16          h_proto;                /* packet type ID field */
-    } __attribute__((packed));
-
-    struct iphdr {
-            u8    ihl:4,
-                    version:4;
-            u8    tos;
-            u16  tot_len;
-            u16  id;
-            u16  frag_off;
-            u8    ttl;
-            u8    protocol;
-            u16 check;
-            u32  saddr;
-            u32  daddr;
-            /*The options start here. */
-    } __attribute__((packed));
-
-
-    struct icmphdr {
-      u8          type;
-      u8          code;
-      u16       checksum;
-      union {
-            struct {
-                    u16  id;
-                    u16  sequence;
-            } echo;
-            u32  gateway;
-            struct {
-                    u16  __unused;
-                    u16  mtu;
-            } frag;
-      } un;
-    } __attribute__((packed));
 
     struct virtio_net_req {
         struct virtio_net::virtio_net_hdr hdr;
@@ -258,31 +220,6 @@ namespace virtio {
 
                 _ifn->if_ipackets++;
                 (*_ifn->if_input)(_ifn, m);
-
-                ethhdr* eh = reinterpret_cast<ethhdr*>(buf);
-                virtio_net_d(fmt("The src %x:%x:%x:%x:%x:%x dst %x:%x:%x:%x:%x:%x type %d ") %
-                        (u32)eh->h_source[0] %
-                        (u32)eh->h_source[1] %
-                        (u32)eh->h_source[2] %
-                        (u32)eh->h_source[3] %
-                        (u32)eh->h_source[4] %
-                        (u32)eh->h_source[5] %
-                        (u32)eh->h_dest[0] %
-                        (u32)eh->h_dest[1] %
-                        (u32)eh->h_dest[2] %
-                        (u32)eh->h_dest[3] %
-                        (u32)eh->h_dest[4] %
-                        (u32)eh->h_dest[5] %
-                        (u32)eh->h_proto);
-
-                iphdr* ip = reinterpret_cast<iphdr*>(buf+sizeof(ethhdr));
-                virtio_net_d(fmt("tot_len = %d protocol=%d, saddr=%d:%d:%d:%d daddr=%d:%d:%d:%d") %
-                        (u32)ip->tot_len % (u32)ip->protocol % (ip->saddr & 0xff) % (ip->saddr >> 8 & 0xff) %
-                        (ip->saddr >> 16 & 0xff) % (ip->saddr >> 24 & 0xff) % (ip->daddr & 0xff) % (ip->daddr >> 8 & 0xff) %
-                        (ip->daddr >> 16 & 0xff) % (ip->daddr >> 24 & 0xff));
-
-                icmphdr* icmp = reinterpret_cast<icmphdr*>(buf+sizeof(ethhdr)+sizeof(iphdr));
-                virtio_net_d(fmt("icmp code=%d. type=%d") % (u32)icmp->code % (u32)icmp->type);
 
                 delete req;
                 // TODO: who should free it? m_freem(m);
@@ -349,7 +286,8 @@ namespace virtio {
             }
         }
 
-        req->hdr.hdr_len = ETH_ALEN + sizeof(iphdr);
+        //TODO: verify what the hdr_len should be
+        req->hdr.hdr_len = ETH_ALEN;
         req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
         // leak for now ; req->buffer = (u8*)out;
 
