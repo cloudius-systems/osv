@@ -5,10 +5,10 @@ To build OSv
 0) Install perquisite packages:
 
    On Fedora:
-     yum install boost-static genromfs
+     yum install boost-static genromfs libvirt
 
    On Debian:
-     apt-get install libboost-all-dev genromfs
+     apt-get install libboost-all-dev genromfs libvirt
 
 1) make sure all git submodules are uptodate
    -----------------------------------------
@@ -39,7 +39,23 @@ To build OSv
 To run OSv
 ==========
 
-    sh scripts/run
+    ./scripts/run.py
+
+External Networking
+===================
+
+To start osv with external networking:
+
+    $ sudo ./scripts/run.py -n
+
+Inside OSv, configure netwroking like so:
+
+    $ ifconfig virtio-net0 192.168.122.100 netmask 255.255.255.0 up
+    $ route add default gw 192.168.122.1
+
+Test networking:
+
+    $ test TCPExternalCommunication
 
 Debugging
 =========
@@ -51,7 +67,7 @@ To clean debugging build's results, use
 	make clean mode=debug
 
 To run the debugging build:
-	sh scripts/run.sh debug
+	./scripts/run.py -d
 
 To connect a debugger to this run:
 	$ gdb build/debug/loader.elf
@@ -143,4 +159,4 @@ Running java benchmarks
 After running "make", do
     scripts/imgedit.py setargs build/debug/loader.img java.so -jar bench.jar
 
-and then run normally (sh scripts/run.sh).
+and then run normally (./scripts/run.py).
