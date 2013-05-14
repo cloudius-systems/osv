@@ -208,6 +208,13 @@ function command()
     invoke(inp);
 }
 
+// eval command
+function $(cmd)
+{
+    inp = cmd.split(" ");
+    return (invoke(inp));
+}
+
 function main_loop()
 {
     while (true) {
