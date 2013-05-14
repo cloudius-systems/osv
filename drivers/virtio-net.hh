@@ -225,7 +225,7 @@ namespace virtio {
 
         void receiver();
         void fill_rx_ring();
-        bool tx(struct mbuf* m_head, bool flush = true);
+        bool tx(struct mbuf* m_head, bool flush = false);
         void kick(int queue) {_queues[queue]->kick();}
         void tx_gc_thread();
         void tx_gc();
