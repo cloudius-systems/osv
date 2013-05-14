@@ -187,6 +187,17 @@ function tab()
     beep();
 }
 
+function invoke(inp)
+{
+    if (inp[0] in _commands) {
+        var cmd = _commands[inp[0]];
+        return (cmd.invoke(inp));
+    } else if (inp[0]) {
+        print("No such command: '" + inp[0] + "'");
+        return (-1);
+    }
+}
+
 function command()
 {
     var inp = input();
@@ -194,12 +205,7 @@ function command()
         return;
     }
     
-    if (inp[0] in _commands) {
-        var cmd = _commands[inp[0]];
-        cmd.invoke(inp);
-    } else if (inp[0]) {
-        print("No such command: '" + inp[0] + "'");
-    }
+    invoke(inp);
 }
 
 function main_loop()
