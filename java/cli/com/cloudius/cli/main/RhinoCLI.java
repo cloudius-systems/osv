@@ -2,7 +2,6 @@ package com.cloudius.cli.main;
 
 import java.io.*;
 
-import com.cloudius.cli.tests.TestRunner;
 import com.cloudius.cli.util.ELFLoader;
 import com.cloudius.cli.util.Networking;
 
@@ -26,7 +25,6 @@ public class RhinoCLI {
             
             global.init(_cx);
             _scope = ScriptableObject.getTopLevelScope(global);
-            ScriptableObject.defineClass(_scope, TestRunner.class);
             ScriptableObject.defineClass(_scope, ELFLoader.class);
             ScriptableObject.defineClass(_scope, Networking.class);
             

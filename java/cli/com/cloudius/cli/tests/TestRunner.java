@@ -3,24 +3,14 @@ package com.cloudius.cli.tests;
 import java.io.File;
 import java.util.HashMap;
 
+import sun.org.mozilla.javascript.Scriptable;
+
 import com.cloudius.cli.main.RhinoCLI;
 
-import sun.org.mozilla.javascript.Scriptable;
-import sun.org.mozilla.javascript.ScriptableObject;
-import sun.org.mozilla.javascript.annotations.*;
-
-public class TestRunner extends ScriptableObject {
-    
-    private static final long serialVersionUID = 555837467364642L;
-
-    @Override
-    public String getClassName() {
-        return "TestRunner";
-    }
+public class TestRunner {
     
     private HashMap<String, Test> _tests;
     
-    @JSConstructor
     public TestRunner() {
         _tests = new HashMap<String, Test>();
     }
@@ -34,8 +24,6 @@ public class TestRunner extends ScriptableObject {
         return true;
     }
     
-
-    @JSFunction
     public boolean run(String name) {
         if (!_tests.containsKey(name)) {
             return false;
@@ -62,7 +50,6 @@ public class TestRunner extends ScriptableObject {
         }
     }
     
-    @JSFunction
     public void registerAllTests() {
         this.register("TCPEchoServerTest", new TCPEchoServerTest());
         this.register("TCPExternalCommunication", new TCPExternalCommunication());
@@ -70,7 +57,6 @@ public class TestRunner extends ScriptableObject {
         this.registerELFTests();
     }
     
-    @JSFunction
     public Scriptable getTestNames() {
         Object[] names = _tests.keySet().toArray();
         return (RhinoCLI._cx.newArray(RhinoCLI._scope, names));

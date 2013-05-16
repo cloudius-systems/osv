@@ -1,4 +1,4 @@
-importPackage(Packages.com.cloudius.tests);
+importPackage(com.cloudius.cli.tests);
 
 var test_cmd = {
         
