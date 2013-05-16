@@ -99,6 +99,7 @@
 /usr/lib/jni/balloon.so: java/jni/balloon.so
 /usr/lib/&/jni/elf-loader.so: java/&
 /usr/lib/&/jni/networking.so: java/&
+/usr/lib/&/jni/stty.so: java/&
 /console/util.js: ../../console/util.js
 /console/autocomplete.js: ../../console/autocomplete.js
 /console/optparse.js: ../../console/optparse.js

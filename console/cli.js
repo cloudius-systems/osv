@@ -215,6 +215,8 @@ function $(cmd)
     return (invoke(inp));
 }
 
+var _stty = new com.cloudius.util.Stty();
+
 function main_loop()
 {
     while (true) {
@@ -224,6 +226,7 @@ function main_loop()
         flush();
         
         // Read command
+        _stty.raw();
         while (_c != 0x0D) {
             _c = _reader.read();
             
@@ -252,6 +255,7 @@ function main_loop()
             
             render(_c == 0x0D);
         }
+        _stty.reset();
         
         // Issue command
         command();
