@@ -242,7 +242,9 @@ namespace virtio {
         while (queue->avail_ring_has_room(2)) {
             virtio_net_req *req = new virtio_net_req;
 
-            struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, page_size);
+            // As long as we're using standard MTU of 1500, it's fine to use
+            // MCLBYTES
+            struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MCLBYTES);
             if (!m)
                 break;
             req->um.reset(m);
@@ -255,7 +257,7 @@ namespace virtio {
             //struct virtio_net_hdr *hdr = static_cast<struct virtio_net_hdr*>(mdata);
             //offset += sizeof(struct virtio_net_hdr);
 
-            req->payload.add(mmu::virt_to_phys(mdata), page_size);
+            req->payload.add(mmu::virt_to_phys(mdata), MCLBYTES);
             req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
 
             if (!queue->add_buf(&req->payload,0,req->payload.get_sgs(),req)) {
