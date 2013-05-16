@@ -205,12 +205,13 @@ vput(vnode_t vp)
 	DPRINTF(VFSDB_VNODE, ("vput: ref=%d %s\n", vp->v_refcnt,
 			      vp->v_path));
 
+    VNODE_LOCK();
 	vp->v_refcnt--;
 	if (vp->v_refcnt > 0) {
+	    VNODE_UNLOCK();
 		vn_unlock(vp);
 		return;
 	}
-	VNODE_LOCK();
 	list_remove(&vp->v_link);
 	VNODE_UNLOCK();
 
