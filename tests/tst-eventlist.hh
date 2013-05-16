@@ -45,10 +45,10 @@ public:
 
         // register handler 1&2 to event a
         int h1 = event_manager->register_event("event_a", [&] { handler1(); });
-        event_manager->register_event("event_a", [&] { handler2(); });
+        int h2 = event_manager->register_event("event_a", [&] { handler2(); });
         // register handler 3&4 to event b
-        event_manager->register_event("event_b", [&] { handler3(); });
-        event_manager->register_event("event_b", [&] { handler4(); });
+        int h3 = event_manager->register_event("event_b", [&] { handler3(); });
+        int h4 = event_manager->register_event("event_b", [&] { handler4(); });
 
         // invoke event a & b
         event_manager->invoke_event("event_a");
@@ -56,11 +56,16 @@ public:
 
         // remove handler 1 & append handler 5
         event_manager->deregister_event("event_a", h1);
-        event_manager->register_event("event_a", [&] { handler5(); });
+        int h5 = event_manager->register_event("event_a", [&] { handler5(); });
 
         // invoke event a & b
         event_manager->invoke_event("event_a");
         event_manager->invoke_event("event_b");
+
+        event_manager->deregister_event("event_a", h2);
+        event_manager->deregister_event("event_a", h5);
+        event_manager->deregister_event("event_b", h3);
+        event_manager->deregister_event("event_b", h4);
     }
 };
 
