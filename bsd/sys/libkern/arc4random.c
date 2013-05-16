@@ -31,11 +31,14 @@ static struct mtx arc4_mtx;
 
 static u_int8_t arc4_randbyte(void);
 
-uint8_t read_random_gen = 0;
+/* FIXME: OSv - use real random */
 int read_random(void* buf, int count)
 {
+    struct timeval tv;
+    getmicrotime(&tv);
     for (int i=0; i<count; i++) {
-        ((uint8_t *)buf)[i] = read_random_gen++;
+        ((uint8_t *)buf)[i] = tv.tv_usec & 0xFF;
+        tv.tv_usec *= 7;
     }
 
     return (count);
