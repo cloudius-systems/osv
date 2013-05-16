@@ -3,18 +3,12 @@ package com.cloudius.cli.util;
 import java.io.IOException;
 
 import sun.org.mozilla.javascript.NativeArray;
-import sun.org.mozilla.javascript.ScriptableObject;
-import sun.org.mozilla.javascript.annotations.JSFunction;
 
 import com.cloudius.util.Exec;
 import com.cloudius.cli.main.RhinoCLI;
 
-public class ELFLoader extends ScriptableObject {
+public class ELFLoader {
 
-    // Identifies the scriptable object
-    private static final long serialVersionUID = 87664098764510039L;
-
-    @JSFunction
     public boolean run()
     {
         NativeArray js_argv = (NativeArray)RhinoCLI._scope.get("_global_argv",
@@ -33,10 +27,4 @@ public class ELFLoader extends ScriptableObject {
         	return false;
         }
     }
-
-    @Override
-    public String getClassName() {
-        return "ELFLoader";
-    }
-
 }
