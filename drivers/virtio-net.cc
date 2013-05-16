@@ -184,10 +184,10 @@ namespace virtio {
     struct virtio_net_req {
         struct virtio_net::virtio_net_hdr hdr;
         sglist payload;
-        struct mbuf *m;
+        std::unique_ptr<struct mbuf> um;
 
-        virtio_net_req() :m(nullptr) {memset(&hdr,0,sizeof(hdr));};
-        ~virtio_net_req() {}
+        virtio_net_req() {memset(&hdr,0,sizeof(hdr));};
+        ~virtio_net_req() {if (um) m_freem(um.get());}
     };
 
     void virtio_net::receiver() {
@@ -207,11 +207,10 @@ namespace virtio {
                 auto ii = req->payload._nodes.begin();
                 ii++;
 
-                struct mbuf *m = req->m;
-
+                auto m = req->um.release();
                 u8* buf = mtod(m, u8*);
-
                 virtio_net_d(fmt("\t got hdr len:%d = %d, len= %d vaddr=%p") % i++ % (int)req->hdr.hdr_len % len % (void*)buf);
+                delete req;
 
                 m->m_pkthdr.len = len;
                 m->m_pkthdr.rcvif = _ifn;
@@ -220,9 +219,6 @@ namespace virtio {
 
                 _ifn->if_ipackets++;
                 (*_ifn->if_input)(_ifn, m);
-
-                delete req;
-                // TODO: who should free it? m_freem(m);
             }
 
             if (queue->avail_ring_has_room(queue->size()/2)) {
@@ -249,12 +245,11 @@ namespace virtio {
             struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, page_size);
             if (!m)
                 break;
+            req->um.reset(m);
 
-            req->m = m;
             u8 *mdata;
-            //int offset;
-
             mdata = mtod(m, u8*);
+
             //Better use the header withing the mbuf allocation like in freebsd
             //offset = 0;
             //struct virtio_net_hdr *hdr = static_cast<struct virtio_net_hdr*>(mdata);
@@ -265,7 +260,6 @@ namespace virtio {
 
             if (!queue->add_buf(&req->payload,0,req->payload.get_sgs(),req)) {
                 delete req;
-                m_freem(m);
                 break;
             }
         }
@@ -288,6 +282,7 @@ namespace virtio {
 
         //TODO: verify what the hdr_len should be
         req->hdr.hdr_len = ETH_ALEN;
+        req->um.reset(m);
         req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
         // leak for now ; req->buffer = (u8*)out;
 
@@ -334,9 +329,7 @@ namespace virtio {
 
         while((req = static_cast<virtio_net_req*>(queue->get_buf(&len))) != nullptr) {
             virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
-
             delete req;
-            if (req->m) m_freem(req->m);
         }
     }
 
