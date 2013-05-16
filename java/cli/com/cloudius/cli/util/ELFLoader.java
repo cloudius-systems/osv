@@ -20,11 +20,11 @@ public class ELFLoader {
         }
 
         try {
-        	long exitcode = Exec.run(argv);
-        	RhinoCLI._scope.put("_exitcode", RhinoCLI._scope, exitcode);
-        	return true;
+            long exitcode = Exec.run(argv);
+            RhinoCLI._scope.put("_exitcode", RhinoCLI._scope, exitcode);
+            return true;
         } catch (IOException e) {
-        	return false;
+            return false;
         }
     }
 }
