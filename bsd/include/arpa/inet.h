@@ -58,6 +58,15 @@
 #ifndef _ARPA_INET_H_
 #define	_ARPA_INET_H_
 
+#define __NEED_in_addr_t
+#define __NEED_in_port_t
+#define __NEED_uint16_t
+#define __NEED_uint32_t
+#define __NEED_size_t
+#define __NEED_socklen_t
+#define __NEED_struct_in_addr
+#include <bits/alltypes.h>
+
 /* External definitions for functions in inet(3). */
 
 #include <sys/cdefs.h>
@@ -67,49 +76,6 @@
 
 #define	INET_ADDRSTRLEN		16
 #define	INET6_ADDRSTRLEN	46
-
-#ifndef _UINT16_T_DECLARED
-typedef	__uint16_t	uint16_t;
-#define	_UINT16_T_DECLARED
-#endif
-
-#ifndef _UINT32_T_DECLARED
-typedef	__uint32_t	uint32_t;
-#define	_UINT32_T_DECLARED
-#endif
-
-#ifndef _IN_ADDR_T_DECLARED
-typedef	uint32_t	in_addr_t;
-#define	_IN_ADDR_T_DECLARED
-#endif
-
-#ifndef _IN_PORT_T_DECLARED
-typedef	uint16_t	in_port_t;
-#define	_IN_PORT_T_DECLARED
-#endif
-
-#if __BSD_VISIBLE
-#ifndef _SIZE_T_DECLARED
-typedef	__size_t	size_t;
-#define	_SIZE_T_DECLARED
-#endif
-#endif
-
-/*
- * XXX socklen_t is used by a POSIX.1-2001 interface, but not required by
- * POSIX.1-2001.
- */
-#ifndef _SOCKLEN_T_DECLARED
-typedef	__socklen_t	socklen_t;
-#define	_SOCKLEN_T_DECLARED
-#endif
-
-#ifndef _STRUCT_IN_ADDR_DECLARED
-struct in_addr {
-	in_addr_t s_addr;
-};
-#define	_STRUCT_IN_ADDR_DECLARED
-#endif
 
 __BEGIN_DECLS
 #ifndef _BYTEORDER_PROTOTYPED

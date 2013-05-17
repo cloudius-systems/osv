@@ -33,59 +33,27 @@
 #ifndef _SYS_SOCKET_H_
 #define	_SYS_SOCKET_H_
 
-#include <osv/uio.h>
-#include <sys/cdefs.h>
-#include <bsd/machine/_align.h>
 #define __NEED___pid_t
 #define __NEED___gid_t
 #define __NEED___off_t
+#define __NEED_gid_t
+#define __NEED_pid_t
+#define __NEED_off_t
+#define __NEED_uid_t
+#define __NEED_sa_family_t
+#define __NEED_socklen_t
+#define __NEED_ssize_t
+#define __NEED_uint32_t
 #include <bits/alltypes.h>
+
+#include <osv/uio.h>
+#include <sys/cdefs.h>
+#include <bsd/machine/_align.h>
+
 
 /*
  * Definitions related to sockets: types, address families, options.
  */
-
-/*
- * Data types.
- */
-#if __BSD_VISIBLE
-#ifndef _GID_T_DECLARED
-typedef	__gid_t		gid_t;
-#define	_GID_T_DECLARED
-#endif
-
-#ifndef _OFF_T_DECLARED
-typedef	__off_t		off_t;
-#define	_OFF_T_DECLARED
-#endif
-
-#ifndef _PID_T_DECLARED
-typedef	__pid_t		pid_t;
-#define	_PID_T_DECLARED
-#endif
-#endif
-
-#ifndef _SA_FAMILY_T_DECLARED
-typedef	uint8_t	sa_family_t;
-#define	_SA_FAMILY_T_DECLARED
-#endif
-
-#ifndef _SOCKLEN_T_DECLARED
-typedef	__socklen_t	socklen_t;
-#define	_SOCKLEN_T_DECLARED
-#endif
- 
-#ifndef _SSIZE_T_DECLARED
-typedef	__ssize_t	ssize_t;
-#define	_SSIZE_T_DECLARED
-#endif
-
-#if __BSD_VISIBLE 
-#ifndef _UID_T_DECLARED
-typedef	__uid_t		uid_t;
-#define	_UID_T_DECLARED
-#endif
-#endif
 
 /*
  * Types
