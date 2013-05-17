@@ -29,7 +29,7 @@
 #include <sys/cdefs.h>
 #include <bsd/sys/sys/param.h>
 #include <ctype.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/file.h>
 #include <malloc.h>
 #include <bsd/sys/sys/sbuf.h>
