@@ -38,6 +38,7 @@ static char sccsid[] = "@(#)realpath.c	8.1 (Berkeley) 2/16/94";
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include <osv/prex.h> /* for strlcpy / strlcat */
 
