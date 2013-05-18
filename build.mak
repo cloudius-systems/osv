@@ -360,7 +360,8 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 miscbase = $(src)/external/misc.bin
-boost-libs := $(lastword $(sort $(wildcard /usr/lib*/libboost_program_options-mt.a)))
+boost-lib-dir = $(miscbase)/usr/lib64
+boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
 
 bsd/%.o: COMMON += -D _KERNEL
 
