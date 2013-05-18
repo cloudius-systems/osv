@@ -2,7 +2,6 @@
 #define _OSV_PREX_H 1
 
 
-#include <sys/cdefs.h>
 #include <unistd.h>
 #include <osv/fcntl.h>
 

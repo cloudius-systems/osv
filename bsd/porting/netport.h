@@ -9,6 +9,8 @@
 #include <memory.h>
 #include <time.h>
 #include <pthread.h>
+#define __NEED_socklen_t
+#include <bits/alltypes.h>
 
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
@@ -137,7 +139,6 @@ extern int tick;
 
 #define log(x, fmt, ...) do {} while(0)
 
-#define PAGE_SIZE (4096)
 #define PAGE_MASK (PAGE_SIZE-1)
 
 void abort(void);

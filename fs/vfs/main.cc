@@ -358,6 +358,7 @@ int fdatasync(int fd)
     return fsync(fd);
 }
 
+extern "C"
 int __fxstat(int ver, int fd, struct stat *st)
 {
 	struct file *fp;
@@ -382,6 +383,7 @@ out_errno:
 	errno = error;
 	return -1;
 }
+extern "C"
 int __fxstat64(int, int, struct stat64 *) __attribute__((weak, alias("__fxstat")));
 
 extern "C"
@@ -624,6 +626,7 @@ out_errno:
 tracepoint<const char*> trace_stat("stat", "%s");
 tracepoint<int> trace_stat_err("stat_err", "%d");
 
+extern "C"
 int __xstat(int ver, const char *pathname, struct stat *st)
 {
 	struct task *t = main_task;
@@ -650,6 +653,7 @@ out_errno:
 	errno = error;
 	return -1;
 }
+extern "C"
 int __xstat64(int, const char *, struct stat64 *) __attribute__((weak, alias("__xstat")));
 
 int stat(const char *pathname, struct stat *st)
@@ -658,6 +662,7 @@ int stat(const char *pathname, struct stat *st)
 }
 int stat64(const char *, struct stat64 *) __attribute__((weak, alias("stat")));
 
+extern "C"
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {
 	return __xstat(ver, pathname, st);

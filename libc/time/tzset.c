@@ -7,8 +7,6 @@
 
 #include "__time.h"
 
-#define TZNAME_MAX _POSIX_TZNAME_MAX
-
 long  __timezone = 0;
 int   __daylight = 0;
 char *__tzname[2] = { 0, 0 };

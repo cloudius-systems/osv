@@ -3,7 +3,6 @@
  */
 
 #include <termios.h>
-#include <asm/ioctls.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 

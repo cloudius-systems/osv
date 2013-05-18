@@ -33,8 +33,19 @@
 #ifndef _NETINET_IN_H_
 #define	_NETINET_IN_H_
 
+#define __NEED_in_addr_t
+#define __NEED_in_port_t
+#define __NEED_uint8_t
+#define __NEED_uint16_t
+#define __NEED_uint32_t
+#define __NEED_sa_family_t
+#define __NEED_socklen_t
+#define __NEED_struct_in_addr
+#include <bits/alltypes.h>
+
 #include <sys/cdefs.h>
 #include <bsd/machine/endian.h>
+
 
 /* Protocols common to RFC 1700, POSIX, and X/Open. */
 #define	IPPROTO_IP		0		/* dummy for IP */
@@ -44,49 +55,6 @@
 
 #define	INADDR_ANY		(u_int32_t)0x00000000
 #define	INADDR_BROADCAST	(u_int32_t)0xffffffff	/* must be masked */
-
-#ifndef _UINT8_T_DECLARED
-typedef	__uint8_t		uint8_t;
-#define	_UINT8_T_DECLARED
-#endif
-
-#ifndef _UINT16_T_DECLARED
-typedef	__uint16_t		uint16_t;
-#define	_UINT16_T_DECLARED
-#endif
-
-#ifndef _UINT32_T_DECLARED
-typedef	__uint32_t		uint32_t;
-#define	_UINT32_T_DECLARED
-#endif
-
-#ifndef _IN_ADDR_T_DECLARED
-typedef	uint32_t		in_addr_t;
-#define	_IN_ADDR_T_DECLARED
-#endif
-
-#ifndef _IN_PORT_T_DECLARED
-typedef	uint16_t		in_port_t;
-#define	_IN_PORT_T_DECLARED
-#endif
-
-#ifndef _SA_FAMILY_T_DECLARED
-typedef	uint8_t			sa_family_t;
-#define	_SA_FAMILY_T_DECLARED
-#endif
-
-/* Internet address (a structure for historical reasons). */
-#ifndef	_STRUCT_IN_ADDR_DECLARED
-struct in_addr {
-	in_addr_t s_addr;
-};
-#define	_STRUCT_IN_ADDR_DECLARED
-#endif
-
-#ifndef	_SOCKLEN_T_DECLARED
-typedef	__socklen_t	socklen_t;
-#define	_SOCKLEN_T_DECLARED
-#endif
 
 #include <bsd/sys/sys/_sockaddr_storage.h>
 

@@ -1,6 +1,8 @@
 #ifndef OSV_FCNTL_H
 #define OSV_FCNTL_H
 
+#include <sys/cdefs.h>
+
 __BEGIN_DECLS
 
 /*

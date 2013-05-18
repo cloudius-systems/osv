@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <sys/lock.h>
 #include <sys/mutex.h>
-#include <sys/unistd.h>
+#include <unistd.h>
 #include <sys/debug.h>
 #include <sys/kthread.h>
 

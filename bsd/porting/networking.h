@@ -1,6 +1,8 @@
 #ifndef __NETWORKING_H__
 #define __NETWORKING_H__
 
+#include <sys/cdefs.h>
+
 __BEGIN_DECLS
 
 /* Interface Functions */

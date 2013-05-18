@@ -70,7 +70,7 @@ void mutex_unlock(mutex_t* m);
 /* Is owned by current thread */
 bool mutex_owned(mutex_t* m);
 
-static __always_inline void mutex_init(mutex_t* m)
+static inline void mutex_init(mutex_t* m)
 {
     m->_depth = 0;
     m->_owner = 0;
@@ -79,7 +79,7 @@ static __always_inline void mutex_init(mutex_t* m)
     spinlock_init(&m->_wait_lock);
 }
 
-static __always_inline void mutex_destroy(mutex_t* m)
+static inline void mutex_destroy(mutex_t* m)
 {
 }
 

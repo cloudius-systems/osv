@@ -114,6 +114,7 @@ int sched_yield()
     return 0;
 }
 
+extern "C"
 int getloadavg(double loadavg[], int nelem)
 {
     int i;

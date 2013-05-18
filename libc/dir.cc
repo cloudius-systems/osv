@@ -13,6 +13,10 @@ struct __dirstream {
 	int fd;
 };
 
+struct __DIR_s {
+    int fd;
+};
+
 
 DIR *opendir(const char *path)
 {

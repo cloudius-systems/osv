@@ -9,6 +9,7 @@ u64 convert(const timespec& ts)
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
 
+extern "C"
 int gettimeofday(struct timeval* tv, struct timezone* tz)
 {
     if (!tv) {

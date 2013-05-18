@@ -42,8 +42,6 @@ termios tio = {
             /*VSTART*/0, /*VSTOP*/0, /*VSUSP*/0, /*VEOL*/0,
             /*VREPRINT*/0, /*VDISCARD*/0, /*VWERASE*/0,
             /*VLNEXT*/0, /*VEOL2*/0},
-    .c_ispeed = 0,
-    .c_ospeed = 0,
 };
 
 // Console line discipline thread.

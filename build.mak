@@ -4,17 +4,28 @@ cmdline = java.so -jar /java/cli.jar
 #cmdline = testrunner.so
 #cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
-INCLUDES += -I$(src)/external/acpica/source/include
+INCLUDES += -isystem $(src)/include/glibc-compat
+gcc-inc-base = $(src)/external/gcc.bin/usr/include/c++/4.7.2
+INCLUDES += -isystem $(gcc-inc-base)
+INCLUDES += -isystem $(gcc-inc-base)/x86_64-redhat-linux
+INCLUDES += -isystem $(src)/external/acpica/source/include
+INCLUDES += -isystem $(src)/external/misc.bin/usr/include
+INCLUDES += -isystem $(src)/include/api
+INCLUDES += -isystem $(src)/include/api/x86_64
+INCLUDES += -isystem gen/include
+INCLUDES += -isystem $(src)/bsd/sys
+
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
+	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
-	$(configuration)
+	$(configuration) -nostdinc
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
 tracing-flags = $(tracing-flags-$(conf-tracing))
 
-CXXFLAGS = -std=gnu++11 -lstdc++ $(do-sys-includes) $(COMMON)
+CXXFLAGS = -std=gnu++11 -lstdc++ $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
@@ -24,6 +35,8 @@ CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
 ASFLAGS = -g $(autodepend)
 
 fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
+
+bsd/%.o: INCLUDES += -isystem $(src)/bsd/sys
 
 configuration-defines = conf-preempt conf-debug_memory
 
@@ -83,7 +96,6 @@ tests/tst-queue-mpsc.so: CFLAGS+=-lstdc++
 tests/tst-mutex.so: CFLAGS+=-lstdc++
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
-sys-includes +=  $(gccbase)/usr/include $(glibcbase)/usr/include
 autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
@@ -348,7 +360,8 @@ jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
 glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 miscbase = $(src)/external/misc.bin
-boost-libs := $(lastword $(sort $(wildcard /usr/lib*/libboost_program_options-mt.a)))
+boost-lib-dir = $(miscbase)/usr/lib64
+boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
 
 bsd/%.o: COMMON += -D _KERNEL
 
@@ -381,8 +394,14 @@ ctype-data.h: gen-ctype-data
 gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
+generated-headers = gen/include/bits/alltypes.h
+
+gen/include/bits/alltypes.h: $(src)/include/api/x86_64/bits/alltypes.h.sh
+	$(call very-quiet, mkdir -p $(dir $@))
+	$(call quiet, sh $^ > $@, GEN $@)
+
+$(src)/build.mak: $(generated-headers)
+
 -include $(shell find -name '*.d')
 
 .DELETE_ON_ERROR:
-
-.SECONDARY:

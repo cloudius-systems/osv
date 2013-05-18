@@ -48,6 +48,8 @@ enum	uio_rw { UIO_READ, UIO_WRITE };
  */
 #define IOSIZE_MAX      INT_MAX
 
+#define UIO_MAXIOV 1024
+
 struct uio {
 	struct iovec *uio_iov;		/* scatter/gather list */
 	int	uio_iovcnt;		/* length of scatter/gather list */

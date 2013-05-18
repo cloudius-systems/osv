@@ -9,10 +9,6 @@
 #include <math.h>
 #include <float.h>
 
-// FIXME: _POSIX_ARG_MAX is 4096, this causes a stack overflow
-//#define NL_ARGMAX _POSIX_ARG_MAX
-#define NL_ARGMAX 20
-
 /* Some useful macros */
 
 #define MAX(a,b) ((a)>(b) ? (a) : (b))

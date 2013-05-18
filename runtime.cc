@@ -269,6 +269,14 @@ struct __locale_data
   values __flexarr;	/* Items, usually pointers into `filedata'.  */
 };
 
+#define _NL_ITEM(category, index)   (((category) << 16) | (index))
+#define _NL_ITEM_CATEGORY(item)     ((int) (item) >> 16)
+#define _NL_ITEM_INDEX(item)        ((int) (item) & 0xffff)
+
+#define _NL_CTYPE_CLASS  0
+#define _NL_CTYPE_TOUPPER 1
+#define _NL_CTYPE_TOLOWER 3
+
 __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     __THROW
 {

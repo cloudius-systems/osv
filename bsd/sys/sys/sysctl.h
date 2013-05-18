@@ -805,6 +805,7 @@ struct sbuf	*sbuf_new_for_sysctl(struct sbuf *, char *, int,
 		    struct sysctl_req *);
 #else	/* !_KERNEL */
 #include <sys/cdefs.h>
+#include <sys/types.h>
 
 __BEGIN_DECLS
 int	sysctl(const int *, u_int, void *, size_t *, const void *, size_t);

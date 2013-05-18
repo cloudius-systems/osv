@@ -3,6 +3,8 @@
 
 #include <sys/ioctl.h>
 
+#define _IOC_TYPE(x) (((x) >> 24) & 0xff)
+
 #define SIOCBEGIN   0x8900
 #define SIOCEND     0x89ff
 
@@ -41,15 +43,10 @@
 #undef SIOCPROTOPRIVATE
 
 /* Generic file-descriptor ioctl's. */
-#define	FIOSETOWN	_IOW('f', 124, int)	/* set owner */
-#define	FIOGETOWN	_IOR('f', 123, int)	/* get owner */
 #define	FIONWRITE	_IOR('f', 119, int)	/* get # bytes (yet) to write */
 #define	FIONSPACE	_IOR('f', 118, int)	/* get space in send queue */
 
 /* Socket ioctl's. */
-#define	SIOCATMARK	 _IOR('s',  7, int)		/* at oob mark? */
-#define	SIOCSPGRP	 _IOW('s',  8, int)		/* set process group */
-#define	SIOCGPGRP	 _IOR('s',  9, int)		/* get process group */
 
 #define	SIOCAIFADDR	 _IOW('i', 26, struct ifaliasreq)/* add/chg IF alias */
 #define	SIOCALIFADDR	 _IOW('i', 27, struct if_laddrreq) /* add IF addr */

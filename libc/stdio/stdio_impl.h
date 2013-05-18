@@ -3,6 +3,7 @@
 
 #include "stdio.h"
 #include "libc.h"
+#include <pthread.h>
 
 #define UNGET 8
 

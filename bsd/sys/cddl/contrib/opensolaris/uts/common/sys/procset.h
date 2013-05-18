@@ -39,7 +39,7 @@ extern "C" {
 
 #include <sys/feature_tests.h>
 #include <sys/types.h>
-#include <sys/signal.h>
+#include <signal.h>
 
 /*
  *	This file defines the data needed to specify a set of

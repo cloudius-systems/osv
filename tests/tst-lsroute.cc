@@ -27,6 +27,7 @@
  */
 
 #include <sys/param.h>
+#include <bsd/sys/sys/sysctl.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/net/if_types.h>
