@@ -1,5 +1,7 @@
 importPackage(java.io);
 importPackage(java.lang);
+importPackage(com.cloudius.util);
+importPackage(com.cloudius.cli.util);
 
 load("/console/util.js");
 load("/console/autocomplete.js");
