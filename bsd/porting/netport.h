@@ -9,6 +9,7 @@
 #include <memory.h>
 #include <time.h>
 #include <pthread.h>
+#include <osv/debug.h>
 #define __NEED_socklen_t
 #include <bits/alltypes.h>
 
@@ -139,7 +140,7 @@ extern int tick;
 
 #define panic(...) abort()
 
-#define log(x, fmt, ...) do {} while(0)
+#define log(x, ...) tprintf("bsd-log", logger_error, __VA_ARGS__)
 
 #define PAGE_MASK (PAGE_SIZE-1)
 
