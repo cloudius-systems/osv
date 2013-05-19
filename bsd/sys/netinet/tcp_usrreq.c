@@ -87,11 +87,11 @@
  */
 static int	tcp_attach(struct socket *);
 #ifdef INET
-static int	tcp_connect(struct tcpcb *, struct sockaddr *,
+static int	tcp_connect(struct tcpcb *, struct bsd_sockaddr *,
 		    struct thread *td);
 #endif /* INET */
 #ifdef INET6
-static int	tcp6_connect(struct tcpcb *, struct sockaddr *,
+static int	tcp6_connect(struct tcpcb *, struct bsd_sockaddr *,
 		    struct thread *td);
 #endif /* INET6 */
 static void	tcp_disconnect(struct tcpcb *);
@@ -232,14 +232,14 @@ tcp_usr_detach(struct socket *so)
  * Give the socket an address.
  */
 static int
-tcp_usr_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
+tcp_usr_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	int error = 0;
 	struct inpcb *inp;
 	struct tcpcb *tp = NULL;
-	struct sockaddr_in *sinp;
+	struct bsd_sockaddr_in *sinp;
 
-	sinp = (struct sockaddr_in *)nam;
+	sinp = (struct bsd_sockaddr_in *)nam;
 	if (nam->sa_len != sizeof (*sinp))
 		return (EINVAL);
 	/*
@@ -273,14 +273,14 @@ out:
 
 #ifdef INET6
 static int
-tcp6_usr_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
+tcp6_usr_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	int error = 0;
 	struct inpcb *inp;
 	struct tcpcb *tp = NULL;
-	struct sockaddr_in6 *sin6p;
+	struct bsd_sockaddr_in6 *sin6p;
 
-	sin6p = (struct sockaddr_in6 *)nam;
+	sin6p = (struct bsd_sockaddr_in6 *)nam;
 	if (nam->sa_len != sizeof (*sin6p))
 		return (EINVAL);
 	/*
@@ -309,12 +309,12 @@ tcp6_usr_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 		if (IN6_IS_ADDR_UNSPECIFIED(&sin6p->sin6_addr))
 			inp->inp_vflag |= INP_IPV4;
 		else if (IN6_IS_ADDR_V4MAPPED(&sin6p->sin6_addr)) {
-			struct sockaddr_in sin;
+			struct bsd_sockaddr_in sin;
 
 			in6_sin6_2_sin(&sin, sin6p);
 			inp->inp_vflag |= INP_IPV4;
 			inp->inp_vflag &= ~INP_IPV6;
-			error = in_pcbbind(inp, (struct sockaddr *)&sin,
+			error = in_pcbbind(inp, (struct bsd_sockaddr *)&sin,
 			    td->td_ucred);
 			INP_HASH_WUNLOCK(&V_tcbinfo);
 			goto out;
@@ -355,7 +355,7 @@ tcp_usr_listen(struct socket *so, int backlog, struct thread *td)
 	error = solisten_proto_check(so);
 	INP_HASH_WLOCK(&V_tcbinfo);
 	if (error == 0 && inp->inp_lport == 0)
-		error = in_pcbbind(inp, (struct sockaddr *)0, 0);
+		error = in_pcbbind(inp, (struct bsd_sockaddr *)0, 0);
 	INP_HASH_WUNLOCK(&V_tcbinfo);
 	if (error == 0) {
 		tp->t_state = TCPS_LISTEN;
@@ -396,7 +396,7 @@ tcp6_usr_listen(struct socket *so, int backlog, struct thread *td)
 		inp->inp_vflag &= ~INP_IPV4;
 		if ((inp->inp_flags & IN6P_IPV6_V6ONLY) == 0)
 			inp->inp_vflag |= INP_IPV4;
-		error = in6_pcbbind(inp, (struct sockaddr *)0, td->td_ucred);
+		error = in6_pcbbind(inp, (struct bsd_sockaddr *)0, td->td_ucred);
 	}
 	INP_HASH_WUNLOCK(&V_tcbinfo);
 	if (error == 0) {
@@ -421,14 +421,14 @@ out:
  * Send initial segment on connection.
  */
 static int
-tcp_usr_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
+tcp_usr_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	int error = 0;
 	struct inpcb *inp;
 	struct tcpcb *tp = NULL;
-	struct sockaddr_in *sinp;
+	struct bsd_sockaddr_in *sinp;
 
-	sinp = (struct sockaddr_in *)nam;
+	sinp = (struct bsd_sockaddr_in *)nam;
 	if (nam->sa_len != sizeof (*sinp))
 		return (EINVAL);
 	/*
@@ -460,16 +460,16 @@ out:
 
 #ifdef INET6
 static int
-tcp6_usr_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
+tcp6_usr_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	int error = 0;
 	struct inpcb *inp;
 	struct tcpcb *tp = NULL;
-	struct sockaddr_in6 *sin6p;
+	struct bsd_sockaddr_in6 *sin6p;
 
 	TCPDEBUG0;
 
-	sin6p = (struct sockaddr_in6 *)nam;
+	sin6p = (struct bsd_sockaddr_in6 *)nam;
 	if (nam->sa_len != sizeof (*sin6p))
 		return (EINVAL);
 	/*
@@ -495,7 +495,7 @@ tcp6_usr_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
 	 * Is this a significant problem?
 	 */
 	if (IN6_IS_ADDR_V4MAPPED(&sin6p->sin6_addr)) {
-		struct sockaddr_in sin;
+		struct bsd_sockaddr_in sin;
 
 		if ((inp->inp_flags & IN6P_IPV6_V6ONLY) != 0) {
 			error = EINVAL;
@@ -508,7 +508,7 @@ tcp6_usr_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
 		if ((error = prison_remote_ip4(td->td_ucred,
 		    &sin.sin_addr)) != 0)
 			goto out;
-		if ((error = tcp_connect(tp, (struct sockaddr *)&sin, td)) != 0)
+		if ((error = tcp_connect(tp, (struct bsd_sockaddr *)&sin, td)) != 0)
 			goto out;
 		error = tcp_output_connect(so, nam);
 		goto out;
@@ -580,7 +580,7 @@ out:
  * are fully initialized.
  */
 static int
-tcp_usr_accept(struct socket *so, struct sockaddr **nam)
+tcp_usr_accept(struct socket *so, struct bsd_sockaddr **nam)
 {
 	int error = 0;
 	struct inpcb *inp = NULL;
@@ -623,7 +623,7 @@ out:
 
 #ifdef INET6
 static int
-tcp6_usr_accept(struct socket *so, struct sockaddr **nam)
+tcp6_usr_accept(struct socket *so, struct bsd_sockaddr **nam)
 {
 	struct inpcb *inp = NULL;
 	int error = 0;
@@ -747,7 +747,7 @@ out:
  */
 static int
 tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
-    struct sockaddr *nam, struct mbuf *control, struct thread *td)
+    struct bsd_sockaddr *nam, struct mbuf *control, struct thread *td)
 {
 	int error = 0;
 	struct inpcb *inp;
@@ -1053,7 +1053,7 @@ struct pr_usrreqs tcp6_usrreqs = {
 #ifdef INET
 /*
  * Common subroutine to open a TCP connection to remote host specified
- * by struct sockaddr_in in mbuf *nam.  Call in_pcbbind to assign a local
+ * by struct bsd_sockaddr_in in mbuf *nam.  Call in_pcbbind to assign a local
  * port number if needed.  Call in_pcbconnect_setup to do the routing and
  * to choose a local host address (interface).  If there is an existing
  * incarnation of the same connection in TIME-WAIT state and if the remote
@@ -1062,7 +1062,7 @@ struct pr_usrreqs tcp6_usrreqs = {
  * Initialize connection parameters and enter SYN-SENT state.
  */
 static int
-tcp_connect(struct tcpcb *tp, struct sockaddr *nam, struct thread *td)
+tcp_connect(struct tcpcb *tp, struct bsd_sockaddr *nam, struct thread *td)
 {
 	struct inpcb *inp = tp->t_inpcb, *oinp;
 	struct socket *so = inp->inp_socket;
@@ -1074,7 +1074,7 @@ tcp_connect(struct tcpcb *tp, struct sockaddr *nam, struct thread *td)
 	INP_HASH_WLOCK(&V_tcbinfo);
 
 	if (inp->inp_lport == 0) {
-		error = in_pcbbind(inp, (struct sockaddr *)0, 0);
+		error = in_pcbbind(inp, (struct bsd_sockaddr *)0, 0);
 		if (error)
 			goto out;
 	}
@@ -1124,11 +1124,11 @@ out:
 
 #ifdef INET6
 static int
-tcp6_connect(struct tcpcb *tp, struct sockaddr *nam, struct thread *td)
+tcp6_connect(struct tcpcb *tp, struct bsd_sockaddr *nam, struct thread *td)
 {
 	struct inpcb *inp = tp->t_inpcb, *oinp;
 	struct socket *so = inp->inp_socket;
-	struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)nam;
+	struct bsd_sockaddr_in6 *sin6 = (struct bsd_sockaddr_in6 *)nam;
 	struct in6_addr addr6;
 	int error;
 
@@ -1136,7 +1136,7 @@ tcp6_connect(struct tcpcb *tp, struct sockaddr *nam, struct thread *td)
 	INP_HASH_WLOCK(&V_tcbinfo);
 
 	if (inp->inp_lport == 0) {
-		error = in6_pcbbind(inp, (struct sockaddr *)0, td->td_ucred);
+		error = in6_pcbbind(inp, (struct bsd_sockaddr *)0, td->td_ucred);
 		if (error)
 			goto out;
 	}

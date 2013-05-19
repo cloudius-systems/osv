@@ -234,7 +234,7 @@ void	ip_savecontrol(struct inpcb *, struct mbuf **, struct ip *,
 void	ip_slowtimo(void);
 u_int16_t	ip_randomid(void);
 int	rip_ctloutput(struct socket *, struct sockopt *);
-void	rip_ctlinput(int, struct sockaddr *, void *);
+void	rip_ctlinput(int, struct bsd_sockaddr *, void *);
 void	rip_init(void);
 #ifdef VIMAGE
 void	rip_destroy(void);

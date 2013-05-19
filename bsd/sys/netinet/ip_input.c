@@ -1307,11 +1307,11 @@ struct in_ifaddr *
 ip_rtaddr(struct in_addr dst, u_int fibnum)
 {
 	struct route sro;
-	struct sockaddr_in *sin;
+	struct bsd_sockaddr_in *sin;
 	struct in_ifaddr *ia;
 
 	bzero(&sro, sizeof(sro));
-	sin = (struct sockaddr_in *)&sro.ro_dst;
+	sin = (struct bsd_sockaddr_in *)&sro.ro_dst;
 	sin->sin_family = AF_INET;
 	sin->sin_len = sizeof(*sin);
 	sin->sin_addr = dst;
@@ -1441,11 +1441,11 @@ ip_forward(struct mbuf *m, int srcrt)
 	dest.s_addr = 0;
 	if (!srcrt && V_ipsendredirects &&
 	    ia != NULL && ia->ia_ifp == m->m_pkthdr.rcvif) {
-		struct sockaddr_in *sin;
+		struct bsd_sockaddr_in *sin;
 		struct rtentry *rt;
 
 		bzero(&ro, sizeof(ro));
-		sin = (struct sockaddr_in *)&ro.ro_dst;
+		sin = (struct bsd_sockaddr_in *)&ro.ro_dst;
 		sin->sin_family = AF_INET;
 		sin->sin_len = sizeof(*sin);
 		sin->sin_addr = ip->ip_dst;
@@ -1655,15 +1655,15 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 	if (inp->inp_flags & INP_RECVIF) {
 		struct ifnet *ifp;
 		struct sdlbuf {
-			struct sockaddr_dl sdl;
+			struct bsd_sockaddr_dl sdl;
 			u_char	pad[32];
 		} sdlbuf;
-		struct sockaddr_dl *sdp;
-		struct sockaddr_dl *sdl2 = &sdlbuf.sdl;
+		struct bsd_sockaddr_dl *sdp;
+		struct bsd_sockaddr_dl *sdl2 = &sdlbuf.sdl;
 
 		if (((ifp = m->m_pkthdr.rcvif)) 
 		&& ( ifp->if_index && (ifp->if_index <= V_if_index))) {
-			sdp = (struct sockaddr_dl *)ifp->if_addr->ifa_addr;
+			sdp = (struct bsd_sockaddr_dl *)ifp->if_addr->ifa_addr;
 			/*
 			 * Change our mind and don't try copy.
 			 */
@@ -1675,7 +1675,7 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 		} else {
 makedummy:	
 			sdl2->sdl_len
-				= offsetof(struct sockaddr_dl, sdl_data[0]);
+				= offsetof(struct bsd_sockaddr_dl, sdl_data[0]);
 			sdl2->sdl_family = AF_LINK;
 			sdl2->sdl_index = 0;
 			sdl2->sdl_nlen = sdl2->sdl_alen = sdl2->sdl_slen = 0;

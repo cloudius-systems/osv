@@ -91,7 +91,7 @@ struct	ether_arp {
 #define	arp_pln	ea_hdr.ar_pln
 #define	arp_op	ea_hdr.ar_op
 
-struct sockaddr_inarp {
+struct bsd_sockaddr_inarp {
 	u_char	sin_len;
 	u_char	sin_family;
 	u_short sin_port;
@@ -115,7 +115,7 @@ struct llentry;
 struct ifaddr;
 
 int	arpresolve(struct ifnet *ifp, struct rtentry *rt,
-		    struct mbuf *m, struct sockaddr *dst, u_char *desten,
+		    struct mbuf *m, struct bsd_sockaddr *dst, u_char *desten,
 		    struct llentry **lle);
 void	arp_ifinit(struct ifnet *, struct ifaddr *);
 void	arp_ifinit2(struct ifnet *, struct ifaddr *, u_char *);

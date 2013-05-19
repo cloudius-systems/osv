@@ -31,7 +31,7 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 	return 0;
 }
 
-int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 {
 	int error;
 
@@ -47,7 +47,7 @@ int getsockname(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 	return 0;
 }
 
-int accept4(int fd, struct sockaddr *restrict addr, socklen_t *restrict len, int flg)
+int accept4(int fd, struct bsd_sockaddr *restrict addr, socklen_t *restrict len, int flg)
 {
 	int fd2, error;
 
@@ -63,7 +63,7 @@ int accept4(int fd, struct sockaddr *restrict addr, socklen_t *restrict len, int
 	return fd2;
 }
 
-int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
+int accept(int fd, struct bsd_sockaddr *restrict addr, socklen_t *restrict len)
 {
 	int fd2, error;
 
@@ -79,7 +79,7 @@ int accept(int fd, struct sockaddr *restrict addr, socklen_t *restrict len)
 	return fd2;
 }
 
-int bind(int fd, const struct sockaddr *addr, socklen_t len)
+int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
 	int error;
 
@@ -95,7 +95,7 @@ int bind(int fd, const struct sockaddr *addr, socklen_t len)
 	return 0;
 }
 
-int connect(int fd, const struct sockaddr *addr, socklen_t len)
+int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
 	int error;
 
@@ -128,7 +128,7 @@ int listen(int fd, int backlog)
 }
 
 ssize_t recvfrom(int fd, void *restrict buf, size_t len, int flags,
-		struct sockaddr *restrict addr, socklen_t *restrict alen)
+		struct bsd_sockaddr *restrict addr, socklen_t *restrict alen)
 {
 	int error;
 	ssize_t bytes;
@@ -181,7 +181,7 @@ ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
 }
 
 ssize_t sendto(int fd, const void *buf, size_t len, int flags,
-    const struct sockaddr *addr, socklen_t alen)
+    const struct bsd_sockaddr *addr, socklen_t alen)
 {
 	int error;
 	ssize_t bytes;

@@ -62,14 +62,14 @@ raw_init(void)
  * Raw protocol interface.
  */
 void
-raw_input(struct mbuf *m0, struct sockproto *proto, struct sockaddr *src)
+raw_input(struct mbuf *m0, struct sockproto *proto, struct bsd_sockaddr *src)
 {
 
 	return (raw_input_ext(m0, proto, src, NULL));
 }
 
 void
-raw_input_ext(struct mbuf *m0, struct sockproto *proto, struct sockaddr *src,
+raw_input_ext(struct mbuf *m0, struct sockproto *proto, struct bsd_sockaddr *src,
     raw_input_cb_fn cb)
 {
 	struct rawcb *rp;
@@ -113,7 +113,7 @@ raw_input_ext(struct mbuf *m0, struct sockproto *proto, struct sockaddr *src,
 
 /*ARGSUSED*/
 void
-raw_ctlinput(int cmd, struct sockaddr *arg, void *dummy)
+raw_ctlinput(int cmd, struct bsd_sockaddr *arg, void *dummy)
 {
 
 	if (cmd < 0 || cmd >= PRC_NCMDS)
@@ -161,14 +161,14 @@ raw_uattach(struct socket *so, int proto, struct thread *td)
 }
 
 static int
-raw_ubind(struct socket *so, struct sockaddr *nam, struct thread *td)
+raw_ubind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 
 	return (EINVAL);
 }
 
 static int
-raw_uconnect(struct socket *so, struct sockaddr *nam, struct thread *td)
+raw_uconnect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 
 	return (EINVAL);
@@ -199,7 +199,7 @@ raw_udisconnect(struct socket *so)
 /* pru_listen is EOPNOTSUPP */
 
 static int
-raw_upeeraddr(struct socket *so, struct sockaddr **nam)
+raw_upeeraddr(struct socket *so, struct bsd_sockaddr **nam)
 {
 
 	KASSERT(sotorawcb(so) != NULL, ("raw_upeeraddr: rp == NULL"));
@@ -211,7 +211,7 @@ raw_upeeraddr(struct socket *so, struct sockaddr **nam)
 /* pru_rcvoob is EOPNOTSUPP */
 
 static int
-raw_usend(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
+raw_usend(struct socket *so, int flags, struct mbuf *m, struct bsd_sockaddr *nam,
     struct mbuf *control, struct thread *td)
 {
 
@@ -244,10 +244,10 @@ raw_ushutdown(struct socket *so)
 }
 
 static int
-raw_usockaddr(struct socket *so, struct sockaddr **nam)
+raw_ubsd_sockaddr(struct socket *so, struct bsd_sockaddr **nam)
 {
 
-	KASSERT(sotorawcb(so) != NULL, ("raw_usockaddr: rp == NULL"));
+	KASSERT(sotorawcb(so) != NULL, ("raw_ubsd_sockaddr: rp == NULL"));
 
 	return (EINVAL);
 }
@@ -262,6 +262,6 @@ struct pr_usrreqs raw_usrreqs = {
 	.pru_peeraddr =		raw_upeeraddr,
 	.pru_send =		raw_usend,
 	.pru_shutdown =		raw_ushutdown,
-	.pru_sockaddr =		raw_usockaddr,
+	.pru_sockaddr =		raw_ubsd_sockaddr,
 	.pru_close =		raw_uclose,
 };

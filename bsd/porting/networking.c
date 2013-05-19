@@ -17,9 +17,9 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
 {
     int error, success;
     struct in_aliasreq ifra;
-    struct sockaddr_in* addr      = &ifra.ifra_addr;
-    struct sockaddr_in* mask      = &ifra.ifra_mask;
-    struct sockaddr_in* broadcast = &ifra.ifra_broadaddr;
+    struct bsd_sockaddr_in* addr      = &ifra.ifra_addr;
+    struct bsd_sockaddr_in* mask      = &ifra.ifra_mask;
+    struct bsd_sockaddr_in* broadcast = &ifra.ifra_broadaddr;
     struct ifnet* ifp;
 
     if ((if_name == NULL) || (ip_addr == NULL) || (mask_addr == NULL)) {
@@ -44,7 +44,7 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
         goto out;
     }
     addr->sin_family = AF_INET;
-    addr->sin_len = sizeof(struct sockaddr_in);
+    addr->sin_len = sizeof(struct bsd_sockaddr_in);
 
     /* Mask */
     success = inet_aton(mask_addr, &mask->sin_addr);
@@ -52,9 +52,9 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
         error = EINVAL;
         goto out;
     }
-    mask->sin_len = sizeof(struct sockaddr_in);
+    mask->sin_len = sizeof(struct bsd_sockaddr_in);
     broadcast->sin_family      = AF_INET;
-    broadcast->sin_len         = sizeof(struct sockaddr_in);
+    broadcast->sin_len         = sizeof(struct bsd_sockaddr_in);
     broadcast->sin_addr.s_addr = (addr->sin_addr.s_addr &
                                   mask->sin_addr.s_addr) |
                                  ~mask->sin_addr.s_addr ;

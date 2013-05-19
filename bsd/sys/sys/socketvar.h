@@ -295,7 +295,7 @@ extern struct uma_zone *socket_zone;
 extern so_gen_t so_gencnt;
 
 struct mbuf;
-struct sockaddr;
+struct bsd_sockaddr;
 struct ucred;
 struct uio;
 
@@ -312,19 +312,19 @@ __BEGIN_DECLS
  * From uipc_socket and friends
  */
 int	sockargs(struct mbuf **mp, caddr_t buf, int buflen, int type);
-int	getsockaddr(struct sockaddr **namp, caddr_t uaddr, size_t len);
+int	getsockaddr(struct bsd_sockaddr **namp, caddr_t uaddr, size_t len);
 void	soabort(struct socket *so);
-int	soaccept(struct socket *so, struct sockaddr **nam);
+int	soaccept(struct socket *so, struct bsd_sockaddr **nam);
 int	socheckuid(struct socket *so, uid_t uid);
-int	sobind(struct socket *so, struct sockaddr *nam, struct thread *td);
+int	sobind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td);
 int	soclose(struct socket *so);
-int	soconnect(struct socket *so, struct sockaddr *nam, struct thread *td);
+int	soconnect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td);
 int	soconnect2(struct socket *so1, struct socket *so2);
 int	socow_setup(struct mbuf *m0, struct uio *uio);
 int	socreate(int dom, struct socket **aso, int type, int proto,
 	    struct ucred *cred, struct thread *td);
 int	sodisconnect(struct socket *so);
-struct	sockaddr *sodupsockaddr(const struct sockaddr *sa, int mflags);
+struct	bsd_sockaddr *sodupbsd_sockaddr(const struct bsd_sockaddr *sa, int mflags);
 void	sofree(struct socket *so);
 void	sohasoutofband(struct socket *so);
 int	solisten(struct socket *so, int backlog, struct thread *td);
@@ -338,26 +338,26 @@ int	sopoll(struct socket *so, int events, struct ucred *active_cred,
 	    struct thread *td);
 int	sopoll_generic(struct socket *so, int events,
 	    struct ucred *active_cred, struct thread *td);
-int	soreceive(struct socket *so, struct sockaddr **paddr, struct uio *uio,
+int	soreceive(struct socket *so, struct bsd_sockaddr **paddr, struct uio *uio,
 	    struct mbuf **mp0, struct mbuf **controlp, int *flagsp);
-int	soreceive_stream(struct socket *so, struct sockaddr **paddr,
+int	soreceive_stream(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
-int	soreceive_dgram(struct socket *so, struct sockaddr **paddr,
+int	soreceive_dgram(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
-int	soreceive_generic(struct socket *so, struct sockaddr **paddr,
+int	soreceive_generic(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
 int	soreserve(struct socket *so, u_long sndcc, u_long rcvcc);
 void	sorflush(struct socket *so);
-int	sosend(struct socket *so, struct sockaddr *addr, struct uio *uio,
+int	sosend(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	    struct mbuf *top, struct mbuf *control, int flags,
 	    struct thread *td);
-int	sosend_dgram(struct socket *so, struct sockaddr *addr,
+int	sosend_dgram(struct socket *so, struct bsd_sockaddr *addr,
 	    struct uio *uio, struct mbuf *top, struct mbuf *control,
 	    int flags, struct thread *td);
-int	sosend_generic(struct socket *so, struct sockaddr *addr,
+int	sosend_generic(struct socket *so, struct bsd_sockaddr *addr,
 	    struct uio *uio, struct mbuf *top, struct mbuf *control,
 	    int flags, struct thread *td);
 int	soshutdown(struct socket *so, int how);

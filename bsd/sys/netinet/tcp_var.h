@@ -651,7 +651,7 @@ void	 tcp_twstart(struct tcpcb *);
 int	 tcp_twrecycleable(struct tcptw *tw);
 #endif
 void	 tcp_twclose(struct tcptw *_tw, int _reuse);
-void	 tcp_ctlinput(int, struct sockaddr *, void *);
+void	 tcp_ctlinput(int, struct bsd_sockaddr *, void *);
 int	 tcp_ctloutput(struct socket *, struct sockopt *);
 struct tcpcb *
 	 tcp_drop(struct tcpcb *, int);

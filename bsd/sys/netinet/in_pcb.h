@@ -618,15 +618,15 @@ void	in_pcbgroup_update_mbuf(struct inpcb *, struct mbuf *);
 
 void	in_pcbpurgeif0(struct inpcbinfo *, struct ifnet *);
 int	in_pcballoc(struct socket *, struct inpcbinfo *);
-int	in_pcbbind(struct inpcb *, struct sockaddr *, struct ucred *);
+int	in_pcbbind(struct inpcb *, struct bsd_sockaddr *, struct ucred *);
 int	in_pcb_lport(struct inpcb *, struct in_addr *, u_short *,
 	    struct ucred *, int);
-int	in_pcbbind_setup(struct inpcb *, struct sockaddr *, in_addr_t *,
+int	in_pcbbind_setup(struct inpcb *, struct bsd_sockaddr *, in_addr_t *,
 	    u_short *, struct ucred *);
-int	in_pcbconnect(struct inpcb *, struct sockaddr *, struct ucred *);
-int	in_pcbconnect_mbuf(struct inpcb *, struct sockaddr *, struct ucred *,
+int	in_pcbconnect(struct inpcb *, struct bsd_sockaddr *, struct ucred *);
+int	in_pcbconnect_mbuf(struct inpcb *, struct bsd_sockaddr *, struct ucred *,
 	    struct mbuf *);
-int	in_pcbconnect_setup(struct inpcb *, struct sockaddr *, in_addr_t *,
+int	in_pcbconnect_setup(struct inpcb *, struct bsd_sockaddr *, in_addr_t *,
 	    u_short *, in_addr_t *, u_short *, struct inpcb **,
 	    struct ucred *);
 void	in_pcbdetach(struct inpcb *);
@@ -654,9 +654,9 @@ int	in_pcbrele(struct inpcb *);
 int	in_pcbrele_rlocked(struct inpcb *);
 int	in_pcbrele_wlocked(struct inpcb *);
 void	in_pcbsetsolabel(struct socket *so);
-int	in_getpeeraddr(struct socket *so, struct sockaddr **nam);
-int	in_getsockaddr(struct socket *so, struct sockaddr **nam);
-struct sockaddr *
+int	in_getpeeraddr(struct socket *so, struct bsd_sockaddr **nam);
+int	in_getsockaddr(struct socket *so, struct bsd_sockaddr **nam);
+struct bsd_sockaddr *
 	in_sockaddr(in_port_t port, struct in_addr *addr);
 void	in_pcbsosetlabel(struct socket *so);
 #endif /* _KERNEL */

@@ -68,7 +68,7 @@ static char *if_mask = "255.255.255.0";
 /* Try to read from the socket in test1 */
 void test1_recv(struct socket* s)
 {
-    struct sockaddr* from;
+    struct bsd_sockaddr* from;
     struct uio uio = {0};
     uio.uio_resid = 52;
     struct mbuf* m;
@@ -87,9 +87,9 @@ void test1_echorequest(void)
 
     /* Socket Variables */
     struct socket *s;
-    struct sockaddr_in to, from;
+    struct bsd_sockaddr_in to, from;
     int error = -1;
-    size_t sz = sizeof(struct sockaddr_in);
+    size_t sz = sizeof(struct bsd_sockaddr_in);
 
     error = socreate(AF_INET, &s, SOCK_RAW, IPPROTO_ICMP, NULL, NULL);
     if (error) {
@@ -109,7 +109,7 @@ void test1_echorequest(void)
     inet_aton(if_ip, &from.sin_addr);
 
     /* Set source address */
-    error = sobind(s, (struct sockaddr *)&from, NULL);
+    error = sobind(s, (struct bsd_sockaddr *)&from, NULL);
     if (error) {
         TLOG("sobind() failed %d", error);
     }
@@ -129,7 +129,7 @@ void test1_echorequest(void)
     icp->icmp_cksum = in_cksum(m, 18);
 
     /* Send an ICMP packet on our interface */
-    error = sosend(s, (struct sockaddr *)&to, NULL, m, NULL, 0, NULL);
+    error = sosend(s, (struct bsd_sockaddr *)&to, NULL, m, NULL, 0, NULL);
     TLOG("sosend() result is %s", error? "failure":"success");
 
 

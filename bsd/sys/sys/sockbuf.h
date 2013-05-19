@@ -58,7 +58,7 @@
 #define	SBS_RCVATMARK		0x0040	/* at mark on input */
 
 struct mbuf;
-struct sockaddr;
+struct bsd_sockaddr;
 struct socket;
 struct thread;
 
@@ -122,9 +122,9 @@ void	sbappend(struct sockbuf *sb, struct mbuf *m);
 void	sbappend_locked(struct sockbuf *sb, struct mbuf *m);
 void	sbappendstream(struct sockbuf *sb, struct mbuf *m);
 void	sbappendstream_locked(struct sockbuf *sb, struct mbuf *m);
-int	sbappendaddr(struct sockbuf *sb, const struct sockaddr *asa,
+int	sbappendaddr(struct sockbuf *sb, const struct bsd_sockaddr *asa,
 	    struct mbuf *m0, struct mbuf *control);
-int	sbappendaddr_locked(struct sockbuf *sb, const struct sockaddr *asa,
+int	sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
 	    struct mbuf *m0, struct mbuf *control);
 int	sbappendcontrol(struct sockbuf *sb, struct mbuf *m0,
 	    struct mbuf *control);

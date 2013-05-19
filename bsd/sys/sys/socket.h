@@ -248,7 +248,7 @@ struct accept_filter_arg {
  * Structure used by kernel to store most
  * addresses.
  */
-struct sockaddr {
+struct bsd_sockaddr {
 	unsigned char	sa_len;		/* total length */
 	sa_family_t	sa_family;	/* address family */
 	char		sa_data[14];	/* actually longer; address value */
@@ -527,9 +527,9 @@ struct sockcred {
 
 #if __BSD_VISIBLE
 /*
- * 4.3 compat sockaddr, move to compat file later
+ * 4.3 compat bsd_sockaddr, move to compat file later
  */
-struct osockaddr {
+struct bsd_osockaddr {
 	unsigned short sa_family;	/* address family */
 	char	sa_data[14];		/* up to 14 bytes of direct address */
 };
@@ -584,19 +584,19 @@ struct sf_hdtr {
 #include <sys/cdefs.h>
 
 __BEGIN_DECLS
-int	accept(int, struct sockaddr * __restrict, socklen_t * __restrict);
-int	bind(int, const struct sockaddr *, socklen_t);
-int	connect(int, const struct sockaddr *, socklen_t);
-int	getpeername(int, struct sockaddr * __restrict, socklen_t * __restrict);
-int	getsockname(int, struct sockaddr * __restrict, socklen_t * __restrict);
+int	accept(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
+int	bind(int, const struct bsd_sockaddr *, socklen_t);
+int	connect(int, const struct bsd_sockaddr *, socklen_t);
+int	getpeername(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
+int	getsockname(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
 int	getsockopt(int, int, int, void * __restrict, socklen_t * __restrict);
 int	listen(int, int);
 ssize_t	recv(int, void *, size_t, int);
-ssize_t	recvfrom(int, void *, size_t, int, struct sockaddr * __restrict, socklen_t * __restrict);
+ssize_t	recvfrom(int, void *, size_t, int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
 ssize_t	recvmsg(int, struct msghdr *, int);
 ssize_t	send(int, const void *, size_t, int);
 ssize_t	sendto(int, const void *,
-	    size_t, int, const struct sockaddr *, socklen_t);
+	    size_t, int, const struct bsd_sockaddr *, socklen_t);
 ssize_t	sendmsg(int, const struct msghdr *, int);
 #if __BSD_VISIBLE
 int	sendfile(int, int, off_t, size_t, struct sf_hdtr *, off_t *, int);

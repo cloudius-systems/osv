@@ -301,7 +301,7 @@ out:
 
 #ifdef INET
 int
-in_pcbbind(struct inpcb *inp, struct sockaddr *nam, struct ucred *cred)
+in_pcbbind(struct inpcb *inp, struct bsd_sockaddr *nam, struct ucred *cred)
 {
 	int anonport, error;
 
@@ -311,7 +311,7 @@ in_pcbbind(struct inpcb *inp, struct sockaddr *nam, struct ucred *cred)
 	if (inp->inp_lport != 0 || inp->inp_laddr.s_addr != INADDR_ANY)
 		return (EINVAL);
 	anonport = inp->inp_lport == 0 && (nam == NULL ||
-	    ((struct sockaddr_in *)nam)->sin_port == 0);
+	    ((struct bsd_sockaddr_in *)nam)->sin_port == 0);
 	error = in_pcbbind_setup(inp, nam, &inp->inp_laddr.s_addr,
 	    &inp->inp_lport, cred);
 	if (error)
@@ -459,11 +459,11 @@ in_pcb_lport(struct inpcb *inp, struct in_addr *laddrp, u_short *lportp,
  * On error, the values of *laddrp and *lportp are not changed.
  */
 int
-in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
+in_pcbbind_setup(struct inpcb *inp, struct bsd_sockaddr *nam, in_addr_t *laddrp,
     u_short *lportp, struct ucred *cred)
 {
 	struct socket *so = inp->inp_socket;
-	struct sockaddr_in *sin;
+	struct bsd_sockaddr_in *sin;
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 	struct in_addr laddr;
 	u_short lport = 0;
@@ -484,7 +484,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 	if ((so->so_options & (SO_REUSEADDR|SO_REUSEPORT)) == 0)
 		lookupflags = INPLOOKUP_WILDCARD;
 	if (nam != NULL) {
-		sin = (struct sockaddr_in *)nam;
+		sin = (struct bsd_sockaddr_in *)nam;
 		if (nam->sa_len != sizeof (*sin))
 			return (EINVAL);
 #ifdef notdef
@@ -521,7 +521,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
 			 * to any endpoint address, local or not.
 			 */
 			if ((inp->inp_flags & INP_BINDANY) == 0 &&
-			    ifa_ifwithaddr_check((struct sockaddr *)sin) == 0) 
+			    ifa_ifwithaddr_check((struct bsd_sockaddr *)sin) == 0) 
 				return (EADDRNOTAVAIL);
 		}
 		laddr = sin->sin_addr;
@@ -604,7 +604,7 @@ in_pcbbind_setup(struct inpcb *inp, struct sockaddr *nam, in_addr_t *laddrp,
  * then pick one.
  */
 int
-in_pcbconnect_mbuf(struct inpcb *inp, struct sockaddr *nam,
+in_pcbconnect_mbuf(struct inpcb *inp, struct bsd_sockaddr *nam,
     struct ucred *cred, struct mbuf *m)
 {
 	u_short lport, fport;
@@ -646,7 +646,7 @@ in_pcbconnect_mbuf(struct inpcb *inp, struct sockaddr *nam,
 }
 
 int
-in_pcbconnect(struct inpcb *inp, struct sockaddr *nam, struct ucred *cred)
+in_pcbconnect(struct inpcb *inp, struct bsd_sockaddr *nam, struct ucred *cred)
 {
 
 	return (in_pcbconnect_mbuf(inp, nam, cred, NULL));
@@ -661,8 +661,8 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
     struct ucred *cred)
 {
 	struct ifaddr *ifa;
-	struct sockaddr *sa;
-	struct sockaddr_in *sin;
+	struct bsd_sockaddr *sa;
+	struct bsd_sockaddr_in *sin;
 	struct route sro;
 	int error;
 
@@ -671,9 +671,9 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	error = 0;
 	bzero(&sro, sizeof(sro));
 
-	sin = (struct sockaddr_in *)&sro.ro_dst;
+	sin = (struct bsd_sockaddr_in *)&sro.ro_dst;
 	sin->sin_family = AF_INET;
-	sin->sin_len = sizeof(struct sockaddr_in);
+	sin->sin_len = sizeof(struct bsd_sockaddr_in);
 	sin->sin_addr.s_addr = faddr->s_addr;
 
 	/*
@@ -697,9 +697,9 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 		struct in_ifaddr *ia;
 		struct ifnet *ifp;
 
-		ia = ifatoia(ifa_ifwithdstaddr((struct sockaddr *)sin));
+		ia = ifatoia(ifa_ifwithdstaddr((struct bsd_sockaddr *)sin));
 		if (ia == NULL)
-			ia = ifatoia(ifa_ifwithnet((struct sockaddr *)sin, 0));
+			ia = ifatoia(ifa_ifwithnet((struct bsd_sockaddr *)sin, 0));
 		if (ia == NULL) {
 			error = ENETUNREACH;
 			goto done;
@@ -714,7 +714,7 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 			sa = ifa->ifa_addr;
 			if (sa->sa_family != AF_INET)
 				continue;
-			sin = (struct sockaddr_in *)sa;
+			sin = (struct bsd_sockaddr_in *)sa;
             ia = (struct in_ifaddr *)ifa;
             break;
 		}
@@ -756,12 +756,12 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	 * and if we cannot find, fall back to the 'default' jail address.
 	 */
 	if ((sro.ro_rt->rt_ifp->if_flags & IFF_LOOPBACK) != 0) {
-		struct sockaddr_in sain;
+		struct bsd_sockaddr_in sain;
 		struct in_ifaddr *ia;
 
-		bzero(&sain, sizeof(struct sockaddr_in));
+		bzero(&sain, sizeof(struct bsd_sockaddr_in));
 		sain.sin_family = AF_INET;
-		sain.sin_len = sizeof(struct sockaddr_in);
+		sain.sin_len = sizeof(struct bsd_sockaddr_in);
 		sain.sin_addr.s_addr = faddr->s_addr;
 
 		ia = ifatoia(ifa_ifwithdstaddr(sintosa(&sain)));
@@ -801,11 +801,11 @@ done:
  * is set to NULL.
  */
 int
-in_pcbconnect_setup(struct inpcb *inp, struct sockaddr *nam,
+in_pcbconnect_setup(struct inpcb *inp, struct bsd_sockaddr *nam,
     in_addr_t *laddrp, u_short *lportp, in_addr_t *faddrp, u_short *fportp,
     struct inpcb **oinpp, struct ucred *cred)
 {
-	struct sockaddr_in *sin = (struct sockaddr_in *)nam;
+	struct bsd_sockaddr_in *sin = (struct bsd_sockaddr_in *)nam;
 	struct in_ifaddr *ia;
 	struct inpcb *oinp;
 	struct in_addr laddr, faddr;
@@ -1129,10 +1129,10 @@ in_pcbdrop(struct inpcb *inp)
 /*
  * Common routines to return the socket addresses associated with inpcbs.
  */
-struct sockaddr *
+struct bsd_sockaddr *
 in_sockaddr(in_port_t port, struct in_addr *addr_p)
 {
-	struct sockaddr_in *sin;
+	struct bsd_sockaddr_in *sin;
 
 	sin = malloc(sizeof *sin);
 	bzero(sin, sizeof *sin);
@@ -1141,11 +1141,11 @@ in_sockaddr(in_port_t port, struct in_addr *addr_p)
 	sin->sin_addr = *addr_p;
 	sin->sin_port = port;
 
-	return (struct sockaddr *)sin;
+	return (struct bsd_sockaddr *)sin;
 }
 
 int
-in_getsockaddr(struct socket *so, struct sockaddr **nam)
+in_getsockaddr(struct socket *so, struct bsd_sockaddr **nam)
 {
 	struct inpcb *inp;
 	struct in_addr addr;
@@ -1164,7 +1164,7 @@ in_getsockaddr(struct socket *so, struct sockaddr **nam)
 }
 
 int
-in_getpeeraddr(struct socket *so, struct sockaddr **nam)
+in_getpeeraddr(struct socket *so, struct bsd_sockaddr **nam)
 {
 	struct inpcb *inp;
 	struct in_addr addr;

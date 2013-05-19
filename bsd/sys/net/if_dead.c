@@ -41,7 +41,7 @@
 #include <bsd/sys/net/if_var.h>
 
 static int
-ifdead_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa,
+ifdead_output(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr *sa,
     struct route *ro)
 {
 
@@ -70,8 +70,8 @@ ifdead_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 }
 
 static int
-ifdead_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
-    struct sockaddr *sa)
+ifdead_resolvemulti(struct ifnet *ifp, struct bsd_sockaddr **llsa,
+    struct bsd_sockaddr *sa)
 {
 
 	*llsa = NULL;

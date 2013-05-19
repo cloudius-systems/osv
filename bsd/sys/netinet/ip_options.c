@@ -96,7 +96,7 @@ ip_dooptions(struct mbuf *m, int pass)
 	int opt, optlen, cnt, off, code, type = ICMP_PARAMPROB, forward = 0;
 	struct in_addr *sin, dst;
 	uint32_t ntime;
-	struct	sockaddr_in ipaddr = { sizeof(ipaddr), AF_INET };
+	struct	bsd_sockaddr_in ipaddr = { sizeof(ipaddr), AF_INET };
 
 	/* Ignore or reject packets with IP options. */
 	if (ip_doopts == 0)
@@ -155,7 +155,7 @@ ip_dooptions(struct mbuf *m, int pass)
 				goto bad;
 			}
 			ipaddr.sin_addr = ip->ip_dst;
-			if (ifa_ifwithaddr_check((struct sockaddr *)&ipaddr)
+			if (ifa_ifwithaddr_check((struct bsd_sockaddr *)&ipaddr)
 			    == 0) {
 				if (opt == IPOPT_SSRR) {
 					type = ICMP_UNREACH;
@@ -221,7 +221,7 @@ dropit:
 
 			if (opt == IPOPT_SSRR) {
 #define	INA	struct in_ifaddr *
-#define	SA	struct sockaddr *
+#define	SA	struct bsd_sockaddr *
 			    if ((ia = (INA)ifa_ifwithdstaddr((SA)&ipaddr)) == NULL)
 				    ia = (INA)ifa_ifwithnet((SA)&ipaddr, 0);
 			} else

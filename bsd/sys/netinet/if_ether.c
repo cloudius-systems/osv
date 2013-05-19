@@ -59,8 +59,8 @@
 #include <bsd/sys/net/if_llatbl.h>
 #include <bsd/sys/netinet/if_ether.h>
 
-#define SIN(s) ((struct sockaddr_in *)s)
-#define SDL(s) ((struct sockaddr_dl *)s)
+#define SIN(s) ((struct bsd_sockaddr_in *)s)
+#define SDL(s) ((struct bsd_sockaddr_dl *)s)
 
 SYSCTL_DECL(_net_link_ether);
 SYSCTL_NODE(_net_link_ether, PF_INET, inet, CTLFLAG_RW, 0, "");
@@ -133,7 +133,7 @@ void arp_ifscrub(struct ifnet *ifp, uint32_t addr);
 void
 arp_ifscrub(struct ifnet *ifp, uint32_t addr)
 {
-	struct sockaddr_in addr4;
+	struct bsd_sockaddr_in addr4;
 
 	bzero((void *)&addr4, sizeof(addr4));
 	addr4.sin_len    = sizeof(addr4);
@@ -141,7 +141,7 @@ arp_ifscrub(struct ifnet *ifp, uint32_t addr)
 	addr4.sin_addr.s_addr = addr;
 	IF_AFDATA_LOCK(ifp);
 	lla_lookup(LLTABLE(ifp), (LLE_DELETE | LLE_IFADDR),
-	    (struct sockaddr *)&addr4);
+	    (struct bsd_sockaddr *)&addr4);
 	IF_AFDATA_UNLOCK(ifp);
 }
 #endif
@@ -191,7 +191,7 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
 {
 	struct mbuf *m;
 	struct arphdr *ah;
-	struct sockaddr sa;
+	struct bsd_sockaddr sa;
 
 	if (sip == NULL) {
 		/* XXX don't believe this can happen (or explain why) */
@@ -254,7 +254,7 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
  */
 int
 arpresolve(struct ifnet *ifp, struct rtentry *rt0, struct mbuf *m,
-	struct sockaddr *dst, u_char *desten, struct llentry **lle)
+	struct bsd_sockaddr *dst, u_char *desten, struct llentry **lle)
 {
 	struct llentry *la = 0;
 	u_int flags = 0;
@@ -486,15 +486,15 @@ in_arpinput(struct mbuf *m)
 	struct rtentry *rt;
 	struct ifaddr *ifa;
 	struct in_ifaddr *ia;
-	struct sockaddr sa;
+	struct bsd_sockaddr sa;
 	struct in_addr isaddr, itaddr, myaddr;
 	u_int8_t *enaddr = NULL;
 	int op, flags;
 	int req_len;
 	int bridged = 0, is_bridge = 0;
 	int carp_match = 0;
-	struct sockaddr_in sin;
-	sin.sin_len = sizeof(struct sockaddr_in);
+	struct bsd_sockaddr_in sin;
+	sin.sin_len = sizeof(struct bsd_sockaddr_in);
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = 0;
 
@@ -640,13 +640,13 @@ match:
 		goto reply;
 
 	bzero(&sin, sizeof(sin));
-	sin.sin_len = sizeof(struct sockaddr_in);
+	sin.sin_len = sizeof(struct bsd_sockaddr_in);
 	sin.sin_family = AF_INET;
 	sin.sin_addr = isaddr;
 	flags = (itaddr.s_addr == myaddr.s_addr) ? LLE_CREATE : 0;
 	flags |= LLE_EXCLUSIVE;
 	IF_AFDATA_LOCK(ifp);
-	la = lla_lookup(LLTABLE(ifp), flags, (struct sockaddr *)&sin);
+	la = lla_lookup(LLTABLE(ifp), flags, (struct bsd_sockaddr *)&sin);
 	IF_AFDATA_UNLOCK(ifp);
 	if (la != NULL) {
 		/* the following is not an error when doing bridging */
@@ -747,7 +747,7 @@ reply:
 
 		sin.sin_addr = itaddr;
 		IF_AFDATA_LOCK(ifp);
-		lle = lla_lookup(LLTABLE(ifp), 0, (struct sockaddr *)&sin);
+		lle = lla_lookup(LLTABLE(ifp), 0, (struct bsd_sockaddr *)&sin);
 		IF_AFDATA_UNLOCK(ifp);
 
 		if ((lle != NULL) && (lle->la_flags & LLE_PUB)) {
@@ -764,7 +764,7 @@ reply:
 
 			sin.sin_addr = itaddr;
 			/* XXX MRT use table 0 for arp reply  */
-			rt = in_rtalloc1((struct sockaddr *)&sin, 0, 0UL, 0);
+			rt = in_rtalloc1((struct bsd_sockaddr *)&sin, 0, 0UL, 0);
 			if (!rt)
 				goto drop;
 
@@ -791,7 +791,7 @@ reply:
 			sin.sin_addr = isaddr;
 
 			/* XXX MRT use table 0 for arp checks */
-			rt = in_rtalloc1((struct sockaddr *)&sin, 0, 0UL, 0);
+			rt = in_rtalloc1((struct bsd_sockaddr *)&sin, 0, 0UL, 0);
 			if (!rt)
 				goto drop;
 			if (rt->rt_ifp != ifp) {
@@ -856,7 +856,7 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 		 */
 		IF_AFDATA_LOCK(ifp);
 		lle = lla_lookup(LLTABLE(ifp), (LLE_CREATE | LLE_IFADDR | LLE_STATIC),
-				 (struct sockaddr *)IA_SIN(ifa));
+				 (struct bsd_sockaddr *)IA_SIN(ifa));
 		IF_AFDATA_UNLOCK(ifp);
 		if (lle == NULL)
 			log(LOG_INFO, "arp_ifinit: cannot create arp "

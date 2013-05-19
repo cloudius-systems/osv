@@ -51,7 +51,7 @@
 uint32_t toedev_registration_count;
 
 int
-tcp_offload_connect(struct socket *so, struct sockaddr *nam)
+tcp_offload_connect(struct socket *so, struct bsd_sockaddr *nam)
 {
 	struct ifnet *ifp;
 	struct toedev *tdev;

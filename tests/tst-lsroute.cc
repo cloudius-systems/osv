@@ -51,7 +51,7 @@
 
 extern "C" {
 # define NI_NUMERICHOST	1
-extern int getnameinfo (const struct sockaddr *__restrict __sa,
+extern int getnameinfo (const struct bsd_sockaddr *__restrict __sa,
 			socklen_t __salen, char *__restrict __host,
 			socklen_t __hostlen, char *__restrict __serv,
 			socklen_t __servlen, int __flags);
@@ -162,7 +162,7 @@ ncpaddr_ntowa(const struct ncpaddr *addr)
 {
   static char res[NCP_ASCIIBUFFERSIZE];
 #ifndef NOINET6
-  struct sockaddr_in6 sin6;
+  struct bsd_sockaddr_in6 sin6;
 #endif
 
   switch (addr->ncpaddr_family) {
@@ -179,7 +179,7 @@ ncpaddr_ntowa(const struct ncpaddr *addr)
 #if 0
     adjust_linklocal(&sin6);
 #endif
-    if (getnameinfo((struct sockaddr *)&sin6, sizeof sin6, res, sizeof(res),
+    if (getnameinfo((struct bsd_sockaddr *)&sin6, sizeof sin6, res, sizeof(res),
                     NULL, 0, NI_NUMERICHOST) != 0)
       break;
 
@@ -193,14 +193,14 @@ ncpaddr_ntowa(const struct ncpaddr *addr)
 
 
 void
-ncprange_setsa(struct ncprange *range, const struct sockaddr *host,
-               const struct sockaddr *mask)
+ncprange_setsa(struct ncprange *range, const struct bsd_sockaddr *host,
+               const struct bsd_sockaddr *mask)
 {
-  const struct sockaddr_in *host4 = (const struct sockaddr_in *)host;
-  const struct sockaddr_in *mask4 = (const struct sockaddr_in *)mask;
+  const struct bsd_sockaddr_in *host4 = (const struct bsd_sockaddr_in *)host;
+  const struct bsd_sockaddr_in *mask4 = (const struct bsd_sockaddr_in *)mask;
 #ifndef NOINET6
-  const struct sockaddr_in6 *host6 = (const struct sockaddr_in6 *)host;
-  const struct sockaddr_in6 *mask6 = (const struct sockaddr_in6 *)mask;
+  const struct bsd_sockaddr_in6 *host6 = (const struct bsd_sockaddr_in6 *)host;
+  const struct bsd_sockaddr_in6 *mask6 = (const struct bsd_sockaddr_in6 *)mask;
 #endif
 
   switch (host->sa_family) {
@@ -365,17 +365,17 @@ p_flags(u_int32_t f, unsigned max)
 
 
 static void
-p_sockaddr(struct sockaddr *phost, struct sockaddr *pmask, int width)
+p_bsd_sockaddr(struct bsd_sockaddr *phost, struct bsd_sockaddr *pmask, int width)
 {
     struct ncprange range;
     char buf[29];
-    struct sockaddr_dl *dl = (struct sockaddr_dl *)phost;
+    struct bsd_sockaddr_dl *dl = (struct bsd_sockaddr_dl *)phost;
 
     if (0)
     {
         char tmp[50];
 
-        printf("Found the following sockaddr:\n");
+        printf("Found the following bsd_sockaddr:\n");
         printf("  Family %d, len %d\n",
                (int)phost->sa_family, (int)phost->sa_len);
         inet_ntop(phost->sa_family, phost->sa_data, tmp, sizeof tmp);
@@ -438,7 +438,7 @@ p_sockaddr(struct sockaddr *phost, struct sockaddr *pmask, int width)
 
 
 static void
-route_ParseHdr(struct rt_msghdr *rtm, struct sockaddr *sa[RTAX_MAX])
+route_ParseHdr(struct rt_msghdr *rtm, struct bsd_sockaddr *sa[RTAX_MAX])
 {
     char *wp;
     int rtax;
@@ -449,7 +449,7 @@ route_ParseHdr(struct rt_msghdr *rtm, struct sockaddr *sa[RTAX_MAX])
     {
         if (rtm->rtm_addrs & (1 << rtax))
         {
-            sa[rtax] = (struct sockaddr *)wp;
+            sa[rtax] = (struct bsd_sockaddr *)wp;
             wp += ROUND_UP(sa[rtax]->sa_len, sizeof(long));
            if (sa[rtax]->sa_family == 0)
                 sa[rtax] = NULL;	/* ??? */
@@ -477,7 +477,7 @@ Index2Nam(int idx)
     int mib[6], have, had;
     size_t needed;
     char *buf, *ptr, *end;
-    struct sockaddr_dl *dl;
+    struct bsd_sockaddr_dl *dl;
     struct if_msghdr *ifm;
 
     if (ifs) {
@@ -512,7 +512,7 @@ Index2Nam(int idx)
       ifm = (struct if_msghdr *)ptr;
       if (ifm->ifm_type != RTM_IFINFO)
         continue;
-      dl = (struct sockaddr_dl *)(ifm + 1);
+      dl = (struct bsd_sockaddr_dl *)(ifm + 1);
       if (ifm->ifm_index > 0) {
         if (ifm->ifm_index > have) {
           char **newifs;
@@ -575,7 +575,7 @@ int
 main(int argc, char *argv[])
 {
     struct rt_msghdr *rtm;
-    struct sockaddr *sa[RTAX_MAX];
+    struct bsd_sockaddr *sa[RTAX_MAX];
     char *sp, *ep, *cp;
     size_t needed = -1;
     int mib[6];
@@ -616,8 +616,8 @@ main(int argc, char *argv[])
         if (sa[RTAX_DST] && sa[RTAX_GATEWAY] &&
             sa[RTAX_DST]->sa_family != AF_INET6)
         {
-            p_sockaddr(sa[RTAX_DST], sa[RTAX_NETMASK], 20);
-            p_sockaddr(sa[RTAX_GATEWAY], NULL, 20);
+            p_bsd_sockaddr(sa[RTAX_DST], sa[RTAX_NETMASK], 20);
+            p_bsd_sockaddr(sa[RTAX_GATEWAY], NULL, 20);
 
             p_flags(rtm->rtm_flags, 6);
             printf(" %s\n", Index2Nam(rtm->rtm_index));
@@ -639,8 +639,8 @@ main(int argc, char *argv[])
 
             if (sa[RTAX_DST] && sa[RTAX_GATEWAY] &&
                 sa[RTAX_DST]->sa_family == AF_INET6) {
-                p_sockaddr(sa[RTAX_DST], sa[RTAX_NETMASK], 20);
-                p_sockaddr(sa[RTAX_GATEWAY], NULL, 20);
+                p_bsd_sockaddr(sa[RTAX_DST], sa[RTAX_NETMASK], 20);
+                p_bsd_sockaddr(sa[RTAX_GATEWAY], NULL, 20);
 
                 p_flags(rtm->rtm_flags, 6);
                 printf(" %s\n", Index2Nam(rtm->rtm_index));

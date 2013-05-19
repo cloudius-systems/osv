@@ -59,7 +59,7 @@
 #include <bsd/sys/sys/_sockaddr_storage.h>
 
 /* Socket address, internet style. */
-struct sockaddr_in {
+struct bsd_sockaddr_in {
 	uint8_t	sin_len;
 	sa_family_t	sin_family;
 	in_port_t	sin_port;
@@ -503,13 +503,13 @@ struct ip_mreq_source {
  */
 struct group_req {
 	uint32_t		gr_interface;	/* interface index */
-	struct sockaddr_storage	gr_group;	/* group address */
+	struct bsd_sockaddr_storage	gr_group;	/* group address */
 };
 
 struct group_source_req {
 	uint32_t		gsr_interface;	/* interface index */
-	struct sockaddr_storage	gsr_group;	/* group address */
-	struct sockaddr_storage	gsr_source;	/* source address */
+	struct bsd_sockaddr_storage	gsr_group;	/* group address */
+	struct bsd_sockaddr_storage	gsr_source;	/* source address */
 };
 
 #ifndef __MSFILTERREQ_DEFINED
@@ -523,15 +523,15 @@ struct __msfilterreq {
 	uint32_t		 msfr_ifindex;	/* interface index */
 	uint32_t		 msfr_fmode;	/* filter mode for group */
 	uint32_t		 msfr_nsrcs;	/* # of sources in msfr_srcs */
-	struct sockaddr_storage	 msfr_group;	/* group address */
-	struct sockaddr_storage	*msfr_srcs;	/* pointer to the first member
+	struct bsd_sockaddr_storage	 msfr_group;	/* group address */
+	struct bsd_sockaddr_storage	*msfr_srcs;	/* pointer to the first member
 						 * of a contiguous array of
 						 * sources to filter in full.
 						 */
 };
 #endif
 
-struct sockaddr;
+struct bsd_sockaddr;
 
 /*
  * Advanced (Full-state) APIs [RFC3678]
@@ -542,10 +542,10 @@ int	setipv4sourcefilter(int, struct in_addr, struct in_addr, uint32_t,
 	    uint32_t, struct in_addr *);
 int	getipv4sourcefilter(int, struct in_addr, struct in_addr, uint32_t *,
 	    uint32_t *, struct in_addr *);
-int	setsourcefilter(int, uint32_t, struct sockaddr *, socklen_t,
-	    uint32_t, uint32_t, struct sockaddr_storage *);
-int	getsourcefilter(int, uint32_t, struct sockaddr *, socklen_t,
-	    uint32_t *, uint32_t *, struct sockaddr_storage *);
+int	setsourcefilter(int, uint32_t, struct bsd_sockaddr *, socklen_t,
+	    uint32_t, uint32_t, struct bsd_sockaddr_storage *);
+int	getsourcefilter(int, uint32_t, struct bsd_sockaddr *, socklen_t,
+	    uint32_t *, uint32_t *, struct bsd_sockaddr_storage *);
 
 /*
  * Filter modes; also used to represent per-socket filter mode internally.
@@ -704,8 +704,8 @@ __END_DECLS
 #define	in_nullhost(x)	((x).s_addr == INADDR_ANY)
 #define	in_allhosts(x)	((x).s_addr == htonl(INADDR_ALLHOSTS_GROUP))
 
-#define	satosin(sa)	((struct sockaddr_in *)(sa))
-#define	sintosa(sin)	((struct sockaddr *)(sin))
+#define	satosin(sa)	((struct bsd_sockaddr_in *)(sa))
+#define	sintosa(sin)	((struct bsd_sockaddr *)(sin))
 #define	ifatoia(ifa)	((struct in_ifaddr *)(ifa))
 
 /*

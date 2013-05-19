@@ -74,7 +74,7 @@ SYSCTL_INT(_net_inet_ip, OID_AUTO, mbuf_frag_size, CTLFLAG_RW,
 #endif
 
 static void	ip_mloopback
-	(struct ifnet *, struct mbuf *, struct sockaddr_in *, int);
+	(struct ifnet *, struct mbuf *, struct bsd_sockaddr_in *, int);
 
 
 extern int in_mcast_loop;
@@ -104,7 +104,7 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 	int mtu;
 	int n;	/* scratchpad */
 	int error = 0;
-	struct sockaddr_in *dst;
+	struct bsd_sockaddr_in *dst;
 	struct in_ifaddr *ia;
 	int isbroadcast, sw_csum;
 	struct route iproute;
@@ -175,7 +175,7 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 		hlen = ip->ip_hl << 2;
 	}
 
-	dst = (struct sockaddr_in *)&ro->ro_dst;
+	dst = (struct bsd_sockaddr_in *)&ro->ro_dst;
 again:
 	ia = NULL;
 	/*
@@ -276,7 +276,7 @@ again:
 		ifp = rte->rt_ifp;
 		rte->rt_rmx.rmx_pksent++;
 		if (rte->rt_flags & RTF_GATEWAY)
-			dst = (struct sockaddr_in *)rte->rt_gateway;
+			dst = (struct bsd_sockaddr_in *)rte->rt_gateway;
 		if (rte->rt_flags & RTF_HOST)
 			isbroadcast = (rte->rt_flags & RTF_BROADCAST);
 		else
@@ -310,7 +310,7 @@ again:
 		 * still points to the address in "ro".  (It may have been
 		 * changed to point to a gateway address, above.)
 		 */
-		dst = (struct sockaddr_in *)&ro->ro_dst;
+		dst = (struct bsd_sockaddr_in *)&ro->ro_dst;
 		/*
 		 * See if the caller provided any multicast options
 		 */
@@ -538,8 +538,8 @@ sendit:
 	/* Or forward to some other address? */
 	if ((m->m_flags & M_IP_NEXTHOP) &&
 	    (fwd_tag = m_tag_find(m, PACKET_TAG_IPFORWARD, NULL)) != NULL) {
-		dst = (struct sockaddr_in *)&ro->ro_dst;
-		bcopy((fwd_tag+1), dst, sizeof(struct sockaddr_in));
+		dst = (struct bsd_sockaddr_in *)&ro->ro_dst;
+		bcopy((fwd_tag+1), dst, sizeof(struct bsd_sockaddr_in));
 		m->m_flags |= M_SKIP_FIREWALL;
 		m->m_flags &= ~M_IP_NEXTHOP;
 		m_tag_delete(m, fwd_tag);
@@ -610,7 +610,7 @@ passout:
 		 */
 		m->m_flags &= ~(M_PROTOFLAGS);
 		error = (*ifp->if_output)(ifp, m,
-		    		(struct sockaddr *)dst, ro);
+		    		(struct bsd_sockaddr *)dst, ro);
 		goto done;
 	}
 
@@ -644,7 +644,7 @@ passout:
 			m->m_flags &= ~(M_PROTOFLAGS);
 
 			error = (*ifp->if_output)(ifp, m,
-			    (struct sockaddr *)dst, ro);
+			    (struct bsd_sockaddr *)dst, ro);
 		} else
 			m_freem(m);
 	}
@@ -1255,7 +1255,7 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
  * replicating that code here.
  */
 static void
-ip_mloopback(struct ifnet *ifp, struct mbuf *m, struct sockaddr_in *dst,
+ip_mloopback(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr_in *dst,
     int hlen)
 {
 	register struct ip *ip;

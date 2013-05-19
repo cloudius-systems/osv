@@ -65,22 +65,22 @@ struct in_ifaddr {
 	u_long	ia_subnetmask;		/* mask of subnet */
 	LIST_ENTRY(in_ifaddr) ia_hash;	/* entry in bucket of inet addresses */
 	TAILQ_ENTRY(in_ifaddr) ia_link;	/* list of internet addresses */
-	struct	sockaddr_in ia_addr;	/* reserve space for interface name */
-	struct	sockaddr_in ia_dstaddr; /* reserve space for broadcast addr */
+	struct	bsd_sockaddr_in ia_addr;	/* reserve space for interface name */
+	struct	bsd_sockaddr_in ia_dstaddr; /* reserve space for broadcast addr */
 #define	ia_broadaddr	ia_dstaddr
-	struct	sockaddr_in ia_sockmask; /* reserve space for general netmask */
+	struct	bsd_sockaddr_in ia_sockmask; /* reserve space for general netmask */
 };
 
 struct	in_aliasreq {
 	char	ifra_name[IFNAMSIZ];		/* if name, e.g. "en0" */
-	struct	sockaddr_in ifra_addr;
-	struct	sockaddr_in ifra_broadaddr;
+	struct	bsd_sockaddr_in ifra_addr;
+	struct	bsd_sockaddr_in ifra_broadaddr;
 #define ifra_dstaddr ifra_broadaddr
-	struct	sockaddr_in ifra_mask;
+	struct	bsd_sockaddr_in ifra_mask;
 };
 /*
  * Given a pointer to an in_ifaddr (ifaddr),
- * return a pointer to the addr as a sockaddr_in.
+ * return a pointer to the addr as a bsd_sockaddr_in.
  */
 #define IA_SIN(ia)    (&(((struct in_ifaddr *)(ia))->ia_addr))
 #define IA_DSTSIN(ia) (&(((struct in_ifaddr *)(ia))->ia_dstaddr))
@@ -425,7 +425,7 @@ struct	ip_moptions;
 struct radix_node_head;
 
 int	imo_multi_filter(const struct ip_moptions *, const struct ifnet *,
-	    const struct sockaddr *, const struct sockaddr *);
+	    const struct bsd_sockaddr *, const struct bsd_sockaddr *);
 void	inm_commit(struct in_multi *);
 void	inm_clear_recorded(struct in_multi *);
 void	inm_print(const struct in_multi *);
@@ -456,11 +456,11 @@ void	in_domifdetach(struct ifnet *, void *);
 /* XXX */
 void	 in_rtalloc_ign(struct route *ro, u_long ignflags, u_int fibnum);
 void	 in_rtalloc(struct route *ro, u_int fibnum);
-struct rtentry *in_rtalloc1(struct sockaddr *, int, u_long, u_int);
-void	 in_rtredirect(struct sockaddr *, struct sockaddr *,
-	    struct sockaddr *, int, struct sockaddr *, u_int);
-int	 in_rtrequest(int, struct sockaddr *,
-	    struct sockaddr *, struct sockaddr *, int, struct rtentry **, u_int);
+struct rtentry *in_rtalloc1(struct bsd_sockaddr *, int, u_long, u_int);
+void	 in_rtredirect(struct bsd_sockaddr *, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, int, struct bsd_sockaddr *, u_int);
+int	 in_rtrequest(int, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, struct bsd_sockaddr *, int, struct rtentry **, u_int);
 void	in_setmatchfunc(struct radix_node_head *, int);
 
 #if 0

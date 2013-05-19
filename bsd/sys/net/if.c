@@ -304,7 +304,7 @@ ifaddr_byindex(u_short idx)
 /*
  * Network interface utility routines.
  *
- * Routines with ifa_ifwith* names take sockaddr *'s as
+ * Routines with ifa_ifwith* names take bsd_sockaddr *'s as
  * parameters.
  */
 
@@ -530,7 +530,7 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 {
 	unsigned socksize, ifasize;
 	int namelen, masklen;
-	struct sockaddr_dl *sdl;
+	struct bsd_sockaddr_dl *sdl;
 	struct ifaddr *ifa;
 
 	if (ifp->if_index == 0 || ifp != ifnet_byindex(ifp->if_index))
@@ -561,7 +561,7 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		 * Always save enough space for any possiable name so we
 		 * can do a rename in place later.
 		 */
-		masklen = offsetof(struct sockaddr_dl, sdl_data[0]) + IFNAMSIZ;
+		masklen = offsetof(struct bsd_sockaddr_dl, sdl_data[0]) + IFNAMSIZ;
 		socksize = masklen + ifp->if_addrlen;
 		if (socksize < sizeof(*sdl))
 			socksize = sizeof(*sdl);
@@ -570,7 +570,7 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		ifa = malloc(ifasize);
 		bzero(ifa, ifasize);
 		ifa_init(ifa);
-		sdl = (struct sockaddr_dl *)(ifa + 1);
+		sdl = (struct bsd_sockaddr_dl *)(ifa + 1);
 		sdl->sdl_len = socksize;
 		sdl->sdl_family = AF_LINK;
 		bcopy(ifp->if_xname, sdl->sdl_data, namelen);
@@ -580,9 +580,9 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 		ifp->if_addr = ifa;
 		ifa->ifa_ifp = ifp;
 		ifa->ifa_rtrequest = link_rtrequest;
-		ifa->ifa_addr = (struct sockaddr *)sdl;
-		sdl = (struct sockaddr_dl *)(socksize + (caddr_t)sdl);
-		ifa->ifa_netmask = (struct sockaddr *)sdl;
+		ifa->ifa_addr = (struct bsd_sockaddr *)sdl;
+		sdl = (struct bsd_sockaddr_dl *)(socksize + (caddr_t)sdl);
+		ifa->ifa_netmask = (struct bsd_sockaddr *)sdl;
 		sdl->sdl_len = masklen;
 		while (namelen != 0)
 			sdl->sdl_data[--namelen] = 0xff;
@@ -1192,25 +1192,25 @@ ifa_free(struct ifaddr *ifa)
 }
 
 int
-ifa_add_loopback_route(struct ifaddr *ifa, struct sockaddr *ia)
+ifa_add_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
 {
 	int error = 0;
 	struct rtentry *rt = NULL;
 	struct rt_addrinfo info;
-	static struct sockaddr_dl null_sdl = {sizeof(null_sdl), AF_LINK};
+	static struct bsd_sockaddr_dl null_sdl = {sizeof(null_sdl), AF_LINK};
 
 	bzero(&info, sizeof(info));
 	info.rti_ifp = V_loif;
 	info.rti_flags = ifa->ifa_flags | RTF_HOST | RTF_STATIC;
 	info.rti_info[RTAX_DST] = ia;
-	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)&null_sdl;
+	info.rti_info[RTAX_GATEWAY] = (struct bsd_sockaddr *)&null_sdl;
 	error = rtrequest1_fib(RTM_ADD, &info, &rt, 0);
 
 	if (error == 0 && rt != NULL) {
 		RT_LOCK(rt);
-		((struct sockaddr_dl *)rt->rt_gateway)->sdl_type  =
+		((struct bsd_sockaddr_dl *)rt->rt_gateway)->sdl_type  =
 			ifa->ifa_ifp->if_type;
-		((struct sockaddr_dl *)rt->rt_gateway)->sdl_index =
+		((struct bsd_sockaddr_dl *)rt->rt_gateway)->sdl_index =
 			ifa->ifa_ifp->if_index;
 		RT_REMREF(rt);
 		RT_UNLOCK(rt);
@@ -1221,11 +1221,11 @@ ifa_add_loopback_route(struct ifaddr *ifa, struct sockaddr *ia)
 }
 
 int
-ifa_del_loopback_route(struct ifaddr *ifa, struct sockaddr *ia)
+ifa_del_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
 {
 	int error = 0;
 	struct rt_addrinfo info;
-	struct sockaddr_dl null_sdl;
+	struct bsd_sockaddr_dl null_sdl;
 
 	bzero(&null_sdl, sizeof(null_sdl));
 	null_sdl.sdl_len = sizeof(null_sdl);
@@ -1235,7 +1235,7 @@ ifa_del_loopback_route(struct ifaddr *ifa, struct sockaddr *ia)
 	bzero(&info, sizeof(info));
 	info.rti_flags = ifa->ifa_flags | RTF_HOST | RTF_STATIC;
 	info.rti_info[RTAX_DST] = ia;
-	info.rti_info[RTAX_GATEWAY] = (struct sockaddr *)&null_sdl;
+	info.rti_info[RTAX_GATEWAY] = (struct bsd_sockaddr *)&null_sdl;
 	error = rtrequest1_fib(RTM_DELETE, &info, NULL, 0);
 
 	if (error != 0)
@@ -1245,7 +1245,7 @@ ifa_del_loopback_route(struct ifaddr *ifa, struct sockaddr *ia)
 }
 
 /*
- * XXX: Because sockaddr_dl has deeper structure than the sockaddr
+ * XXX: Because bsd_sockaddr_dl has deeper structure than the bsd_sockaddr
  * structs used to represent other address families, it is necessary
  * to perform a different comparison.
  */
@@ -1254,18 +1254,18 @@ ifa_del_loopback_route(struct ifaddr *ifa, struct sockaddr *ia)
 	(bcmp((a1), (a2), ((a1))->sa_len) == 0)
 
 #define	sa_dl_equal(a1, a2)	\
-	((((struct sockaddr_dl *)(a1))->sdl_len ==			\
-	 ((struct sockaddr_dl *)(a2))->sdl_len) &&			\
-	 (bcmp(LLADDR((struct sockaddr_dl *)(a1)),			\
-	       LLADDR((struct sockaddr_dl *)(a2)),			\
-	       ((struct sockaddr_dl *)(a1))->sdl_alen) == 0))
+	((((struct bsd_sockaddr_dl *)(a1))->sdl_len ==			\
+	 ((struct bsd_sockaddr_dl *)(a2))->sdl_len) &&			\
+	 (bcmp(LLADDR((struct bsd_sockaddr_dl *)(a1)),			\
+	       LLADDR((struct bsd_sockaddr_dl *)(a2)),			\
+	       ((struct bsd_sockaddr_dl *)(a1))->sdl_alen) == 0))
 
 /*
  * Locate an interface based on a complete address.
  */
 /*ARGSUSED*/
 static struct ifaddr *
-ifa_ifwithaddr_internal(struct sockaddr *addr, int getref)
+ifa_ifwithaddr_internal(struct bsd_sockaddr *addr, int getref)
 {
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
@@ -1302,14 +1302,14 @@ done:
 }
 
 struct ifaddr *
-ifa_ifwithaddr(struct sockaddr *addr)
+ifa_ifwithaddr(struct bsd_sockaddr *addr)
 {
 
 	return (ifa_ifwithaddr_internal(addr, 1));
 }
 
 int
-ifa_ifwithaddr_check(struct sockaddr *addr)
+ifa_ifwithaddr_check(struct bsd_sockaddr *addr)
 {
 
 	return (ifa_ifwithaddr_internal(addr, 0) != NULL);
@@ -1320,7 +1320,7 @@ ifa_ifwithaddr_check(struct sockaddr *addr)
  */
 /* ARGSUSED */
 struct ifaddr *
-ifa_ifwithbroadaddr(struct sockaddr *addr)
+ifa_ifwithbroadaddr(struct bsd_sockaddr *addr)
 {
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
@@ -1353,7 +1353,7 @@ done:
  */
 /*ARGSUSED*/
 struct ifaddr *
-ifa_ifwithdstaddr(struct sockaddr *addr)
+ifa_ifwithdstaddr(struct bsd_sockaddr *addr)
 {
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
@@ -1386,7 +1386,7 @@ done:
  * is most specific found.
  */
 struct ifaddr *
-ifa_ifwithnet(struct sockaddr *addr, int ignore_ptp)
+ifa_ifwithnet(struct bsd_sockaddr *addr, int ignore_ptp)
 {
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
@@ -1399,7 +1399,7 @@ ifa_ifwithnet(struct sockaddr *addr, int ignore_ptp)
 	 * so do that if we can.
 	 */
 	if (af == AF_LINK) {
-	    struct sockaddr_dl *sdl = (struct sockaddr_dl *)addr;
+	    struct bsd_sockaddr_dl *sdl = (struct bsd_sockaddr_dl *)addr;
 	    if (sdl->sdl_index && sdl->sdl_index <= V_if_index)
 		return (ifaddr_byindex(sdl->sdl_index));
 	}
@@ -1498,7 +1498,7 @@ done:
  * a given address.
  */
 struct ifaddr *
-ifaof_ifpforaddr(struct sockaddr *addr, struct ifnet *ifp)
+ifaof_ifpforaddr(struct bsd_sockaddr *addr, struct ifnet *ifp)
 {
 	struct ifaddr *ifa;
 	char *cp, *cp2, *cp3;
@@ -1555,7 +1555,7 @@ static void
 link_rtrequest(int cmd, struct rtentry *rt, struct rt_addrinfo *info)
 {
 	struct ifaddr *ifa, *oifa;
-	struct sockaddr *dst;
+	struct bsd_sockaddr *dst;
 	struct ifnet *ifp;
 
 	RT_LOCK_ASSERT(rt);
@@ -1773,7 +1773,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 	char *descrbuf, *odescrbuf;
 	char new_name[IFNAMSIZ];
 	struct ifaddr *ifa;
-	struct sockaddr_dl *sdl;
+	struct bsd_sockaddr_dl *sdl;
 
 	ifr = (struct ifreq *)data;
 	switch (cmd) {
@@ -1967,7 +1967,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		strlcpy(ifp->if_xname, new_name, sizeof(ifp->if_xname));
 		ifa = ifp->if_addr;
 		IFA_LOCK(ifa);
-		sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+		sdl = (struct bsd_sockaddr_dl *)ifa->ifa_addr;
 		namelen = strlen(new_name);
 		onamelen = sdl->sdl_nlen;
 		/*
@@ -1981,7 +1981,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		}
 		bcopy(new_name, sdl->sdl_data, namelen);
 		sdl->sdl_nlen = namelen;
-		sdl = (struct sockaddr_dl *)ifa->ifa_netmask;
+		sdl = (struct bsd_sockaddr_dl *)ifa->ifa_netmask;
 		bzero(sdl->sdl_data, onamelen);
 		while (namelen != 0)
 			sdl->sdl_data[--namelen] = 0xff;
@@ -2479,13 +2479,13 @@ again:
 		addrs = 0;
 		IF_ADDR_RLOCK(ifp);
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-			struct sockaddr *sa = ifa->ifa_addr;
+			struct bsd_sockaddr *sa = ifa->ifa_addr;
 
 			addrs++;
 #ifdef COMPAT_43
 			if (cmd == OSIOCGIFCONF) {
-				struct osockaddr *osa =
-					 (struct osockaddr *)&ifr.ifr_addr;
+				struct bsd_osockaddr *osa =
+					 (struct bsd_osockaddr *)&ifr.ifr_addr;
 				ifr.ifr_addr = *sa;
 				osa->sa_family = sa->sa_family;
 				sbuf_bcat(sb, &ifr, sizeof(ifr));
@@ -2547,7 +2547,7 @@ if_allmulti(struct ifnet *ifp, int onswitch)
 }
 
 struct ifmultiaddr *
-if_findmulti(struct ifnet *ifp, struct sockaddr *sa)
+if_findmulti(struct ifnet *ifp, struct bsd_sockaddr *sa)
 {
 	struct ifmultiaddr *ifma;
 
@@ -2568,17 +2568,17 @@ if_findmulti(struct ifnet *ifp, struct sockaddr *sa)
 
 /*
  * Allocate a new ifmultiaddr and initialize based on passed arguments.  We
- * make copies of passed sockaddrs.  The ifmultiaddr will not be added to
+ * make copies of passed bsd_sockaddrs.  The ifmultiaddr will not be added to
  * the ifnet multicast address list here, so the caller must do that and
  * other setup work (such as notifying the device driver).  The reference
  * count is initialized to 1.
  */
 static struct ifmultiaddr *
-if_allocmulti(struct ifnet *ifp, struct sockaddr *sa, struct sockaddr *llsa,
+if_allocmulti(struct ifnet *ifp, struct bsd_sockaddr *sa, struct bsd_sockaddr *llsa,
     int mflags)
 {
 	struct ifmultiaddr *ifma;
-	struct sockaddr *dupsa;
+	struct bsd_sockaddr *dupsa;
 
 	ifma = malloc(sizeof *ifma);
 	if (ifma == NULL)
@@ -2658,11 +2658,11 @@ if_freemulti(struct ifmultiaddr *ifma)
  * address reference, if desired.
  */
 int
-if_addmulti(struct ifnet *ifp, struct sockaddr *sa,
+if_addmulti(struct ifnet *ifp, struct bsd_sockaddr *sa,
     struct ifmultiaddr **retifma)
 {
 	struct ifmultiaddr *ifma, *ll_ifma;
-	struct sockaddr *llsa;
+	struct bsd_sockaddr *llsa;
 	int error;
 
 	/*
@@ -2775,7 +2775,7 @@ unlock_out:
  * Network-layer protocol domains must use if_delmulti_ifma().
  */
 int
-if_delmulti(struct ifnet *ifp, struct sockaddr *sa)
+if_delmulti(struct ifnet *ifp, struct bsd_sockaddr *sa)
 {
 	struct ifmultiaddr *ifma;
 	int lastref;
@@ -2963,7 +2963,7 @@ if_delmulti_locked(struct ifnet *ifp, struct ifmultiaddr *ifma, int detaching)
 int
 if_setlladdr(struct ifnet *ifp, const u_char *lladdr, int len)
 {
-	struct sockaddr_dl *sdl;
+	struct bsd_sockaddr_dl *sdl;
 	struct ifaddr *ifa;
 	struct ifreq ifr;
 
@@ -2975,7 +2975,7 @@ if_setlladdr(struct ifnet *ifp, const u_char *lladdr, int len)
 	}
 	ifa_ref(ifa);
 	IF_ADDR_RUNLOCK(ifp);
-	sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+	sdl = (struct bsd_sockaddr_dl *)ifa->ifa_addr;
 	if (sdl == NULL) {
 		ifa_free(ifa);
 		return (EINVAL);

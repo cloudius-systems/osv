@@ -79,7 +79,7 @@
 int		loioctl(struct ifnet *, u_long, caddr_t);
 static void	lortrequest(int, struct rtentry *, struct rt_addrinfo *);
 int		looutput(struct ifnet *ifp, struct mbuf *m,
-		    struct sockaddr *dst, struct route *ro);
+		    struct bsd_sockaddr *dst, struct route *ro);
 static int	lo_clone_create(struct if_clone *, int, caddr_t);
 static void	lo_clone_destroy(struct ifnet *);
 
@@ -128,7 +128,7 @@ VNET_SYSINIT(vnet_loif_init, SI_SUB_PROTO_IFATTACHDOMAIN, SI_ORDER_ANY,
 
 
 int
-looutput(struct ifnet *ifp, struct mbuf *m, struct sockaddr *dst,
+looutput(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr *dst,
     struct route *ro)
 {
 	u_int32_t af;

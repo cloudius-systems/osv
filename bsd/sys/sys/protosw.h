@@ -38,7 +38,7 @@
 /* Forward declare these structures referenced from prototypes below. */
 struct mbuf;
 struct thread;
-struct sockaddr;
+struct bsd_sockaddr;
 struct socket;
 struct sockopt;
 
@@ -69,7 +69,7 @@ struct sockopt;
 typedef void	pr_input_t (struct mbuf *, int);
 typedef int	pr_input6_t (struct mbuf **, int*, int);  /* XXX FIX THIS */
 typedef int	pr_output_t (struct mbuf *, struct socket *);
-typedef void	pr_ctlinput_t (int, struct sockaddr *, void *);
+typedef void	pr_ctlinput_t (int, struct bsd_sockaddr *, void *);
 typedef int	pr_ctloutput_t (struct socket *, struct sockopt *);
 typedef	void	pr_init_t (void);
 typedef	void	pr_destroy_t (void);
@@ -189,11 +189,11 @@ struct uio;
  */
 struct pr_usrreqs {
 	void	(*pru_abort)(struct socket *so);
-	int	(*pru_accept)(struct socket *so, struct sockaddr **nam);
+	int	(*pru_accept)(struct socket *so, struct bsd_sockaddr **nam);
 	int	(*pru_attach)(struct socket *so, int proto, struct thread *td);
-	int	(*pru_bind)(struct socket *so, struct sockaddr *nam,
+	int	(*pru_bind)(struct socket *so, struct bsd_sockaddr *nam,
 		    struct thread *td);
-	int	(*pru_connect)(struct socket *so, struct sockaddr *nam,
+	int	(*pru_connect)(struct socket *so, struct bsd_sockaddr *nam,
 		    struct thread *td);
 	int	(*pru_connect2)(struct socket *so1, struct socket *so2);
 	int	(*pru_control)(struct socket *so, u_long cmd, caddr_t data,
@@ -202,11 +202,11 @@ struct pr_usrreqs {
 	int	(*pru_disconnect)(struct socket *so);
 	int	(*pru_listen)(struct socket *so, int backlog,
 		    struct thread *td);
-	int	(*pru_peeraddr)(struct socket *so, struct sockaddr **nam);
+	int	(*pru_peeraddr)(struct socket *so, struct bsd_sockaddr **nam);
 	int	(*pru_rcvd)(struct socket *so, int flags);
 	int	(*pru_rcvoob)(struct socket *so, struct mbuf *m, int flags);
 	int	(*pru_send)(struct socket *so, int flags, struct mbuf *m, 
-		    struct sockaddr *addr, struct mbuf *control,
+		    struct bsd_sockaddr *addr, struct mbuf *control,
 		    struct thread *td);
 #define	PRUS_OOB	0x1
 #define	PRUS_EOF	0x2
@@ -214,11 +214,11 @@ struct pr_usrreqs {
 	int	(*pru_sense)(struct socket *so, struct stat *sb);
         int	(*pru_shutdown)(struct socket *so);
 	int	(*pru_flush)(struct socket *so, int direction);  
-	int	(*pru_sockaddr)(struct socket *so, struct sockaddr **nam);
-	int	(*pru_sosend)(struct socket *so, struct sockaddr *addr,
+	int	(*pru_sockaddr)(struct socket *so, struct bsd_sockaddr **nam);
+	int	(*pru_sosend)(struct socket *so, struct bsd_sockaddr *addr,
 		    struct uio *uio, struct mbuf *top, struct mbuf *control,
 		    int flags, struct thread *td);
-	int	(*pru_soreceive)(struct socket *so, struct sockaddr **paddr,
+	int	(*pru_soreceive)(struct socket *so, struct bsd_sockaddr **paddr,
 		    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 		    int *flagsp);
 	int	(*pru_sopoll)(struct socket *so, int events,
@@ -230,29 +230,29 @@ struct pr_usrreqs {
 /*
  * All nonvoid pru_*() functions below return EOPNOTSUPP.
  */
-int	pru_accept_notsupp(struct socket *so, struct sockaddr **nam);
+int	pru_accept_notsupp(struct socket *so, struct bsd_sockaddr **nam);
 int	pru_attach_notsupp(struct socket *so, int proto, struct thread *td);
-int	pru_bind_notsupp(struct socket *so, struct sockaddr *nam,
+int	pru_bind_notsupp(struct socket *so, struct bsd_sockaddr *nam,
 	    struct thread *td);
-int	pru_connect_notsupp(struct socket *so, struct sockaddr *nam,
+int	pru_connect_notsupp(struct socket *so, struct bsd_sockaddr *nam,
 	    struct thread *td);
 int	pru_connect2_notsupp(struct socket *so1, struct socket *so2);
 int	pru_control_notsupp(struct socket *so, u_long cmd, caddr_t data,
 	    struct ifnet *ifp, struct thread *td);
 int	pru_disconnect_notsupp(struct socket *so);
 int	pru_listen_notsupp(struct socket *so, int backlog, struct thread *td);
-int	pru_peeraddr_notsupp(struct socket *so, struct sockaddr **nam);
+int	pru_peeraddr_notsupp(struct socket *so, struct bsd_sockaddr **nam);
 int	pru_rcvd_notsupp(struct socket *so, int flags);
 int	pru_rcvoob_notsupp(struct socket *so, struct mbuf *m, int flags);
 int	pru_send_notsupp(struct socket *so, int flags, struct mbuf *m,
-	    struct sockaddr *addr, struct mbuf *control, struct thread *td);
+	    struct bsd_sockaddr *addr, struct mbuf *control, struct thread *td);
 int	pru_sense_null(struct socket *so, struct stat *sb);
 int	pru_shutdown_notsupp(struct socket *so);
-int	pru_sockaddr_notsupp(struct socket *so, struct sockaddr **nam);
-int	pru_sosend_notsupp(struct socket *so, struct sockaddr *addr,
+int	pru_sockaddr_notsupp(struct socket *so, struct bsd_sockaddr **nam);
+int	pru_sosend_notsupp(struct socket *so, struct bsd_sockaddr *addr,
 	    struct uio *uio, struct mbuf *top, struct mbuf *control, int flags,
 	    struct thread *td);
-int	pru_soreceive_notsupp(struct socket *so, struct sockaddr **paddr,
+int	pru_soreceive_notsupp(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
 int	pru_sopoll_notsupp(struct socket *so, int events, struct ucred *cred,
@@ -263,7 +263,7 @@ int	pru_sopoll_notsupp(struct socket *so, int events, struct ucred *cred,
 /*
  * The arguments to the ctlinput routine are
  *	(*protosw[].pr_ctlinput)(cmd, sa, arg);
- * where cmd is one of the commands below, sa is a pointer to a sockaddr,
+ * where cmd is one of the commands below, sa is a pointer to a bsd_sockaddr,
  * and arg is a `void *' argument used within a protocol family.
  */
 #define	PRC_IFDOWN		0	/* interface transition */
@@ -330,8 +330,8 @@ char	*prcorequests[] = {
 #endif
 
 #ifdef _KERNEL
-void	pfctlinput(int, struct sockaddr *);
-void	pfctlinput2(int, struct sockaddr *, void *);
+void	pfctlinput(int, struct bsd_sockaddr *);
+void	pfctlinput2(int, struct bsd_sockaddr *, void *);
 struct protosw *pffindproto(int family, int protocol, int type);
 struct protosw *pffindtype(int family, int type);
 int	pf_proto_register(int family, struct protosw *npr);

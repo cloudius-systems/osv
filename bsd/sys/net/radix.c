@@ -115,7 +115,7 @@ static int	rn_satisfies_leaf(char *trial, struct radix_node *leaf,
 
 /*
  * Most of the functions in this code assume that the key/mask arguments
- * are sockaddr-like structures, where the first byte is an u_char
+ * are bsd_sockaddr-like structures, where the first byte is an u_char
  * indicating the size of the entire structure.
  *
  * To make the assumption more explicit, we use the LEN() macro to access

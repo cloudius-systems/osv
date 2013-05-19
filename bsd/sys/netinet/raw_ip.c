@@ -217,7 +217,7 @@ rip_destroy(void)
 #ifdef INET
 static int
 rip_append(struct inpcb *last, struct ip *ip, struct mbuf *n,
-    struct sockaddr_in *ripsrc)
+    struct bsd_sockaddr_in *ripsrc)
 {
 	int policyfail = 0;
 
@@ -246,7 +246,7 @@ rip_append(struct inpcb *last, struct ip *ip, struct mbuf *n,
 			ip_savecontrol(last, &opts, ip, n);
 		SOCKBUF_LOCK(&so->so_rcv);
 		if (sbappendaddr_locked(&so->so_rcv,
-		    (struct sockaddr *)ripsrc, n, opts) == 0) {
+		    (struct bsd_sockaddr *)ripsrc, n, opts) == 0) {
 			/* should notify about lost packet */
 			m_freem(n);
 			if (opts)
@@ -270,7 +270,7 @@ rip_input(struct mbuf *m, int off)
 	struct ip *ip = mtod(m, struct ip *);
 	int proto = ip->ip_p;
 	struct inpcb *inp, *last;
-	struct sockaddr_in ripsrc;
+	struct bsd_sockaddr_in ripsrc;
 	int hash;
 
 	bzero(&ripsrc, sizeof(ripsrc));
@@ -346,17 +346,17 @@ rip_input(struct mbuf *m, int off)
 
 			blocked = MCAST_PASS;
 			if (proto != IPPROTO_IGMP) {
-				struct sockaddr_in group;
+				struct bsd_sockaddr_in group;
 
-				bzero(&group, sizeof(struct sockaddr_in));
-				group.sin_len = sizeof(struct sockaddr_in);
+				bzero(&group, sizeof(struct bsd_sockaddr_in));
+				group.sin_len = sizeof(struct bsd_sockaddr_in);
 				group.sin_family = AF_INET;
 				group.sin_addr = ip->ip_dst;
 
 				blocked = imo_multi_filter(inp->inp_moptions,
 				    ifp,
-				    (struct sockaddr *)&group,
-				    (struct sockaddr *)&ripsrc);
+				    (struct bsd_sockaddr *)&group,
+				    (struct bsd_sockaddr *)&ripsrc);
 			}
 
 			if (blocked != MCAST_PASS) {
@@ -656,7 +656,7 @@ rip_ctloutput(struct socket *so, struct sockopt *sopt)
  * routes.
  */
 void
-rip_ctlinput(int cmd, struct sockaddr *sa, void *vip)
+rip_ctlinput(int cmd, struct bsd_sockaddr *sa, void *vip)
 {
 	struct in_ifaddr *ia;
 	struct ifnet *ifp;
@@ -839,9 +839,9 @@ rip_disconnect(struct socket *so)
 }
 
 static int
-rip_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
+rip_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
-	struct sockaddr_in *addr = (struct sockaddr_in *)nam;
+	struct bsd_sockaddr_in *addr = (struct bsd_sockaddr_in *)nam;
 	struct inpcb *inp;
 
 	if (nam->sa_len != sizeof(*addr))
@@ -854,7 +854,7 @@ rip_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 	    (addr->sin_family != AF_INET && addr->sin_family != AF_IMPLINK) ||
 	    (addr->sin_addr.s_addr &&
 	     (inp->inp_flags & INP_BINDANY) == 0 &&
-	     ifa_ifwithaddr_check((struct sockaddr *)addr) == 0))
+	     ifa_ifwithaddr_check((struct bsd_sockaddr *)addr) == 0))
 		return (EADDRNOTAVAIL);
 
 	INP_INFO_WLOCK(&V_ripcbinfo);
@@ -868,9 +868,9 @@ rip_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
 }
 
 static int
-rip_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
+rip_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
-	struct sockaddr_in *addr = (struct sockaddr_in *)nam;
+	struct bsd_sockaddr_in *addr = (struct bsd_sockaddr_in *)nam;
 	struct inpcb *inp;
 
 	if (nam->sa_len != sizeof(*addr))
@@ -909,7 +909,7 @@ rip_shutdown(struct socket *so)
 }
 
 static int
-rip_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
+rip_send(struct socket *so, int flags, struct mbuf *m, struct bsd_sockaddr *nam,
     struct mbuf *control, struct thread *td)
 {
 	struct inpcb *inp;
@@ -932,7 +932,7 @@ rip_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
 			m_freem(m);
 			return (ENOTCONN);
 		}
-		dst = ((struct sockaddr_in *)nam)->sin_addr.s_addr;
+		dst = ((struct bsd_sockaddr_in *)nam)->sin_addr.s_addr;
 	}
 	return (rip_output(m, so, dst));
 }

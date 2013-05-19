@@ -52,10 +52,10 @@
  */
 
 /*
- * Structure of a Link-Level sockaddr:
+ * Structure of a Link-Level bsd_sockaddr:
  */
-struct sockaddr_dl {
-	u_char	sdl_len;	/* Total length of sockaddr */
+struct bsd_sockaddr_dl {
+	u_char	sdl_len;	/* Total length of bsd_sockaddr */
 	u_char	sdl_family;	/* AF_LINK */
 	u_short	sdl_index;	/* if != 0, system given index for interface */
 	u_char	sdl_type;	/* interface type */
@@ -73,8 +73,8 @@ struct sockaddr_dl {
 #include <sys/cdefs.h>
 
 __BEGIN_DECLS
-void	link_addr(const char *, struct sockaddr_dl *);
-char	*link_ntoa(const struct sockaddr_dl *);
+void	link_addr(const char *, struct bsd_sockaddr_dl *);
+char	*link_ntoa(const struct bsd_sockaddr_dl *);
 __END_DECLS
 
 #endif /* !_KERNEL */

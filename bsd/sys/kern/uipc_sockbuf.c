@@ -620,7 +620,7 @@ sbappendrecord(struct sockbuf *sb, struct mbuf *m0)
  * mbufs.
  */
 int
-sbappendaddr_locked(struct sockbuf *sb, const struct sockaddr *asa,
+sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
     struct mbuf *m0, struct mbuf *control)
 {
 	struct mbuf *m, *n, *nlast;
@@ -670,7 +670,7 @@ sbappendaddr_locked(struct sockbuf *sb, const struct sockaddr *asa,
  * mbufs.
  */
 int
-sbappendaddr(struct sockbuf *sb, const struct sockaddr *asa,
+sbappendaddr(struct sockbuf *sb, const struct bsd_sockaddr *asa,
     struct mbuf *m0, struct mbuf *control)
 {
 	int retval;

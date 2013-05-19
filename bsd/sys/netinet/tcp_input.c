@@ -777,9 +777,9 @@ findpcb:
 
 #ifdef INET6
 	if (isipv6 && fwd_tag != NULL) {
-		struct sockaddr_in6 *next_hop6;
+		struct bsd_sockaddr_in6 *next_hop6;
 
-		next_hop6 = (struct sockaddr_in6 *)(fwd_tag + 1);
+		next_hop6 = (struct bsd_sockaddr_in6 *)(fwd_tag + 1);
 		/*
 		 * Transparently forwarded. Pretend to be the destination.
 		 * Already got one like this?
@@ -815,9 +815,9 @@ findpcb:
 #endif
 #ifdef INET
 	if (fwd_tag != NULL) {
-		struct sockaddr_in *next_hop;
+		struct bsd_sockaddr_in *next_hop;
 
-		next_hop = (struct sockaddr_in *)(fwd_tag+1);
+		next_hop = (struct bsd_sockaddr_in *)(fwd_tag+1);
 		/*
 		 * Transparently forwarded. Pretend to be the destination.
 		 * already got one like this?

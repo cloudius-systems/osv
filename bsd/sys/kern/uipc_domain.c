@@ -446,7 +446,7 @@ found:
 }
 
 void
-pfctlinput(int cmd, struct sockaddr *sa)
+pfctlinput(int cmd, struct bsd_sockaddr *sa)
 {
 	struct domain *dp;
 	struct protosw *pr;
@@ -458,7 +458,7 @@ pfctlinput(int cmd, struct sockaddr *sa)
 }
 
 void
-pfctlinput2(int cmd, struct sockaddr *sa, void *ctlparam)
+pfctlinput2(int cmd, struct bsd_sockaddr *sa, void *ctlparam)
 {
 	struct domain *dp;
 	struct protosw *pr;

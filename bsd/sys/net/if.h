@@ -367,9 +367,9 @@ struct ifreq_buffer {
 struct	ifreq {
 	char	ifr_name[IFNAMSIZ];		/* if name, e.g. "en0" */
 	union {
-		struct	sockaddr ifru_addr;
-		struct	sockaddr ifru_dstaddr;
-		struct	sockaddr ifru_broadaddr;
+		struct	bsd_sockaddr ifru_addr;
+		struct	bsd_sockaddr ifru_dstaddr;
+		struct	bsd_sockaddr ifru_broadaddr;
 		struct	ifreq_buffer ifru_buffer;
 		short	ifru_flags[2];
 		short	ifru_index;
@@ -401,15 +401,15 @@ struct	ifreq {
 };
 
 #define	_SIZEOF_ADDR_IFREQ(ifr) \
-	((ifr).ifr_addr.sa_len > sizeof(struct sockaddr) ? \
-	 (sizeof(struct ifreq) - sizeof(struct sockaddr) + \
+	((ifr).ifr_addr.sa_len > sizeof(struct bsd_sockaddr) ? \
+	 (sizeof(struct ifreq) - sizeof(struct bsd_sockaddr) + \
 	  (ifr).ifr_addr.sa_len) : sizeof(struct ifreq))
 
 struct ifaliasreq {
 	char	ifra_name[IFNAMSIZ];		/* if name, e.g. "en0" */
-	struct	sockaddr ifra_addr;
-	struct	sockaddr ifra_broadaddr;
-	struct	sockaddr ifra_mask;
+	struct	bsd_sockaddr ifra_addr;
+	struct	bsd_sockaddr ifra_broadaddr;
+	struct	bsd_sockaddr ifra_mask;
 };
 
 struct ifmediareq {
@@ -497,8 +497,8 @@ struct if_laddrreq {
 	u_int	flags;
 #define	IFLR_PREFIX	0x8000  /* in: prefix given  out: kernel fills id */
 	u_int	prefixlen;         /* in/out */
-	struct	sockaddr_storage addr;   /* in/out */
-	struct	sockaddr_storage dstaddr; /* out */
+	struct	bsd_sockaddr_storage addr;   /* in/out */
+	struct	bsd_sockaddr_storage dstaddr; /* out */
 };
 
 #endif /* __BSD_VISIBLE */

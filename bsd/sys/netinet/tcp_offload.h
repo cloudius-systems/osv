@@ -226,7 +226,7 @@ EVENTHANDLER_DECLARE(tcp_offload_listen_stop, tcp_offload_listen_stop_fn);
  * - check the interface for TOE capability and TOE is enabled
  * - check if the device has resources to offload the connection
  */
-int	tcp_offload_connect(struct socket *so, struct sockaddr *nam);
+int	tcp_offload_connect(struct socket *so, struct bsd_sockaddr *nam);
 
 /*
  * The tcp_output_* routines are wrappers around the toe_usrreqs calls
@@ -254,7 +254,7 @@ int	tcp_offload_connect(struct socket *so, struct sockaddr *nam);
 #define	SO_OFFLOADABLE(so)	((so->so_options & SO_NO_OFFLOAD) == 0)
 
 static __inline int
-tcp_output_connect(struct socket *so, struct sockaddr *nam)
+tcp_output_connect(struct socket *so, struct bsd_sockaddr *nam)
 {
 	struct tcpcb *tp = sototcpcb(so);
 	int error;

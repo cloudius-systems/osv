@@ -89,7 +89,7 @@ struct toedev {
 	 * Establish a connection to nam using the TOE device dev
 	 */
 	int	(*tod_connect)(struct toedev *dev, struct socket *so,
-	        struct rtentry *rt, struct sockaddr *nam);
+	        struct rtentry *rt, struct bsd_sockaddr *nam);
 	/*
 	 * Send an mbuf down to the toe device 
 	 */

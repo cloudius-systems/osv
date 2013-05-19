@@ -73,7 +73,7 @@ linux_ifconf(struct ifconf *ifc_p)
 		IFNET_RLOCK();
 		TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 			TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-				struct sockaddr *sa = ifa->ifa_addr;
+				struct bsd_sockaddr *sa = ifa->ifa_addr;
 				if (sa->sa_family == AF_INET)
 					ifc_p->ifc_len += sizeof(ifr);
 			}
@@ -106,7 +106,7 @@ again:
 
 		/* Walk the address list */
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-			struct sockaddr *sa = ifa->ifa_addr;
+			struct bsd_sockaddr *sa = ifa->ifa_addr;
 
 			if (sa->sa_family == AF_INET) {
 				ifr.ifr_addr.sa_family = LINUX_AF_INET;
@@ -173,7 +173,7 @@ static int
 linux_gifhwaddr(struct ifnet *ifp, struct l_ifreq *ifr)
 {
 	struct ifaddr *ifa;
-	struct sockaddr_dl *sdl;
+	struct bsd_sockaddr_dl *sdl;
 	struct l_sockaddr *lsa_p = &ifr->ifr_hwaddr ;
 
 	if (ifp->if_type == IFT_LOOP) {
@@ -186,7 +186,7 @@ linux_gifhwaddr(struct ifnet *ifp, struct l_ifreq *ifr)
 		return (ENOENT);
 
 	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-		sdl = (struct sockaddr_dl*)ifa->ifa_addr;
+		sdl = (struct bsd_sockaddr_dl*)ifa->ifa_addr;
 		if (sdl != NULL && (sdl->sdl_family == AF_LINK) &&
 		    (sdl->sdl_type == IFT_ETHER)) {
             
@@ -212,7 +212,7 @@ bsd_to_linux_ifreq(struct ifreq *ifr_p)
     *(u_short *)&ifr_p->ifr_addr = family;
 }
 
-// Convert Linux sockaddr to bsd
+// Convert Linux bsd_sockaddr to bsd
 static inline void
 linux_to_bsd_ifreq(struct ifreq *ifr_p)
 {

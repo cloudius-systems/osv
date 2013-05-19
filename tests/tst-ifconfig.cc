@@ -137,7 +137,7 @@ private:
         char buf[64] ;
 
         if (do_get_ifr(cmd, &ifr) == 0)
-            inet_ntoa_r(((sockaddr_in *)&(ifr.ifr_addr))->sin_addr, buf) ;
+            inet_ntoa_r(((bsd_sockaddr_in *)&(ifr.ifr_addr))->sin_addr, buf) ;
         else
             buf[0] = '\0' ;
         return buf ;
@@ -205,7 +205,7 @@ string interface_class::flags2str(uint32_t flags)
 
 
 char *
-link_ntoa(const struct sockaddr_dl *sdl, char obuf[64])
+link_ntoa(const struct bsd_sockaddr_dl *sdl, char obuf[64])
 {
 	char *out = obuf;
 	int i;
@@ -262,7 +262,7 @@ int main(int argc, const char **argv)
             interface_class interface(if_name(ifp)) ;
             if (ifp->if_addr && ifp->if_addrlen && ifp->if_type == IFT_ETHER)
             {
-                link_ntoa((struct sockaddr_dl *)ifp->if_addr->ifa_addr,
+                link_ntoa((struct bsd_sockaddr_dl *)ifp->if_addr->ifa_addr,
                           phys_addr) ;
             }
             else

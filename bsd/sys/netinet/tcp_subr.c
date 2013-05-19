@@ -1194,7 +1194,7 @@ static int
 tcp_getcred(SYSCTL_HANDLER_ARGS)
 {
 	struct xucred xuc;
-	struct sockaddr_in addrs[2];
+	struct bsd_sockaddr_in addrs[2];
 	struct inpcb *inp;
 	int error;
 
@@ -1231,7 +1231,7 @@ static int
 tcp6_getcred(SYSCTL_HANDLER_ARGS)
 {
 	struct xucred xuc;
-	struct sockaddr_in6 addrs[2];
+	struct bsd_sockaddr_in6 addrs[2];
 	struct inpcb *inp;
 	int error;
 #ifdef INET
@@ -1293,7 +1293,7 @@ SYSCTL_PROC(_net_inet6_tcp6, OID_AUTO, getcred,
 
 #ifdef INET
 void
-tcp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
+tcp_ctlinput(int cmd, struct bsd_sockaddr *sa, void *vip)
 {
 	struct ip *ip = vip;
 	struct tcphdr *th;
@@ -1306,7 +1306,7 @@ tcp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 	tcp_seq icmp_tcp_seq;
 	int mtu;
 
-	faddr = ((struct sockaddr_in *)sa)->sin_addr;
+	faddr = ((struct bsd_sockaddr_in *)sa)->sin_addr;
 	if (sa->sa_family != AF_INET || faddr.s_addr == INADDR_ANY)
 		return;
 
@@ -1408,14 +1408,14 @@ tcp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
 
 #ifdef INET6
 void
-tcp6_ctlinput(int cmd, struct sockaddr *sa, void *d)
+tcp6_ctlinput(int cmd, struct bsd_sockaddr *sa, void *d)
 {
 	struct tcphdr th;
 	struct inpcb *(*notify)(struct inpcb *, int) = tcp_notify;
 	struct ip6_hdr *ip6;
 	struct mbuf *m;
 	struct ip6ctlparam *ip6cp = NULL;
-	const struct sockaddr_in6 *sa6_src = NULL;
+	const struct bsd_sockaddr_in6 *sa6_src = NULL;
 	int off;
 	struct tcp_portonly {
 		u_int16_t th_sport;
@@ -1423,7 +1423,7 @@ tcp6_ctlinput(int cmd, struct sockaddr *sa, void *d)
 	} *thp;
 
 	if (sa->sa_family != AF_INET6 ||
-	    sa->sa_len != sizeof(struct sockaddr_in6))
+	    sa->sa_len != sizeof(struct bsd_sockaddr_in6))
 		return;
 
 	if (cmd == PRC_MSGSIZE)
@@ -1464,20 +1464,20 @@ tcp6_ctlinput(int cmd, struct sockaddr *sa, void *d)
 		m_copydata(m, off, sizeof(*thp), (caddr_t)&th);
 
 		in6_pcbnotify(&V_tcbinfo, sa, th.th_dport,
-		    (struct sockaddr *)ip6cp->ip6c_src,
+		    (struct bsd_sockaddr *)ip6cp->ip6c_src,
 		    th.th_sport, cmd, NULL, notify);
 
 		bzero(&inc, sizeof(inc));
 		inc.inc_fport = th.th_dport;
 		inc.inc_lport = th.th_sport;
-		inc.inc6_faddr = ((struct sockaddr_in6 *)sa)->sin6_addr;
+		inc.inc6_faddr = ((struct bsd_sockaddr_in6 *)sa)->sin6_addr;
 		inc.inc6_laddr = ip6cp->ip6c_src->sin6_addr;
 		inc.inc_flags |= INC_ISIPV6;
 		INP_INFO_WLOCK(&V_tcbinfo);
 		syncache_unreach(&inc, &th);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 	} else
-		in6_pcbnotify(&V_tcbinfo, sa, 0, (const struct sockaddr *)sa6_src,
+		in6_pcbnotify(&V_tcbinfo, sa, 0, (const struct bsd_sockaddr *)sa6_src,
 			      0, cmd, NULL, notify);
 }
 #endif /* INET6 */
@@ -1684,7 +1684,7 @@ u_long
 tcp_maxmtu(struct in_conninfo *inc, int *flags)
 {
 	struct route sro;
-	struct sockaddr_in *dst;
+	struct bsd_sockaddr_in *dst;
 	struct ifnet *ifp;
 	u_long maxmtu = 0;
 
@@ -1692,7 +1692,7 @@ tcp_maxmtu(struct in_conninfo *inc, int *flags)
 
 	bzero(&sro, sizeof(sro));
 	if (inc->inc_faddr.s_addr != INADDR_ANY) {
-	        dst = (struct sockaddr_in *)&sro.ro_dst;
+	        dst = (struct bsd_sockaddr_in *)&sro.ro_dst;
 		dst->sin_family = AF_INET;
 		dst->sin_len = sizeof(*dst);
 		dst->sin_addr = inc->inc_faddr;
@@ -1730,7 +1730,7 @@ tcp_maxmtu6(struct in_conninfo *inc, int *flags)
 	bzero(&sro6, sizeof(sro6));
 	if (!IN6_IS_ADDR_UNSPECIFIED(&inc->inc6_faddr)) {
 		sro6.ro_dst.sin6_family = AF_INET6;
-		sro6.ro_dst.sin6_len = sizeof(struct sockaddr_in6);
+		sro6.ro_dst.sin6_len = sizeof(struct bsd_sockaddr_in6);
 		sro6.ro_dst.sin6_addr = inc->inc6_faddr;
 		in6_rtalloc_ign(&sro6, 0, inc->inc_fibnum);
 	}
@@ -1838,7 +1838,7 @@ int
 tcp_signature_compute(struct mbuf *m, int _unused, int len, int optlen,
     u_char *buf, u_int direction)
 {
-	union sockaddr_union dst;
+	union bsd_sockaddr_union dst;
 #ifdef INET
 	struct ippseudo ippseudo;
 #endif
@@ -1863,7 +1863,7 @@ tcp_signature_compute(struct mbuf *m, int _unused, int len, int optlen,
 	KASSERT(buf != NULL, ("NULL signature pointer"));
 
 	/* Extract the destination from the IP header in the mbuf. */
-	bzero(&dst, sizeof(union sockaddr_union));
+	bzero(&dst, sizeof(union bsd_sockaddr_union));
 	ip = mtod(m, struct ip *);
 #ifdef INET6
 	ip6 = NULL;	/* Make the compiler happy. */
@@ -1871,7 +1871,7 @@ tcp_signature_compute(struct mbuf *m, int _unused, int len, int optlen,
 	switch (ip->ip_v) {
 #ifdef INET
 	case IPVERSION:
-		dst.sa.sa_len = sizeof(struct sockaddr_in);
+		dst.sa.sa_len = sizeof(struct bsd_sockaddr_in);
 		dst.sa.sa_family = AF_INET;
 		dst.sin.sin_addr = (direction == IPSEC_DIR_INBOUND) ?
 		    ip->ip_src : ip->ip_dst;
@@ -1880,7 +1880,7 @@ tcp_signature_compute(struct mbuf *m, int _unused, int len, int optlen,
 #ifdef INET6
 	case (IPV6_VERSION >> 4):
 		ip6 = mtod(m, struct ip6_hdr *);
-		dst.sa.sa_len = sizeof(struct sockaddr_in6);
+		dst.sa.sa_len = sizeof(struct bsd_sockaddr_in6);
 		dst.sa.sa_family = AF_INET6;
 		dst.sin6.sin6_addr = (direction == IPSEC_DIR_INBOUND) ?
 		    ip6->ip6_src : ip6->ip6_dst;
@@ -2060,13 +2060,13 @@ static int
 sysctl_drop(SYSCTL_HANDLER_ARGS)
 {
 	/* addrs[0] is a foreign socket, addrs[1] is a local one. */
-	struct sockaddr_storage addrs[2];
+	struct bsd_sockaddr_storage addrs[2];
 	struct inpcb *inp;
 	struct tcpcb *tp;
 	struct tcptw *tw;
-	struct sockaddr_in *fin, *lin;
+	struct bsd_sockaddr_in *fin, *lin;
 #ifdef INET6
-	struct sockaddr_in6 *fin6, *lin6;
+	struct bsd_sockaddr_in6 *fin6, *lin6;
 #endif
 	int error;
 
@@ -2090,18 +2090,18 @@ sysctl_drop(SYSCTL_HANDLER_ARGS)
 	switch (addrs[0].ss_family) {
 #ifdef INET6
 	case AF_INET6:
-		fin6 = (struct sockaddr_in6 *)&addrs[0];
-		lin6 = (struct sockaddr_in6 *)&addrs[1];
-		if (fin6->sin6_len != sizeof(struct sockaddr_in6) ||
-		    lin6->sin6_len != sizeof(struct sockaddr_in6))
+		fin6 = (struct bsd_sockaddr_in6 *)&addrs[0];
+		lin6 = (struct bsd_sockaddr_in6 *)&addrs[1];
+		if (fin6->sin6_len != sizeof(struct bsd_sockaddr_in6) ||
+		    lin6->sin6_len != sizeof(struct bsd_sockaddr_in6))
 			return (EINVAL);
 		if (IN6_IS_ADDR_V4MAPPED(&fin6->sin6_addr)) {
 			if (!IN6_IS_ADDR_V4MAPPED(&lin6->sin6_addr))
 				return (EINVAL);
-			in6_sin6_2_sin_in_sock((struct sockaddr *)&addrs[0]);
-			in6_sin6_2_sin_in_sock((struct sockaddr *)&addrs[1]);
-			fin = (struct sockaddr_in *)&addrs[0];
-			lin = (struct sockaddr_in *)&addrs[1];
+			in6_sin6_2_sin_in_sock((struct bsd_sockaddr *)&addrs[0]);
+			in6_sin6_2_sin_in_sock((struct bsd_sockaddr *)&addrs[1]);
+			fin = (struct bsd_sockaddr_in *)&addrs[0];
+			lin = (struct bsd_sockaddr_in *)&addrs[1];
 			break;
 		}
 		error = sa6_embedscope(fin6, V_ip6_use_defzone);
@@ -2114,10 +2114,10 @@ sysctl_drop(SYSCTL_HANDLER_ARGS)
 #endif
 #ifdef INET
 	case AF_INET:
-		fin = (struct sockaddr_in *)&addrs[0];
-		lin = (struct sockaddr_in *)&addrs[1];
-		if (fin->sin_len != sizeof(struct sockaddr_in) ||
-		    lin->sin_len != sizeof(struct sockaddr_in))
+		fin = (struct bsd_sockaddr_in *)&addrs[0];
+		lin = (struct bsd_sockaddr_in *)&addrs[1];
+		if (fin->sin_len != sizeof(struct bsd_sockaddr_in) ||
+		    lin->sin_len != sizeof(struct bsd_sockaddr_in))
 			return (EINVAL);
 		break;
 #endif

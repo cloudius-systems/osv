@@ -129,18 +129,18 @@ llentry_free(struct llentry *lle)
  */
 struct llentry *
 llentry_alloc(struct ifnet *ifp, struct lltable *lt,
-    struct sockaddr_storage *dst)
+    struct bsd_sockaddr_storage *dst)
 {
 	struct llentry *la;
 
 	IF_AFDATA_RLOCK(ifp);
-	la = lla_lookup(lt, LLE_EXCLUSIVE, (struct sockaddr *)dst);
+	la = lla_lookup(lt, LLE_EXCLUSIVE, (struct bsd_sockaddr *)dst);
 	IF_AFDATA_RUNLOCK(ifp);
 	if ((la == NULL) &&
 	    (ifp->if_flags & (IFF_NOARP | IFF_STATICARP)) == 0) {
 		IF_AFDATA_WLOCK(ifp);
 		la = lla_lookup(lt, (LLE_CREATE | LLE_EXCLUSIVE),
-		    (struct sockaddr *)dst);
+		    (struct bsd_sockaddr *)dst);
 		IF_AFDATA_WUNLOCK(ifp);
 	}
 
@@ -210,7 +210,7 @@ lltable_drain(int af)
 #endif
 
 void
-lltable_prefix_free(int af, struct sockaddr *prefix, struct sockaddr *mask,
+lltable_prefix_free(int af, struct bsd_sockaddr *prefix, struct bsd_sockaddr *mask,
     u_int flags)
 {
 	struct lltable *llt;
@@ -256,9 +256,9 @@ lltable_init(struct ifnet *ifp, int af)
 int
 lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 {
-	struct sockaddr_dl *dl =
-	    (struct sockaddr_dl *)info->rti_info[RTAX_GATEWAY];
-	struct sockaddr *dst = (struct sockaddr *)info->rti_info[RTAX_DST];
+	struct bsd_sockaddr_dl *dl =
+	    (struct bsd_sockaddr_dl *)info->rti_info[RTAX_GATEWAY];
+	struct bsd_sockaddr *dst = (struct bsd_sockaddr *)info->rti_info[RTAX_DST];
 	struct ifnet *ifp;
 	struct lltable *llt;
 	struct llentry *lle;
@@ -282,9 +282,9 @@ lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 			flags |= LLE_PUB;
 #ifdef INET
 			if (dst->sa_family == AF_INET &&
-			    ((struct sockaddr_inarp *)dst)->sin_other != 0) {
+			    ((struct bsd_sockaddr_inarp *)dst)->sin_other != 0) {
 				struct rtentry *rt;
-				((struct sockaddr_inarp *)dst)->sin_other = 0;
+				((struct bsd_sockaddr_inarp *)dst)->sin_other = 0;
 				rt = rtalloc1(dst, 0, 0);
 				if (rt == NULL || !(rt->rt_flags & RTF_HOST)) {
 					log(LOG_INFO, "%s: RTM_ADD publish "
@@ -363,8 +363,8 @@ lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 			/*  gratuitous ARP */
 			if ((laflags & LLE_PUB) && dst->sa_family == AF_INET) {
 				arprequest(ifp,
-				    &((struct sockaddr_in *)dst)->sin_addr,
-				    &((struct sockaddr_in *)dst)->sin_addr,
+				    &((struct bsd_sockaddr_in *)dst)->sin_addr,
+				    &((struct bsd_sockaddr_in *)dst)->sin_addr,
 				    ((laflags & LLE_PROXY) ?
 					(u_char *)IF_LLADDR(ifp) :
 					(u_char *)LLADDR(dl)));
@@ -394,7 +394,7 @@ VNET_SYSINIT(vnet_lltable_init, SI_SUB_PSEUDO, SI_ORDER_FIRST,
 #ifdef DDB
 struct llentry_sa {
 	struct llentry		base;
-	struct sockaddr		l3_addr;
+	struct bsd_sockaddr		l3_addr;
 };
 
 static void
@@ -429,10 +429,10 @@ llatbl_lle_show(struct llentry_sa *la)
 #ifdef INET
 	case AF_INET:
 	{
-		struct sockaddr_in *sin;
+		struct bsd_sockaddr_in *sin;
 		char l3s[INET_ADDRSTRLEN];
 
-		sin = (struct sockaddr_in *)&la->l3_addr;
+		sin = (struct bsd_sockaddr_in *)&la->l3_addr;
 		inet_ntoa_r(sin->sin_addr, l3s);
 		db_printf(" l3_addr=%s\n", l3s);
 		break;
@@ -441,10 +441,10 @@ llatbl_lle_show(struct llentry_sa *la)
 #ifdef INET6
 	case AF_INET6:
 	{
-		struct sockaddr_in6 *sin6;
+		struct bsd_sockaddr_in6 *sin6;
 		char l3s[INET6_ADDRSTRLEN];
 
-		sin6 = (struct sockaddr_in6 *)&la->l3_addr;
+		sin6 = (struct bsd_sockaddr_in6 *)&la->l3_addr;
 		ip6_sprintf(l3s, &sin6->sin6_addr);
 		db_printf(" l3_addr=%s\n", l3s);
 		break;

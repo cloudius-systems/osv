@@ -69,8 +69,8 @@ extern void sctp_addr_change(struct ifaddr *ifa, int cmd);
 MALLOC_DEFINE(M_RTABLE, "routetbl", "routing tables");
 
 /* NB: these are not modified */
-static struct	sockaddr route_src = { 2, PF_ROUTE, };
-static struct	sockaddr sa_zero   = { sizeof(sa_zero), AF_INET, };
+static struct	bsd_sockaddr route_src = { 2, PF_ROUTE, };
+static struct	bsd_sockaddr sa_zero   = { sizeof(sa_zero), AF_INET, };
 
 /*
  * Used by rtsock/raw_input callback code to decide whether to filter the update
@@ -160,7 +160,7 @@ rts_init(void)
 SYSINIT(rtsock, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, rts_init, 0);
 
 static int
-raw_input_rts_cb(struct mbuf *m, struct sockproto *proto, struct sockaddr *src,
+raw_input_rts_cb(struct mbuf *m, struct sockproto *proto, struct bsd_sockaddr *src,
     struct rawcb *rp)
 {
 	int fibnum;
@@ -276,14 +276,14 @@ rts_attach(struct socket *so, int proto, struct thread *td)
 }
 
 static int
-rts_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
+rts_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 
 	return (raw_usrreqs.pru_bind(so, nam, td)); /* xxx just EINVAL */
 }
 
 static int
-rts_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
+rts_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 
 	return (raw_usrreqs.pru_connect(so, nam, td)); /* XXX just EINVAL */
@@ -326,7 +326,7 @@ rts_disconnect(struct socket *so)
 /* pru_listen is EOPNOTSUPP */
 
 static int
-rts_peeraddr(struct socket *so, struct sockaddr **nam)
+rts_peeraddr(struct socket *so, struct bsd_sockaddr **nam)
 {
 
 	return (raw_usrreqs.pru_peeraddr(so, nam));
@@ -336,7 +336,7 @@ rts_peeraddr(struct socket *so, struct sockaddr **nam)
 /* pru_rcvoob is EOPNOTSUPP */
 
 static int
-rts_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *nam,
+rts_send(struct socket *so, int flags, struct mbuf *m, struct bsd_sockaddr *nam,
 	 struct mbuf *control, struct thread *td)
 {
 
@@ -353,7 +353,7 @@ rts_shutdown(struct socket *so)
 }
 
 static int
-rts_sockaddr(struct socket *so, struct sockaddr **nam)
+rts_sockaddr(struct socket *so, struct bsd_sockaddr **nam)
 {
 
 	return (raw_usrreqs.pru_sockaddr(so, nam));
@@ -548,7 +548,7 @@ route_output(struct mbuf *m, struct socket *so)
 		 * the local end point of the PPP link.
 		 */
 		if (rtm->rtm_flags & RTF_ANNOUNCE) {
-			struct sockaddr laddr;
+			struct bsd_sockaddr laddr;
 
 			if (rt->rt_ifp != NULL && 
 			    rt->rt_ifp->if_type == IFT_PROPVIRTUAL) {
@@ -641,7 +641,7 @@ route_output(struct mbuf *m, struct socket *so)
 			/*
 			 * New gateway could require new ifaddr, ifp;
 			 * flags may also be different; ifp may be specified
-			 * by ll sockaddr when protocol address is ambiguous
+			 * by ll bsd_sockaddr when protocol address is ambiguous
 			 */
 			if (((rt->rt_flags & RTF_GATEWAY) &&
 			     info.rti_info[RTAX_GATEWAY] != NULL) ||
@@ -803,20 +803,20 @@ rt_getmetrics(const struct rt_metrics_lite *in, struct rt_metrics *out)
 }
 
 /*
- * Extract the addresses of the passed sockaddrs.
+ * Extract the addresses of the passed bsd_sockaddrs.
  * Do a little sanity checking so as to avoid bad memory references.
  * This data is derived straight from userland.
  */
 static int
 rt_xaddrs(caddr_t cp, caddr_t cplim, struct rt_addrinfo *rtinfo)
 {
-	struct sockaddr *sa;
+	struct bsd_sockaddr *sa;
 	int i;
 
 	for (i = 0; i < RTAX_MAX && cp < cplim; i++) {
 		if ((rtinfo->rti_addrs & (1 << i)) == 0)
 			continue;
-		sa = (struct sockaddr *)cp;
+		sa = (struct bsd_sockaddr *)cp;
 		/*
 		 * It won't fit.
 		 */
@@ -849,7 +849,7 @@ rt_msg1(int type, struct rt_addrinfo *rtinfo)
 	struct rt_msghdr *rtm;
 	struct mbuf *m;
 	int i;
-	struct sockaddr *sa;
+	struct bsd_sockaddr *sa;
 	int len, dlen;
 
 	switch (type) {
@@ -964,7 +964,7 @@ again:
 	if (cp0)
 		cp += len;
 	for (i = 0; i < RTAX_MAX; i++) {
-		struct sockaddr *sa;
+		struct bsd_sockaddr *sa;
 
 		if ((sa = rtinfo->rti_info[i]) == NULL)
 			continue;
@@ -1017,7 +1017,7 @@ rt_missmsg_fib(int type, struct rt_addrinfo *rtinfo, int flags, int error,
 {
 	struct rt_msghdr *rtm;
 	struct mbuf *m;
-	struct sockaddr *sa = rtinfo->rti_info[RTAX_DST];
+	struct bsd_sockaddr *sa = rtinfo->rti_info[RTAX_DST];
 
 	if (route_cb.any_count == 0)
 		return;
@@ -1084,7 +1084,7 @@ rt_newaddrmsg_fib(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt,
     int fibnum)
 {
 	struct rt_addrinfo info;
-	struct sockaddr *sa = NULL;
+	struct bsd_sockaddr *sa = NULL;
 	int pass;
 	struct mbuf *m = NULL;
 	struct ifnet *ifp = ifa->ifa_ifp;
@@ -1274,7 +1274,7 @@ rt_dispatch(struct mbuf *m, sa_family_t saf)
 	struct m_tag *tag;
 
 	/*
-	 * Preserve the family from the sockaddr, if any, in an m_tag for
+	 * Preserve the family from the bsd_sockaddr, if any, in an m_tag for
 	 * use when injecting the mbuf into the routing socket buffer from
 	 * the netisr.
 	 */

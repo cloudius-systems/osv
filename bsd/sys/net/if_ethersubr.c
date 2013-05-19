@@ -76,7 +76,7 @@
 
 int (*ef_inputp)(struct ifnet*, struct ether_header *eh, struct mbuf *m);
 int (*ef_outputp)(struct ifnet *ifp, struct mbuf **mp,
-		struct sockaddr *dst, short *tp, int *hlen);
+		struct bsd_sockaddr *dst, short *tp, int *hlen);
 
 #ifdef CTASSERT
 CTASSERT(sizeof (struct ether_header) == ETHER_ADDR_LEN * 2 + 2);
@@ -98,7 +98,7 @@ void	(*vlan_input_p)(struct ifnet *, struct mbuf *);
 /* if_bridge(4) support */
 struct mbuf *(*bridge_input_p)(struct ifnet *, struct mbuf *); 
 int	(*bridge_output_p)(struct ifnet *, struct mbuf *, 
-		struct sockaddr *, struct rtentry *);
+		struct bsd_sockaddr *, struct rtentry *);
 void	(*bridge_dn_p)(struct mbuf *, struct ifnet *);
 #endif
 
@@ -110,8 +110,8 @@ struct mbuf *(*lagg_input_p)(struct ifnet *, struct mbuf *);
 static const u_char etherbroadcastaddr[ETHER_ADDR_LEN] =
 			{ 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
-static	int ether_resolvemulti(struct ifnet *, struct sockaddr **,
-		struct sockaddr *);
+static	int ether_resolvemulti(struct ifnet *, struct bsd_sockaddr **,
+		struct bsd_sockaddr *);
 
 /* XXX: should be in an arp support file, not here */
 MALLOC_DEFINE(M_ARPCOM, "arpcom", "802.* interface internals");
@@ -138,7 +138,7 @@ static VNET_DEFINE(int, ether_ipfw);
  */
 int
 ether_output(struct ifnet *ifp, struct mbuf *m,
-	struct sockaddr *dst, struct route *ro)
+	struct bsd_sockaddr *dst, struct route *ro)
 {
 	short type;
 	int error = 0, hdrcmplt = 0;
@@ -882,7 +882,7 @@ ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 {
 	int i;
 	struct ifaddr *ifa;
-	struct sockaddr_dl *sdl;
+	struct bsd_sockaddr_dl *sdl;
 
 	ifp->if_addrlen = ETHER_ADDR_LEN;
 	ifp->if_hdrlen = ETHER_HDR_LEN;
@@ -897,7 +897,7 @@ ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 
 	ifa = ifp->if_addr;
 	KASSERT(ifa != NULL, ("%s: no lladdr!\n", __func__));
-	sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+	sdl = (struct bsd_sockaddr_dl *)ifa->ifa_addr;
 	sdl->sdl_type = IFT_ETHER;
 	sdl->sdl_alen = ifp->if_addrlen;
 	bcopy(lla, LLADDR(sdl), ifp->if_addrlen);
@@ -1043,9 +1043,9 @@ ether_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 
 	case SIOCGIFADDR:
 		{
-			struct sockaddr *sa;
+			struct bsd_sockaddr *sa;
 
-			sa = (struct sockaddr *) & ifr->ifr_data;
+			sa = (struct bsd_sockaddr *) & ifr->ifr_data;
 			bcopy(IF_LLADDR(ifp),
 			      (caddr_t) sa->sa_data, ETHER_ADDR_LEN);
 		}
@@ -1069,15 +1069,15 @@ ether_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 }
 
 static int
-ether_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
-	struct sockaddr *sa)
+ether_resolvemulti(struct ifnet *ifp, struct bsd_sockaddr **llsa,
+	struct bsd_sockaddr *sa)
 {
-	struct sockaddr_dl *sdl;
+	struct bsd_sockaddr_dl *sdl;
 #ifdef INET
-	struct sockaddr_in *sin;
+	struct bsd_sockaddr_in *sin;
 #endif
 #ifdef INET6
-	struct sockaddr_in6 *sin6;
+	struct bsd_sockaddr_in6 *sin6;
 #endif
 	u_char *e_addr;
 
@@ -1086,7 +1086,7 @@ ether_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
 		/*
 		 * No mapping needed. Just check that it's a valid MC address.
 		 */
-		sdl = (struct sockaddr_dl *)sa;
+		sdl = (struct bsd_sockaddr_dl *)sa;
 		e_addr = (u_char*)LLADDR(sdl);
 		if (!ETHER_IS_MULTICAST(e_addr))
 			return EADDRNOTAVAIL;
@@ -1095,7 +1095,7 @@ ether_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
 
 #ifdef INET
 	case AF_INET:
-		sin = (struct sockaddr_in *)sa;
+		sin = (struct bsd_sockaddr_in *)sa;
 		if (!IN_MULTICAST(ntohl(sin->sin_addr.s_addr)))
 			return EADDRNOTAVAIL;
 		sdl = malloc(sizeof *sdl);
@@ -1109,12 +1109,12 @@ ether_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
 		sdl->sdl_alen = ETHER_ADDR_LEN;
 		e_addr = (u_char*)LLADDR(sdl);
 		ETHER_MAP_IP_MULTICAST(&sin->sin_addr, e_addr);
-		*llsa = (struct sockaddr *)sdl;
+		*llsa = (struct bsd_sockaddr *)sdl;
 		return 0;
 #endif
 #ifdef INET6
 	case AF_INET6:
-		sin6 = (struct sockaddr_in6 *)sa;
+		sin6 = (struct bsd_sockaddr_in6 *)sa;
 		if (IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
 			/*
 			 * An IP6 address of 0 means listen to all
@@ -1138,7 +1138,7 @@ ether_resolvemulti(struct ifnet *ifp, struct sockaddr **llsa,
 		sdl->sdl_alen = ETHER_ADDR_LEN;
 		e_addr = LLADDR(sdl);
 		ETHER_MAP_IPV6_MULTICAST(&sin6->sin6_addr, e_addr);
-		*llsa = (struct sockaddr *)sdl;
+		*llsa = (struct bsd_sockaddr *)sdl;
 		return 0;
 #endif
 

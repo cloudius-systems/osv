@@ -354,11 +354,11 @@ icmp_input(struct mbuf *m, int off)
 	struct icmp *icp;
 	struct in_ifaddr *ia;
 	struct ip *ip = mtod(m, struct ip *);
-	struct sockaddr_in icmpsrc, icmpdst, icmpgw;
+	struct bsd_sockaddr_in icmpsrc, icmpdst, icmpgw;
 	int hlen = off;
 	int icmplen = ip->ip_len;
 	int i, code;
-	void (*ctlfunc)(int, struct sockaddr *, void *);
+	void (*ctlfunc)(int, struct bsd_sockaddr *, void *);
 	int fibnum;
 
 	/*
@@ -420,13 +420,13 @@ icmp_input(struct mbuf *m, int off)
 
 	/* Initialize */
 	bzero(&icmpsrc, sizeof(icmpsrc));
-	icmpsrc.sin_len = sizeof(struct sockaddr_in);
+	icmpsrc.sin_len = sizeof(struct bsd_sockaddr_in);
 	icmpsrc.sin_family = AF_INET;
 	bzero(&icmpdst, sizeof(icmpdst));
-	icmpdst.sin_len = sizeof(struct sockaddr_in);
+	icmpdst.sin_len = sizeof(struct bsd_sockaddr_in);
 	icmpdst.sin_family = AF_INET;
 	bzero(&icmpgw, sizeof(icmpgw));
-	icmpgw.sin_len = sizeof(struct sockaddr_in);
+	icmpgw.sin_len = sizeof(struct bsd_sockaddr_in);
 	icmpgw.sin_family = AF_INET;
 
 	ICMPSTAT_INC(icps_inhist[icp->icmp_type]);
@@ -512,7 +512,7 @@ icmp_input(struct mbuf *m, int off)
 		 */
 		ctlfunc = inetsw[ip_protox[icp->icmp_ip.ip_p]].pr_ctlinput;
 		if (ctlfunc)
-			(*ctlfunc)(code, (struct sockaddr *)&icmpsrc,
+			(*ctlfunc)(code, (struct bsd_sockaddr *)&icmpsrc,
 				   (void *)&icp->icmp_ip);
 		break;
 
@@ -570,7 +570,7 @@ icmp_input(struct mbuf *m, int off)
 			icmpdst.sin_addr = ip->ip_dst;
 		}
 		ia = (struct in_ifaddr *)ifaof_ifpforaddr(
-			    (struct sockaddr *)&icmpdst, m->m_pkthdr.rcvif);
+			    (struct bsd_sockaddr *)&icmpdst, m->m_pkthdr.rcvif);
 		if (ia == NULL)
 			break;
 		if (ia->ia_ifp == NULL) {
@@ -645,14 +645,14 @@ reflect:
 #endif
 		icmpsrc.sin_addr = icp->icmp_ip.ip_dst;
 		for ( fibnum = 0; fibnum < rt_numfibs; fibnum++) {
-			in_rtredirect((struct sockaddr *)&icmpsrc,
-			  (struct sockaddr *)&icmpdst,
-			  (struct sockaddr *)0, RTF_GATEWAY | RTF_HOST,
-			  (struct sockaddr *)&icmpgw, fibnum);
+			in_rtredirect((struct bsd_sockaddr *)&icmpsrc,
+			  (struct bsd_sockaddr *)&icmpdst,
+			  (struct bsd_sockaddr *)0, RTF_GATEWAY | RTF_HOST,
+			  (struct bsd_sockaddr *)&icmpgw, fibnum);
 		}
-		pfctlinput(PRC_REDIRECT_HOST, (struct sockaddr *)&icmpsrc);
+		pfctlinput(PRC_REDIRECT_HOST, (struct bsd_sockaddr *)&icmpsrc);
 #ifdef IPSEC
-		key_sa_routechange((struct sockaddr *)&icmpsrc);
+		key_sa_routechange((struct bsd_sockaddr *)&icmpsrc);
 #endif
 		break;
 

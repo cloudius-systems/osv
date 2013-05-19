@@ -64,7 +64,7 @@ in_addroute(void *v_arg, void *n_arg, struct radix_node_head *head,
     struct radix_node *treenodes)
 {
 	struct rtentry *rt = (struct rtentry *)treenodes;
-	struct sockaddr_in *sin = (struct sockaddr_in *)rt_key(rt);
+	struct bsd_sockaddr_in *sin = (struct bsd_sockaddr_in *)rt_key(rt);
 
 	RADIX_NODE_HEAD_WLOCK_ASSERT(head);
 	/*
@@ -204,7 +204,7 @@ in_rtqkill(struct radix_node *rn, void *rock)
 				panic("rtqkill route really not free");
 
 			err = in_rtrequest(RTM_DELETE,
-					(struct sockaddr *)rt_key(rt),
+					(struct bsd_sockaddr *)rt_key(rt),
 					rt->rt_gateway, rt_mask(rt),
 					rt->rt_flags | RTF_RNH_LOCKED, 0,
 					rt->rt_fibnum);
@@ -467,9 +467,9 @@ in_rtalloc_ign(struct route *ro, u_long ignflags, u_int fibnum)
 
 int
 in_rtrequest( int req,
-	struct sockaddr *dst,
-	struct sockaddr *gateway,
-	struct sockaddr *netmask,
+	struct bsd_sockaddr *dst,
+	struct bsd_sockaddr *gateway,
+	struct bsd_sockaddr *netmask,
 	int flags,
 	struct rtentry **ret_nrt,
 	u_int fibnum)
@@ -479,17 +479,17 @@ in_rtrequest( int req,
 }
 
 struct rtentry *
-in_rtalloc1(struct sockaddr *dst, int report, u_long ignflags, u_int fibnum)
+in_rtalloc1(struct bsd_sockaddr *dst, int report, u_long ignflags, u_int fibnum)
 {
 	return (rtalloc1_fib(dst, report, ignflags, fibnum));
 }
 
 void
-in_rtredirect(struct sockaddr *dst,
-	struct sockaddr *gateway,
-	struct sockaddr *netmask,
+in_rtredirect(struct bsd_sockaddr *dst,
+	struct bsd_sockaddr *gateway,
+	struct bsd_sockaddr *netmask,
 	int flags,
-	struct sockaddr *src,
+	struct bsd_sockaddr *src,
 	u_int fibnum)
 {
 	rtredirect_fib(dst, gateway, netmask, flags, src, fibnum);

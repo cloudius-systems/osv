@@ -131,7 +131,7 @@ sys_socket(int domain, int type, int protocol, int *out_fd)
 
 /* ARGSUSED */
 int
-sys_bind(int s, struct sockaddr *sa, int namelen)
+sys_bind(int s, struct bsd_sockaddr *sa, int namelen)
 {
 	int error;
 
@@ -141,7 +141,7 @@ sys_bind(int s, struct sockaddr *sa, int namelen)
 }
 
 int
-kern_bind(int fd, struct sockaddr *sa)
+kern_bind(int fd, struct bsd_sockaddr *sa)
 {
 	struct socket *so;
 	struct file *fp;
@@ -181,7 +181,7 @@ sys_listen(int s, int backlog)
  */
 static int
 accept1(int s,
-        struct sockaddr * name,
+        struct bsd_sockaddr * name,
         socklen_t * namelen, int *out_fd)
 {
 	int error;
@@ -195,11 +195,11 @@ accept1(int s,
 }
 
 int
-kern_accept(int s, struct sockaddr *name,
+kern_accept(int s, struct bsd_sockaddr *name,
     socklen_t *namelen, struct file **out_fp, int *out_fd)
 {
 	struct file *headfp, *nfp = NULL;
-	struct sockaddr *sa = NULL;
+	struct bsd_sockaddr *sa = NULL;
 	int error;
 	struct socket *head, *so;
 	int fd;
@@ -327,7 +327,7 @@ done:
 
 int
 sys_accept(int s,
-           struct sockaddr * name,
+           struct bsd_sockaddr * name,
            socklen_t * namelen, int *out_fd)
 {
 
@@ -336,7 +336,7 @@ sys_accept(int s,
 
 /* ARGSUSED */
 int
-sys_connect(int s, struct sockaddr *sa, socklen_t len)
+sys_connect(int s, struct bsd_sockaddr *sa, socklen_t len)
 {
 	int error;
 
@@ -346,7 +346,7 @@ sys_connect(int s, struct sockaddr *sa, socklen_t len)
 }
 
 int
-kern_connect(int fd, struct sockaddr *sa)
+kern_connect(int fd, struct bsd_sockaddr *sa)
 {
 	struct socket *so;
 	struct file *fp;
@@ -459,11 +459,11 @@ static int
 sendit(int s, struct msghdr* mp, int flags, ssize_t* bytes)
 {
 	struct mbuf *control;
-	struct sockaddr *to;
+	struct bsd_sockaddr *to;
 	int error;
 
 	if (mp->msg_name != NULL) {
-	    to = (struct sockaddr *)mp->msg_name;
+	    to = (struct bsd_sockaddr *)mp->msg_name;
 	} else {
 		to = NULL;
 	}
@@ -498,7 +498,7 @@ kern_sendit(int s,
 	struct uio auio;
 	struct iovec *iov;
 	struct socket *so;
-	struct sockaddr *from = 0;
+	struct bsd_sockaddr *from = 0;
 	int i, error;
 	ssize_t len;
 
@@ -520,7 +520,7 @@ kern_sendit(int s,
 		}
 	}
 	len = auio.uio_resid;
-	from = (struct sockaddr*)mp->msg_name;
+	from = (struct bsd_sockaddr*)mp->msg_name;
 	error = sosend(so, from, &auio, 0, control, flags, 0);
 	if (error) {
 		if (auio.uio_resid != len && (error == ERESTART ||
@@ -585,7 +585,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 	caddr_t ctlbuf;
 	struct file *fp;
 	struct socket *so;
-	struct sockaddr *fromsa = 0;
+	struct bsd_sockaddr *fromsa = 0;
 
 	if (controlp != NULL)
 		*controlp = NULL;
@@ -685,7 +685,7 @@ recvit(int s, struct msghdr *mp, void *namelenp, ssize_t* bytes)
 
 int
 sys_recvfrom(int s, caddr_t buf, size_t  len, int flags,
-    struct sockaddr * __restrict    from,
+    struct bsd_sockaddr * __restrict    from,
     socklen_t * __restrict fromlenaddr,
     ssize_t* bytes)
 {
@@ -844,9 +844,9 @@ kern_getsockopt(int s,
  */
 /* ARGSUSED */
 int
-getsockname1(int fdes, struct sockaddr * __restrict asa, socklen_t * __restrict alen)
+getsockname1(int fdes, struct bsd_sockaddr * __restrict asa, socklen_t * __restrict alen)
 {
-	struct sockaddr *sa;
+	struct bsd_sockaddr *sa;
 	socklen_t len;
 	int error;
 
@@ -865,7 +865,7 @@ getsockname1(int fdes, struct sockaddr * __restrict asa, socklen_t * __restrict 
 }
 
 int
-kern_getsockname(int fd, struct sockaddr **sa, socklen_t *alen)
+kern_getsockname(int fd, struct bsd_sockaddr **sa, socklen_t *alen)
 {
 	struct socket *so;
 	struct file *fp;
@@ -892,7 +892,7 @@ kern_getsockname(int fd, struct sockaddr **sa, socklen_t *alen)
 	*alen = len;
 #ifdef KTRACE
 	if (KTRPOINT(td, KTR_STRUCT))
-		ktrsockaddr(*sa);
+		ktrbsd_sockaddr(*sa);
 #endif
 bad:
 	fdrop(fp);
@@ -904,7 +904,7 @@ bad:
 }
 
 int
-sys_getsockname(int fdes, struct sockaddr * __restrict asa, socklen_t * __restrict alen)
+sys_getsockname(int fdes, struct bsd_sockaddr * __restrict asa, socklen_t * __restrict alen)
 {
 
 	return (getsockname1(fdes, asa, alen));
@@ -933,12 +933,12 @@ getpeername1(td, uap, compat)
 	struct thread *td;
 	struct getpeername_args /* {
 		int	fdes;
-		struct sockaddr * __restrict	asa;
+		struct bsd_sockaddr * __restrict	asa;
 		socklen_t * __restrict	alen;
 	} */ *uap;
 	int compat;
 {
-	struct sockaddr *sa;
+	struct bsd_sockaddr *sa;
 	socklen_t len;
 	int error;
 
@@ -953,7 +953,7 @@ getpeername1(td, uap, compat)
 	if (len != 0) {
 #ifdef COMPAT_OLDSOCK
 		if (compat)
-			((struct osockaddr *)sa)->sa_family = sa->sa_family;
+			((struct bsd_osockaddr *)sa)->sa_family = sa->sa_family;
 #endif
 		error = copyout(sa, uap->asa, (u_int)len);
 	}
@@ -964,7 +964,7 @@ getpeername1(td, uap, compat)
 }
 
 int
-kern_getpeername(struct thread *td, int fd, struct sockaddr **sa,
+kern_getpeername(struct thread *td, int fd, struct bsd_sockaddr **sa,
     socklen_t *alen)
 {
 	struct socket *so;
@@ -997,7 +997,7 @@ kern_getpeername(struct thread *td, int fd, struct sockaddr **sa,
 	*alen = len;
 #ifdef KTRACE
 	if (KTRPOINT(td, KTR_STRUCT))
-		ktrsockaddr(*sa);
+		ktrbsd_sockaddr(*sa);
 #endif
 bad:
 	if (error && *sa) {
@@ -1022,7 +1022,7 @@ sys_getpeername(td, uap)
 int
 sockargs(struct mbuf **mp, caddr_t buf, int buflen, int type)
 {
-	struct sockaddr *sa;
+	struct bsd_sockaddr *sa;
 	struct mbuf *m;
 	int error;
 
@@ -1040,7 +1040,7 @@ sockargs(struct mbuf **mp, caddr_t buf, int buflen, int type)
 	else {
 		*mp = m;
 		if (type == MT_SONAME) {
-			sa = mtod(m, struct sockaddr *);
+			sa = mtod(m, struct bsd_sockaddr *);
 			sa->sa_len = buflen;
 		}
 	}

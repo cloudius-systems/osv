@@ -107,7 +107,7 @@ VNET_DEFINE(int, rttrash);		/* routes not in table but not freed */
 #define	V_rttrash	VNET(rttrash)
 
 
-/* compare two sockaddr structures */
+/* compare two bsd_sockaddr structures */
 #define	sa_equal(a1, a2) (bcmp((a1), (a2), (a1)->sa_len) == 0)
 
 /*
@@ -301,14 +301,14 @@ rtalloc_ign_fib(struct route *ro, u_long ignore, u_int fibnum)
  * The returned route, if any, is locked.
  */
 struct rtentry *
-rtalloc1(struct sockaddr *dst, int report, u_long ignflags)
+rtalloc1(struct bsd_sockaddr *dst, int report, u_long ignflags)
 {
 
 	return (rtalloc1_fib(dst, report, ignflags, RT_DEFAULT_FIB));
 }
 
 struct rtentry *
-rtalloc1_fib(struct sockaddr *dst, int report, u_long ignflags,
+rtalloc1_fib(struct bsd_sockaddr *dst, int report, u_long ignflags,
 		    u_int fibnum)
 {
 	struct radix_node_head *rnh;
@@ -467,22 +467,22 @@ done:
  * message from the network layer.
  */
 void
-rtredirect(struct sockaddr *dst,
-	struct sockaddr *gateway,
-	struct sockaddr *netmask,
+rtredirect(struct bsd_sockaddr *dst,
+	struct bsd_sockaddr *gateway,
+	struct bsd_sockaddr *netmask,
 	int flags,
-	struct sockaddr *src)
+	struct bsd_sockaddr *src)
 {
 
 	rtredirect_fib(dst, gateway, netmask, flags, src, RT_DEFAULT_FIB);
 }
 
 void
-rtredirect_fib(struct sockaddr *dst,
-	struct sockaddr *gateway,
-	struct sockaddr *netmask,
+rtredirect_fib(struct bsd_sockaddr *dst,
+	struct bsd_sockaddr *gateway,
+	struct bsd_sockaddr *netmask,
 	int flags,
-	struct sockaddr *src,
+	struct bsd_sockaddr *src,
 	u_int fibnum)
 {
 	struct rtentry *rt, *rt0 = NULL;
@@ -634,14 +634,14 @@ rtioctl_fib(u_long req, caddr_t data, u_int fibnum)
  * For both ifa_ifwithroute() routines, 'ifa' is returned referenced.
  */
 struct ifaddr *
-ifa_ifwithroute(int flags, struct sockaddr *dst, struct sockaddr *gateway)
+ifa_ifwithroute(int flags, struct bsd_sockaddr *dst, struct bsd_sockaddr *gateway)
 {
 
 	return (ifa_ifwithroute_fib(flags, dst, gateway, RT_DEFAULT_FIB));
 }
 
 struct ifaddr *
-ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
+ifa_ifwithroute_fib(int flags, struct bsd_sockaddr *dst, struct bsd_sockaddr *gateway,
 				u_int fibnum)
 {
 	register struct ifaddr *ifa;
@@ -716,9 +716,9 @@ ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
  */
 int
 rtrequest(int req,
-	struct sockaddr *dst,
-	struct sockaddr *gateway,
-	struct sockaddr *netmask,
+	struct bsd_sockaddr *dst,
+	struct bsd_sockaddr *gateway,
+	struct bsd_sockaddr *netmask,
 	int flags,
 	struct rtentry **ret_nrt)
 {
@@ -729,9 +729,9 @@ rtrequest(int req,
 
 int
 rtrequest_fib(int req,
-	struct sockaddr *dst,
-	struct sockaddr *gateway,
-	struct sockaddr *netmask,
+	struct bsd_sockaddr *dst,
+	struct bsd_sockaddr *gateway,
+	struct bsd_sockaddr *netmask,
 	int flags,
 	struct rtentry **ret_nrt,
 	u_int fibnum)
@@ -778,7 +778,7 @@ rt_getifa_fib(struct rt_addrinfo *info, u_int fibnum)
 	int error = 0;
 
 	/*
-	 * ifp may be specified by sockaddr_dl
+	 * ifp may be specified by bsd_sockaddr_dl
 	 * when protocol address is ambiguous.
 	 */
 	if (info->rti_ifp == NULL && ifpaddr != NULL &&
@@ -790,7 +790,7 @@ rt_getifa_fib(struct rt_addrinfo *info, u_int fibnum)
 	if (info->rti_ifa == NULL && ifaaddr != NULL)
 		info->rti_ifa = ifa_ifwithaddr(ifaaddr);
 	if (info->rti_ifa == NULL) {
-		struct sockaddr *sa;
+		struct bsd_sockaddr *sa;
 
 		sa = ifaaddr != NULL ? ifaaddr :
 		    (gateway != NULL ? gateway : dst);
@@ -1014,8 +1014,8 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 	register struct radix_node *rn;
 	register struct radix_node_head *rnh;
 	struct ifaddr *ifa;
-	struct sockaddr *ndst;
-	struct sockaddr_storage mdst;
+	struct bsd_sockaddr *ndst;
+	struct bsd_sockaddr_storage mdst;
 #define senderr(x) { error = x ; goto bad; }
 
 	KASSERT((fibnum < rt_numfibs), ("rtrequest1_fib: bad fibnum"));
@@ -1051,8 +1051,8 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 	switch (req) {
 	case RTM_DELETE:
 		if (netmask) {
-			rt_maskedcopy(dst, (struct sockaddr *)&mdst, netmask);
-			dst = (struct sockaddr *)&mdst;
+			rt_maskedcopy(dst, (struct bsd_sockaddr *)&mdst, netmask);
+			dst = (struct bsd_sockaddr *)&mdst;
 		}
 #ifdef RADIX_MPATH
 		if (rn_mpath_capable(rnh)) {
@@ -1148,7 +1148,7 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 		/*
 		 * point to the (possibly newly malloc'd) dest address.
 		 */
-		ndst = (struct sockaddr *)rt_key(rt);
+		ndst = (struct bsd_sockaddr *)rt_key(rt);
 
 		/*
 		 * make sure it contains the value we want (masked if needed).
@@ -1217,7 +1217,7 @@ bad:
 #undef flags
 
 int
-rt_setgate(struct rtentry *rt, struct sockaddr *dst, struct sockaddr *gate)
+rt_setgate(struct rtentry *rt, struct bsd_sockaddr *dst, struct bsd_sockaddr *gate)
 {
 	/* XXX dst may be overwritten, can we move this to below */
 	int dlen = SA_SIZE(dst), glen = SA_SIZE(gate);
@@ -1247,8 +1247,8 @@ rt_setgate(struct rtentry *rt, struct sockaddr *dst, struct sockaddr *gate)
 		 */
 		bcopy(dst, new, dlen);
 		Free(rt_key(rt));	/* free old block, if any */
-		rt_key(rt) = (struct sockaddr *)new;
-		rt->rt_gateway = (struct sockaddr *)(new + dlen);
+		rt_key(rt) = (struct bsd_sockaddr *)new;
+		rt->rt_gateway = (struct bsd_sockaddr *)(new + dlen);
 	}
 
 	/*
@@ -1260,7 +1260,7 @@ rt_setgate(struct rtentry *rt, struct sockaddr *dst, struct sockaddr *gate)
 }
 
 void
-rt_maskedcopy(struct sockaddr *src, struct sockaddr *dst, struct sockaddr *netmask)
+rt_maskedcopy(struct bsd_sockaddr *src, struct bsd_sockaddr *dst, struct bsd_sockaddr *netmask)
 {
 	register u_char *cp1 = (u_char *)src;
 	register u_char *cp2 = (u_char *)dst;
@@ -1286,8 +1286,8 @@ rt_maskedcopy(struct sockaddr *src, struct sockaddr *dst, struct sockaddr *netma
 static inline  int
 rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 {
-	struct sockaddr *dst;
-	struct sockaddr *netmask;
+	struct bsd_sockaddr *dst;
+	struct bsd_sockaddr *netmask;
 	struct rtentry *rt = NULL;
 	struct rt_addrinfo info;
 	int error = 0;
@@ -1295,7 +1295,7 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 	char tempbuf[_SOCKADDR_TMPSIZE];
 	int didwork = 0;
 	int a_failure = 0;
-	static struct sockaddr_dl null_sdl = {sizeof(null_sdl), AF_LINK};
+	static struct bsd_sockaddr_dl null_sdl = {sizeof(null_sdl), AF_LINK};
 
 	if (flags & RTF_HOST) {
 		dst = ifa->ifa_dstaddr;
@@ -1342,8 +1342,8 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 		 * XXX this is kinda inet specific..
 		 */
 		if (netmask != NULL) {
-			rt_maskedcopy(dst, (struct sockaddr *)tempbuf, netmask);
-			dst = (struct sockaddr *)tempbuf;
+			rt_maskedcopy(dst, (struct bsd_sockaddr *)tempbuf, netmask);
+			dst = (struct bsd_sockaddr *)tempbuf;
 		}
 	}
 	/*
@@ -1369,7 +1369,7 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 			error = (rn == NULL ||
 			    (rn->rn_flags & RNF_ROOT) ||
 			    RNTORT(rn)->rt_ifa != ifa ||
-			    !sa_equal((struct sockaddr *)rn->rn_key, dst));
+			    !sa_equal((struct bsd_sockaddr *)rn->rn_key, dst));
 			RADIX_NODE_HEAD_UNLOCK(rnh);
 			if (error) {
 				/* this is only an error if bad on ALL tables */
@@ -1388,7 +1388,7 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 		 */
 		if (cmd == RTM_ADD)
 			info.rti_info[RTAX_GATEWAY] =
-			    (struct sockaddr *)&null_sdl;
+			    (struct bsd_sockaddr *)&null_sdl;
 		else
 			info.rti_info[RTAX_GATEWAY] = ifa->ifa_addr;
 		info.rti_info[RTAX_NETMASK] = netmask;
@@ -1402,9 +1402,9 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 			 * doing this for compatibility reasons
 			 */
 			if (cmd == RTM_ADD) {
-			    ((struct sockaddr_dl *)rt->rt_gateway)->sdl_type  =
+			    ((struct bsd_sockaddr_dl *)rt->rt_gateway)->sdl_type  =
 				rt->rt_ifp->if_type;
-			    ((struct sockaddr_dl *)rt->rt_gateway)->sdl_index =
+			    ((struct bsd_sockaddr_dl *)rt->rt_gateway)->sdl_index =
 				rt->rt_ifp->if_index;
 			}
 			RT_ADDREF(rt);
@@ -1467,7 +1467,7 @@ rtinit_fib(struct ifaddr *ifa, int cmd, int flags)
 int
 rtinit(struct ifaddr *ifa, int cmd, int flags)
 {
-	struct sockaddr *dst;
+	struct bsd_sockaddr *dst;
 	int fib = RT_DEFAULT_FIB;
 
 	if (flags & RTF_HOST) {

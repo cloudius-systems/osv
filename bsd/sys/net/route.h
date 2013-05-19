@@ -55,7 +55,7 @@ struct route {
 	struct	llentry *ro_lle;
 	struct	in_ifaddr *ro_ia;
 	int		ro_flags;
-	struct	sockaddr ro_dst;
+	struct	bsd_sockaddr ro_dst;
 };
 
 #define	RT_CACHING_CONTEXT	0x1	/* XXX: not used anywhere */
@@ -123,9 +123,9 @@ struct rtentry {
 	 * because the code does some casts of a 'struct radix_node *'
 	 * to a 'struct rtentry *'
 	 */
-#define	rt_key(r)	(*((struct sockaddr **)(&(r)->rt_nodes->rn_key)))
-#define	rt_mask(r)	(*((struct sockaddr **)(&(r)->rt_nodes->rn_mask)))
-	struct	sockaddr *rt_gateway;	/* value */
+#define	rt_key(r)	(*((struct bsd_sockaddr **)(&(r)->rt_nodes->rn_key)))
+#define	rt_mask(r)	(*((struct bsd_sockaddr **)(&(r)->rt_nodes->rn_mask)))
+	struct	bsd_sockaddr *rt_gateway;	/* value */
 	int	rt_flags;		/* up/down?, host/net */
 	int	rt_refcnt;		/* # held references */
 	struct	ifnet *rt_ifp;		/* the answer: interface to use */
@@ -144,8 +144,8 @@ struct rtentry {
  */
 struct ortentry {
 	u_long	rt_hash;		/* to speed lookups */
-	struct	sockaddr rt_dst;	/* key */
-	struct	sockaddr rt_gateway;	/* value */
+	struct	bsd_sockaddr rt_dst;	/* key */
+	struct	bsd_sockaddr rt_gateway;	/* value */
 	short	rt_flags;		/* up/down?, host/net */
 	short	rt_refcnt;		/* # held references */
 	u_long	rt_use;			/* raw # packets forwarded */
@@ -213,7 +213,7 @@ struct rt_msghdr {
 	u_char	rtm_type;	/* message type */
 	u_short	rtm_index;	/* index for associated ifp */
 	int	rtm_flags;	/* flags, incl. kern & message, e.g. DONE */
-	int	rtm_addrs;	/* bitmask identifying sockaddrs in msg */
+	int	rtm_addrs;	/* bitmask identifying bsd_sockaddrs in msg */
 	int	rtm_pid;	/* identify sender */
 	int	rtm_seq;	/* for sender to identify action */
 	int	rtm_errno;	/* why failed */
@@ -262,52 +262,52 @@ struct rt_msghdr {
 /*
  * Bitmask values for rtm_addrs.
  */
-#define RTA_DST		0x1	/* destination sockaddr present */
-#define RTA_GATEWAY	0x2	/* gateway sockaddr present */
-#define RTA_NETMASK	0x4	/* netmask sockaddr present */
-#define RTA_GENMASK	0x8	/* cloning mask sockaddr present */
-#define RTA_IFP		0x10	/* interface name sockaddr present */
-#define RTA_IFA		0x20	/* interface addr sockaddr present */
-#define RTA_AUTHOR	0x40	/* sockaddr for author of redirect */
+#define RTA_DST		0x1	/* destination bsd_sockaddr present */
+#define RTA_GATEWAY	0x2	/* gateway bsd_sockaddr present */
+#define RTA_NETMASK	0x4	/* netmask bsd_sockaddr present */
+#define RTA_GENMASK	0x8	/* cloning mask bsd_sockaddr present */
+#define RTA_IFP		0x10	/* interface name bsd_sockaddr present */
+#define RTA_IFA		0x20	/* interface addr bsd_sockaddr present */
+#define RTA_AUTHOR	0x40	/* bsd_sockaddr for author of redirect */
 #define RTA_BRD		0x80	/* for NEWADDR, broadcast or p-p dest addr */
 
 /*
- * Index offsets for sockaddr array for alternate internal encoding.
+ * Index offsets for bsd_sockaddr array for alternate internal encoding.
  */
-#define RTAX_DST	0	/* destination sockaddr present */
-#define RTAX_GATEWAY	1	/* gateway sockaddr present */
-#define RTAX_NETMASK	2	/* netmask sockaddr present */
-#define RTAX_GENMASK	3	/* cloning mask sockaddr present */
-#define RTAX_IFP	4	/* interface name sockaddr present */
-#define RTAX_IFA	5	/* interface addr sockaddr present */
-#define RTAX_AUTHOR	6	/* sockaddr for author of redirect */
+#define RTAX_DST	0	/* destination bsd_sockaddr present */
+#define RTAX_GATEWAY	1	/* gateway bsd_sockaddr present */
+#define RTAX_NETMASK	2	/* netmask bsd_sockaddr present */
+#define RTAX_GENMASK	3	/* cloning mask bsd_sockaddr present */
+#define RTAX_IFP	4	/* interface name bsd_sockaddr present */
+#define RTAX_IFA	5	/* interface addr bsd_sockaddr present */
+#define RTAX_AUTHOR	6	/* bsd_sockaddr for author of redirect */
 #define RTAX_BRD	7	/* for NEWADDR, broadcast or p-p dest addr */
 #define RTAX_MAX	8	/* size of array to allocate */
 
 struct rt_addrinfo {
 	int	rti_addrs;
-	struct	sockaddr *rti_info[RTAX_MAX];
+	struct	bsd_sockaddr *rti_info[RTAX_MAX];
 	int	rti_flags;
 	struct	ifaddr *rti_ifa;
 	struct	ifnet *rti_ifp;
 };
 
 /*
- * This macro returns the size of a struct sockaddr when passed
+ * This macro returns the size of a struct bsd_sockaddr when passed
  * through a routing socket. Basically we round up sa_len to
  * a multiple of sizeof(long), with a minimum of sizeof(long).
  * The check for a NULL pointer is just a convenience, probably never used.
  * The case sa_len == 0 should only apply to empty structures.
  */
 #define SA_SIZE(sa)						\
-    (  (!(sa) || ((struct sockaddr *)(sa))->sa_len == 0) ?	\
+    (  (!(sa) || ((struct bsd_sockaddr *)(sa))->sa_len == 0) ?	\
 	sizeof(long)		:				\
-	1 + ( (((struct sockaddr *)(sa))->sa_len - 1) | (sizeof(long) - 1) ) )
+	1 + ( (((struct bsd_sockaddr *)(sa))->sa_len - 1) | (sizeof(long) - 1) ) )
 
 #define SA_SIZE_ALWAYS(sa)                     \
-    (  (((struct sockaddr *)(sa))->sa_len == 0) ?  \
+    (  (((struct bsd_sockaddr *)(sa))->sa_len == 0) ?  \
     sizeof(long)        :               \
-    1 + ( (((struct sockaddr *)(sa))->sa_len - 1) | (sizeof(long) - 1) ) )
+    1 + ( (((struct bsd_sockaddr *)(sa))->sa_len - 1) | (sizeof(long) - 1) ) )
 
 #ifdef _KERNEL
 
@@ -375,8 +375,8 @@ void	 rt_missmsg_fib(int, struct rt_addrinfo *, int, int, int);
 void	 rt_newaddrmsg(int, struct ifaddr *, int, struct rtentry *);
 void	 rt_newaddrmsg_fib(int, struct ifaddr *, int, struct rtentry *, int);
 void	 rt_newmaddrmsg(int, struct ifmultiaddr *);
-int	 rt_setgate(struct rtentry *, struct sockaddr *, struct sockaddr *);
-void 	 rt_maskedcopy(struct sockaddr *, struct sockaddr *, struct sockaddr *);
+int	 rt_setgate(struct rtentry *, struct bsd_sockaddr *, struct bsd_sockaddr *);
+void 	 rt_maskedcopy(struct bsd_sockaddr *, struct bsd_sockaddr *, struct bsd_sockaddr *);
 
 /*
  * Note the following locking behavior:
@@ -392,20 +392,20 @@ void 	 rt_maskedcopy(struct sockaddr *, struct sockaddr *, struct sockaddr *);
 
 int	 rtexpunge(struct rtentry *);
 void	 rtfree(struct rtentry *);
-int	 rt_check(struct rtentry **, struct rtentry **, struct sockaddr *);
+int	 rt_check(struct rtentry **, struct rtentry **, struct bsd_sockaddr *);
 
 /* XXX MRT COMPAT VERSIONS THAT SET UNIVERSE to 0 */
 /* Thes are used by old code not yet converted to use multiple FIBS */
 int	 rt_getifa(struct rt_addrinfo *);
 void	 rtalloc_ign(struct route *ro, u_long ignflags);
 void	 rtalloc(struct route *ro); /* XXX deprecated, use rtalloc_ign(ro, 0) */
-struct rtentry *rtalloc1(struct sockaddr *, int, u_long);
+struct rtentry *rtalloc1(struct bsd_sockaddr *, int, u_long);
 int	 rtinit(struct ifaddr *, int, int);
 int	 rtioctl(u_long, caddr_t);
-void	 rtredirect(struct sockaddr *, struct sockaddr *,
-	    struct sockaddr *, int, struct sockaddr *);
-int	 rtrequest(int, struct sockaddr *,
-	    struct sockaddr *, struct sockaddr *, int, struct rtentry **);
+void	 rtredirect(struct bsd_sockaddr *, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, int, struct bsd_sockaddr *);
+int	 rtrequest(int, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, struct bsd_sockaddr *, int, struct rtentry **);
 
 #ifndef BURN_BRIDGES
 /* defaults to "all" FIBs */
@@ -419,17 +419,17 @@ int	 rtinit_fib(struct ifaddr *, int, int);
 int	 rt_getifa_fib(struct rt_addrinfo *, u_int fibnum);
 void	 rtalloc_ign_fib(struct route *ro, u_long ignflags, u_int fibnum);
 void	 rtalloc_fib(struct route *ro, u_int fibnum);
-struct rtentry *rtalloc1_fib(struct sockaddr *, int, u_long, u_int);
+struct rtentry *rtalloc1_fib(struct bsd_sockaddr *, int, u_long, u_int);
 int	 rtioctl_fib(u_long, caddr_t, u_int);
-void	 rtredirect_fib(struct sockaddr *, struct sockaddr *,
-	    struct sockaddr *, int, struct sockaddr *, u_int);
-int	 rtrequest_fib(int, struct sockaddr *,
-	    struct sockaddr *, struct sockaddr *, int, struct rtentry **, u_int);
+void	 rtredirect_fib(struct bsd_sockaddr *, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, int, struct bsd_sockaddr *, u_int);
+int	 rtrequest_fib(int, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, struct bsd_sockaddr *, int, struct rtentry **, u_int);
 int	 rtrequest1_fib(int, struct rt_addrinfo *, struct rtentry **, u_int);
 
 #include <bsd/sys/sys/eventhandler.h>
-typedef void (*rtevent_arp_update_fn)(void *, struct rtentry *, uint8_t *, struct sockaddr *);
-typedef void (*rtevent_redirect_fn)(void *, struct rtentry *, struct rtentry *, struct sockaddr *);
+typedef void (*rtevent_arp_update_fn)(void *, struct rtentry *, uint8_t *, struct bsd_sockaddr *);
+typedef void (*rtevent_redirect_fn)(void *, struct rtentry *, struct rtentry *, struct bsd_sockaddr *);
 /* route_arp_update_event is no longer generated; see arp_update_event */
 EVENTHANDLER_DECLARE(route_arp_update_event, rtevent_arp_update_fn);
 EVENTHANDLER_DECLARE(route_redirect_event, rtevent_redirect_fn);

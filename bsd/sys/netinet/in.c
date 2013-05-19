@@ -65,9 +65,9 @@ static int in_lifaddr_ioctl(struct socket *, u_long, caddr_t,
 
 static int	in_addprefix(struct in_ifaddr *, int);
 static int	in_scrubprefix(struct in_ifaddr *, u_int);
-static void	in_socktrim(struct sockaddr_in *);
+static void	in_socktrim(struct bsd_sockaddr_in *);
 static int	in_ifinit(struct ifnet *,
-	    struct in_ifaddr *, struct sockaddr_in *, int);
+	    struct in_ifaddr *, struct bsd_sockaddr_in *, int);
 static void	in_purgemaddrs(struct ifnet *);
 
 static VNET_DEFINE(int, sameprefixcarponly);
@@ -145,10 +145,10 @@ in_canforward(struct in_addr in)
 }
 
 /*
- * Trim a mask in a sockaddr
+ * Trim a mask in a bsd_sockaddr
  */
 static void
-in_socktrim(struct sockaddr_in *ap)
+in_socktrim(struct bsd_sockaddr_in *ap)
 {
     register char *cplim = (char *) &ap->sin_addr;
     register char *cp = (char *) (&ap->sin_addr + 1);
@@ -214,7 +214,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 	struct in_addr dst;
 	struct in_ifinfo *ii;
 	struct in_aliasreq *ifra = (struct in_aliasreq *)data;
-	struct sockaddr_in oldaddr;
+	struct bsd_sockaddr_in oldaddr;
 	int error, hostIsNew, iaIsNew, maskIsNew;
 	int iaIsFirst;
 
@@ -305,7 +305,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 	 * If an alias address was specified, find that one instead of the
 	 * first one on the interface, if possible.
 	 */
-	dst = ((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr;
+	dst = ((struct bsd_sockaddr_in *)&ifr->ifr_addr)->sin_addr;
 	IN_IFADDR_RLOCK();
 	LIST_FOREACH(iap, INADDR_HASH(dst.s_addr), ia_hash) {
 		if (iap->ia_ifp == ifp &&
@@ -379,9 +379,9 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 
 			ifa = &ia->ia_ifa;
 			ifa_init(ifa);
-			ifa->ifa_addr = (struct sockaddr *)&ia->ia_addr;
-			ifa->ifa_dstaddr = (struct sockaddr *)&ia->ia_dstaddr;
-			ifa->ifa_netmask = (struct sockaddr *)&ia->ia_sockmask;
+			ifa->ifa_addr = (struct bsd_sockaddr *)&ia->ia_addr;
+			ifa->ifa_dstaddr = (struct bsd_sockaddr *)&ia->ia_dstaddr;
+			ifa->ifa_netmask = (struct bsd_sockaddr *)&ia->ia_sockmask;
 
 			ia->ia_sockmask.sin_len = 8;
 			ia->ia_sockmask.sin_family = AF_INET;
@@ -421,7 +421,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 	 */
 	switch (cmd) {
 	case SIOCGIFADDR:
-		*((struct sockaddr_in *)&ifr->ifr_addr) = ia->ia_addr;
+		*((struct bsd_sockaddr_in *)&ifr->ifr_addr) = ia->ia_addr;
 		goto out;
 
 	case SIOCGIFBRDADDR:
@@ -429,7 +429,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 			error = EINVAL;
 			goto out;
 		}
-		*((struct sockaddr_in *)&ifr->ifr_dstaddr) = ia->ia_broadaddr;
+		*((struct bsd_sockaddr_in *)&ifr->ifr_dstaddr) = ia->ia_broadaddr;
 		goto out;
 
 	case SIOCGIFDSTADDR:
@@ -437,11 +437,11 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 			error = EINVAL;
 			goto out;
 		}
-		*((struct sockaddr_in *)&ifr->ifr_dstaddr) = ia->ia_dstaddr;
+		*((struct bsd_sockaddr_in *)&ifr->ifr_dstaddr) = ia->ia_dstaddr;
 		goto out;
 
 	case SIOCGIFNETMASK:
-		*((struct sockaddr_in *)&ifr->ifr_addr) = ia->ia_sockmask;
+		*((struct bsd_sockaddr_in *)&ifr->ifr_addr) = ia->ia_sockmask;
 		goto out;
 
 	case SIOCSIFDSTADDR:
@@ -450,7 +450,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 			goto out;
 		}
 		oldaddr = ia->ia_dstaddr;
-		ia->ia_dstaddr = *(struct sockaddr_in *)&ifr->ifr_dstaddr;
+		ia->ia_dstaddr = *(struct bsd_sockaddr_in *)&ifr->ifr_dstaddr;
 		if (ifp->if_ioctl != NULL) {
 			error = (*ifp->if_ioctl)(ifp, SIOCSIFDSTADDR,
 			    (caddr_t)ia);
@@ -460,10 +460,10 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 			}
 		}
 		if (ia->ia_flags & IFA_ROUTE) {
-			ia->ia_ifa.ifa_dstaddr = (struct sockaddr *)&oldaddr;
+			ia->ia_ifa.ifa_dstaddr = (struct bsd_sockaddr *)&oldaddr;
 			rtinit(&(ia->ia_ifa), (int)RTM_DELETE, RTF_HOST);
 			ia->ia_ifa.ifa_dstaddr =
-					(struct sockaddr *)&ia->ia_dstaddr;
+					(struct bsd_sockaddr *)&ia->ia_dstaddr;
 			rtinit(&(ia->ia_ifa), (int)RTM_ADD, RTF_HOST|RTF_UP);
 		}
 		goto out;
@@ -473,12 +473,12 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 			error = EINVAL;
 			goto out;
 		}
-		ia->ia_broadaddr = *(struct sockaddr_in *)&ifr->ifr_broadaddr;
+		ia->ia_broadaddr = *(struct bsd_sockaddr_in *)&ifr->ifr_broadaddr;
 		goto out;
 
 	case SIOCSIFADDR:
 		error = in_ifinit(ifp, ia,
-		    (struct sockaddr_in *) &ifr->ifr_addr, 1);
+		    (struct bsd_sockaddr_in *) &ifr->ifr_addr, 1);
 		if (error != 0 && iaIsNew)
 			break;
 		if (error == 0) {
@@ -668,14 +668,14 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
 		/* address must be specified on ADD and DELETE */
 		if (iflr->addr.ss_family != AF_INET)
 			return (EINVAL);
-		if (iflr->addr.ss_len != sizeof(struct sockaddr_in))
+		if (iflr->addr.ss_len != sizeof(struct bsd_sockaddr_in))
 			return (EINVAL);
 		/* XXX need improvement */
 		if (iflr->dstaddr.ss_family
 		 && iflr->dstaddr.ss_family != AF_INET)
 			return (EINVAL);
 		if (iflr->dstaddr.ss_family
-		 && iflr->dstaddr.ss_len != sizeof(struct sockaddr_in))
+		 && iflr->dstaddr.ss_len != sizeof(struct bsd_sockaddr_in))
 			return (EINVAL);
 		break;
 	default: /*shouldn't happen*/
@@ -705,7 +705,7 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
 		}
 
 		ifra.ifra_mask.sin_family = AF_INET;
-		ifra.ifra_mask.sin_len = sizeof(struct sockaddr_in);
+		ifra.ifra_mask.sin_len = sizeof(struct bsd_sockaddr_in);
 		in_len2mask(&ifra.ifra_mask.sin_addr, iflr->prefixlen);
 
 		return (in_control(so, SIOCAIFADDR, (caddr_t)&ifra, ifp, td));
@@ -715,7 +715,7 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
 	    {
 		struct in_ifaddr *ia;
 		struct in_addr mask, candidate, match;
-		struct sockaddr_in *sin;
+		struct bsd_sockaddr_in *sin;
 
 		bzero(&mask, sizeof(mask));
 		bzero(&match, sizeof(match));
@@ -723,7 +723,7 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
 			/* lookup a prefix rather than address. */
 			in_len2mask(&mask, iflr->prefixlen);
 
-			sin = (struct sockaddr_in *)&iflr->addr;
+			sin = (struct bsd_sockaddr_in *)&iflr->addr;
 			match.s_addr = sin->sin_addr.s_addr;
 			match.s_addr &= mask.s_addr;
 
@@ -736,7 +736,7 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
 			/* on deleting an address, do exact match */
 			if (cmd != SIOCGLIFADDR) {
 				in_len2mask(&mask, 32);
-				sin = (struct sockaddr_in *)&iflr->addr;
+				sin = (struct bsd_sockaddr_in *)&iflr->addr;
 				match.s_addr = sin->sin_addr.s_addr;
 			}
 		}
@@ -747,7 +747,7 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
 				continue;
 			if (match.s_addr == 0)
 				break;
-			candidate.s_addr = ((struct sockaddr_in *)&ifa->ifa_addr)->sin_addr.s_addr;
+			candidate.s_addr = ((struct bsd_sockaddr_in *)&ifa->ifa_addr)->sin_addr.s_addr;
 			candidate.s_addr &= mask.s_addr;
 			if (candidate.s_addr == match.s_addr)
 				break;
@@ -818,11 +818,11 @@ in_ifscrub(struct ifnet *ifp, struct in_ifaddr *ia, u_int flags)
  * and routing table entry.
  */
 static int
-in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct sockaddr_in *sin,
+in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct bsd_sockaddr_in *sin,
     int scrub)
 {
 	register u_long i = ntohl(sin->sin_addr.s_addr);
-	struct sockaddr_in oldaddr;
+	struct bsd_sockaddr_in oldaddr;
 	int s = splimp(), flags = RTF_UP, error = 0;
 
 	oldaddr = ia->ia_addr;
@@ -864,9 +864,9 @@ in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct sockaddr_in *sin,
 	}
 	splx(s);
 	if (scrub) {
-		ia->ia_ifa.ifa_addr = (struct sockaddr *)&oldaddr;
+		ia->ia_ifa.ifa_addr = (struct bsd_sockaddr *)&oldaddr;
 		in_ifscrub(ifp, ia, LLE_STATIC);
-		ia->ia_ifa.ifa_addr = (struct sockaddr *)&ia->ia_addr;
+		ia->ia_ifa.ifa_addr = (struct bsd_sockaddr *)&ia->ia_addr;
 	}
 	/*
 	 * Be compatible with network classes, if netmask isn't supplied,
@@ -925,7 +925,7 @@ in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct sockaddr_in *sin,
 		struct route ia_ro;
 
 		bzero(&ia_ro, sizeof(ia_ro));
-		*((struct sockaddr_in *)(&ia_ro.ro_dst)) = ia->ia_addr;
+		*((struct bsd_sockaddr_in *)(&ia_ro.ro_dst)) = ia->ia_addr;
 		rtalloc_ign_fib(&ia_ro, 0, RT_DEFAULT_FIB);
 		if ((ia_ro.ro_rt != NULL) && (ia_ro.ro_rt->rt_ifp != NULL) &&
 		    (ia_ro.ro_rt->rt_ifp == V_loif)) {
@@ -934,7 +934,7 @@ in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct sockaddr_in *sin,
 			RTFREE_LOCKED(ia_ro.ro_rt);
 		} else
 			error = ifa_add_loopback_route((struct ifaddr *)ia,
-			    (struct sockaddr *)&ia->ia_addr);
+			    (struct bsd_sockaddr *)&ia->ia_addr);
 		if (error == 0)
 			ia->ia_flags |= IFA_RTSELF;
 		if (ia_ro.ro_rt != NULL)
@@ -956,7 +956,7 @@ static void in_addralias_rtmsg(int cmd, struct in_addr *prefix,
     struct in_ifaddr *target)
 {
 	struct route pfx_ro;
-	struct sockaddr_in *pfx_addr;
+	struct bsd_sockaddr_in *pfx_addr;
 	struct rtentry msg_rt;
 
 	/* QL: XXX
@@ -965,7 +965,7 @@ static void in_addralias_rtmsg(int cmd, struct in_addr *prefix,
 	 * alias. Therefore this route report is inaccurate.
 	 */
 	bzero(&pfx_ro, sizeof(pfx_ro));
-	pfx_addr = (struct sockaddr_in *)(&pfx_ro.ro_dst);
+	pfx_addr = (struct bsd_sockaddr_in *)(&pfx_ro.ro_dst);
 	pfx_addr->sin_len = sizeof(*pfx_addr);
 	pfx_addr->sin_family = AF_INET;
 	pfx_addr->sin_addr = *prefix;
@@ -980,7 +980,7 @@ static void in_addralias_rtmsg(int cmd, struct in_addr *prefix,
 		 * All other parts of the rtentry is accurate,
 		 * e.g., rt_key, rt_mask, rt_ifp etc.
 		 */
-		msg_rt.rt_gateway = (struct sockaddr *)&target->ia_addr;
+		msg_rt.rt_gateway = (struct bsd_sockaddr *)&target->ia_addr;
 		rt_newaddrmsg(cmd, (struct ifaddr *)target, 0, &msg_rt);
 		RTFREE(pfx_ro.ro_rt);
 	}
@@ -1072,7 +1072,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 	struct in_ifaddr *ia;
 	struct in_addr prefix, mask, p;
 	int error = 0;
-	struct sockaddr_in prefix0, mask0;
+	struct bsd_sockaddr_in prefix0, mask0;
 
 	/*
 	 * Remove the loopback route to the interface address.
@@ -1091,7 +1091,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 		int freeit = 0;
 
 		bzero(&ia_ro, sizeof(ia_ro));
-		*((struct sockaddr_in *)(&ia_ro.ro_dst)) = target->ia_addr;
+		*((struct bsd_sockaddr_in *)(&ia_ro.ro_dst)) = target->ia_addr;
 		rtalloc_ign_fib(&ia_ro, 0, 0);
 		if ((ia_ro.ro_rt != NULL) && (ia_ro.ro_rt->rt_ifp != NULL) &&
 		    (ia_ro.ro_rt->rt_ifp == V_loif)) {
@@ -1106,7 +1106,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 		}
 		if (freeit && (flags & LLE_STATIC)) {
 			error = ifa_del_loopback_route((struct ifaddr *)target,
-			    (struct sockaddr *)&target->ia_addr);
+			    (struct bsd_sockaddr *)&target->ia_addr);
 			if (error == 0)
 				target->ia_flags &= ~IFA_RTSELF;
 		}
@@ -1186,8 +1186,8 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 	mask0.sin_len = sizeof(mask0);
 	mask0.sin_family = AF_INET;
 	mask0.sin_addr.s_addr = target->ia_subnetmask;
-	lltable_prefix_free(AF_INET, (struct sockaddr *)&prefix0,
-	    (struct sockaddr *)&mask0, flags);
+	lltable_prefix_free(AF_INET, (struct bsd_sockaddr *)&prefix0,
+	    (struct bsd_sockaddr *)&mask0, flags);
 
 	/*
 	 * As no-one seem to have this prefix, we can remove the route.
@@ -1305,7 +1305,7 @@ in_purgemaddrs(struct ifnet *ifp)
 
 struct in_llentry {
 	struct llentry		base;
-	struct sockaddr_in	l3_addr4;
+	struct bsd_sockaddr_in	l3_addr4;
 };
 
 /*
@@ -1323,7 +1323,7 @@ in_lltable_free(struct lltable *llt, struct llentry *lle)
 }
 
 static struct llentry *
-in_lltable_new(const struct sockaddr *l3addr, u_int flags)
+in_lltable_new(const struct bsd_sockaddr *l3addr, u_int flags)
 {
 	struct in_llentry *lle;
 
@@ -1338,7 +1338,7 @@ in_lltable_new(const struct sockaddr *l3addr, u_int flags)
 	 * an ARP request.
 	 */
 	lle->base.la_expire = time_uptime; /* mark expired */
-	lle->l3_addr4 = *(const struct sockaddr_in *)l3addr;
+	lle->l3_addr4 = *(const struct bsd_sockaddr_in *)l3addr;
 	lle->base.lle_refcnt = 1;
 	lle->base.lle_free = in_lltable_free;
 	LLE_LOCK_INIT(&lle->base);
@@ -1352,11 +1352,11 @@ in_lltable_new(const struct sockaddr *l3addr, u_int flags)
 	    (((ntohl((d)->sin_addr.s_addr) ^ (a)->sin_addr.s_addr) & (m)->sin_addr.s_addr)) == 0 )
 
 static void
-in_lltable_prefix_free(struct lltable *llt, const struct sockaddr *prefix,
-    const struct sockaddr *mask, u_int flags)
+in_lltable_prefix_free(struct lltable *llt, const struct bsd_sockaddr *prefix,
+    const struct bsd_sockaddr *mask, u_int flags)
 {
-	const struct sockaddr_in *pfx = (const struct sockaddr_in *)prefix;
-	const struct sockaddr_in *msk = (const struct sockaddr_in *)mask;
+	const struct bsd_sockaddr_in *pfx = (const struct bsd_sockaddr_in *)prefix;
+	const struct bsd_sockaddr_in *msk = (const struct bsd_sockaddr_in *)mask;
 	struct llentry *lle, *next;
 	int i;
 	size_t pkts_dropped;
@@ -1384,7 +1384,7 @@ in_lltable_prefix_free(struct lltable *llt, const struct sockaddr *prefix,
 
 
 static int
-in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct sockaddr *l3addr)
+in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct bsd_sockaddr *l3addr)
 {
 	struct rtentry *rt;
 
@@ -1392,7 +1392,7 @@ in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct sockaddr *l3addr
 	    ("sin_family %d", l3addr->sa_family));
 
 	/* XXX rtalloc1 should take a const param */
-	rt = rtalloc1(__DECONST(struct sockaddr *, l3addr), 0, 0);
+	rt = rtalloc1(__DECONST(struct bsd_sockaddr *, l3addr), 0, 0);
 
 	if (rt == NULL)
 		return (EINVAL);
@@ -1437,14 +1437,14 @@ in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct sockaddr *l3addr
 
 		sa = (const char *)rt_key(rt);
 		addr = (const char *)l3addr;
-		len = ((const struct sockaddr_in *)l3addr)->sin_len;
+		len = ((const struct bsd_sockaddr_in *)l3addr)->sin_len;
 		lim = addr + len;
 
 		for ( ; addr < lim; sa++, mask++, addr++) {
 			if ((*sa ^ *addr) & *mask) {
 #ifdef DIAGNOSTIC
 				log(LOG_INFO, "IPv4 address: \"%s\" is not on the network\n",
-				    inet_ntoa(((const struct sockaddr_in *)l3addr)->sin_addr));
+				    inet_ntoa(((const struct bsd_sockaddr_in *)l3addr)->sin_addr));
 #endif
 				RTFREE_LOCKED(rt);
 				return (EINVAL);
@@ -1461,9 +1461,9 @@ in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct sockaddr *l3addr
  * If found return lle read locked.
  */
 static struct llentry *
-in_lltable_lookup(struct lltable *llt, u_int flags, const struct sockaddr *l3addr)
+in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l3addr)
 {
-	const struct sockaddr_in *sin = (const struct sockaddr_in *)l3addr;
+	const struct bsd_sockaddr_in *sin = (const struct bsd_sockaddr_in *)l3addr;
 	struct ifnet *ifp = llt->llt_ifp;
 	struct llentry *lle;
 	struct llentries *lleh;
@@ -1476,7 +1476,7 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct sockaddr *l3add
 	hashkey = sin->sin_addr.s_addr;
 	lleh = &llt->lle_head[LLATBL_HASH(hashkey, LLTBL_HASHMASK)];
 	LIST_FOREACH(lle, lleh, lle_next) {
-		struct sockaddr_in *sa2 = satosin(L3_ADDR(lle));
+		struct bsd_sockaddr_in *sa2 = satosin(L3_ADDR(lle));
 		if (lle->la_flags & LLE_DELETED)
 			continue;
 		if (sa2->sin_addr.s_addr == sin->sin_addr.s_addr)
@@ -1539,14 +1539,14 @@ done:
 static int
 in_lltable_dump(struct lltable *llt, struct sysctl_req *wr)
 {
-#define	SIN(lle)	((struct sockaddr_in *) L3_ADDR(lle))
+#define	SIN(lle)	((struct bsd_sockaddr_in *) L3_ADDR(lle))
 	struct ifnet *ifp = llt->llt_ifp;
 	struct llentry *lle;
 	/* XXX stack use */
 	struct {
 		struct rt_msghdr	rtm;
-		struct sockaddr_inarp	sin;
-		struct sockaddr_dl	sdl;
+		struct bsd_sockaddr_inarp	sin;
+		struct bsd_sockaddr_dl	sdl;
 	} arpc;
 	int error, i;
 
@@ -1555,7 +1555,7 @@ in_lltable_dump(struct lltable *llt, struct sysctl_req *wr)
 	error = 0;
 	for (i = 0; i < LLTBL_HASHTBL_SIZE; i++) {
 		LIST_FOREACH(lle, &llt->lle_head[i], lle_next) {
-			struct sockaddr_dl *sdl;
+			struct bsd_sockaddr_dl *sdl;
 
 			/* skip deleted entries */
 			if ((lle->la_flags & LLE_DELETED) == LLE_DELETED)
@@ -1563,8 +1563,8 @@ in_lltable_dump(struct lltable *llt, struct sysctl_req *wr)
 			/*
 			 * produce a msg made of:
 			 *  struct rt_msghdr;
-			 *  struct sockaddr_inarp; (IPv4)
-			 *  struct sockaddr_dl;
+			 *  struct bsd_sockaddr_inarp; (IPv4)
+			 *  struct bsd_sockaddr_dl;
 			 */
 			bzero(&arpc, sizeof(arpc));
 			arpc.rtm.rtm_msglen = sizeof(arpc);

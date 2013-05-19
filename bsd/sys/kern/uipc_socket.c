@@ -442,7 +442,7 @@ sonewconn(struct socket *head, int connstatus)
 }
 
 int
-sobind(struct socket *so, struct sockaddr *nam, struct thread *td)
+sobind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	int error;
 
@@ -702,7 +702,7 @@ soabort(struct socket *so)
 }
 
 int
-soaccept(struct socket *so, struct sockaddr **nam)
+soaccept(struct socket *so, struct bsd_sockaddr **nam)
 {
 	int error;
 
@@ -718,7 +718,7 @@ soaccept(struct socket *so, struct sockaddr **nam)
 }
 
 int
-soconnect(struct socket *so, struct sockaddr *nam, struct thread *td)
+soconnect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	int error;
 
@@ -776,7 +776,7 @@ sodisconnect(struct socket *so)
 #define	SBLOCKWAIT(f)	(((f) & MSG_DONTWAIT) ? 0 : SBL_WAIT)
 
 int
-sosend_dgram(struct socket *so, struct sockaddr *addr, struct uio *uio,
+sosend_dgram(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
 	long space;
@@ -938,7 +938,7 @@ out:
  * on return.
  */
 int
-sosend_generic(struct socket *so, struct sockaddr *addr, struct uio *uio,
+sosend_generic(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
 	long space;
@@ -1113,7 +1113,7 @@ out:
 }
 
 int
-sosend(struct socket *so, struct sockaddr *addr, struct uio *uio,
+sosend(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
 	int error;
@@ -1211,7 +1211,7 @@ sockbuf_pushsync(struct sockbuf *sb, struct mbuf *nextrecord)
  * the count in uio_resid.
  */
 int
-soreceive_generic(struct socket *so, struct sockaddr **psa, struct uio *uio,
+soreceive_generic(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
     struct mbuf **mp0, struct mbuf **controlp, int *flagsp)
 {
 	struct mbuf *m, **mp;
@@ -1333,7 +1333,7 @@ dontblock:
 		    ("m->m_type == %d", m->m_type));
 		orig_resid = 0;
 		if (psa != NULL)
-			*psa = sodupsockaddr(mtod(m, struct sockaddr *),
+			*psa = sodupbsd_sockaddr(mtod(m, struct bsd_sockaddr *),
 			    M_NOWAIT);
 		if (flags & MSG_PEEK) {
 			m = m->m_next;
@@ -1656,7 +1656,7 @@ release:
  * Optimized version of soreceive() for stream (TCP) sockets.
  */
 int
-soreceive_stream(struct socket *so, struct sockaddr **psa, struct uio *uio,
+soreceive_stream(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
     struct mbuf **mp0, struct mbuf **controlp, int *flagsp)
 {
 	int len = 0, error = 0, flags, oresid;
@@ -1848,7 +1848,7 @@ out:
  * sleep lock to prevent I/O interlacing.
  */
 int
-soreceive_dgram(struct socket *so, struct sockaddr **psa, struct uio *uio,
+soreceive_dgram(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
     struct mbuf **mp0, struct mbuf **controlp, int *flagsp)
 {
 	struct mbuf *m, *m2;
@@ -1953,7 +1953,7 @@ soreceive_dgram(struct socket *so, struct sockaddr **psa, struct uio *uio,
 		KASSERT(m->m_type == MT_SONAME,
 		    ("m->m_type == %d", m->m_type));
 		if (psa != NULL)
-			*psa = sodupsockaddr(mtod(m, struct sockaddr *),
+			*psa = sodupbsd_sockaddr(mtod(m, struct bsd_sockaddr *),
 			    M_NOWAIT);
 		m = m_free(m);
 	}
@@ -2026,7 +2026,7 @@ soreceive_dgram(struct socket *so, struct sockaddr **psa, struct uio *uio,
 }
 
 int
-soreceive(struct socket *so, struct sockaddr **psa, struct uio *uio,
+soreceive(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
     struct mbuf **mp0, struct mbuf **controlp, int *flagsp)
 {
 	int error;
@@ -2696,7 +2696,7 @@ sopoll_generic(struct socket *so, int events, struct ucred *active_cred,
  * supported by a protocol.  Fill in as needed.
  */
 int
-pru_accept_notsupp(struct socket *so, struct sockaddr **nam)
+pru_accept_notsupp(struct socket *so, struct bsd_sockaddr **nam)
 {
 
 	return EOPNOTSUPP;
@@ -2710,14 +2710,14 @@ pru_attach_notsupp(struct socket *so, int proto, struct thread *td)
 }
 
 int
-pru_bind_notsupp(struct socket *so, struct sockaddr *nam, struct thread *td)
+pru_bind_notsupp(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 
 	return EOPNOTSUPP;
 }
 
 int
-pru_connect_notsupp(struct socket *so, struct sockaddr *nam, struct thread *td)
+pru_connect_notsupp(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 
 	return EOPNOTSUPP;
@@ -2753,7 +2753,7 @@ pru_listen_notsupp(struct socket *so, int backlog, struct thread *td)
 }
 
 int
-pru_peeraddr_notsupp(struct socket *so, struct sockaddr **nam)
+pru_peeraddr_notsupp(struct socket *so, struct bsd_sockaddr **nam)
 {
 
 	return EOPNOTSUPP;
@@ -2775,7 +2775,7 @@ pru_rcvoob_notsupp(struct socket *so, struct mbuf *m, int flags)
 
 int
 pru_send_notsupp(struct socket *so, int flags, struct mbuf *m,
-    struct sockaddr *addr, struct mbuf *control, struct thread *td)
+    struct bsd_sockaddr *addr, struct mbuf *control, struct thread *td)
 {
 
 	return EOPNOTSUPP;
@@ -2800,14 +2800,14 @@ pru_shutdown_notsupp(struct socket *so)
 }
 
 int
-pru_sockaddr_notsupp(struct socket *so, struct sockaddr **nam)
+pru_sockaddr_notsupp(struct socket *so, struct bsd_sockaddr **nam)
 {
 
 	return EOPNOTSUPP;
 }
 
 int
-pru_sosend_notsupp(struct socket *so, struct sockaddr *addr, struct uio *uio,
+pru_sosend_notsupp(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
 
@@ -2815,7 +2815,7 @@ pru_sosend_notsupp(struct socket *so, struct sockaddr *addr, struct uio *uio,
 }
 
 int
-pru_soreceive_notsupp(struct socket *so, struct sockaddr **paddr,
+pru_soreceive_notsupp(struct socket *so, struct bsd_sockaddr **paddr,
     struct uio *uio, struct mbuf **mp0, struct mbuf **controlp, int *flagsp)
 {
 
@@ -2980,12 +2980,12 @@ soisdisconnected(struct socket *so)
 }
 
 /*
- * Make a copy of a sockaddr in a malloced buffer of type M_SONAME.
+ * Make a copy of a bsd_sockaddr in a malloced buffer of type M_SONAME.
  */
-struct sockaddr *
-sodupsockaddr(const struct sockaddr *sa, int mflags)
+struct bsd_sockaddr *
+sodupbsd_sockaddr(const struct bsd_sockaddr *sa, int mflags)
 {
-	struct sockaddr *sa2;
+	struct bsd_sockaddr *sa2;
 
 	sa2 = malloc(sa->sa_len);
 	if (sa2)

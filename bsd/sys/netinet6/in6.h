@@ -116,7 +116,7 @@ struct in6_addr {
 #define SIN6_LEN
 #endif
 
-struct sockaddr_in6 {
+struct bsd_sockaddr_in6 {
 	uint8_t		sin6_len;	/* length of this struct */
 	sa_family_t	sin6_family;	/* AF_INET6 */
 	in_port_t	sin6_port;	/* Transport layer port # */
@@ -141,7 +141,7 @@ struct sockaddr_in6 {
 #endif
 
 #ifdef _KERNEL
-extern const struct sockaddr_in6 sa6_any;
+extern const struct bsd_sockaddr_in6 sa6_any;
 
 extern const struct in6_addr in6mask0;
 extern const struct in6_addr in6mask32;
@@ -374,7 +374,7 @@ struct route_in6 {
 	struct	llentry *ro_lle;
 	struct	in6_addr *ro_ia6;
 	int		ro_flags;
-	struct	sockaddr_in6 ro_dst;
+	struct	bsd_sockaddr_in6 ro_dst;
 };
 #endif
 
@@ -455,7 +455,7 @@ struct route_in6 {
 /* more new socket options introduced in RFC3542 */
 #define IPV6_PKTINFO		46 /* in6_pktinfo; send if, src addr */
 #define IPV6_HOPLIMIT		47 /* int; send hop limit */
-#define IPV6_NEXTHOP		48 /* sockaddr; next hop addr */
+#define IPV6_NEXTHOP		48 /* bsd_sockaddr; next hop addr */
 #define IPV6_HOPOPTS		49 /* ip6_hbh; send hop-by-hop option */
 #define IPV6_DSTOPTS		50 /* ip6_dest; send dst option befor rthdr */
 #define IPV6_RTHDR		51 /* ip6_rthdr; send routing header */
@@ -532,7 +532,7 @@ struct in6_pktinfo {
  * Control structure for IPV6_RECVPATHMTU socket option.
  */
 struct ip6_mtuinfo {
-	struct sockaddr_in6 ip6m_addr;	/* or sockaddr_storage? */
+	struct bsd_sockaddr_in6 ip6m_addr;	/* or bsd_sockaddr_storage? */
 	uint32_t ip6m_mtu;
 };
 
@@ -637,19 +637,19 @@ int	in6_localip(struct in6_addr *);
 int	in6_addrscope(struct in6_addr *);
 struct	in6_ifaddr *in6_ifawithifp(struct ifnet *, struct in6_addr *);
 extern void in6_if_up(struct ifnet *);
-struct sockaddr;
+struct bsd_sockaddr;
 extern	u_char	ip6_protox[];
 
-void	in6_sin6_2_sin(struct sockaddr_in *sin,
-			    struct sockaddr_in6 *sin6);
-void	in6_sin_2_v4mapsin6(struct sockaddr_in *sin,
-				 struct sockaddr_in6 *sin6);
-void	in6_sin6_2_sin_in_sock(struct sockaddr *nam);
-void	in6_sin_2_v4mapsin6_in_sock(struct sockaddr **nam);
+void	in6_sin6_2_sin(struct bsd_sockaddr_in *sin,
+			    struct bsd_sockaddr_in6 *sin6);
+void	in6_sin_2_v4mapsin6(struct bsd_sockaddr_in *sin,
+				 struct bsd_sockaddr_in6 *sin6);
+void	in6_sin6_2_sin_in_sock(struct bsd_sockaddr *nam);
+void	in6_sin_2_v4mapsin6_in_sock(struct bsd_sockaddr **nam);
 extern void addrsel_policy_init(void);
 
-#define	satosin6(sa)	((struct sockaddr_in6 *)(sa))
-#define	sin6tosa(sin6)	((struct sockaddr *)(sin6))
+#define	satosin6(sa)	((struct bsd_sockaddr_in6 *)(sa))
+#define	sin6tosa(sin6)	((struct bsd_sockaddr *)(sin6))
 #define	ifatoia6(ifa)	((struct in6_ifaddr *)(ifa))
 
 extern int	(*faithprefix_p)(struct in6_addr *);

@@ -46,7 +46,7 @@ int sysctl_rtsock(SYSCTL_HANDLER_ARGS) ;
 /*
  * Routing message structure -
  *
- * The addresses (sockaddrs) goes into m_space
+ * The addresses (bsd_sockaddrs) goes into m_space
  * see usr.sbin/arp.c and sbin/route/route.c in FreeBSD 9
  */
 struct rt_msg {
@@ -83,9 +83,9 @@ ether_aton(const char *a)
     return (ether_aton_r(a, &e));
 }
 
-static struct sockaddr_inarp getaddr_inarp(const char* host)
+static struct bsd_sockaddr_inarp getaddr_inarp(const char* host)
 {
-    static struct sockaddr_inarp reply;
+    static struct bsd_sockaddr_inarp reply;
 
     bzero(&reply, sizeof(reply));
     reply.sin_len = sizeof(reply);
@@ -105,8 +105,8 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
     int l = 0;
 
     /* ARP Addresses */
-    struct sockaddr_inarp dst; /* what are we looking for */
-    struct sockaddr_dl sdl_m;
+    struct bsd_sockaddr_inarp dst; /* what are we looking for */
+    struct bsd_sockaddr_dl sdl_m;
     struct ether_addr *ea;
 
     /*
@@ -173,9 +173,9 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     int rtm_addrs;
 
     /* IPv4: Addresses */
-    struct sockaddr_in dst;
-    struct sockaddr_in gw;
-    struct sockaddr_in mask;
+    struct bsd_sockaddr_in dst;
+    struct bsd_sockaddr_in gw;
+    struct bsd_sockaddr_in mask;
 
     /*
      * Init
@@ -199,16 +199,16 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     bzero(&mask, sizeof(mask));
 
     dst.sin_family = AF_INET;
-    dst.sin_len = sizeof(struct sockaddr_in);
+    dst.sin_len = sizeof(struct bsd_sockaddr_in);
     inet_aton(destination, &dst.sin_addr);
 
     gw.sin_family = AF_INET;
-    gw.sin_len = sizeof(struct sockaddr_in);
+    gw.sin_len = sizeof(struct bsd_sockaddr_in);
     inet_aton(gateway, &gw.sin_addr);
 
     if (netmask) {
         mask.sin_family = AF_INET;
-        mask.sin_len = sizeof(struct sockaddr_in);
+        mask.sin_len = sizeof(struct bsd_sockaddr_in);
         inet_aton(netmask, &mask.sin_addr);
     }
 

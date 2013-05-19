@@ -100,9 +100,9 @@ SYSCTL_ULONG(_net_inet_udp, UDPCTL_MAXDGRAM, maxdgram, CTLFLAG_RW,
 
 u_long	udp_recvspace = 40 * (1024 +
 #ifdef INET6
-				      sizeof(struct sockaddr_in6)
+				      sizeof(struct bsd_sockaddr_in6)
 #else
-				      sizeof(struct sockaddr_in)
+				      sizeof(struct bsd_sockaddr_in)
 #endif
 				      );
 
@@ -125,7 +125,7 @@ SYSCTL_VNET_STRUCT(_net_inet_udp, UDPCTL_STATS, stats, CTLFLAG_RW,
 
 #ifdef INET
 static void	udp_detach(struct socket *so);
-static int	udp_output(struct inpcb *, struct mbuf *, struct sockaddr *,
+static int	udp_output(struct inpcb *, struct mbuf *, struct bsd_sockaddr *,
 		    struct mbuf *, struct thread *);
 #endif
 
@@ -206,20 +206,20 @@ udp_discardcb(struct udpcb *up)
 #ifdef INET
 /*
  * Subroutine of udp_input(), which appends the provided mbuf chain to the
- * passed pcb/socket.  The caller must provide a sockaddr_in via udp_in that
+ * passed pcb/socket.  The caller must provide a bsd_sockaddr_in via udp_in that
  * contains the source address.  If the socket ends up being an IPv6 socket,
- * udp_append() will convert to a sockaddr_in6 before passing the address
+ * udp_append() will convert to a bsd_sockaddr_in6 before passing the address
  * into the socket code.
  */
 static void
 udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
-    struct sockaddr_in *udp_in)
+    struct bsd_sockaddr_in *udp_in)
 {
-	struct sockaddr *append_sa;
+	struct bsd_sockaddr *append_sa;
 	struct socket *so;
 	struct mbuf *opts = 0;
 #ifdef INET6
-	struct sockaddr_in6 udp_in6;
+	struct bsd_sockaddr_in6 udp_in6;
 #endif
 	struct udpcb *up;
 
@@ -277,10 +277,10 @@ udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
 		udp_in6.sin6_len = sizeof(udp_in6);
 		udp_in6.sin6_family = AF_INET6;
 		in6_sin_2_v4mapsin6(udp_in, &udp_in6);
-		append_sa = (struct sockaddr *)&udp_in6;
+		append_sa = (struct bsd_sockaddr *)&udp_in6;
 	} else
 #endif /* INET6 */
-		append_sa = (struct sockaddr *)udp_in;
+		append_sa = (struct bsd_sockaddr *)udp_in;
 	m_adj(n, off);
 
 	so = inp->inp_socket;
@@ -305,7 +305,7 @@ udp_input(struct mbuf *m, int off)
 	struct inpcb *inp;
 	int len;
 	struct ip save_ip;
-	struct sockaddr_in udp_in;
+	struct bsd_sockaddr_in udp_in;
 	struct m_tag *fwd_tag;
 
 	ifp = m->m_pkthdr.rcvif;
@@ -341,7 +341,7 @@ udp_input(struct mbuf *m, int off)
 		goto badunlocked;
 
 	/*
-	 * Construct sockaddr format source address.  Stuff source address
+	 * Construct bsd_sockaddr format source address.  Stuff source address
 	 * and datagram in user buffer.
 	 */
 	bzero(&udp_in, sizeof(udp_in));
@@ -443,20 +443,20 @@ udp_input(struct mbuf *m, int off)
 			 */
 			imo = inp->inp_moptions;
 			if (IN_MULTICAST(ntohl(ip->ip_dst.s_addr))) {
-				struct sockaddr_in	 group;
+				struct bsd_sockaddr_in	 group;
 				int			 blocked;
 				if (imo == NULL) {
 					INP_RUNLOCK(inp);
 					continue;
 				}
-				bzero(&group, sizeof(struct sockaddr_in));
-				group.sin_len = sizeof(struct sockaddr_in);
+				bzero(&group, sizeof(struct bsd_sockaddr_in));
+				group.sin_len = sizeof(struct bsd_sockaddr_in);
 				group.sin_family = AF_INET;
 				group.sin_addr = ip->ip_dst;
 
 				blocked = imo_multi_filter(imo, ifp,
-					(struct sockaddr *)&group,
-					(struct sockaddr *)&udp_in);
+					(struct bsd_sockaddr *)&group,
+					(struct bsd_sockaddr *)&udp_in);
 				if (blocked != MCAST_PASS) {
 					if (blocked == MCAST_NOTGMEMBER)
 						IPSTAT_INC(ips_notmember);
@@ -515,9 +515,9 @@ udp_input(struct mbuf *m, int off)
 	 */
 	if ((m->m_flags & M_IP_NEXTHOP) &&
 	    (fwd_tag = m_tag_find(m, PACKET_TAG_IPFORWARD, NULL)) != NULL) {
-		struct sockaddr_in *next_hop;
+		struct bsd_sockaddr_in *next_hop;
 
-		next_hop = (struct sockaddr_in *)(fwd_tag + 1);
+		next_hop = (struct bsd_sockaddr_in *)(fwd_tag + 1);
 
 		/*
 		 * Transparently forwarded. Pretend to be the destination.
@@ -611,14 +611,14 @@ udp_notify(struct inpcb *inp, int errval)
 
 #ifdef INET
 void
-udp_ctlinput(int cmd, struct sockaddr *sa, void *vip)
+udp_ctlinput(int cmd, struct bsd_sockaddr *sa, void *vip)
 {
 	struct ip *ip = vip;
 	struct udphdr *uh;
 	struct in_addr faddr;
 	struct inpcb *inp;
 
-	faddr = ((struct sockaddr_in *)sa)->sin_addr;
+	faddr = ((struct bsd_sockaddr_in *)sa)->sin_addr;
 	if (sa->sa_family != AF_INET || faddr.s_addr == INADDR_ANY)
 		return;
 
@@ -772,7 +772,7 @@ static int
 udp_getcred(SYSCTL_HANDLER_ARGS)
 {
 	struct xucred xuc;
-	struct sockaddr_in addrs[2];
+	struct bsd_sockaddr_in addrs[2];
 	struct inpcb *inp;
 	int error;
 
@@ -909,14 +909,14 @@ udp_ctloutput(struct socket *so, struct sockopt *sopt)
 #define	UH_RLOCKED	1
 #define	UH_UNLOCKED	0
 static int
-udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
+udp_output(struct inpcb *inp, struct mbuf *m, struct bsd_sockaddr *addr,
     struct mbuf *control, struct thread *td)
 {
 	struct udpiphdr *ui;
 	int len = m->m_pkthdr.len;
 	struct in_addr faddr, laddr;
 	struct cmsghdr *cm;
-	struct sockaddr_in *sin, src;
+	struct bsd_sockaddr_in *sin, src;
 	int error = 0;
 	int ipflags;
 	u_short fport, lport;
@@ -1016,7 +1016,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
 	 *
 	 * XXXRW: Check that hash locking update here is correct.
 	 */
-	sin = (struct sockaddr_in *)addr;
+	sin = (struct bsd_sockaddr_in *)addr;
 	if (sin != NULL &&
 	    (inp->inp_laddr.s_addr == INADDR_ANY && inp->inp_lport == 0)) {
 		INP_RUNLOCK(inp);
@@ -1049,7 +1049,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct sockaddr *addr,
 			error = EINVAL;
 			goto release;
 		}
-		error = in_pcbbind_setup(inp, (struct sockaddr *)&src,
+		error = in_pcbbind_setup(inp, (struct bsd_sockaddr *)&src,
 		    &laddr.s_addr, &lport, 0);
 		if (error)
 			goto release;
@@ -1426,7 +1426,7 @@ udp_set_kernel_tunneling(struct socket *so, udp_tun_func_t f)
 
 #ifdef INET
 static int
-udp_bind(struct socket *so, struct sockaddr *nam, struct thread *td)
+udp_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	struct inpcb *inp;
 	int error;
@@ -1460,11 +1460,11 @@ udp_close(struct socket *so)
 }
 
 static int
-udp_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
+udp_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 {
 	struct inpcb *inp;
 	int error;
-	struct sockaddr_in *sin;
+	struct bsd_sockaddr_in *sin;
 
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("udp_connect: inp == NULL"));
@@ -1473,7 +1473,7 @@ udp_connect(struct socket *so, struct sockaddr *nam, struct thread *td)
 		INP_WUNLOCK(inp);
 		return (EISCONN);
 	}
-	sin = (struct sockaddr_in *)nam;
+	sin = (struct bsd_sockaddr_in *)nam;
 	INP_HASH_WLOCK(&V_udbinfo);
 	error = in_pcbconnect(inp, nam, 0);
 	INP_HASH_WUNLOCK(&V_udbinfo);
@@ -1528,7 +1528,7 @@ udp_disconnect(struct socket *so)
 }
 
 static int
-udp_send(struct socket *so, int flags, struct mbuf *m, struct sockaddr *addr,
+udp_send(struct socket *so, int flags, struct mbuf *m, struct bsd_sockaddr *addr,
     struct mbuf *control, struct thread *td)
 {
 	struct inpcb *inp;

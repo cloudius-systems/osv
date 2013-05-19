@@ -86,7 +86,7 @@ struct llentry {
 		struct callout	ln_timer_ch;
 		struct callout  la_timer;
 	} lle_timer;
-	/* NB: struct sockaddr must immediately follow */
+	/* NB: struct bsd_sockaddr must immediately follow */
 };
 
 #define	LLE_WLOCK(lle)		rw_wlock(&(lle)->lle_lock)
@@ -138,8 +138,8 @@ struct llentry {
 #define	la_timer	lle_timer.la_timer
 
 /* XXX bad name */
-#define	L3_ADDR(lle)	((struct sockaddr *)(&lle[1]))
-#define	L3_ADDR_LEN(lle)	(((struct sockaddr *)(&lle[1]))->sa_len)
+#define	L3_ADDR(lle)	((struct bsd_sockaddr *)(&lle[1]))
+#define	L3_ADDR_LEN(lle)	(((struct bsd_sockaddr *)(&lle[1]))->sa_len)
 
 #ifndef LLTBL_HASHTBL_SIZE
 #define	LLTBL_HASHTBL_SIZE	32	/* default 32 ? */
@@ -156,11 +156,11 @@ struct lltable {
 	struct ifnet		*llt_ifp;
 
 	void			(*llt_prefix_free)(struct lltable *,
-				    const struct sockaddr *prefix,
-				    const struct sockaddr *mask,
+				    const struct bsd_sockaddr *prefix,
+				    const struct bsd_sockaddr *mask,
 				    u_int flags);
 	struct llentry *	(*llt_lookup)(struct lltable *, u_int flags,
-				    const struct sockaddr *l3addr);
+				    const struct bsd_sockaddr *l3addr);
 	int			(*llt_dump)(struct lltable *,
 				    struct sysctl_req *);
 };
@@ -185,8 +185,8 @@ MALLOC_DECLARE(M_LLTABLE);
 
 struct lltable *lltable_init(struct ifnet *, int);
 void		lltable_free(struct lltable *);
-void		lltable_prefix_free(int, struct sockaddr *,
-		    struct sockaddr *, u_int);
+void		lltable_prefix_free(int, struct bsd_sockaddr *,
+		    struct bsd_sockaddr *, u_int);
 #if 0
 void		lltable_drain(int);
 #endif
@@ -194,13 +194,13 @@ int		lltable_sysctl_dumparp(int, struct sysctl_req *);
 
 size_t		llentry_free(struct llentry *);
 struct llentry  *llentry_alloc(struct ifnet *, struct lltable *,
-		    struct sockaddr_storage *);
+		    struct bsd_sockaddr_storage *);
 
 /*
  * Generic link layer address lookup function.
  */
 static __inline struct llentry *
-lla_lookup(struct lltable *llt, u_int flags, const struct sockaddr *l3addr)
+lla_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l3addr)
 {
 	return llt->llt_lookup(llt, flags, l3addr);
 }

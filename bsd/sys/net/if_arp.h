@@ -86,8 +86,8 @@ struct	arphdr {
  * ARP ioctl request
  */
 struct arpreq {
-	struct	sockaddr arp_pa;		/* protocol address */
-	struct	sockaddr arp_ha;		/* hardware address */
+	struct	bsd_sockaddr arp_pa;		/* protocol address */
+	struct	bsd_sockaddr arp_ha;		/* hardware address */
 	int	arp_flags;			/* flags */
 };
 /*  arp_flags and at_flags field values */

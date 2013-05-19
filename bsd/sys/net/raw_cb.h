@@ -71,12 +71,12 @@ pr_init_t	raw_init;
  * so that protocol-specific functions can be handled.
  */
 typedef int (*raw_input_cb_fn)(struct mbuf *, struct sockproto *,
-    struct sockaddr *, struct rawcb *);
+    struct bsd_sockaddr *, struct rawcb *);
 
 int	 raw_attach(struct socket *, int);
 void	 raw_detach(struct rawcb *);
-void	 raw_input(struct mbuf *, struct sockproto *, struct sockaddr *);
-void	 raw_input_ext(struct mbuf *, struct sockproto *, struct sockaddr *,
+void	 raw_input(struct mbuf *, struct sockproto *, struct bsd_sockaddr *);
+void	 raw_input_ext(struct mbuf *, struct sockproto *, struct bsd_sockaddr *,
 	    raw_input_cb_fn);
 
 /*
