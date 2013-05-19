@@ -24,6 +24,7 @@ std::vector<cpu*> cpus;
 thread __thread * s_current;
 
 unsigned __thread preempt_counter = CONF_preempt ? 0 : 1;
+bool __thread need_reschedule = false;
 
 elf::tls_data tls;
 
@@ -53,6 +54,7 @@ void cpu::schedule(bool yield)
 
 void cpu::reschedule_from_interrupt(bool preempt)
 {
+    need_reschedule = false;
     handle_incoming_wakeups();
     auto now = clock::get()->time();
     thread* p = thread::current();
@@ -437,7 +439,9 @@ void preempt_disable()
 void preempt_enable()
 {
     --preempt_counter;
-    // FIXME: may need to schedule() here if a high prio thread is waiting
+    if (!preempt_counter && need_reschedule) {
+        schedule();
+    }
 }
 
 unsigned int get_preempt_counter()
@@ -449,6 +453,9 @@ void preempt()
 {
     if (!preempt_counter) {
         sched::cpu::current()->reschedule_from_interrupt(true);
+    } else {
+        // preempt_enable() will pick this up eventually
+        need_reschedule = true;
     }
 }
 
