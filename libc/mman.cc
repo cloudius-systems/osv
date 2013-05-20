@@ -70,3 +70,15 @@ int munmap(void *addr, size_t length)
     mmu::unmap(addr, length);
     return 0;
 }
+
+int msync(void *addr, size_t length, int flags)
+{
+    if (!mmu::ismapped(addr, length)) {
+        errno = ENOMEM;
+        return -1;
+    }
+    // FIXME: The implementation is missing. We didn't do any synching -
+    // just check if the given memory region is mapped... libunwind, which
+    // we use for backtrace(), uses msync() for just check checking.
+    return 0;
+}

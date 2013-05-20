@@ -648,6 +648,47 @@ void* map_file(void* addr, size_t size, bool search, unsigned perm,
     return (void*) allocate(start, size, search, ffill, perm);
 }
 
+// Efficiently find the vma in vma_list which contains the given address.
+// Performance is logarithmic in length of vma_list, so it is more efficient
+// than simple iteration. Returns vma_list.end() if the address isn't mapped.
+vma_list_type::iterator find_vma(uintptr_t addr)
+{
+    auto p = vma_list.lower_bound(vma(addr,addr));
+    if (p == vma_list.end() || p->start() == addr) {
+        return p;
+    } else {
+        // p is the first with p->start() > addr. So p doesn't contain addr,
+        // but the previous vma may, and we need to check.
+        if (p == vma_list.begin()) {
+            return vma_list.end();
+        } else {
+            --p;
+            if (p->start() <= addr && addr < p->end()) {
+                return p;
+            } else
+                return vma_list.end();
+        }
+    }
+}
+
+// Checks if the entire given memory region is mapped (in vma_list).
+bool ismapped(void *addr, size_t size)
+{
+    uintptr_t start = (uintptr_t) addr;
+    uintptr_t end = start + size;
+
+    std::lock_guard<mutex> guard(vma_list_mutex);
+
+    for (auto p = find_vma(start); p != vma_list.end(); ++p) {
+        if (p->start() > start)
+            return false;
+        start = p->end();
+        if (start >= end)
+            return true;
+    }
+    return false;
+}
+
 
 namespace {
 

@@ -185,6 +185,24 @@ int main(int argc, char **argv)
 //        assert(errno==ENOTSUP);
 //        free(buf);
 
+    // Test that msync() can tell if a range of memory is mapped.
+    // libunwind's functions which we use for backtrace() require this.
+    buf = mmap(NULL, 4096*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(msync(buf, 4096*10, MS_ASYNC) == 0);
+    assert(msync(buf, 4096*9, MS_ASYNC) == 0);
+    assert(msync(buf+4096, 4096*9, MS_ASYNC) == 0);
+    munmap(buf+4096, 4096*3);
+    munmap(buf+4096*7, 4096*2);
+    assert(msync(buf, 4096*10, MS_ASYNC) == -1);
+    assert(msync(buf, 4096, MS_ASYNC) == 0);
+    assert(msync(buf+4096, 4096, MS_ASYNC) == -1);
+    assert(msync(buf+4096*4, 3*4096, MS_ASYNC) == 0);
+    assert(msync(buf+4096*5, 1*4096, MS_ASYNC) == 0);
+    assert(msync(buf+4096, 4096, MS_ASYNC) == -1);
+    assert(msync(buf, 3*4096, MS_ASYNC) == -1);
+    assert(msync(buf+3*4096, 3*4096, MS_ASYNC) == -1);
+    munmap(buf, 4096*10);
+
     // TODO: verify that mmapping more than available physical memory doesn't
     // panic just return -1 and ENOMEM.
     // TODO: verify that huge-page-sized allocations get a huge-page aligned address
