@@ -97,9 +97,12 @@ unsigned pool::get_size()
     return _size;
 }
 
+static inline void* untracked_alloc_page();
+static inline void untracked_free_page(void *v);
+
 void pool::add_page()
 {
-    void* page = alloc_page();
+    void* page = untracked_alloc_page();
     auto header = new (page) page_header;
     header->owner = this;
     header->nalloc = 0;
@@ -122,7 +125,7 @@ void pool::free(void* object)
             _free.erase(_free.iterator_to(*header));
         }
         // FIXME: add hysteresis
-        free_page(header);
+        untracked_free_page(header);
     } else {
         if (!header->local_free) {
             _free.push_front(*header);
@@ -252,7 +255,7 @@ static unsigned large_object_size(void *obj)
     return header->size;
 }
 
-void* alloc_page()
+static inline void* untracked_alloc_page()
 {
     std::lock_guard<mutex> guard(free_page_ranges_lock);
 
@@ -264,20 +267,30 @@ void* alloc_page()
     auto p = &*free_page_ranges.begin();
     if (p->size == page_size) {
         free_page_ranges.erase(*p);
-        tracker_remember(p, page_size);
         return p;
     } else {
         p->size -= page_size;
         void* v = p;
         v += p->size;
-        tracker_remember(v, page_size);
         return v;
     }
 }
 
-void free_page(void* v)
+void* alloc_page()
+{
+    void *p = untracked_alloc_page();
+    tracker_remember(p, page_size);
+    return p;
+}
+
+static inline void untracked_free_page(void *v)
 {
     free_page_range(v, page_size);
+}
+
+void free_page(void* v)
+{
+    untracked_free_page(v);
     tracker_forget(v);
 }
 
