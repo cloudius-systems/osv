@@ -1,24 +1,25 @@
 #include <execinfo.h>
 
-#if 0
-// Implementation using libunwind.a. Unfortunately, despite linking with
-// libwind.a I couldn't get this to link, because of some symbol
-// dependency hell.
-static int backtrace(void **buffer, int size) {
+// Implementation using libunwind.a. This implementation works even with code
+// compiled with omit-frame-pointer.
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+int backtrace(void **buffer, int size) {
     unw_context_t context;
-    unw_getcontext(&context);
+    if (unw_getcontext(&context) < 0)
+        return 0;
     unw_cursor_t cursor;
-    unw_init_local(&cursor, &context);
+    if (unw_init_local(&cursor, &context) < 0)
+        return 0;
 
     int count = 0;
-    while (count < size && unw_step(&cursor)) {
+    while (count < size && unw_step(&cursor) > 0) {
         unw_word_t ip;
         unw_get_reg (&cursor, UNW_REG_IP, &ip);
         buffer[count++] = (void*) ip;
     }
     return count;
 }
-#endif
 
 #if 0
 // An alternative, slightly more awkward but functioning implementation,
@@ -67,6 +68,7 @@ int backtrace(void **buffer, int size)
 }
 #endif
 
+#if 0
 // This is the third implementation of backtrace(), using gcc's builtins
 //__builtin_frame_address and __builtin_return_address. This is the ugliest
 // of the three implementation, because these builtins awkwardly require
@@ -98,3 +100,4 @@ int backtrace(void **buffer, int size)
     TRY7(0) TRY7(7) TRY7(14) TRY7(21)   // get up to 28 levels of calls
     return 28;
 }
+#endif
