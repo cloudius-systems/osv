@@ -33,12 +33,13 @@ enum {
 class vma {
 public:
     vma(uintptr_t start, uintptr_t end);
+    void set(uintptr_t start, uintptr_t end);
     uintptr_t start() const;
     uintptr_t end() const;
     void* addr() const;
     uintptr_t size() const;
     void split(uintptr_t edge);
-    private:
+private:
     uintptr_t _start;
     uintptr_t _end;
 public:

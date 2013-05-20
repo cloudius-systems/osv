@@ -594,20 +594,24 @@ struct fill_file_page : fill_page {
 uintptr_t allocate(uintptr_t start, size_t size, bool search,
                     fill_page& fill, unsigned perm)
 {
-    std::lock_guard<mutex> guard(vma_list_mutex);
+    // To support memory allocation tracking - where operator new() might end
+    // up indirectly calling mmap(), we need to allocate the vma object here,
+    // and not between the evacuate() and populate().
+    vma *v = new vma(start, start + size);
 
+    std::lock_guard<mutex> guard(vma_list_mutex);
     if (search) {
         // search for unallocated hole around start
         if (!start) {
             start = 0x200000000000ul;
         }
         start = find_hole(start, size);
+        v->set(start, start+size);
     } else {
         // we don't know if the given range is free, need to evacuate it first
         evacuate(start, start+size);
     }
 
-    vma* v = new vma(start, start+size);
     vma_list.insert(*v);
 
     populate(&fill, perm).operate((void*)start, size);
@@ -708,6 +712,12 @@ vma::vma(uintptr_t start, uintptr_t end)
     : _start(align_down(start))
     , _end(align_up(end))
 {
+}
+
+void vma::set(uintptr_t start, uintptr_t end)
+{
+    _start = align_down(start);
+    _end = align_up(end);
 }
 
 uintptr_t vma::start() const
