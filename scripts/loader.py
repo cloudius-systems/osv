@@ -484,8 +484,16 @@ def show_leak():
     allocations = tracker['allocations']
     # Build a list of allocations to be sorted lexicographically by call chain
     # and summarize allocations with the same call chain:
+    percent='   ';
+    gdb.write('Fetching data from qemu/osv: %s' % percent);
+    gdb.flush();
     allocs = [];
     for i in range(size_allocations) :
+        newpercent = '%2d%%' % round(100.0*i/(size_allocations-1));
+        if newpercent != percent :
+            percent = newpercent;
+            gdb.write('\b\b\b%s' % newpercent);
+            gdb.flush();
         a = allocations[i]
         addr = ulong(a['addr'])
         if addr == 0 :
@@ -496,7 +504,10 @@ def show_leak():
         for j in range(nbacktrace) :
             callchain.append(backtrace[nbacktrace-1-j])
         allocs.append((i, callchain))
+    gdb.write('\nSorting %d allocations...' % len(allocs));
+    gdb.flush();
     allocs.sort(key=lambda entry: entry[1])
+    gdb.write('Done.\n');
     gdb.write('Allocations still in memory at this time (seq=%d):\n\n' % tracker['current_seq'])
     total_size = 0
     cur_n = 0
