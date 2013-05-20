@@ -76,6 +76,9 @@ void alloc_tracker::forget(void *addr)
     if (!addr)
         return;
     std::lock_guard<mutex> guard(lock);
+    if (lock.getdepth() > 1) {
+        return;
+    }
     for (size_t i = 0; i < size_allocations; i++){
         if (allocations[i].addr == addr) {
             allocations[i].addr = 0;
