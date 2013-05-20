@@ -144,6 +144,7 @@ public:
     struct attr {
         stack_info stack;
         cpu *pinned_cpu;
+        bool detached = false;
         attr(cpu *pinned_cpu = nullptr) : pinned_cpu(pinned_cpu) { }
     };
 
@@ -227,13 +228,7 @@ public:
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
     static unsigned long _s_idgen;
-};
-
-class detached_thread : public thread {
-public:
-    explicit detached_thread(std::function<void ()> f);
 private:
-    ~detached_thread(); // require this to be a heap variable
     class reaper;
     friend class reaper;
     static reaper* _s_reaper;
