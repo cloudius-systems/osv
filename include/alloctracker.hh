@@ -19,7 +19,7 @@ public:
     void remember(void *addr, int size);
     void forget(void *addr);
 private:
-    static constexpr int MAX_BACKTRACE = 20;
+    static constexpr int MAX_BACKTRACE = 30;
     struct alloc_info {
         // sequential number of allocation (to know how "old" this allocation
         // is):
