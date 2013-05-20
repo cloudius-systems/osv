@@ -118,7 +118,7 @@ static void	rt_setmetrics(u_long which, const struct rt_metrics *in,
 			struct rt_metrics_lite *out);
 static void	rt_getmetrics(const struct rt_metrics_lite *in,
 			struct rt_metrics *out);
-static void	rt_dispatch(struct mbuf *, sa_family_t);
+static void	rt_dispatch(struct mbuf *, bsd_sa_family_t);
 
 static struct netisr_handler rtsock_nh = {
 	.nh_name = "rtsock",
@@ -384,7 +384,7 @@ route_output(struct mbuf *m, struct socket *so)
 	struct rt_addrinfo info;
 	int len, error = 0;
 	struct ifnet *ifp = NULL;
-	sa_family_t saf = AF_UNSPEC;
+	bsd_sa_family_t saf = AF_UNSPEC;
 
 #define senderr(e) { error = e; goto flush;}
 	if (m == NULL || ((m->m_len < sizeof(long)) &&
@@ -1269,7 +1269,7 @@ rt_ifannouncemsg(struct ifnet *ifp, int what)
 }
 
 static void
-rt_dispatch(struct mbuf *m, sa_family_t saf)
+rt_dispatch(struct mbuf *m, bsd_sa_family_t saf)
 {
 	struct m_tag *tag;
 

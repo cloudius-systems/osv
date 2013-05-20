@@ -40,7 +40,6 @@
 #define __NEED_pid_t
 #define __NEED_off_t
 #define __NEED_uid_t
-#define __NEED_sa_family_t
 #define __NEED_socklen_t
 #define __NEED_ssize_t
 #define __NEED_uint32_t
@@ -250,7 +249,7 @@ struct accept_filter_arg {
  */
 struct bsd_sockaddr {
 	unsigned char	sa_len;		/* total length */
-	sa_family_t	sa_family;	/* address family */
+	bsd_sa_family_t	sa_family;	/* address family */
 	char		sa_data[14];	/* actually longer; address value */
 };
 #if __BSD_VISIBLE

@@ -27,6 +27,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
 
+#include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
 

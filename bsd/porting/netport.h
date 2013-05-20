@@ -12,6 +12,8 @@
 #define __NEED_socklen_t
 #include <bits/alltypes.h>
 
+typedef unsigned char bsd_sa_family_t;
+
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
 

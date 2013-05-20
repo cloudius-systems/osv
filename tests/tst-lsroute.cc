@@ -27,6 +27,8 @@
  */
 
 #include <sys/param.h>
+#include <bsd/porting/netport.h>
+
 #include <bsd/sys/sys/sysctl.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/sys/socket.h>
@@ -102,7 +104,7 @@ mask62bits(const struct in6_addr *mask)
 #define	NCP_ASCIIBUFFERSIZE	52
 
 struct ncpaddr {
-  sa_family_t ncpaddr_family;
+  bsd_sa_family_t ncpaddr_family;
   union {
     struct in_addr ip4addr;
 #ifndef NOINET6
@@ -112,7 +114,7 @@ struct ncpaddr {
 };
 
 struct ncprange{
-  sa_family_t ncprange_family;
+  bsd_sa_family_t ncprange_family;
   union {
     struct {
       struct in_addr ipaddr;

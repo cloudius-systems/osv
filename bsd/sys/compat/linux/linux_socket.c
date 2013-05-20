@@ -58,6 +58,10 @@
 #include <bsd/sys/compat/linux/linux.h>
 #include <bsd/sys/compat/linux/linux_socket.h>
 
+#define __NEED_sa_family_t
+#include <bits/alltypes.h>
+
+
 static int linux_to_bsd_domain(int);
 
 /*
