@@ -143,7 +143,8 @@ extern int tick;
     #define INET (1)
 #endif
 
-#define panic(...) abort()
+#define panic(...) do { tprintf("bsd-panic", logger_error, __VA_ARGS__); \
+                        abort(); } while(0)
 
 #define log(x, ...) tprintf("bsd-log", logger_error, __VA_ARGS__)
 
