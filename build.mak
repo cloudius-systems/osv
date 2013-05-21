@@ -262,7 +262,23 @@ solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod_subr.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zutil.o
 
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfeature_common.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_comutil.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_deleg.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_fletcher.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_ioctl_compat.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_namecheck.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zpool_prop.o
+zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.o
+
 solaris-tests += tests/tst-solaris-taskq.so
+
+solaris += $(zfs)
+
+$(zfs): CFLAGS+= \
+	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
+	-I$(src)/bsd/sys/cddl/contrib/opensolaris/common/zfs
 
 $(solaris) $(solaris-tests): CFLAGS+= \
 	-Wno-strict-aliasing \
