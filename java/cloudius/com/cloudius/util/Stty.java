@@ -2,7 +2,7 @@ package com.cloudius.util;
 
 import com.cloudius.Config;
 
-public class Stty implements AutoCloseable {
+public class Stty {
 	static {
 	    Config.loadJNI("stty.so");
 	}
