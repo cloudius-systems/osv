@@ -201,7 +201,7 @@ typedef struct zfs_acl_ids {
 struct znode;
 struct zfsvfs;
 
-#ifdef _KERNEL
+#if 0 // def _KERNEL
 int zfs_acl_ids_create(struct znode *, int, vattr_t *,
     cred_t *, vsecattr_t *, zfs_acl_ids_t *);
 void zfs_acl_ids_free(zfs_acl_ids_t *);

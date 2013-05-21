@@ -33,6 +33,7 @@
 
 #include <sys/param.h>
 #include <string.h>
+#include <errno.h>
 
 #define	PAGESIZE	PAGE_SIZE
 #define	PAGEOFFSET	(PAGESIZE - 1)

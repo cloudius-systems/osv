@@ -29,16 +29,6 @@
 #include <sys/types.h>
 #include <sys/acl_impl.h>
 
-#if defined(_KERNEL)
-/*
- * When compiling OpenSolaris kernel code, this file is getting
- * included instead of FreeBSD one.  Pull the original sys/acl.h as well.
- */
-#undef _SYS_ACL_H
-#include_next <sys/acl.h>
-#define	_SYS_ACL_H
-#endif	/* _KERNEL */
-
 #ifdef	__cplusplus
 extern "C" {
 #endif
