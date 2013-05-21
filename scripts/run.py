@@ -44,7 +44,8 @@ def start_osv():
         args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
         args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
     else:
-        args += ["-device", "virtio-net-pci"]
+        args += ["-netdev", "user,id=un0"]
+        args += ["-device", "virtio-net-pci,netdev=un0"]
         
     try:
         # Save the current settings of the stty
