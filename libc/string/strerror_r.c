@@ -1,7 +1,6 @@
 
 #include <sys/types.h>
 #include <errno.h>
-#include "libc.h"
 
 /*
  * Glibc provides two incompatible versions of strerror_r and uses
@@ -28,5 +27,3 @@ int strerror_r(int err, char *buf, size_t buflen)
 	return 0;
 }
 
-// FIXME: the following misbuilds:
-//weak_alias(strerror_r, __xpg_strerror_r);
