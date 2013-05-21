@@ -19,7 +19,13 @@ public:
     void remember(void *addr, int size);
     void forget(void *addr);
 private:
-    static constexpr int MAX_BACKTRACE = 30;
+    // For each allocation we remember MAX_BACKTRACE functions (or rather,
+    // instruction pointers) on the call chain. We remember either the
+    // deepest (newest) calls, if POLICY_DEEPEST, else the shallowest
+    // (top-level calls).
+    static constexpr int MAX_BACKTRACE = 20;
+    static constexpr bool POLICY_DEEPEST = true;
+
     struct alloc_info {
         // sequential number of allocation (to know how "old" this allocation
         // is):

@@ -45,11 +45,11 @@ void alloc_tracker::remember(void *addr, int size)
     a->size = size;
 
     // Do the backtrace. If we ask for only a small number of call levels
-    // we'll get only the deepest (most recent) levels, but we are more
-    // interested in the highest level functions, so we ask for 1024 levels
-    // (assuming we'll never have deeper recursion than that), and later only
-    // save the highest levels.
-    static void *bt[1024];
+    // we'll get only the deepest (most recent) levels, but when
+    // !POLICY_DEEPEST we are more  interested in the highest level functions,
+    // so we ask for 1024 levels (assuming we'll never have deeper recursion than
+    // that), and later only save the highest levels.
+    static void *bt[POLICY_DEEPEST ? MAX_BACKTRACE : 1024];
     int n = backtrace(bt, sizeof(bt)/sizeof(*bt));
 
     // When backtrace is too deep, save only the MAX_BACKTRACE most high
@@ -58,7 +58,7 @@ void alloc_tracker::remember(void *addr, int size)
     // and then malloc/alloc_page) and and at the end (typically some assembly
     // code or ununderstood address).
     static constexpr int N_USELESS_FUNCS_START = 2;
-    static constexpr int N_USELESS_FUNCS_END = 1;
+    static constexpr int N_USELESS_FUNCS_END = 0;
     void **bt_from = bt + N_USELESS_FUNCS_START;
     n -= N_USELESS_FUNCS_START+N_USELESS_FUNCS_END;
     if(n > MAX_BACKTRACE) {
