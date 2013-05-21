@@ -295,6 +295,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     });
     setup_tcb();
     init_stack();
+    if (_attr.detached) {
+        // assumes detached threads directly on heap, not as member.
+        // if untrue, or need a special deleter, the user must call
+        // set_cleanup() with whatever cleanup needs to be done.
+        set_cleanup([=] { delete this; });
+    }
     if (main) {
         _vruntime = 0; // simulate the first schedule into this thread
         _status.store(status::running);
@@ -620,7 +626,6 @@ void thread::reaper::reap()
                 auto z = _zombies.front();
                 _zombies.pop_front();
                 z->join();
-                delete z;
             }
         });
     }
