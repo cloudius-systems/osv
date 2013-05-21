@@ -23,6 +23,7 @@ void alloc_tracker::remember(void *addr, int size)
         if(!allocations[i].addr){
             // found a free spot, reuse it
             a = &allocations[i];
+            break;
          }
     }
     if (!a) {
