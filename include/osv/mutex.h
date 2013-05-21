@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,13 +43,14 @@ void spinlock::unlock()
 // Mutex:
 
 typedef struct mutex {
-    spinlock_t _wait_lock;
-    unsigned _depth;
-    void *_owner;
     struct wait_list {
         struct waiter *first;
         struct waiter *last;
     } _wait_list;
+    uint32_t _hole_for_pthread_compatiblity; // pthread_mutex_t's __kind
+    spinlock_t _wait_lock;
+    uint16_t _depth;
+    void *_owner;
 #ifdef __cplusplus
     // additional convenience methods for C++
     inline mutex();

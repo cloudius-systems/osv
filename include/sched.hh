@@ -144,6 +144,7 @@ public:
     struct attr {
         stack_info stack;
         cpu *pinned_cpu;
+        bool detached = false;
         attr(cpu *pinned_cpu = nullptr) : pinned_cpu(pinned_cpu) { }
     };
 
@@ -166,6 +167,7 @@ public:
     stack_info get_stack_info();
     cpu* tcpu() __attribute__((no_instrument_function));
     void join();
+    void set_cleanup(std::function<void ()> cleanup);
     unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
 private:
     void main();
@@ -209,6 +211,7 @@ private:
     unsigned long _id;
     u64 _vruntime;
     u64 _borrow;
+    std::function<void ()> _cleanup;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
@@ -225,13 +228,7 @@ public:
     // for the debugger
     bi::list_member_hook<> _thread_list_link;
     static unsigned long _s_idgen;
-};
-
-class detached_thread : public thread {
-public:
-    explicit detached_thread(std::function<void ()> f);
 private:
-    ~detached_thread(); // require this to be a heap variable
     class reaper;
     friend class reaper;
     static reaper* _s_reaper;

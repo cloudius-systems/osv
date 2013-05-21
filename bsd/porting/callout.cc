@@ -13,12 +13,12 @@ extern "C" {
 
 int _callout_stop_safe_locked(struct callout *c, int safe);
 
-sched::detached_thread* callout_get_thread(struct callout *c)
+sched::thread* callout_get_thread(struct callout *c)
 {
-    return reinterpret_cast<sched::detached_thread*>(c->thread);
+    return reinterpret_cast<sched::thread*>(c->thread);
 }
 
-void callout_set_thread(struct callout *c, sched::detached_thread* t)
+void callout_set_thread(struct callout *c, sched::thread* t)
 {
     c->thread = reinterpret_cast<void*>(t);
 }
@@ -65,9 +65,9 @@ void _callout_wrapper(struct callout *c)
 
         uint64_t cur = clock::get()->time();
         if (cur < c->c_to_ns+TMILISECOND) {
-            sched::timer t(*sched::detached_thread::current());
+            sched::timer t(*sched::thread::current());
             t.set(c->c_to_ns);
-            sched::detached_thread::wait_until(c->c_callout_mtx, [&] {
+            sched::thread::wait_until(c->c_callout_mtx, [&] {
                 return ( (t.expired()) || (c->c_stopped) );
             });
         }
@@ -197,9 +197,11 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
         return 1;
     }
 
-    sched::detached_thread* callout_thread = new sched::detached_thread([=] {
+    sched::thread::attr a;
+    a.detached = true;
+    sched::thread* callout_thread = new sched::thread([=] {
         _callout_wrapper(c);
-    });
+    }, a);
 
     callout_set_thread(c, callout_thread);
     c->c_flags &= ~(CALLOUT_COMPLETED | CALLOUT_DISPATCHING);
@@ -215,7 +217,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
  */
 int _callout_stop_safe_locked(struct callout *c, int safe)
 {
-    sched::detached_thread* callout_thread = callout_get_thread(c);
+    sched::thread* callout_thread = callout_get_thread(c);
     cdbg("*C* C=0x%lx _callout_stop_safe_locked() c->thread=0x%lx c->flags=0x%04x",
         (uint64_t)c, (uint64_t)callout_thread, c->c_flags);
     if (!callout_thread) {

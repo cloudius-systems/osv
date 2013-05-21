@@ -1,6 +1,11 @@
 #include <osv/mutex.h>
 #include <sched.hh>
 #include "arch.hh"
+#include <pthread.h>
+#include <cassert>
+
+static_assert(sizeof(mutex) <= sizeof(pthread_mutex_t), "mutex too big");
+static_assert(offsetof(mutex, _hole_for_pthread_compatiblity) == 16, "mutex hole in wrong place");
 
 struct waiter {
     struct waiter*	next;

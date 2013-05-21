@@ -39,6 +39,17 @@ constexpr u64 max_slice = 10_ms;
 
 namespace sched {
 
+class thread::reaper {
+public:
+    reaper();
+    void reap();
+    void add_zombie(thread* z);
+private:
+    mutex _mtx;
+    std::list<thread*> _zombies;
+    thread _thread;
+};
+
 cpu::cpu()
     : idle_thread([this] { idle(); }, thread::attr(this))
 {
@@ -383,6 +394,9 @@ void thread::stop_wait()
 
 void thread::complete()
 {
+    if (_attr.detached) {
+        _s_reaper->add_zombie(this);
+    }
     _status.store(status::terminated);
     if (_joiner) {
         _joiner->wake();
@@ -429,11 +443,22 @@ void thread::join()
     }
     _joiner = current();
     wait_until([this] { return _status.load() == status::terminated; });
+    // probably unneeded, but don't execute an std::function<> which may
+    // be deleting itself
+    auto cleanup = _cleanup;
+    if (cleanup) {
+        cleanup();
+    }
 }
 
 thread::stack_info thread::get_stack_info()
 {
     return _attr.stack;
+}
+
+void thread::set_cleanup(std::function<void ()> cleanup)
+{
+    _cleanup = cleanup;
 }
 
 unsigned long thread::id()
@@ -580,24 +605,13 @@ bool operator<(const timer& t1, const timer& t2)
     }
 }
 
-class detached_thread::reaper {
-public:
-    reaper();
-    void reap();
-    void add_zombie(detached_thread* z);
-private:
-    mutex _mtx;
-    std::list<detached_thread*> _zombies;
-    thread _thread;
-};
-
-detached_thread::reaper::reaper()
+thread::reaper::reaper()
     : _mtx{}, _zombies{}, _thread([=] { reap(); })
 {
     _thread.start();
 }
 
-void detached_thread::reaper::reap()
+void thread::reaper::reap()
 {
     while (true) {
         with_lock(_mtx, [=] {
@@ -612,28 +626,20 @@ void detached_thread::reaper::reap()
     }
 }
 
-void detached_thread::reaper::add_zombie(detached_thread* z)
+void thread::reaper::add_zombie(thread* z)
 {
+    assert(z->_attr.detached);
     with_lock(_mtx, [=] {
         _zombies.push_back(z);
         _thread.wake();
     });
 }
 
-detached_thread::detached_thread(std::function<void ()> f)
-    : thread([=] { f(); _s_reaper->add_zombie(this); })
-{
-}
-
-detached_thread::~detached_thread()
-{
-}
-
-detached_thread::reaper *detached_thread::_s_reaper;
+thread::reaper *thread::_s_reaper;
 
 void init_detached_threads_reaper()
 {
-    detached_thread::_s_reaper = new detached_thread::reaper;
+    thread::_s_reaper = new thread::reaper;
 }
 
 void init(elf::tls_data tls_data, std::function<void ()> cont)
