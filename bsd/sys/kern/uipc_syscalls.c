@@ -495,7 +495,7 @@ kern_sendit(int s,
             ssize_t *bytes)
 {
 	struct file *fp;
-	struct uio auio;
+	struct uio auio = {};
 	struct iovec *iov;
 	struct socket *so;
 	struct bsd_sockaddr *from = 0;
@@ -548,8 +548,8 @@ int
 sys_sendto(int s, caddr_t buf, size_t  len, int flags, caddr_t to, int tolen,
     ssize_t* bytes)
 {
-	struct msghdr msg;
-	struct iovec aiov;
+	struct msghdr msg = {};
+	struct iovec aiov = {};
 	int error;
 
 	msg.msg_name = to;
