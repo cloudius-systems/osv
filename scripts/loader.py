@@ -502,13 +502,22 @@ def show_leak():
         backtrace = a['backtrace']
         callchain = []
         for j in range(nbacktrace) :
-            callchain.append(backtrace[nbacktrace-1-j])
+            callchain.append(ulong(backtrace[nbacktrace-1-j]))
         allocs.append((i, callchain))
-    gdb.write('\nSorting %d allocations...' % len(allocs));
+    gdb.write('\n');
+
+    gdb.write('Merging %d allocations by identical call chain... ' %
+              len(allocs))
     gdb.flush();
     allocs.sort(key=lambda entry: entry[1])
-    gdb.write('Done.\n');
-    gdb.write('Allocations still in memory at this time (seq=%d):\n\n' % tracker['current_seq'])
+    
+    import collections
+    Record = collections.namedtuple('Record',
+                                    ['bytes', 'allocations', 'minsize',
+                                     'maxsize', 'avgsize', 'minbirth',
+                                     'maxbirth', 'avgbirth', 'callchain'])
+    records = [];
+    
     total_size = 0
     cur_n = 0
     cur_total_size = 0
@@ -538,17 +547,16 @@ def show_leak():
         if k!=len(allocs)-1 and callchain==allocs[k+1][1] :
             continue;
         # We're done with a bunch of allocations with same call chain:
-        gdb.write('Found %d bytes in %d allocations [size ' % (cur_total_size, cur_n))
-        if cur_min_size != cur_max_size :
-            gdb.write('%d/%.1f/%d' % (cur_min_size, cur_total_size/cur_n, cur_max_size))
-        else :
-            gdb.write('%d' % cur_min_size)
-        gdb.write(', birth ')
-        if cur_first_seq != cur_last_seq :
-            gdb.write('%d/%.1f/%d' % (cur_first_seq, cur_total_seq/cur_n, cur_last_seq))
-        else :
-            gdb.write('%d' % cur_first_seq)
-        gdb.write(']\nfrom:\n')
+        r = Record(bytes = cur_total_size,
+                   allocations = cur_n,
+                   minsize = cur_min_size,
+                   maxsize = cur_max_size,
+                   avgsize = cur_total_size/cur_n,
+                   minbirth = cur_first_seq,
+                   maxbirth = cur_last_seq,
+                   avgbirth = cur_total_seq/cur_n,
+                   callchain = callchain)
+        records.append(r)
         cur_n = 0
         cur_total_size = 0
         cur_total_seq = 0
@@ -556,16 +564,39 @@ def show_leak():
         cur_last_seq = -1
         cur_max_size = -1
         cur_min_size = -1
-        if len(callchain)==20 :
-            gdb.write('\t<deeper stack trace not remembered>\n')
-        for f in reversed(callchain) :
-            func_name = f
-            sal = gdb.find_pc_line(ulong(f))
+    gdb.write('generated %d records.\n' % len(records))
+        
+    # Now sort the records by total number of bytes
+    records.sort(key=lambda r: r.bytes, reverse=True)
+
+    gdb.write('\nAllocations still in memory at this time (seq=%d):\n\n' %
+              tracker['current_seq'])
+    for r in records :
+        gdb.write('Found %d bytes in %d allocations [size ' % (r.bytes, r.allocations))
+        if r.minsize != r.maxsize :
+            gdb.write('%d/%.1f/%d' % (r.minsize, r.avgsize, r.maxsize))
+        else :
+            gdb.write('%d' % r.minsize)
+        gdb.write(', birth ')
+        if r.minbirth != r.maxbirth :
+            gdb.write('%d/%.1f/%d' % (r.minbirth, r.avgbirth, r.maxbirth))
+        else :
+            gdb.write('%d' % r.minbirth)
+        gdb.write(']\nfrom:\n')
+        for f in reversed(r.callchain) :
+            infosym = gdb.execute('info symbol 0x%x' % f, False, True)
+            func = infosym[:infosym.find(" + ")]
+            sal = gdb.find_pc_line(f)
             try :
+                # prefer (filename:line),
                 source = ' (%s:%s)' % (sal.symtab.filename, sal.line)
             except :
-                source = ''
-            gdb.write('\t%s%s\n' % (func_name, source));
+                # but if can't get it, at least give the name of the object
+                if infosym.startswith("No symbol matches") :
+                    source = ''
+                else :
+                    source = ' (%s)' % infosym[infosym.rfind("/")+1:].rstrip()
+            gdb.write('\t%s%s\n' % (func, source));
         gdb.write('\n')
 
 class osv_trace(gdb.Command):
