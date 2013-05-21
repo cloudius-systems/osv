@@ -284,7 +284,7 @@ namespace virtio {
 
         //TODO: verify what the hdr_len should be
         req->hdr.hdr_len = ETH_ALEN;
-        req->um.reset(m);
+        req->um.reset(m_head);
         req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
         // leak for now ; req->buffer = (u8*)out;
 
