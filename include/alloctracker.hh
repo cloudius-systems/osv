@@ -26,6 +26,20 @@ private:
     static constexpr int MAX_BACKTRACE = 20;
     static constexpr bool POLICY_DEEPEST = true;
 
+    // For simplicity, we hold the list of living allocations in a simple
+    // array of alloc_info node - not a more sophisticated hash table.
+    // It sounds like this has terrible O(N) performance, but we usually
+    // get great performance thanks to two tricks:
+    // 1. We keep the unused nodes linked together (see next and first_free)
+    //    so getting a free node for rememeber() is always O(1).
+    // 2. We keep the used nodes linked together (again next, and
+    //    newest_allocation) from newest to oldest, so forget() can always
+    //    start with the newest allocation - so the popular case of free()
+    //    quickly after malloc() is very fast.
+    // Benchmarks show that these two tricks significantly (up to 3-fold)
+    // increase performance of leak-checked program, and provides exactly
+    // the same performance as a real O(1) data structure (like hash table).
+
     struct alloc_info {
         // sequential number of allocation (to know how "old" this allocation
         // is):
@@ -38,11 +52,18 @@ private:
         // chain that led to this allocation.
         int nbacktrace;
         void *backtrace[MAX_BACKTRACE];
+        // "next" is the index of the next alloc_info node. For in-use nodes,
+        // this points to the next older allocation, and for free nodes, it
+        // points to the next node on the free list. The value -1 signifies
+        // a nonexistant node.
+        int next;
     };
 
-    // The current implementation for searching allocated blocks and remembering
-    // new ones is with a slow linear search. This is very slow when there are
-    // a lot of living allocations. It should be changed to a hash table!
+    // Indexes of the first free node, and the most recently used mode.
+    // Each is the head of a list, using the "next" pointer and ending in -1.
+    int first_free;
+    int newest_allocation;
+
     struct alloc_info *allocations = 0;
     size_t size_allocations = 0;
     unsigned long current_seq = 0;

@@ -18,28 +18,33 @@ void alloc_tracker::remember(void *addr, int size)
         return;
     }
 
-    struct alloc_info *a = nullptr;
-    for (size_t i = 0; i < size_allocations; i++) {
-        if(!allocations[i].addr){
-            // found a free spot, reuse it
-            a = &allocations[i];
-            break;
-         }
-    }
-    if (!a) {
+    if (!allocations || first_free < 0) {
         // Grow the vector to make room for more allocation records.
         int old_size = size_allocations;
         size_allocations = size_allocations ? 2*size_allocations : 1024;
         struct alloc_info *old_allocations = allocations;
-        allocations = (struct alloc_info *) malloc(
-                size_allocations * sizeof(struct alloc_info));
-        if (old_allocations)
+        allocations = (struct alloc_info *)
+                malloc(size_allocations * sizeof(struct alloc_info));
+        if (old_allocations) {
             memcpy(allocations, old_allocations,
                 size_allocations * sizeof(struct alloc_info));
-        for (size_t i = old_size; i < size_allocations; i++)
-            allocations[i].addr=0;
-        a = &allocations[old_size];
+        } else {
+            first_free = -1;
+            newest_allocation = -1;
+        }
+        for (size_t i = old_size; i < size_allocations; ++i) {
+            allocations[i].addr = 0;
+            allocations[i].next = first_free;
+            first_free = i;
+        }
     }
+
+    // Free node available, reuse it
+    int index = first_free;
+    struct alloc_info *a = &allocations[index];
+    first_free = a->next;
+    a->next = newest_allocation;
+    newest_allocation = index;
 
     a->seq = current_seq++;
     a->addr = addr;
@@ -80,9 +85,14 @@ void alloc_tracker::forget(void *addr)
     if (lock.getdepth() > 1) {
         return;
     }
-    for (size_t i = 0; i < size_allocations; i++){
-        if (allocations[i].addr == addr) {
-            allocations[i].addr = 0;
+
+    for (int *i = &newest_allocation; *i >= 0; i = &(allocations[*i].next)) {
+        if (allocations[*i].addr == addr) {
+            allocations[*i].addr = 0;
+            int save_next_allocation = allocations[*i].next;
+            allocations[*i].next = first_free;
+            first_free = *i;
+            *i = save_next_allocation;
             return;
         }
     }
