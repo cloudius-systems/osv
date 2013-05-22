@@ -35,7 +35,7 @@
 #include <sys/cdefs.h>
 #include <sys/statfs.h>
 #include <osv/vnode.h>
-#include <osv/list.h>
+#include <bsd/sys/sys/queue.h>
 
 __BEGIN_DECLS
 
@@ -43,7 +43,7 @@ __BEGIN_DECLS
  * Mount data
  */
 struct mount {
-	struct list_head	m_link;		/* link to next mount point */
+	LIST_ENTRY(mount) m_link;	/* link to next mount point */
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
