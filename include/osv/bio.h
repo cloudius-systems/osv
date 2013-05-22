@@ -42,7 +42,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <stdbool.h>
-#include <osv/list.h>
+#include <bsd/sys/sys/queue.h>
 
 __BEGIN_DECLS
 
@@ -85,7 +85,7 @@ struct bio {
 	void	(*bio_done)(struct bio *);
 
 
-	struct list_head	bio_list;
+	TAILQ_ENTRY(bio) bio_list;
 
 	/*
 	 * I/O synchronization, probably should move out of the struct to
