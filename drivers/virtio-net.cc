@@ -184,10 +184,13 @@ namespace virtio {
     struct virtio_net_req {
         struct virtio_net::virtio_net_hdr hdr;
         sglist payload;
-        std::unique_ptr<struct mbuf> um;
+        struct free_deleter {
+            void operator()(struct mbuf *m) {m_freem(m);}
+        };
+
+        std::unique_ptr<struct mbuf, free_deleter> um;
 
         virtio_net_req() {memset(&hdr,0,sizeof(hdr));};
-        ~virtio_net_req() {if (um) m_freem(um.get());}
     };
 
     void virtio_net::receiver() {
