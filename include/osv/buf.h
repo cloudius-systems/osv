@@ -32,14 +32,15 @@
 
 #include <sys/types.h>
 #include <sys/cdefs.h>
-#include <osv/list.h>
 #include <osv/mutex.h>
+
+#include <bsd/sys/sys/queue.h>
 
 /*
  * Buffer header
  */
 struct buf {
-	struct list_head b_link;	/* link to block list */
+	TAILQ_ENTRY(buf) b_link;	/* link to block list */
 	int		b_flags;	/* see defines below */
 	struct device	*b_dev;		/* device */
 	int		b_blkno;	/* block # on device */

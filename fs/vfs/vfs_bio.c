@@ -37,7 +37,6 @@
  */
 
 #include <osv/prex.h>
-#include <osv/list.h>
 #include <osv/buf.h>
 #include <osv/bio.h>
 #include <osv/device.h>
@@ -69,7 +68,7 @@ static mutex_t bio_lock = MUTEX_INITIALIZER;
 
 /* fixed set of buffers */
 static struct buf buf_table[NBUFS];
-static struct list_head free_list = LIST_SINIT(free_list);
+static TAILQ_HEAD(, buf) free_list = TAILQ_HEAD_INITIALIZER(free_list);
 
 static sem_t free_sem;
 
@@ -80,7 +79,7 @@ static void
 bio_insert_head(struct buf *bp)
 {
 
-	list_insert(&free_list, &bp->b_link);
+	TAILQ_INSERT_HEAD(&free_list, bp, b_link);
 	sem_post(&free_sem);
 }
 
@@ -90,8 +89,7 @@ bio_insert_head(struct buf *bp)
 static void
 bio_insert_tail(struct buf *bp)
 {
-
-	list_insert(list_prev(&free_list), &bp->b_link);
+	TAILQ_INSERT_TAIL(&free_list, bp, b_link);
 	sem_post(&free_sem);
 }
 
@@ -102,8 +100,8 @@ static void
 bio_remove(struct buf *bp)
 {
 	sem_wait(&free_sem);
-	ASSERT(!list_empty(&free_list));
-	list_remove(&bp->b_link);
+	ASSERT(!TAILQ_EMPTY(&free_list));
+	TAILQ_REMOVE(&free_list, bp, b_link);
 }
 
 /*
@@ -115,9 +113,9 @@ bio_remove_head(void)
 	struct buf *bp;
 
 	sem_wait(&free_sem);
-	ASSERT(!list_empty(&free_list));
-	bp = list_entry(list_first(&free_list), struct buf, b_link);
-	list_remove(&bp->b_link);
+	ASSERT(!TAILQ_EMPTY(&free_list));
+	bp = TAILQ_FIRST(&free_list);
+	TAILQ_REMOVE(&free_list, bp, b_link);
 	return bp;
 }
 
@@ -393,7 +391,7 @@ bio_init(void)
 		bp->b_flags = B_INVAL;
 		bp->b_data = malloc(BSIZE);
 		mutex_init(&bp->b_lock);
-		list_insert(&free_list, &bp->b_link);
+		TAILQ_INSERT_TAIL(&free_list, bp, b_link);
 	}
 	sem_init(&free_sem, 0, NBUFS);
 
