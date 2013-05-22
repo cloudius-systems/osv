@@ -11,13 +11,12 @@ void semaphore::post(unsigned units)
         _val += units;
         auto i = _waiters.begin();
         while (_val > 0 && i != _waiters.end()) {
-            auto p = i++;
-            auto& wr = *p;
+            auto wr = i++;
             if (wr->units <= _val) {
                 _val -= wr->units;
                 wr->owner->wake();
                 wr->owner = nullptr;
-                _waiters.erase(p);
+                _waiters.erase(wr);
             }
         }
     });
@@ -34,7 +33,7 @@ void semaphore::wait(unsigned units)
         } else {
             wr.owner = sched::thread::current();
             wr.units = units;
-            _waiters.push_back(&wr);
+            _waiters.push_back(wr);
             wait = true;
         }
     });

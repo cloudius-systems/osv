@@ -2,7 +2,7 @@
 #define SEMAPHORE_HH_
 
 #include <osv/mutex.h>
-#include <list>
+#include <boost/intrusive/list.hpp>
 #include <sched.hh>
 
 class semaphore {
@@ -14,11 +14,13 @@ public:
 private:
     unsigned _val;
     mutex _mtx;
-    struct wait_record {
+    struct wait_record : boost::intrusive::list_base_hook<> {
         sched::thread* owner;
         unsigned units;
     };
-    std::list<wait_record*> _waiters;
+    boost::intrusive::list<wait_record,
+                          boost::intrusive::base_hook<wait_record>,
+                          boost::intrusive::constant_time_size<false>> _waiters;
 };
 
 #endif /* SEMAPHORE_HH_ */
