@@ -72,29 +72,29 @@ extern int vfs_debug;
  */
 struct task {
 	char 	    t_cwd[PATH_MAX];	/* current working directory */
-	file_t	    t_cwdfp;		/* directory for cwd */
+	struct file *t_cwdfp;		/* directory for cwd */
 };
 
 extern const struct vfssw vfssw[];
 
 __BEGIN_DECLS
 int	 sys_open(char *path, int flags, mode_t mode, struct file *fp);
-int	 sys_read(file_t fp, struct iovec *iov, size_t niov,
+int	 sys_read(struct file *fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count);
-int	 sys_write(file_t fp, struct iovec *iov, size_t niov,
+int	 sys_write(struct file *fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count);
-int	 sys_lseek(file_t fp, off_t off, int type, off_t * cur_off);
-int	 sys_ioctl(file_t fp, u_long request, void *buf);
-int	 sys_fstat(file_t fp, struct stat *st);
+int	 sys_lseek(struct file *fp, off_t off, int type, off_t * cur_off);
+int	 sys_ioctl(struct file *fp, u_long request, void *buf);
+int	 sys_fstat(struct file *fp, struct stat *st);
 int	 sys_fstatfs(struct file *fp, struct statfs *buf);
-int	 sys_fsync(file_t fp);
-int	 sys_ftruncate(file_t fp, off_t length);
+int	 sys_fsync(struct file *fp);
+int	 sys_ftruncate(struct file *fp, off_t length);
 
-int	 sys_readdir(file_t fp, struct dirent *dirent);
-int	 sys_rewinddir(file_t fp);
-int	 sys_seekdir(file_t fp, long loc);
-int	 sys_telldir(file_t fp, long *loc);
-int	 sys_fchdir(file_t fp, char *path);
+int	 sys_readdir(struct file *fp, struct dirent *dirent);
+int	 sys_rewinddir(struct file *fp);
+int	 sys_seekdir(struct file *fp, long loc);
+int	 sys_telldir(struct file *fp, long *loc);
+int	 sys_fchdir(struct file *fp, char *path);
 
 int	 sys_mkdir(char *path, mode_t mode);
 int	 sys_rmdir(char *path);

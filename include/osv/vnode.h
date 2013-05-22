@@ -101,13 +101,13 @@ struct vattr {
 #define IO_APPEND	0x0001
 
 typedef	int (*vnop_open_t)	(struct vnode *, int);
-typedef	int (*vnop_close_t)	(struct vnode *, file_t);
+typedef	int (*vnop_close_t)	(struct vnode *, struct file *);
 typedef	int (*vnop_read_t)	(struct vnode *, struct uio *, int);
 typedef	int (*vnop_write_t)	(struct vnode *, struct uio *, int);
-typedef	int (*vnop_seek_t)	(struct vnode *, file_t, off_t, off_t);
-typedef	int (*vnop_ioctl_t)	(struct vnode *, file_t, u_long, void *);
-typedef	int (*vnop_fsync_t)	(struct vnode *, file_t);
-typedef	int (*vnop_readdir_t)	(struct vnode *, file_t, struct dirent *);
+typedef	int (*vnop_seek_t)	(struct vnode *, struct file *, off_t, off_t);
+typedef	int (*vnop_ioctl_t)	(struct vnode *, struct file *, u_long, void *);
+typedef	int (*vnop_fsync_t)	(struct vnode *, struct file *);
+typedef	int (*vnop_readdir_t)	(struct vnode *, struct file *, struct dirent *);
 typedef	int (*vnop_lookup_t)	(struct vnode *, char *, struct vnode *);
 typedef	int (*vnop_create_t)	(struct vnode *, char *, mode_t);
 typedef	int (*vnop_remove_t)	(struct vnode *, struct vnode *, char *);

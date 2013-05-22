@@ -79,7 +79,7 @@ devfs_open(struct vnode *vp, int flags)
 }
 
 static int
-devfs_close(struct vnode *vp, file_t fp)
+devfs_close(struct vnode *vp, struct file *fp)
 {
 
 	DPRINTF(("devfs_close: fp=%x\n", fp));
@@ -103,7 +103,7 @@ devfs_write(struct vnode *vp, struct uio *uio, int ioflags)
 }
 
 static int
-devfs_ioctl(struct vnode *vp, file_t fp, u_long cmd, void *arg)
+devfs_ioctl(struct vnode *vp, struct file *fp, u_long cmd, void *arg)
 {
 	int error;
 
@@ -148,7 +148,7 @@ devfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
  * @vp: vnode of the directory.
  */
 static int
-devfs_readdir(struct vnode *vp, file_t fp, struct dirent *dir)
+devfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 {
 	struct devinfo info;
 	int error, i;

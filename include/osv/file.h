@@ -74,8 +74,6 @@ struct file {
 #define FD_LOCK(fp)	mutex_lock(&(fp->f_lock))
 #define FD_UNLOCK(fp)	mutex_unlock(&(fp->f_lock))
 
-typedef struct file *file_t;
-
 #define FOF_OFFSET  0x0800    /* Use the offset in uio argument */
 
 typedef int fo_init_t(struct file *fp);

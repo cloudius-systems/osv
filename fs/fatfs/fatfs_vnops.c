@@ -305,7 +305,7 @@ fatfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 }
 
 static int
-fatfs_readdir(struct vnode *vp, file_t fp, struct dirent *dir)
+fatfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node np;

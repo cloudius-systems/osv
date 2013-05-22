@@ -133,14 +133,14 @@ sys_open(char *path, int flags, mode_t mode, struct file *fp)
 }
 
 int
-sys_close(file_t fp)
+sys_close(struct file *fp)
 {
 
 	return 0;
 }
 
 int
-sys_read(file_t fp, struct iovec *iov, size_t niov,
+sys_read(struct file *fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
 	struct uio *uio = NULL;
@@ -175,7 +175,7 @@ sys_read(file_t fp, struct iovec *iov, size_t niov,
 }
 
 int
-sys_write(file_t fp, struct iovec *iov, size_t niov,
+sys_write(struct file *fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
 	struct uio *uio = NULL;
@@ -210,7 +210,7 @@ sys_write(file_t fp, struct iovec *iov, size_t niov,
 }
 
 int
-sys_lseek(file_t fp, off_t off, int type, off_t *origin)
+sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 {
 	struct vnode *vp;
 
@@ -258,7 +258,7 @@ sys_lseek(file_t fp, off_t off, int type, off_t *origin)
 }
 
 int
-sys_ioctl(file_t fp, u_long request, void *buf)
+sys_ioctl(struct file *fp, u_long request, void *buf)
 {
 	int error;
 
@@ -274,7 +274,7 @@ sys_ioctl(file_t fp, u_long request, void *buf)
 }
 
 int
-sys_fsync(file_t fp)
+sys_fsync(struct file *fp)
 {
 	struct vnode *vp;
 	int error;
@@ -292,7 +292,7 @@ sys_fsync(file_t fp)
 }
 
 int
-sys_fstat(file_t fp, struct stat *st)
+sys_fstat(struct file *fp, struct stat *st)
 {
 	int error = 0;
 
@@ -339,7 +339,7 @@ out_fdrop:
 }
 
 int
-sys_readdir(file_t fp, struct dirent *dir)
+sys_readdir(struct file *fp, struct dirent *dir)
 {
 	struct vnode *dvp;
 	int error;
@@ -360,7 +360,7 @@ sys_readdir(file_t fp, struct dirent *dir)
 }
 
 int
-sys_rewinddir(file_t fp)
+sys_rewinddir(struct file *fp)
 {
 	struct vnode *dvp;
 
@@ -376,7 +376,7 @@ sys_rewinddir(file_t fp)
 }
 
 int
-sys_seekdir(file_t fp, long loc)
+sys_seekdir(struct file *fp, long loc)
 {
 	struct vnode *dvp;
 
@@ -392,7 +392,7 @@ sys_seekdir(file_t fp, long loc)
 }
 
 int
-sys_telldir(file_t fp, long *loc)
+sys_telldir(struct file *fp, long *loc)
 {
 	struct vnode *dvp;
 
@@ -718,13 +718,13 @@ sys_truncate(char *path, off_t length)
 }
 
 int
-sys_ftruncate(file_t fp, off_t length)
+sys_ftruncate(struct file *fp, off_t length)
 {
 	return 0;
 }
 
 int
-sys_fchdir(file_t fp, char *cwd)
+sys_fchdir(struct file *fp, char *cwd)
 {
 	struct vnode *dvp;
 
