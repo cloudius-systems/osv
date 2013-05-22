@@ -37,7 +37,8 @@
 #include <osv/mutex.h>
 #include <osv/poll.h>
 #include <osv/uio.h>
-#include <osv/list.h>
+
+#include <bsd/sys/sys/queue.h>
 
 __BEGIN_DECLS
 
@@ -66,7 +67,7 @@ struct file {
 	struct fileops	*f_ops;		/* file ops abstraction */
 	void		*f_data;	/* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
-	struct list_head f_plist;	/* poll requests */
+	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
 };
 

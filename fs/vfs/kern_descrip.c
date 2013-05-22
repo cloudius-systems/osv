@@ -3,10 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <osv/file.h>
-#include <osv/list.h>
 #include <osv/poll.h>
 #include <osv/debug.h>
 #include <osv/mutex.h>
+
+#include <bsd/sys/sys/queue.h>
 
 /*
  * Global file descriptors table - in OSv we have a single process so file
@@ -145,7 +146,7 @@ int falloc_noinstall(struct file **resultfp)
 
 	fp->f_ops = &badfileops;
 	fp->f_count = 1;
-	list_init(&fp->f_plist);
+	TAILQ_INIT(&fp->f_poll_list);
 	mutex_init(&fp->f_lock);
 
 	*resultfp = fp;

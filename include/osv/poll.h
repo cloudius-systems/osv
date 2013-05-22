@@ -31,7 +31,7 @@
 #define _OSV_POLL_H_
 
 #include <sys/cdefs.h>
-#include <osv/list.h>
+#include <bsd/sys/sys/queue.h>
 
 __BEGIN_DECLS
 
@@ -118,7 +118,7 @@ struct pollreq {
 
 /* linked list of pollreq links */
 struct poll_link {
-    struct list_head _link;
+    TAILQ_ENTRY(poll_link) _link;
     struct pollreq* _req;
     /* Events being polled... */
     int _events;

@@ -40,11 +40,11 @@
 
 #include <osv/file.h>
 #include <osv/poll.h>
-#include <osv/list.h>
 #include <osv/debug.h>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
+#include <bsd/sys/sys/queue.h>
 
 #define dbg_d(...) tprintf("poll", logger_debug, __VA_ARGS__)
 
@@ -68,27 +68,18 @@ void poll_drain(struct file* fp)
 {
     dbg_d("poll_drain(fp=0x%" PRIx64 ")", fp);
 
-    list_t head, n, tmp;
-    struct poll_link* pl;
-
     FD_LOCK(fp);
-    head = &fp->f_plist;
-
-    for (n = list_first(head); n != head; n = list_next(n)) {
-        pl = list_entry(n, struct poll_link, _link);
+    while (!TAILQ_EMPTY(&fp->f_poll_list)) {
+        struct poll_link *pl = TAILQ_FIRST(&fp->f_poll_list);
 
         /* FIXME: TODO -
          * Should we mark POLLHUP?
          * Should we wake the pollers?
          */
 
-        /* Remove poll_link() */
-        tmp = n->prev;
-        list_remove(n);
+        TAILQ_REMOVE(&fp->f_poll_list, pl, _link);
         free(pl);
-        n = tmp;
     }
-
     FD_UNLOCK(fp);
 }
 
@@ -144,40 +135,23 @@ int poll_scan(struct pollfd _pfd[], nfds_t _nfds)
  */
 int poll_wake(struct file* fp, int events)
 {
+    struct poll_link *pl;
+
     if (!fp)
         return 0;
 
     dbg_d("poll_wake(fp=0x%" PRIx64 ", events=%d)", fp, events);
 
-    list_t head, n;
-    struct poll_link* pl;
-
     fhold(fp);
 
     FD_LOCK(fp);
-    head = &fp->f_plist;
-
-    /* Anyone polls? */
-    if (list_empty(head)) {
-        FD_UNLOCK(fp);
-        fdrop(fp);
-        return EINVAL;
-    }
-
     /*
      * There may be several pollreqs associated with this fd.
      * Wake each and every one.
      */
-    for (n = list_first(head); n != head; n = list_next(n)) {
-        pl = list_entry(n, struct poll_link, _link);
-
-        /* Make sure some of the events match */
-        if (pl->_events & events == 0) {
-            continue;
-        }
-
-        /* Wakeup the poller of this request */
-        wakeup((void*)pl->_req);
+    TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
+        if (pl->_events & events)
+            wakeup((void*)pl->_req);
     }
 
     FD_UNLOCK(fp);
@@ -219,11 +193,9 @@ void poll_install(struct pollreq* p)
         pl->_events = entry->events;
 
         FD_LOCK(fp);
-
-        /* Insert at the end */
-        list_insert(list_prev(&fp->f_plist), (list_t)pl);
-
+	TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
         FD_UNLOCK(fp);
+
         fdrop(fp);
     }
 }
@@ -231,7 +203,6 @@ void poll_install(struct pollreq* p)
 void poll_uninstall(struct pollreq* p)
 {
     int i, error;
-    list_t head, n;
     struct pollfd* entry_pfd;
     struct poll_link* pl;
     struct file* fp;
@@ -247,25 +218,17 @@ void poll_uninstall(struct pollreq* p)
             continue;
         }
 
-        FD_LOCK(fp);
-        if (list_empty(&fp->f_plist)) {
-            FD_UNLOCK(fp);
-            fdrop(fp);
-            continue;
-        }
-
         /* Search for current pollreq and remove it from list */
-        head = &fp->f_plist;
-        for (n = list_first(head); n != head; n = list_next(n)) {
-            pl = list_entry(n, struct poll_link, _link);
+        FD_LOCK(fp);
+	TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
             if (pl->_req == p) {
-                list_remove(n);
+                TAILQ_REMOVE(&fp->f_poll_list, pl, _link);
                 free(pl);
                 break;
             }
         }
-
         FD_UNLOCK(fp);
+
         fdrop(fp);
 
     } /* End of clearing pollreq references from the other fds */
