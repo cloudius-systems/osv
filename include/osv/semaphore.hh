@@ -1,7 +1,6 @@
 #ifndef SEMAPHORE_HH_
 #define SEMAPHORE_HH_
 
-#include <memory>
 #include <osv/mutex.h>
 #include <list>
 #include <sched.hh>
@@ -14,7 +13,7 @@ public:
     bool trywait(unsigned units = 1);
 private:
     unsigned _val;
-    std::unique_ptr<mutex> _mtx;
+    mutex _mtx;
     struct wait_record {
         sched::thread* owner;
         unsigned units;

@@ -2,13 +2,12 @@
 
 semaphore::semaphore(unsigned val)
     : _val(val)
-    , _mtx(new mutex)
 {
 }
 
 void semaphore::post(unsigned units)
 {
-    with_lock(*_mtx, [=] {
+    with_lock(_mtx, [=] {
         _val += units;
         auto i = _waiters.begin();
         while (_val > 0 && i != _waiters.end()) {
@@ -29,7 +28,7 @@ void semaphore::wait(unsigned units)
     bool wait = false;
     wait_record wr;
     wr.owner = nullptr;
-    with_lock(*_mtx, [&] {
+    with_lock(_mtx, [&] {
         if (_val >= units) {
             _val -= units;
         } else {
@@ -47,7 +46,7 @@ void semaphore::wait(unsigned units)
 bool semaphore::trywait(unsigned units)
 {
     bool ok = false;
-    with_lock(*_mtx, [&] {
+    with_lock(_mtx, [&] {
         if (_val > units) {
             _val -= units;
             ok = true;
