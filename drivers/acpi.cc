@@ -9,6 +9,9 @@ extern "C" {
 #include "drivers/clock.hh"
 #include "processor.hh"
 
+#include <osv/mutex.h>
+#include <osv/semaphore.hh>
+
 ACPI_STATUS AcpiOsInitialize(void)
 {
     return AE_OK;
@@ -51,49 +54,77 @@ ACPI_STATUS AcpiOsPhysicalTableOverride(ACPI_TABLE_HEADER *ExistingTable,
     return AE_OK;
 }
 
+// Note: AcpiOsCreateLock requires a lock which can be used for mutual
+// exclusion of a resources between multiple threads *AND* interrupt handlers.
+// Normally, this requires a spinlock (which disables interrupts), to ensure
+// that while a thread is using the protected resource, an interrupt handler
+// with the same context as the thread doesn't use it.
+// However, in OSV, interrupt handlers are run in ordinary threads, so the
+// mutual exclusion of an ordinary "mutex" is enough.
 ACPI_STATUS AcpiOsCreateLock(ACPI_SPINLOCK *OutHandle)
 {
-    // FIXME: implement
-    return AE_NOT_IMPLEMENTED;
+    *OutHandle = new mutex();
+    return AE_OK;
 }
 
 ACPI_CPU_FLAGS AcpiOsAcquireLock(ACPI_SPINLOCK Handle)
 {
-    // FIXME: implement
+    reinterpret_cast<mutex *>(Handle) -> lock();
     return 0;
 }
 
 void AcpiOsReleaseLock(ACPI_SPINLOCK Handle, ACPI_CPU_FLAGS Flags)
 {
-    // FIXME: implement
+    reinterpret_cast<mutex *>(Handle) -> unlock();;
 }
 
 void AcpiOsDeleteLock(ACPI_SPINLOCK Handle)
 {
-    // FIXME: implement
+    delete reinterpret_cast<mutex *>(Handle);
 }
 
 ACPI_STATUS AcpiOsCreateSemaphore(UINT32 MaxUnits,
         UINT32 InitialUnits, ACPI_SEMAPHORE *OutHandle)
 {
-    // FIXME: implement
-    return AE_NOT_IMPLEMENTED;
+    // Note: we ignore MaxUnits.
+    *OutHandle = new semaphore(InitialUnits);
+    return AE_OK;
 }
 
 ACPI_STATUS AcpiOsDeleteSemaphore(ACPI_SEMAPHORE Handle)
 {
-    return AE_NOT_IMPLEMENTED;
+    if (!Handle)
+        return AE_BAD_PARAMETER;
+    delete reinterpret_cast<semaphore *>(Handle);
+    return AE_OK;
 }
 
 ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE Handle,
         UINT32 Units, UINT16 Timeout)
 {
-    return AE_NOT_IMPLEMENTED;
+    if (!Handle)
+        return AE_BAD_PARAMETER;
+    semaphore *sem = reinterpret_cast<semaphore *>(Handle);
+    switch(Timeout) {
+    case ACPI_DO_NOT_WAIT:
+        return sem->trywait(Units) ? AE_OK : AE_TIME;
+    case ACPI_WAIT_FOREVER:
+        sem->wait(Units);
+        return AE_OK;
+    default:
+        sched::timer timer(*sched::thread::current());
+        timer.set(Timeout * 1_ms);
+        return sem->wait(Units, &timer) ? AE_OK : AE_TIME;
+    }
 }
 
 ACPI_STATUS AcpiOsSignalSemaphore(ACPI_SEMAPHORE Handle, UINT32 Units)
 {
-    return AE_NOT_IMPLEMENTED;
+    if (!Handle)
+        return AE_BAD_PARAMETER;
+    semaphore *sem = reinterpret_cast<semaphore *>(Handle);
+    sem->post(Units);
+    return AE_OK;
 }
 
 void *AcpiOsAllocate(ACPI_SIZE Size)
