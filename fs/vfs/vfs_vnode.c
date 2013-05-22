@@ -79,7 +79,7 @@ static mutex_t vnode_lock = MUTEX_INITIALIZER;
  * XXX(hch): replace with a better hash for 64-bit pointers.
  */
 static u_int
-vn_hash(mount_t mp, char *path)
+vn_hash(struct mount *mp, char *path)
 {
 	u_int val = 0;
 
@@ -95,7 +95,7 @@ vn_hash(mount_t mp, char *path)
  * vn_lock() will increment the reference count of vnode.
  */
 struct vnode *
-vn_lookup(mount_t mp, char *path)
+vn_lookup(struct mount *mp, char *path)
 {
 	struct vnode *vp;
 
@@ -148,7 +148,7 @@ vn_unlock(struct vnode *vp)
  * Increment its reference count and lock it.
  */
 struct vnode *
-vget(mount_t mp, char *path)
+vget(struct mount *mp, char *path)
 {
 	struct vnode *vp;
 	int error;
@@ -311,7 +311,7 @@ vcount(struct vnode *vp)
  * Remove all vnode in the vnode table for unmount.
  */
 void
-vflush(mount_t mp)
+vflush(struct mount *mp)
 {
 	int i;
 	struct vnode *vp;
@@ -412,7 +412,7 @@ vnode_dump(void)
 {
 	int i;
 	struct vnode *vp;
-	mount_t mp;
+	struct mount *mp;
 	char type[][6] = { "VNON ", "VREG ", "VDIR ", "VBLK ", "VCHR ",
 			   "VLNK ", "VSOCK", "VFIFO" };
 

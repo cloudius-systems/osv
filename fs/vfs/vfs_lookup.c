@@ -50,7 +50,7 @@ namei(char *path, struct vnode **vpp)
 	char *p;
 	char node[PATH_MAX];
 	char name[PATH_MAX];
-	mount_t mp;
+	struct mount *mp;
 	struct vnode *dvp, *vp;
 	int error, i;
 

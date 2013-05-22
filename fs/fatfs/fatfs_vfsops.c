@@ -45,10 +45,10 @@
 
 #include "fatfs.h"
 
-static int fatfs_mount	(mount_t mp, char *dev, int flags, void *data);
-static int fatfs_unmount(mount_t mp);
+static int fatfs_mount	(struct mount *mp, char *dev, int flags, void *data);
+static int fatfs_unmount(struct mount *mp);
 #define fatfs_sync	((vfsop_sync_t)vfs_nullop)
-static int fatfs_vget	(mount_t mp, struct vnode *vp);
+static int fatfs_vget	(struct mount *mp, struct vnode *vp);
 #define fatfs_statfs	((vfsop_statfs_t)vfs_nullop)
 
 /*
@@ -138,7 +138,7 @@ out:
  * Mount file system.
  */
 static int
-fatfs_mount(mount_t mp, char *dev, int flags, void *data)
+fatfs_mount(struct mount *mp, char *dev, int flags, void *data)
 {
 	struct fatfs_node *np;
 	struct fatfsmount *fmp;
@@ -188,7 +188,7 @@ fatfs_mount(mount_t mp, char *dev, int flags, void *data)
  * Unmount the file system.
  */
 static int
-fatfs_unmount(mount_t mp)
+fatfs_unmount(struct mount *mp)
 {
 	struct fatfsmount *fmp;
 
@@ -205,7 +205,7 @@ fatfs_unmount(mount_t mp)
  * Prepare the FAT specific node and fill the vnode.
  */
 static int
-fatfs_vget(mount_t mp, struct vnode *vp)
+fatfs_vget(struct mount *mp, struct vnode *vp)
 {
 	struct fatfs_node *np;
 

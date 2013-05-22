@@ -81,7 +81,7 @@ int
 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 {
 	const struct vfssw *fs;
-	mount_t mp;
+	struct mount *mp;
 	struct device *device;
 	struct vnode *vp, *vp_covered;
 	int error;
@@ -198,7 +198,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 int
 sys_umount(char *path)
 {
-	mount_t mp;
+	struct mount *mp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_umount: path=%s\n", path));
@@ -248,7 +248,7 @@ found:
 int
 sys_sync(void)
 {
-	mount_t mp;
+	struct mount *mp;
 
 	/* Call each mounted file system. */
 	MOUNT_LOCK();
@@ -294,9 +294,9 @@ count_match(char *path, char *mount_root)
  * @root: pointer to root directory in path.
  */
 int
-vfs_findroot(char *path, mount_t *mp, char **root)
+vfs_findroot(char *path, struct mount **mp, char **root)
 {
-	mount_t m = NULL, tmp;
+	struct mount *m = NULL, *tmp;
 	size_t len, max_len = 0;
 
 	if (!path)
@@ -325,7 +325,7 @@ vfs_findroot(char *path, mount_t *mp, char **root)
  * Mark a mount point as busy.
  */
 void
-vfs_busy(mount_t mp)
+vfs_busy(struct mount *mp)
 {
 
 	MOUNT_LOCK();
@@ -338,7 +338,7 @@ vfs_busy(mount_t mp)
  * Mark a mount point as busy.
  */
 void
-vfs_unbusy(mount_t mp)
+vfs_unbusy(struct mount *mp)
 {
 
 	MOUNT_LOCK();
@@ -362,7 +362,7 @@ vfs_einval(void)
 void
 mount_dump(void)
 {
-	mount_t mp;
+	struct mount *mp;
 
 	MOUNT_LOCK();
 

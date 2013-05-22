@@ -53,7 +53,6 @@ struct mount {
 	struct vnode	*m_covered;	/* vnode covered on parent fs */
 	void		*m_data;	/* private data for fs */
 };
-typedef struct mount *mount_t;
 
 
 /*
@@ -103,19 +102,19 @@ struct vfssw {
  * Operations supported on virtual file system.
  */
 struct vfsops {
-	int (*vfs_mount)	(mount_t, char *, int, void *);
-	int (*vfs_unmount)	(mount_t);
-	int (*vfs_sync)		(mount_t);
-	int (*vfs_vget)		(mount_t, struct vnode *);
-	int (*vfs_statfs)	(mount_t, struct statfs *);
+	int (*vfs_mount)	(struct mount *, char *, int, void *);
+	int (*vfs_unmount)	(struct mount *);
+	int (*vfs_sync)		(struct mount *);
+	int (*vfs_vget)		(struct mount *, struct vnode *);
+	int (*vfs_statfs)	(struct mount *, struct statfs *);
 	struct vnops	*vfs_vnops;
 };
 
-typedef int (*vfsop_mount_t)(mount_t, char *, int, void *);
-typedef int (*vfsop_umount_t)(mount_t);
-typedef int (*vfsop_sync_t)(mount_t);
-typedef int (*vfsop_vget_t)(mount_t, struct vnode *);
-typedef int (*vfsop_statfs_t)(mount_t, struct statfs *);
+typedef int (*vfsop_mount_t)(struct mount *, char *, int, void *);
+typedef int (*vfsop_umount_t)(struct mount *);
+typedef int (*vfsop_sync_t)(struct mount *);
+typedef int (*vfsop_vget_t)(struct mount *, struct vnode *);
+typedef int (*vfsop_statfs_t)(struct mount *, struct statfs *);
 
 /*
  * VFS interface

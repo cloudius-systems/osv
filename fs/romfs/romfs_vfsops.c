@@ -14,7 +14,7 @@
 extern struct vnops romfs_vnops;
 
 static int
-romfs_mount(mount_t mp, char *dev, int flags, void *data)
+romfs_mount(struct mount *mp, char *dev, int flags, void *data)
 {
 	struct romfs_dsb *sb;
 	struct romfs_mount *rmp;
@@ -71,14 +71,14 @@ out_free_rmp:
 }
 
 static int
-romfs_unmount(mount_t mp)
+romfs_unmount(struct mount *mp)
 {
 
 	return EBUSY;
 }
 
 static int
-romfs_vget(mount_t mp, struct vnode *vp)
+romfs_vget(struct mount *mp, struct vnode *vp)
 {
 	struct romfs_node *np = malloc(sizeof(*np));
 

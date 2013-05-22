@@ -122,9 +122,9 @@ int	 namei(char *path, struct vnode **vpp);
 int	 lookup(char *path, struct vnode **vpp, char **name);
 void	 vnode_init(void);
 
-int	 vfs_findroot(char *path, mount_t *mp, char **root);
-void	 vfs_busy(mount_t mp);
-void	 vfs_unbusy(mount_t mp);
+int	 vfs_findroot(char *path, struct mount **mp, char **root);
+void	 vfs_busy(struct mount *mp);
+void	 vfs_unbusy(struct mount *mp);
 
 int	 fs_noop(void);
 

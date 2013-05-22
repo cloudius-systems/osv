@@ -36,8 +36,8 @@
 
 extern struct vnops ramfs_vnops;
 
-static int ramfs_mount(mount_t mp, char *dev, int flags, void *data);
-static int ramfs_unmount(mount_t mp);
+static int ramfs_mount(struct mount *mp, char *dev, int flags, void *data);
+static int ramfs_unmount(struct mount *mp);
 #define ramfs_sync	((vfsop_sync_t)vfs_nullop)
 #define ramfs_vget	((vfsop_vget_t)vfs_nullop)
 #define ramfs_statfs	((vfsop_statfs_t)vfs_nullop)
@@ -58,7 +58,7 @@ struct vfsops ramfs_vfsops = {
  * Mount a file system.
  */
 static int
-ramfs_mount(mount_t mp, char *dev, int flags, void *data)
+ramfs_mount(struct mount *mp, char *dev, int flags, void *data)
 {
 	struct ramfs_node *np;
 
@@ -80,7 +80,7 @@ ramfs_mount(mount_t mp, char *dev, int flags, void *data)
  *       directories, and it requires more work...
  */
 static int
-ramfs_unmount(mount_t mp)
+ramfs_unmount(struct mount *mp)
 {
 
 	return EBUSY;
