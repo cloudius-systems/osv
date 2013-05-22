@@ -32,6 +32,7 @@
 #include "barrier.hh"
 #include "smp.hh"
 #include "bsd/sys/sys/sysctl.h"
+#include <osv/power.hh>
 
 #define __LC_LAST 13
 
@@ -87,9 +88,7 @@ void abort()
         debug("Aborted\n");
         already_aborted = true;
     }
-    crash_other_processors();
-    while (true)
-	processor::halt_no_interrupts();
+    osv::halt();
 }
 
 void __cxa_pure_virtual(void)
