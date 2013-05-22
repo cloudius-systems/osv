@@ -25,6 +25,7 @@
 #include "barrier.hh"
 #include "arch.hh"
 #include "osv/trace.hh"
+#include <osv/power.hh>
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -227,7 +228,13 @@ void main_cont(int ac, char** av)
     pthread_create(&pthread, nullptr, do_main_thread, &args);
     void* retval;
     pthread_join(pthread, &retval);
-    sched::thread::wait_until([] { return false; });
+    if (memory::tracker_enabled) {
+        debug("Leak testing done. Please use 'osv leak show' in gdb to analyze results.\n");
+        osv::halt();
+    } else {
+        debug("Powering off.\n");
+        osv::poweroff();
+    }
 }
 
 int __argc;
