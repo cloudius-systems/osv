@@ -240,6 +240,7 @@ out_errno:
 	return -1;
 }
 
+extern "C"
 ssize_t pwrite64(int, const void*, size_t, off_t) __attribute__((weak, alias("pwrite")));
 
 ssize_t write(int fd, const void *buf, size_t count)
