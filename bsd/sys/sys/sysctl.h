@@ -196,6 +196,7 @@ void sysctl_unregister_oid(struct sysctl_oid *oidp);
 #undef SYSCTL_UINT
 #undef SYSCTL_INT
 #undef SYSCTL_ULONG
+#undef SYSCTL_UQUAD
 #undef SYSCTL_PROC
 #undef SYSCTL_OPAQUE
 #undef SYSCTL_STRING

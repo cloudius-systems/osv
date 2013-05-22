@@ -105,6 +105,7 @@ extern int tick;
 #define SYSCTL_UINT(...)
 #define SYSCTL_INT(...)
 #define SYSCTL_ULONG(...)
+#define SYSCTL_UQUAD(...)
 #define SYSCTL_PROC(...)
 #define SYSCTL_OPAQUE(...)
 #define SYSCTL_STRING(...)
