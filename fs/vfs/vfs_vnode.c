@@ -94,10 +94,10 @@ vn_hash(mount_t mp, char *path)
  * Returns locked vnode for specified mount point and path.
  * vn_lock() will increment the reference count of vnode.
  */
-vnode_t
+struct vnode *
 vn_lookup(mount_t mp, char *path)
 {
-	vnode_t vp;
+	struct vnode *vp;
 
 	VNODE_LOCK();
 	LIST_FOREACH(vp, &vnode_table[vn_hash(mp, path)], v_link) {
@@ -118,7 +118,7 @@ vn_lookup(mount_t mp, char *path)
  * Lock vnode
  */
 void
-vn_lock(vnode_t vp)
+vn_lock(struct vnode *vp)
 {
 	ASSERT(vp);
 	ASSERT(vp->v_refcnt > 0);
@@ -132,7 +132,7 @@ vn_lock(vnode_t vp)
  * Unlock vnode
  */
 void
-vn_unlock(vnode_t vp)
+vn_unlock(struct vnode *vp)
 {
 	ASSERT(vp);
 	ASSERT(vp->v_refcnt > 0);
@@ -147,10 +147,10 @@ vn_unlock(vnode_t vp)
  * Allocate new vnode for specified path.
  * Increment its reference count and lock it.
  */
-vnode_t
+struct vnode *
 vget(mount_t mp, char *path)
 {
-	vnode_t vp;
+	struct vnode *vp;
 	int error;
 	size_t len;
 
@@ -195,7 +195,7 @@ vget(mount_t mp, char *path)
  * Unlock vnode and decrement its reference count.
  */
 void
-vput(vnode_t vp)
+vput(struct vnode *vp)
 {
 	ASSERT(vp);
 	ASSERT(vp->v_nrlocks > 0);
@@ -230,7 +230,7 @@ vput(vnode_t vp)
  * Increment the reference count on an active vnode.
  */
 void
-vref(vnode_t vp)
+vref(struct vnode *vp)
 {
 	ASSERT(vp);
 	ASSERT(vp->v_refcnt > 0);	/* Need vget */
@@ -249,7 +249,7 @@ vref(vnode_t vp)
  * If count drops to zero, call inactive routine and return to freelist.
  */
 void
-vrele(vnode_t vp)
+vrele(struct vnode *vp)
 {
 	ASSERT(vp);
 	ASSERT(vp->v_refcnt > 0);
@@ -279,7 +279,7 @@ vrele(vnode_t vp)
  * vgone() is called when unlocked vnode is no longer valid.
  */
 void
-vgone(vnode_t vp)
+vgone(struct vnode *vp)
 {
 	ASSERT(vp->v_nrlocks == 0);
 
@@ -297,7 +297,7 @@ vgone(vnode_t vp)
  * Return reference count.
  */
 int
-vcount(vnode_t vp)
+vcount(struct vnode *vp)
 {
 	int count;
 
@@ -314,7 +314,7 @@ void
 vflush(mount_t mp)
 {
 	int i;
-	vnode_t vp;
+	struct vnode *vp;
 
 	VNODE_LOCK();
 	for (i = 0; i < VNODE_BUCKETS; i++) {
@@ -328,7 +328,7 @@ vflush(mount_t mp)
 }
 
 int
-vn_stat(vnode_t vp, struct stat *st)
+vn_stat(struct vnode *vp, struct stat *st)
 {
 	mode_t mode;
 
@@ -377,7 +377,7 @@ vn_stat(vnode_t vp, struct stat *st)
  * Chceck permission on vnode pointer.
  */
 int
-vn_access(vnode_t vp, int flags)
+vn_access(struct vnode *vp, int flags)
 {
 	int error = 0;
 
@@ -411,7 +411,7 @@ void
 vnode_dump(void)
 {
 	int i;
-	vnode_t vp;
+	struct vnode *vp;
 	mount_t mp;
 	char type[][6] = { "VNON ", "VREG ", "VDIR ", "VBLK ", "VCHR ",
 			   "VLNK ", "VSOCK", "VFIFO" };

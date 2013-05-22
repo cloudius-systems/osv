@@ -156,7 +156,7 @@ ramfs_rename_node(struct ramfs_node *np, char *name)
 }
 
 static int
-ramfs_lookup(vnode_t dvp, char *name, vnode_t vp)
+ramfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
 {
 	struct ramfs_node *np, *dnp;
 	size_t len;
@@ -191,7 +191,7 @@ ramfs_lookup(vnode_t dvp, char *name, vnode_t vp)
 }
 
 static int
-ramfs_mkdir(vnode_t dvp, char *name, mode_t mode)
+ramfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
 {
 	struct ramfs_node *np;
 
@@ -208,7 +208,7 @@ ramfs_mkdir(vnode_t dvp, char *name, mode_t mode)
 
 /* Remove a directory */
 static int
-ramfs_rmdir(vnode_t dvp, vnode_t vp, char *name)
+ramfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
 {
 
 	return ramfs_remove_node(dvp->v_data, vp->v_data);
@@ -216,7 +216,7 @@ ramfs_rmdir(vnode_t dvp, vnode_t vp, char *name)
 
 /* Remove a file */
 static int
-ramfs_remove(vnode_t dvp, vnode_t vp, char *name)
+ramfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
 	struct ramfs_node *np;
 	int error;
@@ -234,7 +234,7 @@ ramfs_remove(vnode_t dvp, vnode_t vp, char *name)
 
 /* Truncate file */
 static int
-ramfs_truncate(vnode_t vp, off_t length)
+ramfs_truncate(struct vnode *vp, off_t length)
 {
 	struct ramfs_node *np;
 	void *new_buf;
@@ -271,7 +271,7 @@ ramfs_truncate(vnode_t vp, off_t length)
  * Create empty file.
  */
 static int
-ramfs_create(vnode_t dvp, char *name, mode_t mode)
+ramfs_create(struct vnode *dvp, char *name, mode_t mode)
 {
 	struct ramfs_node *np;
 
@@ -353,8 +353,8 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 }
 
 static int
-ramfs_rename(vnode_t dvp1, vnode_t vp1, char *name1,
-	     vnode_t dvp2, vnode_t vp2, char *name2)
+ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
+	     struct vnode *dvp2, struct vnode *vp2, char *name2)
 {
 	struct ramfs_node *np, *old_np;
 	int error;
@@ -394,7 +394,7 @@ ramfs_rename(vnode_t dvp1, vnode_t vp1, char *name1,
  * @vp: vnode of the directory.
  */
 static int
-ramfs_readdir(vnode_t vp, file_t fp, struct dirent *dir)
+ramfs_readdir(struct vnode *vp, file_t fp, struct dirent *dir)
 {
 	struct ramfs_node *np, *dnp;
 	int i;

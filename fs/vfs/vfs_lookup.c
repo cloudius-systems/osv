@@ -45,13 +45,13 @@
  * @vpp:  vnode to be returned.
  */
 int
-namei(char *path, vnode_t *vpp)
+namei(char *path, struct vnode **vpp)
 {
 	char *p;
 	char node[PATH_MAX];
 	char name[PATH_MAX];
 	mount_t mp;
-	vnode_t dvp, vp;
+	struct vnode *dvp, *vp;
 	int error, i;
 
 	DPRINTF(VFSDB_VNODE, ("namei: path=%s\n", path));
@@ -148,12 +148,12 @@ namei(char *path, vnode_t *vpp)
  * This routine returns a locked directory vnode and file name.
  */
 int
-lookup(char *path, vnode_t *vpp, char **name)
+lookup(char *path, struct vnode **vpp, char **name)
 {
 	char buf[PATH_MAX];
 	char root[] = "/";
 	char *file, *dir;
-	vnode_t vp;
+	struct vnode *vp;
 	int error;
 
 	DPRINTF(VFSDB_VNODE, ("lookup: path=%s\n", path));

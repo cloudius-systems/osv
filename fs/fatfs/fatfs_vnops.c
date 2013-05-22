@@ -51,7 +51,7 @@
 #define TEMP_DATE   0x3021
 #define TEMP_TIME   0
 
-static int	fatfs_rmdir(vnode_t dvp, vnode_t vp, char *name);
+static int	fatfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name);
 
 
 static int
@@ -100,7 +100,7 @@ fat_write_cluster(struct fatfsmount *fmp, u_long cluster)
  * The vnode data will be set properly.
  */
 static int
-fatfs_lookup(vnode_t dvp, char *name, vnode_t vp)
+fatfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
 {
 	struct fatfsmount *fmp;
 	struct fat_dirent *de;
@@ -305,7 +305,7 @@ fatfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 }
 
 static int
-fatfs_readdir(vnode_t vp, file_t fp, struct dirent *dir)
+fatfs_readdir(struct vnode *vp, file_t fp, struct dirent *dir)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node np;
@@ -342,7 +342,7 @@ fatfs_readdir(vnode_t vp, file_t fp, struct dirent *dir)
  * Create empty file.
  */
 static int
-fatfs_create(vnode_t dvp, char *name, mode_t mode)
+fatfs_create(struct vnode *dvp, char *name, mode_t mode)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node np;
@@ -383,7 +383,7 @@ fatfs_create(vnode_t dvp, char *name, mode_t mode)
 }
 
 static int
-fatfs_remove(vnode_t dvp, vnode_t vp, char *name)
+fatfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node np;
@@ -423,8 +423,8 @@ fatfs_remove(vnode_t dvp, vnode_t vp, char *name)
 }
 
 static int
-fatfs_rename(vnode_t dvp1, vnode_t vp1, char *name1,
-	     vnode_t dvp2, vnode_t vp2, char *name2)
+fatfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
+	     struct vnode *dvp2, struct vnode *vp2, char *name2)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node *dp2 = dvp2->v_data;
@@ -520,7 +520,7 @@ fatfs_rename(vnode_t dvp1, vnode_t vp1, char *name1,
 }
 
 static int
-fatfs_mkdir(vnode_t dvp, char *name, mode_t mode)
+fatfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node *dp = dvp->v_data;
@@ -585,7 +585,7 @@ fatfs_mkdir(vnode_t dvp, char *name, mode_t mode)
  * remove can be done only with empty directory
  */
 static int
-fatfs_rmdir(vnode_t dvp, vnode_t vp, char *name)
+fatfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node np;
@@ -623,14 +623,14 @@ fatfs_rmdir(vnode_t dvp, vnode_t vp, char *name)
 }
 
 static int
-fatfs_getattr(vnode_t vp, struct vattr *vap)
+fatfs_getattr(struct vnode *vp, struct vattr *vap)
 {
 	/* XXX */
 	return 0;
 }
 
 static int
-fatfs_setattr(vnode_t vp, struct vattr *vap)
+fatfs_setattr(struct vnode *vp, struct vattr *vap)
 {
 	/* XXX */
 	return 0;
@@ -638,7 +638,7 @@ fatfs_setattr(vnode_t vp, struct vattr *vap)
 
 
 static int
-fatfs_inactive(vnode_t vp)
+fatfs_inactive(struct vnode *vp)
 {
 
 	free(vp->v_data);
@@ -646,7 +646,7 @@ fatfs_inactive(vnode_t vp)
 }
 
 static int
-fatfs_truncate(vnode_t vp, off_t length)
+fatfs_truncate(struct vnode *vp, off_t length)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node *np;

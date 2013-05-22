@@ -276,7 +276,7 @@ out_unlock:
 }
 
 static int
-romfs_mkdir(vnode_t dvp, char *name, mode_t mode)
+romfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
 {
 	if (!S_ISDIR(mode))
 		return EINVAL;
@@ -284,19 +284,19 @@ romfs_mkdir(vnode_t dvp, char *name, mode_t mode)
 }
 
 static int
-romfs_rmdir(vnode_t dvp, vnode_t vp, char *name)
+romfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
 {
 	return EPERM;
 }
 
 static int
-romfs_remove(vnode_t dvp, vnode_t vp, char *name)
+romfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
 	return EPERM;
 }
 
 static int
-romfs_inactive(vnode_t vp)
+romfs_inactive(struct vnode *vp)
 {
 	free(vp->v_data);
 	return 0;
@@ -304,20 +304,20 @@ romfs_inactive(vnode_t vp)
 
 
 static int
-romfs_truncate(vnode_t vp, off_t length)
+romfs_truncate(struct vnode *vp, off_t length)
 {
 	return EROFS;
 }
 
 static int
-romfs_create(vnode_t dvp, char *name, mode_t mode)
+romfs_create(struct vnode *dvp, char *name, mode_t mode)
 {
 	return EPERM;
 }
 
 static int
-romfs_rename(vnode_t dvp1, vnode_t vp1, char *name1,
-	     vnode_t dvp2, vnode_t vp2, char *name2)
+romfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
+	     struct vnode *dvp2, struct vnode *vp2, char *name2)
 {
 	return EPERM;
 }

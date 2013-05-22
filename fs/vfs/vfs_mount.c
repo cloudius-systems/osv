@@ -83,7 +83,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	const struct vfssw *fs;
 	mount_t mp;
 	struct device *device;
-	vnode_t vp, vp_covered;
+	struct vnode *vp, *vp_covered;
 	int error;
 
 	kprintf("VFS: mounting %s at %s\n", fsname, dir);

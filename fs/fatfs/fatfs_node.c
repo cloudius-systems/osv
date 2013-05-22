@@ -118,7 +118,7 @@ fat_lookup_dirent(struct fatfsmount *fmp, u_long sec, char *name,
  * @np: pointer to fat node
  */
 int
-fatfs_lookup_node(vnode_t dvp, char *name, struct fatfs_node *np)
+fatfs_lookup_node(struct vnode *dvp, char *name, struct fatfs_node *np)
 {
 	struct fatfs_node *dp = dvp->v_data;
 	struct fatfsmount *fmp;
@@ -212,7 +212,7 @@ fat_get_dirent(struct fatfsmount *fmp, u_long sec, int target, int *index,
  * @np: pointer to fat node
  */
 int
-fatfs_get_node(vnode_t dvp, int index, struct fatfs_node *np)
+fatfs_get_node(struct vnode *dvp, int index, struct fatfs_node *np)
 {
 	struct fatfs_node *dp = dvp->v_data;
 	struct fatfsmount *fmp;
@@ -291,7 +291,7 @@ fat_add_dirent(struct fatfsmount *fmp, u_long sec, struct fatfs_node *np)
  * @np: pointer to fat node
  */
 int
-fatfs_add_node(vnode_t dvp, struct fatfs_node *np)
+fatfs_add_node(struct vnode *dvp, struct fatfs_node *np)
 {
 	struct fatfsmount *fmp;
 	struct fatfs_node *dp = dvp->v_data;

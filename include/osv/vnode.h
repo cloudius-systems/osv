@@ -77,7 +77,6 @@ struct vnode {
 	char		*v_path;	/* pointer to path in fs */
 	void		*v_data;	/* private data for fs */
 };
-typedef struct vnode *vnode_t;
 
 /* flags for vnode */
 #define VROOT		0x0001		/* root of its file system */
@@ -101,24 +100,25 @@ struct vattr {
 
 #define IO_APPEND	0x0001
 
-typedef	int (*vnop_open_t)	(vnode_t, int);
-typedef	int (*vnop_close_t)	(vnode_t, file_t);
+typedef	int (*vnop_open_t)	(struct vnode *, int);
+typedef	int (*vnop_close_t)	(struct vnode *, file_t);
 typedef	int (*vnop_read_t)	(struct vnode *, struct uio *, int);
 typedef	int (*vnop_write_t)	(struct vnode *, struct uio *, int);
-typedef	int (*vnop_seek_t)	(vnode_t, file_t, off_t, off_t);
-typedef	int (*vnop_ioctl_t)	(vnode_t, file_t, u_long, void *);
-typedef	int (*vnop_fsync_t)	(vnode_t, file_t);
-typedef	int (*vnop_readdir_t)	(vnode_t, file_t, struct dirent *);
-typedef	int (*vnop_lookup_t)	(vnode_t, char *, vnode_t);
-typedef	int (*vnop_create_t)	(vnode_t, char *, mode_t);
-typedef	int (*vnop_remove_t)	(vnode_t, vnode_t, char *);
-typedef	int (*vnop_rename_t)	(vnode_t, vnode_t, char *, vnode_t, vnode_t, char *);
-typedef	int (*vnop_mkdir_t)	(vnode_t, char *, mode_t);
-typedef	int (*vnop_rmdir_t)	(vnode_t, vnode_t, char *);
-typedef	int (*vnop_getattr_t)	(vnode_t, struct vattr *);
-typedef	int (*vnop_setattr_t)	(vnode_t, struct vattr *);
-typedef	int (*vnop_inactive_t)	(vnode_t);
-typedef	int (*vnop_truncate_t)	(vnode_t, off_t);
+typedef	int (*vnop_seek_t)	(struct vnode *, file_t, off_t, off_t);
+typedef	int (*vnop_ioctl_t)	(struct vnode *, file_t, u_long, void *);
+typedef	int (*vnop_fsync_t)	(struct vnode *, file_t);
+typedef	int (*vnop_readdir_t)	(struct vnode *, file_t, struct dirent *);
+typedef	int (*vnop_lookup_t)	(struct vnode *, char *, struct vnode *);
+typedef	int (*vnop_create_t)	(struct vnode *, char *, mode_t);
+typedef	int (*vnop_remove_t)	(struct vnode *, struct vnode *, char *);
+typedef	int (*vnop_rename_t)	(struct vnode *, struct vnode *, char *,
+				 struct vnode *, struct vnode *, char *);
+typedef	int (*vnop_mkdir_t)	(struct vnode *, char *, mode_t);
+typedef	int (*vnop_rmdir_t)	(struct vnode *, struct vnode *, char *);
+typedef	int (*vnop_getattr_t)	(struct vnode *, struct vattr *);
+typedef	int (*vnop_setattr_t)	(struct vnode *, struct vattr *);
+typedef	int (*vnop_inactive_t)	(struct vnode *);
+typedef	int (*vnop_truncate_t)	(struct vnode *, off_t);
 
 /*
  * vnode operations
@@ -169,17 +169,17 @@ struct vnops {
 
 int	 vop_nullop(void);
 int	 vop_einval(void);
-vnode_t	 vn_lookup(struct mount *, char *);
-void	 vn_lock(vnode_t);
-void	 vn_unlock(vnode_t);
-int	 vn_stat(vnode_t, struct stat *);
-int	 vn_access(vnode_t, int);
-vnode_t	 vget(struct mount *, char *);
-void	 vput(vnode_t);
-void	 vgone(vnode_t);
-void	 vref(vnode_t);
-void	 vrele(vnode_t);
-int	 vcount(vnode_t);
+struct vnode *vn_lookup(struct mount *, char *);
+void	 vn_lock(struct vnode *);
+void	 vn_unlock(struct vnode *);
+int	 vn_stat(struct vnode *, struct stat *);
+int	 vn_access(struct vnode *, int);
+struct vnode *vget(struct mount *, char *);
+void	 vput(struct vnode *);
+void	 vgone(struct vnode *);
+void	 vref(struct vnode *);
+void	 vrele(struct vnode *);
+int	 vcount(struct vnode *);
 void	 vflush(struct mount *);
 
 __END_DECLS

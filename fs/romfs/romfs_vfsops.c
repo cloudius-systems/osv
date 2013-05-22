@@ -78,7 +78,7 @@ romfs_unmount(mount_t mp)
 }
 
 static int
-romfs_vget(mount_t mp, vnode_t vp)
+romfs_vget(mount_t mp, struct vnode *vp)
 {
 	struct romfs_node *np = malloc(sizeof(*np));
 

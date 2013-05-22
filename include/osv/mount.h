@@ -106,7 +106,7 @@ struct vfsops {
 	int (*vfs_mount)	(mount_t, char *, int, void *);
 	int (*vfs_unmount)	(mount_t);
 	int (*vfs_sync)		(mount_t);
-	int (*vfs_vget)		(mount_t, vnode_t);
+	int (*vfs_vget)		(mount_t, struct vnode *);
 	int (*vfs_statfs)	(mount_t, struct statfs *);
 	struct vnops	*vfs_vnops;
 };
@@ -114,7 +114,7 @@ struct vfsops {
 typedef int (*vfsop_mount_t)(mount_t, char *, int, void *);
 typedef int (*vfsop_umount_t)(mount_t);
 typedef int (*vfsop_sync_t)(mount_t);
-typedef int (*vfsop_vget_t)(mount_t, vnode_t);
+typedef int (*vfsop_vget_t)(mount_t, struct vnode *);
 typedef int (*vfsop_statfs_t)(mount_t, struct statfs *);
 
 /*

@@ -118,8 +118,8 @@ int	 task_conv(struct task *t, const char *path, int mode, char *full);
 //int	 sec_file_permission(task_t task, char *path, int mode);
 int	 sec_vnode_permission(char *path);
 
-int	 namei(char *path, vnode_t *vpp);
-int	 lookup(char *path, vnode_t *vpp, char **name);
+int	 namei(char *path, struct vnode **vpp);
+int	 lookup(char *path, struct vnode **vpp, char **name);
 void	 vnode_init(void);
 
 int	 vfs_findroot(char *path, mount_t *mp, char **root);

@@ -50,7 +50,7 @@
 int
 sys_open(char *path, int flags, mode_t mode, struct file *fp)
 {
-	vnode_t vp, dvp;
+	struct vnode *vp, *dvp;
 	char *filename;
 	int error;
 
@@ -212,7 +212,7 @@ sys_write(file_t fp, struct iovec *iov, size_t niov,
 int
 sys_lseek(file_t fp, off_t off, int type, off_t *origin)
 {
-	vnode_t vp;
+	struct vnode *vp;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_seek: fp=%x off=%d type=%d\n",
 				(u_int)fp, (u_int)off, type));
@@ -276,7 +276,7 @@ sys_ioctl(file_t fp, u_long request, void *buf)
 int
 sys_fsync(file_t fp)
 {
-	vnode_t vp;
+	struct vnode *vp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_fsync: fp=%x\n", fp));
@@ -341,7 +341,7 @@ out_fdrop:
 int
 sys_readdir(file_t fp, struct dirent *dir)
 {
-	vnode_t dvp;
+	struct vnode *dvp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_readdir: fp=%x\n", fp));
@@ -362,7 +362,7 @@ sys_readdir(file_t fp, struct dirent *dir)
 int
 sys_rewinddir(file_t fp)
 {
-	vnode_t dvp;
+	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
 	vn_lock(dvp);
@@ -378,7 +378,7 @@ sys_rewinddir(file_t fp)
 int
 sys_seekdir(file_t fp, long loc)
 {
-	vnode_t dvp;
+	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
 	vn_lock(dvp);
@@ -394,7 +394,7 @@ sys_seekdir(file_t fp, long loc)
 int
 sys_telldir(file_t fp, long *loc)
 {
-	vnode_t dvp;
+	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
 	vn_lock(dvp);
@@ -411,7 +411,7 @@ int
 sys_mkdir(char *path, mode_t mode)
 {
 	char *name;
-	vnode_t vp, dvp;
+	struct vnode *vp, *dvp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_mkdir: path=%s mode=%d\n",	path, mode));
@@ -441,7 +441,7 @@ sys_mkdir(char *path, mode_t mode)
 int
 sys_rmdir(char *path)
 {
-	vnode_t vp, dvp;
+	struct vnode *vp, *dvp;
 	int error;
 	char *name;
 
@@ -479,7 +479,7 @@ int
 sys_mknod(char *path, mode_t mode)
 {
 	char *name;
-	vnode_t vp, dvp;
+	struct vnode *vp, *dvp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_mknod: path=%s mode=%d\n",	path, mode));
@@ -516,7 +516,7 @@ sys_mknod(char *path, mode_t mode)
 int
 sys_rename(char *src, char *dest)
 {
-	vnode_t vp1, vp2 = 0, dvp1, dvp2;
+	struct vnode *vp1, *vp2 = 0, *dvp1, *dvp2;
 	char *sname, *dname;
 	int error;
 	size_t len;
@@ -605,7 +605,7 @@ int
 sys_unlink(char *path)
 {
 	char *name;
-	vnode_t vp, dvp;
+	struct vnode *vp, *dvp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
@@ -640,7 +640,7 @@ sys_unlink(char *path)
 int
 sys_access(char *path, int mode)
 {
-	vnode_t vp;
+	struct vnode *vp;
 	int error, flags;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_access: path=%s mode=%x\n", path, mode));
@@ -666,7 +666,7 @@ sys_access(char *path, int mode)
 int
 sys_stat(char *path, struct stat *st)
 {
-	vnode_t vp;
+	struct vnode *vp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_stat: path=%s\n", path));
@@ -726,7 +726,7 @@ sys_ftruncate(file_t fp, off_t length)
 int
 sys_fchdir(file_t fp, char *cwd)
 {
-	vnode_t dvp;
+	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
 	vn_lock(dvp);

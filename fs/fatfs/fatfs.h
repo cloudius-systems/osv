@@ -145,7 +145,7 @@ struct fatfsmount {
 	u_long	last_cluster;	/* last cluser */
 	u_long	fat_mask;	/* mask for cluster# */
 	u_long	free_scan;	/* start cluster# to free search */
-	vnode_t	root_vnode;	/* vnode for root */
+	struct vnode *root_vnode;	/* vnode for root */
 	char	*io_buf;	/* local data buffer */
 	char	*fat_buf;	/* buffer for fat entry */
 	char	*dir_buf;	/* buffer for directory entry */
@@ -194,10 +194,10 @@ int	 fat_compare_name(char *n1, char *n2);
 void	 fat_mode_to_attr(mode_t mode, u_char *attr);
 void	 fat_attr_to_mode(u_char attr, mode_t *mode);
 
-int	 fatfs_lookup_node(vnode_t dvp, char *name, struct fatfs_node *node);
-int	 fatfs_get_node(vnode_t dvp, int index, struct fatfs_node *node);
+int	 fatfs_lookup_node(struct vnode *dvp, char *name, struct fatfs_node *node);
+int	 fatfs_get_node(struct vnode *dvp, int index, struct fatfs_node *node);
 int	 fatfs_put_node(struct fatfsmount *fmp, struct fatfs_node *node);
-int	 fatfs_add_node(vnode_t dvp, struct fatfs_node *node);
+int	 fatfs_add_node(struct vnode *dvp, struct fatfs_node *node);
 __END_DECLS
 
 #endif /* !_FATFS_H */

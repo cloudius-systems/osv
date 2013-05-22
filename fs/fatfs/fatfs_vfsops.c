@@ -48,7 +48,7 @@
 static int fatfs_mount	(mount_t mp, char *dev, int flags, void *data);
 static int fatfs_unmount(mount_t mp);
 #define fatfs_sync	((vfsop_sync_t)vfs_nullop)
-static int fatfs_vget	(mount_t mp, vnode_t vp);
+static int fatfs_vget	(mount_t mp, struct vnode *vp);
 #define fatfs_statfs	((vfsop_statfs_t)vfs_nullop)
 
 /*
@@ -142,7 +142,7 @@ fatfs_mount(mount_t mp, char *dev, int flags, void *data)
 {
 	struct fatfs_node *np;
 	struct fatfsmount *fmp;
-	vnode_t vp;
+	struct vnode *vp;
 	int error = 0;
 
 	DPRINTF(("fatfs_mount device=%s\n", dev));
@@ -205,7 +205,7 @@ fatfs_unmount(mount_t mp)
  * Prepare the FAT specific node and fill the vnode.
  */
 static int
-fatfs_vget(mount_t mp, vnode_t vp)
+fatfs_vget(mount_t mp, struct vnode *vp)
 {
 	struct fatfs_node *np;
 
