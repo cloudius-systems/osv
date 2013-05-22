@@ -35,6 +35,7 @@
 #include <sys/cdefs.h>
 #include <sys/statfs.h>
 #include <osv/vnode.h>
+#include <osv/list.h>
 
 __BEGIN_DECLS
 

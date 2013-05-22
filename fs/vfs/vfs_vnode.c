@@ -63,7 +63,7 @@
  * All active (opened) vnodes are stored on this hash table.
  * They can be accessed by its path name.
  */
-static struct list_head vnode_table[VNODE_BUCKETS];
+static LIST_HEAD(vnode_hash_head, vnode) vnode_table[VNODE_BUCKETS];
 
 /*
  * Global lock to access all vnodes and vnode table.
@@ -97,13 +97,10 @@ vn_hash(mount_t mp, char *path)
 vnode_t
 vn_lookup(mount_t mp, char *path)
 {
-	list_t head, n;
 	vnode_t vp;
 
 	VNODE_LOCK();
-	head = &vnode_table[vn_hash(mp, path)];
-	for (n = list_first(head); n != head; n = list_next(n)) {
-		vp = list_entry(n, struct vnode, v_link);
+	LIST_FOREACH(vp, &vnode_table[vn_hash(mp, path)], v_link) {
 		if (vp->v_mount == mp &&
 		    !strncmp(vp->v_path, path, PATH_MAX)) {
 			vp->v_refcnt++;
@@ -189,7 +186,7 @@ vget(mount_t mp, char *path)
 	vp->v_nrlocks++;
 
 	VNODE_LOCK();
-	list_insert(&vnode_table[vn_hash(mp, path)], &vp->v_link);
+	LIST_INSERT_HEAD(&vnode_table[vn_hash(mp, path)], vp, v_link);
 	VNODE_UNLOCK();
 	return vp;
 }
@@ -206,14 +203,14 @@ vput(vnode_t vp)
 	DPRINTF(VFSDB_VNODE, ("vput: ref=%d %s\n", vp->v_refcnt,
 			      vp->v_path));
 
-    VNODE_LOCK();
+	VNODE_LOCK();
 	vp->v_refcnt--;
 	if (vp->v_refcnt > 0) {
 	    VNODE_UNLOCK();
 		vn_unlock(vp);
 		return;
 	}
-	list_remove(&vp->v_link);
+	LIST_REMOVE(vp, v_link);
 	VNODE_UNLOCK();
 
 	/*
@@ -265,7 +262,7 @@ vrele(vnode_t vp)
 		VNODE_UNLOCK();
 		return;
 	}
-	list_remove(&vp->v_link);
+	LIST_REMOVE(vp, v_link);
 	VNODE_UNLOCK();
 
 	/*
@@ -288,7 +285,7 @@ vgone(vnode_t vp)
 
 	VNODE_LOCK();
 	DPRINTF(VFSDB_VNODE, ("vgone: %s\n", vp->v_path));
-	list_remove(&vp->v_link);
+	LIST_REMOVE(vp, v_link);
 	vfs_unbusy(vp->v_mount);
 	mutex_destroy(&vp->v_lock);
 	free(vp->v_path);
@@ -317,14 +314,11 @@ void
 vflush(mount_t mp)
 {
 	int i;
-	list_t head, n;
 	vnode_t vp;
 
 	VNODE_LOCK();
 	for (i = 0; i < VNODE_BUCKETS; i++) {
-		head = &vnode_table[i];
-		for (n = list_first(head); n != head; n = list_next(n)) {
-			vp = list_entry(n, struct vnode, v_link);
+	        LIST_FOREACH(vp, &vnode_table[i], v_link) {
 			if (vp->v_mount == mp) {
 				/* XXX: */
 			}
@@ -417,7 +411,6 @@ void
 vnode_dump(void)
 {
 	int i;
-	list_t head, n;
 	vnode_t vp;
 	mount_t mp;
 	char type[][6] = { "VNON ", "VREG ", "VDIR ", "VBLK ", "VCHR ",
@@ -429,9 +422,7 @@ vnode_dump(void)
 	dprintf(" -------- -------- ----- ------ -------- ------------------------------\n");
 
 	for (i = 0; i < VNODE_BUCKETS; i++) {
-		head = &vnode_table[i];
-		for (n = list_first(head); n != head; n = list_next(n)) {
-			vp = list_entry(n, struct vnode, v_link);
+	        LIST_FOREACH(vp, &vnode_table[i], v_link) {
 			mp = vp->v_mount;
 
 			dprintf(" %08x %08x %s %6d %8d %s%s\n", (u_int)vp,
@@ -469,5 +460,5 @@ vnode_init(void)
 	int i;
 
 	for (i = 0; i < VNODE_BUCKETS; i++)
-		list_init(&vnode_table[i]);
+		LIST_INIT(&vnode_table[i]);
 }

@@ -36,7 +36,6 @@
 #include <osv/uio.h>
 #include <osv/mutex.h>
 #include "file.h"
-#include <osv/list.h>
 #include "dirent.h"
 
 __BEGIN_DECLS
@@ -65,7 +64,7 @@ enum vtype {
  * appropriate lock.
  */
 struct vnode {
-	struct list_head v_link;	/* link for hash list */
+	LIST_ENTRY(vnode) v_link;	/* link for hash list */
 	struct mount	*v_mount;	/* mounted vfs pointer */
 	struct vnops	*v_op;		/* vnode operations */
 	int		v_refcnt;	/* reference count */
