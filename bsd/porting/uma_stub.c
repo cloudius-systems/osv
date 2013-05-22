@@ -46,12 +46,12 @@ void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
         return;
     }
 
-    if (zone->uz_fini) {
-        zone->uz_fini(item, zone->uz_size);
-    }
-
     if (zone->uz_dtor) {
         zone->uz_dtor(item, zone->uz_size, udata);
+    }
+
+    if (zone->uz_fini) {
+        zone->uz_fini(item, zone->uz_size);
     }
 
     free(item);
