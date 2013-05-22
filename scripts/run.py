@@ -5,15 +5,17 @@ import argparse
 
 stty_params=None
 
+devnull = open('/dev/null', 'w')
+
 def stty_save():
     global stty_params
-    p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE)
+    p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE, stderr=devnull)
     stty_params, err = p.communicate()
     stty_params = stty_params.strip()
     
 def stty_restore():
     if (stty_params):
-        subprocess.call(["stty", stty_params])
+        subprocess.call(["stty", stty_params], stderr=devnull)
 
 def cleanups():
     "cleanups after execution"
