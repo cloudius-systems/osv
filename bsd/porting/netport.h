@@ -112,6 +112,7 @@ extern int tick;
 #define SYSCTL_OID(...)
 #define TUNABLE_INT(...)
 #define TUNABLE_ULONG(...)
+#define TUNABLE_QUAD(...)
 #define TUNABLE_INT_FETCH(...)
 
 #define __NO_STRICT_ALIGNMENT
