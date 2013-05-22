@@ -9,14 +9,15 @@
 class semaphore {
 public:
     explicit semaphore(unsigned val);
-    void post();
-    void wait();
-    bool trywait();
+    void post(unsigned units = 1);
+    void wait(unsigned units = 1);
+    bool trywait(unsigned units = 1);
 private:
     unsigned _val;
     std::unique_ptr<mutex> _mtx;
     struct wait_record {
         sched::thread* owner;
+        unsigned units;
     };
     std::list<wait_record*> _waiters;
 };
