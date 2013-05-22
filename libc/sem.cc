@@ -1,18 +1,24 @@
 #include <semaphore.h>
 #include <osv/semaphore.hh>
+#include <memory>
 #include "libc.hh"
 
 // FIXME: smp safety
 
-semaphore* from_libc(sem_t* p)
+struct indirect_semaphore : std::unique_ptr<semaphore> {
+    explicit indirect_semaphore(unsigned units)
+        : std::unique_ptr<semaphore>(new semaphore(units)) {}
+};
+
+indirect_semaphore& from_libc(sem_t* p)
 {
-    return reinterpret_cast<semaphore*>(p);
+    return *reinterpret_cast<indirect_semaphore*>(p);
 }
 
 int sem_init(sem_t* s, int pshared, unsigned val)
 {
-    static_assert(sizeof(semaphore) <= sizeof(*s), "sem_t overflow");
-    new (s) semaphore(val);
+    static_assert(sizeof(indirect_semaphore) <= sizeof(*s), "sem_t overflow");
+    new (s) indirect_semaphore(val);
     return 0;
 }
 
