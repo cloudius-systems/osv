@@ -56,7 +56,9 @@ public:
     }
     cpu_set fetch_clear() {
         cpu_set ret;
-        ret._mask = _mask.exchange(0);
+        if (_mask.load(std::memory_order_relaxed)) {
+            ret._mask = _mask.exchange(0);
+        }
         return ret;
     }
     operator bool() const {
