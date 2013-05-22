@@ -22,25 +22,30 @@ void semaphore::post(unsigned units)
     });
 }
 
-void semaphore::wait(unsigned units)
+bool semaphore::wait(unsigned units, sched::timer* tmr)
 {
-    bool wait = false;
     wait_record wr;
     wr.owner = nullptr;
-    with_lock(_mtx, [&] {
-        if (_val >= units) {
-            _val -= units;
-        } else {
-            wr.owner = sched::thread::current();
-            wr.units = units;
-            _waiters.push_back(wr);
-            wait = true;
-        }
-    });
 
-    if (wait)
-        sched::thread::wait_until([&] { return !wr.owner; });
-}
+    std::lock_guard<mutex> guard(_mtx);
+
+    if (_val >= units) {
+        _val -= units;
+        return true;
+    } else {
+        wr.owner = sched::thread::current();
+        wr.units = units;
+        _waiters.push_back(wr);
+    }
+
+    sched::thread::wait_until(_mtx,
+            [&] { return (tmr && tmr->expired()) || !wr.owner; });
+
+    // if wr.owner, it's a timeout - post() didn't wake us and didn't decrease
+    // the semaphore's value for us. Note we are holding the mutex, so there
+    // can be no race with post().
+    return !wr.owner;
+ }
 
 bool semaphore::trywait(unsigned units)
 {

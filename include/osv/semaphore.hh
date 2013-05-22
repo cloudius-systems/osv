@@ -9,7 +9,7 @@ class semaphore {
 public:
     explicit semaphore(unsigned val);
     void post(unsigned units = 1);
-    void wait(unsigned units = 1);
+    bool wait(unsigned units = 1, sched::timer* tmr = nullptr);
     bool trywait(unsigned units = 1);
 private:
     unsigned _val;
