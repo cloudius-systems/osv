@@ -160,3 +160,11 @@ After running "make", do
     scripts/imgedit.py setargs build/debug/loader.img java.so -jar bench.jar
 
 and then run normally (./scripts/run.py).
+
+
+Profiling
+=========
+
+You can use 'perf kvm' for profiling:
+
+    perf kvm --guestvmlinux=build/release/loader.elf top
