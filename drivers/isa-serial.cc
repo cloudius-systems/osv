@@ -53,21 +53,19 @@ void IsaSerialConsole::newline()
 }
 
 void IsaSerialConsole::reset() {
-	// Put the line control register in acceptance mode (latch)
-	lcr = pci::inb(ioport + LCR_ADDRESS);
-	lcr |= 1 << LCR_DIVISOR_LATCH_ACCESS_BIT & LCR_DIVISOR_LATCH_ACCESS_BIT_HIGH;
-    pci::outb(lcr, ioport + LCR_ADDRESS);
-
-    pci::outb(1, ioport + BAUD_GEN0_ADDRESS);
-    pci::outb(0, ioport + BAUD_GEN1_ADDRESS);
-
-	// Close the latch
-	lcr = pci::inb(ioport + LCR_ADDRESS);
-	lcr &= ~(1 << LCR_DIVISOR_LATCH_ACCESS_BIT & LCR_DIVISOR_LATCH_ACCESS_BIT_HIGH);
-    pci::outb(lcr, ioport + LCR_ADDRESS);
+    // Set the UART speed to to 115,200 bps, This is done by writing 1,0 to
+    // Divisor Latch registers, but to access these we need to temporarily
+    // set the Divisor Latch Access Bit (DLAB) on the LSR register, because
+    // the UART has fewer ports than registers...
+    lcr = pci::inb(ioport + LCR_ADDRESS);
+    pci::outb(lcr | LCR_DLAB, ioport + LCR_ADDRESS);
+    pci::outb(1, ioport + DLL_ADDRESS);
+    pci::outb(0, ioport + DLM_ADDRESS);
+    lcr &= ~LCR_DLAB;
+    pci::outb(lcr & ~LCR_DLAB, ioport + LCR_ADDRESS);
 
     //  interrupt threshold
-    pci::outb(0, FCR_ADDRESS);
+    pci::outb(0, ioport + FCR_ADDRESS);
 
     // enable interrupts
     pci::outb(1, ioport + IER_ADDRESS);
