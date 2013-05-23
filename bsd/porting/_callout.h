@@ -38,27 +38,17 @@
 #ifndef _SYS__CALLOUT_H
 #define	_SYS__CALLOUT_H
 
-#define CALLOUT_LOCK(c)			(mutex_lock(&(c)->c_callout_mtx))
-#define CALLOUT_UNLOCK(c)		(mutex_unlock(&(c)->c_callout_mtx))
-
 #include <osv/mutex.h>
 
 struct callout {
-	/* OSv thread */
-	void *thread;
 	/* OSv waiter thread for drain (drain) */
 	void *waiter_thread;
 	/* State of this entry */
 	int c_flags;
-	/* OSv: Mark to stop waiting */
-	volatile int c_stopped;
-	/* OSv: Mark to reschedule currently running callout */
-	volatile int c_reschedule;
+	uint64_t c_ticks;
 	/* Time when callout will be dispatched, both in ticks and in ns */
 	uint64_t c_time;
 	uint64_t c_to_ns;
-	/* MP lock to callout data */
-	mutex_t c_callout_mtx;
 	/* Callout Handler */
 	void (*c_fn)(void *);
 	void* c_arg;

@@ -3,6 +3,7 @@
 extern "C" {
     #include <sys/time.h>
 
+    #include <bsd/porting/callout.h>
     #include <bsd/porting/netport.h>
     #include <bsd/porting/networking.h>
     #include <bsd/porting/route.h>
@@ -40,6 +41,9 @@ extern "C" {
 void net_init(void)
 {
     debug("Initializing network stack...\n");
+
+    // Initialize callouts
+    init_callouts();
 
     /* Random */
     struct timeval tv;

@@ -42,7 +42,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/_callout.h>
 
-#define CALLOUT_SIGNATURE (36456283)
+void init_callouts(void);
 
 #define	CALLOUT_LOCAL_ALLOC	0x0001 /* was allocated from callfree */
 #define	CALLOUT_ACTIVE		0x0002 /* callout is currently active */
@@ -50,11 +50,8 @@
 #define	CALLOUT_MPSAFE		0x0008 /* callout handler is mp safe */
 #define	CALLOUT_RETURNUNLOCKED	0x0010 /* handler returns with mtx unlocked */
 #define	CALLOUT_COMPLETED	0x0020 /* callout thread finished */
-#define	CALLOUT_DISPATCHING	0x0040 /* callout handler currently is running */
 
 struct lock_object;
-
-extern int ncallout;
 
 #define	callout_active(c)	((c)->c_flags & CALLOUT_ACTIVE)
 #define	callout_deactivate(c)	((c)->c_flags &= ~CALLOUT_ACTIVE)
@@ -63,6 +60,7 @@ void	callout_init(struct callout *, int);
 void callout_init_mtx(struct callout *c, struct mtx *lock, int flags);
 void callout_init_rw(struct callout *c, struct rwlock *rw, int flags);
 #define	callout_pending(c)	((c)->c_flags & CALLOUT_PENDING)
+#define callout_completed(c)  ((c)->c_flags & CALLOUT_COMPLETED)
 int	callout_reset_on(struct callout *, u64, void (*)(void *), void *, int);
 #define	callout_reset(c, on_tick, fn, arg)				\
     callout_reset_on((c), (on_tick), (fn), (arg), 0)
