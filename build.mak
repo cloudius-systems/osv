@@ -19,7 +19,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
-	$(configuration) -nostdinc
+	$(configuration) -nostdinc -D__OSV__
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
@@ -120,6 +120,7 @@ tests += tests/tst-condvar.so
 tests += tests/tst-queue-mpsc.so
 tests += tests/tst-af-local.so
 tests += tests/tst-yield.so
+tests += tests/tst-ctxsw.so
 
 tests/hello/Hello.class: javabase=tests/hello
 

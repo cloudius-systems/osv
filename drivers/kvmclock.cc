@@ -4,6 +4,7 @@
 #include "mmu.hh"
 #include "string.h"
 #include "cpuid.hh"
+#include "barrier.hh"
 
 class kvmclock : public clock {
 private:
@@ -56,9 +57,9 @@ u64 kvmclock::wall_clock_boot()
     u64 w;
     do {
         v1 = _wall->version;
-        __sync_synchronize();
+        barrier();
         w = u64(_wall->sec) * 1000000000 + _wall->nsec;
-        __sync_synchronize();
+        barrier();
         v2 = _wall->version;
     } while (v1 != v2);
     return w;
@@ -70,7 +71,7 @@ u64 kvmclock::system_time()
     u64 time;
     do {
         v1 = _sys->version;
-        __sync_synchronize();
+        barrier();
         time = processor::rdtsc() - _sys->tsc_timestamp;
         if (_sys->tsc_shift >= 0) {
             time <<= _sys->tsc_shift;
@@ -82,7 +83,7 @@ u64 kvmclock::system_time()
                 : "rm"(u64(_sys->tsc_to_system_mul))
                 : "rdx");
         time += _sys->system_time;
-        __sync_synchronize();
+        barrier();
         v2 = _sys->version;
     } while (v1 != v2);
     return time;

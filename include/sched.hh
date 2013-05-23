@@ -40,12 +40,12 @@ const unsigned max_cpus = sizeof(unsigned long) * 8;
 class cpu_set {
 public:
     explicit cpu_set() : _mask() {}
-    cpu_set(const cpu_set& other) : _mask(other._mask.load()) {}
+    cpu_set(const cpu_set& other) : _mask(other._mask.load(std::memory_order_relaxed)) {}
     void set(unsigned c) {
-        _mask.fetch_or(1UL << c);
+        _mask.fetch_or(1UL << c, std::memory_order_release);
     }
     void clear(unsigned c) {
-        _mask.fetch_and(~(1UL << c));
+        _mask.fetch_and(~(1UL << c), std::memory_order_release);
     }
     class iterator;
     iterator begin() {
@@ -56,7 +56,9 @@ public:
     }
     cpu_set fetch_clear() {
         cpu_set ret;
-        ret._mask = _mask.exchange(0);
+        if (_mask.load(std::memory_order_relaxed)) {
+            ret._mask = _mask.exchange(0, std::memory_order_acquire);
+        }
         return ret;
     }
     operator bool() const {
