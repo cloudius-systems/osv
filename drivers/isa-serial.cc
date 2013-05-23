@@ -61,7 +61,6 @@ void IsaSerialConsole::reset() {
     pci::outb(lcr | LCR_DLAB, ioport + LCR_ADDRESS);
     pci::outb(1, ioport + DLL_ADDRESS);
     pci::outb(0, ioport + DLM_ADDRESS);
-    lcr &= ~LCR_DLAB;
     pci::outb(lcr & ~LCR_DLAB, ioport + LCR_ADDRESS);
 
     //  interrupt threshold
