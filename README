@@ -153,6 +153,15 @@ Please note that "osv leak show" can take a L-O-N-G time - even a few
 minutes, especially when running Java, as it allocates myriads of objects
 that GDB will now have to inspect.
 
+
+Use-after-free and overrun detection
+====================================
+
+Set conf-debug_memory=1 in base.mak, and perform a clean build.  A use-after-free will result
+in an immediate segmentation fault.
+
+Note that the detector requires a lot of memory, so you may need to start a larger guest.
+
 Running java benchmarks
 =======================
 
