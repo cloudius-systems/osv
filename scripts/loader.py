@@ -268,15 +268,18 @@ class osv_info_threads(gdb.Command):
                 while sal.symtab:
                     fname = sal.symtab.filename
                     b = os.path.basename(fname);
-                    if b=="arch-switch.hh" or b=="sched.cc" or b=="sched.hh" or b=="mutex.hh":
+                    if b in ["arch-switch.hh", "sched.cc", "sched.hh", 
+                             "mutex.hh", "mutex.cc", "mutex.c", "mutex.h"]:
                         fr = fr.older();
                         sal = fr.find_sal();
                     else:
+                        if fname[:6] == "../../":
+                            fname = fname[6:]
                         break;
 
                 if fr.function():
                     function = fr.function().name
-		else:
+                else:
                     function = '??'
                 status = str(t['_status']['_M_i']).replace('sched::thread::', '')
                 gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12d\n' %
