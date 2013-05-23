@@ -124,8 +124,8 @@ void test2(void)
     callout_reset(&t2b, hz/4000, t2_b, NULL);
 
     sleep(4);
-    callout_stop(&t2a);
-    callout_stop(&t2b);
+    callout_drain(&t2a);
+    callout_drain(&t2b);
 
     /* Run test without mutex (unsynchronized access) */
     tdbg("With No Mutex:\n");
@@ -143,8 +143,8 @@ void test2(void)
     callout_reset(&t2b_mtx, hz/4000, t2_b2, NULL);
 
     sleep(4);
-    callout_stop(&t2a_mtx);
-    callout_stop(&t2b_mtx);
+    callout_drain(&t2a_mtx);
+    callout_drain(&t2b_mtx);
 
     /* Run test without mutex (unsynchronized access) */
     tdbg("With Mutex:\n");
@@ -155,7 +155,7 @@ void test2(void)
 
 int main(int argc, char **argv)
 {
-    // test1();
+    test1();
     test2();
     return 0;
 }
