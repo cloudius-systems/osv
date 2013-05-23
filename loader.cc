@@ -97,6 +97,7 @@ int main(int ac, char **av)
 }
 
 static bool opt_leak = false;
+static bool opt_noshutdown = false;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -118,6 +119,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("help", "show help text\n")
         ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable\n")
         ("leak", "start leak detector after boot\n")
+        ("noshutdown", "continue running after main() returns\n")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -132,6 +134,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("leak")) {
         opt_leak = true;
+    }
+
+    if (vars.count("noshutdown")) {
+        opt_noshutdown = true;
     }
 
     if (vars.count("trace")) {
@@ -228,6 +234,14 @@ void main_cont(int ac, char** av)
     pthread_create(&pthread, nullptr, do_main_thread, &args);
     void* retval;
     pthread_join(pthread, &retval);
+
+    if (opt_noshutdown) {
+        // If the --noshutdown option is given, continue running the system,
+        // and whatever threads might be running, even after main returns
+        debug("main() returned.\n");
+        sched::thread::wait_until([] { return false; });
+    }
+
     if (memory::tracker_enabled) {
         debug("Leak testing done. Please use 'osv leak show' in gdb to analyze results.\n");
         osv::halt();
