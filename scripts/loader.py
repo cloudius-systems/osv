@@ -299,49 +299,35 @@ class osv_info_callouts(gdb.Command):
         gdb.Command.__init__(self, 'osv info callouts',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
-        exit_thread_context()
-        state = vmstate()
-        for t in state.thread_list:
-            with thread_context(t, state):
-                cpu = t['_cpu']
-                tid = t['_id']
-                fr = gdb.selected_frame()
-                # Non-running threads have always, by definition, just called
-                # a reschedule, and the stack trace is filled with reschedule
-                # related functions (switch_to, schedule, wait_until, etc.).
-                # Here we try to skip such functions and instead show a more
-                # interesting caller which initiated the wait.
-                fname = '??'
-                sal = fr.find_sal()
-                found = False
-                while sal.symtab:
-                    fname = sal.symtab.filename
-                    func = "none"
-                    if fr.function():
-                        func = fr.function().name
-                        
-                    if (func == "_callout_wrapper(callout*)"):
-                        found = True
-                        break;
-
-                    fr = fr.older();
-                    if (fr):
-                        sal = fr.find_sal()
-                    else:
-                        break
-                
-                # We have a valid callout frame
-                if (found):
-                    callout = fr.read_var("c")
-                    c_fn = callout['c_fn']
-                    c_stopped = "stopped" if (callout['c_stopped'] == 1) else ""
-                    _depth = callout['c_callout_mtx']['_depth']
-                    if (_depth != 0):
-                        c_locked = "locked(%d) " % _depth
-                    else:
-                        c_locked = "unlocked"
-                    gdb.write("#%-6d 0x%-20x %-30s %s %s\n" % 
-                              (tid, ulong(callout), c_fn, c_locked, c_stopped))
+        c = str(gdb.lookup_global_symbol('callouts::_callouts').value())
+        callouts = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', c)
+        
+        gdb.write("%-5s%-40s%-40s%-30s%-10s\n" % ("id", "addr", "function", "abs time (ns)", "flags"))
+        
+        # We have a valid callout frame
+        for desc in callouts:
+            id = int(desc[0])
+            addr = desc[1]
+            callout = gdb.parse_and_eval('(struct callout *)' + addr)
+            fname = callout['c_fn']
+            
+            # time
+            t = int(callout['c_to_ns'])
+            
+            # flags
+            CALLOUT_ACTIVE = 0x0002
+            CALLOUT_PENDING = 0x0004
+            CALLOUT_COMPLETED = 0x0020
+            f = int(callout['c_flags'])
+            
+            flags = ("0x%04x " % f) + \
+                    ("A" if (callout['c_flags'] & CALLOUT_ACTIVE) else "") + \
+                    ("P" if (callout['c_flags'] & CALLOUT_PENDING) else "") + \
+                    ("C" if (callout['c_flags'] & CALLOUT_COMPLETED) else "")
+            
+            # dispatch time ns  ticks callout function
+            gdb.write("%-5d%-40s%-40s%-30s%-10s\n" %
+                      (id, callout, fname, t, flags))
                 
 class osv_thread(gdb.Command):
     def __init__(self):
