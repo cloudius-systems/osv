@@ -20,6 +20,9 @@ typedef unsigned char bsd_sa_family_t;
 
 #define MAXCOMLEN       19 
 
+/* maximum common x86 L1 size */
+#define CACHE_LINE_SIZE		128
+
 #define __offsetof(type, field)  __builtin_offsetof(type, field)
 
 #define __containerof(x, s, m) ({                                       \
