@@ -424,8 +424,10 @@ dmu_buf_hold_array_by_dnode(dnode_t *dn, uint64_t offset, uint64_t length,
 		if (read)
 			(void) dbuf_read(db, zio, dbuf_flags);
 #ifdef _KERNEL
+#ifndef __OSV__
 		else
 			curthread->td_ru.ru_oublock++;
+#endif
 #endif
 		dbp[i] = &db->db;
 	}
