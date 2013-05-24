@@ -29,14 +29,12 @@
 #ifndef _OPENSOLARIS_SYS_FILE_H_
 #define	_OPENSOLARIS_SYS_FILE_H_
 
-#include_next <sys/file.h>
+#include <osv/file.h>
 
 #define	FKIOCTL	0x80000000	/* ioctl addresses are from kernel */
 
 #ifdef _KERNEL
 typedef	struct file	file_t;
-
-#include <sys/capability.h>
 
 static __inline file_t *
 getf(int fd)
@@ -47,7 +45,7 @@ getf(int fd)
 	 * We wouldn't need all of these rights on every invocation
 	 * if we had more information about intent.
 	 */
-	if (fget(curthread, fd, CAP_READ | CAP_WRITE | CAP_SEEK, &fp) == 0)
+	if (fget(fd, &fp) == 0)
 		return (fp);
 	return (NULL);
 }
@@ -58,9 +56,9 @@ releasef(int fd)
 	struct file *fp;
 
 	/* No CAP_ rights required, as we're only releasing. */
-	if (fget(curthread, fd, 0, &fp) == 0) {
-		fdrop(fp, curthread);
-		fdrop(fp, curthread);
+	if (fget(fd, &fp) == 0) {
+		fdrop(fp);
+		fdrop(fp);
 	}
 }
 #endif	/* _KERNEL */

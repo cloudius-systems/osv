@@ -78,6 +78,7 @@ extern "C" {
 #include <sys/sunddi.h>
 #include <sys/priority.h>
 #include <sys/sig.h>
+#include <sys/vnode.h>
 
 #define	CPU_SEQID	get_cpuid()
 

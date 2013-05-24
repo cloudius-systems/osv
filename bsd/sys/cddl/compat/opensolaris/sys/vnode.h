@@ -38,18 +38,17 @@ typedef	struct vnode	vnode_t;
 typedef	struct vattr	vattr_t;
 typedef enum vtype vtype_t;
 
-#include <sys/namei.h>
-enum symfollow { NO_FOLLOW = NOFOLLOW };
+//enum symfollow { NO_FOLLOW = NOFOLLOW };
+
+#include_next <sys/vnode.h>
+#include <fcntl.h>
 
 #include <sys/proc.h>
-#include_next <sys/vnode.h>
 #include <sys/mount.h>
 #include <sys/cred.h>
-#include <sys/fcntl.h>
 #include <sys/file.h>
-#include <sys/filedesc.h>
-#include <sys/syscallsubr.h>
 
+#if 0
 typedef	struct vop_vector	vnodeops_t;
 #define	VOP_FID		VOP_VPTOFH
 #define	vop_fid		vop_vptofh
@@ -300,6 +299,7 @@ vn_remove(char *fnamep, enum uio_seg seg, enum rm dirflag)
 
 	return (kern_unlink(curthread, fnamep, seg));
 }
+#endif
 
 #endif	/* _KERNEL */
 

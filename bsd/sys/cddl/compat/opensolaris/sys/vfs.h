@@ -36,12 +36,11 @@
 #include <sys/mount.h>
 #include <sys/vnode.h>
 
-#define	rootdir	rootvnode
-
 typedef	struct mount	vfs_t;
 
-#define	vfs_flag	mnt_flag
-#define	vfs_data	mnt_data
+#define	vfs_flag	m_flags
+#define	vfs_data	m_data
+#if 0
 #define	vfs_count	mnt_ref
 #define	vfs_fsid	mnt_stat.f_fsid
 #define	vfs_bsize	mnt_stat.f_bsize
@@ -130,6 +129,7 @@ typedef	uint64_t	vfs_feature_t;
 #define	vfs_set_feature(vfsp, feature)		do { } while (0)
 #define	vfs_clear_feature(vfsp, feature)	do { } while (0)
 #define	vfs_has_feature(vfsp, feature)		(0)
+#endif
 
 #endif	/* _KERNEL */
 

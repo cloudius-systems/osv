@@ -39,7 +39,7 @@
 #ifndef _SYS_VNODE_H
 #define	_SYS_VNODE_H
 
-#include_next <sys/vnode.h>
+#include <osv/vnode.h>
 
 #define	IS_DEVVP(vp)	\
 	((vp)->v_type == VCHR || (vp)->v_type == VBLK || (vp)->v_type == VFIFO)
