@@ -644,6 +644,8 @@ static struct {
 } dnode_move_stats;
 #endif	/* DNODE_STATS */
 
+#ifdef sun
+#ifdef	_KERNEL
 static void
 dnode_move_impl(dnode_t *odn, dnode_t *ndn)
 {
@@ -782,8 +784,6 @@ dnode_move_impl(dnode_t *odn, dnode_t *ndn)
 	odn->dn_moved = (uint8_t)-1;
 }
 
-#ifdef sun
-#ifdef	_KERNEL
 /*ARGSUSED*/
 static kmem_cbrc_t
 dnode_move(void *buf, void *newbuf, size_t size, void *arg)
