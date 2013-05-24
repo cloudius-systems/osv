@@ -1,0 +1,55 @@
+1. Lazy population
+==================
+
+Currently, an anonymous mmap() allocates physical memory pages for the
+entire specified memory range.
+
+This is similar to MAP_POPULATE in Linux, but is not the default on Linux.
+Rather, its default is lazy population: Physical memory is only allocated
+to pages when they are actually used. The benefit of this can be noticed
+in various places, but one particularly interesting benefit is to threads:
+Each threads mmap()s a 1MB (by default) stack. In OSV's eager population,
+a full 1MB of physical memory is allocated to each thread. With lazy
+population, if a thread only uses 10 KB of its stack (which is not unlikely!),
+only about this much of physical memory is actually allocated.
+
+So OSV should also have lazy population.
+
+Some implementation ideas:
+
+1. Continue to use both small and huge pages, and lazily allocate both.
+   I.e., a 1MB stack will get a page fault on every new 4K used, but a
+   huge 500MB allocation (e.g., Java's heap) will get page faults that
+   clear 2MB at a time.
+
+2. For small pages, consider this approach: Allocate one zeroed 4K page,
+   call it page_zero. New mmaps() will be filled with ptes pointing
+   to this page_zero, all marked read-only. If the program reads these
+   addresses, it gets 0 as expected. When the program writes to such
+   an address, we get a page fault. When the page-fault handler sees the
+   fault is at an address pointing to page_zero, it allocates a new physical
+   page, zeros it ("copy on write") and sets the PTE to point to it (TODO:
+   do we need TLB flush here?).
+
+3. For huge pages, especially 1G pages, allocating an unused zero page is a
+   waste. Instead, use an arbitrary page address, and mark it non-present
+   (not readable, and not writable). On write fault, allocate a new zero
+   huge page as before. On read fault, also allocate a zero huge page
+   if we haven't done this before, but remember who's using it so we can
+   soon "expire" this page and mark all its references not-present again
+   (this will definitely require a TLB flush).
+
+Of course, look also at what Linux does here to get ideas.
+
+
+2. mmap() writeback
+===================
+
+Currently, mmap()ing a file reads it into memory once, but if one writes
+to this memory area, the file is NOT written to - not sponteneously and
+not even if you call msync().
+
+This is similar to MAP_PRIVATE in Linux, but is not what people usually
+have in mind when they use mmap. Java has an interface memory-mapping of
+files (see MappedByteBuffer), and its user do expect that data written
+into such mapped memory will be written back the backing file.
