@@ -2699,7 +2699,6 @@ struct promotearg {
 };
 
 static int snaplist_space(list_t *l, uint64_t mintxg, uint64_t *spacep);
-static boolean_t snaplist_unstable(list_t *l);
 
 static int
 dsl_dataset_promote_check(void *arg1, void *arg2, dmu_tx_t *tx)
