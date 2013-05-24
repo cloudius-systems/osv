@@ -83,7 +83,7 @@ extern void txg_register_callbacks(txg_handle_t *txghp, list_t *tx_callbacks);
  * to be used to throttle writers when the system nears its
  * capacity.
  */
-extern void txg_delay(struct dsl_pool *dp, uint64_t txg, int ticks);
+extern void txg_delay(struct dsl_pool *dp, uint64_t txg, int nticks);
 
 /*
  * Wait until the given transaction group has finished syncing.

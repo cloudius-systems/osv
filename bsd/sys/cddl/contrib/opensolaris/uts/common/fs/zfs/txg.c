@@ -482,15 +482,15 @@ txg_quiesce_thread(void *arg)
 }
 
 /*
- * Delay this thread by 'ticks' if we are still in the open transaction
+ * Delay this thread by 'nticks' if we are still in the open transaction
  * group and there is already a waiting txg quiesing or quiesced.  Abort
  * the delay if this txg stalls or enters the quiesing state.
  */
 void
-txg_delay(dsl_pool_t *dp, uint64_t txg, int ticks)
+txg_delay(dsl_pool_t *dp, uint64_t txg, int nticks)
 {
 	tx_state_t *tx = &dp->dp_tx;
-	clock_t timeout = ddi_get_lbolt() + ticks;
+	clock_t timeout = ddi_get_lbolt() + nticks;
 
 	/* don't delay if this txg could transition to quiesing immediately */
 	if (tx->tx_open_txg > txg ||
