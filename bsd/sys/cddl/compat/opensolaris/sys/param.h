@@ -30,7 +30,7 @@
 #ifndef _COMPAT_OPENSOLARIS_SYS_PARAM_H_
 #define _COMPAT_OPENSOLARIS_SYS_PARAM_H_
 
-#include_next <sys/param.h>
+#include <bsd/sys/sys/param.h>
 
 #define	PAGESIZE	PAGE_SIZE
 
