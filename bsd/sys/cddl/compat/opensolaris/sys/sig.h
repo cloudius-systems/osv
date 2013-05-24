@@ -31,19 +31,13 @@
 
 #ifdef _KERNEL
 
-#include <sys/param.h>
-#include <sys/lock.h>
-#include <sys/mutex.h>
-#include <sys/proc.h>
-#include <sys/signalvar.h>
-#include <sys/debug.h>
-
 #define	FORREAL		0
 #define	JUSTLOOKING	1
 
 static __inline int
 issig(int why)
 {
+#if 0 // not sure we care
 	struct thread *td = curthread;
 	struct proc *p;
 	int sig;
@@ -61,6 +55,7 @@ issig(int why)
 		if (sig != 0)
 			return (1);
 	}
+#endif
 	return (0);
 }
 

@@ -77,6 +77,7 @@ extern "C" {
 #include <sys/fm/util.h>
 #include <sys/sunddi.h>
 #include <sys/priority.h>
+#include <sys/sig.h>
 
 #define	CPU_SEQID	(curcpu)
 
