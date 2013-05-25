@@ -79,7 +79,7 @@ extern "C" {
 #include <sys/priority.h>
 #include <sys/sig.h>
 
-#define	CPU_SEQID	(curcpu)
+#define	CPU_SEQID	get_cpuid()
 
 #define	tsd_create(keyp, destructor)	do {				\
 	*(keyp) = osd_thread_register((destructor));			\
