@@ -5658,6 +5658,7 @@ spa_scan(spa_t *spa, pool_scan_func_t func)
  * ==========================================================================
  */
 
+#ifdef _HAVE_ZFS_CONFIG_WRITE_SUPPORT
 static void
 spa_async_remove(spa_t *spa, vdev_t *vd)
 {
@@ -5812,6 +5813,7 @@ spa_async_thread(void *arg)
 	mutex_exit(&spa->spa_async_lock);
 	thread_exit();
 }
+#endif /* _HAVE_ZFS_CONFIG_WRITE_SUPPORT */
 
 void
 spa_async_suspend(spa_t *spa)
@@ -5835,6 +5837,7 @@ spa_async_resume(spa_t *spa)
 static void
 spa_async_dispatch(spa_t *spa)
 {
+#ifdef _HAVE_ZFS_CONFIG_WRITE_SUPPORT
 	mutex_enter(&spa->spa_async_lock);
 	if (spa->spa_async_tasks && !spa->spa_async_suspended &&
 	    spa->spa_async_thread == NULL &&
@@ -5842,6 +5845,7 @@ spa_async_dispatch(spa_t *spa)
 		spa->spa_async_thread = thread_create(NULL, 0,
 		    spa_async_thread, spa, 0, &p0, TS_RUN, maxclsyspri);
 	mutex_exit(&spa->spa_async_lock);
+#endif
 }
 
 void
