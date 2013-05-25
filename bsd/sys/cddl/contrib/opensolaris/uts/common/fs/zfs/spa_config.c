@@ -74,6 +74,9 @@ const char *spa_config_path = ZPOOL_CACHE;
 void
 spa_config_load(void)
 {
+#ifdef __OSV__
+	return;
+#else
 	void *buf = NULL;
 	nvlist_t *nvlist, *child;
 	nvpair_t *nvpair;
@@ -137,8 +140,10 @@ out:
 		kmem_free(buf, fsize);
 
 	kobj_close_file(file);
+#endif
 }
 
+#ifdef _HAVE_ZFS_CONFIG_WRITE_SUPPORT
 static void
 spa_config_write(spa_config_dirent_t *dp, nvlist_t *nvl)
 {
@@ -188,6 +193,7 @@ spa_config_write(spa_config_dirent_t *dp, nvlist_t *nvl)
 	kmem_free(buf, buflen);
 	kmem_free(temp, MAXPATHLEN);
 }
+#endif /* _HAVE_ZFS_CONFIG_WRITE_SUPPORT */
 
 /*
  * Synchronize pool configuration to disk.  This must be called with the
@@ -201,6 +207,9 @@ spa_config_sync(spa_t *target, boolean_t removing, boolean_t postsysevent)
 
 	ASSERT(MUTEX_HELD(&spa_namespace_lock));
 
+#ifndef _HAVE_ZFS_CONFIG_WRITE_SUPPORT
+	return;
+#else
 	if (rootdir == NULL || !(spa_mode_global & FWRITE))
 		return;
 
@@ -260,6 +269,7 @@ spa_config_sync(spa_t *target, boolean_t removing, boolean_t postsysevent)
 
 	if (postsysevent)
 		spa_event_notify(target, NULL, ESC_ZFS_CONFIG_SYNC);
+#endif /* _HAVE_ZFS_CONFIG_WRITE_SUPPORT */
 }
 
 /*
