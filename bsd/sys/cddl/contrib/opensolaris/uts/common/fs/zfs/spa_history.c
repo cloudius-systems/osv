@@ -178,10 +178,12 @@ spa_history_write(spa_t *spa, void *buf, uint64_t len, spa_history_phys_t *shpp,
 static char *
 spa_history_zone()
 {
+#ifndef __OSV__
 #ifdef _KERNEL
 	/* XXX: pr_hostname can be changed by default from within a jail! */
 	if (jailed(curthread->td_ucred))
 		return (curthread->td_ucred->cr_prison->pr_hostname);
+#endif
 #endif
 	return ("global");
 }
