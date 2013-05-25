@@ -133,8 +133,6 @@
 #include <zfs_fletcher.h>
 #include <sys/sdt.h>
 
-#include <vm/vm_pageout.h>
-
 #ifdef illumos
 #ifndef _KERNEL
 /* set with ZFS_DEBUG=watch, to enable watchpoints on frozen buffers */
@@ -2281,7 +2279,7 @@ static int
 arc_reclaim_needed(void)
 {
 
-#ifdef _KERNEL
+#if defined(_KERNEL) && !defined(__OSV__)
 
 	if (needfree)
 		return (1);
@@ -2357,6 +2355,7 @@ arc_kmem_reap_now(arc_reclaim_strategy_t strat)
 	kmem_cache_t		*prev_cache = NULL;
 	kmem_cache_t		*prev_data_cache = NULL;
 
+#ifndef __OSV__
 #ifdef _KERNEL
 	if (arc_meta_used >= arc_meta_limit) {
 		/*
@@ -2370,6 +2369,7 @@ arc_kmem_reap_now(arc_reclaim_strategy_t strat)
 	 * Reclaim unused memory from all kmem caches.
 	 */
 	kmem_reap();
+#endif
 #endif
 #endif
 
@@ -2395,7 +2395,7 @@ arc_kmem_reap_now(arc_reclaim_strategy_t strat)
 }
 
 static void
-arc_reclaim_thread(void *dummy __unused)
+arc_reclaim_thread(void *dummy __unused2)
 {
 	clock_t			growtime = 0;
 	arc_reclaim_strategy_t	last_reclaim = ARC_RECLAIM_CONS;
@@ -3176,8 +3176,10 @@ top:
 		ARCSTAT_CONDSTAT(!(hdr->b_flags & ARC_PREFETCH),
 		    demand, prefetch, hdr->b_type != ARC_BUFC_METADATA,
 		    data, metadata, misses);
+#ifndef __OSV__
 #ifdef _KERNEL
 		curthread->td_ru.ru_inblock++;
+#endif
 #endif
 
 		if (vd != NULL && l2arc_ndev != 0 && !(l2arc_norw && devw)) {
@@ -3667,6 +3669,7 @@ arc_write(zio_t *pio, spa_t *spa, uint64_t txg,
 static int
 arc_memory_throttle(uint64_t reserve, uint64_t inflight_data, uint64_t txg)
 {
+#ifndef __OSV__
 #ifdef _KERNEL
 	uint64_t available_memory =
 	    ptoa((uintmax_t)cnt.v_free_count + cnt.v_cache_count);
@@ -3717,6 +3720,7 @@ arc_memory_throttle(uint64_t reserve, uint64_t inflight_data, uint64_t txg)
 		ARCSTAT_INCR(arcstat_memory_throttle_count, 1);
 		return (ERESTART);
 	}
+#endif
 #endif
 	return (0);
 }
@@ -3786,11 +3790,12 @@ arc_tempreserve_space(uint64_t reserve, uint64_t txg)
 }
 
 static kmutex_t arc_lowmem_lock;
+#ifndef __OSV__
 #ifdef _KERNEL
 static eventhandler_tag arc_event_lowmem = NULL;
 
 static void
-arc_lowmem(void *arg __unused, int howto __unused)
+arc_lowmem(void *arg __unused2, int howto __unused2)
 {
 
 	/* Serialize access via arc_lowmem_lock. */
@@ -3811,6 +3816,7 @@ arc_lowmem(void *arg __unused, int howto __unused)
 	mutex_exit(&arc_reclaim_thr_lock);
 	mutex_exit(&arc_lowmem_lock);
 }
+#endif
 #endif
 
 void
@@ -3943,9 +3949,11 @@ arc_init(void)
 	(void) thread_create(NULL, 0, arc_reclaim_thread, NULL, 0, &p0,
 	    TS_RUN, minclsyspri);
 
+#ifndef __OSV__
 #ifdef _KERNEL
 	arc_event_lowmem = EVENTHANDLER_REGISTER(vm_lowmem, arc_lowmem, NULL,
 	    EVENTHANDLER_PRI_FIRST);
+#endif
 #endif
 
 	arc_dead = FALSE;
@@ -3957,6 +3965,7 @@ arc_init(void)
 		zfs_write_limit_shift = 0;
 	mutex_init(&zfs_write_limit_lock, NULL, MUTEX_DEFAULT, NULL);
 
+#ifndef __OSV__
 #ifdef _KERNEL
 	if (TUNABLE_INT_FETCH("vfs.zfs.prefetch_disable", &zfs_prefetch_disable))
 		prefetch_tunable_set = 1;
@@ -3978,6 +3987,7 @@ arc_init(void)
 		    "to /boot/loader.conf.\n");
 		zfs_prefetch_disable = 1;
 	}
+#endif
 #endif
 	/* Warn about ZFS memory and address space requirements. */
 	if (((uint64_t)physmem * PAGESIZE) < (256 + 128 + 64) * (1 << 20)) {
@@ -4041,9 +4051,11 @@ arc_fini(void)
 	ASSERT(arc_loaned_bytes == 0);
 
 	mutex_destroy(&arc_lowmem_lock);
+#ifndef __OSV__
 #ifdef _KERNEL
 	if (arc_event_lowmem != NULL)
 		EVENTHANDLER_DEREGISTER(vm_lowmem, arc_event_lowmem);
+#endif
 #endif
 }
 
@@ -4860,7 +4872,7 @@ l2arc_write_buffers(spa_t *spa, l2arc_dev_t *dev, uint64_t target_sz)
  * heart of the L2ARC.
  */
 static void
-l2arc_feed_thread(void *dummy __unused)
+l2arc_feed_thread(void *dummy __unused2)
 {
 	callb_cpr_t cpr;
 	l2arc_dev_t *dev;
