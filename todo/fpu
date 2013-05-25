@@ -1,0 +1,21 @@
+Avoiding unnecessary FPU state saving
+=====================================
+
+1. Understand why the "sunflow" benchmark fails unless we also save FPU
+   state on reschedule_from_interrupt with !preempt:
+
+   1. One guess is that Java has a bug where it doesn't follow the calling
+      conventions and doesn't save its fpu state before calling some library
+      function. Avi tried to reproduce this in Linux (with a layer that
+      ruins the FPU state before calling library functions) and couldn't
+      so this may not be the correct explanation.
+
+   2. Another guess (by Avi) is that a signal handler is involved and
+      we don't save the FPU on signals! Need to fix that.
+
+2. Even if we don't need to save the whole fpu state on !preempt, we probably
+   need to save the fcw and mxcsr.
+
+3. If for some reason (?) this problem is unfixable and we must (why?) save
+   FPU on every context switch, we may be forced to consider lazy FPU
+   switching - which we tried to avoid.
