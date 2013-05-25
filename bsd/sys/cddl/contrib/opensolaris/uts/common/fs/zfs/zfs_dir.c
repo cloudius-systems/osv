@@ -933,7 +933,7 @@ zfs_make_xattrdir(znode_t *zp, vattr_t *vap, vnode_t **xvpp, cred_t *cr)
 	 * In FreeBSD, access checking for creating an EA is being done
 	 * in zfs_setextattr(),
 	 */
-#ifndef __FreeBSD__
+#if !(defined(__FreeBSD__) || defined(__OSV__))
 	if (error = zfs_zaccess(zp, ACE_WRITE_NAMED_ATTRS, 0, B_FALSE, cr))
 		return (error);
 #endif
@@ -1026,7 +1026,7 @@ top:
 
 	if (!(flags & CREATE_XATTR_DIR)) {
 		zfs_dirent_unlock(dl);
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__OSV__)
 		return (ENOATTR);
 #else
 		return (ENOENT);

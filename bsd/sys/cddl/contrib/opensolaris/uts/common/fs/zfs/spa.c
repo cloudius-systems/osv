@@ -723,7 +723,7 @@ spa_change_guid_sync(void *arg1, void *arg2, dmu_tx_t *tx)
 	vdev_config_dirty(rvd);
 	spa_config_exit(spa, SCL_STATE, FTAG);
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__OSV__)
 	/*
 	 * TODO: until recent illumos logging changes are merged
 	 *       log reguid as pool property change
