@@ -44,6 +44,8 @@ typedef unsigned char bsd_sa_family_t;
 struct proc {
 };
 
+extern struct proc proc0;
+
 /*
  * We use this as a fake opaque C type for passing around sched::thread
  * pointers in C code.

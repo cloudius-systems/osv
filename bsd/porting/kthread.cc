@@ -8,12 +8,14 @@
 #include <bsd/porting/netport.h>
 #include <bsd/sys/sys/kthread.h>
 
+struct proc proc0;
+
 int
 kthread_add(void (*func)(void *), void *arg, struct proc *p,
 		struct thread **newtdp, int flags, int pages,
 		const char *fmt, ...)
 {
-    assert(p == NULL);
+    assert(p == NULL || p == &proc0);
     assert(flags == 0);
     assert(pages == NULL);
 
