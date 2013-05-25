@@ -26,6 +26,7 @@
 
 #include <sys/cdefs.h>
 #include <bsd/porting/netport.h>
+#include <osv/debug.h>
 
 #include <sys/param.h>
 #include <sys/kmem.h>
@@ -63,10 +64,10 @@ taskq_create(const char *name, int nthreads, pri_t pri, int minalloc __unused2,
 {
 	taskq_t *tq;
 
-#ifdef notsupported
-	if ((flags & TASKQ_THREADS_CPU_PCT) != 0)
-		nthreads = MAX((mp_ncpus * nthreads) / 100, 1);
-#endif
+	if ((flags & TASKQ_THREADS_CPU_PCT) != 0) {
+		kprintf("using unsupported TASKQ_THREADS_CPU_PCT flag\n");
+//		nthreads = MAX((mp_ncpus * nthreads) / 100, 1);
+	}
 
 	tq = kmem_alloc(sizeof(*tq), KM_SLEEP);
 	tq->tq_queue = taskqueue_create(name, M_WAITOK, taskqueue_thread_enqueue,

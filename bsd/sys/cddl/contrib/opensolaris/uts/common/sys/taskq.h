@@ -53,9 +53,7 @@ struct proc;
 #define	TASKQ_PREPOPULATE	0x0001	/* Prepopulate with threads and data */
 #define	TASKQ_CPR_SAFE		0x0002	/* Use CPR safe protocol */
 #define	TASKQ_DYNAMIC		0x0004	/* Use dynamic thread scheduling */
-#ifdef notsupported
 #define	TASKQ_THREADS_CPU_PCT	0x0008	/* number of threads as % of ncpu */
-#endif
 #define	TASKQ_DC_BATCH		0x0010	/* Taskq uses SDC in batch mode */
 
 /*
