@@ -279,4 +279,7 @@ int ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 
 int get_cpuid(void);
 
+size_t get_physmem(void);
+#define physmem		get_physmem()
+
 #endif

@@ -1,6 +1,7 @@
 #include <osv/types.h>
 #include "drivers/clock.hh"
 #include "sched.hh"
+#include "mempool.hh"
 
 extern "C" {
     #include <time.h>
@@ -39,4 +40,9 @@ int get_ticks(void)
 {
     u64 ntm = clock::get()->time();
     return (ns2ticks(ntm));
+}
+
+size_t get_physmem(void)
+{
+    return memory::phys_mem_size / memory::page_size;
 }
