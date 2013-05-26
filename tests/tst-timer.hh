@@ -38,7 +38,7 @@ public:
         srandom(clock::get()->time());
 
         for (int i=0; i<tester_iteration; i++) {
-            u64 ns = (random() % 1000000000) - 500000000; // -5 to +5 ms
+            u64 ns = (random() % 1_s) - 500_ms;
             sched::timer t(*sched::thread::current());
             t.set(clock::get()->time() + ns);
 
@@ -68,7 +68,7 @@ public:
 
     void run()
     {
-        //test1();
+        test1();
         test2();
     }
 };
