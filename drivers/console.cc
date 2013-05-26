@@ -24,6 +24,11 @@ void write(const char *msg, size_t len, bool lf)
         console.newline();
 }
 
+// lockless version
+void write_ll(const char *msg, size_t len)
+{
+    console.write_ll(msg, len);
+}
 
 mutex console_mutex;
 // characters available to be returned on read() from the console

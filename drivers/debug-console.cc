@@ -10,6 +10,13 @@ void debug_console::write(const char* str, size_t len)
     with_lock(_lock, [=] { if (_impl) { _impl->write(str, len); }});
 }
 
+void debug_console::write_ll(const char *str, size_t len)
+{
+    if (_impl) {
+        _impl->write(str, len);
+    }
+}
+
 void debug_console::newline()
 {
     with_lock(_lock, [=] { if (_impl) { _impl->newline(); }});

@@ -170,4 +170,10 @@ extern "C" {
         console::write(msg, len, false);
     }
 
+    // lockless version
+    void debug_ll(const char *msg)
+    {
+        console::write_ll(msg, strlen(msg));
+    }
+
 }

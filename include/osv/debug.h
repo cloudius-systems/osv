@@ -18,6 +18,10 @@ __BEGIN_DECLS
 void debug(const char *msg);
 void debug_write(const char *msg, size_t len);
 
+/* a lockless version that doesn't take any locks before printing,
+   should be used only to debug faults */
+void debug_ll(const char *msg);
+
 int vkprintf(const char *__restrict fmt, va_list ap)
 	__attribute__((format(printf, 1, 0)));
 int kprintf(const char *__restrict fmt, ...)
