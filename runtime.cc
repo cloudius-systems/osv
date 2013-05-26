@@ -83,10 +83,10 @@ static bool already_aborted = false;
 void abort()
 {
     if (!already_aborted) {
+        already_aborted = true;
         // Since the debug() code is complex and might cause an additional
         // abort, we need to prevent endless abort() nesting.
         debug("Aborted\n");
-        already_aborted = true;
     }
     osv::halt();
 }
