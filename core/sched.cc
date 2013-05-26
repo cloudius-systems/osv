@@ -482,7 +482,7 @@ void preempt_disable()
 void preempt_enable()
 {
     --preempt_counter;
-    if (!preempt_counter && need_reschedule) {
+    if (!preempt_counter && need_reschedule && arch::irq_enabled()) {
         schedule();
     }
 }
