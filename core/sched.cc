@@ -93,21 +93,10 @@ void cpu::reschedule_from_interrupt(bool preempt)
     if (n != thread::current()) {
         if (preempt) {
             p->_fpu.save();
-        } else {
-            // FIXME: In this case, in theory, we do not need to save the FPU
-            // state (perhaps just mxcsr and cw) because we got here through a
-            // function call and the calling conventions guarantee the caller
-            // clears the FPU state. Unfortunately, in practice, the SPECjvm
-            // "sunflow" benchmark breaks (gets wrong results) if we don't
-            // save the SSE registers here. We don't know why.
-            p->_fpu.save();
         }
         trace_switch(n);
         n->switch_to();
         if (preempt) {
-            p->_fpu.restore();
-        } else {
-            // FIXME: This shouldn't be here! See comment above.
             p->_fpu.restore();
         }
     }
