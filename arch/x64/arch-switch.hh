@@ -14,13 +14,37 @@ void stack_trampoline(sched::thread* t, void (*func)(sched::thread*),
 
 namespace sched {
 
+void set_fsbase_msr(u64 v)
+{
+    processor::wrmsr(msr::IA32_FS_BASE, v);
+}
+
+void set_fsbase_fsgsbase(u64 v)
+{
+    processor::wrfsbase(v);
+}
+
+extern "C"
+void (*resolve_set_fsbase(void))(u64 v)
+{
+    // can't use processor::features, because it is not initialized
+    // early enough.
+    if (processor::cpuid(0).a >= 7 && (processor::cpuid(7).b & 1)) {
+        return set_fsbase_fsgsbase;
+    } else {
+        return set_fsbase_msr;
+    }
+}
+
+void set_fsbase(u64 v) __attribute__((ifunc("resolve_set_fsbase")));
+
 void thread::switch_to()
 {
     thread* old = current();
     // writing to fs_base invalidates memory accesses, so surround with
     // barriers
     barrier();
-    processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
+    set_fsbase(reinterpret_cast<u64>(_tcb));
     barrier();
     _cpu->arch.set_exception_stack(&_arch);
     asm volatile
