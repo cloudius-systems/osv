@@ -227,21 +227,19 @@ void schedule(bool yield)
 void thread::yield()
 {
     auto t = current();
+    std::lock_guard<irq_lock_type> guard(irq_lock);
     // FIXME: drive by IPI
-    bool resched = with_lock(irq_lock, [t] {
-        t->_cpu->handle_incoming_wakeups();
-        // FIXME: what about other cpus?
-        if (t->_cpu->runqueue.empty()) {
-            return false;
-        }
-        t->_cpu->runqueue.push_back(*t);
-        assert(t->_status.load() == status::running);
-        t->_status.store(status::queued);
-        return true;
-    });
-    if (resched) {
-        t->_cpu->schedule(true);
+    t->_cpu->handle_incoming_wakeups();
+    // FIXME: what about other cpus?
+    if (t->_cpu->runqueue.empty()) {
+        return;
     }
+    // TODO: need to give up some vruntime (move to borrow) so we're last
+    // on the queue, and then we can use push_back()
+    t->_cpu->runqueue.insert_equal(*t);
+    assert(t->_status.load() == status::running);
+    t->_status.store(status::queued);
+    t->_cpu->reschedule_from_interrupt(false);
 }
 
 thread::stack_info::stack_info()
