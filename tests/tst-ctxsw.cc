@@ -6,6 +6,9 @@
 #include <sys/time.h>
 #include <cinttypes>
 #include <stdio.h>
+#include <stdint.h>
+
+uint64_t target_time = 10; // seconds
 
 #ifdef __OSV__
 
@@ -99,10 +102,14 @@ void pinned_thread::join()
 
 pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+pthread_cond_t mgmt_cond = PTHREAD_COND_INITIALIZER;
 unsigned owner;
 unsigned remain;
 
-void run(unsigned me)
+bool exiting;
+unsigned nr_running;
+
+void run_once(unsigned me)
 {
     bool done = false;
     while (!done) {
@@ -112,6 +119,7 @@ void run(unsigned me)
         }
         if (remain == 0) {
             done = true;
+            pthread_cond_broadcast(&mgmt_cond);
         } else {
             --remain;
         }
@@ -121,6 +129,22 @@ void run(unsigned me)
     }
 }
 
+void run(unsigned me)
+{
+    while (!exiting) {
+        pthread_mutex_lock(&mtx);
+        while (!exiting && !nr_running) {
+            pthread_cond_wait(&mgmt_cond, &mtx);
+        }
+        if (exiting) {
+            pthread_mutex_unlock(&mtx);
+            break;
+        }
+        --nr_running;
+        pthread_mutex_unlock(&mtx);
+        run_once(me);
+    }
+}
 
 uint64_t nstime()
 {
@@ -136,18 +160,41 @@ void test(std::string name,
     pinned_thread t0([] { run(0); }), t1([] { run(1); });
     pin0(t0);
     pin1(t1);
-    auto n_iterations = 10000000;
-    remain = n_iterations;
-
-    auto start = nstime();
+    auto n_iterations = 10000;
+    exiting = false;
+    bool converged = false;
+    uint64_t start, end;
 
     t0.start();
     t1.start();
 
+    while (!converged) {
+        n_iterations *= 2;
+        start = nstime();
+
+        pthread_mutex_lock(&mtx);
+        nr_running = 2;
+        remain = n_iterations;
+        pthread_cond_broadcast(&mgmt_cond);
+
+        while (remain) {
+            pthread_cond_wait(&mgmt_cond, &mtx);
+        }
+
+        pthread_mutex_unlock(&mtx);
+
+        end = nstime();
+        converged = (end - start) >= (target_time * 1000000000);
+    }
+
+
+    pthread_mutex_lock(&mtx);
+    exiting = true;
+    pthread_cond_broadcast(&mgmt_cond);
+    pthread_mutex_unlock(&mtx);
+
     t0.join();
     t1.join();
-
-    auto end = nstime();
 
     printf("%10" PRIu64 " %s\n", (end - start) / n_iterations, name.c_str());
 }
