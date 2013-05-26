@@ -43,14 +43,31 @@ struct arch_thread {
     char exception_stack[4096] __attribute__((aligned(16)));
 };
 
-struct arch_fpu {
-    typedef processor::fpu_state fpu_state;
+
+template <class T>
+struct save_fpu {
+    T state;
     // FIXME: xsave and friends
-    void save() { processor::fxsave(s); }
-    void restore() { processor::fxrstor(s); }
-    fpu_state* s = static_cast<fpu_state*>(memory::alloc_page());
-    ~arch_fpu(){ memory::free_page(s); }
+    typedef processor::fpu_state fpu_state;
+    void save() { processor::fxsave(state.addr()); }
+    void restore() { processor::fxrstor(state.addr()); }
 };
+
+struct fpu_state_alloc_page {
+    processor::fpu_state* s =
+            static_cast<processor::fpu_state*>(memory::alloc_page());
+    processor::fpu_state *addr(){ return s; }
+    ~fpu_state_alloc_page(){ memory::free_page(s); }
+};
+
+struct fpu_state_inplace {
+    processor::fpu_state s;
+    processor::fpu_state *addr() { return &s; }
+} __attribute__((aligned(16)));
+
+typedef save_fpu<fpu_state_alloc_page> arch_fpu;
+typedef save_fpu<fpu_state_inplace> inplace_arch_fpu;
+
 
 inline arch_cpu::arch_cpu()
     : gdt{0, 0x00af9b000000ffff, 0x00cf93000000ffff, 0x00cf9b000000ffff,

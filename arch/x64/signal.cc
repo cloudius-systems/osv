@@ -2,14 +2,15 @@
 #include "exceptions.hh"
 #include <signal.h>
 #include <stdlib.h>
+#include <arch-cpu.hh>
 
 namespace arch {
 
 struct signal_frame {
     exception_frame state;
-    //fpu_state fpu;
     siginfo_t si;
     struct sigaction sa;
+    sched::inplace_arch_fpu fpu;
 };
 
 }
@@ -27,11 +28,12 @@ void build_signal_frame(exception_frame* ef,
 {
     void* rsp = reinterpret_cast<void*>(ef->rsp);
     rsp -= 128;                 // skip red zone
-    rsp = align_down(rsp, 16);  // align for sse
-    rsp  -= sizeof(signal_frame);
+    rsp -= sizeof(signal_frame);
+    // the Linux x86_64 calling conventions want 16-byte aligned rsp, and
+    // signal_frame also needs to be 16-byte aligned (for the fpu state):
+    rsp = align_down(rsp, 16);
     signal_frame* frame = static_cast<signal_frame*>(rsp);
     frame->state = *ef;
-    // FIXME: FPU?
     frame->si = si;
     frame->sa = sa;
     ef->rip = reinterpret_cast<ulong>(call_signal_handler_thunk);
@@ -42,6 +44,7 @@ void build_signal_frame(exception_frame* ef,
 
 void call_signal_handler(arch::signal_frame* frame)
 {
+    frame->fpu.save();
     if (frame->sa.sa_flags & SA_SIGINFO) {
         ucontext_t uc = {};
         auto& regs = uc.uc_mcontext.gregs;
@@ -84,6 +87,7 @@ void call_signal_handler(arch::signal_frame* frame)
     } else {
         frame->sa.sa_handler(frame->si.si_signo);
     }
+    frame->fpu.restore();
     // FIXME: all te other gory details
 }
 
