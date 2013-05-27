@@ -122,3 +122,8 @@ kmem_debugging(void)
 {
 	return (0);
 }
+
+uint64_t kmem_size(void)
+{
+	return physmem * PAGE_SIZE;
+}
