@@ -208,11 +208,11 @@ inline void wrfsbase(u64 data)
 }
 
 inline void halt_no_interrupts() {
-    asm volatile ("cli; hlt");
+    asm volatile ("cli; hlt" : : : "memory");
 }
 
 inline void sti_hlt() {
-    asm volatile ("sti; hlt");
+    asm volatile ("sti; hlt" : : : "memory");
 }
 
 inline u8 inb (u16 port)
@@ -256,12 +256,12 @@ inline void outl (u32 val, u16 port)
 
 inline void sti()
 {
-    asm volatile ("sti");
+    asm volatile ("sti" : : : "memory");
 }
 
 inline void cli()
 {
-    asm volatile ("cli");
+    asm volatile ("cli" : : : "memory");
 }
 
 inline u64 rdtsc()
