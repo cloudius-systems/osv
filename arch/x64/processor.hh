@@ -202,6 +202,11 @@ inline void wrmsr(u32 index, u64 data) {
     asm volatile ("wrmsr" : : "c"(index), "a"(lo), "d"(hi));
 }
 
+inline void wrfsbase(u64 data)
+{
+    asm volatile("wrfsbase %0" : : "r"(data));
+}
+
 inline void halt_no_interrupts() {
     asm volatile ("cli; hlt");
 }

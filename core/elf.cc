@@ -924,6 +924,9 @@ init_table get_init(Elf64_Ehdr* header)
                         // FIXME: assumes TLS segment comes before DYNAMIC segment
                         *static_cast<u64*>(addr) = lookup()->st_value - ret.tls.size;
                         break;
+                    case R_X86_64_IRELATIVE:
+                        *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(base + addend)();
+                        break;
                     default:
                         abort();
                     }
