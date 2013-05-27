@@ -54,6 +54,7 @@ public class TestRunner {
         this.register("TCPEchoServerTest", new TCPEchoServerTest());
         this.register("TCPExternalCommunication", new TCPExternalCommunication());
         this.register("TCPDownloadFile", new TCPDownloadFile());
+        this.register("TCPConcurrentDownloads", new TCPConcurrentDownloads());
         this.registerELFTests();
     }
     
