@@ -97,17 +97,6 @@ struct passwd* getpwuid(uid_t uid)
     }
 }
 
-int uname(struct utsname* u)
-{
-    // lie, to avoid confusing the payload.
-    strcpy(u->sysname, "Linux");
-    strcpy(u->nodename, "osv.local");
-    strcpy(u->release, "3.7");
-    strcpy(u->version, "#1 SMP");
-    strcpy(u->machine, "x86_64");
-    return 0;
-}
-
 int sched_yield()
 {
     sched::thread::yield();
