@@ -29,6 +29,7 @@
 #ifndef _OPENSOLARIS_SYS_MISC_H_
 #define	_OPENSOLARIS_SYS_MISC_H_
 
+#include <sys/utsname.h>
 #include <sys/limits.h>
 
 #define	MAXUID	UID_MAX
@@ -46,16 +47,8 @@
 #define	_FIO_SEEK_HOLE	FIOSEEKHOLE
 
 #ifdef _KERNEL
-struct opensolaris_utsname {
-	char	*sysname;
-	char	*nodename;
-	char	*release;
-	char	version[32];
-	char	*machine;
-};
-
 extern char hw_serial[11];
-extern struct opensolaris_utsname utsname;
+extern struct utsname utsname;
 #endif
 
 #endif	/* _OPENSOLARIS_SYS_MISC_H_ */
