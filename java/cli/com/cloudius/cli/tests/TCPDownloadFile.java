@@ -12,10 +12,9 @@ public class TCPDownloadFile implements Test {
     public static final String _url = "http://mirror.isoc.org.il/pub/fedora/releases/18/Fedora/x86_64/iso/Fedora-18-x86_64-netinst.iso";
     public static final int _chunk_size = 0x10000;
     public static final String _expected_md5 = "227acebbc5392a4600349ae0c2d0ffcf";
-        
-    @Override
-    public boolean run() {
-        
+    public static final int _max_iterations = 5;
+    
+    private boolean test() {
         try {
             URL url = new URL(_url);
             HttpURLConnection conn = (HttpURLConnection)url.openConnection();
@@ -67,6 +66,21 @@ public class TCPDownloadFile implements Test {
         } catch (Exception ex) {
             ex.printStackTrace();
             return (false);
+        }
+        
+        return (true);
+    }
+    
+    @Override
+    public boolean run() {
+        
+        for (int i=0; i < _max_iterations; i++) {
+            System.out.format("Running iteration %d/%d\n", i+1,
+                    _max_iterations);
+            boolean rc = this.test();
+            if (!rc) {
+                return (false);
+            }
         }
         
         return (true);
