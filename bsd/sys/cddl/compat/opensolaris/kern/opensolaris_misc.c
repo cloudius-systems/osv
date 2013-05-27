@@ -25,11 +25,8 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
 #include <sys/libkern.h>
 #include <sys/limits.h>
 #include <sys/misc.h>
@@ -38,7 +35,7 @@ __FBSDID("$FreeBSD$");
 char hw_serial[11] = "0";
 
 struct opensolaris_utsname utsname = {
-	.machine = MACHINE
+	.machine = "amd64"
 };
 
 static void

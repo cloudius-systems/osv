@@ -62,7 +62,10 @@ extern int zone_dataset_visible(const char *, int *);
  * if the specified zone doesn't emulate a hostid).  Passing NULL retrieves
  * the global zone's (i.e., physical system's) hostid.
  */
-extern uint32_t zone_get_hostid(void *);
+static inline uint32_t zone_get_hostid(void *ptr)
+{
+	return 0;
+}
 
 #else	/* !_KERNEL */
 
