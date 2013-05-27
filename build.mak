@@ -383,7 +383,7 @@ miscbase = $(src)/external/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
 
-bsd/%.o: COMMON += -D _KERNEL
+bsd/%.o: COMMON += -D_KERNEL -DSMP 
 
 usr.img: usr.manifest
 	$(call quiet, \
