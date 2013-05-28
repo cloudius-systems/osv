@@ -108,6 +108,21 @@ class osv_heap(gdb.Command):
         for page_range in free_page_ranges():
             print '%s 0x%016x' % (page_range, page_range['size'])
 
+class osv_memory(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv memory',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        freemem = 0
+        for page_range in free_page_ranges():
+            freemem += int(page_range['size'])
+            
+        memsize = gdb.parse_and_eval('memory::phys_mem_size')
+        
+        print ("Total Memory: %d Bytes" % memsize)
+        print ("Free Memory:  %d Bytes (%.2f%%)" % 
+               (freemem, (freemem*100.0/memsize)))
+    
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer')
 
@@ -662,6 +677,7 @@ class osv_pagetable_walk(gdb.Command):
 
 osv()
 osv_heap()
+osv_memory()
 osv_syms()
 osv_info()
 osv_info_threads()
