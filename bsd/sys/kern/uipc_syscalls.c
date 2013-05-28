@@ -847,7 +847,7 @@ int
 getsockname1(int fdes, struct bsd_sockaddr * __restrict asa, socklen_t * __restrict alen)
 {
 	struct bsd_sockaddr *sa;
-	socklen_t len;
+	socklen_t len = *alen;
 	int error;
 
 	error = kern_getsockname(fdes, &sa, &len);
