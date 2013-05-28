@@ -72,6 +72,29 @@ class Connect(gdb.Command):
 
 Connect()
 
+#
+# free_page_ranges generator, use pattern:
+# for range in free_page_ranges():
+#     pass
+#
+def free_page_ranges(node = None):
+    if (node == None):
+        fpr = gdb.lookup_global_symbol('memory::free_page_ranges').value()
+        p = fpr['tree_']['data_']['node_plus_pred_']
+        node = p['header_plus_size_']['header_']['parent_']
+    
+    if (long(node) != 0):
+        page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
+        page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
+        
+        for x in free_page_ranges(node['left_']):
+            yield x
+            
+        yield page_range
+        
+        for x in free_page_ranges(node['right_']):
+            yield x
+
 class osv(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv',
@@ -82,18 +105,8 @@ class osv_heap(gdb.Command):
         gdb.Command.__init__(self, 'osv heap',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        free_page_ranges = gdb.lookup_global_symbol('memory::free_page_ranges').value()
-        p = free_page_ranges['tree_']['data_']['node_plus_pred_']
-        p = p['header_plus_size_']['header_']['parent_']
-        self.show(p)
-    def show(self, node):
-        if long(node) == 0:
-            return
-        page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
-        page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
-        self.show(node['left_'])
-        print '%s 0x%016x' % (page_range, page_range['size'])
-        self.show(node['right_'])
+        for page_range in free_page_ranges():
+            print '%s 0x%016x' % (page_range, page_range['size'])
 
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer')
