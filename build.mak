@@ -124,7 +124,7 @@ tests += tests/tst-ctxsw.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
-java/RunJar.class: javabase=java
+java/RunJava.class: javabase=java
 
 all: loader.img loader.bin usr.img
 
@@ -399,7 +399,7 @@ jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(jni) \
-		tests/testrunner.so java/java.so java/RunJar.class
+		tests/testrunner.so java/java.so java/RunJava.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)

@@ -3,9 +3,20 @@
 #include <string.h>
 #include "debug.hh"
 
+// java.so is similar to the standard "java" command line launcher in Linux.
+//
+// This program does very little - basically it starts the JVM and asks it
+// to run a fixed class, /java/RunJava.class, which parses the command line
+// parameters, sets up the class path, and runs the jar or class specified
+// in these parameters. Unfortunately, we cannot do this here in C++ code
+// because FindClass() has a known bug where it cannot find a class inside a
+// .jar, just a class in a directory.
+
 extern elf::program* prog;
 
 #define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
+#define RUNJAVA_DIR     "/java"
+#define RUNJAVA         "RunJava"
 
 JavaVMOption mkoption(const char* s)
 {
@@ -14,7 +25,8 @@ JavaVMOption mkoption(const char* s)
     return opt;
 }
 
-extern "C" int main(int ac, char **av)
+extern "C"
+int main(int argc, char **argv)
 {
     prog->add_object(JVM_PATH);
 
@@ -23,51 +35,43 @@ extern "C" int main(int ac, char **av)
     JavaVMInitArgs vm_args = {};
     vm_args.version = JNI_VERSION_1_6;
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
+
     std::vector<JavaVMOption> options;
-    options.push_back(mkoption("-Djava.class.path=/java"));
-    while (ac > 0 && av[0][0] == '-' && av[0] != std::string("-jar")) {
-        options.push_back(mkoption(av[0]));
-        ++av, --ac;
-    }
-    if (ac < 1) {
-        debug("java.so: No class or jar given in command line. Aborting.\n");
-        abort();
-    }
-    std::string mainclassname;
-    if (std::string(av[0]) == "-jar") {
-        mainclassname = "RunJar";
-    } else {
-        mainclassname = av[0];
-    }
-    ++av, --ac;
+    options.push_back(mkoption("-Djava.class.path=" RUNJAVA_DIR));
     vm_args.nOptions = options.size();
     vm_args.options = options.data();
 
     auto JNI_CreateJavaVM
         = prog->lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
+    if (!JNI_CreateJavaVM) {
+        debug("java.so: failed looking up JNI_CreateJavaVM()\n");
+        abort();
+    }
+
     JavaVM* jvm = nullptr;
     JNIEnv *env;
-
-    auto ret = JNI_CreateJavaVM(&jvm, &env, &vm_args);
-    assert(ret == 0);
-    auto mainclass = env->FindClass(mainclassname.c_str());
+    if (JNI_CreateJavaVM(&jvm, &env, &vm_args) != 0) {
+        debug("java.so: Can't create VM.\n");
+        abort();
+    }
+    auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
-        debug("java.so: Can't find class %s.\n", mainclassname);
+        debug("java.so: Can't find class %s in %s.\n", RUNJAVA, RUNJAVA_DIR);
         abort();
     }
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
-    auto stringclass = env->FindClass("java/lang/String");
-    std::vector<std::string> newargs;
-    for (auto i = 0; i < ac; ++i) {
-        newargs.push_back(av[i]);
+    if (!mainmethod) {
+        debug("java.so: Can't find main() in class %s.\n", RUNJAVA);
+        abort();
     }
 
-    auto args = env->NewObjectArray(newargs.size(), stringclass, nullptr);
-    for (auto i = 0u; i < newargs.size(); ++i) {
-        env->SetObjectArrayElement(args, i, env->NewStringUTF(newargs[i].c_str()));
+    auto stringclass = env->FindClass("java/lang/String");
+    auto args = env->NewObjectArray(argc, stringclass, nullptr);
+    for (int i = 0; i < argc; ++i) {
+        env->SetObjectArrayElement(args, i, env->NewStringUTF(argv[i]));
     }
+
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
     return 0;
 }
-

@@ -94,7 +94,7 @@
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
-/java/RunJar.class: java/RunJar.class
+/java/RunJava.class: java/RunJava.class
 /java/bench.jar: tests/bench/bench.jar
 /java/cloudius.jar: java/cloudius.jar
 /java/cli.jar: java/cli.jar
