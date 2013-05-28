@@ -32,10 +32,6 @@ var run_cmd = {
     },
 
     invoke: function(inp) {
-        if (inp.length != 2) {
-            return;
-        }
-
         rc = this.run(inp);
         if (rc < 0) {
             print("run: couldn't execute elf");
