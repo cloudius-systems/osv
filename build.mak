@@ -424,6 +424,7 @@ objects += core/sglist.o
 objects += core/kprintf.o
 objects += core/trace.o
 objects += core/poll.o
+objects += core/select.o
 objects += core/power.o
 
 include $(src)/fs/build.mak
