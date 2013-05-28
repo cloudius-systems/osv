@@ -95,10 +95,11 @@ public class TCPConcurrentDownloads implements Test {
     
     List<Boolean> _results = 
             Collections.synchronizedList(new ArrayList<Boolean>(_max_threads));
-    public CountDownLatch _latch = new CountDownLatch(_max_threads);
+    public CountDownLatch _latch;
     
     @Override
     public boolean run() {
+        _latch = new CountDownLatch(_max_threads);
         
         for (int i=0; i < _max_threads; i++) {
             _results.add(i, false);
