@@ -48,10 +48,13 @@
 #include <string.h>
 
 #include <osv/prex.h>
+#include <osv/mutex.h>
 #include <osv/device.h>
 
-#define sched_lock()	do {} while (0)
-#define sched_unlock()	do {} while (0)
+struct mutex sched_mutex = MUTEX_INITIALIZER;
+
+#define sched_lock()	mutex_lock(&sched_mutex);
+#define sched_unlock()	mutex_unlock(&sched_mutex);
 
 
 /* list head of the devices */
