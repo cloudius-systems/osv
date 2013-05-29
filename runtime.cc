@@ -317,6 +317,7 @@ long sysconf(int name)
     case _SC_PHYS_PAGES: return memory::phys_mem_size / memory::page_size;
     case _SC_GETPW_R_SIZE_MAX: return 1024;
     case _SC_IOV_MAX: return KERN_IOV_MAX;
+    case _SC_THREAD_SAFE_FUNCTIONS: return 1;
     }
     debug(fmt("sysconf: unknown parameter %1%\n") % name);
     abort();
