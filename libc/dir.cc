@@ -70,3 +70,6 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 extern "C" int readdir64_r(DIR *dir, struct dirent64 *entry,
 		struct dirent64 **result)
 		__attribute__((alias("readdir_r")));
+
+#undef readdir64
+extern "C" struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
