@@ -91,6 +91,7 @@
 /&/tests/tst-vfs.so: ./&
 /&/tests/tst-yield.so: ./&
 /&/tests/tst-ctxsw.so: ./&
+/&/tests/tst-readdir.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so

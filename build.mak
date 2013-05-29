@@ -121,6 +121,7 @@ tests += tests/tst-queue-mpsc.so
 tests += tests/tst-af-local.so
 tests += tests/tst-yield.so
 tests += tests/tst-ctxsw.so
+tests += tests/tst-readdir.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
