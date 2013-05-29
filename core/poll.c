@@ -241,8 +241,10 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     struct pollreq p = {0};
     size_t pfd_sz = sizeof(struct pollfd) * _nfds;
 
-    if (_nfds > FD_SETSIZE)
-        return (EINVAL);
+    if (_nfds > FDMAX) {
+        errno = EINVAL;
+        return -1;
+    }
 
     dbg_d("poll()");
 
