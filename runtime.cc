@@ -318,9 +318,11 @@ long sysconf(int name)
     case _SC_GETPW_R_SIZE_MAX: return 1024;
     case _SC_IOV_MAX: return KERN_IOV_MAX;
     case _SC_THREAD_SAFE_FUNCTIONS: return 1;
+    default:
+        debug(fmt("sysconf(): stubbed for parameter %1%\n") % name);
+        errno = EINVAL;
+        return -1;
     }
-    debug(fmt("sysconf: unknown parameter %1%\n") % name);
-    abort();
 }
 
 size_t confstr(int name, char* buf, size_t len)
