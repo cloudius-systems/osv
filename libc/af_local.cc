@@ -11,6 +11,7 @@
 #include <osv/fcntl.h>
 #include <osv/condvar.h>
 #include "fs/fs.hh"
+#include "fs/unsupported.h"
 #include "libc.hh"
 #include <osv/poll.h>
 
@@ -215,21 +216,6 @@ int af_local_poll(file* f, int events)
     return revents;
 }
 
-int af_local_truncate(file* f, off_t length)
-{
-    return EINVAL;
-}
-
-int af_local_ioctl(file* f, ulong comm, void* data)
-{
-    return ENOTTY;
-}
-
-int af_local_stat(file* f, struct stat* s)
-{
-    return EINVAL;
-}
-
 int af_local_close(file* f)
 {
     auto afl = static_cast<af_local*>(f->f_data);
@@ -238,21 +224,16 @@ int af_local_close(file* f)
     return 0;
 }
 
-int af_local_chmod(file* f, mode_t m)
-{
-    return EINVAL;
-}
-
 fileops af_local_ops = {
     af_local_init,
     af_local_read,
     af_local_write,
-    af_local_truncate,
-    af_local_ioctl,
+    unsupported_truncate,
+    unsupported_ioctl,
     af_local_poll,
-    af_local_stat,
+    unsupported_stat,
     af_local_close,
-    af_local_chmod,
+    unsupported_chmod,
 };
 
 int socketpair_af_local(int type, int proto, int sv[2])

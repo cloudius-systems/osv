@@ -213,12 +213,6 @@ int fdrop(struct file *fp)
 	return 1;
 }
 
-int
-invfo_chmod(struct file *fp, mode_t mode)
-{
-	return EINVAL;
-}
-
 static int
 badfo_init(struct file *fp)
 {

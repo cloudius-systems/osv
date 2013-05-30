@@ -36,6 +36,7 @@
 #include <osv/uio.h>
 #include <osv/types.h>
 #include <osv/ioctl.h>
+#include <fs/unsupported.h>
 
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
@@ -290,5 +291,5 @@ struct fileops socketops = {
     .fo_poll = soo_poll,
     .fo_stat = soo_stat,
     .fo_close = soo_close,
-    .fo_chmod = invfo_chmod,
+    .fo_chmod = unsupported_chmod,
 };

@@ -102,8 +102,6 @@ extern struct fileops badfileops;
 extern struct fileops vfs_ops;
 extern struct fileops socketops;
 
-fo_chmod_t  invfo_chmod;
-
 /* Alloc an fd for fp */
 int _fdalloc(struct file *fp, int *newfd, int min_fd);
 int fdalloc(struct file* fp, int *newfd);
