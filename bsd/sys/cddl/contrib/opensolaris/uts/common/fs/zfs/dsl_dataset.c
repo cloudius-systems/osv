@@ -3644,6 +3644,7 @@ typedef struct zfs_hold_cleanup_arg {
 	char htag[MAXNAMELEN];
 } zfs_hold_cleanup_arg_t;
 
+#ifndef __OSV__
 static void
 dsl_dataset_user_release_onexit(void *arg)
 {
@@ -3667,6 +3668,7 @@ dsl_register_onexit_hold_cleanup(dsl_dataset_t *ds, const char *htag,
 	VERIFY3U(0, ==, zfs_onexit_add_cb(minor,
 	    dsl_dataset_user_release_onexit, ca, NULL));
 }
+#endif
 
 /*
  * If you add new checks here, you may need to add
@@ -3801,9 +3803,13 @@ dsl_dataset_user_hold(char *dsname, char *snapname, char *htag,
 		/* Currently we only support cleanup-on-exit of tempholds. */
 		if (!temphold)
 			return (EINVAL);
+#ifdef __OSV__
+		abort();
+#else
 		error = zfs_onexit_fd_hold(cleanup_fd, &minor);
 		if (error)
 			return (error);
+#endif
 	}
 
 	ha = kmem_zalloc(sizeof (struct dsl_ds_holdarg), KM_SLEEP);
@@ -3813,8 +3819,10 @@ dsl_dataset_user_hold(char *dsname, char *snapname, char *htag,
 	error = spa_open(dsname, &spa, FTAG);
 	if (error) {
 		kmem_free(ha, sizeof (struct dsl_ds_holdarg));
+#ifndef __OSV__
 		if (cleanup_fd != -1)
 			zfs_onexit_fd_rele(cleanup_fd);
+#endif
 		return (error);
 	}
 
@@ -3840,12 +3848,14 @@ dsl_dataset_user_hold(char *dsname, char *snapname, char *htag,
 		if (dst->dst_err) {
 			dsl_dataset_name(ds, ha->failed);
 			*strchr(ha->failed, '@') = '\0';
+#ifndef __OSV__
 		} else if (error == 0 && minor != 0 && temphold) {
 			/*
 			 * If this hold is to be released upon process exit,
 			 * register that action now.
 			 */
 			dsl_register_onexit_hold_cleanup(ds, htag, minor);
+#endif
 		}
 		dsl_dataset_rele(ds, ha->dstg);
 	}
@@ -3860,8 +3870,10 @@ dsl_dataset_user_hold(char *dsname, char *snapname, char *htag,
 
 	kmem_free(ha, sizeof (struct dsl_ds_holdarg));
 	spa_close(spa, FTAG);
+#ifndef __OSV__
 	if (cleanup_fd != -1)
 		zfs_onexit_fd_rele(cleanup_fd);
+#endif
 	return (error);
 }
 

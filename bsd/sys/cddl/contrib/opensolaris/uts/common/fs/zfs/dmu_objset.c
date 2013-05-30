@@ -957,6 +957,9 @@ dmu_objset_snapshot(char *fsname, char *snapname, char *tag,
 		return (err);
 
 	if (temporary) {
+#ifdef __OSV__
+		abort();
+#else
 		if (cleanup_fd < 0) {
 			spa_close(spa, FTAG);
 			return (EINVAL);
@@ -965,6 +968,7 @@ dmu_objset_snapshot(char *fsname, char *snapname, char *tag,
 			spa_close(spa, FTAG);
 			return (err);
 		}
+#endif
 	}
 
 	sn.dstg = dsl_sync_task_group_create(spa_get_dsl(spa));
@@ -1015,8 +1019,10 @@ dmu_objset_snapshot(char *fsname, char *snapname, char *tag,
 
 	if (err)
 		(void) strcpy(fsname, sn.failed);
+#ifndef __OSV__
 	if (temporary)
 		zfs_onexit_fd_rele(cleanup_fd);
+#endif
 	dsl_sync_task_group_destroy(sn.dstg);
 	spa_close(spa, FTAG);
 	return (err);
