@@ -2537,6 +2537,7 @@ dsl_snapshot_rename_one(const char *name, void *arg)
 	snapname = kmem_asprintf("%s@%s", name, ra->oldsnap);
 	(void) strlcpy(ra->failed, snapname, sizeof (ra->failed));
 
+#ifndef __OSV__
 	/*
 	 * For recursive snapshot renames the parent won't be changing
 	 * so we just pass name for both the to/from argument.
@@ -2546,6 +2547,7 @@ dsl_snapshot_rename_one(const char *name, void *arg)
 		strfree(snapname);
 		return (err == ENOENT ? 0 : err);
 	}
+#endif
 
 #ifndef __OSV__
 #ifdef _KERNEL

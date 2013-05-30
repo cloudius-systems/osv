@@ -904,6 +904,7 @@ dmu_objset_snapshot_one(const char *name, void *arg)
 
 	(void) strcpy(sn->failed, name);
 
+#ifndef __OSV__
 	/*
 	 * Check permissions if we are doing a recursive snapshot.  The
 	 * permission checks for the starting dataset have already been
@@ -911,6 +912,7 @@ dmu_objset_snapshot_one(const char *name, void *arg)
 	 */
 	if (sn->recursive && (err = zfs_secpolicy_snapshot_perms(name, CRED())))
 		return (err);
+#endif
 
 	err = dmu_objset_hold(name, sn, &os);
 	if (err != 0)
