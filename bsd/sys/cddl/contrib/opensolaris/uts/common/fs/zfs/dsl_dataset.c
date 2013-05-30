@@ -1050,12 +1050,14 @@ dsl_dataset_origin_rm_prep(struct dsl_ds_destroyarg *dsda, void *tag)
 		namelen = dsl_dataset_namelen(origin) + 1;
 		name = kmem_alloc(namelen, KM_SLEEP);
 		dsl_dataset_name(origin, name);
+#ifndef __OSV__
 #ifdef _KERNEL
 		error = zfs_unmount_snap(name, NULL);
 		if (error) {
 			kmem_free(name, namelen);
 			return (error);
 		}
+#endif
 #endif
 		error = dsl_dataset_own(name, B_TRUE, tag, &origin);
 		kmem_free(name, namelen);
@@ -2506,8 +2508,10 @@ dsl_dataset_snapshot_rename_sync(void *arg1, void *arg2, dmu_tx_t *tx)
 	    ds->ds_snapname, 8, 1, &ds->ds_object, tx);
 	ASSERT0(err);
 	dsl_dataset_name(ds, newname);
+#ifndef __OSV__
 #ifdef _KERNEL
 	zvol_rename_minors(oldname, newname);
+#endif
 #endif
 
 	spa_history_log_internal(LOG_DS_RENAME, dd->dd_pool->dp_spa, tx,
@@ -2543,11 +2547,13 @@ dsl_snapshot_rename_one(const char *name, void *arg)
 		return (err == ENOENT ? 0 : err);
 	}
 
+#ifndef __OSV__
 #ifdef _KERNEL
 	/*
 	 * For all filesystems undergoing rename, we'll need to unmount it.
 	 */
 	(void) zfs_unmount_snap(snapname, NULL);
+#endif
 #endif
 	err = dsl_dataset_hold(snapname, ra->dstg, &ds);
 	strfree(snapname);
@@ -4005,6 +4011,7 @@ dsl_dataset_user_release_one(const char *dsname, void *arg)
 	}
 
 	if (might_destroy) {
+#ifndef __OSV__
 #ifdef _KERNEL
 		name = kmem_asprintf("%s@%s", dsname, ha->snapname);
 		error = zfs_unmount_snap(name, NULL);
@@ -4013,6 +4020,7 @@ dsl_dataset_user_release_one(const char *dsname, void *arg)
 			dsl_dataset_rele(ds, dtag);
 			return (error);
 		}
+#endif
 #endif
 		if (!dsl_dataset_tryown(ds, B_TRUE, dtag)) {
 			dsl_dataset_rele(ds, dtag);

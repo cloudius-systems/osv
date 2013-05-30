@@ -1343,9 +1343,11 @@ dsl_dir_rename_sync(void *arg1, void *arg2, dmu_tx_t *tx)
 	    dd->dd_myname, 8, 1, &dd->dd_object, tx);
 	ASSERT0(err);
 	dsl_dir_name(dd, newname);
+#ifndef __OSV__
 #ifdef _KERNEL
 	zfsvfs_update_fromname(oldname, newname);
 	zvol_rename_minors(oldname, newname);
+#endif
 #endif
 
 	spa_history_log_internal(LOG_DS_RENAME, dd->dd_pool->dp_spa,
