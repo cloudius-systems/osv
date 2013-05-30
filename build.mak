@@ -119,6 +119,7 @@ tests += tests/tst-lsroute.so
 tests += tests/tst-condvar.so
 tests += tests/tst-queue-mpsc.so
 tests += tests/tst-af-local.so
+tests += tests/tst-pipe.so
 tests += tests/tst-yield.so
 tests += tests/tst-ctxsw.so
 tests += tests/tst-readdir.so

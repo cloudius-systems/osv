@@ -14,6 +14,8 @@
 #include "fs/unsupported.h"
 #include "libc.hh"
 #include <osv/poll.h>
+#include <debug.hh>
+#include <unistd.h>
 
 struct af_local_buffer {
     static constexpr size_t max_buf = 8192;
@@ -128,6 +130,7 @@ int af_local_buffer::read(uio* data)
             return;
         }
         auto iov = data->uio_iov;
+        // FIXME: this loop does NOT correctly iterate the iovec.
         while (data->uio_resid && (read_events_unlocked() & POLLIN)) {
             auto n = std::min(q.size(), iov->iov_len);
             char* p = static_cast<char*>(iov->iov_base);
@@ -150,15 +153,24 @@ int af_local_buffer::write(uio* data)
     int err = 0;
     with_lock(mtx, [&] {
         int r;
+        // FIXME: In Posix, pipe write()s smaller than PIPE_BUF (=4096) are
+        // guaranteed to be atomic, i.e., if there's no place for the whole
+        // write in the buffer, we need to wait until there is - not just
+        // until there is place for at least one byte.
+        // FIXME: Should support also non-blocking operation (O_NONBLOCK).
         while ((r = write_events_unlocked()) == 0) {
             may_write.wait(&mtx);
         }
         if (!(r & POLLOUT)) {
             assert(r & POLLHUP);
+            // FIXME: If we don't generate a SIGPIPE here, at least assert
+            // that SIGPIPE is SIG_IGN (which can be our default); If the
+            // user installed
             err = EPIPE;
             return;
         }
         auto iov = data->uio_iov;
+        // FIXME: this loop does NOT correctly iterate the iovec.
         while (data->uio_resid && (write_events_unlocked() & POLLOUT)) {
             auto n = std::min(max_buf - q.size(), iov->iov_len);
             char* p = static_cast<char*>(iov->iov_base);
@@ -260,3 +272,101 @@ int socketpair_af_local(int type, int proto, int sv[2])
     }
 }
 
+// Also implement pipes using the same af_local_buffer mechanism:
+
+struct pipe_writer {
+    af_local_buffer_ref buf;
+    pipe_writer(af_local_buffer *b) : buf(b) { }
+    ~pipe_writer() { buf->detach_sender(); }
+};
+
+struct pipe_reader {
+    af_local_buffer_ref buf;
+    pipe_reader(af_local_buffer *b) : buf(b) { }
+    ~pipe_reader() { buf->detach_receiver(); }
+};
+
+int pipe_init(file* f)
+{
+    if (f->f_flags & FWRITE) {
+        pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
+        po->buf->attach_sender(f);
+    } else {
+        pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
+        po->buf->attach_receiver(f);
+    }
+    return 0;
+}
+
+int pipe_read(file *f, uio *data, int flags)
+{
+    pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
+    return po->buf->read(data);
+}
+
+int pipe_write(file *f, uio *data, int flags)
+{
+    pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
+    return po->buf->write(data);
+}
+
+int pipe_poll(file *f, int events)
+{
+    int revents = 0;
+    // One end of the pipe is read-only, the other write-only:
+    if (f->f_flags & FWRITE) {
+        pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
+        if (events & POLLOUT) {
+            revents |= po->buf->write_events();
+        }
+    } else {
+        pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
+        if (events & POLLIN) {
+            revents |= po->buf->read_events();
+        }
+    }
+    return revents;
+}
+
+int pipe_close(file *f)
+{
+    if (f->f_flags & FWRITE) {
+        delete static_cast<pipe_writer*>(f->f_data);
+    } else {
+        delete static_cast<pipe_reader*>(f->f_data);
+    }
+    f->f_data = nullptr;
+    return 0;
+}
+
+fileops pipe_ops = {
+    pipe_init,
+    pipe_read,
+    pipe_write,
+    unsupported_truncate,
+    unsupported_ioctl,
+    pipe_poll,
+    unsupported_stat,
+    pipe_close,
+    unsupported_chmod,
+};
+
+int pipe(int pipefd[2]) {
+    auto b = new af_local_buffer;
+    std::unique_ptr<pipe_reader> s1{new pipe_reader(b)};
+    std::unique_ptr<pipe_writer> s2{new pipe_writer(b)};
+    try {
+        fileref f1{falloc_noinstall()};
+        fileref f2{falloc_noinstall()};
+        finit(f1.get(), FREAD, DTYPE_UNSPEC, s1.release(), &pipe_ops);
+        finit(f2.get(), FWRITE, DTYPE_UNSPEC, s2.release(), &pipe_ops);
+        fdesc fd1(f1);
+        fdesc fd2(f2);
+        // all went well, user owns descriptors now
+        pipefd[0] = fd1.release();
+        pipefd[1] = fd2.release();
+        return 0;
+    } catch (int error) {
+        return libc_error(error);
+    }
+}

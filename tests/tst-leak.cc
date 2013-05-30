@@ -3,9 +3,12 @@
 #include <sys/mman.h>
 #include <pthread.h>
 
-namespace memory {
-extern bool tracker_enabled;
-}
+// Run this test with "--leak" to check for various previously-known
+// memory leaks.
+
+//namespace memory {
+//extern bool tracker_enabled;
+//}
 
 static void *donothing(void *arg)
 {
@@ -15,8 +18,8 @@ static void *donothing(void *arg)
 
 int main(int argc, char **argv)
 {
-    bool save_tracker_enabled = memory::tracker_enabled;
-    memory::tracker_enabled = true;
+//    bool save_tracker_enabled = memory::tracker_enabled;
+//    memory::tracker_enabled = true;
 
     debug("testing leaks in malloc\n");
     for (int i = 0; i < 100; i++) {
@@ -74,8 +77,22 @@ int main(int argc, char **argv)
     sleep(1);
     debug("\n");
 
+    debug("testing leaks in pipe()");
+    for(int i = 0; i < 100; i++){
+        int p[2];
+        assert(pipe(p) == 0);
+        assert(close(p[0]) == 0);
+        assert(close(p[1]) == 0);
+    }
+    debug("\n");
 
-    debug("leak testing done. Please use 'osv leak show' in gdb to analyze results\n");
+    // Sleep a bit, to see if we leak anything in some sort of periodic
+    // background thread
+    debug("testing background activity (10 seconds)");
+    sleep(10);
+    debug("\n");
 
-    memory::tracker_enabled = save_tracker_enabled;
+
+//    debug("leak testing done. Please use 'osv leak show' in gdb to analyze results\n");
+//    memory::tracker_enabled = save_tracker_enabled;
 }
