@@ -3740,7 +3740,7 @@ out:
 	return (error);
 }
 
-#else
+#elif defined(__FreeBSD__)
 
 extern int vdev_geom_read_pool_label(const char *name, nvlist_t ***configs,
     uint64_t *count);
