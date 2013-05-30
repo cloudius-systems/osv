@@ -1,7 +1,8 @@
 
 fs :=
 
-fs +=	fs.o
+fs +=	fs.o \
+	unsupported.o
 
 fs +=	vfs/main.o \
 	vfs/kern_descrip.o \
