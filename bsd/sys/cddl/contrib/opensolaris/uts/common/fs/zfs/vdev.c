@@ -56,12 +56,14 @@ static vdev_ops_t *vdev_ops_table[] = {
 	&vdev_mirror_ops,
 	&vdev_replacing_ops,
 	&vdev_spare_ops,
+#ifdef __FreeBSD__
 #ifdef _KERNEL
 	&vdev_geom_ops,
 #else
 	&vdev_disk_ops,
 #endif
 	&vdev_file_ops,
+#endif
 	&vdev_missing_ops,
 	&vdev_hole_ops,
 	NULL
