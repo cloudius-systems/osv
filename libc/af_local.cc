@@ -12,6 +12,7 @@
 #include <osv/condvar.h>
 #include "fs/fs.hh"
 #include "libc.hh"
+#include <osv/poll.h>
 
 struct af_local_buffer {
     static constexpr size_t max_buf = 8192;
@@ -24,14 +25,16 @@ public:
     int write_events();
     void detach_sender();
     void detach_receiver();
+    void attach_sender(struct file *f);
+    void attach_receiver(struct file *f);
 private:
     int read_events_unlocked();
     int write_events_unlocked();
 private:
     mutex mtx;
     std::deque<char> q;
-    bool receiver = true;
-    bool sender = true;
+    struct file *receiver = nullptr;
+    struct file *sender = nullptr;
     std::atomic<unsigned> refs = {};
     condvar may_read;
     condvar may_write;
@@ -49,22 +52,36 @@ typedef boost::intrusive_ptr<af_local_buffer> af_local_buffer_ref;
 
 void af_local_buffer::detach_sender()
 {
-    with_lock(mtx, [=] {
-        if (sender) {
-            sender = false;
-            may_read.wake_all();
-        }
-    });
+    std::lock_guard<mutex> guard(mtx);
+    if (sender) {
+        sender = nullptr;
+        if (receiver)
+            poll_wake(receiver, POLLRDHUP);
+        may_read.wake_all();
+    }
 }
 
 void af_local_buffer::detach_receiver()
 {
-    with_lock(mtx, [=] {
-        if (receiver) {
-            receiver = false;
-            may_write.wake_all();
-        }
-    });
+    std::lock_guard<mutex> guard(mtx);
+    if (receiver) {
+        receiver = nullptr;
+        if (sender)
+            poll_wake(sender, POLLHUP);
+        may_write.wake_all();
+    }
+}
+
+void af_local_buffer::attach_sender(struct file *f)
+{
+    assert(sender == nullptr);
+    sender = f;
+}
+
+void af_local_buffer::attach_receiver(struct file *f)
+{
+    assert(receiver == nullptr);
+    receiver = f;
 }
 
 int af_local_buffer::read_events_unlocked()
@@ -117,6 +134,8 @@ int af_local_buffer::read(uio* data)
             q.erase(q.begin(), q.begin() + n);
             data->uio_resid -= n;
         }
+        if (write_events_unlocked() && POLLOUT)
+            poll_wake(sender, POLLOUT);
     });
     may_write.wake_all();
     return 0;
@@ -145,6 +164,8 @@ int af_local_buffer::write(uio* data)
             std::copy(p, p + n, std::back_inserter(q));
             data->uio_resid -= n;
         }
+        if (read_events_unlocked() && POLLIN)
+            poll_wake(receiver, POLLIN);
     });
     may_read.wake_all();
     return err;
@@ -163,6 +184,9 @@ struct af_local {
 
 int af_local_init(file* f)
 {
+    af_local* afl = static_cast<af_local*>(f->f_data);
+    afl->send->attach_sender(f);
+    afl->receive->attach_receiver(f);
     return 0;
 }
 
