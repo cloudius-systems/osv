@@ -61,6 +61,7 @@ int main(int ac, char** av)
         report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read after waiting poll");
     });
     t2.start();
+    sleep(1);
     r = write(s[0], msg, 5);
     t2.join();
     report(r == 5, "write to polling socket");
@@ -87,7 +88,7 @@ int main(int ac, char** av)
     report(nsock > 100, "create many sockets");
 
 
-    debug("SUMMARY: %d tests, %d failures", tests, fails);
+    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
 
 
