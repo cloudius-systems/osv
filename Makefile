@@ -1,5 +1,5 @@
 
-mode=debug
+mode=relase
 
 out = build/$(mode)
 submake = $(out)/Makefile
