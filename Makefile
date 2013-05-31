@@ -1,5 +1,5 @@
 
-mode=relase
+mode=release
 
 out = build/$(mode)
 submake = $(out)/Makefile
