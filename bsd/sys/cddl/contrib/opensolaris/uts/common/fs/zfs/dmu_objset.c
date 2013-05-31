@@ -999,8 +999,10 @@ dmu_objset_snapshot(char *fsname, char *snapname, char *tag,
 		dsl_dataset_t *ds = os->os_dsl_dataset;
 		if (dst->dst_err) {
 			dsl_dataset_name(ds, sn.failed);
+#ifndef __OSV__
 		} else if (temporary) {
 			dsl_register_onexit_hold_cleanup(sn.newds, tag, minor);
+#endif
 		}
 		if (sn.needsuspend)
 			zil_resume(dmu_objset_zil(os));
