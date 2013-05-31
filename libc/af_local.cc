@@ -138,8 +138,8 @@ int af_local_buffer::read(uio* data)
             q.erase(q.begin(), q.begin() + n);
             data->uio_resid -= n;
         }
-        if (write_events_unlocked() && POLLOUT)
-            poll_wake(sender, POLLOUT);
+        if (write_events_unlocked() & POLLOUT)
+            poll_wake(sender, (POLLOUT | POLLWRNORM));
     });
     may_write.wake_all();
     return 0;
@@ -177,8 +177,8 @@ int af_local_buffer::write(uio* data)
             std::copy(p, p + n, std::back_inserter(q));
             data->uio_resid -= n;
         }
-        if (read_events_unlocked() && POLLIN)
-            poll_wake(receiver, POLLIN);
+        if (read_events_unlocked() & POLLIN)
+            poll_wake(receiver, (POLLIN | POLLRDNORM));
     });
     may_read.wake_all();
     return err;
