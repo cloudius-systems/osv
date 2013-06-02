@@ -30,16 +30,14 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
         condvar->waiters_fifo.newest->newer = &wr;
     }
     condvar->waiters_fifo.newest = &wr;
-    mutex_unlock(&condvar->m);
 
     mutex_unlock(user_mutex);
     // Wait until either the timer expires or condition variable signaled
-    sched::thread::wait_until([&] {
+    sched::thread::wait_until(&condvar->m, [&] {
         return (tmr && tmr->expired()) || !wr.t;
     });
     if (wr.t) {
         // wr is still in the linked list (because of a timeout) so remove it:
-        mutex_lock(&condvar->m);
         if (&wr == condvar->waiters_fifo.oldest) {
             condvar->waiters_fifo.oldest = wr.newer;
             if (!wr.newer) {
@@ -58,9 +56,10 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
                 p = p->newer;
             }
         }
-        mutex_unlock(&condvar->m);
         ret = ETIMEDOUT;
     }
+    mutex_unlock(&condvar->m);
+
     mutex_lock(user_mutex);
     return ret;
 }
