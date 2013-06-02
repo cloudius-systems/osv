@@ -1,6 +1,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "sched.hh"
 #include "debug.hh"
 
@@ -81,13 +82,115 @@ int main(int ac, char** av)
     r = poll(&poller, 1, 0);
     report(r == 0, "poll() (no input on write end)");
 
+
+    // test atomic writes. Assumes our af_local_buffer size is 8192 bytes -
+    // if this changes we need to change this test!
+#define TSTBUFSIZE 8192*3
+    char *buf1 = (char *)calloc(1,TSTBUFSIZE);
+    char *buf2 = (char *)calloc(1,TSTBUFSIZE);
+    sched::thread t3([&] {
+        r = write(s[1], buf1, 8100);
+        report(r == 8100, "write 8100 bytes to empty pipe");
+        // this write() should block, not partially succeed:
+        r = write(s[1], buf1, 400);
+        report(r == 400, "write 400 bytes is atomic");
+        // this write() should block until the whole buffer is written,
+        // even if it takes several waits
+        r = write(s[1], buf1, 20000);
+        report(r == 20000, "write 20000 bytes until complete");
+        // this write() should block until the whole buffer is written,
+        // even if it takes several waits
+
+    });
+    t3.start();
+    sleep(1);
+    r2 = read(s[0], buf2, 8100); // 1 second should be enough for this to be available
+    report(r2 == 8100, "read 8100 bytes from pipe");
+    r2 = read(s[0], buf2, 400);
+    report(r2 == 400, "read 400 bytes written atomicly");
+    int count=20000;
+    while(count>0) {
+        r2 = read(s[0], buf2, count);
+        report (r2>0, "partial read of the 20000 bytes");
+        debug("(read %d)\n", r2);
+        count -= r2;
+    }
+    t3.join();
+    free(buf1);
+    free(buf2);
+
+    // test writev
+    struct iovec iov[3];
+    char b1[3], b2[2], bn[0];
+    char bout[5];
+    memcpy(b1, "hel", 3);
+    memcpy(b2, "lo", 2);
+    iov[0].iov_base = b1;
+    iov[0].iov_len = 3;
+    iov[1].iov_base = bn;
+    iov[1].iov_len = 0;
+    iov[2].iov_base = b2;
+    iov[2].iov_len = 2;
+    r = writev(s[1], iov, sizeof(iov)/sizeof(iov[0]));
+    report(r == 5, "writev");
+//    debug("r=%d\n",r);
+    if (r == 5) {
+        r = read(s[0], bout, 5);
+        report(r == 5 && memcmp(bout, "hello", 5) == 0, "read after writev");
+    }
+
+    // test readv
+    b1[0] = b2[0] = '\0';
+    r = write(s[1], "mieuw", 5);
+    report(r == 5, "write for readv");
+    r = readv(s[0], iov, sizeof(iov)/sizeof(iov[0]));
+    report(r == 5 && memcmp(b1,"mie",3)==0 && memcmp(b2,"uw",2)==0, "readv");
+
+    // larger, more extensive test, with writev
+#define LARGE1 1234567
+#define LARGE2 2345678
+    buf1 = (char *)calloc(1, LARGE1);
+    buf2 = (char *)calloc(1, LARGE2);
+    char *buf3 = (char *)calloc(1, 8192);
+    iov[0].iov_base = buf1;
+    iov[0].iov_len = LARGE1;
+    iov[1].iov_base = buf2;
+    iov[1].iov_len = LARGE2;
+    char c = 0;
+    for (int i = 0; i < LARGE1; i++)
+        buf1[i] = c++;
+    for (int i = 0; i < LARGE2; i++)
+        buf2[i] = c++;
+    sched::thread t4([&] {
+        r = writev(s[1], iov, 2);
+        report(r == LARGE1+LARGE2, "large writev");;
+    });
+    t4.start();
+    c = 0;
+    count = LARGE1 + LARGE2;
+    while(count > 0) {
+        r2 = read(s[0], buf3, count);
+        if (r2 <= 0)
+            break;
+        count -= r2;
+        for (int i = 0; i < r2; i++) {
+            if (buf3[i] != c++)
+                report(false, "correct data read from large writev");
+        }
+    }
+    report (count == 0, "read of large writev");
+    t4.join();
+    free(buf1);
+    free(buf2);
+    free(buf3);
+
+    // test closing
     r = close(s[0]);
     report(r == 0, "close read side first");
-    r = write(s[1], msg, 5);
+    r = write(s[1], msg, 4);
     report(r == -1 && errno == EPIPE, "write, other side closed");
     r = close(s[1]);
     report(r == 0, "close also write side");
-
 
     r = pipe(s);
     report(r == 0, "pipe call");
