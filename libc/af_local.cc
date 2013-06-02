@@ -116,6 +116,20 @@ int af_local_buffer::write_events()
     return with_lock(mtx, [=] { return write_events_unlocked(); });
 }
 
+// Copy from the pipe into the given iovec array, until the array is full
+// or the queue is empty. Decrements uio->uio_resid.
+static void copy_to_uio(std::deque<char> &q, uio *uio)
+{
+    for (int i = 0; i < uio->uio_iovcnt && !q.empty(); i++) {
+        auto &iov = uio->uio_iov[i];
+        auto n = std::min(q.size(), iov.iov_len);
+        char* p = static_cast<char*>(iov.iov_base);
+        std::copy(q.begin(), q.begin() + n, p);
+        q.erase(q.begin(), q.begin() + n);
+        uio->uio_resid -= n;
+    }
+}
+
 int af_local_buffer::read(uio* data)
 {
     if (!data->uio_resid) {
@@ -130,20 +144,38 @@ int af_local_buffer::read(uio* data)
             assert(r & POLLRDHUP);
             return;
         }
-        auto iov = data->uio_iov;
-        // FIXME: this loop does NOT correctly iterate the iovec.
-        while (data->uio_resid && (read_events_unlocked() & POLLIN)) {
-            auto n = std::min(q.size(), iov->iov_len);
-            char* p = static_cast<char*>(iov->iov_base);
-            std::copy(q.begin(), q.begin() + n, p);
-            q.erase(q.begin(), q.begin() + n);
-            data->uio_resid -= n;
-        }
+        copy_to_uio(q, data);
         if (write_events_unlocked() & POLLOUT)
             poll_wake(sender, (POLLOUT | POLLWRNORM));
     });
     may_write.wake_all();
     return 0;
+}
+
+// Copy from a certain iovec array into a pipe, starting at a given index
+// and offset, until the buffer or the array ends. Decrements uio->uio_resid,
+// and modifies ind and offset to where the copy stopped.
+static void copy_from_uio(uio *uio, size_t *ind, size_t *offset,
+        std::deque<char> &buf, size_t bufsize)
+{
+    int i = *ind;
+    size_t off = *offset;
+
+    while (i < uio->uio_iovcnt && buf.size() < bufsize) {
+        auto &iov = uio->uio_iov[i];
+        auto n = std::min(bufsize - buf.size(), iov.iov_len - off);
+        char* p = static_cast<char*>(iov.iov_base) + off;
+        std::copy(p, p + n, std::back_inserter(buf));
+        uio->uio_resid -= n;
+        off += n;
+        if (off == iov.iov_len) {
+            ++i;
+            off = 0;
+        }
+    }
+
+    *offset = off;
+    *ind = i;
 }
 
 int af_local_buffer::write(uio* data)
@@ -173,17 +205,9 @@ int af_local_buffer::write(uio* data)
         // A blocking write() to a pipe never returns with partial success -
         // it waits, possibly writing its output in parts and waiting multiple
         // times, until the whole given buffer is written.
-        int iovoffset = 0;
+        size_t ind = 0, offset = 0;
         while (data->uio_resid && receiver) {
-            // FIXME: this loop does NOT correctly iterate the iovec.
-            auto iov = data->uio_iov;
-            while (data->uio_resid && q.size() < max_buf) {
-                auto n = std::min(max_buf - q.size(), iov->iov_len-iovoffset);
-                char* p = static_cast<char*>(iov->iov_base) + iovoffset;
-                std::copy(p, p + n, std::back_inserter(q));
-                data->uio_resid -= n;
-                iovoffset += n;
-            }
+            copy_from_uio(data, &ind, &offset, q, max_buf);
             if (data->uio_resid) {
                 // The buffer is full but we still have more to send. Wake up
                 // readers, and go to sleep ourselves.
