@@ -16,6 +16,7 @@
 #include <osv/poll.h>
 #include <debug.hh>
 #include <unistd.h>
+#include <fcntl.h>
 
 struct af_local_buffer {
     static constexpr size_t max_buf = 8192;
@@ -206,12 +207,16 @@ int af_local_init(file* f)
 int af_local_read(file* f, uio* data, int flags)
 {
     af_local* afl = static_cast<af_local*>(f->f_data);
+    // FIXME: Should support also non-blocking operation in
+    // af_local_read/write and pipe_read/write.
+    assert(!(f->f_flags & FNONBLOCK));
     return afl->receive->read(data);
 }
 
 int af_local_write(file* f, uio* data, int flags)
 {
     af_local* afl = static_cast<af_local*>(f->f_data);
+    assert(!(f->f_flags & FNONBLOCK));
     return afl->send->write(data);
 }
 
@@ -301,12 +306,14 @@ int pipe_init(file* f)
 int pipe_read(file *f, uio *data, int flags)
 {
     pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
+    assert(!(f->f_flags & FNONBLOCK));
     return po->buf->read(data);
 }
 
 int pipe_write(file *f, uio *data, int flags)
 {
     pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
+    assert(!(f->f_flags & FNONBLOCK));
     return po->buf->write(data);
 }
 
