@@ -14,8 +14,13 @@ var run_cmd = {
 
         argv.splice(0, 1);
 
-        // FIXME: Handle absolute paths
-        var f = File(cd.cwd(), argv[0]);
+        var f = null;
+        if (argv[0].indexOf("/") == 0) {
+            f = File(argv[0]);
+        } else {
+            f = File(cd.cwd(), argv[0]);
+        }
+
         if (!f.exists()) {
             return -1;
         }
