@@ -160,6 +160,10 @@ struct argblock {
     char** av;
 };
 
+// Java uses this global variable (supplied by Glibc) to figure out the
+// initial thread's stack end.
+void *__libc_stack_end;
+
 void run_main(elf::program *prog, struct argblock *args)
 {
     auto av = args->av;
@@ -177,6 +181,8 @@ void run_main(elf::program *prog, struct argblock *args)
         debug("Enabling leak detector.\n");
         memory::tracker_enabled = true;
     }
+
+    __libc_stack_end = __builtin_frame_address(0);
 
     main(ac, av);
 }
