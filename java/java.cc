@@ -73,5 +73,10 @@ int main(int argc, char **argv)
     }
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
+
+    // DestroyJavaVM() waits for all all non-daemon threads to end, and
+    // only then destroys the JVM.
+    jvm->DetachCurrentThread();
+    jvm->DestroyJavaVM();
     return 0;
 }
