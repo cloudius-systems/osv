@@ -113,7 +113,6 @@ tests += tests/tst-leak.so tests/tst-mmap.so tests/tst-vfs.so
 tests += tests/tst-mutex.so
 tests += tests/tst-sockets.so
 tests += tests/tst-bsd-tcp1.so
-tests += tests/tst-lsroute.so
 tests += tests/tst-condvar.so
 tests += tests/tst-queue-mpsc.so
 tests += tests/tst-af-local.so
@@ -128,6 +127,7 @@ java/RunJava.class: javabase=java
 
 tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
+tools += tools/route/lsroute.so
 
 all: loader.img loader.bin usr.img
 
