@@ -12,7 +12,11 @@ var route_cmd = {
     add_deafult_gw: function(gwaddr) {
         networking_interface.route_add_default(gwaddr);
     },
-        
+    
+    print_route: function() {
+        return (run_cmd.run(["/tools/lsroute.so"]));
+    },
+    
     init: function() {
         this._parser = new OptParser(route_options);
     },
@@ -31,7 +35,7 @@ var route_cmd = {
             return;
         }
         
-        this.help();
+        this.print_route();
     },
     
     tab: function(inp) {
