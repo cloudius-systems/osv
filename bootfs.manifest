@@ -70,9 +70,6 @@
 /tests/tst-bsd-tcp1.so: ./tests/tst-bsd-tcp1.so
 /tests/tst-bsd-evh.so: ./tests/tst-bsd-evh.so
 /tests/tst-bsd-callout.so: ./tests/tst-bsd-callout.so
-/tests/tst-bsd-netisr.so: ./tests/tst-bsd-netisr.so
-/tests/tst-bsd-netdriver.so: ./tests/tst-bsd-netdriver.so
-/tests/tst-virtionet.so: ./tests/tst-virtionet.so
 /tests/tst-fpu.so: ./tests/tst-fpu.so
 /tests/tst-preempt.so: ./tests/tst-preempt.so
 /tests/tst-tracepoint.so: ./tests/tst-tracepoint.so
