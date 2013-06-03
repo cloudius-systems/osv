@@ -78,7 +78,6 @@
 /tests/tst-mutex.so: ./tests/tst-mutex.so
 /tests/tst-hub.so: ./tests/tst-hub.so
 /tests/tst-lsroute.so: ./tests/tst-lsroute.so
-/tests/tst-ifconfig.so: ./tests/tst-ifconfig.so
 /tests/tst-condvar.so: ./tests/tst-condvar.so
 /tests/tst-queue-mpsc.so: ./tests/tst-queue-mpsc.so
 /&/tests/tst-af-local.so: ./&
@@ -101,6 +100,7 @@
 /usr/lib/&/jni/elf-loader.so: java/&
 /usr/lib/&/jni/networking.so: java/&
 /usr/lib/&/jni/stty.so: java/&
+/tools/ifconfig.so: ./tools/ifconfig/ifconfig.so
 /console/util.js: ../../console/util.js
 /console/autocomplete.js: ../../console/autocomplete.js
 /console/optparse.js: ../../console/optparse.js

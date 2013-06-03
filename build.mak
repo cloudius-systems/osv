@@ -113,7 +113,6 @@ tests += tests/tst-leak.so tests/tst-mmap.so tests/tst-vfs.so
 tests += tests/tst-mutex.so
 tests += tests/tst-sockets.so
 tests += tests/tst-bsd-tcp1.so
-tests += tests/tst-ifconfig.so
 tests += tests/tst-lsroute.so
 tests += tests/tst-condvar.so
 tests += tests/tst-queue-mpsc.so
@@ -126,6 +125,9 @@ tests += tests/tst-readdir.so
 tests/hello/Hello.class: javabase=tests/hello
 
 java/RunJava.class: javabase=java
+
+tools/%.o: COMMON += -fPIC
+tools := tools/ifconfig/ifconfig.so
 
 all: loader.img loader.bin usr.img
 
@@ -481,7 +483,7 @@ jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(jni) \
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) $(jni) \
 		tests/testrunner.so java/java.so java/RunJava.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
