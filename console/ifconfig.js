@@ -11,8 +11,17 @@ var ifconfig_cmd = {
         var rc = networking_interface.if_up(ifname);
         return rc;
     },
+    
+    iflist: function() {
+        argv = ["/tools/ifconfig.so"]
+        return run_cmd.run(argv)
+    },
         
     invoke: function(inp) {
+        if (inp.length == 1) {
+            return this.iflist();
+        }
+        
         if (inp.length != 6) {
             this.help();
             return;
