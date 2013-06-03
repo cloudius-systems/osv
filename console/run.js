@@ -8,11 +8,9 @@ var run_cmd = {
     },
 
     run: function(argv) {
-        if (argv.length < 2) {
+        if (argv.length < 1) {
             return -1;
         }
-
-        argv.splice(0, 1);
 
         var f = null;
         if (argv[0].indexOf("/") == 0) {
@@ -37,6 +35,13 @@ var run_cmd = {
     },
 
     invoke: function(inp) {
+        if (inp.length < 2) {
+            return;
+        }
+        
+        // ditch 'run'
+        inp.splice(0, 1);
+        
         rc = this.run(inp);
         if (rc < 0) {
             print("run: couldn't execute elf");
