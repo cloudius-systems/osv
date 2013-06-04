@@ -173,7 +173,6 @@ void run_main(elf::program *prog, struct argblock *args)
         debug("run_main(): cannot execute %s. Aborting.\n", av[0]);
         abort();
     }
-    ++av, --ac;
     auto main = obj->lookup<void (int, char**)>("main");
     assert(main);
 

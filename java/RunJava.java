@@ -20,7 +20,7 @@ public class RunJava {
     }
 
     static void parseArgs(String[] args) throws Throwable {
-        for (int i = 0; i < args.length; i++) {
+        for (int i = 1; i < args.length; i++) {
             if (args[i].equals("-jar")) {
                 if (i+1 >= args.length) {
                     System.err.println("RunJava: Missing jar name after '-jar'.");
