@@ -11,6 +11,8 @@ public class RhinoCLI {
 
     public static Scriptable _scope;
     public static Context _cx;
+    
+    public static String[] _args;
 
     //
     // Invoke the cli.js file take care of exposing all scriptable objects
@@ -23,6 +25,8 @@ public class RhinoCLI {
             global.init(_cx);
             _scope = ScriptableObject.getTopLevelScope(global);
             
+            _args = args;
+
             FileReader cli_js = new FileReader("/console/cli.js");
             _cx.evaluateReader(_scope, cli_js, "cli.js", 1, null);
             

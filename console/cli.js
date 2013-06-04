@@ -286,5 +286,10 @@ update_prompt();
 
 load("/console/init.js");
 
-// Main loop
-main_loop();
+mainargs = com.cloudius.cli.main.RhinoCLI._args;
+if (mainargs.length) {
+    invoke(mainargs);
+} else {
+    // Main loop
+    main_loop();
+}
