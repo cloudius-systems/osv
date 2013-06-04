@@ -67,9 +67,9 @@ int main(int argc, char **argv)
     }
 
     auto stringclass = env->FindClass("java/lang/String");
-    auto args = env->NewObjectArray(argc, stringclass, nullptr);
-    for (int i = 0; i < argc; ++i) {
-        env->SetObjectArrayElement(args, i, env->NewStringUTF(argv[i]));
+    auto args = env->NewObjectArray(argc-1, stringclass, nullptr);
+    for (int i = 0; i < argc-1; ++i) {
+        env->SetObjectArrayElement(args, i, env->NewStringUTF(argv[i+1]));
     }
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
