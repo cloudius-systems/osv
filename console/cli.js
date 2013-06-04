@@ -17,6 +17,7 @@ load("/console/ifconfig.js");
 load("/console/arp.js");
 load("/console/md5sum.js");
 load("/console/route.js");
+load("/console/java.js");
 
 // Commands
 var _commands = new Array();
@@ -31,6 +32,7 @@ _commands["ifconfig"] = ifconfig_cmd;
 _commands["arp"] = arp_cmd;
 _commands["route"] = route_cmd;
 _commands["md5sum"] = md5sum_cmd;
+_commands["java"] = java_cmd;
 
 // Create interface to networking functions
 var networking_interface = new Networking();

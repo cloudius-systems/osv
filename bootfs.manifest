@@ -114,6 +114,7 @@
 /console/arp.js: ../../console/arp.js
 /console/route.js: ../../console/route.js
 /console/ifconfig.js: ../../console/ifconfig.js
+/console/java.js: ../../console/java.js
 /console/cli.js: ../../console/cli.js
 /console/init.js: ../../console/init.js
 /console/md5sum.js: ../../console/md5sum.js
