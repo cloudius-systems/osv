@@ -33,6 +33,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
 #include <osv/mutex.h>
 #include <osv/poll.h>
@@ -191,6 +192,12 @@ fo_chmod(struct file *fp, mode_t mode)
 {
 	return fp->f_ops->fo_chmod(fp, mode);
 }
+
+static inline bool is_nonblock(struct file *f)
+{
+    return (f->f_flags & FNONBLOCK);
+}
+
 
 __END_DECLS
 

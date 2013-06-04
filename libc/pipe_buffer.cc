@@ -81,24 +81,25 @@ static void copy_to_uio(std::deque<char> &q, uio *uio)
     }
 }
 
-int pipe_buffer::read(uio* data)
+int pipe_buffer::read(uio* data, bool nonblock)
 {
     if (!data->uio_resid) {
         return 0;
     }
-    with_lock(mtx, [&] {
-        int r;
-        while ((r = read_events_unlocked()) == 0) {
-            may_read.wait(&mtx);
-        }
-        if (!(r & POLLIN)) {
-            assert(r & POLLRDHUP);
-            return;
-        }
-        copy_to_uio(q, data);
-        if (write_events_unlocked() & POLLOUT)
-            poll_wake(sender, (POLLOUT | POLLWRNORM));
-    });
+    std::unique_lock<mutex> lock(mtx);
+    if (nonblock && q.empty()) {
+        return sender ? EAGAIN : 0;
+    }
+    while (sender && q.empty()) {
+        may_read.wait(&mtx);
+    }
+    if (q.empty()) {
+        return 0;
+    }
+    copy_to_uio(q, data);
+    if (write_events_unlocked() & POLLOUT)
+        poll_wake(sender, (POLLOUT | POLLWRNORM));
+    lock.unlock();
     may_write.wake_all();
     return 0;
 }
@@ -129,28 +130,35 @@ static void copy_from_uio(uio *uio, size_t *ind, size_t *offset,
     *ind = i;
 }
 
-int pipe_buffer::write(uio* data)
+int pipe_buffer::write(uio* data, bool nonblock)
 {
     if (!data->uio_resid) {
         return 0;
     }
     int err = 0;
     with_lock(mtx, [&] {
-        // FIXME: Should support also non-blocking operation (O_NONBLOCK).
         // A write() smaller than PIPE_BUF (=4096 in Linux) will not be split
         // (i.e., will be "atomic"): For such a small write, we need to wait
         // until there's enough room for all it in the buffer.
         int needroom = data->uio_resid <= 4096 ? data->uio_resid : 1;
-        while (receiver && q.size() + needroom > max_buf) {
-            may_write.wait(&mtx);
-        }
-
-        if (!receiver) {
-            // FIXME: If we don't generate a SIGPIPE here, at least assert
-            // that SIGPIPE is SIG_IGN (which can be our default); If the
-            // user installed
-            err = EPIPE;
-            return;
+        if (nonblock) {
+            if (!receiver) {
+                // FIXME: If we don't generate a SIGPIPE here, at least assert
+                // that the user did not install a SIGPIPE handler.
+                err = EPIPE;
+                return;
+            } else if (q.size() + needroom > max_buf) {
+                err = EAGAIN;
+                return;
+            }
+        } else {
+            while (receiver && q.size() + needroom > max_buf) {
+                may_write.wait(&mtx);
+            }
+            if (!receiver) {
+                err = EPIPE;
+                return;
+            }
         }
 
         // A blocking write() to a pipe never returns with partial success -
@@ -165,6 +173,9 @@ int pipe_buffer::write(uio* data)
                 assert(q.size() == max_buf);
                 poll_wake(receiver, (POLLIN | POLLRDNORM));
                 may_read.wake_all();
+                if (nonblock) {
+                    return;
+                }
                 while (receiver && q.size() == max_buf) {
                     may_write.wait(&mtx);
                 }

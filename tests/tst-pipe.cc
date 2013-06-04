@@ -2,6 +2,7 @@
 #include <sys/poll.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #include "sched.hh"
 #include "debug.hh"
 
@@ -200,6 +201,38 @@ int main(int ac, char** av)
     report(r == 0, "read, other side closed");
     r = close(s[0]);
     report(r == 0, "close also read side");
+
+    // test nonblocking
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    r = fcntl(s[0], F_SETFL, O_NONBLOCK);
+    report(r == 0, "set read side to nonblocking");
+    memcpy(msg, "yoyoy", 5);
+    memset(reply, 0, 5);
+    r = read(s[0], reply, 5);
+    report(r == -1 && errno == EAGAIN, "read from empty nonblocking pipe");
+    r = write(s[1], msg, 3);
+    report(r == 3, "small write to empty pipe");
+    r = read(s[0], reply, 5);
+    report(r == 3, "partial read from nonblocking pipe");
+    r = fcntl(s[1], F_SETFL, O_NONBLOCK);
+    report(r == 0, "set write side to nonblocking");
+    r = write(s[1], msg, 5);
+    report(r == 5, "small write to empty nonblocking pipe");
+    r = write(s[1], msg, 5);
+    report(r == 5, "small write to non-empty nonblocking pipe");
+    buf1 = (char*) calloc(1, TSTBUFSIZE);
+    r = write(s[1], buf1, TSTBUFSIZE);
+    report(r == (8192 - 10), "partial write to nonblocking pipe");
+    r = write(s[1], buf1, TSTBUFSIZE);
+    report(r == -1 && errno == EAGAIN, "write to full nonblocking pipe");
+    r = read(s[0], buf1, TSTBUFSIZE);
+    report(r == 8192, "read entire nonblocking pipe");
+    free(buf1);
+    r = close(s[0]);
+    report(r == 0, "close read side");
+    r = close(s[1]);
+    report(r == 0, "close write side");
 
 
     std::vector<int> fds;

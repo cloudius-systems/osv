@@ -29,17 +29,14 @@ int af_local_init(file* f)
 int af_local_read(file* f, uio* data, int flags)
 {
     af_local* afl = static_cast<af_local*>(f->f_data);
-    // FIXME: Should support also non-blocking operation in
-    // af_local_read/write and pipe_read/write.
-    assert(!(f->f_flags & FNONBLOCK));
-    return afl->receive->read(data);
+    return afl->receive->read(data, is_nonblock(f));
 }
 
 int af_local_write(file* f, uio* data, int flags)
 {
     af_local* afl = static_cast<af_local*>(f->f_data);
     assert(!(f->f_flags & FNONBLOCK));
-    return afl->send->write(data);
+    return afl->send->write(data, is_nonblock(f));
 }
 
 int af_local_poll(file* f, int events)

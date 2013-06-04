@@ -15,8 +15,8 @@ private:
 public:
     pipe_buffer() = default;
     pipe_buffer(const pipe_buffer&) = delete;
-    int read(uio* data);
-    int write(uio* data);
+    int read(uio* data, bool nonblock);
+    int write(uio* data, bool nonblock);
     int read_events();
     int write_events();
     void detach_sender();

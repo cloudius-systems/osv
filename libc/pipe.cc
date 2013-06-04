@@ -35,15 +35,13 @@ static int pipe_init(file* f)
 static int pipe_read(file *f, uio *data, int flags)
 {
     pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
-    assert(!(f->f_flags & FNONBLOCK));
-    return po->buf->read(data);
+    return po->buf->read(data, is_nonblock(f));
 }
 
 static int pipe_write(file *f, uio *data, int flags)
 {
     pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
-    assert(!(f->f_flags & FNONBLOCK));
-    return po->buf->write(data);
+    return po->buf->write(data, is_nonblock(f));
 }
 
 static int pipe_poll(file *f, int events)
