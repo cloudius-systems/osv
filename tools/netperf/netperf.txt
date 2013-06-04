@@ -1,0 +1,37 @@
+To measure netwroking throughput we use netperf-2.6.0,
+
+The netperf client isn't working in OS-v, only netserver,
+and only after applying a small patch to the source.
+
+
+How to compile netperf from source so it'll run on osv:
+
+1. checkout the netperf-2.6.0 source from the following URL:
+http://www.netperf.org/netperf/DownloadNetperf.html
+
+2. compile regularly on linux, we're building the binaries that run on the host now.
+$ ./configure
+$ make
+$ sudo make install
+
+3. apply the osv patch to netperf
+$ patch -p1 < osv.patch
+
+4. build again
+$ make clean
+$ make CFLGAS="-fPIC -shared"
+
+5. copy src/netserver and use it in OS-v.
+
+
+
+Starting netserver
+
+[osv]$ run /tools/netserver-osv -D -4 -f
+
+ 
+Connecting using netperf
+
+[linux]$ ./netperf-linux -H 192.168.122.100
+
+
