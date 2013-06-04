@@ -46,7 +46,7 @@ def start_osv():
         args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
         args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
     else:
-        args += ["-netdev", "user,id=un0"]
+        args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
         
     try:
