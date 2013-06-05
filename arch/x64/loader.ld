@@ -16,6 +16,11 @@ SECTIONS
     .eh_frame : { *(.eh_frame) } :text
     .eh_frame_hdr : { *(.eh_frame_hdr) } :text :eh_frame
     .note : { *(.note*) } :text :note
+    .tracepoint_patch_sites ALIGN(8) : {
+        __tracepoint_patch_sites_start = .;
+        *(.tracepoint_patch_sites)
+        __tracepoint_patch_sites_end = .;
+    } : text
     .data : { *(.data) } :text
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text

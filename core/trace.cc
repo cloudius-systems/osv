@@ -9,6 +9,22 @@
 tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
 tracepoint<2, void*, void*> trace_function_exit("function exit", "fn %p caller %p");
 
+struct tracepoint_patch_site {
+    unsigned long id;
+    void* patch_site;
+    void* slow_path;
+};
+
+extern "C" tracepoint_patch_site
+    __tracepoint_patch_sites_start[], __tracepoint_patch_sites_end[];
+
+struct tracepoint_patch_sites_type {
+    tracepoint_patch_site* begin() { return __tracepoint_patch_sites_start; }
+    tracepoint_patch_site* end() { return __tracepoint_patch_sites_end; }
+};
+
+tracepoint_patch_sites_type tracepoint_patch_sites;
+
 constexpr size_t trace_page_size = 4096;  // need not match arch page size
 constexpr unsigned max_trace = trace_page_size * 1024;
 
@@ -58,7 +74,19 @@ tracepoint_base::~tracepoint_base()
 
 void tracepoint_base::enable()
 {
+    if (enabled) {
+        return;
+    }
     enabled = true;
+    for (auto& tps : tracepoint_patch_sites) {
+        if (id == tps.id) {
+            auto dst = static_cast<char*>(tps.slow_path);
+            auto src = static_cast<char*>(tps.patch_site) + 5;
+            // FIXME: can fail on smp.
+            *static_cast<u8*>(tps.patch_site) = 0xe9; // jmp
+            *static_cast<u32*>(tps.patch_site + 1) = dst - src;
+        }
+    }
 }
 
 void tracepoint_base::try_enable()

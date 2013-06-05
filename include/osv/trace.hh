@@ -245,6 +245,15 @@ public:
         sig = signature();
     }
     void operator()(r_args... as) {
+        asm goto("1: .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 \n\t"  // 5-byte nop
+                 ".pushsection .tracepoint_patch_sites, \"a\", @progbits \n\t"
+                 ".quad %c[id] \n\t"
+                 ".quad 1b \n\t"
+                 ".quad %l[slow_path] \n\t"
+                 ".popsection"
+                 : : [id]"i"(_id) : : slow_path);
+        return;
+        slow_path:
         trace_slow_path(assign(as...));
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
