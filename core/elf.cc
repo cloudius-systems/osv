@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
 #include <functional>
+#include <cxxabi.h>
 
 namespace {
     typedef boost::format fmt;
@@ -311,6 +312,20 @@ object::dynamic_str_array(unsigned tag)
     return r;
 }
 
+static std::string demangle(const char *name) {
+    int status;
+    char *demangled = abi::__cxa_demangle(name, nullptr, 0, &status);
+    std::string ret(name);
+    if (demangled) {
+        ret += " (";
+        ret += demangled;
+        ret += ")";
+        // "demangled" was allocated with malloc() by __cxa_demangle
+        free(demangled);
+    }
+    return ret;
+}
+
 symbol_module object::symbol(unsigned idx)
 {
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
@@ -324,7 +339,7 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        debug(fmt("failed looking up symbol %1%\n") % name);
+        debug(fmt("failed looking up symbol %1%\n") % demangle(name));
         abort();
     }
     return ret;
