@@ -156,6 +156,10 @@ bool virtio_driver::probe_virt_queues(void)
         // Setup queue_id:entry_id 1:1 correlation...
         virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _num_queues);
         virtio_conf_writew(VIRTIO_MSI_QUEUE_VECTOR, _num_queues);
+        if (virtio_conf_readw(VIRTIO_MSI_QUEUE_VECTOR) != _num_queues) {
+            virtio_e(fmt("Setting MSIx entry for queue %d failed.") % _num_queues);
+            return false;
+        }
 
         _num_queues++;
 
