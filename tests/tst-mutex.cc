@@ -78,7 +78,7 @@ static void test(int N, long len, bool pinned)
 template <typename T>
 static void measure_uncontended(long len)
 {
-    debug("Measuring uncontended %s lock/unlock: ",typeinfo<T>::name());
+    debug("Measuring uncontended %s lock/unlock: ", typeinfo<T>::name());
     T m;
     auto t1 = clock::get()->time();
     for (int i=0; i<len; i++) {
@@ -89,9 +89,18 @@ static void measure_uncontended(long len)
     debug ("%d ns\n", (t2-t1)/len);
 }
 
+template <typename T>
+static void show_size()
+{
+    debug("Size of %s: %d\n", typeinfo<T>::name(), sizeof(T));
+}
+
 int main(int argc, char **argv)
 {
     debug("Running mutex tests\n");
+    show_size<lockfree::mutex>();
+    show_size<mutex>();
+    show_size<spinlock>();
 
     measure_uncontended<lockfree::mutex>(10000000);
     measure_uncontended<mutex>(10000000);

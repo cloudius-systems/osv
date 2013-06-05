@@ -66,11 +66,10 @@ public:
     {
         sched::thread *current = sched::thread::current();
 
-        if (count.fetch_add(1) == 0) {
+        if (count.fetch_add(1, std::memory_order_acquire) == 0) {
             // Uncontended case (no other thread is holding the lock, and no
             // concurrent lock() attempts). We got the lock.
-            owner.store(current);
-            assert(depth==0);
+            owner.store(current, std::memory_order_relaxed);
             depth = 1;
             return;
         }
@@ -78,8 +77,8 @@ public:
         // If we're here the mutex was already locked, but we're implementing
         // a recursive mutex so it's possible the lock holder is us - in which
         // case we don't need to increment depth instead of waiting.
-        if (owner.load() == current) {
-            --count;
+        if (owner.load(std::memory_order_relaxed) == current) {
+            count.fetch_add(-1, std::memory_order_relaxed);
             ++depth;
             return;
         }
@@ -130,23 +129,22 @@ public:
         // they will set us to be the owner first.
         // TODO: perhaps check if owner isn't already current, in which case no need to reschedule?
         current->tcpu()->schedule(true);
-        assert(owner.load()==current);
+        assert(owner.load(std::memory_order_relaxed)==current);
     }
 
     bool try_lock(){
         sched::thread *current = sched::thread::current();
         int zero = 0;
-        if (count.compare_exchange_strong(zero, 1)) {
+        if (count.compare_exchange_strong(zero, 1, std::memory_order_acquire)) {
             // Uncontended case. We got the lock.
-            owner.store(current);
-            assert(depth==0);
+            owner.store(current, std::memory_order_relaxed);
             depth = 1;
             return true;
         }
 
         // We're implementing a recursive mutex -lock may still succeed if
         // this thread is the one holding it.
-        if (owner.load() == current) {
+        if (owner.load(std::memory_order_relaxed) == current) {
             ++depth;
             return true;
         }
@@ -156,7 +154,7 @@ public:
         // we do, we got the lock.
         auto old_handoff = handoff.load();
         if(!old_handoff && handoff.compare_exchange_strong(old_handoff, 0U)) {
-            ++count;
+            count.fetch_add(1, std::memory_order_relaxed);
             owner.store(current);
             assert(depth==0);
             depth = 1;
@@ -166,23 +164,18 @@ public:
     }
 
     void unlock(){
-        sched::thread *current = sched::thread::current();
-
-        // Some special treatment for recursive mutex:
-        if (owner.load() != current) {
-            // TODO: Anything more sensible to do? exception?
-            debug("lockfree::mutex.unlock() of non-locked mutex\n");
-            return;
-        }
-        assert(depth!=0);
-        --depth;
-        if (depth > 0)
+        // We assume unlock() is only ever called when this thread is holding
+        // the lock. For performance reasons, we do not verify that
+        // owner.load()==current && depth!=0.
+        if (--depth)
             return; // recursive mutex still locked.
-        owner.store(nullptr);
+
+        owner.store(nullptr, std::memory_order_relaxed);
 
         // If there is no waiting lock(), we're done. This is the easy case :-)
-        if (count.fetch_add(-1) == 1)
+        if (count.fetch_add(-1, std::memory_order_release) == 1) {
             return;
+        }
 
         // Otherwise there is at least one concurrent lock(). Awaken one if
         // it's waiting on the waitqueue, otherwise use the RHO protocol to
@@ -195,8 +188,8 @@ public:
             sched::thread *thread;
             if (waitqueue.pop(&thread)) {
                 depth = 1;
-                owner.store(thread);
-                assert(thread!=current); // this thread isn't waiting, we know that :(
+                owner.store(thread, std::memory_order_relaxed);
+                //assert(thread!=current); // this thread isn't waiting, we know that :(
                 thread->wake();
                 return;
             }
