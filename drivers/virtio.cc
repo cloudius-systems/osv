@@ -143,7 +143,7 @@ bool virtio_driver::probe_virt_queues(void)
         }
 
         // Read queue size
-        virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _num_queues);
+        virtio_conf_writew(VIRTIO_PCI_QUEUE_SEL, _num_queues);
         qsize = virtio_conf_readw(VIRTIO_PCI_QUEUE_NUM);
         if (0 == qsize) {
             break;
@@ -155,7 +155,7 @@ bool virtio_driver::probe_virt_queues(void)
 
         // Setup queue_id:entry_id 1:1 correlation...
         virtio_conf_writel(VIRTIO_PCI_QUEUE_SEL, _num_queues);
-        virtio_conf_writel(VIRTIO_MSI_QUEUE_VECTOR, _num_queues);
+        virtio_conf_writew(VIRTIO_MSI_QUEUE_VECTOR, _num_queues);
 
         _num_queues++;
 
