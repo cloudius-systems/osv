@@ -4,9 +4,10 @@
 #include <atomic>
 #include <regex>
 #include <boost/algorithm/string/replace.hpp>
+#include <debug.hh>
 
-tracepoint<void*, void*> trace_function_entry("function entry", "fn %p caller %p");
-tracepoint<void*, void*> trace_function_exit("function exit", "fn %p caller %p");
+tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
+tracepoint<2, void*, void*> trace_function_exit("function exit", "fn %p caller %p");
 
 constexpr size_t trace_page_size = 4096;  // need not match arch page size
 constexpr unsigned max_trace = trace_page_size * 1024;
@@ -37,6 +38,24 @@ void enable_tracepoint(std::string wildcard)
     }
 }
 
+tracepoint_base::tracepoint_base(unsigned _id, const char* _name, const char* _format)
+    : id(_id), name(_name), format(_format)
+{
+    auto inserted = known_ids().insert(id).second;
+    if (!inserted) {
+        debug("duplicate tracepoint id %d (%s)\n", id, name);
+        abort();
+    }
+    tp_list.push_back(*this);
+    try_enable();
+}
+
+tracepoint_base::~tracepoint_base()
+{
+    tp_list.erase(tp_list.iterator_to(*this));
+    known_ids().erase(id);
+}
+
 void tracepoint_base::enable()
 {
     enabled = true;
@@ -49,6 +68,16 @@ void tracepoint_base::try_enable()
             enable();
         }
     }
+}
+
+std::unordered_set<unsigned>& tracepoint_base::known_ids()
+{
+    // since tracepoints are constructed in global scope, use
+    // a function static scope which is guaranteed to initialize
+    // when needed (as opposed to the unspecified order of global
+    // scope initializers)
+    static std::unordered_set<unsigned> _known_ids;
+    return _known_ids;
 }
 
 trace_record* allocate_trace_record(size_t size)

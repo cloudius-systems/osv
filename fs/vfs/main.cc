@@ -59,9 +59,9 @@
 int	vfs_debug = VFSDB_FLAGS;
 #endif
 
-tracepoint<const char*, int> trace_open("open", "%s %x");
-tracepoint<int> trace_open_fd("open_fd", "%d");
-tracepoint<int> trace_open_err("open_ret", "%d");
+tracepoint<2001, const char*, int> trace_open("open", "%s %x");
+tracepoint<2002, int> trace_open_fd("open_fd", "%d");
+tracepoint<2003, int> trace_open_err("open_ret", "%d");
 
 struct task *main_task;	/* we only have a single process */
 
@@ -625,8 +625,8 @@ out_errno:
 	return -1;
 }
 
-tracepoint<const char*> trace_stat("stat", "%s");
-tracepoint<int> trace_stat_err("stat_err", "%d");
+tracepoint<2004, const char*> trace_stat("stat", "%s");
+tracepoint<2005, int> trace_stat_err("stat_err", "%d");
 
 extern "C"
 int __xstat(int ver, const char *pathname, struct stat *st)
