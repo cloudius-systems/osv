@@ -31,12 +31,6 @@ bool logger::parse_configuration(void)
     add_tag("pci", logger_info);
     add_tag("poll", logger_info);
 
-    // Tests
-    add_tag("tst-eventlist", logger_none);
-    add_tag("tst-rwlock", logger_none);
-    add_tag("tst-bsd-netdriver", logger_debug);
-    add_tag("tst-virtionet", logger_debug);
-
     return (true);
 }
 
