@@ -9,6 +9,7 @@
 #include <sched.hh>
 #include <boost/intrusive/list.hpp>
 #include <string>
+#include <unordered_set>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
@@ -29,10 +30,6 @@ trace_record* allocate_trace_record(size_t size);
 
 template <class storage_args, class runtime_args>
 class assigner_type;
-
-template <class storage_args, class runtime_args,
-          typename assigner_type<storage_args, runtime_args>::type assign>
-class tracepointv;
 
 template <typename... args>
 struct storage_args
@@ -206,17 +203,15 @@ struct serializer<N, N, args...> {
     }
 };
 
+typedef std::tuple<const std::type_info*, unsigned long> tracepoint_id;
+
 class tracepoint_base {
 public:
-    explicit tracepoint_base(const char* _name, const char* _format)
-        : name(_name), format(_format) {
-        tp_list.push_back(*this);
-        try_enable();
-    }
-    ~tracepoint_base() {
-        tp_list.erase(tp_list.iterator_to(*this));
-    }
+    explicit tracepoint_base(unsigned _id, const std::type_info& _tp_type,
+                             const char* _name, const char* _format);
+    ~tracepoint_base();
     void enable();
+    tracepoint_id id;
     const char* name;
     const char* format;
     u64 sig;
@@ -232,20 +227,39 @@ public:
         > tp_list;
 private:
     void try_enable();
+    static std::unordered_set<tracepoint_id>& known_ids();
 };
 
-template <typename... s_args,
+namespace {
+
+template <unsigned id,
+          class storage_args, class runtime_args,
+          typename assigner_type<storage_args, runtime_args>::type assign>
+class tracepointv;
+
+template <unsigned _id,
+          typename... s_args,
           typename... r_args,
           typename assigner_type<storage_args<s_args...>, runtime_args<r_args...>>::type assign>
-class tracepointv<storage_args<s_args...>, runtime_args<r_args...>, assign>
+class tracepointv<_id, storage_args<s_args...>, runtime_args<r_args...>, assign>
     : public tracepoint_base
 {
 public:
     explicit tracepointv(const char* name, const char* format)
-        : tracepoint_base(name, format) {
+        : tracepoint_base(_id, typeid(*this), name, format) {
         sig = signature();
     }
     void operator()(r_args... as) {
+        asm goto("1: .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 \n\t"  // 5-byte nop
+                 ".pushsection .tracepoint_patch_sites, \"a\", @progbits \n\t"
+                 ".quad %c[id] \n\t"
+                 ".quad %c[type] \n\t"
+                 ".quad 1b \n\t"
+                 ".quad %l[slow_path] \n\t"
+                 ".popsection"
+                 : : [type]"i"(&typeid(*this)), [id]"i"(_id) : : slow_path);
+        return;
+        slow_path:
         trace_slow_path(assign(as...));
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
@@ -275,6 +289,8 @@ public:
     }
 };
 
+}
+
 template <typename... args>
 inline
 std::tuple<args...> identity_assign(args... as)
@@ -282,8 +298,9 @@ std::tuple<args...> identity_assign(args... as)
     return std::make_tuple(as...);
 }
 
-template <typename... args>
-using tracepoint = tracepointv<storage_args<args...>,
+template <unsigned id, typename... args>
+using tracepoint = tracepointv<id,
+                               storage_args<args...>,
                                runtime_args<args...>,
                                identity_assign<args...>>;
 

@@ -13,11 +13,11 @@
 
 namespace sched {
 
-tracepoint<thread*> trace_switch("sched_switch", "to %p");
-tracepoint<> trace_wait("sched_wait", "");
-tracepoint<thread*> trace_wake("sched_wake", "wake %p");
-tracepoint<thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
-tracepoint<thread*> trace_queue("sched_queue", "thread=%p");
+tracepoint<1001, thread*> trace_switch("sched_switch", "to %p");
+tracepoint<1002> trace_wait("sched_wait", "");
+tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
+tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
+tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
 
 std::vector<cpu*> cpus;
 
