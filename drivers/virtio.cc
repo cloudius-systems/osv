@@ -184,6 +184,26 @@ vring* virtio_driver::get_virt_queue(unsigned idx)
     return (_queues[idx]);
 }
 
+void virtio_driver::wait_for_queue(vring* queue)
+{
+    sched::thread::wait_until([queue] {
+        bool have_elements = queue->used_ring_not_empty();
+        if (!have_elements) {
+            queue->enable_interrupts();
+
+            // we must check that the ring is not empty *after*
+            // we enable interrupts to avoid a race where a packet
+            // may have been delivered between queue->used_ring_not_empty()
+            // and queue->enable_interrupts() above
+            have_elements = queue->used_ring_not_empty();
+            if (have_elements) {
+                queue->disable_interrupts();
+            }
+        }
+        return have_elements;
+    });
+}
+
 u32 virtio_driver::get_device_features(void)
 {
     return (virtio_conf_readl(VIRTIO_PCI_HOST_FEATURES));

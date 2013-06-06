@@ -98,9 +98,9 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     read_config();
 
     //register the single irq callback for the block
-    sched::thread* isr = new sched::thread([this] { this->response_worker(); });
-    isr->start();
-    _msi.easy_register({ { 0, isr } });
+    sched::thread* t = new sched::thread([this] { this->response_worker(); });
+    t->start();
+    _msi.easy_register({ { 0, nullptr, t } });
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 

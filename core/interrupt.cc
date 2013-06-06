@@ -89,8 +89,10 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
 
     for (auto binding : bindings) {
         msix_vector* vec = assigned[idx++];
-        sched::thread *isr = binding.thread;
-        bool assign_ok = assign_isr(vec, [isr]{ isr->wake(); });
+        auto isr = binding.isr;
+        auto t = binding.t;
+
+        bool assign_ok = assign_isr(vec, [=] { if (isr) isr(); t->wake(); });
         if (!assign_ok) {
             free_vectors(assigned);
             return false;

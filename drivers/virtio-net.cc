@@ -111,6 +111,9 @@ namespace virtio {
     virtio_net::virtio_net(pci::device& dev)
         : virtio_driver(dev)
     {
+        _rx_queue = get_virt_queue(0);
+        _tx_queue = get_virt_queue(1);
+
         std::stringstream ss;
         ss << "virtio-net";
 
@@ -142,12 +145,15 @@ namespace virtio {
         _ifn->if_ioctl = virtio_if_ioctl;
         _ifn->if_start = virtio_if_start;
         _ifn->if_init = virtio_if_init;
-        _ifn->if_snd.ifq_maxlen = _queues[1]->size();
+        _ifn->if_snd.ifq_maxlen = _tx_queue->size();
         _ifn->if_capabilities = 0/* IFCAP_RXCSUM */;
         _ifn->if_capenable = _ifn->if_capabilities;
 
         ether_ifattach(_ifn, _config.mac);
-        _msi.easy_register({ { 0, rx }, {1, tx }});
+        _msi.easy_register({
+            { 0, [&] { _rx_queue->disable_interrupts(); }, rx },
+            { 1, [&] { _tx_queue->disable_interrupts(); }, tx }
+        });
 
         fill_rx_ring();
 
@@ -194,18 +200,17 @@ namespace virtio {
     };
 
     void virtio_net::receiver() {
-        vring* queue = get_virt_queue(0);
 
         while (1) {
-            sched::thread::wait_until([this, queue] {
-                return queue->used_ring_not_empty();
-            });
+
+            // Wait for rx queue (used elements)
+            virtio_driver::wait_for_queue(_rx_queue);
 
             int i = 0;
             u32 len;
             virtio_net_req * req;
 
-            while((req = static_cast<virtio_net_req*>(queue->get_buf(&len))) != nullptr) {
+            while((req = static_cast<virtio_net_req*>(_rx_queue->get_buf(&len))) != nullptr) {
 
                 auto ii = req->payload._nodes.begin();
                 ii++;
@@ -224,7 +229,7 @@ namespace virtio {
                 (*_ifn->if_input)(_ifn, m);
             }
 
-            if (queue->avail_ring_has_room(queue->size()/2)) {
+            if (_rx_queue->avail_ring_has_room(_rx_queue->size()/2)) {
                 virtio_net_d(fmt("ring is less than half full, refill"));
                 fill_rx_ring();
             }
@@ -237,12 +242,11 @@ namespace virtio {
 
     void virtio_net::fill_rx_ring()
     {
-        vring* queue = get_virt_queue(0);
         virtio_net_d(fmt("%s") % __FUNCTION__);
 
         // it could have been a while (1) loop but it simplifies the allocation
         // tracking
-        while (queue->avail_ring_has_room(2)) {
+        while (_rx_queue->avail_ring_has_room(2)) {
             virtio_net_req *req = new virtio_net_req;
 
             // As long as we're using standard MTU of 1500, it's fine to use
@@ -263,18 +267,17 @@ namespace virtio {
             req->payload.add(mmu::virt_to_phys(mdata), MCLBYTES);
             req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
 
-            if (!queue->add_buf(&req->payload,0,req->payload.get_sgs(),req)) {
+            if (!_rx_queue->add_buf(&req->payload,0,req->payload.get_sgs(),req)) {
                 delete req;
                 break;
             }
         }
 
-        queue->kick();
+        _rx_queue->kick();
     }
 
     bool virtio_net::tx(struct mbuf *m_head, bool flush)
     {
-        vring* queue = get_virt_queue(1);
         struct mbuf *m;
         virtio_net_req *req = new virtio_net_req;
 
@@ -291,8 +294,8 @@ namespace virtio {
         req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
         // leak for now ; req->buffer = (u8*)out;
 
-        if (!queue->avail_ring_has_room(req->payload.get_sgs())) {
-            if (queue->used_ring_not_empty()) {
+        if (!_tx_queue->avail_ring_has_room(req->payload.get_sgs())) {
+            if (_tx_queue->used_ring_not_empty()) {
                 virtio_net_d(fmt("%s: gc tx buffers to clear space"));
                 tx_gc();
             } else {
@@ -302,25 +305,22 @@ namespace virtio {
             }
         }
 
-        if (!queue->add_buf(&req->payload, req->payload.get_sgs(),0,req)) {
+        if (!_tx_queue->add_buf(&req->payload, req->payload.get_sgs(),0,req)) {
             delete req;
             return false;
         }
 
         if (flush)
-            queue->kick();
+            _tx_queue->kick();
 
         return true;
     }
 
     void virtio_net::tx_gc_thread() {
-        vring* queue = get_virt_queue(1);
 
         while (1) {
-            sched::thread::wait_until([this, queue] {
-                return queue->used_ring_not_empty();
-            });
-
+            // Wait for tx queue (used elements)
+            virtio_driver::wait_for_queue(_tx_queue);
             tx_gc();
         }
     }
@@ -330,9 +330,8 @@ namespace virtio {
         int i = 0;
         u32 len;
         virtio_net_req * req;
-        vring* queue = get_virt_queue(1);
 
-        while((req = static_cast<virtio_net_req*>(queue->get_buf(&len))) != nullptr) {
+        while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf(&len))) != nullptr) {
             virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
             delete req;
         }

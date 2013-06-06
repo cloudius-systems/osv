@@ -41,7 +41,10 @@ private:
 // entry -> thread to wake
 struct msix_binding {
     unsigned entry;
-    sched::thread* thread;
+    // high priority ISR
+    std::function<void ()> isr;
+    // bottom half
+    sched::thread *t;
 };
 
 class interrupt_manager {

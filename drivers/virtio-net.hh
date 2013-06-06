@@ -224,6 +224,7 @@ namespace virtio {
 
         virtual u32 get_driver_features(void);
 
+        void wait_for_queue(vring* queue);
         void receiver();
         void fill_rx_ring();
         bool tx(struct mbuf* m_head, bool flush = false);
@@ -236,6 +237,9 @@ namespace virtio {
 
         std::string _driver_name;
         virtio_net_config _config;
+
+        vring* _rx_queue;
+        vring* _tx_queue;
 
         //maintains the virtio instance number for multiple drives
         static int _instance;
