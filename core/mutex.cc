@@ -3,9 +3,14 @@
 #include "arch.hh"
 #include <pthread.h>
 #include <cassert>
+#include "osv/trace.hh"
 
 static_assert(sizeof(mutex) <= sizeof(pthread_mutex_t), "mutex too big");
 static_assert(offsetof(mutex, _hole_for_pthread_compatiblity) == 16, "mutex hole in wrong place");
+
+tracepoint<21001, mutex_t*, void*> trace_mutex_lock("mutex_lock", "%p at RIP=%p");
+tracepoint<21002, mutex_t*, void*> trace_mutex_unlock("mutex_unlock", "%p at RIP=%p");
+tracepoint<21003, mutex_t*, void*> trace_mutex_wait("mutex_lock_wait", "%p held by %p");
 
 struct waiter {
     struct waiter*	next;
@@ -29,8 +34,9 @@ void mutex_lock(mutex_t *mutex)
 {
     struct waiter w;
 
-    w.thread = sched::thread::current();
+    trace_mutex_lock(mutex, __builtin_return_address(0));
 
+    w.thread = sched::thread::current();
     spin_lock(&mutex->_wait_lock);
     if (!mutex->_owner || mutex->_owner == w.thread) {
         mutex->_owner = w.thread;
@@ -47,6 +53,7 @@ void mutex_lock(mutex_t *mutex)
     mutex->_wait_list.last = &w;
     spin_unlock(&mutex->_wait_lock);
 
+    trace_mutex_wait(mutex, mutex->_owner);
     sched::thread::wait_until([=] {
         return mutex->_owner == w.thread;
     });
@@ -73,6 +80,8 @@ bool mutex_trylock(mutex_t *mutex)
 
 void mutex_unlock(mutex_t *mutex)
 {
+    trace_mutex_unlock(mutex, __builtin_return_address(0));
+
     spin_lock(&mutex->_wait_lock);
     if (mutex->_depth == 1) {
         if (mutex->_wait_list.first) {
