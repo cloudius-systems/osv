@@ -72,6 +72,16 @@ namespace virtio {
         return ( (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old) );
     }
 
+    void vring::disable_interrupts()
+    {
+        _avail->disable_interrupt();
+    }
+
+    void vring::enable_interrupts()
+    {
+        _avail->enable_interrupt();
+    }
+
     // The convention is that out descriptors are at the beginning of the sg list
     // TODO: add barriers
     bool

@@ -1,6 +1,7 @@
 #ifndef VIRTIO_VRING_H
 #define VIRTIO_VRING_H
 
+#include <atomic>
 #include <functional>
 #include <osv/mutex.h>
 #include "debug.hh"
@@ -54,10 +55,11 @@ class virtio_driver;
             VRING_AVAIL_F_NO_INTERRUPT=1
         };
 
-        void disable_interrupt(void) { _flags |= VRING_AVAIL_F_NO_INTERRUPT; }
-        void enable_interrupt(void) { _flags = 0;}
-       
-        u16 _flags;
+        void disable_interrupt(void) { _flags.store(VRING_AVAIL_F_NO_INTERRUPT, std::memory_order_relaxed); }
+        void enable_interrupt(void) { _flags.store(0, std::memory_order_relaxed); }
+
+        std::atomic<u16> _flags;
+
         // Where we put the next descriptor
         u16 _idx;
         // There may be no more entries than the queue size read from device
@@ -134,6 +136,10 @@ class virtio_driver;
         // we have just incremented index from old to new_idx,
         // should we trigger an event?
         static int need_event(u16 event_idx, u16 new_idx, u16 old);
+
+        // Let host know about interrupt delivery
+        void disable_interrupts();
+        void enable_interrupts();
 
     private:
 
