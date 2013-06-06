@@ -31,11 +31,6 @@ trace_record* allocate_trace_record(size_t size);
 template <class storage_args, class runtime_args>
 class assigner_type;
 
-template <unsigned id,
-          class storage_args, class runtime_args,
-          typename assigner_type<storage_args, runtime_args>::type assign>
-class tracepointv;
-
 template <typename... args>
 struct storage_args
 {
@@ -208,12 +203,15 @@ struct serializer<N, N, args...> {
     }
 };
 
+typedef std::tuple<const std::type_info*, unsigned long> tracepoint_id;
+
 class tracepoint_base {
 public:
-    explicit tracepoint_base(unsigned _id, const char* _name, const char* _format);
+    explicit tracepoint_base(unsigned _id, const std::type_info& _tp_type,
+                             const char* _name, const char* _format);
     ~tracepoint_base();
     void enable();
-    unsigned id;
+    tracepoint_id id;
     const char* name;
     const char* format;
     u64 sig;
@@ -229,8 +227,15 @@ public:
         > tp_list;
 private:
     void try_enable();
-    static std::unordered_set<unsigned>& known_ids();
+    static std::unordered_set<tracepoint_id>& known_ids();
 };
+
+namespace {
+
+template <unsigned id,
+          class storage_args, class runtime_args,
+          typename assigner_type<storage_args, runtime_args>::type assign>
+class tracepointv;
 
 template <unsigned _id,
           typename... s_args,
@@ -241,17 +246,18 @@ class tracepointv<_id, storage_args<s_args...>, runtime_args<r_args...>, assign>
 {
 public:
     explicit tracepointv(const char* name, const char* format)
-        : tracepoint_base(_id, name, format) {
+        : tracepoint_base(_id, typeid(*this), name, format) {
         sig = signature();
     }
     void operator()(r_args... as) {
         asm goto("1: .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 \n\t"  // 5-byte nop
                  ".pushsection .tracepoint_patch_sites, \"a\", @progbits \n\t"
                  ".quad %c[id] \n\t"
+                 ".quad %c[type] \n\t"
                  ".quad 1b \n\t"
                  ".quad %l[slow_path] \n\t"
                  ".popsection"
-                 : : [id]"i"(_id) : : slow_path);
+                 : : [type]"i"(&typeid(*this)), [id]"i"(_id) : : slow_path);
         return;
         slow_path:
         trace_slow_path(assign(as...));
@@ -282,6 +288,8 @@ public:
         return signature_helper<s_args...>::sig;
     }
 };
+
+}
 
 template <typename... args>
 inline

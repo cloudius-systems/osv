@@ -438,9 +438,9 @@ def dump_trace():
     indents = defaultdict(int)
     def lookup_tp(name):
         tp_base = gdb.lookup_type('tracepoint_base')
-        return gdb.lookup_global_symbol(name).value().cast(tp_base)
-    tp_fn_entry = lookup_tp('trace_function_entry')
-    tp_fn_exit = lookup_tp('trace_function_exit')
+        return gdb.lookup_global_symbol(name).value().dereference()
+    tp_fn_entry = lookup_tp('gdb_trace_function_entry')
+    tp_fn_exit = lookup_tp('gdb_trace_function_exit')
 
     i = 0
     while i < last:

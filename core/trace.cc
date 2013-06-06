@@ -9,8 +9,15 @@
 tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
 tracepoint<2, void*, void*> trace_function_exit("function exit", "fn %p caller %p");
 
+// since tracepoint<> is in an anonymous namespace, the compiler eliminates
+// global symbols that refer to objects of that type.
+//
+// Add another reference so the debugger can access trace_function_entry
+tracepoint_base* gdb_trace_function_entry = &trace_function_entry;
+tracepoint_base* gdb_trace_function_exit = &trace_function_exit;
+
 struct tracepoint_patch_site {
-    unsigned long id;
+    tracepoint_id id;
     void* patch_site;
     void* slow_path;
 };
@@ -54,12 +61,26 @@ void enable_tracepoint(std::string wildcard)
     }
 }
 
-tracepoint_base::tracepoint_base(unsigned _id, const char* _name, const char* _format)
-    : id(_id), name(_name), format(_format)
+namespace std {
+
+template<>
+struct hash<tracepoint_id> {
+    size_t operator()(const tracepoint_id& id) const {
+        std::hash<const std::type_info*> h0;
+        std::hash<unsigned> h1;
+        return h0(std::get<0>(id)) ^ h1(std::get<1>(id));
+    }
+};
+
+}
+
+tracepoint_base::tracepoint_base(unsigned _id, const std::type_info& tp_type,
+                                 const char* _name, const char* _format)
+    : id{&tp_type, _id}, name(_name), format(_format)
 {
     auto inserted = known_ids().insert(id).second;
     if (!inserted) {
-        debug("duplicate tracepoint id %d (%s)\n", id, name);
+        debug("duplicate tracepoint id %d (%s)\n", std::get<0>(id), name);
         abort();
     }
     tp_list.push_back(*this);
@@ -98,13 +119,13 @@ void tracepoint_base::try_enable()
     }
 }
 
-std::unordered_set<unsigned>& tracepoint_base::known_ids()
+std::unordered_set<tracepoint_id>& tracepoint_base::known_ids()
 {
     // since tracepoints are constructed in global scope, use
     // a function static scope which is guaranteed to initialize
     // when needed (as opposed to the unspecified order of global
     // scope initializers)
-    static std::unordered_set<unsigned> _known_ids;
+    static std::unordered_set<tracepoint_id> _known_ids;
     return _known_ids;
 }
 
