@@ -206,7 +206,6 @@ namespace virtio {
             // Wait for rx queue (used elements)
             virtio_driver::wait_for_queue(_rx_queue);
 
-            int i = 0;
             u32 len;
             virtio_net_req * req;
 
@@ -216,8 +215,6 @@ namespace virtio {
                 ii++;
 
                 auto m = req->um.release();
-                u8* buf = mtod(m, u8*);
-                virtio_net_d(fmt("\t got hdr len:%d = %d, len= %d vaddr=%p") % i++ % (int)req->hdr.hdr_len % len % (void*)buf);
                 delete req;
 
                 m->m_pkthdr.len = len;
@@ -327,12 +324,10 @@ namespace virtio {
 
     void virtio_net::tx_gc()
     {
-        int i = 0;
         u32 len;
         virtio_net_req * req;
 
         while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf(&len))) != nullptr) {
-            virtio_net_d(fmt("%s: gc %d") % __FUNCTION__ % i++);
             delete req;
         }
     }
