@@ -267,6 +267,8 @@ solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod_subr.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zutil.o
 
+solaris-tests += tests/tst-solaris-taskq.so
+
 zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfeature_common.o
 zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_comutil.o
 zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_deleg.o
@@ -358,11 +360,12 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zle.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
 #zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 
-solaris-tests += tests/tst-solaris-taskq.so
+zfs-tests += tests/tst-zfs-simple.so
 
 solaris += $(zfs)
+solaris-tests += $(zfs-tests)
 
-$(zfs): CFLAGS+= \
+$(zfs) $(zfs-tests): CFLAGS+= \
 	-DBUILDING_ZFS \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/common/zfs
