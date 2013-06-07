@@ -23,6 +23,11 @@
  * Copyright (c) 2012 by Delphix. All rights reserved.
  */
 
+#define task prex_task
+#include <fs/vfs/vfs.h>
+#undef task
+#undef ASSERT
+
 #include <sys/zfs_context.h>
 #include <sys/spa.h>
 #include <sys/vdev_file.h>
@@ -52,9 +57,8 @@ vdev_file_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
     uint64_t *ashift)
 {
 	vdev_file_t *vf;
-	vnode_t *vp;
-	vattr_t vattr;
-	int error, vfslocked;
+	struct file *fp;
+	int error;
 
 	/*
 	 * We must have a pathname, and it must be absolute.
@@ -71,66 +75,34 @@ vdev_file_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	if (vd->vdev_tsd != NULL) {
 		ASSERT(vd->vdev_reopening);
 		vf = vd->vdev_tsd;
-		vp = vf->vf_vnode;
 		goto skip_open;
 	}
 
 	vf = vd->vdev_tsd = kmem_zalloc(sizeof (vdev_file_t), KM_SLEEP);
 
-	/*
-	 * We always open the files from the root of the global zone, even if
-	 * we're in a local zone.  If the user has gotten to this point, the
-	 * administrator has already decided that the pool should be available
-	 * to local zone users, so the underlying devices should be as well.
-	 */
-	ASSERT(vd->vdev_path != NULL && vd->vdev_path[0] == '/');
-	error = vn_openat(vd->vdev_path + 1, UIO_SYSSPACE,
-	    spa_mode(vd->vdev_spa) | FOFFMAX, 0, &vp, 0, 0, rootdir, -1);
+	error = falloc_noinstall(&fp);
+	if (error)
+		goto out_free_vf;
 
-	if (error) {
-		vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;
-		kmem_free(vd->vdev_tsd, sizeof (vdev_file_t));
-		vd->vdev_tsd = NULL;
-		return (error);
-	}
+	error = sys_open(vd->vdev_path, O_RDWR, 0, fp);
+	if (error)
+		goto out_fdrop;
 
-	vf->vf_vnode = vp;
-
-#ifdef _KERNEL
-	/*
-	 * Make sure it's a regular file.
-	 */
-	if (vp->v_type != VREG) {
-		(void) VOP_CLOSE(vp, spa_mode(vd->vdev_spa), 1, 0, kcred, NULL);
-		vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;
-		kmem_free(vd->vdev_tsd, sizeof (vdev_file_t));
-		vd->vdev_tsd = NULL;
-		return (ENODEV);
-	}
-#endif
+	vf->vf_file = fp;
 
 skip_open:
-	/*
-	 * Determine the physical size of the file.
-	 */
-	vattr.va_mask = AT_SIZE;
-	vfslocked = VFS_LOCK_GIANT(vp->v_mount);
-	vn_lock(vp, LK_SHARED | LK_RETRY);
-	error = VOP_GETATTR(vp, &vattr, kcred);
-	VOP_UNLOCK(vp, 0);
-	VFS_UNLOCK_GIANT(vfslocked);
-	if (error) {
-		(void) VOP_CLOSE(vp, spa_mode(vd->vdev_spa), 1, 0, kcred, NULL);
-		vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;
-		kmem_free(vd->vdev_tsd, sizeof (vdev_file_t));
-		vd->vdev_tsd = NULL;
-		return (error);
-	}
-
-	*max_psize = *psize = vattr.va_size;
+	*max_psize = *psize = vf->vf_file->f_vnode->v_size;
 	*ashift = SPA_MINBLOCKSHIFT;
 
 	return (0);
+
+out_fdrop:
+	fdrop(fp);
+out_free_vf:
+	kmem_free(vd->vdev_tsd, sizeof (vdev_file_t));
+	vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;
+	vd->vdev_tsd = NULL;
+	return error;
 }
 
 static void
@@ -141,10 +113,8 @@ vdev_file_close(vdev_t *vd)
 	if (vd->vdev_reopening || vf == NULL)
 		return;
 
-	if (vf->vf_vnode != NULL) {
-		(void) VOP_CLOSE(vf->vf_vnode, spa_mode(vd->vdev_spa), 1, 0,
-		    kcred, NULL);
-	}
+	if (vf->vf_file != NULL)
+		fdrop(vf->vf_file);
 
 	vd->vdev_delayed_close = B_FALSE;
 	kmem_free(vf, sizeof (vdev_file_t));
@@ -156,8 +126,10 @@ vdev_file_io_start(zio_t *zio)
 {
 	vdev_t *vd = zio->io_vd;
 	vdev_file_t *vf;
-	vnode_t *vp;
-	ssize_t resid;
+	struct file *fp;
+	struct iovec iov;
+	size_t count;
+	int error;
 
 	if (!vdev_readable(vd)) {
 		zio->io_error = ENXIO;
@@ -165,31 +137,40 @@ vdev_file_io_start(zio_t *zio)
 	}
 
 	vf = vd->vdev_tsd;
-	vp = vf->vf_vnode;
+	fp = vf->vf_file;
 
-	if (zio->io_type == ZIO_TYPE_IOCTL) {
+	switch (zio->io_type) {
+	case ZIO_TYPE_READ:
+	case ZIO_TYPE_WRITE:
+		iov.iov_base = zio->io_data;
+		iov.iov_len = zio->io_size;
+		if (zio->io_type == ZIO_TYPE_READ)
+			error = sys_read(fp, &iov, 1, zio->io_offset, &count);
+		else
+			error = sys_write(fp, &iov, 1, zio->io_offset, &count);
+		if (error && count != zio->io_size)
+			zio->io_error = ENOSPC;
+		else
+			zio->io_error = error;
+
+		zio_interrupt(zio);
+		return (ZIO_PIPELINE_STOP);
+	case ZIO_TYPE_IOCTL:
+#if 0
 		switch (zio->io_cmd) {
 		case DKIOCFLUSHWRITECACHE:
 			zio->io_error = VOP_FSYNC(vp, FSYNC | FDSYNC,
 			    kcred, NULL);
 			break;
 		default:
+#endif
 			zio->io_error = ENOTSUP;
-		}
+//		}
 
 		return (ZIO_PIPELINE_CONTINUE);
+	default:
+		abort();
 	}
-
-	zio->io_error = vn_rdwr(zio->io_type == ZIO_TYPE_READ ?
-	    UIO_READ : UIO_WRITE, vp, zio->io_data, zio->io_size,
-	    zio->io_offset, UIO_SYSSPACE, 0, RLIM64_INFINITY, kcred, &resid);
-
-	if (resid != 0 && zio->io_error == 0)
-		zio->io_error = ENOSPC;
-
-	zio_interrupt(zio);
-
-	return (ZIO_PIPELINE_STOP);
 }
 
 /* ARGSUSED */
@@ -210,23 +191,3 @@ vdev_ops_t vdev_file_ops = {
 	VDEV_TYPE_FILE,		/* name of this vdev type */
 	B_TRUE			/* leaf vdev */
 };
-
-/*
- * From userland we access disks just like files.
- */
-#ifndef _KERNEL
-
-vdev_ops_t vdev_disk_ops = {
-	vdev_file_open,
-	vdev_file_close,
-	vdev_default_asize,
-	vdev_file_io_start,
-	vdev_file_io_done,
-	NULL,
-	vdev_file_hold,
-	vdev_file_rele,
-	VDEV_TYPE_DISK,		/* name of this vdev type */
-	B_TRUE			/* leaf vdev */
-};
-
-#endif

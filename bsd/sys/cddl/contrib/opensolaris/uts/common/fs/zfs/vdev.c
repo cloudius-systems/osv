@@ -62,8 +62,8 @@ static vdev_ops_t *vdev_ops_table[] = {
 #else
 	&vdev_disk_ops,
 #endif
-	&vdev_file_ops,
 #endif
+	&vdev_file_ops,
 	&vdev_missing_ops,
 	&vdev_hole_ops,
 	NULL
