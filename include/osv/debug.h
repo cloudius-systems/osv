@@ -14,6 +14,16 @@ typedef enum logger_severity_e {
      logger_none = 4
  } logger_severity;
 
+#if CONF_logger_debug
+    #define tprintf_d(tag, ...) tprintf((tag), logger_debug, __VA_ARGS__)
+#else
+    #define tprintf_d(tag, ...) do{}while(0)
+#endif
+
+#define tprintf_i(tag, ...) tprintf((tag), logger_info, __VA_ARGS__)
+#define tprintf_w(tag, ...) tprintf((tag), logger_warn, __VA_ARGS__)
+#define tprintf_e(tag, ...) tprintf((tag), logger_error, __VA_ARGS__)
+
 __BEGIN_DECLS
 void debug(const char *msg);
 void debug_write(const char *msg, size_t len);

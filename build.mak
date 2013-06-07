@@ -38,7 +38,7 @@ fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
 
 bsd/%.o: INCLUDES += -isystem $(src)/bsd/sys
 
-configuration-defines = conf-preempt conf-debug_memory
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
