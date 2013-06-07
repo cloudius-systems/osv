@@ -58,7 +58,7 @@ namespace pci {
     {
         function::dump_config();
 
-        pci_d(fmt("    subsys_vid:subsys_id %x:%x\n") % _subsystem_vid % _subsystem_id);
+        pci_d("    subsys_vid:subsys_id %x:%x\n", _subsystem_vid, _subsystem_id);
     }
 
 }

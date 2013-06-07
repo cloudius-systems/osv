@@ -2,7 +2,7 @@
 
 #include "drivers/virtio.hh"
 #include "virtio-vring.hh"
-#include "debug.hh"
+#include <osv/debug.h>
 
 using namespace pci;
 
@@ -54,7 +54,7 @@ bool virtio_driver::setup_features(void)
     //to the virtio spec
     for (int i=0;i<32;i++)
         if (subset & (1 << i))
-            virtio_d(fmt("%s: found feature intersec of bit %d") % __FUNCTION__ % i);
+            virtio_d("%s: found feature intersec of bit %d", __FUNCTION__,  i);
 
     if (subset & (1 << VIRTIO_RING_F_INDIRECT_DESC))
         set_indirect_buf_cap(true);
@@ -71,14 +71,14 @@ void virtio_driver::dump_config()
     _dev.get_bdf(B, D, F);
 
     _dev.dump_config();
-    virtio_d(fmt("%s [%x:%x.%x] vid:id= %x:%x") % get_name() %
-        (u16)B % (u16)D % (u16)F %
-        _dev.get_vendor_id() %
+    virtio_d("%s [%x:%x.%x] vid:id= %x:%x", get_name().c_str(),
+        (u16)B, (u16)D, (u16)F,
+        _dev.get_vendor_id(),
         _dev.get_device_id());
 
-    virtio_d(fmt("    virtio features: "));
+    virtio_d("    virtio features: ");
     for (int i=0;i<32;i++)
-        virtio_d(fmt(" %d ") % get_device_feature_bit(i));
+        virtio_d(" %d ", get_device_feature_bit(i));
 }
 
 bool virtio_driver::parse_pci_config(void)
@@ -96,14 +96,14 @@ bool virtio_driver::parse_pci_config(void)
     // Check ABI version
     u8 rev = _dev.get_revision_id();
     if (rev != VIRTIO_PCI_ABI_VERSION) {
-        virtio_e(fmt("Wrong virtio revision=%x") % rev);
+        virtio_e("Wrong virtio revision=%x", rev);
         return (false);
     }
 
     // Check device ID
     u16 dev_id = _dev.get_device_id();
     if ((dev_id < VIRTIO_PCI_ID_MIN) || (dev_id > VIRTIO_PCI_ID_MAX)) {
-        virtio_e(fmt("Wrong virtio dev id %x") % dev_id);
+        virtio_e("Wrong virtio dev id %x", dev_id);
         return (false);
     }
 
@@ -156,7 +156,7 @@ bool virtio_driver::probe_virt_queues(void)
         // Setup queue_id:entry_id 1:1 correlation...
         virtio_conf_writew(VIRTIO_MSI_QUEUE_VECTOR, _num_queues);
         if (virtio_conf_readw(VIRTIO_MSI_QUEUE_VECTOR) != _num_queues) {
-            virtio_e(fmt("Setting MSIx entry for queue %d failed.") % _num_queues);
+            virtio_e("Setting MSIx entry for queue %d failed.", _num_queues);
             return false;
         }
 
@@ -168,7 +168,7 @@ bool virtio_driver::probe_virt_queues(void)
         virtio_conf_writel(VIRTIO_PCI_QUEUE_PFN, (u32)(queue->get_paddr() >> VIRTIO_PCI_QUEUE_ADDR_SHIFT));
 
         // Debug print
-        virtio_d(fmt("Queue[%d] -> size %d, paddr %x") % (_num_queues-1) % qsize % queue->get_paddr());
+        virtio_d("Queue[%d] -> size %d, paddr %x", (_num_queues-1), qsize, queue->get_paddr());
 
     } while (true);
 

@@ -35,10 +35,10 @@
 class Driver;
 
 #define pci_tag "pci"
-#define pci_d(fmt)   logger::instance()->wrt(pci_tag, logger_debug, (fmt))
-#define pci_i(fmt)   logger::instance()->wrt(pci_tag, logger_info, (fmt))
-#define pci_w(fmt)   logger::instance()->wrt(pci_tag, logger_warn, (fmt))
-#define pci_e(fmt)   logger::instance()->wrt(pci_tag, logger_error, (fmt))
+#define pci_d(...)   tprintf_d(pci_tag, __VA_ARGS__)
+#define pci_i(...)   tprintf_i(pci_tag, __VA_ARGS__)
+#define pci_w(...)   tprintf_w(pci_tag, __VA_ARGS__)
+#define pci_e(...)   tprintf_e(pci_tag, __VA_ARGS__)
 
 namespace pci {
 

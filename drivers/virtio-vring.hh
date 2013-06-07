@@ -9,10 +9,10 @@
 class sglist;
 
 #define virtio_tag "virtio"
-#define virtio_d(fmt)   logger::instance()->wrt(virtio_tag, logger_debug, (fmt))
-#define virtio_i(fmt)   logger::instance()->wrt(virtio_tag, logger_info, (fmt))
-#define virtio_w(fmt)   logger::instance()->wrt(virtio_tag, logger_warn, (fmt))
-#define virtio_e(fmt)   logger::instance()->wrt(virtio_tag, logger_error, (fmt))
+#define virtio_d(...)   tprintf_d(virtio_tag, __VA_ARGS__)
+#define virtio_i(...)   tprintf_i(virtio_tag, __VA_ARGS__)
+#define virtio_w(...)   tprintf_w(virtio_tag, __VA_ARGS__)
+#define virtio_e(...)   tprintf_e(virtio_tag, __VA_ARGS__)
 
 namespace virtio {
 

@@ -46,7 +46,7 @@
 #include <bsd/porting/synch.h>
 #include <bsd/sys/sys/queue.h>
 
-#define dbg_d(...) tprintf("poll", logger_debug, __VA_ARGS__)
+#define dbg_d(...) tprintf_d("poll", __VA_ARGS__)
 
 int poll_no_poll(int events)
 {

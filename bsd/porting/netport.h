@@ -145,10 +145,10 @@ extern int tick;
     #define INET (1)
 #endif
 
-#define panic(...) do { tprintf("bsd-panic", logger_error, __VA_ARGS__); \
+#define panic(...) do { tprintf_e("bsd-panic", __VA_ARGS__); \
                         abort(); } while(0)
 
-#define log(x, ...) tprintf("bsd-log", logger_error, __VA_ARGS__)
+#define log(x, ...) tprintf_e("bsd-log", __VA_ARGS__)
 
 #define PAGE_MASK (PAGE_SIZE-1)
 

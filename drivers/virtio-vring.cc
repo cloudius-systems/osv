@@ -101,7 +101,7 @@ namespace virtio {
             int i = 0, idx, prev_idx = -1;
             idx = _avail_head;
 
-            virtio_d(fmt("\t%s: avail_head=%d, in=%d, out=%d") % __FUNCTION__ % _avail_head % in % out);
+            virtio_d("\t%s: avail_head=%d, in=%d, out=%d", __FUNCTION__, _avail_head, in, out);
             _cookie[idx] = cookie;
             vring_desc* descp = _desc;
 
@@ -123,7 +123,7 @@ namespace virtio {
             }
 
             for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
-                virtio_d(fmt("\t%s: idx=%d, len=%d, paddr=%x") % __FUNCTION__ % idx % (*ii)._len % (*ii)._paddr);
+                virtio_d("\t%s: idx=%d, len=%d, paddr=%x", __FUNCTION__, idx, (*ii)._len, (*ii)._paddr);
                 descp[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
                 descp[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
                 descp[idx]._paddr = (*ii)._paddr;
@@ -141,7 +141,7 @@ namespace virtio {
             _avail->_idx++;
             _avail_head = idx;
 
-            virtio_d(fmt("\t%s: _avail->_idx=%d, added=%d,") % __FUNCTION__ % _avail->_idx % _avail_added_since_kick);
+            virtio_d("\t%s: _avail->_idx=%d, added=%d,", __FUNCTION__, _avail->_idx, _avail_added_since_kick);
 
             return true;
         });
@@ -160,11 +160,11 @@ namespace virtio {
 
             barrier(); // Normalize the used fields of these descriptors
             if (_used_guest_head == _used->_idx) {
-                virtio_d(fmt("get_used_desc: no avail buffers ptr=%d") % _used_guest_head);
+                virtio_d("get_used_desc: no avail buffers ptr=%d", _used_guest_head);
                 return reinterpret_cast<void*>(0);
             }
 
-            virtio_d(fmt("get used: guest head=%d use_elem[head].id=%d") % used_ptr % _used->_used_elements[used_ptr]._id);
+            virtio_d("get used: guest head=%d use_elem[head].id=%d", used_ptr, _used->_used_elements[used_ptr]._id);
             elem = _used->_used_elements[used_ptr];
             int idx = elem._id;
             *len = elem._len;

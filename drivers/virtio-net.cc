@@ -17,7 +17,7 @@
 #include <string.h>
 #include <map>
 #include <errno.h>
-#include "debug.hh"
+#include <osv/debug.h>
 
 #include "sched.hh"
 
@@ -42,40 +42,40 @@ namespace virtio {
     int virtio_net::_instance = 0;
 
     #define virtio_net_tag "virtio-net"
-    #define virtio_net_d(fmt)   logger::instance()->wrt(virtio_net_tag, logger_debug, (fmt))
-    #define virtio_net_i(fmt)   logger::instance()->wrt(virtio_net_tag, logger_info, (fmt))
-    #define virtio_net_w(fmt)   logger::instance()->wrt(virtio_net_tag, logger_warn, (fmt))
-    #define virtio_net_e(fmt)   logger::instance()->wrt(virtio_net_tag, logger_error, (fmt))
+    #define virtio_net_d(...)   tprintf_d(virtio_net_tag, __VA_ARGS__)
+    #define virtio_net_i(...)   tprintf_i(virtio_net_tag, __VA_ARGS__)
+    #define virtio_net_w(...)   tprintf_w(virtio_net_tag, __VA_ARGS__)
+    #define virtio_net_e(...)   tprintf_e(virtio_net_tag, __VA_ARGS__)
 
     static int virtio_if_ioctl(
             struct ifnet *ifp,
             u_long command,
             caddr_t data)
     {
-        virtio_net_d(fmt("virtio_if_ioctl %x") % command);
+        virtio_net_d("virtio_if_ioctl %x", command);
 
         int error = 0;
         switch(command) {
         case SIOCSIFMTU:
-            virtio_net_d(fmt("SIOCSIFMTU"));
+            virtio_net_d("SIOCSIFMTU");
             break;
         case SIOCSIFFLAGS:
-            virtio_net_d(fmt("SIOCSIFFLAGS"));
+            virtio_net_d("SIOCSIFFLAGS");
             /* Change status ifup, ifdown */
             if (ifp->if_flags & IFF_UP) {
                 ifp->if_drv_flags |= IFF_DRV_RUNNING;
-                virtio_net_d(fmt("if_up"));
+                virtio_net_d("if_up");
             } else {
                 ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-                virtio_net_d(fmt("if_down"));
+                virtio_net_d("if_down");
             }
             break;
         case SIOCADDMULTI:
         case SIOCDELMULTI:
-            virtio_net_d(fmt("SIOCDELMULTI"));
+            virtio_net_d("SIOCDELMULTI");
             break;
         default:
-            virtio_net_d(fmt("redirecting to ether_ioctl()..."));
+            virtio_net_d("redirecting to ether_ioctl()...");
             error = ether_ioctl(ifp, command, data);
             break;
         }
@@ -88,12 +88,12 @@ namespace virtio {
         struct mbuf* m_head = NULL;
         virtio_net* vnet = (virtio_net*)ifp->if_softc;
 
-        virtio_net_d(fmt("%s_start (transmit)") % __FUNCTION__);
+        virtio_net_d("%s_start (transmit)", __FUNCTION__);
 
         /* Process packets */
         IF_DEQUEUE(&ifp->if_snd, m_head);
         while (m_head != NULL) {
-            virtio_net_d(fmt("*** processing packet! ***"));
+            virtio_net_d("*** processing packet! ***");
 
             vnet->tx(m_head, false);
 
@@ -105,7 +105,7 @@ namespace virtio {
 
     static void virtio_if_init(void* xsc)
     {
-        virtio_net_d(fmt("Virtio-net init"));
+        virtio_net_d("Virtio-net init");
     }
 
     virtio_net::virtio_net(pci::device& dev)
@@ -118,7 +118,7 @@ namespace virtio {
         ss << "virtio-net";
 
         _driver_name = ss.str();
-        virtio_i(fmt("VIRTIO NET INSTANCE"));
+        virtio_i("VIRTIO NET INSTANCE");
         _id = _instance++;
 
         read_config();
@@ -134,7 +134,7 @@ namespace virtio {
         if (_ifn == NULL) {
            //FIXME: need to handle this case - expand the above function not to allocate memory and
            // do it within the constructor.
-           virtio_net_w(fmt("if_alloc failed!"));
+           virtio_net_w("if_alloc failed!");
            return;
         }
 
@@ -176,12 +176,12 @@ namespace virtio {
         virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
         if (get_guest_feature_bit(VIRTIO_NET_F_MAC))
-            virtio_net_i(fmt("The mac addr of the device is %x:%x:%x:%x:%x:%x") %
-                    (u32)_config.mac[0] %
-                    (u32)_config.mac[1] %
-                    (u32)_config.mac[2] %
-                    (u32)_config.mac[3] %
-                    (u32)_config.mac[4] %
+            virtio_net_i("The mac addr of the device is %x:%x:%x:%x:%x:%x",
+                    (u32)_config.mac[0],
+                    (u32)_config.mac[1],
+                    (u32)_config.mac[2],
+                    (u32)_config.mac[3],
+                    (u32)_config.mac[4],
                     (u32)_config.mac[5]);
 
         return true;
@@ -227,7 +227,7 @@ namespace virtio {
             }
 
             if (_rx_queue->avail_ring_has_room(_rx_queue->size()/2)) {
-                virtio_net_d(fmt("ring is less than half full, refill"));
+                virtio_net_d("ring is less than half full, refill");
                 fill_rx_ring();
             }
 
@@ -239,7 +239,7 @@ namespace virtio {
 
     void virtio_net::fill_rx_ring()
     {
-        virtio_net_d(fmt("%s") % __FUNCTION__);
+        virtio_net_d("%s", __FUNCTION__);
 
         // it could have been a while (1) loop but it simplifies the allocation
         // tracking
@@ -280,7 +280,7 @@ namespace virtio {
 
         for (m = m_head; m != NULL; m = m->m_next) {
             if (m->m_len != 0) {
-                virtio_net_d(fmt("Frag len=%d:") % m->m_len);
+                virtio_net_d("Frag len=%d:", m->m_len);
                 req->payload.add(mmu::virt_to_phys(m->m_data), m->m_len);
             }
         }
@@ -293,10 +293,10 @@ namespace virtio {
 
         if (!_tx_queue->avail_ring_has_room(req->payload.get_sgs())) {
             if (_tx_queue->used_ring_not_empty()) {
-                virtio_net_d(fmt("%s: gc tx buffers to clear space"));
+                virtio_net_d("%s: gc tx buffers to clear space");
                 tx_gc();
             } else {
-                virtio_net_d(fmt("%s: no room") % __FUNCTION__);
+                virtio_net_d("%s: no room", __FUNCTION__);
                 delete req;
                 return false;
             }

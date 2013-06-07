@@ -7,7 +7,7 @@
 #include "debug.hh"
 #include "tst-hub.hh"
 
-#define dbg_d(...) logger::instance()->wrt("tst-tcp1", logger_error, __VA_ARGS__)
+#define dbg_d(...) tprintf_d("tst-tcp1", __VA_ARGS__)
 
 #define LISTEN_PORT (5555)
 #define ITERATIONS (400)

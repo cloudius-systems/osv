@@ -10,8 +10,7 @@ extern "C" {
     #include <bsd/porting/synch.h>
 }
 
-#define dbg_d(...) \
-    logger::instance()->wrt("tst-synch", logger_error, __VA_ARGS__)
+#define dbg_d(...) tprintf_d("tst-synch", __VA_ARGS__)
 
 class test_synch : public unit_tests::vtest {
 public:

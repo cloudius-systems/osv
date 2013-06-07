@@ -9,7 +9,7 @@
 
 #include "libc.h"
 
-#define sock_d(...)		tprintf("socket-api", logger_debug, __VA_ARGS__);
+#define sock_d(...)		tprintf_d("socket-api", __VA_ARGS__);
 
 int socketpair(int domain, int type, int protocol, int sv[2])
 {

@@ -551,33 +551,30 @@ namespace pci {
 
     void function::dump_config(void)
     {
-        pci_d(fmt("[%x:%x.%x] vid:id = %x:%x\n") %
-            (u16)_bus % (u16)_device % (u16)_func % _vendor_id % _device_id);
+        pci_d("[%x:%x.%x] vid:id = %x:%x\n",
+            (u16)_bus, (u16)_device, (u16)_func, _vendor_id, _device_id);
 
         // PCI BARs
         int bar_idx = 1;
         bar *bar = get_bar(bar_idx);
         while (bar != nullptr) {
-            pci_d(fmt("    bar[%d]: %sbits addr=%x size=%x\n") % bar_idx %
-                (bar->is_64()?"64":"32") % bar->get_addr64() % bar->get_size());
+            pci_d("    bar[%d]: %sbits addr=%x size=%x", bar_idx,
+                (bar->is_64()?"64":"32"), bar->get_addr64(), bar->get_size());
             bar = get_bar(++bar_idx);
         }
 
-        pci_d(fmt("    IRQ = %d\n") % (u16)get_interrupt_line());
+        pci_d("    IRQ = %d\n", (u16)get_interrupt_line());
 
         // MSI-x
         if (_have_msix) {
-            pci_d(fmt("    Have MSI-X!\n"));
-            pci_d(fmt("        msix_location: %1%\n") % (u16)_msix.msix_location);
-            pci_d(fmt("        msix_ctrl: %1%\n") % _msix.msix_ctrl);
-            pci_d(fmt("        msix_msgnum: %1%\n") % _msix.msix_msgnum);
-            pci_d(
-                fmt("        msix_table_bar: %1%\n") % (u16)_msix.msix_table_bar);
-            pci_d(
-                fmt("        msix_table_offset: %1%\n")
-                    % _msix.msix_table_offset);
-            pci_d(fmt("        msix_pba_bar: %1%\n") % (u16)_msix.msix_pba_bar);
-            pci_d(fmt("        msix_pba_offset: %1%\n") % _msix.msix_pba_offset);
+            pci_d("    Have MSI-X!\n");
+            pci_d("        msix_location: %1%\n", (u16)_msix.msix_location);
+            pci_d("        msix_ctrl: %1%\n", _msix.msix_ctrl);
+            pci_d("        msix_msgnum: %1%\n", _msix.msix_msgnum);
+            pci_d("        msix_table_bar: %1%\n", (u16)_msix.msix_table_bar);
+            pci_d("        msix_table_offset: %1%\n", _msix.msix_table_offset);
+            pci_d("        msix_pba_bar: %1%\n", (u16)_msix.msix_pba_bar);
+            pci_d("        msix_pba_offset: %1%\n", _msix.msix_pba_offset);
         }
     }
 }

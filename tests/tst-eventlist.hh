@@ -5,7 +5,7 @@
 #include "debug.hh"
 #include "tst-hub.hh"
 
-#define dbg_d(fmt)   logger::instance()->wrt("tst-eventlist", logger_debug, (fmt))
+#define dbg_d(...)   tprintf_d("tst-eventlist", __VA_ARGS__)
 
 class test_eventlist : public unit_tests::vtest {
 public:
@@ -14,27 +14,27 @@ public:
 
     void handler1(void)
     {
-        dbg_d(fmt("handler1"));
+        dbg_d("handler1");
     }
 
     void handler2(void)
     {
-        dbg_d(fmt("handler2"));
+        dbg_d("handler2");
     }
 
     void handler3(void)
     {
-        dbg_d(fmt("handler3"));
+        dbg_d("handler3");
     }
 
     void handler4(void)
     {
-        dbg_d(fmt("handler4"));
+        dbg_d("handler4");
     }
 
     void handler5(void)
     {
-        dbg_d(fmt("handler5"));
+        dbg_d("handler5");
     }
 
     void run(void)

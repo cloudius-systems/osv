@@ -11,7 +11,7 @@ extern "C" {
     #include <bsd/porting/sync_stub.h>
 }
 
-#define cdbg(...) tprintf("callout", logger_debug, __VA_ARGS__)
+#define cdbg(...) tprintf_d("callout", __VA_ARGS__)
 
 int _callout_stop_safe_locked(struct callout *c, int safe);
 
@@ -38,14 +38,6 @@ namespace callouts {
     // The callout dispatcher thread
     sched::thread *_callout_dispatcher = nullptr;
     bool _have_work = false;
-
-    void print_callouts(void)
-    {
-        cdbg("Showing Callouts:");
-        for (auto i: _callouts) {
-            cdbg("    0x%lx expires=%lu", (uint64_t)i, i->c_to_ns);
-        }
-    }
 
     void add_callout(callout *c)
     {

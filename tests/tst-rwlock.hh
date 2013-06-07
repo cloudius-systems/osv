@@ -1,7 +1,7 @@
 #ifndef __TST_RWLOCK__
 #define __TST_RWLOCK__
 
-#include "debug.hh"
+#include <osv/debug.h>
 #include "sched.hh"
 #include "tst-hub.hh"
 
@@ -20,8 +20,7 @@ extern "C" {
 
 
 #define rw_tag "tst-rwlock"
-#define rw_d(...)   \
-    logger::instance()->wrt(rw_tag, logger_debug, __VA_ARGS__)
+#define rw_d(...)   tprintf_d(rw_tag, __VA_ARGS__)
 
 class test_rwlock : public unit_tests::vtest {
 public:

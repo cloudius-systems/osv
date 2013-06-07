@@ -5,8 +5,7 @@
 #include "drivers/clock.hh"
 #include "sched.hh"
 
-#define SYNCH_LOG(...) \
-    logger::instance()->wrt("bsd-synch", logger_debug, __VA_ARGS__)
+#define SYNCH_LOG(...) tprintf_d("bsd-synch", __VA_ARGS__)
 
 extern "C" {
     #include <bsd/porting/netport.h>

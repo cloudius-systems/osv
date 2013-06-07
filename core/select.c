@@ -6,7 +6,7 @@
 #include <api/sys/select.h>
 #include <bsd/porting/synch.h>
 
-#define select_d(...)  tprintf("select", logger_error, __VA_ARGS__)
+#define select_d(...)  tprintf_d("select", __VA_ARGS__)
 
 /* Basic select() implementation on top of poll() */
 int select (int nfds,

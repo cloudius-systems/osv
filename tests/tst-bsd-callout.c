@@ -6,7 +6,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
 
-#define tdbg(...) tprintf("tst-bsd-callout", logger_error, __VA_ARGS__)
+#define tdbg(...) tprintf_d("tst-bsd-callout", __VA_ARGS__)
 
 struct callout c1, c2;
 int ctr;

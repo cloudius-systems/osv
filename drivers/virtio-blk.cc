@@ -15,7 +15,7 @@
 #include <string.h>
 #include <map>
 #include <errno.h>
-#include "debug.hh"
+#include <osv/debug.h>
 
 #include "sched.hh"
 #include "drivers/clock.hh"
@@ -92,7 +92,7 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     ss << "virtio-blk";
 
     _driver_name = ss.str();
-    virtio_i(fmt("VIRTIO BLK INSTANCE"));
+    virtio_i("VIRTIO BLK INSTANCE");
     _id = _instance++;
 
     read_config();
@@ -125,29 +125,29 @@ bool virtio_blk::read_config()
     //read all of the block config (including size, mce, topology,..) in one shot
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
-    virtio_i(fmt("The capacity of the device is %d") % (u64)_config.capacity);
+    virtio_i("The capacity of the device is %d", (u64)_config.capacity);
     if (get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
-        virtio_i(fmt("The size_max of the device is %d") % (u32)_config.size_max);
+        virtio_i("The size_max of the device is %d",(u32)_config.size_max);
     if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
-        virtio_i(fmt("The seg_size of the device is %d") % (u32)_config.seg_max);
+        virtio_i("The seg_size of the device is %d",(u32)_config.seg_max);
     if (get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
-        virtio_i(fmt("The cylinders count of the device is %d") % (u16)_config.geometry.cylinders);
-        virtio_i(fmt("The heads count of the device is %d") % (u32)_config.geometry.heads);
-        virtio_i(fmt("The sector count of the device is %d") % (u32)_config.geometry.sectors);
+        virtio_i("The cylinders count of the device is %d",(u16)_config.geometry.cylinders);
+        virtio_i("The heads count of the device is %d",(u32)_config.geometry.heads);
+        virtio_i("The sector count of the device is %d",(u32)_config.geometry.sectors);
     }
     if (get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
-        virtio_i(fmt("The block size of the device is %d") % (u32)_config.blk_size);
+        virtio_i("The block size of the device is %d",(u32)_config.blk_size);
     if (get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
-        virtio_i(fmt("The physical_block_exp of the device is %d") % (u32)_config.physical_block_exp);
-        virtio_i(fmt("The alignment_offset of the device is %d") % (u32)_config.alignment_offset);
-        virtio_i(fmt("The min_io_size of the device is %d") % (u16)_config.min_io_size);
-        virtio_i(fmt("The opt_io_size of the device is %d") % (u32)_config.opt_io_size);
+        virtio_i("The physical_block_exp of the device is %d",(u32)_config.physical_block_exp);
+        virtio_i("The alignment_offset of the device is %d",(u32)_config.alignment_offset);
+        virtio_i("The min_io_size of the device is %d",(u16)_config.min_io_size);
+        virtio_i("The opt_io_size of the device is %d",(u32)_config.opt_io_size);
     }
     if (get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
-        virtio_i(fmt("The write cache enable of the device is %d") % (u32)_config.wce);
+        virtio_i("The write cache enable of the device is %d",(u32)_config.wce);
     if (get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
         set_readonly();
-        virtio_i(fmt("Device is read only"));
+        virtio_i("Device is read only");
     }
 
     return true;
@@ -182,22 +182,23 @@ void virtio_blk::response_worker() {
             return queue->used_ring_not_empty();
         });
 
-        virtio_d(fmt("\t ----> IRQ: virtio_d - blk thread awaken"));
+        virtio_d("\t ----> IRQ: virtio_d - blk thread awaken");
 
-        int i = 0;
         u32 len;
 
         while((req = static_cast<virtio_blk_req*>(queue->get_buf(&len))) != nullptr) {
-            virtio_d(fmt("\t got response:%d = %d ") % i++ % (int)req->status->status);
+            virtio_d("\t got response = %d ", (int)req->status->status);
 
             virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
             //  This is debug code to verify the read content, to be remove later on
             if (header->type == VIRTIO_BLK_T_IN) {
-                virtio_d(fmt("\t verify that sector %d contains data %d") % (int)header->sector % (int)(header->sector/8));
+                virtio_d("\t verify that sector %d contains data %d", (int)header->sector, (int)(header->sector/8));
                 auto ii = req->payload->_nodes.begin();
                 ii++;
-                char*buf = reinterpret_cast<char*>(mmu::phys_to_virt(ii->_paddr));
-                virtio_d(fmt("\t value = %d len=%d") % (int)(*buf) % ii->_len);
+
+                virtio_d("\t value = %d len=%d",
+                    *reinterpret_cast<int*>(mmu::phys_to_virt(ii->_paddr)),
+                    ii->_len);
 
             }
             biodone(req->bio, true);
@@ -221,8 +222,8 @@ int virtio_blk::make_virtio_request(struct bio* bio)
     if (!bio) return EIO;
 
     if (bio->bio_bcount/page_size + 1 > _config.seg_max) {
-        virtio_w(fmt("%s:request of size %d needs more segment than the max %d") %
-                __FUNCTION__ % bio->bio_bcount % (u32)_config.seg_max);
+        virtio_w("%s:request of size %d needs more segment than the max %d",
+                __FUNCTION__, bio->bio_bcount, (u32)_config.seg_max);
         return EIO;
     }
 

@@ -125,7 +125,7 @@
 
 #include <bsd/sys/net/vnet.h>
 
-#define uipc_d(...) tprintf("uipc_socket", logger_debug, __VA_ARGS__)
+#define uipc_d(...) tprintf_d("uipc_socket", __VA_ARGS__)
 
 static int	soreceive_rcvoob(struct socket *so, struct uio *uio,
 		    int flags);

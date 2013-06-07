@@ -7,7 +7,7 @@
 
 #include "debug.hh"
 
-#define dbg_d(...)   logger::instance()->wrt("tst-sockets", logger_error, __VA_ARGS__)
+#define dbg_d(...)   tprintf_d("tst-sockets", __VA_ARGS__)
 
 const int stup_maxfds = 5;
 const int stup_fport = 5000;
