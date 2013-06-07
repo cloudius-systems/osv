@@ -50,7 +50,12 @@ public:
 
             dbg_d("Calling poll()");
             int error = poll(pfds, stup_maxfds, 10000);
-            dbg_d("poll() result=%d completed:", error);
+            if (error < 0) {
+                dbg_d("poll() failed %d", errno);
+                return -1;
+            }
+            
+            dbg_d("poll() result=%d completed", error);
 
             /* Check result */
             for (int i=0; i<5; i++) {
