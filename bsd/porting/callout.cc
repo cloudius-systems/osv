@@ -69,10 +69,14 @@ namespace callouts {
         return (false);
     }
 
+    void mark_have_work(void)
+    {
+        _have_work = true;
+    }
+
     // wakes the dispatcher
     void wake_dispatcher(void)
     {
-        _have_work = true;
         _callout_dispatcher->wake();
     }
 }
@@ -225,8 +229,10 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
     c->c_flags |= (CALLOUT_PENDING | CALLOUT_ACTIVE);
 
     callouts::add_callout(c);
-    callouts::wake_dispatcher();
+    callouts::mark_have_work();
     callouts::unlock();
+
+    callouts::wake_dispatcher();
 
     return result;
 }
@@ -248,6 +254,7 @@ int _callout_stop_safe_locked(struct callout *c, int is_drain)
 
         // Wait for callout
         callout_set_waiter(c, sched::thread::current());
+        callouts::mark_have_work();
         callouts::wake_dispatcher();
 
         sched::thread::wait_until(callouts::_callout_mutex, [&] {
