@@ -10,6 +10,7 @@
 #include <boost/intrusive/list.hpp>
 #include <string>
 #include <unordered_set>
+#include <drivers/clock.hh>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
@@ -19,6 +20,7 @@ class tracepoint_base;
 struct trace_record {
     tracepoint_base* tp;
     sched::thread* thread;
+    u64 time;
     unsigned cpu;
     union {
         u8 buffer[0];
@@ -268,6 +270,7 @@ public:
             auto tr = allocate_trace_record(size());
             tr->tp = this;
             tr->thread = sched::thread::current();
+            tr->time = clock::get()->time();
             tr->cpu = -1;
             if (tr->thread) {
                 tr->cpu = tr->thread->tcpu()->id;

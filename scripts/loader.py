@@ -444,7 +444,7 @@ def dump_trace():
 
     i = 0
     while i < last:
-        tp_key, thread, cpu = struct.unpack('QQI', trace_log[i:i+20])
+        tp_key, thread, time, cpu = struct.unpack('QQQI', trace_log[i:i+28])
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
@@ -452,9 +452,11 @@ def dump_trace():
                 fn_name = block.function.print_name
             except:
                 fn_name = '???'
-            gdb.write('0x%016x %2d %s %s %s\n' 
+            gdb.write('0x%016x %2d %12d.%06d %s %s %s\n' 
                       % (thread,
                          cpu,
+                         time / 1000000000,
+                         (time % 1000000000) / 1000,
                          indent,
                          annotation,
                          fn_name,
@@ -464,7 +466,7 @@ def dump_trace():
             continue
         tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
         sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
-        i += 24
+        i += 32
         size = struct.calcsize(sig)
         buffer = trace_log[i:i+size]
         i += size
@@ -484,9 +486,11 @@ def dump_trace():
             format = tp['format'].string()
             format = format.replace('%p', '0x%016x')
             name = tp['name'].string()
-            gdb.write('0x%016x %2d %-20s %s\n'
+            gdb.write('0x%016x %2d %12d.%06d %-20s %s\n'
                       % (thread,
                          cpu,
+                         time / 1000000000,
+                         (time % 1000000000) / 1000,
                          name,
                          format % data,
                          )
