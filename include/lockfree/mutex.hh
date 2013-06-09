@@ -43,9 +43,13 @@
 // I doubt this will make a practical difference.
 
 #include <atomic>
-
-#include <sched.hh>
 #include <lockfree/queue-mpsc.hh>
+
+// we don't want to include <sched.hh> because that includes a bunch of things
+// which eventually, recursively, use mutexes.
+namespace sched {
+    class thread;
+}
 
 namespace lockfree {
 
@@ -61,7 +65,7 @@ private:
     unsigned int sequence;
 public:
     mutex() : count(0), depth(0), owner(nullptr), waitqueue(), handoff(0), sequence(0) { }
-    ~mutex() { assert(count==0); }
+    ~mutex() { /*assert(count==0);*/ }
 
     void lock();
     bool try_lock();

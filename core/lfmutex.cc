@@ -1,4 +1,5 @@
 #include <lockfree/mutex.hh>
+#include <sched.hh>
 
 namespace lockfree {
 
