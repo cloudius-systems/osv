@@ -26,18 +26,6 @@ void mutex::lock()
     // If we're here still here the lock is owned by a different thread.
     // Put this thread in a waiting queue, so it will eventually be woken
     // when another thread releases the lock.
-
-    // Mark the thread "waiting" now with wait_guard(). The code from
-    // here until the schedule() below must be kept to a bare minimum:
-    // It will never be preempted (if we preempt a "waiting" thread, it
-    // will never come back), and it cannot run any code expecting a
-    // "running" thread - such as another wait_guard() or anything
-    // using one (mutexes, malloc, etc.). A good way to think about the
-    // situation is that between the wait_guard() and schedule(), the
-    // current thread is replaced by a new non-preemptable execution
-    // context with the code below.
-    sched::wait_guard wait_guard(current);
-
     linked_item<sched::thread *> waiter(current);
     waitqueue.push(&waiter);
 
@@ -56,9 +44,6 @@ void mutex::lock()
                 owner.store(thread);
                 if(thread!=current) {
                     thread->wake();
-                    // Note that because of the wait_guard, preemption of
-                    // this thread is disabled, so the above wake() will
-                    // not reschedule current or change its state.
                 }  else
                     return; // got the lock ourselves
             }
@@ -67,9 +52,9 @@ void mutex::lock()
 
     // Wait until another thread wakes us up. When somebody wakes us,
     // they will set us to be the owner first.
-    // TODO: perhaps check if owner isn't already current, in which case no need to reschedule?
-    current->tcpu()->schedule(true);
-    assert(owner.load(std::memory_order_relaxed)==current);
+    sched::thread::wait_until([&] {
+        return owner.load(std::memory_order_relaxed) == current;
+    });
 }
 
 bool mutex::try_lock()
