@@ -18,6 +18,7 @@ tracepoint<1002> trace_wait("sched_wait", "");
 tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
 tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
 tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
+tracepoint<1006> trace_preempt("sched_preempt", "");
 
 std::vector<cpu*> cpus;
 
@@ -92,6 +93,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
         if (preempt) {
+            trace_preempt();
             p->_fpu.save();
         }
         trace_switch(n);
