@@ -76,6 +76,43 @@ int main(int ac, char** av)
 
     close(s[0]);
 
+    // Test shutdown() a bit
+
+    r = socketpair(AF_LOCAL, SOCK_STREAM, 0, s);
+    report(r == 0, "socketpair call");
+    r = shutdown(s[0], SHUT_RD);
+    report(r == 0, "shutdown SHUT_RD");
+    r = read(s[0], reply, 5);
+    report(r == -1 && errno == EBADF, "can't read from SHUT_RD socket");
+    r = write(s[1], msg, 5);
+    report(r == -1 && errno == EPIPE, "write to socket with other side SHUT_RD");
+    r = write(s[0], msg, 5);
+    report(r == 5, "SHUT_RD socket can still be written");
+    r = read(s[1], reply, 5);
+    report(r == 5 && !memcmp(msg, reply, 5), "read from socket with other side SHUT_RD");
+    r = close(s[0]);
+    report(r == 0, "close after SHUT_RD");
+    r = close(s[1]);
+    report(r == 0, "close when other end is SHUT_RD");
+
+    r = socketpair(AF_LOCAL, SOCK_STREAM, 0, s);
+    report(r == 0, "socketpair call");
+    r = shutdown(s[0], SHUT_WR);
+    report(r == 0, "shutdown SHUT_WR");
+    r = write(s[0], msg, 5);
+    report(r == -1 && errno == EBADF, "can't write to SHUT_WR socket");
+    r = read(s[1], msg, 5);
+    report(r == 0, "read from socket with other side SHUT_WR");
+    r = write(s[1], msg, 5);
+    report(r == 5, "write to socket with other side SHUT_WR");
+    r = read(s[0], reply, 5);
+    report(r == 5 && !memcmp(msg, reply, 5), "SHUT_WR socket can still be read");
+    r = close(s[0]);
+    report(r == 0, "close after SHUT_WR");
+    r = close(s[1]);
+    report(r == 0, "close when other end is SHUT_WR");
+
+
     std::vector<int> sockets;
     while (socketpair(AF_LOCAL, SOCK_STREAM, 0, s) == 0) {
         sockets.push_back(s[0]);

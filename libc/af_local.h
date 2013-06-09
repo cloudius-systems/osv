@@ -7,6 +7,7 @@ extern "C" {
 
 int socketpair_af_local(int type, int proto, int sv[2]);
 
+int shutdown_af_local(int fd, int how);
 
 #ifdef __cplusplus
 }

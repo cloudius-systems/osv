@@ -95,3 +95,33 @@ int socketpair_af_local(int type, int proto, int sv[2])
         return libc_error(error);
     }
 }
+
+int shutdown_af_local(int fd, int how) {
+    fileref fr(fileref_from_fd(fd));
+    if (!fr) {
+        return EBADF;
+    }
+    struct file *f = fr.get();
+    if (f->f_ops != &af_local_ops) {
+        return ENOTSOCK;
+    }
+    af_local *afl = static_cast<af_local*>(f->f_data);
+    switch (how) {
+    case SHUT_RD:
+        afl->receive->detach_receiver();
+        f->f_flags &= ~FREAD;
+        break;
+    case SHUT_WR:
+        afl->send->detach_sender();
+        f->f_flags &= ~FWRITE;
+        break;
+    case SHUT_RDWR:
+        afl->receive->detach_receiver();
+        afl->send->detach_sender();
+        f->f_flags &= ~(FREAD|FWRITE);
+        break;
+    default:
+        return EINVAL;
+    }
+    return 0;
+}

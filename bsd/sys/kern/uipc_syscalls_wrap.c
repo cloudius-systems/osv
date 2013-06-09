@@ -273,6 +273,12 @@ int shutdown(int fd, int how)
 
 	sock_d("shutdown(fd=%d, how=%d)", fd, how);
 
+	// Try first if it's a AF_LOCAL socket (af_local.cc), and if not
+	// fall back to network sockets. TODO: do this more cleanly.
+	error = shutdown_af_local(fd, how);
+	if (error != ENOTSOCK) {
+	    return error;
+	}
 	error = linux_shutdown(fd, how);
 	if (error) {
 		sock_d("shutdown() failed, errno=%d", error);
