@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_set>
 #include <drivers/clock.hh>
+#include <cstring>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
@@ -306,6 +307,15 @@ using tracepoint = tracepointv<id,
                                storage_args<args...>,
                                runtime_args<args...>,
                                identity_assign<args...>>;
+
+//#define tracepoint(...) tracepoint<__COUNTER__, ##__VA_ARGS__>
+
+static inline const char *trace_strip_prefix(const char *name)
+{
+    return (strncmp(name, "trace_", 6) == 0) ? (name+6) : name;
+}
+#define TRACEPOINT(name, fmt, ...) \
+    tracepoint<__COUNTER__, ##__VA_ARGS__> name(trace_strip_prefix(#name), fmt);
 
 
 #endif /* TRACE_HH_ */
