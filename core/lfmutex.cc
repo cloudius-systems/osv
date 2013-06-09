@@ -145,4 +145,23 @@ bool mutex::owned() const
 
 }
 
+// For use in C, which can't access namespaces or methods. Note that for
+// performance, we use "flatten" which basically creates a copy of each
+// function.
+// TODO: We can avoid this copy by make these C functions the only copy of the
+// functions, and make the methods inline, calling these functions with
+// "this" as a parameter. But this would be un-C++-like :(
+extern "C" {
+__attribute__((flatten)) void lockfree_mutex_lock(void *m) {
+    static_cast<lockfree::mutex *>(m)->lock();
+}
+__attribute__ ((flatten)) void lockfree_mutex_unlock(void *m) {
+    static_cast<lockfree::mutex *>(m)->unlock();
+}
+__attribute__ ((flatten)) bool lockfree_mutex_try_lock(void *m) {
+    return static_cast<lockfree::mutex *>(m)->try_lock();
+}
+__attribute__ ((flatten)) bool lockfree_mutex_owned(void *m) {
+    return static_cast<lockfree::mutex *>(m)->owned();
+}
 }
