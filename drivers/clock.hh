@@ -8,7 +8,7 @@ public:
     virtual ~clock();
     virtual u64 time() = 0;
     static void register_clock(clock* c);
-    static clock* get();
+    static clock* get() __attribute__((no_instrument_function));
 private:
     static clock* _c;
 };

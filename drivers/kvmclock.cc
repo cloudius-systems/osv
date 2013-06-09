@@ -25,7 +25,7 @@ private:
      } __attribute__((__packed__)); /* 32 bytes */
 public:
     kvmclock();
-    virtual u64 time();
+    virtual u64 time() __attribute__((no_instrument_function));
 private:
     u64 wall_clock_boot();
     u64 system_time();
