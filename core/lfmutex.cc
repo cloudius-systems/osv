@@ -137,5 +137,11 @@ void mutex::unlock()
     }
 }
 
+bool mutex::owned() const
+{
+    return owner == sched::thread::current();
+}
+
+}
 
 }

@@ -67,6 +67,10 @@ public:
     bool try_lock();
     void unlock();
 
+    bool owned() const;
+    // getdepth() should only be used by the thread holding the lock
+    inline unsigned int getdepth() const { return depth; }
+
 };
 
 }
