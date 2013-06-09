@@ -145,7 +145,7 @@ extern "C" void nmi(exception_frame* ef)
 }
 
 #define DUMMY_HANDLER(x) \
-     extern "C" void x(); void x() { debug("DUMMY_HANDLER for " #x " aborting.\n"); abort(); }
+     extern "C" void x(); void x() { abort("DUMMY_HANDLER for " #x " aborting.\n"); }
 
 DUMMY_HANDLER(debug_exception)
 DUMMY_HANDLER(breakpoint)

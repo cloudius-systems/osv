@@ -82,11 +82,14 @@ void *__dso_handle;
 static bool already_aborted = false;
 void abort()
 {
+    abort("Aborted\n");
+}
+
+void abort(const char *msg)
+{
     if (!already_aborted) {
         already_aborted = true;
-        // Since the debug() code is complex and might cause an additional
-        // abort, we need to prevent endless abort() nesting.
-        debug_ll("Aborted\n");
+        debug_ll(msg);
     }
     osv::halt();
 }

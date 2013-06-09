@@ -80,4 +80,6 @@ void debug(const char* fmt, args... as)
     debug(f, as...);
 }
 
+void abort(const char *msg) __attribute__((noreturn));
+
 #endif // DEBUG_H
