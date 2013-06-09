@@ -27,9 +27,9 @@ public:
         if (ret) {
             return ret;
         }
-        // Otherwise, we need to allocate the real mutex. Take care that
-        // several threads don't allocate the same mutex the same time. We use
-        // optimistic allocation here, assuming the object is cheap to
+        // Otherwise, we need to allocate the real object. Take care that
+        // several threads don't allocate the same object the same time. We
+        // use optimistic allocation here, assuming the object is cheap to
         // allocate; Alternatively we could could have also used a mutex.
         ret = new T;
         T *val = 0;
