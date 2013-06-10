@@ -58,6 +58,8 @@ void* symbol_module::relocated_addr() const
     case STT_FUNC:
         return base + symbol->st_value;
         break;
+    case STT_IFUNC:
+        return reinterpret_cast<void *(*)()>(base + symbol->st_value)();
     default:
         debug(fmt("unknown relocation type %d\n") % symbol_type(*symbol));
         abort();
