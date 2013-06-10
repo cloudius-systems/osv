@@ -219,6 +219,7 @@ private:
     friend class cpu;
     friend class timer;
     friend class thread_runtime_compare;
+    friend class arch_cpu;
     friend void ::smp_main();
     friend void ::smp_launch();
     friend void init(elf::tls_data tls, std::function<void ()> cont);

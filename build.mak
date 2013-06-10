@@ -414,6 +414,7 @@ objects += arch/x64/smp.o
 objects += arch/x64/signal.o
 objects += arch/x64/cpuid.o
 objects += arch/x64/string.o
+objects += arch/x64/arch-cpu.o
 objects += core/mutex.o
 objects += core/lfmutex.o
 objects += core/semaphore.o
