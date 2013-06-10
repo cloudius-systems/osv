@@ -94,10 +94,10 @@ inline void arch_cpu::init_on_cpu()
     idt.load_on_cpu();
     ulong cr4 = cr4_de | cr4_pse | cr4_pae | cr4_pge | cr4_osfxsr
             | cr4_osxmmexcpt;
-    if (features.fsgsbase) {
+    if (features().fsgsbase) {
         cr4 |= cr4_fsgsbase;
     }
-    if (features.xsave) {
+    if (features().xsave) {
         cr4 |= cr4_osxsave;
     }
     write_cr4(cr4);
