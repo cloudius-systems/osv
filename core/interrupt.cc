@@ -7,6 +7,9 @@
 #include "exceptions.hh"
 #include "interrupt.hh"
 #include "apic.hh"
+#include <osv/trace.hh>
+
+TRACEPOINT(trace_msix_interrupt, "vector=0x%02x", unsigned);
 
 using namespace pci;
 
@@ -57,6 +60,7 @@ void msix_vector::add_entryid(unsigned entry_id)
 
 void msix_vector::interrupt(void)
 {
+    trace_msix_interrupt(_vector);
     _handler();
 }
 
