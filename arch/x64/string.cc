@@ -1,6 +1,6 @@
 
 #include <string.h>
-#include "processor.hh"
+#include "cpuid.hh"
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
@@ -16,8 +16,7 @@ void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 extern "C"
 void *(*resolve_memcpy())(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    using processor::cpuid;
-    if (cpuid(0).a >= 7 && (cpuid(7, 0).b & 0x200)) {
+    if (processor::features().repmovsb) {
         return memcpy_repmov;
     }
     return memcpy_base;
