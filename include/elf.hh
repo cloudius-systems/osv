@@ -215,6 +215,7 @@ enum {
     STT_HIOS = 12,
     STT_LOPROC = 13, // Processor-speciﬁc use
     STT_HIPROC = 15,
+    STT_IFUNC = 10, // Indirect function
 };
 
 enum {
