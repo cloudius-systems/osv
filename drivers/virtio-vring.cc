@@ -10,9 +10,13 @@
 
 #include "sched.hh"
 #include "interrupt.hh"
+#include "osv/trace.hh"
 
 using namespace memory;
 using sched::thread;
+
+TRACEPOINT(trace_virtio_enable_interrupts, "vring=%p", void *);
+TRACEPOINT(trace_virtio_disable_interrupts, "vring=%p", void *);
 
 namespace virtio {
 
@@ -74,11 +78,13 @@ namespace virtio {
 
     void vring::disable_interrupts()
     {
+        trace_virtio_disable_interrupts(this);
         _avail->disable_interrupt();
     }
 
     void vring::enable_interrupts()
     {
+        trace_virtio_enable_interrupts(this);
         _avail->enable_interrupt();
     }
 
