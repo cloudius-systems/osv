@@ -38,8 +38,8 @@ kvmclock::kvmclock()
 {
     _wall = new kvmclock::pvclock_wall_clock;
     _sys = new kvmclock::pvclock_vcpu_time_info;
-    memset(_wall, 0, sizeof(_wall));
-    memset(_sys, 0, sizeof(_sys));
+    memset(_wall, 0, sizeof(*_wall));
+    memset(_sys, 0, sizeof(*_sys));
     processor::wrmsr(msr::KVM_WALL_CLOCK_NEW, mmu::virt_to_phys(_wall));
     // FIXME: on each cpu
     processor::wrmsr(msr::KVM_SYSTEM_TIME_NEW, mmu::virt_to_phys(_sys) | 1);
