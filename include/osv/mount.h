@@ -127,8 +127,6 @@ typedef int (*vfsop_statfs_t)(struct mount *, struct statfs *);
 
 #define VFS_NULL		    ((void *)vfs_null)
 
-int	mount(const char *, const char *, const char *, int, void *);
-int	umount(const char *);
 int	vfs_nullop(void);
 int	vfs_einval(void);
 __END_DECLS
