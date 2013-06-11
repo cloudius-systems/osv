@@ -344,7 +344,8 @@ void thread::wake()
         wakeup_ipi.send(_cpu);
     } else if (arch::irq_enabled() && preempt_counter == 1) { // ignore the preempt_disable() above
         _cpu->schedule();
-        // We'll also reschedule at the end of an interrupt if needed
+    } else {
+        need_reschedule = true;
     }
     preempt_enable();
 }
