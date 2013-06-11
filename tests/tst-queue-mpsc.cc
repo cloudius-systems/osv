@@ -41,15 +41,16 @@ int main(int argc, char **argv) {
     // Test trivial single-thread, queuing.
     std::cerr << "test1\n";
     lockfree::queue_mpsc<int> q;
-    int n;
-    assert(!q.pop(&n));
+    assert(!q.pop());
     assert(q.empty());
     std::cerr << "test2\n";
     lockfree::linked_item<int> item(7);
     q.push(&item);
     assert(!q.empty());
-    assert(q.pop(&n) && n == 7);
-    assert(!q.pop(&n));
+    lockfree::linked_item<int> *n;
+    n = q.pop();
+    assert(n && n->value == 7);
+    assert(!q.pop());
     assert(q.empty());
     std::cerr << "test3\n";
     int len = 1000;
@@ -60,9 +61,10 @@ int main(int argc, char **argv) {
     }
     for (int i = 0; i < len; i++) {
         assert(!q.empty());
-        assert(q.pop(&n) && n == i * i);
+        n = q.pop();
+        assert(n && n->value == i * i);
     }
-    assert(!q.pop(&n));
+    assert(!q.pop());
     assert(q.empty());
     delete[] items;
 
@@ -117,8 +119,8 @@ int main(int argc, char **argv) {
         // Now run the real test:
         int left = npushers4*niter4;
         while (left) {
-            int item;
-            if (waitq4.pop(&item)) {
+            lockfree::linked_item<int> *item;
+            if ((item = waitq4.pop())) {
                 // TODO: this test leaks all the item memory! :-) See below for a better flow-controlled test
                 // another option is to add a list<LT*> and free it all when we're done with this test.
                 left--;
@@ -196,32 +198,30 @@ int main(int argc, char **argv) {
         for(int j = 0; j < npushers; j++)
             last[j] = -1;
         while (left) {
-            struct waititem item;
-            item.waiter = -1; // debugging
-            item.wakeup = nullptr;// debugging
-            if (waitq.pop(&item)) {
-                assert(item.waiter!=-1); // debugging
-                assert(item.wakeup!=nullptr);//debugging
-                assert(item.debugflag==57);// debugging
+            struct lockfree::linked_item<waititem> *item;
+            if ((item = waitq.pop())) {
+                assert(item->value.waiter!=-1); // debugging
+                assert(item->value.wakeup!=nullptr);//debugging
+                assert(item->value.debugflag==57);// debugging
                 nsomething++;
                 if (!(nsomething%10000)) {
                     std::cerr << ".";
                 }
-                assert(item.waiter >= 0 && item.waiter < npushers);
-                assert(item.payload == (last[item.waiter]+1));
-                last[item.waiter]++;
-                if (last[item.waiter] == niter-1) {
+                assert(item->value.waiter >= 0 && item->value.waiter < npushers);
+                assert(item->value.payload == (last[item->value.waiter]+1));
+                last[item->value.waiter]++;
+                if (last[item->value.waiter] == niter-1) {
                     left--; // this pusher is done.
                 }
                 // It's important to take the lock when setting wakeup=1. If
                 // we didn't, we might set wakeup=1 (and then notify_one())
                 // right after the other thread tested it, just before it
                 // began waiting.
-                mutexes[item.waiter].lock();
-                assert(*(item.wakeup)==0);// sanity check
-                *(item.wakeup) = 1;
-                mutexes[item.waiter].unlock();
-                condvars[item.waiter].notify_one();
+                mutexes[item->value.waiter].lock();
+                assert(*(item->value.wakeup)==0);// sanity check
+                *(item->value.wakeup) = 1;
+                mutexes[item->value.waiter].unlock();
+                condvars[item->value.waiter].notify_one();
             } else {
                 nnothing++;
             }
