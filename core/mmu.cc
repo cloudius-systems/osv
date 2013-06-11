@@ -827,6 +827,7 @@ void switch_to_runtime_page_table()
 
 void page_fault(exception_frame *ef)
 {
+    sched::exception_guard g;
     auto addr = processor::read_cr2();
     // FIXME: handle fixable faults
     osv::handle_segmentation_fault(addr, ef);

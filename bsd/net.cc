@@ -35,6 +35,8 @@ extern "C" {
     extern void system_taskq_init(void *arg);
     extern void opensolaris_load(void *arg);
     extern void callb_init(void *arg);
+
+    extern void zfs_init(void *arg);
 }
 
 
@@ -82,6 +84,7 @@ void net_init(void)
     /* Start the loopback device */
     osv_start_if("lo0", "127.0.0.1", "255.0.0.0");
     osv_ifup("lo0");
+    zfs_init(NULL);
 
     debug("Done!\n");
 }

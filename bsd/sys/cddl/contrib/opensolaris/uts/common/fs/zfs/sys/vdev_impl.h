@@ -302,7 +302,7 @@ extern vdev_ops_t vdev_root_ops;
 extern vdev_ops_t vdev_mirror_ops;
 extern vdev_ops_t vdev_replacing_ops;
 extern vdev_ops_t vdev_raidz_ops;
-#ifdef _KERNEL
+#if defined(__FreeBSD__) && defined(_KERNEL)
 extern vdev_ops_t vdev_geom_ops;
 #else
 extern vdev_ops_t vdev_disk_ops;

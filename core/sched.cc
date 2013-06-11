@@ -344,7 +344,8 @@ void thread::wake()
         wakeup_ipi.send(_cpu);
     } else if (arch::irq_enabled() && preempt_counter == 1) { // ignore the preempt_disable() above
         _cpu->schedule();
-        // We'll also reschedule at the end of an interrupt if needed
+    } else {
+        need_reschedule = true;
     }
     preempt_enable();
 }
@@ -394,10 +395,15 @@ void thread::complete()
     if (_attr.detached) {
         _s_reaper->add_zombie(this);
     }
+    // If this thread gets preempted after setting status to terminated,
+    // it will never be scheduled again and never get to wake the joiner.
+    // So we must disable preemption here.
+    preempt_disable();
     _status.store(status::terminated);
     if (_joiner) {
         _joiner->wake();
     }
+    preempt_enable();
     while (true) {
         schedule();
     }

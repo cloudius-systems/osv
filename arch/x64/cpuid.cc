@@ -3,7 +3,12 @@
 
 namespace processor {
 
-features_type features;
+const features_type& features()
+{
+    // features() can be used very early, make sure it is initialized
+    static features_type f;
+    return f;
+}
 
 namespace {
 
@@ -50,7 +55,7 @@ cpuid_bit cpuid_bits[] = {
 
 constexpr unsigned nr_cpuid_bits = sizeof(cpuid_bits) / sizeof(*cpuid_bits);
 
-void process_cpuid_bit(const cpuid_bit& b)
+void process_cpuid_bit(features_type& features, const cpuid_bit& b)
 {
     bool subleaf = b.leaf == 7;
     auto base = b.leaf & 0xf0000000;
@@ -79,13 +84,18 @@ void process_cpuid_bit(const cpuid_bit& b)
 }
 
 
-void  __attribute__((constructor(200))) process_cpuid()
+void process_cpuid(features_type& features)
 {
     for (unsigned i = 0; i < nr_cpuid_bits; ++i) {
-        process_cpuid_bit(cpuid_bits[i]);
+        process_cpuid_bit(features, cpuid_bits[i]);
     }
 }
 
+}
+
+features_type::features_type()
+{
+    process_cpuid(*this);
 }
 
 }

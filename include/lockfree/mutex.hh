@@ -56,8 +56,11 @@ namespace lockfree {
 class mutex {
 private:
     std::atomic<int> count;
-    // "owner" and "depth" are need for implementing a recursive mutex, but
-    // owner is also used to tell a thread being woken that it was made owner.
+    // "owner" and "depth" are only used for implementing a recursive mutex.
+    // "depth" is not an atomic variable - only the lock-owning thread sets
+    // and reads its own depth. "owner" is atomic - one thread doing lock()
+    // needs to read the current owner possibly set by another thread - but
+    // it can be accessed with relaxed memory ordering.
     unsigned int depth;
     std::atomic<sched::thread *> owner;
     queue_mpsc<sched::thread *> waitqueue;

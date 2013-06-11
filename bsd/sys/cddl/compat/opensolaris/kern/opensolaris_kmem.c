@@ -38,7 +38,10 @@
 void *
 zfs_kmem_alloc(size_t size, int kmflags)
 {
-	return malloc(size);
+	void *ptr = malloc(size);
+	if (ptr && (kmflags & M_ZERO))
+		memset(ptr, 0, size);
+	return ptr;
 }
 
 void

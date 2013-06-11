@@ -36,7 +36,7 @@ extern "C" {
 #endif
 
 typedef struct vdev_file {
-	vnode_t		*vf_vnode;
+	struct file	*vf_file;
 } vdev_file_t;
 
 #ifdef	__cplusplus

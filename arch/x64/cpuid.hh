@@ -4,6 +4,7 @@
 namespace processor {
 
 struct features_type {
+    features_type();
     bool sse3;
     bool ssse3;
     bool cmpxchg16b;
@@ -23,7 +24,7 @@ struct features_type {
     bool kvm_clocksource_stable;
 };
 
-extern features_type features;
+extern const features_type& features();
 
 }
 

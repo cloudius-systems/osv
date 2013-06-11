@@ -131,6 +131,7 @@ void interrupt(exception_frame* frame)
 extern "C" void divide_error(exception_frame *ef);
 void divide_error(exception_frame *ef)
 {
+    sched::exception_guard g;
     siginfo_t si;
     si.si_signo = SIGFPE;
     si.si_code = FPE_INTDIV;

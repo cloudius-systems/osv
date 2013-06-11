@@ -29,7 +29,7 @@ void (*resolve_set_fsbase(void))(u64 v)
 {
     // can't use processor::features, because it is not initialized
     // early enough.
-    if (processor::cpuid(0).a >= 7 && (processor::cpuid(7).b & 1)) {
+    if (processor::features().fsgsbase) {
         return set_fsbase_fsgsbase;
     } else {
         return set_fsbase_msr;

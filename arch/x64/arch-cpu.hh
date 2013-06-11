@@ -35,8 +35,12 @@ struct arch_cpu {
     u32 apic_id;
     u32 acpi_id;
     u64 gdt[nr_gdt];
+    bool in_exception = false;
     void init_on_cpu();
+    void set_exception_stack(char* base, size_t size);
     void set_exception_stack(arch_thread* t);
+    void enter_exception();
+    void exit_exception();
 };
 
 struct arch_thread {
@@ -79,10 +83,15 @@ inline arch_cpu::arch_cpu()
     gdt[gdt_tssx] = tss_addr >> 32;
 }
 
+inline void arch_cpu::set_exception_stack(char* base, size_t size)
+{
+    atss.tss.ist[1] = reinterpret_cast<u64>(base + size);
+}
+
 inline void arch_cpu::set_exception_stack(arch_thread* t)
 {
     auto& s = t->exception_stack;
-    atss.tss.ist[1] = reinterpret_cast<u64>(s + sizeof(s));
+    set_exception_stack(s, sizeof(s));
 }
 
 inline void arch_cpu::init_on_cpu()
@@ -94,14 +103,19 @@ inline void arch_cpu::init_on_cpu()
     idt.load_on_cpu();
     ulong cr4 = cr4_de | cr4_pse | cr4_pae | cr4_pge | cr4_osfxsr
             | cr4_osxmmexcpt;
-    if (features.fsgsbase) {
+    if (features().fsgsbase) {
         cr4 |= cr4_fsgsbase;
     }
-    if (features.xsave) {
+    if (features().xsave) {
         cr4 |= cr4_osxsave;
     }
     write_cr4(cr4);
 }
+
+struct exception_guard {
+    exception_guard();
+    ~exception_guard();
+};
 
 }
 
