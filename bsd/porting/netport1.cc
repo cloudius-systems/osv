@@ -2,6 +2,7 @@
 #include "drivers/clock.hh"
 #include "sched.hh"
 #include "mempool.hh"
+#include "bsd/sys/cddl/compat/opensolaris/sys/kcondvar.h"
 
 extern "C" {
     #include <time.h>
@@ -45,4 +46,13 @@ int get_ticks(void)
 size_t get_physmem(void)
 {
     return memory::phys_mem_size / memory::page_size;
+}
+
+int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo)
+{
+    if (tmo <= 0) {
+        return -1;
+    }
+    auto ret = condvar_wait(cv, mutex, clock::get()->time() + ticks2ns(tmo));
+    return ret == ETIMEDOUT ? -1 : 0;
 }
