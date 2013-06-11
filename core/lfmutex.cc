@@ -10,6 +10,8 @@ void mutex::lock()
     if (count.fetch_add(1, std::memory_order_acquire) == 0) {
         // Uncontended case (no other thread is holding the lock, and no
         // concurrent lock() attempts). We got the lock.
+        // Setting count=1 already got us the lock; we set owner and depth
+        // just for implementing a recursive mutex.
         owner.store(current, std::memory_order_relaxed);
         depth = 1;
         return;
@@ -27,6 +29,8 @@ void mutex::lock()
     // If we're here still here the lock is owned by a different thread.
     // Put this thread in a waiting queue, so it will eventually be woken
     // when another thread releases the lock.
+    // Note "waiter" is on the stack, so we must not return before making sure
+    // it was popped from waitqueue (by another thread or by us.)
     linked_item<sched::thread *> waiter(current);
     waitqueue.push(&waiter);
 
@@ -38,24 +42,35 @@ void mutex::lock()
             if (handoff.compare_exchange_strong(old_handoff, 0U)) {
                 // Note the explanation above about no concurrent pop()s also
                 // explains why we can be sure waitqueue is still not empty.
-                sched::thread *thread;
-                assert(waitqueue.pop(&thread));
-                assert(depth==0);
-                depth = 1;
-                owner.store(thread);
-                if(thread!=current) {
+                linked_item<sched::thread *> *other = waitqueue.pop();
+                assert(other);
+                if(other->value != current) {
+                    // At this point, waiter.value must be != 0, otherwise it
+                    // means someone has already woken us up, breaking the
+                    // handoff protocol which decided we should be the ones to
+                    // wake somebody up. Note that right after thread->wake()
+                    // below, waiter.value may become 0: the thread we woke
+                    // can call unlock() and decide to wake us up.
+                    assert(waiter.value);
+                    sched::thread *thread = other->value;
+                    other->value = nullptr;
                     thread->wake();
-                }  else
-                    return; // got the lock ourselves
+                } else {
+                    // got the lock ourselves
+                    assert(other == &waiter);
+                    owner.store(current, std::memory_order_relaxed);
+                    depth = 1;
+                    return;
+                }
             }
         }
     }
 
     // Wait until another thread wakes us up. When somebody wakes us,
-    // they will set us to be the owner first.
-    sched::thread::wait_until([&] {
-        return owner.load(std::memory_order_relaxed) == current;
-    });
+    // they will first zero the value field in our wait record.
+    sched::thread::wait_until([&] { return !waiter.value; });
+    owner.store(current, std::memory_order_relaxed);
+    depth = 1;
 }
 
 bool mutex::try_lock()
@@ -82,8 +97,7 @@ bool mutex::try_lock()
     auto old_handoff = handoff.load();
     if(!old_handoff && handoff.compare_exchange_strong(old_handoff, 0U)) {
         count.fetch_add(1, std::memory_order_relaxed);
-        owner.store(current);
-        assert(depth==0);
+        owner.store(current, std::memory_order_relaxed);
         depth = 1;
         return true;
     }
@@ -98,6 +112,10 @@ void mutex::unlock()
     if (--depth)
         return; // recursive mutex still locked.
 
+    // When we return from unlock(), we will no longer be holding the lock.
+    // We can't leave owner==current, otherwise a later lock() in the same
+    // thread will think it's a recursive lock, while actually another thread
+    // is in the middle of acquiring the lock and has set count>0.
     owner.store(nullptr, std::memory_order_relaxed);
 
     // If there is no waiting lock(), we're done. This is the easy case :-)
