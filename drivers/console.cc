@@ -215,10 +215,6 @@ console_ioctl(struct device *dev, u_long request, void *arg)
     }
 }
 
-}
-
-using namespace console;
-
 static struct devops console_devops = {
     .open	= no_open,
     .close	= no_close,
@@ -233,14 +229,12 @@ struct driver console_driver = {
     .devops	= &console_devops,
 };
 
-
-extern "C" int
-console_init(void)
+void console_init(void)
 {
     auto console_poll_thread = new sched::thread(console_poll);
     Console* serial_console = new IsaSerialConsole(console_poll_thread);
     console_poll_thread->start();
     console::console.set_impl(serial_console);
     device_create(&console_driver, "console", D_CHR);
-    return 0;
+}
 }

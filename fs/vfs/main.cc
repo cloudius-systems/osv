@@ -1218,7 +1218,6 @@ void mount_usr(void)
 		kprintf("failed to mount romfs, error = %d\n", ret);
 }
 
-extern "C" int console_init(void);
 extern "C" void bio_init(void);
 
 int vfs_initialized;
@@ -1232,7 +1231,6 @@ vfs_init(void)
 	bio_init();
 	vnode_init();
 	task_alloc(&main_task);
-	console_init();
 
 	/*
 	 * Initialize each file system.

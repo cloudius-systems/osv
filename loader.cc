@@ -22,6 +22,7 @@
 #include "sched.hh"
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
+#include "drivers/console.hh"
 #include "barrier.hh"
 #include "arch.hh"
 #include "osv/trace.hh"
@@ -216,6 +217,7 @@ void main_cont(int ac, char** av)
 {
     std::tie(ac, av) = parse_options(ac, av);
     ioapic::init();
+    console::console_init();
     smp_launch();
     memory::enable_debug_allocator();
     enable_trace();
