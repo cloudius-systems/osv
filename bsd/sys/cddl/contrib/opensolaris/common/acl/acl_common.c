@@ -220,6 +220,7 @@ cmp2acls(void *a, void *b)
 	return (0);
 }
 
+#ifndef _KERNEL
 /*ARGSUSED*/
 static void *
 cacl_realloc(void *ptr, size_t size, size_t new_size)
@@ -235,6 +236,7 @@ cacl_realloc(void *ptr, size_t size, size_t new_size)
 	return (realloc(ptr, new_size));
 #endif
 }
+#endif
 
 static int
 cacl_malloc(void **ptr, size_t size)
@@ -251,6 +253,7 @@ cacl_malloc(void **ptr, size_t size)
 #endif
 }
 
+#ifndef _KERNEL
 /*ARGSUSED*/
 static void
 cacl_free(void *ptr, size_t size)
@@ -261,6 +264,7 @@ cacl_free(void *ptr, size_t size)
 	free(ptr);
 #endif
 }
+#endif
 
 #if !defined(_KERNEL)
 acl_t *

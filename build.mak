@@ -247,6 +247,7 @@ solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sysevent.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/acl/acl_common.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
@@ -378,6 +379,7 @@ $(solaris) $(solaris-tests): CFLAGS+= \
 	-Wno-maybe-uninitialized \
 	-D_KERNEL \
 	-I$(src)/bsd/sys/cddl/compat/opensolaris \
+	-I$(src)/bsd/sys/cddl/contrib/opensolaris/common \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common \
 	-I$(src)/bsd/sys
 
