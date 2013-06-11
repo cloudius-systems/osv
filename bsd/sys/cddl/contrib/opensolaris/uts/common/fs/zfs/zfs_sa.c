@@ -119,6 +119,7 @@ zfs_sa_symlink(znode_t *zp, char *link, int len, dmu_tx_t *tx)
 	}
 }
 
+#ifdef _NOTYET
 void
 zfs_sa_get_scanstamp(znode_t *zp, xvattr_t *xvap)
 {
@@ -183,6 +184,7 @@ zfs_sa_set_scanstamp(znode_t *zp, xvattr_t *xvap, dmu_tx_t *tx)
 		    &zp->z_pflags, sizeof (uint64_t), tx));
 	}
 }
+#endif /* _NOTYET */
 
 /*
  * I'm not convinced we should do any of this upgrade.
@@ -226,12 +228,12 @@ zfs_sa_upgrade(sa_handle_t *hdl, dmu_tx_t *tx)
 	 * Otherwise, we know we are doing the
 	 * sa_update() that caused us to enter this function.
 	 */
-	if (mutex_owner(&zp->z_lock) != curthread) {
+//	if (mutex_owner(&zp->z_lock) != curthread) {
 		if (mutex_tryenter(&zp->z_lock) == 0)
 			return;
 		else
 			drop_lock = B_TRUE;
-	}
+//	}
 
 	/* First do a bulk query of the attributes that aren't cached */
 	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL, &mtime, 16);
@@ -282,8 +284,10 @@ zfs_sa_upgrade(sa_handle_t *hdl, dmu_tx_t *tx)
 	SA_ADD_BULK_ATTR(sa_attrs, count, SA_ZPL_DACL_COUNT(zfsvfs), NULL,
 	    &zp->z_acl_cached->z_acl_count, 8);
 
+#ifdef _NOTYET
 	if (zp->z_acl_cached->z_version < ZFS_ACL_VERSION_FUID)
 		zfs_acl_xform(zp, zp->z_acl_cached, CRED());
+#endif
 
 	locate.cb_aclp = zp->z_acl_cached;
 	SA_ADD_BULK_ATTR(sa_attrs, count, SA_ZPL_DACL_ACES(zfsvfs),

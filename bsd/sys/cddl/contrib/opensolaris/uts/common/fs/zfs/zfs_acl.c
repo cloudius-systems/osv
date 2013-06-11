@@ -528,6 +528,7 @@ zfs_acl_valid_ace_type(uint_t type, uint_t flags)
 	return (B_FALSE);
 }
 
+#ifdef _NOTYET
 static boolean_t
 zfs_ace_valid(vtype_t obj_type, zfs_acl_t *aclp, uint16_t type, uint16_t iflags)
 {
@@ -565,6 +566,7 @@ zfs_ace_valid(vtype_t obj_type, zfs_acl_t *aclp, uint16_t type, uint16_t iflags)
 
 	return (B_TRUE);
 }
+#endif
 
 static void *
 zfs_acl_next_ace(zfs_acl_t *aclp, void *start, uint64_t *who,
@@ -640,6 +642,7 @@ zfs_ace_walk(void *datap, uint64_t cookie, int aclcnt,
 	return ((uint64_t)(uintptr_t)acep);
 }
 
+#ifdef _NOTYET
 static zfs_acl_node_t *
 zfs_acl_curr_node(zfs_acl_t *aclp)
 {
@@ -866,6 +869,7 @@ zfs_unix_to_v4(uint32_t access_mask)
 		new_mask |= ACE_READ_DATA;
 	return (new_mask);
 }
+#endif
 
 static void
 zfs_set_ace(zfs_acl_t *aclp, void *acep, uint32_t access_mask,
@@ -1212,6 +1216,9 @@ zfs_aclset_common(znode_t *zp, zfs_acl_t *aclp, cred_t *cr, dmu_tx_t *tx)
 	if (!zfsvfs->z_use_fuids) {
 		otype = DMU_OT_OLDACL;
 	} else {
+#ifdef __OSV__
+		abort();
+#endif
 		if ((aclp->z_version == ZFS_ACL_VERSION_INITIAL) &&
 		    (zfsvfs->z_version >= ZPL_VERSION_FUID))
 			zfs_acl_xform(zp, aclp, cr);
@@ -1460,6 +1467,7 @@ zfs_acl_chmod_setattr(znode_t *zp, zfs_acl_t **aclp, uint64_t mode)
 	return (error);
 }
 
+#ifdef _NOTYET
 /*
  * strip off write_owner and write_acl
  */
@@ -2724,3 +2732,4 @@ zfs_zaccess_rename(znode_t *sdzp, znode_t *szp, znode_t *tdzp,
 
 	return (error);
 }
+#endif

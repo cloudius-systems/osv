@@ -41,7 +41,7 @@
 #include <sys/file.h>
 #include <sys/kmem.h>
 #include <sys/errno.h>
-#include <sys/unistd.h>
+#include <unistd.h>
 #include <sys/atomic.h>
 #include <sys/zfs_dir.h>
 #include <sys/zfs_acl.h>
@@ -95,6 +95,8 @@ SYSCTL_INT(_debug_sizeof, OID_AUTO, znode, CTLFLAG_RD, 0, sizeof(znode_t),
  * be freed before it can be safely accessed.
  */
 krwlock_t zfsvfs_lock;
+
+#ifdef _NOTYET
 
 static kmem_cache_t *znode_cache = NULL;
 
@@ -1442,6 +1444,7 @@ zfs_znode_free(znode_t *zp)
 
 	VFS_RELE(zfsvfs->z_vfs);
 }
+#endif /* NOTYET */
 
 void
 zfs_tstamp_update_setup(znode_t *zp, uint_t flag, uint64_t mtime[2],
@@ -1513,6 +1516,7 @@ zfs_grow_blocksize(znode_t *zp, uint64_t size, dmu_tx_t *tx)
 	dmu_object_size_from_db(sa_get_db(zp->z_sa_hdl), &zp->z_blksz, &dummy);
 }
 
+#ifdef _NOTYET
 #ifdef sun
 /*
  * This is a dummy interface used when pvn_vplist_dirty() should *not*
@@ -1975,6 +1979,7 @@ zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
 		mutex_destroy(&zfsvfs.z_hold_mtx[i]);
 }
 
+#endif /* _NOTYET */
 #endif /* _KERNEL */
 
 static int
