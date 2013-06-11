@@ -44,10 +44,12 @@ typedef struct pathname {
 #define	pn_alloc(pnp)	panic("pn_alloc() called")
 #define	pn_free(pnp)	panic("pn_free() called")
 
+#if 0
 int lookupname(char *, enum uio_seg, enum symfollow, vnode_t **, vnode_t **);
 int lookupnameat(char *, enum uio_seg, enum symfollow, vnode_t **, vnode_t **,
     vnode_t *);
 int traverse(vnode_t **, int);
+#endif
 
 #endif	/* _KERNEL */
 
