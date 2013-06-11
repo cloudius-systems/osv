@@ -59,16 +59,16 @@ public:
         } while (!pushlist.compare_exchange_weak(old, item, std::memory_order_release));
     }
 
-    inline bool pop(T *result)
+    inline LT* pop()
     {
         if (poplist) {
             // The poplist (prepared by an earlier pop) is not empty, so pop
             // from it. We don't need any locking to access the poplist, as
             // it is only touched by pop operations, and our assumption (of a
             // single-consumer queue) is that pops cannot be concurrent.
-            *result = poplist->value;
+            LT* result = poplist;
             poplist = poplist->next;
-            return true;
+            return result;
         } else {
             // The poplist is empty. Atomically take the entire pushlist (pushers
             // may continue to to push concurrently, so the atomicity is imporant)
@@ -79,7 +79,7 @@ public:
             // doesn't support memory_order_consume so we use memory_order_acquire.
             LT *r = pushlist.exchange(nullptr, /*std::memory_order_consume*/std::memory_order_acquire);
             if (!r)
-                return false; // the both poplist and poplist were empty
+                return nullptr; // the both poplist and poplist were empty
             // Reverse the previous pushlist (now in r) into poplist, and return
             // the last item (the oldest pushed item) as the result of the pop.
             while (r->next) {
@@ -88,8 +88,7 @@ public:
                 poplist = r;
                 r = next;
             }
-            *result = r->value;
-            return true;
+            return r;
         }
     }
 
