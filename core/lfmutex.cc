@@ -131,11 +131,11 @@ void mutex::unlock()
     // another lock() queued itself - but if it did, wouldn't the next
     // iteration just pop and return?
     while(true) {
-        sched::thread *thread;
-        if (waitqueue.pop(&thread)) {
-            depth = 1;
-            owner.store(thread, std::memory_order_relaxed);
-            //assert(thread!=current); // this thread isn't waiting, we know that :(
+        linked_item<sched::thread *> *other = waitqueue.pop();
+        if (other) {
+            sched::thread *thread = other->value;
+            other->value = nullptr;
+            assert(thread!=sched::thread::current()); // this thread isn't waiting, we know that :(
             thread->wake();
             return;
         }
