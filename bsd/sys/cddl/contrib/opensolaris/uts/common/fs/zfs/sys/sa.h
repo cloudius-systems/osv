@@ -26,7 +26,7 @@
 #define	_SYS_SA_H
 
 #include <sys/dmu.h>
-#include <sys/uio.h>
+#include <sys/solaris_uio.h>
 
 /*
  * Currently available byteswap functions.
