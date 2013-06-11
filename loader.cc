@@ -89,7 +89,7 @@ elf::program* prog;
 
 int main(int ac, char **av)
 {
-    debug("Loader Copyright 2013 Unnamed\n");
+    debug("Loader Copyright 2013 Cloudius Systems\n");
 
     test_locale();
     idt.load_on_cpu();
