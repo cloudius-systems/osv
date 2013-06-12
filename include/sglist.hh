@@ -16,15 +16,17 @@ public:
 
     const int max_sgs = 1000;
 
-    sglist() : _nsgs(0), _max_sgs(max_sgs) {};
-    sglist(int n) : _nsgs(n), _max_sgs(max_sgs) {};
+    sglist() : _tot_len(0), _nsgs(0), _max_sgs(max_sgs) {};
+    sglist(int n) : _tot_len(0), _nsgs(n), _max_sgs(max_sgs) {};
 
     int get_sgs() {return _nsgs;}
 
     bool add(u64 paddr, u32 len, bool front=false);
+    int len() { return _tot_len; }
     void dump();
 
     std::list<struct sg_node> _nodes;
+    int _tot_len;
     int _nsgs;
     int _max_sgs;
 };
