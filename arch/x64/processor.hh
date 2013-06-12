@@ -264,6 +264,14 @@ inline void cli()
     asm volatile ("cli" : : : "memory");
 }
 
+__attribute__((no_instrument_function))
+inline void cli_notrace();
+
+inline void cli_notrace()
+{
+    asm volatile ("cli" : : : "memory");
+}
+
 inline u64 rdtsc()
 {
     u32 lo, hi;
