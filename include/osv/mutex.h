@@ -5,6 +5,54 @@
 #include <string.h>
 #include <stdint.h>
 
+// To replace the spin-lock-based mutex with lockfree::mutex everywhere,
+// change #undef LOCKFREE_MUTEX here to #define.
+#undef LOCKFREE_MUTEX
+
+#ifdef LOCKFREE_MUTEX
+#define LOCKFREE_MUTEX_SIZE 40
+#ifdef __cplusplus
+/** C++ **/
+#include <lockfree/mutex.hh>
+typedef lockfree::mutex mutex;
+typedef lockfree::mutex mutex_t;
+static_assert(sizeof(mutex) == LOCKFREE_MUTEX_SIZE, "LOCKFREE_MUTEX_SIZE should match lockfree::mutex");
+static inline void mutex_lock(mutex_t* m)
+{
+    m->lock();
+}
+static inline bool mutex_trylock(mutex_t* m)
+{
+    return m->try_lock();
+}
+static inline void mutex_unlock(mutex_t* m)
+{
+    return m->unlock();
+}
+static inline bool mutex_owned(mutex_t* m)
+{
+    return m->owned();
+}
+#else
+/** C **/
+typedef struct mutex {
+    char byte[LOCKFREE_MUTEX_SIZE];
+} mutex_t;
+void lockfree_mutex_lock(void *m);
+void lockfree_mutex_unlock(void *m);
+bool lockfree_mutex_try_lock(void *m);
+bool lockfree_mutex_owned(void *m);
+static inline void mutex_lock(mutex_t *m) { lockfree_mutex_lock(m); }
+static inline void mutex_unlock(mutex_t *m) { lockfree_mutex_unlock(m); }
+static inline bool mutex_trylock(mutex_t *m) { return lockfree_mutex_try_lock(m); }
+static inline bool mutex_owned(mutex_t *m) { return lockfree_mutex_owned(m); }
+#endif
+/** both C and C++ code currently use these, though they should be C-only  **/
+static inline void mutex_init(mutex_t* m) { memset(m, 0, sizeof(mutex_t)); }
+static inline void mutex_destroy(mutex_t* m) { }
+#define MUTEX_INITIALIZER   {}
+#endif /* LOCKFREE_MUTEX */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,6 +90,7 @@ void spinlock::unlock()
 
 // Mutex:
 
+#ifndef LOCKFREE_MUTEX
 typedef struct mutex {
     struct wait_list {
         struct waiter *first;
@@ -84,10 +133,12 @@ static inline void mutex_init(mutex_t* m)
 static inline void mutex_destroy(mutex_t* m)
 {
 }
+#endif
 
 #ifdef __cplusplus
 }
 
+#ifndef LOCKFREE_MUTEX
 mutex::mutex()
 {
     mutex_init(this);
@@ -112,6 +163,7 @@ bool mutex::owned()
 {
     return mutex_owned(this);
 }
+#endif
 
 #include <mutex>
 

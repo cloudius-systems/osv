@@ -12,6 +12,7 @@
 
 #include <osv/mutex.h>
 #include <osv/condvar.h>
+#include <osv/lazy_indirect.hh>
 
 namespace pthread_private {
 
@@ -176,6 +177,28 @@ pthread_t pthread_self()
     return current_pthread;
 }
 
+#ifdef LOCKFREE_MUTEX
+typedef lazy_indirect<mutex> indirect_mutex;
+static_assert(sizeof(indirect_mutex) <= sizeof(pthread_mutex_t), "mutex overflow");
+static_assert(sizeof(indirect_mutex) <= 16, "pthread_mutex_t not zeroed at byte 16");
+int pthread_mutex_init(pthread_mutex_t* __restrict m,
+        const pthread_mutexattr_t* __restrict attr)
+{
+    // FIXME: respect attr
+    new (m) indirect_mutex;
+    return 0;
+}
+int pthread_mutex_destroy(pthread_mutex_t *m)
+{
+    reinterpret_cast<indirect_mutex*>(m)->~indirect_mutex();
+    return 0;
+}
+mutex* from_libc(pthread_mutex_t* m)
+{
+    return reinterpret_cast<indirect_mutex*>(m)->get();
+}
+
+#else
 static_assert(sizeof(mutex) <= sizeof(pthread_mutex_t), "mutex overflow");
 
 mutex* from_libc(pthread_mutex_t* m)
@@ -196,6 +219,7 @@ int pthread_mutex_destroy(pthread_mutex_t *m)
     from_libc(m)->~mutex();
     return 0;
 }
+#endif
 
 int pthread_mutex_lock(pthread_mutex_t *m)
 {
@@ -230,6 +254,27 @@ int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
     return sigprocmask(how, set, oldset);
 }
 
+#ifdef LOCKFREE_MUTEX
+typedef lazy_indirect<condvar> indirect_condvar;
+static_assert(sizeof(indirect_condvar) < sizeof(pthread_cond_t), "condvar overflow");
+int pthread_cond_init(pthread_cond_t* __restrict c,
+        const pthread_condattr_t* __restrict attr)
+{
+    // FIXME: respect attr
+    new (c) indirect_condvar;
+    return 0;
+}
+int pthread_cond_destroy(pthread_cond_t *c)
+{
+    reinterpret_cast<indirect_condvar*>(c)->~indirect_condvar();
+    return 0;
+}
+condvar* from_libc(pthread_cond_t* c)
+{
+    return reinterpret_cast<indirect_condvar*>(c)->get();
+}
+
+#else
 condvar* from_libc(pthread_cond_t* cond)
 {
     return reinterpret_cast<condvar*>(cond);
@@ -247,6 +292,7 @@ int pthread_cond_destroy(pthread_cond_t* cond)
 {
     return 0;
 }
+#endif
 
 int pthread_cond_broadcast(pthread_cond_t *cond)
 {

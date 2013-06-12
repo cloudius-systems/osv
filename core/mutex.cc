@@ -5,6 +5,7 @@
 #include <cassert>
 #include "osv/trace.hh"
 
+#ifndef LOCKFREE_MUTEX
 static_assert(sizeof(mutex) <= sizeof(pthread_mutex_t), "mutex too big");
 static_assert(offsetof(mutex, _hole_for_pthread_compatiblity) == 16, "mutex hole in wrong place");
 
@@ -13,9 +14,11 @@ tracepoint<21002, mutex_t*, void*> trace_mutex_unlock("mutex_unlock", "%p at RIP
 tracepoint<21003, mutex_t*, void*> trace_mutex_wait("mutex_lock_wait", "%p held by %p");
 
 struct waiter {
-    struct waiter*	next;
-    sched::thread*	thread;
+    struct waiter* next;
+    sched::thread* thread;
 };
+#endif
+
 
 void spin_lock(spinlock_t *sl)
 {
@@ -30,6 +33,7 @@ void spin_unlock(spinlock_t *sl)
     arch::irq_enable();
 }
 
+#ifndef LOCKFREE_MUTEX
 void mutex_lock(mutex_t *mutex)
 {
     struct waiter w;
@@ -101,3 +105,4 @@ bool mutex_owned(mutex_t* mutex)
 {
     return (mutex->_owner == sched::thread::current());
 }
+#endif
