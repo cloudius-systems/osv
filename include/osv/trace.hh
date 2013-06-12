@@ -12,6 +12,7 @@
 #include <unordered_set>
 #include <drivers/clock.hh>
 #include <cstring>
+#include <arch.hh>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
@@ -267,7 +268,9 @@ public:
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
         if (enabled) {
-            sched::preempt_disable();
+            arch::irq_flag_notrace irq;
+            irq.save();
+            arch::irq_disable_notrace();
             auto tr = allocate_trace_record(size());
             tr->tp = this;
             tr->thread = sched::thread::current();
@@ -277,7 +280,7 @@ public:
                 tr->cpu = tr->thread->tcpu()->id;
             }
             serialize(tr->buffer, as);
-            sched::preempt_enable();
+            irq.restore();
         }
     }
     void serialize(void* buffer, std::tuple<s_args...> as) {
