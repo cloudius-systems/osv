@@ -212,6 +212,7 @@ private:
     arch_fpu _fpu;
     unsigned long _id;
     u64 _vruntime;
+    static const u64 max_vruntime = std::numeric_limits<u64>::max();
     u64 _borrow;
     std::function<void ()> _cleanup;
     friend void thread_main_c(thread* t);

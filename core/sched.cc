@@ -165,7 +165,11 @@ void cpu::enqueue(thread& t, u64 now)
     trace_queue(&t);
     auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
     auto tail = head + max_slice * runqueue.size();
-    if (t._vruntime > tail) {
+    // special treatment for idle thread: make sure it is in the back of the queue
+    if (&t == &idle_thread) {
+        t._vruntime = thread::max_vruntime;
+        t._borrow = 0;
+    } else if (t._vruntime > tail) {
         t._borrow = t._vruntime - tail;
     } else {
         t._borrow = 0;
