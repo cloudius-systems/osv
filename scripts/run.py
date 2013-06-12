@@ -31,9 +31,7 @@ def set_imgargs():
 def start_osv():
     args = [
         "-vnc", ":1",
-        "-enable-kvm",
         "-gdb", "tcp::1234,server,nowait",
-        "-cpu", "host,+x2apic",
         "-m", cmdargs.memsize,
         "-smp", cmdargs.vcpus,
         "-chardev", "stdio,mux=on,id=stdio",
@@ -49,6 +47,17 @@ def start_osv():
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
         
+    if (cmdargs.hypervisor == "kvm"):
+        args += ["-enable-kvm", "-cpu", "host,+x2apic"]
+    elif ((cmdargs.hypervisor == "xen") or (cmdargs.hypervisor == "xenpv")):
+        print >> sys.stderr, "Support for Xen hypervisor not implemented"
+        return;
+    elif ((cmdargs.hypervisor == "none") or (cmdargs.hypervisor == "qemu")):
+        pass
+    else:
+        print >> sys.stderr, "Unrecognized hypervisor selected"
+        return;
+
     try:
         # Save the current settings of the stty
         stty_save()
@@ -77,6 +86,8 @@ if (__name__ == "__main__"):
                         help="specify number of vcpus")
     parser.add_argument("-e", "--execute", action="store", default=None, metavar="CMD",
                         help="edit command line before execution")
+    parser.add_argument("-p", "--hypervisor", action="store", default="kvm",
+                        help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
     
