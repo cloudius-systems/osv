@@ -299,6 +299,7 @@ struct cpu {
 void preempt();
 void preempt_disable() __attribute__((no_instrument_function));
 void preempt_enable() __attribute__((no_instrument_function));
+bool preemptable() __attribute__((no_instrument_function));
 
 thread* current();
 

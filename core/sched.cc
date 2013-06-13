@@ -481,9 +481,14 @@ void preempt_disable()
 void preempt_enable()
 {
     --preempt_counter;
-    if (!preempt_counter && need_reschedule && arch::irq_enabled()) {
+    if (preemptable() && need_reschedule && arch::irq_enabled()) {
         schedule();
     }
+}
+
+bool preemptable()
+{
+    return (!preempt_counter);
 }
 
 unsigned int get_preempt_counter()
@@ -493,7 +498,7 @@ unsigned int get_preempt_counter()
 
 void preempt()
 {
-    if (!preempt_counter) {
+    if (preemptable()) {
         sched::cpu::current()->reschedule_from_interrupt(true);
     } else {
         // preempt_enable() will pick this up eventually
