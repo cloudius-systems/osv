@@ -1,5 +1,5 @@
-#include "clock.hh"
 #include <assert.h>
+#include "clock.hh"
 
 clock* clock::_c;
 

@@ -18,4 +18,9 @@ struct pvclock_vcpu_time_info {
          u8    flags;
          u8    pad[2];
 } __attribute__((__packed__)); /* 32 bytes */
+
+namespace pvclock {
+u64 wall_clock_boot(pvclock_wall_clock *_wall);
+u64 system_time(pvclock_vcpu_time_info *sys);
+};
 #endif

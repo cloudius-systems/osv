@@ -397,6 +397,7 @@ drivers += $(bsd) $(solaris)
 drivers += core/mmu.o
 drivers += core/elf.o
 drivers += core/interrupt.o
+drivers += core/pvclock-abi.o
 drivers += drivers/device.o
 drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
 drivers += drivers/driver.o

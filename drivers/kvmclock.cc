@@ -6,24 +6,9 @@
 #include "cpuid.hh"
 #include "barrier.hh"
 #include <osv/percpu.hh>
+#include <osv/pvclock-abi.hh>
 
 class kvmclock : public clock {
-private:
-    struct pvclock_wall_clock {
-            u32   version;
-            u32   sec;
-            u32   nsec;
-    } __attribute__((__packed__));
-    struct pvclock_vcpu_time_info {
-             u32   version;
-             u32   pad0;
-             u64   tsc_timestamp;
-             u64   system_time;
-             u32   tsc_to_system_mul;
-             s8    tsc_shift;
-             u8    flags;
-             u8    pad[2];
-     } __attribute__((__packed__)); /* 32 bytes */
 public:
     kvmclock();
     virtual u64 time() __attribute__((no_instrument_function));
@@ -40,12 +25,12 @@ private:
 };
 
 bool kvmclock::_smp_init = false;
-PERCPU(kvmclock::pvclock_vcpu_time_info, kvmclock::_sys);
+PERCPU(pvclock_vcpu_time_info, kvmclock::_sys);
 
 kvmclock::kvmclock()
     : cpu_notifier(&kvmclock::setup_cpu)
 {
-    _wall = new kvmclock::pvclock_wall_clock;
+    _wall = new pvclock_wall_clock;
     memset(_wall, 0, sizeof(*_wall));
     processor::wrmsr(msr::KVM_WALL_CLOCK_NEW, mmu::virt_to_phys(_wall));
     _wall_ns = wall_clock_boot();
@@ -73,43 +58,16 @@ u64 kvmclock::time()
 
 u64 kvmclock::wall_clock_boot()
 {
-    u32 v1, v2;
-    u64 w;
-    do {
-        v1 = _wall->version;
-        barrier();
-        w = u64(_wall->sec) * 1000000000 + _wall->nsec;
-        barrier();
-        v2 = _wall->version;
-    } while (v1 != v2);
-    return w;
+    return pvclock::wall_clock_boot(_wall);
 }
 
 u64 kvmclock::system_time()
 {
-    u32 v1, v2;
-    u64 time;
     sched::preempt_disable();
     auto sys = &*_sys;  // avoid recaclulating address each access
-    do {
-        v1 = sys->version;
-        barrier();
-        time = processor::rdtsc() - sys->tsc_timestamp;
-        if (sys->tsc_shift >= 0) {
-            time <<= sys->tsc_shift;
-        } else {
-            time >>= -sys->tsc_shift;
-        }
-        asm("mul %1; shrd $32, %%rdx, %0"
-                : "+a"(time)
-                : "rm"(u64(sys->tsc_to_system_mul))
-                : "rdx");
-        time += sys->system_time;
-        barrier();
-        v2 = sys->version;
-    } while (v1 != v2);
+    auto r = pvclock::system_time(sys);
     sched::preempt_enable();
-    return time;
+    return r;
 }
 
 static __attribute__((constructor)) void setup_kvmclock()
