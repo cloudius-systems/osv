@@ -8,6 +8,7 @@ extern "C" {
 #include "sched.hh"
 #include "drivers/clock.hh"
 #include "processor.hh"
+#include "align.hh"
 
 #include <osv/mutex.h>
 #include <osv/semaphore.hh>
@@ -139,11 +140,22 @@ void AcpiOsFree(void *Memory)
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS Where, ACPI_SIZE Length)
 {
+    size_t page_align = 4096;
+    size_t map_size = align_up(Length, page_align);
+    uint64_t _where = align_down(Where, map_size);
+    
+    mmu::linear_map(mmu::phys_to_virt(_where), _where, map_size, map_size);
     return mmu::phys_to_virt(Where);
 }
 
 void AcpiOsUnmapMemory(void *LogicalAddress, ACPI_SIZE Size)
+
 {
+    size_t page_align = 4096;
+    size_t map_size = align_up(Size, page_align);
+    void *_where = align_down(LogicalAddress, map_size);
+    
+    mmu::unmap(_where, map_size);
 }
 
 ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
