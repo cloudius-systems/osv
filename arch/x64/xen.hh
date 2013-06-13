@@ -31,6 +31,7 @@ struct xen_shared_info {
 namespace xen {
 
 void xen_init(processor::features_type &features, unsigned base);
+extern struct xen_shared_info xen_shared_info;
 
 }
 

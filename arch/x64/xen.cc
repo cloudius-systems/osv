@@ -79,7 +79,7 @@ struct xen_add_to_physmap {
     unsigned long gpfn;
 };
 
-static struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
+struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
 
 static bool xen_pci_enabled()
 {
