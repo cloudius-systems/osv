@@ -212,6 +212,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
     u64 cur = clock::get()->time();
     int cur_ticks = ns2ticks(cur);
     int result = 0;
+    bool queued_first = false;
 
     callouts::lock();
 
@@ -229,10 +230,15 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
     c->c_flags |= (CALLOUT_PENDING | CALLOUT_ACTIVE);
 
     callouts::add_callout(c);
-    callouts::mark_have_work();
+    if (c == callouts::get_one()) {
+        callouts::mark_have_work();
+        queued_first = true;
+    }
+
     callouts::unlock();
 
-    callouts::wake_dispatcher();
+    if (queued_first)
+        callouts::wake_dispatcher();
 
     return result;
 }
