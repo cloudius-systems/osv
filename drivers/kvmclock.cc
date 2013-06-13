@@ -34,6 +34,7 @@ private:
 private:
     static bool _smp_init;
     pvclock_wall_clock* _wall;
+    u64  _wall_ns;
     static PERCPU(pvclock_vcpu_time_info, _sys);
     sched::cpu::notifier cpu_notifier;
 };
@@ -47,6 +48,7 @@ kvmclock::kvmclock()
     _wall = new kvmclock::pvclock_wall_clock;
     memset(_wall, 0, sizeof(*_wall));
     processor::wrmsr(msr::KVM_WALL_CLOCK_NEW, mmu::virt_to_phys(_wall));
+    _wall_ns = wall_clock_boot();
 }
 
 void kvmclock::setup_cpu()
@@ -59,7 +61,7 @@ void kvmclock::setup_cpu()
 u64 kvmclock::time()
 {
     sched::preempt_disable();
-    auto r = wall_clock_boot();
+    auto r = _wall_ns;
     // Due to problems in init order dependencies (the clock depends
     // on the scheduler, for percpu initialization, and vice-versa, for
     // idle thread initialization, don't loop up system time until at least
