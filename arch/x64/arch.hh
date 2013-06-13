@@ -14,6 +14,14 @@ inline void irq_disable()
     processor::cli();
 }
 
+__attribute__((no_instrument_function))
+inline void irq_disable_notrace();
+
+inline void irq_disable_notrace()
+{
+    processor::cli_notrace();
+}
+
 inline void irq_enable()
 {
     processor::sti();
@@ -40,6 +48,32 @@ public:
 private:
     unsigned long _rflags;
 };
+
+class irq_flag_notrace {
+public:
+    // need to clear the red zone when playing with the stack. also, can't
+    // use "m" constraint as it might be addressed relative to %rsp
+    __attribute__((no_instrument_function)) void save();
+    __attribute__((no_instrument_function)) void restore();
+    __attribute__((no_instrument_function)) bool enabled() const;
+private:
+    unsigned long _rflags;
+};
+
+inline void irq_flag_notrace::save()
+{
+    asm volatile("sub $128, %%rsp; pushfq; popq %0; add $128, %%rsp" : "=r"(_rflags));
+}
+
+inline void irq_flag_notrace::restore()
+{
+    asm volatile("sub $128, %%rsp; pushq %0; popfq; add $128, %%rsp" : : "r"(_rflags));
+}
+
+inline bool irq_flag_notrace::enabled() const
+{
+    return _rflags & 0x200;
+}
 
 inline bool irq_enabled()
 {

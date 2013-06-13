@@ -149,12 +149,21 @@ trace_record* allocate_trace_record(size_t size)
     return reinterpret_cast<trace_record*>(&trace_log[pn % max_trace]);
 }
 
+static __thread unsigned func_trace_nesting;
+
 extern "C" void __cyg_profile_func_enter(void *this_fn, void *call_site)
 {
     if (!trace_enabled) {
         return;
     }
-    trace_function_entry(this_fn, call_site);
+    arch::irq_flag_notrace irq;
+    irq.save();
+    arch::irq_disable_notrace();
+    if (func_trace_nesting++ == 0) {
+        trace_function_entry(this_fn, call_site);
+    }
+    --func_trace_nesting;
+    irq.restore();
 }
 
 extern "C" void __cyg_profile_func_exit(void *this_fn, void *call_site)
@@ -162,6 +171,13 @@ extern "C" void __cyg_profile_func_exit(void *this_fn, void *call_site)
     if (!trace_enabled || !arch::tls_available()) {
         return;
     }
-    trace_function_exit(this_fn, call_site);
+    arch::irq_flag_notrace irq;
+    irq.save();
+    arch::irq_disable_notrace();
+    if (func_trace_nesting++ == 0) {
+        trace_function_exit(this_fn, call_site);
+    }
+    --func_trace_nesting;
+    irq.restore();
 }
 
