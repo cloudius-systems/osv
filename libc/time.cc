@@ -1,5 +1,6 @@
 #include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 #include "libc.hh"
 #include "drivers/clock.hh"
 #include "sched.hh"
@@ -26,6 +27,12 @@ int gettimeofday(struct timeval* tv, struct timezone* tz)
 int nanosleep(const struct timespec* req, struct timespec* rem)
 {
     sched::thread::sleep_until(clock::get()->time() + convert(*req));
+    return 0;
+}
+
+int usleep(useconds_t usec)
+{
+    sched::thread::sleep_until(clock::get()->time() + usec * 1_us);
     return 0;
 }
 
