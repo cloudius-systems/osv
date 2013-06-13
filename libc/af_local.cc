@@ -109,16 +109,22 @@ int shutdown_af_local(int fd, int how) {
     switch (how) {
     case SHUT_RD:
         afl->receive->detach_receiver();
+        FD_LOCK(f);
         f->f_flags &= ~FREAD;
+        FD_UNLOCK(f);
         break;
     case SHUT_WR:
         afl->send->detach_sender();
+        FD_LOCK(f);
         f->f_flags &= ~FWRITE;
+        FD_UNLOCK(f);
         break;
     case SHUT_RDWR:
         afl->receive->detach_receiver();
         afl->send->detach_sender();
+        FD_LOCK(f);
         f->f_flags &= ~(FREAD|FWRITE);
+        FD_UNLOCK(f);
         break;
     default:
         return EINVAL;
