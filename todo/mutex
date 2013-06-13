@@ -1,17 +1,17 @@
-Replace spinlock-based mutex by lockfree mutext
-===============================================
-
-<lockfree/mutex.hh> seems functional, but to replace the spinlock-based mutex
-with it, we'll should do the following:
-
 1. Make the structure smaller
 -----------------------------
-It can be 36 bytes if we also make condvar (which contains a mutex) smaller,
-or if we make it 32 bytes, we don't need to change condvar.
+If we reduce mutex's size (currently 40 bytes) to 36 bytes, and also
+additionally reduce the size of condvar, we can use mutex and condvar
+directly in the pthread implementation instead of lazy_indirect<>.
 
-Some ideas on how to make the structure smaller:
+We shouldn't do this unless there's evidence that lazy_indirect is
+hurting performance.
+
+Some ideas on how to make the structures smaller:
 1. Make sequence, handoff, and/or depth 16-bit (in osv/mutex.h depth is
    already 16-bit).
+   Can also make "count" 16-bit, but this will limit the number of waiting
+   threads to 65536, so probably not a good idea.
 2. Make queue_mpsc's two pointers 32-bit. On thread creation, give each
    thread a 32-bit pointer (or a recycled thread_id - see below - indexing
    a global array) which can be used instead of putting the wait struct on
@@ -20,49 +20,12 @@ Some ideas on how to make the structure smaller:
 4. Have a new recycled low (32-bit) numeric "threadid" and use it for owner
    instead of a 64-bit pointer.
 
-2. More testing
----------------
-
-Write more tests for the lockfree mutex. The most difficult part of the
-algorithm, the "handoff", happens only when the queue is empty, so the
-best chance to see this in action would probably be to test with only two
-pinned threads.
-
-3. Memory ordering
+2. Memory ordering
 ------------------
 
 Using sequential memory ordering for all atomic variables is definitely
-not needed, and significantly slows down the mutex. I started relaxing the
-memory ordering, and saw a significant improvement in the uncontended case,
-but I need to complete this work.
-
-4. Benchmark
-------------
-
-Write a benchmark for the uncontended case (done), and for some sort of
-contended case, and compare its performance to the old spinlock and mutex.
-
-4. Clean up the code
---------------------
-
-Don't put everything in the .h. See how we can most as much as possible to
-the .cc, without hurting performance.
-
-Also make the lockfree mutex usable from C. Think if we can do this with
-the same type, as we did in <osv/mutex.h>. Perhaps we'll need to switch
-from using the atomic<int> type to using just int and global std::atomic
-functions.
-
-5. "Fishy" things to look at again
-----------------------------------
-
-Think - and *test* - the issue of spurious wake() coming from other code.
-Replace the "lock guard" by an explicit prepare_wait(), and later replace
-the schedule by a loop, doing a new prepare_wait() every time schedule()
-returns when we're still not owner.
-
-Think and test: Write a "half lock" which increases count but doesn't add
-anything to the queue. This causes every lock()/unlock() to use the handoff
-protocol, allowing us to 1. test it. 2. see how much performance drops.
-Consider the interesting theoretical problem: why should an uncompleted,
-hung, lock, slow down now all the lock/unlock? Can't there be a better way?
+not needed, and significantly slows down the mutex. I already relaxed the
+memory ordering in the fast path, and saw a significant improvement in
+the uncontended case, but I need to complete this work in the handoff case.
+See the measure_uncontended<handoff_stressing_mutex> for measuring this case
+(currently I see 48 ns instead of 29 ns for the non-handoff case).
