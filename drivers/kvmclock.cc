@@ -5,6 +5,7 @@
 #include "string.h"
 #include "cpuid.hh"
 #include "barrier.hh"
+#include <osv/percpu.hh>
 
 class kvmclock : public clock {
 private:
@@ -29,26 +30,45 @@ public:
 private:
     u64 wall_clock_boot();
     u64 system_time();
+    static void setup_cpu();
 private:
+    static bool _smp_init;
     pvclock_wall_clock* _wall;
-    pvclock_vcpu_time_info* _sys;  // FIXME: make percpu
+    static PERCPU(pvclock_vcpu_time_info, _sys);
+    sched::cpu::notifier cpu_notifier;
 };
 
+bool kvmclock::_smp_init = false;
+PERCPU(kvmclock::pvclock_vcpu_time_info, kvmclock::_sys);
+
 kvmclock::kvmclock()
+    : cpu_notifier(&kvmclock::setup_cpu)
 {
     _wall = new kvmclock::pvclock_wall_clock;
-    _sys = new kvmclock::pvclock_vcpu_time_info;
     memset(_wall, 0, sizeof(*_wall));
-    memset(_sys, 0, sizeof(*_sys));
     processor::wrmsr(msr::KVM_WALL_CLOCK_NEW, mmu::virt_to_phys(_wall));
-    // FIXME: on each cpu
-    processor::wrmsr(msr::KVM_SYSTEM_TIME_NEW, mmu::virt_to_phys(_sys) | 1);
+}
+
+void kvmclock::setup_cpu()
+{
+    memset(&*_sys, 0, sizeof(*_sys));
+    processor::wrmsr(msr::KVM_SYSTEM_TIME_NEW, mmu::virt_to_phys(&*_sys) | 1);
+    _smp_init = true;
 }
 
 u64 kvmclock::time()
 {
-    // FIXME: disable interrupts
-    return wall_clock_boot() + system_time();
+    sched::preempt_disable();
+    auto r = wall_clock_boot();
+    // Due to problems in init order dependencies (the clock depends
+    // on the scheduler, for percpu initialization, and vice-versa, for
+    // idle thread initialization, don't loop up system time until at least
+    // one cpu is initialized.
+    if (_smp_init) {
+        r += system_time();
+    }
+    sched::preempt_enable();
+    return r;
 }
 
 u64 kvmclock::wall_clock_boot()
@@ -69,22 +89,23 @@ u64 kvmclock::system_time()
 {
     u32 v1, v2;
     u64 time;
+    auto sys = &*_sys;  // avoid recaclulating address each access
     do {
-        v1 = _sys->version;
+        v1 = sys->version;
         barrier();
-        time = processor::rdtsc() - _sys->tsc_timestamp;
-        if (_sys->tsc_shift >= 0) {
-            time <<= _sys->tsc_shift;
+        time = processor::rdtsc() - sys->tsc_timestamp;
+        if (sys->tsc_shift >= 0) {
+            time <<= sys->tsc_shift;
         } else {
-            time >>= -_sys->tsc_shift;
+            time >>= -sys->tsc_shift;
         }
         asm("mul %1; shrd $32, %%rdx, %0"
                 : "+a"(time)
-                : "rm"(u64(_sys->tsc_to_system_mul))
+                : "rm"(u64(sys->tsc_to_system_mul))
                 : "rdx");
-        time += _sys->system_time;
+        time += sys->system_time;
         barrier();
-        v2 = _sys->version;
+        v2 = sys->version;
     } while (v1 != v2);
     return time;
 }
