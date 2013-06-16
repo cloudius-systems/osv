@@ -273,7 +273,7 @@ typedef bi::rbtree<thread,
                   > runqueue_type;
 
 struct cpu {
-    explicit cpu();
+    explicit cpu(unsigned id);
     unsigned id;
     struct arch_cpu arch;
     thread* bringup_thread;

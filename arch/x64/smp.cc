@@ -46,8 +46,7 @@ void parse_madt()
             if (!(lapic->LapicFlags & ACPI_MADT_ENABLED)) {
                 break;
             }
-            auto c = new sched::cpu;
-            c->id = idgen++;
+            auto c = new sched::cpu(idgen++);
             c->arch.apic_id = lapic->Id;
             c->arch.acpi_id = lapic->ProcessorId;
             c->arch.initstack.next = smp_stack_free;

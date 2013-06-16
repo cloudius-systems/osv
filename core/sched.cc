@@ -51,8 +51,9 @@ private:
     thread _thread;
 };
 
-cpu::cpu()
-    : idle_thread([this] { idle(); }, thread::attr(this))
+cpu::cpu(unsigned _id)
+    : id(_id)
+    , idle_thread([this] { idle(); }, thread::attr(this))
 {
 }
 
