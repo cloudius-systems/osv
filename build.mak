@@ -434,6 +434,7 @@ objects += core/trace.o
 objects += core/poll.o
 objects += core/select.o
 objects += core/power.o
+objects += core/percpu.o
 
 include $(src)/fs/build.mak
 include $(src)/libc/build.mak

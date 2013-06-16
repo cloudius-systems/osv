@@ -10,6 +10,7 @@
 #include "interrupt.hh"
 #include "smp.hh"
 #include "osv/trace.hh"
+#include <osv/percpu.hh>
 
 namespace sched {
 
@@ -55,6 +56,7 @@ cpu::cpu(unsigned _id)
     : id(_id)
     , idle_thread([this] { idle(); }, thread::attr(this))
 {
+    percpu_init(id);
 }
 
 void cpu::schedule(bool yield)
