@@ -4,6 +4,7 @@
 #include <atomic>
 #include <regex>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/range/algorithm/remove.hpp>
 #include <debug.hh>
 
 tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
@@ -95,10 +96,23 @@ tracepoint_base::~tracepoint_base()
 
 void tracepoint_base::enable()
 {
-    if (enabled) {
-        return;
+    logging = true;
+    update();
+}
+
+void tracepoint_base::update()
+{
+    bool new_active = logging || !probes.empty();
+    if (new_active && !active) {
+        activate();
+    } else if (!new_active && active) {
+        deactivate();
     }
-    enabled = true;
+}
+
+void tracepoint_base::activate()
+{
+    active = true;
     for (auto& tps : tracepoint_patch_sites) {
         if (id == tps.id) {
             auto dst = static_cast<char*>(tps.slow_path);
@@ -110,6 +124,28 @@ void tracepoint_base::enable()
     }
 }
 
+void tracepoint_base::deactivate()
+{
+    active = false;
+    for (auto& tps : tracepoint_patch_sites) {
+        if (id == tps.id) {
+            auto p = static_cast<u8*>(tps.patch_site);
+            // FIXME: can fail on smp.
+            p[0] = 0x0f;
+            p[1] = 0x1f;
+            p[2] = 0x44;
+            p[3] = 0x00;
+            p[4] = 0x00;
+        }
+    }
+}
+
+void tracepoint_base::run_probes() {
+    for (auto probe : probes) {
+        probe->hit();
+    }
+}
+
 void tracepoint_base::try_enable()
 {
     for (auto& re : enabled_tracepoint_regexs) {
@@ -117,6 +153,21 @@ void tracepoint_base::try_enable()
             enable();
         }
     }
+}
+
+void tracepoint_base::add_probe(probe* p)
+{
+    // FIXME: locking
+    probes.push_back(p);
+    update();
+}
+
+void tracepoint_base::del_probe(probe* p)
+{
+    // FIXME: locking
+    auto i = boost::remove(probes, p);
+    probes.erase(i, probes.end());
+    update();
 }
 
 std::unordered_set<tracepoint_id>& tracepoint_base::known_ids()

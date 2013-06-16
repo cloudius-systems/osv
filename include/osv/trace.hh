@@ -211,15 +211,21 @@ typedef std::tuple<const std::type_info*, unsigned long> tracepoint_id;
 
 class tracepoint_base {
 public:
+    struct probe {
+        virtual ~probe() {}
+        virtual void hit() = 0;
+    };
+public:
     explicit tracepoint_base(unsigned _id, const std::type_info& _tp_type,
                              const char* _name, const char* _format);
     ~tracepoint_base();
     void enable();
+    void add_probe(probe* p);
+    void del_probe(probe* p);
     tracepoint_id id;
     const char* name;
     const char* format;
     u64 sig;
-    bool enabled = false;
     typedef boost::intrusive::list_member_hook<> tp_list_link_type;
     tp_list_link_type tp_list_link;
     static boost::intrusive::list<
@@ -229,8 +235,16 @@ public:
                                       &tracepoint_base::tp_list_link>,
         boost::intrusive::constant_time_size<false>
         > tp_list;
+protected:
+    bool active = false; // logging || !probes.empty()
+    bool logging = false;
+    std::vector<probe*> probes;
+    void run_probes();
 private:
     void try_enable();
+    void activate();
+    void deactivate();
+    void update();
     static std::unordered_set<tracepoint_id>& known_ids();
 };
 
@@ -267,21 +281,29 @@ public:
         trace_slow_path(assign(as...));
     }
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
-        if (enabled) {
+        if (active) {
             arch::irq_flag_notrace irq;
             irq.save();
             arch::irq_disable_notrace();
-            auto tr = allocate_trace_record(size());
-            tr->tp = this;
-            tr->thread = sched::thread::current();
-            tr->time = clock::get()->time();
-            tr->cpu = -1;
-            if (tr->thread) {
-                tr->cpu = tr->thread->tcpu()->id;
-            }
-            serialize(tr->buffer, as);
+#undef log
+            log(as);
+            run_probes();
             irq.restore();
         }
+    }
+    void log(const std::tuple<s_args...>& as) {
+        if (!logging) {
+            return;
+        }
+        auto tr = allocate_trace_record(size());
+        tr->tp = this;
+        tr->thread = sched::thread::current();
+        tr->time = clock::get()->time();
+        tr->cpu = -1;
+        if (tr->thread) {
+            tr->cpu = tr->thread->tcpu()->id;
+        }
+        serialize(tr->buffer, as);
     }
     void serialize(void* buffer, std::tuple<s_args...> as) {
         return serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
