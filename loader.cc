@@ -215,10 +215,12 @@ namespace pthread_private {
 
 void main_cont(int ac, char** av)
 {
+    sched::preempt_disable();
     std::tie(ac, av) = parse_options(ac, av);
     ioapic::init();
     console::console_init();
     smp_launch();
+    sched::preempt_enable();
     memory::enable_debug_allocator();
     enable_trace();
     sched::init_detached_threads_reaper();
