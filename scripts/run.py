@@ -40,6 +40,9 @@ def start_osv():
         "-drive", ("file=build/%s/loader.img,if=virtio,cache=unsafe" % opt_path),
         "-drive", ("file=build/%s/usr.img,if=virtio,cache=unsafe" % opt_path)]
     
+    if (cmdargs.no_shutdown):
+        args += ["-no-reboot", "-no-shutdown"]
+     
     if (cmdargs.networking):
         args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
         args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
@@ -88,6 +91,8 @@ if (__name__ == "__main__"):
                         help="edit command line before execution")
     parser.add_argument("-p", "--hypervisor", action="store", default="kvm",
                         help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
+    parser.add_argument("-H", "--no-shutdown", action="store_true",
+                        help="don't restart qemu automatially (allow debugger to connect on early errors)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
     
