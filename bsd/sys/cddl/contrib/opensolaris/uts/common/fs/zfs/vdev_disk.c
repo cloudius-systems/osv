@@ -193,3 +193,91 @@ vdev_ops_t vdev_disk_ops = {
 	VDEV_TYPE_DISK,		/* name of this vdev type */
 	B_TRUE			/* leaf vdev */
 };
+
+static int
+vdev_disk_physio(struct device *dev, caddr_t data, size_t size,
+    uint64_t offset, int write)
+{
+	struct bio *bio;
+	int ret;
+
+	bio = alloc_bio();
+	if (write)
+		bio->bio_cmd = BIO_READ;
+	else
+		bio->bio_cmd = BIO_WRITE;
+
+	bio->bio_dev = dev;
+	bio->bio_data = data;
+	bio->bio_offset = offset;
+	bio->bio_bcount = size;
+
+	bio->bio_dev->driver->devops->strategy(bio);
+
+	ret = bio_wait(bio);
+	destroy_bio(bio);
+
+	return ret;
+}
+
+/*
+ * Given the root disk device name, read the label from
+ * the device, and construct a configuration nvlist.
+ */
+int
+vdev_disk_read_rootlabel(char *devname, nvlist_t **config)
+{
+	vdev_label_t *label;
+	struct device *dev;
+	uint64_t size;
+	int l;
+	int error = -1;
+	char *minor_name;
+
+	error = device_open(devname, DO_RDWR, &dev);
+	if (error)
+		return error;
+
+	size = P2ALIGN_TYPED(dev->size, sizeof (vdev_label_t), uint64_t);
+	label = kmem_alloc(sizeof (vdev_label_t), KM_SLEEP);
+
+	*config = NULL;
+	for (l = 0; l < VDEV_LABELS; l++) {
+		uint64_t offset, state, txg = 0;
+
+		/* read vdev label */
+		offset = vdev_label_offset(size, l, 0);
+		if (vdev_disk_physio(dev, (caddr_t)label,
+		    VDEV_SKIP_SIZE + VDEV_PHYS_SIZE, offset, 0) != 0)
+			continue;
+
+		if (nvlist_unpack(label->vl_vdev_phys.vp_nvlist,
+		    sizeof (label->vl_vdev_phys.vp_nvlist), config, 0) != 0) {
+			*config = NULL;
+			continue;
+		}
+
+		if (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_STATE,
+		    &state) != 0 || state >= POOL_STATE_DESTROYED) {
+			nvlist_free(*config);
+			*config = NULL;
+			continue;
+		}
+
+		if (nvlist_lookup_uint64(*config, ZPOOL_CONFIG_POOL_TXG,
+		    &txg) != 0 || txg == 0) {
+			nvlist_free(*config);
+			*config = NULL;
+			continue;
+		}
+
+		break;
+	}
+
+	kmem_free(label, sizeof (vdev_label_t));
+	device_close(dev);
+	if (*config == NULL)
+		error = EIDRM;
+
+	return (error);
+}
