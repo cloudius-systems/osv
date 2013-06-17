@@ -1,6 +1,7 @@
 #include <mutex>
 #include <set>
 #include "drivers/clock.hh"
+#include "osv/trace.hh"
 #include "debug.hh"
 #include "sched.hh"
 
@@ -11,7 +12,14 @@ extern "C" {
     #include <bsd/porting/sync_stub.h>
 }
 
-#define cdbg(...) tprintf_d("callout", __VA_ARGS__)
+TRACEPOINT(trace_callout_init, "C=%p", void *);
+TRACEPOINT(trace_callout_reset, "C=%p to_ticks=%d fn=%p arg=%p", void *, uint64_t, void *, void *);
+TRACEPOINT(trace_callout_stop_wait, "C=%p", void *);
+TRACEPOINT(trace_callout_stop, "C=%p flags=%d, is_drain=%d", void *, int, int);
+TRACEPOINT(trace_callout_thread_waiting, "C=%p", void *);
+TRACEPOINT(trace_callout_thread_retry, "C=%p", void *);
+TRACEPOINT(trace_callout_thread_dispatching, "C=%p fn=%p", void *, void *);
+TRACEPOINT(trace_callout_thread_waking, "C=%p thread=%p", void *, void *);
 
 int _callout_stop_safe_locked(struct callout *c, int safe);
 
@@ -120,7 +128,7 @@ static void _callout_thread(void)
             sched::timer t(*sched::thread::current());
             t.set(c->c_to_ns);
 
-            cdbg("*C* C=0x%lx _callout_thread() waiting...", (uint64_t)c);
+            trace_callout_thread_waiting(c);
             sched::thread::wait_until(callouts::_callout_mutex, [&] {
                 return ( (t.expired()) || (callouts::_have_work));
             });
@@ -130,7 +138,7 @@ static void _callout_thread(void)
         }
 
         if (!expired) {
-            cdbg("*C* C=0x%lx _callout_thread() retry", (uint64_t)c);
+            trace_callout_thread_retry(c);
             continue;
         }
 
@@ -151,11 +159,10 @@ static void _callout_thread(void)
 
         c->c_flags &= ~CALLOUT_PENDING;
 
-        cdbg("*C* C=0x%lx _callout_thread() dispatching", (uint64_t)c);
-
         callouts::unlock();
 
         // Callout handler
+        trace_callout_thread_dispatching(c, (void*)fn);
         fn(arg);
 
         callouts::lock();
@@ -173,18 +180,13 @@ static void _callout_thread(void)
         // reset || drain || !stop
         if (callouts::have_callout(c)) {
 
-            cdbg("*C* C=0x%lx _callout_thread() done dispatching", (uint64_t)c);
-
             waiter = callout_get_waiter(c);
             callout_set_waiter(c, NULL);
             // if the callout hadn't been reschedule, remove it
             if ( ((c->c_flags & CALLOUT_PENDING) == 0) || (waiter) ) {
-                cdbg("*C* C=0x%lx _callout_thread() removing callout", (uint64_t)c);
                 c->c_flags |= CALLOUT_COMPLETED;
                 callouts::remove_callout(c);
             }
-        } else {
-            cdbg("*C* C=NULL _callout_thread() done dispatching");
         }
 
         // FIXME: should we do this in case the caller called callout_stop?
@@ -195,12 +197,9 @@ static void _callout_thread(void)
                 mtx_unlock(c_mtx);
         }
 
-        cdbg("*C* C=0x%lx _callout_thread() completed", (uint64_t)c);
-
         // if we have a waiter then the callout structure must be valid
         if (waiter) {
-            cdbg("*C* C=0x%lx _callout_thread() waking 0x%lx",
-                (uint64_t)c, waiter);
+            trace_callout_thread_waking(c, waiter);
             waiter->wake();
         }
     }
@@ -216,8 +215,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
 
     callouts::lock();
 
-    cdbg("*C* C=0x%lx callout_reset_on() to_ticks=%lu fn=0x%lx arg=0x%lx",
-        (uint64_t)c, to_ticks, fn, arg);
+    trace_callout_reset(c, to_ticks, (void*)fn, arg);
 
     result = _callout_stop_safe_locked(c, 0);
 
@@ -248,28 +246,25 @@ int _callout_stop_safe_locked(struct callout *c, int is_drain)
 {
     int result = 0;
 
-    cdbg("*C* C=0x%lx _callout_stop_safe_locked() c->flags=0x%04x is_drain=%d",
-        (uint64_t)c, c->c_flags, is_drain);
+    trace_callout_stop(c, c->c_flags, is_drain);
 
     if ((is_drain) &&
         (sched::thread::current() != callouts::_callout_dispatcher) &&
             (callout_pending(c) ||
              (callout_active(c) && !callout_completed(c))) ) {
 
-        cdbg("*C* C=0x%lx _callout_stop_safe_locked() waiting...", (uint64_t)c);
-
         // Wait for callout
         callout_set_waiter(c, sched::thread::current());
         callouts::mark_have_work();
         callouts::wake_dispatcher();
+
+        trace_callout_stop_wait(c);
 
         sched::thread::wait_until(callouts::_callout_mutex, [&] {
             return (c->c_flags & CALLOUT_COMPLETED);
         });
 
         result = 1;
-        cdbg("*C* C=0x%lx _callout_stop_safe_locked() done waiting",
-            (uint64_t)c);
     }
 
     callouts::remove_callout(c);
@@ -296,7 +291,7 @@ void callout_init(struct callout *c, int mpsafe)
     bzero(c, sizeof *c);
     assert(mpsafe != 0);
 
-    cdbg("*C* C=0x%lx callout_init()", (uint64_t)c);
+    trace_callout_init(c);
 }
 
 void callout_init_rw(struct callout *c, struct rwlock *rw, int flags)
@@ -323,3 +318,4 @@ void init_callouts(void)
     callouts::_callout_dispatcher = new sched::thread(_callout_thread);
     callouts::_callout_dispatcher->start();
 }
+
