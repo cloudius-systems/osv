@@ -489,7 +489,7 @@ usr.img: usr.manifest
 		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
-	java/jni/stty.so
+	java/jni/stty.so java/jni/tracepoint.so
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) $(jni) \

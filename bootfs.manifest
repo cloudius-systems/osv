@@ -99,6 +99,7 @@
 /usr/lib/&/jni/elf-loader.so: java/&
 /usr/lib/&/jni/networking.so: java/&
 /usr/lib/&/jni/stty.so: java/&
+/usr/lib/&/jni/tracepoint.so: java/&
 /tools/ifconfig.so: ./tools/ifconfig/ifconfig.so
 /tools/lsroute.so: ./tools/route/lsroute.so
 /console/util.js: ../../console/util.js
