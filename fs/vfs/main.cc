@@ -1236,9 +1236,11 @@ vfs_init(void)
 	 * Initialize each file system.
 	 */
 	for (fs = vfssw; fs->vs_name; fs++) {
-		DPRINTF(VFSDB_CORE, ("VFS: initializing %s\n",
-				     fs->vs_name));
-		fs->vs_init();
+		if (fs->vs_init) {
+			DPRINTF(VFSDB_CORE, ("VFS: initializing %s\n",
+					     fs->vs_name));
+			fs->vs_init();
+		}
 	}
 
 	mount_rootfs();

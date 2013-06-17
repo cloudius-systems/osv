@@ -29,7 +29,6 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/kernel.h>
 #include <sys/sysmacros.h>
 #include <sys/kmem.h>
 #include <sys/acl.h>
@@ -60,9 +59,9 @@
 #include <sys/dnlc.h>
 #include <sys/dmu_objset.h>
 #include <sys/spa_boot.h>
-#include <sys/jail.h>
 #include "zfs_comutil.h"
 
+#if notyet
 struct mtx zfs_debug_mtx;
 MTX_SYSINIT(zfs_debug_mtx, &zfs_debug_mtx, "zfs_debug", MTX_DEF);
 
@@ -2479,3 +2478,22 @@ zfsvfs_update_fromname(const char *oldname, const char *newname)
 	mtx_unlock(&mountlist_mtx);
 }
 #endif
+#endif
+
+static int
+zfs_mount(struct mount *mp, char *dev, int flags, void *data)
+{
+	return 0;
+}
+
+/*
+ * File system operations
+ */
+struct vfsops zfs_vfsops = {
+	zfs_mount,		/* mount */
+	NULL,		/* unmount */
+	((vfsop_sync_t)vfs_nullop),		/* sync */
+	((vfsop_vget_t)vfs_nullop),		/* vget */
+	((vfsop_statfs_t)vfs_nullop),		/* statfs */
+	NULL,		/* vnops */
+};
