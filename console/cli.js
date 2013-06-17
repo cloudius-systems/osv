@@ -1,5 +1,4 @@
 importPackage(java.io);
-importPackage(java.lang);
 importPackage(com.cloudius.util);
 importPackage(com.cloudius.cli.util);
 
@@ -36,6 +35,8 @@ _commands["java"] = java_cmd;
 
 // Create interface to networking functions
 var networking_interface = new Networking();
+
+var System = java.lang.System
 
 // I/O
 var _reader = new BufferedReader( new InputStreamReader(System['in']) );
