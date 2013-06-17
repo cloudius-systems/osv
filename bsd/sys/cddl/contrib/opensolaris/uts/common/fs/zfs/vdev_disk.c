@@ -82,21 +82,11 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 		dvd = vd->vdev_tsd;
 	}
 
-#if 0
 	/*
 	 * Determine the actual size of the device.
 	 */
-	if (ldi_get_size(dvd->vd_lh, psize) != 0) {
-		vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;
-		return (EINVAL);
-	}
-
-	dkmext.dki_pbsize = DEV_BSIZE;
-
-	*ashift = highbit(MAX(dkmext.dki_pbsize, SPA_MINBLOCKSIZE)) - 1;
-
-	*max_psize = *psize;
-#endif
+	*max_psize = *psize = dvd->device->size;
+	*ashift = highbit(MAX(DEV_BSIZE, SPA_MINBLOCKSIZE)) - 1;
 	return 0;
 }
 
