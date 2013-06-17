@@ -143,7 +143,7 @@ ramdisk_init(void)
 
 	dev = device_create(&ramdisk_driver, "ram0", D_BLK);
 	sc = dev->private_data;
-	sc->size = 4 * 1024 * 1024;
+	sc->size = dev->size = 4 * 1024 * 1024;
 	sc->addr = malloc(sc->size);
 
 	TAILQ_INIT(&sc->bio_list);

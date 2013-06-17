@@ -112,6 +112,7 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     dev = device_create(&virtio_blk_driver, dev_name.c_str(), D_BLK);
     prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
     prv->drv = this;
+    dev->size = prv->drv->size();
 }
 
 virtio_blk::~virtio_blk()

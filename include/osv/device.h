@@ -118,6 +118,7 @@ struct device {
 	int		flags;		/* D_* flags defined above */
 	int		active;		/* device has not been destroyed */
 	int		refcnt;		/* reference count */
+	off_t		size;		/* device size */
 	void		*private_data;	/* private storage */
 };
 
