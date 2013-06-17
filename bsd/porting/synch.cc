@@ -1,17 +1,24 @@
 #include <map>
 #include <list>
 #include <errno.h>
-#include "debug.hh"
 #include "drivers/clock.hh"
 #include "sched.hh"
-
-#define SYNCH_LOG(...) tprintf_d("bsd-synch", __VA_ARGS__)
+#include "osv/trace.hh"
 
 extern "C" {
     #include <bsd/porting/netport.h>
     #include <bsd/porting/synch.h>
     #include <bsd/porting/sync_stub.h>
 }
+
+TRACEPOINT(trace_synch_msleep, "chan=%p mtx=%p timo_hz=%d", void *, void *, int);
+TRACEPOINT(trace_synch_msleep_wait, "chan=%p", void *);
+TRACEPOINT(trace_synch_msleep_timeout_wait, "chan=%p", void *);
+TRACEPOINT(trace_synch_msleep_expired, "chan=%p", void *);
+TRACEPOINT(trace_synch_wakeup, "chan=%p", void *);
+TRACEPOINT(trace_synch_wakeup_waking, "chan=%p thread=%p", void *, void *);
+TRACEPOINT(trace_synch_wakeup_one, "chan=%p", void *);
+TRACEPOINT(trace_synch_wakeup_one_waking, "chan=%p thread=%p", void *, void *);
 
 struct synch_thread {
     sched::thread* _thread;
@@ -51,7 +58,7 @@ synch_port* synch_port::_instance = nullptr;
 int synch_port::msleep(void *chan, struct mtx *mtx,
     int priority, const char *wmesg, int timo_hz)
 {
-    SYNCH_LOG("msleep chan=%x, mtx=%x, timo_seconds=%d", chan, mtx, timo_hz);
+    trace_synch_msleep(chan, mtx, timo_hz);
 
     mutex_t *wait_lock = nullptr;
 
@@ -76,17 +83,20 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         sched::timer t(*sched::thread::current());
         t.set(cur_time + nanoseconds);
 
+        trace_synch_msleep_timeout_wait(chan);
         sched::thread::wait_until(wait_lock, [&] {
             return ( (t.expired()) || (wait._awake) );
         });
 
         // msleep timeout
         if (!wait._awake) {
+            trace_synch_msleep_expired(chan);
             return (EWOULDBLOCK);
         }
 
     } else {
 
+        trace_synch_msleep_wait(chan);
         sched::thread::wait_until(wait_lock, [&] {
             return (wait._awake);
         });
@@ -98,7 +108,7 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
 
 void synch_port::wakeup(void* chan)
 {
-    SYNCH_LOG("wakeup chan=%x", chan);
+    trace_synch_wakeup(chan);
     std::list<synch_thread *> ttw;
 
     mutex_lock(&_lock);
@@ -112,6 +122,7 @@ void synch_port::wakeup(void* chan)
     mutex_unlock(&_lock);
 
     for (auto st: ttw) {
+        trace_synch_wakeup_waking(chan, st->_thread);
         st->_awake = true;
         st->_thread->wake();
     }
@@ -119,8 +130,8 @@ void synch_port::wakeup(void* chan)
 
 void synch_port::wakeup_one(void* chan)
 {
+    trace_synch_wakeup_one(chan);
     synch_thread* wait = nullptr;
-    SYNCH_LOG("wakeup_one");
 
     mutex_lock(&_lock);
     auto ppp = _evlist.equal_range(chan);
@@ -132,6 +143,7 @@ void synch_port::wakeup_one(void* chan)
     mutex_unlock(&_lock);
 
     if (wait) {
+        trace_synch_wakeup_one_waking(chan, wait->_thread);
         wait->_awake = true;
         wait->_thread->wake();
     }
