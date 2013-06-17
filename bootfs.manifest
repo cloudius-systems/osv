@@ -119,4 +119,5 @@
 /console/cli.js: ../../console/cli.js
 /console/init.js: ../../console/init.js
 /console/md5sum.js: ../../console/md5sum.js
+/&/console/perf.js: ../../&
 /&/etc/hosts: ../../static/&
