@@ -88,6 +88,7 @@
 /&/tests/tst-yield.so: ./&
 /&/tests/tst-ctxsw.so: ./&
 /&/tests/tst-readdir.so: ./&
+/&/tests/tst-zfs-simple.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
