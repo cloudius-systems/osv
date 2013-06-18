@@ -5,9 +5,9 @@
 #include <string.h>
 #include <stdint.h>
 
-// To replace the spin-lock-based mutex with lockfree::mutex everywhere,
-// change #undef LOCKFREE_MUTEX here to #define.
-#undef LOCKFREE_MUTEX
+// To use the spin-lock-based mutex instead of lockfree::mutex everywhere,
+// change #define LOCKFREE_MUTEX here to #undef.
+#define LOCKFREE_MUTEX
 
 #ifdef LOCKFREE_MUTEX
 #define LOCKFREE_MUTEX_SIZE 40
