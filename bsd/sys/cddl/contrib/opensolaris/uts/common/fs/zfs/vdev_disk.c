@@ -146,8 +146,10 @@ vdev_disk_start_ioctl(zio_t *zio)
 
 	switch (zio->io_cmd) {
 	case DKIOCFLUSHWRITECACHE:
-		if (zfs_nocacheflush)
+		if (1 || zfs_nocacheflush) {
+			kprintf("DKIOCFLUSHWRITECACHE ignored\n");
 			break;
+		}
 		if (vd->vdev_nowritecache) {
 			zio->io_error = ENOTSUP;
 			break;
