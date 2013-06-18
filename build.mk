@@ -440,8 +440,8 @@ objects += core/power.o
 objects += core/percpu.o
 objects += core/per-cpu-counter.o
 
-include $(src)/fs/build.mak
-include $(src)/libc/build.mak
+include $(src)/fs/build.mk
+include $(src)/libc/build.mk
 
 objects += $(addprefix fs/, $(fs))
 objects += $(addprefix libc/, $(libc))
@@ -517,7 +517,7 @@ gen/include/bits/alltypes.h: $(src)/include/api/x86_64/bits/alltypes.h.sh
 	$(call very-quiet, mkdir -p $(dir $@))
 	$(call quiet, sh $^ > $@, GEN $@)
 
-$(src)/build.mak: $(generated-headers)
+$(src)/build.mk: $(generated-headers)
 
 -include $(shell find -name '*.d')
 

@@ -9,7 +9,7 @@ silentant = $(if $V,, scripts/silentant.py)
 
 # It's not practical to build large Java programs from make, because of
 # how Java does dependencies; so we use ant instead.  But we also cannot
-# call ant from the main makefile (build.mak), since make will have no
+# call ant from the main makefile (build.mk), since make will have no
 # idea whether the target has changed or not.  So we call ant from here,
 # and then the main makefile can treat the build products (jars) as inputs
 
@@ -25,7 +25,7 @@ $(submake): Makefile
 	echo 'mode = $(mode)' > $@
 	echo 'src = ../..' >> $@
 	echo 'VPATH = ../..' >> $@
-	echo 'include ../../build.mak' >> $@
+	echo 'include ../../build.mk' >> $@
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
