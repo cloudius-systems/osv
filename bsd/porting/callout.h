@@ -42,6 +42,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/_callout.h>
 
+__BEGIN_DECLS
 void init_callouts(void);
 
 #define	CALLOUT_LOCAL_ALLOC	0x0001 /* was allocated from callfree */
@@ -75,5 +76,6 @@ int	_callout_stop_safe(struct callout *, int);
 void	callout_tick(void);
 int	callout_tickstofirst(int limit);
 extern void (*callout_new_inserted)(int cpu, int ticks);
+__END_DECLS
 
 #endif /* _SYS_CALLOUT_H_ */

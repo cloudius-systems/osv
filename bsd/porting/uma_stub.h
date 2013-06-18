@@ -1,3 +1,5 @@
+#include <sys/cdefs.h>
+
 #include <stdint.h>
 #include <bsd/machine/param.h>
 
@@ -167,6 +169,7 @@ typedef void *(*uma_alloc)(uma_zone_t zone, int size, u_int8_t *pflag, int wait)
  */
 typedef void (*uma_free)(void *item, int size, u_int8_t pflag);
 
+__BEGIN_DECLS
 void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags);
 void * uma_zalloc(uma_zone_t zone, int flags);
 void uma_zfree_arg(uma_zone_t zone, void *item, void *udata);
@@ -354,5 +357,6 @@ int uma_zone_exhausted_nolock(uma_zone_t zone);
  */
 u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item);
 
+__END_DECLS
 
 #endif

@@ -8,9 +8,11 @@
 #ifndef _NET_ETHERNET_H_
 #define _NET_ETHERNET_H_
 
+__BEGIN_DECLS
 void ether_init(void *arg);
 void* ether_alloc(u_char type, struct ifnet *ifp);
 void ether_free(void *com, u_char type);
+__END_DECLS
 
 /*
  * Some basic Ethernet constants.

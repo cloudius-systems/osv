@@ -34,8 +34,6 @@
 
 #include <bsd/sys/netinet/in.h>
 
-void vnet_lltable_init(void);
-
 struct ifnet;
 struct sysctl_req;
 struct rt_msghdr;
@@ -183,6 +181,9 @@ MALLOC_DECLARE(M_LLTABLE);
 #define LLATBL_HASH(key, mask) \
 	(((((((key >> 8) ^ key) >> 8) ^ key) >> 8) ^ key) & mask)
 
+__BEGIN_DECLS
+void vnet_lltable_init(void);
+
 struct lltable *lltable_init(struct ifnet *, int);
 void		lltable_free(struct lltable *);
 void		lltable_prefix_free(int, struct bsd_sockaddr *,
@@ -195,6 +196,7 @@ int		lltable_sysctl_dumparp(int, struct sysctl_req *);
 size_t		llentry_free(struct llentry *);
 struct llentry  *llentry_alloc(struct ifnet *, struct lltable *,
 		    struct bsd_sockaddr_storage *);
+__END_DECLS
 
 /*
  * Generic link layer address lookup function.

@@ -51,11 +51,9 @@
 #ifndef _NETINET_CC_H_
 #define _NETINET_CC_H_
 
+#include <sys/cdefs.h>
 /* XXX: TCP_CA_NAME_MAX define lives in tcp.h for compat reasons. */
 #include <bsd/sys/netinet/tcp.h>
-
-void cc_init(void);
-int cc_modevent(int event_type, void *data);
 
 extern struct cc_algo htcp_cc_algo;
 extern struct cc_algo cubic_cc_algo;
@@ -73,9 +71,14 @@ VNET_DECLARE(struct cc_algo *, default_cc_ptr);
 /* Define the new net.inet.tcp.cc sysctl tree. */
 SYSCTL_DECL(_net_inet_tcp_cc);
 
+__BEGIN_DECLS
+void cc_init(void);
+int cc_modevent(int event_type, void *data);
+
 /* CC housekeeping functions. */
 int	cc_register_algo(struct cc_algo *add_cc);
 int	cc_deregister_algo(struct cc_algo *remove_cc);
+__END_DECLS
 
 /*
  * Wrapper around transport structs that contain same-named congestion

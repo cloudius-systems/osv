@@ -5,12 +5,10 @@
 #include "debug.hh"
 #include "sched.hh"
 
-extern "C" {
-    #include <bsd/porting/netport.h>
-    #include <bsd/porting/callout.h>
-    #include <bsd/porting/rwlock.h>
-    #include <bsd/porting/sync_stub.h>
-}
+#include <bsd/porting/rwlock.h>
+#include <bsd/porting/callout.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/sync_stub.h>
 
 TRACEPOINT(trace_callout_init, "C=%p", void *);
 TRACEPOINT(trace_callout_reset, "C=%p to_ticks=%d fn=%p arg=%p", void *, uint64_t, void *, void *);

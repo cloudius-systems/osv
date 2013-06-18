@@ -33,8 +33,6 @@
 #ifndef _NET_NETISR_H_
 #define _NET_NETISR_H_
 
-void netisr_init(void *arg);
-
 /*
  * The netisr (network interrupt service routine) provides a deferred
  * execution evironment in which (generally inbound) network processing can
@@ -204,6 +202,9 @@ struct netisr_handler {
 	void		*nh_pspare[4];	/* For future use. */
 };
 
+__BEGIN_DECLS
+void netisr_init(void *arg);
+
 /*
  * Register, unregister, and other netisr handler management functions.
  */
@@ -244,6 +245,7 @@ u_int	netisr_get_cpuid(u_int cpunumber);
 void	netisr_sched_poll(void);
 void	netisr_poll(void);
 void	netisr_pollmore(void);
+__END_DECLS
 
 #endif /* !_KERNEL */
 #endif /* !_NET_NETISR_H_ */

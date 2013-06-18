@@ -33,6 +33,8 @@
 #ifndef _SYS_DOMAIN_H_
 #define _SYS_DOMAIN_H_
 
+#include <sys/cdefs.h>
+
 /*
  * Structure per communications domain.
  */
@@ -74,6 +76,7 @@ struct domain {
 };
 
 #ifdef _KERNEL
+__BEGIN_DECLS
 extern int	domain_init_status;
 extern struct	domain *domains;
 void		domain_add(void *);
@@ -82,6 +85,7 @@ void		domain_init(void *);
 void		vnet_domain_init(void *);
 void		vnet_domain_uninit(void *);
 #endif
+__END_DECLS
 
 #define OSV_DOMAIN_SET(name)                    \
     do {                                        \

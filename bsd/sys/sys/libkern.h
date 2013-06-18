@@ -41,6 +41,7 @@
 #define	LIBKERN_BODY
 #endif
 
+__BEGIN_DECLS
 u_long   bsd_random(void);
 void     bsd_srandom(u_long);
 
@@ -59,5 +60,6 @@ static __inline u_long ulmax(u_long a, u_long b) { return (a > b ? a : b); }
 static __inline u_long ulmin(u_long a, u_long b) { return (a < b ? a : b); }
 static __inline off_t omax(off_t a, off_t b) { return (a > b ? a : b); }
 static __inline off_t omin(off_t a, off_t b) { return (a < b ? a : b); }
+__END_DECLS
 
 #endif /* !_SYS_LIBKERN_H_ */

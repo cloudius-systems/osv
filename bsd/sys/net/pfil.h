@@ -32,6 +32,8 @@
 #ifndef _NET_PFIL_H_
 #define _NET_PFIL_H_
 
+#include <sys/cdefs.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
 #include <bsd/sys/sys/queue.h>
@@ -40,8 +42,10 @@ struct mbuf;
 struct ifnet;
 struct inpcb;
 
+__BEGIN_DECLS
 int vnet_pfil_init(void);
 int vnet_pfil_uninit(void);
+__END_DECLS
 
 /*
  * The packet filter hooks are designed for anything to call them to

@@ -33,10 +33,14 @@
 #ifndef _NETINET_IF_ETHER_H_
 #define _NETINET_IF_ETHER_H_
 
+#include <sys/cdefs.h>
+
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/if_arp.h>
 
+__BEGIN_DECLS
 void    arp_init(void);
+
 
 /*
  * Macro to map an IP multicast address to an Ethernet multicast address.
@@ -119,6 +123,7 @@ int	arpresolve(struct ifnet *ifp, struct rtentry *rt,
 		    struct llentry **lle);
 void	arp_ifinit(struct ifnet *, struct ifaddr *);
 void	arp_ifinit2(struct ifnet *, struct ifaddr *, u_char *);
+__END_DECLS
 
 #include <bsd/sys/sys/eventhandler.h>
 typedef void (*llevent_arp_update_fn)(void *, struct llentry *);

@@ -34,11 +34,15 @@
 #ifndef _SYS_MBUF_H_
 #define	_SYS_MBUF_H_
 
+#include <sys/cdefs.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 #include <bsd/machine/param.h>
 
 #include <bsd/sys/sys/queue.h>
+
+__BEGIN_DECLS
 
 /*
  * Mbufs are of a single size, MSIZE (sys/param.h), which includes overhead.
@@ -396,6 +400,7 @@ struct mbstat {
  * The rest of it is defined in kern/kern_mbuf.c
  */
 
+__BEGIN_DECLS
 void mbuf_init(void *dummy);
 void tunable_mbinit(void *dummy);
 
@@ -422,6 +427,8 @@ static __inline void		 m_chtype(struct mbuf *m, short new_type);
 void				 mb_free_ext(struct mbuf *);
 static __inline struct mbuf	*m_last(struct mbuf *m);
 int				 m_pkthdr_init(struct mbuf *m, int how);
+__END_DECLS
+
 
 static __inline int
 m_gettype(int size)
@@ -1090,5 +1097,6 @@ m_tag_find(struct mbuf *m, int type, struct m_tag *start)
  #define M_PROFILE(m)
 #endif
 
+__END_DECLS
 
 #endif /* !_SYS_MBUF_H_ */

@@ -42,11 +42,13 @@
 #include <bsd/sys/sys/queue.h>
 #endif
 
+__BEGIN_DECLS
 void if_init(void *__unused);
 void vnet_if_init(const void *__unused);
 void if_attachdomain(void *dummy);
 
 void vnet_loif_init(void);
+__END_DECLS
 
 /*
  * Length of interface external name, including terminating '\0'.

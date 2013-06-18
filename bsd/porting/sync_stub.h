@@ -1,6 +1,7 @@
 #ifndef SYNC_STUB_H
 #define SYNC_STUB_H
 
+#include <sys/cdefs.h>
 #include <osv/mutex.h>
 
 struct mtx {
@@ -15,17 +16,14 @@ struct mtx {
 #define MA_RECURSED     (0x04)
 #define MA_NOTRECURSED  (0x08)
 
+__BEGIN_DECLS
 void mtx_init(struct mtx *m, const char *name, const char *type, int opts);
-
 void mtx_destroy(struct mtx *m);
-
 void mtx_lock(struct mtx *mp);
-
 void mtx_unlock(struct mtx *mp);
-
 void mtx_assert(struct mtx *mp, int flag);
+__END_DECLS
 
 #define mtx_sleep(chan, mtx, pri, wmesg, timo) (void)0;
-
 
 #endif /* SYNC_STUB_H */

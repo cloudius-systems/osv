@@ -33,8 +33,6 @@
 #ifndef	_NET_IF_VAR_H_
 #define	_NET_IF_VAR_H_
 
-__BEGIN_DECLS
-
 /*
  * Structures defining a network interface, providing a packet
  * transport mechanism (ala level 0 of the PUP protocols).
@@ -88,6 +86,9 @@ struct	vnet;
 #include <bsd/sys/sys/socket.h>
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/sync_stub.h>
+
+
+__BEGIN_DECLS
 
 #define	IF_DUNIT_NONE	-1
 

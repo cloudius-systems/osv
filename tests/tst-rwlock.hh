@@ -7,9 +7,7 @@
 
 using namespace sched;
 
-extern "C" {
-    #include <bsd/porting/rwlock.h>
-}
+#include <bsd/porting/rwlock.h>
 
 //
 // Test 1 - test lock recursively on the same thread

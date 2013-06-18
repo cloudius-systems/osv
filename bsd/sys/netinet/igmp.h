@@ -37,10 +37,14 @@
 #ifndef _NETINET_IGMP_H_
 #define _NETINET_IGMP_H_
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
 void igmp_init(void);
 void igmp_uninit(void);
 void vnet_igmp_init(void);
 void vnet_igmp_uninit(void);
+__END_DECLS
 
 /*
  * Internet Group Management Protocol (IGMP) definitions.

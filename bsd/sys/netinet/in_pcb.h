@@ -38,6 +38,7 @@
 #ifndef _NETINET_IN_PCB_H_
 #define _NETINET_IN_PCB_H_
 
+#include <sys/cdefs.h>
 #include <stddef.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
@@ -49,6 +50,7 @@
 #include <bsd/sys/net/vnet.h>
 #include <bsd/porting/uma_stub.h>
 
+__BEGIN_DECLS
 void ipport_tick_init(const void *unused);
 
 #define	in6pcb		inpcb	/* for KAME src sync over BSD*'s */
@@ -660,5 +662,7 @@ struct bsd_sockaddr *
 	in_sockaddr(in_port_t port, struct in_addr *addr);
 void	in_pcbsosetlabel(struct socket *so);
 #endif /* _KERNEL */
+
+__END_DECLS
 
 #endif /* !_NETINET_IN_PCB_H_ */

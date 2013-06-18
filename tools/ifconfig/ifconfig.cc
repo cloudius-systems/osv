@@ -38,7 +38,6 @@
 #include <bsd/porting/networking.h>
 #include <bsd/porting/route.h>
 #include <bsd/porting/callout.h>
-extern "C" {
 #undef NZERO
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/net/if_var.h>
@@ -54,8 +53,6 @@ extern "C" {
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 #include <bsd/machine/in_cksum.h>
-}
-
 
 #include <string>
 using std::string ;

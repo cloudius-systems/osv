@@ -33,9 +33,13 @@
 #ifndef _NET_ROUTE_H_
 #define _NET_ROUTE_H_
 
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
 void rts_init(void);
 void route_init(void);
 void vnet_route_init(void);
+__END_DECLS
 
 /*
  * Kernel resident routing tables.

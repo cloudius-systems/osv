@@ -13,6 +13,8 @@
 #define __NEED_socklen_t
 #include <bits/alltypes.h>
 
+__BEGIN_DECLS
+
 typedef unsigned char bsd_sa_family_t;
 
 #define MOD_LOAD (1)
@@ -283,5 +285,7 @@ int get_cpuid(void);
 
 size_t get_physmem(void);
 #define physmem		get_physmem()
+
+__END_DECLS
 
 #endif

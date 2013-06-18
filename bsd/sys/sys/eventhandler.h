@@ -113,7 +113,7 @@ do {									\
 		eventhandler_deregister(_el, tag);			\
 } while(0)
 	
-
+__BEGIN_DECLS
 eventhandler_tag eventhandler_register(struct eventhandler_list *list, 
 	    const char *name, void *func, void *arg, int priority);
 void	eventhandler_deregister(struct eventhandler_list *list,
@@ -121,6 +121,8 @@ void	eventhandler_deregister(struct eventhandler_list *list,
 struct eventhandler_list *eventhandler_find_list(const char *name);
 struct eventhandler_list *eventhandler_clone(struct eventhandler_list *list);
 void eventhandler_free_clone(struct eventhandler_list *list);
+void eventhandler_init(void * __unused);
+__END_DECLS
 
 /*
  * Standard system event queues.
@@ -147,8 +149,5 @@ EVENTHANDLER_DECLARE(bpf_track, bpf_track_fn);
 typedef void (*uma_zone_chfn)(void *);
 EVENTHANDLER_DECLARE(nmbclusters_change, uma_zone_chfn);
 EVENTHANDLER_DECLARE(maxsockets_change, uma_zone_chfn);
-
-
-void eventhandler_init(void * __unused);
 
 #endif /* SYS_EVENTHANDLER_H */
