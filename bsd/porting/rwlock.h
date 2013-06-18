@@ -32,24 +32,13 @@
 #ifndef _SYS_RWLOCK_H_
 #define _SYS_RWLOCK_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+/* The real implementation is here */
+#include <osv/rwlock.h>
 
-#include <osv/mutex.h>
+__BEGIN_DECLS
 
 #define LO_INITIALIZED  0x00010000  /* Lock has been initialized. */
 #define LO_RECURSABLE   0x00080000  /* Lock may recurse. */
-
-struct rwlock {
-    mutex_t _mutex;             /* Use a sleeping mutex */
-    u_int _rw_recurse;          /* Counter for recursion support */
-    u_int _lo_flags;            /* Allow threads to recursively acquire
-                                   exclusive locks for rw */
-};
-
-#define LOCK_FILE   __FILE__
-#define LOCK_LINE   __LINE__
 
 /*
  * Function prototypes.  Routines that start with _ are not part of the
@@ -57,31 +46,17 @@ struct rwlock {
  * be used instead.
  */
 
-#define	rw_init(rw, name)	rw_init_flags((rw), (name), 0)
-void	rw_init_flags(struct rwlock *rw, const char *name, int opts);
-void	rw_destroy(struct rwlock *rw);
-int	rw_wowned(struct rwlock *rw);
-void	_rw_wlock(struct rwlock *rw, const char *file, int line);
-int	_rw_try_wlock(struct rwlock *rw, const char *file, int line);
-void	_rw_wunlock(struct rwlock *rw, const char *file, int line);
-void	_rw_rlock(struct rwlock *rw, const char *file, int line);
-int	_rw_try_rlock(struct rwlock *rw, const char *file, int line);
-void	_rw_runlock(struct rwlock *rw, const char *file, int line);
-int	_rw_try_upgrade(struct rwlock *rw, const char *file, int line);
-void	_rw_downgrade(struct rwlock *rw, const char *file, int line);
+#define rw_init(rw, name)   rw_init_flags((rw), (name), 0)
+#define rw_destroy(rw)      rwlock_destroy((rw))
+static inline
+void rw_init_flags(struct rwlock *rw, const char *name, int opts) {
+    rwlock_init(rw);
+}
 
 /*
  * Public interface for lock operations.
  */
 
-#define	rw_wlock(rw)		_rw_wlock((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_wunlock(rw)		_rw_wunlock((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_rlock(rw)		_rw_rlock((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_runlock(rw)		_rw_runlock((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_try_rlock(rw)	_rw_try_rlock((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_try_upgrade(rw)	_rw_try_upgrade((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_try_wlock(rw)	_rw_try_wlock((rw), LOCK_FILE, LOCK_LINE)
-#define	rw_downgrade(rw)	_rw_downgrade((rw), LOCK_FILE, LOCK_LINE)
 #define	rw_unlock(rw)	do {						\
 	if (rw_wowned(rw))						\
 		rw_wunlock(rw);						\
@@ -104,8 +79,6 @@ void	_rw_downgrade(struct rwlock *rw, const char *file, int line);
 
 #define	rw_assert(rw, what)
 
-#ifdef __cplusplus
-}
-#endif
+__END_DECLS
 
 #endif /* !_SYS_RWLOCK_H_ */
