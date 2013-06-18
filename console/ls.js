@@ -1,5 +1,5 @@
 
-var ls = {
+register_command('ls', {
         
     ls_dirs: function(subdir) {
         var dir;
@@ -39,4 +39,4 @@ var ls = {
         print("ls: list files in current directory");
     }
 
-};
+})

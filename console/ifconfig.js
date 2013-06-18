@@ -1,5 +1,5 @@
 
-var ifconfig_cmd = {
+register_command('ifconfig', {
         
     // returns a boolean indicating a successful operation
     set_ip: function(ifname, ip, netmask) {
@@ -47,6 +47,6 @@ var ifconfig_cmd = {
     help: function() {
         print("ifconfig <ifname> <ip> netmask <mask> up")
     }
-};
+})
 
 

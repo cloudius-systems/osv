@@ -1,6 +1,6 @@
 importPackage(com.cloudius.cli.tests);
 
-var test_cmd = {
+register_command('test', {
         
     init: function() {
         this._test_runner = new TestRunner();
@@ -49,6 +49,6 @@ var test_cmd = {
     tab_delim: function () {
         return ('\n');
     }
-};
+})
 
 

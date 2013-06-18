@@ -7,7 +7,7 @@ var route_options = [
   {opt:"gw", op:"store", metaname: "GW", help:"set default route"},
   {opt:"netmask", op:"store", metaname: "NETMASK", help:"for a network route"}];
 
-var route_cmd = {
+register_command('route', {
         
     add_deafult_gw: function(gwaddr) {
         networking_interface.route_add_default(gwaddr);
@@ -46,4 +46,4 @@ var route_cmd = {
         print("route: manipulate/display the routing table\n");
         this._parser.printUsage();
     }
-}
+})

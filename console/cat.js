@@ -1,5 +1,5 @@
 
-var cat = {
+register_command('cat', {
         
     invoke: function(inp) {
         if (inp.length != 2) {
@@ -41,6 +41,5 @@ var cat = {
             
         return (ls.ls());
     },
-};
-
+})
 

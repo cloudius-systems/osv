@@ -1,4 +1,4 @@
-var md5sum_cmd = {
+register_command('md5sum', {
     init: function() {
         this._md5 = new MD5();
     },
@@ -38,4 +38,4 @@ var md5sum_cmd = {
         print("usage: md5sum <filename>");
     }
     
-}
+})

@@ -1,7 +1,7 @@
 var _global_argv = 0;
 var _exitcode = -1;
 
-var run_cmd = {
+register_command('run', {
 
     init: function() {
         this.elf_loader = new ELFLoader();
@@ -57,6 +57,6 @@ var run_cmd = {
         return (ls.ls());
     },
 
-};
+})
 
 

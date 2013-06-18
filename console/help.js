@@ -1,5 +1,5 @@
 
-var help_cmd = {
+register_command('help', {
         
     invoke: function(inp) {
         if (inp.length != 2) {
@@ -23,6 +23,6 @@ var help_cmd = {
     help: function() {
         print("help: describe command");
     }
-};
+})
 
 

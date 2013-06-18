@@ -1,6 +1,6 @@
 
 
-var perf_cmd = {
+register_command('perf', {
     invoke: function(args) {
         args.shift()
         var cmd = args.shift()
@@ -100,5 +100,5 @@ var perf_cmd = {
             this.subcommands[k].parent = this
         }
     },
-}
+})
 

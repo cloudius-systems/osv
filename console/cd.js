@@ -1,5 +1,5 @@
 
-var cd = {
+register_command('cd', {
         
     init: function() {
         this._cwd = new File(".");
@@ -75,6 +75,6 @@ var cd = {
             _line_idx++;
         }
     }
-};
+})
 
 

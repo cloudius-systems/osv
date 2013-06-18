@@ -1,5 +1,5 @@
 
-var arp_cmd = {
+register_command('arp', {
    
     add: function(ifname, macaddr, ip) {
         networking_interface.arp_add(ifname, macaddr, ip);
@@ -19,6 +19,6 @@ var arp_cmd = {
         print("arp: manipulate the system ARP cache")
         print("usage: arp <ifname> <macaddr> <ip>")
     }
-};
+})
 
 

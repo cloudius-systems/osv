@@ -1,5 +1,5 @@
 
-var pwd = {
+register_command('pwd', {
         
     pwd: function() {
         return (cd.pwd());
@@ -9,6 +9,6 @@ var pwd = {
         print (this.pwd());
     },
     
-};
+})
 
 

@@ -2,6 +2,12 @@ importPackage(java.io);
 importPackage(com.cloudius.util);
 importPackage(com.cloudius.cli.util);
 
+var _commands = {}
+
+var register_command = function(name, command) {
+    _commands[name] = command
+}
+
 load("/console/util.js");
 load("/console/autocomplete.js");
 load("/console/optparse.js");
@@ -19,22 +25,6 @@ load("/console/route.js");
 load("/console/java.js");
 load("/console/perf.js");
 
-// Commands
-var _commands = new Array();
-_commands["ls"] = ls;
-_commands["cd"] = cd;
-_commands["pwd"] = pwd;
-_commands["cat"] = cat;
-_commands["help"] = help_cmd;
-_commands["test"] = test_cmd;
-_commands["run"] = run_cmd;
-_commands["ifconfig"] = ifconfig_cmd;
-_commands["arp"] = arp_cmd;
-_commands["route"] = route_cmd;
-_commands["md5sum"] = md5sum_cmd;
-_commands["java"] = java_cmd;
-_commands["perf"] = perf_cmd;
-
 // Create interface to networking functions
 var networking_interface = new Networking();
 
@@ -51,6 +41,9 @@ var _c = 0;
 
 /* FIXME: Handle multi-line commands */
 var MAX_LENGTH = 80;
+
+var cd = _commands.cd
+var run_cmd = _commands.run
 
 // Prompt
 _prompt = "[osv]$ ";
