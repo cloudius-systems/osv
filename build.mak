@@ -437,6 +437,8 @@ objects += core/trace.o
 objects += core/poll.o
 objects += core/select.o
 objects += core/power.o
+objects += core/percpu.o
+objects += core/per-cpu-counter.o
 
 include $(src)/fs/build.mak
 include $(src)/libc/build.mak
@@ -490,7 +492,7 @@ usr.img: usr.manifest
 		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
-	java/jni/stty.so
+	java/jni/stty.so java/jni/tracepoint.so
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) $(jni) \

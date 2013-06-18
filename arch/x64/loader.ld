@@ -25,6 +25,11 @@ SECTIONS
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
     _init_array_end = .;
+    .percpu : {
+        _percpu_start = .;
+        *(.percpu)
+        _percpu_end = .;
+    }
     .tls_template_start = .;
     .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls :text
     .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls :text

@@ -1,5 +1,4 @@
 importPackage(java.io);
-importPackage(java.lang);
 importPackage(com.cloudius.util);
 importPackage(com.cloudius.cli.util);
 
@@ -18,6 +17,7 @@ load("/console/arp.js");
 load("/console/md5sum.js");
 load("/console/route.js");
 load("/console/java.js");
+load("/console/perf.js");
 
 // Commands
 var _commands = new Array();
@@ -33,9 +33,12 @@ _commands["arp"] = arp_cmd;
 _commands["route"] = route_cmd;
 _commands["md5sum"] = md5sum_cmd;
 _commands["java"] = java_cmd;
+_commands["perf"] = perf_cmd;
 
 // Create interface to networking functions
 var networking_interface = new Networking();
+
+var System = java.lang.System
 
 // I/O
 var _reader = new BufferedReader( new InputStreamReader(System['in']) );

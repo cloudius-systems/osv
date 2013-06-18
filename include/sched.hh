@@ -12,6 +12,7 @@
 #include <osv/mutex.h>
 #include <atomic>
 #include "osv/lockless-queue.hh"
+#include <list>
 
 extern "C" {
 void smp_main();
@@ -273,7 +274,7 @@ typedef bi::rbtree<thread,
                   > runqueue_type;
 
 struct cpu {
-    explicit cpu();
+    explicit cpu(unsigned id);
     unsigned id;
     struct arch_cpu arch;
     thread* bringup_thread;
@@ -294,6 +295,20 @@ struct cpu {
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
     void enqueue(thread& t, u64 now);
+    class notifier;
+};
+
+class cpu::notifier {
+public:
+    explicit notifier(std::function<void ()> cpu_up);
+    ~notifier();
+private:
+    static void fire();
+private:
+    std::function<void ()> _cpu_up;
+    static mutex _mtx;
+    static std::list<notifier*> _notifiers;
+    friend class cpu;
 };
 
 void preempt();

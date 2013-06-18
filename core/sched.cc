@@ -10,6 +10,7 @@
 #include "interrupt.hh"
 #include "smp.hh"
 #include "osv/trace.hh"
+#include <osv/percpu.hh>
 
 namespace sched {
 
@@ -34,6 +35,9 @@ inter_processor_interrupt wakeup_ipi{[] {}};
 constexpr u64 vruntime_bias = 4_ms;
 constexpr u64 max_slice = 10_ms;
 
+mutex cpu::notifier::_mtx;
+std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(300)));
+
 }
 
 #include "arch-switch.hh"
@@ -51,9 +55,11 @@ private:
     thread _thread;
 };
 
-cpu::cpu()
-    : idle_thread([this] { idle(); }, thread::attr(this))
+cpu::cpu(unsigned _id)
+    : id(_id)
+    , idle_thread([this] { idle(); }, thread::attr(this))
 {
+    percpu_init(id);
 }
 
 void cpu::schedule(bool yield)
@@ -190,6 +196,7 @@ unsigned cpu::load()
 
 void cpu::load_balance()
 {
+    notifier::fire();
     timer tmr(*thread::current());
     while (true) {
         tmr.set(clock::get()->time() + 100_ms);
@@ -223,6 +230,26 @@ void cpu::load_balance()
             wakeup_ipi.send(min);
         });
     }
+}
+
+cpu::notifier::notifier(std::function<void ()> cpu_up)
+    : _cpu_up(cpu_up)
+{
+    with_lock(_mtx, [this] { _notifiers.push_back(this); });
+}
+
+cpu::notifier::~notifier()
+{
+    with_lock(_mtx, [this] { _notifiers.remove(this); });
+}
+
+void cpu::notifier::fire()
+{
+    with_lock(_mtx, [] {
+        for (auto n : _notifiers) {
+            n->_cpu_up();
+        }
+    });
 }
 
 void schedule(bool yield)
