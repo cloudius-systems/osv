@@ -27,7 +27,7 @@ static inline bool mutex_trylock(mutex_t* m)
 }
 static inline void mutex_unlock(mutex_t* m)
 {
-    return m->unlock();
+    m->unlock();
 }
 static inline bool mutex_owned(mutex_t* m)
 {
