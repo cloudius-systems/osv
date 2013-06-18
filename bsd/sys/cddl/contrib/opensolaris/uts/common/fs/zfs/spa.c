@@ -2770,11 +2770,7 @@ spa_open_common(const char *pool, spa_t **spapp, void *tag, nvlist_t *nvpolicy,
 	 * up calling spa_open() again.  The real fix is to figure out how to
 	 * avoid dsl_dir_open() calling this in the first place.
 	 */
-#ifndef __OSV__ // OSv has recursive mutexes
-	if (mutex_owner(&spa_namespace_lock) != curthread) {
-#else
-	if (1) {
-#endif
+	if (!mutex_owned(&spa_namespace_lock)) {
 		mutex_enter(&spa_namespace_lock);
 		locked = B_TRUE;
 	}

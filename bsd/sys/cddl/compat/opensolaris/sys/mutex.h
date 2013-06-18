@@ -45,8 +45,9 @@ typedef mutex_t	kmutex_t;
 #define	mutex_tryenter(lock)	mutex_trylock(lock)
 #define	mutex_exit(lock)	mutex_unlock(lock)
 
-#if 0 // needs core implementation that matches what ZFS expects
-#define	mutex_owner(lock)	((lock)->sx_lock & SX_LOCK_SHARED ? NULL : (struct thread *)SX_OWNER((lock)->sx_lock))
+#if 0
+/* Use mutex_owned() instead */
+#define	mutex_owner(lock)
 #endif
 
 #endif	/* _OPENSOLARIS_SYS_MUTEX_H_ */

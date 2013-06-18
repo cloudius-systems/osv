@@ -228,12 +228,12 @@ zfs_sa_upgrade(sa_handle_t *hdl, dmu_tx_t *tx)
 	 * Otherwise, we know we are doing the
 	 * sa_update() that caused us to enter this function.
 	 */
-//	if (mutex_owner(&zp->z_lock) != curthread) {
+	if (!mutex_owned(&zp->z_lock)) {
 		if (mutex_tryenter(&zp->z_lock) == 0)
 			return;
 		else
 			drop_lock = B_TRUE;
-//	}
+	}
 
 	/* First do a bulk query of the attributes that aren't cached */
 	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL, &mtime, 16);
