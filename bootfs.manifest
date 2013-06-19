@@ -90,6 +90,7 @@
 /&/tests/tst-readdir.so: ./&
 /&/tests/tst-zfs-simple.so: ./&
 /&/tests/tst-zfs-disk.so: ./&
+/&/tests/tst-wake.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
