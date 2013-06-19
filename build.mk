@@ -436,6 +436,7 @@ objects += core/kprintf.o
 objects += core/trace.o
 objects += core/poll.o
 objects += core/select.o
+objects += core/epoll.o
 objects += core/power.o
 objects += core/percpu.o
 objects += core/per-cpu-counter.o
