@@ -44,6 +44,7 @@ var MAX_LENGTH = 80;
 
 var cd = _commands.cd
 var run_cmd = _commands.run
+var ls = _commands.ls
 
 // Prompt
 _prompt = "[osv]$ ";
