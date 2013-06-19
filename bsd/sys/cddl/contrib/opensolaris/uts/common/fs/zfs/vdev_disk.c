@@ -203,9 +203,9 @@ vdev_disk_physio(struct device *dev, caddr_t data, size_t size,
 
 	bio = alloc_bio();
 	if (write)
-		bio->bio_cmd = BIO_READ;
-	else
 		bio->bio_cmd = BIO_WRITE;
+	else
+		bio->bio_cmd = BIO_READ;
 
 	bio->bio_dev = dev;
 	bio->bio_data = data;
