@@ -163,6 +163,8 @@ public:
     template <class Pred>
     static void wait_until(mutex_t* mtx, Pred pred);
     void wake();
+    template <class Pred>
+    inline void wake_with(Pred pred);
     static void sleep_until(u64 abstime);
     static void yield();
     static void exit() __attribute__((__noreturn__));
@@ -202,6 +204,7 @@ private:
         running,
         queued,
         waking, // between waiting and queued
+        terminating, // temporary state used in complete()
         terminated,
     };
     std::atomic<status> _status;
@@ -216,6 +219,13 @@ private:
     static const u64 max_vruntime = std::numeric_limits<u64>::max();
     u64 _borrow;
     std::function<void ()> _cleanup;
+    // When _ref_counter reaches 0, the thread can be deleted.
+    // Starts with 1, decremented by complete() and also temporarily modified
+    // by ref() and unref().
+    std::atomic_uint _ref_counter;
+    void ref();
+    void unref();
+    friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
     friend class cpu;
@@ -391,6 +401,46 @@ inline
 void thread::wait_until(mutex_t* mtx, Pred pred)
 {
     do_wait_until(mtx, pred);
+}
+
+// About ref(), unref() and and wake_with():
+//
+// Consider one thread doing:
+//     wait_until([&] { return *x == 0; })
+// the almost-correct way to wake it is:
+//     *x = 0;
+//     t->wake();
+// This is only "almost" correct, because doing *x = 0 may already cause the
+// thread to wake up (if it wasn't sleeping yet, or because of a spurious
+// wakeup) and may decide to exit, in which case t->wake() may crash. So to be
+// safe we need to use ref(), which prevents a thread's destruction until a
+// matching unref():
+//     t->ref();
+//     *x = 0;
+//     t->wake();
+//     t->unref();
+// wake_with is a convenient one-line shortcut for the above four lines,
+// with a syntax mirroring that of wait_until():
+//     t->wake_with([&] { *x = 0; });
+
+class thread_ref_guard {
+public:
+    thread_ref_guard(thread* t) : _t(t) { t->ref(); }
+    ~thread_ref_guard() { _t->unref(); }
+private:
+    thread* _t;
+};
+
+template <class Pred>
+inline
+void thread::wake_with(Pred pred)
+{
+    // TODO: Try first to disable preemption and if thread and current are on
+    // the same CPU, we don't need the disable_exit_guard (with its slow atomic
+    // operations) because we know the thread can't run and exit.
+    thread_ref_guard guard(this);
+    pred();
+    wake();
 }
 
 extern cpu __thread* current_cpu;
