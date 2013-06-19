@@ -17,6 +17,7 @@ namespace console {
 void write(const char *msg, size_t len, bool lf);
 void write_ll(const char *msg, size_t len);
 void console_init(void);
+int open(void);
 
 }
 

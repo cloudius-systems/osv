@@ -12,6 +12,9 @@
 #include "drivers/clock.hh"
 #include <termios.h>
 
+#include <fs/fs.hh>
+#include <fs/unsupported.h>
+
 namespace console {
 
 // should eventually become a list of console device that we chose the best from
@@ -153,7 +156,7 @@ void console_poll()
 }
 
 static int
-console_read(struct device *dev, struct uio *uio, int ioflag)
+console_read(struct uio *uio, int ioflag)
 {
     return with_lock(console_mutex, [=] {
         readers.push_back(sched::thread::current());
@@ -179,7 +182,7 @@ console_read(struct device *dev, struct uio *uio, int ioflag)
 }
 
 static int
-console_write(struct device *dev, struct uio *uio, int ioflag)
+console_write(struct uio *uio, int ioflag)
 {
     while (uio->uio_resid > 0) {
         struct iovec *iov = uio->uio_iov;
@@ -201,7 +204,7 @@ console_write(struct device *dev, struct uio *uio, int ioflag)
 }
 
 static int
-console_ioctl(struct device *dev, u_long request, void *arg)
+console_ioctl(u_long request, void *arg)
 {
     switch (request) {
     case TCGETS:
@@ -215,12 +218,30 @@ console_ioctl(struct device *dev, u_long request, void *arg)
     }
 }
 
+template <class T> static int
+op_read(T *ignore, struct uio *uio, int ioflag)
+{
+    return console_read(uio, ioflag);
+}
+
+template <class T> static int
+op_write(T *ignore, struct uio *uio, int ioflag)
+{
+    return console_write(uio, ioflag);
+}
+
+template <class T> static int
+op_ioctl(T *ignore, u_long request, void *arg)
+{
+    return console_ioctl(request, arg);
+}
+
 static struct devops console_devops = {
     .open	= no_open,
     .close	= no_close,
-    .read	= console_read,
-    .write	= console_write,
-    .ioctl	= console_ioctl,
+    .read	= op_read<device>,
+    .write	= op_write<device>,
+    .ioctl	= op_ioctl<device>,
     .devctl	= no_devctl,
 };
 
@@ -237,4 +258,53 @@ void console_init(void)
     console::console.set_impl(serial_console);
     device_create(&console_driver, "console", D_CHR);
 }
+
+// The above allows opening /dev/console to use the console. We currently
+// have a bug with the VFS/device layer - vfs_read() and vfs_write() hold a
+// lock throughout the call, preventing a write() to the console while read()
+// is blocked. Moreover, poll() can't be implemented on files, including
+// character special devices.
+// To bypass this buggy layer, here's an console::open() function, a
+// replacement for open("/dev/console", O_RDWR, 0).
+static int fops_console_init_close(file *f)
+{
+    return 0;
+}
+
+static int
+fops_console_stat(file *f, struct stat *s)
+{
+    // We are not expected to fill much in s. Java expects (see os::available
+    // in os_linux.cpp) S_ISCHR to be true.
+    // TODO: what does Linux fill when we stat() a tty?
+    memset(s, 0, sizeof(struct stat));
+    s->st_mode = S_IFCHR;
+    return 0;
+}
+
+
+static fileops console_ops = {
+    fops_console_init_close,
+    op_read<file>,
+    op_write<file>,
+    unsupported_truncate,
+    op_ioctl<file>,
+    unsupported_poll, // FIXME: implement this, and don't forget poll_wake()
+    fops_console_stat,
+    fops_console_init_close,
+    unsupported_chmod,
+};
+
+int open() {
+    try {
+        fileref f{falloc_noinstall()};
+        finit(f.get(), FREAD|FWRITE, DTYPE_UNSPEC, NULL, &console_ops);
+        fdesc fd(f);
+        return fd.release();
+    } catch (int error) {
+        errno = error;
+        return -1;
+    }
+}
+
 }

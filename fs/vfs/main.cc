@@ -50,6 +50,7 @@
 #include <osv/debug.h>
 #include <osv/ioctl.h>
 #include <osv/trace.hh>
+#include <drivers/console.hh>
 
 #include "vfs.h"
 
@@ -1246,7 +1247,8 @@ vfs_init(void)
 	mount_rootfs();
 	unpack_bootfs();
 
-	if (open("/dev/console", O_RDWR, 0) != 0)
+//	if (open("/dev/console", O_RDWR, 0) != 0)
+	if (console::open() != 0)
 		kprintf("failed to open console, error = %d\n", errno);
 	if (dup(0) != 1)
 		kprintf("failed to dup console (1)\n");
