@@ -126,10 +126,10 @@ public:
     bool get_guest_feature_bit(int bit);
 
     // device status
-    u32 get_dev_status(void);
-    void set_dev_status(u32 status);
-    void add_dev_status(u32 status);
-    void del_dev_status(u32 status);
+    u8 get_dev_status(void);
+    void set_dev_status(u8 status);
+    void add_dev_status(u8 status);
+    void del_dev_status(u8 status);
 
     // Access the virtio conf address space set by pci bar 1
     bool get_virtio_config_bit(u32 offset, int bit);

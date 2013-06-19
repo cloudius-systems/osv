@@ -128,7 +128,7 @@ void virtio_driver::free_queues(void)
 
 bool virtio_driver::kick(int queue)
 {
-    virtio_conf_writel(VIRTIO_PCI_QUEUE_NOTIFY, queue);
+    virtio_conf_writew(VIRTIO_PCI_QUEUE_NOTIFY, queue);
     return true;
 }
 
@@ -235,22 +235,22 @@ bool virtio_driver::get_guest_feature_bit(int bit)
 }
 
 
-u32 virtio_driver::get_dev_status(void)
+u8 virtio_driver::get_dev_status(void)
 {
-    return (virtio_conf_readl(VIRTIO_PCI_STATUS));
+    return (virtio_conf_readb(VIRTIO_PCI_STATUS));
 }
 
-void virtio_driver::set_dev_status(u32 status)
+void virtio_driver::set_dev_status(u8 status)
 {
-    virtio_conf_writel(VIRTIO_PCI_STATUS, status);
+    virtio_conf_writeb(VIRTIO_PCI_STATUS, status);
 }
 
-void virtio_driver::add_dev_status(u32 status)
+void virtio_driver::add_dev_status(u8 status)
 {
     set_dev_status(get_dev_status() | status);
 }
 
-void virtio_driver::del_dev_status(u32 status)
+void virtio_driver::del_dev_status(u8 status)
 {
     set_dev_status(get_dev_status() & ~status);
 }
