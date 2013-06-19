@@ -13,6 +13,7 @@ fo_truncate_t unsupported_truncate;
 fo_ioctl_t unsupported_ioctl;
 fo_stat_t unsupported_stat;
 fo_chmod_t unsupported_chmod;
+fo_poll_t unsupported_poll;
 
 __END_DECLS
 

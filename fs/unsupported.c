@@ -63,3 +63,8 @@ int unsupported_write(struct file *fp, struct uio *uio, int flags)
 {
     return EINVAL; /* as explained above, doesn't matter what we return */
 }
+
+int unsupported_poll(struct file *fp, int events)
+{
+    return 0;
+}
