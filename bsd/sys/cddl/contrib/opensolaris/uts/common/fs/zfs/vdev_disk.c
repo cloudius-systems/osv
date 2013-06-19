@@ -234,7 +234,7 @@ vdev_disk_read_rootlabel(char *devname, nvlist_t **config)
 	int error = -1;
 	char *minor_name;
 
-	error = device_open(devname, DO_RDWR, &dev);
+	error = device_open(devname + 5, DO_RDWR, &dev);
 	if (error)
 		return error;
 
