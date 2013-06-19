@@ -1201,16 +1201,16 @@ void mount_rootfs(void)
 		kprintf("failed to mount devfs, error = %d\n", ret);
 }
 
-void mount_usr(void)
+extern "C" void mount_usr(void)
 {
 	int ret;
 
 	if (mkdir("/usr", 0755) < 0)
 		kprintf("failed to create /usr, error = %d\n", errno);
 
-	ret = sys_mount("/dev/vblk1", "/usr", "romfs", 0, NULL);
+	ret = sys_mount("/dev/vblk1", "/usr", "zfs", 0, (void *)"osv/usr");
 	if (ret)
-		kprintf("failed to mount romfs, error = %d\n", ret);
+		kprintf("failed to mount /usr, error = %d\n", ret);
 }
 
 extern "C" void bio_init(void);

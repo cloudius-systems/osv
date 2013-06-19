@@ -490,20 +490,16 @@ boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
 
 bsd/%.o: COMMON += -D_KERNEL -DSMP 
 
-usr.img: usr.manifest
-	$(call quiet, \
-		JDKBASE=$(jdkbase) \
-		GCCBASE=$(gccbase) \
-		MISCBASE=$(miscbase) \
-		BUILDDIR="${@}.tmp" \
-		IMAGE="$@" \
-		sh $(src)/scripts/mkromfs.sh, MKROMFS $@)
+usr.img: scripts/mkzfs.py usr.manifest $(jni)
+	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \
+		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
+		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) $(jni) \
+bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
 		tests/testrunner.so java/java.so java/RunJava.class
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
