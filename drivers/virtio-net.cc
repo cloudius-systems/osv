@@ -39,7 +39,6 @@ using namespace memory;
 
 // TODO list
 // irq thread affinity and tx affinity
-// Mergable buffers
 // tx zero copy
 // vlans?
 
@@ -127,7 +126,10 @@ namespace virtio {
         virtio_i("VIRTIO NET INSTANCE");
         _id = _instance++;
 
+        setup_features();
         read_config();
+
+        _hdr_size = (_mergeable_bufs)? sizeof(virtio_net_hdr_mrg_rxbuf):sizeof(virtio_net_hdr);
 
         //register the 3 irq callback for the net
         sched::thread* rx = new sched::thread([this] { this->receiver(); });
@@ -190,11 +192,13 @@ namespace virtio {
                     (u32)_config.mac[4],
                     (u32)_config.mac[5]);
 
+        _mergeable_bufs = get_guest_feature_bit(VIRTIO_NET_F_MRG_RXBUF);
+
         return true;
     }
 
     struct virtio_net_req {
-        struct virtio_net::virtio_net_hdr hdr;
+        struct virtio_net::virtio_net_hdr_mrg_rxbuf mhdr;
         sglist payload;
         struct free_deleter {
             void operator()(struct mbuf *m) {m_freem(m);}
@@ -202,7 +206,7 @@ namespace virtio {
 
         std::unique_ptr<struct mbuf, free_deleter> um;
 
-        virtio_net_req() {memset(&hdr,0,sizeof(hdr));};
+        virtio_net_req() {memset(&mhdr,0,sizeof(mhdr));};
     };
 
     void virtio_net::receiver() {
@@ -211,96 +215,119 @@ namespace virtio {
 
             // Wait for rx queue (used elements)
             virtio_driver::wait_for_queue(_rx_queue);
-
-            u32 len;
-            virtio_net_req * req;
-
             trace_virtio_net_rx_wake();
 
-            while((req = static_cast<virtio_net_req*>(_rx_queue->get_buf(&len))) != nullptr) {
+            u32 len;
+            struct mbuf* m;
+            int nbufs;
+            u32 offset = _hdr_size;
+            //use local header that we copy out of the mbuf since we're truncating it
+            struct virtio_net_hdr_mrg_rxbuf mhdr;
 
-                auto ii = req->payload._nodes.begin();
-                ii++;
+            while ((m = static_cast<struct mbuf*>(_rx_queue->get_buf(&len))) != nullptr) {
 
-                auto m = req->um.release();
-                delete req;
+                if (len < _hdr_size + ETHER_HDR_LEN) {
+                    _ifn->if_ierrors++;
+                    m_free(m);
+                    continue;
+                }
+
+                memcpy(&mhdr, mtod(m, void *), _hdr_size);
+
+                if (!_mergeable_bufs) {
+                    nbufs = 1;
+                } else {
+                    nbufs = mhdr.num_buffers;
+                    if (nbufs > 1) // It should happen but it doesn't, leave the comment for visibility in the mean time
+                        virtio_net_e("\t RX: mergeable, hdr len: %d, len %d, num_bufs=%d", mhdr.hdr.hdr_len, len, mhdr.num_buffers);
+                }
 
                 m->m_pkthdr.len = len;
                 m->m_pkthdr.rcvif = _ifn;
                 m->m_pkthdr.csum_flags = 0;
                 m->m_len = len;
 
+                struct mbuf* m_head, *m_tail;
+                m_tail = m_head = m;
+
+                while (--nbufs > 0) {
+                    if ((m = static_cast<struct mbuf*>(_rx_queue->get_buf(&len))) == nullptr) {
+                        _ifn->if_ierrors++;
+                        break;
+                    }
+
+                    if (m->m_len < (int)len)
+                        len = m->m_len;
+
+                    m->m_len = len;
+                    m->m_flags &= ~M_PKTHDR;
+                    m_head->m_pkthdr.len += len;
+                    m_tail->m_next = m;
+                    m_tail = m;
+                }
+
+                // skip over the virtio header bytes (offset) that aren't need for the above layer
+                m_adj(m_head, offset);
+
                 _ifn->if_ipackets++;
+                (*_ifn->if_input)(_ifn, m_head);
 
                 trace_virtio_net_rx_packet(_ifn->if_index, len);
 
-                (*_ifn->if_input)(_ifn, m);
+                // The interface may have been stopped while we were
+                // passing the packet up the network stack.
+                if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
+                    break;
             }
 
-            if (_rx_queue->avail_ring_has_room(_rx_queue->size()/2)) {
-                virtio_net_d("ring is less than half full, refill");
+            if (_rx_queue->refill_ring_cond()) {
                 fill_rx_ring();
             }
-
         }
-
     }
 
     static const int page_size = 4096;
 
     void virtio_net::fill_rx_ring()
     {
-        virtio_net_d("%s", __FUNCTION__);
+        bool worked = false;
 
-        // it could have been a while (1) loop but it simplifies the allocation
-        // tracking
-        while (_rx_queue->avail_ring_has_room(2)) {
-            virtio_net_req *req = new virtio_net_req;
-
-            // As long as we're using standard MTU of 1500, it's fine to use
-            // MCLBYTES
+        while (_rx_queue->avail_ring_not_empty()) {
+            sglist payload;
             struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MCLBYTES);
             if (!m)
                 break;
-            req->um.reset(m);
 
-            u8 *mdata;
-            mdata = mtod(m, u8*);
+            m->m_len = MCLBYTES;
+            u8 *mdata = mtod(m, u8*);
 
-            //Better use the header withing the mbuf allocation like in freebsd
-            //offset = 0;
-            //struct virtio_net_hdr *hdr = static_cast<struct virtio_net_hdr*>(mdata);
-            //offset += sizeof(struct virtio_net_hdr);
-
-            req->payload.add(mmu::virt_to_phys(mdata), MCLBYTES);
-            req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
-
-            if (!_rx_queue->add_buf(&req->payload,0,req->payload.get_sgs(),req)) {
-                delete req;
+            payload.add(mmu::virt_to_phys(mdata), m->m_len);
+            if (!_rx_queue->add_buf(&payload,0,payload.get_sgs(),m)) {
+                m_freem(m);
                 break;
             }
+            worked = true;
         }
 
-        _rx_queue->kick();
+        if (worked) _rx_queue->kick();
     }
+
 
     bool virtio_net::tx(struct mbuf *m_head, bool flush)
     {
         struct mbuf *m;
         virtio_net_req *req = new virtio_net_req;
 
+        req->um.reset(m_head);
+        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->mhdr)), _hdr_size);
+
         for (m = m_head; m != NULL; m = m->m_next) {
             if (m->m_len != 0) {
                 virtio_net_d("Frag len=%d:", m->m_len);
+                req->mhdr.num_buffers++;
                 req->payload.add(mmu::virt_to_phys(m->m_data), m->m_len);
             }
         }
-
-        //TODO: verify what the hdr_len should be
-        req->hdr.hdr_len = ETH_ALEN;
-        req->um.reset(m_head);
-        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->hdr)), sizeof(struct virtio_net_hdr), true);
-        // leak for now ; req->buffer = (u8*)out;
 
         if (!_tx_queue->avail_ring_has_room(req->payload.get_sgs())) {
             if (_tx_queue->used_ring_not_empty()) {
@@ -349,7 +376,7 @@ namespace virtio {
     u32 virtio_net::get_driver_features(void)
     {
         u32 base = virtio_driver::get_driver_features();
-        return (base | ( 1 << VIRTIO_NET_F_MAC));
+        return (base | ( 1 << VIRTIO_NET_F_MAC) | (1 << VIRTIO_NET_F_MRG_RXBUF));
     }
 
     hw_driver* virtio_net::probe(hw_device* dev)

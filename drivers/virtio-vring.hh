@@ -127,6 +127,7 @@ class virtio_driver;
         // when the available ring has x descriptors as room it means that
         // x descriptors can be allocated while _num-x are available for the host
         bool avail_ring_has_room(int n);
+        bool refill_ring_cond();
         bool kick();
         // Total number of descriptors in ring
         int size() {return _num;}

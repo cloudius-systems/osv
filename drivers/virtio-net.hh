@@ -237,6 +237,8 @@ namespace virtio {
 
         std::string _driver_name;
         virtio_net_config _config;
+        bool _mergeable_bufs;
+        u32 _hdr_size;
 
         vring* _rx_queue;
         vring* _tx_queue;

@@ -201,6 +201,11 @@ namespace virtio {
         return (_avail_count > 0);
     }
 
+    bool vring::refill_ring_cond()
+        {
+            return (_avail_count >= _num/2);
+        }
+
     bool vring::avail_ring_has_room(int descriptors)
     {
         if (_dev->get_indirect_buf_cap())
