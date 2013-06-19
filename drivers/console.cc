@@ -213,6 +213,12 @@ console_ioctl(u_long request, void *arg)
     case TCSETS:
         tio = *static_cast<termios*>(arg);
         return 0;
+    case FIONREAD:
+        // used in OpenJDK's os::available (os_linux.cpp)
+        console_mutex.lock();
+        *static_cast<int*>(arg) = console_queue.size();
+        console_mutex.unlock();
+        return 0;
     default:
         return -ENOTTY;
     }
