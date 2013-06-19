@@ -1009,7 +1009,7 @@ badport_bandlim(int which)
 		 * the previous behaviour at the expense of added complexity.
 		 */
 		if (V_icmplim_output && opps > V_icmplim)
-			log(LOG_NOTICE, "Limiting %s from %d to %d packets/sec\n",
+			bsd_log(LOG_NOTICE, "Limiting %s from %d to %d packets/sec\n",
 				r->type, opps, V_icmplim);
 	}
 	return 0;			/* okay to send packet */

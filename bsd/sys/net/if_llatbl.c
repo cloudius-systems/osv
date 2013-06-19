@@ -266,12 +266,12 @@ lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 	int error = 0;
 
 	if (dl == NULL || dl->sdl_family != AF_LINK) {
-		log(LOG_INFO, "%s: invalid dl\n", __func__);
+		bsd_log(LOG_INFO, "%s: invalid dl\n", __func__);
 		return EINVAL;
 	}
 	ifp = ifnet_byindex(dl->sdl_index);
 	if (ifp == NULL) {
-		log(LOG_INFO, "%s: invalid ifp (sdl_index %d)\n",
+		bsd_log(LOG_INFO, "%s: invalid ifp (sdl_index %d)\n",
 		    __func__, dl->sdl_index);
 		return EINVAL;
 	}
@@ -287,7 +287,7 @@ lla_rt_output(struct rt_msghdr *rtm, struct rt_addrinfo *info)
 				((struct bsd_sockaddr_inarp *)dst)->sin_other = 0;
 				rt = rtalloc1(dst, 0, 0);
 				if (rt == NULL || !(rt->rt_flags & RTF_HOST)) {
-					log(LOG_INFO, "%s: RTM_ADD publish "
+					bsd_log(LOG_INFO, "%s: RTM_ADD publish "
 					    "(proxy only) is invalid\n",
 					    __func__);
 					if (rt)

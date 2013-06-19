@@ -193,7 +193,7 @@ ip_dooptions(struct mbuf *m, int pass)
 					 */
 nosourcerouting:
 					strcpy(buf, inet_ntoa(ip->ip_dst));
-					log(LOG_WARNING, 
+					bsd_log(LOG_WARNING,
 					    "attempted source route from %s to %s\n",
 					    inet_ntoa(ip->ip_src), buf);
 					type = ICMP_UNREACH;

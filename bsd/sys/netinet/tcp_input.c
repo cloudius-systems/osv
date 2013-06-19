@@ -861,7 +861,7 @@ findpcb:
 		if ((tcp_log_in_vain == 1 && (thflags & TH_SYN)) ||
 		    tcp_log_in_vain == 2) {
 			if ((s = tcp_log_vain(NULL, th, (void *)ip, ip6)))
-				log(LOG_INFO, "%s; %s: Connection attempt "
+				bsd_log(LOG_INFO, "%s; %s: Connection attempt "
 				    "to closed port\n", s, __func__);
 		}
 		/*
@@ -1082,7 +1082,7 @@ relocked:
 				 * try.
 				 */
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-					log(LOG_DEBUG, "%s; %s: Listen socket: "
+					bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					    "Socket allocation failed due to "
 					    "limits or memory shortage, %s\n",
 					    s, __func__,
@@ -1154,7 +1154,7 @@ relocked:
 		 */
 		if ((thflags & TH_SYN) == 0) {
 			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				log(LOG_DEBUG, "%s; %s: Listen socket: "
+				bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 				    "SYN is missing, segment ignored\n",
 				    s, __func__);
 			TCPSTAT_INC(tcps_badsyn);
@@ -1165,7 +1165,7 @@ relocked:
 		 */
 		if (thflags & TH_ACK) {
 			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				log(LOG_DEBUG, "%s; %s: Listen socket: "
+				bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 				    "SYN|ACK invalid, segment rejected\n",
 				    s, __func__);
 			syncache_badack(&inc);	/* XXX: Not needed! */
@@ -1186,7 +1186,7 @@ relocked:
 		 */
 		if ((thflags & TH_FIN) && V_drop_synfin) {
 			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				log(LOG_DEBUG, "%s; %s: Listen socket: "
+				bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 				    "SYN|FIN segment ignored (based on "
 				    "sysctl setting)\n", s, __func__);
 			TCPSTAT_INC(tcps_badsyn);
@@ -1242,7 +1242,7 @@ relocked:
 			    (ia6->ia6_flags & IN6_IFF_DEPRECATED)) {
 				ifa_free(&ia6->ia_ifa);
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    log(LOG_DEBUG, "%s; %s: Listen socket: "
+				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					"Connection attempt to deprecated "
 					"IPv6 address rejected\n",
 					s, __func__);
@@ -1266,7 +1266,7 @@ relocked:
 		 */
 		if (m->m_flags & (M_BCAST|M_MCAST)) {
 			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-			    log(LOG_DEBUG, "%s; %s: Listen socket: "
+			    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 				"Connection attempt from broad- or multicast "
 				"link layer address ignored\n", s, __func__);
 			goto dropunlock;
@@ -1276,7 +1276,7 @@ relocked:
 			if (th->th_dport == th->th_sport &&
 			    IN6_ARE_ADDR_EQUAL(&ip6->ip6_dst, &ip6->ip6_src)) {
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    log(LOG_DEBUG, "%s; %s: Listen socket: "
+				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					"Connection attempt to/from self "
 					"ignored\n", s, __func__);
 				goto dropunlock;
@@ -1284,7 +1284,7 @@ relocked:
 			if (IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst) ||
 			    IN6_IS_ADDR_MULTICAST(&ip6->ip6_src)) {
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    log(LOG_DEBUG, "%s; %s: Listen socket: "
+				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					"Connection attempt from/to multicast "
 					"address ignored\n", s, __func__);
 				goto dropunlock;
@@ -1299,7 +1299,7 @@ relocked:
 			if (th->th_dport == th->th_sport &&
 			    ip->ip_dst.s_addr == ip->ip_src.s_addr) {
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    log(LOG_DEBUG, "%s; %s: Listen socket: "
+				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					"Connection attempt from/to self "
 					"ignored\n", s, __func__);
 				goto dropunlock;
@@ -1309,7 +1309,7 @@ relocked:
 			    ip->ip_src.s_addr == htonl(INADDR_BROADCAST) ||
 			    in_broadcast(ip->ip_dst, m->m_pkthdr.rcvif)) {
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    log(LOG_DEBUG, "%s; %s: Listen socket: "
+				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					"Connection attempt from/to broad- "
 					"or multicast address ignored\n",
 					s, __func__);
@@ -2195,7 +2195,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 
 		if ((s = tcp_log_addrs(&tp->t_inpcb->inp_inc, th, NULL, NULL))) {
-			log(LOG_DEBUG, "%s; %s: %s: Received %d bytes of data after socket "
+			bsd_log(LOG_DEBUG, "%s; %s: %s: Received %d bytes of data after socket "
 			    "was closed, sending RST and removing tcpcb\n",
 			    s, __func__, tcpstates[tp->t_state], tlen);
 			free(s);

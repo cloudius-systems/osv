@@ -148,7 +148,7 @@ extern int tick;
 #define panic(...) do { tprintf_e("bsd-panic", __VA_ARGS__); \
                         abort(); } while(0)
 
-#define log(x, ...) tprintf_e("bsd-log", __VA_ARGS__)
+#define bsd_log(x, ...) tprintf_e("bsd-log", __VA_ARGS__)
 
 #define PAGE_MASK (PAGE_SIZE-1)
 

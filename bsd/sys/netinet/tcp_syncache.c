@@ -394,7 +394,7 @@ static void syncache_timer(void *xsch)
 		}
 		if (sc->sc_rxmits > V_tcp_syncache.rexmt_limit) {
 			if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL ))) {
-				log(LOG_DEBUG, "%s; %s: Retransmits exhausted, "
+				bsd_log(LOG_DEBUG, "%s; %s: Retransmits exhausted, "
 				"giving up and removing syncache entry\n", s, __func__);
 				free(s);
 			}
@@ -403,7 +403,7 @@ static void syncache_timer(void *xsch)
 			continue;
 		}
 		if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL ))) {
-			log(LOG_DEBUG, "%s; %s: Response timeout, "
+			bsd_log(LOG_DEBUG, "%s; %s: Response timeout, "
 			"retransmitting (%u) SYN|ACK\n", s, __func__, sc->sc_rxmits);
 			free(s);
 		}
@@ -485,7 +485,7 @@ void syncache_chkrst(struct in_conninfo *inc, struct tcphdr *th)
 	 */
 	if (th->th_flags & (TH_ACK | TH_SYN | TH_FIN)) {
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: Spurious RST with ACK, SYN or "
+			bsd_log(LOG_DEBUG, "%s; %s: Spurious RST with ACK, SYN or "
 			"FIN flag set, segment ignored\n", s, __func__);
 		TCPSTAT_INC(tcps_badrst);
 		goto done;
@@ -501,7 +501,7 @@ void syncache_chkrst(struct in_conninfo *inc, struct tcphdr *th)
 	 */
 	if (sc == NULL ) {
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: Spurious RST without matching "
+			bsd_log(LOG_DEBUG, "%s; %s: Spurious RST without matching "
 			"syncache entry (possibly syncookie only), "
 			"segment ignored\n", s, __func__);
 		TCPSTAT_INC(tcps_badrst);
@@ -525,12 +525,12 @@ void syncache_chkrst(struct in_conninfo *inc, struct tcphdr *th)
 		&& SEQ_LEQ(th->th_seq, sc->sc_irs + sc->sc_wnd)) {
 		syncache_drop(sc, sch);
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: Our SYN|ACK was rejected, "
+			bsd_log(LOG_DEBUG, "%s; %s: Our SYN|ACK was rejected, "
 			"connection attempt aborted by remote endpoint\n", s, __func__);
 		TCPSTAT_INC(tcps_sc_reset);
 	} else {
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: RST with invalid SEQ %u != "
+			bsd_log(LOG_DEBUG, "%s; %s: RST with invalid SEQ %u != "
 			"IRS %u (+WND %u), segment ignored\n",
 				s, __func__, th->th_seq, sc->sc_irs, sc->sc_wnd);
 		TCPSTAT_INC(tcps_badrst);
@@ -616,7 +616,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		 */
 		TCPSTAT_INC(tcps_listendrop);
 		if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL ))) {
-			log(LOG_DEBUG, "%s; %s: Socket create failed "
+			bsd_log(LOG_DEBUG, "%s; %s: Socket create failed "
 			"due to limits or memory shortage\n", s, __func__);
 			free(s);
 		}
@@ -664,7 +664,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		inp->inp_laddr.s_addr = INADDR_ANY;
 		inp->inp_lport = 0;
 		if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL ))) {
-			log(LOG_DEBUG, "%s; %s: in_pcbinshash failed "
+			bsd_log(LOG_DEBUG, "%s; %s: in_pcbinshash failed "
 			"with error %i\n", s, __func__, error);
 			free(s);
 		}
@@ -707,7 +707,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 					thread0.td_ucred, m)) != 0) {
 			inp->in6p_laddr = laddr6;
 			if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL))) {
-				log(LOG_DEBUG, "%s; %s: in6_pcbconnect failed "
+				bsd_log(LOG_DEBUG, "%s; %s: in6_pcbconnect failed "
 					"with error %i\n",
 					s, __func__, error);
 				free(s);
@@ -747,7 +747,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 			!= 0) {
 			inp->inp_laddr = laddr;
 			if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL ))) {
-				log(LOG_DEBUG, "%s; %s: in_pcbconnect failed "
+				bsd_log(LOG_DEBUG, "%s; %s: in_pcbconnect failed "
 				"with error %i\n", s, __func__, error);
 				free(s);
 			}
@@ -868,7 +868,7 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 		if (!V_tcp_syncookies) {
 			SCH_UNLOCK(sch);
 			if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-				log(LOG_DEBUG, "%s; %s: Spurious ACK, "
+				bsd_log(LOG_DEBUG, "%s; %s: Spurious ACK, "
 				"segment rejected (syncookies disabled)\n", s, __func__);
 			goto failed;
 		}
@@ -877,7 +877,7 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 		SCH_UNLOCK(sch);
 		if (sc == NULL ) {
 			if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-				log(LOG_DEBUG, "%s; %s: Segment failed "
+				bsd_log(LOG_DEBUG, "%s; %s: Segment failed "
 				"SYNCOOKIE authentication, segment rejected "
 				"(probably spoofed)\n", s, __func__);
 			goto failed;
@@ -896,7 +896,7 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 	 */
 	if (th->th_ack != sc->sc_iss + 1 && !TOEPCB_ISSET(sc)) {
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: ACK %u != ISS+1 %u, segment "
+			bsd_log(LOG_DEBUG, "%s; %s: ACK %u != ISS+1 %u, segment "
 			"rejected\n", s, __func__, th->th_ack, sc->sc_iss);
 		goto failed;
 	}
@@ -909,14 +909,14 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 		|| SEQ_GT(th->th_seq, sc->sc_irs + sc->sc_wnd))&&
 	!TOEPCB_ISSET(sc)){
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: SEQ %u != IRS+1 %u, segment "
+			bsd_log(LOG_DEBUG, "%s; %s: SEQ %u != IRS+1 %u, segment "
 			"rejected\n", s, __func__, th->th_seq, sc->sc_irs);
 		goto failed;
 	}
 
 	if (!(sc->sc_flags & SCF_TIMESTAMP) && (to->to_flags & TOF_TS)) {
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
-			log(LOG_DEBUG, "%s; %s: Timestamp not expected, "
+			bsd_log(LOG_DEBUG, "%s; %s: Timestamp not expected, "
 			"segment rejected\n", s, __func__);
 		goto failed;
 	}
@@ -927,7 +927,7 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 	if ((to->to_flags & TOF_TS) && to->to_tsecr != sc->sc_ts&&
 	!TOEPCB_ISSET(sc)) {if
 (		(s = tcp_log_addrs(inc, th, NULL, NULL)))
-		log(LOG_DEBUG, "%s; %s: TSECR %u != TS %u, "
+		bsd_log(LOG_DEBUG, "%s; %s: TSECR %u != TS %u, "
 		"segment rejected\n",
 		s, __func__, to->to_tsecr, sc->sc_ts);
 		goto failed;
@@ -1100,7 +1100,7 @@ static void _syncache_add(struct in_conninfo *inc, struct tcpopt *to,
 #endif
 		/* Retransmit SYN|ACK and reset retransmit count. */
 		if ((s = tcp_log_addrs(&sc->sc_inc, th, NULL, NULL ))) {
-			log(LOG_DEBUG, "%s; %s: Received duplicate SYN, "
+			bsd_log(LOG_DEBUG, "%s; %s: Received duplicate SYN, "
 			"resetting timer and retransmitting SYN|ACK\n", s, __func__);
 			free(s);
 		}

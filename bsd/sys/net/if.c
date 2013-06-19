@@ -1122,7 +1122,7 @@ if_rtdel(struct radix_node *rn, void *arg)
 				rt_mask(rt), rt->rt_flags|RTF_RNH_LOCKED,
 				(struct rtentry **) NULL, rt->rt_fibnum);
 		if (err) {
-			log(LOG_WARNING, "if_rtdel: error %d\n", err);
+			bsd_log(LOG_WARNING, "if_rtdel: error %d\n", err);
 		}
 	}
 
@@ -1215,7 +1215,7 @@ ifa_add_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
 		RT_REMREF(rt);
 		RT_UNLOCK(rt);
 	} else if (error != 0)
-		log(LOG_INFO, "ifa_add_loopback_route: insertion failed\n");
+		bsd_log(LOG_INFO, "ifa_add_loopback_route: insertion failed\n");
 
 	return (error);
 }
@@ -1239,7 +1239,7 @@ ifa_del_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
 	error = rtrequest1_fib(RTM_DELETE, &info, NULL, 0);
 
 	if (error != 0)
-		log(LOG_INFO, "ifa_del_loopback_route: deletion failed\n");
+		bsd_log(LOG_INFO, "ifa_del_loopback_route: deletion failed\n");
 
 	return (error);
 }
@@ -1671,7 +1671,7 @@ do_link_state_change(void *arg, int pending)
 	if (pending > 1)
 		if_printf(ifp, "%d link states coalesced\n", pending);
 	if (log_link_state_change)
-		log(LOG_NOTICE, "%s: link state changed to %s\n", ifp->if_xname,
+		bsd_log(LOG_NOTICE, "%s: link state changed to %s\n", ifp->if_xname,
 		    (link_state == LINK_STATE_UP) ? "UP" : "DOWN" );
 	EVENTHANDLER_INVOKE(ifnet_link_event, ifp, ifp->if_link_state);
 	CURVNET_RESTORE();
@@ -1906,7 +1906,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 				ifp->if_flags |= IFF_PROMISC;
 			else if (ifp->if_pcount == 0)
 				ifp->if_flags &= ~IFF_PROMISC;
-			log(LOG_INFO, "%s: permanently promiscuous mode %s\n",
+			bsd_log(LOG_INFO, "%s: permanently promiscuous mode %s\n",
 			    ifp->if_xname,
 			    (new_flags & IFF_PPROMISC) ? "enabled" : "disabled");
 		}
@@ -1961,7 +1961,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 		rt_ifannouncemsg(ifp, IFAN_DEPARTURE);
 		EVENTHANDLER_INVOKE(ifnet_departure_event, ifp);
 
-		log(LOG_INFO, "%s: changing name to '%s'\n",
+		bsd_log(LOG_INFO, "%s: changing name to '%s'\n",
 		    ifp->if_xname, new_name);
 
 		strlcpy(ifp->if_xname, new_name, sizeof(ifp->if_xname));
@@ -2420,7 +2420,7 @@ ifpromisc(struct ifnet *ifp, int pswitch)
 			   &ifp->if_pcount, pswitch);
 	/* If promiscuous mode status has changed, log a message */
 	if (error == 0 && ((ifp->if_flags ^ oldflags) & IFF_PROMISC))
-		log(LOG_INFO, "%s: promiscuous mode %s\n",
+		bsd_log(LOG_INFO, "%s: promiscuous mode %s\n",
 		    ifp->if_xname,
 		    (ifp->if_flags & IFF_PROMISC) ? "enabled" : "disabled");
 	return (error);

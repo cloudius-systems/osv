@@ -289,7 +289,7 @@ retry:
 	}
 	if (la == NULL) {
 		if (flags & LLE_CREATE)
-			log(LOG_DEBUG,
+			bsd_log(LOG_DEBUG,
 			    "arpresolve: can't allocate llinfo for %s\n",
 			    inet_ntoa(SIN(dst)->sin_addr));
 		m_freem(m);
@@ -318,7 +318,7 @@ retry:
 	}
 
 	if (la->la_flags & LLE_STATIC) {   /* should not happen! */
-		log(LOG_DEBUG, "arpresolve: ouch, empty static llinfo for %s\n",
+		bsd_log(LOG_DEBUG, "arpresolve: ouch, empty static llinfo for %s\n",
 		    inet_ntoa(SIN(dst)->sin_addr));
 		m_freem(m);
 		error = EINVAL;
@@ -407,7 +407,7 @@ arpintr(struct mbuf *m)
 
 	if (m->m_len < sizeof(struct arphdr) &&
 	    ((m = m_pullup(m, sizeof(struct arphdr))) == NULL)) {
-		log(LOG_NOTICE, "arp: runt packet -- m_pullup failed\n");
+		bsd_log(LOG_NOTICE, "arp: runt packet -- m_pullup failed\n");
 		return;
 	}
 	ar = mtod(m, struct arphdr *);
@@ -417,7 +417,7 @@ arpintr(struct mbuf *m)
 	    ntohs(ar->ar_hrd) != ARPHRD_ARCNET &&
 	    ntohs(ar->ar_hrd) != ARPHRD_IEEE1394 &&
 	    ntohs(ar->ar_hrd) != ARPHRD_INFINIBAND) {
-		log(LOG_NOTICE, "arp: unknown hardware address format (0x%2D)"
+		bsd_log(LOG_NOTICE, "arp: unknown hardware address format (0x%2D)"
 		    " (from %*D to %*D)\n", (unsigned char *)&ar->ar_hrd, "",
 		    ETHER_ADDR_LEN, (u_char *)ar_sha(ar), ":",
 		    ETHER_ADDR_LEN, (u_char *)ar_tha(ar), ":");
@@ -427,7 +427,7 @@ arpintr(struct mbuf *m)
 
 	if (m->m_len < arphdr_len(ar)) {
 		if ((m = m_pullup(m, arphdr_len(ar))) == NULL) {
-			log(LOG_NOTICE, "arp: runt packet\n");
+			bsd_log(LOG_NOTICE, "arp: runt packet\n");
 			m_freem(m);
 			return;
 		}
@@ -505,7 +505,7 @@ in_arpinput(struct mbuf *m)
 
 	req_len = arphdr_len2(ifp->if_addrlen, sizeof(struct in_addr));
 	if (m->m_len < req_len && (m = m_pullup(m, req_len)) == NULL) {
-		log(LOG_NOTICE, "in_arp: runt packet -- m_pullup failed\n");
+		bsd_log(LOG_NOTICE, "in_arp: runt packet -- m_pullup failed\n");
 		return;
 	}
 
@@ -515,13 +515,13 @@ in_arpinput(struct mbuf *m)
 	 * a protocol length not equal to an IPv4 address.
 	 */
 	if (ah->ar_pln != sizeof(struct in_addr)) {
-		log(LOG_NOTICE, "in_arp: requested protocol length != %zu\n",
+		bsd_log(LOG_NOTICE, "in_arp: requested protocol length != %zu\n",
 		    sizeof(struct in_addr));
 		return;
 	}
 
 	if (allow_multicast == 0 && ETHER_IS_MULTICAST(ar_sha(ah))) {
-		log(LOG_NOTICE, "arp: %*D is multicast\n",
+		bsd_log(LOG_NOTICE, "arp: %*D is multicast\n",
 		    ifp->if_addrlen, (u_char *)ar_sha(ah), ":");
 		return;
 	}
@@ -616,7 +616,7 @@ match:
 	if (!bcmp(ar_sha(ah), enaddr, ifp->if_addrlen))
 		goto drop;	/* it's from me, ignore it. */
 	if (!bcmp(ar_sha(ah), ifp->if_broadcastaddr, ifp->if_addrlen)) {
-		log(LOG_NOTICE,
+		bsd_log(LOG_NOTICE,
 		    "arp: link address is broadcast for IP address %s!\n",
 		    inet_ntoa(isaddr));
 		goto drop;
@@ -628,7 +628,7 @@ match:
 	 * potential misconfiguration.
 	 */
 	if (!bridged && isaddr.s_addr == myaddr.s_addr && myaddr.s_addr != 0) {
-		log(LOG_ERR,
+		bsd_log(LOG_ERR,
 		   "arp: %*D is using my IP address %s on %s!\n",
 		   ifp->if_addrlen, (u_char *)ar_sha(ah), ":",
 		   inet_ntoa(isaddr), ifp->if_xname);
@@ -652,7 +652,7 @@ match:
 		/* the following is not an error when doing bridging */
 		if (!bridged && la->lle_tbl->llt_ifp != ifp && !carp_match) {
 			if (log_arp_wrong_iface)
-				log(LOG_WARNING, "arp: %s is on %s "
+				bsd_log(LOG_WARNING, "arp: %s is on %s "
 				    "but got reply from %*D on %s\n",
 				    inet_ntoa(isaddr),
 				    la->lle_tbl->llt_ifp->if_xname,
@@ -666,7 +666,7 @@ match:
 			if (la->la_flags & LLE_STATIC) {
 				LLE_WUNLOCK(la);
 				if (log_arp_permanent_modify)
-					log(LOG_ERR,
+					bsd_log(LOG_ERR,
 					    "arp: %*D attempts to modify "
 					    "permanent entry for %s on %s\n",
 					    ifp->if_addrlen,
@@ -675,7 +675,7 @@ match:
 				goto reply;
 			}
 			if (log_arp_movements) {
-				log(LOG_INFO, "arp: %s moved from %*D "
+				bsd_log(LOG_INFO, "arp: %s moved from %*D "
 				    "to %*D on %s\n",
 				    inet_ntoa(isaddr),
 				    ifp->if_addrlen,
@@ -687,7 +687,7 @@ match:
 
 		if (ifp->if_addrlen != ah->ar_hln) {
 			LLE_WUNLOCK(la);
-			log(LOG_WARNING, "arp from %*D: addr len: new %d, "
+			bsd_log(LOG_WARNING, "arp from %*D: addr len: new %d, "
 			    "i/f %d (ignored)\n", ifp->if_addrlen,
 			    (u_char *) ar_sha(ah), ":", ah->ar_hln,
 			    ifp->if_addrlen);
@@ -795,7 +795,7 @@ reply:
 			if (!rt)
 				goto drop;
 			if (rt->rt_ifp != ifp) {
-				log(LOG_INFO, "arp_proxy: ignoring request"
+				bsd_log(LOG_INFO, "arp_proxy: ignoring request"
 				    " from %s via %s, expecting %s\n",
 				    inet_ntoa(isaddr), ifp->if_xname,
 				    rt->rt_ifp->if_xname);
@@ -859,7 +859,7 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 				 (struct bsd_sockaddr *)IA_SIN(ifa));
 		IF_AFDATA_UNLOCK(ifp);
 		if (lle == NULL)
-			log(LOG_INFO, "arp_ifinit: cannot create arp "
+			bsd_log(LOG_INFO, "arp_ifinit: cannot create arp "
 			    "entry for interface address\n");
 		else
 			LLE_RUNLOCK(lle);

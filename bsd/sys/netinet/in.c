@@ -1160,14 +1160,14 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 			if (error == 0)
 				target->ia_flags &= ~IFA_ROUTE;
 			else
-				log(LOG_INFO, "in_scrubprefix: err=%d, old prefix delete failed\n",
+				bsd_log(LOG_INFO, "in_scrubprefix: err=%d, old prefix delete failed\n",
 					error);
 			error = rtinit(&ia->ia_ifa, (int)RTM_ADD,
 			    rtinitflags(ia) | RTF_UP);
 			if (error == 0)
 				ia->ia_flags |= IFA_ROUTE;
 			else
-				log(LOG_INFO, "in_scrubprefix: err=%d, new prefix add failed\n",
+				bsd_log(LOG_INFO, "in_scrubprefix: err=%d, new prefix add failed\n",
 					error);
 			ifa_free(&ia->ia_ifa);
 			return (error);
@@ -1196,7 +1196,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 	if (error == 0)
 		target->ia_flags &= ~IFA_ROUTE;
 	else
-		log(LOG_INFO, "in_scrubprefix: err=%d, prefix delete failed\n", error);
+		bsd_log(LOG_INFO, "in_scrubprefix: err=%d, prefix delete failed\n", error);
 	return (error);
 }
 
@@ -1443,7 +1443,7 @@ in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct bsd_sockaddr *l3
 		for ( ; addr < lim; sa++, mask++, addr++) {
 			if ((*sa ^ *addr) & *mask) {
 #ifdef DIAGNOSTIC
-				log(LOG_INFO, "IPv4 address: \"%s\" is not on the network\n",
+				bsd_log(LOG_INFO, "IPv4 address: \"%s\" is not on the network\n",
 				    inet_ntoa(((const struct bsd_sockaddr_in *)l3addr)->sin_addr));
 #endif
 				RTFREE_LOCKED(rt);
@@ -1485,7 +1485,7 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 	if (lle == NULL) {
 #ifdef DIAGNOSTIC
 		if (flags & LLE_DELETE)
-			log(LOG_INFO, "interface address is missing from cache = %p  in delete\n", lle);
+			bsd_log(LOG_INFO, "interface address is missing from cache = %p  in delete\n", lle);
 #endif
 		if (!(flags & LLE_CREATE))
 			return (NULL);
@@ -1500,7 +1500,7 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 
 		lle = in_lltable_new(l3addr, flags);
 		if (lle == NULL) {
-			log(LOG_INFO, "lla_lookup: new lle malloc failed\n");
+			bsd_log(LOG_INFO, "lla_lookup: new lle malloc failed\n");
 			goto done;
 		}
 		lle->la_flags = flags & ~LLE_CREATE;
@@ -1520,7 +1520,7 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 			EVENTHANDLER_INVOKE(arp_update_event, lle);
 			LLE_WUNLOCK(lle);
 #ifdef DIAGNOSTIC
-			log(LOG_INFO, "ifaddr cache = %p  is deleted\n", lle);
+			bsd_log(LOG_INFO, "ifaddr cache = %p  is deleted\n", lle);
 #endif
 		}
 		lle = (void *)-1;

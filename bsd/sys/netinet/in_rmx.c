@@ -209,7 +209,7 @@ in_rtqkill(struct radix_node *rn, void *rock)
 					rt->rt_flags | RTF_RNH_LOCKED, 0,
 					rt->rt_fibnum);
 			if (err) {
-				log(LOG_WARNING, "in_rtqkill: error %d\n", err);
+				bsd_log(LOG_WARNING, "in_rtqkill: error %d\n", err);
 			} else {
 				ap->killed++;
 			}
@@ -289,7 +289,7 @@ in_rtqtimo_one(void *rock)
 
 		last_adjusted_timeout = time_uptime;
 #ifdef DIAGNOSTIC
-		log(LOG_DEBUG, "in_rtqtimo: adjusted rtq_reallyold to %d\n",
+		bsd_log(LOG_DEBUG, "in_rtqtimo: adjusted rtq_reallyold to %d\n",
 		    V_rtq_reallyold);
 #endif
 		arg.found = arg.killed = 0;

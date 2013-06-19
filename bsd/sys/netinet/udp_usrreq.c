@@ -549,7 +549,7 @@ udp_input(struct mbuf *m, int off)
 			char buf[4*sizeof "123"];
 
 			strcpy(buf, inet_ntoa(ip->ip_dst));
-			log(LOG_INFO,
+			bsd_log(LOG_INFO,
 			    "Connection attempt to UDP %s:%d from %s:%d\n",
 			    buf, ntohs(uh->uh_dport), inet_ntoa(ip->ip_src),
 			    ntohs(uh->uh_sport));

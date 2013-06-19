@@ -400,7 +400,7 @@ rtfree(struct rtentry *rt)
 	 */
 	RT_REMREF(rt);
 	if (rt->rt_refcnt > 0) {
-		log(LOG_DEBUG, "%s: %p has %d refs\n", __func__, rt, rt->rt_refcnt);
+		bsd_log(LOG_DEBUG, "%s: %p has %d refs\n", __func__, rt, rt->rt_refcnt);
 		goto done;
 	}
 
