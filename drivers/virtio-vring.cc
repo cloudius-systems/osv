@@ -82,6 +82,14 @@ namespace virtio {
         _avail->disable_interrupt();
     }
 
+    bool vring::use_indirect(int desc_needed)
+    {
+        return false && // It degrades netperf performance
+                _dev->get_indirect_buf_cap() &&
+                desc_needed > 1 &&  					// no need to use indirect for a single descriptor
+                _avail_count > _num*2/3;   // use indirect only when low space
+    }
+
     void vring::enable_interrupts()
     {
         trace_virtio_enable_interrupts(this);
@@ -94,8 +102,11 @@ namespace virtio {
     vring::add_buf(sglist* sg, u16 out, u16 in, void* cookie) {
         return with_lock(_lock, [=] {
             int desc_needed = in + out;
-            if (_dev->get_indirect_buf_cap())
+            bool indirect = false;
+            if (use_indirect(desc_needed*_num/2)) {
                 desc_needed = 1;
+                indirect = true;
+            }
 
             if (_avail_count < desc_needed) {
                 //make sure the interrupts get there
@@ -111,7 +122,7 @@ namespace virtio {
             _cookie[idx] = cookie;
             vring_desc* descp = _desc;
 
-            if (_dev->get_indirect_buf_cap()) {
+            if (indirect) {
                 vring_desc* indirect = reinterpret_cast<vring_desc*>(malloc((in+out)*sizeof(vring_desc)));
                 if (!indirect)
                     return false;
@@ -208,8 +219,8 @@ namespace virtio {
 
     bool vring::avail_ring_has_room(int descriptors)
     {
-        if (_dev->get_indirect_buf_cap())
-            descriptors--;
+        if (use_indirect(descriptors))
+            descriptors = 1;
         return (_avail_count >= descriptors);
     }
 
