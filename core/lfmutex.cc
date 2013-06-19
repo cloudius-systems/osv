@@ -52,9 +52,7 @@ void mutex::lock()
                     // below, waiter.value may become 0: the thread we woke
                     // can call unlock() and decide to wake us up.
                     assert(waiter.value);
-                    sched::thread *thread = other->value;
-                    other->value = nullptr;
-                    thread->wake();
+                    other->value->wake_with([&] { other->value = nullptr; });
                 } else {
                     // got the lock ourselves
                     assert(other == &waiter);
@@ -133,10 +131,8 @@ void mutex::unlock()
     while(true) {
         linked_item<sched::thread *> *other = waitqueue.pop();
         if (other) {
-            sched::thread *thread = other->value;
-            other->value = nullptr;
-            assert(thread!=sched::thread::current()); // this thread isn't waiting, we know that :(
-            thread->wake();
+            assert(other->value != sched::thread::current()); // this thread isn't waiting, we know that :(
+            other->value->wake_with([&] { other->value = nullptr; });
             return;
         }
         // Some concurrent lock() is in progress (we know this because of
