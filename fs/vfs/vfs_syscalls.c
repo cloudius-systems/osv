@@ -218,6 +218,11 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 				(u_int)fp, (u_int)off, type));
 
 	vp = fp->f_vnode;
+	if (!vp) {
+	    // Linux doesn't implement lseek() on pipes, sockets, or ttys.
+	    // In OSV, we only implement lseek() on regular files, backed by vnode
+	    return ESPIPE;
+	}
 	vn_lock(vp);
 	switch (type) {
 	case SEEK_SET:
@@ -285,6 +290,9 @@ sys_fsync(struct file *fp)
 		return EBADF;
 
 	vp = fp->f_vnode;
+	if (!vp) {
+	    return EINVAL;
+	}
 	vn_lock(vp);
 	error = VOP_FSYNC(vp, fp);
 	vn_unlock(vp);
@@ -347,6 +355,9 @@ sys_readdir(struct file *fp, struct dirent *dir)
 	DPRINTF(VFSDB_SYSCALL, ("sys_readdir: fp=%x\n", fp));
 
 	dvp = fp->f_vnode;
+	if (!dvp) {
+	    return ENOTDIR;
+	}
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -365,6 +376,9 @@ sys_rewinddir(struct file *fp)
 	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
+	if (!dvp) {
+	    return ENOTDIR;
+	}
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -381,6 +395,9 @@ sys_seekdir(struct file *fp, long loc)
 	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
+	if (!dvp) {
+	    return ENOTDIR;
+	}
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -397,6 +414,9 @@ sys_telldir(struct file *fp, long *loc)
 	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
+	if (!dvp) {
+	    return ENOTDIR;
+	}
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -700,6 +720,9 @@ int
 sys_fstatfs(struct file *fp, struct statfs *buf)
 {
 	struct vnode *vp = fp->f_vnode;
+	if (!vp) {
+	    return EBADF;
+	}
 	int error = 0;
 
 	memset(buf, 0, sizeof(*buf));
@@ -729,6 +752,9 @@ sys_fchdir(struct file *fp, char *cwd)
 	struct vnode *dvp;
 
 	dvp = fp->f_vnode;
+	if (!dvp) {
+	    return EBADF;
+	}
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
