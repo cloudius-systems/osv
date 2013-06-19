@@ -211,7 +211,7 @@ void virtio_blk::response_worker() {
 
 }
 
-int virtio_blk::size() {
+int64_t virtio_blk::size() {
     return _config.capacity * _config.blk_size;
 }
 

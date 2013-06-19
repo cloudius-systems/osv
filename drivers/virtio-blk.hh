@@ -151,7 +151,7 @@ namespace virtio {
         int make_virtio_request(struct bio*);
 
         void response_worker();
-        int size();
+        int64_t size();
 
         void set_readonly() {_ro = true;}
         bool is_readonly() {return _ro;}
