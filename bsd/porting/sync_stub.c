@@ -1,4 +1,5 @@
 #include <osv/mutex.h>
+#include <stdlib.h>
 
 #include <bsd/porting/sync_stub.h>
 
@@ -24,5 +25,18 @@ void mtx_unlock(struct mtx *mp)
 
 void mtx_assert(struct mtx *mp, int flag)
 {
-
+    switch (flag) {
+    case MA_OWNED:
+        if (!mutex_owned(&mp->_mutex)) {
+            abort();
+        }
+        break;
+    case MA_NOTOWNED:
+        if (mutex_owned(&mp->_mutex)) {
+            abort();
+        }
+        break;
+    default:
+        abort();
+    }
 }
