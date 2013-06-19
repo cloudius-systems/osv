@@ -86,7 +86,7 @@ public:
     //! Class destructor
     ~interface_class()
     {
-        sofree(sock) ;
+        soclose(sock) ;
     }
 
     //! Set interface name
