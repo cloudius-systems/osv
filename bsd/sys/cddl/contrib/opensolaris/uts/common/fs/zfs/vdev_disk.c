@@ -130,11 +130,7 @@ vdev_disk_start_bio(zio_t *zio)
 	ret = bio_wait(bio);
 	destroy_bio(bio);
 
-	if (ret) {
-		zio->io_error = ret;
-		return ZIO_PIPELINE_CONTINUE;
-	}
-
+	zio->io_error = ret;
 	zio_interrupt(zio);
 	return ZIO_PIPELINE_STOP;
 }
