@@ -36,10 +36,6 @@
  *
  * Processor Characteristics:
  *
- * _LITTLE_ENDIAN / _BIG_ENDIAN:
- *	The natural byte order of the processor.  A pointer to an int points
- *	to the least/most significant byte of that int.
- *
  * _STACK_GROWS_UPWARD / _STACK_GROWS_DOWNWARD:
  *	The processor specific direction of stack growth.  A push onto the
  *	stack increases/decreases the stack pointer, so it stores data at
@@ -235,9 +231,6 @@ extern "C" {
 /*
  * Define the appropriate "processor characteristics"
  */
-#if defined(sun)
-#define	_LITTLE_ENDIAN
-#endif
 #define	_STACK_GROWS_DOWNWARD
 #define	_LONG_LONG_LTOH
 #define	_BIT_FIELDS_LTOH
@@ -302,9 +295,6 @@ extern "C" {
 /*
  * Define the appropriate "processor characteristics"
  */
-#if defined(sun)
-#define	_LITTLE_ENDIAN
-#endif
 #define	_STACK_GROWS_DOWNWARD
 #define	_LONG_LONG_LTOH
 #define	_BIT_FIELDS_LTOH
@@ -504,9 +494,6 @@ extern "C" {
  * Define the appropriate "processor characteristics" shared between
  * all Solaris on SPARC systems.
  */
-#if defined(sun)
-#define	_BIG_ENDIAN
-#endif
 #define	_STACK_GROWS_DOWNWARD
 #define	_LONG_LONG_HTOL
 #define	_BIT_FIELDS_HTOL
