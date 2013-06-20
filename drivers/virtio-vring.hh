@@ -90,8 +90,9 @@ class virtio_driver;
             VRING_USED_F_NO_NOTIFY=1
         };
 
-        void disable_interrupt(void) { _flags |= VRING_USED_F_NO_NOTIFY; }
-        void enable_interrupt(void) { _flags = 0; }
+        bool notifications_disabled(void) {
+            return (_flags & VRING_USED_F_NO_NOTIFY);
+        }
         
         u16 _flags;
         u16 _idx;

@@ -231,6 +231,9 @@ namespace virtio {
 
     bool
     vring::kick() {
+        if (_used->notifications_disabled())
+            return false;
+
         _dev->kick(_q_index);
         _avail_added_since_kick = 0;
         return true;
