@@ -23,6 +23,7 @@
  * Copyright (c) 2000, 2010, Oracle and/or its affiliates. All rights reserved.
  */
 
+#include <sys/byteorder.h>
 #include <sys/debug.h>
 #include <sys/nvpair.h>
 #include <sys/nvpair_impl.h>
