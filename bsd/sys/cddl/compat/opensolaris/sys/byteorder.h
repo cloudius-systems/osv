@@ -42,6 +42,13 @@
 #ifndef _OPENSOLARIS_SYS_BYTEORDER_H_
 #define	_OPENSOLARIS_SYS_BYTEORDER_H_
 
+#include <endian.h>
+
+#define _BIG_ENDIAN __BIG_ENDIAN
+#define _LITTLE_ENDIAN __LITTLE_ENDIAN
+#define _PDP_ENDIAN __PDP_ENDIAN
+#define _BYTE_ORDER __BYTE_ORDER
+
 /*
  * Macros to reverse byte order
  */
