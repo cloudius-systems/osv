@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 
     // A basic two-thread test - one thread waits for the other
     debug("test2\n");
-    mutex m = MUTEX_INITIALIZER;
+    mutex m;
     int res=0;
     sched::thread *t1 = new sched::thread([&cond,&m,&res] {
         m.lock();
