@@ -295,6 +295,7 @@ struct cpu {
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     cpu_set incoming_wakeups_mask;
     incoming_wakeup_queue* incoming_wakeups;
+    thread* terminating_thread;
     static cpu* current();
     void init_on_cpu();
     void schedule(bool yield = false);

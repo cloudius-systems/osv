@@ -58,6 +58,7 @@ private:
 cpu::cpu(unsigned _id)
     : id(_id)
     , idle_thread([this] { idle(); }, thread::attr(this))
+    , terminating_thread(nullptr)
 {
     percpu_init(id);
 }
@@ -106,6 +107,10 @@ void cpu::reschedule_from_interrupt(bool preempt)
         n->switch_to();
         if (preempt) {
             p->_fpu.restore();
+        }
+        if (p->_cpu->terminating_thread) {
+            p->_cpu->terminating_thread->unref();
+            p->_cpu->terminating_thread = nullptr;
         }
     }
 }
@@ -370,21 +375,16 @@ void thread::ref()
 void thread::unref()
 {
     if (_ref_counter.fetch_add(-1) == 1) {
+        // thread can't unref() itself, because if it decides to wake joiner,
+        // it will delete the stack it is currently running on.
+        assert(thread::current() != this);
+
         // FIXME: we have a problem in case of a race between join() and the
         // thread's completion. Here we can see _joiner==0 and not notify
         // anyone, but at the same time join() decided to go to sleep (because
         // status is not yet status::terminated) and we'll never wake it.
         if (_joiner) {
             _joiner->wake_with([&] { _status.store(status::terminated); });
-            // FIXME: At this point, we've awoken _joiner, which can promptly
-            // clean this thread up, including deleting the stack we and our
-            // caller (complete()) is running on. So right now we can be
-            // running on a deleted stack! This is a serious bug (even if
-            // rare because requires very specific timing).
-            // NOTE: This bug can especially be seen happen when wake above
-            // calls wrmsr (for the ipi) which takes a long time (an exit) and
-            // in the meantime the joiner deletes our stack, and the return
-            // from the ipi/wrmsr function (retq instruction) gets a segfault.
         } else {
             _status.store(status::terminated);
         }
@@ -457,18 +457,16 @@ void thread::complete()
     if (_attr.detached) {
         _s_reaper->add_zombie(this);
     }
-    // If this thread gets preempted after changing status (to terminating
-    // here, or to terminated in unref()), it will never be scheduled
-    // again and never get to wake the joiner. So must disable preemption.
+    // If this thread gets preempted after changing status it will never be
+    // scheduled again to set terminating_thread. So must disable preemption.
     preempt_disable();
     _status.store(status::terminating);
-    // unref() here will either do the exit (change state to terminated, wake
-    // joiner thread) now, or if a ref() is blocking us, leave the state
-    // "terminating" and the matching unref() will complete the termination.
-    unref();
-    preempt_enable();
-    // The thread is now in the "terminating" or "terminated" state, so on
-    // call to schedule() or on preemption, it will never get to run again.
+    // We want to run unref() here, but can't because it cause the stack we're
+    // running on to be deleted. Instead, set a _cpu field telling the next
+    // thread running on this cpu to do the unref() for us.
+    _cpu->terminating_thread = this;
+    // The thread is now in the "terminating" state, so on call to schedule()
+    // it will never get to run again.
     while (true) {
         schedule();
     }
