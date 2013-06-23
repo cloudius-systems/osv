@@ -1,5 +1,0 @@
-Avoiding unnecessary FPU state saving
-=====================================
-
-2. Even if we don't need to save the whole fpu state on !preempt, we probably
-   need to save the fcw and mxcsr.

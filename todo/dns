@@ -1,9 +1,0 @@
-In Shrew.java, I used
-	connection.getInetAddress().getHostName()
-(commented out in the current code)
-And it waits for 5 seconds and times out (returning the IP address string).
-
-What does it do in these 5 seconds? Do we have the proper resolver code?
-Do we need to configure the resolver? If not configured, why does it not
-give up immediately instead of waiting 5 seconds? If we configure it
-properly, will it work?
