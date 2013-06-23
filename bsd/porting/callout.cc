@@ -135,7 +135,7 @@ static void _callout_thread(void)
             expired = t.expired();
         }
 
-        if (!expired) {
+        if (!expired  || (!callouts::have_callout(c))) {
             trace_callout_thread_retry(c);
             continue;
         }
