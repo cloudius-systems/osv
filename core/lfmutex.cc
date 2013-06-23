@@ -1,10 +1,20 @@
 #include <lockfree/mutex.hh>
+#include <osv/trace.hh>
 #include <sched.hh>
+
+TRACEPOINT(trace_mutex_lock, "%p", mutex *);
+TRACEPOINT(trace_mutex_lock_wait, "%p", mutex *);
+TRACEPOINT(trace_mutex_lock_wake, "%p", mutex *);
+TRACEPOINT(trace_mutex_try_lock, "%p, success=%d", mutex *, bool);
+TRACEPOINT(trace_mutex_unlock, "%p", mutex *);
+
 
 namespace lockfree {
 
 void mutex::lock()
 {
+    trace_mutex_lock(this);
+
     sched::thread *current = sched::thread::current();
 
     if (count.fetch_add(1, std::memory_order_acquire) == 0) {
@@ -66,7 +76,9 @@ void mutex::lock()
 
     // Wait until another thread wakes us up. When somebody wakes us,
     // they will first zero the value field in our wait record.
+    trace_mutex_lock_wait(this);
     sched::thread::wait_until([&] { return !waiter.value; });
+    trace_mutex_lock_wake(this);
     owner.store(current, std::memory_order_relaxed);
     depth = 1;
 }
@@ -79,6 +91,7 @@ bool mutex::try_lock()
         // Uncontended case. We got the lock.
         owner.store(current, std::memory_order_relaxed);
         depth = 1;
+        trace_mutex_try_lock(this, true);
         return true;
     }
 
@@ -86,6 +99,7 @@ bool mutex::try_lock()
     // this thread is the one holding it.
     if (owner.load(std::memory_order_relaxed) == current) {
         ++depth;
+        trace_mutex_try_lock(this, true);
         return true;
     }
 
@@ -97,13 +111,18 @@ bool mutex::try_lock()
         count.fetch_add(1, std::memory_order_relaxed);
         owner.store(current, std::memory_order_relaxed);
         depth = 1;
+        trace_mutex_try_lock(this, true);
         return true;
     }
+
+    trace_mutex_try_lock(this, false);
     return false;
 }
 
 void mutex::unlock()
 {
+    trace_mutex_unlock(this);
+
     // We assume unlock() is only ever called when this thread is holding
     // the lock. For performance reasons, we do not verify that
     // owner.load()==current && depth!=0.
