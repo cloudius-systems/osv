@@ -264,9 +264,9 @@ zfs_replay_swap_attrs(lr_attr_t *lrattr)
  * as option FUID information.
  */
 static int
-zfs_replay_create_acl(zfsvfs_t *zfsvfs,
-    lr_acl_create_t *lracl, boolean_t byteswap)
+zfs_replay_create_acl(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_acl_create_t *lracl = data;
 	char *name = NULL;		/* location determined later */
 	lr_create_t *lr = (lr_create_t *)lracl;
 	znode_t *dzp;
@@ -413,8 +413,9 @@ bail:
 }
 
 static int
-zfs_replay_create(zfsvfs_t *zfsvfs, lr_create_t *lr, boolean_t byteswap)
+zfs_replay_create(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_create_t *lr = data;
 	char *name = NULL;		/* location determined later */
 	char *link;			/* symlink content follows name */
 	znode_t *dzp;
@@ -545,8 +546,9 @@ out:
 }
 
 static int
-zfs_replay_remove(zfsvfs_t *zfsvfs, lr_remove_t *lr, boolean_t byteswap)
+zfs_replay_remove(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_remove_t *lr = data;
 	char *name = (char *)(lr + 1);	/* name follows lr_remove_t */
 	znode_t *dzp;
 	struct componentname cn;
@@ -596,8 +598,9 @@ fail:
 }
 
 static int
-zfs_replay_link(zfsvfs_t *zfsvfs, lr_link_t *lr, boolean_t byteswap)
+zfs_replay_link(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_link_t *lr;
 	char *name = (char *)(lr + 1);	/* name follows lr_link_t */
 	znode_t *dzp, *zp;
 	struct componentname cn;
@@ -636,8 +639,9 @@ zfs_replay_link(zfsvfs_t *zfsvfs, lr_link_t *lr, boolean_t byteswap)
 }
 
 static int
-zfs_replay_rename(zfsvfs_t *zfsvfs, lr_rename_t *lr, boolean_t byteswap)
+zfs_replay_rename(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_rename_t *lr = data;
 	char *sname = (char *)(lr + 1);	/* sname and tname follow lr_rename_t */
 	char *tname = sname + strlen(sname) + 1;
 	znode_t *sdzp, *tdzp;
@@ -706,8 +710,9 @@ fail:
 }
 
 static int
-zfs_replay_write(zfsvfs_t *zfsvfs, lr_write_t *lr, boolean_t byteswap)
+zfs_replay_write(zfsvfs_t *zfsvfs, void *_data, boolean_t byteswap)
 {
+	lr_write_t *lr = _data;
 	char *data = (char *)(lr + 1);	/* data follows lr_write_t */
 	znode_t	*zp;
 	int error;
@@ -772,8 +777,9 @@ zfs_replay_write(zfsvfs_t *zfsvfs, lr_write_t *lr, boolean_t byteswap)
  * the file is grown.
  */
 static int
-zfs_replay_write2(zfsvfs_t *zfsvfs, lr_write_t *lr, boolean_t byteswap)
+zfs_replay_write2(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_write_t *lr = data;
 	znode_t	*zp;
 	int error;
 	uint64_t end;
@@ -817,9 +823,10 @@ top:
 }
 
 static int
-zfs_replay_truncate(zfsvfs_t *zfsvfs, lr_truncate_t *lr, boolean_t byteswap)
+zfs_replay_truncate(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
 #ifdef sun
+	lr_truncate_t *lr = data;
 	znode_t *zp;
 	flock64_t fl;
 	int error;
@@ -849,8 +856,9 @@ zfs_replay_truncate(zfsvfs_t *zfsvfs, lr_truncate_t *lr, boolean_t byteswap)
 }
 
 static int
-zfs_replay_setattr(zfsvfs_t *zfsvfs, lr_setattr_t *lr, boolean_t byteswap)
+zfs_replay_setattr(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_setattr_t *lr = data;
 	znode_t *zp;
 	xvattr_t xva;
 	vattr_t *vap = &xva.xva_vattr;
@@ -905,8 +913,9 @@ zfs_replay_setattr(zfsvfs_t *zfsvfs, lr_setattr_t *lr, boolean_t byteswap)
 }
 
 static int
-zfs_replay_acl_v0(zfsvfs_t *zfsvfs, lr_acl_v0_t *lr, boolean_t byteswap)
+zfs_replay_acl_v0(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_acl_v0_t *lr = data;
 	ace_t *ace = (ace_t *)(lr + 1);	/* ace array follows lr_acl_t */
 	vsecattr_t vsa;
 	znode_t *zp;
@@ -953,8 +962,9 @@ zfs_replay_acl_v0(zfsvfs_t *zfsvfs, lr_acl_v0_t *lr, boolean_t byteswap)
  *
  */
 static int
-zfs_replay_acl(zfsvfs_t *zfsvfs, lr_acl_t *lr, boolean_t byteswap)
+zfs_replay_acl(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+	lr_acl_t *lr = data;
 	ace_t *ace = (ace_t *)(lr + 1);
 	vsecattr_t vsa;
 	znode_t *zp;
