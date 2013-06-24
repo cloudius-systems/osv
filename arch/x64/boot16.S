@@ -63,6 +63,8 @@ read_disk:
 	mov $0x42, %ah
 	mov $0x80, %dl
 	int $0x13
+	jc done_disk # in case of errors, we don't really know what to do.
+
 	cli
 	lgdtw gdt
 	mov $0x11, %ax
@@ -95,6 +97,7 @@ read_disk:
 	addl $(0x8000 / 0x200), lba
 	decw count32
 	jnz read_disk
+done_disk:
 
 	mov $e820data, %edi
 	mov %edi, mb_mmap_addr
