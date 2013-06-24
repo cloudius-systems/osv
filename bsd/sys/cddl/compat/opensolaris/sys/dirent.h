@@ -31,7 +31,7 @@
 
 #include <sys/types.h>
 
-#include_next <sys/dirent.h>
+#include <dirent.h>
 
 typedef	struct dirent	dirent64_t;
 typedef ino_t		ino64_t;
