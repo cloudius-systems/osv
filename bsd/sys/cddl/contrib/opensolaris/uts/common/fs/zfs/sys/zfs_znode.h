@@ -251,6 +251,7 @@ VTOZ(vnode_t *vp)
 #define	VTOZ(VP)	((znode_t *)(VP)->v_data)
 #endif
 
+#ifndef __OSV__
 /*
  * ZFS_ENTER() is called on entry to each ZFS vnode and vfs operation.
  * ZFS_ENTER_NOERROR() is called when we can't return EIO.
@@ -270,6 +271,14 @@ VTOZ(vnode_t *vp)
 	rrw_enter(&(zfsvfs)->z_teardown_lock, RW_READER, FTAG)
 
 #define	ZFS_EXIT(zfsvfs) rrw_exit(&(zfsvfs)->z_teardown_lock, FTAG)
+#else
+/*
+ * No need for this locking until we support unmount.
+ */
+#define ZFS_ENTER(zfsvfs)		do { } while (0)
+#define ZFS_ENTER_NOERROR(zfsvfs)	do { } while (0)
+#define ZFS_EXIT(zfsvfs)		do { } while (0)
+#endif
 
 #define	ZFS_VERIFY_ZP(zp) \
 	if ((zp)->z_sa_hdl == NULL) { \
