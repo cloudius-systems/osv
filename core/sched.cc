@@ -464,6 +464,10 @@ void thread::complete()
     // We want to run unref() here, but can't because it cause the stack we're
     // running on to be deleted. Instead, set a _cpu field telling the next
     // thread running on this cpu to do the unref() for us.
+    if (_cpu->terminating_thread) {
+        assert(_cpu->terminating_thread != this);
+        _cpu->terminating_thread->unref();
+    }
     _cpu->terminating_thread = this;
     // The thread is now in the "terminating" state, so on call to schedule()
     // it will never get to run again.
