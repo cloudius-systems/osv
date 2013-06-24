@@ -102,18 +102,6 @@ class virtio_driver;
     class vring {
     public:
 
-        enum {
-
-            /* We support indirect buffer descriptors */
-            VIRTIO_RING_F_INDIRECT_DESC = 28,
-
-            /* The Guest publishes the used index for which it expects an interrupt
-             * at the end of the avail ring. Host should ignore the avail->flags field. */
-            /* The Host publishes the avail index for which it expects a kick
-             * at the end of the used ring. Guest should ignore the used->flags field. */
-            VIRTIO_RING_F_EVENT_IDX = 29,
-        };    
-      
         vring(virtio_driver* const dev, u16 num, u16 q_index);
         virtual ~vring();
 
