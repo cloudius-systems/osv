@@ -60,7 +60,6 @@ void kvmclock::setup_cpu()
 
 u64 kvmclock::time()
 {
-    sched::preempt_disable();
     auto r = _wall_ns;
     // Due to problems in init order dependencies (the clock depends
     // on the scheduler, for percpu initialization, and vice-versa, for
@@ -69,7 +68,6 @@ u64 kvmclock::time()
     if (_smp_init) {
         r += system_time();
     }
-    sched::preempt_enable();
     return r;
 }
 
@@ -91,6 +89,7 @@ u64 kvmclock::system_time()
 {
     u32 v1, v2;
     u64 time;
+    sched::preempt_disable();
     auto sys = &*_sys;  // avoid recaclulating address each access
     do {
         v1 = sys->version;
@@ -109,6 +108,7 @@ u64 kvmclock::system_time()
         barrier();
         v2 = sys->version;
     } while (v1 != v2);
+    sched::preempt_enable();
     return time;
 }
 
