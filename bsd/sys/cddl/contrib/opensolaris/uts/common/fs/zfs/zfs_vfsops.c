@@ -90,25 +90,12 @@ SYSCTL_INT(_vfs_zfs_version, OID_AUTO, zpl, CTLFLAG_RD, &zfs_version_zpl, 0,
 static int zfs_mount(vfs_t *vfsp);
 static int zfs_umount(vfs_t *vfsp, int fflag);
 static int zfs_root(vfs_t *vfsp, int flags, vnode_t **vpp);
-static int zfs_statfs(vfs_t *vfsp, struct statfs *statp);
 static int zfs_vget(vfs_t *vfsp, ino_t ino, int flags, vnode_t **vpp);
-static int zfs_sync(vfs_t *vfsp, int waitfor);
 static int zfs_checkexp(vfs_t *vfsp, struct sockaddr *nam, int *extflagsp,
     struct ucred **credanonp, int *numsecflavors, int **secflavors);
 static int zfs_fhtovp(vfs_t *vfsp, fid_t *fidp, int flags, vnode_t **vpp);
 static void zfs_objset_close(zfsvfs_t *zfsvfs);
 static void zfs_freevfs(vfs_t *vfsp);
-
-static struct vfsops zfs_vfsops = {
-	.vfs_mount =		zfs_mount,
-	.vfs_unmount =		zfs_umount,
-	.vfs_root =		zfs_root,
-	.vfs_statfs =		zfs_statfs,
-	.vfs_vget =		zfs_vget,
-	.vfs_sync =		zfs_sync,
-	.vfs_checkexp =		zfs_checkexp,
-	.vfs_fhtovp =		zfs_fhtovp,
-};
 
 VFS_SET(zfs_vfsops, zfs, VFCF_JAIL | VFCF_DELEGADMIN);
 
@@ -118,59 +105,36 @@ VFS_SET(zfs_vfsops, zfs, VFCF_JAIL | VFCF_DELEGADMIN);
  * from being unloaded after a umount -f
  */
 static uint32_t	zfs_active_fs_count = 0;
+#endif
 
 /*ARGSUSED*/
 static int
-zfs_sync(vfs_t *vfsp, int waitfor)
+zfs_sync(struct mount *mp)
 {
-
 	/*
-	 * Data integrity is job one.  We don't want a compromised kernel
-	 * writing to the storage pool, so we never sync during panic.
+	 * Sync a specific filesystem.
 	 */
-	if (panicstr)
-		return (0);
+	zfsvfs_t *zfsvfs = mp->m_data;
+	dsl_pool_t *dp;
+	int error;
 
-	if (vfsp != NULL) {
-		/*
-		 * Sync a specific filesystem.
-		 */
-		zfsvfs_t *zfsvfs = vfsp->vfs_data;
-		dsl_pool_t *dp;
-		int error;
+#ifdef TODO // force a fsync on all vnodes
+	error = vfs_stdsync(vfsp, waitfor);
+	if (error != 0)
+		return (error);
+#endif
 
-		error = vfs_stdsync(vfsp, waitfor);
-		if (error != 0)
-			return (error);
+	ZFS_ENTER(zfsvfs);
+	dp = dmu_objset_pool(zfsvfs->z_os);
 
-		ZFS_ENTER(zfsvfs);
-		dp = dmu_objset_pool(zfsvfs->z_os);
+	if (zfsvfs->z_log != NULL)
+		zil_commit(zfsvfs->z_log, 0);
 
-		/*
-		 * If the system is shutting down, then skip any
-		 * filesystems which may exist on a suspended pool.
-		 */
-		if (sys_shutdown && spa_suspended(dp->dp_spa)) {
-			ZFS_EXIT(zfsvfs);
-			return (0);
-		}
-
-		if (zfsvfs->z_log != NULL)
-			zil_commit(zfsvfs->z_log, 0);
-
-		ZFS_EXIT(zfsvfs);
-	} else {
-		/*
-		 * Sync all ZFS filesystems.  This is what happens when you
-		 * run sync(1M).  Unlike other filesystems, ZFS honors the
-		 * request by waiting for all pools to commit all dirty data.
-		 */
-		spa_sync_allpools();
-	}
-
+	ZFS_EXIT(zfsvfs);
 	return (0);
 }
 
+#ifdef notyet
 #ifndef __FreeBSD__
 static int
 zfs_create_unique_device(dev_t *dev)
@@ -1678,14 +1642,13 @@ zfs_mount(vfs_t *vfsp)
 out:
 	return (error);
 }
+#endif
 
 static int
-zfs_statfs(vfs_t *vfsp, struct statfs *statp)
+zfs_statfs(struct mount *mp, struct statfs *statp)
 {
-	zfsvfs_t *zfsvfs = vfsp->vfs_data;
+	zfsvfs_t *zfsvfs = mp->m_data;
 	uint64_t refdbytes, availbytes, usedobjs, availobjs;
-
-	statp->f_version = STATFS_VERSION;
 
 	ZFS_ENTER(zfsvfs);
 
@@ -1698,7 +1661,6 @@ zfs_statfs(vfs_t *vfsp, struct statfs *statp)
 	 * and we report our blocksize as the filesystem's maximum blocksize.
 	 */
 	statp->f_bsize = SPA_MINBLOCKSIZE;
-	statp->f_iosize = zfsvfs->z_vfs->mnt_stat.f_iosize;
 
 	/*
 	 * The following report "total" blocks of various kinds in the
@@ -1721,22 +1683,13 @@ zfs_statfs(vfs_t *vfsp, struct statfs *statp)
 	statp->f_ffree = MIN(availobjs, statp->f_bfree);
 	statp->f_files = statp->f_ffree + usedobjs;
 
-	/*
-	 * We're a zfs filesystem.
-	 */
-	(void) strlcpy(statp->f_fstypename, "zfs", sizeof(statp->f_fstypename));
-
-	strlcpy(statp->f_mntfromname, vfsp->mnt_stat.f_mntfromname,
-	    sizeof(statp->f_mntfromname));
-	strlcpy(statp->f_mntonname, vfsp->mnt_stat.f_mntonname,
-	    sizeof(statp->f_mntonname));
-
-	statp->f_namemax = ZFS_MAXNAMELEN;
+	statp->f_namelen = ZFS_MAXNAMELEN;
 
 	ZFS_EXIT(zfsvfs);
 	return (0);
 }
 
+#ifdef notyet
 int
 zfs_vnode_lock(vnode_t *vp, int flags)
 {
@@ -2490,10 +2443,10 @@ zfs_mount(struct mount *mp, char *dev, int flags, void *data)
  * File system operations
  */
 struct vfsops zfs_vfsops = {
-	zfs_mount,		/* mount */
+	zfs_mount,	/* mount */
 	NULL,		/* unmount */
-	((vfsop_sync_t)vfs_nullop),		/* sync */
+	zfs_sync,	/* sync */
 	((vfsop_vget_t)vfs_nullop),		/* vget */
-	((vfsop_statfs_t)vfs_nullop),		/* statfs */
+	zfs_statfs,	/* statfs */
 	NULL,		/* vnops */
 };
