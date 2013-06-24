@@ -399,9 +399,13 @@ void	vn_rele_async(struct vnode *vp, struct taskq *taskq);
 void		xva_init(xvattr_t *);
 xoptattr_t	*xva_getxoptattr(xvattr_t *);	/* Get ptr to xoptattr_t */
 
+#if 0 // will need the taskq back once vnops are implemented
 #define	VN_RELE_ASYNC(vp, taskq)	{ \
 	vn_rele_async(vp, taskq); \
 }
+#else
+#define VN_RELE_ASYNC(vp, taskq)	vrele(vp)
+#endif
 
 #endif	/* _KERNEL */
 
