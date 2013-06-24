@@ -592,7 +592,7 @@ void timer_list::fired()
 void timer_list::suspend(bi::list<timer>& timers)
 {
     for (auto& t : timers) {
-        assert(!t._expired);
+        assert(t._state == timer::state::armed);
         _list.erase(_list.iterator_to(t));
     }
 }
@@ -602,7 +602,7 @@ void timer_list::resume(bi::list<timer>& timers)
 {
     bool rearm = false;
     for (auto& t : timers) {
-        assert(!t._expired);
+        assert(t._state == timer::state::armed);
         auto i = _list.insert(t).first;
         rearm |= i == _list.begin();
     }
@@ -620,7 +620,6 @@ timer_list::callback_dispatch timer_list::_dispatch;
 
 timer::timer(thread& t)
     : _t(t)
-    , _expired()
 {
 }
 
@@ -631,14 +630,14 @@ timer::~timer()
 
 void timer::expire()
 {
-    _expired = true;
+    _state = state::expired;
     _t._active_timers.erase(_t._active_timers.iterator_to(*this));
     _t.wake();
 }
 
 void timer::set(u64 time)
 {
-    _expired = false;
+    _state = state::armed;
     _time = time;
     with_lock(irq_lock, [=] {
         auto& timers = _t._cpu->timers;
@@ -652,13 +651,15 @@ void timer::set(u64 time)
 
 void timer::cancel()
 {
+    if (_state == state::free) {
+        return;
+    }
     with_lock(irq_lock, [=] {
-        if (_expired) {
-            return;
+        if (_state == state::armed) {
+            _t._active_timers.erase(_t._active_timers.iterator_to(*this));
+            _t._cpu->timers._list.erase(_t._cpu->timers._list.iterator_to(*this));
         }
-        _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-        _t._cpu->timers._list.erase(_t._cpu->timers._list.iterator_to(*this));
-        _expired = false;
+        _state = state::free;
     });
     // even if we remove the first timer, allow it to expire rather than
     // reprogramming the timer
@@ -666,7 +667,7 @@ void timer::cancel()
 
 bool timer::expired() const
 {
-    return _expired;
+    return _state == state::expired;
 }
 
 bool operator<(const timer& t1, const timer& t2)

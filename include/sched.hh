@@ -129,7 +129,10 @@ private:
     void expire();
 private:
     thread& _t;
-    bool _expired;
+    enum class state {
+        free, armed, expired
+    };
+    state _state = state::free;
     u64 _time;
     friend class timer_list;
 };

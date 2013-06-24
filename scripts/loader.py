@@ -272,6 +272,8 @@ def exit_thread_context():
         active_thread_context.__exit__()
         active_thread_context = None
 
+timer_state_expired = gdb.parse_and_eval('sched::timer_base::expired')
+
 def show_thread_timers(t):
     head = t['_active_timers']['data_']['root_plus_size_']['root_']
     n = head['next_']
@@ -283,7 +285,7 @@ def show_thread_timers(t):
         na -= timer_type.fields()[1].bitpos / 8
         timer = na.cast(timer_type.pointer())
         expired = ''
-        if timer['_expired']:
+        if timer['_state'] == timer_state_expired:
             expired = '*'
         expiration = long(timer['_time']) / 1.0e9
         gdb.write(' %11.9f%s' % (expiration, expired))
