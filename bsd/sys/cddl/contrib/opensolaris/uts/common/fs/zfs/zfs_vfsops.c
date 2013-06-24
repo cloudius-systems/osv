@@ -86,18 +86,7 @@ SYSCTL_INT(_vfs_zfs_version, OID_AUTO, spa, CTLFLAG_RD, &zfs_version_spa, 0,
 static int zfs_version_zpl = ZPL_VERSION;
 SYSCTL_INT(_vfs_zfs_version, OID_AUTO, zpl, CTLFLAG_RD, &zfs_version_zpl, 0,
     "ZPL_VERSION");
-
-static int zfs_mount(vfs_t *vfsp);
-static int zfs_umount(vfs_t *vfsp, int fflag);
-static int zfs_root(vfs_t *vfsp, int flags, vnode_t **vpp);
-static int zfs_vget(vfs_t *vfsp, ino_t ino, int flags, vnode_t **vpp);
-static int zfs_checkexp(vfs_t *vfsp, struct sockaddr *nam, int *extflagsp,
-    struct ucred **credanonp, int *numsecflavors, int **secflavors);
-static int zfs_fhtovp(vfs_t *vfsp, fid_t *fidp, int flags, vnode_t **vpp);
-static void zfs_objset_close(zfsvfs_t *zfsvfs);
-static void zfs_freevfs(vfs_t *vfsp);
-
-VFS_SET(zfs_vfsops, zfs, VFCF_JAIL | VFCF_DELEGADMIN);
+#endif
 
 /*
  * We need to keep a count of active fs's.
@@ -105,7 +94,6 @@ VFS_SET(zfs_vfsops, zfs, VFCF_JAIL | VFCF_DELEGADMIN);
  * from being unloaded after a umount -f
  */
 static uint32_t	zfs_active_fs_count = 0;
-#endif
 
 /*ARGSUSED*/
 static int
@@ -134,8 +122,7 @@ zfs_sync(struct mount *mp)
 	return (0);
 }
 
-#ifdef notyet
-#ifndef __FreeBSD__
+#ifdef sun
 static int
 zfs_create_unique_device(dev_t *dev)
 {
@@ -196,37 +183,14 @@ atime_changed_cb(void *arg, uint64_t newval)
 
 	if (newval == TRUE) {
 		zfsvfs->z_atime = TRUE;
-		zfsvfs->z_vfs->vfs_flag &= ~MNT_NOATIME;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_NOATIME);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_ATIME, NULL, 0);
 	} else {
 		zfsvfs->z_atime = FALSE;
-		zfsvfs->z_vfs->vfs_flag |= MNT_NOATIME;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_ATIME);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_NOATIME, NULL, 0);
 	}
 }
 
 static void
 xattr_changed_cb(void *arg, uint64_t newval)
 {
-	zfsvfs_t *zfsvfs = arg;
-
-	if (newval == TRUE) {
-		/* XXX locking on vfs_flag? */
-#ifdef TODO
-		zfsvfs->z_vfs->vfs_flag |= VFS_XATTR;
-#endif
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_NOXATTR);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_XATTR, NULL, 0);
-	} else {
-		/* XXX locking on vfs_flag? */
-#ifdef TODO
-		zfsvfs->z_vfs->vfs_flag &= ~VFS_XATTR;
-#endif
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_XATTR);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_NOXATTR, NULL, 0);
-	}
 }
 
 static void
@@ -239,7 +203,6 @@ blksz_changed_cb(void *arg, uint64_t newval)
 		newval = SPA_MAXBLOCKSIZE;
 
 	zfsvfs->z_max_blksz = newval;
-	zfsvfs->z_vfs->mnt_stat.f_iosize = newval;
 }
 
 static void
@@ -248,15 +211,11 @@ readonly_changed_cb(void *arg, uint64_t newval)
 	zfsvfs_t *zfsvfs = arg;
 
 	if (newval) {
-		/* XXX locking on vfs_flag? */
-		zfsvfs->z_vfs->vfs_flag |= VFS_RDONLY;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_RW);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_RO, NULL, 0);
+		/* XXX locking on m_flags? */
+		zfsvfs->z_vfs->m_flags |= MNT_RDONLY;
 	} else {
-		/* XXX locking on vfs_flag? */
-		zfsvfs->z_vfs->vfs_flag &= ~VFS_RDONLY;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_RO);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_RW, NULL, 0);
+		/* XXX locking on m_flags? */
+		zfsvfs->z_vfs->m_flags &= ~MNT_RDONLY;
 	}
 }
 
@@ -266,13 +225,9 @@ setuid_changed_cb(void *arg, uint64_t newval)
 	zfsvfs_t *zfsvfs = arg;
 
 	if (newval == FALSE) {
-		zfsvfs->z_vfs->vfs_flag |= VFS_NOSETUID;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_SETUID);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_NOSETUID, NULL, 0);
+		zfsvfs->z_vfs->m_flags |= MNT_NOSUID;
 	} else {
-		zfsvfs->z_vfs->vfs_flag &= ~VFS_NOSETUID;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_NOSETUID);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_SETUID, NULL, 0);
+		zfsvfs->z_vfs->m_flags &= ~MNT_NOSUID;
 	}
 }
 
@@ -282,13 +237,9 @@ exec_changed_cb(void *arg, uint64_t newval)
 	zfsvfs_t *zfsvfs = arg;
 
 	if (newval == FALSE) {
-		zfsvfs->z_vfs->vfs_flag |= VFS_NOEXEC;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_EXEC);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_NOEXEC, NULL, 0);
+		zfsvfs->z_vfs->m_flags |= MNT_NOEXEC;
 	} else {
-		zfsvfs->z_vfs->vfs_flag &= ~VFS_NOEXEC;
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_NOEXEC);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_EXEC, NULL, 0);
+		zfsvfs->z_vfs->m_flags &= ~MNT_NOEXEC;
 	}
 }
 
@@ -303,14 +254,6 @@ exec_changed_cb(void *arg, uint64_t newval)
 static void
 nbmand_changed_cb(void *arg, uint64_t newval)
 {
-	zfsvfs_t *zfsvfs = arg;
-	if (newval == FALSE) {
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_NBMAND);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_NONBMAND, NULL, 0);
-	} else {
-		vfs_clearmntopt(zfsvfs->z_vfs, MNTOPT_NONBMAND);
-		vfs_setmntopt(zfsvfs->z_vfs, MNTOPT_NBMAND, NULL, 0);
-	}
 }
 
 static void
@@ -355,8 +298,8 @@ zfs_register_callbacks(vfs_t *vfsp)
 	int readonly, do_readonly = B_FALSE;
 	int setuid, do_setuid = B_FALSE;
 	int exec, do_exec = B_FALSE;
-	int xattr, do_xattr = B_FALSE;
-	int atime, do_atime = B_FALSE;
+	int xattr = B_TRUE, do_xattr = B_FALSE;
+	int atime = B_TRUE, do_atime = B_FALSE;
 	int error = 0;
 
 	ASSERT(vfsp);
@@ -377,60 +320,20 @@ zfs_register_callbacks(vfs_t *vfsp)
 	 * of mount options, we stash away the current values and
 	 * restore them after we register the callbacks.
 	 */
-	if (vfs_optionisset(vfsp, MNTOPT_RO, NULL) ||
+	if ((vfsp->m_flags & MNT_RDONLY) ||
 	    !spa_writeable(dmu_objset_spa(os))) {
 		readonly = B_TRUE;
 		do_readonly = B_TRUE;
-	} else if (vfs_optionisset(vfsp, MNTOPT_RW, NULL)) {
-		readonly = B_FALSE;
-		do_readonly = B_TRUE;
 	}
-	if (vfs_optionisset(vfsp, MNTOPT_NOSUID, NULL)) {
+	if (vfsp->m_flags & MNT_NOSUID) {
 		setuid = B_FALSE;
 		do_setuid = B_TRUE;
-	} else {
-		if (vfs_optionisset(vfsp, MNTOPT_NOSETUID, NULL)) {
-			setuid = B_FALSE;
-			do_setuid = B_TRUE;
-		} else if (vfs_optionisset(vfsp, MNTOPT_SETUID, NULL)) {
-			setuid = B_TRUE;
-			do_setuid = B_TRUE;
-		}
 	}
-	if (vfs_optionisset(vfsp, MNTOPT_NOEXEC, NULL)) {
+	if (vfsp->m_flags & MNT_NOEXEC) {
 		exec = B_FALSE;
 		do_exec = B_TRUE;
-	} else if (vfs_optionisset(vfsp, MNTOPT_EXEC, NULL)) {
-		exec = B_TRUE;
-		do_exec = B_TRUE;
 	}
-	if (vfs_optionisset(vfsp, MNTOPT_NOXATTR, NULL)) {
-		xattr = B_FALSE;
-		do_xattr = B_TRUE;
-	} else if (vfs_optionisset(vfsp, MNTOPT_XATTR, NULL)) {
-		xattr = B_TRUE;
-		do_xattr = B_TRUE;
-	}
-	if (vfs_optionisset(vfsp, MNTOPT_NOATIME, NULL)) {
-		atime = B_FALSE;
-		do_atime = B_TRUE;
-	} else if (vfs_optionisset(vfsp, MNTOPT_ATIME, NULL)) {
-		atime = B_TRUE;
-		do_atime = B_TRUE;
-	}
-
-	/*
-	 * nbmand is a special property.  It can only be changed at
-	 * mount time.
-	 *
-	 * This is weird, but it is documented to only be changeable
-	 * at mount time.
-	 */
-	if (vfs_optionisset(vfsp, MNTOPT_NONBMAND, NULL)) {
-		nbmand = B_FALSE;
-	} else if (vfs_optionisset(vfsp, MNTOPT_NBMAND, NULL)) {
-		nbmand = B_TRUE;
-	} else {
+	{
 		char osname[MAXNAMELEN];
 
 		dmu_objset_name(os, osname);
@@ -509,6 +412,7 @@ unregister:
 
 }
 
+#ifdef notyet
 static int
 zfs_space_delta_cb(dmu_object_type_t bonustype, void *data,
     uint64_t *userp, uint64_t *groupp)
@@ -796,6 +700,7 @@ zfs_owner_overquota(zfsvfs_t *zfsvfs, znode_t *zp, boolean_t isgroup)
 
 	return (zfs_fuid_overquota(zfsvfs, isgroup, fuid));
 }
+#endif
 
 int
 zfsvfs_create(const char *osname, zfsvfs_t **zfvp)
@@ -923,7 +828,7 @@ zfsvfs_create(const char *osname, zfsvfs_t **zfvp)
 	mutex_init(&zfsvfs->z_lock, NULL, MUTEX_DEFAULT, NULL);
 	list_create(&zfsvfs->z_all_znodes, sizeof (znode_t),
 	    offsetof(znode_t, z_link_node));
-	rrw_init(&zfsvfs->z_teardown_lock);
+//	rrw_init(&zfsvfs->z_teardown_lock);
 	rw_init(&zfsvfs->z_teardown_inactive_lock, NULL, RW_DEFAULT, NULL);
 	rw_init(&zfsvfs->z_fuid_lock, NULL, RW_DEFAULT, NULL);
 	for (i = 0; i != ZFS_OBJ_MTX_SZ; i++)
@@ -955,6 +860,7 @@ zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
 	dmu_objset_set_user(zfsvfs->z_os, zfsvfs);
 	mutex_exit(&zfsvfs->z_os->os_user_ptr_lock);
 
+#ifdef notyet
 	zfsvfs->z_log = zil_open(zfsvfs->z_os, zfs_get_data);
 
 	/*
@@ -969,9 +875,9 @@ zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
 		 * During replay we remove the read only flag to
 		 * allow replays to succeed.
 		 */
-		readonly = zfsvfs->z_vfs->vfs_flag & VFS_RDONLY;
+		readonly = zfsvfs->z_vfs->m_flags & MNT_RDONLY;
 		if (readonly != 0)
-			zfsvfs->z_vfs->vfs_flag &= ~VFS_RDONLY;
+			zfsvfs->z_vfs->m_flags &= ~MNT_RDONLY;
 		else
 			zfs_unlinked_drain(zfsvfs);
 
@@ -1012,13 +918,15 @@ zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
 				zfsvfs->z_replay = B_FALSE;
 			}
 		}
-		zfsvfs->z_vfs->vfs_flag |= readonly; /* restore readonly bit */
+		zfsvfs->z_vfs->m_flags |= readonly; /* restore readonly bit */
 	}
-
+#endif
 	return (0);
 }
 
+#ifdef notyet
 extern krwlock_t zfsvfs_lock; /* in zfs_znode.c */
+#endif
 
 void
 zfsvfs_free(zfsvfs_t *zfsvfs)
@@ -1031,15 +939,15 @@ zfsvfs_free(zfsvfs_t *zfsvfs)
 	 * not unmounted. We consider the filesystem valid before the barrier
 	 * and invalid after the barrier.
 	 */
-	rw_enter(&zfsvfs_lock, RW_READER);
-	rw_exit(&zfsvfs_lock);
+//	rw_enter(&zfsvfs_lock, RW_READER);
+//	rw_exit(&zfsvfs_lock);
 
-	zfs_fuid_destroy(zfsvfs);
+//	zfs_fuid_destroy(zfsvfs);
 
 	mutex_destroy(&zfsvfs->z_znodes_lock);
 	mutex_destroy(&zfsvfs->z_lock);
 	list_destroy(&zfsvfs->z_all_znodes);
-	rrw_destroy(&zfsvfs->z_teardown_lock);
+//	rrw_destroy(&zfsvfs->z_teardown_lock);
 	rw_destroy(&zfsvfs->z_teardown_inactive_lock);
 	rw_destroy(&zfsvfs->z_fuid_lock);
 	for (i = 0; i != ZFS_OBJ_MTX_SZ; i++)
@@ -1051,23 +959,6 @@ static void
 zfs_set_fuid_feature(zfsvfs_t *zfsvfs)
 {
 	zfsvfs->z_use_fuids = USE_FUIDS(zfsvfs->z_version, zfsvfs->z_os);
-	if (zfsvfs->z_vfs) {
-		if (zfsvfs->z_use_fuids) {
-			vfs_set_feature(zfsvfs->z_vfs, VFSFT_XVATTR);
-			vfs_set_feature(zfsvfs->z_vfs, VFSFT_SYSATTR_VIEWS);
-			vfs_set_feature(zfsvfs->z_vfs, VFSFT_ACEMASKONACCESS);
-			vfs_set_feature(zfsvfs->z_vfs, VFSFT_ACLONCREATE);
-			vfs_set_feature(zfsvfs->z_vfs, VFSFT_ACCESS_FILTER);
-			vfs_set_feature(zfsvfs->z_vfs, VFSFT_REPARSE);
-		} else {
-			vfs_clear_feature(zfsvfs->z_vfs, VFSFT_XVATTR);
-			vfs_clear_feature(zfsvfs->z_vfs, VFSFT_SYSATTR_VIEWS);
-			vfs_clear_feature(zfsvfs->z_vfs, VFSFT_ACEMASKONACCESS);
-			vfs_clear_feature(zfsvfs->z_vfs, VFSFT_ACLONCREATE);
-			vfs_clear_feature(zfsvfs->z_vfs, VFSFT_ACCESS_FILTER);
-			vfs_clear_feature(zfsvfs->z_vfs, VFSFT_REPARSE);
-		}
-	}
 	zfsvfs->z_use_sa = USE_SA(zfsvfs->z_version, zfsvfs->z_os);
 }
 
@@ -1090,15 +981,8 @@ zfs_domount(vfs_t *vfsp, char *osname)
 	if (error = dsl_prop_get_integer(osname, "recordsize", &recordsize,
 	    NULL))
 		goto out;
-	zfsvfs->z_vfs->vfs_bsize = SPA_MINBLOCKSIZE;
-	zfsvfs->z_vfs->mnt_stat.f_iosize = recordsize;
 
 	vfsp->vfs_data = zfsvfs;
-	vfsp->mnt_flag |= MNT_LOCAL;
-	vfsp->mnt_kern_flag |= MNTK_MPSAFE;
-	vfsp->mnt_kern_flag |= MNTK_LOOKUP_SHARED;
-	vfsp->mnt_kern_flag |= MNTK_SHARED_WRITES;
-	vfsp->mnt_kern_flag |= MNTK_EXTENDED_SHARED;
 
 	/*
 	 * The fsid is 64 bits, composed of an 8-bit fs type, which
@@ -1110,23 +994,11 @@ zfs_domount(vfs_t *vfsp, char *osname)
 	 */
 	fsid_guid = dmu_objset_fsid_guid(zfsvfs->z_os);
 	ASSERT((fsid_guid & ~((1ULL<<56)-1)) == 0);
-	vfsp->vfs_fsid.val[0] = fsid_guid;
-	vfsp->vfs_fsid.val[1] = ((fsid_guid>>32) << 8) |
-	    vfsp->mnt_vfc->vfc_typenum & 0xFF;
 
 	/*
 	 * Set features for file system.
 	 */
 	zfs_set_fuid_feature(zfsvfs);
-	if (zfsvfs->z_case == ZFS_CASE_INSENSITIVE) {
-		vfs_set_feature(vfsp, VFSFT_DIRENTFLAGS);
-		vfs_set_feature(vfsp, VFSFT_CASEINSENSITIVE);
-		vfs_set_feature(vfsp, VFSFT_NOCASESENSITIVE);
-	} else if (zfsvfs->z_case == ZFS_CASE_MIXED) {
-		vfs_set_feature(vfsp, VFSFT_DIRENTFLAGS);
-		vfs_set_feature(vfsp, VFSFT_CASEINSENSITIVE);
-	}
-	vfs_set_feature(vfsp, VFSFT_ZEROCOPY_SUPPORTED);
 
 	if (dmu_objset_is_snapshot(zfsvfs->z_os)) {
 		uint64_t pval;
@@ -1146,13 +1018,10 @@ zfs_domount(vfs_t *vfsp, char *osname)
 		error = zfsvfs_setup(zfsvfs, B_TRUE);
 	}
 
-	vfs_mountedfrom(vfsp, osname);
-	/* Grab extra reference. */
-	VERIFY(VFS_ROOT(vfsp, LK_EXCLUSIVE, &vp) == 0);
-	VOP_UNLOCK(vp, 0);
-
+#ifdef notyet
 	if (!zfsvfs->z_issnap)
 		zfsctl_create(zfsvfs);
+#endif
 out:
 	if (error) {
 		dmu_objset_disown(zfsvfs->z_os, zfsvfs);
@@ -1164,6 +1033,7 @@ out:
 	return (error);
 }
 
+#ifdef notyet
 void
 zfs_unregister_callbacks(zfsvfs_t *zfsvfs)
 {
@@ -1502,6 +1372,7 @@ out:
 	return (ENOTSUP);
 }
 #endif	/* OPENSOLARIS_MOUNTROOT */
+#endif
 
 static int
 getpoolname(const char *osname, char *poolname)
@@ -1522,127 +1393,24 @@ getpoolname(const char *osname, char *poolname)
 	return (0);
 }
 
-/*ARGSUSED*/
 static int
-zfs_mount(vfs_t *vfsp)
+zfs_mount(struct mount *mp, char *dev, int flags, void *data)
 {
-	kthread_t	*td = curthread;
-	vnode_t		*mvp = vfsp->mnt_vnodecovered;
-	cred_t		*cr = td->td_ucred;
-	char		*osname;
+	char pname[MAXNAMELEN];
+	char		*osname = data;
 	int		error = 0;
-	int		canwrite;
 
-	if (!prison_allow(td->td_ucred, PR_ALLOW_MOUNT_ZFS))
-		return (EPERM);
-
-	if (vfs_getopt(vfsp->mnt_optnew, "from", (void **)&osname, NULL))
-		return (EINVAL);
-
-	/*
-	 * If full-owner-access is enabled and delegated administration is
-	 * turned on, we must set nosuid.
-	 */
-	if (zfs_super_owner &&
-	    dsl_deleg_access(osname, ZFS_DELEG_PERM_MOUNT, cr) != ECANCELED) {
-		secpolicy_fs_mount_clearopts(cr, vfsp);
-	}
-
-	/*
-	 * Check for mount privilege?
-	 *
-	 * If we don't have privilege then see if
-	 * we have local permission to allow it
-	 */
-	error = secpolicy_fs_mount(cr, mvp, vfsp);
-	if (error) {
-		if (dsl_deleg_access(osname, ZFS_DELEG_PERM_MOUNT, cr) != 0)
-			goto out;
-
-		if (!(vfsp->vfs_flag & MS_REMOUNT)) {
-			vattr_t		vattr;
-
-			/*
-			 * Make sure user is the owner of the mount point
-			 * or has sufficient privileges.
-			 */
-
-			vattr.va_mask = AT_UID;
-
-			vn_lock(mvp, LK_SHARED | LK_RETRY);
-			if (VOP_GETATTR(mvp, &vattr, cr)) {
-				VOP_UNLOCK(mvp, 0);
-				goto out;
-			}
-
-			if (secpolicy_vnode_owner(mvp, cr, vattr.va_uid) != 0 &&
-			    VOP_ACCESS(mvp, VWRITE, cr, td) != 0) {
-				VOP_UNLOCK(mvp, 0);
-				goto out;
-			}
-			VOP_UNLOCK(mvp, 0);
-		}
-
-		secpolicy_fs_mount_clearopts(cr, vfsp);
-	}
-
-	/*
-	 * Refuse to mount a filesystem if we are in a local zone and the
-	 * dataset is not visible.
-	 */
-	if (!INGLOBALZONE(curthread) &&
-	    (!zone_dataset_visible(osname, &canwrite) || !canwrite)) {
-		error = EPERM;
-		goto out;
-	}
-
-#ifdef SECLABEL
-	error = zfs_mount_label_policy(vfsp, osname);
+	error = getpoolname(osname, pname);
 	if (error)
-		goto out;
-#endif
+		return error;
 
-	vfsp->vfs_flag |= MNT_NFS4ACLS;
+	error = spa_import_rootpool(dev);
+	if (error)
+		return error;
 
-	/*
-	 * When doing a remount, we simply refresh our temporary properties
-	 * according to those options set in the current VFS options.
-	 */
-	if (vfsp->vfs_flag & MS_REMOUNT) {
-		/* refresh mount options */
-		zfs_unregister_callbacks(vfsp->vfs_data);
-		error = zfs_register_callbacks(vfsp);
-		goto out;
-	}
-
-	/* Initial root mount: try hard to import the requested root pool. */
-	if ((vfsp->vfs_flag & MNT_ROOTFS) != 0 &&
-	    (vfsp->vfs_flag & MNT_UPDATE) == 0) {
-		char pname[MAXNAMELEN];
-
-		error = getpoolname(osname, pname);
-		if (error == 0)
-			error = spa_import_rootpool(pname);
-		if (error)
-			goto out;
-	}
-	DROP_GIANT();
-	error = zfs_domount(vfsp, osname);
-	PICKUP_GIANT();
-
-#ifdef sun
-	/*
-	 * Add an extra VFS_HOLD on our parent vfs so that it can't
-	 * disappear due to a forced unmount.
-	 */
-	if (error == 0 && ((zfsvfs_t *)vfsp->vfs_data)->z_issnap)
-		VFS_HOLD(mvp->v_vfsp);
-#endif	/* sun */
-
-out:
-	return (error);
+	kprintf("zfs: mounting %s from device %s\n", osname, dev);
+	return zfs_domount(mp, osname);
 }
-#endif
 
 static int
 zfs_statfs(struct mount *mp, struct statfs *statp)
@@ -2357,6 +2125,7 @@ zfs_set_version(zfsvfs_t *zfsvfs, uint64_t newvers)
 
 	return (0);
 }
+#endif
 
 /*
  * Read a property stored within the master node.
@@ -2400,6 +2169,7 @@ zfs_get_zplprop(objset_t *os, zfs_prop_t prop, uint64_t *value)
 	return (error);
 }
 
+#ifdef __FreeBSD__
 #ifdef _KERNEL
 void
 zfsvfs_update_fromname(const char *oldname, const char *newname)
@@ -2432,12 +2202,6 @@ zfsvfs_update_fromname(const char *oldname, const char *newname)
 }
 #endif
 #endif
-
-static int
-zfs_mount(struct mount *mp, char *dev, int flags, void *data)
-{
-	return 0;
-}
 
 /*
  * File system operations
