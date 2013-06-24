@@ -25,8 +25,7 @@ register_command('run', {
 
         argv[0] = f.getCanonicalPath();
 
-        _global_argv = argv;
-        var success = this.elf_loader.run();
+        var success = this.elf_loader.run(argv);
         if (!success) {
             return -1;
         }
