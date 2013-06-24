@@ -44,7 +44,7 @@ extern "C" {
  * V_RDDIR_ENTFLAGS, and if the file system supports the flags.
  */
 typedef struct edirent {
-	ino64_t		ed_ino;		/* "inode number" of entry */
+	ino_t		ed_ino;		/* "inode number" of entry */
 	off64_t		ed_off;		/* offset of disk directory entry */
 	uint32_t	ed_eflags;	/* per-entry flags */
 	unsigned short	ed_reclen;	/* length of this record */
