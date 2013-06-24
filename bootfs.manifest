@@ -1,5 +1,4 @@
 [manifest]
-/tools/netserver: ../../netserver
 /usr/lib/jvm/&/jre/lib/amd64/server/libjvm.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libverify.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libjava.so: %(jdkbase)s/&
