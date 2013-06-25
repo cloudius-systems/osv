@@ -23,6 +23,7 @@ struct features_type {
     bool kvm_clocksource2;
     bool kvm_clocksource_stable;
     bool xen_clocksource;
+    bool xen_pci;
 };
 
 extern const features_type& features();

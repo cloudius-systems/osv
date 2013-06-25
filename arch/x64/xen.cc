@@ -81,6 +81,27 @@ struct xen_add_to_physmap {
 
 static struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
 
+static bool xen_pci_enabled()
+{
+    u16 magic = processor::inw(0x10);
+    if (magic != 0x49d2) {
+        return false;
+    }
+
+    u8 version = processor::inw(0x12);
+
+    if (version != 0) {
+        processor::outw(0xffff, 0x10); // product: experimental
+        processor::outl(0, 0x10); // build id: whatever
+        u16 _magic = processor::inw(0x10); // just make sure we are not blacklisted
+        if (_magic != 0x49d2) {
+            return false;
+        }
+    }
+    processor::outw(3 ,0x10); // 2 => NICs, 1 => BLK
+    return true;
+}
+
 void xen_init(processor::features_type &features, unsigned base)
 {
         // Base + 1 would have given us the version number, it is mostly
@@ -106,5 +127,7 @@ void xen_init(processor::features_type &features, unsigned base)
         // 7 => add to physmap
         if (memory_hypercall(7, &map))
             assert(0);
+
+        features.xen_pci = xen_pci_enabled();
 }
 }
