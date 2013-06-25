@@ -322,7 +322,7 @@ VTOZ(vnode_t *vp)
 #define	CONTENT_MODIFIED	(AT_MTIME | AT_CTIME)
 
 #define	ZFS_ACCESSTIME_STAMP(zfsvfs, zp) \
-	if ((zfsvfs)->z_atime && !((zfsvfs)->z_vfs->vfs_flag & VFS_RDONLY)) \
+	if ((zfsvfs)->z_atime && !((zfsvfs)->z_vfs->m_flags & MNT_RDONLY)) \
 		zfs_tstamp_update_setup(zp, ACCESSED, NULL, NULL, B_FALSE);
 
 extern int	zfs_init_fs(zfsvfs_t *, znode_t **);
