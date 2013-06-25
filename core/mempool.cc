@@ -12,6 +12,11 @@
 #include "alloctracker.hh"
 #include <atomic>
 #include "mmu.hh"
+#include <osv/trace.hh>
+
+TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
+TRACEPOINT(trace_memory_free, "buf=%p", void *);
+TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
 
 namespace memory {
 
@@ -536,27 +541,35 @@ void* realloc(void* v, size_t size)
 void* malloc(size_t size)
 {
 #if CONF_debug_memory == 0
-    return std_malloc(size);
+    void* buf = std_malloc(size);
 #else
-    return dbg::malloc(size);
+    void* buf = dbg::malloc(size);
 #endif
+
+    trace_memory_malloc(buf, size);
+    return buf;
 }
 
 void* realloc(void* obj, size_t size)
 {
 #if CONF_debug_memory == 0
-    return std_realloc(obj, size);
+    void* buf = std_realloc(obj, size);
 #else
-    return dbg::realloc(obj, size);
+    void* buf = dbg::realloc(obj, size);
 #endif
+
+    trace_memory_realloc(obj, size, buf);
+    return buf;
 }
 
 void free(void* obj)
 {
+    trace_memory_free(obj);
+
 #if CONF_debug_memory == 0
-    return std_free(obj);
+    std_free(obj);
 #else
-    return dbg::free(obj);
+    dbg::free(obj);
 #endif
 }
 
