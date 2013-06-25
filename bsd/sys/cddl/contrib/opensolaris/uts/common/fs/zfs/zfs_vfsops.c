@@ -968,7 +968,7 @@ zfs_domount(vfs_t *vfsp, char *osname)
 	uint64_t recordsize, fsid_guid;
 	int error = 0;
 	zfsvfs_t *zfsvfs;
-	vnode_t *vp;
+	znode_t *rootzp;
 
 	ASSERT(vfsp);
 	ASSERT(osname);
@@ -1017,6 +1017,11 @@ zfs_domount(vfs_t *vfsp, char *osname)
 	} else {
 		error = zfsvfs_setup(zfsvfs, B_TRUE);
 	}
+
+	error = zfs_zget(zfsvfs, zfsvfs->z_root, &rootzp);
+	if (error == 0)
+		vfsp->m_root->v_data = rootzp;
+
 
 #ifdef notyet
 	if (!zfsvfs->z_issnap)
