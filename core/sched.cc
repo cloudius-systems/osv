@@ -310,7 +310,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)
     , _attr(attr)
-    , _timers_need_reload()
     , _vruntime(clock::get()->time())
     , _ref_counter(1)
     , _joiner()
@@ -487,22 +486,22 @@ void thread::exit()
     t->complete();
 }
 
-void thread::suspend_timers()
+void timer_base::client::suspend_timers()
 {
     if (_timers_need_reload) {
         return;
     }
     _timers_need_reload = true;
-    _cpu->timers.suspend(_active_timers);
+    cpu::current()->timers.suspend(_active_timers);
 }
 
-void thread::resume_timers()
+void timer_base::client::resume_timers()
 {
     if (!_timers_need_reload) {
         return;
     }
     _timers_need_reload = false;
-    _cpu->timers.resume(_active_timers);
+    cpu::current()->timers.resume(_active_timers);
 }
 
 void thread::join()
@@ -529,6 +528,11 @@ thread::stack_info thread::get_stack_info()
 void thread::set_cleanup(std::function<void ()> cleanup)
 {
     _cleanup = cleanup;
+}
+
+void thread::timer_fired()
+{
+    wake();
 }
 
 unsigned long thread::id()
@@ -589,7 +593,7 @@ void timer_list::fired()
 }
 
 // call with irq disabled
-void timer_list::suspend(bi::list<timer>& timers)
+void timer_list::suspend(bi::list<timer_base>& timers)
 {
     for (auto& t : timers) {
         assert(t._state == timer::state::armed);
@@ -598,7 +602,7 @@ void timer_list::suspend(bi::list<timer>& timers)
 }
 
 // call with irq disabled
-void timer_list::resume(bi::list<timer>& timers)
+void timer_list::resume(bi::list<timer_base>& timers)
 {
     bool rearm = false;
     for (auto& t : timers) {
@@ -618,29 +622,29 @@ void timer_list::callback_dispatch::fired()
 
 timer_list::callback_dispatch timer_list::_dispatch;
 
-timer::timer(thread& t)
+timer_base::timer_base(timer_base::client& t)
     : _t(t)
 {
 }
 
-timer::~timer()
+timer_base::~timer_base()
 {
     cancel();
 }
 
-void timer::expire()
+void timer_base::expire()
 {
     _state = state::expired;
     _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-    _t.wake();
+    _t.timer_fired();
 }
 
-void timer::set(u64 time)
+void timer_base::set(u64 time)
 {
     _state = state::armed;
     _time = time;
     with_lock(irq_lock, [=] {
-        auto& timers = _t._cpu->timers;
+        auto& timers = cpu::current()->timers;
         timers._list.insert(*this);
         _t._active_timers.push_back(*this);
         if (timers._list.iterator_to(*this) == timers._list.begin()) {
@@ -649,7 +653,7 @@ void timer::set(u64 time)
     });
 };
 
-void timer::cancel()
+void timer_base::cancel()
 {
     if (_state == state::free) {
         return;
@@ -657,7 +661,7 @@ void timer::cancel()
     with_lock(irq_lock, [=] {
         if (_state == state::armed) {
             _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-            _t._cpu->timers._list.erase(_t._cpu->timers._list.iterator_to(*this));
+            cpu::current()->timers._list.erase(cpu::current()->timers._list.iterator_to(*this));
         }
         _state = state::free;
     });
@@ -665,12 +669,12 @@ void timer::cancel()
     // reprogramming the timer
 }
 
-bool timer::expired() const
+bool timer_base::expired() const
 {
     return _state == state::expired;
 }
 
-bool operator<(const timer& t1, const timer& t2)
+bool operator<(const timer_base& t1, const timer_base& t2)
 {
     if (t1._time < t2._time) {
         return true;

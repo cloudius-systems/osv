@@ -140,7 +140,7 @@ class osv_memory(gdb.Command):
                (freemem, (freemem*100.0/memsize)))
     
 ulong_type = gdb.lookup_type('unsigned long')
-timer_type = gdb.lookup_type('sched::timer')
+timer_type = gdb.lookup_type('sched::timer_base')
 
 active_thread_context = None
 

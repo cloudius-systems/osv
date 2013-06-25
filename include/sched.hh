@@ -117,18 +117,30 @@ private:
     std::atomic<unsigned long> _mask;
 };
 
-class timer : public bi::set_base_hook<>, public bi::list_base_hook<> {
+class timer_base : public bi::set_base_hook<>, public bi::list_base_hook<> {
 public:
-    explicit timer(thread& t);
-    ~timer();
+    class client {
+    public:
+        virtual ~client() {}
+        virtual void timer_fired() = 0;
+        void suspend_timers();
+        void resume_timers();
+    private:
+        bool _timers_need_reload = false;
+        bi::list<timer_base> _active_timers;
+        friend class timer_base;
+    };
+public:
+    explicit timer_base(client& t);
+    ~timer_base();
     void set(u64 time);
     bool expired() const;
     void cancel();
-    friend bool operator<(const timer& t1, const timer& t2);
+    friend bool operator<(const timer_base& t1, const timer_base& t2);
 private:
     void expire();
-private:
-    thread& _t;
+protected:
+    client& _t;
     enum class state {
         free, armed, expired
     };
@@ -137,7 +149,12 @@ private:
     friend class timer_list;
 };
 
-class thread {
+class timer : public timer_base {
+public:
+    explicit timer(thread& t);
+};
+
+class thread : private timer_base::client {
 public:
     struct stack_info {
         stack_info();
@@ -188,14 +205,14 @@ private:
     void setup_tcb();
     void free_tcb();
     void complete() __attribute__((__noreturn__));
-    void suspend_timers();
-    void resume_timers();
     static void on_thread_stack(thread* t);
     template <class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
     struct dummy_lock {};
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
+private:
+    virtual void timer_fired() override;
 private:
     std::function<void ()> _func;
     thread_state _state;
@@ -213,8 +230,6 @@ private:
     std::atomic<status> _status;
     attr _attr;
     cpu* _cpu;
-    bool _timers_need_reload;
-    bi::list<timer> _active_timers;
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned long _id;
@@ -258,11 +273,11 @@ void init_detached_threads_reaper();
 class timer_list {
 public:
     void fired();
-    void suspend(bi::list<timer>& t);
-    void resume(bi::list<timer>& t);
+    void suspend(bi::list<timer_base>& t);
+    void resume(bi::list<timer_base>& t);
 private:
-    friend class timer;
-    bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;
+    friend class timer_base;
+    bi::set<timer_base, bi::base_hook<bi::set_base_hook<>>> _list;
     class callback_dispatch : private clock_event_callback {
     public:
         callback_dispatch();
@@ -457,6 +472,12 @@ inline cpu* thread::tcpu()
 inline cpu* cpu::current()
 {
     return thread::current()->tcpu();
+}
+
+inline
+timer::timer(thread& t)
+    : timer_base(t)
+{
 }
 
 extern std::vector<cpu*> cpus;
