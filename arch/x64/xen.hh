@@ -1,7 +1,7 @@
 #ifndef XEN_HH
 #define XEN_HH
 #include <osv/types.h>
-#include "drivers/clock.hh"
+#include <osv/pvclock-abi.hh>
 #include "cpuid.hh"
 
 #define CURRENT_DOMAIN (0x7FF0U)
