@@ -30,6 +30,11 @@ SECTIONS
         *(.percpu)
         _percpu_end = .;
     }
+    .percpu_workers : {
+        _percpu_workers_start = .;
+        *(.percpu_workers)
+        _percpu_workers_end = .;
+    }
     .tls_template_start = .;
     .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls :text
     .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) } :tls :text
