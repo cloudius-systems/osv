@@ -61,7 +61,6 @@ public:
 
 struct pool::free_object {
     free_object* next;
-    page_header* to_page_header();
 };
 
 class malloc_pool : public pool {
