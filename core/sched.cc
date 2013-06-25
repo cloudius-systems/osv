@@ -20,6 +20,9 @@ tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
 tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
 tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
 tracepoint<1006> trace_preempt("sched_preempt", "");
+TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, u64);
+TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
+TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
 std::vector<cpu*> cpus;
 
@@ -634,6 +637,7 @@ timer_base::~timer_base()
 
 void timer_base::expire()
 {
+    trace_timer_fired(this);
     _state = state::expired;
     _t._active_timers.erase(_t._active_timers.iterator_to(*this));
     _t.timer_fired();
@@ -641,6 +645,7 @@ void timer_base::expire()
 
 void timer_base::set(u64 time)
 {
+    trace_timer_set(this, time);
     _state = state::armed;
     _time = time;
     with_lock(irq_lock, [=] {
@@ -658,6 +663,7 @@ void timer_base::cancel()
     if (_state == state::free) {
         return;
     }
+    trace_timer_cancel(this);
     with_lock(irq_lock, [=] {
         if (_state == state::armed) {
             _t._active_timers.erase(_t._active_timers.iterator_to(*this));
