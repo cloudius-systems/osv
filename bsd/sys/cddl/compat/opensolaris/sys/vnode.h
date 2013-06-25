@@ -115,7 +115,7 @@ vn_is_readonly(vnode_t *vp)
 #define	va_blksize	va_blocksize
 #define	va_seq		va_gen
 
-#define	MAXOFFSET_T	OFF_MAX
+#define	MAXOFFSET_T	LONG_MAX
 #define	EXCL		0
 
 #define	ACCESSED		(AT_ATIME)

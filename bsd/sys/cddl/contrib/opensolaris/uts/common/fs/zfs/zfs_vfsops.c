@@ -2203,6 +2203,8 @@ zfsvfs_update_fromname(const char *oldname, const char *newname)
 #endif
 #endif
 
+extern struct vnops zfs_vnops;
+
 /*
  * File system operations
  */
@@ -2212,5 +2214,5 @@ struct vfsops zfs_vfsops = {
 	zfs_sync,	/* sync */
 	((vfsop_vget_t)vfs_nullop),		/* vget */
 	zfs_statfs,	/* statfs */
-	NULL,		/* vnops */
+	&zfs_vnops,	/* vnops */
 };

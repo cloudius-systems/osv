@@ -58,7 +58,6 @@
 #include <sys/dirent.h>
 #include <sys/policy.h>
 #include <sys/sunddi.h>
-#include <sys/filio.h>
 #include <sys/sid.h>
 #include <sys/zfs_ctldir.h>
 #include <sys/zfs_fuid.h>
@@ -67,12 +66,7 @@
 #include <sys/zfs_rlock.h>
 #include <sys/extdirent.h>
 #include <sys/kidmap.h>
-#include <sys/bio.h>
-#include <sys/buf.h>
-#include <sys/sf_buf.h>
-#include <sys/sched.h>
 #include <sys/acl.h>
-#include <vm/vm_pageout.h>
 
 /*
  * Programming rules.
@@ -164,33 +158,23 @@
  *	return (error);			// done, report error
  */
 
-/* ARGSUSED */
 static int
-zfs_open(vnode_t **vpp, int flag, cred_t *cr, caller_context_t *ct)
+zfs_open(vnode_t *vp, int flags)
 {
-	znode_t	*zp = VTOZ(*vpp);
+	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 
-	if ((flag & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
-	    ((flag & FAPPEND) == 0)) {
+	if ((flags & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
+	    ((flags & O_APPEND) == 0)) {
 		ZFS_EXIT(zfsvfs);
 		return (EPERM);
 	}
 
-	if (!zfs_has_ctldir(zp) && zp->z_zfsvfs->z_vscan &&
-	    ZTOV(zp)->v_type == VREG &&
-	    !(zp->z_pflags & ZFS_AV_QUARANTINED) && zp->z_size > 0) {
-		if (fs_vscan(*vpp, cr, 0) != 0) {
-			ZFS_EXIT(zfsvfs);
-			return (EACCES);
-		}
-	}
-
 	/* Keep a count of the synchronous opens in the znode */
-	if (flag & (FSYNC | FDSYNC))
+	if (flags & O_DSYNC)
 		atomic_inc_32(&zp->z_sync_cnt);
 
 	ZFS_EXIT(zfsvfs);
@@ -199,34 +183,23 @@ zfs_open(vnode_t **vpp, int flag, cred_t *cr, caller_context_t *ct)
 
 /* ARGSUSED */
 static int
-zfs_close(vnode_t *vp, int flag, int count, offset_t offset, cred_t *cr,
-    caller_context_t *ct)
+zfs_close(vnode_t *vp, file_t *fp)
 {
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
-
-	/*
-	 * Clean up any locks held by this process on the vp.
-	 */
-	cleanlocks(vp, ddi_get_pid(), 0);
-	cleanshares(vp, ddi_get_pid());
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 
 	/* Decrement the synchronous opens in the znode */
-	if ((flag & (FSYNC | FDSYNC)) && (count == 1))
+	if (fp->f_flags & O_DSYNC)
 		atomic_dec_32(&zp->z_sync_cnt);
-
-	if (!zfs_has_ctldir(zp) && zp->z_zfsvfs->z_vscan &&
-	    ZTOV(zp)->v_type == VREG &&
-	    !(zp->z_pflags & ZFS_AV_QUARANTINED) && zp->z_size > 0)
-		VERIFY(fs_vscan(vp, cr, 1) == 0);
 
 	ZFS_EXIT(zfsvfs);
 	return (0);
 }
 
+#ifdef NOTYET
 /*
  * Lseek support for finding holes (cmd == _FIO_SEEK_HOLE) and
  * data (cmd == _FIO_SEEK_DATA). "off" is an in/out parameter.
@@ -268,57 +241,6 @@ zfs_holey(vnode_t *vp, u_long cmd, offset_t *off)
 		return (error);
 	*off = noff;
 	return (error);
-}
-
-/* ARGSUSED */
-static int
-zfs_ioctl(vnode_t *vp, u_long com, intptr_t data, int flag, cred_t *cred,
-    int *rvalp, caller_context_t *ct)
-{
-	offset_t off;
-	int error;
-	zfsvfs_t *zfsvfs;
-	znode_t *zp;
-
-	switch (com) {
-	case _FIOFFS:
-		return (0);
-
-		/*
-		 * The following two ioctls are used by bfu.  Faking out,
-		 * necessary to avoid bfu errors.
-		 */
-	case _FIOGDIO:
-	case _FIOSDIO:
-		return (0);
-
-	case _FIO_SEEK_DATA:
-	case _FIO_SEEK_HOLE:
-#ifdef sun
-		if (ddi_copyin((void *)data, &off, sizeof (off), flag))
-			return (EFAULT);
-#else
-		off = *(offset_t *)data;
-#endif
-		zp = VTOZ(vp);
-		zfsvfs = zp->z_zfsvfs;
-		ZFS_ENTER(zfsvfs);
-		ZFS_VERIFY_ZP(zp);
-
-		/* offset parameter is in/out */
-		error = zfs_holey(vp, com, &off);
-		ZFS_EXIT(zfsvfs);
-		if (error)
-			return (error);
-#ifdef sun
-		if (ddi_copyout(&off, (void *)data, sizeof (off), flag))
-			return (EFAULT);
-#else
-		*(offset_t *)data = off;
-#endif
-		return (0);
-	}
-	return (ENOTTY);
 }
 
 static vm_page_t
@@ -2623,12 +2545,16 @@ update:
 }
 
 ulong_t zfs_fsync_sync_cnt = 4;
+#endif /* NOTYET */
 
 static int
-zfs_fsync(vnode_t *vp, int syncflag, cred_t *cr, caller_context_t *ct)
+zfs_fsync(vnode_t *vp, file_t *fp)
 {
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
+#ifdef TODO
+
+	vop_stdfsync(ap);
 
 	(void) tsd_set(zfs_fsyncer_key, (void *)zfs_fsync_sync_cnt);
 
@@ -2638,10 +2564,12 @@ zfs_fsync(vnode_t *vp, int syncflag, cred_t *cr, caller_context_t *ct)
 		zil_commit(zfsvfs->z_log, zp->z_id);
 		ZFS_EXIT(zfsvfs);
 	}
+#endif
 	return (0);
 }
 
 
+#ifdef NOTYET
 /*
  * Get the requested file attributes and place them in the provided
  * vattr structure.
@@ -4614,29 +4542,29 @@ zfs_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
 	}
 	rw_exit(&zfsvfs->z_teardown_inactive_lock);
 }
+#endif /* NOTYET */
 
-#ifdef sun
 /*
  * Bounds-check the seek operation.
  *
  *	IN:	vp	- vnode seeking within
  *		ooff	- old file offset
  *		noffp	- pointer to new file offset
- *		ct	- caller context
  *
  *	RETURN:	0 if success
  *		EINVAL if new offset invalid
  */
 /* ARGSUSED */
 static int
-zfs_seek(vnode_t *vp, offset_t ooff, offset_t *noffp,
-    caller_context_t *ct)
+zfs_seek(vnode_t *vp, file_t *fp, offset_t ooff, offset_t noffp)
 {
 	if (vp->v_type == VDIR)
 		return (0);
-	return ((*noffp < 0 || *noffp > MAXOFFSET_T) ? EINVAL : 0);
+	return ((noffp < 0 || noffp > MAXOFFSET_T) ? EINVAL : 0);
 }
 
+#ifdef NOTYET
+#ifdef sun
 /*
  * Pre-filter the generic locking function to trap attempts to place
  * a mandatory lock on a memory mapped file.
@@ -5223,336 +5151,6 @@ zfs_setsecattr(vnode_t *vp, vsecattr_t *vsecp, int flag, cred_t *cr,
 	return (error);
 }
 
-#ifdef sun
-/*
- * Tunable, both must be a power of 2.
- *
- * zcr_blksz_min: the smallest read we may consider to loan out an arcbuf
- * zcr_blksz_max: if set to less than the file block size, allow loaning out of
- *                an arcbuf for a partial block read
- */
-int zcr_blksz_min = (1 << 10);	/* 1K */
-int zcr_blksz_max = (1 << 17);	/* 128K */
-
-/*ARGSUSED*/
-static int
-zfs_reqzcbuf(vnode_t *vp, enum uio_rw ioflag, xuio_t *xuio, cred_t *cr,
-    caller_context_t *ct)
-{
-	znode_t	*zp = VTOZ(vp);
-	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
-	int max_blksz = zfsvfs->z_max_blksz;
-	uio_t *uio = &xuio->xu_uio;
-	ssize_t size = uio->uio_resid;
-	offset_t offset = uio->uio_loffset;
-	int blksz;
-	int fullblk, i;
-	arc_buf_t *abuf;
-	ssize_t maxsize;
-	int preamble, postamble;
-
-	if (xuio->xu_type != UIOTYPE_ZEROCOPY)
-		return (EINVAL);
-
-	ZFS_ENTER(zfsvfs);
-	ZFS_VERIFY_ZP(zp);
-	switch (ioflag) {
-	case UIO_WRITE:
-		/*
-		 * Loan out an arc_buf for write if write size is bigger than
-		 * max_blksz, and the file's block size is also max_blksz.
-		 */
-		blksz = max_blksz;
-		if (size < blksz || zp->z_blksz != blksz) {
-			ZFS_EXIT(zfsvfs);
-			return (EINVAL);
-		}
-		/*
-		 * Caller requests buffers for write before knowing where the
-		 * write offset might be (e.g. NFS TCP write).
-		 */
-		if (offset == -1) {
-			preamble = 0;
-		} else {
-			preamble = P2PHASE(offset, blksz);
-			if (preamble) {
-				preamble = blksz - preamble;
-				size -= preamble;
-			}
-		}
-
-		postamble = P2PHASE(size, blksz);
-		size -= postamble;
-
-		fullblk = size / blksz;
-		(void) dmu_xuio_init(xuio,
-		    (preamble != 0) + fullblk + (postamble != 0));
-		DTRACE_PROBE3(zfs_reqzcbuf_align, int, preamble,
-		    int, postamble, int,
-		    (preamble != 0) + fullblk + (postamble != 0));
-
-		/*
-		 * Have to fix iov base/len for partial buffers.  They
-		 * currently represent full arc_buf's.
-		 */
-		if (preamble) {
-			/* data begins in the middle of the arc_buf */
-			abuf = dmu_request_arcbuf(sa_get_db(zp->z_sa_hdl),
-			    blksz);
-			ASSERT(abuf);
-			(void) dmu_xuio_add(xuio, abuf,
-			    blksz - preamble, preamble);
-		}
-
-		for (i = 0; i < fullblk; i++) {
-			abuf = dmu_request_arcbuf(sa_get_db(zp->z_sa_hdl),
-			    blksz);
-			ASSERT(abuf);
-			(void) dmu_xuio_add(xuio, abuf, 0, blksz);
-		}
-
-		if (postamble) {
-			/* data ends in the middle of the arc_buf */
-			abuf = dmu_request_arcbuf(sa_get_db(zp->z_sa_hdl),
-			    blksz);
-			ASSERT(abuf);
-			(void) dmu_xuio_add(xuio, abuf, 0, postamble);
-		}
-		break;
-	case UIO_READ:
-		/*
-		 * Loan out an arc_buf for read if the read size is larger than
-		 * the current file block size.  Block alignment is not
-		 * considered.  Partial arc_buf will be loaned out for read.
-		 */
-		blksz = zp->z_blksz;
-		if (blksz < zcr_blksz_min)
-			blksz = zcr_blksz_min;
-		if (blksz > zcr_blksz_max)
-			blksz = zcr_blksz_max;
-		/* avoid potential complexity of dealing with it */
-		if (blksz > max_blksz) {
-			ZFS_EXIT(zfsvfs);
-			return (EINVAL);
-		}
-
-		maxsize = zp->z_size - uio->uio_loffset;
-		if (size > maxsize)
-			size = maxsize;
-
-		if (size < blksz || vn_has_cached_data(vp)) {
-			ZFS_EXIT(zfsvfs);
-			return (EINVAL);
-		}
-		break;
-	default:
-		ZFS_EXIT(zfsvfs);
-		return (EINVAL);
-	}
-
-	uio->uio_extflg = UIO_XUIO;
-	XUIO_XUZC_RW(xuio) = ioflag;
-	ZFS_EXIT(zfsvfs);
-	return (0);
-}
-
-/*ARGSUSED*/
-static int
-zfs_retzcbuf(vnode_t *vp, xuio_t *xuio, cred_t *cr, caller_context_t *ct)
-{
-	int i;
-	arc_buf_t *abuf;
-	int ioflag = XUIO_XUZC_RW(xuio);
-
-	ASSERT(xuio->xu_type == UIOTYPE_ZEROCOPY);
-
-	i = dmu_xuio_cnt(xuio);
-	while (i-- > 0) {
-		abuf = dmu_xuio_arcbuf(xuio, i);
-		/*
-		 * if abuf == NULL, it must be a write buffer
-		 * that has been returned in zfs_write().
-		 */
-		if (abuf)
-			dmu_return_arcbuf(abuf);
-		ASSERT(abuf || ioflag == UIO_WRITE);
-	}
-
-	dmu_xuio_fini(xuio);
-	return (0);
-}
-
-/*
- * Predeclare these here so that the compiler assumes that
- * this is an "old style" function declaration that does
- * not include arguments => we won't get type mismatch errors
- * in the initializations that follow.
- */
-static int zfs_inval();
-static int zfs_isdir();
-
-static int
-zfs_inval()
-{
-	return (EINVAL);
-}
-
-static int
-zfs_isdir()
-{
-	return (EISDIR);
-}
-/*
- * Directory vnode operations template
- */
-vnodeops_t *zfs_dvnodeops;
-const fs_operation_def_t zfs_dvnodeops_template[] = {
-	VOPNAME_OPEN,		{ .vop_open = zfs_open },
-	VOPNAME_CLOSE,		{ .vop_close = zfs_close },
-	VOPNAME_READ,		{ .error = zfs_isdir },
-	VOPNAME_WRITE,		{ .error = zfs_isdir },
-	VOPNAME_IOCTL,		{ .vop_ioctl = zfs_ioctl },
-	VOPNAME_GETATTR,	{ .vop_getattr = zfs_getattr },
-	VOPNAME_SETATTR,	{ .vop_setattr = zfs_setattr },
-	VOPNAME_ACCESS,		{ .vop_access = zfs_access },
-	VOPNAME_LOOKUP,		{ .vop_lookup = zfs_lookup },
-	VOPNAME_CREATE,		{ .vop_create = zfs_create },
-	VOPNAME_REMOVE,		{ .vop_remove = zfs_remove },
-	VOPNAME_LINK,		{ .vop_link = zfs_link },
-	VOPNAME_RENAME,		{ .vop_rename = zfs_rename },
-	VOPNAME_MKDIR,		{ .vop_mkdir = zfs_mkdir },
-	VOPNAME_RMDIR,		{ .vop_rmdir = zfs_rmdir },
-	VOPNAME_READDIR,	{ .vop_readdir = zfs_readdir },
-	VOPNAME_SYMLINK,	{ .vop_symlink = zfs_symlink },
-	VOPNAME_FSYNC,		{ .vop_fsync = zfs_fsync },
-	VOPNAME_INACTIVE,	{ .vop_inactive = zfs_inactive },
-	VOPNAME_FID,		{ .vop_fid = zfs_fid },
-	VOPNAME_SEEK,		{ .vop_seek = zfs_seek },
-	VOPNAME_PATHCONF,	{ .vop_pathconf = zfs_pathconf },
-	VOPNAME_GETSECATTR,	{ .vop_getsecattr = zfs_getsecattr },
-	VOPNAME_SETSECATTR,	{ .vop_setsecattr = zfs_setsecattr },
-	VOPNAME_VNEVENT, 	{ .vop_vnevent = fs_vnevent_support },
-	NULL,			NULL
-};
-
-/*
- * Regular file vnode operations template
- */
-vnodeops_t *zfs_fvnodeops;
-const fs_operation_def_t zfs_fvnodeops_template[] = {
-	VOPNAME_OPEN,		{ .vop_open = zfs_open },
-	VOPNAME_CLOSE,		{ .vop_close = zfs_close },
-	VOPNAME_READ,		{ .vop_read = zfs_read },
-	VOPNAME_WRITE,		{ .vop_write = zfs_write },
-	VOPNAME_IOCTL,		{ .vop_ioctl = zfs_ioctl },
-	VOPNAME_GETATTR,	{ .vop_getattr = zfs_getattr },
-	VOPNAME_SETATTR,	{ .vop_setattr = zfs_setattr },
-	VOPNAME_ACCESS,		{ .vop_access = zfs_access },
-	VOPNAME_LOOKUP,		{ .vop_lookup = zfs_lookup },
-	VOPNAME_RENAME,		{ .vop_rename = zfs_rename },
-	VOPNAME_FSYNC,		{ .vop_fsync = zfs_fsync },
-	VOPNAME_INACTIVE,	{ .vop_inactive = zfs_inactive },
-	VOPNAME_FID,		{ .vop_fid = zfs_fid },
-	VOPNAME_SEEK,		{ .vop_seek = zfs_seek },
-	VOPNAME_FRLOCK,		{ .vop_frlock = zfs_frlock },
-	VOPNAME_SPACE,		{ .vop_space = zfs_space },
-	VOPNAME_GETPAGE,	{ .vop_getpage = zfs_getpage },
-	VOPNAME_PUTPAGE,	{ .vop_putpage = zfs_putpage },
-	VOPNAME_MAP,		{ .vop_map = zfs_map },
-	VOPNAME_ADDMAP,		{ .vop_addmap = zfs_addmap },
-	VOPNAME_DELMAP,		{ .vop_delmap = zfs_delmap },
-	VOPNAME_PATHCONF,	{ .vop_pathconf = zfs_pathconf },
-	VOPNAME_GETSECATTR,	{ .vop_getsecattr = zfs_getsecattr },
-	VOPNAME_SETSECATTR,	{ .vop_setsecattr = zfs_setsecattr },
-	VOPNAME_VNEVENT,	{ .vop_vnevent = fs_vnevent_support },
-	VOPNAME_REQZCBUF, 	{ .vop_reqzcbuf = zfs_reqzcbuf },
-	VOPNAME_RETZCBUF, 	{ .vop_retzcbuf = zfs_retzcbuf },
-	NULL,			NULL
-};
-
-/*
- * Symbolic link vnode operations template
- */
-vnodeops_t *zfs_symvnodeops;
-const fs_operation_def_t zfs_symvnodeops_template[] = {
-	VOPNAME_GETATTR,	{ .vop_getattr = zfs_getattr },
-	VOPNAME_SETATTR,	{ .vop_setattr = zfs_setattr },
-	VOPNAME_ACCESS,		{ .vop_access = zfs_access },
-	VOPNAME_RENAME,		{ .vop_rename = zfs_rename },
-	VOPNAME_READLINK,	{ .vop_readlink = zfs_readlink },
-	VOPNAME_INACTIVE,	{ .vop_inactive = zfs_inactive },
-	VOPNAME_FID,		{ .vop_fid = zfs_fid },
-	VOPNAME_PATHCONF,	{ .vop_pathconf = zfs_pathconf },
-	VOPNAME_VNEVENT,	{ .vop_vnevent = fs_vnevent_support },
-	NULL,			NULL
-};
-
-/*
- * special share hidden files vnode operations template
- */
-vnodeops_t *zfs_sharevnodeops;
-const fs_operation_def_t zfs_sharevnodeops_template[] = {
-	VOPNAME_GETATTR,	{ .vop_getattr = zfs_getattr },
-	VOPNAME_ACCESS,		{ .vop_access = zfs_access },
-	VOPNAME_INACTIVE,	{ .vop_inactive = zfs_inactive },
-	VOPNAME_FID,		{ .vop_fid = zfs_fid },
-	VOPNAME_PATHCONF,	{ .vop_pathconf = zfs_pathconf },
-	VOPNAME_GETSECATTR,	{ .vop_getsecattr = zfs_getsecattr },
-	VOPNAME_SETSECATTR,	{ .vop_setsecattr = zfs_setsecattr },
-	VOPNAME_VNEVENT,	{ .vop_vnevent = fs_vnevent_support },
-	NULL,			NULL
-};
-
-/*
- * Extended attribute directory vnode operations template
- *	This template is identical to the directory vnodes
- *	operation template except for restricted operations:
- *		VOP_MKDIR()
- *		VOP_SYMLINK()
- * Note that there are other restrictions embedded in:
- *	zfs_create()	- restrict type to VREG
- *	zfs_link()	- no links into/out of attribute space
- *	zfs_rename()	- no moves into/out of attribute space
- */
-vnodeops_t *zfs_xdvnodeops;
-const fs_operation_def_t zfs_xdvnodeops_template[] = {
-	VOPNAME_OPEN,		{ .vop_open = zfs_open },
-	VOPNAME_CLOSE,		{ .vop_close = zfs_close },
-	VOPNAME_IOCTL,		{ .vop_ioctl = zfs_ioctl },
-	VOPNAME_GETATTR,	{ .vop_getattr = zfs_getattr },
-	VOPNAME_SETATTR,	{ .vop_setattr = zfs_setattr },
-	VOPNAME_ACCESS,		{ .vop_access = zfs_access },
-	VOPNAME_LOOKUP,		{ .vop_lookup = zfs_lookup },
-	VOPNAME_CREATE,		{ .vop_create = zfs_create },
-	VOPNAME_REMOVE,		{ .vop_remove = zfs_remove },
-	VOPNAME_LINK,		{ .vop_link = zfs_link },
-	VOPNAME_RENAME,		{ .vop_rename = zfs_rename },
-	VOPNAME_MKDIR,		{ .error = zfs_inval },
-	VOPNAME_RMDIR,		{ .vop_rmdir = zfs_rmdir },
-	VOPNAME_READDIR,	{ .vop_readdir = zfs_readdir },
-	VOPNAME_SYMLINK,	{ .error = zfs_inval },
-	VOPNAME_FSYNC,		{ .vop_fsync = zfs_fsync },
-	VOPNAME_INACTIVE,	{ .vop_inactive = zfs_inactive },
-	VOPNAME_FID,		{ .vop_fid = zfs_fid },
-	VOPNAME_SEEK,		{ .vop_seek = zfs_seek },
-	VOPNAME_PATHCONF,	{ .vop_pathconf = zfs_pathconf },
-	VOPNAME_GETSECATTR,	{ .vop_getsecattr = zfs_getsecattr },
-	VOPNAME_SETSECATTR,	{ .vop_setsecattr = zfs_setsecattr },
-	VOPNAME_VNEVENT,	{ .vop_vnevent = fs_vnevent_support },
-	NULL,			NULL
-};
-
-/*
- * Error vnode operations template
- */
-vnodeops_t *zfs_evnodeops;
-const fs_operation_def_t zfs_evnodeops_template[] = {
-	VOPNAME_INACTIVE,	{ .vop_inactive = zfs_inactive },
-	VOPNAME_PATHCONF,	{ .vop_pathconf = zfs_pathconf },
-	NULL,			NULL
-};
-#endif	/* sun */
-
 static int
 ioflags(int ioflags)
 {
@@ -5654,54 +5252,6 @@ zfs_freebsd_getpages(ap)
 {
 
 	return (zfs_getpages(ap->a_vp, ap->a_m, ap->a_count, ap->a_reqpage));
-}
-
-static int
-zfs_freebsd_open(ap)
-	struct vop_open_args /* {
-		struct vnode *a_vp;
-		int a_mode;
-		struct ucred *a_cred;
-		struct thread *a_td;
-	} */ *ap;
-{
-	vnode_t	*vp = ap->a_vp;
-	znode_t *zp = VTOZ(vp);
-	int error;
-
-	error = zfs_open(&vp, ap->a_mode, ap->a_cred, NULL);
-	if (error == 0)
-		vnode_create_vobject(vp, zp->z_size, ap->a_td);
-	return (error);
-}
-
-static int
-zfs_freebsd_close(ap)
-	struct vop_close_args /* {
-		struct vnode *a_vp;
-		int  a_fflag;
-		struct ucred *a_cred;
-		struct thread *a_td;
-	} */ *ap;
-{
-
-	return (zfs_close(ap->a_vp, ap->a_fflag, 1, 0, ap->a_cred, NULL));
-}
-
-static int
-zfs_freebsd_ioctl(ap)
-	struct vop_ioctl_args /* {
-		struct vnode *a_vp;
-		u_long a_command;
-		caddr_t a_data;
-		int a_fflag;
-		struct ucred *cred;
-		struct thread *td;
-	} */ *ap;
-{
-
-	return (zfs_ioctl(ap->a_vp, ap->a_command, (intptr_t)ap->a_data,
-	    ap->a_fflag, ap->a_cred, NULL, NULL));
 }
 
 static int
@@ -5890,54 +5440,7 @@ zfs_freebsd_fsync(ap)
 	} */ *ap;
 {
 
-	vop_stdfsync(ap);
 	return (zfs_fsync(ap->a_vp, 0, ap->a_td->td_ucred, NULL));
-}
-
-static int
-zfs_freebsd_getattr(ap)
-	struct vop_getattr_args /* {
-		struct vnode *a_vp;
-		struct vattr *a_vap;
-		struct ucred *a_cred;
-	} */ *ap;
-{
-	vattr_t *vap = ap->a_vap;
-	xvattr_t xvap;
-	u_long fflags = 0;
-	int error;
-
-	xva_init(&xvap);
-	xvap.xva_vattr = *vap;
-	xvap.xva_vattr.va_mask |= AT_XVATTR;
-
-	/* Convert chflags into ZFS-type flags. */
-	/* XXX: what about SF_SETTABLE?. */
-	XVA_SET_REQ(&xvap, XAT_IMMUTABLE);
-	XVA_SET_REQ(&xvap, XAT_APPENDONLY);
-	XVA_SET_REQ(&xvap, XAT_NOUNLINK);
-	XVA_SET_REQ(&xvap, XAT_NODUMP);
-	error = zfs_getattr(ap->a_vp, (vattr_t *)&xvap, 0, ap->a_cred, NULL);
-	if (error != 0)
-		return (error);
-
-	/* Convert ZFS xattr into chflags. */
-#define	FLAG_CHECK(fflag, xflag, xfield)	do {			\
-	if (XVA_ISSET_RTN(&xvap, (xflag)) && (xfield) != 0)		\
-		fflags |= (fflag);					\
-} while (0)
-	FLAG_CHECK(SF_IMMUTABLE, XAT_IMMUTABLE,
-	    xvap.xva_xoptattrs.xoa_immutable);
-	FLAG_CHECK(SF_APPEND, XAT_APPENDONLY,
-	    xvap.xva_xoptattrs.xoa_appendonly);
-	FLAG_CHECK(SF_NOUNLINK, XAT_NOUNLINK,
-	    xvap.xva_xoptattrs.xoa_nounlink);
-	FLAG_CHECK(UF_NODUMP, XAT_NODUMP,
-	    xvap.xva_xoptattrs.xoa_nodump);
-#undef	FLAG_CHECK
-	*vap = xvap.xva_vattr;
-	vap->va_flags = fflags;
-	return (0);
 }
 
 static int
@@ -6662,92 +6165,26 @@ zfs_freebsd_setacl(ap)
 
 	return (error);
 }
+#endif /* NOTYET */
 
-int
-zfs_freebsd_aclcheck(ap)
-	struct vop_aclcheck_args /* {
-		struct vnode *vp;
-		acl_type_t type;
-		struct acl *aclp;
-		struct ucred *cred;
-		struct thread *td;
-	} */ *ap;
-{
-
-	return (EOPNOTSUPP);
-}
-
-struct vop_vector zfs_vnodeops;
-struct vop_vector zfs_fifoops;
-struct vop_vector zfs_shareops;
-
-struct vop_vector zfs_vnodeops = {
-	.vop_default =		&default_vnodeops,
-	.vop_inactive =		zfs_freebsd_inactive,
-	.vop_reclaim =		zfs_freebsd_reclaim,
-	.vop_access =		zfs_freebsd_access,
-#ifdef FREEBSD_NAMECACHE
-	.vop_lookup =		vfs_cache_lookup,
-	.vop_cachedlookup =	zfs_freebsd_lookup,
-#else
-	.vop_lookup =		zfs_freebsd_lookup,
-#endif
-	.vop_getattr =		zfs_freebsd_getattr,
-	.vop_setattr =		zfs_freebsd_setattr,
-	.vop_create =		zfs_freebsd_create,
-	.vop_mknod =		zfs_freebsd_create,
-	.vop_mkdir =		zfs_freebsd_mkdir,
-	.vop_readdir =		zfs_freebsd_readdir,
-	.vop_fsync =		zfs_freebsd_fsync,
-	.vop_open =		zfs_freebsd_open,
-	.vop_close =		zfs_freebsd_close,
-	.vop_rmdir =		zfs_freebsd_rmdir,
-	.vop_ioctl =		zfs_freebsd_ioctl,
-	.vop_link =		zfs_freebsd_link,
-	.vop_symlink =		zfs_freebsd_symlink,
-	.vop_readlink =		zfs_freebsd_readlink,
-	.vop_read =		zfs_freebsd_read,
-	.vop_write =		zfs_freebsd_write,
-	.vop_remove =		zfs_freebsd_remove,
-	.vop_rename =		zfs_freebsd_rename,
-	.vop_pathconf =		zfs_freebsd_pathconf,
-	.vop_bmap =		VOP_EOPNOTSUPP,
-	.vop_fid =		zfs_freebsd_fid,
-	.vop_getextattr =	zfs_getextattr,
-	.vop_deleteextattr =	zfs_deleteextattr,
-	.vop_setextattr =	zfs_setextattr,
-	.vop_listextattr =	zfs_listextattr,
-	.vop_getacl =		zfs_freebsd_getacl,
-	.vop_setacl =		zfs_freebsd_setacl,
-	.vop_aclcheck =		zfs_freebsd_aclcheck,
-	.vop_getpages =		zfs_freebsd_getpages,
+struct vnops zfs_vnops = {
+	zfs_open,			/* open */
+	zfs_close,			/* close */
+	NULL,				/* read */
+	NULL, 				/* write */
+	zfs_seek,			/* seek */
+	(vnop_ioctl_t)vop_einval,	/* ioctl */
+	zfs_fsync,			/* fsync */
+	NULL,				/* readdir */
+	NULL,				/* lookup */
+	NULL,				/* create */
+	NULL,				/* remove */
+	NULL,				/* rename */
+	NULL,				/* mkdir */
+	NULL,				/* rmdir */
+	NULL,				/* getattr */
+	NULL,				/* setattr */
+	NULL,				/* inactive */
+	NULL,				/* truncate */
 };
 
-struct vop_vector zfs_fifoops = {
-	.vop_default =		&fifo_specops,
-	.vop_fsync =		zfs_freebsd_fsync,
-	.vop_access =		zfs_freebsd_access,
-	.vop_getattr =		zfs_freebsd_getattr,
-	.vop_inactive =		zfs_freebsd_inactive,
-	.vop_read =		VOP_PANIC,
-	.vop_reclaim =		zfs_freebsd_reclaim,
-	.vop_setattr =		zfs_freebsd_setattr,
-	.vop_write =		VOP_PANIC,
-	.vop_pathconf = 	zfs_freebsd_fifo_pathconf,
-	.vop_fid =		zfs_freebsd_fid,
-	.vop_getacl =		zfs_freebsd_getacl,
-	.vop_setacl =		zfs_freebsd_setacl,
-	.vop_aclcheck =		zfs_freebsd_aclcheck,
-};
-
-/*
- * special share hidden files vnode operations template
- */
-struct vop_vector zfs_shareops = {
-	.vop_default =		&default_vnodeops,
-	.vop_access =		zfs_freebsd_access,
-	.vop_inactive =		zfs_freebsd_inactive,
-	.vop_reclaim =		zfs_freebsd_reclaim,
-	.vop_fid =		zfs_freebsd_fid,
-	.vop_pathconf =		zfs_freebsd_pathconf,
-};

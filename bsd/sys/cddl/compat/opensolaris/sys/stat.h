@@ -34,7 +34,7 @@
 
 #define	stat64	stat
 
-#define	MAXOFFSET_T	OFF_MAX
+#define	MAXOFFSET_T	LONG_MAX
 
 #ifndef _KERNEL
 #include <sys/disk.h>
