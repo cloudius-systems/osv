@@ -3,6 +3,7 @@
 #include <sys/dmu.h>
 #include <sys/spa.h>
 #include <sys/zfs_sa.h>
+#include <sys/zfs_znode.h>
 #include <sys/sa_impl.h>
 #include <osv/debug.h>
 
@@ -75,4 +76,5 @@ void zfs_init(void *arg)
 {
 	spa_init(FREAD | FWRITE);
 	dmu_objset_register_type(DMU_OST_ZFS, zfs_space_delta_cb);
+	zfs_znode_init();
 }
