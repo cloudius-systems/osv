@@ -58,7 +58,7 @@ private:
         u32 offset2;
         u32 res1;
     } __attribute__((aligned(16)));
-    void add_entry(unsigned vec, void (*handler)());
+    void add_entry(unsigned vec, unsigned ist, void (*handler)());
     idt_entry _idt[256];
     std::function<void ()> _handlers[256];
 };

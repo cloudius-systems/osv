@@ -16,7 +16,8 @@ inline void arch_cpu::enter_exception()
 
 inline void arch_cpu::exit_exception()
 {
-    set_exception_stack(&sched::thread::current()->_arch);
+    auto& s = exception_stack;
+    set_exception_stack(s, sizeof(s));
     in_exception = false;
 }
 
