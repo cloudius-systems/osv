@@ -2216,59 +2216,28 @@ out:
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
+#endif /* NOTYET */
 
 /*
- * Read as many directory entries as will fit into the provided
- * buffer from the given directory cursor position (specified in
- * the uio structure.
- *
- *	IN:	vp	- vnode of directory to read.
- *		uio	- structure supplying read location, range info,
- *			  and return buffer.
- *		cr	- credentials of caller.
- *		ct	- caller context
- *		flags	- case flags
- *
- *	OUT:	uio	- updated offset and range, buffer filled.
- *		eofp	- set to true if end-of-file detected.
- *
- *	RETURN:	0 if success
- *		error code if failure
- *
- * Timestamps:
- *	vp - atime updated
- *
  * Note that the low 4 bits of the cookie returned by zap is always zero.
  * This allows us to use the low range for "special" directory entries:
  * We use 0 for '.', and 1 for '..'.  If this is the root of the filesystem,
  * we use the offset 2 for the '.zfs' directory.
  */
-/* ARGSUSED */
 static int
-zfs_readdir(vnode_t *vp, uio_t *uio, cred_t *cr, int *eofp, int *ncookies, u_long **cookies)
+zfs_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 {
-	znode_t		*zp = VTOZ(vp);
-	iovec_t		*iovp;
-	edirent_t	*eodp;
-	dirent64_t	*odp;
+	znode_t		*zp = VTOZ(dvp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
 	objset_t	*os;
-	caddr_t		outbuf;
-	size_t		bufsize;
 	zap_cursor_t	zc;
 	zap_attribute_t	zap;
-	uint_t		bytes_wanted;
-	uint64_t	offset; /* must be unsigned; checks for < 1 */
 	uint64_t	parent;
-	int		local_eof;
-	int		outcount;
 	int		error;
 	uint8_t		prefetch;
-	boolean_t	check_sysattrs;
 	uint8_t		type;
-	int		ncooks;
-	u_long		*cooks = NULL;
 	int		flags = 0;
+	ino64_t		objnum;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
@@ -2280,37 +2249,21 @@ zfs_readdir(vnode_t *vp, uio_t *uio, cred_t *cr, int *eofp, int *ncookies, u_lon
 	}
 
 	/*
-	 * If we are not given an eof variable,
-	 * use a local one.
-	 */
-	if (eofp == NULL)
-		eofp = &local_eof;
-
-	/*
-	 * Check for valid iov_len.
-	 */
-	if (uio->uio_iov->iov_len <= 0) {
-		ZFS_EXIT(zfsvfs);
-		return (EINVAL);
-	}
-
-	/*
 	 * Quit if directory has been removed (posix)
 	 */
-	if ((*eofp = zp->z_unlinked) != 0) {
+	if (zp->z_unlinked != 0) {
 		ZFS_EXIT(zfsvfs);
-		return (0);
+		return ENOENT;
 	}
 
 	error = 0;
 	os = zfsvfs->z_os;
-	offset = uio->uio_loffset;
 	prefetch = zp->z_zn_prefetch;
 
 	/*
 	 * Initialize the iterator cursor.
 	 */
-	if (offset <= 3) {
+	if (fp->f_offset <= 3) {
 		/*
 		 * Start iteration from the beginning of the directory.
 		 */
@@ -2319,231 +2272,85 @@ zfs_readdir(vnode_t *vp, uio_t *uio, cred_t *cr, int *eofp, int *ncookies, u_lon
 		/*
 		 * The offset is a serialized cursor.
 		 */
-		zap_cursor_init_serialized(&zc, os, zp->z_id, offset);
+		zap_cursor_init_serialized(&zc, os, zp->z_id, fp->f_offset);
 	}
 
 	/*
-	 * Get space to change directory entries into fs independent format.
+	 * Special case `.', `..', and `.zfs'.
 	 */
-	iovp = uio->uio_iov;
-	bytes_wanted = iovp->iov_len;
-	if (uio->uio_segflg != UIO_SYSSPACE || uio->uio_iovcnt != 1) {
-		bufsize = bytes_wanted;
-		outbuf = kmem_alloc(bufsize, KM_SLEEP);
-		odp = (struct dirent64 *)outbuf;
+	if (fp->f_offset == 0) {
+		(void) strcpy(zap.za_name, ".");
+		zap.za_normalization_conflict = 0;
+		objnum = zp->z_id;
+		type = DT_DIR;
+	} else if (fp->f_offset == 1) {
+		(void) strcpy(zap.za_name, "..");
+		zap.za_normalization_conflict = 0;
+		objnum = parent;
+		type = DT_DIR;
+	} else if (fp->f_offset == 2 && zfs_show_ctldir(zp)) {
+		(void) strcpy(zap.za_name, ZFS_CTLDIR_NAME);
+		zap.za_normalization_conflict = 0;
+		objnum = ZFSCTL_INO_ROOT;
+		type = DT_DIR;
 	} else {
-		bufsize = bytes_wanted;
-		odp = (struct dirent64 *)iovp->iov_base;
-	}
-	eodp = (struct edirent *)odp;
-
-	if (ncookies != NULL) {
 		/*
-		 * Minimum entry size is dirent size and 1 byte for a file name.
+		 * Grab next entry.
 		 */
-		ncooks = uio->uio_resid / (sizeof(struct dirent) - sizeof(((struct dirent *)NULL)->d_name) + 1);
-		cooks = malloc(ncooks * sizeof(u_long), M_TEMP, M_WAITOK);
-		*cookies = cooks;
-		*ncookies = ncooks;
+		if (error = zap_cursor_retrieve(&zc, &zap))
+			goto update;
+
+		if (zap.za_integer_length != 8 ||
+		    zap.za_num_integers != 1) {
+			cmn_err(CE_WARN, "zap_readdir: bad directory "
+			    "entry, obj = %lld, offset = %lld\n",
+			    (u_longlong_t)zp->z_id,
+			    (u_longlong_t)fp->f_offset);
+			error = ENXIO;
+			goto update;
+		}
+
+		objnum = ZFS_DIRENT_OBJ(zap.za_first_integer);
+		/*
+		 * MacOS X can extract the object type here such as:
+		 * uint8_t type = ZFS_DIRENT_TYPE(zap.za_first_integer);
+		 */
+		type = ZFS_DIRENT_TYPE(zap.za_first_integer);
 	}
-	/*
-	 * If this VFS supports the system attribute view interface; and
-	 * we're looking at an extended attribute directory; and we care
-	 * about normalization conflicts on this vfs; then we must check
-	 * for normalization conflicts with the sysattr name space.
-	 */
-#ifdef TODO
-	check_sysattrs = vfs_has_feature(vp->v_vfsp, VFSFT_SYSATTR_VIEWS) &&
-	    (vp->v_flag & V_XATTRDIR) && zfsvfs->z_norm &&
-	    (flags & V_RDDIR_ENTFLAGS);
-#else
-	check_sysattrs = 0;
-#endif
 
 	/*
-	 * Transform to file-system independent format
+	 * Add normal entry:
 	 */
-	outcount = 0;
-	while (outcount < bytes_wanted) {
-		ino64_t objnum;
-		ushort_t reclen;
-		off64_t *next = NULL;
+	dir->d_ino = objnum;
+	(void) strlcpy(dir->d_name, zap.za_name, strlen(zap.za_name) + 1);
+	dir->d_type = type;
 
-		/*
-		 * Special case `.', `..', and `.zfs'.
-		 */
-		if (offset == 0) {
-			(void) strcpy(zap.za_name, ".");
-			zap.za_normalization_conflict = 0;
-			objnum = zp->z_id;
-			type = DT_DIR;
-		} else if (offset == 1) {
-			(void) strcpy(zap.za_name, "..");
-			zap.za_normalization_conflict = 0;
-			objnum = parent;
-			type = DT_DIR;
-		} else if (offset == 2 && zfs_show_ctldir(zp)) {
-			(void) strcpy(zap.za_name, ZFS_CTLDIR_NAME);
-			zap.za_normalization_conflict = 0;
-			objnum = ZFSCTL_INO_ROOT;
-			type = DT_DIR;
-		} else {
-			/*
-			 * Grab next entry.
-			 */
-			if (error = zap_cursor_retrieve(&zc, &zap)) {
-				if ((*eofp = (error == ENOENT)) != 0)
-					break;
-				else
-					goto update;
-			}
+	/* Prefetch znode */
+	if (prefetch)
+		dmu_prefetch(os, objnum, 0, 0);
 
-			if (zap.za_integer_length != 8 ||
-			    zap.za_num_integers != 1) {
-				cmn_err(CE_WARN, "zap_readdir: bad directory "
-				    "entry, obj = %lld, offset = %lld\n",
-				    (u_longlong_t)zp->z_id,
-				    (u_longlong_t)offset);
-				error = ENXIO;
-				goto update;
-			}
-
-			objnum = ZFS_DIRENT_OBJ(zap.za_first_integer);
-			/*
-			 * MacOS X can extract the object type here such as:
-			 * uint8_t type = ZFS_DIRENT_TYPE(zap.za_first_integer);
-			 */
-			type = ZFS_DIRENT_TYPE(zap.za_first_integer);
-
-			if (check_sysattrs && !zap.za_normalization_conflict) {
-#ifdef TODO
-				zap.za_normalization_conflict =
-				    xattr_sysattr_casechk(zap.za_name);
-#else
-				panic("%s:%u: TODO", __func__, __LINE__);
-#endif
-			}
-		}
-
-		if (flags & V_RDDIR_ACCFILTER) {
-			/*
-			 * If we have no access at all, don't include
-			 * this entry in the returned information
-			 */
-			znode_t	*ezp;
-			if (zfs_zget(zp->z_zfsvfs, objnum, &ezp) != 0)
-				goto skip_entry;
-			if (!zfs_has_access(ezp, cr)) {
-				VN_RELE(ZTOV(ezp));
-				goto skip_entry;
-			}
-			VN_RELE(ZTOV(ezp));
-		}
-
-		if (flags & V_RDDIR_ENTFLAGS)
-			reclen = EDIRENT_RECLEN(strlen(zap.za_name));
-		else
-			reclen = DIRENT64_RECLEN(strlen(zap.za_name));
-
-		/*
-		 * Will this entry fit in the buffer?
-		 */
-		if (outcount + reclen > bufsize) {
-			/*
-			 * Did we manage to fit anything in the buffer?
-			 */
-			if (!outcount) {
-				error = EINVAL;
-				goto update;
-			}
-			break;
-		}
-		if (flags & V_RDDIR_ENTFLAGS) {
-			/*
-			 * Add extended flag entry:
-			 */
-			eodp->ed_ino = objnum;
-			eodp->ed_reclen = reclen;
-			/* NOTE: ed_off is the offset for the *next* entry */
-			next = &(eodp->ed_off);
-			eodp->ed_eflags = zap.za_normalization_conflict ?
-			    ED_CASE_CONFLICT : 0;
-			(void) strncpy(eodp->ed_name, zap.za_name,
-			    EDIRENT_NAMELEN(reclen));
-			eodp = (edirent_t *)((intptr_t)eodp + reclen);
-		} else {
-			/*
-			 * Add normal entry:
-			 */
-			odp->d_ino = objnum;
-			odp->d_reclen = reclen;
-			odp->d_namlen = strlen(zap.za_name);
-			(void) strlcpy(odp->d_name, zap.za_name, odp->d_namlen + 1);
-			odp->d_type = type;
-			odp = (dirent64_t *)((intptr_t)odp + reclen);
-		}
-		outcount += reclen;
-
-		ASSERT(outcount <= bufsize);
-
-		/* Prefetch znode */
-		if (prefetch)
-			dmu_prefetch(os, objnum, 0, 0);
-
-	skip_entry:
-		/*
-		 * Move to the next entry, fill in the previous offset.
-		 */
-		if (offset > 2 || (offset == 2 && !zfs_show_ctldir(zp))) {
-			zap_cursor_advance(&zc);
-			offset = zap_cursor_serialize(&zc);
-		} else {
-			offset += 1;
-		}
-
-		if (cooks != NULL) {
-			*cooks++ = offset;
-			ncooks--;
-			KASSERT(ncooks >= 0, ("ncookies=%d", ncooks));
-		}
+	/*
+	 * Move to the next entry, fill in the previous offset.
+	 */
+	if (fp->f_offset > 2 || (fp->f_offset == 2 && !zfs_show_ctldir(zp))) {
+		zap_cursor_advance(&zc);
+		fp->f_offset = zap_cursor_serialize(&zc);
+	} else {
+		fp->f_offset += 1;
 	}
+
 	zp->z_zn_prefetch = B_FALSE; /* a lookup will re-enable pre-fetching */
-
-	/* Subtract unused cookies */
-	if (ncookies != NULL)
-		*ncookies -= ncooks;
-
-	if (uio->uio_segflg == UIO_SYSSPACE && uio->uio_iovcnt == 1) {
-		iovp->iov_base += outcount;
-		iovp->iov_len -= outcount;
-		uio->uio_resid -= outcount;
-	} else if (error = uiomove(outbuf, (long)outcount, UIO_READ, uio)) {
-		/*
-		 * Reset the pointer.
-		 */
-		offset = uio->uio_loffset;
-	}
 
 update:
 	zap_cursor_fini(&zc);
-	if (uio->uio_segflg != UIO_SYSSPACE || uio->uio_iovcnt != 1)
-		kmem_free(outbuf, bufsize);
-
-	if (error == ENOENT)
-		error = 0;
 
 	ZFS_ACCESSTIME_STAMP(zfsvfs, zp);
 
-	uio->uio_loffset = offset;
 	ZFS_EXIT(zfsvfs);
-	if (error != 0 && cookies != NULL) {
-		free(*cookies, M_TEMP);
-		*cookies = NULL;
-		*ncookies = 0;
-	}
 	return (error);
 }
 
+#ifdef NOTYET
 ulong_t zfs_fsync_sync_cnt = 4;
 #endif /* NOTYET */
 
@@ -6175,7 +5982,7 @@ struct vnops zfs_vnops = {
 	zfs_seek,			/* seek */
 	(vnop_ioctl_t)vop_einval,	/* ioctl */
 	zfs_fsync,			/* fsync */
-	NULL,				/* readdir */
+	zfs_readdir,			/* readdir */
 	NULL,				/* lookup */
 	NULL,				/* create */
 	NULL,				/* remove */
