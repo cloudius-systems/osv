@@ -17,8 +17,13 @@ int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
 
 int main(int argc, char **argv)
 {
+#define TESTDIR		"/mnt"
 	struct statfs st;
 	int ret;
+	DIR *dir;
+	char path[PATH_MAX];
+	struct dirent *d;
+	struct stat s;
 
 	if (mkdir("/mnt", 0755) < 0) {
 		printf("failed to create /mnt, error = %d\n", errno);
@@ -42,6 +47,39 @@ int main(int argc, char **argv)
 	printf("f_files: %ld\n", st.f_files); 
 	printf("f_ffree: %ld\n", st.f_ffree); 
 	printf("f_namelen: %ld\n", st.f_namelen); 
+
+	dir = opendir(TESTDIR);
+	if (!dir) {
+		perror("failed to open testdir");
+		return EXIT_FAILURE;
+	}
+
+	while ((d = readdir(dir))) {
+		if (strcmp(d->d_name, ".") == 0 ||
+		    strcmp(d->d_name, "..") == 0) {
+		    	printf("found hidden entry %s\n", d->d_name);
+			continue;
+		}
+
+		snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
+		if (stat(path, &s) < 0) {
+			printf("failed to stat %s\n", path);
+			continue;
+		}
+
+		if (!S_ISREG(s.st_mode) || !S_ISDIR(s.st_mode)) {
+			printf("ignoring %s, not a regular file\n", path);
+			continue;
+		}
+
+		printf("found %s\tsize: %ld\n", d->d_name, s.st_size);
+	}
+
+	if (closedir(dir) < 0) {
+		perror("failed to close testdir");
+		return EXIT_FAILURE;
+	}
+
 
 	return 0;
 }
