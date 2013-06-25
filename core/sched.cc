@@ -20,7 +20,7 @@ tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
 tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
 tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
 tracepoint<1006> trace_preempt("sched_preempt", "");
-TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, u64);
+TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
@@ -35,8 +35,8 @@ elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{[] {}};
 
-constexpr u64 vruntime_bias = 4_ms;
-constexpr u64 max_slice = 10_ms;
+constexpr s64 vruntime_bias = 4_ms;
+constexpr s64 max_slice = 10_ms;
 
 mutex cpu::notifier::_mtx;
 std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(300)));
@@ -174,11 +174,11 @@ void cpu::handle_incoming_wakeups()
     }
 }
 
-void cpu::enqueue(thread& t, u64 now)
+void cpu::enqueue(thread& t, s64 now)
 {
     trace_queue(&t);
     auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
-    auto tail = head + max_slice * runqueue.size();
+    auto tail = head + max_slice * int(runqueue.size());
     // special treatment for idle thread: make sure it is in the back of the queue
     if (&t == &idle_thread) {
         t._vruntime = thread::max_vruntime;
@@ -430,7 +430,7 @@ void thread::wait()
     schedule(true);
 }
 
-void thread::sleep_until(u64 abstime)
+void thread::sleep_until(s64 abstime)
 {
     timer t(*current());
     t.set(abstime);
@@ -643,7 +643,7 @@ void timer_base::expire()
     _t.timer_fired();
 }
 
-void timer_base::set(u64 time)
+void timer_base::set(s64 time)
 {
     trace_timer_set(this, time);
     _state = state::armed;

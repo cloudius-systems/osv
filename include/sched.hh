@@ -133,7 +133,7 @@ public:
 public:
     explicit timer_base(client& t);
     ~timer_base();
-    void set(u64 time);
+    void set(s64 time);
     bool expired() const;
     void cancel();
     friend bool operator<(const timer_base& t1, const timer_base& t2);
@@ -145,7 +145,7 @@ protected:
         free, armed, expired
     };
     state _state = state::free;
-    u64 _time;
+    s64 _time;
     friend class timer_list;
 };
 
@@ -185,7 +185,7 @@ public:
     void wake();
     template <class Pred>
     inline void wake_with(Pred pred);
-    static void sleep_until(u64 abstime);
+    static void sleep_until(s64 abstime);
     static void yield();
     static void exit() __attribute__((__noreturn__));
     static thread* current() __attribute((no_instrument_function));
@@ -233,9 +233,9 @@ private:
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned long _id;
-    u64 _vruntime;
-    static const u64 max_vruntime = std::numeric_limits<u64>::max();
-    u64 _borrow;
+    s64 _vruntime;
+    static const s64 max_vruntime = std::numeric_limits<s64>::max();
+    s64 _borrow;
     std::function<void ()> _cleanup;
     // When _ref_counter reaches 0, the thread can be deleted.
     // Starts with 1, decremented by complete() and also temporarily modified
@@ -323,7 +323,7 @@ struct cpu {
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
-    void enqueue(thread& t, u64 now);
+    void enqueue(thread& t, s64 now);
     class notifier;
 };
 
