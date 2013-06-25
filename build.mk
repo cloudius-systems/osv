@@ -121,6 +121,7 @@ tests += tests/tst-yield.so
 tests += tests/tst-ctxsw.so
 tests += tests/tst-readdir.so
 tests += tests/tst-wake.so
+tests += tests/tst-epoll.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
