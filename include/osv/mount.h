@@ -129,6 +129,10 @@ typedef int (*vfsop_statfs_t)(struct mount *, struct statfs *);
 
 int	vfs_nullop(void);
 int	vfs_einval(void);
+
+void	 vfs_busy(struct mount *mp);
+void	 vfs_unbusy(struct mount *mp);
+
 __END_DECLS
 
 #endif	/* !_SYS_MOUNT_H_ */
