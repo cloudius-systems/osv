@@ -55,7 +55,7 @@ public:
             int eevents = i.second.events;
             assert(!(eevents&(EPOLLET|EPOLLONESHOT)));
             // We (ab)use the fact that POLLIN==EPOLLIN, etc. TODO: static_assert.
-            pollfds[n].revents = eevents;
+            pollfds[n].events = eevents;
             n++;
         }
         int r = poll(pollfds.get(), n, timeout_ms);
