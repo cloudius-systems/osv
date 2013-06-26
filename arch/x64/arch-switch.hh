@@ -124,7 +124,6 @@ void thread::free_tcb()
 
 void thread_main_c(thread* t)
 {
-    s_current = t;
     arch::irq_enable();
 #ifdef CONF_preempt
     preempt_enable();

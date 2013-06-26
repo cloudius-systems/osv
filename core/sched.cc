@@ -341,6 +341,14 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         _id = _s_idgen++;
     });
     setup_tcb();
+    // setup s_current before switching to the thread, so interrupts
+    // can call thread::current()
+    // remote_thread_local_var() doesn't work when there is no current
+    // thread, so don't do this for main threads (switch_to_first will
+    // do that for us instead)
+    if (!main) {
+        remote_thread_local_var(s_current) = this;
+    }
     init_stack();
     if (_attr.detached) {
         // assumes detached threads directly on heap, not as member.
