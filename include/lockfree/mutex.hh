@@ -54,7 +54,7 @@ namespace sched {
 namespace lockfree {
 
 class mutex {
-private:
+protected:
     std::atomic<int> count;
     // "owner" and "depth" are only used for implementing a recursive mutex.
     // "depth" is not an atomic variable - only the lock-owning thread sets
@@ -67,6 +67,9 @@ private:
     std::atomic<unsigned int> handoff;
     unsigned int sequence;
 public:
+    // Note: mutex's constructor just initializes the whole structure to
+    // zero, and its destructor does nothing. This is useful to know when
+    // allocating a mutex in C.
     mutex() : count(0), depth(0), owner(nullptr), waitqueue(), handoff(0), sequence(0) { }
     ~mutex() { /*assert(count==0);*/ }
 
