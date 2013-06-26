@@ -314,6 +314,20 @@ typedef bi::list<thread,
 thread_list_type thread_list;
 unsigned long thread::_s_idgen;
 
+void* thread::do_remote_thread_local_var(void* var)
+{
+    auto tls_cur = static_cast<char*>(current()->_tcb->tls_base);
+    auto tls_this = static_cast<char*>(this->_tcb->tls_base);
+    auto offset = static_cast<char*>(var) - tls_cur;
+    return tls_this + offset;
+}
+
+template <typename T>
+T& thread::remote_thread_local_var(T& var)
+{
+    return *static_cast<T*>(do_remote_thread_local_var(&var));
+}
+
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)

@@ -211,6 +211,8 @@ private:
     struct dummy_lock {};
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
+    template <typename T> T& remote_thread_local_var(T& var);
+    void* do_remote_thread_local_var(void* var);
 private:
     virtual void timer_fired() override;
 private:
