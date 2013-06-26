@@ -196,6 +196,7 @@ bsd += bsd/porting/sync_stub.o
 bsd += bsd/porting/callout.o
 bsd += bsd/porting/synch.o
 bsd += bsd/porting/kthread.o
+bsd += bsd/porting/pcpu.o
 bsd += bsd/sys/netinet/if_ether.o  
 bsd += bsd/sys/compat/linux/linux_socket.o  
 bsd += bsd/sys/compat/linux/linux_ioctl.o  
