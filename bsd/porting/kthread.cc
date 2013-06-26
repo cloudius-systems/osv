@@ -6,6 +6,7 @@
 
 #include <bsd/porting/curthread.h>
 #include <bsd/porting/netport.h>
+#include <bsd/porting/kthread.h>
 #include <bsd/sys/sys/kthread.h>
 
 struct proc proc0;
@@ -29,6 +30,23 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
     return 0;
 }
 
+
+int kproc_create(void (*func)(void *), void *arg, struct proc **p,
+                int flags, int pages, const char *str, ...)
+{
+    sched::thread::attr at;
+    at.detached = true;
+
+    sched::thread* t = new sched::thread([=] { func(arg); }, at);
+    t->start();
+
+    if (p) {
+        *p = new proc;
+        (*p)->p_pid = t->id();
+    }
+    return 0;
+}
+
 void
 kthread_exit(void)
 {
@@ -39,4 +57,13 @@ struct thread *
 get_curthread(void)
 {
     return reinterpret_cast<struct thread *>(sched::thread::current());
+}
+
+struct proc
+get_curproc(void)
+{
+    auto cur = sched::thread::current();
+    struct proc p;
+    p.p_pid = cur->id();
+    return p;
 }

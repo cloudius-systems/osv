@@ -46,9 +46,6 @@ typedef int accmode_t;
 #define __predict_false(x) (x)
 #define __predict_true(x) (x)
 
-struct proc {
-};
-
 extern struct proc proc0;
 
 /*
