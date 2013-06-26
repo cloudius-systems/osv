@@ -469,6 +469,7 @@ mappedread(vnode_t *vp, int nbytes, uio_t *uio)
 	VM_OBJECT_UNLOCK(obj);
 	return (error);
 }
+#endif /* NOTYET */
 
 offset_t zfs_read_chunk_size = 1024 * 1024; /* Tunable */
 
@@ -492,7 +493,7 @@ offset_t zfs_read_chunk_size = 1024 * 1024; /* Tunable */
  */
 /* ARGSUSED */
 static int
-zfs_read(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
+zfs_read(vnode_t *vp, uio_t *uio, int ioflag)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
@@ -500,7 +501,9 @@ zfs_read(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 	ssize_t		n, nbytes;
 	int		error;
 	rl_t		*rl;
+#ifdef sun
 	xuio_t		*xuio = NULL;
+#endif
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
@@ -527,6 +530,7 @@ zfs_read(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 		return (0);
 	}
 
+#ifndef __OSV__
 	/*
 	 * Check for mandatory locks
 	 */
@@ -544,6 +548,7 @@ zfs_read(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 	if (zfsvfs->z_log &&
 	    (ioflag & FRSYNC || zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS))
 		zil_commit(zfsvfs->z_log, zp->z_id);
+#endif
 
 	/*
 	 * Lock the range against changes.
@@ -602,9 +607,11 @@ zfs_read(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 			error = mappedread_sf(vp, nbytes, uio);
 		else
 #endif /* __FreeBSD__ */
+#ifndef __OSV__
 		if (vn_has_cached_data(vp))
 			error = mappedread(vp, nbytes, uio);
 		else
+#endif
 			error = dmu_read_uio(os, zp->z_id, uio, nbytes);
 		if (error) {
 			/* convert checksum errors into IO errors */
@@ -623,6 +630,7 @@ out:
 	return (error);
 }
 
+#ifdef NOTYET
 /*
  * Write the bytes to a file.
  *
@@ -5832,7 +5840,7 @@ zfs_freebsd_setacl(ap)
 struct vnops zfs_vnops = {
 	zfs_open,			/* open */
 	zfs_close,			/* close */
-	NULL,				/* read */
+	zfs_read,			/* read */
 	NULL, 				/* write */
 	zfs_seek,			/* seek */
 	(vnop_ioctl_t)vop_einval,	/* ioctl */
