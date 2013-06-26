@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		if (!S_ISREG(s.st_mode) || !S_ISDIR(s.st_mode)) {
+		if (!S_ISREG(s.st_mode) && !S_ISDIR(s.st_mode)) {
 			printf("ignoring %s, not a regular file\n", path);
 			continue;
 		}
