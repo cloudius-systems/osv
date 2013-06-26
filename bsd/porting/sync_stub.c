@@ -1,4 +1,5 @@
 #include <osv/mutex.h>
+#include <osv/rwlock.h>
 #include <stdlib.h>
 
 #include <bsd/porting/sync_stub.h>
@@ -39,4 +40,29 @@ void mtx_assert(struct mtx *mp, int flag)
     default:
         abort();
     }
+}
+
+void sx_init(struct sx *s, const char *name)
+{
+    rwlock_init(&s->_rw);
+}
+
+void sx_xlock(struct sx *s)
+{
+    rw_wlock(&s->_rw);
+}
+
+void sx_xunlock(struct sx *s)
+{
+    rw_wunlock(&s->_rw);
+}
+
+void sx_slock(struct sx *s)
+{
+    rw_wlock(&s->_rw);
+}
+
+void sx_sunlock(struct sx *s)
+{
+    rw_runlock(&s->_rw);
 }

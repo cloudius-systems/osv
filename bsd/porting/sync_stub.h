@@ -22,6 +22,21 @@ void mtx_destroy(struct mtx *m);
 void mtx_lock(struct mtx *mp);
 void mtx_unlock(struct mtx *mp);
 void mtx_assert(struct mtx *mp, int flag);
+
+#ifndef __cplusplus
+#include <osv/rwlock.h>
+struct sx {
+    rwlock_t _rw;
+};
+
+void sx_init(struct sx *m, const char *name);
+void sx_xlock(struct sx *mp);
+void sx_xunlock(struct sx *mp);
+void sx_slock(struct sx *mp);
+void sx_sunlock(struct sx *mp);
+#endif
+#define sx_assert(...) do { } while (0)
+
 __END_DECLS
 
 #define mtx_sleep(chan, mtx, pri, wmesg, timo) (void)0;
