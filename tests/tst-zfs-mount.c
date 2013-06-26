@@ -18,6 +18,8 @@ int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
 int main(int argc, char **argv)
 {
 #define TESTDIR		"/mnt"
+	char rbuf[BUF_SIZE];
+	int fd;
 	struct statfs st;
 	int ret;
 	DIR *dir;
@@ -81,5 +83,26 @@ int main(int argc, char **argv)
 	}
 
 
+	fd = open("/mnt/tests/tst-zfs-simple.c", O_RDONLY);
+	if (fd < 0) {
+		perror("open");
+		return 1;
+	}
+
+	memset(rbuf, 0, BUF_SIZE);
+	ret = pread(fd, rbuf, BUF_SIZE, 0);
+	if (ret < 0) {
+		perror("pread");
+		return 1;
+	}
+	if (ret < BUF_SIZE) {
+		fprintf(stderr, "short read\n");
+		return 1;
+	}
+
+	close(fd);
+
+//	rbuf[BUF_SIZE] = '\0';
+//	printf("%s\n", rbuf);
 	return 0;
 }
