@@ -60,10 +60,15 @@ private:
 
 cpu::cpu(unsigned _id)
     : id(_id)
-    , idle_thread([this] { idle(); }, thread::attr(this))
+    , idle_thread()
     , terminating_thread(nullptr)
 {
     percpu_init(id);
+}
+
+void cpu::init_idle_thread()
+{
+    idle_thread = new thread([this] { idle(); }, thread::attr(this));
 }
 
 void cpu::schedule(bool yield)
@@ -180,7 +185,7 @@ void cpu::enqueue(thread& t, s64 now)
     auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
     auto tail = head + max_slice * int(runqueue.size());
     // special treatment for idle thread: make sure it is in the back of the queue
-    if (&t == &idle_thread) {
+    if (&t == idle_thread) {
         t._vruntime = thread::max_vruntime;
         t._borrow = 0;
     } else if (t._vruntime > tail) {

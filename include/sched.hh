@@ -308,7 +308,7 @@ struct cpu {
     thread* bringup_thread;
     runqueue_type runqueue;
     timer_list timers;
-    thread idle_thread;
+    thread* idle_thread;
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     cpu_set incoming_wakeups_mask;
@@ -324,6 +324,7 @@ struct cpu {
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
     void enqueue(thread& t, s64 now);
+    void init_idle_thread();
     class notifier;
 };
 

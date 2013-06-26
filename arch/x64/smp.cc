@@ -78,7 +78,7 @@ void smp_init()
 void ap_bringup(sched::cpu* c)
 {
     __sync_fetch_and_add(&smp_processors, 1);
-    c->idle_thread.start();
+    c->idle_thread->start();
     c->load_balance();
 }
 
@@ -101,12 +101,14 @@ void smp_launch()
             c->init_on_cpu();
             (new sched::thread([c] { c->load_balance(); },
                     sched::thread::attr(c)))->start();
-            c->idle_thread.start();
+            c->init_idle_thread();
+            c->idle_thread->start();
             continue;
         }
         sched::thread::attr attr;
         attr.stack = { new char[81920], 81920 };
         attr.pinned_cpu = c;
+        c->init_idle_thread();
         c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
     }
     apic->write(apicreg::ICR, 0xc4500); // INIT
