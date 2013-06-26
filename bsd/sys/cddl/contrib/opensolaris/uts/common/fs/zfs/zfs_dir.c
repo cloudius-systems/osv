@@ -42,7 +42,6 @@
 #include <sys/policy.h>
 #include <sys/kcondvar.h>
 #include <sys/callb.h>
-#include <sys/smp.h>
 #include <sys/zfs_dir.h>
 #include <sys/zfs_acl.h>
 #include <sys/fs/zfs.h>
@@ -53,7 +52,6 @@
 #include <sys/zfs_fuid.h>
 #include <sys/sa.h>
 #include <sys/zfs_sa.h>
-#include <sys/dnlc.h>
 #include <sys/extdirent.h>
 
 /*
@@ -91,8 +89,10 @@ zfs_match_find(zfsvfs_t *zfsvfs, znode_t *dzp, char *name, boolean_t exact,
 	}
 	*zoid = ZFS_DIRENT_OBJ(*zoid);
 
+#ifndef __OSV__
 	if (error == ENOENT && update)
 		dnlc_update(ZTOV(dzp), name, DNLC_NO_VNODE);
+#endif
 
 	return (error);
 }
@@ -141,7 +141,9 @@ zfs_dirent_lock(zfs_dirlock_t **dlpp, znode_t *dzp, char *name, znode_t **zpp,
 	boolean_t	update;
 	boolean_t	exact;
 	uint64_t	zoid;
+#ifndef __OSV__
 	vnode_t		*vp = NULL;
+#endif
 	int		error = 0;
 	int		cmpflags;
 
@@ -285,6 +287,7 @@ zfs_dirent_lock(zfs_dirlock_t **dlpp, znode_t *dzp, char *name, znode_t **zpp,
 		if (error == 0)
 			error = (zoid == 0 ? ENOENT : 0);
 	} else {
+#ifndef __OSV__
 		if (update)
 			vp = dnlc_lookup(ZTOV(dzp), name);
 		if (vp == DNLC_NO_VNODE) {
@@ -299,7 +302,9 @@ zfs_dirent_lock(zfs_dirlock_t **dlpp, znode_t *dzp, char *name, znode_t **zpp,
 			*dlpp = dl;
 			*zpp = VTOZ(vp);
 			return (0);
-		} else {
+		} else
+#endif
+		{
 			error = zfs_match_find(zfsvfs, dzp, name, exact,
 			    update, direntflags, realpnp, &zoid);
 		}
@@ -319,8 +324,10 @@ zfs_dirent_lock(zfs_dirlock_t **dlpp, znode_t *dzp, char *name, znode_t **zpp,
 			zfs_dirent_unlock(dl);
 			return (error);
 		}
+#ifndef __OSV__
 		if (!(flag & ZXATTR) && update)
 			dnlc_update(ZTOV(dzp), name, ZTOV(*zpp));
+#endif
 	}
 
 	*dlpp = dl;
@@ -339,8 +346,9 @@ zfs_dirent_unlock(zfs_dirlock_t *dl)
 
 	mutex_enter(&dzp->z_lock);
 
-	if (!dl->dl_namelock)
+	if (!dl->dl_namelock) {
 		rw_exit(&dzp->z_name_lock);
+	}
 
 	if (dl->dl_sharecnt > 1) {
 		dl->dl_sharecnt--;
@@ -358,6 +366,7 @@ zfs_dirent_unlock(zfs_dirlock_t *dl)
 	kmem_free(dl, sizeof (*dl) + dl->dl_namesize);
 }
 
+#ifdef NOTYET
 /*
  * Look up an entry in a directory.
  *
@@ -1103,3 +1112,4 @@ zfs_sticky_remove_access(znode_t *zdp, znode_t *zp, cred_t *cr)
 	else
 		return (secpolicy_vnode_remove(ZTOV(zp), cr));
 }
+#endif /* NOTYET */

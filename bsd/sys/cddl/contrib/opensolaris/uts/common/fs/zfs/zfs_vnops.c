@@ -1205,137 +1205,38 @@ specvp_check(vnode_t **vpp, cred_t *cr)
 	}
 	return (error);
 }
+#endif /* NOTYET */
 
-
-/*
- * Lookup an entry in a directory, or an extended attribute directory.
- * If it exists, return a held vnode reference for it.
- *
- *	IN:	dvp	- vnode of directory to search.
- *		nm	- name of entry to lookup.
- *		pnp	- full pathname to lookup [UNUSED].
- *		flags	- LOOKUP_XATTR set if looking for an attribute.
- *		rdir	- root directory vnode [UNUSED].
- *		cr	- credentials of caller.
- *		ct	- caller context
- *		direntflags - directory lookup flags
- *		realpnp - returned pathname.
- *
- *	OUT:	vpp	- vnode of located entry, NULL if not found.
- *
- *	RETURN:	0 if success
- *		error code if failure
- *
- * Timestamps:
- *	NA
- */
-/* ARGSUSED */
 static int
-zfs_lookup(vnode_t *dvp, char *nm, vnode_t **vpp, struct componentname *cnp,
-    int nameiop, cred_t *cr, kthread_t *td, int flags)
+zfs_lookup(struct vnode *dvp, char *nm, struct vnode *vp)
 {
-	znode_t *zdp = VTOZ(dvp);
-	zfsvfs_t *zfsvfs = zdp->z_zfsvfs;
-	int	error = 0;
-	int *direntflags = NULL;
-	void *realpnp = NULL;
+	znode_t *dzp = VTOZ(dvp);
+	zfsvfs_t *zfsvfs = dzp->z_zfsvfs;
+	znode_t *zp;
+	zfs_dirlock_t *dl;
+	int error = 0;
 
-	/* fast path */
-	if (!(flags & (LOOKUP_XATTR | FIGNORECASE))) {
+	if (*nm == '\0')
+		return ENOENT;
+	if (dvp->v_type != VDIR)
+		return ENOTDIR;
 
-		if (dvp->v_type != VDIR) {
-			return (ENOTDIR);
-		} else if (zdp->z_sa_hdl == NULL) {
-			return (EIO);
-		}
-
-		if (nm[0] == 0 || (nm[0] == '.' && nm[1] == '\0')) {
-			error = zfs_fastaccesschk_execute(zdp, cr);
-			if (!error) {
-				*vpp = dvp;
-				VN_HOLD(*vpp);
-				return (0);
-			}
-			return (error);
-		} else {
-			vnode_t *tvp = dnlc_lookup(dvp, nm);
-
-			if (tvp) {
-				error = zfs_fastaccesschk_execute(zdp, cr);
-				if (error) {
-					VN_RELE(tvp);
-					return (error);
-				}
-				if (tvp == DNLC_NO_VNODE) {
-					VN_RELE(tvp);
-					return (ENOENT);
-				} else {
-					*vpp = tvp;
-					return (specvp_check(vpp, cr));
-				}
-			}
-		}
-	}
-
-	DTRACE_PROBE2(zfs__fastpath__lookup__miss, vnode_t *, dvp, char *, nm);
-
+	ASSERT0(!(nm[0] == '.' && nm[1] == '\0'));
+	ASSERT0(!(nm[0] == '.' && nm[1] == '.' && nm[2] == '\0'));
+	
 	ZFS_ENTER(zfsvfs);
-	ZFS_VERIFY_ZP(zdp);
+	ZFS_VERIFY_ZP(dzp);
 
-	*vpp = NULL;
-
-	if (flags & LOOKUP_XATTR) {
-#ifdef TODO
-		/*
-		 * If the xattr property is off, refuse the lookup request.
-		 */
-		if (!(zfsvfs->z_vfs->vfs_flag & VFS_XATTR)) {
-			ZFS_EXIT(zfsvfs);
-			return (EINVAL);
-		}
-#endif
-
-		/*
-		 * We don't allow recursive attributes..
-		 * Maybe someday we will.
-		 */
-		if (zdp->z_pflags & ZFS_XATTR) {
-			ZFS_EXIT(zfsvfs);
-			return (EINVAL);
-		}
-
-		if (error = zfs_get_xattrdir(VTOZ(dvp), vpp, cr, flags)) {
-			ZFS_EXIT(zfsvfs);
-			return (error);
-		}
-
-		/*
-		 * Do we have permission to get into attribute directory?
-		 */
-
-		if (error = zfs_zaccess(VTOZ(*vpp), ACE_EXECUTE, 0,
-		    B_FALSE, cr)) {
-			VN_RELE(*vpp);
-			*vpp = NULL;
-		}
-
-		ZFS_EXIT(zfsvfs);
-		return (error);
-	}
-
-	if (dvp->v_type != VDIR) {
-		ZFS_EXIT(zfsvfs);
-		return (ENOTDIR);
-	}
-
+#ifdef ACL_TODO
 	/*
 	 * Check accessibility of directory.
 	 */
 
-	if (error = zfs_zaccess(zdp, ACE_EXECUTE, 0, B_FALSE, cr)) {
+	if (error = zfs_zaccess(dzp, ACE_EXECUTE, 0, B_FALSE, cr)) {
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
+#endif
 
 	if (zfsvfs->z_utf8 && u8_validate(nm, strlen(nm),
 	    NULL, U8_VALIDATE_ENTIRE, &error) < 0) {
@@ -1343,67 +1244,24 @@ zfs_lookup(vnode_t *dvp, char *nm, vnode_t **vpp, struct componentname *cnp,
 		return (EILSEQ);
 	}
 
-	error = zfs_dirlook(zdp, nm, vpp, flags, direntflags, realpnp);
-	if (error == 0)
-		error = specvp_check(vpp, cr);
+	error = zfs_dirent_lock(&dl, dzp, nm, &zp, ZEXISTS | ZSHARED, NULL, NULL);
+	if (error)
+		return error;
+	zfs_dirent_unlock(dl);
+	dzp->z_zn_prefetch = B_TRUE; /* enable prefetching */
 
-	/* Translate errors and add SAVENAME when needed. */
-	if (cnp->cn_flags & ISLASTCN) {
-		switch (nameiop) {
-		case CREATE:
-		case RENAME:
-			if (error == ENOENT) {
-				error = EJUSTRETURN;
-				cnp->cn_flags |= SAVENAME;
-				break;
-			}
-			/* FALLTHROUGH */
-		case DELETE:
-			if (error == 0)
-				cnp->cn_flags |= SAVENAME;
-			break;
-		}
-	}
-	if (error == 0 && (nm[0] != '.' || nm[1] != '\0')) {
-		int ltype = 0;
+	zp->z_vnode = vp;
+	vp->v_data = zp;
 
-		if (cnp->cn_flags & ISDOTDOT) {
-			ltype = VOP_ISLOCKED(dvp);
-			VOP_UNLOCK(dvp, 0);
-		}
-		ZFS_EXIT(zfsvfs);
-		error = zfs_vnode_lock(*vpp, cnp->cn_lkflags);
-		if (cnp->cn_flags & ISDOTDOT)
-			vn_lock(dvp, ltype | LK_RETRY);
-		if (error != 0) {
-			VN_RELE(*vpp);
-			*vpp = NULL;
-			return (error);
-		}
-	} else {
-		ZFS_EXIT(zfsvfs);
-	}
+	vp->v_mode = zp->z_mode;
+	vp->v_type = IFTOVT(vp->v_mode);
+	vp->v_size = zp->z_size;
 
-#ifdef FREEBSD_NAMECACHE
-	/*
-	 * Insert name into cache (as non-existent) if appropriate.
-	 */
-	if (error == ENOENT && (cnp->cn_flags & MAKEENTRY) && nameiop != CREATE)
-		cache_enter(dvp, *vpp, cnp);
-	/*
-	 * Insert name into cache if appropriate.
-	 */
-	if (error == 0 && (cnp->cn_flags & MAKEENTRY)) {
-		if (!(cnp->cn_flags & ISLASTCN) ||
-		    (nameiop != DELETE && nameiop != RENAME)) {
-			cache_enter(dvp, *vpp, cnp);
-		}
-	}
-#endif
-
-	return (error);
+	ZFS_EXIT(zfsvfs);
+	return error;
 }
 
+#ifdef NOTYET
 /*
  * Attempt to create a new entry in a directory.  If the entry
  * already exists, truncate the file if permissible, else return
@@ -5983,7 +5841,7 @@ struct vnops zfs_vnops = {
 	(vnop_ioctl_t)vop_einval,	/* ioctl */
 	zfs_fsync,			/* fsync */
 	zfs_readdir,			/* readdir */
-	NULL,				/* lookup */
+	zfs_lookup,			/* lookup */
 	NULL,				/* create */
 	NULL,				/* remove */
 	NULL,				/* rename */
