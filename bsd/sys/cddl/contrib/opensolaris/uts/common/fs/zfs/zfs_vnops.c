@@ -4156,10 +4156,11 @@ out:
 	return (error);
 }
 #endif	/* sun */
+#endif /* NOTYET */
 
 /*ARGSUSED*/
-void
-zfs_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
+int
+zfs_inactive(vnode_t *vp)
 {
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
@@ -4172,8 +4173,7 @@ zfs_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
 		 * suspend/resume and this file no longer exists.
 		 */
 		rw_exit(&zfsvfs->z_teardown_inactive_lock);
-		vrecycle(vp, curthread);
-		return;
+		return 0;
 	}
 
 	mutex_enter(&zp->z_lock);
@@ -4183,11 +4183,11 @@ zfs_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
 		 */
 		mutex_exit(&zp->z_lock);
 		rw_exit(&zfsvfs->z_teardown_inactive_lock);
-		vrecycle(vp, curthread);
-		return;
+		return 0;
 	}
 	mutex_exit(&zp->z_lock);
 
+#ifdef TODO_WRITE_SUPPORT
 	if (zp->z_atime_dirty && zp->z_unlinked == 0) {
 		dmu_tx_t *tx = dmu_tx_create(zfsvfs->z_os);
 
@@ -4205,9 +4205,20 @@ zfs_inactive(vnode_t *vp, cred_t *cr, caller_context_t *ct)
 			dmu_tx_commit(tx);
 		}
 	}
+#endif
+
+	/*
+	 * This might want to be moved into a separate VOP_RECLAIM eventually.
+	 */
+	if (zp->z_sa_hdl == NULL)
+		zfs_znode_free(zp);
+	else
+		zfs_zinactive(zp);
 	rw_exit(&zfsvfs->z_teardown_inactive_lock);
+
+	vp->v_data = NULL;
+	return 0;
 }
-#endif /* NOTYET */
 
 /*
  * Bounds-check the seek operation.
@@ -5283,19 +5294,6 @@ zfs_freebsd_link(ap)
 }
 
 static int
-zfs_freebsd_inactive(ap)
-	struct vop_inactive_args /* {
-		struct vnode *a_vp;
-		struct thread *a_td;
-	} */ *ap;
-{
-	vnode_t *vp = ap->a_vp;
-
-	zfs_inactive(vp, ap->a_td->td_ucred, NULL);
-	return (0);
-}
-
-static int
 zfs_freebsd_reclaim(ap)
 	struct vop_reclaim_args /* {
 		struct vnode *a_vp;
@@ -5316,14 +5314,6 @@ zfs_freebsd_reclaim(ap)
 	 * zfs_znode_dmu_fini in zfsvfs_teardown during
 	 * force unmount.
 	 */
-	rw_enter(&zfsvfs->z_teardown_inactive_lock, RW_READER);
-	if (zp->z_sa_hdl == NULL)
-		zfs_znode_free(zp);
-	else
-		zfs_zinactive(zp);
-	rw_exit(&zfsvfs->z_teardown_inactive_lock);
-
-	vp->v_data = NULL;
 	return (0);
 }
 
@@ -5849,7 +5839,7 @@ struct vnops zfs_vnops = {
 	NULL,				/* rmdir */
 	NULL,				/* getattr */
 	NULL,				/* setattr */
-	NULL,				/* inactive */
+	zfs_inactive,			/* inactive */
 	NULL,				/* truncate */
 };
 

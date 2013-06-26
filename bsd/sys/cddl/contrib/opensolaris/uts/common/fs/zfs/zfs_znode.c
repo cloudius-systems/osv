@@ -604,7 +604,6 @@ zfs_znode_sa_init(zfsvfs_t *zfsvfs, znode_t *zp,
 	mutex_exit(&zp->z_lock);
 }
 
-#ifdef NOTYET
 void
 zfs_znode_dmu_fini(znode_t *zp)
 {
@@ -615,18 +614,6 @@ zfs_znode_dmu_fini(znode_t *zp)
 	sa_handle_destroy(zp->z_sa_hdl);
 	zp->z_sa_hdl = NULL;
 }
-
-static void
-zfs_vnode_forget(vnode_t *vp)
-{
-
-	/* copied from insmntque_stddtr */
-	vp->v_data = NULL;
-	vp->v_op = &dead_vnodeops;
-	vgone(vp);
-	vput(vp);
-}
-#endif
 
 /*
  * Construct a new znode/vnode and intialize.
@@ -1329,6 +1316,7 @@ zfs_znode_delete(znode_t *zp, dmu_tx_t *tx)
 	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj);
 	zfs_znode_free(zp);
 }
+#endif /* NOTYET */
 
 void
 zfs_zinactive(znode_t *zp)
@@ -1343,6 +1331,7 @@ zfs_zinactive(znode_t *zp)
 	 */
 	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
 
+#ifdef TODO_WRITE_SUPPORT
 	mutex_enter(&zp->z_lock);
 
 	/*
@@ -1357,6 +1346,7 @@ zfs_zinactive(znode_t *zp)
 	}
 
 	mutex_exit(&zp->z_lock);
+#endif
 	zfs_znode_dmu_fini(zp);
 	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
 	zfs_znode_free(zp);
@@ -1383,7 +1373,6 @@ zfs_znode_free(znode_t *zp)
 
 	VFS_RELE(zfsvfs->z_vfs);
 }
-#endif /* NOTYET */
 
 void
 zfs_tstamp_update_setup(znode_t *zp, uint_t flag, uint64_t mtime[2],
