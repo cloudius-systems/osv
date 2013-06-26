@@ -2,14 +2,13 @@
 #include <osv/trace.hh>
 #include <sched.hh>
 
+namespace lockfree {
+
 TRACEPOINT(trace_mutex_lock, "%p", mutex *);
 TRACEPOINT(trace_mutex_lock_wait, "%p", mutex *);
 TRACEPOINT(trace_mutex_lock_wake, "%p", mutex *);
 TRACEPOINT(trace_mutex_try_lock, "%p, success=%d", mutex *, bool);
 TRACEPOINT(trace_mutex_unlock, "%p", mutex *);
-
-
-namespace lockfree {
 
 void mutex::lock()
 {
