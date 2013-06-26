@@ -504,7 +504,7 @@ miscbase = $(src)/external/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
 
-bsd/%.o: COMMON += -D_KERNEL -DSMP 
+bsd/%.o: COMMON += -D_KERNEL -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so
