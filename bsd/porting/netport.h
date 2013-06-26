@@ -252,11 +252,8 @@ static __inline void        splx(intrmask_t ipl)   { return; }
 /* must match max_cpus in include/sched.hh */
 #define MAXCPU		(sizeof(unsigned long) * 8)
 
-/*
- * This should the number of actual, not possible CPUs, but we can't get at
- * that information for now.
- */
-#define mp_ncpus	MAXCPU
+extern unsigned smp_processors;
+#define mp_ncpus smp_processors
 
 /*
  * OSv: Copied from kern_time.c
