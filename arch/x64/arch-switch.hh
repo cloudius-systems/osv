@@ -126,6 +126,9 @@ void thread_main_c(thread* t)
 {
     s_current = t;
     arch::irq_enable();
+#ifdef CONF_preempt
+    preempt_enable();
+#endif
     t->main();
     t->complete();
 }
