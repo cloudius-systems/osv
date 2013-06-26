@@ -22,7 +22,7 @@ struct waiter {
 
 void spin_lock(spinlock_t *sl)
 {
-    arch::irq_disable();
+    sched::preempt_disable();
     while (__sync_lock_test_and_set(&sl->_lock, 1))
         ;
 }
@@ -30,7 +30,7 @@ void spin_lock(spinlock_t *sl)
 void spin_unlock(spinlock_t *sl)
 {
     __sync_lock_release(&sl->_lock, 0);
-    arch::irq_enable();
+    sched::preempt_enable();
 }
 
 #ifndef LOCKFREE_MUTEX
