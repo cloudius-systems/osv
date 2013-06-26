@@ -56,7 +56,8 @@ enum vtype {
 	VCHR,	    /* character device */
 	VLNK,	    /* symbolic link */
 	VSOCK,	    /* socks */
-	VFIFO	    /* FIFO */
+	VFIFO,	    /* FIFO */
+	VBAD
 };
 
 /*
@@ -181,6 +182,9 @@ void	 vref(struct vnode *);
 void	 vrele(struct vnode *);
 int	 vcount(struct vnode *);
 void	 vflush(struct mount *);
+
+extern enum vtype iftovt_tab[];
+#define IFTOVT(mode)    (iftovt_tab[((mode) & S_IFMT) >> 12])
 
 __END_DECLS
 

@@ -43,6 +43,12 @@
 #include <osv/vnode.h>
 #include "vfs.h"
 
+enum vtype iftovt_tab[16] = {
+	VNON, VFIFO, VCHR, VNON, VDIR, VNON, VBLK, VNON,
+	VREG, VNON, VLNK, VNON, VSOCK, VNON, VNON, VBAD,
+};
+
+
 /*
  * Memo:
  *
@@ -216,7 +222,8 @@ vput(struct vnode *vp)
 	/*
 	 * Deallocate fs specific vnode data
 	 */
-	VOP_INACTIVE(vp);
+	if (vp->v_op->vop_inactive)
+		VOP_INACTIVE(vp);
 	vfs_unbusy(vp->v_mount);
 	vp->v_nrlocks--;
 	ASSERT(vp->v_nrlocks == 0);
