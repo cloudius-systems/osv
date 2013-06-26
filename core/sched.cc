@@ -648,6 +648,7 @@ void timer_base::set(s64 time)
     trace_timer_set(this, time);
     _state = state::armed;
     _time = time;
+    irq_save_lock_type irq_lock;
     with_lock(irq_lock, [=] {
         auto& timers = cpu::current()->timers;
         timers._list.insert(*this);
@@ -664,6 +665,7 @@ void timer_base::cancel()
         return;
     }
     trace_timer_cancel(this);
+    irq_save_lock_type irq_lock;
     with_lock(irq_lock, [=] {
         if (_state == state::armed) {
             _t._active_timers.erase(_t._active_timers.iterator_to(*this));
