@@ -72,6 +72,22 @@ class Connect(gdb.Command):
 
 Connect()
 
+
+class LogTrace(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self,
+                             'logtrace',
+                             gdb.COMMAND_NONE,
+                             gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        gdb.execute('shell rm -f gdb.txt')
+        gdb.execute('set pagination off')
+        gdb.execute('set logging on')
+        gdb.execute('osv trace')
+        gdb.execute('set logging off')
+
+LogTrace()
+
 #
 # free_page_ranges generator, use pattern:
 # for range in free_page_ranges():
