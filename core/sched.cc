@@ -71,6 +71,7 @@ cpu::cpu(unsigned _id)
 void cpu::init_idle_thread()
 {
     idle_thread = new thread([this] { idle(); }, thread::attr(this));
+    idle_thread->_vruntime = std::numeric_limits<s64>::max();
 }
 
 void cpu::schedule(bool yield)
