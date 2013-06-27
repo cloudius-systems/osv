@@ -1245,8 +1245,10 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode *vp)
 	}
 
 	error = zfs_dirent_lock(&dl, dzp, nm, &zp, ZEXISTS | ZSHARED, NULL, NULL);
-	if (error)
+	if (error) {
+		ZFS_EXIT(zfsvfs);
 		return error;
+	}
 	zfs_dirent_unlock(dl);
 	dzp->z_zn_prefetch = B_TRUE; /* enable prefetching */
 
