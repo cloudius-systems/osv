@@ -304,7 +304,12 @@ load("/console/init.js");
 
 mainargs = com.cloudius.cli.main.RhinoCLI._args;
 if (mainargs.length) {
-    invoke(mainargs);
+    var mainargs_js = [];
+    // Cast from java.lang.String to a Javascript String type.
+    for (var i=0; i < mainargs.length; i++) {
+        mainargs_js.push(String(mainargs[i]));
+    }
+    invoke(mainargs_js);
 } else {
     // Main loop
     main_loop();
