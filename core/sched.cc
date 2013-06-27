@@ -62,6 +62,7 @@ cpu::cpu(unsigned _id)
     : id(_id)
     , idle_thread()
     , terminating_thread(nullptr)
+    , running_since(clock::get()->time())
 {
     percpu_init(id);
 }
@@ -90,20 +91,21 @@ void cpu::reschedule_from_interrupt(bool preempt)
     if (p->_borrow) {
         bias /= 2;  // preempt threads on borrowed time sooner
     }
+    s64 current_run = now - running_since;
     if (p->_status == thread::status::running
             && (runqueue.empty()
-                || p->_vruntime + now < runqueue.begin()->_vruntime + bias)) {
+                || p->_vruntime + current_run < runqueue.begin()->_vruntime + bias)) {
         return;
     }
-    p->_vruntime += now;
+    p->_vruntime += current_run;
     if (p->_status == thread::status::running) {
         p->_status.store(thread::status::queued);
-        enqueue(*p, now);
+        enqueue(*p);
     }
     auto ni = runqueue.begin();
     auto n = &*ni;
     runqueue.erase(ni);
-    n->_vruntime -= now;
+    running_since = now;
     assert(n->_status.load() == thread::status::queued);
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
@@ -162,7 +164,6 @@ void cpu::handle_incoming_wakeups()
     if (!queues_with_wakes) {
         return;
     }
-    auto now = clock::get()->time();
     for (auto i : queues_with_wakes) {
         incoming_wakeup_queue q;
         incoming_wakeups[i].copy_and_clear(q);
@@ -172,17 +173,17 @@ void cpu::handle_incoming_wakeups()
             irq_save_lock_type irq_lock;
             with_lock(irq_lock, [&] {
                 t._status.store(thread::status::queued);
-                enqueue(t, now);
+                enqueue(t);
                 t.resume_timers();
             });
         }
     }
 }
 
-void cpu::enqueue(thread& t, s64 now)
+void cpu::enqueue(thread& t)
 {
     trace_queue(&t);
-    auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
+    auto head = std::min(t._vruntime, thread::current()->_vruntime);
     auto tail = head + max_slice * int(runqueue.size());
     // special treatment for idle thread: make sure it is in the back of the queue
     if (&t == idle_thread) {
@@ -357,7 +358,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         set_cleanup([=] { delete this; });
     }
     if (main) {
-        _vruntime = 0; // simulate the first schedule into this thread
         _status.store(status::running);
     }
 }

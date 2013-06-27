@@ -316,6 +316,7 @@ struct cpu {
     cpu_set incoming_wakeups_mask;
     incoming_wakeup_queue* incoming_wakeups;
     thread* terminating_thread;
+    s64 running_since;
     static cpu* current();
     void init_on_cpu();
     void schedule(bool yield = false);
@@ -325,7 +326,7 @@ struct cpu {
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
-    void enqueue(thread& t, s64 now);
+    void enqueue(thread& t);
     void init_idle_thread();
     class notifier;
 };
