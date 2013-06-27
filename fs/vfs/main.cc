@@ -405,18 +405,12 @@ ll_readdir(int fd, struct dirent *d)
 
 	error = fget(fd, &fp);
 	if (error)
-		goto out_errno;
+		return error;
 
 	error = sys_readdir(fp, d);
 	fdrop(fp);
 
-	if (error)
-		goto out_errno;
-	return 0;
-
-out_errno:
-	errno = error;
-	return -1;
+	return error;
 }
 
 #if 0
