@@ -4163,8 +4163,13 @@ int
 zfs_inactive(vnode_t *vp)
 {
 	znode_t	*zp = VTOZ(vp);
-	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
+	zfsvfs_t *zfsvfs;
 	int error;
+
+	if (!zp)
+		return 0;
+
+	zfsvfs = zp->z_zfsvfs;
 
 	rw_enter(&zfsvfs->z_teardown_inactive_lock, RW_READER);
 	if (zp->z_sa_hdl == NULL) {
