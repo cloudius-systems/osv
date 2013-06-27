@@ -34,11 +34,6 @@ inline ulong hypercall(unsigned type, ulong a1, ulong a2)
     return hypercall(type, a1, a2, 0);
 }
 
-inline ulong hypercall(unsigned type, ulong a1, ulong a2, ulong a3, ulong a4)
-{
-    return hypercall(type, a1, a2, a3, a4);
-}
-
 // some template magic to auto-cast pointers to ulongs in hypercall().
 inline ulong cast_pointer(ulong v)
 {
