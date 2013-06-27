@@ -99,6 +99,7 @@ SYSCTL_UINT(_net, OID_AUTO, ifdescr_maxlen, CTLFLAG_RW,
 	"administrative maximum length for interface description");
 
 MALLOC_DEFINE(M_IFDESCR, "ifdescr", "ifnet descriptions");
+static struct sx ifdescr_sx;
 
 void	(*bridge_linkstate_p)(struct ifnet *ifp);
 void	(*ng_ether_link_state_p)(struct ifnet *ifp, int state);
