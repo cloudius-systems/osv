@@ -49,30 +49,15 @@ template <typename... T>
 inline ulong
 memory_hypercall(unsigned type, T... args)
 {
-    return hypercall(12, type, cast_pointer(args)...);
+    return hypercall(__HYPERVISOR_memory_op, type, cast_pointer(args)...);
 }
 
 template <typename... T>
 inline ulong
 version_hypercall(unsigned type, T... args)
 {
-    return hypercall(17, type, cast_pointer(args)...);
+    return hypercall(__HYPERVISOR_xen_version, type, cast_pointer(args)...);
 }
-
-struct xen_feature_info {
-        unsigned int idx;
-        uint32_t features;
-};
-
-struct xen_add_to_physmap {
-    uint16_t domid;
-    uint16_t size;
-
-    uint32_t space;
-
-    unsigned long idx;
-    unsigned long gpfn;
-};
 
 struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
 
@@ -105,22 +90,21 @@ void xen_init(processor::features_type &features, unsigned base)
         processor::wrmsr(x.b, cast_pointer(&hypercall_page));
 
         struct xen_feature_info info;
-        info.idx = 0;
-
+        info.submap_idx = 0;
         // 6 => get features
-        if (version_hypercall(6, &info) < 0)
+        if (version_hypercall(XENVER_get_features, &info) < 0)
             assert(0);
 
-        features.xen_clocksource = (info.features >> 9) & 1;
+        features.xen_clocksource = (info.submap >> 9) & 1;
 
         struct xen_add_to_physmap map;
-        map.domid = CURRENT_DOMAIN;
+        map.domid = DOMID_SELF;
         map.idx = 0;
         map.space = 0;
         map.gpfn = cast_pointer(&xen_shared_info) >> 12;
 
         // 7 => add to physmap
-        if (memory_hypercall(7, &map))
+        if (memory_hypercall(XENMEM_add_to_physmap, &map))
             assert(0);
 
         features.xen_pci = xen_pci_enabled();

@@ -3,8 +3,9 @@
 #include <osv/types.h>
 #include <osv/pvclock-abi.hh>
 #include "cpuid.hh"
-
-#define CURRENT_DOMAIN (0x7FF0U)
+#include <xen/interface/xen.h>
+#include <xen/interface/memory.h>
+#include <xen/interface/version.h>
 
 extern char hypercall_page[];
 
