@@ -277,8 +277,10 @@ public:
     void fired();
     void suspend(bi::list<timer_base>& t);
     void resume(bi::list<timer_base>& t);
+    void rearm();
 private:
     friend class timer_base;
+    s64 _last = std::numeric_limits<s64>::max();
     bi::set<timer_base, bi::base_hook<bi::set_base_hook<>>> _list;
     class callback_dispatch : private clock_event_callback {
     public:

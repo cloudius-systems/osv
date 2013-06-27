@@ -639,13 +639,23 @@ void timer_list::fired()
 {
     auto now = clock::get()->time();
     auto i = _list.begin();
+    _last = std::numeric_limits<s64>::max();
     while (i != _list.end() && i->_time <= now) {
         auto j = i++;
         j->expire();
         _list.erase(j);
     }
     if (!_list.empty()) {
-        clock_event->set(_list.begin()->_time);
+        rearm();
+    }
+}
+
+void timer_list::rearm()
+{
+    auto t = _list.begin()->_time;
+    if (t < _last) {
+        _last = t;
+        clock_event->set(t);
     }
 }
 
@@ -708,7 +718,7 @@ void timer_base::set(s64 time)
         timers._list.insert(*this);
         _t._active_timers.push_back(*this);
         if (timers._list.iterator_to(*this) == timers._list.begin()) {
-            clock_event->set(time);
+            timers.rearm();
         }
     });
 };
