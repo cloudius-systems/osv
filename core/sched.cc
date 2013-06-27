@@ -615,7 +615,7 @@ void timer_list::fired()
 {
     auto now = clock::get()->time();
     auto i = _list.begin();
-    while (i != _list.end() && i->_time < now) {
+    while (i != _list.end() && i->_time <= now) {
         auto j = i++;
         j->expire();
         _list.erase(j);
