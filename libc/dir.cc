@@ -63,7 +63,7 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 		*result = entry;
 	else
 		*result = NULL;
-	return 0;
+	return ret == ENOENT ? 0 : ret;
 }
 
 // FIXME: in 64bit dirent64 and dirent are identical, so it's safe to alias
