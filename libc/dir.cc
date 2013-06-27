@@ -43,7 +43,7 @@ int closedir(DIR *dir)
 
 struct dirent *readdir(DIR *dir)
 {
-	static struct dirent entry, *result;	// XXX: tls?
+	static __thread struct dirent entry, *result;
 	int ret;
 
 	ret = readdir_r(dir, &entry, &result);
