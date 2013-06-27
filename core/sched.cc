@@ -92,6 +92,9 @@ void cpu::reschedule_from_interrupt(bool preempt)
         bias /= 2;  // preempt threads on borrowed time sooner
     }
     s64 current_run = now - running_since;
+    if (p->_vruntime + current_run < 0) { // overflow (idle thread)
+        current_run = 0;
+    }
     if (p->_status == thread::status::running
             && (runqueue.empty()
                 || p->_vruntime + current_run < runqueue.begin()->_vruntime + bias)) {
