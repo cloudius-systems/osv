@@ -237,7 +237,7 @@ private:
     unsigned long _id;
     s64 _vruntime;
     static const s64 max_vruntime = std::numeric_limits<s64>::max();
-    s64 _borrow;
+    s64 _borrow = 0;
     std::function<void ()> _cleanup;
     // When _ref_counter reaches 0, the thread can be deleted.
     // Starts with 1, decremented by complete() and also temporarily modified
