@@ -303,13 +303,14 @@ typedef bi::rbtree<thread,
                    bi::constant_time_size<true> // for load estimation
                   > runqueue_type;
 
-struct cpu {
+struct cpu : private timer_base::client {
     explicit cpu(unsigned id);
     unsigned id;
     struct arch_cpu arch;
     thread* bringup_thread;
     runqueue_type runqueue;
     timer_list timers;
+    timer_base preemption_timer;
     thread* idle_thread;
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
@@ -328,6 +329,8 @@ struct cpu {
     void reschedule_from_interrupt(bool preempt = false);
     void enqueue(thread& t);
     void init_idle_thread();
+    void update_preemption_timer(thread* current, s64 now, s64 run);
+    virtual void timer_fired() override;
     class notifier;
 };
 

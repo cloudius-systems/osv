@@ -60,6 +60,7 @@ private:
 
 cpu::cpu(unsigned _id)
     : id(_id)
+    , preemption_timer(*this)
     , idle_thread()
     , terminating_thread(nullptr)
     , running_since(clock::get()->time())
@@ -98,6 +99,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     if (p->_status == thread::status::running
             && (runqueue.empty()
                 || p->_vruntime + current_run < runqueue.begin()->_vruntime + bias)) {
+        update_preemption_timer(p, now, current_run);
         return;
     }
     p->_vruntime += current_run;
@@ -117,6 +119,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
             p->_fpu.save();
         }
         trace_switch(n);
+        update_preemption_timer(n, now, 0);
         n->switch_to();
         if (preempt) {
             p->_fpu.restore();
@@ -126,6 +129,26 @@ void cpu::reschedule_from_interrupt(bool preempt)
             p->_cpu->terminating_thread = nullptr;
         }
     }
+}
+
+void cpu::update_preemption_timer(thread* current, s64 now, s64 run)
+{
+    preemption_timer.cancel();
+    if (runqueue.empty()) {
+        return;
+    }
+    auto& t = *runqueue.begin();
+    auto delta = t._vruntime - (current->_vruntime + run);
+    auto expire = now + delta + vruntime_bias;
+    if (expire > 0) {
+        // avoid idle thread related overflow
+        preemption_timer.set(expire);
+    }
+}
+
+void cpu::timer_fired()
+{
+    // nothing to do, preemption will happen if needed
 }
 
 void cpu::do_idle()
