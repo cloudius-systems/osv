@@ -14,7 +14,7 @@
 
 namespace sched {
 
-tracepoint<1001, thread*> trace_switch("sched_switch", "to %p");
+tracepoint<1001, thread*, s64, s64> trace_switch("sched_switch", "to %p vold=%d vnew=%d");
 tracepoint<1002> trace_wait("sched_wait", "");
 tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
 tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
@@ -118,7 +118,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
             trace_preempt();
             p->_fpu.save();
         }
-        trace_switch(n);
+        trace_switch(n, p->_vruntime, n->_vruntime);
         update_preemption_timer(n, now, 0);
         n->switch_to();
         if (preempt) {
