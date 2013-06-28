@@ -1,0 +1,3 @@
+#ifndef _OSV_BSD_MACHINE_FRAME_H
+#define _OSV_BSD_MACHINE_FRAME_H
+#endif
