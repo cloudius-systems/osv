@@ -46,6 +46,9 @@ namespace virtio {
         _used_guest_head = 0;
         _avail_added_since_kick = 0;
         _avail_count = num;
+
+        _avail_event = reinterpret_cast<std::atomic<u16>*>(&_used->_used_elements[_num]);
+        _used_event = reinterpret_cast<std::atomic<u16>*>(&_avail->_ring[_num]);
     }
 
     vring::~vring()
@@ -66,16 +69,6 @@ namespace virtio {
                 + sizeof(u16) * 3 + sizeof(vring_used_elem) * num);
     }
 
-    int vring::need_event(u16 event_idx, u16 new_idx, u16 old)
-    {
-        // Note: Xen has similar logic for notification hold-off
-        // in include/xen/interface/io/ring.h with req_event and req_prod
-        // corresponding to event_idx + 1 and new_idx respectively.
-        // Note also that req_event and req_prod in Xen start at 1,
-        // event indexes in virtio start at 0.
-        return ( (u16)(new_idx - event_idx - 1) < (u16)(new_idx - old) );
-    }
-
     void vring::disable_interrupts()
     {
         trace_virtio_disable_interrupts(this);
@@ -94,6 +87,7 @@ namespace virtio {
     {
         trace_virtio_enable_interrupts(this);
         _avail->enable_interrupt();
+        set_used_event(_used_guest_head);
     }
 
     // The convention is that out descriptors are at the beginning of the sg list
@@ -201,6 +195,9 @@ namespace virtio {
             _avail_count += i;
             barrier();
             _desc[idx]._next = _avail_head;
+            // only let the host know about our used idx in case irq are enabled
+            if (_avail->interrupt_on())
+                set_used_event(_used_guest_head);
             _avail_head = elem._id;
 
             return cookie;
@@ -231,12 +228,20 @@ namespace virtio {
 
     bool
     vring::kick() {
-        if (_used->notifications_disabled())
+        bool kicked = true;
+
+        if (_dev->get_event_idx_cap()) {
+
+            kicked = ((u16)(_avail->_idx - _avail_event->load(std::memory_order_acquire) - 1) < _avail_added_since_kick);
+
+        } else if (_used->notifications_disabled())
             return false;
 
-        _dev->kick(_q_index);
-        _avail_added_since_kick = 0;
-        return true;
+        if (kicked) {
+            _dev->kick(_q_index);
+            _avail_added_since_kick = 0;
+        }
+        return kicked;
     }
 
 };

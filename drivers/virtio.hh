@@ -151,11 +151,13 @@ public:
 
     bool get_indirect_buf_cap() {return _cap_indirect_buf;}
     void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
+    bool get_event_idx_cap() {return _cap_event_idx;}
+    void set_event_idx_cap(bool on) {_cap_event_idx = on;}
 
     pci::device& pci_device() { return _dev; }
 protected:
     // Actual drivers should implement this on top of the basic ring features
-    virtual u32 get_driver_features(void) { return (1 << VIRTIO_RING_F_INDIRECT_DESC); }
+    virtual u32 get_driver_features(void) { return (1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX); }
     bool setup_features(void);
 protected:
     pci::device& _dev;
@@ -164,6 +166,7 @@ protected:
     u32 _num_queues;
     pci::bar *_bar1;
     bool _cap_indirect_buf;
+    bool _cap_event_idx = false;
 };
 
 }

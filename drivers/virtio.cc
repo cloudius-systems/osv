@@ -59,6 +59,9 @@ bool virtio_driver::setup_features(void)
     if (subset & (1 << VIRTIO_RING_F_INDIRECT_DESC))
         set_indirect_buf_cap(true);
 
+    if (subset & (1 << VIRTIO_RING_F_EVENT_IDX))
+            set_event_idx_cap(true);
+
     set_guest_features(subset);
 
     return (subset != 0);

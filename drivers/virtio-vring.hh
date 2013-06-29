@@ -57,6 +57,7 @@ class virtio_driver;
 
         void disable_interrupt(void) { _flags.store(VRING_AVAIL_F_NO_INTERRUPT, std::memory_order_relaxed); }
         void enable_interrupt(void) { _flags.store(0, std::memory_order_relaxed); }
+        bool interrupt_on() { return (_flags.load(std::memory_order_relaxed) & VRING_AVAIL_F_NO_INTERRUPT) == 0;}
 
         std::atomic<u16> _flags;
 
@@ -66,9 +67,9 @@ class virtio_driver;
         u16 _ring[];
         // used event index is an optimization in order to get an interrupt from the host
         // only when the value reaches this number
-        // FIXME: broken; can't put a field after a variable legth array.
-        // try mode=release
-        //u16 used_event;
+        // The location of this field is places after the variable length ring array,
+        // that's why we cannot fully define it within the struct and use a function accessor
+        //std::atomic<u16> used_event;
     };
 
     class vring_used_elem {
@@ -91,12 +92,18 @@ class virtio_driver;
         };
 
         bool notifications_disabled(void) {
-            return (_flags & VRING_USED_F_NO_NOTIFY);
+            return (_flags.load(std::memory_order_relaxed) & VRING_USED_F_NO_NOTIFY) != 0;
         }
         
-        u16 _flags;
-        u16 _idx;
+        // Using std::atomic since it being changed by the host
+        std::atomic<u16> _flags;
+        // Using std::atomic in order to have memory barriers for it
+        std::atomic<u16> _idx;
         vring_used_elem _used_elements[];
+        // avail event index is an optimization kick the host only when the value reaches this number
+        // The location of this field is places after the variable length ring array,
+        // that's why we cannot fully define it within the struct and use a function accessor
+        //std::atomic<u16> avail_event;
     };
 
     class vring {
@@ -122,11 +129,7 @@ class virtio_driver;
         // Total number of descriptors in ring
         int size() {return _num;}
 
-        // The following is used with USED_EVENT_IDX and AVAIL_EVENT_IDX
-        // Assuming a given event_idx value from the other size, if
-        // we have just incremented index from old to new_idx,
-        // should we trigger an event?
-        static int need_event(u16 event_idx, u16 new_idx, u16 old);
+        void set_used_event(u16 event) {_used_event->store(event, std::memory_order_relaxed);};
 
         // Let host know about interrupt delivery
         void disable_interrupts();
@@ -161,6 +164,9 @@ class virtio_driver;
         void** _cookie;
         //protects parallel get_bug /add_buf access, mainly the _avail_head variable
         mutex _lock;
+        // pointer to the end of the used ring to get a glimpse of the host avail idx
+        std::atomic<u16> *_avail_event;
+        std::atomic<u16> *_used_event;
     };
 
 
