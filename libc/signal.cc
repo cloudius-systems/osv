@@ -1,4 +1,5 @@
 #include "signal.hh"
+#include <string.h>
 
 namespace osv {
 
@@ -115,4 +116,23 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
         signal_actions[signum] = *act;
     }
     return 0;
+}
+
+// using signal() is not recommended (use sigaction instead!), but some
+// programs like to call to do simple things, like ignoring a certain signal.
+sighandler_t signal(int signum, sighandler_t handler)
+{
+    if (signum < 0 || signum > (int)nsignals) {
+        errno = EINVAL;
+        return SIG_ERR;
+    }
+    struct sigaction old = signal_actions[signum];
+    memset(&signal_actions[signum], 0, sizeof(signal_actions[signum]));
+    signal_actions[signum].sa_handler = handler;
+    if (old.sa_flags & SA_SIGINFO) {
+        // TODO: Is there anything sane to do here?
+        return nullptr;
+    } else {
+        return old.sa_handler;
+    }
 }
