@@ -190,11 +190,30 @@ function tab()
     beep();
 }
 
+function run_sync(cmd, args)
+{
+	return cmd.invoke(args)
+}
+
+function run_async(cmd, args)
+{
+	var t = new java.lang.Thread(new java.lang.Runnable({
+		run: function() { run_sync(cmd, args) }
+	}))
+	t.start()
+	return 0
+}
+
 function invoke(inp)
 {
+	var run = run_sync
+	if (inp.length && inp[inp.length-1] == '&') {
+		inp.pop()
+		run = run_async
+	}
     if (inp[0] in _commands) {
         var cmd = _commands[inp[0]];
-        return (cmd.invoke(inp));
+        return run(cmd, inp)
     } else if (inp[0]) {
         print("No such command: '" + inp[0] + "'");
         return (-1);
