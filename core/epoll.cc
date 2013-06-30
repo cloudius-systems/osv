@@ -18,6 +18,12 @@
 #include <debug.hh>
 #include <unordered_map>
 
+#include <osv/trace.hh>
+TRACEPOINT(trace_epoll_create, "returned fd=%d", int);
+TRACEPOINT(trace_epoll_ctl, "epfd=%d, fd=%d, op=%s", int, int, const char*);
+TRACEPOINT(trace_epoll_wait, "epfd=%d, maxevents=%d, timeout=%d", int, int, int);
+TRACEPOINT(trace_epoll_ready, "fd=%d, event=0x%x", int, int);
+
 // We implement epoll using poll(), and therefore need to convert epoll's
 // event bits to and poll(). These are mostly the same, so the conversion
 // is trivial, but we verify this here with static_asserts. We also don't
@@ -90,10 +96,10 @@ public:
                     events[remain].data = map[pollfds[i].fd].data;
                     events[remain].events =
                             events_poll_to_epoll(pollfds[i].revents);
+                    trace_epoll_ready(pollfds[i].fd, pollfds[i].revents);
                 }
             }
         }
-        if(r) debug("epoll_wait returning %d\n", r);
         return r;
     }
 };
@@ -139,7 +145,6 @@ static inline epoll_obj *get_epoll_obj(fileref fr) {
 
 int epoll_create(int size)
 {
-    debug("epoll_create\n");
     // Note we ignore the size parameter. There's no point in checking it's
     // positive, and on the other hand we can't trust it being meaningful
     // because Linux ignores it too.
@@ -148,16 +153,21 @@ int epoll_create(int size)
         fileref f{falloc_noinstall()};
         finit(f.get(), 0 , DTYPE_UNSPEC, s.release(), &epoll_ops);
         fdesc fd(f);
+        trace_epoll_create(fd.get());
         return fd.release();
     } catch (int error) {
         errno = error;
+        trace_epoll_create(-1);
         return -1;
     }
 }
 
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
-    debug("epoll_ctl %d %d %d\n", epfd, fd, op);
+    trace_epoll_ctl(epfd, fd,
+            op==EPOLL_CTL_ADD ? "EPOLL_CTL_ADD" :
+            op==EPOLL_CTL_MOD ? "EPOLL_CTL_MOD" :
+            op==EPOLL_CTL_DEL ? "EPOLL_CTL_DEL" : "?");
     fileref epfr(fileref_from_fd(epfd));
     if (!epfr) {
         errno = EBADF;
@@ -186,7 +196,6 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
         error = EINVAL;
     }
 
-    debug("epoll_ctl done with %d\n",error);
     if (error) {
         errno = error;
         return -1;
@@ -197,7 +206,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_ms)
 {
-    //debug("epoll_wait timeout=%d\n", timeout_ms);
+    trace_epoll_wait(epfd, maxevents, timeout_ms);
     fileref epfr(fileref_from_fd(epfd));
     if (!epfr) {
         errno = EBADF;
