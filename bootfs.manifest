@@ -47,6 +47,7 @@
 /&/tests/tst-zfs-disk.so: ./&
 /&/tests/tst-wake.so: ./&
 /&/tests/tst-epoll.so: ./&
+/&/tests/tst-lfring.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
