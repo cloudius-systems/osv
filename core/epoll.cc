@@ -18,6 +18,30 @@
 #include <debug.hh>
 #include <unordered_map>
 
+// We implement epoll using poll(), and therefore need to convert epoll's
+// event bits to and poll(). These are mostly the same, so the conversion
+// is trivial, but we verify this here with static_asserts. We also don't
+// support epoll-only flags (namely EPOLLET and EPOLLONESHOT) and assert
+// this at runtime.
+static_assert(POLLIN == EPOLLIN, "POLLIN!=EPOLLIN");
+static_assert(POLLOUT == EPOLLOUT, "POLLOUT!=EPOLLOUT");
+static_assert(POLLRDHUP == EPOLLRDHUP, "POLLRDHUP!=EPOLLRDHUP");
+static_assert(POLLPRI == EPOLLPRI, "POLLPRI!=EPOLLPRI");
+static_assert(POLLERR == EPOLLERR, "POLLERR!=EPOLLERR");
+static_assert(POLLHUP == EPOLLHUP, "POLLHUP!=EPOLLHUP");
+constexpr int SUPPORTED_EVENTS =
+        EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP;
+inline uint32_t events_epoll_to_poll(uint32_t e)
+{
+    assert (!(e & ~SUPPORTED_EVENTS));
+    return e;
+}
+inline uint32_t events_poll_to_epoll(uint32_t e)
+{
+    assert (!(e & ~SUPPORTED_EVENTS));
+    return e;
+}
+
 class epoll_obj {
     std::unordered_map<int, struct epoll_event> map;
 public:
@@ -53,9 +77,7 @@ public:
         for (auto &i : map) {
             pollfds[n].fd = i.first;
             int eevents = i.second.events;
-            assert(!(eevents&(EPOLLET|EPOLLONESHOT)));
-            // We (ab)use the fact that POLLIN==EPOLLIN, etc. TODO: static_assert.
-            pollfds[n].events = eevents;
+            pollfds[n].events = events_epoll_to_poll(eevents);
             n++;
         }
         int r = poll(pollfds.get(), n, timeout_ms);
@@ -66,7 +88,8 @@ public:
                 if (pollfds[i].revents) {
                     --remain;
                     events[remain].data = map[pollfds[i].fd].data;
-                    events[remain].events = pollfds[i].revents;
+                    events[remain].events =
+                            events_poll_to_epoll(pollfds[i].revents);
                 }
             }
         }
