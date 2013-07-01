@@ -13,7 +13,7 @@
 class xenclock : public clock {
 public:
     xenclock();
-    virtual u64 time() __attribute__((no_instrument_function));
+    virtual s64 time() __attribute__((no_instrument_function));
 private:
     pvclock_wall_clock* _wall;
     static void setup_cpu();
@@ -34,7 +34,7 @@ void xenclock::setup_cpu()
     _smp_init = true;
 }
 
-u64 xenclock::time()
+s64 xenclock::time()
 {
     int cpu = 0;
     pvclock_vcpu_time_info *sys;

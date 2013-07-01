@@ -11,7 +11,7 @@
 class kvmclock : public clock {
 public:
     kvmclock();
-    virtual u64 time() __attribute__((no_instrument_function));
+    virtual s64 time() __attribute__((no_instrument_function));
 private:
     u64 wall_clock_boot();
     u64 system_time();
@@ -43,7 +43,7 @@ void kvmclock::setup_cpu()
     _smp_init = true;
 }
 
-u64 kvmclock::time()
+s64 kvmclock::time()
 {
     auto r = _wall_ns;
     // Due to problems in init order dependencies (the clock depends

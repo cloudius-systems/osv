@@ -117,24 +117,44 @@ private:
     std::atomic<unsigned long> _mask;
 };
 
-class timer : public bi::set_base_hook<>, public bi::list_base_hook<> {
+class timer_base : public bi::set_base_hook<>, public bi::list_base_hook<> {
 public:
-    explicit timer(thread& t);
-    ~timer();
-    void set(u64 time);
+    class client {
+    public:
+        virtual ~client() {}
+        virtual void timer_fired() = 0;
+        void suspend_timers();
+        void resume_timers();
+    private:
+        bool _timers_need_reload = false;
+        bi::list<timer_base> _active_timers;
+        friend class timer_base;
+    };
+public:
+    explicit timer_base(client& t);
+    ~timer_base();
+    void set(s64 time);
     bool expired() const;
     void cancel();
-    friend bool operator<(const timer& t1, const timer& t2);
+    friend bool operator<(const timer_base& t1, const timer_base& t2);
 private:
     void expire();
-private:
-    thread& _t;
-    bool _expired;
-    u64 _time;
+protected:
+    client& _t;
+    enum class state {
+        free, armed, expired
+    };
+    state _state = state::free;
+    s64 _time;
     friend class timer_list;
 };
 
-class thread {
+class timer : public timer_base {
+public:
+    explicit timer(thread& t);
+};
+
+class thread : private timer_base::client {
 public:
     struct stack_info {
         stack_info();
@@ -165,7 +185,7 @@ public:
     void wake();
     template <class Pred>
     inline void wake_with(Pred pred);
-    static void sleep_until(u64 abstime);
+    static void sleep_until(s64 abstime);
     static void yield();
     static void exit() __attribute__((__noreturn__));
     static thread* current() __attribute((no_instrument_function));
@@ -185,14 +205,16 @@ private:
     void setup_tcb();
     void free_tcb();
     void complete() __attribute__((__noreturn__));
-    void suspend_timers();
-    void resume_timers();
     static void on_thread_stack(thread* t);
     template <class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
     struct dummy_lock {};
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
+    template <typename T> T& remote_thread_local_var(T& var);
+    void* do_remote_thread_local_var(void* var);
+private:
+    virtual void timer_fired() override;
 private:
     std::function<void ()> _func;
     thread_state _state;
@@ -210,14 +232,12 @@ private:
     std::atomic<status> _status;
     attr _attr;
     cpu* _cpu;
-    bool _timers_need_reload;
-    bi::list<timer> _active_timers;
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned long _id;
-    u64 _vruntime;
-    static const u64 max_vruntime = std::numeric_limits<u64>::max();
-    u64 _borrow;
+    s64 _vruntime;
+    static const s64 max_vruntime = std::numeric_limits<s64>::max();
+    s64 _borrow = 0;
     std::function<void ()> _cleanup;
     // When _ref_counter reaches 0, the thread can be deleted.
     // Starts with 1, decremented by complete() and also temporarily modified
@@ -255,11 +275,13 @@ void init_detached_threads_reaper();
 class timer_list {
 public:
     void fired();
-    void suspend(bi::list<timer>& t);
-    void resume(bi::list<timer>& t);
+    void suspend(bi::list<timer_base>& t);
+    void resume(bi::list<timer_base>& t);
+    void rearm();
 private:
-    friend class timer;
-    bi::set<timer, bi::base_hook<bi::set_base_hook<>>> _list;
+    friend class timer_base;
+    s64 _last = std::numeric_limits<s64>::max();
+    bi::set<timer_base, bi::base_hook<bi::set_base_hook<>>> _list;
     class callback_dispatch : private clock_event_callback {
     public:
         callback_dispatch();
@@ -283,19 +305,21 @@ typedef bi::rbtree<thread,
                    bi::constant_time_size<true> // for load estimation
                   > runqueue_type;
 
-struct cpu {
+struct cpu : private timer_base::client {
     explicit cpu(unsigned id);
     unsigned id;
     struct arch_cpu arch;
     thread* bringup_thread;
     runqueue_type runqueue;
     timer_list timers;
-    thread idle_thread;
+    timer_base preemption_timer;
+    thread* idle_thread;
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     cpu_set incoming_wakeups_mask;
     incoming_wakeup_queue* incoming_wakeups;
     thread* terminating_thread;
+    s64 running_since;
     static cpu* current();
     void init_on_cpu();
     void schedule(bool yield = false);
@@ -305,7 +329,10 @@ struct cpu {
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
-    void enqueue(thread& t, u64 now);
+    void enqueue(thread& t);
+    void init_idle_thread();
+    void update_preemption_timer(thread* current, s64 now, s64 run);
+    virtual void timer_fired() override;
     class notifier;
 };
 
@@ -454,6 +481,12 @@ inline cpu* thread::tcpu()
 inline cpu* cpu::current()
 {
     return thread::current()->tcpu();
+}
+
+inline
+timer::timer(thread& t)
+    : timer_base(t)
+{
 }
 
 extern std::vector<cpu*> cpus;

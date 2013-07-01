@@ -37,39 +37,39 @@ extern "C" {
 interrupt_descriptor_table::interrupt_descriptor_table()
 {
 
-    add_entry(0, ex_de);
-    add_entry(1, ex_db);
-    add_entry(2, ex_nmi);
-    add_entry(3, ex_bp);
-    add_entry(4, ex_of);
-    add_entry(5, ex_br);
-    add_entry(6, ex_ud);
-    add_entry(7, ex_nm);
-    add_entry(8, ex_df);
-    add_entry(10, ex_ts);
-    add_entry(11, ex_np);
-    add_entry(12, ex_ss);
-    add_entry(13, ex_gp);
-    add_entry(14, ex_pf);
-    add_entry(16, ex_mf);
-    add_entry(17, ex_ac);
-    add_entry(18, ex_mc);
-    add_entry(19, ex_xm);
+    add_entry(0, 1, ex_de);
+    add_entry(1, 1, ex_db);
+    add_entry(2, 1, ex_nmi);
+    add_entry(3, 1, ex_bp);
+    add_entry(4, 1, ex_of);
+    add_entry(5, 1, ex_br);
+    add_entry(6, 1, ex_ud);
+    add_entry(7, 1, ex_nm);
+    add_entry(8, 1, ex_df);
+    add_entry(10, 1, ex_ts);
+    add_entry(11, 1, ex_np);
+    add_entry(12, 1, ex_ss);
+    add_entry(13, 1, ex_gp);
+    add_entry(14, 1, ex_pf);
+    add_entry(16, 1, ex_mf);
+    add_entry(17, 1, ex_ac);
+    add_entry(18, 1, ex_mc);
+    add_entry(19, 1, ex_xm);
 
     extern char interrupt_entry[];
     for (unsigned i = 32; i < 256; ++i) {
-        add_entry(i, reinterpret_cast<void (*)()>(interrupt_entry + (i - 32) * 16));
+        add_entry(i, 2, reinterpret_cast<void (*)()>(interrupt_entry + (i - 32) * 16));
     }
 }
 
-void interrupt_descriptor_table::add_entry(unsigned vec, void (*handler)())
+void interrupt_descriptor_table::add_entry(unsigned vec, unsigned ist, void (*handler)())
 {
     ulong addr = reinterpret_cast<ulong>(handler);
     idt_entry e = { };
     e.offset0 = addr;
     e.selector = processor::read_cs();
     // We can't take interrupts on the main stack due to the x86-64 redzone
-    e.ist = 1;
+    e.ist = ist;
     e.type = type_intr_gate;
     e.s = s_special;
     e.dpl = 0;

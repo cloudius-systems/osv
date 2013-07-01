@@ -298,9 +298,10 @@ public:
         auto tr = allocate_trace_record(size());
         tr->tp = this;
         tr->thread = sched::thread::current();
-        tr->time = clock::get()->time();
+        tr->time = 0;
         tr->cpu = -1;
         if (tr->thread) {
+            tr->time = clock::get()->time();
             tr->cpu = tr->thread->tcpu()->id;
         }
         serialize(tr->buffer, as);

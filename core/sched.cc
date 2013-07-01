@@ -14,26 +14,29 @@
 
 namespace sched {
 
-tracepoint<1001, thread*> trace_switch("sched_switch", "to %p");
+tracepoint<1001, thread*, s64, s64> trace_switch("sched_switch", "to %p vold=%d vnew=%d");
 tracepoint<1002> trace_wait("sched_wait", "");
 tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
 tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
 tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
 tracepoint<1006> trace_preempt("sched_preempt", "");
+TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
+TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
+TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
 std::vector<cpu*> cpus;
 
 thread __thread * s_current;
 
-unsigned __thread preempt_counter = CONF_preempt ? 0 : 1;
+unsigned __thread preempt_counter = 1;
 bool __thread need_reschedule = false;
 
 elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{[] {}};
 
-constexpr u64 vruntime_bias = 4_ms;
-constexpr u64 max_slice = 10_ms;
+constexpr s64 vruntime_bias = 4_ms;
+constexpr s64 max_slice = 10_ms;
 
 mutex cpu::notifier::_mtx;
 std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(300)));
@@ -57,10 +60,18 @@ private:
 
 cpu::cpu(unsigned _id)
     : id(_id)
-    , idle_thread([this] { idle(); }, thread::attr(this))
+    , preemption_timer(*this)
+    , idle_thread()
     , terminating_thread(nullptr)
+    , running_since(clock::get()->time())
 {
     percpu_init(id);
+}
+
+void cpu::init_idle_thread()
+{
+    idle_thread = new thread([this] { idle(); }, thread::attr(this));
+    idle_thread->_vruntime = std::numeric_limits<s64>::max();
 }
 
 void cpu::schedule(bool yield)
@@ -82,20 +93,25 @@ void cpu::reschedule_from_interrupt(bool preempt)
     if (p->_borrow) {
         bias /= 2;  // preempt threads on borrowed time sooner
     }
+    s64 current_run = now - running_since;
+    if (p->_vruntime + current_run < 0) { // overflow (idle thread)
+        current_run = 0;
+    }
     if (p->_status == thread::status::running
             && (runqueue.empty()
-                || p->_vruntime + now < runqueue.begin()->_vruntime + bias)) {
+                || p->_vruntime + current_run < runqueue.begin()->_vruntime + bias)) {
+        update_preemption_timer(p, now, current_run);
         return;
     }
-    p->_vruntime += now;
+    p->_vruntime += current_run;
     if (p->_status == thread::status::running) {
         p->_status.store(thread::status::queued);
-        enqueue(*p, now);
+        enqueue(*p);
     }
     auto ni = runqueue.begin();
     auto n = &*ni;
     runqueue.erase(ni);
-    n->_vruntime -= now;
+    running_since = now;
     assert(n->_status.load() == thread::status::queued);
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
@@ -103,7 +119,8 @@ void cpu::reschedule_from_interrupt(bool preempt)
             trace_preempt();
             p->_fpu.save();
         }
-        trace_switch(n);
+        trace_switch(n, p->_vruntime, n->_vruntime);
+        update_preemption_timer(n, now, 0);
         n->switch_to();
         if (preempt) {
             p->_fpu.restore();
@@ -113,6 +130,26 @@ void cpu::reschedule_from_interrupt(bool preempt)
             p->_cpu->terminating_thread = nullptr;
         }
     }
+}
+
+void cpu::update_preemption_timer(thread* current, s64 now, s64 run)
+{
+    preemption_timer.cancel();
+    if (runqueue.empty()) {
+        return;
+    }
+    auto& t = *runqueue.begin();
+    auto delta = t._vruntime - (current->_vruntime + run);
+    auto expire = now + delta + vruntime_bias;
+    if (expire > 0) {
+        // avoid idle thread related overflow
+        preemption_timer.set(expire);
+    }
+}
+
+void cpu::timer_fired()
+{
+    // nothing to do, preemption will happen if needed
 }
 
 void cpu::do_idle()
@@ -154,7 +191,6 @@ void cpu::handle_incoming_wakeups()
     if (!queues_with_wakes) {
         return;
     }
-    auto now = clock::get()->time();
     for (auto i : queues_with_wakes) {
         incoming_wakeup_queue q;
         incoming_wakeups[i].copy_and_clear(q);
@@ -164,20 +200,20 @@ void cpu::handle_incoming_wakeups()
             irq_save_lock_type irq_lock;
             with_lock(irq_lock, [&] {
                 t._status.store(thread::status::queued);
-                enqueue(t, now);
+                enqueue(t);
                 t.resume_timers();
             });
         }
     }
 }
 
-void cpu::enqueue(thread& t, u64 now)
+void cpu::enqueue(thread& t)
 {
     trace_queue(&t);
-    auto head = std::min(t._vruntime, thread::current()->_vruntime + now);
-    auto tail = head + max_slice * runqueue.size();
+    auto head = std::min(t._vruntime, thread::current()->_vruntime);
+    auto tail = head + max_slice * int(runqueue.size());
     // special treatment for idle thread: make sure it is in the back of the queue
-    if (&t == &idle_thread) {
+    if (&t == idle_thread) {
         t._vruntime = thread::max_vruntime;
         t._borrow = 0;
     } else if (t._vruntime > tail) {
@@ -306,11 +342,24 @@ typedef bi::list<thread,
 thread_list_type thread_list;
 unsigned long thread::_s_idgen;
 
+void* thread::do_remote_thread_local_var(void* var)
+{
+    auto tls_cur = static_cast<char*>(current()->_tcb->tls_base);
+    auto tls_this = static_cast<char*>(this->_tcb->tls_base);
+    auto offset = static_cast<char*>(var) - tls_cur;
+    return tls_this + offset;
+}
+
+template <typename T>
+T& thread::remote_thread_local_var(T& var)
+{
+    return *static_cast<T*>(do_remote_thread_local_var(&var));
+}
+
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)
     , _attr(attr)
-    , _timers_need_reload()
     , _vruntime(clock::get()->time())
     , _ref_counter(1)
     , _joiner()
@@ -320,6 +369,14 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         _id = _s_idgen++;
     });
     setup_tcb();
+    // setup s_current before switching to the thread, so interrupts
+    // can call thread::current()
+    // remote_thread_local_var() doesn't work when there is no current
+    // thread, so don't do this for main threads (switch_to_first will
+    // do that for us instead)
+    if (!main) {
+        remote_thread_local_var(s_current) = this;
+    }
     init_stack();
     if (_attr.detached) {
         // assumes detached threads directly on heap, not as member.
@@ -328,7 +385,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         set_cleanup([=] { delete this; });
     }
     if (main) {
-        _vruntime = 0; // simulate the first schedule into this thread
         _status.store(status::running);
     }
 }
@@ -428,7 +484,7 @@ void thread::wait()
     schedule(true);
 }
 
-void thread::sleep_until(u64 abstime)
+void thread::sleep_until(s64 abstime)
 {
     timer t(*current());
     t.set(abstime);
@@ -487,22 +543,22 @@ void thread::exit()
     t->complete();
 }
 
-void thread::suspend_timers()
+void timer_base::client::suspend_timers()
 {
     if (_timers_need_reload) {
         return;
     }
     _timers_need_reload = true;
-    _cpu->timers.suspend(_active_timers);
+    cpu::current()->timers.suspend(_active_timers);
 }
 
-void thread::resume_timers()
+void timer_base::client::resume_timers()
 {
     if (!_timers_need_reload) {
         return;
     }
     _timers_need_reload = false;
-    _cpu->timers.resume(_active_timers);
+    cpu::current()->timers.resume(_active_timers);
 }
 
 void thread::join()
@@ -529,6 +585,11 @@ thread::stack_info thread::get_stack_info()
 void thread::set_cleanup(std::function<void ()> cleanup)
 {
     _cleanup = cleanup;
+}
+
+void thread::timer_fired()
+{
+    wake();
 }
 
 unsigned long thread::id()
@@ -578,31 +639,41 @@ void timer_list::fired()
 {
     auto now = clock::get()->time();
     auto i = _list.begin();
-    while (i != _list.end() && i->_time < now) {
+    _last = std::numeric_limits<s64>::max();
+    while (i != _list.end() && i->_time <= now) {
         auto j = i++;
         j->expire();
         _list.erase(j);
     }
     if (!_list.empty()) {
-        clock_event->set(_list.begin()->_time);
+        rearm();
+    }
+}
+
+void timer_list::rearm()
+{
+    auto t = _list.begin()->_time;
+    if (t < _last) {
+        _last = t;
+        clock_event->set(t);
     }
 }
 
 // call with irq disabled
-void timer_list::suspend(bi::list<timer>& timers)
+void timer_list::suspend(bi::list<timer_base>& timers)
 {
     for (auto& t : timers) {
-        assert(!t._expired);
+        assert(t._state == timer::state::armed);
         _list.erase(_list.iterator_to(t));
     }
 }
 
 // call with irq disabled
-void timer_list::resume(bi::list<timer>& timers)
+void timer_list::resume(bi::list<timer_base>& timers)
 {
     bool rearm = false;
     for (auto& t : timers) {
-        assert(!t._expired);
+        assert(t._state == timer::state::armed);
         auto i = _list.insert(t).first;
         rearm |= i == _list.begin();
     }
@@ -618,58 +689,64 @@ void timer_list::callback_dispatch::fired()
 
 timer_list::callback_dispatch timer_list::_dispatch;
 
-timer::timer(thread& t)
+timer_base::timer_base(timer_base::client& t)
     : _t(t)
-    , _expired()
 {
 }
 
-timer::~timer()
+timer_base::~timer_base()
 {
     cancel();
 }
 
-void timer::expire()
+void timer_base::expire()
 {
-    _expired = true;
+    trace_timer_fired(this);
+    _state = state::expired;
     _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-    _t.wake();
+    _t.timer_fired();
 }
 
-void timer::set(u64 time)
+void timer_base::set(s64 time)
 {
-    _expired = false;
+    trace_timer_set(this, time);
+    _state = state::armed;
     _time = time;
+    irq_save_lock_type irq_lock;
     with_lock(irq_lock, [=] {
-        auto& timers = _t._cpu->timers;
+        auto& timers = cpu::current()->timers;
         timers._list.insert(*this);
         _t._active_timers.push_back(*this);
         if (timers._list.iterator_to(*this) == timers._list.begin()) {
-            clock_event->set(time);
+            timers.rearm();
         }
     });
 };
 
-void timer::cancel()
+void timer_base::cancel()
 {
+    if (_state == state::free) {
+        return;
+    }
+    trace_timer_cancel(this);
+    irq_save_lock_type irq_lock;
     with_lock(irq_lock, [=] {
-        if (_expired) {
-            return;
+        if (_state == state::armed) {
+            _t._active_timers.erase(_t._active_timers.iterator_to(*this));
+            cpu::current()->timers._list.erase(cpu::current()->timers._list.iterator_to(*this));
         }
-        _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-        _t._cpu->timers._list.erase(_t._cpu->timers._list.iterator_to(*this));
-        _expired = false;
+        _state = state::free;
     });
     // even if we remove the first timer, allow it to expire rather than
     // reprogramming the timer
 }
 
-bool timer::expired() const
+bool timer_base::expired() const
 {
-    return _expired;
+    return _state == state::expired;
 }
 
-bool operator<(const timer& t1, const timer& t2)
+bool operator<(const timer_base& t1, const timer_base& t2)
 {
     if (t1._time < t2._time) {
         return true;
