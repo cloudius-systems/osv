@@ -115,7 +115,7 @@ public:
     vring* get_virt_queue(unsigned idx);
 
     // block the calling thread until the queue has some used elements in it.
-    void wait_for_queue(vring* queue);
+    void wait_for_queue(vring* queue, bool (vring::*pred)() const);
 
     // guest/host features physical access
     u32 get_device_features(void);

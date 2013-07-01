@@ -214,7 +214,7 @@ namespace virtio {
         while (1) {
 
             // Wait for rx queue (used elements)
-            virtio_driver::wait_for_queue(_rx_queue);
+            virtio_driver::wait_for_queue(_rx_queue, &vring::used_ring_not_empty);
             trace_virtio_net_rx_wake();
 
             u32 len;
@@ -357,7 +357,7 @@ namespace virtio {
 
         while (1) {
             // Wait for tx queue (used elements)
-            virtio_driver::wait_for_queue(_tx_queue);
+            virtio_driver::wait_for_queue(_tx_queue, &vring::used_ring_is_half_empty);
             trace_virtio_net_tx_wake();
             tx_gc();
         }

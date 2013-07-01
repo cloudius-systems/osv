@@ -3,8 +3,11 @@
 #include "drivers/virtio.hh"
 #include "virtio-vring.hh"
 #include <osv/debug.h>
+#include "osv/trace.hh"
 
 using namespace pci;
+
+TRACEPOINT(trace_virtio_wait_for_queue, "queue(%p) have_elements=%d", void*, int);
 
 namespace virtio {
 
@@ -187,10 +190,10 @@ vring* virtio_driver::get_virt_queue(unsigned idx)
     return (_queues[idx]);
 }
 
-void virtio_driver::wait_for_queue(vring* queue)
+void virtio_driver::wait_for_queue(vring* queue, bool (vring::*pred)() const)
 {
-    sched::thread::wait_until([queue] {
-        bool have_elements = queue->used_ring_not_empty();
+    sched::thread::wait_until([queue,pred] {
+        bool have_elements = (queue->*pred)();
         if (!have_elements) {
             queue->enable_interrupts();
 
@@ -198,11 +201,13 @@ void virtio_driver::wait_for_queue(vring* queue)
             // we enable interrupts to avoid a race where a packet
             // may have been delivered between queue->used_ring_not_empty()
             // and queue->enable_interrupts() above
-            have_elements = queue->used_ring_not_empty();
+            have_elements = (queue->*pred)();
             if (have_elements) {
                 queue->disable_interrupts();
             }
         }
+
+        trace_virtio_wait_for_queue(queue, have_elements);
         return have_elements;
     });
 }

@@ -218,10 +218,15 @@ namespace virtio {
         return (_avail_count >= descriptors);
     }
 
-    bool vring::used_ring_not_empty()
+    bool vring::used_ring_not_empty() const
     {
         return (_used_guest_head != _used->_idx.load(std::memory_order_relaxed));
     }
+
+    bool vring::used_ring_is_half_empty() const
+        {
+            return (_used_guest_head - _used->_idx.load(std::memory_order_relaxed) > (u16)_num/2);
+        }
 
     bool
     vring::kick() {
