@@ -2,7 +2,6 @@
 #include "mempool.hh"
 #include "mmu.hh"
 #include "sglist.hh"
-#include "barrier.hh"
 
 #include "virtio.hh"
 #include "drivers/virtio-vring.hh"
@@ -91,7 +90,6 @@ namespace virtio {
     }
 
     // The convention is that out descriptors are at the beginning of the sg list
-    // TODO: add barriers
     bool
     vring::add_buf(sglist* sg, u16 out, u16 in, void* cookie) {
         return with_lock(_lock, [=] {
@@ -147,12 +145,13 @@ namespace virtio {
             _avail_added_since_kick++;
             _avail_count -= desc_needed;
 
-            _avail->_ring[(_avail->_idx) % _num] = _avail_head;
-            barrier();
-            _avail->_idx++;
+            u16 avail_idx_cache = _avail->_idx.load(std::memory_order_relaxed);
+            _avail->_ring[avail_idx_cache % _num] = _avail_head;
+            //Cheaper than the operator++ that uses seq consistency
+            _avail->_idx.store(avail_idx_cache + 1, std::memory_order_release);
             _avail_head = idx;
 
-            virtio_d("\t%s: _avail->_idx=%d, added=%d,", __FUNCTION__, _avail->_idx, _avail_added_since_kick);
+            virtio_d("\t%s: _avail->_idx=%d, added=%d,", __FUNCTION__, _avail->_idx.load(std::memory_order_relaxed), _avail_added_since_kick);
 
             return true;
         });
@@ -169,7 +168,6 @@ namespace virtio {
             // need to trim the free running counter w/ the array size
             int used_ptr = _used_guest_head % _num;
 
-            barrier(); // Normalize the used fields of these descriptors
             if (_used_guest_head == _used->_idx.load(std::memory_order_relaxed)) {
                 virtio_d("get_used_desc: no avail buffers ptr=%d", _used_guest_head);
                 return reinterpret_cast<void*>(0);
@@ -193,7 +191,6 @@ namespace virtio {
 
             _used_guest_head++;
             _avail_count += i;
-            barrier();
             _desc[idx]._next = _avail_head;
             // only let the host know about our used idx in case irq are enabled
             if (_avail->interrupt_on())
@@ -232,7 +229,7 @@ namespace virtio {
 
         if (_dev->get_event_idx_cap()) {
 
-            kicked = ((u16)(_avail->_idx - _avail_event->load(std::memory_order_acquire) - 1) < _avail_added_since_kick);
+            kicked = ((u16)(_avail->_idx.load(std::memory_order_relaxed) - _avail_event->load(std::memory_order_relaxed) - 1) < _avail_added_since_kick);
 
         } else if (_used->notifications_disabled())
             return false;

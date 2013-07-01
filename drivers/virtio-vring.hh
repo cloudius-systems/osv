@@ -62,7 +62,7 @@ class virtio_driver;
         std::atomic<u16> _flags;
 
         // Where we put the next descriptor
-        u16 _idx;
+        std::atomic<u16> _idx;
         // There may be no more entries than the queue size read from device
         u16 _ring[];
         // used event index is an optimization in order to get an interrupt from the host
