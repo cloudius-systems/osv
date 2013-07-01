@@ -396,6 +396,16 @@ extern "C" { void __elf_resolve_pltgot(void); }
 
 void object::relocate_pltgot()
 {
+    auto pltgot = dynamic_ptr<void*>(DT_PLTGOT);
+    void *original_plt = nullptr;
+    if (pltgot[1]) {
+        // The library was prelinked before being copied to OSV, so the
+        // .GOT.PLT entries point not to the .PLT but to a prelinked address
+        // of the actual function. We'll need to return the link to the .PLT.
+        // The prelinker saved us in pltgot[1] the address of .plt + 0x16.
+        original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
+    }
+
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
     for (auto p = rel; p < rel + nrel; ++p) {
@@ -403,11 +413,17 @@ void object::relocate_pltgot()
           u32 type = info & 0xffffffff;
           assert(type = R_X86_64_JUMP_SLOT);
           void *addr = _base + p->r_offset;
-          // The JUMP_SLOT entry already points back to the PLT, just
-          // make sure it is relocated relative to the object base.
-          *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+          if (original_plt) {
+              // Restore the link to the original plt.
+              // We know the JUMP_SLOT entries are in plt order, and that
+              // each plt entry is 16 bytes.
+              *static_cast<void**>(addr) = original_plt + (p-rel)*16;
+          } else {
+              // The JUMP_SLOT entry already points back to the PLT, just
+              // make sure it is relocated relative to the object base.
+              *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+          }
     }
-    auto pltgot = dynamic_ptr<void*>(DT_PLTGOT);
     // PLTGOT resolution has a special calling convention, with the symbol
     // index and some word pushed on the stack, so we need an assembly
     // stub to convert it back to the standard calling convention.
