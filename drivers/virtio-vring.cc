@@ -170,7 +170,7 @@ namespace virtio {
             int used_ptr = _used_guest_head % _num;
 
             barrier(); // Normalize the used fields of these descriptors
-            if (_used_guest_head == _used->_idx) {
+            if (_used_guest_head == _used->_idx.load(std::memory_order_relaxed)) {
                 virtio_d("get_used_desc: no avail buffers ptr=%d", _used_guest_head);
                 return reinterpret_cast<void*>(0);
             }
@@ -223,7 +223,7 @@ namespace virtio {
 
     bool vring::used_ring_not_empty()
     {
-        return (_used_guest_head != _used->_idx);
+        return (_used_guest_head != _used->_idx.load(std::memory_order_relaxed));
     }
 
     bool
