@@ -32,6 +32,10 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+//custom
+#include <stdint.h>
+#include <bsd/porting/netport.h>
+
 #include <sys/param.h>
 #include <sys/bus.h>
 #include <sys/kernel.h>
@@ -64,6 +68,8 @@ __FBSDID("$FreeBSD$");
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
+
+#define log(...) do {} while (0)
 
 /**
  * \file xenstore.c
@@ -105,6 +111,27 @@ static struct xs_watch *find_watch(const char *token);
 
 MALLOC_DEFINE(M_XENSTORE, "xenstore", "XenStore data and results");
 
+void xs_dev_init()
+{
+}
+
+// end of device functions
+
+static inline void bus_generic_suspend(device_t dev)
+{
+    printf("probably never implement!!!\n");
+}
+
+static inline void bus_generic_resume(device_t dev)
+{
+    printf("probably never implement!!!\n");
+}
+
+
+static inline int is_xen_hvm()
+{
+    return true;
+}
 /**
  * Pointer to shared memory communication structures allowing us
  * to communicate with the XenStore service.
@@ -673,7 +700,7 @@ xs_process_msg(enum xsd_sockmsg_type *type)
  * This thread blocks waiting for data from the XenStore service
  * and processes and received messages.
  */
-static void
+void
 xs_rcv_thread(void *arg __unused)
 {
 	int error;
@@ -1005,7 +1032,7 @@ find_watch(const char *token)
 /**
  * Thread body of the XenStore watch event dispatch thread.
  */
-static void
+void
 xenwatch_thread(void *unused)
 {
 	struct xs_stored_msg *msg;
@@ -1080,7 +1107,7 @@ xs_init_comms(void)
 }
 
 /*------------------ Private Device Attachment Functions  --------------------*/
-static void
+void
 xs_identify(driver_t *driver, device_t parent)
 {
 
@@ -1092,7 +1119,7 @@ xs_identify(driver_t *driver, device_t parent)
  *
  * \param dev
  */
-static int 
+int 
 xs_probe(device_t dev)
 {
 	/*
@@ -1122,7 +1149,7 @@ xs_attach_deferred(void *arg)
  * This routine also prepares for the probe/attach of drivers that rely
  * on the XenStore.  
  */
-static int
+int
 xs_attach(device_t dev)
 {
 	int error;
@@ -1148,13 +1175,15 @@ xs_attach(device_t dev)
 	/* Initialize the interface to xenstore. */
 	struct proc *p;
 
-#ifdef XENHVM
-	xs.evtchn = hvm_get_parameter(HVM_PARAM_STORE_EVTCHN);
-	xs.gpfn = hvm_get_parameter(HVM_PARAM_STORE_PFN);
-	xen_store = pmap_mapdev(xs.gpfn * PAGE_SIZE, PAGE_SIZE);
-#else
-	xs.evtchn = xen_start_info->store_evtchn;
-#endif
+	if (is_xen_hvm()) {
+		xs.evtchn = hvm_get_parameter(HVM_PARAM_STORE_EVTCHN);
+		xs.gpfn = hvm_get_parameter(HVM_PARAM_STORE_PFN);
+		xen_store = pmap_mapdev(xs.gpfn * PAGE_SIZE, PAGE_SIZE);
+	} else {
+		printf("implement me\n");
+		abort();
+		//xs.evtchn = xen_start_info->store_evtchn;
+	}
 
 	TAILQ_INIT(&xs.reply_list);
 	TAILQ_INIT(&xs.watch_events);
@@ -1189,6 +1218,7 @@ xs_attach(device_t dev)
 	return (error);
 }
 
+#if 0
 /**
  * Prepare for suspension of this VM by halting XenStore access after
  * all transactions and individual requests have completed.
@@ -1274,6 +1304,7 @@ DRIVER_MODULE(xenstore, nexus, xenstore_driver, xenstore_devclass, 0, 0);
 SYSCTL_NODE(_dev, OID_AUTO, xen, CTLFLAG_RD, NULL, "Xen");
 SYSCTL_INT(_dev_xen, OID_AUTO, xsd_port, CTLFLAG_RD, &xs.evtchn, 0, "");
 SYSCTL_ULONG(_dev_xen, OID_AUTO, xsd_kva, CTLFLAG_RD, (u_long *) &xen_store, 0, "");
+#endif
 
 /*-------------------------------- Public API --------------------------------*/
 /*------- API comments for these methods can be found in xenstorevar.h -------*/
@@ -1302,7 +1333,8 @@ int
 xs_exists(struct xs_transaction t, const char *dir, const char *node)
 {
 	const char **d;
-	int error, dir_n;
+	int error;
+	unsigned int dir_n;
 
 	error = xs_directory(t, dir, node, &dir_n, &d);
 	if (error)
