@@ -370,7 +370,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)
     , _attr(attr)
-    , _vruntime(clock::get()->time())
+    , _vruntime(main ? 0 : current()->_vruntime)
     , _ref_counter(1)
     , _joiner()
 {
