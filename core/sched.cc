@@ -99,9 +99,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
     thread* p = thread::current();
     // avoid cycling through the runqueue if p still has the highest priority
     auto bias = vruntime_bias;
-    if (p->_borrow) {
-        bias /= 2;  // preempt threads on borrowed time sooner
-    }
     s64 current_run = now - running_since;
     if (p->_vruntime + current_run < 0) { // overflow (idle thread)
         current_run = 0;
@@ -209,26 +206,29 @@ void cpu::handle_incoming_wakeups()
             irq_save_lock_type irq_lock;
             with_lock(irq_lock, [&] {
                 t._status.store(thread::status::queued);
-                enqueue(t);
+                enqueue(t, true);
                 t.resume_timers();
             });
         }
     }
 }
 
-void cpu::enqueue(thread& t)
+void cpu::enqueue(thread& t, bool waking)
 {
     trace_queue(&t);
-    auto head = std::min(t._vruntime, thread::current()->_vruntime);
-    auto tail = head + max_slice * int(runqueue.size());
+    if (waking) {
+        // If a waking thread has a really low vruntime, allow it only
+        // one extra timeslice; otherwise it would dominate the runqueue
+        // and starve out other threads
+        auto current = thread::current();
+        if (current != idle_thread) {
+            auto head = current->_vruntime - max_slice;
+            t._vruntime = std::max(t._vruntime, head);
+        }
+    }
     // special treatment for idle thread: make sure it is in the back of the queue
     if (&t == idle_thread) {
         t._vruntime = thread::max_vruntime;
-        t._borrow = 0;
-    } else if (t._vruntime > tail) {
-        t._borrow = t._vruntime - tail;
-    } else {
-        t._borrow = 0;
     }
     runqueue.insert_equal(t);
 }

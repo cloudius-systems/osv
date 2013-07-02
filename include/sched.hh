@@ -237,7 +237,6 @@ private:
     unsigned long _id;
     s64 _vruntime;
     static const s64 max_vruntime = std::numeric_limits<s64>::max();
-    s64 _borrow = 0;
     std::function<void ()> _cleanup;
     // When _ref_counter reaches 0, the thread can be deleted.
     // Starts with 1, decremented by complete() and also temporarily modified
@@ -293,7 +292,7 @@ private:
 class thread_runtime_compare {
 public:
     bool operator()(const thread& t1, const thread& t2) const {
-        return t1._vruntime - t1._borrow < t2._vruntime - t2._borrow;
+        return t1._vruntime < t2._vruntime;
     }
 };
 
@@ -330,7 +329,7 @@ struct cpu : private timer_base::client {
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
-    void enqueue(thread& t);
+    void enqueue(thread& t, bool waking = false);
     void init_idle_thread();
     void update_preemption_timer(thread* current, s64 now, s64 run);
     virtual void timer_fired() override;
