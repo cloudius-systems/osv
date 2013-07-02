@@ -17,28 +17,15 @@ int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
 
 int main(int argc, char **argv)
 {
-#define TESTDIR		"/mnt"
-	char rbuf[BUF_SIZE];
-	int fd;
+#define TESTDIR	"/usr"
+//	char rbuf[BUF_SIZE];
 	struct statfs st;
-	int ret;
 	DIR *dir;
 	char path[PATH_MAX];
 	struct dirent *d;
 	struct stat s;
 
-	if (mkdir("/mnt", 0755) < 0) {
-		printf("failed to create /mnt, error = %d\n", errno);
-		return -1;
-	}
-
-	ret = sys_mount("/dev/vblk1", "/mnt", "zfs", 0, "osv/usr");
-	if (ret) {
-		printf("failed to mount zfs, error = %d\n", ret);
-		return ret;
-	}
-
-	if (statfs("/mnt", &st) < 0)
+	if (statfs("/usr", &st) < 0)
 		perror("statfs");
 
 	printf("f_type: %ld\n", st.f_type); 
@@ -83,6 +70,7 @@ int main(int argc, char **argv)
 	}
 
 
+#if 0
 	fd = open("/mnt/tests/tst-zfs-simple.c", O_RDONLY);
 	if (fd < 0) {
 		perror("open");
@@ -104,5 +92,6 @@ int main(int argc, char **argv)
 
 //	rbuf[BUF_SIZE] = '\0';
 //	printf("%s\n", rbuf);
+#endif
 	return 0;
 }
