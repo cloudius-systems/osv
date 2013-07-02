@@ -91,6 +91,19 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         // msleep timeout
         if (!wait._awake) {
             trace_synch_msleep_expired(chan);
+            if (chan) {
+                // A pointer to the local "wait" may still be on the list -
+                // need to remove it before we can return:
+                mutex_lock(&_lock);
+                auto ppp = _evlist.equal_range(chan);
+                for (auto it=ppp.first; it!=ppp.second; ++it) {
+                    if ((*it).second == &wait) {
+                        _evlist.erase(it);
+                        break;
+                    }
+                }
+                mutex_unlock(&_lock);
+            }
             return (EWOULDBLOCK);
         }
 
