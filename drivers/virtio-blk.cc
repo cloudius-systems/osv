@@ -228,13 +228,11 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         return EIO;
     }
 
-    int in = 1, out = 1, *buf_count;
     virtio_blk_request_type type;
 
     switch (bio->bio_cmd) {
     case BIO_READ:
         type = VIRTIO_BLK_T_IN;
-        buf_count = &in;
         break;
     case BIO_WRITE:
         if (is_readonly()) {
@@ -243,7 +241,6 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             return EROFS;
         }
         type = VIRTIO_BLK_T_OUT;
-        buf_count = &out;
         break;
     default:
         return ENOTBLK;
@@ -257,8 +254,10 @@ int virtio_blk::make_virtio_request(struct bio* bio)
     // TODO - fix offset source
     hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
 
+    vring* queue = get_virt_queue(0);
     //push 'output' buffers to the beginning of the sg list
-    sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
+    queue->_sg_vec.clear();
+    queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ));
 
     // need to break a contiguous buffers that > 4k into several physical page mapping
     // even if the virtual space is contiguous.
@@ -272,20 +271,20 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         if (offset + size > page_size)
             size = page_size - offset;
         len += size;
-        sg->add(mmu::virt_to_phys(base), size);
+        queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(base), size, (type == VIRTIO_BLK_T_OUT)? vring_desc::VRING_DESC_F_READ:vring_desc::VRING_DESC_F_WRITE));
         base += size;
         offset = 0;
-        (*buf_count)++;
     }
 
     virtio_blk_res* res = new virtio_blk_res;
     res->status = 0;
-    sg->add(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res));
+    queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res), vring_desc::VRING_DESC_F_WRITE));
+
 
     virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
-    vring* queue = get_virt_queue(0);
 
-    if (!queue->add_buf(req->payload,out,in,req)) {
+
+    if (!queue->add_buf(req)) {
         // TODO need to clea the bio
         delete req;
         return EBUSY;

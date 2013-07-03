@@ -49,6 +49,8 @@ namespace virtio {
 
         _avail_event = reinterpret_cast<std::atomic<u16>*>(&_used->_used_elements[_num]);
         _used_event = reinterpret_cast<std::atomic<u16>*>(&_avail->_ring[_num]);
+
+        _sg_vec.reserve(max_sgs);
     }
 
     vring::~vring()
@@ -90,11 +92,10 @@ namespace virtio {
         set_used_event(_used_guest_head, std::memory_order_relaxed);
     }
 
-    // The convention is that out descriptors are at the beginning of the sg list
     bool
-    vring::add_buf(sglist* sg, u16 out, u16 in, void* cookie) {
+    vring::add_buf(void* cookie) {
         return with_lock(_lock, [=] {
-            int desc_needed = in + out;
+            int desc_needed = _sg_vec.size();
             bool indirect = false;
             if (use_indirect(desc_needed*_num/2)) {
                 desc_needed = 1;
@@ -108,36 +109,33 @@ namespace virtio {
                 return false;
             }
 
-            int i = 0, idx, prev_idx = -1;
+            int idx, prev_idx = -1;
             idx = _avail_head;
 
-            virtio_d("\t%s: avail_head=%d, in=%d, out=%d", __FUNCTION__, _avail_head, in, out);
             _cookie[idx] = cookie;
             vring_desc* descp = _desc;
 
             if (indirect) {
-                vring_desc* indirect = reinterpret_cast<vring_desc*>(malloc((in+out)*sizeof(vring_desc)));
+                vring_desc* indirect = reinterpret_cast<vring_desc*>(malloc((_sg_vec.size())*sizeof(vring_desc)));
                 if (!indirect)
                     return false;
                 _desc[idx]._flags = vring_desc::VRING_DESC_F_INDIRECT;
                 _desc[idx]._paddr = mmu::virt_to_phys(indirect);
-                _desc[idx]._len = (in+out)*sizeof(vring_desc);
+                _desc[idx]._len = (_sg_vec.size())*sizeof(vring_desc);
 
                 descp = indirect;
                 //initialize the next pointers
-                for (int j=0;j<in+out;j++) descp[j]._next = j+1;
+                for (u32 j=0;j<_sg_vec.size();j++) descp[j]._next = j+1;
                 //hack to make the logic below the for loop below act
                 //just as before
-                descp[in+out-1]._next = _desc[idx]._next;
+                descp[_sg_vec.size()-1]._next = _desc[idx]._next;
                 idx = 0;
             }
 
-            for (auto ii = sg->_nodes.begin(); i < in + out; ii++, i++) {
-                virtio_d("\t%s: idx=%d, len=%d, paddr=%x", __FUNCTION__, idx, (*ii)._len, (*ii)._paddr);
-                descp[idx]._flags = vring_desc::VRING_DESC_F_NEXT;
-                descp[idx]._flags |= (i>=out)? vring_desc::VRING_DESC_F_WRITE:0;
-                descp[idx]._paddr = (*ii)._paddr;
-                descp[idx]._len = (*ii)._len;
+            for (unsigned i = 0; i < _sg_vec.size(); i++) {
+                descp[idx]._flags = vring_desc::VRING_DESC_F_NEXT| _sg_vec[i]._flags;
+                descp[idx]._paddr = _sg_vec[i]._paddr;
+                descp[idx]._len = _sg_vec[i]._len;
                 prev_idx = idx;
                 idx = descp[idx]._next;
             }

@@ -23,6 +23,8 @@ class virtio_driver;
     class vring_desc {
     public:
         enum {
+            // Read only buffer
+            VRING_DESC_F_READ=0,
             // This marks a buffer as continuing via the next field.
             VRING_DESC_F_NEXT=1,
             // This marks a buffer as write-only (otherwise read-only).
@@ -116,7 +118,7 @@ class virtio_driver;
         static unsigned get_size(unsigned int num, unsigned long align);
 
         // Ring operations
-        bool add_buf(sglist* sg, u16 out, u16 in, void* cookie);
+        bool add_buf(void* cookie);
         void* get_buf(u32 *len);
         bool used_ring_not_empty() const;
         bool used_ring_is_half_empty() const;
@@ -138,6 +140,18 @@ class virtio_driver;
         // Let host know about interrupt delivery
         void disable_interrupts();
         void enable_interrupts();
+
+        const int max_sgs = 256;
+        struct sg_node {
+            u64 _paddr;
+            u32 _len;
+            u16 _flags;
+            sg_node(u64 addr, u32 len, u16 flags=0) :_paddr(addr), _len(len), _flags(flags) {};
+            sg_node(const sg_node& n) :_paddr(n._paddr), _len(n._len), _flags(n._flags) {};
+        };
+
+        // holds a temporary sg_nodes that travel between the upper layer virtio to add_buf
+        std::vector<sg_node> _sg_vec;
 
     private:
 

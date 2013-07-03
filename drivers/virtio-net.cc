@@ -131,7 +131,7 @@ namespace virtio {
 
         _hdr_size = (_mergeable_bufs)? sizeof(virtio_net_hdr_mrg_rxbuf):sizeof(virtio_net_hdr);
 
-        //register the 3 irq callback for the net
+        //register the 2 irq callback for the net
         sched::thread* rx = new sched::thread([this] { this->receiver(); });
         sched::thread* tx = new sched::thread([this] { this->tx_gc_thread(); });
         rx->start();
@@ -293,7 +293,6 @@ namespace virtio {
         bool worked = false;
 
         while (_rx_queue->avail_ring_not_empty()) {
-            sglist payload;
             struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MCLBYTES);
             if (!m)
                 break;
@@ -301,8 +300,9 @@ namespace virtio {
             m->m_len = MCLBYTES;
             u8 *mdata = mtod(m, u8*);
 
-            payload.add(mmu::virt_to_phys(mdata), m->m_len);
-            if (!_rx_queue->add_buf(&payload,0,payload.get_sgs(),m)) {
+            _rx_queue->_sg_vec.clear();
+            _rx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(mdata), m->m_len, vring_desc::VRING_DESC_F_WRITE));
+            if (!_rx_queue->add_buf(m)) {
                 m_freem(m);
                 break;
             }
@@ -319,17 +319,18 @@ namespace virtio {
         virtio_net_req *req = new virtio_net_req;
 
         req->um.reset(m_head);
-        req->payload.add(mmu::virt_to_phys(static_cast<void*>(&req->mhdr)), _hdr_size);
+        _tx_queue->_sg_vec.clear();
+        _tx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(static_cast<void*>(&req->mhdr)), _hdr_size, vring_desc::VRING_DESC_F_READ));
 
         for (m = m_head; m != NULL; m = m->m_next) {
             if (m->m_len != 0) {
                 virtio_net_d("Frag len=%d:", m->m_len);
                 req->mhdr.num_buffers++;
-                req->payload.add(mmu::virt_to_phys(m->m_data), m->m_len);
+                _tx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(m->m_data), m->m_len, vring_desc::VRING_DESC_F_READ));
             }
         }
 
-        if (!_tx_queue->avail_ring_has_room(req->payload.get_sgs())) {
+        if (!_tx_queue->avail_ring_has_room(_tx_queue->_sg_vec.size())) {
             if (_tx_queue->used_ring_not_empty()) {
                 virtio_net_d("%s: gc tx buffers to clear space");
                 tx_gc();
@@ -340,12 +341,12 @@ namespace virtio {
             }
         }
 
-        if (!_tx_queue->add_buf(&req->payload, req->payload.get_sgs(),0,req)) {
+        if (!_tx_queue->add_buf(req)) {
             delete req;
             return false;
         }
 
-        trace_virtio_net_tx_packet(_ifn->if_index, req->payload.len());
+        trace_virtio_net_tx_packet(_ifn->if_index, _tx_queue->_sg_vec.size());
 
         if (flush)
             _tx_queue->kick();
