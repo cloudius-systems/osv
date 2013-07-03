@@ -438,7 +438,6 @@ objects += arch/x64/elf-dl.o
 objects += linux.o
 objects += core/sched.o
 objects += core/mmio.o
-objects += core/sglist.o
 objects += core/kprintf.o
 objects += core/trace.o
 objects += core/poll.o

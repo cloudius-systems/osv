@@ -10,7 +10,6 @@
 
 #include "mempool.hh"
 #include "mmu.hh"
-#include "sglist.hh"
 
 #include <sstream>
 #include <string>
@@ -199,7 +198,6 @@ namespace virtio {
 
     struct virtio_net_req {
         struct virtio_net::virtio_net_hdr_mrg_rxbuf mhdr;
-        sglist payload;
         struct free_deleter {
             void operator()(struct mbuf *m) {m_freem(m);}
         };

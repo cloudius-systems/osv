@@ -33,7 +33,6 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
-#include "sglist.hh"
 
 namespace virtio {
 

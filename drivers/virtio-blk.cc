@@ -8,7 +8,6 @@
 
 #include "mempool.hh"
 #include "mmu.hh"
-#include "sglist.hh"
 
 #include <sstream>
 #include <string>
@@ -155,17 +154,15 @@ bool virtio_blk::read_config()
 }
 
 struct virtio_blk_req {
-    virtio_blk_req(void* req = nullptr, sglist* sg = nullptr, virtio_blk::virtio_blk_res* res = nullptr, struct bio* b=nullptr)
-                   :req_header(req), payload(sg), status(res), bio(b) {};
+    virtio_blk_req(void* req = nullptr, virtio_blk::virtio_blk_res* res = nullptr, struct bio* b=nullptr)
+                   :req_header(req), status(res), bio(b) {};
     ~virtio_blk_req() {
         if (req_header) delete reinterpret_cast<virtio_blk::virtio_blk_outhdr*>(req_header);
-        if (payload) delete payload;
         if (status) delete status;
     }
 
 
     void* req_header;
-    sglist* payload;
     virtio_blk::virtio_blk_res* status;
     struct bio* bio;
 };
@@ -190,20 +187,7 @@ void virtio_blk::response_worker() {
         while((req = static_cast<virtio_blk_req*>(queue->get_buf(&len))) != nullptr) {
             virtio_d("\t got response = %d ", (int)req->status->status);
 
-            virtio_blk_outhdr* header = reinterpret_cast<virtio_blk_outhdr*>(req->req_header);
-            //  This is debug code to verify the read content, to be remove later on
-            if (header->type == VIRTIO_BLK_T_IN) {
-                virtio_d("\t verify that sector %d contains data %d", (int)header->sector, (int)(header->sector/8));
-                auto ii = req->payload->_nodes.begin();
-                ii++;
-
-                virtio_d("\t value = %d len=%d",
-                    *reinterpret_cast<int*>(mmu::phys_to_virt(ii->_paddr)),
-                    ii->_len);
-
-            }
             biodone(req->bio, true);
-
             delete req;
         }
 
@@ -246,8 +230,6 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         return ENOTBLK;
     }
 
-    sglist* sg = new sglist();
-
     virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
     hdr->type = type;
     hdr->ioprio = 0;
@@ -279,13 +261,9 @@ int virtio_blk::make_virtio_request(struct bio* bio)
     virtio_blk_res* res = new virtio_blk_res;
     res->status = 0;
     queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res), vring_desc::VRING_DESC_F_WRITE));
-
-
-    virtio_blk_req* req = new virtio_blk_req(hdr, sg, res, bio);
-
+    virtio_blk_req* req = new virtio_blk_req(hdr, res, bio);
 
     if (!queue->add_buf(req)) {
-        // TODO need to clea the bio
         delete req;
         return EBUSY;
     }

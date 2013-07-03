@@ -6,8 +6,6 @@
 #include <osv/mutex.h>
 #include "debug.hh"
 
-class sglist;
-
 #define virtio_tag "virtio"
 #define virtio_d(...)   tprintf_d(virtio_tag, __VA_ARGS__)
 #define virtio_i(...)   tprintf_i(virtio_tag, __VA_ARGS__)
