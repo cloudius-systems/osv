@@ -86,7 +86,7 @@ namespace virtio {
     {
         trace_virtio_enable_interrupts(this);
         _avail->enable_interrupt();
-        set_used_event(_used_guest_head);
+        set_used_event(_used_guest_head, std::memory_order_relaxed);
     }
 
     // The convention is that out descriptors are at the beginning of the sg list
@@ -151,8 +151,6 @@ namespace virtio {
             _avail->_idx.store(avail_idx_cache + 1, std::memory_order_release);
             _avail_head = idx;
 
-            virtio_d("\t%s: _avail->_idx=%d, added=%d,", __FUNCTION__, _avail->_idx.load(std::memory_order_relaxed), _avail_added_since_kick);
-
             return true;
         });
     }
@@ -168,7 +166,7 @@ namespace virtio {
             // need to trim the free running counter w/ the array size
             int used_ptr = _used_guest_head % _num;
 
-            if (_used_guest_head == _used->_idx.load(std::memory_order_relaxed)) {
+            if (_used_guest_head == _used->_idx.load(std::memory_order_acquire)) {
                 virtio_d("get_used_desc: no avail buffers ptr=%d", _used_guest_head);
                 return nullptr;
             }
@@ -194,7 +192,7 @@ namespace virtio {
             _desc[idx]._next = _avail_head;
             // only let the host know about our used idx in case irq are enabled
             if (_avail->interrupt_on())
-                set_used_event(_used_guest_head);
+                set_used_event(_used_guest_head, std::memory_order_release);
             _avail_head = elem._id;
 
             return cookie;
