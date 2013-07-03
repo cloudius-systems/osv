@@ -10,6 +10,9 @@
 #include "align.hh"
 #include "interrupt.hh"
 
+extern void* elf_start;
+extern size_t elf_size;
+
 namespace {
 
 typedef boost::format fmt;
@@ -165,11 +168,22 @@ const unsigned nlevels = 4;
 
 void* phys_to_virt(phys pa)
 {
+    // The ELF is mapped 1:1
+    void* phys_addr = reinterpret_cast<void*>(pa);
+    if ((phys_addr >= elf_start) && (phys_addr <= elf_start + elf_size)) {
+        return phys_addr;
+    }
+
     return phys_mem + pa;
 }
 
 phys virt_to_phys(void *virt)
 {
+    // The ELF is mapped 1:1
+    if ((virt >= elf_start) && (virt <= elf_start + elf_size)) {
+        return reinterpret_cast<phys>(virt);
+    }
+
     // For now, only allow non-mmaped areas.  Later, we can either
     // bounce such addresses, or lock them in memory and translate
     assert(virt >= phys_mem);

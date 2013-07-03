@@ -48,6 +48,8 @@ namespace {
 }
 
 elf::Elf64_Ehdr* elf_header;
+size_t elf_size;
+void* elf_start;
 elf::tls_data tls_data;
 
 void setup_tls(elf::init_table inittab)

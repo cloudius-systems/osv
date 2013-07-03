@@ -101,6 +101,8 @@ e820ent truncate_above(e820ent ent, u64 a)
 }
 
 extern elf::Elf64_Ehdr* elf_header;
+extern size_t elf_size;
+extern void* elf_start;
 
 void arch_setup_free_memory()
 {
@@ -140,7 +142,9 @@ void arch_setup_free_memory()
     mmu::linear_map(mmu::phys_mem, 0, initial_map, initial_map);
     // map the core, loaded 1:1 by the boot loader
     mmu::phys elf_phys = reinterpret_cast<mmu::phys>(elf_header);
-    mmu::linear_map(elf_header, elf_phys, edata - elf_phys, 0x200000);
+    elf_start = reinterpret_cast<void*>(elf_header);
+    elf_size = edata - elf_phys;
+    mmu::linear_map(elf_start, elf_phys, elf_size, 0x200000);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
