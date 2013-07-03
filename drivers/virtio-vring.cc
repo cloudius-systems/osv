@@ -160,9 +160,9 @@ namespace virtio {
     void*
     vring::get_buf(u32 *len)
     {
-        return with_lock(_lock, [=] {
+        return with_lock(_lock, [=]() -> void* {
             vring_used_elem elem;
-            void* cookie = reinterpret_cast<void*>(0);
+            void* cookie = nullptr;
             int i = 1;
 
             // need to trim the free running counter w/ the array size
@@ -170,7 +170,7 @@ namespace virtio {
 
             if (_used_guest_head == _used->_idx.load(std::memory_order_relaxed)) {
                 virtio_d("get_used_desc: no avail buffers ptr=%d", _used_guest_head);
-                return reinterpret_cast<void*>(0);
+                return nullptr;
             }
 
             virtio_d("get used: guest head=%d use_elem[head].id=%d", used_ptr, _used->_used_elements[used_ptr]._id);
@@ -187,7 +187,7 @@ namespace virtio {
                 }
 
             cookie = _cookie[elem._id];
-            _cookie[elem._id] = reinterpret_cast<void*>(0);
+            _cookie[elem._id] = nullptr;
 
             _used_guest_head++;
             _avail_count += i;
