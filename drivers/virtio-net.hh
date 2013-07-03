@@ -30,6 +30,8 @@
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
+#define _KERNEL
+#include <bsd/sys/sys/mbuf.h>
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
@@ -233,6 +235,17 @@ namespace virtio {
         static hw_driver* probe(hw_device* dev);
 
     private:
+
+        struct virtio_net_req {
+            struct virtio_net::virtio_net_hdr_mrg_rxbuf mhdr;
+            struct free_deleter {
+                void operator()(struct mbuf *m) {m_freem(m);}
+            };
+
+            std::unique_ptr<struct mbuf, free_deleter> um;
+
+            virtio_net_req() {memset(&mhdr,0,sizeof(mhdr));};
+        };
 
         std::string _driver_name;
         virtio_net_config _config;

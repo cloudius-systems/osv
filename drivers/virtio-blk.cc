@@ -153,22 +153,6 @@ bool virtio_blk::read_config()
     return true;
 }
 
-struct virtio_blk_req {
-    virtio_blk_req(void* req = nullptr, virtio_blk::virtio_blk_res* res = nullptr, struct bio* b=nullptr)
-                   :req_header(req), status(res), bio(b) {};
-    ~virtio_blk_req() {
-        if (req_header) delete reinterpret_cast<virtio_blk::virtio_blk_outhdr*>(req_header);
-        if (status) delete status;
-    }
-
-
-    void* req_header;
-    virtio_blk::virtio_blk_res* status;
-    struct bio* bio;
-};
-
-
-
 void virtio_blk::response_worker() {
     vring* queue = get_virt_queue(0);
     virtio_blk_req* req;

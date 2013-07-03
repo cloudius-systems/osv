@@ -196,17 +196,6 @@ namespace virtio {
         return true;
     }
 
-    struct virtio_net_req {
-        struct virtio_net::virtio_net_hdr_mrg_rxbuf mhdr;
-        struct free_deleter {
-            void operator()(struct mbuf *m) {m_freem(m);}
-        };
-
-        std::unique_ptr<struct mbuf, free_deleter> um;
-
-        virtio_net_req() {memset(&mhdr,0,sizeof(mhdr));};
-    };
-
     void virtio_net::receiver() {
 
         while (1) {

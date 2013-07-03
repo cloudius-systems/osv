@@ -159,6 +159,19 @@ namespace virtio {
         static hw_driver* probe(hw_device* dev);
     private:
 
+        struct virtio_blk_req {
+            virtio_blk_req(void* req = nullptr, virtio_blk_res* res = nullptr, struct bio* b=nullptr)
+                           :req_header(req), status(res), bio(b) {};
+            ~virtio_blk_req() {
+                if (req_header) delete reinterpret_cast<virtio_blk_outhdr*>(req_header);
+                if (status) delete status;
+            }
+
+            void* req_header;
+            virtio_blk_res* status;
+            struct bio* bio;
+        };
+
         std::string _driver_name;
         virtio_blk_config _config;
 
