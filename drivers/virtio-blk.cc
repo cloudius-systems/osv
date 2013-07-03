@@ -251,6 +251,15 @@ int virtio_blk::make_virtio_request(struct bio* bio)
 
     sglist* sg = new sglist();
 
+    virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
+    hdr->type = type;
+    hdr->ioprio = 0;
+    // TODO - fix offset source
+    hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
+
+    //push 'output' buffers to the beginning of the sg list
+    sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
+
     // need to break a contiguous buffers that > 4k into several physical page mapping
     // even if the virtual space is contiguous.
     int len = 0;
@@ -268,15 +277,6 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         offset = 0;
         (*buf_count)++;
     }
-
-    virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
-    hdr->type = type;
-    hdr->ioprio = 0;
-    // TODO - fix offset source
-    hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
-
-    //push 'output' buffers to the beginning of the sg list
-    sg->add(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), true);
 
     virtio_blk_res* res = new virtio_blk_res;
     res->status = 0;
