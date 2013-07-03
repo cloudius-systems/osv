@@ -16,6 +16,7 @@ using sched::thread;
 
 TRACEPOINT(trace_virtio_enable_interrupts, "vring=%p", void *);
 TRACEPOINT(trace_virtio_disable_interrupts, "vring=%p", void *);
+TRACEPOINT(trace_virtio_kick, "queue=%d", u16);
 
 namespace virtio {
 
@@ -238,6 +239,7 @@ namespace virtio {
             return false;
 
         if (kicked) {
+            trace_virtio_kick(_q_index);
             _dev->kick(_q_index);
             _avail_added_since_kick = 0;
         }
