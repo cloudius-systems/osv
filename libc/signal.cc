@@ -136,3 +136,14 @@ sighandler_t signal(int signum, sighandler_t handler)
         return old.sa_handler;
     }
 }
+
+// using sigignore() and friends is not recommended as it is obsolete System V
+// APIs. Nevertheless, some programs use it.
+int sigignore(int signum)
+{
+    struct sigaction act;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    act.sa_handler = SIG_IGN;
+    return sigaction(signum, &act, nullptr);
+}
