@@ -29,6 +29,8 @@ SECTIONS
         _percpu_start = .;
         *(.percpu)
         _percpu_end = .;
+        . += 0x100000;
+        _percpu_sec_end = .;
     }
     .percpu_workers : {
         _percpu_workers_start = .;
