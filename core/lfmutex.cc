@@ -106,7 +106,7 @@ bool mutex::try_lock()
     // false), but the last chance is if we can accept a handoff - and if
     // we do, we got the lock.
     auto old_handoff = handoff.load();
-    if(!old_handoff && handoff.compare_exchange_strong(old_handoff, 0U)) {
+    if(old_handoff && handoff.compare_exchange_strong(old_handoff, 0U)) {
         count.fetch_add(1, std::memory_order_relaxed);
         owner.store(current, std::memory_order_relaxed);
         depth = 1;
