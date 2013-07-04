@@ -10,13 +10,17 @@
 #define LOCKFREE_MUTEX
 
 #ifdef LOCKFREE_MUTEX
+#define LOCKFREE_MUTEX_ALIGN void*
 #define LOCKFREE_MUTEX_SIZE 40
 #ifdef __cplusplus
 /** C++ **/
 #include <lockfree/mutex.hh>
 typedef lockfree::mutex mutex;
 typedef lockfree::mutex mutex_t;
-static_assert(sizeof(mutex) == LOCKFREE_MUTEX_SIZE, "LOCKFREE_MUTEX_SIZE should match lockfree::mutex");
+static_assert(sizeof(mutex) == LOCKFREE_MUTEX_SIZE,
+        "LOCKFREE_MUTEX_SIZE should match lockfree::mutex");
+static_assert(alignof(mutex) == alignof(LOCKFREE_MUTEX_ALIGN),
+        "LOCKFREE_MUTEX_ALIGN should match alignment of lockfree::mutex");
 static inline void mutex_lock(mutex_t* m)
 {
     m->lock();
@@ -36,7 +40,10 @@ static inline bool mutex_owned(mutex_t* m)
 #else
 /** C **/
 typedef struct mutex {
-    char byte[LOCKFREE_MUTEX_SIZE];
+    union {
+        char forsize[LOCKFREE_MUTEX_SIZE];
+        LOCKFREE_MUTEX_ALIGN foralignment;
+    };
 } mutex_t;
 void lockfree_mutex_lock(void *m);
 void lockfree_mutex_unlock(void *m);
