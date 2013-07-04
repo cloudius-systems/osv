@@ -13,10 +13,16 @@
 #include <atomic>
 #include "mmu.hh"
 #include <osv/trace.hh>
+#include <lockfree/ring.hh>
+#include <osv/percpu-worker.hh>
+#include <preempt-lock.hh>
+#include <sched.hh>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
+
+bool smp_allocator = false;
 
 namespace memory {
 
@@ -40,6 +46,84 @@ static inline void tracker_forget(void *addr)
         tracker.forget(addr);
     }
 }
+
+//
+// Before smp_allocator=true, threads are not yet available. malloc and free
+// are used immediately after virtual memory is being initialized.
+// sched::cpu::current() uses TLS which is set only later on.
+//
+
+static unsigned mempool_cpuid() {
+    unsigned c = (smp_allocator ? sched::cpu::current()->id: 0);
+    assert(c < 64);
+    return c;
+}
+
+//
+// Since the small pools are managed per-cpu, malloc() always access the correct
+// pool on the same CPU that it was issued from, free() on the other hand, may
+// happen from different CPUs, so for each CPU, we maintain an array of
+// lockless spsc rings, which combined are functioning as huge mpsc ring.
+//
+// A worker item is in charge of freeing the object from the original
+// CPU it was allocated on.
+//
+// As much as the producer is concerned (cpu who did free()) -
+// 1st index -> dest cpu
+// 2nd index -> local cpu
+//
+
+const unsigned free_objects_ring_size = 256;
+typedef ring_spsc<void*, free_objects_ring_size> free_objects_type;
+free_objects_type pcpu_free_list[sched::max_cpus][sched::max_cpus];
+
+struct freelist_full_sync_object {
+    mutex _mtx;
+    condvar _cond;
+    void * _free_obj;
+};
+
+//
+// we use a pcpu sync object to synchronize between the freeing thread and the
+// worker item in the edge case of when the above ring is full.
+//
+// the sync object array performs as a secondary queue with the length of 1
+// item (_free_obj), and freeing threads will wait until it was handled by
+// the worker item. Their first priority is still to push the object to the
+// ring, only if they fail, a single thread may get a hold of,
+// _mtx and set _free_obj, all other threads will wait for the worker to drain
+// the its ring and this secondary 1-item queue.
+//
+freelist_full_sync_object freelist_full_sync[sched::max_cpus];
+
+static void free_worker_fn()
+{
+    unsigned cpu_id = mempool_cpuid();
+
+    // drain the ring, free all objects
+    for (unsigned i=0; i < sched::max_cpus; i++) {
+        void* obj = nullptr;
+        while (pcpu_free_list[cpu_id][i].pop(obj)) {
+            memory::pool::from_object(obj)->free(obj);
+        }
+    }
+
+    // handle secondary 1-item queue.
+    // if we have any waiters, wake them up
+    auto& sync = freelist_full_sync[cpu_id];
+    void* free_obj = nullptr;
+    with_lock(sync._mtx, [&] {
+        free_obj = sync._free_obj;
+        sync._free_obj = nullptr;
+    });
+
+    if (free_obj) {
+        sync._cond.wake_all();
+        memory::pool::from_object(free_obj)->free(free_obj);
+    }
+}
+
+PCPU_WORKERITEM(free_worker, free_worker_fn);
 
 // Memory allocation strategy
 //
@@ -69,7 +153,8 @@ pool::pool(unsigned size)
 
 pool::~pool()
 {
-    assert(_free.empty());
+    for (int i=0; i<64; i++)
+        assert(_free[i].empty());
 }
 
 const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
@@ -81,20 +166,41 @@ pool::page_header* pool::to_header(free_object* object)
                  reinterpret_cast<std::uintptr_t>(object) & ~(page_size - 1));
 }
 
+TRACEPOINT(trace_pool_alloc, "this=%p, obj=%p", void*, void*);
+TRACEPOINT(trace_pool_free, "this=%p, obj=%p", void*, void*);
+TRACEPOINT(trace_pool_free_same_cpu, "this=%p, obj=%p", void*, void*);
+TRACEPOINT(trace_pool_free_different_cpu, "this=%p, obj=%p, obj_cpu=%d", void*, void*, unsigned);
+
 void* pool::alloc()
 {
-    std::lock_guard<mutex> guard(_lock);
-    if (_free.empty()) {
-        add_page();
-    }
-    auto header = _free.begin();
-    auto obj = header->local_free;
-    ++header->nalloc;
-    header->local_free = obj->next;
-    if (!header->local_free) {
-        _free.erase(header);
-    }
-    return obj;
+    void * ret = nullptr;
+    with_lock(preempt_lock, [&] {
+
+        // We enable preemption because add_page() may take a Mutex.
+        // this loop ensures we have at least one free page that we can
+        // allocate from, in from the context of the current cpu
+        unsigned cur_cpu = mempool_cpuid();
+        while (_free[cur_cpu].empty()) {
+            sched::preempt_enable();
+            add_page();
+            sched::preempt_disable();
+            cur_cpu = mempool_cpuid();
+        }
+
+        // We have a free page, get one object and return it to the user
+        auto it = _free[cur_cpu].begin();
+        page_header *header = &(*it);
+        free_object* obj = header->local_free;
+        ++header->nalloc;
+        header->local_free = obj->next;
+        if (!header->local_free) {
+            _free[cur_cpu].erase(it);
+        }
+        ret = obj;
+    });
+
+    trace_pool_alloc(this, ret);
+    return ret;
 }
 
 unsigned pool::get_size()
@@ -107,37 +213,109 @@ static inline void untracked_free_page(void *v);
 
 void pool::add_page()
 {
+    // FIXME: this function allocated a page and set it up but on rare cases
+    // we may add this page to the free list of a different cpu, due to the
+    // enablment of preemption
     void* page = untracked_alloc_page();
-    auto header = new (page) page_header;
-    header->owner = this;
-    header->nalloc = 0;
-    header->local_free = nullptr;
-    for (auto p = page + page_size - _size; p >= header + 1; p -= _size) {
-        auto obj = static_cast<free_object*>(p);
+    with_lock(preempt_lock, [&] {
+        page_header* header = new (page) page_header;
+        header->cpu_id = mempool_cpuid();
+        header->owner = this;
+        header->nalloc = 0;
+        header->local_free = nullptr;
+        for (auto p = page + page_size - _size; p >= header + 1; p -= _size) {
+            auto obj = static_cast<free_object*>(p);
+            obj->next = header->local_free;
+            header->local_free = obj;
+        }
+        _free[header->cpu_id].push_back(*header);
+    });
+}
+
+void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
+{
+    void* object = static_cast<void*>(obj);
+    trace_pool_free_same_cpu(this, object);
+
+    page_header* header = to_header(obj);
+    if (!--header->nalloc) {
+        if (header->local_free) {
+            _free[cpu_id].erase(_free[cpu_id].iterator_to(*header));
+        }
+        // FIXME: add hysteresis
+        sched::preempt_enable();
+        untracked_free_page(header);
+        sched::preempt_disable();
+    } else {
+        if (!header->local_free) {
+            _free[cpu_id].push_front(*header);
+        }
         obj->next = header->local_free;
         header->local_free = obj;
     }
-    _free.push_back(*header);
 }
+
+void pool::free_different_cpu(free_object* obj, unsigned obj_cpu)
+{
+    void* object = static_cast<void*>(obj);
+    trace_pool_free_different_cpu(this, object, obj_cpu);
+    free_objects_type *ring;
+
+    ring = &memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
+    if (!ring->push(object)) {
+        sched::preempt_enable();
+
+        // The ring is full, take a mutex and use the sync object, hand
+        // the object to the secondary 1-item queue
+        auto& sync = freelist_full_sync[obj_cpu];
+        with_lock(sync._mtx, [&] {
+            sync._cond.wait_until(sync._mtx, [&] {
+                return (sync._free_obj == nullptr);
+            });
+
+            with_lock(preempt_lock, [&] {
+                ring = &memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
+                if (!ring->push(object)) {
+                    // If the ring is full, use the secondary queue.
+                    // sync._free_obj is guaranteed null as we're
+                    // the only thread which broke out of the cond.wait
+                    // loop under the mutex
+                    sync._free_obj = object;
+                }
+
+                // Wake the worker item in case at least half of the queue is full
+                if (ring->size() > free_objects_ring_size/2) {
+                    memory::free_worker.signal(sched::cpus[obj_cpu]);
+                }
+            });
+        });
+
+        sched::preempt_disable();
+    }
+}
+
 
 void pool::free(void* object)
 {
-    std::lock_guard<mutex> guard(_lock);
-    auto obj = static_cast<free_object*>(object);
-    auto header = to_header(obj);
-    if (!--header->nalloc) {
-        if (header->local_free) {
-            _free.erase(_free.iterator_to(*header));
+    trace_pool_free(this, object);
+
+    with_lock(preempt_lock, [&] {
+
+        free_object* obj = static_cast<free_object*>(object);
+        page_header* header = to_header(obj);
+        unsigned obj_cpu = header->cpu_id;
+        unsigned cur_cpu = mempool_cpuid();
+
+        if (obj_cpu == cur_cpu) {
+            // free from the same CPU this object has been allocated on.
+            free_same_cpu(obj, obj_cpu);
+        } else {
+            // free from a different CPU. we try to hand the buffer
+            // to the proper worker item that is pinned to the CPU that this buffer
+            // was allocated from, so it'll free it.
+            free_different_cpu(obj, obj_cpu);
         }
-        // FIXME: add hysteresis
-        untracked_free_page(header);
-    } else {
-        if (!header->local_free) {
-            _free.push_front(*header);
-        }
-        obj->next = header->local_free;
-        header->local_free = obj;
-    }
+    });
 }
 
 pool* pool::from_object(void* object)

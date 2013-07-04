@@ -22,6 +22,7 @@ extern char smpboot[], smpboot_end[];
 
 using namespace processor;
 
+extern bool smp_allocator;
 volatile unsigned smp_processors = 1;
 
 using boost::intrusive::get_parent_from_member;
@@ -117,6 +118,7 @@ void smp_launch()
     while (smp_processors != sched::cpus.size()) {
         barrier();
     }
+    smp_allocator = true;
 }
 
 void smp_main()

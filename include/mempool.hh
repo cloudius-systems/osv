@@ -5,6 +5,7 @@
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
 #include <osv/mutex.h>
+#include <arch.hh>
 
 namespace memory {
 
@@ -36,12 +37,16 @@ private:
 private:
     void add_page();
     static page_header* to_header(free_object* object);
+
+    // should get called with the preemption lock taken
+    void free_same_cpu(free_object* obj, unsigned cpu_id);
+    void free_different_cpu(free_object* obj, unsigned obj_cpu);
 private:
-    mutex _lock;
     unsigned _size;
 
     struct page_header {
         pool* owner;
+        unsigned cpu_id;
         unsigned nalloc;
         bi::list_member_hook<> free_link;
         free_object* local_free;  // free objects in this page
@@ -52,8 +57,9 @@ private:
                                      bi::list_member_hook<>,
                                      &page_header::free_link>,
                      bi::constant_time_size<false>
-                    > free_list_type;
-    free_list_type _free;
+                    > CACHELINE_ALIGNED free_list_type;
+    // maintain a list of free pages percpu
+    free_list_type _free[64];
 public:
     static const size_t max_object_size;
     static const size_t min_object_size;
