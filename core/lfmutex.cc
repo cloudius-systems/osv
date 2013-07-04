@@ -174,7 +174,7 @@ void mutex::unlock()
 
 bool mutex::owned() const
 {
-    return owner == sched::thread::current();
+    return owner.load(std::memory_order_relaxed) == sched::thread::current();
 }
 
 }
