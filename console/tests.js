@@ -22,8 +22,16 @@ register_command('test', {
         }
         
         print(">>> Running test " + testname + "...");
+        var beg_time = System.nanoTime();
         var rc = this._test_runner.run(testname);
+        var end_time = System.nanoTime();
+        
+        var dT = end_time - beg_time;
+        var sec = dT / 1000000000.0;
+        
+        System.out.format(">>> Test Duration: %.6fs, %.0fns\n", sec, dT);
         print(">>> Test completed " + (rc ? "successfully!" : "unsuccessfully..."));
+        
     },
     
     tab: function(inp) {
