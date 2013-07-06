@@ -33,4 +33,8 @@ inline constexpr long long operator"" _s(unsigned long long t)
     return t * 1000_ms;
 }
 
+static inline s64 nanotime() {
+    return clock::get()->time();
+}
+
 #endif /* CLOCK_HH_ */
