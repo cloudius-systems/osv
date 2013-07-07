@@ -9,6 +9,8 @@
 
 namespace arch {
 
+#define CACHELINE_ALIGNED __attribute__((aligned(64)))
+
 inline void irq_disable()
 {
     processor::cli();
