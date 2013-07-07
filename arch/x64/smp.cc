@@ -11,6 +11,7 @@ extern "C" {
 #include "debug.hh"
 #include "sched.hh"
 #include "barrier.hh"
+#include "osv/percpu.hh"
 
 extern "C" { void smp_main(void); }
 

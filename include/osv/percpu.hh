@@ -5,24 +5,23 @@
 
 extern char _percpu_start[];
 
-extern std::vector<void*> percpu_base;  // FIXME: move to sched::cpu
+extern __thread void* percpu_base;
 
 template <typename T>
 class percpu {
 public:
     constexpr percpu() {}
     T* operator->() {
-        return for_cpu(sched::cpu::current());
+        return addr();
     }
     T& operator*() {
-        return *addr(sched::cpu::current());
+        return *addr();
     }
     T* for_cpu(sched::cpu* cpu) {
-        return addr(cpu);
+        return addr(cpu->percpu_base);
     }
 private:
-    T *addr(sched::cpu* cpu) {
-        void* base = percpu_base[cpu->id];
+    T *addr(void* base = percpu_base) {
         size_t offset = reinterpret_cast<char*>(&_var) - _percpu_start;
         return reinterpret_cast<T*>(base + offset);
     }

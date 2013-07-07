@@ -12,6 +12,10 @@
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
 
+__thread void* percpu_base;
+
+extern char _percpu_start[], _percpu_end[], _percpu_sec_end[];
+
 namespace sched {
 
 tracepoint<1001, thread*, s64, s64> trace_switch("sched_switch", "to %p vold=%d vnew=%d");
@@ -65,7 +69,11 @@ cpu::cpu(unsigned _id)
     , terminating_thread(nullptr)
     , running_since(clock::get()->time())
 {
-    percpu_init(id);
+    auto max_size = _percpu_sec_end - _percpu_end;
+    auto pcpu_size = _percpu_end - _percpu_start;
+    assert(pcpu_size * (id + 1) <= max_size);
+    percpu_base = _percpu_end + id * pcpu_size;
+    memcpy(percpu_base, _percpu_start, pcpu_size);
 }
 
 void cpu::init_idle_thread()
@@ -264,6 +272,7 @@ void cpu::load_balance()
             mig._status.store(thread::status::waking);
             mig.suspend_timers();
             mig._cpu = min;
+            mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
             min->incoming_wakeups[id].push_front(mig);
             min->incoming_wakeups_mask.set(id);
             // FIXME: avoid if the cpu is alive and if the priority does not
@@ -385,6 +394,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         set_cleanup([=] { delete this; });
     }
     if (main) {
+        _cpu = attr.pinned_cpu;
         _status.store(status::running);
     }
 }
@@ -406,6 +416,7 @@ thread::~thread()
 void thread::start()
 {
     _cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
+    remote_thread_local_var(percpu_base) = _cpu->percpu_base;
     assert(_status == status::unstarted);
     _status.store(status::waiting);
     wake();
@@ -799,8 +810,8 @@ void init(elf::tls_data tls_data, std::function<void ()> cont)
     smp_init();
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
+    attr.pinned_cpu = smp_initial_find_current_cpu();
     thread t{cont, attr, true};
-    t._cpu = smp_initial_find_current_cpu();
     t.switch_to_first();
 }
 

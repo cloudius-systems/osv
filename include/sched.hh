@@ -320,6 +320,7 @@ struct cpu : private timer_base::client {
     incoming_wakeup_queue* incoming_wakeups;
     thread* terminating_thread;
     s64 running_since;
+    void* percpu_base;
     static cpu* current();
     void init_on_cpu();
     void schedule(bool yield = false);
