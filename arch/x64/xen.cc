@@ -4,6 +4,8 @@
 #include "processor.hh"
 #include "cpuid.hh"
 
+shared_info_t *HYPERVISOR_shared_info;
+
 namespace xen {
 
 // we only have asm constraints for the first three hypercall args,
@@ -108,5 +110,6 @@ void xen_init(processor::features_type &features, unsigned base)
             assert(0);
 
         features.xen_pci = xen_pci_enabled();
+        HYPERVISOR_shared_info = reinterpret_cast<shared_info_t *>(&xen_shared_info);
 }
 }
