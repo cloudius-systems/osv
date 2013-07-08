@@ -7,6 +7,7 @@
 
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <sys/poll.h>
 
 struct af_local {
     af_local(pipe_buffer* s, pipe_buffer* r) : send(s), receive(r) {}

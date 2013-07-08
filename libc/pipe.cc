@@ -7,6 +7,7 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/poll.h>
 
 struct pipe_writer {
     pipe_buffer_ref buf;

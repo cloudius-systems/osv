@@ -36,7 +36,6 @@
 #include <fcntl.h>
 
 #include <osv/mutex.h>
-#include <osv/poll.h>
 #include <osv/uio.h>
 
 #include <bsd/sys/sys/queue.h>

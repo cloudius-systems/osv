@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <osv/file.h>
+#include <osv/poll.h>
 #include <fs/vfs/vfs.h>
 
 static int vfs_fo_init(struct file *fp)

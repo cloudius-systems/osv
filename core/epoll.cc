@@ -6,6 +6,7 @@
 // functionality of epoll which Java needs - but not its performance.
 
 #include <sys/epoll.h>
+#include <sys/poll.h>
 #include <memory>
 #include <errno.h>
 
