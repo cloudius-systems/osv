@@ -13,8 +13,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_global.h"
-#include "opt_pmap.h"
+#include <bsd/porting/netport.h>
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -497,7 +496,7 @@ unmap_pte_fn(pte_t *pte, struct page *pmd_page,
 }
 #endif
 
-#ifndef XENHVM
+#if notyet 
 
 static int
 gnttab_map(unsigned int start_idx, unsigned int end_idx)
@@ -564,10 +563,6 @@ gnttab_suspend(void)
 
 #else /* XENHVM */
 
-#include <dev/xen/xenpci/xenpcivar.h>
-
-static vm_paddr_t resume_frames;
-
 static int
 gnttab_map(unsigned int start_idx, unsigned int end_idx)
 {
@@ -582,24 +577,10 @@ gnttab_map(unsigned int start_idx, unsigned int end_idx)
 		xatp.domid = DOMID_SELF;
 		xatp.idx = i;
 		xatp.space = XENMAPSPACE_grant_table;
-		xatp.gpfn = (resume_frames >> PAGE_SHIFT) + i;
+		xatp.gpfn = (virt_to_phys(shared) >> PAGE_SHIFT) + i;
 		if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xatp))
 			panic("HYPERVISOR_memory_op failed to map gnttab");
 	} while (i-- > start_idx);
-
-	if (shared == NULL) {
-		vm_offset_t area;
-
-		area = kmem_alloc_nofault(kernel_map,
-		    PAGE_SIZE * max_nr_grant_frames());
-		KASSERT(area, ("can't allocate VM space for grant table"));
-		shared = (grant_entry_t *)area;
-	}
-
-	for (i = start_idx; i <= end_idx; i++) {
-		pmap_kenter((vm_offset_t) shared + i * PAGE_SIZE,
-		    resume_frames + i * PAGE_SIZE);
-	}
 
 	return (0);
 }
@@ -607,7 +588,6 @@ gnttab_map(unsigned int start_idx, unsigned int end_idx)
 int
 gnttab_resume(void)
 {
-	int error;
 	unsigned int max_nr_gframes, nr_gframes;
 
 	nr_gframes = nr_grant_frames;
@@ -615,12 +595,11 @@ gnttab_resume(void)
 	if (max_nr_gframes < nr_gframes)
 		return (ENOSYS);
 
-	if (!resume_frames) {
-		error = xenpci_alloc_space(PAGE_SIZE * max_nr_gframes,
-		    &resume_frames);
-		if (error) {
-			printf("error mapping gnttab share frames\n");
-			return (error);
+	if (shared == NULL) {
+		shared = malloc(PAGE_SIZE * max_nr_grant_frames(), 0, 0);
+		if (!shared) {
+			printf("can't allocate VM space for grant table");
+			return (ENOMEM);
 		}
 	}
 

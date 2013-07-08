@@ -252,6 +252,9 @@ bsd += bsd/sys/xdr/xdr.o
 bsd += bsd/sys/xdr/xdr_array.o
 bsd += bsd/sys/xdr/xdr_mem.o
 
+bsd/%.o: COMMON += -DXEN -DXENHVM
+bsd += bsd/sys/xen/gnttab.o
+
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_atomic.o
