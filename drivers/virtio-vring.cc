@@ -42,7 +42,8 @@ namespace virtio {
         _cookie = new void*[num];
 
         _avail_head = 0;
-        _used_guest_head = 0;
+        _used_ring_guest_head = 0;
+        _used_ring_host_head = 0;
         _avail_added_since_kick = 0;
         _avail_count = num;
 
@@ -88,12 +89,14 @@ namespace virtio {
     {
         trace_virtio_enable_interrupts(this);
         _avail->enable_interrupt();
-        set_used_event(_used_guest_head, std::memory_order_relaxed);
+        set_used_event(_used_ring_host_head, std::memory_order_relaxed);
     }
 
     bool
     vring::add_buf(void* cookie) {
-        return with_lock(_lock, [=] {
+
+            get_buf_gc();
+
             int desc_needed = _sg_vec.size();
             bool indirect = false;
             if (use_indirect(desc_needed*_num/2)) {
@@ -105,6 +108,7 @@ namespace virtio {
                 //make sure the interrupts get there
                 //it probably should force an exit to the host
                 kick();
+
                 return false;
             }
 
@@ -150,78 +154,100 @@ namespace virtio {
             _avail_head = idx;
 
             return true;
-        });
     }
 
-    void*
-    vring::get_buf(u32 *len)
+    void
+    vring::get_buf_gc()
     {
-        return with_lock(_lock, [=]() -> void* {
+            vring_used_elem elem;
+
+            while (_used_ring_guest_head != _used_ring_host_head) {
+
+                int i = 1;
+
+                // need to trim the free running counter w/ the array size
+                int used_ptr = _used_ring_guest_head % _num;
+
+                elem = _used->_used_elements[used_ptr];
+                int idx = elem._id;
+
+                if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
+                    free(mmu::phys_to_virt(_desc[idx]._paddr));
+                } else
+                    while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
+                        idx = _desc[idx]._next;
+                        i++;
+                    }
+
+                _used_ring_guest_head++;
+                _avail_count += i;
+                _desc[idx]._next = _avail_head; //instead, how about the end of the list?
+                _avail_head = elem._id;  // what's the relation to the add_buf? can I just postpone this?
+            }
+    }
+
+
+    void*
+    vring::get_buf_elem(u32 *len)
+    {
             vring_used_elem elem;
             void* cookie = nullptr;
-            int i = 1;
 
             // need to trim the free running counter w/ the array size
-            int used_ptr = _used_guest_head % _num;
+            int used_ptr = _used_ring_host_head % _num;
 
-            if (_used_guest_head == _used->_idx.load(std::memory_order_acquire)) {
-                virtio_d("get_used_desc: no avail buffers ptr=%d", _used_guest_head);
+            if (_used_ring_host_head == _used->_idx.load(std::memory_order_acquire)) {
                 return nullptr;
             }
 
-            virtio_d("get used: guest head=%d use_elem[head].id=%d", used_ptr, _used->_used_elements[used_ptr]._id);
             elem = _used->_used_elements[used_ptr];
-            int idx = elem._id;
             *len = elem._len;
 
-            if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
-                free(mmu::phys_to_virt(_desc[idx]._paddr));
-            } else
-                while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
-                    idx = _desc[idx]._next;
-                    i++;
-                }
-
             cookie = _cookie[elem._id];
-            _cookie[elem._id] = nullptr;
-
-            _used_guest_head++;
-            _avail_count += i;
-            _desc[idx]._next = _avail_head;
-            // only let the host know about our used idx in case irq are enabled
-            if (_avail->interrupt_on())
-                set_used_event(_used_guest_head, std::memory_order_release);
-            _avail_head = elem._id;
+            _cookie[elem._id] = nullptr; //maybe use this array for the full size hdrs?
 
             return cookie;
-        });
     }
+
+    void
+    vring::get_buf_finalize()
+    {
+            _used_ring_host_head++;
+
+            // only let the host know about our used idx in case irq are enabled
+            if (_avail->interrupt_on())
+                set_used_event(_used_ring_host_head, std::memory_order_release);
+    }
+
 
     bool vring::avail_ring_not_empty()
     {
-        return (_avail_count > 0);
+        u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
+        return (effective_avail_count > 0);
     }
 
     bool vring::refill_ring_cond()
-        {
-            return (_avail_count >= _num/2);
-        }
+    {
+        u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
+        return (effective_avail_count >= _num/2);
+    }
 
     bool vring::avail_ring_has_room(int descriptors)
     {
+        u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
         if (use_indirect(descriptors))
             descriptors = 1;
-        return (_avail_count >= descriptors);
+        return (effective_avail_count >= descriptors);
     }
 
     bool vring::used_ring_not_empty() const
     {
-        return (_used_guest_head != _used->_idx.load(std::memory_order_relaxed));
+        return (_used_ring_host_head != _used->_idx.load(std::memory_order_relaxed));
     }
 
     bool vring::used_ring_is_half_empty() const
         {
-            return (_used_guest_head - _used->_idx.load(std::memory_order_relaxed) > (u16)_num/2);
+            return (_used_ring_host_head - _used->_idx.load(std::memory_order_relaxed) > (u16)_num/2);
         }
 
     bool

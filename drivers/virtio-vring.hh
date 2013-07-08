@@ -117,7 +117,18 @@ class virtio_driver;
 
         // Ring operations
         bool add_buf(void* cookie);
-        void* get_buf(u32 *len);
+        // Get the top item from the used ring
+        void* get_buf_elem(u32 *len);
+        // Let the host know we consumed the used entry
+        // We separate that from get_buf_elem so no one
+        // will re-cycle the request header location until
+        // we're finished with it in the upper layer
+        void get_buf_finalize();
+        // GC the used items that were already read to be emptied
+        // within the ring. Should be called by add_buf
+        // It was separated from the get_buf flow to allow parallelism of the two
+        void get_buf_gc();
+
         bool used_ring_not_empty() const;
         bool used_ring_is_half_empty() const;
         bool avail_ring_not_empty();
@@ -151,6 +162,8 @@ class virtio_driver;
         // holds a temporary sg_nodes that travel between the upper layer virtio to add_buf
         std::vector<sg_node> _sg_vec;
 
+        u16 avail_head() const {return _avail_head;};
+
     private:
 
         // Up pointer
@@ -165,7 +178,11 @@ class virtio_driver;
         // Position of the next available descriptor
         u16 _avail_head;
         // Position of the used descriptor we've last seen
-        u16 _used_guest_head;
+        // from the host used ring
+        u16 _used_ring_host_head;
+        // Position of the used descriptor we've last seen
+        // used internally for get-add bufs sync
+        u16 _used_ring_guest_head;
         // The amount of avail descriptors we've added since last kick
         u16 _avail_added_since_kick;
         u16 _avail_count;

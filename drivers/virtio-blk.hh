@@ -30,8 +30,7 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
-
-struct bio;
+#include <osv/bio.h>
 
 namespace virtio {
 
@@ -160,15 +159,13 @@ namespace virtio {
     private:
 
         struct virtio_blk_req {
-            virtio_blk_req(void* req = nullptr, virtio_blk_res* res = nullptr, struct bio* b=nullptr)
-                           :req_header(req), status(res), bio(b) {};
+            virtio_blk_req(struct bio* b=nullptr) :bio(b) {};
             ~virtio_blk_req() {
-                if (req_header) delete reinterpret_cast<virtio_blk_outhdr*>(req_header);
-                if (status) delete status;
-            }
+                if (bio) biodone(bio, false);
+            };
 
-            void* req_header;
-            virtio_blk_res* status;
+            virtio_blk_outhdr hdr;
+            virtio_blk_res res;
             struct bio* bio;
         };
 
@@ -179,7 +176,15 @@ namespace virtio {
         static int _instance;
         int _id;
         bool _ro;
+        // ring-size array of requests that saves per item allocation
+        virtio_blk_req* _requests = nullptr;
+        // index into the above array
+        u16 _req_idx = 0;
+        // This mutex protects parallel make_request invocations
+        mutex _lock;
+
     };
+
 
 }
 

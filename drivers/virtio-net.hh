@@ -259,6 +259,13 @@ namespace virtio {
         static int _instance;
         int _id;
         struct ifnet* _ifn;
+
+        // ring-size array of requests that saves per item allocation
+        virtio_net_req* _requests = nullptr;
+        // index into the above array
+        u16 _req_idx = 0;
+        // tx gc lock that can be called by the gc thread or the tx xmitter
+        mutex _lock;
     };
 }
 

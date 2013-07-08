@@ -91,8 +91,8 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     ss << "virtio-blk";
 
     _driver_name = ss.str();
-    virtio_i("VIRTIO BLK INSTANCE");
     _id = _instance++;
+    virtio_i("VIRTIO BLK INSTANCE %d", _id);
 
     read_config();
 
@@ -100,6 +100,8 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     sched::thread* t = new sched::thread([this] { this->response_worker(); });
     t->start();
     _msi.easy_register({ { 0, nullptr, t } });
+
+    _requests = new virtio_blk::virtio_blk_req[get_virt_queue(0)->size()];
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
@@ -118,6 +120,8 @@ virtio_blk::~virtio_blk()
 {
     //TODO: In theory maintain the list of free instances and gc it
     // including the thread objects and their stack
+
+    if (_requests) delete [] _requests;
 }
 
 bool virtio_blk::read_config()
@@ -164,19 +168,13 @@ void virtio_blk::response_worker() {
             return queue->used_ring_not_empty();
         });
 
-        virtio_d("\t ----> IRQ: virtio_d - blk thread awaken");
-
         u32 len;
-
-        while((req = static_cast<virtio_blk_req*>(queue->get_buf(&len))) != nullptr) {
-            virtio_d("\t got response = %d ", (int)req->status->status);
-
-            biodone(req->bio, true);
-            delete req;
+        while((req = static_cast<virtio_blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
+            if (req->bio) biodone(req->bio, true);
+            req->bio = nullptr;
+            queue->get_buf_finalize();
         }
-
     }
-
 }
 
 int64_t virtio_blk::size() {
@@ -188,73 +186,83 @@ static const int sector_size = 512;
 
 int virtio_blk::make_virtio_request(struct bio* bio)
 {
-    if (!bio) return EIO;
+    // The lock is here for parallel requests protection
+    return with_lock(_lock, [&] {
 
-    if (bio->bio_bcount/page_size + 1 > _config.seg_max) {
-        virtio_w("%s:request of size %d needs more segment than the max %d",
-                __FUNCTION__, bio->bio_bcount, (u32)_config.seg_max);
-        return EIO;
-    }
+        if (!bio) return EIO;
 
-    virtio_blk_request_type type;
-
-    switch (bio->bio_cmd) {
-    case BIO_READ:
-        type = VIRTIO_BLK_T_IN;
-        break;
-    case BIO_WRITE:
-        if (is_readonly()) {
-            virtio_e("Error: block device is read only");
-            biodone(bio, false);
-            return EROFS;
+        if (bio->bio_bcount/page_size + 1 > _config.seg_max) {
+            virtio_w("%s:request of size %d needs more segment than the max %d",
+                    __FUNCTION__, bio->bio_bcount, (u32)_config.seg_max);
+            return EIO;
         }
-        type = VIRTIO_BLK_T_OUT;
-        break;
-    default:
-        return ENOTBLK;
-    }
 
-    virtio_blk_outhdr* hdr = new virtio_blk_outhdr;
-    hdr->type = type;
-    hdr->ioprio = 0;
-    // TODO - fix offset source
-    hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
+        vring* queue = get_virt_queue(0);
+        if (!queue->avail_ring_not_empty()) {
+            virtio_w("Warn: No space on ring");
+            biodone(bio, false);
+            return ENOMEM;
+        }
 
-    vring* queue = get_virt_queue(0);
-    //push 'output' buffers to the beginning of the sg list
-    queue->_sg_vec.clear();
-    queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ));
+        virtio_blk_request_type type;
 
-    // need to break a contiguous buffers that > 4k into several physical page mapping
-    // even if the virtual space is contiguous.
-    int len = 0;
-    int offset = bio->bio_offset;
-    //todo fix hack that works around the zero offset issue
-    offset = 0xfff & reinterpret_cast<long>(bio->bio_data);
-    void *base = bio->bio_data;
-    while (len != bio->bio_bcount) {
-        int size = std::min((int)bio->bio_bcount - len, page_size);
-        if (offset + size > page_size)
-            size = page_size - offset;
-        len += size;
-        queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(base), size, (type == VIRTIO_BLK_T_OUT)? vring_desc::VRING_DESC_F_READ:vring_desc::VRING_DESC_F_WRITE));
-        base += size;
-        offset = 0;
-    }
+        switch (bio->bio_cmd) {
+        case BIO_READ:
+            type = VIRTIO_BLK_T_IN;
+            break;
+        case BIO_WRITE:
+            if (is_readonly()) {
+                virtio_e("Error: block device is read only");
+                biodone(bio, false);
+                return EROFS;
+            }
+            type = VIRTIO_BLK_T_OUT;
+            break;
+        default:
+            return ENOTBLK;
+        }
 
-    virtio_blk_res* res = new virtio_blk_res;
-    res->status = 0;
-    queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(res), sizeof (struct virtio_blk_res), vring_desc::VRING_DESC_F_WRITE));
-    virtio_blk_req* req = new virtio_blk_req(hdr, res, bio);
+        virtio_blk_req* req = &_requests[_req_idx++%queue->size()];
+        req->bio = bio;
+        virtio_blk_outhdr* hdr = &req->hdr;
+        hdr->type = type;
+        hdr->ioprio = 0;
+        // TODO - fix offset source
+        hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
 
-    if (!queue->add_buf(req)) {
-        delete req;
-        return EBUSY;
-    }
+        //push 'output' buffers to the beginning of the sg list
+        queue->_sg_vec.clear();
+        queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ));
 
-    queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+        // need to break a contiguous buffers that > 4k into several physical page mapping
+        // even if the virtual space is contiguous.
+        int len = 0;
+        int offset = bio->bio_offset;
+        //todo fix hack that works around the zero offset issue
+        offset = 0xfff & reinterpret_cast<long>(bio->bio_data);
+        void *base = bio->bio_data;
+        while (len != bio->bio_bcount) {
+            int size = std::min((int)bio->bio_bcount - len, page_size);
+            if (offset + size > page_size)
+                size = page_size - offset;
+            len += size;
+            queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(base), size, (type == VIRTIO_BLK_T_OUT)? vring_desc::VRING_DESC_F_READ:vring_desc::VRING_DESC_F_WRITE));
+            base += size;
+            offset = 0;
+        }
 
-    return 0;
+        req->res.status = 0;
+        queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(&req->res), sizeof (struct virtio_blk_res), vring_desc::VRING_DESC_F_WRITE));
+
+        if (!queue->add_buf(req)) {
+            biodone(bio, false);
+            return EBUSY;
+        }
+
+        queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+
+        return 0;
+    });
 }
 
 u32 virtio_blk::get_driver_features(void)

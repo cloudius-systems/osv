@@ -31,9 +31,12 @@
 
 TRACEPOINT(trace_virtio_net_rx_packet, "if=%d, len=%d", int, int);
 TRACEPOINT(trace_virtio_net_rx_wake, "");
+TRACEPOINT(trace_virtio_net_fill_rx_ring, "if=%d", int);
+TRACEPOINT(trace_virtio_net_fill_rx_ring_added, "if=%d, added=%d", int, int);
 TRACEPOINT(trace_virtio_net_tx_packet, "if=%d, len=%d", int, int);
 TRACEPOINT(trace_virtio_net_tx_wake, "");
-
+TRACEPOINT(trace_virtio_net_tx_failed_add_buf, "if=%d", int);
+TRACEPOINT(trace_virtio_net_tx_no_space_calling_gc, "if=%d", int);
 using namespace memory;
 
 // TODO list
@@ -145,6 +148,8 @@ namespace virtio {
            return;
         }
 
+        _requests = new virtio_net_req[_rx_queue->size()];
+
         if_initname(_ifn, "eth", _id);
         _ifn->if_mtu = ETHERMTU;
         _ifn->if_softc = static_cast<void*>(this);
@@ -174,7 +179,7 @@ namespace virtio {
 
         ether_ifdetach(_ifn);
         if_free(_ifn);
-
+        if (_requests) delete [] _requests;
     }
 
     bool virtio_net::read_config()
@@ -211,7 +216,10 @@ namespace virtio {
             //use local header that we copy out of the mbuf since we're truncating it
             struct virtio_net_hdr_mrg_rxbuf mhdr;
 
-            while ((m = static_cast<struct mbuf*>(_rx_queue->get_buf(&len))) != nullptr) {
+            while ((m = static_cast<struct mbuf*>(_rx_queue->get_buf_elem(&len))) != nullptr) {
+
+                // TODO: should get out of the loop
+                _rx_queue->get_buf_finalize();
 
                 if (len < _hdr_size + ETHER_HDR_LEN) {
                     _ifn->if_ierrors++;
@@ -238,10 +246,12 @@ namespace virtio {
                 m_tail = m_head = m;
 
                 while (--nbufs > 0) {
-                    if ((m = static_cast<struct mbuf*>(_rx_queue->get_buf(&len))) == nullptr) {
+                    if ((m = static_cast<struct mbuf*>(_rx_queue->get_buf_elem(&len))) == nullptr) {
                         _ifn->if_ierrors++;
                         break;
                     }
+
+                    _rx_queue->get_buf_finalize();
 
                     if (m->m_len < (int)len)
                         len = m->m_len;
@@ -277,7 +287,8 @@ namespace virtio {
 
     void virtio_net::fill_rx_ring()
     {
-        bool worked = false;
+        trace_virtio_net_fill_rx_ring(_ifn->if_index);
+        int added = 0;
 
         while (_rx_queue->avail_ring_not_empty()) {
             struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MCLBYTES);
@@ -293,17 +304,19 @@ namespace virtio {
                 m_freem(m);
                 break;
             }
-            worked = true;
+            added++;
         }
 
-        if (worked) _rx_queue->kick();
+        trace_virtio_net_fill_rx_ring_added(_ifn->if_index, added);
+
+        if (added) _rx_queue->kick();
     }
 
 
     bool virtio_net::tx(struct mbuf *m_head, bool flush)
     {
         struct mbuf *m;
-        virtio_net_req *req = new virtio_net_req;
+        virtio_net_req *req = &_requests[_req_idx++%_tx_queue->size()];
 
         req->um.reset(m_head);
         _tx_queue->_sg_vec.clear();
@@ -318,18 +331,24 @@ namespace virtio {
         }
 
         if (!_tx_queue->avail_ring_has_room(_tx_queue->_sg_vec.size())) {
+            // can't call it, this is a get buf thing
             if (_tx_queue->used_ring_not_empty()) {
-                virtio_net_d("%s: gc tx buffers to clear space");
+                trace_virtio_net_tx_no_space_calling_gc(_ifn->if_index);
                 tx_gc();
+                _tx_queue->get_buf_gc();
             } else {
                 virtio_net_d("%s: no room", __FUNCTION__);
-                delete req;
+                req->um.reset();
+                _req_idx--;
                 return false;
             }
         }
 
         if (!_tx_queue->add_buf(req)) {
-            delete req;
+            trace_virtio_net_tx_failed_add_buf(_ifn->if_index);
+            // TODO clear this ugliness
+            req->um.reset();
+            _req_idx--;
             return false;
         }
 
@@ -353,12 +372,15 @@ namespace virtio {
 
     void virtio_net::tx_gc()
     {
-        u32 len;
-        virtio_net_req * req;
+        with_lock(_lock, [=] {
+            u32 len;
+            virtio_net_req * req;
 
-        while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf(&len))) != nullptr) {
-            delete req;
-        }
+            while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf_elem(&len))) != nullptr) {
+                req->um.reset();
+                _tx_queue->get_buf_finalize();
+            }
+        });
     }
 
     u32 virtio_net::get_driver_features(void)
