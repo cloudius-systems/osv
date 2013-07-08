@@ -74,6 +74,7 @@ cpu::cpu(unsigned _id)
     assert(pcpu_size * (id + 1) <= max_size);
     percpu_base = _percpu_end + id * pcpu_size;
     memcpy(percpu_base, _percpu_start, pcpu_size);
+    percpu_base -= reinterpret_cast<size_t>(_percpu_start);
 }
 
 void cpu::init_idle_thread()

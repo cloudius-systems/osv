@@ -22,7 +22,7 @@ public:
     }
 private:
     T *addr(void* base = percpu_base) {
-        size_t offset = reinterpret_cast<char*>(&_var) - _percpu_start;
+        size_t offset = reinterpret_cast<size_t>(&_var);
         return reinterpret_cast<T*>(base + offset);
     }
 private:
