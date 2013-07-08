@@ -1,4 +1,5 @@
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -7,6 +8,7 @@ import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
+import java.util.zip.ZipException;
 
 public class RunJava {
 	
@@ -57,12 +59,24 @@ public class RunJava {
 
     static void runJar(String jarname, String[] args) throws Throwable {
         File jarfile = new File(jarname);
-        JarFile jar = new JarFile(jarfile);
-        Manifest mf = jar.getManifest();
-        jar.close();
-        String mainClass = mf.getMainAttributes().getValue("Main-Class");
-        setClassPath(jarname);
-        runMain(loadClass(mainClass), args);
+        try {
+            JarFile jar = new JarFile(jarfile);
+            Manifest mf = jar.getManifest();
+            jar.close();
+            String mainClass = mf.getMainAttributes().getValue("Main-Class");
+            if (mainClass == null) {
+                System.err.println(
+                        "RunJava: No 'Main-Class' attribute in manifest of " +
+                                jarname);
+                return;
+            }
+            setClassPath(jarname);
+            runMain(loadClass(mainClass), args);
+        } catch (FileNotFoundException e) {
+            System.err.println("RunJava: File not found: " + jarname);
+        } catch (ZipException e) {
+            System.err.println("RunJava: File is not a jar: " + jarname);
+        }
     }
 
     static void runClass(String mainClass, String[] args) throws Throwable {
