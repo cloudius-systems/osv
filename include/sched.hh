@@ -459,15 +459,15 @@ private:
     thread* _t;
 };
 
-template <class Pred>
+template <class Action>
 inline
-void thread::wake_with(Pred pred)
+void thread::wake_with(Action action)
 {
     // TODO: Try first to disable preemption and if thread and current are on
     // the same CPU, we don't need the disable_exit_guard (with its slow atomic
     // operations) because we know the thread can't run and exit.
     thread_ref_guard guard(this);
-    pred();
+    action();
     wake();
 }
 
