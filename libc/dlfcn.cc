@@ -5,6 +5,14 @@
 
 void* dlopen(const char* filename, int flags)
 {
+    if (!filename) {
+        // It is strange that we are returning a program while
+        // dlsym will always try to open an object. We may have to
+        // revisit this later, specially if this affect the ordering
+        // semantics of lookups. But for now this will work
+        return elf::get_program();
+    }
+
     auto prog = elf::get_program();
     elf::object* obj = prog->add_object(filename);
     // FIXME: handle flags etc.
@@ -20,8 +28,9 @@ int dlclose(void* handle)
 void* dlsym(void* handle, const char* name)
 {
     elf::symbol_module sym;
-    if (handle == RTLD_DEFAULT) {
-        sym = elf::get_program()->lookup(name);
+    auto program = elf::get_program();
+    if ((program == handle) || (handle == RTLD_DEFAULT)) {
+        sym = program->lookup(name);
     } else if (handle == RTLD_NEXT) {
         // FIXME: implement
         abort();
