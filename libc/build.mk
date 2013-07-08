@@ -635,3 +635,4 @@ libc += pipe_buffer.o
 libc += pipe.o
 libc += af_local.o
 libc += user.o
+libc += resource.o
