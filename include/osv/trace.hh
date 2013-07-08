@@ -285,7 +285,6 @@ public:
             arch::irq_flag_notrace irq;
             irq.save();
             arch::irq_disable_notrace();
-#undef log
             log(as);
             run_probes();
             irq.restore();
