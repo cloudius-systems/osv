@@ -50,6 +50,10 @@ dev='/dev/vblk1'
 zfs_pool='osv'
 zfs_fs='usr'
 
+if os.path.exists(zfs_root) and os.listdir(zfs_root): 
+    print 'Please make sure %s does not exist or is an empty directory' % zfs_root
+    sys.exit(1)
+
 os.system('sudo mkdir -p %s' % zfs_root)
 
 os.system('sudo rm -f %s' % options.output)
