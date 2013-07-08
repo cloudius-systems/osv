@@ -1272,36 +1272,8 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode *vp)
 	return error;
 }
 
-#ifdef NOTYET
-/*
- * Attempt to create a new entry in a directory.  If the entry
- * already exists, truncate the file if permissible, else return
- * an error.  Return the vp of the created or trunc'd file.
- *
- *	IN:	dvp	- vnode of directory to put new file entry in.
- *		name	- name of new file entry.
- *		vap	- attributes of new file.
- *		excl	- flag indicating exclusive or non-exclusive mode.
- *		mode	- mode to open file with.
- *		cr	- credentials of caller.
- *		flag	- large file flag [UNUSED].
- *		ct	- caller context
- *		vsecp 	- ACL to be set
- *
- *	OUT:	vpp	- vnode of created or trunc'd entry.
- *
- *	RETURN:	0 if success
- *		error code if failure
- *
- * Timestamps:
- *	dvp - ctime|mtime updated if new entry created
- *	 vp - ctime|mtime always, atime if new
- */
-
-/* ARGSUSED */
 static int
-zfs_create(vnode_t *dvp, char *name, vattr_t *vap, int excl, int mode,
-    vnode_t **vpp, cred_t *cr, kthread_t *td)
+zfs_create(struct vnode *dvp, char *name, mode_t mode)
 {
 	znode_t		*zp, *dzp = VTOZ(dvp);
 	zfsvfs_t	*zfsvfs = dzp->z_zfsvfs;
@@ -1318,22 +1290,15 @@ zfs_create(vnode_t *dvp, char *name, vattr_t *vap, int excl, int mode,
 	boolean_t	have_acl = B_FALSE;
 	void		*vsecp = NULL;
 	int		flag = 0;
+	cred_t		*cr = CRED();
+	uint64_t	txtype;
+	vattr_t		va = {
+		.va_mask	= AT_TYPE|AT_MODE,
+		.va_type	= VREG,
+		.va_mode	= mode,
+	}, *vap = &va;
 
-	/*
-	 * If we have an ephemeral id, ACL, or XVATTR then
-	 * make sure file system is at proper version
-	 */
-
-	ksid = crgetsid(cr, KSID_OWNER);
-	if (ksid)
-		uid = ksid_getid(ksid);
-	else
-		uid = crgetuid(cr);
-
-	if (zfsvfs->z_use_fuids == B_FALSE &&
-	    (vsecp || (vap->va_mask & AT_XVATTR) ||
-	    IS_EPHEMERAL(uid) || IS_EPHEMERAL(gid)))
-		return (EINVAL);
+	uid = crgetuid(cr);
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
@@ -1346,184 +1311,89 @@ zfs_create(vnode_t *dvp, char *name, vattr_t *vap, int excl, int mode,
 		return (EILSEQ);
 	}
 
-	if (vap->va_mask & AT_XVATTR) {
-		if ((error = secpolicy_xvattr(dvp, (xvattr_t *)vap,
-		    crgetuid(cr), cr, vap->va_type)) != 0) {
-			ZFS_EXIT(zfsvfs);
-			return (error);
-		}
-	}
 top:
-	*vpp = NULL;
-
-	if ((vap->va_mode & S_ISVTX) && secpolicy_vnode_stky_modify(cr))
-		vap->va_mode &= ~S_ISVTX;
-
-	if (*name == '\0') {
-		/*
-		 * Null component name refers to the directory itself.
-		 */
-		VN_HOLD(dvp);
-		zp = dzp;
-		dl = NULL;
-		error = 0;
-	} else {
-		/* possible VN_HOLD(zp) */
-		int zflg = 0;
-
-		if (flag & FIGNORECASE)
-			zflg |= ZCILOOK;
-
-		error = zfs_dirent_lock(&dl, dzp, name, &zp, zflg,
-		    NULL, NULL);
-		if (error) {
-			if (have_acl)
-				zfs_acl_ids_free(&acl_ids);
-			if (strcmp(name, "..") == 0)
-				error = EISDIR;
-			ZFS_EXIT(zfsvfs);
-			return (error);
-		}
-	}
-
-	if (zp == NULL) {
-		uint64_t txtype;
-
-		/*
-		 * Create a new file object and update the directory
-		 * to reference it.
-		 */
-		if (error = zfs_zaccess(dzp, ACE_ADD_FILE, 0, B_FALSE, cr)) {
-			if (have_acl)
-				zfs_acl_ids_free(&acl_ids);
-			goto out;
-		}
-
-		/*
-		 * We only support the creation of regular files in
-		 * extended attribute directories.
-		 */
-
-		if ((dzp->z_pflags & ZFS_XATTR) &&
-		    (vap->va_type != VREG)) {
-			if (have_acl)
-				zfs_acl_ids_free(&acl_ids);
-			error = EINVAL;
-			goto out;
-		}
-
-		if (!have_acl && (error = zfs_acl_ids_create(dzp, 0, vap,
-		    cr, vsecp, &acl_ids)) != 0)
-			goto out;
-		have_acl = B_TRUE;
-
-		if (zfs_acl_ids_overquota(zfsvfs, &acl_ids)) {
-			zfs_acl_ids_free(&acl_ids);
-			error = EDQUOT;
-			goto out;
-		}
-
-		tx = dmu_tx_create(os);
-
-		dmu_tx_hold_sa_create(tx, acl_ids.z_aclp->z_acl_bytes +
-		    ZFS_SA_BASE_ATTR_SIZE);
-
-		fuid_dirtied = zfsvfs->z_fuid_dirty;
-		if (fuid_dirtied)
-			zfs_fuid_txhold(zfsvfs, tx);
-		dmu_tx_hold_zap(tx, dzp->z_id, TRUE, name);
-		dmu_tx_hold_sa(tx, dzp->z_sa_hdl, B_FALSE);
-		if (!zfsvfs->z_use_sa &&
-		    acl_ids.z_aclp->z_acl_bytes > ZFS_ACE_SPACE) {
-			dmu_tx_hold_write(tx, DMU_NEW_OBJECT,
-			    0, acl_ids.z_aclp->z_acl_bytes);
-		}
-		error = dmu_tx_assign(tx, TXG_NOWAIT);
-		if (error) {
-			zfs_dirent_unlock(dl);
-			if (error == ERESTART) {
-				dmu_tx_wait(tx);
-				dmu_tx_abort(tx);
-				goto top;
-			}
-			zfs_acl_ids_free(&acl_ids);
-			dmu_tx_abort(tx);
-			ZFS_EXIT(zfsvfs);
-			return (error);
-		}
-		zfs_mknode(dzp, vap, tx, cr, 0, &zp, &acl_ids);
-
-		if (fuid_dirtied)
-			zfs_fuid_sync(zfsvfs, tx);
-
-		(void) zfs_link_create(dl, zp, tx, ZNEW);
-		txtype = zfs_log_create_txtype(Z_FILE, vsecp, vap);
-		if (flag & FIGNORECASE)
-			txtype |= TX_CI;
-		zfs_log_create(zilog, tx, txtype, dzp, zp, name,
-		    vsecp, acl_ids.z_fuidp, vap);
-		zfs_acl_ids_free(&acl_ids);
-		dmu_tx_commit(tx);
-	} else {
-		int aflags = (flag & FAPPEND) ? V_APPEND : 0;
-
+	error = zfs_dirent_lock(&dl, dzp, name, &zp, 0, NULL, NULL);
+	if (error) {
 		if (have_acl)
 			zfs_acl_ids_free(&acl_ids);
-		have_acl = B_FALSE;
-
-		/*
-		 * A directory entry already exists for this name.
-		 */
-		/*
-		 * Can't truncate an existing file if in exclusive mode.
-		 */
-		if (excl == EXCL) {
-			error = EEXIST;
-			goto out;
-		}
-		/*
-		 * Can't open a directory for writing.
-		 */
-		if ((ZTOV(zp)->v_type == VDIR) && (mode & S_IWRITE)) {
+		if (strcmp(name, "..") == 0)
 			error = EISDIR;
-			goto out;
-		}
-		/*
-		 * Verify requested access to file.
-		 */
-		if (mode && (error = zfs_zaccess_rwx(zp, mode, aflags, cr))) {
-			goto out;
-		}
-
-		mutex_enter(&dzp->z_lock);
-		dzp->z_seq++;
-		mutex_exit(&dzp->z_lock);
-
-		/*
-		 * Truncate regular files if requested.
-		 */
-		if ((ZTOV(zp)->v_type == VREG) &&
-		    (vap->va_mask & AT_SIZE) && (vap->va_size == 0)) {
-			/* we can't hold any locks when calling zfs_freesp() */
-			zfs_dirent_unlock(dl);
-			dl = NULL;
-			error = zfs_freesp(zp, 0, 0, mode, TRUE);
-			if (error == 0) {
-				vnevent_create(ZTOV(zp), ct);
-			}
-		}
+		ZFS_EXIT(zfsvfs);
+		return (error);
 	}
+
+	if (zp != NULL) {
+		error = EEXIST;
+		goto out;
+	}
+
+#ifdef ACL_TODO
+	/*
+	 * Create a new file object and update the directory
+	 * to reference it.
+	 */
+	if (error = zfs_zaccess(dzp, ACE_ADD_FILE, 0, B_FALSE, cr)) {
+		if (have_acl)
+			zfs_acl_ids_free(&acl_ids);
+		goto out;
+	}
+#endif
+
+	if (!have_acl && (error = zfs_acl_ids_create(dzp, 0, vap,
+	    cr, vsecp, &acl_ids)) != 0)
+		goto out;
+	have_acl = B_TRUE;
+
+	if (zfs_acl_ids_overquota(zfsvfs, &acl_ids)) {
+		zfs_acl_ids_free(&acl_ids);
+		error = EDQUOT;
+		goto out;
+	}
+
+	tx = dmu_tx_create(os);
+
+	dmu_tx_hold_sa_create(tx, acl_ids.z_aclp->z_acl_bytes +
+	    ZFS_SA_BASE_ATTR_SIZE);
+
+	fuid_dirtied = zfsvfs->z_fuid_dirty;
+	if (fuid_dirtied)
+		zfs_fuid_txhold(zfsvfs, tx);
+	dmu_tx_hold_zap(tx, dzp->z_id, TRUE, name);
+	dmu_tx_hold_sa(tx, dzp->z_sa_hdl, B_FALSE);
+	if (!zfsvfs->z_use_sa &&
+	    acl_ids.z_aclp->z_acl_bytes > ZFS_ACE_SPACE) {
+			dmu_tx_hold_write(tx, DMU_NEW_OBJECT,
+		    0, acl_ids.z_aclp->z_acl_bytes);
+	}
+	error = dmu_tx_assign(tx, TXG_NOWAIT);
+	if (error) {
+		zfs_dirent_unlock(dl);
+		if (error == ERESTART) {
+			dmu_tx_wait(tx);
+			dmu_tx_abort(tx);
+			goto top;
+		}
+		zfs_acl_ids_free(&acl_ids);
+		dmu_tx_abort(tx);
+		ZFS_EXIT(zfsvfs);
+		return (error);
+	}
+	zfs_mknode(dzp, vap, tx, cr, 0, &zp, &acl_ids);
+
+	if (fuid_dirtied)
+		zfs_fuid_sync(zfsvfs, tx);
+
+	(void) zfs_link_create(dl, zp, tx, ZNEW);
+	txtype = zfs_log_create_txtype(Z_FILE, vsecp, vap);
+	zfs_log_create(zilog, tx, txtype, dzp, zp, name,
+	    vsecp, acl_ids.z_fuidp, vap);
+	zfs_acl_ids_free(&acl_ids);
+	dmu_tx_commit(tx);
 out:
 	if (dl)
 		zfs_dirent_unlock(dl);
 
-	if (error) {
-		if (zp)
-			VN_RELE(ZTOV(zp));
-	} else {
-		*vpp = ZTOV(zp);
-		error = specvp_check(vpp, cr);
-	}
+	zfs_zinactive(zp);
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
@@ -1532,6 +1402,7 @@ out:
 	return (error);
 }
 
+#ifdef NOTYET
 /*
  * Remove an entry from a directory.
  *
@@ -5848,7 +5719,7 @@ struct vnops zfs_vnops = {
 	zfs_fsync,			/* fsync */
 	zfs_readdir,			/* readdir */
 	zfs_lookup,			/* lookup */
-	NULL,				/* create */
+	zfs_create,			/* create */
 	NULL,				/* remove */
 	NULL,				/* rename */
 	NULL,				/* mkdir */
