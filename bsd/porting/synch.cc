@@ -122,44 +122,33 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
 void synch_port::wakeup(void* chan)
 {
     trace_synch_wakeup(chan);
-    std::list<synch_thread *> ttw;
 
     mutex_lock(&_lock);
     auto ppp = _evlist.equal_range(chan);
 
     for (auto it=ppp.first; it!=ppp.second; ++it) {
         synch_thread* wait = (*it).second;
-        ttw.push_back(wait);
+        trace_synch_wakeup_waking(chan, wait->_thread);
+        wait->_thread->wake_with([&] { wait->_awake = true; });
     }
     _evlist.erase(ppp.first, ppp.second);
     mutex_unlock(&_lock);
-
-    for (auto st: ttw) {
-        trace_synch_wakeup_waking(chan, st->_thread);
-        st->_awake = true;
-        st->_thread->wake();
-    }
 }
 
 void synch_port::wakeup_one(void* chan)
 {
     trace_synch_wakeup_one(chan);
-    synch_thread* wait = nullptr;
 
     mutex_lock(&_lock);
     auto ppp = _evlist.equal_range(chan);
     auto it = ppp.first;
     if (it != _evlist.end()) {
-        wait = (*it).second;
+        synch_thread* wait = (*it).second;
         _evlist.erase(it);
+        trace_synch_wakeup_one_waking(chan, wait->_thread);
+        wait->_thread->wake_with([&] { wait->_awake = true; });
     }
     mutex_unlock(&_lock);
-
-    if (wait) {
-        trace_synch_wakeup_one_waking(chan, wait->_thread);
-        wait->_awake = true;
-        wait->_thread->wake();
-    }
 }
 
 extern "C" int msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
