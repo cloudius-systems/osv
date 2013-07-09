@@ -44,8 +44,12 @@ def start_osv():
         args += ["-no-reboot", "-no-shutdown"]
      
     if (cmdargs.networking):
-        args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
-        args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
+        if (cmdargs.vhost):
+            args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
+            args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
+	else:
+            args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
+            args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
@@ -83,6 +87,8 @@ if (__name__ == "__main__"):
                         help="start debug version")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root. tap networking, specify interface")
+    parser.add_argument("-v", "--vhost", action="store_true",
+                        help="needs root. tap networking and vhost")
     parser.add_argument("-m", "--memsize", action="store", default="1G",
                         help="specify memory: ex. 1G, 2G, ...")
     parser.add_argument("-c", "--vcpus", action="store", default="4",
