@@ -37,6 +37,8 @@ ASFLAGS = -g $(autodepend)
 fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
 
 bsd/%.o: INCLUDES += -isystem $(src)/bsd/sys
+# for machine/
+bsd/%.o: INCLUDES += -isystem $(src)/bsd/ 
 
 configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
 
