@@ -150,8 +150,12 @@ int poll_wake(struct file* fp, int events)
      * Wake each and every one.
      */
     TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
-        if (pl->_events & events)
+        if (pl->_events & events) {
+            mtx_lock(&pl->_req->_awake_mutex);
+            pl->_req->_awake = true;
+            mtx_unlock(&pl->_req->_awake_mutex);
             wakeup((void*)pl->_req);
+        }
     }
 
     FD_UNLOCK(fp);
@@ -193,7 +197,22 @@ void poll_install(struct pollreq* p)
         pl->_events = entry->events;
 
         FD_LOCK(fp);
-	TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
+        TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
+        // We need to check for an existing event on this file here, while
+        // still holding the lock, so we don't lose an event between checking
+        // and installing. Note this means that poll_scan() in the beginning
+        // of poll() is redundant and may be removed in the future.
+        if(fo_poll(fp, entry->events)) {
+            // Return immediately. poll() will call poll_scan() to get the
+            // full list of events, and will call poll_uninstall() to undo
+            // the partial installation we did here.
+            mtx_lock(&p->_awake_mutex);
+            p->_awake = true;
+            mtx_unlock(&p->_awake_mutex);
+            FD_UNLOCK(fp);
+            fdrop(fp);
+            return;
+        }
         FD_UNLOCK(fp);
 
         fdrop(fp);
@@ -220,7 +239,7 @@ void poll_uninstall(struct pollreq* p)
 
         /* Search for current pollreq and remove it from list */
         FD_LOCK(fp);
-	TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
+        TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
             if (pl->_req == p) {
                 TAILQ_REMOVE(&fp->f_poll_list, pl, _link);
                 free(pl);
@@ -252,6 +271,8 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     p._timeout = _timeout;
     p._pfd = malloc(pfd_sz);
     memcpy(p._pfd, _pfd, pfd_sz);
+    mtx_init(&p._awake_mutex, "poll awake", NULL, MTX_DEF);
+    p._awake = false;
 
     /* Any existing events return immediately */
     nr_events = poll_scan(p._pfd, _nfds);
@@ -280,7 +301,15 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     }
 
     /* Block  */
-    error = msleep((void *)&p, NULL, 0, "poll", timeout);
+    mtx_lock(&p._awake_mutex);
+    if (p._awake) {
+        // poll_install already noticed a missed event, or we got one after
+        // poll_install. Don't sleep, or we won't be woken again!
+        error = 0;
+    } else {
+        error = msleep((void *)&p, &p._awake_mutex, 0, "poll", timeout);
+    }
+    mtx_unlock(&p._awake_mutex);
     if (error != EWOULDBLOCK) {
         nr_events = poll_scan(p._pfd, _nfds);
     } else {
@@ -292,6 +321,7 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
 
     /* return (copy-out) */
     memcpy(_pfd, p._pfd, pfd_sz);
+    mtx_destroy(&p._awake_mutex);
     free(p._pfd);
 
     return nr_events;

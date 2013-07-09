@@ -32,6 +32,8 @@
 
 #include <sys/cdefs.h>
 #include <bsd/sys/sys/queue.h>
+#include <stdbool.h>
+#include <bsd/porting/sync_stub.h>
 
 __BEGIN_DECLS
 
@@ -114,6 +116,8 @@ struct pollreq {
     struct pollfd *_pfd;
     nfds_t _nfds;
     int _timeout;
+    bool _awake;
+    struct mtx _awake_mutex;
 };
 
 /* linked list of pollreq links */
