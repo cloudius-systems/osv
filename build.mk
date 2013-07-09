@@ -256,6 +256,9 @@ bsd/%.o: COMMON += -DXEN -DXENHVM
 bsd += bsd/sys/xen/gnttab.o
 bsd += bsd/sys/xen/evtchn.o
 bsd += bsd/sys/xen/xenstore/xenstore.o
+bsd += bsd/sys/xen/xenbus/xenbus.o
+bsd += bsd/sys/xen/xenbus/xenbusb.o
+bsd += bsd/sys/xen/xenbus/xenbusb_front.o
 
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o

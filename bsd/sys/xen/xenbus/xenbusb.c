@@ -58,9 +58,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/bus.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
+#include <sys/sbuf.h>
 #include <sys/malloc.h>
 #include <sys/module.h>
-#include <sys/sbuf.h>
 #include <sys/sysctl.h>
 #include <sys/syslog.h>
 #include <sys/systm.h>
@@ -299,6 +299,8 @@ xenbusb_enumerate_bus(struct xenbusb_softc *xbs)
 	return (0);
 }
 
+// XXX-OSVEDIT: We don't need sysctl yet
+#if 0
 /**
  * Handler for all generic XenBus device systcl nodes.
  */
@@ -402,6 +404,12 @@ xenbusb_device_sysctl_init(device_t dev)
 			"A",
 			"XenStore path to peer device");
 }
+#else
+static void
+xenbusb_device_sysctl_init(device_t dev)
+{
+}
+#endif
 
 /**
  * \brief Verify the existance of attached device instances and perform
@@ -486,12 +494,7 @@ xenbusb_probe_children_cb(void *arg, int pending __unused)
 {
 	device_t dev = (device_t)arg;
 
-	/*
-	 * Hold Giant until the Giant free newbus changes are committed.
-	 */
-	mtx_lock(&Giant);
 	xenbusb_probe_children(dev);
-	mtx_unlock(&Giant);
 }
 
 /**
@@ -690,7 +693,9 @@ xenbusb_add_device(device_t dev, const char *type, const char *id)
 		xbs->xbs_connecting_children++;
 		mtx_unlock(&xbs->xbs_lock);
 
-		child = device_add_child(dev, NULL, -1);
+		// XXX-OSVEDIT: BSD does not pass the type here But I will, so I am
+		// able to allocate an object from the right type.
+		child = device_add_child(dev, devpath, -1);
 		ivars->xd_dev = child;
 		device_set_ivars(child, ivars);
 	}

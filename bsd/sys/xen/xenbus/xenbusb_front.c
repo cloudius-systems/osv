@@ -38,13 +38,15 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <bsd/porting/netport.h>
+
 #include <sys/param.h>
 #include <sys/bus.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
+#include <sys/sbuf.h>
 #include <sys/malloc.h>
 #include <sys/module.h>
-#include <sys/sbuf.h>
 #include <sys/sysctl.h>
 #include <sys/syslog.h>
 #include <sys/systm.h>
@@ -67,7 +69,7 @@ __FBSDID("$FreeBSD$");
  *
  * \return  Always returns 0 indicating success.
  */
-static int 
+int 
 xenbusb_front_probe(device_t dev)
 {
 	device_set_desc(dev, "Xen Frontend Devices");
@@ -83,7 +85,7 @@ xenbusb_front_probe(device_t dev)
  * \return  On success, 0. Otherwise an errno value indicating the
  *          type of failure.
  */
-static int
+int
 xenbusb_front_attach(device_t dev)
 {
 	return (xenbusb_attach(dev, "device", /*id_components*/1));
@@ -104,7 +106,7 @@ xenbusb_front_attach(device_t dev)
  * and ignores duplicate devices, so it can be called unconditionally
  * for any device found in the XenStore.
  */
-static int
+int
 xenbusb_front_enumerate_type(device_t dev, const char *type)
 {
 	struct xenbusb_softc *xbs;
@@ -138,7 +140,7 @@ xenbusb_front_enumerate_type(device_t dev, const char *type)
  * \return  On success, 0. Otherwise an errno value indicating the
  *          type of failure.
  */
-static int
+int
 xenbusb_front_get_otherend_node(device_t dev, struct xenbus_device_ivars *ivars)
 {
 	char *otherend_path;
@@ -162,8 +164,9 @@ xenbusb_front_get_otherend_node(device_t dev, struct xenbus_device_ivars *ivars)
 	return (error);
 }
 
+#if 0
 /*-------------------- Private Device Attachment Data  -----------------------*/
-static device_method_t xenbusb_front_methods[] = { 
+device_method_t xenbusb_front_methods[] = { 
 	/* Device interface */ 
 	DEVMETHOD(device_identify,	xenbusb_identify),
 	DEVMETHOD(device_probe,         xenbusb_front_probe), 
@@ -194,3 +197,4 @@ devclass_t xenbusb_front_devclass;
  
 DRIVER_MODULE(xenbusb_front, xenstore, xenbusb_front_driver,
 	      xenbusb_front_devclass, 0, 0);
+#endif
