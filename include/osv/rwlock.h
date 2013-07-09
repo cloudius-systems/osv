@@ -3,6 +3,7 @@
 
 #include <osv/mutex.h>
 #include <osv/condvar.h>
+#include <sys/cdefs.h>
 
 #define RWLOCK_INITIALIZER {}
 
