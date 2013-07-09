@@ -37,6 +37,7 @@ void sx_sunlock(struct sx *mp);
 
 __END_DECLS
 
-#define mtx_sleep(chan, mtx, pri, wmesg, timo) (void)0;
+#define mtx_sleep(chan, mtx, pri, wmesg, timo) msleep(chan, mtx, pri, wmesg, timo)
+#define MTX_SYSINIT(a, b, c, d) 
 
 #endif /* SYNC_STUB_H */
