@@ -48,11 +48,11 @@ typedef	struct mount	vfs_t;
 
 #define	v_flag		v_vflag
 #define	v_vfsp		v_mount
+#endif
 
 #define	VFS_RDONLY	MNT_RDONLY
 #define	VFS_NOSETUID	MNT_NOSUID
 #define	VFS_NOEXEC	MNT_NOEXEC
-#endif
 
 #define	VFS_HOLD(vfsp)	vfs_busy(vfsp)
 #define	VFS_RELE(vfsp)	vfs_unbusy(vfsp)
