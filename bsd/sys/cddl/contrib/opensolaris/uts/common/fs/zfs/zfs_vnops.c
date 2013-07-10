@@ -1016,6 +1016,7 @@ again:
 	ZFS_EXIT(zfsvfs);
 	return (0);
 }
+#endif
 
 void
 zfs_get_done(zgd_t *zgd, int error)
@@ -1029,18 +1030,17 @@ zfs_get_done(zgd_t *zgd, int error)
 
 	zfs_range_unlock(zgd->zgd_rl);
 
-	vfslocked = VFS_LOCK_GIANT(zp->z_zfsvfs->z_vfs);
 	/*
 	 * Release the vnode asynchronously as we currently have the
 	 * txg stopped from syncing.
 	 */
-	VN_RELE_ASYNC(ZTOV(zp), dsl_pool_vnrele_taskq(dmu_objset_pool(os)));
+//	VN_RELE_ASYNC(ZTOV(zp), dsl_pool_vnrele_taskq(dmu_objset_pool(os)));
+	zfs_zinactive(zp);
 
 	if (error == 0 && zgd->zgd_bp)
 		zil_add_block(zgd->zgd_zilog, zgd->zgd_bp);
 
 	kmem_free(zgd, sizeof (zgd_t));
-	VFS_UNLOCK_GIANT(vfslocked);
 }
 
 #ifdef DEBUG
@@ -1173,6 +1173,7 @@ zfs_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio)
 	return (error);
 }
 
+#ifdef NOTYET
 /*ARGSUSED*/
 static int
 zfs_access(vnode_t *vp, int mode, int flag, cred_t *cr,
