@@ -660,6 +660,7 @@ zfs_set_userquota(zfsvfs_t *zfsvfs, zfs_userquota_prop_t type,
 	dmu_tx_commit(tx);
 	return (err);
 }
+#endif
 
 boolean_t
 zfs_fuid_overquota(zfsvfs_t *zfsvfs, boolean_t isgroup, uint64_t fuid)
@@ -700,7 +701,6 @@ zfs_owner_overquota(zfsvfs_t *zfsvfs, znode_t *zp, boolean_t isgroup)
 
 	return (zfs_fuid_overquota(zfsvfs, isgroup, fuid));
 }
-#endif
 
 int
 zfsvfs_create(const char *osname, zfsvfs_t **zfvp)

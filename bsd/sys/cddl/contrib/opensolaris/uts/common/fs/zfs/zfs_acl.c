@@ -528,7 +528,6 @@ zfs_acl_valid_ace_type(uint_t type, uint_t flags)
 	return (B_FALSE);
 }
 
-#ifdef _NOTYET
 static boolean_t
 zfs_ace_valid(vtype_t obj_type, zfs_acl_t *aclp, uint16_t type, uint16_t iflags)
 {
@@ -566,7 +565,6 @@ zfs_ace_valid(vtype_t obj_type, zfs_acl_t *aclp, uint16_t type, uint16_t iflags)
 
 	return (B_TRUE);
 }
-#endif
 
 static void *
 zfs_acl_next_ace(zfs_acl_t *aclp, void *start, uint64_t *who,
@@ -642,13 +640,14 @@ zfs_ace_walk(void *datap, uint64_t cookie, int aclcnt,
 	return ((uint64_t)(uintptr_t)acep);
 }
 
-#ifdef _NOTYET
+#ifdef NOTYET
 static zfs_acl_node_t *
 zfs_acl_curr_node(zfs_acl_t *aclp)
 {
 	ASSERT(aclp->z_curr_node);
 	return (aclp->z_curr_node);
 }
+#endif
 
 /*
  * Copy ACE to internal ZFS format.
@@ -714,6 +713,7 @@ zfs_copy_ace_2_fuid(zfsvfs_t *zfsvfs, vtype_t obj_type, zfs_acl_t *aclp,
 	return (0);
 }
 
+#ifdef NOTYET
 /*
  * Copy ZFS ACEs to fixed size ace_t layout
  */
@@ -773,6 +773,7 @@ zfs_copy_fuid_2_ace(zfsvfs_t *zfsvfs, zfs_acl_t *aclp, cred_t *cr,
 		acep = (ace_t *)((caddr_t)acep + ace_size);
 	}
 }
+#endif
 
 static int
 zfs_copy_ace_2_oldace(vtype_t obj_type, zfs_acl_t *aclp, ace_t *acep,
@@ -853,6 +854,7 @@ zfs_acl_xform(znode_t *zp, zfs_acl_t *aclp, cred_t *cr)
 
 }
 
+#ifdef NOTYET
 /*
  * Convert unix access mask to v4 access mask
  */
@@ -1216,9 +1218,6 @@ zfs_aclset_common(znode_t *zp, zfs_acl_t *aclp, cred_t *cr, dmu_tx_t *tx)
 	if (!zfsvfs->z_use_fuids) {
 		otype = DMU_OT_OLDACL;
 	} else {
-#ifdef __OSV__
-		abort();
-#endif
 		if ((aclp->z_version == ZFS_ACL_VERSION_INITIAL) &&
 		    (zfsvfs->z_version >= ZPL_VERSION_FUID))
 			zfs_acl_xform(zp, aclp, cr);
@@ -1467,7 +1466,6 @@ zfs_acl_chmod_setattr(znode_t *zp, zfs_acl_t **aclp, uint64_t mode)
 	return (error);
 }
 
-#ifdef _NOTYET
 /*
  * strip off write_owner and write_acl
  */
@@ -1773,6 +1771,7 @@ zfs_acl_ids_overquota(zfsvfs_t *zfsvfs, zfs_acl_ids_t *acl_ids)
 	    zfs_fuid_overquota(zfsvfs, B_TRUE, acl_ids->z_fgid));
 }
 
+#ifdef NOTYET
 /*
  * Retrieve a files ACL
  */
@@ -1872,6 +1871,7 @@ zfs_getacl(znode_t *zp, vsecattr_t *vsecp, boolean_t skipaclchk, cred_t *cr)
 
 	return (0);
 }
+#endif
 
 int
 zfs_vsec_2_aclp(zfsvfs_t *zfsvfs, vtype_t obj_type,
@@ -1928,6 +1928,7 @@ zfs_vsec_2_aclp(zfsvfs_t *zfsvfs, vtype_t obj_type,
 	return (0);
 }
 
+#ifdef NOTYET
 /*
  * Set a files ACL
  */
@@ -2032,6 +2033,7 @@ done:
 
 	return (error);
 }
+#endif
 
 /*
  * Check accesses of interest (AoI) against attributes of the dataset
@@ -2228,6 +2230,7 @@ zfs_zaccess_aces_check(znode_t *zp, uint32_t *working_mode,
 	return (0);
 }
 
+#ifdef NOTYET
 /*
  * Return true if any access whatsoever granted, we don't actually
  * care what access is granted.
@@ -2245,6 +2248,7 @@ zfs_has_access(znode_t *zp, cred_t *cr)
 	}
 	return (B_TRUE);
 }
+#endif
 
 static int
 zfs_zaccess_common(znode_t *zp, uint32_t v4_mode, uint32_t *working_mode,
@@ -2293,6 +2297,7 @@ zfs_zaccess_append(znode_t *zp, uint32_t *working_mode, boolean_t *check_privs,
 	    check_privs, B_FALSE, cr));
 }
 
+#ifdef NOTYET
 int
 zfs_fastaccesschk_execute(znode_t *zdp, cred_t *cr)
 {
@@ -2359,6 +2364,7 @@ slow:
 	ZFS_EXIT(zdp->z_zfsvfs);
 	return (error);
 }
+#endif
 
 /*
  * Determine whether Access should be granted/denied.
@@ -2370,14 +2376,11 @@ zfs_zaccess(znode_t *zp, int mode, int flags, boolean_t skipaclchk, cred_t *cr)
 {
 	uint32_t	working_mode;
 	int		error;
-	int		is_attr;
 	boolean_t 	check_privs;
 	znode_t		*xzp;
 	znode_t 	*check_zp = zp;
 	mode_t		needed_bits;
 	uid_t		owner;
-
-	is_attr = ((zp->z_pflags & ZFS_XATTR) && (ZTOV(zp)->v_type == VDIR));
 
 #if defined(__FreeBSD__) || defined(__OSV__)
 	/*
@@ -2388,6 +2391,10 @@ zfs_zaccess(znode_t *zp, int mode, int flags, boolean_t skipaclchk, cred_t *cr)
 	if (zp->z_pflags & ZFS_XATTR)
 		return (0);
 #else
+	int		is_attr;
+
+	is_attr = ((zp->z_pflags & ZFS_XATTR) && (ZTOV(zp)->v_type == VDIR));
+
 	/*
 	 * If attribute then validate against base file
 	 */
@@ -2448,17 +2455,16 @@ zfs_zaccess(znode_t *zp, int mode, int flags, boolean_t skipaclchk, cred_t *cr)
 
 	if ((error = zfs_zaccess_common(check_zp, mode, &working_mode,
 	    &check_privs, skipaclchk, cr)) == 0) {
+#if !(defined(__FreeBSD__) || defined(__OSV__))
 		if (is_attr)
 			VN_RELE(ZTOV(xzp));
+#endif
 		return (secpolicy_vnode_access2(cr, ZTOV(zp), owner,
 		    needed_bits, needed_bits));
 	}
 
-	if (error && !check_privs) {
-		if (is_attr)
-			VN_RELE(ZTOV(xzp));
-		return (error);
-	}
+	if (error && !check_privs)
+		goto out_error;
 
 	if (error && (flags & V_APPEND)) {
 		error = zfs_zaccess_append(zp, &working_mode, &check_privs, cr);
@@ -2517,13 +2523,15 @@ zfs_zaccess(znode_t *zp, int mode, int flags, boolean_t skipaclchk, cred_t *cr)
 		    needed_bits, needed_bits);
 	}
 
-
+out_error:
+#if !(defined(__FreeBSD__) || defined(__OSV__))
 	if (is_attr)
 		VN_RELE(ZTOV(xzp));
-
+#endif
 	return (error);
 }
 
+#ifdef NOTYET
 /*
  * Translate traditional unix VREAD/VWRITE/VEXEC mode into
  * native ACL format and call zfs_zaccess()

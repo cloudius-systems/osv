@@ -284,10 +284,8 @@ zfs_sa_upgrade(sa_handle_t *hdl, dmu_tx_t *tx)
 	SA_ADD_BULK_ATTR(sa_attrs, count, SA_ZPL_DACL_COUNT(zfsvfs), NULL,
 	    &zp->z_acl_cached->z_acl_count, 8);
 
-#ifdef _NOTYET
 	if (zp->z_acl_cached->z_version < ZFS_ACL_VERSION_FUID)
 		zfs_acl_xform(zp, zp->z_acl_cached, CRED());
-#endif
 
 	locate.cb_aclp = zp->z_acl_cached;
 	SA_ADD_BULK_ATTR(sa_attrs, count, SA_ZPL_DACL_ACES(zfsvfs),
