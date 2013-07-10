@@ -717,9 +717,8 @@ zfs_link_create(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag)
 {
 	znode_t *dzp = dl->dl_dzp;
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
-	vnode_t *vp = ZTOV(zp);
 	uint64_t value;
-	int zp_is_dir = (vp->v_type == VDIR);
+	int zp_is_dir = S_ISDIR(zp->z_mode);
 	sa_bulk_attr_t bulk[5];
 	uint64_t mtime[2], ctime[2];
 	int count = 0;
@@ -779,7 +778,7 @@ zfs_link_create(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag)
 	ASSERT(error == 0);
 
 #ifndef __OSV__
-	dnlc_update(ZTOV(dzp), dl->dl_name, vp);
+	dnlc_update(ZTOV(dzp), dl->dl_name, ZTOV(zp));
 #endif
 
 	return (0);
