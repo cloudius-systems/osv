@@ -58,9 +58,11 @@ typedef	struct vop_vector	vnodeops_t;
 #define	IS_XATTRDIR(dvp)	(0)
 
 #define	v_count	v_usecount
+#endif
 
 #define	V_APPEND	VAPPEND
 
+#if 0
 #define	rootvfs		(rootvnode == NULL ? NULL : rootvnode->v_mount)
 
 static __inline int

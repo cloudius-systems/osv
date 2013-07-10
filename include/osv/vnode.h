@@ -106,6 +106,7 @@ struct vattr {
 /*
  *  Modes.
  */
+#define VAPPEND 00010
 #define	VREAD	00004		/* read, write, execute permissions */
 #define	VWRITE	00002
 #define	VEXEC	00001
