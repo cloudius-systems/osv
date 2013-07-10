@@ -860,7 +860,6 @@ zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
 	dmu_objset_set_user(zfsvfs->z_os, zfsvfs);
 	mutex_exit(&zfsvfs->z_os->os_user_ptr_lock);
 
-#ifdef notyet
 	zfsvfs->z_log = zil_open(zfsvfs->z_os, zfs_get_data);
 
 	/*
@@ -912,15 +911,16 @@ zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
 			if (zil_replay_disable) {
 				zil_destroy(zfsvfs->z_log, B_FALSE);
 			} else {
+#ifdef TODO_REPLAY
 				zfsvfs->z_replay = B_TRUE;
 				zil_replay(zfsvfs->z_os, zfsvfs,
 				    zfs_replay_vector);
 				zfsvfs->z_replay = B_FALSE;
+#endif
 			}
 		}
 		zfsvfs->z_vfs->m_flags |= readonly; /* restore readonly bit */
 	}
-#endif
 	return (0);
 }
 
