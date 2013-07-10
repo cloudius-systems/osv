@@ -196,7 +196,10 @@ int	 vcount(struct vnode *);
 void	 vflush(struct mount *);
 
 extern enum vtype iftovt_tab[];
+extern int vttoif_tab[];
 #define IFTOVT(mode)    (iftovt_tab[((mode) & S_IFMT) >> 12])
+#define VTTOIF(indx)	(vttoif_tab[(int)(indx)])
+#define MAKEIMODE(indx, mode)   (int)(VTTOIF(indx) | (mode))
 
 __END_DECLS
 
