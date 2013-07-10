@@ -277,6 +277,13 @@ int get_cpuid(void);
 size_t get_physmem(void);
 #define physmem		get_physmem()
 
+#define UID_ROOT	0
+#define UID_NOBODY	65534
+#define	GID_NOBODY	65534
+
+#define UID_MAX		UINT_MAX
+#define GID_MAX		UINT_MAX
+
 __END_DECLS
 
 #endif
