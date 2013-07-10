@@ -88,8 +88,19 @@ struct vnode {
  * Vnode attribute
  */
 struct vattr {
-	int		va_type;	/* vnode type */
+	unsigned int	va_mask;
+	enum vtype	va_type;	/* vnode type */
 	mode_t		va_mode;	/* file access mode */
+	nlink_t		va_nlink;
+	uid_t		va_uid;
+	gid_t		va_gid;
+	ino_t		va_nodeid;
+	struct timespec	va_atime;
+	struct timespec	va_mtime;
+	struct timespec	va_ctime;
+	dev_t		va_rdev;
+	uint64_t	va_nblocks;
+	off_t		va_size;
 };
 
 /*

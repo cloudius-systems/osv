@@ -103,18 +103,6 @@ vn_is_readonly(vnode_t *vp)
 #define	cleanlocks(vp, pid, foo)	do { } while (0)
 #define	cleanshares(vp, pid)		do { } while (0)
 
-/*
- * We will use va_spare is place of Solaris' va_mask.
- * This field is initialized in zfs_setattr().
- */
-#define	va_mask		va_spare
-/* TODO: va_fileid is shorter than va_nodeid !!! */
-#define	va_nodeid	va_fileid
-/* TODO: This field needs conversion! */
-#define	va_nblocks	va_bytes
-#define	va_blksize	va_blocksize
-#define	va_seq		va_gen
-
 #define	MAXOFFSET_T	LONG_MAX
 #define	EXCL		0
 
