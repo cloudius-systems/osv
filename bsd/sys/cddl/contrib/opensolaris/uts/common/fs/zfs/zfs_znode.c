@@ -538,6 +538,12 @@ zfs_create_share_dir(zfsvfs_t *zfsvfs, dmu_tx_t *tx)
 
 	return (error);
 }
+#endif
+
+#ifdef __OSV__
+#define zfs_expldev(dev)	dev
+#define zfs_cmpldev(dev)	dev
+#else
 
 /*
  * define a couple of values we need available
@@ -739,7 +745,6 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
 	return (zp);
 }
 
-#ifdef notyet
 static uint64_t empty_xattr;
 static uint64_t pad[4];
 static zfs_acl_phys_t acl_phys;
@@ -829,7 +834,6 @@ zfs_mknode(znode_t *dzp, vattr_t *vap, dmu_tx_t *tx, cred_t *cr,
 		}
 	}
 
-	getnewvnode_reserve(1);
 	ZFS_OBJ_HOLD_ENTER(zfsvfs, obj);
 	VERIFY(0 == sa_buf_hold(zfsvfs->z_os, obj, NULL, &db));
 
@@ -998,27 +1002,20 @@ zfs_mknode(znode_t *dzp, vattr_t *vap, dmu_tx_t *tx, cred_t *cr,
 	(*zpp)->z_pflags = pflags;
 	(*zpp)->z_mode = mode;
 
+#ifdef HAVE_XVATTR
 	if (vap->va_mask & AT_XVATTR)
 		zfs_xvattr_set(*zpp, (xvattr_t *)vap, tx);
+#endif
 
 	if (obj_type == DMU_OT_ZNODE ||
 	    acl_ids->z_aclp->z_version < ZFS_ACL_VERSION_FUID) {
 		err = zfs_aclset_common(*zpp, acl_ids->z_aclp, cr, tx);
 		ASSERT0(err);
 	}
-	if (!(flag & IS_ROOT_NODE)) {
-		vnode_t *vp;
-
-		vp = ZTOV(*zpp);
-		vp->v_vflag |= VV_FORCEINSMQ;
-		err = insmntque(vp, zfsvfs->z_vfs);
-		vp->v_vflag &= ~VV_FORCEINSMQ;
-		KASSERT(err == 0, ("insmntque() failed: error %d", err));
-	}
 	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj);
-	getnewvnode_drop_reserve();
 }
 
+#ifdef notyet
 /*
  * zfs_xvattr_set only updates the in-core attributes
  * it is assumed the caller will be doing an sa_bulk_update
