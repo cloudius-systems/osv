@@ -654,9 +654,9 @@ namespace dbg {
 
 bool enabled;
 
+using mmu::debug_base;
 // FIXME: we assume the debug memory space is infinite (which it nearly is)
 // and don't reuse space
-static const auto debug_base = reinterpret_cast<char*>(0xffffe00000000000);
 std::atomic<char*> free_area{debug_base};
 struct header {
     explicit header(size_t sz) : size(sz), size2(sz) {

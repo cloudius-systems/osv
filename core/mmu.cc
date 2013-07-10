@@ -9,6 +9,7 @@
 #include "libc/signal.hh"
 #include "align.hh"
 #include "interrupt.hh"
+#include "ilog2.hh"
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -164,6 +165,15 @@ hw_ptep follow(pt_element pte)
     return hw_ptep::force(phys_cast<pt_element>(pte.next_pt_addr()));
 }
 
+// 1's for the bits provided by the pte for this level
+// 0's for the bits provided by the virtual address for this level
+phys pte_level_mask(unsigned level)
+{
+    auto shift = level * ilog2_roundup_constexpr(pte_per_page)
+        + ilog2_roundup_constexpr(page_size);
+    return ~((phys(1) << shift) - 1);
+}
+
 const unsigned nlevels = 4;
 
 void* phys_to_virt(phys pa)
@@ -177,12 +187,34 @@ void* phys_to_virt(phys pa)
     return phys_mem + pa;
 }
 
+phys virt_to_phys_pt(void* virt)
+{
+    auto v = reinterpret_cast<uintptr_t>(virt);
+    auto pte = pt_element::force(processor::read_cr3());
+    unsigned level = nlevels;
+    while (level > 0 && !pte.large()) {
+        assert(pte.present() || level == nlevels);
+        --level;
+        auto pt = follow(pte);
+        pte = pt.at(pt_index(virt, level)).read();
+    }
+    assert(!pte.empty());
+    auto mask = pte_level_mask(level);
+    return (pte.addr(level != 0) & mask) | (v & ~mask);
+}
+
 phys virt_to_phys(void *virt)
 {
     // The ELF is mapped 1:1
     if ((virt >= elf_start) && (virt <= elf_start + elf_size)) {
         return reinterpret_cast<phys>(virt);
     }
+
+#if CONF_debug_memory
+    if (virt > debug_base) {
+        return virt_to_phys_pt(virt);
+    }
+#endif
 
     // For now, only allow non-mmaped areas.  Later, we can either
     // bounce such addresses, or lock them in memory and translate
