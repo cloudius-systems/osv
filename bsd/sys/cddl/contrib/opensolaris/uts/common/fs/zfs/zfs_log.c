@@ -101,6 +101,7 @@ zfs_log_create_txtype(zil_create_t type, vsecattr_t *vsecp, vattr_t *vap)
 	return (TX_MAX_TYPE);
 }
 
+#ifdef HAVE_XVATTR
 /*
  * build up the log data necessary for logging xvattr_t
  * First lr_attr_t is initialized.  following the lr_attr_t
@@ -181,6 +182,7 @@ zfs_log_xvattr(lr_attr_t *lrattr, xvattr_t *xvap)
 		*attrs |= (xoap->xoa_sparse == 0) ? 0 :
 		    XAT0_SPARSE;
 }
+#endif
 
 static void *
 zfs_log_fuid_ids(zfs_fuid_info_t *fuidp, void *start)
@@ -305,13 +307,16 @@ zfs_log_create(zilog_t *zilog, dmu_tx_t *tx, uint64_t txtype,
 	    sizeof (lr->lr_rdev)) != 0)
 		lr->lr_rdev = 0;
 
+#ifdef HAVE_XVATTR
 	/*
 	 * Fill in xvattr info if any
 	 */
 	if (vap->va_mask & AT_XVATTR) {
 		zfs_log_xvattr((lr_attr_t *)((caddr_t)lr + lrsize), xvap);
 		end = (caddr_t)lr + lrsize + xvatsize;
-	} else {
+	} else
+#endif
+	{
 		end = (caddr_t)lr + lrsize;
 	}
 
@@ -474,14 +479,18 @@ zfs_log_write(zilog_t *zilog, dmu_tx_t *tx, int txtype,
 	    (zilog->zl_logbias == ZFS_LOGBIAS_LATENCY);
 	if (resid > immediate_write_sz && !slogging && resid <= zp->z_blksz)
 		write_state = WR_INDIRECT;
+#ifdef TODO_O_SYNC
 	else if (ioflag & (FSYNC | FDSYNC))
 		write_state = WR_COPIED;
+#endif
 	else
 		write_state = WR_NEED_COPY;
 
+#ifdef TODO_FSYNC
 	if ((fsync_cnt = (uintptr_t)tsd_get(zfs_fsyncer_key)) != 0) {
 		(void) tsd_set(zfs_fsyncer_key, (void *)(fsync_cnt - 1));
 	}
+#endif
 
 	while (resid) {
 		itx_t *itx;
@@ -518,9 +527,11 @@ zfs_log_write(zilog_t *zilog, dmu_tx_t *tx, int txtype,
 
 		itx->itx_private = zp->z_zfsvfs;
 
+#ifdef TODO_O_SYNC
 		if (!(ioflag & (FSYNC | FDSYNC)) && (zp->z_sync_cnt == 0) &&
 		    (fsync_cnt == 0))
 			itx->itx_sync = B_FALSE;
+#endif
 
 		zil_itx_assign(zilog, itx, tx);
 
@@ -598,10 +609,12 @@ zfs_log_setattr(zilog_t *zilog, dmu_tx_t *tx, int txtype,
 	ZFS_TIME_ENCODE(&vap->va_atime, lr->lr_atime);
 	ZFS_TIME_ENCODE(&vap->va_mtime, lr->lr_mtime);
 	start = (lr_setattr_t *)(lr + 1);
+#ifdef HAVE_XVATTR
 	if (vap->va_mask & AT_XVATTR) {
 		zfs_log_xvattr((lr_attr_t *)start, xvap);
 		start = (caddr_t)start + ZIL_XVAT_SIZE(xvap->xva_mapsize);
 	}
+#endif
 
 	/*
 	 * Now stick on domain information if any on end
