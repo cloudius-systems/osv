@@ -25,7 +25,7 @@ namespace virtio {
         _q_index = q_index;
         // Alloc enough pages for the vring...
         unsigned sz = VIRTIO_ALIGN(vring::get_size(num, VIRTIO_PCI_VRING_ALIGN));
-        _vring_ptr = malloc(sz);
+        _vring_ptr = memory::alloc_phys_contiguous_aligned(sz, 4096);
         memset(_vring_ptr, 0, sz);
         
         // Set up pointers        
@@ -55,7 +55,7 @@ namespace virtio {
 
     vring::~vring()
     {
-        free(_vring_ptr);
+        memory::free_phys_contiguous_aligned(_vring_ptr);
         delete [] _cookie;
     }
 

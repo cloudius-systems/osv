@@ -33,4 +33,11 @@ unsigned ilog2_roundup(T n)
     return sizeof(T)*8 - count_leading_zeros(n - 1);
 }
 
+template <typename T>
+inline constexpr
+bool is_power_of_two(T n)
+{
+    return (n & (n - 1)) == 0;
+}
+
 #endif

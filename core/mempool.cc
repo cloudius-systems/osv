@@ -654,9 +654,9 @@ namespace dbg {
 
 bool enabled;
 
+using mmu::debug_base;
 // FIXME: we assume the debug memory space is infinite (which it nearly is)
 // and don't reuse space
-static const auto debug_base = reinterpret_cast<char*>(0xffffe00000000000);
 std::atomic<char*> free_area{debug_base};
 struct header {
     explicit header(size_t sz) : size(sz), size2(sz) {
@@ -670,7 +670,7 @@ struct header {
     char fence[16];
     size_t size2;
 };
-static const size_t pad_before = mmu::page_size;
+static const size_t pad_before = 2 * mmu::page_size;
 static const size_t pad_after = mmu::page_size;
 
 void* malloc(size_t size)
@@ -679,15 +679,15 @@ void* malloc(size_t size)
         return std_malloc(size);
     }
 
-    auto hsize = size + sizeof(header);
-    auto asize = align_up(hsize, mmu::page_size);
+    auto asize = align_up(size, mmu::page_size);
     auto padded_size = pad_before + asize + pad_after;
     void* v = free_area.fetch_add(padded_size, std::memory_order_relaxed);
+    mmu::vpopulate(v, mmu::page_size);
+    new (v) header(size);
     v += pad_before;
     mmu::vpopulate(v, asize);
-    auto h = new (v) header(size);
-    memset(v + hsize, '$', asize - hsize);
-    return h + 1;
+    memset(v + size, '$', asize - size);
+    return v;
 }
 
 void free(void* v)
@@ -695,14 +695,14 @@ void free(void* v)
     if (v < debug_base) {
         return std_free(v);
     }
-    auto h = static_cast<header*>(v) - 1;
+    auto h = static_cast<header*>(v - pad_before);
     auto size = h->size;
-    auto hsize = size + sizeof(header);
-    auto asize = align_up(hsize, mmu::page_size);
-    char* vv = reinterpret_cast<char*>(h);
-    assert(std::all_of(vv + hsize, vv  + asize, [=](char c) { return c == '$'; }));
+    auto asize = align_up(size, mmu::page_size);
+    char* vv = reinterpret_cast<char*>(v);
+    assert(std::all_of(vv + size, vv + asize, [=](char c) { return c == '$'; }));
     h->~header();
-    mmu::vdepopulate(h, asize);
+    mmu::vdepopulate(h, mmu::page_size);
+    mmu::vdepopulate(v, asize);
 }
 
 void* realloc(void* v, size_t size)
@@ -758,6 +758,21 @@ void enable_debug_allocator()
 #if CONF_debug_memory == 1
     dbg::enabled = true;
 #endif
+}
+
+void* alloc_phys_contiguous_aligned(size_t size, size_t align)
+{
+    assert(align <= page_size); // implementation limitation
+    assert(is_power_of_two(align));
+    // make use of the standard allocator returning page-aligned
+    // physically contiguous memory:
+    size = std::max(page_size, size);
+    return std_malloc(size);
+}
+
+void free_phys_contiguous_aligned(void* p)
+{
+    std_free(p);
 }
 
 }
