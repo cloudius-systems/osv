@@ -620,23 +620,6 @@ struct fill_anon_page : fill_page {
     }
 };
 
-struct fill_file_page : fill_page {
-    fill_file_page(fileref _f, uint64_t _off, uint64_t _len)
-        : f(_f), off(_off), len(_len) {}
-    virtual void fill(void* addr, uint64_t offset) {
-        offset += off;
-        unsigned toread = 0;
-        if (offset < len) {
-            toread = std::min(len - offset, page_size);
-            read(f, addr, offset, toread);
-        }
-        memset(addr + toread, 0, page_size - toread);
-    }
-    fileref f;
-    uint64_t off;
-    uint64_t len;
-};
-
 uintptr_t allocate(uintptr_t start, size_t size, bool search,
                     fill_page& fill, unsigned perm)
 {
@@ -692,10 +675,20 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
               fileref f, f_offset offset)
 {
-    size = align_up(size, mmu::page_size);
+    auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    fill_file_page ffill(f, offset, ::size(f));
-    return (void*) allocate(start, size, search, ffill, perm);
+    fill_anon_page zfill;
+    auto v = (void*) allocate(start, asize, search, zfill, perm | perm_write);
+    auto fsize = ::size(f);
+    // FIXME: we pre-zeroed this, and now we're overwriting the zeroes
+    if (offset < fsize) {
+        read(f, v, offset, std::min(size, fsize - offset));
+    }
+    // FIXME: do this more cleverly, avoiding a second pass
+    if (!(perm & perm_write)) {
+        protect(v, asize, perm);
+    }
+    return v;
 }
 
 // Efficiently find the vma in vma_list which contains the given address.
