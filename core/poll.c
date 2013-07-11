@@ -198,10 +198,9 @@ void poll_install(struct pollreq* p)
 
         FD_LOCK(fp);
         TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
-        // We need to check for an existing event on this file here, while
-        // still holding the lock, so we don't lose an event between checking
-        // and installing. Note this means that poll_scan() in the beginning
-        // of poll() is redundant and may be removed in the future.
+        FD_UNLOCK(fp);
+        // We need to check if we missed an event on this file just before
+        // installing the poll request on it above.
         if(fo_poll(fp, entry->events)) {
             // Return immediately. poll() will call poll_scan() to get the
             // full list of events, and will call poll_uninstall() to undo
@@ -209,12 +208,9 @@ void poll_install(struct pollreq* p)
             mtx_lock(&p->_awake_mutex);
             p->_awake = true;
             mtx_unlock(&p->_awake_mutex);
-            FD_UNLOCK(fp);
             fdrop(fp);
             return;
         }
-        FD_UNLOCK(fp);
-
         fdrop(fp);
     }
 }
