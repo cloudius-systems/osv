@@ -760,4 +760,19 @@ void enable_debug_allocator()
 #endif
 }
 
+void* alloc_phys_contiguous_aligned(size_t size, size_t align)
+{
+    assert(align <= page_size); // implementation limitation
+    assert(is_power_of_two(align));
+    // make use of the standard allocator returning page-aligned
+    // physically contiguous memory:
+    size = std::max(page_size, size);
+    return std_malloc(size);
+}
+
+void free_phys_contiguous_aligned(void* p)
+{
+    std_free(p);
+}
+
 }

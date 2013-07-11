@@ -13,6 +13,9 @@ const size_t page_size = 4096;
 
 extern size_t phys_mem_size;
 
+void* alloc_phys_contiguous_aligned(size_t sz, size_t align);
+void free_phys_contiguous_aligned(void* p);
+
 void* alloc_page();
 void free_page(void* page);
 void* alloc_huge_page(size_t bytes);
