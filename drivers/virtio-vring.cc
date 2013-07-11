@@ -90,6 +90,7 @@ namespace virtio {
         trace_virtio_enable_interrupts(this);
         _avail->enable_interrupt();
         set_used_event(_used_ring_host_head, std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 
     bool
