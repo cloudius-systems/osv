@@ -155,18 +155,19 @@ void so_wake_poll(struct socket *so, struct sockbuf *sb)
 
     /* Read */
     if (&so->so_rcv == sb) {
-        if (soreadabledata(so))
+        if (soreadable(so)) {
             poll_wake(so->fp, (POLLIN | POLLRDNORM));
+            sb->sb_flags &= ~SB_SEL;
+        }
     }
 
     /* Write */
     if (&so->so_snd == sb) {
-        if (sowriteable(so))
+        if (sowriteable(so)) {
             poll_wake(so->fp, (POLLOUT | POLLWRNORM));
+            sb->sb_flags &= ~SB_SEL;
+        }
     }
-
-	sb->sb_flags &= ~SB_SEL;
-
 }
 
 /*
