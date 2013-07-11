@@ -148,8 +148,6 @@ namespace virtio {
            return;
         }
 
-        _requests = new virtio_net_req[_rx_queue->size()];
-
         if_initname(_ifn, "eth", _id);
         _ifn->if_mtu = ETHERMTU;
         _ifn->if_softc = static_cast<void*>(this);
@@ -176,10 +174,10 @@ namespace virtio {
     {
         //TODO: In theory maintain the list of free instances and gc it
         // including the thread objects and their stack
+        // Will need to clear the pending requests in the ring too
 
         ether_ifdetach(_ifn);
         if_free(_ifn);
-        if (_requests) delete [] _requests;
     }
 
     bool virtio_net::read_config()
@@ -316,7 +314,7 @@ namespace virtio {
     bool virtio_net::tx(struct mbuf *m_head, bool flush)
     {
         struct mbuf *m;
-        virtio_net_req *req = &_requests[_req_idx++%_tx_queue->size()];
+        virtio_net_req *req = new virtio_net_req;
 
         req->um.reset(m_head);
         _tx_queue->_sg_vec.clear();
@@ -338,17 +336,14 @@ namespace virtio {
                 _tx_queue->get_buf_gc();
             } else {
                 virtio_net_d("%s: no room", __FUNCTION__);
-                req->um.reset();
-                _req_idx--;
+                delete req;
                 return false;
             }
         }
 
         if (!_tx_queue->add_buf(req)) {
             trace_virtio_net_tx_failed_add_buf(_ifn->if_index);
-            // TODO clear this ugliness
-            req->um.reset();
-            _req_idx--;
+            delete req;
             return false;
         }
 
@@ -377,7 +372,7 @@ namespace virtio {
             virtio_net_req * req;
 
             while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf_elem(&len))) != nullptr) {
-                req->um.reset();
+                delete req;
                 _tx_queue->get_buf_finalize();
             }
         });

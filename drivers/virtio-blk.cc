@@ -101,8 +101,6 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     t->start();
     _msi.easy_register({ { 0, nullptr, t } });
 
-    _requests = new virtio_blk::virtio_blk_req[get_virt_queue(0)->size()];
-
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     struct virtio_blk_priv* prv;
@@ -120,8 +118,6 @@ virtio_blk::~virtio_blk()
 {
     //TODO: In theory maintain the list of free instances and gc it
     // including the thread objects and their stack
-
-    if (_requests) delete [] _requests;
 }
 
 bool virtio_blk::read_config()
@@ -172,6 +168,7 @@ void virtio_blk::response_worker() {
         while((req = static_cast<virtio_blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
             if (req->bio) biodone(req->bio, true);
             req->bio = nullptr;
+            delete req;
             queue->get_buf_finalize();
         }
     }
@@ -222,7 +219,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             return ENOTBLK;
         }
 
-        virtio_blk_req* req = &_requests[_req_idx++%queue->size()];
+        virtio_blk_req* req = new virtio_blk_req;
         req->bio = bio;
         virtio_blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
@@ -256,6 +253,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
 
         if (!queue->add_buf(req)) {
             biodone(bio, false);
+            delete req;
             return EBUSY;
         }
 

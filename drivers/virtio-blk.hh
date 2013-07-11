@@ -176,10 +176,6 @@ namespace virtio {
         static int _instance;
         int _id;
         bool _ro;
-        // ring-size array of requests that saves per item allocation
-        virtio_blk_req* _requests = nullptr;
-        // index into the above array
-        u16 _req_idx = 0;
         // This mutex protects parallel make_request invocations
         mutex _lock;
 
