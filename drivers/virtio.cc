@@ -192,23 +192,24 @@ vring* virtio_driver::get_virt_queue(unsigned idx)
 
 void virtio_driver::wait_for_queue(vring* queue, bool (vring::*pred)() const)
 {
-    if ((queue->*pred)()) {
-        return;
-    }
-    queue->enable_interrupts();
-    // It is possible that after checking pred() and before enabling
-    // interrupts, the delivered us a packet, for which we will not get an
-    // interrupt. So we much check again.
-    if ((queue->*pred)()) {
-        queue->disable_interrupts();
-        return;
-    }
-    sched::thread::wait_until([&] {
-        // Need to re-enable interrupts as the interrupt disabled them.
-        queue->enable_interrupts();
-        return (queue->*pred)();
+    sched::thread::wait_until([queue,pred] {
+        bool have_elements = (queue->*pred)();
+        if (!have_elements) {
+            queue->enable_interrupts();
+
+            // we must check that the ring is not empty *after*
+            // we enable interrupts to avoid a race where a packet
+            // may have been delivered between queue->used_ring_not_empty()
+            // and queue->enable_interrupts() above
+            have_elements = (queue->*pred)();
+            if (have_elements) {
+                queue->disable_interrupts();
+            }
+        }
+
+        trace_virtio_wait_for_queue(queue, have_elements);
+        return have_elements;
     });
-    queue->disable_interrupts();
 }
 
 u32 virtio_driver::get_device_features(void)
