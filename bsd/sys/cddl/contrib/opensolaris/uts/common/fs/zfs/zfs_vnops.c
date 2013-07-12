@@ -1639,6 +1639,7 @@ out:
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
+#endif
 
 /*
  * Create a new directory and insert it into dvp using the name
@@ -1646,12 +1647,7 @@ out:
  *
  *	IN:	dvp	- vnode of directory to add subdir to.
  *		dirname	- name of new directory.
- *		vap	- attributes of new directory.
- *		cr	- credentials of caller.
- *		ct	- caller context
- *		vsecp	- ACL to be set
- *
- *	OUT:	vpp	- vnode of created directory.
+ *		mode	- mode of new directory.
  *
  *	RETURN:	0 if success
  *		error code if failure
@@ -1660,10 +1656,8 @@ out:
  *	dvp - ctime|mtime updated
  *	 vp - ctime|mtime|atime updated
  */
-/*ARGSUSED*/
 static int
-zfs_mkdir(vnode_t *dvp, char *dirname, vattr_t *vap, vnode_t **vpp, cred_t *cr,
-    caller_context_t *ct, int flags, vsecattr_t *vsecp)
+zfs_mkdir(struct vnode *dvp, char *dirname, mode_t mode)
 {
 	znode_t		*zp, *dzp = VTOZ(dvp);
 	zfsvfs_t	*zfsvfs = dzp->z_zfsvfs;
@@ -1678,23 +1672,16 @@ zfs_mkdir(vnode_t *dvp, char *dirname, vattr_t *vap, vnode_t **vpp, cred_t *cr,
 	gid_t		gid = crgetgid(cr);
 	zfs_acl_ids_t   acl_ids;
 	boolean_t	fuid_dirtied;
+	cred_t		*cr = CRED();
+	vattr_t		va = {
+		.va_mask	= AT_TYPE|AT_MODE,
+		.va_type	= VDIR,
+		.va_mode	= mode,
+	}, *vap = &va;
 
 	ASSERT(vap->va_type == VDIR);
 
-	/*
-	 * If we have an ephemeral id, ACL, or XVATTR then
-	 * make sure file system is at proper version
-	 */
-
-	ksid = crgetsid(cr, KSID_OWNER);
-	if (ksid)
-		uid = ksid_getid(ksid);
-	else
-		uid = crgetuid(cr);
-	if (zfsvfs->z_use_fuids == B_FALSE &&
-	    (vsecp || (vap->va_mask & AT_XVATTR) ||
-	    IS_EPHEMERAL(uid) || IS_EPHEMERAL(gid)))
-		return (EINVAL);
+	uid = crgetuid(cr);
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
@@ -1710,19 +1697,9 @@ zfs_mkdir(vnode_t *dvp, char *dirname, vattr_t *vap, vnode_t **vpp, cred_t *cr,
 		ZFS_EXIT(zfsvfs);
 		return (EILSEQ);
 	}
-	if (flags & FIGNORECASE)
-		zf |= ZCILOOK;
-
-	if (vap->va_mask & AT_XVATTR) {
-		if ((error = secpolicy_xvattr(dvp, (xvattr_t *)vap,
-		    crgetuid(cr), cr, vap->va_type)) != 0) {
-			ZFS_EXIT(zfsvfs);
-			return (error);
-		}
-	}
 
 	if ((error = zfs_acl_ids_create(dzp, 0, vap, cr,
-	    vsecp, &acl_ids)) != 0) {
+	    NULL, &acl_ids)) != 0) {
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
@@ -1734,8 +1711,6 @@ zfs_mkdir(vnode_t *dvp, char *dirname, vattr_t *vap, vnode_t **vpp, cred_t *cr,
 	 * to fail.
 	 */
 top:
-	*vpp = NULL;
-
 	if (error = zfs_dirent_lock(&dl, dzp, dirname, &zp, zf,
 	    NULL, NULL)) {
 		zfs_acl_ids_free(&acl_ids);
@@ -1743,12 +1718,14 @@ top:
 		return (error);
 	}
 
+#ifdef ACL_TODO
 	if (error = zfs_zaccess(dzp, ACE_ADD_SUBDIRECTORY, 0, B_FALSE, cr)) {
 		zfs_acl_ids_free(&acl_ids);
 		zfs_dirent_unlock(dl);
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
+#endif
 
 	if (zfs_acl_ids_overquota(zfsvfs, &acl_ids)) {
 		zfs_acl_ids_free(&acl_ids);
@@ -1801,12 +1778,8 @@ top:
 	 */
 	(void) zfs_link_create(dl, zp, tx, ZNEW);
 
-	*vpp = ZTOV(zp);
-
-	txtype = zfs_log_create_txtype(Z_DIR, vsecp, vap);
-	if (flags & FIGNORECASE)
-		txtype |= TX_CI;
-	zfs_log_create(zilog, tx, txtype, dzp, zp, dirname, vsecp,
+	txtype = zfs_log_create_txtype(Z_DIR, NULL, vap);
+	zfs_log_create(zilog, tx, txtype, dzp, zp, dirname, NULL,
 	    acl_ids.z_fuidp, vap);
 
 	zfs_acl_ids_free(&acl_ids);
@@ -1815,6 +1788,8 @@ top:
 
 	zfs_dirent_unlock(dl);
 
+	zfs_zinactive(zp);
+
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
 
@@ -1822,6 +1797,7 @@ top:
 	return (0);
 }
 
+#ifdef NOTYET
 /*
  * Remove a directory subdir entry.  If the current working
  * directory is the same as the subdir to be removed, the
@@ -5722,7 +5698,7 @@ struct vnops zfs_vnops = {
 	zfs_create,			/* create */
 	NULL,				/* remove */
 	NULL,				/* rename */
-	NULL,				/* mkdir */
+	zfs_mkdir,			/* mkdir */
 	NULL,				/* rmdir */
 	NULL,				/* getattr */
 	NULL,				/* setattr */
