@@ -68,6 +68,7 @@ extern "C" {
 #include <sys/sbuf.h>
 #include <sys/priv.h>
 #include <sys/refstr.h>
+#include <sys/policy.h>
 #include <sys/zone.h>
 #include <sys/eventhandler.h>
 #include <sys/misc.h>

@@ -31,7 +31,6 @@
 
 #include <sys/param.h>
 
-#if 0
 #ifdef _KERNEL
 
 #include <sys/vnode.h>
@@ -73,6 +72,5 @@ int	secpolicy_xvattr(vnode_t *vp, xvattr_t *xvap, uid_t owner, cred_t *cr,
 int	secpolicy_smb(cred_t *cr);
 
 #endif	/* _KERNEL */
-#endif
 
 #endif	/* _OPENSOLARIS_SYS_POLICY_H_ */

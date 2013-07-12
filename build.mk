@@ -247,6 +247,7 @@ solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_cmn_err.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kmem.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kobj.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_policy.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
