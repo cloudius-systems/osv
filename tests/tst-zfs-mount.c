@@ -24,6 +24,7 @@ int main(int argc, char **argv)
 	char path[PATH_MAX];
 	struct dirent *d;
 	struct stat s;
+	int fd;
 
 	if (statfs("/usr", &st) < 0)
 		perror("statfs");
@@ -69,6 +70,19 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	fd = creat("/usr/foo", 0666);
+	if (fd < 0) {
+		perror("creat");
+		return EXIT_FAILURE;
+	}
+
+	if (fstat(fd, &s) < 0) {
+		perror("fstat");
+		return EXIT_FAILURE;
+	}
+	printf("fstat done\n");
+
+	close(fd);
 
 #if 0
 	fd = open("/mnt/tests/tst-zfs-simple.c", O_RDONLY);
