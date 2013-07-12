@@ -17,6 +17,8 @@ __BEGIN_DECLS
 
 typedef unsigned char bsd_sa_family_t;
 
+typedef int accmode_t;
+
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
 
