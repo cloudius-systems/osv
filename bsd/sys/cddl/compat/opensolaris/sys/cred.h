@@ -47,4 +47,9 @@ typedef struct ucred ucred_t;
 #define	crgetngroups(cred)	0
 #define	crgetsid(cred, i)	NULL
 
+static inline int groupmember(gid_t gid, const cred_t *cr)
+{
+	return 1; /* only one user and group in OSv */
+}
+
 #endif	/* _OPENSOLARIS_SYS_CRED_H_ */
