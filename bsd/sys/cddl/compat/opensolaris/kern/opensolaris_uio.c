@@ -41,7 +41,8 @@
  */
 
 #include <sys/types.h>
-#include <sys/uio.h>
+#include <osv/uio.h>
+#include <sys/solaris_uio.h>
 
 /*
  * same as uiomove() but doesn't modify uio structure.
@@ -62,22 +63,10 @@ uiocopy(void *p, size_t n, enum uio_rw rw, struct uio *uio, size_t *cbytes)
 		if (cnt == 0)
 			continue;
 
-		switch (uio->uio_segflg) {
-		case UIO_USERSPACE:
-			if (rw == UIO_READ)
-				error = copyout(p, iov->iov_base, cnt);
-			else
-				error = copyin(iov->iov_base, p, cnt);
-			if (error)
-				return (error);
-			break;
-		case UIO_SYSSPACE:
-			if (uio->uio_rw == UIO_READ)
-				bcopy(p, iov->iov_base, cnt);
-			else
-				bcopy(iov->iov_base, p, cnt);
-			break;
-		}
+		if (uio->uio_rw == UIO_READ)
+			bcopy(p, iov->iov_base, cnt);
+		else
+			bcopy(iov->iov_base, p, cnt);
 
 		p = (caddr_t)p + cnt;
 		n -= cnt;
