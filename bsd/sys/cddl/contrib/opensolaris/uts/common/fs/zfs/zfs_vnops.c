@@ -630,7 +630,6 @@ out:
 	return (error);
 }
 
-#ifdef NOTYET
 /*
  * Write the bytes to a file.
  *
@@ -638,8 +637,6 @@ out:
  *		uio	- structure supplying write location, range info,
  *			  and data buffer.
  *		ioflag	- FAPPEND flag set if in append mode.
- *		cr	- credentials of caller.
- *		ct	- caller context (NFS/CIFS fem monitor only)
  *
  *	OUT:	uio	- updated offset and range.
  *
@@ -652,10 +649,9 @@ out:
 
 /* ARGSUSED */
 static int
-zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
+zfs_write(vnode_t *vp, uio_t *uio, int ioflag)
 {
 	znode_t		*zp = VTOZ(vp);
-	rlim64_t	limit = MAXOFFSET_T;
 	ssize_t		start_resid = uio->uio_resid;
 	ssize_t		tx_bytes;
 	uint64_t	end_size;
@@ -668,9 +664,6 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 	int		max_blksz = zfsvfs->z_max_blksz;
 	int		error;
 	arc_buf_t	*abuf;
-	iovec_t		*aiov;
-	xuio_t		*xuio = NULL;
-	int		i_iov = 0;
 	int		iovcnt = uio->uio_iovcnt;
 	iovec_t		*iovp = uio->uio_iov;
 	int		write_eof;
@@ -684,9 +677,6 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 	n = start_resid;
 	if (n == 0)
 		return (0);
-
-	if (limit == RLIM64_INFINITY || limit > MAXOFFSET_T)
-		limit = MAXOFFSET_T;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
@@ -702,7 +692,7 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 	 * If immutable or not appending then return EPERM
 	 */
 	if ((zp->z_pflags & (ZFS_IMMUTABLE | ZFS_READONLY)) ||
-	    ((zp->z_pflags & ZFS_APPENDONLY) && !(ioflag & FAPPEND) &&
+	    ((zp->z_pflags & ZFS_APPENDONLY) && !(ioflag & IO_APPEND) &&
 	    (uio->uio_loffset < zp->z_size))) {
 		ZFS_EXIT(zfsvfs);
 		return (EPERM);
@@ -713,39 +703,16 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 	/*
 	 * Validate file offset
 	 */
-	woff = ioflag & FAPPEND ? zp->z_size : uio->uio_loffset;
+	woff = ioflag & IO_APPEND ? zp->z_size : uio->uio_loffset;
 	if (woff < 0) {
 		ZFS_EXIT(zfsvfs);
 		return (EINVAL);
 	}
 
 	/*
-	 * Check for mandatory locks before calling zfs_range_lock()
-	 * in order to prevent a deadlock with locks set via fcntl().
-	 */
-	if (MANDMODE((mode_t)zp->z_mode) &&
-	    (error = chklock(vp, FWRITE, woff, n, uio->uio_fmode, ct)) != 0) {
-		ZFS_EXIT(zfsvfs);
-		return (error);
-	}
-
-#ifdef sun
-	/*
-	 * Pre-fault the pages to ensure slow (eg NFS) pages
-	 * don't hold up txg.
-	 * Skip this if uio contains loaned arc_buf.
-	 */
-	if ((uio->uio_extflg == UIO_XUIO) &&
-	    (((xuio_t *)uio)->xu_type == UIOTYPE_ZEROCOPY))
-		xuio = (xuio_t *)uio;
-	else
-		uio_prefaultpages(MIN(n, max_blksz), uio);
-#endif	/* sun */
-
-	/*
 	 * If in append mode, set the io offset pointer to eof.
 	 */
-	if (ioflag & FAPPEND) {
+	if (ioflag & IO_APPEND) {
 		/*
 		 * Obtain an appending range lock to guarantee file append
 		 * semantics.  We reset the write offset once we have the lock.
@@ -770,21 +737,6 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag, cred_t *cr, caller_context_t *ct)
 		rl = zfs_range_lock(zp, woff, n, RL_WRITER);
 	}
 
-	if (vn_rlimit_fsize(vp, uio, uio->uio_td)) {
-		zfs_range_unlock(rl);
-		ZFS_EXIT(zfsvfs);
-		return (EFBIG);
-	}
-
-	if (woff >= limit) {
-		zfs_range_unlock(rl);
-		ZFS_EXIT(zfsvfs);
-		return (EFBIG);
-	}
-
-	if ((woff + n) > limit || woff > (limit - n))
-		n = limit - woff;
-
 	/* Will this write extend the file length? */
 	write_eof = (woff + n > zp->z_size);
 
@@ -807,18 +759,7 @@ again:
 			break;
 		}
 
-		if (xuio && abuf == NULL) {
-			ASSERT(i_iov < iovcnt);
-			aiov = &iovp[i_iov];
-			abuf = dmu_xuio_arcbuf(xuio, i_iov);
-			dmu_xuio_clear(xuio, i_iov);
-			DTRACE_PROBE3(zfs_cp_write, int, i_iov,
-			    iovec_t *, aiov, arc_buf_t *, abuf);
-			ASSERT((aiov->iov_base == abuf->b_data) ||
-			    ((char *)aiov->iov_base - (char *)abuf->b_data +
-			    aiov->iov_len == arc_buf_size(abuf)));
-			i_iov++;
-		} else if (abuf == NULL && n >= max_blksz &&
+		if (abuf == NULL && n >= max_blksz &&
 		    woff >= zp->z_size &&
 		    P2PHASE(woff, max_blksz) == 0 &&
 		    zp->z_blksz == max_blksz) {
@@ -889,7 +830,7 @@ again:
 		nbytes = MIN(n, max_blksz - P2PHASE(woff, max_blksz));
 
 		if (woff + nbytes > zp->z_size)
-			vnode_pager_setsize(vp, woff + nbytes);
+			vp->v_size = woff + nbytes;
 
 		if (abuf == NULL) {
 			tx_bytes = uio->uio_resid;
@@ -898,31 +839,11 @@ again:
 			tx_bytes -= uio->uio_resid;
 		} else {
 			tx_bytes = nbytes;
-			ASSERT(xuio == NULL || tx_bytes == aiov->iov_len);
-			/*
-			 * If this is not a full block write, but we are
-			 * extending the file past EOF and this data starts
-			 * block-aligned, use assign_arcbuf().  Otherwise,
-			 * write via dmu_write().
-			 */
-			if (tx_bytes < max_blksz && (!write_eof ||
-			    aiov->iov_base != abuf->b_data)) {
-				ASSERT(xuio);
-				dmu_write(zfsvfs->z_os, zp->z_id, woff,
-				    aiov->iov_len, aiov->iov_base, tx);
-				dmu_return_arcbuf(abuf);
-				xuio_stat_wbuf_copied();
-			} else {
-				ASSERT(xuio || tx_bytes == max_blksz);
-				dmu_assign_arcbuf(sa_get_db(zp->z_sa_hdl),
-				    woff, abuf, tx);
-			}
+
+			ASSERT(tx_bytes == max_blksz);
+			dmu_assign_arcbuf(sa_get_db(zp->z_sa_hdl), woff, abuf, tx);
 			ASSERT(tx_bytes <= uio->uio_resid);
 			uioskip(uio, tx_bytes);
-		}
-		if (tx_bytes && vn_has_cached_data(vp)) {
-			update_pages(vp, woff, tx_bytes, zfsvfs->z_os,
-			    zp->z_id, uio->uio_segflg, tx);
 		}
 
 		/*
@@ -936,31 +857,6 @@ again:
 			ASSERT(error != 0);
 			break;
 		}
-
-		/*
-		 * Clear Set-UID/Set-GID bits on successful write if not
-		 * privileged and at least one of the excute bits is set.
-		 *
-		 * It would be nice to to this after all writes have
-		 * been done, but that would still expose the ISUID/ISGID
-		 * to another app after the partial write is committed.
-		 *
-		 * Note: we don't call zfs_fuid_map_id() here because
-		 * user 0 is not an ephemeral uid.
-		 */
-		mutex_enter(&zp->z_acl_lock);
-		if ((zp->z_mode & (S_IXUSR | (S_IXUSR >> 3) |
-		    (S_IXUSR >> 6))) != 0 &&
-		    (zp->z_mode & (S_ISUID | S_ISGID)) != 0 &&
-		    secpolicy_vnode_setid_retain(vp, cr,
-		    (zp->z_mode & S_ISUID) != 0 && zp->z_uid == 0) != 0) {
-			uint64_t newmode;
-			zp->z_mode &= ~(S_ISUID | S_ISGID);
-			newmode = zp->z_mode;
-			(void) sa_update(zp->z_sa_hdl, SA_ZPL_MODE(zfsvfs),
-			    (void *)&newmode, sizeof (uint64_t), tx);
-		}
-		mutex_exit(&zp->z_acl_lock);
 
 		zfs_tstamp_update_setup(zp, CONTENT_MODIFIED, mtime, ctime,
 		    B_TRUE);
@@ -991,11 +887,6 @@ again:
 			break;
 		ASSERT(tx_bytes == nbytes);
 		n -= nbytes;
-
-#ifdef sun
-		if (!xuio && n > 0)
-			uio_prefaultpages(MIN(n, max_blksz), uio);
-#endif	/* sun */
 	}
 
 	zfs_range_unlock(rl);
@@ -1009,14 +900,15 @@ again:
 		return (error);
 	}
 
+#ifdef TODO_FSYNC
 	if (ioflag & (FSYNC | FDSYNC) ||
 	    zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, zp->z_id);
+#endif
 
 	ZFS_EXIT(zfsvfs);
 	return (0);
 }
-#endif
 
 void
 zfs_get_done(zgd_t *zgd, int error)
@@ -5689,7 +5581,7 @@ struct vnops zfs_vnops = {
 	zfs_open,			/* open */
 	zfs_close,			/* close */
 	zfs_read,			/* read */
-	NULL, 				/* write */
+	zfs_write,			/* write */
 	zfs_seek,			/* seek */
 	(vnop_ioctl_t)vop_einval,	/* ioctl */
 	zfs_fsync,			/* fsync */
