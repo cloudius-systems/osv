@@ -70,6 +70,15 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	if (mkdir("/usr/testdir", 0777) < 0) {
+		perror("mkdir");
+		return EXIT_FAILURE;
+	}
+	if (stat("/usr/testdir", &s) < 0) {
+		perror("stat dir");
+		return EXIT_FAILURE;
+	}
+
 	fd = creat("/usr/foo", 0666);
 	if (fd < 0) {
 		perror("creat");
