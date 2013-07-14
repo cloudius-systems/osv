@@ -3,8 +3,8 @@
 
 #include "processor.hh"
 #include "exceptions.hh"
-#include "mempool.hh"
 #include "cpuid.hh"
+#include "osv/pagealloc.hh"
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));

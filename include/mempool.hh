@@ -6,6 +6,7 @@
 #include <boost/intrusive/list.hpp>
 #include <osv/mutex.h>
 #include <arch.hh>
+#include <osv/pagealloc.hh>
 
 namespace memory {
 
@@ -16,10 +17,6 @@ extern size_t phys_mem_size;
 void* alloc_phys_contiguous_aligned(size_t sz, size_t align);
 void free_phys_contiguous_aligned(void* p);
 
-void* alloc_page();
-void free_page(void* page);
-void* alloc_huge_page(size_t bytes);
-void free_huge_page(void *page, size_t bytes);
 void setup_free_memory(void* start, size_t bytes);
 
 void debug_memory_pool(size_t *total, size_t *contig);
