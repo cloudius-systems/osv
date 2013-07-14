@@ -18,12 +18,12 @@ extern char _percpu_start[], _percpu_end[], _percpu_sec_end[];
 
 namespace sched {
 
-tracepoint<1001, thread*, s64, s64> trace_switch("sched_switch", "to %p vold=%d vnew=%d");
-tracepoint<1002> trace_wait("sched_wait", "");
-tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
-tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
-tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
-tracepoint<1006> trace_preempt("sched_preempt", "");
+TRACEPOINT(trace_sched_switch, "to %p vold=%d vnew=%d", thread*, s64, s64);
+TRACEPOINT(trace_sched_wait, "");
+TRACEPOINT(trace_sched_wake, "wake %p", thread*);
+TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
+TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
+TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
@@ -123,14 +123,14 @@ void cpu::reschedule_from_interrupt(bool preempt)
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
         if (preempt) {
-            trace_preempt();
+            trace_sched_preempt();
             p->_fpu.save();
         }
         if (p->_status.load(std::memory_order_relaxed) == thread::status::queued
                 && p != idle_thread) {
             n->_vruntime += context_switch_penalty;
         }
-        trace_switch(n, p->_vruntime, n->_vruntime);
+        trace_sched_switch(n, p->_vruntime, n->_vruntime);
         update_preemption_timer(n, now, 0);
         n->switch_to();
         if (preempt) {
@@ -220,7 +220,7 @@ void cpu::handle_incoming_wakeups()
 
 void cpu::enqueue(thread& t, bool waking)
 {
-    trace_queue(&t);
+    trace_sched_queue(&t);
     if (waking) {
         // If a waking thread has a really low vruntime, allow it only
         // one extra timeslice; otherwise it would dominate the runqueue
@@ -271,7 +271,7 @@ void cpu::load_balance()
                 return;
             }
             auto& mig = *i;
-            trace_migrate(&mig, min->id);
+            trace_sched_migrate(&mig, min->id);
             runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
             // we won't race with wake(), since we're not thread::waiting
             assert(mig._status.load() == thread::status::queued);
@@ -466,7 +466,7 @@ void thread::unref()
 
 void thread::wake()
 {
-    trace_wake(this);
+    trace_sched_wake(this);
     status old_status = status::waiting;
     if (!_status.compare_exchange_strong(old_status, status::waking)) {
         return;
@@ -497,7 +497,7 @@ thread* thread::current()
 
 void thread::wait()
 {
-    trace_wait();
+    trace_sched_wait();
     schedule(true);
 }
 
