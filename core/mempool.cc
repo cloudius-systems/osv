@@ -590,6 +590,9 @@ static inline void* std_malloc(size_t size)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
     if (size <= memory::pool::max_object_size) {
+        if (!smp_allocator) {
+            return memory::alloc_page() + memory::non_mempool_obj_offset;
+        }
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
@@ -644,7 +647,10 @@ static inline void std_free(void* object)
         return;
     }
     memory::tracker_forget(object);
-    if (reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1)) {
+    auto offset = reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1);
+    if (offset == memory::non_mempool_obj_offset) {
+        memory::free_page(object - offset);
+    } else if (offset) {
         return memory::pool::from_object(object)->free(object);
     } else {
         return memory::free_large(object);

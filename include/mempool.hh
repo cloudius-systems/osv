@@ -23,6 +23,9 @@ void debug_memory_pool(size_t *total, size_t *contig);
 
 namespace bi = boost::intrusive;
 
+// pre-mempool object smaller than a page
+static constexpr size_t non_mempool_obj_offset = 8;
+
 class pool {
 public:
     explicit pool(unsigned size);
@@ -51,6 +54,8 @@ private:
         bi::list_member_hook<> free_link;
         free_object* local_free;  // free objects in this page
     };
+
+    static_assert(non_mempool_obj_offset < sizeof(page_header), "non_mempool_obj_offset too large");
 
     typedef bi::list<page_header,
                      bi::member_hook<page_header,
