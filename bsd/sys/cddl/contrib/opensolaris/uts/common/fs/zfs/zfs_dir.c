@@ -445,6 +445,7 @@ zfs_dirlook(znode_t *dzp, char *name, vnode_t **vpp, int flags,
 
 	return (error);
 }
+#endif
 
 /*
  * unlinked Set (formerly known as the "delete queue") Error Handling
@@ -519,11 +520,12 @@ zfs_unlinked_drain(zfsvfs_t *zfsvfs)
 			continue;
 
 		zp->z_unlinked = B_TRUE;
-		VN_RELE(ZTOV(zp));
+		zfs_zinactive(zp);
 	}
 	zap_cursor_fini(&zc);
 }
 
+#ifdef NOTYET
 /*
  * Delete the entire contents of a directory.  Return a count
  * of the number of entries that could not be deleted. If we encounter
@@ -695,6 +697,7 @@ out:
 	if (xzp)
 		VN_RELE(ZTOV(xzp));
 }
+#endif
 
 static uint64_t
 zfs_dirent(znode_t *zp, uint64_t mode)
@@ -775,7 +778,9 @@ zfs_link_create(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag)
 	    8, 1, &value, tx);
 	ASSERT(error == 0);
 
+#ifndef __OSV__
 	dnlc_update(ZTOV(dzp), dl->dl_name, vp);
+#endif
 
 	return (0);
 }
@@ -825,9 +830,12 @@ zfs_link_destroy(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag,
 	int count = 0;
 	int error;
 
+#ifndef __OSV__
 	dnlc_remove(ZTOV(dzp), dl->dl_name);
+#endif
 
 	if (!(flag & ZRENAMING)) {
+#ifndef __OSV__
 		if (vn_vfswlock(vp))		/* prevent new mounts on zp */
 			return (EBUSY);
 
@@ -835,12 +843,15 @@ zfs_link_destroy(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag,
 			vn_vfsunlock(vp);
 			return (EBUSY);
 		}
+#endif
 
 		mutex_enter(&zp->z_lock);
 
 		if (zp_is_dir && !zfs_dirempty(zp)) {
 			mutex_exit(&zp->z_lock);
+#ifndef __OSV__
 			vn_vfsunlock(vp);
+#endif
 			return (ENOTEMPTY);
 		}
 
@@ -852,7 +863,9 @@ zfs_link_destroy(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag,
 		error = zfs_dropname(dl, zp, dzp, tx, flag);
 		if (error != 0) {
 			mutex_exit(&zp->z_lock);
+#ifndef __OSV__
 			vn_vfsunlock(vp);
+#endif
 			return (error);
 		}
 
@@ -881,7 +894,9 @@ zfs_link_destroy(zfs_dirlock_t *dl, znode_t *zp, dmu_tx_t *tx, int flag,
 		count = 0;
 		ASSERT(error == 0);
 		mutex_exit(&zp->z_lock);
+#ifndef __OSV__
 		vn_vfsunlock(vp);
+#endif
 	} else {
 		error = zfs_dropname(dl, zp, dzp, tx, flag);
 		if (error != 0)
@@ -925,6 +940,7 @@ zfs_dirempty(znode_t *dzp)
 	return (dzp->z_size == 2 && dzp->z_dirlocks == 0);
 }
 
+#ifdef NOTYET
 int
 zfs_make_xattrdir(znode_t *zp, vattr_t *vap, vnode_t **xvpp, cred_t *cr)
 {
