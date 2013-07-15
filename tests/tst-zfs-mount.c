@@ -99,6 +99,11 @@ int main(int argc, char **argv)
 
 	close(fd);
 
+	if (unlink("/usr/foo") < 0) {
+		perror("unlink");
+		return EXIT_FAILURE;
+	}
+
 #if 0
 	fd = open("/mnt/tests/tst-zfs-simple.c", O_RDONLY);
 	if (fd < 0) {
