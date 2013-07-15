@@ -31,6 +31,7 @@ TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 std::vector<cpu*> cpus;
 
 thread __thread * s_current;
+cpu __thread * current_cpu;
 
 unsigned __thread preempt_counter = 1;
 bool __thread need_reschedule = false;
@@ -76,6 +77,9 @@ cpu::cpu(unsigned _id)
     percpu_base = _percpu_end + id * pcpu_size;
     memcpy(percpu_base, _percpu_start, pcpu_size);
     percpu_base -= reinterpret_cast<size_t>(_percpu_start);
+    if (id == 0) {
+        ::percpu_base = percpu_base;
+    }
 }
 
 void cpu::init_idle_thread()
@@ -279,6 +283,7 @@ void cpu::load_balance()
             mig.suspend_timers();
             mig._cpu = min;
             mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
+            mig.remote_thread_local_var(current_cpu) = min;
             min->incoming_wakeups[id].push_front(mig);
             min->incoming_wakeups_mask.set(id);
             // FIXME: avoid if the cpu is alive and if the priority does not
@@ -402,6 +407,10 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     if (main) {
         _cpu = attr.pinned_cpu;
         _status.store(status::running);
+        if (_cpu == sched::cpus[0]) {
+            s_current = this;
+        }
+        remote_thread_local_var(current_cpu) = _cpu;
     }
 }
 
@@ -423,6 +432,7 @@ void thread::start()
 {
     _cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
     remote_thread_local_var(percpu_base) = _cpu->percpu_base;
+    remote_thread_local_var(current_cpu) = _cpu;
     assert(_status == status::unstarted);
     _status.store(status::waiting);
     wake();

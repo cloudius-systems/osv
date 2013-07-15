@@ -70,6 +70,7 @@ void thread::switch_to_first()
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<u64>(_tcb));
     barrier();
     s_current = this;
+    current_cpu = _cpu;
     remote_thread_local_var(percpu_base) = _cpu->percpu_base;
     _cpu->arch.set_interrupt_stack(&_arch);
     asm volatile

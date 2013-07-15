@@ -480,7 +480,7 @@ inline cpu* thread::tcpu()
 
 inline cpu* cpu::current()
 {
-    return thread::current()->tcpu();
+    return current_cpu;
 }
 
 inline
