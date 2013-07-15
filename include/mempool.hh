@@ -7,6 +7,7 @@
 #include <osv/mutex.h>
 #include <arch.hh>
 #include <osv/pagealloc.hh>
+#include <osv/percpu.hh>
 
 namespace memory {
 
@@ -62,9 +63,13 @@ private:
                                      bi::list_member_hook<>,
                                      &page_header::free_link>,
                      bi::constant_time_size<false>
-                    > CACHELINE_ALIGNED free_list_type;
+                    > free_list_base_type;
+    class free_list_type : public free_list_base_type {
+    public:
+        ~free_list_type() { assert(empty()); }
+    };
     // maintain a list of free pages percpu
-    free_list_type _free[64];
+    dynamic_percpu<free_list_type> _free;
 public:
     static const size_t max_object_size;
     static const size_t min_object_size;

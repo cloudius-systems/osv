@@ -153,8 +153,6 @@ pool::pool(unsigned size)
 
 pool::~pool()
 {
-    for (int i=0; i<64; i++)
-        assert(_free[i].empty());
 }
 
 const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
@@ -179,22 +177,20 @@ void* pool::alloc()
         // We enable preemption because add_page() may take a Mutex.
         // this loop ensures we have at least one free page that we can
         // allocate from, in from the context of the current cpu
-        unsigned cur_cpu = mempool_cpuid();
-        while (_free[cur_cpu].empty()) {
+        while (_free->empty()) {
             sched::preempt_enable();
             add_page();
             sched::preempt_disable();
-            cur_cpu = mempool_cpuid();
         }
 
         // We have a free page, get one object and return it to the user
-        auto it = _free[cur_cpu].begin();
+        auto it = _free->begin();
         page_header *header = &(*it);
         free_object* obj = header->local_free;
         ++header->nalloc;
         header->local_free = obj->next;
         if (!header->local_free) {
-            _free[cur_cpu].erase(it);
+            _free->erase(it);
         }
         ret = obj;
     });
@@ -228,7 +224,7 @@ void pool::add_page()
             obj->next = header->local_free;
             header->local_free = obj;
         }
-        _free[header->cpu_id].push_back(*header);
+        _free->push_back(*header);
     });
 }
 
@@ -240,7 +236,7 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
     page_header* header = to_header(obj);
     if (!--header->nalloc) {
         if (header->local_free) {
-            _free[cpu_id].erase(_free[cpu_id].iterator_to(*header));
+            _free->erase(_free->iterator_to(*header));
         }
         // FIXME: add hysteresis
         sched::preempt_enable();
@@ -248,7 +244,7 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
         sched::preempt_disable();
     } else {
         if (!header->local_free) {
-            _free[cpu_id].push_front(*header);
+            _free->push_front(*header);
         }
         obj->next = header->local_free;
         header->local_free = obj;
