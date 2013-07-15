@@ -9,6 +9,7 @@
 /usr/lib/jvm/&/jre/lib/amd64/libfontmanager.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libnet.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libjavajpeg.so: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/amd64/libmanagement.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/resources.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/rt.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/jsse.jar: %(jdkbase)s/&
@@ -20,6 +21,7 @@
 /usr/lib/jvm/&/jre/lib/rhino.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/meta-index: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/currency.data: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/management-agent.jar: %(jdkbase)s/&
 /usr/lib/libstdc++.so.6: %(gccbase)s/usr/lib64/libstdc++.so.6
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1
