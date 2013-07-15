@@ -28,7 +28,7 @@ TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
-std::vector<cpu*> cpus;
+std::vector<cpu*> cpus __attribute__((init_priority(102)));
 
 thread __thread * s_current;
 cpu __thread * current_cpu;
@@ -45,7 +45,7 @@ constexpr s64 max_slice = 10_ms;
 constexpr s64 context_switch_penalty = 10_us;
 
 mutex cpu::notifier::_mtx;
-std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(300)));
+std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(205)));
 
 }
 
@@ -823,7 +823,6 @@ void init_detached_threads_reaper()
 void init(elf::tls_data tls_data, std::function<void ()> cont)
 {
     tls = tls_data;
-    smp_init();
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     attr.pinned_cpu = smp_initial_find_current_cpu();

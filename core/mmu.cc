@@ -52,6 +52,7 @@ struct vma_list_type : vma_list_base {
     }
 };
 
+__attribute__((init_priority(220)))
 vma_list_type vma_list;
 
 // A fairly coarse-grained mutex serializing modifications to both
