@@ -10,16 +10,10 @@
 
 class per_cpu_counter {
 public:
-    explicit per_cpu_counter();
-    ~per_cpu_counter();
     void increment();
     ulong read();
 private:
-    unsigned _index;
-private:
-    static percpu<ulong*> _counters;
-    static sched::cpu::notifier _cpu_notifier;
-    static void init_on_cpu();
+    dynamic_percpu<ulong> _counter;
 };
 
 #endif /* PER_CPU_COUNTER_HH_ */
