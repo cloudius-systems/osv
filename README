@@ -5,10 +5,11 @@ To build OSv
 0) Install perquisite packages:
 
    On Fedora:
-     yum install boost-static genromfs libvirt zfs-fuse
+     yum install autoconf automake boost-static genromfs libvirt libtool \
+     	zfs-fuse
 
    On Debian:
-     apt-get install libboost-all-dev genromfs libvirt-fuse
+     apt-get install libboost-all-dev genromfs libvirt-fuse autoconf
 
 1) make sure all git submodules are uptodate
    -----------------------------------------
@@ -35,7 +36,7 @@ To build OSv
    ----------------------------------------
 
    On Fedora:
-     service zfs-fuse start
+     sudo service zfs-fuse start
 
    On Debian the daemon should be started automatically.
 
