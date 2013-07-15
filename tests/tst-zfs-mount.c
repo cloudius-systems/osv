@@ -24,6 +24,7 @@ int main(int argc, char **argv)
 	char path[PATH_MAX];
 	struct dirent *d;
 	struct stat s;
+	uint64_t foo = (uint64_t)-1;
 	int fd;
 
 	if (statfs("/usr", &st) < 0)
@@ -90,6 +91,11 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	printf("fstat done\n");
+
+	if (write(fd, &foo, sizeof(foo)) != sizeof(foo)) {
+		perror("write");
+		return EXIT_FAILURE;
+	}
 
 	close(fd);
 
