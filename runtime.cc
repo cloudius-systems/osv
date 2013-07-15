@@ -169,6 +169,18 @@ tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
     return 0;
 }
 
+int vfork()
+{
+    debug("vfork stubbed\n");
+    return -1;
+}
+
+int fork()
+{
+    debug("fork stubbed\n");
+    return -1;
+}
+
 int mlockall(int flags)
 {
     return 0;
