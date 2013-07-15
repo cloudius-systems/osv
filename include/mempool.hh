@@ -39,6 +39,7 @@ private:
     struct page_header;
     struct free_object;
 private:
+    bool have_full_pages();
     void add_page();
     static page_header* to_header(free_object* object);
 

@@ -228,23 +228,33 @@ void pool::add_page()
     });
 }
 
+inline bool pool::have_full_pages()
+{
+    return !_free->empty() && _free->back().nalloc == 0;
+}
+
 void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
 {
     void* object = static_cast<void*>(obj);
     trace_pool_free_same_cpu(this, object);
 
     page_header* header = to_header(obj);
-    if (!--header->nalloc) {
+    if (!--header->nalloc && have_full_pages()) {
         if (header->local_free) {
             _free->erase(_free->iterator_to(*header));
         }
-        // FIXME: add hysteresis
         sched::preempt_enable();
         untracked_free_page(header);
         sched::preempt_disable();
     } else {
         if (!header->local_free) {
-            _free->push_front(*header);
+            if (header->nalloc) {
+                _free->push_front(*header);
+            } else {
+                // keep full pages on the back, so they're not fragmented
+                // early, and so we find them easily in have_full_pages()
+                _free->push_back(*header);
+            }
         }
         obj->next = header->local_free;
         header->local_free = obj;
