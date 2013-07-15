@@ -1294,7 +1294,6 @@ out:
 	return (error);
 }
 
-#ifdef NOTYET
 /*
  * Remove an entry from a directory.
  *
@@ -1314,14 +1313,11 @@ out:
 
 uint64_t null_xattr = 0;
 
-/*ARGSUSED*/
 static int
-zfs_remove(vnode_t *dvp, char *name, cred_t *cr, caller_context_t *ct,
-    int flags)
+zfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
-	znode_t		*zp, *dzp = VTOZ(dvp);
+	znode_t		*zp = VTOZ(vp), *dzp = VTOZ(dvp), *zp_lock;
 	znode_t		*xzp;
-	vnode_t		*vp;
 	zfsvfs_t	*zfsvfs = dzp->z_zfsvfs;
 	zilog_t		*zilog;
 	uint64_t	acl_obj, xattr_obj;
@@ -1332,20 +1328,15 @@ zfs_remove(vnode_t *dvp, char *name, cred_t *cr, caller_context_t *ct,
 	boolean_t	may_delete_now, delete_now = FALSE;
 	boolean_t	unlinked, toobig = FALSE;
 	uint64_t	txtype;
-	pathname_t	*realnmp = NULL;
-	pathname_t	realnm;
 	int		error;
 	int		zflg = ZEXISTS;
+
+	if (vp->v_type == VDIR)
+		return EPERM;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
 	zilog = zfsvfs->z_log;
-
-	if (flags & FIGNORECASE) {
-		zflg |= ZCILOOK;
-		pn_alloc(&realnm);
-		realnmp = &realnm;
-	}
 
 top:
 	xattr_obj = 0;
@@ -1353,38 +1344,18 @@ top:
 	/*
 	 * Attempt to lock directory; fail if entry doesn't exist.
 	 */
-	if (error = zfs_dirent_lock(&dl, dzp, name, &zp, zflg,
-	    NULL, realnmp)) {
-		if (realnmp)
-			pn_free(realnmp);
+	if (error = zfs_dirent_lock(&dl, dzp, name, &zp_lock, zflg,
+	    NULL, NULL)) {
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
 
-	vp = ZTOV(zp);
+	assert(zp_lock == zp);
 
-	if (error = zfs_zaccess_delete(dzp, zp, cr)) {
+#if 0
+	if (error = zfs_zaccess_delete(dzp, zp, cr))
 		goto out;
-	}
-
-	/*
-	 * Need to use rmdir for removing directories.
-	 */
-	if (vp->v_type == VDIR) {
-		error = EPERM;
-		goto out;
-	}
-
-	vnevent_remove(vp, dvp, name, ct);
-
-	if (realnmp)
-		dnlc_remove(dvp, realnmp->pn_buf);
-	else
-		dnlc_remove(dvp, name);
-
-	VI_LOCK(vp);
-	may_delete_now = vp->v_count == 1 && !vn_has_cached_data(vp);
-	VI_UNLOCK(vp);
+#endif
 
 	/*
 	 * We may delete the znode now, or we may put it in the unlinked set;
@@ -1398,14 +1369,8 @@ top:
 	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
 	zfs_sa_upgrade_txholds(tx, zp);
 	zfs_sa_upgrade_txholds(tx, dzp);
-	if (may_delete_now) {
-		toobig =
-		    zp->z_size > zp->z_blksz * DMU_MAX_DELETEBLKCNT;
-		/* if the file is too big, only hold_free a token amount */
-		dmu_tx_hold_free(tx, zp->z_id, 0,
-		    (toobig ? DMU_MAX_ACCESS : DMU_OBJECT_END));
-	}
 
+#ifdef TODO_XATTR
 	/* are there any extended attributes? */
 	error = sa_lookup(zp->z_sa_hdl, SA_ZPL_XATTR(zfsvfs),
 	    &xattr_obj, sizeof (xattr_obj));
@@ -1415,11 +1380,7 @@ top:
 		dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_TRUE);
 		dmu_tx_hold_sa(tx, xzp->z_sa_hdl, B_FALSE);
 	}
-
-	mutex_enter(&zp->z_lock);
-	if ((acl_obj = zfs_external_acl(zp)) != 0 && may_delete_now)
-		dmu_tx_hold_free(tx, acl_obj, 0, DMU_OBJECT_END);
-	mutex_exit(&zp->z_lock);
+#endif
 
 	/* charge as an update -- would be nice not to charge at all */
 	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
@@ -1427,16 +1388,15 @@ top:
 	error = dmu_tx_assign(tx, TXG_NOWAIT);
 	if (error) {
 		zfs_dirent_unlock(dl);
-		VN_RELE(vp);
+#ifdef TODO_XATTR
 		if (xzp)
 			VN_RELE(ZTOV(xzp));
+#endif
 		if (error == ERESTART) {
 			dmu_tx_wait(tx);
 			dmu_tx_abort(tx);
 			goto top;
 		}
-		if (realnmp)
-			pn_free(realnmp);
 		dmu_tx_abort(tx);
 		ZFS_EXIT(zfsvfs);
 		return (error);
@@ -1460,70 +1420,18 @@ top:
 		 * zfs_sa_upgrade().
 		 */
 		mutex_enter(&zp->z_lock);
-		VI_LOCK(vp);
 		(void) sa_lookup(zp->z_sa_hdl, SA_ZPL_XATTR(zfsvfs),
 		    &xattr_obj_unlinked, sizeof (xattr_obj_unlinked));
-		delete_now = may_delete_now && !toobig &&
-		    vp->v_count == 1 && !vn_has_cached_data(vp) &&
-		    xattr_obj == xattr_obj_unlinked && zfs_external_acl(zp) ==
-		    acl_obj;
-		VI_UNLOCK(vp);
-	}
-
-	if (delete_now) {
-#ifdef __FreeBSD__
-		panic("zfs_remove: delete_now branch taken");
-#endif
-		if (xattr_obj_unlinked) {
-			ASSERT3U(xzp->z_links, ==, 2);
-			mutex_enter(&xzp->z_lock);
-			xzp->z_unlinked = 1;
-			xzp->z_links = 0;
-			error = sa_update(xzp->z_sa_hdl, SA_ZPL_LINKS(zfsvfs),
-			    &xzp->z_links, sizeof (xzp->z_links), tx);
-			ASSERT3U(error,  ==,  0);
-			mutex_exit(&xzp->z_lock);
-			zfs_unlinked_add(xzp, tx);
-
-			if (zp->z_is_sa)
-				error = sa_remove(zp->z_sa_hdl,
-				    SA_ZPL_XATTR(zfsvfs), tx);
-			else
-				error = sa_update(zp->z_sa_hdl,
-				    SA_ZPL_XATTR(zfsvfs), &null_xattr,
-				    sizeof (uint64_t), tx);
-			ASSERT0(error);
-		}
-		VI_LOCK(vp);
-		vp->v_count--;
-		ASSERT0(vp->v_count);
-		VI_UNLOCK(vp);
-		mutex_exit(&zp->z_lock);
-		zfs_znode_delete(zp, tx);
-	} else if (unlinked) {
 		mutex_exit(&zp->z_lock);
 		zfs_unlinked_add(zp, tx);
-#ifdef __FreeBSD__
-		vp->v_vflag |= VV_NOSYNC;
-#endif
 	}
 
 	txtype = TX_REMOVE;
-	if (flags & FIGNORECASE)
-		txtype |= TX_CI;
 	zfs_log_remove(zilog, tx, txtype, dzp, name, obj);
 
 	dmu_tx_commit(tx);
 out:
-	if (realnmp)
-		pn_free(realnmp);
-
 	zfs_dirent_unlock(dl);
-
-	if (!delete_now)
-		VN_RELE(vp);
-	if (xzp)
-		VN_RELE(ZTOV(xzp));
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
@@ -1531,7 +1439,6 @@ out:
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
-#endif
 
 /*
  * Create a new directory and insert it into dvp using the name
@@ -5588,7 +5495,7 @@ struct vnops zfs_vnops = {
 	zfs_readdir,			/* readdir */
 	zfs_lookup,			/* lookup */
 	zfs_create,			/* create */
-	NULL,				/* remove */
+	zfs_remove,			/* remove */
 	NULL,				/* rename */
 	zfs_mkdir,			/* mkdir */
 	NULL,				/* rmdir */
