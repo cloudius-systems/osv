@@ -37,11 +37,11 @@
  * Provide a separate set of types for the Linux types.
  */
 typedef int		l_int;
-typedef int32_t		l_long;
+typedef long l_long;
 typedef int64_t		l_longlong;
 typedef short		l_short;
 typedef unsigned int	l_uint;
-typedef uint32_t	l_ulong;
+typedef unsigned long l_ulong;
 typedef uint64_t	l_ulonglong;
 typedef unsigned short	l_ushort;
 
