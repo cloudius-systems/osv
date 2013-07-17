@@ -253,7 +253,7 @@ private:
     friend class arch_cpu;
     friend void ::smp_main();
     friend void ::smp_launch();
-    friend void init(elf::tls_data tls, std::function<void ()> cont);
+    friend void init(std::function<void ()> cont);
 public:
     thread* _joiner;
     bi::set_member_hook<> _runqueue_link;
@@ -365,7 +365,9 @@ private:
 };
 
 // does not return - continues to @cont instead
-void init(elf::tls_data tls_data, std::function<void ()> cont);
+void init(std::function<void ()> cont);
+
+void init_tls(elf::tls_data tls);
 
 inline void acquire(mutex_t& mtx)
 {

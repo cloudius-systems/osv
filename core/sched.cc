@@ -820,14 +820,18 @@ void init_detached_threads_reaper()
     thread::_s_reaper = new thread::reaper;
 }
 
-void init(elf::tls_data tls_data, std::function<void ()> cont)
+void init(std::function<void ()> cont)
 {
-    tls = tls_data;
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     attr.pinned_cpu = smp_initial_find_current_cpu();
     thread t{cont, attr, true};
     t.switch_to_first();
+}
+
+void init_tls(elf::tls_data tls_data)
+{
+    tls = tls_data;
 }
 
 }
