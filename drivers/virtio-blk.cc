@@ -225,10 +225,8 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         virtio_blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
-        // TODO - fix offset source
-        hdr->sector = (int)bio->bio_offset/ sector_size; //wait, isn't offset starts on page addr??
+        hdr->sector = (int)bio->bio_offset/ sector_size;
 
-        //push 'output' buffers to the beginning of the sg list
         queue->_sg_vec.clear();
         queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ));
 
@@ -236,7 +234,6 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         // even if the virtual space is contiguous.
         int len = 0;
         int offset = bio->bio_offset;
-        //todo fix hack that works around the zero offset issue
         offset = 0xfff & reinterpret_cast<long>(bio->bio_data);
         void *base = bio->bio_data;
         while (len != bio->bio_bcount) {
@@ -261,7 +258,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             _request_thread_lock.unlock();
         }
 
-        queue->kick(); // should be out of the loop but I like plenty of irqs for the test
+        queue->kick();
 
         return 0;
     });
