@@ -41,6 +41,7 @@ inter_processor_interrupt wakeup_ipi{[] {}};
 
 constexpr s64 vruntime_bias = 4_ms;
 constexpr s64 max_slice = 10_ms;
+constexpr s64 context_switch_penalty = 10_us;
 
 mutex cpu::notifier::_mtx;
 std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(300)));
@@ -124,6 +125,10 @@ void cpu::reschedule_from_interrupt(bool preempt)
         if (preempt) {
             trace_preempt();
             p->_fpu.save();
+        }
+        if (p->_status.load(std::memory_order_relaxed) == thread::status::queued
+                && p != idle_thread) {
+            n->_vruntime += context_switch_penalty;
         }
         trace_switch(n, p->_vruntime, n->_vruntime);
         update_preemption_timer(n, now, 0);
