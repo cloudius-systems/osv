@@ -171,6 +171,13 @@ void virtio_blk::response_worker() {
             delete req;
             queue->get_buf_finalize();
         }
+
+        // wake up the requesting thread in case the ring was full before
+        _request_thread_lock.lock();
+        if (_waiting_request_thread) {
+            _waiting_request_thread->wake();
+        }
+        _request_thread_lock.unlock();
     }
 }
 
@@ -195,12 +202,6 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         }
 
         vring* queue = get_virt_queue(0);
-        if (!queue->avail_ring_not_empty()) {
-            virtio_w("Warn: No space on ring");
-            biodone(bio, false);
-            return ENOMEM;
-        }
-
         virtio_blk_request_type type;
 
         switch (bio->bio_cmd) {
@@ -251,10 +252,13 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         req->res.status = 0;
         queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(&req->res), sizeof (struct virtio_blk_res), vring_desc::VRING_DESC_F_WRITE));
 
-        if (!queue->add_buf(req)) {
-            biodone(bio, false);
-            delete req;
-            return EBUSY;
+        while (!queue->add_buf(req)) {
+            _waiting_request_thread = sched::thread::current();
+            std::atomic_thread_fence(std::memory_order_seq_cst);
+            sched::thread::wait_until([queue] {queue->get_buf_gc(); return queue->avail_ring_has_room(queue->_sg_vec.size());});
+            _request_thread_lock.lock();
+            _waiting_request_thread = nullptr;
+            _request_thread_lock.unlock();
         }
 
         queue->kick(); // should be out of the loop but I like plenty of irqs for the test
