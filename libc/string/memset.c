@@ -7,7 +7,7 @@
 #define ALIGN (sizeof(size_t)-1)
 #define ONES ((size_t)-1/UCHAR_MAX)
 
-void *memset(void *dest, int c, size_t n)
+void *memset_base(void *dest, int c, size_t n)
 {
 	unsigned char *s = dest;
 	c = (unsigned char)c;
