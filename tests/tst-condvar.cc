@@ -1,5 +1,8 @@
+#include <atomic>
+
 #include "sched.hh"
 #include "debug.hh"
+#include <drivers/clock.hh>
 
 #include <osv/condvar.h>
 
@@ -130,6 +133,41 @@ int main(int argc, char **argv)
         delete threads[i];
     }
     assert_idle(&cond);
+
+    debug("Measuring unwaited wake_all (one thread): ");
+    int iterations = 100000000;
+    condvar cv;
+    auto start = nanotime();
+    for (int i = 0; i < iterations; i++) {
+        cv.wake_all();
+    }
+    auto end = nanotime();
+    debug ("%d ns\n", (end-start)/iterations);
+
+
+    debug("Measuring unwaited wake_all (two threads): ");
+    iterations = 100000000;
+    unsigned int nthreads = 2;
+    assert(sched::cpus.size() >= nthreads);
+    sched::thread *threads2[nthreads];
+    std::atomic<u64> time(0);
+    for(unsigned int i = 0; i < nthreads; i++) {
+        threads2[i]= new sched::thread([iterations, &cv, &time] {
+            auto start = nanotime();
+            for (int j = 0; j < iterations; j++) {
+                cv.wake_all();
+            }
+            auto end = nanotime();
+            time += (end-start);
+        }, sched::thread::attr(sched::cpus[i]));
+        threads2[i]->start();
+    }
+    for(unsigned int i = 0; i < nthreads; i++) {
+        threads2[i]->join();
+        delete threads2[i];
+    }
+    debug ("%d ns\n", time/iterations/nthreads);
+
 
     debug("condvar tests succeeded\n");
     return 0;
