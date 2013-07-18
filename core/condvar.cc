@@ -68,6 +68,13 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
 
 void condvar_wake_one(condvar_t *condvar)
 {
+    // To make wake with no waiters faster, and avoid unnecessary contention
+    // in that case, first check the queue head outside the lock. If it is not
+    // empty, we still need to take the lock, and re-read the head.
+    if (!condvar->waiters_fifo.oldest) {
+        return;
+    }
+
     mutex_lock(&condvar->m);
     struct ccondvar_waiter *wr = condvar->waiters_fifo.oldest;
     if (wr) {
@@ -82,6 +89,10 @@ void condvar_wake_one(condvar_t *condvar)
 
 void condvar_wake_all(condvar_t *condvar)
 {
+    if (!condvar->waiters_fifo.oldest) {
+        return;
+    }
+
     mutex_lock(&condvar->m);
     struct ccondvar_waiter *wr = condvar->waiters_fifo.oldest;
     while (wr) {
