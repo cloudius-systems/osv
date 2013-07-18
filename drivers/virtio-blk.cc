@@ -175,9 +175,10 @@ void virtio_blk::response_worker() {
         // wake up the requesting thread in case the ring was full before
         _request_thread_lock.lock();
         if (_waiting_request_thread) {
-            _waiting_request_thread->wake();
+           _waiting_request_thread->wake_with([&] { _request_thread_lock.unlock(); });
+        } else {
+            _request_thread_lock.unlock();
         }
-        _request_thread_lock.unlock();
     }
 }
 
