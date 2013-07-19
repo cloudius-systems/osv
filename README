@@ -5,8 +5,8 @@ To build OSv
 0) Install perquisite packages:
 
    On Fedora:
-     yum install autoconf automake boost-static genromfs libvirt libtool \
-     	zfs-fuse
+     yum install ant autoconf automake boost-static gcc-c++ genromfs \
+        libvirt libtool zfs-fuse
 
    On Debian:
      apt-get install libboost-all-dev genromfs libvirt-fuse autoconf
