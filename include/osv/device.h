@@ -126,7 +126,64 @@ struct device {
 	int		refcnt;		/* reference count */
 	off_t		size;		/* device size */
 	void		*private_data;	/* private storage */
+
+	void *softc;
+	void *ivars;
+	device_state_t state;
+	const char *desc;
+	int unit;
+	int irq;
+	int vector;
 };
+
+typedef struct device *device_t;
+
+static inline int
+device_set_unit(device_t dev, int unit)
+{
+	dev->unit = unit;
+	return 0;
+}
+
+static inline int
+device_get_unit(device_t dev)
+{
+	return dev->unit;
+}
+
+static inline const char *
+device_get_desc(device_t dev)
+{
+	return dev->desc;
+}
+
+static inline void
+device_set_desc(device_t dev, const char* desc)
+{
+	dev->desc = desc;
+}
+
+static inline void
+device_set_softc(device_t dev, void* softc)
+{
+	dev->softc = softc;
+}
+
+static inline void *
+device_get_softc(device_t dev)
+{
+	return dev->softc;
+}
+
+static inline void device_quiet(device_t dev)
+{
+}
+
+static inline const char *
+devtoname(struct device *dev)
+{
+    return dev->name;
+}
 
 int	 device_open(const char *, int, struct device **);
 int	 device_close(struct device *);
