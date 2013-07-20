@@ -8,6 +8,7 @@
 #include <xen/interface/version.h>
 
 extern char hypercall_page[];
+extern uint8_t xen_features[];
 
 // We don't support 32 bit
 struct xen_vcpu_info {
