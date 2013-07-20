@@ -5,6 +5,7 @@
 #include "cpuid.hh"
 
 shared_info_t *HYPERVISOR_shared_info;
+uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
 
 namespace xen {
 
@@ -92,12 +93,15 @@ void xen_init(processor::features_type &features, unsigned base)
         processor::wrmsr(x.b, cast_pointer(&hypercall_page));
 
         struct xen_feature_info info;
-        info.submap_idx = 0;
-        // 6 => get features
-        if (version_hypercall(XENVER_get_features, &info) < 0)
-            assert(0);
-
-        features.xen_clocksource = (info.submap >> 9) & 1;
+        // To fill up the array used by C code
+        for (int i = 0; i < XENFEAT_NR_SUBMAPS; i++) {
+            info.submap_idx = i;
+            if (version_hypercall(XENVER_get_features, &info) < 0)
+                assert(0);
+            for (int j = 0; j < 32; j++)
+                xen_features[j] = !!(info.submap & 1<<j);
+        }
+        features.xen_clocksource = xen_features[9] & 1;
 
         struct xen_add_to_physmap map;
         map.domid = DOMID_SELF;
