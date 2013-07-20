@@ -6,6 +6,7 @@
 #include <xen/interface/xen.h>
 #include <xen/interface/memory.h>
 #include <xen/interface/version.h>
+#include <xen/interface/hvm/hvm_op.h>
 
 extern char hypercall_page[];
 extern uint8_t xen_features[];
@@ -35,6 +36,7 @@ namespace xen {
 
 void xen_init(processor::features_type &features, unsigned base);
 extern struct xen_shared_info xen_shared_info;
+void xen_set_callback(void);
 
 }
 

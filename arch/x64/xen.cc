@@ -3,6 +3,10 @@
 #include "mmu.hh"
 #include "processor.hh"
 #include "cpuid.hh"
+#include "exceptions.hh"
+#include "sched.hh"
+#include <bsd/porting/pcpu.h>
+#include <bsd/machine/xen/xen-os.h>
 
 shared_info_t *HYPERVISOR_shared_info;
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
@@ -62,6 +66,12 @@ version_hypercall(unsigned type, T... args)
     return hypercall(__HYPERVISOR_xen_version, type, cast_pointer(args)...);
 }
 
+inline ulong
+hvm_hypercall(unsigned type, struct xen_hvm_param *param)
+{
+    return hypercall(__HYPERVISOR_hvm_op, type, cast_pointer(param));
+}
+
 struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
 
 static bool xen_pci_enabled()
@@ -85,6 +95,37 @@ static bool xen_pci_enabled()
     return true;
 }
 
+#define HVM_PARAM_CALLBACK_IRQ 0
+extern "C" void evtchn_do_upcall(void *a);
+
+static void xen_ack_irq()
+{
+    auto cpu = sched::cpu::current();
+    HYPERVISOR_shared_info->vcpu_info[cpu->id].evtchn_upcall_pending = 0; 
+}
+
+void xen_set_callback()
+{
+    struct xen_hvm_param xhp;
+
+    xhp.domid = DOMID_SELF;
+    xhp.index = HVM_PARAM_CALLBACK_IRQ;
+
+    auto vector = idt.register_interrupt_handler(
+            [] {}, // pre_eoi
+            [] { xen_ack_irq(); }, // eoi
+            [] { evtchn_do_upcall(NULL);// handler
+    } );
+
+    // The param vector is comprised of the vector number in the low part, and then:
+    // - all the rest zeroed if we are requesting an ISA irq
+    // - 1 << 56, if we are requesting a PCI INTx irq, and
+    // - 2 << 56, if we are requesting a direct callback.
+    xhp.value = vector | (2ULL << 56);
+    if (hvm_hypercall(HVMOP_set_param, &xhp))
+        assert(0);
+}
+
 void xen_init(processor::features_type &features, unsigned base)
 {
         // Base + 1 would have given us the version number, it is mostly
@@ -102,6 +143,9 @@ void xen_init(processor::features_type &features, unsigned base)
                 xen_features[j] = !!(info.submap & 1<<j);
         }
         features.xen_clocksource = xen_features[9] & 1;
+        features.xen_vector_callback = xen_features[8] & 1;
+        if (!features.xen_vector_callback)
+            abort("Hypervisor does not support vectored callbacks");
 
         struct xen_add_to_physmap map;
         map.domid = DOMID_SELF;
