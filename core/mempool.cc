@@ -598,7 +598,8 @@ static inline void* std_malloc(size_t size)
 
 void* calloc(size_t nmemb, size_t size)
 {
-    // FIXME: check for overflow
+    if (nmemb > std::numeric_limits<size_t>::max() / size)
+        return NULL;
     auto n = nmemb * size;
     auto p = malloc(n);
     memset(p, 0, n);
