@@ -103,10 +103,16 @@ struct driver {
 /*
  * flags for the driver.
  */
-#define	DS_INACTIVE	0x00		/* driver is inactive */
-#define DS_ALIVE	0x01		/* probe succeded */
-#define DS_ACTIVE	0x02		/* intialized */
-#define DS_DEBUG	0x04		/* debug */
+
+typedef enum device_state {
+    DS_INACTIVE	    = 0x00,		/* driver is inactive */
+    DS_ALIVE	    = 0x01,		/* probe succeded */
+    DS_ACTIVE	    = 0x02,		/* intialized */
+    DS_DEBUG	    = 0x04,		/* debug */
+    DS_NOTPRESENT   = 0x08,     /* not probed or probe failed */
+    DS_ATTACHING    = 0x10,     /* currently attaching */
+    DS_ATTACHED     = 0x20,     /*attach method called */
+} device_state_t;
 
 /*
  * Device object
