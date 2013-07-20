@@ -33,6 +33,7 @@ extern "C" {
     void ex_ac();
     void ex_mc();
     void ex_xm();
+    void ex_xen();
 }
 
 interrupt_descriptor_table::interrupt_descriptor_table()
@@ -56,6 +57,7 @@ interrupt_descriptor_table::interrupt_descriptor_table()
     add_entry(17, 1, ex_ac);
     add_entry(18, 1, ex_mc);
     add_entry(19, 1, ex_xm);
+    add_entry(20, 2, ex_xen);
 
     extern char interrupt_entry[];
     for (unsigned i = 32; i < 256; ++i) {

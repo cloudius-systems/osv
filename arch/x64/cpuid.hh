@@ -24,6 +24,7 @@ struct features_type {
     bool kvm_clocksource_stable;
     bool kvm_pv_eoi;
     bool xen_clocksource;
+    bool xen_vector_callback;
     bool xen_pci;
 };
 

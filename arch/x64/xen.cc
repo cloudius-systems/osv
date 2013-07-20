@@ -3,6 +3,9 @@
 #include "mmu.hh"
 #include "processor.hh"
 #include "cpuid.hh"
+#include "exceptions.hh"
+#include <bsd/porting/pcpu.h>
+#include <bsd/machine/xen/xen-os.h>
 
 shared_info_t *HYPERVISOR_shared_info;
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
@@ -62,6 +65,13 @@ version_hypercall(unsigned type, T... args)
     return hypercall(__HYPERVISOR_xen_version, type, cast_pointer(args)...);
 }
 
+template <typename... T>
+inline ulong
+hvm_hypercall(unsigned type, T... args)
+{
+    return hypercall(__HYPERVISOR_hvm_op, type, cast_pointer(args)...);
+}
+
 struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
 
 static bool xen_pci_enabled()
@@ -85,6 +95,18 @@ static bool xen_pci_enabled()
     return true;
 }
 
+#define HVM_PARAM_CALLBACK_IRQ 0
+void xen_set_callback()
+{
+    struct xen_hvm_param xhp;
+
+    xhp.domid = DOMID_SELF;
+    xhp.index = HVM_PARAM_CALLBACK_IRQ;
+    xhp.value = 20 | (2ULL << 56);
+    if (hvm_hypercall(HVMOP_set_param, &xhp))
+        assert(0);
+}
+
 void xen_init(processor::features_type &features, unsigned base)
 {
         // Base + 1 would have given us the version number, it is mostly
@@ -102,6 +124,9 @@ void xen_init(processor::features_type &features, unsigned base)
                 xen_features[j] = !!(info.submap & 1<<j);
         }
         features.xen_clocksource = xen_features[9] & 1;
+        features.xen_vector_callback = xen_features[8] & 1;
+        if (!features.xen_vector_callback)
+            abort("Hypervisor does not support vectored callbacks");
 
         struct xen_add_to_physmap map;
         map.domid = DOMID_SELF;
@@ -116,4 +141,12 @@ void xen_init(processor::features_type &features, unsigned base)
         features.xen_pci = xen_pci_enabled();
         HYPERVISOR_shared_info = reinterpret_cast<shared_info_t *>(&xen_shared_info);
 }
+}
+
+extern "C" void evtchn_do_upcall(void *a);
+extern "C" void xen_do_upcall(exception_frame *ef)
+{
+    cli();
+    evtchn_do_upcall(ef);
+    sti();
 }
