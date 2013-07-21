@@ -64,9 +64,10 @@ void parse_madt()
     }
 }
 
-void smp_init()
+void __attribute__((constructor(250))) smp_init()
 {
     parse_madt();
+    sched::current_cpu = sched::cpus[0];
     for (auto c : sched::cpus) {
         c->incoming_wakeups = new sched::cpu::incoming_wakeup_queue[sched::cpus.size()];
     }
@@ -119,7 +120,6 @@ void smp_launch()
     while (smp_processors != sched::cpus.size()) {
         barrier();
     }
-    smp_allocator = true;
 }
 
 void smp_main()

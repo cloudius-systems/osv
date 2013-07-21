@@ -449,6 +449,7 @@ objects += core/poll.o
 objects += core/select.o
 objects += core/epoll.o
 objects += core/power.o
+objects += core/percpu.o
 objects += core/per-cpu-counter.o
 objects += core/percpu-worker.o
 

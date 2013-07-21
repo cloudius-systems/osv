@@ -6,6 +6,8 @@
 #include <boost/intrusive/list.hpp>
 #include <osv/mutex.h>
 #include <arch.hh>
+#include <osv/pagealloc.hh>
+#include <osv/percpu.hh>
 
 namespace memory {
 
@@ -16,15 +18,14 @@ extern size_t phys_mem_size;
 void* alloc_phys_contiguous_aligned(size_t sz, size_t align);
 void free_phys_contiguous_aligned(void* p);
 
-void* alloc_page();
-void free_page(void* page);
-void* alloc_huge_page(size_t bytes);
-void free_huge_page(void *page, size_t bytes);
 void setup_free_memory(void* start, size_t bytes);
 
 void debug_memory_pool(size_t *total, size_t *contig);
 
 namespace bi = boost::intrusive;
+
+// pre-mempool object smaller than a page
+static constexpr size_t non_mempool_obj_offset = 8;
 
 class pool {
 public:
@@ -38,6 +39,7 @@ private:
     struct page_header;
     struct free_object;
 private:
+    bool have_full_pages();
     void add_page();
     static page_header* to_header(free_object* object);
 
@@ -55,14 +57,20 @@ private:
         free_object* local_free;  // free objects in this page
     };
 
+    static_assert(non_mempool_obj_offset < sizeof(page_header), "non_mempool_obj_offset too large");
+
     typedef bi::list<page_header,
                      bi::member_hook<page_header,
                                      bi::list_member_hook<>,
                                      &page_header::free_link>,
                      bi::constant_time_size<false>
-                    > CACHELINE_ALIGNED free_list_type;
+                    > free_list_base_type;
+    class free_list_type : public free_list_base_type {
+    public:
+        ~free_list_type() { assert(empty()); }
+    };
     // maintain a list of free pages percpu
-    free_list_type _free[64];
+    dynamic_percpu<free_list_type> _free;
 public:
     static const size_t max_object_size;
     static const size_t min_object_size;

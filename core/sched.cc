@@ -18,19 +18,20 @@ extern char _percpu_start[], _percpu_end[], _percpu_sec_end[];
 
 namespace sched {
 
-tracepoint<1001, thread*, s64, s64> trace_switch("sched_switch", "to %p vold=%d vnew=%d");
-tracepoint<1002> trace_wait("sched_wait", "");
-tracepoint<1003, thread*> trace_wake("sched_wake", "wake %p");
-tracepoint<1004, thread*, unsigned> trace_migrate("sched_migrate", "thread=%p cpu=%d");
-tracepoint<1005, thread*> trace_queue("sched_queue", "thread=%p");
-tracepoint<1006> trace_preempt("sched_preempt", "");
+TRACEPOINT(trace_sched_switch, "to %p vold=%d vnew=%d", thread*, s64, s64);
+TRACEPOINT(trace_sched_wait, "");
+TRACEPOINT(trace_sched_wake, "wake %p", thread*);
+TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
+TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
+TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
-std::vector<cpu*> cpus;
+std::vector<cpu*> cpus __attribute__((init_priority(102)));
 
 thread __thread * s_current;
+cpu __thread * current_cpu;
 
 unsigned __thread preempt_counter = 1;
 bool __thread need_reschedule = false;
@@ -41,9 +42,10 @@ inter_processor_interrupt wakeup_ipi{[] {}};
 
 constexpr s64 vruntime_bias = 4_ms;
 constexpr s64 max_slice = 10_ms;
+constexpr s64 context_switch_penalty = 10_us;
 
 mutex cpu::notifier::_mtx;
-std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(300)));
+std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(205)));
 
 }
 
@@ -75,6 +77,9 @@ cpu::cpu(unsigned _id)
     percpu_base = _percpu_end + id * pcpu_size;
     memcpy(percpu_base, _percpu_start, pcpu_size);
     percpu_base -= reinterpret_cast<size_t>(_percpu_start);
+    if (id == 0) {
+        ::percpu_base = percpu_base;
+    }
 }
 
 void cpu::init_idle_thread()
@@ -99,9 +104,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
     thread* p = thread::current();
     // avoid cycling through the runqueue if p still has the highest priority
     auto bias = vruntime_bias;
-    if (p->_borrow) {
-        bias /= 2;  // preempt threads on borrowed time sooner
-    }
     s64 current_run = now - running_since;
     if (p->_vruntime + current_run < 0) { // overflow (idle thread)
         current_run = 0;
@@ -125,10 +127,14 @@ void cpu::reschedule_from_interrupt(bool preempt)
     n->_status.store(thread::status::running);
     if (n != thread::current()) {
         if (preempt) {
-            trace_preempt();
+            trace_sched_preempt();
             p->_fpu.save();
         }
-        trace_switch(n, p->_vruntime, n->_vruntime);
+        if (p->_status.load(std::memory_order_relaxed) == thread::status::queued
+                && p != idle_thread) {
+            n->_vruntime += context_switch_penalty;
+        }
+        trace_sched_switch(n, p->_vruntime, n->_vruntime);
         update_preemption_timer(n, now, 0);
         n->switch_to();
         if (preempt) {
@@ -209,26 +215,29 @@ void cpu::handle_incoming_wakeups()
             irq_save_lock_type irq_lock;
             with_lock(irq_lock, [&] {
                 t._status.store(thread::status::queued);
-                enqueue(t);
+                enqueue(t, true);
                 t.resume_timers();
             });
         }
     }
 }
 
-void cpu::enqueue(thread& t)
+void cpu::enqueue(thread& t, bool waking)
 {
-    trace_queue(&t);
-    auto head = std::min(t._vruntime, thread::current()->_vruntime);
-    auto tail = head + max_slice * int(runqueue.size());
+    trace_sched_queue(&t);
+    if (waking) {
+        // If a waking thread has a really low vruntime, allow it only
+        // one extra timeslice; otherwise it would dominate the runqueue
+        // and starve out other threads
+        auto current = thread::current();
+        if (current != idle_thread) {
+            auto head = current->_vruntime - max_slice;
+            t._vruntime = std::max(t._vruntime, head);
+        }
+    }
     // special treatment for idle thread: make sure it is in the back of the queue
     if (&t == idle_thread) {
         t._vruntime = thread::max_vruntime;
-        t._borrow = 0;
-    } else if (t._vruntime > tail) {
-        t._borrow = t._vruntime - tail;
-    } else {
-        t._borrow = 0;
     }
     runqueue.insert_equal(t);
 }
@@ -266,7 +275,7 @@ void cpu::load_balance()
                 return;
             }
             auto& mig = *i;
-            trace_migrate(&mig, min->id);
+            trace_sched_migrate(&mig, min->id);
             runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
             // we won't race with wake(), since we're not thread::waiting
             assert(mig._status.load() == thread::status::queued);
@@ -274,6 +283,7 @@ void cpu::load_balance()
             mig.suspend_timers();
             mig._cpu = min;
             mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
+            mig.remote_thread_local_var(current_cpu) = min;
             min->incoming_wakeups[id].push_front(mig);
             min->incoming_wakeups_mask.set(id);
             // FIXME: avoid if the cpu is alive and if the priority does not
@@ -370,7 +380,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)
     , _attr(attr)
-    , _vruntime(clock::get()->time())
+    , _vruntime(main ? 0 : current()->_vruntime)
     , _ref_counter(1)
     , _joiner()
 {
@@ -397,6 +407,10 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     if (main) {
         _cpu = attr.pinned_cpu;
         _status.store(status::running);
+        if (_cpu == sched::cpus[0]) {
+            s_current = this;
+        }
+        remote_thread_local_var(current_cpu) = _cpu;
     }
 }
 
@@ -418,6 +432,7 @@ void thread::start()
 {
     _cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
     remote_thread_local_var(percpu_base) = _cpu->percpu_base;
+    remote_thread_local_var(current_cpu) = _cpu;
     assert(_status == status::unstarted);
     _status.store(status::waiting);
     wake();
@@ -461,7 +476,7 @@ void thread::unref()
 
 void thread::wake()
 {
-    trace_wake(this);
+    trace_sched_wake(this);
     status old_status = status::waiting;
     if (!_status.compare_exchange_strong(old_status, status::waking)) {
         return;
@@ -492,7 +507,7 @@ thread* thread::current()
 
 void thread::wait()
 {
-    trace_wait();
+    trace_sched_wait();
     schedule(true);
 }
 
@@ -805,15 +820,18 @@ void init_detached_threads_reaper()
     thread::_s_reaper = new thread::reaper;
 }
 
-void init(elf::tls_data tls_data, std::function<void ()> cont)
+void init(std::function<void ()> cont)
 {
-    tls = tls_data;
-    smp_init();
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     attr.pinned_cpu = smp_initial_find_current_cpu();
     thread t{cont, attr, true};
     t.switch_to_first();
+}
+
+void init_tls(elf::tls_data tls_data)
+{
+    tls = tls_data;
 }
 
 }

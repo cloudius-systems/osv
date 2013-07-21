@@ -21,6 +21,8 @@
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
+TRACEPOINT(trace_memory_page_alloc, "%p", void*);
+TRACEPOINT(trace_memory_page_free, "%p", void*);
 
 bool smp_allocator = false;
 
@@ -153,8 +155,6 @@ pool::pool(unsigned size)
 
 pool::~pool()
 {
-    for (int i=0; i<64; i++)
-        assert(_free[i].empty());
 }
 
 const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
@@ -179,22 +179,20 @@ void* pool::alloc()
         // We enable preemption because add_page() may take a Mutex.
         // this loop ensures we have at least one free page that we can
         // allocate from, in from the context of the current cpu
-        unsigned cur_cpu = mempool_cpuid();
-        while (_free[cur_cpu].empty()) {
+        while (_free->empty()) {
             sched::preempt_enable();
             add_page();
             sched::preempt_disable();
-            cur_cpu = mempool_cpuid();
         }
 
         // We have a free page, get one object and return it to the user
-        auto it = _free[cur_cpu].begin();
+        auto it = _free->begin();
         page_header *header = &(*it);
         free_object* obj = header->local_free;
         ++header->nalloc;
         header->local_free = obj->next;
         if (!header->local_free) {
-            _free[cur_cpu].erase(it);
+            _free->erase(it);
         }
         ret = obj;
     });
@@ -228,8 +226,13 @@ void pool::add_page()
             obj->next = header->local_free;
             header->local_free = obj;
         }
-        _free[header->cpu_id].push_back(*header);
+        _free->push_back(*header);
     });
+}
+
+inline bool pool::have_full_pages()
+{
+    return !_free->empty() && _free->back().nalloc == 0;
 }
 
 void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
@@ -238,17 +241,22 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
     trace_pool_free_same_cpu(this, object);
 
     page_header* header = to_header(obj);
-    if (!--header->nalloc) {
+    if (!--header->nalloc && have_full_pages()) {
         if (header->local_free) {
-            _free[cpu_id].erase(_free[cpu_id].iterator_to(*header));
+            _free->erase(_free->iterator_to(*header));
         }
-        // FIXME: add hysteresis
         sched::preempt_enable();
         untracked_free_page(header);
         sched::preempt_disable();
     } else {
         if (!header->local_free) {
-            _free[cpu_id].push_front(*header);
+            if (header->nalloc) {
+                _free->push_front(*header);
+            } else {
+                // keep full pages on the back, so they're not fragmented
+                // early, and so we find them easily in have_full_pages()
+                _free->push_back(*header);
+            }
         }
         obj->next = header->local_free;
         header->local_free = obj;
@@ -327,6 +335,10 @@ pool* pool::from_object(void* object)
 malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size) + 1]
     __attribute__((init_priority(12000)));
 
+struct mark_smp_allocator_intialized {
+    mark_smp_allocator_intialized() { smp_allocator = true; }
+} s_mark_smp_alllocator_initialized __attribute__((init_priority(12000)));
+
 malloc_pool::malloc_pool()
     : pool(compute_object_size(this - malloc_pools))
 {
@@ -360,7 +372,7 @@ bi::set<page_range,
         bi::member_hook<page_range,
                        bi::set_member_hook<>,
                        &page_range::member_hook>
-       > free_page_ranges __attribute__((init_priority(12000)));
+       > free_page_ranges __attribute__((init_priority(190)));
 
 static void* malloc_large(size_t size)
 {
@@ -407,10 +419,8 @@ static page_range* merge(page_range* a, page_range* b)
 
 // Return a page range back to free_page_ranges. Note how the size of the
 // page range is range->size, but its start is at range itself.
-static void free_page_range(page_range *range)
+static void free_page_range_locked(page_range *range)
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-
     auto i = free_page_ranges.insert(*range).first;
     if (i != free_page_ranges.begin()) {
         i = free_page_ranges.iterator_to(*merge(&*boost::prior(i), &*i));
@@ -418,6 +428,14 @@ static void free_page_range(page_range *range)
     if (boost::next(i) != free_page_ranges.end()) {
         merge(&*i, &*boost::next(i));
     }
+}
+
+// Return a page range back to free_page_ranges. Note how the size of the
+// page range is range->size, but its start is at range itself.
+static void free_page_range(page_range *range)
+{
+    std::lock_guard<mutex> guard(free_page_ranges_lock);
+    free_page_range_locked(range);
 }
 
 static void free_page_range(void *addr, size_t size)
@@ -438,25 +456,114 @@ static unsigned large_object_size(void *obj)
     return header->size;
 }
 
-static inline void* untracked_alloc_page()
+struct page_buffer {
+    static constexpr size_t max = 64;
+    size_t nr = 0;
+    void* free[max];
+};
+
+PERCPU(page_buffer, percpu_page_buffer);
+
+static void refill_page_buffer()
 {
     std::lock_guard<mutex> guard(free_page_ranges_lock);
+    std::lock_guard<preempt_lock_t> no_preempt(preempt_lock);
 
     if(free_page_ranges.empty()) {
         debug("alloc_page(): out of memory\n");
         abort();
     }
 
-    auto p = &*free_page_ranges.begin();
-    if (p->size == page_size) {
-        free_page_ranges.erase(*p);
-        return p;
-    } else {
-        p->size -= page_size;
-        void* v = p;
-        v += p->size;
-        return v;
+    auto& pbuf = *percpu_page_buffer;
+    auto limit = (pbuf.max + 1) / 2;
+
+    while (pbuf.nr < limit) {
+        auto p = &*free_page_ranges.begin();
+        auto size = std::min(p->size, (limit - pbuf.nr) * page_size);
+        p->size -= size;
+        void* pages = static_cast<void*>(p) + p->size;
+        if (!p->size) {
+            free_page_ranges.erase(*p);
+        }
+        while (size) {
+            pbuf.free[pbuf.nr++] = pages;
+            pages += page_size;
+            size -= page_size;
+        }
     }
+}
+
+static void unfill_page_buffer()
+{
+    std::lock_guard<mutex> guard(free_page_ranges_lock);
+    std::lock_guard<preempt_lock_t> no_preempt(preempt_lock);
+
+    auto& pbuf = *percpu_page_buffer;
+
+    while (pbuf.nr > pbuf.max / 2) {
+        auto v = pbuf.free[--pbuf.nr];
+        auto pr = new (v) page_range(page_size);
+        free_page_range_locked(pr);
+    }
+}
+
+static void* alloc_page_local()
+{
+    std::lock_guard<preempt_lock_t> g(preempt_lock);
+    auto& pbuf = *percpu_page_buffer;
+    if (!pbuf.nr) {
+        return nullptr;
+    }
+    return pbuf.free[--pbuf.nr];
+}
+
+static bool free_page_local(void* v)
+{
+    std::lock_guard<preempt_lock_t> g(preempt_lock);
+    auto& pbuf = *percpu_page_buffer;
+    if (pbuf.nr == pbuf.max) {
+        return false;
+    }
+    pbuf.free[pbuf.nr++] = v;
+    return true;
+}
+
+static void* early_alloc_page()
+{
+    std::lock_guard<mutex> guard(free_page_ranges_lock);
+
+    if (free_page_ranges.empty()) {
+        debug("alloc_page(): out of memory\n");
+        abort();
+    }
+
+    auto p = &*free_page_ranges.begin();
+    p->size -= page_size;
+    void* page = static_cast<void*>(p) + p->size;
+    if (!p->size) {
+        free_page_ranges.erase(*p);
+    }
+    return page;
+}
+
+static void early_free_page(void* v)
+{
+    auto pr = new (v) page_range(page_size);
+    free_page_range(pr);
+}
+
+static void* untracked_alloc_page()
+{
+    if (!smp_allocator) {
+        return early_alloc_page();
+    }
+
+    void* ret;
+    while (!(ret = alloc_page_local())) {
+        refill_page_buffer();
+    }
+    trace_memory_page_alloc(ret);
+    return ret;
 }
 
 void* alloc_page()
@@ -468,7 +575,13 @@ void* alloc_page()
 
 static inline void untracked_free_page(void *v)
 {
-    free_page_range(v, page_size);
+    trace_memory_page_free(v);
+    if (!smp_allocator) {
+        return early_free_page(v);
+    }
+    while (!free_page_local(v)) {
+        unfill_page_buffer();
+    }
 }
 
 void free_page(void* v)
@@ -551,7 +664,7 @@ void free_initial_memory_range(void* addr, size_t size)
 
 }
 
-void  __attribute__((constructor(12001))) setup()
+void  __attribute__((constructor(200))) setup()
 {
     arch_setup_free_memory();
 }
@@ -586,6 +699,9 @@ static inline void* std_malloc(size_t size)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
     if (size <= memory::pool::max_object_size) {
+        if (!smp_allocator) {
+            return memory::alloc_page() + memory::non_mempool_obj_offset;
+        }
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
@@ -641,7 +757,10 @@ static inline void std_free(void* object)
         return;
     }
     memory::tracker_forget(object);
-    if (reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1)) {
+    auto offset = reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1);
+    if (offset == memory::non_mempool_obj_offset) {
+        memory::free_page(object - offset);
+    } else if (offset) {
         return memory::pool::from_object(object)->free(object);
     } else {
         return memory::free_large(object);

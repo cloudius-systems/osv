@@ -27,6 +27,7 @@
 #include "arch.hh"
 #include "osv/trace.hh"
 #include <osv/power.hh>
+#include "mempool.hh"
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -55,6 +56,7 @@ elf::tls_data tls_data;
 void setup_tls(elf::init_table inittab)
 {
     tls_data = inittab.tls;
+    sched::init_tls(tls_data);
     memset(tls_data.start + tls_data.filesize, 0, tls_data.size - tls_data.filesize);
     extern char tcb0[]; // defined by linker script
     memcpy(tcb0, inittab.tls.start, inittab.tls.size);
@@ -96,7 +98,7 @@ int main(int ac, char **av)
     test_locale();
     idt.load_on_cpu();
     void main_cont(int ac, char** av);
-    sched::init(tls_data, [=] { main_cont(ac, av); });
+    sched::init([=] { main_cont(ac, av); });
 }
 
 static bool opt_leak = false;
