@@ -387,6 +387,7 @@ void object::relocate_rela()
             *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - tls_data().size;
             break;
         default:
+            debug("unknown relocation type %d\n", type);
             abort();
         }
     }
