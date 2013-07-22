@@ -367,7 +367,7 @@ namespace virtio {
 
     void virtio_net::tx_gc()
     {
-        with_lock(_lock, [=] {
+        with_lock(_tx_gc_lock, [=] {
             u32 len;
             virtio_net_req * req;
 
