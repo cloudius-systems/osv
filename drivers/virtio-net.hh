@@ -234,6 +234,9 @@ namespace virtio {
         void tx_gc();
         static hw_driver* probe(hw_device* dev);
 
+        // tx ring lock protects this ring for multiple access
+        mutex _tx_ring_lock;
+
     private:
 
         struct virtio_net_req {

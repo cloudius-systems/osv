@@ -98,16 +98,17 @@ namespace virtio {
         virtio_net_d("%s_start (transmit)", __FUNCTION__);
 
         /* Process packets */
+        vnet->_tx_ring_lock.lock();
         IF_DEQUEUE(&ifp->if_snd, m_head);
         while (m_head != NULL) {
             virtio_net_d("*** processing packet! ***");
 
             vnet->tx(m_head, false);
-
             IF_DEQUEUE(&ifp->if_snd, m_head);
         }
 
         vnet->kick(1);
+        vnet->_tx_ring_lock.unlock();
     }
 
     static void virtio_if_init(void* xsc)
