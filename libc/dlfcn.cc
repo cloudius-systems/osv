@@ -56,7 +56,7 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
                     void *data)
 {
     int ret = 0;
-    elf::get_program()->with_modules([=, &ret] (std::vector<elf::object*>& m) {
+    elf::get_program()->with_modules([=, &ret] (const std::vector<elf::object*>& m) {
         for (auto obj : m) {
             dl_phdr_info info;
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());
