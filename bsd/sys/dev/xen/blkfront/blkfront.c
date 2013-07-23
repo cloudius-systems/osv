@@ -493,6 +493,7 @@ blkfront_attach(device_t dev)
 		sc->ring_ref[i] = GRANT_INVALID_REF;
 
 	sc->xb_dev = dev;
+	sc->xb_disk = NULL;
 	sc->vdevice = vdevice;
 	sc->connected = BLKIF_STATE_DISCONNECTED;
 
