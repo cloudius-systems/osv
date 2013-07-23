@@ -99,12 +99,14 @@ vn_is_readonly(vnode_t *vp)
 #define	vnevent_rename_dest_dir(vp, ct)		do { } while (0)
 
 #define	specvp(vp, rdev, type, cr)	(VN_HOLD(vp), (vp))
+#endif
 #define	MANDMODE(mode)		(0)
 #define	MANDLOCK(vp, mode)	(0)
 #define	chklock(vp, op, offset, size, mode, ct)	(0)
 #define	cleanlocks(vp, pid, foo)	do { } while (0)
 #define	cleanshares(vp, pid)		do { } while (0)
 
+#if 0
 #define	MAXOFFSET_T	LONG_MAX
 #define	EXCL		0
 
