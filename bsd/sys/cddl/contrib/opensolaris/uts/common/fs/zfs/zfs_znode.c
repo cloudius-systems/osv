@@ -1457,6 +1457,7 @@ zfs_no_putpage(vnode_t *vp, page_t *pp, u_offset_t *offp, size_t *lenp,
 	return (0);
 }
 #endif	/* sun */
+#endif
 
 /*
  * Increase the file length
@@ -1751,6 +1752,7 @@ log:
 	return (0);
 }
 
+#ifdef NOTYET
 void
 zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
 {
