@@ -86,17 +86,30 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	if (fstat(fd, &s) < 0) {
-		perror("fstat");
-		return EXIT_FAILURE;
-	}
-	printf("fstat done\n");
-
 	if (write(fd, &foo, sizeof(foo)) != sizeof(foo)) {
 		perror("write");
 		return EXIT_FAILURE;
 	}
+	
+	if (fstat(fd, &s) < 0) {
+		perror("fstat");
+		return EXIT_FAILURE;
+	}
+	printf("file size = %lld\n", s.st_size);
 
+	close(fd);
+
+	fd = creat("/usr/foo", 0666);
+	if (fd < 0) {
+		perror("creat");
+		return EXIT_FAILURE;
+	}
+
+	if (fstat(fd, &s) < 0) {
+		perror("fstat");
+		return EXIT_FAILURE;
+	}
+	printf("file size = %lld (after O_TRUNC)\n", s.st_size);
 	close(fd);
 
 	if (unlink("/usr/foo") < 0) {
