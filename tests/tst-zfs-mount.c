@@ -104,6 +104,11 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	if (rmdir("/usr/testdir") < 0) {
+		perror("rmdir");
+		return EXIT_FAILURE;
+	}
+
 #if 0
 	fd = open("/mnt/tests/tst-zfs-simple.c", O_RDONLY);
 	if (fd < 0) {
