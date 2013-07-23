@@ -1596,18 +1596,14 @@ top:
 	return (0);
 }
 
-#ifdef NOTYET
 /*
  * Remove a directory subdir entry.  If the current working
  * directory is the same as the subdir to be removed, the
  * remove will fail.
  *
  *	IN:	dvp	- vnode of directory to remove from.
+ *		 vp	- vnode of directory to remove.
  *		name	- name of directory to be removed.
- *		cwd	- vnode of current working directory.
- *		cr	- credentials of caller.
- *		ct	- caller context
- *		flags	- case flags
  *
  *	RETURN:	0 if success
  *		error code if failure
@@ -1617,12 +1613,9 @@ top:
  */
 /*ARGSUSED*/
 static int
-zfs_rmdir(vnode_t *dvp, char *name, vnode_t *cwd, cred_t *cr,
-    caller_context_t *ct, int flags)
+zfs_rmdir(vnode_t *dvp, vnode_t *vp, char *name)
 {
-	znode_t		*dzp = VTOZ(dvp);
-	znode_t		*zp;
-	vnode_t		*vp;
+	znode_t		*dzp = VTOZ(dvp), *zp = VTOZ(vp), *zp_lock;
 	zfsvfs_t	*zfsvfs = dzp->z_zfsvfs;
 	zilog_t		*zilog;
 	zfs_dirlock_t	*dl;
@@ -1630,41 +1623,30 @@ zfs_rmdir(vnode_t *dvp, char *name, vnode_t *cwd, cred_t *cr,
 	int		error;
 	int		zflg = ZEXISTS;
 
+	if (vp->v_type != VDIR)
+		return ENOTDIR;
+
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
 	zilog = zfsvfs->z_log;
 
-	if (flags & FIGNORECASE)
-		zflg |= ZCILOOK;
 top:
-	zp = NULL;
-
 	/*
 	 * Attempt to lock directory; fail if entry doesn't exist.
 	 */
-	if (error = zfs_dirent_lock(&dl, dzp, name, &zp, zflg,
+	if (error = zfs_dirent_lock(&dl, dzp, name, &zp_lock, zflg,
 	    NULL, NULL)) {
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
 
-	vp = ZTOV(zp);
+	assert(zp == zp_lock);
 
+#if 0
 	if (error = zfs_zaccess_delete(dzp, zp, cr)) {
 		goto out;
 	}
-
-	if (vp->v_type != VDIR) {
-		error = ENOTDIR;
-		goto out;
-	}
-
-	if (vp == cwd) {
-		error = EINVAL;
-		goto out;
-	}
-
-	vnevent_rmdir(vp, dvp, name, ct);
+#endif
 
 	/*
 	 * Grab a lock on the directory to make sure that noone is
@@ -1689,7 +1671,6 @@ top:
 		rw_exit(&zp->z_parent_lock);
 		rw_exit(&zp->z_name_lock);
 		zfs_dirent_unlock(dl);
-		VN_RELE(vp);
 		if (error == ERESTART) {
 			dmu_tx_wait(tx);
 			dmu_tx_abort(tx);
@@ -1700,30 +1681,17 @@ top:
 		return (error);
 	}
 
-#ifdef FREEBSD_NAMECACHE
-	cache_purge(dvp);
-#endif
-
 	error = zfs_link_destroy(dl, zp, tx, zflg, NULL);
 
-	if (error == 0) {
-		uint64_t txtype = TX_RMDIR;
-		if (flags & FIGNORECASE)
-			txtype |= TX_CI;
-		zfs_log_remove(zilog, tx, txtype, dzp, name, ZFS_NO_OBJECT);
-	}
+	if (error == 0)
+		zfs_log_remove(zilog, tx, TX_RMDIR, dzp, name, ZFS_NO_OBJECT);
 
 	dmu_tx_commit(tx);
 
 	rw_exit(&zp->z_parent_lock);
 	rw_exit(&zp->z_name_lock);
-#ifdef FREEBSD_NAMECACHE
-	cache_purge(vp);
-#endif
-out:
-	zfs_dirent_unlock(dl);
 
-	VN_RELE(vp);
+	zfs_dirent_unlock(dl);
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
@@ -1731,7 +1699,6 @@ out:
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
-#endif /* NOTYET */
 
 /*
  * Note that the low 4 bits of the cookie returned by zap is always zero.
@@ -5498,7 +5465,7 @@ struct vnops zfs_vnops = {
 	zfs_remove,			/* remove */
 	NULL,				/* rename */
 	zfs_mkdir,			/* mkdir */
-	NULL,				/* rmdir */
+	zfs_rmdir,			/* rmdir */
 	NULL,				/* getattr */
 	NULL,				/* setattr */
 	zfs_inactive,			/* inactive */
