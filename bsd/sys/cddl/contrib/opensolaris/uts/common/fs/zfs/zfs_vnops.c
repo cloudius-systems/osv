@@ -2730,7 +2730,111 @@ out2:
 	ZFS_EXIT(zfsvfs);
 	return (err);
 }
+#endif /* NOTYET */
 
+static int
+zfs_truncate(struct vnode *vp, off_t new_size)
+{
+	znode_t		*zp = VTOZ(vp);
+	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
+	zilog_t		*zilog;
+	dmu_tx_t	*tx;
+	uint64_t	mtime[2], ctime[2];
+	int		err, err2;
+	sa_bulk_attr_t	bulk[7];
+	int		count = 0;
+	struct vattr	va = {
+		.va_mask	= AT_SIZE,
+		.va_size	= new_size,
+	};
+
+	ZFS_ENTER(zfsvfs);
+	ZFS_VERIFY_ZP(zp);
+
+	zilog = zfsvfs->z_log;
+
+	switch (vp->v_type) {
+	case VDIR:
+		ZFS_EXIT(zfsvfs);
+		return (EISDIR);
+	case VREG:
+	case VFIFO:
+		break;
+	default:
+		ZFS_EXIT(zfsvfs);
+		return (EINVAL);
+	}
+
+	if (zp->z_pflags & ZFS_IMMUTABLE) {
+		ZFS_EXIT(zfsvfs);
+		return (EPERM);
+	}
+
+	if (zp->z_pflags & ZFS_READONLY) {
+		ZFS_EXIT(zfsvfs);
+		return (EPERM);
+	}
+
+top:
+	/* Can this be moved to before the top label? */
+	if (zfsvfs->z_vfs->vfs_flag & VFS_RDONLY) {
+		ZFS_EXIT(zfsvfs);
+		return (EROFS);
+	}
+
+	err = zfs_freesp(zp, new_size, 0, 0, FALSE);
+	if (err) {
+		ZFS_EXIT(zfsvfs);
+		return (err);
+	}
+
+	tx = dmu_tx_create(zfsvfs->z_os);
+
+	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
+
+	zfs_sa_upgrade_txholds(tx, zp);
+
+	err = dmu_tx_assign(tx, TXG_NOWAIT);
+	if (err) {
+		if (err == ERESTART)
+			dmu_tx_wait(tx);
+		goto out;
+	}
+
+	count = 0;
+	mutex_enter(&zp->z_lock);
+
+	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs), NULL,
+	    &zp->z_pflags, sizeof (zp->z_pflags));
+
+	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs),
+	    NULL, mtime, sizeof (mtime));
+	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
+	    &ctime, sizeof (ctime));
+	zfs_tstamp_update_setup(zp, CONTENT_MODIFIED, mtime, ctime,
+	    B_TRUE);
+
+	zfs_log_setattr(zilog, tx, TX_SETATTR, zp, &va, AT_SIZE, NULL);
+
+	mutex_exit(&zp->z_lock);
+out:
+	if (err) {
+		dmu_tx_abort(tx);
+		if (err == ERESTART)
+			goto top;
+	} else {
+		err2 = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
+		dmu_tx_commit(tx);
+	}
+
+	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
+		zil_commit(zilog, 0);
+
+	ZFS_EXIT(zfsvfs);
+	return (err);
+}
+
+#ifdef NOTYET
 typedef struct zfs_zlock {
 	krwlock_t	*zl_rwlock;	/* lock we acquired */
 	znode_t		*zl_znode;	/* znode we held */
@@ -5469,6 +5573,5 @@ struct vnops zfs_vnops = {
 	NULL,				/* getattr */
 	NULL,				/* setattr */
 	zfs_inactive,			/* inactive */
-	NULL,				/* truncate */
+	zfs_truncate,			/* truncate */
 };
-
