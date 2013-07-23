@@ -1978,6 +1978,8 @@ network_connect(struct netfront_info *np)
 	XN_TX_LOCK(np);
 	xn_txeof(np);
 	XN_TX_UNLOCK(np);
+	mbufq_init(&np->xn_rx_batch);
+	np->xn_cdata.xn_tx_chain_cnt = 0;
 	network_alloc_rx_buffers(np);
 
 	return (0);
