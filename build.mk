@@ -17,6 +17,7 @@ INCLUDES += -isystem $(src)/bsd/sys
 
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
+	-fno-omit-frame-pointer \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
 	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030209"
