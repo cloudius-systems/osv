@@ -69,4 +69,6 @@ extern "C" {
     void page_fault(exception_frame* ef);
 }
 
+bool fixup_fault(exception_frame*);
+
 #endif

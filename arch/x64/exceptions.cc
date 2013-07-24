@@ -125,6 +125,34 @@ void interrupt(exception_frame* frame)
     sched::preempt();
 }
 
+struct fault_fixup {
+    ulong pc;
+    ulong divert;
+    friend bool operator<(fault_fixup a, fault_fixup b) {
+        return a.pc < b.pc;
+    }
+};
+
+extern fault_fixup fault_fixup_start[], fault_fixup_end[];
+
+static void sort_fault_fixup() __attribute__((constructor(101)));
+
+static void sort_fault_fixup()
+{
+    std::sort(fault_fixup_start, fault_fixup_end);
+}
+
+bool fixup_fault(exception_frame* ef)
+{
+    fault_fixup v{ef->rip, 0};
+    auto ff = std::lower_bound(fault_fixup_start, fault_fixup_end, v);
+    if (ff != fault_fixup_end && ff->pc == ef->rip) {
+        ef->rip = ff->divert;
+        return true;
+    }
+    return false;
+}
+
 // Implement the various x86 exception handlers mentioned in arch/x64/entry.S.
 // Note page_fault() is implemented in core/mmu.cc.
 
@@ -145,6 +173,15 @@ extern "C" void nmi(exception_frame* ef)
     }
 }
 
+extern "C"
+void general_protection(exception_frame* ef)
+{
+    if (fixup_fault(ef)) {
+        return;
+    }
+    abort("general protection fault\n");
+}
+
 #define DUMMY_HANDLER(x) \
      extern "C" void x(); void x() { abort("DUMMY_HANDLER for " #x " aborting.\n"); }
 
@@ -158,7 +195,6 @@ DUMMY_HANDLER(double_fault)
 DUMMY_HANDLER(invalid_tss)
 DUMMY_HANDLER(segment_not_present)
 DUMMY_HANDLER(stack_fault)
-DUMMY_HANDLER(general_protection)
 DUMMY_HANDLER(math_fault)
 DUMMY_HANDLER(alignment_check)
 DUMMY_HANDLER(machine_check)
