@@ -429,6 +429,7 @@ objects += arch/x64/string.o
 objects += arch/x64/arch-cpu.o
 objects += arch/x64/entry-xen.o
 objects += arch/x64/xen.o
+objects += arch/x64/backtrace.o
 objects += core/mutex.o
 objects += core/lfmutex.o
 objects += core/rwlock.o
