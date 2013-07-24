@@ -447,6 +447,7 @@ objects += core/sched.o
 objects += core/mmio.o
 objects += core/kprintf.o
 objects += core/trace.o
+objects += core/callstack.o
 objects += core/poll.o
 objects += core/select.o
 objects += core/epoll.o
