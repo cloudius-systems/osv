@@ -247,6 +247,42 @@ int main(int ac, char** av)
     debug("n=%d\n",n);
     report(n > 100, "create many pipes");
 
+
+    // Writing to a pipe, closing the write end, and then read from the pipe.
+    // The read would normally poll_wake on the write end of the pipe (in case
+    // anybody is waiting to write), but in this case it is closed and should
+    // be ignored.
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    r = write(s[1], msg, 5);
+    report(r == 5, "write to empty socket");
+    r = close(s[1]);
+    report(r == 0, "close write side with non-empty buffer");
+    r = read(s[0], reply, 5);
+    report(r == 5 && memcmp(msg, reply, 5) == 0, "read after write side closed");
+    r = close(s[0]);
+    report(r == 0, "close also read side");
+
+    // A similar test but have the reply read blocking in a second thread,
+    // so it wakes up after the sender was closed - and shouldn't poll_wake
+    // the no-longer existing write-side file descriptor.
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    sched::thread t5([&] {
+        r2 = read(s[0], reply, 5);
+        report(r2 == 5 && memcmp(msg, reply, 5) == 0, "blocking read, may wake up with write side closed");
+        r2 = close(s[0]);
+        report(r2 == 0, "close also read side");
+    });
+    t5.start();
+    sleep(1);
+    r = write(s[1], msg, 5);
+    report(r == 5, "write to empty socket");
+    r = close(s[1]);
+    report(r == 0, "close write side with non-empty buffer");
+    t5.join();
+
+
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
 
