@@ -47,9 +47,11 @@
 
 // we don't want to include <sched.hh> because that includes a bunch of things
 // which eventually, recursively, use mutexes.
+// We also can't include <osv/wait_record.hh>, as that includes <sched.hh>.
 namespace sched {
     class thread;
 }
+struct wait_record;
 
 namespace lockfree {
 
@@ -63,7 +65,7 @@ protected:
     // it can be accessed with relaxed memory ordering.
     unsigned int depth;
     std::atomic<sched::thread *> owner;
-    queue_mpsc<lockfree::linked_item<sched::thread *>> waitqueue;
+    queue_mpsc<wait_record> waitqueue;
     std::atomic<unsigned int> handoff;
     unsigned int sequence;
 public:

@@ -1,6 +1,7 @@
 #include <lockfree/mutex.hh>
 #include <osv/trace.hh>
 #include <sched.hh>
+#include <osv/wait_record.hh>
 
 namespace lockfree {
 
@@ -40,7 +41,7 @@ void mutex::lock()
     // when another thread releases the lock.
     // Note "waiter" is on the stack, so we must not return before making sure
     // it was popped from waitqueue (by another thread or by us.)
-    linked_item<sched::thread *> waiter(current);
+    wait_record waiter(current);
     waitqueue.push(&waiter);
 
     // The "Responsibility Hand-Off" protocol where a lock() picks from
@@ -51,17 +52,17 @@ void mutex::lock()
             if (handoff.compare_exchange_strong(old_handoff, 0U)) {
                 // Note the explanation above about no concurrent pop()s also
                 // explains why we can be sure waitqueue is still not empty.
-                linked_item<sched::thread *> *other = waitqueue.pop();
+                wait_record *other = waitqueue.pop();
                 assert(other);
-                if(other->value != current) {
-                    // At this point, waiter.value must be != 0, otherwise it
-                    // means someone has already woken us up, breaking the
+                if (other->thread() != current) {
+                    // At this point, waiter.thread() must be != 0, otherwise
+                    // it means someone has already woken us up, breaking the
                     // handoff protocol which decided we should be the ones to
                     // wake somebody up. Note that right after thread->wake()
-                    // below, waiter.value may become 0: the thread we woke
+                    // below, waiter.thread() may become 0: the thread we woke
                     // can call unlock() and decide to wake us up.
-                    assert(waiter.value);
-                    other->value->wake_with([&] { other->value = nullptr; });
+                    assert(waiter.thread());
+                    other->wake();
                 } else {
                     // got the lock ourselves
                     assert(other == &waiter);
@@ -76,7 +77,7 @@ void mutex::lock()
     // Wait until another thread wakes us up. When somebody wakes us,
     // they will first zero the value field in our wait record.
     trace_mutex_lock_wait(this);
-    sched::thread::wait_until([&] { return !waiter.value; });
+    waiter.wait();
     trace_mutex_lock_wake(this);
     owner.store(current, std::memory_order_relaxed);
     depth = 1;
@@ -149,10 +150,10 @@ void mutex::unlock()
     // another lock() queued itself - but if it did, wouldn't the next
     // iteration just pop and return?
     while(true) {
-        linked_item<sched::thread *> *other = waitqueue.pop();
+        wait_record *other = waitqueue.pop();
         if (other) {
-            assert(other->value != sched::thread::current()); // this thread isn't waiting, we know that :(
-            other->value->wake_with([&] { other->value = nullptr; });
+            assert(other->thread() != sched::thread::current()); // this thread isn't waiting, we know that :(
+            other->wake();
             return;
         }
         // Some concurrent lock() is in progress (we know this because of
