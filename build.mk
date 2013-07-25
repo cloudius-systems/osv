@@ -456,6 +456,7 @@ objects += core/power.o
 objects += core/percpu.o
 objects += core/per-cpu-counter.o
 objects += core/percpu-worker.o
+objects += core/dhcp.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk

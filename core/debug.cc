@@ -30,6 +30,7 @@ bool logger::parse_configuration(void)
     add_tag("virtio-net", logger_warn);
     add_tag("pci", logger_info);
     add_tag("poll", logger_info);
+    add_tag("dhcp", logger_info);
 
     return (true);
 }
