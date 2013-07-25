@@ -82,6 +82,7 @@ struct bio {
 	void	*bio_data;		/* Memory, superblocks, indirect etc. */
 	int	bio_error;		/* Errno for BIO_ERROR. */
 	long	bio_resid;		/* Remaining I/O in bytes. */
+	void	*bio_caller1;		/* Private use by the consumer. */
 	void	(*bio_done)(struct bio *);
 
 
