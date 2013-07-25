@@ -23,17 +23,17 @@
 // is no memory dynamically allocated, nor is there anything meaningful
 // to do when the waiter list is not empty.
 
-struct ccondvar_waiter;
+struct wait_record;
 
 typedef struct condvar {
     mutex_t m;
     struct {
         // A FIFO queue of waiters - a linked list from oldest (next in line
-        // to be woken) towards newest. The ccondvar_wait structures
-        // themselves are held on the stack of the waiting thread - so no
-        // dynamic memory allocation is needed for this list.
-        struct ccondvar_waiter *oldest;
-        struct ccondvar_waiter *newest;
+        // to be woken) towards newest. The wait records themselves are held
+        // on the stack of the waiting thread - so no dynamic memory
+        // allocation is needed for this list.
+        struct wait_record *oldest;
+        struct wait_record *newest;
     } waiters_fifo;
 
 #ifdef __cplusplus

@@ -1,11 +1,7 @@
 #include <osv/condvar.h>
 #include <sched.h>
 #include <errno.h>
-
-struct ccondvar_waiter {
-    struct ccondvar_waiter *newer;
-    sched::thread *t;
-};
+#include <osv/wait_record.hh>
 
 int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration)
 {
@@ -21,41 +17,39 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration)
 int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
 {
     int ret = 0;
-    struct ccondvar_waiter wr = { nullptr, sched::thread::current() };
+    wait_record wr(sched::thread::current());
 
     mutex_lock(&condvar->m);
     if (!condvar->waiters_fifo.oldest) {
         condvar->waiters_fifo.oldest = &wr;
     } else {
-        condvar->waiters_fifo.newest->newer = &wr;
+        condvar->waiters_fifo.newest->next = &wr;
     }
     condvar->waiters_fifo.newest = &wr;
     mutex_unlock(&condvar->m);
 
     mutex_unlock(user_mutex);
     // Wait until either the timer expires or condition variable signaled
-    sched::thread::wait_until([&] {
-        return (tmr && tmr->expired()) || !wr.t;
-    });
-    if (wr.t) {
+    wr.wait(tmr);
+    if (!wr.woken()) {
         // wr is still in the linked list (because of a timeout) so remove it:
         mutex_lock(&condvar->m);
         if (&wr == condvar->waiters_fifo.oldest) {
-            condvar->waiters_fifo.oldest = wr.newer;
-            if (!wr.newer) {
+            condvar->waiters_fifo.oldest = wr.next;
+            if (!wr.next) {
                 condvar->waiters_fifo.newest = nullptr;
             }
         } else {
-            struct ccondvar_waiter *p = condvar->waiters_fifo.oldest;
+            wait_record *p = condvar->waiters_fifo.oldest;
             while (p) {
-                if (&wr == p->newer) {
-                    p->newer = p->newer->newer;
-                    if(!p->newer) {
+                if (&wr == p->next) {
+                    p->next = p->next->next;
+                    if(!p->next) {
                         condvar->waiters_fifo.newest = p;
                     }
                     break;
                 }
-                p = p->newer;
+                p = p->next;
             }
         }
         mutex_unlock(&condvar->m);
@@ -76,13 +70,13 @@ void condvar_wake_one(condvar_t *condvar)
     }
 
     mutex_lock(&condvar->m);
-    struct ccondvar_waiter *wr = condvar->waiters_fifo.oldest;
+    wait_record *wr = condvar->waiters_fifo.oldest;
     if (wr) {
-        condvar->waiters_fifo.oldest = wr->newer;
-        if (wr->newer == nullptr) {
+        condvar->waiters_fifo.oldest = wr->next;
+        if (wr->next == nullptr) {
             condvar->waiters_fifo.newest = nullptr;
         }
-        wr->t->wake_with([&] { wr->t = nullptr; });
+        wr->wake();
     }
     mutex_unlock(&condvar->m);
 }
@@ -94,10 +88,10 @@ void condvar_wake_all(condvar_t *condvar)
     }
 
     mutex_lock(&condvar->m);
-    struct ccondvar_waiter *wr = condvar->waiters_fifo.oldest;
+    wait_record *wr = condvar->waiters_fifo.oldest;
     while (wr) {
-        auto next_wr = wr->newer; // need to save - *wr invalid after wake
-        wr->t->wake_with([&] { wr->t = nullptr; });
+        auto next_wr = wr->next; // need to save - *wr invalid after wake
+        wr->wake();
         wr = next_wr;
     }
     condvar->waiters_fifo.oldest = condvar->waiters_fifo.newest = nullptr;
