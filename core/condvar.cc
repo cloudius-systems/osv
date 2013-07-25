@@ -26,6 +26,10 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
         condvar->waiters_fifo.newest->next = &wr;
     }
     condvar->waiters_fifo.newest = &wr;
+    // Remember user_mutex for "wait morphing" feature. Assert our assumption
+    // that concurrent waits use the same mutex.
+    assert(!condvar->user_mutex || condvar->user_mutex == user_mutex);
+    condvar->user_mutex = user_mutex;
     mutex_unlock(user_mutex);
     mutex_unlock(&condvar->m);
 
@@ -77,6 +81,11 @@ void condvar_wake_one(condvar_t *condvar)
             condvar->waiters_fifo.newest = nullptr;
         }
         wr->wake();
+        // To help the assert() in condvar_wait(), we need to zero saved
+        // user_mutex when all concurrent condvar_wait()s are done.
+        if (!condvar->waiters_fifo.oldest) {
+            condvar->user_mutex = nullptr;
+        }
     }
     mutex_unlock(&condvar->m);
 }
@@ -89,6 +98,9 @@ void condvar_wake_all(condvar_t *condvar)
 
     mutex_lock(&condvar->m);
     wait_record *wr = condvar->waiters_fifo.oldest;
+    // To help the assert() in condvar_wait(), we need to zero saved
+    // user_mutex when all concurrent condvar_wait()s are done.
+    condvar->user_mutex = nullptr;
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
         wr->wake();

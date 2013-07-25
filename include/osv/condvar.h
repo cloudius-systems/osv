@@ -35,6 +35,11 @@ typedef struct condvar {
         struct wait_record *oldest;
         struct wait_record *newest;
     } waiters_fifo;
+    // Remember mutex last used in a wait(), for use in "wait morphing"
+    // feature. We disallow (as Posix Threads do) using different mutexes in
+    // concurrent wait()s on the same condvar. We could lift this requirement,
+    // but then we would need to remember the user_mutex on each wait_record.
+    mutex_t *user_mutex;
 
 #ifdef __cplusplus
     // In C++, for convenience also provide methods.
