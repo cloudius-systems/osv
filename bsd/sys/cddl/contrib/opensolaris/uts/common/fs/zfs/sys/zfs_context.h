@@ -96,6 +96,7 @@ extern "C" {
 
 extern int zfs_debug_level;
 extern struct mtx zfs_debug_mtx;
+#ifndef __OSV__
 #define	ZFS_LOG(lvl, ...)	do {					\
 	if (((lvl) & 0xff) <= zfs_debug_level) {			\
 		mtx_lock(&zfs_debug_mtx);				\
@@ -107,6 +108,13 @@ extern struct mtx zfs_debug_mtx;
 		mtx_unlock(&zfs_debug_mtx);				\
 	}								\
 } while (0)
+#else
+#define	ZFS_LOG(lvl, ...)	do {					\
+	kprintf("%s:%u[%d]: ", __func__, __LINE__, (lvl));		\
+	kprintf(__VA_ARGS__);						\
+	kprintf("\n");							\
+} while (0)
+#endif
 
 #define	sys_shutdown	rebooting
 
