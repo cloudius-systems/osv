@@ -51,6 +51,7 @@
  * which is indexed by the transaction type.
  */
 
+#ifndef __OSV__
 static void
 zfs_init_vattr(vattr_t *vap, uint64_t mask, uint64_t mode,
 	uint64_t uid, uint64_t gid, uint64_t rdev, uint64_t nodeid)
@@ -68,14 +69,16 @@ zfs_init_vattr(vattr_t *vap, uint64_t mask, uint64_t mode,
 	vap->va_rdev = zfs_cmpldev(rdev);
 	vap->va_nodeid = nodeid;
 }
+#endif
 
 /* ARGSUSED */
 static int
-zfs_replay_error(zfsvfs_t *zfsvfs, lr_t *lr, boolean_t byteswap)
+zfs_replay_error(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
 	return (ENOTSUP);
 }
 
+#ifndef __OSV__
 static void
 zfs_replay_xvattr(lr_attr_t *lrattr, xvattr_t *xvap)
 {
@@ -258,6 +261,7 @@ zfs_replay_swap_attrs(lr_attr_t *lrattr)
 	byteswap_uint64_array((caddr_t)(lrattr + 1) + (sizeof (uint32_t) *
 	    (lrattr->lr_attr_masksize - 1)), 3 * sizeof (uint64_t));
 }
+#endif
 
 /*
  * Replay file create with optional ACL, xvattr information as well
@@ -266,6 +270,10 @@ zfs_replay_swap_attrs(lr_attr_t *lrattr)
 static int
 zfs_replay_create_acl(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifdef __OSV__
+	kprintf("TX_CREATE_ACL not supported on OSv\n");
+	return EOPNOTSUPP;
+#else
 	lr_acl_create_t *lracl = data;
 	char *name = NULL;		/* location determined later */
 	lr_create_t *lr = (lr_create_t *)lracl;
@@ -410,11 +418,16 @@ bail:
 	zfsvfs->z_fuid_replay = NULL;
 
 	return (error);
+#endif
 }
 
 static int
 zfs_replay_create(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifndef TODO_OSV
+	kprintf("TX_CREATE\n");
+	return EOPNOTSUPP;
+#else
 	lr_create_t *lr = data;
 	char *name = NULL;		/* location determined later */
 	char *link;			/* symlink content follows name */
@@ -481,7 +494,7 @@ zfs_replay_create(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 	cn.cn_thread = curthread;
 	cn.cn_flags = SAVENAME;
 
-	vn_lock(ZTOV(dzp), LK_EXCLUSIVE | LK_RETRY);
+	vn_lock(ZTOV(dzp));
 	switch (txtype) {
 	case TX_CREATE_ATTR:
 		lrattr = (lr_attr_t *)(caddr_t)(lr + 1);
@@ -543,11 +556,16 @@ out:
 		zfs_fuid_info_free(zfsvfs->z_fuid_replay);
 	zfsvfs->z_fuid_replay = NULL;
 	return (error);
+#endif
 }
 
 static int
 zfs_replay_remove(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifndef TODO_OSV
+	kprintf("TX_REMOVE\n");
+	return EOPNOTSUPP;
+#else
 	lr_remove_t *lr = data;
 	char *name = (char *)(lr + 1);	/* name follows lr_remove_t */
 	znode_t *dzp;
@@ -595,11 +613,16 @@ fail:
 	VN_RELE(ZTOV(dzp));
 
 	return (error);
+#endif
 }
 
 static int
 zfs_replay_link(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifdef __OSV__
+	kprintf("TX_LINK not supported on OSv\n");
+	return EOPNOTSUPP;
+#else
 	lr_link_t *lr;
 	char *name = (char *)(lr + 1);	/* name follows lr_link_t */
 	znode_t *dzp, *zp;
@@ -636,11 +659,16 @@ zfs_replay_link(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 	VN_RELE(ZTOV(dzp));
 
 	return (error);
+#endif
 }
 
 static int
 zfs_replay_rename(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifndef TODO_OSV
+	kprintf("TX_RENAME\n");
+	return EOPNOTSUPP;
+#else
 	lr_rename_t *lr = data;
 	char *sname = (char *)(lr + 1);	/* sname and tname follow lr_rename_t */
 	char *tname = sname + strlen(sname) + 1;
@@ -707,11 +735,16 @@ fail:
 	VN_RELE(ZTOV(sdzp));
 
 	return (error);
+#endif
 }
 
 static int
 zfs_replay_write(zfsvfs_t *zfsvfs, void *_data, boolean_t byteswap)
 {
+#ifndef TODO_OSV
+	kprintf("TX_WRITE\n");
+	return EOPNOTSUPP;
+#else
 	lr_write_t *lr = _data;
 	char *data = (char *)(lr + 1);	/* data follows lr_write_t */
 	znode_t	*zp;
@@ -768,6 +801,7 @@ zfs_replay_write(zfsvfs_t *zfsvfs, void *_data, boolean_t byteswap)
 	zfsvfs->z_replay_eof = 0;	/* safety */
 
 	return (error);
+#endif
 }
 
 /*
@@ -779,6 +813,10 @@ zfs_replay_write(zfsvfs_t *zfsvfs, void *_data, boolean_t byteswap)
 static int
 zfs_replay_write2(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifndef TODO_OSV
+	kprintf("TX_WRITE2\n");
+	return EOPNOTSUPP;
+#else
 	lr_write_t *lr = data;
 	znode_t	*zp;
 	int error;
@@ -820,6 +858,7 @@ top:
 	VN_RELE(ZTOV(zp));
 
 	return (error);
+#endif
 }
 
 static int
@@ -858,6 +897,10 @@ zfs_replay_truncate(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 static int
 zfs_replay_setattr(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifdef __OSV__
+	kprintf("TX_SETATTR not supported on OSv\n");
+	return EOPNOTSUPP;
+#else
 	lr_setattr_t *lr = data;
 	znode_t *zp;
 	xvattr_t xva;
@@ -910,11 +953,16 @@ zfs_replay_setattr(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 	VN_RELE(vp);
 
 	return (error);
+#endif
 }
 
 static int
 zfs_replay_acl_v0(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifdef __OSV__
+	kprintf("TX_ACL_V0 not supported on OSv\n");
+	return EOPNOTSUPP;
+#else
 	lr_acl_v0_t *lr = data;
 	ace_t *ace = (ace_t *)(lr + 1);	/* ace array follows lr_acl_t */
 	vsecattr_t vsa;
@@ -945,6 +993,7 @@ zfs_replay_acl_v0(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 	VN_RELE(ZTOV(zp));
 
 	return (error);
+#endif
 }
 
 /*
@@ -964,6 +1013,10 @@ zfs_replay_acl_v0(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 static int
 zfs_replay_acl(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 {
+#ifdef __OSV__
+	kprintf("TX_ACL_V0 not supported on OSv\n");
+	return EOPNOTSUPP;
+#else
 	lr_acl_t *lr = data;
 	ace_t *ace = (ace_t *)(lr + 1);
 	vsecattr_t vsa;
@@ -1012,6 +1065,7 @@ zfs_replay_acl(zfsvfs_t *zfsvfs, void *data, boolean_t byteswap)
 	VN_RELE(ZTOV(zp));
 
 	return (error);
+#endif
 }
 
 /*
