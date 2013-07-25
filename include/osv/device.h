@@ -201,6 +201,7 @@ int	nullop(void);
 int	physio(struct device *dev, struct uio *uio, int ioflags);
 
 struct device *	device_create(struct driver *drv, const char *name, int flags);
+void device_register(struct device *device, const char *name, int flags);
 
 __END_DECLS
 
