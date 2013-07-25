@@ -115,7 +115,26 @@ void condvar_wake_all(condvar_t *condvar)
     condvar->user_mutex = nullptr;
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
+        auto cpu_wr = wr->thread()->tcpu();
         user_mutex->send_lock(wr);
+        // As an optimization for many threads to wake up on relatively few
+        // CPUs, queue all the threads that will likely wake on the same CPU
+        // one after another, as same-CPU wakeup is faster.
+        wait_record *prevr = nullptr;
+        for (auto r = next_wr; r;) {
+            auto nextr = r->next;
+            if (r->thread()->tcpu() == cpu_wr) {
+                user_mutex->send_lock(r);
+                if (r == next_wr) {
+                    next_wr = nextr;
+                } else {
+                    prevr->next = nextr;
+                }
+            } else {
+                prevr = r;
+            }
+            r = nextr;
+        }
         wr = next_wr;
     }
     condvar->waiters_fifo.oldest = condvar->waiters_fifo.newest = nullptr;
