@@ -36,8 +36,12 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
     // that concurrent waits use the same mutex.
     assert(!condvar->user_mutex || condvar->user_mutex == user_mutex);
     condvar->user_mutex = user_mutex;
+    // This preempt_disable() is just an optimization, to avoid context
+    // switch between the two unlocks.
+    sched::preempt_disable();
     mutex_unlock(user_mutex);
     mutex_unlock(&condvar->m);
+    sched::preempt_enable();
 
     // Wait until either the timer expires or condition variable signaled
     wr.wait(tmr);
