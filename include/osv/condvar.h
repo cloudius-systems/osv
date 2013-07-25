@@ -45,6 +45,7 @@ typedef struct condvar {
     // In C++, for convenience also provide methods.
     condvar() { memset(this, 0, sizeof *this); }
     inline int wait(mutex_t *user_mutex, sched::timer *tmr = nullptr);
+    inline int wait(mutex_t &user_mutex, sched::timer *tmr = nullptr);
     inline void wake_one();
     inline void wake_all();
     template <class Pred>
@@ -70,6 +71,9 @@ void condvar_wake_all(condvar_t *condvar);
 int condvar_wait(condvar_t *condvar, mutex_t *user_mutex, sched::timer *tmr);
 int condvar_t::wait(mutex_t *user_mutex, sched::timer *tmr) {
     return condvar_wait(this, user_mutex, tmr);
+}
+int condvar_t::wait(mutex_t &user_mutex, sched::timer *tmr) {
+    return condvar_wait(this, &user_mutex, tmr);
 }
 void condvar_t::wake_one() {
     return condvar_wake_one(this);
