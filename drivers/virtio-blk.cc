@@ -217,6 +217,9 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             }
             type = VIRTIO_BLK_T_OUT;
             break;
+        case BIO_FLUSH:
+            type = VIRTIO_BLK_T_FLUSH;
+            break;
         default:
             return ENOTBLK;
         }
