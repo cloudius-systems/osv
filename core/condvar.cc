@@ -60,7 +60,15 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
         ret = ETIMEDOUT;
     }
 
-    mutex_lock(user_mutex);
+    if (wr.woken()) {
+        // Our wr was woken. The "wait morphing" protocol used by
+        // condvar_wake*() ensures that this only happens after we got the
+        // user_mutex for ourselves, so no need to mutex_lock() here.
+        user_mutex->receive_lock();
+    } else {
+        mutex_lock(user_mutex);
+    }
+
     return ret;
 }
 
@@ -80,7 +88,10 @@ void condvar_wake_one(condvar_t *condvar)
         if (wr->next == nullptr) {
             condvar->waiters_fifo.newest = nullptr;
         }
-        wr->wake();
+        // Rather than wake the waiter here (wr->wake()) and have it wait
+        // again for the mutex, we do "wait morphing" - have it continue to
+        // sleep until the mutex becomes available.
+        condvar->user_mutex->send_lock(wr);
         // To help the assert() in condvar_wait(), we need to zero saved
         // user_mutex when all concurrent condvar_wait()s are done.
         if (!condvar->waiters_fifo.oldest) {
@@ -100,10 +111,11 @@ void condvar_wake_all(condvar_t *condvar)
     wait_record *wr = condvar->waiters_fifo.oldest;
     // To help the assert() in condvar_wait(), we need to zero saved
     // user_mutex when all concurrent condvar_wait()s are done.
+    auto user_mutex = condvar->user_mutex;
     condvar->user_mutex = nullptr;
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
-        wr->wake();
+        user_mutex->send_lock(wr);
         wr = next_wr;
     }
     condvar->waiters_fifo.oldest = condvar->waiters_fifo.newest = nullptr;
