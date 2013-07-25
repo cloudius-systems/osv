@@ -42,7 +42,8 @@ class dynamic_percpu {
 public:
     dynamic_percpu()
         : _offset(dynamic_percpu_alloc(sizeof(T), align))
-        , _notifier(new sched::cpu::notifier([=] { new (addr()) T(); }))
+        // we want a lambda instead of boost::bind(), but this mysteriously fails in gcc 4.7.2
+        , _notifier(new sched::cpu::notifier(std::bind(&dynamic_percpu::construct, this)))
     {
         for (auto c : sched::cpus) {
             new (for_cpu(c)) T();
@@ -58,6 +59,9 @@ public:
     T& operator*() { return *addr(); }
     T* for_cpu(sched::cpu* cpu) { return addr(cpu->percpu_base); }
 private:
+    void construct() {
+        new (addr()) T();
+    }
     T* addr(void* base = percpu_base) {
         return static_cast<T*>(base + _offset);
     }
