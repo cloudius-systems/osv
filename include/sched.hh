@@ -190,7 +190,7 @@ public:
     static void exit() __attribute__((__noreturn__));
     static thread* current() __attribute((no_instrument_function));
     stack_info get_stack_info();
-    cpu* tcpu() __attribute__((no_instrument_function));
+    cpu* tcpu() const __attribute__((no_instrument_function));
     void join();
     void set_cleanup(std::function<void ()> cleanup);
     unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
@@ -475,7 +475,7 @@ void thread::wake_with(Action action)
 
 extern cpu __thread* current_cpu;
 
-inline cpu* thread::tcpu()
+inline cpu* thread::tcpu() const
 {
     return _cpu;
 }
