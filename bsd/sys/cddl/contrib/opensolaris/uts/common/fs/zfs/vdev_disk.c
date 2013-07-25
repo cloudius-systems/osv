@@ -146,13 +146,31 @@ vdev_disk_start_bio(zio_t *zio)
 }
 
 static int
+vdev_disk_start_flush(zio_t *zio)
+{
+	vdev_t *vd = zio->io_vd;
+	struct vdev_disk *dvd = vd->vdev_tsd;
+	struct bio *bio;
+
+	bio = alloc_bio();
+	bio->bio_cmd = BIO_FLUSH;
+	bio->bio_dev = dvd->device;
+
+	bio->bio_caller1 = zio;
+	bio->bio_done = vdev_disk_bio_done;
+
+	bio->bio_dev->driver->devops->strategy(bio);
+	return ZIO_PIPELINE_STOP;
+}
+
+static int
 vdev_disk_start_ioctl(zio_t *zio)
 {
 	vdev_t *vd = zio->io_vd;
 
 	switch (zio->io_cmd) {
 	case DKIOCFLUSHWRITECACHE:
-		if (1 || zfs_nocacheflush) {
+		if (zfs_nocacheflush) {
 			kprintf("DKIOCFLUSHWRITECACHE ignored\n");
 			break;
 		}
@@ -161,10 +179,7 @@ vdev_disk_start_ioctl(zio_t *zio)
 			break;
 		}
 
-		kprintf("DKIOCFLUSHWRITECACHE used\n");
-		abort();
-		break;
-
+		return vdev_disk_start_flush(zio);
 	default:
 		zio->io_error = ENOTSUP;
 		break;
