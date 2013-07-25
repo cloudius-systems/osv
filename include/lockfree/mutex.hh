@@ -63,7 +63,7 @@ protected:
     // it can be accessed with relaxed memory ordering.
     unsigned int depth;
     std::atomic<sched::thread *> owner;
-    queue_mpsc<sched::thread *> waitqueue;
+    queue_mpsc<lockfree::linked_item<sched::thread *>> waitqueue;
     std::atomic<unsigned int> handoff;
     unsigned int sequence;
 public:

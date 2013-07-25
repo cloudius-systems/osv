@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
     // Test trivial single-thread, queuing.
     std::cerr << "test1\n";
-    lockfree::queue_mpsc<int> q;
+    lockfree::queue_mpsc<lockfree::linked_item<int>> q;
     assert(!q.pop());
     assert(q.empty());
     std::cerr << "test2\n";
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     // and a popper pops them. To ensure there's some concurrency, all threads
     // wait to start at roughly the same time.
     std::cerr << "test4\n";
-    lockfree::queue_mpsc<int> waitq4;
+    lockfree::queue_mpsc<lockfree::linked_item<int>> waitq4;
     constexpr int npushers4 = 20;
     constexpr int niter4 = 10000;
     std::thread *pushers4[npushers4];
@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
         int payload;
         int debugflag; // for debugging
     };
-    lockfree::queue_mpsc<struct waititem> waitq;
+    lockfree::queue_mpsc<lockfree::linked_item<struct waititem>> waitq;
     std::thread *pushers[npushers];
     std::mutex mutexes[npushers];
     std::condition_variable condvars[npushers];

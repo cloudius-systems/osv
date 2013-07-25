@@ -24,6 +24,9 @@
 
 namespace lockfree {
 
+// linked_item<T> is just an example of a type LT which can be passed as a
+// parameter to the template queue_mpsc<LT>. But any type LT with a field
+// "LT *next" will do as well.
 template <class T>
 class linked_item {
 public:
@@ -33,15 +36,15 @@ public:
     explicit linked_item<T>(T val) : value(val), next(nullptr) { }
  };
 
-template <class T>
+// LT can be any type that has an "LT *next" field, which we used to hold a
+// pointer to the next item in the queue.
+template <class LT>
 class queue_mpsc {
-public:
-    typedef linked_item<T> LT;
 private:
     std::atomic<LT*> pushlist;
     LT* poplist;
 public:
-    queue_mpsc<T>() : pushlist(nullptr), poplist(nullptr) { }
+    queue_mpsc<LT>() : pushlist(nullptr), poplist(nullptr) { }
 
     inline void push(LT* item)
     {

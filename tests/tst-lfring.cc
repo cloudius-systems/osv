@@ -234,7 +234,7 @@ public:
 
 private:
 
-    lockfree::queue_mpsc<int> _queue;
+    lockfree::queue_mpsc<lockfree::linked_item<int>> _queue;
 
     // items for pusher1, pusher2, pusher3
     lockfree::linked_item<int> _items[3][elements_to_process];
