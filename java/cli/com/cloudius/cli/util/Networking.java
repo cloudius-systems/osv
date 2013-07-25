@@ -3,6 +3,7 @@ package com.cloudius.cli.util;
 import java.io.IOException;
 
 import com.cloudius.net.Arp;
+import com.cloudius.net.DHCP;
 import com.cloudius.net.IFConfig;
 import com.cloudius.net.Route;
 
@@ -36,6 +37,11 @@ public class Networking  {
     public static void route_add_default(String gw)
     {
         Route.add_default(gw);
+    }
+    
+    public static void dhcp_start()
+    {
+        DHCP.dhcp_start();
     }
     
 }

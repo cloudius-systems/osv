@@ -77,3 +77,17 @@ extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_Route_add_1default
 
     env->ReleaseStringUTFChars(gw, gw_c);
 }
+
+extern "C" void dhcp_start();
+
+/*
+ * Class:     com_cloudius_net_DHCP
+ * Method:    dhcp_start
+ * Signature: ()V
+ */
+extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_DHCP_dhcp_1start
+  (JNIEnv *, jclass)
+{
+    dhcp_start();
+}
+
