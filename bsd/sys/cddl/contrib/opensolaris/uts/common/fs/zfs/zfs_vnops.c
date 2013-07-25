@@ -2834,7 +2834,6 @@ out:
 	return (err);
 }
 
-#ifdef NOTYET
 typedef struct zfs_zlock {
 	krwlock_t	*zl_rwlock;	/* lock we acquired */
 	znode_t		*zl_znode;	/* znode we held */
@@ -2851,7 +2850,7 @@ zfs_rename_unlock(zfs_zlock_t **zlpp)
 
 	while ((zl = *zlpp) != NULL) {
 		if (zl->zl_znode != NULL)
-			VN_RELE(ZTOV(zl->zl_znode));
+			zfs_zinactive(zl->zl_znode);
 		rw_exit(zl->zl_rwlock);
 		*zlpp = zl->zl_next;
 		kmem_free(zl, sizeof (*zl));
@@ -2937,12 +2936,11 @@ zfs_rename_lock(znode_t *szp, znode_t *tdzp, znode_t *sdzp, zfs_zlock_t **zlpp)
  * directory.  Change the entry name as indicated.
  *
  *	IN:	sdvp	- Source directory containing the "old entry".
+ *		svp	- Source vnode
  *		snm	- Old entry name.
  *		tdvp	- Target directory to contain the "new entry".
+ *		tvp	- Target vnode
  *		tnm	- New entry name.
- *		cr	- credentials of caller.
- *		ct	- caller context
- *		flags	- case flags
  *
  *	RETURN:	0 if success
  *		error code if failure
@@ -2950,16 +2948,14 @@ zfs_rename_lock(znode_t *szp, znode_t *tdzp, znode_t *sdzp, zfs_zlock_t **zlpp)
  * Timestamps:
  *	sdvp,tdvp - ctime|mtime updated
  */
-/*ARGSUSED*/
 static int
-zfs_rename(vnode_t *sdvp, char *snm, vnode_t *tdvp, char *tnm, cred_t *cr,
-    caller_context_t *ct, int flags)
+zfs_rename(struct vnode *sdvp, struct vnode *svp, char *snm,
+	     struct vnode *tdvp, struct vnode *tvp, char *tnm)
 {
 	znode_t		*tdzp, *szp, *tzp;
 	znode_t		*sdzp = VTOZ(sdvp);
 	zfsvfs_t	*zfsvfs = sdzp->z_zfsvfs;
 	zilog_t		*zilog;
-	vnode_t		*realvp;
 	zfs_dirlock_t	*sdl, *tdl;
 	dmu_tx_t	*tx;
 	zfs_zlock_t	*zl;
@@ -2971,16 +2967,17 @@ zfs_rename(vnode_t *sdvp, char *snm, vnode_t *tdvp, char *tnm, cred_t *cr,
 	ZFS_VERIFY_ZP(sdzp);
 	zilog = zfsvfs->z_log;
 
-	/*
-	 * Make sure we have the real vp for the target directory.
-	 */
-	if (VOP_REALVP(tdvp, &realvp, ct) == 0)
-		tdvp = realvp;
-
-	if (tdvp->v_vfsp != sdvp->v_vfsp || zfsctl_is_node(tdvp)) {
+	if (tdvp->v_vfsp != sdvp->v_vfsp) {
 		ZFS_EXIT(zfsvfs);
 		return (EXDEV);
 	}
+
+#ifdef TODO_ZFSCTL
+	if (zfsctl_is_node(tdvp)) {
+		ZFS_EXIT(zfsvfs);
+		return (EXDEV);
+	}
+#endif
 
 	tdzp = VTOZ(tdvp);
 	ZFS_VERIFY_ZP(tdzp);
@@ -2989,9 +2986,6 @@ zfs_rename(vnode_t *sdvp, char *snm, vnode_t *tdvp, char *tnm, cred_t *cr,
 		ZFS_EXIT(zfsvfs);
 		return (EILSEQ);
 	}
-
-	if (flags & FIGNORECASE)
-		zflg |= ZCILOOK;
 
 top:
 	szp = NULL;
@@ -3055,9 +3049,7 @@ top:
 		 * is an exact match, we will allow this to proceed as
 		 * a name-change request.
 		 */
-		if ((zfsvfs->z_case == ZFS_CASE_INSENSITIVE ||
-		    (zfsvfs->z_case == ZFS_CASE_MIXED &&
-		    flags & FIGNORECASE)) &&
+		if ((zfsvfs->z_case == ZFS_CASE_INSENSITIVE) &&
 		    u8_strcmp(snm, tnm, 0, zfsvfs->z_norm, U8_UNICODE_LATEST,
 		    &error) == 0) {
 			/*
@@ -3098,7 +3090,7 @@ top:
 		if (!terr) {
 			zfs_dirent_unlock(tdl);
 			if (tzp)
-				VN_RELE(ZTOV(tzp));
+				zfs_zinactive(tzp);
 		}
 
 		if (sdzp == tdzp)
@@ -3116,7 +3108,7 @@ top:
 	}
 	if (terr) {
 		zfs_dirent_unlock(sdl);
-		VN_RELE(ZTOV(szp));
+		zfs_zinactive(szp);
 
 		if (sdzp == tdzp)
 			rw_exit(&sdzp->z_name_lock);
@@ -3127,6 +3119,7 @@ top:
 		return (terr);
 	}
 
+#ifdef TODO_ACL
 	/*
 	 * Must have write access at the source to remove the old entry
 	 * and write access at the target to create the new entry.
@@ -3134,10 +3127,11 @@ top:
 	 * done in a single check.
 	 */
 
-	if (error = zfs_zaccess_rename(sdzp, szp, tdzp, tzp, cr))
+	if (error = zfs_zaccess_rename(sdzp, szp, tdzp, tzp, kcred))
 		goto out;
+#endif
 
-	if (ZTOV(szp)->v_type == VDIR) {
+	if (S_ISDIR(szp->z_mode)) {
 		/*
 		 * Check to make sure rename is valid.
 		 * Can't do a move like this: /usr/a/b to /usr/a/b/c/d
@@ -3153,13 +3147,13 @@ top:
 		/*
 		 * Source and target must be the same type.
 		 */
-		if (ZTOV(szp)->v_type == VDIR) {
-			if (ZTOV(tzp)->v_type != VDIR) {
+		if (S_ISDIR(szp->z_mode)) {
+			if (!S_ISDIR(tzp->z_mode)) {
 				error = ENOTDIR;
 				goto out;
 			}
 		} else {
-			if (ZTOV(tzp)->v_type == VDIR) {
+			if (S_ISDIR(tzp->z_mode)) {
 				error = EISDIR;
 				goto out;
 			}
@@ -3173,18 +3167,6 @@ top:
 			error = 0;
 			goto out;
 		}
-	}
-
-	vnevent_rename_src(ZTOV(szp), sdvp, snm, ct);
-	if (tzp)
-		vnevent_rename_dest(ZTOV(tzp), tdvp, tnm, ct);
-
-	/*
-	 * notify the target directory if it is not the same
-	 * as source directory.
-	 */
-	if (tdvp != sdvp) {
-		vnevent_rename_dest_dir(tdvp, ct);
 	}
 
 	tx = dmu_tx_create(zfsvfs->z_os);
@@ -3213,9 +3195,9 @@ top:
 		if (sdzp == tdzp)
 			rw_exit(&sdzp->z_name_lock);
 
-		VN_RELE(ZTOV(szp));
+		zfs_zinactive(szp);
 		if (tzp)
-			VN_RELE(ZTOV(tzp));
+			zfs_zinactive(tzp);
 		if (error == ERESTART) {
 			dmu_tx_wait(tx);
 			dmu_tx_abort(tx);
@@ -3240,15 +3222,8 @@ top:
 
 			error = zfs_link_destroy(sdl, szp, tx, ZRENAMING, NULL);
 			if (error == 0) {
-				zfs_log_rename(zilog, tx, TX_RENAME |
-				    (flags & FIGNORECASE ? TX_CI : 0), sdzp,
+				zfs_log_rename(zilog, tx, TX_RENAME, sdzp,
 				    sdl->dl_name, tdzp, tdl->dl_name, szp);
-
-				/*
-				 * Update path information for the target vnode
-				 */
-				vn_renamepath(tdvp, ZTOV(szp), tnm,
-				    strlen(tnm));
 			} else {
 				/*
 				 * At this point, we have successfully created
@@ -3266,12 +3241,6 @@ top:
 				    ZRENAMING, NULL), ==, 0);
 			}
 		}
-#ifdef FREEBSD_NAMECACHE
-		if (error == 0) {
-			cache_purge(sdvp);
-			cache_purge(tdvp);
-		}
-#endif
 	}
 
 	dmu_tx_commit(tx);
@@ -3286,9 +3255,9 @@ out:
 		rw_exit(&sdzp->z_name_lock);
 
 
-	VN_RELE(ZTOV(szp));
+	zfs_zinactive(szp);
 	if (tzp)
-		VN_RELE(ZTOV(tzp));
+		zfs_zinactive(tzp);
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
@@ -3298,6 +3267,7 @@ out:
 	return (error);
 }
 
+#ifdef NOTYET
 /*
  * Insert the indicated symbolic reference entry into the directory.
  *
@@ -5567,7 +5537,7 @@ struct vnops zfs_vnops = {
 	zfs_lookup,			/* lookup */
 	zfs_create,			/* create */
 	zfs_remove,			/* remove */
-	NULL,				/* rename */
+	zfs_rename,			/* rename */
 	zfs_mkdir,			/* mkdir */
 	zfs_rmdir,			/* rmdir */
 	NULL,				/* getattr */
