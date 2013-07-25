@@ -24,6 +24,7 @@ load("/console/md5sum.js");
 load("/console/route.js");
 load("/console/java.js");
 load("/console/perf.js");
+load("/console/dhclient.js");
 
 // Create interface to networking functions
 var networking_interface = new Networking();
