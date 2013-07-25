@@ -112,12 +112,27 @@ int main(int argc, char **argv)
 	printf("file size = %lld (after O_TRUNC)\n", s.st_size);
 	close(fd);
 
-	if (unlink("/usr/foo") < 0) {
+	if (rename("/usr/foo", "/usr/foo2")) {
+		perror("rename simple");
+		return EXIT_FAILURE;
+	}
+
+	if (rename("/usr/foo2", "/usr/testdir/foo")) {
+		perror("rename cross dir");
+		return EXIT_FAILURE;
+	}
+
+	if (unlink("/usr/testdir/foo") < 0) {
 		perror("unlink");
 		return EXIT_FAILURE;
 	}
 
-	if (rmdir("/usr/testdir") < 0) {
+	if (rename("/usr/testdir", "/usr/testdir2")) {
+		perror("rename dir");
+		return EXIT_FAILURE;
+	}
+
+	if (rmdir("/usr/testdir2") < 0) {
 		perror("rmdir");
 		return EXIT_FAILURE;
 	}
