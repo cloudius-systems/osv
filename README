@@ -36,7 +36,8 @@ To build OSv
    ----------------------------------------
 
    On Fedora:
-     sudo service zfs-fuse start
+     sudo systemctl start zfs-fuse.service
+     sudo systemctl enable zfs-fuse.service	# to have it start on reboot
 
    On Debian the daemon should be started automatically.
 
