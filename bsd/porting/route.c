@@ -307,6 +307,7 @@ const char* osv_get_if_mac_addr(const char* if_name)
     struct ifnet* ifp;
     struct ifaddr *ifa, *next;
 
+    /* FIXME: where's the unref? */
     ifp = ifunit_ref(if_name);
 
     TAILQ_FOREACH_SAFE(ifa, &ifp->if_addrhead, ifa_link, next) {
