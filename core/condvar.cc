@@ -26,9 +26,9 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
         condvar->waiters_fifo.newest->next = &wr;
     }
     condvar->waiters_fifo.newest = &wr;
+    mutex_unlock(user_mutex);
     mutex_unlock(&condvar->m);
 
-    mutex_unlock(user_mutex);
     // Wait until either the timer expires or condition variable signaled
     wr.wait(tmr);
     if (!wr.woken()) {
