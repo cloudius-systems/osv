@@ -106,13 +106,26 @@ vdev_disk_close(vdev_t *vd)
 	vd->vdev_tsd = NULL;
 }
 
+static void vdev_disk_bio_done(struct bio *bio)
+{
+	zio_t *zio = bio->bio_caller1;
+
+	if (bio->bio_flags & BIO_ERROR)
+		zio->io_error = EIO;
+	else
+		zio->io_error = 0;
+
+	destroy_bio(bio);
+
+	zio_interrupt(zio);
+}
+
 static int
 vdev_disk_start_bio(zio_t *zio)
 {
 	vdev_t *vd = zio->io_vd;
 	struct vdev_disk *dvd = vd->vdev_tsd;
 	struct bio *bio;
-	int ret;
 
 	bio = alloc_bio();
 	if (zio->io_type == ZIO_TYPE_READ)
@@ -125,13 +138,10 @@ vdev_disk_start_bio(zio_t *zio)
 	bio->bio_offset = zio->io_offset;
 	bio->bio_bcount = zio->io_size;
 
+	bio->bio_caller1 = zio;
+	bio->bio_done = vdev_disk_bio_done;
+
 	bio->bio_dev->driver->devops->strategy(bio);
-
-	ret = bio_wait(bio);
-	destroy_bio(bio);
-
-	zio->io_error = ret;
-	zio_interrupt(zio);
 	return ZIO_PIPELINE_STOP;
 }
 
