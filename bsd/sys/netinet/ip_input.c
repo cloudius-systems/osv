@@ -197,6 +197,8 @@ SYSCTL_VNET_INT(_net_inet_ip, OID_AUTO, output_flowtable_size, CTLFLAG_RDTUN,
 
 static void	ip_freef(struct ipqhead *, struct ipq *);
 
+extern int dhcp_hook_rx(struct mbuf* m);
+
 /*
  * Kernel module interface for updating ipstat.  The argument is an index
  * into ipstat treated as an array of u_long.  While this encodes the general
@@ -483,6 +485,13 @@ tooshort:
 	if (ip_ipsec_filtertunnel(m))
 		goto passin;
 #endif /* IPSEC */
+
+	/*
+	 * DHCP
+	 */
+	if (dhcp_hook_rx(m)) {
+		return;
+	}
 
 	/*
 	 * Run through list of hooks for input packets.
