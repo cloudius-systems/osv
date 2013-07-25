@@ -50,6 +50,8 @@
 #include <osv/prex.h>
 #include <osv/mutex.h>
 #include <osv/device.h>
+#include <osv/debug.h>
+#include <geom/geom_disk.h>
 
 struct mutex sched_mutex = MUTEX_INITIALIZER;
 
@@ -75,6 +77,44 @@ device_lookup(const char *name)
 	return NULL;
 }
 
+void device_register(struct device *dev, const char *name, int flags)
+{
+	size_t len;
+	void *private = NULL;
+
+	assert(dev->driver != NULL);
+
+	/* Check the length of name. */
+	len = strnlen(name, MAXDEVNAME);
+	if (len == 0 || len >= MAXDEVNAME)
+		return;
+
+	sched_lock();
+
+	/* Check if specified name is already used. */
+	if (device_lookup(name) != NULL)
+		sys_panic("duplicate device");
+
+	/*
+	 * Allocate a device and device private data.
+	 */
+	if (dev->driver->devsz != 0) {
+		if ((private = malloc(dev->driver->devsz)) == NULL)
+			sys_panic("devsz");
+		memset(private, 0, dev->driver->devsz);
+	}
+
+	strlcpy(dev->name, name, len + 1);
+	dev->flags = flags;
+	dev->active = 1;
+	dev->refcnt = 1;
+	dev->private_data = private;
+	dev->next = device_list;
+	device_list = dev;
+
+	sched_unlock();
+}
+
 
 /*
  * device_create - create new device object.
@@ -88,7 +128,6 @@ device_create(struct driver *drv, const char *name, int flags)
 {
 	struct device *dev;
 	size_t len;
-	void *private = NULL;
 
 	assert(drv != NULL);
 
@@ -97,33 +136,14 @@ device_create(struct driver *drv, const char *name, int flags)
 	if (len == 0 || len >= MAXDEVNAME)
 		return NULL;
 
-	sched_lock();
-
-	/* Check if specified name is already used. */
-	if (device_lookup(name) != NULL)
-		sys_panic("duplicate device");
-
 	/*
-	 * Allocate a device structure and device private data.
+	 * Allocate a device structure.
 	 */
 	if ((dev = malloc(sizeof(*dev))) == NULL)
 		sys_panic("device_create");
 
-	if (drv->devsz != 0) {
-		if ((private = malloc(drv->devsz)) == NULL)
-			sys_panic("devsz");
-		memset(private, 0, drv->devsz);
-	}
-	strlcpy(dev->name, name, len + 1);
-	dev->driver = drv;
-	dev->flags = flags;
-	dev->active = 1;
-	dev->refcnt = 1;
-	dev->private_data = private;
-	dev->next = device_list;
-	device_list = dev;
-
-	sched_unlock();
+    dev->driver = drv;
+    device_register(dev, name, flags);
 	return dev;
 }
 
@@ -289,12 +309,15 @@ device_read(struct device *dev, struct uio *uio, int ioflags)
 	struct devops *ops;
 	int error;
 
+    kprintf("trying read\n");
 	if ((error = device_reference(dev)) != 0)
 		return error;
 
+    kprintf("almost asserting\n");
 	ops = dev->driver->devops;
 	assert(ops->read != NULL);
 	error = (*ops->read)(dev, uio, ioflags);
+    kprintf("read %d?\n", error);
 
 	device_release(dev);
 	return error;
@@ -306,12 +329,15 @@ device_write(struct device *dev, struct uio *uio, int ioflags)
 	struct devops *ops;
 	int error;
 
+    kprintf("entering write\n");
 	if ((error = device_reference(dev)) != 0)
 		return error;
 
+    kprintf("will write\n");
 	ops = dev->driver->devops;
 	assert(ops->write != NULL);
 	error = (*ops->write)(dev, uio, ioflags);
+    kprintf("wrote\n");
 
 	device_release(dev);
 	return error;
