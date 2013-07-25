@@ -10,6 +10,8 @@ TRACEPOINT(trace_mutex_lock_wait, "%p", mutex *);
 TRACEPOINT(trace_mutex_lock_wake, "%p", mutex *);
 TRACEPOINT(trace_mutex_try_lock, "%p, success=%d", mutex *, bool);
 TRACEPOINT(trace_mutex_unlock, "%p", mutex *);
+TRACEPOINT(trace_mutex_send_lock, "%p, wr=%p", mutex *, wait_record *);
+TRACEPOINT(trace_mutex_receive_lock, "%p", mutex *);
 
 void mutex::lock()
 {
@@ -80,6 +82,62 @@ void mutex::lock()
     waiter.wait();
     trace_mutex_lock_wake(this);
     owner.store(current, std::memory_order_relaxed);
+    depth = 1;
+}
+
+// send_lock() is used for implementing a "wait morphing" technique, where
+// the wait_record of a thread currently waiting on a condvar is put to wait
+// on a mutex, without waking it up first. This avoids unnecessary context
+// switches that happen if the thread is woken up just to try and grab the
+// mutex and go to sleep again.
+//
+// send_lock(wait_record) is similar to lock(), but instead of taking the lock
+// for the current thread, it takes the lock for another thread which is
+// currently waiting on the given wait_record. This wait_record will be woken
+// when the lock becomes availble - either during the send_lock() call, or
+// sometime later when the lock holder unlock()s it. It is assumed that the
+// waiting thread DOES NOT hold the mutex at the time of this call, so the
+// thread should relinquish the lock before putting itself on wait_record.
+void mutex::send_lock(wait_record *wr)
+{
+    trace_mutex_send_lock(this, wr);
+    if (count.fetch_add(1, std::memory_order_acquire) == 0) {
+        // Uncontended case (no other thread is holding the lock, and no
+        // concurrent lock() attempts). We got the lock for wr, so wake it.
+        wr->wake();
+        return;
+    }
+
+    // If we can't grab the lock for wr now, we push it in the wait queue,
+    // so it will eventually be woken when another thread releases the lock.
+    waitqueue.push(wr);
+
+    // Like in lock(), we incremented "count" before pushing anything on to
+    // the queue so a concurrent unlock() may not have found anybody to wake.
+    // So we must also do the "Resposibility Hand-Off" protocol to help the
+    // concurrent unlock() return without waiting for us to push.
+    auto old_handoff = handoff.load();
+    if (old_handoff) {
+        if (!waitqueue.empty()){
+            if (handoff.compare_exchange_strong(old_handoff, 0U)) {
+                wait_record *other = waitqueue.pop();
+                assert(other);
+                other->wake();
+            }
+        }
+    }
+}
+
+// A thread waking up knowing it received a lock from send_lock() as part of
+// a "wait morphing" protocol, must call receive_lock() to complete the lock's
+// adoption by this thread.
+// TODO: It is unfortunate that receive_lock() needs to exist at all. If we
+// changed the code so that an unlock() always sets owner and depth for the
+// thread it wakes, we wouldn't need this function.
+void mutex::receive_lock()
+{
+    trace_mutex_receive_lock(this);
+    owner.store(sched::thread::current(), std::memory_order_relaxed);
     depth = 1;
 }
 

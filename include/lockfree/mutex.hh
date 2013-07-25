@@ -83,6 +83,9 @@ public:
     // getdepth() should only be used by the thread holding the lock
     inline unsigned int getdepth() const { return depth; }
 
+    // For wait morphing. Do not use unless you know what you are doing :-)
+    void send_lock(wait_record *wr);
+    void receive_lock();
 };
 
 }
