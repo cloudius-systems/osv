@@ -61,6 +61,13 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
                 }
                 p = p->next;
             }
+            if (!p) {
+                // wr is no longer in the queue, so either wr.wake() is
+                // already done, or wake_all() has just taken the whole queue
+                // and will wr.wake() soon. We can't return (and invalidate wr)
+                // until it calls wr.wake().
+                wr.wait();
+            }
         }
         mutex_unlock(&condvar->m);
         ret = ETIMEDOUT;
@@ -121,6 +128,8 @@ void condvar_wake_all(condvar_t *condvar)
     // user_mutex when all concurrent condvar_wait()s are done.
     auto user_mutex = condvar->user_mutex;
     condvar->user_mutex = nullptr;
+    condvar->waiters_fifo.oldest = condvar->waiters_fifo.newest = nullptr;
+    mutex_unlock(&condvar->m);
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
         auto cpu_wr = wr->thread()->tcpu();
@@ -145,6 +154,4 @@ void condvar_wake_all(condvar_t *condvar)
         }
         wr = next_wr;
     }
-    condvar->waiters_fifo.oldest = condvar->waiters_fifo.newest = nullptr;
-    mutex_unlock(&condvar->m);
 }
