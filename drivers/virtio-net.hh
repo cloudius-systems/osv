@@ -121,6 +121,7 @@ namespace virtio {
             VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MAX = 0x8000,
 
             ETH_ALEN = 14,
+            VIRTIO_NET_CSUM_OFFLOAD = CSUM_TCP | CSUM_UDP,
         };
 
         struct virtio_net_config {
@@ -226,9 +227,11 @@ namespace virtio {
         virtual u32 get_driver_features(void);
 
         void wait_for_queue(vring* queue);
+        bool rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr);
         void receiver();
         void fill_rx_ring();
         bool tx(struct mbuf* m_head, bool flush = false);
+        struct mbuf* tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr);
         void kick(int queue) {_queues[queue]->kick();}
         void tx_gc_thread();
         void tx_gc();
@@ -253,6 +256,14 @@ namespace virtio {
         std::string _driver_name;
         virtio_net_config _config;
         bool _mergeable_bufs;
+        bool _tso_ecn = false;
+        bool _status = false;
+        bool _host_tso_ecn = false;
+        bool _csum = false;
+        bool _guest_csum = false;
+        bool _guest_tso4 = false;
+        bool _host_tso4 = false;
+
         u32 _hdr_size;
 
         vring* _rx_queue;

@@ -28,6 +28,14 @@
 #include <osv/ioctl.h>
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/if_types.h>
+#include <bsd/sys/sys/param.h>
+
+#include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/if_vlan_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/udp.h>
+#include <bsd/sys/netinet/tcp.h>
 
 TRACEPOINT(trace_virtio_net_rx_packet, "if=%d, len=%d", int, int);
 TRACEPOINT(trace_virtio_net_rx_wake, "");
@@ -156,8 +164,22 @@ namespace virtio {
         _ifn->if_ioctl = virtio_if_ioctl;
         _ifn->if_start = virtio_if_start;
         _ifn->if_init = virtio_if_init;
-        _ifn->if_snd.ifq_maxlen = _tx_queue->size();
-        _ifn->if_capabilities = 0/* IFCAP_RXCSUM */;
+        IFQ_SET_MAXLEN(&_ifn->if_snd, _tx_queue->size());
+
+        _ifn->if_capabilities = 0;
+
+        if (_csum) {
+            _ifn->if_capabilities |= IFCAP_TXCSUM;
+            if (_host_tso4)
+                _ifn->if_capabilities |= IFCAP_TSO4;
+        }
+
+        if (_guest_csum) {
+            _ifn->if_capabilities |= IFCAP_RXCSUM;
+            if (_guest_tso4)
+                _ifn->if_capabilities |= IFCAP_LRO;
+        }
+
         _ifn->if_capenable = _ifn->if_capabilities;
 
         ether_ifattach(_ifn, _config.mac);
@@ -196,8 +218,78 @@ namespace virtio {
                     (u32)_config.mac[5]);
 
         _mergeable_bufs = get_guest_feature_bit(VIRTIO_NET_F_MRG_RXBUF);
+        _status = get_guest_feature_bit(VIRTIO_NET_F_STATUS);
+        _tso_ecn = get_guest_feature_bit(VIRTIO_NET_F_GUEST_ECN);
+        _host_tso_ecn = get_guest_feature_bit(VIRTIO_NET_F_HOST_ECN);
+        _csum = get_guest_feature_bit(VIRTIO_NET_F_CSUM);
+        _guest_csum = get_guest_feature_bit(VIRTIO_NET_F_GUEST_CSUM);
+        _guest_tso4 = get_guest_feature_bit(VIRTIO_NET_F_GUEST_TSO4);
+        _host_tso4 = get_guest_feature_bit(VIRTIO_NET_F_HOST_TSO4);
+
+        virtio_net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
+        virtio_net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
+        virtio_net_i("Features: %s=%d,%s=%d", "Guest_csum", _guest_csum, "guest tso4", _guest_tso4);
+        virtio_net_i("Features: %s=%d", "host tso4", _host_tso4);
 
         return true;
+    }
+
+    /*
+     * Original comment from FreeBSD
+     * Alternative method of doing receive checksum offloading. Rather
+     * than parsing the received frame down to the IP header, use the
+     * csum_offset to determine which CSUM_* flags are appropriate. We
+     * can get by with doing this only because the checksum offsets are
+     * unique for the things we care about.
+     */
+    bool
+    virtio_net::rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr)
+    {
+        struct ether_header *eh;
+        struct ether_vlan_header *evh;
+        struct udphdr *udp;
+        int csum_len;
+        u16 eth_type;
+
+        csum_len = hdr->csum_start + hdr->csum_offset;
+
+        if (csum_len < (int)sizeof(struct ether_header) + (int)sizeof(struct ip))
+            return true;
+        if (m->m_len < csum_len)
+            return true;
+
+        eh = mtod(m, struct ether_header *);
+        eth_type = ntohs(eh->ether_type);
+        if (eth_type == ETHERTYPE_VLAN) {
+            evh = mtod(m, struct ether_vlan_header *);
+            eth_type = ntohs(evh->evl_proto);
+        }
+
+        if (eth_type != ETHERTYPE_IP) {
+            return true;
+        }
+
+        /* Use the offset to determine the appropriate CSUM_* flags. */
+        switch (hdr->csum_offset) {
+        case offsetof(struct udphdr, uh_sum):
+            if (m->m_len < hdr->csum_start + (int)sizeof(struct udphdr))
+                return true;
+            udp = (struct udphdr *)(mtod(m, uint8_t *) + hdr->csum_start);
+            if (udp->uh_sum == 0)
+                return false;
+
+            /* FALLTHROUGH */
+
+        case offsetof(struct tcphdr, th_sum):
+            m->m_pkthdr.csum_flags |= CSUM_DATA_VALID | CSUM_PSEUDO_HDR;
+            m->m_pkthdr.csum_data = 0xFFFF;
+            break;
+
+        default:
+            return true;
+        }
+
+        return false;
     }
 
     void virtio_net::receiver() {
@@ -232,8 +324,6 @@ namespace virtio {
                     nbufs = 1;
                 } else {
                     nbufs = mhdr.num_buffers;
-                    if (nbufs > 1) // It should happen but it doesn't, leave the comment for visibility in the mean time
-                        virtio_net_e("\t RX: mergeable, hdr len: %d, len %d, num_bufs=%d", mhdr.hdr.hdr_len, len, mhdr.num_buffers);
                 }
 
                 m->m_pkthdr.len = len;
@@ -264,6 +354,11 @@ namespace virtio {
 
                 // skip over the virtio header bytes (offset) that aren't need for the above layer
                 m_adj(m_head, offset);
+
+                if (_ifn->if_capenable & IFCAP_RXCSUM &&
+                    mhdr.hdr.flags & virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM) {
+                    rx_csum(m_head, &mhdr.hdr);
+                }
 
                 _ifn->if_ipackets++;
                 (*_ifn->if_input)(_ifn, m_head);
@@ -318,6 +413,15 @@ namespace virtio {
         virtio_net_req *req = new virtio_net_req;
 
         req->um.reset(m_head);
+
+        if (m_head->m_pkthdr.csum_flags != 0) {
+            m = tx_offload(m_head, &req->mhdr.hdr);
+            if ((m_head = m) == nullptr) {
+                delete req;
+                return false;
+            }
+        }
+
         _tx_queue->_sg_vec.clear();
         _tx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(static_cast<void*>(&req->mhdr)), _hdr_size, vring_desc::VRING_DESC_F_READ));
 
@@ -356,6 +460,88 @@ namespace virtio {
         return true;
     }
 
+    struct mbuf*
+    virtio_net::tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr)
+    {
+        struct ether_header *eh;
+        struct ether_vlan_header *evh;
+        struct ip *ip;
+        struct tcphdr *tcp;
+        int ip_offset;
+        u16 eth_type, csum_start;
+        u8 ip_proto, gso_type;
+
+        ip_offset = sizeof(struct ether_header);
+        if (m->m_len < ip_offset) {
+            if ((m = m_pullup(m, ip_offset)) == nullptr)
+                return nullptr;
+        }
+
+        eh = mtod(m, struct ether_header *);
+        eth_type = ntohs(eh->ether_type);
+        if (eth_type == ETHERTYPE_VLAN) {
+            ip_offset = sizeof(struct ether_vlan_header);
+            if (m->m_len < ip_offset) {
+                if ((m = m_pullup(m, ip_offset)) == nullptr)
+                    return nullptr;
+            }
+            evh = mtod(m, struct ether_vlan_header *);
+            eth_type = ntohs(evh->evl_proto);
+        }
+
+        switch (eth_type) {
+        case ETHERTYPE_IP:
+            if (m->m_len < ip_offset + (int)sizeof(struct ip)) {
+                m = m_pullup(m, ip_offset + sizeof(struct ip));
+                if (m == nullptr)
+                    return nullptr;
+            }
+
+            ip = (struct ip *)(mtod(m, uint8_t *) + ip_offset);
+            ip_proto = ip->ip_p;
+            csum_start = ip_offset + (ip->ip_hl << 2);
+            gso_type = virtio_net::virtio_net_hdr::VIRTIO_NET_HDR_GSO_TCPV4;
+            break;
+
+        default:
+            return m;
+        }
+
+        if (m->m_pkthdr.csum_flags & VIRTIO_NET_CSUM_OFFLOAD) {
+            hdr->flags |= virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM;
+            hdr->csum_start = csum_start;
+            hdr->csum_offset = m->m_pkthdr.csum_data;
+        }
+
+        if (m->m_pkthdr.csum_flags & CSUM_TSO) {
+            if (ip_proto != IPPROTO_TCP)
+                return m;
+
+            if (m->m_len < csum_start + (int)sizeof(struct tcphdr)) {
+                m = m_pullup(m, csum_start + sizeof(struct tcphdr));
+                if (m == nullptr)
+                    return nullptr;
+            }
+
+            tcp = (struct tcphdr *)(mtod(m, uint8_t *) + csum_start);
+            hdr->gso_type = gso_type;
+            hdr->hdr_len = csum_start + (tcp->th_off << 2);
+            hdr->gso_size = m->m_pkthdr.tso_segsz;
+
+            if (tcp->th_flags & TH_CWR) {
+                if (!_tso_ecn) {
+                    virtio_w("TSO with ECN not supported by host\n");
+                    m_freem(m);
+                    return nullptr;
+                }
+
+                hdr->flags |= virtio_net_hdr::VIRTIO_NET_HDR_GSO_ECN;
+            }
+        }
+
+        return m;
+    }
+
     void virtio_net::tx_gc_thread() {
 
         while (1) {
@@ -382,7 +568,16 @@ namespace virtio {
     u32 virtio_net::get_driver_features(void)
     {
         u32 base = virtio_driver::get_driver_features();
-        return (base | ( 1 << VIRTIO_NET_F_MAC) | (1 << VIRTIO_NET_F_MRG_RXBUF));
+        return (base | (1 << VIRTIO_NET_F_MAC)        \
+                     | (1 << VIRTIO_NET_F_MRG_RXBUF)  \
+                     | (1 << VIRTIO_NET_F_STATUS)     \
+                     | (1 << VIRTIO_NET_F_CSUM)       \
+                     | (1 << VIRTIO_NET_F_GUEST_CSUM) \
+                     | (1 << VIRTIO_NET_F_GUEST_TSO4) \
+                     | (1 << VIRTIO_NET_F_HOST_ECN)   \
+                     | (1 << VIRTIO_NET_F_HOST_TSO4)  \
+                     | (1 << VIRTIO_NET_F_GUEST_ECN)  \
+                     | (1 << VIRTIO_RING_F_INDIRECT_DESC));
     }
 
     hw_driver* virtio_net::probe(hw_device* dev)
