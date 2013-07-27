@@ -99,6 +99,13 @@ __FBSDID("$FreeBSD$");
 /* Features supported by all backends.  TSO and LRO can be negotiated */
 #define XN_CSUM_FEATURES	(CSUM_TCP | CSUM_UDP)
 
+// XXX: 4 integers + 48 bytes
+// GCC is being a bitch here and for some reason unable to calculate this
+// statically, thus believing it is a variadic size.
+// So I am manually getting the size here
+#undef __RING_HEADER_SIZE
+#define __RING_HEADER_SIZE(_s) (4 * sizeof(int) + 48)
+
 #define NET_TX_RING_SIZE __RING_SIZE((netif_tx_sring_t *)0, PAGE_SIZE)
 #define NET_RX_RING_SIZE __RING_SIZE((netif_rx_sring_t *)0, PAGE_SIZE)
 
