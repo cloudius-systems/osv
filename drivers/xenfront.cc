@@ -8,6 +8,8 @@
 #include <xen/xenstore/xenstorevar.h>
 #include <xen/xenbus/xenbusb.h>
 
+extern driver_t netfront_driver;
+
 namespace xenfront {
 
 void xenfront_driver::otherend_changed(XenbusState state)
@@ -29,6 +31,12 @@ int xenfront_driver::attach()
     return 0;
 }
 
+// No need to have a counter for disks, because unit number for disks are not an
+// increasing counter, but rather it position in the bus. For the network, we could
+// hash the mac address if we would really care, to make sure that those are stable
+// This will do for now.
+static std::atomic<int> net_unit;
+
 void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
 {
     driver_t *table;
@@ -39,8 +47,15 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
     _node_path = std::string(ivars->xd_node);
     _type = std::string(ivars->xd_type);
 
-    // Table definitions go here
-    return;
+    if (!strcmp(ivars->xd_type, "vif")) {
+        table = &netfront_driver;
+        _irq_type = INTR_TYPE_NET,
+        ss << "xenfront-net";
+        // Very unfrequent, so don't care about how expensive and full of barriers this is
+        _bsd_dev.unit = net_unit++;
+
+    } else
+        return;
 
     _driver_name = ss.str();
     device_method_t *dm = table->methods;

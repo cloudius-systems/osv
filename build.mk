@@ -261,6 +261,7 @@ bsd += bsd/sys/xen/xenstore/xenstore.o
 bsd += bsd/sys/xen/xenbus/xenbus.o
 bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
+bsd += bsd/sys/dev/xen/netfront/netfront.o
 
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
@@ -435,6 +436,7 @@ drivers += drivers/virtio-blk.o
 drivers += drivers/clock.o drivers/kvmclock.o drivers/xenclock.o
 drivers += drivers/clockevent.o
 drivers += drivers/acpi.o
+drivers += drivers/xenfront.o drivers/xenfront-xenbus.o
 
 objects = bootfs.o
 objects += arch/x64/exceptions.o
