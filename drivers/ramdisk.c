@@ -39,7 +39,7 @@
 struct ramdisk_softc {
 	char		*addr;		/* base address of image */
 	size_t		size;		/* image size */
-	TAILQ_HEAD(, bio) bio_list;
+	TAILQ_HEAD(, bio) bio_queue;
 	pthread_mutex_t	bio_mutex;
 	pthread_cond_t	bio_wait;
 };
@@ -94,7 +94,7 @@ ramdisk_strategy(struct bio *bio)
 	struct ramdisk_softc *sc = bio->bio_dev->private_data;
 
 	pthread_mutex_lock(&sc->bio_mutex);
-	TAILQ_INSERT_TAIL(&sc->bio_list, bio, bio_list);
+	TAILQ_INSERT_TAIL(&sc->bio_queue, bio, bio_queue);
 	pthread_cond_signal(&sc->bio_wait);
 	pthread_mutex_unlock(&sc->bio_mutex);
 }
@@ -121,10 +121,10 @@ static void *ramdisk_thread_fn(void *arg)
 
 	pthread_mutex_lock(&sc->bio_mutex);
 	for (;;) {
-		while (!TAILQ_EMPTY(&sc->bio_list)) {
-			struct bio *bio = TAILQ_FIRST(&sc->bio_list);
+		while (!TAILQ_EMPTY(&sc->bio_queue)) {
+			struct bio *bio = TAILQ_FIRST(&sc->bio_queue);
 
-			TAILQ_REMOVE(&sc->bio_list, bio, bio_list);
+			TAILQ_REMOVE(&sc->bio_queue, bio, bio_queue);
 			ramdisk_io(sc, bio);
 		}
 		pthread_cond_wait(&sc->bio_wait, &sc->bio_mutex);
@@ -146,7 +146,7 @@ ramdisk_init(void)
 	sc->size = dev->size = 4 * 1024 * 1024;
 	sc->addr = malloc(sc->size);
 
-	TAILQ_INIT(&sc->bio_list);
+	TAILQ_INIT(&sc->bio_queue);
 	pthread_mutex_init(&sc->bio_mutex, NULL);
 	pthread_cond_init(&sc->bio_wait, NULL);
 

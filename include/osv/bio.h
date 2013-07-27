@@ -85,8 +85,7 @@ struct bio {
 	void	*bio_caller1;		/* Private use by the consumer. */
 	void	(*bio_done)(struct bio *);
 
-
-	TAILQ_ENTRY(bio) bio_list;
+	TAILQ_ENTRY(bio) bio_queue;
 
 	/*
 	 * I/O synchronization, probably should move out of the struct to
