@@ -43,6 +43,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <bsd/sys/sys/queue.h>
+#include <osv/device.h>
 
 __BEGIN_DECLS
 
@@ -69,6 +70,8 @@ struct bio;
 #define	BIO_NOTCLASSIFIED		(void *)(~0UL)
 
 typedef void bio_task_t(void *);
+typedef uint64_t   daddr_t;    /* disk address */
+
 
 /*
  * The bio structure describes an I/O operation in the kernel.
@@ -84,6 +87,9 @@ struct bio {
 	long	bio_resid;		/* Remaining I/O in bytes. */
 	void	*bio_caller1;		/* Private use by the consumer. */
 	void	(*bio_done)(struct bio *);
+	struct disk *bio_disk;
+	daddr_t bio_pblkno;
+	off_t   bio_length;     /* Like bio_bcount */
 
 	TAILQ_ENTRY(bio) bio_queue;
 
@@ -94,6 +100,16 @@ struct bio {
 	pthread_mutex_t bio_mutex;
 	pthread_cond_t	bio_wait;
 };
+
+struct bio_queue_head {
+	TAILQ_HEAD(bio_queue, bio) queue;
+	off_t last_offset;
+	struct	bio *insert_point;
+};
+struct bio *bioq_takefirst(struct bio_queue_head *head);
+struct bio *bioq_first(struct bio_queue_head *head);
+
+void bioq_init(struct bio_queue_head *head);
 
 struct bio *	alloc_bio(void);
 void		destroy_bio(struct bio *bio);
