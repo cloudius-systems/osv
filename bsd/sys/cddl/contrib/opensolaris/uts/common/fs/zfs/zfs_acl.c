@@ -2148,7 +2148,7 @@ zfs_zaccess_aces_check(znode_t *zp, uint32_t *working_mode,
 		if (!zfs_acl_valid_ace_type(type, iflags))
 			continue;
 
-		if (ZTOV(zp)->v_type == VDIR && (iflags & ACE_INHERIT_ONLY_ACE))
+		if (S_ISDIR(zp->z_mode) && (iflags & ACE_INHERIT_ONLY_ACE))
 			continue;
 
 		/* Skip ACE if it does not affect any AoI */
