@@ -1089,6 +1089,7 @@ top:
 
 	return (error);
 }
+#endif /* NOTYET */
 
 /*
  * Decide whether it is okay to remove within a sticky directory.
@@ -1127,4 +1128,3 @@ zfs_sticky_remove_access(znode_t *zdp, znode_t *zp, cred_t *cr)
 	else
 		return (secpolicy_vnode_remove(ZTOV(zp), cr));
 }
-#endif /* NOTYET */
