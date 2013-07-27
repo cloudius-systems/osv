@@ -565,8 +565,10 @@ do {									\
 	(ifq)->ifq_drv_len++;						\
 } while (0)
 
+// XXX: dv_len does not exist in ifqueue in BSD as well. This is probably
+// used in another structure that supercedes ifq
 #define	IFQ_DRV_IS_EMPTY(ifq)						\
-	(((ifq)->ifq_drv_len == 0) && ((ifq)->ifq_len == 0))
+	(((ifq)->ifq_len == 0))
 
 #define	IFQ_DRV_PURGE(ifq)						\
 do {									\
