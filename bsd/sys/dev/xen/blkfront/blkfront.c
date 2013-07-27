@@ -152,16 +152,16 @@ blkfront_vdevice_to_unit(uint32_t vdevice, int *unit, const char **name)
 		int base;
 		const char *name;
 	} info[] = {
-		{3,	6,	0,	"ad"},	/* ide0 */
-		{22,	6,	2,	"ad"},	/* ide1 */
-		{33,	6,	4,	"ad"},	/* ide2 */
-		{34,	6,	6,	"ad"},	/* ide3 */
-		{56,	6,	8,	"ad"},	/* ide4 */
-		{57,	6,	10,	"ad"},	/* ide5 */
-		{88,	6,	12,	"ad"},	/* ide6 */
-		{89,	6,	14,	"ad"},	/* ide7 */
-		{90,	6,	16,	"ad"},	/* ide8 */
-		{91,	6,	18,	"ad"},	/* ide9 */
+		{3,	6,	0,	"vblk"},	/* ide0 */
+		{22,	6,	2,	"vblk"},	/* ide1 */
+		{33,	6,	4,	"vblk"},	/* ide2 */
+		{34,	6,	6,	"vblk"},	/* ide3 */
+		{56,	6,	8,	"vblk"},	/* ide4 */
+		{57,	6,	10,	"vblk"},	/* ide5 */
+		{88,	6,	12,	"vblk"},	/* ide6 */
+		{89,	6,	14,	"vblk"},	/* ide7 */
+		{90,	6,	16,	"vblk"},	/* ide8 */
+		{91,	6,	18,	"vblk"},	/* ide9 */
 
 		{8,	4,	0,	"da"},	/* scsi disk0 */
 		{65,	4,	16,	"da"},	/* scsi disk1 */
@@ -479,7 +479,7 @@ blkfront_attach(device_t dev)
 	}
 
 	blkfront_vdevice_to_unit(vdevice, &unit, &name);
-	if (!strcmp(name, "xbd"))
+	if (!strcmp(name, "vblk"))
 		device_set_unit(dev, unit);
 
 	sc = device_get_softc(dev);
