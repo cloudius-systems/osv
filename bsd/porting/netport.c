@@ -5,6 +5,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/if_media.h>
 
 int copyin(const void *uaddr, void *kaddr, size_t len)
 {
@@ -106,3 +107,23 @@ int tvtohz(struct timeval *tv)
     return (tv->tv_sec*hz + tv->tv_usec);
 }
 
+void
+ifmedia_init(struct ifmedia *ifm, int dontcare_mask, ifm_change_cb_t change_callback,
+             ifm_stat_cb_t status_callback)
+{
+}
+
+void
+ifmedia_add(struct ifmedia *ifm, int mword, int data, void *aux)
+{
+}
+void
+ifmedia_set(struct ifmedia *ifm, int target)
+{
+}
+
+int
+ifmedia_ioctl(struct ifnet *ifp, struct ifreq *ifr, struct ifmedia *ifm, u_long cmd)
+{
+    return -ENOSYS;
+}
