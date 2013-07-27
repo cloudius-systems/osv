@@ -2044,9 +2044,13 @@ static int
 zfs_zaccess_dataset_check(znode_t *zp, uint32_t v4_mode)
 {
 	if ((v4_mode & WRITE_MASK) &&
-	    (zp->z_zfsvfs->z_vfs->vfs_flag & VFS_RDONLY) &&
+	    (zp->z_zfsvfs->z_vfs->vfs_flag & VFS_RDONLY)
+#ifndef __OSV__
+	    &&
 	    (!IS_DEVVP(ZTOV(zp)) ||
-	    (IS_DEVVP(ZTOV(zp)) && (v4_mode & WRITE_MASK_ATTRS)))) {
+	    (IS_DEVVP(ZTOV(zp)) && (v4_mode & WRITE_MASK_ATTRS)))
+#endif
+	    ) {
 		return (EROFS);
 	}
 
@@ -2054,9 +2058,9 @@ zfs_zaccess_dataset_check(znode_t *zp, uint32_t v4_mode)
 	 * Only check for READONLY on non-directories.
 	 */
 	if ((v4_mode & WRITE_MASK_DATA) &&
-	    (((ZTOV(zp)->v_type != VDIR) &&
+	    ((!S_ISDIR(zp->z_mode) &&
 	    (zp->z_pflags & (ZFS_READONLY | ZFS_IMMUTABLE))) ||
-	    (ZTOV(zp)->v_type == VDIR &&
+	    (S_ISDIR(zp->z_mode) &&
 	    (zp->z_pflags & ZFS_IMMUTABLE)))) {
 		return (EPERM);
 	}
