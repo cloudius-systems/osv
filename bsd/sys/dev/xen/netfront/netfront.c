@@ -2116,7 +2116,7 @@ create_netdev(device_t dev)
 	/* Set up ifnet structure */
 	ifp = np->xn_ifp = if_alloc(IFT_ETHER);
     	ifp->if_softc = np;
-    	if_initname(ifp, "xn",  device_get_unit(dev));
+    	if_initname(ifp, "eth",  device_get_unit(dev));
     	ifp->if_flags = IFF_BROADCAST | IFF_SIMPLEX | IFF_MULTICAST;
     	ifp->if_ioctl = xn_ioctl;
     	ifp->if_output = ether_output;
