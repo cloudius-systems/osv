@@ -246,6 +246,11 @@ xlvbd_add(struct xb_softc *sc, blkif_sector_t sectors,
 
 /************************ end VBD support *****************/
 
+struct xb_softc *blkfront_bio_to_sc(struct bio *bp)
+{
+    return bp->bio_dev->softc;
+}
+
 /*
  * Read/write routine for a buffer.  Finds the proper unit, place it on
  * the sortq and kick the controller.
@@ -253,14 +258,13 @@ xlvbd_add(struct xb_softc *sc, blkif_sector_t sectors,
 static void
 xb_strategy(struct bio *bp)
 {
-	struct xb_softc	*sc = (struct xb_softc *)bp->bio_disk->d_drv1;
+	struct xb_softc	*sc = blkfront_bio_to_sc(bp);
 
 	/* bogus disk? */
 	if (sc == NULL) {
 		bp->bio_error = EINVAL;
-		bp->bio_flags |= BIO_ERROR;
 		bp->bio_resid = bp->bio_bcount;
-		biodone(bp);
+		biodone(bp, false);
 		return;
 	}
 
@@ -295,7 +299,7 @@ xb_bio_complete(struct xb_softc *sc, struct xb_command *cm)
 		bp->bio_resid = 0;
 
 	xb_free_command(cm);
-	biodone(bp);
+	biodone(bp, !(bp->bio_flags & BIO_ERROR));
 }
 
 // Quiesce the disk writes for a dump file before allowing the next buffer.
@@ -1148,7 +1152,7 @@ blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 	if (error) {
 		printf("error %d in blkif_queue_cb\n", error);
 		cm->bp->bio_error = EIO;
-		biodone(cm->bp);
+		biodone(cm->bp, false);
 		xb_free_command(cm);
 		return;
 	}
