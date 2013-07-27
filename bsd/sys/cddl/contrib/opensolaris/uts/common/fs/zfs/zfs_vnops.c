@@ -1128,16 +1128,14 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode *vp)
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
 
-#ifdef ACL_TODO
 	/*
 	 * Check accessibility of directory.
 	 */
 
-	if (error = zfs_zaccess(dzp, ACE_EXECUTE, 0, B_FALSE, cr)) {
+	if (error = zfs_zaccess(dzp, ACE_EXECUTE, 0, B_FALSE, NULL)) {
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
-#endif
 
 	if (zfsvfs->z_utf8 && u8_validate(nm, strlen(nm),
 	    NULL, U8_VALIDATE_ENTIRE, &error) < 0) {
@@ -1219,7 +1217,6 @@ top:
 		goto out;
 	}
 
-#ifdef ACL_TODO
 	/*
 	 * Create a new file object and update the directory
 	 * to reference it.
@@ -1229,7 +1226,6 @@ top:
 			zfs_acl_ids_free(&acl_ids);
 		goto out;
 	}
-#endif
 
 	if (!have_acl && (error = zfs_acl_ids_create(dzp, 0, vap,
 	    cr, vsecp, &acl_ids)) != 0)
@@ -1352,10 +1348,8 @@ top:
 
 	assert(zp_lock == zp);
 
-#if 0
-	if (error = zfs_zaccess_delete(dzp, zp, cr))
+	if (error = zfs_zaccess_delete(dzp, zp, NULL))
 		goto out;
-#endif
 
 	/*
 	 * We may delete the znode now, or we may put it in the unlinked set;
@@ -1517,14 +1511,12 @@ top:
 		return (error);
 	}
 
-#ifdef ACL_TODO
 	if (error = zfs_zaccess(dzp, ACE_ADD_SUBDIRECTORY, 0, B_FALSE, cr)) {
 		zfs_acl_ids_free(&acl_ids);
 		zfs_dirent_unlock(dl);
 		ZFS_EXIT(zfsvfs);
 		return (error);
 	}
-#endif
 
 	if (zfs_acl_ids_overquota(zfsvfs, &acl_ids)) {
 		zfs_acl_ids_free(&acl_ids);
@@ -1642,11 +1634,9 @@ top:
 
 	assert(zp == zp_lock);
 
-#if 0
-	if (error = zfs_zaccess_delete(dzp, zp, cr)) {
+	if (error = zfs_zaccess_delete(dzp, zp, NULL)) {
 		goto out;
 	}
-#endif
 
 	/*
 	 * Grab a lock on the directory to make sure that noone is
@@ -1691,6 +1681,7 @@ top:
 	rw_exit(&zp->z_parent_lock);
 	rw_exit(&zp->z_name_lock);
 
+out:
 	zfs_dirent_unlock(dl);
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
@@ -3119,7 +3110,6 @@ top:
 		return (terr);
 	}
 
-#ifdef TODO_ACL
 	/*
 	 * Must have write access at the source to remove the old entry
 	 * and write access at the target to create the new entry.
@@ -3129,7 +3119,6 @@ top:
 
 	if (error = zfs_zaccess_rename(sdzp, szp, tdzp, tzp, kcred))
 		goto out;
-#endif
 
 	if (S_ISDIR(szp->z_mode)) {
 		/*
