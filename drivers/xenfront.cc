@@ -7,6 +7,8 @@
 #include <xen/xenstore/xenstorevar.h>
 #include <xen/xenbus/xenbusb.h>
 
+extern driver_t netfront_driver;
+
 namespace xenfront {
 
 void xenfront_driver::otherend_changed(XenbusState state)
@@ -37,8 +39,13 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
     _node_path = std::string(ivars->xd_node);
     _type = std::string(ivars->xd_type);
 
-    // Table definitions go here
-    return;
+    if (!strcmp(ivars->xd_type, "vif")) {
+        table = &netfront_driver;
+        _irq_type = INTR_TYPE_NET,
+        ss << "xenfront-net";
+
+    } else
+        return;
 
     _driver_name = ss.str();
     device_method_t *dm = table->methods;
