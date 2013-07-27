@@ -27,7 +27,12 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include "opt_inet.h"
+#include <bsd/porting/netport.h>
+#include <bsd/porting/bus.h>
+#include <bsd/porting/mmu.h>
+#include <bsd/porting/synch.h>
+#include <bsd/porting/kthread.h>
+#include <bsd/porting/callout.h>
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -36,30 +41,30 @@ __FBSDID("$FreeBSD$");
 #include <sys/malloc.h>
 #include <sys/module.h>
 #include <sys/kernel.h>
-#include <sys/socket.h>
+#include <bsd/sys/sys/socket.h>
 #include <sys/sysctl.h>
 #include <sys/queue.h>
 #include <sys/lock.h>
 #include <sys/sx.h>
 
-#include <net/if.h>
-#include <net/if_arp.h>
-#include <net/ethernet.h>
-#include <net/if_dl.h>
-#include <net/if_media.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_arp.h>
+#include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_media.h>
 
 #include <net/bpf.h>
 
-#include <net/if_types.h>
-#include <net/if.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/if.h>
 
-#include <netinet/in_systm.h>
-#include <netinet/in.h>
-#include <netinet/ip.h>
-#include <netinet/if_ether.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/if_ether.h>
 #if __FreeBSD_version >= 700000
-#include <netinet/tcp.h>
-#include <netinet/tcp_lro.h>
+#include <bsd/sys/netinet/tcp.h>
+#include <bsd/sys/netinet/tcp_lro.h>
 #endif
 
 #include <vm/vm.h>
@@ -176,7 +181,7 @@ static int talk_to_backend(device_t dev, struct netfront_info *info);
 static int create_netdev(device_t dev);
 static void netif_disconnect_backend(struct netfront_info *info);
 static int setup_device(device_t dev, struct netfront_info *info);
-static void free_ring(int *ref, void *ring_ptr_ref);
+static void free_ring(grant_ref_t *ref, void *ring_ptr_ref);
 
 static int  xn_ifmedia_upd(struct ifnet *ifp);
 static void xn_ifmedia_sts(struct ifnet *ifp, struct ifmediareq *ifmr);
@@ -275,8 +280,8 @@ struct netfront_info {
 	grant_ref_t grant_rx_ref[NET_TX_RING_SIZE + 1]; 
 
 	device_t		xbdev;
-	int			tx_ring_ref;
-	int			rx_ring_ref;
+	grant_ref_t		tx_ring_ref;
+	grant_ref_t		rx_ring_ref;
 	uint8_t			mac[ETHER_ADDR_LEN];
 	struct xn_chain_data	xn_cdata;	/* mbufs */
 	struct mbuf_head	xn_rx_batch;	/* head of the batch queue */
@@ -469,11 +474,13 @@ netfront_attach(device_t dev)
 		return (err);
 	}
 
+#if 0
 #if __FreeBSD_version >= 700000
 	SYSCTL_ADD_INT(device_get_sysctl_ctx(dev),
 	    SYSCTL_CHILDREN(device_get_sysctl_tree(dev)),
 	    OID_AUTO, "enable_lro", CTLTYPE_INT|CTLFLAG_RW,
 	    &xn_enable_lro, 0, "Large Receive Offload");
+#endif
 #endif
 
 	return (0);
@@ -2196,7 +2203,7 @@ netif_disconnect_backend(struct netfront_info *info)
 }
 
 static void
-free_ring(int *ref, void *ring_ptr_ref)
+free_ring(grant_ref_t *ref, void *ring_ptr_ref)
 {
 	void **ring_ptr_ptr = ring_ptr_ref;
 
@@ -2237,12 +2244,8 @@ static device_method_t netfront_methods[] = {
 	DEVMETHOD_END
 }; 
 
-static driver_t netfront_driver = { 
+driver_t netfront_driver = {
 	"xn", 
 	netfront_methods, 
 	sizeof(struct netfront_info),                      
 }; 
-devclass_t netfront_devclass; 
- 
-DRIVER_MODULE(xe, xenbusb_front, netfront_driver, netfront_devclass, NULL,
-    NULL); 
