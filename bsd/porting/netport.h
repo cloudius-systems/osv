@@ -12,6 +12,7 @@
 #include <osv/debug.h>
 #define __NEED_socklen_t
 #include <bits/alltypes.h>
+#include "bitops.h"
 
 __BEGIN_DECLS
 
