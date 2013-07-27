@@ -37,12 +37,19 @@ extern "C" {
     extern void callb_init(void *arg);
 
     extern void zfs_init(void *arg);
-}
 
+    // taskqueue
+    #include <bsd/sys/sys/taskqueue.h>
+    #include <bsd/sys/sys/priority.h>
+    TASKQUEUE_DEFINE_THREAD(thread);
+}
 
 void net_init(void)
 {
     debug("Initializing network stack...\n");
+
+    // main taskqueue
+    taskqueue_define_thread(NULL);
 
     // Initialize callouts
     init_callouts();
