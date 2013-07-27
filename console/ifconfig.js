@@ -35,7 +35,7 @@ register_command('ifconfig', {
         
         var rc = this.set_ip(ifname, ip, mask);
         if (!rc) {
-            print ("ifconfig: unable to set ip, wrong input");
+            print ("ifconfig: unable to set ip for " + ifname + ", wrong input");
         }
         
         rc = this.if_up(ifname);
