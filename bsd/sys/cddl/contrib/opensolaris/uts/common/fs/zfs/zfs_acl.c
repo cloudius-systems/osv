@@ -2556,6 +2556,7 @@ zfs_zaccess_unix(znode_t *zp, mode_t mode, cred_t *cr)
 
 	return (zfs_zaccess(zp, v4_mode, 0, B_FALSE, cr));
 }
+#endif
 
 static int
 zfs_delete_final_check(znode_t *zp, znode_t *dzp,
@@ -2744,4 +2745,3 @@ zfs_zaccess_rename(znode_t *sdzp, znode_t *szp, znode_t *tdzp,
 
 	return (error);
 }
-#endif
