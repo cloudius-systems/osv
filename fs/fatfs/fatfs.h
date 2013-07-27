@@ -39,6 +39,7 @@
 #include <osv/file.h>
 #include <osv/mount.h>
 #include <osv/buf.h>
+#include <osv/bio.h>
 
 /* #define DEBUG_FATFS 1 */
 
@@ -158,8 +159,6 @@ struct fatfsmount {
 
 #define IS_EOFCL(fat, cl) \
 	(((cl) & EOF_MASK) == ((fat)->fat_mask & EOF_MASK))
-
-typedef uint64_t daddr_t;
 
 /*
  * File/directory node
