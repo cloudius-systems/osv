@@ -1413,6 +1413,11 @@ blkif_completion(struct xb_command *s)
 	return (BLKIF_SEGS_TO_BLOCKS(s->nseg));
 }
 
+struct device *blkfront_from_softc(struct xb_softc *s)
+{
+    return s->xb_dev;
+}
+
 /* ** Driver registration ** */
 static device_method_t blkfront_methods[] = { 
 	/* Device interface */ 
