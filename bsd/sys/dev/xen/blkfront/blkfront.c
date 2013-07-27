@@ -30,6 +30,12 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <bsd/porting/netport.h>
+#include <bsd/porting/synch.h>
+#include <bsd/porting/bus.h>
+#include <bsd/porting/mmu.h>
+#include <bsd/porting/kthread.h>
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>
@@ -81,8 +87,6 @@ static void blkfront_initialize(struct xb_softc *);
 static int blkif_completion(struct xb_command *);
 static void blkif_free(struct xb_softc *);
 static void blkif_queue_cb(void *, bus_dma_segment_t *, int, int);
-
-static MALLOC_DEFINE(M_XENBLOCKFRONT, "xbd", "Xen Block Front driver data");
 
 #define GRANT_INVALID_REF 0
 
@@ -417,6 +421,7 @@ blkfront_probe(device_t dev)
 static void
 xb_setup_sysctl(struct xb_softc *xb)
 {
+#if 0
 	struct sysctl_ctx_list *sysctl_ctx = NULL;
 	struct sysctl_oid      *sysctl_tree = NULL;
 	
@@ -446,6 +451,7 @@ xb_setup_sysctl(struct xb_softc *xb)
 		        "ring_pages", CTLFLAG_RD,
 		        &xb->ring_pages, 0,
 		        "communication channel pages (negotiated)");
+#endif
 }
 
 /*
@@ -830,7 +836,7 @@ setup_blkring(struct xb_softc *sc)
 
 	error = bind_listening_port_to_irqhandler(
 	    xenbus_get_otherend_id(sc->xb_dev),
-	    "xbd", (driver_intr_t *)blkif_int, sc,
+	    "xbd", (driver_intr_t)blkif_int, sc,
 	    INTR_TYPE_BIO | INTR_MPSAFE, &sc->irq);
 	if (error) {
 		xenbus_dev_fatal(sc->xb_dev, error,
@@ -1423,11 +1429,8 @@ static device_method_t blkfront_methods[] = {
 	{ 0, 0 } 
 }; 
 
-static driver_t blkfront_driver = { 
+driver_t blkfront_driver = {
 	"xbd", 
 	blkfront_methods, 
 	sizeof(struct xb_softc),                      
 }; 
-devclass_t blkfront_devclass; 
- 
-DRIVER_MODULE(xbd, xenbusb_front, blkfront_driver, blkfront_devclass, 0, 0); 
