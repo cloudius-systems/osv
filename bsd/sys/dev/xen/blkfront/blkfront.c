@@ -202,6 +202,11 @@ blkfront_vdevice_to_unit(uint32_t vdevice, int *unit, const char **name)
 	*name = "xbd";
 }
 
+struct disk *disk_alloc(void)
+{
+    return malloc(sizeof(struct disk) , 0, 0);
+}
+
 int
 xlvbd_add(struct xb_softc *sc, blkif_sector_t sectors,
     int vdevice, uint16_t vdisk_info, unsigned long sector_size)
