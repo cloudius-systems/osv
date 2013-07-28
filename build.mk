@@ -14,6 +14,8 @@ INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/x86_64
 INCLUDES += -isystem gen/include
 INCLUDES += -isystem $(src)/bsd/sys
+# For acessing machine/ in cpp xen drivers
+INCLUDES += -isystem $(src)/bsd/
 
 # $(call compiler-flag, -ffoo, option, file)
 #     returns option if file builds with -ffoo, empty otherwise
@@ -26,7 +28,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-fno-omit-frame-pointer $(compiler-specific) \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
-	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030209"
+	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207"
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
