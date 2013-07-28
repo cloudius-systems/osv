@@ -114,10 +114,10 @@ static void free_worker_fn()
     // if we have any waiters, wake them up
     auto& sync = freelist_full_sync[cpu_id];
     void* free_obj = nullptr;
-    with_lock(sync._mtx, [&] {
+    WITH_LOCK(sync._mtx) {
         free_obj = sync._free_obj;
         sync._free_obj = nullptr;
-    });
+    }
 
     if (free_obj) {
         sync._cond.wake_all();
@@ -174,7 +174,7 @@ TRACEPOINT(trace_pool_free_different_cpu, "this=%p, obj=%p, obj_cpu=%d", void*, 
 void* pool::alloc()
 {
     void * ret = nullptr;
-    with_lock(preempt_lock, [&] {
+    WITH_LOCK(preempt_lock) {
 
         // We enable preemption because add_page() may take a Mutex.
         // this loop ensures we have at least one free page that we can
@@ -195,7 +195,7 @@ void* pool::alloc()
             _free->erase(it);
         }
         ret = obj;
-    });
+    }
 
     trace_pool_alloc(this, ret);
     return ret;
@@ -215,7 +215,7 @@ void pool::add_page()
     // we may add this page to the free list of a different cpu, due to the
     // enablment of preemption
     void* page = untracked_alloc_page();
-    with_lock(preempt_lock, [&] {
+    WITH_LOCK(preempt_lock) {
         page_header* header = new (page) page_header;
         header->cpu_id = mempool_cpuid();
         header->owner = this;
@@ -227,7 +227,7 @@ void pool::add_page()
             header->local_free = obj;
         }
         _free->push_back(*header);
-    });
+    }
 }
 
 inline bool pool::have_full_pages()
@@ -276,12 +276,12 @@ void pool::free_different_cpu(free_object* obj, unsigned obj_cpu)
         // The ring is full, take a mutex and use the sync object, hand
         // the object to the secondary 1-item queue
         auto& sync = freelist_full_sync[obj_cpu];
-        with_lock(sync._mtx, [&] {
+        WITH_LOCK(sync._mtx) {
             sync._cond.wait_until(sync._mtx, [&] {
                 return (sync._free_obj == nullptr);
             });
 
-            with_lock(preempt_lock, [&] {
+            WITH_LOCK(preempt_lock) {
                 ring = &memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
                 if (!ring->push(object)) {
                     // If the ring is full, use the secondary queue.
@@ -295,8 +295,8 @@ void pool::free_different_cpu(free_object* obj, unsigned obj_cpu)
                 if (ring->size() > free_objects_ring_size/2) {
                     memory::free_worker.signal(sched::cpus[obj_cpu]);
                 }
-            });
-        });
+            }
+        }
 
         sched::preempt_disable();
     }
@@ -307,7 +307,7 @@ void pool::free(void* object)
 {
     trace_pool_free(this, object);
 
-    with_lock(preempt_lock, [&] {
+    WITH_LOCK(preempt_lock) {
 
         free_object* obj = static_cast<free_object*>(object);
         page_header* header = to_header(obj);
@@ -323,7 +323,7 @@ void pool::free(void* object)
             // was allocated from, so it'll free it.
             free_different_cpu(obj, obj_cpu);
         }
-    });
+    }
 }
 
 pool* pool::from_object(void* object)
