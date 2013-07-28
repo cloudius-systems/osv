@@ -35,6 +35,7 @@
 #ifndef _XEN_XENBUS_XENBUSB_H
 #define _XEN_XENBUS_XENBUSB_H
 
+__BEGIN_DECLS
 /**
  * \file xenbusb.h
  *
@@ -294,5 +295,5 @@ void xenbusb_localend_changed(device_t bus, device_t child, const char *path);
 int xenbusb_add_device(device_t dev, const char *type, const char *id);
 
 #include "xenbusb_if.h"
-
+__END_DECLS
 #endif /* _XEN_XENBUS_XENBUSB_H */

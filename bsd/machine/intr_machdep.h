@@ -28,7 +28,7 @@
 
 #ifndef __MACHINE_INTR_MACHDEP_H__
 #define	__MACHINE_INTR_MACHDEP_H__
-
+__BEGIN_DECLS
 #ifdef _KERNEL
 
 /*
@@ -171,4 +171,5 @@ int	msix_release(int irq);
 
 #endif	/* !LOCORE */
 #endif	/* _KERNEL */
+__END_DECLS
 #endif	/* !__MACHINE_INTR_MACHDEP_H__ */

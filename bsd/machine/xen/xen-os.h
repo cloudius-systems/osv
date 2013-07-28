@@ -6,7 +6,7 @@
 
 #ifndef _XEN_OS_H_
 #define _XEN_OS_H_
-
+__BEGIN_DECLS
 #ifdef PAE
 #define CONFIG_X86_PAE
 #endif
@@ -292,5 +292,5 @@ static __inline__ void atomic_inc(atomic_t *v)
      __asm__ __volatile__("rdtsc" : "=A" (val))
 
 #endif /* !__ASSEMBLY__ */
-
+__END_DECLS
 #endif /* _OS_H_ */

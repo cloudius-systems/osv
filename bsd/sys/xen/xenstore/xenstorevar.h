@@ -34,6 +34,7 @@
 #ifndef _XEN_XENSTORE_XENSTOREVAR_H
 #define _XEN_XENSTORE_XENSTOREVAR_H
 
+__BEGIN_DECLS
 #include <sys/queue.h>
 #include <sys/bus.h>
 #include <sys/eventhandler.h>
@@ -337,5 +338,5 @@ void xs_unregister_watch(struct xs_watch *watch);
  * \return  A buffer containing the joined path.
  */
 struct sbuf *xs_join(const char *, const char *);
-
+__END_DECLS
 #endif /* _XEN_XENSTORE_XENSTOREVAR_H */
