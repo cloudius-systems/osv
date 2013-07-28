@@ -7,6 +7,7 @@
 #include <cstdarg>
 #include <osv/debug.h>
 #include <osv/mutex.h>
+#include <osv/printf.hh>
 #include "boost/format.hpp"
 
 typedef boost::format fmt;
@@ -63,21 +64,16 @@ void debug(const char* fmt, args... as);
 
 extern "C" {void readln(char *msg, size_t size); }
 
-template <>
-void debug(boost::format& fmt);
-
-template <typename arg0, typename... args>
-inline
-void debug(boost::format& fmt, const arg0& a0, args... as)
-{
-    debug(fmt % a0, as...);
-}
-
 template <typename... args>
 void debug(const char* fmt, args... as)
 {
-    boost::format f(fmt);
-    debug(f, as...);
+    debug(osv::sprintf(fmt, as...));
+}
+
+template <typename... args>
+void debug(boost::format& fmt, args... as)
+{
+    debug(osv::sprintf(fmt, as...));
 }
 
 void abort(const char *msg) __attribute__((noreturn));
