@@ -59,12 +59,16 @@ int pipe_buffer::write_events_unlocked()
 
 int pipe_buffer::read_events()
 {
-    return with_lock(mtx, [=] { return read_events_unlocked(); });
+    WITH_LOCK(mtx) {
+        return read_events_unlocked();
+    }
 }
 
 int pipe_buffer::write_events()
 {
-    return with_lock(mtx, [=] { return write_events_unlocked(); });
+    WITH_LOCK(mtx) {
+        return write_events_unlocked();
+    }
 }
 
 // Copy from the pipe into the given iovec array, until the array is full
@@ -135,8 +139,7 @@ int pipe_buffer::write(uio* data, bool nonblock)
     if (!data->uio_resid) {
         return 0;
     }
-    int err = 0;
-    with_lock(mtx, [&] {
+    WITH_LOCK(mtx) {
         // A write() smaller than PIPE_BUF (=4096 in Linux) will not be split
         // (i.e., will be "atomic"): For such a small write, we need to wait
         // until there's enough room for all it in the buffer.
@@ -145,19 +148,16 @@ int pipe_buffer::write(uio* data, bool nonblock)
             if (!receiver) {
                 // FIXME: If we don't generate a SIGPIPE here, at least assert
                 // that the user did not install a SIGPIPE handler.
-                err = EPIPE;
-                return;
+                return EPIPE;
             } else if (q.size() + needroom > max_buf) {
-                err = EAGAIN;
-                return;
+                return EAGAIN;
             }
         } else {
             while (receiver && q.size() + needroom > max_buf) {
                 may_write.wait(&mtx);
             }
             if (!receiver) {
-                err = EPIPE;
-                return;
+                return EPIPE;
             }
         }
 
@@ -174,7 +174,7 @@ int pipe_buffer::write(uio* data, bool nonblock)
                 poll_wake(receiver, (POLLIN | POLLRDNORM));
                 may_read.wake_all();
                 if (nonblock) {
-                    return;
+                    return 0;
                 }
                 while (receiver && q.size() == max_buf) {
                     may_write.wait(&mtx);
@@ -183,7 +183,7 @@ int pipe_buffer::write(uio* data, bool nonblock)
         }
         if (read_events_unlocked() & POLLIN)
             poll_wake(receiver, (POLLIN | POLLRDNORM));
-    });
+    }
     may_read.wake_all();
-    return err;
+    return 0;
 }
