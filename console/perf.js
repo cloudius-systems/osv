@@ -85,6 +85,22 @@ register_command('perf', {
             java.lang.Thread.sleep(1000)
         }
     },
+    callstack: function(args) {
+        var pkg = Packages.com.cloudius.trace
+        var tpname = args[0]
+        var tp = new pkg.Tracepoint(tpname)
+        var traces = pkg.Callstack.collect(tp, 10, 20, 5000)
+        printf('%10s  %s\n', 'freq', 'callstack')
+        for (var i in traces) {
+        	var tr = traces[i]
+        	printf('%10.0f ', traces[i].getHits())
+        	var pc = traces[i].getProgramCounters()
+        	for (var j in pc) {
+        		printf(' 0x%x', jlong(pc[j]))
+        	}
+        	printf('\n')
+        }
+    },
     subcommands: {
         list: {
             invoke: function(args) { this.parent.list(args) },
@@ -93,6 +109,10 @@ register_command('perf', {
         stat: {
             invoke: function(args) { this.parent.stat(args) },
             usage: 'stat [[tag=]tracepoint]...',
+        },
+        callstack: {
+        	invoke: function(args) { this.parent.callstack(args) },
+        	usage: 'callstack tracepoint',
         },
     },
     init: function() {

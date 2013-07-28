@@ -869,6 +869,8 @@ void page_fault(exception_frame *ef)
 {
     sched::exception_guard g;
     auto addr = processor::read_cr2();
-    // FIXME: handle fixable faults
+    if (fixup_fault(ef)) {
+        return;
+    }
     osv::handle_segmentation_fault(addr, ef);
 }

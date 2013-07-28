@@ -1,6 +1,7 @@
 #include "tracepoint.hh"
 #include <osv/trace.hh>
 #include <osv/per-cpu-counter.hh>
+#include <osv/callstack.hh>
 #include <debug.hh>
 
 static std::string get_string(JNIEnv* jni, jstring s)
@@ -87,3 +88,36 @@ JNIEXPORT jlong JNICALL Java_com_cloudius_trace_Tracepoint_readCounter
     return c->read();
 }
 
+JNIEXPORT jobjectArray JNICALL Java_com_cloudius_trace_Callstack_collect
+  (JNIEnv *env, jclass callstack_class, jobject tp, jint depth, jint count, jlong millis)
+{
+    auto tpclass = env->GetObjectClass(tp);
+    auto handle_field = env->GetFieldID(tpclass, "handle", "J");
+    auto _tp = env->GetLongField(tp, handle_field);
+    auto tpp = reinterpret_cast<tracepoint_base*>(_tp);
+    // up to 1000 distinct traces; ignore 3 nearest frames
+    callstack_collector collector(1000, 3, depth);
+    collector.attach(*tpp);
+    collector.start();
+    sched::thread::sleep_until(nanotime() + millis * 1_ms);
+    collector.stop();
+    std::vector<callstack_collector::trace> r;
+    unsigned nr = 0;
+    collector.dump(count, [&] (const callstack_collector::trace& tr){ ++nr; });
+    auto array = env->NewObjectArray(nr, callstack_class, nullptr);
+    auto ctor = env->GetMethodID(callstack_class, "<init>", "(I[J)V");
+    size_t idx = 0;
+    collector.dump(count, [&](const callstack_collector::trace& tr) {
+        auto pc = env->NewLongArray(tr.len);
+        for (unsigned i = 0; i < tr.len; ++i) {
+            auto npc = env->GetLongArrayElements(pc, nullptr);
+            std::transform(tr.pc, tr.pc + tr.len, npc,
+                    [](void* v) { return reinterpret_cast<jlong>(v); });
+            env->ReleaseLongArrayElements(pc, npc, JNI_COMMIT);
+        }
+        auto cs = env->NewObject(callstack_class, ctor, jint(tr.hits), pc);
+        env->SetObjectArrayElement(array, idx++, cs);
+        env->DeleteLocalRef(cs);
+    });
+    return array;
+}

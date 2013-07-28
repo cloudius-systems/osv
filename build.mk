@@ -17,6 +17,7 @@ INCLUDES += -isystem $(src)/bsd/sys
 
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
+	-fno-omit-frame-pointer \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
 	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030209"
@@ -429,6 +430,7 @@ objects += arch/x64/string.o
 objects += arch/x64/arch-cpu.o
 objects += arch/x64/entry-xen.o
 objects += arch/x64/xen.o
+objects += arch/x64/backtrace.o
 objects += core/mutex.o
 objects += core/lfmutex.o
 objects += core/rwlock.o
@@ -446,6 +448,7 @@ objects += core/sched.o
 objects += core/mmio.o
 objects += core/kprintf.o
 objects += core/trace.o
+objects += core/callstack.o
 objects += core/poll.o
 objects += core/select.o
 objects += core/epoll.o

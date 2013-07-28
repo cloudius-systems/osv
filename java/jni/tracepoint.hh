@@ -63,6 +63,14 @@ JNIEXPORT void JNICALL Java_com_cloudius_trace_Tracepoint_destroyCounter
 JNIEXPORT jlong JNICALL Java_com_cloudius_trace_Tracepoint_readCounter
   (JNIEnv *, jclass, jlong);
 
+/*
+ * Class:     com_cloudius_trace_Callstack
+ * Method:    collect
+ * Signature: (Lcom/cloudius/trace/Tracepoint;IIJ)[Lcom/cloudius/trace/Callstack;
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_cloudius_trace_Callstack_collect
+  (JNIEnv *, jclass, jobject, jint, jint, jlong);
+
 #ifdef __cplusplus
 }
 #endif

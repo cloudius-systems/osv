@@ -832,13 +832,6 @@ void* program::do_lookup_function(const char* name)
     return sym.relocated_addr();
 }
 
-void program::with_modules(std::function<void (std::vector<object*>&)> f)
-{
-    // FIXME: locking?
-    std::vector<object*> tmp = _modules;
-    f(tmp);
-}
-
 dladdr_info program::lookup_addr(const void* addr)
 {
     for (auto module : _modules) {

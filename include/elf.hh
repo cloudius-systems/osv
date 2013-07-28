@@ -348,8 +348,9 @@ public:
     template <typename T>
     T* lookup_function(const char* symbol);
     tls_data tls();
-    // run a function with all current modules as a parameter
-    void with_modules(std::function<void (std::vector<object*>&)> f);
+    // run a function with all current modules (const std::vector<object*>&) as a parameter
+    template <typename functor>
+    void with_modules(functor f);
     dladdr_info lookup_addr(const void* addr);
     void set_search_path(std::initializer_list<std::string> path);
 private:
@@ -383,6 +384,15 @@ T*
 program::lookup_function(const char* symbol)
 {
     return reinterpret_cast<T*>(do_lookup_function(symbol));
+}
+
+template <typename functor>
+inline
+void program::with_modules(functor f)
+{
+    // FIXME: locking?
+    const std::vector<object*>& tmp = _modules;
+    f(tmp);
 }
 
 template <>

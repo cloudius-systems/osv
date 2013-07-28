@@ -10,7 +10,13 @@ SECTIONS
 	 */
     . = 0x201000;
     .dynamic : { *(.dynamic) } :dynamic :text
-    .text : { *(.text*) } :text
+    .text : { *(.text) *(.text.hot) *(.text.unlikely) *(.text.fixup) } :text
+    . = ALIGN(8);
+    .fixup : {
+        fault_fixup_start = .;
+        *(.fixup)
+        fault_fixup_end = .;
+    } :text
     .eh_frame : { *(.eh_frame) } : text
     .rodata : { *(.rodata*) } :text
     .eh_frame : { *(.eh_frame) } :text
