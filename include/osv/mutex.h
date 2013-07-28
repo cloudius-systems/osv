@@ -175,13 +175,6 @@ bool mutex::owned()
 #include <mutex>
 #include <cstdlib>
 
-template <class Lock, class Func>
-auto with_lock(Lock& lock, Func func) -> decltype(func())
-{
-    std::lock_guard<Lock> guard(lock);
-    return func();
-}
-
 template <class lock_type>
 struct lock_guard_for_with_lock : std::lock_guard<lock_type> {
     using std::lock_guard<lock_type>::lock_guard;
