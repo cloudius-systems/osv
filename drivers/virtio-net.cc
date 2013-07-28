@@ -368,7 +368,7 @@ namespace virtio {
 
     void virtio_net::tx_gc()
     {
-        with_lock(_tx_gc_lock, [=] {
+        WITH_LOCK(_tx_gc_lock) {
             u32 len;
             virtio_net_req * req;
 
@@ -376,7 +376,7 @@ namespace virtio {
                 delete req;
                 _tx_queue->get_buf_finalize();
             }
-        });
+        }
     }
 
     u32 virtio_net::get_driver_features(void)
