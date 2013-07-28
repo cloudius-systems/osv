@@ -1,14 +1,12 @@
 #include "sched.hh"
 #include "debug.hh"
 
-extern "C" {
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
 
 #define _WANT_NETISR_INTERNAL
 #include <bsd/sys/net/netisr.h>
 #include <bsd/sys/net/netisr_internal.h>
-}
 
 
 static inline sched::thread* niosv_to_thread(netisr_osv_cookie_t cookie)

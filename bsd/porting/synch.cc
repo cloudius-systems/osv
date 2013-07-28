@@ -5,11 +5,9 @@
 #include "sched.hh"
 #include "osv/trace.hh"
 
-extern "C" {
     #include <bsd/porting/netport.h>
     #include <bsd/porting/synch.h>
     #include <bsd/porting/sync_stub.h>
-}
 
 TRACEPOINT(trace_synch_msleep, "chan=%p mtx=%p timo_hz=%d", void *, void *, int);
 TRACEPOINT(trace_synch_msleep_wait, "chan=%p", void *);

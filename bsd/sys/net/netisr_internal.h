@@ -37,6 +37,7 @@
 #error "no user-serviceable parts inside"
 #endif
 
+__BEGIN_DECLS
 /* OSv "softare interrupts" */
 typedef void(*netisr_osv_handler_t)(void*);
 typedef void* netisr_osv_cookie_t;
@@ -118,5 +119,5 @@ struct netisr_workstream {
 #define	NWS_RUNNING	0x00000001	/* Currently running in a thread. */
 #define	NWS_DISPATCHING	0x00000002	/* Currently being direct-dispatched. */
 #define	NWS_SCHEDULED	0x00000004	/* Signal issued. */
-
+__END_DECLS
 #endif /* !_NET_NETISR_INTERNAL_H_ */
