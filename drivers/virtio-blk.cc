@@ -192,7 +192,7 @@ static const int sector_size = 512;
 int virtio_blk::make_virtio_request(struct bio* bio)
 {
     // The lock is here for parallel requests protection
-    return with_lock(_lock, [&] {
+    WITH_LOCK(_lock) {
 
         if (!bio) return EIO;
 
@@ -265,7 +265,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         queue->kick();
 
         return 0;
-    });
+    }
 }
 
 u32 virtio_blk::get_driver_features(void)

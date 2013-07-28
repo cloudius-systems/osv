@@ -47,17 +47,17 @@ gsi_edge_interrupt::gsi_edge_interrupt(unsigned gsi, std::function<void ()> hand
     : _gsi(gsi)
     , _vector(idt.register_handler(handler))
 {
-    with_lock(mtx, [=] {
+    WITH_LOCK(mtx) {
         write(0x10 + gsi * 2 + 1, sched::cpus[0]->arch.apic_id << 24);
         write(0x10 + gsi * 2, _vector);
-    });
+    }
 }
 
 gsi_edge_interrupt::~gsi_edge_interrupt()
 {
-    with_lock(mtx, [=] {
+    WITH_LOCK(mtx) {
         write(0x10 + _gsi * 2, 1 << 16);  // mask
-    });
+    }
     idt.unregister_handler(_vector);
 }
 

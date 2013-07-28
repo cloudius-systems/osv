@@ -41,7 +41,7 @@ void rwlock::runlock()
 {
     bool need_wake = false;
 
-    with_lock(_mtx, [&] {
+    WITH_LOCK(_mtx) {
         assert(_wowner == nullptr);
         assert(_readers > 0);
 
@@ -50,7 +50,7 @@ void rwlock::runlock()
         if ((--_readers == 0) && (_write_waiters)) {
             need_wake = true;
         }
-    });
+    }
 
     // wake() only after releasing the mutex
     if (need_wake) {
@@ -104,16 +104,15 @@ bool rwlock::try_wlock()
 
 void rwlock::wunlock()
 {
-    with_lock(_mtx, [&] {
+    WITH_LOCK(_mtx) {
         assert(_wowner == sched::thread::current());
 
         if (_wrecurse > 0) {
             _wrecurse--;
-            return;
+        } else {
+            _wowner = nullptr;
         }
-
-        _wowner = nullptr;
-    });
+    }
 
     // wake() only after releasing the mutex
     if (_write_waiters) {
@@ -125,14 +124,14 @@ void rwlock::wunlock()
 
 void rwlock::downgrade()
 {
-    with_lock(_mtx, [this] {
+    WITH_LOCK(_mtx) {
         assert(_wowner == sched::thread::current());
 
         // I'm aware this implementation is ugly but it does the trick for the
         // time being.
         while (_wrecurse) this->wunlock();
         this->wunlock();
-    });
+    }
 
     // FIXME: Writers that already wait get precedence, so this function can
     // block, there's only one user in sys/netinet/if_ether.c

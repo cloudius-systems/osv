@@ -7,7 +7,7 @@ semaphore::semaphore(unsigned val)
 
 void semaphore::post(unsigned units)
 {
-    with_lock(_mtx, [=] {
+    WITH_LOCK(_mtx) {
         _val += units;
         auto i = _waiters.begin();
         while (_val > 0 && i != _waiters.end()) {
@@ -19,7 +19,7 @@ void semaphore::post(unsigned units)
                 _waiters.erase(wr);
             }
         }
-    });
+    }
 }
 
 bool semaphore::wait(unsigned units, sched::timer* tmr)
@@ -50,12 +50,12 @@ bool semaphore::wait(unsigned units, sched::timer* tmr)
 bool semaphore::trywait(unsigned units)
 {
     bool ok = false;
-    with_lock(_mtx, [&] {
+    WITH_LOCK(_mtx) {
         if (_val > units) {
             _val -= units;
             ok = true;
         }
-    });
+    }
 
     return ok;
 }

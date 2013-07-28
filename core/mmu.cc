@@ -652,16 +652,16 @@ uintptr_t allocate(uintptr_t start, size_t size, bool search,
 void vpopulate(void* addr, size_t size)
 {
     fill_anon_page fill;
-    with_lock(vma_list_mutex, [=, &fill] {
+    WITH_LOCK(vma_list_mutex) {
         populate(&fill, perm_rwx).operate(addr, size);
-    });
+    }
 }
 
 void vdepopulate(void* addr, size_t size)
 {
-    with_lock(vma_list_mutex, [=] {
+    WITH_LOCK(vma_list_mutex) {
         unpopulate().operate(addr, size);
-    });
+    }
     tlb_flush();
 }
 

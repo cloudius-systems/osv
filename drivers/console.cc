@@ -158,7 +158,7 @@ void console_poll()
 static int
 console_read(struct uio *uio, int ioflag)
 {
-    return with_lock(console_mutex, [=] {
+    WITH_LOCK(console_mutex) {
         readers.push_back(sched::thread::current());
         sched::thread::wait_until(console_mutex, [] { return !console_queue.empty(); });
         readers.remove(sched::thread::current());
@@ -178,7 +178,7 @@ console_read(struct uio *uio, int ioflag)
             }
         }
         return 0;
-    });
+    }
 }
 
 static int
@@ -188,10 +188,10 @@ console_write(struct uio *uio, int ioflag)
         struct iovec *iov = uio->uio_iov;
 
         if (iov->iov_len) {
-            with_lock(console_mutex, [=] {
+            WITH_LOCK(console_mutex) {
                 console::write(reinterpret_cast<const char *>(iov->iov_base),
                                iov->iov_len, false);
-            });
+            }
         }
 
         uio->uio_iov++;

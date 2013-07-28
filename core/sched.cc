@@ -91,9 +91,9 @@ void cpu::init_idle_thread()
 void cpu::schedule(bool yield)
 {
 
-    with_lock(irq_lock, [this] {
+    WITH_LOCK(irq_lock) {
         reschedule_from_interrupt();
-    });
+    }
 }
 
 void cpu::reschedule_from_interrupt(bool preempt)
@@ -213,11 +213,11 @@ void cpu::handle_incoming_wakeups()
             auto& t = q.front();
             q.pop_front_nonatomic();
             irq_save_lock_type irq_lock;
-            with_lock(irq_lock, [&] {
+            WITH_LOCK(irq_lock) {
                 t._status.store(thread::status::queued);
                 enqueue(t, true);
                 t.resume_timers();
-            });
+            }
         }
     }
 }
@@ -268,11 +268,11 @@ void cpu::load_balance()
         if (min == this) {
             continue;
         }
-        with_lock(irq_lock, [this, min] {
+        WITH_LOCK(irq_lock) {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
                     [](thread& t) { return !t._attr.pinned_cpu; });
             if (i == runqueue.rend()) {
-                return;
+                continue;
             }
             auto& mig = *i;
             trace_sched_migrate(&mig, min->id);
@@ -289,28 +289,32 @@ void cpu::load_balance()
             // FIXME: avoid if the cpu is alive and if the priority does not
             // FIXME: warrant an interruption
             wakeup_ipi.send(min);
-        });
+        }
     }
 }
 
 cpu::notifier::notifier(std::function<void ()> cpu_up)
     : _cpu_up(cpu_up)
 {
-    with_lock(_mtx, [this] { _notifiers.push_back(this); });
+    WITH_LOCK(_mtx) {
+        _notifiers.push_back(this);
+    }
 }
 
 cpu::notifier::~notifier()
 {
-    with_lock(_mtx, [this] { _notifiers.remove(this); });
+    WITH_LOCK(_mtx) {
+        _notifiers.remove(this);
+    }
 }
 
 void cpu::notifier::fire()
 {
-    with_lock(_mtx, [] {
+    WITH_LOCK(_mtx) {
         for (auto n : _notifiers) {
             n->_cpu_up();
         }
-    });
+    }
 }
 
 void schedule(bool yield)
@@ -384,10 +388,10 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _ref_counter(1)
     , _joiner()
 {
-    with_lock(thread_list_mutex, [this] {
+    WITH_LOCK(thread_list_mutex) {
         thread_list.push_back(*this);
         _id = _s_idgen++;
-    });
+    }
     setup_tcb();
     // setup s_current before switching to the thread, so interrupts
     // can call thread::current()
@@ -419,9 +423,9 @@ thread::~thread()
     if (!_attr.detached) {
         join();
     }
-    with_lock(thread_list_mutex, [this] {
+    WITH_LOCK(thread_list_mutex) {
         thread_list.erase(thread_list.iterator_to(*this));
-    });
+    }
     if (_attr.stack.deleter) {
         _attr.stack.deleter(_attr.stack);
     }
@@ -740,14 +744,14 @@ void timer_base::set(s64 time)
     _state = state::armed;
     _time = time;
     irq_save_lock_type irq_lock;
-    with_lock(irq_lock, [=] {
+    WITH_LOCK(irq_lock) {
         auto& timers = cpu::current()->timers;
         timers._list.insert(*this);
         _t._active_timers.push_back(*this);
         if (timers._list.iterator_to(*this) == timers._list.begin()) {
             timers.rearm();
         }
-    });
+    }
 };
 
 void timer_base::cancel()
@@ -757,13 +761,13 @@ void timer_base::cancel()
     }
     trace_timer_cancel(this);
     irq_save_lock_type irq_lock;
-    with_lock(irq_lock, [=] {
+    WITH_LOCK(irq_lock) {
         if (_state == state::armed) {
             _t._active_timers.erase(_t._active_timers.iterator_to(*this));
             cpu::current()->timers._list.erase(cpu::current()->timers._list.iterator_to(*this));
         }
         _state = state::free;
-    });
+    }
     // even if we remove the first timer, allow it to expire rather than
     // reprogramming the timer
 }
@@ -793,24 +797,24 @@ thread::reaper::reaper()
 void thread::reaper::reap()
 {
     while (true) {
-        with_lock(_mtx, [=] {
+        WITH_LOCK(_mtx) {
             wait_until(_mtx, [=] { return !_zombies.empty(); });
             while (!_zombies.empty()) {
                 auto z = _zombies.front();
                 _zombies.pop_front();
                 z->join();
             }
-        });
+        }
     }
 }
 
 void thread::reaper::add_zombie(thread* z)
 {
     assert(z->_attr.detached);
-    with_lock(_mtx, [=] {
+    WITH_LOCK(_mtx) {
         _zombies.push_back(z);
         _thread.wake();
-    });
+    }
 }
 
 thread::reaper *thread::_s_reaper;
