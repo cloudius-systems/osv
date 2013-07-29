@@ -7,6 +7,7 @@ class x2apic : public apic_driver {
 public:
     explicit x2apic();
     virtual void init_on_ap();
+    virtual u32 read(apicreg reg);
     virtual void write(apicreg reg, u32 value);
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned apic_id, unsigned vector);
@@ -73,6 +74,11 @@ void x2apic::nmi_allbutself()
 void x2apic::eoi()
 {
     wrmsr(msr::X2APIC_EOI, 0);
+}
+
+u32 x2apic::read(apicreg reg)
+{
+    return processor::rdmsr(0x800 + unsigned(reg) / 0x10);
 }
 
 void x2apic::write(apicreg reg, u32 value)
