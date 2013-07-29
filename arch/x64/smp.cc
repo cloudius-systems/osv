@@ -81,6 +81,7 @@ void __attribute__((constructor(250))) smp_init()
 void ap_bringup(sched::cpu* c)
 {
     __sync_fetch_and_add(&smp_processors, 1);
+    processor::kvm_pv_eoi_init();
     c->idle_thread->start();
     c->load_balance();
 }
@@ -97,6 +98,7 @@ sched::cpu* smp_initial_find_current_cpu()
 
 void smp_launch()
 {
+    processor::kvm_pv_eoi_init();
     auto boot_cpu = smp_initial_find_current_cpu();
     for (auto c : sched::cpus) {
         if (c == boot_cpu) {

@@ -36,7 +36,9 @@ public:
     interrupt_descriptor_table();
     void load_on_cpu();
     unsigned register_handler(std::function<void ()> handler);
+    unsigned register_level_triggered_handler(std::function<void ()> pre_eoi, std::function<void ()> handler);
     void unregister_handler(unsigned vector);
+    void invoke_interrupt_pre_eoi(unsigned vector);
     void invoke_interrupt(unsigned vector);
 private:
     enum {
@@ -60,7 +62,11 @@ private:
     } __attribute__((aligned(16)));
     void add_entry(unsigned vec, unsigned ist, void (*handler)());
     idt_entry _idt[256];
-    std::function<void ()> _handlers[256];
+    struct handler {
+        std::function<void ()> pre_eoi;
+        std::function<void ()> post_eoi;
+    };
+    handler _handlers[256];
 };
 
 extern interrupt_descriptor_table idt;

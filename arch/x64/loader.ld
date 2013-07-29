@@ -31,9 +31,11 @@ SECTIONS
     _init_array_start = .;
     .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
     _init_array_end = .;
+    . = ALIGN(4096);
     .percpu : {
         _percpu_start = .;
         *(.percpu)
+        . = ALIGN(4096);
         _percpu_end = .;
         . += 0x100000;
         _percpu_sec_end = .;

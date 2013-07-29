@@ -83,6 +83,7 @@ public:
     virtual void ipi_allbutself(unsigned vector) = 0;
     virtual void nmi_allbutself() = 0;
     virtual void eoi() = 0;
+    virtual u32 read(apicreg reg) = 0;
     virtual void write(apicreg reg, u32 value) = 0;
     virtual u32 id() = 0;
     void set_lvt(apiclvt reg, unsigned vector);
@@ -97,6 +98,8 @@ protected:
 };
 
 extern apic_driver* apic;
+
+void kvm_pv_eoi_init();
 
 }
 
