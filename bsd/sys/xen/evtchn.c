@@ -10,6 +10,11 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <bsd/porting/netport.h>
+#include <bsd/porting/bus.h>
+#include <bsd/porting/sync_stub.h>
+#include <bsd/porting/pcpu.h>
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/bus.h>
@@ -36,7 +41,16 @@ __FBSDID("$FreeBSD$");
 #include <xen/xen_intr.h>
 #include <xen/evtchn.h>
 
-static inline unsigned long __ffs(unsigned long word)
+//XXX: This may not be safe in general. Right now, given their uses (most of them
+//are commented out, this should be okay
+// FIXME: preempt
+#define mtx_lock_spin(x) do {  mtx_lock(x); } while (0)
+#define mtx_unlock_spin(x) do { mtx_unlock(x); } while (0)
+
+// We don't expose an evtchn device.
+#define evtchn_device_upcall(x) do {} while (0)
+
+static inline unsigned int __ffs(unsigned int word)
 {
         __asm__("bsfl %1,%0"
                 :"=r" (word)
@@ -58,7 +72,7 @@ struct xenpic_intsrc {
 	struct intsrc     xp_intsrc;
 	void		  *xp_cookie;
 	uint8_t           xp_vector;
-	boolean_t	  xp_masked;
+	int	  xp_masked;
 };
 
 struct xenpic { 
@@ -194,7 +208,7 @@ void force_evtchn_callback(void)
 void 
 evtchn_do_upcall(struct trapframe *frame) 
 {
-	unsigned long  l1, l2;
+	unsigned int   l1, l2;
 	unsigned int   l1i, l2i, port;
 	int            irq, cpu;
 	shared_info_t *s;
@@ -1060,7 +1074,7 @@ void irq_resume(void)
 	}
 }
 
-static void 
+void 
 evtchn_init(void *dummy __unused)
 {
 	int i, cpu;
