@@ -113,5 +113,8 @@ os.system('sleep 2')
 os.system('sudo losetup -d %s' % loop_dev)
 os.system('sudo rm %s' % dev)
 
+os.system('sudo chmod g+w %s' % options.output)
+os.system('sudo chmod o+w %s' % options.output)
+
 depends.write('\n\n')
 depends.close()
