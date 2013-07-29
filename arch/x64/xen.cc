@@ -96,13 +96,14 @@ static bool xen_pci_enabled()
 }
 
 #define HVM_PARAM_CALLBACK_IRQ 0
+extern "C" void evtchn_do_upcall(void *a);
 void xen_set_callback()
 {
     struct xen_hvm_param xhp;
 
     xhp.domid = DOMID_SELF;
     xhp.index = HVM_PARAM_CALLBACK_IRQ;
-    xhp.value = 20 | (2ULL << 56);
+    xen_vector = idt.register_handler([=] { evtchn_do_upcall(NULL); }) | (2ULL << 56);
     if (hvm_hypercall(HVMOP_set_param, &xhp))
         assert(0);
 }
@@ -141,12 +142,4 @@ void xen_init(processor::features_type &features, unsigned base)
         features.xen_pci = xen_pci_enabled();
         HYPERVISOR_shared_info = reinterpret_cast<shared_info_t *>(&xen_shared_info);
 }
-}
-
-extern "C" void evtchn_do_upcall(void *a);
-extern "C" void xen_do_upcall(exception_frame *ef)
-{
-    cli();
-    evtchn_do_upcall(ef);
-    sti();
 }
