@@ -99,6 +99,8 @@ protected:
 
 extern apic_driver* apic;
 
+void kvm_pv_eoi_init();
+
 }
 
 #endif /* APIC_HH_ */

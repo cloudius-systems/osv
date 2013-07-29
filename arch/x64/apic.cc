@@ -1,7 +1,28 @@
 #include "apic.hh"
 #include "msr.hh"
+#include <osv/percpu.hh>
+#include <cpuid.hh>
+#include <processor.hh>
+#include <mmu.hh>
 
 namespace processor {
+
+static constexpr u32 msr_kvm_pv_eoi = 0x4b564d04;
+static PERCPU(u32, kvm_pv_eoi_word);
+
+void kvm_pv_eoi_init()
+{
+    if (features().kvm_pv_eoi) {
+        wrmsr(msr_kvm_pv_eoi, mmu::virt_to_phys(&*kvm_pv_eoi_word) | 1);
+    }
+}
+
+inline bool try_fast_eoi()
+{
+    u8 r;
+    asm("btr %2, %0; setc %1" : "+m"(*kvm_pv_eoi_word), "=rm"(r) : "r"(0));
+    return r;
+}
 
 class x2apic : public apic_driver {
 public:
@@ -73,6 +94,9 @@ void x2apic::nmi_allbutself()
 
 void x2apic::eoi()
 {
+    if (try_fast_eoi()) {
+        return;
+    }
     wrmsr(msr::X2APIC_EOI, 0);
 }
 
