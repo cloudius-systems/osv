@@ -229,7 +229,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         virtio_blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
-        hdr->sector = (int)bio->bio_offset/ sector_size;
+        hdr->sector = bio->bio_offset/ sector_size;
 
         queue->_sg_vec.clear();
         queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ));
