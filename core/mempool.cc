@@ -457,7 +457,7 @@ static unsigned large_object_size(void *obj)
 }
 
 struct page_buffer {
-    static constexpr size_t max = 64;
+    static constexpr size_t max = 512;
     size_t nr = 0;
     void* free[max];
 };
