@@ -87,25 +87,40 @@ interrupt_descriptor_table::load_on_cpu()
     processor::lidt(d);
 }
 
-unsigned interrupt_descriptor_table::register_handler(std::function<void ()> handler)
+unsigned interrupt_descriptor_table::register_level_triggered_handler(
+        std::function<void ()> pre_eoi,
+        std::function<void ()> handler)
 {
     for (unsigned i = 32; i < 256; ++i) {
-        if (!_handlers[i]) {
-            _handlers[i] = handler;
+        if (!_handlers[i].post_eoi) {
+            _handlers[i].pre_eoi = pre_eoi;
+            _handlers[i].post_eoi = handler;
             return i;
         }
     }
     abort();
 }
 
+unsigned interrupt_descriptor_table::register_handler(std::function<void ()> handler)
+{
+    return register_level_triggered_handler([] {}, handler);
+}
+
+
 void interrupt_descriptor_table::unregister_handler(unsigned vector)
 {
-    _handlers[vector] = {};
+    _handlers[vector].pre_eoi = {};
+    _handlers[vector].post_eoi = {};
+}
+
+void interrupt_descriptor_table::invoke_interrupt_pre_eoi(unsigned vector)
+{
+    _handlers[vector].pre_eoi();
 }
 
 void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
 {
-    _handlers[vector]();
+    _handlers[vector].post_eoi();
 }
 
 extern "C" { void interrupt(exception_frame* frame); }
@@ -117,8 +132,9 @@ void interrupt(exception_frame* frame)
     // don't nest.
     current_interrupt_frame = frame;
     unsigned vector = frame->error_code;
-    idt.invoke_interrupt(vector);
+    idt.invoke_interrupt_pre_eoi(vector);
     processor::wrmsr(0x80b, 0); // EOI
+    idt.invoke_interrupt(vector);
     // must call scheduler after EOI, or it may switch contexts and miss the EOI
     current_interrupt_frame = nullptr;
     // FIXME: layering violation
