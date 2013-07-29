@@ -187,10 +187,17 @@ static __inline unsigned long __xchg(unsigned long x, volatile void * ptr,
         break;
     case 4:
         __asm__ __volatile__("xchgl %0,%1"
+                             :"=r" (*(unsigned int *)x)
+                             :"m" (*__xg(ptr)), "0" (*(unsigned int *)x)
+                             :"memory");
+        break;
+    case 8:
+        __asm__ __volatile__("xchgq %0,%1"
                              :"=r" (x)
                              :"m" (*__xg(ptr)), "0" (x)
                              :"memory");
         break;
+
     }
     return x;
 }
