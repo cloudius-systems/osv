@@ -177,7 +177,7 @@ bool mutex::owned()
 
 template <class lock_type>
 struct lock_guard_for_with_lock : std::lock_guard<lock_type> {
-    using std::lock_guard<lock_type>::lock_guard;
+    lock_guard_for_with_lock(lock_type& lock) : std::lock_guard<lock_type>(lock) {}
     operator bool() const { return false; }
 };
 
