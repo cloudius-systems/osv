@@ -166,7 +166,23 @@ void virtio_blk::response_worker() {
 
         u32 len;
         while((req = static_cast<virtio_blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
-            if (req->bio) biodone(req->bio, true);
+            if (req->bio) {
+                switch (req->res.status) {
+                case VIRTIO_BLK_S_OK:
+                    biodone(req->bio, true);
+                    break;
+                case VIRTIO_BLK_S_UNSUPP:
+                    kprintf("unsupported I/O request\n");
+                    biodone(req->bio, false);
+                    break;
+                default:
+                    kprintf("virtio-blk: I/O error, sector = %lu, len = %lu, type = %x\n",
+                            req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
+                    biodone(req->bio, false);
+                    break;
+               }
+            }
+
             req->bio = nullptr;
             delete req;
             queue->get_buf_finalize();
