@@ -303,7 +303,6 @@ update_prompt();
 
 load("/console/init.js");
 
-mainargs = com.cloudius.cli.main.RhinoCLI._args;
 if (mainargs.length) {
     var mainargs_js = [];
     // Cast from java.lang.String to a Javascript String type.

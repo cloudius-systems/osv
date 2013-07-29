@@ -1,10 +1,6 @@
-var _global_argv = 0;
-var _exitcode = -1;
-
 register_command('run', {
 
     init: function() {
-        this.elf_loader = new ELFLoader();
     },
 
     run: function(argv) {
@@ -25,12 +21,9 @@ register_command('run', {
 
         argv[0] = f.getCanonicalPath();
 
-        var success = this.elf_loader.run(argv);
-        if (!success) {
-            return -1;
-        }
-
-        return 0;
+        var elf_loader = new ELFLoader();
+        var success = elf_loader.run(argv);
+        return [success, elf_loader.lastExitCode()];
     },
 
     invoke: function(inp) {
@@ -42,14 +35,14 @@ register_command('run', {
         inp.splice(0, 1);
         
         rc = this.run(inp);
-        if (rc < 0) {
+        if (!rc[0]) {
             print("run: couldn't execute elf");
             return;
         }
 
-        print("run: finished with exitcode " + _exitcode);
+        print("run: finished with exitcode " + rc[1]);
 
-        return (rc);
+        return (rc[1]);
     },
 
     tab: function(inp) {

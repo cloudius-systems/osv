@@ -58,8 +58,7 @@ public class TestRunner {
         this.registerELFTests();
     }
     
-    public Scriptable getTestNames() {
-        Object[] names = _tests.keySet().toArray();
-        return (RhinoCLI._cx.newArray(RhinoCLI._scope, names));
+    public String[] getTestNames() {
+        return _tests.keySet().toArray(new String[_tests.size()]);
     }
 }

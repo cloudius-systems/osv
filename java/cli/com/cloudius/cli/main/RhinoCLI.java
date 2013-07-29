@@ -7,28 +7,18 @@ import sun.org.mozilla.javascript.tools.shell.*;
 
 public class RhinoCLI {
     
-    public static Global global = new Global();
-
-    public static Scriptable _scope;
-    public static Context _cx;
-    
-    public static String[] _args;
-
-    //
-    // Invoke the cli.js file take care of exposing all scriptable objects
-    // such as the tests
-    //
     public static void main(String[] args) {
-        _cx = Context.enter();
+        Global global = new Global();
+        Context cx = Context.enter();
         try {
+            global.init(cx);
+            Scriptable scope = ScriptableObject.getTopLevelScope(global);
             
-            global.init(_cx);
-            _scope = ScriptableObject.getTopLevelScope(global);
-            
-            _args = args;
+            // Pass some info into the Javascript code as top-level variables:
+            scope.put("mainargs", scope, args);
 
             FileReader cli_js = new FileReader("/console/cli.js");
-            _cx.evaluateReader(_scope, cli_js, "cli.js", 1, null);
+            cx.evaluateReader(scope, cli_js, "cli.js", 1, null);
             
         } catch (Exception ex) {
             ex.printStackTrace();
