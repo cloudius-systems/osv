@@ -37,8 +37,8 @@ public:
     void load_on_cpu();
     unsigned register_handler(std::function<void ()> handler);
     unsigned register_level_triggered_handler(std::function<void ()> pre_eoi, std::function<void ()> handler);
+    unsigned register_interrupt_handler(std::function<void ()> eoi, std::function<void ()> pre_eoi, std::function<void ()> handler);
     void unregister_handler(unsigned vector);
-    void invoke_interrupt_pre_eoi(unsigned vector);
     void invoke_interrupt(unsigned vector);
 private:
     enum {
@@ -63,6 +63,7 @@ private:
     void add_entry(unsigned vec, unsigned ist, void (*handler)());
     idt_entry _idt[256];
     struct handler {
+        std::function<void ()> eoi;
         std::function<void ()> pre_eoi;
         std::function<void ()> post_eoi;
     };
