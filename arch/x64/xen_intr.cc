@@ -7,20 +7,19 @@
 namespace xen {
 void xen_irq::do_irq(void)
 {
-    // Look out for races
     while (true) {
         sched::thread::wait_until([this] {
-            return this->_irq_pending != 0;
+            return _irq_pending != 0;
         });
+        _irq_pending = 0;
         _handler(_args);
-        _irq_pending--;
     }
 }
 
 xen_irq::xen_irq(driver_intr_t handler, void *args)
     : _handler(handler), _args(args), _irq_pending(0)
 {
-    _thread = new sched::thread([this] { this->do_irq(); });
+    _thread = new sched::thread([this] { do_irq(); });
     _thread->start();
 }
 
@@ -51,6 +50,7 @@ intr_execute_handlers(struct intsrc *isrc, struct trapframe *frame)
 {
     int vector = reinterpret_cast<long>(isrc);
     assert(vector < 256);
+    assert(xen_allocated_irqs[vector]);
     xen_allocated_irqs[vector]->wake();
 }
 
