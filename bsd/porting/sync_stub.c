@@ -59,7 +59,7 @@ void sx_xunlock(struct sx *s)
 
 void sx_slock(struct sx *s)
 {
-    rw_wlock(&s->_rw);
+    rw_rlock(&s->_rw);
 }
 
 void sx_sunlock(struct sx *s)
