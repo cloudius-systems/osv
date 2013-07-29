@@ -15,9 +15,15 @@ INCLUDES += -isystem $(src)/include/api/x86_64
 INCLUDES += -isystem gen/include
 INCLUDES += -isystem $(src)/bsd/sys
 
+# $(call compiler-flag, -ffoo, option, file)
+#     returns option if file builds with -ffoo, empty otherwise
+compiler-flag = $(shell $(CXX) -Werror $1 -o /dev/null -c $3  > /dev/null 2>&1 && echo $2)
+
+compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL, $(src)/compiler/attr/cold-label.cc)
+
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
-	-fno-omit-frame-pointer \
+	-fno-omit-frame-pointer $(compiler-specific) \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
 	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030209"

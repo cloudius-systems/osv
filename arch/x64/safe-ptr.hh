@@ -1,6 +1,8 @@
 #ifndef SAFE_PTR_HH_
 #define SAFE_PTR_HH_
 
+#include <osv/compiler.h>
+
 template <typename T>
 inline bool
 safe_load(const T* potentially_bad_pointer, T& data)
@@ -39,7 +41,7 @@ safe_store(const T* potentially_bad_pointer, const T& data)
             : "memory"
             : fail);
     return true;
-    fail: __attribute__((cold));
+    fail: ATTR_COLD_LABEL;
     return false;
 }
 
