@@ -36,6 +36,12 @@ __FBSDID("$FreeBSD$");
 #include <bsd/porting/mmu.h>
 #include <bsd/porting/kthread.h>
 
+#include <bsd/porting/netport.h>
+#include <bsd/porting/synch.h>
+#include <bsd/porting/bus.h>
+#include <bsd/porting/mmu.h>
+#include <bsd/porting/kthread.h>
+
 #include <sys/param.h>
 #include <sys/systm.h>
 #include <sys/malloc.h>

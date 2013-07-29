@@ -9,6 +9,7 @@
 #include <xen/xenbus/xenbusb.h>
 
 extern driver_t netfront_driver;
+extern driver_t blkfront_driver;
 
 namespace xenfront {
 
@@ -54,6 +55,10 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
         // Very unfrequent, so don't care about how expensive and full of barriers this is
         _bsd_dev.unit = net_unit++;
 
+    } else if (!strcmp(ivars->xd_type, "vbd")) {
+        table = &blkfront_driver;
+        _irq_type = INTR_TYPE_BIO;
+        ss << "vblk";
     } else
         return;
 
