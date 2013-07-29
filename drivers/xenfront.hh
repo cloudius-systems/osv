@@ -60,9 +60,9 @@ protected:
     unsigned int _irq;
     int _irq_type;
 
-    xenfront::probe _probe;
-    xenfront::attach _attach;
-    xenfront::backend_changed _backend_changed;
+    xenfront::probe _probe = nullptr;
+    xenfront::attach _attach = nullptr;
+    xenfront::backend_changed _backend_changed = nullptr;
 };
 }
 
