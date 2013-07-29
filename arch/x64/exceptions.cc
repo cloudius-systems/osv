@@ -6,6 +6,7 @@
 #include "sched.hh"
 #include "debug.hh"
 #include <libc/signal.hh>
+#include <apic.hh>
 
 typedef boost::format fmt;
 
@@ -133,7 +134,7 @@ void interrupt(exception_frame* frame)
     current_interrupt_frame = frame;
     unsigned vector = frame->error_code;
     idt.invoke_interrupt_pre_eoi(vector);
-    processor::wrmsr(0x80b, 0); // EOI
+    apic->eoi();
     idt.invoke_interrupt(vector);
     // must call scheduler after EOI, or it may switch contexts and miss the EOI
     current_interrupt_frame = nullptr;
