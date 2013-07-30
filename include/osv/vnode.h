@@ -112,6 +112,8 @@ struct vattr {
 #define	VEXEC	00001
 
 #define IO_APPEND	0x0001
+#define IO_SYNC		0x0002
+
 
 typedef	int (*vnop_open_t)	(struct vnode *, int);
 typedef	int (*vnop_close_t)	(struct vnode *, struct file *);

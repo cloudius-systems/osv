@@ -64,6 +64,8 @@ static int vfs_write(struct file *fp, struct uio *uio, int flags)
 
 	if (fp->f_flags & O_APPEND)
 		ioflags |= IO_APPEND;
+	if (fp->f_flags & (O_DSYNC|O_SYNC))
+		ioflags |= IO_SYNC;
 
 	if ((flags & FOF_OFFSET) == 0)
 	        uio->uio_offset = fp->f_offset;
