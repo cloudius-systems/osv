@@ -6,6 +6,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/range/algorithm/remove.hpp>
 #include <debug.hh>
+#include "prio.hh"
 
 tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
 tracepoint<2, void*, void*> trace_function_exit("function exit", "fn %p caller %p");
@@ -40,7 +41,7 @@ char trace_log[max_trace] __attribute__((may_alias, aligned(sizeof(long))));
 std::atomic<size_t> trace_record_last;
 bool trace_enabled;
 
-typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority(4000)));
+typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority(TRACEPOINT_BASE_INIT_PRIO)));
 
 std::vector<std::regex> enabled_tracepoint_regexs;
 
