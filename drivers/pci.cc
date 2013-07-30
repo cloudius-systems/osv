@@ -120,43 +120,66 @@ void pci_devices_print(void)
     }
 }
 
+void check_bus(u16 bus)
+{
+    u16 slot, func;
+    for (slot = 0; slot < 32; slot++) {
+        if (read_pci_config_word(bus, slot, 0, PCI_VENDOR_ID) == 0xffff)
+            continue;
+
+        for (func = 0; func < 8; func++) {
+
+            if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff) {
+                continue;
+            }
+
+            function * dev = nullptr;
+            if (function::is_bridge(bus, slot, func)) {
+                dev = new bridge(bus, slot, func);
+                u8 sec_bus = read_pci_config_byte(bus, slot, func, PCI_CONFIG_SECONDARY_BUS);
+                check_bus(sec_bus);
+            } else {
+                dev = new device(bus, slot, func);
+            }
+
+            bool parse_ok = dev->parse_pci_config();
+            if (!parse_ok) {
+                pci_e("Error: couldn't parse device config space %x:%x.%x",
+                        bus, slot, func);
+                break;
+            }
+
+            if (!device_manager::instance()->register_device(dev)) {
+                pci_e("Error: couldn't register device %x:%x.%x",
+                        bus, slot, func);
+                //TODO: Need to beautify it as multiple instances of the device may exist
+                delete (dev);
+            }
+
+            // test for multiple functions
+            if (func == 0 &&
+                    !(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
+                break;
+        }
+    }
+}
 void pci_device_enumeration(void)
 {
-    u16 bus, slot, func;
-    for (bus = 0; bus < 256; bus++)
-        for (slot = 0; slot < 32; slot++)
-            for (func = 0; func < 8; func++) {
+    u16 func;
 
-                if (read_pci_config(bus, slot, func, PCI_CLASS_REVISION) == 0xffffffff) {
-                    continue;
-                }
-
-                function * dev = nullptr;
-                if (function::is_bridge(bus, slot, func)) {
-                    dev = new bridge(bus, slot, func);
-                } else {
-                    dev = new device(bus, slot, func);
-                }
-
-                bool parse_ok = dev->parse_pci_config();
-                if (!parse_ok) {
-                    pci_e("Error: couldn't parse device config space %x:%x.%x",
-                        bus, slot, func);
-                    break;
-                }
-
-                if (!device_manager::instance()->register_device(dev)) {
-                    pci_e("Error: couldn't register device %x:%x.%x",
-                        bus, slot, func);
-                    //TODO: Need to beautify it as multiple instances of the device may exist
-                    delete (dev);
-                }
-
-                // test for multiple functions
-                if (func == 0 &&
-                    !(read_pci_config_byte(bus, slot, func, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC))
-                        break;
+    bool single_bus = (read_pci_config_byte(0, 0, 0, PCI_HEADER_TYPE) & PCI_HEADER_MULTI_FUNC) == 0;
+   
+    if (single_bus) {
+        check_bus(0);
+    } else {
+        for (func = 0; func < 8; func++) {
+            if (read_pci_config_word(0, 0, func, PCI_VENDOR_ID) == 0xffff) {
+                if (func == 0)
+                    break; // func 0 not present, skip entire device
+                continue;
             }
+            check_bus(func);
+        }
+    }
 }
-
 }
