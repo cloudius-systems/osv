@@ -5,9 +5,10 @@
 #include "sched.hh"
 #include "osv/trace.hh"
 
-    #include <bsd/porting/netport.h>
-    #include <bsd/porting/synch.h>
-    #include <bsd/porting/sync_stub.h>
+#include <bsd/porting/netport.h>
+#include <bsd/porting/synch.h>
+#include <bsd/porting/sync_stub.h>
+#include <bsd/sys/sys/param.h>
 
 TRACEPOINT(trace_synch_msleep, "chan=%p mtx=%p timo_hz=%d", void *, void *, int);
 TRACEPOINT(trace_synch_msleep_wait, "chan=%p", void *);
@@ -82,10 +83,14 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         t.set(cur_time + nanoseconds);
 
         trace_synch_msleep_timeout_wait(chan);
-        sched::thread::wait_until(wait_lock, [&] {
+        mutex_unlock(wait_lock);
+        sched::thread::wait_until([&] {
             return ( (t.expired()) || (wait._awake) );
         });
 
+        if (!(priority & PDROP)) {
+            mutex_lock(wait_lock);
+        }
         // msleep timeout
         if (!wait._awake) {
             trace_synch_msleep_expired(chan);
@@ -108,9 +113,15 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
     } else {
 
         trace_synch_msleep_wait(chan);
-        sched::thread::wait_until(wait_lock, [&] {
+
+        mutex_unlock(wait_lock);
+        sched::thread::wait_until([&] {
             return (wait._awake);
         });
+
+        if (!(priority & PDROP)) {
+            mutex_lock(wait_lock);
+        }
 
     }
 
