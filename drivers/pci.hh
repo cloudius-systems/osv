@@ -50,6 +50,7 @@ using processor::outw;
 using processor::outl;
 
     enum pc_early_defines {
+        PCI_VENDOR_ID      = 0x0,
         PCI_CONFIG_ADDRESS = 0xcf8,
         PCI_CONFIG_DATA    = 0xcfc,
         PCI_BUS_OFFSET     = 16,
@@ -67,6 +68,7 @@ using processor::outl;
         PCI_SUBSYSTEM_VID  = 0x2c,
         PCI_HEADER_MULTI_FUNC = 0x80,
         PCI_BAR0_ADDR      = 0x10,
+        PCI_CONFIG_SECONDARY_BUS = 0x19,
         PCI_CAPABILITIES_PTR = 0x34,
     };
 
