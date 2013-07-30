@@ -151,11 +151,6 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS Where, ACPI_SIZE Length)
 void AcpiOsUnmapMemory(void *LogicalAddress, ACPI_SIZE Size)
 
 {
-    size_t page_align = 4096;
-    size_t map_size = align_up(Size, page_align);
-    void *_where = align_down(LogicalAddress, map_size);
-    
-    mmu::unmap(_where, map_size);
 }
 
 ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
