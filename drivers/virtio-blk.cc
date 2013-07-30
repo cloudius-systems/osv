@@ -94,6 +94,7 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     _id = _instance++;
     virtio_i("VIRTIO BLK INSTANCE %d", _id);
 
+    setup_features();
     read_config();
 
     //register the single irq callback for the block
