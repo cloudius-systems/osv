@@ -126,26 +126,26 @@ bool virtio_blk::read_config()
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
     virtio_i("The capacity of the device is %d", (u64)_config.capacity);
-    if (get_device_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
         virtio_i("The size_max of the device is %d",(u32)_config.size_max);
-    if (get_device_feature_bit(VIRTIO_BLK_F_SEG_MAX))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
         virtio_i("The seg_size of the device is %d",(u32)_config.seg_max);
-    if (get_device_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
+    if (get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
         virtio_i("The cylinders count of the device is %d",(u16)_config.geometry.cylinders);
         virtio_i("The heads count of the device is %d",(u32)_config.geometry.heads);
         virtio_i("The sector count of the device is %d",(u32)_config.geometry.sectors);
     }
-    if (get_device_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
         virtio_i("The block size of the device is %d",(u32)_config.blk_size);
-    if (get_device_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
+    if (get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
         virtio_i("The physical_block_exp of the device is %d",(u32)_config.physical_block_exp);
         virtio_i("The alignment_offset of the device is %d",(u32)_config.alignment_offset);
         virtio_i("The min_io_size of the device is %d",(u16)_config.min_io_size);
         virtio_i("The opt_io_size of the device is %d",(u32)_config.opt_io_size);
     }
-    if (get_device_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
         virtio_i("The write cache enable of the device is %d",(u32)_config.wce);
-    if (get_device_feature_bit(VIRTIO_BLK_F_RO)) {
+    if (get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
         set_readonly();
         virtio_i("Device is read only");
     }
