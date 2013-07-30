@@ -546,7 +546,7 @@ zfs_read(vnode_t *vp, uio_t *uio, int ioflag)
 	 * If we're in FRSYNC mode, sync out this znode before reading it.
 	 */
 	if (zfsvfs->z_log &&
-	    (ioflag & FRSYNC || zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS))
+	    (ioflag & IO_FRSYNC || zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS))
 		zil_commit(zfsvfs->z_log, zp->z_id);
 #endif
 
@@ -900,11 +900,9 @@ again:
 		return (error);
 	}
 
-#ifdef TODO_FSYNC
-	if (ioflag & (FSYNC | FDSYNC) ||
+	if (ioflag & IO_SYNC ||
 	    zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, zp->z_id);
-#endif
 
 	ZFS_EXIT(zfsvfs);
 	return (0);
@@ -1823,18 +1821,17 @@ update:
 	return (error);
 }
 
-#ifdef NOTYET
 ulong_t zfs_fsync_sync_cnt = 4;
-#endif /* NOTYET */
 
 static int
 zfs_fsync(vnode_t *vp, file_t *fp)
 {
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
-#ifdef TODO
 
+#ifdef TODO
 	vop_stdfsync(ap);
+#endif
 
 	(void) tsd_set(zfs_fsyncer_key, (void *)zfs_fsync_sync_cnt);
 
@@ -1844,7 +1841,7 @@ zfs_fsync(vnode_t *vp, file_t *fp)
 		zil_commit(zfsvfs->z_log, zp->z_id);
 		ZFS_EXIT(zfsvfs);
 	}
-#endif
+
 	return (0);
 }
 

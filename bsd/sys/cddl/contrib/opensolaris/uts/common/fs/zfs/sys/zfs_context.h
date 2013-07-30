@@ -83,13 +83,12 @@ extern "C" {
 
 #define	CPU_SEQID	get_cpuid()
 
-#define	tsd_create(keyp, destructor)	do {				\
-	*(keyp) = osd_thread_register((destructor));			\
-	KASSERT(*(keyp) > 0, ("cannot register OSD"));			\
-} while (0)
-#define	tsd_destroy(keyp)		osd_thread_deregister(*(keyp))
-#define	tsd_get(key)			osd_thread_get(curthread, (key))
-#define	tsd_set(key, value)		osd_thread_set(curthread, (key), (value))
+#define	tsd_create(keyp, destructor) \
+	ERROR: Use a __thread variable instead
+#define	tsd_destroy(keyp) \
+	ERROR: Use a __thread variable instead
+#define	tsd_get(key)			(key)
+#define	tsd_set(key, value)		((key) = (value))
 
 #ifdef	__cplusplus
 }

@@ -7,6 +7,8 @@
 #include <sys/sa_impl.h>
 #include <osv/debug.h>
 
+__thread void *zfs_fsyncer_key;
+
 static int
 zfs_space_delta_cb(dmu_object_type_t bonustype, void *data,
     uint64_t *userp, uint64_t *groupp)

@@ -479,18 +479,14 @@ zfs_log_write(zilog_t *zilog, dmu_tx_t *tx, int txtype,
 	    (zilog->zl_logbias == ZFS_LOGBIAS_LATENCY);
 	if (resid > immediate_write_sz && !slogging && resid <= zp->z_blksz)
 		write_state = WR_INDIRECT;
-#ifdef TODO_O_SYNC
-	else if (ioflag & (FSYNC | FDSYNC))
+	else if (ioflag & IO_SYNC)
 		write_state = WR_COPIED;
-#endif
 	else
 		write_state = WR_NEED_COPY;
 
-#ifdef TODO_FSYNC
 	if ((fsync_cnt = (uintptr_t)tsd_get(zfs_fsyncer_key)) != 0) {
 		(void) tsd_set(zfs_fsyncer_key, (void *)(fsync_cnt - 1));
 	}
-#endif
 
 	while (resid) {
 		itx_t *itx;
@@ -527,11 +523,9 @@ zfs_log_write(zilog_t *zilog, dmu_tx_t *tx, int txtype,
 
 		itx->itx_private = zp->z_zfsvfs;
 
-#ifdef TODO_O_SYNC
-		if (!(ioflag & (FSYNC | FDSYNC)) && (zp->z_sync_cnt == 0) &&
+		if (!(ioflag & IO_SYNC) && (zp->z_sync_cnt == 0) &&
 		    (fsync_cnt == 0))
 			itx->itx_sync = B_FALSE;
-#endif
 
 		zil_itx_assign(zilog, itx, tx);
 
