@@ -31,9 +31,9 @@ var networking_interface = new Networking();
 
 var System = java.lang.System
 
-// I/O
-var _reader = new BufferedReader( new InputStreamReader(System['in']) );
-var _writer = new BufferedWriter( new OutputStreamWriter(System['out']));
+// I/O. Note we get "stdin" and "stdout" from RhinoCLI.java.
+var _reader = stdin;
+var _writer = new BufferedWriter( new OutputStreamWriter(stdout));
 
 // Line
 var _line_idx = 0;
@@ -72,6 +72,11 @@ function write_string(s)
     }
     
     _writer.write(s, 0, s.length);
+}
+
+function print(s)
+{
+	write_string(s+"\n");
 }
 
 function beep()
