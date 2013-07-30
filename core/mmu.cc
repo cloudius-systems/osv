@@ -10,6 +10,7 @@
 #include "align.hh"
 #include "interrupt.hh"
 #include "ilog2.hh"
+#include "prio.hh"
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -52,7 +53,7 @@ struct vma_list_type : vma_list_base {
     }
 };
 
-__attribute__((init_priority(220)))
+__attribute__((init_priority(VMA_LIST_INIT_PRIO)))
 vma_list_type vma_list;
 
 // A fairly coarse-grained mutex serializing modifications to both

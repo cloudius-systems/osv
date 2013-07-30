@@ -7,6 +7,7 @@
 #include "barrier.hh"
 #include <osv/percpu.hh>
 #include <osv/pvclock-abi.hh>
+#include "prio.hh"
 
 class kvmclock : public clock {
 public:
@@ -70,7 +71,7 @@ u64 kvmclock::system_time()
     return r;
 }
 
-static __attribute__((constructor(210))) void setup_kvmclock()
+static __attribute__((constructor(CLOCK_INIT_PRIO))) void setup_kvmclock()
 {
     // FIXME: old clocksource too?
     if (processor::features().kvm_clocksource2) {

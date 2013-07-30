@@ -11,6 +11,7 @@
 #include "smp.hh"
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
+#include "prio.hh"
 
 __thread void* percpu_base;
 
@@ -28,7 +29,7 @@ TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
-std::vector<cpu*> cpus __attribute__((init_priority(102)));
+std::vector<cpu*> cpus __attribute__((init_priority(CPUS_INIT_PRIO)));
 
 thread __thread * s_current;
 cpu __thread * current_cpu;
@@ -45,7 +46,7 @@ constexpr s64 max_slice = 10_ms;
 constexpr s64 context_switch_penalty = 10_us;
 
 mutex cpu::notifier::_mtx;
-std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(205)));
+std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(NOTIFIERS_INIT_PRIO)));
 
 }
 
