@@ -103,7 +103,8 @@ void xen_set_callback()
 
     xhp.domid = DOMID_SELF;
     xhp.index = HVM_PARAM_CALLBACK_IRQ;
-    xen_vector = idt.register_handler([=] { evtchn_do_upcall(NULL); }) | (2ULL << 56);
+    auto vector = idt.register_interrupt_handler([] {}, [] {},  [] { evtchn_do_upcall(NULL); });
+    xhp.value = vector | (2ULL << 56);
     if (hvm_hypercall(HVMOP_set_param, &xhp))
         assert(0);
 }
