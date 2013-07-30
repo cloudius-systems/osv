@@ -292,7 +292,8 @@ u32 virtio_blk::get_driver_features(void)
                  | ( 1 << VIRTIO_BLK_F_SEG_MAX)
                  | ( 1 << VIRTIO_BLK_F_GEOMETRY)
                  | ( 1 << VIRTIO_BLK_F_RO)
-                 | ( 1 << VIRTIO_BLK_F_BLK_SIZE));
+                 | ( 1 << VIRTIO_BLK_F_BLK_SIZE)
+                 | ( 1 << VIRTIO_BLK_F_CONFIG_WCE));
 }
 
 hw_driver* virtio_blk::probe(hw_device* dev)
