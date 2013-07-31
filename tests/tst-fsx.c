@@ -1612,6 +1612,5 @@ main(int argc, char **argv)
 	}
 	prt("All operations completed A-OK!\n");
 
-	exit(0);
 	return 0;
 }
