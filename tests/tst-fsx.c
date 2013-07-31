@@ -1495,6 +1495,7 @@ main(int argc, char **argv)
 	if (argc != 0)
 		usage();
 	fname = "/usr/fsxtmp";
+	mapped_writes = 0;	/* no support for writing through mmaps yet */
 #else
 	if (argc != 1)
 		usage();
