@@ -228,11 +228,11 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 	case SEEK_SET:
 		if (off < 0)
 			off = 0;
-		if (off > (off_t)vp->v_size)
+		if (off > vp->v_size)
 			off = vp->v_size;
 		break;
 	case SEEK_CUR:
-		if (fp->f_offset + off > (off_t)vp->v_size)
+		if (fp->f_offset + off > vp->v_size)
 			off = vp->v_size;
 		else if (fp->f_offset + off < 0)
 			off = 0;
@@ -242,7 +242,7 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 	case SEEK_END:
 		if (off > 0)
 			off = vp->v_size;
-		else if ((int)vp->v_size + off < 0)
+		else if (vp->v_size + off < 0)
 			off = 0;
 		else
 			off = vp->v_size + off;
