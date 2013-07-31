@@ -4,10 +4,6 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 
-/* Global zone structures */
-int uma_zone_num = 0;
-struct uma_zone zones[OSV_UMA_MAX_ZONES] = {0};
-
 void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
     void * ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
@@ -81,7 +77,7 @@ uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
             uma_dtor dtor, uma_init uminit, uma_fini fini,
             int align, u_int32_t flags)
 {
-    uma_zone_t z = &zones[uma_zone_num++];
+    uma_zone_t z = new uma_zone;
 
     z->uz_name = name;
     z->uz_size = size;
@@ -103,8 +99,7 @@ uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
 uma_zone_t uma_zsecond_create(char *name, uma_ctor ctor, uma_dtor dtor,
             uma_init zinit, uma_fini zfini, uma_zone_t master)
 {
-    assert(uma_zone_num < OSV_UMA_MAX_ZONES);
-    uma_zone_t z = &zones[uma_zone_num++];
+    uma_zone_t z = new uma_zone;
 
     z->uz_name = name;
     z->uz_size = master->uz_size;
@@ -140,5 +135,5 @@ u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item)
 
 void uma_zdestroy(uma_zone_t zone)
 {
-    /* Do nothing */
+    delete zone;
 }

@@ -6,9 +6,6 @@
 #ifndef UMA_STUB_H
 #define UMA_STUB_H
 
-
-#define OSV_UMA_MAX_ZONES   (64)
-
 /*
  * Header we add to the end of each item
  */
