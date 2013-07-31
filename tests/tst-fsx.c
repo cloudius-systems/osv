@@ -119,7 +119,7 @@ unsigned long	testcalls = 0;		/* calls to function "test" */
 
 unsigned long	simulatedopcount = 0;	/* -b flag */
 int	closeprob = 0;			/* -c flag */
-int	debug = 0;			/* -d flag */
+int	fsx_debug = 0;			/* -d flag */
 unsigned long	debugstart = 0;		/* -D flag */
 int	flush = 0;			/* -f flag */
 int	do_fsync = 0;			/* -y flag */
@@ -536,7 +536,7 @@ doread(unsigned offset, unsigned size)
 
 	if (!quiet &&
 		((progressinterval && testcalls % progressinterval == 0)  ||
-		(debug &&
+		(fsx_debug &&
 		       (monitorstart == -1 ||
 			(offset + size > monitorstart &&
 			(monitorend == -1 || offset <= monitorend))))))
@@ -615,7 +615,7 @@ domapread(unsigned offset, unsigned size)
 
 	if (!quiet &&
 		((progressinterval && testcalls % progressinterval == 0) ||
-		       (debug &&
+		       (fsx_debug &&
 		       (monitorstart == -1 ||
 			(offset + size > monitorstart &&
 			(monitorend == -1 || offset <= monitorend))))))
@@ -689,7 +689,7 @@ dowrite(unsigned offset, unsigned size)
 
 	if (!quiet &&
 		((progressinterval && testcalls % progressinterval == 0) ||
-		       (debug &&
+		       (fsx_debug &&
 		       (monitorstart == -1 ||
 			(offset + size > monitorstart &&
 			(monitorend == -1 || offset <= monitorend))))))
@@ -756,7 +756,7 @@ domapwrite(unsigned offset, unsigned size)
 
 	if (!quiet &&
 		((progressinterval && testcalls % progressinterval == 0) ||
-		       (debug &&
+		       (fsx_debug &&
 		       (monitorstart == -1 ||
 			(offset + size > monitorstart &&
 			(monitorend == -1 || offset <= monitorend))))))
@@ -815,7 +815,7 @@ dotruncate(unsigned size)
 		return;
 	
 	if ((progressinterval && testcalls % progressinterval == 0) ||
-	    (debug && (monitorstart == -1 || monitorend == -1 ||
+	    (fsx_debug && (monitorstart == -1 || monitorend == -1 ||
 		      size <= monitorend)))
 		prt("%lu trunc\tfrom 0x%x to 0x%x\n", testcalls, oldsize, size);
 	if (ftruncate(fd, (off_t)size) == -1) {
@@ -856,7 +856,7 @@ do_punch_hole(unsigned offset, unsigned length)
 		return;
 
 	if ((progressinterval && testcalls % progressinterval == 0) ||
-	    (debug && (monitorstart == -1 || monitorend == -1 ||
+	    (fsx_debug && (monitorstart == -1 || monitorend == -1 ||
 		      end_offset <= monitorend))) {
 		prt("%lu punch\tfrom 0x%x to 0x%x, (0x%x bytes)\n", testcalls,
 			offset, offset+length, length);
@@ -924,7 +924,7 @@ do_preallocate(unsigned offset, unsigned length)
 		return;
 	
 	if ((progressinterval && testcalls % progressinterval == 0) ||
-	    (debug && (monitorstart == -1 || monitorend == -1 ||
+	    (fsx_debug && (monitorstart == -1 || monitorend == -1 ||
 		      end_offset <= monitorend)))
 		prt("%lu falloc\tfrom 0x%x to 0x%x (0x%x bytes)\n", testcalls,
 				offset, offset + length, length);
@@ -974,7 +974,7 @@ docloseopen(void)
 	if (testcalls <= simulatedopcount)
 		return;
 
-	if (debug)
+	if (fsx_debug)
 		prt("%lu close/open\n", testcalls);
 	if (close(fd)) {
 		prterr("docloseopen: close");
@@ -1014,7 +1014,7 @@ test(void)
 		closeopen = (rv >> 3) < (1 << 28) / closeprob;
 
 	if (debugstart > 0 && testcalls >= debugstart)
-		debug = 1;
+		fsx_debug = 1;
 
 	if (!quiet && testcalls < simulatedopcount && testcalls % 100000 == 0)
 		prt("%lu...\n", testcalls);
@@ -1120,13 +1120,13 @@ usage(void)
 		"fsx [-dnqxAFLOWZ] [-b opnum] [-c Prob] [-l flen] [-m start:end] [-o oplen] [-p progressinterval] [-r readbdy] [-s style] [-t truncbdy] [-w writebdy] [-D startingop] [-N numops] [-P dirpath] [-S seed] fname\n\
 	-b opnum: beginning operation number (default 1)\n\
 	-c P: 1 in P chance of file close+open at each op (default infinity)\n\
-	-d: debug output for all operations\n\
+	-d: fsx_debug output for all operations\n\
 	-f flush and invalidate cache after I/O\n\
 	-l flen: the upper bound on file size (default 262144)\n\
-	-m startop:endop: monitor (print debug output) specified byte range (default 0:infinity)\n\
+	-m startop:endop: monitor (print fsx_debug output) specified byte range (default 0:infinity)\n\
 	-n: no verifications of file size\n\
 	-o oplen: the upper bound on operation size (default 65536)\n\
-	-p progressinterval: debug output at specified operation interval\n\
+	-p progressinterval: fsx_debug output at specified operation interval\n\
 	-q: quieter operation\n\
 	-r readbdy: 4096 would make reads page aligned (default 1)\n\
 	-s style: 1 gives smaller truncates (default 0)\n\
@@ -1138,7 +1138,7 @@ usage(void)
 #ifdef AIO
 "	-A: Use the AIO system calls\n"
 #endif
-"	-D startingop: debug output starting at specified operation\n"
+"	-D startingop: fsx_debug output starting at specified operation\n"
 #ifdef FALLOCATE
 "	-F: Do not use fallocate (preallocation) calls\n"
 #endif
@@ -1370,7 +1370,7 @@ main(int argc, char **argv)
 				usage();
 			break;
 		case 'd':
-			debug = 1;
+			fsx_debug = 1;
 			break;
 		case 'f':
 			flush = 1;
@@ -1391,7 +1391,7 @@ main(int argc, char **argv)
 				usage();
 			if (monitorend == 0)
 				monitorend = -1; /* aka infinity */
-			debug = 1;
+			fsx_debug = 1;
 		case 'n':
 			sizechecks = 0;
 			break;
