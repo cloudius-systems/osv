@@ -26,6 +26,10 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
         }
     }
 
+    if (flags & M_ZERO) {
+        bzero(ptr, zone->uz_size);
+    }
+
     UMA_ITEM_HDR(zone, ptr)->refcnt = 1;
 
     return (ptr);
