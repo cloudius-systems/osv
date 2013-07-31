@@ -113,7 +113,7 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
      * Init
      */
 
-    m = m_getcl(M_DONTWAIT | M_ZERO, MT_DATA, M_PKTHDR);
+    m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
     m_rtmsg = mtod(m, struct rt_msg*);
     cp = m_rtmsg->m_space;
 
@@ -181,7 +181,7 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
      * Init
      */
 
-    m = m_getcl(M_DONTWAIT | M_ZERO, MT_DATA, M_PKTHDR);
+    m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
     m_rtmsg = mtod(m, struct rt_msg*);
     cp = m_rtmsg->m_space;
     rtm_addrs = (RTA_DST | RTA_GATEWAY);
