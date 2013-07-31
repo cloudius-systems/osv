@@ -737,13 +737,33 @@ sys_fstatfs(struct file *fp, struct statfs *buf)
 int
 sys_truncate(char *path, off_t length)
 {
-	return 0;
+	struct vnode *vp;
+	int error;
+
+	error = namei(path, &vp);
+	if (error)
+		return error;
+
+	error = VOP_TRUNCATE(vp, length);
+
+	vput(vp);
+	return error;
 }
 
 int
 sys_ftruncate(struct file *fp, off_t length)
 {
-	return 0;
+	struct vnode *vp = fp->f_vnode;
+	int error;
+
+	if (!vp)
+		return EBADF;
+
+	vn_lock(vp);
+	error = VOP_TRUNCATE(vp, length);
+	vn_unlock(vp);
+
+	return error;
 }
 
 int
