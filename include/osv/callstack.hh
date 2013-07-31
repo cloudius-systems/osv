@@ -39,6 +39,7 @@ public:
     // as the program counter array is variable length, so it can't be allocated
     // normally or copied.
     struct trace : boost::intrusive::unordered_set_base_hook<> {
+        trace(void** pc, unsigned len);
         unsigned hits;  // number of times this trace was seen
         unsigned len;   // length of pc[] array
         void* pc[];     // program counters, most recent first
@@ -55,7 +56,7 @@ private:
     // Callback from tracepoint_base::probe
     virtual void hit() override;
     size_t trace_object_size();
-    trace* alloc_trace();
+    trace* alloc_trace(void** pc, unsigned len);
     // merge per-cpu traces into cpu0
     void merge();
     std::set<trace*, histogram_compare> histogram(size_t n);

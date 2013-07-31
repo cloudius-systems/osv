@@ -113,10 +113,17 @@ size_t hash_value(const callstack_collector::trace& a)
     return hash(a.pc);
 }
 
-callstack_collector::trace* callstack_collector::alloc_trace()
+callstack_collector::trace* callstack_collector::alloc_trace(void** pc, unsigned len)
 {
     auto t = _free_traces.fetch_add(trace_object_size(), std::memory_order_relaxed);
-    return static_cast<trace*>(t);
+    return new (t) trace(pc, len);
+}
+
+callstack_collector::trace::trace(void** pc, unsigned len)
+    : hits()
+    , len(len)
+{
+    std::copy(pc, pc + len, this->pc);
 }
 
 // an instrumented tracepoint was hit; collect a trace
@@ -132,14 +139,11 @@ void callstack_collector::hit()
     auto i = table->find(bt, hash, bt_trace_compare);
     if (i == table->end()) {
         // new unique trace, copy and store it
-        auto t = alloc_trace();
+        auto t = alloc_trace(bt, nr);
         if (!t) {
             _overflow.store(true);
             return;
         }
-        t->hits = 0;
-        t->len = nr;
-        std::copy(bt, bt + nr, t->pc);
         i = table->insert(*t).first;
     }
     ++i->hits;
