@@ -10,7 +10,13 @@ SECTIONS
 	 */
     . = 0x201000;
     .dynamic : { *(.dynamic) } :dynamic :text
-    .text : { *(.text) *(.text.hot) *(.text.unlikely) *(.text.fixup) } :text
+    .text : {
+        *(.text.hot .text.hot.*)
+        *(.text.unlikely .text.*_unlikely)
+        *(.text.fixup)
+        *(.text.startup .text.startup.*)
+        *(.text .text.*)
+    } :text
     . = ALIGN(8);
     .fixup : {
         fault_fixup_start = .;
