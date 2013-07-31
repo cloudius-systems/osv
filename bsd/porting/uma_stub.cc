@@ -3,18 +3,44 @@
 #include <bsd/machine/param.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
+#include <preempt-lock.hh>
+
+void* uma_zone::cache::alloc()
+{
+    if (len) {
+        return a[--len];
+    }
+    return nullptr;
+}
+
+bool uma_zone::cache::free(void* obj)
+{
+    if (len < max_size) {
+        a[len++] = obj;
+        return true;
+    }
+    return false;
+}
 
 void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
-    void * ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
+    void * ptr;
 
-    bzero(ptr, zone->uz_size + UMA_ITEM_HDR_LEN);
+    WITH_LOCK(preempt_lock) {
+        ptr = (*zone->percpu_cache)->alloc();
+    }
 
-    // Call init
-    if (zone->uz_init != NULL) {
-        if (zone->uz_init(ptr, zone->uz_size, flags) != 0) {
-            free(ptr);
-            return (NULL);
+    if (!ptr) {
+        ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
+
+        bzero(ptr, zone->uz_size + UMA_ITEM_HDR_LEN);
+
+        // Call init
+        if (zone->uz_init != NULL) {
+            if (zone->uz_init(ptr, zone->uz_size, flags) != 0) {
+                free(ptr);
+                return (NULL);
+            }
         }
     }
 
@@ -48,6 +74,12 @@ void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
 
     if (zone->uz_dtor) {
         zone->uz_dtor(item, zone->uz_size, udata);
+    }
+
+    WITH_LOCK(preempt_lock) {
+        if ((*zone->percpu_cache)->free(item)) {
+            return;
+        }
     }
 
     if (zone->uz_fini) {
