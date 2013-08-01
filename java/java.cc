@@ -38,6 +38,20 @@ int main(int argc, char **argv)
 
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=" RUNJAVA_DIR));
+
+    int orig_argc = argc;
+    for (int i = 1; i < orig_argc; i++) {
+        // We are not supposed to look for verbose options after -jar
+        // or class name. From that point on, they are user provided
+        if (!strcmp(argv[i], "-jar") && strncmp(argv[i], "-", strlen("-")))
+            break;
+
+        if (!strncmp(argv[i], "-verbose", strlen("-verbose"))) {
+            options.push_back(mkoption(argv[i]));
+            argv[i] = NULL; // so we don't pass it to RunJava
+            argc--;
+        }
+    }
     vm_args.nOptions = options.size();
     vm_args.options = options.data();
 
@@ -68,8 +82,12 @@ int main(int argc, char **argv)
 
     auto stringclass = env->FindClass("java/lang/String");
     auto args = env->NewObjectArray(argc-1, stringclass, nullptr);
-    for (int i = 0; i < argc-1; ++i) {
-        env->SetObjectArrayElement(args, i, env->NewStringUTF(argv[i+1]));
+
+    int index = 0;
+    for (int i = 1; i < orig_argc; i++) {
+        if (!argv[i])
+            continue;
+        env->SetObjectArrayElement(args, index++, env->NewStringUTF(argv[i]));
     }
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
