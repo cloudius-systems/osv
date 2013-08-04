@@ -71,6 +71,14 @@ private:
 };
 
 
+template <typename T>
+struct autoconstructed_ptr : std::unique_ptr<T> {
+    autoconstructed_ptr() : std::unique_ptr<T>(new T) {}
+};
+
+template <typename T>
+using dynamic_percpu_indirect = dynamic_percpu<autoconstructed_ptr<T>>;
+
 void percpu_init(unsigned cpu);
 
 #endif /* PERCPU_HH_ */

@@ -6,9 +6,6 @@
 #ifndef UMA_STUB_H
 #define UMA_STUB_H
 
-
-#define OSV_UMA_MAX_ZONES   (64)
-
 /*
  * Header we add to the end of each item
  */
@@ -123,8 +120,24 @@ typedef void (*uma_fini)(void *mem, int size);
  * TODO: Optimize for cache line size
  *
  */
+struct uma_zone;
+
+#ifdef __cplusplus
+
+#include <osv/percpu.hh>
+
 struct uma_zone {
     const char  *uz_name;   /* Text name of the zone */
+
+    struct cache {
+        static constexpr size_t max_size = 1000;
+        size_t len = 0;
+        void* a[max_size];
+        void* alloc();
+        bool free(void* obj);
+    };
+
+    dynamic_percpu_indirect<cache> percpu_cache;
 
     uma_ctor    uz_ctor;    /* Constructor for each allocation */
     uma_dtor    uz_dtor;    /* Destructor */
@@ -138,6 +151,8 @@ struct uma_zone {
     struct uma_zone* master;
 
 };
+
+#endif
 
 typedef struct uma_zone * uma_zone_t;
 
