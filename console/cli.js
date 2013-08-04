@@ -306,7 +306,9 @@ for (var cmd in _commands) {
 
 update_prompt();
 
-load("/console/init.js");
+if (flagInit) {
+	load("/console/init.js");
+}
 
 if (mainargs.length) {
     var mainargs_js = [];
