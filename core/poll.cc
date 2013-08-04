@@ -48,6 +48,12 @@
 
 #define dbg_d(...) tprintf_d("poll", __VA_ARGS__)
 
+#include <osv/trace.hh>
+TRACEPOINT(trace_poll_drain, "fd=%p", file*);
+TRACEPOINT(trace_poll_wake, "fd=%p, events=0x%x", file*, int);
+TRACEPOINT(trace_poll, "");
+
+
 int poll_no_poll(int events)
 {
     /*
@@ -66,7 +72,7 @@ int poll_no_poll(int events)
 /* Drain the poll link list from the file... */
 void poll_drain(struct file* fp)
 {
-    dbg_d("poll_drain(fp=0x%" PRIx64 ")", fp);
+    trace_poll_drain(fp);
 
     FD_LOCK(fp);
     while (!TAILQ_EMPTY(&fp->f_poll_list)) {
@@ -96,7 +102,8 @@ int poll_scan(struct pollfd _pfd[], nfds_t _nfds)
 
     struct file* fp;
     struct pollfd* entry;
-    int error, i;
+    int error;
+    unsigned i;
     int nr_events = 0;
 
     for (i=0; i<_nfds; ++i) {
@@ -140,7 +147,7 @@ int poll_wake(struct file* fp, int events)
     if (!fp)
         return 0;
 
-    dbg_d("poll_wake(fp=0x%" PRIx64 ", events=%d)", fp, events);
+    trace_poll_wake(fp, events);
 
     fhold(fp);
 
@@ -173,7 +180,8 @@ int poll_wake(struct file* fp, int events)
   */
 void poll_install(struct pollreq* p)
 {
-    int i, error;
+    unsigned i;
+    int error;
     struct poll_link* pl;
     struct file* fp;
     struct pollfd* entry;
@@ -187,7 +195,7 @@ void poll_install(struct pollreq* p)
         assert(error == 0);
 
         /* Allocate a link */
-        pl = malloc(sizeof(struct poll_link));
+        pl = (struct poll_link *) malloc(sizeof(struct poll_link));
         memset(pl, 0, sizeof(struct poll_link));
 
         /* Save a reference to request on current file structure.
@@ -217,7 +225,8 @@ void poll_install(struct pollreq* p)
 
 void poll_uninstall(struct pollreq* p)
 {
-    int i, error;
+    unsigned i;
+    int error;
     struct pollfd* entry_pfd;
     struct poll_link* pl;
     struct file* fp;
@@ -261,11 +270,11 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
         return -1;
     }
 
-    dbg_d("poll()");
+    trace_poll();
 
     p._nfds = _nfds;
     p._timeout = _timeout;
-    p._pfd = malloc(pfd_sz);
+    p._pfd = (struct pollfd *) malloc(pfd_sz);
     memcpy(p._pfd, _pfd, pfd_sz);
     mtx_init(&p._awake_mutex, "poll awake", NULL, MTX_DEF);
     p._awake = false;
