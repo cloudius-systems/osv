@@ -31,9 +31,9 @@ var networking_interface = new Networking();
 
 var System = java.lang.System
 
-// I/O. Note we get "stdin" and "stdout" from RhinoCLI.java.
-var _reader = stdin;
-var _writer = new BufferedWriter( new OutputStreamWriter(stdout));
+// I/O. Note we get "tty" from RhinoCLI.java.
+var _reader = tty.getIn();
+var _writer = new BufferedWriter( new OutputStreamWriter(tty.getOut()));
 
 // Line
 var _line_idx = 0;
@@ -243,7 +243,7 @@ function $(cmd)
     return (invoke(inp));
 }
 
-var _stty = new com.cloudius.util.Stty();
+var _stty = tty.getStty();
 
 function main_loop()
 {

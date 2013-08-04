@@ -2,7 +2,7 @@ package com.cloudius.util;
 
 import com.cloudius.Config;
 
-public class Stty {
+public class Stty implements IStty {
 	static {
 	    Config.loadJNI("stty.so");
 	}
