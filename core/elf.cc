@@ -11,6 +11,7 @@
 #include <boost/algorithm/string.hpp>
 #include <functional>
 #include <cxxabi.h>
+#include <iterator>
 
 namespace {
     typedef boost::format fmt;
@@ -757,7 +758,11 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
         auto ef = new file(*this, f, name);
         ef->set_base(_next_alloc);
         _files[name] = ef;
-        _modules.push_back(ef);
+        // We need to push the object at the end of the list (so that the main
+        // shared object gets searched before the shared libraries it uses),
+        // with one exception: the kernel needs to remain at the end of the
+        // list - We want it to behave like a library, not the main program.
+        _modules.insert(std::prev(_modules.end()), ef);
         ef->load_segments();
         _next_alloc = ef->end();
         add_debugger_obj(ef);
