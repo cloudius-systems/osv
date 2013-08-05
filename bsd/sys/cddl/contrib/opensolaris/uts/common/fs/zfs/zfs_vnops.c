@@ -3731,7 +3731,6 @@ zfs_inactive(vnode_t *vp)
 	}
 	mutex_exit(&zp->z_lock);
 
-#ifdef TODO_WRITE_SUPPORT
 	if (zp->z_atime_dirty && zp->z_unlinked == 0) {
 		dmu_tx_t *tx = dmu_tx_create(zfsvfs->z_os);
 
@@ -3749,7 +3748,6 @@ zfs_inactive(vnode_t *vp)
 			dmu_tx_commit(tx);
 		}
 	}
-#endif
 
 	/*
 	 * This might want to be moved into a separate VOP_RECLAIM eventually.

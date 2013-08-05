@@ -1294,6 +1294,7 @@ zfs_rezget(znode_t *zp)
 
 	return (0);
 }
+#endif
 
 void
 zfs_znode_delete(znode_t *zp, dmu_tx_t *tx)
@@ -1313,7 +1314,6 @@ zfs_znode_delete(znode_t *zp, dmu_tx_t *tx)
 	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj);
 	zfs_znode_free(zp);
 }
-#endif /* NOTYET */
 
 void
 zfs_zinactive(znode_t *zp)
@@ -1328,7 +1328,6 @@ zfs_zinactive(znode_t *zp)
 	 */
 	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
 
-#ifdef TODO_WRITE_SUPPORT
 	mutex_enter(&zp->z_lock);
 
 	/*
@@ -1343,7 +1342,7 @@ zfs_zinactive(znode_t *zp)
 	}
 
 	mutex_exit(&zp->z_lock);
-#endif
+
 	zfs_znode_dmu_fini(zp);
 	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
 	zfs_znode_free(zp);

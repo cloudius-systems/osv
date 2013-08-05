@@ -525,7 +525,6 @@ zfs_unlinked_drain(zfsvfs_t *zfsvfs)
 	zap_cursor_fini(&zc);
 }
 
-#ifdef NOTYET
 /*
  * Delete the entire contents of a directory.  Return a count
  * of the number of entries that could not be deleted. If we encounter
@@ -572,7 +571,7 @@ zfs_purgedir(znode_t *dzp)
 		error = dmu_tx_assign(tx, TXG_WAIT);
 		if (error) {
 			dmu_tx_abort(tx);
-			VN_RELE(ZTOV(xzp));
+			zfs_zinactive(xzp);
 			skipped += 1;
 			continue;
 		}
@@ -585,7 +584,7 @@ zfs_purgedir(znode_t *dzp)
 			skipped += 1;
 		dmu_tx_commit(tx);
 
-		VN_RELE(ZTOV(xzp));
+		zfs_zinactive(xzp);
 	}
 	zap_cursor_fini(&zc);
 	if (error != ENOENT)
@@ -695,9 +694,8 @@ zfs_rmnode(znode_t *zp)
 	dmu_tx_commit(tx);
 out:
 	if (xzp)
-		VN_RELE(ZTOV(xzp));
+		zfs_zinactive(xzp);
 }
-#endif
 
 static uint64_t
 zfs_dirent(znode_t *zp, uint64_t mode)
