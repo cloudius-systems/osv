@@ -133,6 +133,7 @@ tests += tests/tst-wake.so
 tests += tests/tst-epoll.so
 tests += tests/tst-lfring.so
 tests += tests/tst-fsx.so
+tests += tests/tst-resolve.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
