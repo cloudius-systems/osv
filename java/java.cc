@@ -25,6 +25,11 @@ JavaVMOption mkoption(const char* s)
     return opt;
 }
 
+inline bool starts_with(const char *s, const char *prefix)
+{
+    return !strncmp(s, prefix, strlen(prefix));
+}
+
 extern "C"
 int main(int argc, char **argv)
 {
@@ -43,10 +48,11 @@ int main(int argc, char **argv)
     for (int i = 1; i < orig_argc; i++) {
         // We are not supposed to look for verbose options after -jar
         // or class name. From that point on, they are user provided
-        if (!strcmp(argv[i], "-jar") || strncmp(argv[i], "-", strlen("-")))
+        if (!strcmp(argv[i], "-jar") || !starts_with(argv[i], "-"))
             break;
 
-        if (!strncmp(argv[i], "-verbose", strlen("-verbose"))) {
+        // Pass some options directly to the JVM
+        if (starts_with(argv[i], "-verbose") || starts_with(argv[i], "-X")) {
             options.push_back(mkoption(argv[i]));
             argv[i] = NULL; // so we don't pass it to RunJava
             argc--;
