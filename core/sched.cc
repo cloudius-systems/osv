@@ -168,15 +168,44 @@ void cpu::timer_fired()
     // nothing to do, preemption will happen if needed
 }
 
+struct idle_poll_lock_type {
+    explicit idle_poll_lock_type(cpu& c) : _c(c) {}
+    void lock() { _c.idle_poll_start(); }
+    void unlock() { _c.idle_poll_end(); }
+    cpu& _c;
+};
+
+void cpu::idle_poll_start()
+{
+    idle_poll.store(true, std::memory_order_relaxed);
+}
+
+void cpu::idle_poll_end()
+{
+    idle_poll.store(false, std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+}
+
+void cpu::send_wakeup_ipi()
+{
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    if (!idle_poll.load(std::memory_order_relaxed)) {
+        wakeup_ipi.send(this);
+    }
+}
+
 void cpu::do_idle()
 {
     do {
-        // spin for a bit before halting
-        for (unsigned ctr = 0; ctr < 100; ++ctr) {
-            // FIXME: can we pull threads from loaded cpus?
-            handle_incoming_wakeups();
-            if (!runqueue.empty()) {
-                return;
+        idle_poll_lock_type idle_poll_lock{*this};
+        WITH_LOCK(idle_poll_lock) {
+            // spin for a bit before halting
+            for (unsigned ctr = 0; ctr < 100; ++ctr) {
+                // FIXME: can we pull threads from loaded cpus?
+                handle_incoming_wakeups();
+                if (!runqueue.empty()) {
+                    return;
+                }
             }
         }
         std::unique_lock<irq_lock_type> guard(irq_lock);
@@ -289,7 +318,7 @@ void cpu::load_balance()
             min->incoming_wakeups_mask.set(id);
             // FIXME: avoid if the cpu is alive and if the priority does not
             // FIXME: warrant an interruption
-            wakeup_ipi.send(min);
+            min->send_wakeup_ipi();
         }
     }
 }
@@ -493,7 +522,7 @@ void thread::wake()
     // FIXME: avoid if the cpu is alive and if the priority does not
     // FIXME: warrant an interruption
     if (_cpu != current()->tcpu()) {
-        wakeup_ipi.send(_cpu);
+        _cpu->send_wakeup_ipi();
     } else {
         need_reschedule = true;
     }
