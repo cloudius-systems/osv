@@ -340,9 +340,20 @@ vflush(struct mount *mp)
 int
 vn_stat(struct vnode *vp, struct stat *st)
 {
+	struct vattr vattr;
+	struct vattr *vap;
 	mode_t mode;
+	int error;
+
+	vap = &vattr;
 
 	memset(st, 0, sizeof(struct stat));
+
+	memset(vap, 0, sizeof(struct vattr));
+
+	error = VOP_GETATTR(vp, vap);
+	if (error)
+		return error;
 
 	st->st_ino = (ino_t)vp;
 	st->st_size = vp->v_size;
@@ -375,10 +386,14 @@ vn_stat(struct vnode *vp, struct stat *st)
 	st->st_mode = mode;
 	st->st_blksize = BSIZE;
 	st->st_blocks = vp->v_size / S_BLKSIZE;
-	st->st_uid = 0;
-	st->st_gid = 0;
+	st->st_uid = vap->va_uid;
+	st->st_gid = vap->va_gid;
 	if (vp->v_type == VCHR || vp->v_type == VBLK)
-		st->st_rdev = (dev_t)vp->v_data;
+		st->st_rdev = vap->va_rdev;
+
+	st->st_atim = vap->va_atime;
+	st->st_mtim = vap->va_mtime;
+	st->st_ctim = vap->va_ctime;
 
 	return 0;
 }
