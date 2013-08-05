@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     for (int i = 1; i < orig_argc; i++) {
         // We are not supposed to look for verbose options after -jar
         // or class name. From that point on, they are user provided
-        if (!strcmp(argv[i], "-jar") && strncmp(argv[i], "-", strlen("-")))
+        if (!strcmp(argv[i], "-jar") || strncmp(argv[i], "-", strlen("-")))
             break;
 
         if (!strncmp(argv[i], "-verbose", strlen("-verbose"))) {
