@@ -202,8 +202,7 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
     case POSIX_FADV_DONTNEED:
         return 0;
     default:
-        errno = EINVAL;
-        return -1;
+        return EINVAL;
     }
 }
 
