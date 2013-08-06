@@ -658,6 +658,9 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
 	zp->z_blksz = blksz;
 	zp->z_seq = 0x7A4653;
 	zp->z_sync_cnt = 0;
+#ifdef __OSV__
+	zp->z_ref_cnt = 1;
+#endif
 
 	zfs_znode_sa_init(zfsvfs, zp, db, obj_type, hdl);
 
@@ -1160,6 +1163,9 @@ zfs_zget(zfsvfs_t *zfsvfs, uint64_t obj_num, znode_t **zpp)
 		if (zp->z_unlinked) {
 			err = ENOENT;
 		} else {
+#ifdef __OSV__
+			zp->z_ref_cnt++;
+#endif
 			*zpp = zp;
 			err = 0;
 		}
@@ -1321,14 +1327,23 @@ zfs_zinactive(znode_t *zp)
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
 	uint64_t z_id = zp->z_id;
 
-	ASSERT(zp->z_sa_hdl);
-
 	/*
 	 * Don't allow a zfs_zget() while were trying to release this znode
 	 */
 	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
 
 	mutex_enter(&zp->z_lock);
+#ifdef __OSV__
+	if (--zp->z_ref_cnt)
+		goto out;
+
+	if (zp->z_sa_hdl == NULL) {
+		zfs_znode_free(zp);
+		goto out;
+	}
+#else
+	ASSERT(zp->z_sa_hdl);
+#endif
 
 	/*
 	 * If this was the last reference to a file with no links,
@@ -1346,6 +1361,13 @@ zfs_zinactive(znode_t *zp)
 	zfs_znode_dmu_fini(zp);
 	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
 	zfs_znode_free(zp);
+#ifdef __OSV__
+	return;
+out:
+	mutex_exit(&zp->z_lock);
+	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+	return;
+#endif
 }
 
 void
