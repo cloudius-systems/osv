@@ -115,7 +115,7 @@ out_errno:
 	return -1;
 }
 
-extern "C" int open64(const char *pathname, int flags, ...) __attribute__((alias("open")));
+LFS64(open);
 
 int creat(const char *pathname, mode_t mode)
 {
@@ -178,9 +178,7 @@ out_errno:
 	return -1;
 }
 
-extern "C"
-off_t lseek64(int fd, off64_t offset, int whence)
-    __attribute__((alias("lseek")));
+LFS64(lseek);
 
 ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
@@ -208,8 +206,7 @@ out_errno:
 	return -1;
 }
 
-extern "C"
-ssize_t pread64(int, void*, size_t, off_t) __attribute__((weak, alias("pread")));
+LFS64(pread);
 
 ssize_t read(int fd, void *buf, size_t count)
 {
@@ -242,8 +239,7 @@ out_errno:
 	return -1;
 }
 
-extern "C"
-ssize_t pwrite64(int, const void*, size_t, off_t) __attribute__((weak, alias("pwrite")));
+LFS64(pwrite);
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
@@ -386,15 +382,16 @@ out_errno:
 	errno = error;
 	return -1;
 }
-extern "C"
-int __fxstat64(int, int, struct stat64 *) __attribute__((weak, alias("__fxstat")));
+
+LFS64(__fxstat);
 
 extern "C"
 int fstat(int fd, struct stat *st)
 {
 	return __fxstat(1, fd, st);
 }
-int fstat64(int, struct stat64 *) __attribute__((weak, alias("fstat")));
+
+LFS64(fstat);
 
 extern "C"
 int
@@ -650,27 +647,30 @@ out_errno:
 	errno = error;
 	return -1;
 }
-extern "C"
-int __xstat64(int, const char *, struct stat64 *) __attribute__((weak, alias("__xstat")));
+
+LFS64(__xstat);
 
 int stat(const char *pathname, struct stat *st)
 {
 	return __xstat(1, pathname, st);
 }
-int stat64(const char *, struct stat64 *) __attribute__((weak, alias("stat")));
+
+LFS64(stat);
 
 extern "C"
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {
 	return __xstat(ver, pathname, st);
 }
-int __lxstat64(int, const char *, struct stat64 *) __attribute__((weak, alias("__lxstat")));
+
+LFS64(__lxstat);
 
 int lstat(const char *pathname, struct stat *st)
 {
 	return __lxstat(1, pathname, st);
 }
-int lstat64(const char *, struct stat64 *) __attribute__((weak, alias("lstat")));
+
+LFS64(lstat);
 
 extern "C"
 int __statfs(const char *pathname, struct statfs *buf)
@@ -692,7 +692,8 @@ out_errno:
 	return -1;
 }
 weak_alias(__statfs, statfs);
-int statfs64(const char *, struct statfs64 *) __attribute__((weak, alias("statfs")));
+
+LFS64(statfs);
 
 extern "C"
 int __fstatfs(int fd, struct statfs *buf)
@@ -716,7 +717,8 @@ out_errno:
 	return -1;
 }
 weak_alias(__fstatfs, fstatfs);
-int fstatfs64(int, struct statfs64 *) __attribute__((weak, alias("fstatfs")));
+
+LFS64(fstatfs);
 
 static int
 statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
