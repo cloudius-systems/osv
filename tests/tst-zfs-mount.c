@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 	char path[PATH_MAX];
 	struct dirent *d;
 	struct stat s;
-	uint64_t foo = (uint64_t)-1;
+	char foo[PATH_MAX] = { 0,};
 	int fd;
 
 	if (statfs("/usr", &st) < 0)
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	fd = creat("/usr/foo", 0666);
+	fd = open("/usr/foo", O_CREAT|O_TRUNC|O_WRONLY|O_SYNC, 0666);
 	if (fd < 0) {
 		perror("creat");
 		return EXIT_FAILURE;
@@ -88,6 +88,11 @@ int main(int argc, char **argv)
 
 	if (write(fd, &foo, sizeof(foo)) != sizeof(foo)) {
 		perror("write");
+		return EXIT_FAILURE;
+	}
+
+	if (fsync(fd) < 0) {
+		perror("fsync");
 		return EXIT_FAILURE;
 	}
 	
