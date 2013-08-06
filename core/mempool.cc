@@ -716,7 +716,7 @@ static inline void* std_malloc(size_t size)
 void* calloc(size_t nmemb, size_t size)
 {
     if (nmemb > std::numeric_limits<size_t>::max() / size)
-        return NULL;
+        return nullptr;
     auto n = nmemb * size;
     auto p = malloc(n);
     memset(p, 0, n);
@@ -738,7 +738,7 @@ static inline void* std_realloc(void* object, size_t size)
         return malloc(size);
     if (!size) {
         free(object);
-        return NULL;
+        return nullptr;
     }
 
     size_t old_size = object_size(object);
