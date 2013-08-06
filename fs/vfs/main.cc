@@ -1071,6 +1071,8 @@ out_errno:
 	return -1;
 }
 
+LFS64(ftruncate);
+
 ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
 {
 	struct task *t = main_task;
