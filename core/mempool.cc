@@ -719,6 +719,8 @@ void* calloc(size_t nmemb, size_t size)
         return nullptr;
     auto n = nmemb * size;
     auto p = malloc(n);
+    if (!p)
+        return nullptr;
     memset(p, 0, n);
     return p;
 }
