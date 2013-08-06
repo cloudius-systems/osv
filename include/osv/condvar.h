@@ -13,6 +13,14 @@
 
 #endif
 
+// The "wait morphing" feature requires mutex->send_lock() to be available
+// and that the condvar structure can be enlarged with another field.
+// Currently neither will work in the old spin-based mutex implementation.
+#ifdef LOCKFREE_MUTEX
+#define WAIT_MORPHING 1
+#endif
+
+
 // Note: To be useful for implementing pthread's condition variables, the
 // condvar_t structure doesn't need any special initialization beyond zero
 // initialization (note PTHREAD_COND_INITIALIZER is all zeros). For this
@@ -35,11 +43,13 @@ typedef struct condvar {
         struct wait_record *oldest;
         struct wait_record *newest;
     } waiters_fifo;
+#if WAIT_MORPHING
     // Remember mutex last used in a wait(), for use in "wait morphing"
     // feature. We disallow (as Posix Threads do) using different mutexes in
     // concurrent wait()s on the same condvar. We could lift this requirement,
     // but then we would need to remember the user_mutex on each wait_record.
     mutex_t *user_mutex;
+#endif
 
 #ifdef __cplusplus
     // In C++, for convenience also provide methods.
