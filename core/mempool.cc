@@ -380,23 +380,23 @@ static void* malloc_large(size_t size)
     size = (size + page_size - 1) & ~(page_size - 1);
     size += page_size;
 
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-
-    for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-        auto header = &*i;
-        page_range* ret_header;
-        if (header->size >= size) {
-            if (header->size == size) {
-                free_page_ranges.erase(i);
-                ret_header = header;
-            } else {
-                void *v = header;
-                header->size -= size;
-                ret_header = new (v + header->size) page_range(size);
+    WITH_LOCK(free_page_ranges_lock) {
+        for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
+            auto header = &*i;
+            page_range* ret_header;
+            if (header->size >= size) {
+                if (header->size == size) {
+                    free_page_ranges.erase(i);
+                    ret_header = header;
+                } else {
+                    void *v = header;
+                    header->size -= size;
+                    ret_header = new (v + header->size) page_range(size);
+                }
+                void* obj = ret_header;
+                obj += page_size;
+                return obj;
             }
-            void* obj = ret_header;
-            obj += page_size;
-            return obj;
         }
     }
     debug(fmt("malloc_large(): out of memory: can't find %d bytes. aborting.\n")
@@ -435,8 +435,9 @@ static void free_page_range_locked(page_range *range)
 // page range is range->size, but its start is at range itself.
 static void free_page_range(page_range *range)
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-    free_page_range_locked(range);
+    WITH_LOCK(free_page_ranges_lock) {
+        free_page_range_locked(range);
+    }
 }
 
 static void free_page_range(void *addr, size_t size)
@@ -467,84 +468,88 @@ PERCPU(page_buffer, percpu_page_buffer);
 
 static void refill_page_buffer()
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-    std::lock_guard<preempt_lock_t> no_preempt(preempt_lock);
+    WITH_LOCK(free_page_ranges_lock) {
+        WITH_LOCK(preempt_lock) {
+            if(free_page_ranges.empty()) {
+                debug("alloc_page(): out of memory\n");
+                abort();
+            }
 
-    if(free_page_ranges.empty()) {
-        debug("alloc_page(): out of memory\n");
-        abort();
-    }
+            auto& pbuf = *percpu_page_buffer;
+            auto limit = (pbuf.max + 1) / 2;
 
-    auto& pbuf = *percpu_page_buffer;
-    auto limit = (pbuf.max + 1) / 2;
-
-    while (pbuf.nr < limit) {
-        auto p = &*free_page_ranges.begin();
-        auto size = std::min(p->size, (limit - pbuf.nr) * page_size);
-        p->size -= size;
-        void* pages = static_cast<void*>(p) + p->size;
-        if (!p->size) {
-            free_page_ranges.erase(*p);
-        }
-        while (size) {
-            pbuf.free[pbuf.nr++] = pages;
-            pages += page_size;
-            size -= page_size;
+            while (pbuf.nr < limit) {
+                auto p = &*free_page_ranges.begin();
+                auto size = std::min(p->size, (limit - pbuf.nr) * page_size);
+                p->size -= size;
+                void* pages = static_cast<void*>(p) + p->size;
+                if (!p->size) {
+                    free_page_ranges.erase(*p);
+                }
+                while (size) {
+                    pbuf.free[pbuf.nr++] = pages;
+                    pages += page_size;
+                    size -= page_size;
+                }
+            }
         }
     }
 }
 
 static void unfill_page_buffer()
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-    std::lock_guard<preempt_lock_t> no_preempt(preempt_lock);
+    WITH_LOCK(free_page_ranges_lock) {
+        WITH_LOCK(preempt_lock) {
+            auto& pbuf = *percpu_page_buffer;
 
-    auto& pbuf = *percpu_page_buffer;
-
-    while (pbuf.nr > pbuf.max / 2) {
-        auto v = pbuf.free[--pbuf.nr];
-        auto pr = new (v) page_range(page_size);
-        free_page_range_locked(pr);
+            while (pbuf.nr > pbuf.max / 2) {
+                auto v = pbuf.free[--pbuf.nr];
+                auto pr = new (v) page_range(page_size);
+                free_page_range_locked(pr);
+            }
+        }
     }
 }
 
 static void* alloc_page_local()
 {
-    std::lock_guard<preempt_lock_t> g(preempt_lock);
-    auto& pbuf = *percpu_page_buffer;
-    if (!pbuf.nr) {
-        return nullptr;
+    WITH_LOCK(preempt_lock) {
+        auto& pbuf = *percpu_page_buffer;
+        if (!pbuf.nr) {
+            return nullptr;
+        }
+        return pbuf.free[--pbuf.nr];
     }
-    return pbuf.free[--pbuf.nr];
 }
 
 static bool free_page_local(void* v)
 {
-    std::lock_guard<preempt_lock_t> g(preempt_lock);
-    auto& pbuf = *percpu_page_buffer;
-    if (pbuf.nr == pbuf.max) {
-        return false;
+    WITH_LOCK(preempt_lock) {
+        auto& pbuf = *percpu_page_buffer;
+        if (pbuf.nr == pbuf.max) {
+            return false;
+        }
+        pbuf.free[pbuf.nr++] = v;
+        return true;
     }
-    pbuf.free[pbuf.nr++] = v;
-    return true;
 }
 
 static void* early_alloc_page()
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
+    WITH_LOCK(free_page_ranges_lock) {
+        if (free_page_ranges.empty()) {
+            debug("alloc_page(): out of memory\n");
+            abort();
+        }
 
-    if (free_page_ranges.empty()) {
-        debug("alloc_page(): out of memory\n");
-        abort();
+        auto p = &*free_page_ranges.begin();
+        p->size -= page_size;
+        void* page = static_cast<void*>(p) + p->size;
+        if (!p->size) {
+            free_page_ranges.erase(*p);
+        }
+        return page;
     }
-
-    auto p = &*free_page_ranges.begin();
-    p->size -= page_size;
-    void* page = static_cast<void*>(p) + p->size;
-    if (!p->size) {
-        free_page_ranges.erase(*p);
-    }
-    return page;
 }
 
 static void early_free_page(void* v)
@@ -598,42 +603,42 @@ void free_page(void* v)
  */
 void* alloc_huge_page(size_t N)
 {
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-
-    for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-        page_range *range = &*i;
-        if (range->size < N)
-            continue;
-        intptr_t v = (intptr_t) range;
-        // Find the the beginning of the last aligned area in the given
-        // page range. This will be our return value:
-        intptr_t ret = (v+range->size-N) & ~(N-1);
-        if (ret<v)
-            continue;
-        // endsize is the number of bytes in the page range *after* the
-        // N bytes we will return. calculate it before changing header->size
-        int endsize = v+range->size-ret-N;
-        // Make the original page range smaller, pointing to the part before
-        // our ret (if there's nothing before, remove this page range)
-        if (ret==v)
-            free_page_ranges.erase(*range);
-        else
-            range->size = ret-v;
-        // Create a new page range for the endsize part (if there is one)
-        if (endsize > 0) {
-            void *e = (void *)(ret+N);
-            free_page_range(e, endsize);
+    WITH_LOCK(free_page_ranges_lock) {
+        for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
+            page_range *range = &*i;
+            if (range->size < N)
+                continue;
+            intptr_t v = (intptr_t) range;
+            // Find the the beginning of the last aligned area in the given
+            // page range. This will be our return value:
+            intptr_t ret = (v+range->size-N) & ~(N-1);
+            if (ret<v)
+                continue;
+            // endsize is the number of bytes in the page range *after* the
+            // N bytes we will return. calculate it before changing header->size
+            int endsize = v+range->size-ret-N;
+            // Make the original page range smaller, pointing to the part before
+            // our ret (if there's nothing before, remove this page range)
+            if (ret==v)
+                free_page_ranges.erase(*range);
+            else
+                range->size = ret-v;
+            // Create a new page range for the endsize part (if there is one)
+            if (endsize > 0) {
+                void *e = (void *)(ret+N);
+                free_page_range(e, endsize);
+            }
+            // Return the middle 2MB part
+            return (void*) ret;
+            // TODO: consider using tracker.remember() for each one of the small
+            // pages allocated. However, this would be inefficient, and since we
+            // only use alloc_huge_page in one place, maybe not worth it.
         }
-        // Return the middle 2MB part
-        return (void*) ret;
-        // TODO: consider using tracker.remember() for each one of the small
-        // pages allocated. However, this would be inefficient, and since we
-        // only use alloc_huge_page in one place, maybe not worth it.
+        // TODO: instead of aborting, tell the caller of this failure and have
+        // it fall back to small pages instead.
+        debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.\n") % N);
+        abort();
     }
-    // TODO: instead of aborting, tell the caller of this failure and have
-    // it fall back to small pages instead.
-    debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.\n") % N);
-    abort();
 }
 
 void free_huge_page(void* v, size_t N)
@@ -673,12 +678,14 @@ void  __attribute__((constructor(MEMPOOL_INIT_PRIO))) setup()
 void debug_memory_pool(size_t *total, size_t *contig)
 {
     *total = *contig = 0;
-    std::lock_guard<mutex> guard(free_page_ranges_lock);
-    for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-        auto header = &*i;
-        *total += header->size;
-        if (header->size > *contig) {
-            *contig = header->size;
+
+    WITH_LOCK(free_page_ranges_lock) {
+        for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
+            auto header = &*i;
+            *total += header->size;
+            if (header->size > *contig) {
+                *contig = header->size;
+            }
         }
     }
 }
