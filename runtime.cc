@@ -191,6 +191,22 @@ int munlockall(void)
     return 0;
 }
 
+int posix_fadvise(int fd, off_t offset, off_t len, int advice)
+{
+    switch (advice) {
+    case POSIX_FADV_NORMAL:
+    case POSIX_FADV_SEQUENTIAL:
+    case POSIX_FADV_RANDOM:
+    case POSIX_FADV_NOREUSE:
+    case POSIX_FADV_WILLNEED:
+    case POSIX_FADV_DONTNEED:
+        return 0;
+    default:
+        errno = EINVAL;
+        return -1;
+    }
+}
+
 int getpid()
 {
     return 0;
