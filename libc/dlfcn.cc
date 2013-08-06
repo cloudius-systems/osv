@@ -3,6 +3,29 @@
 #include <link.h>
 #include <osv/debug.h>
 
+static __thread char dlerror_msg[128];
+static __thread char *dlerror_ptr;
+
+static char *dlerror_set(char *val)
+{
+    char *old = dlerror_ptr;
+
+    dlerror_ptr = val;
+
+    return old;
+}
+
+static void dlerror_fmt(const char *fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(dlerror_msg, sizeof(dlerror_msg), fmt, args);
+    va_end(args);
+
+    dlerror_set(dlerror_msg);
+}
+
 void* dlopen(const char* filename, int flags)
 {
     if (!filename) {
@@ -39,6 +62,7 @@ void* dlsym(void* handle, const char* name)
         sym = { obj->lookup_symbol(name), obj };
     }
     if (!sym.obj || !sym.symbol) {
+        dlerror_fmt("dlsym: symbol %s not found", name);
         return nullptr;
     }
     return sym.relocated_addr();
@@ -83,4 +107,9 @@ extern "C" int dladdr(void *addr, Dl_info *info)
     info->dli_sname = ei.sym;
     info->dli_saddr = ei.addr;
     return 0;
+}
+
+extern "C" char *dlerror(void)
+{
+    return dlerror_set(nullptr);
 }
