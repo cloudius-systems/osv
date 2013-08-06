@@ -470,7 +470,7 @@ static void refill_page_buffer()
 {
     WITH_LOCK(free_page_ranges_lock) {
         WITH_LOCK(preempt_lock) {
-            if(free_page_ranges.empty()) {
+            if (free_page_ranges.empty()) {
                 debug("alloc_page(): out of memory\n");
                 abort();
             }
