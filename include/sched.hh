@@ -313,6 +313,8 @@ struct cpu : private timer_base::client {
     timer_list timers;
     timer_base preemption_timer;
     thread* idle_thread;
+    // if true, cpu is now polling incoming_wakeups_mask
+    std::atomic<bool> idle_poll = { false };
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     cpu_set incoming_wakeups_mask;
@@ -324,8 +326,12 @@ struct cpu : private timer_base::client {
     void init_on_cpu();
     void schedule(bool yield = false);
     void handle_incoming_wakeups();
+    bool poll_wakeup_queue();
     void idle();
     void do_idle();
+    void idle_poll_start();
+    void idle_poll_end();
+    void send_wakeup_ipi();
     void load_balance();
     unsigned load();
     void reschedule_from_interrupt(bool preempt = false);
