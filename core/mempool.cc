@@ -851,8 +851,18 @@ void free(void* v)
 
 void* realloc(void* v, size_t size)
 {
+    if (!v)
+        return malloc(size);
+    if (!size) {
+        free(v);
+        return nullptr;
+    }
     auto h = static_cast<header*>(v - pad_before);
+    if (h->size >= size)
+        return v;
     void* n = malloc(size);
+    if (!n)
+        return nullptr;
     memcpy(n, v, h->size);
     free(v);
     return n;
