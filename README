@@ -2,7 +2,7 @@
 To build OSv
 ============
 
-0) Install perquisite packages:
+0) Install prerequisite packages:
 
    On Fedora:
      yum install ant autoconf automake boost-static gcc-c++ genromfs \
