@@ -31,18 +31,17 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
         if (gfdt[fd])
             continue;
 
-        mutex_lock(&gfdt_lock);
-        /* Now that we hold the lock,
-         * make sure the entry is still available */
-        if (gfdt[fd]) {
-            mutex_unlock(&gfdt_lock);
-            continue;
-        }
+        WITH_LOCK(gfdt_lock) {
+            /* Now that we hold the lock,
+             * make sure the entry is still available */
+            if (gfdt[fd]) {
+                continue;
+            }
 
-        /* Install */
-        gfdt[fd] = fp;
-        *newfd = fd;
-        mutex_unlock(&gfdt_lock);
+            /* Install */
+            gfdt[fd] = fp;
+            *newfd = fd;
+        }
 
         return 0;
     }
@@ -65,16 +64,15 @@ int fdclose(int fd)
 {
     struct file* fp;
 
-    mutex_lock(&gfdt_lock);
+    WITH_LOCK(gfdt_lock) {
 
-    fp = gfdt[fd];
-    if (fp == NULL) {
-        mutex_unlock(&gfdt_lock);
-        return EBADF;
+        fp = gfdt[fd];
+        if (fp == NULL) {
+            return EBADF;
+        }
+
+        gfdt[fd] = NULL;
     }
-
-    gfdt[fd] = NULL;
-    mutex_unlock(&gfdt_lock);
 
     fdrop(fp);
 
@@ -94,11 +92,11 @@ int fdset(int fd, struct file *fp)
 
     fhold(fp);
 
-    mutex_lock(&gfdt_lock);
-    orig = gfdt[fd];
-    /* Install new file structure in place */
-    gfdt[fd] = fp;
-    mutex_unlock(&gfdt_lock);
+    WITH_LOCK(gfdt_lock) {
+        orig = gfdt[fd];
+        /* Install new file structure in place */
+        gfdt[fd] = fp;
+    }
 
     if (orig)
         fdrop(orig);
@@ -117,16 +115,14 @@ int fget(int fd, struct file **out_fp)
     if (fd < 0 || fd >= FDMAX)
         return EBADF;
 
-    mutex_lock(&gfdt_lock);
+    WITH_LOCK(gfdt_lock) {
+        fp = gfdt[fd];
+        if (fp == NULL) {
+            return EBADF;
+        }
 
-    fp = gfdt[fd];
-    if (fp == NULL) {
-        mutex_unlock(&gfdt_lock);
-        return EBADF;
+        fhold(fp);
     }
-
-    fhold(fp);
-    mutex_unlock(&gfdt_lock);
 
     *out_fp = fp;
     return 0;
