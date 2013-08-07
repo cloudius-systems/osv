@@ -284,13 +284,10 @@ sys_fsync(struct file *fp)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_fsync: fp=%x\n", fp));
 
-	if ((fp->f_flags & FWRITE) == 0)
-		return EBADF;
-
 	vp = fp->f_vnode;
-	if (!vp) {
-	    return EINVAL;
-	}
+	if (!vp)
+		return EINVAL;
+
 	vn_lock(vp);
 	error = VOP_FSYNC(vp, fp);
 	vn_unlock(vp);
