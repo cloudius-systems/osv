@@ -125,6 +125,7 @@ struct device {
 	int		active;		/* device has not been destroyed */
 	int		refcnt;		/* reference count */
 	off_t		size;		/* device size */
+	size_t		max_io_size;
 	void		*private_data;	/* private storage */
 
 	void *softc;

@@ -110,6 +110,7 @@ void device_register(struct device *dev, const char *name, int flags)
 	dev->refcnt = 1;
 	dev->private_data = private;
 	dev->next = device_list;
+	dev->max_io_size = UINT_MAX;
 	device_list = dev;
 
 	sched_unlock();
