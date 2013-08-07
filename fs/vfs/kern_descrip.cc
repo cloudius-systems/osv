@@ -6,14 +6,17 @@
 #include <osv/poll.h>
 #include <osv/debug.h>
 #include <osv/mutex.h>
+#include <osv/rcu.hh>
 
 #include <bsd/sys/sys/queue.h>
+
+using namespace osv;
 
 /*
  * Global file descriptors table - in OSv we have a single process so file
  * descriptors are maintained globally.
  */
-struct file *gfdt[FDMAX] = {};
+rcu_ptr<file> gfdt[FDMAX] = {};
 mutex_t gfdt_lock = MUTEX_INITIALIZER;
 
 /*
@@ -34,12 +37,12 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
         WITH_LOCK(gfdt_lock) {
             /* Now that we hold the lock,
              * make sure the entry is still available */
-            if (gfdt[fd]) {
+            if (gfdt[fd].read_by_owner()) {
                 continue;
             }
 
             /* Install */
-            gfdt[fd] = fp;
+            gfdt[fd].assign(fp);
             *newfd = fd;
         }
 
@@ -66,15 +69,15 @@ int fdclose(int fd)
 
     WITH_LOCK(gfdt_lock) {
 
-        fp = gfdt[fd];
+        fp = gfdt[fd].read_by_owner();
         if (fp == NULL) {
             return EBADF;
         }
 
-        gfdt[fd] = NULL;
+        gfdt[fd].assign(nullptr);
     }
 
-    fdrop(fp);
+    rcu_defer(fdrop, fp);
 
     return 0;
 }
@@ -93,13 +96,13 @@ int fdset(int fd, struct file *fp)
     fhold(fp);
 
     WITH_LOCK(gfdt_lock) {
-        orig = gfdt[fd];
+        orig = gfdt[fd].read_by_owner();
         /* Install new file structure in place */
-        gfdt[fd] = fp;
+        gfdt[fd].assign(fp);
     }
 
     if (orig)
-        fdrop(orig);
+        rcu_defer(fdrop, orig);
 
     return 0;
 }
@@ -115,8 +118,8 @@ int fget(int fd, struct file **out_fp)
     if (fd < 0 || fd >= FDMAX)
         return EBADF;
 
-    WITH_LOCK(gfdt_lock) {
-        fp = gfdt[fd];
+    WITH_LOCK(rcu_read_lock) {
+        fp = gfdt[fd].read();
         if (fp == NULL) {
             return EBADF;
         }
