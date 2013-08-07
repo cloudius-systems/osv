@@ -139,7 +139,7 @@ int falloc_noinstall(struct file **resultfp)
 {
 	struct file *fp;
 
-	fp = malloc(sizeof(*fp));
+	fp = new file;
 	if (!fp)
 		return ENOMEM;
 	memset(fp, 0, sizeof(*fp));
