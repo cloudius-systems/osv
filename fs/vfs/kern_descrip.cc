@@ -23,32 +23,32 @@ mutex_t gfdt_lock = MUTEX_INITIALIZER;
  */
 int _fdalloc(struct file *fp, int *newfd, int min_fd)
 {
-	int fd;
+    int fd;
 
-	fhold(fp);
+    fhold(fp);
 
-	for (fd = min_fd; fd < FDMAX; fd++) {
-		if (gfdt[fd])
-			continue;
+    for (fd = min_fd; fd < FDMAX; fd++) {
+        if (gfdt[fd])
+            continue;
 
-		mutex_lock(&gfdt_lock);
-		/* Now that we hold the lock,
-		 * make sure the entry is still available */
-		if (gfdt[fd]) {
-			mutex_unlock(&gfdt_lock);
-			continue;
-		}
+        mutex_lock(&gfdt_lock);
+        /* Now that we hold the lock,
+         * make sure the entry is still available */
+        if (gfdt[fd]) {
+            mutex_unlock(&gfdt_lock);
+            continue;
+        }
 
-		/* Install */
-		gfdt[fd] = fp;
-		*newfd = fd;
-		mutex_unlock(&gfdt_lock);
+        /* Install */
+        gfdt[fd] = fp;
+        *newfd = fd;
+        mutex_unlock(&gfdt_lock);
 
-		return 0;
-	}
+        return 0;
+    }
 
-	fdrop(fp);
-	return EMFILE;
+    fdrop(fp);
+    return EMFILE;
 }
 
 /*
@@ -58,27 +58,27 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
  */
 int fdalloc(struct file *fp, int *newfd)
 {
-	return (_fdalloc(fp, newfd, 0));
+    return (_fdalloc(fp, newfd, 0));
 }
 
 int fdclose(int fd)
 {
-	struct file* fp;
+    struct file* fp;
 
-	mutex_lock(&gfdt_lock);
+    mutex_lock(&gfdt_lock);
 
-	fp = gfdt[fd];
-	if (fp == NULL) {
-		mutex_unlock(&gfdt_lock);
-		return EBADF;
-	}
+    fp = gfdt[fd];
+    if (fp == NULL) {
+        mutex_unlock(&gfdt_lock);
+        return EBADF;
+    }
 
-	gfdt[fd] = NULL;
-	mutex_unlock(&gfdt_lock);
+    gfdt[fd] = NULL;
+    mutex_unlock(&gfdt_lock);
 
-	fdrop(fp);
+    fdrop(fp);
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -87,23 +87,23 @@ int fdclose(int fd)
  */
 int fdset(int fd, struct file *fp)
 {
-	struct file *orig;
+    struct file *orig;
 
-	if (fd < 0 || fd >= FDMAX)
-	        return EBADF;
+    if (fd < 0 || fd >= FDMAX)
+        return EBADF;
 
-	fhold(fp);
+    fhold(fp);
 
-	mutex_lock(&gfdt_lock);
-	orig = gfdt[fd];
-	/* Install new file structure in place */
-	gfdt[fd] = fp;
-	mutex_unlock(&gfdt_lock);
+    mutex_lock(&gfdt_lock);
+    orig = gfdt[fd];
+    /* Install new file structure in place */
+    gfdt[fd] = fp;
+    mutex_unlock(&gfdt_lock);
 
-	if (orig)
-		fdrop(orig);
+    if (orig)
+        fdrop(orig);
 
-	return 0;
+    return 0;
 }
 
 /*
@@ -112,24 +112,24 @@ int fdset(int fd, struct file *fp)
  */
 int fget(int fd, struct file **out_fp)
 {
-	struct file *fp;
+    struct file *fp;
 
-	if (fd < 0 || fd >= FDMAX)
-	        return EBADF;
+    if (fd < 0 || fd >= FDMAX)
+        return EBADF;
 
-	mutex_lock(&gfdt_lock);
+    mutex_lock(&gfdt_lock);
 
-	fp = gfdt[fd];
-	if (fp == NULL) {
-		mutex_unlock(&gfdt_lock);
-		return EBADF;
-	}
+    fp = gfdt[fd];
+    if (fp == NULL) {
+        mutex_unlock(&gfdt_lock);
+        return EBADF;
+    }
 
-	fhold(fp);
-	mutex_unlock(&gfdt_lock);
+    fhold(fp);
+    mutex_unlock(&gfdt_lock);
 
-	*out_fp = fp;
-	return 0;
+    *out_fp = fp;
+    return 0;
 }
 
 /*
@@ -137,20 +137,20 @@ int fget(int fd, struct file **out_fp)
  */
 int falloc_noinstall(struct file **resultfp)
 {
-	struct file *fp;
+    struct file *fp;
 
-	fp = new file;
-	if (!fp)
-		return ENOMEM;
-	memset(fp, 0, sizeof(*fp));
+    fp = new file;
+    if (!fp)
+        return ENOMEM;
+    memset(fp, 0, sizeof(*fp));
 
-	fp->f_ops = &badfileops;
-	fp->f_count = 1;
-	TAILQ_INIT(&fp->f_poll_list);
-	mutex_init(&fp->f_lock);
+    fp->f_ops = &badfileops;
+    fp->f_count = 1;
+    TAILQ_INIT(&fp->f_poll_list);
+    mutex_init(&fp->f_lock);
 
-	*resultfp = fp;
-	return 0;
+    *resultfp = fp;
+    return 0;
 }
 
 /*
@@ -159,116 +159,116 @@ int falloc_noinstall(struct file **resultfp)
  */
 int falloc(struct file **resultfp, int *resultfd)
 {
-	struct file *fp;
-	int error;
-	int fd;
+    struct file *fp;
+    int error;
+    int fd;
 
-	error = falloc_noinstall(&fp);
-	if (error)
-		return error;
-	
-	error = fdalloc(fp, &fd);
-	if (error) {
-		fdrop(fp);
-		return error;
-	}
+    error = falloc_noinstall(&fp);
+    if (error)
+        return error;
 
-	/* Result */
-	*resultfp = fp;
-	*resultfd = fd;
-	return 0;
+    error = fdalloc(fp, &fd);
+    if (error) {
+        fdrop(fp);
+        return error;
+    }
+
+    /* Result */
+    *resultfp = fp;
+    *resultfd = fd;
+    return 0;
 }
 
 void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
-		struct fileops *ops)
+        struct fileops *ops)
 {
-	fp->f_flags = flags;
-	fp->f_type = type;
-	fp->f_data = opaque;
-	fp->f_ops = ops;
+    fp->f_flags = flags;
+    fp->f_type = type;
+    fp->f_data = opaque;
+    fp->f_ops = ops;
 
-	fo_init(fp);
+    fo_init(fp);
 }
 
 void fhold(struct file* fp)
 {
-	__sync_fetch_and_add(&fp->f_count, 1);
+    __sync_fetch_and_add(&fp->f_count, 1);
 }
 
 int fdrop(struct file *fp)
 {
-	if (__sync_fetch_and_sub(&fp->f_count, 1) > 1)
-		return 0;
+    if (__sync_fetch_and_sub(&fp->f_count, 1) > 1)
+        return 0;
 
-	/* We are about to free this file structure, but we still do things with it
-	 * so we increase the refcount by one, fdrop may get called again
-	 * and we don't want to reach this point more than once.
-	 */
+    /* We are about to free this file structure, but we still do things with it
+     * so we increase the refcount by one, fdrop may get called again
+     * and we don't want to reach this point more than once.
+     */
 
-	fhold(fp);
-	fo_close(fp);
-	poll_drain(fp);
-	mutex_destroy(&fp->f_lock);
-	free(fp);
-	return 1;
+    fhold(fp);
+    fo_close(fp);
+    poll_drain(fp);
+    mutex_destroy(&fp->f_lock);
+    free(fp);
+    return 1;
 }
 
 static int
 badfo_init(struct file *fp)
 {
-	return EBADF;
+    return EBADF;
 }
 
 static int
 badfo_readwrite(struct file *fp, struct uio *uio, int flags)
 {
-	return EBADF;
+    return EBADF;
 }
 
 static int
 badfo_truncate(struct file *fp, off_t length)
 {
-	return EINVAL;
+    return EINVAL;
 }
 
 static int
 badfo_ioctl(struct file *fp, u_long com, void *data)
 {
-	return EBADF;
+    return EBADF;
 }
 
 static int
 badfo_poll(struct file *fp, int events)
 {
-	return 0;
+    return 0;
 }
 
 static int
 badfo_stat(struct file *fp, struct stat *sb)
 {
-	return EBADF;
+    return EBADF;
 }
 
 static int
 badfo_close(struct file *fp)
 {
-	return EBADF;
+    return EBADF;
 }
 
 static int
 badfo_chmod(struct file *fp, mode_t mode)
 {
-	return EBADF;
+    return EBADF;
 }
 
 struct fileops badfileops = {
-	.fo_init	= badfo_init,
-	.fo_read	= badfo_readwrite,
-	.fo_write	= badfo_readwrite,
-	.fo_truncate	= badfo_truncate,
-	.fo_ioctl	= badfo_ioctl,
-	.fo_poll	= badfo_poll,
-	.fo_stat	= badfo_stat,
-	.fo_close	= badfo_close,
-	.fo_chmod	= badfo_chmod,
+    .fo_init	 = badfo_init,
+    .fo_read	 = badfo_readwrite,
+    .fo_write	 = badfo_readwrite,
+    .fo_truncate = badfo_truncate,
+    .fo_ioctl	 = badfo_ioctl,
+    .fo_poll	 = badfo_poll,
+    .fo_stat	 = badfo_stat,
+    .fo_close	 = badfo_close,
+    .fo_chmod	 = badfo_chmod,
 };
