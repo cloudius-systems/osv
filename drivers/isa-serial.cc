@@ -1,8 +1,8 @@
 #include "isa-serial.hh"
 #include <string.h>
 
-IsaSerialConsole::IsaSerialConsole(sched::thread* poll_thread)
-    : _irq(4, [=] { poll_thread->wake(); })
+IsaSerialConsole::IsaSerialConsole(sched::thread* poll_thread, const termios *tio)
+    : _irq(4, [=] { poll_thread->wake(); }), _tio(tio)
 {
 	reset();
 }
@@ -10,7 +10,9 @@ IsaSerialConsole::IsaSerialConsole(sched::thread* poll_thread)
 void IsaSerialConsole::write(const char *str, size_t len)
 {
     while (len > 0) {
-    	writeByte(*str++);
+        if ((*str == '\n') && (_tio->c_oflag & OPOST) && (_tio->c_oflag & ONLCR))
+            writeByte('\r');
+        writeByte(*str++);
         len--;
     }
 }

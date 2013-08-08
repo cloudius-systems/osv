@@ -39,7 +39,7 @@ std::list<sched::thread*> readers;
 
 termios tio = {
     .c_iflag = ICRNL,
-    .c_oflag = 0,
+    .c_oflag = OPOST | ONLCR,
     .c_cflag = 0,
     .c_lflag = ECHO | ECHOCTL | ICANON | ECHOE,
     .c_line = 0,
@@ -209,6 +209,9 @@ console_ioctl(u_long request, void *arg)
         *static_cast<termios*>(arg) = tio;
         return 0;
     case TCSETS:
+        // FIXME: We may need to lock this, since the writers are
+        // still consulting the data. But for now, it is not terribly
+        // important
         tio = *static_cast<termios*>(arg);
         return 0;
     case FIONREAD:
@@ -257,7 +260,7 @@ struct driver console_driver = {
 void console_init(void)
 {
     auto console_poll_thread = new sched::thread(console_poll);
-    Console* serial_console = new IsaSerialConsole(console_poll_thread);
+    Console* serial_console = new IsaSerialConsole(console_poll_thread, &tio);
     console_poll_thread->start();
     console::console.set_impl(serial_console);
     device_create(&console_driver, "console", D_CHR);

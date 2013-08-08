@@ -6,10 +6,11 @@
 #include "drivers/pci.hh"
 #include "sched.hh"
 #include "interrupt.hh"
+#include <termios.h>
 
 class IsaSerialConsole : public Console {
 public:
-	explicit IsaSerialConsole(sched::thread* consumer);
+    explicit IsaSerialConsole(sched::thread* consumer, const termios *tio);
     virtual void write(const char *str, size_t len);
     virtual bool input_ready() override;
     virtual char readch();
@@ -17,6 +18,8 @@ private:
     gsi_edge_interrupt _irq;
     static const u16 ioport = 0x3f8;
     u8 lcr;
+    const termios *_tio;
+
     enum IsaSerialValues {
         // UART registers, offsets to ioport:
         IER_ADDRESS = 1,    // Interrupt Enable Register

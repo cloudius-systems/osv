@@ -11,6 +11,8 @@
 static void simple_write(const char *str, size_t len)
 {
     while (len > 0) {
+        if ((*str == '\n'))
+            processor::outb('\r', 0x3f8);
         processor::outb(*str++, 0x3f8);
         len--;
     }
