@@ -703,6 +703,7 @@ void program::set_object(std::string name, object* obj)
     _files[name] = obj;
     if (std::find(_modules.begin(), _modules.end(), obj) == _modules.end()) {
         _modules.push_back(obj);
+        _modules_adds++;
     }
 }
 
@@ -763,6 +764,7 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
         // with one exception: the kernel needs to remain at the end of the
         // list - We want it to behave like a library, not the main program.
         _modules.insert(std::prev(_modules.end()), ef);
+        _modules_adds++;
         ef->load_segments();
         _next_alloc = ef->end();
         add_debugger_obj(ef);
@@ -782,11 +784,13 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
 
 void program::remove_object(std::string name)
 {
+//    std::lock_guard<mutex> guard(_mutex);
     auto ef = _files[name];
 
     del_debugger_obj(ef);
     _files.erase(name);
     _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
+    _modules_subs++;
     ef->unload_segments();
     delete ef;
 }

@@ -80,7 +80,8 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
                     void *data)
 {
     int ret = 0;
-    elf::get_program()->with_modules([=, &ret] (const std::vector<elf::object*>& m) {
+    elf::get_program()->with_modules([=, &ret] (
+            const std::vector<elf::object*>& m, int adds, int subs) {
         for (auto obj : m) {
             dl_phdr_info info;
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());
@@ -90,6 +91,8 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
             // hopefully, the libc and osv types match:
             info.dlpi_phdr = reinterpret_cast<Elf64_Phdr*>(&*phdrs.begin());
             info.dlpi_phnum = phdrs.size();
+            info.dlpi_adds = adds;
+            info.dlpi_subs = subs;
             ret = callback(&info, sizeof(info), data);
             if (ret) {
                 break;

@@ -365,6 +365,9 @@ private:
     std::map<std::string, object*> _files;
     std::vector<object*> _modules; // in priority order
     std::vector<std::string> _search_path;
+    // Count object additions and removals from _modules. dl_iterate_phdr()
+    // callbacks can use this to know if the object list has not changed.
+    int _modules_adds = 0, _modules_subs = 0;
     // debugger interface
     static object* s_objs[100];
 };
@@ -392,7 +395,7 @@ void program::with_modules(functor f)
 {
     // FIXME: locking?
     const std::vector<object*>& tmp = _modules;
-    f(tmp);
+    f(tmp, _modules_adds, _modules_subs);
 }
 
 template <>
