@@ -131,7 +131,7 @@ function render(newline)
     
     cooked += "\r" + _prompt + line;
     if (newline) {
-        cooked += "\n";
+        cooked += "\r\n";
     }
     
     write_string(cooked);
