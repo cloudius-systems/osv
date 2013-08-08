@@ -20,11 +20,9 @@ namespace console {
 // should eventually become a list of console device that we chose the best from
 debug_console console;
 
-void write(const char *msg, size_t len, bool lf)
+void write(const char *msg, size_t len)
 {
     console.write(msg, len);
-    if (lf)
-        console.newline();
 }
 
 // lockless version
@@ -190,7 +188,7 @@ console_write(struct uio *uio, int ioflag)
         if (iov->iov_len) {
             WITH_LOCK(console_mutex) {
                 console::write(reinterpret_cast<const char *>(iov->iov_base),
-                               iov->iov_len, false);
+                               iov->iov_len);
             }
         }
 

@@ -46,12 +46,6 @@ void IsaSerialConsole::writeByte(const char letter)
 	pci::outb(letter, ioport);
 }
 
-void IsaSerialConsole::newline()
-{
-	writeByte('\n');
-	writeByte('\r');
-}
-
 void IsaSerialConsole::reset() {
     // Set the UART speed to to 115,200 bps, This is done by writing 1,0 to
     // Divisor Latch registers, but to access these we need to temporarily

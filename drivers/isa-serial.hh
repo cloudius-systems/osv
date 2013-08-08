@@ -11,7 +11,6 @@ class IsaSerialConsole : public Console {
 public:
 	explicit IsaSerialConsole(sched::thread* consumer);
     virtual void write(const char *str, size_t len);
-    virtual void newline();
     virtual bool input_ready() override;
     virtual char readch();
 private:

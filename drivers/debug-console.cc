@@ -41,15 +41,6 @@ void debug_console::write_ll(const char *str, size_t len)
         simple_write(str, len);
 }
 
-void debug_console::newline()
-{
-    WITH_LOCK(_lock) {
-        if (_impl) {
-            _impl->newline();
-        }
-    }
-}
-
 char debug_console::readch()
 {
     WITH_LOCK(_lock) {

@@ -139,7 +139,7 @@ void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
 }
 void debug(std::string str)
 {
-    console::write(str.c_str(), str.length(), false);
+    console::write(str.c_str(), str.length());
 }
 
 void debug(const boost::format& fmt)
@@ -151,12 +151,12 @@ extern "C" {
 
     void debug(const char *msg)
     {
-        console::write(msg, strlen(msg), false);
+        console::write(msg, strlen(msg));
     }
 
     void debug_write(const char *msg, size_t len)
     {
-        console::write(msg, len, false);
+        console::write(msg, len);
     }
 
     // lockless version

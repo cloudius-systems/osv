@@ -13,7 +13,6 @@ public:
     virtual void write(const char *str, size_t len);
     // write without taking any locks
     void write_ll(const char *str, size_t len);
-    virtual void newline();
     virtual bool input_ready() override;
     virtual char readch();
 private:
