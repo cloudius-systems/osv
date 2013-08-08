@@ -270,7 +270,7 @@ public:
     void unload_segments();
     void* resolve_pltgot(unsigned index);
     tls_data tls();
-    std::vector<Elf64_Phdr> phdrs();
+    const std::vector<Elf64_Phdr> *phdrs();
     std::string soname();
     std::string pathname();
     void run_init_func();

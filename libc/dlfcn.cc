@@ -87,10 +87,15 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());
             std::string name = obj->pathname();
             info.dlpi_name = name.c_str();
-            auto phdrs = obj->phdrs();
+            auto phdrs_vectorp = obj->phdrs();
+            // Note that the callback may (as long as adds/subs don't change)
+            // keep around pointers to phdrs_array, so we assume obj->phdrs()
+            // doesn't move around or change.
+            auto phdrs_array = &((*phdrs_vectorp)[0]);
+            auto phdrs_size = phdrs_vectorp->size();
             // hopefully, the libc and osv types match:
-            info.dlpi_phdr = reinterpret_cast<Elf64_Phdr*>(&*phdrs.begin());
-            info.dlpi_phnum = phdrs.size();
+            info.dlpi_phdr = reinterpret_cast<const Elf64_Phdr*>(phdrs_array);
+            info.dlpi_phnum = phdrs_size;
             info.dlpi_adds = adds;
             info.dlpi_subs = subs;
             ret = callback(&info, sizeof(info), data);

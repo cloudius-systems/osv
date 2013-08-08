@@ -648,9 +648,9 @@ std::string object::soname()
     return dynamic_exists(DT_SONAME) ? dynamic_str(DT_SONAME) : std::string();
 }
 
-std::vector<Elf64_Phdr> object::phdrs()
+const std::vector<Elf64_Phdr> *object::phdrs()
 {
-    return _phdrs;
+    return &_phdrs;
 }
 
 std::string object::pathname()
