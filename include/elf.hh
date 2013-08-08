@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <osv/types.h>
+#include <atomic>
 
 namespace elf {
 
@@ -306,6 +307,15 @@ protected:
     void* _tls_segment;
     ulong _tls_init_size, _tls_uninit_size;
     Elf64_Dyn* _dynamic_table;
+    // Allow objects on program->_modules to be usable for the threads
+    // currently initializing them, but not yet visible for other threads.
+    // This simplifies the code (the initializer can use the regular lookup
+    // functions).
+private:
+    std::atomic<void*> _visibility;
+    bool visible(void) const;
+public:
+    void setprivate(bool);
 };
 
 class file : public object {

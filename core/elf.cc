@@ -12,6 +12,7 @@
 #include <functional>
 #include <cxxabi.h>
 #include <iterator>
+#include <sched.hh>
 
 namespace {
     typedef boost::format fmt;
@@ -74,12 +75,26 @@ object::object(program& prog, std::string pathname)
     , _tls_init_size()
     , _tls_uninit_size()
     , _dynamic_table(nullptr)
+    , _visibility(nullptr)
 {
 }
 
 object::~object()
 {
 }
+
+bool object::visible(void) const
+{
+    auto v = _visibility.load(std::memory_order_acquire);
+    return (v == nullptr) || (v == sched::thread::current());
+}
+
+void object::setprivate(bool priv)
+{
+     _visibility.store(priv ? sched::thread::current() : nullptr,
+             std::memory_order_release);
+}
+
 
 template <>
 void* object::lookup(const char* symbol)
@@ -537,6 +552,9 @@ Elf64_Sym* object::lookup_symbol_gnu(const char* name)
 
 Elf64_Sym* object::lookup_symbol(const char* name)
 {
+    if (!visible()) {
+        return nullptr;
+    }
     Elf64_Sym* sym;
     if (dynamic_exists(DT_GNU_HASH)) {
         sym = lookup_symbol_gnu(name);
@@ -759,6 +777,7 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
         auto ef = new file(*this, f, name);
         ef->set_base(_next_alloc);
         _files[name] = ef;
+        ef->setprivate(true);
         // We need to push the object at the end of the list (so that the main
         // shared object gets searched before the shared libraries it uses),
         // with one exception: the kernel needs to remain at the end of the
@@ -771,6 +790,7 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
         ef->load_needed();
         ef->relocate();
         ef->run_init_func();
+        ef->setprivate(false);
         return ef;
     }
 
