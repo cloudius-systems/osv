@@ -123,7 +123,7 @@ mk_irq_info(uint32_t type, uint32_t index, uint32_t evtchn)
  * Accessors for packed IRQ information.
  */
 
-static inline unsigned int evtchn_from_irq(int irq)
+int evtchn_from_irq(int irq)
 {
 	return irq_info[irq] & ((1U << _EVTCHN_BITS) - 1);
 }
