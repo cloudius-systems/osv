@@ -752,7 +752,7 @@ xs_get_error(const char *errorstring)
 		if (!strcmp(errorstring, xsd_errors[i].errstring))
 			return (xsd_errors[i].errnum);
 	}
-	log(LOG_WARNING, "XENSTORE xen store gave: unknown error %s",
+	bsd_log(LOG_WARNING, "XENSTORE xen store gave: unknown error %s",
 	    errorstring);
 	return (EINVAL);
 }
@@ -1060,7 +1060,7 @@ xs_init_comms(void)
 	int error;
 
 	if (xen_store->rsp_prod != xen_store->rsp_cons) {
-		log(LOG_WARNING, "XENSTORE response ring is not quiescent "
+		bsd_log(LOG_WARNING, "XENSTORE response ring is not quiescent "
 		    "(%08x:%08x): fixing up\n",
 		    xen_store->rsp_cons, xen_store->rsp_prod);
 		xen_store->rsp_cons = xen_store->rsp_prod;
@@ -1072,7 +1072,7 @@ xs_init_comms(void)
 	error = bind_caller_port_to_irqhandler(xs.evtchn, "xenstore",
 	    xs_intr, NULL, INTR_TYPE_NET, &xs.irq);
 	if (error) {
-		log(LOG_WARNING, "XENSTORE request irq failed %i\n", error);
+		bsd_log(LOG_WARNING, "XENSTORE request irq failed %i\n", error);
 		return (error);
 	}
 
@@ -1140,7 +1140,7 @@ xs_attach(device_t dev)
 	 */
 	error = gnttab_init();
 	if (error != 0) {
-		log(LOG_WARNING,
+		bsd_log(LOG_WARNING,
 		    "XENSTORE: Error initializing grant tables: %d\n", error);
 		return (ENXIO);
 	}
@@ -1637,7 +1637,7 @@ xs_unregister_watch(struct xs_watch *watch)
 
 	error = xs_unwatch(watch->node, token);
 	if (error)
-		log(LOG_WARNING, "XENSTORE Failed to release watch %s: %i\n",
+		bsd_log(LOG_WARNING, "XENSTORE Failed to release watch %s: %i\n",
 		    watch->node, error);
 
 	sx_sunlock(&xs.suspend_mutex);
