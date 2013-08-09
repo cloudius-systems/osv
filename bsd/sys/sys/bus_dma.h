@@ -72,6 +72,7 @@
 #ifndef _BUS_DMA_H_
 #define _BUS_DMA_H_
 
+__BEGIN_DECLS
 #include <sys/_bus_dma.h>
 
 /*
@@ -274,4 +275,5 @@ void _bus_dmamap_unload(bus_dma_tag_t dmat, bus_dmamap_t map);
 
 #endif /* __sparc64__ */
 
+__END_DECLS
 #endif /* _BUS_DMA_H_ */
