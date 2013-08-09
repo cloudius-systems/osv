@@ -191,6 +191,7 @@ bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
 bsd += bsd/sys/kern/subr_taskqueue.o
 bsd += bsd/sys/kern/sys_socket.o
+bsd += bsd/sys/kern/subr_disk.o
 bsd += bsd/porting/route.o
 bsd += bsd/porting/networking.o
 bsd += bsd/porting/netport.o

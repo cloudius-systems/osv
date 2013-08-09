@@ -15,6 +15,8 @@
 __FBSDID("$FreeBSD$");
 
 #include "opt_geom.h"
+#include <bsd/porting/netport.h>
+#include <bsd/porting/mmu.h>
 
 #include <sys/param.h>
 #include <sys/systm.h>
