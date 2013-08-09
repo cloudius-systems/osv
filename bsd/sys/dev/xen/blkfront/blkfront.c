@@ -1104,7 +1104,7 @@ xb_bio_command(struct xb_softc *sc)
 	cm->datalen = bp->bio_bcount;
 	cm->operation = (bp->bio_cmd == BIO_READ) ? BLKIF_OP_READ :
 	    BLKIF_OP_WRITE;
-	cm->sector_number = (blkif_sector_t)bp->bio_pblkno;
+	cm->sector_number = (blkif_sector_t)bp->bio_offset / sc->xb_disk->d_sectorsize;
 
 	return (cm);
 }
