@@ -160,10 +160,7 @@ void virtio_blk::response_worker() {
 
     while (1) {
 
-        sched::thread::wait_until([this] {
-            vring* queue = get_virt_queue(0);
-            return queue->used_ring_not_empty();
-        });
+        virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
 
         u32 len;
         while((req = static_cast<virtio_blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
