@@ -198,6 +198,7 @@ int	 bdev_write(struct device *dev, struct uio *uio, int ioflags);
 
 int	enodev(void);
 int	nullop(void);
+void multiplex_strategy(struct bio *);
 
 int	physio(struct device *dev, struct uio *uio, int ioflags);
 

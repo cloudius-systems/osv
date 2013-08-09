@@ -99,6 +99,7 @@ struct bio {
 	 */
 	pthread_mutex_t bio_mutex;
 	pthread_cond_t	bio_wait;
+	volatile unsigned int bio_refcnt;
 };
 
 struct bio_queue_head {
