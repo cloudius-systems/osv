@@ -117,6 +117,8 @@ void		destroy_bio(struct bio *bio);
 
 int		bio_wait(struct bio *bio);
 void		biodone(struct bio *bio, bool ok);
+struct devstat;
+void    biofinish(struct bio *bp, struct devstat *stat, int error);
 
 __END_DECLS
 

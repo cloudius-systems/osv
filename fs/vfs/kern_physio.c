@@ -64,6 +64,15 @@ biodone(struct bio *bio, bool ok)
 	}
 }
 
+void
+biofinish(struct bio *bp, struct devstat *stat, int error)
+{
+	if (error) {
+		bp->bio_error = error;
+	}
+	biodone(bp, error);
+}
+
 static void multiplex_bio_done(struct bio *b)
 {
 	struct bio *bio = b->bio_caller1;
