@@ -187,6 +187,7 @@ size_t strlcpy(char *dst, const char *src, size_t siz);
 
 
 typedef uintptr_t __uintptr_t;
+typedef unsigned long uoff_t;
 
 #ifndef __DECONST
 #define __DECONST(type, var)    ((type)(__uintptr_t)(const void *)(var))
