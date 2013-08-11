@@ -77,7 +77,7 @@ int fdclose(int fd)
         gfdt[fd].assign(nullptr);
     }
 
-    rcu_defer(fdrop, fp);
+    fdrop(fp);
 
     return 0;
 }
@@ -107,6 +107,18 @@ int fdset(int fd, struct file *fp)
     return 0;
 }
 
+static bool fhold_if_positive(file* f)
+{
+    auto c = f->f_count;
+    // zero or negative f_count means that the file is being closed; don't
+    // increment
+    while (c > 0 && !__atomic_compare_exchange_n(&f->f_count, &c, c + 1, true,
+            __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+        // nothing to do
+    }
+    return c > 0;
+}
+
 /*
  * Retrieves a file structure from the gfdt and increases its refcount in a
  * synchronized way, this ensures that a concurrent close will not interfere.
@@ -124,7 +136,9 @@ int fget(int fd, struct file **out_fp)
             return EBADF;
         }
 
-        fhold(fp);
+        if (!fhold_if_positive(fp)) {
+            return EBADF;
+        }
     }
 
     *out_fp = fp;
@@ -196,19 +210,20 @@ void fhold(struct file* fp)
 
 int fdrop(struct file *fp)
 {
-    if (__sync_fetch_and_sub(&fp->f_count, 1) > 1)
+    if (__sync_fetch_and_sub(&fp->f_count, 1) != 1)
         return 0;
 
     /* We are about to free this file structure, but we still do things with it
-     * so we increase the refcount by one, fdrop may get called again
+     * so set the refcount to INT_MIN, fhold/fdrop may get called again
      * and we don't want to reach this point more than once.
+     * INT_MIN is also safe against fget() seeing this file.
      */
 
-    fhold(fp);
+    fp->f_count = INT_MIN;
     fo_close(fp);
     poll_drain(fp);
     mutex_destroy(&fp->f_lock);
-    free(fp);
+    rcu_dispose(fp);
     return 1;
 }
 

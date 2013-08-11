@@ -61,7 +61,7 @@ struct fileops;
  */
 struct file {
 	int		f_flags;	/* open flags */
-	int		f_count;	/* reference count */
+	int		f_count;	/* reference count, see below */
 	off_t		f_offset;	/* current position in file */
 	struct vnode	*f_vnode;	/* vnode */
 	struct fileops	*f_ops;		/* file ops abstraction */
@@ -70,6 +70,14 @@ struct file {
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
 };
+
+// f_count rules:
+//
+// > 0: file is live and open, normal reference counting applies
+// = 0: file is open but being removed from file table, may not
+//         acquire new references
+// < 0: file is being closed, may not acquire new references (but
+//         close path may still call fhold()/fdrop()
 
 #define FD_LOCK(fp)	mutex_lock(&(fp->f_lock))
 #define FD_UNLOCK(fp)	mutex_unlock(&(fp->f_lock))
