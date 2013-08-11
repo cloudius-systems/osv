@@ -27,7 +27,10 @@
 #include "arch.hh"
 #include "osv/trace.hh"
 #include <osv/power.hh>
+#include <osv/rcu.hh>
 #include "mempool.hh"
+
+using namespace osv;
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -228,6 +231,7 @@ void main_cont(int ac, char** av)
     memory::enable_debug_allocator();
     enable_trace();
     sched::init_detached_threads_reaper();
+    rcu_init();
 
     vfs_init();
     ramdisk_init();
