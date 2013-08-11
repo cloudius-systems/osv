@@ -170,8 +170,10 @@ namespace virtio {
 
         if (_csum) {
             _ifn->if_capabilities |= IFCAP_TXCSUM;
-            if (_host_tso4)
+            if (_host_tso4) {
                 _ifn->if_capabilities |= IFCAP_TSO4;
+                _ifn->if_hwassist = CSUM_TCP | CSUM_UDP | CSUM_TSO;
+            }
         }
 
         if (_guest_csum) {
