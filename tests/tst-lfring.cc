@@ -175,7 +175,7 @@ class test_mpsc_queue {
 public:
 
     static const int max_random = 25;
-    static const u64 elements_to_process = 100000000;
+    static const u64 elements_to_process = 1000000;
 
     void init()
     {
