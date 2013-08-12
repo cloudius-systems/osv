@@ -83,12 +83,14 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         t.set(cur_time + nanoseconds);
 
         trace_synch_msleep_timeout_wait(chan);
-        mutex_unlock(wait_lock);
+        if (wait_lock) {
+            mutex_unlock(wait_lock);
+        }
         sched::thread::wait_until([&] {
             return ( (t.expired()) || (wait._awake) );
         });
 
-        if (!(priority & PDROP)) {
+        if (!(priority & PDROP) && wait_lock) {
             mutex_lock(wait_lock);
         }
         // msleep timeout
@@ -114,12 +116,14 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
 
         trace_synch_msleep_wait(chan);
 
-        mutex_unlock(wait_lock);
+        if (wait_lock) {
+            mutex_unlock(wait_lock);
+        }
         sched::thread::wait_until([&] {
             return (wait._awake);
         });
 
-        if (!(priority & PDROP)) {
+        if (!(priority & PDROP) && wait_lock) {
             mutex_lock(wait_lock);
         }
 
