@@ -96,8 +96,9 @@ public:
         rw_init(&lock, "tst1");
 
         rw_rlock(&lock);
-        rw_wlock(&lock);
-        rw_wunlock(&lock);
+        rw_try_upgrade(&lock);
+        rw_downgrade(&lock);
+        rw_runlock(&lock);
 
         rw_wlock(&lock);
         rw_wunlock(&lock);
@@ -107,8 +108,6 @@ public:
 
         rw_wlock(&lock);
         rw_wunlock(&lock);
-
-        rw_runlock(&lock);
 
         rw_destroy(&lock);
 
