@@ -704,6 +704,8 @@ program::program(::filesystem& fs, void* addr)
     set_object("libpthread.so.0", _core.get());
     set_object("libdl.so.2", _core.get());
     set_object("librt.so.1", _core.get());
+    set_object("libstdc++.so.6", _core.get());
+    set_object("libgcc_s.so.1", _core.get());
 }
 
 void program::set_search_path(std::initializer_list<std::string> path)

@@ -495,7 +495,10 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
 	    $(boost-libs) \
-	    $(libstdc++.a) $(libsupc++.a) $(libgcc_s.a) $(libgcc_eh.a) $(src)/libunwind.a $(libgcc_eh.a), \
+	    --whole-archive \
+	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
+	    --no-whole-archive \
+	    $(src)/libunwind.a, \
 		LD $@)
 
 dummy-shlib.so: dummy-shlib.o

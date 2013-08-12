@@ -95,55 +95,7 @@ void abort(const char *msg)
     osv::halt();
 }
 
-void __cxa_pure_virtual(void)
-{
-    abort();
-}
-
 namespace __cxxabiv1 {
-    std::terminate_handler __terminate_handler = abort;
-
-    namespace {
-        struct guard {
-            unsigned char initialized;
-            unsigned char lock;
-
-            int acquire() {
-                if (initialized) {
-                    return 0;
-                }
-                while (__sync_lock_test_and_set(&lock, 1)) {
-                    barrier();
-                }
-                if (initialized) {
-                    __sync_lock_release(&lock, 0);
-                    return 0;
-                }
-                return 1;
-            }
-
-            void release() {
-                initialized = 1;
-                __sync_lock_release(&lock, 0);
-            }
-        };
-    }
-
-
-    int __cxa_guard_acquire(__guard* g)
-    {
-        return reinterpret_cast<guard*>(g)->acquire();
-    }
-
-    void __cxa_guard_release(__guard* g) _GLIBCXX_NOTHROW
-    {
-        return reinterpret_cast<guard*>(g)->release();
-    }
-
-    void __cxa_guard_abort(__guard*) _GLIBCXX_NOTHROW
-    {
-	abort();
-    }
 
     int __cxa_atexit(void (*destructor)(void *), void *arg, void *dso)
     {
@@ -230,12 +182,6 @@ gid_t getegid(void)
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
     memset(vec, 0x01, (length + getpagesize() - 1) / getpagesize());
-    return 0;
-}
-
-int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
-                          char *buf, size_t buf_len, unw_word_t *offp)
-{
     return 0;
 }
 

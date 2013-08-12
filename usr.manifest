@@ -20,8 +20,6 @@
 /usr/lib/jvm/&/jre/lib/rhino.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/meta-index: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/currency.data: %(jdkbase)s/&
-/usr/lib/libstdc++.so.6: %(gccbase)s/usr/lib64/libstdc++.so.6
-/usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1
 /usr/lib/&/libfontconfig.so.1: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libfreetype.so.6: %(miscbase)s/usr/lib64/&
