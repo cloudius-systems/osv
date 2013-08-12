@@ -10,19 +10,21 @@
 typedef void (*void_func_fn)(void*);
 EVENTHANDLER_DECLARE(test_handler1, void_func_fn);
 
+int f1, f2, f3;
+
 void void_f1(void* arg)
 {
-    printf("f1\n");
+    ++f1;
 }
 
 void void_f2(void* arg)
 {
-    printf("f2\n");
+    ++f2;
 }
 
 void void_f3(void* arg)
 {
-    printf("f3\n");
+    ++f3;
 }
 
 /*
