@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <xlocale.h>
 #include <cassert>
+#include <sys/sysinfo.h>
 #include "processor.hh"
 #include "debug.hh"
 #include <boost/format.hpp>
@@ -401,4 +402,9 @@ void exit(int status)
 {
     debug(fmt("program exited with status %d\n") % status);
     abort();
+}
+
+int get_nprocs()
+{
+    return sysconf(_SC_NPROCESSORS_ONLN);
 }
