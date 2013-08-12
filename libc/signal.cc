@@ -77,6 +77,12 @@ int sigaddset(sigset_t *sigset, int signum)
     return 0;
 }
 
+int sigdelset(sigset_t *sigset, int signum)
+{
+    from_libc(sigset)->mask.reset(signum);
+    return 0;
+}
+
 int sigismember(const sigset_t *sigset, int signum)
 {
     return from_libc(sigset)->mask.test(signum);
