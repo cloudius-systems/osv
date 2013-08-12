@@ -7,8 +7,6 @@
 #include <bsd/sys/sys/priority.h>
 #include <bsd/sys/sys/taskqueue.h>
 
-static int foo = 1;
-
 static void
 task_worker(void *context, int pending)
 {
@@ -21,7 +19,7 @@ int main(int argc, char **argv)
 	struct task task;
 	int retval;
 
-	t = taskqueue_create("test", M_WAITOK, taskqueue_thread_enqueue, &foo);
+	t = taskqueue_create("test", M_WAITOK, taskqueue_thread_enqueue, &t);
 	if (!t) {
 		kprintf("unable to create taskqueue\n");
 		return 1;
