@@ -31,9 +31,13 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
     }
 
     if (!ptr) {
-        ptr = malloc(zone->uz_size + UMA_ITEM_HDR_LEN);
+        auto size = zone->uz_size;
+        if (zone->uz_flags & UMA_ZONE_REFCNT) {
+            size += UMA_ITEM_HDR_LEN;
+        }
+        ptr = malloc(size);
 
-        bzero(ptr, zone->uz_size + UMA_ITEM_HDR_LEN);
+        bzero(ptr, zone->uz_size);
 
         // Call init
         if (zone->uz_init != NULL) {
@@ -56,7 +60,9 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
         bzero(ptr, zone->uz_size);
     }
 
-    UMA_ITEM_HDR(zone, ptr)->refcnt = 1;
+    if (zone->uz_flags & UMA_ZONE_REFCNT) {
+        UMA_ITEM_HDR(zone, ptr)->refcnt = 1;
+    }
 
     return (ptr);
 }
@@ -122,10 +128,10 @@ uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
     z->uz_init = uminit;
     z->uz_fini = fini;
     z->master = NULL;
+    z->uz_flags = flags;
 
     /* Do we need align and flags?
     args.align = align;
-    args.flags = flags;
     args.keg = NULL;
     */
 
@@ -144,6 +150,7 @@ uma_zone_t uma_zsecond_create(char *name, uma_ctor ctor, uma_dtor dtor,
     z->uz_init = zinit;
     z->uz_fini = zfini;
     z->master = master;
+    z->uz_flags = master->uz_flags;
 
     return (z);
 }
