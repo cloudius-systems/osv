@@ -151,9 +151,9 @@ namespace dhcp {
 
     void dhcp_mbuf::compose_discover(struct ifnet* ifp)
     {
-        bzero(_m->m_data, _m->m_len);
         size_t dhcp_len = sizeof(struct dhcp_packet);
         struct dhcp_packet* pkt = pdhcp();
+        *pkt = {};
         u8 requested_options[] = {DHCP_OPTION_SUBNET_MASK, DHCP_OPTION_ROUTER,
             DHCP_OPTION_DOMAIN_NAME_SERVERS, DHCP_OPTION_INTERFACE_MTU,
             DHCP_OPTION_BROADCAST_ADDRESS};
@@ -187,9 +187,9 @@ namespace dhcp {
     void dhcp_mbuf::compose_request(struct ifnet* ifp, u32 xid, in_addr_t yip,
         in_addr_t sip)
     {
-        bzero(_m->m_data, _m->m_len);
         size_t dhcp_len = sizeof(struct dhcp_packet);
         struct dhcp_packet* pkt = pdhcp();
+        *pkt = {};
 
         // Header
         pkt->op = BOOTREQUEST;
