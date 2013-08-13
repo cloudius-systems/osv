@@ -88,17 +88,22 @@ register_command('perf', {
     callstack: function(args) {
         var pkg = Packages.com.cloudius.trace
         var tpname = args[0]
-        var tp = new pkg.Tracepoint(tpname)
-        var traces = pkg.Callstack.collect(tp, 10, 20, 5000)
-        printf('%10s  %s\n', 'freq', 'callstack')
-        for (var i in traces) {
-        	var tr = traces[i]
-        	printf('%10.0f ', traces[i].getHits())
-        	var pc = traces[i].getProgramCounters()
-        	for (var j in pc) {
-        		printf(' 0x%x', jlong(pc[j]))
-        	}
-        	printf('\n')
+        try {
+            var tp = new pkg.Tracepoint(tpname)
+            var traces = pkg.Callstack.collect(tp, 10, 20, 5000)
+            printf('%10s  %s\n', 'freq', 'callstack')
+            for (var i in traces) {
+                var tr = traces[i]
+                printf('%10.0f ', traces[i].getHits())
+                var pc = traces[i].getProgramCounters()
+                for (var j in pc) {
+                        printf(' 0x%x', jlong(pc[j]))
+                }
+                printf('\n')
+            }
+        } catch (err) {
+            write_string('bad tracepoint "' + tpname + '"\n')
+            return
         }
     },
     subcommands: {
