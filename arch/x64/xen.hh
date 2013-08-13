@@ -7,9 +7,13 @@
 #include <xen/interface/memory.h>
 #include <xen/interface/version.h>
 #include <xen/interface/hvm/hvm_op.h>
+#include "alternative.hh"
 
 extern char hypercall_page[];
 extern uint8_t xen_features[];
+extern struct start_info* xen_start_info;
+
+#define XENPV_ALTERNATIVE(x, y) ALTERNATIVE((xen_start_info != nullptr), x, y)
 
 // We don't support 32 bit
 struct xen_vcpu_info {
