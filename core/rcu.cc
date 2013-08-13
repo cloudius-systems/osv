@@ -1,5 +1,6 @@
 #include <osv/rcu.hh>
 #include <osv/mutex.h>
+#include <osv/semaphore.hh>
 #include <vector>
 #include <boost/algorithm/cxx11/all_of.hpp>
 
@@ -112,6 +113,13 @@ void rcu_defer(std::function<void ()>&& func)
         callbacks.push_back(func);
     }
     garbage_collector_thread->wake();
+}
+
+void rcu_synchronize()
+{
+    semaphore s{0};
+    rcu_defer([](semaphore* s) { s->post(); }, &s);
+    s.wait();
 }
 
 void rcu_init()

@@ -152,6 +152,8 @@ void rcu_defer(functor func, T* p)
     rcu_defer([=] { func(p); });
 }
 
+void rcu_synchronize();
+
 }
 
 #endif /* RCU_HH_ */
