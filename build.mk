@@ -32,7 +32,7 @@ tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
 tracing-flags = $(tracing-flags-$(conf-tracing))
 
-CXXFLAGS = -std=gnu++11 -lstdc++ $(COMMON)
+CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
