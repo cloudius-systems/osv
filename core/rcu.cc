@@ -5,6 +5,8 @@
 
 namespace osv {
 
+rcu_lock_type rcu_read_lock;
+
 namespace rcu {
 
 mutex mtx;
