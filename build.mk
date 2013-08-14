@@ -5,13 +5,16 @@ cmdline = java.so -jar /java/cli.jar
 #cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -isystem $(src)/include/glibc-compat
-gcc-inc-base = $(src)/external/gcc.bin/usr/include/c++/4.7.2
+gcc-inc-base = $(src)/external/gcc.bin/usr/include/c++/4.8.1
+gcc-inc-base2 = $(src)/external/gcc.bin/usr/lib/gcc/x86_64-redhat-linux/4.8.1/include
 INCLUDES += -isystem $(gcc-inc-base)
 INCLUDES += -isystem $(gcc-inc-base)/x86_64-redhat-linux
 INCLUDES += -isystem $(src)/external/acpica/source/include
 INCLUDES += -isystem $(src)/external/misc.bin/usr/include
 INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/x86_64
+# must be after include/api, since it includes some libc-style headers:
+INCLUDES += -isystem $(gcc-inc-base2)
 INCLUDES += -isystem gen/include
 INCLUDES += -isystem $(src)/bsd/sys
 # For acessing machine/ in cpp xen drivers
