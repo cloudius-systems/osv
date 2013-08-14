@@ -286,24 +286,6 @@ vrele(struct vnode *vp)
 }
 
 /*
- * vgone() is called when unlocked vnode is no longer valid.
- */
-void
-vgone(struct vnode *vp)
-{
-	ASSERT(vp->v_nrlocks == 0);
-
-	VNODE_LOCK();
-	DPRINTF(VFSDB_VNODE, ("vgone: %s\n", vp->v_path));
-	LIST_REMOVE(vp, v_link);
-	vfs_unbusy(vp->v_mount);
-	mutex_destroy(&vp->v_lock);
-	free(vp->v_path);
-	free(vp);
-	VNODE_UNLOCK();
-}
-
-/*
  * Return reference count.
  */
 int

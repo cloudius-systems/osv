@@ -191,7 +191,6 @@ int	 vn_stat(struct vnode *, struct stat *);
 int	 vn_access(struct vnode *, int);
 struct vnode *vget(struct mount *, char *);
 void	 vput(struct vnode *);
-void	 vgone(struct vnode *);
 void	 vref(struct vnode *);
 void	 vrele(struct vnode *);
 int	 vcount(struct vnode *);

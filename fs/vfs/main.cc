@@ -1229,6 +1229,7 @@ vfs_init(void)
 	const struct vfssw *fs;
 
 	bio_init();
+	lookup_init();
 	vnode_init();
 	task_alloc(&main_task);
 

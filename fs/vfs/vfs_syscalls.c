@@ -50,7 +50,8 @@
 int
 sys_open(char *path, int flags, mode_t mode, struct file *fp)
 {
-	struct vnode *vp, *dvp;
+	struct dentry *dp, *ddp;
+	struct vnode *vp;
 	char *filename;
 	int error;
 
@@ -61,75 +62,90 @@ sys_open(char *path, int flags, mode_t mode, struct file *fp)
 	if  ((flags & (FREAD | FWRITE)) == 0)
 		return EINVAL;
 	if (flags & O_CREAT) {
-		error = namei(path, &vp);
+		error = namei(path, &dp);
 		if (error == ENOENT) {
 			/* Create new file. */
-			if ((error = lookup(path, &dvp, &filename)) != 0)
+			if ((error = lookup(path, &ddp, &filename)) != 0)
 				return error;
-			if ((error = vn_access(dvp, VWRITE)) != 0) {
-				vput(dvp);
+
+			vn_lock(ddp->d_vnode);
+			if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0) {
+				vn_unlock(ddp->d_vnode);
+				drele(ddp);
 				return error;
 			}
 			mode &= ~S_IFMT;
 			mode |= S_IFREG;
-			error = VOP_CREATE(dvp, filename, mode);
-			vput(dvp);
+			error = VOP_CREATE(ddp->d_vnode, filename, mode);
+			vn_unlock(ddp->d_vnode);
+			drele(ddp);
+
 			if (error)
 				return error;
-			if ((error = namei(path, &vp)) != 0)
+			if ((error = namei(path, &dp)) != 0)
 				return error;
+
+			vp = dp->d_vnode;
 			flags &= ~O_TRUNC;
 		} else if (error) {
 			return error;
 		} else {
 			/* File already exits */
 			if (flags & O_EXCL) {
-				vput(vp);
-				return EEXIST;
+				error = EEXIST;
+				goto out_drele;
 			}
-			flags &= ~O_CREAT;
 		}
+
+		vp = dp->d_vnode;
+		flags &= ~O_CREAT;
 	} else {
 		/* Open */
-		if ((error = namei(path, &vp)) != 0)
+		error = namei(path, &dp);
+		if (error)
 			return error;
-	}
-	if ((flags & O_CREAT) == 0) {
+
+		vp = dp->d_vnode;
+
 		if (flags & FWRITE || flags & O_TRUNC) {
-			if ((error = vn_access(vp, VWRITE)) != 0) {
-				vput(vp);
-				return error;
-			}
-			if (vp->v_type == VDIR) {
-				/* Openning directory with writable. */
-				vput(vp);
-				return EISDIR;
-			}
+			error = vn_access(vp, VWRITE);
+			if (error)
+				goto out_drele;
+
+			error = EISDIR;
+			if (vp->v_type == VDIR)
+				goto out_drele;
 		}
 	}
+
+	vref(vp);
+	vn_lock(vp);
 	/* Process truncate request */
 	if (flags & O_TRUNC) {
-		if (!(flags & FWRITE) || (vp->v_type == VDIR)) {
-			vput(vp);
-			return EINVAL;
-		}
-		if ((error = VOP_TRUNCATE(vp, 0)) != 0) {
-			vput(vp);
-			return error;
-		}
+		error = EINVAL;
+		if (!(flags & FWRITE) || vp->v_type == VDIR)
+			goto out_vn_unlock;
+
+		error = VOP_TRUNCATE(vp, 0);
+		if (error)
+			goto out_vn_unlock;
 	}
 
 	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
 	fp->f_vnode = vp;
 
 	error = VOP_OPEN(vp, fp);
-	if (error) {
-		vput(vp);
-		return error;
-	}
-
+	if (error)
+		goto out_vn_unlock;
 	vn_unlock(vp);
+	drele(dp);
 	return 0;
+
+out_vn_unlock:
+	vn_unlock(vp);
+out_drele:
+	drele(dp);
+	return error;
 }
 
 int
@@ -426,37 +442,41 @@ int
 sys_mkdir(char *path, mode_t mode)
 {
 	char *name;
-	struct vnode *vp, *dvp;
+	struct dentry *dp, *ddp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_mkdir: path=%s mode=%d\n",	path, mode));
 
-	if ((error = namei(path, &vp)) == 0) {
+	error = namei(path, &dp);
+	if (!error) {
 		/* File already exists */
-		vput(vp);
+		drele(dp);
 		return EEXIST;
 	}
-	/* Notice: vp is invalid here! */
 
-	if ((error = lookup(path, &dvp, &name)) != 0) {
+	if ((error = lookup(path, &ddp, &name)) != 0) {
 		/* Directory already exists */
 		return error;
 	}
-	if ((error = vn_access(dvp, VWRITE)) != 0)
+
+	vn_lock(ddp->d_vnode);
+	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0)
 		goto out;
 	mode &= ~S_IFMT;
 	mode |= S_IFDIR;
 
-	error = VOP_MKDIR(dvp, name, mode);
+	error = VOP_MKDIR(ddp->d_vnode, name, mode);
  out:
-	vput(dvp);
+	vn_unlock(ddp->d_vnode);
+	drele(ddp);
 	return error;
 }
 
 int
 sys_rmdir(char *path)
 {
-	struct vnode *vp, *dvp;
+	struct dentry *dp, *ddp;
+	struct vnode *vp;
 	int error;
 	char *name;
 
@@ -464,8 +484,12 @@ sys_rmdir(char *path)
 
 	if ((error = check_dir_empty(path)) != 0)
 		return error;
-	if ((error = namei(path, &vp)) != 0)
+	error = namei(path, &dp);
+	if (error)
 		return error;
+
+	vp = dp->d_vnode;
+	vn_lock(vp);
 	if ((error = vn_access(vp, VWRITE)) != 0)
 		goto out;
 	if (vp->v_type != VDIR) {
@@ -476,17 +500,21 @@ sys_rmdir(char *path)
 		error = EBUSY;
 		goto out;
 	}
-	if ((error = lookup(path, &dvp, &name)) != 0)
+	if ((error = lookup(path, &ddp, &name)) != 0)
 		goto out;
 
-	error = VOP_RMDIR(dvp, vp, name);
+	vn_lock(ddp->d_vnode);
+	error = VOP_RMDIR(ddp->d_vnode, vp, name);
+	vn_unlock(ddp->d_vnode);
+
 	vn_unlock(vp);
-	vgone(vp);
-	vput(dvp);
+	drele(ddp);
+	drele(dp);
 	return error;
 
  out:
-	vput(vp);
+	vn_unlock(vp);
+	drele(dp);
 	return error;
 }
 
@@ -494,7 +522,7 @@ int
 sys_mknod(char *path, mode_t mode)
 {
 	char *name;
-	struct vnode *vp, *dvp;
+	struct dentry *dp, *ddp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_mknod: path=%s mode=%d\n",	path, mode));
@@ -510,27 +538,32 @@ sys_mknod(char *path, mode_t mode)
 		return EINVAL;
 	}
 
-	if ((error = namei(path, &vp)) == 0) {
-		vput(vp);
+	error = namei(path, &dp);
+	if (!error) {
+		drele(dp);
 		return EEXIST;
 	}
 
-	if ((error = lookup(path, &dvp, &name)) != 0)
+	if ((error = lookup(path, &ddp, &name)) != 0)
 		return error;
-	if ((error = vn_access(dvp, VWRITE)) != 0)
+
+	vn_lock(ddp->d_vnode);
+	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0)
 		goto out;
 	if (S_ISDIR(mode))
-		error = VOP_MKDIR(dvp, name, mode);
+		error = VOP_MKDIR(ddp->d_vnode, name, mode);
 	else
-		error = VOP_CREATE(dvp, name, mode);
+		error = VOP_CREATE(ddp->d_vnode, name, mode);
  out:
-	vput(dvp);
+	vn_unlock(ddp->d_vnode);
+	drele(ddp);
 	return error;
 }
 
 int
 sys_rename(char *src, char *dest)
 {
+	struct dentry *dp1, *dp2 = 0, *ddp1, *ddp2;
 	struct vnode *vp1, *vp2 = 0, *dvp1, *dvp2;
 	char *sname, *dname;
 	int error;
@@ -539,8 +572,13 @@ sys_rename(char *src, char *dest)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
 
-	if ((error = namei(src, &vp1)) != 0)
+	error = namei(src, &dp1);
+	if (error)
 		return error;
+
+	vp1 = dp1->d_vnode;
+	vn_lock(vp1);
+
 	if ((error = vn_access(vp1, VWRITE)) != 0)
 		goto err1;
 
@@ -559,10 +597,15 @@ sys_rename(char *src, char *dest)
 		error = EBUSY;
 		goto err1;
 	}
+
 	/* Check type of source & target */
-	error = namei(dest, &vp2);
+	error = namei(dest, &dp2);
 	if (error == 0) {
 		/* target exists */
+
+		vp2 = dp2->d_vnode;
+		vn_lock(vp2);
+
 		if (vp1->v_type == VDIR && vp2->v_type != VDIR) {
 			error = ENOTDIR;
 			goto err2;
@@ -592,11 +635,17 @@ sys_rename(char *src, char *dest)
 	*dname = 0;
 	dname++;
 
-	if ((error = lookup(src, &dvp1, &sname)) != 0)
+	if ((error = lookup(src, &ddp1, &sname)) != 0)
 		goto err2;
 
-	if ((error = namei(dest, &dvp2)) != 0)
+	dvp1 = ddp1->d_vnode;
+	vn_lock(dvp1);
+
+	if ((error = namei(dest, &ddp2)) != 0)
 		goto err3;
+
+	dvp2 = ddp2->d_vnode;
+	vn_lock(dvp2);
 
 	/* The source and dest must be same file system */
 	if (dvp1->v_mount != dvp2->v_mount) {
@@ -605,14 +654,19 @@ sys_rename(char *src, char *dest)
 	}
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
  err4:
-	vput(dvp2);
+	vn_unlock(dvp2);
+	drele(ddp2);
  err3:
-	vput(dvp1);
+	vn_unlock(dvp1);
+	drele(ddp1);
  err2:
-	if (vp2)
-		vput(vp2);
+	if (vp2) {
+		vn_unlock(vp2);
+		drele(dp2);
+	}
  err1:
-	vput(vp1);
+	vn_unlock(vp1);
+	drele(dp1);
 	return error;
 }
 
@@ -620,13 +674,17 @@ int
 sys_unlink(char *path)
 {
 	char *name;
-	struct vnode *vp, *dvp;
+	struct dentry *dp, *ddp;
+	struct vnode *vp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
 
-	if ((error = namei(path, &vp)) != 0)
+	if ((error = namei(path, &dp)) != 0)
 		return error;
+
+	vp = dp->d_vnode;
+	vn_lock(vp);
 	if ((error = vn_access(vp, VWRITE)) != 0)
 		goto out;
 	if (vp->v_type == VDIR) {
@@ -638,30 +696,34 @@ sys_unlink(char *path)
 		error = EBUSY;
 		goto out;
 	}
-	if ((error = lookup(path, &dvp, &name)) != 0)
+	if ((error = lookup(path, &ddp, &name)) != 0)
 		goto out;
 
-	error = VOP_REMOVE(dvp, vp, name);
+	vn_lock(ddp->d_vnode);
+	error = VOP_REMOVE(ddp->d_vnode, vp, name);
+	vn_unlock(ddp->d_vnode);
 
 	vn_unlock(vp);
-	vgone(vp);
-	vput(dvp);
+	drele(ddp);
+	drele(dp);
 	return 0;
  out:
-	vput(vp);
+	vn_unlock(vp);
+	drele(dp);
 	return error;
 }
 
 int
 sys_access(char *path, int mode)
 {
-	struct vnode *vp;
+	struct dentry *dp;
 	int error, flags;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_access: path=%s mode=%x\n", path, mode));
 
 	/* If F_OK is set, we return here if file is not found. */
-	if ((error = namei(path, &vp)) != 0)
+	error = namei(path, &dp);
+	if (error)
 		return error;
 
 	flags = 0;
@@ -672,41 +734,42 @@ sys_access(char *path, int mode)
 	if (mode & X_OK)
 		flags |= VEXEC;
 
-	error = vn_access(vp, flags);
+	error = vn_access(dp->d_vnode, flags);
 
-	vput(vp);
+	drele(dp);
 	return error;
 }
 
 int
 sys_stat(char *path, struct stat *st)
 {
-	struct vnode *vp;
+	struct dentry *dp;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_stat: path=%s\n", path));
 
-	if ((error = namei(path, &vp)) != 0)
+	error = namei(path, &dp);
+	if (error)
 		return error;
-	error = vn_stat(vp, st);
-	vput(vp);
+	error = vn_stat(dp->d_vnode, st);
+	drele(dp);
 	return error;
 }
 
 int
 sys_statfs(char *path, struct statfs *buf)
 {
-	struct vnode *vp;
+	struct dentry *dp;
 	int error;
 
 	memset(buf, 0, sizeof(*buf));
 
-	error = namei(path, &vp);
+	error = namei(path, &dp);
 	if (error)
 		return error;
 
-	error = VFS_STATFS(vp->v_mount, buf);
-	vput(vp);
+	error = VFS_STATFS(dp->d_mount, buf);
+	drele(dp);
 
 	return error;
 }
@@ -732,16 +795,18 @@ sys_fstatfs(struct file *fp, struct statfs *buf)
 int
 sys_truncate(char *path, off_t length)
 {
-	struct vnode *vp;
+	struct dentry *dp;
 	int error;
 
-	error = namei(path, &vp);
+	error = namei(path, &dp);
 	if (error)
 		return error;
 
-	error = VOP_TRUNCATE(vp, length);
+	vn_lock(dp->d_vnode);
+	error = VOP_TRUNCATE(dp->d_vnode, length);
+	vn_unlock(dp->d_vnode);
 
-	vput(vp);
+	drele(dp);
 	return error;
 }
 
@@ -784,13 +849,13 @@ ssize_t
 sys_readlink(char *path, char *buf, size_t bufsize)
 {
 	int error;
-	struct vnode *vp;
+	struct dentry *dp;
 
-	error = namei(path, &vp);
+	error = namei(path, &dp);
 	if (error)
 		return error;
 
 	/* no symlink support (yet) in OSv */
-	vput(vp);
+	drele(dp);
 	return EINVAL;
 }

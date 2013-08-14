@@ -80,6 +80,7 @@ extern "C" {
 #include <sys/priority.h>
 #include <sys/sig.h>
 #include <sys/vnode.h>
+#include <osv/dentry.h>
 
 #define	CPU_SEQID	get_cpuid()
 
