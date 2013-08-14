@@ -119,14 +119,14 @@ sys_open(char *path, int flags, mode_t mode, struct file *fp)
 		}
 	}
 
+	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
+	fp->f_vnode = vp;
+
 	/* Request to file system */
 	if ((error = VOP_OPEN(vp, flags)) != 0) {
 		vput(vp);
 		return error;
 	}
-
-	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
-	fp->f_vnode = vp;
 
 	vn_unlock(vp);
 	return 0;
