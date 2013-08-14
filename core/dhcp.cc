@@ -125,11 +125,6 @@ namespace dhcp {
             return false;
         }
 
-        // Don't handle broadcast packets
-        if (_m->m_flags & M_BCAST) {
-            return false;
-        }
-
         if ((ip->ip_p != IPPROTO_UDP) || (udp->uh_dport != ntohs(dhcp_client_port))) {
             return false;
         }
