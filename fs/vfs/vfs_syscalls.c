@@ -842,7 +842,7 @@ sys_fchdir(struct file *fp, char *cwd)
 		vn_unlock(dvp);
 		return EBADF;
 	}
-	strlcpy(cwd, dvp->v_path, PATH_MAX);
+	strlcpy(cwd, fp->f_dentry->d_path, PATH_MAX);
 	vn_unlock(dvp);
 	return 0;
 }

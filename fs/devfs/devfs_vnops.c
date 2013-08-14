@@ -54,13 +54,12 @@ static int
 devfs_open(struct file *fp)
 {
 	struct vnode *vp = fp->f_dentry->d_vnode;
-	char *path;
+	char *path = fp->f_dentry->d_path;
 	struct device *dev;
 	int error;
 
-	DPRINTF(("devfs_open: path=%s\n", vp->v_path));
+	DPRINTF(("devfs_open: path=%s\n", path));
 
-	path = vp->v_path;
 	if (!strcmp(path, "/"))	/* root ? */
 		return 0;
 
@@ -86,7 +85,7 @@ devfs_close(struct vnode *vp, struct file *fp)
 
 	DPRINTF(("devfs_close: fp=%x\n", fp));
 
-	if (!strcmp(vp->v_path, "/"))	/* root ? */
+	if (!strcmp(fp->f_dentry->d_path, "/"))	/* root ? */
 		return 0;
 
 	return device_close(vp->v_data);
