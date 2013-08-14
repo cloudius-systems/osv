@@ -159,22 +159,23 @@
  */
 
 static int
-zfs_open(vnode_t *vp, int flags)
+zfs_open(struct file *fp)
 {
+	struct vnode *vp = fp->f_vnode;
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 
-	if ((flags & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
-	    ((flags & O_APPEND) == 0)) {
+	if ((fp->f_flags & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
+	    ((fp->f_flags & O_APPEND) == 0)) {
 		ZFS_EXIT(zfsvfs);
 		return (EPERM);
 	}
 
 	/* Keep a count of the synchronous opens in the znode */
-	if (flags & O_DSYNC)
+	if (fp->f_flags & O_DSYNC)
 		atomic_inc_32(&zp->z_sync_cnt);
 
 	ZFS_EXIT(zfsvfs);

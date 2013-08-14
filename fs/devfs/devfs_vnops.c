@@ -50,8 +50,9 @@
 #include "devfs.h"
 
 static int
-devfs_open(struct vnode *vp, int flags)
+devfs_open(struct file *fp)
 {
+	struct vnode *vp = fp->f_vnode;
 	char *path;
 	struct device *dev;
 	int error;
@@ -68,7 +69,7 @@ devfs_open(struct vnode *vp, int flags)
 	}
 	if (*path == '/')
 		path++;
-	error = device_open(path, flags & DO_RWMASK, &dev);
+	error = device_open(path, fp->f_flags & DO_RWMASK, &dev);
 	if (error) {
 		DPRINTF(("devfs_open: can not open device = %s error=%d\n",
 			 path, error));
