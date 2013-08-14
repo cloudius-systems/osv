@@ -3,6 +3,7 @@ package com.cloudius.cli.tests;
 import java.io.File;
 import java.util.HashMap;
 
+import sun.org.mozilla.javascript.Context;
 import sun.org.mozilla.javascript.Scriptable;
 
 import com.cloudius.cli.main.RhinoCLI;
@@ -58,7 +59,12 @@ public class TestRunner {
         this.registerELFTests();
     }
     
-    public String[] getTestNames() {
-        return _tests.keySet().toArray(new String[_tests.size()]);
+    public Scriptable getTestNames() {
+        Context cx = Context.enter();
+        Object[] names = _tests.keySet().toArray();
+        Scriptable tests = cx.newArray(cx.initStandardObjects(), names);
+        Context.exit();
+        
+        return (tests);
     }
 }
