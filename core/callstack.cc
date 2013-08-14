@@ -59,12 +59,15 @@ void callstack_collector::merge()
             continue;
         }
         auto& table = **_table.for_cpu(c);
-        for (auto& tr : table) {
+        auto it = table.begin();
+        while (it != table.end()) {
+            trace& tr = *it;
             auto i = table0.find(tr);
             if (i != table0.end()) {
                 i->hits += tr.hits;
+                ++it;
             } else {
-                table.erase(table.iterator_to(tr));
+                table.erase(it++);
                 table0.insert(tr);
             }
         }
