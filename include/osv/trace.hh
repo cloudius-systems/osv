@@ -13,6 +13,7 @@
 #include <drivers/clock.hh>
 #include <cstring>
 #include <arch.hh>
+#include <osv/rcu.hh>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
@@ -238,7 +239,8 @@ public:
 protected:
     bool active = false; // logging || !probes.empty()
     bool logging = false;
-    std::vector<probe*> probes;
+    osv::rcu_ptr<std::vector<probe*>> probes_ptr;
+    mutex probes_mutex;
     void run_probes();
 private:
     void try_enable();
