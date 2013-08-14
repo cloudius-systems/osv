@@ -350,6 +350,12 @@ void exit(int status)
     abort();
 }
 
+int atexit(void (*func)())
+{
+    // nothing to do
+    return 0;
+}
+
 int get_nprocs()
 {
     return sysconf(_SC_NPROCESSORS_ONLN);
