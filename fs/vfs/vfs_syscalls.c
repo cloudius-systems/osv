@@ -118,7 +118,6 @@ sys_open(char *path, int flags, mode_t mode, struct file *fp)
 		}
 	}
 
-	vref(vp);
 	vn_lock(vp);
 	/* Process truncate request */
 	if (flags & O_TRUNC) {
@@ -132,13 +131,13 @@ sys_open(char *path, int flags, mode_t mode, struct file *fp)
 	}
 
 	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
-	fp->f_vnode = vp;
+	fp->f_dentry = dp;
 
 	error = VOP_OPEN(vp, fp);
 	if (error)
 		goto out_vn_unlock;
 	vn_unlock(vp);
-	drele(dp);
+
 	return 0;
 
 out_vn_unlock:
@@ -233,12 +232,13 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 	DPRINTF(VFSDB_SYSCALL, ("sys_seek: fp=%x off=%d type=%d\n",
 				(u_int)fp, (u_int)off, type));
 
-	vp = fp->f_vnode;
-	if (!vp) {
+	if (!fp->f_dentry) {
 	    // Linux doesn't implement lseek() on pipes, sockets, or ttys.
 	    // In OSV, we only implement lseek() on regular files, backed by vnode
 	    return ESPIPE;
 	}
+
+	vp = fp->f_dentry->d_vnode;
 	vn_lock(vp);
 	switch (type) {
 	case SEEK_SET:
@@ -300,10 +300,10 @@ sys_fsync(struct file *fp)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_fsync: fp=%x\n", fp));
 
-	vp = fp->f_vnode;
-	if (!vp)
+	if (!fp->f_dentry)
 		return EINVAL;
 
+	vp = fp->f_dentry->d_vnode;
 	vn_lock(vp);
 	error = VOP_FSYNC(vp, fp);
 	vn_unlock(vp);
@@ -365,10 +365,10 @@ sys_readdir(struct file *fp, struct dirent *dir)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_readdir: fp=%x\n", fp));
 
-	dvp = fp->f_vnode;
-	if (!dvp) {
-	    return ENOTDIR;
-	}
+	if (!fp->f_dentry)
+		return ENOTDIR;
+
+	dvp = fp->f_dentry->d_vnode;
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -386,10 +386,10 @@ sys_rewinddir(struct file *fp)
 {
 	struct vnode *dvp;
 
-	dvp = fp->f_vnode;
-	if (!dvp) {
-	    return ENOTDIR;
-	}
+	if (!fp->f_dentry)
+		return ENOTDIR;
+
+	dvp = fp->f_dentry->d_vnode;
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -405,10 +405,10 @@ sys_seekdir(struct file *fp, long loc)
 {
 	struct vnode *dvp;
 
-	dvp = fp->f_vnode;
-	if (!dvp) {
-	    return ENOTDIR;
-	}
+	if (!fp->f_dentry)
+		return ENOTDIR;
+
+	dvp = fp->f_dentry->d_vnode;
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -424,10 +424,10 @@ sys_telldir(struct file *fp, long *loc)
 {
 	struct vnode *dvp;
 
-	dvp = fp->f_vnode;
-	if (!dvp) {
-	    return ENOTDIR;
-	}
+	if (!fp->f_dentry)
+		return ENOTDIR;
+
+	dvp = fp->f_dentry->d_vnode;
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
@@ -777,12 +777,13 @@ sys_statfs(char *path, struct statfs *buf)
 int
 sys_fstatfs(struct file *fp, struct statfs *buf)
 {
-	struct vnode *vp = fp->f_vnode;
-	if (!vp) {
-	    return EBADF;
-	}
+	struct vnode *vp;
 	int error = 0;
 
+	if (!fp->f_dentry)
+		return EBADF;
+
+	vp = fp->f_dentry->d_vnode;
 	memset(buf, 0, sizeof(*buf));
 
 	vn_lock(vp);
@@ -813,12 +814,13 @@ sys_truncate(char *path, off_t length)
 int
 sys_ftruncate(struct file *fp, off_t length)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp;
 	int error;
 
-	if (!vp)
+	if (!fp->f_dentry)
 		return EBADF;
 
+	vp = fp->f_dentry->d_vnode;
 	vn_lock(vp);
 	error = VOP_TRUNCATE(vp, length);
 	vn_unlock(vp);
@@ -831,10 +833,10 @@ sys_fchdir(struct file *fp, char *cwd)
 {
 	struct vnode *dvp;
 
-	dvp = fp->f_vnode;
-	if (!dvp) {
-	    return EBADF;
-	}
+	if (!fp->f_dentry)
+		return EBADF;
+
+	dvp = fp->f_dentry->d_vnode;
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);

@@ -91,7 +91,7 @@ vdev_file_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	vf->vf_file = fp;
 
 skip_open:
-	*max_psize = *psize = vf->vf_file->f_vnode->v_size;
+	*max_psize = *psize = vf->vf_file->f_dentry->d_vnode->v_size;
 	*ashift = SPA_MINBLOCKSHIFT;
 
 	return (0);

@@ -1022,7 +1022,7 @@ int isatty(int fd)
 	if (error)
 		goto out_errno;
 
-	if (fp->f_vnode && fp->f_vnode->v_flags & VISTTY)
+	if (fp->f_dentry && fp->f_dentry->d_vnode->v_flags & VISTTY)
 		istty = 1;
 	fdrop(fp);
 

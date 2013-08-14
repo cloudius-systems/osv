@@ -46,13 +46,14 @@
 #include <osv/device.h>
 #include <osv/vnode.h>
 #include <osv/mount.h>
+#include <osv/dentry.h>
 
 #include "devfs.h"
 
 static int
 devfs_open(struct file *fp)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	char *path;
 	struct device *dev;
 	int error;

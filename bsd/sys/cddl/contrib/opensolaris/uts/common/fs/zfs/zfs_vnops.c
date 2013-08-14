@@ -161,7 +161,7 @@
 static int
 zfs_open(struct file *fp)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
 
