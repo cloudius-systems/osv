@@ -158,7 +158,8 @@ pool::~pool()
 {
 }
 
-const size_t pool::max_object_size = page_size - sizeof(pool::page_header);
+// FIXME: handle larger sizes better, while preserving alignment:
+const size_t pool::max_object_size = page_size / 2;
 const size_t pool::min_object_size = sizeof(pool::free_object);
 
 pool::page_header* pool::to_header(free_object* object)
