@@ -921,7 +921,7 @@ blkfront_connect(struct xb_softc *sc)
 		return;
 	}
 	err = xs_gather(XST_NIL, xenbus_get_otherend_path(dev),
-			"feature-barrier", "%lu", &feature_barrier,
+			"feature-barrier", "%u", &feature_barrier,
 			NULL);
 	if (!err || feature_barrier)
 		sc->xb_flags |= XB_BARRIER;
