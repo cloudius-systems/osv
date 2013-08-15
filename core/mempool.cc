@@ -479,7 +479,10 @@ static void refill_page_buffer()
             auto limit = (pbuf.max + 1) / 2;
 
             while (pbuf.nr < limit) {
-                auto p = &*free_page_ranges.begin();
+                auto it = free_page_ranges.begin();
+                if (it == free_page_ranges.end())
+                    break;
+                auto p = &*it;
                 auto size = std::min(p->size, (limit - pbuf.nr) * page_size);
                 p->size -= size;
                 void* pages = static_cast<void*>(p) + p->size;
