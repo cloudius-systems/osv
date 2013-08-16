@@ -12,8 +12,10 @@
 extern char hypercall_page[];
 extern uint8_t xen_features[];
 extern struct start_info* xen_start_info;
+extern "C" shared_info_t *HYPERVISOR_shared_info;
 
 #define XENPV_ALTERNATIVE(x, y) ALTERNATIVE((xen_start_info != nullptr), x, y)
+#define is_xen() (HYPERVISOR_shared_info != nullptr)
 
 // We don't support 32 bit
 struct xen_vcpu_info {

@@ -1,5 +1,6 @@
 #include "apic.hh"
 #include "msr.hh"
+#include "xen.hh"
 #include <osv/percpu.hh>
 #include <cpuid.hh>
 #include <processor.hh>
@@ -118,7 +119,24 @@ void x2apic::write(apicreg reg, u32 value)
 
 u32 x2apic::id()
 {
-    return processor::rdmsr(msr::X2APIC_ID);
+    u32 id = processor::rdmsr(msr::X2APIC_ID);
+    if (!is_xen())
+        return id;
+
+    // The x2APIC specification says that reading from the X2APIC_ID MSR should
+    // return the physical apic id of the current processor. However, the Xen
+    // implementation (as of 4.2.2) is broken, and reads actually return old
+    // style xAPIC id. Even if they fix it, we still have HVs deployed around
+    // that will return the wrong ID. We can work around this by testing if the
+    // returned APIC id is in the form (id << 24), since in that case, the
+    // first 24 bits will all be zeroed. Then at least we can get this working
+    // everywhere. This may pose a problem if we want to ever support more than
+    // 1 << 24 vCPUs (or if any other HV has some random x2apic ids), but that
+    // is highly unlikely anyway.
+    if (((id & 0xffffff) == 0) && ((id >> 24) != 0)) {
+        id = (id >> 24);
+    }
+    return id;
 }
 
 apic_driver* create_apic_driver()
