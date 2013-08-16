@@ -29,6 +29,7 @@ compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL,
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	-fno-omit-frame-pointer $(compiler-specific) \
+	-include $(src)/compiler/include/intrinsics.hh \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
 	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207"
@@ -44,7 +45,7 @@ CFLAGS = -std=gnu99 $(COMMON)
 CFLAGS += -I $(src)/libc/internal -I  $(src)/libc/arch/$(arch) \
 	-Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable
 
-ASFLAGS = -g $(autodepend)
+ASFLAGS = -g $(autodepend) -DASSEMBLY
 
 fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
 
