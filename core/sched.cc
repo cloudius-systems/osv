@@ -518,13 +518,14 @@ void thread::wake()
     preempt_disable();
     unsigned c = cpu::current()->id;
     _cpu->incoming_wakeups[c].push_front(*this);
-    _cpu->incoming_wakeups_mask.set(c);
-    // FIXME: avoid if the cpu is alive and if the priority does not
-    // FIXME: warrant an interruption
-    if (_cpu != current()->tcpu()) {
-        _cpu->send_wakeup_ipi();
-    } else {
-        need_reschedule = true;
+    if (!_cpu->incoming_wakeups_mask.test_and_set(c)) {
+        // FIXME: avoid if the cpu is alive and if the priority does not
+        // FIXME: warrant an interruption
+        if (_cpu != current()->tcpu()) {
+            _cpu->send_wakeup_ipi();
+        } else {
+            need_reschedule = true;
+        }
     }
     preempt_enable();
 }
