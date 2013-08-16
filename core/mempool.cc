@@ -841,7 +841,7 @@ void free(void* v)
 
 void* realloc(void* v, size_t size)
 {
-    auto h = static_cast<header*>(v) - 1;
+    auto h = static_cast<header*>(v - pad_before);
     void* n = malloc(size);
     memcpy(n, v, h->size);
     free(v);
