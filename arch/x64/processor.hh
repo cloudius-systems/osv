@@ -202,6 +202,27 @@ inline void wrmsr(u32 index, u64 data) {
     asm volatile ("wrmsr" : : "c"(index), "a"(lo), "d"(hi));
 }
 
+inline bool wrmsr_safe(u32 index, u64 data) {
+    u32 lo = data, hi = data >> 32;
+
+    bool ret = true;
+    asm volatile ("1: \n\t"
+                  "wrmsr\n\t"
+                  "2: \n\t"
+                  ".pushsection .text.fixup, \"ax\" \n\t"
+                  "3: \n\t"
+                  "xor %[ret], %[ret]\n\t"
+                  "jmp 2b \n\t"
+                  ".popsection \n\t"
+                  ".pushsection .fixup, \"a\" \n\t"
+                  ".quad 1b, 3b \n\t"
+                  ".popsection\n"
+            :  [ret]"+r"(ret)
+            : "c"(index), "a"(lo), "d"(hi));
+
+    return ret;
+}
+
 inline void wrfsbase(u64 data)
 {
     asm volatile("wrfsbase %0" : : "r"(data));
