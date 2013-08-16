@@ -116,10 +116,12 @@ void smp_launch()
         attr.pinned_cpu = c;
         c->init_idle_thread();
         c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
+
+        apic->init_ipi(c->arch.apic_id, 0x4500); // INIT
+        apic->init_ipi(c->arch.apic_id, 0x4600); // SIPI
+        apic->init_ipi(c->arch.apic_id, 0x4600); // SIPI
     }
-    apic->write(apicreg::ICR, 0xc4500); // INIT
-    apic->write(apicreg::ICR, 0xc4600); // SIPI
-    apic->write(apicreg::ICR, 0xc4600); // SIPI
+
     while (smp_processors != sched::cpus.size()) {
         barrier();
     }

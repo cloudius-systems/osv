@@ -32,6 +32,7 @@ public:
     virtual void write(apicreg reg, u32 value);
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned apic_id, unsigned vector);
+    virtual void init_ipi(unsigned apic_id, unsigned vector);
     virtual void ipi_allbutself(unsigned vector);
     virtual void nmi_allbutself();
     virtual void eoi();
@@ -76,6 +77,11 @@ void x2apic::self_ipi(unsigned vector)
 void x2apic::ipi(unsigned apic_id, unsigned vector)
 {
     wrmsr(msr::X2APIC_ICR, vector | (u64(apic_id) << 32) | (1 << 14));
+}
+
+void x2apic::init_ipi(unsigned apic_id, unsigned vector)
+{
+    wrmsr_safe(msr::X2APIC_ICR, vector | (u64(apic_id) << 32));
 }
 
 static constexpr unsigned APIC_SHORTHAND_SELF = 0x40000;
