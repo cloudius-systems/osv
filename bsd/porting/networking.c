@@ -16,6 +16,7 @@
 int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
 {
     int error, success;
+    struct ifreq oldaddr;
     struct in_aliasreq ifra;
     struct bsd_sockaddr_in* addr      = &ifra.ifra_addr;
     struct bsd_sockaddr_in* mask      = &ifra.ifra_mask;
@@ -58,6 +59,11 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
     broadcast->sin_addr.s_addr = (addr->sin_addr.s_addr &
                                   mask->sin_addr.s_addr) |
                                  ~mask->sin_addr.s_addr ;
+    strncpy(oldaddr.ifr_name, if_name, IFNAMSIZ);
+    error = in_control(NULL, SIOCGIFADDR, (caddr_t)&oldaddr, ifp, NULL);
+    if (!error) {
+        in_control(NULL, SIOCDIFADDR, (caddr_t)&oldaddr, ifp, NULL);
+    }
     error = in_control(NULL, SIOCAIFADDR, (caddr_t)&ifra, ifp, NULL);
 
 out:
