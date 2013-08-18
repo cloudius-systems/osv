@@ -546,17 +546,17 @@ namespace dhcp {
 
     void dhcp_worker::dhcp_worker_fn()
     {
-        _lock.lock();
         while (true) {
+            mbuf* m;
+            WITH_LOCK(_lock) {
+                sched::thread::wait_until(_lock, [&] {
+                    return (!_rx_packets.empty());
+                });
 
-            sched::thread::wait_until(_lock, [&] {
-                return (!_rx_packets.empty());
-            });
-
-            // Get packet for handling
-            struct mbuf* m = _rx_packets.front();
-            _rx_packets.pop_front();
-            _lock.unlock();
+                // Get packet for handling
+                m = _rx_packets.front();
+                _rx_packets.pop_front();
+            }
 
             auto it = _universe.find(m->m_pkthdr.rcvif);
             if (it == _universe.end()) {
@@ -565,11 +565,7 @@ namespace dhcp {
             }
 
             it->second->process_packet(m);
-            _lock.lock();
         }
-
-        // Never reached
-        _lock.unlock();
     }
 
     void dhcp_worker::queue_packet(struct mbuf* m)
