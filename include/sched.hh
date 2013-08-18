@@ -49,6 +49,9 @@ public:
         unsigned bit = 1UL << c;
         return _mask.fetch_or(bit, std::memory_order_release) & bit;
     }
+    bool test_all_and_set(unsigned c) {
+        return _mask.fetch_or(1UL << c, std::memory_order_release);
+    }
     void clear(unsigned c) {
         _mask.fetch_and(~(1UL << c), std::memory_order_release);
     }

@@ -518,7 +518,7 @@ void thread::wake()
     preempt_disable();
     unsigned c = cpu::current()->id;
     _cpu->incoming_wakeups[c].push_front(*this);
-    if (!_cpu->incoming_wakeups_mask.test_and_set(c)) {
+    if (!_cpu->incoming_wakeups_mask.test_all_and_set(c)) {
         // FIXME: avoid if the cpu is alive and if the priority does not
         // FIXME: warrant an interruption
         if (_cpu != current()->tcpu()) {
