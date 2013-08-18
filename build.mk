@@ -144,6 +144,7 @@ tests += tests/tst-lfring.so
 tests += tests/tst-fsx.so
 tests += tests/tst-resolve.so
 tests += tests/tst-except.so
+tests += tests/tst-tcp-sendonly.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
