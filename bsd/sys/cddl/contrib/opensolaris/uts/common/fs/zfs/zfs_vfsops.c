@@ -1018,7 +1018,7 @@ zfs_domount(vfs_t *vfsp, char *osname)
 
 	error = zfs_zget(zfsvfs, zfsvfs->z_root, &rootzp);
 	if (error == 0)
-		vfsp->m_root->v_data = rootzp;
+		vfsp->m_root->d_vnode->v_data = rootzp;
 
 
 #ifdef notyet

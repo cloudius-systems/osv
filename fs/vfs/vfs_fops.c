@@ -12,22 +12,23 @@ static int vfs_fo_init(struct file *fp)
 
 static int vfs_close(struct file *fp)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 
 	vn_lock(vp);
 	error = VOP_CLOSE(vp, fp);
-	if (error) {
-		vn_unlock(vp);
+	vn_unlock(vp);
+
+	if (error)
 		return error;
-	}
-	vput(vp);
+
+	drele(fp->f_dentry);
 	return 0;
 }
 
 static int vfs_read(struct file *fp, struct uio *uio, int flags)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 	size_t count;
 	ssize_t bytes;
@@ -52,7 +53,7 @@ static int vfs_read(struct file *fp, struct uio *uio, int flags)
 
 static int vfs_write(struct file *fp, struct uio *uio, int flags)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	int ioflags = 0;
 	int error;
 	size_t count;
@@ -83,7 +84,7 @@ static int vfs_write(struct file *fp, struct uio *uio, int flags)
 
 static int vfs_ioctl(struct file *fp, u_long com, void *data)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 
 	vn_lock(vp);
@@ -95,7 +96,7 @@ static int vfs_ioctl(struct file *fp, u_long com, void *data)
 
 static int vfs_stat(struct file *fp, struct stat *st)
 {
-	struct vnode *vp = fp->f_vnode;
+	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 
 	vn_lock(vp);

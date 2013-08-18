@@ -63,7 +63,7 @@ struct file {
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
 	off_t		f_offset;	/* current position in file */
-	struct vnode	*f_vnode;	/* vnode */
+	struct dentry	*f_dentry;	/* dentry */
 	struct fileops	*f_ops;		/* file ops abstraction */
 	void		*f_data;	/* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */

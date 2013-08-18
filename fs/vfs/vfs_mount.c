@@ -83,7 +83,8 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	const struct vfssw *fs;
 	struct mount *mp;
 	struct device *device;
-	struct vnode *vp, *vp_covered;
+	struct dentry *dp_covered;
+	struct vnode *vp;
 	int error;
 
 	kprintf("VFS: mounting %s at %s\n", fsname, dir);
@@ -132,19 +133,19 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	 */
 	if (*dir == '/' && *(dir + 1) == '\0') {
 		/* Ignore if it mounts to global root directory. */
-		vp_covered = NULL;
+		dp_covered = NULL;
 	} else {
-		if ((error = namei(dir, &vp_covered)) != 0) {
+		if ((error = namei(dir, &dp_covered)) != 0) {
 
 			error = ENOENT;
 			goto err2;
 		}
-		if (vp_covered->v_type != VDIR) {
+		if (dp_covered->d_vnode->v_type != VDIR) {
 			error = ENOTDIR;
 			goto err3;
 		}
 	}
-	mp->m_covered = vp_covered;
+	mp->m_covered = dp_covered;
 
 	/*
 	 * Create a root vnode for this file system.
@@ -156,7 +157,13 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	vp->v_type = VDIR;
 	vp->v_flags = VROOT;
 	vp->v_mode = S_IFDIR | S_IRUSR | S_IWUSR | S_IXUSR;
-	mp->m_root = vp;
+
+	mp->m_root = dentry_alloc(vp, "/");
+	if (!mp->m_root) {
+		vput(vp);
+		goto err3;
+	}
+	vput(vp);
 
 	/*
 	 * Call a file system specific routine.
@@ -168,13 +175,6 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 		vp->v_mode &=~S_IWUSR;
 
 	/*
-	 * Keep reference count for root/covered vnode.
-	 */
-	vn_unlock(vp);
-	if (vp_covered)
-		vn_unlock(vp_covered);
-
-	/*
 	 * Insert to mount list
 	 */
 	LIST_INSERT_HEAD(&mount_list, mp, m_link);
@@ -182,10 +182,10 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 
 	return 0;	/* success */
  err4:
-	vput(vp);
+	drele(mp->m_root);
  err3:
-	if (vp_covered)
-		vput(vp_covered);
+	if (dp_covered)
+		drele(dp_covered);
  err2:
 	free(mp);
  err1:
@@ -227,7 +227,7 @@ found:
 	LIST_REMOVE(mp, m_link);
 
 	/* Decrement referece count of root vnode */
-	vrele(mp->m_covered);
+	drele(mp->m_covered);
 
 	/* Release all vnodes */
 	vflush(mp);

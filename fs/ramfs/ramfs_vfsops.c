@@ -31,6 +31,7 @@
 
 #include <osv/vnode.h>
 #include <osv/mount.h>
+#include <osv/dentry.h>
 
 #include "ramfs.h"
 
@@ -68,7 +69,7 @@ ramfs_mount(struct mount *mp, char *dev, int flags, void *data)
 	np = ramfs_allocate_node("/", VDIR);
 	if (np == NULL)
 		return ENOMEM;
-	mp->m_root->v_data = np;
+	mp->m_root->d_vnode->v_data = np;
 	return 0;
 }
 

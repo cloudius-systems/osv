@@ -27,30 +27,122 @@
  * SUCH DAMAGE.
  */
 
-/*
- * vfs_lookup.c - vnode lookup function.
- */
-
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
 
+#include <osv/dentry.h>
 #include <osv/vnode.h>
 #include "vfs.h"
 
+#define DENTRY_BUCKETS 32
+
+static LIST_HEAD(dentry_hash_head, dentry) dentry_hash_table[DENTRY_BUCKETS];
+static struct mutex dentry_hash_lock;
+
 /*
- * Convert a pathname into a pointer to a locked vnode.
+ * Get the hash value from the mount point and path name.
+ * XXX: replace with a better hash for 64-bit pointers.
+ */
+static u_int
+dentry_hash(struct mount *mp, char *path)
+{
+	u_int val = 0;
+
+	if (path) {
+		while (*path)
+			val = ((val << 5) + val) + *path++;
+	}
+	return (val ^ (unsigned long)mp) & (DENTRY_BUCKETS - 1);
+}
+
+
+struct dentry *
+dentry_alloc(struct vnode *vp, char *path)
+{
+	struct mount *mp = vp->v_mount;
+	struct dentry *dp = calloc(sizeof(*dp), 1);
+
+	if (!dp)
+		return NULL;
+
+	vp->v_refcnt++;
+
+	dp->d_refcnt = 1;
+	dp->d_vnode = vp;
+	dp->d_mount = mp;
+	dp->d_path = strdup(path);
+
+	mutex_lock(&dentry_hash_lock);
+	LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(mp, path)], dp, d_link);
+	mutex_unlock(&dentry_hash_lock);
+	return dp;
+};
+
+static struct dentry *
+dentry_lookup(struct mount *mp, char *path)
+{
+	struct dentry *dp;
+
+	mutex_lock(&dentry_hash_lock);
+	LIST_FOREACH(dp, &dentry_hash_table[dentry_hash(mp, path)], d_link) {
+		if (dp->d_mount == mp &&
+		    !strncmp(dp->d_path, path, PATH_MAX)) {
+			dp->d_refcnt++;
+			mutex_unlock(&dentry_hash_lock);
+			return dp;
+		}
+	}
+	mutex_unlock(&dentry_hash_lock);
+	return NULL;		/* not found */
+}
+
+void
+dref(struct dentry *dp)
+{
+	ASSERT(dp);
+	ASSERT(dp->d_refcnt > 0);
+
+	mutex_lock(&dentry_hash_lock);
+	dp->d_refcnt++;
+	mutex_unlock(&dentry_hash_lock);
+}
+
+void
+drele(struct dentry *dp)
+{
+	ASSERT(dp);
+	ASSERT(dp->d_refcnt > 0);
+
+	mutex_lock(&dentry_hash_lock);
+	if (--dp->d_refcnt) {
+		mutex_unlock(&dentry_hash_lock);
+		return;
+	}
+	LIST_REMOVE(dp, d_link);
+	mutex_unlock(&dentry_hash_lock);
+
+	vrele(dp->d_vnode);
+
+	free(dp->d_path);
+	free(dp);
+}
+
+/*
+ * Convert a pathname into a pointer to a dentry
  *
  * @path: full path name.
- * @vpp:  vnode to be returned.
+ * @dpp:  dentry to be returned.
  */
 int
-namei(char *path, struct vnode **vpp)
+namei(char *path, struct dentry **dpp)
 {
 	char *p;
 	char node[PATH_MAX];
 	char name[PATH_MAX];
 	struct mount *mp;
+	struct dentry *dp, *ddp;
 	struct vnode *dvp, *vp;
 	int error, i;
 
@@ -64,10 +156,10 @@ namei(char *path, struct vnode **vpp)
 		return ENOTDIR;
 	strlcpy(node, "/", sizeof(node));
 	strlcat(node, p, sizeof(node));
-	vp = vn_lookup(mp, node);
-	if (vp) {
+	dp = dentry_lookup(mp, node);
+	if (dp) {
 		/* vnode is already active. */
-		*vpp = vp;
+		*dpp = dp;
 		return 0;
 	}
 	/*
@@ -75,11 +167,11 @@ namei(char *path, struct vnode **vpp)
 	 * This is done to attach the fs specific data to
 	 * the target vnode.
 	 */
-	if ((dvp = mp->m_root) == NULL)
+	ddp = mp->m_root;
+	if (!ddp)
 		sys_panic("VFS: no root");
+	dref(ddp);
 
-	vref(dvp);
-	vn_lock(dvp);
 	node[0] = '\0';
 
 	while (*p != '\0') {
@@ -100,26 +192,39 @@ namei(char *path, struct vnode **vpp)
 		 */
 		strlcat(node, "/", sizeof(node));
 		strlcat(node, name, sizeof(node));
-		vp = vn_lookup(mp, node);
-		if (vp == NULL) {
+		dp = dentry_lookup(mp, node);
+		if (dp == NULL) {
 			vp = vget(mp, node);
 			if (vp == NULL) {
-				vput(dvp);
+				drele(ddp);
 				return ENOMEM;
 			}
+
+			dvp = ddp->d_vnode;
+			vn_lock(dvp);
+
 			/* Find a vnode in this directory. */
 			error = VOP_LOOKUP(dvp, name, vp);
 			if (error || (*p == '/' && vp->v_type != VDIR)) {
-				/* Not found */
 				vput(vp);
-				vput(dvp);
+				vn_unlock(dvp);
+				drele(ddp);
 				if (!error)
 					error = ENOENT;
 				return error;
 			}
+
+			dp = dentry_alloc(vp, node);
+			vn_unlock(dvp);
+			vput(vp);
+
+			if (!dp) {
+				drele(ddp);
+				return ENOMEM;
+			}
 		}
-		vput(dvp);
-		dvp = vp;
+		drele(ddp);
+		ddp = dp;
 		while (*p != '\0' && *p != '/')
 			p++;
 	}
@@ -133,7 +238,7 @@ namei(char *path, struct vnode **vpp)
 	}
 #endif
 
-	*vpp = vp;
+	*dpp = dp;
 	return 0;
 }
 
@@ -142,18 +247,18 @@ namei(char *path, struct vnode **vpp)
  * This is a very central but not so complicated routine. ;-P
  *
  * @path: full path.
- * @vpp:  pointer to locked vnode for directory.
+ * @dpp:  pointer to dentry for directory.
  * @name: pointer to file name in path.
  *
  * This routine returns a locked directory vnode and file name.
  */
 int
-lookup(char *path, struct vnode **vpp, char **name)
+lookup(char *path, struct dentry **dpp, char **name)
 {
 	char buf[PATH_MAX];
 	char root[] = "/";
 	char *file, *dir;
-	struct vnode *vp;
+	struct dentry *dp;
 	int error;
 
 	DPRINTF(VFSDB_VNODE, ("lookup: path=%s\n", path));
@@ -174,17 +279,31 @@ lookup(char *path, struct vnode **vpp, char **name)
 	/*
 	 * Get the vnode for directory
 	 */
-	if ((error = namei(dir, &vp)) != 0)
+	if ((error = namei(dir, &dp)) != 0)
 		return error;
-	if (vp->v_type != VDIR) {
-		vput(vp);
+	if (dp->d_vnode->v_type != VDIR) {
+		drele(dp);
 		return ENOTDIR;
 	}
-	*vpp = vp;
+
+	*dpp = dp;
 
 	/*
 	 * Get the file name
 	 */
 	*name = strrchr(path, '/') + 1;
 	return 0;
+}
+
+/*
+ * vnode_init() is called once (from vfs_init)
+ * in initialization.
+ */
+void
+lookup_init(void)
+{
+	int i;
+
+	for (i = 0; i < DENTRY_BUCKETS; i++)
+		LIST_INIT(&dentry_hash_table[i]);
 }

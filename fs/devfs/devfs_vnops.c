@@ -46,19 +46,20 @@
 #include <osv/device.h>
 #include <osv/vnode.h>
 #include <osv/mount.h>
+#include <osv/dentry.h>
 
 #include "devfs.h"
 
 static int
-devfs_open(struct vnode *vp, int flags)
+devfs_open(struct file *fp)
 {
-	char *path;
+	struct vnode *vp = fp->f_dentry->d_vnode;
+	char *path = fp->f_dentry->d_path;
 	struct device *dev;
 	int error;
 
-	DPRINTF(("devfs_open: path=%s\n", vp->v_path));
+	DPRINTF(("devfs_open: path=%s\n", path));
 
-	path = vp->v_path;
 	if (!strcmp(path, "/"))	/* root ? */
 		return 0;
 
@@ -68,7 +69,7 @@ devfs_open(struct vnode *vp, int flags)
 	}
 	if (*path == '/')
 		path++;
-	error = device_open(path, flags & DO_RWMASK, &dev);
+	error = device_open(path, fp->f_flags & DO_RWMASK, &dev);
 	if (error) {
 		DPRINTF(("devfs_open: can not open device = %s error=%d\n",
 			 path, error));
@@ -84,7 +85,7 @@ devfs_close(struct vnode *vp, struct file *fp)
 
 	DPRINTF(("devfs_close: fp=%x\n", fp));
 
-	if (!strcmp(vp->v_path, "/"))	/* root ? */
+	if (!strcmp(fp->f_dentry->d_path, "/"))	/* root ? */
 		return 0;
 
 	return device_close(vp->v_data);

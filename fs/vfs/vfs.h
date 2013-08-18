@@ -39,6 +39,7 @@
 #include <osv/file.h>
 #include <osv/mount.h>
 #include <osv/vnode.h>
+#include <osv/dentry.h>
 
 /* #define DEBUG_VFS 1 */
 
@@ -118,18 +119,23 @@ int	 task_conv(struct task *t, const char *path, int mode, char *full);
 //int	 sec_file_permission(task_t task, char *path, int mode);
 int	 sec_vnode_permission(char *path);
 
-int	 namei(char *path, struct vnode **vpp);
-int	 lookup(char *path, struct vnode **vpp, char **name);
+int	 namei(char *path, struct dentry **dpp);
+int	 lookup(char *path, struct dentry **dpp, char **name);
 void	 vnode_init(void);
+void	 lookup_init(void);
 
 int	 vfs_findroot(char *path, struct mount **mp, char **root);
 
 int	 fs_noop(void);
 
+struct dentry *dentry_alloc(struct vnode *vp, char *path);
+void	drele(struct dentry *dp);
+
 #ifdef DEBUG_VFS
 void	 vnode_dump(void);
 void	 mount_dump(void);
 #endif
+
 __END_DECLS
 
 #endif /* !_VFS_H */

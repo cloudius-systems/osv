@@ -115,7 +115,7 @@ struct vattr {
 #define IO_SYNC		0x0002
 
 
-typedef	int (*vnop_open_t)	(struct vnode *, int);
+typedef	int (*vnop_open_t)	(struct file *);
 typedef	int (*vnop_close_t)	(struct vnode *, struct file *);
 typedef	int (*vnop_read_t)	(struct vnode *, struct uio *, int);
 typedef	int (*vnop_write_t)	(struct vnode *, struct uio *, int);
@@ -162,7 +162,7 @@ struct vnops {
 /*
  * vnode interface
  */
-#define VOP_OPEN(VP, F)		   ((VP)->v_op->vop_open)(VP, F)
+#define VOP_OPEN(VP, FP)	   ((VP)->v_op->vop_open)(FP)
 #define VOP_CLOSE(VP, FP)	   ((VP)->v_op->vop_close)(VP, FP)
 #define VOP_READ(VP, U, F)	   ((VP)->v_op->vop_read)(VP, U, F)
 #define VOP_WRITE(VP, U, F)	   ((VP)->v_op->vop_write)(VP, U, F)
@@ -191,7 +191,6 @@ int	 vn_stat(struct vnode *, struct stat *);
 int	 vn_access(struct vnode *, int);
 struct vnode *vget(struct mount *, char *);
 void	 vput(struct vnode *);
-void	 vgone(struct vnode *);
 void	 vref(struct vnode *);
 void	 vrele(struct vnode *);
 int	 vcount(struct vnode *);
