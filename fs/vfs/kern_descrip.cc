@@ -102,7 +102,7 @@ int fdset(int fd, struct file *fp)
     }
 
     if (orig)
-        rcu_defer(fdrop, orig);
+        fdrop(orig);
 
     return 0;
 }
