@@ -5,6 +5,7 @@
 #include "exceptions.hh"
 #include "cpuid.hh"
 #include "osv/pagealloc.hh"
+#include <xmmintrin.h>
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -118,6 +119,11 @@ inline void arch_cpu::init_on_cpu()
         cr4 |= cr4_osxsave;
     }
     write_cr4(cr4);
+
+    // We can't trust the FPU and the MXCSR to be always initialized to default values.
+    // In at least one particular version of Xen it is not, leading to SIMD exceptions.
+    asm volatile ("fninit" ::: "memory");
+    _mm_setcsr(0x1f80);
 }
 
 struct exception_guard {
