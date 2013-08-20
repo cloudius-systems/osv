@@ -19,7 +19,7 @@ $ patch -p1 < osv.patch
 
 4. build again
 $ make clean
-$ make CFLGAS="-fPIC -shared"
+$ make CFLAGS="-fPIC -shared"
 
 5. copy src/netserver and use it in OS-v.
 
