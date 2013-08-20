@@ -60,6 +60,8 @@
 int	vfs_debug = VFSDB_FLAGS;
 #endif
 
+std::atomic<mode_t> global_umask{S_IWGRP | S_IWOTH};
+
 TRACEPOINT(trace_vfs_open, "\"%s\" 0x%x 0%0o", const char*, int, mode_t);
 TRACEPOINT(trace_vfs_open_ret, "%d", int);
 TRACEPOINT(trace_vfs_open_err, "%d", int);
@@ -1305,6 +1307,11 @@ int chmod(const char *pathname, mode_t mode)
 	debug("stub chmod\n");
 	trace_vfs_chmod_ret();
 	return 0;
+}
+
+mode_t umask(mode_t newmask)
+{
+	return global_umask.exchange(newmask, std::memory_order_relaxed);
 }
 
 int
