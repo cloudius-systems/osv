@@ -14,7 +14,7 @@ void xen_irq::do_irq(void)
 {
     while (true) {
         sched::thread::wait_until([this] {
-            return _irq_pending.exchange(true, std::memory_order_relaxed);
+            return _irq_pending.exchange(false, std::memory_order_relaxed);
         });
 
         _handler(_args);
