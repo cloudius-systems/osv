@@ -57,6 +57,14 @@
 /java/bench.jar: tests/bench/bench.jar
 /java/cloudius.jar: java/cloudius.jar
 /java/cli.jar: java/cli.jar
+/java/sshd.jar: java/sshd.jar
+/java/lib/bcprov-jdk15-140.jar: ../../external/jars.bin/bcprov-jdk15-140.jar
+/java/lib/mina-core-2.0.5.jar: ../../external/jars.bin/mina-core-2.0.5.jar
+/java/lib/slf4j-api-1.7.5.jar: ../../external/jars.bin/slf4j-api-1.7.5.jar
+/java/lib/slf4j-simple-1.7.5.jar: ../../external/jars.bin/slf4j-simple-1.7.5.jar
+/java/lib/sshd-core-0.8.0.jar: ../../external/jars.bin/sshd-core-0.8.0.jar
+/java/lib/sshd-pam-0.8.0.jar: ../../external/jars.bin/sshd-pam-0.8.0.jar
+/java/lib/tomcat-apr-5.5.23.jar: ../../external/jars.bin/tomcat-apr-5.5.23.jar
 /tools/ifconfig.so: ./tools/ifconfig/ifconfig.so
 /tools/lsroute.so: ./tools/route/lsroute.so
 /console/util.js: ../../console/util.js
