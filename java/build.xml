@@ -4,18 +4,33 @@
         simple example build file
     </description>
   <!-- set global properties for this build -->
+  <property name="external" location="../external"/>
+  <property name="external-lib" location="${external}/jars.bin"/>
   <property name="src-cloudius" location="cloudius/"/>
   <property name="src-cli" location="cli/"/>
+  <property name="src-sshd" location="sshd"/>
   <property name="build-cloudius" location="${out}/classes-cloudius"/>
   <property name="build-cli" location="${out}/classes-cli"/>
+  <property name="build-sshd" location="${out}/classes-sshd"/>
+  <property name="jars-sshd" value="bcprov-jdk15-140.jar mina-core-2.0.5.jar slf4j-api-1.7.5.jar slf4j-simple-1.7.5.jar sshd-core-0.8.0.jar sshd-pam-0.8.0.jar tomcat-apr-5.5.23.jar" />
+  
+  <script language="javascript">
+  	var jars_sshd_with_lib = project.getProperty('jars-sshd')
+  		.split(' ').map(function(jar) { return "lib/" + jar; })
+  		.join(' ');
+  	project.setProperty('jars-lib-sshd', jars_sshd_with_lib)
+  </script>
+	
   <property name="dist" location="${out}"/>
-
+	
   <target name="init">
     <!-- Create the build directory structure used by compile -->
     <mkdir dir="${build-cloudius}"/>
     <mkdir dir="${build-cloudius}/META-INF"/>
     <mkdir dir="${build-cli}"/>
     <mkdir dir="${build-cli}/META-INF"/>
+    <mkdir dir="${build-sshd}"/>
+    <mkdir dir="${build-sshd}/META-INF"/>
   </target>
 
   <target name="compile" depends="init"
@@ -25,17 +40,29 @@
     <javac includeantruntime="false" srcdir="${src-cli}" destdir="${build-cli}">
       <classpath path="${build-cloudius}" />
     </javac>
+    <javac includeantruntime="false" srcdir="${src-sshd}" destdir="${build-sshd}">
+      <classpath>
+      	<path path="${build-cloudius}" />
+      	<path path="${build-cli}" />
+      	<fileset dir="${external-lib}" includes="${jars-sshd}" />
+      </classpath>
+    </javac>
   </target>
 
   <target name="dist" depends="compile"
         description="generate the distribution" >
-
     <jar jarfile="${dist}/cloudius.jar" basedir="${build-cloudius}" compress="false" />
     <jar jarfile="${dist}/cli.jar" basedir="${build-cli}" compress="false" >
       <manifest>
         <attribute name="Main-Class" value="com.cloudius.cli.main.RhinoCLI" />
         <attribute name="Class-Path" value="cloudius.jar" />
       </manifest>
+    </jar>
+  	<jar jarfile="${dist}/sshd.jar" basedir="${build-sshd}" compress="false">
+  	  <manifest>
+  	  	<attribute name="Main-Class" value="com.cloudius.sshd.Server" />
+  	  	<attribute name="Class-Path" value="cli.jar ${jars-lib-sshd}" />
+  	  </manifest>
     </jar>
   </target>
 
@@ -44,6 +71,7 @@
     <!-- Delete the ${build} and ${dist} directory trees -->
     <delete dir="${build-cloudius}"/>
     <delete dir="${build-cli}"/>
+    <delete dir="${build-sshd}"/>
     <delete dir="${dist}"/>
   </target>
 </project>
