@@ -34,6 +34,7 @@
 #include "smp.hh"
 #include "bsd/sys/sys/sysctl.h"
 #include <osv/power.hh>
+#include <sys/time.h>
 
 #define __LC_LAST 13
 
@@ -359,4 +360,10 @@ int atexit(void (*func)())
 int get_nprocs()
 {
     return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+int utimes (const char *, const struct timeval [2])
+{
+    // FIXME This is just a stub
+    return 0;
 }
