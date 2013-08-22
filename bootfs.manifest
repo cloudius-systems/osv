@@ -53,6 +53,7 @@
 /&/tests/tst-resolve.so: ./&
 /&/tests/tst-except.so: ./&
 /&/tests/tst-tcp-sendonly.so: ./&
+/&/tests/tst-tcp-hash-srv.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
