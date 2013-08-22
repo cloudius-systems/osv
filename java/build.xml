@@ -14,13 +14,6 @@
   <property name="build-sshd" location="${out}/classes-sshd"/>
   <property name="jars-sshd" value="bcprov-jdk15-140.jar mina-core-2.0.5.jar slf4j-api-1.7.5.jar slf4j-simple-1.7.5.jar sshd-core-0.8.0.jar sshd-pam-0.8.0.jar tomcat-apr-5.5.23.jar" />
   
-  <script language="javascript">
-  	var jars_sshd_with_lib = project.getProperty('jars-sshd')
-  		.split(' ').map(function(jar) { return "lib/" + jar; })
-  		.join(' ');
-  	project.setProperty('jars-lib-sshd', jars_sshd_with_lib)
-  </script>
-	
   <property name="dist" location="${out}"/>
 	
   <target name="init">
