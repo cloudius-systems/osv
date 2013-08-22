@@ -37,7 +37,7 @@
       <classpath>
       	<path path="${build-cloudius}" />
       	<path path="${build-cli}" />
-      	<fileset dir="${external-lib}" includes="${jars-sshd}" />
+      	<fileset id="jars-sshd.fileset" dir="${external-lib}" includes="${jars-sshd}"/>
       </classpath>
     </javac>
   </target>
@@ -51,11 +51,16 @@
         <attribute name="Class-Path" value="cloudius.jar" />
       </manifest>
     </jar>
-  	<jar jarfile="${dist}/sshd.jar" basedir="${build-sshd}" compress="false">
-  	  <manifest>
-  	  	<attribute name="Main-Class" value="com.cloudius.sshd.Server" />
-  	  	<attribute name="Class-Path" value="cli.jar ${jars-lib-sshd}" />
-  	  </manifest>
+    
+    <!-- Prefix libs from jars-sshd with lib/ -->
+    <pathconvert property="jars-lib-sshd" refid="jars-sshd.fileset" pathsep=" ">
+      <map from="${external-lib}" to="lib" />
+    </pathconvert>
+    <jar jarfile="${dist}/sshd.jar" basedir="${build-sshd}" compress="false">
+      <manifest>
+        <attribute name="Main-Class" value="com.cloudius.sshd.Server" />
+        <attribute name="Class-Path" value="cli.jar ${jars-lib-sshd}" />
+      </manifest>
     </jar>
   </target>
 
