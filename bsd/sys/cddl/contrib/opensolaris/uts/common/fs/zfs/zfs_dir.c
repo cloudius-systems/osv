@@ -525,6 +525,7 @@ zfs_unlinked_drain(zfsvfs_t *zfsvfs)
 	zap_cursor_fini(&zc);
 }
 
+#ifdef NOTYET
 /*
  * Delete the entire contents of a directory.  Return a count
  * of the number of entries that could not be deleted. If we encounter
@@ -591,6 +592,7 @@ zfs_purgedir(znode_t *dzp)
 		skipped += 1;
 	return (skipped);
 }
+#endif
 
 void
 zfs_rmnode(znode_t *zp)
@@ -605,6 +607,7 @@ zfs_rmnode(znode_t *zp)
 
 	ASSERT(zp->z_links == 0);
 
+#ifndef __OSV__
 	/*
 	 * If this is an attribute directory, purge its contents.
 	 */
@@ -620,6 +623,7 @@ zfs_rmnode(znode_t *zp)
 			return;
 		}
 	}
+#endif
 
 	/*
 	 * Free up all the data in the file.
