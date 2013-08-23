@@ -116,7 +116,7 @@ make_vdev_root(void)
 	nvlist_t *root, **child;
 	int c;
 
-	ASSERT(t > 0);
+	//ASSERT(t > 0);
 
 	child = calloc(1, sizeof (nvlist_t *));
 	child[0] = make_vdev_disk("/dev/vblk1");
