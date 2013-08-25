@@ -68,9 +68,10 @@ void cpu_quiescent_state_thread::work()
     }
 }
 
-bool all_at_generation(uint64_t generation)
+bool all_at_generation(decltype(cpu_quiescent_state_threads)& cqsts,
+                       uint64_t generation)
 {
-    for (auto cqst : cpu_quiescent_state_threads) {
+    for (auto cqst : cqsts) {
         if (!cqst->check(generation)) {
             return false;
         }
@@ -82,10 +83,15 @@ void await_grace_period()
 {
     static uint64_t generation = 0;
     ++generation;
-    for (auto cqst : cpu_quiescent_state_threads) {
+    // copy cpu_quiescent_state_threads to prevent a hotplugged cpu
+    // from changing the number of cpus we request a new generation on,
+    // and the number of cpus we wait on
+    // FIXME: better locking
+    auto cqsts = cpu_quiescent_state_threads;
+    for (auto cqst : cqsts) {
         cqst->request(generation);
     }
-    sched::thread::wait_until([] { return all_at_generation(generation); });
+    sched::thread::wait_until([&cqsts] { return all_at_generation(cqsts, generation); });
 }
 
 void collect_garbage()
