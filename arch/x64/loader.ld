@@ -11,11 +11,13 @@ SECTIONS
     . = 0x201000;
     .dynamic : { *(.dynamic) } :dynamic :text
     .text : {
+        text_start = .;
         *(.text.hot .text.hot.*)
         *(.text.unlikely .text.*_unlikely)
         *(.text.fixup)
         *(.text.startup .text.startup.*)
         *(.text .text.*)
+        text_end = .;
     } :text
     . = ALIGN(8);
     .fixup : {

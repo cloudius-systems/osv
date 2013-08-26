@@ -868,10 +868,18 @@ void switch_to_runtime_page_table()
 
 void page_fault(exception_frame *ef)
 {
+    extern const char text_start[], text_end[];
     sched::exception_guard g;
     auto addr = processor::read_cr2();
     if (fixup_fault(ef)) {
         return;
+    }
+    auto pc = reinterpret_cast<void*>(ef->rip);
+    if (!pc) {
+        abort("trying to execute null pointer");
+    }
+    if (pc >= text_start && pc < text_end) {
+        abort("page fault outside application");
     }
     osv::handle_segmentation_fault(addr, ef);
 }
