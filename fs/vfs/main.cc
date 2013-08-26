@@ -427,9 +427,6 @@ int __fxstat(int ver, int fd, struct stat *st)
 	int error;
 
 	trace_vfs_fstat(fd, st);
-	error = ENOSYS;
-	if (ver != 1)
-		goto out_errno;
 
 	error = fget(fd, &fp);
 	if (error)
