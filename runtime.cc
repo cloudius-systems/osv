@@ -35,6 +35,8 @@
 #include "bsd/sys/sys/sysctl.h"
 #include <osv/power.hh>
 #include <sys/time.h>
+#include "mmu.hh"
+#include "libc/libc.hh"
 
 #define __LC_LAST 13
 
@@ -182,6 +184,9 @@ gid_t getegid(void)
 
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
+    if (!mmu::ismapped(addr, length)) {
+        return libc_error(ENOMEM);
+    }
     memset(vec, 0x01, (length + getpagesize() - 1) / getpagesize());
     return 0;
 }
