@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <arch-cpu.hh>
+#include <debug.hh>
 
 namespace arch {
 
@@ -42,8 +43,16 @@ void build_signal_frame(exception_frame* ef,
 
 }
 
+unsigned __thread signal_nesting;
+
 void call_signal_handler(arch::signal_frame* frame)
 {
+    if (signal_nesting) {
+        // Note: nested signals are legal, but rarely used, so they usually
+        // indicate trouble
+        abort("nested signals");
+    }
+    ++signal_nesting;
     frame->fpu.save();
     if (frame->sa.sa_flags & SA_SIGINFO) {
         ucontext_t uc = {};
@@ -88,6 +97,7 @@ void call_signal_handler(arch::signal_frame* frame)
         frame->sa.sa_handler(frame->si.si_signo);
     }
     frame->fpu.restore();
+    --signal_nesting;
     // FIXME: all te other gory details
 }
 
