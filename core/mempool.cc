@@ -20,7 +20,9 @@
 #include "prio.hh"
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
+TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
+TRACEPOINT(trace_memory_free_large, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
 TRACEPOINT(trace_memory_page_alloc, "%p", void*);
 TRACEPOINT(trace_memory_page_free, "%p", void*);
@@ -396,6 +398,7 @@ static void* malloc_large(size_t size)
                 }
                 void* obj = ret_header;
                 obj += page_size;
+                trace_memory_malloc_large(obj, size);
                 return obj;
             }
         }
@@ -777,6 +780,7 @@ static inline void std_free(void* object)
     } else if (offset) {
         return memory::pool::from_object(object)->free(object);
     } else {
+        trace_memory_free_large(object);
         return memory::free_large(object);
     }
 }
