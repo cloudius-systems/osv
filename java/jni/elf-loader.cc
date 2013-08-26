@@ -1,4 +1,6 @@
 //#include <algorithm>
+#include "debug.hh"
+#include "sched.hh"
 #include "elf.hh"
 #include <jni.h>
 #include <stdlib.h>
@@ -22,6 +24,8 @@ bool run_elf(int argc, char** argv, int *return_code)
        return (false);
     }
 
+    debug("run_elf(): running main() in the context of thread %p\n",
+        sched::thread::current());
     int rc = main(argc, argv);
 
     /* cleanups */
