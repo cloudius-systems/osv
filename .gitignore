@@ -2,4 +2,8 @@
 build/
 .\#*
 \#*\#
+java/${out}/
+java/lib/
+libunwind.a
 
+.gradle

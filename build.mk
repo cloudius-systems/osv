@@ -1,6 +1,8 @@
 
 arch = x64
-cmdline = java.so -jar /java/cli.jar
+# cmdline = java.so -jar /java/cli.jar
+# cmdline = java.so -jar /java/web.jar -cp java/cli.jar app
+cmdline = java.so -cp /java/web.jar:/java/cli-1.0.jar:/java/cloudius-1.0.jar: org.jruby.JarBootstrapMain app
 #cmdline = testrunner.so
 #cmdline = java.so Hello
 INCLUDES = -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
