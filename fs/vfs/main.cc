@@ -752,9 +752,6 @@ int __xstat(int ver, const char *pathname, struct stat *st)
 	int error;
 
 	trace_vfs_stat(pathname, st);
-	error = ENOSYS;
-	if (ver != 1)
-		goto out_errno;
 
 	error = task_conv(t, pathname, 0, path);
 	if (error)
