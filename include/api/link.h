@@ -12,6 +12,7 @@
 #define ElfW(type) Elf32_ ## type
 #endif
 
+#include <sys/cdefs.h>
 __BEGIN_DECLS
 
 /* this is the same everywhere except alpha and s390 */

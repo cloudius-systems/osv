@@ -5,7 +5,6 @@
 #include "arch-cpu.hh"
 #include <functional>
 #include "tls.hh"
-#include "elf.hh"
 #include "drivers/clockevent.hh"
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
@@ -18,6 +17,12 @@ extern "C" {
 void smp_main();
 };
 void smp_launch();
+
+// Avoid #include "elf.hh", as it recursively includes sched.hh. We just
+// need pointer to elf::tls_data
+namespace elf {
+    struct tls_data;
+}
 
 namespace sched {
 

@@ -1,5 +1,6 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>

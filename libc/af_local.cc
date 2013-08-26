@@ -1,6 +1,7 @@
 #include "af_local.h"
 #include "pipe_buffer.hh"
 
+#include <fs/fs.hh>
 #include <fs/unsupported.h>
 #include <osv/fcntl.h>
 #include <libc/libc.hh>
