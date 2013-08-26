@@ -85,6 +85,9 @@ void alloc_tracker::forget(void *addr)
     if (lock.getdepth() > 1) {
         return;
     }
+    if (!allocations) {
+        return;
+    }
 
     for (int *i = &newest_allocation; *i >= 0; i = &(allocations[*i].next)) {
         if (allocations[*i].addr == addr) {
