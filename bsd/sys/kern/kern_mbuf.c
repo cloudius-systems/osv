@@ -220,6 +220,7 @@ uma_zone_t	zone_ext_refcnt;
  */
 static int	mb_ctor_mbuf(void *, int, void *, int);
 static int	mb_ctor_clust(void *, int, void *, int);
+static int	mb_ctor_clust_extref(void *, int, void *, int);
 static int	mb_ctor_pack(void *, int, void *, int);
 static void	mb_dtor_mbuf(void *, int, void *);
 static void	mb_dtor_clust(void *, int, void *);
@@ -265,13 +266,13 @@ mbuf_init(void *dummy)
 
 	/* Make jumbo frame zone too. Page size, 9k and 16k. */
 	zone_jumbop = uma_zcreate(MBUF_JUMBOP_MEM_NAME, MJUMPAGESIZE,
-	    mb_ctor_clust, mb_dtor_clust,
+	    mb_ctor_clust_extref, mb_dtor_clust,
 #ifdef INVARIANTS
 	    trash_init, trash_fini,
 #else
 	    NULL, NULL,
 #endif
-	    UMA_ALIGN_PTR, UMA_ZONE_REFCNT);
+	    UMA_ALIGN_PTR, 0);
 	if (nmbjumbop > 0)
 		uma_zone_set_max(zone_jumbop, nmbjumbop);
 
@@ -498,12 +499,6 @@ mb_ctor_clust(void *mem, int size, void *arg, int how)
 		type = EXT_CLUSTER;
 		zone = zone_clust;
 		break;
-#if MJUMPAGESIZE != MCLBYTES
-	case MJUMPAGESIZE:
-		type = EXT_JUMBOP;
-		zone = zone_jumbop;
-		break;
-#endif
 	case MJUM9BYTES:
 		type = EXT_JUMBO9;
 		zone = zone_jumbo9;
@@ -531,6 +526,15 @@ mb_ctor_clust(void *mem, int size, void *arg, int how)
 		m->m_ext.ext_type = type;
 		m->m_ext.ref_cnt = refcnt;
 	}
+
+	return (0);
+}
+
+static int
+mb_ctor_clust_extref(void *mem, int size, void *arg, int how)
+{
+	struct mbuf *m = (struct mbuf *)arg;
+	MEXTADD(m, mem, size, NULL, NULL, NULL, 0, EXT_JUMBOP);
 
 	return (0);
 }

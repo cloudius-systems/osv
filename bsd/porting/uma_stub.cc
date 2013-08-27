@@ -35,7 +35,17 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
         if (zone->uz_flags & UMA_ZONE_REFCNT) {
             size += UMA_ITEM_HDR_LEN;
         }
-        ptr = malloc(size);
+
+        /*
+         * Because alloc_page is faster than our malloc in the current implementation,
+         * (if it ever change, we should revisit), it is worth it to take an alternate
+         * path if our size + refcnt_size is exactly a page
+         */
+        if (size == PAGE_SIZE) {
+            ptr = memory::alloc_page();
+        } else {
+            ptr = malloc(size);
+        }
 
         bzero(ptr, zone->uz_size);
 
@@ -92,7 +102,15 @@ void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
         zone->uz_fini(item, zone->uz_size);
     }
 
-    free(item);
+    auto effective_size = zone->uz_size;
+    if (zone->uz_flags)
+        effective_size += UMA_ITEM_HDR_LEN;
+
+    if (effective_size == PAGE_SIZE) {
+       memory::free_page(item);
+    } else {
+       free(item);
+    }
 }
 
 void uma_zfree(uma_zone_t zone, void *item)
@@ -173,6 +191,7 @@ int uma_zone_exhausted_nolock(uma_zone_t zone)
 
 u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item)
 {
+    assert(zone->uz_flags & UMA_ZONE_REFCNT);
     return &(UMA_ITEM_HDR(zone, item))->refcnt;
 }
 
