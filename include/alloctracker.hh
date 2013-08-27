@@ -68,6 +68,28 @@ private:
     size_t size_allocations = 0;
     unsigned long current_seq = 0;
     mutex lock;
+
+    // If the allocation tracking code causes new allocations, they will in
+    // turn cause a nested call to the tracking functions. To avoid endless
+    // recursion, we do not track these deeper memory allocations. Remember
+    // that the purpose of the allocation tracking is finding memory leaks in
+    // the application code, not allocation tracker code.
+    class in_tracker_t {
+    private:
+        bool flag;
+    public:
+        void lock() {
+            flag = true;
+        }
+        void unlock() {
+            flag = false;
+        }
+        operator bool() {
+            return flag;
+        }
+    };
+    static __thread class in_tracker_t in_tracker;
+
 };
 #endif
 

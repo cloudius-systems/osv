@@ -6,49 +6,49 @@
 
 namespace memory {
 
+__thread alloc_tracker::in_tracker_t alloc_tracker::in_tracker;
+
 void alloc_tracker::remember(void *addr, int size)
 {
-    std::lock_guard<mutex> guard(lock);
-    // If the code in this method causes new allocations, they will in turn
-    // cause a nested call to this function. To avoid endless recursion, we
-    // do not track these deeper memory allocations. Remember that the
-    // purpose of the allocation tracking is finding memory leaks in the
-    // application code, not in the code in this file.
-    if (lock.getdepth() > 1) {
+    if (in_tracker)
         return;
-    }
+    std::lock_guard<in_tracker_t> intracker(in_tracker);
 
-    if (!allocations || first_free < 0) {
-        // Grow the vector to make room for more allocation records.
-        int old_size = size_allocations;
-        size_allocations = size_allocations ? 2*size_allocations : 1024;
-        struct alloc_info *old_allocations = allocations;
-        allocations = (struct alloc_info *)
-                malloc(size_allocations * sizeof(struct alloc_info));
-        if (old_allocations) {
-            memcpy(allocations, old_allocations,
-                size_allocations * sizeof(struct alloc_info));
-        } else {
-            first_free = -1;
-            newest_allocation = -1;
+    int index;
+
+    WITH_LOCK(lock) {
+        if (!allocations || first_free < 0) {
+            // Grow the vector to make room for more allocation records.
+            int old_size = size_allocations;
+            size_allocations = size_allocations ? 2*size_allocations : 1024;
+            struct alloc_info *old_allocations = allocations;
+            allocations = (struct alloc_info *)
+                         malloc(size_allocations * sizeof(struct alloc_info));
+            if (old_allocations) {
+                memcpy(allocations, old_allocations,
+                        size_allocations * sizeof(struct alloc_info));
+            } else {
+                first_free = -1;
+                newest_allocation = -1;
+            }
+            for (size_t i = old_size; i < size_allocations; ++i) {
+                allocations[i].addr = 0;
+                allocations[i].next = first_free;
+                first_free = i;
+            }
         }
-        for (size_t i = old_size; i < size_allocations; ++i) {
-            allocations[i].addr = 0;
-            allocations[i].next = first_free;
-            first_free = i;
-        }
+
+        // Free node available, reuse it
+        index = first_free;
+        struct alloc_info *a = &allocations[index];
+        first_free = a->next;
+        a->next = newest_allocation;
+        newest_allocation = index;
+
+        a->seq = current_seq++;
+        a->addr = addr;
+        a->size = size;
     }
-
-    // Free node available, reuse it
-    int index = first_free;
-    struct alloc_info *a = &allocations[index];
-    first_free = a->next;
-    a->next = newest_allocation;
-    newest_allocation = index;
-
-    a->seq = current_seq++;
-    a->addr = addr;
-    a->size = size;
 
     // Do the backtrace. If we ask for only a small number of call levels
     // we'll get only the deepest (most recent) levels, but when
@@ -71,9 +71,15 @@ void alloc_tracker::remember(void *addr, int size)
         bt_from += n - MAX_BACKTRACE;
         n = MAX_BACKTRACE;
     }
-    a->nbacktrace = n < 0 ? 0 : n;
-    for (int i = 0; i < n; i++) {
-        a->backtrace[i] = bt_from[i];
+
+    // We need the lock back, to prevent a concurrent allocation from moving
+    // allocations[] while we use it.
+    WITH_LOCK(lock) {
+        struct alloc_info *a = &allocations[index];
+        a->nbacktrace = n < 0 ? 0 : n;
+        for (int i = 0; i < n; i++) {
+            a->backtrace[i] = bt_from[i];
+        }
     }
 }
 
@@ -81,10 +87,10 @@ void alloc_tracker::forget(void *addr)
 {
     if (!addr)
         return;
-    std::lock_guard<mutex> guard(lock);
-    if (lock.getdepth() > 1) {
+    if (in_tracker)
         return;
-    }
+    std::lock_guard<in_tracker_t> intracker(in_tracker);
+    std::lock_guard<mutex> guard(lock);
     if (!allocations) {
         return;
     }
