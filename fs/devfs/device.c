@@ -310,15 +310,12 @@ device_read(struct device *dev, struct uio *uio, int ioflags)
 	struct devops *ops;
 	int error;
 
-    kprintf("trying read\n");
 	if ((error = device_reference(dev)) != 0)
 		return error;
 
-    kprintf("almost asserting\n");
 	ops = dev->driver->devops;
 	assert(ops->read != NULL);
 	error = (*ops->read)(dev, uio, ioflags);
-    kprintf("read %d?\n", error);
 
 	device_release(dev);
 	return error;
@@ -330,15 +327,12 @@ device_write(struct device *dev, struct uio *uio, int ioflags)
 	struct devops *ops;
 	int error;
 
-    kprintf("entering write\n");
 	if ((error = device_reference(dev)) != 0)
 		return error;
 
-    kprintf("will write\n");
 	ops = dev->driver->devops;
 	assert(ops->write != NULL);
 	error = (*ops->write)(dev, uio, ioflags);
-    kprintf("wrote\n");
 
 	device_release(dev);
 	return error;
