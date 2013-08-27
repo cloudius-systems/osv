@@ -203,6 +203,32 @@ int main(int argc, char **argv)
     assert(msync(buf+3*4096, 3*4096, MS_ASYNC) == -1);
     munmap(buf, 4096*10);
 
+    // Similarly test mincore().
+    unsigned char vec[20];
+    buf = mmap(NULL, 4096*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(mincore(buf, 4096*10, vec) == 0);
+    assert(mincore(buf, 4096*9, vec) == 0);
+    assert(mincore(buf+4096, 4096*9, vec) == 0);
+    munmap(buf+4096, 4096*3);
+    munmap(buf+4096*7, 4096*2);
+    assert(mincore(buf, 4096*10, vec) == -1);
+    assert(mincore(buf, 4096, vec) == 0);
+    assert(mincore(buf+4096, 4096, vec) == -1);
+    assert(mincore(buf+4096*4, 3*4096, vec) == 0);
+    assert(mincore(buf+4096*5, 1*4096, vec) == 0);
+    assert(mincore(buf+4096, 4096, vec) == -1);
+    assert(mincore(buf, 3*4096, vec) == -1);
+    assert(mincore(buf+3*4096, 3*4096, vec) == -1);
+    munmap(buf, 4096*10);
+
+    // While msync() only works on mmapped memory, mincore() should also
+    // succeed on non-mmapped memory, such as stack variables and malloc().
+    char x;
+    assert(mincore(&x, 1, vec) == 0);
+    void *y = malloc(1);
+    assert(mincore(y, 1, vec) == 0);
+    free(y);
+
     // TODO: verify that mmapping more than available physical memory doesn't
     // panic just return -1 and ENOMEM.
     // TODO: verify that huge-page-sized allocations get a huge-page aligned address
