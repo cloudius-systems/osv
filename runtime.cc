@@ -184,7 +184,7 @@ gid_t getegid(void)
 
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
-    if (!mmu::ismapped(addr, length)) {
+    if (!mmu::isreadable(addr, length)) {
         return libc_error(ENOMEM);
     }
     memset(vec, 0x01, (length + getpagesize() - 1) / getpagesize());

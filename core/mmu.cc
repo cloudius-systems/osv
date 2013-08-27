@@ -11,6 +11,7 @@
 #include "interrupt.hh"
 #include "ilog2.hh"
 #include "prio.hh"
+#include <safe-ptr.hh>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -716,7 +717,7 @@ vma_list_type::iterator find_vma(uintptr_t addr)
     }
 }
 
-// Checks if the entire given memory region is mapped (in vma_list).
+// Checks if the entire given memory region is mmap()ed (in vma_list).
 bool ismapped(void *addr, size_t size)
 {
     uintptr_t start = (uintptr_t) addr;
@@ -734,6 +735,17 @@ bool ismapped(void *addr, size_t size)
     return false;
 }
 
+// Checks if the entire given memory region is readable.
+bool isreadable(void *addr, size_t size)
+{
+    char *end = align_up((char *)addr + size, mmu::page_size);
+    char tmp;
+    for (char *p = (char *)addr; p < end; p += mmu::page_size) {
+        if (!safe_load(p, tmp))
+            return false;
+    }
+    return true;
+}
 
 namespace {
 
