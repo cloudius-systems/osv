@@ -111,6 +111,24 @@ def free_page_ranges(node = None):
         for x in free_page_ranges(node['right_']):
             yield x
 
+def vma_list(node = None):
+    if (node == None):
+        fpr = gdb.lookup_global_symbol('mmu::vma_list').value()
+        p = fpr['tree_']['data_']['node_plus_pred_']
+        node = p['header_plus_size_']['header_']['parent_']
+
+    if (long(node) != 0):
+        vma = node.cast(gdb.lookup_type('void').pointer()) - 16
+        vma = vma.cast(gdb.lookup_type('mmu::vma').pointer())
+
+        for x in vma_list(node['left_']):
+            yield x
+
+        yield vma
+
+        for x in vma_list(node['right_']):
+            yield x
+
 class osv(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv',
@@ -138,6 +156,17 @@ class osv_memory(gdb.Command):
         print ("Total Memory: %d Bytes" % memsize)
         print ("Free Memory:  %d Bytes (%.2f%%)" % 
                (freemem, (freemem*100.0/memsize)))
+
+class osv_mmap(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv mmap',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        for vma in vma_list():
+            start = ulong(vma['_start'])
+            end   = ulong(vma['_end'])
+            size  = ulong(end - start)
+            print '%s 0x%016x 0x%016x [%s kB]' % (vma, start, end, size / 1024)
     
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer_base')
@@ -700,6 +729,7 @@ class osv_pagetable_walk(gdb.Command):
 osv()
 osv_heap()
 osv_memory()
+osv_mmap()
 osv_syms()
 osv_info()
 osv_info_threads()
