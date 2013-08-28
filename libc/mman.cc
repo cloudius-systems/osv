@@ -2,6 +2,10 @@
 #include <memory>
 #include "mmu.hh"
 #include "debug.hh"
+#include "osv/trace.hh"
+
+TRACEPOINT(trace_memory_mmap, "ret=%p, addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, void *, size_t, int, int, int, off_t);
+TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 
 unsigned libc_prot_to_perm(int prot)
 {
@@ -49,14 +53,17 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     // make use the payload isn't remapping physical memory
     assert(reinterpret_cast<long>(addr) >= 0);
 
+    void *ret;
     if (fd == -1) {
-        return mmu::map_anon(addr, length, !(flags & MAP_FIXED),
+        ret = mmu::map_anon(addr, length, !(flags & MAP_FIXED),
                 libc_prot_to_perm(prot));
     } else {
         fileref f(fileref_from_fd(fd));
-        return mmu::map_file(addr, length, !(flags & MAP_FIXED),
+        ret = mmu::map_file(addr, length, !(flags & MAP_FIXED),
                 libc_prot_to_perm(prot), f, offset);
     }
+    trace_memory_mmap(ret, addr, length, prot, flags, fd, offset);
+    return ret;
 }
 
 extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
@@ -66,6 +73,7 @@ extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
 
 int munmap(void *addr, size_t length)
 {
+    trace_memory_munmap(addr, length);
     // TODO: fail with EINVAL in some cases of addr, length.
     mmu::unmap(addr, length);
     return 0;
