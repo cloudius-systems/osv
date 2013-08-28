@@ -150,10 +150,19 @@ class osv_memory(gdb.Command):
         freemem = 0
         for page_range in free_page_ranges():
             freemem += int(page_range['size'])
+
+        mmapmem = 0
+        for vma in vma_list():
+            start = ulong(vma['_start'])
+            end   = ulong(vma['_end'])
+            size  = ulong(end - start)
+            mmapmem += size
             
         memsize = gdb.parse_and_eval('memory::phys_mem_size')
         
         print ("Total Memory: %d Bytes" % memsize)
+        print ("Mmap Memory:  %d Bytes (%.2f%%)" %
+               (mmapmem, (mmapmem*100.0/memsize)))
         print ("Free Memory:  %d Bytes (%.2f%%)" % 
                (freemem, (freemem*100.0/memsize)))
 
