@@ -22,20 +22,23 @@ public class RunJava {
     }
 
     static void parseArgs(String[] args) throws Throwable {
+        ArrayList<String> classpath = new ArrayList<String>();
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-jar")) {
                 if (i+1 >= args.length) {
                     System.err.println("RunJava: Missing jar name after '-jar'.");
                     return;
                 }
-                runJar(args[i+1], java.util.Arrays.copyOfRange(args,  i+2, args.length));
+                runJar(args[i+1], java.util.Arrays.copyOfRange(args, i+2, args.length), classpath);
                 return;
             } else if (args[i].equals("-classpath") || args[i].equals("-cp")) {
                 if (i+1 >= args.length) {
                     System.err.println("RunJava: Missing parameter after '"+args[i]+"'");
                     return;
                 }
-                setClassPath(expandClassPath(args[i+1]));
+                for (String c : expandClassPath(args[i+1])) {
+                    classpath.add(c);
+                }
                 i++;
             } else if (args[i].startsWith("-D")) {
                 int eq = args[i].indexOf('=');
@@ -47,7 +50,7 @@ public class RunJava {
                 String value = args[i].substring(eq+1, args[i].length());
                 System.setProperty(key,  value);
             } else if (!args[i].startsWith("-")) {
-                runClass(args[i], java.util.Arrays.copyOfRange(args,  i+1,  args.length));
+                runClass(args[i], java.util.Arrays.copyOfRange(args,  i+1,  args.length), classpath);
                 return;
             } else {
                 System.err.println("RunJava: Unknown parameter '"+args[i]+"'");
@@ -57,7 +60,7 @@ public class RunJava {
         System.err.println("RunJava: No jar or class specified to run.");
     }
 
-    static void runJar(String jarname, String[] args) throws Throwable {
+    static void runJar(String jarname, String[] args, ArrayList<String> classpath) throws Throwable {
         File jarfile = new File(jarname);
         try {
             JarFile jar = new JarFile(jarfile);
@@ -70,8 +73,8 @@ public class RunJava {
                                 jarname);
                 return;
             }
-            setClassPath(jarname);
-            runMain(loadClass(mainClass), args);
+            classpath.add(jarname);
+            runClass(mainClass, args, classpath);
         } catch (FileNotFoundException e) {
             System.err.println("RunJava: File not found: " + jarname);
         } catch (ZipException e) {
@@ -79,7 +82,8 @@ public class RunJava {
         }
     }
 
-    static void runClass(String mainClass, String[] args) throws Throwable {
+    static void runClass(String mainClass, String[] args, Iterable<String> classpath) throws Throwable {
+        setClassPath(classpath);
         runMain(loadClass(mainClass), args);
     }
 
@@ -97,6 +101,11 @@ public class RunJava {
         for (String jar : jars) {
             urls.add(new URL("file:///" + jar));
         }
+        // If no classpath was specified, don't touch the classloader at
+        // all, so we just inherit the one used to run us.
+        if (urls.isEmpty())
+            return;
+
         URL[] urlArray = urls.toArray(new URL[urls.size()]);
 	    
         URLClassLoader ucl = new URLClassLoader(urlArray,
@@ -116,10 +125,6 @@ public class RunJava {
         System.setProperty("java.class.path", sb.toString());
     }
 
-    static void setClassPath(String jar) throws MalformedURLException {
-        setClassPath(java.util.Collections.singleton(jar));
-    }
-	
     static Class<?> loadClass(String name) throws ClassNotFoundException {
         return Thread.currentThread().getContextClassLoader().loadClass(name);
     }
