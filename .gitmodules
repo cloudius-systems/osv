@@ -19,9 +19,6 @@
 [submodule "external/misc.bin"]
 	path = external/misc.bin
 	url = ../misc.bin.git
-[submodule "external/jars.bin"]
-	path = external/jars.bin
-	url = ../jars.bin.git
 [submodule "mgmt"]
 	path = mgmt
 	url = ../mgmt.git
