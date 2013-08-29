@@ -12,6 +12,8 @@
 #include "ilog2.hh"
 #include "prio.hh"
 #include <safe-ptr.hh>
+#include "fs/vfs/vfs.h"
+#include <osv/error.h>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -617,6 +619,27 @@ void unmap(void* addr, size_t size)
     evacuate(start, start+size);
 }
 
+error msync(void* addr, size_t length, int flags)
+{
+    length = align_up(length, mmu::page_size);
+    auto start = reinterpret_cast<uintptr_t>(addr);
+    auto end = start+length;
+    auto err = make_error(ENOMEM);
+    WITH_LOCK(vma_list_mutex) {
+        auto lower = vma_list.lower_bound(vma(start, end));
+        auto upper = vma_list.upper_bound(vma(start, end));
+        for (auto i = lower; i != upper; ++i) {
+            if (contains(start, end, *i)) {
+                err = i->sync(start, end);
+                if (err.bad()) {
+                    break;
+                }
+            }
+        }
+    }
+    return err;
+}
+
 struct fill_anon_page : fill_page {
     virtual void fill(void* addr, uint64_t offset) {
         memset(addr, 0, page_size);
@@ -804,12 +827,29 @@ void vma::split(uintptr_t edge)
     vma_list.insert(*n);
 }
 
+error vma::sync(uintptr_t start, uintptr_t end)
+{
+    return make_error(ENOMEM);
+}
+
 file_vma::file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared)
     : vma(start, end)
     , _file(file)
     , _offset(offset)
     , _shared(shared)
 {
+}
+
+error file_vma::sync(uintptr_t start, uintptr_t end)
+{
+    if (!_shared)
+        return make_error(ENOMEM);
+    auto fsize = ::size(_file);
+    uintptr_t size = end - start;
+    uintptr_t offset = _offset + (start - vma::start());
+    write(_file, addr(), offset, std::min(size, fsize - offset));
+    auto err = sys_fsync(_file.get());
+    return make_error(err);
 }
 
 unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages

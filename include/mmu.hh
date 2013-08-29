@@ -6,6 +6,7 @@
 #include <boost/intrusive/set.hpp>
 #include <osv/types.h>
 #include <functional>
+#include <osv/error.h>
 
 namespace mmu {
 
@@ -42,6 +43,7 @@ public:
     void* addr() const;
     uintptr_t size() const;
     void split(uintptr_t edge);
+    virtual error sync(uintptr_t start, uintptr_t end);
 private:
     uintptr_t _start;
     uintptr_t _end;
@@ -52,6 +54,7 @@ public:
 class file_vma : public vma {
 public:
     file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared);
+    virtual error sync(uintptr_t start, uintptr_t end) override;
 private:
     fileref _file;
     f_offset _offset;
@@ -63,6 +66,7 @@ void* map_file(void* addr, size_t size, bool search, unsigned perm,
 void* map_anon(void* addr, size_t size, bool search, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);
+error msync(void* addr, size_t length, int flags);
 bool ismapped(void *addr, size_t size);
 bool isreadable(void *addr, size_t size);
 
