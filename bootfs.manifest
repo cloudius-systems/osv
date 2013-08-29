@@ -58,6 +58,7 @@
 /java/web.jar: ../../mgmt/web/build/web.jar
 /java/cloudius-1.0.jar: ../../mgmt/cloudius/build/libs/cloudius-1.0.jar
 /java/cli-1.0.jar: ../../mgmt/cli/build/libs/cli-1.0.jar
+/java/crash-1.0.jar: ../../mgmt/crash/build/libs/crash-1.0.jar
 /java/sshd-1.0.jar: ../../mgmt/sshd/build/libs/sshd-1.0.jar
 /views/footer.haml: ../../mgmt/web/views/footer.haml
 /views/index.haml: ../../mgmt/web/views/index.haml
