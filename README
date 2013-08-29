@@ -6,7 +6,7 @@ To build OSv
 
    On Fedora:
      yum install ant autoconf automake boost-static gcc-c++ genromfs \
-        libvirt libtool zfs-fuse
+        libvirt libtool zfs-fuse flex bison
 
    On Debian:
      apt-get install libboost-all-dev genromfs libvirt-fuse autoconf
