@@ -187,6 +187,24 @@ struct lock_guard_for_with_lock : std::lock_guard<lock_type> {
     else /* locked statement comes here */
 
 
+// like std::lock_guard<>, but drops the lock temporarily
+// instead of acquiring it
+template <class lock_type>
+struct lock_guard_for_drop_lock {
+    lock_guard_for_drop_lock(lock_type& lock) : l(lock) { l.unlock(); }
+    ~lock_guard_for_drop_lock() { l.lock(); }
+    operator bool() const { return false; }
+    lock_type& l;
+};
+
+// Used for temporarily dropping a lock
+// Note: doesn't deal well with recursive locks
+#define DROP_LOCK(_dl_lock) \
+    if (lock_guard_for_drop_lock<decltype(_dl_lock)> _dl_lock_guard{_dl_lock}) \
+        std::abort(); \
+    else /* unlocked statement comes here */
+
+
 #endif
 
 #endif /* MUTEX_H_ */
