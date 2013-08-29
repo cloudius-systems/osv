@@ -35,6 +35,7 @@ enum {
 class vma {
 public:
     vma(uintptr_t start, uintptr_t end);
+    virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
     uintptr_t start() const;
     uintptr_t end() const;
@@ -48,8 +49,17 @@ public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
 
+class file_vma : public vma {
+public:
+    file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared);
+private:
+    fileref _file;
+    f_offset _offset;
+    bool _shared;
+};
+
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
-              fileref file, f_offset offset);
+              fileref file, f_offset offset, bool shared);
 void* map_anon(void* addr, size_t size, bool search, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);

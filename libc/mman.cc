@@ -59,7 +59,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     } else {
         fileref f(fileref_from_fd(fd));
         ret = mmu::map_file(addr, length, !(flags & MAP_FIXED),
-                libc_prot_to_perm(prot), f, offset);
+                libc_prot_to_perm(prot), f, offset, flags & MAP_SHARED);
     }
     trace_memory_mmap(ret, addr, length, prot, flags, fd, offset);
     return ret;

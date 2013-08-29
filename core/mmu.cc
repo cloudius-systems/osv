@@ -623,14 +623,9 @@ struct fill_anon_page : fill_page {
     }
 };
 
-uintptr_t allocate(uintptr_t start, size_t size, bool search,
+uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search,
                     fill_page& fill, unsigned perm)
 {
-    // To support memory allocation tracking - where operator new() might end
-    // up indirectly calling mmap(), we need to allocate the vma object here,
-    // and not between the evacuate() and populate().
-    vma *v = new vma(start, start + size);
-
     std::lock_guard<mutex> guard(vma_list_mutex);
     if (search) {
         // search for unallocated hole around start
@@ -672,16 +667,18 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm)
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    return (void*) allocate(start, size, search, zfill, perm);
+    auto* vma = new mmu::vma(start, start + size);
+    return (void*) allocate(vma, start, size, search, zfill, perm);
 }
 
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
-              fileref f, f_offset offset)
+              fileref f, f_offset offset, bool shared)
 {
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    auto v = (void*) allocate(start, asize, search, zfill, perm | perm_write);
+    auto *vma = new mmu::file_vma(start, start + size, f, offset, shared);
+    auto v = (void*) allocate(vma, start, asize, search, zfill, perm | perm_write);
     auto fsize = ::size(f);
     // FIXME: we pre-zeroed this, and now we're overwriting the zeroes
     if (offset < fsize) {
@@ -767,6 +764,10 @@ vma::vma(uintptr_t start, uintptr_t end)
 {
 }
 
+vma::~vma()
+{
+}
+
 void vma::set(uintptr_t start, uintptr_t end)
 {
     _start = align_down(start);
@@ -801,6 +802,14 @@ void vma::split(uintptr_t edge)
     vma* n = new vma(edge, _end);
     _end = edge;
     vma_list.insert(*n);
+}
+
+file_vma::file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared)
+    : vma(start, end)
+    , _file(file)
+    , _offset(offset)
+    , _shared(shared)
+{
 }
 
 unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
