@@ -37,7 +37,6 @@ def start_osv():
         "-chardev", "stdio,mux=on,id=stdio",
         "-mon", "chardev=stdio,mode=readline,default",
         "-device", "isa-serial,chardev=stdio",
-        "-drive", ("file=build/%s/loader.img,if=virtio,cache=unsafe" % opt_path),
         "-drive", ("file=build/%s/usr.img,if=virtio,cache=unsafe" % opt_path)]
     
     if (cmdargs.no_shutdown):

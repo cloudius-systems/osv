@@ -29,6 +29,12 @@ opt = optparse.OptionParser(option_list = [
                     metavar = 'VAR=DATA',
                     action = 'callback',
                     callback = add_var),
+        make_option('-s',
+                    dest = 'offset',
+                    help = 'offset to write the data to',
+                    metavar = 'OFFSET',
+                    default = 0),
+
 ])
 
 (options, args) = opt.parse_args()
@@ -46,7 +52,7 @@ depends.write('%s: \\\n' % (options.output,))
 
 zfs_root='/zfs'
 loop_dev='/dev/loop7'
-dev='/dev/vblk1'
+dev='/dev/vblk0.1'
 zfs_pool='osv'
 zfs_fs='usr'
 
@@ -58,7 +64,8 @@ os.system('sudo mkdir -p %s' % zfs_root)
 
 os.system('sudo rm -f %s' % options.output)
 os.system('sudo truncate --size 10g %s' % options.output)
-os.system('sudo losetup %s %s' % (loop_dev, options.output))
+os.system('sudo losetup -o %s %s %s' % (options.offset, loop_dev, options.output))
+
 os.system('sudo ln %s %s' % (loop_dev, dev))
 
 os.system('sudo zpool create -f %s -R %s %s' % (zfs_pool, zfs_root, dev))

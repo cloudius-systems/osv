@@ -1413,7 +1413,7 @@ extern "C" void mount_usr(void)
 	if (mkdir("/usr", 0755) < 0)
 		kprintf("failed to create /usr, error = %d\n", errno);
 
-	ret = sys_mount("/dev/vblk1", "/usr", "zfs", 0, (void *)"osv/usr");
+	ret = sys_mount("/dev/vblk0.1", "/usr", "zfs", 0, (void *)"osv/usr");
 	if (ret)
 		kprintf("failed to mount /usr, error = %d\n", ret);
 }

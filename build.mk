@@ -169,6 +169,10 @@ loader.img: boot.bin loader.elf
 	$(call quiet, $(src)/scripts/imgedit.py setsize $@ $(image-size), IMGEDIT $@)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
+loader-size = $(shell stat --printf %s loader.img)
+zfs-start = $(shell echo $$[$(loader-size)+2097151 & ~2097151])
+zfs-size = $(shell echo $$[10737418240 - $(zfs-start)])
+
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
 	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
@@ -542,10 +546,13 @@ bsd/%.o: COMMON += -D_KERNEL -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so
 
-usr.img: scripts/mkzfs.py usr.manifest $(jni)
+usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
-		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
+		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
+	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
+	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
+	$(call quiet, rm loader.img)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
