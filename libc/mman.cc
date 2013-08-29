@@ -33,14 +33,12 @@ int mprotect(void *addr, size_t len, int prot)
 
     if ((reinterpret_cast<intptr_t>(addr) & 4095) || (len & 4095)) {
         // address not page aligned
-        errno = EINVAL;
-        return -1;
+        return libc_error(EINVAL);
     }
     if (!mmu::protect(addr, len, libc_prot_to_perm(prot))) {
         // NOTE: we return ENOMEM when part of the range was not mapped,
         // but nevertheless, set the protection on the rest!
-        errno = ENOMEM;
-        return -1;
+        return libc_error(ENOMEM);
     }
     return 0;
 }
