@@ -73,6 +73,7 @@ extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
 int munmap(void *addr, size_t length)
 {
     trace_memory_munmap(addr, length);
+    mmu::msync(addr, length, 0);
     // TODO: fail with EINVAL in some cases of addr, length.
     mmu::unmap(addr, length);
     return 0;
