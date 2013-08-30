@@ -158,7 +158,7 @@ all: loader.img loader.bin usr.img
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
 
-image-size = $(shell stat --printf %s loader.elf)
+image-size = $(shell stat --printf %s loader-stripped.elf)
 
 loader.img: boot.bin loader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
