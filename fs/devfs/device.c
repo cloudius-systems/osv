@@ -42,6 +42,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
@@ -51,6 +52,8 @@
 #include <osv/mutex.h>
 #include <osv/device.h>
 #include <osv/debug.h>
+#include <osv/buf.h>
+
 #include <geom/geom_disk.h>
 
 struct mutex sched_mutex = MUTEX_INITIALIZER;
@@ -75,6 +78,84 @@ device_lookup(const char *name)
 			return dev;
 	}
 	return NULL;
+}
+
+struct partition_table_entry {
+	uint8_t  bootable;
+	uint8_t  starting_head;
+	uint16_t starting_sector:6;
+	uint16_t starting_cylinder:10;
+	uint8_t  system_id;
+	uint8_t  ending_head;
+	uint16_t ending_sector:6;
+	uint16_t ending_cylinder:10;
+	uint32_t rela_sector;
+	uint32_t total_sectors;
+} __attribute__((packed));
+
+/*
+ * read_partition_table - given a device @dev, create one subdevice per partition
+ * found in that device.
+ *
+ * This function will read a partition table from the canonical location of the
+ * device pointed by @dev. For each partition found, a new device will be
+ * created. The newly created device will have most of its data copied from
+ * @dev, except for its name, offset and size.
+ */
+void read_partition_table(struct device *dev)
+{
+	struct buf *bp;
+	unsigned long offset;
+	int index;
+
+	bread(dev, 0, &bp);
+
+	sched_lock();
+	for (offset = 0x1be, index = 0; offset < 0x1fe; offset += 0x10, index++) {
+		struct partition_table_entry *entry;
+		char dev_name[MAXDEVNAME];
+		struct device *new_dev;
+
+		entry = bp->b_data + offset;
+
+		if (entry->system_id == 0) {
+			continue;
+		}
+
+		if ((entry->starting_head == 0) || (entry->starting_sector == 0) ||
+			(entry->starting_cylinder == 0) || (entry->ending_head == 0) ||
+			(entry->ending_sector == 0) || (entry->ending_cylinder) == 0) {
+			continue;
+		}
+
+		if (dev->size < (8ULL << 30)) {
+			uint64_t lba = (entry->starting_cylinder * 255 + entry->starting_head) * 63 + (entry->starting_sector - 1);
+			uint64_t end = (entry->ending_cylinder * 255 + entry->ending_head) * 63 + (entry->ending_sector - 1);
+
+			if ((lba != entry->rela_sector) || (end != (entry->rela_sector + entry->total_sectors))) {
+				kprintf("corrupted partition, %d. Skipping\n", index);
+				continue;
+			}
+		} else if ((entry->starting_head != 255) || (entry->starting_sector != 63) ||
+				   (entry->starting_cylinder != 1023) || (entry->ending_head != 255) ||
+				   (entry->ending_sector != 63) || (entry->ending_cylinder) != 1023) {
+			kprintf("corrupted partition, %d. Skipping\n", index);
+			continue;
+		}
+
+		snprintf(dev_name, MAXDEVNAME, "%s.%d", dev->name, index);
+		new_dev = device_create(dev->driver, dev_name, dev->flags);
+		free(new_dev->private_data);
+
+		new_dev->offset = entry->rela_sector << 9;
+		new_dev->size = (off_t)entry->total_sectors << 9;
+		new_dev->max_io_size = dev->max_io_size;
+		new_dev->private_data = dev->private_data;
+		device_set_softc(new_dev, device_get_softc(dev));
+	}
+
+	sched_unlock();
+	brelse(bp);
 }
 
 void device_register(struct device *dev, const char *name, int flags)

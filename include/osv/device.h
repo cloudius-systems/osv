@@ -205,6 +205,7 @@ int	physio(struct device *dev, struct uio *uio, int ioflags);
 
 struct device *	device_create(struct driver *drv, const char *name, int flags);
 void device_register(struct device *device, const char *name, int flags);
+void read_partition_table(struct device *device);
 
 __END_DECLS
 
