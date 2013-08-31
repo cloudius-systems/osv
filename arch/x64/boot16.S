@@ -137,5 +137,20 @@ done_e820:
 	mov $mb_info, %ebx
 	jmp *entry
 
+.org 0x1b8
+.byte 0x56, 0x53, 0x4F, 0, 0, 0
+
+.org 0x1be
+.space 16, 0
+
+.org 0x1ce
+.space 16, 0
+
+.org 0x1de
+.space 16, 0
+
+.org 0x1ee,
+.space 16, 0
+
 .org 0x1fe
 .byte 0x55, 0xaa
