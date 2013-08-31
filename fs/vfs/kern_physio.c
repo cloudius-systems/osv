@@ -95,8 +95,6 @@ static void multiplex_bio_done(struct bio *b)
 		biodone(bio, true);
 }
 
-void xb_strategy(struct bio *bio);
-
 void multiplex_strategy(struct bio *bio)
 {
 	struct device *dev = bio->bio_dev;
