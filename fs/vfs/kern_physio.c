@@ -102,6 +102,7 @@ void multiplex_strategy(struct bio *bio)
 
 	uint64_t len = bio->bio_bcount;
 
+	bio->bio_offset += bio->bio_dev->offset;
 	uint64_t offset = bio->bio_offset;
 	void *buf = bio->bio_data;
 

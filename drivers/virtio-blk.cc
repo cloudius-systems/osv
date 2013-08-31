@@ -40,6 +40,7 @@ virtio_blk_strategy(struct bio *bio)
 {
     struct virtio_blk_priv *prv = reinterpret_cast<struct virtio_blk_priv*>(bio->bio_dev->private_data);
 
+    bio->bio_offset += bio->bio_dev->offset;
     prv->drv->make_virtio_request(bio);
 }
 
