@@ -79,6 +79,8 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
 
 void xenfront_driver::finished()
 {
+    if (_irq_type == INTR_TYPE_BIO)
+        read_partition_table(&this->_bsd_dev);
     _bus->remove_pending(this);
 }
 

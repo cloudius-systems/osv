@@ -111,6 +111,7 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
     prv->drv = this;
     dev->size = prv->drv->size();
+    read_partition_table(dev);
 }
 
 virtio_blk::~virtio_blk()
