@@ -7,9 +7,11 @@
 /usr/lib/jvm/&/jre/lib/amd64/libawt.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/headless/libmawt.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libfontmanager.so: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/amd64/libmanagement.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libnet.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libjavajpeg.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/resources.jar: %(jdkbase)s/&
+/usr/lib/jvm/&/lib/tools.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/rt.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/jsse.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/jce.jar: %(jdkbase)s/&
