@@ -3,6 +3,7 @@
 #include "mmu.hh"
 #include "debug.hh"
 #include "osv/trace.hh"
+#include "libc/libc.hh"
 
 TRACEPOINT(trace_memory_mmap, "ret=%p, addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
