@@ -5,6 +5,7 @@
 #include <atomic>
 #include <memory>
 #include <functional>
+#include <barrier.hh>
 
 // Read-copy-update implementation
 //
@@ -100,6 +101,11 @@ inline void rcu_lock_type::lock()
 
 inline void rcu_lock_type::unlock()
 {
+    // Prevent reads from being hoisted after unlock(), since the memory
+    // can be destroyed.
+    // This is implied by preempt_enable(), since it calls schedule(), but
+    // let's make it explicit anyway.
+    barrier();
     sched::preempt_enable();
 }
 

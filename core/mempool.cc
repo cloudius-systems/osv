@@ -184,9 +184,9 @@ void* pool::alloc()
         // this loop ensures we have at least one free page that we can
         // allocate from, in from the context of the current cpu
         while (_free->empty()) {
-            sched::preempt_enable();
-            add_page();
-            sched::preempt_disable();
+            DROP_LOCK(preempt_lock) {
+                add_page();
+            }
         }
 
         // We have a free page, get one object and return it to the user
@@ -249,9 +249,9 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
         if (header->local_free) {
             _free->erase(_free->iterator_to(*header));
         }
-        sched::preempt_enable();
-        untracked_free_page(header);
-        sched::preempt_disable();
+        DROP_LOCK(preempt_lock) {
+            untracked_free_page(header);
+        }
     } else {
         if (!header->local_free) {
             if (header->nalloc) {
@@ -275,34 +275,32 @@ void pool::free_different_cpu(free_object* obj, unsigned obj_cpu)
 
     ring = &memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
     if (!ring->push(object)) {
-        sched::preempt_enable();
+        DROP_LOCK(preempt_lock) {
+            // The ring is full, take a mutex and use the sync object, hand
+            // the object to the secondary 1-item queue
+            auto& sync = freelist_full_sync[obj_cpu];
+            WITH_LOCK(sync._mtx) {
+                sync._cond.wait_until(sync._mtx, [&] {
+                    return (sync._free_obj == nullptr);
+                });
 
-        // The ring is full, take a mutex and use the sync object, hand
-        // the object to the secondary 1-item queue
-        auto& sync = freelist_full_sync[obj_cpu];
-        WITH_LOCK(sync._mtx) {
-            sync._cond.wait_until(sync._mtx, [&] {
-                return (sync._free_obj == nullptr);
-            });
+                WITH_LOCK(preempt_lock) {
+                    ring = &memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
+                    if (!ring->push(object)) {
+                        // If the ring is full, use the secondary queue.
+                        // sync._free_obj is guaranteed null as we're
+                        // the only thread which broke out of the cond.wait
+                        // loop under the mutex
+                        sync._free_obj = object;
+                    }
 
-            WITH_LOCK(preempt_lock) {
-                ring = &memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
-                if (!ring->push(object)) {
-                    // If the ring is full, use the secondary queue.
-                    // sync._free_obj is guaranteed null as we're
-                    // the only thread which broke out of the cond.wait
-                    // loop under the mutex
-                    sync._free_obj = object;
-                }
-
-                // Wake the worker item in case at least half of the queue is full
-                if (ring->size() > free_objects_ring_size/2) {
-                    memory::free_worker.signal(sched::cpus[obj_cpu]);
+                    // Wake the worker item in case at least half of the queue is full
+                    if (ring->size() > free_objects_ring_size/2) {
+                        memory::free_worker.signal(sched::cpus[obj_cpu]);
+                    }
                 }
             }
         }
-
-        sched::preempt_disable();
     }
 }
 
