@@ -49,7 +49,7 @@ static inline int error_get(error e)
 
 inline static int error_to_libc(error e)
 {
-    if (error_bad(e)) {
+    if (!error_bad(e)) {
         return 0;
     } else {
         errno = error_get(e);
