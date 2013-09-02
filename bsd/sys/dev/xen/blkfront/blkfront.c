@@ -936,13 +936,16 @@ blkfront_connect(struct xb_softc *sc)
 		xlvbd_add(sc, sectors, sc->vdevice, binfo, sector_size);
 	}
 
+	mtx_lock(&sc->xb_io_lock);
+	sc->connected = BLKIF_STATE_CONNECTED;
+	sc->xb_flags |= XB_READY;
+	mtx_unlock(&sc->xb_io_lock);
+
 	(void)xenbus_set_state(dev, XenbusStateConnected); 
 
 	/* Kick pending requests. */
 	mtx_lock(&sc->xb_io_lock);
-	sc->connected = BLKIF_STATE_CONNECTED;
 	xb_startio(sc);
-	sc->xb_flags |= XB_READY;
 	mtx_unlock(&sc->xb_io_lock);
 }
 
