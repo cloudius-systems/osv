@@ -18,6 +18,6 @@ elif cmd == 'setsize':
     block_size = 32 * 1024
     blocks = (size + block_size - 1) / block_size
     f = file(img, 'r+')
-    f.seek(512-4)
+    f.seek(0x10)
     f.write(struct.pack('H', blocks))
     f.close()

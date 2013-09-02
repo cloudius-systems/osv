@@ -18,6 +18,10 @@ e820data = 0x2000
 start:
 	ljmp $0, $init
 
+# Be conservative, we should not be in the 10th byte so far, but better safe than sorry
+.org 0x10
+count32: .short 4096 # in 32k units, 4096=128MB
+
 int1342_struct:
 	.byte 0x10
 	.byte 0
@@ -132,10 +136,6 @@ done_e820:
 	mov $target, %eax
 	mov $mb_info, %ebx
 	jmp *entry
-
-.org 0x1fc
-
-count32: .short 4096 # in 32k units, 4096=128MB
 
 .org 0x1fe
 .byte 0x55, 0xaa
