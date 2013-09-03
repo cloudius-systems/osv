@@ -34,6 +34,7 @@
 #include <sys/zfs_ioctl.h>
 #include <sys/spa.h>
 #include <sys/nvpair.h>
+#include <sys/sysctl.h>
 
 #include <libshare.h>
 #include <libuutil.h>
