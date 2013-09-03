@@ -10,6 +10,8 @@
 /usr/lib/jvm/&/jre/lib/amd64/libmanagement.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libnet.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libjavajpeg.so: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/amd64/libinstrument.so: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/amd64/jli/libjli.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/resources.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/lib/tools.jar: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/rt.jar: %(jdkbase)s/&
