@@ -2,6 +2,11 @@
 libzfs-file-list = changelist config dataset diff import iter mount pool status util
 libzfs-objects = $(foreach file, $(libzfs-file-list), bsd/cddl/contrib/opensolaris/lib/libzfs/common/libzfs_$(file).o)
 
+libzpool-file-list = taskq util kernel
+libzpool-objects = $(foreach file, $(libzpool-file-list), bsd/cddl/contrib/opensolaris/lib/libzpool/common/$(file).o)
+
+libzfs-objects += $(libzpool-objects)
+
 define libzfs-includes =
   bsd/cddl/compat/opensolaris/lib/libumem
   bsd/cddl/contrib/opensolaris/head
@@ -16,6 +21,7 @@ define libzfs-includes =
   bsd/sys/cddl/contrib/opensolaris/uts/common/sys
   bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs
   bsd/sys/cddl/contrib/opensolaris/common/zfs
+  bsd/sys/cddl/contrib/opensolaris/uts/common/zmod
   bsd/include
   bsd
   bsd/sys
