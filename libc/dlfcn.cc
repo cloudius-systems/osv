@@ -39,6 +39,9 @@ void* dlopen(const char* filename, int flags)
     auto prog = elf::get_program();
     elf::object* obj = prog->add_object(filename);
     // FIXME: handle flags etc.
+    if (!obj) {
+        dlerror_fmt("dlopen: failed to open %s", filename);
+    }
     return obj;
 }
 
