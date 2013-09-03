@@ -9,6 +9,7 @@
 #define	_PATH_CSHELL	"/bin/csh"
 #define	_PATH_DEVDB	"/var/run/dev.db"
 #define	_PATH_DEVNULL	"/dev/null"
+#define	_PATH_DEVZERO	"/dev/zero"
 #define	_PATH_DRUM	"/dev/drum"
 #define	_PATH_GSHADOW	"/etc/gshadow"
 #define	_PATH_KLOG	"/proc/kmsg"
