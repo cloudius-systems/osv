@@ -134,3 +134,5 @@ ifmedia_ioctl(struct ifnet *ifp, struct bsd_ifreq *ifr, struct ifmedia *ifm, u_l
 {
     return -ENOSYS;
 }
+
+size_t physmem;

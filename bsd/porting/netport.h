@@ -302,7 +302,7 @@ int ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 int get_cpuid(void);
 
 size_t get_physmem(void);
-#define physmem		get_physmem()
+extern size_t physmem;
 
 #define UID_ROOT	0
 #define UID_NOBODY	65534
