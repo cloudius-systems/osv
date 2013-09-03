@@ -871,3 +871,5 @@ void init_tls(elf::tls_data tls_data)
 }
 
 }
+
+irq_lock_type irq_lock;

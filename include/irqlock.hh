@@ -29,10 +29,6 @@ inline void irq_save_lock_type::unlock()
     _flags.restore();
 }
 
-namespace {
-
-irq_lock_type irq_lock;
-
-}
+extern irq_lock_type irq_lock;
 
 #endif /* IRQLOCK_HH_ */
