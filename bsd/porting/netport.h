@@ -30,6 +30,13 @@ typedef int accmode_t;
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
 
+struct module_stat;
+
+static inline int     modnext(int _modid) { return 0; }
+static inline int     modfnext(int _modid) { return 0; }
+static inline int     modstat(int _modid, struct module_stat *_stat) { return 0; }
+static inline int     modfind(const char *_name) { return 0; }
+
 #define MAXCOMLEN       19 
 
 /* maximum common x86 L1 size */
