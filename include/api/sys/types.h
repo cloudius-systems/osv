@@ -53,6 +53,9 @@ extern "C" {
 #define __NEED_pthread_key_t
 #define __NEED_pthread_once_t
 #define __NEED_useconds_t
+#define __NEED_cpusetid_t
+#define __NEED_cpulevel_t
+#define __NEED_cpuwhich_t
 
 #include <bits/alltypes.h>
 

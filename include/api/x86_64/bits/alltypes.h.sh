@@ -138,6 +138,10 @@ TYPEDEF uint32_t __pid_t;
 TYPEDEF uint32_t gid_t;
 TYPEDEF uint32_t pid_t;
 
+TYPEDEF int cpusetid_t;
+TYPEDEF int cpulevel_t;
+TYPEDEF int cpuwhich_t;
+
 #define _PID_T_DECLARED
 #define _SSIZE_T_DECLARED
 #define _UID_T_DECLARED
