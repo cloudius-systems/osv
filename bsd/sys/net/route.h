@@ -34,6 +34,7 @@
 #define _NET_ROUTE_H_
 
 #include <sys/cdefs.h>
+#include <porting/sync_stub.h>
 
 __BEGIN_DECLS
 void rts_init(void);

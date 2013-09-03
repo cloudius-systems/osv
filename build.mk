@@ -28,8 +28,11 @@ compiler-flag = $(shell $(CXX) -Werror $1 -o /dev/null -c $3  > /dev/null 2>&1 &
 
 compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL, $(src)/compiler/attr/cold-label.cc)
 
+kernel-defines = -D_KERNEL
+
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
+	$(kernel-defines) \
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include $(src)/compiler/include/intrinsics.hh \
 	$(do-sys-includes) \
@@ -435,7 +438,6 @@ $(solaris) $(solaris-tests): CFLAGS+= \
 	-Wno-unused-variable \
 	-Wno-switch \
 	-Wno-maybe-uninitialized \
-	-D_KERNEL \
 	-I$(src)/bsd/sys/cddl/compat/opensolaris \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/common \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common \
@@ -554,7 +556,7 @@ boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a \
               $(boost-lib-dir)/libboost_system-mt.a
 
-bsd/%.o: COMMON += -D_KERNEL -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
+bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so

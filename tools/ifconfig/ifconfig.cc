@@ -32,8 +32,6 @@
 #include <osv/ioctl.h>
 
 
-#define _KERNEL
-
 #include <bsd/porting/netport.h>
 #include <bsd/porting/networking.h>
 #include <bsd/porting/route.h>
@@ -134,7 +132,7 @@ private:
         char buf[64] ;
 
         if (do_get_ifr(cmd, &ifr) == 0)
-            inet_ntoa_r(((bsd_sockaddr_in *)&(ifr.ifr_addr))->sin_addr, buf) ;
+            inet_ntoa_r(((bsd_sockaddr_in *)&(ifr.ifr_addr))->sin_addr, buf, sizeof buf) ;
         else
             buf[0] = '\0' ;
         return buf ;

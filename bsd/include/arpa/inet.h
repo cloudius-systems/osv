@@ -101,7 +101,7 @@ in_addr_t	 inet_netof(struct in_addr);
 in_addr_t	 inet_network(const char *);
 char		*inet_net_ntop(int, const void *, int, char *, size_t);
 int		 inet_net_pton(int, const char *, void *, size_t);
-char		*inet_ntoa_r(struct in_addr, char *buf, socklen_t size);
+const char	*inet_ntoa_r(struct in_addr, char *buf, socklen_t size);
 char		*inet_cidr_ntop(int, const void *, int, char *, size_t);
 int		 inet_cidr_pton(int, const char *, void *, int *);
 unsigned	 inet_nsap_addr(const char *, unsigned char *, int);

@@ -8,7 +8,6 @@
 #include <sstream>
 #include <drivers/xenfront.hh>
 #include <osv/device.h>
-#define _KERNEL
 #include <bsd/sys/geom/geom_disk.h>
 #include <osv/bio.h>
 

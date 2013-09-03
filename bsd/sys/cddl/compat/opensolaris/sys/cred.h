@@ -41,11 +41,14 @@ typedef struct ucred ucred_t;
 #define	kcred		NULL
 #define	CRED()		NULL
 
+#ifdef _KERNEL
+
 #define	crgetuid(cred)		0
 #define	crgetgid(cred)		0
 #define	crgetgroups(cred)	NULL
 #define	crgetngroups(cred)	0
 #define	crgetsid(cred, i)	NULL
+#endif
 
 static inline int groupmember(gid_t gid, const cred_t *cr)
 {

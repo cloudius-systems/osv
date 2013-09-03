@@ -48,12 +48,12 @@ inet_ntoa(struct in_addr ina)
 	return buf;
 }
 
-char *
-inet_ntoa_r(struct in_addr ina, char *buf)
+const char *
+inet_ntoa_r(struct in_addr ina, char *buf, socklen_t len)
 {
 	unsigned char *ucp = (unsigned char *)&ina;
 
-	sprintf(buf, "%d.%d.%d.%d",
+	snprintf(buf, len, "%d.%d.%d.%d",
 		ucp[0] & 0xff,
 		ucp[1] & 0xff,
 		ucp[2] & 0xff,

@@ -6,8 +6,6 @@
  */
 
 
-#define _KERNEL
-
 #include <osv/debug.h>
 
 #include <bsd/porting/curthread.h>

@@ -787,13 +787,13 @@ int	sysctl_ctx_entry_del(struct sysctl_ctx_list *clist,
 		struct sysctl_oid *oidp);
 
 int	kernel_sysctl(struct thread *td, int *name, u_int namelen, void *old,
-		      size_t *oldlenp, void *new, size_t newlen,
+		      size_t *oldlenp, void *_new, size_t newlen,
 		      size_t *retval, int flags);
 int	kernel_sysctlbyname(struct thread *td, char *name,
-		void *old, size_t *oldlenp, void *new, size_t newlen,
+		void *old, size_t *oldlenp, void *_new, size_t newlen,
 		size_t *retval, int flags);
 int	userland_sysctl(struct thread *td, int *name, u_int namelen, void *old,
-			size_t *oldlenp, int inkernel, void *new, size_t newlen,
+			size_t *oldlenp, int inkernel, void *_new, size_t newlen,
 			size_t *retval, int flags);
 int	sysctl_find_oid(int *name, u_int namelen, struct sysctl_oid **noid,
 			int *nindx, struct sysctl_req *req);

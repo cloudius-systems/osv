@@ -33,6 +33,8 @@
 #ifndef _RADIX_H_
 #define	_RADIX_H_
 
+#include "osv/rwlock.h"
+
 /*
  * Radix search tree node layout.
  */

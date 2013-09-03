@@ -5,8 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#define _KERNEL
-
 #include <list>
 
 #include <stdlib.h>

@@ -37,6 +37,8 @@
 #ifndef _GEOM_GEOM_DISK_H_
 #define _GEOM_GEOM_DISK_H_
 
+#include <porting/mmu.h>
+
 #ifdef _KERNEL 
 
 

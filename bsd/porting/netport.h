@@ -156,8 +156,12 @@ extern int tick;
     #define INET (1)
 #endif
 
+#ifdef _KERNEL
+
 #define panic(...) do { tprintf_e("bsd-panic", __VA_ARGS__); \
                         abort(); } while(0)
+
+#endif
 
 #define bsd_log(x, ...) tprintf_e("bsd-log", __VA_ARGS__)
 

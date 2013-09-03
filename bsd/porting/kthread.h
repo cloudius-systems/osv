@@ -10,6 +10,8 @@
 
 #include <sys/cdefs.h>
 
+#ifdef _KERNEL
+
 // Compat only
 #define RFHIGHPID   (1<<18) /* use a pid higher than 10 (idleproc) */
 
@@ -27,4 +29,7 @@ struct proc get_curproc(void);
 __END_DECLS
 
 #define curproc ({ struct proc _p = get_curproc(); &_p; })
+
+#endif
+
 #endif

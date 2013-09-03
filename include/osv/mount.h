@@ -39,6 +39,8 @@
 
 __BEGIN_DECLS
 
+#ifdef _KERNEL
+
 /*
  * Mount data
  */
@@ -55,6 +57,7 @@ struct mount {
 	void		*m_data;	/* private data for fs */
 };
 
+#endif
 
 /*
  * Mount flags.
@@ -89,6 +92,8 @@ struct mount {
  * Mask of flags that are visible to statfs()
  */
 #define	MNT_VISFLAGMASK	0x0000ffff
+
+#ifdef _KERNEL
 
 /*
  * Filesystem type switch table.
@@ -133,6 +138,8 @@ int	vfs_einval(void);
 
 void	 vfs_busy(struct mount *mp);
 void	 vfs_unbusy(struct mount *mp);
+
+#endif
 
 __END_DECLS
 

@@ -30,6 +30,8 @@
 #ifndef _SYS_VNODE_H_
 #define _SYS_VNODE_H_
 
+#ifdef _KERNEL
+
 #include <sys/cdefs.h>
 #include <sys/stat.h>
 #include <osv/prex.h>
@@ -214,5 +216,7 @@ static inline void vnode_pager_setsize(struct vnode *vp, off_t size)
 }
 
 __END_DECLS
+
+#endif
 
 #endif /* !_SYS_VNODE_H_ */

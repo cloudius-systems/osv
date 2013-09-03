@@ -86,6 +86,9 @@ typedef	short		pri_t;
 typedef	int32_t		daddr32_t;
 typedef	int32_t		time32_t;
 typedef	u_longlong_t	diskaddr_t;
+typedef bool		boolean_t;
+#define B_FALSE		false
+#define B_TRUE		true
 
 #endif	/* !_KERNEL */
 

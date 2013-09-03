@@ -2242,11 +2242,11 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 	sp = s + strlen(s);
 
 	if (inc && ((inc->inc_flags & INC_ISIPV6) == 0)) {
-		inet_ntoa_r(inc->inc_faddr, sp);
+		inet_ntoa_r(inc->inc_faddr, sp, s + size - sp);
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i to [", ntohs(inc->inc_fport));
 		sp = s + strlen(s);
-		inet_ntoa_r(inc->inc_laddr, sp);
+		inet_ntoa_r(inc->inc_laddr, sp, s + size - sp);
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i", ntohs(inc->inc_lport));
 #ifdef INET6
@@ -2269,11 +2269,11 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 #endif /* INET6 */
 #ifdef INET
 	} else if (ip && th) {
-		inet_ntoa_r(ip->ip_src, sp);
+		inet_ntoa_r(ip->ip_src, sp, s + size - sp);
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i to [", ntohs(th->th_sport));
 		sp = s + strlen(s);
-		inet_ntoa_r(ip->ip_dst, sp);
+		inet_ntoa_r(ip->ip_dst, sp, s + size - sp);
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i", ntohs(th->th_dport));
 #endif /* INET */

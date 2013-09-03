@@ -7,7 +7,6 @@
 
 #include "xen.hh"
 #include "xen_intr.hh"
-#define _KERNEL
 #include <bsd/porting/bus.h>
 #include <machine/intr_machdep.h>
 #include "bitops.h"

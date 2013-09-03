@@ -11,7 +11,6 @@
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
-#define _KERNEL
 #include <bsd/sys/sys/mbuf.h>
 
 #include "drivers/virtio.hh"
