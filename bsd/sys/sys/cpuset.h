@@ -32,6 +32,7 @@
 #ifndef _SYS_CPUSET_H_
 #define	_SYS_CPUSET_H_
 
+#include <sys/cdefs.h>
 #include <sys/_cpuset.h>
 
 #define	CPUSETBUFSIZ	((2 + sizeof(long) * 2) * _NCPUWORDS)
