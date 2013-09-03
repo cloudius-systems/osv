@@ -31,11 +31,9 @@ using boost::intrusive::get_parent_from_member;
 
 void parse_madt()
 {
-    auto st = AcpiInitializeTables(NULL, 0, false);
-    assert(st == AE_OK);
     char madt_sig[] = ACPI_SIG_MADT;
     ACPI_TABLE_HEADER* madt_header;
-    st = AcpiGetTable(madt_sig, 0, &madt_header);
+    auto st = AcpiGetTable(madt_sig, 0, &madt_header);
     assert(st == AE_OK);
     auto madt = get_parent_from_member(madt_header, &ACPI_TABLE_MADT::Header);
     void* subtable = madt + 1;

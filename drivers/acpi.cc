@@ -9,9 +9,12 @@ extern "C" {
 #include "drivers/clock.hh"
 #include "processor.hh"
 #include "align.hh"
+#include "xen.hh"
 
 #include <osv/mutex.h>
 #include <osv/semaphore.hh>
+
+#include "prio.hh"
 
 ACPI_STATUS AcpiOsInitialize(void)
 {
@@ -383,3 +386,7 @@ void AcpiOsVprintf(const char *Format, va_list Args)
     vprintf(Format, Args);
 }
 
+void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init()
+{
+     XENPV_ALTERNATIVE({auto st = AcpiInitializeTables(NULL, 0, false); assert(st == AE_OK);}, {});
+}
