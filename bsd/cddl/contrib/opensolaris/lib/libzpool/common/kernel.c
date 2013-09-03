@@ -36,6 +36,8 @@
 #include <sys/zmod.h>
 #include <sys/utsname.h>
 #include <sys/systeminfo.h>
+#include <osv/fcntl.h>
+#include <unistd.h>
 
 /*
  * Emulation of kernel services in userland.
