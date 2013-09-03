@@ -19,9 +19,11 @@ INCLUDES += -isystem $(src)/include/api/x86_64
 # must be after include/api, since it includes some libc-style headers:
 INCLUDES += -isystem $(gcc-inc-base2)
 INCLUDES += -isystem gen/include
-INCLUDES += -isystem $(src)/bsd/sys
+INCLUDES += $(post-includes-bsd)
+
+post-includes-bsd += -isystem $(src)/bsd/sys
 # For acessing machine/ in cpp xen drivers
-INCLUDES += -isystem $(src)/bsd/
+post-includes-bsd += -isystem $(src)/bsd/
 
 # $(call compiler-flag, -ffoo, option, file)
 #     returns option if file builds with -ffoo, empty otherwise
