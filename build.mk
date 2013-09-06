@@ -170,8 +170,8 @@ loader.img: boot.bin loader.elf
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
 loader-size = $(shell stat --printf %s loader.img)
-zfs-start = $(shell echo $$[$(loader-size)+2097151 & ~2097151])
-zfs-size = $(shell echo $$[10737418240 - $(zfs-start)])
+zfs-start = $(shell echo $$(($(loader-size)+2097151 & ~2097151)))
+zfs-size = $(shell echo $$((10737418240 - $(zfs-start))))
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
