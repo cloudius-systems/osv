@@ -9,6 +9,7 @@
 #define OSV_FCNTL_H
 
 #include <sys/cdefs.h>
+#include <fcntl.h>
 
 __BEGIN_DECLS
 
@@ -20,8 +21,19 @@ __BEGIN_DECLS
 #define FWRITE          0x00000002
 
 /* convert from open() flags to/from fflags; convert O_RD/WR to FREAD/FWRITE */
-#define FFLAGS(oflags)  ((oflags) + 1)
-#define OFLAGS(fflags)  ((fflags) - 1)
+static inline int fflags(int oflags)
+{
+    int rw = oflags & O_ACCMODE;
+    oflags &= ~O_ACCMODE;
+    return (rw + 1) | oflags;
+}
+
+static inline int oflags(int fflags)
+{
+    int rw = fflags & (FREAD|FWRITE);
+    fflags &= ~(FREAD|FWRITE);
+    return (rw - 1) | fflags;
+}
 
 __END_DECLS
 
