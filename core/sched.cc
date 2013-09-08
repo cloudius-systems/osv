@@ -306,6 +306,11 @@ void cpu::load_balance()
         if (min == this) {
             continue;
         }
+        // This CPU is temporarily running one extra thread (this thread),
+        // so don't migrate a thread away if the difference is only 1.
+        if (min->load() >= (load() - 1)) {
+            continue;
+        }
         WITH_LOCK(irq_lock) {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
                     [](thread& t) { return !t._attr.pinned_cpu; });
