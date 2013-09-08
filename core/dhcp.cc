@@ -40,10 +40,10 @@ extern "C" int dhcp_hook_rx(struct mbuf* m)
     return 1;
 }
 
-extern "C" void dhcp_start()
+void dhcp_start(bool wait)
 {
     // Initialize the global DHCP worker
-    net_dhcp_worker.init();
+    net_dhcp_worker.init(wait);
 }
 
 namespace dhcp {
@@ -503,7 +503,7 @@ namespace dhcp {
     ///////////////////////////////////////////////////////////////////////////
 
     dhcp_worker::dhcp_worker()
-        : _dhcp_thread(nullptr)
+        : _dhcp_thread(nullptr), _have_ip(false), _waiter(nullptr)
     {
 
     }
@@ -517,7 +517,7 @@ namespace dhcp {
         // FIXME: free packets and states
     }
 
-    void dhcp_worker::init()
+    void dhcp_worker::init(bool wait)
     {
         struct ifnet *ifp = nullptr;
 
@@ -542,6 +542,12 @@ namespace dhcp {
         // Create the worker thread
         _dhcp_thread = new sched::thread([&] { dhcp_worker_fn(); });
         _dhcp_thread->start();
+
+        if (wait) {
+            dhcp_i("Waiting for IP...");
+            _waiter = sched::thread::current();
+            sched::thread::wait_until([&]{ return _have_ip; });
+        }
     }
 
     void dhcp_worker::dhcp_worker_fn()
@@ -565,6 +571,14 @@ namespace dhcp {
             }
 
             it->second->process_packet(m);
+
+            // Check if we got an ip
+            if (it->second->is_acknowledged()) {
+                _have_ip = true;
+                if (_waiter) {
+                    _waiter->wake();
+                }
+            }
         }
     }
 

@@ -11,6 +11,8 @@
 #include <osv/mutex.h>
 #include <osv/debug.h>
 
+extern "C" void dhcp_start(bool wait);
+
 namespace dhcp {
 
     #define dhcp_tag "dhcp"
@@ -195,6 +197,8 @@ namespace dhcp {
         void state_discover(dhcp_mbuf &dm);
         void state_request(dhcp_mbuf &dm);
 
+        bool is_acknowledged() { return (_state == DHCP_ACKNOWLEDGE); }
+
     private:
         state _state;
         struct ifnet* _ifp;
@@ -212,7 +216,7 @@ namespace dhcp {
         ~dhcp_worker();
 
         // Initializing a state per interface, sends discover packets
-        void init();
+        void init(bool wait);
 
         void dhcp_worker_fn();
         void queue_packet(struct mbuf* m);
@@ -223,6 +227,10 @@ namespace dhcp {
         mutex _lock;
         std::list<struct mbuf*> _rx_packets;
         std::map<struct ifnet*, dhcp_interface_state*> _universe;
+
+        // Wait for IP
+        bool _have_ip;
+        sched::thread * _waiter;
     };
 
 } // namespace dhcp
