@@ -32,7 +32,7 @@ namespace xenfront {
     private:
         void wait_for_devices(void);
         pci::device& _dev;
-        interrupt_manager _intx;
+        std::unique_ptr<gsi_level_interrupt> _pgsi;
         struct device _xenstore_device;
 
         std::vector<xenfront_driver *> _children;

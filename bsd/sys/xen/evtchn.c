@@ -155,6 +155,8 @@ static unsigned long pirq_needs_unmask_notify[NR_PIRQS/sizeof(unsigned long)];
 /* Reference counts for bindings to IRQs. */
 static int irq_bindcount[NR_IRQS];
 
+static bool irq_is_legacy = 0;
+
 #define VALID_EVTCHN(_chn) ((_chn) != 0)
 
 #ifdef SMP
@@ -194,6 +196,10 @@ static void init_evtchn_cpu_bindings(void)
 
 #endif
 
+void evtchn_irq_is_legacy(void)
+{
+	irq_is_legacy = 1;
+}
 
 /*
  * Force a proper event-channel callback from Xen after clearing the
@@ -969,7 +975,7 @@ unmask_evtchn(int port)
 	vcpu_info_t *vcpu_info = &s->vcpu_info[cpu];
 
 	/* Slow path (hypercall) if this is a non-local port. */
-	if (unlikely(cpu != cpu_from_evtchn(port))) {
+	if (unlikely(irq_is_legacy || (cpu != cpu_from_evtchn(port)))) {
 		struct evtchn_unmask unmask = { .port = port };
 		(void)HYPERVISOR_event_channel_op(EVTCHNOP_unmask, &unmask);
 		return;

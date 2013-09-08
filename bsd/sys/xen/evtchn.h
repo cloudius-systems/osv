@@ -72,6 +72,8 @@ int irq_to_evtchn_port(int irq);
 
 void ipi_pcpu(unsigned int cpu, int vector);
 
+void evtchn_irq_is_legacy(void);
+
 /*
  * CHARACTER-DEVICE DEFINITIONS
  */

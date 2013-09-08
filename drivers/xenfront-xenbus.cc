@@ -34,7 +34,6 @@ namespace xenfront {
 xenbus::xenbus(pci::device& pci_dev)
     : hw_driver()
     , _dev(pci_dev)
-    , _intx(&pci_dev)
 {
     static int initialized;
     int irqno = pci_dev.get_interrupt_line();
@@ -54,7 +53,11 @@ xenbus::xenbus(pci::device& pci_dev)
     // bringup
     evtchn_init(NULL);
 
-    xen::xen_set_callback();
+    if (features().xen_vector_callback) {
+        xen::xen_set_callback();
+    } else {
+        _pgsi.reset(xen::xen_set_callback(irqno));
+    }
 
     xs_attach(&_xenstore_device);
 

@@ -4,6 +4,7 @@
 #include "processor.hh"
 #include "cpuid.hh"
 #include "exceptions.hh"
+#include "interrupt.hh"
 #include "sched.hh"
 #include <bsd/porting/pcpu.h>
 #include <bsd/machine/xen/xen-os.h>
@@ -101,12 +102,19 @@ static bool xen_pci_enabled()
 
 #define HVM_PARAM_CALLBACK_IRQ 0
 extern "C" void evtchn_do_upcall(void *a);
+extern "C" void evtchn_irq_is_legacy(void);
 
 static void xen_ack_irq()
 {
     auto cpu = sched::cpu::current();
     HYPERVISOR_shared_info->vcpu_info[cpu->id].evtchn_upcall_pending = 0; 
 }
+
+// For HVMOP_set_param the param vector is comprised of
+// the vector number in the low part, and then:
+// - all the rest zeroed if we are requesting an ISA irq
+// - 1 << 56, if we are requesting a PCI INTx irq, and
+// - 2 << 56, if we are requesting a direct callback.
 
 void xen_set_callback()
 {
@@ -116,18 +124,41 @@ void xen_set_callback()
     xhp.index = HVM_PARAM_CALLBACK_IRQ;
 
     auto vector = idt.register_interrupt_handler(
-            [] {}, // pre_eoi
-            [] { xen_ack_irq(); }, // eoi
-            [] { evtchn_do_upcall(NULL);// handler
-    } );
+        [] {}, // pre_eoi
+        [] { xen_ack_irq(); }, // eoi
+        [] { evtchn_do_upcall(NULL); }// handler
+    );
 
-    // The param vector is comprised of the vector number in the low part, and then:
-    // - all the rest zeroed if we are requesting an ISA irq
-    // - 1 << 56, if we are requesting a PCI INTx irq, and
-    // - 2 << 56, if we are requesting a direct callback.
     xhp.value = vector | (2ULL << 56);
+
     if (hvm_hypercall(HVMOP_set_param, &xhp))
         assert(0);
+}
+
+gsi_level_interrupt *xen_set_callback(int irqno)
+{
+    struct xen_hvm_param xhp;
+
+    xhp.domid = DOMID_SELF;
+    xhp.index = HVM_PARAM_CALLBACK_IRQ;
+
+    if (irqno >= 16) {
+        debug("INTx not supported yet.\n");
+        abort();
+    }
+
+    auto gsi = new gsi_level_interrupt(
+        irqno,
+        [] { xen_ack_irq(); },
+        [] { evtchn_do_upcall(NULL); }
+    );
+
+    xhp.value = irqno;
+
+    if (hvm_hypercall(HVMOP_set_param, &xhp))
+        assert(0);
+
+    return gsi;
 }
 
 void xen_init(processor::features_type &features, unsigned base)
@@ -149,7 +180,7 @@ void xen_init(processor::features_type &features, unsigned base)
         features.xen_clocksource = xen_features[9] & 1;
         features.xen_vector_callback = xen_features[8] & 1;
         if (!features.xen_vector_callback)
-            abort("Hypervisor does not support vectored callbacks");
+            evtchn_irq_is_legacy();
 
         struct xen_add_to_physmap map;
         map.domid = DOMID_SELF;

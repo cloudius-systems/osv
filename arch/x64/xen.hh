@@ -38,11 +38,14 @@ struct xen_shared_info {
     unsigned long pad1[3];
 };
 
+class gsi_level_interrupt;
+
 namespace xen {
 
 void xen_init(processor::features_type &features, unsigned base);
 extern struct xen_shared_info xen_shared_info;
-void xen_set_callback(void);
+gsi_level_interrupt *xen_set_callback(int irqno);
+void xen_set_callback();
 
 }
 
