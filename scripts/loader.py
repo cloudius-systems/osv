@@ -479,8 +479,8 @@ def align_down(v, pagesize):
 def align_up(v, pagesize):
     return align_down(v + pagesize - 1, pagesize)
 
-def dump_trace():
-    from collections import defaultdict
+def dump_trace(out_func):
+    from collections import defaultdict       
     inf = gdb.selected_inferior()
     trace_log = gdb.lookup_global_symbol('trace_log').value()
     max_trace = ulong(gdb.parse_and_eval('max_trace'))
@@ -508,7 +508,7 @@ def dump_trace():
                 fn_name = block.function.print_name
             except:
                 fn_name = '???'
-            gdb.write('0x%016x %2d %12d.%06d %s %s %s\n' 
+            out_func('0x%016x %2d %12d.%06d %s %s %s\n' 
                       % (thread,
                          cpu,
                          time / 1000000000,
@@ -542,7 +542,7 @@ def dump_trace():
             format = tp['format'].string()
             format = format.replace('%p', '0x%016x')
             name = tp['name'].string()
-            gdb.write('0x%016x %2d %12d.%06d %-20s %s\n'
+            out_func('0x%016x %2d %12d.%06d %-20s %s\n'
                       % (thread,
                          cpu,
                          time / 1000000000,
@@ -680,8 +680,16 @@ class osv_trace(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        dump_trace()
+        dump_trace(gdb.write)
 
+class osv_trace_file(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv trace2file', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        fout = file("trace.txt", "wt")
+        dump_trace(fout.write)
+        fout.close()
+        
 class osv_leak(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv leak', gdb.COMMAND_USER,
@@ -747,6 +755,7 @@ osv_thread()
 osv_thread_apply()
 osv_thread_apply_all()
 osv_trace()
+osv_trace_file()
 osv_leak()
 osv_leak_show()
 osv_leak_on()
