@@ -1089,7 +1089,7 @@ int fcntl(int fd, int cmd, int arg)
 		FD_UNLOCK(fp);
 		break;
 	case F_GETFL:
-		ret = fp->f_flags;
+		ret = oflags(fp->f_flags);
 		break;
 	case F_SETFL:
 		/* Ignore flags */
@@ -1097,8 +1097,8 @@ int fcntl(int fd, int cmd, int arg)
 
 		assert((arg & ~SETFL) == 0);
 		FD_LOCK(fp);
-		fp->f_flags = (fp->f_flags & ~SETFL) |
-			(arg & SETFL);
+		fp->f_flags = fflags((oflags(fp->f_flags) & ~SETFL) |
+			(arg & SETFL));
 		FD_UNLOCK(fp);
 
 		/* Sync nonblocking/async state with file flags */
