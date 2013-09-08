@@ -25,7 +25,7 @@ def set_imgargs():
     if (not cmdargs.execute):
         return
     
-    args = ["setargs", "build/%s/loader.img" % opt_path, cmdargs.execute]
+    args = ["setargs", "build/%s/usr.img" % opt_path, cmdargs.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
     
 def start_osv():
