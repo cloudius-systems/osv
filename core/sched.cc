@@ -110,6 +110,13 @@ void cpu::reschedule_from_interrupt(bool preempt)
     if (p->_vruntime + current_run < 0) { // overflow (idle thread)
         current_run = 0;
     }
+    if (current_run > max_slice) {
+        // This thread has run for a long time, or clock:time() jumped. But if
+        // we increase vruntime by the full amount, this thread might go into
+        // a huge cpu time debt and won't be scheduled again for a long time.
+        // So limit the vruntime increase.
+        current_run = max_slice;
+    }
     if (p->_status == thread::status::running
             && (runqueue.empty()
                 || p->_vruntime + current_run < runqueue.begin()->_vruntime + bias)) {
