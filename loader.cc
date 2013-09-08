@@ -31,6 +31,8 @@
 #include <osv/power.hh>
 #include <osv/rcu.hh>
 #include "mempool.hh"
+#include <bsd/porting/networking.h>
+#include "dhcp.hh"
 
 using namespace osv;
 
@@ -213,6 +215,11 @@ void* do_main_thread(void *_args)
 
 
     mount_usr();
+
+    // Start DHCP by default and wait for an IP
+    osv_start_if("eth0", "0.0.0.0", "255.255.255.0");
+    osv_ifup("eth0");
+    dhcp_start(true);
 
     run_main(prog, args);
 
