@@ -19,6 +19,7 @@ __BEGIN_DECLS
  */
 #define FREAD           0x00000001
 #define FWRITE          0x00000002
+#define FEXCL		O_EXCL
 
 /* convert from open() flags to/from fflags; convert O_RD/WR to FREAD/FWRITE */
 static inline int fflags(int oflags)
