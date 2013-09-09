@@ -2,6 +2,7 @@
 #define APIC_HH_
 
 #include <osv/types.h>
+#include <mmu.hh>
 
 namespace processor {
 
@@ -75,9 +76,9 @@ struct msi_message {
 
 class apic_driver {
 public:
-    apic_driver() : _apic_base_lo(0xfee00000), _apic_base_hi(0) {}
-    virtual ~apic_driver();
-    virtual void init_on_ap() = 0;
+    apic_driver() { read_base(); }
+    virtual ~apic_driver() {}
+    virtual void init_on_ap() { enable(); }
     virtual void self_ipi(unsigned vector) = 0;
     virtual void ipi(unsigned apic_id, unsigned vector) = 0;
     virtual void init_ipi(unsigned apic_id, unsigned vector) = 0;
@@ -87,15 +88,28 @@ public:
     virtual u32 read(apicreg reg) = 0;
     virtual void write(apicreg reg, u32 value) = 0;
     virtual u32 id() = 0;
-    void set_lvt(apiclvt reg, unsigned vector);
+
     // vector should be above 31, below 15 will fail
     // dest_id is the apic id, if using an io_apic.
     msi_message compose_msix(u8 vector, u8 dest_id);
 protected:
-    void software_enable();
-protected:
-    u32 _apic_base_lo;
-    u32 _apic_base_hi;
+    virtual void software_enable();
+    virtual void enable() = 0;
+
+    mmu::phys _apic_base;
+
+    static constexpr unsigned APIC_SHORTHAND_SELF = 0x40000;
+    static constexpr unsigned APIC_SHORTHAND_ALL =  0x80000;
+    static constexpr unsigned APIC_SHORTHAND_ALLBUTSELF = 0xC0000;
+    static constexpr unsigned APIC_ICR_TYPE_FIXED = 0x00000;
+    static constexpr unsigned APIC_ICR_LEVEL_ASSERT = 1 << 14;
+    static constexpr unsigned APIC_BASE_GLOBAL_ENABLE = 1 << 11;
+
+    static u32 apic_delivery(u32 mode) { return mode << DELIVERY_SHIFT; }
+
+private:
+    void read_base();
+    static constexpr unsigned DELIVERY_SHIFT = 8;
 };
 
 extern apic_driver* apic;

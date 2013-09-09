@@ -4,7 +4,7 @@
 #include <osv/percpu.hh>
 #include <cpuid.hh>
 #include <processor.hh>
-#include <mmu.hh>
+#include "debug.hh"
 
 namespace processor {
 
@@ -27,10 +27,7 @@ inline bool try_fast_eoi()
 
 class x2apic : public apic_driver {
 public:
-    explicit x2apic();
-    virtual void init_on_ap();
-    virtual u32 read(apicreg reg);
-    virtual void write(apicreg reg, u32 value);
+    x2apic() : apic_driver() { enable(); }
     virtual void self_ipi(unsigned vector);
     virtual void ipi(unsigned apic_id, unsigned vector);
     virtual void init_ipi(unsigned apic_id, unsigned vector);
@@ -38,13 +35,53 @@ public:
     virtual void nmi_allbutself();
     virtual void eoi();
     virtual u32 id();
-private:
-    void enable();
+
+    virtual u32 read(apicreg reg)
+        { return rdmsr(0x800 + unsigned(reg) / 0x10); }
+    virtual void write(apicreg reg, u32 value)
+        { wrmsr(0x800 + unsigned(reg) / 0x10, value); }
+
+protected:
+    virtual void enable();
 };
 
-apic_driver::~apic_driver()
-{
-}
+class xapic final : public apic_driver {
+public:
+    xapic();
+
+    virtual void self_ipi(unsigned vector)
+        { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_SELF, vector); }
+
+    virtual void init_ipi(unsigned apic_id, unsigned vector)
+        { xapic::ipi(apic_id << 24, vector);}
+
+    virtual void ipi_allbutself(unsigned vector)
+        { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF, vector); }
+
+    virtual void nmi_allbutself()
+        { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF,
+                     apic_delivery(NMI_DELIVERY)); }
+
+    virtual void ipi(unsigned apic_id, unsigned vector);
+
+    virtual void eoi();
+    virtual u32 id();
+
+    virtual void write(apicreg reg, u32 value) { *reg_ptr(reg) = value; }
+    virtual u32 read(apicreg reg) { return *reg_ptr(reg); }
+
+protected:
+    virtual void enable();
+
+private:
+    u32* reg_ptr(apicreg r)
+        {return reinterpret_cast<u32*>(&_base_virt[static_cast<unsigned>(r)]);}
+
+    u8* const _base_virt = mmu::phys_cast<u8>(_apic_base);
+
+    static constexpr unsigned ICR2_DESTINATION_SHIFT = 24;
+    static constexpr unsigned XAPIC_ID_SHIFT = 24;
+};
 
 void apic_driver::software_enable()
 {
@@ -52,74 +89,51 @@ void apic_driver::software_enable()
     write(apicreg::SPIV, 0x1ff); // FIXME: allocate real vector
 }
 
-x2apic::x2apic()
+void apic_driver::read_base()
+{
+    static constexpr u64 base_addr_mask = 0xFFFFFF000;
+    _apic_base = rdmsr(msr::IA32_APIC_BASE) & base_addr_mask;
+
+    debug(fmt("APIC base %p\n") % _apic_base);
+}
+
+xapic::xapic()
     : apic_driver()
 {
-    enable();
+    mmu::linear_map(static_cast<void*>(_base_virt), _apic_base, 4096, 4096);
+    xapic::enable();
+}
+
+void xapic::enable()
+{
+    wrmsr(msr::IA32_APIC_BASE, _apic_base | APIC_BASE_GLOBAL_ENABLE);
     software_enable();
 }
 
-void x2apic::init_on_ap()
+void xapic::ipi(unsigned apic_id, unsigned vector)
 {
-    enable();
+    xapic::write(apicreg::ICR2, apic_id << ICR2_DESTINATION_SHIFT);
+    xapic::write(apicreg::ICR, vector | APIC_ICR_LEVEL_ASSERT);
 }
 
-void x2apic::enable()
-{
-    processor::wrmsr(msr::IA32_APIC_BASE, _apic_base_lo | (3 << 10));
-    software_enable();
-}
-
-void x2apic::self_ipi(unsigned vector)
-{
-    wrmsr(msr::X2APIC_SELF_IPI, vector);
-}
-
-void x2apic::ipi(unsigned apic_id, unsigned vector)
-{
-    wrmsr(msr::X2APIC_ICR, vector | (u64(apic_id) << 32) | (1 << 14));
-}
-
-void x2apic::init_ipi(unsigned apic_id, unsigned vector)
-{
-    wrmsr_safe(msr::X2APIC_ICR, vector | (u64(apic_id) << 32));
-}
-
-static constexpr unsigned APIC_SHORTHAND_SELF = 0x40000;
-static constexpr unsigned APIC_SHORTHAND_ALL =  0x80000;
-static constexpr unsigned APIC_SHORTHAND_ALLBUTSELF = 0xC0000;
-
-void x2apic::ipi_allbutself(unsigned vector)
-{
-    wrmsr(msr::X2APIC_ICR, vector | APIC_SHORTHAND_ALLBUTSELF | (1 << 14));
-}
-
-void x2apic::nmi_allbutself()
-{
-    wrmsr(msr::X2APIC_ICR, APIC_SHORTHAND_ALLBUTSELF | (4 << 8) | (1 << 14));
-}
-
-void x2apic::eoi()
+void xapic::eoi()
 {
     if (try_fast_eoi()) {
         return;
     }
-    wrmsr(msr::X2APIC_EOI, 0);
+
+    xapic::write(apicreg::EOR, 0);
 }
 
-u32 x2apic::read(apicreg reg)
+u32 xapic::id()
 {
-    return processor::rdmsr(0x800 + unsigned(reg) / 0x10);
-}
-
-void x2apic::write(apicreg reg, u32 value)
-{
-    processor::wrmsr(0x800 + unsigned(reg) / 0x10, value);
+    return xapic::read(apicreg::ID) >> XAPIC_ID_SHIFT;
 }
 
 u32 x2apic::id()
 {
-    u32 id = processor::rdmsr(msr::X2APIC_ID);
+    u32 id = read(apicreg::ID);
+
     if (!is_xen())
         return id;
 
@@ -139,18 +153,59 @@ u32 x2apic::id()
     return id;
 }
 
+void x2apic::enable()
+{
+    wrmsr(msr::IA32_APIC_BASE, _apic_base | APIC_BASE_GLOBAL_ENABLE | (1 << 10));
+    software_enable();
+}
+
+void x2apic::self_ipi(unsigned vector)
+{
+    wrmsr(msr::X2APIC_SELF_IPI, vector);
+}
+
+void x2apic::ipi(unsigned apic_id, unsigned vector)
+{
+    wrmsr(msr::X2APIC_ICR, vector | (u64(apic_id) << 32) | APIC_ICR_LEVEL_ASSERT);
+}
+
+void x2apic::init_ipi(unsigned apic_id, unsigned vector)
+{
+    wrmsr_safe(msr::X2APIC_ICR, vector | (u64(apic_id) << 32));
+}
+
+void x2apic::ipi_allbutself(unsigned vector)
+{
+    wrmsr(msr::X2APIC_ICR, vector | APIC_SHORTHAND_ALLBUTSELF | APIC_ICR_LEVEL_ASSERT);
+}
+
+void x2apic::nmi_allbutself()
+{
+    wrmsr(msr::X2APIC_ICR, APIC_SHORTHAND_ALLBUTSELF |
+                           apic_delivery(NMI_DELIVERY) |
+                           APIC_ICR_LEVEL_ASSERT);
+}
+
+void x2apic::eoi()
+{
+    if (try_fast_eoi()) {
+        return;
+    }
+    wrmsr(msr::X2APIC_EOI, 0);
+}
+
 apic_driver* create_apic_driver()
 {
-    // FIXME: detect
-    return new x2apic;
+    // TODO: Some Xen versions do not expose x2apic CPU feature
+    //       but still support it. Should we do more precise detection?
+    if (features().x2apic) {
+        return new x2apic;
+    } else {
+        return new xapic;
+    };
 }
 
 apic_driver* apic = create_apic_driver();
-
-void apic_driver::set_lvt(apiclvt source, unsigned vector)
-{
-    write(static_cast<apicreg>(source), vector);
-}
 
 msi_message apic_driver::compose_msix(u8 vector, u8 dest_id)
 {
@@ -161,8 +216,7 @@ msi_message apic_driver::compose_msix(u8 vector, u8 dest_id)
     }
 
     msg._addr =
-        ( (u64)_apic_base_hi << 32 ) |
-        ( _apic_base_lo & 0xFFF00000 ) |
+        ( _apic_base & 0xFFF00000 ) |
         ( dest_id << 12 );
 
     msg._data =
