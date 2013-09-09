@@ -2,6 +2,8 @@
 import subprocess
 import sys
 import argparse
+import os
+import tempfile
 
 stty_params=None
 
@@ -28,7 +30,7 @@ def set_imgargs():
     args = ["setargs", "build/%s/usr.img" % opt_path, cmdargs.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
     
-def start_osv():
+def start_osv_qemu():
     args = [
         "-vnc", ":1",
         "-gdb", "tcp::1234,server,nowait",
@@ -53,16 +55,10 @@ def start_osv():
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
         
-    if (cmdargs.hypervisor == "kvm"):
+    if cmdargs.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
-    elif ((cmdargs.hypervisor == "xen") or (cmdargs.hypervisor == "xenpv")):
-        print >> sys.stderr, "Support for Xen hypervisor not implemented"
-        return;
-    elif ((cmdargs.hypervisor == "none") or (cmdargs.hypervisor == "qemu")):
+    elif (cmdargs.hypervisor == "none") or (cmdargs.hypervisor == "qemu"):
         pass
-    else:
-        print >> sys.stderr, "Unrecognized hypervisor selected"
-        return;
 
     try:
         # Save the current settings of the stty
@@ -74,6 +70,86 @@ def start_osv():
         pass
     finally:
         cleanups()
+
+def start_osv_xen():
+    if cmdargs.hypervisor == "xen":
+        args = [
+            "builder='hvm'",
+            "xen_platform_pci=1",
+            "acpi=1",
+            "apic=1",
+            "boot='c'",
+        ]
+    else:
+        args = [ "kernel='%s/build/%s/loader.elf'" % (os.getcwd(), opt_path) ]
+
+    try:
+        memory = int(cmdargs.memsize)
+    except ValueError:
+        memory = cmdargs.memsize
+
+        if memory[-1:].upper() == "M":
+            memory = int(memory[:-1])
+        elif memory[-2:].upper() == "MB":
+            memory = int(memory[:-2])
+        elif memory[-1:].upper() == "G":
+            memory = 1024 * int(memory[:-1])
+        elif memory[-2:].upper() == "GB":
+            memory = memory[:-2]
+            memory = 1024 * int(memory[:-2])
+        else:
+            print >> sys.stderr, "Unrecognized memory size"
+            return;
+
+    args += [
+        "memory=%d" % (memory),
+        "vcpus=%s" % (cmdargs.vcpus),
+        "maxcpus=%s" % (cmdargs.vcpus),
+        "name='osv-%d'" % (os.getpid()),
+        "disk=['file://%s/build/%s/usr.img,hda,rw']" % (os.getcwd(), opt_path),
+        "serial='pty'",
+        "paused=0",
+        "on_crash='preserve'"
+    ]
+
+    if cmdargs.networking:
+        args += [ "vif=['bridge=virbr0']" ]
+
+    # Using xm would allow us to get away with creating the file, but it comes
+    # with its set of problems as well. Stick to xl.
+    xenfile = tempfile.NamedTemporaryFile(mode="w")
+    xenfile.writelines( "%s\n" % item for item in args )
+    xenfile.flush()
+
+    try:
+        # Save the current settings of the stty
+        stty_save()
+
+        # Launch qemu
+        cmdline = ["xl", "create" ]
+        if not cmdargs.detach:
+            cmdline += [ "-c" ]
+        cmdline += [ xenfile.name ]
+        subprocess.call(cmdline)
+    except:
+        pass
+    finally:
+        xenfile.close()
+        cleanups()
+
+def start_osv():
+    launchers = {
+            "xen" : start_osv_xen,
+            "xenpv" : start_osv_xen,
+            "none" : start_osv_qemu,
+            "qemu" : start_osv_qemu,
+            "kvm" : start_osv_qemu,
+    }
+    try:
+        launchers[cmdargs.hypervisor]()
+    except KeyError: 
+        print >> sys.stderr, "Unrecognized hypervisor selected"
+        return;
 
 def main():
     set_imgargs()
@@ -96,6 +172,8 @@ if (__name__ == "__main__"):
                         help="edit command line before execution")
     parser.add_argument("-p", "--hypervisor", action="store", default="kvm",
                         help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
+    parser.add_argument("-D", "--detach", action="store",
+                        help="run in background, do not connect the console (Xen only)")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
                         help="don't restart qemu automatially (allow debugger to connect on early errors)")
     cmdargs = parser.parse_args()
