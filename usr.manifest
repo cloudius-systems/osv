@@ -51,3 +51,11 @@
 /usr/lib/&/jni/networking.so: java/&
 /usr/lib/&/jni/stty.so: java/&
 /usr/lib/&/jni/tracepoint.so: java/&
+/usr/mgmt/web-1.0.jar: ../../mgmt/web/build/libs/web-1.0.jar
+/usr/mgmt/mgmt.json: ../../mgmt/web/config/mgmt.json
+/usr/mgmt/uploads/index.rb: ../../mgmt/web/views/index.rb
+/usr/mgmt/apps/index.rb: ../../mgmt/web/views/index.rb
+/usr/mgmt/views/**: ../../mgmt/web/views/**
+/usr/mgmt/templates/**: ../../mgmt/web/templates/**
+/usr/mgmt/public/**: ../../mgmt/web/public/**
+/usr/mgmt/lib/**: ../../mgmt/web/lib/**
