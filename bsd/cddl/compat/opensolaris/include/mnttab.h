@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <paths.h>
 
-#define	MNTTAB		_PATH_DEVZERO
+#define	MNTTAB		_PATH_MNTTAB
 #define	MNT_LINE_MAX	1024
 
 #define	MS_OVERLAY	0x0
