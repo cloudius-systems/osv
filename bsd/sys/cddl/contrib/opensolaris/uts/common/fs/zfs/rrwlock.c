@@ -69,7 +69,7 @@
  */
 
 /* global key for TSD */
-uint_t rrw_tsd_key;
+__thread struct rrw_node *rrw_tsd_key;
 
 typedef struct rrw_node {
 	struct rrw_node	*rn_next;
