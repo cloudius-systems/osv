@@ -2,6 +2,7 @@
 import socket
 from Queue import Queue
 from threading import Thread
+import sys
 
 class Worker(Thread):
     """Thread executing tasks from a given tasks queue"""
@@ -40,25 +41,53 @@ def hash_function(data):
 
 def make_connection():
     global data
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("192.168.122.89", 2500))
-    data = "".join(data)    
-    s.send(data)
-    s.send("END")
-    res = s.recv(1)
-    s.close()
-    print 'Received', ord(res[0])
+    global drops
+    global hash_errors
+    
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("192.168.122.89", 2500))
+        data = "".join(data)    
+        s.send(data)
+        s.send("END")
+        res = s.recv(1)
+        s.close()
+        if (ord(res[0]) != expected):
+            hash_errors = hash_errors + 1
+        
+    except:
+        drops = drops + 1
     
 if __name__ == "__main__":
+
+    nthreads = 0
+    connections = 0
+
+    try:
+        nthreads = int(sys.argv[1])
+        connections = int(sys.argv[2])
+    except:
+        print "Usage: ./tst-tcp-hash-cli.py <nthreads> <connections>"
+        sys.exit()
 
     #data = range(0, (4096**2)*2, 11)
     data = range(0,4096, 11)
     data = map(lambda x: chr(x % 256), data)
-    print "Expecting:", hash_function(data)
+    expected = hash_function(data)
 
-    pool = ThreadPool(200)
-    for i in range(200):
+    print "Sending %d bytes requests, expected hash: %d" % (len(data), expected)
+    print "Creating %d threads and making %d connections, please wait..." % (nthreads, connections)
+
+    drops = 0
+    hash_errors = 0
+
+    pool = ThreadPool(nthreads)
+    for i in range(connections):
         pool.add_task(make_connection)
 
     pool.wait_completion()
+
+    # FIXME: these metrics may not be accurate as I didn't use locks and interfere with the test
+    print "Test completed with %d drops and %d hash errors" % (drops, hash_errors)
+
 

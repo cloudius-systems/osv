@@ -20,7 +20,7 @@ static u8 hash_function(u8 * data, u32 len)
     return result;
 }
 
-#define dbg(...) tprintf_e("tst-tcp-hash-srv", __VA_ARGS__)
+#define dbg(...) tprintf_d("tst-tcp-hash-srv", __VA_ARGS__)
 
 const int listen_port = 2500;
 const int chunk_size = 1024;
