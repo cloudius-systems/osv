@@ -534,14 +534,14 @@ namespace dhcp {
         }
         IFNET_RUNLOCK();
 
+        // Create the worker thread
+        _dhcp_thread = new sched::thread([&] { dhcp_worker_fn(); });
+        _dhcp_thread->start();
+
         // Send discover packets!
         for (auto &it: _universe) {
             it.second->discover();
         }
-
-        // Create the worker thread
-        _dhcp_thread = new sched::thread([&] { dhcp_worker_fn(); });
-        _dhcp_thread->start();
 
         if (wait) {
             dhcp_i("Waiting for IP...");
