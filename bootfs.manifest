@@ -96,3 +96,4 @@
 /console/dhclient.js: ../../console/dhclient.js
 /&/console/perf.js: ../../&
 /&/etc/hosts: ../../static/&
+/&/etc/inputrc: ../../static/&
