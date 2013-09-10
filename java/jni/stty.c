@@ -52,6 +52,17 @@ Java_com_cloudius_util_Stty_raw
 }
 
 JNIEXPORT void JNICALL
+Java_com_cloudius_util_Stty_jlineMode
+(JNIEnv *env, jobject self)
+{
+	struct termios t;
+	ioctl(0, TCGETS, &t);
+	t.c_iflag &= ~(INLCR | ICRNL);
+	t.c_lflag &= ~(ICANON | ECHO);
+	ioctl(0, TCSETS, &t);
+}
+
+JNIEXPORT void JNICALL
 Java_com_cloudius_util_Stty_reset
 (JNIEnv *env, jobject self, jlong addr)
 {
