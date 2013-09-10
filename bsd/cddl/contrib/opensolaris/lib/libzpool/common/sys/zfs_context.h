@@ -564,6 +564,14 @@ extern int zfs_secpolicy_rename_perms(const char *from, const char *to,
     cred_t *cr);
 extern int zfs_secpolicy_destroy_perms(const char *name, cred_t *cr);
 extern zoneid_t getzoneid(void);
+
+#ifdef __OSV__
+
+#define GLOBAL_ZONEID 0
+#define getzoneid() GLOBAL_ZONEID
+
+#endif
+
 /* Random compatibility stuff. */
 #define	lbolt	(gethrtime() >> 23)
 #define	lbolt64	(gethrtime() >> 23)
