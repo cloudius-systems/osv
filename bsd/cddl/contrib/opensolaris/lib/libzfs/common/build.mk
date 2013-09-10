@@ -6,6 +6,8 @@ libzpool-file-list = taskq util kernel
 libzpool-objects = $(foreach file, $(libzpool-file-list), bsd/cddl/contrib/opensolaris/lib/libzpool/common/$(file).o)
 
 libzfs-objects += $(libzpool-objects)
+libzfs-objects += bsd/cddl/compat/opensolaris/misc/mkdirp.o
+libzfs-objects += bsd/cddl/compat/opensolaris/misc/zmount.o
 
 define libzfs-includes =
   bsd/cddl/compat/opensolaris/lib/libumem
@@ -39,7 +41,7 @@ $(libzfs-objects): kernel-defines =
 $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \
 			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function
 
-libzfs.so: $(libzfs-objects)
+libzfs.so: $(libzfs-objects) libuutil.so
 	$(makedir)
 	$(q-build-so)
 
