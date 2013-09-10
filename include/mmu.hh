@@ -42,9 +42,9 @@ public:
     uintptr_t end() const;
     void* addr() const;
     uintptr_t size() const;
-    void split(uintptr_t edge);
+    virtual void split(uintptr_t edge);
     virtual error sync(uintptr_t start, uintptr_t end);
-private:
+protected:
     uintptr_t _start;
     uintptr_t _end;
 public:
@@ -54,8 +54,10 @@ public:
 class file_vma : public vma {
 public:
     file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared);
+    virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
 private:
+    f_offset offset(uintptr_t addr);
     fileref _file;
     f_offset _offset;
     bool _shared;

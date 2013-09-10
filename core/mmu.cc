@@ -840,16 +840,32 @@ file_vma::file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset
 {
 }
 
+void file_vma::split(uintptr_t edge)
+{
+    if (edge <= _start || edge >= _end) {
+        return;
+    }
+    auto off = offset(edge);
+    vma* n = new file_vma(edge, _end, _file, off, _shared);
+    _end = edge;
+    vma_list.insert(*n);
+}
+
 error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!_shared)
         return make_error(ENOMEM);
     auto fsize = ::size(_file);
     uintptr_t size = end - start;
-    uintptr_t offset = _offset + (start - vma::start());
-    write(_file, addr(), offset, std::min(size, fsize - offset));
+    auto off = offset(start);
+    write(_file, addr(), off, std::min(size, fsize - off));
     auto err = sys_fsync(_file.get());
     return make_error(err);
+}
+
+f_offset file_vma::offset(uintptr_t addr)
+{
+    return _offset + (addr - _start);
 }
 
 unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
