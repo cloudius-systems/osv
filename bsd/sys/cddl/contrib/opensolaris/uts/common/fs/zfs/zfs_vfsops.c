@@ -1399,17 +1399,25 @@ getpoolname(const char *osname, char *poolname)
 static int
 zfs_mount(struct mount *mp, char *dev, int flags, void *data)
 {
+	// If @data is present, then it is the osname, while @dev is the device
+	//    (root mount)
+	// Otherwise, @dev is the osname, and zpool is already initialized
+	// FIXME: make some sense out of this.  In FreeBSD it is communicated via a flag.
+
 	char pname[MAXNAMELEN];
-	char		*osname = data;
+	char		*osname = dev;
 	int		error = 0;
 
-	error = getpoolname(osname, pname);
-	if (error)
-		return error;
+	if (data) {
+		osname = data;
+		error = getpoolname(osname, pname);
+		if (error)
+			return error;
 
-	error = spa_import_rootpool(dev);
-	if (error)
-		return error;
+		error = spa_import_rootpool(dev);
+		if (error)
+			return error;
+	}
 
 	kprintf("zfs: mounting %s from device %s\n", osname, dev);
 	return zfs_domount(mp, osname);
