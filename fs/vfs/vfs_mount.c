@@ -97,13 +97,11 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 		return ENODEV;	/* No such file system */
 
 	/* Open device. NULL can be specified as a device. */
+	// Allow device_open() to fail, in which case dev is interpreted
+	// by the file system mount routine (e.g zfs pools)
 	device = 0;
-	if (*dev != '\0') {
-		if (strncmp(dev, "/dev/", 5))
-			return ENOTBLK;
-		if ((error = device_open(dev + 5, DO_RDWR, &device)) != 0)
-			return error;
-	}
+	if (dev && strncmp(dev, "/dev/", 5) == 0)
+		device_open(dev + 5, DO_RDWR, &device);
 
 	MOUNT_LOCK();
 
@@ -189,7 +187,8 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
  err2:
 	free(mp);
  err1:
-	device_close(device);
+	if (device)
+		device_close(device);
 
 	MOUNT_UNLOCK();
 	return error;
