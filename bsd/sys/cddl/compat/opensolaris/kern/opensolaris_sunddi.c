@@ -32,6 +32,7 @@
 #include <sys/misc.h>
 #include <sys/sunddi.h>
 #include <sys/sysctl.h>
+#include <sys/queue.h>
 
 int
 ddi_strtol(const char *str, char **nptr, int base, long *result)
@@ -68,7 +69,6 @@ ddi_strtoull(const char *str, char **nptr, int base, unsigned long long *result)
 	return (0);
 }
 
-#if 0
 struct ddi_soft_state_item {
 	int	 ssi_item;
 	void	*ssi_data;
@@ -158,7 +158,7 @@ ddi_soft_state_free(void *state, int item)
 }
 
 int
-ddi_soft_state_init(void **statep, size_t size, size_t nitems __unused)
+ddi_soft_state_init(void **statep, size_t size, size_t nitems)
 {
 	struct ddi_soft_state *ss;
 
@@ -188,4 +188,3 @@ ddi_soft_state_fini(void **statep)
 
 	*statep = NULL;
 }
-#endif
