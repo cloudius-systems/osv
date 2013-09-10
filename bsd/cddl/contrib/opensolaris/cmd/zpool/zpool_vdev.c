@@ -376,6 +376,12 @@ check_device(const char *name, boolean_t force, boolean_t isspare)
 static boolean_t
 is_whole_disk(const char *arg)
 {
+#ifdef __OSV__
+	// FIXME: return the correct value, and make sure the system handles it
+	// we lie, since we're only opening a partition, but it's easier
+	return true;
+#endif
+
 #ifdef sun
 	struct dk_gpt *label;
 	int	fd;
