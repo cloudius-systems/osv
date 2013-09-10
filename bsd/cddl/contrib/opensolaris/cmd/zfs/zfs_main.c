@@ -56,6 +56,7 @@
 #include <sys/fs/zfs.h>
 #include <sys/types.h>
 #include <time.h>
+#include <err.h>
 
 #include <libzfs.h>
 #include <zfs_prop.h>
