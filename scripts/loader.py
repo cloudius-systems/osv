@@ -176,7 +176,7 @@ class osv_mmap(gdb.Command):
             start = ulong(vma['_start'])
             end   = ulong(vma['_end'])
             size  = ulong(end - start)
-            print '%s 0x%016x 0x%016x [%s kB]' % (vma, start, end, size / 1024)
+            print '0x%016x 0x%016x [%s kB]' % (start, end, size / 1024)
     
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer_base')
