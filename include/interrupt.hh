@@ -92,13 +92,32 @@ private:
     unsigned _vector;
 };
 
-class gsi_edge_interrupt {
+class gsi_interrupt {
 public:
-    explicit gsi_edge_interrupt(unsigned gsi, std::function<void ()> handler);
-    ~gsi_edge_interrupt();
+    void set(unsigned gsi, unsigned vector);
+    void clear();
 private:
     unsigned _gsi;
+};
+
+class gsi_edge_interrupt {
+public:
+    gsi_edge_interrupt(unsigned gsi, std::function<void ()> handler);
+    ~gsi_edge_interrupt();
+private:
     unsigned _vector;
+    gsi_interrupt _gsi;
+};
+
+class gsi_level_interrupt {
+public:
+    gsi_level_interrupt(unsigned gsi,
+                        std::function<void ()> ack,
+                        std::function<void ()> handler);
+    ~gsi_level_interrupt();
+private:
+    unsigned _vector;
+    gsi_interrupt _gsi;
 };
 
 #endif /* INTERRUPT_HH_ */

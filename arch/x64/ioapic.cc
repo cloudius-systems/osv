@@ -43,22 +43,47 @@ void init()
 
 using namespace ioapic;
 
-gsi_edge_interrupt::gsi_edge_interrupt(unsigned gsi, std::function<void ()> handler)
-    : _gsi(gsi)
-    , _vector(idt.register_handler(handler))
+void gsi_interrupt::set(unsigned gsi, unsigned vector)
 {
     WITH_LOCK(mtx) {
         write(0x10 + gsi * 2 + 1, sched::cpus[0]->arch.apic_id << 24);
-        write(0x10 + gsi * 2, _vector);
+        write(0x10 + gsi * 2, vector);
     }
+    _gsi = gsi;
 }
 
-gsi_edge_interrupt::~gsi_edge_interrupt()
+void gsi_interrupt::clear()
 {
     WITH_LOCK(mtx) {
         write(0x10 + _gsi * 2, 1 << 16);  // mask
     }
+}
+
+gsi_edge_interrupt::gsi_edge_interrupt(unsigned gsi,
+                                       std::function<void ()> handler)
+    : _vector(idt.register_handler(handler))
+{
+    _gsi.set(gsi, _vector);
+}
+
+gsi_edge_interrupt::~gsi_edge_interrupt()
+{
+    _gsi.clear();
     idt.unregister_handler(_vector);
 }
 
+gsi_level_interrupt::gsi_level_interrupt(unsigned gsi,
+                                         std::function<void ()> ack,
+                                         std::function<void ()> handler)
+    : _vector(idt.register_level_triggered_handler(ack, handler))
+{
+    //TODO: Interrupt sharing support
+    _gsi.set(gsi, _vector);
+}
+
+gsi_level_interrupt::~gsi_level_interrupt()
+{
+    _gsi.clear();
+    idt.unregister_handler(_vector);
+}
 
