@@ -116,7 +116,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 	/*
 	 * Create VFS mount entry.
 	 */
-	if (!(mp = malloc(sizeof(struct mount)))) {
+	if (!(mp = new mount)) {
 		error = ENOMEM;
 		goto err1;
 	}
