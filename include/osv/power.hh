@@ -5,6 +5,7 @@ namespace osv {
 
 void halt() __attribute__((noreturn));
 void poweroff() __attribute__((noreturn));
+void reboot();
 
 }
 

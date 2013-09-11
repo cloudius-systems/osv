@@ -548,7 +548,7 @@ boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
 bsd/%.o: COMMON += -D_KERNEL -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
-	java/jni/stty.so java/jni/tracepoint.so
+	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so
 
 usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \

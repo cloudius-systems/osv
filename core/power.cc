@@ -1,6 +1,7 @@
 #include <osv/power.hh>
 #include <debug.hh>
 #include <smp.hh>
+#include <processor.hh>
 
 extern "C" {
 #include "acpi.h"
@@ -47,5 +48,16 @@ void poweroff(void)
     // We shouldn't get here.
     halt();
 }
+
+// reboot() does not normally return, but may return if the reboot magic for
+// some reson fails.
+void reboot(void)
+{
+    // It would be nice if AcpiReset() worked, but it doesn't seem to work
+    // (on qemu & kvm), so let's resort to brute force...
+    processor::outb(1, 0x92);
+    debug("osv::reboot() did not work :(\n");
+}
+
 
 } /* namespace osv */
