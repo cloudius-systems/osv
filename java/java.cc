@@ -52,7 +52,7 @@ int main(int argc, char **argv)
             break;
 
         // Pass some options directly to the JVM
-        if (starts_with(argv[i], "-verbose") || starts_with(argv[i], "-X") || starts_with(argv[i], "-javaagent")) {
+        if (starts_with(argv[i], "-verbose") || starts_with(argv[i], "-D") || starts_with(argv[i], "-X") || starts_with(argv[i], "-javaagent")) {
             options.push_back(mkoption(argv[i]));
             argv[i] = NULL; // so we don't pass it to RunJava
             argc--;
