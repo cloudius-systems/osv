@@ -44,7 +44,7 @@ private:
     std::atomic<LT*> pushlist;
     LT* poplist;
 public:
-    queue_mpsc<LT>() : pushlist(nullptr), poplist(nullptr) { }
+    constexpr queue_mpsc<LT>() : pushlist(nullptr), poplist(nullptr) { }
 
     inline void push(LT* item)
     {
