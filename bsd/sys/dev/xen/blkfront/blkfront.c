@@ -467,6 +467,13 @@ xb_setup_sysctl(struct xb_softc *xb)
 #endif
 }
 
+static int xs_id_by_name(const char* name)
+{
+	const char *id_str = strrchr(name, '/');
+	id_str = id_str ? id_str + 1 : name;
+	return atoi(id_str);
+}
+
 /*
  * Setup supplies the backend dir, virtual device.  We place an event
  * channel and shared frame entries.  We watch backend to wait if it's
@@ -476,19 +483,22 @@ static int
 blkfront_attach(device_t dev)
 {
 	struct xb_softc *sc;
-	const char *name;
+	const char *name, *node_name;
 	uint32_t vdevice;
 	int error;
 	int i;
 	int unit;
 
+	node_name = xenbus_get_node(dev);
+
 	/* FIXME: Use dynamic device id if this is not set. */
-	error = xs_scanf(XST_NIL, xenbus_get_node(dev),
+	error = xs_scanf(XST_NIL, node_name,
 	    "virtual-device", NULL, "%" PRIu32, &vdevice);
 	if (error) {
-		xenbus_dev_fatal(dev, error, "reading virtual-device");
-		device_printf(dev, "Couldn't determine virtual device.\n");
-		return (error);
+		/* On some Xen versions there is no virtual-device property,
+		 * last part of device name should be used instead
+		 */
+		vdevice = xs_id_by_name(node_name);
 	}
 
 	blkfront_vdevice_to_unit(vdevice, &unit, &name);
