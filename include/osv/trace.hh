@@ -25,6 +25,7 @@ struct trace_record {
     sched::thread* thread;
     u64 time;
     unsigned cpu;
+    bool backtrace : 1;  // 10-elemenet backtrace precedes parameters
     union {
         u8 buffer[0];
         long align[0];
@@ -221,6 +222,7 @@ public:
                              const char* _name, const char* _format);
     ~tracepoint_base();
     void enable();
+    static void log_backtraces();
     void add_probe(probe* p);
     void del_probe(probe* p);
     tracepoint_id id;
@@ -242,12 +244,22 @@ protected:
     osv::rcu_ptr<std::vector<probe*>> probes_ptr;
     mutex probes_mutex;
     void run_probes();
+    void log_backtrace(trace_record* tr, u8*& buffer) {
+        if (!_log_backtrace) {
+            return;
+        }
+        do_log_backtrace(tr, buffer);
+    }
+    void do_log_backtrace(trace_record* tr, u8*& buffer);
+    size_t base_size() { return _log_backtrace ? backtrace_len * sizeof(void*) : 0; }
 private:
     void try_enable();
     void activate();
     void deactivate();
     void update();
     static std::unordered_set<tracepoint_id>& known_ids();
+    static bool _log_backtrace;
+    static const size_t backtrace_len = 10;
 };
 
 namespace {
@@ -301,17 +313,20 @@ public:
         tr->thread = sched::thread::current();
         tr->time = 0;
         tr->cpu = -1;
+        auto buffer = tr->buffer;
         if (tr->thread) {
             tr->time = clock::get()->time();
             tr->cpu = tr->thread->tcpu()->id;
         }
-        serialize(tr->buffer, as);
+        tr->backtrace = false;
+        log_backtrace(tr, buffer);
+        serialize(buffer, as);
     }
     void serialize(void* buffer, std::tuple<s_args...> as) {
         return serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
     }
     size_t size() {
-        return serializer<0, sizeof...(s_args), s_args...>::size(0);
+        return base_size() + serializer<0, sizeof...(s_args), s_args...>::size(0);
     }
     // Python struct style signature H=u16, I=u32, Q=u64 etc, packed into a
     // u64, lsb=first parameter

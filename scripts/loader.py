@@ -493,6 +493,8 @@ def dump_trace(out_func):
     trace_log = trace_log[pivot:] + trace_log[:pivot]
     last += max_trace - pivot
     indents = defaultdict(int)
+    backtrace_len = 10
+    bt_format = '   [' + str.join(' ', ['0x%x'] * backtrace_len) + ']'
     def lookup_tp(name):
         tp_base = gdb.lookup_type('tracepoint_base')
         return gdb.lookup_global_symbol(name).value().dereference()
@@ -501,7 +503,7 @@ def dump_trace(out_func):
 
     i = 0
     while i < last:
-        tp_key, thread, time, cpu = struct.unpack('QQQI', trace_log[i:i+28])
+        tp_key, thread, time, cpu, flags = struct.unpack('QQQII', trace_log[i:i+32])
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
@@ -524,6 +526,11 @@ def dump_trace(out_func):
         tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
         sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
         i += 32
+        backtrace = None
+        if flags & 1:
+            # backtrace
+            backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
+            i += 8 * backtrace_len
         size = struct.calcsize(sig)
         buffer = trace_log[i:i+size]
         i += size
@@ -543,13 +550,17 @@ def dump_trace(out_func):
             format = tp['format'].string()
             format = format.replace('%p', '0x%016x')
             name = tp['name'].string()
-            out_func('0x%016x %2d %12d.%06d %-20s %s\n'
+            bt_str = ''
+            if backtrace:
+                bt_str = bt_format % backtrace
+            out_func('0x%016x %2d %12d.%06d %-20s %s%s\n'
                       % (thread,
                          cpu,
                          time / 1000000000,
                          (time % 1000000000) / 1000,
                          name,
                          format % data,
+                         bt_str,
                          )
                       )
 

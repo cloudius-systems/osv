@@ -110,6 +110,7 @@ int main(int ac, char **av)
 
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
+static bool opt_log_backtrace = false;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -130,6 +131,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     desc.add_options()
         ("help", "show help text\n")
         ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable\n")
+        ("trace-backtrace", "log backtraces in the tracepoint log\n")
         ("leak", "start leak detector after boot\n")
         ("noshutdown", "continue running after main() returns\n")
     ;
@@ -150,6 +152,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("noshutdown")) {
         opt_noshutdown = true;
+    }
+
+    if (vars.count("trace-backtrace")) {
+        opt_log_backtrace = true;
     }
 
     if (vars.count("trace")) {
@@ -240,6 +246,11 @@ void main_cont(int ac, char** av)
     sched::preempt_enable();
     memory::enable_debug_allocator();
     enable_trace();
+    if (opt_log_backtrace) {
+        // can only do this after smp_launch, otherwise the IDT is not initialized,
+        // and backtrace_safe() fails as soon as we get an exception
+        tracepoint_base::log_backtraces();
+    }
     sched::init_detached_threads_reaper();
     rcu_init();
 

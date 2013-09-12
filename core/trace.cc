@@ -7,6 +7,7 @@
 #include <boost/range/algorithm/remove.hpp>
 #include <debug.hh>
 #include "prio.hh"
+#include <osv/execinfo.hh>
 
 tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
 tracepoint<2, void*, void*> trace_function_exit("function exit", "fn %p caller %p");
@@ -203,6 +204,20 @@ std::unordered_set<tracepoint_id>& tracepoint_base::known_ids()
     // scope initializers)
     static std::unordered_set<tracepoint_id> _known_ids;
     return _known_ids;
+}
+
+bool tracepoint_base::_log_backtrace;
+
+void tracepoint_base::log_backtraces()
+{
+    _log_backtrace = true;
+}
+
+void tracepoint_base::do_log_backtrace(trace_record* tr, u8*& buffer)
+{
+    tr->backtrace = true;
+    backtrace_safe(reinterpret_cast<void**>(buffer), backtrace_len);
+    buffer += backtrace_len * sizeof(void*);
 }
 
 trace_record* allocate_trace_record(size_t size)
