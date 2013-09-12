@@ -1,8 +1,10 @@
+#include <osv/debug.h>
 #include <netdb.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -16,6 +18,8 @@ int getnameinfo(const struct sockaddr *restrict sa, socklen_t sl,
 	char buf[256];
 	unsigned char reply[512];
 	int af = sa->sa_family;
+	char line[512];
+	FILE *f;
 	unsigned char *a;
 
 	switch (af) {
@@ -29,6 +33,28 @@ int getnameinfo(const struct sockaddr *restrict sa, socklen_t sl,
 		break;
 	default:
 		return EAI_FAMILY;
+	}
+
+	/* Try to find ip within /etc/hosts */
+	if ((node && nodelen) && (af == AF_INET)) {
+		const char *ipstr = inet_ntoa(((struct sockaddr_in *)sa)->sin_addr);
+		size_t l = strlen(ipstr);
+		f = fopen("/etc/hosts", "r");
+		if (f) while (fgets(line, sizeof line, f)) {
+			if (strncmp(line, ipstr, l) != 0)
+				continue;
+
+			char *domain = strtok(line, " ");
+			if (!domain) continue;
+			domain = strtok(NULL, " ");
+			if (!domain) continue;
+
+			if (strlen(domain) >= nodelen) return EAI_OVERFLOW;
+			strcpy(node, domain);
+			fclose(f);
+			return 0;
+		}
+		if (f) fclose(f);
 	}
 
 	if (node && nodelen) {
