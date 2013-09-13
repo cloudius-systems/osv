@@ -37,6 +37,7 @@
 #include <sys/time.h>
 #include "mmu.hh"
 #include "libc/libc.hh"
+#include <api/sys/times.h>
 
 #define __LC_LAST 13
 
@@ -370,5 +371,11 @@ int get_nprocs()
 int utimes (const char *, const struct timeval [2])
 {
     // FIXME This is just a stub
+    return 0;
+}
+
+clock_t times(struct tms *buffer)
+{
+    debug("times not implemented\n");
     return 0;
 }
