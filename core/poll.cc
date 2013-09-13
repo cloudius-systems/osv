@@ -51,8 +51,9 @@
 #include <osv/trace.hh>
 TRACEPOINT(trace_poll_drain, "fd=%p", file*);
 TRACEPOINT(trace_poll_wake, "fd=%p, events=0x%x", file*, int);
-TRACEPOINT(trace_poll, "");
-
+TRACEPOINT(trace_poll, "_pfd=%p, _nfds=%lu, _timeout=%d", struct pollfd *, nfds_t, int);
+TRACEPOINT(trace_poll_ret, "%d", int);
+TRACEPOINT(trace_poll_err, "%d", int);
 
 int poll_no_poll(int events)
 {
@@ -265,12 +266,13 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     struct pollreq p = {0};
     size_t pfd_sz = sizeof(struct pollfd) * _nfds;
 
+    trace_poll(_pfd, _nfds, _timeout);
+
     if (_nfds > FDMAX) {
         errno = EINVAL;
+        trace_poll_err(errno);
         return -1;
     }
-
-    trace_poll();
 
     p._nfds = _nfds;
     p._timeout = _timeout;
@@ -284,14 +286,14 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     if (nr_events) {
         memcpy(_pfd, p._pfd, pfd_sz);
         free(p._pfd);
-        return nr_events;
+        goto out;
     }
 
     /* Timeout -> Don't wait... */
     if (p._timeout == 0) {
         memcpy(_pfd, p._pfd, pfd_sz);
         free(p._pfd);
-        return 0;
+        goto out;
     }
 
     /* Add pollreq references */
@@ -328,7 +330,8 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     memcpy(_pfd, p._pfd, pfd_sz);
     mtx_destroy(&p._awake_mutex);
     free(p._pfd);
-
+out:
+    trace_poll_ret(nr_events);
     return nr_events;
 }
 
