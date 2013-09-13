@@ -132,6 +132,7 @@ static int blkif_open(struct disk *dp);
 static int blkif_close(struct disk *dp);
 static int blkif_ioctl(struct disk *dp, u_long cmd, void *addr, int flag, struct thread *td);
 static int blkif_queue_request(struct xb_softc *sc, struct xb_command *cm);
+static void xb_quiesce(struct xb_softc *sc);
 static void xb_strategy(struct bio *bp);
 
 // In order to quiesce the device during kernel dumps, outstanding requests to
@@ -260,6 +261,13 @@ static void
 xb_strategy(struct bio *bp)
 {
 	struct xb_softc	*sc = bp->bio_dev->softc;
+
+	if ((bp->bio_cmd == BIO_FLUSH) && 
+		!((sc->xb_flags & XB_BARRIER) || (sc->xb_flags & XB_FLUSH))) {
+		xb_quiesce(sc);
+		biodone(bp, true);
+		return;
+	}
 
 	/* bogus disk? */
 	if (sc == NULL) {
@@ -901,7 +909,7 @@ blkfront_connect(struct xb_softc *sc)
 	device_t dev = sc->xb_dev;
 	unsigned long sectors, sector_size;
 	unsigned int binfo;
-	int err, feature_barrier;
+	int err, feature_barrier, feature_flush;
 
 	if( (sc->connected == BLKIF_STATE_CONNECTED) || 
 	    (sc->connected == BLKIF_STATE_SUSPENDED) )
@@ -925,6 +933,13 @@ blkfront_connect(struct xb_softc *sc)
 			NULL);
 	if (!err || feature_barrier)
 		sc->xb_flags |= XB_BARRIER;
+
+	err = xs_gather(XST_NIL, xenbus_get_otherend_path(dev),
+			"feature-flush-cache", "%lu", &feature_flush,
+			NULL);
+	if (err == 0 && feature_flush != 0)
+		sc->xb_flags |= XB_FLUSH;
+
 
 	if (sc->xb_disk == NULL) {
 		device_printf(dev, "%juMB <%s> at %s",
@@ -1111,8 +1126,28 @@ xb_bio_command(struct xb_softc *sc)
 	cm->bp = bp;
 	cm->data = bp->bio_data;
 	cm->datalen = bp->bio_bcount;
-	cm->operation = (bp->bio_cmd == BIO_READ) ? BLKIF_OP_READ :
-	    BLKIF_OP_WRITE;
+	switch (bp->bio_cmd) {
+		case BIO_READ:
+			cm->operation = BLKIF_OP_READ;
+			break;
+		case BIO_WRITE:
+			/* FIXME / OSV: This will be bogus if barriers are not supported, but our FS does not commonly 
+			/ request it anyway */
+			cm->operation = (bp->bio_flags & BIO_ORDERED) ? BLKIF_OP_WRITE_BARRIER : BLKIF_OP_WRITE;
+			break;
+		case BIO_FLUSH:
+			if ((sc->xb_flags & XB_FLUSH) != 0)
+				cm->operation = BLKIF_OP_FLUSH_DISKCACHE;
+			else if ((sc->xb_flags & XB_BARRIER) != 0)
+				cm->operation = BLKIF_OP_WRITE_BARRIER;
+			else
+				/* Should have already been handled by xb_quiesce */
+				panic("flush request, but no flush support available");
+			break;
+		default:
+			panic("Unrecognized bio request");
+			break;
+	}
 	cm->sector_number = (blkif_sector_t)bp->bio_offset / sc->xb_disk->d_sectorsize;
 
 	return (cm);

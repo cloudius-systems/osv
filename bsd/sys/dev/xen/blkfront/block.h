@@ -163,6 +163,7 @@ struct xb_softc {
 #define XB_BARRIER	(1 << 1)	/* backend supports barriers */
 #define XB_READY	(1 << 2)	/* Is ready */
 #define XB_FROZEN	(1 << 3)	/* Waiting for resources */
+#define XB_FLUSH	(1 << 4)	/* backend supports flushes */
 	int			vdevice;
 	int			connected;
 	u_int			ring_pages;
