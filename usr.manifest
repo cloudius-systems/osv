@@ -5,6 +5,7 @@
 /usr/lib/jvm/&/jre/lib/amd64/libzip.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libnio.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libawt.so: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/amd64/librmi.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libjdwp.so: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/amd64/libdt_socket.so: %(jdkbase)s/&
 /usr/lib/libnpt.so: %(jdkbase)s/jre/lib/amd64/libnpt.so
