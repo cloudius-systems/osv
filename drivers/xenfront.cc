@@ -75,6 +75,7 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
     _bsd_dev.softc = malloc(table->size);
     // Simpler and we don't expect driver loading to fail anyway
     assert(_bsd_dev.softc);
+    memset(_bsd_dev.softc, 0, table->size);
 }
 
 void xenfront_driver::finished()
