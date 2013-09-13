@@ -109,9 +109,7 @@ bus_dmamap_load(bus_dma_tag_t dmat, bus_dmamap_t map, void *buf,
 		void *callback_arg, int flags)
 {
     unsigned int nsegs = 0;
-    for (unsigned int i = 0; i < buflen / sizeof(int); i++) {
-        ((unsigned int *)buf)[i] = i;
-    }
+
     while (buflen > 0) {
         auto segsize = std::min(buflen, dmat->maxsegsz);
         segsize = align_up(segsize, dmat->alignment);
