@@ -59,11 +59,6 @@
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
 /java/RunJava.class: java/RunJava.class
-/java/cloudius-1.0.jar: ../../mgmt/cloudius/build/libs/cloudius-1.0.jar
-/java/cli-1.0.jar: ../../mgmt/cli/build/libs/cli-1.0.jar
-/java/crash-1.0.jar: ../../mgmt/crash/build/libs/crash-1.0.jar
-/java/sshd-1.0.jar: ../../mgmt/sshd/build/libs/sshd-1.0.jar
-/tmp/index.rb: ../../mgmt/web/views/index.rb
 /tools/ifconfig.so: ./tools/ifconfig/ifconfig.so
 /tools/lsroute.so: ./tools/route/lsroute.so
 /console/util.js: ../../console/util.js
