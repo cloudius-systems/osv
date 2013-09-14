@@ -21,6 +21,7 @@ public:
 private:
     mmioaddr_t _addr;
     uint64_t _wall;
+    uint64_t _period;
 };
 
 class rtc {
@@ -88,12 +89,15 @@ uint64_t rtc::wallclock_ns()
     return dur.total_nanoseconds();
 }
 
+#define HPET_PERIOD     0x004
 #define HPET_CONFIG     0x010
 #define HPET_COUNTER    0x0f0
 
+#define MAX_PERIOD     100000000UL
+#define MIN_PERIOD     1000000UL
+
 hpetclock::hpetclock(uint64_t hpet_address)
 {
-
     // If we ever need another rtc user, it should be global. But
     // we should really, really avoid it. So let it local.
     auto r = new rtc();
@@ -105,6 +109,11 @@ hpetclock::hpetclock(uint64_t hpet_address)
     // the RTC
     cfg &= ~0x1;
     mmio_setl(_addr + HPET_CONFIG, cfg);
+
+    _period = mmio_getl(_addr + HPET_PERIOD);
+    // Hpet has its period presented in femtoseconds.
+    assert((_period >= MIN_PERIOD) && (_period <= MAX_PERIOD));
+    _period /= 1000000UL; // nanoseconds
 
     // In theory we should disable NMIs, but on virtual hardware, we can
     // relax that (This is specially true given our current NMI handler,
@@ -127,7 +136,7 @@ s64 hpetclock::time()
 {
     // Reading just the base counter should give us a couple of years
     // before we roll over, and will make us slightly faster...
-    return mmio_getl(_addr + HPET_COUNTER) + _wall;
+    return _wall + (mmio_getl(_addr + HPET_COUNTER) * _period);
 }
 
 void __attribute__((constructor(HPET_INIT_PRIO))) hpet_init()
