@@ -26,6 +26,9 @@ $(submake): Makefile
 	echo 'VPATH = ../..' >> $@
 	echo 'include ../../build.mk' >> $@
 
+qcow2: all
+	qemu-img convert -f raw -O qcow2 build/$(mode)/usr.img build/$(mode)/usr.qcow2
+
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
 	$(call quiet, cd mgmt && ./gradlew clean >> /dev/null , GRADLE CLEAN)
