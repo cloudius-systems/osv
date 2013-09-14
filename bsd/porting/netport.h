@@ -97,8 +97,16 @@ extern int tick;
 #define TSECOND (1000000000L)
 #define TMILISECOND (1000000L)
 
-/* Defines how many ticks are in 1 second */
-#define hz (1000000L)
+/* BSD-originated functions like msleep() measure time in units of "ticks",
+ * which are defined here by the macro hz (there are hz ticks per second).
+ * hz can be changed to anything, and does not impose, for example, a timer
+ * interrupt hz times a second. A very high hz, for example 1000000, is
+ * fine, but because the timeout parameter to msleep is an int, it results
+ * in a maximum timeout of just 36 minutes.
+ * As a compromise, we currently choose hz=1000 (same as poll()'s resolution),
+ * which gets us 1ms resolution, and a 24 day range.
+ */
+#define hz (1000L)
 #define ticks2ns(ticks) (ticks * (TSECOND / hz))
 #define ns2ticks(ns)    (ns / (TSECOND / hz))
 
