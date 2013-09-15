@@ -1,3 +1,10 @@
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
 /*-
  * Copyright (c) 1982, 1986, 1989, 1993
  *  The Regents of the University of California.  All rights reserved.
