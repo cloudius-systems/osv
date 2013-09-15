@@ -1,3 +1,10 @@
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
 #ifndef LOCKFREE_MUTEX_HH
 #define LOCKFREE_MUTEX_HH
 // A lock-free mutex implementation, based on the combination of two basic

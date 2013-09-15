@@ -1,0 +1,6 @@
+Unless otherwise stated, the header files in this directory have been
+copied from the Musl project.
+
+The Musl "COPYRIGHT" file states that "[these] files are trivial, in my
+opinion not copyrightable in the first place, and hereby explicitly released
+to the Public Domain".
