@@ -262,18 +262,18 @@ xb_strategy(struct bio *bp)
 {
 	struct xb_softc	*sc = bp->bio_dev->softc;
 
-	if ((bp->bio_cmd == BIO_FLUSH) && 
-		!((sc->xb_flags & XB_BARRIER) || (sc->xb_flags & XB_FLUSH))) {
-		xb_quiesce(sc);
-		biodone(bp, true);
-		return;
-	}
-
 	/* bogus disk? */
 	if (sc == NULL) {
 		bp->bio_error = EINVAL;
 		bp->bio_resid = bp->bio_bcount;
 		biodone(bp, false);
+		return;
+	}
+
+	if ((bp->bio_cmd == BIO_FLUSH) && 
+		!((sc->xb_flags & XB_BARRIER) || (sc->xb_flags & XB_FLUSH))) {
+		xb_quiesce(sc);
+		biodone(bp, true);
 		return;
 	}
 
@@ -935,7 +935,7 @@ blkfront_connect(struct xb_softc *sc)
 		sc->xb_flags |= XB_BARRIER;
 
 	err = xs_gather(XST_NIL, xenbus_get_otherend_path(dev),
-			"feature-flush-cache", "%lu", &feature_flush,
+			"feature-flush-cache", "%u", &feature_flush,
 			NULL);
 	if (err == 0 && feature_flush != 0)
 		sc->xb_flags |= XB_FLUSH;
