@@ -2,10 +2,9 @@
 All the files under the following directories are imported from musl:
 
   arch
-  errno
-  string
   ctype
   env
+  errno
   exit
   internal
   locale
@@ -13,11 +12,13 @@ All the files under the following directories are imported from musl:
   misc
   multibyte
   network
+  passwd
   prng
   setjmp
   signal
   stdio
   stdlib
+  string
   temp
   time
   unistd
