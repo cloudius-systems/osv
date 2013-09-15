@@ -1,3 +1,10 @@
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
 //
 // Same as an Echo server but more practical to validate correctness of
 // recieved / transmitted data. Uses TCP.

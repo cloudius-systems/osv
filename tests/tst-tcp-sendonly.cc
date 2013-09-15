@@ -1,3 +1,10 @@
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
 //
 // This test attempts to connect to the host (192.168.122.1) on port 9999
 // and send a small data packet, this test will fail if this port will be
