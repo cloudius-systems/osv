@@ -173,7 +173,7 @@ if (__name__ == "__main__"):
                         help="edit command line before execution")
     parser.add_argument("-p", "--hypervisor", action="store", default="kvm",
                         help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
-    parser.add_argument("-D", "--detach", action="store",
+    parser.add_argument("-D", "--detach", action="store_true",
                         help="run in background, do not connect the console (Xen only)")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
                         help="don't restart qemu automatially (allow debugger to connect on early errors)")
