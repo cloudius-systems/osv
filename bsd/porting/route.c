@@ -171,6 +171,7 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     char *cp;
     int l = 0;
     int rtm_addrs;
+    struct ifaddr *ifa;
 
     /* IPv4: Addresses */
     struct bsd_sockaddr_in dst;
@@ -221,8 +222,15 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     m_rtmsg->m_rtm.rtm_version = RTM_VERSION;
     m_rtmsg->m_rtm.rtm_seq = ++msg_seq;
     m_rtmsg->m_rtm.rtm_addrs = rtm_addrs;
+
+    if (flags & RTF_GATEWAY) {
+        ifa = ifa_ifwithnet((struct bsd_sockaddr *)&gw, 1);
+        if (ifa) {
+            m_rtmsg->m_rtm.rtm_rmx.rmx_mtu = ifa->ifa_ifp->if_mtu;
+        }
+    }
     /*
-        FIXME: OSv - support metrics such as MTU, weight...
+        FIXME: OSv - support other metrics such as weight, etc...
         m_rtmsg->m_rtm.rtm_rmx = rt_metrics;
         m_rtmsg->m_rtm.rtm_inits = rtm_inits;
     */
