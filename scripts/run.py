@@ -54,6 +54,7 @@ def start_osv_qemu():
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
+        args += ["-redir", "tcp:8080::8080"]
         
     if cmdargs.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
