@@ -34,4 +34,12 @@ clean:
 	$(call quiet, cd mgmt && ./gradlew clean >> /dev/null , GRADLE CLEAN)
 	
 
+external:
+	cd external/libunwind && autoreconf -i
+	cd external/libunwind && sh config.sh
+	make -C external/libunwind
+	cp external/libunwind/src/.libs/libunwind.a .
+	make -C external/glibc-testsuite
+
+.PHONY: external
 .DELETE_ON_ERROR:

@@ -28,7 +28,7 @@ To build OSv
 3) build everything at once
    ------------------------
 
-   ./scripts/build-all.sh 
+   make external all 
 
 OR follow steps below
 
