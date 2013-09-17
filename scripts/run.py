@@ -180,7 +180,7 @@ if (__name__ == "__main__"):
     parser.add_argument("-D", "--detach", action="store_true",
                         help="run in background, do not connect the console")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
-                        help="don't restart qemu automatially (allow debugger to connect on early errors)")
+                        help="don't restart qemu automatically (allow debugger to connect on early errors)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
     
