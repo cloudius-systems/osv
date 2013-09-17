@@ -41,5 +41,9 @@ external:
 	cp external/libunwind/src/.libs/libunwind.a .
 	make -C external/glibc-testsuite
 
+tags:
+	find . -name "*.cc" -o -name "*.hh" -o -name "*.h" -o -name "*.c" | ctags -L -
+
 .PHONY: external
+.PHONY: tags
 .DELETE_ON_ERROR:
