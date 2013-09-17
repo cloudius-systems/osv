@@ -66,7 +66,6 @@ extern "C" {
     void __stack_chk_fail(void);
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
-    char *__nl_langinfo_l(nl_item __item, __locale_t __l);
     int mallopt(int param, int value);
     FILE *popen(const char *command, const char *type);
     int pclose(FILE *stream);
@@ -221,52 +220,8 @@ namespace {
     }
 }
 
-/*
- * Note that libstdc++ pokes into this structure, even if it is declared privately in
- * glibc, so we can't replace it with an opaque one.
- *
- * XXX: this defintion seems to be copied 1:1 from glibc, and should not stay in our
- * code if we can avoid it.  Let's figure out how libstdc++ gets at it.
- */
-struct __locale_data
-{
-  const char *name;
-  const char *filedata;		/* Region mapping the file data.  */
-  off_t filesize;		/* Size of the file (and the region).  */
-  enum				/* Flavor of storage used for those.  */
-  {
-    ld_malloced,		/* Both are malloc'd.  */
-    ld_mapped,			/* name is malloc'd, filedata mmap'd */
-    ld_archive			/* Both point into mmap'd archive regions.  */
-  } alloc;
-
-  /* This provides a slot for category-specific code to cache data computed
-     about this locale.  That code can set a cleanup function to deallocate
-     the data.  */
-  struct
-  {
-    void (*cleanup) (struct __locale_data *);
-    union
-    {
-      void *data;
-      struct lc_time_data *time;
-      const struct gconv_fcts *ctype;
-    };
-  } __private;
-
-  unsigned int usage_count;	/* Counter for users.  */
-
-  int use_translit;		/* Nonzero if the mb*towv*() and wc*tomb()
-				   functions should use transliteration.  */
-
-  unsigned int nstrings;	/* Number of strings below.  */
-  union locale_data_value
-  {
-    const uint32_t *wstr;
-    const char *string;
-    unsigned int word;		/* Note endian issues vs 64-bit pointers.  */
-  }
-  values __flexarr;	/* Items, usually pointers into `filedata'.  */
+struct __locale_data {
+    const void *values[0];
 };
 
 #define _NL_ITEM(category, index)   (((category) << 16) | (index))
@@ -297,11 +252,11 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
 	*result_ptr = result;
 	auto ctypes = result_ptr->__locales[LC_CTYPE]->values;
 	result_ptr->__ctype_b = (const unsigned short *)
-	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_CLASS)].string + 128;
+	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_CLASS)] + 128;
 	result_ptr->__ctype_tolower = (const int *)
-	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOLOWER)].string + 128;
+	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOLOWER)] + 128;
 	result_ptr->__ctype_toupper = (const int *)
-	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)].string + 128;
+	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)] + 128;
 	return result_ptr;
     }
     abort();
