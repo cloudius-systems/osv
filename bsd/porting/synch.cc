@@ -84,7 +84,7 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
     }
 
     if (timo_hz) {
-        u64 nanoseconds = timo_hz*(1000000000L/hz);
+        u64 nanoseconds = ticks2ns(timo_hz);
         u64 cur_time = clock::get()->time();
         sched::timer t(*sched::thread::current());
         t.set(cur_time + nanoseconds);
