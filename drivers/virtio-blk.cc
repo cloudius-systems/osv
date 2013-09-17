@@ -160,7 +160,8 @@ bool virtio_blk::read_config()
     return true;
 }
 
-void virtio_blk::response_worker() {
+void virtio_blk::response_worker()
+{
     vring* queue = get_virt_queue(0);
     virtio_blk_req* req;
 
@@ -202,7 +203,8 @@ void virtio_blk::response_worker() {
     }
 }
 
-int64_t virtio_blk::size() {
+int64_t virtio_blk::size()
+{
     return _config.capacity * _config.blk_size;
 }
 
@@ -249,7 +251,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         virtio_blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
-        hdr->sector = bio->bio_offset/ sector_size;
+        hdr->sector = bio->bio_offset / sector_size;
 
         queue->_sg_vec.clear();
         queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ));
