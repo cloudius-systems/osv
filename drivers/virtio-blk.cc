@@ -277,9 +277,9 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             _waiting_request_thread = sched::thread::current();
             std::atomic_thread_fence(std::memory_order_seq_cst);
             sched::thread::wait_until([queue] {queue->get_buf_gc(); return queue->avail_ring_has_room(queue->_sg_vec.size());});
-            _request_thread_lock.lock();
-            _waiting_request_thread = nullptr;
-            _request_thread_lock.unlock();
+            WITH_LOCK(_request_thread_lock) {
+                _waiting_request_thread = nullptr;
+            }
         }
 
         queue->kick();
