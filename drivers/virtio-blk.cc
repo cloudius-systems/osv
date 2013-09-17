@@ -259,8 +259,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         // need to break a contiguous buffers that > 4k into several physical page mapping
         // even if the virtual space is contiguous.
         long len = 0;
-        int offset = bio->bio_offset;
-        offset = 0xfff & reinterpret_cast<long>(bio->bio_data);
+        int offset = reinterpret_cast<long>(bio->bio_data) & 0xfff;
         void *base = bio->bio_data;
         while (len != bio->bio_bcount) {
             long size = std::min(bio->bio_bcount - len, (long)page_size);
