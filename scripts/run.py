@@ -36,9 +36,6 @@ def start_osv_qemu():
         "-gdb", "tcp::1234,server,nowait",
         "-m", cmdargs.memsize,
         "-smp", cmdargs.vcpus,
-        "-chardev", "stdio,mux=on,id=stdio",
-        "-mon", "chardev=stdio,mode=readline,default",
-        "-device", "isa-serial,chardev=stdio",
         "-drive", ("file=build/%s/usr.img,if=virtio,cache=unsafe" % opt_path)]
     
     if (cmdargs.no_shutdown):
@@ -54,11 +51,19 @@ def start_osv_qemu():
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
+        args += ["-redir", "tcp:8080::8080"]
         
     if cmdargs.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
     elif (cmdargs.hypervisor == "none") or (cmdargs.hypervisor == "qemu"):
         pass
+
+    if (cmdargs.detach):
+        args += ["-daemonize"]
+    else:
+        args += ["-chardev", "stdio,mux=on,id=stdio"]
+        args += ["-mon", "chardev=stdio,mode=readline,default"]
+        args += ["-device", "isa-serial,chardev=stdio"]
 
     try:
         # Save the current settings of the stty
@@ -172,10 +177,10 @@ if (__name__ == "__main__"):
                         help="edit command line before execution")
     parser.add_argument("-p", "--hypervisor", action="store", default="kvm",
                         help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
-    parser.add_argument("-D", "--detach", action="store",
-                        help="run in background, do not connect the console (Xen only)")
+    parser.add_argument("-D", "--detach", action="store_true",
+                        help="run in background, do not connect the console")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
-                        help="don't restart qemu automatially (allow debugger to connect on early errors)")
+                        help="don't restart qemu automatically (allow debugger to connect on early errors)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
     
