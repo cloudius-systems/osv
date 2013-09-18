@@ -9,7 +9,7 @@ To build OSv
         libvirt libtool zfs-fuse flex bison
 
    On Debian:
-     apt-get install libboost-all-dev genromfs zfs-fuse autoconf
+     apt-get install libboost-all-dev genromfs zfs-fuse autoconf ant
 
 1) make sure the zfs-fuse daemon is running
    ----------------------------------------
