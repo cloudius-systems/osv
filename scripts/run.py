@@ -71,8 +71,9 @@ def start_osv_qemu():
 
         # Launch qemu
         subprocess.call(["qemu-system-x86_64"] + args)
-    except:
-        pass
+    except OSError, e:
+        print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
+              format(e.errno, e.strerror, " ".join(args)))
     finally:
         cleanups()
 
