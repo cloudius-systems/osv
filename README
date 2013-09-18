@@ -10,8 +10,8 @@ To build OSv
    On Debian:
      apt-get install build-essential libboost-all-dev genromfs zfs-fuse autoconf libtool openjdk-7-jdk ant
      
-   (Ubuntu users: you may use Oracle JDK in [this ppa](https://launchpad.net/~webupd8team/+archive/java)
-   if you don't want to pull too many dependencies for `openjdk-7-jdk`)
+   (Ubuntu users: you may use Oracle JDK in https://launchpad.net/~webupd8team/+archive/java
+    if you don't want to pull too many dependencies for `openjdk-7-jdk`)
 
 1) make sure the zfs-fuse daemon is running
    ----------------------------------------
