@@ -243,7 +243,7 @@ namespace dhcp {
         decode_ip_len();
 
         // Read allocated IP address
-        _your_ip = pdhcp()->yiaddr.s_addr;
+        _your_ip = ntohl(pdhcp()->yiaddr.s_addr);
 
         // Parse options
         u8* packet_start = mtod(_m, u8*);
@@ -267,9 +267,11 @@ namespace dhcp {
                 break;
             case DHCP_OPTION_SUBNET_MASK:
                 PARSE_OP(in_addr_t, u32, _subnet_mask);
+                _subnet_mask = ntohl(_subnet_mask);
                 break;
             case DHCP_OPTION_ROUTER:
                 PARSE_OP(in_addr_t, u32, _router_ip);
+                _router_ip = ntohl(_router_ip);
                 break;
             case DHCP_OPTION_DHCP_SERVER:
                 PARSE_OP(in_addr_t, u32, _dhcp_server_ip);
@@ -473,10 +475,10 @@ namespace dhcp {
         char gw_ip[16];
 
         struct in_addr yip, sip, gwip, dip;
-        yip.s_addr = dm.get_your_ip();
-        sip.s_addr = dm.get_subnet_mask();
-        gwip.s_addr = dm.get_router_ip();
-        dip.s_addr = dm.get_dhcp_server_ip();
+        yip.s_addr  = htonl(dm.get_your_ip());
+        sip.s_addr  = htonl(dm.get_subnet_mask());
+        gwip.s_addr = htonl(dm.get_router_ip());
+        dip.s_addr  = htonl(dm.get_dhcp_server_ip());
 
         inet_ntoa_r(yip, our_ip);
         inet_ntoa_r(sip, smask_ip);
