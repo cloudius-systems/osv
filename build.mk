@@ -147,6 +147,7 @@ tests += tests/tst-except.so
 tests += tests/tst-tcp-sendonly.so
 tests += tests/tst-tcp-hash-srv.so
 tests += tests/tst-loadbalance.so
+tests += tests/tst-dns-resolver.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
