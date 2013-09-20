@@ -208,7 +208,6 @@ int64_t virtio_blk::size()
     return _config.capacity * _config.blk_size;
 }
 
-static const int page_size = 4096;
 static const int sector_size = 512;
 
 int virtio_blk::make_virtio_request(struct bio* bio)
@@ -218,7 +217,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
 
         if (!bio) return EIO;
 
-        if (bio->bio_bcount/page_size + 1 > _config.seg_max) {
+        if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
             virtio_w("%s:request of size %d needs more segment than the max %d",
                     __FUNCTION__, bio->bio_bcount, (u32)_config.seg_max);
             return EIO;
@@ -262,9 +261,9 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         int offset = reinterpret_cast<long>(bio->bio_data) & 0xfff;
         void *base = bio->bio_data;
         while (len != bio->bio_bcount) {
-            long size = std::min(bio->bio_bcount - len, (long)page_size);
-            if (offset + size > page_size)
-                size = page_size - offset;
+            long size = std::min(bio->bio_bcount - len, (long)mmu::page_size);
+            if (offset + size > (long)mmu::page_size)
+                size = mmu::page_size - offset;
             len += size;
             queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(base), size, (type == VIRTIO_BLK_T_OUT)? vring_desc::VRING_DESC_F_READ:vring_desc::VRING_DESC_F_WRITE));
             base += size;
