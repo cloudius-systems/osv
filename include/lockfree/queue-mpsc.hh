@@ -80,18 +80,21 @@ public:
             poplist = poplist->next;
             return result;
         } else {
-            // The poplist is empty. Atomically take the entire pushlist (pushers
-            // may continue to to push concurrently, so the atomicity is imporant)
-            // and then at our leasure, reverse this list (so oldest first) into
-            // poplist. We can do this at our leasure because there are no competing
-            // pops. Note we need memory_order_consume (because we only access memory
-            // via the pointer loaded from the atomic variable), but it appears gcc
-            // doesn't support memory_order_consume so we use memory_order_acquire.
-            LT *r = pushlist.exchange(nullptr, /*std::memory_order_consume*/std::memory_order_acquire);
+            // The poplist is empty. Atomically take the entire pushlist
+            // (pushers may continue to to push concurrently, so the atomicity
+            // is imporant) and then at our leisure, reverse this list (so
+            // oldest first) into poplist. We can do this at our leisure
+            // because there are no competing pops. Note we need "consume"
+            // memory orderinf (because we only access memory via the pointer
+            // loaded from the atomic variable), but it appears gcc doesn't
+            // support memory_order_consume so we use memory_order_acquire.
+            LT *r = pushlist.exchange(nullptr,
+                    /*std::memory_order_consume*/std::memory_order_acquire);
             if (!r)
                 return nullptr; // the both poplist and poplist were empty
-            // Reverse the previous pushlist (now in r) into poplist, and return
-            // the last item (the oldest pushed item) as the result of the pop.
+            // Reverse the previous pushlist (now in r) into poplist, and
+            // return the last item (the oldest pushed item) as the result
+            // of the pop.
             while (r->next) {
                 LT *next = r->next;
                 r->next = poplist;
