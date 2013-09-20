@@ -50,6 +50,7 @@
 /&/tests/tst-wake.so: ./&
 /&/tests/tst-epoll.so: ./&
 /&/tests/tst-lfring.so: ./&
+/&/tests/tst-sleep.so: ./&
 /&/tests/tst-resolve.so: ./&
 /&/tests/tst-except.so: ./&
 /&/tests/tst-tcp-sendonly.so: ./&
