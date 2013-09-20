@@ -4,6 +4,7 @@ import sys
 import argparse
 import os
 import tempfile
+import errno
 
 stty_params=None
 
@@ -73,8 +74,11 @@ def start_osv_qemu():
         # Launch qemu
         subprocess.call(["qemu-system-x86_64"] + args)
     except OSError, e:
-        print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
-              format(e.errno, e.strerror, " ".join(args)))
+        if e.errno == errno.ENOENT:
+          print("QEMU/KVM not found. Please install qemu-system-x86 package.")
+        else:
+          print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
+                format(e.errno, e.strerror, " ".join(args)))
     finally:
         cleanups()
 
