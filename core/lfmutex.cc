@@ -38,7 +38,7 @@ void mutex::lock()
 
     // If we're here the mutex was already locked, but we're implementing
     // a recursive mutex so it's possible the lock holder is us - in which
-    // case we don't need to increment depth instead of waiting.
+    // case we need to increment depth instead of waiting.
     if (owner.load(std::memory_order_relaxed) == current) {
         count.fetch_add(-1, std::memory_order_relaxed);
         ++depth;
@@ -67,7 +67,7 @@ void mutex::lock()
                     // At this point, waiter.thread() must be != 0, otherwise
                     // it means someone has already woken us up, breaking the
                     // handoff protocol which decided we should be the ones to
-                    // wake somebody up. Note that right after thread->wake()
+                    // wake somebody up. Note that right after other->wake()
                     // below, waiter.thread() may become 0: the thread we woke
                     // can call unlock() and decide to wake us up.
                     assert(waiter.thread());
@@ -83,8 +83,7 @@ void mutex::lock()
         }
     }
 
-    // Wait until another thread wakes us up. When somebody wakes us,
-    // they will first zero the value field in our wait record.
+    // Wait until another thread pops us from the wait queue and wakes us up.
     trace_mutex_lock_wait(this);
     waiter.wait();
     trace_mutex_lock_wake(this);
