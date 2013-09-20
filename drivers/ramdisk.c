@@ -157,7 +157,7 @@ ramdisk_init(void)
 	pthread_mutex_init(&sc->bio_mutex, NULL);
 	pthread_cond_init(&sc->bio_wait, NULL);
 
-	printf("RAM disk at 0x%08x (%dK bytes)\n",
+	printf("RAM disk at 0x%08lx (%zdK bytes)\n",
 	       (unsigned long)sc->addr, sc->size/1024);
     
 	error = pthread_create(&ramdisk_thread, NULL, ramdisk_thread_fn, sc);

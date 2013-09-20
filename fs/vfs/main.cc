@@ -1485,7 +1485,7 @@ vfs_init(void)
 
 void sys_panic(const char *str)
 {
-	kprintf(str);
+	kprintf("%s", str);
 	while (1)
 		;
 }

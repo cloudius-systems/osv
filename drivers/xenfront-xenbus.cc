@@ -216,7 +216,7 @@ XenbusState xenbus_get_state(device_t _dev)
     XenbusState state;
     xenfront::xenfront_driver *dev = bsd_to_xenfront(_dev);
 
-    xs_scanf(XST_NIL, dev->get_node_path().c_str(), "state", NULL, "%d", &state);
+    xs_scanf(XST_NIL, dev->get_node_path().c_str(), "state", NULL, "%d", (int*)&state);
 
     // Should really be XenbusStateLast or so
     assert(state <= XenbusStateReconfigured);
