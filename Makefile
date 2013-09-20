@@ -40,9 +40,11 @@ external:
 	cp external/libunwind/src/.libs/libunwind.a .
 	make -C external/glibc-testsuite
 
+# default output file of ctags
 tags:
 	find . -name "*.cc" -o -name "*.hh" -o -name "*.h" -o -name "*.c" | ctags -L -
 
+# default output file of etags
 TAGS:
 	rm -f TAGS
 	find . -name "*.cc" -o -name "*.hh" -o -name "*.h" -o -name "*.c" -exec etags -a {} \;
