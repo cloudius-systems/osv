@@ -7,6 +7,7 @@
 
 #ifndef XEN_HH
 #define XEN_HH
+#include <atomic>
 #include <osv/types.h>
 #include <osv/pvclock-abi.hh>
 #include "cpuid.hh"
@@ -28,7 +29,7 @@ extern "C" shared_info_t *HYPERVISOR_shared_info;
 struct xen_vcpu_info {
     uint8_t evtchn_upcall_pending;
     uint8_t evtchn_upcall_mask;
-    uint64_t evtchn_pending_sel;
+    std::atomic<uint64_t> evtchn_pending_sel;
     uint64_t cr2;
     uint64_t pad;
     pvclock_vcpu_time_info time;
@@ -37,8 +38,8 @@ struct xen_vcpu_info {
 struct xen_shared_info {
     struct xen_vcpu_info vcpu_info[32];
 
-    unsigned long evtchn_pending[sizeof(unsigned long) * 8];
-    unsigned long evtchn_mask[sizeof(unsigned long) * 8];
+    std::atomic<unsigned long> evtchn_pending[sizeof(unsigned long) * 8];
+    std::atomic<unsigned long> evtchn_mask[sizeof(unsigned long) * 8];
 
     pvclock_wall_clock wc;
 
