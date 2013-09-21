@@ -54,6 +54,7 @@ void xen_init(processor::features_type &features, unsigned base);
 extern struct xen_shared_info xen_shared_info;
 gsi_level_interrupt *xen_set_callback(int irqno);
 void xen_set_callback();
+void xen_handle_irq();
 
 }
 
