@@ -108,7 +108,6 @@ static bool xen_pci_enabled()
 }
 
 #define HVM_PARAM_CALLBACK_IRQ 0
-extern "C" void evtchn_do_upcall(void *a);
 extern "C" void evtchn_irq_is_legacy(void);
 
 static void xen_ack_irq()
@@ -133,7 +132,7 @@ void xen_set_callback()
     auto vector = idt.register_interrupt_handler(
         [] {}, // pre_eoi
         [] { xen_ack_irq(); }, // eoi
-        [] { evtchn_do_upcall(NULL); }// handler
+        [] { xen_handle_irq(); }// handler
     );
 
     xhp.value = vector | (2ULL << 56);
@@ -157,7 +156,7 @@ gsi_level_interrupt *xen_set_callback(int irqno)
     auto gsi = new gsi_level_interrupt(
         irqno,
         [] { xen_ack_irq(); },
-        [] { evtchn_do_upcall(NULL); }
+        [] { xen_handle_irq(); }
     );
 
     xhp.value = irqno;

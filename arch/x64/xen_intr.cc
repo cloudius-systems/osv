@@ -125,17 +125,8 @@ intr_register_source(struct intsrc *isrc)
 void
 intr_execute_handlers(struct intsrc *isrc, struct trapframe *frame)
 {
-    int vector = reinterpret_cast<long>(isrc);
-    assert(vector < 256);
-    assert(xen_allocated_irqs[vector]);
-
-    // FIXME: Technically, this should be under a lock. RCU is perfect, since
-    // locking read-side is useless and expensive. However, for now we are fine
-    // without it: We are not doing irq sharing, and not supporting
-    // unregistering.  Therefore once we register, this pointer should be
-    // stable. We never call this function before we register as well (and if
-    // we do, the assert above will trigger)
-    xen_allocated_irqs[vector]->wake();
+    // Make sure we are never called by the BSD code
+    abort();
 }
 
 struct intsrc *
