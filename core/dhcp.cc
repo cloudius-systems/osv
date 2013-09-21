@@ -209,7 +209,7 @@ namespace dhcp {
         memcpy(options, dhcp_options_magic, 4);
         options += 4;
 
-        in_addr_t dhcp_server_ip = htonl(sip);
+        in_addr_t dhcp_server_ip = sip;
         in_addr_t requested_ip = yip;
         options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_REQUEST);
         options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
