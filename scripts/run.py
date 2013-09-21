@@ -75,7 +75,7 @@ def start_osv_qemu():
         subprocess.call(["qemu-system-x86_64"] + args)
     except OSError, e:
         if e.errno == errno.ENOENT:
-          print("QEMU/KVM not found. Please install qemu-system-x86 package.")
+          print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
         else:
           print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
                 format(e.errno, e.strerror, " ".join(args)))
