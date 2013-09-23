@@ -115,30 +115,35 @@ int select (int nfds,
     for (i=0; i < poll_fd_idx; i++) {
         if (req[i].revents == 0)
             continue;
-
+        if (req[i].revents & POLLNVAL) {
+            errno = EBADF;
+            error = -1;
+            break;
+        }
+        bool event = false;
         if (readfds) {
-            if (req[i].revents & POLLIN) {
+            if (req[i].revents & (POLLIN | POLLHUP | POLLERR)) {
                 FD_SET(req[i].fd, readfds);
-                num_fds++;
+                event = true;
             }
         }
 
         if (writefds) {
-            if (req[i].revents & POLLOUT) {
+            if (req[i].revents & (POLLOUT | POLLRDHUP | POLLERR)) {
                 FD_SET(req[i].fd, writefds);
-                num_fds++;
+                event = true;
             }
         }
 
-        if (req[i].revents & POLLERR) {
-            if (exceptfds) {
+        if (exceptfds) {
+            if (req[i].revents & POLLPRI) {
                 FD_SET(req[i].fd, exceptfds);
-                num_fds++;
+                event = true;
             }
+        }
 
-            errno = EBADF;
-            error = -1;
-            break;
+        if (event) {
+            num_fds++;
         }
     }
 

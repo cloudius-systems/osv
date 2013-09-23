@@ -121,7 +121,7 @@ int poll_scan(struct pollfd _pfd[], nfds_t _nfds)
 
         error = fget(entry->fd, &fp);
         if (error) {
-            entry->revents |= POLLERR;
+            entry->revents |= POLLNVAL;
             nr_events++;
             continue;
         }
