@@ -134,6 +134,7 @@ typedef	int (*vnop_getattr_t)	(struct vnode *, struct vattr *);
 typedef	int (*vnop_setattr_t)	(struct vnode *, struct vattr *);
 typedef	int (*vnop_inactive_t)	(struct vnode *);
 typedef	int (*vnop_truncate_t)	(struct vnode *, off_t);
+typedef	int (*vnop_link_t)      (struct vnode *, struct vnode *, char *);
 
 /*
  * vnode operations
@@ -157,6 +158,7 @@ struct vnops {
 	vnop_setattr_t		vop_setattr;
 	vnop_inactive_t		vop_inactive;
 	vnop_truncate_t		vop_truncate;
+	vnop_link_t		vop_link;
 };
 
 /*
@@ -181,6 +183,7 @@ struct vnops {
 #define VOP_SETATTR(VP, VAP)	   ((VP)->v_op->vop_setattr)(VP, VAP)
 #define VOP_INACTIVE(VP)	   ((VP)->v_op->vop_inactive)(VP)
 #define VOP_TRUNCATE(VP, N)	   ((VP)->v_op->vop_truncate)(VP, N)
+#define VOP_LINK(DVP, SVP, N) 	   ((DVP)->v_op->vop_link)(DVP, SVP, N)
 
 int	 vop_nullop(void);
 int	 vop_einval(void);
