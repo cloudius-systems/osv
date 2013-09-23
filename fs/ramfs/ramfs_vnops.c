@@ -430,6 +430,12 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
+static int
+ramfs_link(struct vnode *tdvp, struct vnode *svp, char *name)
+{
+	return EPERM;
+}
+
 int
 ramfs_init(void)
 {
@@ -467,5 +473,6 @@ struct vnops ramfs_vnops = {
 	ramfs_setattr,		/* setattr */
 	ramfs_inactive,		/* inactive */
 	ramfs_truncate,		/* truncate */
+	ramfs_link,		/* link */
 };
 
