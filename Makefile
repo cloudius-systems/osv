@@ -39,17 +39,13 @@ external:
 	make -C external/libunwind
 	cp external/libunwind/src/.libs/libunwind.a .
 	make -C external/glibc-testsuite
-
-# default output file of ctags
-tags:
-	find . -name "*.cc" -o -name "*.hh" -o -name "*.h" -o -name "*.c" | ctags -L -
-
-# default output file of etags
-TAGS:
-	rm -f TAGS
-	find . -name "*.cc" -o -name "*.hh" -o -name "*.h" -o -name "*.c" -exec etags -a {} \;
-
 .PHONY: external
-.PHONY: tags
-.PHONY: TAGS
+
+# "tags" is the default output file of ctags, "TAGS" is that of etags
+tags TAGS:
+	rm -f -- "$@"
+	find . -name "*.cc" -o -name "*.hh" -o -name "*.h" -o -name "*.c" |\
+		xargs $(if $(filter $@, tags),ctags,etags) -a
+.PHONY: tags TAGS
+
 .DELETE_ON_ERROR:
