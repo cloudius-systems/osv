@@ -101,6 +101,7 @@ int	 sys_mkdir(char *path, mode_t mode);
 int	 sys_rmdir(char *path);
 int	 sys_mknod(char *path, mode_t mode);
 int	 sys_rename(char *src, char *dest);
+int	 sys_link(char *oldpath, char *newpath);
 int	 sys_unlink(char *path);
 int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);

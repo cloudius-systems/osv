@@ -678,6 +678,84 @@ sys_rename(char *src, char *dest)
 }
 
 int
+sys_link(char *oldpath, char *newpath)
+{
+	char *name;
+	struct dentry *olddp, *newdp, *ddp;
+	struct vnode *vp;
+	int error;
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
+				oldpath, newpath));
+
+	/* File from oldpath must exist */
+	if ((error = namei(oldpath, &olddp)) != 0)
+		return error;
+
+	vp = olddp->d_vnode;
+	vn_lock(vp);
+
+	/* Check that the source FS (oldpath) supports link */
+	if (!vp->v_op->vop_link) {
+		error = EPERM;
+		goto out;
+	}
+
+	if (vp->v_type == VDIR) {
+		error = EPERM;
+		goto out;
+	}
+
+	/* If newpath exists, it shouldn't be overwritten */
+	if (!namei(newpath, &newdp)) {
+		drele(newdp);
+		error = EEXIST;
+		goto out;
+	}
+
+	/* Get pointer to the parent dentry of newpath */
+	if ((error = lookup(newpath, &ddp, &name)) != 0)
+		goto out;
+
+	vn_lock(ddp->d_vnode);
+
+	/* Both files must reside on the same mounted file system */
+	if (olddp->d_mount != ddp->d_mount) {
+		error = EXDEV;
+		goto out1;
+	}
+
+	/* Write access to the dir containing newpath is required */
+	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0)
+		goto out1;
+
+	/* Map newpath into dentry hash with the same vnode as oldpath */
+	if (!(newdp = dentry_alloc(vp, newpath))) {
+		error = ENOMEM;
+		goto out1;
+	}
+
+	if ((error = VOP_LINK(ddp->d_vnode, vp, name)) != 0) {
+		drele(newdp);
+		goto out1;
+	}
+
+	vn_unlock(ddp->d_vnode);
+	drele(ddp);
+
+	vn_unlock(vp);
+	drele(olddp);
+	return 0;
+ out1:
+	vn_unlock(ddp->d_vnode);
+	drele(ddp);
+ out:
+	vn_unlock(vp);
+	drele(olddp);
+	return error;
+}
+
+int
 sys_unlink(char *path)
 {
 	char *name;

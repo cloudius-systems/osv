@@ -712,10 +712,29 @@ TRACEPOINT(trace_vfs_link_err, "%d", int);
 
 int link(const char *oldpath, const char *newpath)
 {
+	struct task *t = main_task;
+	char path1[PATH_MAX];
+	char path2[PATH_MAX];
+	int error;
+
 	trace_vfs_link(oldpath, newpath);
-	/* XXX */
-	errno = EPERM;
-	trace_vfs_link_err(errno);
+
+	error = ENOENT;
+	if (oldpath == NULL || newpath == NULL)
+		goto out_errno;
+	if ((error = task_conv(t, oldpath, VWRITE, path1)) != 0)
+		goto out_errno;
+	if ((error = task_conv(t, newpath, VWRITE, path2)) != 0)
+		goto out_errno;
+
+	error = sys_link(path1, path2);
+	if (error)
+		goto out_errno;
+	trace_vfs_link_ret();
+	return 0;
+out_errno:
+	trace_vfs_link_err(error);
+	errno = error;
 	return -1;
 }
 
