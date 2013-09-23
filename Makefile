@@ -16,7 +16,7 @@ silentant = $(if $V,, scripts/silentant.py)
 all: $(submake)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
-	$(call quiet, cd mgmt && ./gradlew :web:jar build >> /dev/null, GRADLE :web:jar build)
+	cd mgmt && ./gradlew :web:jar build
 	$(MAKE) -C $(dir $(submake)) $@
 
 $(submake): Makefile
