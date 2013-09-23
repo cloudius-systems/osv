@@ -854,7 +854,6 @@ zfs_acl_xform(znode_t *zp, zfs_acl_t *aclp, cred_t *cr)
 
 }
 
-#ifdef NOTYET
 /*
  * Convert unix access mask to v4 access mask
  */
@@ -871,7 +870,6 @@ zfs_unix_to_v4(uint32_t access_mask)
 		new_mask |= ACE_READ_DATA;
 	return (new_mask);
 }
-#endif
 
 static void
 zfs_set_ace(zfs_acl_t *aclp, void *acep, uint32_t access_mask,
@@ -2545,6 +2543,7 @@ zfs_zaccess_rwx(znode_t *zp, mode_t mode, int flags, cred_t *cr)
 {
 	return (zfs_zaccess(zp, zfs_unix_to_v4(mode >> 6), flags, B_FALSE, cr));
 }
+#endif
 
 /*
  * Access function for secpolicy_vnode_setattr
@@ -2556,7 +2555,6 @@ zfs_zaccess_unix(znode_t *zp, mode_t mode, cred_t *cr)
 
 	return (zfs_zaccess(zp, v4_mode, 0, B_FALSE, cr));
 }
-#endif
 
 static int
 zfs_delete_final_check(znode_t *zp, znode_t *dzp,

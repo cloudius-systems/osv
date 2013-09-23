@@ -3304,6 +3304,7 @@ zfs_readlink(vnode_t *vp, uio_t *uio, cred_t *cr, caller_context_t *ct)
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
+#endif /* NOTYET */
 
 /*
  * Insert a new entry into directory tdvp referencing svp.
@@ -3311,8 +3312,6 @@ zfs_readlink(vnode_t *vp, uio_t *uio, cred_t *cr, caller_context_t *ct)
  *	IN:	tdvp	- Directory to contain new entry.
  *		svp	- vnode of new entry.
  *		name	- name of new entry.
- *		cr	- credentials of caller.
- *		ct	- caller context
  *
  *	RETURN:	0 if success
  *		error code if failure
@@ -3323,8 +3322,7 @@ zfs_readlink(vnode_t *vp, uio_t *uio, cred_t *cr, caller_context_t *ct)
  */
 /* ARGSUSED */
 static int
-zfs_link(vnode_t *tdvp, vnode_t *svp, char *name, cred_t *cr,
-    caller_context_t *ct, int flags)
+zfs_link(vnode_t *tdvp, vnode_t *svp, char *name)
 {
 	znode_t		*dzp = VTOZ(tdvp);
 	znode_t		*tzp, *szp;
@@ -3337,15 +3335,13 @@ zfs_link(vnode_t *tdvp, vnode_t *svp, char *name, cred_t *cr,
 	int		zf = ZNEW;
 	uint64_t	parent;
 	uid_t		owner;
+	int 		flags = 0;
 
 	ASSERT(tdvp->v_type == VDIR);
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
 	zilog = zfsvfs->z_log;
-
-	if (VOP_REALVP(svp, &realvp, ct) == 0)
-		svp = realvp;
 
 	/*
 	 * POSIX dictates that we return EPERM here.
@@ -3356,7 +3352,11 @@ zfs_link(vnode_t *tdvp, vnode_t *svp, char *name, cred_t *cr,
 		return (EPERM);
 	}
 
+#ifdef TODO_ZFSCTL
 	if (svp->v_vfsp != tdvp->v_vfsp || zfsctl_is_node(svp)) {
+#else
+	if (svp->v_vfsp != tdvp->v_vfsp) {
+#endif
 		ZFS_EXIT(zfsvfs);
 		return (EXDEV);
 	}
@@ -3381,8 +3381,6 @@ zfs_link(vnode_t *tdvp, vnode_t *svp, char *name, cred_t *cr,
 		ZFS_EXIT(zfsvfs);
 		return (EILSEQ);
 	}
-	if (flags & FIGNORECASE)
-		zf |= ZCILOOK;
 
 	/*
 	 * We do not support links between attributes and non-attributes
@@ -3393,18 +3391,6 @@ zfs_link(vnode_t *tdvp, vnode_t *svp, char *name, cred_t *cr,
 	if ((szp->z_pflags & ZFS_XATTR) != (dzp->z_pflags & ZFS_XATTR)) {
 		ZFS_EXIT(zfsvfs);
 		return (EINVAL);
-	}
-
-
-	owner = zfs_fuid_map_id(zfsvfs, szp->z_uid, cr, ZFS_OWNER);
-	if (owner != crgetuid(cr) && secpolicy_basic_link(svp, cr) != 0) {
-		ZFS_EXIT(zfsvfs);
-		return (EPERM);
-	}
-
-	if (error = zfs_zaccess(dzp, ACE_ADD_FILE, 0, B_FALSE, cr)) {
-		ZFS_EXIT(zfsvfs);
-		return (error);
 	}
 
 top:
@@ -3439,18 +3425,12 @@ top:
 
 	if (error == 0) {
 		uint64_t txtype = TX_LINK;
-		if (flags & FIGNORECASE)
-			txtype |= TX_CI;
 		zfs_log_link(zilog, tx, txtype, dzp, szp, name);
 	}
 
 	dmu_tx_commit(tx);
 
 	zfs_dirent_unlock(dl);
-
-	if (error == 0) {
-		vnevent_link(svp, ct);
-	}
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
@@ -3696,7 +3676,6 @@ out:
 	return (error);
 }
 #endif	/* sun */
-#endif /* NOTYET */
 
 /*ARGSUSED*/
 int
@@ -5384,4 +5363,5 @@ struct vnops zfs_vnops = {
 	NULL,				/* setattr */
 	zfs_inactive,			/* inactive */
 	zfs_truncate,			/* truncate */
+	zfs_link,			/* link */
 };
