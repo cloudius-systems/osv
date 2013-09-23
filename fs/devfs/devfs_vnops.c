@@ -179,6 +179,12 @@ devfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
+static int
+devfs_link(struct vnode *tdvp, struct vnode *svp, char *name)
+{
+	return EPERM;
+}
+
 int
 devfs_init(void)
 {
@@ -225,6 +231,7 @@ struct vnops devfs_vnops = {
 	devfs_setattr,		/* setattr */
 	devfs_inactive,		/* inactive */
 	devfs_truncate,		/* truncate */
+	devfs_link,		/* link */
 };
 
 /*
