@@ -116,7 +116,6 @@ int poll_scan(struct pollfd _pfd[], nfds_t _nfds)
 
     for (i=0; i<_nfds; ++i) {
         entry = &_pfd[i];
-        /* FIXME: verify zeroing revents is posix compliant */
         entry->revents = 0;
 
         error = fget(entry->fd, &fp);
@@ -210,7 +209,9 @@ void poll_install(struct pollreq* p)
          * will be cleared on wakeup()
          */
         pl->_req = p;
-        pl->_events = entry->events;
+        // In addition to the user's requested events, also allow events which
+        // cannot be requested by the user (e.g., POLLHUP).
+        pl->_events = entry->events | ~POLL_REQUESTABLE;
 
         FD_LOCK(fp);
         TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);

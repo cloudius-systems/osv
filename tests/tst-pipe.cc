@@ -290,6 +290,23 @@ int main(int ac, char** av)
     report(r == 0, "close write side with non-empty buffer");
     t5.join();
 
+    // Test waiting poll() on read side, when write side closes (POLLHUP expected)
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    sched::thread t6([&] {
+        sleep(1);
+        r2 = close(s[1]);
+        report(r2 == 0, "close write side");
+    });
+    t6.start();
+    poller = { s[0], POLLIN, 0 };
+    r = poll(&poller, 1, 5000);
+    report(r==1, "wait for pipe to be readable");
+    report(poller.revents & POLLHUP, "POLLHUP signaled"); // POLLHUP|POLLIN or POLLHUP are fine.
+    t6.join();
+    r = close(s[0]);
+    report(r == 0, "close also read side");
+
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }

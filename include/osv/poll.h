@@ -104,6 +104,15 @@ struct pollfd {
 #endif
 
 /*
+ * The bits in POLL_REQUESTABLE are allowed in poll's input "events" bitmask,
+ * and therefore will not be returned in "revents" unless they are also turned
+ * on in "events". Bits outside POLL_REQUESTABLE, such as POLLHUP, POLLERR or
+ * POLLNVAL, cannot be requested, but may still be returned in "revents".
+ */
+#define POLL_REQUESTABLE (POLLIN | POLLOUT | POLLPRI | POLLRDNORM | \
+            POLLWRNORM | POLLRDBAND | POLLWRBAND)
+
+/*
  * Each file descriptor saves a reference to an allocated poll request.
  * This structure is allocated when poll() is called and deallocated when
  * poll() is returned.
