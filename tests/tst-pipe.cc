@@ -47,12 +47,12 @@ int main(int ac, char** av)
     int r2;
     sched::thread t1([&] {
         r2 = read(s[0], reply, 5);
+        report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read before write");
     });
     t1.start();
     sleep(1);
     r = write(s[1], msg, 5);
     t1.join();
-    report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read before write");
 
 
     memcpy(msg, "fooba", 5);
