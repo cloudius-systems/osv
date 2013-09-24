@@ -3,6 +3,9 @@ To measure netwroking throughput we use netperf-2.6.0,
 The netperf client isn't working in OS-v, only netserver,
 and only after applying a small patch to the source.
 
+Additional limitation is inability of netserver to track test execution time
+on OS-v, when using TCP_MAERTS mode limit test duration by number of bytes transferred
+and not by time.
 
 How to compile netperf from source so it'll run on osv:
 
