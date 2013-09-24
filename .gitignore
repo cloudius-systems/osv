@@ -9,3 +9,7 @@ libunwind.a
 .gradle
 tags
 TAGS
+
+cscope.in.out
+cscope.out
+cscope.po.out

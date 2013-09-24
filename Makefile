@@ -48,4 +48,9 @@ tags TAGS:
 		xargs $(if $(filter $@, tags),ctags,etags) -a
 .PHONY: tags TAGS
 
+cscope:
+	find -name '*.[chS]' -o -name "*.cc" -o -name "*.hh" | cscope -bq
+	@echo cscope index created
+.PHONY: cscpoe
+
 .DELETE_ON_ERROR:
