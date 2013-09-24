@@ -435,7 +435,7 @@ void object::relocate_pltgot()
     for (auto p = rel; p < rel + nrel; ++p) {
         auto info = p->r_info;
           u32 type = info & 0xffffffff;
-          assert(type = R_X86_64_JUMP_SLOT);
+          assert(type == R_X86_64_JUMP_SLOT);
           void *addr = _base + p->r_offset;
           if (original_plt) {
               // Restore the link to the original plt.
