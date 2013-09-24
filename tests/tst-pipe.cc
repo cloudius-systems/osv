@@ -307,6 +307,19 @@ int main(int ac, char** av)
     r = close(s[0]);
     report(r == 0, "close also read side");
 
+    // Test poll() on read side, when write side is already closed (POLLHUP expected)
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    r = close(s[1]);
+    report(r == 0, "close write side");
+    poller = { s[0], POLLIN, 0 };
+    r = poll(&poller, 1, 0);
+    report(r==1, "pipe is readable");
+    report(poller.revents & POLLHUP, "POLLHUP signaled");
+    t6.join();
+    r = close(s[0]);
+    report(r == 0, "close also read side");
+
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
