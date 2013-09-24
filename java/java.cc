@@ -27,7 +27,7 @@ extern elf::program* prog;
 
 JavaVMOption mkoption(const char* s)
 {
-    JavaVMOption opt;
+    JavaVMOption opt = {};
     opt.optionString = strdup(s);
     return opt;
 }
