@@ -320,6 +320,48 @@ int main(int ac, char** av)
     r = close(s[0]);
     report(r == 0, "close also read side");
 
+    // Test waiting poll() on write side, when read side closes (POLLERR
+    // expected, as Linux does, though POLLRDHUP would also make sense...)
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    // fill the write buffer of the pipe, and check it is no longer writable
+    poller = { s[1], POLLOUT, 0 };
+    r = poll(&poller, 1, 0);
+    report(r==1 && poller.revents == POLLOUT, "empty pipe is ready for write");
+    r = fcntl(s[1], F_SETFL, O_NONBLOCK);
+    report(r == 0, "set write side to nonblocking");
+    r = write(s[1], buf1, TSTBUFSIZE);
+    report(r > 0, "large write to fill pipe");
+    r = fcntl(s[1], F_SETFL, 0);
+    report(r == 0, "set write side to blocking");
+    r = poll(&poller, 1, 0);
+    report(r==0, "full pipe is not ready for write");
+
+    sched::thread t7([&] {
+        sleep(1);
+        r2 = close(s[0]);
+        report(r2 == 0, "close read side");
+    });
+    t7.start();
+    r = poll(&poller, 1, 5000);
+    report(r==1, "wait for pipe to be ready for write");
+    report(poller.revents & POLLERR, "POLLERR signaled"); // Following Linux, we return POLLERR|POLLOUT.
+    t7.join();
+    r = close(s[1]);
+    report(r == 0, "close also write side");
+
+    // Test poll() on write side, when read side is already closed (POLLERR expected)
+    r = pipe(s);
+    report(r == 0, "pipe call");
+    r = close(s[0]);
+    report(r == 0, "close read side");
+    poller = { s[1], POLLOUT, 0 };
+    r = poll(&poller, 1, 0);
+    report(r==1, "closed pipe is ready for write");
+    report(poller.revents & POLLERR, "POLLERR signaled");
+    r = close(s[1]);
+    report(r == 0, "close also write side");
+
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
