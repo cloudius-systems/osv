@@ -733,13 +733,6 @@ sys_link(char *oldpath, char *newpath)
 		drele(newdp);
 		goto out1;
 	}
-
-	vn_unlock(newdirdp->d_vnode);
-	drele(newdirdp);
-
-	vn_unlock(vp);
-	drele(olddp);
-	return 0;
  out1:
 	vn_unlock(newdirdp->d_vnode);
 	drele(newdirdp);
