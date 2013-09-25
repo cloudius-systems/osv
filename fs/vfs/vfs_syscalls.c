@@ -695,12 +695,6 @@ sys_link(char *oldpath, char *newpath)
 	vp = olddp->d_vnode;
 	vn_lock(vp);
 
-	/* Check that the source FS (oldpath) supports link */
-	if (!vp->v_op->vop_link) {
-		error = EPERM;
-		goto out;
-	}
-
 	if (vp->v_type == VDIR) {
 		error = EPERM;
 		goto out;
