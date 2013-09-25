@@ -174,21 +174,6 @@ int getpid()
     return 0;
 }
 
-uid_t getuid()
-{
-    return 0;
-}
-
-gid_t getgid()
-{
-    return 0;
-}
-
-gid_t getegid(void)
-{
-    return 0;
-}
-
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
     if (!mmu::isreadable(addr, length)) {
