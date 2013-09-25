@@ -281,7 +281,8 @@ public:
     const std::vector<Elf64_Phdr> *phdrs();
     std::string soname();
     std::string pathname();
-    void run_init_func();
+    void run_init_funcs();
+    void run_fini_funcs();
     template <typename T = void>
     T* lookup(const char* name);
     dladdr_info lookup_addr(const void* addr);

@@ -683,16 +683,33 @@ std::string object::pathname()
     return _pathname;
 }
 
-void object::run_init_func()
+// Run the object's static constructors or similar initialization
+void object::run_init_funcs()
 {
-    if (!dynamic_exists(DT_INIT_ARRAY)) {
-        return;
+    // FIXME: may also need to run DT_INIT here (before DT_INIT_ARRAY), but
+    // on modern gcc it seems it doesn't work (and isn't needed).
+    if (dynamic_exists(DT_INIT_ARRAY)) {
+        auto funcs = dynamic_ptr<void (*)()>(DT_INIT_ARRAY);
+        auto nr = dynamic_val(DT_INIT_ARRAYSZ) / sizeof(*funcs);
+        for (auto i = 0u; i < nr; ++i) {
+            funcs[i]();
+        }
     }
-    auto inits = dynamic_ptr<void (*)()>(DT_INIT_ARRAY);
-    auto nr = dynamic_val(DT_INIT_ARRAYSZ) / sizeof(*inits);
-    for (auto i = 0u; i < nr; ++i) {
-        inits[i]();
+}
+
+// Run the object's static destructors or similar finalization
+void object::run_fini_funcs()
+{
+    if (dynamic_exists(DT_FINI_ARRAY)) {
+        auto funcs = dynamic_ptr<void (*)()>(DT_FINI_ARRAY);
+        auto nr = dynamic_val(DT_FINI_ARRAYSZ) / sizeof(*funcs);
+        // According to the standard, call functions in reverse order.
+        for (int i = nr - 1; i >= 0; --i) {
+            funcs[i]();
+        }
     }
+    // FIXME: may also need to run DT_FINI here (after DT_FINI_ARRAY), but
+    // on modern gcc it seems it doesn't work (and isn't needed).
 }
 
 program* s_program;
@@ -798,7 +815,7 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
         add_debugger_obj(ef);
         ef->load_needed();
         ef->relocate();
-        ef->run_init_func();
+        ef->run_init_funcs();
         ef->setprivate(false);
         return ef;
     }
@@ -820,6 +837,7 @@ void program::remove_object(std::string name)
     _files.erase(name);
     _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
     _modules_subs++;
+    ef->run_fini_funcs();
     ef->unload_segments();
     delete ef;
 }
