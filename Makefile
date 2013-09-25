@@ -49,7 +49,7 @@ tags TAGS:
 .PHONY: tags TAGS
 
 cscope:
-	find -name '*.[chS]' -o -name "*.cc" -o -name "*.hh" | cscope -bq
+	find -name '*.[chS]' -o -name "*.cc" -o -name "*.hh" | cscope -bq -i-
 	@echo cscope index created
 .PHONY: cscpoe
 
