@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 
@@ -37,6 +38,8 @@ int main(int argc, char *argv[])
         oldpath = "/usr/foo";
         newpath = "/usr/foo2";
     }
+
+    report(link(oldpath, newpath) < 0 && errno == ENOENT, "link returns ENOENT if source path does not exists");
 
     // Create a temporary file that's used in testing.
     auto fd = open(oldpath, O_CREAT|O_TRUNC|O_RDWR, 0666);
