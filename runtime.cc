@@ -45,6 +45,8 @@
 #include "mmu.hh"
 #include "libc/libc.hh"
 #include <api/sys/times.h>
+#include <map>
+#include <boost/range/adaptor/reversed.hpp>
 
 #define __LC_LAST 13
 
@@ -105,18 +107,44 @@ void abort(const char *msg)
     osv::halt();
 }
 
+// __cxa_atexit and __cxa_finalize:
+// Gcc implements static constructors and destructors in shared-objects (DSO)
+// in the following way: Static constructors are added to a list DT_INIT_ARRAY
+// in the object, and we run these functions after loading the object. Gcc's
+// code for each constructor calls a function __cxxabiv1::__cxa_atexit (which
+// we need to implement here) to register a destructor, linked to this DSO.
+// Gcc also adds a single finalization function to DT_FINI_ARRAY (which we
+// call when unloading the DSO), which calls __cxxabiv1::__cxa_finalize
+// (which we need to implement here) - this function is supposed to call all
+// the destructors previously registered for the given DSO.
+//
+// This implementation is greatly simplified by the assumption that the kernel
+// never exits, so our code doesn't need to work during early initialization,
+// nor does __cxa_finalize(0) need to work.
+typedef void (*destructor_t)(void *);
+static std::map<void *, std::vector<std::pair<destructor_t,void*>>> destructors;
 namespace __cxxabiv1 {
+int __cxa_atexit(destructor_t destructor, void *arg, void *dso)
+{
+    // As explained above, don't remember the kernel's own destructors.
+    if (dso == &__dso_handle)
+        return 0;
+    destructors[dso].push_back(std::make_pair(destructor, arg));
+    return 0;
+}
 
-    int __cxa_atexit(void (*destructor)(void *), void *arg, void *dso)
-    {
-	return 0;
+int __cxa_finalize(void *dso)
+{
+    if (!dso || dso == &__dso_handle) {
+        debug("__cxa_finalize() running kernel's destructors not supported\n");
+        return 0;
     }
-
-    int __cxa_finalize(void *f)
-    {
-	return 0;
+    for (auto d : boost::adaptors::reverse(destructors[dso])) {
+        d.first(d.second);
     }
-
+    destructors.erase(dso);
+    return 0;
+}
 }
 
 int getpagesize()
