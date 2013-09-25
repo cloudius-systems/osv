@@ -135,7 +135,7 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 // programs like to call to do simple things, like ignoring a certain signal.
 sighandler_t signal(int signum, sighandler_t handler)
 {
-    if (signum < 0 || signum > (int)nsignals) {
+    if (signum < 0 || signum >= (int)nsignals) {
         errno = EINVAL;
         return SIG_ERR;
     }
