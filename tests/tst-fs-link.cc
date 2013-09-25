@@ -52,6 +52,8 @@ int main(int argc, char *argv[])
     // Create a hard link
     report(link(oldpath, newpath) == 0, "create a hard link");
 
+    report(link(oldpath, newpath) < 0 && errno == EEXIST, "link returns EEXIST if destination path exists");
+
     auto fd2 = open(newpath, O_RDONLY);
     lseek(fd2, 0, SEEK_SET);
     read(fd2, buf2, 4);
