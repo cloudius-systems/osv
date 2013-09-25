@@ -86,7 +86,7 @@ task_conv(struct task *t, const char *cpath, int acc, char *full)
 	end = src + len;
 	if (path[0] == '/') {
 		*tgt++ = *src++;
-		len++;
+		len = 1;
 	} else {
 		strlcpy(full, cwd, PATH_MAX);
 		len = strlen(cwd);
