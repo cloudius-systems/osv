@@ -74,6 +74,8 @@ ramfs_allocate_node(char *name, int type)
 void
 ramfs_free_node(struct ramfs_node *np)
 {
+	if (np->rn_buf != NULL)
+		free(np->rn_buf);
 
 	free(np->rn_name);
 	free(np);
@@ -218,18 +220,8 @@ ramfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
 static int
 ramfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
-	struct ramfs_node *np;
-	int error;
-
 	DPRINTF(("remove %s in %s\n", name, dvp->v_path));
-	error = ramfs_remove_node(dvp->v_data, vp->v_data);
-	if (error)
-		return error;
-
-	np = vp->v_data;
-	if (np->rn_buf != NULL)
-		free(np->rn_buf);
-	return 0;
+	return ramfs_remove_node(dvp->v_data, vp->v_data);
 }
 
 /* Truncate file */
