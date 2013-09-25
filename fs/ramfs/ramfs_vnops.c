@@ -143,7 +143,7 @@ ramfs_rename_node(struct ramfs_node *np, char *name)
 	len = strlen(name);
 	if (len <= np->rn_namelen) {
 		/* Reuse current name buffer */
-		strlcpy(np->rn_name, name, sizeof(np->rn_name));
+		strlcpy(np->rn_name, name, np->rn_namelen);
 	} else {
 		/* Expand name buffer */
 		tmp = malloc(len + 1);
