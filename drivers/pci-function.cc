@@ -558,7 +558,7 @@ namespace pci {
 
     void function::dump_config(void)
     {
-        pci_d("[%x:%x.%x] vid:id = %x:%x\n",
+        pci_d("[%x:%x.%x] vid:id = %x:%x",
             (u16)_bus, (u16)_device, (u16)_func, _vendor_id, _device_id);
 
         // PCI BARs
@@ -570,18 +570,18 @@ namespace pci {
             bar = get_bar(++bar_idx);
         }
 
-        pci_d("    IRQ = %d\n", (u16)get_interrupt_line());
+        pci_d("    IRQ = %d", (u16)get_interrupt_line());
 
         // MSI-x
         if (_have_msix) {
-            pci_d("    Have MSI-X!\n");
-            pci_d("        msix_location: %1%\n", (u16)_msix.msix_location);
-            pci_d("        msix_ctrl: %1%\n", _msix.msix_ctrl);
-            pci_d("        msix_msgnum: %1%\n", _msix.msix_msgnum);
-            pci_d("        msix_table_bar: %1%\n", (u16)_msix.msix_table_bar);
-            pci_d("        msix_table_offset: %1%\n", _msix.msix_table_offset);
-            pci_d("        msix_pba_bar: %1%\n", (u16)_msix.msix_pba_bar);
-            pci_d("        msix_pba_offset: %1%\n", _msix.msix_pba_offset);
+            pci_d("    Have MSI-X!");
+            pci_d("        msix_location: %d", (u16)_msix.msix_location);
+            pci_d("        msix_ctrl: %d", _msix.msix_ctrl);
+            pci_d("        msix_msgnum: %d", _msix.msix_msgnum);
+            pci_d("        msix_table_bar: %d", (u16)_msix.msix_table_bar);
+            pci_d("        msix_table_offset: %d", _msix.msix_table_offset);
+            pci_d("        msix_pba_bar: %d", (u16)_msix.msix_pba_bar);
+            pci_d("        msix_pba_offset: %d", _msix.msix_pba_offset);
         }
     }
 }
