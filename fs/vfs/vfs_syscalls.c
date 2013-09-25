@@ -680,9 +680,9 @@ sys_rename(char *src, char *dest)
 int
 sys_link(char *oldpath, char *newpath)
 {
-	char *name;
-	struct dentry *olddp, *newdp, *ddp;
+	struct dentry *olddp, *newdp, *newdirdp;
 	struct vnode *vp;
+	char *name;
 	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
@@ -708,19 +708,19 @@ sys_link(char *oldpath, char *newpath)
 	}
 
 	/* Get pointer to the parent dentry of newpath */
-	if ((error = lookup(newpath, &ddp, &name)) != 0)
+	if ((error = lookup(newpath, &newdirdp, &name)) != 0)
 		goto out;
 
-	vn_lock(ddp->d_vnode);
+	vn_lock(newdirdp->d_vnode);
 
 	/* Both files must reside on the same mounted file system */
-	if (olddp->d_mount != ddp->d_mount) {
+	if (olddp->d_mount != newdirdp->d_mount) {
 		error = EXDEV;
 		goto out1;
 	}
 
 	/* Write access to the dir containing newpath is required */
-	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0)
+	if ((error = vn_access(newdirdp->d_vnode, VWRITE)) != 0)
 		goto out1;
 
 	/* Map newpath into dentry hash with the same vnode as oldpath */
@@ -729,20 +729,20 @@ sys_link(char *oldpath, char *newpath)
 		goto out1;
 	}
 
-	if ((error = VOP_LINK(ddp->d_vnode, vp, name)) != 0) {
+	if ((error = VOP_LINK(newdirdp->d_vnode, vp, name)) != 0) {
 		drele(newdp);
 		goto out1;
 	}
 
-	vn_unlock(ddp->d_vnode);
-	drele(ddp);
+	vn_unlock(newdirdp->d_vnode);
+	drele(newdirdp);
 
 	vn_unlock(vp);
 	drele(olddp);
 	return 0;
  out1:
-	vn_unlock(ddp->d_vnode);
-	drele(ddp);
+	vn_unlock(newdirdp->d_vnode);
+	drele(newdirdp);
  out:
 	vn_unlock(vp);
 	drele(olddp);
