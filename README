@@ -13,6 +13,10 @@ To build OSv
    (Ubuntu users: you may use Oracle JDK in https://launchpad.net/~webupd8team/+archive/java
     if you don't want to pull too many dependencies for `openjdk-7-jdk`)
 
+  To ensure functional C++11 support, Gcc 4.7 or above is required.
+  Gcc 4.8 or above is recommended, as this was the first version to fully
+  comply with the C++11 standard.
+
 1) make sure the zfs-fuse daemon is running
    ----------------------------------------
 
