@@ -34,7 +34,6 @@
 
 #include <bsd/porting/uma_stub.h>
 #include <bsd/sys/sys/mbuf.h>
-#include <bsd/sys/sys/sbuf.h>
 #include <bsd/machine/atomic.h>
 
 int	max_linkhdr;
@@ -1391,59 +1390,6 @@ m_getptr(struct mbuf *m, int loc, int *off)
 		}
 	}
 	return (NULL);
-}
-
-void
-m_print(const struct mbuf *m, int maxlen)
-{
-	int len;
-	int pdata;
-	struct sbuf *buf;
-	const struct mbuf *m2;
-
-	if (m == NULL) {
-		printf("mbuf: %p\n", m);
-		return;
-	}
-
-	buf = sbuf_new_auto();
-	if (buf == NULL)
-		return;
-
-	if (m->m_flags & M_PKTHDR)
-		len = m->m_pkthdr.len;
-	else
-		len = -1;
-	m2 = m;
-	while (m2 != NULL && (len == -1 || len)) {
-		pdata = m2->m_len;
-		if (maxlen != -1 && pdata > maxlen)
-			pdata = maxlen;
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat"
-#pragma GCC diagnostic ignored "-Wformat-extra-args"
-
-		sbuf_printf(buf, "mbuf: %p len: %d, next: %p, %b%s", m2, m2->m_len,
-		    m2->m_next, m2->m_flags, "\20\20freelist\17skipfw"
-		    "\11proto5\10proto4\7proto3\6proto2\5proto1\4rdonly"
-		    "\3eor\2pkthdr\1ext", pdata ? "" : "\n");
-		if (pdata)
-			sbuf_printf(buf, ", %*D\n", pdata, (u_char *)m2->m_data, "-");
-
-#pragma GCC diagnostic pop
-
-		if (len != -1)
-			len -= m2->m_len;
-		m2 = m2->m_next;
-	}
-	if (len > 0)
-		sbuf_printf(buf, "%d bytes unaccounted for.\n", len);
-
-	sbuf_finish(buf);
-	printf("%s", sbuf_data(buf));
-	sbuf_delete(buf);
-	return;
 }
 
 u_int

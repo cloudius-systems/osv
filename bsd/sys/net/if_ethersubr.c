@@ -40,7 +40,6 @@
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
-#include <bsd/sys/sys/sbuf.h>
 #include <bsd/sys/sys/socket.h>
 
 #include <bsd/sys/net/if.h>
@@ -857,38 +856,6 @@ discard:
 	}
 #endif
 	m_freem(m);
-}
-
-/*
- * Convert Ethernet address to printable (loggable) representation.
- * This routine is for compatibility; it's better to just use
- *
- *	printf("%6D", <pointer to address>, ":");
- *
- * since there's no static buffer involved.
- */
-char *
-ether_sprintf(const u_char *ap)
-{
-	struct sbuf *buf;
-	static char etherbuf[18];
-	
-	buf = sbuf_new_auto();
-	if (buf == NULL)
-		return (etherbuf);
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat"
-#pragma GCC diagnostic ignored "-Wformat-extra-args"
-
-	sbuf_printf(buf, "%6D", ap, ":");
-
-#pragma GCC diagnostic pop
-
-	sbuf_finish(buf);
-	strncpy(etherbuf, sbuf_data(buf), sizeof(etherbuf));
-	sbuf_delete(buf);
-	return (etherbuf);
 }
 
 /*

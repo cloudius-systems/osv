@@ -36,7 +36,7 @@
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
- #include <bsd/sys/sys/sbuf.h>
+#include <bsd/sys/sys/sbuf.h>
 #ifdef INET6
 #include <bsd/sys/sys/domain.h>
 #endif
