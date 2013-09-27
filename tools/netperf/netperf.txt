@@ -1,11 +1,6 @@
-To measure netwroking throughput we use netperf-2.6.0,
+To measure networking throughput we use netperf-2.6.0,
 
-The netperf client isn't working in OS-v, only netserver,
-and only after applying a small patch to the source.
-
-Additional limitation is inability of netserver to track test execution time
-on OS-v, when using TCP_MAERTS mode limit test duration by number of bytes transferred
-and not by time.
+The netperf client isn't working in OS-v, only netserver.
 
 How to compile netperf from source so it'll run on osv:
 
@@ -17,14 +12,11 @@ $ ./configure
 $ make
 $ sudo make install
 
-3. apply the osv patch to netperf
-$ patch -p1 < osv.patch
-
-4. build again
+3. build again
 $ make clean
 $ make CFLAGS="-fPIC -shared"
 
-5. copy src/netserver and use it in OS-v.
+4. copy src/netserver and use it in OS-v.
 
 
 
