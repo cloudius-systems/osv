@@ -192,7 +192,7 @@ void* phys_to_virt(phys pa)
 {
     // The ELF is mapped 1:1
     void* phys_addr = reinterpret_cast<void*>(pa);
-    if ((phys_addr >= elf_start) && (phys_addr <= elf_start + elf_size)) {
+    if ((phys_addr >= elf_start) && (phys_addr < elf_start + elf_size)) {
         return phys_addr;
     }
 
@@ -218,7 +218,7 @@ phys virt_to_phys_pt(void* virt)
 phys virt_to_phys(void *virt)
 {
     // The ELF is mapped 1:1
-    if ((virt >= elf_start) && (virt <= elf_start + elf_size)) {
+    if ((virt >= elf_start) && (virt < elf_start + elf_size)) {
         return reinterpret_cast<phys>(virt);
     }
 
