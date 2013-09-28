@@ -18,7 +18,7 @@
 
 class kvmclock : public clock {
 public:
-    kvmclock();
+    kvmclock(bool);
     virtual s64 time() __attribute__((no_instrument_function));
 private:
     u64 wall_clock_boot();
@@ -26,6 +26,7 @@ private:
     static void setup_cpu();
 private:
     static bool _smp_init;
+    static bool _new_kvmclock_msrs;
     pvclock_wall_clock* _wall;
     u64  _wall_ns;
     static PERCPU(pvclock_vcpu_time_info, _sys);
@@ -33,21 +34,27 @@ private:
 };
 
 bool kvmclock::_smp_init = false;
+bool kvmclock::_new_kvmclock_msrs;
 PERCPU(pvclock_vcpu_time_info, kvmclock::_sys);
 
-kvmclock::kvmclock()
+kvmclock::kvmclock(bool new_kvmclock_msrs)
     : cpu_notifier(&kvmclock::setup_cpu)
 {
+    auto wall_time_msr = (new_kvmclock_msrs) ?
+                         msr::KVM_WALL_CLOCK_NEW : msr::KVM_WALL_CLOCK;
     _wall = new pvclock_wall_clock;
     memset(_wall, 0, sizeof(*_wall));
-    processor::wrmsr(msr::KVM_WALL_CLOCK_NEW, mmu::virt_to_phys(_wall));
+    processor::wrmsr(wall_time_msr, mmu::virt_to_phys(_wall));
     _wall_ns = wall_clock_boot();
+    _new_kvmclock_msrs = new_kvmclock_msrs;
 }
 
 void kvmclock::setup_cpu()
 {
+    auto system_time_msr = (_new_kvmclock_msrs) ?
+                           msr::KVM_SYSTEM_TIME_NEW : msr::KVM_SYSTEM_TIME;
     memset(&*_sys, 0, sizeof(*_sys));
-    processor::wrmsr(msr::KVM_SYSTEM_TIME_NEW, mmu::virt_to_phys(&*_sys) | 1);
+    processor::wrmsr(system_time_msr, mmu::virt_to_phys(&*_sys) | 1);
     _smp_init = true;
 }
 
@@ -80,8 +87,8 @@ u64 kvmclock::system_time()
 
 static __attribute__((constructor(CLOCK_INIT_PRIO))) void setup_kvmclock()
 {
-    // FIXME: old clocksource too?
-    if (processor::features().kvm_clocksource2) {
-        clock::register_clock(new kvmclock);
+    if (processor::features().kvm_clocksource2 ||
+        processor::features().kvm_clocksource) {
+        clock::register_clock(new kvmclock(processor::features().kvm_clocksource2));
     }
 }

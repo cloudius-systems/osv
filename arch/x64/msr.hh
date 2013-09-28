@@ -60,6 +60,8 @@ enum class msr : uint32_t {
     IA32_EFER = 0xc0000080,
     IA32_FS_BASE = 0xc0000100,
 
+    KVM_WALL_CLOCK = 0x11,
+    KVM_SYSTEM_TIME = 0x12,
     KVM_WALL_CLOCK_NEW = 0x4b564d00,
     KVM_SYSTEM_TIME_NEW = 0x4b564d01,
 
