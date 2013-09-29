@@ -202,8 +202,8 @@ public:
     template <class Pred>
     static void wait_until(mutex_t* mtx, Pred pred);
     void wake();
-    template <class Pred>
-    inline void wake_with(Pred pred);
+    template <class Action>
+    inline void wake_with(Action action);
     static void sleep_until(s64 abstime);
     static void yield();
     static void exit() __attribute__((__noreturn__));
