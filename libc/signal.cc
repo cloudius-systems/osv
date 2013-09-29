@@ -12,6 +12,9 @@
 #include <debug.hh>
 #include <osv/printf.hh>
 #include <sched.hh>
+#include <osv/mutex.h>
+#include <osv/condvar.h>
+#include <drivers/clock.hh>
 
 namespace osv {
 
@@ -229,4 +232,59 @@ int kill(pid_t pid, int sig)
         t->start();
     }
     return 0;
+}
+
+// Our alarm() implementation has one system-wide alarm-thread, which waits
+// for the single timer (or instructions to change the timer) and sends
+// SIGALRM when the timer expires.
+// alarm() is an archaic Unix API and didn't age well. It should should never
+// be used in new programs.
+
+static mutex alarm_mutex;
+static condvar alarm_cond;
+static sched::thread *alarm_thread = nullptr;
+static s64 alarm_due = 0;
+
+void alarm_thread_func()
+{
+    sched::timer tmr(*sched::thread::current());
+    while (true) {
+        WITH_LOCK(alarm_mutex) {
+            if (alarm_due != 0) {
+                tmr.set(alarm_due);
+                alarm_cond.wait(alarm_mutex, &tmr);
+                if (tmr.expired()) {
+                    alarm_due = 0;
+                    kill(0, SIGALRM);
+                } else {
+                    tmr.cancel();
+                }
+            } else {
+                alarm_cond.wait(alarm_mutex);
+            }
+        }
+    }
+}
+
+unsigned int alarm(unsigned int seconds)
+{
+    unsigned int ret = 0;
+    WITH_LOCK(alarm_mutex) {
+        if (!alarm_thread) {
+            alarm_thread = new sched::thread(alarm_thread_func);
+            alarm_thread->start();
+        }
+        s64 now = nanotime();
+        if (alarm_due) {
+            ret = (alarm_due - now) / 1_s;
+        }
+        if (seconds) {
+            alarm_due = now + seconds*1_s;
+        } else {
+            // alarm(0) means cancel alarm, not an alarm in 0 seconds.
+            alarm_due = 0;
+        }
+        alarm_cond.wake_one();
+    }
+    return ret;
 }
