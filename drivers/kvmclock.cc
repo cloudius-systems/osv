@@ -18,7 +18,7 @@
 
 class kvmclock : public clock {
 public:
-    kvmclock(bool);
+    kvmclock(bool new_kvmclock_msrs);
     virtual s64 time() __attribute__((no_instrument_function));
 private:
     u64 wall_clock_boot();
