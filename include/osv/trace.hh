@@ -32,7 +32,7 @@ struct trace_record {
     sched::thread* thread;
     u64 time;
     unsigned cpu;
-    bool backtrace : 1;  // 10-elemenet backtrace precedes parameters
+    bool backtrace : 1;  // 10-element backtrace precedes parameters
     union {
         u8 buffer[0];
         long align[0];

@@ -147,6 +147,9 @@ reboot after setting the breakpoint:
  you can use multiple --trace= switches, or a single one with commas.  Shell-style wildcards
  allow enabling multiple tracepoints (as in the example). 
  
+ If you add the --trace-backtrace switch, every tracepoint hit will also record
+ a stack backtrace.
+
  To trace all function entries/returns in the program, build with conf-tracing=1 (clean build
  needed), and enable "function*" tracepoints, with --trace=.
  

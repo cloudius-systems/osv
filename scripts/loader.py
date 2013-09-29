@@ -45,6 +45,38 @@ def load_elf(path, base):
 
     gdb.execute('add-symbol-file %s %s %s' % (path, text_addr, args))
 
+class syminfo(object):
+    cache = dict()
+    def __init__(self, addr):
+        if addr in syminfo.cache:
+            cobj = syminfo.cache[addr]
+            self.func = cobj.func
+            self.source = cobj.source
+            return
+        infosym = gdb.execute('info symbol 0x%x' % addr, False, True)
+        self.func = infosym[:infosym.find(" + ")]
+        sal = gdb.find_pc_line(addr)
+        try :
+            # prefer (filename:line),
+            self.source = '%s:%s' % (sal.symtab.filename, sal.line)
+        except :
+            # but if can't get it, at least give the name of the object
+            if infosym.startswith("No symbol matches") :
+                self.source = None
+            else:
+                self.source = infosym[infosym.rfind("/")+1:].rstrip()
+        if self.source and self.source.startswith('../../'):
+            self.source = self.source[6:]
+        syminfo.cache[addr] = self
+    def __str__(self):
+        ret = self.func
+        if self.source:
+            ret += ' (%s)' % (self.source,)
+        return ret
+    @classmethod
+    def clear_cache(clazz):
+        clazz.cache.clear()
+
 def translate(path):
     '''given a path, try to find it on the host OS'''
     name = os.path.basename(path)
@@ -196,6 +228,7 @@ class osv_syms(gdb.Command):
         gdb.Command.__init__(self, 'osv syms',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
+        syminfo.clear_cache()
         p = gdb.lookup_global_symbol('elf::program::s_objs').value()
         p = p.dereference().address
         while long(p.dereference()):
@@ -493,8 +526,8 @@ def dump_trace(out_func):
     trace_log = trace_log[pivot:] + trace_log[:pivot]
     last += max_trace - pivot
     indents = defaultdict(int)
-    backtrace_len = 10
-    bt_format = '   [' + str.join(' ', ['0x%x'] * backtrace_len) + ']'
+    backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
+    bt_format = '   [' + str.join(' ', ['%s'] * backtrace_len) + ']'
     def lookup_tp(name):
         tp_base = gdb.lookup_type('tracepoint_base')
         return gdb.lookup_global_symbol(name).value().dereference()
@@ -552,7 +585,7 @@ def dump_trace(out_func):
             name = tp['name'].string()
             bt_str = ''
             if backtrace:
-                bt_str = bt_format % backtrace
+                bt_str = bt_format % tuple([syminfo(x) for x in backtrace])
             out_func('0x%016x %2d %12d.%06d %-20s %s%s\n'
                       % (thread,
                          cpu,
@@ -672,20 +705,9 @@ def show_leak():
         else :
             gdb.write('%d' % r.minbirth)
         gdb.write(']\nfrom:\n')
-        for f in reversed(r.callchain) :
-            infosym = gdb.execute('info symbol 0x%x' % f, False, True)
-            func = infosym[:infosym.find(" + ")]
-            sal = gdb.find_pc_line(f)
-            try :
-                # prefer (filename:line),
-                source = ' (%s:%s)' % (sal.symtab.filename, sal.line)
-            except :
-                # but if can't get it, at least give the name of the object
-                if infosym.startswith("No symbol matches") :
-                    source = ''
-                else :
-                    source = ' (%s)' % infosym[infosym.rfind("/")+1:].rstrip()
-            gdb.write('\t%s%s\n' % (func, source));
+        for f in reversed(r.callchain):
+            si = syminfo(f)
+            gdb.write('\t%s\n' % (si,))
         gdb.write('\n')
 
 class osv_trace(gdb.Command):
