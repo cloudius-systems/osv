@@ -46,7 +46,13 @@ def load_elf(path, base):
     gdb.execute('add-symbol-file %s %s %s' % (path, text_addr, args))
 
 class syminfo(object):
+    cache = dict()
     def __init__(self, addr):
+        if addr in syminfo.cache:
+            cobj = syminfo.cache[addr]
+            self.func = cobj.func
+            self.source = cobj.source
+            return
         infosym = gdb.execute('info symbol 0x%x' % addr, False, True)
         self.func = infosym[:infosym.find(" + ")]
         sal = gdb.find_pc_line(addr)
@@ -61,11 +67,15 @@ class syminfo(object):
                 self.source = infosym[infosym.rfind("/")+1:].rstrip()
         if self.source and self.source.startswith('../../'):
             self.source = self.source[6:]
+        syminfo.cache[addr] = self
     def __str__(self):
         ret = self.func
         if self.source:
             ret += ' (%s)' % (self.source,)
         return ret
+    @classmethod
+    def clear_cache(clazz):
+        clazz.cache.clear()
 
 def translate(path):
     '''given a path, try to find it on the host OS'''
@@ -218,6 +228,7 @@ class osv_syms(gdb.Command):
         gdb.Command.__init__(self, 'osv syms',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
+        syminfo.clear_cache()
         p = gdb.lookup_global_symbol('elf::program::s_objs').value()
         p = p.dereference().address
         while long(p.dereference()):
