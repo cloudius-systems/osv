@@ -16,6 +16,8 @@
 #include "prio.hh"
 #include <osv/execinfo.hh>
 
+using namespace std;
+
 tracepoint<1, void*, void*> trace_function_entry("function entry", "fn %p caller %p");
 tracepoint<2, void*, void*> trace_function_exit("function exit", "fn %p caller %p");
 
@@ -223,7 +225,9 @@ void tracepoint_base::log_backtraces()
 void tracepoint_base::do_log_backtrace(trace_record* tr, u8*& buffer)
 {
     tr->backtrace = true;
-    backtrace_safe(reinterpret_cast<void**>(buffer), backtrace_len);
+    auto bt = reinterpret_cast<void**>(buffer);
+    auto done = backtrace_safe(bt, backtrace_len);
+    fill(bt + done, bt + backtrace_len, nullptr);
     buffer += backtrace_len * sizeof(void*);
 }
 

@@ -493,7 +493,7 @@ def dump_trace(out_func):
     trace_log = trace_log[pivot:] + trace_log[:pivot]
     last += max_trace - pivot
     indents = defaultdict(int)
-    backtrace_len = 10
+    backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
     bt_format = '   [' + str.join(' ', ['0x%x'] * backtrace_len) + ']'
     def lookup_tp(name):
         tp_base = gdb.lookup_type('tracepoint_base')
