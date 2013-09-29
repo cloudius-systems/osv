@@ -7,6 +7,11 @@
 
 #include "signal.hh"
 #include <string.h>
+#include <unistd.h>
+#include <string.h>
+#include <debug.hh>
+#include <osv/printf.hh>
+#include <sched.hh>
 
 namespace osv {
 
@@ -159,4 +164,69 @@ int sigignore(int signum)
     sigemptyset(&act.sa_mask);
     act.sa_handler = SIG_IGN;
     return sigaction(signum, &act, nullptr);
+}
+
+// Partially-Linux-compatible support for kill(2).
+// Note that this is different from our generate_signal() - the latter is only
+// suitable for delivering SIGFPE and SIGSEGV to the same thread that called
+// this function.
+//
+// Handling kill(2)/signal(2) exactly like Linux, where one of the existing
+// threads runs the signal handler, is difficult in OSv because it requires
+// tracking of when we're in kernel code (to delay the signal handling until
+// it returns to "user" code), and also to interrupt sleeping kernel code and
+// have it return sooner.
+// Instead, we provide a simple "approximation" of the signal handling -
+// on each kill(), a *new* thread is created to run the signal handler code.
+//
+// This approximation will work in programs that do not care about the signal
+// being delivered to a specific thread, and that do not intend that the
+// signal should interrupt a system call (e.g., sleep() or hung read()).
+// FIXME: think if our handling of nested signals is ok (right now while
+// handling a signal, we can get another one of the same signal and start
+// another handler thread. We should probably block this signal while
+// handling it.
+
+int kill(pid_t pid, int sig)
+{
+    // OSv only implements one process, whose pid is getpid().
+    // Sending a signal to pid 0 or -1 is also fine, as it will also send a
+    // signal to the same single process.
+    if (pid != getpid() && pid != 0 && pid != -1) {
+        errno = ESRCH;
+        return -1;
+    }
+    if (sig == 0) {
+        // kill() with signal 0 doesn't cause an actual signal 0, just
+        // testing the pid.
+        return 0;
+    }
+    if (sig < 0 || sig >= (int)nsignals) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (is_sig_dfl(signal_actions[sig])) {
+        // Our default is to abort the process
+        abort(osv::sprintf("Uncaught signal %d (\"%s\"). Aborting.\n",
+                sig, strsignal(sig)).c_str());
+    } else if(!is_sig_ign(signal_actions[sig])) {
+        // User-defined signal handler. Run it in a new thread. This isn't
+        // very Unix-like behavior, but if we assume that the program doesn't
+        // care which of its threads handle the signal - why not just create
+        // a completely new thread and run it there...
+        const auto& sa = signal_actions[sig];
+        sched::thread::attr a;
+        a.detached = true;
+        a.stack.size = 65536; // TODO: what is a good size?
+        auto t = new sched::thread([=] {
+            if (sa.sa_flags & SA_SIGINFO) {
+                // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
+                sa.sa_sigaction(sig, nullptr, nullptr);
+            } else {
+                sa.sa_handler(sig);
+            }
+        }, a);
+        t->start();
+    }
+    return 0;
 }

@@ -150,6 +150,7 @@ tests += tests/tst-tcp-hash-srv.so
 tests += tests/tst-loadbalance.so
 tests += tests/tst-dns-resolver.so
 tests += tests/tst-fs-link.so
+tests += tests/tst-kill.so
 
 tests/hello/Hello.class: javabase=tests/hello
 

@@ -58,6 +58,7 @@
 /&/tests/tst-loadbalance.so: ./&
 /&/tests/tst-dns-resolver.so: ./&
 /&/tests/tst-fs-link.so: ./&
+/&/tests/tst-kill.so: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
