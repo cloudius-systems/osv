@@ -56,6 +56,16 @@ public class RunJava {
                 String key = args[i].substring(2, eq);
                 String value = args[i].substring(eq+1, args[i].length());
                 System.setProperty(key,  value);
+            } else if (args[i].equals("-version")) {
+                System.err.println("java version \"" +
+                        System.getProperty("java.version") + "\"");
+                System.err.println(System.getProperty("java.runtime.name") +
+                        " (" + System.getProperty("java.runtime.version") +
+                        ")");
+                System.err.println(System.getProperty("java.vm.name") +
+                        " (build " + System.getProperty("java.vm.version") +
+                        ", " + System.getProperty("java.vm.info") + ")");
+                return;
             } else if (!args[i].startsWith("-")) {
                 runClass(args[i], java.util.Arrays.copyOfRange(args,  i+1,  args.length), classpath);
                 return;
