@@ -527,7 +527,7 @@ def dump_trace(out_func):
     last += max_trace - pivot
     indents = defaultdict(int)
     backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
-    bt_format = '   [' + str.join(' ', ['0x%x'] * backtrace_len) + ']'
+    bt_format = '   [' + str.join(' ', ['%s'] * backtrace_len) + ']'
     def lookup_tp(name):
         tp_base = gdb.lookup_type('tracepoint_base')
         return gdb.lookup_global_symbol(name).value().dereference()
@@ -585,7 +585,7 @@ def dump_trace(out_func):
             name = tp['name'].string()
             bt_str = ''
             if backtrace:
-                bt_str = bt_format % backtrace
+                bt_str = bt_format % tuple([syminfo(x) for x in backtrace])
             out_func('0x%016x %2d %12d.%06d %-20s %s%s\n'
                       % (thread,
                          cpu,
