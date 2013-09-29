@@ -5,6 +5,24 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+// condvar is OSv's implemenation of the classic "condition variable"
+// synchronization primitive. It is similar to condition variables in POSIX
+// Threads, but makes one additional guarantees that POSIX Threads do not:
+// Our condvar_wait() is guaranteed not to have "spurious wakeups", i.e.,
+// condvar_wait() will only return if someone called condvar_wake_one()/all().
+//
+// The difference is subtle. Usually you still need to check the condition
+// after condvar_wait() returns because other threads may race us to change
+// the condition. But in some cases we use this guarantee. One example is our
+// semaphore implementation (semaphore.cc): In the traditional implementation
+// when spurious condvar_wait wakeups are possible, the wakee decrements the
+// semaphore's counter (this can cause a "thundering herd" problem). Using
+// our condvar without spurious wakeups, it is possible to decrement the
+// counter in the waker, and decide exactly who to wake.
+//
+// So watch out - if this implementation is ever rewritten, it should continue
+// to guarantee no-spurious-wakeups - even if POSIX Threads doesn't need it.
+
 #ifndef CONDVAR_H_
 #define CONDVAR_H_
 
