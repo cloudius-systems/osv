@@ -130,7 +130,7 @@ void read_partition_table(struct device *dev)
 		new_dev = device_create(dev->driver, dev_name, dev->flags);
 		free(new_dev->private_data);
 
-		new_dev->offset = entry->rela_sector << 9;
+		new_dev->offset = (off_t)entry->rela_sector << 9;
 		new_dev->size = (off_t)entry->total_sectors << 9;
 		new_dev->max_io_size = dev->max_io_size;
 		new_dev->private_data = dev->private_data;
