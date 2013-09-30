@@ -122,9 +122,7 @@ void read_partition_table(struct device *dev)
 			continue;
 		}
 
-		if ((entry->starting_head == 0) || (entry->starting_sector == 0) ||
-			(entry->starting_cylinder == 0) || (entry->ending_head == 0) ||
-			(entry->ending_sector == 0) || (entry->ending_cylinder) == 0) {
+		if (entry->starting_sector == 0) {
 			continue;
 		}
 
