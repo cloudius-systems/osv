@@ -15,6 +15,12 @@ def chs(x):
     h = (x / sec_per_track) % heads
     s = x % sec_per_track + 1
 
+    # see http://en.wikipedia.org/wiki/Master_Boot_Record
+    if c > 1023:
+        c = 1023
+        h = 254
+        s = 63
+
     return c,h,s
 
 def read_chars_up_to_null(file):
@@ -66,13 +72,8 @@ elif cmd == 'setpartition':
     f.seek(0,2)
     fsize = f.tell()
 
-    if fsize >= (8 << 30):
-        head = head_end = 255
-        cyl = cyl_end = 1023
-        sec = sec_end = 63;
-    else:
-        cyl, head, sec = chs(start / 512);
-        cyl_end, head_end, sec_end = chs((start + size) / 512);
+    cyl, head, sec = chs(start / 512);
+    cyl_end, head_end, sec_end = chs((start + size) / 512);
 
     f.seek(partition + 1)
     f.write(struct.pack('B', head))
