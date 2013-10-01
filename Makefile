@@ -17,7 +17,7 @@ all: $(submake)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
 	cd mgmt && ./gradlew --daemon :web:jar build
-	$(MAKE) -C $(dir $(submake)) $@
+	$(MAKE) -r -C $(dir $(submake)) $@
 
 $(submake): Makefile
 	mkdir -p $(dir $@)
