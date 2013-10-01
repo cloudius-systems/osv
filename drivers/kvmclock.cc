@@ -60,17 +60,14 @@ void kvmclock::setup_cpu()
 
 bool kvmclock::probe()
 {
-    if (!processor::features().kvm_clocksource2 &&
-        !processor::features().kvm_clocksource) {
-        return false;
+    if (processor::features().kvm_clocksource2) {
+        return true;
     }
-
-    if (!processor::features().kvm_clocksource2 &&
-        processor::features().kvm_clocksource) {
+    if (processor::features().kvm_clocksource) {
         _new_kvmclock_msrs = false;
+        return true;
     }
-
-    return true;
+    return false;
 }
 
 s64 kvmclock::time()
