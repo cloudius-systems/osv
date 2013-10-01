@@ -561,7 +561,6 @@ usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
-	$(call quiet, rm loader.img)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
