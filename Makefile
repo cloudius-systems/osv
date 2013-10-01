@@ -31,7 +31,7 @@ qcow2: all
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
-	$(call quiet, cd mgmt && ./gradlew clean >> /dev/null , GRADLE CLEAN)
+	$(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null , GRADLE CLEAN)
 
 external:
 	cd external/libunwind && autoreconf -i
