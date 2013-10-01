@@ -17,14 +17,13 @@ inline void arch_cpu::enter_exception()
         abort("nested exception");
     }
     in_exception = true;
-    auto& s = initstack.stack;
+    auto& s = percpu_exception_stack;
     set_exception_stack(s, sizeof(s));
 }
 
 inline void arch_cpu::exit_exception()
 {
-    auto& s = exception_stack;
-    set_exception_stack(s, sizeof(s));
+    set_exception_stack(&thread::current()->_arch);
     in_exception = false;
 }
 
