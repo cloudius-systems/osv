@@ -205,10 +205,8 @@ Running java benchmarks
 =======================
 
 After running "make", do
-    scripts/imgedit.py setargs build/debug/loader.img java.so -jar bench.jar
 
-and then run normally (./scripts/run.py).
-
+    ./scripts/run.py -e "java.so -jar /tests/bench/bench.jar"
 
 Profiling
 =========
