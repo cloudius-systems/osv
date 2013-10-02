@@ -46,7 +46,7 @@ def start_osv_qemu():
         if (cmdargs.vhost):
             args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
             args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
-	else:
+        else:
             args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
             args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
     else:
