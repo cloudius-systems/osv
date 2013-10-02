@@ -50,6 +50,14 @@
 
 #include "devfs.h"
 
+#ifdef DEBUG_DEVFS
+#define DPRINTF(a)	dprintf a
+#else
+#define DPRINTF(a)	do {} while (0)
+#endif
+
+#define ASSERT(e)	assert(e)
+
 static int
 devfs_open(struct file *fp)
 {

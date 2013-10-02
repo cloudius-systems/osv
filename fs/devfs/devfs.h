@@ -34,12 +34,4 @@
 
 /* #define DEBUG_DEVFS 1 */
 
-#ifdef DEBUG_DEVFS
-#define DPRINTF(a)	dprintf a
-#else
-#define DPRINTF(a)	do {} while (0)
-#endif
-
-#define ASSERT(e)	assert(e)
-
 #endif /* !_DEVFS_H */
