@@ -63,6 +63,12 @@
 
 #include "libc/internal/libc.h"
 
+#include <algorithm>
+#include <unordered_map>
+
+using namespace std;
+
+
 #ifdef DEBUG_VFS
 int	vfs_debug = VFSDB_FLAGS;
 #endif
@@ -1438,6 +1444,29 @@ void mount_rootfs(void)
 	ret = sys_mount("", "/dev", "devfs", 0, NULL);
 	if (ret)
 		kprintf("failed to mount devfs, error = %d\n", ret);
+}
+
+extern "C"
+int nmount(struct iovec *iov, unsigned niov, int flags)
+{
+	struct args {
+		char* fstype = nullptr;
+		char* fspath = nullptr;
+		char* from = nullptr;
+	};
+	static unordered_map<string, char* args::*> argmap {
+		{ "fstype", &args::fstype },
+		{ "fspath", &args::fspath },
+		{ "from", &args::from },
+	};
+	args a;
+	for (size_t i = 0; i < niov; i += 2) {
+		std::string s(static_cast<const char*>(iov[i].iov_base));
+		if (argmap.count(s)) {
+			a.*(argmap[s]) = static_cast<char*>(iov[i+1].iov_base);
+		}
+	}
+	return sys_mount(a.from, a.fspath, a.fstype, flags, nullptr);
 }
 
 extern "C" void mount_usr(void)
