@@ -35,6 +35,14 @@ inline bool starts_with(const char *s, const char *prefix)
     return !strncmp(s, prefix, strlen(prefix));
 }
 
+static bool is_jvm_option(const char *arg) {
+    return starts_with(arg, "-verbose") ||
+           starts_with(arg, "-D") ||
+           starts_with(arg, "-X") ||
+           starts_with(arg, "-javaagent") ||
+           starts_with(arg, "-agentlib");
+}
+
 extern "C"
 int main(int argc, char **argv)
 {
@@ -57,7 +65,7 @@ int main(int argc, char **argv)
             break;
 
         // Pass some options directly to the JVM
-        if (starts_with(argv[i], "-verbose") || starts_with(argv[i], "-D") || starts_with(argv[i], "-X") || starts_with(argv[i], "-javaagent")) {
+        if (is_jvm_option(argv[i])) {
             options.push_back(mkoption(argv[i]));
             argv[i] = NULL; // so we don't pass it to RunJava
             argc--;
