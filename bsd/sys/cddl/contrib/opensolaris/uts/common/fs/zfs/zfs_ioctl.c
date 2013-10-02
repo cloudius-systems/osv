@@ -4918,8 +4918,6 @@ zfs_ioc_space_snaps(zfs_cmd_t *zc)
 	return (error);
 }
 
-#ifndef __OSV__
-
 /*
  * pool create, destroy, and export don't log the history as part of
  * zfsdev_ioctl, but rather zfs_ioc_pool_create, and zfs_ioc_pool_export
@@ -4928,20 +4926,24 @@ zfs_ioc_space_snaps(zfs_cmd_t *zc)
 static int
 zfs_ioc_jail(zfs_cmd_t *zc)
 {
-
+#ifdef __OSV__
+	abort();
+#else
 	return (zone_dataset_attach(curthread->td_ucred, zc->zc_name,
 	    (int)zc->zc_jailid));
+#endif
 }
 
 static int
 zfs_ioc_unjail(zfs_cmd_t *zc)
 {
-
+#ifdef __OSV__
+	abort();
+#else
 	return (zone_dataset_detach(curthread->td_ucred, zc->zc_name,
 	    (int)zc->zc_jailid));
-}
-
 #endif
+}
 
 static zfs_ioc_vec_t zfs_ioc_vec[] = {
 	{ zfs_ioc_pool_create, zfs_secpolicy_config, POOL_NAME, B_FALSE,
