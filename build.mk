@@ -577,7 +577,8 @@ usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
-		tests/testrunner.so java/java.so java/runjava.jar
+		tests/testrunner.so java/java.so java/runjava.jar \
+		zpool.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)

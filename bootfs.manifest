@@ -68,3 +68,5 @@
 /tools/lsroute.so: ./tools/route/lsroute.so
 /&/etc/hosts: ../../static/&
 /&/etc/inputrc: ../../static/&
+/zpool.so: zpool.so
+/libzfs.so: libzfs.so
