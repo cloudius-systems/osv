@@ -31,8 +31,8 @@ TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
 TRACEPOINT(trace_memory_free_large, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
-TRACEPOINT(trace_memory_page_alloc, "%p", void*);
-TRACEPOINT(trace_memory_page_free, "%p", void*);
+TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
+TRACEPOINT(trace_memory_page_free, "page=%p", void*);
 
 bool smp_allocator = false;
 

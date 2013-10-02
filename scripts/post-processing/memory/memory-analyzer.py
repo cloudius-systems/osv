@@ -19,18 +19,20 @@ def get_buf(x):
     return re.findall("buf=(0x................)", x)[0]
 
 def is_page_alloc(x):
-    pass
+    return x.find("memory_page_alloc ") > 0
 
 def is_page_free(x):
-    pass
+    return x.find("memory_page_free ") > 0
 
 def get_page(x):
-    pass
+    return re.findall("page=(0x................)", x)[0]
 
 # buf -> [(size, is_freed), ...]
+page_allocs = {}
 mallocs = {}
 
 def process_records():
+    global page_allocs
     global mallocs
     global trace_records
 
@@ -63,6 +65,34 @@ def process_records():
                         print "Buffer %s buf already been freed." % buf
                     else:
                        mallocs[buf][-1][1] = True 
+
+	    #
+	    # TODO: It is possible to alloc_huge_page() and then free_page()
+	    # it in 512 pieces, and vice versa. Add support for that.
+	    #
+            elif (is_page_alloc(l)):
+                page = get_page(l)
+                t = [4096, False]
+                if (page_allocs.has_key(page)):
+                    if (page_allocs[page][-1][1] == False):
+                        print "Page %s was already allocated." % page
+                    page_allocs[page] += [t]
+                else:
+                    page_allocs[page] = [t]
+
+            elif (is_page_free(l)):
+                page = get_page(l)
+                # check if page had been allocated
+                if (not page_allocs.has_key(page)):
+                    # print "Page %s never been allocated." % page
+                    pass
+                else:
+                    # check if page already freed
+                    if (page_allocs[page][-1][1] == True):
+                        print "Page %s buf already been freed." % page
+                    else:
+                       page_allocs[page][-1][1] = True
+
         except:
             print "Problem parsing line: '%s'" % l
             raise
