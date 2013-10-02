@@ -572,13 +572,14 @@ static void early_free_page(void* v)
 
 static void* untracked_alloc_page()
 {
-    if (!smp_allocator) {
-        return early_alloc_page();
-    }
-
     void* ret;
-    while (!(ret = alloc_page_local())) {
-        refill_page_buffer();
+
+    if (!smp_allocator) {
+        ret = early_alloc_page();
+    } else {
+        while (!(ret = alloc_page_local())) {
+            refill_page_buffer();
+        }
     }
     trace_memory_page_alloc(ret);
     return ret;
