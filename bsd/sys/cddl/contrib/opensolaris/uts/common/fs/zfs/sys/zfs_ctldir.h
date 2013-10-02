@@ -28,6 +28,7 @@
 #include <sys/vnode.h>
 #include <sys/zfs_vfsops.h>
 #include <sys/zfs_znode.h>
+#include <sys/pathname.h>
 
 #ifdef	__cplusplus
 extern "C" {

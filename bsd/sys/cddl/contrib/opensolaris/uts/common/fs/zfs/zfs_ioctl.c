@@ -40,7 +40,7 @@
 #include <sys/proc.h>
 #include <sys/errno.h>
 #include <sys/uio.h>
-#include <sys/buf.h>
+//#include <sys/buf.h>
 #include <sys/file.h>
 #include <sys/kmem.h>
 #include <sys/conf.h>
@@ -626,6 +626,7 @@ zfs_secpolicy_send(zfs_cmd_t *zc, cred_t *cr)
 static int
 zfs_secpolicy_deleg_share(zfs_cmd_t *zc, cred_t *cr)
 {
+#ifndef __OSV__
 	vnode_t *vp;
 	int error;
 
@@ -645,11 +646,15 @@ zfs_secpolicy_deleg_share(zfs_cmd_t *zc, cred_t *cr)
 	VN_RELE(vp);
 	return (dsl_deleg_access(zc->zc_name,
 	    ZFS_DELEG_PERM_SHARE, cr));
+#else
+	return 0;
+#endif
 }
 
 int
 zfs_secpolicy_share(zfs_cmd_t *zc, cred_t *cr)
 {
+#ifndef __OSV__
 	if (!INGLOBALZONE(curthread))
 		return (EPERM);
 
@@ -658,6 +663,9 @@ zfs_secpolicy_share(zfs_cmd_t *zc, cred_t *cr)
 	} else {
 		return (zfs_secpolicy_deleg_share(zc, cr));
 	}
+#else
+	return 0;
+#endif
 }
 
 int
@@ -2766,6 +2774,8 @@ zfs_ioc_get_fsacl(zfs_cmd_t *zc)
 	return (error);
 }
 
+#ifndef __OSV__
+
 /*
  * Search the vfs list for a specified resource.  Returns a pointer to it
  * or NULL if no suitable entry is found. The caller of this routine
@@ -2786,6 +2796,8 @@ zfs_get_vfs(const char *resource)
 	mtx_unlock(&mountlist_mtx);
 	return (vfsp);
 }
+
+#endif
 
 /* ARGSUSED */
 static void
@@ -3141,6 +3153,8 @@ out:
 	return (error);
 }
 
+#ifndef __OSV__
+
 int
 zfs_unmount_snap(const char *name, void *arg)
 {
@@ -3173,6 +3187,8 @@ zfs_unmount_snap(const char *name, void *arg)
 	}
 	return (0);
 }
+
+#endif
 
 /*
  * inputs:
@@ -4902,6 +4918,8 @@ zfs_ioc_space_snaps(zfs_cmd_t *zc)
 	return (error);
 }
 
+#ifndef __OSV__
+
 /*
  * pool create, destroy, and export don't log the history as part of
  * zfsdev_ioctl, but rather zfs_ioc_pool_create, and zfs_ioc_pool_export
@@ -4922,6 +4940,8 @@ zfs_ioc_unjail(zfs_cmd_t *zc)
 	return (zone_dataset_detach(curthread->td_ucred, zc->zc_name,
 	    (int)zc->zc_jailid));
 }
+
+#endif
 
 static zfs_ioc_vec_t zfs_ioc_vec[] = {
 	{ zfs_ioc_pool_create, zfs_secpolicy_config, POOL_NAME, B_FALSE,
@@ -5213,7 +5233,9 @@ zfsdev_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 		zc = (void *)addr;
 	}
 
+#ifndef __OSV__
 	error = zfs_ioc_vec[vec].zvec_secpolicy(zc, td->td_ucred);
+#endif
 
 	/*
 	 * Ensure that all pool/dataset names are valid before we pass down to
