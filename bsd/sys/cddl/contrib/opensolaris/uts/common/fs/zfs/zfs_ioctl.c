@@ -5285,6 +5285,11 @@ zfsdev_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 	return (error);
 }
 
+int osv_zfs_ioctl(unsigned long req, void* buffer)
+{
+	return zfs_ioctl(NULL, req, (caddr_t)buffer, NULL);
+}
+
 #ifdef sun
 static int
 zfs_attach(dev_info_t *dip, ddi_attach_cmd_t cmd)
