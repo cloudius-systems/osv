@@ -554,18 +554,18 @@ struct sf_hdtr {
 #include <sys/cdefs.h>
 
 __BEGIN_DECLS
-int	accept(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
-int	bind(int, const struct bsd_sockaddr *, socklen_t);
-int	connect(int, const struct bsd_sockaddr *, socklen_t);
-int	getpeername(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
-int	getsockname(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
+int	bsd_accept(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
+int	bsd_bind(int, const struct bsd_sockaddr *, socklen_t);
+int	bsd_connect(int, const struct bsd_sockaddr *, socklen_t);
+int	bsd_getpeername(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
+int	bsd_getsockname(int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
 int	getsockopt(int, int, int, void * __restrict, socklen_t * __restrict);
 int	listen(int, int);
 ssize_t	recv(int, void *, size_t, int);
-ssize_t	recvfrom(int, void *, size_t, int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
+ssize_t	bsd_recvfrom(int, void *, size_t, int, struct bsd_sockaddr * __restrict, socklen_t * __restrict);
 ssize_t	recvmsg(int, struct msghdr *, int);
 ssize_t	send(int, const void *, size_t, int);
-ssize_t	sendto(int, const void *,
+ssize_t	bsd_sendto(int, const void *,
 	    size_t, int, const struct bsd_sockaddr *, socklen_t);
 ssize_t	sendmsg(int, const struct msghdr *, int);
 #if __BSD_VISIBLE
