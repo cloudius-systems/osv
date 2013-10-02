@@ -12,7 +12,8 @@
 #include "osv/trace.hh"
 #include "libc/libc.hh"
 
-TRACEPOINT(trace_memory_mmap, "ret=%p, addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, void *, size_t, int, int, int, off_t);
+TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
+TRACEPOINT(trace_memory_mmap_ret, "%p", void *);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 
 unsigned libc_prot_to_perm(int prot)
@@ -54,6 +55,8 @@ int mprotect(void *addr, size_t len, int prot)
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
+    trace_memory_mmap(addr, length, prot, flags, fd, offset);
+
     // TODO: should fail with EINVAL in some cases of addr, length, offset.
 
     // make use the payload isn't remapping physical memory
@@ -68,7 +71,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
         ret = mmu::map_file(addr, length, !(flags & MAP_FIXED),
                 libc_prot_to_perm(prot), f, offset, flags & MAP_SHARED);
     }
-    trace_memory_mmap(ret, addr, length, prot, flags, fd, offset);
+    trace_memory_mmap_ret(ret);
     return ret;
 }
 
