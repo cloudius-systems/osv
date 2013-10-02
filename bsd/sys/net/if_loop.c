@@ -307,7 +307,7 @@ lortrequest(int cmd, struct rtentry *rt, struct rt_addrinfo *info)
 int
 loioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct ifreq *ifr = (struct ifreq *)data;
 	int error = 0, mask;
 
@@ -315,7 +315,7 @@ loioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 	case SIOCSIFADDR:
 		ifp->if_flags |= IFF_UP;
 		ifp->if_drv_flags |= IFF_DRV_RUNNING;
-		ifa = (struct ifaddr *)data;
+		ifa = (struct bsd_ifaddr *)data;
 		ifa->ifa_rtrequest = lortrequest;
 		/*
 		 * Everything else is done at a higher level.

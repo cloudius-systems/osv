@@ -489,7 +489,7 @@ rtredirect_fib(struct bsd_sockaddr *dst,
 	int error = 0;
 	short *stat = NULL;
 	struct rt_addrinfo info;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct radix_node_head *rnh;
 
 	ifa = NULL;
@@ -633,18 +633,18 @@ rtioctl_fib(u_long req, caddr_t data, u_int fibnum)
 /*
  * For both ifa_ifwithroute() routines, 'ifa' is returned referenced.
  */
-struct ifaddr *
+struct bsd_ifaddr *
 ifa_ifwithroute(int flags, struct bsd_sockaddr *dst, struct bsd_sockaddr *gateway)
 {
 
 	return (ifa_ifwithroute_fib(flags, dst, gateway, RT_DEFAULT_FIB));
 }
 
-struct ifaddr *
+struct bsd_ifaddr *
 ifa_ifwithroute_fib(int flags, struct bsd_sockaddr *dst, struct bsd_sockaddr *gateway,
 				u_int fibnum)
 {
-	register struct ifaddr *ifa;
+	register struct bsd_ifaddr *ifa;
 	int not_found = 0;
 
 	if ((flags & RTF_GATEWAY) == 0) {
@@ -700,7 +700,7 @@ ifa_ifwithroute_fib(int flags, struct bsd_sockaddr *dst, struct bsd_sockaddr *ga
 			return (NULL);
 	}
 	if (ifa->ifa_addr->sa_family != dst->sa_family) {
-		struct ifaddr *oifa = ifa;
+		struct bsd_ifaddr *oifa = ifa;
 		ifa = ifaof_ifpforaddr(dst, ifa->ifa_ifp);
 		if (ifa == NULL)
 			ifa = oifa;
@@ -774,7 +774,7 @@ rt_getifa(struct rt_addrinfo *info)
 int
 rt_getifa_fib(struct rt_addrinfo *info, u_int fibnum)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	int error = 0;
 
 	/*
@@ -826,7 +826,7 @@ rtexpunge(struct rtentry *rt)
 	struct rtentry *rt0;
 #endif
 	struct radix_node_head *rnh;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	int error = 0;
 
 	/*
@@ -1013,7 +1013,7 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 	register struct rtentry *rt;
 	register struct radix_node *rn;
 	register struct radix_node_head *rnh;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr *ndst;
 	struct bsd_sockaddr_storage mdst;
 #define senderr(x) { error = x ; goto bad; }
@@ -1284,7 +1284,7 @@ rt_maskedcopy(struct bsd_sockaddr *src, struct bsd_sockaddr *dst, struct bsd_soc
  */
 #define _SOCKADDR_TMPSIZE 128 /* Not too big.. kernel stack size is limited */
 static inline  int
-rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
+rtinit1(struct bsd_ifaddr *ifa, int cmd, int flags, int fibnum)
 {
 	struct bsd_sockaddr *dst;
 	struct bsd_sockaddr *netmask;
@@ -1454,7 +1454,7 @@ rtinit1(struct ifaddr *ifa, int cmd, int flags, int fibnum)
 #ifndef BURN_BRIDGES
 /* special one for inet internal use. may not use. */
 int
-rtinit_fib(struct ifaddr *ifa, int cmd, int flags)
+rtinit_fib(struct bsd_ifaddr *ifa, int cmd, int flags)
 {
 	return (rtinit1(ifa, cmd, flags, -1));
 }
@@ -1465,7 +1465,7 @@ rtinit_fib(struct ifaddr *ifa, int cmd, int flags)
  * for an interface.
  */
 int
-rtinit(struct ifaddr *ifa, int cmd, int flags)
+rtinit(struct bsd_ifaddr *ifa, int cmd, int flags)
 {
 	struct bsd_sockaddr *dst;
 	int fib = RT_DEFAULT_FIB;

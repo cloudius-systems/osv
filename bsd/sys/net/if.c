@@ -175,7 +175,7 @@ static	if_com_alloc_t *if_com_alloc[256];
 static	if_com_free_t *if_com_free[256];
 
 MALLOC_DEFINE(M_IFNET, "ifnet", "interface internals");
-MALLOC_DEFINE(M_IFADDR, "ifaddr", "interface address");
+MALLOC_DEFINE(M_IFADDR, "bsd_ifaddr", "interface address");
 MALLOC_DEFINE(M_IFMADDR, "ether_multi", "link-level multicast address");
 
 struct ifnet *
@@ -289,10 +289,10 @@ ifnet_setbyindex(u_short idx, struct ifnet *ifp)
 	IFNET_WUNLOCK();
 }
 
-struct ifaddr *
+struct bsd_ifaddr *
 ifaddr_byindex(u_short idx)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	IFNET_RLOCK_NOSLEEP();
 	ifa = ifnet_byindex_locked(idx)->if_addr;
@@ -532,7 +532,7 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 	unsigned socksize, ifasize;
 	int namelen, masklen;
 	struct bsd_sockaddr_dl *sdl;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	if (ifp->if_index == 0 || ifp != ifnet_byindex(ifp->if_index))
 		panic ("%s: BUG: if_attach called without if_alloc'd input()\n",
@@ -664,7 +664,7 @@ if_attachdomain1(struct ifnet *ifp)
 void
 if_purgeaddrs(struct ifnet *ifp)
 {
-	struct ifaddr *ifa, *next;
+	struct bsd_ifaddr *ifa, *next;
 
 	TAILQ_FOREACH_SAFE(ifa, &ifp->if_addrhead, ifa_link, next) {
 		if (ifa->ifa_addr->sa_family == AF_LINK)
@@ -730,7 +730,7 @@ if_detach(struct ifnet *ifp)
 static void
 if_detach_internal(struct ifnet *ifp, int vmove)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct radix_node_head	*rnh;
 	int i, j;
 	struct domain *dp;
@@ -783,12 +783,12 @@ if_detach_internal(struct ifnet *ifp, int vmove)
 		if_dead(ifp);
 
 		/*
-		 * Remove link ifaddr pointer and maybe decrement if_index.
+		 * Remove link bsd_ifaddr pointer and maybe decrement if_index.
 		 * Clean up all addresses.
 		 */
 		ifp->if_addr = NULL;
 
-		/* We can now free link ifaddr. */
+		/* We can now free link bsd_ifaddr. */
 		if (!TAILQ_EMPTY(&ifp->if_addrhead)) {
 			ifa = TAILQ_FIRST(&ifp->if_addrhead);
 			TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);
@@ -1168,22 +1168,22 @@ if_maddr_runlock(struct ifnet *ifp)
  * Reference count functions for ifaddrs.
  */
 void
-ifa_init(struct ifaddr *ifa)
+ifa_init(struct bsd_ifaddr *ifa)
 {
 
-	mtx_init(&ifa->ifa_mtx, "ifaddr", NULL, MTX_DEF);
+	mtx_init(&ifa->ifa_mtx, "bsd_ifaddr", NULL, MTX_DEF);
 	refcount_init(&ifa->ifa_refcnt, 1);
 }
 
 void
-ifa_ref(struct ifaddr *ifa)
+ifa_ref(struct bsd_ifaddr *ifa)
 {
 
 	refcount_acquire(&ifa->ifa_refcnt);
 }
 
 void
-ifa_free(struct ifaddr *ifa)
+ifa_free(struct bsd_ifaddr *ifa)
 {
 
 	if (refcount_release(&ifa->ifa_refcnt)) {
@@ -1193,7 +1193,7 @@ ifa_free(struct ifaddr *ifa)
 }
 
 int
-ifa_add_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
+ifa_add_loopback_route(struct bsd_ifaddr *ifa, struct bsd_sockaddr *ia)
 {
 	int error = 0;
 	struct rtentry *rt = NULL;
@@ -1222,7 +1222,7 @@ ifa_add_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
 }
 
 int
-ifa_del_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
+ifa_del_loopback_route(struct bsd_ifaddr *ifa, struct bsd_sockaddr *ia)
 {
 	int error = 0;
 	struct rt_addrinfo info;
@@ -1265,11 +1265,11 @@ ifa_del_loopback_route(struct ifaddr *ifa, struct bsd_sockaddr *ia)
  * Locate an interface based on a complete address.
  */
 /*ARGSUSED*/
-static struct ifaddr *
+static struct bsd_ifaddr *
 ifa_ifwithaddr_internal(struct bsd_sockaddr *addr, int getref)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	IFNET_RLOCK_NOSLEEP();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
@@ -1302,7 +1302,7 @@ done:
 	return (ifa);
 }
 
-struct ifaddr *
+struct bsd_ifaddr *
 ifa_ifwithaddr(struct bsd_sockaddr *addr)
 {
 
@@ -1320,11 +1320,11 @@ ifa_ifwithaddr_check(struct bsd_sockaddr *addr)
  * Locate an interface based on the broadcast address.
  */
 /* ARGSUSED */
-struct ifaddr *
+struct bsd_ifaddr *
 ifa_ifwithbroadaddr(struct bsd_sockaddr *addr)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	IFNET_RLOCK_NOSLEEP();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
@@ -1353,11 +1353,11 @@ done:
  * Locate the point to point interface with a given destination address.
  */
 /*ARGSUSED*/
-struct ifaddr *
+struct bsd_ifaddr *
 ifa_ifwithdstaddr(struct bsd_sockaddr *addr)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	IFNET_RLOCK_NOSLEEP();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
@@ -1386,12 +1386,12 @@ done:
  * Find an interface on a specific network.  If many, choice
  * is most specific found.
  */
-struct ifaddr *
+struct bsd_ifaddr *
 ifa_ifwithnet(struct bsd_sockaddr *addr, int ignore_ptp)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
-	struct ifaddr *ifa_maybe = NULL;
+	struct bsd_ifaddr *ifa;
+	struct bsd_ifaddr *ifa_maybe = NULL;
 	u_int af = addr->sa_family;
 	char *addr_data = addr->sa_data, *cplim;
 
@@ -1498,13 +1498,13 @@ done:
  * Find an interface address specific to an interface best matching
  * a given address.
  */
-struct ifaddr *
+struct bsd_ifaddr *
 ifaof_ifpforaddr(struct bsd_sockaddr *addr, struct ifnet *ifp)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	char *cp, *cp2, *cp3;
 	char *cplim;
-	struct ifaddr *ifa_maybe = NULL;
+	struct bsd_ifaddr *ifa_maybe = NULL;
 	u_int af = addr->sa_family;
 
 	if (af >= AF_MAX)
@@ -1555,7 +1555,7 @@ done:
 static void
 link_rtrequest(int cmd, struct rtentry *rt, struct rt_addrinfo *info)
 {
-	struct ifaddr *ifa, *oifa;
+	struct bsd_ifaddr *ifa, *oifa;
 	struct bsd_sockaddr *dst;
 	struct ifnet *ifp;
 
@@ -1582,7 +1582,7 @@ link_rtrequest(int cmd, struct rtentry *rt, struct rt_addrinfo *info)
 static void
 if_unroute(struct ifnet *ifp, int flag, int fam)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	KASSERT(flag == IFF_UP, ("if_unroute: flag != IFF_UP"));
 
@@ -1604,7 +1604,7 @@ if_unroute(struct ifnet *ifp, int flag, int fam)
 static void
 if_route(struct ifnet *ifp, int flag, int fam)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	KASSERT(flag == IFF_UP, ("if_route: flag != IFF_UP"));
 
@@ -1773,7 +1773,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 	size_t descrlen;
 	char *descrbuf, *odescrbuf;
 	char new_name[IFNAMSIZ];
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr_dl *sdl;
 
 	ifr = (struct ifreq *)data;
@@ -2439,7 +2439,7 @@ ifconf(u_long cmd, caddr_t data)
 {
 	struct ifconf *ifc = (struct ifconf *)data;
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct ifreq ifr;
 	struct sbuf *sb;
 	int error, full = 0, valid_len, max_len;
@@ -2965,7 +2965,7 @@ int
 if_setlladdr(struct ifnet *ifp, const u_char *lladdr, int len)
 {
 	struct bsd_sockaddr_dl *sdl;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct ifreq ifr;
 
 	IF_ADDR_RLOCK(ifp);

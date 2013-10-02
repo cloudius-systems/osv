@@ -685,7 +685,7 @@ static void
 icmp_reflect(struct mbuf *m)
 {
 	struct ip *ip = mtod(m, struct ip *);
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct ifnet *ifp;
 	struct in_ifaddr *ia;
 	struct in_addr t;

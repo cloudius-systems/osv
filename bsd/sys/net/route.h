@@ -133,7 +133,7 @@ struct rtentry {
 	int	rt_flags;		/* up/down?, host/net */
 	int	rt_refcnt;		/* # held references */
 	struct	ifnet *rt_ifp;		/* the answer: interface to use */
-	struct	ifaddr *rt_ifa;		/* the answer: interface address to use */
+	struct	bsd_ifaddr *rt_ifa;		/* the answer: interface address to use */
 	struct	rt_metrics_lite rt_rmx;	/* metrics used by rx'ing protocols */
 	u_int	rt_fibnum;		/* which FIB */
 #ifdef _KERNEL
@@ -292,7 +292,7 @@ struct rt_addrinfo {
 	int	rti_addrs;
 	struct	bsd_sockaddr *rti_info[RTAX_MAX];
 	int	rti_flags;
-	struct	ifaddr *rti_ifa;
+	struct	bsd_ifaddr *rti_ifa;
 	struct	ifnet *rti_ifp;
 };
 
@@ -376,8 +376,8 @@ void	 rt_ifannouncemsg(struct ifnet *, int);
 void	 rt_ifmsg(struct ifnet *);
 void	 rt_missmsg(int, struct rt_addrinfo *, int, int);
 void	 rt_missmsg_fib(int, struct rt_addrinfo *, int, int, int);
-void	 rt_newaddrmsg(int, struct ifaddr *, int, struct rtentry *);
-void	 rt_newaddrmsg_fib(int, struct ifaddr *, int, struct rtentry *, int);
+void	 rt_newaddrmsg(int, struct bsd_ifaddr *, int, struct rtentry *);
+void	 rt_newaddrmsg_fib(int, struct bsd_ifaddr *, int, struct rtentry *, int);
 void	 rt_newmaddrmsg(int, struct ifmultiaddr *);
 int	 rt_setgate(struct rtentry *, struct bsd_sockaddr *, struct bsd_sockaddr *);
 void 	 rt_maskedcopy(struct bsd_sockaddr *, struct bsd_sockaddr *, struct bsd_sockaddr *);
@@ -404,7 +404,7 @@ int	 rt_getifa(struct rt_addrinfo *);
 void	 rtalloc_ign(struct route *ro, u_long ignflags);
 void	 rtalloc(struct route *ro); /* XXX deprecated, use rtalloc_ign(ro, 0) */
 struct rtentry *rtalloc1(struct bsd_sockaddr *, int, u_long);
-int	 rtinit(struct ifaddr *, int, int);
+int	 rtinit(struct bsd_ifaddr *, int, int);
 int	 rtioctl(u_long, caddr_t);
 void	 rtredirect(struct bsd_sockaddr *, struct bsd_sockaddr *,
 	    struct bsd_sockaddr *, int, struct bsd_sockaddr *);
@@ -413,7 +413,7 @@ int	 rtrequest(int, struct bsd_sockaddr *,
 
 #ifndef BURN_BRIDGES
 /* defaults to "all" FIBs */
-int	 rtinit_fib(struct ifaddr *, int, int);
+int	 rtinit_fib(struct bsd_ifaddr *, int, int);
 #endif
 
 /* XXX MRT NEW VERSIONS THAT USE FIBs

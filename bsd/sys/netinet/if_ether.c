@@ -199,7 +199,7 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
 		 * The caller did not supply a source address, try to find
 		 * a compatible one among those assigned to this interface.
 		 */
-		struct ifaddr *ifa;
+		struct bsd_ifaddr *ifa;
 
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			if (!ifa->ifa_addr ||
@@ -484,7 +484,7 @@ in_arpinput(struct mbuf *m)
 	struct ifnet *ifp = m->m_pkthdr.rcvif;
 	struct llentry *la = NULL;
 	struct rtentry *rt;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct in_ifaddr *ia;
 	struct bsd_sockaddr sa;
 	struct in_addr isaddr, itaddr, myaddr;
@@ -842,7 +842,7 @@ drop:
 #endif
 
 void
-arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
+arp_ifinit(struct ifnet *ifp, struct bsd_ifaddr *ifa)
 {
 	struct llentry *lle;
 
@@ -868,7 +868,7 @@ arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 }
 
 void
-arp_ifinit2(struct ifnet *ifp, struct ifaddr *ifa, u_char *enaddr)
+arp_ifinit2(struct ifnet *ifp, struct bsd_ifaddr *ifa, u_char *enaddr)
 {
 	if (ntohl(IA_SIN(ifa)->sin_addr.s_addr) != INADDR_ANY)
 		arprequest(ifp, &IA_SIN(ifa)->sin_addr,

@@ -369,7 +369,7 @@ ip_input(struct mbuf *m)
 {
 	struct ip *ip = NULL;
 	struct in_ifaddr *ia = NULL;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct ifnet *ifp;
 	int    checkif, hlen = 0;
 	u_short sum;

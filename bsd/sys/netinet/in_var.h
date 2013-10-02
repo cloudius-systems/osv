@@ -53,11 +53,11 @@ struct in_ifinfo {
 /*
  * Interface address, Internet version.  One of these structures
  * is allocated for each Internet address on an interface.
- * The ifaddr structure contains the protocol-independent part
+ * The bsd_ifaddr structure contains the protocol-independent part
  * of the structure and is assumed to be first.
  */
 struct in_ifaddr {
-	struct	ifaddr ia_ifa;		/* protocol-independent info */
+	struct	bsd_ifaddr ia_ifa;		/* protocol-independent info */
 #define	ia_ifp		ia_ifa.ifa_ifp
 #define ia_flags	ia_ifa.ifa_flags
 					/* ia_subnet{,mask} in host order */
@@ -79,7 +79,7 @@ struct	in_aliasreq {
 	struct	bsd_sockaddr_in ifra_mask;
 };
 /*
- * Given a pointer to an in_ifaddr (ifaddr),
+ * Given a pointer to an in_ifaddr (bsd_ifaddr),
  * return a pointer to the addr as a bsd_sockaddr_in.
  */
 #define IA_SIN(ia)    (&(((struct in_ifaddr *)(ia))->ia_addr))
@@ -446,7 +446,7 @@ int	in_control(struct socket *, u_long, caddr_t, struct ifnet *,
 	    struct thread *);
 void	in_rtqdrain(void);
 void	ip_input(struct mbuf *);
-int	in_ifadown(struct ifaddr *ifa, int);
+int	in_ifadown(struct bsd_ifaddr *ifa, int);
 void	in_ifscrub(struct ifnet *, struct in_ifaddr *, u_int);
 struct	mbuf	*ip_fastforward(struct mbuf *);
 void	*in_domifattach(struct ifnet *);

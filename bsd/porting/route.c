@@ -171,7 +171,7 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     char *cp;
     int l = 0;
     int rtm_addrs;
-    struct ifaddr *ifa;
+    struct bsd_ifaddr *ifa;
 
     /* IPv4: Addresses */
     struct bsd_sockaddr_in dst;
@@ -313,7 +313,7 @@ void osv_route_arp_add(const char* if_name, const char* ip,
 const char* osv_get_if_mac_addr(const char* if_name)
 {
     struct ifnet* ifp;
-    struct ifaddr *ifa, *next;
+    struct bsd_ifaddr *ifa, *next;
 
     /* FIXME: where's the unref? */
     ifp = ifunit_ref(if_name);

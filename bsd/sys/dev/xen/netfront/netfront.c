@@ -676,7 +676,7 @@ static void
 netfront_send_fake_arp(device_t dev, struct netfront_info *info)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	
 	ifp = info->xn_ifp;
 	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
@@ -1753,7 +1753,7 @@ xn_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 	struct netfront_info *sc = ifp->if_softc;
 	struct ifreq *ifr = (struct ifreq *) data;
 #ifdef INET
-	struct ifaddr *ifa = (struct ifaddr *)data;
+	struct bsd_ifaddr *ifa = (struct bsd_ifaddr *)data;
 #endif
 
 	int mask, error = 0;

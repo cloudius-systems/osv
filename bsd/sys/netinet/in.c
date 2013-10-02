@@ -209,7 +209,7 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 {
 	register struct ifreq *ifr = (struct ifreq *)data;
 	register struct in_ifaddr *ia, *iap;
-	register struct ifaddr *ifa;
+	register struct bsd_ifaddr *ifa;
 	struct in_addr allhosts_addr;
 	struct in_addr dst;
 	struct in_ifinfo *ii;
@@ -649,7 +649,7 @@ in_lifaddr_ioctl(struct socket *so, u_long cmd, caddr_t data,
     struct ifnet *ifp, struct thread *td)
 {
 	struct if_laddrreq *iflr = (struct if_laddrreq *)data;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	/* sanity checks */
 	if (data == NULL || ifp == NULL) {
@@ -933,7 +933,7 @@ in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct bsd_sockaddr_in *sin,
 			RT_ADDREF(ia_ro.ro_rt);
 			RTFREE_LOCKED(ia_ro.ro_rt);
 		} else
-			error = ifa_add_loopback_route((struct ifaddr *)ia,
+			error = ifa_add_loopback_route((struct bsd_ifaddr *)ia,
 			    (struct bsd_sockaddr *)&ia->ia_addr);
 		if (error == 0)
 			ia->ia_flags |= IFA_RTSELF;
@@ -981,7 +981,7 @@ static void in_addralias_rtmsg(int cmd, struct in_addr *prefix,
 		 * e.g., rt_key, rt_mask, rt_ifp etc.
 		 */
 		msg_rt.rt_gateway = (struct bsd_sockaddr *)&target->ia_addr;
-		rt_newaddrmsg(cmd, (struct ifaddr *)target, 0, &msg_rt);
+		rt_newaddrmsg(cmd, (struct bsd_ifaddr *)target, 0, &msg_rt);
 		RTFREE(pfx_ro.ro_rt);
 	}
 	return;
@@ -1105,7 +1105,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 			RTFREE_LOCKED(ia_ro.ro_rt);
 		}
 		if (freeit && (flags & LLE_STATIC)) {
-			error = ifa_del_loopback_route((struct ifaddr *)target,
+			error = ifa_del_loopback_route((struct bsd_ifaddr *)target,
 			    (struct bsd_sockaddr *)&target->ia_addr);
 			if (error == 0)
 				target->ia_flags &= ~IFA_RTSELF;
@@ -1208,7 +1208,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 int
 in_broadcast(struct in_addr in, struct ifnet *ifp)
 {
-	register struct ifaddr *ifa;
+	register struct bsd_ifaddr *ifa;
 	u_long t;
 
 	if (in.s_addr == INADDR_BROADCAST ||
@@ -1520,7 +1520,7 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 			EVENTHANDLER_INVOKE(arp_update_event, lle);
 			LLE_WUNLOCK(lle);
 #ifdef DIAGNOSTIC
-			bsd_log(LOG_INFO, "ifaddr cache = %p  is deleted\n", lle);
+			bsd_log(LOG_INFO, "bsd_ifaddr cache = %p  is deleted\n", lle);
 #endif
 		}
 		lle = (void *)-1;

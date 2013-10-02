@@ -93,7 +93,7 @@ __BEGIN_DECLS
 #define	IF_DUNIT_NONE	-1
 
 TAILQ_HEAD(ifnethead, ifnet);	/* we use TAILQs so that the order of */
-TAILQ_HEAD(ifaddrhead, ifaddr);	/* instantiation is preserved in the list */
+TAILQ_HEAD(ifaddrhead, bsd_ifaddr);	/* instantiation is preserved in the list */
 TAILQ_HEAD(ifprefixhead, ifprefix);
 TAILQ_HEAD(ifmultihead, ifmultiaddr);
 TAILQ_HEAD(ifgrouphead, ifg_group);
@@ -171,7 +171,7 @@ struct ifnet {
 	void	(*if_reassign)		/* reassign to vnet routine */
 		(struct ifnet *, struct vnet *, char *);
 	struct	vnet *if_home_vnet;	/* where this ifnet originates from */
-	struct	ifaddr	*if_addr;	/* pointer to link-level address */
+	struct	bsd_ifaddr	*if_addr;	/* pointer to link-level address */
 	void	*if_llsoftc;		/* link layer softc */
 	int	if_drv_flags;		/* driver-managed status flags */
 	struct  ifqueue if_snd;		/* output queue */
@@ -592,30 +592,30 @@ do {									\
 #endif /* _KERNEL */
 
 /*
- * The ifaddr structure contains information about one address
+ * The bsd_ifaddr structure contains information about one address
  * of an interface.  They are maintained by the different address families,
  * are allocated and attached when an address is set, and are linked
  * together so all addresses for an interface can be located.
  *
- * NOTE: a 'struct ifaddr' is always at the beginning of a larger
+ * NOTE: a 'struct bsd_ifaddr' is always at the beginning of a larger
  * chunk of malloc'ed memory, where we store the three addresses
  * (ifa_addr, ifa_dstaddr and ifa_netmask) referenced here.
  */
-struct ifaddr {
+struct bsd_ifaddr {
 	struct	bsd_sockaddr *ifa_addr;	/* address of interface */
 	struct	bsd_sockaddr *ifa_dstaddr;	/* other end of p-to-p link */
 #define	ifa_broadaddr	ifa_dstaddr	/* broadcast address interface */
 	struct	bsd_sockaddr *ifa_netmask;	/* used to determine subnet */
 	struct	if_data if_data;	/* not all members are meaningful */
 	struct	ifnet *ifa_ifp;		/* back-pointer to interface */
-	TAILQ_ENTRY(ifaddr) ifa_link;	/* queue macro glue */
+	TAILQ_ENTRY(bsd_ifaddr) ifa_link;	/* queue macro glue */
 	void	(*ifa_rtrequest)	/* check or clean routes (+ or -)'d */
 		(int, struct rtentry *, struct rt_addrinfo *);
 	u_short	ifa_flags;		/* mostly rt_flags for cloning */
 	u_int	ifa_refcnt;		/* references to this structure */
 	int	ifa_metric;		/* cost of going out this interface */
 	int (*ifa_claim_addr)		/* check if an addr goes to this if */
-		(struct ifaddr *, struct bsd_sockaddr *);
+		(struct bsd_ifaddr *, struct bsd_sockaddr *);
 	struct mtx ifa_mtx;
 };
 #define	IFA_ROUTE	RTF_UP		/* route installed */
@@ -628,9 +628,9 @@ struct ifaddr {
 #define	IFA_LOCK(ifa)		mtx_lock(&(ifa)->ifa_mtx)
 #define	IFA_UNLOCK(ifa)		mtx_unlock(&(ifa)->ifa_mtx)
 
-void	ifa_free(struct ifaddr *ifa);
-void	ifa_init(struct ifaddr *ifa);
-void	ifa_ref(struct ifaddr *ifa);
+void	ifa_free(struct bsd_ifaddr *ifa);
+void	ifa_init(struct bsd_ifaddr *ifa);
+void	ifa_ref(struct bsd_ifaddr *ifa);
 #endif
 
 /*
@@ -648,7 +648,7 @@ struct ifprefix {
 };
 
 /*
- * Multicast address structure.  This is analogous to the ifaddr
+ * Multicast address structure.  This is analogous to the bsd_ifaddr
  * structure except that it keeps track of multicast addresses.
  */
 struct ifmultiaddr {
@@ -693,10 +693,10 @@ struct ifnet	*ifnet_byindex_ref(u_short idx);
 
 /*
  * Given the index, ifaddr_byindex() returns the one and only
- * link-level ifaddr for the interface. You are not supposed to use
+ * link-level bsd_ifaddr for the interface. You are not supposed to use
  * it to traverse the list of addresses associated to the interface.
  */
-struct ifaddr	*ifaddr_byindex(u_short idx);
+struct bsd_ifaddr	*ifaddr_byindex(u_short idx);
 
 VNET_DECLARE(struct ifnethead, ifnet);
 VNET_DECLARE(struct ifgrouphead, ifg_head);
@@ -746,18 +746,18 @@ struct	ifnet *ifunit_ref(const char *);
 void	ifq_init(struct ifqueue *, struct ifnet *ifp);
 void	ifq_delete(struct ifqueue *);
 
-int	ifa_add_loopback_route(struct ifaddr *, struct bsd_sockaddr *);
-int	ifa_del_loopback_route(struct ifaddr *, struct bsd_sockaddr *);
+int	ifa_add_loopback_route(struct bsd_ifaddr *, struct bsd_sockaddr *);
+int	ifa_del_loopback_route(struct bsd_ifaddr *, struct bsd_sockaddr *);
 
-struct	ifaddr *ifa_ifwithaddr(struct bsd_sockaddr *);
+struct	bsd_ifaddr *ifa_ifwithaddr(struct bsd_sockaddr *);
 int		ifa_ifwithaddr_check(struct bsd_sockaddr *);
-struct	ifaddr *ifa_ifwithbroadaddr(struct bsd_sockaddr *);
-struct	ifaddr *ifa_ifwithdstaddr(struct bsd_sockaddr *);
-struct	ifaddr *ifa_ifwithnet(struct bsd_sockaddr *, int);
-struct	ifaddr *ifa_ifwithroute(int, struct bsd_sockaddr *, struct bsd_sockaddr *);
-struct	ifaddr *ifa_ifwithroute_fib(int, struct bsd_sockaddr *, struct bsd_sockaddr *, u_int);
+struct	bsd_ifaddr *ifa_ifwithbroadaddr(struct bsd_sockaddr *);
+struct	bsd_ifaddr *ifa_ifwithdstaddr(struct bsd_sockaddr *);
+struct	bsd_ifaddr *ifa_ifwithnet(struct bsd_sockaddr *, int);
+struct	bsd_ifaddr *ifa_ifwithroute(int, struct bsd_sockaddr *, struct bsd_sockaddr *);
+struct	bsd_ifaddr *ifa_ifwithroute_fib(int, struct bsd_sockaddr *, struct bsd_sockaddr *, u_int);
 
-struct	ifaddr *ifaof_ifpforaddr(struct bsd_sockaddr *, struct ifnet *);
+struct	bsd_ifaddr *ifaof_ifpforaddr(struct bsd_sockaddr *, struct ifnet *);
 
 int	if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen);
 

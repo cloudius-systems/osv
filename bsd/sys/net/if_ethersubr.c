@@ -881,7 +881,7 @@ void
 ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 {
 	int i;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr_dl *sdl;
 
 	ifp->if_addrlen = ETHER_ADDR_LEN;
@@ -1020,7 +1020,7 @@ ether_crc32_be(const uint8_t *buf, size_t len)
 int
 ether_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
-	struct ifaddr *ifa = (struct ifaddr *) data;
+	struct bsd_ifaddr *ifa = (struct bsd_ifaddr *) data;
 	struct ifreq *ifr = (struct ifreq *) data;
 	int error = 0;
 

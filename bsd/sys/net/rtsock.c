@@ -62,7 +62,7 @@
 
 #if defined(INET) || defined(INET6)
 #ifdef SCTP
-extern void sctp_addr_change(struct ifaddr *ifa, int cmd);
+extern void sctp_addr_change(struct bsd_ifaddr *ifa, int cmd);
 #endif /* SCTP */
 #endif
 
@@ -552,7 +552,7 @@ route_output(struct mbuf *m, struct socket *so)
 
 			if (rt->rt_ifp != NULL && 
 			    rt->rt_ifp->if_type == IFT_PROPVIRTUAL) {
-				struct ifaddr *ifa;
+				struct bsd_ifaddr *ifa;
 
 				ifa = ifa_ifwithnet(info.rti_info[RTAX_DST], 1);
 				if (ifa != NULL)
@@ -639,7 +639,7 @@ route_output(struct mbuf *m, struct socket *so)
 
 		case RTM_CHANGE:
 			/*
-			 * New gateway could require new ifaddr, ifp;
+			 * New gateway could require new bsd_ifaddr, ifp;
 			 * flags may also be different; ifp may be specified
 			 * by ll bsd_sockaddr when protocol address is ambiguous
 			 */
@@ -1080,7 +1080,7 @@ rt_ifmsg(struct ifnet *ifp)
  * copies of it.
  */
 void
-rt_newaddrmsg_fib(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt,
+rt_newaddrmsg_fib(int cmd, struct bsd_ifaddr *ifa, int error, struct rtentry *rt,
     int fibnum)
 {
 	struct rt_addrinfo info;
@@ -1096,7 +1096,7 @@ rt_newaddrmsg_fib(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt,
 	/*
 	 * notify the SCTP stack
 	 * this will only get called when an address is added/deleted
-	 * XXX pass the ifaddr struct instead if ifa->ifa_addr...
+	 * XXX pass the bsd_ifaddr struct instead if ifa->ifa_addr...
 	 */
 	sctp_addr_change(ifa, cmd);
 #endif /* SCTP */
@@ -1151,7 +1151,7 @@ rt_newaddrmsg_fib(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt,
 }
 
 void
-rt_newaddrmsg(int cmd, struct ifaddr *ifa, int error, struct rtentry *rt)
+rt_newaddrmsg(int cmd, struct bsd_ifaddr *ifa, int error, struct rtentry *rt)
 {
 
 	rt_newaddrmsg_fib(cmd, ifa, error, rt, RTS_ALLFIBS);
@@ -1426,7 +1426,7 @@ sysctl_iflist_ifm(struct ifnet *ifp, struct rt_addrinfo *info,
 }
 #if 0
 static int
-sysctl_iflist_ifaml(struct ifaddr *ifa, struct rt_addrinfo *info,
+sysctl_iflist_ifaml(struct bsd_ifaddr *ifa, struct rt_addrinfo *info,
     struct walkarg *w, int len)
 {
 	struct ifa_msghdrl *ifam;
@@ -1446,7 +1446,7 @@ sysctl_iflist_ifaml(struct ifaddr *ifa, struct rt_addrinfo *info,
 }
 #endif
 static int
-sysctl_iflist_ifam(struct ifaddr *ifa, struct rt_addrinfo *info,
+sysctl_iflist_ifam(struct bsd_ifaddr *ifa, struct rt_addrinfo *info,
     struct walkarg *w, int len)
 {
 	struct ifa_msghdr *ifam;
@@ -1464,7 +1464,7 @@ static int
 sysctl_iflist(int af, struct walkarg *w)
 {
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct rt_addrinfo info;
 	int len, error = 0;
 
@@ -1532,7 +1532,7 @@ sysctl_ifmalist(int af, struct walkarg *w)
 	struct ifmultiaddr *ifma;
 	struct	rt_addrinfo info;
 	int	len, error = 0;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 
 	bzero((caddr_t)&info, sizeof(info));
 	IFNET_RLOCK();

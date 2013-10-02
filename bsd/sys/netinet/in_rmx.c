@@ -391,7 +391,7 @@ in_detachhead(void **head, int off)
  * plug back in.
  */
 struct in_ifadown_arg {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	int del;
 };
 
@@ -433,7 +433,7 @@ in_ifadownkill(struct radix_node *rn, void *xap)
 }
 
 int
-in_ifadown(struct ifaddr *ifa, int delete)
+in_ifadown(struct bsd_ifaddr *ifa, int delete)
 {
 	struct in_ifadown_arg arg;
 	struct radix_node_head *rnh;

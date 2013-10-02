@@ -61,7 +61,7 @@ linux_ifconf(struct ifconf *ifc_p)
 {
 	struct l_ifreq ifr;
 	struct ifnet *ifp;
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct sbuf *sb;
 	int full = 0, valid_len, max_len;
 
@@ -172,7 +172,7 @@ linux_gifflags(struct ifnet *ifp, struct l_ifreq *ifr)
 static int
 linux_gifhwaddr(struct ifnet *ifp, struct l_ifreq *ifr)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr_dl *sdl;
 	struct l_sockaddr *lsa_p = &ifr->ifr_hwaddr ;
 

@@ -660,7 +660,7 @@ static int
 in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
     struct ucred *cred)
 {
-	struct ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr *sa;
 	struct bsd_sockaddr_in *sin;
 	struct route sro;

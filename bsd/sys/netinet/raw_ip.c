@@ -650,7 +650,7 @@ rip_ctloutput(struct socket *so, struct sockopt *sopt)
 
 /*
  * This function exists solely to receive the PRC_IFDOWN messages which are
- * sent by if_down().  It looks for an ifaddr whose ifa_addr is sa, and calls
+ * sent by if_down().  It looks for an bsd_ifaddr whose ifa_addr is sa, and calls
  * in_ifadown() to remove all routes corresponding to that address.  It also
  * receives the PRC_IFUP messages from if_up() and reinstalls the interface
  * routes.
@@ -709,7 +709,7 @@ rip_ctlinput(int cmd, struct bsd_sockaddr *sa, void *vip)
 		    || (ifp->if_flags & IFF_POINTOPOINT))
 			flags |= RTF_HOST;
 
-		err = ifa_del_loopback_route((struct ifaddr *)ia, sa);
+		err = ifa_del_loopback_route((struct bsd_ifaddr *)ia, sa);
 		if (err == 0)
 			ia->ia_flags &= ~IFA_RTSELF;
 
@@ -717,7 +717,7 @@ rip_ctlinput(int cmd, struct bsd_sockaddr *sa, void *vip)
 		if (err == 0)
 			ia->ia_flags |= IFA_ROUTE;
 
-		err = ifa_add_loopback_route((struct ifaddr *)ia, sa);
+		err = ifa_add_loopback_route((struct bsd_ifaddr *)ia, sa);
 		if (err == 0)
 			ia->ia_flags |= IFA_RTSELF;
 
