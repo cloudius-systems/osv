@@ -81,7 +81,7 @@ struct bio {
 	uint8_t	bio_flags;		/* General flags. */
 	struct device *bio_dev;		/* Device to do I/O on. */
 	off_t	bio_offset;		/* Offset into file. */
-	long	bio_bcount;		/* Valid bytes in buffer. */
+	size_t	bio_bcount;		/* Valid bytes in buffer. */
 	void	*bio_data;		/* Memory, superblocks, indirect etc. */
 	int	bio_error;		/* Errno for BIO_ERROR. */
 	long	bio_resid;		/* Remaining I/O in bytes. */

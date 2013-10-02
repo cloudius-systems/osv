@@ -257,12 +257,12 @@ int virtio_blk::make_virtio_request(struct bio* bio)
 
         // need to break a contiguous buffers that > 4k into several physical page mapping
         // even if the virtual space is contiguous.
-        long len = 0;
-        int offset = reinterpret_cast<long>(bio->bio_data) & 0xfff;
+        size_t len = 0;
+        auto offset = reinterpret_cast<size_t>(bio->bio_data) & 0xfff;
         void *base = bio->bio_data;
         while (len != bio->bio_bcount) {
-            long size = std::min(bio->bio_bcount - len, (long)mmu::page_size);
-            if (offset + size > (long)mmu::page_size)
+            auto size = std::min(bio->bio_bcount - len, mmu::page_size);
+            if (offset + size > mmu::page_size)
                 size = mmu::page_size - offset;
             len += size;
             queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(base), size, (type == VIRTIO_BLK_T_OUT)? vring_desc::VRING_DESC_F_READ:vring_desc::VRING_DESC_F_WRITE));
