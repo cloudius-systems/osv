@@ -5,6 +5,8 @@ import sys, os, optparse, struct
 cmd = sys.argv[1]
 args = sys.argv[2:]
 
+args_offset = 512
+
 def chs(x):
     sec_per_track = 63
     heads = 255 
@@ -15,14 +17,35 @@ def chs(x):
 
     return c,h,s
 
+def read_chars_up_to_null(file):
+    while True:
+        try:
+            c = file.read(1)
+            if c == '\0':
+                raise StopIteration
+            yield c
+        except ValueError:
+            raise StopIteration
+
+def read_cstr(file):
+    return ''.join(read_chars_up_to_null(file))
+
+def write_cstr(file, str):
+    file.write(str)
+    file.write('\0')
 
 if cmd == 'setargs':
     img = args[0]
     args = args[1:]
-    argstr = str.join(' ', args) + '\0'
+    argstr = str.join(' ', args)
     with file(img, 'r+b') as f:
-        f.seek(512)
-        f.write(argstr)
+        f.seek(args_offset)
+        write_cstr(f, argstr)
+elif cmd == 'getargs':
+    img = args[0]
+    with file(img, 'r+b') as f:
+        f.seek(args_offset)
+        print read_cstr(f)
 elif cmd == 'setsize':
     img = args[0]
     size = int(args[1])
