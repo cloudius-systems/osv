@@ -168,6 +168,7 @@ java/runjava.jar:
 tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
 tools += tools/route/lsroute.so
+tools += tools/mkfs/mkfs.so
 
 all: loader.img loader.bin usr.img
 
@@ -587,6 +588,10 @@ bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
 bootfs.o: bootfs.bin
+
+tools/mkfs/mkfs.so: CFLAGS += -lstdc++
+
+tools/mkfs/mkfs.so: tools/mkfs/mkfs.o
 
 runtime.o: ctype-data.h
 
