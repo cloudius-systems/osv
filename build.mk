@@ -200,6 +200,7 @@ arch/x64/boot32.o: loader.elf
 bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
 
 include $(src)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/build.mk
+include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk
 
 bsd  = bsd/net.o  
 bsd += bsd/machine/in_cksum.o
@@ -405,7 +406,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_debug.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_dir.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_fm.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_fuid.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_ioctl.o
+zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_ioctl.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_init.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_log.o
 #zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_onexit.o
