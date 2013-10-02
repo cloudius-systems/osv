@@ -468,24 +468,7 @@ __END_DECLS
 #define	IP_MAX_SOCK_SRC_FILTER		128	/* sources per socket/group */
 #define	IP_MAX_SOCK_MUTE_FILTER		128	/* XXX no longer used */
 
-/*
- * Argument structure for IP_ADD_MEMBERSHIP and IP_DROP_MEMBERSHIP.
- */
-struct ip_mreq {
-	struct	in_addr imr_multiaddr;	/* IP multicast address of group */
-	struct	in_addr imr_interface;	/* local IP address of interface */
-};
-
-/*
- * Modified argument structure for IP_MULTICAST_IF, obtained from Linux.
- * This is used to specify an interface index for multicast sends, as
- * the IPv4 legacy APIs do not support this (unless IP_SENDIF is available).
- */
-struct ip_mreqn {
-	struct	in_addr imr_multiaddr;	/* IP multicast address of group */
-	struct	in_addr imr_address;	/* local IP address of interface */
-	int		imr_ifindex;	/* Interface index; cast to uint32_t */
-};
+#include <netinet/__in.h>
 
 /*
  * Argument structure for IPv4 Multicast Source Filter APIs. [RFC3678]

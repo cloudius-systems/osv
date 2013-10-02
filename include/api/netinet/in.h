@@ -242,18 +242,7 @@ struct ip_opts
 	char ip_opts[40];
 };
 
-struct ip_mreq
-{
-	struct in_addr imr_multiaddr;
-	struct in_addr imr_interface;
-};
-
-struct ip_mreqn
-{
-	struct in_addr imr_multiaddr;
-	struct in_addr imr_address;
-	int imr_ifindex;
-};
+#include <netinet/__in.h>
 
 struct in_pktinfo
 {
