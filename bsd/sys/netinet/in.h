@@ -677,7 +677,7 @@ int	 in_localip(struct in_addr);
 int	 inet_aton(const char *, struct in_addr *); /* in libkern */
 char	*inet_ntoa(struct in_addr); /* in libkern */
 char	*inet_ntoa_r(struct in_addr ina, char *buf); /* in libkern */
-char	*inet_ntop(int, const void *, char *, socklen_t); /* in libkern */
+const char *inet_ntop(int, const void *__restrict, char *__restrict, socklen_t); /* in libkern */
 int	 inet_pton(int af, const char *, void *); /* in libkern */
 void	 in_ifdetach(struct ifnet *);
 __END_DECLS

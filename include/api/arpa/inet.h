@@ -18,10 +18,12 @@ extern "C" {
 
 #include <bits/alltypes.h>
 
+#ifndef _BYTEORDER_FUNC_DEFINED
 uint32_t htonl(uint32_t);
 uint16_t htons(uint16_t);
 uint32_t ntohl(uint32_t);
 uint16_t ntohs(uint16_t);
+#endif
 
 in_addr_t inet_addr (const char *);
 in_addr_t inet_network (const char *);
