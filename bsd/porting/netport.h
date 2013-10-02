@@ -313,4 +313,6 @@ extern size_t physmem;
 
 __END_DECLS
 
+#define CTASSERT(x) _Static_assert(x, "assertion failed: " #x)
+
 #endif
