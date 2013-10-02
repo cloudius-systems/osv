@@ -1,6 +1,7 @@
 #ifndef _BSD_MALLOC_H
 #define _BSD_MALLOC_H
 #include <bsd/porting/mmu.h>
+#include <bsd/porting/netport.h>
 // just our malloc impl.
 #include <malloc.h>
 #include "param.h" // BSD malloc includes this, so some files do not.
