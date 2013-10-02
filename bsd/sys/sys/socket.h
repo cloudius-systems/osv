@@ -116,14 +116,6 @@
 #define	SO_PROTOTYPE	SO_PROTOCOL	/* alias for SO_PROTOCOL (SunOS name) */
 #endif
 
-/*
- * Structure used for manipulating linger option.
- */
-struct linger {
-	int	l_onoff;		/* option on/off */
-	int	l_linger;		/* linger time */
-};
-
 #if __BSD_VISIBLE
 struct accept_filter_arg {
 	char	af_name[16];
@@ -395,15 +387,7 @@ struct sockproto {
  * Message header for recvmsg and sendmsg calls.
  * Used value-result for recvmsg, value only for sendmsg.
  */
-struct msghdr {
-	void		*msg_name;		/* optional address */
-	socklen_t	 msg_namelen;		/* size of address */
-	struct iovec	*msg_iov;		/* scatter/gather array */
-	int		 msg_iovlen;		/* # elements in msg_iov */
-	void		*msg_control;		/* ancillary data, see below */
-	socklen_t	 msg_controllen;	/* ancillary data buffer len */
-	int		 msg_flags;		/* flags on received message */
-};
+#include <api/sys/__socket.h>
 
 #define	MSG_OOB		0x1		/* process out-of-band data */
 #define	MSG_PEEK	0x2		/* peek at incoming message */
@@ -425,19 +409,6 @@ struct msghdr {
 #if __BSD_VISIBLE
 #define	MSG_NOSIGNAL	0x20000		/* do not generate SIGPIPE on EOF */
 #endif
-
-/*
- * Header for ancillary data objects in msg_control buffer.
- * Used for additional information with/about a datagram
- * not expressible by flags.  The format is a sequence
- * of message elements headed by cmsghdr structures.
- */
-struct cmsghdr {
-	socklen_t	cmsg_len;		/* data byte count, including hdr */
-	int		cmsg_level;		/* originating protocol */
-	int		cmsg_type;		/* protocol-specific type */
-/* followed by	u_char  cmsg_data[]; */
-};
 
 #if __BSD_VISIBLE
 /*

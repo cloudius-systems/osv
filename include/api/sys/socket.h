@@ -17,19 +17,13 @@ extern "C" {
 
 #include <bits/alltypes.h>
 
-#include <bits/socket.h>
+#include <sys/__socket.h>
 
 struct ucred
 {
 	pid_t pid;
 	uid_t uid;
 	gid_t gid;
-};
-
-struct linger
-{
-	int l_onoff;
-	int l_linger;
 };
 
 #define SHUT_RD 0

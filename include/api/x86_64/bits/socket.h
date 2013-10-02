@@ -1,3 +1,6 @@
+#ifndef OSV_BITS_SOCKET_H
+#define OSV_BITS_SOCKET_H
+
 struct msghdr
 {
 	void *msg_name;
@@ -16,3 +19,4 @@ struct cmsghdr
 	int cmsg_level;
 	int cmsg_type;
 };
+#endif
