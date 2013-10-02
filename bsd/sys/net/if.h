@@ -513,10 +513,7 @@ MALLOC_DECLARE(M_IFMADDR);
 #endif
 
 #ifndef _KERNEL
-struct if_nameindex {
-	unsigned int	if_index;	/* 1, 2, ... */
-	char		*if_name;	/* null terminated name: "le0", ... */
-};
+#include <api/net/__if.h>
 
 __BEGIN_DECLS
 void			 if_freenameindex(struct if_nameindex *);

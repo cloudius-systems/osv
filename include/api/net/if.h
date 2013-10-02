@@ -9,11 +9,7 @@ extern "C" {
 
 #define IF_NAMESIZE 16
 
-struct if_nameindex
-{
-	unsigned int if_index;
-	char *if_name;
-};
+#include <api/net/__if.h>
 
 unsigned int if_nametoindex (const char *);
 char *if_indextoname (unsigned int, char *);
