@@ -604,7 +604,7 @@ tcp_tw_2msl_reset(struct tcptw *tw, int rearm)
 	INP_WLOCK_ASSERT(tw->tw_inpcb);
 	if (rearm)
 		TAILQ_REMOVE(&V_twq_2msl, tw, tw_2msl);
-	tw->tw_time = ticks + 2 * tcp_msl;
+	tw->tw_time = bsd_ticks + 2 * tcp_msl;
 	TAILQ_INSERT_TAIL(&V_twq_2msl, tw, tw_2msl);
 }
 
@@ -624,7 +624,7 @@ tcp_tw_2msl_scan(int reuse)
 	INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 	for (;;) {
 		tw = TAILQ_FIRST(&V_twq_2msl);
-		if (tw == NULL || (!reuse && (tw->tw_time - ticks) > 0))
+		if (tw == NULL || (!reuse && (tw->tw_time - bsd_ticks) > 0))
 			break;
 		INP_WLOCK(tw->tw_inpcb);
 		tcp_twclose(tw, reuse);

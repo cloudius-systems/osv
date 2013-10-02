@@ -239,7 +239,7 @@ taskqueue_enqueue_timeout(struct taskqueue *queue,
 				ticks = -ticks; /* Ignore overflow. */
 		}
 		if (ticks > 0) {
-			callout_reset(&timeout_task->c, ticks,
+			callout_reset(&timeout_task->c, bsd_ticks,
 			    taskqueue_timeout_func, timeout_task);
 		}
 	}

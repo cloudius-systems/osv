@@ -188,7 +188,7 @@ cubic_cwnd(int ticks_since_cong, unsigned long wmax, uint32_t smss, int64_t K)
 }
 
 /*
- * Compute an approximation of the NewReno cwnd some number of ticks after a
+ * Compute an approximation of the NewReno cwnd some number of bsd_ticks after a
  * congestion event. RTT should be the average RTT estimate for the path
  * measured over the previous congestion epoch and wmax is the value of cwnd at
  * the last congestion event. The "TCP friendly" concept in the CUBIC I-D is
@@ -210,7 +210,7 @@ reno_cwnd(int ticks_since_cong, int rtt_ticks, unsigned long wmax,
 }
 
 /*
- * Compute an approximation of the "TCP friendly" cwnd some number of ticks
+ * Compute an approximation of the "TCP friendly" cwnd some number of bsd_ticks
  * after a congestion event that is designed to yield the same average cwnd as
  * NewReno while using CUBIC's beta of 0.8. RTT should be the average RTT
  * estimate for the path measured over the previous congestion epoch and wmax is

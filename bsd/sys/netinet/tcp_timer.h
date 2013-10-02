@@ -91,7 +91,7 @@
 #define TCPTV_FINWAIT2_TIMEOUT (60*hz)         /* FIN_WAIT_2 timeout if no receiver */
 
 /*
- * Minimum retransmit timer is 3 ticks, for algorithmic stability.
+ * Minimum retransmit timer is 3 bsd_ticks, for algorithmic stability.
  * TCPT_RANGESET() will add another TCPTV_CPU_VAR to deal with
  * the expected worst-case processing variances by the kernels
  * representing the end points.  Such variances do not always show

@@ -309,7 +309,7 @@ static void syncache_insert(struct syncache *sc, struct syncache_head *sch)
 
 	/* Reinitialize the bucket row's timer. */
 	if (sch->sch_length == 1)
-		sch->sch_nextc = ticks + INT_MAX;
+		sch->sch_nextc = bsd_ticks + INT_MAX;
 	syncache_timeout(sc, sch, 1);
 
 	SCH_UNLOCK(sch);
@@ -344,12 +344,12 @@ static void syncache_drop(struct syncache *sc, struct syncache_head *sch)
 static void syncache_timeout(struct syncache *sc, struct syncache_head *sch,
 	int docallout)
 {
-	sc->sc_rxttime = ticks + TCPTV_RTOBASE * (tcp_backoff[sc->sc_rxmits]);
+	sc->sc_rxttime = bsd_ticks + TCPTV_RTOBASE * (tcp_backoff[sc->sc_rxmits]);
 	sc->sc_rxmits++;
 	if (TSTMP_LT(sc->sc_rxttime, sch->sch_nextc)) {
 		sch->sch_nextc = sc->sc_rxttime;
 		if (docallout)
-			callout_reset(&sch->sch_timer, sch->sch_nextc - ticks,
+			callout_reset(&sch->sch_timer, sch->sch_nextc - bsd_ticks,
 				syncache_timer, (void *)sch);
 	}
 }
@@ -363,7 +363,7 @@ static void syncache_timer(void *xsch)
 {
 	struct syncache_head *sch = (struct syncache_head *)xsch;
 	struct syncache *sc, *nsc;
-	int tick = ticks;
+	int tick = bsd_ticks;
 	char *s;
 
 	CURVNET_SET(sch->sch_vnet);

@@ -95,9 +95,9 @@ void getmicrotime(struct timeval *tvp);
 void getmicrouptime(struct timeval *tvp);
 int tvtohz(struct timeval *tv);
 
-/* Returns the current time in ticks (there's hz ticks in 1 second) */
+/* Returns the current time in bsd_ticks (there's hz bsd_ticks in 1 second) */
 int get_ticks(void);
-#define ticks (get_ticks())
+#define bsd_ticks (get_ticks())
 
 extern int tick;
 
@@ -105,7 +105,7 @@ extern int tick;
 #define TMILISECOND (1000000L)
 
 /* BSD-originated functions like msleep() measure time in units of "ticks",
- * which are defined here by the macro hz (there are hz ticks per second).
+ * which are defined here by the macro hz (there are hz bsd_ticks per second).
  * hz can be changed to anything, and does not impose, for example, a timer
  * interrupt hz times a second. A very high hz, for example 1000000, is
  * fine, but because the timeout parameter to msleep is an int, it results
@@ -279,7 +279,7 @@ extern unsigned smp_processors;
  *
  * Note that we maintain the struct timeval for compatibility
  * with other bsd systems.  We reuse the storage and just monitor
- * clock ticks for minimal overhead.
+ * clock bsd_ticks for minimal overhead.
  */
 int ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps);
 

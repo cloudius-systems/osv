@@ -70,7 +70,7 @@
 #define HTCP_ALPHA_INC_SHIFT 4
 
 #define HTCP_INIT_ALPHA 1
-#define HTCP_DELTA_L hz		/* 1 sec in ticks. */
+#define HTCP_DELTA_L hz		/* 1 sec in bsd_ticks. */
 #define HTCP_MINBETA 128	/* 0.5 << HTCP_SHIFT. */
 #define HTCP_MAXBETA 204	/* ~0.8 << HTCP_SHIFT. */
 #define HTCP_MINROWE 26		/* ~0.1 << HTCP_SHIFT. */
@@ -89,7 +89,7 @@
  * i.e. 1 + 10(delta - delta_l) + ((delta - delta_l) / 2) ^ 2
  *
  * "diff" is passed in to the macro as "delta - delta_l" and is expected to be
- * in units of ticks.
+ * in units of bsd_ticks.
  *
  * The joyousnous of fixed point maths means our function implementation looks a
  * little funky...
@@ -151,13 +151,13 @@ struct htcp {
 	int		maxrtt;
 	/* Shortest rtt seen for the flow. */
 	int		minrtt;
-	/* Time of last congestion event in ticks. */
+	/* Time of last congestion event in bsd_ticks. */
 	int		t_last_cong;
 };
 
 static int htcp_rtt_ref;
 /*
- * The maximum number of ticks the value of diff can reach in
+ * The maximum number of bsd_ticks the value of diff can reach in
  * htcp_recalc_alpha() before alpha will stop increasing due to overflow.
  * See comment above HTCP_CALC_ALPHA for more info.
  */
@@ -203,7 +203,7 @@ htcp_ack_received(struct cc_var *ccv, uint16_t type)
 		htcp_recalc_alpha(ccv);
 		/*
 		 * Use the logic in NewReno ack_received() for slow start and
-		 * for the first HTCP_DELTA_L ticks after either the flow starts
+		 * for the first HTCP_DELTA_L bsd_ticks after either the flow starts
 		 * or a congestion event (when alpha equals 1).
 		 */
 		if (htcp_data->alpha == 1 ||
@@ -253,7 +253,7 @@ htcp_cb_init(struct cc_var *ccv)
 	htcp_data->maxrtt = TCPTV_SRTTBASE;
 	htcp_data->minrtt = TCPTV_SRTTBASE;
 	htcp_data->prev_cwnd = 0;
-	htcp_data->t_last_cong = ticks;
+	htcp_data->t_last_cong = bsd_ticks;
 
 	ccv->cc_data = htcp_data;
 
@@ -283,7 +283,7 @@ htcp_cong_signal(struct cc_var *ccv, uint32_t type)
 				    (htcp_data->maxrtt - htcp_data->minrtt) *
 				    95) / 100;
 				htcp_ssthresh_update(ccv);
-				htcp_data->t_last_cong = ticks;
+				htcp_data->t_last_cong = bsd_ticks;
 				htcp_data->prev_cwnd = CCV(ccv, snd_cwnd);
 			}
 			ENTER_RECOVERY(CCV(ccv, t_flags));
@@ -300,7 +300,7 @@ htcp_cong_signal(struct cc_var *ccv, uint32_t type)
 			    htcp_data->minrtt) * 95) / 100;
 			htcp_ssthresh_update(ccv);
 			CCV(ccv, snd_cwnd) = CCV(ccv, snd_ssthresh);
-			htcp_data->t_last_cong = ticks;
+			htcp_data->t_last_cong = bsd_ticks;
 			htcp_data->prev_cwnd = CCV(ccv, snd_cwnd);
 			ENTER_CONGRECOVERY(CCV(ccv, t_flags));
 		}
@@ -315,7 +315,7 @@ htcp_cong_signal(struct cc_var *ccv, uint32_t type)
 		 * congestion.
 		 */
 		if (CCV(ccv, t_rxtshift) >= 2)
-			htcp_data->t_last_cong = ticks;
+			htcp_data->t_last_cong = bsd_ticks;
 		break;
 	}
 }
@@ -372,10 +372,10 @@ htcp_recalc_alpha(struct cc_var *ccv)
 	int alpha, diff, now;
 
 	htcp_data = ccv->cc_data;
-	now = ticks;
+	now = bsd_ticks;
 
 	/*
-	 * If ticks has wrapped around (will happen approximately once every 49
+	 * If bsd_ticks has wrapped around (will happen approximately once every 49
 	 * days on a machine with the default kern.hz=1000) and a flow straddles
 	 * the wrap point, our alpha calcs will be completely wrong. We cut our
 	 * losses and restart alpha from scratch by setting t_last_cong = now -
@@ -393,7 +393,7 @@ htcp_recalc_alpha(struct cc_var *ccv)
 	/* Cap alpha if the value of diff would overflow HTCP_CALC_ALPHA(). */
 	if (diff < htcp_max_diff) {
 		/*
-		 * If it has been more than HTCP_DELTA_L ticks since congestion,
+		 * If it has been more than HTCP_DELTA_L bsd_ticks since congestion,
 		 * increase alpha according to the function defined in the spec.
 		 */
 		if (diff > 0) {

@@ -371,7 +371,7 @@ struct tcptw {
  * firing of the timer.  The bias will give us exactly the
  * 1.5 tick we need.  But, because the bias is
  * statistical, we have to test that we don't drop below
- * the minimum feasible timer (which is 2 ticks).
+ * the minimum feasible timer (which is 2 bsd_ticks).
  * This version of the macro adapted from a paper by Lawrence
  * Brakmo and Larry Peterson which outlines a problem caused
  * by insufficient precision in the original implementation,
