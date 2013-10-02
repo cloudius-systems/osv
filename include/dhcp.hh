@@ -9,6 +9,7 @@
 #define __DHCP_HH__
 
 #include <list>
+#include <vector>
 
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/netinet/in.h>
@@ -17,6 +18,9 @@
 #include <sched.hh>
 #include <osv/mutex.h>
 #include <osv/debug.h>
+
+#include <boost/asio/ip/address.hpp>
+#include <boost/asio/ip/address_v4.hpp>
 
 extern "C" void dhcp_start(bool wait);
 
@@ -115,7 +119,10 @@ namespace dhcp {
         void set(struct mbuf* m);
 
         void compose_discover(struct ifnet* ifp);
-        void compose_request(struct ifnet* ifp, u32 xid, in_addr_t yip, in_addr_t sip);
+        void compose_request(struct ifnet* ifp,
+                             u32 xid,
+                             boost::asio::ip::address_v4 yip,
+                             boost::asio::ip::address_v4 sip);
 
         /* Decode packet */
         bool is_valid_dhcp();
@@ -124,12 +131,14 @@ namespace dhcp {
 
         u32 get_xid();
         dhcp_message_type get_message_type() { return _message_type; }
-        in_addr_t get_router_ip() { return _router_ip; }
-        in_addr_t get_dhcp_server_ip() { return _dhcp_server_ip; }
-        in_addr_t get_your_ip() { return _your_ip; }
-        in_addr_t get_dns_ip() { return _dns_ip; }
-        in_addr_t get_subnet_mask() { return _subnet_mask; }
-        in_addr_t get_broadcast_ip() { return _broadcast_ip; }
+        boost::asio::ip::address_v4 get_router_ip() { return _router_ip; }
+        boost::asio::ip::address_v4 get_dhcp_server_ip() {
+            return _dhcp_server_ip;
+        }
+        boost::asio::ip::address_v4 get_your_ip() { return _your_ip; }
+        std::vector<boost::asio::ip::address> get_dns_ips() { return _dns_ips; }
+        boost::asio::ip::address_v4 get_subnet_mask() { return _subnet_mask; }
+        boost::asio::ip::address_v4 get_broadcast_ip() { return _broadcast_ip; }
         int get_lease_time_sec() { return _lease_time_sec; }
         int get_renewal_time_sec() { return _renewal_time_sec; }
         int get_rebind_time_sec() { return _rebind_time_sec; }
@@ -158,12 +167,14 @@ namespace dhcp {
 
         // Decoded variables
         dhcp_message_type _message_type;
-        in_addr_t _router_ip;
-        in_addr_t _dhcp_server_ip;
-        in_addr_t _dns_ip;
-        in_addr_t _subnet_mask;
-        in_addr_t _broadcast_ip;
-        in_addr_t _your_ip;
+        boost::asio::ip::address_v4 _router_ip;
+        boost::asio::ip::address_v4 _dhcp_server_ip;
+        // store DNS IPs as a vector of ip::address to ease working with IPV6
+        // compatible libc
+        std::vector<boost::asio::ip::address> _dns_ips;
+        boost::asio::ip::address_v4 _subnet_mask;
+        boost::asio::ip::address_v4 _broadcast_ip;
+        boost::asio::ip::address_v4 _your_ip;
         u32 _lease_time_sec;
         u32 _renewal_time_sec;
         u32 _rebind_time_sec;

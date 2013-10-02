@@ -29,6 +29,8 @@
 #include <dhcp.hh>
 #include <drivers/clock.hh>
 
+using namespace boost::asio;
+
 dhcp::dhcp_worker net_dhcp_worker;
 
 // Returns whether we hooked the packet
@@ -87,12 +89,6 @@ namespace dhcp {
 
         // Init decoded fields
         _message_type = DHCP_MT_INVALID;
-        _dhcp_server_ip = 0;
-        _router_ip = 0;
-        _dns_ip = 0;
-        _subnet_mask = 0;
-        _broadcast_ip = 0;
-        _your_ip = 0;
         _lease_time_sec = 0;
         _renewal_time_sec = 0;
         _rebind_time_sec = 0;
@@ -186,8 +182,10 @@ namespace dhcp {
         build_udp_ip_headers(dhcp_len);
     }
 
-    void dhcp_mbuf::compose_request(struct ifnet* ifp, u32 xid, in_addr_t yip,
-        in_addr_t sip)
+    void dhcp_mbuf::compose_request(struct ifnet* ifp,
+                                    u32 xid,
+                                    ip::address_v4 yip,
+                                    ip::address_v4 sip)
     {
         size_t dhcp_len = sizeof(struct dhcp_packet);
         struct dhcp_packet* pkt = pdhcp();
@@ -209,8 +207,8 @@ namespace dhcp {
         memcpy(options, dhcp_options_magic, 4);
         options += 4;
 
-        in_addr_t dhcp_server_ip = sip;
-        in_addr_t requested_ip = yip;
+        ip::address_v4::bytes_type dhcp_server_ip = sip.to_bytes();
+        ip::address_v4::bytes_type requested_ip = yip.to_bytes();
         options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_REQUEST);
         options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
         options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
@@ -240,10 +238,16 @@ namespace dhcp {
 
     bool dhcp_mbuf::decode()
     {
+        ip::address_v4::bytes_type bytes;
+
         decode_ip_len();
 
+        // clear DNS
+        _dns_ips.clear();
+
         // Read allocated IP address
-        _your_ip = ntohl(pdhcp()->yiaddr.s_addr);
+        memcpy(&bytes, &pdhcp()->yiaddr.s_addr, sizeof(bytes));
+        _your_ip = ip::address_v4(bytes);
 
         // Parse options
         u8* packet_start = mtod(_m, u8*);
@@ -266,28 +270,38 @@ namespace dhcp {
                 PARSE_OP(dhcp_message_type, u8, _message_type);
                 break;
             case DHCP_OPTION_SUBNET_MASK:
-                PARSE_OP(in_addr_t, u32, _subnet_mask);
-                _subnet_mask = ntohl(_subnet_mask);
+                PARSE_OP(ip::address_v4::bytes_type,
+                         ip::address_v4::bytes_type,
+                         bytes);
+                _subnet_mask = ip::address_v4(bytes);
                 break;
             case DHCP_OPTION_ROUTER:
-                PARSE_OP(in_addr_t, u32, _router_ip);
-                _router_ip = ntohl(_router_ip);
+                PARSE_OP(ip::address_v4::bytes_type,
+                         ip::address_v4::bytes_type,
+                         bytes);
+                _router_ip = ip::address_v4(bytes);
                 break;
             case DHCP_OPTION_DHCP_SERVER:
-                PARSE_OP(in_addr_t, u32, _dhcp_server_ip);
-                _dhcp_server_ip = ntohl(_dhcp_server_ip);
+                PARSE_OP(ip::address_v4::bytes_type,
+                         ip::address_v4::bytes_type,
+                         bytes);
+                _dhcp_server_ip = ip::address_v4(bytes);
                 break;
             case DHCP_OPTION_DOMAIN_NAME_SERVERS:
-                PARSE_OP(in_addr_t, u32, _dns_ip);
-                _dns_ip = ntohl(_dns_ip);
+                PARSE_OP(ip::address_v4::bytes_type,
+                         ip::address_v4::bytes_type,
+                         bytes);
+                _dns_ips.push_back(ip::address(ip::address_v4(bytes)));
                 break;
             case DHCP_OPTION_INTERFACE_MTU:
                 PARSE_OP(u16, u16, _mtu);
                 _mtu = ntohs(_mtu);
                 break;
             case DHCP_OPTION_BROADCAST_ADDRESS:
-                PARSE_OP(in_addr_t, u32, _broadcast_ip);
-                _broadcast_ip = ntohl(_broadcast_ip);
+                PARSE_OP(ip::address_v4::bytes_type,
+                         ip::address_v4::bytes_type,
+                         bytes);
+                _broadcast_ip = ip::address_v4(bytes);
                 break;
             case DHCP_OPTION_LEASE_TIME:
                 PARSE_OP(u32, u32, _lease_time_sec);
@@ -470,30 +484,26 @@ namespace dhcp {
             return;
         }
 
-        char our_ip[16];
-        char smask_ip[16];
-        char gw_ip[16];
-
-        struct in_addr yip, sip, gwip, dip;
-        yip.s_addr  = htonl(dm.get_your_ip());
-        sip.s_addr  = htonl(dm.get_subnet_mask());
-        gwip.s_addr = htonl(dm.get_router_ip());
-        dip.s_addr  = htonl(dm.get_dhcp_server_ip());
-
-        inet_ntoa_r(yip, our_ip);
-        inet_ntoa_r(sip, smask_ip);
-        inet_ntoa_r(gwip, gw_ip);
-
         dhcp_i("Configuring %s: ip %s subnet mask %s gateway %s",
-            _ifp->if_xname, our_ip, smask_ip, gw_ip);
+            _ifp->if_xname,
+             dm.get_your_ip().to_string().c_str(),
+             dm.get_subnet_mask().to_string().c_str(),
+             dm.get_router_ip().to_string().c_str());
 
-        osv_start_if(_ifp->if_xname, our_ip, smask_ip);
-        osv_route_add_network("0.0.0.0", "0.0.0.0", gw_ip);
+        osv_start_if(_ifp->if_xname,
+                     dm.get_your_ip().to_string().c_str(),
+                     dm.get_subnet_mask().to_string().c_str());
+        osv_route_add_network("0.0.0.0",
+                              "0.0.0.0",
+                              dm.get_router_ip().to_string().c_str());
 
         // Send a DHCP Request
         _state = DHCP_REQUEST;
         dhcp_mbuf dm_req(false);
-        dm_req.compose_request(_ifp, _xid, yip.s_addr, dip.s_addr);
+        dm_req.compose_request(_ifp,
+                               _xid,
+                               dm.get_your_ip(),
+                               dm.get_dhcp_server_ip());
         _sock->dhcp_send(dm_req);
     }
 

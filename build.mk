@@ -548,7 +548,8 @@ glibcbase = $(src)/external/glibc.bin
 gccbase = $(src)/external/gcc.bin
 miscbase = $(src)/external/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
-boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a
+boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a \
+              $(boost-lib-dir)/libboost_system-mt.a
 
 bsd/%.o: COMMON += -D_KERNEL -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 
