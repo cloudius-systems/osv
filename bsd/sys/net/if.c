@@ -113,7 +113,7 @@ struct mbuf *(*tbr_dequeue_ptr)(struct ifqueue *, int) = NULL;
  * declaration order.
  */
 static void	if_attachdomain1(struct ifnet *);
-static int	ifconf(u_long, caddr_t);
+static int	bsd_ifconf(u_long, caddr_t);
 static void	if_freemulti(struct ifmultiaddr *);
 static void	if_grow(void);
 static void	if_route(struct ifnet *, int flag, int fam);
@@ -1765,7 +1765,7 @@ ifunit(const char *name)
 static int
 ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 {
-	struct ifreq *ifr;
+	struct bsd_ifreq *ifr;
 	struct ifstat *ifs;
 	int error = 0;
 	int new_flags, temp_flags;
@@ -1776,7 +1776,7 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
 	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr_dl *sdl;
 
-	ifr = (struct ifreq *)data;
+	ifr = (struct bsd_ifreq *)data;
 	switch (cmd) {
 	case SIOCGIFINDEX:
 		ifr->ifr_index = ifp->if_index;
@@ -2177,7 +2177,7 @@ int
 ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 {
 	struct ifnet *ifp;
-	struct ifreq *ifr;
+	struct bsd_ifreq *ifr;
 	int error;
 	int oif_flags;
 
@@ -2185,7 +2185,7 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 	switch (cmd) {
 	case SIOCGIFCONF:
 	case OSIOCGIFCONF:
-		error = ifconf(cmd, data);
+		error = bsd_ifconf(cmd, data);
 		CURVNET_RESTORE();
 		return (error);
 
@@ -2193,13 +2193,13 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 	case SIOCGIFCONF32:
 		{
 			struct ifconf32 *ifc32;
-			struct ifconf ifc;
+			struct bsd_ifconf ifc;
 
 			ifc32 = (struct ifconf32 *)data;
 			ifc.ifc_len = ifc32->ifc_len;
 			ifc.ifc_buf = PTRIN(ifc32->ifc_buf);
 
-			error = ifconf(SIOCGIFCONF, (void *)&ifc);
+			error = bsd_ifconf(SIOCGIFCONF, (void *)&ifc);
 			CURVNET_RESTORE();
 			if (error == 0)
 				ifc32->ifc_len = ifc.ifc_len;
@@ -2207,7 +2207,7 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 		}
 #endif
 	}
-	ifr = (struct ifreq *)data;
+	ifr = (struct bsd_ifreq *)data;
 
 	switch (cmd) {
 	case SIOCIFCREATE:
@@ -2343,7 +2343,7 @@ ifioctl(struct socket *so, u_long cmd, caddr_t data, struct thread *td)
 static int
 if_setflag(struct ifnet *ifp, int flag, int pflag, int *refcount, int onswitch)
 {
-	struct ifreq ifr;
+	struct bsd_ifreq ifr;
 	int error;
 	int oldflags, oldcount;
 
@@ -2435,12 +2435,12 @@ ifpromisc(struct ifnet *ifp, int pswitch)
  */
 /*ARGSUSED*/
 static int
-ifconf(u_long cmd, caddr_t data)
+bsd_ifconf(u_long cmd, caddr_t data)
 {
-	struct ifconf *ifc = (struct ifconf *)data;
+	struct bsd_ifconf *ifc = (struct bsd_ifconf *)data;
 	struct ifnet *ifp;
 	struct bsd_ifaddr *ifa;
-	struct ifreq ifr;
+	struct bsd_ifreq ifr;
 	struct sbuf *sb;
 	int error, full = 0, valid_len, max_len;
 
@@ -2499,8 +2499,8 @@ again:
 				max_len += sizeof(ifr);
 			} else {
 				sbuf_bcat(sb, &ifr,
-				    offsetof(struct ifreq, ifr_addr));
-				max_len += offsetof(struct ifreq, ifr_addr);
+				    offsetof(struct bsd_ifreq, ifr_addr));
+				max_len += offsetof(struct bsd_ifreq, ifr_addr);
 				sbuf_bcat(sb, sa, sa->sa_len);
 				max_len += sa->sa_len;
 			}
@@ -2966,7 +2966,7 @@ if_setlladdr(struct ifnet *ifp, const u_char *lladdr, int len)
 {
 	struct bsd_sockaddr_dl *sdl;
 	struct bsd_ifaddr *ifa;
-	struct ifreq ifr;
+	struct bsd_ifreq ifr;
 
 	IF_ADDR_RLOCK(ifp);
 	ifa = ifp->if_addr;

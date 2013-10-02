@@ -57,7 +57,7 @@ extern int soo_ioctl(struct file *fp, u_long cmd, void *data);
  */
 
 static int
-linux_ifconf(struct ifconf *ifc_p)
+linux_ifconf(struct bsd_ifconf *ifc_p)
 {
 	struct l_ifreq ifr;
 	struct ifnet *ifp;
@@ -201,12 +201,12 @@ linux_gifhwaddr(struct ifnet *ifp, struct l_ifreq *ifr)
 
 
 /*
-* Fix the interface address field in ifreq. The bsd stack expects a
+* Fix the interface address field in bsd_ifreq. The bsd stack expects a
 * length/family byte members, while linux and everyone else use a short family
 * field. 
 */
 static inline void
-bsd_to_linux_ifreq(struct ifreq *ifr_p)
+bsd_to_linux_ifreq(struct bsd_ifreq *ifr_p)
 {
     u_short family = ifr_p->ifr_addr.sa_family ;
     *(u_short *)&ifr_p->ifr_addr = family;
@@ -214,7 +214,7 @@ bsd_to_linux_ifreq(struct ifreq *ifr_p)
 
 // Convert Linux bsd_sockaddr to bsd
 static inline void
-linux_to_bsd_ifreq(struct ifreq *ifr_p)
+linux_to_bsd_ifreq(struct bsd_ifreq *ifr_p)
 {
     u_short family = *(u_short *)&(ifr_p->ifr_addr) ;
     
@@ -244,7 +244,7 @@ linux_ioctl_socket(struct file *fp, u_long cmd, void *data)
     case SIOCSIFBRDADDR: 
 		if ((ifp = ifunit_ref((char *)data)) == NULL)
 			return (EINVAL);
-linux_to_bsd_ifreq((struct ifreq *)data) ;
+linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
         error = soo_ioctl(fp, cmd, data);
         break ;
 
@@ -263,11 +263,11 @@ linux_to_bsd_ifreq((struct ifreq *)data) ;
 		if ((ifp = ifunit_ref((char *)data)) == NULL)
 			return (EINVAL);
         error = soo_ioctl(fp, cmd, data);
-		bsd_to_linux_ifreq((struct ifreq *)data);
+		bsd_to_linux_ifreq((struct bsd_ifreq *)data);
 		break;
 
 	case SIOCGIFCONF:
-		error = linux_ifconf((struct ifconf *)data);
+		error = linux_ifconf((struct bsd_ifconf *)data);
 		break;
 
 	case SIOCGIFFLAGS:

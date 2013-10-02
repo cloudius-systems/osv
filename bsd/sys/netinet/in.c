@@ -207,7 +207,7 @@ int
 in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
     struct thread *td)
 {
-	register struct ifreq *ifr = (struct ifreq *)data;
+	register struct bsd_ifreq *ifr = (struct bsd_ifreq *)data;
 	register struct in_ifaddr *ia, *iap;
 	register struct bsd_ifaddr *ifa;
 	struct in_addr allhosts_addr;

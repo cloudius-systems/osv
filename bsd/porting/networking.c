@@ -23,7 +23,7 @@
 int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
 {
     int error, success;
-    struct ifreq oldaddr;
+    struct bsd_ifreq oldaddr;
     struct in_aliasreq ifra;
     struct bsd_sockaddr_in* addr      = &ifra.ifra_addr;
     struct bsd_sockaddr_in* mask      = &ifra.ifra_mask;
@@ -81,7 +81,7 @@ out:
 int osv_ifup(const char* if_name)
 {
     int error;
-    struct ifreq ifr = {0};
+    struct bsd_ifreq ifr = {0};
 
     if (if_name == NULL) {
         return (EINVAL);

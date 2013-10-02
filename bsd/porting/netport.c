@@ -130,7 +130,7 @@ ifmedia_set(struct ifmedia *ifm, int target)
 }
 
 int
-ifmedia_ioctl(struct ifnet *ifp, struct ifreq *ifr, struct ifmedia *ifm, u_long cmd)
+ifmedia_ioctl(struct ifnet *ifp, struct bsd_ifreq *ifr, struct ifmedia *ifm, u_long cmd)
 {
     return -ENOSYS;
 }

@@ -105,7 +105,7 @@ public:
     string  get_flags() const
     {
         uint32_t flags ;
-        ifreq ifr;
+        bsd_ifreq ifr;
 
         if (do_get_ifr(SIOCGIFFLAGS, &ifr)  == 0) {
             flags = ((uint32_t)ifr.ifr_flagshigh << 16) | ifr.ifr_flags ;
@@ -118,7 +118,7 @@ public:
     //! Get mtu
     string  get_mtu() const
     {
-        ifreq ifr ;
+        bsd_ifreq ifr ;
 
         if (do_get_ifr(SIOCGIFMTU, &ifr)  == 0)
             return std::to_string(ifr.ifr_mtu);
@@ -130,7 +130,7 @@ private:
     //! Get interface address/mask/broadcast
     string  do_get_addr(u_long cmd) const
     {
-        ifreq ifr;
+        bsd_ifreq ifr;
         char buf[64] ;
 
         if (do_get_ifr(cmd, &ifr) == 0)
@@ -141,7 +141,7 @@ private:
     }
 
     //! A wrapper around ifr requests.
-    int do_get_ifr(u_long cmd, ifreq *ifrp) const
+    int do_get_ifr(u_long cmd, bsd_ifreq *ifrp) const
     {
         bzero(ifrp, sizeof(*ifrp)) ;
         strncpy(ifrp->ifr_name, name.c_str(), IFNAMSIZ);

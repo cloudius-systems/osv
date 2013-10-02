@@ -308,7 +308,7 @@ int
 loioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
 	struct bsd_ifaddr *ifa;
-	struct ifreq *ifr = (struct ifreq *)data;
+	struct bsd_ifreq *ifr = (struct bsd_ifreq *)data;
 	int error = 0, mask;
 
 	switch (cmd) {

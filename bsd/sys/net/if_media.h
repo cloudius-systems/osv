@@ -101,7 +101,7 @@ void	ifmedia_list_add(struct ifmedia *mp, struct ifmedia_entry *lp,
 void	ifmedia_set(struct ifmedia *ifm, int mword);
 
 /* Common ioctl function for getting/setting media, called by driver. */
-int	ifmedia_ioctl(struct ifnet *ifp, struct ifreq *ifr,
+int	ifmedia_ioctl(struct ifnet *ifp, struct bsd_ifreq *ifr,
 	    struct ifmedia *ifm, u_long cmd);
 
 /* Compute baudrate for a given media. */

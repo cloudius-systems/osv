@@ -1751,7 +1751,7 @@ static int
 xn_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
 	struct netfront_info *sc = ifp->if_softc;
-	struct ifreq *ifr = (struct ifreq *) data;
+	struct bsd_ifreq *ifr = (struct bsd_ifreq *) data;
 #ifdef INET
 	struct bsd_ifaddr *ifa = (struct bsd_ifaddr *)data;
 #endif

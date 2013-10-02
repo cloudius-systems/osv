@@ -49,78 +49,78 @@
 #define	SIOCGETVIFCNT	_IOWR('r', 15, struct sioc_vif_req)/* get vif pkt cnt */
 #define	SIOCGETSGCNT	_IOWR('r', 16, struct sioc_sg_req) /* get s,g pkt cnt */
 
-#define	SIOCSIFADDR	 _IOW('i', 12, struct ifreq)	/* set ifnet address */
-#define	OSIOCGIFADDR	_IOWR('i', 13, struct ifreq)	/* get ifnet address */
-#define	SIOCGIFADDR	_IOWR('i', 33, struct ifreq)	/* get ifnet address */
-#define	SIOCSIFDSTADDR	 _IOW('i', 14, struct ifreq)	/* set p-p address */
-#define	OSIOCGIFDSTADDR	_IOWR('i', 15, struct ifreq)	/* get p-p address */
-#define	SIOCGIFDSTADDR	_IOWR('i', 34, struct ifreq)	/* get p-p address */
-#define	SIOCSIFFLAGS	 _IOW('i', 16, struct ifreq)	/* set ifnet flags */
-#define	SIOCGIFFLAGS	_IOWR('i', 17, struct ifreq)	/* get ifnet flags */
-#define	OSIOCGIFBRDADDR	_IOWR('i', 18, struct ifreq)	/* get broadcast addr */
-#define	SIOCGIFBRDADDR	_IOWR('i', 35, struct ifreq)	/* get broadcast addr */
-#define	SIOCSIFBRDADDR	 _IOW('i', 19, struct ifreq)	/* set broadcast addr */
-#define	OSIOCGIFCONF	_IOWR('i', 20, struct ifconf)	/* get ifnet list */
-#define	SIOCGIFCONF	_IOWR('i', 36, struct ifconf)	/* get ifnet list */
-#define	OSIOCGIFNETMASK	_IOWR('i', 21, struct ifreq)	/* get net addr mask */
-#define	SIOCGIFNETMASK	_IOWR('i', 37, struct ifreq)	/* get net addr mask */
-#define	SIOCSIFNETMASK	 _IOW('i', 22, struct ifreq)	/* set net addr mask */
-#define	SIOCGIFMETRIC	_IOWR('i', 23, struct ifreq)	/* get IF metric */
-#define	SIOCSIFMETRIC	 _IOW('i', 24, struct ifreq)	/* set IF metric */
-#define	SIOCDIFADDR	 _IOW('i', 25, struct ifreq)	/* delete IF addr */
+#define	SIOCSIFADDR	 _IOW('i', 12, struct bsd_ifreq)	/* set ifnet address */
+#define	OSIOCGIFADDR	_IOWR('i', 13, struct bsd_ifreq)	/* get ifnet address */
+#define	SIOCGIFADDR	_IOWR('i', 33, struct bsd_ifreq)	/* get ifnet address */
+#define	SIOCSIFDSTADDR	 _IOW('i', 14, struct bsd_ifreq)	/* set p-p address */
+#define	OSIOCGIFDSTADDR	_IOWR('i', 15, struct bsd_ifreq)	/* get p-p address */
+#define	SIOCGIFDSTADDR	_IOWR('i', 34, struct bsd_ifreq)	/* get p-p address */
+#define	SIOCSIFFLAGS	 _IOW('i', 16, struct bsd_ifreq)	/* set ifnet flags */
+#define	SIOCGIFFLAGS	_IOWR('i', 17, struct bsd_ifreq)	/* get ifnet flags */
+#define	OSIOCGIFBRDADDR	_IOWR('i', 18, struct bsd_ifreq)	/* get broadcast addr */
+#define	SIOCGIFBRDADDR	_IOWR('i', 35, struct bsd_ifreq)	/* get broadcast addr */
+#define	SIOCSIFBRDADDR	 _IOW('i', 19, struct bsd_ifreq)	/* set broadcast addr */
+#define	OSIOCGIFCONF	_IOWR('i', 20, struct bsd_ifconf)	/* get ifnet list */
+#define	SIOCGIFCONF	_IOWR('i', 36, struct bsd_ifconf)	/* get ifnet list */
+#define	OSIOCGIFNETMASK	_IOWR('i', 21, struct bsd_ifreq)	/* get net addr mask */
+#define	SIOCGIFNETMASK	_IOWR('i', 37, struct bsd_ifreq)	/* get net addr mask */
+#define	SIOCSIFNETMASK	 _IOW('i', 22, struct bsd_ifreq)	/* set net addr mask */
+#define	SIOCGIFMETRIC	_IOWR('i', 23, struct bsd_ifreq)	/* get IF metric */
+#define	SIOCSIFMETRIC	 _IOW('i', 24, struct bsd_ifreq)	/* set IF metric */
+#define	SIOCDIFADDR	 _IOW('i', 25, struct bsd_ifreq)	/* delete IF addr */
 #define	OSIOCAIFADDR	 _IOW('i', 26, struct oifaliasreq)/* add/chg IF alias */
 #define	SIOCALIFADDR	 _IOW('i', 27, struct if_laddrreq) /* add IF addr */
 #define	SIOCGLIFADDR	_IOWR('i', 28, struct if_laddrreq) /* get IF addr */
 #define	SIOCDLIFADDR	 _IOW('i', 29, struct if_laddrreq) /* delete IF addr */
-#define	SIOCSIFCAP	 _IOW('i', 30, struct ifreq)	/* set IF features */
-#define	SIOCGIFCAP	_IOWR('i', 31, struct ifreq)	/* get IF features */
-#define	SIOCGIFINDEX	_IOWR('i', 32, struct ifreq)	/* get IF index */
-#define	SIOCGIFMAC	_IOWR('i', 38, struct ifreq)	/* get IF MAC label */
-#define	SIOCSIFMAC	 _IOW('i', 39, struct ifreq)	/* set IF MAC label */
-#define	SIOCSIFNAME	 _IOW('i', 40, struct ifreq)	/* set IF name */
-#define	SIOCSIFDESCR	 _IOW('i', 41, struct ifreq)	/* set ifnet descr */ 
-#define	SIOCGIFDESCR	_IOWR('i', 42, struct ifreq)	/* get ifnet descr */ 
+#define	SIOCSIFCAP	 _IOW('i', 30, struct bsd_ifreq)	/* set IF features */
+#define	SIOCGIFCAP	_IOWR('i', 31, struct bsd_ifreq)	/* get IF features */
+#define	SIOCGIFINDEX	_IOWR('i', 32, struct bsd_ifreq)	/* get IF index */
+#define	SIOCGIFMAC	_IOWR('i', 38, struct bsd_ifreq)	/* get IF MAC label */
+#define	SIOCSIFMAC	 _IOW('i', 39, struct bsd_ifreq)	/* set IF MAC label */
+#define	SIOCSIFNAME	 _IOW('i', 40, struct bsd_ifreq)	/* set IF name */
+#define	SIOCSIFDESCR	 _IOW('i', 41, struct bsd_ifreq)	/* set ifnet descr */ 
+#define	SIOCGIFDESCR	_IOWR('i', 42, struct bsd_ifreq)	/* get ifnet descr */ 
 #define	SIOCAIFADDR	 _IOW('i', 43, struct ifaliasreq)/* add/chg IF alias */
 
-#define	SIOCADDMULTI	 _IOW('i', 49, struct ifreq)	/* add m'cast addr */
-#define	SIOCDELMULTI	 _IOW('i', 50, struct ifreq)	/* del m'cast addr */
-#define	SIOCGIFMTU	_IOWR('i', 51, struct ifreq)	/* get IF mtu */
-#define	SIOCSIFMTU	 _IOW('i', 52, struct ifreq)	/* set IF mtu */
-#define	SIOCGIFPHYS	_IOWR('i', 53, struct ifreq)	/* get IF wire */
-#define	SIOCSIFPHYS	 _IOW('i', 54, struct ifreq)	/* set IF wire */
-#define	SIOCSIFMEDIA	_IOWR('i', 55, struct ifreq)	/* set net media */
+#define	SIOCADDMULTI	 _IOW('i', 49, struct bsd_ifreq)	/* add m'cast addr */
+#define	SIOCDELMULTI	 _IOW('i', 50, struct bsd_ifreq)	/* del m'cast addr */
+#define	SIOCGIFMTU	_IOWR('i', 51, struct bsd_ifreq)	/* get IF mtu */
+#define	SIOCSIFMTU	 _IOW('i', 52, struct bsd_ifreq)	/* set IF mtu */
+#define	SIOCGIFPHYS	_IOWR('i', 53, struct bsd_ifreq)	/* get IF wire */
+#define	SIOCSIFPHYS	 _IOW('i', 54, struct bsd_ifreq)	/* set IF wire */
+#define	SIOCSIFMEDIA	_IOWR('i', 55, struct bsd_ifreq)	/* set net media */
 #define	SIOCGIFMEDIA	_IOWR('i', 56, struct ifmediareq) /* get net media */
 
-#define	SIOCSIFGENERIC	 _IOW('i', 57, struct ifreq)	/* generic IF set op */
-#define	SIOCGIFGENERIC	_IOWR('i', 58, struct ifreq)	/* generic IF get op */
+#define	SIOCSIFGENERIC	 _IOW('i', 57, struct bsd_ifreq)	/* generic IF set op */
+#define	SIOCGIFGENERIC	_IOWR('i', 58, struct bsd_ifreq)	/* generic IF get op */
 
 #define	SIOCGIFSTATUS	_IOWR('i', 59, struct ifstat)	/* get IF status */
-#define	SIOCSIFLLADDR	 _IOW('i', 60, struct ifreq)	/* set linklevel addr */
+#define	SIOCSIFLLADDR	 _IOW('i', 60, struct bsd_ifreq)	/* set linklevel addr */
 
 #define	SIOCSIFPHYADDR	 _IOW('i', 70, struct ifaliasreq) /* set gif addres */
-#define	SIOCGIFPSRCADDR	_IOWR('i', 71, struct ifreq)	/* get gif psrc addr */
-#define	SIOCGIFPDSTADDR	_IOWR('i', 72, struct ifreq)	/* get gif pdst addr */
-#define	SIOCDIFPHYADDR	 _IOW('i', 73, struct ifreq)	/* delete gif addrs */
+#define	SIOCGIFPSRCADDR	_IOWR('i', 71, struct bsd_ifreq)	/* get gif psrc addr */
+#define	SIOCGIFPDSTADDR	_IOWR('i', 72, struct bsd_ifreq)	/* get gif pdst addr */
+#define	SIOCDIFPHYADDR	 _IOW('i', 73, struct bsd_ifreq)	/* delete gif addrs */
 #define	SIOCSLIFPHYADDR	 _IOW('i', 74, struct if_laddrreq) /* set gif addrs */
 #define	SIOCGLIFPHYADDR	_IOWR('i', 75, struct if_laddrreq) /* get gif addrs */
 
-#define	SIOCGPRIVATE_0	_IOWR('i', 80, struct ifreq)	/* device private 0 */
-#define	SIOCGPRIVATE_1	_IOWR('i', 81, struct ifreq)	/* device private 1 */
+#define	SIOCGPRIVATE_0	_IOWR('i', 80, struct bsd_ifreq)	/* device private 0 */
+#define	SIOCGPRIVATE_1	_IOWR('i', 81, struct bsd_ifreq)	/* device private 1 */
 
-#define	SIOCSIFVNET	_IOWR('i', 90, struct ifreq)	/* move IF jail/vnet */
-#define	SIOCSIFRVNET	_IOWR('i', 91, struct ifreq)	/* reclaim vnet IF */
+#define	SIOCSIFVNET	_IOWR('i', 90, struct bsd_ifreq)	/* move IF jail/vnet */
+#define	SIOCSIFRVNET	_IOWR('i', 91, struct bsd_ifreq)	/* reclaim vnet IF */
 
-#define	SIOCGIFFIB	_IOWR('i', 92, struct ifreq)	/* get IF fib */
-#define	SIOCSIFFIB	 _IOW('i', 93, struct ifreq)	/* set IF fib */
+#define	SIOCGIFFIB	_IOWR('i', 92, struct bsd_ifreq)	/* get IF fib */
+#define	SIOCSIFFIB	 _IOW('i', 93, struct bsd_ifreq)	/* set IF fib */
 
 #define	SIOCSDRVSPEC	_IOW('i', 123, struct ifdrv)	/* set driver-specific
 								  parameters */
 #define	SIOCGDRVSPEC	_IOWR('i', 123, struct ifdrv)	/* get driver-specific
 								  parameters */
 
-#define	SIOCIFCREATE	_IOWR('i', 122, struct ifreq)	/* create clone if */
-#define	SIOCIFCREATE2	_IOWR('i', 124, struct ifreq)	/* create clone if */
-#define	SIOCIFDESTROY	 _IOW('i', 121, struct ifreq)	/* destroy clone if */
+#define	SIOCIFCREATE	_IOWR('i', 122, struct bsd_ifreq)	/* create clone if */
+#define	SIOCIFCREATE2	_IOWR('i', 124, struct bsd_ifreq)	/* create clone if */
+#define	SIOCIFDESTROY	 _IOW('i', 121, struct bsd_ifreq)	/* destroy clone if */
 #define	SIOCIFGCLONERS	_IOWR('i', 120, struct if_clonereq) /* get cloners */
 
 #define	SIOCAIFGROUP	 _IOW('i', 135, struct ifgroupreq) /* add an ifgroup */

@@ -366,7 +366,7 @@ struct ifreq_buffer {
  * definitions which begin with ifr_name.  The
  * remainder may be interface specific.
  */
-struct	ifreq {
+struct	bsd_ifreq {
 	char	ifr_name[IFNAMSIZ];		/* if name, e.g. "en0" */
 	union {
 		struct	bsd_sockaddr ifru_addr;
@@ -404,8 +404,8 @@ struct	ifreq {
 
 #define	_SIZEOF_ADDR_IFREQ(ifr) \
 	((ifr).ifr_addr.sa_len > sizeof(struct bsd_sockaddr) ? \
-	 (sizeof(struct ifreq) - sizeof(struct bsd_sockaddr) + \
-	  (ifr).ifr_addr.sa_len) : sizeof(struct ifreq))
+	 (sizeof(struct bsd_ifreq) - sizeof(struct bsd_sockaddr) + \
+	  (ifr).ifr_addr.sa_len) : sizeof(struct bsd_ifreq))
 
 struct ifaliasreq {
 	char	ifra_name[IFNAMSIZ];		/* if name, e.g. "en0" */
@@ -450,11 +450,11 @@ struct ifstat {
  * for machine (useful for programs which
  * must know all networks accessible).
  */
-struct	ifconf {
+struct	bsd_ifconf {
 	int	ifc_len;		/* size of associated buffer */
 	union {
 		caddr_t	ifcu_buf;
-		struct	ifreq *ifcu_req;
+		struct	bsd_ifreq *ifcu_req;
 	} ifc_ifcu;
 #define	ifc_buf	ifc_ifcu.ifcu_buf	/* buffer address */
 #define	ifc_req	ifc_ifcu.ifcu_req	/* array of structures returned */

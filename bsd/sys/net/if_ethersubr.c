@@ -1021,7 +1021,7 @@ int
 ether_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
 	struct bsd_ifaddr *ifa = (struct bsd_ifaddr *) data;
-	struct ifreq *ifr = (struct ifreq *) data;
+	struct bsd_ifreq *ifr = (struct bsd_ifreq *) data;
 	int error = 0;
 
 	switch (command) {
