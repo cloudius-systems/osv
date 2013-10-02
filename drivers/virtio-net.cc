@@ -386,8 +386,6 @@ namespace virtio {
         }
     }
 
-    static const int page_size = 4096;
-
     void virtio_net::fill_rx_ring()
     {
         trace_virtio_net_fill_rx_ring(_ifn->if_index);
