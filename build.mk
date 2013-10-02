@@ -371,7 +371,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/gzip.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/lzjb.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/refcount.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/rrwlock.o
+zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/rrwlock.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/sa.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/sha256.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa.o
@@ -422,7 +422,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_compress.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_inject.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zle.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
+zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 
 zfs-tests += tests/tst-zfs-simple.so
 zfs-tests += tests/tst-zfs-disk.so
