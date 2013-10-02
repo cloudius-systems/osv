@@ -199,6 +199,7 @@ arch/x64/boot32.o: loader.elf
 
 bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
 
+include $(src)/bsd/cddl/contrib/opensolaris/lib/libuutil/common/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk
 
