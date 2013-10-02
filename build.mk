@@ -202,6 +202,7 @@ bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
 include $(src)/bsd/cddl/contrib/opensolaris/lib/libuutil/common/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk
+include $(src)/bsd/cddl/contrib/opensolaris/cmd/zfs/build.mk
 
 bsd  = bsd/net.o  
 bsd += bsd/machine/in_cksum.o
