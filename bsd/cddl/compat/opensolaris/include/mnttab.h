@@ -16,7 +16,6 @@
 #define	MS_NOMNTTAB	0x0
 #define	MS_RDONLY	0x1
 
-#define	umount2(p, f)	unmount(p, f)
 
 struct mnttab {
 	char	*mnt_special;
