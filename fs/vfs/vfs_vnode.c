@@ -300,6 +300,28 @@ vcount(struct vnode *vp)
 	return count;
 }
 
+static void vevict(struct vnode *vp)
+{
+	// Temporarily elevate the reference count while dropping the names,
+	// so dele() won't drop the vnode on us
+	++vp->v_refcnt;
+	while (1) {
+		vn_lock(vp);
+		if (LIST_EMPTY(&vp->v_names)) {
+			vn_unlock(vp);
+			break;
+		}
+		struct dentry *dp = LIST_FIRST(&vp->v_names);
+		// drele() here will cause a vn_lock(), so just take a reference
+		// here and drele() after the lock is dropped.
+		dref(dp);
+		vn_unlock(vp);
+		drele(dp);
+		drele(dp);
+	}
+	vrele(vp);
+}
+
 /*
  * Remove all vnode in the vnode table for unmount.
  */
@@ -307,13 +329,13 @@ void
 vflush(struct mount *mp)
 {
 	int i;
-	struct vnode *vp;
+	struct vnode *vp, *tmp;
 
 	VNODE_LOCK();
 	for (i = 0; i < VNODE_BUCKETS; i++) {
-	        LIST_FOREACH(vp, &vnode_table[i], v_link) {
+	        LIST_FOREACH_SAFE(vp, &vnode_table[i], v_link, tmp) {
 			if (vp->v_mount == mp) {
-				/* XXX: */
+				vevict(vp);
 			}
 		}
 	}
