@@ -15,8 +15,7 @@
 
 #define	MS_OVERLAY	0x0
 #define	MS_NOMNTTAB	0x0
-#define	MS_RDONLY	0x1
-
+#define	MS_RDONLY	1
 
 struct mnttab {
 	char	*mnt_special;
