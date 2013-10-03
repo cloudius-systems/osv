@@ -65,6 +65,10 @@ To run OSv
 
     ./scripts/run.py
 
+By default, this runs OSv under KVM, with 4 VCPUs and 1GB of memory,
+and runs the default management application (containing a shell, Web
+server, and SSH server).
+
 External Networking
 ===================
 
@@ -85,13 +89,14 @@ Test networking:
 
     $ test TCPExternalCommunication
 
-Running java or C applications that allready reside within the image:
+Running Java or C applications that already reside within the image:
 
-    #Netserver
-    $ sudo scripts/run.py -nv -m4G -e "java.so -jar /java/cli.jar run /usr/netserver -D -4 -f"
+    # The default Java-based shell and web server
+    sudo scripts/run.py -nv -m4G -e "java.so -jar /usr/mgmt/web-1.0.jar app prod"
 
-    #The cli and the internal web server
-    sudo scripts/run.py -nv -m4G -e "java.so -cp /java/cli.jar -jar /java/web.jar app"
+    # One of the unit tests (compiled C++ code)
+    $ sudo scripts/run.py -nv -m4G -e "/tests/tst-pipe.so"
+
 
 
 Debugging
