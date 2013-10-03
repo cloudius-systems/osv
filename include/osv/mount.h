@@ -135,4 +135,24 @@ void	 vfs_unbusy(struct mount *mp);
 
 __END_DECLS
 
+#ifdef __cplusplus
+
+#include <vector>
+#include <string>
+
+namespace osv {
+
+struct mount_desc {
+    std::string special;
+    std::string path;
+    std::string type;
+    std::string options;
+};
+
+std::vector<mount_desc> current_mounts();
+
+}
+
+#endif
+
 #endif	/* !_SYS_MOUNT_H_ */

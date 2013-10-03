@@ -48,6 +48,8 @@
 #include <osv/debug.h>
 #include "vfs.h"
 
+using namespace std;
+
 /*
  * List for VFS mount points.
  */
@@ -75,6 +77,17 @@ fs_getfs(char *name)
     if (!fs->vs_name)
         return NULL;
     return fs;
+}
+
+const char*
+fs_getfsname(vfsops* ops)
+{
+    for (auto fs = vfssw; fs->vs_name; fs++) {
+        if (fs->vs_op == ops) {
+            return fs->vs_name;
+        }
+    }
+    abort();
 }
 
 int
@@ -355,6 +368,34 @@ int
 vfs_einval(void)
 {
     return EINVAL;
+}
+
+namespace osv {
+
+mount_desc to_mount_desc(mount* m)
+{
+    mount_desc ret;
+    ret.special = m->m_special;
+    ret.path = m->m_path;
+    ret.type = fs_getfsname(m->m_op);
+    // FIXME: record options
+    ret.options = "";
+    return ret;
+}
+
+vector<mount_desc>
+current_mounts()
+{
+    WITH_LOCK(mount_lock) {
+        vector<mount_desc> ret;
+        struct mount *mp;
+        LIST_FOREACH(mp, &mount_list, m_link) {
+            ret.push_back(to_mount_desc(mp));
+        }
+        return ret;
+    }
+}
+
 }
 
 #ifdef DEBUG_VFS
