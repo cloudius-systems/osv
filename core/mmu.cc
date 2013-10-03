@@ -836,7 +836,7 @@ void vma::split(uintptr_t edge)
 
 error vma::sync(uintptr_t start, uintptr_t end)
 {
-    return make_error(ENOMEM);
+    return no_error();
 }
 
 file_vma::file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared)
