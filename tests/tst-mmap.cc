@@ -5,12 +5,16 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#ifdef __OSV__
 #include "sched.hh"
-#include "debug.hh"
-#include "align.hh"
+#endif
 
 #include <sys/mman.h>
 #include <signal.h>
+
+#include <iostream>
+#include <cassert>
+#include <cstdlib>
 
 static bool segv_received = false;
 static void segv_handler(int sig, siginfo_t *si, void *unused)
@@ -68,13 +72,13 @@ static bool try_read(void *addr)
 
 int main(int argc, char **argv)
 {
-    debug("Running mmap tests\n");
+    std::cerr << "Running mmap tests\n";
     // Test that munmap actually recycles the physical memory allocated by mmap
     for (int i = 0; i < 1000; i++) {
         constexpr size_t size = 1<<20;
         void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
         if(!buf)
-            debug("mmap failed!\n");
+            std::cerr << "mmap failed!\n";
         munmap(buf, size);
     }
     // Do the same for allocations large enough to use huge-pages
@@ -82,7 +86,7 @@ int main(int argc, char **argv)
         constexpr size_t size = 30 * 1<<20;
         void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
         if(!buf)
-            debug("mmap failed!\n");
+            std::cerr << "mmap failed!\n";
         munmap(buf, size);
     }
     // Test that we can override mmaps, without munmap, without leaking
@@ -143,6 +147,7 @@ int main(int argc, char **argv)
     assert(!try_write(buf));
     munmap(buf, 4096);
 
+#ifdef __OSV__
     // Try the same, but in two separate processors: Processor 0 successfully
     // writes to an address, processor 1 protects it, and then processor 0
     // tries to write again (and should fail). For this test to succeed, we
@@ -177,6 +182,7 @@ int main(int argc, char **argv)
     delete t1; // also join()s the thread
     delete t2;
     munmap(buf, 4096);
+#endif
 
     // Test that mprotect() only hides memory, doesn't free it
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
@@ -243,6 +249,6 @@ int main(int argc, char **argv)
     // TODO: verify that various calls to mmap() and munmap() (length=0, unaligned
     // address, etc.) fail with EINVAL.
     // TODO: test that mprotect() over malloc()ed memory (not just mmap()) works.
-    debug("mmap tests succeeded\n");
+    std::cerr << "mmap tests succeeded\n";
     return 0;
 }
