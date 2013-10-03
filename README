@@ -69,6 +69,8 @@ By default, this runs OSv under KVM, with 4 VCPUs and 1GB of memory,
 and runs the default management application (containing a shell, Web
 server, and SSH server).
 
+If running under KVM you can terminate by hitting Ctrl+A X.
+
 External Networking
 ===================
 

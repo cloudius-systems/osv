@@ -66,6 +66,8 @@ def start_osv_qemu():
         args += ["-chardev", "stdio,mux=on,id=stdio"]
         args += ["-mon", "chardev=stdio,mode=readline,default"]
         args += ["-device", "isa-serial,chardev=stdio"]
+        if not cmdargs.with_graphic:
+            args += ["-nographic"]
 
     try:
         # Save the current settings of the stty
@@ -187,6 +189,9 @@ if (__name__ == "__main__"):
                         help="run in background, do not connect the console")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
                         help="don't restart qemu automatically (allow debugger to connect on early errors)")
+    parser.add_argument("-g", "--with-graphic", action="store_true",
+                        help="qemu only. don't pass -nographic flag. pressing ctrl+c from console will kill the emulator")
+
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
     
