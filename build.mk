@@ -581,7 +581,7 @@ $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/li
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
 		tests/testrunner.so java/java.so java/runjava.jar \
-		zpool.so
+		zpool.so zfs.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
