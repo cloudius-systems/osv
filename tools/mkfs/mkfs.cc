@@ -36,6 +36,11 @@ void mkfs()
     zfs_driver->flags = 0;
     zfs_driver->name = "zfs";
     device_create(zfs_driver, "zfs", D_CHR);
+    mkdir("/etc", 0755);
+    int fd = creat("/etc/mnttab", 0644);
+    assert(fd != -1);
+    close(fd);
+
     int ret;
     auto ok = run("/zpool.so",
             {"zpool", "create", "-f", "-R", "/zfs", "osv", "/dev/vblk0.1"}, &ret);
