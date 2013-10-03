@@ -138,6 +138,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
     mp->m_flags = flags;
     mp->m_dev = device;
     strlcpy(mp->m_path, dir, sizeof(mp->m_path));
+    strlcpy(mp->m_special, dev, sizeof(mp->m_special));
 
     /*
      * Get vnode to be covered in the upper file system.

@@ -47,7 +47,8 @@ struct mount {
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
-	char		m_path[PATH_MAX]; /* mounted path */
+	char            m_path[PATH_MAX]; /* mounted path */
+	char            m_special[PATH_MAX]; /* resource */
 	struct device	*m_dev;		/* mounted device */
 	struct dentry	*m_root;	/* root vnode */
 	struct dentry	*m_covered;	/* vnode covered on parent fs */
