@@ -3,6 +3,7 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
+#include "processor-flags.h"
 
 .text
 .code32
@@ -52,6 +53,18 @@ interrupt_stack_top = .
 
 .text
 
+#define BOOT_CR0 ( X86_CR0_PE \
+                 | X86_CR0_WP \
+                 | X86_CR0_PG )
+
+#define BOOT_CR4 ( X86_CR4_DE         \
+                 | X86_CR4_PSE        \
+                 | X86_CR4_PAE        \
+                 | X86_CR4_PGE        \
+                 | X86_CR4_PCE        \
+                 | X86_CR4_OSFXSR     \
+                 | X86_CR4_OSXMMEXCPT )
+
 .globl start32
 start32:
     mov %eax, %ebp
@@ -65,7 +78,7 @@ start32:
     ljmp $0x18, $1f
 1:
     and $~7, %esp
-    mov $0x000007b8, %eax
+    mov $BOOT_CR4, %eax
     mov %eax, %cr4
     lea ident_pt_l4, %eax
     mov %eax, %cr3
@@ -73,7 +86,7 @@ start32:
     mov $0x00000900, %eax
     xor %edx, %edx
     wrmsr
-    mov $0x80010001, %eax
+    mov $BOOT_CR0, %eax
     mov %eax, %cr0
     ljmpl $8, $start64
 .code64
