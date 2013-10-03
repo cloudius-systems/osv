@@ -3,6 +3,7 @@
 #ifndef	_OPENSOLARIS_MNTTAB_H_
 #define	_OPENSOLARIS_MNTTAB_H_
 
+#include <sys/cdefs.h>
 #include <sys/param.h>
 #include <sys/mount.h>
 
@@ -25,10 +26,14 @@ struct mnttab {
 };
 #define	extmnttab	mnttab
 
+__BEGIN_DECLS
+
 int getmntany(FILE *fd, struct mnttab *mgetp, struct mnttab *mrefp);
 int getmntent(FILE *fp, struct mnttab *mp);
 char *hasmntopt(struct mnttab *mnt, char *opt);
 
 void statfs2mnttab(struct statfs *sfs, struct mnttab *mp);
+
+__END_DECLS
 
 #endif	/* !_OPENSOLARIS_MNTTAB_H_ */
