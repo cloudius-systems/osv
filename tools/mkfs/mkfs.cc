@@ -45,5 +45,7 @@ void mkfs()
     auto ok = run("/zpool.so",
             {"zpool", "create", "-f", "-R", "/zfs", "osv", "/dev/vblk0.1"}, &ret);
     assert(ok && ret == 0);
+    ok = run("/zfs.so", {"zfs", "create", "osv/usr"}, &ret);
+    assert(ok && ret == 0);
 }
 
