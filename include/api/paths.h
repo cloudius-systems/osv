@@ -18,7 +18,7 @@
 #define	_PATH_MAILDIR	"/var/mail"
 #define	_PATH_MAN	"/usr/share/man"
 #define	_PATH_MEM	"/dev/mem"
-#define	_PATH_MNTTAB	"/etc/fstab"
+#define	_PATH_MNTTAB	"/etc/mnttab"
 #define	_PATH_MOUNTED	"/etc/mtab"
 #define	_PATH_NOLOGIN	"/etc/nologin"
 #define	_PATH_PRESERVE	"/var/lib"
