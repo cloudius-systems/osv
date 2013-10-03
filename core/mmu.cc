@@ -626,6 +626,11 @@ void unmap(void* addr, size_t size)
     evacuate(start, start+size);
 }
 
+bool intersects(uintptr_t start, uintptr_t end, vma& y)
+{
+    return y.start() < end && start < y.end();
+}
+
 error msync(void* addr, size_t length, int flags)
 {
     length = align_up(length, mmu::page_size);
@@ -633,10 +638,10 @@ error msync(void* addr, size_t length, int flags)
     auto end = start+length;
     auto err = make_error(ENOMEM);
     WITH_LOCK(vma_list_mutex) {
-        auto lower = vma_list.lower_bound(vma(start, end));
-        auto upper = vma_list.upper_bound(vma(start, end));
+        auto lower = vma_list.begin();
+        auto upper = vma_list.end();
         for (auto i = lower; i != upper; ++i) {
-            if (contains(start, end, *i)) {
+            if (intersects(start, end, *i)) {
                 err = i->sync(start, end);
                 if (err.bad()) {
                     break;
@@ -862,6 +867,8 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!_shared)
         return make_error(ENOMEM);
+    start = std::max(start, _start);
+    end = std::min(end, _end);
     auto fsize = ::size(_file);
     uintptr_t size = end - start;
     auto off = offset(start);
