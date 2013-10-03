@@ -88,6 +88,7 @@ SYSCTL_INT(_vfs_zfs_version, OID_AUTO, zpl, CTLFLAG_RD, &zfs_version_zpl, 0,
     "ZPL_VERSION");
 #endif
 
+static void zfs_freevfs(vfs_t *vfsp);
 /*
  * We need to keep a count of active fs's.
  * This is necessary to prevent our module
@@ -1036,7 +1037,6 @@ out:
 	return (error);
 }
 
-#ifdef notyet
 void
 zfs_unregister_callbacks(zfsvfs_t *zfsvfs)
 {
@@ -1079,6 +1079,8 @@ zfs_unregister_callbacks(zfsvfs_t *zfsvfs)
 		    vscan_changed_cb, zfsvfs) == 0);
 	}
 }
+
+#ifdef notyet
 
 #ifdef SECLABEL
 /*
@@ -1506,6 +1508,8 @@ zfs_root(vfs_t *vfsp, int flags, vnode_t **vpp)
 	return (error);
 }
 
+#endif
+
 /*
  * Teardown the zfsvfs::z_os.
  *
@@ -1607,20 +1611,27 @@ zfsvfs_teardown(zfsvfs_t *zfsvfs, boolean_t unmounting)
 
 /*ARGSUSED*/
 static int
-zfs_umount(vfs_t *vfsp, int fflag)
+zfs_umount(vfs_t *vfsp /* , int fflag */)
 {
+#ifdef __OSV__
+	int fflag = 0;
+#endif
 	kthread_t *td = curthread;
 	zfsvfs_t *zfsvfs = vfsp->vfs_data;
 	objset_t *os;
+#ifndef __OSV__
 	cred_t *cr = td->td_ucred;
+#endif
 	int ret;
 
+#ifndef __OSV__
 	ret = secpolicy_fs_unmount(cr, vfsp);
 	if (ret) {
 		if (dsl_deleg_access((char *)refstr_value(vfsp->vfs_resource),
 		    ZFS_DELEG_PERM_MOUNT, cr))
 			return (ret);
 	}
+#endif
 
 	/*
 	 * We purge the parent filesystem's vfsp as the parent filesystem
@@ -1635,17 +1646,21 @@ zfs_umount(vfs_t *vfsp, int fflag)
 	 * dataset itself.
 	 */
 	if (zfsvfs->z_ctldir != NULL) {
-		if ((ret = zfsctl_umount_snapshots(vfsp, fflag, cr)) != 0)
+#ifdef __OSV__
+		abort();
+#else
+		if ((ret = zfsctl_umount_snapshots(vfsp, fflag, /* cr */  NULL)) != 0)
 			return (ret);
-		ret = vflush(vfsp, 0, 0, td);
-		ASSERT(ret == EBUSY);
+		/* ret = */ vflush(vfsp /* , 0, 0, td */);
+		// ASSERT(ret == EBUSY);
 		if (!(fflag & MS_FORCE)) {
-			if (zfsvfs->z_ctldir->v_count > 1)
+			if (zfsvfs->z_ctldir->v_refcnt > 1)
 				return (EBUSY);
-			ASSERT(zfsvfs->z_ctldir->v_count == 1);
+			ASSERT(zfsvfs->z_ctldir->v_refcnt == 1);
 		}
 		zfsctl_destroy(zfsvfs);
 		ASSERT(zfsvfs->z_ctldir == NULL);
+#endif
 	}
 
 	if (fflag & MS_FORCE) {
@@ -1662,7 +1677,8 @@ zfs_umount(vfs_t *vfsp, int fflag)
 	/*
 	 * Flush all the files.
 	 */
-	ret = vflush(vfsp, 1, (fflag & MS_FORCE) ? FORCECLOSE : 0, td);
+	/* ret = */ vflush(vfsp /* , 1, (fflag & MS_FORCE) ? FORCECLOSE : 0, td */);
+#ifndef __OSV__
 	if (ret != 0) {
 		if (!zfsvfs->z_issnap) {
 			zfsctl_create(zfsvfs);
@@ -1670,6 +1686,7 @@ zfs_umount(vfs_t *vfsp, int fflag)
 		}
 		return (ret);
 	}
+#endif
 
 	if (!(fflag & MS_FORCE)) {
 		/*
@@ -1683,11 +1700,11 @@ zfs_umount(vfs_t *vfsp, int fflag)
 		 * reflected in the vnode count.
 		 */
 		if (zfsvfs->z_ctldir == NULL) {
-			if (vfsp->vfs_count > 1)
+			if (vfsp->m_count > 1)
 				return (EBUSY);
 		} else {
-			if (vfsp->vfs_count > 2 ||
-			    zfsvfs->z_ctldir->v_count > 1)
+			if (vfsp->m_count > 2 ||
+			    zfsvfs->z_ctldir->v_refcnt > 1)
 				return (EBUSY);
 		}
 	}
@@ -1717,17 +1734,26 @@ zfs_umount(vfs_t *vfsp, int fflag)
 	 * We can now safely destroy the '.zfs' directory node.
 	 */
 	if (zfsvfs->z_ctldir != NULL)
+#ifdef __OSV__
+		abort();
+#else
 		zfsctl_destroy(zfsvfs);
+#endif
 	if (zfsvfs->z_issnap) {
+	        abort();
+#ifndef __OSV__
 		vnode_t *svp = vfsp->mnt_vnodecovered;
 
 		if (svp->v_count >= 2)
 			VN_RELE(svp);
+#endif
 	}
 	zfs_freevfs(vfsp);
 
 	return (0);
 }
+
+#ifdef notyet
 
 static int
 zfs_vget(vfs_t *vfsp, ino_t ino, int flags, vnode_t **vpp)
@@ -1975,6 +2001,8 @@ bail:
 	return (err);
 }
 
+#endif
+
 static void
 zfs_freevfs(vfs_t *vfsp)
 {
@@ -1995,6 +2023,8 @@ zfs_freevfs(vfs_t *vfsp)
 
 	atomic_add_32(&zfs_active_fs_count, -1);
 }
+
+#ifdef notyet
 
 #ifdef __i386__
 static int desiredvnodes_backup;
@@ -2222,7 +2252,7 @@ extern struct vnops zfs_vnops;
  */
 struct vfsops zfs_vfsops = {
 	zfs_mount,	/* mount */
-	NULL,		/* unmount */
+	zfs_umount,	/* unmount */
 	zfs_sync,	/* sync */
 	((vfsop_vget_t)vfs_nullop),		/* vget */
 	zfs_statfs,	/* statfs */
