@@ -1,3 +1,10 @@
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
 #include "libc.hh"
 #include "sched.hh"
 #include <stdio.h>
@@ -12,6 +19,9 @@
 #include <sys/sysinfo.h>
 #include <osv/debug.h>
 #include <sched.h>
+#include <termios.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
 
 int libc_error(int err)
 {
@@ -120,3 +130,45 @@ extern "C" int sysinfo(struct sysinfo *info)
     return 0;
 }
 
+int tcgetattr(int fd, termios *p)
+{
+    return ioctl(fd, TCGETS, p);
+}
+
+int tcsetattr(int fd, int action, const termios *p)
+{
+    switch (action) {
+    case TCSANOW:
+        break;
+    case TCSADRAIN:
+        tcdrain(fd);
+        break;
+    case TCSAFLUSH:
+        tcdrain(fd);
+        tcflush(fd,TCIFLUSH);
+        break;
+    default:
+        errno = EINVAL;
+        return -1;
+    }
+    return ioctl(fd, TCSETS, p);
+}
+
+int tcdrain(int fd)
+{
+    // The archaic TCSBRK is customary on Linux for draining output.
+    // BSD would have used TIOCDRAIN.
+    return ioctl(fd, TCSBRK, 1);
+}
+
+int tcflush(int fd, int what)
+{
+    // Linux uses TCFLSH. BSD would have used TIOCFLUSH (and different
+    // argument).
+    return ioctl(fd, TCFLSH, what);
+}
+
+speed_t cfgetospeed(const termios *p)
+{
+    return p->__c_ospeed;
+}
