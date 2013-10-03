@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, sys, struct, optparse, StringIO, ConfigParser
+import os, sys, struct, optparse, StringIO, ConfigParser, subprocess
 
 make_option = optparse.make_option
 
@@ -51,8 +51,6 @@ depends.write('%s: \\\n' % (options.output,))
 
 
 zfs_root='/zfs'
-loop_dev='/dev/loop7'
-dev='/dev/vblk0.1'
 zfs_pool='osv'
 zfs_fs='usr'
 
@@ -61,15 +59,6 @@ if os.path.exists(zfs_root) and os.listdir(zfs_root):
     sys.exit(1)
 
 os.system('sudo mkdir -p %s' % zfs_root)
-
-os.system('sudo rm -f %s' % options.output)
-os.system('sudo truncate --size 10g %s' % options.output)
-os.system('sudo losetup -o %s %s %s' % (options.offset, loop_dev, options.output))
-
-os.system('sudo ln %s %s' % (loop_dev, dev))
-
-os.system('sudo zpool create -f %s -R %s %s' % (zfs_pool, zfs_root, dev))
-os.system('sudo zfs create %s/%s' % (zfs_pool, zfs_fs))
 
 files = dict([(f, manifest.get('manifest', f, vars = defines))
               for f in manifest.options('manifest')])
@@ -115,13 +104,12 @@ for name, hostname in files:
         os.system('sudo mkdir -p %s/`dirname %s`' % ('/zfs/', name))
         os.system('sudo cp -L %s %s/%s' % (hostname, '/zfs/', name))
 
-os.system('sudo zpool export %s' % zfs_pool)
-os.system('sleep 2')
-os.system('sudo losetup -d %s' % loop_dev)
-os.system('sudo rm %s' % dev)
+osv = subprocess.Popen('cd ../..; scripts/run.py -e "--nomount tools/mkfs.so" --forward tcp:10000::10000', shell = True)
+nc = subprocess.Popen('sleep 3 && cd /zfs/usr && find -type f | cpio -o -H newc | nc localhost 10000', shell = True)
 
-os.system('sudo chmod g+w %s' % options.output)
-os.system('sudo chmod o+w %s' % options.output)
+osv.wait()
+nc.wait()
+os.system('sudo rm -rf /zfs')
 
 depends.write('\n\n')
 depends.close()
