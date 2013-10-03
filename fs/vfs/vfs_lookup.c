@@ -73,6 +73,7 @@ dentry_alloc(struct vnode *vp, const char *path)
 	dp->d_vnode = vp;
 	dp->d_mount = mp;
 	dp->d_path = strdup(path);
+	vn_add_name(vp, dp);
 
 	mutex_lock(&dentry_hash_lock);
 	LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(mp, path)], dp, d_link);
@@ -121,6 +122,8 @@ drele(struct dentry *dp)
 		return;
 	}
 	LIST_REMOVE(dp, d_link);
+	vn_del_name(dp->d_vnode, dp);
+
 	mutex_unlock(&dentry_hash_lock);
 
 	vrele(dp->d_vnode);
@@ -214,8 +217,8 @@ namei(char *path, struct dentry **dpp)
 				return error;
 			}
 
-			dp = dentry_alloc(vp, node);
 			vn_unlock(dvp);
+			dp = dentry_alloc(vp, node);
 			vput(vp);
 
 			if (!dp) {

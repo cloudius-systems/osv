@@ -19,6 +19,7 @@ struct dentry {
 	char		*d_path;	/* pointer to path in fs */
 	struct vnode	*d_vnode;
 	struct mount	*d_mount;
+	LIST_ENTRY(dentry) d_names_link; /* link fo vnode::d_names */
 };
 
 #endif /* _OSV_DENTRY_H */

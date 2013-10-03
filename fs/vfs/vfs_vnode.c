@@ -174,6 +174,7 @@ vget(struct mount *mp, const char *path)
 		free(vp);
 		return NULL;
 	}
+	LIST_INIT(&vp->v_names);
 	vp->v_mount = mp;
 	vp->v_refcnt = 1;
 	vp->v_op = mp->m_op->vfs_vnops;
@@ -470,3 +471,18 @@ vnode_init(void)
 	for (i = 0; i < VNODE_BUCKETS; i++)
 		LIST_INIT(&vnode_table[i]);
 }
+
+void vn_add_name(struct vnode *vp, struct dentry *dp)
+{
+	vn_lock(vp);
+	LIST_INSERT_HEAD(&vp->v_names, dp, d_names_link);
+	vn_unlock(vp);
+}
+
+void vn_del_name(struct vnode *vp, struct dentry *dp)
+{
+	vn_lock(vp);
+	LIST_REMOVE(dp, d_names_link);
+	vn_unlock(vp);
+}
+
