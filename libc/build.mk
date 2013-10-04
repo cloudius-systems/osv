@@ -374,6 +374,7 @@ libc += network/__ipparse.o
 libc += network/inet_pton.o
 libc += network/inet_ntop.o
 libc += network/proto.o
+libc += network/if_indextoname.o
 
 libc += prng/rand.o
 libc += prng/random.o
