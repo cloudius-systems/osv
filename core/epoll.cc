@@ -156,6 +156,13 @@ int epoll_create(int size)
     // Note we ignore the size parameter. There's no point in checking it's
     // positive, and on the other hand we can't trust it being meaningful
     // because Linux ignores it too.
+    return epoll_create1(0);
+}
+
+int epoll_create1(int flags)
+{
+    flags &= ~EPOLL_CLOEXEC;
+    assert(!flags);
     std::unique_ptr<epoll_obj> s{new epoll_obj()};
     try {
         fileref f{falloc_noinstall()};
