@@ -40,7 +40,9 @@ extern "C" {
 typedef struct
 {
 	unsigned __opaque1, __opaque2;
-} mbstate_t;
+} __mbstate_t;
+
+typedef __mbstate_t mbstate_t;
 
 wchar_t *wcscpy (wchar_t *__restrict, const wchar_t *__restrict);
 wchar_t *wcsncpy (wchar_t *__restrict, const wchar_t *__restrict, size_t);
