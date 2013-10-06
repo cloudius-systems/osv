@@ -640,3 +640,4 @@ libc += af_local.o
 libc += user.o
 libc += resource.o
 libc += mount.o
+libc += eventfd.o
