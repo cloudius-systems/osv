@@ -232,7 +232,7 @@ void* do_main_thread(void *_args)
     if (!osv_start_if("eth0", "0.0.0.0", "255.255.255.0") && !osv_ifup("eth0"))
         dhcp_start(true);
     else
-        debug("Could not initialize network interface");
+        debug("Could not initialize network interface.\n");
 
     run_main(prog, args);
 
