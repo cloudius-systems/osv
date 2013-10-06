@@ -29,6 +29,11 @@
 #include <dhcp.hh>
 #include <drivers/clock.hh>
 
+namespace osv {
+void set_dns_config(std::vector<boost::asio::ip::address> nameservers,
+                    std::vector<std::string> search_domains);
+}
+
 using namespace boost::asio;
 
 dhcp::dhcp_worker net_dhcp_worker;
@@ -496,6 +501,7 @@ namespace dhcp {
         osv_route_add_network("0.0.0.0",
                               "0.0.0.0",
                               dm.get_router_ip().to_string().c_str());
+        osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
 
         // Send a DHCP Request
         _state = DHCP_REQUEST;
