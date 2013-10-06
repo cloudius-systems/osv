@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "__dns.h"
+#include "__dns.hh"
 
 int getnameinfo(const struct sockaddr *restrict sa, socklen_t sl,
 	char *restrict node, socklen_t nodelen,

@@ -3,7 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include "__dns.h"
+#include "__dns.hh"
 #include <stdio.h>
 
 int __ipparse(void *dest, int family, const char *s0)

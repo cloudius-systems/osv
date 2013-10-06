@@ -6,7 +6,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
-#include "__dns.h"
+#include "__dns.hh"
 #include <stdio.h>
 
 static int is_valid(const char *host)

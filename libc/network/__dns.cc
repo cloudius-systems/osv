@@ -11,7 +11,7 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "__dns.h"
+#include "__dns.hh"
 #include <stdio.h>
 
 #define TIMEOUT 5
@@ -33,7 +33,7 @@ int __dns_doqueries(unsigned char *dest, const char *name, int *rr, int rrcnt)
 	union {
 		struct sockaddr_in sin;
 		struct sockaddr_in6 sin6;
-	} sa = {0}, ns[3] = {{0}};
+	} sa = {{0}}, ns[3] = {{{0}}};
 	socklen_t sl = 0;
 	int nns = 0;
 	int family = AF_UNSPEC;
@@ -64,7 +64,7 @@ int __dns_doqueries(unsigned char *dest, const char *name, int *rr, int rrcnt)
 
 	/* Make a reasonably unpredictable id */
 	clock_gettime(CLOCK_REALTIME, &ts);
-	id = ts.tv_nsec + ts.tv_nsec/65536UL & 0xffff;
+	id = (ts.tv_nsec + ts.tv_nsec/65536UL) & 0xffff;
 
 	/* Get nameservers from resolv.conf, fallback to localhost */
 	f = fopen("/etc/resolv.conf", "r");
@@ -95,7 +95,7 @@ int __dns_doqueries(unsigned char *dest, const char *name, int *rr, int rrcnt)
 	//pthread_cleanup_push(cleanup, (void *)(intptr_t)fd);
 	//pthread_setcancelstate(cs, 0);
 
-	if (bind(fd, (void *)&sa, sl) < 0) {
+	if (bind(fd, (const sockaddr*)&sa, sl) < 0) {
 		errcode = EAI_SYSTEM;
 		goto out;
 	}
@@ -108,10 +108,11 @@ int __dns_doqueries(unsigned char *dest, const char *name, int *rr, int rrcnt)
 
 		/* Query all configured namservers in parallel */
 		for (i=0; i<rrcnt; i++) if (rr[i]) for (j=0; j<nns; j++) {
-			q[0] = id+i >> 8;
+			q[0] = (id+i) >> 8;
 			q[1] = id+i;
 			q[ql-3] = rr[i];
-			sendto(fd, q, ql, MSG_NOSIGNAL, (void *)&ns[j], sl);
+			sendto(fd, q, ql, MSG_NOSIGNAL,
+                               (const sockaddr*)&ns[j], sl);
 		}
 
 		/* Wait for a response, or until time to retry */
@@ -119,15 +120,16 @@ int __dns_doqueries(unsigned char *dest, const char *name, int *rr, int rrcnt)
 
 		/* Process any and all replies */
 		while (got+failed < rrcnt && (rlen = recvfrom(fd, r, 512, 0,
-			(void *)&sa, (socklen_t[1]){sl})) >= 2)
+			(sockaddr*)&sa, (socklen_t *)&sl)) >= 2)
 		{
 			/* Ignore replies from addresses we didn't send to */
 			for (i=0; i<nns; i++) if (!memcmp(ns+i, &sa, sl)) break;
 			if (i==nns) continue;
 
 			/* Compute index of the query from id */
-			i = r[0]*256+r[1] - id & 0xffff;
-			if ((unsigned)i >= rrcnt || !rr[i]) continue;
+			i = (r[0]*256+r[1] - id) & 0xffff;
+			if ((unsigned int)i >= (unsigned int) rrcnt || !rr[i])
+				continue;
 
 			/* Interpret the result code */
 			switch (r[3] & 15) {
@@ -181,8 +183,8 @@ int __dns_query(unsigned char *r, const void *a, int family, int ptr)
 	int rr[2], rrcnt = 1;
 
 	if (ptr) {
-		if (family == AF_INET6) mkptr6(buf, a);
-		else mkptr4(buf, a);
+		if (family == AF_INET6) mkptr6(buf, (unsigned char *) a);
+		else mkptr4(buf, (unsigned char *) a);
 		rr[0] = RR_PTR;
 		a = buf;
 	} else if (family == AF_INET6) {
@@ -192,7 +194,7 @@ int __dns_query(unsigned char *r, const void *a, int family, int ptr)
 		if (family != AF_INET) rr[rrcnt++] = RR_AAAA;
 	}
 
-	return __dns_doqueries(r, a, rr, rrcnt);
+	return __dns_doqueries(r, (const char *)a, rr, rrcnt);
 }
 
 
@@ -248,10 +250,10 @@ int __dns_get_rr(void *dest, size_t stride, size_t maxlen, size_t limit, const u
 		p += 1 + !!*p;
 		len = p[8]*256 + p[9];
 		if (p+len > r+512) return -1;
-		if (p[1]==rr && len <= maxlen) {
+		if (p[1]==rr && (size_t)len <= maxlen) {
 			if (dec && decname(tmp, r, p+10)<0) return -1;
 			if (dest && limit) {
-				if (dec) strcpy(dest, tmp);
+				if (dec) strcpy((char *)dest, tmp);
 				else memcpy(dest, p+10, len);
 				dest = (char *)dest + stride;
 				limit--;
