@@ -154,7 +154,10 @@ tests += tests/tst-kill.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
-java/RunJava.class: javabase=java
+java/io/osv/RunJava.class: javabase=java
+java/runjava.jar: java/io/osv/RunJava.class
+	jar cf $@ -C java $(patsubst java/%, %, $^)
+	jar i $@
 
 tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
@@ -566,7 +569,7 @@ usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
-		tests/testrunner.so java/java.so java/RunJava.class
+		tests/testrunner.so java/java.so java/runjava.jar
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)

@@ -1,3 +1,5 @@
+package io.osv;
+
 /*
  * Copyright (C) 2013 Cloudius Systems, Ltd.
  *
@@ -7,6 +9,7 @@
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -66,6 +69,14 @@ public class RunJava {
                         " (build " + System.getProperty("java.vm.version") +
                         ", " + System.getProperty("java.vm.info") + ")");
                 return;
+            } else if (args[i].equals("-Xclassloader")) {
+                // Non-standard try - use a different class loader.
+                if (i+1 >= args.length) {
+                    System.err.println("RunJava: Missing parameter after '"+args[i]+"'");
+                    return;
+                }
+                Xclassloader = args[i+1];
+                i++;           
             } else if (!args[i].startsWith("-")) {
                 runClass(args[i], java.util.Arrays.copyOfRange(args,  i+1,  args.length), classpath);
                 return;
@@ -112,6 +123,24 @@ public class RunJava {
             throw ex.getCause();
         }               
     }
+    
+    static String Xclassloader = null;
+    static URLClassLoader getClassLoader(URL[] urls) {
+        if (Xclassloader == null) {
+            return new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
+        } else {
+            try {
+                Class<?> classloader = loadClass(Xclassloader);
+                Constructor<?> c = classloader.getConstructor(URL[].class, ClassLoader.class);
+                URLClassLoader cl = (URLClassLoader)
+                        c.newInstance(urls, ClassLoader.getSystemClassLoader());
+                return cl;
+            } catch (Throwable e) {
+                e.printStackTrace();
+                return new URLClassLoader(urls, ClassLoader.getSystemClassLoader());              
+            }
+        }
+    }
 
     static void setClassPath(Iterable<String> jars) throws MalformedURLException {
         ArrayList<URL> urls = new ArrayList<URL>();
@@ -125,8 +154,8 @@ public class RunJava {
 
         URL[] urlArray = urls.toArray(new URL[urls.size()]);
 	    
-        URLClassLoader ucl = new URLClassLoader(urlArray,
-                ClassLoader.getSystemClassLoader());
+        URLClassLoader ucl = getClassLoader(urlArray);
+
         Thread.currentThread().setContextClassLoader(ucl);
         
 	    // Also update the java.class.path property

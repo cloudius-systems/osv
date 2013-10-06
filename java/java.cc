@@ -13,17 +13,15 @@
 // java.so is similar to the standard "java" command line launcher in Linux.
 //
 // This program does very little - basically it starts the JVM and asks it
-// to run a fixed class, /java/RunJava.class, which parses the command line
-// parameters, sets up the class path, and runs the jar or class specified
-// in these parameters. Unfortunately, we cannot do this here in C++ code
-// because FindClass() has a known bug where it cannot find a class inside a
-// .jar, just a class in a directory.
+// to run a fixed class, RunJava, which parses the command line parameters,
+// sets up the class path, and runs the jar or class specified in these
+// parameters.
 
 extern elf::program* prog;
 
 #define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
-#define RUNJAVA_DIR     "/java"
-#define RUNJAVA         "RunJava"
+#define RUNJAVA_PATH    "/java/runjava.jar"
+#define RUNJAVA         "io/osv/RunJava"    // separated by slashes, not dots
 
 JavaVMOption mkoption(const char* s)
 {
@@ -49,7 +47,7 @@ int main(int argc, char **argv)
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
 
     std::vector<JavaVMOption> options;
-    options.push_back(mkoption("-Djava.class.path=" RUNJAVA_DIR));
+    options.push_back(mkoption("-Djava.class.path=" RUNJAVA_PATH));
 
     int orig_argc = argc;
     for (int i = 1; i < orig_argc; i++) {
@@ -83,7 +81,7 @@ int main(int argc, char **argv)
     }
     auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
-        debug("java.so: Can't find class %s in %s.\n", RUNJAVA, RUNJAVA_DIR);
+        debug("java.so: Can't find class %s in %s.\n", RUNJAVA, RUNJAVA_PATH);
         abort();
     }
 
