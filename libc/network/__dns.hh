@@ -6,6 +6,23 @@
 #define RR_AAAA 28
 
 #ifdef __cplusplus
+#include <vector>
+#include <string>
+#include <boost/asio/ip/address.hpp>
+
+#include <osv/mutex.h>
+
+namespace osv {
+
+void set_dns_config(std::vector<boost::asio::ip::address> nameservers,
+		    std::vector<std::string> search_domains);
+
+std::vector<boost::asio::ip::address> get_nameservers();
+
+std::vector<std::string> get_search_domains();
+
+}
+
 extern "C" {
 #endif
 

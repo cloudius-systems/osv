@@ -19,6 +19,45 @@
 #define PACKET_MAX 512
 #define PTR_MAX (64 + sizeof ".in-addr.arpa")
 
+using namespace boost::asio::ip;
+using namespace std;
+
+/* searchdomains and namservers are shared between multiple libc files so use
+ * osv namespace
+ */
+namespace osv {
+	vector<address> nameservers;
+	vector<string> search_domains;
+	lockfree::mutex dns_lock;
+
+	void set_dns_config(vector<address> nameservers,
+			    vector<string> domains)
+	{
+		WITH_LOCK(osv::dns_lock) {
+			osv::nameservers = nameservers;
+			osv::search_domains = search_domains;
+		}
+	}
+
+	vector<address> get_nameservers()
+	{
+		vector<address> result;
+		WITH_LOCK(osv::dns_lock) {
+			result = osv::nameservers;
+		}
+		return result;
+	}
+
+	vector<string> get_search_domains()
+	{
+		vector<string> result;
+		WITH_LOCK(osv::dns_lock) {
+			result = osv::search_domains;
+		}
+		return result;
+	}
+}
+
 static void cleanup(void *p)
 {
 	close((intptr_t)p);
@@ -66,9 +105,35 @@ int __dns_doqueries(unsigned char *dest, const char *name, int *rr, int rrcnt)
 	clock_gettime(CLOCK_REALTIME, &ts);
 	id = (ts.tv_nsec + ts.tv_nsec/65536UL) & 0xffff;
 
+	/* Get nameservers from OSv first, fallback to resolv.conf */
+	nns = 0;
+	vector<address> servers = osv::get_nameservers();
+	for (auto it = servers.begin(); nns < 3 && it != servers.end(); ++it) {
+		auto ip = (*it);
+		if (ip.is_v4()) {
+			address_v4::bytes_type bytes;
+			bytes = ip.to_v4().to_bytes();
+			memcpy(&ns[nns].sin.sin_addr.s_addr, &bytes,
+			        sizeof(bytes));
+			ns[nns].sin.sin_family = family = AF_INET;
+			sl = sizeof sa.sin;
+		} else if (ip.is_v6()) {
+			address_v6::bytes_type bytes;
+			bytes = ip.to_v6().to_bytes();
+			memcpy(&ns[nns].sin6.sin6_addr.s6_addr, &bytes,
+			        sizeof(bytes));
+			ns[nns].sin6.sin6_family = family = AF_INET6;
+			sl = sizeof sa.sin6;
+		} else {
+			continue;
+		}
+		ns[nns].sin.sin_port = htons(53);
+		nns++;
+	}
+
 	/* Get nameservers from resolv.conf, fallback to localhost */
 	f = fopen("/etc/resolv.conf", "r");
-	if (f) for (nns=0; nns<3 && fgets(line, sizeof line, f); ) {
+	if (f) for (; nns<3 && fgets(line, sizeof line, f); ) {
 		if (strncmp(line, "nameserver", 10) || !isspace(line[10]))
 			continue;
 		for (s=line+11; isspace(*s); s++);
