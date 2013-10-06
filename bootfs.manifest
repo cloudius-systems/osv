@@ -63,7 +63,7 @@
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
 /java.so: java/java.so
-/java/RunJava.class: java/RunJava.class
+/java/runjava.jar: java/runjava.jar
 /tools/ifconfig.so: ./tools/ifconfig/ifconfig.so
 /tools/lsroute.so: ./tools/route/lsroute.so
 /&/etc/hosts: ../../static/&
