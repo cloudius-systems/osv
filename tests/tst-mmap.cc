@@ -77,16 +77,14 @@ int main(int argc, char **argv)
     for (int i = 0; i < 1000; i++) {
         constexpr size_t size = 1<<20;
         void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
-        if(!buf)
-            std::cerr << "mmap failed!\n";
+        assert(buf != MAP_FAILED);
         munmap(buf, size);
     }
     // Do the same for allocations large enough to use huge-pages
     for (int i = 0; i < 100; i++) {
         constexpr size_t size = 30 * 1<<20;
         void *buf = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
-        if(!buf)
-            std::cerr << "mmap failed!\n";
+        assert(buf != MAP_FAILED);
         munmap(buf, size);
     }
     // Test that we can override mmaps, without munmap, without leaking
@@ -94,15 +92,18 @@ int main(int argc, char **argv)
     // more fun.
     int hugepagesize = 1<<21;
     void *buf = mmap(NULL, hugepagesize*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
-    assert(buf);
+    assert(buf != MAP_FAILED);
     for (int i=0; i<100; i++) {
         mmap(buf, hugepagesize-4096, PROT_READ, MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+        assert(buf != MAP_FAILED);
         mmap(buf, hugepagesize*9+4096, PROT_READ, MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+        assert(buf != MAP_FAILED);
     }
     munmap(buf, hugepagesize*9+4096);
 
     // test mprotect making a read-only page.
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     mprotect(buf, 4096, PROT_READ);
     assert(!try_write(buf));
     munmap(buf, 4096);
@@ -110,6 +111,7 @@ int main(int argc, char **argv)
     // test mprotect again, with part of huge page, and see that it only
     // modifies the desired part and not anything else
     buf = mmap(NULL, 3*hugepagesize, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     void *hp = (void*) (((uintptr_t)buf&~(hugepagesize-1))+hugepagesize);
     mprotect(hp+4096, 4096, PROT_READ);
     assert(try_write(hp));
@@ -119,6 +121,7 @@ int main(int argc, char **argv)
 
     // test that mprotect with PROT_NONE disables even read
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     mprotect(buf, 4096, PROT_NONE);
     assert(!try_read(buf));
     munmap(buf, 4096);
@@ -126,14 +129,17 @@ int main(int argc, char **argv)
     // Tests similar to the above, but giving reduced permissions on
     // mmap() itself instead of calling mprotect
     buf = mmap(NULL, 4096, PROT_READ, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     assert(!try_write(buf));
     munmap(buf, 4096);
 
     buf = mmap(NULL, 4096, PROT_NONE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     assert(!try_read(buf));
     munmap(buf, 4096);
 
     buf = mmap(NULL, 4096, PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     assert(try_write(buf));
     munmap(buf, 4096);
 
@@ -142,6 +148,7 @@ int main(int argc, char **argv)
     // forbid it. If we don't TLB flush correctly, it might erroneously
     // succeed!
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     *(char*)buf = 0; // write will succeed
     mprotect(buf, 4096, PROT_READ);
     assert(!try_write(buf));
@@ -156,6 +163,7 @@ int main(int argc, char **argv)
     assert(sched::cpus.size() >= 2); // this test can't work without 2 cpus...
     std::atomic_int state(0);
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     sched::thread *t2 = nullptr;
     sched::thread *t1 = new sched::thread([&]{
         *(char*)buf = 0; // write will succeed
@@ -186,6 +194,7 @@ int main(int argc, char **argv)
 
     // Test that mprotect() only hides memory, doesn't free it
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     *(char*)buf = 123;
     mprotect(buf, 4096, PROT_NONE); // hide the memory - but don't unmap
     mprotect(buf, 4096, PROT_READ); // get it back
@@ -201,6 +210,7 @@ int main(int argc, char **argv)
     // Test that msync() can tell if a range of memory is mapped.
     // libunwind's functions which we use for backtrace() require this.
     buf = mmap(NULL, 4096*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     assert(msync(buf, 4096*10, MS_ASYNC) == 0);
     assert(msync(buf, 4096*9, MS_ASYNC) == 0);
     assert(msync(buf+4096, 4096*9, MS_ASYNC) == 0);
@@ -219,6 +229,7 @@ int main(int argc, char **argv)
     // Similarly test mincore().
     unsigned char vec[20];
     buf = mmap(NULL, 4096*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf != MAP_FAILED);
     assert(mincore(buf, 4096*10, vec) == 0);
     assert(mincore(buf, 4096*9, vec) == 0);
     assert(mincore(buf+4096, 4096*9, vec) == 0);
