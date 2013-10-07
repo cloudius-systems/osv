@@ -18,6 +18,7 @@
 #include "debug-console.hh"
 #include "drivers/clock.hh"
 #include <termios.h>
+#include <signal.h>
 
 #include <fs/fs.hh>
 #include <fs/unsupported.h>
@@ -48,9 +49,9 @@ termios tio = {
     .c_iflag = ICRNL,
     .c_oflag = OPOST | ONLCR,
     .c_cflag = 0,
-    .c_lflag = ECHO | ECHOCTL | ICANON | ECHOE,
+    .c_lflag = ECHO | ECHOCTL | ICANON | ECHOE | ISIG,
     .c_line = 0,
-    .c_cc = {/*VINTR*/0, /*VQUIT*/0, /*VERASE*/'\177', /*VKILL*/0,
+    .c_cc = {/*VINTR*/'\3', /*VQUIT*/'\34', /*VERASE*/'\177', /*VKILL*/0,
             /*VEOF*/0, /*VTIME*/0, /*VMIN*/0, /*VSWTC*/0,
             /*VSTART*/0, /*VSTOP*/0, /*VSUSP*/0, /*VEOL*/0,
             /*VREPRINT*/0, /*VDISCARD*/0, /*VWERASE*/0,
@@ -97,6 +98,17 @@ void console_poll()
         if (c == '\r' && tio.c_iflag & ICRNL) {
             c = '\n';
         }
+        if (tio.c_lflag & ISIG) {
+            // Currently, INTR and QUIT signal OSv's only process, process 0.
+            if (c == tio.c_cc[VINTR]) {
+                kill(0, SIGINT);
+                continue;
+            } else if (c == tio.c_cc[VQUIT]) {
+                kill(0, SIGQUIT);
+                continue;
+            }
+        }
+
         if (tio.c_lflag & ICANON) {
             // canonical ("cooked") mode, where input is only made
             // available to the reader after a newline (until then, the
