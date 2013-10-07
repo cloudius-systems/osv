@@ -13,6 +13,7 @@
 #include "libc/libc.hh"
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
+TRACEPOINT(trace_memory_mmap_err, "%d", int);
 TRACEPOINT(trace_memory_mmap_ret, "%p", void *);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 
@@ -56,6 +57,12 @@ void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
     trace_memory_mmap(addr, length, prot, flags, fd, offset);
+
+    if (!(flags & (MAP_SHARED|MAP_PRIVATE))) {
+        errno = EINVAL;
+        trace_memory_mmap_err(errno);
+        return MAP_FAILED;
+    }
 
     // TODO: should fail with EINVAL in some cases of addr, length, offset.
 

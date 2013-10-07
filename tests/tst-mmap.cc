@@ -107,6 +107,10 @@ int main(int argc, char **argv)
     }
     munmap(buf, hugepagesize*9+4096);
 
+    // Test for missing MAP_PRIVATE or MAP_SHARED flag
+    buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    assert(buf == MAP_FAILED);
+
     // test mprotect making a read-only page.
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
     assert(buf != MAP_FAILED);
