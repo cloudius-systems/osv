@@ -69,6 +69,12 @@ static bool try_read(void *addr)
     return (!caught_segv());
 }
 
+static void* align_page_down(void *x)
+{
+    uintptr_t addr = reinterpret_cast<uintptr_t>(x);
+
+    return reinterpret_cast<void*>(addr & ~4095UL);
+}
 
 int main(int argc, char **argv)
 {
@@ -248,9 +254,9 @@ int main(int argc, char **argv)
     // While msync() only works on mmapped memory, mincore() should also
     // succeed on non-mmapped memory, such as stack variables and malloc().
     char x;
-    assert(mincore(&x, 1, vec) == 0);
+    assert(mincore(align_page_down(&x), 1, vec) == 0);
     void *y = malloc(1);
-    assert(mincore(y, 1, vec) == 0);
+    assert(mincore(align_page_down(y), 1, vec) == 0);
     free(y);
 
     // TODO: verify that mmapping more than available physical memory doesn't
