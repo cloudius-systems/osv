@@ -255,8 +255,10 @@ int main(int argc, char **argv)
     // succeed on non-mmapped memory, such as stack variables and malloc().
     char x;
     assert(mincore(align_page_down(&x), 1, vec) == 0);
+    assert(mincore(align_page_down(&x)+1, 1, vec) == -1);
     void *y = malloc(1);
     assert(mincore(align_page_down(y), 1, vec) == 0);
+    assert(mincore(align_page_down(y)+1, 1, vec) == -1);
     free(y);
 
     // TODO: verify that mmapping more than available physical memory doesn't

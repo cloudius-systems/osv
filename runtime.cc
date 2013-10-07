@@ -204,6 +204,9 @@ int getpid()
 
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
+    if ((reinterpret_cast<intptr_t>(addr) & 4095)) {
+        return libc_error(EINVAL);
+    }
     if (!mmu::isreadable(addr, length)) {
         return libc_error(ENOMEM);
     }
