@@ -776,6 +776,38 @@ class osv_pagetable_walk(gdb.Command):
             level -= 1
             ptep = pte + pt_index(addr, level) * 8
 
+def runqueue(cpuid, node = None):
+    if (node == None):
+        cpus = gdb.lookup_global_symbol('sched::cpus').value()
+        cpu = cpus['_M_impl']['_M_start'][cpuid]
+        rq = cpu['runqueue']
+        p = rq['data_']['node_plus_pred_']
+        node = p['header_plus_size_']['header_']['parent_']
+
+    if (long(node) != 0):
+        offset = gdb.parse_and_eval('(int)&((sched::thread *)0)->_runqueue_link');
+        thread = node.cast(gdb.lookup_type('void').pointer()) - offset
+        thread = thread.cast(gdb.lookup_type('sched::thread').pointer())
+
+        for x in runqueue(cpuid, node['left_']):
+            yield x
+
+        yield thread
+
+        for x in runqueue(cpuid, node['right_']):
+            yield x
+
+class osv_runqueue(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv runqueue',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        ncpus = gdb.parse_and_eval('sched::cpus._M_impl._M_finish - sched::cpus._M_impl._M_start');
+        for cpu in xrange(ncpus) :
+            gdb.write("CPU %d:\n" % cpu)
+            for thread in runqueue(cpu):
+                print '%d 0x%x %d' % (thread['_id'], ulong(thread), thread['_vruntime'])
+
 
 osv()
 osv_heap()
@@ -796,5 +828,6 @@ osv_leak_on()
 osv_leak_off()
 osv_pagetable()
 osv_pagetable_walk()
+osv_runqueue()
 
 setup_libstdcxx()
