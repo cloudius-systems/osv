@@ -6,12 +6,12 @@
  */
 
 // Test the effectiveness of the thread load-balancing feature of the scheduler
+// NOTE: This test should be run with 2 cpus.
 //
 // The test begins by measuring a single-threaded tight loop that takes
 // roughly 20 seconds. It then runs this loop in conjunction with other loads
 // to see how effective the load balancing is. We check the following
 // scenarios.
-// This test should be run with 2 cpus.
 //
 // 1. Run two concurrent loops on the 2 CPUs available. We expect to see the
 //    loop time the same as the single-threaded time ("x1" in the output).
@@ -22,7 +22,7 @@
 // 3. Two concurrent loops, plus one "intermittent thread" - a thread which
 //    busy-loops for 1 millisecond, sleeps for 10 milliseconds, and so on
 //    ad infinitum.
-//    We expect fair scheduler to let the intermittent thread run for 1ms
+//    We expect fair a scheduler to let the intermittent thread run for 1ms
 //    when it wants, so it uses 1/11 of one CPU, so with perfect load
 //    balancing we expect a performance of (2-1/11)/2, i.e., the reported
 //    loop measurement to be x1.05.
@@ -31,8 +31,7 @@
 //    intermittent thread should take 1/11th of one CPU, and the expected
 //    measurement is x2.1.
 //
-//
-// Unexpected results in any of these tests should be understood as follows:
+// Unexpected results in any of these tests should be debugged as follows:
 //
 // 1. Running "top" on the host during all these tests should show 200% CPU
 //    use. Any less means that a CPU is being left idle while it could be
@@ -121,6 +120,14 @@ private:
 
 int main()
 {
+    // For expected values below, we assume running on 2 cpus.
+    if (std::thread::hardware_concurrency() != 2) {
+        std::cerr << "Detected " << std::thread::hardware_concurrency() <<
+                " CPUs, but this test requires exactly 2.\n";
+        return 0;
+    }
+
+
     // Set secs to the desired number of seconds a measurement should
     // take. Note that the whole test will take several times longer than
     // secs, as we do several tests each lasting at least this long.
@@ -153,8 +160,6 @@ int main()
     double d = loop(looplen);
     std::cout << secs << " [x" << (d/secs) << "].\n\n";
 
-    std::cout << "NOTE: for expected values below, we assume running on 2 cpus\n";
-
     // Run N loops concurrently. If cpu load balancing is working correctly,
     // if N is lower than the number of (real) cores, we expect the time
     // to run this to be the same as the time to run one loop.
@@ -171,4 +176,6 @@ int main()
     concurrent_loops(looplen, 2, secs, 1.0*2/(2-1.0/11));
     concurrent_loops(looplen, 4, secs, 2.0*2/(2-1.0/11));
     bi.stop();
+
+    return 0;
 }
