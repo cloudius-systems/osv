@@ -47,7 +47,7 @@ def start_osv_qemu():
             args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
             args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
         else:
-            args += ["-netdev", "bridge,id=hn0,br=virbr0,helper=/usr/libexec/qemu-bridge-helper"]
+            args += ["-netdev", "bridge,id=hn0,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (cmdargs.bridge)]
             args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
@@ -126,7 +126,7 @@ def start_osv_xen():
     ]
 
     if cmdargs.networking:
-        args += [ "vif=['bridge=virbr0']" ]
+        args += [ "vif=['bridge=%s']" % (cmdargs.bridge)]
 
     # Using xm would allow us to get away with creating the file, but it comes
     # with its set of problems as well. Stick to xl.
@@ -175,6 +175,8 @@ if (__name__ == "__main__"):
                         help="start debug version")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root. tap networking, specify interface")
+    parser.add_argument("-b", "--bridge", action="store", default="virbr0",
+                        help="bridge name for tap networking")
     parser.add_argument("-v", "--vhost", action="store_true",
                         help="needs root. tap networking and vhost")
     parser.add_argument("-m", "--memsize", action="store", default="1G",
