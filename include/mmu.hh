@@ -76,6 +76,7 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);
 error msync(void* addr, size_t length, int flags);
+bool is_linear_mapped(void *addr, size_t size);
 bool ismapped(void *addr, size_t size);
 bool isreadable(void *addr, size_t size);
 

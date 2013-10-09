@@ -749,6 +749,14 @@ vma_list_type::iterator find_vma(uintptr_t addr)
     }
 }
 
+bool is_linear_mapped(void *addr, size_t size)
+{
+    if ((addr >= elf_start) && (addr + size <= elf_start + elf_size)) {
+        return true;
+    }
+    return addr >= phys_mem;
+}
+
 // Checks if the entire given memory region is mmap()ed (in vma_list).
 bool ismapped(void *addr, size_t size)
 {

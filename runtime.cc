@@ -47,6 +47,8 @@
 #include <api/sys/times.h>
 #include <map>
 #include <boost/range/adaptor/reversed.hpp>
+#include "align.hh"
+#include <safe-ptr.hh>
 
 #define __LC_LAST 13
 
@@ -207,10 +209,18 @@ int mincore(void *addr, size_t length, unsigned char *vec)
     if ((reinterpret_cast<intptr_t>(addr) & 4095)) {
         return libc_error(EINVAL);
     }
-    if (!mmu::isreadable(addr, length)) {
+    if (!mmu::is_linear_mapped(addr, length) && !mmu::ismapped(addr, length)) {
         return libc_error(ENOMEM);
     }
-    memset(vec, 0x01, (length + getpagesize() - 1) / getpagesize());
+    char *end = align_up((char *)addr + length, mmu::page_size);
+    char tmp;
+    for (char *p = (char *)addr; p < end; p += mmu::page_size) {
+        if (safe_load(p, tmp)) {
+            *vec++ = 0x01;
+        } else {
+            *vec++ = 0x00;
+        }
+    }
     return 0;
 }
 
