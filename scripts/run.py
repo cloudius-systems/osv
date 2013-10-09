@@ -74,7 +74,9 @@ def start_osv_qemu():
         stty_save()
 
         # Launch qemu
-        subprocess.call(["qemu-system-x86_64"] + args)
+        qemu_env = os.environ.copy()
+        qemu_env['OSV_BRIDGE'] = cmdargs.bridge
+        subprocess.call(["qemu-system-x86_64"] + args, env = qemu_env)
     except OSError, e:
         if e.errno == errno.ENOENT:
           print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
