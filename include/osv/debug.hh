@@ -117,6 +117,6 @@ void debug(boost::format& fmt, args... as)
     debug(osv::sprintf(fmt, as...));
 }
 
-void abort(const char *msg) __attribute__((noreturn));
+void abort(const char *fmt, ...) __attribute__((noreturn));
 
 #endif // DEBUG_H

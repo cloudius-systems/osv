@@ -80,10 +80,18 @@ void abort()
     abort("Aborted\n");
 }
 
-void abort(const char *msg)
+void abort(const char *fmt, ...)
 {
     if (!already_aborted) {
         already_aborted = true;
+
+        static char msg[1024];
+        va_list ap;
+
+        va_start(ap, fmt);
+        vsnprintf(msg, sizeof(msg), fmt, ap);
+        va_end(ap);
+
         debug_ll(msg);
         panic::pvpanic::panicked();
     }
