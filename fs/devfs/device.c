@@ -122,24 +122,7 @@ void read_partition_table(struct device *dev)
 			continue;
 		}
 
-		if ((entry->starting_head == 0) || (entry->starting_sector == 0) ||
-			(entry->starting_cylinder == 0) || (entry->ending_head == 0) ||
-			(entry->ending_sector == 0) || (entry->ending_cylinder) == 0) {
-			continue;
-		}
-
-		if (dev->size < (8ULL << 30)) {
-			uint64_t lba = (entry->starting_cylinder * 255 + entry->starting_head) * 63 + (entry->starting_sector - 1);
-			uint64_t end = (entry->ending_cylinder * 255 + entry->ending_head) * 63 + (entry->ending_sector - 1);
-
-			if ((lba != entry->rela_sector) || (end != (entry->rela_sector + entry->total_sectors))) {
-				kprintf("corrupted partition, %d. Skipping\n", index);
-				continue;
-			}
-		} else if ((entry->starting_head != 255) || (entry->starting_sector != 63) ||
-				   (entry->starting_cylinder != 1023) || (entry->ending_head != 255) ||
-				   (entry->ending_sector != 63) || (entry->ending_cylinder) != 1023) {
-			kprintf("corrupted partition, %d. Skipping\n", index);
+		if (entry->starting_sector == 0) {
 			continue;
 		}
 
@@ -147,7 +130,7 @@ void read_partition_table(struct device *dev)
 		new_dev = device_create(dev->driver, dev_name, dev->flags);
 		free(new_dev->private_data);
 
-		new_dev->offset = entry->rela_sector << 9;
+		new_dev->offset = (off_t)entry->rela_sector << 9;
 		new_dev->size = (off_t)entry->total_sectors << 9;
 		new_dev->max_io_size = dev->max_io_size;
 		new_dev->private_data = dev->private_data;
