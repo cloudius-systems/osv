@@ -24,6 +24,9 @@
         description="generate the distribution" >
 
     <jar jarfile="${dist}/bench.jar" basedir="${build}" compress="false">
+        <fileset dir="${build}"/>
+        <fileset dir="${src}" includes="test.txt"/>
+
 	    <manifest>
 	    	<attribute name="Main-Class" value="com.cloudiussystems.bench.Bench"/>
 	    </manifest>

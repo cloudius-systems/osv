@@ -16,12 +16,13 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.zip.ZipException;
 
 public class RunJava {
-	
+
     public static void main(String[] args) {
         try {
             parseArgs(args);
@@ -76,7 +77,7 @@ public class RunJava {
                     return;
                 }
                 Xclassloader = args[i+1];
-                i++;           
+                i++;
             } else if (!args[i].startsWith("-")) {
                 runClass(args[i], java.util.Arrays.copyOfRange(args,  i+1,  args.length), classpath);
                 return;
@@ -110,9 +111,40 @@ public class RunJava {
         }
     }
 
-    static void runClass(String mainClass, String[] args, Iterable<String> classpath) throws Throwable {
-        setClassPath(classpath);
-        runMain(loadClass(mainClass), args);
+    static void runClass(final String mainClass, final String[] args, final Iterable<String> classpath) throws Throwable {
+        OsvSystemClassLoader osvClassLoader = getOsvClassLoader();
+        ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getDefaultSystemClassLoader());
+
+        osvClassLoader.run(appClassLoader,
+                new SandBoxedProcess() {
+
+                    @Override
+                    public void run() throws Throwable {
+                        updateClassPathProperty(classpath);
+                        runMain(loadClass(mainClass), args);
+                    }
+                });
+    }
+
+    private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
+        List<URL> urls = toUrls(classpath);
+
+        // If no classpath was specified, don't touch the classloader at
+        // all, so we just inherit the one used to run us.
+        if (urls.isEmpty()) {
+            return parent;
+        }
+
+        URL[] urlArray = urls.toArray(new URL[urls.size()]);
+        return createAppClassLoader(urlArray, parent);
+    }
+
+    private static List<URL> toUrls(Iterable<String> classpath) throws MalformedURLException {
+        ArrayList<URL> urls = new ArrayList<URL>();
+        for (String path : classpath) {
+            urls.add(toUrl(path));
+        }
+        return urls;
     }
 
     static void runMain(Class<?> klass, String[] args) throws Throwable {
@@ -121,48 +153,40 @@ public class RunJava {
             main.invoke(null, new Object[] { args });
         } catch (InvocationTargetException ex) {
             throw ex.getCause();
-        }               
+        }
     }
-    
+
+    private static OsvSystemClassLoader getOsvClassLoader() {
+        ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
+        if (!(systemClassLoader instanceof OsvSystemClassLoader)) {
+            throw new AssertionError("System class loader should be an instance of "
+                    + OsvSystemClassLoader.class.getName() + " but is "
+                    + systemClassLoader.getClass().getName());
+        }
+
+        return (OsvSystemClassLoader) systemClassLoader;
+    }
+
     static String Xclassloader = null;
-    static URLClassLoader getClassLoader(URL[] urls) {
+    private static URLClassLoader createAppClassLoader(URL[] urls, ClassLoader parent) {
         if (Xclassloader == null) {
-            return new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
+            return new URLClassLoader(urls, parent);
         } else {
             try {
                 Class<?> classloader = loadClass(Xclassloader);
                 Constructor<?> c = classloader.getConstructor(URL[].class, ClassLoader.class);
-                URLClassLoader cl = (URLClassLoader)
-                        c.newInstance(urls, ClassLoader.getSystemClassLoader());
-                return cl;
+                return (URLClassLoader) c.newInstance(urls, parent);
             } catch (Throwable e) {
                 e.printStackTrace();
-                return new URLClassLoader(urls, ClassLoader.getSystemClassLoader());              
+                return new URLClassLoader(urls, parent);
             }
         }
     }
 
-    static void setClassPath(Iterable<String> paths) throws MalformedURLException {
-        ArrayList<URL> urls = new ArrayList<URL>();
-        for (String path : paths) {
-            urls.add(toUrl(path));
-        }
-
-        // If no classpath was specified, don't touch the classloader at
-        // all, so we just inherit the one used to run us.
-        if (urls.isEmpty())
-            return;
-
-        URL[] urlArray = urls.toArray(new URL[urls.size()]);
-	    
-        URLClassLoader ucl = getClassLoader(urlArray);
-
-        Thread.currentThread().setContextClassLoader(ucl);
-        
-	    // Also update the java.class.path property
+    private static void updateClassPathProperty(Iterable<String> classpath) {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
-        for (String path : paths) {
+        for (String path : classpath) {
             if (!first) {
                 sb.append(":");
             }
@@ -210,4 +234,5 @@ public class RunJava {
         }
         return ret;
     }
+
 }

@@ -56,6 +56,7 @@ int main(int argc, char **argv)
 
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=" RUNJAVA_PATH));
+    options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
 
     int orig_argc = argc;
     for (int i = 1; i < orig_argc; i++) {
