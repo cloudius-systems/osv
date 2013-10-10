@@ -76,8 +76,16 @@ TRACEPOINT(trace_vfs_open_err, "%d", int);
 struct task *main_task;	/* we only have a single process */
 
 extern "C"
-int open(const char *pathname, int flags, mode_t mode)
+int open(const char *pathname, int flags, ...)
 {
+	mode_t mode = 0;
+	if (flags & O_CREAT) {
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, mode_t);
+		va_end(ap);
+	}
+
 	trace_vfs_open(pathname, flags, mode);
 
 	struct task *t = main_task;
