@@ -129,7 +129,7 @@ int	 vfs_findroot(char *path, struct mount **mp, char **root);
 
 int	 fs_noop(void);
 
-struct dentry *dentry_alloc(struct vnode *vp, char *path);
+struct dentry *dentry_alloc(struct vnode *vp, const char *path);
 void	drele(struct dentry *dp);
 
 #ifdef DEBUG_VFS

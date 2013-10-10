@@ -46,7 +46,7 @@ static struct mutex dentry_hash_lock;
  * XXX: replace with a better hash for 64-bit pointers.
  */
 static u_int
-dentry_hash(struct mount *mp, char *path)
+dentry_hash(struct mount *mp, const char *path)
 {
 	u_int val = 0;
 
@@ -59,7 +59,7 @@ dentry_hash(struct mount *mp, char *path)
 
 
 struct dentry *
-dentry_alloc(struct vnode *vp, char *path)
+dentry_alloc(struct vnode *vp, const char *path)
 {
 	struct mount *mp = vp->v_mount;
 	struct dentry *dp = calloc(sizeof(*dp), 1);
