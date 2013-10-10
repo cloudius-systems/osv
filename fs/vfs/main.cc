@@ -76,8 +76,16 @@ TRACEPOINT(trace_vfs_open_err, "%d", int);
 struct task *main_task;	/* we only have a single process */
 
 extern "C"
-int open(const char *pathname, int flags, mode_t mode)
+int open(const char *pathname, int flags, ...)
 {
+	mode_t mode = 0;
+	if (flags & O_CREAT) {
+		va_list ap;
+		va_start(ap, flags);
+		mode = va_arg(ap, mode_t);
+		va_end(ap);
+	}
+
 	trace_vfs_open(pathname, flags, mode);
 
 	struct task *t = main_task;
@@ -1089,7 +1097,7 @@ int fcntl(int fd, int cmd, int arg)
 		FD_UNLOCK(fp);
 		break;
 	case F_GETFL:
-		ret = fp->f_flags;
+		ret = oflags(fp->f_flags);
 		break;
 	case F_SETFL:
 		/* Ignore flags */
@@ -1097,8 +1105,8 @@ int fcntl(int fd, int cmd, int arg)
 
 		assert((arg & ~SETFL) == 0);
 		FD_LOCK(fp);
-		fp->f_flags = (fp->f_flags & ~SETFL) |
-			(arg & SETFL);
+		fp->f_flags = fflags((oflags(fp->f_flags) & ~SETFL) |
+			(arg & SETFL));
 		FD_UNLOCK(fp);
 
 		/* Sync nonblocking/async state with file flags */

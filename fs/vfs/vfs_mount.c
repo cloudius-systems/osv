@@ -196,7 +196,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 }
 
 int
-sys_umount(char *path)
+sys_umount(const char *path)
 {
 	struct mount *mp;
 	int error;

@@ -26,12 +26,15 @@ struct dirent
 	char d_name[256];
 };
 
+#define dirent64 dirent
+
 #define d_fileno d_ino
 
 int            closedir(DIR *);
 DIR           *fdopendir(int);
 DIR           *opendir(const char *);
 struct dirent *readdir(DIR *);
+struct dirent *readdir64(DIR *);
 int            readdir_r(DIR *__restrict, struct dirent *__restrict, struct dirent **__restrict);
 void           rewinddir(DIR *);
 void           seekdir(DIR *, long);

@@ -88,7 +88,7 @@ static mutex_t vnode_lock = MUTEX_INITIALIZER;
  * XXX(hch): replace with a better hash for 64-bit pointers.
  */
 static u_int
-vn_hash(struct mount *mp, char *path)
+vn_hash(struct mount *mp, const char *path)
 {
 	u_int val = 0;
 
@@ -157,7 +157,7 @@ vn_unlock(struct vnode *vp)
  * Increment its reference count and lock it.
  */
 struct vnode *
-vget(struct mount *mp, char *path)
+vget(struct mount *mp, const char *path)
 {
 	struct vnode *vp;
 	int error;
