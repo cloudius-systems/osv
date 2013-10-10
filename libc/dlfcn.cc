@@ -124,7 +124,8 @@ extern "C" int dladdr(void *addr, Dl_info *info)
     info->dli_fbase = ei.base;
     info->dli_sname = ei.sym;
     info->dli_saddr = ei.addr;
-    return 0;
+    /* dladdr returns non-zero on success and 0 on error */
+    return 1;
 }
 
 extern "C" char *dlerror(void)
