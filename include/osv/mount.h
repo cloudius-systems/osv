@@ -47,7 +47,8 @@ struct mount {
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
-	char		m_path[PATH_MAX]; /* mounted path */
+	char            m_path[PATH_MAX]; /* mounted path */
+	char            m_special[PATH_MAX]; /* resource */
 	struct device	*m_dev;		/* mounted device */
 	struct dentry	*m_root;	/* root vnode */
 	struct dentry	*m_covered;	/* vnode covered on parent fs */
@@ -134,5 +135,25 @@ void	 vfs_busy(struct mount *mp);
 void	 vfs_unbusy(struct mount *mp);
 
 __END_DECLS
+
+#ifdef __cplusplus
+
+#include <vector>
+#include <string>
+
+namespace osv {
+
+struct mount_desc {
+    std::string special;
+    std::string path;
+    std::string type;
+    std::string options;
+};
+
+std::vector<mount_desc> current_mounts();
+
+}
+
+#endif
 
 #endif	/* !_SYS_MOUNT_H_ */

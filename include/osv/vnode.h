@@ -74,6 +74,7 @@ struct vnode {
 	mode_t		v_mode;		/* file mode */
 	off_t		v_size;		/* file size */
 	mutex_t		v_lock;		/* lock for this vnode */
+	LIST_HEAD(, dentry) v_names;	/* directory entries pointing at this */
 	int		v_nrlocks;	/* lock count (for debug) */
 	char		*v_path;	/* pointer to path in fs */
 	void		*v_data;	/* private data for fs */
@@ -198,6 +199,8 @@ void	 vref(struct vnode *);
 void	 vrele(struct vnode *);
 int	 vcount(struct vnode *);
 void	 vflush(struct mount *);
+void vn_add_name(struct vnode *, struct dentry *);
+void vn_del_name(struct vnode *, struct dentry *);
 
 extern enum vtype iftovt_tab[];
 extern int vttoif_tab[];
