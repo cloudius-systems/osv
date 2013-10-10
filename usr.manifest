@@ -69,4 +69,5 @@
 /usr/mgmt/templates/**: ../../mgmt/web/templates/**
 /usr/mgmt/public/**: ../../mgmt/web/public/**
 /usr/mgmt/lib/**: ../../mgmt/web/lib/**
+/usr/mgmt/config/logging.properties: ../../mgmt/web/config/logging.properties
 /tmp/index.rb: ../../mgmt/web/views/index.rb

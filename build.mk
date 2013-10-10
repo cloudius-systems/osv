@@ -2,7 +2,7 @@
 arch = x64
 # cmdline = java.so -jar /java/cli.jar
 # cmdline = java.so -jar /java/web.jar -cp java/cli.jar app
-cmdline = java.so -jar /usr/mgmt/web-1.0.0.jar app prod
+cmdline = java.so -Djava.util.logging.config.file=/usr/mgmt/config/logging.properties -jar /usr/mgmt/web-1.0.0.jar app prod
 #cmdline = testrunner.so
 #cmdline = java.so Hello
 local-includes =
