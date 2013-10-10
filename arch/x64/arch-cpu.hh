@@ -45,7 +45,6 @@ struct arch_cpu {
     u32 apic_id;
     u32 acpi_id;
     u64 gdt[nr_gdt];
-    bool in_exception = false;
     void init_on_cpu();
     void set_ist_entry(unsigned ist, char* base, size_t size);
     void set_exception_stack(char* base, size_t size);

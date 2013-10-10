@@ -11,6 +11,8 @@
 
 namespace sched {
 
+__thread bool in_exception = false;
+
 inline void arch_cpu::enter_exception()
 {
     if (in_exception) {
