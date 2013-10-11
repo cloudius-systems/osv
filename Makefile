@@ -28,6 +28,7 @@ $(submake): Makefile
 	mkdir -p $(dir $@)
 	echo 'mode = $(mode)' > $@
 	echo 'src = ../..' >> $@
+	echo 'out = $(abspath $(out))' >> $@
 	echo 'VPATH = ../..' >> $@
 	echo 'include ../../build.mk' >> $@
 

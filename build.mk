@@ -160,10 +160,10 @@ tests += tests/tst-kill.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
-java/io/osv/RunJava.class: javabase=java
-java/runjava.jar: java/io/osv/RunJava.class
-	jar cf $@ -C java $(patsubst java/%, %, $^)
-	jar i $@
+java/runjava.jar:
+	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(out) \
+		-e -f $(src)/java/build.xml runjava-jar $(if $V,,-q), ANT runjava.jar)
+.PHONY: java/runjava.jar
 
 tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
