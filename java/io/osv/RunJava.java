@@ -142,11 +142,12 @@ public class RunJava {
         }
     }
 
-    static void setClassPath(Iterable<String> jars) throws MalformedURLException {
+    static void setClassPath(Iterable<String> paths) throws MalformedURLException {
         ArrayList<URL> urls = new ArrayList<URL>();
-        for (String jar : jars) {
-            urls.add(new URL("file:///" + jar));
+        for (String path : paths) {
+            urls.add(toUrl(path));
         }
+
         // If no classpath was specified, don't touch the classloader at
         // all, so we just inherit the one used to run us.
         if (urls.isEmpty())
@@ -161,14 +162,22 @@ public class RunJava {
 	    // Also update the java.class.path property
         StringBuilder sb = new StringBuilder();
         boolean first = true;
-        for (String jar : jars) {
+        for (String path : paths) {
             if (!first) {
                 sb.append(":");
             }
             first = false;
-            sb.append(jar);
+            sb.append(path);
         }
         System.setProperty("java.class.path", sb.toString());
+    }
+
+    private static URL toUrl(String path) throws MalformedURLException {
+        return new URL("file:///" + path + (isDirectory(path) ? "/" : ""));
+    }
+
+    private static boolean isDirectory(String path) {
+        return new File(path).isDirectory();
     }
 
     static Class<?> loadClass(String name) throws ClassNotFoundException {
