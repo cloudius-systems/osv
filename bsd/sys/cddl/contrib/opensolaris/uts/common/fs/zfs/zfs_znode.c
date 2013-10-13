@@ -487,6 +487,8 @@ zfs_create_op_tables()
 }
 #endif	/* sun */
 
+#endif
+
 int
 zfs_create_share_dir(zfsvfs_t *zfsvfs, dmu_tx_t *tx)
 {
@@ -529,8 +531,8 @@ zfs_create_share_dir(zfsvfs_t *zfsvfs, dmu_tx_t *tx)
 
 	zfs_acl_ids_free(&acl_ids);
 	ZTOV(sharezp)->v_data = NULL;
-	ZTOV(sharezp)->v_count = 0;
-	ZTOV(sharezp)->v_holdcnt = 0;
+	ZTOV(sharezp)->v_refcnt = 0;
+	//ZTOV(sharezp)->v_holdcnt = 0;
 	zp->z_vnode = NULL;
 	sa_handle_destroy(sharezp->z_sa_hdl);
 	sharezp->z_vnode = NULL;
@@ -538,7 +540,6 @@ zfs_create_share_dir(zfsvfs_t *zfsvfs, dmu_tx_t *tx)
 
 	return (error);
 }
-#endif
 
 #ifdef __OSV__
 #define zfs_expldev(dev)	dev
@@ -1773,7 +1774,6 @@ log:
 	return (0);
 }
 
-#ifdef NOTYET
 void
 zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
 {
@@ -1927,7 +1927,6 @@ zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
 		mutex_destroy(&zfsvfs.z_hold_mtx[i]);
 }
 
-#endif /* _NOTYET */
 #endif /* _KERNEL */
 
 static int

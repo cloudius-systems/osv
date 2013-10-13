@@ -124,13 +124,13 @@ static const char *userquota_perms[] = {
 static int zfs_ioc_userspace_upgrade(zfs_cmd_t *zc);
 static int zfs_check_settable(const char *name, nvpair_t *property,
     cred_t *cr);
-static int zfs_check_clearable(char *dataset, nvlist_t *props,
-    nvlist_t **errors);
+//static int zfs_check_clearable(char *dataset, nvlist_t *props,
+//    nvlist_t **errors);
 static int zfs_fill_zplprops_root(uint64_t, nvlist_t *, nvlist_t *,
     boolean_t *);
 int zfs_set_prop_nvlist(const char *, zprop_source_t, nvlist_t *, nvlist_t **);
  
-static void zfsdev_close(void *data);
+void zfsdev_close(struct file *fp);
 
 /* _NOTE(PRINTFLIKE(4)) - this is printf-like, but lint is too whiney */
 void
@@ -876,6 +876,8 @@ zfs_secpolicy_create(zfs_cmd_t *zc, cred_t *cr)
 	return (error);
 }
 
+#ifndef __OSV__
+
 static int
 zfs_secpolicy_umount(zfs_cmd_t *zc, cred_t *cr)
 {
@@ -887,6 +889,8 @@ zfs_secpolicy_umount(zfs_cmd_t *zc, cred_t *cr)
 	}
 	return (error);
 }
+
+#endif
 
 /*
  * Policy for pool operations - create/destroy pools, add vdevs, etc.  Requires
@@ -1070,6 +1074,8 @@ get_nvlist(uint64_t nvl, uint64_t size, int iflag, nvlist_t **nvp)
 	return (0);
 }
 
+#ifdef NOTYET
+
 static int
 fit_error_list(zfs_cmd_t *zc, nvlist_t **errors)
 {
@@ -1104,6 +1110,8 @@ fit_error_list(zfs_cmd_t *zc, nvlist_t **errors)
 
 	return (0);
 }
+
+#endif
 
 static int
 put_nvlist(zfs_cmd_t *zc, nvlist_t *nvl)
@@ -1329,6 +1337,9 @@ zfs_ioc_pool_import(zfs_cmd_t *zc)
 static int
 zfs_ioc_pool_export(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	int error;
 	boolean_t force = (boolean_t)zc->zc_cookie;
 	boolean_t hardforce = (boolean_t)zc->zc_guid;
@@ -1338,6 +1349,7 @@ zfs_ioc_pool_export(zfs_cmd_t *zc)
 	if (error == 0)
 		zvol_remove_minors(zc->zc_name);
 	return (error);
+#endif
 }
 
 static int
@@ -2175,7 +2187,9 @@ zfs_prop_set_userquota(const char *dsname, nvpair_t *pair)
 
 	err = zfsvfs_hold(dsname, FTAG, &zfsvfs, B_FALSE);
 	if (err == 0) {
+#ifndef __OSV__
 		err = zfs_set_userquota(zfsvfs, type, domain, rid, quota);
+#endif
 		zfsvfs_rele(zfsvfs, FTAG);
 	}
 
@@ -2231,9 +2245,12 @@ zfs_prop_set_special(const char *dsname, zprop_source_t source,
 		err = dsl_dataset_set_reservation(dsname, source, intval);
 		break;
 	case ZFS_PROP_VOLSIZE:
+		abort();
+#ifdef NOTYET
 		err = zvol_set_volsize(dsname, ddi_driver_major(zfs_dip),
 		    intval);
 		break;
+#endif
 	case ZFS_PROP_VERSION:
 	{
 		zfsvfs_t *zfsvfs;
@@ -2991,10 +3008,12 @@ zfs_ioc_create(zfs_cmd_t *zc)
 		cbfunc = zfs_create_cb;
 		break;
 
+#ifdef NOTYET
 	case DMU_OST_ZVOL:
 		cbfunc = zvol_create_cb;
 		break;
 
+#endif
 	default:
 		cbfunc = NULL;
 		break;
@@ -3154,11 +3173,12 @@ out:
 	return (error);
 }
 
-#ifndef __OSV__
-
 int
 zfs_unmount_snap(const char *name, void *arg)
 {
+#ifdef __OSV__
+	abort();
+#else
 	vfs_t *vfsp = NULL;
 
 	if (arg) {
@@ -3187,9 +3207,8 @@ zfs_unmount_snap(const char *name, void *arg)
 		mtx_unlock(&Giant);	/* dounmount() */
 	}
 	return (0);
-}
-
 #endif
+}
 
 /*
  * inputs:
@@ -3263,6 +3282,9 @@ zfs_ioc_destroy_snaps_nvl(zfs_cmd_t *zc)
 static int
 zfs_ioc_destroy(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	int err;
 	if (strchr(zc->zc_name, '@') && zc->zc_objset_type == DMU_OST_ZFS) {
 		err = zfs_unmount_snap(zc->zc_name, NULL);
@@ -3274,6 +3296,7 @@ zfs_ioc_destroy(zfs_cmd_t *zc)
 	if (zc->zc_objset_type == DMU_OST_ZVOL && err == 0)
 		(void) zvol_remove_minor(zc->zc_name);
 	return (err);
+#endif
 }
 
 /*
@@ -3285,6 +3308,9 @@ zfs_ioc_destroy(zfs_cmd_t *zc)
 static int
 zfs_ioc_rollback(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	dsl_dataset_t *ds, *clone;
 	int error;
 	zfsvfs_t *zfsvfs;
@@ -3358,6 +3384,7 @@ out:
 	if (ds)
 		dsl_dataset_rele(ds, FTAG);
 	return (error);
+#endif
 }
 
 /*
@@ -3522,6 +3549,8 @@ zfs_check_settable(const char *dsname, nvpair_t *pair, cred_t *cr)
 	return (zfs_secpolicy_setprop(dsname, prop, pair, CRED()));
 }
 
+#ifdef NOTYET
+
 /*
  * Removes properties from the given props list that fail permission checks
  * needed to clear them and to restore them in case of a receive error. For each
@@ -3654,6 +3683,9 @@ next:
 static boolean_t zfs_ioc_recv_inject_err;
 #endif
 
+#endif
+
+
 /*
  * inputs:
  * zc_name		name of containing filesystem
@@ -3675,6 +3707,9 @@ static boolean_t zfs_ioc_recv_inject_err;
 static int
 zfs_ioc_recv(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	file_t *fp;
 	objset_t *os;
 	dmu_recv_cookie_t drc;
@@ -3893,6 +3928,7 @@ out:
 		error = props_error;
 
 	return (error);
+#endif
 }
 
 /*
@@ -3910,6 +3946,9 @@ out:
 static int
 zfs_ioc_send(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	objset_t *fromsnap = NULL;
 	objset_t *tosnap;
 	int error;
@@ -3983,6 +4022,7 @@ zfs_ioc_send(zfs_cmd_t *zc)
 		dsl_dataset_rele(dsfrom, FTAG);
 	dsl_dataset_rele(ds, FTAG);
 	return (error);
+#endif
 }
 
 /*
@@ -4228,6 +4268,9 @@ zfs_ioc_promote(zfs_cmd_t *zc)
 static int
 zfs_ioc_userspace_one(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	zfsvfs_t *zfsvfs;
 	int error;
 
@@ -4243,6 +4286,7 @@ zfs_ioc_userspace_one(zfs_cmd_t *zc)
 	zfsvfs_rele(zfsvfs, FTAG);
 
 	return (error);
+#endif
 }
 
 /*
@@ -4259,6 +4303,9 @@ zfs_ioc_userspace_one(zfs_cmd_t *zc)
 static int
 zfs_ioc_userspace_many(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	zfsvfs_t *zfsvfs;
 	int bufsize = zc->zc_nvlist_dst_size;
 
@@ -4283,6 +4330,7 @@ zfs_ioc_userspace_many(zfs_cmd_t *zc)
 	zfsvfs_rele(zfsvfs, FTAG);
 
 	return (error);
+#endif
 }
 
 /*
@@ -4295,6 +4343,8 @@ zfs_ioc_userspace_many(zfs_cmd_t *zc)
 static int
 zfs_ioc_userspace_upgrade(zfs_cmd_t *zc)
 {
+	abort();
+#ifdef NOTYET
 	objset_t *os;
 	int error = 0;
 	zfsvfs_t *zfsvfs;
@@ -4324,6 +4374,7 @@ zfs_ioc_userspace_upgrade(zfs_cmd_t *zc)
 	}
 
 	return (error);
+#endif
 }
 
 #ifdef sun
@@ -4543,6 +4594,9 @@ zfs_ioc_tmp_snapshot(zfs_cmd_t *zc)
 static int
 zfs_ioc_diff(zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	abort();
+#else
 	objset_t *fromsnap;
 	objset_t *tosnap;
 	file_t *fp;
@@ -4577,6 +4631,7 @@ zfs_ioc_diff(zfs_cmd_t *zc)
 	dmu_objset_rele(fromsnap, FTAG);
 	dmu_objset_rele(tosnap, FTAG);
 	return (error);
+#endif
 }
 
 #ifdef sun
@@ -4792,7 +4847,11 @@ zfs_ioc_hold(zfs_cmd_t *zc)
 	}
 
 	if (zc->zc_cleanup_fd != -1 && zc->zc_temphold) {
+#ifdef __OSV__
+		error = 0;
+#else
 		error = zfs_onexit_fd_hold(zc->zc_cleanup_fd, &minor);
+#endif
 		if (error) {
 			dsl_dataset_rele(ds, FTAG);
 			return (error);
@@ -4803,10 +4862,14 @@ zfs_ioc_hold(zfs_cmd_t *zc)
 	    zc->zc_temphold);
 	if (minor != 0) {
 		if (error == 0) {
+#ifndef __OSV__
 			dsl_register_onexit_hold_cleanup(ds, zc->zc_string,
 			    minor);
+#endif
 		}
+#ifndef __OSV__
 		zfs_onexit_fd_rele(zc->zc_cleanup_fd);
+#endif
 	}
 	dsl_dataset_rele(ds, FTAG);
 
@@ -5085,6 +5148,14 @@ pool_status_check(const char *name, zfs_ioc_namecheck_t type)
 	return (error);
 }
 
+#ifdef __OSV__
+
+// really from zvol.c, but we don't build that yet
+void *zfsdev_state;
+
+#endif
+
+
 /*
  * Find a free minor number.
  */
@@ -5109,7 +5180,7 @@ zfsdev_minor_alloc(void)
 }
 
 static int
-zfs_ctldev_init(struct cdev *devp)
+zfs_ctldev_init(struct file *fp)
 {
 	minor_t minor;
 	zfs_soft_state_t *zs;
@@ -5123,11 +5194,13 @@ zfs_ctldev_init(struct cdev *devp)
 	if (ddi_soft_state_zalloc(zfsdev_state, minor) != DDI_SUCCESS)
 		return (EAGAIN);
 
-	devfs_set_cdevpriv((void *)(uintptr_t)minor, zfsdev_close);
+	fp->f_data = (void *)(uintptr_t)minor;
 
 	zs = ddi_get_soft_state(zfsdev_state, minor);
 	zs->zss_type = ZSST_CTLDEV;
+#ifdef NOTYET
 	zfs_onexit_init((zfs_onexit_t **)&zs->zss_data);
+#endif
 
 	return (0);
 }
@@ -5137,7 +5210,9 @@ zfs_ctldev_destroy(zfs_onexit_t *zo, minor_t minor)
 {
 	ASSERT(MUTEX_HELD(&spa_namespace_lock));
 
+#ifdef NOTYET
 	zfs_onexit_destroy(zo);
+#endif
 	ddi_soft_state_free(zfsdev_state, minor);
 }
 
@@ -5153,8 +5228,8 @@ zfsdev_get_soft_state(minor_t minor, enum zfs_soft_state_type which)
 	return (zp->zss_data);
 }
 
-static int
-zfsdev_open(struct cdev *devp, int flag, int mode, struct thread *td)
+int
+zfsdev_open(struct file *fp, int flag, int mode)
 {
 	int error = 0;
 
@@ -5166,18 +5241,18 @@ zfsdev_open(struct cdev *devp, int flag, int mode, struct thread *td)
 	/* This is the control device. Allocate a new minor if requested. */
 	if (flag & FEXCL) {
 		mutex_enter(&spa_namespace_lock);
-		error = zfs_ctldev_init(devp);
+		error = zfs_ctldev_init(fp);
 		mutex_exit(&spa_namespace_lock);
 	}
 
 	return (error);
 }
 
-static void
-zfsdev_close(void *data)
+void
+zfsdev_close(struct file *fp)
 {
 	zfs_onexit_t *zo;
-	minor_t minor = (minor_t)(uintptr_t)data;
+	minor_t minor = (minor_t)(uintptr_t)fp->f_data;
 
 	if (minor == 0)
 		return;
@@ -5231,12 +5306,14 @@ zfsdev_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 		zc = kmem_zalloc(sizeof(zfs_cmd_t), KM_SLEEP);
 		bzero(zc, sizeof(zfs_cmd_t));
 		zfs_cmd_compat_get(zc, addr, cflag);
-		zfs_ioctl_compat_pre(zc, &vec, cflag);
+		zfs_ioctl_compat_pre(zc, (int*)&vec, cflag);
 	} else {
 		zc = (void *)addr;
 	}
 
-#ifndef __OSV__
+#ifdef __OSV__
+	error = 0;
+#else
 	error = zfs_ioc_vec[vec].zvec_secpolicy(zc, td->td_ucred);
 #endif
 
@@ -5288,7 +5365,8 @@ zfsdev_ioctl(struct cdev *dev, u_long cmd, caddr_t addr, int flag,
 
 int osv_zfs_ioctl(unsigned long req, void* buffer)
 {
-	return zfs_ioctl(NULL, req, (caddr_t)buffer, NULL);
+	// cast to compat sign extension
+	return zfsdev_ioctl(NULL, (unsigned)req, (caddr_t)buffer, 0, NULL);
 }
 
 #ifdef sun
@@ -5403,6 +5481,8 @@ static struct modlinkage modlinkage = {
 	NULL
 };
 #endif	/* sun */
+
+#ifndef __OSV__
 
 static struct cdevsw zfs_cdevsw = {
 	.d_version =	D_VERSION,
@@ -5549,3 +5629,5 @@ static moduledata_t zfs_mod = {
 DECLARE_MODULE(zfsctrl, zfs_mod, SI_SUB_VFS, SI_ORDER_ANY);
 MODULE_DEPEND(zfsctrl, opensolaris, 1, 1, 1);
 MODULE_DEPEND(zfsctrl, krpc, 1, 1, 1);
+
+#endif

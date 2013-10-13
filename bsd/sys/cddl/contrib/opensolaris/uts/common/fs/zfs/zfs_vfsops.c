@@ -2062,6 +2062,8 @@ zfs_busy(void)
 	return (zfs_active_fs_count != 0);
 }
 
+#endif
+
 int
 zfs_set_version(zfsvfs_t *zfsvfs, uint64_t newvers)
 {
@@ -2128,7 +2130,6 @@ zfs_set_version(zfsvfs_t *zfsvfs, uint64_t newvers)
 
 	return (0);
 }
-#endif
 
 /*
  * Read a property stored within the master node.
