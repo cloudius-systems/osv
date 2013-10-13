@@ -144,6 +144,16 @@ struct signature_char<bool> {
     static const char sig = '?';
 };
 
+template <>
+struct signature_char<float> {
+    static const char sig = 'f';
+};
+
+template <>
+struct signature_char<double> {
+    static const char sig = 'd';
+};
+
 template <typename T>
 struct signature_char<T*> {
     static const char sig = 'P';
