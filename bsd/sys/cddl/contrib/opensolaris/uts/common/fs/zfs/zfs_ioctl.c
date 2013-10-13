@@ -75,6 +75,7 @@
 #include <sys/zvol.h>
 #include <sys/dsl_scan.h>
 #include <sys/dmu_objset.h>
+#include <sys/ioccom.h>
 
 #include "zfs_namecheck.h"
 #include "zfs_prop.h"
