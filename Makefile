@@ -7,6 +7,11 @@ submake = $(out)/Makefile
 quiet = $(if $V, $1, @echo " $2"; $1)
 silentant = $(if $V,, scripts/silentant.py)
 
+# $(call only-if, value, what-to-do-if-true)
+only-if = $(if $(strip $(subst 0,,$1)),$2,@\#)
+
+mgmt = 1
+
 # It's not practical to build large Java programs from make, because of
 # how Java does dependencies; so we use ant instead.  But we also cannot
 # call ant from the main makefile (build.mk), since make will have no
@@ -16,7 +21,7 @@ silentant = $(if $V,, scripts/silentant.py)
 all: $(submake)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
-	cd mgmt && ./gradlew --daemon :web:jar build
+	$(call only-if, $(mgmt), cd mgmt && ./gradlew --daemon :web:jar build)
 	$(MAKE) -r -C $(dir $(submake)) $@
 
 $(submake): Makefile
@@ -31,7 +36,7 @@ qcow2: all
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
-	$(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null , GRADLE CLEAN)
+	$(call only-if, $(mgmt), $(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null, GRADLE CLEAN))
 
 external:
 	cd external/libunwind && autoreconf -i
