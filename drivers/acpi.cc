@@ -5,6 +5,9 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <map>
+#include <memory>
+
 extern "C" {
     #include "acpi.h"
     #include "acpiosxf.h"
@@ -22,6 +25,7 @@ extern "C" {
 #include <osv/semaphore.hh>
 
 #include "drivers/pci.hh"
+#include "interrupt.hh"
 
 #include "prio.hh"
 
@@ -201,13 +205,30 @@ AcpiOsReleaseObject (
 /*
  * Interrupt handlers
  */
+
+namespace osv {
+    std::map<UINT32, std::unique_ptr<gsi_edge_interrupt>> acpi_interrupts;
+}
+
 ACPI_STATUS
 AcpiOsInstallInterruptHandler(
     UINT32                  InterruptNumber,
     ACPI_OSD_HANDLER        ServiceRoutine,
     void                    *Context)
 {
-    return AE_NOT_IMPLEMENTED;
+    if (ServiceRoutine == nullptr) {
+        return AE_BAD_PARAMETER;
+    }
+
+    if (osv::acpi_interrupts.count(InterruptNumber)) {
+        return AE_ALREADY_EXISTS;
+    }
+
+    osv::acpi_interrupts[InterruptNumber] = std::unique_ptr<gsi_edge_interrupt>(
+        new gsi_edge_interrupt(InterruptNumber,
+                               [=] { ServiceRoutine(Context); }));
+
+    return AE_OK;
 }
 
 ACPI_STATUS
@@ -215,7 +236,16 @@ AcpiOsRemoveInterruptHandler(
     UINT32                  InterruptNumber,
     ACPI_OSD_HANDLER        ServiceRoutine)
 {
-    return AE_NOT_IMPLEMENTED;
+    if (ServiceRoutine == nullptr) {
+        return AE_BAD_PARAMETER;
+    }
+
+    if (!osv::acpi_interrupts.count(InterruptNumber)) {
+        return AE_NOT_EXIST;
+    }
+
+    osv::acpi_interrupts.erase(InterruptNumber);
+    return AE_OK;
 }
 
 ACPI_THREAD_ID AcpiOsGetThreadId(void)
