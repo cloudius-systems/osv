@@ -38,6 +38,7 @@
 #include <sys/systeminfo.h>
 #include <osv/fcntl.h>
 #include <unistd.h>
+#include <api/sys/time.h>
 
 /*
  * Emulation of kernel services in userland.
