@@ -17,8 +17,6 @@
 // sets up the class path, and runs the jar or class specified in these
 // parameters.
 
-extern elf::program* prog;
-
 #define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
 #define RUNJAVA_PATH    "/java/runjava.jar"
 #define RUNJAVA         "io/osv/RunJava"    // separated by slashes, not dots
@@ -46,7 +44,9 @@ static bool is_jvm_option(const char *arg) {
 extern "C"
 int main(int argc, char **argv)
 {
-    prog->add_object(JVM_PATH);
+    auto prog = elf::get_program();
+    // The JVM library remains loaded as long as jvm_so is in scope.
+    auto jvm_so = prog->get_library(JVM_PATH);
 
     auto JNI_GetDefaultJavaVMInitArgs
         = prog->lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");

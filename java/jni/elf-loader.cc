@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern elf::program* prog;
 
 bool run_elf(int argc, char** argv, int *return_code)
 {
@@ -14,7 +13,7 @@ bool run_elf(int argc, char** argv, int *return_code)
         return (false);
     }
 
-    auto obj = prog->add_object(argv[0]);
+    auto obj = elf::get_program()->get_library(argv[0]);
     if (!obj) {
         return (false);
     }
@@ -27,9 +26,6 @@ bool run_elf(int argc, char** argv, int *return_code)
     debug("run_elf(): running main() in the context of thread %p\n",
         sched::thread::current());
     int rc = main(argc, argv);
-
-    /* cleanups */
-    prog->remove_object(argv[0]);
 
     /* set the return code */
     if (return_code) {

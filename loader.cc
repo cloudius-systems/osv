@@ -102,8 +102,6 @@ void premain()
     }
 }
 
-elf::program* prog;
-
 int main(int ac, char **av)
 {
     debug("Loader Copyright 2013 Cloudius Systems\n");
@@ -192,7 +190,9 @@ void run_main(elf::program *prog, struct argblock *args)
 {
     auto av = args->av;
     auto ac = args->ac;
-    auto obj = prog->add_object(av[0]);
+    // Ensure that the shared library doesn't exit when we return by
+    // keeping a reference to it in the free store.
+    auto obj = *(new std::shared_ptr<elf::object>(prog->get_library(av[0])));
     if (!obj) {
         debug("run_main(): cannot execute %s. Aborting.\n", av[0]);
         abort();
@@ -234,7 +234,7 @@ void* do_main_thread(void *_args)
     else
         debug("Could not initialize network interface.\n");
 
-    run_main(prog, args);
+    run_main(elf::get_program(), args);
 
     return nullptr;
 }
@@ -270,8 +270,8 @@ void main_cont(int ac, char** av)
 
     processor::sti();
 
-    prog = new elf::program(fs);
-    prog->set_search_path({"/", "/usr/lib"});
+    new elf::program(fs);
+    elf::get_program()->set_search_path({"/", "/usr/lib"});
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work

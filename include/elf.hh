@@ -15,6 +15,9 @@
 #include <osv/types.h>
 #include <atomic>
 
+/**
+ * elf namespace
+ */
 namespace elf {
 
 typedef u64 Elf64_Addr;
@@ -315,6 +318,14 @@ protected:
     void* _tls_segment;
     ulong _tls_init_size, _tls_uninit_size;
     Elf64_Dyn* _dynamic_table;
+
+    // Keep list of references to other modules, to prevent them from being
+    // unloaded. When this object is unloaded, the reference count of all
+    // objects listed here goes down, and they too may be unloaded.
+    std::vector<std::shared_ptr<elf::object>> _needed;
+    // TODO: we also need a set<shared_ptr<object>> for other objects used in
+    // resolving symbols from this symbol.
+
     // Allow objects on program->_modules to be usable for the threads
     // currently initializing them, but not yet visible for other threads.
     // This simplifies the code (the initializer can use the regular lookup
@@ -356,12 +367,70 @@ public:
     object* obj;
 };
 
+/**
+ * The dynamic linker's view of the running program.
+ *
+ * \b program provides an interface to the dynamic linking of the running
+ * program. It allows loading and unloading shared objects, and looking up
+ * symbols.
+ *
+ * \b program is a singleton, whose only instance can be retrieved with
+ * program::get_program().
+ *
+ * For example, to load a shared object, run its main function, and unload
+ * it when no longer in use, you use the following code:
+ * \code
+ * auto lib = elf::get_program()->get_library(path);
+ * auto main = lib->lookup<int (int, char**)>("main");
+ * int rc = main(argc, argv);
+ * // The shared object may be unloaded when "lib" goes out of scope
+ * \endcode
+ * This example is missing error handling: see osv::run() for a more complete
+ * implementation.
+ */
 class program {
 public:
     explicit program(::filesystem& fs,
                      void* base = reinterpret_cast<void*>(0x100000000000UL));
-    object* add_object(std::string lib, std::vector<std::string> extra_path = {});
-    void remove_object(std::string name);
+    /**
+     * Load a shared library, and return an interface to it.
+     *
+     * \b get_library ensures that the specified shared library is loaded, and
+     * returns a shared pointer to a elf::object object through which this
+     * shared library can be used.
+     *
+     * For example, the following code snippet runs the main() function of a
+     * given shared library:
+     * \code
+     * auto lib = elf::get_program()->get_library(path);
+     * auto main = lib->lookup<int (int, char**)>("main");
+     * int rc = main(argc, argv);
+     * \endcode
+     *
+     * \return get_library() returns a reference-counted <I>shared pointer</I>
+     * (std::shared_ptr) to an elf::object. When the last shared-pointer
+     * pointing to the same library goes out of scope, the library will be
+     * automatically unloaded from memory. If the above example, as soon as
+     * "lib" goes out of scope, and if no other thread still refers to the same
+     * library, the library will be unloaded.
+     *
+     * \param[in] lib         The shared library to load. Can be a relative or
+     *                        absolute pathname, or a module name (to be looked
+     *                        up in the library search path.
+     * \param[in] extra_path  Additional directories to search in addition to
+     *                        the default search path which is set with
+     *                        set_search_path().
+     */
+    std::shared_ptr<elf::object>
+    get_library(std::string lib, std::vector<std::string> extra_path = {});
+
+    /**
+     * Set the default search path for get_library().
+     *
+     * The search path defaults (as set in loader.cc) to /, /usr/lib.
+     */
+    void set_search_path(std::initializer_list<std::string> path);
+
     symbol_module lookup(const char* symbol);
     template <typename T>
     T* lookup_function(const char* symbol);
@@ -370,17 +439,17 @@ public:
     template <typename functor>
     void with_modules(functor f);
     dladdr_info lookup_addr(const void* addr);
-    void set_search_path(std::initializer_list<std::string> path);
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
     void* do_lookup_function(const char* symbol);
-    void set_object(std::string lib, object* obj);
+    void set_object(std::string lib, std::shared_ptr<object> obj);
+    void remove_object(object *obj);
 private:
     ::filesystem& _fs;
     void* _next_alloc;
-    std::unique_ptr<object> _core;
-    std::map<std::string, object*> _files;
+    std::shared_ptr<object> _core;
+    std::map<std::string, std::weak_ptr<object>> _files;
     std::vector<object*> _modules; // in priority order
     std::vector<std::string> _search_path;
     // Count object additions and removals from _modules. dl_iterate_phdr()
@@ -388,8 +457,13 @@ private:
     int _modules_adds = 0, _modules_subs = 0;
     // debugger interface
     static object* s_objs[100];
+
+    friend elf::file::~file();
 };
 
+/**
+ * Get the single elf::program instance
+ */
 program* get_program();
 
 struct init_table {

@@ -123,6 +123,7 @@ load_program_headers();
 
 file::~file()
 {
+    get_program()->remove_object(this);
 }
 
 memory_image::memory_image(program& prog, void* base)
@@ -658,8 +659,14 @@ void object::load_needed()
     }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
-        if (_prog.add_object(lib, rpath) == nullptr)
-            debug(fmt("could not load %s\n") % lib);
+        auto obj = _prog.get_library(lib, rpath);
+        if (obj) {
+            // Keep a reference to the needed object, so it won't be
+            // unloaded until this object is unloaded.
+            _needed.push_back(std::move(obj));
+        } else {
+            debug("could not load %s\n", lib);
+        }
     }
 }
 
@@ -722,14 +729,14 @@ program::program(::filesystem& fs, void* addr)
     _core->load_segments();
     assert(!s_program);
     s_program = this;
-    set_object("libc.so.6", _core.get());
-    set_object("libm.so.6", _core.get());
-    set_object("ld-linux-x86-64.so.2", _core.get());
-    set_object("libpthread.so.0", _core.get());
-    set_object("libdl.so.2", _core.get());
-    set_object("librt.so.1", _core.get());
-    set_object("libstdc++.so.6", _core.get());
-    set_object("libgcc_s.so.1", _core.get());
+    set_object("libc.so.6", _core);
+    set_object("libm.so.6", _core);
+    set_object("ld-linux-x86-64.so.2", _core);
+    set_object("libpthread.so.0", _core);
+    set_object("libdl.so.2", _core);
+    set_object("librt.so.1", _core);
+    set_object("libstdc++.so.6", _core);
+    set_object("libgcc_s.so.1", _core);
 }
 
 void program::set_search_path(std::initializer_list<std::string> path)
@@ -742,11 +749,11 @@ tls_data program::tls()
     return _core->tls();
 }
 
-void program::set_object(std::string name, object* obj)
+void program::set_object(std::string name, std::shared_ptr<elf::object> obj)
 {
     _files[name] = obj;
-    if (std::find(_modules.begin(), _modules.end(), obj) == _modules.end()) {
-        _modules.push_back(obj);
+    if (std::find(_modules.begin(), _modules.end(), obj.get()) == _modules.end()) {
+        _modules.push_back(obj.get());
         _modules_adds++;
     }
 }
@@ -771,15 +778,11 @@ static std::string canonicalize(std::string p)
     }
 }
 
-object* program::add_object(std::string name, std::vector<std::string> extra_path)
+std::shared_ptr<elf::object>
+program::get_library(std::string name, std::vector<std::string> extra_path)
 {
     fileref f;
     if (name.find('/') == name.npos) {
-        for (auto mod : _modules) {
-            if (name == mod->soname()) {
-                return mod;
-            }
-        }
         std::vector<std::string> search_path;
         search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
         search_path.insert(search_path.end(), _search_path.begin(), _search_path.end());
@@ -799,47 +802,45 @@ object* program::add_object(std::string name, std::vector<std::string> extra_pat
         f = fileref_from_fname(name);
     }
 
-    if (!_files.count(name) && f) {
-        auto ef = new file(*this, f, name);
+    if (_files.count(name)) {
+        auto obj = _files[name].lock();
+        assert(obj);
+        return obj;
+    } else if (f) {
+        auto ef = std::make_shared<file>(*this, f, name);
         ef->set_base(_next_alloc);
-        _files[name] = ef;
         ef->setprivate(true);
         // We need to push the object at the end of the list (so that the main
         // shared object gets searched before the shared libraries it uses),
         // with one exception: the kernel needs to remain at the end of the
         // list - We want it to behave like a library, not the main program.
-        _modules.insert(std::prev(_modules.end()), ef);
+        _modules.insert(std::prev(_modules.end()), ef.get());
         _modules_adds++;
         ef->load_segments();
         _next_alloc = ef->end();
-        add_debugger_obj(ef);
+        add_debugger_obj(ef.get());
         ef->load_needed();
         ef->relocate();
         ef->run_init_funcs();
         ef->setprivate(false);
+        _files[name] = ef;
+        _files[ef->soname()] = ef;
         return ef;
+    } else {
+        return std::shared_ptr<object>();
     }
-
-    if (!_files.count(name)) {
-        return nullptr;
-    }
-
-    // TODO: we'll need to refcount the objects here or in the dl*() wrappers
-    return _files[name];
 }
 
-void program::remove_object(std::string name)
+void program::remove_object(object *ef)
 {
-//    std::lock_guard<mutex> guard(_mutex);
-    auto ef = _files[name];
-
     del_debugger_obj(ef);
-    _files.erase(name);
+    _files.erase(ef->pathname());
+    _files.erase(ef->soname());
     _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
     _modules_subs++;
     ef->run_fini_funcs();
     ef->unload_segments();
-    delete ef;
+    // Note we don't delete(ef) here - the contrary, delete(ef) calls us.
 }
 
 object* program::s_objs[100];
