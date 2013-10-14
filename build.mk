@@ -591,7 +591,7 @@ bootfs.o: bootfs.bin
 
 tools/mkfs/mkfs.so: CFLAGS += -lstdc++
 
-tools/mkfs/mkfs.so: tools/mkfs/mkfs.o libzfs.so
+tools/mkfs/mkfs.so: tools/mkfs/mkfs.o tools/mkfs/cpio.o libzfs.so
 
 runtime.o: ctype-data.h
 
