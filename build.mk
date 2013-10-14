@@ -162,7 +162,7 @@ tests/hello/Hello.class: javabase=tests/hello
 
 java/runjava.jar:
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(out) \
-		-e -f $(src)/java/build.xml runjava-jar $(if $V,,-q), ANT runjava.jar)
+		-e -f $(src)/java/runjava/build.xml jar $(if $V,,-q), ANT runjava)
 .PHONY: java/runjava.jar
 
 tools/%.o: COMMON += -fPIC

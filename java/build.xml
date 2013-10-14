@@ -9,14 +9,12 @@
   <property name="src-cloudius" location="cloudius/"/>
   <property name="src-cli" location="cli/"/>
   <property name="src-sshd" location="sshd"/>
-  <property name="dist" location="${out}"/>
-  <property name="java-dist" location="${dist}/java"/>
   <property name="build-cloudius" location="${out}/classes-cloudius"/>
   <property name="build-cli" location="${out}/classes-cli"/>
   <property name="build-sshd" location="${out}/classes-sshd"/>
-  <property name="build-runjava" location="${java-dist}/runjava"/>
   <property name="jars-sshd" value="bcprov-jdk15-140.jar mina-core-2.0.5.jar slf4j-api-1.7.5.jar slf4j-simple-1.7.5.jar sshd-core-0.8.0.jar sshd-pam-0.8.0.jar tomcat-apr-5.5.23.jar" />
   
+  <property name="dist" location="${out}"/>
 
   <target name="init">
     <!-- Create the build directory structure used by compile -->
@@ -26,20 +24,6 @@
     <mkdir dir="${build-cli}/META-INF"/>
     <mkdir dir="${build-sshd}"/>
     <mkdir dir="${build-sshd}/META-INF"/>
-  </target>
-
-  <target name="runjava-compile">
-    <mkdir dir="${build-runjava}"/>
-    <javac debug="true" includeantruntime="false" srcdir="." includes="io/**/*.java" destdir="${build-runjava}"/>
-  </target>
-
-  <target name="runjava-jar" depends="runjava-compile">
-    <jar jarfile="${java-dist}/runjava.jar">
-      <fileset dir="${build-runjava}"/>
-      <manifest>
-        <attribute name="Main-Class" value="io.osv.RunJava"/>
-      </manifest>
-    </jar>
   </target>
 
   <target name="compile" depends="init"
