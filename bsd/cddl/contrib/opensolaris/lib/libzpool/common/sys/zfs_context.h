@@ -223,7 +223,7 @@ extern void *mutex_owner(kmutex_t *mp);
  * RW locks
  */
 typedef struct krwlock {
-	int		rw_count;
+	volatile u_int	rw_count;
 	void		*rw_owner;
 	boolean_t	initialized;
 	rwlock_t	rw_lock;
