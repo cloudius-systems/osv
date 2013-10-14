@@ -21,6 +21,8 @@ extern "C" {
 #include <osv/mutex.h>
 #include <osv/semaphore.hh>
 
+#include "drivers/pci.hh"
+
 #include "prio.hh"
 
 ACPI_STATUS AcpiOsInitialize(void)
@@ -345,7 +347,33 @@ AcpiOsReadPciConfiguration(
     UINT64                  *Value,
     UINT32                  Width)
 {
-    return AE_NOT_IMPLEMENTED;
+    switch(Width) {
+    case 64:
+        // OSv pci config functions does not do 64 bits reads
+        return AE_NOT_IMPLEMENTED;
+        break;
+    case 32:
+        *Value = pci::read_pci_config(PciId->Bus,
+                                      PciId->Device,
+                                      PciId->Function,
+                                      Reg);
+        break;
+    case 16:
+        *Value = pci::read_pci_config_word(PciId->Bus,
+                                           PciId->Device,
+                                           PciId->Function,
+                                           Reg);
+        break;
+    case 8:
+        *Value = pci::read_pci_config_byte(PciId->Bus,
+                                           PciId->Device,
+                                           PciId->Function,
+                                           Reg);
+        break;
+    default:
+        return AE_BAD_PARAMETER;
+    }
+    return AE_OK;
 }
 
 ACPI_STATUS
@@ -355,7 +383,36 @@ AcpiOsWritePciConfiguration (
     UINT64                  Value,
     UINT32                  Width)
 {
-    return AE_NOT_IMPLEMENTED;
+    switch(Width) {
+    case 64:
+        // OSv pci config functions does not do 64 bits writes
+        return AE_NOT_IMPLEMENTED;
+        break;
+    case 32:
+        pci::write_pci_config(PciId->Bus,
+                              PciId->Device,
+                              PciId->Function,
+                              Reg,
+                              Value);
+        break;
+    case 16:
+        pci::write_pci_config_word(PciId->Bus,
+                                   PciId->Device,
+                                   PciId->Function,
+                                   Reg,
+                                   Value);
+        break;
+    case 8:
+        pci::write_pci_config_byte(PciId->Bus,
+                                   PciId->Device,
+                                   PciId->Function,
+                                   Reg,
+                                   Value);
+        break;
+    default:
+        return AE_BAD_PARAMETER;
+    }
+    return AE_OK;
 }
 
 BOOLEAN
