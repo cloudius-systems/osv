@@ -52,7 +52,7 @@
 #include <sys/errno.h>
 #include <sys/uio.h>
 #include <sys/bio.h>
-#include <sys/buf.h>
+//#include <sys/buf.h>
 #include <sys/kmem.h>
 #include <sys/conf.h>
 #include <sys/cmn_err.h>
@@ -88,7 +88,10 @@ struct g_class zfs_zvol_class = {
 	.version = G_VERSION,
 };
 
+
+#ifndef __OSV__
 DECLARE_GEOM_CLASS(zfs_zvol_class, zfs_zvol);
+#endif
 
 void *zfsdev_state;
 static char *zvol_tag = "zvol_tag";
@@ -145,22 +148,25 @@ int zvol_maxphys = DMU_MAX_ACCESS/2;
 
 extern int zfs_set_prop_nvlist(const char *, zprop_source_t,
     nvlist_t *, nvlist_t **);
-static int zvol_remove_zv(zvol_state_t *);
-static int zvol_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio);
-static int zvol_dumpify(zvol_state_t *zv);
-static int zvol_dump_fini(zvol_state_t *zv);
-static int zvol_dump_init(zvol_state_t *zv, boolean_t resize);
+//static int zvol_remove_zv(zvol_state_t *);
+//static int zvol_get_data(void *arg, lr_write_t *lr, char *buf, zio_t *zio);
+//static int zvol_dumpify(zvol_state_t *zv);
+//static int zvol_dump_fini(zvol_state_t *zv);
+//static int zvol_dump_init(zvol_state_t *zv, boolean_t resize);
 
-static zvol_state_t *zvol_geom_create(const char *name);
-static void zvol_geom_run(zvol_state_t *zv);
-static void zvol_geom_destroy(zvol_state_t *zv);
-static int zvol_geom_access(struct g_provider *pp, int acr, int acw, int ace);
-static void zvol_geom_start(struct bio *bp);
-static void zvol_geom_worker(void *arg);
+//static zvol_state_t *zvol_geom_create(const char *name);
+//static void zvol_geom_run(zvol_state_t *zv);
+//static void zvol_geom_destroy(zvol_state_t *zv);
+//static int zvol_geom_access(struct g_provider *pp, int acr, int acw, int ace);
+//static void zvol_geom_start(struct bio *bp);
+//static void zvol_geom_worker(void *arg);
 
 static void
 zvol_size_changed(zvol_state_t *zv)
 {
+#ifdef __OSV__
+	abort();
+#else
 #ifdef sun
 	dev_t dev = makedevice(maj, min);
 
@@ -188,6 +194,7 @@ zvol_size_changed(zvol_state_t *zv)
 		return;
 	pp->mediasize = zv->zv_volsize;
 #endif	/* !sun */
+#endif
 }
 
 int
@@ -243,6 +250,9 @@ zvol_get_stats(objset_t *os, nvlist_t *nv)
 static zvol_state_t *
 zvol_minor_lookup(const char *name)
 {
+#ifdef __OSV__
+	abort();
+#else
 	struct g_provider *pp;
 	struct g_geom *gp;
 	zvol_state_t *zv = NULL;
@@ -263,6 +273,7 @@ zvol_minor_lookup(const char *name)
 	g_topology_unlock();
 
 	return (gp != NULL ? zv : NULL);
+#endif
 }
 
 /* extent mapping arg */
@@ -270,6 +281,8 @@ struct maparg {
 	zvol_state_t	*ma_zv;
 	uint64_t	ma_blks;
 };
+
+#ifdef NOTYET
 
 /*ARGSUSED*/
 static int
@@ -323,6 +336,8 @@ zvol_free_extents(zvol_state_t *zv)
 	}
 }
 
+
+#ifdef NOTYET
 static int
 zvol_get_lbas(zvol_state_t *zv)
 {
@@ -381,6 +396,7 @@ zvol_create_cb(objset_t *os, void *arg, cred_t *cr, dmu_tx_t *tx)
 	error = zap_update(os, ZVOL_ZAP_OBJ, "size", 8, 1, &volsize, tx);
 	ASSERT(error == 0);
 }
+#endif
 
 /*
  * Replay a TX_WRITE ZIL transaction that didn't get committed
@@ -435,26 +451,26 @@ zvol_replay_err(zvol_state_t *zv, lr_t *lr, boolean_t byteswap)
  * Only TX_WRITE is needed for zvol.
  */
 zil_replay_func_t *zvol_replay_vector[TX_MAX_TYPE] = {
-	zvol_replay_err,	/* 0 no such transaction type */
-	zvol_replay_err,	/* TX_CREATE */
-	zvol_replay_err,	/* TX_MKDIR */
-	zvol_replay_err,	/* TX_MKXATTR */
-	zvol_replay_err,	/* TX_SYMLINK */
-	zvol_replay_err,	/* TX_REMOVE */
-	zvol_replay_err,	/* TX_RMDIR */
-	zvol_replay_err,	/* TX_LINK */
-	zvol_replay_err,	/* TX_RENAME */
-	zvol_replay_write,	/* TX_WRITE */
-	zvol_replay_err,	/* TX_TRUNCATE */
-	zvol_replay_err,	/* TX_SETATTR */
-	zvol_replay_err,	/* TX_ACL */
-	zvol_replay_err,	/* TX_CREATE_ACL */
-	zvol_replay_err,	/* TX_CREATE_ATTR */
-	zvol_replay_err,	/* TX_CREATE_ACL_ATTR */
-	zvol_replay_err,	/* TX_MKDIR_ACL */
-	zvol_replay_err,	/* TX_MKDIR_ATTR */
-	zvol_replay_err,	/* TX_MKDIR_ACL_ATTR */
-	zvol_replay_err,	/* TX_WRITE2 */
+	(zil_replay_func_t *)zvol_replay_err,	/* 0 no such transaction type */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_CREATE */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_MKDIR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_MKXATTR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_SYMLINK */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_REMOVE */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_RMDIR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_LINK */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_RENAME */
+	(zil_replay_func_t *)zvol_replay_write,	/* TX_WRITE */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_TRUNCATE */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_SETATTR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_ACL */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_CREATE_ACL */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_CREATE_ATTR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_CREATE_ACL_ATTR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_MKDIR_ACL */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_MKDIR_ATTR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_MKDIR_ACL_ATTR */
+	(zil_replay_func_t *)zvol_replay_err,	/* TX_WRITE2 */
 };
 
 #ifdef sun
@@ -471,6 +487,10 @@ zvol_name2minor(const char *name, minor_t *minor)
 	return (zv ? 0 : -1);
 }
 #endif	/* sun */
+
+#endif
+
+#ifdef NOTYET
 
 /*
  * Create a minor node (plus a whole lot more) for the specified volume.
@@ -747,6 +767,8 @@ zvol_prealloc(zvol_state_t *zv)
 }
 #endif	/* sun */
 
+#endif
+
 int
 zvol_update_volsize(objset_t *os, uint64_t volsize)
 {
@@ -776,6 +798,10 @@ zvol_update_volsize(objset_t *os, uint64_t volsize)
 void
 zvol_remove_minors(const char *name)
 {
+#ifdef __OSV__
+	abort();
+#else
+
 	struct g_geom *gp, *gptmp;
 	struct g_provider *pp;
 	zvol_state_t *zv;
@@ -804,6 +830,7 @@ zvol_remove_minors(const char *name)
 	g_topology_unlock();
 	mutex_exit(&spa_namespace_lock);
 	PICKUP_GIANT();
+#endif
 }
 
 int
@@ -890,6 +917,8 @@ out:
 
 	return (error);
 }
+
+#ifdef NOTYET
 
 /*ARGSUSED*/
 static int
@@ -1329,6 +1358,8 @@ zvol_strategy(struct bio *bp)
 
 	return (0);
 }
+
+#endif
 
 #ifdef sun
 /*
@@ -1997,9 +2028,14 @@ zvol_dump_fini(zvol_state_t *zv)
 }
 #endif	/* sun */
 
+#ifdef NOTYET
+
 static zvol_state_t *
 zvol_geom_create(const char *name)
 {
+#ifdef __OSV__
+	abort();
+#else
 	struct g_provider *pp;
 	struct g_geom *gp;
 	zvol_state_t *zv;
@@ -2019,6 +2055,7 @@ zvol_geom_create(const char *name)
 	pp->private = zv;
 
 	return (zv);
+#endif
 }
 
 static void
@@ -2213,9 +2250,14 @@ zvol_create_snapshots(objset_t *os, const char *name)
 	return (error);
 }
 
+#endif
+
 int
 zvol_create_minors(const char *name)
 {
+#ifdef __OSV__
+	abort();
+#else
 	uint64_t cookie;
 	objset_t *os;
 	char *osname, *p;
@@ -2275,7 +2317,10 @@ zvol_create_minors(const char *name)
 	dmu_objset_rele(os, FTAG);
 	kmem_free(osname, MAXPATHLEN);
 	return (0);
+#endif
 }
+
+#ifdef NOTYET
 
 static void
 zvol_rename_minor(struct g_geom *gp, const char *newname)
@@ -2303,9 +2348,12 @@ zvol_rename_minor(struct g_geom *gp, const char *newname)
 	g_error_provider(pp, 0);
 }
 
+#endif
+
 void
 zvol_rename_minors(const char *oldname, const char *newname)
 {
+#ifndef __OSV__
 	char name[MAXPATHLEN];
 	struct g_provider *pp;
 	struct g_geom *gp;
@@ -2342,4 +2390,5 @@ zvol_rename_minors(const char *oldname, const char *newname)
 	g_topology_unlock();
 	mutex_exit(&spa_namespace_lock);
 	PICKUP_GIANT();
+#endif
 }

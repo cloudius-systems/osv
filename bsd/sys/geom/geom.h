@@ -304,6 +304,8 @@ int g_valid_obj(void const *ptr);
 #define G_VALID_PROVIDER(foo) do { } while (0)
 #endif
 
+#ifndef __OSV__
+
 int g_modevent(module_t, int, void *);
 
 /* geom_io.c */
@@ -323,11 +325,15 @@ int g_write_data(struct g_consumer *cp, off_t offset, void *ptr, off_t length);
 int g_delete_data(struct g_consumer *cp, off_t offset, off_t length);
 void g_print_bio(struct bio *bp);
 
+#endif
+
 /* geom_kern.c / geom_kernsim.c */
 
 #ifdef _KERNEL
 
 extern struct sx topology_lock;
+
+#ifndef __OSV__
 
 struct g_kerneldump {
 	off_t		offset;
@@ -359,6 +365,10 @@ g_free(void *ptr)
 #endif
 	free(ptr, M_GEOM);
 }
+
+#endif
+
+extern struct mtx Giant;
 
 #define g_topology_lock() 					\
 	do {							\

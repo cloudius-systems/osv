@@ -199,6 +199,11 @@ arch/x64/boot32.o: loader.elf
 
 bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
 
+include $(src)/bsd/cddl/contrib/opensolaris/lib/libuutil/common/build.mk
+include $(src)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/build.mk
+include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk
+include $(src)/bsd/cddl/contrib/opensolaris/cmd/zfs/build.mk
+
 bsd  = bsd/net.o  
 bsd += bsd/machine/in_cksum.o
 bsd += bsd/sys/crypto/sha2/sha2.o
@@ -369,7 +374,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/gzip.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/lzjb.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/refcount.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/rrwlock.o
+zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/rrwlock.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/sa.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/sha256.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa.o
@@ -403,7 +408,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_debug.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_dir.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_fm.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_fuid.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_ioctl.o
+zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_ioctl.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_init.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_log.o
 #zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_onexit.o
@@ -420,7 +425,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_compress.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_inject.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zle.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
+zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 
 zfs-tests += tests/tst-zfs-simple.so
 zfs-tests += tests/tst-zfs-disk.so
@@ -574,7 +579,8 @@ usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
-		tests/testrunner.so java/java.so java/runjava.jar
+		tests/testrunner.so java/java.so java/runjava.jar \
+		zpool.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)

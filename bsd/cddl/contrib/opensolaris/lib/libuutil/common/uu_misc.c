@@ -69,7 +69,7 @@ static const char	*uu_panic_format;
 static va_list		uu_panic_args;
 static pthread_t	uu_panic_thread;
 
-static uint32_t		_uu_main_error;
+//static uint32_t		_uu_main_error;
 
 void
 uu_set_error(uint_t code)
@@ -206,10 +206,12 @@ uu_panic(const char *format, ...)
 int
 assfail(const char *astring, const char *file, int line)
 {
-	__assert(astring, file, line);
+	__assert_fail(astring, file, line, "");
 	/*NOTREACHED*/
 	return (0);
 }
+
+#ifndef __OSV__
 
 static void
 uu_lockup(void)
@@ -248,6 +250,8 @@ uu_init(void)
 {
 	(void) pthread_atfork(uu_lockup, uu_release, uu_release_child);
 }
+
+#endif
 
 /*
  * Dump a block of memory in hex+ascii, for debugging

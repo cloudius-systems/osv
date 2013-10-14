@@ -210,6 +210,8 @@ extern int vttoif_tab[];
 #define VTTOIF(indx)	(vttoif_tab[(int)(indx)])
 #define MAKEIMODE(indx, mode)   (int)(VTTOIF(indx) | (mode))
 
+#define VATTR_NULL(vp) (*(vp) = (vattr_t){})
+
 static inline void vnode_pager_setsize(struct vnode *vp, off_t size)
 {
 	vp->v_size = size;

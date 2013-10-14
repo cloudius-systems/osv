@@ -50,6 +50,8 @@ enum	uio_rw { UIO_READ, UIO_WRITE };
 
 #define UIO_MAXIOV 1024
 
+#define UIO_SYSSPACE 0
+
 struct uio {
 	struct iovec *uio_iov;		/* scatter/gather list */
 	int	uio_iovcnt;		/* length of scatter/gather list */

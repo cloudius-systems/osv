@@ -271,11 +271,15 @@ typedef enum zfs_case {
 	ZFS_CASE_MIXED
 } zfs_case_t;
 
+// our MAXPATHLEN is 4096, which causes sizeof(zfs_cmd_t) to overflow
+// the len field in ioctl numbers, which causes ioctls to fail
+#define ZFS_MAXPATHLEN 1024
+
 typedef struct zfs_cmd {
-	char		zc_name[MAXPATHLEN];
-	char		zc_value[MAXPATHLEN * 2];
+	char		zc_name[ZFS_MAXPATHLEN];
+	char		zc_value[ZFS_MAXPATHLEN * 2];
 	char		zc_string[MAXNAMELEN];
-	char		zc_top_ds[MAXPATHLEN];
+	char		zc_top_ds[ZFS_MAXPATHLEN];
 	uint64_t	zc_guid;
 	uint64_t	zc_nvlist_conf;		/* really (char *) */
 	uint64_t	zc_nvlist_conf_size;

@@ -34,6 +34,7 @@
 #include <sys/zfs_ioctl.h>
 #include <sys/spa.h>
 #include <sys/nvpair.h>
+#include <sys/sysctl.h>
 
 #include <libshare.h>
 #include <libuutil.h>
@@ -225,6 +226,9 @@ static int zfs_kernel_version = 0;
 static __inline int
 zcmd_ioctl(int fd, unsigned long cmd, zfs_cmd_t *zc)
 {
+#ifdef __OSV__
+	return ioctl(fd, cmd, zc);
+#else
 	size_t oldsize, zfs_kernel_version_size;
 	int version, ret, cflag = ZFS_CMD_COMPAT_NONE;
 
@@ -248,6 +252,7 @@ zcmd_ioctl(int fd, unsigned long cmd, zfs_cmd_t *zc)
 	}
 
 	return (ret);
+#endif
 }
 #define	ioctl(fd, cmd, zc)	zcmd_ioctl((fd), (cmd), (zc))
 #endif	/* !sun */

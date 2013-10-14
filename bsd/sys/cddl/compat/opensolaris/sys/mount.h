@@ -34,4 +34,6 @@
 
 typedef	struct fid		fid_t;
 
+#define MS_FORCE MNT_FORCE
+
 #endif	/* !_OPENSOLARIS_SYS_MOUNT_H_ */

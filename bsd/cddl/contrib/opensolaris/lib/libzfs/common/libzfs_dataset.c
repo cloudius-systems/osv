@@ -723,6 +723,9 @@ int
 libzfs_mnttab_find(libzfs_handle_t *hdl, const char *fsname,
     struct mnttab *entry)
 {
+#ifdef __OSV__
+	return ENOENT;
+#else
 	mnttab_node_t find;
 	mnttab_node_t *mtn;
 
@@ -750,6 +753,7 @@ libzfs_mnttab_find(libzfs_handle_t *hdl, const char *fsname,
 		return (0);
 	}
 	return (ENOENT);
+#endif
 }
 
 void
@@ -1137,6 +1141,7 @@ badlabel:
 			 *		sharenfs (yes)
 			 *		sharesmb (yes)
 			 */
+#ifdef __OSV__
 			if (zoned) {
 				if (getzoneid() == GLOBAL_ZONEID) {
 					zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
@@ -1166,6 +1171,7 @@ badlabel:
 				(void) zfs_error(hdl, EZFS_ZONED, errbuf);
 				goto error;
 			}
+#endif
 
 			/*
 			 * At this point, it is legitimate to set the
@@ -1623,7 +1629,7 @@ zfs_prop_inherit(zfs_handle_t *zhp, const char *propname, boolean_t received)
 	(void) strlcpy(zc.zc_name, zhp->zfs_name, sizeof (zc.zc_name));
 	(void) strlcpy(zc.zc_value, propname, sizeof (zc.zc_value));
 
-	if (prop == ZFS_PROP_MOUNTPOINT && getzoneid() == GLOBAL_ZONEID &&
+	if (prop == ZFS_PROP_MOUNTPOINT && /* getzoneid() == GLOBAL_ZONEID && */
 	    zfs_prop_get_int(zhp, ZFS_PROP_ZONED)) {
 		zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
 		    "dataset is used in a non-global zone"));

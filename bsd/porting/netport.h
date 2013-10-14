@@ -30,6 +30,13 @@ typedef int accmode_t;
 #define MOD_LOAD (1)
 #define MOD_UNLOAD (2)
 
+struct module_stat;
+
+static inline int     modnext(int _modid) { return 0; }
+static inline int     modfnext(int _modid) { return 0; }
+static inline int     modstat(int _modid, struct module_stat *_stat) { return 0; }
+static inline int     modfind(const char *_name) { return 0; }
+
 #define MAXCOMLEN       19 
 
 /* maximum common x86 L1 size */
@@ -295,7 +302,7 @@ int ratecheck(struct timeval *lasttime, const struct timeval *mininterval);
 int get_cpuid(void);
 
 size_t get_physmem(void);
-#define physmem		get_physmem()
+extern size_t physmem;
 
 #define UID_ROOT	0
 #define UID_NOBODY	65534
@@ -305,5 +312,7 @@ size_t get_physmem(void);
 #define GID_MAX		UINT_MAX
 
 __END_DECLS
+
+#define CTASSERT(x) _Static_assert(x, "assertion failed: " #x)
 
 #endif

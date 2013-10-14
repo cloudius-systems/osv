@@ -53,6 +53,8 @@
 #include "zfs_prop.h"
 #include "zfeature_common.h"
 
+#include <bsd/porting/netport.h>
+
 int aok;
 
 int
