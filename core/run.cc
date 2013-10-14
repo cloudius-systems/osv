@@ -8,6 +8,8 @@
 
 #include <debug.hh>
 
+extern int optind;
+
 using namespace std;
 using namespace boost::range;
 
@@ -25,7 +27,12 @@ bool run(std::string path, int argc, char** argv, int *return_code)
     if (!main) {
         return false;
     }
+    // make sure to have a fresh optind across calls
+    // FIXME: fails if run() is executed in parallel
+    int old_optind = optind;
+    optind = 0;
     int rc = main(argc, argv);
+    optind = old_optind;
     if (return_code) {
         *return_code = rc;
     }
