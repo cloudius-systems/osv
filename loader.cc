@@ -32,6 +32,7 @@
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 #include "drivers/console.hh"
+#include "drivers/pvpanic.hh"
 #include "barrier.hh"
 #include "arch.hh"
 #include "osv/trace.hh"
@@ -219,6 +220,9 @@ void run_main(elf::program *prog, struct argblock *args)
 void* do_main_thread(void *_args)
 {
     auto args = static_cast<argblock*>(_args);
+
+    // initialize panic drivers
+    panic::pvpanic::probe_and_setup();
 
     // Enumerate PCI devices
     pci::pci_device_enumeration();

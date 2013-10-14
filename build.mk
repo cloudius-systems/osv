@@ -481,6 +481,7 @@ drivers += drivers/clockevent.o
 drivers += drivers/acpi.o
 drivers += drivers/hpet.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
+drivers += drivers/pvpanic.o
 
 objects = bootfs.o
 objects += arch/x64/dump.o

@@ -50,7 +50,7 @@
 #include "align.hh"
 #include <safe-ptr.hh>
 #include <osv/stubbing.hh>
-
+#include "drivers/pvpanic.hh"
 
 #define __LC_LAST 13
 
@@ -90,6 +90,7 @@ void abort(const char *msg)
     if (!already_aborted) {
         already_aborted = true;
         debug_ll(msg);
+        panic::pvpanic::panicked();
     }
     osv::halt();
 }
