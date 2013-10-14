@@ -14,6 +14,7 @@
 #include <sched.hh>
 #include <osv/mutex.h>
 #include <osv/condvar.h>
+#include <osv/power.hh>
 #include <drivers/clock.hh>
 
 namespace osv {
@@ -209,9 +210,10 @@ int kill(pid_t pid, int sig)
         return -1;
     }
     if (is_sig_dfl(signal_actions[sig])) {
-        // Our default is to abort the process
-        abort(osv::sprintf("Uncaught signal %d (\"%s\"). Aborting.\n",
-                sig, strsignal(sig)).c_str());
+        // Our default is to power off.
+        debug("Uncaught signal %d (\"%s\"). Powering off.\n",
+                sig, strsignal(sig));
+        osv::poweroff();
     } else if(!is_sig_ign(signal_actions[sig])) {
         // User-defined signal handler. Run it in a new thread. This isn't
         // very Unix-like behavior, but if we assume that the program doesn't
