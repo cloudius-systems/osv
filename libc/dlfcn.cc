@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include "elf.hh"
 #include <link.h>
-#include <osv/debug.h>
+#include <debug.hh>
 
 static __thread char dlerror_msg[128];
 static __thread char *dlerror_ptr;
@@ -43,17 +43,22 @@ void* dlopen(const char* filename, int flags)
         return elf::get_program();
     }
 
-    auto prog = elf::get_program();
-    elf::object* obj = prog->add_object(filename);
+    std::shared_ptr<elf::object> obj =
+            elf::get_program()->get_library(filename);
     // FIXME: handle flags etc.
     if (!obj) {
         dlerror_fmt("dlopen: failed to open %s", filename);
     }
-    return obj;
+    return new std::shared_ptr<elf::object> (std::move(obj));
 }
 
 int dlclose(void* handle)
 {
+    // FIXME: before we allow dlclose(), we need to keep for each object a set
+    // of shared_ptr to other objects which were used to resolve its symbols,
+    // so that we don't unmap an object while its symbols are being used by
+    // another.
+    // delete ((std::shared_ptr<elf::object>*) handle);
     debug("stub dlclose()\n");
     return 0;
 }
@@ -68,20 +73,14 @@ void* dlsym(void* handle, const char* name)
         // FIXME: implement
         abort();
     } else {
-        auto obj = reinterpret_cast<elf::object*>(handle);
-        sym = { obj->lookup_symbol(name), obj };
+        auto obj = *reinterpret_cast<std::shared_ptr<elf::object>*>(handle);
+        sym = { obj->lookup_symbol(name), obj.get() };
     }
     if (!sym.obj || !sym.symbol) {
         dlerror_fmt("dlsym: symbol %s not found", name);
         return nullptr;
     }
     return sym.relocated_addr();
-}
-
-// osv-local function to dlclose by path, as we can't remove objects by handle yet.
-extern "C" void dlclose_by_path_np(const char* filename)
-{
-    elf::get_program()->remove_object(filename);
 }
 
 extern "C"
