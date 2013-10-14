@@ -61,6 +61,7 @@
 /&/tests/tst-kill.so: ./&
 /&/tests/tst-rename.so: ./&
 /&/tests/tst-truncate.so: ./&
+/&/tests/tst-panic.so: ./&
 /&/tests/bench/bench.jar: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
