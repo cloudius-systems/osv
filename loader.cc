@@ -22,6 +22,7 @@
 #include "xen.hh"
 #include "ioapic.hh"
 
+#include "drivers/acpi.hh"
 #include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
 #include "drivers/virtio-blk.hh"
@@ -256,6 +257,7 @@ void main_cont(int ac, char** av)
     std::tie(ac, av) = parse_options(ac, av);
     ioapic::init();
     smp_launch();
+    acpi::init();
     sched::preempt_enable();
     console::console_init();
     memory::enable_debug_allocator();

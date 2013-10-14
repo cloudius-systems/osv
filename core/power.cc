@@ -30,19 +30,7 @@ void halt(void)
 
 void poweroff(void)
 {
-    ACPI_STATUS status;
-    status = AcpiInitializeSubsystem();
-    if (ACPI_FAILURE(status)) {
-        debug("AcpiInitializeSubsystem failed: %s\n", AcpiFormatException(status));
-        halt();
-    }
-    status = AcpiLoadTables();
-    if (ACPI_FAILURE(status)) {
-        debug("AcpiLoadTables failed: %s\n", AcpiFormatException(status));
-        halt();
-    }
-
-    status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
+    ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
     if (ACPI_FAILURE(status)) {
         debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
         halt();

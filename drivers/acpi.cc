@@ -21,6 +21,7 @@ extern "C" {
 #include "align.hh"
 #include "xen.hh"
 
+#include <osv/debug.h>
 #include <osv/mutex.h>
 #include <osv/semaphore.hh>
 
@@ -480,7 +481,58 @@ void AcpiOsVprintf(const char *Format, va_list Args)
     vprintf(Format, Args);
 }
 
-void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init()
+void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init_early()
 {
      XENPV_ALTERNATIVE({auto st = AcpiInitializeTables(NULL, 0, false); assert(st == AE_OK);}, {});
+}
+
+namespace acpi {
+
+// must be called after the scheduler, apic and smp where started to run
+// The following function comes from the documentation example page 262
+void init()
+{
+    bool allow_resize = false;
+    static int max_acpi_tables = 16;
+
+    // Initialize ACPICA subsystem
+    ACPI_STATUS status = AcpiInitializeSubsystem();
+    if (ACPI_FAILURE(status)) {
+        debug("AcpiInitializeSubsystem() failed: %s\n",
+              AcpiFormatException(status));
+        return;
+    }
+
+    // Initialize the ACPICA Table Manager and get all ACPI tables
+    // nothing is preallocated so pass a nullptr so the code will allocate and
+    // fill up to max_acpi_tables
+    status = AcpiInitializeTables(nullptr, max_acpi_tables, allow_resize);
+    if (ACPI_FAILURE(status)) {
+        debug("AcpiInitializeTables failed: %s\n", AcpiFormatException(status));
+        return;
+    }
+
+    // Create the ACPI namespace from ACPI tables
+    status = AcpiLoadTables();
+    if (ACPI_FAILURE(status)) {
+        debug("AcpiLoadTables failed: %s\n", AcpiFormatException(status));
+        return;
+    }
+
+    // TODO: Installation of Local handlers
+
+    // Initialize the ACPI hardware
+    status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
+    if (ACPI_FAILURE(status)) {
+        debug("AcpiEnableSubsystem failed: %s\n", AcpiFormatException(status));
+        return;
+    }
+
+    // Complete the ACPI namespace object initialization
+    status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
+    if (ACPI_FAILURE(status)) {
+        debug("AcpiInitializeObjects failed: %s\n", AcpiFormatException(status));
+    }
+}
+
 }
