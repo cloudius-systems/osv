@@ -603,11 +603,10 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
 
 void evacuate(uintptr_t start, uintptr_t end)
 {
+    addr_range r(start, end);
     std::lock_guard<mutex> guard(vma_list_mutex);
-    // FIXME: use equal_range or something
-    for (auto i = std::next(vma_list.begin());
-            i != std::prev(vma_list.end());
-            ++i) {
+    auto range = vma_list.equal_range(r, vma::addr_compare());
+    for (auto i = range.first; i != range.second; ++i) {
         i->split(end);
         i->split(start);
         if (contains(start, end, *i)) {
@@ -617,6 +616,7 @@ void evacuate(uintptr_t start, uintptr_t end)
             delete &dead;
         }
     }
+    // FIXME: range also indicates where we can insert a new vma, use it
 }
 
 void unmap(void* addr, size_t size)

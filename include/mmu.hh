@@ -40,6 +40,17 @@ enum {
     perm_rwx = perm_read | perm_write | perm_exec,
 };
 
+class addr_range {
+public:
+    addr_range(uintptr_t start, uintptr_t end)
+        : _start(start), _end(end) {}
+    uintptr_t start() const { return _start; }
+    uintptr_t end() const { return _end; }
+private:
+    uintptr_t _start;
+    uintptr_t _end;
+};
+
 class vma {
 public:
     vma(uintptr_t start, uintptr_t end);
@@ -51,11 +62,24 @@ public:
     uintptr_t size() const;
     virtual void split(uintptr_t edge);
     virtual error sync(uintptr_t start, uintptr_t end);
+    class addr_compare;
 protected:
     uintptr_t _start;
     uintptr_t _end;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
+};
+
+// compare object for searching the vma list
+// defines a partial ordering: if a range intersects a vma,
+// it is considered equal, if it is completely before it is less
+// than the vma, if it is completely after it is after the vma.
+//
+// this partial ordering is compatible with vma_list_type.
+class vma::addr_compare {
+public:
+    bool operator()(const vma& x, addr_range y) const { return x.end() <= y.start(); }
+    bool operator()(addr_range x, const vma& y) const { return x.end() <= y.start(); }
 };
 
 class file_vma : public vma {
