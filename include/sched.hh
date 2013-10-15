@@ -19,6 +19,8 @@
 #include <atomic>
 #include "osv/lockless-queue.hh"
 #include <list>
+#include <memory>
+#include <vector>
 
 extern "C" {
 void smp_main();
@@ -213,6 +215,9 @@ public:
     void join();
     void set_cleanup(std::function<void ()> cleanup);
     unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
+    void* get_tls(ulong module);
+    void* setup_tls(ulong module, const void* tls_template,
+            size_t init_size, size_t uninit_size);
 private:
     void main();
     void switch_to();
@@ -261,6 +266,7 @@ private:
     // Starts with 1, decremented by complete() and also temporarily modified
     // by ref() and unref().
     std::atomic_uint _ref_counter;
+    std::vector<std::unique_ptr<char[]>> _tls;
     void ref();
     void unref();
     friend class thread_ref_guard;

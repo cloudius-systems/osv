@@ -679,6 +679,25 @@ unsigned long thread::id()
     return _id;
 }
 
+void* thread::get_tls(ulong module)
+{
+    if (module >= _tls.size()) {
+        return nullptr;
+    }
+    return _tls[module].get();
+}
+
+void* thread::setup_tls(ulong module, const void* tls_template,
+        size_t init_size, size_t uninit_size)
+{
+    _tls.resize(std::max(module + 1, _tls.size()));
+    _tls[module].reset(new char[init_size + uninit_size]);
+    auto p = _tls[module].get();
+    memcpy(p, tls_template, init_size);
+    memset(p + init_size, 0, uninit_size);
+    return p;
+}
+
 void preempt_disable()
 {
     ++preempt_counter;

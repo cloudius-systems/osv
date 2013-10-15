@@ -289,6 +289,8 @@ public:
     template <typename T = void>
     T* lookup(const char* name);
     dladdr_info lookup_addr(const void* addr);
+    unsigned long module_index() const;
+    void* tls_addr();
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -318,6 +320,7 @@ protected:
     void* _tls_segment;
     ulong _tls_init_size, _tls_uninit_size;
     Elf64_Dyn* _dynamic_table;
+    unsigned long _module_index;
 
     // Keep list of references to other modules, to prevent them from being
     // unloaded. When this object is unloaded, the reference count of all
@@ -439,18 +442,24 @@ public:
     template <typename functor>
     void with_modules(functor f);
     dladdr_info lookup_addr(const void* addr);
+    void* tls_addr(ulong module);
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
     void* do_lookup_function(const char* symbol);
     void set_object(std::string lib, std::shared_ptr<object> obj);
     void remove_object(object *obj);
+    ulong register_dtv(object* obj);
+    void free_dtv(object* obj);
 private:
     ::filesystem& _fs;
     void* _next_alloc;
     std::shared_ptr<object> _core;
     std::map<std::string, std::weak_ptr<object>> _files;
     std::vector<object*> _modules; // in priority order
+    // used to determine object::_module_index, so indexes
+    // are stable even when objects are deleted:
+    std::vector<object*> _module_index_list;
     std::vector<std::string> _search_path;
     // Count object additions and removals from _modules. dl_iterate_phdr()
     // callbacks can use this to know if the object list has not changed.
@@ -459,6 +468,7 @@ private:
     static object* s_objs[100];
 
     friend elf::file::~file();
+    friend class object;
 };
 
 /**

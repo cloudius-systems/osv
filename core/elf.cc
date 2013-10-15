@@ -16,10 +16,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/range/algorithm/find.hpp>
 #include <functional>
 #include <cxxabi.h>
 #include <iterator>
 #include <sched.hh>
+
+using namespace std;
+using namespace boost::range;
 
 namespace {
     typedef boost::format fmt;
@@ -82,12 +86,14 @@ object::object(program& prog, std::string pathname)
     , _tls_init_size()
     , _tls_uninit_size()
     , _dynamic_table(nullptr)
+    , _module_index(_prog.register_dtv(this))
     , _visibility(nullptr)
 {
 }
 
 object::~object()
 {
+    _prog.free_dtv(this);
 }
 
 bool object::visible(void) const
@@ -371,12 +377,6 @@ symbol_module object::symbol(unsigned idx)
     return ret;
 }
 
-Elf64_Xword object::symbol_tls_module(unsigned idx)
-{
-    debug("not looking up symbol module\n");
-    return 0;
-}
-
 void object::relocate_rela()
 {
     auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
@@ -402,7 +402,7 @@ void object::relocate_rela()
             *static_cast<void**>(addr) = symbol(sym).relocated_addr();
             break;
         case R_X86_64_DPTMOD64:
-            *static_cast<u64*>(addr) = symbol_tls_module(sym);
+            *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
             break;
         case R_X86_64_DTPOFF64:
             *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
@@ -719,6 +719,16 @@ void object::run_fini_funcs()
     // on modern gcc it seems it doesn't work (and isn't needed).
 }
 
+void* object::tls_addr()
+{
+    auto t = sched::thread::current();
+    auto r = t->get_tls(_module_index);
+    if (!r) {
+        r = t->setup_tls(_module_index, _tls_segment, _tls_init_size, _tls_uninit_size);
+    }
+    return r;
+}
+
 program* s_program;
 
 program::program(::filesystem& fs, void* addr)
@@ -1029,11 +1039,48 @@ init_table get_init(Elf64_Ehdr* header)
     return ret;
 }
 
+ulong program::register_dtv(object* obj)
+{
+    auto i = find(_module_index_list, nullptr);
+    if (i != _module_index_list.end()) {
+        *i = obj;
+        return i - _module_index_list.begin();
+    } else {
+        _module_index_list.push_back(obj);
+        return _module_index_list.size() - 1;
+    }
 }
+
+void program::free_dtv(object* obj)
+{
+    auto i = find(_module_index_list, obj);
+    assert(i != _module_index_list.end());
+    *i = nullptr;
+}
+
+void* program::tls_addr(ulong module)
+{
+    return _module_index_list[module]->tls_addr();
+}
+
+}
+
+using namespace elf;
 
 extern "C" { void* elf_resolve_pltgot(unsigned long index, elf::object* obj); }
 
 void* elf_resolve_pltgot(unsigned long index, elf::object* obj)
 {
     return obj->resolve_pltgot(index);
+}
+
+struct module_and_offset {
+    ulong module;
+    ulong offset;
+};
+
+extern "C"
+void* __tls_get_addr(module_and_offset* mao)
+{
+    return s_program->tls_addr(mao->module) + mao->offset;
 }
