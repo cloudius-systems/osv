@@ -9,7 +9,7 @@ libzfs-objects += $(libzpool-objects)
 libzfs-objects += bsd/cddl/compat/opensolaris/misc/mkdirp.o
 libzfs-objects += bsd/cddl/compat/opensolaris/misc/zmount.o
 
-define libzfs-includes =
+define libzfs-includes
   bsd/cddl/compat/opensolaris/lib/libumem
   bsd/cddl/contrib/opensolaris/head
   bsd/cddl/contrib/opensolaris/lib/libzpool/common
