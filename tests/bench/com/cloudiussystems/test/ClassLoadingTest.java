@@ -3,6 +3,7 @@ package com.cloudiussystems.test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.Enumeration;
 import java.util.Scanner;
 
@@ -14,19 +15,61 @@ import java.util.Scanner;
  */
 
 public class ClassLoadingTest {
-    public static final String RESOURCE_NAME = "test.txt";
-    public static final String RESOURCE_CONTENT = "abc";
+    private static final String RESOURCE_NAME = "test.txt";
+    private static final String RESOURCE_CONTENT = "abc";
+    private static final ClassLoader systemLoader = ClassLoader.getSystemClassLoader();
 
     public static void main(String[] args) throws IOException {
         testGetResource();
         testGetResourceAsStream();
         testGetResources();
+        testGettingResourceFromChild();
+        testAssertionStatusManipulation();
 
         System.out.println("OK");
     }
 
+    private static void testAssertionStatusManipulation() {
+        testAssertionStatusCanBeSet();
+        testAssertionStatusCanBeCleared();
+        testPackageAssertionStatusCanBeSet();
+        testDefaultAssertionStatusCanBeSet();
+    }
+
+    private static void testAssertionStatusCanBeSet() {
+        systemLoader.clearAssertionStatus();
+        systemLoader.setClassAssertionStatus(ClassWithAssertion.class.getName(), true);
+        assertTrue(ClassWithAssertion.assertExecuted);
+    }
+
+    private static void testAssertionStatusCanBeCleared() {
+        systemLoader.clearAssertionStatus();
+        systemLoader.setClassAssertionStatus(ClassWithAssertion2.class.getName(), true);
+        systemLoader.clearAssertionStatus();
+        assertFalse(ClassWithAssertion2.assertExecuted);
+    }
+
+    private static void testPackageAssertionStatusCanBeSet() {
+        systemLoader.clearAssertionStatus();
+        systemLoader.setPackageAssertionStatus(ClassWithAssertion3.class.getPackage().getName(), true);
+        assertTrue(ClassWithAssertion3.assertExecuted);
+    }
+
+    private static void testDefaultAssertionStatusCanBeSet() {
+        systemLoader.clearAssertionStatus();
+        systemLoader.setDefaultAssertionStatus(true);
+        assertTrue(ClassWithAssertion4.assertExecuted);
+    }
+
+    private static void testGettingResourceFromChild() throws IOException {
+        URLClassLoader child = new URLClassLoader(new URL[]{}, systemLoader);
+
+        assertNotNull(child.getResource(RESOURCE_NAME));
+        assertTrue(child.getResources(RESOURCE_NAME).hasMoreElements());
+    }
+
     private static void testGetResources() throws IOException {
-        Enumeration<URL> resources = classLoader().getResources(RESOURCE_NAME);
+        Enumeration<URL> resources = systemLoader.getResources(RESOURCE_NAME);
         assertTrue(resources.hasMoreElements());
         assertEquals(readAndClose(resources.nextElement().openStream()), RESOURCE_CONTENT);
         assertFalse(resources.hasMoreElements());
@@ -41,17 +84,15 @@ public class ClassLoadingTest {
     }
 
     private static void testGetResource() throws IOException {
-        URL resource = classLoader().getResource(RESOURCE_NAME);
+        URL resource = systemLoader.getResource(RESOURCE_NAME);
         assertNotNull(resource);
+
+        //noinspection ConstantConditions
         assertEquals(readAndClose(resource.openStream()), RESOURCE_CONTENT);
     }
 
-    private static ClassLoader classLoader() {
-        return ClassLoader.getSystemClassLoader();
-    }
-
     private static void testGetResourceAsStream() throws IOException {
-        InputStream stream = classLoader().getResourceAsStream(RESOURCE_NAME);
+        InputStream stream = systemLoader.getResourceAsStream(RESOURCE_NAME);
         assertNotNull(stream);
         assertEquals(readAndClose(stream), RESOURCE_CONTENT);
     }

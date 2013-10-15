@@ -113,7 +113,7 @@ public class RunJava {
 
     static void runClass(final String mainClass, final String[] args, final Iterable<String> classpath) throws Throwable {
         OsvSystemClassLoader osvClassLoader = getOsvClassLoader();
-        ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getDefaultSystemClassLoader());
+        ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getParent());
 
         osvClassLoader.run(appClassLoader,
                 new SandBoxedProcess() {
