@@ -6,8 +6,13 @@
 
   <target name="compile">
     <mkdir dir="${build-dir}"/>
-    <javac debug="true" includeantruntime="false" srcdir="."
-           includes="**/*.java" destdir="${build-dir}"/>
+    <javac debug="true"
+           includeantruntime="false"
+           srcdir="."
+           includes="**/*.java"
+           destdir="${build-dir}"
+           source="1.7"
+           target="1.7"/>
   </target>
 
   <target name="jar" depends="compile">
