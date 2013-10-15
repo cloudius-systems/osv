@@ -626,26 +626,19 @@ void unmap(void* addr, size_t size)
     evacuate(start, start+size);
 }
 
-bool intersects(uintptr_t start, uintptr_t end, vma& y)
-{
-    return y.start() < end && start < y.end();
-}
-
 error msync(void* addr, size_t length, int flags)
 {
     length = align_up(length, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto end = start+length;
     auto err = make_error(ENOMEM);
+    addr_range r(start, end);
     WITH_LOCK(vma_list_mutex) {
-        auto lower = vma_list.begin();
-        auto upper = vma_list.end();
-        for (auto i = lower; i != upper; ++i) {
-            if (intersects(start, end, *i)) {
-                err = i->sync(start, end);
-                if (err.bad()) {
-                    break;
-                }
+        auto range = vma_list.equal_range(r, vma::addr_compare());
+        for (auto i = range.first; i != range.second; ++i) {
+            err = i->sync(start, end);
+            if (err.bad()) {
+                break;
             }
         }
     }
@@ -762,10 +755,12 @@ bool ismapped(void *addr, size_t size)
 {
     uintptr_t start = (uintptr_t) addr;
     uintptr_t end = start + size;
+    addr_range r(start, end);
 
     std::lock_guard<mutex> guard(vma_list_mutex);
 
-    for (auto p = find_vma(start); p != vma_list.end(); ++p) {
+    auto range = vma_list.equal_range(r, vma::addr_compare());
+    for (auto p = range.first; p != range.second; ++p) {
         if (p->start() > start)
             return false;
         start = p->end();
