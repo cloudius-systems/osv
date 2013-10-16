@@ -82,5 +82,6 @@ int main(int ac, char** av)
     acceptor.accept(*socket.rdbuf());
     cpio_in_expand expand_files;
     cpio_in::parse(socket, expand_files);
+    sync();
 }
 
