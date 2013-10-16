@@ -573,7 +573,7 @@ jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so
 
 usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
-	$(call quiet, qemu-img create -q $@ 10G, QEMU-IMG CREATE $@)
+	$(call quiet, qemu-img create $@ 10G, QEMU-IMG CREATE $@)
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d --build-dir "$(abspath .)/zfs" -m $(src)/usr.manifest \
