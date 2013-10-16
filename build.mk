@@ -476,6 +476,7 @@ drivers += drivers/hpet.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 
 objects = bootfs.o
+objects += arch/x64/dump.o
 objects += arch/x64/exceptions.o
 objects += arch/x64/entry.o
 objects += arch/x64/ioapic.o

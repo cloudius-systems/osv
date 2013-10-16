@@ -6,6 +6,7 @@
  */
 
 #include "exceptions.hh"
+#include "dump.hh"
 #include "mmu.hh"
 #include "processor.hh"
 #include "interrupt.hh"
@@ -209,6 +210,9 @@ void general_protection(exception_frame* ef)
     if (fixup_fault(ef)) {
         return;
     }
+
+    dump_registers(ef);
+
     abort("general protection fault\n");
 }
 
