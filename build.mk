@@ -575,7 +575,7 @@ usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
 	$(call quiet, qemu-img create -q $@ 10G, QEMU-IMG CREATE $@)
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
-	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \
+	$(src)/scripts/mkzfs.py -o $@ -d $@.d --build-dir "$(abspath .)/zfs" -m $(src)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, sys, struct, optparse, StringIO, ConfigParser, subprocess
+import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil
 
 make_option = optparse.make_option
 
@@ -14,6 +14,10 @@ opt = optparse.OptionParser(option_list = [
                     dest = 'output',
                     help = 'write to FILE',
                     metavar = 'FILE'),
+        make_option('--build-dir',
+                    dest = 'zfs_root',
+                    help = 'use DIR as a temporary directory',
+                    metavar = 'DIR'),
         make_option('-d',
                     dest = 'depends',
                     help = 'write dependencies to FILE',
@@ -42,6 +46,7 @@ opt = optparse.OptionParser(option_list = [
 depends = StringIO.StringIO()
 if options.depends:
     depends = file(options.depends, 'w')
+zfs_root = options.zfs_root
 #out = file(options.output, 'w')
 manifest = ConfigParser.SafeConfigParser()
 manifest.optionxform = str # avoid lowercasing
@@ -50,15 +55,12 @@ manifest.read(options.manifest)
 depends.write('%s: \\\n' % (options.output,))
 
 
-zfs_root='/zfs'
 zfs_pool='osv'
 zfs_fs='usr'
 
-if os.path.exists(zfs_root) and os.listdir(zfs_root): 
-    print 'Please make sure %s does not exist or is an empty directory' % zfs_root
-    sys.exit(1)
-
-os.system('sudo mkdir -p %s' % zfs_root)
+if os.path.exists(zfs_root):
+    shutil.rmtree(zfs_root)
+os.system('mkdir -p %s' % (zfs_root,))
 
 files = dict([(f, manifest.get('manifest', f, vars = defines))
               for f in manifest.options('manifest')])
@@ -101,15 +103,14 @@ files = [(x, unsymlink(y)) for (x, y) in files]
 for name, hostname in files:
     depends.write('\t%s \\\n' % (hostname,))
     if name[:4] in [ '/usr' ]:
-        os.system('sudo mkdir -p %s/`dirname %s`' % ('/zfs/', name))
-        os.system('sudo cp -L %s %s/%s' % (hostname, '/zfs/', name))
+        os.system('mkdir -p %s/`dirname %s`' % (zfs_root, name))
+        os.system('cp -L %s %s/%s' % (hostname, zfs_root, name))
 
 osv = subprocess.Popen('cd ../..; scripts/run.py -e "--nomount tools/mkfs.so" --forward tcp:10000::10000', shell = True)
-nc = subprocess.Popen('sleep 3 && cd /zfs/usr && find -type f | cpio -o -H newc | nc localhost 10000', shell = True)
+nc = subprocess.Popen('sleep 3 && cd %s/usr && find -type f | cpio -o -H newc | nc localhost 10000' % (zfs_root,), shell = True)
 
 osv.wait()
 nc.wait()
-os.system('sudo rm -rf /zfs')
 
 depends.write('\n\n')
 depends.close()
