@@ -204,8 +204,10 @@ static zfs_command_t command_table[] = {
 	{ "release",	zfs_do_release,		HELP_RELEASE		},
 	{ "diff",	zfs_do_diff,		HELP_DIFF		},
 	{ NULL },
+#ifndef __OSV__
 	{ "jail",	zfs_do_jail,		HELP_JAIL		},
 	{ "unjail",	zfs_do_unjail,		HELP_UNJAIL		},
+#endif
 };
 
 #define	NCOMMAND	(sizeof (command_table) / sizeof (command_table[0]))
@@ -6295,6 +6297,8 @@ zfs_do_unshare(int argc, char **argv)
 	return (unshare_unmount(OP_SHARE, argc, argv));
 }
 
+#ifndef __OSV__
+
 /*
  * Attach/detach the given dataset to/from the given jail
  */
@@ -6356,6 +6360,8 @@ zfs_do_unjail(int argc, char **argv)
 
 	return (do_jail(argc, argv, 0));
 }
+
+#endif
 
 /*
  * Called when invoked as /etc/fs/zfs/mount.  Do the mount if the mountpoint is
