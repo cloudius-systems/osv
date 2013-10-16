@@ -1486,10 +1486,7 @@ m_defrag(struct mbuf *m0, int how)
 	}
 #endif
 	
-	if (m0->m_pkthdr.len > MHLEN)
-		m_final = m_getcl(how, MT_DATA, M_PKTHDR);
-	else
-		m_final = m_gethdr(how, MT_DATA);
+	MGETHDR(m_final, how, MT_DATA);
 
 	if (m_final == NULL)
 		goto nospace;
@@ -1501,16 +1498,23 @@ m_defrag(struct mbuf *m0, int how)
 
 	while (progress < m0->m_pkthdr.len) {
 		length = m0->m_pkthdr.len - progress;
-		if (length > MCLBYTES)
-			length = MCLBYTES;
+		if (length > MJUMPAGESIZE)
+			length = MJUMPAGESIZE;
+
+		if(m_new == NULL) {
+			MGETHDR(m_new, how, MT_DATA);
+		}
 
 		if (m_new == NULL) {
-			if (length > MLEN)
-				m_new = m_getcl(how, MT_DATA, 0);
-			else
-				m_new = m_get(how, MT_DATA);
-			if (m_new == NULL)
-				goto nospace;
+			printf("%s: MGETHDR failed\n", __func__);
+			goto nospace;
+		}
+
+		m_cljget(m_new, how, MJUMPAGESIZE);
+		if ((m_new->m_flags & M_EXT) == 0) {
+			printf("%s: m_cljget failed\n", __func__);
+			m_freem(m_new);
+			goto nospace;
 		}
 
 		m_copydata(m0, progress, length, mtod(m_new, caddr_t));
