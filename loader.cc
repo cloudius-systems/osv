@@ -115,6 +115,7 @@ int main(int ac, char **av)
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
+static bool opt_mount = true;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -137,6 +138,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable\n")
         ("trace-backtrace", "log backtraces in the tracepoint log\n")
         ("leak", "start leak detector after boot\n")
+        ("nomount", "don't mount the file system\n")
         ("noshutdown", "continue running after main() returns\n")
     ;
     bpo::variables_map vars;
@@ -172,6 +174,8 @@ std::tuple<int, char**> parse_options(int ac, char** av)
             }
         }
     }
+    opt_mount = !vars.count("nomount");
+
     av += nr_options;
     ac -= nr_options;
     return std::make_tuple(ac, av);
@@ -226,7 +230,9 @@ void* do_main_thread(void *_args)
     drvman->list_drivers();
 
 
-    mount_usr();
+    if (opt_mount) {
+        mount_usr();
+    }
 
     // Start DHCP by default and wait for an IP
     if (!osv_start_if("eth0", "0.0.0.0", "255.255.255.0") && !osv_ifup("eth0"))
