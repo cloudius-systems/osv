@@ -47,6 +47,12 @@ constexpr int SUPPORTED_EVENTS =
         EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP;
 inline uint32_t events_epoll_to_poll(uint32_t e)
 {
+    static bool warned;
+    if ((e & EPOLLET) & !warned) {
+        warned = true;
+        debug("EPOLLET ignored\n");
+    }
+    e &= ~EPOLLET;
     assert (!(e & ~SUPPORTED_EVENTS));
     return e;
 }
