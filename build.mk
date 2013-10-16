@@ -168,6 +168,7 @@ java/runjava.jar:
 tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
 tools += tools/route/lsroute.so
+tools += tools/mkfs/mkfs.so
 
 all: loader.img loader.bin usr.img
 
@@ -547,9 +548,9 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
-	    $(boost-libs) \
 	    --whole-archive \
 	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
+	      $(boost-libs) \
 	    --no-whole-archive \
 	    $(src)/libunwind.a, \
 		LD $@)
@@ -572,22 +573,28 @@ jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so
 
 usr.img: loader.img scripts/mkzfs.py usr.manifest $(jni)
-	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \
-		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
-		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
+	$(call quiet, qemu-img create -q $@ 10G, QEMU-IMG CREATE $@)
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
+	$(src)/scripts/mkzfs.py -o $@ -d $@.d --build-dir "$(abspath .)/zfs" -m $(src)/usr.manifest \
+		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
+		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
 bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
 		tests/testrunner.so java/java.so java/runjava.jar \
-		zpool.so
+		zpool.so zfs.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
 bootfs.o: bootfs.bin
+
+tools/mkfs/mkfs.so: CFLAGS += -lstdc++
+
+tools/mkfs/mkfs.so: tools/mkfs/mkfs.o tools/mkfs/cpio.o libzfs.so
 
 runtime.o: ctype-data.h
 

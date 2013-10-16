@@ -1337,9 +1337,6 @@ zfs_ioc_pool_import(zfs_cmd_t *zc)
 static int
 zfs_ioc_pool_export(zfs_cmd_t *zc)
 {
-#ifdef __OSV__
-	abort();
-#else
 	int error;
 	boolean_t force = (boolean_t)zc->zc_cookie;
 	boolean_t hardforce = (boolean_t)zc->zc_guid;
@@ -1349,7 +1346,6 @@ zfs_ioc_pool_export(zfs_cmd_t *zc)
 	if (error == 0)
 		zvol_remove_minors(zc->zc_name);
 	return (error);
-#endif
 }
 
 static int

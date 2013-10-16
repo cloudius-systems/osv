@@ -798,10 +798,7 @@ zvol_update_volsize(objset_t *os, uint64_t volsize)
 void
 zvol_remove_minors(const char *name)
 {
-#ifdef __OSV__
-	abort();
-#else
-
+#ifndef __OSV__
 	struct g_geom *gp, *gptmp;
 	struct g_provider *pp;
 	zvol_state_t *zv;

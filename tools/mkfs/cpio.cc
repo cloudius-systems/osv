@@ -1,0 +1,90 @@
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
+
+#include "cpio.hh"
+#include <istream>
+#include <boost/lexical_cast.hpp>
+#include <cstdlib>
+#include <stdexcept>
+#include <align.hh>
+#include <memory>
+#include <sstream>
+
+using namespace std;
+
+namespace osv {
+
+struct cpio_newc_header {
+    char c_magic[6];
+    char c_ino[8];
+    char c_mode[8];
+    char c_uid[8];
+    char c_gid[8];
+    char c_nlink[8];
+    char c_mtime[8];
+    char c_filesize[8];
+    char c_devmajor[8];
+    char c_devminor[8];
+    char c_rdevmajor[8];
+    char c_rdevminor[8];
+    char c_namesize[8];
+    char c_check[8];
+};
+
+uint32_t convert(char (&field)[8])
+{
+    char with_nul[9];
+    std::copy(field, field + 8, with_nul);
+    with_nul[8] = '\0';
+    char* endptr;
+    auto ret = strtoul(with_nul, &endptr, 16);
+    if (endptr != with_nul + 8) {
+        throw runtime_error("bad cpio format");
+    }
+    return ret;
+}
+
+cpio_in::~cpio_in()
+{
+}
+
+bool cpio_in::parse_one(istream& is, cpio_in& out)
+{
+    union {
+        cpio_newc_header header;
+        char data[];
+    } header;
+    is.read(header.data, sizeof(header));
+    auto& h = header.header;
+    auto namesize = convert(h.c_namesize);
+    auto aligned = align_up(sizeof(header) + namesize, sizeof(uint32_t)) - sizeof(header);
+    unique_ptr<char[]> namebuf{new char[aligned]};
+    is.read(namebuf.get(), aligned);
+    string name{namebuf.get(), namesize - 1};
+    if (name == "TRAILER!!!") {
+        return false;
+    }
+    auto filesize = convert(h.c_filesize);
+    auto aligned_filesize = align_up(filesize, 4u);
+    unique_ptr<char[]> data(new char[aligned_filesize]);
+    is.read(data.get(), aligned_filesize);
+    stringstream file;
+    file.write(data.get(), filesize);
+    data.release();
+    out.add_file(name, file);
+    return true;
+}
+
+void cpio_in::parse(istream& is, cpio_in& out)
+{
+    is.rdbuf()->pubsetbuf(nullptr, 0);
+    while (parse_one(is, out))
+        ;
+}
+
+}

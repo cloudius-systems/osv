@@ -71,3 +71,6 @@
 /libuutil.so: libuutil.so
 /zpool.so: zpool.so
 /libzfs.so: libzfs.so
+/zfs.so: zfs.so
+/tools/mkfs.so: tools/mkfs/mkfs.so
+

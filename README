@@ -5,10 +5,10 @@ To build OSv
 
    On Fedora:
      yum install ant autoconf automake boost-static gcc-c++ genromfs \
-        libvirt libtool zfs-fuse flex bison
+        libvirt libtool flex bison
 
    On Debian:
-     apt-get install build-essential libboost-all-dev genromfs zfs-fuse autoconf libtool openjdk-7-jdk ant
+     apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant
 
    (Ubuntu users: you may use Oracle JDK in https://launchpad.net/~webupd8team/+archive/java
     if you don't want to pull too many dependencies for `openjdk-7-jdk`)
@@ -17,14 +17,7 @@ To build OSv
   Gcc 4.8 or above is recommended, as this was the first version to fully
   comply with the C++11 standard.
 
-1) make sure the zfs-fuse daemon is running
-   ----------------------------------------
-
-   On Fedora:
-     sudo systemctl start zfs-fuse.service
-     sudo systemctl enable zfs-fuse.service	# to have it start on reboot
-
-   On Debian the daemon should be started automatically.
+1) (obsolete)
 
 2) make sure all git submodules are uptodate
    -----------------------------------------
