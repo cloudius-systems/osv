@@ -547,9 +547,9 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
-	    $(boost-libs) \
 	    --whole-archive \
 	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
+	      $(boost-libs) \
 	    --no-whole-archive \
 	    $(src)/libunwind.a, \
 		LD $@)
