@@ -54,6 +54,8 @@ def start_osv_qemu():
         args += ["-device", "virtio-net-pci,netdev=un0"]
         args += ["-redir", "tcp:8080::8080"]
         args += ["-redir", "tcp:2222::22"]
+        for rule in cmdargs.forward:
+            args += ['-redir', rule]
         
     if cmdargs.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
@@ -196,6 +198,8 @@ if (__name__ == "__main__"):
     parser.add_argument("-g", "--with-graphic", action="store_true",
                         help="qemu only. don't pass -nographic flag. pressing ctrl+c from console will kill the emulator")
 
+    parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
+                        help = "add network forwarding RULE (QEMU syntax)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
     
