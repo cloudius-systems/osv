@@ -105,7 +105,7 @@ q-build-so = $(call quiet, $(build-so), CC $@)
 	$(makedir)
 	$(call quiet, javac -d $(javabase) -cp $(src)/$(javabase) $^, JAVAC $@)
 
-tests/%.o: COMMON += -fPIC
+tests/%.o: COMMON += -fPIC -DBOOST_TEST_DYN_LINK
 
 %.so: COMMON += -fPIC -shared
 %.so: %.o
@@ -122,6 +122,8 @@ sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
+
+boost-tests := tests/tst-rename.so
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 tests += tests/tst-vblk.so tests/bench/bench.jar
@@ -157,8 +159,8 @@ tests += tests/tst-loadbalance.so
 tests += tests/tst-dns-resolver.so
 tests += tests/tst-fs-link.so
 tests += tests/tst-kill.so
-tests += tests/tst-rename.so
 tests += tests/tst-truncate.so
+tests += $(boost-tests)
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -568,6 +570,9 @@ miscbase = $(src)/external/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a \
               $(boost-lib-dir)/libboost_system-mt.a
+
+$(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework-mt.so \
+                $(boost-lib-dir)/libboost_filesystem-mt.so
 
 bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 

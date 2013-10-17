@@ -35,6 +35,8 @@
 /usr/lib/&/libfreetype.so.6: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libjpeg.so.62: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_unit_test_framework-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_filesystem-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
 /&/usr/share/fontconfig/conf.avail/59-liberation-mono.conf: %(miscbase)s/&
 /&/usr/share/fontconfig/conf.avail/59-liberation-sans.conf: %(miscbase)s/&
 /&/usr/share/fontconfig/conf.avail/59-liberation-serif.conf: %(miscbase)s/&
