@@ -72,12 +72,13 @@ struct cpio_in_expand : cpio_in {
 
 int main(int ac, char** av)
 {
-    mkfs();
-
     using namespace boost::asio::ip;
 
     boost::asio::io_service io_service;
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 10000));
+
+    mkfs();
+
     boost::asio::ip::tcp::iostream socket;
     acceptor.accept(*socket.rdbuf());
     cpio_in_expand expand_files;
