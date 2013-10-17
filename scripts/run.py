@@ -30,14 +30,30 @@ def set_imgargs():
     
     args = ["setargs", "build/%s/usr.img" % opt_path, cmdargs.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
+
+def is_direct_io_supported(path):
+    if not os.path.exists(path):
+        raise Exception('Path not found: ' + path)
+
+    try:
+        file = os.open(path, os.O_RDONLY | os.O_DIRECT)
+        os.close(file)
+        return True
+    except OSError, e:
+        if e.errno == errno.EINVAL:
+            return False;
+        raise
     
 def start_osv_qemu():
+    image_file = "build/%s/usr.img" % opt_path
+    cache = 'none' if is_direct_io_supported(image_file) else 'unsafe'
+
     args = [
         "-vnc", ":1",
         "-gdb", "tcp::1234,server,nowait",
         "-m", cmdargs.memsize,
         "-smp", cmdargs.vcpus,
-        "-drive", ("file=build/%s/usr.img,if=virtio,cache=none" % opt_path)]
+        "-drive", "file=%s,if=virtio,cache=%s" % (image_file, cache)]
     
     if (cmdargs.no_shutdown):
         args += ["-no-reboot", "-no-shutdown"]
