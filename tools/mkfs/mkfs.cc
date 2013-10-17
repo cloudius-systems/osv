@@ -59,7 +59,7 @@ extern "C" { int mkdirp(const char *d, mode_t mode); }
 
 struct cpio_in_expand : cpio_in {
     virtual void add_file(string name, istream& is) override {
-        cout << "add_file " << name << "\n";
+        cout << "Adding " << name << "...\n";
         name = "/zfs/usr/" + name;
         auto pos = name.rfind('/');
         if (pos != name.npos) {
