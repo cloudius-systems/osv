@@ -167,8 +167,16 @@ extern "C" {
     }
 
     // lockless version
-    void debug_ll(const char *msg)
+    void debug_ll(const char *fmt, ...)
     {
+        static char msg[1024];
+
+        va_list ap;
+
+        va_start(ap, fmt);
+        vsnprintf(msg, sizeof(msg), fmt, ap);
+        va_end(ap);
+
         console::write_ll(msg, strlen(msg));
     }
 
