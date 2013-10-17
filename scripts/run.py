@@ -219,13 +219,7 @@ if (__name__ == "__main__"):
                         help = "add network forwarding RULE (QEMU syntax)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
-
-    if cmdargs.image:
-        image_file = cmdargs.image
-    else:
-        image_file = "build/%s/usr.img" % opt_path
-
-    image_file = os.path.abspath(image_file)
+    image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % opt_path)
     
     # Call main
     main()
