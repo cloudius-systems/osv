@@ -77,3 +77,23 @@ BOOST_AUTO_TEST_CASE(test_renaming_in_the_same_directory)
 		dir / "aaaaaaaaa",
 		dir / "aa");
 }
+
+BOOST_AUTO_TEST_CASE(test_moving_file_to_another_directory)
+{
+	TempDir dir;
+
+	std::string sub("sub");
+	BOOST_REQUIRE(fs::create_directories(dir / sub));
+
+	test_rename(
+		dir / "file",
+		dir / sub / "file");
+
+	test_rename(
+		dir / sub / "file2",
+		dir / "file2");
+
+	test_rename(
+		dir / sub / "a",
+		dir / "aaaa");
+}

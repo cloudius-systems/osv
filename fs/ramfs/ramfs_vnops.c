@@ -375,6 +375,7 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
 			np->rn_buf = old_np->rn_buf;
 			np->rn_size = old_np->rn_size;
 			np->rn_bufsize = old_np->rn_bufsize;
+			old_np->rn_buf = NULL;
 		}
 		/* Remove source file */
 		ramfs_remove_node(dvp1->v_data, vp1->v_data);
