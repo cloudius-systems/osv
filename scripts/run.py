@@ -28,7 +28,7 @@ def set_imgargs():
     if (not cmdargs.execute):
         return
     
-    args = ["setargs", "build/%s/usr.img" % opt_path, cmdargs.execute]
+    args = ["setargs", image_file, cmdargs.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
 
 def is_direct_io_supported(path):
@@ -45,7 +45,6 @@ def is_direct_io_supported(path):
         raise
     
 def start_osv_qemu():
-    image_file = "build/%s/usr.img" % opt_path
     cache = 'none' if is_direct_io_supported(image_file) else 'unsafe'
 
     args = [
@@ -139,7 +138,7 @@ def start_osv_xen():
         "vcpus=%s" % (cmdargs.vcpus),
         "maxcpus=%s" % (cmdargs.vcpus),
         "name='osv-%d'" % (os.getpid()),
-        "disk=['file://%s/build/%s/usr.img,hda,rw']" % (os.getcwd(), opt_path),
+        "disk=['file://%s,hda,rw']" % image_file,
         "serial='pty'",
         "paused=0",
         "on_crash='preserve'"
@@ -193,6 +192,8 @@ if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-d", "--debug", action="store_true", 
                         help="start debug version")
+    parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
+                        help="path to disk image file. defaults to build/$mode/usr.img")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root. tap networking, specify interface")
     parser.add_argument("-b", "--bridge", action="store", default="virbr0",
@@ -218,6 +219,13 @@ if (__name__ == "__main__"):
                         help = "add network forwarding RULE (QEMU syntax)")
     cmdargs = parser.parse_args()
     opt_path = "debug" if cmdargs.debug else "release"
+
+    if cmdargs.image:
+        image_file = cmdargs.image
+    else:
+        image_file = "build/%s/usr.img" % opt_path
+
+    image_file = os.path.abspath(image_file)
     
     # Call main
     main()
