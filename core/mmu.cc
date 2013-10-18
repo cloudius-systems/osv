@@ -719,29 +719,6 @@ void* map_file(void* addr, size_t size, bool search, unsigned perm,
     return v;
 }
 
-// Efficiently find the vma in vma_list which contains the given address.
-// Performance is logarithmic in length of vma_list, so it is more efficient
-// than simple iteration. Returns vma_list.end() if the address isn't mapped.
-vma_list_type::iterator find_vma(uintptr_t addr)
-{
-    auto p = vma_list.lower_bound(vma(addr,addr));
-    if (p == vma_list.end() || p->start() == addr) {
-        return p;
-    } else {
-        // p is the first with p->start() > addr. So p doesn't contain addr,
-        // but the previous vma may, and we need to check.
-        if (p == vma_list.begin()) {
-            return vma_list.end();
-        } else {
-            --p;
-            if (p->start() <= addr && addr < p->end()) {
-                return p;
-            } else
-                return vma_list.end();
-        }
-    }
-}
-
 bool is_linear_mapped(void *addr, size_t size)
 {
     if ((addr >= elf_start) && (addr + size <= elf_start + elf_size)) {
