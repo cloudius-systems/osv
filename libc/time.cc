@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include <osv/stubbing.hh>
 #include "libc.hh"
 #include "drivers/clock.hh"
 #include "sched.hh"
@@ -76,4 +77,10 @@ int clock_getres(clockid_t clk_id, struct timespec* ts)
 int clock_getcpuclockid(pid_t pid, clockid_t* clock_id)
 {
     return libc_error(ENOSYS);
+}
+
+clock_t clock (void)
+{
+    WARN_STUBBED();
+    return -1;
 }

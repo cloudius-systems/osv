@@ -16,6 +16,8 @@
 #include <osv/condvar.h>
 #include <osv/power.hh>
 #include <drivers/clock.hh>
+#include <api/setjmp.h>
+#include <osv/stubbing.hh>
 
 namespace osv {
 
@@ -289,4 +291,16 @@ unsigned int alarm(unsigned int seconds)
         alarm_cond.wake_one();
     }
     return ret;
+}
+
+int sigaltstack(const stack_t *ss, stack_t *oss)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
+extern "C" int __sigsetjmp(sigjmp_buf env, int savemask)
+{
+    WARN_STUBBED();
+    return 0;
 }

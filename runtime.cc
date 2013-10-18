@@ -49,6 +49,8 @@
 #include <boost/range/adaptor/reversed.hpp>
 #include "align.hh"
 #include <safe-ptr.hh>
+#include <osv/stubbing.hh>
+
 
 #define __LC_LAST 13
 
@@ -76,23 +78,6 @@ extern "C" {
 }
 
 void *__dso_handle;
-
-#define WARN(msg) do {					\
-        static bool _x;					\
-	if (!_x) {					\
-	    _x = true;					\
-	    debug("WARNING: unimplemented " msg);	\
-	}						\
-    } while (0)
-
-#define UNIMPLEMENTED(msg) do {				\
-	WARN(msg "\n");					\
-	abort();					\
-    } while (0)
-
-
-#define UNIMPL(decl) decl { UNIMPLEMENTED(#decl); }
-#define IGN(decl) decl { WARN(#decl " (continuing)"); }
 
 static bool already_aborted = false;
 void abort()
