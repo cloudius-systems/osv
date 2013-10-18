@@ -47,6 +47,9 @@ external:
 	make -C external/glibc-testsuite
 .PHONY: external
 
+check: all
+	./scripts/test.py
+
 # "tags" is the default output file of ctags, "TAGS" is that of etags
 tags TAGS:
 	rm -f -- "$@"
