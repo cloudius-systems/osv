@@ -565,11 +565,35 @@ sys_mknod(char *path, mode_t mode)
 	return error;
 }
 
+/*
+ * Returns true when @parent path could represent parent directory
+ * of a file or directory represented by @child path.
+ *
+ * Assumes both paths do not have trailing slashes.
+ */
 static bool
 is_parent(const char *parent, const char *child)
 {
 	size_t p_len = strlen(parent);
 	return !strncmp(parent, child, p_len) && (parent[p_len-1] == '/' || child[p_len] == '/');
+}
+
+static bool
+has_trailing(const char *path, char ch)
+{
+	size_t len = strlen(path);
+	return len && path[len - 1] == ch;
+}
+
+static void
+strip_trailing(char *path, char ch)
+{
+	size_t len = strlen(path);
+
+	while (len && path[len - 1] == ch)
+		len--;
+
+	path[len] = '\0';
 }
 
 int
@@ -592,16 +616,6 @@ sys_rename(char *src, char *dest)
 
 	if ((error = vn_access(vp1, VWRITE)) != 0)
 		goto err1;
-
-	/* If source and dest are the same, do nothing */
-	if (!strncmp(src, dest, PATH_MAX))
-		goto err1;
-
-	/* Check if target is directory of source */
-	if (is_parent(src, dest)) {
-		error = EINVAL;
-		goto err1;
-	}
 
 	/* Is the source busy ? */
 	if (vcount(vp1) >= 2) {
@@ -633,6 +647,29 @@ sys_rename(char *src, char *dest)
 			error = EBUSY;
 			goto err2;
 		}
+	} else if (error == ENOENT) {
+		if (vp1->v_type != VDIR && has_trailing(dest, '/')) {
+			error = ENOTDIR;
+			goto err2;
+		}
+	} else {
+		goto err2;
+	}
+
+	if (strcmp(dest, "/"))
+		strip_trailing(dest, '/');
+
+	if (strcmp(src, "/"))
+		strip_trailing(src, '/');
+
+	/* If source and dest are the same, do nothing */
+	if (!strncmp(src, dest, PATH_MAX))
+		goto err2;
+
+	/* Check if target is directory of source */
+	if (is_parent(src, dest)) {
+		error = EINVAL;
+		goto err2;
 	}
 
 	dname = strrchr(dest, '/');
@@ -663,6 +700,7 @@ sys_rename(char *src, char *dest)
 		error = EXDEV;
 		goto err4;
 	}
+
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
  err4:
 	vn_unlock(dvp2);
