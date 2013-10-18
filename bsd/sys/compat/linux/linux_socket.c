@@ -597,7 +597,7 @@ linux_sendto_hdrincl(int s, void *buf, int len, int flags, void *to,
 
 	/* Check that the packet isn't too big or too small. */
 	if (len < linux_ip_copysize ||
-	    len > IP_MAXPACKET)
+	    len > IP_MAXSEGMENT)
 		return (EINVAL);
 
 	packet = (struct ip *)buf;

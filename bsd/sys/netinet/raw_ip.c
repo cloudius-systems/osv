@@ -406,7 +406,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 	 * allocate an mbuf for a header and fill it in.
 	 */
 	if ((inp->inp_flags & INP_HDRINCL) == 0) {
-		if (m->m_pkthdr.len + sizeof(struct ip) > IP_MAXPACKET) {
+		if (m->m_pkthdr.len + sizeof(struct ip) > IP_MAXSEGMENT) {
 			m_freem(m);
 			return(EMSGSIZE);
 		}
@@ -427,7 +427,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		ip->ip_dst.s_addr = dst;
 		ip->ip_ttl = inp->inp_ip_ttl;
 	} else {
-		if (m->m_pkthdr.len > IP_MAXPACKET) {
+		if (m->m_pkthdr.len > IP_MAXSEGMENT) {
 			m_freem(m);
 			return(EMSGSIZE);
 		}

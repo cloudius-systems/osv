@@ -72,6 +72,16 @@ struct ip {
 #define	IP_MAXPACKET	65535		/* maximum packet size */
 
 /*
+ * Maximum number of bytes to be reserved for L2 header.
+ * Currently equals to ETH header size since this is the only
+ * supported L2 protocol.
+ *
+ */
+#define LAYER2_MAXHDRSIZE	14
+
+#define	IP_MAXSEGMENT (IP_MAXPACKET - LAYER2_MAXHDRSIZE)
+
+/*
  * Definitions for IP type of service (ip_tos).
  */
 #define	IPTOS_LOWDELAY		0x10

@@ -929,7 +929,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct bsd_sockaddr *addr,
 	 * pcbinfo lock or not.  Do any work to decide what is needed up
 	 * front before acquiring any locks.
 	 */
-	if (len + sizeof(struct udpiphdr) > IP_MAXPACKET) {
+	if (len + sizeof(struct udpiphdr) > IP_MAXSEGMENT) {
 		if (control)
 			m_freem(control);
 		m_freem(m);

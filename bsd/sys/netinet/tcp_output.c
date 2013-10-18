@@ -715,8 +715,8 @@ send:
 			 * TCP and options length to keep ip->ip_len
 			 * from overflowing.
 			 */
-			if (len > IP_MAXPACKET - hdrlen) {
-				len = IP_MAXPACKET - hdrlen;
+			if (len > IP_MAXSEGMENT - hdrlen) {
+				len = IP_MAXSEGMENT - hdrlen;
 				sendalot = 1;
 			}
 
@@ -747,7 +747,7 @@ send:
 	} else
 		tso = 0;
 
-	KASSERT(len + hdrlen + ipoptlen <= IP_MAXPACKET,
+	KASSERT(len + hdrlen + ipoptlen <= IP_MAXSEGMENT,
 	    ("%s: len > IP_MAXPACKET", __func__));
 
 /*#ifdef DIAGNOSTIC*/

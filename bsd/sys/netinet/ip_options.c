@@ -489,7 +489,7 @@ ip_insertoptions(struct mbuf *m, struct mbuf *opt, int *phlen)
 	unsigned optlen;
 
 	optlen = opt->m_len - sizeof(p->ipopt_dst);
-	if (optlen + ip->ip_len > IP_MAXPACKET) {
+	if (optlen + ip->ip_len > IP_MAXSEGMENT) {
 		*phlen = 0;
 		return (m);		/* XXX should fail */
 	}
