@@ -158,6 +158,7 @@ tests += tests/tst-dns-resolver.so
 tests += tests/tst-fs-link.so
 tests += tests/tst-kill.so
 tests += tests/tst-rename.so
+tests += tests/tst-truncate.so
 
 tests/hello/Hello.class: javabase=tests/hello
 

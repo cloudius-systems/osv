@@ -62,6 +62,7 @@ int unlink(const char *);
 int unlinkat(int, const char *, int);
 int rmdir(const char *);
 int truncate(const char *, off_t);
+int truncate64(const char *, off_t);
 int ftruncate(int, off_t);
 
 #define F_OK 0

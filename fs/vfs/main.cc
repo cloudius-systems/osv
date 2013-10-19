@@ -1276,6 +1276,8 @@ out_errno:
 	return -1;
 }
 
+LFS64(truncate);
+
 TRACEPOINT(trace_vfs_ftruncate, "%d 0x%x", int, off_t);
 TRACEPOINT(trace_vfs_ftruncate_ret, "");
 TRACEPOINT(trace_vfs_ftruncate_err, "%d", int);
