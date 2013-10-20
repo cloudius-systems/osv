@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <api/utime.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
@@ -84,3 +85,5 @@ clock_t clock (void)
     WARN_STUBBED();
     return -1;
 }
+
+NO_SYS(int utime(const char *, const struct utimbuf *));

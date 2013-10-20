@@ -54,7 +54,7 @@
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
-#include <osv/debug.h>
+#include <osv/stubbing.hh>
 #include <osv/ioctl.h>
 #include <osv/trace.hh>
 #include <drivers/console.hh>
@@ -1344,6 +1344,8 @@ int chmod(const char *pathname, mode_t mode)
 	trace_vfs_chmod_ret();
 	return 0;
 }
+
+NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
 mode_t umask(mode_t newmask)
 {

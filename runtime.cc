@@ -159,6 +159,9 @@ int fork()
     return -1;
 }
 
+NO_SYS(int execvp(const char *, char *const []));
+NO_SYS(int symlink(const char *, const char *));
+
 int mlockall(int flags)
 {
     return 0;
@@ -290,6 +293,12 @@ long sysconf(int name)
         errno = EINVAL;
         return -1;
     }
+}
+
+long pathconf(const char *, int)
+{
+    WARN_STUBBED();
+    return -1;
 }
 
 size_t confstr(int name, char* buf, size_t len)
