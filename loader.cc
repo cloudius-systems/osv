@@ -39,6 +39,7 @@
 #include "mempool.hh"
 #include <bsd/porting/networking.h>
 #include "dhcp.hh"
+#include <osv/version.h>
 
 using namespace osv;
 
@@ -104,7 +105,7 @@ void premain()
 
 int main(int ac, char **av)
 {
-    debug("Loader Copyright 2013 Cloudius Systems\n");
+    debug("OSv " OSV_VERSION " Copyright 2013 Cloudius Systems\n");
 
     test_locale();
     idt.load_on_cpu();

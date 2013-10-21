@@ -1,0 +1,30 @@
+#!/bin/sh
+
+if [ "$#" -ne 1 ]; then
+  echo "usage: $(basename $0) OUTPUT" >&2
+  exit 1
+fi
+
+output=$1
+
+version=$(git describe --tags --long)
+
+tmp=$(mktemp)
+
+cat >$tmp <<EOL
+/* This file is generated automatically. */
+#ifndef OSV_VERSION_H
+#define OSV_VERSION_H
+
+#define OSV_VERSION "$version"
+
+#endif
+EOL
+
+if cmp -s $tmp $output 
+then
+    rm $tmp
+else
+    mkdir -p $(dirname $output)
+    mv $tmp $output
+fi
