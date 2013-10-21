@@ -33,7 +33,11 @@
 	pushq_cfi %r14
 	pushq_cfi %r15
 	mov %rsp, %rdi
+	subq $8, %rsp # 16-byte alignment
+	.cfi_adjust_cfa_offset 8
 	call \handler
+	addq $8, %rsp # 16-byte alignment
+	.cfi_adjust_cfa_offset -8
 	popq_cfi %r15
 	popq_cfi %r14
 	popq_cfi %r13
