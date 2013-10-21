@@ -3218,6 +3218,7 @@ zfs_unmount_snap(const char *name, void *arg)
 static int
 zfs_ioc_destroy_snaps_nvl(zfs_cmd_t *zc)
 {
+#ifdef NOTYET
 	int err, len;
 	nvlist_t *nvl;
 	nvpair_t *pair;
@@ -3265,6 +3266,9 @@ zfs_ioc_destroy_snaps_nvl(zfs_cmd_t *zc)
 	    zc->zc_name);
 	nvlist_free(nvl);
 	return (err);
+#else
+	abort();
+#endif /* NOTYET */
 }
 
 /*
