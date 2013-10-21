@@ -11,7 +11,7 @@
 #include <osv/compiler.h>
 
 template <typename T>
-inline bool
+static inline bool
 safe_load(const T* potentially_bad_pointer, T& data)
 {
     unsigned char ok = true;
@@ -34,7 +34,7 @@ safe_load(const T* potentially_bad_pointer, T& data)
 }
 
 template <typename T>
-inline bool
+static inline bool
 safe_store(const T* potentially_bad_pointer, const T& data)
 {
     asm goto
