@@ -11,7 +11,7 @@
 
 void dump_registers(exception_frame* ef)
 {
-    debug("registers:");
+    debug("registers:\n");
     debug("RIP: 0x%016x  RFL: 0x%016x  CS:  0x%016x  SS:  0x%016x\n", ef->rip, ef->rflags, ef->cs, ef->ss);
     debug("RAX: 0x%016x  RBX: 0x%016x  RCX: 0x%016x  RDX: 0x%016x\n", ef->rax, ef->rbx, ef->rcx, ef->rdx);
     debug("RSI: 0x%016x  RDI: 0x%016x  RBP: 0x%016x  R8:  0x%016x\n", ef->rsi, ef->rdi, ef->rbp, ef->r8);
