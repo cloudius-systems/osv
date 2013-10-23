@@ -9,6 +9,9 @@
 #include "cpio.hh"
 #include <istream>
 #include <boost/lexical_cast.hpp>
+#include <boost/iostreams/concepts.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/iostreams/restrict.hpp>
 #include <cstdlib>
 #include <stdexcept>
 #include <align.hh>
@@ -18,6 +21,8 @@
 using namespace std;
 
 namespace osv {
+
+namespace io = boost::iostreams;
 
 struct cpio_newc_header {
     char c_magic[6];
@@ -71,12 +76,13 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     }
     auto filesize = convert(h.c_filesize);
     auto aligned_filesize = align_up(filesize, 4u);
-    unique_ptr<char[]> data(new char[aligned_filesize]);
-    is.read(data.get(), aligned_filesize);
-    stringstream file;
-    file.write(data.get(), filesize);
-    data.release();
+
+    typedef io::restriction<basic_istream<char>> restriction_t;
+    io::stream<restriction_t> file(io::restrict(is, 0, filesize));
+    file.rdbuf()->pubsetbuf(nullptr, 0);
+
     out.add_file(name, file);
+    is.ignore(aligned_filesize - filesize);
     return true;
 }
 
