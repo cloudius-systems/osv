@@ -22,7 +22,7 @@ static bool		tq_done;
 static void
 tq_test_func(void *arg)
 {
-	kprintf("%s called for %s\n", __func__, arg);
+	kprintf("%s called for %s\n", __func__, (char *) arg);
 
 	mutex_lock(&tq_mutex);
 	tq_done = true;
