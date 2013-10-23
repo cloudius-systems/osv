@@ -101,6 +101,7 @@ exception_error_entry interrupt_entry_common, interrupt
 .global thread_main
 thread_main:
 	.cfi_startproc simple
+	.cfi_undefined %rip
 	.cfi_def_cfa %rsp, 0
 	mov %rbp, %rdi
 	call thread_main_c
