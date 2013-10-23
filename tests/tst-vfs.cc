@@ -5,14 +5,48 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#define BOOST_TEST_MODULE tst-vfs
+
 #include "sched.hh"
 #include "debug.hh"
+#include "tst-fs.hh"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <boost/test/unit_test.hpp>
 
-int main(int argc, char **argv)
+
+BOOST_AUTO_TEST_CASE(test_path_lookup)
+{
+    TempDir dir;
+
+    BOOST_REQUIRE(fs::create_directories(dir / "sub"));
+
+    fs::path valid_paths[] = {
+        dir,
+        dir / ".",
+        dir / "/",
+        dir / "/sub",
+        dir / "/sub/",
+        dir / "/sub/",
+        dir / "/sub/.",
+        dir / "/sub/..",
+        dir / "/sub/../",
+        dir / "/sub/../sub",
+        dir / "/sub/../sub/",
+        dir / "/sub/../sub/.",
+        dir / "/sub/../sub/..",
+        dir / "/sub/../sub/../",
+        dir / "/sub/../sub/../sub"
+    };
+
+    for (auto path : valid_paths) {
+        BOOST_REQUIRE_MESSAGE(fs::exists(path), "Path " + path.string() + " should exist");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(test_concurrent_file_operations)
 {
     debug("Running concurrent file operation tests\n");
 
@@ -23,7 +57,7 @@ int main(int argc, char **argv)
             threads[i] = new sched::thread([] {
                     struct stat buf;
                     for (int j = 0; j < 1000; j++) {
-                        assert(stat("/usr/lib/jvm/jre/lib/amd64/headless/libmawt.so", &buf)==0);
+                        BOOST_REQUIRE(stat("/usr/lib/jvm/jre/lib/amd64/headless/libmawt.so", &buf)==0);
                     }
             });
     }
@@ -36,5 +70,4 @@ int main(int argc, char **argv)
     }
 
     debug("concurrent file operation tests succeeded\n");
-    return 0;
 }

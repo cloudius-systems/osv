@@ -1,34 +1,22 @@
-#define BOOST_TEST_MODULE __file__
+/*
+ * Copyright (C) 2013 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
 
-#include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <iostream>
+#define BOOST_TEST_MODULE tst-rename
+
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/test/unit_test.hpp>
+
+#include "tst-fs.hh"
 
 namespace fs = boost::filesystem;
 
 static const char *SECRET = "Hello, world";
 
-class TempDir : public fs::path
-{
-
-public:
-	TempDir() : fs::path(tmpnam(NULL)) {
-		fs::create_directories(*this);
-	}
-
-	virtual ~TempDir() {
-		fs::remove_all(*this);
-	}
-};
 
 static std::string read_line(const fs::path& path)
 {

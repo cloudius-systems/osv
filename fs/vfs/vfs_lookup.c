@@ -183,6 +183,10 @@ namei(char *path, struct dentry **dpp)
 		 */
 		while (*p == '/')
 			p++;
+
+		if (*p == '\0')
+			break;
+
 		for (i = 0; i < PATH_MAX; i++) {
 			if (*p == '\0' || *p == '/')
 				break;

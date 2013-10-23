@@ -123,7 +123,8 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-boost-tests := tests/tst-rename.so
+boost-tests := tests/tst-rename.so \
+	tests/tst-vfs.so
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 tests += tests/tst-vblk.so tests/bench/bench.jar
@@ -134,7 +135,8 @@ tests += tests/tst-fpu.so
 tests += tests/tst-preempt.so
 tests += tests/tst-tracepoint.so
 tests += tests/tst-hub.so
-tests += tests/tst-leak.so tests/tst-mmap.so tests/tst-vfs.so
+tests += tests/tst-leak.so
+tests += tests/tst-mmap.so
 tests += tests/tst-mmap-file.so
 tests += tests/tst-mutex.so
 tests += tests/tst-sockets.so
