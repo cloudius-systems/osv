@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -e
+
+version=$(git describe --tags --long)
+
+make -j8 clean
+make -j8 external
+make -j8 qcow2
+
+image=build/release/usr.qcow2
+
+url=s3://downloads.osv.io/qemu/osv-$version.qcow2
+
+s3cmd put $image $url
+
+s3cmd setacl $url --acl-public
+
+echo "OSv $version is now available for download at:"
+echo ""
+echo "http://downloads.osv.io.s3-website-us-east-1.amazonaws.com/qemu/osv-$version.qcow2"
