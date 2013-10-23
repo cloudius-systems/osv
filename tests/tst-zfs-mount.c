@@ -39,11 +39,11 @@ int main(int argc, char **argv)
 
 	printf("f_type: %ld\n", st.f_type); 
 	printf("f_bsize: %ld\n", st.f_bsize); 
-	printf("f_blocks: %ld\n", st.f_blocks); 
-	printf("f_bfree: %ld\n", st.f_bfree); 
-	printf("f_bavail: %ld\n", st.f_bavail); 
-	printf("f_files: %ld\n", st.f_files); 
-	printf("f_ffree: %ld\n", st.f_ffree); 
+	printf("f_blocks: %lld\n", st.f_blocks); 
+	printf("f_bfree: %lld\n", st.f_bfree); 
+	printf("f_bavail: %lld\n", st.f_bavail); 
+	printf("f_files: %lld\n", st.f_files); 
+	printf("f_ffree: %lld\n", st.f_ffree); 
 	printf("f_namelen: %ld\n", st.f_namelen); 
 
 	dir = opendir(TESTDIR);
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
 		perror("fstat");
 		return EXIT_FAILURE;
 	}
-	printf("file size = %lld\n", s.st_size);
+	printf("file size = %ld\n", s.st_size);
 
 	close(fd);
 
@@ -121,7 +121,7 @@ int main(int argc, char **argv)
 		perror("fstat");
 		return EXIT_FAILURE;
 	}
-	printf("file size = %lld (after O_TRUNC)\n", s.st_size);
+	printf("file size = %ld (after O_TRUNC)\n", s.st_size);
 	close(fd);
 
 	if (rename("/usr/foo", "/usr/foo2")) {

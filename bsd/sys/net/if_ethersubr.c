@@ -859,22 +859,6 @@ discard:
 }
 
 /*
- * Convert Ethernet address to printable (loggable) representation.
- * This routine is for compatibility; it's better to just use
- *
- *	printf("%6D", <pointer to address>, ":");
- *
- * since there's no static buffer involved.
- */
-char *
-ether_sprintf(const u_char *ap)
-{
-	static char etherbuf[18];
-	snprintf(etherbuf, sizeof (etherbuf), "%6D", ap, ":");
-	return (etherbuf);
-}
-
-/*
  * Perform common duties while attaching to interface list
  */
 void

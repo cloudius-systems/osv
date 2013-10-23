@@ -36,6 +36,7 @@
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/sbuf.h>
 #ifdef INET6
 #include <bsd/sys/sys/domain.h>
 #endif
@@ -2213,6 +2214,7 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 {
 	char *s, *sp;
 	size_t size;
+	struct sbuf *buf;
 	struct ip *ip;
 #ifdef INET6
 	const struct ip6_hdr *ip6;
@@ -2282,8 +2284,23 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 		return (NULL);
 	}
 	sp = s + strlen(s);
-	if (th)
-		sprintf(sp, " tcpflags 0x%b", th->th_flags, PRINT_TH_FLAGS);
+	if (th) {
+		buf = sbuf_new_auto();
+		if (buf != NULL) {
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat"
+#pragma GCC diagnostic ignored "-Wformat-extra-args"
+
+			sbuf_printf(buf, " tcpflags 0x%b", th->th_flags, PRINT_TH_FLAGS);
+
+#pragma GCC diagnostic pop
+
+			sbuf_finish(buf);
+			sprintf(sp, "%s", sbuf_data(buf));
+			sbuf_delete(buf);
+		}
+	}
 	if (*(s + size - 1) != '\0')
 		panic("%s: string too long", __func__);
 	return (s);
