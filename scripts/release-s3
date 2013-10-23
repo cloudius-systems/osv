@@ -2,7 +2,7 @@
 
 set -e
 
-version=$(git describe --tags --long)
+version=$(git describe --tags)
 
 make -j8 clean
 make -j8 external

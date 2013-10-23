@@ -7,7 +7,7 @@ fi
 
 output=$1
 
-version=$(git describe --tags --long)
+version=$(git describe --tags)
 
 tmp=$(mktemp)
 
