@@ -342,7 +342,7 @@ int pclose(FILE *stream)
 void exit(int status)
 {
     debug(fmt("program exited with status %d\n") % status);
-    abort();
+    osv::poweroff();
 }
 
 int atexit(void (*func)())
