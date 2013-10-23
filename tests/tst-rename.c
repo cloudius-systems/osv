@@ -17,7 +17,7 @@ static bool has_secret(const char *name) {
 
 	if (strcmp(SECRET, buf)) {
 		fprintf(stderr, "File content does not match, "
-			"expected %s but found %s, file=%s\n", SECRET, buf, file);
+			"expected %s but found %s, file=%s\n", SECRET, buf, name);
 		fclose(file);
 		return false;
 	}
