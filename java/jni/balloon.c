@@ -17,7 +17,7 @@ JNIEXPORT jboolean JNICALL Java_com_cloudius_balloon_Balloon_giveup(
     }
 
     int len = (*env)->GetArrayLength(env, array);
-    fprintf(stderr,"Hi! %x len %d\n", p, len);
+    fprintf(stderr,"Hi! %p len %d\n", p, len);
 
     // Java allocations aren't necessarily page-aligned. We can unmap only the
     // page-aligned part of the given byte array p,len - so we fix p,len to be
@@ -29,7 +29,7 @@ JNIEXPORT jboolean JNICALL Java_com_cloudius_balloon_Balloon_giveup(
     jbyte *newp = (jbyte*) (((unsigned long)p+4095) & ~4095);
     len = (len-(newp-p)) & ~4095;
     p = newp;
-    fprintf(stderr,"After page alignment: %x len %d\n", p, len);
+    fprintf(stderr,"After page alignment: %p len %d\n", p, len);
 
 
     // TODO: Think about the huge page issue - sometimes may (?) make

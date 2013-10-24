@@ -541,7 +541,7 @@ Index2Nam(int idx)
         if (ifs[ifm->ifm_index-1] == NULL) {
           ifs[ifm->ifm_index-1] = (char *)malloc(dl->sdl_nlen+1);
           if (ifs[ifm->ifm_index-1] == NULL)
-	    printf("Skipping interface %s: Out of memory\n",
+	    printf("Skipping interface %d: Out of memory\n",
                   ifm->ifm_index);
 	  else {
 	    memcpy(ifs[ifm->ifm_index-1], dl->sdl_data, dl->sdl_nlen);

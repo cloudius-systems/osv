@@ -129,7 +129,7 @@ void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, va
 
     unsigned long tid = sched::thread::current()->id();
     _lock.lock();
-    kprintf("[%s/%d %s]: ", loggable_severity(severity), tid, tag);
+    kprintf("[%s/%lu %s]: ", loggable_severity(severity), tid, tag);
     vkprintf(_fmt, ap);
     kprintf("\n");
     _lock.unlock();
