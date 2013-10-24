@@ -12,7 +12,7 @@
 
 class VGAConsole : public Console {
 public:
-    virtual void write(const char *str);
+    virtual void write(const char *str, size_t len);
     virtual void newline();
 private:
     unsigned _col = 0;

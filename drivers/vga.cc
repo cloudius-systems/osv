@@ -11,13 +11,14 @@ volatile unsigned short * const VGAConsole::buffer
 = reinterpret_cast<volatile unsigned short *>(0xb8000);
 
 
-void VGAConsole::write(const char *str)
+void VGAConsole::write(const char *str, size_t len)
 {
-    while (*str) {
+    while (len > 0) {
 	buffer[(nrows-1)*ncols + _col++] = 0x700 + *str++;
 	if (_col == ncols) {
 	    newline();
 	}
+        len--;
     }
 }
 
