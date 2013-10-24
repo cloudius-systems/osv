@@ -44,7 +44,6 @@
 /&/tests/tst-yield.so: ./&
 /&/tests/tst-ctxsw.so: ./&
 /&/tests/tst-readdir.so: ./&
-/&/tests/tst-zfs-simple.so: ./&
 /&/tests/tst-zfs-disk.so: ./&
 /&/tests/tst-zfs-mount.so: ./&
 /&/tests/tst-wake.so: ./&

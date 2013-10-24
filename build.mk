@@ -443,7 +443,6 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zle.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 
-zfs-tests += tests/tst-zfs-simple.so
 zfs-tests += tests/tst-zfs-disk.so
 
 tests += tests/tst-zfs-mount.so
