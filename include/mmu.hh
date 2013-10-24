@@ -21,9 +21,9 @@ constexpr uintptr_t page_size = 4096;
 
 typedef uint64_t f_offset;
 
-static constexpr char* phys_mem = reinterpret_cast<char*>(0xffffc00000000000);
+static char* const phys_mem = reinterpret_cast<char*>(0xffffc00000000000);
 // area for debug allocations:
-static constexpr char* debug_base = reinterpret_cast<char*>(0xffffe00000000000);
+static char* const debug_base = reinterpret_cast<char*>(0xffffe00000000000);
 
 inline unsigned pt_index(void *virt, unsigned level)
 {
