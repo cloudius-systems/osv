@@ -34,7 +34,7 @@ enum  {
 namespace sched {
 
 struct arch_cpu;
-class arch_thread;
+struct arch_thread;
 
 struct arch_cpu {
     arch_cpu();
