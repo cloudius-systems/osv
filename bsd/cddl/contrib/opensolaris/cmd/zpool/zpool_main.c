@@ -2764,9 +2764,9 @@ print_header(list_cbdata_t *cb)
 		if (pl->pl_next == NULL && !right_justify)
 			(void) printf("%s", header);
 		else if (right_justify)
-			(void) printf("%*s", width, header);
+			(void) printf("%*s", (int) width, header);
 		else
-			(void) printf("%-*s", width, header);
+			(void) printf("%-*s", (int) width, header);
 
 	}
 
@@ -2837,9 +2837,9 @@ print_pool(zpool_handle_t *zhp, list_cbdata_t *cb)
 		if (cb->cb_scripted || (pl->pl_next == NULL && !right_justify))
 			(void) printf("%s", propstr);
 		else if (right_justify)
-			(void) printf("%*s", width, propstr);
+			(void) printf("%*s", (int) width, propstr);
 		else
-			(void) printf("%-*s", width, propstr);
+			(void) printf("%-*s", (int) width, propstr);
 	}
 
 	(void) printf("\n");
@@ -2860,7 +2860,7 @@ print_one_column(zpool_prop_t prop, uint64_t value, boolean_t scripted)
 	if (scripted)
 		(void) printf("\t%s", propval);
 	else
-		(void) printf("  %*s", width, propval);
+		(void) printf("  %*s", (int) width, propval);
 }
 
 void

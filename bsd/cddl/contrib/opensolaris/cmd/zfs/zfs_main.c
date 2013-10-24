@@ -2501,9 +2501,9 @@ print_us_node(boolean_t scripted, boolean_t parsable, int *fields, int types,
 		if (scripted)
 			(void) printf("%s", strval);
 		else if (field == USFIELD_TYPE || field == USFIELD_NAME)
-			(void) printf("%-*s", width[field], strval);
+			(void) printf("%-*s", (int) width[field], strval);
 		else
-			(void) printf("%*s", width[field], strval);
+			(void) printf("%*s", (int) width[field], strval);
 
 		first = B_FALSE;
 		cfield++;
@@ -2528,10 +2528,10 @@ print_us(boolean_t scripted, boolean_t parsable, int *fields, int types,
 			col = gettext(us_field_hdr[field]);
 			if (field == USFIELD_TYPE || field == USFIELD_NAME) {
 				(void) printf(first ? "%-*s" : "  %-*s",
-				    width[field], col);
+				    (int) width[field], col);
 			} else {
 				(void) printf(first ? "%*s" : "  %*s",
-				    width[field], col);
+				    (int) width[field], col);
 			}
 			first = B_FALSE;
 			cfield++;
@@ -2823,9 +2823,9 @@ print_header(zprop_list_t *pl)
 		if (pl->pl_next == NULL && !right_justify)
 			(void) printf("%s", header);
 		else if (right_justify)
-			(void) printf("%*s", pl->pl_width, header);
+			(void) printf("%*s", (int) pl->pl_width, header);
 		else
-			(void) printf("%-*s", pl->pl_width, header);
+			(void) printf("%-*s", (int) pl->pl_width, header);
 	}
 
 	(void) printf("\n");
@@ -5231,7 +5231,7 @@ print_holds(boolean_t scripted, size_t nwidth, size_t tagwidth, nvlist_t *nvl)
 		for (i = 0; i < 3; i++) {
 			col = gettext(hdr_cols[i]);
 			if (i < 2)
-				(void) printf("%-*s  ", i ? tagwidth : nwidth,
+				(void) printf("%-*s  ", (int) (i ? tagwidth : nwidth),
 				    col);
 			else
 				(void) printf("%s\n", col);
@@ -5258,8 +5258,9 @@ print_holds(boolean_t scripted, size_t nwidth, size_t tagwidth, nvlist_t *nvl)
 			(void) strftime(tsbuf, DATETIME_BUF_LEN,
 			    gettext(STRFTIME_FMT_STR), &t);
 
-			(void) printf("%-*s%*c%-*s%*c%s\n", nwidth, zname,
-			    sepnum, sep, tagwidth, tagname, sepnum, sep, tsbuf);
+			(void) printf("%-*s%*c%-*s%*c%s\n", (int) nwidth, zname,
+			    (int) sepnum, sep, (int) tagwidth, tagname, (int) sepnum,
+			    sep, tsbuf);
 		}
 	}
 }
