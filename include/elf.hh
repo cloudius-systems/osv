@@ -250,7 +250,7 @@ struct Elf64_Sym {
 };
 
 class program;
-class symbol_module;
+struct symbol_module;
 
 struct tls_data {
     void* start;
