@@ -36,7 +36,7 @@ namespace elf {
 namespace sched {
 
 class thread;
-class cpu;
+struct cpu;
 class timer;
 class timer_list;
 class cpu_mask;
@@ -272,7 +272,7 @@ private:
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
-    friend class cpu;
+    friend struct cpu;
     friend class timer;
     friend class thread_runtime_compare;
     friend struct arch_cpu;
@@ -377,7 +377,7 @@ private:
     std::function<void ()> _cpu_up;
     static mutex _mtx;
     static std::list<notifier*> _notifiers;
-    friend class cpu;
+    friend struct cpu;
 };
 
 void preempt();
