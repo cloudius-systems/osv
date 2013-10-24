@@ -42,7 +42,7 @@ struct trace_record {
 trace_record* allocate_trace_record(size_t size);
 
 template <class storage_args, class runtime_args>
-class assigner_type;
+struct assigner_type;
 
 template <typename... args>
 struct storage_args
