@@ -609,6 +609,26 @@ out_errno:
 	return -1;
 }
 
+static void
+get_last_component(const char *path, char *dst)
+{
+	int pos = strlen(path) - 1;
+
+	while (pos >= 0 && path[pos] == '/')
+		pos--;
+
+	int component_end = pos;
+
+	while (pos >= 0 && path[pos] != '/')
+		pos--;
+
+	int component_start = pos + 1;
+
+	int len = component_end - component_start + 1;
+	memcpy(dst, path + component_start, len);
+	dst[len] = 0;
+}
+
 TRACEPOINT(trace_vfs_rename, "\"%s\" \"%s\"", const char*, const char*);
 TRACEPOINT(trace_vfs_rename_ret, "");
 TRACEPOINT(trace_vfs_rename_err, "%d", int);
@@ -624,6 +644,18 @@ int rename(const char *oldpath, const char *newpath)
 	error = ENOENT;
 	if (oldpath == NULL || newpath == NULL)
 		goto out_errno;
+
+	get_last_component(oldpath, src);
+	if (!strcmp(src, ".") || !strcmp(src, "..")) {
+		error = EINVAL;
+		goto out_errno;
+	}
+
+	get_last_component(newpath, dest);
+	if (!strcmp(dest, ".") || !strcmp(dest, "..")) {
+		error = EINVAL;
+		goto out_errno;
+	}
 
 	if ((error = task_conv(t, oldpath, VREAD, src)) != 0)
 		goto out_errno;
