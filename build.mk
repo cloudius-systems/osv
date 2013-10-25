@@ -25,15 +25,18 @@ post-includes-bsd += -isystem $(src)/bsd/sys
 # For acessing machine/ in cpp xen drivers
 post-includes-bsd += -isystem $(src)/bsd/
 
+ifneq ($(werror),0)
+	CFLAGS_WERROR = -Werror
+endif
 # $(call compiler-flag, -ffoo, option, file)
 #     returns option if file builds with -ffoo, empty otherwise
-compiler-flag = $(shell $(CXX) -Werror $1 -o /dev/null -c $3  > /dev/null 2>&1 && echo $2)
+compiler-flag = $(shell $(CXX) $(CFLAGS_WERROR) $1 -o /dev/null -c $3  > /dev/null 2>&1 && echo $2)
 
 compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL, $(src)/compiler/attr/cold-label.cc)
 
 kernel-defines = -D_KERNEL
 
-COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 -Wno-format-security \
+COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(kernel-defines) \
 	-fno-omit-frame-pointer $(compiler-specific) \
