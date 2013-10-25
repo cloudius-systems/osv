@@ -14,7 +14,7 @@
 
 extern char _percpu_start[];
 
-extern __thread void* percpu_base;
+extern __thread char* percpu_base;
 
 template <typename T>
 class percpu {
@@ -30,7 +30,7 @@ public:
         return addr(cpu->percpu_base);
     }
 private:
-    T *addr(void* base = percpu_base) {
+    T *addr(char* base = percpu_base) {
         size_t offset = reinterpret_cast<size_t>(&_var);
         return reinterpret_cast<T*>(base + offset);
     }

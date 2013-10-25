@@ -21,7 +21,7 @@
 #include "prio.hh"
 #include "elf.hh"
 
-__thread void* percpu_base;
+__thread char* percpu_base;
 
 extern char _percpu_start[], _percpu_end[], _percpu_sec_end[];
 
