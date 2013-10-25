@@ -629,6 +629,11 @@ get_last_component(const char *path, char *dst)
 	dst[len] = 0;
 }
 
+static bool null_or_empty(const char *str)
+{
+	return str == NULL || *str == '\0';
+}
+
 TRACEPOINT(trace_vfs_rename, "\"%s\" \"%s\"", const char*, const char*);
 TRACEPOINT(trace_vfs_rename_ret, "");
 TRACEPOINT(trace_vfs_rename_err, "%d", int);
@@ -642,7 +647,7 @@ int rename(const char *oldpath, const char *newpath)
 	int error;
 
 	error = ENOENT;
-	if (oldpath == NULL || newpath == NULL)
+	if (null_or_empty(oldpath) || null_or_empty(newpath))
 		goto out_errno;
 
 	get_last_component(oldpath, src);
