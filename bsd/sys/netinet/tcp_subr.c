@@ -2283,7 +2283,7 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 	}
 	sp = s + strlen(s);
 	if (th)
-		sprintf(sp, " tcpflags 0x%b", th->th_flags, PRINT_TH_FLAGS);
+		sprintf(sp, " tcpflags 0x%x", th->th_flags);
 	if (*(s + size - 1) != '\0')
 		panic("%s: string too long", __func__);
 	return (s);
