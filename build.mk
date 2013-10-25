@@ -33,7 +33,7 @@ compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL,
 
 kernel-defines = -D_KERNEL
 
-COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 \
+COMMON = $(autodepend) -g -Wall -Wno-pointer-arith -Werror -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(kernel-defines) \
 	-fno-omit-frame-pointer $(compiler-specific) \
