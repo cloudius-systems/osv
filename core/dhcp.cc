@@ -518,7 +518,6 @@ namespace dhcp {
             _state = DHCP_ACKNOWLEDGE;
 
             // FIXME: if we get a nack or timeout, clear routing information
-            // TODO: configure DNS
             // TODO: setup lease
         }
     }
