@@ -487,20 +487,6 @@ namespace dhcp {
             return;
         }
 
-        dhcp_i("Configuring %s: ip %s subnet mask %s gateway %s",
-            _ifp->if_xname,
-             dm.get_your_ip().to_string().c_str(),
-             dm.get_subnet_mask().to_string().c_str(),
-             dm.get_router_ip().to_string().c_str());
-
-        osv_start_if(_ifp->if_xname,
-                     dm.get_your_ip().to_string().c_str(),
-                     dm.get_subnet_mask().to_string().c_str());
-        osv_route_add_network("0.0.0.0",
-                              "0.0.0.0",
-                              dm.get_router_ip().to_string().c_str());
-        osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
-
         // Send a DHCP Request
         _state = DHCP_REQUEST;
         dhcp_mbuf dm_req(false);
@@ -517,9 +503,27 @@ namespace dhcp {
             dhcp_i("Server acknowledged IP for interface %s", _ifp->if_xname);
             _state = DHCP_ACKNOWLEDGE;
 
-            // FIXME: if we get a nack or timeout, clear routing information
+            // TODO: check that the IP address is not responding with ARP
+            // RFC2131 section 3.1.5
+
+            dhcp_i("Configuring %s: ip %s subnet mask %s gateway %s",
+                _ifp->if_xname,
+                 dm.get_your_ip().to_string().c_str(),
+                 dm.get_subnet_mask().to_string().c_str(),
+                 dm.get_router_ip().to_string().c_str());
+
+            osv_start_if(_ifp->if_xname,
+                         dm.get_your_ip().to_string().c_str(),
+                         dm.get_subnet_mask().to_string().c_str());
+            osv_route_add_network("0.0.0.0",
+                                  "0.0.0.0",
+                                  dm.get_router_ip().to_string().c_str());
+            osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
+
             // TODO: setup lease
         }
+        // FIXME: retry on timeout and restart DORA sequence if it timeout a
+        //        couple of time
     }
 
     ///////////////////////////////////////////////////////////////////////////
