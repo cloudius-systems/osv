@@ -519,8 +519,13 @@ namespace dhcp {
                                   "0.0.0.0",
                                   dm.get_router_ip().to_string().c_str());
             osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
-
             // TODO: setup lease
+        } else if (dm.get_message_type() == DHCP_MT_NAK) {
+            // from RFC 2131 section 3.1.5
+            // "If the client receives a DHCPNAK message, the client restarts the
+            // configuration process."
+            _state = DHCP_INIT;
+            discover();
         }
         // FIXME: retry on timeout and restart DORA sequence if it timeout a
         //        couple of time
