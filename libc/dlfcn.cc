@@ -48,6 +48,7 @@ void* dlopen(const char* filename, int flags)
     // FIXME: handle flags etc.
     if (!obj) {
         dlerror_fmt("dlopen: failed to open %s", filename);
+        return nullptr;
     }
     return new std::shared_ptr<elf::object> (std::move(obj));
 }
