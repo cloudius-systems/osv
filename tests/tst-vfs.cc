@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <boost/test/unit_test.hpp>
 
-
 BOOST_AUTO_TEST_CASE(test_path_lookup)
 {
     TempDir dir;
@@ -42,7 +41,7 @@ BOOST_AUTO_TEST_CASE(test_path_lookup)
     };
 
     for (auto path : valid_paths) {
-        BOOST_REQUIRE_MESSAGE(fs::exists(path), "Path " + path.string() + " should exist");
+        assert_exists(path);
     }
 }
 

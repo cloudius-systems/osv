@@ -212,12 +212,10 @@ namei(char *path, struct dentry **dpp)
 
 			/* Find a vnode in this directory. */
 			error = VOP_LOOKUP(dvp, name, vp);
-			if (error || (*p == '/' && vp->v_type != VDIR)) {
+			if (error) {
 				vput(vp);
 				vn_unlock(dvp);
 				drele(ddp);
-				if (!error)
-					error = ENOENT;
 				return error;
 			}
 
@@ -232,6 +230,12 @@ namei(char *path, struct dentry **dpp)
 		}
 		drele(ddp);
 		ddp = dp;
+
+		if (*p == '/' && ddp->d_vnode->v_type != VDIR) {
+			drele(ddp);
+			return ENOTDIR;
+		}
+
 		while (*p != '\0' && *p != '/')
 			p++;
 	}
