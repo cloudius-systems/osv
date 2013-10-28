@@ -81,7 +81,7 @@ protected:
     virtual void enable();
 
 private:
-    u32* reg_ptr(apicreg r)
+    volatile u32* reg_ptr(apicreg r)
         {return reinterpret_cast<u32*>(&_base_virt[static_cast<unsigned>(r)]);}
 
     u8* const _base_virt = mmu::phys_cast<u8>(_apic_base);
