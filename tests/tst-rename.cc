@@ -9,9 +9,11 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/test/unit_test.hpp>
 
 #include "tst-fs.hh"
+#include "debug.hh"
 
 namespace fs = boost::filesystem;
 
@@ -64,6 +66,42 @@ BOOST_AUTO_TEST_CASE(test_renaming_in_the_same_directory)
 	test_rename(
 		dir / "aaaaaaaaa",
 		dir / "aa");
+}
+
+template<typename T>
+static bool contains(std::vector<T> values, T value)
+{
+	return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+template<typename Iter>
+static std::vector<std::string> to_strings(Iter values)
+{
+	std::vector<std::string> strings;
+	for (auto v : values)
+	{
+		strings.push_back(std::to_string(v));
+	}
+	return strings;
+}
+
+static void assert_one_of(int value, std::vector<int> values)
+{
+	BOOST_REQUIRE_MESSAGE(contains(values, value),
+		fmt("%s shound be in {%s}") % value % boost::algorithm::join(to_strings(values), ", "));
+}
+
+static void assert_rename_fails(const fs::path& src, const fs::path& dst, std::vector<int> errnos)
+{
+	BOOST_TEST_MESSAGE("Renaming " + src.string() + " to " + dst.string());
+	BOOST_REQUIRE(rename(src.c_str(), dst.c_str()) == -1);
+	assert_one_of(errno, errnos);
+}
+
+BOOST_AUTO_TEST_CASE(test_renaming_to_child_path_should_fail)
+{
+	TempDir dir;
+	assert_rename_fails(dir, dir / "child", {EINVAL});
 }
 
 BOOST_AUTO_TEST_CASE(test_moving_file_to_another_directory)

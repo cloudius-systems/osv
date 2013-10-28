@@ -565,6 +565,13 @@ sys_mknod(char *path, mode_t mode)
 	return error;
 }
 
+static bool
+is_parent(const char *parent, const char *child)
+{
+	size_t p_len = strlen(parent);
+	return !strncmp(parent, child, p_len) && (parent[p_len-1] == '/' || child[p_len] == '/');
+}
+
 int
 sys_rename(char *src, char *dest)
 {
@@ -572,7 +579,6 @@ sys_rename(char *src, char *dest)
 	struct vnode *vp1, *vp2 = 0, *dvp1, *dvp2;
 	char *sname, *dname;
 	int error;
-	size_t len;
 	char root[] = "/";
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
@@ -592,11 +598,11 @@ sys_rename(char *src, char *dest)
 		goto err1;
 
 	/* Check if target is directory of source */
-	len = strlen(dest);
-	if (!strncmp(src, dest, len)) {
+	if (is_parent(src, dest)) {
 		error = EINVAL;
 		goto err1;
 	}
+
 	/* Is the source busy ? */
 	if (vcount(vp1) >= 2) {
 		error = EBUSY;
