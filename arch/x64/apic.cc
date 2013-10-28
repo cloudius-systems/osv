@@ -60,7 +60,7 @@ public:
         { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_SELF, vector); }
 
     virtual void init_ipi(unsigned apic_id, unsigned vector)
-        { xapic::ipi(apic_id << 24, vector);}
+        { xapic::ipi(apic_id, vector);}
 
     virtual void ipi_allbutself(unsigned vector)
         { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF, vector); }
