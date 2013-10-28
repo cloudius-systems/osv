@@ -77,8 +77,8 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     auto filesize = convert(h.c_filesize);
     auto aligned_filesize = align_up(filesize, 4u);
 
-    typedef io::restriction<basic_istream<char>> restriction_t;
-    io::stream<restriction_t> file(io::restrict(is, 0, filesize));
+    auto file_slice = io::restrict(is, 0, filesize);
+    io::stream<decltype(file_slice)> file(file_slice);
     file.rdbuf()->pubsetbuf(nullptr, 0);
 
     out.add_file(name, file);
