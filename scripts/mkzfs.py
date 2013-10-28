@@ -107,7 +107,7 @@ for name, hostname in files:
         os.system('cp -L %s %s/%s' % (hostname, zfs_root, name))
 
 image_path = os.path.abspath(options.output)
-osv = subprocess.Popen('cd ../..; scripts/run.py -i %s -e "--nomount tools/mkfs.so" --forward tcp:10000::10000' % image_path, shell = True)
+osv = subprocess.Popen('cd ../..; scripts/run.py -c1 -i %s -e "--nomount tools/mkfs.so" --forward tcp:10000::10000' % image_path, shell = True)
 nc = subprocess.Popen('sleep 3 && cd %s/usr && find -type f | cpio -o -H newc | nc -4 localhost 10000' % (zfs_root,), shell = True)
 
 osv.wait()
