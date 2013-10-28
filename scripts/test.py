@@ -3,7 +3,10 @@ import subprocess
 
 tests = [
     "/tests/tst-mmap.so",
-    "/tests/tst-mmap-file.so"
+    "/tests/tst-mmap-file.so",
+    "/tests/tst-rename.so",
+    "/tests/tst-vfs.so",
+    "/tests/tst-stat.so",
 ]
 
 def run_test(name):
