@@ -87,14 +87,18 @@ build-s = $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<
 q-build-s = $(call quiet, $(build-s), AS $@)
 build-so = $(CC) $(CFLAGS) -o $@ $^
 q-build-so = $(call quiet, $(build-so), CC $@)
+adjust-deps = sed -i 's! $(subst .,\.,$<)\b! !g' $(@:.o=.d)
+q-adjust-deps = $(call very-quiet, $(adjust-deps))
 	
 %.o: %.cc
 	$(makedir)
 	$(q-build-cxx)
+	$(q-adjust-deps)
 
 %.o: %.c
 	$(makedir)
 	$(q-build-c)
+	$(q-adjust-deps)
 
 %.o: %.S
 	$(makedir)
