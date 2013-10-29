@@ -131,7 +131,7 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE Handle,
         return AE_OK;
     default:
         sched::timer timer(*sched::thread::current());
-        timer.set(Timeout * 1_ms);
+        timer.set(nanotime() + Timeout * 1_ms);
         return sem->wait(Units, &timer) ? AE_OK : AE_TIME;
     }
 }
