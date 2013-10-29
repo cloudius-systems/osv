@@ -56,6 +56,9 @@ def start_osv_qemu():
     
     if (cmdargs.no_shutdown):
         args += ["-no-reboot", "-no-shutdown"]
+
+    if (cmdargs.wait):
+		args += ["-S"]
      
     if (cmdargs.networking):
         if (cmdargs.vhost):
@@ -201,6 +204,8 @@ if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-d", "--debug", action="store_true", 
                         help="start debug version")
+    parser.add_argument("-w", "--wait", action="store_true",
+                        help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
     parser.add_argument("-n", "--networking", action="store_true",
