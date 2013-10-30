@@ -68,6 +68,8 @@ public class OsvSystemClassLoader extends ClassLoader {
 
                 try {
                     process.run();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 } catch (Throwable throwable) {
                     getUncaughtExceptionHandler().uncaughtException(this, throwable);
                 }
@@ -83,7 +85,15 @@ public class OsvSystemClassLoader extends ClassLoader {
         });
 
         thread.start();
-        thread.join();
+
+        for (;;) {
+            try {
+                thread.join();
+                break;
+            } catch (InterruptedException e) {
+                thread.interrupt();
+            }
+        }
     }
 
     private ClassLoader getDelegate() {
