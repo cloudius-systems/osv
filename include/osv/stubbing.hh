@@ -18,10 +18,11 @@
 	}						\
 } while (0)
 
-#define WARN(msg) DO_ONCE(debug("WARNING: unimplemented " msg))
+#define WARN(msg) debug("WARNING: " msg)
+#define WARN_ONCE(msg) DO_ONCE(WARN(msg))
 
 #define UNIMPLEMENTED(msg) do {				\
-	WARN(msg "\n");					\
+	WARN("unimplemented " msg "\n");		\
 	abort();					\
     } while (0)
 
@@ -32,9 +33,7 @@
 }
 
 #define UNIMPL(decl) decl { UNIMPLEMENTED(#decl); }
-#define IGN(decl) decl { WARN(#decl " (continuing)"); }
 
 #define WARN_STUBBED() DO_ONCE(debug("%s() stubbed\n", __func__))
-
 
 #endif
