@@ -33,6 +33,8 @@
 #ifndef _SYS_SOCKTATE_H_
 #define _SYS_SOCKTATE_H_
 
+#include <sys/cdefs.h>
+
 /*
  * Socket state bits.
  *
@@ -72,6 +74,7 @@
 
 struct socket;
 
+__BEGIN_DECLS
 void	soisconnected(struct socket *so);
 void	soisconnecting(struct socket *so);
 void	soisdisconnected(struct socket *so);
@@ -80,4 +83,6 @@ void	socantrcvmore(struct socket *so);
 void	socantrcvmore_locked(struct socket *so);
 void	socantsendmore(struct socket *so);
 void	socantsendmore_locked(struct socket *so);
+__END_DECLS
+
 #endif /* _SYS_SOCKTATE_H_ */

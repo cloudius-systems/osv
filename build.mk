@@ -350,6 +350,8 @@ bsd += bsd/sys/xen/xenbus/xenbusb_front.o
 bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
 
+bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-parentheses -Wno-unused-but-set-variable
+
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/atomic/${BSD_MACHINE_ARCH}/opensolaris_atomic.o

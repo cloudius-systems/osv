@@ -50,7 +50,7 @@ struct llc {
 	    struct {
 		u_int8_t control;
 		u_int8_t format_id;
-		u_int8_t class;
+		u_int8_t klass;
 		u_int8_t window_x2;
 	    } __packed type_u;
 	    struct {

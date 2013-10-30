@@ -33,6 +33,7 @@
 #ifndef _NETINET_IN_VAR_H_
 #define _NETINET_IN_VAR_H_
 
+#include <osv/initialize.hh>
 #include <bsd/sys/sys/queue.h>
 #include <bsd/sys/sys/fnv_hash.h>
 #include <bsd/sys/sys/tree.h>

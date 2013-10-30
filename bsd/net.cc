@@ -29,10 +29,10 @@
 #include <bsd/sys/net/route.h>
 #include <bsd/machine/param.h>
 
-extern "C" {
+/* Generation of ip ids */
+void ip_initid(void);
 
-    /* Generation of ip ids */
-    void ip_initid(void);
+extern "C" {
 
     /* AF_INET */
     extern  struct domain inetdomain;

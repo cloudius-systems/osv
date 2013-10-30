@@ -32,6 +32,11 @@
 
 #ifndef _NETINET_TCP_SYNCACHE_H_
 #define _NETINET_TCP_SYNCACHE_H_
+
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
+
 #ifdef _KERNEL
 
 struct toeopt;
@@ -100,6 +105,8 @@ struct syncache {
 #define	SYNCOOKIE_SECRET_SIZE	8	/* dwords */
 #define	SYNCOOKIE_LIFETIME	16	/* seconds */
 
+TAILQ_HEAD(sch_head, syncache);
+
 struct syncache_head {
 	struct vnet	*sch_vnet;
 	struct mtx	sch_mtx;
@@ -126,4 +133,7 @@ struct tcp_syncache {
 };
 
 #endif /* _KERNEL */
+
+__END_DECLS
+
 #endif /* !_NETINET_TCP_SYNCACHE_H_ */

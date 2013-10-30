@@ -30,6 +30,8 @@
 #ifndef _TCP_LRO_H_
 #define _TCP_LRO_H_
 
+#include <sys/cdefs.h>
+
 struct lro_entry
 {
 	SLIST_ENTRY(lro_entry)	next;
@@ -84,10 +86,14 @@ struct lro_ctrl {
 	struct lro_head	lro_free;
 };
 
+__BEGIN_DECLS
+
 int tcp_lro_init(struct lro_ctrl *);
 void tcp_lro_free(struct lro_ctrl *);
 void tcp_lro_flush(struct lro_ctrl *, struct lro_entry *);
 int tcp_lro_rx(struct lro_ctrl *, struct mbuf *, uint32_t);
+
+__END_DECLS
 
 #define	TCP_LRO_CANNOT		-1
 #define	TCP_LRO_NOT_SUPPORTED	1

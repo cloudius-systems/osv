@@ -37,7 +37,7 @@ using namespace boost::asio;
 dhcp::dhcp_worker net_dhcp_worker;
 
 // Returns whether we hooked the packet
-extern "C" int dhcp_hook_rx(struct mbuf* m)
+int dhcp_hook_rx(struct mbuf* m)
 {
     dhcp::dhcp_mbuf dm(false, m);
 

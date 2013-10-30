@@ -55,6 +55,8 @@
 /* XXX: TCP_CA_NAME_MAX define lives in tcp.h for compat reasons. */
 #include <bsd/sys/netinet/tcp.h>
 
+__BEGIN_DECLS
+
 extern struct cc_algo htcp_cc_algo;
 extern struct cc_algo cubic_cc_algo;
 extern struct cc_algo newreno_cc_algo;
@@ -173,5 +175,7 @@ extern struct rwlock cc_list_lock;
 #define	CC_LIST_WLOCK()		rw_wlock(&cc_list_lock)
 #define	CC_LIST_WUNLOCK()	rw_wunlock(&cc_list_lock)
 #define	CC_LIST_LOCK_ASSERT()	rw_assert(&cc_list_lock, RA_LOCKED)
+
+__END_DECLS
 
 #endif /* _NETINET_CC_H_ */

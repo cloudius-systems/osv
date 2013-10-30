@@ -33,6 +33,7 @@
 #ifndef _SYS_PROTOSW_H_
 #define _SYS_PROTOSW_H_
 
+#include <sys/cdefs.h>
 #include <bsd/porting/netport.h>
 
 /* Forward declare these structures referenced from prototypes below. */
@@ -230,6 +231,7 @@ struct pr_usrreqs {
 /*
  * All nonvoid pru_*() functions below return EOPNOTSUPP.
  */
+__BEGIN_DECLS
 int	pru_accept_notsupp(struct socket *so, struct bsd_sockaddr **nam);
 int	pru_attach_notsupp(struct socket *so, int proto, struct thread *td);
 int	pru_bind_notsupp(struct socket *so, struct bsd_sockaddr *nam,
@@ -257,6 +259,7 @@ int	pru_soreceive_notsupp(struct socket *so, struct bsd_sockaddr **paddr,
 	    int *flagsp);
 int	pru_sopoll_notsupp(struct socket *so, int events, struct ucred *cred,
 	    struct thread *td);
+__END_DECLS
 
 #endif /* _KERNEL */
 
@@ -330,12 +333,14 @@ char	*prcorequests[] = {
 #endif
 
 #ifdef _KERNEL
+__BEGIN_DECLS
 void	pfctlinput(int, struct bsd_sockaddr *);
 void	pfctlinput2(int, struct bsd_sockaddr *, void *);
 struct protosw *pffindproto(int family, int protocol, int type);
 struct protosw *pffindtype(int family, int type);
 int	pf_proto_register(int family, struct protosw *npr);
 int	pf_proto_unregister(int family, int protocol, int type);
+__END_DECLS
 #endif
 
 #endif

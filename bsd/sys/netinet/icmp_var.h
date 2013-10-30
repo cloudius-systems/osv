@@ -89,6 +89,9 @@ void	kmod_icmpstat_inc(int statnum);
 }
 
 #ifdef _KERNEL
+
+__BEGIN_DECLS
+
 SYSCTL_DECL(_net_inet_icmp);
 
 VNET_DECLARE(struct icmpstat, icmpstat);	/* icmp statistics. */
@@ -104,6 +107,9 @@ extern int badport_bandlim(int);
 #define BANDLIM_ICMP6_UNREACH 5
 #define BANDLIM_SCTP_OOTB 6
 #define BANDLIM_MAX 6
+
+__END_DECLS
+
 #endif
 
 #endif

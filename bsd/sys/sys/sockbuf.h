@@ -33,6 +33,8 @@
 #ifndef _SYS_SOCKBUF_H_
 #define _SYS_SOCKBUF_H_
 
+#include <sys/cdefs.h>
+
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
 #include <bsd/porting/rwlock.h>
@@ -78,6 +80,7 @@ struct	xsockbuf {
  * Variables for socket buffering.
  */
 struct	sockbuf {
+        int test_fn();
 	struct	mtx sb_mtx;	/* sockbuf lock */
 	struct	rwlock sb_rwlock;	/* prevent I/O interlacing */
 	short	sb_state;	/* (c/d) socket state on sockbuf */
@@ -108,6 +111,7 @@ struct	sockbuf {
  * Per-socket buffer mutex used to protect most fields in the socket
  * buffer.
  */
+__BEGIN_DECLS
 #define	SOCKBUF_MTX(_sb)		(&(_sb)->sb_mtx)
 #define	SOCKBUF_LOCK_INIT(_sb, _name) \
 	mtx_init(SOCKBUF_MTX(_sb), _name, NULL, MTX_DEF)
@@ -156,6 +160,7 @@ void	sbtoxsockbuf(struct sockbuf *sb, struct xsockbuf *xsb);
 int	sbwait(struct sockbuf *sb);
 int	sblock(struct sockbuf *sb, int flags);
 void	sbunlock(struct sockbuf *sb);
+__END_DECLS
 
 /*
  * How much space is there in a socket buffer (so->so_snd or so->so_rcv)?
