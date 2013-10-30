@@ -185,25 +185,24 @@ public class OsvSystemClassLoader extends ClassLoader {
         return getDelegate().getResourceAsStream(name);
     }
 
+    @SuppressWarnings("unchecked")
     private <T> T invoke(Method method, ClassLoader target, Object... args) {
         try {
-            //noinspection unchecked
             return (T) method.invoke(target, args);
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private <T, E extends Exception> T invokeAndForwardException(Class<E> exceptionType, Method method,
+    @SuppressWarnings("unchecked")
+    private <T, E extends Throwable> T invokeAndForwardException(Class<E> exceptionType, Method method,
                                                                  ClassLoader target, Object... args) throws E {
         try {
-            //noinspection unchecked
             return (T) method.invoke(target, args);
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         } catch (InvocationTargetException e) {
             if (exceptionType.isAssignableFrom(e.getCause().getClass())) {
-                //noinspection unchecked
                 throw ((E) e.getCause());
             }
             throw new RuntimeException(e);
