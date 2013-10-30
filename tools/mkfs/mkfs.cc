@@ -77,8 +77,10 @@ int main(int ac, char** av)
     boost::asio::io_service io_service;
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 10000));
 
+    cout << "Running mkfs...\n";
     mkfs();
 
+    cout << "Waiting for connection from host...\n";
     boost::asio::ip::tcp::iostream socket;
     acceptor.accept(*socket.rdbuf());
     cpio_in_expand expand_files;

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil
+import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil, socket, time, threading
 
 make_option = optparse.make_option
 
@@ -14,10 +14,6 @@ opt = optparse.OptionParser(option_list = [
                     dest = 'output',
                     help = 'write to FILE',
                     metavar = 'FILE'),
-        make_option('--build-dir',
-                    dest = 'zfs_root',
-                    help = 'use DIR as a temporary directory',
-                    metavar = 'DIR'),
         make_option('-d',
                     dest = 'depends',
                     help = 'write dependencies to FILE',
@@ -46,7 +42,6 @@ opt = optparse.OptionParser(option_list = [
 depends = StringIO.StringIO()
 if options.depends:
     depends = file(options.depends, 'w')
-zfs_root = options.zfs_root
 #out = file(options.output, 'w')
 manifest = ConfigParser.SafeConfigParser()
 manifest.optionxform = str # avoid lowercasing
@@ -58,9 +53,6 @@ depends.write('%s: \\\n' % (options.output,))
 zfs_pool='osv'
 zfs_fs='usr'
 
-if os.path.exists(zfs_root):
-    shutil.rmtree(zfs_root)
-os.system('mkdir -p %s' % (zfs_root,))
 
 files = dict([(f, manifest.get('manifest', f, vars = defines))
               for f in manifest.options('manifest')])
@@ -100,18 +92,68 @@ def unsymlink(f):
 files = list(expand(files.items()))
 files = [(x, unsymlink(y)) for (x, y) in files]
 
+image_path = os.path.abspath(options.output)
+osv = subprocess.Popen('cd ../..; scripts/run.py -c1 -i %s -g -e "--nomount tools/mkfs.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
+
+# Wait for the guest to come up and tell us it's listening
+while True:
+    line = osv.stdout.readline()
+    if not line or line.find("Waiting for connection")>=0:
+        break;
+    print line.rstrip();
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.connect(("127.0.0.1", 10000));
+
+# We'll want to read the rest of the guest's output, so that it doesn't
+# hang, and so the user can see what's happening. Easiest to do this with
+# a thread.
+def consumeoutput(file):
+    for line in iter(file.readline, ''):
+        print line.rstrip()
+threading.Thread(target = consumeoutput, args = (osv.stdout,)).start()
+
+# Send a CPIO header or file, padded to multiple of 4 bytes 
+def cpio_send(data):
+    s.sendall(data)
+    partial = len(data)%4
+    if partial > 0:
+        s.sendall('\0'*(4-partial))
+def cpio_field(number, length):
+    return "%.*x" % (length, number);
+def cpio_header(filename, filesize):
+    return ("070701"                          # magic
+            + cpio_field(0, 8)                # inode
+            + cpio_field(0, 8)                # mode
+            + cpio_field(0, 8)                # uid
+            + cpio_field(0, 8)                # gid
+            + cpio_field(0, 8)                # nlink
+            + cpio_field(0, 8)                # mtime
+            + cpio_field(filesize, 8)         # filesize
+            + cpio_field(0, 8)                # devmajor
+            + cpio_field(0, 8)                # devminor
+            + cpio_field(0, 8)                # rdevmajor
+            + cpio_field(0, 8)                # rdevminor
+            + cpio_field(len(filename)+1, 8)  # namesize
+            + cpio_field(0, 8)                # check
+            + filename + '\0')
+
+# Send the files to the guest
 for name, hostname in files:
     depends.write('\t%s \\\n' % (hostname,))
     if name[:4] in [ '/usr' ]:
-        os.system('mkdir -p %s/`dirname %s`' % (zfs_root, name))
-        os.system('cp -L %s %s/%s' % (hostname, zfs_root, name))
+        name = name[5:] # mkfs.so puts everything in /usr
+        cpio_send(cpio_header(name, os.stat(hostname).st_size))
+        with open(hostname, 'r') as f:
+            cpio_send(f.read())
+cpio_send(cpio_header("TRAILER!!!", 0))
+s.shutdown(socket.SHUT_WR)
 
-image_path = os.path.abspath(options.output)
-osv = subprocess.Popen('cd ../..; scripts/run.py -c1 -i %s -e "--nomount tools/mkfs.so" --forward tcp:10000::10000' % image_path, shell = True)
-nc = subprocess.Popen('sleep 3 && cd %s/usr && find -type f | cpio -o -H newc | nc -4 localhost 10000' % (zfs_root,), shell = True)
+# Wait for the guest to actually finish writing and syncing
+s.recv(1)
+s.close()
 
 osv.wait()
-nc.wait()
 
 depends.write('\n\n')
 depends.close()
