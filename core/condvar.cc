@@ -55,6 +55,7 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
     // Wait until either the timer expires or condition variable signaled
     wr.wait(tmr);
     if (!wr.woken()) {
+        ret = ETIMEDOUT;
         // wr is still in the linked list (because of a timeout) so remove it:
         mutex_lock(&condvar->m);
         if (&wr == condvar->waiters_fifo.oldest) {
@@ -80,10 +81,10 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
                 // and will wr.wake() soon. We can't return (and invalidate wr)
                 // until it calls wr.wake().
                 wr.wait();
+                ret = 0;
             }
         }
         mutex_unlock(&condvar->m);
-        ret = ETIMEDOUT;
     }
 
 #if WAIT_MORPHING
