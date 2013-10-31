@@ -25,6 +25,7 @@ extern "C" {
 #include <osv/mutex.h>
 #include <osv/semaphore.hh>
 
+#include "drivers/console.hh"
 #include "drivers/pci.hh"
 #include "interrupt.hh"
 
@@ -472,13 +473,17 @@ void ACPI_INTERNAL_VAR_XFACE AcpiOsPrintf(const char *Format, ...)
 {
     va_list va;
     va_start(va, Format);
-    vprintf(Format, va);
+    AcpiOsVprintf(Format, va);
     va_end(va);
 }
 
 void AcpiOsVprintf(const char *Format, va_list Args)
 {
-    vprintf(Format, Args);
+    static char msg[1024];
+
+    vsnprintf(msg, sizeof(msg), Format, Args);
+
+    console::write_ll(msg, strlen(msg));
 }
 
 void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init_early()
