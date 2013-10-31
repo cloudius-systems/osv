@@ -450,7 +450,7 @@ AcpiOsWritePciConfiguration (
 BOOLEAN
 AcpiOsReadable(void *Pointer, ACPI_SIZE Length)
 {
-    return true;
+    return mmu::isreadable(Pointer, Length);
 }
 
 BOOLEAN
