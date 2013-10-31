@@ -486,34 +486,40 @@ void AcpiOsVprintf(const char *Format, va_list Args)
     console::write_ll(msg, strlen(msg));
 }
 
-void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init_early()
-{
-     XENPV_ALTERNATIVE({auto st = AcpiInitializeTables(NULL, 0, false); assert(st == AE_OK);}, {});
-}
-
 namespace acpi {
+
+#define ACPI_MAX_INIT_TABLES 16
+
+static ACPI_TABLE_DESC TableArray[ACPI_MAX_INIT_TABLES];
+
+void early_init()
+{
+    ACPI_STATUS status;
+
+    status = AcpiInitializeTables(TableArray, ACPI_MAX_INIT_TABLES, TRUE);
+    if (ACPI_FAILURE(status)) {
+        debug("AcpiInitializeTables failed: %s\n", AcpiFormatException(status));
+        return;
+    }
+}
 
 // must be called after the scheduler, apic and smp where started to run
 // The following function comes from the documentation example page 262
 void init()
 {
-    bool allow_resize = false;
-    static int max_acpi_tables = 16;
+    ACPI_STATUS status;
 
     // Initialize ACPICA subsystem
-    ACPI_STATUS status = AcpiInitializeSubsystem();
+    status = AcpiInitializeSubsystem();
     if (ACPI_FAILURE(status)) {
-        debug("AcpiInitializeSubsystem() failed: %s\n",
-              AcpiFormatException(status));
+        debug("AcpiInitializeSubsystem failed: %s\n", AcpiFormatException(status));
         return;
     }
 
-    // Initialize the ACPICA Table Manager and get all ACPI tables
-    // nothing is preallocated so pass a nullptr so the code will allocate and
-    // fill up to max_acpi_tables
-    status = AcpiInitializeTables(nullptr, max_acpi_tables, allow_resize);
+    // Copy the root table list to dynamic memory
+    status = AcpiReallocateRootTable();
     if (ACPI_FAILURE(status)) {
-        debug("AcpiInitializeTables failed: %s\n", AcpiFormatException(status));
+        debug("AcpiReallocateRootTable failed: %s\n", AcpiFormatException(status));
         return;
     }
 
@@ -540,4 +546,9 @@ void init()
     }
 }
 
+}
+
+void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init_early()
+{
+     XENPV_ALTERNATIVE({ acpi::early_init(); }, {});
 }
