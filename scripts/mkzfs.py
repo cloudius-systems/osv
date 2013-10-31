@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 
 import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil, socket, time, threading
 

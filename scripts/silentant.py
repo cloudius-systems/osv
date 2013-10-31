@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 
 # ant insists of being not very quiet, with output like
 #
@@ -23,4 +23,4 @@ lines = out.splitlines()
 if not (len(lines) == 3 and lines[0] == '' and lines[1] == 'BUILD SUCCESSFUL'):
     print out,
 
-sys.exit(ant.returncode) 
+sys.exit(ant.returncode)

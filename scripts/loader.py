@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 
 import gdb
 import re
@@ -493,7 +493,7 @@ gdb.events.cont.connect(continue_handler)
 def setup_libstdcxx():
     gcc = external + '/gcc.bin'
     sys.path += [gcc + '/usr/share/gdb/auto-load/usr/lib64',
-                 glob(gcc + '/usr/share/gcc-*/python')[0],
+                 glob(gcc + '/usr/share/gcc-*/python2')[0],
                  ]
     main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
     execfile(main)
