@@ -595,21 +595,21 @@ usr.raw: loader.img
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
-usr.img: scripts/mkzfs.py usr.manifest $(jni) usr.raw
+usr.img: scripts/mkzfs.py $(out)/usr.manifest $(jni) usr.raw
 	$(call quiet, echo Creating $@ as $(img_format))
 	$(call quiet, qemu-img convert -f raw -O $(img_format) usr.raw $@)
 	$(call quiet, qemu-img resize $@ +10G > /dev/null 2>&1)
-	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \
+	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
-bootfs.bin: scripts/mkbootfs.py bootfs.manifest $(tests) $(tools) \
+bootfs.bin: scripts/mkbootfs.py $(out)/bootfs.manifest $(tests) $(tools) \
 		tests/testrunner.so java/java.so java/runjava.jar \
 		zpool.so zfs.so
-	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(src)/bootfs.manifest \
+	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
@@ -638,6 +638,12 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 	$(call quiet, sh $(src)/scripts/gen-version-header $@, GEN $@)
 
 $(src)/build.mk: $(generated-headers)
+
+$(out)/bootfs.manifest: $(src)/scripts/module.py
+	cd $(out)/module && ../../../scripts/module.py bootfs
+
+$(out)/usr.manifest: $(src)/scripts/module.py
+	cd $(out)/module && ../../../scripts/module.py usr
 
 -include $(shell find -name '*.d')
 

@@ -3,6 +3,7 @@ mode=release
 
 out = build/$(mode)
 submake = $(out)/Makefile
+modulemk = $(out)/module/module.mk
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 silentant = $(if $V,, scripts/silentant.py)
@@ -18,7 +19,7 @@ mgmt = 1
 # idea whether the target has changed or not.  So we call ant from here,
 # and then the main makefile can treat the build products (jars) as inputs
 
-all: $(submake)
+all: $(submake) $(modulemk)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
 	$(call only-if, $(mgmt), cd mgmt && ./gradlew --daemon :web:jar build)
@@ -31,6 +32,14 @@ $(submake): Makefile
 	echo 'out = $(abspath $(out))' >> $@
 	echo 'VPATH = ../..' >> $@
 	echo 'include ../../build.mk' >> $@
+
+$(modulemk): Makefile
+	mkdir -p $(dir $@)
+	echo 'mode = $(mode)' > $@
+	echo 'src = ../../../..' >> $@
+	echo 'out = $(abspath $(out))' >> $@
+	echo 'VPATH = ../../../../' >> $@
+	echo 'include ../../../../build.mk' >> $@
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
