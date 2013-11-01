@@ -181,7 +181,7 @@ void xen_init(processor::features_type &features, unsigned base)
             if (version_hypercall(XENVER_get_features, &info) < 0)
                 assert(0);
             for (int j = 0; j < 32; j++)
-                xen_features[j] = !!(info.submap & 1<<j);
+                xen_features[i * j] = !!(info.submap & 1<<j);
         }
         features.xen_clocksource = xen_features[9] & 1;
         features.xen_vector_callback = xen_features[8] & 1;
