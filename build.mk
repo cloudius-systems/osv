@@ -6,7 +6,7 @@ cmdline = java.so -Djava.util.logging.config.file=/usr/mgmt/config/logging.prope
 #cmdline = testrunner.so
 #cmdline = java.so Hello
 local-includes =
-INCLUDES = $(local-includes) -I. -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
+INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -isystem $(src)/include/glibc-compat
 gcc-inc-base = $(src)/external/gcc.bin/usr/include/c++/4.8.2
 gcc-inc-base2 = $(src)/external/gcc.bin/usr/lib/gcc/x86_64-redhat-linux/4.8.2/include
@@ -614,9 +614,9 @@ tools/mkfs/mkfs.so: CFLAGS += -lstdc++
 
 tools/mkfs/mkfs.so: tools/mkfs/mkfs.o tools/mkfs/cpio.o libzfs.so
 
-runtime.o: ctype-data.h
+runtime.o: gen/include/ctype-data.h
 
-ctype-data.h: gen-ctype-data
+gen/include/ctype-data.h: gen-ctype-data
 	$(call quiet, ./gen-ctype-data > $@, GEN $@)
 
 gen-ctype-data: gen-ctype-data.o
