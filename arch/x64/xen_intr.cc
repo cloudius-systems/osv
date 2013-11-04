@@ -103,6 +103,10 @@ void xen_handle_irq()
 
 static __attribute__((constructor)) void setup_xen_irq()
 {
+    if (!is_xen()) {
+        return;
+    }
+
     xen_irq_handlers = new xen_irq;
 }
 }
