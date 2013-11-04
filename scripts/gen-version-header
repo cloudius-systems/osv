@@ -7,7 +7,7 @@ fi
 
 output=$1
 
-version=$(git describe --tags)
+version=$(`dirname $0`/osv-version.sh)
 
 tmp=$(mktemp)
 

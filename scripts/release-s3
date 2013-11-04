@@ -2,7 +2,7 @@
 
 set -e
 
-version=$(git describe --tags)
+version=$(`dirname $0`/osv-version.sh)
 
 make -j8 clean
 make -j8 external
