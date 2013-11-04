@@ -114,7 +114,8 @@ T* phys_cast(phys pa)
     return static_cast<T*>(phys_to_virt(pa));
 }
 
-void linear_map(void* virt, phys addr, size_t size, size_t slop);
+void linear_map(void* virt, phys addr, size_t size,
+                size_t slop = mmu::page_size);
 void free_initial_memory_range(uintptr_t addr, size_t size);
 void switch_to_runtime_page_table();
 void set_nr_page_sizes(unsigned nr);

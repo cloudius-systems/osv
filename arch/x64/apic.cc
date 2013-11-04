@@ -107,7 +107,7 @@ void apic_driver::read_base()
 xapic::xapic()
     : apic_driver()
 {
-    mmu::linear_map(static_cast<void*>(_base_virt), _apic_base, 4096, 4096);
+    mmu::linear_map(static_cast<void*>(_base_virt), _apic_base, 4096);
     xapic::enable();
 }
 

@@ -43,7 +43,7 @@ void write(unsigned reg, u32 data)
 
 void init()
 {
-    mmu::linear_map(const_cast<void*>(base), base_phys, 4096, 4096);
+    mmu::linear_map(const_cast<void*>(base), base_phys, 4096);
 }
 
 }
