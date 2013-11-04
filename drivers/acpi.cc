@@ -158,11 +158,10 @@ void AcpiOsFree(void *Memory)
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS Where, ACPI_SIZE Length)
 {
-    size_t page_align = 4096;
-    size_t map_size = align_up(Length, page_align);
-    uint64_t _where = align_down(Where, map_size);
+    uint64_t _where = align_down(Where, mmu::page_size);
+    size_t map_size = align_up(Length + Where - _where, mmu::page_size);
     
-    mmu::linear_map(mmu::phys_to_virt(_where), _where, map_size, map_size);
+    mmu::linear_map(mmu::phys_to_virt(_where), _where, map_size);
     return mmu::phys_to_virt(Where);
 }
 
