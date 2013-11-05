@@ -183,11 +183,12 @@ def start_osv():
         print >> sys.stderr, "Unrecognized hypervisor selected"
         return;
 
-def detect_hypervisor():
+def choose_hypervisor(external_networking):
     if os.path.exists('/dev/kvm'):
         return 'kvm'
     if (os.path.exists('/proc/xen/capabilities')
-        and 'control_d' in file('/proc/xen/capabilities').read()):
+        and 'control_d' in file('/proc/xen/capabilities').read()
+        and external_networking):
         return 'xen'
     return 'qemu'
 
@@ -214,7 +215,7 @@ if (__name__ == "__main__"):
                         help="specify number of vcpus")
     parser.add_argument("-e", "--execute", action="store", default=None, metavar="CMD",
                         help="edit command line before execution")
-    parser.add_argument("-p", "--hypervisor", action="store", default=detect_hypervisor(),
+    parser.add_argument("-p", "--hypervisor", action="store", default="auto",
                         help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
     parser.add_argument("-D", "--detach", action="store_true",
                         help="run in background, do not connect the console")
@@ -229,6 +230,8 @@ if (__name__ == "__main__"):
     opt_path = "debug" if cmdargs.debug else "release"
     image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % opt_path)
     
+    if(cmdargs.hypervisor == "auto"):
+        cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
     # Call main
     main()
     
