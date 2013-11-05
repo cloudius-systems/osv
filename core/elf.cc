@@ -734,11 +734,11 @@ program* s_program;
 program::program(::filesystem& fs, void* addr)
     : _fs(fs)
     , _next_alloc(addr)
-    , _core(new elf::memory_image(*this, reinterpret_cast<void*>(0x200000)))
 {
-    _core->load_segments();
     assert(!s_program);
     s_program = this;
+    _core = make_shared<memory_image>(*this, reinterpret_cast<void*>(0x200000));
+    _core->load_segments();
     set_object("libc.so.6", _core);
     set_object("libm.so.6", _core);
     set_object("ld-linux-x86-64.so.2", _core);
