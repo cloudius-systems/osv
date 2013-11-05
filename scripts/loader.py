@@ -311,9 +311,9 @@ class thread_context(object):
         self.old_frame = gdb.selected_frame()
         self.new_frame = gdb.newest_frame()
         self.new_frame.select()
-        self.old_rsp = ulong(gdb.parse_and_eval('$rsp').cast(ulong_type))
-        self.old_rip = ulong(gdb.parse_and_eval('$rip').cast(ulong_type))
-        self.old_rbp = ulong(gdb.parse_and_eval('$rbp').cast(ulong_type))
+        self.old_rsp = gdb.parse_and_eval('$rsp').cast(ulong_type)
+        self.old_rip = gdb.parse_and_eval('$rip').cast(ulong_type)
+        self.old_rbp = gdb.parse_and_eval('$rbp').cast(ulong_type)
         self.running_cpu = state.cpu_from_thread(thread)
         self.vm_thread = gdb.selected_thread()
         if not self.running_cpu:
