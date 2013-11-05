@@ -261,10 +261,10 @@ void main_cont(int ac, char** av)
     std::tie(ac, av) = parse_options(ac, av);
     ioapic::init();
     smp_launch();
+    memory::enable_debug_allocator();
     acpi::init();
     sched::preempt_enable();
     console::console_init();
-    memory::enable_debug_allocator();
     enable_trace();
     if (opt_log_backtrace) {
         // can only do this after smp_launch, otherwise the IDT is not initialized,
