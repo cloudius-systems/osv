@@ -166,8 +166,11 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS Where, ACPI_SIZE Length)
 }
 
 void AcpiOsUnmapMemory(void *LogicalAddress, ACPI_SIZE Size)
-
 {
+    // Unmap is a no-op and leaves the mapppings in place because the amount of
+    // mapped ACPI memory is limited, and we don't track whether what it maps
+    // was previously mapped (so unmap can poke a hole where a previous mapping
+    // existed, even before ACPI).
 }
 
 ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
