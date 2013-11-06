@@ -374,7 +374,7 @@ class osv_info_threads(gdb.Command):
         for t in state.thread_list:
             with thread_context(t, state):
                 cpu = t['_cpu']
-		tid = t['_id']
+                tid = t['_id']
                 fr = gdb.selected_frame()
                 # Non-running threads have always, by definition, just called
                 # a reschedule, and the stack trace is filled with reschedule
@@ -459,7 +459,7 @@ class osv_thread(gdb.Command):
             if t.address.cast(ulong_type) == long(arg, 0):
                 thread = t
             with thread_context(t, state):
-	        if t['_id'] == long(arg, 0):
+                if t['_id'] == long(arg, 0):
                     thread = t
         if not thread:
             print 'Not found'
