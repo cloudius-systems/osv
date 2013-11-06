@@ -24,6 +24,7 @@
 #include <osv/percpu-worker.hh>
 #include <preempt-lock.hh>
 #include <sched.hh>
+#include <algorithm>
 #include "prio.hh"
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
@@ -831,6 +832,9 @@ void* malloc(size_t size)
     v += pad_before;
     mmu::vpopulate(v, asize);
     memset(v + size, '$', asize - size);
+    // fill the memory with garbage, to catch use-before-init
+    uint8_t garbage = 3;
+    std::generate_n(static_cast<uint8_t*>(v), size, [&] { return garbage++; });
     return v;
 }
 
