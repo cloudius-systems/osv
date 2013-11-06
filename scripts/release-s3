@@ -6,9 +6,9 @@ version=$(`dirname $0`/osv-version.sh)
 
 make -j8 clean
 make -j8 external
-make -j8 qcow2
+make -j8 all
 
-image=build/release/usr.qcow2
+image=build/release/usr.img
 
 url=s3://downloads.osv.io/qemu/osv-$version.qcow2
 
