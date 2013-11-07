@@ -364,6 +364,12 @@ def show_thread_timers(t):
         n = n['next_']
     gdb.write('\n')
 
+def get_function_name(frame):
+    if frame.function():
+        return frame.function().name
+    else:
+        return '??'
+
 class osv_info_threads(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv info threads',
@@ -381,24 +387,31 @@ class osv_info_threads(gdb.Command):
                 # related functions (switch_to, schedule, wait_until, etc.).
                 # Here we try to skip such functions and instead show a more
                 # interesting caller which initiated the wait.
+                file_blacklist = ["arch-switch.hh", "sched.cc", "sched.hh",
+                                  "mutex.hh", "mutex.cc", "mutex.c", "mutex.h"]
+
+                # Functions from blacklisted files which are interesting
+                sched_thread_join = 'sched::thread::join()'
+                function_whitelist = [sched_thread_join]
+
                 fname = '??'
+                function = '??'
                 sal = fr.find_sal()
                 while sal.symtab:
                     fname = sal.symtab.filename
-                    b = os.path.basename(fname);
-                    if b in ["arch-switch.hh", "sched.cc", "sched.hh", 
-                             "mutex.hh", "mutex.cc", "mutex.c", "mutex.h"]:
-                        fr = fr.older();
-                        sal = fr.find_sal();
-                    else:
-                        if fname[:6] == "../../":
-                            fname = fname[6:]
-                        break;
+                    function = get_function_name(fr)
+                    is_whitelisted = function in function_whitelist
+                    is_blacklisted = os.path.basename(fname) in file_blacklist
 
-                if fr.function():
-                    function = fr.function().name
-                else:
-                    function = '??'
+                    if is_whitelisted or not is_blacklisted:
+                        break
+
+                    fr = fr.older()
+                    sal = fr.find_sal()
+
+                if fname[:6] == "../../":
+                            fname = fname[6:]
+
                 status = str(t['_status']['_M_i']).replace('sched::thread::', '')
                 gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12d\n' %
                           (tid, ulong(t.address),
@@ -410,6 +423,10 @@ class osv_info_threads(gdb.Command):
                            t['_vruntime'],
                            )
                           )
+
+                if function == sched_thread_join:
+                    gdb.write("\tjoining on %s\n" % fr.read_var("this"))
+
                 show_thread_timers(t)
 
 class osv_info_callouts(gdb.Command):
