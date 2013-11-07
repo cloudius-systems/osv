@@ -10,7 +10,6 @@
 #include "tst-malloc.hh"
 #include "tst-timer.hh"
 #include "tst-devices.hh"
-#include "tst-eventlist.hh"
 #include "tst-rwlock.hh"
 #include "tst-bsd-synch.hh"
 
@@ -21,7 +20,6 @@ void tests::execute_tests() {
     test_malloc malloc;
     test_timer timer;
     test_devices dev;
-    test_eventlist evlist;
     test_rwlock rwlock;
     test_synch synch;
 
@@ -29,7 +27,6 @@ void tests::execute_tests() {
     instance().register_test(&malloc);
     instance().register_test(&timer);
     instance().register_test(&dev);
-    instance().register_test(&evlist);
     instance().register_test(&rwlock);
     instance().register_test(&synch);
 
