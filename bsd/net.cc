@@ -10,7 +10,7 @@
 
 #include <bsd/porting/callout.h>
 #include <bsd/porting/netport.h>
-#include <bsd/porting/networking.h>
+#include <bsd/porting/networking.hh>
 #include <bsd/porting/route.h>
 
 #include <bsd/sys/sys/libkern.h>
@@ -96,8 +96,8 @@ void net_init(void)
     vnet_loif_init();
 
     /* Start the loopback device */
-    osv_start_if("lo0", "127.0.0.1", "255.0.0.0");
-    osv_ifup("lo0");
+    osv::start_if("lo0", "127.0.0.1", "255.0.0.0");
+    osv::ifup("lo0");
     zfs_init(NULL);
 
     debug("Done!\n");

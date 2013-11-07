@@ -9,14 +9,15 @@
 #define __NETWORKING_H__
 
 #include <sys/cdefs.h>
+#include <string>
+#include <functional>
 
-__BEGIN_DECLS
-
-/* Interface Functions */
-int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr);
-
-int osv_ifup(const char* if_name);
-
-__END_DECLS
+namespace osv {
+    void for_each_if(std::function<void (std::string)> func);
+    /* Interface Functions */
+    int start_if(std::string if_name, std::string ip_addr,
+        std::string mask_addr);
+    int ifup(std::string if_name);
+}
 
 #endif /* __NETWORKING_H__ */

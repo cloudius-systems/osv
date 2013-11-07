@@ -10,7 +10,7 @@
 
 #include <bsd/porting/netport.h>
 
-#include <bsd/porting/networking.h>
+#include <bsd/porting/networking.hh>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_llatbl.h>
@@ -20,7 +20,22 @@
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 
-int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr)
+namespace osv {
+
+void for_each_if(std::function<void (std::string)> func)
+{
+	struct ifnet *ifp;
+
+	IFNET_RLOCK_NOSLEEP();
+	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
+		std::string str(ifp->if_xname);
+		func(str);
+	}
+	IFNET_RUNLOCK_NOSLEEP();
+
+}
+
+int start_if(std::string if_name, std::string ip_addr, std::string mask_addr)
 {
     int error, success;
     struct bsd_ifreq oldaddr;
@@ -30,15 +45,15 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
     struct bsd_sockaddr_in* broadcast = &ifra.ifra_broadaddr;
     struct ifnet* ifp;
 
-    if ((if_name == NULL) || (ip_addr == NULL) || (mask_addr == NULL)) {
+    if ((if_name.empty()) || (ip_addr.empty()) || (mask_addr.empty())) {
         return (EINVAL);
     }
 
     bzero(&ifra, sizeof(struct in_aliasreq));
 
     /* IF Name */
-    strncpy(ifra.ifra_name, if_name, IFNAMSIZ);
-    ifp = ifunit_ref(if_name);
+    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
+    ifp = ifunit_ref(if_name.c_str());
     if (!ifp) {
         return (ENOENT);
     }
@@ -46,7 +61,7 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
     // todo check for null
 
     /* IP Address */
-    success = inet_aton(ip_addr, &addr->sin_addr);
+    success = inet_aton(ip_addr.c_str(), &addr->sin_addr);
     if (!success) {
         error = EINVAL;
         goto out;
@@ -55,7 +70,7 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
     addr->sin_len = sizeof(struct bsd_sockaddr_in);
 
     /* Mask */
-    success = inet_aton(mask_addr, &mask->sin_addr);
+    success = inet_aton(mask_addr.c_str(), &mask->sin_addr);
     if (!success) {
         error = EINVAL;
         goto out;
@@ -66,7 +81,7 @@ int osv_start_if(const char* if_name, const char* ip_addr, const char* mask_addr
     broadcast->sin_addr.s_addr = (addr->sin_addr.s_addr &
                                   mask->sin_addr.s_addr) |
                                  ~mask->sin_addr.s_addr ;
-    strncpy(oldaddr.ifr_name, if_name, IFNAMSIZ);
+    strncpy(oldaddr.ifr_name, if_name.c_str(), IFNAMSIZ);
     error = in_control(NULL, SIOCGIFADDR, (caddr_t)&oldaddr, ifp, NULL);
     if (!error) {
         in_control(NULL, SIOCDIFADDR, (caddr_t)&oldaddr, ifp, NULL);
@@ -78,16 +93,16 @@ out:
     return (error);
 }
 
-int osv_ifup(const char* if_name)
+int ifup(std::string if_name)
 {
     int error;
     struct bsd_ifreq ifr = {0};
 
-    if (if_name == NULL) {
+    if (if_name.empty()) {
         return (EINVAL);
     }
 
-    strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
+    strncpy(ifr.ifr_name, if_name.c_str(), IFNAMSIZ);
     error = ifioctl(NULL, SIOCGIFFLAGS, (caddr_t)&ifr, NULL);
     if (error) {
         return (error);
@@ -100,4 +115,4 @@ int osv_ifup(const char* if_name)
     error = ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, NULL);
     return (error);
 }
-
+}

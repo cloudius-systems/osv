@@ -20,7 +20,7 @@
 #include <bsd/sys/netinet/udp.h>
 #include <bsd/machine/in_cksum.h>
 
-#include <bsd/porting/networking.h>
+#include <bsd/porting/networking.hh>
 #include <bsd/porting/route.h>
 
 #include <debug.hh>
@@ -512,7 +512,7 @@ namespace dhcp {
                  dm.get_subnet_mask().to_string().c_str(),
                  dm.get_router_ip().to_string().c_str());
 
-            osv_start_if(_ifp->if_xname,
+            osv::start_if(_ifp->if_xname,
                          dm.get_your_ip().to_string().c_str(),
                          dm.get_subnet_mask().to_string().c_str());
             osv_route_add_network("0.0.0.0",

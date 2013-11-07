@@ -1,5 +1,5 @@
 #include <jni.h>
-#include <bsd/porting/networking.h>
+#include <bsd/porting/networking.hh>
 #include <bsd/porting/route.h>
 
 /*
@@ -14,7 +14,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_IFConfig_set_1ip
     const char * ip_c = env->GetStringUTFChars(ip, 0);
     const char * netmask_c = env->GetStringUTFChars(netmask, 0);
 
-    int error = osv_start_if(ifname_c, ip_c, netmask_c);
+    int error = osv::start_if(ifname_c, ip_c, netmask_c);
     if (error) {
         jclass cls = env->FindClass("java/io/IOException");
         env->ThrowNew(cls, "osv_start_if failed");
@@ -35,7 +35,7 @@ extern "C" JNIEXPORT void JNICALL Java_com_cloudius_net_IFConfig_if_1up
 {
     const char * ifname_c = env->GetStringUTFChars(ifname, 0);
 
-    int error = osv_ifup(ifname_c);
+    int error = osv::ifup(ifname_c);
     if (error) {
         jclass cls = env->FindClass("java/io/IOException");
         env->ThrowNew(cls, "osv_ifup failed");

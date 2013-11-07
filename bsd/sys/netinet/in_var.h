@@ -419,6 +419,7 @@ inm_acquire_locked(struct in_multi *inm)
 #define MCAST_NOTSMEMBER	2	/* This host excluded source */
 #define MCAST_MUTED		3	/* [deprecated] */
 
+__BEGIN_DECLS
 struct	rtentry;
 struct	route;
 struct	ip_moptions;
@@ -462,6 +463,7 @@ void	 in_rtredirect(struct bsd_sockaddr *, struct bsd_sockaddr *,
 int	 in_rtrequest(int, struct bsd_sockaddr *,
 	    struct bsd_sockaddr *, struct bsd_sockaddr *, int, struct rtentry **, u_int);
 void	in_setmatchfunc(struct radix_node_head *, int);
+__END_DECLS
 
 #if 0
 int	 in_rt_getifa(struct rt_addrinfo *, u_int fibnum);

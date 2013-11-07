@@ -33,7 +33,7 @@
 
 
 #include <bsd/porting/netport.h>
-#include <bsd/porting/networking.h>
+#include <bsd/porting/networking.hh>
 #include <bsd/porting/route.h>
 #include <bsd/porting/callout.h>
 #undef NZERO

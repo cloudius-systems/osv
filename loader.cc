@@ -39,7 +39,7 @@
 #include <osv/power.hh>
 #include <osv/rcu.hh>
 #include "mempool.hh"
-#include <bsd/porting/networking.h>
+#include <bsd/porting/networking.hh>
 #include "dhcp.hh"
 #include <osv/version.h>
 
@@ -240,11 +240,13 @@ void* do_main_thread(void *_args)
         mount_usr();
     }
 
-    // Start DHCP by default and wait for an IP
-    if (!osv_start_if("eth0", "0.0.0.0", "255.255.255.0") && !osv_ifup("eth0"))
-        dhcp_start(true);
-    else
-        debug("Could not initialize network interface.\n");
+    osv::for_each_if([] (std::string if_name) {
+        // Start DHCP by default and wait for an IP
+        if (osv::start_if(if_name, "0.0.0.0", "255.255.255.0") != 0 ||
+            osv::ifup(if_name) != 0)
+            debug("Could not initialize network interface.\n");
+    });
+    dhcp_start(true);
 
     run_main(elf::get_program(), args);
 
