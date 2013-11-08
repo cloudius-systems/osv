@@ -241,6 +241,9 @@ void* do_main_thread(void *_args)
     }
 
     osv::for_each_if([] (std::string if_name) {
+        if (if_name == "lo0")
+            return;
+
         // Start DHCP by default and wait for an IP
         if (osv::start_if(if_name, "0.0.0.0", "255.255.255.0") != 0 ||
             osv::ifup(if_name) != 0)
