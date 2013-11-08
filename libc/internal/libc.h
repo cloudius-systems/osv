@@ -18,7 +18,7 @@ struct __libc {
 //	int (*atexit)(void (*)(void));
 //	void (*fini)(void);
 //	void (*ldso_fini)(void);
-	volatile int threads_minus_1;
+//	volatile int threads_minus_1;
 //	int canceldisable;
 	FILE *ofl_head;
 	mutex_t ofl_lock;
@@ -33,8 +33,8 @@ extern struct __libc __libc ATTR_LIBC_VISIBILITY;
 /* Designed to avoid any overhead in non-threaded processes */
 int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
 void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
-#define LOCK(x) (libc.threads_minus_1 ? (mutex_lock(&(x)),1) : ((void)(x),1))
-#define UNLOCK(x) (libc.threads_minus_1 ? (mutex_unlock(&(x)),1) : ((void)(x),1))
+#define LOCK(x) (mutex_lock(&(x)),1)
+#define UNLOCK(x) (mutex_unlock(&(x)),1)
 
 extern char **__environ;
 
