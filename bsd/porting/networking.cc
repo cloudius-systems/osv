@@ -96,7 +96,7 @@ out:
 int ifup(std::string if_name)
 {
     int error;
-    struct bsd_ifreq ifr = {0};
+    struct bsd_ifreq ifr;
 
     if (if_name.empty()) {
         return (EINVAL);
