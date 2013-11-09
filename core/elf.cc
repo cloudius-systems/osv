@@ -254,6 +254,7 @@ void object::load_segments()
         case PT_GNU_STACK:
         case PT_GNU_RELRO:
         case PT_GNU_EH_FRAME:
+        case PT_PAX_FLAGS:
             break;
         case PT_TLS:
             _tls_segment = _base + phdr.p_vaddr;
