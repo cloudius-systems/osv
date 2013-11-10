@@ -1,5 +1,6 @@
 
 arch = x64
+img_format ?= qcow2
 # cmdline = java.so -jar /java/cli.jar
 # cmdline = java.so -jar /java/web.jar -cp java/cli.jar app
 cmdline = java.so -Djava.util.logging.config.file=/usr/mgmt/config/logging.properties -jar /usr/mgmt/web-1.0.0.jar app prod
@@ -595,7 +596,8 @@ usr.raw: loader.img
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
 usr.img: scripts/mkzfs.py usr.manifest $(jni) usr.raw
-	$(call quiet, qemu-img convert -f raw -O qcow2 usr.raw $@)
+	$(call quiet, echo Creating $@ as $(img_format))
+	$(call quiet, qemu-img convert -f raw -O $(img_format) usr.raw $@)
 	$(call quiet, qemu-img resize $@ +10G > /dev/null 2>&1)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(src)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \

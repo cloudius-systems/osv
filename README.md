@@ -37,6 +37,12 @@ Finally, build everything at once:
 make external all 
 ```
 
+By default make creates image in qcow2 format. To change this pass format value via img_format variable, i.e.
+
+```
+make img_format=raw external all
+```
+
 ## Running OSv
 
 ```
