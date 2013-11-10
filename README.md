@@ -96,7 +96,7 @@ $ sudo scripts/run.py -nv -m4G -e "/tests/tst-pipe.so"
 To build with debugging symbols, and preemption off (to not confuse gdb),
 
 ```
-make -j mode=debug conf-preempt=0
+make mode=debug conf-preempt=0
 ```
 
 To clean debugging build's results, use
