@@ -304,7 +304,7 @@ while true; do
 
     if test x"$INSTANCE_ONLY" != x"1"; then
         echo_progress Building from the scratch
-        make clean && git submodule update && make external && make
+        make clean && git submodule update && make external && make img_format=raw
 
         if test x"$?" != x"0"; then
             handle_error Build failed.
