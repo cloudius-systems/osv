@@ -138,7 +138,7 @@ def start_osv_xen():
         "vcpus=%s" % (cmdargs.vcpus),
         "maxcpus=%s" % (cmdargs.vcpus),
         "name='osv-%d'" % (os.getpid()),
-        "disk=['file://%s,hda,rw']" % image_file,
+        "disk=['%s,qcow2,hda,rw']" % image_file,
         "serial='pty'",
         "paused=0",
         "on_crash='preserve'"
