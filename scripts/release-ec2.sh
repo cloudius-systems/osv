@@ -264,15 +264,15 @@ list_additional_regions() {
 
 replicate_ami() {
  local AMI_ID=$1
- local REGIONS=`list_additional_regions`
+ local REGIONS="`list_additional_regions`"
 
  for REGION in $REGIONS
  do
      echo Copying to $REGION
      local AMI_IN_REGION=`copy_ami_to_region $AMI_ID $REGION`
 
-     if test x"$VOLUME_ID" = x; then
-         handle_error Failed to replacate AMI to $REGION region.
+     if test x"$AMI_IN_REGION" = x; then
+         handle_error Failed to replicate AMI to $REGION region.
          return 1;
      fi
 
