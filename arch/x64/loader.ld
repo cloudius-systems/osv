@@ -61,13 +61,12 @@ SECTIONS
         _percpu_workers_end = .;
     }
     . = ALIGN(64);
-    .tls_template_start = .;
     .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls :text
     .tbss : {
         *(.tbss .tbss.* .gnu.linkonce.tb.*)
         . = ALIGN(64);
     } :tls :text
-    .tls_template_size = . - .tls_template_start;
+    .tls_template_size = SIZEOF(.tdata) + SIZEOF(.tbss);
     .bss : { *(.bss .bss.*) } :text
     . = ALIGN(64);
     tcb0 = .;
