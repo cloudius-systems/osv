@@ -24,15 +24,14 @@ namespace osv {
 
 void for_each_if(std::function<void (std::string)> func)
 {
-	struct ifnet *ifp;
+    struct ifnet *ifp;
 
-	IFNET_RLOCK_NOSLEEP();
-	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
-		std::string str(ifp->if_xname);
-		func(str);
-	}
-	IFNET_RUNLOCK_NOSLEEP();
-
+    IFNET_RLOCK_NOSLEEP();
+    TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
+        std::string str(ifp->if_xname);
+        func(str);
+    }
+    IFNET_RUNLOCK_NOSLEEP();
 }
 
 int start_if(std::string if_name, std::string ip_addr, std::string mask_addr)
