@@ -282,7 +282,7 @@ ip_init(void)
 	for (i = 0; i < IPREASS_NHASH; i++)
 		TAILQ_INIT(&V_ipq[i]);
 	V_maxnipq = nmbclusters / 32;
-	V_maxfragsperpacket = 16;
+	V_maxfragsperpacket = IP_MAXPACKET / IP_MSS + 1;
 	V_ipq_zone = uma_zcreate("ipq", sizeof(struct ipq), NULL, NULL, NULL,
 	    NULL, UMA_ALIGN_PTR, 0);
 	maxnipq_update();
