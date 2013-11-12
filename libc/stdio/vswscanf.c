@@ -32,7 +32,7 @@ int vswscanf(const wchar_t *restrict s, const wchar_t *restrict fmt, va_list ap)
 	FILE f = {
 		.buf = buf, .buf_size = sizeof buf,
 		.cookie = (void *)s,
-		.read = wstring_read, .lock_owner = STDIO_SINGLETHREADED,
+		.read = wstring_read, .no_locking = true,
 	};
 	return vfwscanf(&f, fmt, ap);
 }

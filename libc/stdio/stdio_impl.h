@@ -8,9 +8,9 @@
 #define UNGET 8
 
 #define FFINALLOCK(f) \
-	((f)->lock_owner != STDIO_SINGLETHREADED ? __lockfile((f)) : 0)
+	((f)->no_locking ? 0 : __lockfile((f)))
 #define FLOCK(f) \
-	int __need_unlock = ((f)->lock_owner != STDIO_SINGLETHREADED ? __lockfile((f)) : 0)
+	int __need_unlock = ((f)->no_locking ? 0 : __lockfile((f)))
 #define FUNLOCK(f) if (__need_unlock) __unlockfile((f)); else
 
 #define F_PERM 1
@@ -57,13 +57,7 @@ struct __FILE_s {
 	unsigned char *shend;
 	off_t shlim, shcnt;
 
-	/*
-	 * Using magic -1 and 0 values for pthread_t fields is a dangerous
-	 * game, but with our implementation of pthread_t as a pointer
-	 * we'll get away with it for now.
-	 */
-#define STDIO_SINGLETHREADED	((pthread_t)-1)
-	pthread_t lock_owner;
+	bool no_locking;
 	mutex_t mutex;
 };
 

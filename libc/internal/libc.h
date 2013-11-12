@@ -12,7 +12,7 @@
 
 struct __libc {
 	void *main_thread;
-	int threaded;
+//	int threaded;
 //	int secure;
 //	size_t *auxv;
 //	int (*atexit)(void (*)(void));
@@ -30,7 +30,6 @@ struct __libc {
 extern struct __libc __libc ATTR_LIBC_VISIBILITY;
 #define libc __libc
 
-/* Designed to avoid any overhead in non-threaded processes */
 int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
 void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
 #define LOCK(x) (mutex_lock(&(x)),1)

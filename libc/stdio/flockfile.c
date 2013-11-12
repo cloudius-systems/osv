@@ -4,9 +4,7 @@
 
 void flockfile(FILE *f)
 {
-	pthread_t self = pthread_self();
-
-	if (f->lock_owner == self) {
+	if (mutex_owned(&f->mutex)) {
 		if (f->lockcount < LONG_MAX) {
 			f->lockcount++;
 			return;
@@ -20,6 +18,5 @@ void flockfile(FILE *f)
 	}
 
 	mutex_lock(&f->mutex);
-	f->lock_owner = self;
 	f->lockcount = 1;
 }

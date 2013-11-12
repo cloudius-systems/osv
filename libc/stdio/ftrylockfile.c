@@ -4,9 +4,7 @@
 
 int ftrylockfile(FILE *f)
 {
-	pthread_t self = pthread_self();
-
-	if (f->lock_owner == self) {
+	if (mutex_owned(&f->mutex)) {
 		if (f->lockcount == LONG_MAX)
 			return -1;
 		f->lockcount++;
@@ -15,7 +13,6 @@ int ftrylockfile(FILE *f)
 
 	if (!mutex_trylock(&f->mutex))
 		return -1;
-	f->lock_owner = self;
 	f->lockcount = 1;
 	return 0;
 }

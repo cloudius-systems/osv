@@ -79,8 +79,6 @@ FILE *open_wmemstream(wchar_t **bufp, size_t *sizep)
 	f->seek = wms_seek;
 	f->close = wms_close;
 
-	if (!libc.threaded) f->lock_owner = STDIO_SINGLETHREADED;
-
 	OFLLOCK();
 	f->next = libc.ofl_head;
 	if (libc.ofl_head) libc.ofl_head->prev = f;

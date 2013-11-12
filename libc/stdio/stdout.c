@@ -10,7 +10,6 @@ static FILE f = {
 	.write = __stdout_write,
 	.seek = __stdio_seek,
 	.close = __stdio_close,
-	.lock_owner = STDIO_SINGLETHREADED,
 };
 FILE *const stdout = &f;
 FILE *const __stdout_used = &f;
