@@ -7,6 +7,7 @@ tests = [
     "/tests/tst-rename.so",
     "/tests/tst-vfs.so",
     "/tests/tst-stat.so",
+    "/tests/tst-libc-locking.so",
 ]
 
 def run_test(name):
