@@ -259,6 +259,46 @@ found:
 }
 
 int
+sys_pivot_root(const char *new_root, const char *put_old)
+{
+    struct mount *mp, *newmp = NULL, *oldmp = NULL;
+    int error;
+
+    WITH_LOCK(mount_lock) {
+        LIST_FOREACH(mp, &mount_list, m_link) {
+            if (!strcmp(mp->m_path, new_root)) {
+                newmp = mp;
+            }
+            if (!strcmp(mp->m_path, put_old)) {
+                oldmp = mp;
+            }
+        }
+        if (!newmp || !oldmp || newmp == oldmp) {
+            return EINVAL;
+        }
+        LIST_FOREACH(mp, &mount_list, m_link) {
+            if (mp == newmp || mp == oldmp) {
+                continue;
+            }
+            if (!strncmp(mp->m_path, put_old, strlen(put_old))) {
+                return EBUSY;
+            }
+        }
+        if ((error = VFS_UNMOUNT(oldmp)) != 0) {
+            return error;
+        }
+        LIST_REMOVE(oldmp, m_link);
+
+        vflush(oldmp);
+
+        free(oldmp);
+
+        strlcpy(newmp->m_path, "/", sizeof(newmp->m_path));
+    }
+    return 0;
+}
+
+int
 sys_sync(void)
 {
     struct mount *mp;
