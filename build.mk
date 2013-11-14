@@ -640,10 +640,10 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 
 $(src)/build.mk: $(generated-headers)
 
-$(out)/bootfs.manifest: $(src)/scripts/module.py
+$(out)/bootfs.manifest: $(src)/scripts/module.py bootfs.manifest.skel
 	cd $(out)/module && ../../../scripts/module.py bootfs
 
-$(out)/usr.manifest: $(src)/scripts/module.py
+$(out)/usr.manifest: $(src)/scripts/module.py usr.manifest.skel
 	cd $(out)/module && ../../../scripts/module.py usr
 
 -include $(shell find -name '*.d')
