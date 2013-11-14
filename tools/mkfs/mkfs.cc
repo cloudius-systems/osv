@@ -50,7 +50,7 @@ void mkfs()
     auto ok = run("/zpool.so",
             {"zpool", "create", "-f", "-R", "/zfs", "osv", "/dev/vblk0.1"}, &ret);
     assert(ok && ret == 0);
-    ok = run("/zfs.so", {"zfs", "create", "osv/usr"}, &ret);
+    ok = run("/zfs.so", {"zfs", "create", "osv/zfs"}, &ret);
     assert(ok && ret == 0);
 }
 
@@ -60,7 +60,7 @@ extern "C" { int mkdirp(const char *d, mode_t mode); }
 struct cpio_in_expand : cpio_in {
     virtual void add_file(string name, istream& is) override {
         cout << "Adding " << name << "...\n";
-        name = "/zfs/usr/" + name;
+        name = "/zfs/zfs/" + name;
         auto pos = name.rfind('/');
         if (pos != name.npos) {
             mkdirp(name.substr(0, pos).c_str(), 0755);

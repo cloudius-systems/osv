@@ -1510,16 +1510,31 @@ int nmount(struct iovec *iov, unsigned niov, int flags)
 	return sys_mount(a.from, a.fspath, a.fstype, flags, nullptr);
 }
 
-extern "C" void mount_usr(void)
+extern "C" void mount_zfs_rootfs(void)
 {
 	int ret;
 
-	if (mkdir("/usr", 0755) < 0)
-		kprintf("failed to create /usr, error = %d\n", errno);
+	if (mkdir("/zfs", 0755) < 0)
+		kprintf("failed to create /zfs, error = %d\n", errno);
 
-	ret = sys_mount("/dev/vblk0.1", "/usr", "zfs", 0, (void *)"osv/usr");
+	ret = sys_umount("/dev");
 	if (ret)
-		kprintf("failed to mount /usr, error = %d\n", ret);
+		kprintf("failed to unmount /dev, error = %d\n", ret);
+
+	ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
+	if (ret)
+		kprintf("failed to mount /zfs, error = %d\n", ret);
+
+	ret = sys_pivot_root("/zfs", "/");
+	if (ret)
+		kprintf("failed to pivot root, error = %d\n", ret);
+
+	if (mkdir("/dev", 0755) < 0)
+		kprintf("failed to create /dev, error = %d\n", errno);
+
+	ret = sys_mount("", "/dev", "devfs", 0, NULL);
+	if (ret)
+		kprintf("failed to mount devfs, error = %d\n", ret);
 }
 
 extern "C" void bio_init(void);

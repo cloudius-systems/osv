@@ -141,11 +141,9 @@ def cpio_header(filename, filesize):
 # Send the files to the guest
 for name, hostname in files:
     depends.write('\t%s \\\n' % (hostname,))
-    if name[:4] in [ '/usr' ]:
-        name = name[5:] # mkfs.so puts everything in /usr
-        cpio_send(cpio_header(name, os.stat(hostname).st_size))
-        with open(hostname, 'r') as f:
-            cpio_send(f.read())
+    cpio_send(cpio_header(name, os.stat(hostname).st_size))
+    with open(hostname, 'r') as f:
+        cpio_send(f.read())
 cpio_send(cpio_header("TRAILER!!!", 0))
 s.shutdown(socket.SHUT_WR)
 

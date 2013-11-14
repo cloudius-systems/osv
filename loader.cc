@@ -84,7 +84,7 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
-    void mount_usr(void);
+    void mount_zfs_rootfs(void);
     void ramdisk_init(void);
 }
 
@@ -237,7 +237,7 @@ void* do_main_thread(void *_args)
 
 
     if (opt_mount) {
-        mount_usr();
+        mount_zfs_rootfs();
     }
 
     osv::for_each_if([] (std::string if_name) {

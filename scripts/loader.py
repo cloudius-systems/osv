@@ -80,7 +80,7 @@ class syminfo(object):
 def translate(path):
     '''given a path, try to find it on the host OS'''
     name = os.path.basename(path)
-    for top in [build_dir, external, '/usr']:
+    for top in [build_dir, external, '/zfs']:
         for root, dirs, files in os.walk(top):
             if name in files:
                 return os.path.join(root, name)
