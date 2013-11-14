@@ -20,6 +20,7 @@
 
 #include <osv/mutex.h>
 #include <osv/condvar.h>
+#include <osv/stubbing.hh>
 #include <osv/lazy_indirect.hh>
 
 namespace pthread_private {
@@ -532,5 +533,12 @@ int pthread_getschedparam(pthread_t thread, int *policy,
         struct sched_param *param)
 {
     debug("pthread_getschedparam stubbed out\n");
+    return EINVAL;
+}
+
+int pthread_kill(pthread_t thread, int sig)
+{
+    WARN_STUBBED();
+
     return EINVAL;
 }
