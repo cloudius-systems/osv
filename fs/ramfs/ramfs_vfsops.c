@@ -83,6 +83,5 @@ ramfs_mount(struct mount *mp, char *dev, int flags, void *data)
 static int
 ramfs_unmount(struct mount *mp)
 {
-
-	return EBUSY;
+	return 0;
 }
