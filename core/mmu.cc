@@ -288,7 +288,7 @@ void split_large_page(hw_ptep ptep, unsigned level)
 
 struct fill_page {
 public:
-    virtual void fill(void* addr, uint64_t offset) = 0;
+    virtual void fill(void* addr, uint64_t offset, uintptr_t size) = 0;
 };
 
 void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
@@ -464,19 +464,13 @@ public:
 protected:
     virtual void small_page(hw_ptep ptep, uintptr_t offset){
         phys page = virt_to_phys(memory::alloc_page());
-        fill->fill(phys_to_virt(page), offset);
+        fill->fill(phys_to_virt(page), offset, page_size);
         assert(ptep.read().empty()); // don't populate an already populated page!
         ptep.write(make_normal_pte(page, perm));
     }
     virtual void huge_page(hw_ptep ptep, uintptr_t offset){
         phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
-        uint64_t o=0;
-        // Unfortunately, fill() is only coded for small-page-size chunks, we
-        // need to repeat it:
-        for (int i=0; i<pte_per_page; i++){
-            fill->fill(phys_to_virt(page+o), offset+o);
-            o += page_size;
-        }
+        fill->fill(phys_to_virt(page), offset, huge_page_size);
         if (!ptep.read().empty()) {
             assert(!ptep.read().large()); // don't populate an already populated page!
             // held smallpages (already evacuated), now will be used for huge page
@@ -646,8 +640,8 @@ error msync(void* addr, size_t length, int flags)
 }
 
 struct fill_anon_page : fill_page {
-    virtual void fill(void* addr, uint64_t offset) {
-        memset(addr, 0, page_size);
+    virtual void fill(void* addr, uint64_t offset, uintptr_t size) {
+        memset(addr, 0, size);
     }
 };
 
