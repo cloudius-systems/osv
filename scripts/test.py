@@ -11,6 +11,7 @@ tests = [
 ]
 
 def run_test(name):
+    print("Running '%s'..." % name)
     args = ["-g", "-e", name]
     subprocess.call(["./scripts/run.py"] + args)
 
