@@ -481,6 +481,13 @@ vop_einval(void)
 	return EINVAL;
 }
 
+int
+vop_eperm(void)
+{
+
+	return EPERM;
+}
+
 /*
  * vnode_init() is called once (from vfs_init)
  * in initialization.

@@ -190,6 +190,7 @@ struct vnops {
 
 int	 vop_nullop(void);
 int	 vop_einval(void);
+int	 vop_eperm(void);
 struct vnode *vn_lookup(struct mount *, char *);
 void	 vn_lock(struct vnode *);
 void	 vn_unlock(struct vnode *);

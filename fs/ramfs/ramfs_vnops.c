@@ -431,12 +431,6 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
-static int
-ramfs_link(struct vnode *tdvp, struct vnode *svp, char *name)
-{
-	return EPERM;
-}
-
 int
 ramfs_init(void)
 {
@@ -451,6 +445,7 @@ ramfs_init(void)
 #define ramfs_getattr	((vnop_getattr_t)vop_nullop)
 #define ramfs_setattr	((vnop_setattr_t)vop_nullop)
 #define ramfs_inactive	((vnop_inactive_t)vop_nullop)
+#define ramfs_link	((vnop_link_t)vop_eperm)
 
 /*
  * vnode operations
