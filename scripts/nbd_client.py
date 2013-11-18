@@ -22,6 +22,9 @@ class nbd_client(object):
     DISCONNECT = 2
     FLUSH = 3
 
+    FLAG_HAS_FLAGS = (1 << 0)
+    FLAG_SEND_FLUSH = (1 << 2)
+
     def __init__(self, hostname, port = 10809):
         self._flushed = True
         self._closed = True
@@ -95,8 +98,18 @@ class nbd_client(object):
         assert(errno == 0)
         return data
 
+    def need_flush(self):
+        if self._flags & self.FLAG_HAS_FLAGS != 0 and \
+           self._flags & self.FLAG_SEND_FLUSH != 0:
+            return True
+        else:
+            return False
+
     def flush(self):
         self._is_read = False
+        if self.need_flush() == False:
+            self._flushed = True
+            return True
         header = self._build_header(self.FLUSH, 0, 0)
         self._s.send(header)
         (data, errno) = self._parse_reply()
