@@ -23,7 +23,7 @@
 
 __thread char* percpu_base;
 
-extern char _percpu_start[], _percpu_end[], _percpu_sec_end[];
+extern char _percpu_start[], _percpu_end[];
 
 namespace sched {
 
@@ -80,10 +80,8 @@ cpu::cpu(unsigned _id)
     , terminating_thread(nullptr)
     , running_since(clock::get()->time())
 {
-    auto max_size = _percpu_sec_end - _percpu_end;
     auto pcpu_size = _percpu_end - _percpu_start;
-    assert(pcpu_size * (id + 1) <= max_size);
-    percpu_base = _percpu_end + id * pcpu_size;
+    percpu_base = (char *) malloc(pcpu_size);
     memcpy(percpu_base, _percpu_start, pcpu_size);
     percpu_base -= reinterpret_cast<size_t>(_percpu_start);
     if (id == 0) {

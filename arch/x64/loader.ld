@@ -52,8 +52,6 @@ SECTIONS
         *(.percpu)
         . = ALIGN(4096);
         _percpu_end = .;
-        . += ((_percpu_end - _percpu_start) * 64);
-        _percpu_sec_end = .;
     }
     .percpu_workers : {
         _percpu_workers_start = .;
