@@ -12,30 +12,30 @@ import java.io.IOException;
 
 public class Counter implements Closeable {
 
-	private long handle;
-	
-	public Counter(Tracepoint tp) {
-		handle = tp.createCounter();
-	}
+    private long handle;
 
-	public long read() {
-		return Tracepoint.readCounter(handle);
-	}
-	
-	@Override
-	public void finalize() {
-		try {
-			close();
-		} catch (IOException e) {
-			// nothing we can do.
-		}
-	}
+    public Counter(Tracepoint tp) {
+        handle = tp.createCounter();
+    }
 
-	@Override
-	public void close() throws IOException {
-		if (handle != 0) {
-			Tracepoint.destroyCounter(handle);
-			handle = 0;
-		}
-	}
+    public long read() {
+        return Tracepoint.readCounter(handle);
+    }
+
+    @Override
+    public void finalize() {
+        try {
+            close();
+        } catch (IOException e) {
+            // nothing we can do.
+        }
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (handle != 0) {
+            Tracepoint.destroyCounter(handle);
+            handle = 0;
+        }
+    }
 }
