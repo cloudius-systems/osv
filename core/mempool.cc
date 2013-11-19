@@ -26,6 +26,7 @@
 #include <sched.hh>
 #include <algorithm>
 #include "prio.hh"
+#include <stdlib.h>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void *, size_t);
@@ -907,6 +908,45 @@ void free(void* obj)
 #else
     dbg::free(obj);
 #endif
+}
+
+// posix_memalign() and C11's aligned_alloc() return an aligned memory block
+// that can be freed with an ordinary free(). The following is a temporary
+// implementation that simply calls malloc(), aborting when the desired
+// alignment has not been achieved. In particular, for large allocations
+// our malloc() already returns page-aligned blocks, so such memalign()
+// calls will succeed.
+
+int posix_memalign(void **memptr, size_t alignment, size_t size)
+{
+    // posix_memalign() but not aligned_alloc() adds an additional requirement
+    // that alignment is a multiple of sizeof(void*). We don't verify this
+    // requirement, and rather always return memory which is aligned at least
+    // to sizeof(void*), even if lesser alignment is requested.
+    if (!is_power_of_two(alignment) || (size & (alignment - 1))) {
+        return EINVAL;
+    }
+    void *ret = malloc(size);
+    if (!ret) {
+        return ENOMEM;
+    }
+    // Until we have a full implementation, just croak if we didn't get
+    // the desired alignment.
+    assert (!(reinterpret_cast<uintptr_t>(ret) & (alignment - 1)));
+    *memptr = ret;
+    return 0;
+
+}
+
+void *aligned_alloc(size_t alignment, size_t size)
+{
+    void *ret;
+    int error = posix_memalign(&ret, alignment, size);
+    if (error) {
+        errno = error;
+        return NULL;
+    }
+    return ret;
 }
 
 namespace memory {
