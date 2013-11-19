@@ -20,6 +20,7 @@
 #include <osv/percpu.hh>
 #include "prio.hh"
 #include "elf.hh"
+#include <stdlib.h>
 
 __thread char* percpu_base;
 
@@ -81,7 +82,10 @@ cpu::cpu(unsigned _id)
     , running_since(clock::get()->time())
 {
     auto pcpu_size = _percpu_end - _percpu_start;
-    percpu_base = (char *) malloc(pcpu_size);
+    // We want the want the per-cpu area to be aligned as the most strictly
+    // aligned per-cpu variable. This is probably CACHELINE_ALIGNED (64 bytes)
+    // but we'll be even stricter, and go for page (4096 bytes) alignment.
+    percpu_base = (char *) aligned_alloc(4096, pcpu_size);
     memcpy(percpu_base, _percpu_start, pcpu_size);
     percpu_base -= reinterpret_cast<size_t>(_percpu_start);
     if (id == 0) {
