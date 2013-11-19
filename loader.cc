@@ -201,8 +201,8 @@ void run_main(elf::program *prog, struct argblock *args)
     // keeping a reference to it in the free store.
     auto obj = *(new std::shared_ptr<elf::object>(prog->get_library(av[0])));
     if (!obj) {
-        debug("run_main(): cannot execute %s. Aborting.\n", av[0]);
-        abort();
+        debug("run_main(): cannot execute %s. Powering off.\n", av[0]);
+        osv::poweroff();
     }
     auto main = obj->lookup<void (int, char**)>("main");
     assert(main);
