@@ -19,6 +19,9 @@ namespace mmu {
 
 constexpr uintptr_t page_size = 4096;
 
+constexpr int pte_per_page = 512;
+constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
+
 typedef uint64_t f_offset;
 
 static char* const phys_mem = reinterpret_cast<char*>(0xffffc00000000000);

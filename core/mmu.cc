@@ -29,9 +29,6 @@ namespace {
 
 typedef boost::format fmt;
 
-constexpr int pte_per_page = 512;
-constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
-
 }
 
 namespace mmu {
