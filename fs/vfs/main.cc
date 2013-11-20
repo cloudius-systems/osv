@@ -1477,14 +1477,14 @@ void mount_rootfs(void)
 
 	ret = sys_mount("", "/", "ramfs", 0, NULL);
 	if (ret)
-		kprintf("failed to mount rootfs, error = %d\n", ret);
+		kprintf("failed to mount rootfs, error = %s\n", strerror(ret));
 
 	if (mkdir("/dev", 0755) < 0)
-		kprintf("failed to create /dev, error = %d\n", errno);
+		kprintf("failed to create /dev, error = %s\n", strerror(errno));
 
 	ret = sys_mount("", "/dev", "devfs", 0, NULL);
 	if (ret)
-		kprintf("failed to mount devfs, error = %d\n", ret);
+		kprintf("failed to mount devfs, error = %s\n", strerror(ret));
 }
 
 extern "C"
@@ -1515,26 +1515,26 @@ extern "C" void mount_zfs_rootfs(void)
 	int ret;
 
 	if (mkdir("/zfs", 0755) < 0)
-		kprintf("failed to create /zfs, error = %d\n", errno);
+		kprintf("failed to create /zfs, error = %s\n", strerror(errno));
 
 	ret = sys_umount("/dev");
 	if (ret)
-		kprintf("failed to unmount /dev, error = %d\n", ret);
+		kprintf("failed to unmount /dev, error = %s\n", strerror(ret));
 
 	ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
 	if (ret)
-		kprintf("failed to mount /zfs, error = %d\n", ret);
+		kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
 
 	ret = sys_pivot_root("/zfs", "/");
 	if (ret)
-		kprintf("failed to pivot root, error = %d\n", ret);
+		kprintf("failed to pivot root, error = %s\n", strerror(ret));
 
 	if (mkdir("/dev", 0755) < 0)
-		kprintf("failed to create /dev, error = %d\n", errno);
+		kprintf("failed to create /dev, error = %s\n", strerror(errno));
 
 	ret = sys_mount("", "/dev", "devfs", 0, NULL);
 	if (ret)
-		kprintf("failed to mount devfs, error = %d\n", ret);
+		kprintf("failed to mount devfs, error = %s\n", strerror(ret));
 }
 
 extern "C" void bio_init(void);
