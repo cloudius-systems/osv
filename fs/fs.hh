@@ -26,6 +26,17 @@ static inline void intrusive_ptr_release(file *fp)
 
 typedef boost::intrusive_ptr<file> fileref;
 
+namespace std {
+
+template<>
+struct hash<fileref> {
+    size_t operator()(const fileref& fp) const {
+        return hash<file*>()(fp.get());
+    }
+};
+
+}
+
 fileref fileref_from_fd(int fd);
 fileref fileref_from_fname(std::string name);
 uint64_t size(fileref f);

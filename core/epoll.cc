@@ -19,6 +19,7 @@
 
 
 #include <osv/file.h>
+#include <osv/poll.h>
 #include <fs/fs.hh>
 #include <fs/unsupported.h>
 #include <drivers/clock.hh>
@@ -30,7 +31,7 @@
 TRACEPOINT(trace_epoll_create, "returned fd=%d", int);
 TRACEPOINT(trace_epoll_ctl, "epfd=%d, fd=%d, op=%s", int, int, const char*);
 TRACEPOINT(trace_epoll_wait, "epfd=%d, maxevents=%d, timeout=%d", int, int, int);
-TRACEPOINT(trace_epoll_ready, "fd=%d, event=0x%x", int, int);
+TRACEPOINT(trace_epoll_ready, "file=%p, event=0x%x", file*, int);
 
 // We implement epoll using poll(), and therefore need to convert epoll's
 // event bits to and poll(). These are mostly the same, so the conversion
@@ -63,28 +64,28 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
 }
 
 class epoll_obj {
-    std::unordered_map<int, struct epoll_event> map;
+    std::unordered_map<fileref, epoll_event> map;
 public:
-    int add(int fd, struct epoll_event *event)
+    int add(fileref fp, struct epoll_event *event)
     {
-        if (map.count(fd)) {
+        if (map.count(fp)) {
             return EEXIST;
         }
-        map[fd] = *event;
+        map.emplace(std::move(fp), *event);
         return 0;
     }
-    int mod(int fd, struct epoll_event *event)
+    int mod(fileref fp, struct epoll_event *event)
     {
         try {
-            map.at(fd) = *event;
+            map.at(fp) = *event;
             return 0;
         } catch (std::out_of_range &e) {
             return ENOENT;
         }
     }
-    int del(int fd)
+    int del(fileref fp)
     {
-        if (map.erase(fd)) {
+        if (map.erase(fp)) {
             return 0;
         } else {
             return ENOENT;
@@ -92,25 +93,25 @@ public:
     }
     int wait(struct epoll_event *events, int maxevents, int timeout_ms)
     {
-        std::unique_ptr<pollfd[]> pollfds(new pollfd[map.size()]);
-        int n=0;
+        std::vector<poll_file> pollfds;
+        pollfds.reserve(map.size());
         for (auto &i : map) {
-            pollfds[n].fd = i.first;
             int eevents = i.second.events;
-            pollfds[n].events = events_epoll_to_poll(eevents);
-            n++;
+            auto events = events_epoll_to_poll(eevents);
+            pollfds.emplace_back(i.first, events, 0);
         }
-        int r = poll(pollfds.get(), n, timeout_ms);
+        int r = do_poll(pollfds, timeout_ms);
         if (r > 0) {
             r = std::min(r, maxevents);
             int remain = r;
-            for (int i = 0; i < n && remain;  i++) {
+            for (size_t i = 0; i < pollfds.size() && remain;  i++) {
                 if (pollfds[i].revents) {
                     --remain;
-                    events[remain].data = map[pollfds[i].fd].data;
+                    assert(pollfds[i].fp);
+                    events[remain].data = map[pollfds[i].fp].data;
                     events[remain].events =
                             events_poll_to_epoll(pollfds[i].revents);
-                    trace_epoll_ready(pollfds[i].fd, pollfds[i].revents);
+                    trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
                 }
             }
         }
@@ -202,16 +203,17 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
     }
 
     int error = 0;
+    fileref fp = fileref_from_fd(fd);
 
     switch (op) {
     case EPOLL_CTL_ADD:
-        error = epo->add(fd, event);
+        error = epo->add(std::move(fp), event);
         break;
     case EPOLL_CTL_MOD:
-        error = epo->mod(fd, event);
+        error = epo->mod(std::move(fp), event);
         break;
     case EPOLL_CTL_DEL:
-        error = epo->del(fd);
+        error = epo->del(std::move(fp));
         break;
     default:
         error = EINVAL;
