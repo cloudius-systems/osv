@@ -330,7 +330,7 @@ inter_processor_interrupt tlb_flush_ipi{[] {
 void tlb_flush()
 {
     tlb_flush_this_processor();
-    if (sched::cpus.size() == 1)
+    if (sched::cpus.size() <= 1)
         return;
     std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_waiter = sched::thread::current();
