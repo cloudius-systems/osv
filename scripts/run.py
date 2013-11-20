@@ -45,7 +45,10 @@ def is_direct_io_supported(path):
         raise
     
 def start_osv_qemu():
-    cache = 'none' if is_direct_io_supported(image_file) else 'unsafe'
+    if (cmdargs.unsafe_cache):
+        cache = 'unsafe'
+    else:
+        cache = 'none' if is_direct_io_supported(image_file) else 'unsafe'
 
     args = [
         "-vnc", ":1",
@@ -228,6 +231,8 @@ if (__name__ == "__main__"):
                         help="don't restart qemu automatically (allow debugger to connect on early errors)")
     parser.add_argument("-g", "--with-graphic", action="store_true",
                         help="qemu only. don't pass -nographic flag. pressing ctrl+c from console will kill the emulator")
+    parser.add_argument("-u", "--unsafe-cache", action="store_true",
+                        help="Set cache to unsafe. Use it at your own risk.")
 
     parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
                         help = "add network forwarding RULE (QEMU syntax)")
