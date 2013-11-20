@@ -436,7 +436,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)
     , _attr(attr)
-    , _vruntime(main ? 0 : current()->_vruntime)
+    , _vruntime((main || !s_current) ? 0 : current()->_vruntime)
     , _ref_counter(1)
     , _joiner()
 {
@@ -450,7 +450,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     // remote_thread_local_var() doesn't work when there is no current
     // thread, so don't do this for main threads (switch_to_first will
     // do that for us instead)
-    if (!main) {
+    if (!main && sched::s_current) {
         remote_thread_local_var(s_current) = this;
     }
     init_stack();
