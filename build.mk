@@ -125,6 +125,7 @@ tests/%.o: COMMON += -fPIC -DBOOST_TEST_DYN_LINK
 # by default.
 tests/tst-queue-mpsc.so: CFLAGS+=-lstdc++
 tests/tst-mutex.so: CFLAGS+=-lstdc++
+tests/tst-tcp.so: CFLAGS += -lstdc++
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
@@ -174,6 +175,9 @@ tests += tests/tst-kill.so
 tests += tests/tst-truncate.so
 tests += $(boost-tests)
 tests += tests/tst-panic.so
+tests += tests/tst-tcp.so
+
+tests/tst-tcp.so: tests/tst-tcp.o
 
 tests/hello/Hello.class: javabase=tests/hello
 

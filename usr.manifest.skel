@@ -136,6 +136,7 @@
 /&/tests/tst-panic.so: ./&
 /&/tests/tst-stat.so: ./&
 /&/tests/tst-libc-locking.so: ./&
+/&/tests/tst-tcp.so: ./&
 /&/tests/bench/bench.jar: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
