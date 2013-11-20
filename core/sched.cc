@@ -415,7 +415,7 @@ typedef bi::list<thread,
                                  bi::list_member_hook<>,
                                  &thread::_thread_list_link>
                 > thread_list_type;
-thread_list_type thread_list;
+thread_list_type thread_list __attribute__((init_priority(THREADLIST_INIT_PRIO)));
 unsigned long thread::_s_idgen;
 
 void* thread::do_remote_thread_local_var(void* var)
