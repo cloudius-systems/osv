@@ -486,10 +486,16 @@ thread::~thread()
 
 void thread::start()
 {
+    assert(_status == status::unstarted);
+
+    if (!sched::s_current) {
+        _status.store(status::prestarted);
+        return;
+    }
+
     _cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
     remote_thread_local_var(percpu_base) = _cpu->percpu_base;
     remote_thread_local_var(current_cpu) = _cpu;
-    assert(_status == status::unstarted);
     _status.store(status::waiting);
     wake();
 }

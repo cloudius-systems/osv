@@ -245,6 +245,7 @@ private:
     thread_control_block* _tcb;
     enum class status {
         invalid,
+        prestarted,
         unstarted,
         waiting,
         running,
