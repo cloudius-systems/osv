@@ -344,11 +344,11 @@ pool* pool::from_object(void* object)
 }
 
 malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size) + 1]
-    __attribute__((init_priority(MALLOC_POOLS_INIT_PRIO)));
+    __attribute__((init_priority((int)init_prio::malloc_pools)));
 
 struct mark_smp_allocator_intialized {
     mark_smp_allocator_intialized() { smp_allocator = true; }
-} s_mark_smp_alllocator_initialized __attribute__((init_priority(MALLOC_POOLS_INIT_PRIO)));
+} s_mark_smp_alllocator_initialized __attribute__((init_priority((int)init_prio::malloc_pools)));
 
 malloc_pool::malloc_pool()
     : pool(compute_object_size(this - malloc_pools))
@@ -383,7 +383,7 @@ bi::set<page_range,
         bi::member_hook<page_range,
                        bi::set_member_hook<>,
                        &page_range::member_hook>
-       > free_page_ranges __attribute__((init_priority(FPRANGES_INIT_PRIO)));
+       > free_page_ranges __attribute__((init_priority((int)init_prio::fpranges)));
 
 static void* malloc_large(size_t size)
 {
@@ -685,7 +685,7 @@ void free_initial_memory_range(void* addr, size_t size)
 
 }
 
-void  __attribute__((constructor(MEMPOOL_INIT_PRIO))) setup()
+void  __attribute__((constructor(init_prio::mempool))) setup()
 {
     arch_setup_free_memory();
 }

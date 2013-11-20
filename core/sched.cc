@@ -38,7 +38,7 @@ TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 
-std::vector<cpu*> cpus __attribute__((init_priority(CPUS_INIT_PRIO)));
+std::vector<cpu*> cpus __attribute__((init_priority((int)init_prio::cpus)));
 
 thread __thread * s_current;
 cpu __thread * current_cpu;
@@ -55,7 +55,7 @@ constexpr s64 max_slice = 10_ms;
 constexpr s64 context_switch_penalty = 10_us;
 
 mutex cpu::notifier::_mtx;
-std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority(NOTIFIERS_INIT_PRIO)));
+std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority((int)init_prio::notifiers)));
 
 }
 
@@ -415,7 +415,7 @@ typedef bi::list<thread,
                                  bi::list_member_hook<>,
                                  &thread::_thread_list_link>
                 > thread_list_type;
-thread_list_type thread_list __attribute__((init_priority(THREADLIST_INIT_PRIO)));
+thread_list_type thread_list __attribute__((init_priority((int)init_prio::threadlist)));
 unsigned long thread::_s_idgen;
 
 void* thread::do_remote_thread_local_var(void* var)

@@ -51,7 +51,7 @@ char trace_log[max_trace] __attribute__((may_alias, aligned(sizeof(long))));
 std::atomic<size_t> trace_record_last;
 bool trace_enabled;
 
-typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority(TRACEPOINT_BASE_INIT_PRIO)));
+typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority((int)init_prio::tracepoint_base)));
 
 std::vector<std::regex> enabled_tracepoint_regexs;
 

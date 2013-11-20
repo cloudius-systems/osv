@@ -30,10 +30,10 @@ namespace pthread_private {
     __thread void* tsd[tsd_nkeys];
     __thread pthread_t current_pthread;
 
-    __attribute__ ((init_priority (PTHREAD_INIT_PRIO))) mutex tsd_key_mutex;
-    __attribute__ ((init_priority (PTHREAD_INIT_PRIO))) std::vector<bool>
+    __attribute__ ((init_priority ((int)init_prio::pthread))) mutex tsd_key_mutex;
+    __attribute__ ((init_priority ((int)init_prio::pthread))) std::vector<bool>
                                           tsd_used_keys(tsd_nkeys);
-    __attribute__ ((init_priority (PTHREAD_INIT_PRIO)))
+    __attribute__ ((init_priority ((int)init_prio::pthread)))
                   std::vector<void (*)(void*)> tsd_dtor(tsd_nkeys);
 
     struct thread_attr;

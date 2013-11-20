@@ -61,7 +61,7 @@ s64 xenclock::time()
     return r;
 }
 
-static __attribute__((constructor(CLOCK_INIT_PRIO))) void setup_xenclock()
+static __attribute__((constructor(init_prio::clock))) void setup_xenclock()
 {
     if (processor::features().xen_clocksource) {
         clock::register_clock(new xenclock);

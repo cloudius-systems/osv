@@ -146,7 +146,7 @@ s64 hpetclock::time()
     return _wall + (mmio_getl(_addr + HPET_COUNTER) * _period);
 }
 
-void __attribute__((constructor(HPET_INIT_PRIO))) hpet_init()
+void __attribute__((constructor(init_prio::hpet))) hpet_init()
 {
     XENPV_ALTERNATIVE(
     {

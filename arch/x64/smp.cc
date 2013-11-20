@@ -70,7 +70,7 @@ void parse_madt()
     }
 }
 
-void __attribute__((constructor(SCHED_INIT_PRIO))) smp_init()
+void __attribute__((constructor(init_prio::sched))) smp_init()
 {
     parse_madt();
     sched::current_cpu = sched::cpus[0];

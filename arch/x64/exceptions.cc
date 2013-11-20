@@ -20,7 +20,7 @@
 typedef boost::format fmt;
 
 __thread exception_frame* current_interrupt_frame;
-interrupt_descriptor_table idt __attribute__((init_priority(IDT_INIT_PRIO)));
+interrupt_descriptor_table idt __attribute__((init_priority((int)init_prio::idt)));
 
 extern "C" {
     void ex_de();
@@ -166,7 +166,7 @@ struct fault_fixup {
 
 extern fault_fixup fault_fixup_start[], fault_fixup_end[];
 
-static void sort_fault_fixup() __attribute__((constructor(SORT_INIT_PRIO)));
+static void sort_fault_fixup() __attribute__((constructor(init_prio::sort)));
 
 static void sort_fault_fixup()
 {

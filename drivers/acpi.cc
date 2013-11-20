@@ -550,7 +550,7 @@ void init()
 
 }
 
-void __attribute__((constructor(ACPI_INIT_PRIO))) acpi_init_early()
+void __attribute__((constructor(init_prio::acpi))) acpi_init_early()
 {
      XENPV_ALTERNATIVE({ acpi::early_init(); }, {});
 }

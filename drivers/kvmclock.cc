@@ -97,7 +97,7 @@ u64 kvmclock::system_time()
     return r;
 }
 
-static __attribute__((constructor(CLOCK_INIT_PRIO))) void setup_kvmclock()
+static __attribute__((constructor(init_prio::clock))) void setup_kvmclock()
 {
     if (kvmclock::probe()) {
         clock::register_clock(new kvmclock);
