@@ -902,12 +902,29 @@ void init_detached_threads_reaper()
     thread::_s_reaper = new thread::reaper;
 }
 
+void start_early_threads()
+{
+    WITH_LOCK(thread_list_mutex) {
+        for (auto& t : thread_list) {
+            if (&t == sched::thread::current()) {
+                continue;
+            }
+            t.remote_thread_local_var(s_current) = &t;
+            thread::status expected = thread::status::prestarted;
+            if (t._status.compare_exchange_strong(expected,
+                thread::status::unstarted, std::memory_order_relaxed)) {
+                t.start();
+            }
+        }
+    }
+}
+
 void init(std::function<void ()> cont)
 {
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     attr.pinned_cpu = smp_initial_find_current_cpu();
-    thread t{cont, attr, true};
+    thread t{[=] { start_early_threads(); cont(); }, attr, true};
     t.switch_to_first();
 }
 

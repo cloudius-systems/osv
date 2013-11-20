@@ -235,6 +235,7 @@ private:
     struct dummy_lock {};
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
+    friend void start_early_threads();
     template <typename T> T& remote_thread_local_var(T& var);
     void* do_remote_thread_local_var(void* var);
 private:
