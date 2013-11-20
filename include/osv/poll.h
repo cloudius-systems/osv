@@ -35,6 +35,13 @@
 #include <stdbool.h>
 #include <bsd/porting/sync_stub.h>
 
+#ifdef __cplusplus
+
+#include <fs/fs.hh>
+#include <vector>
+
+#endif
+
 __BEGIN_DECLS
 
 /*
@@ -112,6 +119,19 @@ struct pollfd {
 #define POLL_REQUESTABLE (POLLIN | POLLOUT | POLLPRI | POLLRDNORM | \
             POLLWRNORM | POLLRDBAND | POLLWRBAND)
 
+struct poll_file;
+
+#ifdef __cplusplus
+
+struct poll_file {
+    poll_file() = default;
+    poll_file(fileref fp, short events, short revents)
+        : fp(fp), events(events), revents(revents) {}
+    fileref fp;
+    short events;
+    short revents;
+};
+
 /*
  * Each file descriptor saves a reference to an allocated poll request.
  * This structure is allocated when poll() is called and deallocated when
@@ -122,12 +142,14 @@ struct pollfd {
  *
  */
 struct pollreq {
-    struct pollfd *_pfd;
+    std::vector<poll_file> _pfd;
     nfds_t _nfds;
     int _timeout;
     bool _awake;
     struct mtx _awake_mutex;
 };
+
+#endif
 
 /* linked list of pollreq links */
 struct poll_link {
@@ -144,5 +166,11 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout);
 void poll_drain(struct file* fp);
 int poll_no_poll(int events);
 __END_DECLS
+
+#ifdef __cplusplus
+
+int do_poll(std::vector<poll_file>& pfd, int _timeout);
+
+#endif
 
 #endif /* !_OSV_POLL_H_ */

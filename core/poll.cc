@@ -104,22 +104,18 @@ void poll_drain(struct file* fp)
  *
  * Returns the number of file descriptors changed
  */
-int poll_scan(struct pollfd _pfd[], nfds_t _nfds)
+int poll_scan(std::vector<poll_file>& _pfd)
 {
     dbg_d("poll_scan()");
 
-    struct file* fp;
-    struct pollfd* entry;
-    int error;
-    unsigned i;
     int nr_events = 0;
 
-    for (i=0; i<_nfds; ++i) {
-        entry = &_pfd[i];
+    for (auto& e : _pfd) {
+        auto* entry = &e;
         entry->revents = 0;
 
-        error = fget(entry->fd, &fp);
-        if (error) {
+        auto* fp = entry->fp.get();
+        if (!fp) {
             entry->revents |= POLLNVAL;
             nr_events++;
             continue;
@@ -136,8 +132,6 @@ int poll_scan(struct pollfd _pfd[], nfds_t _nfds)
          */
         if ((entry->revents & POLLHUP) != 0)
             entry->revents &= ~POLLOUT;
-
-        fdrop(fp);
     }
 
     return nr_events;
@@ -188,18 +182,16 @@ int poll_wake(struct file* fp, int events)
 void poll_install(struct pollreq* p)
 {
     unsigned i;
-    int error;
     struct poll_link* pl;
-    struct file* fp;
-    struct pollfd* entry;
+    struct poll_file* entry;
 
     dbg_d("poll_install()");
 
     for (i=0; i < p->_nfds; ++i) {
         entry = &p->_pfd[i];
 
-        error = fget(entry->fd, &fp);
-        assert(error == 0);
+        auto fp = entry->fp.get();
+        assert(fp);
 
         /* Allocate a link */
         pl = (struct poll_link *) malloc(sizeof(struct poll_link));
@@ -225,29 +217,24 @@ void poll_install(struct pollreq* p)
             mtx_lock(&p->_awake_mutex);
             p->_awake = true;
             mtx_unlock(&p->_awake_mutex);
-            fdrop(fp);
             return;
         }
-        fdrop(fp);
     }
 }
 
 void poll_uninstall(struct pollreq* p)
 {
     unsigned i;
-    int error;
-    struct pollfd* entry_pfd;
     struct poll_link* pl;
-    struct file* fp;
 
     dbg_d("poll_uninstall()");
 
     /* Remove pollreq from all file descriptors */
     for (i=0; i < p->_nfds; ++i) {
-        entry_pfd = &p->_pfd[i];
+        auto entry = &p->_pfd[i];
 
-        error = fget(entry_pfd->fd, &fp);
-        if (error) {
+        auto fp = entry->fp.get();
+        if (!fp) {
             continue;
         }
 
@@ -262,45 +249,31 @@ void poll_uninstall(struct pollreq* p)
         }
         FD_UNLOCK(fp);
 
-        fdrop(fp);
-
     } /* End of clearing pollreq references from the other fds */
 }
 
-int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
+int do_poll(std::vector<poll_file>& pfd, int _timeout)
 {
     int nr_events, error;
     int timeout;
-    struct pollreq p = {0};
-    size_t pfd_sz = sizeof(struct pollfd) * _nfds;
+    struct pollreq p = {};
 
-    trace_poll(_pfd, _nfds, _timeout);
-
-    if (_nfds > FDMAX) {
-        errno = EINVAL;
-        trace_poll_err(errno);
-        return -1;
-    }
-
-    p._nfds = _nfds;
+    p._nfds = pfd.size();
     p._timeout = _timeout;
-    p._pfd = (struct pollfd *) malloc(pfd_sz);
-    memcpy(p._pfd, _pfd, pfd_sz);
+    p._pfd = std::move(pfd);
     mtx_init(&p._awake_mutex, "poll awake", NULL, MTX_DEF);
     p._awake = false;
 
     /* Any existing events return immediately */
-    nr_events = poll_scan(p._pfd, _nfds);
+    nr_events = poll_scan(p._pfd);
     if (nr_events) {
-        memcpy(_pfd, p._pfd, pfd_sz);
-        free(p._pfd);
+        pfd = std::move(p._pfd);
         goto out;
     }
 
     /* Timeout -> Don't wait... */
     if (p._timeout == 0) {
-        memcpy(_pfd, p._pfd, pfd_sz);
-        free(p._pfd);
+        pfd = std::move(p._pfd);
         goto out;
     }
 
@@ -326,7 +299,7 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     }
     mtx_unlock(&p._awake_mutex);
     if (error != EWOULDBLOCK) {
-        nr_events = poll_scan(p._pfd, _nfds);
+        nr_events = poll_scan(p._pfd);
     } else {
         nr_events = 0;
     }
@@ -334,13 +307,37 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     /* Remove pollreq references */
     poll_uninstall(&p);
 
-    /* return (copy-out) */
-    memcpy(_pfd, p._pfd, pfd_sz);
+    pfd = std::move(p._pfd);
     mtx_destroy(&p._awake_mutex);
-    free(p._pfd);
 out:
-    trace_poll_ret(nr_events);
     return nr_events;
+}
+
+int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
+{
+    trace_poll(_pfd, _nfds, _timeout);
+
+    if (_nfds > FDMAX) {
+        errno = EINVAL;
+        trace_poll_err(errno);
+        return -1;
+    }
+
+    std::vector<poll_file> pfd;
+    pfd.reserve(_nfds);
+
+    for (nfds_t i = 0; i < _nfds; ++i) {
+        pfd.emplace_back(fileref_from_fd(_pfd[i].fd), _pfd->events, _pfd->revents);
+    }
+
+    auto ret = do_poll(pfd, _timeout);
+
+    for (nfds_t i = 0; i < pfd.size(); ++i) {
+        _pfd[i].revents = pfd[i].revents;
+    }
+
+    trace_poll_ret(ret);
+    return ret;
 }
 
 #undef dbg_d
