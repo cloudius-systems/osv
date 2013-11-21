@@ -130,6 +130,7 @@ void tcp_test_client::test_thread::do_connection()
             throw runtime_error("data mismatch");
         }
     }
+    socket.close();
     lock_dropper.unlock(); // really, locks
     ++_client._connections_completed;
     if (_client.done()) {
