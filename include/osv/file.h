@@ -42,6 +42,12 @@
 
 #include <bsd/sys/sys/queue.h>
 
+#ifdef __cplusplus
+
+#include <osv/rcu.hh>
+
+#endif
+
 __BEGIN_DECLS
 
 /*
@@ -62,6 +68,10 @@ struct fileops;
  * File structure
  */
 struct file {
+#ifdef __cplusplus
+	~file();
+	void operator delete(void *p) { osv::rcu_dispose(p); }
+#endif
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
 	off_t		f_offset;	/* current position in file */
