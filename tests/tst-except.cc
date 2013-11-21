@@ -8,6 +8,7 @@
 #include <debug.hh>
 #include <exception>
 #include <setjmp.h>
+#include <memory>
 
 int tests = 0, fails = 0;
 
@@ -27,6 +28,26 @@ void myterminate()
     longjmp(env, 1);
 }
 
+void function_that_throws()
+{
+    throw 0;
+}
+
+void function_with_landing_point()
+{
+    std::shared_ptr<int> ptr = std::make_shared<int>(7);
+    function_that_throws();
+}
+
+void test_unwind_resume()
+{
+    try {
+        function_with_landing_point();
+    } catch (int x) {
+        report(true, "_Unwind_Resume");
+    }
+}
+
 int main(int ac, char** av)
 {
     // Test simple throw of an integer.
@@ -36,6 +57,8 @@ int main(int ac, char** av)
     } catch (int e) {
         report (e == 1, "catch 1");
     }
+
+    test_unwind_resume();
 
     // Test that unhandled exceptions work and indeed call the termination
     // function as set by std::set_terminate(). Unfortunately, this test is
