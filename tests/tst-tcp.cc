@@ -186,9 +186,11 @@ void tcp_test_client::run()
         }
         _condvar.wait(lock);
         _completed_threads.clear();
-        if (_ex) {
-            rethrow_exception(_ex);
-        }
+    }
+    _condvar.wait(lock, [&] { return !_running_threads; });
+    _completed_threads.clear();
+    if (_ex) {
+        rethrow_exception(_ex);
     }
     cout << "created " << _connections_completed << " connections\n";
 }
