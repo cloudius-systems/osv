@@ -44,6 +44,8 @@
 
 #ifdef __cplusplus
 
+#include <memory>
+#include <vector>
 #include <osv/rcu.hh>
 
 #endif
@@ -81,6 +83,11 @@ struct file {
 	filetype_t	f_type;		/* descriptor type */
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
+#ifdef __cplusplus
+	std::unique_ptr<std::vector<file*>> f_epolls;
+#else
+	void* f_epolls_placeholder;
+#endif
 };
 
 // f_count rules:

@@ -236,6 +236,11 @@ file::~file()
     fp->f_count = INT_MIN;
     fo_close(fp);
     poll_drain(fp);
+    if (f_epolls) {
+        for (auto ep : *f_epolls) {
+            epoll_file_closed(ep, this);
+        }
+    }
 }
 
 static int

@@ -26,6 +26,7 @@
 
 #include <debug.hh>
 #include <unordered_map>
+#include <boost/range/algorithm/find.hpp>
 
 #include <osv/trace.hh>
 TRACEPOINT(trace_epoll_create, "returned fd=%d", int);
@@ -65,13 +66,27 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
 
 class epoll_obj {
     std::unordered_map<file*, epoll_event> map;
+    file* epoll_fp;
 public:
+    explicit epoll_obj(file* fp) : epoll_fp(fp) {}
+    ~epoll_obj() {
+        for (auto& e : map) {
+            auto fp = e.first;
+            remove_me(fp);
+        }
+    }
     int add(file* fp, struct epoll_event *event)
     {
         if (map.count(fp)) {
             return EEXIST;
         }
         map.emplace(std::move(fp), *event);
+        WITH_LOCK(fp->f_lock) {
+            if (!fp->f_epolls) {
+                fp->f_epolls.reset(new std::vector<file*>);
+            }
+            fp->f_epolls->push_back(epoll_fp);
+        }
         return 0;
     }
     int mod(file* fp, struct epoll_event *event)
@@ -86,6 +101,7 @@ public:
     int del(file* fp)
     {
         if (map.erase(fp)) {
+            remove_me(fp);
             return 0;
         } else {
             return ENOENT;
@@ -116,6 +132,14 @@ public:
             }
         }
         return r;
+    }
+private:
+    void remove_me(file* fp) {
+        WITH_LOCK(fp->f_lock) {
+            auto i = boost::range::find(*fp->f_epolls, epoll_fp);
+            assert(i != fp->f_epolls->end());
+            fp->f_epolls->erase(i);
+        }
     }
 };
 
@@ -170,9 +194,9 @@ int epoll_create1(int flags)
 {
     flags &= ~EPOLL_CLOEXEC;
     assert(!flags);
-    std::unique_ptr<epoll_obj> s{new epoll_obj()};
     try {
         fileref f{falloc_noinstall()};
+        std::unique_ptr<epoll_obj> s{new epoll_obj(f.get())};
         finit(f.get(), 0 , DTYPE_UNSPEC, s.release(), &epoll_ops);
         fdesc fd(f);
         trace_epoll_create(fd.get());
@@ -243,4 +267,11 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_
     }
 
     return epo->wait(events, maxevents, timeout_ms);
+}
+
+void epoll_file_closed(file* epoll_file, file* client)
+{
+    fileref epoll_ptr(epoll_file);
+    auto epoll_obj = get_epoll_obj(epoll_ptr);
+    epoll_obj->del(client);
 }

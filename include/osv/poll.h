@@ -170,6 +170,7 @@ __END_DECLS
 #ifdef __cplusplus
 
 int do_poll(std::vector<poll_file>& pfd, int _timeout);
+void epoll_file_closed(file* epoller, file* client);
 
 #endif
 
