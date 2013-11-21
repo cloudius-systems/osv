@@ -747,7 +747,6 @@ program::program(::filesystem& fs, void* addr)
     set_object("libdl.so.2", _core);
     set_object("librt.so.1", _core);
     set_object("libstdc++.so.6", _core);
-    set_object("libgcc_s.so.1", _core);
     set_object("libboost_system-mt.so.1.53.0", _core);
     set_object("libboost_program_options-mt.so.1.53.0", _core);
 }
