@@ -64,9 +64,9 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
 }
 
 class epoll_obj {
-    std::unordered_map<fileref, epoll_event> map;
+    std::unordered_map<file*, epoll_event> map;
 public:
-    int add(fileref fp, struct epoll_event *event)
+    int add(file* fp, struct epoll_event *event)
     {
         if (map.count(fp)) {
             return EEXIST;
@@ -74,7 +74,7 @@ public:
         map.emplace(std::move(fp), *event);
         return 0;
     }
-    int mod(fileref fp, struct epoll_event *event)
+    int mod(file* fp, struct epoll_event *event)
     {
         try {
             map.at(fp) = *event;
@@ -83,7 +83,7 @@ public:
             return ENOENT;
         }
     }
-    int del(fileref fp)
+    int del(file* fp)
     {
         if (map.erase(fp)) {
             return 0;
@@ -108,7 +108,7 @@ public:
                 if (pollfds[i].revents) {
                     --remain;
                     assert(pollfds[i].fp);
-                    events[remain].data = map[pollfds[i].fp].data;
+                    events[remain].data = map[pollfds[i].fp.get()].data;
                     events[remain].events =
                             events_poll_to_epoll(pollfds[i].revents);
                     trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
@@ -207,13 +207,13 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
     switch (op) {
     case EPOLL_CTL_ADD:
-        error = epo->add(std::move(fp), event);
+        error = epo->add(fp.get(), event);
         break;
     case EPOLL_CTL_MOD:
-        error = epo->mod(std::move(fp), event);
+        error = epo->mod(fp.get(), event);
         break;
     case EPOLL_CTL_DEL:
-        error = epo->del(std::move(fp));
+        error = epo->del(fp.get());
         break;
     default:
         error = EINVAL;
