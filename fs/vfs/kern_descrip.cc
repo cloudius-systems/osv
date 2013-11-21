@@ -167,7 +167,6 @@ int falloc_noinstall(struct file **resultfp)
     fp->f_ops = &badfileops;
     fp->f_count = 1;
     TAILQ_INIT(&fp->f_poll_list);
-    mutex_init(&fp->f_lock);
 
     *resultfp = fp;
     return 0;
