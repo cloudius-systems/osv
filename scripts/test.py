@@ -2,6 +2,7 @@
 import subprocess
 
 tests = [
+    "/tests/tst-except.so",
     "/tests/tst-mmap.so",
     "/tests/tst-mmap-file.so",
     "/tests/tst-rename.so",
