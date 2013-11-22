@@ -9,6 +9,8 @@
 PARAM_HELP="--help"
 PARAM_PRIVATE_ONLY="--private-ami-only"
 PARAM_INSTANCE="--instance-only"
+PARAM_IMAGE="--override-image"
+PARAM_VERSION="--override-version"
 
 print_help() {
  cat <<HLPEND
@@ -46,6 +48,8 @@ This script assumes following packages are installed and functional:
 This script receives following command line arguments:
 
     $PARAM_HELP - print this help screen and exit
+    $PARAM_IMAGE - do not rebuild OSv, upload specified image instead
+    $PARAM_VERSION - do not generate version based on repository, use specified string instead
     $PARAM_PRIVATE_ONLY - do not publish or replicate AMI - useful for pre-release build verification
     $PARAM_INSTANCE - do not rebuild, upload existing image and stop afer instance creation - useful for development phase
 
@@ -56,7 +60,45 @@ timestamp() {
  echo `date -u +'%Y-%m-%dT%H-%M-%SZ'`
 }
 
-OSV_VER=$(`dirname $0`/osv-version.sh)
+while test "$#" -ne 0
+do
+  case "$1" in
+    "$PARAM_IMAGE")
+      OSV_VOLUME=$2
+      DONT_BUILD=1
+      shift 2
+      ;;
+    "$PARAM_VERSION")
+      OSV_VER=$2
+      shift 2
+      ;;
+    "$PARAM_PRIVATE_ONLY")
+      DONT_PUBLISH=1
+      shift
+      ;;
+    "$PARAM_INSTANCE")
+      INSTANCE_ONLY=1
+      DONT_BUILD=1
+      shift
+      ;;
+    "$PARAM_HELP")
+      print_help
+      exit 0
+      ;;
+    *)
+      shift
+      ;;
+    esac
+done
+
+if test x"$OSV_VER" = x""; then
+    OSV_VER=$(`dirname $0`/osv-version.sh)
+fi
+
+if test x"$OSV_VOLUME" = x""; then
+    OSV_VOLUME=build/release/usr.img
+fi
+
 OSV_RSTATUS=rstatus-$OSV_VER-`timestamp`.txt
 OSV_BUCKET=osv-$OSV_VER-$USER-at-`hostname`-`timestamp`
 
@@ -65,8 +107,6 @@ S3_CREDENTIALS="-O $AWS_ACCESS_KEY_ID -W $AWS_SECRET_ACCESS_KEY"
 
 export AWS_DEFAULT_REGION=us-east-1
 OSV_INITIAL_ZONE="${AWS_DEFAULT_REGION}a"
-
-OSV_VOLUME=build/release/usr.img
 
 #We use Microsoft Windows Server 2012 Base AMI by Amazon as a template
 TEMPLATE_AMI_ID=ami-173d747e
@@ -282,19 +322,6 @@ replicate_ami() {
  return 0;
 }
 
-if test x"$1" = x"$PARAM_HELP"; then
-    print_help
-    exit 0
-fi
-
-if test x"$1" = x"$PARAM_PRIVATE_ONLY"; then
-    DONT_PUBLISH=1
-fi
-
-if test x"$1" = x"$PARAM_INSTANCE"; then
-    INSTANCE_ONLY=1
-fi
-
 BUCKET_CREATED=0
 
 while true; do
@@ -302,7 +329,7 @@ while true; do
     echo_progress Releasing version $OSV_VER
     amend_rstatus Release status for version $OSV_VER
 
-    if test x"$INSTANCE_ONLY" != x"1"; then
+    if test x"$DONT_BUILD" != x"1"; then
         echo_progress Building from the scratch
         make clean && git submodule update && make external && make img_format=raw
 
