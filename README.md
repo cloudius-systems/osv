@@ -68,7 +68,7 @@ The -v is for kvm's vhost that provides better performance
 and it's setup requires a tap and thus we use sudo.
 
 By default OSv spawns a dhcpd that auto config the virtual nics.
-Static config can be done within OSv, configure netwroking like so:
+Static config can be done within OSv, configure networking like so:
 
 ```
 ifconfig virtio-net0 192.168.122.100 netmask 255.255.255.0 up
@@ -183,7 +183,7 @@ gdb.txt will contain the the trace.
 
 Memory allocation tracking can be enabled/disabled with the gdb commands
 "osv leak on", "osv leak off", but even easier is to add the "--leak"
-paramter to the loader, to have it start leak detection when entering the
+parameter to the loader, to have it start leak detection when entering the
 payload (not during OSv boot). For example:
 
 ```
