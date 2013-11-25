@@ -54,9 +54,9 @@ struct vma_list_type : vma_list_base {
     vma_list_type() {
         // insert markers for the edges of allocatable area
         // simplifies searches
-        insert(*new vma(0, 0));
+        insert(*new vma(0, 0, 0));
         uintptr_t e = 0x800000000000;
-        insert(*new vma(e, e));
+        insert(*new vma(e, e, 0));
     }
 };
 
@@ -561,9 +561,35 @@ protected:
     }
 };
 
+bool contains(uintptr_t start, uintptr_t end, vma& y)
+{
+    return y.start() >= start && y.end() <= end;
+}
+
+/**
+ * Change virtual memory range protection
+ *
+ * Change protection for a virtual memory range.  Updates page tables and VMas
+ * for populated memory regions and just VMAs for unpopulated ranges.
+ *
+ * \return 1 if memory protection was changed successfully; otherwise returns 0.
+ */
 int protect(void *addr, size_t size, unsigned int perm)
 {
+    uintptr_t start = reinterpret_cast<uintptr_t>(addr);
+    uintptr_t end = start + size;
+    addr_range r(start, end);
     std::lock_guard<mutex> guard(vma_list_mutex);
+    auto range = vma_list.equal_range(r, vma::addr_compare());
+    for (auto i = range.first; i != range.second; ++i) {
+        if (i->perm() == perm)
+            continue;
+        i->split(end);
+        i->split(start);
+        if (contains(start, end, *i)) {
+            i->protect(perm);
+        }
+    }
     protection p(perm);
     p.operate(addr, size);
     return p.getsuccess();
@@ -585,11 +611,6 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
         ++n;
     }
     abort();
-}
-
-bool contains(uintptr_t start, uintptr_t end, vma& y)
-{
-    return y.start() >= start && y.end() <= end;
 }
 
 void evacuate(uintptr_t start, uintptr_t end)
@@ -686,7 +707,7 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm)
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    auto* vma = new mmu::vma(start, start + size);
+    auto* vma = new mmu::vma(start, start + size, perm);
     return (void*) allocate(vma, start, size, search, zfill, perm);
 }
 
@@ -696,7 +717,7 @@ void* map_file(void* addr, size_t size, bool search, unsigned perm,
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    auto *vma = new mmu::file_vma(start, start + size, f, offset, shared);
+    auto *vma = new mmu::file_vma(start, start + size, perm, f, offset, shared);
     auto v = (void*) allocate(vma, start, asize, search, zfill, perm | perm_write);
     auto fsize = ::size(f);
     // FIXME: we pre-zeroed this, and now we're overwriting the zeroes
@@ -764,9 +785,10 @@ uintptr_t align_up(uintptr_t ptr)
 
 }
 
-vma::vma(uintptr_t start, uintptr_t end)
+vma::vma(uintptr_t start, uintptr_t end, unsigned perm)
     : _start(align_down(start))
     , _end(align_up(end))
+    , _perm(perm)
 {
 }
 
@@ -778,6 +800,11 @@ void vma::set(uintptr_t start, uintptr_t end)
 {
     _start = align_down(start);
     _end = align_up(end);
+}
+
+void vma::protect(unsigned perm)
+{
+    _perm = perm;
 }
 
 uintptr_t vma::start() const
@@ -800,12 +827,17 @@ uintptr_t vma::size() const
     return _end - _start;
 }
 
+unsigned vma::perm() const
+{
+    return _perm;
+}
+
 void vma::split(uintptr_t edge)
 {
     if (edge <= _start || edge >= _end) {
         return;
     }
-    vma* n = new vma(edge, _end);
+    vma* n = new vma(edge, _end, _perm);
     _end = edge;
     vma_list.insert(*n);
 }
@@ -815,8 +847,8 @@ error vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
-file_vma::file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared)
-    : vma(start, end)
+file_vma::file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared)
+    : vma(start, end, perm)
     , _file(file)
     , _offset(offset)
     , _shared(shared)
@@ -829,7 +861,7 @@ void file_vma::split(uintptr_t edge)
         return;
     }
     auto off = offset(edge);
-    vma* n = new file_vma(edge, _end, _file, off, _shared);
+    vma* n = new file_vma(edge, _end, _perm, _file, off, _shared);
     _end = edge;
     vma_list.insert(*n);
 }

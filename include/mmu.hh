@@ -15,6 +15,9 @@
 #include <functional>
 #include <osv/error.h>
 
+/**
+ * MMU namespace
+ */
 namespace mmu {
 
 constexpr uintptr_t page_size = 4096;
@@ -56,19 +59,22 @@ private:
 
 class vma {
 public:
-    vma(uintptr_t start, uintptr_t end);
+    vma(uintptr_t start, uintptr_t end, unsigned perm);
     virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
+    void protect(unsigned perm);
     uintptr_t start() const;
     uintptr_t end() const;
     void* addr() const;
     uintptr_t size() const;
+    unsigned perm() const;
     virtual void split(uintptr_t edge);
     virtual error sync(uintptr_t start, uintptr_t end);
     class addr_compare;
 protected:
     uintptr_t _start;
     uintptr_t _end;
+    unsigned _perm;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
@@ -87,7 +93,7 @@ public:
 
 class file_vma : public vma {
 public:
-    file_vma(uintptr_t start, uintptr_t end, fileref file, f_offset offset, bool shared);
+    file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
 private:
