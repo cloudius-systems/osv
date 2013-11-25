@@ -62,7 +62,7 @@ int getaddrinfo(const char *restrict host, const char *restrict serv, const stru
 	FILE *f;
 	char *z;
 	int result;
-	int cnt;
+	int cnt, eof;
 
 	if (host && strlen(host)>255) return EAI_NONAME;
 	if (serv && strlen(serv)>32) return EAI_SERVICE;
@@ -91,8 +91,9 @@ int getaddrinfo(const char *restrict host, const char *restrict serv, const stru
 					continue;
 				break;
 			}
+			eof = feof(f);
 			fclose(f);
-			if (feof(f)) return EAI_SERVICE;
+			if (eof) return EAI_SERVICE;
 		}
 		if (port > 65535) return EAI_SERVICE;
 		port = htons(port);
