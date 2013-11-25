@@ -1925,7 +1925,6 @@ zfs_getattr(vnode_t *vp, vattr_t *vap)
 	return (0);
 }
 
-#ifdef NOTYET
 /*
  * Set the file attributes to the values contained in the
  * vattr structure.
@@ -1946,8 +1945,7 @@ zfs_getattr(vnode_t *vp, vattr_t *vap)
  */
 /* ARGSUSED */
 static int
-zfs_setattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
-	caller_context_t *ct)
+zfs_setattr(vnode_t *vp, vattr_t *vap)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
@@ -1958,6 +1956,8 @@ zfs_setattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
 	uint_t		mask = vap->va_mask;
 	uint_t		saved_mask;
 	uint64_t	saved_mode;
+	int		flags = 0;
+	cred_t		*cr = CRED();
 	int		trim_mask = 0;
 	uint64_t	new_mode;
 	uint64_t	new_uid, new_gid;
@@ -2009,6 +2009,7 @@ zfs_setattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
 		return (EINVAL);
 	}
 
+#ifndef __OSV__
 	/*
 	 * If this is an xvattr_t, then get a pointer to the structure of
 	 * optional attributes.  If this is NULL, then we have a vattr_t.
@@ -2016,6 +2017,7 @@ zfs_setattr(vnode_t *vp, vattr_t *vap, int flags, cred_t *cr,
 	xoap = xva_getxoptattr(xvap);
 
 	xva_init(&tmpxvattr);
+#endif
 
 	/*
 	 * Immutable files can only alter immutable bit and atime
@@ -2575,7 +2577,6 @@ out2:
 	ZFS_EXIT(zfsvfs);
 	return (err);
 }
-#endif /* NOTYET */
 
 static int
 zfs_truncate(struct vnode *vp, off_t new_size)
@@ -5361,7 +5362,7 @@ struct vnops zfs_vnops = {
 	zfs_mkdir,			/* mkdir */
 	zfs_rmdir,			/* rmdir */
 	zfs_getattr,			/* getattr */
-	NULL,				/* setattr */
+	zfs_setattr,			/* setattr */
 	zfs_inactive,			/* inactive */
 	zfs_truncate,			/* truncate */
 	zfs_link,			/* link */

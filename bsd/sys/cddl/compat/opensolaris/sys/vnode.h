@@ -85,7 +85,9 @@ vn_is_readonly(vnode_t *vp)
 #define	vn_matchops(vp, vops)	((vp)->v_op == &(vops))
 
 #define	VN_HOLD(v)	vref(v)
+#endif
 #define	VN_RELE(v)	vrele(v)
+#if 0
 #define	VN_URELE(v)	vput(v)
 
 #define	VOP_REALVP(vp, vpp, ct)	(*(vpp) = (vp), 0)
