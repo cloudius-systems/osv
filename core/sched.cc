@@ -753,10 +753,10 @@ timer_list::callback_dispatch::callback_dispatch()
 void timer_list::fired()
 {
     auto now = clock::get()->time();
-    auto i = _list.begin();
     _last = std::numeric_limits<s64>::max();
-    while (i != _list.end() && i->_time <= now) {
-        auto j = i++;
+    // don't hold iterators across list iteration, since the list can change
+    while (!_list.empty() && _list.begin()->_time <= now) {
+        auto j = _list.begin();
         j->expire();
         // timer_base::expire may have re-added j to the timer_list
         if (j->_state != timer_base::state::armed) {
