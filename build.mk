@@ -3,7 +3,7 @@ arch = x64
 img_format ?= qcow2
 # cmdline = java.so -jar /java/cli.jar
 # cmdline = java.so -jar /java/web.jar -cp java/cli.jar app
-cmdline = java.so -Djava.util.logging.config.file=/usr/mgmt/config/logging.properties -jar /usr/mgmt/web-1.0.0.jar app prod
+cmdline = java.so -Djava.util.logging.config.file=/usr/mgmt/config/logging.properties io.osv.MultiJarLoader -mains /usr/mgmt/javamains
 #cmdline = testrunner.so
 #cmdline = java.so Hello
 local-includes =

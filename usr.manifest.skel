@@ -62,8 +62,11 @@
 /usr/lib/&/jni/stty.so: java/&
 /usr/lib/&/jni/tracepoint.so: java/&
 /usr/lib/&/jni/power.so: java/&
+/usr/mgmt/lib/bcprov-jdk15on-147.jar: ../../mgmt/web/vendor/bundle/jruby/1.9/gems/bouncy-castle-java-1.5.0147/lib/bcprov-jdk15on-147.jar
+/usr/mgmt/lib/bcpkix-jdk15on-147.jar: ../../mgmt/web/vendor/bundle/jruby/1.9/gems/bouncy-castle-java-1.5.0147/lib/bcpkix-jdk15on-147.jar
 /usr/mgmt/web-1.0.0.jar: ../../mgmt/web/build/libs/web-1.0.0.jar
 /usr/mgmt/crash-1.0.0.jar: ../../mgmt/crash/build/libs/crash-1.0.0.jar
+/usr/mgmt/javamains: ../../javamains
 /usr/mgmt/mgmt.json: ../../mgmt/web/config/mgmt.json
 /usr/mgmt/uploads/index.rb: ../../mgmt/web/views/index.rb
 /usr/mgmt/apps/index.rb: ../../mgmt/web/views/index.rb

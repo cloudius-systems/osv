@@ -1,0 +1,11 @@
+############################################################
+# This is the java multiple main configuration file
+# each line will be passed to the loader, similiar
+# to what happend in a a normal java run
+# each jar will be run in its own thread
+# you can put delay between runs, e.g. to sleep for 2sec do:
+# sleep 2000
+#############################################################
+-cp /usr/mgmt/lib/bcprov-jdk15on-147.jar:/usr/mgmt/web-1.0.0.jar:/usr/mgmt/lib/bcpkix-jdk15on-147.jar -jar /usr/mgmt/crash-1.0.0.jar
+sleep 20000
+-jar /usr/mgmt/web-1.0.0.jar app dev
