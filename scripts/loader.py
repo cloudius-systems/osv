@@ -212,6 +212,7 @@ class osv_mmap(gdb.Command):
     
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer_base')
+thread_type = gdb.lookup_type('sched::thread')
 
 active_thread_context = None
 
@@ -267,12 +268,60 @@ class cpu(object):
         g_cpus = gdb.parse_and_eval('sched::cpus._M_impl._M_start')
         self.obj = g_cpus + self.id
 
+def template_arguments(gdb_type):
+    n = 0;
+    while True:
+        try:
+            yield gdb_type.template_argument(n)
+            n += 1
+        except RuntimeError:
+            return
+
+def get_template_arg_with_prefix(gdb_type, prefix):
+    for arg in template_arguments(gdb_type):
+        if str(arg).startswith(prefix):
+            return arg
+
+def get_base_class_offset(gdb_type, base_class_name):
+    name_pattern = re.escape(base_class_name) + "(<.*>)?$"
+    for field in gdb_type.fields():
+        if field.is_base_class and re.match(name_pattern, field.name):
+            return field.bitpos / 8
+
+class intrusive_list:
+    size_t = gdb.lookup_type('size_t')
+
+    def __init__(self, list_ref):
+        list_type = list_ref.type.strip_typedefs()
+        self.node_type = list_type.template_argument(0)
+        self.root = list_ref['data_']['root_plus_size_']['root_']
+
+        member_hook = get_template_arg_with_prefix(list_type, "boost::intrusive::member_hook")
+        if member_hook:
+            self.link_offset = member_hook.template_argument(2).cast(self.size_t)
+        else:
+            self.link_offset = get_base_class_offset(self.node_type, "boost::intrusive::list_base_hook")
+            if self.link_offset == None:
+                raise Exception("Class does not extend list_base_hook: " + str(self.node_type))
+
+    def __iter__(self):
+        hook = self.root['next_']
+        while hook != self.root.address:
+            node_ptr = hook.cast(self.size_t) - self.link_offset
+            yield node_ptr.cast(self.node_type.pointer()).dereference()
+            hook = hook['next_']
+
+    def __nonzero__(self):
+        return self.root['next_'] != self.root.address
+
 class vmstate(object):
     def __init__(self):
         self.reload()
+
     def reload(self):
         self.load_cpu_list()
         self.load_thread_list()
+
     def load_cpu_list(self):
         # cause gdb to initialize thread list
         gdb.execute('info threads', False, True)
@@ -281,22 +330,10 @@ class vmstate(object):
             c = cpu(cpu_thread)
             cpu_list[c.id] = c
         self.cpu_list = cpu_list
+
     def load_thread_list(self):
-        ret = []
-        thread_list = gdb.lookup_global_symbol('sched::thread_list').value()
-        root = thread_list['data_']['root_plus_size_']['root_']
-        node = root['next_']
-        thread_type = gdb.lookup_type('sched::thread')
-        void_ptr = gdb.lookup_type('void').pointer()
-        for f in thread_type.fields():
-            if f.name == '_thread_list_link':
-                link_offset = f.bitpos / 8
-        while node != root.address:
-            t = node.cast(void_ptr) - link_offset
-            t = t.cast(thread_type.pointer())
-            ret.append(t.dereference())
-            node = node['next_']
-        self.thread_list = ret
+        self.thread_list = list(intrusive_list(gdb.lookup_global_symbol('sched::thread_list').value()))
+
     def cpu_from_thread(self, thread):
         stack = thread['_attr']['stack']
         stack_begin = ulong(stack['begin'])
@@ -347,22 +384,14 @@ def exit_thread_context():
 timer_state_expired = gdb.parse_and_eval('sched::timer_base::expired')
 
 def show_thread_timers(t):
-    head = t['_active_timers']['data_']['root_plus_size_']['root_']
-    n = head['next_']
-    if n == head.address:
-        return
-    gdb.write('  timers:')
-    while n != head.address:
-        na = n.cast(ulong_type)
-        na -= timer_type.fields()[1].bitpos / 8
-        timer = na.cast(timer_type.pointer())
-        expired = ''
-        if timer['_state'] == timer_state_expired:
-            expired = '*'
-        expiration = long(timer['_time']) / 1.0e9
-        gdb.write(' %11.9f%s' % (expiration, expired))
-        n = n['next_']
-    gdb.write('\n')
+    timer_list = intrusive_list(t['_active_timers'])
+    if timer_list:
+        gdb.write('  timers:')
+        for timer in timer_list:
+            expired = '*' if timer['_state'] == timer_state_expired else ''
+            expiration = long(timer['_time']) / 1.0e9
+            gdb.write(' %11.9f%s' % (expiration, expired))
+        gdb.write('\n')
 
 def get_function_name(frame):
     if frame.function():
