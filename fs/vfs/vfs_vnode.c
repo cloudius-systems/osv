@@ -405,7 +405,31 @@ vn_stat(struct vnode *vp, struct stat *st)
 }
 
 /*
- * Chceck permission on vnode pointer.
+ * Set access and modification times of the vnode
+ */
+int
+vn_settimes(struct vnode *vp, struct timespec times[2])
+{
+    struct vattr vattr;
+    struct vattr *vap;
+    int error;
+
+    vap = &vattr;
+    memset(vap, 0, sizeof(struct vattr));
+
+    vap->va_atime = times[0];
+    vap->va_mtime = times[1];
+    vap->va_mask = AT_ATIME | AT_MTIME;
+
+    vn_lock(vp);
+    error = VOP_SETATTR(vp, vap);
+    vn_unlock(vp);
+
+    return error;
+}
+
+/*
+ * Check permission on vnode pointer.
  */
 int
 vn_access(struct vnode *vp, int flags)

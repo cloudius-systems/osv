@@ -195,6 +195,7 @@ struct vnode *vn_lookup(struct mount *, char *);
 void	 vn_lock(struct vnode *);
 void	 vn_unlock(struct vnode *);
 int	 vn_stat(struct vnode *, struct stat *);
+int	 vn_settimes(struct vnode *, struct timespec[2]);
 int	 vn_access(struct vnode *, int);
 struct vnode *vget(struct mount *, const char *);
 void	 vput(struct vnode *);

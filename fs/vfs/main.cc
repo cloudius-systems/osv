@@ -1371,6 +1371,35 @@ out_errno:
 	return -1;
 }
 
+TRACEPOINT(trace_vfs_utimes, "\"%s\"", const char*);
+TRACEPOINT(trace_vfs_utimes_ret, "");
+TRACEPOINT(trace_vfs_utimes_err, "%d", int);
+
+extern "C"
+int utimes(const char *pathname, const struct timeval times[2])
+{
+    struct task *t = main_task;
+    char path[PATH_MAX];
+    int error;
+
+    trace_vfs_utimes(pathname);
+
+    error = task_conv(t, pathname, 0, path);
+    if (error)
+        goto out_errno;
+
+    error = sys_utimes(path, times);
+    if (error)
+        goto out_errno;
+
+    trace_vfs_utimes_ret();
+    return 0;
+out_errno:
+    trace_vfs_utimes_err(error);
+    errno = error;
+    return -1;
+}
+
 TRACEPOINT(trace_vfs_chmod, "\"%s\" 0%0o", const char*, mode_t);
 TRACEPOINT(trace_vfs_chmod_ret, "");
 

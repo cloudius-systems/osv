@@ -975,3 +975,51 @@ sys_readlink(char *path, char *buf, size_t bufsize)
 	drele(dp);
 	return EINVAL;
 }
+
+/*
+ * Check the validity of the members of a struct timeval.
+ */
+static bool is_timeval_valid(const struct timeval *time)
+{
+    return (time->tv_sec >= 0) &&
+           (time->tv_usec >= 0 && time->tv_usec < 1000000);
+}
+
+/*
+ * Convert a timeval struct to a timespec one.
+ */
+static void convert_timeval(struct timespec *to, const struct timeval *from)
+{
+    to->tv_sec = from->tv_sec;
+    to->tv_nsec = from->tv_usec * 1000; // Convert microseconds to nanoseconds
+}
+
+int
+sys_utimes(char *path, const struct timeval times[2])
+{
+    int error;
+    struct dentry *dp;
+    struct timespec timespec_times[2];
+
+    DPRINTF(VFSDB_SYSCALL, ("sys_utimes: path=%s\n", path));
+
+    if (!is_timeval_valid(&times[0]) || !is_timeval_valid(&times[1]))
+        return EINVAL;
+
+    // Convert each element of timeval array to the timespec type
+    convert_timeval(&timespec_times[0], &times[0]);
+    convert_timeval(&timespec_times[1], &times[1]);
+
+    error = namei(path, &dp);
+    if (error)
+        return error;
+
+    if (dp->d_mount->m_flags & MNT_RDONLY) {
+        error = EROFS;
+    } else {
+        error = vn_settimes(dp->d_vnode, timespec_times);
+    }
+
+    drele(dp);
+    return error;
+}

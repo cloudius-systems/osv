@@ -351,12 +351,6 @@ int get_nprocs()
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
-int utimes (const char *, const struct timeval [2])
-{
-    // FIXME This is just a stub
-    return 0;
-}
-
 clock_t times(struct tms *buffer)
 {
     debug("times not implemented\n");
