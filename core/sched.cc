@@ -758,7 +758,10 @@ void timer_list::fired()
     while (i != _list.end() && i->_time <= now) {
         auto j = i++;
         j->expire();
-        _list.erase(j);
+        // timer_base::expire may have re-added j to the timer_list
+        if (j->_state != timer_base::state::armed) {
+            _list.erase(j);
+        }
     }
     if (!_list.empty()) {
         rearm();
