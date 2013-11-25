@@ -236,8 +236,14 @@ void cpu::do_idle()
     } while (runqueue.empty());
 }
 
+void start_early_threads();
+
 void cpu::idle()
 {
+    if (id == 0) {
+        start_early_threads();
+    }
+
     while (true) {
         do_idle();
         // FIXME: we don't have an idle priority class yet. so
@@ -924,7 +930,7 @@ void init(std::function<void ()> cont)
     thread::attr attr;
     attr.stack = { new char[4096*10], 4096*10 };
     attr.pinned_cpu = smp_initial_find_current_cpu();
-    thread t{[=] { start_early_threads(); cont(); }, attr, true};
+    thread t{cont, attr, true};
     t.switch_to_first();
 }
 
