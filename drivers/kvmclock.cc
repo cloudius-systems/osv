@@ -30,7 +30,7 @@ private:
     static bool _new_kvmclock_msrs;
     pvclock_wall_clock* _wall;
     u64  _wall_ns;
-    static PERCPU(pvclock_vcpu_time_info, _sys);
+    static percpu<pvclock_vcpu_time_info> _sys;
     sched::cpu::notifier cpu_notifier;
 };
 

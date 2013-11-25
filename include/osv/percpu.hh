@@ -12,14 +12,28 @@
 #include <type_traits>
 #include <memory>
 
-extern char _percpu_start[];
-
 extern __thread char* percpu_base;
 
 template <typename T>
 class percpu {
 public:
-    constexpr percpu() {}
+    // We need percpu<T> variables to be defined with the PERCPU macro so
+    // they'll end up in the right section. To enforce this, we add a fake
+    // argument to the constructor. The type percpu<T> still needs to be
+    // used to declare the variable separately from its definition (which
+    // is needed for class static variables).
+    static constexpr struct
+        please_use_PERCPU_macro {} please_use_PERCPU_macro {};
+    // percpu<T>'s constructor needs to be constexpr so that the .percpu
+    // section can be constructed at compile time, and then at early run time
+    // be copied to per-cpu copies of this section, without risking that the
+    // constructor hasn't run yet.
+    explicit constexpr percpu(struct please_use_PERCPU_macro) { }
+    // You can't copy a per-cpu variable and get a new per-cpu variable.
+    // Neither can one be moved (its address is important).
+    percpu(const percpu&) = delete;
+    percpu(percpu&&) = delete;
+
     T* operator->() {
         return addr();
     }
@@ -39,7 +53,8 @@ private:
     friend size_t dynamic_percpu_base();
 };
 
-#define PERCPU(type, var) percpu<type> var __attribute__((section(".percpu")))
+#define PERCPU(type, var) __attribute__((section(".percpu"))) \
+            percpu<type> var (percpu<type>::please_use_PERCPU_macro)
 
 size_t dynamic_percpu_alloc(size_t size, size_t align);
 void dynamic_percpu_free(size_t offset, size_t size);
