@@ -76,15 +76,17 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
                 p = p->next;
             }
             if (!p) {
-                // wr is no longer in the queue, so either wr.wake() is
-                // already done, or wake_all() has just taken the whole queue
-                // and will wr.wake() soon. We can't return (and invalidate wr)
-                // until it calls wr.wake().
-                wr.wait();
                 ret = 0;
             }
         }
         mutex_unlock(&condvar->m);
+        if (!ret) {
+            // wr is no longer in the queue, so either wr.wake() is
+            // already done, or wake_all() has just taken the whole queue
+            // and will wr.wake() soon. We can't return (and invalidate wr)
+            // until it calls wr.wake().
+            wr.wait();
+        }
     }
 
 #if WAIT_MORPHING
