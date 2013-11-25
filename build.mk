@@ -176,6 +176,7 @@ tests += tests/tst-kill.so
 tests += tests/tst-truncate.so
 tests += $(boost-tests)
 tests += tests/tst-panic.so
+tests += tests/tst-utimes.so
 tests += tests/tst-tcp.so
 
 tests/tst-tcp.so: tests/tst-tcp.o

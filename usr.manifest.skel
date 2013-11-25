@@ -139,6 +139,7 @@
 /&/tests/tst-rename.so: ./&
 /&/tests/tst-truncate.so: ./&
 /&/tests/tst-panic.so: ./&
+/&/tests/tst-utimes.so: ./&
 /&/tests/tst-stat.so: ./&
 /&/tests/tst-libc-locking.so: ./&
 /&/tests/tst-tcp.so: ./&
