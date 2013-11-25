@@ -41,6 +41,11 @@
 #include <osv/vnode.h>
 #include <osv/dentry.h>
 
+/*
+ * Import vnode attributes flags
+ */
+#include <osv/vnode_attr.h>
+
 /* #define DEBUG_VFS 1 */
 
 /*
