@@ -21,6 +21,7 @@
 #include <safe-ptr.hh>
 #include "fs/vfs/vfs.h"
 #include <osv/error.h>
+#include <osv/trace.hh>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -30,6 +31,8 @@ namespace {
 typedef boost::format fmt;
 
 }
+
+extern const char text_start[], text_end[];
 
 namespace mmu {
 
@@ -504,7 +507,9 @@ protected:
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
         pt_element pte = ptep.read();
-        assert(!pte.empty()); // evacuate() shouldn't call us twice for the same page.
+        if (pte.empty()) {
+            return;
+        }
         ptep.write(make_empty_pte());
         // FIXME: tlb flush
         memory::free_page(phys_to_virt(pte.addr(false)));
@@ -513,7 +518,9 @@ protected:
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
         // FIXME: tlb flush
-        assert(!pte.empty()); // evacuate() shouldn't call us twice for the same page.
+        if (pte.empty()) {
+            return;
+        }
         if (pte.large()) {
             memory::free_huge_page(phys_to_virt(pte.addr(true)),
                     huge_page_size);
@@ -523,7 +530,9 @@ protected:
             // of one huge page.
             hw_ptep pt = follow(pte);
             for(int i=0; i<pte_per_page; ++i) {
-                assert(!pt.at(i).read().empty()); //  evacuate() shouldn't call us twice for the same page.
+                if (pt.at(i).read().empty()) {
+                    continue;
+                }
                 pt_element pte = pt.at(i).read();
                 // FIXME: tlb flush?
                 pt.at(i).write(make_empty_pte());
@@ -547,14 +556,13 @@ public:
 protected:
     virtual void small_page(hw_ptep ptep, uintptr_t offset){
          if (ptep.read().empty()) {
-            success = false;
             return;
         }
         change_perm(ptep, perm);
      }
     virtual void huge_page(hw_ptep ptep, uintptr_t offset){
         if (ptep.read().empty()) {
-            success = false;
+            return;
         } else if (ptep.read().large()) {
             change_perm(ptep, perm);
         } else {
@@ -569,7 +577,6 @@ protected:
         }
     }
     virtual bool should_allocate_intermediate(){
-        success = false;
         return false;
     }
 };
@@ -676,8 +683,7 @@ struct fill_anon_page : fill_page {
     }
 };
 
-uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search,
-                    fill_page& fill, unsigned perm)
+uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
     if (search) {
@@ -693,8 +699,6 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search,
     }
 
     vma_list.insert(*v);
-
-    populate(&fill, perm).operate((void*)start, size);
 
     return start;
 }
@@ -719,9 +723,8 @@ void* map_anon(void* addr, size_t size, bool search, unsigned perm)
 {
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    fill_anon_page zfill;
     auto* vma = new mmu::vma(start, start + size, perm);
-    return (void*) allocate(vma, start, size, search, zfill, perm);
+    return (void*) allocate(vma, start, size, search);
 }
 
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
@@ -731,7 +734,8 @@ void* map_file(void* addr, size_t size, bool search, unsigned perm,
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
     auto *vma = new mmu::file_vma(start, start + size, perm, f, offset, shared);
-    auto v = (void*) allocate(vma, start, asize, search, zfill, perm | perm_write);
+    auto v = (void*) allocate(vma, start, asize, search);
+    populate(&zfill, perm | perm_write).operate(v, asize);
     auto fsize = ::size(f);
     // FIXME: we pre-zeroed this, and now we're overwriting the zeroes
     if (offset < fsize) {
@@ -798,6 +802,47 @@ uintptr_t align_up(uintptr_t ptr)
 
 }
 
+bool access_fault(vma& vma, unsigned long error_code)
+{
+    auto perm = vma.perm();
+    if (error_code & page_fault_insn) {
+        return true;
+    }
+    if (error_code & page_fault_write) {
+        return !(perm & perm_write);
+    }
+    return !(perm & perm_read);
+}
+
+TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, u16);
+TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x", uintptr_t, u16);
+TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, u16);
+
+void vm_sigsegv(uintptr_t addr, exception_frame* ef)
+{
+    auto pc = reinterpret_cast<void*>(ef->rip);
+    if (pc >= text_start && pc < text_end) {
+        abort("page fault outside application");
+    }
+    osv::handle_segmentation_fault(addr, ef);
+}
+
+void vm_fault(uintptr_t addr, exception_frame* ef)
+{
+    trace_mmu_vm_fault(addr, ef->error_code);
+    addr = align_down(addr);
+    WITH_LOCK(vma_list_mutex) {
+        auto vma = vma_list.find(addr_range(addr, addr+1), vma::addr_compare());
+        if (vma == vma_list.end() || access_fault(*vma, ef->error_code)) {
+            vm_sigsegv(addr, ef);
+            trace_mmu_vm_fault_sigsegv(addr, ef->error_code);
+            return;
+        }
+        vma->fault(addr);
+    }
+    trace_mmu_vm_fault_ret(addr, ef->error_code);
+}
+
 vma::vma(uintptr_t start, uintptr_t end, unsigned perm)
     : _start(align_down(start))
     , _end(align_up(end))
@@ -860,6 +905,21 @@ error vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
+void vma::fault(uintptr_t addr)
+{
+    auto hp_start = ::align_up(_start, huge_page_size);
+    auto hp_end = ::align_down(_end, huge_page_size);
+    size_t size;
+    if (hp_start <= addr && addr < hp_end) {
+        addr = ::align_down(addr, huge_page_size);
+        size = huge_page_size;
+    } else {
+        size = page_size;
+    }
+    fill_anon_page zfill;
+    populate(&zfill, _perm).operate((void*)addr, size);
+}
+
 file_vma::file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared)
     : vma(start, end, perm)
     , _file(file)
@@ -891,6 +951,11 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
     write(_file, addr(), off, std::min(size, fsize - off));
     auto err = sys_fsync(_file.get());
     return make_error(err);
+}
+
+void file_vma::fault(uintptr_t addr)
+{
+    abort("trying to fault-in file-backed vma");
 }
 
 f_offset file_vma::offset(uintptr_t addr)
@@ -975,7 +1040,6 @@ void switch_to_runtime_page_table()
 
 void page_fault(exception_frame *ef)
 {
-    extern const char text_start[], text_end[];
     sched::exception_guard g;
     auto addr = processor::read_cr2();
     if (fixup_fault(ef)) {
@@ -985,8 +1049,8 @@ void page_fault(exception_frame *ef)
     if (!pc) {
         abort("trying to execute null pointer");
     }
-    if (pc >= text_start && pc < text_end) {
-        abort("page fault outside application");
-    }
-    osv::handle_segmentation_fault(addr, ef);
+    sched::inplace_arch_fpu fpu;
+    fpu.save();
+    mmu::vm_fault(addr, ef);
+    fpu.restore();
 }

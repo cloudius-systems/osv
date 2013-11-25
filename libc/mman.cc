@@ -45,6 +45,9 @@ int mprotect(void *addr, size_t len, int prot)
         // address not page aligned
         return libc_error(EINVAL);
     }
+    if (!mmu::ismapped(addr, len)) {
+        return libc_error(ENOMEM);
+    }
     if (!mmu::protect(addr, len, libc_prot_to_perm(prot))) {
         // NOTE: we return ENOMEM when part of the range was not mapped,
         // but nevertheless, set the protection on the rest!

@@ -57,6 +57,14 @@ private:
     uintptr_t _end;
 };
 
+enum {
+    page_fault_prot  = 1ul << 0,
+    page_fault_write = 1ul << 1,
+    page_fault_user  = 1ul << 2,
+    page_fault_rsvd  = 1ul << 3,
+    page_fault_insn  = 1ul << 4,
+};
+
 class vma {
 public:
     vma(uintptr_t start, uintptr_t end, unsigned perm);
@@ -70,6 +78,7 @@ public:
     unsigned perm() const;
     virtual void split(uintptr_t edge);
     virtual error sync(uintptr_t start, uintptr_t end);
+    virtual void fault(uintptr_t addr);
     class addr_compare;
 protected:
     uintptr_t _start;
@@ -96,6 +105,7 @@ public:
     file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
+    virtual void fault(uintptr_t addr) override;
 private:
     f_offset offset(uintptr_t addr);
     fileref _file;
