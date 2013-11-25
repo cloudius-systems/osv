@@ -104,6 +104,7 @@
 /tests/tst-tracepoint.so: ./tests/tst-tracepoint.so
 /tests/tst-leak.so: ./tests/tst-leak.so
 /tests/tst-mmap.so: ./tests/tst-mmap.so
+/tests/tst-mmap-anon-perf.so: ./tests/tst-mmap-anon-perf.so
 /tests/tst-mmap-file.so: ./tests/tst-mmap-file.so
 /tests/tst-mutex.so: ./tests/tst-mutex.so
 /tests/tst-hub.so: ./tests/tst-hub.so
