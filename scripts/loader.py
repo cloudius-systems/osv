@@ -5,7 +5,10 @@ import re
 import os, os.path
 import struct
 import json
+import itertools
+import operator
 from glob import glob
+from collections import defaultdict
 
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 external = build_dir + '/../../external'
@@ -559,8 +562,40 @@ def align_down(v, pagesize):
 def align_up(v, pagesize):
     return align_down(v + pagesize - 1, pagesize)
 
-def dump_trace(out_func):
-    from collections import defaultdict       
+class Trace:
+    def __init__(self, tp, thread, time, cpu, data, backtrace=None):
+        self.tp = tp
+        self.thread = thread
+        self.time = time
+        self.cpu = cpu
+        self.data = data
+        self.backtrace = backtrace
+
+    @property
+    def name(self):
+        return self.tp['name'].string()
+
+    def format_data(self):
+        format = self.tp['format'].string()
+        format = format.replace('%p', '0x%016x')
+        return format % self.data
+
+class TraceConstants:
+    def __init__(self):
+        self.backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
+        self.bt_format = '   [' + str.join(' ', ['%s'] * self.backtrace_len) + ']'
+
+class BacktraceFormatter:
+    def __init__(self, trace_constants):
+        self.trace_constants = trace_constants
+
+    def __call__(self, backtrace):
+        if not backtrace:
+            return ''
+        return self.trace_constants.bt_format % tuple([syminfo(x) for x in backtrace])
+
+def all_traces():
+    constants = TraceConstants()
     inf = gdb.selected_inferior()
     trace_log = gdb.lookup_global_symbol('trace_log').value()
     max_trace = ulong(gdb.parse_and_eval('max_trace'))
@@ -571,18 +606,45 @@ def dump_trace(out_func):
     pivot = align_up(last, trace_page_size)
     trace_log = trace_log[pivot:] + trace_log[:pivot]
     last += max_trace - pivot
-    indents = defaultdict(int)
-    backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
-    bt_format = '   [' + str.join(' ', ['%s'] * backtrace_len) + ']'
-    def lookup_tp(name):
-        tp_base = gdb.lookup_type('tracepoint_base')
-        return gdb.lookup_global_symbol(name).value().dereference()
-    tp_fn_entry = lookup_tp('gdb_trace_function_entry')
-    tp_fn_exit = lookup_tp('gdb_trace_function_exit')
+    backtrace_len = constants.backtrace_len
 
     i = 0
     while i < last:
         tp_key, thread, time, cpu, flags = struct.unpack('QQQII', trace_log[i:i+32])
+        if tp_key == 0:
+            i = align_up(i + 8, trace_page_size)
+            continue
+        tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
+        sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
+        i += 32
+
+        backtrace = None
+        if flags & 1:
+            backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
+            i += 8 * backtrace_len
+
+        size = struct.calcsize(sig)
+        data = struct.unpack(sig, trace_log[i:i+size])
+        i += size
+        i = align_up(i, 8)
+        yield Trace(tp, thread, time, cpu, data, backtrace=backtrace)
+
+def dump_trace(out_func):
+    indents = defaultdict(int)
+    constants = TraceConstants()
+    bt_formatter = BacktraceFormatter(constants)
+
+    def lookup_tp(name):
+        return gdb.lookup_global_symbol(name).value().dereference()
+    tp_fn_entry = lookup_tp('gdb_trace_function_entry')
+    tp_fn_exit = lookup_tp('gdb_trace_function_exit')
+
+    for trace in all_traces():
+        thread = trace.thread
+        time = trace.time
+        cpu = trace.cpu
+        tp = trace.tp
+
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
@@ -599,47 +661,26 @@ def dump_trace(out_func):
                          annotation,
                          fn_name,
                          ))
-        if tp_key == 0:
-            i = align_up(i + 8, trace_page_size)
-            continue
-        tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
-        sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
-        i += 32
-        backtrace = None
-        if flags & 1:
-            # backtrace
-            backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
-            i += 8 * backtrace_len
-        size = struct.calcsize(sig)
-        buffer = trace_log[i:i+size]
-        i += size
-        i = align_up(i, 8)
-        data = struct.unpack(sig, buffer)
+
         if tp == tp_fn_entry.address:
             indent = '  ' * indents[thread]
             indents[thread] += 1
-            trace_function(indent, '->', data)
+            trace_function(indent, '->', trace.data)
         elif tp == tp_fn_exit.address:
             indents[thread] -= 1
             if indents[thread] < 0:
                 indents[thread] = 0
             indent = '  ' * indents[thread]
-            trace_function(indent, '<-', data)
+            trace_function(indent, '<-', trace.data)
         else:
-            format = tp['format'].string()
-            format = format.replace('%p', '0x%016x')
-            name = tp['name'].string()
-            bt_str = ''
-            if backtrace:
-                bt_str = bt_format % tuple([syminfo(x) for x in backtrace])
             out_func('0x%016x %2d %12d.%06d %-20s %s%s\n'
                       % (thread,
                          cpu,
                          time / 1000000000,
                          (time % 1000000000) / 1000,
-                         name,
-                         format % data,
-                         bt_str,
+                         trace.name,
+                         trace.format_data(),
+                         bt_formatter(trace.backtrace),
                          )
                       )
 
@@ -769,7 +810,7 @@ class osv_trace_file(gdb.Command):
         fout = file("trace.txt", "wt")
         dump_trace(fout.write)
         fout.close()
-        
+
 class osv_leak(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv leak', gdb.COMMAND_USER,
