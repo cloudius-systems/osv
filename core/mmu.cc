@@ -123,6 +123,10 @@ public:
     hw_ptep(const hw_ptep& a) : p(a.p) {}
     pt_element read() const { return *p; }
     void write(pt_element pte) { *const_cast<volatile u64*>(&p->x) = pte.x; }
+    bool compare_exchange(pt_element oldval, pt_element newval) {
+        std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
+        return x->compare_exchange_strong(oldval.x, newval.x, std::memory_order_relaxed);
+    }
     hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
     static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
     // no longer using this as a page table
@@ -460,20 +464,29 @@ public:
     populate(fill_page *fill, unsigned int perm) : fill(fill), perm(perm) { }
 protected:
     virtual void small_page(hw_ptep ptep, uintptr_t offset){
+        if (!ptep.read().empty()) {
+            return;
+        }
         phys page = virt_to_phys(memory::alloc_page());
         fill->fill(phys_to_virt(page), offset, page_size);
-        assert(ptep.read().empty()); // don't populate an already populated page!
-        ptep.write(make_normal_pte(page, perm));
+        if (!ptep.compare_exchange(make_empty_pte(), make_normal_pte(page, perm))) {
+            memory::free_page(phys_to_virt(page));
+        }
     }
     virtual void huge_page(hw_ptep ptep, uintptr_t offset){
-        phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
-        fill->fill(phys_to_virt(page), offset, huge_page_size);
-        if (!ptep.read().empty()) {
-            assert(!ptep.read().large()); // don't populate an already populated page!
+        auto pte = ptep.read();
+        if (!pte.empty()) {
+            if (pte.large()) {
+                return;
+            }
             // held smallpages (already evacuated), now will be used for huge page
             free_intermediate_level(ptep);
         }
-        ptep.write(make_large_pte(page, perm));
+        phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
+        fill->fill(phys_to_virt(page), offset, huge_page_size);
+        if (!ptep.compare_exchange(make_empty_pte(), make_large_pte(page, perm))) {
+            memory::free_huge_page(phys_to_virt(page), huge_page_size);
+        }
     }
     virtual bool should_allocate_intermediate(){
         return true;
