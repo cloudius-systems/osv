@@ -443,7 +443,7 @@ ramfs_init(void)
 #define ramfs_ioctl	((vnop_ioctl_t)vop_einval)
 #define ramfs_fsync	((vnop_fsync_t)vop_nullop)
 #define ramfs_getattr	((vnop_getattr_t)vop_nullop)
-#define ramfs_setattr	((vnop_setattr_t)vop_nullop)
+#define ramfs_setattr	((vnop_setattr_t)vop_eperm)
 #define ramfs_inactive	((vnop_inactive_t)vop_nullop)
 #define ramfs_link	((vnop_link_t)vop_eperm)
 
