@@ -232,7 +232,7 @@ void file::load_segment(const Elf64_Phdr& phdr)
     mmu::map_file(_base + vstart, filesz, false, mmu::perm_rwx,
                   _f, align_down(phdr.p_offset, page_size), false);
     memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
-    mmu::map_anon(_base + vstart + filesz, memsz - filesz, false, mmu::perm_rwx);
+    mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::mmap_fixed, mmu::perm_rwx);
 }
 
 void object::load_segments()

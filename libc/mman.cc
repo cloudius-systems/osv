@@ -17,6 +17,18 @@ TRACEPOINT(trace_memory_mmap_err, "%d", int);
 TRACEPOINT(trace_memory_mmap_ret, "%p", void *);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 
+unsigned libc_flags_to_mmap(int flags)
+{
+    unsigned mmap_flags = 0;
+    if (flags & MAP_FIXED) {
+        mmap_flags |= mmu::mmap_fixed;
+    }
+    if (flags & MAP_POPULATE) {
+        mmap_flags |= mmu::mmap_populate;
+    }
+    return mmap_flags;
+}
+
 unsigned libc_prot_to_perm(int prot)
 {
     unsigned perm = 0;
@@ -74,7 +86,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
 
     void *ret;
     if (fd == -1) {
-        ret = mmu::map_anon(addr, length, !(flags & MAP_FIXED),
+        ret = mmu::map_anon(addr, length, libc_flags_to_mmap(flags),
                 libc_prot_to_perm(prot));
     } else {
         fileref f(fileref_from_fd(fd));

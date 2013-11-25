@@ -65,6 +65,11 @@ enum {
     page_fault_insn  = 1ul << 4,
 };
 
+enum {
+    mmap_fixed       = 1ul << 0,
+    mmap_populate    = 1ul << 1,
+};
+
 class vma {
 public:
     vma(uintptr_t start, uintptr_t end, unsigned perm);
@@ -115,7 +120,7 @@ private:
 
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
               fileref file, f_offset offset, bool shared);
-void* map_anon(void* addr, size_t size, bool search, unsigned perm);
+void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);
 error msync(void* addr, size_t length, int flags);

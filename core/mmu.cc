@@ -719,12 +719,18 @@ void vdepopulate(void* addr, size_t size)
     tlb_flush();
 }
 
-void* map_anon(void* addr, size_t size, bool search, unsigned perm)
+void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
 {
+    bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto* vma = new mmu::vma(start, start + size, perm);
-    return (void*) allocate(vma, start, size, search);
+    auto v = (void*) allocate(vma, start, size, search);
+    if (flags & mmap_populate) {
+        fill_anon_page zfill;
+        populate(&zfill, perm).operate(v, size);
+    }
+    return v;
 }
 
 void* map_file(void* addr, size_t size, bool search, unsigned perm,
