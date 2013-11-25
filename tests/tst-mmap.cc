@@ -241,6 +241,14 @@ int main(int argc, char **argv)
     buf = mmap(NULL, 4096*10, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
     assert(buf != MAP_FAILED);
     assert(mincore(buf, 4096*10, vec) == 0);
+    unsigned char non_resident[10];
+    memset(non_resident, 0x00, 10);
+    assert(memcmp(vec, non_resident, 10) == 0);
+    unsigned char partially_resident[10] = { 0x01, 0x00, 0x01, 0x00 };
+    *(char*)buf = 123;
+    *(char*)(buf + 4096*2) = 123;
+    assert(mincore(buf, 4096*10, vec) == 0);
+    assert(memcmp(vec, partially_resident, 10) == 0);
     assert(mincore(buf, 4096*9, vec) == 0);
     assert(mincore(buf+4096, 4096*9, vec) == 0);
     munmap(buf+4096, 4096*3);
@@ -253,6 +261,15 @@ int main(int argc, char **argv)
     assert(mincore(buf+4096, 4096, vec) == -1);
     assert(mincore(buf, 3*4096, vec) == -1);
     assert(mincore(buf+3*4096, 3*4096, vec) == -1);
+    munmap(buf, 4096*10);
+
+    // MAP_POPULATE and mincore()
+    buf = mmap(NULL, 4096*10, PROT_READ|PROT_WRITE, MAP_POPULATE|MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+    assert(buf != MAP_FAILED);
+    assert(mincore(buf, 4096*10, vec) == 0);
+    unsigned char resident[10];
+    memset(resident, 0x01, 10);
+    assert(memcmp(vec, resident, 10) == 0);
     munmap(buf, 4096*10);
 
     // While msync() only works on mmapped memory, mincore() should also
