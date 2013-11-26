@@ -133,6 +133,7 @@ tests/%.o: COMMON += -fPIC -DBOOST_TEST_DYN_LINK
 tests/tst-queue-mpsc.so: CFLAGS+=-lstdc++
 tests/tst-mutex.so: CFLAGS+=-lstdc++
 tests/tst-tcp.so: CFLAGS += -lstdc++
+tests/tst-strerror_r.so: CFLAGS += -lstdc++
 
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
