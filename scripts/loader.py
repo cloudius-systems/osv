@@ -446,14 +446,14 @@ class osv_info_threads(gdb.Command):
                             fname = fname[6:]
 
                 status = str(t['_status']['_M_i']).replace('sched::thread::', '')
-                gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12d\n' %
+                gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12g\n' %
                           (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
                            function,
                            fname,
                            sal.line,
-                           t['_vruntime'],
+                           t['_runtime']['_Rtt'],
                            )
                           )
 
@@ -1010,7 +1010,7 @@ class osv_runqueue(gdb.Command):
         for cpu in xrange(ncpus) :
             gdb.write("CPU %d:\n" % cpu)
             for thread in runqueue(cpu):
-                print '%d 0x%x %d' % (thread['_id'], ulong(thread), thread['_vruntime'])
+                print '%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt'])
 
 
 osv()
