@@ -8,6 +8,7 @@ tests = [
     "/tests/tst-rename.so",
     "/tests/tst-vfs.so",
     "/tests/tst-stat.so",
+    "/tests/tst-utimes.so",
     "/tests/tst-libc-locking.so",
 ]
 
