@@ -41,6 +41,9 @@ namespace elf {
     struct tls_data;
 }
 
+/**
+ * OSV Scheduler namespace
+ */
 namespace sched {
 
 class thread;
@@ -256,6 +259,9 @@ private:
     int _renormalize_count;
 };
 
+/**
+ * OSv thread
+ */
 class thread : private timer_base::client {
 public:
     struct stack_info {
@@ -299,9 +305,29 @@ public:
     void* get_tls(ulong module);
     void* setup_tls(ulong module, const void* tls_template,
             size_t init_size, size_t uninit_size);
+    /**
+     * Set thread's priority
+     *
+     * Set the thread's priority, used to determine how much CPU time it will
+     * get when competing for CPU time with other threads. The priority is a
+     * floating-point number in (0,inf], with lower priority getting more
+     * runtime. If one thread has priority s and a second has s/2, the second
+     * thread will get twice as much runtime than the first.
+     * An infinite priority (also sched::thread::priority_idle) means that the
+     * thread will only get to run when no other wants to run.
+     *
+     * The default priority for new threads is sched::thread::priority_default
+     * (1.0).
+     */
     void set_priority(float priority);
     static constexpr float priority_idle = std::numeric_limits<float>::infinity();
     static constexpr float priority_default = 1.0;
+    /**
+     * Get thread's priority
+     *
+     * Returns the thread's priority, a floating-point number whose meaning is
+     * explained in set_priority().
+     */
     float priority() const;
 private:
     void main();
