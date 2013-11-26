@@ -99,9 +99,8 @@ void cpu::init_idle_thread()
     idle_thread->_vruntime = std::numeric_limits<s64>::max();
 }
 
-void cpu::schedule(bool yield)
+void cpu::schedule()
 {
-
     WITH_LOCK(irq_lock) {
         reschedule_from_interrupt();
     }
@@ -379,9 +378,9 @@ void cpu::notifier::fire()
     }
 }
 
-void schedule(bool yield)
+void schedule()
 {
-    cpu::current()->schedule(yield);
+    cpu::current()->schedule();
 }
 
 void thread::yield()
@@ -581,7 +580,7 @@ thread* thread::current()
 void thread::wait()
 {
     trace_sched_wait();
-    schedule(true);
+    schedule();
 }
 
 void thread::sleep_until(s64 abstime)
@@ -603,7 +602,7 @@ void thread::stop_wait()
     }
     preempt_enable();
     while (_status.load() == status::waking) {
-        schedule(true);
+        schedule();
     }
     assert(_status.load() == status::running);
 }
