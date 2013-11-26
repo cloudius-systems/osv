@@ -10,6 +10,7 @@ tests = [
     "/tests/tst-stat.so",
     "/tests/tst-utimes.so",
     "/tests/tst-libc-locking.so",
+    "/tests/tst-strerror_r.so",
 ]
 
 def run_test(name):
