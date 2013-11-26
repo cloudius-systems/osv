@@ -93,28 +93,13 @@ $ sudo scripts/run.py -nv -m4G -e "/tests/tst-pipe.so"
 
 ## Debugging
 
-To build with debugging symbols, and preemption off (to not confuse gdb),
+For more information about debugging OSv and applications on OSv, please
+refer to https://github.com/cloudius-systems/osv/wiki/Debugging-OSv
+
+To attach a debugger to a running OSv guest, run:
 
 ```
-make mode=debug conf-preempt=0
-```
-
-To clean debugging build's results, use
-
-```
-make clean mode=debug
-```
-
-To run the debugging build:
-
-```
-./scripts/run.py -d
-```
-
-To connect a debugger to this run:
-
-```
-$ gdb build/debug/loader.elf
+$ gdb build/release/loader.elf
 (gdb) connect
 (gdb) osv syms
 (gdb) bt
@@ -127,6 +112,26 @@ reboot after setting the breakpoint:
 (gdb) hbreak function_name
 (gdb) monitor system_reset
 (gdb) c
+```
+
+To compile OSv with optimizations disabled (this may be useful for debugging
+when you see an important variable or function optimized out), run
+
+```
+make mode=debug
+```
+
+To run that mode=debug build and debug it, use:
+
+```
+./scripts/run.py -d
+gdb build/debug/loader.elf
+```
+
+To clean the mode=debug build,
+
+```
+make mode=debug clean
 ```
 
 ## Tracing
