@@ -267,9 +267,15 @@ void cpu::handle_incoming_wakeups()
             q.pop_front_nonatomic();
             irq_save_lock_type irq_lock;
             WITH_LOCK(irq_lock) {
-                t._status.store(thread::status::queued);
-                enqueue(t, true);
-                t.resume_timers();
+                if (&t == thread::current()) {
+                    // Special case of current thread being woken before
+                    // having a chance to be scheduled out.
+                    t._status.store(thread::status::running);
+                } else {
+                    t._status.store(thread::status::queued);
+                    enqueue(t);
+                    t.resume_timers();
+                }
             }
         }
     }
