@@ -26,8 +26,9 @@ void report(bool ok, string msg)
 
 int main(int ac, char** av)
 {
-    error_code ec(EPERM, system_category());
-    report(ec.message().substr(7) != "unknown", "strerror_r() called from a _GNU_SOURCE binary");
+    error_code ec(EACCES, system_category());
+    auto ok = ec.message() == "Permission denied";
+    report(ok, "strerror_r() called from a _GNU_SOURCE binary");
     std::cout << "Test complete (" << failures << "/" << tests << " failures)\n";
     return failures ? 1 : 0;
 }
