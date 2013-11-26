@@ -23,6 +23,6 @@ private:
     sched::cpu::notifier _cpu_notifier;
     void _cpu_init(sched::cpu *c);
 
-    percpu <sched::thread *> _thread;
+    static percpu <sched::thread *> _thread;
 };
 }

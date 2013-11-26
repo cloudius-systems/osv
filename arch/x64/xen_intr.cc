@@ -18,6 +18,8 @@ extern "C" {
 
 namespace xen {
 
+PERCPU(sched::thread *, xen_irq::_thread);
+
 struct xen_irq_handler {
     driver_intr_t handler;
     void *arg;
