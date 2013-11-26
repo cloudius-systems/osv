@@ -133,6 +133,7 @@
 /&/tests/tst-tcp-sendonly.so: ./&
 /&/tests/tst-tcp-hash-srv.so: ./&
 /&/tests/tst-loadbalance.so: ./&
+/&/tests/tst-scheduler.so: ./&
 /&/tests/tst-dns-resolver.so: ./&
 /&/tests/tst-fs-link.so: ./&
 /&/tests/tst-kill.so: ./&
