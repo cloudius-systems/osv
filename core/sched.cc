@@ -246,10 +246,8 @@ void cpu::idle()
 
     while (true) {
         do_idle();
-        // FIXME: we don't have an idle priority class yet. so
-        // FIXME: yield when we're done and let the scheduler pick
-        // FIXME: someone else
-        thread::yield();
+        // We have idle priority, so this runs the thread on the runqueue:
+        schedule();
     }
 }
 
