@@ -12,7 +12,7 @@ extern char *strerror (int);
 extern size_t strlen (const char *);
 extern void *memcpy (void *__restrict, const void *__restrict, size_t);
 
-int strerror_r(int err, char *buf, size_t buflen)
+int __xpg_strerror_r(int err, char *buf, size_t buflen)
 {
 	char *msg = strerror(err);
 	size_t l = strlen(msg);
@@ -27,3 +27,8 @@ int strerror_r(int err, char *buf, size_t buflen)
 	return 0;
 }
 
+char* strerror_r(int err, char *buf, size_t buflen)
+{
+	__xpg_strerror_r(err, buf, buflen);
+	return buf;
+}

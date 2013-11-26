@@ -57,7 +57,13 @@ char *strerror (int);
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
 char *strtok_r (char *__restrict, const char *__restrict, char **__restrict);
-int strerror_r (int, char *, size_t);
+#ifndef _GNU_SOURCE
+int __xpg_strerror_r (int, char *, size_t);
+static inline strerror_r(int __errnum, char* __buf, size_t __bufsize)
+{
+	return __xpg_strerror_r(__errnum, __buf, __bufsize);
+}
+#endif
 char *stpcpy(char *__restrict, const char *__restrict);
 char *stpncpy(char *__restrict, const char *__restrict, size_t);
 size_t strnlen (const char *, size_t);
@@ -67,6 +73,10 @@ char *strsignal(int);
 char *strerror_l (int, locale_t);
 int strcoll_l (const char *, const char *, locale_t);
 size_t strxfrm_l (char *__restrict, const char *__restrict, size_t, locale_t);
+#endif
+
+#ifdef _GNU_SOURCE
+char* strerror_r (int, char *, size_t);
 #endif
 
 #if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
