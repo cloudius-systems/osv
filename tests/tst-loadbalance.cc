@@ -112,6 +112,9 @@ public:
     }
     void stop() {
         _stop = true;
+        _t->join();
+        delete _t;
+        _t = nullptr;
     }
 private:
     std::thread *_t = nullptr;
