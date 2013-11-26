@@ -35,7 +35,14 @@ compiler-flag = $(shell $(CXX) $(CFLAGS_WERROR) $1 -o /dev/null -c $3  > /dev/nu
 
 compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL, $(src)/compiler/attr/cold-label.cc)
 
-kernel-defines = -D_KERNEL
+source-dialects = -D_GNU_SOURCE
+
+bsd/%.o: source-dialects =
+
+# libc has its own source dialect control
+libc/%.o: source-dialects =
+
+kernel-defines = -D_KERNEL $(source-dialects)
 
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
