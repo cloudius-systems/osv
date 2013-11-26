@@ -28,7 +28,7 @@ extern char _percpu_start[], _percpu_end[];
 
 namespace sched {
 
-TRACEPOINT(trace_sched_switch, "to %p vold=%d vnew=%d", thread*, s64, s64);
+TRACEPOINT(trace_sched_switch, "to %p vold=%g vnew=%g", thread*, float, float);
 TRACEPOINT(trace_sched_wait, "");
 TRACEPOINT(trace_sched_wake, "wake %p", thread*);
 TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
@@ -50,9 +50,64 @@ elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{[] {}};
 
-constexpr s64 vruntime_bias = 4_ms;
-constexpr s64 max_slice = 10_ms;
+// "tau" controls the length of the history we consider for scheduling,
+// or more accurately the rate of decay of an exponential moving average.
+// In particular, it can be seen that if a thread has been monopolizing the
+// CPU, and a long-sleeping thread wakes up (or new thread is created),
+// the new thread will get to run for ln2*tau. (ln2 is roughly 0.7).
+constexpr s64 tau = 200_ms;
+
+// "thyst" controls the hysteresis algorithm which temporarily gives a
+// running thread some extra runtime before preempting it. We subtract thyst
+// when the thread is switched in, and add it back when the thread is switched
+// out. In particular, it can be shown that when two cpu-busy threads at equal
+// priority compete, they will alternate at time-slices of 2*thyst; Also,
+// the distance between two preemption interrupts cannot be lower than thyst.
+constexpr s64 thyst = 2_ms;
+
 constexpr s64 context_switch_penalty = 10_us;
+
+constexpr float cmax = 0x1P63;
+constexpr float cinitial = 0x1P-63;
+
+static inline float exp_tau(s64 t) {
+    // return expf((float)t/(float)tau);
+    // Approximate e^x as much faster 1+x for x<0.001 (the error is O(x^2)).
+    // Further speed up by comparing and adding integers as much as we can:
+    static constexpr int m = tau / 1000;
+    static constexpr float invtau = 1.0f / tau;
+    if (t < m && t > -m)
+        return (tau + t) * invtau;
+    else
+        return expf(t * invtau);
+}
+
+// fastlog2() is an approximation of log2, designed for speed over accuracy
+// (it is accurate to roughly 5 digits).
+// The function is copyright (C) 2012 Paul Mineiro, released under the
+// BSD license. See https://code.google.com/p/fastapprox/.
+static inline float
+fastlog2 (float x)
+{
+    union { float f; u32 i; } vx = { x };
+    union { u32 i; float f; } mx = { (vx.i & 0x007FFFFF) | 0x3f000000 };
+    float y = vx.i;
+    y *= 1.1920928955078125e-7f;
+    return y - 124.22551499f - 1.498030302f * mx.f
+            - 1.72587999f / (0.3520887068f + mx.f);
+}
+
+static inline float taulog(float f) {
+    //return tau * logf(f);
+    // We don't need the full accuracy of logf - we use this in time_until(),
+    // where it's fine to overshoot, even significantly, the correct time
+    // because a thread running a bit too much will "pay" in runtime.
+    // We multiply by 1.01 to ensure overshoot, not undershoot.
+    static constexpr float tau2 = tau * 0.69314718f * 1.01;
+    return tau2 * fastlog2(f);
+}
+
+static constexpr runtime_t inf = std::numeric_limits<runtime_t>::infinity();
 
 mutex cpu::notifier::_mtx;
 std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority((int)init_prio::notifiers)));
@@ -80,6 +135,8 @@ cpu::cpu(unsigned _id)
     , idle_thread()
     , terminating_thread(nullptr)
     , running_since(clock::get()->time())
+    , c(cinitial)
+    , renormalize_count(0)
 {
     auto pcpu_size = _percpu_end - _percpu_start;
     // We want the want the per-cpu area to be aligned as the most strictly
@@ -96,7 +153,7 @@ cpu::cpu(unsigned _id)
 void cpu::init_idle_thread()
 {
     idle_thread = new thread([this] { idle(); }, thread::attr(this));
-    idle_thread->_vruntime = std::numeric_limits<s64>::max();
+    idle_thread->set_priority(thread::priority_idle);
 }
 
 void cpu::schedule()
@@ -106,76 +163,120 @@ void cpu::schedule()
     }
 }
 
+// In the x86 ABI, the FPU state is callee-saved, meaning that a program must
+// not call a function in the middle of an FPU calculation. But if we get a
+// preemption, i.e., the scheduler is called by an interrupt, the currently
+// running thread might be in the middle of a floating point calculation,
+// which we must not trample over.
+// When the scheduler code itself doesn't use the FPU (!scheduler_uses_fpu),
+// we need to save the running thread's FPU state only before switching to
+// a different thread (and restore this thread's FPU state when coming back
+// to this thread). However, if the scheduler itself uses the FPU in its
+// calculations (scheduler_uses_fpu), we always (when in preemption) need
+// to save and restore this thread's FPU state when we enter and exit the
+// scheduler.
+#ifdef RUNTIME_PSEUDOFLOAT
+static constexpr bool scheduler_uses_fpu = false;
+#else
+static constexpr bool scheduler_uses_fpu = true;
+#endif
+
 void cpu::reschedule_from_interrupt(bool preempt)
 {
+    if (scheduler_uses_fpu && preempt) {
+        thread::current()->_fpu.save();
+    }
+
     need_reschedule = false;
     handle_incoming_wakeups();
     auto now = clock::get()->time();
+
+    auto interval = now - running_since;
+    running_since = now;
+    if (interval == 0) {
+        // During startup, the clock may be stuck and we get zero intervals.
+        // To avoid scheduler loops, let's make it non-zero.
+        interval = context_switch_penalty;
+    }
     thread* p = thread::current();
-    // avoid cycling through the runqueue if p still has the highest priority
-    auto bias = vruntime_bias;
-    s64 current_run = now - running_since;
-    if (p->_vruntime + current_run < 0) { // overflow (idle thread)
-        current_run = 0;
-    }
-    if (current_run > max_slice) {
-        // This thread has run for a long time, or clock:time() jumped. But if
-        // we increase vruntime by the full amount, this thread might go into
-        // a huge cpu time debt and won't be scheduled again for a long time.
-        // So limit the vruntime increase.
-        current_run = max_slice;
-    }
-    if (p->_status == thread::status::running
-            && (runqueue.empty()
-                || p->_vruntime + current_run < runqueue.begin()->_vruntime + bias)) {
-        update_preemption_timer(p, now, current_run);
-        return;
-    }
-    p->_vruntime += current_run;
-    if (p->_status == thread::status::running) {
+
+    const auto p_status = p->_status.load();
+    assert(p_status != thread::status::queued);
+
+    p->_runtime.ran_for(interval);
+
+    if (p_status == thread::status::running) {
+        // The current thread is still runnable. Check if it still has the
+        // lowest runtime, and update the timer until the next thread's turn.
+        if (runqueue.empty()) {
+            preemption_timer.cancel();
+            if (scheduler_uses_fpu && preempt) {
+                p->_fpu.restore();
+            }
+            return;
+        } else {
+            auto &t = *runqueue.begin();
+            if (p->_runtime.get_local() < t._runtime.get_local()) {
+                preemption_timer.cancel();
+                auto delta = p->_runtime.time_until(t._runtime.get_local());
+                if (delta > 0) {
+                    preemption_timer.set(now + delta);
+                }
+                if (scheduler_uses_fpu && preempt) {
+                    p->_fpu.restore();
+                }
+                return;
+            }
+        }
+        // If we're here, p no longer has the lowest runtime. Before queuing
+        // p, return the runtime it borrowed for hysteresis.
+        p->_runtime.hysteresis_run_stop();
         p->_status.store(thread::status::queued);
         enqueue(*p);
+    } else {
+        // p is no longer running, so we'll switch to a different thread.
+        // Return the runtime p borrowed for hysteresis.
+        p->_runtime.hysteresis_run_stop();
     }
+
     auto ni = runqueue.begin();
     auto n = &*ni;
     runqueue.erase(ni);
-    running_since = now;
     assert(n->_status.load() == thread::status::queued);
+    trace_sched_switch(n, p->_runtime.get_local(), n->_runtime.get_local());
     n->_status.store(thread::status::running);
-    if (n != thread::current()) {
-        if (preempt) {
-            trace_sched_preempt();
+    n->_runtime.hysteresis_run_start();
+
+    assert(n!=p);
+
+    if (preempt) {
+        trace_sched_preempt();
+        if (!scheduler_uses_fpu) {
+            // If runtime is not a float, we only need to save the FPU here,
+            // just when deciding to switch threads.
             p->_fpu.save();
         }
-        if (p->_status.load(std::memory_order_relaxed) == thread::status::queued
-                && p != idle_thread) {
-            n->_vruntime += context_switch_penalty;
-        }
-        trace_sched_switch(n, p->_vruntime, n->_vruntime);
-        update_preemption_timer(n, now, 0);
-        n->switch_to();
-        if (preempt) {
-            p->_fpu.restore();
-        }
-        if (p->_cpu->terminating_thread) {
-            p->_cpu->terminating_thread->unref();
-            p->_cpu->terminating_thread = nullptr;
-        }
     }
-}
-
-void cpu::update_preemption_timer(thread* current, s64 now, s64 run)
-{
+    if (p->_status.load(std::memory_order_relaxed) == thread::status::queued
+            && p != idle_thread) {
+        n->_runtime.add_context_switch_penalty();
+    }
     preemption_timer.cancel();
-    if (runqueue.empty()) {
-        return;
+    if (!runqueue.empty()) {
+        auto& t = *runqueue.begin();
+        auto delta = n->_runtime.time_until(t._runtime.get_local());
+        if (delta > 0) {
+            preemption_timer.set(now + delta);
+        }
     }
-    auto& t = *runqueue.begin();
-    auto delta = t._vruntime - (current->_vruntime + run);
-    auto expire = now + delta + vruntime_bias;
-    if (expire > 0) {
-        // avoid idle thread related overflow
-        preemption_timer.set(expire);
+    n->switch_to();
+    if (p->_cpu->terminating_thread) {
+        p->_cpu->terminating_thread->unref();
+        p->_cpu->terminating_thread = nullptr;
+    }
+
+    if (preempt) {
+        p->_fpu.restore();
     }
 }
 
@@ -270,6 +371,11 @@ void cpu::handle_incoming_wakeups()
                     t._status.store(thread::status::running);
                 } else {
                     t._status.store(thread::status::queued);
+                    // Make sure the CPU-local runtime measure is suitably
+                    // normalized. We may need to convert a global value to the
+                    // local value when waking up after a CPU migration, or to
+                    // perform renormalizations which we missed while sleeping.
+                    t._runtime.update_after_sleep();
                     enqueue(t);
                     t.resume_timers();
                 }
@@ -278,23 +384,9 @@ void cpu::handle_incoming_wakeups()
     }
 }
 
-void cpu::enqueue(thread& t, bool waking)
+void cpu::enqueue(thread& t)
 {
     trace_sched_queue(&t);
-    if (waking) {
-        // If a waking thread has a really low vruntime, allow it only
-        // one extra timeslice; otherwise it would dominate the runqueue
-        // and starve out other threads
-        auto current = thread::current();
-        if (current != idle_thread) {
-            auto head = current->_vruntime - max_slice;
-            t._vruntime = std::max(t._vruntime, head);
-        }
-    }
-    // special treatment for idle thread: make sure it is in the back of the queue
-    if (&t == idle_thread) {
-        t._vruntime = thread::max_vruntime;
-    }
     runqueue.insert_equal(t);
 }
 
@@ -343,6 +435,9 @@ void cpu::load_balance()
             mig._status.store(thread::status::waking);
             mig.suspend_timers();
             mig._cpu = min;
+            // Convert the CPU-local runtime measure to a globally meaningful
+            // measure
+            mig._runtime.export_runtime();
             mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
             mig.remote_thread_local_var(current_cpu) = min;
             min->incoming_wakeups[id].push_front(mig);
@@ -393,12 +488,26 @@ void thread::yield()
     if (t->_cpu->runqueue.empty()) {
         return;
     }
-    // TODO: need to give up some vruntime (move to borrow) so we're last
-    // on the queue, and then we can use push_back()
-    t->_cpu->runqueue.insert_equal(*t);
     assert(t->_status.load() == status::running);
-    t->_status.store(status::queued);
+    // Do not yield to a thread with idle priority
+    thread &tnext = *(t->_cpu->runqueue.begin());
+    if (tnext.priority() == thread::priority_idle) {
+        return;
+    }
+    t->_runtime.set_local(tnext._runtime);
+    // Note that reschedule_from_interrupt will further increase t->_runtime
+    // by thyst, giving the other thread 2*thyst to run before going back to t
     t->_cpu->reschedule_from_interrupt(false);
+}
+
+void thread::set_priority(float priority)
+{
+    _runtime.set_priority(priority);
+}
+
+float thread::priority() const
+{
+    return _runtime.priority();
 }
 
 thread::stack_info::stack_info()
@@ -444,8 +553,8 @@ T& thread::remote_thread_local_var(T& var)
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _status(status::unstarted)
+    , _runtime(thread::priority_default)
     , _attr(attr)
-    , _vruntime((main || !s_current) ? 0 : current()->_vruntime)
     , _ref_counter(1)
     , _joiner()
 {
@@ -943,6 +1052,151 @@ void init(std::function<void ()> cont)
 void init_tls(elf::tls_data tls_data)
 {
     tls = tls_data;
+}
+
+// For a description of the algorithms behind the thread_runtime::*
+// implementation, please refer to:
+// https://docs.google.com/document/d/1W7KCxOxP-1Fy5EyF2lbJGE2WuKmu5v0suYqoHas1jRM
+
+void thread_runtime::export_runtime()
+{
+    _Rtt /= cpu::current()->c;;
+    _renormalize_count = -1; // special signal to update_after_sleep()
+}
+
+void thread_runtime::update_after_sleep()
+{
+    auto cpu_renormalize_count = cpu::current()->renormalize_count;
+    if (_renormalize_count == cpu_renormalize_count) {
+        return;
+    }
+    if (_renormalize_count == -1) {
+        // export_runtime() was used to convert the CPU-local runtime to
+        // a global value. We need to convert it back to a local value,
+        // suitable for this CPU.
+        _Rtt *= cpu::current()->c;
+    } else if (_renormalize_count + 1 == cpu_renormalize_count) {
+        _Rtt *= cinitial / cmax;
+    } else if (_Rtt != inf) {
+        // We need to divide by cmax^2 or even a higher power. We assume
+        // this will bring Rtt to zero anyway, so no sense in doing an
+        // accurate calculation
+        _Rtt = 0;
+    }
+    _renormalize_count = cpu_renormalize_count;
+}
+
+void thread_runtime::ran_for(s64 time)
+{
+    assert (_priority > 0);
+    assert (time >= 0);
+
+    cpu *curcpu = cpu::current();
+
+    // When a thread is created, it gets _Rtt = 0, so its _renormalize_count
+    // is irrelevant, and couldn't be set correctly in the constructor.
+    // So set it here.
+    if (!_Rtt) {
+        _renormalize_count = curcpu->renormalize_count;
+    }
+
+    const auto cold = curcpu->c;
+    const auto cnew = cold * exp_tau(time);
+
+    // During our boot process, unfortunately clock::time() jumps by the
+    // amount of host uptime, which can be huge and cause the above
+    // calculation to overflow. In that case, just ignore this time period.
+    if (cnew == inf) {
+        return;
+    }
+    curcpu->c = cnew;
+
+    _Rtt += _priority * (cnew - cold);
+
+    assert (_renormalize_count != -1); // forgot to update_after_sleep?
+
+    // As time goes by, the normalization constant c grows towards infinity.
+    // To avoid an overflow, we need to renormalize if c becomes too big.
+    // We only renormalize the runtime of the running or runnable threads.
+    // Sleeping threads will be renormalized when they wake
+    // (see update_after_sleep()), depending on the number of renormalization
+    // steps they have missed (this is why we need to keep a counter).
+    if (cnew < cmax) {
+        return;
+    }
+    if (++curcpu->renormalize_count < 0) {
+        // Don't use negative values (We use -1 to mark export_runtime())
+        curcpu->renormalize_count = 0;
+    }
+    _Rtt *= cinitial / cmax;
+    _renormalize_count = curcpu->renormalize_count;
+    for (auto &t : curcpu->runqueue) {
+        if (t._runtime._renormalize_count >= 0) {
+            t._runtime._Rtt *= cinitial / cmax;
+            t._runtime._renormalize_count++;
+        }
+    }
+    curcpu->c *= cinitial / cmax;
+}
+
+const auto hysteresis_mul_exp_tau = exp_tau(thyst);
+const auto hysteresis_div_exp_tau = exp_tau(-thyst);
+const auto penalty_exp_tau = exp_tau(context_switch_penalty);
+
+void thread_runtime::hysteresis_run_start()
+{
+    // Optimized version of ran_for(-thyst);
+    if (!_Rtt) {
+        _renormalize_count = cpu::current()->renormalize_count;
+    }
+    const auto cold = cpu::current()->c;
+    const auto cnew = cold * hysteresis_div_exp_tau;
+    cpu::current()->c = cnew;
+    if (_priority == inf) {
+        // TODO: the only reason we need this case is so that time<0
+        // will bring us to +inf, not -inf. Think if there's a cleaner
+        // alternative to doing this if.
+        _Rtt = inf;
+    } else {
+        _Rtt += _priority * (cnew - cold);
+    }
+}
+
+void thread_runtime::hysteresis_run_stop()
+{
+    // Optimized version of ran_for(thyst);
+    if (!_Rtt) {
+        _renormalize_count = cpu::current()->renormalize_count;
+    }
+    const auto cold = cpu::current()->c;
+    const auto cnew = cold * hysteresis_mul_exp_tau;
+    cpu::current()->c = cnew;
+    _Rtt += _priority * (cnew - cold);
+}
+
+void thread_runtime::add_context_switch_penalty()
+{
+    // Does the same as: ran_for(context_switch_penalty);
+    const auto cold = cpu::current()->c;
+    const auto cnew = cold * penalty_exp_tau;
+    cpu::current()->c = cnew;
+    _Rtt += _priority * (cnew - cold);
+
+}
+
+s64 thread_runtime::time_until(runtime_t target_local_runtime) const
+{
+    if (_priority == inf) {
+        return -1;
+    }
+    if (target_local_runtime == inf) {
+        return -1;
+    }
+    auto ret = taulog(runtime_t(1) +
+            (target_local_runtime - _Rtt) / _priority / cpu::current()->c);
+    if (ret > (runtime_t)std::numeric_limits<s64>::max())
+        return -1;
+    return (s64) ret;
 }
 
 }
