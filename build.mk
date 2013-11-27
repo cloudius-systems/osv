@@ -502,6 +502,7 @@ drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
+drivers += drivers/virtio-rng.o
 drivers += drivers/clock.o drivers/kvmclock.o drivers/xenclock.o
 drivers += drivers/clockevent.o
 drivers += drivers/acpi.o

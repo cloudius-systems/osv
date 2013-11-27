@@ -78,6 +78,8 @@ def start_osv_qemu():
         for rule in cmdargs.forward:
             args += ['-redir', rule]
         
+    args += ["-device", "virtio-rng-pci"]
+
     if cmdargs.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
     elif (cmdargs.hypervisor == "none") or (cmdargs.hypervisor == "qemu"):
