@@ -744,7 +744,6 @@ sys_link(char *oldpath, char *newpath)
 
 	/* If newpath exists, it shouldn't be overwritten */
 	if (!namei(newpath, &newdp)) {
-		drele(newdp);
 		error = EEXIST;
 		goto out;
 	}
@@ -771,16 +770,14 @@ sys_link(char *oldpath, char *newpath)
 		goto out1;
 	}
 
-	if ((error = VOP_LINK(newdirdp->d_vnode, vp, name)) != 0) {
-		drele(newdp);
-		goto out1;
-	}
+	error = VOP_LINK(newdirdp->d_vnode, vp, name);
  out1:
 	vn_unlock(newdirdp->d_vnode);
 	drele(newdirdp);
  out:
 	vn_unlock(vp);
 	drele(olddp);
+	drele(newdp);
 	return error;
 }
 
