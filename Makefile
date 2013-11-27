@@ -25,21 +25,13 @@ all: $(submake) $(modulemk)
 	$(call only-if, $(mgmt), cd mgmt && ./gradlew --daemon :web:jar build)
 	$(MAKE) -r -C $(dir $(submake)) $@
 
-$(submake): Makefile
+$(submake) $(modulemk): Makefile
 	mkdir -p $(dir $@)
 	echo 'mode = $(mode)' > $@
-	echo 'src = ../..' >> $@
+	echo 'src = $(abspath .)' >> $@
 	echo 'out = $(abspath $(out))' >> $@
-	echo 'VPATH = ../..' >> $@
-	echo 'include ../../build.mk' >> $@
-
-$(modulemk): Makefile
-	mkdir -p $(dir $@)
-	echo 'mode = $(mode)' > $@
-	echo 'src = ../../../..' >> $@
-	echo 'out = $(abspath $(out))' >> $@
-	echo 'VPATH = ../../../../' >> $@
-	echo 'include ../../../../build.mk' >> $@
+	echo 'VPATH = $(abspath .)' >> $@
+	echo 'include $(abspath build.mk)' >> $@
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
