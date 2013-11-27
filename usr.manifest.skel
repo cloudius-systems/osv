@@ -145,6 +145,7 @@
 /&/tests/tst-libc-locking.so: ./&
 /&/tests/tst-tcp.so: ./&
 /&/tests/tst-strerror_r.so: ./&
+/&/tests/tst-random.so: ./&
 /&/tests/bench/bench.jar: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class

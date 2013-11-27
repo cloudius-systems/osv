@@ -188,6 +188,7 @@ tests += tests/tst-panic.so
 tests += tests/tst-utimes.so
 tests += tests/tst-tcp.so
 tests += tests/tst-strerror_r.so
+tests += tests/tst-random.so
 
 tests/tst-tcp.so: tests/tst-tcp.o
 
