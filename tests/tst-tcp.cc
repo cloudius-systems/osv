@@ -98,6 +98,8 @@ void tcp_test_client::test_thread::do_connection()
         throw runtime_error("cannot resolve address");
     }
     auto endpoint = *i;
+    socket.open(boost::asio::ip::tcp::v4());  // for set_option()
+    socket.set_option(decltype(socket)::reuse_address(true));
     socket.connect(endpoint);
     std::array<uint32_t, 1024> send_buffer, receive_buffer;
     uint64_t done = 0, rdone = 0;
