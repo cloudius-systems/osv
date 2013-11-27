@@ -100,7 +100,7 @@ void mutex::lock()
 // send_lock(wait_record) is similar to lock(), but instead of taking the lock
 // for the current thread, it takes the lock for another thread which is
 // currently waiting on the given wait_record. This wait_record will be woken
-// when the lock becomes availble - either during the send_lock() call, or
+// when the lock becomes available - either during the send_lock() call, or
 // sometime later when the lock holder unlock()s it. It is assumed that the
 // waiting thread DOES NOT hold the mutex at the time of this call, so the
 // thread should relinquish the lock before putting itself on wait_record.
@@ -120,7 +120,7 @@ void mutex::send_lock(wait_record *wr)
 
     // Like in lock(), we incremented "count" before pushing anything on to
     // the queue so a concurrent unlock() may not have found anybody to wake.
-    // So we must also do the "Resposibility Hand-Off" protocol to help the
+    // So we must also do the "Responsibility Hand-Off" protocol to help the
     // concurrent unlock() return without waiting for us to push.
     auto old_handoff = handoff.load();
     if (old_handoff) {
