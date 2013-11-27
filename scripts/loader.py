@@ -14,6 +14,8 @@ from collections import defaultdict
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 external = build_dir + '/../../external'
 
+virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
+
 class status_enum_class(object):
     pass
 status_enum = status_enum_class()
@@ -25,6 +27,14 @@ def pt_index(addr, level):
 
 def phys_cast(addr, type):
     return gdb.Value(addr + phys_mem).cast(type.pointer())
+
+def read_vector(v):
+    impl = v['_M_impl']
+    ptr = impl['_M_start']
+    end = impl['_M_finish']
+    while ptr != end:
+        yield ptr.dereference()
+        ptr += 1
 
 def load_elf(path, base):
     args = ''
@@ -292,6 +302,9 @@ def get_base_class_offset(gdb_type, base_class_name):
         if field.is_base_class and re.match(name_pattern, field.name):
             return field.bitpos / 8
 
+def derived_from(type, base_class):
+    return len([x for x in type.fields()
+                if x.is_base_class and x.type == base_class]) != 0
 class intrusive_list:
     size_t = gdb.lookup_type('size_t')
 
@@ -902,6 +915,29 @@ def show_leak():
             gdb.write('\t%s\n' % (si,))
         gdb.write('\n')
 
+def drivers():
+    drvman = gdb.lookup_global_symbol('hw::driver_manager::_instance').value()
+    drivers = drvman['_drivers']
+    return read_vector(drivers)
+
+def show_virtio_driver(v):
+    gdb.write('%s at %s\n' % (v.dereference().dynamic_type, v))
+    vb = v.cast(virtio_driver_type.pointer())
+    for qidx in range(0, vb['_num_queues']):
+        q = vb['_queues'][qidx]
+        gdb.write('  queue %d at %s\n' % (qidx, q))
+        avail_guest_idx = q['_avail']['_idx']['_M_i']
+        avail_host_idx = q['_avail_event']['_M_i']
+        gdb.write('    avail g=0x%x h=0x%x (%d)\n'
+                  % (avail_host_idx, avail_guest_idx, avail_guest_idx - avail_host_idx))
+        used_host_idx = q['_used']['_idx']['_M_i']
+        used_guest_idx = q['_used_event']['_M_i']
+        gdb.write('    used   h=0x%x g=0x%x (%d)\n'
+                  % (used_host_idx, used_guest_idx, used_host_idx - used_guest_idx))
+        used_flags = q['_used']['_flags']['_M_i']
+        gdb.write('    used notifications: %s\n' %
+                  ('disabled' if used_flags & 1 else 'enabled',))
+
 class osv_trace(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace', gdb.COMMAND_USER, gdb.COMPLETE_COMMAND, True)
@@ -1012,6 +1048,14 @@ class osv_runqueue(gdb.Command):
             for thread in runqueue(cpu):
                 print '%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt'])
 
+class osv_info_virtio(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv info virtio', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        for driver in drivers():
+            if derived_from(driver.dereference().dynamic_type, virtio_driver_type):
+                show_virtio_driver(driver)
+
 
 osv()
 osv_heap()
@@ -1021,6 +1065,7 @@ osv_syms()
 osv_info()
 osv_info_threads()
 osv_info_callouts()
+osv_info_virtio()
 osv_thread()
 osv_thread_apply()
 osv_thread_apply_all()
