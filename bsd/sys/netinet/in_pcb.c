@@ -566,9 +566,18 @@ in_pcbbind_setup(struct inpcb *inp, struct bsd_sockaddr *nam, in_addr_t *laddrp,
 				 * being in use (for now).  This is better
 				 * than a panic, but not desirable.
 				 */
+				/*
+				 * Linux allows a SO_REUSEADDR socket to be
+				 * bound to an existing TIME_WAIT socket
+				 * if SO_REUSEADDR is set on the new socket.
+				 *
+				 * Allow for that in addition to the BSD
+				 * SO_REUSEPORT semantics.
+				 */
 				tw = intotw(t);
 				if (tw == NULL ||
-				    (reuseport & tw->tw_so_options) == 0)
+				    ((reuseport & tw->tw_so_options) == 0)
+				     && (so->so_options & SO_REUSEADDR) == 0)
 					return (EADDRINUSE);
 			} else if (t && (reuseport == 0 ||
 			    (t->inp_flags2 & INP_REUSEPORT) == 0)) {
