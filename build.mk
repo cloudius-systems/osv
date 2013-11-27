@@ -656,11 +656,14 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 
 $(src)/build.mk: $(generated-headers)
 
-$(out)/bootfs.manifest: $(src)/scripts/module.py bootfs.manifest.skel
-	cd $(out)/module && ../../../scripts/module.py bootfs
+.PHONY: generate-manifests
+generate-manifests: bootfs.manifest.skel usr.manifest.skel
+	cd $(out)/module \
+	  && $(src)/scripts/module.py usr \
+	  && $(src)/scripts/module.py bootfs
 
-$(out)/usr.manifest: $(src)/scripts/module.py usr.manifest.skel
-	cd $(out)/module && ../../../scripts/module.py usr
+$(out)/bootfs.manifest: generate-manifests
+$(out)/usr.manifest: generate-manifests
 
 -include $(shell find -name '*.d')
 
