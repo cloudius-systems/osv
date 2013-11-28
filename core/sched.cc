@@ -193,9 +193,10 @@ void cpu::reschedule_from_interrupt(bool preempt)
 
     auto interval = now - running_since;
     running_since = now;
-    if (interval == 0) {
+    if (interval <= 0) {
         // During startup, the clock may be stuck and we get zero intervals.
         // To avoid scheduler loops, let's make it non-zero.
+        // Also ignore backward jumps in the clock.
         interval = context_switch_penalty;
     }
     thread* p = thread::current();
