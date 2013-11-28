@@ -1558,9 +1558,6 @@ extern "C" void mount_zfs_rootfs(void)
 	if (ret)
 		kprintf("failed to pivot root, error = %s\n", strerror(ret));
 
-	if (mkdir("/dev", 0755) < 0)
-		kprintf("failed to create /dev, error = %s\n", strerror(errno));
-
 	ret = sys_mount("", "/dev", "devfs", 0, NULL);
 	if (ret)
 		kprintf("failed to mount devfs, error = %s\n", strerror(ret));

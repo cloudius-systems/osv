@@ -154,3 +154,4 @@
 /tools/lsroute.so: ./tools/route/lsroute.so
 /&/etc/hosts: ../../static/&
 /&/etc/inputrc: ../../static/&
+/&/dev/.keep: ../../static/&
