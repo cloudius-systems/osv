@@ -301,12 +301,7 @@ u32 virtio_blk::get_driver_features(void)
 
 hw_driver* virtio_blk::probe(hw_device* dev)
 {
-    if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
-        if (pci_dev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, VIRTIO_BLK_DEVICE_ID)) {
-            return new virtio_blk(*pci_dev);
-        }
-    }
-    return nullptr;
+    return virtio::probe<virtio_blk, VIRTIO_BLK_DEVICE_ID>(dev);
 }
 
 }
