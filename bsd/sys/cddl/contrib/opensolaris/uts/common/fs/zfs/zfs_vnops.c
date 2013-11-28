@@ -2496,7 +2496,7 @@ top:
 	 * Do this after setting timestamps to prevent timestamp
 	 * update from toggling bit
 	 */
-
+#ifndef __OSV__
 	if (xoap && (mask & AT_XVATTR)) {
 
 		/*
@@ -2528,7 +2528,7 @@ top:
 
 		zfs_xvattr_set(zp, xvap, tx);
 	}
-
+#endif
 	if (fuid_dirtied)
 		zfs_fuid_sync(zfsvfs, tx);
 
