@@ -214,23 +214,6 @@ device_create(struct driver *drv, const char *name, int flags)
 }
 
 #if 0
-int
-device_destroy(struct device *dev)
-{
-
-	sched_lock();
-	if (!device_valid(dev)) {
-		sched_unlock();
-		return ENODEV;
-	}
-	dev->active = 0;
-	device_release(dev);
-	sched_unlock();
-	return 0;
-}
-#endif
-
-#if 0
 /*
  * Return device's private data.
  */
@@ -306,6 +289,21 @@ device_release(struct device *dev)
 	}
 	free(dev);
 	sched_unlock();
+}
+
+int
+device_destroy(struct device *dev)
+{
+
+	sched_lock();
+	if (!device_valid(dev)) {
+		sched_unlock();
+		return ENODEV;
+	}
+	dev->active = 0;
+	device_release(dev);
+	sched_unlock();
+	return 0;
 }
 
 /*
