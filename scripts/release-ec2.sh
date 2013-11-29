@@ -116,14 +116,14 @@ amend_rstatus() {
 }
 
 handle_error() {
- echo "\033[31m >>> [`timestamp`] ERROR: $* \033[0m"
+ echo $(tput setaf 1)">>> [`timestamp`] ERROR: $*"$(tput sgr0)
  echo
  amend_rstatus ERROR: $*
  amend_rstatus Release FAILED.
 }
 
 echo_progress() {
- echo "\033[33m >>> $* \033[0m"
+ echo $(tput setaf 3)">>> $*"$(tput sgr0)
 }
 
 get_json_value() {
