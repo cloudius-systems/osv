@@ -194,7 +194,9 @@ get_volume_state() {
 
 get_ami_state() {
  local AMI_ID=$1
- aws ec2 describe-images --image-ids $AMI_ID | get_json_value '["Images"][0]["State"]'
+ shift
+
+ aws ec2 describe-images --image-ids $AMI_ID $* | get_json_value '["Images"][0]["State"]'
 }
 
 detach_volume() {
@@ -257,13 +259,14 @@ wait_for_volume_state() {
 
 wait_for_ami_ready() {
  local AMI_ID=$1
+ shift
 
  local STATE="unknown"
 
  while test x"$STATE" != x"available"
  do
    sleep 5
-   STATE=`get_ami_state $AMI_ID`
+   STATE=`get_ami_state $AMI_ID $*`
    echo AMI is $STATE
  done
 }
@@ -295,11 +298,34 @@ copy_ami_to_region() {
 
 make_ami_public() {
  local AMI_ID=$1
- $EC2_HOME/bin/ec2-modify-image-attribute $AMI_ID --launch-permission --add all
+ shift
+
+ $EC2_HOME/bin/ec2-modify-image-attribute $AMI_ID --launch-permission --add all $*
+}
+
+make_ami_private() {
+ local AMI_ID=$1
+ shift
+
+ $EC2_HOME/bin/ec2-modify-image-attribute $AMI_ID --launch-permission --remove all $*
 }
 
 list_additional_regions() {
  $EC2_HOME/bin/ec2-describe-regions | ec2_response_value REGION REGION | grep -v $AWS_DEFAULT_REGION
+}
+
+get_own_ami_info() {
+ local AMI_ID=$1
+ shift
+
+ $EC2_HOME/bin/ec2-describe-images $* | grep $AMI_ID
+}
+
+get_public_ami_info() {
+ local AMI_ID=$1
+ shift
+
+ $EC2_HOME/bin/ec2-describe-images -x all $* | grep $AMI_ID
 }
 
 replicate_ami() {
@@ -317,9 +343,53 @@ replicate_ami() {
      fi
 
      amend_rstatus AMI ID in region $REGION is $AMI_IN_REGION
+     NL='
+'
+     REPLICAS_LIST="$REPLICAS_LIST${NL}$AMI_IN_REGION $REGION"
  done
 
  return 0;
+}
+
+# This function implements work-around for AMIs copying problem described here:
+# https://forums.aws.amazon.com/thread.jspa?messageID=454676&#454676
+make_replica_public() {
+  local AMI_ID=$1
+  local REGION=$2
+
+  PUBLIC_AMI_INFO=
+
+  echo_progress Make AMI $AMI_ID from $REGION region public
+  echo_progress Wait for AMI to become available
+  wait_for_ami_ready $AMI_ID "--region $REGION"
+
+  while test x"$PUBLIC_AMI_INFO" == x""
+  do
+    make_ami_private $AMI_ID "--region $REGION"
+    get_own_ami_info $AMI_ID "--region $REGION"
+    make_ami_public $AMI_ID "--region $REGION"
+    get_own_ami_info $AMI_ID "--region $REGION"
+
+    for i in 1 2 3 4 5
+    do
+      sleep 5
+      PUBLIC_AMI_INFO=`get_public_ami_info $AMI_ID "--region $REGION"`
+      echo $i/5: $PUBLIC_AMI_INFO
+
+      if test x"$PUBLIC_AMI_INFO" != x""; then
+        return 0
+      fi
+    done
+
+  done
+}
+
+make_replicas_public() {
+  while read AMI; do
+    if test x"$AMI" != x""; then
+      make_replica_public $AMI
+    fi
+  done
 }
 
 BUCKET_CREATED=0
@@ -477,12 +547,18 @@ while true; do
     fi
 
     echo_progress Replicating AMI to existing regions
+    REPLICAS_LIST=
     replicate_ami $AMI_ID
 
     if test x"$?" != x"0"; then
         handle_error Failed to initiate AMI replication. Replicate $AMI_ID in $AWS_DEFAULT_REGION region manually.
         break;
     fi
+
+    echo_progress Making replicated images public \(work-around AWS bug\)
+    make_replicas_public <<END_REPLICAS
+$REPLICAS_LIST
+END_REPLICAS
 
     amend_rstatus Release SUCCEEDED
 
