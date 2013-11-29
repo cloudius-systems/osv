@@ -5,41 +5,54 @@ import sys
 import os
 import subprocess
 
-f = open("../../../config.json")
-conf = json.load(f)
-f.close()
+src_path="../../.."
+build_path=".."
 
-mtype = sys.argv[1]
-mskel = open("../../../%s.manifest.skel" % mtype)
-m = open("../%s.manifest" % mtype, "w")
-for l in mskel.readlines():
-	m.write(l)
-mskel.close()
+def read_config():
+	with open(os.path.join(src_path, "config.json")) as file:
+		return json.load(file)
 
-for mod in conf["modules"]:
-	mmod_path = "%s/%s.manifest" % (mod["name"], mtype)
-	if os.access(mod["name"], os.F_OK) == False:
-		if mod["type"] == "git":
-			cmd = "git clone -b %s %s %s" % (mod["branch"], mod["path"], mod["name"])
-		elif mod["type"] == "svn":
-			cmd = "svn co %s %s" % (mod["path"], mod["name"])
-		elif mod["type"] == "dir":
-			cmd = "cp -a %s %s" % (mod["path"], mod["name"])
-		else:
-			raise Exception("%s is unknown type" % mod["type"])
-		print cmd
-		subprocess.call([cmd], shell=True)
-	if os.access(mmod_path, os.F_OK) == False:
-		pwd = os.getcwd()
-		print "cd %s" % mod["name"]
-		os.chdir(mod["name"])
-		cmd = "make module"
-		subprocess.call([cmd], shell=True)
-		print "cd -"
-		os.chdir(pwd)
-	print "append %s to %s.manifest" % (mmod_path, mtype)
-	mmod = open(mmod_path)
-	for l in mmod.readlines():
-		m.write(l)
-	mmod.close()
-m.close()
+def fetch_module(module, target_dir):
+	print "Fetching %s" % module["name"]
+
+	if module["type"] == "git":
+		cmd = "git clone -b %s %s %s" % (module["branch"], module["path"], target_dir)
+	elif module["type"] == "svn":
+		cmd = "svn co %s %s" % (module["path"], target_dir)
+	elif module["type"] == "dir":
+		cmd = "cp -a %s %s" % (module["path"], target_dir)
+	else:
+		raise Exception("%s is unknown type" % module["type"])
+
+	print cmd
+	subprocess.call([cmd], shell=True)
+
+def append_lines(file_path, dst_file):
+	with open(file_path) as src_file:
+		for line in src_file:
+			dst_file.write(line)
+
+def get_module_dir(module):
+	return os.path.join(build_path, "module", module["name"])
+
+if __name__ == "__main__":
+	config = read_config()
+
+	manifest_type = sys.argv[1]
+	manifest_name = "%s.manifest" % manifest_type
+	print "Preparing %s" % manifest_name
+
+	with open(os.path.join(build_path, manifest_name), "w") as manifest:
+		append_lines(os.path.join(src_path, "%s.skel" % manifest_name), manifest)
+
+		for module in config["modules"]:
+			module_dir = get_module_dir(module)
+			if not os.path.exists(module_dir):
+				fetch_module(module, module_dir)
+
+			module_manifest = os.path.join(module_dir, manifest_name)
+			if not os.path.exists(module_manifest):
+				subprocess.call(["make module"], shell=True, cwd=module_dir)
+
+			print "Appending %s to %s" % (module_manifest, manifest_name)
+			append_lines(module_manifest, manifest)
