@@ -155,3 +155,4 @@
 /&/etc/hosts: ../../static/&
 /&/etc/inputrc: ../../static/&
 /&/dev/.keep: ../../static/&
+/&/tmp/.keep: ../../static/&

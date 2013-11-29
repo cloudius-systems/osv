@@ -1454,20 +1454,6 @@ void unpack_bootfs(void)
 	struct bootfs_metadata *md = (struct bootfs_metadata *)&bootfs_start;
 	int fd, i;
 
-	// Empty directories to create. Other directories will be created
-	// automatically below.
-	const char *dirs[] = {
-		"/tmp",
-		NULL,
-	};
-
-	for (i = 0; dirs[i] != NULL; i++) {
-		if (mkdir(dirs[i], 0666) < 0) {
-			perror("mkdir");
-			sys_panic("foo");
-		}
-	}
-
 	for (i = 0; md[i].name[0]; i++) {
 		int ret;
 
