@@ -1607,7 +1607,7 @@ vfs_init(void)
 
 void sys_panic(const char *str)
 {
-	kprintf("%s", str);
+	kprintf("%s\n", str);
 	while (1)
 		;
 }
