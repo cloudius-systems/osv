@@ -659,8 +659,7 @@ $(src)/build.mk: $(generated-headers)
 .PHONY: generate-manifests
 generate-manifests: bootfs.manifest.skel usr.manifest.skel
 	cd $(out)/module \
-	  && $(src)/scripts/module.py usr \
-	  && $(src)/scripts/module.py bootfs
+	  && $(src)/scripts/module.py
 
 $(out)/bootfs.manifest: generate-manifests
 $(out)/usr.manifest: generate-manifests
