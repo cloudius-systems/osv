@@ -96,6 +96,8 @@ uint64_t rtc::wallclock_ns()
     return dur.total_nanoseconds();
 }
 
+#define HPET_CAP        0x000
+#define HPET_CAP_COUNT_SIZE (1<<13)
 #define HPET_PERIOD     0x004
 #define HPET_CONFIG     0x010
 #define HPET_COUNTER    0x0f0
@@ -109,6 +111,11 @@ hpetclock::hpetclock(uint64_t hpet_address)
     // we should really, really avoid it. So let it local.
     auto r = new rtc();
     _addr = mmio_map(hpet_address, 4096);
+
+    // Verify that a 64-bit counter is supported, and we're not forced to
+    // operate in 32-bit mode (which has interrupt on every wrap-around).
+    auto cap = mmio_getl(_addr + HPET_CAP);
+    assert(cap & HPET_CAP_COUNT_SIZE);
 
     unsigned int cfg = mmio_getl(_addr + HPET_CONFIG);
     // Stop the HPET First, so we can make sure the counter is at 0 when we
@@ -141,9 +148,7 @@ hpetclock::hpetclock(uint64_t hpet_address)
 
 s64 hpetclock::time()
 {
-    // Reading just the base counter should give us a couple of years
-    // before we roll over, and will make us slightly faster...
-    return _wall + (mmio_getl(_addr + HPET_COUNTER) * _period);
+    return _wall + (mmio_getq(_addr + HPET_COUNTER) * _period);
 }
 
 void __attribute__((constructor(init_prio::hpet))) hpet_init()
