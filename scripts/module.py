@@ -57,7 +57,7 @@ def make_modules():
 
 		if not os.path.exists(module_dir):
 			fetch_module(module, module_dir)
-			subprocess.call(["make", "module"], shell=True, cwd=module_dir)
+			subprocess.call(["make module"], shell=True, cwd=module_dir)
 
 if __name__ == "__main__":
 	config = read_config()
