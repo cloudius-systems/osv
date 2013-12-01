@@ -230,7 +230,7 @@ int
 linux_ioctl_socket(struct file *fp, u_long cmd, void *data)
 {
 	struct ifnet *ifp = NULL;
-	int error = 0, type = fp->f_type ;
+	int error = 0, type = file_type(fp);
 	if (type != DTYPE_SOCKET) {
 			return (ENOIOCTL);
 	}

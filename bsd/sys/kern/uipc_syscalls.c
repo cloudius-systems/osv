@@ -93,12 +93,12 @@ getsock_cap(int fd, struct file **fpp, u_int *fflagp)
     if (error)
         return (error);
 
-    if (fp->f_type != DTYPE_SOCKET) {
+    if (file_type(fp) != DTYPE_SOCKET) {
         fdrop(fp);
         return (ENOTSOCK);
     }
     if (fflagp != NULL)
-        *fflagp = fp->f_flags;
+        *fflagp = file_flags(fp);
     *fpp = fp;
     return (0);
 }
@@ -151,7 +151,7 @@ kern_bind(int fd, struct bsd_sockaddr *sa)
 	if (error)
 		return (error);
 
-	so = fp->f_data;
+	so = file_data(fp);
 	error = sobind(so, sa, 0);
 	fdrop(fp);
 	return (error);
@@ -170,7 +170,7 @@ sys_listen(int s, int backlog)
 	    return error;
 	}
 
-	so = fp->f_data;
+	so = file_data(fp);
 	error = solisten(so, backlog, 0);
 	fdrop(fp);
 	return(error);
@@ -213,7 +213,7 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	error = getsock_cap(s, &headfp, &fflag);
 	if (error)
 		return (error);
-	head = headfp->f_data;
+	head = file_data(headfp);
 	if ((head->so_options & SO_ACCEPTCONN) == 0) {
 		error = EINVAL;
 		goto done;
@@ -356,7 +356,7 @@ kern_connect(int fd, struct bsd_sockaddr *sa)
 	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = fp->f_data;
+	so = file_data(fp);
 	if (so->so_state & SS_ISCONNECTING) {
 		error = EALREADY;
 		goto done1;
@@ -505,7 +505,7 @@ kern_sendit(int s,
 	error = getsock_cap(s, &fp, NULL);
 	if (error)
 		return (error);
-	so = (struct socket *)fp->f_data;
+	so = (struct socket *)file_data(fp);
 
 	auio.uio_iov = mp->msg_iov;
 	auio.uio_iovcnt = mp->msg_iovlen;
@@ -593,7 +593,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 	error = getsock_cap(s, &fp, NULL);
 	if (error)
 		return (error);
-	so = fp->f_data;
+	so = file_data(fp);
 
 	auio.uio_iov = mp->msg_iov;
 	auio.uio_iovcnt = mp->msg_iovlen;
@@ -733,7 +733,7 @@ sys_shutdown(int s, int how)
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = fp->f_data;
+		so = file_data(fp);
 		error = soshutdown(so, how);
 		fdrop(fp);
 	}
@@ -770,7 +770,7 @@ kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize)
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = fp->f_data;
+		so = file_data(fp);
 		error = sosetopt(so, &sopt);
 		fdrop(fp);
 	}
@@ -831,7 +831,7 @@ kern_getsockopt(int s,
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = fp->f_data;
+		so = file_data(fp);
 		error = sogetopt(so, &sopt);
 		*valsize = sopt.sopt_valsize;
 		fdrop(fp);
@@ -878,7 +878,7 @@ kern_getsockname(int fd, struct bsd_sockaddr **sa, socklen_t *alen)
 	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = fp->f_data;
+	so = file_data(fp);
 	*sa = NULL;
 	CURVNET_SET(so->so_vnet);
 	error = (*so->so_proto->pr_usrreqs->pru_sockaddr)(so, sa);

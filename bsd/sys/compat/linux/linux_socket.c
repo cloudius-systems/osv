@@ -87,12 +87,12 @@ fgetsock(int fd, struct socket **spp,
 		*fflagp = 0;
 	if ((error = fget(fd, &fp)) != 0)
 		return (error);
-	if (fp->f_type != DTYPE_SOCKET) {
+	if (file_type(fp) != DTYPE_SOCKET) {
 		error = ENOTSOCK;
 	} else {
-		*spp = fp->f_data;
+		*spp = file_data(fp);
 		if (fflagp)
-			*fflagp = fp->f_flags;
+			*fflagp = file_flags(fp);
 		SOCK_LOCK(*spp);
 		soref(*spp);
 		SOCK_UNLOCK(*spp);

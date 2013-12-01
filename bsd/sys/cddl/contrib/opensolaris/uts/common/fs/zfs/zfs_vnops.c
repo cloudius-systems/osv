@@ -161,21 +161,21 @@
 static int
 zfs_open(struct file *fp)
 {
-	struct vnode *vp = fp->f_dentry->d_vnode;
+	struct vnode *vp = file_dentry(fp)->d_vnode;
 	znode_t	*zp = VTOZ(vp);
 	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 
-	if ((fp->f_flags & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
-	    ((fp->f_flags & O_APPEND) == 0)) {
+	if ((file_flags(fp) & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
+	    ((file_flags(fp) & O_APPEND) == 0)) {
 		ZFS_EXIT(zfsvfs);
 		return (EPERM);
 	}
 
 	/* Keep a count of the synchronous opens in the znode */
-	if (fp->f_flags & O_DSYNC)
+	if (file_flags(fp) & O_DSYNC)
 		atomic_inc_32(&zp->z_sync_cnt);
 
 	ZFS_EXIT(zfsvfs);
@@ -193,7 +193,7 @@ zfs_close(vnode_t *vp, file_t *fp)
 	ZFS_VERIFY_ZP(zp);
 
 	/* Decrement the synchronous opens in the znode */
-	if (fp->f_flags & O_DSYNC)
+	if (file_flags(fp) & O_DSYNC)
 		atomic_dec_32(&zp->z_sync_cnt);
 
 	ZFS_EXIT(zfsvfs);
@@ -1735,7 +1735,7 @@ zfs_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 	/*
 	 * Initialize the iterator cursor.
 	 */
-	if (fp->f_offset <= 3) {
+	if (file_offset(fp) <= 3) {
 		/*
 		 * Start iteration from the beginning of the directory.
 		 */
@@ -1744,23 +1744,23 @@ zfs_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 		/*
 		 * The offset is a serialized cursor.
 		 */
-		zap_cursor_init_serialized(&zc, os, zp->z_id, fp->f_offset);
+		zap_cursor_init_serialized(&zc, os, zp->z_id, file_offset(fp));
 	}
 
 	/*
 	 * Special case `.', `..', and `.zfs'.
 	 */
-	if (fp->f_offset == 0) {
+	if (file_offset(fp) == 0) {
 		(void) strcpy(zap.za_name, ".");
 		zap.za_normalization_conflict = 0;
 		objnum = zp->z_id;
 		type = DT_DIR;
-	} else if (fp->f_offset == 1) {
+	} else if (file_offset(fp) == 1) {
 		(void) strcpy(zap.za_name, "..");
 		zap.za_normalization_conflict = 0;
 		objnum = parent;
 		type = DT_DIR;
-	} else if (fp->f_offset == 2 && zfs_show_ctldir(zp)) {
+	} else if (file_offset(fp) == 2 && zfs_show_ctldir(zp)) {
 		(void) strcpy(zap.za_name, ZFS_CTLDIR_NAME);
 		zap.za_normalization_conflict = 0;
 		objnum = ZFSCTL_INO_ROOT;
@@ -1777,7 +1777,7 @@ zfs_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 			cmn_err(CE_WARN, "zap_readdir: bad directory "
 			    "entry, obj = %lld, offset = %lld\n",
 			    (u_longlong_t)zp->z_id,
-			    (u_longlong_t)fp->f_offset);
+			    (u_longlong_t)file_offset(fp));
 			error = ENXIO;
 			goto update;
 		}
@@ -1804,11 +1804,11 @@ zfs_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 	/*
 	 * Move to the next entry, fill in the previous offset.
 	 */
-	if (fp->f_offset > 2 || (fp->f_offset == 2 && !zfs_show_ctldir(zp))) {
+	if (file_offset(fp) > 2 || (file_offset(fp) == 2 && !zfs_show_ctldir(zp))) {
 		zap_cursor_advance(&zc);
-		fp->f_offset = zap_cursor_serialize(&zc);
+		file_setoffset(fp, zap_cursor_serialize(&zc));
 	} else {
-		fp->f_offset += 1;
+		file_setoffset(fp, file_offset(fp) + 1);
 	}
 
 	zp->z_zn_prefetch = B_FALSE; /* a lookup will re-enable pre-fetching */

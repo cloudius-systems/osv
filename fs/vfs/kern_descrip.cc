@@ -243,6 +243,22 @@ file::~file()
     }
 }
 
+void file_makebad(struct file *fp)
+{
+    fp->f_ops = &badfileops;
+    fp->f_data = NULL;
+}
+
+dentry* file_dentry(file* fp)
+{
+    return fp->f_dentry;
+}
+
+void file_setdata(file* fp, void* data)
+{
+    fp->f_data = data;
+}
+
 static int
 badfo_init(struct file *fp)
 {
@@ -360,4 +376,29 @@ fo_chmod(struct file *fp, mode_t mode)
 bool is_nonblock(struct file *f)
 {
     return (f->f_flags & FNONBLOCK);
+}
+
+int file_flags(file *f)
+{
+    return f->f_flags;
+}
+
+off_t file_offset(file* f)
+{
+    return f->f_offset;
+}
+
+void file_setoffset(file* f, off_t o)
+{
+    f->f_offset = o;
+}
+
+void* file_data(file* f)
+{
+    return f->f_data;
+}
+
+filetype_t file_type(file* f)
+{
+    return f->f_type;
 }

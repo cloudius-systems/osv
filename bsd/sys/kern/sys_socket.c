@@ -52,7 +52,7 @@ extern int linux_ioctl_socket(struct file *fp, u_long cmd, void *data) ;
 int
 soo_init(struct file *fp)
 {
-    struct socket *so = fp->f_data;
+    struct socket *so = file_data(fp);
     so->fp = fp;
 
     return 0;
@@ -62,7 +62,7 @@ soo_init(struct file *fp)
 int
 soo_read(struct file *fp, struct uio *uio, int flags)
 {
-    struct socket *so = fp->f_data;
+    struct socket *so = file_data(fp);
     int error;
 
     error = soreceive(so, 0, uio, 0, 0, 0);
@@ -73,7 +73,7 @@ soo_read(struct file *fp, struct uio *uio, int flags)
 int
 soo_write(struct file *fp, struct uio *uio, int flags)
 {
-    struct socket *so = fp->f_data;
+    struct socket *so = file_data(fp);
     int error;
 
     error = sosend(so, 0, uio, 0, 0, 0, 0);
@@ -136,7 +136,7 @@ static char get_ioctl_type(int ioctl)
 int
 soo_ioctl(struct file *fp, u_long cmd, void *data)
 {
-    struct socket *so = fp->f_data;
+    struct socket *so = file_data(fp);
     int error = 0;
     char ioctl_type ;
     
@@ -231,14 +231,14 @@ soo_ioctl(struct file *fp, u_long cmd, void *data)
 int
 soo_poll(struct file *fp, int events)
 {
-    struct socket *so = fp->f_data;
+    struct socket *so = file_data(fp);
     return (sopoll(so, events, 0, 0));
 }
 
 int
 soo_stat(struct file *fp, struct stat *ub)
 {
-    struct socket *so = fp->f_data;
+    struct socket *so = file_data(fp);
 
     bzero((caddr_t)ub, sizeof (*ub));
     ub->st_mode = S_IFSOCK;
@@ -273,9 +273,8 @@ soo_close(struct file *fp)
     int error = 0;
     struct socket *so;
 
-    so = fp->f_data;
-    fp->f_ops = &badfileops;
-    fp->f_data = NULL;
+    so = file_data(fp);
+    file_makebad(fp);
 
     if (so)
         error = soclose(so);

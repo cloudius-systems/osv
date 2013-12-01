@@ -5194,7 +5194,7 @@ zfs_ctldev_init(struct file *fp)
 	if (ddi_soft_state_zalloc(zfsdev_state, minor) != DDI_SUCCESS)
 		return (EAGAIN);
 
-	fp->f_data = (void *)(uintptr_t)minor;
+	file_setdata(fp, (void *)(uintptr_t)minor);
 
 	zs = ddi_get_soft_state(zfsdev_state, minor);
 	zs->zss_type = ZSST_CTLDEV;
@@ -5252,7 +5252,7 @@ void
 zfsdev_close(struct file *fp)
 {
 	zfs_onexit_t *zo;
-	minor_t minor = (minor_t)(uintptr_t)fp->f_data;
+	minor_t minor = (minor_t)(uintptr_t)file_data(fp);
 
 	if (minor == 0)
 		return;
