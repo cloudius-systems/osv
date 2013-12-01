@@ -63,17 +63,19 @@ typedef enum {
 
 struct vnode;
 struct fileops;
+struct file;
 
 #define FDMAX       (0x4000)
+
+#ifdef __cplusplus
+
 
 /*
  * File structure
  */
 struct file {
-#ifdef __cplusplus
 	~file();
 	void operator delete(void *p) { osv::rcu_dispose(p); }
-#endif
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
 	off_t		f_offset;	/* current position in file */
@@ -83,12 +85,10 @@ struct file {
 	filetype_t	f_type;		/* descriptor type */
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
-#ifdef __cplusplus
 	std::unique_ptr<std::vector<file*>> f_epolls;
-#else
-	void* f_epolls_placeholder;
-#endif
 };
+
+#endif
 
 // f_count rules:
 //
