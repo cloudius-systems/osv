@@ -96,19 +96,19 @@ devfs_close(struct vnode *vp, struct file *fp)
 	if (!strcmp(fp->f_dentry->d_path, "/"))	/* root ? */
 		return 0;
 
-	return device_close(vp->v_data);
+	return device_close((device*)vp->v_data);
 }
 
 static int
 devfs_read(struct vnode *vp, struct uio *uio, int ioflags)
 {
-	return device_read(vp->v_data, uio, ioflags);
+	return device_read((device*)vp->v_data, uio, ioflags);
 }
 
 static int
 devfs_write(struct vnode *vp, struct uio *uio, int ioflags)
 {
-	return device_write(vp->v_data, uio, ioflags);
+	return device_write((device*)vp->v_data, uio, ioflags);
 }
 
 static int
@@ -116,7 +116,7 @@ devfs_ioctl(struct vnode *vp, struct file *fp, u_long cmd, void *arg)
 {
 	int error;
 
-	error = device_ioctl(vp->v_data, cmd, arg);
+	error = device_ioctl((device*)vp->v_data, cmd, arg);
 	DPRINTF(("devfs_ioctl: cmd=%x\n", cmd));
 	return error;
 }
@@ -187,6 +187,7 @@ devfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
+extern "C"
 int
 devfs_init(void)
 {
