@@ -394,8 +394,7 @@ public:
  */
 class program {
 public:
-    explicit program(::filesystem& fs,
-                     void* base = reinterpret_cast<void*>(0x100000000000UL));
+    explicit program(void* base = reinterpret_cast<void*>(0x100000000000UL));
     /**
      * Load a shared library, and return an interface to it.
      *
@@ -453,7 +452,6 @@ private:
     ulong register_dtv(object* obj);
     void free_dtv(object* obj);
 private:
-    ::filesystem& _fs;
     void* _next_alloc;
     std::shared_ptr<object> _core;
     std::map<std::string, std::weak_ptr<object>> _files;

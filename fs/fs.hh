@@ -43,8 +43,6 @@ uint64_t size(fileref f);
 void read(fileref f, void *buffer, uint64_t offset, uint64_t len);
 void write(fileref f, const void* buffer, uint64_t offset, uint64_t len);
 
-class filesystem {};
-
 fileref falloc_noinstall(); // throws error
 
 class fdesc {

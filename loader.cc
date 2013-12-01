@@ -135,20 +135,26 @@ std::tuple<int, char**> parse_options(int ac, char** av)
                                    [](const char* arg) { return arg[0] != '-'; }) - av;
     std::copy(av, av + nr_options, std::back_inserter(args));
 
-    bpo::options_description desc("osv options:\n");
+    bpo::options_description desc("OSv options");
     desc.add_options()
-        ("help", "show help text\n")
-        ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable\n")
-        ("trace-backtrace", "log backtraces in the tracepoint log\n")
-        ("leak", "start leak detector after boot\n")
-        ("nomount", "don't mount the file system\n")
-        ("noshutdown", "continue running after main() returns\n")
+        ("help", "show help text")
+        ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable")
+        ("trace-backtrace", "log backtraces in the tracepoint log")
+        ("leak", "start leak detector after boot")
+        ("nomount", "don't mount the file system")
+        ("noshutdown", "continue running after main() returns")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
     // argument
     int style = bpos::unix_style & ~(bpos::long_allow_next | bpos::short_allow_next);
-    bpo::store(bpo::parse_command_line(args.size(), args.data(), desc, style), vars);
+    try {
+        bpo::store(bpo::parse_command_line(args.size(), args.data(), desc, style), vars);
+    } catch(std::exception &e) {
+        std::cout << e.what() << '\n';
+        std::cout << desc << '\n';
+        abort();
+    }
     bpo::notify(vars);
 
     if (vars.count("help")) {
@@ -262,6 +268,9 @@ namespace pthread_private {
 
 void main_cont(int ac, char** av)
 {
+    new elf::program();
+    elf::get_program()->set_search_path({"/", "/usr/lib"});
+
     sched::preempt_disable();
     std::tie(ac, av) = parse_options(ac, av);
     ioapic::init();
@@ -282,14 +291,10 @@ void main_cont(int ac, char** av)
     vfs_init();
     ramdisk_init();
 
-    filesystem fs;
-
     net_init();
 
     processor::sti();
 
-    new elf::program(fs);
-    elf::get_program()->set_search_path({"/", "/usr/lib"});
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work

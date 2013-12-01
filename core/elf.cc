@@ -732,9 +732,8 @@ void* object::tls_addr()
 
 program* s_program;
 
-program::program(::filesystem& fs, void* addr)
-    : _fs(fs)
-    , _next_alloc(addr)
+program::program(void* addr)
+    : _next_alloc(addr)
 {
     assert(!s_program);
     s_program = this;
