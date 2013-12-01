@@ -55,13 +55,13 @@ ramfs_allocate_node(char *name, int type)
 {
 	struct ramfs_node *np;
 
-	np = malloc(sizeof(struct ramfs_node));
+	np = (ramfs_node*)malloc(sizeof(struct ramfs_node));
 	if (np == NULL)
 		return NULL;
 	memset(np, 0, sizeof(struct ramfs_node));
 
 	np->rn_namelen = strlen(name);
-	np->rn_name = malloc(np->rn_namelen + 1);
+	np->rn_name = (char*)malloc(np->rn_namelen + 1);
 	if (np->rn_name == NULL) {
 		free(np);
 		return NULL;
@@ -146,7 +146,7 @@ ramfs_rename_node(struct ramfs_node *np, char *name)
 		strlcpy(np->rn_name, name, np->rn_namelen + 1);
 	} else {
 		/* Expand name buffer */
-		tmp = malloc(len + 1);
+		tmp = (char*)malloc(len + 1);
 		if (tmp == NULL)
 			return ENOMEM;
 		strlcpy(tmp, name, len + 1);
@@ -170,7 +170,7 @@ ramfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
 	mutex_lock(&ramfs_lock);
 
 	len = strlen(name);
-	dnp = dvp->v_data;
+	dnp = (ramfs_node*)dvp->v_data;
 	found = 0;
 	for (np = dnp->rn_child; np != NULL; np = np->rn_next) {
 		if (np->rn_namelen == len &&
@@ -201,7 +201,7 @@ ramfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
 	if (!S_ISDIR(mode))
 		return EINVAL;
 
-	np = ramfs_add_node(dvp->v_data, name, VDIR);
+	np = (ramfs_node*)ramfs_add_node((ramfs_node*)dvp->v_data, name, VDIR);
 	if (np == NULL)
 		return ENOMEM;
 	np->rn_size = 0;
@@ -213,7 +213,7 @@ static int
 ramfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
 {
 
-	return ramfs_remove_node(dvp->v_data, vp->v_data);
+	return ramfs_remove_node((ramfs_node*)dvp->v_data, (ramfs_node*)vp->v_data);
 }
 
 /* Remove a file */
@@ -221,7 +221,7 @@ static int
 ramfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
 	DPRINTF(("remove %s in %s\n", name, dvp->v_path));
-	return ramfs_remove_node(dvp->v_data, vp->v_data);
+	return ramfs_remove_node((ramfs_node*)dvp->v_data, (ramfs_node*)vp->v_data);
 }
 
 /* Truncate file */
@@ -233,7 +233,7 @@ ramfs_truncate(struct vnode *vp, off_t length)
 	size_t new_size;
 
 	DPRINTF(("truncate %s length=%d\n", vp->v_path, length));
-	np = vp->v_data;
+	np = (ramfs_node*)vp->v_data;
 
 	if (length == 0) {
 		if (np->rn_buf != NULL) {
@@ -241,7 +241,7 @@ ramfs_truncate(struct vnode *vp, off_t length)
 			np->rn_buf = NULL;
 			np->rn_bufsize = 0;
 		}
-	} else if (length > np->rn_bufsize) {
+	} else if (size_t(length) > np->rn_bufsize) {
 		// XXX: this could use a page level allocator
 		new_size = round_page(length);
 		new_buf = malloc(new_size);
@@ -251,7 +251,7 @@ ramfs_truncate(struct vnode *vp, off_t length)
 			memcpy(new_buf, np->rn_buf, vp->v_size);
 			free(np->rn_buf);
 		}
-		np->rn_buf = new_buf;
+		np->rn_buf = (char*)new_buf;
 		np->rn_bufsize = new_size;
 	}
 	np->rn_size = length;
@@ -271,7 +271,7 @@ ramfs_create(struct vnode *dvp, char *name, mode_t mode)
 	if (!S_ISREG(mode))
 		return EINVAL;
 
-	np = ramfs_add_node(dvp->v_data, name, VREG);
+	np = ramfs_add_node((ramfs_node*)dvp->v_data, name, VREG);
 	if (np == NULL)
 		return ENOMEM;
 	return 0;
@@ -280,7 +280,7 @@ ramfs_create(struct vnode *dvp, char *name, mode_t mode)
 static int
 ramfs_read(struct vnode *vp, struct uio *uio, int ioflag)
 {
-	struct ramfs_node *np = vp->v_data;
+	struct ramfs_node *np = (ramfs_node*)vp->v_data;
 	size_t len;
 
 	if (vp->v_type == VDIR)
@@ -307,7 +307,7 @@ ramfs_read(struct vnode *vp, struct uio *uio, int ioflag)
 static int
 ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 {
-	struct ramfs_node *np = vp->v_data;
+	struct ramfs_node *np = (ramfs_node*)vp->v_data;
 
 	if (vp->v_type == VDIR)
 		return EISDIR;
@@ -322,7 +322,7 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 	if (ioflag & IO_APPEND)
 		uio->uio_offset = np->rn_size;
 
-	if (uio->uio_offset + uio->uio_resid > (size_t)vp->v_size) {
+	if (size_t(uio->uio_offset + uio->uio_resid) > (size_t)vp->v_size) {
 		/* Expand the file size before writing to it */
 		off_t end_pos = uio->uio_offset + uio->uio_resid;
 		if (end_pos > (off_t)np->rn_bufsize) {
@@ -335,7 +335,7 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 				memcpy(new_buf, np->rn_buf, vp->v_size);
 				free(np->rn_buf);
 			}
-			np->rn_buf = new_buf;
+			np->rn_buf = (char*)new_buf;
 			np->rn_bufsize = new_size;
 		}
 		np->rn_size = end_pos;
@@ -353,20 +353,20 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
 
 	if (vp2) {
 		/* Remove destination file, first */
-		error = ramfs_remove_node(dvp2->v_data, vp2->v_data);
+		error = ramfs_remove_node((ramfs_node*)dvp2->v_data, (ramfs_node*)vp2->v_data);
 		if (error)
 			return error;
 	}
 	/* Same directory ? */
 	if (dvp1 == dvp2) {
 		/* Change the name of existing file */
-		error = ramfs_rename_node(vp1->v_data, name2);
+		error = ramfs_rename_node((ramfs_node*)vp1->v_data, name2);
 		if (error)
 			return error;
 	} else {
 		/* Create new file or directory */
-		old_np = vp1->v_data;
-		np = ramfs_add_node(dvp2->v_data, name2, VREG);
+		old_np = (ramfs_node*)vp1->v_data;
+		np = ramfs_add_node((ramfs_node*)dvp2->v_data, name2, VREG);
 		if (np == NULL)
 			return ENOMEM;
 
@@ -378,7 +378,7 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
 			old_np->rn_buf = NULL;
 		}
 		/* Remove source file */
-		ramfs_remove_node(dvp1->v_data, vp1->v_data);
+		ramfs_remove_node((ramfs_node*)dvp1->v_data, (ramfs_node*)vp1->v_data);
 	}
 	return 0;
 }
@@ -401,7 +401,7 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 		dir->d_type = DT_DIR;
 		strlcpy((char *)&dir->d_name, "..", sizeof(dir->d_name));
 	} else {
-		dnp = vp->v_data;
+		dnp = (ramfs_node*)vp->v_data;
 		np = dnp->rn_child;
 		if (np == NULL) {
 			mutex_unlock(&ramfs_lock);
@@ -431,6 +431,7 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
+extern "C"
 int
 ramfs_init(void)
 {
