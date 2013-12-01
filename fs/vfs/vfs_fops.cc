@@ -11,6 +11,7 @@
 #include <osv/file.h>
 #include <osv/poll.h>
 #include <fs/vfs/vfs.h>
+#include <osv/initialize.hh>
 
 static int vfs_fo_init(struct file *fp)
 {
@@ -118,12 +119,12 @@ static int vfs_poll(struct file *fp, int events)
 	return poll_no_poll(events);
 }
 
-struct fileops vfs_ops = {
-	.fo_init	= vfs_fo_init,
-	.fo_close	= vfs_close,
-	.fo_read	= vfs_read,
-	.fo_write	= vfs_write,
-	.fo_ioctl	= vfs_ioctl,
-	.fo_stat	= vfs_stat,
-	.fo_poll	= vfs_poll,
-};
+struct fileops vfs_ops = initialize_with([] (fileops& x) {
+	x.fo_init	= vfs_fo_init;
+	x.fo_close	= vfs_close;
+	x.fo_read	= vfs_read;
+	x.fo_write	= vfs_write;
+	x.fo_ioctl	= vfs_ioctl;
+	x.fo_stat	= vfs_stat;
+	x.fo_poll	= vfs_poll;
+});
