@@ -586,9 +586,7 @@ extern uint64_t physmem;
 #define	root_mount_wait()	do { } while (0)
 #define	root_mounted()		(1)
 
-struct file {
-	void *dummy;
-};
+struct file;
 
 #define	FCREAT	O_CREAT
 #define	FOFFMAX	0x0
