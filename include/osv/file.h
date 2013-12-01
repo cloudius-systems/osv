@@ -151,79 +151,20 @@ int falloc(struct file **resultfp, int *resultfd);
 void finit(struct file *fp, unsigned flags, filetype_t type,
     void *opaque, struct fileops *ops);
 
+bool is_nonblock(struct file *f);
 
 /*
  * Easy inline functions for invoking the file operations
  */
-static __inline fo_init_t   fo_init;
-static __inline fo_rdwr_t   fo_read;
-static __inline fo_rdwr_t   fo_write;
-static __inline fo_truncate_t   fo_truncate;
-static __inline fo_ioctl_t  fo_ioctl;
-static __inline fo_poll_t   fo_poll;
-static __inline fo_stat_t   fo_stat;
-static __inline fo_close_t  fo_close;
-static __inline fo_chmod_t  fo_chmod;
-
-static __inline int
-fo_init(struct file *fp)
-{
-	return fp->f_ops->fo_init(fp);
-}
-
-static __inline int
-fo_read(struct file *fp, struct uio *uio, int flags)
-{
-	return fp->f_ops->fo_read(fp, uio, flags);
-}
-
-static __inline int
-fo_write(struct file *fp, struct uio *uio, int flags)
-{
-	return fp->f_ops->fo_write(fp, uio, flags);
-}
-
-static __inline int
-fo_truncate(struct file *fp, off_t length)
-{
-	return fp->f_ops->fo_truncate(fp, length);
-}
-
-static __inline int
-fo_ioctl(struct file *fp, u_long com, void *data)
-{
-	return fp->f_ops->fo_ioctl(fp, com, data);
-}
-
-static __inline int
-fo_poll(struct file *fp, int events)
-{
-	return fp->f_ops->fo_poll(fp, events);
-}
-
-static __inline int
-fo_stat(struct file *fp, struct stat *sb)
-{
-	return fp->f_ops->fo_stat(fp, sb);
-}
-
-static __inline int
-fo_close(struct file *fp)
-{
-	return fp->f_ops->fo_close(fp);
-}
-
-static __inline int
-fo_chmod(struct file *fp, mode_t mode)
-{
-	return fp->f_ops->fo_chmod(fp, mode);
-}
-
-static inline bool is_nonblock(struct file *f)
-{
-    return (f->f_flags & FNONBLOCK);
-}
-
+extern fo_init_t   fo_init;
+extern fo_rdwr_t   fo_read;
+extern fo_rdwr_t   fo_write;
+extern fo_truncate_t   fo_truncate;
+extern fo_ioctl_t  fo_ioctl;
+extern fo_poll_t   fo_poll;
+extern fo_stat_t   fo_stat;
+extern fo_close_t  fo_close;
+extern fo_chmod_t  fo_chmod;
 
 __END_DECLS
 

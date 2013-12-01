@@ -302,3 +302,62 @@ struct fileops badfileops = {
     .fo_close	 = badfo_close,
     .fo_chmod	 = badfo_chmod,
 };
+
+ int
+fo_init(struct file *fp)
+{
+        return fp->f_ops->fo_init(fp);
+}
+
+ int
+fo_read(struct file *fp, struct uio *uio, int flags)
+{
+        return fp->f_ops->fo_read(fp, uio, flags);
+}
+
+ int
+fo_write(struct file *fp, struct uio *uio, int flags)
+{
+        return fp->f_ops->fo_write(fp, uio, flags);
+}
+
+ int
+fo_truncate(struct file *fp, off_t length)
+{
+        return fp->f_ops->fo_truncate(fp, length);
+}
+
+ int
+fo_ioctl(struct file *fp, u_long com, void *data)
+{
+        return fp->f_ops->fo_ioctl(fp, com, data);
+}
+
+ int
+fo_poll(struct file *fp, int events)
+{
+        return fp->f_ops->fo_poll(fp, events);
+}
+
+ int
+fo_stat(struct file *fp, struct stat *sb)
+{
+        return fp->f_ops->fo_stat(fp, sb);
+}
+
+ int
+fo_close(struct file *fp)
+{
+        return fp->f_ops->fo_close(fp);
+}
+
+ int
+fo_chmod(struct file *fp, mode_t mode)
+{
+        return fp->f_ops->fo_chmod(fp, mode);
+}
+
+bool is_nonblock(struct file *f)
+{
+    return (f->f_flags & FNONBLOCK);
+}
