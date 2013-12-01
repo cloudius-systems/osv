@@ -109,7 +109,7 @@ void smp_launch()
     for (auto c : sched::cpus) {
         if (c == boot_cpu) {
             sched::thread::current()->_cpu = c;
-            c->init_on_cpu();
+            // c->init_on_cpu() already done in main().
             (new sched::thread([c] { c->load_balance(); },
                     sched::thread::attr(c)))->start();
             c->init_idle_thread();

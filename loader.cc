@@ -110,7 +110,7 @@ int main(int ac, char **av)
     debug("OSv " OSV_VERSION " Copyright 2013 Cloudius Systems\n");
 
     test_locale();
-    idt.load_on_cpu();
+    smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
     sched::init([=] { main_cont(ac, av); });
 }
