@@ -411,11 +411,11 @@ kern_socketpair(int domain, int type, int protocol, int *rsv)
 	if (error)
 		goto free2;
 	rsv[0] = fd;
-	fp1->f_data = so1;	/* so1 already has ref count */
+	void* data1 = so1;	/* so1 already has ref count */
 	error = falloc(&fp2, &fd);
 	if (error)
 		goto free3;
-	fp2->f_data = so2;	/* so2 already has ref count */
+	void* data2 = so2;	/* so2 already has ref count */
 	rsv[1] = fd;
 	error = soconnect2(so1, so2);
 	if (error)
@@ -428,8 +428,8 @@ kern_socketpair(int domain, int type, int protocol, int *rsv)
 		 if (error)
 			goto free4;
 	}
-	finit(fp1, FREAD | FWRITE, DTYPE_SOCKET, fp1->f_data, &socketops);
-	finit(fp2, FREAD | FWRITE, DTYPE_SOCKET, fp2->f_data, &socketops);
+	finit(fp1, FREAD | FWRITE, DTYPE_SOCKET, data1, &socketops);
+	finit(fp2, FREAD | FWRITE, DTYPE_SOCKET, data2, &socketops);
 	fdrop(fp1);
 	fdrop(fp2);
 	return (0);
