@@ -58,7 +58,7 @@ Java_com_cloudius_util_Stty_jlineMode
 	struct termios t;
 	ioctl(0, TCGETS, &t);
 	t.c_iflag &= ~(INLCR | ICRNL);
-	t.c_lflag &= ~(ICANON | ECHO);
+	t.c_lflag &= ~(ICANON | ECHO | ISIG);
 	ioctl(0, TCSETS, &t);
 }
 
