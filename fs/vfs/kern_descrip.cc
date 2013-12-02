@@ -172,32 +172,6 @@ int falloc_noinstall(struct file **resultfp)
     return 0;
 }
 
-/*
- * Allocate a file structure and install it into the descriptor table.
- * Holds 2 references when return successfully.
- */
-int falloc(struct file **resultfp, int *resultfd)
-{
-    struct file *fp;
-    int error;
-    int fd;
-
-    error = falloc_noinstall(&fp);
-    if (error)
-        return error;
-
-    error = fdalloc(fp, &fd);
-    if (error) {
-        fdrop(fp);
-        return error;
-    }
-
-    /* Result */
-    *resultfp = fp;
-    *resultfd = fd;
-    return 0;
-}
-
 void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
         struct fileops *ops)
 {
