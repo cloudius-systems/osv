@@ -68,9 +68,9 @@ fileref falloc_noinstall()
     return fileref(fp, false);
 }
 
-fdesc::fdesc(fileref f)
+fdesc::fdesc(file* f)
 {
-    int r = fdalloc(f.get(), &_fd);
+    int r = fdalloc(f, &_fd);
     if (r) {
         throw r;
     }

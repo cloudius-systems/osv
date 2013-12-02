@@ -49,7 +49,9 @@ class fdesc {
 public:
     explicit fdesc() : _fd(-1) {}
     explicit fdesc(int fd) : _fd(fd) {}
-    explicit fdesc(fileref f);
+    explicit fdesc(file* f);
+    explicit fdesc(const fileref& f) : fdesc(f.get()) {}
+    // fdesc(fileref&& f) would be nice, but we can't implement it
     ~fdesc();
     int get() { return _fd; }
     int release() { int fd = -1; std::swap(fd, _fd); return fd; }
