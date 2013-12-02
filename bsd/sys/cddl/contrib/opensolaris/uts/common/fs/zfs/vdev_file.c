@@ -80,13 +80,9 @@ vdev_file_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 
 	vf = vd->vdev_tsd = kmem_zalloc(sizeof (vdev_file_t), KM_SLEEP);
 
-	error = falloc_noinstall(&fp);
+	error = sys_open(vd->vdev_path, O_RDWR, 0, &fp);
 	if (error)
 		goto out_free_vf;
-
-	error = sys_open(vd->vdev_path, O_RDWR, 0, fp);
-	if (error)
-		goto out_fdrop;
 
 	vf->vf_file = fp;
 
@@ -96,8 +92,6 @@ skip_open:
 
 	return (0);
 
-out_fdrop:
-	fdrop(fp);
 out_free_vf:
 	kmem_free(vd->vdev_tsd, sizeof (vdev_file_t));
 	vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;

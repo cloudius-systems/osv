@@ -100,10 +100,6 @@ int open(const char *pathname, int flags, ...)
 	int fd, error;
 	int acc;
 
-	error = falloc(&fp, &fd);
-	if (error)
-		goto out_errno;
-
 	acc = 0;
 	switch (flags & O_ACCMODE) {
 	case O_RDONLY:
@@ -119,19 +115,21 @@ int open(const char *pathname, int flags, ...)
 
 	error = task_conv(t, pathname, acc, path);
 	if (error)
-		goto out_fput;
+		goto out_errno;
 
-	error = sys_open(path, flags, mode, fp);
+	error = sys_open(path, flags, mode, &fp);
+	if (error)
+		goto out_errno;
+
+	error = fdalloc(fp, &fd);
 	if (error)
 		goto out_fput;
-
 	fdrop(fp);
 	trace_vfs_open_ret(fd);
 	return fd;
 
 out_fput:
 	fdrop(fp);
-	fdclose(fd);
 out_errno:
 	errno = error;
 	trace_vfs_open_err(error);
@@ -695,14 +693,9 @@ int chdir(const char *pathname)
 	if (pathname == NULL)
 		goto out_errno;
 
-	error = falloc_noinstall(&fp);
-	if (error)
-		goto out_errno;
-
 	/* Check if directory exits */
-	error = sys_open(path, O_RDONLY, 0, fp);
+	error = sys_open(path, O_RDONLY, 0, &fp);
 	if (error) {
-		fdrop(fp);
 		goto out_errno;
 	}
 
