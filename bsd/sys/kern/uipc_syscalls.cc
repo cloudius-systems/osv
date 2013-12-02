@@ -405,57 +405,33 @@ done1:
 int
 kern_socketpair(int domain, int type, int protocol, int *rsv)
 {
-	struct file *fp1, *fp2;
-	struct socket *so1, *so2;
-	int fd, error;
-	void *data1, *data2;
-
-	error = socreate(domain, &so1, type, protocol, 0, 0);
-	if (error)
-		return (error);
-	error = socreate(domain, &so2, type, protocol, 0, 0);
-	if (error)
-		goto free1;
-	/* On success extra reference to `fp1' and 'fp2' is set by falloc. */
-	error = falloc(&fp1, &fd);
-	if (error)
-		goto free2;
-	rsv[0] = fd;
-	data1 = so1;	/* so1 already has ref count */
-	error = falloc(&fp2, &fd);
-	if (error)
-		goto free3;
-	data2 = so2;	/* so2 already has ref count */
-	rsv[1] = fd;
-	error = soconnect2(so1, so2);
-	if (error)
-		goto free4;
-	if (type == SOCK_DGRAM) {
-		/*
-		 * Datagram socket connection is asymmetric.
-		 */
-		 error = soconnect2(so2, so1);
-		 if (error)
-			goto free4;
+	try {
+		socketref so1 = socreate(domain, type, protocol);
+		socketref so2 = socreate(domain, type, protocol);
+		int error = soconnect2(so1.get(), so2.get());
+		if (error)
+			return error;
+		if (type == SOCK_DGRAM) {
+			/*
+			 * Datagram socket connection is asymmetric.
+			 */
+			 error = soconnect2(so2.get(), so1.get());
+			 if (error)
+				 return error;
+		}
+		fileref fp1 = falloc_noinstall();
+		finit(fp1.get(), FREAD | FWRITE, DTYPE_SOCKET, so1.release(), &socketops);
+		fileref fp2 = falloc_noinstall();
+		finit(fp2.get(), FREAD | FWRITE, DTYPE_SOCKET, so2.release(), &socketops);
+		fdesc fd1(fp1);
+		fdesc fd2(fp2);
+		// end of exception territory; relax
+		rsv[0] = fd1.release();
+		rsv[1] = fd2.release();
+		return 0;
+	} catch (int error) {
+		return error;
 	}
-	finit(fp1, FREAD | FWRITE, DTYPE_SOCKET, data1, &socketops);
-	finit(fp2, FREAD | FWRITE, DTYPE_SOCKET, data2, &socketops);
-	fdrop(fp1);
-	fdrop(fp2);
-	return (0);
-free4:
-    fdrop(fp2);
-	fdrop(fp2);
-free3:
-	fdrop(fp1);
-	fdrop(fp1);
-free2:
-	if (so2 != NULL)
-		(void)soclose(so2);
-free1:
-	if (so1 != NULL)
-		(void)soclose(so1);
-	return (error);
 }
 
 int
