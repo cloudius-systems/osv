@@ -151,7 +151,7 @@ kern_bind(int fd, struct bsd_sockaddr *sa)
 	if (error)
 		return (error);
 
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	error = sobind(so, sa, 0);
 	fdrop(fp);
 	return (error);
@@ -170,7 +170,7 @@ sys_listen(int s, int backlog)
 	    return error;
 	}
 
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	error = solisten(so, backlog, 0);
 	fdrop(fp);
 	return(error);
@@ -213,7 +213,7 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	error = getsock_cap(s, &headfp, &fflag);
 	if (error)
 		return (error);
-	head = file_data(headfp);
+	head = (socket*)file_data(headfp);
 	if ((head->so_options & SO_ACCEPTCONN) == 0) {
 		error = EINVAL;
 		goto done;
@@ -356,7 +356,7 @@ kern_connect(int fd, struct bsd_sockaddr *sa)
 	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	if (so->so_state & SS_ISCONNECTING) {
 		error = EALREADY;
 		goto done1;
@@ -399,6 +399,7 @@ kern_socketpair(int domain, int type, int protocol, int *rsv)
 	struct file *fp1, *fp2;
 	struct socket *so1, *so2;
 	int fd, error;
+	void *data1, *data2;
 
 	error = socreate(domain, &so1, type, protocol, 0, 0);
 	if (error)
@@ -411,11 +412,11 @@ kern_socketpair(int domain, int type, int protocol, int *rsv)
 	if (error)
 		goto free2;
 	rsv[0] = fd;
-	void* data1 = so1;	/* so1 already has ref count */
+	data1 = so1;	/* so1 already has ref count */
 	error = falloc(&fp2, &fd);
 	if (error)
 		goto free3;
-	void* data2 = so2;	/* so2 already has ref count */
+	data2 = so2;	/* so2 already has ref count */
 	rsv[1] = fd;
 	error = soconnect2(so1, so2);
 	if (error)
@@ -467,13 +468,14 @@ sendit(int s, struct msghdr* mp, int flags, ssize_t* bytes)
 	} else {
 		to = NULL;
 	}
+	(void)to;  // FIXME: never used?
 
 	if (mp->msg_control) {
 		if (mp->msg_controllen < sizeof(struct cmsghdr)) {
 			error = EINVAL;
 			goto bad;
 		}
-		error = sockargs(&control, mp->msg_control,
+		error = sockargs(&control, (caddr_t)mp->msg_control,
 		    mp->msg_controllen, MT_CONTROL);
 		if (error)
 			goto bad;
@@ -593,7 +595,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 	error = getsock_cap(s, &fp, NULL);
 	if (error)
 		return (error);
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 
 	auio.uio_iov = mp->msg_iov;
 	auio.uio_iovcnt = mp->msg_iovlen;
@@ -634,7 +636,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 		len = mp->msg_controllen;
 		m = control;
 		mp->msg_controllen = 0;
-		ctlbuf = mp->msg_control;
+		ctlbuf = (caddr_t)mp->msg_control;
 
 		while (m && len > 0) {
 			unsigned int tocopy;
@@ -733,7 +735,7 @@ sys_shutdown(int s, int how)
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = file_data(fp);
+		so = (socket*)file_data(fp);
 		error = soshutdown(so, how);
 		fdrop(fp);
 	}
@@ -770,7 +772,7 @@ kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize)
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = file_data(fp);
+		so = (socket*)file_data(fp);
 		error = sosetopt(so, &sopt);
 		fdrop(fp);
 	}
@@ -831,7 +833,7 @@ kern_getsockopt(int s,
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = file_data(fp);
+		so = (socket*)file_data(fp);
 		error = sogetopt(so, &sopt);
 		*valsize = sopt.sopt_valsize;
 		fdrop(fp);
@@ -878,7 +880,7 @@ kern_getsockname(int fd, struct bsd_sockaddr **sa, socklen_t *alen)
 	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	*sa = NULL;
 	CURVNET_SET(so->so_vnet);
 	error = (*so->so_proto->pr_usrreqs->pru_sockaddr)(so, sa);
