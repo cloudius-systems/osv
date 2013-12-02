@@ -68,13 +68,23 @@ int mprotect(void *addr, size_t len, int prot)
     return 0;
 }
 
+int mmap_validate_flags(int flags)
+{
+    int type = flags & (MAP_SHARED|MAP_PRIVATE);
+    // Either MAP_SHARED or MAP_PRIVATE must be set, but not both.
+    if (!type || type == (MAP_SHARED|MAP_PRIVATE)) {
+        return EINVAL;
+    }
+    return 0;
+}
+
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
     trace_memory_mmap(addr, length, prot, flags, fd, offset);
 
-    if (!(flags & (MAP_SHARED|MAP_PRIVATE))) {
-        errno = EINVAL;
+    errno = mmap_validate_flags(flags);
+    if (errno) {
         trace_memory_mmap_err(errno);
         return MAP_FAILED;
     }
