@@ -231,7 +231,7 @@ kern_accept(int s, struct bsd_sockaddr *name,
 		error = EINVAL;
 		goto done;
 	}
-	error = falloc(&nfp, &fd);
+	error = falloc_noinstall(&nfp);
 	if (error)
 		goto done;
 	ACCEPT_LOCK();
@@ -278,9 +278,6 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	SOCK_UNLOCK(so);
 	ACCEPT_UNLOCK();
 
-	/* An extra reference on `nfp' has been held for us by falloc(). */
-	*out_fd = fd;
-
 	/* FIXME: OSv - Implement... select/poll */
 #if 0
 	/* connection has been removed from the listen queue */
@@ -309,16 +306,15 @@ kern_accept(int s, struct bsd_sockaddr *name,
 			*namelen = sa->sa_len;
 		bcopy(sa, name, *namelen);
 	}
+	error = fdalloc(nfp, &fd);
+	if (error)
+		goto noconnection;
+	/* An extra reference on `nfp' has been held for us by fdalloc(). */
+	*out_fd = fd;
+
 noconnection:
 	if (sa)
 		free(sa);
-
-	/*
-	 * close the new descriptor, assuming someone hasn't ripped it
-	 * out from under us.
-	 */
-	if (error)
-	    fdrop(nfp);
 
 	/*
 	 * Release explicitly held references before returning.  We return
