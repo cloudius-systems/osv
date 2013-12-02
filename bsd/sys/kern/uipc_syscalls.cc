@@ -53,6 +53,10 @@
 #include <osv/uio.h>
 #include <bsd/sys/net/vnet.h>
 
+#include <memory>
+#include <fs/fs.hh>
+
+using namespace std;
 
 /* FIXME: OSv - implement... */
 #if 0
@@ -103,6 +107,22 @@ getsock_cap(int fd, struct file **fpp, u_int *fflagp)
     return (0);
 }
 
+struct socket_closer {
+	void operator()(socket* so) { soclose(so); }
+};
+
+using socketref = unique_ptr<socket, socket_closer>;
+
+socketref socreate(int dom, int type, int proto)
+{
+	socket* so;
+	int error = socreate(dom, &so, type, proto, nullptr, nullptr);
+	if (error) {
+		throw error;
+	}
+	return socketref(so);
+}
+
 /*
  * System call interface to the socket abstraction.
  */
@@ -110,23 +130,16 @@ getsock_cap(int fd, struct file **fpp, u_int *fflagp)
 int
 sys_socket(int domain, int type, int protocol, int *out_fd)
 {
-	struct socket *so;
-	struct file *fp;
-	int fd, error;
-
-	error = falloc(&fp, &fd);
-	if (error)
-		return (error);
-	/* An extra reference on `fp' has been held for us by falloc(). */
-	error = socreate(domain, &so, type, protocol, 0, 0);
-	if (error) {
-		fdrop(fp);
-	} else {
-		finit(fp, FREAD | FWRITE, DTYPE_SOCKET, so, &socketops);
-		*out_fd = fd;
+	try {
+		auto so = socreate(domain, type, protocol);
+		fileref fp = falloc_noinstall();
+		finit(fp.get(), FREAD | FWRITE, DTYPE_SOCKET, so.release(), &socketops);
+		fdesc fd(fp);
+		*out_fd = fd.release();
+		return 0;
+	} catch (int error) {
+		return error;
 	}
-	fdrop(fp);
-	return (error);
 }
 
 /* ARGSUSED */
