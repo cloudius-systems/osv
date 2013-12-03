@@ -139,7 +139,6 @@ struct fileops {
 
 extern struct fileops badfileops;
 extern struct fileops vfs_ops;
-extern struct fileops socketops;
 
 /* Alloc an fd for fp */
 int _fdalloc(struct file *fp, int *newfd, int min_fd);

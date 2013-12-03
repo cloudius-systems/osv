@@ -36,6 +36,7 @@
 #include <osv/uio.h>
 #include <osv/types.h>
 #include <osv/ioctl.h>
+#include <osv/socket.hh>
 #include <fs/unsupported.h>
 #include <osv/initialize.hh>
 
@@ -48,33 +49,35 @@
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/net/vnet.h>
 
+using namespace std;
+
 extern "C" int linux_ioctl_socket(struct file *fp, u_long cmd, void *data) ;
 
-int
-soo_init(struct file *fp)
+socket_file::socket_file(unsigned flags, socket* _so)
+    : file(flags, DTYPE_SOCKET, _so)
+    , so(_so)
 {
-    struct socket *so = (socket*)file_data(fp);
-    so->fp = fp;
-
-    return 0;
+    so->fp = this;
 }
 
-/* ARGSUSED */
-int
-soo_read(struct file *fp, struct uio *uio, int flags)
+socket_file::socket_file(unsigned flags, unique_ptr<socket, socket_closer>&& so)
+    : socket_file(flags, so.get())
 {
-    struct socket *so = (socket*)file_data(fp);
+    so.release();
+}
+
+int
+socket_file::read(struct uio *uio, int flags)
+{
     int error;
 
     error = soreceive(so, 0, uio, 0, 0, 0);
     return (error);
 }
 
-/* ARGSUSED */
 int
-soo_write(struct file *fp, struct uio *uio, int flags)
+socket_file::write(struct uio *uio, int flags)
 {
-    struct socket *so = (socket*)file_data(fp);
     int error;
 
     error = sosend(so, 0, uio, 0, 0, 0, 0);
@@ -89,7 +92,7 @@ soo_write(struct file *fp, struct uio *uio, int flags)
 }
 
 int
-soo_truncate(struct file *fp, off_t length)
+socket_file::truncate(off_t length)
 {
 
     return (EINVAL);
@@ -133,11 +136,9 @@ static char get_ioctl_type(int ioctl)
         return _IOC_TYPE(ioctl) ;
 }
 
-extern "C"
 int
-soo_ioctl(struct file *fp, u_long cmd, void *data)
+socket_file::ioctl(u_long cmd, void *data)
 {
-    struct socket *so = (socket*)file_data(fp);
     int error = 0;
     char ioctl_type ;
     
@@ -230,17 +231,14 @@ soo_ioctl(struct file *fp, u_long cmd, void *data)
 }
 
 int
-soo_poll(struct file *fp, int events)
+socket_file::poll(int events)
 {
-    struct socket *so = (socket*)file_data(fp);
     return (sopoll(so, events, 0, 0));
 }
 
 int
-soo_stat(struct file *fp, struct stat *ub)
+socket_file::stat(struct stat *ub)
 {
-    struct socket *so = (socket*)file_data(fp);
-
     bzero((caddr_t)ub, sizeof (*ub));
     ub->st_mode = S_IFSOCK;
     /*
@@ -269,26 +267,16 @@ soo_stat(struct file *fp, struct stat *ub)
  */
 /* ARGSUSED */
 int
-soo_close(struct file *fp)
+socket_file::close()
 {
     int error = 0;
-    struct socket *so;
-
-    so = (socket*)file_data(fp);
 
     if (so)
         error = soclose(so);
     return (error);
 }
 
-struct fileops socketops = {
-    .fo_init = soo_init,
-    .fo_read = soo_read,
-    .fo_write = soo_write,
-    .fo_truncate = soo_truncate,
-    .fo_ioctl = linux_ioctl_socket,
-    .fo_poll = soo_poll,
-    .fo_stat = soo_stat,
-    .fo_close = soo_close,
-    .fo_chmod = unsupported_chmod,
-};
+int socket_file::chmod(mode_t mode)
+{
+    return unsupported_chmod(this, mode);
+}
