@@ -189,6 +189,7 @@ tests += tests/tst-utimes.so
 tests += tests/tst-tcp.so
 tests += tests/tst-strerror_r.so
 tests += tests/tst-random.so
+tests += tests/tst-commands.so
 
 tests/tst-tcp.so: tests/tst-tcp.o
 
@@ -542,6 +543,7 @@ objects += core/alloctracker.o
 objects += core/printf.o
 objects += arch/x64/elf-dl.o
 objects += linux.o
+objects += core/commands.o
 objects += core/sched.o
 objects += core/mmio.o
 objects += core/kprintf.o

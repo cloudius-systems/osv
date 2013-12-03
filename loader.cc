@@ -43,6 +43,8 @@
 #include <bsd/porting/networking.hh>
 #include "dhcp.hh"
 #include <osv/version.h>
+#include <osv/run.hh>
+#include "commands.hh"
 
 using namespace osv;
 
@@ -192,42 +194,57 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     return std::make_tuple(ac, av);
 }
 
-struct argblock {
-    int ac;
-    char** av;
-};
-
-// Java uses this global variable (supplied by Glibc) to figure out the
-// initial thread's stack end.
-void *__libc_stack_end;
-
-void run_main(elf::program *prog, struct argblock *args)
+// return the std::string and the commands_args poiting to them as a move
+std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
 {
-    auto av = args->av;
-    auto ac = args->ac;
-    // Ensure that the shared library doesn't exit when we return by
-    // keeping a reference to it in the free store.
-    auto obj = *(new std::shared_ptr<elf::object>(prog->get_library(av[0])));
-    if (!obj) {
-        debug("run_main(): cannot execute %s. Powering off.\n", av[0]);
-        osv::poweroff();
+    std::vector<std::vector<std::string> > commands;
+    std::string line = std::string("");
+    bool ok;
+
+    // concatenate everything
+    for (auto i = 0; i < ac; i++) {
+        line += std::string(av[i]) + " ";
     }
-    auto main = obj->lookup<void (int, char**)>("main");
-    assert(main);
+
+    commands = osv::parse_command_line(line, ok);
+
+    if (!ok) {
+        debug("Failed to parse commands line\n");
+        abort();
+    }
+
+    return commands;
+}
+
+void run_main(std::vector<std::string> &vec)
+{
+    auto b = std::begin(vec)++;
+    auto e = std::end(vec);
+    std::string command = vec[0];
+    std::vector<std::string> args(b, e);
+    bool result;
+    int ret;
 
     if (opt_leak) {
         debug("Enabling leak detector.\n");
         memory::tracker_enabled = true;
     }
 
-    __libc_stack_end = __builtin_frame_address(0);
+    result = osv::run(command, args, &ret);
 
-    main(ac, av);
+    // success
+    if (result) {
+        return;
+    }
+
+    debug("run_main(): cannot execute %s. Powering off.\n", command.c_str());
+    osv::poweroff();
 }
 
-void* do_main_thread(void *_args)
+void* do_main_thread(void *_commands)
 {
-    auto args = static_cast<argblock*>(_args);
+    auto commands =
+         static_cast<std::vector<std::vector<std::string> > *>(_commands);
 
     // initialize panic drivers
     panic::pvpanic::probe_and_setup();
@@ -260,7 +277,10 @@ void* do_main_thread(void *_args)
     });
     dhcp_start(true);
 
-    run_main(elf::get_program(), args);
+    // run each payload in order
+    for (auto &it : *commands) {
+        run_main(it);
+    }
 
     return nullptr;
 }
@@ -273,9 +293,12 @@ void main_cont(int ac, char** av)
 {
     new elf::program();
     elf::get_program()->set_search_path({"/", "/usr/lib"});
+    std::vector<std::vector<std::string> > cmds;
 
     sched::preempt_disable();
     std::tie(ac, av) = parse_options(ac, av);
+    // multiple programs can be run -> separate their arguments
+    cmds = prepare_commands(ac, av);
     ioapic::init();
     smp_launch();
     memory::enable_debug_allocator();
@@ -301,8 +324,7 @@ void main_cont(int ac, char** av)
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
-    argblock args{ ac, av };
-    pthread_create(&pthread, nullptr, do_main_thread, &args);
+    pthread_create(&pthread, nullptr, do_main_thread, (void *) &cmds);
     void* retval;
     pthread_join(pthread, &retval);
 

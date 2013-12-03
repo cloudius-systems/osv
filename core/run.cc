@@ -13,13 +13,19 @@ extern int optind;
 using namespace std;
 using namespace boost::range;
 
+// Java uses this global variable (supplied by Glibc) to figure out the
+// initial thread's stack end.
+void *__libc_stack_end;
+bool static stack_end_init;
+
 namespace osv {
 
 bool run(std::string path, int argc, char** argv, int *return_code)
 {
-    // Load the given shared library. When "lib" goes out of scope, it
-    // may be unloaded.
-    auto lib = elf::get_program()->get_library(path);
+    // Ensure that the shared library doesn't exit when we return by
+    // keeping a reference to it in the free store.
+    auto lib = *(new std::shared_ptr<elf::object>(elf::get_program()->get_library(path)));
+
     if (!lib) {
         return false;
     }
@@ -31,6 +37,10 @@ bool run(std::string path, int argc, char** argv, int *return_code)
     // FIXME: fails if run() is executed in parallel
     int old_optind = optind;
     optind = 0;
+    if (!stack_end_init) {
+        __libc_stack_end = __builtin_frame_address(0);
+        stack_end_init = true;
+    }
     int rc = main(argc, argv);
     optind = old_optind;
     if (return_code) {
