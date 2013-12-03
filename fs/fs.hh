@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <boost/intrusive_ptr.hpp>
 #include <osv/file.h>
+#include <utility>
 
 static inline void intrusive_ptr_add_ref(file *fp)
 {
@@ -43,23 +44,29 @@ uint64_t size(fileref f);
 void read(fileref f, void *buffer, uint64_t offset, uint64_t len);
 void write(fileref f, const void* buffer, uint64_t offset, uint64_t len);
 
-template <class file_type = file>
+template <class file_type, typename... args>
 fileref
-make_file(unsigned flags, filetype_t type,
-        void *opaque, struct fileops *ops)
+make_file(args&&... a)
 {
-    file* fp = new (std::nothrow) file_type(flags, type, opaque, ops);
+    file* fp = new (std::nothrow) file_type(std::forward<args>(a)...);
     if (!fp) {
         throw ENOMEM;
     }
     return fileref(fp, false);
 }
 
-template <class T, class file_type = file>
-fileref make_file(unsigned flags, filetype_t type,
-        std::unique_ptr<T>&& opaque, struct fileops *ops)
+inline
+fileref make_file(unsigned flags, filetype_t type, void *opaque,
+        struct fileops *ops)
 {
-    auto f = make_file<file_type>(flags, type, opaque.get(), ops);
+    return make_file<file>(flags, type, opaque, ops);
+}
+
+template <typename T>
+fileref make_file(unsigned flags, filetype_t type, std::unique_ptr<T>&& opaque,
+        struct fileops *ops)
+{
+    auto f = make_file<file>(flags, type, opaque.get(), ops);
     opaque.release();
     return f;
 }
