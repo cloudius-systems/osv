@@ -68,7 +68,7 @@ class epoll_obj {
     std::unordered_map<file*, epoll_event> map;
     file* epoll_fp;
 public:
-    explicit epoll_obj(file* fp) : epoll_fp(fp) {}
+    void set_epoll_fp(file* fp) { epoll_fp = fp; }
     ~epoll_obj() {
         for (auto& e : map) {
             auto fp = e.first;
@@ -195,9 +195,10 @@ int epoll_create1(int flags)
     flags &= ~EPOLL_CLOEXEC;
     assert(!flags);
     try {
-        fileref f{falloc_noinstall()};
-        std::unique_ptr<epoll_obj> s{new epoll_obj(f.get())};
-        finit(f.get(), 0 , DTYPE_UNSPEC, s.release(), &epoll_ops);
+        std::unique_ptr<epoll_obj> s{new epoll_obj};
+        fileref f = make_file(0 , DTYPE_UNSPEC, s.get(), &epoll_ops);
+        s->set_epoll_fp(f.get());
+        s.release();
         fdesc fd(f);
         trace_epoll_create(fd.get());
         return fd.release();
