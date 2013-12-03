@@ -11,15 +11,16 @@
 #include <osv/file.h>
 #include <osv/poll.h>
 #include <fs/vfs/vfs.h>
-#include <osv/initialize.hh>
+#include <osv/vfs_file.hh>
 
-static int vfs_fo_init(struct file *fp)
+vfs_file::vfs_file(unsigned flags)
+	: file(flags, DTYPE_VNODE)
 {
-	return 0;
 }
 
-static int vfs_close(struct file *fp)
+int vfs_file::close()
 {
+	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 
@@ -34,8 +35,9 @@ static int vfs_close(struct file *fp)
 	return 0;
 }
 
-static int vfs_read(struct file *fp, struct uio *uio, int flags)
+int vfs_file::read(struct uio *uio, int flags)
 {
+	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 	size_t count;
@@ -59,8 +61,9 @@ static int vfs_read(struct file *fp, struct uio *uio, int flags)
 }
 
 
-static int vfs_write(struct file *fp, struct uio *uio, int flags)
+int vfs_file::write(struct uio *uio, int flags)
 {
+	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	int ioflags = 0;
 	int error;
@@ -90,8 +93,9 @@ static int vfs_write(struct file *fp, struct uio *uio, int flags)
 	return error;
 }
 
-static int vfs_ioctl(struct file *fp, u_long com, void *data)
+int vfs_file::ioctl(u_long com, void *data)
 {
+	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 
@@ -102,8 +106,9 @@ static int vfs_ioctl(struct file *fp, u_long com, void *data)
 	return error;
 }
 
-static int vfs_stat(struct file *fp, struct stat *st)
+int vfs_file::stat(struct stat *st)
 {
+	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 
@@ -114,17 +119,19 @@ static int vfs_stat(struct file *fp, struct stat *st)
 	return error;
 }
 
-static int vfs_poll(struct file *fp, int events)
+int vfs_file::poll(int events)
 {
 	return poll_no_poll(events);
 }
 
-struct fileops vfs_ops = initialize_with([] (fileops& x) {
-	x.fo_init	= vfs_fo_init;
-	x.fo_close	= vfs_close;
-	x.fo_read	= vfs_read;
-	x.fo_write	= vfs_write;
-	x.fo_ioctl	= vfs_ioctl;
-	x.fo_stat	= vfs_stat;
-	x.fo_poll	= vfs_poll;
-});
+int vfs_file::truncate(off_t len)
+{
+	// somehow this is handled outside file ops
+	abort();
+}
+
+int vfs_file::chmod(mode_t mode)
+{
+	// somehow this is handled outside file ops
+	abort();
+}
