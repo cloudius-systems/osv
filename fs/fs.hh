@@ -44,6 +44,9 @@ void read(fileref f, void *buffer, uint64_t offset, uint64_t len);
 void write(fileref f, const void* buffer, uint64_t offset, uint64_t len);
 
 fileref falloc_noinstall(); // throws error
+fileref make_file(unsigned flags, filetype_t type,
+        void *opaque, struct fileops *ops);
+
 
 class fdesc {
 public:

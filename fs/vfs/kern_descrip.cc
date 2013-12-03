@@ -183,6 +183,14 @@ void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
     fo_init(fp);
 }
 
+fileref make_file(unsigned flags, filetype_t type, void *opaque,
+        struct fileops *ops)
+{
+    auto f = falloc_noinstall();
+    finit(f.get(), flags, type, opaque, ops);
+    return f;
+}
+
 void fhold(struct file* fp)
 {
     __sync_fetch_and_add(&fp->f_count, 1);
