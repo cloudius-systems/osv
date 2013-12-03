@@ -1542,6 +1542,13 @@ extern "C" void mount_zfs_rootfs(void)
 		kprintf("failed to mount devfs, error = %s\n", strerror(ret));
 }
 
+extern "C" void unmount_rootfs(void)
+{
+	sys_umount("/dev");
+
+	sys_umount2("/", MNT_FORCE);
+}
+
 extern "C" void bio_init(void);
 
 int vfs_initialized;
