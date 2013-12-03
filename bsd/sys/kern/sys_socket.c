@@ -274,7 +274,6 @@ soo_close(struct file *fp)
     struct socket *so;
 
     so = file_data(fp);
-    file_makebad(fp);
 
     if (so)
         error = soclose(so);

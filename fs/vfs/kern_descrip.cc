@@ -229,12 +229,6 @@ file::~file()
     }
 }
 
-void file_makebad(struct file *fp)
-{
-    fp->f_ops = &badfileops;
-    fp->f_data = NULL;
-}
-
 dentry* file_dentry(file* fp)
 {
     return fp->f_dentry;

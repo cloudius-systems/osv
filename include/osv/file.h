@@ -140,7 +140,6 @@ filetype_t file_type(struct file *fp);
 void* file_data(struct file *fp);
 void file_setdata(struct file *fp, void *data);
 int file_flags(struct file *fp);
-void file_makebad(struct file *fp);
 struct dentry* file_dentry(struct file *fp);
 off_t file_offset(struct file *fp);
 void file_setoffset(struct file *fp, off_t off);
