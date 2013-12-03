@@ -285,6 +285,19 @@ void console_init(void)
     device_create(&console_driver, "console", D_CHR);
 }
 
+class console_file : public file {
+public:
+    console_file() : file(FREAD|FWRITE, DTYPE_UNSPEC) {}
+    virtual int read(struct uio *uio, int flags) override;
+    virtual int write(struct uio *uio, int flags) override;
+    virtual int truncate(off_t len) override;
+    virtual int ioctl(u_long com, void *data) override;
+    virtual int poll(int events) override;
+    virtual int stat(struct stat* buf) override;
+    virtual int close() override;
+    virtual int chmod(mode_t mode) override;
+};
+
 // The above allows opening /dev/console to use the console. We currently
 // have a bug with the VFS/device layer - vfs_read() and vfs_write() hold a
 // lock throughout the call, preventing a write() to the console while read()
@@ -292,13 +305,8 @@ void console_init(void)
 // character special devices.
 // To bypass this buggy layer, here's an console::open() function, a
 // replacement for open("/dev/console", O_RDWR, 0).
-static int fops_console_init_close(file *f)
-{
-    return 0;
-}
 
-static int
-fops_console_stat(file *f, struct stat *s)
+int console_file::stat(struct stat *s)
 {
     // We are not expected to fill much in s. Java expects (see os::available
     // in os_linux.cpp) S_ISCHR to be true.
@@ -308,22 +316,44 @@ fops_console_stat(file *f, struct stat *s)
     return 0;
 }
 
+int console_file::read(struct uio *uio, int flags)
+{
+    return op_read<file>(this, uio, flags);
+}
 
-static fileops console_ops = {
-    fops_console_init_close,
-    op_read<file>,
-    op_write<file>,
-    unsupported_truncate,
-    op_ioctl<file>,
-    unsupported_poll, // FIXME: implement this, and don't forget poll_wake()
-    fops_console_stat,
-    fops_console_init_close,
-    unsupported_chmod,
-};
+int console_file::write(struct uio *uio, int flags)
+{
+    return op_write<file>(this, uio, flags);
+}
+
+int console_file::truncate(off_t len)
+{
+    return unsupported_truncate(this, len);
+}
+
+int console_file::ioctl(u_long com, void *data)
+{
+    return op_ioctl<file>(this, com, data);
+}
+
+int console_file::poll(int events)
+{
+    return unsupported_poll(this, events);
+}
+
+int console_file::close()
+{
+    return 0;
+}
+
+int console_file::chmod(mode_t mode)
+{
+    return unsupported_chmod(this, mode);
+}
 
 int open() {
     try {
-        fileref f = make_file(FREAD|FWRITE, DTYPE_UNSPEC, NULL, &console_ops);
+        fileref f = make_file<console_file>();
         fdesc fd(f);
         return fd.release();
     } catch (int error) {
