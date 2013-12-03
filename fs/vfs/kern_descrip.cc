@@ -152,14 +152,15 @@ int fget(int fd, struct file **out_fp)
     return 0;
 }
 
-static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
-        struct fileops *ops)
+file::file(unsigned flags, filetype_t type, void *opaque,
+           struct fileops *ops)
+    : f_flags(flags)
+    , f_count(1)
+    , f_ops(ops)
+    , f_data(opaque)
+    , f_type(type)
 {
-    fp->f_flags = flags;
-    fp->f_type = type;
-    fp->f_data = opaque;
-    fp->f_ops = ops;
-    fp->f_count = 1;
+    auto fp = this;
     TAILQ_INIT(&fp->f_poll_list);
 
     fo_init(fp);
@@ -168,11 +169,10 @@ static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque
 fileref make_file(unsigned flags, filetype_t type, void *opaque,
         struct fileops *ops)
 {
-    file* fp = new (std::nothrow) file;
+    file* fp = new (std::nothrow) file(flags, type, opaque, ops);
     if (!fp) {
         throw ENOMEM;
     }
-    finit(fp, flags, type, opaque, ops);
     return fileref(fp, false);
 }
 

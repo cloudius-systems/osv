@@ -74,6 +74,8 @@ struct file;
  * File structure
  */
 struct file {
+	file(unsigned flags, filetype_t type, void *opaque,
+		struct fileops *ops);
 	~file();
 	void operator delete(void *p) { osv::rcu_dispose(p); }
 	int		f_flags;	/* open flags */
