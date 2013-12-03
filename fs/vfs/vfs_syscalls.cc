@@ -53,6 +53,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include "vfs.h"
+#include <fs/fs.hh>
 
 int
 sys_open(char *path, int flags, mode_t mode, struct file **fpp)
@@ -136,10 +137,14 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 			goto out_vn_unlock;
 	}
 
-	error = falloc_noinstall(&fp);
-	if (error)
-		goto out_vn_unlock;
-	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
+	try {
+	    fileref f = make_file(flags, DTYPE_VNODE, NULL, &vfs_ops);
+	    fp = f.get();
+	    fhold(fp);
+	} catch (int err) {
+	    error = err;
+	    goto out_vn_unlock;
+	}
 	fp->f_dentry = dp;
 
 	error = VOP_OPEN(vp, fp);
