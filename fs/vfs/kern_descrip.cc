@@ -166,6 +166,46 @@ file::file(unsigned flags, filetype_t type, void *opaque,
     fo_init(fp);
 }
 
+int file::read(struct uio *uio, int flags)
+{
+    return f_ops->fo_read(this, uio, flags);
+}
+
+int file::write(struct uio *uio, int flags)
+{
+    return f_ops->fo_write(this, uio, flags);
+}
+
+int file::truncate(off_t len)
+{
+    return f_ops->fo_truncate(this, len);
+}
+
+int file::ioctl(u_long com, void *data)
+{
+    return f_ops->fo_ioctl(this, com, data);
+}
+
+int file::poll(int events)
+{
+    return f_ops->fo_poll(this, events);
+}
+
+int file::stat(struct stat* buf)
+{
+    return f_ops->fo_stat(this, buf);
+}
+
+int file::close()
+{
+    return f_ops->fo_close(this);
+}
+
+int file::chmod(mode_t mode)
+{
+    return f_ops->fo_chmod(this, mode);
+}
+
 void fhold(struct file* fp)
 {
     __sync_fetch_and_add(&fp->f_count, 1);
@@ -279,49 +319,49 @@ fo_init(struct file *fp)
  int
 fo_read(struct file *fp, struct uio *uio, int flags)
 {
-        return fp->f_ops->fo_read(fp, uio, flags);
+        return fp->read(uio, flags);
 }
 
  int
 fo_write(struct file *fp, struct uio *uio, int flags)
 {
-        return fp->f_ops->fo_write(fp, uio, flags);
+        return fp->write(uio, flags);
 }
 
  int
 fo_truncate(struct file *fp, off_t length)
 {
-        return fp->f_ops->fo_truncate(fp, length);
+        return fp->truncate(length);
 }
 
  int
 fo_ioctl(struct file *fp, u_long com, void *data)
 {
-        return fp->f_ops->fo_ioctl(fp, com, data);
+        return fp->ioctl(com, data);
 }
 
  int
 fo_poll(struct file *fp, int events)
 {
-        return fp->f_ops->fo_poll(fp, events);
+        return fp->poll(events);
 }
 
  int
 fo_stat(struct file *fp, struct stat *sb)
 {
-        return fp->f_ops->fo_stat(fp, sb);
+        return fp->stat(sb);
 }
 
  int
 fo_close(struct file *fp)
 {
-        return fp->f_ops->fo_close(fp);
+        return fp->close();
 }
 
  int
 fo_chmod(struct file *fp, mode_t mode)
 {
-        return fp->f_ops->fo_chmod(fp, mode);
+        return fp->chmod(mode);
 }
 
 bool is_nonblock(struct file *f)

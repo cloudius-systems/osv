@@ -76,8 +76,18 @@ struct file;
 struct file {
 	file(unsigned flags, filetype_t type, void *opaque,
 		struct fileops *ops);
-	~file();
+	virtual ~file();
 	void operator delete(void *p) { osv::rcu_dispose(p); }
+
+	virtual int read(struct uio *uio, int flags);
+	virtual int write(struct uio *uio, int flags);
+	virtual int truncate(off_t len);
+	virtual int ioctl(u_long com, void *data);
+	virtual int poll(int events);
+	virtual int stat(struct stat* buf);
+	virtual int close();
+	virtual int chmod(mode_t mode);
+
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
 	off_t		f_offset = 0;	/* current position in file */
