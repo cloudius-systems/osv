@@ -152,21 +152,6 @@ int fget(int fd, struct file **out_fp)
     return 0;
 }
 
-/*
- * Allocate a file structure without installing it into the descriptor table.
- */
-static int falloc_noinstall(struct file **resultfp)
-{
-    struct file *fp;
-
-    fp = new (std::nothrow) file;
-    if (!fp)
-        return ENOMEM;
-
-    *resultfp = fp;
-    return 0;
-}
-
 static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
         struct fileops *ops)
 {
@@ -183,10 +168,9 @@ static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque
 fileref make_file(unsigned flags, filetype_t type, void *opaque,
         struct fileops *ops)
 {
-    file* fp;
-    auto error = falloc_noinstall(&fp);
-    if (error) {
-        throw error;
+    file* fp = new (std::nothrow) file;
+    if (!fp) {
+        throw ENOMEM;
     }
     finit(fp, flags, type, opaque, ops);
     return fileref(fp, false);
