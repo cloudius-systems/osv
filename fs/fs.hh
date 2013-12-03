@@ -43,14 +43,23 @@ uint64_t size(fileref f);
 void read(fileref f, void *buffer, uint64_t offset, uint64_t len);
 void write(fileref f, const void* buffer, uint64_t offset, uint64_t len);
 
-fileref make_file(unsigned flags, filetype_t type,
-        void *opaque, struct fileops *ops);
+template <class file_type = file>
+fileref
+make_file(unsigned flags, filetype_t type,
+        void *opaque, struct fileops *ops)
+{
+    file* fp = new (std::nothrow) file_type(flags, type, opaque, ops);
+    if (!fp) {
+        throw ENOMEM;
+    }
+    return fileref(fp, false);
+}
 
-template <class T>
+template <class T, class file_type = file>
 fileref make_file(unsigned flags, filetype_t type,
         std::unique_ptr<T>&& opaque, struct fileops *ops)
 {
-    auto f = make_file(flags, type, opaque.get(), ops);
+    auto f = make_file<file_type>(flags, type, opaque.get(), ops);
     opaque.release();
     return f;
 }
