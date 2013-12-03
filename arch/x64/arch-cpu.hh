@@ -139,7 +139,8 @@ inline void arch_cpu::init_on_cpu()
     // We can't trust the FPU and the MXCSR to be always initialized to default values.
     // In at least one particular version of Xen it is not, leading to SIMD exceptions.
     asm volatile ("fninit" ::: "memory");
-    _mm_setcsr(0x1f80);
+    unsigned int csr = 0x1f80;
+    asm volatile ("ldmxcsr %0" : : "m" (csr));
 }
 
 struct exception_guard {
