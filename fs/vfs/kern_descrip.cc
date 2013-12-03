@@ -159,7 +159,7 @@ static int falloc_noinstall(struct file **resultfp)
 {
     struct file *fp;
 
-    fp = new file;
+    fp = new (std::nothrow) file;
     if (!fp)
         return ENOMEM;
 
