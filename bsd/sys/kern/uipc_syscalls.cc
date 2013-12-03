@@ -132,8 +132,7 @@ sys_socket(int domain, int type, int protocol, int *out_fd)
 {
 	try {
 		auto so = socreate(domain, type, protocol);
-		fileref fp = falloc_noinstall();
-		finit(fp.get(), FREAD | FWRITE, DTYPE_SOCKET, so.release(), &socketops);
+		fileref fp = make_file(FREAD | FWRITE, DTYPE_SOCKET, so.release(), &socketops);
 		fdesc fd(fp);
 		*out_fd = fd.release();
 		return 0;
