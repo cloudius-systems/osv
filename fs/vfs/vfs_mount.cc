@@ -209,7 +209,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
 }
 
 int
-sys_umount(const char *path)
+sys_umount2(const char *path, int flags)
 {
     struct mount *mp;
     int error;
@@ -231,7 +231,7 @@ found:
     /*
      * Root fs can not be unmounted.
      */
-    if (mp->m_covered == NULL) {
+    if (mp->m_covered == NULL && !(flags & MNT_FORCE)) {
         error = EINVAL;
         goto out;
     }
@@ -240,7 +240,9 @@ found:
     LIST_REMOVE(mp, m_link);
 
     /* Decrement referece count of root vnode */
-    drele(mp->m_covered);
+    if (mp->m_covered) {
+        drele(mp->m_covered);
+    }
 
     /* Release all vnodes */
     vflush(mp);
@@ -256,6 +258,12 @@ found:
  out:
     MOUNT_UNLOCK();
     return error;
+}
+
+int
+sys_umount(const char *path)
+{
+    return sys_umount2(path, 0);
 }
 
 int

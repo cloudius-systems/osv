@@ -116,6 +116,7 @@ ssize_t	 sys_readlink(char *path, char *buf, size_t bufsize);
 int  sys_utimes(char *path, const struct timeval times[2]);
 
 int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
+int	 sys_umount2(const char *path, int flags);
 int	 sys_umount(const char *path);
 int	 sys_pivot_root(const char *new_root, const char *old_put);
 int	 sys_sync(void);

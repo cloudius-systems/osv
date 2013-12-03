@@ -56,7 +56,6 @@ extern "C" {
 #define MS_MGC_VAL 0xc0ed0000
 #define MS_MGC_MSK 0xffff0000
 
-#define MNT_FORCE       1
 #define MNT_DETACH      2
 #define MNT_EXPIRE      4
 #define UMOUNT_NOFOLLOW 8

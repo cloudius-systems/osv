@@ -61,8 +61,6 @@ struct mount {
 
 /*
  * Mount flags.
- *
- * Unmount uses MNT_FORCE flag.
  */
 #define	MNT_RDONLY	0x00000001	/* read only filesystem */
 #define	MNT_SYNCHRONOUS	0x00000002	/* file system written synchronously */
@@ -71,6 +69,11 @@ struct mount {
 #define	MNT_NODEV	0x00000010	/* don't interpret special files */
 #define	MNT_UNION	0x00000020	/* union with underlying filesystem */
 #define	MNT_ASYNC	0x00000040	/* file system written asynchronously */
+
+/*
+ * Unmount flags.
+ */
+#define MNT_FORCE	0x00000001	/* forced unmount */
 
 /*
  * exported mount flags.
