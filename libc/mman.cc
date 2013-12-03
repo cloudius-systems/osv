@@ -10,6 +10,8 @@
 #include "mmu.hh"
 #include "debug.hh"
 #include "osv/trace.hh"
+#include "osv/dentry.h"
+#include "osv/mount.h"
 #include "libc/libc.hh"
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
@@ -82,6 +84,28 @@ int mmap_validate(void *addr, size_t length, int flags, off_t offset)
     return 0;
 }
 
+int mmap_validate_file(const fileref f, int prot, int flags)
+{
+    if (!f) {
+        return EBADF;
+    }
+    // fail if mapping a file that is not opened for reading.
+    if (!(f->f_flags & FREAD)) {
+        return EACCES;
+    }
+    if (prot & PROT_WRITE) {
+        if ((flags & MAP_SHARED) && !(f->f_flags & FWRITE)) {
+            return EACCES;
+        }
+    }
+    // fail if prot asks for PROT_EXEC and the underlying FS was
+    // mounted no-exec.
+    if (prot & PROT_EXEC && (f->f_dentry->d_mount->m_flags & MNT_NOEXEC)) {
+        return EPERM;
+    }
+    return 0;
+}
+
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
@@ -97,11 +121,18 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     assert(reinterpret_cast<long>(addr) >= 0);
 
     void *ret;
-    if (fd == -1) {
+    if (flags & MAP_ANONYMOUS) {
         ret = mmu::map_anon(addr, length, libc_flags_to_mmap(flags),
                 libc_prot_to_perm(prot));
     } else {
         fileref f(fileref_from_fd(fd));
+
+        errno = mmap_validate_file(f, prot, flags);
+        if (errno) {
+            trace_memory_mmap_err(errno);
+            return MAP_FAILED;
+        }
+
         ret = mmu::map_file(addr, length, !(flags & MAP_FIXED),
                 libc_prot_to_perm(prot), f, offset, flags & MAP_SHARED);
     }
