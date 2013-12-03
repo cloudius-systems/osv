@@ -68,11 +68,15 @@ int mprotect(void *addr, size_t len, int prot)
     return 0;
 }
 
-int mmap_validate_flags(int flags)
+int mmap_validate(void *addr, size_t length, int flags, off_t offset)
 {
     int type = flags & (MAP_SHARED|MAP_PRIVATE);
     // Either MAP_SHARED or MAP_PRIVATE must be set, but not both.
     if (!type || type == (MAP_SHARED|MAP_PRIVATE)) {
+        return EINVAL;
+    }
+    if ((flags & MAP_FIXED && (reinterpret_cast<intptr_t>(addr) & 4095)) ||
+        (offset & 4095) || length == 0) {
         return EINVAL;
     }
     return 0;
@@ -83,13 +87,11 @@ void *mmap(void *addr, size_t length, int prot, int flags,
 {
     trace_memory_mmap(addr, length, prot, flags, fd, offset);
 
-    errno = mmap_validate_flags(flags);
+    errno = mmap_validate(addr, length, flags, offset);
     if (errno) {
         trace_memory_mmap_err(errno);
         return MAP_FAILED;
     }
-
-    // TODO: should fail with EINVAL in some cases of addr, length, offset.
 
     // make use the payload isn't remapping physical memory
     assert(reinterpret_cast<long>(addr) >= 0);
