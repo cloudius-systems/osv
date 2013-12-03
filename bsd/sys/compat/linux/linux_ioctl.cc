@@ -50,7 +50,7 @@
 #include <osv/ioctl.h>
 #include <sys/ioctl.h>
 
-extern int soo_ioctl(struct file *fp, u_long cmd, void *data);
+extern "C" int soo_ioctl(struct file *fp, u_long cmd, void *data);
 
 /*
  * Implement the SIOCGIFCONF ioctl
@@ -225,6 +225,8 @@ linux_to_bsd_ifreq(struct bsd_ifreq *ifr_p)
 /*
  * Socket related ioctls
  */
+
+extern "C" int linux_ioctl_socket(struct file *fp, u_long cmd, void *data);
 
 int
 linux_ioctl_socket(struct file *fp, u_long cmd, void *data)
