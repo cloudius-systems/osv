@@ -53,6 +53,10 @@
 #include <osv/uio.h>
 #include <bsd/sys/net/vnet.h>
 
+#include <memory>
+#include <fs/fs.hh>
+
+using namespace std;
 
 /* FIXME: OSv - implement... */
 #if 0
@@ -103,6 +107,22 @@ getsock_cap(int fd, struct file **fpp, u_int *fflagp)
     return (0);
 }
 
+struct socket_closer {
+	void operator()(socket* so) { soclose(so); }
+};
+
+using socketref = unique_ptr<socket, socket_closer>;
+
+socketref socreate(int dom, int type, int proto)
+{
+	socket* so;
+	int error = socreate(dom, &so, type, proto, nullptr, nullptr);
+	if (error) {
+		throw error;
+	}
+	return socketref(so);
+}
+
 /*
  * System call interface to the socket abstraction.
  */
@@ -110,23 +130,16 @@ getsock_cap(int fd, struct file **fpp, u_int *fflagp)
 int
 sys_socket(int domain, int type, int protocol, int *out_fd)
 {
-	struct socket *so;
-	struct file *fp;
-	int fd, error;
-
-	error = falloc(&fp, &fd);
-	if (error)
-		return (error);
-	/* An extra reference on `fp' has been held for us by falloc(). */
-	error = socreate(domain, &so, type, protocol, 0, 0);
-	if (error) {
-		fdrop(fp);
-	} else {
-		finit(fp, FREAD | FWRITE, DTYPE_SOCKET, so, &socketops);
-		*out_fd = fd;
+	try {
+		auto so = socreate(domain, type, protocol);
+		fileref fp = falloc_noinstall();
+		finit(fp.get(), FREAD | FWRITE, DTYPE_SOCKET, so.release(), &socketops);
+		fdesc fd(fp);
+		*out_fd = fd.release();
+		return 0;
+	} catch (int error) {
+		return error;
 	}
-	fdrop(fp);
-	return (error);
 }
 
 /* ARGSUSED */
@@ -151,7 +164,7 @@ kern_bind(int fd, struct bsd_sockaddr *sa)
 	if (error)
 		return (error);
 
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	error = sobind(so, sa, 0);
 	fdrop(fp);
 	return (error);
@@ -170,7 +183,7 @@ sys_listen(int s, int backlog)
 	    return error;
 	}
 
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	error = solisten(so, backlog, 0);
 	fdrop(fp);
 	return(error);
@@ -213,12 +226,12 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	error = getsock_cap(s, &headfp, &fflag);
 	if (error)
 		return (error);
-	head = file_data(headfp);
+	head = (socket*)file_data(headfp);
 	if ((head->so_options & SO_ACCEPTCONN) == 0) {
 		error = EINVAL;
 		goto done;
 	}
-	error = falloc(&nfp, &fd);
+	error = falloc_noinstall(&nfp);
 	if (error)
 		goto done;
 	ACCEPT_LOCK();
@@ -265,9 +278,6 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	SOCK_UNLOCK(so);
 	ACCEPT_UNLOCK();
 
-	/* An extra reference on `nfp' has been held for us by falloc(). */
-	*out_fd = fd;
-
 	/* FIXME: OSv - Implement... select/poll */
 #if 0
 	/* connection has been removed from the listen queue */
@@ -296,16 +306,15 @@ kern_accept(int s, struct bsd_sockaddr *name,
 			*namelen = sa->sa_len;
 		bcopy(sa, name, *namelen);
 	}
+	error = fdalloc(nfp, &fd);
+	if (error)
+		goto noconnection;
+	/* An extra reference on `nfp' has been held for us by fdalloc(). */
+	*out_fd = fd;
+
 noconnection:
 	if (sa)
 		free(sa);
-
-	/*
-	 * close the new descriptor, assuming someone hasn't ripped it
-	 * out from under us.
-	 */
-	if (error)
-	    fdrop(nfp);
 
 	/*
 	 * Release explicitly held references before returning.  We return
@@ -356,7 +365,7 @@ kern_connect(int fd, struct bsd_sockaddr *sa)
 	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	if (so->so_state & SS_ISCONNECTING) {
 		error = EALREADY;
 		goto done1;
@@ -396,56 +405,33 @@ done1:
 int
 kern_socketpair(int domain, int type, int protocol, int *rsv)
 {
-	struct file *fp1, *fp2;
-	struct socket *so1, *so2;
-	int fd, error;
-
-	error = socreate(domain, &so1, type, protocol, 0, 0);
-	if (error)
-		return (error);
-	error = socreate(domain, &so2, type, protocol, 0, 0);
-	if (error)
-		goto free1;
-	/* On success extra reference to `fp1' and 'fp2' is set by falloc. */
-	error = falloc(&fp1, &fd);
-	if (error)
-		goto free2;
-	rsv[0] = fd;
-	void* data1 = so1;	/* so1 already has ref count */
-	error = falloc(&fp2, &fd);
-	if (error)
-		goto free3;
-	void* data2 = so2;	/* so2 already has ref count */
-	rsv[1] = fd;
-	error = soconnect2(so1, so2);
-	if (error)
-		goto free4;
-	if (type == SOCK_DGRAM) {
-		/*
-		 * Datagram socket connection is asymmetric.
-		 */
-		 error = soconnect2(so2, so1);
-		 if (error)
-			goto free4;
+	try {
+		socketref so1 = socreate(domain, type, protocol);
+		socketref so2 = socreate(domain, type, protocol);
+		int error = soconnect2(so1.get(), so2.get());
+		if (error)
+			return error;
+		if (type == SOCK_DGRAM) {
+			/*
+			 * Datagram socket connection is asymmetric.
+			 */
+			 error = soconnect2(so2.get(), so1.get());
+			 if (error)
+				 return error;
+		}
+		fileref fp1 = falloc_noinstall();
+		finit(fp1.get(), FREAD | FWRITE, DTYPE_SOCKET, so1.release(), &socketops);
+		fileref fp2 = falloc_noinstall();
+		finit(fp2.get(), FREAD | FWRITE, DTYPE_SOCKET, so2.release(), &socketops);
+		fdesc fd1(fp1);
+		fdesc fd2(fp2);
+		// end of exception territory; relax
+		rsv[0] = fd1.release();
+		rsv[1] = fd2.release();
+		return 0;
+	} catch (int error) {
+		return error;
 	}
-	finit(fp1, FREAD | FWRITE, DTYPE_SOCKET, data1, &socketops);
-	finit(fp2, FREAD | FWRITE, DTYPE_SOCKET, data2, &socketops);
-	fdrop(fp1);
-	fdrop(fp2);
-	return (0);
-free4:
-    fdrop(fp2);
-	fdrop(fp2);
-free3:
-	fdrop(fp1);
-	fdrop(fp1);
-free2:
-	if (so2 != NULL)
-		(void)soclose(so2);
-free1:
-	if (so1 != NULL)
-		(void)soclose(so1);
-	return (error);
 }
 
 int
@@ -467,13 +453,14 @@ sendit(int s, struct msghdr* mp, int flags, ssize_t* bytes)
 	} else {
 		to = NULL;
 	}
+	(void)to;  // FIXME: never used?
 
 	if (mp->msg_control) {
 		if (mp->msg_controllen < sizeof(struct cmsghdr)) {
 			error = EINVAL;
 			goto bad;
 		}
-		error = sockargs(&control, mp->msg_control,
+		error = sockargs(&control, (caddr_t)mp->msg_control,
 		    mp->msg_controllen, MT_CONTROL);
 		if (error)
 			goto bad;
@@ -593,7 +580,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 	error = getsock_cap(s, &fp, NULL);
 	if (error)
 		return (error);
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 
 	auio.uio_iov = mp->msg_iov;
 	auio.uio_iovcnt = mp->msg_iovlen;
@@ -634,7 +621,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 		len = mp->msg_controllen;
 		m = control;
 		mp->msg_controllen = 0;
-		ctlbuf = mp->msg_control;
+		ctlbuf = (caddr_t)mp->msg_control;
 
 		while (m && len > 0) {
 			unsigned int tocopy;
@@ -733,7 +720,7 @@ sys_shutdown(int s, int how)
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = file_data(fp);
+		so = (socket*)file_data(fp);
 		error = soshutdown(so, how);
 		fdrop(fp);
 	}
@@ -770,7 +757,7 @@ kern_setsockopt(int s, int level, int name, void *val, socklen_t valsize)
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = file_data(fp);
+		so = (socket*)file_data(fp);
 		error = sosetopt(so, &sopt);
 		fdrop(fp);
 	}
@@ -831,7 +818,7 @@ kern_getsockopt(int s,
 
 	error = getsock_cap(s, &fp, NULL);
 	if (error == 0) {
-		so = file_data(fp);
+		so = (socket*)file_data(fp);
 		error = sogetopt(so, &sopt);
 		*valsize = sopt.sopt_valsize;
 		fdrop(fp);
@@ -878,7 +865,7 @@ kern_getsockname(int fd, struct bsd_sockaddr **sa, socklen_t *alen)
 	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = file_data(fp);
+	so = (socket*)file_data(fp);
 	*sa = NULL;
 	CURVNET_SET(so->so_vnet);
 	error = (*so->so_proto->pr_usrreqs->pru_sockaddr)(so, sa);

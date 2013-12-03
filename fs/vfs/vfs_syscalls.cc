@@ -55,8 +55,9 @@
 #include "vfs.h"
 
 int
-sys_open(char *path, int flags, mode_t mode, struct file *fp)
+sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 {
+	file *fp;
 	struct dentry *dp, *ddp;
 	struct vnode *vp;
 	char *filename;
@@ -135,16 +136,22 @@ sys_open(char *path, int flags, mode_t mode, struct file *fp)
 			goto out_vn_unlock;
 	}
 
+	error = falloc_noinstall(&fp);
+	if (error)
+		goto out_vn_unlock;
 	finit(fp, flags, DTYPE_VNODE, NULL, &vfs_ops);
 	fp->f_dentry = dp;
 
 	error = VOP_OPEN(vp, fp);
 	if (error)
-		goto out_vn_unlock;
+		goto out_free_fp;
 	vn_unlock(vp);
 
+	*fpp = fp;
 	return 0;
 
+out_free_fp:
+	fdrop(fp);
 out_vn_unlock:
 	vn_unlock(vp);
 out_drele:
@@ -339,13 +346,9 @@ check_dir_empty(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("check_dir_empty\n"));
 
-	error = falloc_noinstall(&fp);
+	error = sys_open(path, O_RDONLY, 0, &fp);
 	if (error)
-		return error;
-
-	error = sys_open(path, O_RDONLY, 0, fp);
-	if (error)
-		goto out_fdrop;
+		goto out_error;
 
 	do {
 		error = sys_readdir(fp, &dir);
@@ -357,8 +360,8 @@ check_dir_empty(char *path)
 		error = 0;
 	else if (error == 0)
 		error = EEXIST;
-out_fdrop:
 	fdrop(fp);
+out_error:
 	return error;
 }
 

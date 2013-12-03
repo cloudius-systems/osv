@@ -8,9 +8,12 @@
 #ifndef UIPC_SYSCALLS_H
 #define UIPC_SYSCALLS_H
 
+#include <sys/cdefs.h>
 #include <osv/file.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/socket.h>
+
+__BEGIN_DECLS
 
 /* Private interface */
 int kern_bind(int fd, struct bsd_sockaddr *sa);
@@ -65,5 +68,7 @@ int linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
 int linux_socketpair(int domain, int type, int protocol, int* rsv);
 int linux_getsockname(int s, struct bsd_sockaddr *addr, socklen_t *addrlen);
 
+
+__END_DECLS
 
 #endif /* !UIPC_SYSCALLS_H */

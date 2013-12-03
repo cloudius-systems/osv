@@ -33,6 +33,8 @@
 #ifndef _SYS_SOCKOPT_H_
 #define _SYS_SOCKOPT_H_
 
+#include <sys/cdefs.h>
+
 #ifndef _KERNEL
 #error "no user-servicable parts inside"
 #endif
@@ -56,6 +58,8 @@ struct	sockopt {
 	struct	thread *sopt_td; /* calling thread or null if kernel */
 };
 
+__BEGIN_DECLS
+
 int	sosetopt(struct socket *so, struct sockopt *sopt);
 int	sogetopt(struct socket *so, struct sockopt *sopt);
 int	sooptcopyin(struct sockopt *sopt, void *buf, size_t len, size_t minlen);
@@ -68,5 +72,7 @@ int	do_getopt_accept_filter(struct socket *so, struct sockopt *sopt);
 int	do_setopt_accept_filter(struct socket *so, struct sockopt *sopt);
 int	so_setsockopt(struct socket *so, int level, int optname,
 	    void *optval, size_t optlen);
+
+__END_DECLS
 
 #endif /* _SYS_SOCKOPT_H_ */

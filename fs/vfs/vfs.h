@@ -84,7 +84,7 @@ struct task {
 extern const struct vfssw vfssw[];
 
 __BEGIN_DECLS
-int	 sys_open(char *path, int flags, mode_t mode, struct file *fp);
+int	 sys_open(char *path, int flags, mode_t mode, struct file **fp);
 int	 sys_read(struct file *fp, struct iovec *iov, size_t niov,
 		off_t offset, size_t *count);
 int	 sys_write(struct file *fp, struct iovec *iov, size_t niov,
