@@ -163,10 +163,6 @@ static int falloc_noinstall(struct file **resultfp)
     if (!fp)
         return ENOMEM;
 
-    fp->f_ops = &badfileops;
-    fp->f_count = 1;
-    TAILQ_INIT(&fp->f_poll_list);
-
     *resultfp = fp;
     return 0;
 }
@@ -178,6 +174,8 @@ static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque
     fp->f_type = type;
     fp->f_data = opaque;
     fp->f_ops = ops;
+    fp->f_count = 1;
+    TAILQ_INIT(&fp->f_poll_list);
 
     fo_init(fp);
 }
