@@ -297,6 +297,10 @@ sys_pivot_root(const char *new_root, const char *put_old)
         }
         LIST_REMOVE(oldmp, m_link);
 
+        newmp->m_root->d_vnode->v_mount = newmp;
+
+        newmp->m_covered = NULL;
+
         vflush(oldmp);
 
         free(oldmp);
