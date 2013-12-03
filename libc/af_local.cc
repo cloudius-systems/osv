@@ -90,10 +90,8 @@ int socketpair_af_local(int type, int proto, int sv[2])
     std::unique_ptr<af_local> s1{new af_local(b1, b2)};
     std::unique_ptr<af_local> s2{new af_local(b2, b1)};
     try {
-        fileref f1{falloc_noinstall()};
-        fileref f2{falloc_noinstall()};
-        finit(f1.get(), FREAD|FWRITE, DTYPE_UNSPEC, s1.release(), &af_local_ops);
-        finit(f2.get(), FREAD|FWRITE, DTYPE_UNSPEC, s2.release(), &af_local_ops);
+        fileref f1 = make_file(FREAD|FWRITE, DTYPE_UNSPEC, move(s1), &af_local_ops);
+        fileref f2 = make_file(FREAD|FWRITE, DTYPE_UNSPEC, move(s2), &af_local_ops);
         fdesc fd1(f1);
         fdesc fd2(f2);
         // all went well, user owns descriptors now
