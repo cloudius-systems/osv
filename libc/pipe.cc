@@ -99,10 +99,8 @@ int pipe(int pipefd[2]) {
     std::unique_ptr<pipe_reader> s1{new pipe_reader(b)};
     std::unique_ptr<pipe_writer> s2{new pipe_writer(b)};
     try {
-        fileref f1{falloc_noinstall()};
-        fileref f2{falloc_noinstall()};
-        finit(f1.get(), FREAD, DTYPE_UNSPEC, s1.release(), &pipe_ops);
-        finit(f2.get(), FWRITE, DTYPE_UNSPEC, s2.release(), &pipe_ops);
+        fileref f1 = make_file(FREAD, DTYPE_UNSPEC, move(s1), &pipe_ops);
+        fileref f2 = make_file(FWRITE, DTYPE_UNSPEC, move(s2), &pipe_ops);
         fdesc fd1(f1);
         fdesc fd2(f2);
         // all went well, user owns descriptors now
