@@ -68,6 +68,7 @@ enum {
 enum {
     mmap_fixed       = 1ul << 0,
     mmap_populate    = 1ul << 1,
+    mmap_shared      = 1ul << 2,
 };
 
 class vma {
@@ -118,8 +119,8 @@ private:
     bool _shared;
 };
 
-void* map_file(void* addr, size_t size, bool search, unsigned perm,
-              fileref file, f_offset offset, bool shared);
+void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
+              fileref file, f_offset offset);
 void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm);
 void unmap(void* addr, size_t size);
 int protect(void *addr, size_t size, unsigned int perm);

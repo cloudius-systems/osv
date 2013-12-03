@@ -733,9 +733,11 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     return v;
 }
 
-void* map_file(void* addr, size_t size, bool search, unsigned perm,
-              fileref f, f_offset offset, bool shared)
+void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
+              fileref f, f_offset offset)
 {
+    bool search = !(flags & mmu::mmap_fixed);
+    bool shared = flags & mmu::mmap_shared;
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;

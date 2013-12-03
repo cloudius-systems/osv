@@ -28,6 +28,9 @@ unsigned libc_flags_to_mmap(int flags)
     if (flags & MAP_POPULATE) {
         mmap_flags |= mmu::mmap_populate;
     }
+    if (flags & MAP_SHARED) {
+        mmap_flags |= mmu::mmap_shared;
+    }
     return mmap_flags;
 }
 
@@ -133,8 +136,8 @@ void *mmap(void *addr, size_t length, int prot, int flags,
             return MAP_FAILED;
         }
 
-        ret = mmu::map_file(addr, length, !(flags & MAP_FIXED),
-                libc_prot_to_perm(prot), f, offset, flags & MAP_SHARED);
+        ret = mmu::map_file(addr, length, libc_flags_to_mmap(flags),
+                libc_prot_to_perm(prot), f, offset);
     }
     trace_memory_mmap_ret(ret);
     return ret;
