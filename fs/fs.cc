@@ -58,16 +58,6 @@ fileref fileref_from_fname(std::string fname)
     return f;
 }
 
-fileref falloc_noinstall()
-{
-    file* fp;
-    int ret = falloc_noinstall(&fp);
-    if (ret) {
-        throw ret;
-    }
-    return fileref(fp, false);
-}
-
 fdesc::fdesc(file* f)
 {
     int r = fdalloc(f, &_fd);

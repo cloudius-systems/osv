@@ -155,7 +155,7 @@ int fget(int fd, struct file **out_fp)
 /*
  * Allocate a file structure without installing it into the descriptor table.
  */
-int falloc_noinstall(struct file **resultfp)
+static int falloc_noinstall(struct file **resultfp)
 {
     struct file *fp;
 
@@ -172,7 +172,7 @@ int falloc_noinstall(struct file **resultfp)
     return 0;
 }
 
-void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
+static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
         struct fileops *ops)
 {
     fp->f_flags = flags;
@@ -186,9 +186,13 @@ void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
 fileref make_file(unsigned flags, filetype_t type, void *opaque,
         struct fileops *ops)
 {
-    auto f = falloc_noinstall();
-    finit(f.get(), flags, type, opaque, ops);
-    return f;
+    file* fp;
+    auto error = falloc_noinstall(&fp);
+    if (error) {
+        throw error;
+    }
+    finit(fp, flags, type, opaque, ops);
+    return fileref(fp, false);
 }
 
 void fhold(struct file* fp)

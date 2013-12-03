@@ -153,11 +153,6 @@ int fdrop(struct file* fp);
 /* Get fp from fd and increment refcount */
 int fget(int fd, struct file** fp);
 
-/* Allocate and initialize a file descriptor */
-int falloc_noinstall(struct file **resultfp);
-void finit(struct file *fp, unsigned flags, filetype_t type,
-    void *opaque, struct fileops *ops);
-
 bool is_nonblock(struct file *f);
 
 /*
