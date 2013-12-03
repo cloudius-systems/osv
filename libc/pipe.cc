@@ -29,78 +29,82 @@ struct pipe_reader {
     ~pipe_reader() { buf->detach_receiver(); }
 };
 
-static int pipe_init(file* f)
+class pipe_file final : public file {
+public:
+    explicit pipe_file(std::unique_ptr<pipe_reader>&& s);
+    explicit pipe_file(std::unique_ptr<pipe_writer>&& s);
+    virtual int read(uio* data, int flags) override;
+    virtual int write(uio* data, int flags) override;
+    virtual int poll(int events) override;
+    virtual int close() override;
+    virtual int truncate(off_t len) override { return unsupported_truncate(this, len); }
+    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
+    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
+    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
+private:
+    pipe_writer* writer = nullptr;
+    pipe_reader* reader = nullptr;
+};
+
+pipe_file::pipe_file(std::unique_ptr<pipe_writer>&& s)
+    : file(FWRITE, DTYPE_UNSPEC)
+    , writer(s.release())
 {
-    if (f->f_flags & FWRITE) {
-        pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
-        po->buf->attach_sender(f);
-    } else {
-        pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
-        po->buf->attach_receiver(f);
-    }
-    return 0;
+    writer->buf->attach_sender(this);
 }
 
-static int pipe_read(file *f, uio *data, int flags)
+pipe_file::pipe_file(std::unique_ptr<pipe_reader>&& s)
+    : file(FREAD, DTYPE_UNSPEC)
+    , reader(s.release())
 {
-    pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
-    return po->buf->read(data, is_nonblock(f));
+    reader->buf->attach_receiver(this);
 }
 
-static int pipe_write(file *f, uio *data, int flags)
+int pipe_file::read(uio *data, int flags)
 {
-    pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
-    return po->buf->write(data, is_nonblock(f));
+    return reader->buf->read(data, is_nonblock(this));
 }
 
-static int pipe_poll(file *f, int events)
+int pipe_file::write(uio *data, int flags)
+{
+    return writer->buf->write(data, is_nonblock(this));
+}
+
+int pipe_file::poll(int events)
 {
     int revents = 0;
     // One end of the pipe is read-only, the other write-only:
-    if (f->f_flags & FWRITE) {
-        pipe_writer *po = static_cast<pipe_writer*>(f->f_data);
+    if (f_flags & FWRITE) {
         if (events & POLLOUT) {
-            revents |= po->buf->write_events();
+            revents |= writer->buf->write_events();
         }
     } else {
-        pipe_reader *po = static_cast<pipe_reader*>(f->f_data);
         if (events & POLLIN) {
-            revents |= po->buf->read_events();
+            revents |= reader->buf->read_events();
         }
     }
     return revents;
 }
 
-static int pipe_close(file *f)
+int pipe_file::close()
 {
-    if (f->f_flags & FWRITE) {
-        delete static_cast<pipe_writer*>(f->f_data);
+    if (f_flags & FWRITE) {
+        delete writer;
+        writer = nullptr;
     } else {
-        delete static_cast<pipe_reader*>(f->f_data);
+        delete reader;
+        reader = nullptr;
     }
-    f->f_data = nullptr;
     return 0;
 }
-
-static fileops pipe_ops = {
-    pipe_init,
-    pipe_read,
-    pipe_write,
-    unsupported_truncate,
-    unsupported_ioctl,
-    pipe_poll,
-    unsupported_stat,
-    pipe_close,
-    unsupported_chmod,
-};
 
 int pipe(int pipefd[2]) {
     auto b = new pipe_buffer;
     std::unique_ptr<pipe_reader> s1{new pipe_reader(b)};
     std::unique_ptr<pipe_writer> s2{new pipe_writer(b)};
     try {
-        fileref f1 = make_file(FREAD, DTYPE_UNSPEC, move(s1), &pipe_ops);
-        fileref f2 = make_file(FWRITE, DTYPE_UNSPEC, move(s2), &pipe_ops);
+        fileref f1 = make_file<pipe_file>(move(s1));
+        fileref f2 = make_file<pipe_file>(move(s2));
         fdesc fd1(f1);
         fdesc fd2(f2);
         // all went well, user owns descriptors now
