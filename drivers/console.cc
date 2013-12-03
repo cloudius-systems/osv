@@ -323,8 +323,7 @@ static fileops console_ops = {
 
 int open() {
     try {
-        fileref f{falloc_noinstall()};
-        finit(f.get(), FREAD|FWRITE, DTYPE_UNSPEC, NULL, &console_ops);
+        fileref f = make_file(FREAD|FWRITE, DTYPE_UNSPEC, NULL, &console_ops);
         fdesc fd(f);
         return fd.release();
     } catch (int error) {
