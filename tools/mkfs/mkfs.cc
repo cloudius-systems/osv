@@ -10,9 +10,8 @@
 #include <osv/run.hh>
 #include <fs/vfs/vfs.h>
 #include <iostream>
-#include <fstream>
-#include <boost/asio.hpp>
-#include "cpio.hh"
+
+using namespace osv;
 
 extern "C" int osv_zfs_ioctl(unsigned long req, void* buffer);
 
@@ -30,7 +29,6 @@ static devops zfs_devops = {
     no_devctl,
 };
 
-using namespace osv;
 using namespace std;
 
 void mkfs()
@@ -54,37 +52,10 @@ void mkfs()
     assert(ok && ret == 0);
 }
 
-// Want to use boost::filesystem, but too much effort to integrate
-extern "C" { int mkdirp(const char *d, mode_t mode); }
-
-struct cpio_in_expand : cpio_in {
-    virtual void add_file(string name, istream& is) override {
-        cout << "Adding " << name << "...\n";
-        name = "/zfs/zfs/" + name;
-        auto pos = name.rfind('/');
-        if (pos != name.npos) {
-            mkdirp(name.substr(0, pos).c_str(), 0755);
-        }
-        ofstream os(name);
-        os << is.rdbuf();
-    }
-};
-
 int main(int ac, char** av)
 {
-    using namespace boost::asio::ip;
-
-    boost::asio::io_service io_service;
-    tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 10000));
-
     cout << "Running mkfs...\n";
     mkfs();
-
-    cout << "Waiting for connection from host...\n";
-    boost::asio::ip::tcp::iostream socket;
-    acceptor.accept(*socket.rdbuf());
-    cpio_in_expand expand_files;
-    cpio_in::parse(socket, expand_files);
     sync();
 }
 

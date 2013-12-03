@@ -93,7 +93,7 @@ files = list(expand(files.items()))
 files = [(x, unsymlink(y)) for (x, y) in files]
 
 image_path = os.path.abspath(options.output)
-osv = subprocess.Popen('cd ../..; scripts/run.py -c1 -i %s -u -g -e "--nomount tools/mkfs.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
+osv = subprocess.Popen('cd ../..; scripts/run.py -c1 -i %s -u -g -e "--nomount tools/mkfs.so; tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
 
 # Wait for the guest to come up and tell us it's listening
 while True:

@@ -204,6 +204,7 @@ tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
 tools += tools/route/lsroute.so
 tools += tools/mkfs/mkfs.so
+tools += tools/cpiod/cpiod.so
 
 all: loader.img loader.bin usr.img
 
@@ -636,9 +637,11 @@ bootfs.bin: scripts/mkbootfs.py $(out)/bootfs.manifest $(tests) $(tools) \
 
 bootfs.o: bootfs.bin
 
-tools/mkfs/mkfs.so: CFLAGS += -lstdc++
+tools/mkfs/mkfs.so: tools/mkfs/mkfs.o libzfs.so
 
-tools/mkfs/mkfs.so: tools/mkfs/mkfs.o tools/mkfs/cpio.o libzfs.so
+tools/cpiod/cpiod.so: CFLAGS += -lstdc++
+
+tools/cpiod/cpiod.so: tools/cpiod/cpiod.o tools/cpiod/cpio.o libzfs.so
 
 runtime.o: gen/include/ctype-data.h
 

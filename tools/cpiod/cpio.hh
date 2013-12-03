@@ -6,8 +6,8 @@
  */
 
 
-#ifndef OSV_TOOLS_MKFS_CPIO_HH_
-#define OSV_TOOLS_MKFS_CPIO_HH_
+#ifndef OSV_TOOLS_CPIOD_CPIO_HH_
+#define OSV_TOOLS_CPIOD_CPIO_HH_
 
 #include <istream>
 #include <string>
@@ -26,4 +26,4 @@ private:
 
 }
 
-#endif /* OSV_TOOLS_MKFS_CPIO_HH_ */
+#endif /* OSV_TOOLS_CPIOD_CPIO_HH_ */
