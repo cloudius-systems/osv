@@ -55,22 +55,6 @@ make_file(args&&... a)
     return fileref(fp, false);
 }
 
-inline
-fileref make_file(unsigned flags, filetype_t type, void *opaque,
-        struct fileops *ops)
-{
-    return make_file<file>(flags, type, opaque, ops);
-}
-
-template <typename T>
-fileref make_file(unsigned flags, filetype_t type, std::unique_ptr<T>&& opaque,
-        struct fileops *ops)
-{
-    auto f = make_file<file>(flags, type, opaque.get(), ops);
-    opaque.release();
-    return f;
-}
-
 class fdesc {
 public:
     explicit fdesc() : _fd(-1) {}
