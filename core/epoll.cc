@@ -64,16 +64,16 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
     return e;
 }
 
-class epoll_obj {
+class epoll_file final : public file {
     std::unordered_map<file*, epoll_event> map;
-    file* epoll_fp;
 public:
-    void set_epoll_fp(file* fp) { epoll_fp = fp; }
-    ~epoll_obj() {
+    epoll_file() : file(0, DTYPE_UNSPEC) {}
+    virtual int close() override {
         for (auto& e : map) {
             auto fp = e.first;
             remove_me(fp);
         }
+        return 0;
     }
     int add(file* fp, struct epoll_event *event)
     {
@@ -85,7 +85,7 @@ public:
             if (!fp->f_epolls) {
                 fp->f_epolls.reset(new std::vector<file*>);
             }
-            fp->f_epolls->push_back(epoll_fp);
+            fp->f_epolls->push_back(this);
         }
         return 0;
     }
@@ -136,51 +136,20 @@ public:
 private:
     void remove_me(file* fp) {
         WITH_LOCK(fp->f_lock) {
-            auto i = boost::range::find(*fp->f_epolls, epoll_fp);
+            auto i = boost::range::find(*fp->f_epolls, this);
             assert(i != fp->f_epolls->end());
             fp->f_epolls->erase(i);
         }
     }
+public:
+    virtual int read(uio* data, int flags) override { return unsupported_read(this, data, flags); }
+    virtual int write(uio* data, int flags) override { return unsupported_write(this, data, flags); }
+    virtual int truncate(off_t off) override { return unsupported_truncate(this, off); }
+    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
+    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
+    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
+    virtual int poll(int events) override { return unsupported_poll(this, events); }
 };
-
-static int epoll_fop_init(file* f)
-{
-    return 0;
-}
-
-static int epoll_fop_close(file *f)
-{
-    delete static_cast<epoll_obj*>(f->f_data);
-    f->f_data = nullptr;
-    return 0;
-}
-
-static fileops epoll_ops = {
-    epoll_fop_init,
-    unsupported_read,
-    unsupported_write,
-    unsupported_truncate,
-    unsupported_ioctl,
-    unsupported_poll,
-    unsupported_stat,
-    epoll_fop_close,
-    unsupported_chmod,
-};
-
-static inline bool is_epoll(struct file *f)
-{
-    return f->f_ops == &epoll_ops;
-}
-
-
-static inline epoll_obj *get_epoll_obj(fileref fr) {
-    struct file *f = fr.get();
-    if (is_epoll(f)) {
-        return static_cast<epoll_obj*> (f->f_data);
-    } else {
-        return nullptr;
-    }
-}
 
 int epoll_create(int size)
 {
@@ -195,10 +164,7 @@ int epoll_create1(int flags)
     flags &= ~EPOLL_CLOEXEC;
     assert(!flags);
     try {
-        std::unique_ptr<epoll_obj> s{new epoll_obj};
-        fileref f = make_file(0 , DTYPE_UNSPEC, s.get(), &epoll_ops);
-        s->set_epoll_fp(f.get());
-        s.release();
+        fileref f = make_file<epoll_file>();
         fdesc fd(f);
         trace_epoll_create(fd.get());
         return fd.release();
@@ -221,7 +187,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
         return -1;
     }
 
-    epoll_obj *epo = get_epoll_obj(epfr);
+    auto epo = dynamic_cast<epoll_file*>(epfr.get());
     if (!epo) {
         errno = EINVAL;
         return -1;
@@ -261,7 +227,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_
         return -1;
     }
 
-    epoll_obj *epo = get_epoll_obj(epfr);
+    auto epo = dynamic_cast<epoll_file*>(epfr.get());
     if (!epo || maxevents <= 0) {
         errno = EINVAL;
         return -1;
@@ -270,9 +236,9 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_
     return epo->wait(events, maxevents, timeout_ms);
 }
 
-void epoll_file_closed(file* epoll_file, file* client)
+void epoll_file_closed(file* epoll_fd, file* client)
 {
-    fileref epoll_ptr(epoll_file);
-    auto epoll_obj = get_epoll_obj(epoll_ptr);
+    fileref epoll_ptr(epoll_fd);
+    auto epoll_obj = dynamic_cast<epoll_file*>(epoll_ptr.get());
     epoll_obj->del(client);
 }
