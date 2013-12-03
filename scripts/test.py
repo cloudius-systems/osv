@@ -21,7 +21,8 @@ def scan_errors(s):
     if not s:
         return False
     patterns = [
-        "failures detected in test suite",
+        "failures detected in test",
+        "failure detected in test",
         "Assertion failed",
         "FAIL"
     ]
