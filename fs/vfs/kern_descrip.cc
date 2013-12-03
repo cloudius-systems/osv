@@ -152,60 +152,14 @@ int fget(int fd, struct file **out_fp)
     return 0;
 }
 
-file::file(unsigned flags, filetype_t type, void *opaque,
-           struct fileops *ops)
+file::file(unsigned flags, filetype_t type, void *opaque)
     : f_flags(flags)
     , f_count(1)
-    , f_ops(ops)
     , f_data(opaque)
     , f_type(type)
 {
     auto fp = this;
     TAILQ_INIT(&fp->f_poll_list);
-
-    if (ops) {
-        fo_init(fp);
-    }
-}
-
-int file::read(struct uio *uio, int flags)
-{
-    return f_ops->fo_read(this, uio, flags);
-}
-
-int file::write(struct uio *uio, int flags)
-{
-    return f_ops->fo_write(this, uio, flags);
-}
-
-int file::truncate(off_t len)
-{
-    return f_ops->fo_truncate(this, len);
-}
-
-int file::ioctl(u_long com, void *data)
-{
-    return f_ops->fo_ioctl(this, com, data);
-}
-
-int file::poll(int events)
-{
-    return f_ops->fo_poll(this, events);
-}
-
-int file::stat(struct stat* buf)
-{
-    return f_ops->fo_stat(this, buf);
-}
-
-int file::close()
-{
-    return f_ops->fo_close(this);
-}
-
-int file::chmod(mode_t mode)
-{
-    return f_ops->fo_chmod(this, mode);
 }
 
 void fhold(struct file* fp)
@@ -250,12 +204,6 @@ dentry* file_dentry(file* fp)
 void file_setdata(file* fp, void* data)
 {
     fp->f_data = data;
-}
-
- int
-fo_init(struct file *fp)
-{
-        return fp->f_ops->fo_init(fp);
 }
 
  int
