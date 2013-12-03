@@ -37,6 +37,7 @@
 #include <osv/types.h>
 #include <osv/ioctl.h>
 #include <fs/unsupported.h>
+#include <osv/initialize.hh>
 
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
@@ -47,12 +48,12 @@
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/net/vnet.h>
 
-extern int linux_ioctl_socket(struct file *fp, u_long cmd, void *data) ;
+extern "C" int linux_ioctl_socket(struct file *fp, u_long cmd, void *data) ;
 
 int
 soo_init(struct file *fp)
 {
-    struct socket *so = file_data(fp);
+    struct socket *so = (socket*)file_data(fp);
     so->fp = fp;
 
     return 0;
@@ -62,7 +63,7 @@ soo_init(struct file *fp)
 int
 soo_read(struct file *fp, struct uio *uio, int flags)
 {
-    struct socket *so = file_data(fp);
+    struct socket *so = (socket*)file_data(fp);
     int error;
 
     error = soreceive(so, 0, uio, 0, 0, 0);
@@ -73,7 +74,7 @@ soo_read(struct file *fp, struct uio *uio, int flags)
 int
 soo_write(struct file *fp, struct uio *uio, int flags)
 {
-    struct socket *so = file_data(fp);
+    struct socket *so = (socket*)file_data(fp);
     int error;
 
     error = sosend(so, 0, uio, 0, 0, 0, 0);
@@ -98,32 +99,31 @@ soo_truncate(struct file *fp, off_t length)
 #define LINUX_IOCTL_IDX(ioctl)  ((ioctl) - SIOCBEGIN)
 #define LINUX_IOCTL_TYPE(ioctl)  (linux_ioctl_type_tbl[LINUX_IOCTL_IDX(ioctl)])
 
-static char linux_ioctl_type_tbl[256] = {
-    [LINUX_IOCTL_IDX(SIOCGIFCONF)]        = 'i', /* get iface list           */
-    [LINUX_IOCTL_IDX(SIOCGIFFLAGS)]       = 'i', /* get flags                */
-    [LINUX_IOCTL_IDX(SIOCSIFFLAGS)]       = 'i', /* set flags                */
-    [LINUX_IOCTL_IDX(SIOCGIFADDR)]        = 'i', /* get PA address           */
-    [LINUX_IOCTL_IDX(SIOCSIFADDR)]        = 'i', /* set PA address           */
-    [LINUX_IOCTL_IDX(SIOCGIFDSTADDR)]     = 'i', /* get remote PA address    */
-    [LINUX_IOCTL_IDX(SIOCSIFDSTADDR)]     = 'i', /* set remote PA address    */
-    [LINUX_IOCTL_IDX(SIOCGIFBRDADDR)]     = 'i', /* get broadcast PA address */
-    [LINUX_IOCTL_IDX(SIOCSIFBRDADDR)]     = 'i', /* set broadcast PA address */
-    [LINUX_IOCTL_IDX(SIOCGIFNETMASK)]     = 'i', /* get network PA mask      */
-    [LINUX_IOCTL_IDX(SIOCSIFNETMASK)]     = 'i', /* set network PA mask      */
-    [LINUX_IOCTL_IDX(SIOCGIFMETRIC)]      = 'i', /* get metric               */
-    [LINUX_IOCTL_IDX(SIOCSIFMETRIC)]      = 'i', /* set metric               */
-    [LINUX_IOCTL_IDX(SIOCGIFMTU)]         = 'i', /* get MTU size             */
-    [LINUX_IOCTL_IDX(SIOCSIFMTU)]         = 'i', /* set MTU size             */
-    [LINUX_IOCTL_IDX(SIOCSIFNAME)]        = 'i', /* set interface name       */
-    [LINUX_IOCTL_IDX(SIOCGIFHWADDR)]      = 'i', /* set hardware address 	 */
-    [LINUX_IOCTL_IDX(SIOCADDMULTI)]       = 'i', /* Multicast address lists  */
-    [LINUX_IOCTL_IDX(SIOCDELMULTI)]       = 'i',
-    [LINUX_IOCTL_IDX(SIOCGIFINDEX)]       = 'i', /* name -> if_index mapping */
-    [LINUX_IOCTL_IDX(SIOCDIFADDR)]        = 'i', /* delete PA address        */
-    [LINUX_IOCTL_IDX(SIOCGIFBR)]          = 'i', /* Bridging support         */
-    [LINUX_IOCTL_IDX(SIOCSIFBR)]          = 'i', /* Set bridging options     */
-} ;
-
+static std::array<char, 256> linux_ioctl_type_tbl = initialize_array<char, 256>({
+    { LINUX_IOCTL_IDX(SIOCGIFCONF)        , 'i', /* get iface list           */ },
+    { LINUX_IOCTL_IDX(SIOCGIFFLAGS)       , 'i', /* get flags                */ },
+    { LINUX_IOCTL_IDX(SIOCSIFFLAGS)       , 'i', /* set flags                */ },
+    { LINUX_IOCTL_IDX(SIOCGIFADDR)        , 'i', /* get PA address           */ },
+    { LINUX_IOCTL_IDX(SIOCSIFADDR)        , 'i', /* set PA address           */ },
+    { LINUX_IOCTL_IDX(SIOCGIFDSTADDR)     , 'i', /* get remote PA address    */ },
+    { LINUX_IOCTL_IDX(SIOCSIFDSTADDR)     , 'i', /* set remote PA address    */ },
+    { LINUX_IOCTL_IDX(SIOCGIFBRDADDR)     , 'i', /* get broadcast PA address */ },
+    { LINUX_IOCTL_IDX(SIOCSIFBRDADDR)     , 'i', /* set broadcast PA address */ },
+    { LINUX_IOCTL_IDX(SIOCGIFNETMASK)     , 'i', /* get network PA mask      */ },
+    { LINUX_IOCTL_IDX(SIOCSIFNETMASK)     , 'i', /* set network PA mask      */ },
+    { LINUX_IOCTL_IDX(SIOCGIFMETRIC)      , 'i', /* get metric               */ },
+    { LINUX_IOCTL_IDX(SIOCSIFMETRIC)      , 'i', /* set metric               */ },
+    { LINUX_IOCTL_IDX(SIOCGIFMTU)         , 'i', /* get MTU size             */ },
+    { LINUX_IOCTL_IDX(SIOCSIFMTU)         , 'i', /* set MTU size             */ },
+    { LINUX_IOCTL_IDX(SIOCSIFNAME)        , 'i', /* set interface name       */ },
+    { LINUX_IOCTL_IDX(SIOCGIFHWADDR)      , 'i', /* set hardware address 	 */ },
+    { LINUX_IOCTL_IDX(SIOCADDMULTI)       , 'i', /* Multicast address lists  */ },
+    { LINUX_IOCTL_IDX(SIOCDELMULTI)       , 'i', },
+    { LINUX_IOCTL_IDX(SIOCGIFINDEX)       , 'i', /* name -> if_index mapping */ },
+    { LINUX_IOCTL_IDX(SIOCDIFADDR)        , 'i', /* delete PA address        */ },
+    { LINUX_IOCTL_IDX(SIOCGIFBR)          , 'i', /* Bridging support         */ },
+    { LINUX_IOCTL_IDX(SIOCSIFBR)          , 'i', /* Set bridging options     */ },
+});
 
 static char get_ioctl_type(int ioctl)
 {
@@ -133,10 +133,11 @@ static char get_ioctl_type(int ioctl)
         return _IOC_TYPE(ioctl) ;
 }
 
+extern "C"
 int
 soo_ioctl(struct file *fp, u_long cmd, void *data)
 {
-    struct socket *so = file_data(fp);
+    struct socket *so = (socket*)file_data(fp);
     int error = 0;
     char ioctl_type ;
     
@@ -210,17 +211,17 @@ soo_ioctl(struct file *fp, u_long cmd, void *data)
          */
         ioctl_type = get_ioctl_type(cmd) ;
         if (ioctl_type == 'i')
-            error = ifioctl(so, cmd, data, 0);
+            error = ifioctl(so, cmd, (caddr_t)data, 0);
         else if (ioctl_type == 'r') {
             CURVNET_SET(so->so_vnet);
-            error = rtioctl_fib(cmd, data, so->so_fibnum);
+            error = rtioctl_fib(cmd, (caddr_t)data, so->so_fibnum);
             CURVNET_RESTORE();
         } else if (ioctl_type == '\0') {
             error = ENOTTY ;    /* An unsupported Linux ioctl */
         } else {
             CURVNET_SET(so->so_vnet);
             error = ((*so->so_proto->pr_usrreqs->pru_control)
-                (so, cmd, data, 0, 0));
+                (so, cmd, (caddr_t)data, 0, 0));
             CURVNET_RESTORE();
         }
         break;
@@ -231,14 +232,14 @@ soo_ioctl(struct file *fp, u_long cmd, void *data)
 int
 soo_poll(struct file *fp, int events)
 {
-    struct socket *so = file_data(fp);
+    struct socket *so = (socket*)file_data(fp);
     return (sopoll(so, events, 0, 0));
 }
 
 int
 soo_stat(struct file *fp, struct stat *ub)
 {
-    struct socket *so = file_data(fp);
+    struct socket *so = (socket*)file_data(fp);
 
     bzero((caddr_t)ub, sizeof (*ub));
     ub->st_mode = S_IFSOCK;
@@ -273,7 +274,7 @@ soo_close(struct file *fp)
     int error = 0;
     struct socket *so;
 
-    so = file_data(fp);
+    so = (socket*)file_data(fp);
 
     if (so)
         error = soclose(so);
