@@ -216,14 +216,6 @@ int fdrop(struct file *fp)
     if (__sync_fetch_and_sub(&fp->f_count, 1) != 1)
         return 0;
 
-    delete fp;
-    return 1;
-}
-
-file::~file()
-{
-    auto fp = this;
-
     /* We are about to free this file structure, but we still do things with it
      * so set the refcount to INT_MIN, fhold/fdrop may get called again
      * and we don't want to reach this point more than once.
@@ -232,6 +224,14 @@ file::~file()
 
     fp->f_count = INT_MIN;
     fo_close(fp);
+    delete fp;
+    return 1;
+}
+
+file::~file()
+{
+    auto fp = this;
+
     poll_drain(fp);
     if (f_epolls) {
         for (auto ep : *f_epolls) {
