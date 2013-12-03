@@ -421,10 +421,8 @@ kern_socketpair(int domain, int type, int protocol, int *rsv)
 			 if (error)
 				 return error;
 		}
-		fileref fp1 = falloc_noinstall();
-		finit(fp1.get(), FREAD | FWRITE, DTYPE_SOCKET, so1.release(), &socketops);
-		fileref fp2 = falloc_noinstall();
-		finit(fp2.get(), FREAD | FWRITE, DTYPE_SOCKET, so2.release(), &socketops);
+		fileref fp1 = make_file(FREAD | FWRITE, DTYPE_SOCKET, so1.release(), &socketops);
+		fileref fp2 = make_file(FREAD | FWRITE, DTYPE_SOCKET, so2.release(), &socketops);
 		fdesc fd1(fp1);
 		fdesc fd2(fp2);
 		// end of exception territory; relax
