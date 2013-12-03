@@ -163,7 +163,9 @@ file::file(unsigned flags, filetype_t type, void *opaque,
     auto fp = this;
     TAILQ_INIT(&fp->f_poll_list);
 
-    fo_init(fp);
+    if (ops) {
+        fo_init(fp);
+    }
 }
 
 int file::read(struct uio *uio, int flags)

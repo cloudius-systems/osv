@@ -75,7 +75,7 @@ struct file;
  */
 struct file {
 	file(unsigned flags, filetype_t type, void *opaque,
-		struct fileops *ops);
+		struct fileops *ops = nullptr);
 	virtual ~file();
 	void operator delete(void *p) { osv::rcu_dispose(p); }
 
