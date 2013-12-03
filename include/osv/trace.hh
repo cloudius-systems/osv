@@ -41,24 +41,6 @@ struct trace_record {
 
 trace_record* allocate_trace_record(size_t size);
 
-template <class storage_args, class runtime_args>
-struct assigner_type;
-
-template <typename... args>
-struct storage_args
-{
-};
-
-template <typename... args>
-struct runtime_args
-{
-};
-
-template <typename... s_args, typename... r_args>
-struct assigner_type<storage_args<s_args...>, runtime_args<r_args...>> {
-    typedef std::tuple<s_args...> (*type)(r_args...);
-};
-
 template <size_t idx, size_t N, typename... args>
 struct tuple_formatter
 {
@@ -281,16 +263,14 @@ private:
 
 namespace {
 
-template <unsigned id,
-          class storage_args, class runtime_args,
-          typename assigner_type<storage_args, runtime_args>::type assign>
+template <unsigned id, typename assign_fn, assign_fn* assign>
 class tracepointv;
 
 template <unsigned _id,
           typename... s_args,
           typename... r_args,
-          typename assigner_type<storage_args<s_args...>, runtime_args<r_args...>>::type assign>
-class tracepointv<_id, storage_args<s_args...>, runtime_args<r_args...>, assign>
+          std::tuple<s_args...>(*assign)(r_args...)>
+class tracepointv<_id, std::tuple<s_args...>(r_args...), assign>
     : public tracepoint_base
 {
 public:
@@ -363,8 +343,7 @@ std::tuple<args...> identity_assign(args... as)
 
 template <unsigned id, typename... args>
 using tracepoint = tracepointv<id,
-                               storage_args<args...>,
-                               runtime_args<args...>,
+                               decltype(identity_assign<args...>),
                                identity_assign<args...>>;
 
 //#define tracepoint(...) tracepoint<__COUNTER__, ##__VA_ARGS__>
@@ -375,6 +354,8 @@ static inline const char *trace_strip_prefix(const char *name)
 }
 #define TRACEPOINT(name, fmt, ...) \
     tracepoint<__COUNTER__, ##__VA_ARGS__> name(trace_strip_prefix(#name), fmt);
+#define TRACEPOINTV(name, fmt, assign) \
+    tracepointv<__COUNTER__, decltype(assign), assign> name(trace_strip_prefix(#name), fmt);
 
 
 #endif /* TRACE_HH_ */

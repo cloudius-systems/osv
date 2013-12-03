@@ -19,7 +19,7 @@ struct test_object {
 
 
 tracepoint<10001, unsigned, long> trace_1("tp1", "%d %d");
-tracepointv<10002, storage_args<int, long>, runtime_args<test_object&>, test_object::unpack>
+tracepointv<10002, decltype(test_object::unpack), test_object::unpack>
     trace_2("tp2", "%d %d");
 tracepoint<10003, const char*, long, const char*> trace_string("tp3", "%s %d %s");
 
