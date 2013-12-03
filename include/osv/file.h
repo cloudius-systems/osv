@@ -78,10 +78,10 @@ struct file {
 	void operator delete(void *p) { osv::rcu_dispose(p); }
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
-	off_t		f_offset;	/* current position in file */
-	struct dentry	*f_dentry;	/* dentry */
+	off_t		f_offset = 0;	/* current position in file */
+	struct dentry	*f_dentry = nullptr; /* dentry */
 	struct fileops	*f_ops;		/* file ops abstraction */
-	void		*f_data;	/* file descriptor specific data */
+	void		*f_data;        /* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */

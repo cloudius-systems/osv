@@ -162,7 +162,6 @@ static int falloc_noinstall(struct file **resultfp)
     fp = new file;
     if (!fp)
         return ENOMEM;
-    memset(fp, 0, sizeof(*fp));
 
     fp->f_ops = &badfileops;
     fp->f_count = 1;
