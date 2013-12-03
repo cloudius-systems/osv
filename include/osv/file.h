@@ -137,8 +137,6 @@ struct fileops {
 	fo_chmod_t  *fo_chmod;
 };
 
-extern struct fileops badfileops;
-
 /* Alloc an fd for fp */
 int _fdalloc(struct file *fp, int *newfd, int min_fd);
 int fdalloc(struct file* fp, int *newfd);

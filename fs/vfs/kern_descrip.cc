@@ -252,66 +252,6 @@ void file_setdata(file* fp, void* data)
     fp->f_data = data;
 }
 
-static int
-badfo_init(struct file *fp)
-{
-    return EBADF;
-}
-
-static int
-badfo_readwrite(struct file *fp, struct uio *uio, int flags)
-{
-    return EBADF;
-}
-
-static int
-badfo_truncate(struct file *fp, off_t length)
-{
-    return EINVAL;
-}
-
-static int
-badfo_ioctl(struct file *fp, u_long com, void *data)
-{
-    return EBADF;
-}
-
-static int
-badfo_poll(struct file *fp, int events)
-{
-    return 0;
-}
-
-static int
-badfo_stat(struct file *fp, struct stat *sb)
-{
-    return EBADF;
-}
-
-static int
-badfo_close(struct file *fp)
-{
-    return EBADF;
-}
-
-static int
-badfo_chmod(struct file *fp, mode_t mode)
-{
-    return EBADF;
-}
-
-struct fileops badfileops = {
-    .fo_init	 = badfo_init,
-    .fo_read	 = badfo_readwrite,
-    .fo_write	 = badfo_readwrite,
-    .fo_truncate = badfo_truncate,
-    .fo_ioctl	 = badfo_ioctl,
-    .fo_poll	 = badfo_poll,
-    .fo_stat	 = badfo_stat,
-    .fo_close	 = badfo_close,
-    .fo_chmod	 = badfo_chmod,
-};
-
  int
 fo_init(struct file *fp)
 {
