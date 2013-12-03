@@ -617,13 +617,17 @@ usr.raw: loader.img
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
-usr.img: scripts/mkzfs.py $(out)/usr.manifest $(jni) usr.raw
+bare.img: scripts/mkzfs.py $(jni) usr.raw $(out)/bootfs.manifest
 	$(call quiet, echo Creating $@ as $(img_format))
 	$(call quiet, qemu-img convert -f raw -O $(img_format) usr.raw $@)
 	$(call quiet, qemu-img resize $@ +10G > /dev/null 2>&1)
-	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/usr.manifest \
+	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest
+
+usr.img: bare.img $(out)/usr.manifest
+	$(call quiet, cp bare.img $@)
+	$(src)/scripts/upload_manifest.py -o $@ -d $@.d -m $(out)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
-		glibcbase=$(glibcbase) -D miscbase=$(miscbase) -s $(zfs-start)
+		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/

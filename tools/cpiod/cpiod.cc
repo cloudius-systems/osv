@@ -48,8 +48,7 @@ int main(int ac, char** av)
     desc.add_options()
         ("help", "produce help message")
         ("port", po::value<int>()->default_value(10000), "set listening port")
-        ("prefix", po::value<std::string>()->
-                   default_value(std::string("/zfs/zfs/")), "set prefix");
+        ("prefix", po::value<std::string>()->default_value(std::string("/")), "set prefix");
 
     po::variables_map vm;
     po::store(po::parse_command_line(ac, av, desc), vm);
