@@ -230,9 +230,6 @@ kern_accept(int s, struct bsd_sockaddr *name,
 		error = EINVAL;
 		goto done;
 	}
-	error = falloc_noinstall(&nfp);
-	if (error)
-		goto done;
 	ACCEPT_LOCK();
 	if ((head->so_state & SS_NBIO) && TAILQ_EMPTY(&head->so_comp)) {
 		ACCEPT_UNLOCK();
@@ -286,8 +283,14 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	if (pgid != 0)
 		fsetown(pgid, &so->so_sigio);
 #endif
-
-	finit(nfp, fflag, DTYPE_SOCKET, so, &socketops);
+	try {
+	    auto nf = make_file(fflag, DTYPE_SOCKET, so, &socketops);
+	    nfp = nf.get();  // want nf.release()
+	    fhold(nfp);
+	} catch (int err) {
+	    error = err;
+	    goto noconnection;
+	}
 	/* Sync socket nonblocking/async state with file flags */
 	tmp = fflag & FNONBLOCK;
 	(void) fo_ioctl(nfp, FIONBIO, &tmp);
