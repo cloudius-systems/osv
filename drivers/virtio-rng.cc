@@ -7,6 +7,10 @@
 
 #include "drivers/virtio-rng.hh"
 #include "mmu.hh"
+#include <algorithm>
+#include <iterator>
+
+using namespace std;
 
 namespace virtio {
 
@@ -57,7 +61,6 @@ struct driver virtio_rng_driver = {
 
 virtio_rng::virtio_rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
-    , _entropy(64)
     , _gsi(pci_dev.get_interrupt_line(), [&] { ack_irq(); }, [&] { handle_irq(); })
     , _thread([&] { worker(); })
 {
@@ -79,16 +82,15 @@ virtio_rng::~virtio_rng()
     device_destroy(_random_dev);
 }
 
-u32 virtio_rng::get_random_bytes(char *buf, u32 size)
+size_t virtio_rng::get_random_bytes(char *buf, size_t size)
 {
     WITH_LOCK(_mtx) {
         _consumer.wait_until(_mtx, [&] {
-            return _entropy_count > 0;
+            return _entropy.size() > 0;
         });
-        auto len = std::min(_entropy_count, size);
-        memcpy(buf, &_entropy[0], len);
-        _entropy_count -= len;
-        _entropy = _entropy.shift(len);
+        auto len = std::min(_entropy.size(), size);
+        copy_n(_entropy.begin(), len, buf);
+        _entropy.erase(_entropy.begin(), _entropy.begin() + len);
         _producer.wake_one();
         return len;
     }
@@ -109,7 +111,7 @@ void virtio_rng::worker()
     for (;;) {
         WITH_LOCK(_mtx) {
             _producer.wait_until(_mtx, [&] {
-                return _entropy_count < _entropy.size();
+                return _entropy.size() < _pool_size;
             });
             refill();
             _consumer.wake_all();
@@ -119,9 +121,10 @@ void virtio_rng::worker()
 
 void virtio_rng::refill()
 {
-    void *data = &_entropy[0] + _entropy_count;
+    auto remaining = _pool_size - _entropy.size();
+    vector<char> buf(remaining);
+    void *data = buf.data();
     auto paddr = mmu::virt_to_phys(data);
-    auto remaining = _entropy.size() - _entropy_count;
 
     _queue->_sg_vec.clear();
     _queue->_sg_vec.push_back(vring::sg_node(paddr, remaining, vring_desc::VRING_DESC_F_WRITE));
@@ -139,7 +142,7 @@ void virtio_rng::refill()
     u32 len;
     _queue->get_buf_elem(&len);
     _queue->get_buf_finalize();
-    _entropy_count += len;
+    copy_n(buf.begin(), len, back_inserter(_entropy));
 }
 
 hw_driver* virtio_rng::probe(hw_device *dev)

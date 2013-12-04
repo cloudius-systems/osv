@@ -15,7 +15,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/device.hh"
 
-#include <valarray>
+#include <vector>
 
 namespace virtio {
 
@@ -30,7 +30,7 @@ public:
 
     virtual const std::string get_name(void) { return "virtio-rng"; }
 
-    u32 get_random_bytes(char *buf, u32 size);
+    size_t get_random_bytes(char *buf, size_t size);
 
     static hw_driver* probe(hw_device* dev);
 
@@ -41,11 +41,11 @@ private:
     void worker();
     void refill();
 
-    std::valarray<char> _entropy;
+    static const size_t _pool_size = 64;
+    std::vector<char> _entropy;
     gsi_level_interrupt _gsi;
     sched::thread _thread;
     device* _random_dev;
-    u32 _entropy_count;
     condvar _producer;
     condvar _consumer;
     vring* _queue;
