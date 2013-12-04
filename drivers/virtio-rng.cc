@@ -13,52 +13,6 @@
 using namespace std;
 
 namespace virtio {
-
-struct virtio_rng_priv {
-    virtio_rng* drv;
-};
-
-static virtio_rng_priv *to_priv(device *dev)
-{
-    return reinterpret_cast<virtio_rng_priv*>(dev->private_data);
-}
-
-static int
-virtio_rng_read(struct device *dev, struct uio *uio, int ioflags)
-{
-    auto prv = to_priv(dev);
-
-    for (auto i = 0; i < uio->uio_iovcnt; i++) {
-        auto *iov = &uio->uio_iov[i];
-
-        auto nr = prv->drv->get_random_bytes(static_cast<char*>(iov->iov_base), iov->iov_len);
-
-        uio->uio_resid  -= nr;
-        uio->uio_offset += nr;
-
-        if (nr < iov->iov_len) {
-            break;
-        }
-    }
-
-    return 0;
-}
-
-static struct devops virtio_rng_devops {
-    no_open,
-    no_close,
-    virtio_rng_read,
-    no_write,
-    no_ioctl,
-    no_devctl,
-};
-
-struct driver virtio_rng_driver = {
-    "virtio_rng",
-    &virtio_rng_devops,
-    sizeof(struct virtio_rng_priv),
-};
-
 virtio_rng::virtio_rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
     , _gsi(pci_dev.get_interrupt_line(), [&] { ack_irq(); }, [&] { handle_irq(); })
@@ -66,20 +20,15 @@ virtio_rng::virtio_rng(pci::device& pci_dev)
 {
     _queue = get_virt_queue(0);
 
-    struct virtio_rng_priv *prv;
-
-    _random_dev = device_create(&virtio_rng_driver, "random", D_CHR);
-    prv = to_priv(_random_dev);
-    prv->drv = this;
-
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     _thread.start();
+
+    randomdev::random_device::register_source(this);
 }
 
 virtio_rng::~virtio_rng()
 {
-    device_destroy(_random_dev);
 }
 
 size_t virtio_rng::get_random_bytes(char *buf, size_t size)

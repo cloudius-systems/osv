@@ -267,6 +267,7 @@ void* do_main_thread(void *_commands)
     drvman->load_all();
     drvman->list_drivers();
 
+    randomdev::randomdev_init();
 
     if (opt_mount) {
         mount_zfs_rootfs();

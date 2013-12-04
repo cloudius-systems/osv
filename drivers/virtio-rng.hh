@@ -14,12 +14,13 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/device.hh"
+#include "drivers/random.hh"
 
 #include <vector>
 
 namespace virtio {
 
-class virtio_rng : public virtio_driver {
+class virtio_rng : public virtio_driver, randomdev::hw_rng {
 public:
     enum {
         VIRTIO_RNG_DEVICE_ID = 0x1005,
@@ -30,7 +31,7 @@ public:
 
     virtual const std::string get_name(void) { return "virtio-rng"; }
 
-    size_t get_random_bytes(char *buf, size_t size);
+    virtual size_t get_random_bytes(char *buf, size_t size) override;
 
     static hw_driver* probe(hw_device* dev);
 
@@ -45,7 +46,6 @@ private:
     std::vector<char> _entropy;
     gsi_level_interrupt _gsi;
     sched::thread _thread;
-    device* _random_dev;
     condvar _producer;
     condvar _consumer;
     vring* _queue;
