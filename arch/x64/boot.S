@@ -175,8 +175,8 @@ trlock: .byte 0
 smpboot64:
 	mov smpboot_cr3, %rax
 	mov %rax, %cr3
-	mov smp_stack_free, %rax
 1:
+	mov smp_stack_free, %rax
 	mov 4096(%rax), %rbx
 	lock cmpxchg %rbx, smp_stack_free
 	jnz 1b
