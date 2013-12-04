@@ -61,7 +61,8 @@ def generate_manifests(modules, basic_apps):
                 module_manifest = os.path.join(module_dir, manifest_name)
                 print "Appending %s to %s" % (module_manifest, manifest_name)
                 append_manifest(module_manifest, manifest, variables={
-                        'MODULE_DIR': module_dir
+                        'MODULE_DIR': module_dir,
+                        'OSV_BASE': resolve.get_osv_base()
                     })
 
             for app in basic_apps:
