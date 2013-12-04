@@ -65,10 +65,6 @@ virtio_rng::virtio_rng(pci::device& pci_dev)
 
     struct virtio_rng_priv *prv;
 
-    _urandom_dev = device_create(&virtio_rng_driver, "urandom", D_CHR);
-    prv = to_priv(_urandom_dev);
-    prv->drv = this;
-
     _random_dev = device_create(&virtio_rng_driver, "random", D_CHR);
     prv = to_priv(_random_dev);
     prv->drv = this;
@@ -80,7 +76,6 @@ virtio_rng::virtio_rng(pci::device& pci_dev)
 
 virtio_rng::~virtio_rng()
 {
-    device_destroy(_urandom_dev);
     device_destroy(_random_dev);
 }
 

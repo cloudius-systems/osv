@@ -44,7 +44,6 @@ private:
     std::valarray<char> _entropy;
     gsi_level_interrupt _gsi;
     sched::thread _thread;
-    device* _urandom_dev;
     device* _random_dev;
     u32 _entropy_count;
     condvar _producer;
