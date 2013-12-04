@@ -340,4 +340,12 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     return ret;
 }
 
+/* Used by code compiled on Linux with -D_FORTIFY_SOURCE */
+extern "C"
+int __poll_chk (struct pollfd _pfd[], nfds_t _nfds, int _timeout, size_t pdflen)
+{
+  assert(pdflen / sizeof (_pfd[0]) >= _nfds);
+  return poll (_pfd, _nfds, _timeout);
+}
+
 #undef dbg_d

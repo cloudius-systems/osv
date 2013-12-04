@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <limits.h>
+#include <assert.h>
 #include "libc.h"
 
 #define ALIGN (sizeof(size_t))
@@ -27,3 +28,11 @@ char *__stpcpy(char *__restrict d, const char *__restrict s)
 }
 
 weak_alias(__stpcpy, stpcpy);
+
+/* Used by code compiled on Linux with -D_FORTIFY_SOURCE */
+char *__stpcpy_chk (char *dest, const char *src, size_t destlen)
+{
+    // TODO: This repeats some of stpcpy's work. Make it more efficent.
+    assert(strlen(src) < destlen);
+    return stpcpy(dest, src);
+}
