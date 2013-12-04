@@ -123,25 +123,27 @@ void virtio_rng::refill()
 {
     auto remaining = _pool_size - _entropy.size();
     vector<char> buf(remaining);
-    void *data = buf.data();
-    auto paddr = mmu::virt_to_phys(data);
-
-    _queue->_sg_vec.clear();
-    _queue->_sg_vec.push_back(vring::sg_node(paddr, remaining, vring_desc::VRING_DESC_F_WRITE));
-
-    while (!_queue->add_buf(data)) {
-        sched::thread::wait_until([&] {
-            _queue->get_buf_gc();
-            return _queue->avail_ring_has_room(_queue->_sg_vec.size());
-        });
-    }
-    _queue->kick();
-
-    wait_for_queue(_queue, &vring::used_ring_not_empty);
-
     u32 len;
-    _queue->get_buf_elem(&len);
-    _queue->get_buf_finalize();
+    DROP_LOCK(_mtx) {
+        void *data = buf.data();
+        auto paddr = mmu::virt_to_phys(data);
+
+        _queue->_sg_vec.clear();
+        _queue->_sg_vec.push_back(vring::sg_node(paddr, remaining, vring_desc::VRING_DESC_F_WRITE));
+
+        while (!_queue->add_buf(data)) {
+            sched::thread::wait_until([&] {
+                _queue->get_buf_gc();
+                return _queue->avail_ring_has_room(_queue->_sg_vec.size());
+            });
+        }
+        _queue->kick();
+
+        wait_for_queue(_queue, &vring::used_ring_not_empty);
+
+        _queue->get_buf_elem(&len);
+        _queue->get_buf_finalize();
+    }
     copy_n(buf.begin(), len, back_inserter(_entropy));
 }
 
