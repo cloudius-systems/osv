@@ -112,7 +112,7 @@ void virtio_rng::worker()
                 return _entropy_count < _entropy.size();
             });
             refill();
-            _consumer.wake_one();
+            _consumer.wake_all();
         }
     }
 }
