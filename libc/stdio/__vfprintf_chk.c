@@ -24,7 +24,7 @@ int __vsnprintf_chk(char *s, size_t maxlen, int flags, size_t slen,
     if (slen < maxlen) {
         abort();
     }
-    return vsnprintf(s, slen, format, args);
+    return vsnprintf(s, maxlen, format, args);
 }
 
 int __sprintf_chk(char *s, int flags, size_t slen, const char *format, ...)
