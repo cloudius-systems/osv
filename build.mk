@@ -612,14 +612,14 @@ bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so
 
-usr.raw: loader.img
+bare.raw: loader.img
 	$(call quiet, qemu-img create $@ 100M, QEMU-IMG CREATE $@)
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
-bare.img: scripts/mkzfs.py $(jni) usr.raw $(out)/bootfs.manifest
+bare.img: scripts/mkzfs.py $(jni) bare.raw $(out)/bootfs.manifest
 	$(call quiet, echo Creating $@ as $(img_format))
-	$(call quiet, qemu-img convert -f raw -O $(img_format) usr.raw $@)
+	$(call quiet, qemu-img convert -f raw -O $(img_format) bare.raw $@)
 	$(call quiet, qemu-img resize $@ +10G > /dev/null 2>&1)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest
 
