@@ -66,11 +66,11 @@ void xen_irq::do_irq(void)
         });
 
         while (l1 != 0) {
-            l1i = bsrl(l1);
+            l1i = bsrq(l1);
             l1 &= ~(1 << l1i);
 
             while ((l2 = active_evtchns(l1i, cpu_mask)) != 0) {
-                l2i = bsrl(l2);
+                l2i = bsrq(l2);
                 unsigned long port = (l1i * LONG_BIT) + l2i;
 
                 // FIXME: It should be possible to mask all channels

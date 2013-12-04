@@ -15,6 +15,14 @@ bsrl(unsigned int mask)
     return result;
 }
 
+static inline unsigned long
+bsrq(unsigned long mask)
+{
+    unsigned long result;
+    asm volatile("bsrq %1,%0" : "=r" (result) : "rm" (mask));
+    return result;
+}
+
 static inline int
 fls(int mask)
 {
