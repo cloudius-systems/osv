@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 
 import sys
+import re
 import os
 import subprocess
 import operator
@@ -33,11 +34,19 @@ class jvm(api.basic_app):
     def add(self, app):
         self.apps.append(app)
 
+def expand(text, variables):
+    def resolve(m):
+        name = m.group('name')
+        if not name in variables:
+            raise Exception('Undefined variable: ' + name)
+        return variables[name]
 
-def append_lines(file_path, dst_file):
+    return re.sub(r'\${(?P<name>.*)}', resolve, text)
+
+def append_manifest(file_path, dst_file, variables={}):
     with open(file_path) as src_file:
         for line in src_file:
-            dst_file.write(line)
+            dst_file.write(expand(line, variables))
 
 def generate_manifests(modules, basic_apps):
     for manifest_type in ["usr", "bootfs"]:
@@ -45,12 +54,15 @@ def generate_manifests(modules, basic_apps):
         print "Preparing %s" % manifest_name
 
         with open(os.path.join(resolve.get_build_path(), manifest_name), "w") as manifest:
-            append_lines(os.path.join(resolve.get_osv_base(), "%s.skel" % manifest_name), manifest)
+            append_manifest(os.path.join(resolve.get_osv_base(), "%s.skel" % manifest_name), manifest)
 
             for module in modules:
-                module_manifest = os.path.join(resolve.get_module_dir(module), manifest_name)
+                module_dir = resolve.get_module_dir(module)
+                module_manifest = os.path.join(module_dir, manifest_name)
                 print "Appending %s to %s" % (module_manifest, manifest_name)
-                append_lines(module_manifest, manifest)
+                append_manifest(module_manifest, manifest, variables={
+                        'MODULE_DIR': module_dir
+                    })
 
             for app in basic_apps:
                 app.prepare_manifest(resolve.get_build_path(), manifest_type, manifest)
