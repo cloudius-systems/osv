@@ -20,18 +20,17 @@ bool static stack_end_init;
 
 namespace osv {
 
-bool run(std::string path, int argc, char** argv, int *return_code)
+std::shared_ptr<elf::object> run(std::string path,
+                                 int argc, char** argv, int *return_code)
 {
-    // Ensure that the shared library doesn't exit when we return by
-    // keeping a reference to it in the free store.
-    auto lib = *(new std::shared_ptr<elf::object>(elf::get_program()->get_library(path)));
+    auto lib = elf::get_program()->get_library(path);
 
     if (!lib) {
-        return false;
+        return nullptr;
     }
     auto main = lib->lookup<int (int, char**)>("main");
     if (!main) {
-        return false;
+        return nullptr;
     }
     // make sure to have a fresh optind across calls
     // FIXME: fails if run() is executed in parallel
@@ -46,10 +45,11 @@ bool run(std::string path, int argc, char** argv, int *return_code)
     if (return_code) {
         *return_code = rc;
     }
-    return true;
+    return lib;
 }
 
-bool run(string path, vector<string> args, int* return_code)
+std::shared_ptr<elf::object> run(string path,
+                                 vector<string> args, int* return_code)
 {
     // C main wants mutable arguments, so we have can't use strings directly
     vector<vector<char>> mut_args;

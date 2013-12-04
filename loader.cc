@@ -222,7 +222,6 @@ void run_main(std::vector<std::string> &vec)
     auto e = std::end(vec);
     std::string command = vec[0];
     std::vector<std::string> args(b, e);
-    bool result;
     int ret;
 
     if (opt_leak) {
@@ -230,10 +229,10 @@ void run_main(std::vector<std::string> &vec)
         memory::tracker_enabled = true;
     }
 
-    result = osv::run(command, args, &ret);
+    auto lib = *(new std::shared_ptr<elf::object>(osv::run(command, args, &ret)));
 
     // success
-    if (result) {
+    if (lib) {
         return;
     }
 

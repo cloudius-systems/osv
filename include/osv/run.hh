@@ -31,9 +31,10 @@ namespace osv {
  * and argv and returning an int).
  * This \c main function is run in the current thread.
  *
- * run() loads the given shared object into memory, and unloads it when not
- * needed any more. In particular, if the same object is run concurrently, it
- * will only be unloaded after the last of the concurrent runs has finished.
+ * run() loads the given shared object into memory, and unloads it if the caller
+ * does not save the returned shared pointer.
+ * In particular, if the same object is run concurrently, it will only be
+ * unloaded after the last of the concurrent runs has finished.
  *
  * It is worth noting how run() of a shared object differs Unix's traditional
  * exec() of an executable:
@@ -72,9 +73,11 @@ namespace osv {
  *                         <TT>return_code == nulltr</TT>, main()'s return
  *                         code is ignored.
  *
- * \return \c true if run, \c false if couldn't run
+ * \return \c shared pointer to the library if run, \c empty shared pointer if
+ *                         couldn't run
  */
-bool run(std::string path, int argc, char** argv, int *return_code);
+std::shared_ptr<elf::object> run(std::string path,
+                                 int argc, char** argv, int *return_code);
 
 /**
  * Run the given executable.
@@ -84,9 +87,10 @@ bool run(std::string path, int argc, char** argv, int *return_code);
  * and argv and returning an int).
  * This \c main function is run in the current thread.
  *
- * run() loads the given shared object into memory, and unloads it when not
- * needed any more. In particular, if the same object is run concurrently, it
- * will only be unloaded after the last of the concurrent runs has finished.
+ * run() loads the given shared object into memory, and unloads it if the caller
+ * does not save the returned shared pointer.
+ * In particular, if the same object is run concurrently, it will only be
+ * unloaded after the last of the concurrent runs has finished.
  *
  * It is worth noting how run() of a shared object differs Unix's traditional
  * exec() of an executable:
@@ -124,9 +128,12 @@ bool run(std::string path, int argc, char** argv, int *return_code);
  *                         <TT>return_code == nulltr</TT>, main()'s return
  *                         code is ignored.
  *
- * \return \c true if run, \c false if couldn't run
+ * \return \c shared pointer to the library if run, \c empty shared pointer
+ *                          if couldn't run
  */
-bool run(std::string path, std::vector<std::string> args, int *return_code);
+std::shared_ptr<elf::object> run(std::string path,
+                                 std::vector<std::string> args,
+                                 int* return_code);
 
 /**@}*/
 
