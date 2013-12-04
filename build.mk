@@ -1,11 +1,6 @@
 
 arch = x64
 img_format ?= qcow2
-# cmdline = java.so -jar /java/cli.jar
-# cmdline = java.so -jar /java/web.jar -cp java/cli.jar app
-cmdline = java.so -Djava.util.logging.config.file=/usr/mgmt/config/logging.properties io.osv.MultiJarLoader -mains /usr/mgmt/javamains
-#cmdline = testrunner.so
-#cmdline = java.so Hello
 local-includes =
 INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
 INCLUDES += -isystem $(src)/include/glibc-compat
@@ -623,12 +618,12 @@ bare.img: scripts/mkzfs.py $(jni) bare.raw $(out)/bootfs.manifest
 	$(call quiet, qemu-img resize $@ +10G > /dev/null 2>&1)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest
 
-usr.img: bare.img $(out)/usr.manifest
+usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
 	$(call quiet, cp bare.img $@)
 	$(src)/scripts/upload_manifest.py -o $@ -d $@.d -m $(out)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
-	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(shell cat $(out)/cmdline), IMGEDIT $@)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
@@ -667,13 +662,14 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 
 $(src)/build.mk: $(generated-headers)
 
-.PHONY: generate-manifests
-generate-manifests: bootfs.manifest.skel usr.manifest.skel
+.PHONY: process-modules
+process-modules: bootfs.manifest.skel usr.manifest.skel
 	cd $(out)/module \
-	  && $(src)/scripts/module.py
+	  && OSV_BASE=$(src) OSV_BUILD_PATH=$(out) $(src)/scripts/module.py --image-config $(image)
 
-$(out)/bootfs.manifest: generate-manifests
-$(out)/usr.manifest: generate-manifests
+$(out)/cmdline: process-modules
+$(out)/bootfs.manifest: process-modules
+$(out)/usr.manifest: process-modules
 
 -include $(shell find -name '*.d')
 

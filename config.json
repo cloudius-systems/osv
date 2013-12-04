@@ -1,4 +1,8 @@
 {
-   "modules":[
-   ]
+   "modules": {
+        "mgmt": {
+                "type": "direct-dir",
+                "path": "${OSV_BASE}/modules/mgmt/"
+        }
+   }
 }
