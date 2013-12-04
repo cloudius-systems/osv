@@ -62,12 +62,9 @@ public:
     virtual void init_ipi(unsigned apic_id, unsigned vector)
         { xapic::ipi(apic_id, vector);}
 
-    virtual void ipi_allbutself(unsigned vector)
-        { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF, vector); }
+    virtual void ipi_allbutself(unsigned vector);
 
-    virtual void nmi_allbutself()
-        { xapic::ipi(APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF,
-                     apic_delivery(NMI_DELIVERY)); }
+    virtual void nmi_allbutself();
 
     virtual void ipi(unsigned apic_id, unsigned vector);
 
@@ -115,6 +112,18 @@ void xapic::enable()
 {
     wrmsr(msr::IA32_APIC_BASE, _apic_base | APIC_BASE_GLOBAL_ENABLE);
     software_enable();
+}
+
+void xapic::nmi_allbutself()
+{
+    xapic::write(apicreg::ICR, APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF |
+                               apic_delivery(NMI_DELIVERY));
+}
+
+void xapic::ipi_allbutself(unsigned vector)
+{
+    xapic::write(apicreg::ICR, APIC_ICR_TYPE_FIXED | APIC_SHORTHAND_ALLBUTSELF |
+                               vector | APIC_ICR_LEVEL_ASSERT);
 }
 
 void xapic::ipi(unsigned apic_id, unsigned vector)
