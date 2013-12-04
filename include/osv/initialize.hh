@@ -9,6 +9,9 @@
 #define INITIALIZE_HH_
 
 #include <type_traits>
+#include <array>
+#include <initializer_list>
+#include <utility>
 
 // helper to find out the argument type of a function object
 template <typename T>
@@ -58,5 +61,15 @@ auto initialize_with(func f) -> first_argument_no_ref<func>
     return val;
 }
 
+template <typename val, size_t size>
+std::array<val, size>
+initialize_array(std::initializer_list<std::pair<size_t, val>> il)
+{
+    std::array<val, size> ret;
+    for (auto ile : il) {
+        ret[ile.first] = ile.second;
+    }
+    return ret;
+}
 
 #endif /* INITIALIZE_HH_ */

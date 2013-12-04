@@ -47,10 +47,11 @@
 #include <bsd/sys/compat/linux/linux.h>
 
 #include <osv/file.h>
+#include <osv/socket.hh>
 #include <osv/ioctl.h>
 #include <sys/ioctl.h>
 
-extern int soo_ioctl(struct file *fp, u_long cmd, void *data);
+extern "C" int soo_ioctl(struct file *fp, u_long cmd, void *data);
 
 /*
  * Implement the SIOCGIFCONF ioctl
@@ -226,6 +227,8 @@ linux_to_bsd_ifreq(struct bsd_ifreq *ifr_p)
  * Socket related ioctls
  */
 
+extern "C" int linux_ioctl_socket(struct file *fp, u_long cmd, void *data);
+
 int
 linux_ioctl_socket(struct file *fp, u_long cmd, void *data)
 {
@@ -234,6 +237,7 @@ linux_ioctl_socket(struct file *fp, u_long cmd, void *data)
 	if (type != DTYPE_SOCKET) {
 			return (ENOIOCTL);
 	}
+        socket_file *sfp = static_cast<socket_file*>(fp);
 
     // RUN COMMAND
     
@@ -245,7 +249,7 @@ linux_ioctl_socket(struct file *fp, u_long cmd, void *data)
 		if ((ifp = ifunit_ref((char *)data)) == NULL)
 			return (EINVAL);
 linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
-        error = soo_ioctl(fp, cmd, data);
+        error = sfp->ioctl(cmd, data);
         break ;
 
 	case SIOCGIFMTU:
@@ -253,7 +257,7 @@ linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
 	case SIOCGIFINDEX:
 		if ((ifp = ifunit_ref((char *)data)) == NULL)
 			return (EINVAL);
-        error = soo_ioctl(fp, cmd, data);
+        error = sfp->ioctl(cmd, data);
 		break;
 
 	case SIOCGIFADDR:
@@ -262,7 +266,7 @@ linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
 	case SIOCGIFNETMASK:
 		if ((ifp = ifunit_ref((char *)data)) == NULL)
 			return (EINVAL);
-        error = soo_ioctl(fp, cmd, data);
+        error = sfp->ioctl(cmd, data);
 		bsd_to_linux_ifreq((struct bsd_ifreq *)data);
 		break;
 
@@ -287,7 +291,7 @@ linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
 		break;
 
     default:
-        error = soo_ioctl(fp, cmd, data);
+        error = sfp->ioctl(cmd, data);
 		break;
     }
     if (ifp)

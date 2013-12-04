@@ -9,6 +9,7 @@
 #include "pipe_buffer.hh"
 
 #include <fs/fs.hh>
+#include <osv/socket.hh>
 #include <fs/unsupported.h>
 #include <osv/fcntl.h>
 #include <libc/libc.hh>
@@ -16,82 +17,80 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
+#include <utility>
 
-struct af_local {
-    af_local(pipe_buffer* s, pipe_buffer* r) : send(s), receive(r) {}
-    ~af_local() {
-        send->detach_sender();
-        receive->detach_receiver();
-    }
+using namespace std;
+
+struct af_local final : public file {
+    af_local(const pipe_buffer_ref& s, const pipe_buffer_ref& r)
+            : file(FREAD|FWRITE, DTYPE_UNSPEC), send(s), receive(r) { init(); }
+    af_local(pipe_buffer_ref&& s, pipe_buffer_ref&& r)
+            : file(FREAD|FWRITE, DTYPE_UNSPEC), send(std::move(s)), receive(std::move(r)) { init(); }
+    void init();
+    virtual int read(uio* data, int flags) override;
+    virtual int write(uio* data, int flags) override;
+    virtual int poll(int events) override;
+    virtual int close() override;
+    virtual int truncate(off_t off) override { return unsupported_truncate(this, off); }
+    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
+    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
+    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
+
     pipe_buffer_ref send;
     pipe_buffer_ref receive;
 };
 
-int af_local_init(file* f)
+void af_local::init()
 {
-    af_local* afl = static_cast<af_local*>(f->f_data);
-    afl->send->attach_sender(f);
-    afl->receive->attach_receiver(f);
-    return 0;
+    send->attach_sender(this);
+    receive->attach_receiver(this);
 }
 
-int af_local_read(file* f, uio* data, int flags)
+int af_local::read(uio* data, int flags)
 {
-    af_local* afl = static_cast<af_local*>(f->f_data);
-    return afl->receive->read(data, is_nonblock(f));
+    return receive->read(data, is_nonblock(this));
 }
 
-int af_local_write(file* f, uio* data, int flags)
+int af_local::write(uio* data, int flags)
 {
-    af_local* afl = static_cast<af_local*>(f->f_data);
-    assert(!(f->f_flags & FNONBLOCK));
-    return afl->send->write(data, is_nonblock(f));
+    assert(!(f_flags & FNONBLOCK));
+    return send->write(data, is_nonblock(this));
 }
 
-int af_local_poll(file* f, int events)
+int af_local::poll(int events)
 {
-    af_local* afl = static_cast<af_local*>(f->f_data);
     int revents = 0;
     if (events & POLLIN) {
-        revents |= afl->receive->read_events();
+        revents |= receive->read_events();
     }
     if (events & POLLOUT) {
-        revents |= afl->send->write_events();
+        revents |= send->write_events();
     }
     return revents;
 }
 
-int af_local_close(file* f)
+int af_local::close()
 {
-    auto afl = static_cast<af_local*>(f->f_data);
-    delete afl;
-    f->f_data = nullptr;
+    if (send) {
+        send->detach_sender();
+    }
+    if (receive) {
+        receive->detach_receiver();
+    }
+    send.reset();
+    receive.reset();
     return 0;
 }
-
-fileops af_local_ops = {
-    af_local_init,
-    af_local_read,
-    af_local_write,
-    unsupported_truncate,
-    unsupported_ioctl,
-    af_local_poll,
-    unsupported_stat,
-    af_local_close,
-    unsupported_chmod,
-};
 
 int socketpair_af_local(int type, int proto, int sv[2])
 {
     assert(type == SOCK_STREAM);
     assert(proto == 0);
-    auto b1 = new pipe_buffer;
-    auto b2 = new pipe_buffer;
-    std::unique_ptr<af_local> s1{new af_local(b1, b2)};
-    std::unique_ptr<af_local> s2{new af_local(b2, b1)};
+    pipe_buffer_ref b1{new pipe_buffer};
+    pipe_buffer_ref b2{new pipe_buffer};
     try {
-        fileref f1 = make_file(FREAD|FWRITE, DTYPE_UNSPEC, move(s1), &af_local_ops);
-        fileref f2 = make_file(FREAD|FWRITE, DTYPE_UNSPEC, move(s2), &af_local_ops);
+        fileref f1 = make_file<af_local>(b1, b2);
+        fileref f2 = make_file<af_local>(std::move(b2), std::move(b1));
         fdesc fd1(f1);
         fdesc fd2(f2);
         // all went well, user owns descriptors now
@@ -108,27 +107,26 @@ int shutdown_af_local(int fd, int how) {
     if (!fr) {
         return EBADF;
     }
-    struct file *f = fr.get();
-    if (f->f_ops != &af_local_ops) {
+    auto f = dynamic_cast<af_local*>(fr.get());
+    if (!f) {
         return ENOTSOCK;
     }
-    af_local *afl = static_cast<af_local*>(f->f_data);
     switch (how) {
     case SHUT_RD:
-        afl->receive->detach_receiver();
+        f->receive->detach_receiver();
         FD_LOCK(f);
         f->f_flags &= ~FREAD;
         FD_UNLOCK(f);
         break;
     case SHUT_WR:
-        afl->send->detach_sender();
+        f->send->detach_sender();
         FD_LOCK(f);
         f->f_flags &= ~FWRITE;
         FD_UNLOCK(f);
         break;
     case SHUT_RDWR:
-        afl->receive->detach_receiver();
-        afl->send->detach_sender();
+        f->receive->detach_receiver();
+        f->send->detach_sender();
         FD_LOCK(f);
         f->f_flags &= ~(FREAD|FWRITE);
         FD_UNLOCK(f);

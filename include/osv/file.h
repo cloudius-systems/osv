@@ -62,7 +62,6 @@ typedef enum {
 } filetype_t;
 
 struct vnode;
-struct fileops;
 struct file;
 
 #define FDMAX       (0x4000)
@@ -74,14 +73,24 @@ struct file;
  * File structure
  */
 struct file {
-	~file();
+	file(unsigned flags, filetype_t type, void *opaque = nullptr);
+	virtual ~file();
 	void operator delete(void *p) { osv::rcu_dispose(p); }
+
+	virtual int read(struct uio *uio, int flags) = 0;
+	virtual int write(struct uio *uio, int flags) = 0;
+	virtual int truncate(off_t len) = 0;
+	virtual int ioctl(u_long com, void *data) = 0;
+	virtual int poll(int events) = 0;
+	virtual int stat(struct stat* buf) = 0;
+	virtual int close() = 0;
+	virtual int chmod(mode_t mode) = 0;
+
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
-	off_t		f_offset;	/* current position in file */
-	struct dentry	*f_dentry;	/* dentry */
-	struct fileops	*f_ops;		/* file ops abstraction */
-	void		*f_data;	/* file descriptor specific data */
+	off_t		f_offset = 0;	/* current position in file */
+	struct dentry	*f_dentry = nullptr; /* dentry */
+	void		*f_data;        /* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
@@ -113,22 +122,6 @@ typedef int fo_close_t(struct file *fp);
 typedef int fo_chmod_t(struct file *fp, mode_t mode);
 
 
-struct fileops {
-	fo_init_t   *fo_init;
-	fo_rdwr_t   *fo_read;
-	fo_rdwr_t   *fo_write;
-	fo_truncate_t   *fo_truncate;
-	fo_ioctl_t  *fo_ioctl;
-	fo_poll_t   *fo_poll;
-	fo_stat_t   *fo_stat;
-	fo_close_t  *fo_close;
-	fo_chmod_t  *fo_chmod;
-};
-
-extern struct fileops badfileops;
-extern struct fileops vfs_ops;
-extern struct fileops socketops;
-
 /* Alloc an fd for fp */
 int _fdalloc(struct file *fp, int *newfd, int min_fd);
 int fdalloc(struct file* fp, int *newfd);
@@ -140,7 +133,6 @@ filetype_t file_type(struct file *fp);
 void* file_data(struct file *fp);
 void file_setdata(struct file *fp, void *data);
 int file_flags(struct file *fp);
-void file_makebad(struct file *fp);
 struct dentry* file_dentry(struct file *fp);
 off_t file_offset(struct file *fp);
 void file_setoffset(struct file *fp, off_t off);

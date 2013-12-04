@@ -417,6 +417,8 @@ int	 rtrequest(int, struct bsd_sockaddr *,
 int	 rtinit_fib(struct bsd_ifaddr *, int, int);
 #endif
 
+__BEGIN_DECLS
+
 /* XXX MRT NEW VERSIONS THAT USE FIBs
  * For now the protocol indepedent versions are the same as the AF_INET ones
  * but this will change.. 
@@ -431,6 +433,8 @@ void	 rtredirect_fib(struct bsd_sockaddr *, struct bsd_sockaddr *,
 int	 rtrequest_fib(int, struct bsd_sockaddr *,
 	    struct bsd_sockaddr *, struct bsd_sockaddr *, int, struct rtentry **, u_int);
 int	 rtrequest1_fib(int, struct rt_addrinfo *, struct rtentry **, u_int);
+
+__END_DECLS
 
 #include <bsd/sys/sys/eventhandler.h>
 typedef void (*rtevent_arp_update_fn)(void *, struct rtentry *, uint8_t *, struct bsd_sockaddr *);

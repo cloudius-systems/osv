@@ -152,47 +152,14 @@ int fget(int fd, struct file **out_fp)
     return 0;
 }
 
-/*
- * Allocate a file structure without installing it into the descriptor table.
- */
-static int falloc_noinstall(struct file **resultfp)
+file::file(unsigned flags, filetype_t type, void *opaque)
+    : f_flags(flags)
+    , f_count(1)
+    , f_data(opaque)
+    , f_type(type)
 {
-    struct file *fp;
-
-    fp = new file;
-    if (!fp)
-        return ENOMEM;
-    memset(fp, 0, sizeof(*fp));
-
-    fp->f_ops = &badfileops;
-    fp->f_count = 1;
+    auto fp = this;
     TAILQ_INIT(&fp->f_poll_list);
-
-    *resultfp = fp;
-    return 0;
-}
-
-static void finit(struct file *fp, unsigned flags, filetype_t type, void *opaque,
-        struct fileops *ops)
-{
-    fp->f_flags = flags;
-    fp->f_type = type;
-    fp->f_data = opaque;
-    fp->f_ops = ops;
-
-    fo_init(fp);
-}
-
-fileref make_file(unsigned flags, filetype_t type, void *opaque,
-        struct fileops *ops)
-{
-    file* fp;
-    auto error = falloc_noinstall(&fp);
-    if (error) {
-        throw error;
-    }
-    finit(fp, flags, type, opaque, ops);
-    return fileref(fp, false);
 }
 
 void fhold(struct file* fp)
@@ -205,14 +172,6 @@ int fdrop(struct file *fp)
     if (__sync_fetch_and_sub(&fp->f_count, 1) != 1)
         return 0;
 
-    delete fp;
-    return 1;
-}
-
-file::~file()
-{
-    auto fp = this;
-
     /* We are about to free this file structure, but we still do things with it
      * so set the refcount to INT_MIN, fhold/fdrop may get called again
      * and we don't want to reach this point more than once.
@@ -221,18 +180,20 @@ file::~file()
 
     fp->f_count = INT_MIN;
     fo_close(fp);
+    delete fp;
+    return 1;
+}
+
+file::~file()
+{
+    auto fp = this;
+
     poll_drain(fp);
     if (f_epolls) {
         for (auto ep : *f_epolls) {
             epoll_file_closed(ep, this);
         }
     }
-}
-
-void file_makebad(struct file *fp)
-{
-    fp->f_ops = &badfileops;
-    fp->f_data = NULL;
 }
 
 dentry* file_dentry(file* fp)
@@ -245,118 +206,52 @@ void file_setdata(file* fp, void* data)
     fp->f_data = data;
 }
 
-static int
-badfo_init(struct file *fp)
-{
-    return EBADF;
-}
-
-static int
-badfo_readwrite(struct file *fp, struct uio *uio, int flags)
-{
-    return EBADF;
-}
-
-static int
-badfo_truncate(struct file *fp, off_t length)
-{
-    return EINVAL;
-}
-
-static int
-badfo_ioctl(struct file *fp, u_long com, void *data)
-{
-    return EBADF;
-}
-
-static int
-badfo_poll(struct file *fp, int events)
-{
-    return 0;
-}
-
-static int
-badfo_stat(struct file *fp, struct stat *sb)
-{
-    return EBADF;
-}
-
-static int
-badfo_close(struct file *fp)
-{
-    return EBADF;
-}
-
-static int
-badfo_chmod(struct file *fp, mode_t mode)
-{
-    return EBADF;
-}
-
-struct fileops badfileops = {
-    .fo_init	 = badfo_init,
-    .fo_read	 = badfo_readwrite,
-    .fo_write	 = badfo_readwrite,
-    .fo_truncate = badfo_truncate,
-    .fo_ioctl	 = badfo_ioctl,
-    .fo_poll	 = badfo_poll,
-    .fo_stat	 = badfo_stat,
-    .fo_close	 = badfo_close,
-    .fo_chmod	 = badfo_chmod,
-};
-
- int
-fo_init(struct file *fp)
-{
-        return fp->f_ops->fo_init(fp);
-}
-
  int
 fo_read(struct file *fp, struct uio *uio, int flags)
 {
-        return fp->f_ops->fo_read(fp, uio, flags);
+        return fp->read(uio, flags);
 }
 
  int
 fo_write(struct file *fp, struct uio *uio, int flags)
 {
-        return fp->f_ops->fo_write(fp, uio, flags);
+        return fp->write(uio, flags);
 }
 
  int
 fo_truncate(struct file *fp, off_t length)
 {
-        return fp->f_ops->fo_truncate(fp, length);
+        return fp->truncate(length);
 }
 
  int
 fo_ioctl(struct file *fp, u_long com, void *data)
 {
-        return fp->f_ops->fo_ioctl(fp, com, data);
+        return fp->ioctl(com, data);
 }
 
  int
 fo_poll(struct file *fp, int events)
 {
-        return fp->f_ops->fo_poll(fp, events);
+        return fp->poll(events);
 }
 
  int
 fo_stat(struct file *fp, struct stat *sb)
 {
-        return fp->f_ops->fo_stat(fp, sb);
+        return fp->stat(sb);
 }
 
  int
 fo_close(struct file *fp)
 {
-        return fp->f_ops->fo_close(fp);
+        return fp->close();
 }
 
  int
 fo_chmod(struct file *fp, mode_t mode)
 {
-        return fp->f_ops->fo_chmod(fp, mode);
+        return fp->chmod(mode);
 }
 
 bool is_nonblock(struct file *f)

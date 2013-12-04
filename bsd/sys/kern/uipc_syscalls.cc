@@ -45,6 +45,7 @@
 #include <bsd/sys/sys/param.h>
 #include <bsd/porting/synch.h>
 #include <osv/file.h>
+#include <osv/socket.hh>
 
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/protosw.h>
@@ -107,12 +108,6 @@ getsock_cap(int fd, struct file **fpp, u_int *fflagp)
     return (0);
 }
 
-struct socket_closer {
-	void operator()(socket* so) { soclose(so); }
-};
-
-using socketref = unique_ptr<socket, socket_closer>;
-
 socketref socreate(int dom, int type, int proto)
 {
 	socket* so;
@@ -132,7 +127,7 @@ sys_socket(int domain, int type, int protocol, int *out_fd)
 {
 	try {
 		auto so = socreate(domain, type, protocol);
-		fileref fp = make_file(FREAD | FWRITE, DTYPE_SOCKET, so.release(), &socketops);
+		fileref fp = make_file<socket_file>(FREAD | FWRITE, move(so));
 		fdesc fd(fp);
 		*out_fd = fd.release();
 		return 0;
@@ -284,7 +279,7 @@ kern_accept(int s, struct bsd_sockaddr *name,
 		fsetown(pgid, &so->so_sigio);
 #endif
 	try {
-	    auto nf = make_file(fflag, DTYPE_SOCKET, so, &socketops);
+	    auto nf = make_file<socket_file>(fflag, so);
 	    nfp = nf.get();  // want nf.release()
 	    fhold(nfp);
 	} catch (int err) {
@@ -421,8 +416,8 @@ kern_socketpair(int domain, int type, int protocol, int *rsv)
 			 if (error)
 				 return error;
 		}
-		fileref fp1 = make_file(FREAD | FWRITE, DTYPE_SOCKET, so1.release(), &socketops);
-		fileref fp2 = make_file(FREAD | FWRITE, DTYPE_SOCKET, so2.release(), &socketops);
+		fileref fp1 = make_file<socket_file>(FREAD | FWRITE, move(so1));
+		fileref fp2 = make_file<socket_file>(FREAD | FWRITE, move(so2));
 		fdesc fd1(fp1);
 		fdesc fd2(fp2);
 		// end of exception territory; relax

@@ -52,6 +52,7 @@
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
+#include <osv/vfs_file.hh>
 #include "vfs.h"
 #include <fs/fs.hh>
 
@@ -138,7 +139,7 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	}
 
 	try {
-	    fileref f = make_file(flags, DTYPE_VNODE, NULL, &vfs_ops);
+	    fileref f = make_file<vfs_file>(flags);
 	    fp = f.get();
 	    fhold(fp);
 	} catch (int err) {

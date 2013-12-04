@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <boost/intrusive_ptr.hpp>
 #include <osv/file.h>
+#include <utility>
 
 static inline void intrusive_ptr_add_ref(file *fp)
 {
@@ -43,16 +44,15 @@ uint64_t size(fileref f);
 void read(fileref f, void *buffer, uint64_t offset, uint64_t len);
 void write(fileref f, const void* buffer, uint64_t offset, uint64_t len);
 
-fileref make_file(unsigned flags, filetype_t type,
-        void *opaque, struct fileops *ops);
-
-template <class T>
-fileref make_file(unsigned flags, filetype_t type,
-        std::unique_ptr<T>&& opaque, struct fileops *ops)
+template <class file_type, typename... args>
+fileref
+make_file(args&&... a)
 {
-    auto f = make_file(flags, type, opaque.get(), ops);
-    opaque.release();
-    return f;
+    file* fp = new (std::nothrow) file_type(std::forward<args>(a)...);
+    if (!fp) {
+        throw ENOMEM;
+    }
+    return fileref(fp, false);
 }
 
 class fdesc {
