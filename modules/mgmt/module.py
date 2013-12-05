@@ -20,5 +20,5 @@ web = run_java(
 
 full = [
     shell,
-    delayed(web, 20000)
+    delayed(web, 3000)
 ]
