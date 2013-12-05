@@ -31,6 +31,10 @@
 /usr/lib/jvm/&/jre/lib/currency.data: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/logging.properties: %(jdkbase)s/&
 /usr/lib/jvm/&/jre/lib/security/java.security: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/security/java.policy: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/security/US_export_policy.jar: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/security/local_policy.jar: %(jdkbase)s/&
+/usr/lib/jvm/&/jre/lib/security/nss.cfg: %(jdkbase)s/&
 /usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1
 /usr/lib/&/libfontconfig.so.1: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libfreetype.so.6: %(miscbase)s/usr/lib64/&
