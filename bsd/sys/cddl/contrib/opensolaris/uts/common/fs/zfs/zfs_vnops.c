@@ -2140,6 +2140,7 @@ top:
 	mutex_enter(&zp->z_lock);
 	oldva.va_mode = zp->z_mode;
 	zfs_fuid_map_ids(zp, cr, &oldva.va_uid, &oldva.va_gid);
+#ifndef __OSV__
 	if (mask & AT_XVATTR) {
 		/*
 		 * Update xvattr mask to include only those attributes
@@ -2222,6 +2223,7 @@ top:
 			need_policy = TRUE;
 		}
 	}
+#endif
 
 	mutex_exit(&zp->z_lock);
 
