@@ -340,7 +340,6 @@ private:
     void setup_tcb();
     void free_tcb();
     void complete() __attribute__((__noreturn__));
-    static void on_thread_stack(thread* t);
     template <class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
     struct dummy_lock {};

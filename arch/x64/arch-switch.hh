@@ -111,12 +111,6 @@ void thread::init_stack()
     _state.rsp = stacktop;
 }
 
-void thread::on_thread_stack(thread* t)
-{
-    t->_func();
-    t->complete();
-}
-
 void thread::setup_tcb()
 {
     assert(tls.size);
