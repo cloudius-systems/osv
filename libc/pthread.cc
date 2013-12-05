@@ -504,6 +504,42 @@ int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type)
     return EINVAL;
 }
 
+int pthread_condattr_init(pthread_condattr_t *)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
+int pthread_condattr_destroy(pthread_condattr_t *)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
+int pthread_condattr_setclock(pthread_condattr_t *, clockid_t)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
+int pthread_condattr_setpshared(pthread_condattr_t *, int)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
+int pthread_condattr_getclock(const pthread_condattr_t *__restrict, clockid_t *__restrict)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
+int pthread_condattr_getpshared(const pthread_condattr_t *__restrict, int *__restrict)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
 void pthread_exit(void *retval)
 {
     WARN_STUBBED();
