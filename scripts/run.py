@@ -219,7 +219,7 @@ if (__name__ == "__main__"):
                         help="bridge name for tap networking")
     parser.add_argument("-v", "--vhost", action="store_true",
                         help="needs root. tap networking and vhost")
-    parser.add_argument("-m", "--memsize", action="store", default="1G",
+    parser.add_argument("-m", "--memsize", action="store", default="2G",
                         help="specify memory: ex. 1G, 2G, ...")
     parser.add_argument("-c", "--vcpus", action="store", default="4",
                         help="specify number of vcpus")
