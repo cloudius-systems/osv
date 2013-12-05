@@ -396,8 +396,6 @@ public:
     bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
-    // for the debugger
-    bi::list_member_hook<> _thread_list_link;
     static unsigned long _s_idgen;
 private:
     class reaper;

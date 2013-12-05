@@ -21,6 +21,7 @@
 #include "prio.hh"
 #include "elf.hh"
 #include <stdlib.h>
+#include <unordered_map>
 
 __thread char* percpu_base;
 
@@ -528,13 +529,13 @@ void thread::stack_info::default_deleter(thread::stack_info si)
     free(si.begin);
 }
 
-mutex thread_list_mutex;
-typedef bi::list<thread,
-                 bi::member_hook<thread,
-                                 bi::list_member_hook<>,
-                                 &thread::_thread_list_link>
-                > thread_list_type;
-thread_list_type thread_list __attribute__((init_priority((int)init_prio::threadlist)));
+mutex thread_map_mutex;
+// An unordered_set would be simpler, but it hashes using the address of the thread
+// as the key. And if we already have the thread's address, there is no point in
+// hashing it. So we use unordered_map and use the thread id as the key.
+std::unordered_map<unsigned long, thread *> thread_map
+    __attribute__((init_priority((int)init_prio::threadlist)));
+
 unsigned long thread::_s_idgen;
 
 void* thread::do_remote_thread_local_var(void* var)
@@ -559,9 +560,9 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _ref_counter(1)
     , _joiner()
 {
-    WITH_LOCK(thread_list_mutex) {
-        thread_list.push_back(*this);
+    WITH_LOCK(thread_map_mutex) {
         _id = _s_idgen++;
+        thread_map.insert(std::make_pair(_id, this));
     }
     setup_tcb();
     // setup s_current before switching to the thread, so interrupts
@@ -594,8 +595,8 @@ thread::~thread()
     if (!_attr.detached) {
         join();
     }
-    WITH_LOCK(thread_list_mutex) {
-        thread_list.erase(thread_list.iterator_to(*this));
+    WITH_LOCK(thread_map_mutex) {
+        thread_map.erase(_id);
     }
     if (_attr.stack.deleter) {
         _attr.stack.deleter(_attr.stack);
@@ -1026,16 +1027,17 @@ void init_detached_threads_reaper()
 
 void start_early_threads()
 {
-    WITH_LOCK(thread_list_mutex) {
-        for (auto& t : thread_list) {
-            if (&t == sched::thread::current()) {
+    WITH_LOCK(thread_map_mutex) {
+        for (auto th : thread_map) {
+            thread *t = th.second;
+            if (t == sched::thread::current()) {
                 continue;
             }
-            t.remote_thread_local_var(s_current) = &t;
+            t->remote_thread_local_var(s_current) = t;
             thread::status expected = thread::status::prestarted;
-            if (t._status.compare_exchange_strong(expected,
+            if (t->_status.compare_exchange_strong(expected,
                 thread::status::unstarted, std::memory_order_relaxed)) {
-                t.start();
+                t->start();
             }
         }
     }
