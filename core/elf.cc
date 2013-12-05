@@ -403,7 +403,11 @@ void object::relocate_rela()
             *static_cast<void**>(addr) = symbol(sym).relocated_addr();
             break;
         case R_X86_64_DPTMOD64:
-            *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
+            if (sym == STN_UNDEF) {
+                *static_cast<u64*>(addr) = 0;
+            } else {
+                *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
+            }
             break;
         case R_X86_64_DTPOFF64:
             *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
