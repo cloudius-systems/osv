@@ -51,6 +51,8 @@
 #include <safe-ptr.hh>
 #include <osv/stubbing.hh>
 #include "drivers/pvpanic.hh"
+#include <api/sys/resource.h>
+#include <api/math.h>
 
 #define __LC_LAST 13
 
@@ -354,5 +356,88 @@ int get_nprocs()
 clock_t times(struct tms *buffer)
 {
     debug("times not implemented\n");
+    return 0;
+}
+
+static int prio_find_thread(sched::thread **th, int which, int id)
+{
+    errno = 0;
+    if ((which == PRIO_USER) || (which == PRIO_PGRP)) {
+        return 0;
+    }
+
+    if (which != PRIO_PROCESS) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (id == 0) {
+        *th = sched::thread::current();
+    } else {
+        *th = sched::thread::find_by_id(id);
+    }
+
+    if (!th) {
+        errno = ESRCH;
+        return -1;
+    }
+    return 0;
+}
+
+// Our priority formula is osv_prio = e^(prio * k), where k is a constant.
+// We (arbitrarily) want osv_prio(20) = 5, and osv_prio(-20) = 1/5.
+//
+// So e^(20 * prio_k) = 5
+//    20 * prio_k = ln(5)
+//    prio_k = ln(5) / 20
+//
+// When we are given OSv prio, obviously, the inverse formula applies:
+//
+//    e^(prio * prio_k) = osv_prio
+//    prio * prio_k = ln(osv_prio)
+//    prio = ln(osv_prio) / prio_k
+//
+static constexpr float prio_k = log(5) / 20;
+
+int getpriority(int which, int id)
+{
+    sched::thread *th;
+    int ret = prio_find_thread(&th, which, id);
+    if (ret < 0) {
+        return ret;
+    }
+
+    // Case for which which is not a process and we should just return and not
+    // do anything
+    if (!th && !ret) {
+        return 0;
+    }
+
+    // We're not super concerned with speed during get/set priority, which we
+    // expect to be fairly rare. So we can use the stdlib math functions
+    // instead of any fast approximations.
+    int prio = logf(th->priority()) / prio_k;
+    if (prio < -20) {
+        prio = -20;
+    }
+    if (prio > 19) {
+        prio = 19;
+    }
+    return prio;
+}
+
+int setpriority(int which, int id, int prio)
+{
+    sched::thread *th;
+    int ret = prio_find_thread(&th, which, id);
+    if (ret < 0) {
+        return ret;
+    }
+    if (!th && !ret) {
+        return 0;
+    }
+
+    float p = expf(prio_k * prio);
+    th->set_priority(p);
     return 0;
 }
