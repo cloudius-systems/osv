@@ -24,11 +24,28 @@
 #include <osv/debug.h>
 
 #include "sched.hh"
+#include "osv/trace.hh"
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 
 #include <osv/device.h>
 #include <osv/bio.h>
+
+TRACEPOINT(trace_virtio_blk_read_config_capacity, "capacity=%lu", u64);
+TRACEPOINT(trace_virtio_blk_read_config_size_max, "size_max=%u", u32);
+TRACEPOINT(trace_virtio_blk_read_config_seg_max, "seg_max=%u", u32);
+TRACEPOINT(trace_virtio_blk_read_config_geometry, "cylinders=%u, heads=%u, sectors=%u", u32, u32, u32);
+TRACEPOINT(trace_virtio_blk_read_config_blk_size, "blk_size=%u", u32);
+TRACEPOINT(trace_virtio_blk_read_config_topology, "physical_block_exp=%u, alignment_offset=%u, min_io_size=%u, opt_io_size=%u", u32, u32, u32, u32);
+TRACEPOINT(trace_virtio_blk_read_config_wce, "wce=%u", u32);
+TRACEPOINT(trace_virtio_blk_read_config_ro, "readonly=true");
+TRACEPOINT(trace_virtio_blk_make_virtio_request_seg_max, "request of size %d needs more segment than the max %d", size_t, u32);
+TRACEPOINT(trace_virtio_blk_make_virtio_request_readonly, "write on readonly device");
+TRACEPOINT(trace_virtio_blk_wake, "");
+TRACEPOINT(trace_virtio_blk_strategy, "bio=%p", struct bio*);
+TRACEPOINT(trace_virtio_blk_req_ok, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
+TRACEPOINT(trace_virtio_blk_req_unsupp, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
+TRACEPOINT(trace_virtio_blk_req_err, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
 
 using namespace memory;
 
@@ -47,6 +64,7 @@ virtio_blk_strategy(struct bio *bio)
 {
     struct virtio_blk_priv *prv = reinterpret_cast<struct virtio_blk_priv*>(bio->bio_dev->private_data);
 
+    trace_virtio_blk_strategy(bio);
     bio->bio_offset += bio->bio_dev->offset;
     prv->drv->make_virtio_request(bio);
 }
@@ -132,29 +150,25 @@ bool virtio_blk::read_config()
     //read all of the block config (including size, mce, topology,..) in one shot
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
-    virtio_i("The capacity of the device is %d", (u64)_config.capacity);
+    trace_virtio_blk_read_config_capacity(_config.capacity);
+
     if (get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
-        virtio_i("The size_max of the device is %d",(u32)_config.size_max);
+        trace_virtio_blk_read_config_size_max(_config.size_max);
     if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
-        virtio_i("The seg_size of the device is %d",(u32)_config.seg_max);
+        trace_virtio_blk_read_config_seg_max(_config.seg_max);
     if (get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
-        virtio_i("The cylinders count of the device is %d",(u16)_config.geometry.cylinders);
-        virtio_i("The heads count of the device is %d",(u32)_config.geometry.heads);
-        virtio_i("The sector count of the device is %d",(u32)_config.geometry.sectors);
+        trace_virtio_blk_read_config_geometry((u32)_config.geometry.cylinders, (u32)_config.geometry.heads, (u32)_config.geometry.sectors);
     }
     if (get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
-        virtio_i("The block size of the device is %d",(u32)_config.blk_size);
+        trace_virtio_blk_read_config_blk_size(_config.blk_size);
     if (get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
-        virtio_i("The physical_block_exp of the device is %d",(u32)_config.physical_block_exp);
-        virtio_i("The alignment_offset of the device is %d",(u32)_config.alignment_offset);
-        virtio_i("The min_io_size of the device is %d",(u16)_config.min_io_size);
-        virtio_i("The opt_io_size of the device is %d",(u32)_config.opt_io_size);
+        trace_virtio_blk_read_config_topology((u32)_config.physical_block_exp, (u32)_config.alignment_offset, (u32)_config.min_io_size, (u32)_config.opt_io_size);
     }
     if (get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
-        virtio_i("The write cache enable of the device is %d",(u32)_config.wce);
+        trace_virtio_blk_read_config_wce((u32)_config.wce);
     if (get_guest_feature_bit(VIRTIO_BLK_F_RO)) {
         set_readonly();
-        virtio_i("Device is read only");
+        trace_virtio_blk_read_config_ro();
     }
 
     return true;
@@ -168,6 +182,7 @@ void virtio_blk::response_worker()
     while (1) {
 
         virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
+        trace_virtio_blk_wake();
 
         u32 len;
         while((req = static_cast<virtio_blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
@@ -175,15 +190,15 @@ void virtio_blk::response_worker()
                 switch (req->res.status) {
                 case VIRTIO_BLK_S_OK:
                     biodone(req->bio, true);
+                    trace_virtio_blk_req_ok(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
                     break;
                 case VIRTIO_BLK_S_UNSUPP:
-                    kprintf("unsupported I/O request\n");
                     biodone(req->bio, false);
+                    trace_virtio_blk_req_unsupp(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
                     break;
                 default:
-                    kprintf("virtio-blk: I/O error, sector = %lu, len = %lu, type = %x\n",
-                            req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
                     biodone(req->bio, false);
+                    trace_virtio_blk_req_err(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
                     break;
                }
             }
@@ -218,8 +233,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         if (!bio) return EIO;
 
         if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
-            virtio_w("%s:request of size %d needs more segment than the max %d",
-                    __FUNCTION__, bio->bio_bcount, (u32)_config.seg_max);
+            trace_virtio_blk_make_virtio_request_seg_max(bio->bio_bcount, _config.seg_max);
             return EIO;
         }
 
@@ -232,7 +246,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             break;
         case BIO_WRITE:
             if (is_readonly()) {
-                virtio_e("Error: block device is read only");
+                trace_virtio_blk_make_virtio_request_readonly();
                 biodone(bio, false);
                 return EROFS;
             }
