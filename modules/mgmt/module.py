@@ -16,7 +16,7 @@ shell = run_java(
 
 web = run_java(
         jvm_args=[_logging_opts],
-        args=['-jar', _web_jar, 'app', 'dev'])
+        args=['-jar', _web_jar, 'app', 'prod'])
 
 full = [
     shell,
