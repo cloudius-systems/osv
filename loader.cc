@@ -272,16 +272,20 @@ void* do_main_thread(void *_commands)
         mount_zfs_rootfs();
     }
 
-    osv::for_each_if([] (std::string if_name) {
+    bool has_if = false;
+    osv::for_each_if([&has_if] (std::string if_name) {
         if (if_name == "lo0")
             return;
 
+        has_if = true;
         // Start DHCP by default and wait for an IP
         if (osv::start_if(if_name, "0.0.0.0", "255.255.255.0") != 0 ||
             osv::ifup(if_name) != 0)
             debug("Could not initialize network interface.\n");
     });
-    dhcp_start(true);
+    if (has_if) {
+        dhcp_start(true);
+    }
 
     // run each payload in order
     for (auto &it : *commands) {
