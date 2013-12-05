@@ -397,6 +397,7 @@ public:
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
     static unsigned long _s_idgen;
+    static thread *find_by_id(unsigned long id);
 private:
     class reaper;
     friend class reaper;

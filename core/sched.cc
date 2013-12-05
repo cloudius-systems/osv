@@ -538,6 +538,14 @@ std::unordered_map<unsigned long, thread *> thread_map
 
 unsigned long thread::_s_idgen;
 
+thread *thread::find_by_id(unsigned long id)
+{
+    auto th = thread_map.find(id);
+    if (th == thread_map.end())
+        return NULL;
+    return (*th).second;
+}
+
 void* thread::do_remote_thread_local_var(void* var)
 {
     auto tls_cur = static_cast<char*>(current()->_tcb->tls_base);
