@@ -14,33 +14,28 @@
 #include <unistd.h>
 #include <limits.h>
 
-#define TESTDIR		"/tests"
+#include <osv/run.hh>
+#include <debug.hh>
 
-extern void dlclose_by_path_np(const char* filename);
+#define TESTDIR		"/tests"
 
 static unsigned nr_tests, nr_failures;
 
 void load_test(char *path, char *argv0)
 {
-	void *handle;
-	int (*test_main)(int argc, char **argv);
-	int ret;
-
-	printf("running %s\n", path);
-
-	handle = dlopen(path, 0);
-	test_main = dlsym(handle, "main");
+    printf("running %s\n", path);
+    int ret;
+    if (!osv::run(path, 1, &argv0, &ret)) {
+        abort("Failed to execute or missing main()\n");
+    }
 
 	++nr_tests;
-	ret = test_main(1, &argv0);
 	if (ret) {
 	    ++nr_failures;
 		printf("failed.\n");
 	} else {
 		printf("ok.\n");
 	}
-
-	dlclose_by_path_np(path);
 }
 
 int check_path(char *path)
