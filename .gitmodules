@@ -22,3 +22,6 @@
 [submodule "mgmt"]
 	path = mgmt
 	url = ../../cloudius-systems/mgmt.git
+[submodule "apps"]
+	path = apps
+	url = ../../cloudius-systems/osv-apps
