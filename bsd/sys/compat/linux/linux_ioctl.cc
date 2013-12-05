@@ -58,110 +58,110 @@
 static int
 linux_ifconf(struct bsd_ifconf *ifc_p)
 {
-	struct l_ifreq ifr;
-	struct ifnet *ifp;
-	struct bsd_ifaddr *ifa;
-	struct sbuf *sb;
-	int full = 0, valid_len, max_len;
+    struct l_ifreq ifr;
+    struct ifnet *ifp;
+    struct bsd_ifaddr *ifa;
+    struct sbuf *sb;
+    int full = 0, valid_len, max_len;
 
-	max_len = MAXPHYS - 1;
+    max_len = MAXPHYS - 1;
 
-	/* handle the 'request buffer size' case */
-	if ((void *)ifc_p->ifc_buf == NULL) {
-		ifc_p->ifc_len = 0;
-		IFNET_RLOCK();
-		TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
-			TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-				struct bsd_sockaddr *sa = ifa->ifa_addr;
-				if (sa->sa_family == AF_INET)
-					ifc_p->ifc_len += sizeof(ifr);
-			}
-		}
-		IFNET_RUNLOCK();
-		return (0);
-	}       
+    /* handle the 'request buffer size' case */
+    if ((void *)ifc_p->ifc_buf == NULL) {
+        ifc_p->ifc_len = 0;
+        IFNET_RLOCK();
+        TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
+            TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+                struct bsd_sockaddr *sa = ifa->ifa_addr;
+                if (sa->sa_family == AF_INET)
+                    ifc_p->ifc_len += sizeof(ifr);
+            }
+        }
+        IFNET_RUNLOCK();
+        return (0);
+    }
 
-	if (ifc_p->ifc_len <= 0) {
-		return (EINVAL);
-	}
+    if (ifc_p->ifc_len <= 0) {
+        return (EINVAL);
+    }
 
-again:
-	/* Keep track of eth interfaces */
-	if (ifc_p->ifc_len <= max_len) {
-		max_len = ifc_p->ifc_len;
-		full = 1;
-	}
-	sb = sbuf_new(NULL, NULL, max_len + 1, SBUF_FIXEDLEN);
-	max_len = 0;
-	valid_len = 0;
+    again:
+    /* Keep track of eth interfaces */
+    if (ifc_p->ifc_len <= max_len) {
+        max_len = ifc_p->ifc_len;
+        full = 1;
+    }
+    sb = sbuf_new(NULL, NULL, max_len + 1, SBUF_FIXEDLEN);
+    max_len = 0;
+    valid_len = 0;
 
-	/* Return all AF_INET addresses of all interfaces */
-	IFNET_RLOCK();
-	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
-		int addrs = 0;
+    /* Return all AF_INET addresses of all interfaces */
+    IFNET_RLOCK();
+    TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
+        int addrs = 0;
 
-		bzero(&ifr, sizeof(ifr));
+        bzero(&ifr, sizeof(ifr));
         strlcpy(ifr.ifr_name, ifp->if_xname, IFNAMSIZ);
 
-		/* Walk the address list */
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-			struct bsd_sockaddr *sa = ifa->ifa_addr;
+        /* Walk the address list */
+        TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+            struct bsd_sockaddr *sa = ifa->ifa_addr;
 
-			if (sa->sa_family == AF_INET) {
-				ifr.ifr_addr.sa_family = LINUX_AF_INET;
-				memcpy(ifr.ifr_addr.sa_data, sa->sa_data,
-				    sizeof(ifr.ifr_addr.sa_data));
-				sbuf_bcat(sb, &ifr, sizeof(ifr));
-				max_len += sizeof(ifr);
-				addrs++;
-			}
+            if (sa->sa_family == AF_INET) {
+                ifr.ifr_addr.sa_family = LINUX_AF_INET;
+                memcpy(ifr.ifr_addr.sa_data, sa->sa_data,
+                        sizeof(ifr.ifr_addr.sa_data));
+                sbuf_bcat(sb, &ifr, sizeof(ifr));
+                max_len += sizeof(ifr);
+                addrs++;
+            }
 
-			if (sbuf_error(sb) == 0)
-				valid_len = sbuf_len(sb);
-		}
-		if (addrs == 0) {
-			bzero((caddr_t)&ifr.ifr_addr, sizeof(ifr.ifr_addr));
-			sbuf_bcat(sb, &ifr, sizeof(ifr));
-			max_len += sizeof(ifr);
+            if (sbuf_error(sb) == 0)
+                valid_len = sbuf_len(sb);
+        }
+        if (addrs == 0) {
+            bzero((caddr_t)&ifr.ifr_addr, sizeof(ifr.ifr_addr));
+            sbuf_bcat(sb, &ifr, sizeof(ifr));
+            max_len += sizeof(ifr);
 
-			if (sbuf_error(sb) == 0)
-				valid_len = sbuf_len(sb);
-		}
-	}
-	IFNET_RUNLOCK();
+            if (sbuf_error(sb) == 0)
+                valid_len = sbuf_len(sb);
+        }
+    }
+    IFNET_RUNLOCK();
 
-	if (valid_len != max_len && !full) {
-		sbuf_delete(sb);
-		goto again;
-	}
+    if (valid_len != max_len && !full) {
+        sbuf_delete(sb);
+        goto again;
+    }
 
-	ifc_p->ifc_len = valid_len; 
-	sbuf_finish(sb);
+    ifc_p->ifc_len = valid_len;
+    sbuf_finish(sb);
     memcpy(ifc_p->ifc_buf, sbuf_data(sb), ifc_p->ifc_len);
-	sbuf_delete(sb);
+    sbuf_delete(sb);
 
-	return (0);
+    return (0);
 }
 
 static void
 linux_gifflags(struct ifnet *ifp, struct l_ifreq *ifr)
 {
-	l_short flags;
+    l_short flags;
 
-	flags = (ifp->if_flags | ifp->if_drv_flags);
-	/* These flags have no Linux equivalent
+    flags = (ifp->if_flags | ifp->if_drv_flags);
+    /* These flags have no Linux equivalent
      *
      *  Notes:
      *       - We do show IFF_SMART|IFF_DRV_OACTIVE|IFF_SIMPLEX
      *       - IFF_LINK0 has a value of 0x1000 which conflics with the Linux
      *         IFF_MULTICAST value.
      */
-	flags &= ~(IFF_LINK0|IFF_LINK1|IFF_LINK2);
-	/* Linux' multicast flag is in a different bit */
-	if (flags & IFF_MULTICAST) {
-		flags &= ~IFF_MULTICAST;
-		flags |= 0x1000;
-	}
+    flags &= ~(IFF_LINK0|IFF_LINK1|IFF_LINK2);
+    /* Linux' multicast flag is in a different bit */
+    if (flags & IFF_MULTICAST) {
+        flags &= ~IFF_MULTICAST;
+        flags |= 0x1000;
+    }
     ifr->ifr_flags = flags ;
 }
 
@@ -171,39 +171,39 @@ linux_gifflags(struct ifnet *ifp, struct l_ifreq *ifr)
 static int
 linux_gifhwaddr(struct ifnet *ifp, struct l_ifreq *ifr)
 {
-	struct bsd_ifaddr *ifa;
-	struct bsd_sockaddr_dl *sdl;
-	struct l_sockaddr *lsa_p = &ifr->ifr_hwaddr ;
+    struct bsd_ifaddr *ifa;
+    struct bsd_sockaddr_dl *sdl;
+    struct l_sockaddr *lsa_p = &ifr->ifr_hwaddr ;
 
-	if (ifp->if_type == IFT_LOOP) {
-		bzero(lsa_p, sizeof(*lsa_p));
-		lsa_p->sa_family = ARPHRD_LOOPBACK;
-		return 0;
-	}
+    if (ifp->if_type == IFT_LOOP) {
+        bzero(lsa_p, sizeof(*lsa_p));
+        lsa_p->sa_family = ARPHRD_LOOPBACK;
+        return 0;
+    }
 
-	if (ifp->if_type != IFT_ETHER)
-		return (ENOENT);
+    if (ifp->if_type != IFT_ETHER)
+        return (ENOENT);
 
-	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-		sdl = (struct bsd_sockaddr_dl*)ifa->ifa_addr;
-		if (sdl != NULL && (sdl->sdl_family == AF_LINK) &&
-		    (sdl->sdl_type == IFT_ETHER)) {
-            
+    TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+        sdl = (struct bsd_sockaddr_dl*)ifa->ifa_addr;
+        if (sdl != NULL && (sdl->sdl_family == AF_LINK) &&
+                (sdl->sdl_type == IFT_ETHER)) {
+
             bzero(lsa_p, sizeof(*lsa_p));
-			lsa_p->sa_family = ARPHRD_ETHER;
-			bcopy(LLADDR(sdl), lsa_p->sa_data, LINUX_IFHWADDRLEN);
-			return 0;
-		}
-	}
-	return (ENOENT);
+            lsa_p->sa_family = ARPHRD_ETHER;
+            bcopy(LLADDR(sdl), lsa_p->sa_data, LINUX_IFHWADDRLEN);
+            return 0;
+        }
+    }
+    return (ENOENT);
 }
 
 
 /*
-* Fix the interface address field in bsd_ifreq. The bsd stack expects a
-* length/family byte members, while linux and everyone else use a short family
-* field. 
-*/
+ * Fix the interface address field in bsd_ifreq. The bsd stack expects a
+ * length/family byte members, while linux and everyone else use a short family
+ * field.
+ */
 static inline void
 bsd_to_linux_ifreq(struct bsd_ifreq *ifr_p)
 {
@@ -216,7 +216,7 @@ static inline void
 linux_to_bsd_ifreq(struct bsd_ifreq *ifr_p)
 {
     u_short family = *(u_short *)&(ifr_p->ifr_addr) ;
-    
+
     ifr_p->ifr_addr.sa_family = family ;
     ifr_p->ifr_addr.sa_len    = 16 ;
 }
@@ -230,67 +230,67 @@ extern "C" int linux_ioctl_socket(socket_file *fp, u_long cmd, void *data);
 int
 linux_ioctl_socket(socket_file *fp, u_long cmd, void *data)
 {
-	struct ifnet *ifp = NULL;
-	int error = 0, type = file_type(fp);
-	if (type != DTYPE_SOCKET) {
-			return (ENOIOCTL);
-	}
+    struct ifnet *ifp = NULL;
+    int error = 0, type = file_type(fp);
+    if (type != DTYPE_SOCKET) {
+        return (ENOIOCTL);
+    }
     // RUN COMMAND
-    
-	switch (cmd) {
-	case SIOCSIFADDR:
-	case SIOCSIFNETMASK:
+
+    switch (cmd) {
+    case SIOCSIFADDR:
+    case SIOCSIFNETMASK:
     case SIOCSIFDSTADDR: 
     case SIOCSIFBRDADDR: 
-		if ((ifp = ifunit_ref((char *)data)) == NULL)
-			return (EINVAL);
-linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
+        if ((ifp = ifunit_ref((char *)data)) == NULL)
+            return (EINVAL);
+        linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
         error = fp->bsd_ioctl(cmd, data);
         break ;
 
-	case SIOCGIFMTU:
-	case SIOCSIFMTU:
-	case SIOCGIFINDEX:
-		if ((ifp = ifunit_ref((char *)data)) == NULL)
-			return (EINVAL);
+    case SIOCGIFMTU:
+    case SIOCSIFMTU:
+    case SIOCGIFINDEX:
+        if ((ifp = ifunit_ref((char *)data)) == NULL)
+            return (EINVAL);
         error = fp->bsd_ioctl(cmd, data);
-		break;
+        break;
 
-	case SIOCGIFADDR:
-	case SIOCGIFDSTADDR:
-	case SIOCGIFBRDADDR:
-	case SIOCGIFNETMASK:
-		if ((ifp = ifunit_ref((char *)data)) == NULL)
-			return (EINVAL);
+    case SIOCGIFADDR:
+    case SIOCGIFDSTADDR:
+    case SIOCGIFBRDADDR:
+    case SIOCGIFNETMASK:
+        if ((ifp = ifunit_ref((char *)data)) == NULL)
+            return (EINVAL);
         error = fp->bsd_ioctl(cmd, data);
-		bsd_to_linux_ifreq((struct bsd_ifreq *)data);
-		break;
+        bsd_to_linux_ifreq((struct bsd_ifreq *)data);
+        break;
 
-	case SIOCGIFCONF:
-		error = linux_ifconf((struct bsd_ifconf *)data);
-		break;
+    case SIOCGIFCONF:
+        error = linux_ifconf((struct bsd_ifconf *)data);
+        break;
 
-	case SIOCGIFFLAGS:
-		if ((ifp = ifunit_ref((char *)data)) == NULL)
-			return (EINVAL);
-		linux_gifflags(ifp, (struct l_ifreq *)data);
-		break;
+    case SIOCGIFFLAGS:
+        if ((ifp = ifunit_ref((char *)data)) == NULL)
+            return (EINVAL);
+        linux_gifflags(ifp, (struct l_ifreq *)data);
+        break;
 
-	case SIOCSIFNAME:
+    case SIOCSIFNAME:
         error = ENOIOCTL;
-		break;
+        break;
 
-	case SIOCGIFHWADDR:
-		if ((ifp = ifunit_ref((char *)data)) == NULL)
-			return (EINVAL);
-		error = linux_gifhwaddr(ifp, (struct l_ifreq *)data);
-		break;
+    case SIOCGIFHWADDR:
+        if ((ifp = ifunit_ref((char *)data)) == NULL)
+            return (EINVAL);
+        error = linux_gifhwaddr(ifp, (struct l_ifreq *)data);
+        break;
 
     default:
         error = fp->bsd_ioctl(cmd, data);
-		break;
+        break;
     }
     if (ifp)
         if_rele(ifp);
-	return (error);
+    return (error);
 }
