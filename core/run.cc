@@ -13,11 +13,6 @@ extern int optind;
 using namespace std;
 using namespace boost::range;
 
-// Java uses this global variable (supplied by Glibc) to figure out the
-// initial thread's stack end.
-void *__libc_stack_end;
-bool static stack_end_init;
-
 namespace osv {
 
 std::shared_ptr<elf::object> run(std::string path,
@@ -36,10 +31,6 @@ std::shared_ptr<elf::object> run(std::string path,
     // FIXME: fails if run() is executed in parallel
     int old_optind = optind;
     optind = 0;
-    if (!stack_end_init) {
-        __libc_stack_end = __builtin_frame_address(0);
-        stack_end_init = true;
-    }
     int rc = main(argc, argv);
     optind = old_optind;
     if (return_code) {

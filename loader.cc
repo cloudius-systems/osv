@@ -216,6 +216,12 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
     return commands;
 }
 
+// Java uses this global variable (supplied by Glibc) to figure out
+// aproximatively where the initial thread's stack end.
+// The aproximation allow to fill the variable here instead of doing it in
+// osv::run.
+void *__libc_stack_end;
+
 void run_main(std::vector<std::string> &vec)
 {
     auto b = std::begin(vec)++;
@@ -229,6 +235,7 @@ void run_main(std::vector<std::string> &vec)
         memory::tracker_enabled = true;
     }
 
+    __libc_stack_end = __builtin_frame_address(0);
     auto lib = *(new std::shared_ptr<elf::object>(osv::run(command, args, &ret)));
 
     // success
