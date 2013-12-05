@@ -1,8 +1,16 @@
 {
    "modules": {
         "mgmt": {
-                "type": "direct-dir",
-                "path": "${OSV_BASE}/modules/mgmt/"
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/modules/mgmt/"
+        },
+        "tomcat": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/apps/tomcat/"
+        },
+        "cassandra": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/apps/cassandra/"
         }
    }
 }
