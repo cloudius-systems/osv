@@ -34,6 +34,7 @@ public:
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual int chmod(mode_t mode) override;
+    int bsd_ioctl(u_long cmd, void* data);
     socket* so;
 };
 
