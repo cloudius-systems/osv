@@ -440,7 +440,6 @@ namespace virtio {
             if (_tx_queue->used_ring_not_empty()) {
                 trace_virtio_net_tx_no_space_calling_gc(_ifn->if_index);
                 tx_gc();
-                _tx_queue->get_buf_gc();
             } else {
                 virtio_net_d("%s: no room", __FUNCTION__);
                 delete req;
@@ -554,6 +553,7 @@ namespace virtio {
                 delete req;
                 _tx_queue->get_buf_finalize();
             }
+            _tx_queue->get_buf_gc();
         }
     }
 
