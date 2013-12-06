@@ -401,7 +401,7 @@ while true; do
 
     if test x"$DONT_BUILD" != x"1"; then
         echo_progress Building from the scratch
-        make clean && git submodule update && make external && make img_format=raw
+        make clean && git submodule update && make external && make -j `nproc` img_format=raw
 
         if test x"$?" != x"0"; then
             handle_error Build failed.
@@ -595,7 +595,7 @@ fi
 
 if test x"$BUCKET_CREATED" != x"0"; then
     echo_progress Deleting bucket $OSV_BUCKET
-    aws s3 rb s3://$OSV_BUCKET --force
+    aws s3 rb s3://$OSV_BUCKET --force > /dev/null
 fi
 
 echo_progress Done. Release status is stored in $OSV_RSTATUS:
