@@ -103,7 +103,7 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
         auto isr = binding.isr;
         auto t = binding.t;
 
-        bool assign_ok = assign_isr(vec, [=] { if (isr) isr(); t->wake(); });
+        bool assign_ok = assign_isr(vec, [=] { if (isr) isr(); if (t) t->wake(); });
         if (!assign_ok) {
             free_vectors(assigned);
             return false;
