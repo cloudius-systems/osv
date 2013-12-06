@@ -108,8 +108,8 @@ S3_CREDENTIALS="-O $AWS_ACCESS_KEY_ID -W $AWS_SECRET_ACCESS_KEY"
 export AWS_DEFAULT_REGION=us-east-1
 OSV_INITIAL_ZONE="${AWS_DEFAULT_REGION}a"
 
-#We use Microsoft Windows Server 2012 Base AMI by Amazon as a template
-TEMPLATE_AMI_ID=ami-173d747e
+#We use OSv-v0.03 AMI in us-east-1 as a template
+TEMPLATE_AMI_ID=ami-45d2882c
 
 amend_rstatus() {
  echo \[`timestamp`\] $* >> $OSV_RSTATUS
@@ -363,7 +363,7 @@ make_replica_public() {
   echo_progress Wait for AMI to become available
   wait_for_ami_ready $AMI_ID "--region $REGION"
 
-  while test x"$PUBLIC_AMI_INFO" == x""
+  while test x"$PUBLIC_AMI_INFO" = x""
   do
     make_ami_private $AMI_ID "--region $REGION"
     get_own_ami_info $AMI_ID "--region $REGION"
@@ -450,7 +450,7 @@ while true; do
         break;
     fi
 
-    echo_progress Creating new template instance from Windows AMI $TEMPLATE_AMI_ID
+    echo_progress Creating new template instance from AMI $TEMPLATE_AMI_ID
     INSTANCE_ID=`launch_template_instance`
 
     if test x"$INSTANCE_ID" = x; then
