@@ -245,9 +245,6 @@ BOOST_AUTO_TEST_CASE(test_renaming_file_to_directory)
 
 	test_file_rename_fails(file, dir, {EISDIR});
 	test_file_rename_fails(file, empty_dir, {EISDIR});
-
-	// See issue #68
-	fs::remove_all(empty_dir);
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_directory_to_non_empty_directory)
@@ -258,9 +255,6 @@ BOOST_AUTO_TEST_CASE(test_renaming_directory_to_non_empty_directory)
 
 	prepare_file(dst / "file2");
 	assert_rename_fails(src, dst, {ENOTEMPTY, EEXIST});
-
-	// See issue #68
-	fs::remove_all(dst);
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_directory_to_empty_directory)
@@ -329,10 +323,6 @@ BOOST_AUTO_TEST_CASE(test_renaming_directory_to_existing_file_when_dst_ends_with
 	fs::path empty_dir = make_dir(dir / "empty_dir");
 	assert_rename_fails(empty_dir, file / "/", {ENOTDIR});
 	assert_rename_fails(empty_dir, file, {ENOTDIR});
-
-	// See issue #68
-	fs::remove_all(empty_dir);
-	fs::remove_all(empty_dir);
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_directory_to_nonexisting_file_ending_with_slash_succeeds)
@@ -410,10 +400,6 @@ BOOST_AUTO_TEST_CASE(test_renaming_with_last_coponent_as_dot_or_dot_dot_shall_fa
 	assert_rename_fails(fs::path(".."), empty_dir, {EBUSY, EINVAL});
 	assert_rename_fails(fs::path("../"), empty_dir, {EBUSY, EINVAL});
 	assert_rename_fails(fs::path("..//"), empty_dir, {EBUSY, EINVAL});
-
-	// See issue #68.
-	fs::remove_all(tmp / "sub");
-	fs::remove_all(empty_dir);
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_with_empty_paths_fails)
