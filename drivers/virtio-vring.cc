@@ -254,9 +254,9 @@ namespace virtio {
     }
 
     bool vring::used_ring_is_half_empty() const
-        {
-            return (_used_ring_host_head - _used->_idx.load(std::memory_order_relaxed) > (u16)_num/2);
-        }
+    {
+        return (_used->_idx.load(std::memory_order_relaxed) - _used_ring_host_head > (u16)(_num / 2));
+    }
 
     bool
     vring::kick() {
