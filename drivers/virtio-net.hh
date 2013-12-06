@@ -213,7 +213,6 @@ namespace virtio {
         bool tx(struct mbuf* m_head, bool flush = false);
         struct mbuf* tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr);
         void kick(int queue) {_queues[queue]->kick();}
-        void tx_gc_thread();
         void tx_gc();
         static hw_driver* probe(hw_device* dev);
 

@@ -47,7 +47,6 @@ TRACEPOINT(trace_virtio_net_rx_wake, "");
 TRACEPOINT(trace_virtio_net_fill_rx_ring, "if=%d", int);
 TRACEPOINT(trace_virtio_net_fill_rx_ring_added, "if=%d, added=%d", int, int);
 TRACEPOINT(trace_virtio_net_tx_packet, "if=%d, len=%d", int, int);
-TRACEPOINT(trace_virtio_net_tx_wake, "");
 TRACEPOINT(trace_virtio_net_tx_failed_add_buf, "if=%d", int);
 TRACEPOINT(trace_virtio_net_tx_no_space_calling_gc, "if=%d", int);
 using namespace memory;
@@ -149,9 +148,7 @@ namespace virtio {
 
         //register the 2 irq callback for the net
         sched::thread* rx = new sched::thread([this] { this->receiver(); });
-        sched::thread* tx = new sched::thread([this] { this->tx_gc_thread(); });
         rx->start();
-        tx->start();
 
         //initialize the BSD interface _if
         _ifn = if_alloc(IFT_ETHER);
@@ -192,7 +189,7 @@ namespace virtio {
         ether_ifattach(_ifn, _config.mac);
         _msi.easy_register({
             { 0, [&] { _rx_queue->disable_interrupts(); }, rx },
-            { 1, [&] { _tx_queue->disable_interrupts(); }, tx }
+            { 1, [&] { _tx_queue->disable_interrupts(); }, nullptr }
         });
 
         fill_rx_ring();
@@ -545,16 +542,6 @@ namespace virtio {
         }
 
         return m;
-    }
-
-    void virtio_net::tx_gc_thread() {
-
-        while (1) {
-            // Wait for tx queue (used elements)
-            virtio_driver::wait_for_queue(_tx_queue, &vring::used_ring_is_half_empty);
-            trace_virtio_net_tx_wake();
-            tx_gc();
-        }
     }
 
     void virtio_net::tx_gc()
