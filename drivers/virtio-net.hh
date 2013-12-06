@@ -252,9 +252,6 @@ namespace virtio {
         static int _instance;
         int _id;
         struct ifnet* _ifn;
-
-        // tx gc lock that can be called by the gc thread or the tx xmitter
-        mutex _tx_gc_lock;
     };
 }
 

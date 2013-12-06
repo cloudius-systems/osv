@@ -545,16 +545,14 @@ namespace virtio {
 
     void virtio_net::tx_gc()
     {
-        WITH_LOCK(_tx_gc_lock) {
-            u32 len;
-            virtio_net_req * req;
+        virtio_net_req * req;
+        u32 len;
 
-            while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf_elem(&len))) != nullptr) {
-                delete req;
-                _tx_queue->get_buf_finalize();
-            }
-            _tx_queue->get_buf_gc();
+        while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf_elem(&len))) != nullptr) {
+            delete req;
+            _tx_queue->get_buf_finalize();
         }
+        _tx_queue->get_buf_gc();
     }
 
     u32 virtio_net::get_driver_features(void)
