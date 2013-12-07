@@ -49,6 +49,7 @@
 
 
 static mutex_t ramfs_lock = MUTEX_INITIALIZER;
+static uint64_t inode_count = 1; /* inode 0 is reserved to root */
 
 struct ramfs_node *
 ramfs_allocate_node(char *name, int type)
@@ -158,11 +159,14 @@ ramfs_rename_node(struct ramfs_node *np, char *name)
 }
 
 static int
-ramfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
+ramfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 {
 	struct ramfs_node *np, *dnp;
+	struct vnode *vp;
 	size_t len;
 	int found;
+
+	*vpp = NULL;
 
 	if (*name == '\0')
 		return ENOENT;
@@ -183,12 +187,25 @@ ramfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
 		mutex_unlock(&ramfs_lock);
 		return ENOENT;
 	}
+	if (vget(dvp->v_mount, inode_count++, &vp)) {
+		/* found in cache */
+		*vpp = vp;
+		mutex_unlock(&ramfs_lock);
+		return 0;
+	}
+	if (!vp) {
+		mutex_unlock(&ramfs_lock);
+		return ENOMEM;
+	}
 	vp->v_data = np;
 	vp->v_mode = ALLPERMS;
 	vp->v_type = np->rn_type;
 	vp->v_size = np->rn_size;
 
 	mutex_unlock(&ramfs_lock);
+
+	*vpp = vp;
+
 	return 0;
 }
 

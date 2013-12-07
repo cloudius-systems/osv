@@ -811,8 +811,7 @@ sys_unlink(char *path)
 		error = EPERM;
 		goto out;
 	}
-	/* XXX: Need to allow unlink for opened file. */
-	if (vp->v_flags & VROOT || vcount(vp) >= 2) {
+	if (vp->v_flags & VROOT) {
 		error = EBUSY;
 		goto out;
 	}

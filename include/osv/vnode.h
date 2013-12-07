@@ -67,6 +67,7 @@ enum vtype {
  * appropriate lock.
  */
 struct vnode {
+	uint64_t	v_ino;		/* inode number */
 	LIST_ENTRY(vnode) v_link;	/* link for hash list */
 	struct mount	*v_mount;	/* mounted vfs pointer */
 	struct vnops	*v_op;		/* vnode operations */
@@ -78,7 +79,6 @@ struct vnode {
 	mutex_t		v_lock;		/* lock for this vnode */
 	LIST_HEAD(, dentry) v_names;	/* directory entries pointing at this */
 	int		v_nrlocks;	/* lock count (for debug) */
-	char		*v_path;	/* pointer to path in fs */
 	void		*v_data;	/* private data for fs */
 };
 
@@ -126,7 +126,7 @@ typedef	int (*vnop_seek_t)	(struct vnode *, struct file *, off_t, off_t);
 typedef	int (*vnop_ioctl_t)	(struct vnode *, struct file *, u_long, void *);
 typedef	int (*vnop_fsync_t)	(struct vnode *, struct file *);
 typedef	int (*vnop_readdir_t)	(struct vnode *, struct file *, struct dirent *);
-typedef	int (*vnop_lookup_t)	(struct vnode *, char *, struct vnode *);
+typedef	int (*vnop_lookup_t)	(struct vnode *, char *, struct vnode **);
 typedef	int (*vnop_create_t)	(struct vnode *, char *, mode_t);
 typedef	int (*vnop_remove_t)	(struct vnode *, struct vnode *, char *);
 typedef	int (*vnop_rename_t)	(struct vnode *, struct vnode *, char *,
@@ -191,13 +191,13 @@ struct vnops {
 int	 vop_nullop(void);
 int	 vop_einval(void);
 int	 vop_eperm(void);
-struct vnode *vn_lookup(struct mount *, char *);
+struct vnode *vn_lookup(struct mount *, uint64_t);
 void	 vn_lock(struct vnode *);
 void	 vn_unlock(struct vnode *);
 int	 vn_stat(struct vnode *, struct stat *);
 int	 vn_settimes(struct vnode *, struct timespec[2]);
 int	 vn_access(struct vnode *, int);
-struct vnode *vget(struct mount *, const char *);
+int	 vget(struct mount *, uint64_t ino, struct vnode **vpp);
 void	 vput(struct vnode *);
 void	 vref(struct vnode *);
 void	 vrele(struct vnode *);
