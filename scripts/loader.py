@@ -305,6 +305,23 @@ def get_base_class_offset(gdb_type, base_class_name):
 def derived_from(type, base_class):
     return len([x for x in type.fields()
                 if x.is_base_class and x.type == base_class]) != 0
+
+class unordered_map:
+
+    def __init__(self, map_ref):
+        map_header = map_ref['_M_h']
+        map_type = map_header.type.strip_typedefs()
+        self.node_type = gdb.lookup_type(str(map_type) +  '::__node_type').pointer()
+        self.begin = map_header['_M_bbegin']
+
+    def __iter__(self):
+        begin = self.begin
+        while begin:
+            node = begin.cast(self.node_type).dereference()
+            elem = node["_M_v"]
+            yield elem["second"]
+            begin = node["_M_nxt"]
+
 class intrusive_list:
     size_t = gdb.lookup_type('size_t')
 
@@ -349,7 +366,7 @@ class vmstate(object):
         self.cpu_list = cpu_list
 
     def load_thread_list(self):
-        self.thread_list = list(intrusive_list(gdb.lookup_global_symbol('sched::thread_list').value()))
+        self.thread_list = sorted(unordered_map(gdb.lookup_global_symbol('sched::thread_map').value()), key=lambda x: int(x["_id"]))
 
     def cpu_from_thread(self, thread):
         stack = thread['_attr']['stack']
