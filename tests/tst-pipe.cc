@@ -330,7 +330,9 @@ int main(int ac, char** av)
     report(r==1 && poller.revents == POLLOUT, "empty pipe is ready for write");
     r = fcntl(s[1], F_SETFL, O_NONBLOCK);
     report(r == 0, "set write side to nonblocking");
+    buf1 = (char*) calloc(1, TSTBUFSIZE);
     r = write(s[1], buf1, TSTBUFSIZE);
+    free(buf1);
     report(r > 0, "large write to fill pipe");
     r = fcntl(s[1], F_SETFL, 0);
     report(r == 0, "set write side to blocking");
@@ -364,6 +366,7 @@ int main(int ac, char** av)
 
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    return fails == 0 ? 0 : 1;
 }
 
 
