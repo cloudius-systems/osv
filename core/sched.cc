@@ -566,6 +566,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _runtime(thread::priority_default)
     , _attr(attr)
     , _id(0)
+    , _cleanup([this] { delete this; })
     , _ref_counter(1)
     , _joiner()
 {
@@ -599,12 +600,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         remote_thread_local_var(s_current) = this;
     }
     init_stack();
-    if (_attr.detached) {
-        // assumes detached threads directly on heap, not as member.
-        // if untrue, or need a special deleter, the user must call
-        // set_cleanup() with whatever cleanup needs to be done.
-        set_cleanup([=] { delete this; });
-    }
     if (main) {
         _cpu = attr.pinned_cpu;
         _status.store(status::running);
@@ -804,12 +799,6 @@ void thread::join()
     }
     _joiner = current();
     wait_until([this] { return _status.load() == status::terminated; });
-    // probably unneeded, but don't execute an std::function<> which may
-    // be deleting itself
-    auto cleanup = _cleanup;
-    if (cleanup) {
-        cleanup();
-    }
 }
 
 thread::stack_info thread::get_stack_info()
@@ -819,6 +808,7 @@ thread::stack_info thread::get_stack_info()
 
 void thread::set_cleanup(std::function<void ()> cleanup)
 {
+    assert(_status == status::unstarted);
     _cleanup = cleanup;
 }
 
@@ -1029,6 +1019,7 @@ void thread::reaper::reap()
                 auto z = _zombies.front();
                 _zombies.pop_front();
                 z->join();
+                z->_cleanup();
             }
         }
     }

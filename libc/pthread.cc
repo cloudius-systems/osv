@@ -102,7 +102,6 @@ namespace pthread_private {
 
     int pthread::join(void** retval)
     {
-        _thread.set_cleanup({});
         _thread.join();
         if (retval) {
             *retval = _retval;
