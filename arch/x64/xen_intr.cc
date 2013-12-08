@@ -67,7 +67,7 @@ void xen_irq::do_irq(void)
 
         while (l1 != 0) {
             l1i = bsrq(l1);
-            l1 &= ~(1 << l1i);
+            l1 &= ~(1ULL << l1i);
 
             while ((l2 = active_evtchns(l1i, cpu_mask)) != 0) {
                 l2i = bsrq(l2);
@@ -76,9 +76,9 @@ void xen_irq::do_irq(void)
                 // FIXME: It should be possible to mask all channels
                 // together, but by doing that I lose interrupts eventually.
                 // So let's do it like this now and optmize it later.
-                xen_shared_info.evtchn_mask[l1i].fetch_or(1 << l2i);
+                xen_shared_info.evtchn_mask[l1i].fetch_or(1ULL << l2i);
                 void *arg = xen_allocated_irqs[port].arg;
-                xen_shared_info.evtchn_pending[l1i].fetch_and(~(1 << l2i));
+                xen_shared_info.evtchn_pending[l1i].fetch_and(~(1ULL << l2i));
                 xen_allocated_irqs[port].handler(arg);
                 unmask_evtchn(port);
             }
