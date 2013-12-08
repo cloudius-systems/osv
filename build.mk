@@ -52,6 +52,8 @@ tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
 tracing-flags = $(tracing-flags-$(conf-tracing))
 
+gcc-opt-Og := $(call compiler-flag, -Og, -Og, $(src)/compiler/empty.cc)
+
 CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
