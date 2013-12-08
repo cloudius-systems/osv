@@ -13,66 +13,77 @@
 
 #include <debug.hh>
 
+int tests = 0, fails = 0;
+
+static void report(bool ok, const char* msg)
+{
+    ++tests;
+    fails += !ok;
+    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+}
+
 int main(int argc, char **argv)
 {
     debug("Testing readdir() and related functions\n");
-    assert(mkdir("/tmp/tst-readdir", 0777) == 0);
+    report(mkdir("/tmp/tst-readdir", 0777) == 0, "mkdir");
 
     // test readdir() on empty directory
     DIR *dir = opendir("/tmp/tst-readdir");
-    assert(dir != NULL);
+    report(dir != NULL, "opendir");
     struct dirent *ent;
     ent = readdir(dir);
-    assert(ent != NULL);
-    assert(!strcmp(ent->d_name, "."));
+    report(ent != NULL, "readdir first entry");
+    report(!strcmp(ent->d_name, "."), "first directory entry is .");
     ent = readdir(dir);
-    assert(ent != NULL);
-    assert(!strcmp(ent->d_name, ".."));
+    report(ent != NULL, "readdir second entry");
+    report(!strcmp(ent->d_name, ".."), "second directory entry is ..");
     ent = readdir(dir);
-    assert(!ent);
-    assert(closedir(dir) == 0);
+    report(!ent, "no third directory entry");
+    int iret = closedir(dir);
+    report(iret == 0, "closedir");
 
     // test readdir() on directory with one file
     int fd;
     fd=creat("/tmp/tst-readdir/aaa", 0777);
-    assert(fd>=0);
+    report(fd>=0, "creat");
     close(fd);
     dir = opendir("/tmp/tst-readdir");
-    assert(dir != NULL);
+    report(dir != NULL, "opendir");
     ent = readdir(dir);
-    assert(ent != NULL);
-    assert(!strcmp(ent->d_name, "."));
+    report(ent != NULL, "readdir");
+    report(!strcmp(ent->d_name, "."), "first entry is .");
     ent = readdir(dir);
-    assert(ent != NULL);
-    assert(!strcmp(ent->d_name, ".."));
+    report(ent != NULL, "readdir");
+    report(!strcmp(ent->d_name, ".."), "second entry is ..");
     ent = readdir(dir);
-    assert(ent != NULL);
-    assert(!strcmp(ent->d_name, "aaa"));
+    report(ent != NULL, "readdir");
+    report(!strcmp(ent->d_name, "aaa"), "third entry is aaa");
     ent = readdir(dir);
-    assert(!ent);
-    assert(closedir(dir) == 0);
+    report(!ent, "no more entries");
+    iret = closedir(dir);
+    report(iret == 0, "closedir");
 
     // test readdir_r() on directory with one file
     dir = opendir("/tmp/tst-readdir");
-    assert(dir != NULL);
+    report(dir != NULL, "opendir");
     ent = (struct dirent *)malloc(4096);
     struct dirent *r;
-    assert(readdir_r(dir, ent, &r)==0 && r!=NULL);
-    assert(!strcmp(ent->d_name, "."));
-    assert(readdir_r(dir, ent, &r)==0 && r!=NULL);
-    assert(!strcmp(ent->d_name, ".."));
-    assert(readdir_r(dir, ent, &r)==0 && r!=NULL);
-    assert(!strcmp(ent->d_name, "aaa"));
-    assert(readdir_r(dir, ent, &r)==0 && r==NULL);
-    assert(closedir(dir) == 0);
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "."), "first entry is .");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, ".."), "second entry is ..");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "aaa"), "third entry is aaa");
+    report(readdir_r(dir, ent, &r)==0 && r==NULL, "no more entries");
+    iret = closedir(dir);
+    report(iret == 0, "closedir");
     free(ent);
 
-    assert(unlink("/tmp/tst-readdir/aaa")==0);
-    assert(rmdir("/tmp/tst-readdir")==0);
+    report(unlink("/tmp/tst-readdir/aaa")==0, "unlink aaa");
+    report(rmdir("/tmp/tst-readdir")==0, "rmdir");
 
-
-    debug("Tested readdir() successfully\n");
-    return 0;
+    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    return fails == 0 ? 0 : 1;
 }
 
 
