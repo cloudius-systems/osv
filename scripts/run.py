@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 import subprocess
 import sys
+import signal
 import argparse
 import os
 import tempfile
@@ -223,6 +224,11 @@ def choose_hypervisor(external_networking):
         return 'xen'
     return 'qemu'
 
+def dummy_signal_handler(signal, frame):
+    """ Dummy signal handler so python will ignore the KeyboardInterrupt exception
+    """
+    pass
+
 def main(options):
     set_imgargs(options)
     start_osv(options)
@@ -267,6 +273,10 @@ if (__name__ == "__main__"):
     
     if(cmdargs.hypervisor == "auto"):
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
+
+    # Python should ignore SIGINT
+    signal.signal(signal.SIGINT, dummy_signal_handler)
+
     # Call main
     main(cmdargs)
     
