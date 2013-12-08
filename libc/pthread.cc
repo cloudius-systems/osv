@@ -470,8 +470,9 @@ int pthread_cancel(pthread_t thread)
 
 int pthread_detach(pthread_t thread)
 {
-    WARN_STUBBED();
-    return ESRCH;
+    pthread* p = pthread::from_libc(thread);
+    p->_thread.detach();
+    return 0;
 }
 
 int pthread_equal(pthread_t t1, pthread_t t2)

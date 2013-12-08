@@ -279,6 +279,27 @@ public:
         attr(cpu *pinned_cpu = nullptr) : pinned_cpu(pinned_cpu) { }
     };
 
+private:
+    // Unlike the detached user visible attribute, those are internal to
+    // our state machine. They exist to synchronize the detach() method against
+    // thread completion and deletion.
+    //
+    // When a thread starts with _attr.detached = false, detach_state = attached.
+    // When a thread starts with _attr.detached = true, detach_state == detached.
+    //
+    // Upon completion:
+    //   if detach_state == attached, detach_state <= attached_complete. (atomically)
+    //   This means that the thread was completedi while in attached state, and is waiting
+    //   for someone to join or detach it.
+    //
+    // Upon detach:
+    //   if detach_state == attached, detach_state <= detached.
+    //   if detach_state == attached_complete, that means the detacher found a
+    //   thread already complete. detach() being called means join() won't, so
+    //   detach() is responsible for releasing its resources.
+    enum class detach_state { attached, detached, attached_complete };
+    std::atomic<detach_state> _detach_state = { detach_state::attached };
+
 public:
     explicit thread(std::function<void ()> func, attr attributes = attr(),
             bool main = false);
@@ -300,6 +321,7 @@ public:
     stack_info get_stack_info();
     cpu* tcpu() const __attribute__((no_instrument_function));
     void join();
+    void detach();
     void set_cleanup(std::function<void ()> cleanup);
     unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
     void* get_tls(ulong module);

@@ -600,6 +600,11 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
         remote_thread_local_var(s_current) = this;
     }
     init_stack();
+
+    if (_attr.detached) {
+        _detach_state.store(detach_state::detached);
+    }
+
     if (main) {
         _cpu = attr.pinned_cpu;
         _status.store(status::running);
@@ -740,7 +745,9 @@ void thread::stop_wait()
 
 void thread::complete()
 {
-    if (_attr.detached) {
+    auto value = detach_state::attached;
+    _detach_state.compare_exchange_strong(value, detach_state::attached_complete);
+    if (value == detach_state::detached) {
         _s_reaper->add_zombie(this);
     }
     // If this thread gets preempted after changing status it will never be
@@ -799,6 +806,18 @@ void thread::join()
     }
     _joiner = current();
     wait_until([this] { return _status.load() == status::terminated; });
+}
+
+void thread::detach()
+{
+    _attr.detached = true;
+    auto value = detach_state::attached;
+    _detach_state.compare_exchange_strong(value, detach_state::detached);
+    if (value == detach_state::attached_complete) {
+        // Complete was called prior to our call to detach. If we
+        // don't add ourselves to the reaper now, nobody will.
+        _s_reaper->add_zombie(this);
+    }
 }
 
 thread::stack_info thread::get_stack_info()
