@@ -137,6 +137,7 @@
 /&/tests/tst-random.so: ./&
 /&/tests/tst-fs-stress.so: ./&
 /&/tests/tst-bdev-write.so: ./&
+/&/tests/tst-threadcomplete.so: ./&
 /&/tests/bench/bench.jar: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class

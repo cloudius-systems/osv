@@ -187,6 +187,7 @@ tests += tests/tst-tcp.so
 tests += tests/tst-strerror_r.so
 tests += tests/tst-random.so
 tests += tests/tst-commands.so
+tests += tests/tst-threadcomplete.so
 
 tests/tst-tcp.so: tests/tst-tcp.o
 
