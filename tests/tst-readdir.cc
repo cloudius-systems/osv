@@ -78,9 +78,38 @@ int main(int argc, char **argv)
     iret = closedir(dir);
     report(iret == 0, "closedir");
     free(ent);
-
     report(unlink("/tmp/tst-readdir/aaa")==0, "unlink aaa");
     report(rmdir("/tmp/tst-readdir")==0, "rmdir");
+
+    // test removal of all a directory's nodes
+    report(mkdir("/tmp/tst-readdir", 0777) == 0, "mkdir");
+    report(mkdir("/tmp/tst-readdir/a", 0777) == 0, "mkdir");
+    report(mkdir("/tmp/tst-readdir/b", 0777) == 0, "mkdir");
+    fd=creat("/tmp/tst-readdir/c", 0777);
+    report(fd>=0, "creat");
+    close(fd);
+    report(mkdir("/tmp/tst-readdir/d", 0777) == 0, "mkdir");
+    fd=creat("/tmp/tst-readdir/e", 0777);
+    report(fd>=0, "creat");
+    close(fd);
+    // Note: Linux normally returns ENOTEMPTY when deleting a non-empty
+    // directory, OSv returns EEXIST, which Posix also allows.
+    report(rmdir("/tmp/tst-readdir") == -1 && (errno == ENOTEMPTY||errno == EEXIST), "can't rmdir non-empty directory");
+    dir = opendir("/tmp/tst-readdir");
+    report(dir != NULL, "opendir");
+    while ((ent = readdir(dir)) != NULL) {
+        if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
+            continue;
+        std::string path("/tmp/tst-readdir");
+        path += "/";
+        path += ent->d_name;
+        iret = remove(path.c_str());
+        report(iret == 0, "remove");
+    }
+    iret = closedir(dir);
+    report(iret == 0, "closedir");
+    report(rmdir("/tmp/tst-readdir")==0, "rmdir");
+
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
     return fails == 0 ? 0 : 1;
