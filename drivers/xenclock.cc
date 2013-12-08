@@ -63,6 +63,12 @@ s64 xenclock::time()
 
 static __attribute__((constructor(init_prio::clock))) void setup_xenclock()
 {
+    // FIXME: find out if the HV supports positioning the vcpu structure
+    // outside the shared structure, and keep going in that case.
+    if (sched::cpus.size() > 32) {
+        return;
+    }
+
     if (processor::features().xen_clocksource) {
         clock::register_clock(new xenclock);
     }
