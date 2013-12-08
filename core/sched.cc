@@ -536,9 +536,9 @@ mutex thread_map_mutex;
 std::unordered_map<unsigned long, thread *> thread_map
     __attribute__((init_priority((int)init_prio::threadlist)));
 
-unsigned long thread::_s_idgen;
+unsigned long thread::_s_idgen = 0;
 
-thread *thread::find_by_id(unsigned long id)
+thread *thread::find_by_id(unsigned int id)
 {
     auto th = thread_map.find(id);
     if (th == thread_map.end())
@@ -565,12 +565,29 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _status(status::unstarted)
     , _runtime(thread::priority_default)
     , _attr(attr)
+    , _id(0)
     , _ref_counter(1)
     , _joiner()
 {
     WITH_LOCK(thread_map_mutex) {
-        _id = _s_idgen++;
-        thread_map.insert(std::make_pair(_id, this));
+        if (!main) {
+            auto ttid = _s_idgen;
+            auto tid = ttid;
+            do {
+                tid++;
+                if (tid > UINT_MAX) { // wrap around
+                    tid = 1;
+                }
+                if (!find_by_id(tid)) {
+                    _s_idgen = _id = tid;
+                    thread_map.insert(std::make_pair(_id, this));
+                    break;
+                }
+            } while (tid != ttid); // One full round trip is enough
+            if (tid == ttid) {
+                abort("Can't allocate a Thread ID");
+            }
+        }
     }
     setup_tcb();
     // setup s_current before switching to the thread, so interrupts

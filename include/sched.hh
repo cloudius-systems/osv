@@ -371,7 +371,7 @@ private:
     cpu* _cpu;
     arch_thread _arch;
     arch_fpu _fpu;
-    unsigned long _id;
+    unsigned int _id;
     std::function<void ()> _cleanup;
     // When _ref_counter reaches 0, the thread can be deleted.
     // Starts with 1, decremented by complete() and also temporarily modified
@@ -397,7 +397,7 @@ public:
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
     static unsigned long _s_idgen;
-    static thread *find_by_id(unsigned long id);
+    static thread *find_by_id(unsigned int id);
 private:
     class reaper;
     friend class reaper;
