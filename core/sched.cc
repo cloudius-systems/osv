@@ -135,7 +135,6 @@ cpu::cpu(unsigned _id)
     , preemption_timer(*this)
     , idle_thread()
     , terminating_thread(nullptr)
-    , running_since(clock::get()->time())
     , c(cinitial)
     , renormalize_count(0)
 {
@@ -153,6 +152,7 @@ cpu::cpu(unsigned _id)
 
 void cpu::init_idle_thread()
 {
+    running_since = clock::get()->time();
     idle_thread = new thread([this] { idle(); }, thread::attr(this));
     idle_thread->set_priority(thread::priority_idle);
 }
