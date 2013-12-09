@@ -1,24 +1,27 @@
 #!/usr/bin/env python2
 import subprocess
 import argparse
+import glob
 import sys
+import os
 import re
 
-tests = [
-    "/tests/tst-except.so",
-    "/tests/tst-mmap.so",
-    "/tests/tst-mmap-file.so",
-    "/tests/tst-rename.so",
-    "/tests/tst-vfs.so",
-    "/tests/tst-stat.so",
-    "/tests/tst-utimes.so",
-    "/tests/tst-libc-locking.so",
-    "/tests/tst-strerror_r.so",
-    "/tests/tst-pipe.so",
-    "/tests/tst-fs-link.so",
-    "/tests/tst-threadcomplete.so",
-    "/tests/tst-huge.so",
+blacklist = [
+    "tst-bsd-callout.so",
+    "tst-ctxsw.so",
+    "tst-leak.so",
+    "tst-lfring.so",
+    "tst-mmap-anon-perf.so",
+    "tst-mutex.so",
+    "tst-panic.so",
+    "tst-random.so",
+    "tst-sockets.so",
+    "tst-tcp-hash-srv.so",
+    "tst-wake.so",
+    "tst-zfs-disk.so",
 ]
+
+tests = sorted([os.path.basename(x) for x in glob.glob('build/release/tests/tst-*.so')])
 
 def scan_errors(s):
     if not s:
@@ -36,7 +39,7 @@ def scan_errors(s):
 
 def run_test(name):
     print("Running '%s'..." % name)
-    args = ["-g", "-e", name]
+    args = ["-g", "-e", "tests/%s" % (name)]
     process = subprocess.Popen(["./scripts/run.py"] + args, stdout=subprocess.PIPE)
     out = ""
     line = ""
@@ -62,7 +65,8 @@ def run_test(name):
 
 def run_tests():
     for test in tests:
-        run_test(test)
+        if not test in blacklist:
+            run_test(test)
 
     print("OK (%d tests run)" % (len(tests)))
 
