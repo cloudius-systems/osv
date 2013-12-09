@@ -132,10 +132,10 @@ void virtio_rng::refill()
         _queue->_sg_vec.push_back(vring::sg_node(paddr, remaining, vring_desc::VRING_DESC_F_WRITE));
 
         while (!_queue->add_buf(data)) {
-            sched::thread::wait_until([&] {
+            while (!_queue->avail_ring_has_room(_queue->_sg_vec.size())) {
+                sched::thread::wait_until([&] {return _queue->used_ring_can_gc();});
                 _queue->get_buf_gc();
-                return _queue->avail_ring_has_room(_queue->_sg_vec.size());
-            });
+            }
         }
         _queue->kick();
 
