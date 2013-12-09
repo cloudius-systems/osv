@@ -107,7 +107,7 @@ namespace virtio {
 
             int desc_needed = _sg_vec.size();
             bool indirect = false;
-            if (use_indirect(desc_needed*_num/2)) {
+            if (use_indirect(desc_needed)) {
                 desc_needed = 1;
                 indirect = true;
             }
