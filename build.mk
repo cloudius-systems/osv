@@ -157,6 +157,7 @@ tests += tests/tst-leak.so
 tests += tests/tst-mmap-anon-perf.so
 tests += tests/tst-mmap-file.so
 tests += tests/tst-mmap.so
+tests += tests/tst-huge.so
 tests += tests/tst-mutex.so
 tests += tests/tst-sockets.so
 tests += tests/tst-bsd-tcp1.so

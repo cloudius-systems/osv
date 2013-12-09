@@ -16,6 +16,7 @@ tests = [
     "/tests/tst-pipe.so",
     "/tests/tst-fs-link.so",
     "/tests/tst-threadcomplete.so",
+    "/tests/tst-huge.so",
 ]
 
 def scan_errors(s):

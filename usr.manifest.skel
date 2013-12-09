@@ -95,6 +95,7 @@
 /tests/tst-preempt.so: ./tests/tst-preempt.so
 /tests/tst-tracepoint.so: ./tests/tst-tracepoint.so
 /tests/tst-leak.so: ./tests/tst-leak.so
+/tests/tst-huge.so: ./tests/tst-huge.so
 /tests/tst-mmap.so: ./tests/tst-mmap.so
 /tests/tst-mmap-anon-perf.so: ./tests/tst-mmap-anon-perf.so
 /tests/tst-mmap-file.so: ./tests/tst-mmap-file.so
