@@ -238,7 +238,7 @@ phys virt_to_phys(void *virt)
     return static_cast<char*>(virt) - phys_mem;
 }
 
-void allocate_intermediate_level(hw_ptep ptep)
+bool allocate_intermediate_level(hw_ptep ptep)
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
     // since the pt is not yet mapped, we don't need to use hw_ptep
@@ -246,7 +246,13 @@ void allocate_intermediate_level(hw_ptep ptep)
     for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = make_empty_pte();
     }
-    ptep.write(make_normal_pte(pt_page));
+    // We could have adjusted the previous loop to be done only after we're
+    // sure we're the ones handling this, but this will do for now.
+    if (!ptep.compare_exchange(make_empty_pte(), make_normal_pte(pt_page))) {
+        memory::free_page(phys_to_virt(pt_page));
+        return false;
+    }
+    return true;
 }
 
 void free_intermediate_level(hw_ptep ptep)
@@ -485,8 +491,26 @@ protected:
             // held smallpages (already evacuated), now will be used for huge page
             free_intermediate_level(ptep);
         }
-        phys page = virt_to_phys(memory::alloc_huge_page(huge_page_size));
-        fill->fill(phys_to_virt(page), offset, huge_page_size);
+        void *vpage = memory::alloc_huge_page(huge_page_size);
+        if (!vpage) {
+            if (!allocate_intermediate_level(ptep)) {
+                return;
+            }
+
+            // If the current huge page operation failed, we can try to execute
+            // it again filling the range with the equivalent number of small
+            // pages.  We will do it for this page, but the next huge-page
+            // aligned address may succeed (if there are frees between now and
+            // then, for example).
+            hw_ptep pt = follow(ptep.read());
+            for (int i=0; i<pte_per_page; ++i) {
+                small_page(pt.at(i), offset);
+            }
+            return;
+        }
+
+        phys page = virt_to_phys(vpage);
+        fill->fill(vpage, offset, huge_page_size);
         if (!ptep.compare_exchange(make_empty_pte(), make_large_pte(page, perm))) {
             memory::free_huge_page(phys_to_virt(page), huge_page_size);
         }

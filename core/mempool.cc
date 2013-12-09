@@ -35,6 +35,7 @@ TRACEPOINT(trace_memory_free_large, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
 TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
 TRACEPOINT(trace_memory_page_free, "page=%p", void*);
+TRACEPOINT(trace_memory_huge_failure, "page ranges=%d", unsigned long);
 
 bool smp_allocator = false;
 
@@ -649,10 +650,8 @@ void* alloc_huge_page(size_t N)
             // pages allocated. However, this would be inefficient, and since we
             // only use alloc_huge_page in one place, maybe not worth it.
         }
-        // TODO: instead of aborting, tell the caller of this failure and have
-        // it fall back to small pages instead.
-        debug(fmt("alloc_huge_page: out of memory: can't find %d bytes. aborting.\n") % N);
-        abort();
+        trace_memory_huge_failure(free_page_ranges.size());
+        return nullptr;
     }
 }
 
