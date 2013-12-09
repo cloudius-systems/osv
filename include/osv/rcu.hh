@@ -94,7 +94,7 @@ public:
     // rcu_read_lock
     operator bool() const;
 private:
-    std::atomic<T*> _ptr;
+    std::atomic<T*> _ptr = {};
 };
 
 // Calls 'delete p' when it is safe to do so
