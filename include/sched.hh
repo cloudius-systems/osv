@@ -628,7 +628,7 @@ void thread::wait_until(mutex_t* mtx, Pred pred)
     do_wait_until(mtx, pred);
 }
 
-// About ref(), unref() and and wake_with():
+// About wake_with():
 //
 // Consider one thread doing:
 //     wait_until([&] { return *x == 0; })
@@ -638,34 +638,22 @@ void thread::wait_until(mutex_t* mtx, Pred pred)
 // This is only "almost" correct, because doing *x = 0 may already cause the
 // thread to wake up (if it wasn't sleeping yet, or because of a spurious
 // wakeup) and may decide to exit, in which case t->wake() may crash. So to be
-// safe we need to use ref(), which prevents a thread's destruction until a
-// matching unref():
-//     t->ref();
+// safe we need to use rcu, which prevents a thread's detached_state destruction
+// while in an rcu read-side critical section
+//     thread_handle h(t.handle());
 //     *x = 0;
-//     t->wake();
-//     t->unref();
-// wake_with is a convenient one-line shortcut for the above four lines,
+//     h.wake();  // uses rcu to prevent concurrent detached state destruction
+// wake_with is a convenient one-line shortcut for the above three lines,
 // with a syntax mirroring that of wait_until():
 //     t->wake_with([&] { *x = 0; });
-
-class thread_ref_guard {
-public:
-    thread_ref_guard(thread* t) : _t(t) { t->ref(); }
-    ~thread_ref_guard() { _t->unref(); }
-private:
-    thread* _t;
-};
 
 template <class Action>
 inline
 void thread::wake_with(Action action)
 {
-    // TODO: Try first to disable preemption and if thread and current are on
-    // the same CPU, we don't need the disable_exit_guard (with its slow atomic
-    // operations) because we know the thread can't run and exit.
-    thread_ref_guard guard(this);
+    thread_handle h(handle());
     action();
-    wake();
+    h.wake();
 }
 
 extern cpu __thread* current_cpu;
