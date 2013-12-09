@@ -69,11 +69,12 @@ enum {
     mmap_fixed       = 1ul << 0,
     mmap_populate    = 1ul << 1,
     mmap_shared      = 1ul << 2,
+    mmap_uninitialized = 1ul << 3,
 };
 
 class vma {
 public:
-    vma(uintptr_t start, uintptr_t end, unsigned perm);
+    vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags);
     virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
     void protect(unsigned perm);
@@ -90,6 +91,7 @@ protected:
     uintptr_t _start;
     uintptr_t _end;
     unsigned _perm;
+    unsigned _flags;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };

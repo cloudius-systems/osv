@@ -57,9 +57,9 @@ struct vma_list_type : vma_list_base {
     vma_list_type() {
         // insert markers for the edges of allocatable area
         // simplifies searches
-        insert(*new vma(0, 0, 0));
+        insert(*new vma(0, 0, 0, 0));
         uintptr_t e = 0x800000000000;
-        insert(*new vma(e, e, 0));
+        insert(*new vma(e, e, 0, 0));
     }
 };
 
@@ -707,6 +707,11 @@ struct fill_anon_page : fill_page {
     }
 };
 
+struct fill_anon_page_noinit: fill_page {
+    virtual void fill(void* addr, uint64_t offset, uintptr_t size) {
+    }
+};
+
 uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
@@ -748,11 +753,16 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto* vma = new mmu::vma(start, start + size, perm);
+    auto* vma = new mmu::vma(start, start + size, perm, flags);
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
-        fill_anon_page zfill;
-        populate(&zfill, perm).operate(v, size);
+        if (flags & mmap_uninitialized) {
+            fill_anon_page_noinit zfill;
+            populate(&zfill, perm).operate(v, size);
+        } else {
+            fill_anon_page zfill;
+            populate(&zfill, perm).operate(v, size);
+        }
     }
     return v;
 }
@@ -875,10 +885,11 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     trace_mmu_vm_fault_ret(addr, ef->error_code);
 }
 
-vma::vma(uintptr_t start, uintptr_t end, unsigned perm)
+vma::vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags)
     : _start(align_down(start))
     , _end(align_up(end))
     , _perm(perm)
+    , _flags(flags)
 {
 }
 
@@ -927,7 +938,7 @@ void vma::split(uintptr_t edge)
     if (edge <= _start || edge >= _end) {
         return;
     }
-    vma* n = new vma(edge, _end, _perm);
+    vma* n = new vma(edge, _end, _perm, _flags);
     _end = edge;
     vma_list.insert(*n);
 }
@@ -948,12 +959,18 @@ void vma::fault(uintptr_t addr)
     } else {
         size = page_size;
     }
-    fill_anon_page zfill;
-    populate(&zfill, _perm).operate((void*)addr, size);
+
+    if (_flags & mmap_uninitialized) {
+        fill_anon_page_noinit zfill;
+        populate(&zfill, _perm).operate((void*)addr, size);
+    } else {
+        fill_anon_page zfill;
+        populate(&zfill, _perm).operate((void*)addr, size);
+    }
 }
 
 file_vma::file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared)
-    : vma(start, end, perm)
+    : vma(start, end, perm, 0)
     , _file(file)
     , _offset(offset)
     , _shared(shared)

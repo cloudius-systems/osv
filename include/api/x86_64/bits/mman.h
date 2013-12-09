@@ -25,6 +25,7 @@
 #define MAP_NONBLOCK   0x10000
 #define MAP_STACK      0x20000
 #define MAP_HUGETLB    0x40000
+#define MAP_UNINITIALIZED 0x4000000
 
 #define POSIX_MADV_NORMAL       0
 #define POSIX_MADV_RANDOM       1
