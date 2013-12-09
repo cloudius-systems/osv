@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 import subprocess
+import argparse
 import sys
 import re
 
@@ -38,14 +39,22 @@ def run_test(name):
     args = ["-g", "-e", name]
     process = subprocess.Popen(["./scripts/run.py"] + args, stdout=subprocess.PIPE)
     out = ""
+    line = ""
     while True:
         ch = process.stdout.read(1)
         if ch == '' and process.poll() != None:
             break
         out += ch
-        if ch != '':
+        if ch != '' and cmdargs.verbose:
             sys.stdout.write(ch)
             sys.stdout.flush()
+        line += ch
+        if ch == '\n':
+            if not cmdargs.verbose and scan_errors(line):
+                sys.stdout.write(out)
+                sys.stdout.flush()
+                cmdargs.verbose = True
+            line = ""
 
     if scan_errors(out) or process.returncode:
         print("Test '%s' FAILED" % name)
@@ -61,4 +70,7 @@ def main():
     run_tests()
 
 if (__name__ == "__main__"):
+    parser = argparse.ArgumentParser(prog='test')
+    parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
+    cmdargs = parser.parse_args()
     main()
