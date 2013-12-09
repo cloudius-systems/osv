@@ -8,7 +8,6 @@
 #ifndef RCU_HH_
 #define RCU_HH_
 
-#include <sched.hh>
 #include <atomic>
 #include <memory>
 #include <functional>
@@ -52,6 +51,14 @@
 //        rcu_dispose(old);  // or rcu_defer(some_func, old);
 //      }
 //
+
+// forward-declare some stuff to avoid #include hell
+namespace sched {
+
+void preempt_disable();
+void preempt_enable();
+
+}
 
 namespace osv {
 
