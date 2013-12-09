@@ -169,13 +169,16 @@ TRACEPOINT(trace_vfs_mknod, "\"%s\" 0%0o 0x%x", const char*, mode_t, dev_t);
 TRACEPOINT(trace_vfs_mknod_ret, "");
 TRACEPOINT(trace_vfs_mknod_err, "%d", int);
 
-int mknod(const char *pathname, mode_t mode, dev_t dev)
+
+extern "C"
+int __xmknod(int ver, const char *pathname, mode_t mode, dev_t *dev)
 {
+    assert(ver == 0); // On x86-64 Linux, _MKNOD_VER_LINUX is 0.
     struct task *t = main_task;
     char path[PATH_MAX];
     int error;
 
-    trace_vfs_mknod(pathname, mode, dev);
+    trace_vfs_mknod(pathname, mode, *dev);
     if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
         goto out_errno;
 
@@ -191,6 +194,12 @@ int mknod(const char *pathname, mode_t mode, dev_t dev)
     errno = error;
     return -1;
 }
+
+int mknod(const char *pathname, mode_t mode, dev_t dev)
+{
+    return __xmknod(0, pathname, mode, &dev);
+}
+
 
 TRACEPOINT(trace_vfs_lseek, "%d 0x%x %d", int, off_t, int);
 TRACEPOINT(trace_vfs_lseek_ret, "0x%x", off_t);
