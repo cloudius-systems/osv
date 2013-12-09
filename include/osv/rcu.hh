@@ -68,7 +68,15 @@ public:
     static void unlock();
 };
 
+class preempt_lock_in_rcu_type {
+public:
+    // our rcu implementation disables preemption, so nothing further needs to be done
+    static void lock() {}
+    static void unlock() {}
+};
+
 extern rcu_lock_type rcu_read_lock;
+extern preempt_lock_in_rcu_type preempt_lock_in_rcu;
 
 template <typename T>
 class rcu_ptr {

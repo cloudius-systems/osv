@@ -14,6 +14,7 @@
 namespace osv {
 
 rcu_lock_type rcu_read_lock;
+preempt_lock_in_rcu_type preempt_lock_in_rcu;
 
 namespace rcu {
 
