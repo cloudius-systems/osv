@@ -82,38 +82,44 @@ static LIST_HEAD(vnode_hash_head, vnode) vnode_table[VNODE_BUCKETS];
 static mutex_t vnode_lock = MUTEX_INITIALIZER;
 #define VNODE_LOCK()	mutex_lock(&vnode_lock)
 #define VNODE_UNLOCK()	mutex_unlock(&vnode_lock)
-#define VNODE_OWNED()	mutex_owned(&vnode_lock)
 
 /*
  * Get the hash value from the mount point and path name.
  * XXX(hch): replace with a better hash for 64-bit pointers.
  */
 static u_int
-vn_hash(struct mount *mp, uint64_t ino)
+vn_hash(struct mount *mp, const char *path)
 {
-	return (ino ^ (unsigned long)mp) & (VNODE_BUCKETS - 1);
+	u_int val = 0;
+
+	if (path) {
+		while (*path)
+			val = ((val << 5) + val) + *path++;
+	}
+	return (val ^ (unsigned long)mp) & (VNODE_BUCKETS - 1);
 }
 
 /*
  * Returns locked vnode for specified mount point and path.
  * vn_lock() will increment the reference count of vnode.
- *
- * Locking: VNODE_LOCK must be held.
  */
 struct vnode *
-vn_lookup(struct mount *mp, uint64_t ino)
+vn_lookup(struct mount *mp, char *path)
 {
 	struct vnode *vp;
 
-	assert(VNODE_OWNED());
-	LIST_FOREACH(vp, &vnode_table[vn_hash(mp, ino)], v_link) {
-		if (vp->v_mount == mp && vp->v_ino == ino) {
+	VNODE_LOCK();
+	LIST_FOREACH(vp, &vnode_table[vn_hash(mp, path)], v_link) {
+		if (vp->v_mount == mp &&
+		    !strncmp(vp->v_path, path, PATH_MAX)) {
 			vp->v_refcnt++;
+			VNODE_UNLOCK();
 			mutex_lock(&vp->v_lock);
 			vp->v_nrlocks++;
 			return vp;
 		}
 	}
+	VNODE_UNLOCK();
 	return NULL;		/* not found */
 }
 
@@ -149,39 +155,30 @@ vn_unlock(struct vnode *vp)
 /*
  * Allocate new vnode for specified path.
  * Increment its reference count and lock it.
- * Returns 1 if vnode was found in cache; otherwise returns 0.
  */
-int
-vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
+struct vnode *
+vget(struct mount *mp, const char *path)
 {
 	struct vnode *vp;
 	int error;
+	size_t len;
 
-	*vpp = NULL;
+	DPRINTF(VFSDB_VNODE, ("vget: %s\n", path));
 
-	DPRINTF(VFSDB_VNODE, ("vget %LLu\n", ino));
-
-	VNODE_LOCK();
-
-	vp = vn_lookup(mp, ino);
-	if (vp) {
-		VNODE_UNLOCK();
-		*vpp = vp;
-		return 1;
-	}
-
-	if (!(vp = malloc(sizeof(struct vnode)))) {
-		VNODE_UNLOCK();
-		return 0;
-	}
-
+	if (!(vp = malloc(sizeof(struct vnode))))
+		return NULL;
 	memset(vp, 0, sizeof(struct vnode));
 
+	len = strlen(path) + 1;
+	if (!(vp->v_path = malloc(len))) {
+		free(vp);
+		return NULL;
+	}
 	LIST_INIT(&vp->v_names);
-	vp->v_ino = ino;
 	vp->v_mount = mp;
 	vp->v_refcnt = 1;
 	vp->v_op = mp->m_op->vfs_vnops;
+	strlcpy(vp->v_path, path, len);
 	mutex_init(&vp->v_lock);
 	vp->v_nrlocks = 0;
 
@@ -189,8 +186,8 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	 * Request to allocate fs specific data for vnode.
 	 */
 	if ((error = VFS_VGET(mp, vp)) != 0) {
-		VNODE_UNLOCK();
 		mutex_destroy(&vp->v_lock);
+		free(vp->v_path);
 		free(vp);
 		return NULL;
 	}
@@ -198,12 +195,10 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	mutex_lock(&vp->v_lock);
 	vp->v_nrlocks++;
 
-	LIST_INSERT_HEAD(&vnode_table[vn_hash(mp, ino)], vp, v_link);
+	VNODE_LOCK();
+	LIST_INSERT_HEAD(&vnode_table[vn_hash(mp, path)], vp, v_link);
 	VNODE_UNLOCK();
-
-	*vpp = vp;
-
-	return 0;
+	return vp;
 }
 
 /*
@@ -238,6 +233,7 @@ vput(struct vnode *vp)
 	ASSERT(vp->v_nrlocks == 0);
 	mutex_unlock(&vp->v_lock);
 	mutex_destroy(&vp->v_lock);
+	free(vp->v_path);
 	free(vp);
 }
 
@@ -251,7 +247,8 @@ vref(struct vnode *vp)
 	ASSERT(vp->v_refcnt > 0);	/* Need vget */
 
 	VNODE_LOCK();
-	DPRINTF(VFSDB_VNODE, ("vref: ref=%d\n", vp->v_refcnt));
+	DPRINTF(VFSDB_VNODE, ("vref: ref=%d %s\n", vp->v_refcnt,
+			      vp->v_path));
 	vp->v_refcnt++;
 	VNODE_UNLOCK();
 }
@@ -269,7 +266,8 @@ vrele(struct vnode *vp)
 	ASSERT(vp->v_refcnt > 0);
 
 	VNODE_LOCK();
-	DPRINTF(VFSDB_VNODE, ("vrele: ref=%d\n", vp->v_refcnt));
+	DPRINTF(VFSDB_VNODE, ("vrele: ref=%d %s\n", vp->v_refcnt,
+			      vp->v_path));
 	vp->v_refcnt--;
 	if (vp->v_refcnt > 0) {
 		VNODE_UNLOCK();
@@ -284,6 +282,7 @@ vrele(struct vnode *vp)
 	VOP_INACTIVE(vp);
 	vfs_unbusy(vp->v_mount);
 	mutex_destroy(&vp->v_lock);
+	free(vp->v_path);
 	free(vp);
 }
 

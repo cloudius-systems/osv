@@ -162,8 +162,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
     /*
      * Create a root vnode for this file system.
      */
-    vget(mp, 0, &vp);
-    if (vp == NULL) {
+    if ((vp = vget(mp, "/")) == NULL) {
         error = ENOMEM;
         goto err3;
     }

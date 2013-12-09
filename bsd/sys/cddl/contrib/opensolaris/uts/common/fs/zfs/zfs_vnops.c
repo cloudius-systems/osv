@@ -1108,16 +1108,13 @@ specvp_check(vnode_t **vpp, cred_t *cr)
 #endif /* NOTYET */
 
 static int
-zfs_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
+zfs_lookup(struct vnode *dvp, char *nm, struct vnode *vp)
 {
 	znode_t *dzp = VTOZ(dvp);
 	zfsvfs_t *zfsvfs = dzp->z_zfsvfs;
-	struct vnode *vp;
 	znode_t *zp;
 	zfs_dirlock_t *dl;
 	int error = 0;
-
-	*vpp = NULL;
 
 	if (*nm == '\0')
 		return ENOENT;
@@ -1153,23 +1150,12 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 	zfs_dirent_unlock(dl);
 	dzp->z_zn_prefetch = B_TRUE; /* enable prefetching */
 
-	if (vget(dvp->v_mount, zp->z_id, &vp)) {
-		/* found in cache */
-		*vpp = vp;
-		return 0;
-	}
-	if (!vp) {
-		ZFS_EXIT(zfsvfs);
-		return ENOMEM;
-	}
 	zp->z_vnode = vp;
 	vp->v_data = zp;
 
 	vp->v_mode = zp->z_mode;
 	vp->v_type = IFTOVT(vp->v_mode);
 	vp->v_size = zp->z_size;
-
-	*vpp = vp;
 
 	ZFS_EXIT(zfsvfs);
 	return error;

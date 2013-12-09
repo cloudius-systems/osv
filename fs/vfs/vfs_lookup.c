@@ -201,12 +201,19 @@ namei(char *path, struct dentry **dpp)
 		strlcat(node, name, sizeof(node));
 		dp = dentry_lookup(mp, node);
 		if (dp == NULL) {
+			vp = vget(mp, node);
+			if (vp == NULL) {
+				drele(ddp);
+				return ENOMEM;
+			}
+
 			dvp = ddp->d_vnode;
 			vn_lock(dvp);
 
 			/* Find a vnode in this directory. */
-			error = VOP_LOOKUP(dvp, name, &vp);
+			error = VOP_LOOKUP(dvp, name, vp);
 			if (error) {
+				vput(vp);
 				vn_unlock(dvp);
 				drele(ddp);
 				return error;
