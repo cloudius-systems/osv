@@ -275,7 +275,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     }
     n->switch_to();
     if (p->_detached_state->_cpu->terminating_thread) {
-        p->_detached_state->_cpu->terminating_thread->unref();
+        p->_detached_state->_cpu->terminating_thread->destroy();
         p->_detached_state->_cpu->terminating_thread = nullptr;
     }
 
@@ -569,7 +569,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _attr(attr)
     , _id(0)
     , _cleanup([this] { delete this; })
-    , _ref_counter(1)
     , _joiner()
 {
     WITH_LOCK(thread_map_mutex) {
@@ -657,30 +656,26 @@ void thread::prepare_wait()
     _detached_state->st.store(status::waiting);
 }
 
-void thread::ref()
+// A thread cannot remove its own stack.  The destroy() method is called
+// from another running thread, to wake the thread's joiner, so its stack
+// can be destroyed.
+//
+// (the dying thread cannot wake the joiner directly, since the joiner and
+//  the thread may be executing in parallel)
+void thread::destroy()
 {
-    _ref_counter.fetch_add(1);
-}
+    // thread can't destroy() itself, because if it decides to wake joiner,
+    // it will delete the stack it is currently running on.
+    assert(thread::current() != this);
 
-// The _ref_counter is initialized to 1, and reduced by 1 in complete().
-// Whomever calls unref() and reduces it to 0 gets the honor of ending this
-// thread. This can happen in complete() or somewhere using ref()/unref()).
-void thread::unref()
-{
-    if (_ref_counter.fetch_add(-1) == 1) {
-        // thread can't unref() itself, because if it decides to wake joiner,
-        // it will delete the stack it is currently running on.
-        assert(thread::current() != this);
-
-        // FIXME: we have a problem in case of a race between join() and the
-        // thread's completion. Here we can see _joiner==0 and not notify
-        // anyone, but at the same time join() decided to go to sleep (because
-        // status is not yet status::terminated) and we'll never wake it.
-        if (_joiner) {
-            _joiner->wake_with([&] { _detached_state->st.store(status::terminated); });
-        } else {
-            _detached_state->st.store(status::terminated);
-        }
+    // FIXME: we have a problem in case of a race between join() and the
+    // thread's completion. Here we can see _joiner==0 and not notify
+    // anyone, but at the same time join() decided to go to sleep (because
+    // status is not yet status::terminated) and we'll never wake it.
+    if (_joiner) {
+        _joiner->wake_with([&] { _detached_state->st.store(status::terminated); });
+    } else {
+        _detached_state->st.store(status::terminated);
     }
 }
 
@@ -769,12 +764,12 @@ void thread::complete()
     // scheduled again to set terminating_thread. So must disable preemption.
     preempt_disable();
     _detached_state->st.store(status::terminating);
-    // We want to run unref() here, but can't because it cause the stack we're
+    // We want to run destroy() here, but can't because it cause the stack we're
     // running on to be deleted. Instead, set a _cpu field telling the next
     // thread running on this cpu to do the unref() for us.
     if (_detached_state->_cpu->terminating_thread) {
         assert(_detached_state->_cpu->terminating_thread != this);
-        _detached_state->_cpu->terminating_thread->unref();
+        _detached_state->_cpu->terminating_thread->destroy();
     }
     _detached_state->_cpu->terminating_thread = this;
     // The thread is now in the "terminating" state, so on call to schedule()

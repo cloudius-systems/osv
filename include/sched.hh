@@ -411,13 +411,8 @@ private:
     arch_fpu _fpu;
     unsigned int _id;
     std::function<void ()> _cleanup;
-    // When _ref_counter reaches 0, the thread can be deleted.
-    // Starts with 1, decremented by complete() and also temporarily modified
-    // by ref() and unref().
-    std::atomic_uint _ref_counter;
     std::vector<std::unique_ptr<char[]>> _tls;
-    void ref();
-    void unref();
+    void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
