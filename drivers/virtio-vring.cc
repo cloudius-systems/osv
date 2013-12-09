@@ -88,8 +88,8 @@ namespace virtio {
     {
         return false && // It degrades netperf performance
                 _dev->get_indirect_buf_cap() &&
-                desc_needed > 1 &&  					// no need to use indirect for a single descriptor
-                _avail_count > _num*2/3;   // use indirect only when low space
+                desc_needed > 1 &&	// no need to use indirect for a single descriptor
+                _avail_count < _num / 3;  // use indirect only when low space
     }
 
     void vring::enable_interrupts()
