@@ -433,6 +433,43 @@ def get_function_name(frame):
     else:
         return '??'
 
+class ResolvedFrame:
+    def __init__(self, frame, file_name, line, func_name):
+        self.frame = frame
+        self.file_name = file_name
+        self.line = line
+        self.func_name = func_name
+
+def traverse_resolved_frames(frame):
+    while frame:
+        sal = frame.find_sal()
+        if not sal:
+            return
+
+        symtab = sal.symtab
+        if not symtab:
+            return
+
+        func_name = get_function_name(frame)
+        if not func_name:
+            return
+
+        yield ResolvedFrame(frame, symtab.filename, sal.line, func_name)
+        frame = frame.older()
+
+def strip_dotdot(path):
+    if path[:6] == "../../":
+           return path[6:]
+    return path
+
+def find_or_give_last(predicate, seq):
+    last = None
+    for element in seq:
+        if predicate(element):
+            return element
+        last = element
+    return last
+
 class osv_info_threads(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv info threads',
@@ -444,7 +481,7 @@ class osv_info_threads(gdb.Command):
             with thread_context(t, state):
                 cpu = t['_cpu']
                 tid = t['_id']
-                fr = gdb.selected_frame()
+                newest_frame = gdb.selected_frame()
                 # Non-running threads have always, by definition, just called
                 # a reschedule, and the stack trace is filled with reschedule
                 # related functions (switch_to, schedule, wait_until, etc.).
@@ -457,38 +494,30 @@ class osv_info_threads(gdb.Command):
                 sched_thread_join = 'sched::thread::join()'
                 function_whitelist = [sched_thread_join]
 
-                fname = '??'
-                function = '??'
-                sal = fr.find_sal()
-                while sal.symtab:
-                    fname = sal.symtab.filename
-                    function = get_function_name(fr)
-                    is_whitelisted = function in function_whitelist
-                    is_blacklisted = os.path.basename(fname) in file_blacklist
+                def is_interesting(resolved_frame):
+                    is_whitelisted = resolved_frame.func_name in function_whitelist
+                    is_blacklisted = os.path.basename(resolved_frame.file_name) in file_blacklist
+                    return is_whitelisted or not is_blacklisted
 
-                    if is_whitelisted or not is_blacklisted:
-                        break
+                fr = find_or_give_last(is_interesting, traverse_resolved_frames(newest_frame))
 
-                    fr = fr.older()
-                    sal = fr.find_sal()
-
-                if fname[:6] == "../../":
-                            fname = fname[6:]
+                if fr:
+                    location = '%s at %s:%s' % (fr.func_name, strip_dotdot(fr.file_name), fr.line)
+                else:
+                    location = '??'
 
                 status = str(t['_status']['_M_i']).replace('sched::thread::', '')
-                gdb.write('%4d (0x%x) cpu%s %-10s %s at %s:%s vruntime %12g\n' %
+                gdb.write('%4d (0x%x) cpu%s %-10s %s vruntime %12g\n' %
                           (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
                            status,
-                           function,
-                           fname,
-                           sal.line,
+                           location,
                            t['_runtime']['_Rtt'],
                            )
                           )
 
-                if function == sched_thread_join:
-                    gdb.write("\tjoining on %s\n" % fr.read_var("this"))
+                if fr and fr.func_name == sched_thread_join:
+                    gdb.write("\tjoining on %s\n" % fr.frame.read_var("this"))
 
                 show_thread_timers(t)
 
