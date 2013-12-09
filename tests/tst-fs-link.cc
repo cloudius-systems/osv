@@ -14,8 +14,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <osv/vnode.h>
-#include <osv/dentry.h>
 
 static int tests = 0, fails = 0;
 
@@ -24,55 +22,6 @@ static void report(bool ok, const char* msg)
     ++tests;
     fails += !ok;
     printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
-}
-
-extern "C" void drele(struct dentry *);
-extern "C" int namei(char *, struct dentry **);
-
-static int check_vnode_duplicity(void)
-{
-    int err = 0;
-    char oldpath[] = "/usr/foo";
-    char newpath[] = "/usr/foo2";
-    struct dentry *olddp, *newdp;
-
-    auto fd = open(oldpath, O_CREAT|O_TRUNC|O_RDWR, 0666);
-    close(fd);
-
-    if (link(oldpath, newpath) != 0) {
-        unlink(oldpath);
-        perror("link");
-        return -1;
-    }
-
-    if (namei(oldpath, &olddp)) {
-        err = -1;
-        goto err;
-    }
-
-    if (namei(newpath, &newdp)) {
-        err = -1;
-        goto err1;
-    }
-
-    if (olddp->d_refcnt != 1 || newdp->d_refcnt != 1) {
-        err = -1;
-        goto err2;
-    }
-
-    vn_lock(olddp->d_vnode);
-    if (olddp->d_vnode->v_refcnt != 2 || olddp->d_vnode != newdp->d_vnode) {
-        err = -1;
-    }
-    vn_unlock(olddp->d_vnode);
- err2:
-    drele(newdp);
- err1:
-    drele(olddp);
- err:
-    unlink(newpath);
-    unlink(oldpath);
-    return err;
 }
 
 int main(int argc, char *argv[])
@@ -127,8 +76,6 @@ int main(int argc, char *argv[])
     report(st[0].st_nlink == 1, "hard link count is decreased");
     // Clean up the temporary file.
     report(unlink(oldpath) == 0, "remove the file");
-    // vnode shouldn't be duplicated when looking up two hard links linked to the same inode
-    report(check_vnode_duplicity() == 0, "don't duplicate in-memory vnodes");
     // Report results.
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;
