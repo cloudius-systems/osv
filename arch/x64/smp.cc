@@ -108,7 +108,7 @@ void smp_launch()
     auto boot_cpu = smp_initial_find_current_cpu();
     for (auto c : sched::cpus) {
         if (c == boot_cpu) {
-            sched::thread::current()->_cpu = c;
+            sched::thread::current()->_detached_state->_cpu = c;
             // c->init_on_cpu() already done in main().
             (new sched::thread([c] { c->load_balance(); },
                     sched::thread::attr(c)))->start();
@@ -138,7 +138,7 @@ void smp_main()
     sched::cpu* cpu = smp_initial_find_current_cpu();
     assert(cpu);
     cpu->init_on_cpu();
-    cpu->bringup_thread->_cpu = cpu;
+    cpu->bringup_thread->_detached_state->_cpu = cpu;
     cpu->bringup_thread->switch_to_first();
 }
 

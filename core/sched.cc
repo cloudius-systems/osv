@@ -27,6 +27,8 @@ __thread char* percpu_base;
 
 extern char _percpu_start[], _percpu_end[];
 
+using namespace osv;
+
 namespace sched {
 
 TRACEPOINT(trace_sched_switch, "to %p vold=%g vnew=%g", thread*, float, float);
@@ -202,7 +204,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     }
     thread* p = thread::current();
 
-    const auto p_status = p->_status.load();
+    const auto p_status = p->_detached_state->st.load();
     assert(p_status != thread::status::queued);
 
     p->_runtime.ran_for(interval);
@@ -233,7 +235,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
         // If we're here, p no longer has the lowest runtime. Before queuing
         // p, return the runtime it borrowed for hysteresis.
         p->_runtime.hysteresis_run_stop();
-        p->_status.store(thread::status::queued);
+        p->_detached_state->st.store(thread::status::queued);
         enqueue(*p);
     } else {
         // p is no longer running, so we'll switch to a different thread.
@@ -244,9 +246,9 @@ void cpu::reschedule_from_interrupt(bool preempt)
     auto ni = runqueue.begin();
     auto n = &*ni;
     runqueue.erase(ni);
-    assert(n->_status.load() == thread::status::queued);
+    assert(n->_detached_state->st.load() == thread::status::queued);
     trace_sched_switch(n, p->_runtime.get_local(), n->_runtime.get_local());
-    n->_status.store(thread::status::running);
+    n->_detached_state->st.store(thread::status::running);
     n->_runtime.hysteresis_run_start();
 
     assert(n!=p);
@@ -259,7 +261,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
             p->_fpu.save();
         }
     }
-    if (p->_status.load(std::memory_order_relaxed) == thread::status::queued
+    if (p->_detached_state->st.load(std::memory_order_relaxed) == thread::status::queued
             && p != idle_thread) {
         n->_runtime.add_context_switch_penalty();
     }
@@ -272,9 +274,9 @@ void cpu::reschedule_from_interrupt(bool preempt)
         }
     }
     n->switch_to();
-    if (p->_cpu->terminating_thread) {
-        p->_cpu->terminating_thread->unref();
-        p->_cpu->terminating_thread = nullptr;
+    if (p->_detached_state->_cpu->terminating_thread) {
+        p->_detached_state->_cpu->terminating_thread->unref();
+        p->_detached_state->_cpu->terminating_thread = nullptr;
     }
 
     if (preempt) {
@@ -370,9 +372,9 @@ void cpu::handle_incoming_wakeups()
                 if (&t == thread::current()) {
                     // Special case of current thread being woken before
                     // having a chance to be scheduled out.
-                    t._status.store(thread::status::running);
+                    t._detached_state->st.store(thread::status::running);
                 } else {
-                    t._status.store(thread::status::queued);
+                    t._detached_state->st.store(thread::status::queued);
                     // Make sure the CPU-local runtime measure is suitably
                     // normalized. We may need to convert a global value to the
                     // local value when waking up after a CPU migration, or to
@@ -433,10 +435,10 @@ void cpu::load_balance()
             trace_sched_migrate(&mig, min->id);
             runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
             // we won't race with wake(), since we're not thread::waiting
-            assert(mig._status.load() == thread::status::queued);
-            mig._status.store(thread::status::waking);
+            assert(mig._detached_state->st.load() == thread::status::queued);
+            mig._detached_state->st.store(thread::status::waking);
             mig.suspend_timers();
-            mig._cpu = min;
+            mig._detached_state->_cpu = min;
             // Convert the CPU-local runtime measure to a globally meaningful
             // measure
             mig._runtime.export_runtime();
@@ -485,21 +487,21 @@ void thread::yield()
     auto t = current();
     std::lock_guard<irq_lock_type> guard(irq_lock);
     // FIXME: drive by IPI
-    t->_cpu->handle_incoming_wakeups();
+    t->_detached_state->_cpu->handle_incoming_wakeups();
     // FIXME: what about other cpus?
-    if (t->_cpu->runqueue.empty()) {
+    if (t->_detached_state->_cpu->runqueue.empty()) {
         return;
     }
-    assert(t->_status.load() == status::running);
+    assert(t->_detached_state->st.load() == status::running);
     // Do not yield to a thread with idle priority
-    thread &tnext = *(t->_cpu->runqueue.begin());
+    thread &tnext = *(t->_detached_state->_cpu->runqueue.begin());
     if (tnext.priority() == thread::priority_idle) {
         return;
     }
     t->_runtime.set_local(tnext._runtime);
     // Note that reschedule_from_interrupt will further increase t->_runtime
     // by thyst, giving the other thread 2*thyst to run before going back to t
-    t->_cpu->reschedule_from_interrupt(false);
+    t->_detached_state->_cpu->reschedule_from_interrupt(false);
 }
 
 void thread::set_priority(float priority)
@@ -562,8 +564,8 @@ T& thread::remote_thread_local_var(T& var)
 
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
-    , _status(status::unstarted)
     , _runtime(thread::priority_default)
+    , _detached_state(new detached_state(this))
     , _attr(attr)
     , _id(0)
     , _cleanup([this] { delete this; })
@@ -606,12 +608,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     }
 
     if (main) {
-        _cpu = attr.pinned_cpu;
-        _status.store(status::running);
-        if (_cpu == sched::cpus[0]) {
+        _detached_state->_cpu = attr.pinned_cpu;
+        _detached_state->st.store(status::running);
+        if (_detached_state->_cpu == sched::cpus[0]) {
             s_current = this;
         }
-        remote_thread_local_var(current_cpu) = _cpu;
+        remote_thread_local_var(current_cpu) = _detached_state->_cpu;
     }
 }
 
@@ -627,21 +629,22 @@ thread::~thread()
         _attr.stack.deleter(_attr.stack);
     }
     free_tcb();
+    rcu_dispose(_detached_state.release());
 }
 
 void thread::start()
 {
-    assert(_status == status::unstarted);
+    assert(_detached_state->st == status::unstarted);
 
     if (!sched::s_current) {
-        _status.store(status::prestarted);
+        _detached_state->st.store(status::prestarted);
         return;
     }
 
-    _cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
-    remote_thread_local_var(percpu_base) = _cpu->percpu_base;
-    remote_thread_local_var(current_cpu) = _cpu;
-    _status.store(status::waiting);
+    _detached_state->_cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
+    remote_thread_local_var(percpu_base) = _detached_state->_cpu->percpu_base;
+    remote_thread_local_var(current_cpu) = _detached_state->_cpu;
+    _detached_state->st.store(status::waiting);
     wake();
 }
 
@@ -650,8 +653,8 @@ void thread::prepare_wait()
     // After setting the thread's status to "waiting", we must not preempt it,
     // as it is no longer in "running" state and therefore will not return.
     preempt_disable();
-    assert(_status.load() == status::running);
-    _status.store(status::waiting);
+    assert(_detached_state->st.load() == status::running);
+    _detached_state->st.store(status::waiting);
 }
 
 void thread::ref()
@@ -674,33 +677,44 @@ void thread::unref()
         // anyone, but at the same time join() decided to go to sleep (because
         // status is not yet status::terminated) and we'll never wake it.
         if (_joiner) {
-            _joiner->wake_with([&] { _status.store(status::terminated); });
+            _joiner->wake_with([&] { _detached_state->st.store(status::terminated); });
         } else {
-            _status.store(status::terminated);
+            _detached_state->st.store(status::terminated);
+        }
+    }
+}
+
+// Must be called under rcu_read_lock
+void thread::wake_impl(detached_state* st)
+{
+    status old_status = status::waiting;
+    trace_sched_wake(st->t);
+    if (!st->st.compare_exchange_strong(old_status, status::waking)) {
+        return;
+    }
+    auto tcpu = st->_cpu;
+    WITH_LOCK(preempt_lock_in_rcu) {
+        unsigned c = cpu::current()->id;
+        // we can now use st->t here, since the thread cannot terminate while
+        // it's waking, but not afterwards, when it may be running
+        tcpu->incoming_wakeups[c].push_front(*st->t);
+        if (!tcpu->incoming_wakeups_mask.test_all_and_set(c)) {
+            // FIXME: avoid if the cpu is alive and if the priority does not
+            // FIXME: warrant an interruption
+            if (tcpu != current()->tcpu()) {
+                tcpu->send_wakeup_ipi();
+            } else {
+                need_reschedule = true;
+            }
         }
     }
 }
 
 void thread::wake()
 {
-    trace_sched_wake(this);
-    status old_status = status::waiting;
-    if (!_status.compare_exchange_strong(old_status, status::waking)) {
-        return;
+    WITH_LOCK(rcu_read_lock) {
+        wake_impl(_detached_state.get());
     }
-    preempt_disable();
-    unsigned c = cpu::current()->id;
-    _cpu->incoming_wakeups[c].push_front(*this);
-    if (!_cpu->incoming_wakeups_mask.test_all_and_set(c)) {
-        // FIXME: avoid if the cpu is alive and if the priority does not
-        // FIXME: warrant an interruption
-        if (_cpu != current()->tcpu()) {
-            _cpu->send_wakeup_ipi();
-        } else {
-            need_reschedule = true;
-        }
-    }
-    preempt_enable();
 }
 
 void thread::main()
@@ -732,15 +746,16 @@ void thread::stop_wait()
     // in "waiting" state (otherwise if preempted, it will not be scheduled
     // in again - this is why we disabled preemption in prepare_wait.
     status old_status = status::waiting;
-    if (_status.compare_exchange_strong(old_status, status::running)) {
+    auto& st = _detached_state->st;
+    if (st.compare_exchange_strong(old_status, status::running)) {
         preempt_enable();
         return;
     }
     preempt_enable();
-    while (_status.load() == status::waking) {
+    while (st.load() == status::waking) {
         schedule();
     }
-    assert(_status.load() == status::running);
+    assert(st.load() == status::running);
 }
 
 void thread::complete()
@@ -753,15 +768,15 @@ void thread::complete()
     // If this thread gets preempted after changing status it will never be
     // scheduled again to set terminating_thread. So must disable preemption.
     preempt_disable();
-    _status.store(status::terminating);
+    _detached_state->st.store(status::terminating);
     // We want to run unref() here, but can't because it cause the stack we're
     // running on to be deleted. Instead, set a _cpu field telling the next
     // thread running on this cpu to do the unref() for us.
-    if (_cpu->terminating_thread) {
-        assert(_cpu->terminating_thread != this);
-        _cpu->terminating_thread->unref();
+    if (_detached_state->_cpu->terminating_thread) {
+        assert(_detached_state->_cpu->terminating_thread != this);
+        _detached_state->_cpu->terminating_thread->unref();
     }
-    _cpu->terminating_thread = this;
+    _detached_state->_cpu->terminating_thread = this;
     // The thread is now in the "terminating" state, so on call to schedule()
     // it will never get to run again.
     while (true) {
@@ -800,12 +815,13 @@ void timer_base::client::resume_timers()
 
 void thread::join()
 {
-    if (_status.load() == status::unstarted) {
+    auto& st = _detached_state->st;
+    if (st.load() == status::unstarted) {
         // To allow destruction of a thread object before start().
         return;
     }
     _joiner = current();
-    wait_until([this] { return _status.load() == status::terminated; });
+    wait_until([&] { return st.load() == status::terminated; });
 }
 
 void thread::detach()
@@ -827,7 +843,7 @@ thread::stack_info thread::get_stack_info()
 
 void thread::set_cleanup(std::function<void ()> cleanup)
 {
-    assert(_status == status::unstarted);
+    assert(_detached_state->st == status::unstarted);
     _cleanup = cleanup;
 }
 
@@ -858,6 +874,16 @@ void* thread::setup_tls(ulong module, const void* tls_template,
     memcpy(p, tls_template, init_size);
     memset(p + init_size, 0, uninit_size);
     return p;
+}
+
+void thread_handle::wake()
+{
+    WITH_LOCK(rcu_read_lock) {
+        thread::detached_state* ds = _t.read();
+        if (ds) {
+            thread::wake_impl(ds);
+        }
+    }
 }
 
 void preempt_disable()
@@ -1070,7 +1096,7 @@ void start_early_threads()
             }
             t->remote_thread_local_var(s_current) = t;
             thread::status expected = thread::status::prestarted;
-            if (t->_status.compare_exchange_strong(expected,
+            if (t->_detached_state->st.compare_exchange_strong(expected,
                 thread::status::unstarted, std::memory_order_relaxed)) {
                 t->start();
             }

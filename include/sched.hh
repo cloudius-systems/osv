@@ -21,6 +21,7 @@
 #include <list>
 #include <memory>
 #include <vector>
+#include <osv/rcu.hh>
 
 // If RUNTIME_PSEUDOFLOAT, runtime_t is a pseudofloat<>. Otherwise, a float.
 #undef RUNTIME_PSEUDOFLOAT
@@ -47,6 +48,7 @@ namespace elf {
 namespace sched {
 
 class thread;
+class thread_handle;
 struct cpu;
 class timer;
 class timer_list;
@@ -263,6 +265,8 @@ private:
  * OSv thread
  */
 class thread : private timer_base::client {
+private:
+    struct detached_state;
 public:
     struct stack_info {
         stack_info();
@@ -352,6 +356,7 @@ public:
      */
     float priority() const;
 private:
+    static void wake_impl(detached_state* st);
     void main();
     void switch_to();
     void switch_to_first();
@@ -370,8 +375,11 @@ private:
     friend void start_early_threads();
     template <typename T> T& remote_thread_local_var(T& var);
     void* do_remote_thread_local_var(void* var);
+    thread_handle handle();
 private:
     virtual void timer_fired() override;
+    struct detached_state;
+    friend struct detached_state;
 private:
     std::function<void ()> _func;
     thread_state _state;
@@ -387,10 +395,18 @@ private:
         terminating, // temporary state used in complete()
         terminated,
     };
-    std::atomic<status> _status;
     thread_runtime _runtime;
+    // part of the thread state is detached from the thread structure,
+    // and freed by rcu, so that waking a thread and destroying it can
+    // occur in parallel without synchronization via thread_handle
+    struct detached_state {
+        explicit detached_state(thread* t) : t(t) {}
+        thread* t;
+        cpu* _cpu;
+        std::atomic<status> st = { status::unstarted };
+    };
+    std::unique_ptr<detached_state> _detached_state;
     attr _attr;
-    cpu* _cpu;
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned int _id;
@@ -423,8 +439,21 @@ public:
 private:
     class reaper;
     friend class reaper;
+    friend class thread_handle;
     static reaper* _s_reaper;
     friend void init_detached_threads_reaper();
+};
+
+class thread_handle {
+public:
+    thread_handle() = default;
+    thread_handle(const thread_handle& t) { _t.assign(t._t.read()); }
+    thread_handle(thread& t) { reset(t); }
+    void reset(thread& t) { _t.assign(t._detached_state.get()); }
+    void wake();
+    void clear() { _t.assign(nullptr); }
+private:
+    osv::rcu_ptr<thread::detached_state> _t;
 };
 
 void init_detached_threads_reaper();
@@ -643,7 +672,12 @@ extern cpu __thread* current_cpu;
 
 inline cpu* thread::tcpu() const
 {
-    return _cpu;
+    return _detached_state->_cpu;
+}
+
+inline thread_handle thread::handle()
+{
+    return thread_handle(*this);
 }
 
 inline cpu* cpu::current()
