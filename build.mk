@@ -77,6 +77,11 @@ configuration = $(foreach cf,$(configuration-defines), \
 include $(src)/conf/base.mak
 include $(src)/conf/$(mode).mak
 
+ifeq ($(mode),debug)
+CFLAGS += -Wno-maybe-uninitialized
+CXXFLAGS += -Wno-maybe-uninitialized
+endif
+
 arch-cflags = -msse4.1
 
 
