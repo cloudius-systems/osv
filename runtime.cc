@@ -377,7 +377,7 @@ static int prio_find_thread(sched::thread **th, int which, int id)
         *th = sched::thread::find_by_id(id);
     }
 
-    if (!th) {
+    if (!*th) {
         errno = ESRCH;
         return -1;
     }
