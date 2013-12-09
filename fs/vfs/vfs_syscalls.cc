@@ -364,8 +364,11 @@ check_dir_empty(char *path)
 
 	if (error == ENOENT)
 		error = 0;
-	else if (error == 0)
-		error = EEXIST;
+	else if (error == 0) {
+	    // Posix specifies to return EEXIST in this case (rmdir of non-empty
+	    // directory, but Linux actually returns ENOTEMPTY).
+		error = ENOTEMPTY;
+	}
 	fdrop(fp);
 out_error:
 	return error;
@@ -386,7 +389,7 @@ sys_readdir(struct file *fp, struct dirent *dir)
 	vn_lock(dvp);
 	if (dvp->v_type != VDIR) {
 		vn_unlock(dvp);
-		return EBADF;
+		return ENOTDIR;
 	}
 	error = VOP_READDIR(dvp, fp, dir);
 	DPRINTF(VFSDB_SYSCALL, ("sys_readdir: error=%d path=%s\n",
@@ -808,7 +811,9 @@ sys_unlink(char *path)
 	if ((error = vn_access(vp, VWRITE)) != 0)
 		goto out;
 	if (vp->v_type == VDIR) {
-		error = EPERM;
+	    // Posix specifies that we should return EPERM here, but Linux
+	    // actually returns EISDIR.
+		error = EISDIR;
 		goto out;
 	}
 	/* XXX: Need to allow unlink for opened file. */

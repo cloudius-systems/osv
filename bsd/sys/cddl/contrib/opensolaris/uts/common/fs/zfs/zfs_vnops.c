@@ -1326,6 +1326,8 @@ zfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 	int		error;
 	int		zflg = ZEXISTS;
 
+	// NOTE: This check has no effect: sys_unlink() checks if v_type == VDIR
+	// earlier, and if so, returns EISDIR as in Linux (not EPERM).
 	if (vp->v_type == VDIR)
 		return EPERM;
 
