@@ -258,6 +258,11 @@ namespace virtio {
         return (_used->_idx.load(std::memory_order_relaxed) - _used_ring_host_head > (u16)(_num / 2));
     }
 
+    bool vring::used_ring_can_gc() const
+    {
+        return (_used_ring_guest_head != _used_ring_host_head);
+    }
+
     bool
     vring::kick() {
         bool kicked = true;

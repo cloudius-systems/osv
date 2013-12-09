@@ -138,6 +138,7 @@ class virtio_driver;
 
         bool used_ring_not_empty() const;
         bool used_ring_is_half_empty() const;
+        bool used_ring_can_gc() const;
         bool avail_ring_not_empty();
         // when the available ring has x descriptors as room it means that
         // x descriptors can be allocated while _num-x are available for the host
