@@ -442,6 +442,10 @@ class ResolvedFrame:
 
 def traverse_resolved_frames(frame):
     while frame:
+        if frame.type() == gdb.INLINE_FRAME:
+            frame = frame.older()
+            continue
+
         sal = frame.find_sal()
         if not sal:
             return
