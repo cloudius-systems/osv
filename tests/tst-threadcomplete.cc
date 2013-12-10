@@ -110,8 +110,8 @@ void do_heap_test(bool quick)
 
         t1->start();
         t2->start();
-        delete t1;
         delete t2;
+        delete t1;
     }
 #endif
 }
