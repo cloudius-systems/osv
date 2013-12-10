@@ -58,6 +58,8 @@
 
 #define ASSERT(e)	assert(e)
 
+static uint64_t inode_count = 1; /* inode 0 is reserved to root */
+
 static int
 devfs_open(struct file *fp)
 {
@@ -122,12 +124,15 @@ devfs_ioctl(struct vnode *vp, struct file *fp, u_long cmd, void *arg)
 }
 
 static int
-devfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
+devfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 {
 	struct devinfo info;
+	struct vnode *vp;
 	int error, i;
 
 	DPRINTF(("devfs_lookup:%s\n", name));
+
+	*vpp = NULL;
 
 	if (*name == '\0')
 		return ENOENT;
@@ -145,11 +150,21 @@ devfs_lookup(struct vnode *dvp, char *name, struct vnode *vp)
 			break;
 		i++;
 	}
+	if (vget(dvp->v_mount, inode_count++, &vp)) {
+		/* found in cache */
+		*vpp = vp;
+		return 0;
+	}
+	if (!vp)
+		return ENOMEM;
 	vp->v_type = (info.flags & D_CHR) ? VCHR : VBLK;
 	if (info.flags & D_TTY)
 		vp->v_flags |= VISTTY;
 
 	vp->v_mode = (mode_t)(S_IRUSR | S_IWUSR);
+
+	*vpp = vp;
+
 	return 0;
 }
 

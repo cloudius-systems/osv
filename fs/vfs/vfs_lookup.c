@@ -199,35 +199,28 @@ namei(char *path, struct dentry **dpp)
 		 */
 		strlcat(node, "/", sizeof(node));
 		strlcat(node, name, sizeof(node));
+		dvp = ddp->d_vnode;
+		vn_lock(dvp);
 		dp = dentry_lookup(mp, node);
 		if (dp == NULL) {
-			vp = vget(mp, node);
-			if (vp == NULL) {
-				drele(ddp);
-				return ENOMEM;
-			}
-
-			dvp = ddp->d_vnode;
-			vn_lock(dvp);
-
 			/* Find a vnode in this directory. */
-			error = VOP_LOOKUP(dvp, name, vp);
+			error = VOP_LOOKUP(dvp, name, &vp);
 			if (error) {
-				vput(vp);
 				vn_unlock(dvp);
 				drele(ddp);
 				return error;
 			}
 
-			vn_unlock(dvp);
 			dp = dentry_alloc(vp, node);
 			vput(vp);
 
 			if (!dp) {
+				vn_unlock(dvp);
 				drele(ddp);
 				return ENOMEM;
 			}
 		}
+		vn_unlock(dvp);
 		drele(ddp);
 		ddp = dp;
 
