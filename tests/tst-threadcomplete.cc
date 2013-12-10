@@ -76,11 +76,16 @@ void do_test(bool detach)
     // exist in the same block so they are destroyed together. The others are 4
     // instead of ncpus for consistency.
     for (int i = 0; i < 100; ++i) {
-        std::thread t1([] {  } );
-        std::thread t2([&] { detach_or_join(t1, detach); } );
-        std::thread t3([&] { detach_or_join(t2, detach); } );
-        std::thread t4([&] { detach_or_join(t3, detach); } );
+        std::atomic<int> threads = {0};
+
+
+        std::thread t1([&] { threads.fetch_add(1); } );
+        std::thread t2([&] { detach_or_join(t1, detach); threads.fetch_add(1); } );
+        std::thread t3([&] { detach_or_join(t2, detach); threads.fetch_add(1); } );
+        std::thread t4([&] { detach_or_join(t3, detach); threads.fetch_add(1); } );
         detach_or_join(t4, detach);
+        // All short lived, and for god's sake, we're just a test.
+        while (threads.load() != 4);
     }
 }
 
