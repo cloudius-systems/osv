@@ -145,60 +145,58 @@ do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 boost-tests := tests/tst-rename.so \
 	tests/tst-vfs.so \
 	tests/tst-libc-locking.so \
-	tests/tst-fs-stress.so \
-	tests/tst-bdev-write.so \
+	tests/misc-fs-stress.so \
+	tests/misc-bdev-write.so \
 	tests/tst-stat.so
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
 tests += tests/tst-vblk.so tests/bench/bench.jar
-tests += tests/tst-bsd-evh.so tests/tst-bsd-callout.so
+tests += tests/tst-bsd-evh.so tests/misc-bsd-callout.so
 tests += tests/tst-bsd-kthread.so
 tests += tests/tst-bsd-taskqueue.so
 tests += tests/tst-fpu.so
 tests += tests/tst-preempt.so
 tests += tests/tst-tracepoint.so
 tests += tests/tst-hub.so
-tests += tests/tst-leak.so
-tests += tests/tst-mmap-anon-perf.so
+tests += tests/misc-leak.so
+tests += tests/misc-mmap-anon-perf.so
 tests += tests/tst-mmap-file.so
 tests += tests/tst-mmap.so
 tests += tests/tst-huge.so
-tests += tests/tst-mutex.so
-tests += tests/tst-sockets.so
+tests += tests/misc-mutex.so
+tests += tests/misc-sockets.so
 tests += tests/tst-bsd-tcp1.so
 tests += tests/tst-condvar.so
 tests += tests/tst-queue-mpsc.so
 tests += tests/tst-af-local.so
 tests += tests/tst-pipe.so
 tests += tests/tst-yield.so
-tests += tests/tst-ctxsw.so
+tests += tests/misc-ctxsw.so
 tests += tests/tst-readdir.so
 tests += tests/tst-remove.so
-tests += tests/tst-wake.so
+tests += tests/misc-wake.so
 tests += tests/tst-epoll.so
-tests += tests/tst-lfring.so
+tests += tests/misc-lfring.so
 tests += tests/tst-fsx.so
 tests += tests/tst-sleep.so
 tests += tests/tst-resolve.so
 tests += tests/tst-except.so
-tests += tests/tst-tcp-sendonly.so
-tests += tests/tst-tcp-hash-srv.so
-tests += tests/tst-loadbalance.so
-tests += tests/tst-scheduler.so
+tests += tests/misc-tcp-sendonly.so
+tests += tests/misc-tcp-hash-srv.so
+tests += tests/misc-loadbalance.so
+tests += tests/misc-scheduler.so
 tests += tests/tst-dns-resolver.so
 tests += tests/tst-fs-link.so
 tests += tests/tst-kill.so
 tests += tests/tst-truncate.so
 tests += $(boost-tests)
-tests += tests/tst-panic.so
+tests += tests/misc-panic.so
 tests += tests/tst-utimes.so
-tests += tests/tst-tcp.so
+tests += tests/misc-tcp.so
 tests += tests/tst-strerror_r.so
-tests += tests/tst-random.so
+tests += tests/misc-random.so
 tests += tests/tst-commands.so
 tests += tests/tst-threadcomplete.so
-
-tests/tst-tcp.so: tests/tst-tcp.o
 
 tests/hello/Hello.class: javabase=tests/hello
 
@@ -471,7 +469,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zle.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 
-zfs-tests += tests/tst-zfs-disk.so
+zfs-tests += tests/misc-zfs-disk.so
 
 tests += tests/tst-zfs-mount.so
 

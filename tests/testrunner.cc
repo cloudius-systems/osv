@@ -71,6 +71,9 @@ int main(int argc, char **argv)
 			    strcmp(d->d_name, "..") == 0)
 				continue;
 
+			if (strncmp(d->d_name, "tst-", 4) != 0)
+			    continue;
+
 			snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
 			if (!check_path(path))
 				continue;

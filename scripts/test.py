@@ -8,18 +8,6 @@ import os
 import re
 
 blacklist = [
-    "tst-bsd-callout.so",
-    "tst-ctxsw.so",
-    "tst-leak.so",
-    "tst-lfring.so",
-    "tst-mmap-anon-perf.so",
-    "tst-mutex.so",
-    "tst-panic.so",
-    "tst-random.so",
-    "tst-sockets.so",
-    "tst-tcp-hash-srv.so",
-    "tst-wake.so",
-    "tst-zfs-disk.so",
 ]
 
 tests = sorted([os.path.basename(x) for x in glob.glob('build/release/tests/tst-*.so')])

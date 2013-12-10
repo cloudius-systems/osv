@@ -143,9 +143,17 @@ public:
         // Note: we set count to 2 instead of count++ because it's faster
         // and we want to measure the real unlock(), not to inflate the
         // measurement with these extra instructions.
+#if CONFIG_UP
+        count = 2;
+#else
         count.store(2, std::memory_order_relaxed);
+#endif
         lockfree::mutex::unlock();
+#if CONFIG_UP
+        count = 0;
+#else
         count.store(0, std::memory_order_relaxed);
+#endif
     }
 };
 
