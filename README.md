@@ -65,7 +65,7 @@ sudo ./scripts/run.py -n -v
 ```
 
 The -v is for kvm's vhost that provides better performance
-and it's setup requires a tap and thus we use sudo.
+and its setup requires a tap and thus we use sudo.
 
 By default OSv spawns a dhcpd that auto config the virtual nics.
 Static config can be done within OSv, configure networking like so:

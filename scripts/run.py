@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 import subprocess
 import sys
+import signal
 import argparse
 import os
 import tempfile
@@ -24,11 +25,12 @@ def cleanups():
     "cleanups after execution"
     stty_restore()
 
-def set_imgargs():
-    if (not cmdargs.execute):
+def set_imgargs(options):
+    if (not options.execute):
         return
     
-    args = ["setargs", image_file, cmdargs.execute]
+    assert("image_file" in options)
+    args = ["setargs", options.image_file, options.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
 
 def is_direct_io_supported(path):
@@ -44,54 +46,64 @@ def is_direct_io_supported(path):
             return False;
         raise
     
-def start_osv_qemu():
-    if (cmdargs.unsafe_cache):
+def start_osv_qemu(options):
+    assert("image_file" in options)
+
+    if (options.unsafe_cache):
         cache = 'unsafe'
     else:
-        cache = 'none' if is_direct_io_supported(image_file) else 'unsafe'
+        cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
 
     args = [
         "-vnc", ":1",
         "-gdb", "tcp::1234,server,nowait",
-        "-m", cmdargs.memsize,
-        "-smp", cmdargs.vcpus,
-        "-drive", "file=%s,if=virtio,cache=%s" % (image_file, cache)]
+        "-m", options.memsize,
+        "-smp", options.vcpus,
+        "-drive", "file=%s,if=virtio,cache=%s" % (options.image_file, cache)]
     
-    if (cmdargs.no_shutdown):
+    if (options.no_shutdown):
         args += ["-no-reboot", "-no-shutdown"]
 
-    if (cmdargs.wait):
+    if (options.wait):
 		args += ["-S"]
      
-    if (cmdargs.networking):
-        if (cmdargs.vhost):
+    if (options.networking):
+        if (options.vhost):
             args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
             args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
         else:
-            args += ["-netdev", "bridge,id=hn0,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (cmdargs.bridge)]
+            assert("bridge" in options)
+            args += ["-netdev", "bridge,id=hn0,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (options.bridge)]
             args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         args += ["-device", "virtio-net-pci,netdev=un0"]
         args += ["-redir", "tcp:8080::8080"]
         args += ["-redir", "tcp:2222::22"]
-        for rule in cmdargs.forward:
+
+        assert("forward" in options)
+
+        for rule in options.forward:
             args += ['-redir', rule]
         
     args += ["-device", "virtio-rng-pci"]
 
-    if cmdargs.hypervisor == "kvm":
+    assert("hypervisor" in options)
+
+    if options.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
-    elif (cmdargs.hypervisor == "none") or (cmdargs.hypervisor == "qemu"):
+    elif (options.hypervisor == "none") or (options.hypervisor == "qemu"):
         pass
 
-    if (cmdargs.detach):
+    assert("detach" in options)
+
+    if (options.detach):
         args += ["-daemonize"]
     else:
         args += ["-chardev", "stdio,mux=on,id=stdio"]
         args += ["-mon", "chardev=stdio,mode=readline,default"]
         args += ["-device", "isa-serial,chardev=stdio"]
-        if not cmdargs.with_graphic:
+        if not options.with_graphic:
             args += ["-nographic"]
 
     try:
@@ -100,7 +112,10 @@ def start_osv_qemu():
 
         # Launch qemu
         qemu_env = os.environ.copy()
-        qemu_env['OSV_BRIDGE'] = cmdargs.bridge
+
+        assert("bridge" in options)
+
+        qemu_env['OSV_BRIDGE'] = options.bridge
         subprocess.call(["qemu-system-x86_64"] + args, env = qemu_env)
     except OSError, e:
         if e.errno == errno.ENOENT:
@@ -111,8 +126,10 @@ def start_osv_qemu():
     finally:
         cleanups()
 
-def start_osv_xen():
-    if cmdargs.hypervisor == "xen":
+def start_osv_xen(options):
+    assert("hypervisor" in options)
+
+    if options.hypervisor == "xen":
         args = [
             "builder='hvm'",
             "xen_platform_pci=1",
@@ -121,12 +138,15 @@ def start_osv_xen():
             "boot='c'",
         ]
     else:
-        args = [ "kernel='%s/build/%s/loader.elf'" % (os.getcwd(), opt_path) ]
+        assert("opt_path" in options)
+        args = [ "kernel='%s/build/%s/loader.elf'" % (os.getcwd(), options.opt_path) ]
+
+    assert("memsize" in options)
 
     try:
-        memory = int(cmdargs.memsize)
+        memory = int(options.memsize)
     except ValueError:
-        memory = cmdargs.memsize
+        memory = options.memsize
 
         if memory[-1:].upper() == "M":
             memory = int(memory[:-1])
@@ -141,19 +161,23 @@ def start_osv_xen():
             print >> sys.stderr, "Unrecognized memory size"
             return;
 
+    assert("vcpus" in options)
+    assert("image_file" in options)
+
     args += [
         "memory=%d" % (memory),
-        "vcpus=%s" % (cmdargs.vcpus),
-        "maxcpus=%s" % (cmdargs.vcpus),
+        "vcpus=%s" % (options.vcpus),
+        "maxcpus=%s" % (options.vcpus),
         "name='osv-%d'" % (os.getpid()),
-        "disk=['%s,qcow2,hda,rw']" % image_file,
+        "disk=['%s,qcow2,hda,rw']" % options.image_file,
         "serial='pty'",
         "paused=0",
         "on_crash='preserve'"
     ]
 
-    if cmdargs.networking:
-        args += [ "vif=['bridge=%s']" % (cmdargs.bridge)]
+    if options.networking:
+        assert("bridge" in options)
+        args += [ "vif=['bridge=%s']" % (options.bridge)]
 
     # Using xm would allow us to get away with creating the file, but it comes
     # with its set of problems as well. Stick to xl.
@@ -167,7 +191,7 @@ def start_osv_xen():
 
         # Launch qemu
         cmdline = ["xl", "create" ]
-        if not cmdargs.detach:
+        if not options.detach:
             cmdline += [ "-c" ]
         cmdline += [ xenfile.name ]
         subprocess.call(cmdline)
@@ -177,7 +201,7 @@ def start_osv_xen():
         xenfile.close()
         cleanups()
 
-def start_osv():
+def start_osv(options):
     launchers = {
             "xen" : start_osv_xen,
             "xenpv" : start_osv_xen,
@@ -186,7 +210,7 @@ def start_osv():
             "kvm" : start_osv_qemu,
     }
     try:
-        launchers[cmdargs.hypervisor]()
+        launchers[options.hypervisor](options)
     except KeyError: 
         print >> sys.stderr, "Unrecognized hypervisor selected"
         return;
@@ -200,9 +224,14 @@ def choose_hypervisor(external_networking):
         return 'xen'
     return 'qemu'
 
-def main():
-    set_imgargs()
-    start_osv()
+def dummy_signal_handler(signal, frame):
+    """ Dummy signal handler so python will ignore the KeyboardInterrupt exception
+    """
+    pass
+
+def main(options):
+    set_imgargs(options)
+    start_osv(options)
 
 if (__name__ == "__main__"):
     # Parse arguments
@@ -239,11 +268,15 @@ if (__name__ == "__main__"):
     parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
                         help = "add network forwarding RULE (QEMU syntax)")
     cmdargs = parser.parse_args()
-    opt_path = "debug" if cmdargs.debug else "release"
-    image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % opt_path)
+    cmdargs.opt_path = "debug" if cmdargs.debug else "release"
+    cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
     
     if(cmdargs.hypervisor == "auto"):
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
+
+    # Python should ignore SIGINT
+    signal.signal(signal.SIGINT, dummy_signal_handler)
+
     # Call main
-    main()
+    main(cmdargs)
     
