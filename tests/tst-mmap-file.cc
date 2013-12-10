@@ -130,6 +130,11 @@ int main(int argc, char *argv[])
         "force EACCES by shared mapping a file that is not read-write (and PROT_WRITE is set)");
     report(close(fd) == 0, "close again");
 
+    report(munmap(unaligned_addr, size) == -1 && errno == EINVAL,
+           "munmap: force EINVAL by passing unaligned addr.");
+    report(munmap(aligned_addr, 0) == -1 && errno == EINVAL,
+           "munmap: force EINVAL by passing length equals to zero.");
+
     // TODO: map an append-only file with prot asking for PROT_WRITE, mmap should return EACCES.
     // TODO: map a file under a fs mounted with the flag NO_EXEC and prot asked for PROT_EXEC (expect EPERM).
 
