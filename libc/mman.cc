@@ -18,6 +18,8 @@ TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, off
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
 TRACEPOINT(trace_memory_mmap_ret, "%p", void *);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
+TRACEPOINT(trace_memory_munmap_err, "%d", int);
+TRACEPOINT(trace_memory_munmap_ret, "%d", int);
 
 unsigned libc_flags_to_mmap(int flags)
 {
@@ -151,12 +153,25 @@ extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
     __attribute__((alias("mmap")));
 
 
+int munmap_validate(void *addr, size_t length)
+{
+    if ((reinterpret_cast<intptr_t>(addr) & 4095) || length == 0) {
+        return EINVAL;
+    }
+    return 0;
+}
+
 int munmap(void *addr, size_t length)
 {
     trace_memory_munmap(addr, length);
+    errno = munmap_validate(addr, length);
+    if (errno) {
+        trace_memory_munmap_err(errno);
+        return -1;
+    }
     mmu::msync(addr, length, 0);
-    // TODO: fail with EINVAL in some cases of addr, length.
     mmu::unmap(addr, length);
+    trace_memory_munmap_ret(errno);
     return 0;
 }
 
