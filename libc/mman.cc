@@ -19,7 +19,7 @@ TRACEPOINT(trace_memory_mmap_err, "%d", int);
 TRACEPOINT(trace_memory_mmap_ret, "%p", void *);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 TRACEPOINT(trace_memory_munmap_err, "%d", int);
-TRACEPOINT(trace_memory_munmap_ret, "%d", int);
+TRACEPOINT(trace_memory_munmap_ret, "");
 
 unsigned libc_flags_to_mmap(int flags)
 {
@@ -119,9 +119,10 @@ void *mmap(void *addr, size_t length, int prot, int flags,
 {
     trace_memory_mmap(addr, length, prot, flags, fd, offset);
 
-    errno = mmap_validate(addr, length, flags, offset);
-    if (errno) {
-        trace_memory_mmap_err(errno);
+    int error = mmap_validate(addr, length, flags, offset);
+    if (error) {
+        errno = error;
+        trace_memory_mmap_err(error);
         return MAP_FAILED;
     }
 
@@ -135,9 +136,10 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     } else {
         fileref f(fileref_from_fd(fd));
 
-        errno = mmap_validate_file(f, prot, flags);
-        if (errno) {
-            trace_memory_mmap_err(errno);
+        error = mmap_validate_file(f, prot, flags);
+        if (error) {
+            errno = error;
+            trace_memory_mmap_err(error);
             return MAP_FAILED;
         }
 
@@ -164,14 +166,15 @@ int munmap_validate(void *addr, size_t length)
 int munmap(void *addr, size_t length)
 {
     trace_memory_munmap(addr, length);
-    errno = munmap_validate(addr, length);
-    if (errno) {
-        trace_memory_munmap_err(errno);
+    int error = munmap_validate(addr, length);
+    if (error) {
+        errno = error;
+        trace_memory_munmap_err(error);
         return -1;
     }
     mmu::msync(addr, length, 0);
     mmu::unmap(addr, length);
-    trace_memory_munmap_ret(errno);
+    trace_memory_munmap_ret();
     return 0;
 }
 
