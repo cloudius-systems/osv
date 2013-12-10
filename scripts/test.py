@@ -2,6 +2,7 @@
 import subprocess
 import argparse
 import glob
+import time
 import sys
 import os
 import re
@@ -38,7 +39,10 @@ def scan_errors(s):
     return False
 
 def run_test(name):
-    print("Running '%s'..." % name)
+    sys.stdout.write("  TEST %-25s" % name)
+    sys.stdout.flush()
+
+    start = time.time()
     args = ["-g", "-e", "tests/%s" % (name)]
     process = subprocess.Popen(["./scripts/run.py"] + args, stdout=subprocess.PIPE)
     out = ""
@@ -59,16 +63,28 @@ def run_test(name):
                 cmdargs.verbose = True
             line = ""
 
+    end = time.time()
+
     if scan_errors(out) or process.returncode:
-        print("Test '%s' FAILED" % name)
+        sys.stdout.write("Test %s FAILED\n" % name)
+        sys.stdout.flush()
         exit(1)
+    else:
+        duration = end - start
+        sys.stdout.write(" OK  (%.3f s)\n" % duration)
+        sys.stdout.flush()
 
 def run_tests():
+    start = time.time()
+
     for test in tests:
         if not test in blacklist:
             run_test(test)
 
-    print("OK (%d tests run)" % (len(tests)))
+    end = time.time()
+
+    duration = end - start
+    print("OK (%d tests run, %.3f s)" % (len(tests), duration))
 
 def main():
     run_tests()
