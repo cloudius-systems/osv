@@ -675,6 +675,11 @@ void object::load_needed()
     }
 }
 
+void object::unload_needed()
+{
+    _needed.clear();
+}
+
 tls_data object::tls()
 {
     return tls_data{_tls_segment, _tls_init_size + _tls_uninit_size};
@@ -848,12 +853,13 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
 
 void program::remove_object(object *ef)
 {
+    ef->run_fini_funcs();
+    ef->unload_needed();
     del_debugger_obj(ef);
     _files.erase(ef->pathname());
     _files.erase(ef->soname());
     _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
     _modules_subs++;
-    ef->run_fini_funcs();
     ef->unload_segments();
     // Note we don't delete(ef) here - the contrary, delete(ef) calls us.
 }

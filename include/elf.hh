@@ -272,6 +272,7 @@ public:
     explicit object(program& prog, std::string pathname);
     virtual ~object();
     void load_needed();
+    void unload_needed();
     void relocate();
     void set_base(void* base);
     void set_dynamic_table(Elf64_Dyn* dynamic_table);
