@@ -87,10 +87,14 @@ def run_tests():
     print("OK (%d tests run, %.3f s)" % (len(tests), duration))
 
 def main():
-    run_tests()
+    while True:
+        run_tests()
+        if not cmdargs.repeat:
+            break
 
 if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='test')
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
+    parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
     cmdargs = parser.parse_args()
     main()
