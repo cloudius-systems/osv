@@ -238,7 +238,7 @@ phys virt_to_phys(void *virt)
     return static_cast<char*>(virt) - phys_mem;
 }
 
-bool allocate_intermediate_level(hw_ptep ptep)
+phys allocate_intermediate_level()
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
     // since the pt is not yet mapped, we don't need to use hw_ptep
@@ -246,13 +246,13 @@ bool allocate_intermediate_level(hw_ptep ptep)
     for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = make_empty_pte();
     }
-    // We could have adjusted the previous loop to be done only after we're
-    // sure we're the ones handling this, but this will do for now.
-    if (!ptep.compare_exchange(make_empty_pte(), make_normal_pte(pt_page))) {
-        memory::free_page(phys_to_virt(pt_page));
-        return false;
-    }
-    return true;
+    return pt_page;
+}
+
+void allocate_intermediate_level(hw_ptep ptep)
+{
+    phys pt_page = allocate_intermediate_level();
+    ptep.write(make_normal_pte(pt_page));
 }
 
 void free_intermediate_level(hw_ptep ptep)
@@ -493,7 +493,9 @@ protected:
         }
         void *vpage = memory::alloc_huge_page(huge_page_size);
         if (!vpage) {
-            if (!allocate_intermediate_level(ptep)) {
+            phys pt_page = allocate_intermediate_level();
+            if (!ptep.compare_exchange(make_empty_pte(), make_normal_pte(pt_page))) {
+                memory::free_page(phys_to_virt(pt_page));
                 return;
             }
 
