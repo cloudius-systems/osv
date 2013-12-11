@@ -123,7 +123,8 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
     //register the single irq callback for the block
     sched::thread* t = new sched::thread([this] { this->response_worker(); });
     t->start();
-    _msi.easy_register({ { 0, nullptr, t } });
+    auto queue = get_virt_queue(0);
+    _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
