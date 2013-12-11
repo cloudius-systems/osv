@@ -57,9 +57,9 @@ struct vma_list_type : vma_list_base {
     vma_list_type() {
         // insert markers for the edges of allocatable area
         // simplifies searches
-        insert(*new vma(0, 0, 0, 0));
+        insert(*new anon_vma(0, 0, 0, 0));
         uintptr_t e = 0x800000000000;
-        insert(*new vma(e, e, 0, 0));
+        insert(*new anon_vma(e, e, 0, 0));
     }
 };
 
@@ -674,7 +674,7 @@ void evacuate(uintptr_t start, uintptr_t end)
             delete &dead;
         }
     }
-    // FIXME: range also indicates where we can insert a new vma, use it
+    // FIXME: range also indicates where we can insert a new anon_vma, use it
 }
 
 void unmap(void* addr, size_t size)
@@ -755,7 +755,7 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto* vma = new mmu::vma(start, start + size, perm, flags);
+    auto* vma = new mmu::anon_vma(start, start + size, perm, flags);
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
         if (flags & mmap_uninitialized) {
@@ -935,22 +935,27 @@ unsigned vma::perm() const
     return _perm;
 }
 
-void vma::split(uintptr_t edge)
+anon_vma::anon_vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags)
+    : vma(start, end, perm, flags)
+{
+}
+
+void anon_vma::split(uintptr_t edge)
 {
     if (edge <= _start || edge >= _end) {
         return;
     }
-    vma* n = new vma(edge, _end, _perm, _flags);
+    vma* n = new anon_vma(edge, _end, _perm, _flags);
     _end = edge;
     vma_list.insert(*n);
 }
 
-error vma::sync(uintptr_t start, uintptr_t end)
+error anon_vma::sync(uintptr_t start, uintptr_t end)
 {
     return no_error();
 }
 
-void vma::fault(uintptr_t addr, exception_frame *ef)
+void anon_vma::fault(uintptr_t addr, exception_frame *ef)
 {
     auto hp_start = ::align_up(_start, huge_page_size);
     auto hp_end = ::align_down(_end, huge_page_size);

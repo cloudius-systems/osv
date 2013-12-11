@@ -84,9 +84,9 @@ public:
     void* addr() const;
     uintptr_t size() const;
     unsigned perm() const;
-    virtual void split(uintptr_t edge);
-    virtual error sync(uintptr_t start, uintptr_t end);
-    virtual void fault(uintptr_t addr, exception_frame *ef);
+    virtual void fault(uintptr_t addr, exception_frame *ef) = 0;
+    virtual void split(uintptr_t edge) = 0;
+    virtual error sync(uintptr_t start, uintptr_t end) = 0;
     class addr_compare;
 protected:
     uintptr_t _start;
@@ -107,6 +107,14 @@ class vma::addr_compare {
 public:
     bool operator()(const vma& x, addr_range y) const { return x.end() <= y.start(); }
     bool operator()(addr_range x, const vma& y) const { return x.end() <= y.start(); }
+};
+
+class anon_vma : public vma {
+public:
+    anon_vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags);
+    virtual void split(uintptr_t edge) override;
+    virtual error sync(uintptr_t start, uintptr_t end) override;
+    virtual void fault(uintptr_t addr, exception_frame *ef) override;
 };
 
 class file_vma : public vma {
