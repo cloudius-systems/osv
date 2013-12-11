@@ -10,6 +10,7 @@ import itertools
 import operator
 from glob import glob
 from collections import defaultdict
+from itertools import ifilter
 
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 external = build_dir + '/../../external'
@@ -794,29 +795,30 @@ def get_block_tracepoints():
             block_tracepoints.add(ended)
     return block_tracepoints
 
-def get_timed_traces_per_function():
+def get_timed_traces(traces):
     block_tracepoints = get_block_tracepoints()
 
     # [thread][func] => TimedTrace
     open_functions = defaultdict(dict)
 
-    # [func] => [TimedTrace, ...]
-    timed_traces_per_function = defaultdict(list)
-
-    for trace in all_traces():
-        name = trace.tp['name'].string()
+    for trace in traces:
+        name = trace.name
         ended = get_name_of_ended_func(name)
         if ended:
             if ended in open_functions[trace.thread]:
                 timed = open_functions[trace.thread].pop(ended)
                 timed.duration = trace.time - timed.trace.time
-                timed_traces_per_function[ended].append(timed)
+                yield timed
         elif name in block_tracepoints:
             if name in open_functions[trace.thread]:
                 raise Exception("Nested traces not supported: " + name)
             open_functions[trace.thread][name] = TimedTrace(trace)
 
-    return timed_traces_per_function
+def get_timed_traces_per_function(traces):
+    traces_per_function = defaultdict(list)
+    for timed in get_timed_traces(traces):
+        traces_per_function[timed.trace.name].append(timed)
+    return traces_per_function
 
 def get_percentile(sorted_samples, fraction):
     return sorted_samples[int(math.ceil(float(len(sorted_samples) - 1) * fraction))]
@@ -826,7 +828,7 @@ def dump_trace_summary(out_func):
     out_func("Execution times [ms]:\n")
     out_func(format % ("name", "count", "min", "50%", "90%", "99%", "99.9%", "max", "total"))
 
-    for name, traces in get_timed_traces_per_function().iteritems():
+    for name, traces in get_timed_traces_per_function(all_traces()).iteritems():
         samples = sorted(map(operator.attrgetter('duration'), traces))
         out_func(format % (
             name,
@@ -840,17 +842,15 @@ def dump_trace_summary(out_func):
             format_duration(sum(samples)),
             ))
 
-def dump_timed_trace(out_func, func=None):
+def dump_timed_trace(out_func, filter=None, sort=False):
     bt_formatter = BacktraceFormatter(TraceConstants())
 
-    if func:
-        traces = get_timed_traces_per_function()[func]
-    else:
-        traces = list()
-        for trace_list in get_timed_traces_per_function().itervalues():
-            traces.extend(trace_list)
+    traces = ifilter(filter, all_traces())
+    timed_traces = get_timed_traces(traces)
+    if sort:
+        timed_traces = sorted(timed_traces, key=lambda timed: -timed.duration)
 
-    for timed in sorted(traces, key=lambda t: -t.duration):
+    for timed in timed_traces:
         trace = timed.trace
         out_func('0x%016x %2d %20s %7s %-20s %s%s\n'
                     % (trace.thread,
@@ -1014,7 +1014,24 @@ class osv_trace_duration(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace duration', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        dump_timed_trace(gdb.write, arg)
+        sort = False
+        names = []
+        argv = gdb.string_to_argv(arg)
+        while argv:
+            option = argv.pop(0)
+            if not option.startswith('-'):
+                names.append(option)
+            elif option == '-s':
+                sort = True
+            else:
+                raise Exception("Unsupported option: " + option)
+
+        if names:
+            filter = lambda trace: trace.name in names or get_name_of_ended_func(trace.name) in names
+        else:
+            filter = None
+
+        dump_timed_trace(gdb.write, filter=filter, sort=sort)
 
 class osv_trace_file(gdb.Command):
     def __init__(self):
