@@ -88,11 +88,10 @@ def start_osv_qemu():
     if (cmdargs.detach):
         args += ["-daemonize"]
     else:
-        args += ["-chardev", "stdio,mux=on,id=stdio"]
+        signal_option = ('off', 'on')[cmdargs.with_signals]
+        args += ["-chardev", "stdio,mux=on,id=stdio,signal=%s" % signal_option]
         args += ["-mon", "chardev=stdio,mode=readline,default"]
         args += ["-device", "isa-serial,chardev=stdio"]
-        if not cmdargs.with_graphic:
-            args += ["-nographic"]
 
     try:
         # Save the current settings of the stty
@@ -231,8 +230,8 @@ if (__name__ == "__main__"):
                         help="run in background, do not connect the console")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
                         help="don't restart qemu automatically (allow debugger to connect on early errors)")
-    parser.add_argument("-g", "--with-graphic", action="store_true",
-                        help="qemu only. don't pass -nographic flag. pressing ctrl+c from console will kill the emulator")
+    parser.add_argument("-s", "--with-signals", action="store_true", default=False,
+                        help="qemu only. handle signals instead of passing keys to the guest. pressing ctrl+c from console will kill the emulator")
     parser.add_argument("-u", "--unsafe-cache", action="store_true",
                         help="Set cache to unsafe. Use it at your own risk.")
 

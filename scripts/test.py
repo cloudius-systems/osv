@@ -31,7 +31,7 @@ def run_test(name):
     sys.stdout.flush()
 
     start = time.time()
-    args = ["-g", "-e", "tests/%s" % (name)]
+    args = ["-s", "-e", "tests/%s" % (name)]
     process = subprocess.Popen(["./scripts/run.py"] + args, stdout=subprocess.PIPE)
     out = ""
     line = ""
