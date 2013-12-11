@@ -32,9 +32,12 @@ extern "C" int namei(char *, struct dentry **);
 static int check_vnode_duplicity(void)
 {
     int err = 0;
-    char oldpath[] = "/usr/foo";
-    char newpath[] = "/usr/foo2";
+    char oldpath[64] = "/usr/tst-fs-linkXXXXXX";
+    char newpath[64] = "/usr/tst-fs-linkXXXXXX";
     struct dentry *olddp, *newdp;
+
+    mktemp(oldpath);
+    mktemp(newpath);
 
     auto fd = open(oldpath, O_CREAT|O_TRUNC|O_RDWR, 0666);
     close(fd);
