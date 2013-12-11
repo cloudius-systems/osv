@@ -75,7 +75,7 @@ enum {
 
 class vma {
 public:
-    vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags);
+    vma(addr_range range, unsigned perm, unsigned flags);
     virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
     void protect(unsigned perm);
@@ -89,8 +89,7 @@ public:
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
     class addr_compare;
 protected:
-    uintptr_t _start;
-    uintptr_t _end;
+    addr_range _range;
     unsigned _perm;
     unsigned _flags;
 public:
@@ -111,7 +110,7 @@ public:
 
 class anon_vma : public vma {
 public:
-    anon_vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags);
+    anon_vma(addr_range range, unsigned perm, unsigned flags);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
@@ -119,7 +118,7 @@ public:
 
 class file_vma : public vma {
 public:
-    file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared);
+    file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;

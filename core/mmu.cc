@@ -57,9 +57,9 @@ struct vma_list_type : vma_list_base {
     vma_list_type() {
         // insert markers for the edges of allocatable area
         // simplifies searches
-        insert(*new anon_vma(0, 0, 0, 0));
+        insert(*new anon_vma(addr_range(0, 0), 0, 0));
         uintptr_t e = 0x800000000000;
-        insert(*new anon_vma(e, e, 0, 0));
+        insert(*new anon_vma(addr_range(e, e), 0, 0));
     }
 };
 
@@ -755,7 +755,7 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto* vma = new mmu::anon_vma(start, start + size, perm, flags);
+    auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
         if (flags & mmap_uninitialized) {
@@ -777,7 +777,7 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
-    auto *vma = new mmu::file_vma(start, start + size, perm, f, offset, shared);
+    auto *vma = new mmu::file_vma(addr_range(start, start + size), perm, f, offset, shared);
     auto v = (void*) allocate(vma, start, asize, search);
     populate(&zfill, perm | perm_write).operate(v, asize);
     auto fsize = ::size(f);
@@ -887,9 +887,8 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     trace_mmu_vm_fault_ret(addr, ef->error_code);
 }
 
-vma::vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags)
-    : _start(align_down(start))
-    , _end(align_up(end))
+vma::vma(addr_range range, unsigned perm, unsigned flags)
+    : _range(align_down(range.start()), align_up(range.end()))
     , _perm(perm)
     , _flags(flags)
 {
@@ -901,8 +900,7 @@ vma::~vma()
 
 void vma::set(uintptr_t start, uintptr_t end)
 {
-    _start = align_down(start);
-    _end = align_up(end);
+    _range = addr_range(align_down(start), align_up(end));
 }
 
 void vma::protect(unsigned perm)
@@ -912,22 +910,22 @@ void vma::protect(unsigned perm)
 
 uintptr_t vma::start() const
 {
-    return _start;
+    return _range.start();
 }
 
 uintptr_t vma::end() const
 {
-    return _end;
+    return _range.end();
 }
 
 void* vma::addr() const
 {
-    return reinterpret_cast<void*>(_start);
+    return reinterpret_cast<void*>(_range.start());
 }
 
 uintptr_t vma::size() const
 {
-    return _end - _start;
+    return _range.end() - _range.start();
 }
 
 unsigned vma::perm() const
@@ -935,18 +933,18 @@ unsigned vma::perm() const
     return _perm;
 }
 
-anon_vma::anon_vma(uintptr_t start, uintptr_t end, unsigned perm, unsigned flags)
-    : vma(start, end, perm, flags)
+anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
+    : vma(range, perm, flags)
 {
 }
 
 void anon_vma::split(uintptr_t edge)
 {
-    if (edge <= _start || edge >= _end) {
+    if (edge <= _range.start() || edge >= _range.end()) {
         return;
     }
-    vma* n = new anon_vma(edge, _end, _perm, _flags);
-    _end = edge;
+    vma* n = new anon_vma(addr_range(edge, _range.end()), _perm, _flags);
+    _range = addr_range(_range.start(), edge);
     vma_list.insert(*n);
 }
 
@@ -957,8 +955,8 @@ error anon_vma::sync(uintptr_t start, uintptr_t end)
 
 void anon_vma::fault(uintptr_t addr, exception_frame *ef)
 {
-    auto hp_start = ::align_up(_start, huge_page_size);
-    auto hp_end = ::align_down(_end, huge_page_size);
+    auto hp_start = ::align_up(_range.start(), huge_page_size);
+    auto hp_end = ::align_down(_range.end(), huge_page_size);
     size_t size;
     if (hp_start <= addr && addr < hp_end) {
         addr = ::align_down(addr, huge_page_size);
@@ -976,8 +974,8 @@ void anon_vma::fault(uintptr_t addr, exception_frame *ef)
     }
 }
 
-file_vma::file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared)
-    : vma(start, end, perm, 0)
+file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared)
+    : vma(range, perm, 0)
     , _file(file)
     , _offset(offset)
     , _shared(shared)
@@ -986,12 +984,12 @@ file_vma::file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, 
 
 void file_vma::split(uintptr_t edge)
 {
-    if (edge <= _start || edge >= _end) {
+    if (edge <= _range.start() || edge >= _range.end()) {
         return;
     }
     auto off = offset(edge);
-    vma* n = new file_vma(edge, _end, _perm, _file, off, _shared);
-    _end = edge;
+    vma* n = new file_vma(addr_range(edge, _range.end()), _perm, _file, off, _shared);
+    _range = addr_range(_range.start(), edge);
     vma_list.insert(*n);
 }
 
@@ -999,8 +997,8 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!_shared)
         return make_error(ENOMEM);
-    start = std::max(start, _start);
-    end = std::min(end, _end);
+    start = std::max(start, _range.start());
+    end = std::min(end, _range.end());
     auto fsize = ::size(_file);
     uintptr_t size = end - start;
     auto off = offset(start);
@@ -1016,7 +1014,7 @@ void file_vma::fault(uintptr_t addr, exception_frame *ef)
 
 f_offset file_vma::offset(uintptr_t addr)
 {
-    return _offset + (addr - _start);
+    return _offset + (addr - _range.start());
 }
 
 unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
