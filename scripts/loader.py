@@ -474,6 +474,17 @@ def find_or_give_last(predicate, seq):
         last = element
     return last
 
+def unique_ptr_get(u):
+    return u['_M_t']['_M_head_impl']
+
+def thread_cpu(t):
+    d = unique_ptr_get(t['_detached_state'])
+    return d['_cpu'];
+
+def thread_status(t):
+    d = unique_ptr_get(t['_detached_state'])
+    return str(d['st']['_M_i']).replace('sched::thread::', '')
+
 class osv_info_threads(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv info threads',
@@ -483,7 +494,7 @@ class osv_info_threads(gdb.Command):
         state = vmstate()
         for t in state.thread_list:
             with thread_context(t, state):
-                cpu = t['_cpu']
+                cpu = thread_cpu(t)
                 tid = t['_id']
                 newest_frame = gdb.selected_frame()
                 # Non-running threads have always, by definition, just called
@@ -510,11 +521,10 @@ class osv_info_threads(gdb.Command):
                 else:
                     location = '??'
 
-                status = str(t['_status']['_M_i']).replace('sched::thread::', '')
                 gdb.write('%4d (0x%x) cpu%s %-10s %s vruntime %12g\n' %
                           (tid, ulong(t.address),
                            cpu['arch']['acpi_id'],
-                           status,
+                           thread_status(t),
                            location,
                            t['_runtime']['_Rtt'],
                            )
