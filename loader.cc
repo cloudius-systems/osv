@@ -53,20 +53,6 @@ asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".asciz \"scripts/loader.py\" \n"
     ".popsection \n");
 
-namespace {
-
-    void test_locale()
-    {
-	auto loc = std::locale();
-	auto &fac = std::use_facet<std::ctype<char>>(loc);
-	bool ok = fac.is(std::ctype_base::digit, '3')
-	    && !fac.is(std::ctype_base::digit, 'x');
-	debug(ok ? "locale works\n" : "locale fails\n");
-	//asm volatile ("1: jmp 1b");
-    }
-
-}
-
 elf::Elf64_Ehdr* elf_header;
 size_t elf_size;
 void* elf_start;
@@ -113,7 +99,6 @@ int main(int ac, char **av)
 {
     debug("OSv " OSV_VERSION " Copyright 2013 Cloudius Systems\n");
 
-    test_locale();
     smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
     sched::init([=] { main_cont(ac, av); });
