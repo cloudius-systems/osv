@@ -1098,6 +1098,11 @@ void page_fault(exception_frame *ef)
     if (!pc) {
         abort("trying to execute null pointer");
     }
+    // The following code may sleep. So let's verify the fault did not happen
+    // when preemption was disabled, or interrupts were disabled.
+    assert(sched::preemptable());
+    assert(ef->rflags & processor::rflags_if);
+
     sched::inplace_arch_fpu fpu;
     fpu.save();
     mmu::vm_fault(addr, ef);

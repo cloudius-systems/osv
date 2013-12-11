@@ -42,6 +42,8 @@ constexpr ulong cr4_pcide = 1u << 17;
 constexpr ulong cr4_osxsave = 1u << 18;
 constexpr ulong cr4_smep = 1u << 20;
 
+constexpr ulong rflags_if = 1u << 9;
+
 struct cpuid_result {
     u32 a, b, c, d;
 };

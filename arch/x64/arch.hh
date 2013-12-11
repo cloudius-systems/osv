@@ -52,7 +52,7 @@ public:
         asm volatile("sub $128, %%rsp; pushq %0; popfq; add $128, %%rsp" : : "r"(_rflags));
     }
     bool enabled() const {
-        return _rflags & 0x200;
+        return _rflags & processor::rflags_if;
     }
 private:
     unsigned long _rflags;
@@ -81,7 +81,7 @@ inline void irq_flag_notrace::restore()
 
 inline bool irq_flag_notrace::enabled() const
 {
-    return _rflags & 0x200;
+    return _rflags & processor::rflags_if;
 }
 
 inline bool irq_enabled()
