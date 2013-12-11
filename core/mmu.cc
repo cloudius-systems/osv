@@ -880,7 +880,7 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
             trace_mmu_vm_fault_sigsegv(addr, ef->error_code);
             return;
         }
-        vma->fault(addr);
+        vma->fault(addr, ef);
     }
     trace_mmu_vm_fault_ret(addr, ef->error_code);
 }
@@ -948,7 +948,7 @@ error vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
-void vma::fault(uintptr_t addr)
+void vma::fault(uintptr_t addr, exception_frame *ef)
 {
     auto hp_start = ::align_up(_start, huge_page_size);
     auto hp_end = ::align_down(_end, huge_page_size);
@@ -1002,7 +1002,7 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
     return make_error(err);
 }
 
-void file_vma::fault(uintptr_t addr)
+void file_vma::fault(uintptr_t addr, exception_frame *ef)
 {
     abort("trying to fault-in file-backed vma");
 }

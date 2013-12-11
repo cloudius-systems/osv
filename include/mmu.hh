@@ -15,6 +15,7 @@
 #include <functional>
 #include <osv/error.h>
 
+struct exception_frame;
 /**
  * MMU namespace
  */
@@ -85,7 +86,7 @@ public:
     unsigned perm() const;
     virtual void split(uintptr_t edge);
     virtual error sync(uintptr_t start, uintptr_t end);
-    virtual void fault(uintptr_t addr);
+    virtual void fault(uintptr_t addr, exception_frame *ef);
     class addr_compare;
 protected:
     uintptr_t _start;
@@ -113,7 +114,7 @@ public:
     file_vma(uintptr_t start, uintptr_t end, unsigned perm, fileref file, f_offset offset, bool shared);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
-    virtual void fault(uintptr_t addr) override;
+    virtual void fault(uintptr_t addr, exception_frame *ef) override;
 private:
     f_offset offset(uintptr_t addr);
     fileref _file;
