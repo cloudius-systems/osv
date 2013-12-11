@@ -101,26 +101,47 @@ namespace virtio {
 
         return(error);
     }
-    // Main transmit routine.
-    static void virtio_if_start(struct ifnet* ifp)
+
+    /**
+     * Invalidate the local Tx queues.
+     * @param ifp upper layer instance handle
+     */
+    static void virtio_if_qflush(struct ifnet *ifp)
     {
-        struct mbuf* m_head = NULL;
+        /*
+         * Since virtio_net currently doesn't have any Tx queue we just
+         * flush the upper layer queues.
+         */
+        if_qflush(ifp);
+    }
+
+    /**
+     * Transmits a single mbuf instance.
+     * @param ifp upper layer instance handle
+     * @param m_head mbuf to transmit
+     *
+     * @return 0 in case of success and an appropriate error code
+     *         otherwise
+     */
+    static int virtio_if_transmit(struct ifnet* ifp, struct mbuf* m_head)
+    {
         virtio_net* vnet = (virtio_net*)ifp->if_softc;
 
-        virtio_net_d("%s_start (transmit)", __FUNCTION__);
+        virtio_net_d("%s_start", __FUNCTION__);
 
         /* Process packets */
         vnet->_tx_ring_lock.lock();
-        IF_DEQUEUE(&ifp->if_snd, m_head);
-        while (m_head != NULL) {
-            virtio_net_d("*** processing packet! ***");
 
-            vnet->tx(m_head, false);
-            IF_DEQUEUE(&ifp->if_snd, m_head);
-        }
+        virtio_net_d("*** processing packet! ***");
 
-        vnet->kick(1);
+        int error = vnet->tx_locked(m_head);
+
+        if (!error)
+            vnet->kick(1);
+
         vnet->_tx_ring_lock.unlock();
+
+        return error;
     }
 
     static void virtio_if_init(void* xsc)
@@ -164,7 +185,8 @@ namespace virtio {
         _ifn->if_softc = static_cast<void*>(this);
         _ifn->if_flags = IFF_BROADCAST /*| IFF_MULTICAST*/;
         _ifn->if_ioctl = virtio_if_ioctl;
-        _ifn->if_start = virtio_if_start;
+        _ifn->if_transmit = virtio_if_transmit;
+        _ifn->if_qflush = virtio_if_qflush;
         _ifn->if_init = virtio_if_init;
         IFQ_SET_MAXLEN(&_ifn->if_snd, _tx_queue->size());
 
@@ -408,9 +430,11 @@ namespace virtio {
         if (added) _rx_queue->kick();
     }
 
-
-    bool virtio_net::tx(struct mbuf *m_head, bool flush)
+    /* TODO: Does it really have to be "locked"? */
+    int virtio_net::tx_locked(struct mbuf *m_head, bool flush)
     {
+        DEBUG_ASSERT(_tx_ring_lock.owned(), "_tx_ring_lock is not locked!");
+
         struct mbuf *m;
         virtio_net_req *req = new virtio_net_req;
 
@@ -420,7 +444,8 @@ namespace virtio {
             m = tx_offload(m_head, &req->mhdr.hdr);
             if ((m_head = m) == nullptr) {
                 delete req;
-                return false;
+                /* The buffer is not well-formed */
+                return EINVAL;
             }
         }
 
@@ -443,22 +468,19 @@ namespace virtio {
             } else {
                 virtio_net_d("%s: no room", __FUNCTION__);
                 delete req;
-                return false;
+                return ENOBUFS;
             }
         }
 
         if (!_tx_queue->add_buf(req)) {
             trace_virtio_net_tx_failed_add_buf(_ifn->if_index);
             delete req;
-            return false;
+            return ENOBUFS;
         }
 
         trace_virtio_net_tx_packet(_ifn->if_index, _tx_queue->_sg_vec.size());
 
-        if (flush)
-            _tx_queue->kick();
-
-        return true;
+        return 0;
     }
 
     struct mbuf*

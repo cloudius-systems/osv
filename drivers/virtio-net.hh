@@ -18,6 +18,9 @@
 
 namespace virtio {
 
+    /**
+     * virtio net device class
+     */
     class virtio_net : public virtio_driver {
     public:
 
@@ -210,7 +213,18 @@ namespace virtio {
         bool rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr);
         void receiver();
         void fill_rx_ring();
-        bool tx(struct mbuf* m_head, bool flush = false);
+
+        /**
+         * Transmit a single mbuf.
+         * @param m_head a buffer to transmits
+         * @param flush kick() if TRUE
+         * @note should be called under the _tx_ring_lock.
+         *
+         * @return 0 in case of success and an appropriate error code
+         *         otherwise
+         */
+        int tx_locked(struct mbuf* m_head, bool flush = false);
+
         struct mbuf* tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr);
         void kick(int queue) {_queues[queue]->kick();}
         void tx_gc();
