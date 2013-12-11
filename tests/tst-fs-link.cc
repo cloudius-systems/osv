@@ -86,8 +86,16 @@ int main(int argc, char *argv[])
         oldpath = argv[1];
         newpath = argv[2];
     } else {
-        oldpath = "/usr/foo";
-        newpath = "/usr/foo2";
+	char oldp[64], newp[64];
+
+	strcpy(oldp, "/usr/tst-fs-linkXXXXXX");
+        mktemp(oldp);
+
+	strcpy(newp, "/usr/tst-fs-linkXXXXXX");
+        mktemp(newp);
+
+        oldpath = oldp;
+        newpath = newp;
     }
 
     report(link(oldpath, newpath) < 0 && errno == ENOENT, "link returns ENOENT if source path does not exists");
