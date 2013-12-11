@@ -524,6 +524,7 @@ objects += arch/x64/dump.o
 objects += arch/x64/exceptions.o
 objects += arch/x64/entry.o
 objects += arch/x64/ioapic.o
+objects += arch/x64/mmu.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o

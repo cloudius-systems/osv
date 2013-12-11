@@ -1091,25 +1091,3 @@ void switch_to_runtime_page_table()
 }
 
 }
-
-void page_fault(exception_frame *ef)
-{
-    sched::exception_guard g;
-    auto addr = processor::read_cr2();
-    if (fixup_fault(ef)) {
-        return;
-    }
-    auto pc = reinterpret_cast<void*>(ef->rip);
-    if (!pc) {
-        abort("trying to execute null pointer");
-    }
-    // The following code may sleep. So let's verify the fault did not happen
-    // when preemption was disabled, or interrupts were disabled.
-    assert(sched::preemptable());
-    assert(ef->rflags & processor::rflags_if);
-
-    sched::inplace_arch_fpu fpu;
-    fpu.save();
-    mmu::vm_fault(addr, ef);
-    fpu.restore();
-}

@@ -158,6 +158,8 @@ void set_nr_page_sizes(unsigned nr);
 void vpopulate(void* addr, size_t size);
 void vdepopulate(void* addr, size_t size);
 
+void vm_fault(uintptr_t addr, exception_frame* ef);
+
 }
 
 #endif
