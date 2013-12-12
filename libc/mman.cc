@@ -63,7 +63,7 @@ int mprotect(void *addr, size_t len, int prot)
         abort();
     }
 
-    if ((reinterpret_cast<intptr_t>(addr) & 4095) || (len & 4095)) {
+    if (!mmu::is_page_aligned(addr) || !mmu::is_page_aligned(len)) {
         // address not page aligned
         return libc_error(EINVAL);
     }
@@ -85,8 +85,8 @@ int mmap_validate(void *addr, size_t length, int flags, off_t offset)
     if (!type || type == (MAP_SHARED|MAP_PRIVATE)) {
         return EINVAL;
     }
-    if ((flags & MAP_FIXED && (reinterpret_cast<intptr_t>(addr) & 4095)) ||
-        (offset & 4095) || length == 0) {
+    if ((flags & MAP_FIXED && !mmu::is_page_aligned(addr)) ||
+        !mmu::is_page_aligned(offset) || length == 0) {
         return EINVAL;
     }
     return 0;
@@ -157,7 +157,7 @@ extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
 
 int munmap_validate(void *addr, size_t length)
 {
-    if ((reinterpret_cast<intptr_t>(addr) & 4095) || length == 0) {
+    if (!mmu::is_page_aligned(addr) || length == 0) {
         return EINVAL;
     }
     return 0;

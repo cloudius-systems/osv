@@ -197,7 +197,7 @@ int getpid()
 
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
-    if ((reinterpret_cast<intptr_t>(addr) & 4095)) {
+    if (!mmu::is_page_aligned(addr)) {
         return libc_error(EINVAL);
     }
     if (!mmu::is_linear_mapped(addr, length) && !mmu::ismapped(addr, length)) {

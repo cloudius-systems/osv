@@ -149,6 +149,18 @@ T* phys_cast(phys pa)
     return static_cast<T*>(phys_to_virt(pa));
 }
 
+inline
+bool is_page_aligned(intptr_t addr)
+{
+    return !(addr & (page_size-1));
+}
+
+inline
+bool is_page_aligned(void* addr)
+{
+    return is_page_aligned(reinterpret_cast<intptr_t>(addr));
+}
+
 void linear_map(void* virt, phys addr, size_t size,
                 size_t slop = mmu::page_size);
 void free_initial_memory_range(uintptr_t addr, size_t size);
