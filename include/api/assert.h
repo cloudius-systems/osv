@@ -1,3 +1,6 @@
+#ifndef _API_ASSERT_H
+#define _API_ASSERT_H
+
 #include <features.h>
 
 #undef assert
@@ -17,3 +20,4 @@ void __assert_fail (const char *, const char *, int, const char *) __attribute__
 #ifdef __cplusplus
 }
 #endif
+#endif /* _API_ASSERT_H */
