@@ -8,6 +8,7 @@ import os
 import re
 
 blacklist = [
+  "tst-threadcomplete.so"
 ]
 
 tests = sorted([os.path.basename(x) for x in glob.glob('build/release/tests/tst-*.so')])
