@@ -15,6 +15,11 @@ int umount(const char *path)
 
 int umount2(const char *path, int flags)
 {
+    // If called with MNT_EXPIRE and either MNT_DETACH or MNT_FORCE.
+    if (flags & MNT_EXPIRE && flags & (MNT_DETACH|MNT_FORCE)) {
+        return libc_error(EINVAL);
+    }
+
     auto r = sys_umount2(path, flags);
     if (r == 0) {
         return 0;

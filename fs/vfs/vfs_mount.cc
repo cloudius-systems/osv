@@ -32,6 +32,7 @@
  */
 
 #include <sys/stat.h>
+#include <sys/param.h>
 #include <dirent.h>
 
 #include <limits.h>
@@ -213,11 +214,17 @@ int
 sys_umount2(const char *path, int flags)
 {
     struct mount *mp;
-    int error;
+    int error, pathlen;
 
     DPRINTF(VFSDB_SYSCALL, ("sys_umount: path=%s\n", path));
 
     MOUNT_LOCK();
+
+    pathlen = strlen(path);
+    if (pathlen >= MAXPATHLEN) {
+        error = ENAMETOOLONG;
+        goto out;
+    }
 
     /* Get mount entry */
     LIST_FOREACH(mp, &mount_list, m_link) {
