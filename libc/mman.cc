@@ -161,6 +161,9 @@ int munmap_validate(void *addr, size_t length)
     if (!mmu::is_page_aligned(addr) || length == 0) {
         return EINVAL;
     }
+    if (!mmu::ismapped(addr, length)) {
+        return EINVAL;
+    }
     return 0;
 }
 
