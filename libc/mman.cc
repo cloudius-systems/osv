@@ -131,21 +131,21 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     assert(reinterpret_cast<long>(addr) >= 0);
 
     void *ret;
+
+    auto mmap_flags = libc_flags_to_mmap(flags);
+    auto mmap_perm  = libc_prot_to_perm(prot);
+
     if (flags & MAP_ANONYMOUS) {
-        ret = mmu::map_anon(addr, length, libc_flags_to_mmap(flags),
-                libc_prot_to_perm(prot));
+        ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
     } else {
         fileref f(fileref_from_fd(fd));
-
         error = mmap_validate_file(f, prot, flags);
         if (error) {
             errno = error;
             trace_memory_mmap_err(error);
             return MAP_FAILED;
         }
-
-        ret = mmu::map_file(addr, length, libc_flags_to_mmap(flags),
-                libc_prot_to_perm(prot), f, offset);
+        ret = mmu::map_file(addr, length, mmap_flags, mmap_perm, f, offset);
     }
     trace_memory_mmap_ret(ret);
     return ret;
