@@ -16,6 +16,33 @@
 #include <osv/mutex.h>
 #include <osv/printf.hh>
 #include "boost/format.hpp"
+#include "api/assert.h"
+
+#ifndef NDEBUG
+/**
+ * \note This assert will compile out completely when
+ *       mode=release!!!
+ *
+ * DEBUG_ASSERT() will call for the assert() and will print the
+ * given message if the condition evaluates to false.
+ *
+ * Use this macro for assert-style checking in a fast path code.
+ * It will perform a checking when mode=debug and will be
+ * compiled out when mode=release.
+ *
+ * DEBUG_ASSERT() accepts parameters in a printf-style manner
+ * and prints the message to stderr.
+ */
+#define DEBUG_ASSERT(cond, msg, ...) \
+do {                                                         \
+    if (!(cond)) {                                           \
+        fprintf(stderr, msg ": ", ##__VA_ARGS__);            \
+        assert(0);                                           \
+    }                                                        \
+} while (0)
+#else /* !NDEBUG */
+#define DEBUG_ASSERT(cond, msg, ...) (void)0
+#endif /* NDEBUG */
 
 typedef boost::format fmt;
 
