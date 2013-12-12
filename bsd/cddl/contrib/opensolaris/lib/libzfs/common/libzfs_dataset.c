@@ -2482,6 +2482,7 @@ out:
 	return (err);
 #else	/* !sun */
 	assert(!"invalid code path");
+    abort();
 #endif	/* !sun */
 }
 
