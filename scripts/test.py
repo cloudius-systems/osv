@@ -69,6 +69,9 @@ def run_tests():
     for test in tests:
         if not test in blacklist:
             run_test(test)
+        else:
+            sys.stdout.write("  TEST %-25s SKIPPED\n" % test)
+            sys.stdout.flush()
 
     end = time.time()
 
