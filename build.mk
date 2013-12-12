@@ -82,6 +82,11 @@ CFLAGS += -Wno-maybe-uninitialized
 CXXFLAGS += -Wno-maybe-uninitialized
 endif
 
+# Add -DNDEBUG if conf-DEBUG_BUILD is set to 0 in *.mak files above
+ifeq ($(conf-DEBUG_BUILD),0)
+configuration += -DNDEBUG
+endif
+
 arch-cflags = -msse4.1
 
 
