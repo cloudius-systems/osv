@@ -48,7 +48,6 @@
 #include <map>
 #include <boost/range/adaptor/reversed.hpp>
 #include "align.hh"
-#include <safe-ptr.hh>
 #include <osv/stubbing.hh>
 #include "drivers/pvpanic.hh"
 #include <api/sys/resource.h>
@@ -192,26 +191,6 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 
 int getpid()
 {
-    return 0;
-}
-
-int mincore(void *addr, size_t length, unsigned char *vec)
-{
-    if (!mmu::is_page_aligned(addr)) {
-        return libc_error(EINVAL);
-    }
-    if (!mmu::is_linear_mapped(addr, length) && !mmu::ismapped(addr, length)) {
-        return libc_error(ENOMEM);
-    }
-    char *end = align_up((char *)addr + length, mmu::page_size);
-    char tmp;
-    for (char *p = (char *)addr; p < end; p += mmu::page_size) {
-        if (safe_load(p, tmp)) {
-            *vec++ = 0x01;
-        } else {
-            *vec++ = 0x00;
-        }
-    }
     return 0;
 }
 

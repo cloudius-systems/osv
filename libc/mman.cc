@@ -13,6 +13,7 @@
 #include "osv/dentry.h"
 #include "osv/mount.h"
 #include "libc/libc.hh"
+#include <safe-ptr.hh>
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
@@ -185,4 +186,24 @@ int msync(void *addr, size_t length, int flags)
         err = mmu::msync(addr, length, flags);
     }
     return err.to_libc();
+}
+
+int mincore(void *addr, size_t length, unsigned char *vec)
+{
+    if (!mmu::is_page_aligned(addr)) {
+        return libc_error(EINVAL);
+    }
+    if (!mmu::is_linear_mapped(addr, length) && !mmu::ismapped(addr, length)) {
+        return libc_error(ENOMEM);
+    }
+    char *end = align_up((char *)addr + length, mmu::page_size);
+    char tmp;
+    for (char *p = (char *)addr; p < end; p += mmu::page_size) {
+        if (safe_load(p, tmp)) {
+            *vec++ = 0x01;
+        } else {
+            *vec++ = 0x00;
+        }
+    }
+    return 0;
 }
