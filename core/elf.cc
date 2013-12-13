@@ -420,7 +420,7 @@ void object::relocate_rela()
             *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
             break;
         case R_X86_64_TPOFF64:
-            *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - tls_data().size;
+            *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
             break;
         default:
             debug("unknown relocation type %d\n", type);
@@ -687,9 +687,9 @@ void object::unload_needed()
     _needed.clear();
 }
 
-tls_data object::tls()
+ulong object::get_tls_size()
 {
-    return tls_data{_tls_segment, _tls_init_size + _tls_uninit_size};
+    return _tls_init_size + _tls_uninit_size;
 }
 
 std::string object::soname()
@@ -770,11 +770,6 @@ program::program(void* addr)
 void program::set_search_path(std::initializer_list<std::string> path)
 {
     _search_path = path;
-}
-
-tls_data program::tls()
-{
-    return _core->tls();
 }
 
 void program::set_object(std::string name, std::shared_ptr<elf::object> obj)

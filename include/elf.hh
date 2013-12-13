@@ -282,7 +282,6 @@ public:
     void load_segments();
     void unload_segments();
     void* resolve_pltgot(unsigned index);
-    tls_data tls();
     const std::vector<Elf64_Phdr> *phdrs();
     std::string soname();
     std::string pathname();
@@ -312,6 +311,7 @@ private:
     void relocate_rela();
     void relocate_pltgot();
     unsigned symtab_len();
+    ulong get_tls_size();
 protected:
     program& _prog;
     std::string _pathname;
@@ -440,7 +440,6 @@ public:
     symbol_module lookup(const char* symbol);
     template <typename T>
     T* lookup_function(const char* symbol);
-    tls_data tls();
     // run a function with all current modules (const std::vector<object*>&) as a parameter
     template <typename functor>
     void with_modules(functor f);
