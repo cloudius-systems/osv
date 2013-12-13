@@ -152,6 +152,7 @@ boost-tests := tests/tst-rename.so \
 	tests/tst-libc-locking.so \
 	tests/misc-fs-stress.so \
 	tests/misc-bdev-write.so \
+	tests/tst-promise.so \
 	tests/tst-stat.so
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
