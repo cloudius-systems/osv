@@ -291,7 +291,7 @@ public:
     template <typename T = void>
     T* lookup(const char* name);
     dladdr_info lookup_addr(const void* addr);
-    unsigned long module_index() const;
+    ulong module_index() const;
     void* tls_addr();
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
@@ -322,7 +322,7 @@ protected:
     void* _tls_segment;
     ulong _tls_init_size, _tls_uninit_size;
     Elf64_Dyn* _dynamic_table;
-    unsigned long _module_index;
+    ulong _module_index;
 
     // Keep list of references to other modules, to prevent them from being
     // unloaded. When this object is unloaded, the reference count of all

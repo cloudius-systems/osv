@@ -96,7 +96,7 @@ object::~object()
     _prog.free_dtv(this);
 }
 
-unsigned long object::module_index() const
+ulong object::module_index() const
 {
     return _module_index;
 }
