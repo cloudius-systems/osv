@@ -31,6 +31,8 @@ namespace {
 
 namespace elf {
 
+const ulong program::core_module_index = 0;
+
 namespace {
 
 unsigned symbol_type(Elf64_Sym& sym)
@@ -752,6 +754,7 @@ program::program(void* addr)
     assert(!s_program);
     s_program = this;
     _core = make_shared<memory_image>(*this, reinterpret_cast<void*>(0x200000));
+    assert(_core->module_index() == core_module_index);
     _core->load_segments();
     set_object("libc.so.6", _core);
     set_object("libm.so.6", _core);

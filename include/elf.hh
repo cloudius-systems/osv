@@ -395,6 +395,8 @@ public:
  */
 class program {
 public:
+    static const ulong core_module_index;
+
     explicit program(void* base = reinterpret_cast<void*>(0x100000000000UL));
     /**
      * Load a shared library, and return an interface to it.

@@ -872,6 +872,10 @@ unsigned long thread::id()
 
 void* thread::get_tls(ulong module)
 {
+    if (module == elf::program::core_module_index) {
+        return _tcb->tls_base;
+    }
+
     if (module >= _tls.size()) {
         return nullptr;
     }
