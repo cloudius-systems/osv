@@ -83,12 +83,12 @@ public:
     bool large() const { return x & 0x80; }
     bool nx() const { return x >> 63; }
     phys addr(bool large) const {
-        auto v = x & ((u64(1) << 52) - 1);
+        auto v = x & ((u64(1) << (64-page_size_shift)) - 1);
         v &= ~u64(0xfff);
-        v &= ~(u64(large) << 12);
+        v &= ~(u64(large) << page_size_shift);
         return v;
     }
-    u64 pfn(bool large) const { return addr(large) >> 12; }
+    u64 pfn(bool large) const { return addr(large) >> page_size_shift; }
     phys next_pt_addr() const { return addr(false); }
     u64 next_pt_pfn() const { return pfn(false); }
     void set_present(bool v) { set_bit(0, v); }
@@ -99,10 +99,10 @@ public:
     void set_large(bool v) { set_bit(7, v); }
     void set_nx(bool v) { set_bit(63, v); }
     void set_addr(phys addr, bool large) {
-        auto mask = 0x8000000000000fff | (u64(large) << 12);
+        auto mask = 0x8000000000000fff | (u64(large) << page_size_shift);
         x = (x & mask) | addr;
     }
-    void set_pfn(u64 pfn, bool large) { set_addr(pfn << 12, large); }
+    void set_pfn(u64 pfn, bool large) { set_addr(pfn << page_size_shift, large); }
     static pt_element force(u64 v) { return pt_element(v); }
 private:
     explicit pt_element(u64 v) : x(v) {}
@@ -290,7 +290,7 @@ void split_large_page(hw_ptep ptep, unsigned level)
     auto pt = follow(ptep.read());
     for (auto i = 0; i < pte_per_page; ++i) {
         pt_element tmp = pte_orig;
-        phys addend = phys(i) << (12 + 9 * (level - 1));
+        phys addend = phys(i) << (page_size_shift + 9 * (level - 1));
         tmp.set_addr(tmp.addr(level > 1) | addend, level > 1);
         pt.at(i).write(tmp);
     }
@@ -1048,7 +1048,7 @@ void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
         allocate_intermediate_level(parent);
     }
     hw_ptep pt = follow(parent.read());
-    phys step = phys(1) << (12 + level * 9);
+    phys step = phys(1) << (page_size_shift + level * 9);
     auto idx = pt_index(vstart, level);
     auto eidx = pt_index(vend, level);
     base_virt += idx * step;
@@ -1068,7 +1068,7 @@ void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
 
 size_t page_size_level(unsigned level)
 {
-    return size_t(1) << (12 + 9 * level);
+    return size_t(1) << (page_size_shift + 9 * level);
 }
 
 void linear_map(void* _virt, phys addr, size_t size, size_t slop)

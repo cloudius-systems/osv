@@ -22,6 +22,7 @@ struct exception_frame;
 namespace mmu {
 
 constexpr uintptr_t page_size = 4096;
+constexpr int page_size_shift = 12; // log2(page_size)
 
 constexpr int pte_per_page = 512;
 constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
@@ -35,7 +36,7 @@ static char* const debug_base = reinterpret_cast<char*>(0xffffe00000000000);
 inline unsigned pt_index(void *virt, unsigned level)
 {
     auto v = reinterpret_cast<ulong>(virt);
-    return (v >> (12 + level * 9)) & 511;
+    return (v >> (page_size_shift + level * 9)) & 511;
 }
 
 enum {
