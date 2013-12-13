@@ -96,6 +96,11 @@ object::~object()
     _prog.free_dtv(this);
 }
 
+unsigned long object::module_index() const
+{
+    return _module_index;
+}
+
 bool object::visible(void) const
 {
     auto v = _visibility.load(std::memory_order_acquire);
