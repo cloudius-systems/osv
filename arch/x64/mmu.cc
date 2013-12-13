@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include "arch.hh"
 #include "arch-cpu.hh"
 #include "debug.hh"
 #include "sched.hh"
@@ -25,6 +26,9 @@ void page_fault(exception_frame *ef)
     // when preemption was disabled, or interrupts were disabled.
     assert(sched::preemptable());
     assert(ef->rflags & processor::rflags_if);
+
+    // And since we may sleep, make sure interrupts are enabled.
+    arch::irq_enable();
 
     sched::inplace_arch_fpu fpu;
     fpu.save();

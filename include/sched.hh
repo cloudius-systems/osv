@@ -8,6 +8,7 @@
 #ifndef SCHED_HH_
 #define SCHED_HH_
 
+#include "arch.hh"
 #include "arch-thread-state.hh"
 #include "arch-cpu.hh"
 #include <functional>
@@ -587,6 +588,9 @@ template <class Mutex, class Pred>
 inline
 void thread::do_wait_until(Mutex& mtx, Pred pred)
 {
+    assert(arch::irq_enabled());
+    assert(preemptable());
+
     thread* me = current();
     while (true) {
         {
