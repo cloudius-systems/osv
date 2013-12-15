@@ -189,10 +189,6 @@ struct ucred
 #define SO_NOFCS                43
 #define SO_LOCK_FILTER          44
 
-#ifndef SOL_SOCKET
-#define SOL_SOCKET      1
-#endif
-
 #define SOL_RAW         255
 #define SOL_DECNET      261
 #define SOL_X25         262

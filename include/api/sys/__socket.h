@@ -16,4 +16,8 @@ struct linger
         int l_linger;
 };
 
+#ifndef SOL_SOCKET
+#define SOL_SOCKET      1
+#endif
+
 #endif /* OSV__SOCKET_H_ */

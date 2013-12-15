@@ -284,30 +284,6 @@ bsd_to_linux_domain(int domain)
 }
 
 static int
-linux_to_bsd_sockopt_level(int level)
-{
-
-	switch (level) {
-	case LINUX_SOL_SOCKET:
-		return (SOL_SOCKET);
-	}
-	return (level);
-}
-
-#if 0
-static int
-bsd_to_linux_sockopt_level(int level)
-{
-
-	switch (level) {
-	case SOL_SOCKET:
-		return (LINUX_SOL_SOCKET);
-	}
-	return (level);
-}
-#endif
-
-static int
 linux_to_bsd_ip_sockopt(int opt)
 {
     /*
@@ -1018,7 +994,7 @@ linux_sendmsg(int s, struct msghdr* msg, int flags, ssize_t* bytes)
 			cmsg->cmsg_type =
 			    linux_to_bsd_cmsg_type(linux_cmsg.cmsg_type);
 			cmsg->cmsg_level =
-			    linux_to_bsd_sockopt_level(linux_cmsg.cmsg_level);
+			    linux_cmsg.cmsg_level;
 			if (cmsg->cmsg_type linux_sendmsg== -1
 			    || cmsg->cmsg_level != SOL_SOCKET)
 				goto bad;
@@ -1249,7 +1225,6 @@ linux_setsockopt(int s, int level, int name, caddr_t val, int valsize)
 {
 	int error;
 
-	level = linux_to_bsd_sockopt_level(level);
 	switch (level) {
 	case SOL_SOCKET:
 		name = linux_to_bsd_so_sockopt(name);
@@ -1286,7 +1261,6 @@ linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize)
 {
 	int error;
 
-	level = linux_to_bsd_sockopt_level(level);
 	switch (level) {
 	case SOL_SOCKET:
 		name = linux_to_bsd_so_sockopt(name);

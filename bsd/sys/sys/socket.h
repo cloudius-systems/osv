@@ -124,11 +124,6 @@ struct accept_filter_arg {
 #endif
 
 /*
- * Level number for (get/set)sockopt() to apply to socket itself.
- */
-#define	SOL_SOCKET	0xffff		/* options for socket level */
-
-/*
  * Address families.
  */
 #define	AF_UNSPEC	0		/* unspecified */
