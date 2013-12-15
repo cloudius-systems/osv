@@ -59,6 +59,60 @@
 #define IN_EXPERIMENTAL(a)      ((((in_addr_t)(a)) & 0xe0000000) == 0xe0000000)
 #define IN_BADCLASS(a)          ((((in_addr_t)(a)) & 0xf0000000) == 0xf0000000)
 
+#define IP_TOS             1
+#define IP_TTL             2
+#define IP_HDRINCL         3
+#define IP_OPTIONS         4
+#define IP_ROUTER_ALERT    5
+#define IP_RECVOPTS        6
+#define IP_RETOPTS         7
+#define IP_PKTINFO         8
+#define IP_PKTOPTIONS      9
+#define IP_PMTUDISC        10
+#define IP_MTU_DISCOVER    10
+#define IP_RECVERR         11
+#define IP_RECVTTL         12
+#define IP_RECVTOS         13
+#define IP_MTU             14
+#define IP_FREEBIND        15
+#define IP_IPSEC_POLICY    16
+#define IP_XFRM_POLICY     17
+#define IP_PASSSEC         18
+#define IP_TRANSPARENT     19
+#define IP_ORIGDSTADDR     20
+#define IP_RECVORIGDSTADDR IP_ORIGDSTADDR
+#define IP_MINTTL          21
+#define IP_MULTICAST_IF    32
+#define IP_MULTICAST_TTL   33
+#define IP_MULTICAST_LOOP  34
+#define IP_ADD_MEMBERSHIP  35
+#define IP_DROP_MEMBERSHIP 36
+#define IP_UNBLOCK_SOURCE  37
+#define IP_BLOCK_SOURCE    38
+#define IP_ADD_SOURCE_MEMBERSHIP  39
+#define IP_DROP_SOURCE_MEMBERSHIP 40
+#define IP_MSFILTER        41
+
+#define IP_RECVRETOPTS IP_RETOPTS
+
+#ifdef _GNU_SOURCE
+#define MCAST_JOIN_GROUP   42
+#define MCAST_BLOCK_SOURCE 43
+#define MCAST_UNBLOCK_SOURCE      44
+#define MCAST_LEAVE_GROUP  45
+#define MCAST_JOIN_SOURCE_GROUP   46
+#define MCAST_LEAVE_SOURCE_GROUP  47
+#define MCAST_MSFILTER     48
+
+#define IP_MULTICAST_ALL   49
+#define IP_UNICAST_IF      50
+
+#define MCAST_EXCLUDE 0
+#define MCAST_INCLUDE 1
+#endif
+
+
+
 struct ip_mreq {
         struct  in_addr imr_multiaddr;  /* IP multicast address of group */
         struct  in_addr imr_interface;  /* local IP address of interface */

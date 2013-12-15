@@ -284,40 +284,6 @@ bsd_to_linux_domain(int domain)
 }
 
 static int
-linux_to_bsd_ip_sockopt(int opt)
-{
-    /*
-     * Note: Negative opt values are used to pass BSD commands unchanged.
-     *       i.e. To use The BSD IP_ONESBCAST, which does not have a Linux
-     *       equivalent pass -IP_ONESBCAST to setsockopt().
-     */
-    if (opt < 0)
-        return -opt ;
-    
-	switch (opt) {
-	case LINUX_IP_TOS:
-		return (IP_TOS);
-	case LINUX_IP_TTL:
-		return (IP_TTL);
-	case LINUX_IP_OPTIONS:
-		return (IP_OPTIONS);
-	case LINUX_IP_MULTICAST_IF:
-		return (IP_MULTICAST_IF);
-	case LINUX_IP_MULTICAST_TTL:
-		return (IP_MULTICAST_TTL);
-	case LINUX_IP_MULTICAST_LOOP:
-		return (IP_MULTICAST_LOOP);
-	case LINUX_IP_ADD_MEMBERSHIP:
-		return (IP_ADD_MEMBERSHIP);
-	case LINUX_IP_DROP_MEMBERSHIP:
-		return (IP_DROP_MEMBERSHIP);
-	case LINUX_IP_HDRINCL:
-		return (IP_HDRINCL);
-	}
-	return (-1);
-}
-
-static int
 linux_to_bsd_so_sockopt(int opt)
 {
 
@@ -1230,7 +1196,6 @@ linux_setsockopt(int s, int level, int name, caddr_t val, int valsize)
 		name = linux_to_bsd_so_sockopt(name);
 		break;
 	case IPPROTO_IP:
-		name = linux_to_bsd_ip_sockopt(name);
 		break;
 	case IPPROTO_TCP:
 		/* Linux TCP option values match BSD's */
@@ -1266,7 +1231,6 @@ linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize)
 		name = linux_to_bsd_so_sockopt(name);
 		break;
 	case IPPROTO_IP:
-		name = linux_to_bsd_ip_sockopt(name);
 		break;
 	case IPPROTO_TCP:
 		/* Linux TCP option values match BSD's */

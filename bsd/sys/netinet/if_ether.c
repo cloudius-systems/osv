@@ -34,6 +34,7 @@
  * TODO:
  *	add "inuse/lock" bit (or ref. count) along with valid bit
  */
+#define _GNU_SOURCE 1
 
 #include <sys/cdefs.h>
 #include <bsd/porting/netport.h>

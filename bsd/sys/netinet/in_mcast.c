@@ -32,6 +32,8 @@
  * IPv4 multicast socket, group, and socket option processing module.
  */
 
+#define _GNU_SOURCE
+
 #include <sys/cdefs.h>
 
 #include <bsd/porting/netport.h>

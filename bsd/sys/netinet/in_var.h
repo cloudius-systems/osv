@@ -317,6 +317,8 @@ struct in_multi {
 	}			inm_st[2];	/* state at t0, t1 */
 };
 
+#ifdef _GNU_SOURCE
+
 /*
  * Helper function to derive the filter mode on a source entry
  * from its internal counters. Predicates are:
@@ -338,6 +340,8 @@ ims_get_mode(const struct in_multi *inm, const struct ip_msource *ims,
 		return (MCAST_INCLUDE);
 	return (MCAST_UNDEFINED);
 }
+
+#endif
 
 #ifdef _KERNEL
 

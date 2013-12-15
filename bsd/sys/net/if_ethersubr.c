@@ -30,6 +30,8 @@
  * $FreeBSD$
  */
 
+#define _GNU_SOURCE 1
+
 #include <assert.h>
 
 #include <osv/ioctl.h>

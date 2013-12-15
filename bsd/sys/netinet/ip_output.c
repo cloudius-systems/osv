@@ -29,6 +29,8 @@
  *	@(#)ip_output.c	8.3 (Berkeley) 1/21/94
  */
 
+#define _GNU_SOURCE
+
 #include <sys/cdefs.h>
 
 #include <bsd/porting/netport.h>
@@ -1117,16 +1119,6 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 	case SOPT_GET:
 		switch (sopt->sopt_name) {
 		case IP_OPTIONS:
-		case IP_RETOPTS:
-			if (inp->inp_options)
-				error = sooptcopyout(sopt, 
-						     mtod(inp->inp_options,
-							  char *),
-						     inp->inp_options->m_len);
-			else
-				sopt->sopt_valsize = 0;
-			break;
-
 		case IP_TOS:
 		case IP_TTL:
 		case IP_MINTTL:

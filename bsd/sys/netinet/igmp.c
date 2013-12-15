@@ -47,6 +47,8 @@
  * MULTICAST Revision: 3.5.1.4
  */
 
+#define _GNU_SOURCE
+
 #include <sys/cdefs.h>
 
 #include <bsd/porting/netport.h>
