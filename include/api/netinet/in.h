@@ -122,24 +122,6 @@ uint16_t ntohs(uint16_t);
 #define IN6_ARE_ADDR_EQUAL(a,b) \
 	__ARE_4_EQUAL((const uint32_t *)(a), (const uint32_t *)(b))
 
-#define	IN_CLASSA(a)		((((in_addr_t)(a)) & 0x80000000) == 0)
-#define	IN_CLASSA_NET		0xff000000
-#define	IN_CLASSA_NSHIFT	24
-#define	IN_CLASSA_HOST		(0xffffffff & ~IN_CLASSA_NET)
-#define	IN_CLASSA_MAX		128
-#define	IN_CLASSB(a)		((((in_addr_t)(a)) & 0xc0000000) == 0x80000000)
-#define	IN_CLASSB_NET		0xffff0000
-#define	IN_CLASSB_NSHIFT	16
-#define	IN_CLASSB_HOST		(0xffffffff & ~IN_CLASSB_NET)
-#define	IN_CLASSB_MAX		65536
-#define	IN_CLASSC(a)		((((in_addr_t)(a)) & 0xe0000000) == 0xc0000000)
-#define	IN_CLASSC_NET		0xffffff00
-#define	IN_CLASSC_NSHIFT	8
-#define	IN_CLASSC_HOST		(0xffffffff & ~IN_CLASSC_NET)
-#define	IN_CLASSD(a)		((((in_addr_t)(a)) & 0xf0000000) == 0xe0000000)
-#define	IN_MULTICAST(a)		IN_CLASSD(a)
-#define	IN_EXPERIMENTAL(a)	((((in_addr_t)(a)) & 0xe0000000) == 0xe0000000)
-#define	IN_BADCLASS(a)		((((in_addr_t)(a)) & 0xf0000000) == 0xf0000000)
 
 #define IN_LOOPBACKNET 127
 
