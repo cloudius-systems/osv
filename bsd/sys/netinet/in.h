@@ -47,9 +47,6 @@
 
 #include <netinet/__in.h>
 
-#define	INADDR_ANY		(u_int32_t)0x00000000
-#define	INADDR_BROADCAST	(u_int32_t)0xffffffff	/* must be masked */
-
 #include <bsd/sys/sys/_sockaddr_storage.h>
 
 /* Socket address, internet style. */
@@ -177,10 +174,6 @@ __END_DECLS
 #define IN_LINKLOCAL(i)		(((u_int32_t)(i) & 0xffff0000) == 0xa9fe0000)
 #define IN_ZERONET(i)		(((u_int32_t)(i) & 0xff000000) == 0)
 #define	IN_LOCAL_GROUP(i)	(((u_int32_t)(i) & 0xffffff00) == 0xe0000000)
-#define	INADDR_LOOPBACK		(u_int32_t)0x7f000001
-#ifndef _KERNEL
-#define	INADDR_NONE		0xffffffff		/* -1 return */
-#endif
 
 #define	INADDR_UNSPEC_GROUP	(u_int32_t)0xe0000000	/* 224.0.0.0 */
 #define	INADDR_ALLHOSTS_GROUP	(u_int32_t)0xe0000001	/* 224.0.0.1 */

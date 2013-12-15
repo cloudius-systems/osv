@@ -52,11 +52,6 @@ struct ipv6_mreq
 	unsigned        ipv6mr_interface;
 };
 
-#define INADDR_ANY        ((in_addr_t) 0x00000000)
-#define INADDR_BROADCAST  ((in_addr_t) 0xffffffff)
-#define INADDR_NONE       ((in_addr_t) 0xffffffff)
-#define INADDR_LOOPBACK   ((in_addr_t) 0x7f000001)
-
 #define IN6ADDR_ANY_INIT      { { { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 } } }
 #define IN6ADDR_LOOPBACK_INIT { { { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1 } } }
 
