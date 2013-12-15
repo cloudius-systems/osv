@@ -7,6 +7,7 @@
 
 #include <execinfo.h>
 
+#if 0
 // Implementation using libunwind.a. This implementation works even with code
 // compiled with omit-frame-pointer.
 #define UNW_LOCAL_ONLY
@@ -27,18 +28,12 @@ int backtrace(void **buffer, int size) {
     }
     return count;
 }
+#endif
 
-#if 0
+#if 1
 // An alternative, slightly more awkward but functioning implementation,
 // using the _Unwind* functions which are used by the GCC runtime and
-// supplied in libgcc_s.so). These also use libunwind.a internally, I believe.
-//
-// Unfortunately, while this implementation works nicely on our own code,
-// it fails miserably when java.so is running. Supposedly it sees some
-// unexpected frame pointers, but rather than let us see them and deal
-// with them in worker(), it fails in _Unwind_Backtrace before calling
-// worker(), I don't know why. So stay tuned for the third implementation,
-// below.
+// supplied in libgcc_s.so or libgcc_eh.a).
 #include <unwind.h>
 struct worker_arg {
     void **buffer;
@@ -71,6 +66,11 @@ int backtrace(void **buffer, int size)
     // is not supposed to include the backtrace() function itself).
     struct worker_arg arg { buffer, size, -1, 0 };
     _Unwind_Backtrace(worker, &arg);
+    // _Unwind_Backtrace seems to put a null pointer as the top-most caller,
+    // which is of no interest to us.
+    if (arg.pos > 0 && buffer[arg.pos-1] == nullptr) {
+        arg.pos--;
+    }
     return arg.pos > 0 ? arg.pos : 0;
 }
 #endif
@@ -81,14 +81,11 @@ int backtrace(void **buffer, int size)
 // of the three implementation, because these builtins awkwardly require
 // constant arguments, so instead of a simple loop, we needed to resort
 // to ugly C-preprocessor hacks. This implementation also requires
-// compilation without -fomit-frame-pointer (currently our "release"
-// build is compiled with it, so use our "debug" build).
-//
+// compilation without -fomit-frame-pointer.
 // The good thing about this implementation is that the gcc builtin
 // interface gives us a chance to ignore suspicious frame addresses before
-// continuing to investigate them - and thus allows us to also backtrace
-// when running Java code - some of it running from the heap and, evidently,
-// contains broken frame information.
+// continuing to investigate them. See backtrace_safe() for a better
+// implementation of this idea, with safe loads that can never crash.
 int backtrace(void **buffer, int size)
 {
     void *fa, *ra;
