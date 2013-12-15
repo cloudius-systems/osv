@@ -14,7 +14,6 @@
 #include <cxxabi.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <libunwind.h>
 #include <link.h>
 #include <stdio.h>
 #include <sys/poll.h>
@@ -62,14 +61,8 @@ typedef unsigned char __guard;
 extern "C" {
     void __cxa_pure_virtual(void);
     void abort(void);
-    void _Unwind_Resume(void);
     void *malloc(size_t size);
     void free(void *);
-    int tdep_get_elf_image(struct elf_image *ei, pid_t pid, unw_word_t ip,
-                           unsigned long *segbase, unsigned long *mapoff,
-                           char *path, size_t pathlen);
-    int _Uelf64_get_proc_name(unw_addr_space_t as, int pid, unw_word_t ip,
-                              char *buf, size_t buf_len, unw_word_t *offp);
     void __stack_chk_fail(void);
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
@@ -139,14 +132,6 @@ int __cxa_finalize(void *dso)
 int getpagesize()
 {
     return 4096;
-}
-
-int
-tdep_get_elf_image (struct elf_image *ei, pid_t pid, unw_word_t ip,
-		    unsigned long *segbase, unsigned long *mapoff,
-		    char *path, size_t pathlen)
-{
-    return 0;
 }
 
 int vfork()

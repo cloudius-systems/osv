@@ -2,7 +2,7 @@
 arch = x64
 img_format ?= qcow2
 local-includes =
-INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/external/libunwind/include -I$(src)/include
+INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/include
 INCLUDES += -isystem $(src)/include/glibc-compat
 gcc-inc-base = $(src)/external/gcc.bin/usr/include/c++/4.8.2
 gcc-inc-base2 = $(src)/external/gcc.bin/usr/lib/gcc/x86_64-redhat-linux/4.8.2/include
@@ -600,8 +600,7 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	    --whole-archive \
 	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
 	      $(boost-libs) \
-	    --no-whole-archive \
-	    $(src)/libunwind.a, \
+	    --no-whole-archive, \
 		LD $@)
 
 dummy-shlib.so: dummy-shlib.o

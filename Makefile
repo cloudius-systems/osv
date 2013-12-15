@@ -40,10 +40,6 @@ clean:
 	$(call only-if, $(mgmt), $(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null, GRADLE CLEAN))
 
 external:
-	cd external/libunwind && autoreconf -i
-	cd external/libunwind && sh config.sh
-	make -C external/libunwind
-	cp external/libunwind/src/.libs/libunwind.a .
 	make -C external/glibc-testsuite
 .PHONY: external
 
