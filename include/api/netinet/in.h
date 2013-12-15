@@ -129,7 +129,6 @@ uint16_t ntohs(uint16_t);
 
 #define IP_DEFAULT_MULTICAST_TTL        1
 #define IP_DEFAULT_MULTICAST_LOOP       1
-#define IP_MAX_MEMBERSHIPS              20
 
 struct ip_opts
 {

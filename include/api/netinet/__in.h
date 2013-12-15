@@ -118,6 +118,8 @@
 #define INADDR_NONE       ((in_addr_t) 0xffffffff)
 #define INADDR_LOOPBACK   ((in_addr_t) 0x7f000001)
 
+#define IP_MAX_MEMBERSHIPS              20
+
 struct ip_mreq {
         struct  in_addr imr_multiaddr;  /* IP multicast address of group */
         struct  in_addr imr_interface;  /* local IP address of interface */

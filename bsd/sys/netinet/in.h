@@ -252,7 +252,6 @@ __END_DECLS
  * according to a power-of-two increment.
  */
 #define	IP_MIN_MEMBERSHIPS	31
-#define	IP_MAX_MEMBERSHIPS	4095
 #define	IP_MAX_SOURCE_FILTER	1024	/* XXX to be unused */
 
 /*
