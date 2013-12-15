@@ -650,9 +650,11 @@ template <class Action>
 inline
 void thread::wake_with(Action action)
 {
-    thread_handle h(handle());
-    action();
-    h.wake();
+    WITH_LOCK(osv::rcu_read_lock) {
+        auto ds = _detached_state.get();
+        action();
+        wake_impl(ds);
+    }
 }
 
 extern cpu __thread* current_cpu;
