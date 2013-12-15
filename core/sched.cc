@@ -569,7 +569,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _attr(attr)
     , _id(0)
     , _cleanup([this] { delete this; })
-    , _joiner()
+    , _joiner(nullptr)
 {
     WITH_LOCK(thread_map_mutex) {
         if (!main) {
@@ -656,26 +656,38 @@ void thread::prepare_wait()
     _detached_state->st.store(status::waiting);
 }
 
-// A thread cannot remove its own stack.  The destroy() method is called
-// from another running thread, to wake the thread's joiner, so its stack
-// can be destroyed.
-//
-// (the dying thread cannot wake the joiner directly, since the joiner and
-//  the thread may be executing in parallel)
+// This function is responsible for changing a thread's state from
+// "terminating" to "terminated", while also waking a thread sleeping on
+// join(), if any.
+// This function cannot be called by the dying thread, because waking its
+// joiner usually triggers deletion of the thread and its stack, and it
+// must not be running at the same time.
+// TODO: rename this function, perhaps to wake_joiner()?
 void thread::destroy()
 {
     // thread can't destroy() itself, because if it decides to wake joiner,
     // it will delete the stack it is currently running on.
     assert(thread::current() != this);
 
-    // FIXME: we have a problem in case of a race between join() and the
-    // thread's completion. Here we can see _joiner==0 and not notify
-    // anyone, but at the same time join() decided to go to sleep (because
-    // status is not yet status::terminated) and we'll never wake it.
-    if (_joiner) {
-        _joiner->wake_with([&] { _detached_state->st.store(status::terminated); });
-    } else {
-        _detached_state->st.store(status::terminated);
+    assert(_detached_state->st.load(std::memory_order_relaxed) == status::terminating);
+    // Solve a race between join() and the thread's completion. If join()
+    // manages to set _joiner first, it will sleep and we need to wake it.
+    // But if we set _joiner first, join() will never wait.
+    sched::thread *joiner = nullptr;
+    WITH_LOCK(rcu_read_lock_in_preempt_disabled) {
+        auto ds = _detached_state.get();
+        // Note we can't set status to "terminated" before the CAS on _joiner:
+        // As soon as we set status to terminated, a concurrent join might
+        // return and delete the thread, and _joiner will become invalid.
+        if (_joiner.compare_exchange_strong(joiner, this)) {
+            // In this case, the concurrent join() may have already noticed it
+            // lost the race, returned, and the thread "this" may have been
+            // deleted. But ds is still valid because of RCU lock.
+            ds->st.store(status::terminated);
+        } else {
+            // The joiner won the race, and will wait. We need to wake it.
+            joiner->wake_with([&] { ds->st.store(status::terminated); });
+        }
     }
 }
 
@@ -815,7 +827,13 @@ void thread::join()
         // To allow destruction of a thread object before start().
         return;
     }
-    _joiner = current();
+    sched::thread *old_joiner = nullptr;
+    if (!_joiner.compare_exchange_strong(old_joiner, current())) {
+        // The thread is concurrently completing and took _joiner in destroy().
+        // At this point we know that destroy() will no longer use 'this', so
+        // it's fine to return and for our caller to delete the thread.
+        return;
+    }
     wait_until([&] { return st.load() == status::terminated; });
 }
 

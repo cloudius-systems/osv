@@ -426,7 +426,7 @@ private:
     friend void ::smp_launch();
     friend void init(std::function<void ()> cont);
 public:
-    thread* _joiner;
+    std::atomic<thread *> _joiner;
     bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
