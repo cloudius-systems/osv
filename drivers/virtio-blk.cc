@@ -81,8 +81,7 @@ virtio_blk_read(struct device *dev, struct uio *uio, int ioflags)
 static int
 virtio_blk_write(struct device *dev, struct uio *uio, int ioflags)
 {
-    struct virtio_blk_priv *prv =
-        reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+    auto* prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
 
     if (prv->drv->is_readonly()) return EROFS;
     if (uio->uio_offset + uio->uio_resid > dev->size)
@@ -177,7 +176,7 @@ bool virtio_blk::read_config()
 
 void virtio_blk::response_worker()
 {
-    vring* queue = get_virt_queue(0);
+    auto* queue = get_virt_queue(0);
     virtio_blk_req* req;
 
     while (1) {
@@ -238,7 +237,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             return EIO;
         }
 
-        vring* queue = get_virt_queue(0);
+        auto* queue = get_virt_queue(0);
         virtio_blk_request_type type;
 
         switch (bio->bio_cmd) {
@@ -260,7 +259,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             return ENOTBLK;
         }
 
-        virtio_blk_req* req = new virtio_blk_req;
+        auto* req = new virtio_blk_req;
         req->bio = bio;
         virtio_blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
@@ -274,7 +273,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         // even if the virtual space is contiguous.
         size_t len = 0;
         auto offset = reinterpret_cast<size_t>(bio->bio_data) & 0xfff;
-        void *base = bio->bio_data;
+        auto *base = bio->bio_data;
         while (len != bio->bio_bcount) {
             auto size = std::min(bio->bio_bcount - len, mmu::page_size);
             if (offset + size > mmu::page_size)
@@ -308,7 +307,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
 
 u32 virtio_blk::get_driver_features(void)
 {
-    u32 base = virtio_driver::get_driver_features();
+    auto base = virtio_driver::get_driver_features();
     return (base | ( 1 << VIRTIO_BLK_F_SIZE_MAX)
                  | ( 1 << VIRTIO_BLK_F_SEG_MAX)
                  | ( 1 << VIRTIO_BLK_F_GEOMETRY)
