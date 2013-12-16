@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "stat.hh"
 #include <osv/device.h>
 #include <osv/bio.h>
 #include <osv/prex.h>
@@ -25,16 +26,9 @@ static void bio_done(struct bio* bio)
     destroy_bio(bio);
 }
 
-template<typename T>
-static float to_seconds(T duration)
-{
-    return std::chrono::duration<float>(duration).count();
-}
-
 int main(int argc, char const *argv[])
 {
     struct device *dev;
-
     if (argc < 2) {
         printf("Usage: %s <dev-name>\n", argv[0]);
         return 1;
@@ -46,16 +40,18 @@ int main(int argc, char const *argv[])
     }
 
     const std::chrono::seconds test_duration(10);
-    const std::chrono::seconds stat_period(1);
     const int buf_size = 4*KB;
 
-    int bytes_written = 0;
+    std::atomic<int> bytes_written(0);
     int total = 0;
     int offset = 0;
 
     auto test_start = s_clock.now();
-    auto last_stat_dump = test_start;
     auto end_at = test_start + test_duration;
+
+    stat_printer _stat_printer(bytes_written, [] (float bytes_per_second) {
+        printf("%.3f Mb/s\n", (float)bytes_per_second / MB);
+    }, 1000);
 
     while (s_clock.now() < end_at) {
         auto bio = alloc_bio();
@@ -71,18 +67,11 @@ int main(int argc, char const *argv[])
 
         bytes_written += buf_size;
         total += buf_size;
-
-        auto _now = s_clock.now();
-        if (_now > last_stat_dump + stat_period) {
-            auto period = to_seconds(_now - last_stat_dump);
-
-            printf("%.3f Mb/s\n", (float)bytes_written / MB / period);
-
-            last_stat_dump = _now;
-            bytes_written = 0;
-        }
     }
 
-    printf("Wrote %.3f MB in %.2f s\n", (float) total / MB, to_seconds(s_clock.now() - test_start));
+    auto test_end = s_clock.now();
+    _stat_printer.stop();
+
+    printf("Wrote %.3f MB in %.2f s\n", (float) total / MB, to_seconds(test_end - test_start));
     return 0;
 }
