@@ -70,7 +70,7 @@ struct ipq {
  * Structure stored in mbuf in inpcb.ip_options
  * and passed to ip_output when ip options are in use.
  * The actual length of the options (including ipopt_dst)
- * is in m_len.
+ * is in m_hdr.mh_len.
  */
 #define MAX_IPOPTLEN	40
 

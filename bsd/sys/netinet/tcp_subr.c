@@ -499,7 +499,7 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 		if (m == NULL)
 			return;
 		tlen = 0;
-		m->m_data += max_linkhdr;
+		m->m_hdr.mh_data += max_linkhdr;
 #ifdef INET6
 		if (isipv6) {
 			bcopy((caddr_t)ip6, mtod(m, caddr_t),
@@ -520,11 +520,11 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 		 *  reuse the mbuf. 
 		 * XXX MRT We inherrit the FIB, which is lucky.
 		 */
-		m_freem(m->m_next);
-		m->m_next = NULL;
-		m->m_data = (caddr_t)ipgen;
+		m_freem(m->m_hdr.mh_next);
+		m->m_hdr.mh_next = NULL;
+		m->m_hdr.mh_data = (caddr_t)ipgen;
 		m_addr_changed(m);
-		/* m_len is set later */
+		/* m_hdr.mh_len is set later */
 		tlen = 0;
 #define xchg(a,b,type) { type t; t=a; a=b; b=t; }
 #ifdef INET6
@@ -570,9 +570,9 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 			ip->ip_off |= IP_DF;
 	}
 #endif
-	m->m_len = tlen;
-	m->m_pkthdr.len = tlen;
-	m->m_pkthdr.rcvif = NULL;
+	m->m_hdr.mh_len = tlen;
+	m->M_dat.MH.MH_pkthdr.len = tlen;
+	m->M_dat.MH.MH_pkthdr.rcvif = NULL;
 #ifdef MAC
 	if (inp != NULL) {
 		/*
@@ -600,10 +600,10 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 		nth->th_win = htons((u_short)win);
 	nth->th_urp = 0;
 
-	m->m_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
+	m->M_dat.MH.MH_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
 #ifdef INET6
 	if (isipv6) {
-		m->m_pkthdr.csum_flags = CSUM_TCP_IPV6;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP_IPV6;
 		nth->th_sum = in6_cksum_pseudo(ip6,
 		    tlen - sizeof(struct ip6_hdr), IPPROTO_TCP, 0);
 		ip6->ip6_hlim = in6_selecthlim(tp != NULL ? tp->t_inpcb :
@@ -615,7 +615,7 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 #endif
 #ifdef INET
 	{
-		m->m_pkthdr.csum_flags = CSUM_TCP;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP;
 		nth->th_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr,
 		    htons((u_short)(tlen - sizeof(struct ip) + ip->ip_p)));
 	}
@@ -1457,7 +1457,7 @@ tcp6_ctlinput(int cmd, struct bsd_sockaddr *sa, void *d)
 		 */
 
 		/* check if we can safely examine src and dst ports */
-		if (m->m_pkthdr.len < off + sizeof(*thp))
+		if (m->M_dat.MH.MH_pkthdr.len < off + sizeof(*thp))
 			return;
 
 		bzero(&th, sizeof(th));
@@ -1779,7 +1779,7 @@ ipsec_hdrsiz_tcp(struct tcpcb *tp)
 	if ((inp->inp_vflag & INP_IPV6) != 0) {
 		ip6 = mtod(m, struct ip6_hdr *);
 		th = (struct tcphdr *)(ip6 + 1);
-		m->m_pkthdr.len = m->m_len =
+		m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len =
 			sizeof(struct ip6_hdr) + sizeof(struct tcphdr);
 		tcpip_fillheaders(inp, ip6, th);
 		hdrsiz = ipsec_hdrsiz(m, IPSEC_DIR_OUTBOUND, inp);
@@ -1788,7 +1788,7 @@ ipsec_hdrsiz_tcp(struct tcpcb *tp)
 	{
 		ip = mtod(m, struct ip *);
 		th = (struct tcphdr *)(ip + 1);
-		m->m_pkthdr.len = m->m_len = sizeof(struct tcpiphdr);
+		m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = sizeof(struct tcpiphdr);
 		tcpip_fillheaders(inp, ip, th);
 		hdrsiz = ipsec_hdrsiz(m, IPSEC_DIR_OUTBOUND, inp);
 	}

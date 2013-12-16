@@ -146,7 +146,7 @@ looutput(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr *dst,
 	}
 
 	ifp->if_opackets++;
-	ifp->if_obytes += m->m_pkthdr.len;
+	ifp->if_obytes += m->M_dat.MH.MH_pkthdr.len;
 
 	/* BPF writes need to be handled specially. */
 	if (dst->sa_family == AF_UNSPEC) {
@@ -158,10 +158,10 @@ looutput(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr *dst,
 	switch (dst->sa_family) {
 	case AF_INET:
 		if (ifp->if_capenable & IFCAP_RXCSUM) {
-			m->m_pkthdr.csum_data = 0xffff;
-			m->m_pkthdr.csum_flags = LO_CSUM_SET;
+			m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
+			m->M_dat.MH.MH_pkthdr.csum_flags = LO_CSUM_SET;
 		}
-		m->m_pkthdr.csum_flags &= ~LO_CSUM_FEATURES;
+		m->M_dat.MH.MH_pkthdr.csum_flags &= ~LO_CSUM_FEATURES;
 		break;
 	case AF_INET6:
 #if 0
@@ -171,14 +171,14 @@ looutput(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr *dst,
 		 * a proper solution ought to be sought later.
 		 */
 		if (ifp->if_capenable & IFCAP_RXCSUM_IPV6) {
-			m->m_pkthdr.csum_data = 0xffff;
-			m->m_pkthdr.csum_flags = LO_CSUM_SET;
+			m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
+			m->M_dat.MH.MH_pkthdr.csum_flags = LO_CSUM_SET;
 		}
 #else
-		m->m_pkthdr.csum_data = 0xffff;
-		m->m_pkthdr.csum_flags = LO_CSUM_SET;
+		m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
+		m->M_dat.MH.MH_pkthdr.csum_flags = LO_CSUM_SET;
 #endif
-		m->m_pkthdr.csum_flags &= ~LO_CSUM_FEATURES6;
+		m->M_dat.MH.MH_pkthdr.csum_flags &= ~LO_CSUM_FEATURES6;
 		break;
 	default:
 		printf("looutput: af=%d unexpected\n", dst->sa_family);
@@ -206,7 +206,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 
 	M_ASSERTPKTHDR(m);
 	m_tag_delete_nonpersistent(m);
-	m->m_pkthdr.rcvif = ifp;
+	m->M_dat.MH.MH_pkthdr.rcvif = ifp;
 
 #if 0
 	/*
@@ -225,7 +225,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 		}
 	} else {
 		if (bpf_peers_present(V_loif->if_bpf)) {
-			if ((m->m_flags & M_MCAST) == 0 || V_loif == ifp) {
+			if ((m->m_hdr.mh_flags & M_MCAST) == 0 || V_loif == ifp) {
 				/* XXX beware sizeof(af) != 4 */
 				u_int32_t af1 = af;
 
@@ -248,11 +248,11 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 		 */
 		if (mtod(m, vm_offset_t) & 3) {
 			KASSERT(hlen >= 3, ("if_simloop: hlen too small"));
-			bcopy(m->m_data,
+			bcopy(m->m_hdr.mh_data,
 			    (char *)(mtod(m, vm_offset_t)
 				- (mtod(m, vm_offset_t) & 3)),
-			    m->m_len);
-			m->m_data -= (mtod(m,vm_offset_t) & 3);
+			    m->m_hdr.mh_len);
+			m->m_hdr.mh_data -= (mtod(m,vm_offset_t) & 3);
 		}
 #endif
 	}
@@ -266,7 +266,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 #endif
 #ifdef INET6
 	case AF_INET6:
-		m->m_flags |= M_LOOP;
+		m->m_hdr.mh_flags |= M_LOOP;
 		isr = NETISR_IPV6;
 		break;
 #endif
@@ -286,7 +286,7 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 		return (EAFNOSUPPORT);
 	}
 	ifp->if_ipackets++;
-	ifp->if_ibytes += m->m_pkthdr.len;
+	ifp->if_ibytes += m->M_dat.MH.MH_pkthdr.len;
 	netisr_queue(isr, m);	/* mbuf is free'd on failure. */
 	return (0);
 }

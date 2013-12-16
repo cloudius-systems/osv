@@ -391,22 +391,22 @@ mb_ctor_mbuf(void *mem, int size, void *arg, int how)
 	if (type == MT_NOINIT)
 		return (0);
 
-	m->m_next = NULL;
-	m->m_nextpkt = NULL;
-	m->m_len = 0;
-	m->m_flags = flags;
-	m->m_type = type;
+	m->m_hdr.mh_next = NULL;
+	m->m_hdr.mh_nextpkt = NULL;
+	m->m_hdr.mh_len = 0;
+	m->m_hdr.mh_flags = flags;
+	m->m_hdr.mh_type = type;
 	if (flags & M_PKTHDR) {
-		m->m_data = m->m_pktdat;
-		m->m_pkthdr.rcvif = NULL;
-		m->m_pkthdr.header = NULL;
-		m->m_pkthdr.len = 0;
-		m->m_pkthdr.csum_flags = 0;
-		m->m_pkthdr.csum_data = 0;
-		m->m_pkthdr.tso_segsz = 0;
-		m->m_pkthdr.ether_vtag = 0;
-		m->m_pkthdr.flowid = 0;
-		SLIST_INIT(&m->m_pkthdr.tags);
+		m->m_hdr.mh_data = m->M_dat.MH.MH_dat.MH_databuf;
+		m->M_dat.MH.MH_pkthdr.rcvif = NULL;
+		m->M_dat.MH.MH_pkthdr.header = NULL;
+		m->M_dat.MH.MH_pkthdr.len = 0;
+		m->M_dat.MH.MH_pkthdr.csum_flags = 0;
+		m->M_dat.MH.MH_pkthdr.csum_data = 0;
+		m->M_dat.MH.MH_pkthdr.tso_segsz = 0;
+		m->M_dat.MH.MH_pkthdr.ether_vtag = 0;
+		m->M_dat.MH.MH_pkthdr.flowid = 0;
+		SLIST_INIT(&m->M_dat.MH.MH_pkthdr.tags);
 #ifdef MAC
 		/* If the label init fails, fail the alloc */
 		error = mac_mbuf_init(m, how);
@@ -414,7 +414,7 @@ mb_ctor_mbuf(void *mem, int size, void *arg, int how)
 			return (error);
 #endif
 	} else
-		m->m_data = m->m_dat;
+		m->m_hdr.mh_data = m->M_dat.M_databuf;
 	return (0);
 }
 
@@ -430,10 +430,10 @@ mb_dtor_mbuf(void *mem, int size, void *arg)
 	m = (struct mbuf *)mem;
 	flags = (unsigned long)arg;
 
-	if ((flags & MB_NOTAGS) == 0 && (m->m_flags & M_PKTHDR) != 0)
+	if ((flags & MB_NOTAGS) == 0 && (m->m_hdr.mh_flags & M_PKTHDR) != 0)
 		m_tag_delete_chain(m, NULL);
-	KASSERT((m->m_flags & M_EXT) == 0, ("%s: M_EXT set", __func__));
-	KASSERT((m->m_flags & M_NOFREE) == 0, ("%s: M_NOFREE set", __func__));
+	KASSERT((m->m_hdr.mh_flags & M_EXT) == 0, ("%s: M_EXT set", __func__));
+	KASSERT((m->m_hdr.mh_flags & M_NOFREE) == 0, ("%s: M_NOFREE set", __func__));
 #ifdef INVARIANTS
 	trash_dtor(mem, size, arg);
 #endif
@@ -448,20 +448,20 @@ mb_dtor_pack(void *mem, int size, void *arg)
 	struct mbuf *m;
 
 	m = (struct mbuf *)mem;
-	if ((m->m_flags & M_PKTHDR) != 0)
+	if ((m->m_hdr.mh_flags & M_PKTHDR) != 0)
 		m_tag_delete_chain(m, NULL);
 
 	/* Make sure we've got a clean cluster back. */
-	KASSERT((m->m_flags & M_EXT) == M_EXT, ("%s: M_EXT not set", __func__));
-	KASSERT(m->m_ext.ext_buf != NULL, ("%s: ext_buf == NULL", __func__));
-	KASSERT(m->m_ext.ext_free == NULL, ("%s: ext_free != NULL", __func__));
-	KASSERT(m->m_ext.ext_arg1 == NULL, ("%s: ext_arg1 != NULL", __func__));
-	KASSERT(m->m_ext.ext_arg2 == NULL, ("%s: ext_arg2 != NULL", __func__));
-	KASSERT(m->m_ext.ext_size == MCLBYTES, ("%s: ext_size != MCLBYTES", __func__));
-	KASSERT(m->m_ext.ext_type == EXT_PACKET, ("%s: ext_type != EXT_PACKET", __func__));
-	KASSERT(*m->m_ext.ref_cnt == 1, ("%s: ref_cnt != 1", __func__));
+	KASSERT((m->m_hdr.mh_flags & M_EXT) == M_EXT, ("%s: M_EXT not set", __func__));
+	KASSERT(m->M_dat.MH.MH_dat.MH_ext.ext_buf != NULL, ("%s: ext_buf == NULL", __func__));
+	KASSERT(m->M_dat.MH.MH_dat.MH_ext.ext_free == NULL, ("%s: ext_free != NULL", __func__));
+	KASSERT(m->M_dat.MH.MH_dat.MH_ext.ext_arg1 == NULL, ("%s: ext_arg1 != NULL", __func__));
+	KASSERT(m->M_dat.MH.MH_dat.MH_ext.ext_arg2 == NULL, ("%s: ext_arg2 != NULL", __func__));
+	KASSERT(m->M_dat.MH.MH_dat.MH_ext.ext_size == MCLBYTES, ("%s: ext_size != MCLBYTES", __func__));
+	KASSERT(m->M_dat.MH.MH_dat.MH_ext.ext_type == EXT_PACKET, ("%s: ext_type != EXT_PACKET", __func__));
+	KASSERT(*m->M_dat.MH.MH_dat.MH_ext.ref_cnt == 1, ("%s: ref_cnt != 1", __func__));
 #ifdef INVARIANTS
-	trash_dtor(m->m_ext.ext_buf, MCLBYTES, arg);
+	trash_dtor(m->M_dat.MH.MH_dat.MH_ext.ext_buf, MCLBYTES, arg);
 #endif
 	/*
 	 * If there are processes blocked on zone_clust, waiting for pages
@@ -516,15 +516,15 @@ mb_ctor_clust(void *mem, int size, void *arg, int how)
 	refcnt = uma_find_refcnt(zone, mem);
 	*refcnt = 1;
 	if (m != NULL) {
-		m->m_ext.ext_buf = (caddr_t)mem;
-		m->m_data = m->m_ext.ext_buf;
-		m->m_flags |= M_EXT;
-		m->m_ext.ext_free = NULL;
-		m->m_ext.ext_arg1 = NULL;
-		m->m_ext.ext_arg2 = NULL;
-		m->m_ext.ext_size = size;
-		m->m_ext.ext_type = type;
-		m->m_ext.ref_cnt = refcnt;
+		m->M_dat.MH.MH_dat.MH_ext.ext_buf = (caddr_t)mem;
+		m->m_hdr.mh_data = m->M_dat.MH.MH_dat.MH_ext.ext_buf;
+		m->m_hdr.mh_flags |= M_EXT;
+		m->M_dat.MH.MH_dat.MH_ext.ext_free = NULL;
+		m->M_dat.MH.MH_dat.MH_ext.ext_arg1 = NULL;
+		m->M_dat.MH.MH_dat.MH_ext.ext_arg2 = NULL;
+		m->M_dat.MH.MH_dat.MH_ext.ext_size = size;
+		m->M_dat.MH.MH_dat.MH_ext.ext_type = type;
+		m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
 	}
 
 	return (0);
@@ -568,11 +568,11 @@ mb_zinit_pack(void *mem, int size, int how)
 
 	m = (struct mbuf *)mem;		/* m is virgin. */
 	if (uma_zalloc_arg(zone_clust, m, how) == NULL ||
-	    m->m_ext.ext_buf == NULL)
+	    m->M_dat.MH.MH_dat.MH_ext.ext_buf == NULL)
 		return (ENOMEM);
-	m->m_ext.ext_type = EXT_PACKET;	/* Override. */
+	m->M_dat.MH.MH_dat.MH_ext.ext_type = EXT_PACKET;	/* Override. */
 #ifdef INVARIANTS
-	trash_init(m->m_ext.ext_buf, MCLBYTES, how);
+	trash_init(m->M_dat.MH.MH_dat.MH_ext.ext_buf, MCLBYTES, how);
 #endif
 	return (0);
 }
@@ -588,9 +588,9 @@ mb_zfini_pack(void *mem, int size)
 
 	m = (struct mbuf *)mem;
 #ifdef INVARIANTS
-	trash_fini(m->m_ext.ext_buf, MCLBYTES);
+	trash_fini(m->M_dat.MH.MH_dat.MH_ext.ext_buf, MCLBYTES);
 #endif
-	uma_zfree_arg(zone_clust, m->m_ext.ext_buf, NULL);
+	uma_zfree_arg(zone_clust, m->M_dat.MH.MH_dat.MH_ext.ext_buf, NULL);
 #ifdef INVARIANTS
 	trash_dtor(mem, size, NULL);
 #endif
@@ -616,25 +616,25 @@ mb_ctor_pack(void *mem, int size, void *arg, int how)
 	type = args->type;
 
 #ifdef INVARIANTS
-	trash_ctor(m->m_ext.ext_buf, MCLBYTES, arg, how);
+	trash_ctor(m->M_dat.MH.MH_dat.MH_ext.ext_buf, MCLBYTES, arg, how);
 #endif
-	m->m_next = NULL;
-	m->m_nextpkt = NULL;
-	m->m_data = m->m_ext.ext_buf;
-	m->m_len = 0;
-	m->m_flags = (flags | M_EXT);
-	m->m_type = type;
+	m->m_hdr.mh_next = NULL;
+	m->m_hdr.mh_nextpkt = NULL;
+	m->m_hdr.mh_data = m->M_dat.MH.MH_dat.MH_ext.ext_buf;
+	m->m_hdr.mh_len = 0;
+	m->m_hdr.mh_flags = (flags | M_EXT);
+	m->m_hdr.mh_type = type;
 
 	if (flags & M_PKTHDR) {
-		m->m_pkthdr.rcvif = NULL;
-		m->m_pkthdr.len = 0;
-		m->m_pkthdr.header = NULL;
-		m->m_pkthdr.csum_flags = 0;
-		m->m_pkthdr.csum_data = 0;
-		m->m_pkthdr.tso_segsz = 0;
-		m->m_pkthdr.ether_vtag = 0;
-		m->m_pkthdr.flowid = 0;
-		SLIST_INIT(&m->m_pkthdr.tags);
+		m->M_dat.MH.MH_pkthdr.rcvif = NULL;
+		m->M_dat.MH.MH_pkthdr.len = 0;
+		m->M_dat.MH.MH_pkthdr.header = NULL;
+		m->M_dat.MH.MH_pkthdr.csum_flags = 0;
+		m->M_dat.MH.MH_pkthdr.csum_data = 0;
+		m->M_dat.MH.MH_pkthdr.tso_segsz = 0;
+		m->M_dat.MH.MH_pkthdr.ether_vtag = 0;
+		m->M_dat.MH.MH_pkthdr.flowid = 0;
+		SLIST_INIT(&m->M_dat.MH.MH_pkthdr.tags);
 #ifdef MAC
 		/* If the label init fails, fail the alloc */
 		error = mac_mbuf_init(m, how);
@@ -642,7 +642,7 @@ mb_ctor_pack(void *mem, int size, void *arg, int how)
 			return (error);
 #endif
 	}
-	/* m_ext is already initialized. */
+	/* M_dat.MH.MH_dat.MH_ext is already initialized. */
 
 	return (0);
 }
@@ -653,16 +653,16 @@ m_pkthdr_init(struct mbuf *m, int how)
 #ifdef MAC
 	int error;
 #endif
-	m->m_data = m->m_pktdat;
-	SLIST_INIT(&m->m_pkthdr.tags);
-	m->m_pkthdr.rcvif = NULL;
-	m->m_pkthdr.header = NULL;
-	m->m_pkthdr.len = 0;
-	m->m_pkthdr.flowid = 0;
-	m->m_pkthdr.csum_flags = 0;
-	m->m_pkthdr.csum_data = 0;
-	m->m_pkthdr.tso_segsz = 0;
-	m->m_pkthdr.ether_vtag = 0;
+	m->m_hdr.mh_data = m->M_dat.MH.MH_dat.MH_databuf;
+	SLIST_INIT(&m->M_dat.MH.MH_pkthdr.tags);
+	m->M_dat.MH.MH_pkthdr.rcvif = NULL;
+	m->M_dat.MH.MH_pkthdr.header = NULL;
+	m->M_dat.MH.MH_pkthdr.len = 0;
+	m->M_dat.MH.MH_pkthdr.flowid = 0;
+	m->M_dat.MH.MH_pkthdr.csum_flags = 0;
+	m->M_dat.MH.MH_pkthdr.csum_data = 0;
+	m->M_dat.MH.MH_pkthdr.tso_segsz = 0;
+	m->M_dat.MH.MH_pkthdr.ether_vtag = 0;
 #ifdef MAC
 	/* If the label init fails, fail the alloc */
 	error = mac_mbuf_init(m, how);

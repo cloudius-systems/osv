@@ -220,8 +220,8 @@ sowakeup(struct socket *so, struct sockbuf *sb)
  * implemented.
  *
  * Data stored in a socket buffer is maintained as a list of records.  Each
- * record is a list of mbufs chained together with the m_next field.  Records
- * are chained together with the m_nextpkt field. The upper level routine
+ * record is a list of mbufs chained together with the m_hdr.mh_next field.  Records
+ * are chained together with the m_hdr.mh_nextpkt field. The upper level routine
  * soreceive() expects the following conventions to be observed when placing
  * information in the receive buffer:
  *
@@ -394,14 +394,14 @@ sblastrecordchk(struct sockbuf *sb, const char *file, int line)
 
 	SOCKBUF_LOCK_ASSERT(sb);
 
-	while (m && m->m_nextpkt)
-		m = m->m_nextpkt;
+	while (m && m->m_hdr.mh_nextpkt)
+		m = m->m_hdr.mh_nextpkt;
 
 	if (m != sb->sb_lastrecord) {
 		printf("%s: sb_mb %p sb_lastrecord %p last %p\n",
 			__func__, sb->sb_mb, sb->sb_lastrecord, m);
 		printf("packet chain:\n");
-		for (m = sb->sb_mb; m != NULL; m = m->m_nextpkt)
+		for (m = sb->sb_mb; m != NULL; m = m->m_hdr.mh_nextpkt)
 			printf("\t%p\n", m);
 		panic("%s from %s:%u", __func__, file, line);
 	}
@@ -415,19 +415,19 @@ sblastmbufchk(struct sockbuf *sb, const char *file, int line)
 
 	SOCKBUF_LOCK_ASSERT(sb);
 
-	while (m && m->m_nextpkt)
-		m = m->m_nextpkt;
+	while (m && m->m_hdr.mh_nextpkt)
+		m = m->m_hdr.mh_nextpkt;
 
-	while (m && m->m_next)
-		m = m->m_next;
+	while (m && m->m_hdr.mh_next)
+		m = m->m_hdr.mh_next;
 
 	if (m != sb->sb_mbtail) {
 		printf("%s: sb_mb %p sb_mbtail %p last %p\n",
 			__func__, sb->sb_mb, sb->sb_mbtail, m);
 		printf("packet tree:\n");
-		for (m = sb->sb_mb; m != NULL; m = m->m_nextpkt) {
+		for (m = sb->sb_mb; m != NULL; m = m->m_hdr.mh_nextpkt) {
 			printf("\t");
-			for (n = m; n != NULL; n = n->m_next)
+			for (n = m; n != NULL; n = n->m_hdr.mh_next)
 				printf("%p ", n);
 			printf("\n");
 		}
@@ -439,7 +439,7 @@ sblastmbufchk(struct sockbuf *sb, const char *file, int line)
 #define SBLINKRECORD(sb, m0) do {					\
 	SOCKBUF_LOCK_ASSERT(sb);					\
 	if ((sb)->sb_lastrecord != NULL)				\
-		(sb)->sb_lastrecord->m_nextpkt = (m0);			\
+		(sb)->sb_lastrecord->m_hdr.mh_nextpkt = (m0);			\
 	else								\
 		(sb)->sb_mb = (m0);					\
 	(sb)->sb_lastrecord = (m0);					\
@@ -463,14 +463,14 @@ sbappend_locked(struct sockbuf *sb, struct mbuf *m)
 	SBLASTRECORDCHK(sb);
 	n = sb->sb_mb;
 	if (n) {
-		while (n->m_nextpkt)
-			n = n->m_nextpkt;
+		while (n->m_hdr.mh_nextpkt)
+			n = n->m_hdr.mh_nextpkt;
 		do {
-			if (n->m_flags & M_EOR) {
+			if (n->m_hdr.mh_flags & M_EOR) {
 				sbappendrecord_locked(sb, m); /* XXXXXX!!!! */
 				return;
 			}
-		} while (n->m_next && (n = n->m_next));
+		} while (n->m_hdr.mh_next && (n = n->m_hdr.mh_next));
 	} else {
 		/*
 		 * XXX Would like to simply use sb_mbtail here, but
@@ -479,11 +479,11 @@ sbappend_locked(struct sockbuf *sb, struct mbuf *m)
 		 */
 		if ((n = sb->sb_lastrecord) != NULL) {
 			do {
-				if (n->m_flags & M_EOR) {
+				if (n->m_hdr.mh_flags & M_EOR) {
 					sbappendrecord_locked(sb, m); /* XXXXXX!!!! */
 					return;
 				}
-			} while (n->m_next && (n = n->m_next));
+			} while (n->m_hdr.mh_next && (n = n->m_hdr.mh_next));
 		} else {
 			/*
 			 * If this is the first record in the socket buffer,
@@ -520,7 +520,7 @@ sbappendstream_locked(struct sockbuf *sb, struct mbuf *m)
 {
 	SOCKBUF_LOCK_ASSERT(sb);
 
-	KASSERT(m->m_nextpkt == NULL,("sbappendstream 0"));
+	KASSERT(m->m_hdr.mh_nextpkt == NULL,("sbappendstream 0"));
 	KASSERT(sb->sb_mb == sb->sb_lastrecord,("sbappendstream 1"));
 
 	SBLASTMBUFCHK(sb);
@@ -556,12 +556,12 @@ sbcheck(struct sockbuf *sb)
 	SOCKBUF_LOCK_ASSERT(sb);
 
 	for (m = sb->sb_mb; m; m = n) {
-	    n = m->m_nextpkt;
-	    for (; m; m = m->m_next) {
-		len += m->m_len;
+	    n = m->m_hdr.mh_nextpkt;
+	    for (; m; m = m->m_hdr.mh_next) {
+		len += m->m_hdr.mh_len;
 		mbcnt += MSIZE;
-		if (m->m_flags & M_EXT) /*XXX*/ /* pretty sure this is bogus */
-			mbcnt += m->m_ext.ext_size;
+		if (m->m_hdr.mh_flags & M_EXT) /*XXX*/ /* pretty sure this is bogus */
+			mbcnt += m->M_dat.MH.MH_dat.MH_ext.ext_size;
 	    }
 	}
 	if (len != sb->sb_cc || mbcnt != sb->sb_mbcnt) {
@@ -592,11 +592,11 @@ sbappendrecord_locked(struct sockbuf *sb, struct mbuf *m0)
 	SBLASTRECORDCHK(sb);
 	SBLINKRECORD(sb, m0);
 	sb->sb_mbtail = m0;
-	m = m0->m_next;
-	m0->m_next = 0;
-	if (m && (m0->m_flags & M_EOR)) {
-		m0->m_flags &= ~M_EOR;
-		m->m_flags |= M_EOR;
+	m = m0->m_hdr.mh_next;
+	m0->m_hdr.mh_next = 0;
+	if (m && (m0->m_hdr.mh_flags & M_EOR)) {
+		m0->m_hdr.mh_flags &= ~M_EOR;
+		m->m_hdr.mh_flags |= M_EOR;
 	}
 	/* always call sbcompress() so it can do SBLASTMBUFCHK() */
 	sbcompress(sb, m, m0);
@@ -629,10 +629,10 @@ sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
 
 	SOCKBUF_LOCK_ASSERT(sb);
 
-	if (m0 && (m0->m_flags & M_PKTHDR) == 0)
+	if (m0 && (m0->m_hdr.mh_flags & M_PKTHDR) == 0)
 		panic("sbappendaddr_locked");
 	if (m0)
-		space += m0->m_pkthdr.len;
+		space += m0->M_dat.MH.MH_pkthdr.len;
 	space += m_length(control, &n);
 
 	if (space > sbspace(sb))
@@ -644,14 +644,14 @@ sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
 	MGET(m, M_DONTWAIT, MT_SONAME);
 	if (m == 0)
 		return (0);
-	m->m_len = asa->sa_len;
+	m->m_hdr.mh_len = asa->sa_len;
 	bcopy(asa, mtod(m, caddr_t), asa->sa_len);
 	if (n)
-		n->m_next = m0;		/* concatenate data to control */
+		n->m_hdr.mh_next = m0;		/* concatenate data to control */
 	else
 		control = m0;
-	m->m_next = control;
-	for (n = m; n->m_next != NULL; n = n->m_next)
+	m->m_hdr.mh_next = control;
+	for (n = m; n->m_hdr.mh_next != NULL; n = n->m_hdr.mh_next)
 		sballoc(sb, n);
 	sballoc(sb, n);
 	nlast = n;
@@ -697,11 +697,11 @@ sbappendcontrol_locked(struct sockbuf *sb, struct mbuf *m0,
 
 	if (space > sbspace(sb))
 		return (0);
-	n->m_next = m0;			/* concatenate data to control */
+	n->m_hdr.mh_next = m0;			/* concatenate data to control */
 
 	SBLASTRECORDCHK(sb);
 
-	for (m = control; m->m_next; m = m->m_next)
+	for (m = control; m->m_hdr.mh_next; m = m->m_hdr.mh_next)
 		sballoc(sb, m);
 	sballoc(sb, m);
 	mlast = m;
@@ -754,46 +754,46 @@ sbcompress(struct sockbuf *sb, struct mbuf *m, struct mbuf *n)
 	SOCKBUF_LOCK_ASSERT(sb);
 
 	while (m) {
-		eor |= m->m_flags & M_EOR;
-		if (m->m_len == 0 &&
+		eor |= m->m_hdr.mh_flags & M_EOR;
+		if (m->m_hdr.mh_len == 0 &&
 		    (eor == 0 ||
-		     (((o = m->m_next) || (o = n)) &&
-		      o->m_type == m->m_type))) {
+		     (((o = m->m_hdr.mh_next) || (o = n)) &&
+		      o->m_hdr.mh_type == m->m_hdr.mh_type))) {
 			if (sb->sb_lastrecord == m)
-				sb->sb_lastrecord = m->m_next;
+				sb->sb_lastrecord = m->m_hdr.mh_next;
 			m = m_free(m);
 			continue;
 		}
-		if (n && (n->m_flags & M_EOR) == 0 &&
+		if (n && (n->m_hdr.mh_flags & M_EOR) == 0 &&
 		    M_WRITABLE(n) &&
 		    ((sb->sb_flags & SB_NOCOALESCE) == 0) &&
-		    m->m_len <= MCLBYTES / 4 && /* XXX: Don't copy too much */
-		    m->m_len <= M_TRAILINGSPACE(n) &&
-		    n->m_type == m->m_type) {
-			bcopy(mtod(m, caddr_t), mtod(n, caddr_t) + n->m_len,
-			    (unsigned)m->m_len);
-			n->m_len += m->m_len;
-			sb->sb_cc += m->m_len;
-			if (m->m_type != MT_DATA && m->m_type != MT_OOBDATA)
+		    m->m_hdr.mh_len <= MCLBYTES / 4 && /* XXX: Don't copy too much */
+		    m->m_hdr.mh_len <= M_TRAILINGSPACE(n) &&
+		    n->m_hdr.mh_type == m->m_hdr.mh_type) {
+			bcopy(mtod(m, caddr_t), mtod(n, caddr_t) + n->m_hdr.mh_len,
+			    (unsigned)m->m_hdr.mh_len);
+			n->m_hdr.mh_len += m->m_hdr.mh_len;
+			sb->sb_cc += m->m_hdr.mh_len;
+			if (m->m_hdr.mh_type != MT_DATA && m->m_hdr.mh_type != MT_OOBDATA)
 				/* XXX: Probably don't need.*/
-				sb->sb_ctl += m->m_len;
+				sb->sb_ctl += m->m_hdr.mh_len;
 			m = m_free(m);
 			continue;
 		}
 		if (n)
-			n->m_next = m;
+			n->m_hdr.mh_next = m;
 		else
 			sb->sb_mb = m;
 		sb->sb_mbtail = m;
 		sballoc(sb, m);
 		n = m;
-		m->m_flags &= ~M_EOR;
-		m = m->m_next;
-		n->m_next = 0;
+		m->m_hdr.mh_flags &= ~M_EOR;
+		m = m->m_hdr.mh_next;
+		n->m_hdr.mh_next = 0;
 	}
 	if (eor) {
 		KASSERT(n != NULL, ("sbcompress: eor && n == NULL"));
-		n->m_flags |= eor;
+		n->m_hdr.mh_flags |= eor;
 	}
 	SBLASTMBUFCHK(sb);
 }
@@ -810,7 +810,7 @@ sbflush_internal(struct sockbuf *sb)
 		 * Don't call sbdrop(sb, 0) if the leading mbuf is non-empty:
 		 * we would loop forever. Panic instead.
 		 */
-		if (!sb->sb_cc && (sb->sb_mb == NULL || sb->sb_mb->m_len))
+		if (!sb->sb_cc && (sb->sb_mb == NULL || sb->sb_mb->m_hdr.mh_len))
 			break;
 		sbdrop_internal(sb, (int)sb->sb_cc);
 	}
@@ -845,36 +845,36 @@ sbdrop_internal(struct sockbuf *sb, int len)
 	struct mbuf *m;
 	struct mbuf *next;
 
-	next = (m = sb->sb_mb) ? m->m_nextpkt : 0;
+	next = (m = sb->sb_mb) ? m->m_hdr.mh_nextpkt : 0;
 	while (len > 0) {
 		if (m == 0) {
 			if (next == 0)
 				panic("sbdrop");
 			m = next;
-			next = m->m_nextpkt;
+			next = m->m_hdr.mh_nextpkt;
 			continue;
 		}
-		if (m->m_len > len) {
-			m->m_len -= len;
-			m->m_data += len;
+		if (m->m_hdr.mh_len > len) {
+			m->m_hdr.mh_len -= len;
+			m->m_hdr.mh_data += len;
 			sb->sb_cc -= len;
 			if (sb->sb_sndptroff != 0)
 				sb->sb_sndptroff -= len;
-			if (m->m_type != MT_DATA && m->m_type != MT_OOBDATA)
+			if (m->m_hdr.mh_type != MT_DATA && m->m_hdr.mh_type != MT_OOBDATA)
 				sb->sb_ctl -= len;
 			break;
 		}
-		len -= m->m_len;
+		len -= m->m_hdr.mh_len;
 		sbfree(sb, m);
 		m = m_free(m);
 	}
-	while (m && m->m_len == 0) {
+	while (m && m->m_hdr.mh_len == 0) {
 		sbfree(sb, m);
 		m = m_free(m);
 	}
 	if (m) {
 		sb->sb_mb = m;
-		m->m_nextpkt = next;
+		m->m_hdr.mh_nextpkt = next;
 	} else
 		sb->sb_mb = next;
 	/*
@@ -885,7 +885,7 @@ sbdrop_internal(struct sockbuf *sb, int len)
 	if (m == NULL) {
 		sb->sb_mbtail = NULL;
 		sb->sb_lastrecord = NULL;
-	} else if (m->m_nextpkt == NULL) {
+	} else if (m->m_hdr.mh_nextpkt == NULL) {
 		sb->sb_lastrecord = m;
 	}
 }
@@ -939,10 +939,10 @@ sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff)
 
 	/* Advance by len to be as close as possible for the next transmit. */
 	for (off = off - sb->sb_sndptroff + len - 1;
-	     off > 0 && m != NULL && off >= m->m_len;
-	     m = m->m_next) {
-		sb->sb_sndptroff += m->m_len;
-		off -= m->m_len;
+	     off > 0 && m != NULL && off >= m->m_hdr.mh_len;
+	     m = m->m_hdr.mh_next) {
+		sb->sb_sndptroff += m->m_hdr.mh_len;
+		off -= m->m_hdr.mh_len;
 	}
 	if (off > 0 && m == NULL)
 		panic("%s: sockbuf %p and mbuf %p clashing", __func__, sb, ret);
@@ -964,7 +964,7 @@ sbdroprecord_locked(struct sockbuf *sb)
 
 	m = sb->sb_mb;
 	if (m) {
-		sb->sb_mb = m->m_nextpkt;
+		sb->sb_mb = m->m_hdr.mh_nextpkt;
 		do {
 			sbfree(sb, m);
 			m = m_free(m);
@@ -1005,12 +1005,12 @@ sbcreatecontrol(caddr_t p, int size, int type, int level)
 	if (m == NULL)
 		return ((struct mbuf *) NULL);
 	cp = mtod(m, struct cmsghdr *);
-	m->m_len = 0;
+	m->m_hdr.mh_len = 0;
 	KASSERT(CMSG_SPACE((u_int)size) <= M_TRAILINGSPACE(m),
 	    ("sbcreatecontrol: short mbuf"));
 	if (p != NULL)
 		(void)memcpy(CMSG_DATA(cp), p, size);
-	m->m_len = CMSG_SPACE(size);
+	m->m_hdr.mh_len = CMSG_SPACE(size);
 	cp->cmsg_len = CMSG_LEN(size);
 	cp->cmsg_level = level;
 	cp->cmsg_type = type;

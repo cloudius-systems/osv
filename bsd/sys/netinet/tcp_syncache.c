@@ -1309,10 +1309,10 @@ static int syncache_respond(struct syncache *sc)
 #ifdef MAC
 	mac_syncache_create_mbuf(sc->sc_label, m);
 #endif
-	m->m_data += max_linkhdr;
-	m->m_len = tlen;
-	m->m_pkthdr.len = tlen;
-	m->m_pkthdr.rcvif = NULL;
+	m->m_hdr.mh_data += max_linkhdr;
+	m->m_hdr.mh_len = tlen;
+	m->M_dat.MH.MH_pkthdr.len = tlen;
+	m->M_dat.MH.MH_pkthdr.rcvif = NULL;
 
 #ifdef INET6
 	if (sc->sc_inc.inc_flags & INC_ISIPV6) {
@@ -1402,8 +1402,8 @@ static int syncache_respond(struct syncache *sc)
 
 		/* Adjust headers by option size. */
 		th->th_off = (sizeof(struct tcphdr) + optlen) >> 2;
-		m->m_len += optlen;
-		m->m_pkthdr.len += optlen;
+		m->m_hdr.mh_len += optlen;
+		m->M_dat.MH.MH_pkthdr.len += optlen;
 
 #ifdef TCP_SIGNATURE
 		if (sc->sc_flags & SCF_SIGNATURE)
@@ -1420,10 +1420,10 @@ static int syncache_respond(struct syncache *sc)
 		optlen = 0;
 
 	M_SETFIB(m, sc->sc_inc.inc_fibnum);
-	m->m_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
+	m->M_dat.MH.MH_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
 #ifdef INET6
 	if (sc->sc_inc.inc_flags & INC_ISIPV6) {
-		m->m_pkthdr.csum_flags = CSUM_TCP_IPV6;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP_IPV6;
 		th->th_sum = in6_cksum_pseudo(ip6, tlen + optlen - hlen,
 			IPPROTO_TCP, 0);
 		ip6->ip6_hlim = in6_selecthlim(NULL, NULL);
@@ -1435,7 +1435,7 @@ static int syncache_respond(struct syncache *sc)
 #endif
 #ifdef INET
 	{
-		m->m_pkthdr.csum_flags = CSUM_TCP;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP;
 		th->th_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr,
 			htons(tlen + optlen - hlen + IPPROTO_TCP));
 		error = ip_output(m, sc->sc_ipopts, NULL, 0, NULL, NULL );

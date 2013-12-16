@@ -71,7 +71,7 @@ struct netisr_proto {
  */
 struct netisr_work {
 	/*
-	 * Packet queue, linked by m_nextpkt.
+	 * Packet queue, linked by m_hdr.mh_nextpkt.
 	 */
 	struct mbuf	*nw_head;
 	struct mbuf	*nw_tail;

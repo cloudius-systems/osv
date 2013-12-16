@@ -51,27 +51,27 @@ struct	ether_vlan_header {
 /* Set the VLAN ID in an mbuf packet header non-destructively. */
 #define EVL_APPLY_VLID(m, vlid)						\
 	do {								\
-		if ((m)->m_flags & M_VLANTAG) {				\
-			(m)->m_pkthdr.ether_vtag &= EVL_VLID_MASK;	\
-			(m)->m_pkthdr.ether_vtag |= (vlid);		\
+		if ((m)->m_hdr.mh_flags & M_VLANTAG) {				\
+			(m)->M_dat.MH.MH_pkthdr.ether_vtag &= EVL_VLID_MASK;	\
+			(m)->M_dat.MH.MH_pkthdr.ether_vtag |= (vlid);		\
 		} else {						\
-			(m)->m_pkthdr.ether_vtag = (vlid);		\
-			(m)->m_flags |= M_VLANTAG;			\
+			(m)->M_dat.MH.MH_pkthdr.ether_vtag = (vlid);		\
+			(m)->m_hdr.mh_flags |= M_VLANTAG;			\
 		}							\
 	} while (0)
 
 /* Set the priority ID in an mbuf packet header non-destructively. */
 #define EVL_APPLY_PRI(m, pri)						\
 	do {								\
-		if ((m)->m_flags & M_VLANTAG) {				\
-			uint16_t __vlantag = (m)->m_pkthdr.ether_vtag;	\
-			(m)->m_pkthdr.ether_vtag |= EVL_MAKETAG(	\
+		if ((m)->m_hdr.mh_flags & M_VLANTAG) {				\
+			uint16_t __vlantag = (m)->M_dat.MH.MH_pkthdr.ether_vtag;	\
+			(m)->M_dat.MH.MH_pkthdr.ether_vtag |= EVL_MAKETAG(	\
 			    EVL_VLANOFTAG(__vlantag), (pri),		\
 			    EVL_CFIOFTAG(__vlantag));			\
 		} else {						\
-			(m)->m_pkthdr.ether_vtag =			\
+			(m)->M_dat.MH.MH_pkthdr.ether_vtag =			\
 			    EVL_MAKETAG(0, (pri), 0);			\
-			(m)->m_flags |= M_VLANTAG;			\
+			(m)->m_hdr.mh_flags |= M_VLANTAG;			\
 		}							\
 	} while (0)
 
@@ -108,16 +108,16 @@ struct	vlanreq {
  * received VLAN tag (containing both vlan and priority information)
  * into the ether_vtag mbuf packet header field:
  * 
- *	m->m_pkthdr.ether_vtag = vtag;		// ntohs()?
- *	m->m_flags |= M_VLANTAG;
+ *	m->M_dat.MH.MH_pkthdr.ether_vtag = vtag;		// ntohs()?
+ *	m->m_hdr.mh_flags |= M_VLANTAG;
  *
  * to mark the packet m with the specified VLAN tag.
  *
  * On output the driver should check the mbuf for the M_VLANTAG
  * flag to see if a VLAN tag is present and valid:
  *
- *	if (m->m_flags & M_VLANTAG) {
- *		... = m->m_pkthdr.ether_vtag;	// htons()?
+ *	if (m->m_hdr.mh_flags & M_VLANTAG) {
+ *		... = m->M_dat.MH.MH_pkthdr.ether_vtag;	// htons()?
  *		... pass tag to hardware ...
  *	}
  *

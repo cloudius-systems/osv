@@ -287,17 +287,17 @@ igmp_save_context(struct mbuf *m, struct ifnet *ifp)
 {
 
 #ifdef VIMAGE
-	m->m_pkthdr.header = ifp->if_vnet;
+	m->M_dat.MH.MH_pkthdr.header = ifp->if_vnet;
 #endif /* VIMAGE */
-	m->m_pkthdr.flowid = ifp->if_index;
+	m->M_dat.MH.MH_pkthdr.flowid = ifp->if_index;
 }
 
 static __inline void
 igmp_scrub_context(struct mbuf *m)
 {
 
-	m->m_pkthdr.header = NULL;
-	m->m_pkthdr.flowid = 0;
+	m->M_dat.MH.MH_pkthdr.header = NULL;
+	m->M_dat.MH.MH_pkthdr.flowid = 0;
 }
 
 #ifdef KTR
@@ -324,11 +324,11 @@ igmp_restore_context(struct mbuf *m)
 
 #ifdef notyet
 #if defined(VIMAGE) && defined(INVARIANTS)
-	KASSERT(curvnet == (m->m_pkthdr.header),
+	KASSERT(curvnet == (m->M_dat.MH.MH_pkthdr.header),
 	    ("%s: called when curvnet was not restored", __func__));
 #endif
 #endif
-	return (m->m_pkthdr.flowid);
+	return (m->M_dat.MH.MH_pkthdr.flowid);
 }
 
 #if 0
@@ -485,7 +485,7 @@ igmp_dispatch_queue(struct ifqueue *ifq, int limit, const int loop)
 			break;
 		CTR3(KTR_IGMPV3, "%s: dispatch %p from %p", __func__, ifq, m);
 		if (loop)
-			m->m_flags |= M_IGMP_LOOP;
+			m->m_hdr.mh_flags |= M_IGMP_LOOP;
 		netisr_dispatch(NETISR_IGMP, m);
 		if (--limit == 0)
 			break;
@@ -531,7 +531,7 @@ igmp_ra_alloc(void)
 	p->ipopt_list[1] = 0x04;	/* 4 bytes long */
 	p->ipopt_list[2] = IPOPT_EOL;	/* End of IP option list */
 	p->ipopt_list[3] = 0x00;	/* pad byte */
-	m->m_len = sizeof(p->ipopt_dst) + p->ipopt_list[1];
+	m->m_hdr.mh_len = sizeof(p->ipopt_dst) + p->ipopt_list[1];
 
 	return (m);
 }
@@ -1438,7 +1438,7 @@ igmp_input(struct mbuf *m, int off)
 
 	CTR3(KTR_IGMPV3, "%s: called w/mbuf (%p,%d)", __func__, m, off);
 
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 
 	IGMPSTAT_INC(igps_rcv_total);
 
@@ -1464,7 +1464,7 @@ igmp_input(struct mbuf *m, int off)
 		minlen += IGMP_V3_QUERY_MINLEN;
 	else
 		minlen += IGMP_MINLEN;
-	if ((m->m_flags & M_EXT || m->m_len < minlen) &&
+	if ((m->m_hdr.mh_flags & M_EXT || m->m_hdr.mh_len < minlen) &&
 	    (m = m_pullup(m, minlen)) == 0) {
 		IGMPSTAT_INC(igps_rcv_tooshort);
 		return;
@@ -1474,16 +1474,16 @@ igmp_input(struct mbuf *m, int off)
 	/*
 	 * Validate checksum.
 	 */
-	m->m_data += iphlen;
-	m->m_len -= iphlen;
+	m->m_hdr.mh_data += iphlen;
+	m->m_hdr.mh_len -= iphlen;
 	igmp = mtod(m, struct igmp *);
 	if (in_cksum(m, igmplen)) {
 		IGMPSTAT_INC(igps_rcv_badsum);
 		m_freem(m);
 		return;
 	}
-	m->m_data -= iphlen;
-	m->m_len += iphlen;
+	m->m_hdr.mh_data -= iphlen;
+	m->m_hdr.mh_len += iphlen;
 
 	/*
 	 * IGMP control traffic is link-scope, and must have a TTL of 1.
@@ -1555,8 +1555,8 @@ igmp_input(struct mbuf *m, int off)
 				 */
 				igmpv3len = iphlen + IGMP_V3_QUERY_MINLEN +
 				    srclen;
-				if ((m->m_flags & M_EXT ||
-				     m->m_len < igmpv3len) &&
+				if ((m->m_hdr.mh_flags & M_EXT ||
+				     m->m_hdr.mh_len < igmpv3len) &&
 				    (m = m_pullup(m, igmpv3len)) == NULL) {
 					IGMPSTAT_INC(igps_rcv_tooshort);
 					return;
@@ -2210,10 +2210,10 @@ igmp_v1v2_queue_report(struct in_multi *inm, const int type)
 		return (ENOMEM);
 	MH_ALIGN(m, sizeof(struct ip) + sizeof(struct igmp));
 
-	m->m_pkthdr.len = sizeof(struct ip) + sizeof(struct igmp);
+	m->M_dat.MH.MH_pkthdr.len = sizeof(struct ip) + sizeof(struct igmp);
 
-	m->m_data += sizeof(struct ip);
-	m->m_len = sizeof(struct igmp);
+	m->m_hdr.mh_data += sizeof(struct ip);
+	m->m_hdr.mh_len = sizeof(struct igmp);
 
 	igmp = mtod(m, struct igmp *);
 	igmp->igmp_type = type;
@@ -2222,8 +2222,8 @@ igmp_v1v2_queue_report(struct in_multi *inm, const int type)
 	igmp->igmp_cksum = 0;
 	igmp->igmp_cksum = in_cksum(m, sizeof(struct igmp));
 
-	m->m_data -= sizeof(struct ip);
-	m->m_len += sizeof(struct ip);
+	m->m_hdr.mh_data -= sizeof(struct ip);
+	m->m_hdr.mh_len += sizeof(struct ip);
 
 	ip = mtod(m, struct ip *);
 	ip->ip_tos = 0;
@@ -2239,9 +2239,9 @@ igmp_v1v2_queue_report(struct in_multi *inm, const int type)
 
 	igmp_save_context(m, ifp);
 
-	m->m_flags |= M_IGMPV2;
+	m->m_hdr.mh_flags |= M_IGMPV2;
 	if (inm->inm_igi->igi_flags & IGIF_LOOPBACK)
-		m->m_flags |= M_IGMP_LOOP;
+		m->m_hdr.mh_flags |= M_IGMP_LOOP;
 
 	CTR2(KTR_IGMPV3, "%s: netisr_dispatch(NETISR_IGMP, %p)", __func__, m);
 	netisr_dispatch(NETISR_IGMP, m);
@@ -2766,10 +2766,10 @@ igmp_v3_enqueue_group_record(struct ifqueue *ifq, struct in_multi *inm,
 	m0 = ifq->ifq_tail;
 	if (!is_group_query &&
 	    m0 != NULL &&
-	    (m0->m_pkthdr.PH_vt.vt_nrecs + 1 <= IGMP_V3_REPORT_MAXRECS) &&
-	    (m0->m_pkthdr.len + minrec0len) <
+	    (m0->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs + 1 <= IGMP_V3_REPORT_MAXRECS) &&
+	    (m0->M_dat.MH.MH_pkthdr.len + minrec0len) <
 	     (ifp->if_mtu - IGMP_LEADINGSPACE)) {
-		m0srcs = (ifp->if_mtu - m0->m_pkthdr.len -
+		m0srcs = (ifp->if_mtu - m0->M_dat.MH.MH_pkthdr.len -
 			    sizeof(struct igmp_grouprec)) / sizeof(in_addr_t);
 		m = m0;
 		CTR1(KTR_IGMPV3, "%s: use existing packet", __func__);
@@ -2784,7 +2784,7 @@ igmp_v3_enqueue_group_record(struct ifqueue *ifq, struct in_multi *inm,
 		if (!is_state_change && !is_group_query) {
 			m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
 			if (m)
-				m->m_data += IGMP_LEADINGSPACE;
+				m->m_hdr.mh_data += IGMP_LEADINGSPACE;
 		}
 		if (m == NULL) {
 			m = m_gethdr(M_DONTWAIT, MT_DATA);
@@ -2832,7 +2832,7 @@ igmp_v3_enqueue_group_record(struct ifqueue *ifq, struct in_multi *inm,
 		if (m == m0) {
 			md = m_last(m);
 			pig = (struct igmp_grouprec *)(mtod(md, uint8_t *) +
-			    md->m_len - nbytes);
+			    md->m_hdr.mh_len - nbytes);
 		} else {
 			md = m_getptr(m, 0, &off);
 			pig = (struct igmp_grouprec *)(mtod(md, uint8_t *) +
@@ -2886,10 +2886,10 @@ igmp_v3_enqueue_group_record(struct ifqueue *ifq, struct in_multi *inm,
 	 */
 	if (m != m0) {
 		CTR1(KTR_IGMPV3, "%s: enqueueing first packet", __func__);
-		m->m_pkthdr.PH_vt.vt_nrecs = 1;
+		m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 1;
 		_IF_ENQUEUE(ifq, m);
 	} else
-		m->m_pkthdr.PH_vt.vt_nrecs++;
+		m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs++;
 
 	/*
 	 * No further work needed if no source list in packet(s).
@@ -2909,7 +2909,7 @@ igmp_v3_enqueue_group_record(struct ifqueue *ifq, struct in_multi *inm,
 		}
 		m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
 		if (m)
-			m->m_data += IGMP_LEADINGSPACE;
+			m->m_hdr.mh_data += IGMP_LEADINGSPACE;
 		if (m == NULL) {
 			m = m_gethdr(M_DONTWAIT, MT_DATA);
 			if (m)
@@ -2928,7 +2928,7 @@ igmp_v3_enqueue_group_record(struct ifqueue *ifq, struct in_multi *inm,
 			CTR1(KTR_IGMPV3, "%s: m_append() failed.", __func__);
 			return (-ENOMEM);
 		}
-		m->m_pkthdr.PH_vt.vt_nrecs = 1;
+		m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 1;
 		nbytes += sizeof(struct igmp_grouprec);
 
 		m0srcs = (ifp->if_mtu - IGMP_LEADINGSPACE -
@@ -3052,12 +3052,12 @@ igmp_v3_enqueue_filter_change(struct ifqueue *ifq, struct in_multi *inm)
 		do {
 			m0 = ifq->ifq_tail;
 			if (m0 != NULL &&
-			    (m0->m_pkthdr.PH_vt.vt_nrecs + 1 <=
+			    (m0->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs + 1 <=
 			     IGMP_V3_REPORT_MAXRECS) &&
-			    (m0->m_pkthdr.len + MINRECLEN) <
+			    (m0->M_dat.MH.MH_pkthdr.len + MINRECLEN) <
 			     (ifp->if_mtu - IGMP_LEADINGSPACE)) {
 				m = m0;
-				m0srcs = (ifp->if_mtu - m0->m_pkthdr.len -
+				m0srcs = (ifp->if_mtu - m0->M_dat.MH.MH_pkthdr.len -
 					    sizeof(struct igmp_grouprec)) /
 				    sizeof(in_addr_t);
 				CTR1(KTR_IGMPV3,
@@ -3065,7 +3065,7 @@ igmp_v3_enqueue_filter_change(struct ifqueue *ifq, struct in_multi *inm)
 			} else {
 				m = m_getcl(M_DONTWAIT, MT_DATA, M_PKTHDR);
 				if (m)
-					m->m_data += IGMP_LEADINGSPACE;
+					m->m_hdr.mh_data += IGMP_LEADINGSPACE;
 				if (m == NULL) {
 					m = m_gethdr(M_DONTWAIT, MT_DATA);
 					if (m)
@@ -3076,7 +3076,7 @@ igmp_v3_enqueue_filter_change(struct ifqueue *ifq, struct in_multi *inm)
 					    "%s: m_get*() failed", __func__);
 					return (-ENOMEM);
 				}
-				m->m_pkthdr.PH_vt.vt_nrecs = 0;
+				m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 0;
 				igmp_save_context(m, ifp);
 				m0srcs = (ifp->if_mtu - IGMP_LEADINGSPACE -
 				    sizeof(struct igmp_grouprec)) /
@@ -3112,7 +3112,7 @@ igmp_v3_enqueue_filter_change(struct ifqueue *ifq, struct in_multi *inm)
 				/* current packet; offset from last append */
 				md = m_last(m);
 				pig = (struct igmp_grouprec *)(mtod(md,
-				    uint8_t *) + md->m_len -
+				    uint8_t *) + md->m_hdr.mh_len -
 				    sizeof(struct igmp_grouprec));
 			}
 			/*
@@ -3195,7 +3195,7 @@ igmp_v3_enqueue_filter_change(struct ifqueue *ifq, struct in_multi *inm)
 			 * Count the new group record, and enqueue this
 			 * packet if it wasn't already queued.
 			 */
-			m->m_pkthdr.PH_vt.vt_nrecs++;
+			m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs++;
 			if (m != m0)
 				_IF_ENQUEUE(ifq, m);
 			nbytes += npbytes;
@@ -3257,10 +3257,10 @@ igmp_v3_merge_state_changes(struct in_multi *inm, struct ifqueue *ifscq)
 		if (mt != NULL) {
 			recslen = m_length(m, NULL);
 
-			if ((mt->m_pkthdr.PH_vt.vt_nrecs +
-			    m->m_pkthdr.PH_vt.vt_nrecs <=
+			if ((mt->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs +
+			    m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs <=
 			    IGMP_V3_REPORT_MAXRECS) &&
-			    (mt->m_pkthdr.len + recslen <=
+			    (mt->M_dat.MH.MH_pkthdr.len + recslen <=
 			    (inm->inm_ifp->if_mtu - IGMP_LEADINGSPACE)))
 				domerge = 1;
 		}
@@ -3269,7 +3269,7 @@ igmp_v3_merge_state_changes(struct in_multi *inm, struct ifqueue *ifscq)
 			CTR2(KTR_IGMPV3,
 			    "%s: outbound queue full, skipping whole packet %p",
 			    __func__, m);
-			mt = m->m_nextpkt;
+			mt = m->m_hdr.mh_nextpkt;
 			if (!docopy)
 				m_freem(m);
 			m = mt;
@@ -3279,14 +3279,14 @@ igmp_v3_merge_state_changes(struct in_multi *inm, struct ifqueue *ifscq)
 		if (!docopy) {
 			CTR2(KTR_IGMPV3, "%s: dequeueing %p", __func__, m);
 			_IF_DEQUEUE(gq, m0);
-			m = m0->m_nextpkt;
+			m = m0->m_hdr.mh_nextpkt;
 		} else {
 			CTR2(KTR_IGMPV3, "%s: copying %p", __func__, m);
 			m0 = m_dup(m, M_NOWAIT);
 			if (m0 == NULL)
 				return (ENOMEM);
-			m0->m_nextpkt = NULL;
-			m = m->m_nextpkt;
+			m0->m_hdr.mh_nextpkt = NULL;
+			m = m->m_hdr.mh_nextpkt;
 		}
 
 		if (!domerge) {
@@ -3300,12 +3300,12 @@ igmp_v3_merge_state_changes(struct in_multi *inm, struct ifqueue *ifscq)
 			    __func__, m0, mt);
 
 			mtl = m_last(mt);
-			m0->m_flags &= ~M_PKTHDR;
-			mt->m_pkthdr.len += recslen;
-			mt->m_pkthdr.PH_vt.vt_nrecs +=
-			    m0->m_pkthdr.PH_vt.vt_nrecs;
+			m0->m_hdr.mh_flags &= ~M_PKTHDR;
+			mt->M_dat.MH.MH_pkthdr.len += recslen;
+			mt->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs +=
+			    m0->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs;
 
-			mtl->m_next = m0;
+			mtl->m_hdr.mh_next = m0;
 		}
 	}
 
@@ -3404,7 +3404,7 @@ igmp_intr(struct mbuf *m)
 	 * indexes to guard against interface detach, they are
 	 * unique to each VIMAGE and must be retrieved.
 	 */
-	CURVNET_SET((struct vnet *)(m->m_pkthdr.header));
+	CURVNET_SET((struct vnet *)(m->M_dat.MH.MH_pkthdr.header));
 	ifindex = igmp_restore_context(m);
 
 	/*
@@ -3433,12 +3433,12 @@ igmp_intr(struct mbuf *m)
 	 * MANET interface and the routing protocol needs to see the
 	 * updates), handle this now.
 	 */
-	if (m->m_flags & M_IGMP_LOOP)
+	if (m->m_hdr.mh_flags & M_IGMP_LOOP)
 		imo.imo_multicast_ifp = V_loif;
 	else
 		imo.imo_multicast_ifp = ifp;
 
-	if (m->m_flags & M_IGMPV2) {
+	if (m->m_hdr.mh_flags & M_IGMPV2) {
 		m0 = m;
 	} else {
 		m0 = igmp_v3_encap_report(ifp, m);
@@ -3451,8 +3451,8 @@ igmp_intr(struct mbuf *m)
 	}
 
 	igmp_scrub_context(m0);
-	m->m_flags &= ~(M_PROTOFLAGS);
-	m0->m_pkthdr.rcvif = V_loif;
+	m->m_hdr.mh_flags &= ~(M_PROTOFLAGS);
+	m0->M_dat.MH.MH_pkthdr.rcvif = V_loif;
 #ifdef MAC
 	mac_netinet_igmp_send(ifp, m0);
 #endif
@@ -3490,37 +3490,37 @@ igmp_v3_encap_report(struct ifnet *ifp, struct mbuf *m)
 	struct ip		*ip;
 	int			 hdrlen, igmpreclen;
 
-	KASSERT((m->m_flags & M_PKTHDR),
+	KASSERT((m->m_hdr.mh_flags & M_PKTHDR),
 	    ("%s: mbuf chain %p is !M_PKTHDR", __func__, m));
 
 	igmpreclen = m_length(m, NULL);
 	hdrlen = sizeof(struct ip) + sizeof(struct igmp_report);
 
-	if (m->m_flags & M_IGMPV3_HDR) {
+	if (m->m_hdr.mh_flags & M_IGMPV3_HDR) {
 		igmpreclen -= hdrlen;
 	} else {
 		M_PREPEND(m, hdrlen, M_DONTWAIT);
 		if (m == NULL)
 			return (NULL);
-		m->m_flags |= M_IGMPV3_HDR;
+		m->m_hdr.mh_flags |= M_IGMPV3_HDR;
 	}
 
 	CTR2(KTR_IGMPV3, "%s: igmpreclen is %d", __func__, igmpreclen);
 
-	m->m_data += sizeof(struct ip);
-	m->m_len -= sizeof(struct ip);
+	m->m_hdr.mh_data += sizeof(struct ip);
+	m->m_hdr.mh_len -= sizeof(struct ip);
 
 	igmp = mtod(m, struct igmp_report *);
 	igmp->ir_type = IGMP_v3_HOST_MEMBERSHIP_REPORT;
 	igmp->ir_rsv1 = 0;
 	igmp->ir_rsv2 = 0;
-	igmp->ir_numgrps = htons(m->m_pkthdr.PH_vt.vt_nrecs);
+	igmp->ir_numgrps = htons(m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs);
 	igmp->ir_cksum = 0;
 	igmp->ir_cksum = in_cksum(m, sizeof(struct igmp_report) + igmpreclen);
-	m->m_pkthdr.PH_vt.vt_nrecs = 0;
+	m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 0;
 
-	m->m_data -= sizeof(struct ip);
-	m->m_len += sizeof(struct ip);
+	m->m_hdr.mh_data -= sizeof(struct ip);
+	m->m_hdr.mh_len += sizeof(struct ip);
 
 	ip = mtod(m, struct ip *);
 	ip->ip_tos = IPTOS_PREC_INTERNETCONTROL;
@@ -3531,7 +3531,7 @@ igmp_v3_encap_report(struct ifnet *ifp, struct mbuf *m)
 
 	ip->ip_src.s_addr = INADDR_ANY;
 
-	if (m->m_flags & M_IGMP_LOOP) {
+	if (m->m_hdr.mh_flags & M_IGMP_LOOP) {
 		struct in_ifaddr *ia;
 
 		IFP_TO_IA(ifp, ia);

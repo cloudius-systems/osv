@@ -281,7 +281,7 @@ namespace virtio {
 
         if (csum_len < (int)sizeof(struct ether_header) + (int)sizeof(struct ip))
             return true;
-        if (m->m_len < csum_len)
+        if (m->m_hdr.mh_len < csum_len)
             return true;
 
         eh = mtod(m, struct ether_header *);
@@ -298,7 +298,7 @@ namespace virtio {
         /* Use the offset to determine the appropriate CSUM_* flags. */
         switch (hdr->csum_offset) {
         case offsetof(struct udphdr, uh_sum):
-            if (m->m_len < hdr->csum_start + (int)sizeof(struct udphdr))
+            if (m->m_hdr.mh_len < hdr->csum_start + (int)sizeof(struct udphdr))
                 return true;
             udp = (struct udphdr *)(mtod(m, uint8_t *) + hdr->csum_start);
             if (udp->uh_sum == 0)
@@ -307,8 +307,8 @@ namespace virtio {
             /* FALLTHROUGH */
 
         case offsetof(struct tcphdr, th_sum):
-            m->m_pkthdr.csum_flags |= CSUM_DATA_VALID | CSUM_PSEUDO_HDR;
-            m->m_pkthdr.csum_data = 0xFFFF;
+            m->M_dat.MH.MH_pkthdr.csum_flags |= CSUM_DATA_VALID | CSUM_PSEUDO_HDR;
+            m->M_dat.MH.MH_pkthdr.csum_data = 0xFFFF;
             break;
 
         default:
@@ -352,10 +352,10 @@ namespace virtio {
                     nbufs = mhdr.num_buffers;
                 }
 
-                m->m_pkthdr.len = len;
-                m->m_pkthdr.rcvif = _ifn;
-                m->m_pkthdr.csum_flags = 0;
-                m->m_len = len;
+                m->M_dat.MH.MH_pkthdr.len = len;
+                m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
+                m->M_dat.MH.MH_pkthdr.csum_flags = 0;
+                m->m_hdr.mh_len = len;
 
                 struct mbuf* m_head, *m_tail;
                 m_tail = m_head = m;
@@ -368,13 +368,13 @@ namespace virtio {
 
                     _rx_queue->get_buf_finalize();
 
-                    if (m->m_len < (int)len)
-                        len = m->m_len;
+                    if (m->m_hdr.mh_len < (int)len)
+                        len = m->m_hdr.mh_len;
 
-                    m->m_len = len;
-                    m->m_flags &= ~M_PKTHDR;
-                    m_head->m_pkthdr.len += len;
-                    m_tail->m_next = m;
+                    m->m_hdr.mh_len = len;
+                    m->m_hdr.mh_flags &= ~M_PKTHDR;
+                    m_head->M_dat.MH.MH_pkthdr.len += len;
+                    m_tail->m_hdr.mh_next = m;
                     m_tail = m;
                 }
 
@@ -413,11 +413,11 @@ namespace virtio {
             if (!m)
                 break;
 
-            m->m_len = MCLBYTES;
+            m->m_hdr.mh_len = MCLBYTES;
             u8 *mdata = mtod(m, u8*);
 
             _rx_queue->_sg_vec.clear();
-            _rx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(mdata), m->m_len, vring_desc::VRING_DESC_F_WRITE));
+            _rx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(mdata), m->m_hdr.mh_len, vring_desc::VRING_DESC_F_WRITE));
             if (!_rx_queue->add_buf(m)) {
                 m_freem(m);
                 break;
@@ -440,7 +440,7 @@ namespace virtio {
 
         req->um.reset(m_head);
 
-        if (m_head->m_pkthdr.csum_flags != 0) {
+        if (m_head->M_dat.MH.MH_pkthdr.csum_flags != 0) {
             m = tx_offload(m_head, &req->mhdr.hdr);
             if ((m_head = m) == nullptr) {
                 delete req;
@@ -452,11 +452,11 @@ namespace virtio {
         _tx_queue->_sg_vec.clear();
         _tx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(static_cast<void*>(&req->mhdr)), _hdr_size, vring_desc::VRING_DESC_F_READ));
 
-        for (m = m_head; m != NULL; m = m->m_next) {
-            if (m->m_len != 0) {
-                virtio_net_d("Frag len=%d:", m->m_len);
+        for (m = m_head; m != NULL; m = m->m_hdr.mh_next) {
+            if (m->m_hdr.mh_len != 0) {
+                virtio_net_d("Frag len=%d:", m->m_hdr.mh_len);
                 req->mhdr.num_buffers++;
-                _tx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(m->m_data), m->m_len, vring_desc::VRING_DESC_F_READ));
+                _tx_queue->_sg_vec.push_back(vring::sg_node(mmu::virt_to_phys(m->m_hdr.mh_data), m->m_hdr.mh_len, vring_desc::VRING_DESC_F_READ));
             }
         }
 
@@ -495,7 +495,7 @@ namespace virtio {
         u8 ip_proto, gso_type;
 
         ip_offset = sizeof(struct ether_header);
-        if (m->m_len < ip_offset) {
+        if (m->m_hdr.mh_len < ip_offset) {
             if ((m = m_pullup(m, ip_offset)) == nullptr)
                 return nullptr;
         }
@@ -504,7 +504,7 @@ namespace virtio {
         eth_type = ntohs(eh->ether_type);
         if (eth_type == ETHERTYPE_VLAN) {
             ip_offset = sizeof(struct ether_vlan_header);
-            if (m->m_len < ip_offset) {
+            if (m->m_hdr.mh_len < ip_offset) {
                 if ((m = m_pullup(m, ip_offset)) == nullptr)
                     return nullptr;
             }
@@ -514,7 +514,7 @@ namespace virtio {
 
         switch (eth_type) {
         case ETHERTYPE_IP:
-            if (m->m_len < ip_offset + (int)sizeof(struct ip)) {
+            if (m->m_hdr.mh_len < ip_offset + (int)sizeof(struct ip)) {
                 m = m_pullup(m, ip_offset + sizeof(struct ip));
                 if (m == nullptr)
                     return nullptr;
@@ -530,17 +530,17 @@ namespace virtio {
             return m;
         }
 
-        if (m->m_pkthdr.csum_flags & VIRTIO_NET_CSUM_OFFLOAD) {
+        if (m->M_dat.MH.MH_pkthdr.csum_flags & VIRTIO_NET_CSUM_OFFLOAD) {
             hdr->flags |= virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM;
             hdr->csum_start = csum_start;
-            hdr->csum_offset = m->m_pkthdr.csum_data;
+            hdr->csum_offset = m->M_dat.MH.MH_pkthdr.csum_data;
         }
 
-        if (m->m_pkthdr.csum_flags & CSUM_TSO) {
+        if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_TSO) {
             if (ip_proto != IPPROTO_TCP)
                 return m;
 
-            if (m->m_len < csum_start + (int)sizeof(struct tcphdr)) {
+            if (m->m_hdr.mh_len < csum_start + (int)sizeof(struct tcphdr)) {
                 m = m_pullup(m, csum_start + sizeof(struct tcphdr));
                 if (m == nullptr)
                     return nullptr;
@@ -549,7 +549,7 @@ namespace virtio {
             tcp = (struct tcphdr *)(mtod(m, uint8_t *) + csum_start);
             hdr->gso_type = gso_type;
             hdr->hdr_len = csum_start + (tcp->th_off << 2);
-            hdr->gso_size = m->m_pkthdr.tso_segsz;
+            hdr->gso_size = m->M_dat.MH.MH_pkthdr.tso_segsz;
 
             if (tcp->th_flags & TH_CWR) {
                 if (!_tso_ecn) {

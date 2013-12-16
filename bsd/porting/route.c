@@ -156,7 +156,7 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
 #undef CP_ADDR
 
     m_rtmsg->m_rtm.rtm_msglen = cp - (char *)m_rtmsg;
-    m->m_pkthdr.len = m->m_len = m_rtmsg->m_rtm.rtm_msglen;
+    m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = m_rtmsg->m_rtm.rtm_msglen;
 
     return (m);
 }
@@ -247,7 +247,7 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
 #undef CP_ADDR
 
     m_rtmsg->m_rtm.rtm_msglen = cp - (char *)m_rtmsg;
-    m->m_pkthdr.len = m->m_len = m_rtmsg->m_rtm.rtm_msglen;
+    m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = m_rtmsg->m_rtm.rtm_msglen;
 
     return (m);
 }

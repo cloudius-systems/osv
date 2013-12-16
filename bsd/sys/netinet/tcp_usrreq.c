@@ -781,7 +781,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 	TCPDEBUG1();
 	if (control) {
 		/* TCP doesn't do control messages (rights, creds, etc) */
-		if (control->m_len) {
+		if (control->m_hdr.mh_len) {
 			m_freem(control);
 			if (m)
 				m_freem(m);
@@ -995,7 +995,7 @@ tcp_usr_rcvoob(struct socket *so, struct mbuf *m, int flags)
 		error = EWOULDBLOCK;
 		goto out;
 	}
-	m->m_len = 1;
+	m->m_hdr.mh_len = 1;
 	*mtod(m, caddr_t) = tp->t_iobc;
 	if ((flags & MSG_PEEK) == 0)
 		tp->t_oobflags ^= (TCPOOB_HAVEDATA | TCPOOB_HADDATA);

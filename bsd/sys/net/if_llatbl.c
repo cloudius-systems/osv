@@ -106,7 +106,7 @@ llentry_free(struct llentry *lle)
 
 	pkts_dropped = 0;
 	while ((lle->la_numheld > 0) && (lle->la_hold != NULL)) {
-		next = lle->la_hold->m_nextpkt;
+		next = lle->la_hold->m_hdr.mh_nextpkt;
 		m_freem(lle->la_hold);
 		lle->la_hold = next;
 		lle->la_numheld--;

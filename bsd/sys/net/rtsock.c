@@ -170,7 +170,7 @@ raw_input_rts_cb(struct mbuf *m, struct sockproto *proto, struct bsd_sockaddr *s
 	KASSERT(rp != NULL, ("%s: rp is NULL", __func__));
 
 	/* No filtering requested. */
-	if ((m->m_flags & RTS_FILTER_FIB) == 0)
+	if ((m->m_hdr.mh_flags & RTS_FILTER_FIB) == 0)
 		return (0);
 
 	/* Check if it is a rts and the fib matches the one of the socket. */
@@ -387,12 +387,12 @@ route_output(struct mbuf *m, struct socket *so)
 	bsd_sa_family_t saf = AF_UNSPEC;
 
 #define senderr(e) { error = e; goto flush;}
-	if (m == NULL || ((m->m_len < sizeof(long)) &&
+	if (m == NULL || ((m->m_hdr.mh_len < sizeof(long)) &&
 		       (m = m_pullup(m, sizeof(long))) == NULL))
 		return (ENOBUFS);
-	if ((m->m_flags & M_PKTHDR) == 0)
+	if ((m->m_hdr.mh_flags & M_PKTHDR) == 0)
 		panic("route_output");
-	len = m->m_pkthdr.len;
+	len = m->M_dat.MH.MH_pkthdr.len;
 	if (len < sizeof(*rtm) ||
 	    len != mtod(m, struct rt_msghdr *)->rtm_msglen) {
 		info.rti_info[RTAX_DST] = NULL;
@@ -738,15 +738,15 @@ flush:
 	}
 	if (rtm) {
 		m_copyback(m, 0, rtm->rtm_msglen, (caddr_t)rtm);
-		if (m->m_pkthdr.len < rtm->rtm_msglen) {
+		if (m->M_dat.MH.MH_pkthdr.len < rtm->rtm_msglen) {
 			m_freem(m);
 			m = NULL;
-		} else if (m->m_pkthdr.len > rtm->rtm_msglen)
-			m_adj(m, rtm->rtm_msglen - m->m_pkthdr.len);
+		} else if (m->M_dat.MH.MH_pkthdr.len > rtm->rtm_msglen)
+			m_adj(m, rtm->rtm_msglen - m->M_dat.MH.MH_pkthdr.len);
 	}
 	if (m) {
 		M_SETFIB(m, so->so_fibnum);
-		m->m_flags |= RTS_FILTER_FIB;
+		m->m_hdr.mh_flags |= RTS_FILTER_FIB;
 		if (rp) {
 			/*
 			 * XXX insure we don't get a copy by
@@ -881,15 +881,15 @@ rt_msg1(int type, struct rt_addrinfo *rtinfo)
 	m = m_gethdr(M_DONTWAIT, MT_DATA);
 	if (m && len > MHLEN) {
 		MCLGET(m, M_DONTWAIT);
-		if ((m->m_flags & M_EXT) == 0) {
+		if ((m->m_hdr.mh_flags & M_EXT) == 0) {
 			m_free(m);
 			m = NULL;
 		}
 	}
 	if (m == NULL)
 		return (m);
-	m->m_pkthdr.len = m->m_len = len;
-	m->m_pkthdr.rcvif = NULL;
+	m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = len;
+	m->M_dat.MH.MH_pkthdr.rcvif = NULL;
 	rtm = mtod(m, struct rt_msghdr *);
 	bzero((caddr_t)rtm, len);
 	for (i = 0; i < RTAX_MAX; i++) {
@@ -900,7 +900,7 @@ rt_msg1(int type, struct rt_addrinfo *rtinfo)
 		m_copyback(m, len, dlen, (caddr_t)sa);
 		len += dlen;
 	}
-	if (m->m_pkthdr.len != len) {
+	if (m->M_dat.MH.MH_pkthdr.len != len) {
 		m_freem(m);
 		return (NULL);
 	}
@@ -1029,7 +1029,7 @@ rt_missmsg_fib(int type, struct rt_addrinfo *rtinfo, int flags, int error,
 		KASSERT(fibnum >= 0 && fibnum < rt_numfibs, ("%s: fibnum out "
 		    "of range 0 <= %d < %d", __func__, fibnum, rt_numfibs));
 		M_SETFIB(m, fibnum);
-		m->m_flags |= RTS_FILTER_FIB;
+		m->m_hdr.mh_flags |= RTS_FILTER_FIB;
 	}
 
 	rtm = mtod(m, struct rt_msghdr *);
@@ -1144,7 +1144,7 @@ rt_newaddrmsg_fib(int cmd, struct bsd_ifaddr *ifa, int error, struct rtentry *rt
 			    "fibnum out of range 0 <= %d < %d", __func__,
 			     fibnum, rt_numfibs));
 			M_SETFIB(m, fibnum);
-			m->m_flags |= RTS_FILTER_FIB;
+			m->m_hdr.mh_flags |= RTS_FILTER_FIB;
 		}
 		rt_dispatch(m, sa ? sa->sa_family : AF_UNSPEC);
 	}
@@ -1240,14 +1240,14 @@ rt_ieee80211msg(struct ifnet *ifp, int what, void *data, size_t data_len)
 				return;
 			}
 			bcopy(data, mtod(n, void *), data_len);
-			n->m_len = data_len;
-			m->m_next = n;
+			n->m_hdr.mh_len = data_len;
+			m->m_hdr.mh_next = n;
 		} else if (data_len > 0) {
-			bcopy(data, mtod(m, u_int8_t *) + m->m_len, data_len);
-			m->m_len += data_len;
+			bcopy(data, mtod(m, u_int8_t *) + m->m_hdr.mh_len, data_len);
+			m->m_hdr.mh_len += data_len;
 		}
-		if (m->m_flags & M_PKTHDR)
-			m->m_pkthdr.len += data_len;
+		if (m->m_hdr.mh_flags & M_PKTHDR)
+			m->M_dat.MH.MH_pkthdr.len += data_len;
 		mtod(m, struct if_announcemsghdr *)->ifan_msglen += data_len;
 		rt_dispatch(m, AF_UNSPEC);
 	}

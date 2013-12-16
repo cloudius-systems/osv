@@ -378,12 +378,12 @@ ip_input(struct mbuf *m)
 
 	M_ASSERTPKTHDR(m);
 
-	if (m->m_flags & M_FASTFWD_OURS) {
+	if (m->m_hdr.mh_flags & M_FASTFWD_OURS) {
 		/*
 		 * Firewall or NAT changed destination to local.
 		 * We expect ip_len and ip_off to be in host byte order.
 		 */
-		m->m_flags &= ~M_FASTFWD_OURS;
+		m->m_hdr.mh_flags &= ~M_FASTFWD_OURS;
 		/* Set up some basics that will be used later. */
 		ip = mtod(m, struct ip *);
 		hlen = ip->ip_hl << 2;
@@ -392,10 +392,10 @@ ip_input(struct mbuf *m)
 
 	IPSTAT_INC(ips_total);
 
-	if (m->m_pkthdr.len < sizeof(struct ip))
+	if (m->M_dat.MH.MH_pkthdr.len < sizeof(struct ip))
 		goto tooshort;
 
-	if (m->m_len < sizeof (struct ip) &&
+	if (m->m_hdr.mh_len < sizeof (struct ip) &&
 	    (m = m_pullup(m, sizeof (struct ip))) == NULL) {
 		IPSTAT_INC(ips_toosmall);
 		return;
@@ -412,7 +412,7 @@ ip_input(struct mbuf *m)
 		IPSTAT_INC(ips_badhlen);
 		goto bad;
 	}
-	if (hlen > m->m_len) {
+	if (hlen > m->m_hdr.mh_len) {
 		if ((m = m_pullup(m, hlen)) == NULL) {
 			IPSTAT_INC(ips_badhlen);
 			return;
@@ -421,7 +421,7 @@ ip_input(struct mbuf *m)
 	}
 
 	/* 127/8 must not appear on wire - RFC1122 */
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 	if ((ntohl(ip->ip_dst.s_addr) >> IN_CLASSA_NSHIFT) == IN_LOOPBACKNET ||
 	    (ntohl(ip->ip_src.s_addr) >> IN_CLASSA_NSHIFT) == IN_LOOPBACKNET) {
 		if ((ifp->if_flags & IFF_LOOPBACK) == 0) {
@@ -430,8 +430,8 @@ ip_input(struct mbuf *m)
 		}
 	}
 
-	if (m->m_pkthdr.csum_flags & CSUM_IP_CHECKED) {
-		sum = !(m->m_pkthdr.csum_flags & CSUM_IP_VALID);
+	if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_IP_CHECKED) {
+		sum = !(m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_IP_VALID);
 	} else {
 		if (hlen == sizeof(struct ip)) {
 			sum = in_cksum_hdr(ip);
@@ -466,17 +466,17 @@ ip_input(struct mbuf *m)
 	 * Trim mbufs if longer than we expect.
 	 * Drop packet if shorter than we expect.
 	 */
-	if (m->m_pkthdr.len < ip->ip_len) {
+	if (m->M_dat.MH.MH_pkthdr.len < ip->ip_len) {
 tooshort:
 		IPSTAT_INC(ips_tooshort);
 		goto bad;
 	}
-	if (m->m_pkthdr.len > ip->ip_len) {
-		if (m->m_len == m->m_pkthdr.len) {
-			m->m_len = ip->ip_len;
-			m->m_pkthdr.len = ip->ip_len;
+	if (m->M_dat.MH.MH_pkthdr.len > ip->ip_len) {
+		if (m->m_hdr.mh_len == m->M_dat.MH.MH_pkthdr.len) {
+			m->m_hdr.mh_len = ip->ip_len;
+			m->M_dat.MH.MH_pkthdr.len = ip->ip_len;
 		} else
-			m_adj(m, ip->ip_len - m->m_pkthdr.len);
+			m_adj(m, ip->ip_len - m->M_dat.MH.MH_pkthdr.len);
 	}
 #ifdef IPSEC
 	/*
@@ -513,13 +513,13 @@ tooshort:
 
 	ip = mtod(m, struct ip *);
 	dchg = (odst.s_addr != ip->ip_dst.s_addr);
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 
-	if (m->m_flags & M_FASTFWD_OURS) {
-		m->m_flags &= ~M_FASTFWD_OURS;
+	if (m->m_hdr.mh_flags & M_FASTFWD_OURS) {
+		m->m_hdr.mh_flags &= ~M_FASTFWD_OURS;
 		goto ours;
 	}
-	if (m->m_flags & M_IP_NEXTHOP) {
+	if (m->m_hdr.mh_flags & M_IP_NEXTHOP) {
 		dchg = (m_tag_find(m, PACKET_TAG_IPFORWARD, NULL) != NULL);
 		if (dchg != 0) {
 			/*
@@ -557,7 +557,7 @@ passin:
 	 * with it).
 	 */
 	if (TAILQ_EMPTY(&V_in_ifaddrhead) &&
-	    (m->m_flags & (M_MCAST|M_BCAST)) == 0)
+	    (m->m_hdr.mh_flags & (M_MCAST|M_BCAST)) == 0)
 		goto ours;
 
 	/*
@@ -718,7 +718,7 @@ ours:
 	/* Count the packet in the ip address stats */
 	if (ia != NULL) {
 		ia->ia_ifa.if_ipackets++;
-		ia->ia_ifa.if_ibytes += m->m_pkthdr.len;
+		ia->ia_ifa.if_ibytes += m->M_dat.MH.MH_pkthdr.len;
 		ifa_free(&ia->ia_ifa);
 	}
 
@@ -920,9 +920,9 @@ found:
 			IPSTAT_INC(ips_toosmall); /* XXX */
 			goto dropfrag;
 		}
-		m->m_flags |= M_FRAG;
+		m->m_hdr.mh_flags |= M_FRAG;
 	} else
-		m->m_flags &= ~M_FRAG;
+		m->m_hdr.mh_flags &= ~M_FRAG;
 	ip->ip_off <<= 3;
 
 
@@ -931,15 +931,15 @@ found:
 	 * ip_reass() will return a different mbuf.
 	 */
 	IPSTAT_INC(ips_fragments);
-	m->m_pkthdr.header = ip;
+	m->M_dat.MH.MH_pkthdr.header = ip;
 
 	/* Previous ip_reass() started here. */
 	/*
 	 * Presence of header sizes in mbufs
 	 * would confuse code below.
 	 */
-	m->m_data += hlen;
-	m->m_len -= hlen;
+	m->m_hdr.mh_data += hlen;
+	m->m_hdr.mh_len -= hlen;
 
 	/*
 	 * If first fragment to arrive, create a reassembly queue.
@@ -965,7 +965,7 @@ found:
 		fp->ipq_src = ip->ip_src;
 		fp->ipq_dst = ip->ip_dst;
 		fp->ipq_frags = m;
-		m->m_nextpkt = NULL;
+		m->m_hdr.mh_nextpkt = NULL;
 		goto done;
 	} else {
 		fp->ipq_nfrags++;
@@ -974,7 +974,7 @@ found:
 #endif
 	}
 
-#define GETIP(m)	((struct ip*)((m)->m_pkthdr.header))
+#define GETIP(m)	((struct ip*)((m)->M_dat.MH.MH_pkthdr.header))
 
 	/*
 	 * Handle ECN by comparing this segment with the first one;
@@ -995,7 +995,7 @@ found:
 	/*
 	 * Find a segment which begins after this one does.
 	 */
-	for (p = NULL, q = fp->ipq_frags; q; p = q, q = q->m_nextpkt)
+	for (p = NULL, q = fp->ipq_frags; q; p = q, q = q->m_hdr.mh_nextpkt)
 		if (GETIP(q)->ip_off > ip->ip_off)
 			break;
 
@@ -1014,14 +1014,14 @@ found:
 			if (i >= ip->ip_len)
 				goto dropfrag;
 			m_adj(m, i);
-			m->m_pkthdr.csum_flags = 0;
+			m->M_dat.MH.MH_pkthdr.csum_flags = 0;
 			ip->ip_off += i;
 			ip->ip_len -= i;
 		}
-		m->m_nextpkt = p->m_nextpkt;
-		p->m_nextpkt = m;
+		m->m_hdr.mh_nextpkt = p->m_hdr.mh_nextpkt;
+		p->m_hdr.mh_nextpkt = m;
 	} else {
-		m->m_nextpkt = fp->ipq_frags;
+		m->m_hdr.mh_nextpkt = fp->ipq_frags;
 		fp->ipq_frags = m;
 	}
 
@@ -1036,11 +1036,11 @@ found:
 			GETIP(q)->ip_len -= i;
 			GETIP(q)->ip_off += i;
 			m_adj(q, i);
-			q->m_pkthdr.csum_flags = 0;
+			q->M_dat.MH.MH_pkthdr.csum_flags = 0;
 			break;
 		}
-		nq = q->m_nextpkt;
-		m->m_nextpkt = nq;
+		nq = q->m_hdr.mh_nextpkt;
+		m->m_hdr.mh_nextpkt = nq;
 		IPSTAT_INC(ips_fragdropped);
 		fp->ipq_nfrags--;
 		m_freem(q);
@@ -1057,7 +1057,7 @@ found:
 	 *
 	 */
 	next = 0;
-	for (p = NULL, q = fp->ipq_frags; q; p = q, q = q->m_nextpkt) {
+	for (p = NULL, q = fp->ipq_frags; q; p = q, q = q->m_hdr.mh_nextpkt) {
 		if (GETIP(q)->ip_off != next) {
 			if (fp->ipq_nfrags > V_maxfragsperpacket) {
 				IPSTAT_ADD(ips_fragdropped, fp->ipq_nfrags);
@@ -1068,7 +1068,7 @@ found:
 		next += GETIP(q)->ip_len;
 	}
 	/* Make sure the last packet didn't have the IP_MF flag */
-	if (p->m_flags & M_FRAG) {
+	if (p->m_hdr.mh_flags & M_FRAG) {
 		if (fp->ipq_nfrags > V_maxfragsperpacket) {
 			IPSTAT_ADD(ips_fragdropped, fp->ipq_nfrags);
 			ip_freef(head, fp);
@@ -1092,16 +1092,16 @@ found:
 	 * Concatenate fragments.
 	 */
 	m = q;
-	t = m->m_next;
-	m->m_next = NULL;
+	t = m->m_hdr.mh_next;
+	m->m_hdr.mh_next = NULL;
 	m_cat(m, t);
-	nq = q->m_nextpkt;
-	q->m_nextpkt = NULL;
+	nq = q->m_hdr.mh_nextpkt;
+	q->m_hdr.mh_nextpkt = NULL;
 	for (q = nq; q != NULL; q = nq) {
-		nq = q->m_nextpkt;
-		q->m_nextpkt = NULL;
-		m->m_pkthdr.csum_flags &= q->m_pkthdr.csum_flags;
-		m->m_pkthdr.csum_data += q->m_pkthdr.csum_data;
+		nq = q->m_hdr.mh_nextpkt;
+		q->m_hdr.mh_nextpkt = NULL;
+		m->M_dat.MH.MH_pkthdr.csum_flags &= q->M_dat.MH.MH_pkthdr.csum_flags;
+		m->M_dat.MH.MH_pkthdr.csum_data += q->M_dat.MH.MH_pkthdr.csum_data;
 		m_cat(m, q);
 	}
 	/*
@@ -1109,8 +1109,8 @@ found:
 	 * (and not in for{} loop), though it implies we are not going to
 	 * reassemble more than 64k fragments.
 	 */
-	m->m_pkthdr.csum_data =
-	    (m->m_pkthdr.csum_data & 0xffff) + (m->m_pkthdr.csum_data >> 16);
+	m->M_dat.MH.MH_pkthdr.csum_data =
+	    (m->M_dat.MH.MH_pkthdr.csum_data & 0xffff) + (m->M_dat.MH.MH_pkthdr.csum_data >> 16);
 
 	/*
 	 * Create header for new ip packet by modifying header of first
@@ -1123,10 +1123,10 @@ found:
 	TAILQ_REMOVE(head, fp, ipq_list);
 	V_nipq--;
 	uma_zfree(V_ipq_zone, fp);
-	m->m_len += (ip->ip_hl << 2);
-	m->m_data -= (ip->ip_hl << 2);
+	m->m_hdr.mh_len += (ip->ip_hl << 2);
+	m->m_hdr.mh_data -= (ip->ip_hl << 2);
 	/* some debugging cruft by sklower, below, will go away soon */
-	if (m->m_flags & M_PKTHDR)	/* XXX this should be done elsewhere */
+	if (m->m_hdr.mh_flags & M_PKTHDR)	/* XXX this should be done elsewhere */
 		m_fixhdr(m);
 	IPSTAT_INC(ips_reassembled);
 	IPQ_UNLOCK();
@@ -1157,7 +1157,7 @@ ip_freef(struct ipqhead *fhp, struct ipq *fp)
 
 	while (fp->ipq_frags) {
 		q = fp->ipq_frags;
-		fp->ipq_frags = q->m_nextpkt;
+		fp->ipq_frags = q->m_hdr.mh_nextpkt;
 		m_freem(q);
 	}
 	TAILQ_REMOVE(fhp, fp, ipq_list);
@@ -1368,7 +1368,7 @@ ip_forward(struct mbuf *m, int srcrt)
 	struct route ro;
 	int error, type = 0, code = 0, mtu = 0;
 
-	if (m->m_flags & (M_BCAST|M_MCAST) || in_canforward(ip->ip_dst) == 0) {
+	if (m->m_hdr.mh_flags & (M_BCAST|M_MCAST) || in_canforward(ip->ip_dst) == 0) {
 		IPSTAT_INC(ips_cantforward);
 		m_freem(m);
 		return;
@@ -1414,7 +1414,7 @@ ip_forward(struct mbuf *m, int srcrt)
 	 * assume exclusive access to the IP header in `m', so any
 	 * data in a cluster may change before we reach icmp_error().
 	 */
-	MGETHDR(mcopy, M_DONTWAIT, m->m_type);
+	MGETHDR(mcopy, M_DONTWAIT, m->m_hdr.mh_type);
 	if (mcopy != NULL && !m_dup_pkthdr(mcopy, m, M_DONTWAIT)) {
 		/*
 		 * It's probably ok if the pkthdr dup fails (because
@@ -1426,9 +1426,9 @@ ip_forward(struct mbuf *m, int srcrt)
 		mcopy = NULL;
 	}
 	if (mcopy != NULL) {
-		mcopy->m_len = bsd_min(ip->ip_len, M_TRAILINGSPACE(mcopy));
-		mcopy->m_pkthdr.len = mcopy->m_len;
-		m_copydata(m, 0, mcopy->m_len, mtod(mcopy, caddr_t));
+		mcopy->m_hdr.mh_len = bsd_min(ip->ip_len, M_TRAILINGSPACE(mcopy));
+		mcopy->M_dat.MH.MH_pkthdr.len = mcopy->m_hdr.mh_len;
+		m_copydata(m, 0, mcopy->m_hdr.mh_len, mtod(mcopy, caddr_t));
 	}
 
 #ifdef IPSTEALTH
@@ -1449,7 +1449,7 @@ ip_forward(struct mbuf *m, int srcrt)
 	 */
 	dest.s_addr = 0;
 	if (!srcrt && V_ipsendredirects &&
-	    ia != NULL && ia->ia_ifp == m->m_pkthdr.rcvif) {
+	    ia != NULL && ia->ia_ifp == m->M_dat.MH.MH_pkthdr.rcvif) {
 		struct bsd_sockaddr_in *sin;
 		struct rtentry *rt;
 
@@ -1603,7 +1603,7 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 			*mp = sbcreatecontrol((caddr_t) &bt, sizeof(bt),
 			SCM_BINTIME, SOL_SOCKET);
 			if (*mp)
-				mp = &(*mp)->m_next;
+				mp = &(*mp)->m_hdr.mh_next;
 		}
 		if (inp->inp_socket->so_options & SO_TIMESTAMP) {
 			struct timeval tv;
@@ -1612,7 +1612,7 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 			*mp = sbcreatecontrol((caddr_t) &tv, sizeof(tv),
 				SCM_TIMESTAMP, SOL_SOCKET);
 			if (*mp)
-				mp = &(*mp)->m_next;
+				mp = &(*mp)->m_hdr.mh_next;
 		}
 #else
         /* FIXME: Osv - we don't support bintime just yet,
@@ -1625,7 +1625,7 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
             *mp = sbcreatecontrol((caddr_t) &tv, sizeof(tv),
                 SCM_TIMESTAMP, SOL_SOCKET);
             if (*mp)
-                mp = &(*mp)->m_next;
+                mp = &(*mp)->m_hdr.mh_next;
         }
 #endif
 	}
@@ -1633,13 +1633,13 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 		*mp = (struct mbuf*)sbcreatecontrol((caddr_t) &ip->ip_dst,
 		    sizeof(struct in_addr), IP_RECVDSTADDR, IPPROTO_IP);
 		if (*mp)
-			mp = &(*mp)->m_next;
+			mp = &(*mp)->m_hdr.mh_next;
 	}
 	if (inp->inp_flags & INP_RECVTTL) {
 		*mp = sbcreatecontrol((caddr_t) &ip->ip_ttl,
 		    sizeof(u_char), IP_RECVTTL, IPPROTO_IP);
 		if (*mp)
-			mp = &(*mp)->m_next;
+			mp = &(*mp)->m_hdr.mh_next;
 	}
 #ifdef notyet
 	/* XXX
@@ -1651,14 +1651,14 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 		*mp = sbcreatecontrol((caddr_t) opts_deleted_above,
 		    sizeof(struct in_addr), IP_RECVOPTS, IPPROTO_IP);
 		if (*mp)
-			mp = &(*mp)->m_next;
+			mp = &(*mp)->m_hdr.mh_next;
 	}
 	/* ip_srcroute doesn't do what we want here, need to fix */
 	if (inp->inp_flags & INP_RECVRETOPTS) {
 		*mp = sbcreatecontrol((caddr_t) ip_srcroute(m),
 		    sizeof(struct in_addr), IP_RECVRETOPTS, IPPROTO_IP);
 		if (*mp)
-			mp = &(*mp)->m_next;
+			mp = &(*mp)->m_hdr.mh_next;
 	}
 #endif
 	if (inp->inp_flags & INP_RECVIF) {
@@ -1670,7 +1670,7 @@ ip_savecontrol(struct inpcb *inp, struct mbuf **mp, struct ip *ip,
 		struct bsd_sockaddr_dl *sdp;
 		struct bsd_sockaddr_dl *sdl2 = &sdlbuf.sdl;
 
-		if (((ifp = m->m_pkthdr.rcvif)) 
+		if (((ifp = m->M_dat.MH.MH_pkthdr.rcvif))
 		&& ( ifp->if_index && (ifp->if_index <= V_if_index))) {
 			sdp = (struct bsd_sockaddr_dl *)ifp->if_addr->ifa_addr;
 			/*
@@ -1692,13 +1692,13 @@ makedummy:
 		*mp = sbcreatecontrol((caddr_t) sdl2, sdl2->sdl_len,
 			IP_RECVIF, IPPROTO_IP);
 		if (*mp)
-			mp = &(*mp)->m_next;
+			mp = &(*mp)->m_hdr.mh_next;
 	}
 	if (inp->inp_flags & INP_RECVTOS) {
 		*mp = sbcreatecontrol((caddr_t) &ip->ip_tos,
 		    sizeof(u_char), IP_RECVTOS, IPPROTO_IP);
 		if (*mp)
-			mp = &(*mp)->m_next;
+			mp = &(*mp)->m_hdr.mh_next;
 	}
 }
 

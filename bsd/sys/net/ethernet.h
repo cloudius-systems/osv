@@ -360,7 +360,7 @@ struct ether_addr {
 #define ETHER_BPF_MTAP(_ifp, _m) do {					\
 	if (bpf_peers_present((_ifp)->if_bpf)) {			\
 		M_ASSERTVALID(_m);					\
-		if (((_m)->m_flags & M_VLANTAG) != 0)			\
+		if (((_m)->m_hdr.mh_flags & M_VLANTAG) != 0)			\
 			ether_vlan_mtap((_ifp)->if_bpf, (_m), NULL, 0);	\
 		else							\
 			bpf_mtap((_ifp)->if_bpf, (_m));			\

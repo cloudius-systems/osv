@@ -1716,7 +1716,7 @@ in_pcblookup_mbuf(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 #ifdef PCBGROUP
 	if (in_pcbgroup_enabled(pcbinfo)) {
 		pcbgroup = in_pcbgroup_byhash(pcbinfo, M_HASHTYPE_GET(m),
-		    m->m_pkthdr.flowid);
+		    m->M_dat.MH.MH_pkthdr.flowid);
 		if (pcbgroup != NULL)
 			return (in_pcblookup_group(pcbinfo, pcbgroup, faddr,
 			    fport, laddr, lport, lookupflags, ifp));

@@ -308,7 +308,7 @@ udp_input(struct mbuf *m, int off)
 	struct bsd_sockaddr_in udp_in;
 	struct m_tag *fwd_tag;
 
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 	UDPSTAT_INC(udps_ipackets);
 
 	/*
@@ -325,7 +325,7 @@ udp_input(struct mbuf *m, int off)
 	 * Get IP and UDP header together in first mbuf.
 	 */
 	ip = mtod(m, struct ip *);
-	if (m->m_len < iphlen + sizeof(struct udphdr)) {
+	if (m->m_hdr.mh_len < iphlen + sizeof(struct udphdr)) {
 		if ((m = m_pullup(m, iphlen + sizeof(struct udphdr))) == 0) {
 			UDPSTAT_INC(udps_hdrops);
 			return;
@@ -379,13 +379,13 @@ udp_input(struct mbuf *m, int off)
 	if (uh->uh_sum) {
 		u_short uh_sum;
 
-		if (m->m_pkthdr.csum_flags & CSUM_DATA_VALID) {
-			if (m->m_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
-				uh_sum = m->m_pkthdr.csum_data;
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DATA_VALID) {
+			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
+				uh_sum = m->M_dat.MH.MH_pkthdr.csum_data;
 			else
 				uh_sum = in_pseudo(ip->ip_src.s_addr,
 				    ip->ip_dst.s_addr, htonl((u_short)len +
-				    m->m_pkthdr.csum_data + IPPROTO_UDP));
+				    m->M_dat.MH.MH_pkthdr.csum_data + IPPROTO_UDP));
 			uh_sum ^= 0xffff;
 		} else {
 			char b[9];
@@ -513,7 +513,7 @@ udp_input(struct mbuf *m, int off)
 	/*
 	 * Grab info from PACKET_TAG_IPFORWARD tag prepended to the chain.
 	 */
-	if ((m->m_flags & M_IP_NEXTHOP) &&
+	if ((m->m_hdr.mh_flags & M_IP_NEXTHOP) &&
 	    (fwd_tag = m_tag_find(m, PACKET_TAG_IPFORWARD, NULL)) != NULL) {
 		struct bsd_sockaddr_in *next_hop;
 
@@ -539,7 +539,7 @@ udp_input(struct mbuf *m, int off)
 		}
 		/* Remove the tag from the packet. We don't need it anymore. */
 		m_tag_delete(m, fwd_tag);
-		m->m_flags &= ~M_IP_NEXTHOP;
+		m->m_hdr.mh_flags &= ~M_IP_NEXTHOP;
 	} else
 		inp = in_pcblookup_mbuf(&V_udbinfo, ip->ip_src, uh->uh_sport,
 		    ip->ip_dst, uh->uh_dport, INPLOOKUP_WILDCARD |
@@ -555,7 +555,7 @@ udp_input(struct mbuf *m, int off)
 			    ntohs(uh->uh_sport));
 		}
 		UDPSTAT_INC(udps_noport);
-		if (m->m_flags & (M_BCAST | M_MCAST)) {
+		if (m->m_hdr.mh_flags & (M_BCAST | M_MCAST)) {
 			UDPSTAT_INC(udps_noportbcast);
 			goto badunlocked;
 		}
@@ -913,7 +913,7 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct bsd_sockaddr *addr,
     struct mbuf *control, struct thread *td)
 {
 	struct udpiphdr *ui;
-	int len = m->m_pkthdr.len;
+	int len = m->M_dat.MH.MH_pkthdr.len;
 	struct in_addr faddr, laddr;
 	struct cmsghdr *cm;
 	struct bsd_sockaddr_in *sin, src;
@@ -944,18 +944,18 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct bsd_sockaddr *addr,
 		 * XXX: Currently, we assume all the optional information is
 		 * stored in a single mbuf.
 		 */
-		if (control->m_next) {
+		if (control->m_hdr.mh_next) {
 			INP_RUNLOCK(inp);
 			m_freem(control);
 			m_freem(m);
 			return (EINVAL);
 		}
-		for (; control->m_len > 0;
-		    control->m_data += CMSG_ALIGN(cm->cmsg_len),
-		    control->m_len -= CMSG_ALIGN(cm->cmsg_len)) {
+		for (; control->m_hdr.mh_len > 0;
+		    control->m_hdr.mh_data += CMSG_ALIGN(cm->cmsg_len),
+		    control->m_hdr.mh_len -= CMSG_ALIGN(cm->cmsg_len)) {
 			cm = mtod(control, struct cmsghdr *);
-			if (control->m_len < sizeof(*cm) || cm->cmsg_len == 0
-			    || cm->cmsg_len > control->m_len) {
+			if (control->m_hdr.mh_len < sizeof(*cm) || cm->cmsg_len == 0
+			    || cm->cmsg_len > control->m_hdr.mh_len) {
 				error = EINVAL;
 				break;
 			}
@@ -1133,9 +1133,9 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct bsd_sockaddr *addr,
 		error = ENOBUFS;
 		goto release;
 	}
-	m->m_data += max_linkhdr;
-	m->m_len -= max_linkhdr;
-	m->m_pkthdr.len -= max_linkhdr;
+	m->m_hdr.mh_data += max_linkhdr;
+	m->m_hdr.mh_len -= max_linkhdr;
+	m->M_dat.MH.MH_pkthdr.len -= max_linkhdr;
 
 	/*
 	 * Fill in mbuf with extended UDP header and addresses and length put
@@ -1180,8 +1180,8 @@ udp_output(struct inpcb *inp, struct mbuf *m, struct bsd_sockaddr *addr,
 			faddr.s_addr = INADDR_BROADCAST;
 		ui->ui_sum = in_pseudo(ui->ui_src.s_addr, faddr.s_addr,
 		    htons((u_short)len + sizeof(struct udphdr) + IPPROTO_UDP));
-		m->m_pkthdr.csum_flags = CSUM_UDP;
-		m->m_pkthdr.csum_data = offsetof(struct udphdr, uh_sum);
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_UDP;
+		m->M_dat.MH.MH_pkthdr.csum_data = offsetof(struct udphdr, uh_sum);
 	} else
 		ui->ui_sum = 0;
 	((struct ip *)ui)->ip_len = sizeof (struct udpiphdr) + len;
@@ -1241,14 +1241,14 @@ udp4_espdecap(struct inpcb *inp, struct mbuf *m, int off)
 	 *    IP/UDP hdr + non ESP marker + ESP hdr.
 	 */
 	minlen = off + sizeof(uint64_t) + sizeof(struct esp);
-	if (minlen > m->m_pkthdr.len)
-		minlen = m->m_pkthdr.len;
+	if (minlen > m->M_dat.MH.MH_pkthdr.len)
+		minlen = m->M_dat.MH.MH_pkthdr.len;
 	if ((m = m_pullup(m, minlen)) == NULL) {
 		V_ipsec4stat.in_inval++;
 		return (NULL);		/* Bypass caller processing. */
 	}
 	data = mtod(m, caddr_t);	/* Points to ip header. */
-	payload = m->m_len - off;	/* Size of payload. */
+	payload = m->m_hdr.mh_len - off;	/* Size of payload. */
 
 	if (payload == 1 && data[off] == '\xff')
 		return (m);		/* NB: keepalive packet, no decap. */
@@ -1341,8 +1341,8 @@ udp4_espdecap(struct inpcb *inp, struct mbuf *m, int off)
 	 * We cannot yet update the cksums so clear any
 	 * h/w cksum flags as they are no longer valid.
 	 */
-	if (m->m_pkthdr.csum_flags & CSUM_DATA_VALID)
-		m->m_pkthdr.csum_flags &= ~(CSUM_DATA_VALID|CSUM_PSEUDO_HDR);
+	if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DATA_VALID)
+		m->M_dat.MH.MH_pkthdr.csum_flags &= ~(CSUM_DATA_VALID|CSUM_PSEUDO_HDR);
 
 	(void) ipsec4_common_input(m, iphlen, ip->ip_p);
 	return (NULL);			/* NB: consumed, bypass processing. */

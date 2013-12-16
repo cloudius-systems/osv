@@ -1715,7 +1715,7 @@ if_qflush(struct ifnet *ifp)
 	IFQ_LOCK(ifq);
 	n = ifq->ifq_head;
 	while ((m = n) != 0) {
-		n = m->m_act;
+		n = m->m_hdr.mh_nextpkt;
 		m_freem(m);
 	}
 	ifq->ifq_head = 0;
@@ -3096,8 +3096,8 @@ if_handoff(struct ifqueue *ifq, struct mbuf *m, struct ifnet *ifp, int adjust)
 		return (0);
 	}
 	if (ifp != NULL) {
-		ifp->if_obytes += m->m_pkthdr.len + adjust;
-		if (m->m_flags & (M_BCAST|M_MCAST))
+		ifp->if_obytes += m->M_dat.MH.MH_pkthdr.len + adjust;
+		if (m->m_hdr.mh_flags & (M_BCAST|M_MCAST))
 			ifp->if_omcasts++;
 		active = ifp->if_drv_flags & IFF_DRV_OACTIVE;
 	}

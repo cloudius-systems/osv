@@ -213,7 +213,7 @@ tcp_lro_flush(struct lro_ctrl *lc, struct lro_entry *le)
 			ip6 = le->le_ip6;
 			ip6->ip6_plen = p_len;
 			th = (struct tcphdr *)(ip6 + 1);
-			le->m_head->m_pkthdr.csum_flags = CSUM_DATA_VALID |
+			le->m_head->M_dat.MH.MH_pkthdr.csum_flags = CSUM_DATA_VALID |
 			    CSUM_PSEUDO_HDR;
 			le->p_len += ETHER_HDR_LEN + sizeof(*ip6);
 			break;
@@ -244,7 +244,7 @@ tcp_lro_flush(struct lro_ctrl *lc, struct lro_entry *le)
 #endif
 			ip4->ip_len = p_len;
 			th = (struct tcphdr *)(ip4 + 1);
-			le->m_head->m_pkthdr.csum_flags = CSUM_DATA_VALID |
+			le->m_head->M_dat.MH.MH_pkthdr.csum_flags = CSUM_DATA_VALID |
 			    CSUM_PSEUDO_HDR | CSUM_IP_CHECKED | CSUM_IP_VALID;
 			le->p_len += ETHER_HDR_LEN;
 			break;
@@ -253,8 +253,8 @@ tcp_lro_flush(struct lro_ctrl *lc, struct lro_entry *le)
 		default:
 			th = NULL;	/* Keep compiler happy. */
 		}
-		le->m_head->m_pkthdr.csum_data = 0xffff;
-		le->m_head->m_pkthdr.len = le->p_len;
+		le->m_head->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
+		le->m_head->M_dat.MH.MH_pkthdr.len = le->p_len;
 
 		/* Incorporate the latest ACK into the TCP header. */
 		th->th_ack = le->ack_seq;
@@ -327,7 +327,7 @@ tcp_lro_rx_ipv4(struct lro_ctrl *lc, struct mbuf *m, struct ip *ip4,
 		return (TCP_LRO_CANNOT);
 
 	/* Legacy IP has a header checksum that needs to be correct. */
-	csum_flags = m->m_pkthdr.csum_flags;
+	csum_flags = m->M_dat.MH.MH_pkthdr.csum_flags;
 	if (csum_flags & CSUM_IP_CHECKED) {
 		if (__predict_false((csum_flags & CSUM_IP_VALID) == 0)) {
 			lc->lro_bad_csum++;
@@ -418,7 +418,7 @@ tcp_lro_rx(struct lro_ctrl *lc, struct mbuf *m, uint32_t csum)
 	 * If the frame is padded beyond the end of the IP packet, then we must
 	 * trim the extra bytes off.
 	 */
-	l = m->m_pkthdr.len - (ETHER_HDR_LEN + ip_len);
+	l = m->M_dat.MH.MH_pkthdr.len - (ETHER_HDR_LEN + ip_len);
 	if (l != 0) {
 		if (l < 0)
 			/* Truncated packet. */
@@ -528,14 +528,14 @@ tcp_lro_rx(struct lro_ctrl *lc, struct mbuf *m, uint32_t csum)
 		le->p_len += tcp_data_len;
 
 		/*
-		 * Adjust the mbuf so that m_data points to the first byte of
+		 * Adjust the mbuf so that m_hdr.mh_data points to the first byte of
 		 * the ULP payload.  Adjust the mbuf to avoid complications and
 		 * append new segment to existing mbuf chain.
 		 */
-		m_adj(m, m->m_pkthdr.len - tcp_data_len);
-		m->m_flags &= ~M_PKTHDR;
+		m_adj(m, m->M_dat.MH.MH_pkthdr.len - tcp_data_len);
+		m->m_hdr.mh_flags &= ~M_PKTHDR;
 
-		le->m_tail->m_next = m;
+		le->m_tail->m_hdr.mh_next = m;
 		le->m_tail = m_last(m);
 
 		/*
@@ -567,7 +567,7 @@ tcp_lro_rx(struct lro_ctrl *lc, struct mbuf *m, uint32_t csum)
 		le->source_ip6 = ip6->ip6_src;
 		le->dest_ip6 = ip6->ip6_dst;
 		le->eh_type = eh_type;
-		le->p_len = m->m_pkthdr.len - ETHER_HDR_LEN - sizeof(*ip6);
+		le->p_len = m->M_dat.MH.MH_pkthdr.len - ETHER_HDR_LEN - sizeof(*ip6);
 		break;
 #endif
 #ifdef INET
@@ -576,7 +576,7 @@ tcp_lro_rx(struct lro_ctrl *lc, struct mbuf *m, uint32_t csum)
 		le->source_ip4 = ip4->ip_src.s_addr;
 		le->dest_ip4 = ip4->ip_dst.s_addr;
 		le->eh_type = eh_type;
-		le->p_len = m->m_pkthdr.len - ETHER_HDR_LEN;
+		le->p_len = m->M_dat.MH.MH_pkthdr.len - ETHER_HDR_LEN;
 		break;
 #endif
 	}

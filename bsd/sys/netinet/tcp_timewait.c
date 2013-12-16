@@ -512,7 +512,7 @@ tcp_twrespond(struct tcptw *tw, int flags)
 	m = m_gethdr(M_DONTWAIT, MT_DATA);
 	if (m == NULL)
 		return (ENOBUFS);
-	m->m_data += max_linkhdr;
+	m->m_hdr.mh_data += max_linkhdr;
 
 #ifdef MAC
 	mac_inpcb_create_mbuf(inp, m);
@@ -550,10 +550,10 @@ tcp_twrespond(struct tcptw *tw, int flags)
 	}
 	optlen = tcp_addoptions(&to, (u_char *)(th + 1));
 
-	m->m_len = hdrlen + optlen;
-	m->m_pkthdr.len = m->m_len;
+	m->m_hdr.mh_len = hdrlen + optlen;
+	m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len;
 
-	KASSERT(max_linkhdr + m->m_len <= MHLEN, ("tcptw: mbuf too small"));
+	KASSERT(max_linkhdr + m->m_hdr.mh_len <= MHLEN, ("tcptw: mbuf too small"));
 
 	th->th_seq = htonl(tw->snd_nxt);
 	th->th_ack = htonl(tw->rcv_nxt);
@@ -561,10 +561,10 @@ tcp_twrespond(struct tcptw *tw, int flags)
 	th->th_flags = flags;
 	th->th_win = htons(tw->last_win);
 
-	m->m_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
+	m->M_dat.MH.MH_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
 #ifdef INET6
 	if (isipv6) {
-		m->m_pkthdr.csum_flags = CSUM_TCP_IPV6;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP_IPV6;
 		th->th_sum = in6_cksum_pseudo(ip6,
 		    sizeof(struct tcphdr) + optlen, IPPROTO_TCP, 0);
 		ip6->ip6_hlim = in6_selecthlim(inp, NULL);
@@ -577,10 +577,10 @@ tcp_twrespond(struct tcptw *tw, int flags)
 #endif
 #ifdef INET
 	{
-		m->m_pkthdr.csum_flags = CSUM_TCP;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP;
 		th->th_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr,
 		    htons(sizeof(struct tcphdr) + optlen + IPPROTO_TCP));
-		ip->ip_len = m->m_pkthdr.len;
+		ip->ip_len = m->M_dat.MH.MH_pkthdr.len;
 		if (V_path_mtu_discovery)
 			ip->ip_off |= IP_DF;
 		error = ip_output(m, inp->inp_options, NULL,

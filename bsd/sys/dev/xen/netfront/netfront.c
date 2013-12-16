@@ -840,7 +840,7 @@ network_alloc_rx_buffers(struct netfront_info *sc)
 		}
 
 		m_cljget(m_new, M_NOWAIT, MJUMPAGESIZE);
-		if ((m_new->m_flags & M_EXT) == 0) {
+		if ((m_new->m_hdr.mh_flags & M_EXT) == 0) {
 			printf("%s: m_cljget failed\n", __func__);
 			m_freem(m_new);
 
@@ -852,7 +852,7 @@ no_mbuf:
 			 */
 			break;
 		}
-		m_new->m_len = m_new->m_pkthdr.len = MJUMPAGESIZE;
+		m_new->m_hdr.mh_len = m_new->M_dat.MH.MH_pkthdr.len = MJUMPAGESIZE;
 		
 		/* queue the mbufs allocated */
 		mbufq_tail(&sc->xn_rx_batch, m_new);
@@ -887,8 +887,8 @@ refill:
 		if ((m_new = mbufq_dequeue(&sc->xn_rx_batch)) == NULL)
 			break;
 
-		m_new->m_ext.ext_arg1 = (vm_paddr_t *)(uintptr_t)(
-				vtophys(m_new->m_ext.ext_buf) >> PAGE_SHIFT);
+		m_new->M_dat.MH.MH_dat.MH_ext.ext_arg1 = (vm_paddr_t *)(uintptr_t)(
+				vtophys(m_new->M_dat.MH.MH_dat.MH_ext.ext_buf) >> PAGE_SHIFT);
 
 		id = xennet_rxidx(req_prod + i);
 
@@ -1023,7 +1023,7 @@ xn_rxeof(struct netfront_info *np)
 				continue;
 			}
 
-			m->m_pkthdr.rcvif = ifp;
+			m->M_dat.MH.MH_pkthdr.rcvif = ifp;
 			if ( rx->flags & NETRXF_data_validated ) {
 				/* Tell the stack the checksums are okay */
 				/*
@@ -1031,14 +1031,14 @@ xn_rxeof(struct netfront_info *np)
 				 * check
 				 */
 				
-				m->m_pkthdr.csum_flags |=
+				m->M_dat.MH.MH_pkthdr.csum_flags |=
 					(CSUM_IP_CHECKED | CSUM_IP_VALID | CSUM_DATA_VALID
 					    | CSUM_PSEUDO_HDR);
-				m->m_pkthdr.csum_data = 0xffff;
+				m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
 			}
 
 			np->stats.rx_packets++;
-			np->stats.rx_bytes += m->m_pkthdr.len;
+			np->stats.rx_bytes += m->M_dat.MH.MH_pkthdr.len;
 
 			mbufq_tail(&rxq, m);
 			np->rx.rsp_cons = i;
@@ -1162,7 +1162,7 @@ xn_txeof(struct netfront_info *np)
 			 * Increment packet count if this is the last
 			 * mbuf of the chain.
 			 */
-			if (!m->m_next)
+			if (!m->m_hdr.mh_next)
 				ifp->if_opackets++;
 			if (unlikely(gnttab_query_foreign_access(
 			    np->grant_tx_ref[id]) != 0)) {
@@ -1319,8 +1319,8 @@ xennet_get_responses(struct netfront_info *np,
 	}
 
 	if (m0 != NULL) {
-		m0->m_pkthdr.len = 0;
-		m0->m_next = NULL;
+		m0->M_dat.MH.MH_pkthdr.len = 0;
+		m0->m_hdr.mh_next = NULL;
 	}
 
 	for (;;) {
@@ -1385,7 +1385,7 @@ xennet_get_responses(struct netfront_info *np,
 				MULTI_update_va_mapping(mcl, (u_long)vaddr,
 				    (((vm_paddr_t)mfn) << PAGE_SHIFT) | PG_RW |
 				    PG_V | PG_M | PG_A, 0);
-				pfn = (uintptr_t)m->m_ext.ext_arg1;
+				pfn = (uintptr_t)m->M_dat.MH.MH_dat.MH_ext.ext_arg1;
 				mmu->ptr = ((vm_paddr_t)mfn << PAGE_SHIFT) |
 				    MMU_MACHPHYS_UPDATE;
 				mmu->val = pfn;
@@ -1404,9 +1404,9 @@ next:
 		if (m == NULL)
 			break;
 
-		m->m_len = rx->status;
-		m->m_data += rx->offset;
-		m0->m_pkthdr.len += rx->status;
+		m->m_hdr.mh_len = rx->status;
+		m->m_hdr.mh_data += rx->offset;
+		m0->M_dat.MH.MH_pkthdr.len += rx->status;
 		
 next_skip_queue:
 		if (!(rx->flags & NETRXF_more_data))
@@ -1434,7 +1434,7 @@ next_skip_queue:
 		 * rx->offset + * rx->status > PAGE_SIZE above.  
 		 */
 		if (m_prev != NULL)
-			m_prev->m_next = m;
+			m_prev->m_hdr.mh_next = m;
 
 		/*
 		 * m0 can be NULL if rx->status < 0 or if * rx->offset +
@@ -1442,7 +1442,7 @@ next_skip_queue:
 		 */
 		if (m0 == NULL)
 			m0 = m;
-		m->m_next = NULL;
+		m->m_hdr.mh_next = NULL;
 		ref = xennet_get_rx_ref(np, *cons + frags);
 		ref_cons = *cons + frags;
 		frags++;
@@ -1484,7 +1484,7 @@ xn_count_frags(struct mbuf *m)
 {
 	int nfrags;
 
-	for (nfrags = 0; m != NULL; m = m->m_next)
+	for (nfrags = 0; m != NULL; m = m->m_hdr.mh_next)
 		nfrags++;
 
 	return (nfrags);
@@ -1576,7 +1576,7 @@ xn_assemble_tx_request(struct netfront_info *sc, struct mbuf *m_head)
 	m = m_head;
 	extra = NULL;
 	otherend_id = xenbus_get_otherend_id(sc->xbdev);
-	for (m = m_head; m; m = m->m_next) {
+	for (m = m_head; m; m = m->m_hdr.mh_next) {
 		netif_tx_request_t *tx;
 		uintptr_t id;
 		grant_ref_t ref;
@@ -1610,7 +1610,7 @@ xn_assemble_tx_request(struct netfront_info *sc, struct mbuf *m_head)
 			 * subtracting the sizes of the other
 			 * fragments.
 			 */
-			tx->size = m->m_pkthdr.len;
+			tx->size = m->M_dat.MH.MH_pkthdr.len;
 
 			/*
 			 * The first fragment contains the checksum flags
@@ -1624,13 +1624,13 @@ xn_assemble_tx_request(struct netfront_info *sc, struct mbuf *m_head)
 			 * so we have to test for CSUM_TSO
 			 * explicitly.
 			 */
-			if (m->m_pkthdr.csum_flags
+			if (m->M_dat.MH.MH_pkthdr.csum_flags
 			    & (CSUM_DELAY_DATA | CSUM_TSO)) {
 				tx->flags |= (NETTXF_csum_blank
 				    | NETTXF_data_validated);
 			}
 #if __FreeBSD_version >= 700000
-			if (m->m_pkthdr.csum_flags & CSUM_TSO) {
+			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_TSO) {
 				struct netif_extra_info *gso =
 					(struct netif_extra_info *)
 					RING_GET_REQUEST(&sc->tx,
@@ -1638,7 +1638,7 @@ xn_assemble_tx_request(struct netfront_info *sc, struct mbuf *m_head)
 
 				tx->flags |= NETTXF_extra_info;
 
-				gso->u.gso.size = m->m_pkthdr.tso_segsz;
+				gso->u.gso.size = m->M_dat.MH.MH_pkthdr.tso_segsz;
 				gso->u.gso.type =
 					XEN_NETIF_GSO_TYPE_TCPV4;
 				gso->u.gso.pad = 0;
@@ -1649,16 +1649,16 @@ xn_assemble_tx_request(struct netfront_info *sc, struct mbuf *m_head)
 			}
 #endif
 		} else {
-			tx->size = m->m_len;
+			tx->size = m->m_hdr.mh_len;
 		}
-		if (m->m_next)
+		if (m->m_hdr.mh_next)
 			tx->flags |= NETTXF_more_data;
 
 		sc->tx.req_prod_pvt++;
 	}
 	BPF_MTAP(ifp, m_head);
 
-	sc->stats.tx_bytes += m_head->m_pkthdr.len;
+	sc->stats.tx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
 	sc->stats.tx_packets++;
 
 	return (0);

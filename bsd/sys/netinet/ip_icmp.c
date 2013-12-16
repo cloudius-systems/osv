@@ -223,20 +223,20 @@ icmp_error(struct mbuf *n, int type, int code, uint32_t dest, int mtu)
 	 *  in response to a multicast or broadcast packet.
 	 *  if the old packet protocol was an ICMP error message.
 	 */
-	if (n->m_flags & M_DECRYPTED)
+	if (n->m_hdr.mh_flags & M_DECRYPTED)
 		goto freeit;
 	if (oip->ip_off & ~(IP_MF|IP_DF))
 		goto freeit;
-	if (n->m_flags & (M_BCAST|M_MCAST))
+	if (n->m_hdr.mh_flags & (M_BCAST|M_MCAST))
 		goto freeit;
 	if (oip->ip_p == IPPROTO_ICMP && type != ICMP_REDIRECT &&
-	  n->m_len >= oiphlen + ICMP_MINLEN &&
+	  n->m_hdr.mh_len >= oiphlen + ICMP_MINLEN &&
 	  !ICMP_INFOTYPE(((struct icmp *)((caddr_t)oip + oiphlen))->icmp_type)) {
 		ICMPSTAT_INC(icps_oldicmp);
 		goto freeit;
 	}
 	/* Drop if IP header plus 8 bytes is not contignous in first mbuf. */
-	if (oiphlen + 8 > n->m_len)
+	if (oiphlen + 8 > n->m_hdr.mh_len)
 		goto freeit;
 	/*
 	 * Calculate length to quote from original packet and
@@ -249,10 +249,10 @@ icmp_error(struct mbuf *n, int type, int code, uint32_t dest, int mtu)
 		struct tcphdr *th;
 		int tcphlen;
 
-		if (oiphlen + sizeof(struct tcphdr) > n->m_len &&
-		    n->m_next == NULL)
+		if (oiphlen + sizeof(struct tcphdr) > n->m_hdr.mh_len &&
+		    n->m_hdr.mh_next == NULL)
 			goto stdreply;
-		if (n->m_len < oiphlen + sizeof(struct tcphdr) &&
+		if (n->m_hdr.mh_len < oiphlen + sizeof(struct tcphdr) &&
 		    ((n = m_pullup(n, oiphlen + sizeof(struct tcphdr))) == NULL))
 			goto freeit;
 		th = (struct tcphdr *)((caddr_t)oip + oiphlen);
@@ -261,9 +261,9 @@ icmp_error(struct mbuf *n, int type, int code, uint32_t dest, int mtu)
 			goto freeit;
 		if (oip->ip_len < oiphlen + tcphlen)
 			goto freeit;
-		if (oiphlen + tcphlen > n->m_len && n->m_next == NULL)
+		if (oiphlen + tcphlen > n->m_hdr.mh_len && n->m_hdr.mh_next == NULL)
 			goto stdreply;
-		if (n->m_len < oiphlen + tcphlen && 
+		if (n->m_hdr.mh_len < oiphlen + tcphlen &&
 		    ((n = m_pullup(n, oiphlen + tcphlen)) == NULL))
 			goto freeit;
 		icmpelen = bsd_max(tcphlen, bsd_min(V_icmp_quotelen, oip->ip_len - oiphlen));
@@ -285,7 +285,7 @@ stdreply:	icmpelen = bsd_max(8, bsd_min(V_icmp_quotelen, oip->ip_len - oiphlen))
 #endif
 	icmplen = bsd_min(icmplen, M_TRAILINGSPACE(m) - sizeof(struct ip) - ICMP_MINLEN);
 	m_align(m, ICMP_MINLEN + icmplen);
-	m->m_len = ICMP_MINLEN + icmplen;
+	m->m_hdr.mh_len = ICMP_MINLEN + icmplen;
 
 	/* XXX MRT  make the outgoing packet use the same FIB
 	 * that was associated with the incoming packet
@@ -327,14 +327,14 @@ stdreply:	icmpelen = bsd_max(8, bsd_min(V_icmp_quotelen, oip->ip_len - oiphlen))
 	 * If the original mbuf was meant to bypass the firewall, the error
 	 * reply should bypass as well.
 	 */
-	m->m_flags |= n->m_flags & M_SKIP_FIREWALL;
-	m->m_data -= sizeof(struct ip);
-	m->m_len += sizeof(struct ip);
-	m->m_pkthdr.len = m->m_len;
-	m->m_pkthdr.rcvif = n->m_pkthdr.rcvif;
+	m->m_hdr.mh_flags |= n->m_hdr.mh_flags & M_SKIP_FIREWALL;
+	m->m_hdr.mh_data -= sizeof(struct ip);
+	m->m_hdr.mh_len += sizeof(struct ip);
+	m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len;
+	m->M_dat.MH.MH_pkthdr.rcvif = n->M_dat.MH.MH_pkthdr.rcvif;
 	nip = mtod(m, struct ip *);
 	bcopy((caddr_t)oip, (caddr_t)nip, sizeof(struct ip));
-	nip->ip_len = m->m_len;
+	nip->ip_len = m->m_hdr.mh_len;
 	nip->ip_v = IPVERSION;
 	nip->ip_hl = 5;
 	nip->ip_p = IPPROTO_ICMP;
@@ -378,22 +378,22 @@ icmp_input(struct mbuf *m, int off)
 		goto freeit;
 	}
 	i = hlen + bsd_min(icmplen, ICMP_ADVLENMIN);
-	if (m->m_len < i && (m = m_pullup(m, i)) == NULL)  {
+	if (m->m_hdr.mh_len < i && (m = m_pullup(m, i)) == NULL)  {
 		ICMPSTAT_INC(icps_tooshort);
 		return;
 	}
 	ip = mtod(m, struct ip *);
-	m->m_len -= hlen;
-	m->m_data += hlen;
+	m->m_hdr.mh_len -= hlen;
+	m->m_hdr.mh_data += hlen;
 	icp = mtod(m, struct icmp *);
 	if (in_cksum(m, icmplen)) {
 		ICMPSTAT_INC(icps_checksum);
 		goto freeit;
 	}
-	m->m_len += hlen;
-	m->m_data -= hlen;
+	m->m_hdr.mh_len += hlen;
+	m->m_hdr.mh_data -= hlen;
 
-	if (m->m_pkthdr.rcvif && m->m_pkthdr.rcvif->if_type == IFT_FAITH) {
+	if (m->M_dat.MH.MH_pkthdr.rcvif && m->M_dat.MH.MH_pkthdr.rcvif->if_type == IFT_FAITH) {
 		/*
 		 * Deliver very specific ICMP type only.
 		 */
@@ -522,7 +522,7 @@ icmp_input(struct mbuf *m, int off)
 
 	case ICMP_ECHO:
 		if (!V_icmpbmcastecho
-		    && (m->m_flags & (M_MCAST | M_BCAST)) != 0) {
+		    && (m->m_hdr.mh_flags & (M_MCAST | M_BCAST)) != 0) {
 			ICMPSTAT_INC(icps_bmcastecho);
 			break;
 		}
@@ -534,7 +534,7 @@ icmp_input(struct mbuf *m, int off)
 
 	case ICMP_TSTAMP:
 		if (!V_icmpbmcastecho
-		    && (m->m_flags & (M_MCAST | M_BCAST)) != 0) {
+		    && (m->m_hdr.mh_flags & (M_MCAST | M_BCAST)) != 0) {
 			ICMPSTAT_INC(icps_bmcasttstamp);
 			break;
 		}
@@ -570,7 +570,7 @@ icmp_input(struct mbuf *m, int off)
 			icmpdst.sin_addr = ip->ip_dst;
 		}
 		ia = (struct in_ifaddr *)ifaof_ifpforaddr(
-			    (struct bsd_sockaddr *)&icmpdst, m->m_pkthdr.rcvif);
+			    (struct bsd_sockaddr *)&icmpdst, m->M_dat.MH.MH_pkthdr.rcvif);
 		if (ia == NULL)
 			break;
 		if (ia->ia_ifp == NULL) {
@@ -726,7 +726,7 @@ icmp_reflect(struct mbuf *m)
 	 * addresses, use the first non-broadcast address which corresponds
 	 * to the incoming interface.
 	 */
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 	if (ifp != NULL && ifp->if_flags & IFF_BROADCAST) {
 		IF_ADDR_RLOCK(ifp);
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
@@ -811,14 +811,14 @@ match:
 		cp = (u_char *) (ip + 1);
 		if ((opts = ip_srcroute(m)) == 0 &&
 		    (opts = m_gethdr(M_DONTWAIT, MT_DATA))) {
-			opts->m_len = sizeof(struct in_addr);
+			opts->m_hdr.mh_len = sizeof(struct in_addr);
 			mtod(opts, struct in_addr *)->s_addr = 0;
 		}
 		if (opts) {
 #ifdef ICMPPRINTFS
 		    if (icmpprintfs)
 			    printf("icmp_reflect optlen %d rt %d => ",
-				optlen, opts->m_len);
+				optlen, opts->m_hdr.mh_len);
 #endif
 		    for (cnt = optlen; cnt > 0; cnt -= len, cp += len) {
 			    opt = cp[IPOPT_OPTVAL];
@@ -840,22 +840,22 @@ match:
 			    if (opt == IPOPT_RR || opt == IPOPT_TS ||
 				opt == IPOPT_SECURITY) {
 				    bcopy((caddr_t)cp,
-					mtod(opts, caddr_t) + opts->m_len, len);
-				    opts->m_len += len;
+					mtod(opts, caddr_t) + opts->m_hdr.mh_len, len);
+				    opts->m_hdr.mh_len += len;
 			    }
 		    }
 		    /* Terminate & pad, if necessary */
-		    cnt = opts->m_len % 4;
+		    cnt = opts->m_hdr.mh_len % 4;
 		    if (cnt) {
 			    for (; cnt < 4; cnt++) {
-				    *(mtod(opts, caddr_t) + opts->m_len) =
+				    *(mtod(opts, caddr_t) + opts->m_hdr.mh_len) =
 					IPOPT_EOL;
-				    opts->m_len++;
+				    opts->m_hdr.mh_len++;
 			    }
 		    }
 #ifdef ICMPPRINTFS
 		    if (icmpprintfs)
-			    printf("%d\n", opts->m_len);
+			    printf("%d\n", opts->m_hdr.mh_len);
 #endif
 		}
 		/*
@@ -865,15 +865,15 @@ match:
 		ip->ip_len -= optlen;
 		ip->ip_v = IPVERSION;
 		ip->ip_hl = 5;
-		m->m_len -= optlen;
-		if (m->m_flags & M_PKTHDR)
-			m->m_pkthdr.len -= optlen;
+		m->m_hdr.mh_len -= optlen;
+		if (m->m_hdr.mh_flags & M_PKTHDR)
+			m->M_dat.MH.MH_pkthdr.len -= optlen;
 		optlen += sizeof(struct ip);
 		bcopy((caddr_t)ip + optlen, (caddr_t)(ip + 1),
-			 (unsigned)(m->m_len - sizeof(struct ip)));
+			 (unsigned)(m->m_hdr.mh_len - sizeof(struct ip)));
 	}
 	m_tag_delete_nonpersistent(m);
-	m->m_flags &= ~(M_BCAST|M_MCAST);
+	m->m_hdr.mh_flags &= ~(M_BCAST|M_MCAST);
 	icmp_send(m, opts);
 done:
 	if (opts)
@@ -892,14 +892,14 @@ icmp_send(struct mbuf *m, struct mbuf *opts)
 	register struct icmp *icp;
 
 	hlen = ip->ip_hl << 2;
-	m->m_data += hlen;
-	m->m_len -= hlen;
+	m->m_hdr.mh_data += hlen;
+	m->m_hdr.mh_len -= hlen;
 	icp = mtod(m, struct icmp *);
 	icp->icmp_cksum = 0;
 	icp->icmp_cksum = in_cksum(m, ip->ip_len - hlen);
-	m->m_data -= hlen;
-	m->m_len += hlen;
-	m->m_pkthdr.rcvif = (struct ifnet *)0;
+	m->m_hdr.mh_data -= hlen;
+	m->m_hdr.mh_len += hlen;
+	m->M_dat.MH.MH_pkthdr.rcvif = (struct ifnet *)0;
 #ifdef ICMPPRINTFS
 	if (icmpprintfs) {
 		char buf[4 * sizeof "123"];

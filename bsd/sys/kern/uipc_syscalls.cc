@@ -621,8 +621,8 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 		while (m && len > 0) {
 			unsigned int tocopy;
 
-			if (len >= m->m_len)
-				tocopy = m->m_len;
+			if (len >= m->m_hdr.mh_len)
+				tocopy = m->m_hdr.mh_len;
 			else {
 				mp->msg_flags |= MSG_CTRUNC;
 				tocopy = len;
@@ -634,7 +634,7 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 
 			ctlbuf += tocopy;
 			len -= tocopy;
-			m = m->m_next;
+			m = m->m_hdr.mh_next;
 		}
 		mp->msg_controllen = ctlbuf - (caddr_t)mp->msg_control;
 	}
@@ -1015,7 +1015,7 @@ sockargs(struct mbuf **mp, caddr_t buf, int buflen, int type)
 	m = m_get(M_WAIT, type);
 	if ((u_int)buflen > MLEN)
 		MCLGET(m, M_WAIT);
-	m->m_len = buflen;
+	m->m_hdr.mh_len = buflen;
 	error = copyin(buf, mtod(m, caddr_t), (u_int)buflen);
 	if (error)
 		(void) m_free(m);
@@ -1497,14 +1497,14 @@ retry_space:
 			}
 			MEXTADD(m0, sf_buf_kva(sf), PAGE_SIZE, sf_buf_mext,
 			    sfs, sf, M_RDONLY, EXT_SFBUF);
-			m0->m_data = (char *)sf_buf_kva(sf) + pgoff;
-			m0->m_len = xfsize;
+			m0->m_hdr.mh_data = (char *)sf_buf_kva(sf) + pgoff;
+			m0->m_hdr.mh_len = xfsize;
 
 			/* Append to mbuf chain. */
 			if (mtail != NULL)
-				mtail->m_next = m0;
+				mtail->m_hdr.mh_next = m0;
 			else if (m != NULL)
-				m_last(m)->m_next = m0;
+				m_last(m)->m_hdr.mh_next = m0;
 			else
 				m = m0;
 			mtail = m0;

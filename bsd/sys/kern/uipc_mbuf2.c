@@ -98,21 +98,21 @@ m_pulldown(struct mbuf *m, int off, int len, int *offp)
     {
 	struct mbuf *t;
 	printf("before:");
-	for (t = m; t; t = t->m_next)
-		printf(" %d", t->m_len);
+	for (t = m; t; t = t->m_hdr.mh_next)
+		printf(" %d", t->m_hdr.mh_len);
 	printf("\n");
     }
 #endif
 	n = m;
 	while (n != NULL && off > 0) {
-		if (n->m_len > off)
+		if (n->m_hdr.mh_len > off)
 			break;
-		off -= n->m_len;
-		n = n->m_next;
+		off -= n->m_hdr.mh_len;
+		n = n->m_hdr.mh_next;
 	}
 	/* be sure to point non-empty mbuf */
-	while (n != NULL && n->m_len == 0)
-		n = n->m_next;
+	while (n != NULL && n->m_hdr.mh_len == 0)
+		n = n->m_hdr.mh_next;
 	if (!n) {
 		m_freem(m);
 		return NULL;	/* mbuf chain too short */
@@ -141,43 +141,43 @@ m_pulldown(struct mbuf *m, int off, int len, int *offp)
 	 *      then we're not "writable," according to this code.
 	 */
 	writable = 0;
-	if ((n->m_flags & M_EXT) == 0 ||
-	    (n->m_ext.ext_type == EXT_CLUSTER && M_WRITABLE(n)))
+	if ((n->m_hdr.mh_flags & M_EXT) == 0 ||
+	    (n->M_dat.MH.MH_dat.MH_ext.ext_type == EXT_CLUSTER && M_WRITABLE(n)))
 		writable = 1;
 
 	/*
 	 * the target data is on <n, off>.
 	 * if we got enough data on the mbuf "n", we're done.
 	 */
-	if ((off == 0 || offp) && len <= n->m_len - off && writable)
+	if ((off == 0 || offp) && len <= n->m_hdr.mh_len - off && writable)
 		goto ok;
 
 	/*
-	 * when len <= n->m_len - off and off != 0, it is a special case.
+	 * when len <= n->m_hdr.mh_len - off and off != 0, it is a special case.
 	 * len bytes from <n, off> sits in single mbuf, but the caller does
 	 * not like the starting position (off).
 	 * chop the current mbuf into two pieces, set off to 0.
 	 */
-	if (len <= n->m_len - off) {
-		o = m_dup1(n, off, n->m_len - off, M_DONTWAIT);
+	if (len <= n->m_hdr.mh_len - off) {
+		o = m_dup1(n, off, n->m_hdr.mh_len - off, M_DONTWAIT);
 		if (o == NULL) {
 			m_freem(m);
 			return NULL;	/* ENOBUFS */
 		}
-		n->m_len = off;
-		o->m_next = n->m_next;
-		n->m_next = o;
-		n = n->m_next;
+		n->m_hdr.mh_len = off;
+		o->m_hdr.mh_next = n->m_hdr.mh_next;
+		n->m_hdr.mh_next = o;
+		n = n->m_hdr.mh_next;
 		off = 0;
 		goto ok;
 	}
 
 	/*
-	 * we need to take hlen from <n, off> and tlen from <n->m_next, 0>,
-	 * and construct contiguous mbuf with m_len == len.
+	 * we need to take hlen from <n, off> and tlen from <n->m_hdr.mh_next, 0>,
+	 * and construct contiguous mbuf with m_hdr.mh_len == len.
 	 * note that hlen + tlen == len, and tlen > 0.
 	 */
-	hlen = n->m_len - off;
+	hlen = n->m_hdr.mh_len - off;
 	tlen = len - hlen;
 
 	/*
@@ -185,8 +185,8 @@ m_pulldown(struct mbuf *m, int off, int len, int *offp)
 	 * if not, we can do nothing about the chain.
 	 */
 	olen = 0;
-	for (o = n->m_next; o != NULL; o = o->m_next)
-		olen += o->m_len;
+	for (o = n->m_hdr.mh_next; o != NULL; o = o->m_hdr.mh_next)
+		olen += o->m_hdr.mh_len;
 	if (hlen + olen < len) {
 		m_freem(m);
 		return NULL;	/* mbuf chain too short */
@@ -194,22 +194,22 @@ m_pulldown(struct mbuf *m, int off, int len, int *offp)
 
 	/*
 	 * easy cases first.
-	 * we need to use m_copydata() to get data from <n->m_next, 0>.
+	 * we need to use m_copydata() to get data from <n->m_hdr.mh_next, 0>.
 	 */
 	if ((off == 0 || offp) && M_TRAILINGSPACE(n) >= tlen
 	 && writable) {
-		m_copydata(n->m_next, 0, tlen, mtod(n, caddr_t) + n->m_len);
-		n->m_len += tlen;
-		m_adj(n->m_next, tlen);
+		m_copydata(n->m_hdr.mh_next, 0, tlen, mtod(n, caddr_t) + n->m_hdr.mh_len);
+		n->m_hdr.mh_len += tlen;
+		m_adj(n->m_hdr.mh_next, tlen);
 		goto ok;
 	}
-	if ((off == 0 || offp) && M_LEADINGSPACE(n->m_next) >= hlen
+	if ((off == 0 || offp) && M_LEADINGSPACE(n->m_hdr.mh_next) >= hlen
 	 && writable) {
-		n->m_next->m_data -= hlen;
-		n->m_next->m_len += hlen;
-		bcopy(mtod(n, caddr_t) + off, mtod(n->m_next, caddr_t), hlen);
-		n->m_len -= hlen;
-		n = n->m_next;
+		n->m_hdr.mh_next->m_hdr.mh_data -= hlen;
+		n->m_hdr.mh_next->m_hdr.mh_len += hlen;
+		bcopy(mtod(n, caddr_t) + off, mtod(n->m_hdr.mh_next, caddr_t), hlen);
+		n->m_hdr.mh_len -= hlen;
+		n = n->m_hdr.mh_next;
 		off = 0;
 		goto ok;
 	}
@@ -219,23 +219,23 @@ m_pulldown(struct mbuf *m, int off, int len, int *offp)
 	 * on both end.
 	 */
 	if (len > MLEN)
-		o = m_getcl(M_DONTWAIT, m->m_type, 0);
+		o = m_getcl(M_DONTWAIT, m->m_hdr.mh_type, 0);
 	else
-		o = m_get(M_DONTWAIT, m->m_type);
+		o = m_get(M_DONTWAIT, m->m_hdr.mh_type);
 	if (!o) {
 		m_freem(m);
 		return NULL;	/* ENOBUFS */
 	}
 	/* get hlen from <n, off> into <o, 0> */
-	o->m_len = hlen;
+	o->m_hdr.mh_len = hlen;
 	bcopy(mtod(n, caddr_t) + off, mtod(o, caddr_t), hlen);
-	n->m_len -= hlen;
-	/* get tlen from <n->m_next, 0> into <o, hlen> */
-	m_copydata(n->m_next, 0, tlen, mtod(o, caddr_t) + o->m_len);
-	o->m_len += tlen;
-	m_adj(n->m_next, tlen);
-	o->m_next = n->m_next;
-	n->m_next = o;
+	n->m_hdr.mh_len -= hlen;
+	/* get tlen from <n->m_hdr.mh_next, 0> into <o, hlen> */
+	m_copydata(n->m_hdr.mh_next, 0, tlen, mtod(o, caddr_t) + o->m_hdr.mh_len);
+	o->m_hdr.mh_len += tlen;
+	m_adj(n->m_hdr.mh_next, tlen);
+	o->m_hdr.mh_next = n->m_hdr.mh_next;
+	n->m_hdr.mh_next = o;
 	n = o;
 	off = 0;
 
@@ -244,8 +244,8 @@ ok:
     {
 	struct mbuf *t;
 	printf("after:");
-	for (t = m; t; t = t->m_next)
-		printf("%c%d", t == n ? '*' : ' ', t->m_len);
+	for (t = m; t; t = t->m_hdr.mh_next)
+		printf("%c%d", t == n ? '*' : ' ', t->m_hdr.mh_len);
 	printf(" (off=%d)\n", off);
     }
 #endif
@@ -262,20 +262,20 @@ m_dup1(struct mbuf *m, int off, int len, int wait)
 
 	if (len > MCLBYTES)
 		return NULL;
-	if (off == 0 && (m->m_flags & M_PKTHDR) != 0)
+	if (off == 0 && (m->m_hdr.mh_flags & M_PKTHDR) != 0)
 		copyhdr = 1;
 	else
 		copyhdr = 0;
 	if (len >= MINCLSIZE) {
 		if (copyhdr == 1)
-			n = m_getcl(wait, m->m_type, M_PKTHDR);
+			n = m_getcl(wait, m->m_hdr.mh_type, M_PKTHDR);
 		else
-			n = m_getcl(wait, m->m_type, 0);
+			n = m_getcl(wait, m->m_hdr.mh_type, 0);
 	} else {
 		if (copyhdr == 1)
-			n = m_gethdr(wait, m->m_type);
+			n = m_gethdr(wait, m->m_hdr.mh_type);
 		else
-			n = m_get(wait, m->m_type);
+			n = m_get(wait, m->m_hdr.mh_type);
 	}
 	if (!n)
 		return NULL; /* ENOBUFS */
@@ -285,7 +285,7 @@ m_dup1(struct mbuf *m, int off, int len, int wait)
 		return NULL;
 	}
 	m_copydata(m, off, len, mtod(n, caddr_t));
-	n->m_len = len;
+	n->m_hdr.mh_len = len;
 	return n;
 }
 
@@ -337,7 +337,7 @@ m_tag_delete_chain(struct mbuf *m, struct m_tag *t)
 	if (t != NULL)
 		p = t;
 	else
-		p = SLIST_FIRST(&m->m_pkthdr.tags);
+		p = SLIST_FIRST(&m->M_dat.MH.MH_pkthdr.tags);
 	if (p == NULL)
 		return;
 	while ((q = SLIST_NEXT(p, m_tag_link)) != NULL)
@@ -357,7 +357,7 @@ m_tag_delete_nonpersistent(struct mbuf *m)
 {
 	struct m_tag *p, *q;
 
-	SLIST_FOREACH_SAFE(p, &m->m_pkthdr.tags, m_tag_link, q)
+	SLIST_FOREACH_SAFE(p, &m->M_dat.MH.MH_pkthdr.tags, m_tag_link, q)
 		if ((p->m_tag_id & MTAG_PERSISTENT) == 0)
 			m_tag_delete(m, p);
 }
@@ -370,7 +370,7 @@ m_tag_locate(struct mbuf *m, uint32_t cookie, int type, struct m_tag *t)
 
 	KASSERT(m, ("m_tag_locate: null mbuf"));
 	if (t == NULL)
-		p = SLIST_FIRST(&m->m_pkthdr.tags);
+		p = SLIST_FIRST(&m->M_dat.MH.MH_pkthdr.tags);
 	else
 		p = SLIST_NEXT(t, m_tag_link);
 	while (p != NULL) {
@@ -425,14 +425,14 @@ m_tag_copy_chain(struct mbuf *to, struct mbuf *from, int how)
 	KASSERT(to && from,
 		("m_tag_copy_chain: null argument, to %p from %p", to, from));
 	m_tag_delete_chain(to, NULL);
-	SLIST_FOREACH(p, &from->m_pkthdr.tags, m_tag_link) {
+	SLIST_FOREACH(p, &from->M_dat.MH.MH_pkthdr.tags, m_tag_link) {
 		t = m_tag_copy(p, how);
 		if (t == NULL) {
 			m_tag_delete_chain(to, NULL);
 			return 0;
 		}
 		if (tprev == NULL)
-			SLIST_INSERT_HEAD(&to->m_pkthdr.tags, t, m_tag_link);
+			SLIST_INSERT_HEAD(&to->M_dat.MH.MH_pkthdr.tags, t, m_tag_link);
 		else
 			SLIST_INSERT_AFTER(tprev, t, m_tag_link);
 		tprev = t;

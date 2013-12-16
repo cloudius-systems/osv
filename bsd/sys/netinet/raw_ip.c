@@ -279,7 +279,7 @@ rip_input(struct mbuf *m, int off)
 	ripsrc.sin_addr = ip->ip_src;
 	last = NULL;
 
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 
 	hash = INP_PCBHASH_RAW(proto, ip->ip_src.s_addr,
 	    ip->ip_dst.s_addr, V_ripcbinfo.ipi_hashmask);
@@ -406,7 +406,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 	 * allocate an mbuf for a header and fill it in.
 	 */
 	if ((inp->inp_flags & INP_HDRINCL) == 0) {
-		if (m->m_pkthdr.len + sizeof(struct ip) > IP_MAXSEGMENT) {
+		if (m->M_dat.MH.MH_pkthdr.len + sizeof(struct ip) > IP_MAXSEGMENT) {
 			m_freem(m);
 			return(EMSGSIZE);
 		}
@@ -422,12 +422,12 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		else
 			ip->ip_off = 0;
 		ip->ip_p = inp->inp_ip_p;
-		ip->ip_len = m->m_pkthdr.len;
+		ip->ip_len = m->M_dat.MH.MH_pkthdr.len;
 		ip->ip_src = inp->inp_laddr;
 		ip->ip_dst.s_addr = dst;
 		ip->ip_ttl = inp->inp_ip_ttl;
 	} else {
-		if (m->m_pkthdr.len > IP_MAXSEGMENT) {
+		if (m->M_dat.MH.MH_pkthdr.len > IP_MAXSEGMENT) {
 			m_freem(m);
 			return(EMSGSIZE);
 		}
@@ -439,7 +439,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		 * and don't allow packet length sizes that will crash.
 		 */
 		if (((ip->ip_hl != (sizeof (*ip) >> 2)) && inp->inp_options)
-		    || (ip->ip_len > m->m_pkthdr.len)
+		    || (ip->ip_len > m->M_dat.MH.MH_pkthdr.len)
 		    || (ip->ip_len < (ip->ip_hl << 2))) {
 			INP_RUNLOCK(inp);
 			m_freem(m);

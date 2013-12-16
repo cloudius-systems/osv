@@ -1080,7 +1080,7 @@ linux_recvmsg(int s, struct msghdr *msg, int flags, ssize_t* bytes)
 		linux_cmsg = malloc(L_CMSG_HDRSZ, M_TEMP, M_WAITOK | M_ZERO);
 
 		msg.msg_control = mtod(control, struct cmsghdr *);
-		msg.msg_controllen = control->m_len;
+		msg.msg_controllen = control->m_hdr.mh_len;
 
 		cm = CMSG_FIRSTHDR(&msg);
 

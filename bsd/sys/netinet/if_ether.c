@@ -219,12 +219,12 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
 
 	if ((m = m_gethdr(M_DONTWAIT, MT_DATA)) == NULL)
 		return;
-	m->m_len = sizeof(*ah) + 2*sizeof(struct in_addr) +
+	m->m_hdr.mh_len = sizeof(*ah) + 2*sizeof(struct in_addr) +
 		2*ifp->if_data.ifi_addrlen;
-	m->m_pkthdr.len = m->m_len;
-	MH_ALIGN(m, m->m_len);
+	m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len;
+	MH_ALIGN(m, m->m_hdr.mh_len);
 	ah = mtod(m, struct arphdr *);
-	bzero((caddr_t)ah, m->m_len);
+	bzero((caddr_t)ah, m->m_hdr.mh_len);
 	ah->ar_pro = htons(ETHERTYPE_IP);
 	ah->ar_hln = ifp->if_addrlen;		/* hardware address length */
 	ah->ar_pln = sizeof(struct in_addr);	/* protocol address length */
@@ -234,7 +234,7 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
 	bcopy((caddr_t)tip, (caddr_t)ar_tpa(ah), ah->ar_pln);
 	sa.sa_family = AF_ARP;
 	sa.sa_len = 2;
-	m->m_flags |= M_BCAST;
+	m->m_hdr.mh_flags |= M_BCAST;
 	(*ifp->if_output)(ifp, m, &sa, NULL);
 	ARPSTAT_INC(txrequests);
 }
@@ -265,13 +265,13 @@ arpresolve(struct ifnet *ifp, struct rtentry *rt0, struct mbuf *m,
 
 	*lle = NULL;
 	if (m != NULL) {
-		if (m->m_flags & M_BCAST) {
+		if (m->m_hdr.mh_flags & M_BCAST) {
 			/* broadcast */
 			(void)memcpy(desten,
 			    ifp->if_broadcastaddr, ifp->if_addrlen);
 			return (0);
 		}
-		if (m->m_flags & M_MCAST && ifp->if_type != IFT_ARCNET) {
+		if (m->m_hdr.mh_flags & M_MCAST && ifp->if_type != IFT_ARCNET) {
 			/* multicast */
 			ETHER_MAP_IP_MULTICAST(&SIN(dst)->sin_addr, desten);
 			return (0);
@@ -341,7 +341,7 @@ retry:
 	if (m != NULL) {
 		if (la->la_numheld >= V_arp_maxhold) {
 			if (la->la_hold != NULL) {
-				next = la->la_hold->m_nextpkt;
+				next = la->la_hold->m_hdr.mh_nextpkt;
 				m_freem(la->la_hold);
 				la->la_hold = next;
 				la->la_numheld--;
@@ -350,9 +350,9 @@ retry:
 		}
 		if (la->la_hold != NULL) {
 			curr = la->la_hold;
-			while (curr->m_nextpkt != NULL)
-				curr = curr->m_nextpkt;
-			curr->m_nextpkt = m;
+			while (curr->m_hdr.mh_nextpkt != NULL)
+				curr = curr->m_hdr.mh_nextpkt;
+			curr->m_hdr.mh_nextpkt = m;
 		} else
 			la->la_hold = m;
 		la->la_numheld++;
@@ -406,7 +406,7 @@ arpintr(struct mbuf *m)
 {
 	struct arphdr *ar;
 
-	if (m->m_len < sizeof(struct arphdr) &&
+	if (m->m_hdr.mh_len < sizeof(struct arphdr) &&
 	    ((m = m_pullup(m, sizeof(struct arphdr))) == NULL)) {
 		bsd_log(LOG_NOTICE, "arp: runt packet -- m_pullup failed\n");
 		return;
@@ -426,7 +426,7 @@ arpintr(struct mbuf *m)
 		return;
 	}
 
-	if (m->m_len < arphdr_len(ar)) {
+	if (m->m_hdr.mh_len < arphdr_len(ar)) {
 		if ((m = m_pullup(m, arphdr_len(ar))) == NULL) {
 			bsd_log(LOG_NOTICE, "arp: runt packet\n");
 			m_freem(m);
@@ -482,7 +482,7 @@ static void
 in_arpinput(struct mbuf *m)
 {
 	struct arphdr *ah;
-	struct ifnet *ifp = m->m_pkthdr.rcvif;
+	struct ifnet *ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 	struct llentry *la = NULL;
 	struct rtentry *rt;
 	struct bsd_ifaddr *ifa;
@@ -505,7 +505,7 @@ in_arpinput(struct mbuf *m)
 		is_bridge = 1;
 
 	req_len = arphdr_len2(ifp->if_addrlen, sizeof(struct in_addr));
-	if (m->m_len < req_len && (m = m_pullup(m, req_len)) == NULL) {
+	if (m->m_hdr.mh_len < req_len && (m = m_pullup(m, req_len)) == NULL) {
 		bsd_log(LOG_NOTICE, "in_arp: runt packet -- m_pullup failed\n");
 		return;
 	}
@@ -727,8 +727,8 @@ match:
 			memcpy(&sa, L3_ADDR(la), sizeof(sa));
 			LLE_WUNLOCK(la);
 			for (; m_hold != NULL; m_hold = m_hold_next) {
-				m_hold_next = m_hold->m_nextpkt;
-				m_hold->m_nextpkt = NULL;
+				m_hold_next = m_hold->m_hdr.mh_nextpkt;
+				m_hold->m_hdr.mh_nextpkt = NULL;
 				(*ifp->if_output)(ifp, m_hold, &sa, NULL);
 			}
 		} else
@@ -818,19 +818,19 @@ reply:
 		printf("arp: sending reply for link-local addr %s\n",
 		    inet_ntoa(itaddr));
 #endif
-		m->m_flags |= M_BCAST;
-		m->m_flags &= ~M_MCAST;
+		m->m_hdr.mh_flags |= M_BCAST;
+		m->m_hdr.mh_flags &= ~M_MCAST;
 	} else {
 		/* default behaviour; never reply by broadcast. */
-		m->m_flags &= ~(M_BCAST|M_MCAST);
+		m->m_hdr.mh_flags &= ~(M_BCAST|M_MCAST);
 	}
 	(void)memcpy(ar_tpa(ah), ar_spa(ah), ah->ar_pln);
 	(void)memcpy(ar_spa(ah), &itaddr, ah->ar_pln);
 	ah->ar_op = htons(ARPOP_REPLY);
 	ah->ar_pro = htons(ETHERTYPE_IP); /* let's be sure! */
-	m->m_len = sizeof(*ah) + (2 * ah->ar_pln) + (2 * ah->ar_hln);
-	m->m_pkthdr.len = m->m_len;
-	m->m_pkthdr.rcvif = NULL;
+	m->m_hdr.mh_len = sizeof(*ah) + (2 * ah->ar_pln) + (2 * ah->ar_hln);
+	m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len;
+	m->M_dat.MH.MH_pkthdr.rcvif = NULL;
 	sa.sa_family = AF_ARP;
 	sa.sa_len = 2;
 	(*ifp->if_output)(ifp, m, &sa, NULL);

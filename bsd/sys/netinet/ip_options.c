@@ -318,7 +318,7 @@ dropit:
 				}
 				ipaddr.sin_addr = dst;
 				ia = (INA)ifaof_ifpforaddr((SA)&ipaddr,
-							    m->m_pkthdr.rcvif);
+							    m->M_dat.MH.MH_pkthdr.rcvif);
 				if (ia == NULL)
 					continue;
 				(void)memcpy(sin, &IA_SIN(ia)->sin_addr,
@@ -413,7 +413,7 @@ ip_srcroute(struct mbuf *m0)
 #define OPTSIZ	(sizeof(opts->ip_srcrt.nop) + sizeof(opts->ip_srcrt.srcopt))
 
 	/* length is (nhops+1)*sizeof(addr) + sizeof(nop + srcrt header) */
-	m->m_len = opts->ip_nhops * sizeof(struct in_addr) +
+	m->m_hdr.mh_len = opts->ip_nhops * sizeof(struct in_addr) +
 	    sizeof(struct in_addr) + OPTSIZ;
 
 	/*
@@ -464,11 +464,11 @@ ip_stripoptions(struct mbuf *m, struct mbuf *mopt)
 
 	olen = (ip->ip_hl << 2) - sizeof (struct ip);
 	opts = (caddr_t)(ip + 1);
-	i = m->m_len - (sizeof (struct ip) + olen);
+	i = m->m_hdr.mh_len - (sizeof (struct ip) + olen);
 	bcopy(opts + olen, opts, (unsigned)i);
-	m->m_len -= olen;
-	if (m->m_flags & M_PKTHDR)
-		m->m_pkthdr.len -= olen;
+	m->m_hdr.mh_len -= olen;
+	if (m->m_hdr.mh_flags & M_PKTHDR)
+		m->M_dat.MH.MH_pkthdr.len -= olen;
 	ip->ip_v = IPVERSION;
 	ip->ip_hl = sizeof(struct ip) >> 2;
 }
@@ -488,33 +488,33 @@ ip_insertoptions(struct mbuf *m, struct mbuf *opt, int *phlen)
 	struct ip *ip = mtod(m, struct ip *);
 	unsigned optlen;
 
-	optlen = opt->m_len - sizeof(p->ipopt_dst);
+	optlen = opt->m_hdr.mh_len - sizeof(p->ipopt_dst);
 	if (optlen + ip->ip_len > IP_MAXSEGMENT) {
 		*phlen = 0;
 		return (m);		/* XXX should fail */
 	}
 	if (p->ipopt_dst.s_addr)
 		ip->ip_dst = p->ipopt_dst;
-	if (m->m_flags & M_EXT || m->m_data - optlen < m->m_pktdat) {
+	if (m->m_hdr.mh_flags & M_EXT || m->m_hdr.mh_data - optlen < m->M_dat.MH.MH_dat.MH_databuf) {
 		MGETHDR(n, M_DONTWAIT, MT_DATA);
 		if (n == NULL) {
 			*phlen = 0;
 			return (m);
 		}
 		M_MOVE_PKTHDR(n, m);
-		n->m_pkthdr.rcvif = NULL;
-		n->m_pkthdr.len += optlen;
-		m->m_len -= sizeof(struct ip);
-		m->m_data += sizeof(struct ip);
-		n->m_next = m;
+		n->M_dat.MH.MH_pkthdr.rcvif = NULL;
+		n->M_dat.MH.MH_pkthdr.len += optlen;
+		m->m_hdr.mh_len -= sizeof(struct ip);
+		m->m_hdr.mh_data += sizeof(struct ip);
+		n->m_hdr.mh_next = m;
 		m = n;
-		m->m_len = optlen + sizeof(struct ip);
-		m->m_data += max_linkhdr;
+		m->m_hdr.mh_len = optlen + sizeof(struct ip);
+		m->m_hdr.mh_data += max_linkhdr;
 		bcopy(ip, mtod(m, void *), sizeof(struct ip));
 	} else {
-		m->m_data -= optlen;
-		m->m_len += optlen;
-		m->m_pkthdr.len += optlen;
+		m->m_hdr.mh_data -= optlen;
+		m->m_hdr.mh_len += optlen;
+		m->M_dat.MH.MH_pkthdr.len += optlen;
 		bcopy(ip, mtod(m, void *), sizeof(struct ip));
 	}
 	ip = mtod(m, struct ip *);
@@ -590,7 +590,7 @@ ip_pcbopts(struct inpcb *inp, int optname, struct mbuf *m)
 	if (*pcbopt)
 		(void)m_free(*pcbopt);
 	*pcbopt = 0;
-	if (m == NULL || m->m_len == 0) {
+	if (m == NULL || m->m_hdr.mh_len == 0) {
 		/*
 		 * Only turning off any previous options.
 		 */
@@ -599,16 +599,16 @@ ip_pcbopts(struct inpcb *inp, int optname, struct mbuf *m)
 		return (0);
 	}
 
-	if (m->m_len % sizeof(int32_t))
+	if (m->m_hdr.mh_len % sizeof(int32_t))
 		goto bad;
 	/*
 	 * IP first-hop destination address will be stored before actual
 	 * options; move other options back and clear it when none present.
 	 */
-	if (m->m_data + m->m_len + sizeof(struct in_addr) >= &m->m_dat[MLEN])
+	if (m->m_hdr.mh_data + m->m_hdr.mh_len + sizeof(struct in_addr) >= &m->M_dat.M_databuf[MLEN])
 		goto bad;
-	cnt = m->m_len;
-	m->m_len += sizeof(struct in_addr);
+	cnt = m->m_hdr.mh_len;
+	m->m_hdr.mh_len += sizeof(struct in_addr);
 	cp = mtod(m, u_char *) + sizeof(struct in_addr);
 	bcopy(mtod(m, void *), cp, (unsigned)cnt);
 	bzero(mtod(m, void *), sizeof(struct in_addr));
@@ -647,7 +647,7 @@ ip_pcbopts(struct inpcb *inp, int optname, struct mbuf *m)
 			/* XXX-BZ PRIV_NETINET_SETHDROPTS? */
 			if (optlen < IPOPT_MINOFF - 1 + sizeof(struct in_addr))
 				goto bad;
-			m->m_len -= sizeof(struct in_addr);
+			m->m_hdr.mh_len -= sizeof(struct in_addr);
 			cnt -= sizeof(struct in_addr);
 			optlen -= sizeof(struct in_addr);
 			cp[IPOPT_OLEN] = optlen;
@@ -666,7 +666,7 @@ ip_pcbopts(struct inpcb *inp, int optname, struct mbuf *m)
 			break;
 		}
 	}
-	if (m->m_len > MAX_IPOPTLEN + sizeof(struct in_addr))
+	if (m->m_hdr.mh_len > MAX_IPOPTLEN + sizeof(struct in_addr))
 		goto bad;
 	*pcbopt = m;
 	return (0);

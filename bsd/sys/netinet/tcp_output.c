@@ -689,7 +689,7 @@ send:
 	else
 #endif
 	if (tp->t_inpcb->inp_options)
-		ipoptlen = tp->t_inpcb->inp_options->m_len -
+		ipoptlen = tp->t_inpcb->inp_options->m_hdr.mh_len -
 				offsetof(struct ipoption, ipopt_list);
 	else
 		ipoptlen = 0;
@@ -793,7 +793,7 @@ send:
 #ifdef INET6
 		if (MHLEN < hdrlen + max_linkhdr) {
 			MCLGET(m, M_DONTWAIT);
-			if ((m->m_flags & M_EXT) == 0) {
+			if ((m->m_hdr.mh_flags & M_EXT) == 0) {
 				SOCKBUF_UNLOCK(&so->so_snd);
 				m_freem(m);
 				error = ENOBUFS;
@@ -801,8 +801,8 @@ send:
 			}
 		}
 #endif
-		m->m_data += max_linkhdr;
-		m->m_len = hdrlen;
+		m->m_hdr.mh_data += max_linkhdr;
+		m->m_hdr.mh_len = hdrlen;
 
 		/*
 		 * Start the m_copy functions from the closest mbuf
@@ -813,10 +813,10 @@ send:
 		if (len <= MHLEN - hdrlen - max_linkhdr) {
 			m_copydata(mb, moff, (int)len,
 			    mtod(m, caddr_t) + hdrlen);
-			m->m_len += len;
+			m->m_hdr.mh_len += len;
 		} else {
-			m->m_next = m_copy(mb, moff, (int)len);
-			if (m->m_next == NULL) {
+			m->m_hdr.mh_next = m_copy(mb, moff, (int)len);
+			if (m->m_hdr.mh_next == NULL) {
 				SOCKBUF_UNLOCK(&so->so_snd);
 				(void) m_free(m);
 				error = ENOBUFS;
@@ -855,11 +855,11 @@ send:
 			MH_ALIGN(m, hdrlen);
 		} else
 #endif
-		m->m_data += max_linkhdr;
-		m->m_len = hdrlen;
+		m->m_hdr.mh_data += max_linkhdr;
+		m->m_hdr.mh_len = hdrlen;
 	}
 	SOCKBUF_UNLOCK_ASSERT(&so->so_snd);
-	m->m_pkthdr.rcvif = (struct ifnet *)0;
+	m->M_dat.MH.MH_pkthdr.rcvif = (struct ifnet *)0;
 #ifdef MAC
 	mac_inpcb_create_mbuf(tp->t_inpcb, m);
 #endif
@@ -1019,15 +1019,15 @@ send:
 	 * Put TCP length in extended header, and then
 	 * checksum extended header and data.
 	 */
-	m->m_pkthdr.len = hdrlen + len; /* in6_cksum() need this */
-	m->m_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
+	m->M_dat.MH.MH_pkthdr.len = hdrlen + len; /* in6_cksum() need this */
+	m->M_dat.MH.MH_pkthdr.csum_data = offsetof(struct tcphdr, th_sum);
 #ifdef INET6
 	if (isipv6) {
 		/*
 		 * ip6_plen is not need to be filled now, and will be filled
 		 * in ip6_output.
 		 */
-		m->m_pkthdr.csum_flags = CSUM_TCP_IPV6;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP_IPV6;
 		th->th_sum = in6_cksum_pseudo(ip6, sizeof(struct tcphdr) +
 		    optlen + len, IPPROTO_TCP, 0);
 	}
@@ -1037,7 +1037,7 @@ send:
 #endif
 #ifdef INET
 	{
-		m->m_pkthdr.csum_flags = CSUM_TCP;
+		m->M_dat.MH.MH_pkthdr.csum_flags = CSUM_TCP;
 		th->th_sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr,
 		    htons(sizeof(struct tcphdr) + IPPROTO_TCP + len + optlen));
 
@@ -1055,8 +1055,8 @@ send:
 	if (tso) {
 		KASSERT(len > tp->t_maxopd - optlen,
 		    ("%s: len <= tso_segsz", __func__));
-		m->m_pkthdr.csum_flags |= CSUM_TSO;
-		m->m_pkthdr.tso_segsz = tp->t_maxopd - optlen;
+		m->M_dat.MH.MH_pkthdr.csum_flags |= CSUM_TSO;
+		m->M_dat.MH.MH_pkthdr.tso_segsz = tp->t_maxopd - optlen;
 	}
 
 #ifdef IPSEC
@@ -1149,7 +1149,7 @@ timer:
 #endif
 		{
 			save = ipov->ih_len;
-			ipov->ih_len = htons(m->m_pkthdr.len /* - hdrlen + (th->th_off << 2) */);
+			ipov->ih_len = htons(m->M_dat.MH.MH_pkthdr.len /* - hdrlen + (th->th_off << 2) */);
 		}
 		tcp_trace(TA_OUTPUT, tp->t_state, tp, mtod(m, void *), th, 0);
 #ifdef INET6
@@ -1166,7 +1166,7 @@ timer:
 	 * the template, but need a way to checksum without them.
 	 */
 	/*
-	 * m->m_pkthdr.len should have been set before cksum calcuration,
+	 * m->M_dat.MH.MH_pkthdr.len should have been set before cksum calcuration,
 	 * because in6_cksum() need it.
 	 */
 #ifdef INET6
@@ -1200,7 +1200,7 @@ timer:
 	struct route ro;
 
 	bzero(&ro, sizeof(ro));
-	ip->ip_len = m->m_pkthdr.len;
+	ip->ip_len = m->M_dat.MH.MH_pkthdr.len;
 #ifdef INET6
 	if (tp->t_inpcb->inp_vflag & INP_IPV6PROTO)
 		ip->ip_ttl = in6_selecthlim(tp->t_inpcb, NULL);

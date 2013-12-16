@@ -579,7 +579,7 @@ tcp_input(struct mbuf *m, int off0)
 	if (isipv6) {
 		/* IP6_EXTHDR_CHECK() is already done at tcp6_input(). */
 
-		if (m->m_len < (sizeof(*ip6) + sizeof(*th))) {
+		if (m->m_hdr.mh_len < (sizeof(*ip6) + sizeof(*th))) {
 			m = m_pullup(m, sizeof(*ip6) + sizeof(*th));
 			if (m == NULL) {
 				TCPSTAT_INC(tcps_rcvshort);
@@ -590,12 +590,12 @@ tcp_input(struct mbuf *m, int off0)
 		ip6 = mtod(m, struct ip6_hdr *);
 		th = (struct tcphdr *)((caddr_t)ip6 + off0);
 		tlen = sizeof(*ip6) + ntohs(ip6->ip6_plen) - off0;
-		if (m->m_pkthdr.csum_flags & CSUM_DATA_VALID_IPV6) {
-			if (m->m_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
-				th->th_sum = m->m_pkthdr.csum_data;
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DATA_VALID_IPV6) {
+			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
+				th->th_sum = m->M_dat.MH.MH_pkthdr.csum_data;
 			else
 				th->th_sum = in6_cksum_pseudo(ip6, tlen,
-				    IPPROTO_TCP, m->m_pkthdr.csum_data);
+				    IPPROTO_TCP, m->M_dat.MH.MH_pkthdr.csum_data);
 			th->th_sum ^= 0xffff;
 		} else
 			th->th_sum = in6_cksum(m, IPPROTO_TCP, off0, tlen);
@@ -631,7 +631,7 @@ tcp_input(struct mbuf *m, int off0)
 			ip_stripoptions(m, (struct mbuf *)0);
 			off0 = sizeof(struct ip);
 		}
-		if (m->m_len < sizeof (struct tcpiphdr)) {
+		if (m->m_hdr.mh_len < sizeof (struct tcpiphdr)) {
 			if ((m = m_pullup(m, sizeof (struct tcpiphdr)))
 			    == NULL) {
 				TCPSTAT_INC(tcps_rcvshort);
@@ -643,13 +643,13 @@ tcp_input(struct mbuf *m, int off0)
 		th = (struct tcphdr *)((caddr_t)ip + off0);
 		tlen = ip->ip_len;
 
-		if (m->m_pkthdr.csum_flags & CSUM_DATA_VALID) {
-			if (m->m_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
-				th->th_sum = m->m_pkthdr.csum_data;
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DATA_VALID) {
+			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
+				th->th_sum = m->M_dat.MH.MH_pkthdr.csum_data;
 			else
 				th->th_sum = in_pseudo(ip->ip_src.s_addr,
 						ip->ip_dst.s_addr,
-						htonl(m->m_pkthdr.csum_data +
+						htonl(m->M_dat.MH.MH_pkthdr.csum_data +
 							ip->ip_len +
 							IPPROTO_TCP));
 			th->th_sum ^= 0xffff;
@@ -710,7 +710,7 @@ tcp_input(struct mbuf *m, int off0)
 #endif
 #ifdef INET
 		{
-			if (m->m_len < sizeof(struct ip) + off) {
+			if (m->m_hdr.mh_len < sizeof(struct ip) + off) {
 				if ((m = m_pullup(m, sizeof (struct ip) + off))
 				    == NULL) {
 					TCPSTAT_INC(tcps_rcvshort);
@@ -764,13 +764,13 @@ findpcb:
 	 */
         if (
 #ifdef INET6
-	    (isipv6 && (m->m_flags & M_IP6_NEXTHOP))
+	    (isipv6 && (m->m_hdr.mh_flags & M_IP6_NEXTHOP))
 #ifdef INET
-	    || (!isipv6 && (m->m_flags & M_IP_NEXTHOP))
+	    || (!isipv6 && (m->m_hdr.mh_flags & M_IP_NEXTHOP))
 #endif
 #endif
 #if defined(INET) && !defined(INET6)
-	    (m->m_flags & M_IP_NEXTHOP)
+	    (m->m_hdr.mh_flags & M_IP_NEXTHOP)
 #endif
 	    )
 		fwd_tag = m_tag_find(m, PACKET_TAG_IPFORWARD, NULL);
@@ -786,7 +786,7 @@ findpcb:
 		 */
 		inp = in6_pcblookup_mbuf(&V_tcbinfo,
 		    &ip6->ip6_src, th->th_sport, &ip6->ip6_dst, th->th_dport,
-		    INPLOOKUP_WLOCKPCB, m->m_pkthdr.rcvif, m);
+		    INPLOOKUP_WLOCKPCB, m->M_dat.MH.MH_pkthdr.rcvif, m);
 		if (!inp) {
 			/*
 			 * It's new.  Try to find the ambushing socket.
@@ -797,17 +797,17 @@ findpcb:
 			    th->th_sport, &next_hop6->sin6_addr,
 			    next_hop6->sin6_port ? ntohs(next_hop6->sin6_port) :
 			    th->th_dport, INPLOOKUP_WILDCARD |
-			    INPLOOKUP_WLOCKPCB, m->m_pkthdr.rcvif);
+			    INPLOOKUP_WLOCKPCB, m->M_dat.MH.MH_pkthdr.rcvif);
 		}
 		/* Remove the tag from the packet.  We don't need it anymore. */
 		m_tag_delete(m, fwd_tag);
-		m->m_flags &= ~M_IP6_NEXTHOP;
+		m->m_hdr.mh_flags &= ~M_IP6_NEXTHOP;
 		fwd_tag = NULL;
 	} else if (isipv6) {
 		inp = in6_pcblookup_mbuf(&V_tcbinfo, &ip6->ip6_src,
 		    th->th_sport, &ip6->ip6_dst, th->th_dport,
 		    INPLOOKUP_WILDCARD | INPLOOKUP_WLOCKPCB,
-		    m->m_pkthdr.rcvif, m);
+		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 	}
 #endif /* INET6 */
 #if defined(INET6) && defined(INET)
@@ -824,7 +824,7 @@ findpcb:
 		 */
 		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src, th->th_sport,
 		    ip->ip_dst, th->th_dport, INPLOOKUP_WLOCKPCB,
-		    m->m_pkthdr.rcvif, m);
+		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 		if (!inp) {
 			/*
 			 * It's new.  Try to find the ambushing socket.
@@ -835,17 +835,17 @@ findpcb:
 			    th->th_sport, next_hop->sin_addr,
 			    next_hop->sin_port ? ntohs(next_hop->sin_port) :
 			    th->th_dport, INPLOOKUP_WILDCARD |
-			    INPLOOKUP_WLOCKPCB, m->m_pkthdr.rcvif);
+			    INPLOOKUP_WLOCKPCB, m->M_dat.MH.MH_pkthdr.rcvif);
 		}
 		/* Remove the tag from the packet.  We don't need it anymore. */
 		m_tag_delete(m, fwd_tag);
-		m->m_flags &= ~M_IP_NEXTHOP;
+		m->m_hdr.mh_flags &= ~M_IP_NEXTHOP;
 		fwd_tag = NULL;
 	} else
 		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src,
 		    th->th_sport, ip->ip_dst, th->th_dport,
 		    INPLOOKUP_WILDCARD | INPLOOKUP_WLOCKPCB,
-		    m->m_pkthdr.rcvif, m);
+		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 #endif /* INET */
 
 	/*
@@ -877,12 +877,12 @@ findpcb:
 	}
 	INP_WLOCK_ASSERT(inp);
 	if (!(inp->inp_flags & INP_HW_FLOWID)
-	    && (m->m_flags & M_FLOWID)
+	    && (m->m_hdr.mh_flags & M_FLOWID)
 	    && ((inp->inp_socket == NULL)
 		|| !(inp->inp_socket->so_options & SO_ACCEPTCONN))) {
 		inp->inp_flags |= INP_HW_FLOWID;
 		inp->inp_flags &= ~INP_SW_FLOWID;
-		inp->inp_flowid = m->m_pkthdr.flowid;
+		inp->inp_flowid = m->M_dat.MH.MH_pkthdr.flowid;
 	}
 #ifdef IPSEC
 #ifdef INET6
@@ -1264,7 +1264,7 @@ relocked:
 		 *	link-layer packets with a broadcast IP address. Use
 		 *	in_broadcast() to find them.
 		 */
-		if (m->m_flags & (M_BCAST|M_MCAST)) {
+		if (m->m_hdr.mh_flags & (M_BCAST|M_MCAST)) {
 			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
 			    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 				"Connection attempt from broad- or multicast "
@@ -1307,7 +1307,7 @@ relocked:
 			if (IN_MULTICAST(ntohl(ip->ip_dst.s_addr)) ||
 			    IN_MULTICAST(ntohl(ip->ip_src.s_addr)) ||
 			    ip->ip_src.s_addr == htonl(INADDR_BROADCAST) ||
-			    in_broadcast(ip->ip_dst, m->m_pkthdr.rcvif)) {
+			    in_broadcast(ip->ip_dst, m->M_dat.MH.MH_pkthdr.rcvif)) {
 				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
 				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
 					"Connection attempt from/to broad- "
@@ -3038,7 +3038,7 @@ tcp_dropwithreset(struct mbuf *m, struct tcphdr *th, struct tcpcb *tp,
 	}
 
 	/* Don't bother if destination was broadcast/multicast. */
-	if ((th->th_flags & TH_RST) || m->m_flags & (M_BCAST|M_MCAST))
+	if ((th->th_flags & TH_RST) || m->m_hdr.mh_flags & (M_BCAST|M_MCAST))
 		goto drop;
 #ifdef INET6
 	if (mtod(m, struct ip *)->ip_v == 6) {
@@ -3058,7 +3058,7 @@ tcp_dropwithreset(struct mbuf *m, struct tcphdr *th, struct tcpcb *tp,
 		if (IN_MULTICAST(ntohl(ip->ip_dst.s_addr)) ||
 		    IN_MULTICAST(ntohl(ip->ip_src.s_addr)) ||
 		    ip->ip_src.s_addr == htonl(INADDR_BROADCAST) ||
-		    in_broadcast(ip->ip_dst, m->m_pkthdr.rcvif))
+		    in_broadcast(ip->ip_dst, m->M_dat.MH.MH_pkthdr.rcvif))
 			goto drop;
 	}
 #endif
@@ -3186,7 +3186,7 @@ tcp_pulloutofband(struct socket *so, struct tcphdr *th, struct mbuf *m,
 	int cnt = off + th->th_urp - 1;
 
 	while (cnt >= 0) {
-		if (m->m_len > cnt) {
+		if (m->m_hdr.mh_len > cnt) {
 			char *cp = mtod(m, caddr_t) + cnt;
 			struct tcpcb *tp = sototcpcb(so);
 
@@ -3194,14 +3194,14 @@ tcp_pulloutofband(struct socket *so, struct tcphdr *th, struct mbuf *m,
 
 			tp->t_iobc = *cp;
 			tp->t_oobflags |= TCPOOB_HAVEDATA;
-			bcopy(cp+1, cp, (unsigned)(m->m_len - cnt - 1));
-			m->m_len--;
-			if (m->m_flags & M_PKTHDR)
-				m->m_pkthdr.len--;
+			bcopy(cp+1, cp, (unsigned)(m->m_hdr.mh_len - cnt - 1));
+			m->m_hdr.mh_len--;
+			if (m->m_hdr.mh_flags & M_PKTHDR)
+				m->M_dat.MH.MH_pkthdr.len--;
 			return;
 		}
-		cnt -= m->m_len;
-		m = m->m_next;
+		cnt -= m->m_hdr.mh_len;
+		m = m->m_hdr.mh_next;
 		if (m == NULL)
 			break;
 	}

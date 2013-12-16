@@ -73,7 +73,7 @@ namespace dhcp {
         dst.sa_family = AF_INET;
         dst.sa_len = 2;
 
-        m->m_flags |= M_BCAST;
+        m->m_hdr.mh_flags |= M_BCAST;
 
         // Transmit the packet directly over Ethernet
         int c = _ifp->if_output(_ifp, packet.get(), &dst, NULL);
@@ -127,7 +127,7 @@ namespace dhcp {
         struct udphdr* udp = pudp();
         u8* options = poptions();
 
-        if (_m->m_len < _ip_len + dhcp::udp_len + dhcp::min_dhcp_len) {
+        if (_m->m_hdr.mh_len < _ip_len + dhcp::udp_len + dhcp::min_dhcp_len) {
             return false;
         }
 
@@ -232,7 +232,7 @@ namespace dhcp {
         _ip_len = ip->ip_hl << 2;
     }
 
-#define LENGTH_OK ((options - packet_start) + op_len + len_check_hdr < _m->m_len)
+#define LENGTH_OK ((options - packet_start) + op_len + len_check_hdr < _m->m_hdr.mh_len)
 #define PARSE_OP(type, cast, var) do {              \
     if ((op_len >= (sizeof(cast))) && (LENGTH_OK))  \
         var = type(*(cast *)(options));             \
@@ -338,11 +338,11 @@ namespace dhcp {
         options += 4;
 
         dhcp_option_code op = DHCP_OPTION_PAD;
-        while (((options - packet_start) < _m->m_len) && (op != DHCP_OPTION_END)) {
+        while (((options - packet_start) < _m->m_hdr.mh_len) && (op != DHCP_OPTION_END)) {
             dhcp_option_code op = dhcp_option_code(*options++);
             u8 op_len = *options++;
 
-            if ((op == type) && ((options - packet_start) + op_len < _m->m_len)) {
+            if ((op == type) && ((options - packet_start) + op_len < _m->m_hdr.mh_len)) {
                 *len = op_len;
                 return (options);
             }
@@ -397,7 +397,7 @@ namespace dhcp {
         struct udphdr* udp = pudp();
 
         // Set length in mbuf
-        _m->m_pkthdr.len = _m->m_len = min_ip_len + udp_len + dhcp_len;
+        _m->M_dat.MH.MH_pkthdr.len = _m->m_hdr.mh_len = min_ip_len + udp_len + dhcp_len;
 
         // IP
         memset(ip, 0, sizeof(*ip));
@@ -595,7 +595,7 @@ namespace dhcp {
                 _rx_packets.pop_front();
             }
 
-            auto it = _universe.find(m->m_pkthdr.rcvif);
+            auto it = _universe.find(m->M_dat.MH.MH_pkthdr.rcvif);
             if (it == _universe.end()) {
                 dhcp_e("Couldn't find interface state for DHCP packet!");
                 abort();

@@ -201,20 +201,20 @@ in_cksum_skip(struct mbuf *m, int len, int skip)
 	union l_util l_util;
 
         len -= skip;
-        for (; skip && m; m = m->m_next) {
-                if (m->m_len > skip) {
-                        mlen = m->m_len - skip;
+        for (; skip && m; m = m->m_hdr.mh_next) {
+                if (m->m_hdr.mh_len > skip) {
+                        mlen = m->m_hdr.mh_len - skip;
 			addr = mtod(m, caddr_t) + skip;
                         goto skip_start;
                 } else {
-                        skip -= m->m_len;
+                        skip -= m->m_hdr.mh_len;
                 }
         }
 
-	for (; m && len; m = m->m_next) {
-		if (m->m_len == 0)
+	for (; m && len; m = m->m_hdr.mh_next) {
+		if (m->m_hdr.mh_len == 0)
 			continue;
-		mlen = m->m_len;
+		mlen = m->m_hdr.mh_len;
 		addr = mtod(m, caddr_t);
 skip_start:
 		if (len < mlen)

@@ -790,7 +790,7 @@ sosend_dgram(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	if (uio != NULL)
 		resid = uio->uio_resid;
 	else
-		resid = top->m_pkthdr.len;
+		resid = top->M_dat.MH.MH_pkthdr.len;
 	/*
 	 * In theory resid should be unsigned.  However, space must be
 	 * signed, as it might be less than 0 if we over-committed, and we
@@ -806,7 +806,7 @@ sosend_dgram(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	dontroute =
 	    (flags & MSG_DONTROUTE) && (so->so_options & SO_DONTROUTE) == 0;
 	if (control != NULL)
-		clen = control->m_len;
+		clen = control->m_hdr.mh_len;
 
 	SOCKBUF_LOCK(&so->so_snd);
 	if (so->so_snd.sb_state & SBS_CANTSENDMORE) {
@@ -860,7 +860,7 @@ sosend_dgram(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	if (uio == NULL) {
 		resid = 0;
 		if (flags & MSG_EOR)
-			top->m_flags |= M_EOR;
+			top->m_hdr.mh_flags |= M_EOR;
 	} else {
 		/*
 		 * Copy the data from userland into a mbuf chain.
@@ -949,7 +949,7 @@ sosend_generic(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	if (uio != NULL)
 		resid = uio->uio_resid;
 	else
-		resid = top->m_pkthdr.len;
+		resid = top->M_dat.MH.MH_pkthdr.len;
 	/*
 	 * In theory resid should be unsigned.  However, space must be
 	 * signed, as it might be less than 0 if we over-committed, and we
@@ -969,7 +969,7 @@ sosend_generic(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	    (flags & MSG_DONTROUTE) && (so->so_options & SO_DONTROUTE) == 0 &&
 	    (so->so_proto->pr_flags & PR_ATOMIC);
 	if (control != NULL)
-		clen = control->m_len;
+		clen = control->m_hdr.mh_len;
 
 	error = sblock(&so->so_snd, SBLOCKWAIT(flags));
 	if (error)
@@ -1041,7 +1041,7 @@ restart:
 			if (uio == NULL) {
 				resid = 0;
 				if (flags & MSG_EOR)
-					top->m_flags |= M_EOR;
+					top->m_hdr.mh_flags |= M_EOR;
 			} else {
 				/*
 				 * Copy the data from userland into a mbuf
@@ -1149,7 +1149,7 @@ soreceive_rcvoob(struct socket *so, struct uio *uio, int flags)
 		goto bad;
 	do {
 		error = uiomove(mtod(m, void *),
-		    (int) bsd_min(uio->uio_resid, m->m_len), uio);
+		    (int) bsd_min(uio->uio_resid, m->m_hdr.mh_len), uio);
 		m = m_free(m);
 	} while (uio->uio_resid && error == 0 && m);
 bad:
@@ -1163,7 +1163,7 @@ bad:
  * of a socket buffer, push necessary state changes back into the socket
  * buffer so that other consumers see the values consistently.  'nextrecord'
  * is the callers locally stored value of the original value of
- * sb->sb_mb->m_nextpkt which must be restored when the lead mbuf changes.
+ * sb->sb_mb->m_hdr.mh_nextpkt which must be restored when the lead mbuf changes.
  * NOTE: 'nextrecord' may be NULL.
  */
 static __inline void
@@ -1176,7 +1176,7 @@ sockbuf_pushsync(struct sockbuf *sb, struct mbuf *nextrecord)
 	 * it the first record.
 	 */
 	if (sb->sb_mb != NULL)
-		sb->sb_mb->m_nextpkt = nextrecord;
+		sb->sb_mb->m_hdr.mh_nextpkt = nextrecord;
 	else
 		sb->sb_mb = nextrecord;
 
@@ -1189,7 +1189,7 @@ sockbuf_pushsync(struct sockbuf *sb, struct mbuf *nextrecord)
         if (sb->sb_mb == NULL) {
                 sb->sb_mbtail = NULL;
                 sb->sb_lastrecord = NULL;
-        } else if (sb->sb_mb->m_nextpkt == NULL)
+        } else if (sb->sb_mb->m_hdr.mh_nextpkt == NULL)
                 sb->sb_lastrecord = sb->sb_mb;
 }
 
@@ -1197,7 +1197,7 @@ sockbuf_pushsync(struct sockbuf *sb, struct mbuf *nextrecord)
 /*
  * Implement receive operations on a socket.  We depend on the way that
  * records are added to the sockbuf by sbappend.  In particular, each record
- * (mbufs linked through m_next) must begin with an address if the protocol
+ * (mbufs linked through m_hdr.mh_next) must begin with an address if the protocol
  * so specifies, followed by an optional mbuf or mbufs containing ancillary
  * data, and then zero or more mbufs of data.  In order to allow parallelism
  * between network receive and copying to user space, as well as avoid
@@ -1257,7 +1257,7 @@ restart:
 	if (m == NULL || (((flags & MSG_DONTWAIT) == 0 &&
 	    so->so_rcv.sb_cc < uio->uio_resid) &&
 	    so->so_rcv.sb_cc < so->so_rcv.sb_lowat &&
-	    m->m_nextpkt == NULL && (pr->pr_flags & PR_ATOMIC) == 0)) {
+	    m->m_hdr.mh_nextpkt == NULL && (pr->pr_flags & PR_ATOMIC) == 0)) {
 		KASSERT(m != NULL || !so->so_rcv.sb_cc,
 		    ("receive: m == %p so->so_rcv.sb_cc == %u",
 		    m, so->so_rcv.sb_cc));
@@ -1278,8 +1278,8 @@ restart:
 			} else
 				goto dontblock;
 		}
-		for (; m != NULL; m = m->m_next)
-			if (m->m_type == MT_OOBDATA  || (m->m_flags & M_EOR)) {
+		for (; m != NULL; m = m->m_hdr.mh_next)
+			if (m->m_hdr.mh_type == MT_OOBDATA  || (m->m_hdr.mh_flags & M_EOR)) {
 				m = so->so_rcv.sb_mb;
 				goto dontblock;
 			}
@@ -1327,16 +1327,16 @@ dontblock:
 	KASSERT(m == so->so_rcv.sb_mb, ("soreceive: m != so->so_rcv.sb_mb"));
 	SBLASTRECORDCHK(&so->so_rcv);
 	SBLASTMBUFCHK(&so->so_rcv);
-	nextrecord = m->m_nextpkt;
+	nextrecord = m->m_hdr.mh_nextpkt;
 	if (pr->pr_flags & PR_ADDR) {
-		KASSERT(m->m_type == MT_SONAME,
-		    ("m->m_type == %d", m->m_type));
+		KASSERT(m->m_hdr.mh_type == MT_SONAME,
+		    ("m->m_hdr.mh_type == %d", m->m_hdr.mh_type));
 		orig_resid = 0;
 		if (psa != NULL)
 			*psa = sodupbsd_sockaddr(mtod(m, struct bsd_sockaddr *),
 			    M_NOWAIT);
 		if (flags & MSG_PEEK) {
-			m = m->m_next;
+			m = m->m_hdr.mh_next;
 		} else {
 			sbfree(&so->so_rcv, m);
 			so->so_rcv.sb_mb = m_free(m);
@@ -1351,31 +1351,31 @@ dontblock:
 	 * just copy the data; if !MSG_PEEK, we call into the protocol to
 	 * perform externalization (or freeing if controlp == NULL).
 	 */
-	if (m != NULL && m->m_type == MT_CONTROL) {
+	if (m != NULL && m->m_hdr.mh_type == MT_CONTROL) {
 		struct mbuf *cm = NULL, *cmn;
 		struct mbuf **cme = &cm;
 
 		do {
 			if (flags & MSG_PEEK) {
 				if (controlp != NULL) {
-					*controlp = m_copy(m, 0, m->m_len);
-					controlp = &(*controlp)->m_next;
+					*controlp = m_copy(m, 0, m->m_hdr.mh_len);
+					controlp = &(*controlp)->m_hdr.mh_next;
 				}
-				m = m->m_next;
+				m = m->m_hdr.mh_next;
 			} else {
 				sbfree(&so->so_rcv, m);
-				so->so_rcv.sb_mb = m->m_next;
-				m->m_next = NULL;
+				so->so_rcv.sb_mb = m->m_hdr.mh_next;
+				m->m_hdr.mh_next = NULL;
 				*cme = m;
-				cme = &(*cme)->m_next;
+				cme = &(*cme)->m_hdr.mh_next;
 				m = so->so_rcv.sb_mb;
 			}
-		} while (m != NULL && m->m_type == MT_CONTROL);
+		} while (m != NULL && m->m_hdr.mh_type == MT_CONTROL);
 		if ((flags & MSG_PEEK) == 0)
 			sockbuf_pushsync(&so->so_rcv, nextrecord);
 		while (cm != NULL) {
-			cmn = cm->m_next;
-			cm->m_next = NULL;
+			cmn = cm->m_hdr.mh_next;
+			cm->m_hdr.mh_next = NULL;
 			if (pr->pr_domain->dom_externalize != NULL) {
 				SOCKBUF_UNLOCK(&so->so_rcv);
 				VNET_SO_ASSERT(so);
@@ -1389,19 +1389,19 @@ dontblock:
 			if (controlp != NULL) {
 				orig_resid = 0;
 				while (*controlp != NULL)
-					controlp = &(*controlp)->m_next;
+					controlp = &(*controlp)->m_hdr.mh_next;
 			}
 			cm = cmn;
 		}
 		if (m != NULL)
-			nextrecord = so->so_rcv.sb_mb->m_nextpkt;
+			nextrecord = so->so_rcv.sb_mb->m_hdr.mh_nextpkt;
 		else
 			nextrecord = so->so_rcv.sb_mb;
 		orig_resid = 0;
 	}
 	if (m != NULL) {
 		if ((flags & MSG_PEEK) == 0) {
-			KASSERT(m->m_nextpkt == nextrecord,
+			KASSERT(m->m_hdr.mh_nextpkt == nextrecord,
 			    ("soreceive: post-control, nextrecord !sync"));
 			if (nextrecord == NULL) {
 				KASSERT(so->so_rcv.sb_mb == m,
@@ -1410,7 +1410,7 @@ dontblock:
 				    ("soreceive: post-control, lastrecord!=m"));
 			}
 		}
-		type = m->m_type;
+		type = m->m_hdr.mh_type;
 		if (type == MT_OOBDATA)
 			flags |= MSG_OOB;
 	} else {
@@ -1443,20 +1443,20 @@ dontblock:
 		 * examined ('type'), end the receive operation.
 	 	 */
 		SOCKBUF_LOCK_ASSERT(&so->so_rcv);
-		if (m->m_type == MT_OOBDATA || m->m_type == MT_CONTROL) {
-			if (type != m->m_type)
+		if (m->m_hdr.mh_type == MT_OOBDATA || m->m_hdr.mh_type == MT_CONTROL) {
+			if (type != m->m_hdr.mh_type)
 				break;
 		} else if (type == MT_OOBDATA)
 			break;
 		else
-		    KASSERT(m->m_type == MT_DATA,
-			("m->m_type == %d", m->m_type));
+		    KASSERT(m->m_hdr.mh_type == MT_DATA,
+			("m->m_hdr.mh_type == %d", m->m_hdr.mh_type));
 		so->so_rcv.sb_state &= ~SBS_RCVATMARK;
 		len = uio->uio_resid;
 		if (so->so_oobmark && len > so->so_oobmark - offset)
 			len = so->so_oobmark - offset;
-		if (len > m->m_len - moff)
-			len = m->m_len - moff;
+		if (len > m->m_hdr.mh_len - moff)
+			len = m->m_hdr.mh_len - moff;
 		/*
 		 * If mp is set, just pass back the mbufs.  Otherwise copy
 		 * them out via the uio, then free.  Sockbuf must be
@@ -1489,19 +1489,19 @@ dontblock:
 		} else
 			uio->uio_resid -= len;
 		SOCKBUF_LOCK_ASSERT(&so->so_rcv);
-		if (len == m->m_len - moff) {
-			if (m->m_flags & M_EOR)
+		if (len == m->m_hdr.mh_len - moff) {
+			if (m->m_hdr.mh_flags & M_EOR)
 				flags |= MSG_EOR;
 			if (flags & MSG_PEEK) {
-				m = m->m_next;
+				m = m->m_hdr.mh_next;
 				moff = 0;
 			} else {
-				nextrecord = m->m_nextpkt;
+				nextrecord = m->m_hdr.mh_nextpkt;
 				sbfree(&so->so_rcv, m);
 				if (mp != NULL) {
 					*mp = m;
-					mp = &m->m_next;
-					so->so_rcv.sb_mb = m = m->m_next;
+					mp = &m->m_hdr.mh_next;
+					so->so_rcv.sb_mb = m = m->m_hdr.mh_next;
 					*mp = NULL;
 				} else {
 					so->so_rcv.sb_mb = m_free(m);
@@ -1540,8 +1540,8 @@ dontblock:
  						break;
  					}
 				}
-				m->m_data += len;
-				m->m_len -= len;
+				m->m_hdr.mh_data += len;
+				m->m_hdr.mh_len -= len;
 				so->so_rcv.sb_cc -= len;
 			}
 		}
@@ -1598,7 +1598,7 @@ dontblock:
 			}
 			m = so->so_rcv.sb_mb;
 			if (m != NULL)
-				nextrecord = m->m_nextpkt;
+				nextrecord = m->m_hdr.mh_nextpkt;
 		}
 	}
 
@@ -1619,7 +1619,7 @@ dontblock:
 			if (so->so_rcv.sb_mb == NULL) {
 				so->so_rcv.sb_mbtail = NULL;
 				so->so_rcv.sb_lastrecord = NULL;
-			} else if (nextrecord->m_nextpkt == NULL)
+			} else if (nextrecord->m_hdr.mh_nextpkt == NULL)
 				so->so_rcv.sb_lastrecord = nextrecord;
 		}
 		SBLASTRECORDCHK(&so->so_rcv);
@@ -1763,19 +1763,19 @@ deliver:
 	len = bsd_min(uio->uio_resid, sb->sb_cc);
 	if (mp0 != NULL) {
 		/* Dequeue as many mbufs as possible. */
-		if (!(flags & MSG_PEEK) && len >= sb->sb_mb->m_len) {
+		if (!(flags & MSG_PEEK) && len >= sb->sb_mb->m_hdr.mh_len) {
 			for (*mp0 = m = sb->sb_mb;
-			     m != NULL && m->m_len <= len;
-			     m = m->m_next) {
-				len -= m->m_len;
-				uio->uio_resid -= m->m_len;
+			     m != NULL && m->m_hdr.mh_len <= len;
+			     m = m->m_hdr.mh_next) {
+				len -= m->m_hdr.mh_len;
+				uio->uio_resid -= m->m_hdr.mh_len;
 				sbfree(sb, m);
 				n = m;
 			}
 			sb->sb_mb = m;
 			if (sb->sb_mb == NULL)
 				SB_EMPTY_FIXUP(sb);
-			n->m_next = NULL;
+			n->m_hdr.mh_next = NULL;
 		}
 		/* Copy the remainder. */
 		if (len > 0) {
@@ -1786,9 +1786,9 @@ deliver:
 			if (m == NULL)
 				len = 0;	/* Don't flush data from sockbuf. */
 			else
-				uio->uio_resid -= m->m_len;
+				uio->uio_resid -= m->m_hdr.mh_len;
 			if (*mp0 != NULL)
-				n->m_next = m;
+				n->m_hdr.mh_next = m;
 			else
 				*mp0 = m;
 			if (*mp0 == NULL) {
@@ -1921,14 +1921,14 @@ soreceive_dgram(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 
 	SBLASTRECORDCHK(&so->so_rcv);
 	SBLASTMBUFCHK(&so->so_rcv);
-	nextrecord = m->m_nextpkt;
+	nextrecord = m->m_hdr.mh_nextpkt;
 	if (nextrecord == NULL) {
 		KASSERT(so->so_rcv.sb_lastrecord == m,
 		    ("soreceive_dgram: lastrecord != m"));
 	}
 
-	KASSERT(so->so_rcv.sb_mb->m_nextpkt == nextrecord,
-	    ("soreceive_dgram: m_nextpkt != nextrecord"));
+	KASSERT(so->so_rcv.sb_mb->m_hdr.mh_nextpkt == nextrecord,
+	    ("soreceive_dgram: m_hdr.mh_nextpkt != nextrecord"));
 
 	/*
 	 * Pull 'm' and its chain off the front of the packet queue.
@@ -1939,7 +1939,7 @@ soreceive_dgram(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 	/*
 	 * Walk 'm's chain and free that many bytes from the socket buffer.
 	 */
-	for (m2 = m; m2 != NULL; m2 = m2->m_next)
+	for (m2 = m; m2 != NULL; m2 = m2->m_hdr.mh_next)
 		sbfree(&so->so_rcv, m2);
 
 	/*
@@ -1950,8 +1950,8 @@ soreceive_dgram(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 	SOCKBUF_UNLOCK(&so->so_rcv);
 
 	if (pr->pr_flags & PR_ADDR) {
-		KASSERT(m->m_type == MT_SONAME,
-		    ("m->m_type == %d", m->m_type));
+		KASSERT(m->m_hdr.mh_type == MT_SONAME,
+		    ("m->m_hdr.mh_type == %d", m->m_hdr.mh_type));
 		if (psa != NULL)
 			*psa = sodupbsd_sockaddr(mtod(m, struct bsd_sockaddr *),
 			    M_NOWAIT);
@@ -1971,20 +1971,20 @@ soreceive_dgram(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 	 * protocol to perform externalization (or freeing if controlp ==
 	 * NULL).
 	 */
-	if (m->m_type == MT_CONTROL) {
+	if (m->m_hdr.mh_type == MT_CONTROL) {
 		struct mbuf *cm = NULL, *cmn;
 		struct mbuf **cme = &cm;
 
 		do {
-			m2 = m->m_next;
-			m->m_next = NULL;
+			m2 = m->m_hdr.mh_next;
+			m->m_hdr.mh_next = NULL;
 			*cme = m;
-			cme = &(*cme)->m_next;
+			cme = &(*cme)->m_hdr.mh_next;
 			m = m2;
-		} while (m != NULL && m->m_type == MT_CONTROL);
+		} while (m != NULL && m->m_hdr.mh_type == MT_CONTROL);
 		while (cm != NULL) {
-			cmn = cm->m_next;
-			cm->m_next = NULL;
+			cmn = cm->m_hdr.mh_next;
+			cm->m_hdr.mh_next = NULL;
 			if (pr->pr_domain->dom_externalize != NULL) {
 				error = (*pr->pr_domain->dom_externalize)
 				    (cm, controlp);
@@ -1994,27 +1994,27 @@ soreceive_dgram(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 				m_freem(cm);
 			if (controlp != NULL) {
 				while (*controlp != NULL)
-					controlp = &(*controlp)->m_next;
+					controlp = &(*controlp)->m_hdr.mh_next;
 			}
 			cm = cmn;
 		}
 	}
-	KASSERT(m->m_type == MT_DATA, ("soreceive_dgram: !data"));
+	KASSERT(m->m_hdr.mh_type == MT_DATA, ("soreceive_dgram: !data"));
 
 	while (m != NULL && uio->uio_resid > 0) {
 		len = uio->uio_resid;
-		if (len > m->m_len)
-			len = m->m_len;
+		if (len > m->m_hdr.mh_len)
+			len = m->m_hdr.mh_len;
 		error = uiomove(mtod(m, char *), (int)len, uio);
 		if (error) {
 			m_freem(m);
 			return (error);
 		}
-		if (len == m->m_len)
+		if (len == m->m_hdr.mh_len)
 			m = m_free(m);
 		else {
-			m->m_data += len;
-			m->m_len -= len;
+			m->m_hdr.mh_data += len;
+			m->m_hdr.mh_len -= len;
 		}
 	}
 	if (m != NULL)
@@ -2517,15 +2517,15 @@ soopt_getm(struct sockopt *sopt, struct mbuf **mp)
 		return ENOBUFS;
 	if (sopt_size > MLEN) {
 		MCLGET(m, sopt->sopt_td ? M_WAIT : M_DONTWAIT);
-		if ((m->m_flags & M_EXT) == 0) {
+		if ((m->m_hdr.mh_flags & M_EXT) == 0) {
 			m_free(m);
 			return ENOBUFS;
 		}
-		m->m_len = bsd_min(MCLBYTES, sopt_size);
+		m->m_hdr.mh_len = bsd_min(MCLBYTES, sopt_size);
 	} else {
-		m->m_len = bsd_min(MLEN, sopt_size);
+		m->m_hdr.mh_len = bsd_min(MLEN, sopt_size);
 	}
-	sopt_size -= m->m_len;
+	sopt_size -= m->m_hdr.mh_len;
 	*mp = m;
 	m_prev = m;
 
@@ -2538,17 +2538,17 @@ soopt_getm(struct sockopt *sopt, struct mbuf **mp)
 		if (sopt_size > MLEN) {
 			MCLGET(m, sopt->sopt_td != NULL ? M_WAIT :
 			    M_DONTWAIT);
-			if ((m->m_flags & M_EXT) == 0) {
+			if ((m->m_hdr.mh_flags & M_EXT) == 0) {
 				m_freem(m);
 				m_freem(*mp);
 				return ENOBUFS;
 			}
-			m->m_len = bsd_min(MCLBYTES, sopt_size);
+			m->m_hdr.mh_len = bsd_min(MCLBYTES, sopt_size);
 		} else {
-			m->m_len = bsd_min(MLEN, sopt_size);
+			m->m_hdr.mh_len = bsd_min(MLEN, sopt_size);
 		}
-		sopt_size -= m->m_len;
-		m_prev->m_next = m;
+		sopt_size -= m->m_hdr.mh_len;
+		m_prev->m_hdr.mh_next = m;
 		m_prev = m;
 	}
 	return (0);
@@ -2562,21 +2562,21 @@ soopt_mcopyin(struct sockopt *sopt, struct mbuf *m)
 
 	if (sopt->sopt_val == NULL)
 		return (0);
-	while (m != NULL && sopt->sopt_valsize >= m->m_len) {
+	while (m != NULL && sopt->sopt_valsize >= m->m_hdr.mh_len) {
 		if (sopt->sopt_td != NULL) {
 			int error;
 
 			error = copyin(sopt->sopt_val, mtod(m, char *),
-				       m->m_len);
+				       m->m_hdr.mh_len);
 			if (error != 0) {
 				m_freem(m0);
 				return(error);
 			}
 		} else
-			bcopy(sopt->sopt_val, mtod(m, char *), m->m_len);
-		sopt->sopt_valsize -= m->m_len;
-		sopt->sopt_val = (char *)sopt->sopt_val + m->m_len;
-		m = m->m_next;
+			bcopy(sopt->sopt_val, mtod(m, char *), m->m_hdr.mh_len);
+		sopt->sopt_valsize -= m->m_hdr.mh_len;
+		sopt->sopt_val = (char *)sopt->sopt_val + m->m_hdr.mh_len;
+		m = m->m_hdr.mh_next;
 	}
 	if (m != NULL) /* should be allocated enoughly at ip6_sooptmcopyin() */
 		panic("ip6_sooptmcopyin");
@@ -2592,22 +2592,22 @@ soopt_mcopyout(struct sockopt *sopt, struct mbuf *m)
 
 	if (sopt->sopt_val == NULL)
 		return (0);
-	while (m != NULL && sopt->sopt_valsize >= m->m_len) {
+	while (m != NULL && sopt->sopt_valsize >= m->m_hdr.mh_len) {
 		if (sopt->sopt_td != NULL) {
 			int error;
 
 			error = copyout(mtod(m, char *), sopt->sopt_val,
-				       m->m_len);
+				       m->m_hdr.mh_len);
 			if (error != 0) {
 				m_freem(m0);
 				return(error);
 			}
 		} else
-			bcopy(mtod(m, char *), sopt->sopt_val, m->m_len);
-	       sopt->sopt_valsize -= m->m_len;
-	       sopt->sopt_val = (char *)sopt->sopt_val + m->m_len;
-	       valsize += m->m_len;
-	       m = m->m_next;
+			bcopy(mtod(m, char *), sopt->sopt_val, m->m_hdr.mh_len);
+	       sopt->sopt_valsize -= m->m_hdr.mh_len;
+	       sopt->sopt_val = (char *)sopt->sopt_val + m->m_hdr.mh_len;
+	       valsize += m->m_hdr.mh_len;
+	       m = m->m_hdr.mh_next;
 	}
 	if (m != NULL) {
 		/* enough soopt buffer should be given from user-land */

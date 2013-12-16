@@ -280,11 +280,11 @@ void	if_maddr_runlock(struct ifnet *ifp);	/* if_multiaddrs */
 #define	_IF_QLEN(ifq)		((ifq)->ifq_len)
 
 #define	_IF_ENQUEUE(ifq, m) do { 				\
-	(m)->m_nextpkt = NULL;					\
+	(m)->m_hdr.mh_nextpkt = NULL;					\
 	if ((ifq)->ifq_tail == NULL) 				\
 		(ifq)->ifq_head = m; 				\
 	else 							\
-		(ifq)->ifq_tail->m_nextpkt = m; 		\
+		(ifq)->ifq_tail->m_hdr.mh_nextpkt = m; 		\
 	(ifq)->ifq_tail = m; 					\
 	(ifq)->ifq_len++; 					\
 } while (0)
@@ -296,7 +296,7 @@ void	if_maddr_runlock(struct ifnet *ifp);	/* if_multiaddrs */
 } while (0)
 
 #define	_IF_PREPEND(ifq, m) do {				\
-	(m)->m_nextpkt = (ifq)->ifq_head; 			\
+	(m)->m_hdr.mh_nextpkt = (ifq)->ifq_head; 			\
 	if ((ifq)->ifq_tail == NULL) 				\
 		(ifq)->ifq_tail = (m); 				\
 	(ifq)->ifq_head = (m); 					\
@@ -312,9 +312,9 @@ void	if_maddr_runlock(struct ifnet *ifp);	/* if_multiaddrs */
 #define	_IF_DEQUEUE(ifq, m) do { 				\
 	(m) = (ifq)->ifq_head; 					\
 	if (m) { 						\
-		if (((ifq)->ifq_head = (m)->m_nextpkt) == NULL)	\
+		if (((ifq)->ifq_head = (m)->m_hdr.mh_nextpkt) == NULL)	\
 			(ifq)->ifq_tail = NULL; 		\
-		(m)->m_nextpkt = NULL; 				\
+		(m)->m_hdr.mh_nextpkt = NULL; 				\
 		(ifq)->ifq_len--; 				\
 	} 							\
 } while (0)
@@ -513,8 +513,8 @@ do {									\
 	int len;							\
 	short mflags;							\
 									\
-	len = (m)->m_pkthdr.len;					\
-	mflags = (m)->m_flags;						\
+	len = (m)->M_dat.MH.MH_pkthdr.len;					\
+	mflags = (m)->m_hdr.mh_flags;						\
 	IFQ_ENQUEUE(&(ifp)->if_snd, m, err);				\
 	if ((err) == 0) {						\
 		(ifp)->if_obytes += len + (adj);			\
@@ -532,9 +532,9 @@ do {									\
 do {									\
 	(m) = (ifq)->ifq_drv_head;					\
 	if (m) {							\
-		if (((ifq)->ifq_drv_head = (m)->m_nextpkt) == NULL)	\
+		if (((ifq)->ifq_drv_head = (m)->m_hdr.mh_nextpkt) == NULL)	\
 			(ifq)->ifq_drv_tail = NULL;			\
-		(m)->m_nextpkt = NULL;					\
+		(m)->m_hdr.mh_nextpkt = NULL;					\
 		(ifq)->ifq_drv_len--;					\
 	} else {							\
 		IFQ_LOCK(ifq);						\
@@ -544,11 +544,11 @@ do {									\
 			IFQ_DEQUEUE_NOLOCK(ifq, m0);			\
 			if (m0 == NULL)					\
 				break;					\
-			m0->m_nextpkt = NULL;				\
+			m0->m_hdr.mh_nextpkt = NULL;				\
 			if ((ifq)->ifq_drv_tail == NULL)		\
 				(ifq)->ifq_drv_head = m0;		\
 			else						\
-				(ifq)->ifq_drv_tail->m_nextpkt = m0;	\
+				(ifq)->ifq_drv_tail->m_hdr.mh_nextpkt = m0;	\
 			(ifq)->ifq_drv_tail = m0;			\
 			(ifq)->ifq_drv_len++;				\
 		}							\
@@ -558,7 +558,7 @@ do {									\
 
 #define	IFQ_DRV_PREPEND(ifq, m)						\
 do {									\
-	(m)->m_nextpkt = (ifq)->ifq_drv_head;				\
+	(m)->m_hdr.mh_nextpkt = (ifq)->ifq_drv_head;				\
 	if ((ifq)->ifq_drv_tail == NULL)				\
 		(ifq)->ifq_drv_tail = (m);				\
 	(ifq)->ifq_drv_head = (m);					\
@@ -574,7 +574,7 @@ do {									\
 do {									\
 	struct mbuf *m, *n = (ifq)->ifq_drv_head;			\
 	while((m = n) != NULL) {					\
-		n = m->m_nextpkt;					\
+		n = m->m_hdr.mh_nextpkt;					\
 		m_freem(m);						\
 	}								\
 	(ifq)->ifq_drv_head = (ifq)->ifq_drv_tail = NULL;		\

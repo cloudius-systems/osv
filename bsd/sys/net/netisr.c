@@ -441,8 +441,8 @@ netisr_drain_proto(struct netisr_work *npwp)
 	 * We would assert the lock on the workstream but it's not passed in.
 	 */
 	while ((m = npwp->nw_head) != NULL) {
-		npwp->nw_head = m->m_nextpkt;
-		m->m_nextpkt = NULL;
+		npwp->nw_head = m->m_hdr.mh_nextpkt;
+		m->m_hdr.mh_nextpkt = NULL;
 		if (npwp->nw_head == NULL)
 			npwp->nw_tail = NULL;
 		npwp->nw_len--;
@@ -562,14 +562,14 @@ netisr_process_workstream_proto(struct netisr_workstream *nwsp, u_int proto)
 	nwsp->nws_pendingbits &= ~(1 << proto);
 	NWS_UNLOCK(nwsp);
 	while ((m = local_npw.nw_head) != NULL) {
-		local_npw.nw_head = m->m_nextpkt;
-		m->m_nextpkt = NULL;
+		local_npw.nw_head = m->m_hdr.mh_nextpkt;
+		m->m_hdr.mh_nextpkt = NULL;
 		if (local_npw.nw_head == NULL)
 			local_npw.nw_tail = NULL;
 		local_npw.nw_len--;
-		VNET_ASSERT(m->m_pkthdr.rcvif != NULL,
+		VNET_ASSERT(m->M_dat.MH.MH_pkthdr.rcvif != NULL,
 		    ("%s:%d rcvif == NULL: m=%p", __func__, __LINE__, m));
-		CURVNET_SET(m->m_pkthdr.rcvif->if_vnet);
+		CURVNET_SET(m->M_dat.MH.MH_pkthdr.rcvif->if_vnet);
 		netisr_proto[proto].np_handler(m);
 		CURVNET_RESTORE();
 	}
@@ -629,12 +629,12 @@ netisr_queue_workstream(struct netisr_workstream *nwsp, u_int proto,
 
 	*dosignalp = 0;
 	if (npwp->nw_len < npwp->nw_qlimit) {
-		m->m_nextpkt = NULL;
+		m->m_hdr.mh_nextpkt = NULL;
 		if (npwp->nw_head == NULL) {
 			npwp->nw_head = m;
 			npwp->nw_tail = m;
 		} else {
-			npwp->nw_tail->m_nextpkt = m;
+			npwp->nw_tail->m_hdr.mh_nextpkt = m;
 			npwp->nw_tail = m;
 		}
 		npwp->nw_len++;

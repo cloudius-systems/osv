@@ -153,7 +153,7 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 	int hlen;	/* link layer header length */
 
 	if (ro != NULL) {
-		if (!(m->m_flags & (M_BCAST | M_MCAST)))
+		if (!(m->m_hdr.mh_flags & (M_BCAST | M_MCAST)))
 			lle = ro->ro_lle;
 		rt0 = ro->ro_rt;
 	}
@@ -197,7 +197,7 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 			break;
 		}
 
-		if (m->m_flags & M_BCAST)
+		if (m->m_hdr.mh_flags & M_BCAST)
 			bcopy(ifp->if_broadcastaddr, edst, ETHER_ADDR_LEN);
 		else
 			bcopy(ar_tha(ah), edst, ETHER_ADDR_LEN);
@@ -237,14 +237,14 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 
 	if (lle != NULL && (lle->la_flags & LLE_IFADDR)) {
 		int csum_flags = 0;
-		if (m->m_pkthdr.csum_flags & CSUM_IP)
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_IP)
 			csum_flags |= (CSUM_IP_CHECKED|CSUM_IP_VALID);
-		if (m->m_pkthdr.csum_flags & CSUM_DELAY_DATA)
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DELAY_DATA)
 			csum_flags |= (CSUM_DATA_VALID|CSUM_PSEUDO_HDR);
-		if (m->m_pkthdr.csum_flags & CSUM_SCTP)
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_SCTP)
 			csum_flags |= CSUM_SCTP_VALID;
-		m->m_pkthdr.csum_flags |= csum_flags;
-		m->m_pkthdr.csum_data = 0xffff;
+		m->M_dat.MH.MH_pkthdr.csum_flags |= csum_flags;
+		m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
 		return (if_simloop(ifp, m, dst->sa_family, 0));
 	}
 
@@ -279,14 +279,14 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 	    ((t = pf_find_mtag(m)) == NULL || !t->routed)) {
 		int csum_flags = 0;
 
-		if (m->m_pkthdr.csum_flags & CSUM_IP)
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_IP)
 			csum_flags |= (CSUM_IP_CHECKED|CSUM_IP_VALID);
-		if (m->m_pkthdr.csum_flags & CSUM_DELAY_DATA)
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DELAY_DATA)
 			csum_flags |= (CSUM_DATA_VALID|CSUM_PSEUDO_HDR);
-		if (m->m_pkthdr.csum_flags & CSUM_SCTP)
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_SCTP)
 			csum_flags |= CSUM_SCTP_VALID;
 
-		if (m->m_flags & M_BCAST) {
+		if (m->m_hdr.mh_flags & M_BCAST) {
 			struct mbuf *n;
 
 			/*
@@ -302,17 +302,17 @@ ether_output(struct ifnet *ifp, struct mbuf *m,
 			 * See PR kern/105943 for a proposed general solution.
 			 */
 			if ((n = m_dup(m, M_DONTWAIT)) != NULL) {
-				n->m_pkthdr.csum_flags |= csum_flags;
+				n->M_dat.MH.MH_pkthdr.csum_flags |= csum_flags;
 				if (csum_flags & CSUM_DATA_VALID)
-					n->m_pkthdr.csum_data = 0xffff;
+					n->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
 				(void)if_simloop(ifp, n, dst->sa_family, hlen);
 			} else
 				ifp->if_iqdrops++;
 		} else if (bcmp(eh->ether_dhost, eh->ether_shost,
 				ETHER_ADDR_LEN) == 0) {
-			m->m_pkthdr.csum_flags |= csum_flags;
+			m->M_dat.MH.MH_pkthdr.csum_flags |= csum_flags;
 			if (csum_flags & CSUM_DATA_VALID)
-				m->m_pkthdr.csum_data = 0xffff;
+				m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
 			(void) if_simloop(ifp, m, dst->sa_family, hlen);
 			return (0);	/* XXX */
 		}
@@ -427,8 +427,8 @@ ether_ipfw_chk(struct mbuf **m0, struct ifnet *dst, int shared)
 	 * the packet (shared==1) also better be in the first mbuf.
 	 */
 	m = *m0;
-	i = min( m->m_pkthdr.len, max_protohdr);
-	if ( shared || m->m_len < i) {
+	i = min( m->M_dat.MH.MH_pkthdr.len, max_protohdr);
+	if ( shared || m->m_hdr.mh_len < i) {
 		m = m_pullup(m, i);
 		if (m == NULL) {
 			*m0 = m;
@@ -526,33 +526,33 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	 * Do consistency checks to verify assumptions
 	 * made by code past this point.
 	 */
-	if ((m->m_flags & M_PKTHDR) == 0) {
+	if ((m->m_hdr.mh_flags & M_PKTHDR) == 0) {
 		if_printf(ifp, "discard frame w/o packet header\n");
 		ifp->if_ierrors++;
 		m_freem(m);
 		return;
 	}
-	if (m->m_len < ETHER_HDR_LEN) {
+	if (m->m_hdr.mh_len < ETHER_HDR_LEN) {
 		/* XXX maybe should pullup? */
 		if_printf(ifp, "discard frame w/o leading ethernet "
 				"header (len %u pkt len %u)\n",
-				m->m_len, m->m_pkthdr.len);
+				m->m_hdr.mh_len, m->M_dat.MH.MH_pkthdr.len);
 		ifp->if_ierrors++;
 		m_freem(m);
 		return;
 	}
 	eh = mtod(m, struct ether_header *);
 	etype = ntohs(eh->ether_type);
-	if (m->m_pkthdr.rcvif == NULL) {
+	if (m->M_dat.MH.MH_pkthdr.rcvif == NULL) {
 		if_printf(ifp, "discard frame w/o interface pointer\n");
 		ifp->if_ierrors++;
 		m_freem(m);
 		return;
 	}
 #ifdef DIAGNOSTIC
-	if (m->m_pkthdr.rcvif != ifp) {
+	if (m->M_dat.MH.MH_pkthdr.rcvif != ifp) {
 		if_printf(ifp, "Warning, frame marked as received on %s\n",
-			m->m_pkthdr.rcvif->if_xname);
+			m->M_dat.MH.MH_pkthdr.rcvif->if_xname);
 	}
 #endif
 
@@ -560,9 +560,9 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 
 	if (ETHER_IS_MULTICAST(eh->ether_dhost)) {
 		if (ETHER_IS_BROADCAST(eh->ether_dhost))
-			m->m_flags |= M_BCAST;
+			m->m_hdr.mh_flags |= M_BCAST;
 		else
-			m->m_flags |= M_MCAST;
+			m->m_hdr.mh_flags |= M_MCAST;
 		ifp->if_imcasts++;
 	}
 
@@ -578,12 +578,12 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	 * and once only in case we are re-entered. Nothing else on the
 	 * Ethernet receive path expects to see the FCS.
 	 */
-	if (m->m_flags & M_HASFCS) {
+	if (m->m_hdr.mh_flags & M_HASFCS) {
 		m_adj(m, -ETHER_CRC_LEN);
-		m->m_flags &= ~M_HASFCS;
+		m->m_hdr.mh_flags &= ~M_HASFCS;
 	}
 
-	ifp->if_ibytes += m->m_pkthdr.len;
+	ifp->if_ibytes += m->M_dat.MH.MH_pkthdr.len;
 
 	/* Allow monitor mode to claim this frame, after stats are updated. */
 	if (ifp->if_flags & IFF_MONITOR) {
@@ -599,7 +599,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		    ("%s: if_lagg not loaded!", __func__));
 		m = (*lagg_input_p)(ifp, m);
 		if (m != NULL)
-			ifp = m->m_pkthdr.rcvif;
+			ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 		else {
 			CURVNET_RESTORE();
 			return;
@@ -616,10 +616,10 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	 * path correctly.
 	 * TODO: Deal with Q-in-Q frames, but not arbitrary nesting levels.
 	 */
-	if ((m->m_flags & M_VLANTAG) == 0 && etype == ETHERTYPE_VLAN) {
+	if ((m->m_hdr.mh_flags & M_VLANTAG) == 0 && etype == ETHERTYPE_VLAN) {
 		struct ether_vlan_header *evl;
 
-		if (m->m_len < sizeof(*evl) &&
+		if (m->m_hdr.mh_len < sizeof(*evl) &&
 		    (m = m_pullup(m, sizeof(*evl))) == NULL) {
 #ifdef DIAGNOSTIC
 			if_printf(ifp, "cannot pullup VLAN header\n");
@@ -631,8 +631,8 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		}
 
 		evl = mtod(m, struct ether_vlan_header *);
-		m->m_pkthdr.ether_vtag = ntohs(evl->evl_tag);
-		m->m_flags |= M_VLANTAG;
+		m->M_dat.MH.MH_pkthdr.ether_vtag = ntohs(evl->evl_tag);
+		m->m_hdr.mh_flags |= M_VLANTAG;
 
 		bcopy((char *)evl, (char *)evl + ETHER_VLAN_ENCAP_LEN,
 		    ETHER_HDR_LEN - ETHER_TYPE_LEN);
@@ -647,7 +647,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	if (IFP2AC(ifp)->ac_netgraph != NULL) {
 		KASSERT(ng_ether_input_p != NULL,
 		    ("%s: ng_ether_input_p is NULL", __func__));
-		m->m_flags &= ~M_PROMISC;
+		m->m_hdr.mh_flags &= ~M_PROMISC;
 		(*ng_ether_input_p)(ifp, &m);
 		if (m == NULL) {
 			CURVNET_RESTORE();
@@ -663,7 +663,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	 * and the frame should be delivered locally.
 	 */
 	if (ifp->if_bridge != NULL) {
-		m->m_flags &= ~M_PROMISC;
+		m->m_hdr.mh_flags &= ~M_PROMISC;
 		BRIDGE_INPUT(ifp, m);
 		if (m == NULL) {
 			CURVNET_RESTORE();
@@ -681,7 +681,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		 */
 		if (!ETHER_IS_MULTICAST(eh->ether_dhost) &&
 		    bcmp(IF_LLADDR(ifp), eh->ether_dhost, ETHER_ADDR_LEN) != 0)
-			m->m_flags |= M_PROMISC;
+			m->m_hdr.mh_flags |= M_PROMISC;
 	}
 
 #if 0
@@ -702,7 +702,7 @@ static void
 ether_nh_input(struct mbuf *m)
 {
 
-	ether_input_internal(m->m_pkthdr.rcvif, m);
+	ether_input_internal(m->M_dat.MH.MH_pkthdr.rcvif, m);
 }
 
 static struct netisr_handler	ether_nh = {
@@ -729,7 +729,7 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
 	 * We will rely on rcvif being set properly in the deferred context,
 	 * so assert it is correct here.
 	 */
-	KASSERT(m->m_pkthdr.rcvif == ifp, ("%s: ifnet mismatch", __func__));
+	KASSERT(m->M_dat.MH.MH_pkthdr.rcvif == ifp, ("%s: ifnet mismatch", __func__));
 
 	netisr_dispatch(NETISR_ETHER, m);
 }
@@ -752,7 +752,7 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 	 * Allow dummynet and/or ipfw to claim the frame.
 	 * Do not do this for PROMISC frames in case we are re-entered.
 	 */
-	if (V_ip_fw_chk_ptr && V_ether_ipfw != 0 && !(m->m_flags & M_PROMISC)) {
+	if (V_ip_fw_chk_ptr && V_ether_ipfw != 0 && !(m->m_hdr.mh_flags & M_PROMISC)) {
 		if (ether_ipfw_chk(&m, NULL, 0) == 0) {
 			if (m)
 				m_freem(m);	/* dropped; free mbuf chain */
@@ -770,8 +770,8 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 	 * If this frame has a VLAN tag other than 0, call vlan_input()
 	 * if its module is loaded. Otherwise, drop.
 	 */
-	if ((m->m_flags & M_VLANTAG) &&
-	    EVL_VLANOFTAG(m->m_pkthdr.ether_vtag) != 0) {
+	if ((m->m_hdr.mh_flags & M_VLANTAG) &&
+	    EVL_VLANOFTAG(m->M_dat.MH.MH_pkthdr.ether_vtag) != 0) {
 		if (ifp->if_vlantrunk == NULL) {
 			ifp->if_noproto++;
 			m_freem(m);
@@ -780,7 +780,7 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 		KASSERT(vlan_input_p != NULL,("%s: VLAN not loaded!",
 		    __func__));
 		/* Clear before possibly re-entering ether_input(). */
-		m->m_flags &= ~M_PROMISC;
+		m->m_hdr.mh_flags &= ~M_PROMISC;
 		(*vlan_input_p)(ifp, m);
 		return;
 	}
@@ -790,7 +790,7 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 	 * Pass promiscuously received frames to the upper layer if the user
 	 * requested this by setting IFF_PPROMISC. Otherwise, drop them.
 	 */
-	if ((ifp->if_flags & IFF_PPROMISC) == 0 && (m->m_flags & M_PROMISC)) {
+	if ((ifp->if_flags & IFF_PPROMISC) == 0 && (m->m_hdr.mh_flags & M_PROMISC)) {
 		m_freem(m);
 		return;
 	}
@@ -799,8 +799,8 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 	 * Reset layer specific mbuf flags to avoid confusing upper layers.
 	 * Strip off Ethernet header.
 	 */
-	m->m_flags &= ~M_VLANTAG;
-	m->m_flags &= ~(M_PROTOFLAGS);
+	m->m_hdr.mh_flags &= ~M_VLANTAG;
+	m->m_hdr.mh_flags &= ~(M_PROTOFLAGS);
 	m_adj(m, ETHER_HDR_LEN);
 
 	/*
@@ -1189,16 +1189,16 @@ ether_vlan_mtap(struct bpf_if *bp, struct mbuf *m, void *data, u_int dlen)
 	struct ether_vlan_header vlan;
 	struct mbuf mv, mb;
 
-	KASSERT((m->m_flags & M_VLANTAG) != 0,
+	KASSERT((m->m_hdr.mh_flags & M_VLANTAG) != 0,
 	    ("%s: vlan information not present", __func__));
-	KASSERT(m->m_len >= sizeof(struct ether_header),
+	KASSERT(m->m_hdr.mh_len >= sizeof(struct ether_header),
 	    ("%s: mbuf not large enough for header", __func__));
 	bcopy(mtod(m, char *), &vlan, sizeof(struct ether_header));
 	vlan.evl_proto = vlan.evl_encap_proto;
 	vlan.evl_encap_proto = htons(ETHERTYPE_VLAN);
-	vlan.evl_tag = htons(m->m_pkthdr.ether_vtag);
-	m->m_len -= sizeof(struct ether_header);
-	m->m_data += sizeof(struct ether_header);
+	vlan.evl_tag = htons(m->M_dat.MH.MH_pkthdr.ether_vtag);
+	m->m_hdr.mh_len -= sizeof(struct ether_header);
+	m->m_hdr.mh_data += sizeof(struct ether_header);
 	/*
 	 * If a data link has been supplied by the caller, then we will need to
 	 * re-create a stack allocated mbuf chain with the following structure:
@@ -1210,17 +1210,17 @@ ether_vlan_mtap(struct bpf_if *bp, struct mbuf *m, void *data, u_int dlen)
 	 * Otherwise, submit the packet and vlan header via bpf_mtap2().
 	 */
 	if (data != NULL) {
-		mv.m_next = m;
-		mv.m_data = (caddr_t)&vlan;
-		mv.m_len = sizeof(vlan);
-		mb.m_next = &mv;
-		mb.m_data = data;
-		mb.m_len = dlen;
+		mv.m_hdr.mh_next = m;
+		mv.m_hdr.mh_data = (caddr_t)&vlan;
+		mv.m_hdr.mh_len = sizeof(vlan);
+		mb.m_hdr.mh_next = &mv;
+		mb.m_hdr.mh_data = data;
+		mb.m_hdr.mh_len = dlen;
 		bpf_mtap(bp, &mb);
 	} else
 		bpf_mtap2(bp, &vlan, sizeof(vlan), m);
-	m->m_len += sizeof(struct ether_header);
-	m->m_data -= sizeof(struct ether_header);
+	m->m_hdr.mh_len += sizeof(struct ether_header);
+	m->m_hdr.mh_data -= sizeof(struct ether_header);
 }
 
 struct mbuf *
@@ -1231,9 +1231,9 @@ ether_vlanencap(struct mbuf *m, uint16_t tag)
 	M_PREPEND(m, ETHER_VLAN_ENCAP_LEN, M_DONTWAIT);
 	if (m == NULL)
 		return (NULL);
-	/* M_PREPEND takes care of m_len, m_pkthdr.len for us */
+	/* M_PREPEND takes care of m_hdr.mh_len, M_dat.MH.MH_pkthdr.len for us */
 
-	if (m->m_len < sizeof(*evl)) {
+	if (m->m_hdr.mh_len < sizeof(*evl)) {
 		m = m_pullup(m, sizeof(*evl));
 		if (m == NULL)
 			return (NULL);

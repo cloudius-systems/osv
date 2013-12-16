@@ -65,7 +65,7 @@ __BEGIN_DECLS
  *
  * mtod(m, t)	-- Convert mbuf pointer to data pointer of correct type.
  */
-#define	mtod(m, t)	((t)((m)->m_data))
+#define	mtod(m, t)	((t)((m)->m_hdr.mh_data))
 
 /*
  * Argument structure passed to UMA routines during mbuf and packet
@@ -165,17 +165,6 @@ struct mbuf {
 		char	M_databuf[MLEN];		/* !M_PKTHDR, !M_EXT */
 	} M_dat;
 };
-#define	m_next		m_hdr.mh_next
-#define	m_len		m_hdr.mh_len
-#define	m_data		m_hdr.mh_data
-#define	m_type		m_hdr.mh_type
-#define	m_flags		m_hdr.mh_flags
-#define	m_nextpkt	m_hdr.mh_nextpkt
-#define	m_act		m_nextpkt
-#define	m_pkthdr	M_dat.MH.MH_pkthdr
-#define	m_ext		M_dat.MH.MH_dat.MH_ext
-#define	m_pktdat	M_dat.MH.MH_dat.MH_databuf
-#define	m_dat		M_dat.M_databuf
 
 /*
  * mbuf flags.
@@ -224,7 +213,7 @@ struct mbuf {
  * addresses and TCP port numbers) classify packets into flows.  These flows
  * can then be used to maintain ordering while delivering packets to the OS
  * via parallel input queues, as well as to provide a stateless affinity
- * model.  NIC drivers can pass up the hash via m->m_pkthdr.flowid, and set
+ * model.  NIC drivers can pass up the hash via m->M_dat.MH.MH_pkthdr.flowid, and set
  * m_flag fields to indicate how the hash should be interpreted by the
  * network stack.
  *
@@ -244,17 +233,17 @@ struct mbuf {
 #define	M_HASHTYPE_RSS_TCP_IPV6_EX	0x6	/* TCPv6 4-tiple + ext hdrs */
 #define	M_HASHTYPE_OPAQUE		0xf	/* ordering, not affinity */
 
-#define	M_HASHTYPE_CLEAR(m)	(m)->m_flags &= ~(M_HASHTYPEBITS)
-#define	M_HASHTYPE_GET(m)	(((m)->m_flags & M_HASHTYPEBITS) >> \
+#define	M_HASHTYPE_CLEAR(m)	(m)->m_hdr.mh_flags &= ~(M_HASHTYPEBITS)
+#define	M_HASHTYPE_GET(m)	(((m)->m_hdr.mh_flags & M_HASHTYPEBITS) >> \
 				    M_HASHTYPE_SHIFT)
 #define	M_HASHTYPE_SET(m, v)	do {					\
-	(m)->m_flags &= ~M_HASHTYPEBITS;				\
-	(m)->m_flags |= ((v) << M_HASHTYPE_SHIFT);			\
+	(m)->m_hdr.mh_flags &= ~M_HASHTYPEBITS;				\
+	(m)->m_hdr.mh_flags |= ((v) << M_HASHTYPE_SHIFT);			\
 } while (0)
 #define	M_HASHTYPE_TEST(m, v)	(M_HASHTYPE_GET(m) == (v))
 
 /*
- * Flags preserved when copying m_pkthdr.
+ * Flags preserved when copying M_dat.MH.MH_pkthdr.
  */
 #define	M_COPYFLAGS \
     (M_PKTHDR|M_EOR|M_RDONLY|M_PROTOFLAGS|M_SKIP_FIREWALL|M_BCAST|M_MCAST|\
@@ -505,12 +494,12 @@ m_init(struct mbuf *m, uma_zone_t zone, int size, int how, short type,
 {
 	int error;
 
-	m->m_next = NULL;
-	m->m_nextpkt = NULL;
-	m->m_data = m->m_dat;
-	m->m_len = 0;
-	m->m_flags = flags;
-	m->m_type = type;
+	m->m_hdr.mh_next = NULL;
+	m->m_hdr.mh_nextpkt = NULL;
+	m->m_hdr.mh_data = m->M_dat.M_databuf;
+	m->m_hdr.mh_len = 0;
+	m->m_hdr.mh_flags = flags;
+	m->m_hdr.mh_type = type;
 	if (flags & M_PKTHDR) {
 		if ((error = m_pkthdr_init(m, how)) != 0)
 			return (error);
@@ -542,7 +531,7 @@ m_getclr(int how, short type)
 	args.type = type;
 	m = (struct mbuf*)uma_zalloc_arg(zone_mbuf, &args, how);
 	if (m != NULL)
-		bzero(m->m_data, MLEN);
+		bzero(m->m_hdr.mh_data, MLEN);
 	return (m);
 }
 
@@ -602,8 +591,8 @@ static __inline void
 m_free_fast(struct mbuf *m)
 {
 #ifdef INVARIANTS
-	if (m->m_flags & M_PKTHDR)
-		KASSERT(SLIST_EMPTY(&m->m_pkthdr.tags), ("doing fast free of mbuf with tags"));
+	if (m->m_hdr.mh_flags & M_PKTHDR)
+		KASSERT(SLIST_EMPTY(&m->M_dat.MH.MH_pkthdr.tags), ("doing fast free of mbuf with tags"));
 #endif
 
 	uma_zfree_arg(zone_mbuf, m, (void *)MB_NOTAGS);
@@ -612,11 +601,11 @@ m_free_fast(struct mbuf *m)
 static __inline struct mbuf *
 m_free(struct mbuf *m)
 {
-	struct mbuf *n = m->m_next;
+	struct mbuf *n = m->m_hdr.mh_next;
 
-	if (m->m_flags & M_EXT)
+	if (m->m_hdr.mh_flags & M_EXT)
 		mb_free_ext(m);
-	else if ((m->m_flags & M_NOFREE) == 0)
+	else if ((m->m_hdr.mh_flags & M_NOFREE) == 0)
 		uma_zfree(zone_mbuf, m);
 	return (n);
 }
@@ -625,15 +614,15 @@ static __inline void
 m_clget(struct mbuf *m, int how)
 {
 
-	if (m->m_flags & M_EXT)
+	if (m->m_hdr.mh_flags & M_EXT)
 		printf("%s: %p mbuf already has cluster\n", __func__, m);
-	m->m_ext.ext_buf = (char *)NULL;
+	m->M_dat.MH.MH_dat.MH_ext.ext_buf = (char *)NULL;
 	uma_zalloc_arg(zone_clust, m, how);
 	/*
 	 * On a cluster allocation failure, drain the packet zone and retry,
 	 * we might be able to loosen a few clusters up on the drain.
 	 */
-	if ((how & M_NOWAIT) && (m->m_ext.ext_buf == NULL)) {
+	if ((how & M_NOWAIT) && (m->M_dat.MH.MH_dat.MH_ext.ext_buf == NULL)) {
 		zone_drain(zone_pack);
 		uma_zalloc_arg(zone_clust, m, how);
 	}
@@ -651,10 +640,10 @@ m_cljget(struct mbuf *m, int how, int size)
 {
 	uma_zone_t zone;
 
-	if (m && m->m_flags & M_EXT)
+	if (m && m->m_hdr.mh_flags & M_EXT)
 		printf("%s: %p mbuf already has cluster\n", __func__, m);
 	if (m != NULL)
-		m->m_ext.ext_buf = NULL;
+		m->M_dat.MH.MH_dat.MH_ext.ext_buf = NULL;
 
 	zone = m_getzone(size);
 	return (uma_zalloc_arg(zone, m, how));
@@ -690,13 +679,13 @@ m_cljset(struct mbuf *m, void *cl, int type)
 		break;
 	}
 
-	m->m_data = m->m_ext.ext_buf = (caddr_t)cl;
-	m->m_ext.ext_free = (free_routine_t)NULL;
-	m->m_ext.ext_arg1 = m->m_ext.ext_arg2 = NULL;
-	m->m_ext.ext_size = size;
-	m->m_ext.ext_type = type;
-	m->m_ext.ref_cnt = uma_find_refcnt(zone, cl);
-	m->m_flags |= M_EXT;
+	m->m_hdr.mh_data = m->M_dat.MH.MH_dat.MH_ext.ext_buf = (caddr_t)cl;
+	m->M_dat.MH.MH_dat.MH_ext.ext_free = (free_routine_t)NULL;
+	m->M_dat.MH.MH_dat.MH_ext.ext_arg1 = m->M_dat.MH.MH_dat.MH_ext.ext_arg2 = NULL;
+	m->M_dat.MH.MH_dat.MH_ext.ext_size = size;
+	m->M_dat.MH.MH_dat.MH_ext.ext_type = type;
+	m->M_dat.MH.MH_dat.MH_ext.ref_cnt = uma_find_refcnt(zone, cl);
+	m->m_hdr.mh_flags |= M_EXT;
 
 }
 
@@ -704,15 +693,15 @@ static __inline void
 m_chtype(struct mbuf *m, short new_type)
 {
 
-	m->m_type = new_type;
+	m->m_hdr.mh_type = new_type;
 }
 
 static __inline struct mbuf *
 m_last(struct mbuf *m)
 {
 
-	while (m->m_next)
-		m = m->m_next;
+	while (m->m_hdr.mh_next)
+		m = m->m_hdr.mh_next;
 	return (m);
 }
 
@@ -744,13 +733,13 @@ m_addr_changed(struct mbuf *m)
  * be both the local data payload, or an external buffer area, depending on
  * whether M_EXT is set).
  */
-#define	M_WRITABLE(m)	(!((m)->m_flags & M_RDONLY) &&			\
-			 (!(((m)->m_flags & M_EXT)) ||			\
-			 (*((m)->m_ext.ref_cnt) == 1)) )		\
+#define	M_WRITABLE(m)	(!((m)->m_hdr.mh_flags & M_RDONLY) &&			\
+			 (!(((m)->m_hdr.mh_flags & M_EXT)) ||			\
+			 (*((m)->M_dat.MH.MH_dat.MH_ext.ref_cnt) == 1)) )		\
 
 /* Check if the supplied mbuf has a packet header, or else panic. */
 #define	M_ASSERTPKTHDR(m)						\
-	KASSERT((m) != NULL && (m)->m_flags & M_PKTHDR,			\
+	KASSERT((m) != NULL && (m)->m_hdr.mh_flags & M_PKTHDR,			\
 	    ("%s: no mbuf packet header!", __func__))
 
 /*
@@ -759,19 +748,19 @@ m_addr_changed(struct mbuf *m)
  * XXX: Broken at the moment.  Need some UMA magic to make it work again.
  */
 #define	M_ASSERTVALID(m)						\
-	KASSERT((((struct mbuf *)m)->m_flags & 0) == 0,			\
+	KASSERT((((struct mbuf *)m)->m_hdr.mh_flags & 0) == 0,			\
 	    ("%s: attempted use of a free mbuf!", __func__))
 
 /*
- * Set the m_data pointer of a newly-allocated mbuf (m_get/MGET) to place an
+ * Set the m_hdr.mh_data pointer of a newly-allocated mbuf (m_get/MGET) to place an
  * object of the specified size at the end of the mbuf, longword aligned.
  */
 #define	M_ALIGN(m, len) do {						\
-	KASSERT(!((m)->m_flags & (M_PKTHDR|M_EXT)),			\
+	KASSERT(!((m)->m_hdr.mh_flags & (M_PKTHDR|M_EXT)),			\
 		("%s: M_ALIGN not normal mbuf", __func__));		\
-	KASSERT((m)->m_data == (m)->m_dat,				\
+	KASSERT((m)->m_hdr.mh_data == (m)->M_dat.M_databuf,				\
 		("%s: M_ALIGN not a virgin mbuf", __func__));		\
-	(m)->m_data += (MLEN - (len)) & ~(sizeof(long) - 1);		\
+	(m)->m_hdr.mh_data += (MLEN - (len)) & ~(sizeof(long) - 1);		\
 } while (0)
 
 /*
@@ -779,11 +768,11 @@ m_addr_changed(struct mbuf *m)
  * M_DUP/MOVE_PKTHDR.
  */
 #define	MH_ALIGN(m, len) do {						\
-	KASSERT((m)->m_flags & M_PKTHDR && !((m)->m_flags & M_EXT),	\
+	KASSERT((m)->m_hdr.mh_flags & M_PKTHDR && !((m)->m_hdr.mh_flags & M_EXT),	\
 		("%s: MH_ALIGN not PKTHDR mbuf", __func__));		\
-	KASSERT((m)->m_data == (m)->m_pktdat,				\
+	KASSERT((m)->m_hdr.mh_data == (m)->M_dat.MH.MH_dat.MH_databuf,				\
 		("%s: MH_ALIGN not a virgin mbuf", __func__));		\
-	(m)->m_data += (MHLEN - (len)) & ~(sizeof(long) - 1);		\
+	(m)->m_hdr.mh_data += (MHLEN - (len)) & ~(sizeof(long) - 1);		\
 } while (0)
 
 /*
@@ -794,10 +783,10 @@ m_addr_changed(struct mbuf *m)
  * of checking writability of the mbuf data area rests solely with the caller.
  */
 #define	M_LEADINGSPACE(m)						\
-	((m)->m_flags & M_EXT ?						\
-	    (M_WRITABLE(m) ? (m)->m_data - (m)->m_ext.ext_buf : 0):	\
-	    (m)->m_flags & M_PKTHDR ? (m)->m_data - (m)->m_pktdat :	\
-	    (m)->m_data - (m)->m_dat)
+	((m)->m_hdr.mh_flags & M_EXT ?						\
+	    (M_WRITABLE(m) ? (m)->m_hdr.mh_data - (m)->M_dat.MH.MH_dat.MH_ext.ext_buf : 0):	\
+	    (m)->m_hdr.mh_flags & M_PKTHDR ? (m)->m_hdr.mh_data - (m)->M_dat.MH.MH_dat.MH_databuf :	\
+	    (m)->m_hdr.mh_data - (m)->M_dat.M_databuf)
 
 /*
  * Compute the amount of space available after the end of data in an mbuf.
@@ -806,10 +795,10 @@ m_addr_changed(struct mbuf *m)
  * of checking writability of the mbuf data area rests solely with the caller.
  */
 #define	M_TRAILINGSPACE(m)						\
-	((m)->m_flags & M_EXT ?						\
-	    (M_WRITABLE(m) ? (m)->m_ext.ext_buf + (m)->m_ext.ext_size	\
-		- ((m)->m_data + (m)->m_len) : 0) :			\
-	    &(m)->m_dat[MLEN] - ((m)->m_data + (m)->m_len))
+	((m)->m_hdr.mh_flags & M_EXT ?						\
+	    (M_WRITABLE(m) ? (m)->M_dat.MH.MH_dat.MH_ext.ext_buf + (m)->M_dat.MH.MH_dat.MH_ext.ext_size	\
+		- ((m)->m_hdr.mh_data + (m)->m_hdr.mh_len) : 0) :			\
+	    &(m)->M_dat.M_databuf[MLEN] - ((m)->m_hdr.mh_data + (m)->m_hdr.mh_len))
 
 /*
  * Arrange to prepend space of size plen to mbuf m.  If a new mbuf must be
@@ -824,12 +813,12 @@ m_addr_changed(struct mbuf *m)
 									\
 	MBUF_CHECKSLEEP(how);						\
 	if (M_LEADINGSPACE(_mm) >= _mplen) {				\
-		_mm->m_data -= _mplen;					\
-		_mm->m_len += _mplen;					\
+		_mm->m_hdr.mh_data -= _mplen;					\
+		_mm->m_hdr.mh_len += _mplen;					\
 	} else								\
 		_mm = m_prepend(_mm, _mplen, __mhow);			\
-	if (_mm != NULL && _mm->m_flags & M_PKTHDR)			\
-		_mm->m_pkthdr.len += _mplen;				\
+	if (_mm != NULL && _mm->m_hdr.mh_flags & M_PKTHDR)			\
+		_mm->M_dat.MH.MH_pkthdr.len += _mplen;				\
 	*_mmp = _mm;							\
 } while (0)
 
@@ -990,7 +979,7 @@ static __inline void
 m_tag_init(struct mbuf *m)
 {
 
-	SLIST_INIT(&m->m_pkthdr.tags);
+	SLIST_INIT(&m->M_dat.MH.MH_pkthdr.tags);
 }
 
 /*
@@ -1025,7 +1014,7 @@ static __inline struct m_tag *
 m_tag_first(struct mbuf *m)
 {
 
-	return (SLIST_FIRST(&m->m_pkthdr.tags));
+	return (SLIST_FIRST(&m->M_dat.MH.MH_pkthdr.tags));
 }
 
 /*
@@ -1045,7 +1034,7 @@ static __inline void
 m_tag_prepend(struct mbuf *m, struct m_tag *t)
 {
 
-	SLIST_INSERT_HEAD(&m->m_pkthdr.tags, t, m_tag_link);
+	SLIST_INSERT_HEAD(&m->M_dat.MH.MH_pkthdr.tags, t, m_tag_link);
 }
 
 /*
@@ -1055,7 +1044,7 @@ static __inline void
 m_tag_unlink(struct mbuf *m, struct m_tag *t)
 {
 
-	SLIST_REMOVE(&m->m_pkthdr.tags, t, m_tag, m_tag_link);
+	SLIST_REMOVE(&m->M_dat.MH.MH_pkthdr.tags, t, m_tag, m_tag_link);
 }
 
 /* These are for OpenBSD compatibility. */
@@ -1070,7 +1059,7 @@ m_tag_get(int type, int length, int wait)
 static __inline struct m_tag *
 m_tag_find(struct mbuf *m, int type, struct m_tag *start)
 {
-	return (SLIST_EMPTY(&m->m_pkthdr.tags) ? (struct m_tag *)NULL :
+	return (SLIST_EMPTY(&m->M_dat.MH.MH_pkthdr.tags) ? (struct m_tag *)NULL :
 	    m_tag_locate(m, MTAG_ABI_COMPAT, type, start));
 }
 
@@ -1080,11 +1069,11 @@ m_tag_find(struct mbuf *m, int type, struct m_tag *start)
 
 /* get the fib from an mbuf and if it is not set, return the default */
 #define M_GETFIB(_m) \
-    ((((_m)->m_flags & M_FIB) >> M_FIBSHIFT) & M_FIBMASK)
+    ((((_m)->m_hdr.mh_flags & M_FIB) >> M_FIBSHIFT) & M_FIBMASK)
 
 #define M_SETFIB(_m, _fib) do {						\
-	_m->m_flags &= ~M_FIB;					   	\
-	_m->m_flags |= (((_fib) << M_FIBSHIFT) & M_FIB);  \
+	_m->m_hdr.mh_flags &= ~M_FIB;					   	\
+	_m->m_hdr.mh_flags |= (((_fib) << M_FIBSHIFT) & M_FIB);  \
 } while (0)
 
 #endif /* _KERNEL */
