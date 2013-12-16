@@ -25,6 +25,8 @@ constexpr uintptr_t page_size = 4096;
 constexpr int page_size_shift = 12; // log2(page_size)
 
 constexpr int pte_per_page = 512;
+constexpr int pte_per_page_shift = 9; // log2(pte_per_page)
+
 constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
 
 typedef uint64_t f_offset;
@@ -36,7 +38,7 @@ static char* const debug_base = reinterpret_cast<char*>(0xffffe00000000000);
 inline unsigned pt_index(void *virt, unsigned level)
 {
     auto v = reinterpret_cast<ulong>(virt);
-    return (v >> (page_size_shift + level * 9)) & 511;
+    return (v >> (page_size_shift + level * pte_per_page_shift)) & (pte_per_page - 1);
 }
 
 enum {

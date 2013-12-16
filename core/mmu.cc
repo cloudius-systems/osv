@@ -185,7 +185,7 @@ void split_large_page(hw_ptep ptep, unsigned level)
     auto pt = follow(ptep.read());
     for (auto i = 0; i < pte_per_page; ++i) {
         pt_element tmp = pte_orig;
-        phys addend = phys(i) << (page_size_shift + 9 * (level - 1));
+        phys addend = phys(i) << (page_size_shift + pte_per_page_shift * (level - 1));
         tmp.set_addr(tmp.addr(level > 1) | addend, level > 1);
         pt.at(i).write(tmp);
     }
@@ -943,7 +943,7 @@ void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
         allocate_intermediate_level(parent);
     }
     hw_ptep pt = follow(parent.read());
-    phys step = phys(1) << (page_size_shift + level * 9);
+    phys step = phys(1) << (page_size_shift + level * pte_per_page_shift);
     auto idx = pt_index(vstart, level);
     auto eidx = pt_index(vend, level);
     base_virt += idx * step;
@@ -963,7 +963,7 @@ void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
 
 size_t page_size_level(unsigned level)
 {
-    return size_t(1) << (page_size_shift + 9 * level);
+    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
 }
 
 void linear_map(void* _virt, phys addr, size_t size, size_t slop)
