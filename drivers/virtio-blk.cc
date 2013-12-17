@@ -266,7 +266,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         hdr->ioprio = 0;
         hdr->sector = bio->bio_offset / sector_size;
 
-        queue->_sg_vec.clear();
+        queue->init_sg();
         queue->add_out_sg(hdr, sizeof(struct virtio_blk_outhdr));
 
         // need to break a contiguous buffers that > 4k into several physical page mapping

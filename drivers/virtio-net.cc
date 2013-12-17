@@ -416,7 +416,7 @@ namespace virtio {
             m->m_hdr.mh_len = MCLBYTES;
             u8 *mdata = mtod(m, u8*);
 
-            _rx_queue->_sg_vec.clear();
+            _rx_queue->init_sg();
             _rx_queue->add_in_sg(mdata, m->m_hdr.mh_len);
             if (!_rx_queue->add_buf(m)) {
                 m_freem(m);
@@ -449,7 +449,7 @@ namespace virtio {
             }
         }
 
-        _tx_queue->_sg_vec.clear();
+        _tx_queue->init_sg();
         _tx_queue->add_out_sg(static_cast<void*>(&req->mhdr), _hdr_size);
 
         for (m = m_head; m != NULL; m = m->m_hdr.mh_next) {

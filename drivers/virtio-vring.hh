@@ -168,6 +168,11 @@ class virtio_driver;
             sg_node(const sg_node& n) :_paddr(n._paddr), _len(n._len), _flags(n._flags) {};
         };
 
+        void init_sg(void)
+        {
+            _sg_vec.clear();
+        }
+
         void add_out_sg(void *vaddr, u32 len)
         {
             u64 paddr = mmu::virt_to_phys(vaddr);

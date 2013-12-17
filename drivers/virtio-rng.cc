@@ -76,7 +76,7 @@ void virtio_rng::refill()
     DROP_LOCK(_mtx) {
         void *data = buf.data();
 
-        _queue->_sg_vec.clear();
+        _queue->init_sg();
         _queue->add_in_sg(data, remaining);
 
         while (!_queue->add_buf(data)) {
