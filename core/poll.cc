@@ -62,6 +62,8 @@ TRACEPOINT(trace_poll, "_pfd=%p, _nfds=%lu, _timeout=%d", struct pollfd *, nfds_
 TRACEPOINT(trace_poll_ret, "%d", int);
 TRACEPOINT(trace_poll_err, "%d", int);
 
+using namespace std;
+
 int poll_no_poll(int events)
 {
     /*
@@ -159,10 +161,8 @@ int poll_wake(struct file* fp, int events)
      */
     TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
         if (pl->_events & events) {
-            mtx_lock(&pl->_req->_awake_mutex);
-            pl->_req->_awake = true;
-            mtx_unlock(&pl->_req->_awake_mutex);
-            wakeup((void*)pl->_req);
+            pl->_req->_awake.store(true, memory_order_relaxed);
+            pl->_req->_poll_thread->wake();
         }
     }
 
@@ -214,9 +214,7 @@ void poll_install(struct pollreq* p)
             // Return immediately. poll() will call poll_scan() to get the
             // full list of events, and will call poll_uninstall() to undo
             // the partial installation we did here.
-            mtx_lock(&p->_awake_mutex);
-            p->_awake = true;
-            mtx_unlock(&p->_awake_mutex);
+            p->_awake.store(true, memory_order_relaxed);
             return;
         }
     }
@@ -254,15 +252,13 @@ void poll_uninstall(struct pollreq* p)
 
 int do_poll(std::vector<poll_file>& pfd, int _timeout)
 {
-    int nr_events, error;
-    int timeout;
+    int nr_events;
     struct pollreq p = {};
+    sched::timer tmr(*sched::thread::current());
 
     p._nfds = pfd.size();
     p._timeout = _timeout;
     p._pfd = std::move(pfd);
-    mtx_init(&p._awake_mutex, "poll awake", NULL, MTX_DEF);
-    p._awake = false;
 
     /* Any existing events return immediately */
     nr_events = poll_scan(p._pfd);
@@ -281,34 +277,25 @@ int do_poll(std::vector<poll_file>& pfd, int _timeout)
     poll_install(&p);
 
     /* Timeout */
-    if (p._timeout < 0) {
-        timeout = 0;
-    } else {
-        /* Convert timeout of ms to hz */
-        timeout = p._timeout*(hz/1000L);
+    if (p._timeout > 0) {
+        /* Convert timeout of ms to ns */
+        tmr.set(clock::get()->time() + p._timeout * 1_ms);
     }
 
     /* Block  */
-    mtx_lock(&p._awake_mutex);
-    if (p._awake) {
-        // poll_install already noticed a missed event, or we got one after
-        // poll_install. Don't sleep, or we won't be woken again!
-        error = 0;
-    } else {
-        error = msleep((void *)&p, &p._awake_mutex, 0, "poll", timeout);
-    }
-    mtx_unlock(&p._awake_mutex);
-    if (error != EWOULDBLOCK) {
+    sched::thread::wait_until([&] {
+        return p._awake.load(memory_order_relaxed) || tmr.expired();
+    });
+
+    nr_events = 0;
+    if (p._awake.load(memory_order_relaxed)) {
         nr_events = poll_scan(p._pfd);
-    } else {
-        nr_events = 0;
     }
 
     /* Remove pollreq references */
     poll_uninstall(&p);
 
     pfd = std::move(p._pfd);
-    mtx_destroy(&p._awake_mutex);
 out:
     return nr_events;
 }

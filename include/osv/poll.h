@@ -145,8 +145,8 @@ struct pollreq {
     std::vector<poll_file> _pfd;
     nfds_t _nfds;
     int _timeout;
-    bool _awake;
-    struct mtx _awake_mutex;
+    std::atomic<bool> _awake = { false };
+    sched::thread* _poll_thread = sched::thread::current();
 };
 
 #endif
