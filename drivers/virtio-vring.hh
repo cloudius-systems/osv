@@ -12,6 +12,7 @@
 #include <functional>
 #include <osv/mutex.h>
 #include "debug.hh"
+#include "mmu.hh"
 
 #define virtio_tag "virtio"
 #define virtio_d(...)   tprintf_d(virtio_tag, __VA_ARGS__)
@@ -166,6 +167,19 @@ class virtio_driver;
             sg_node(u64 addr, u32 len, u16 flags=0) :_paddr(addr), _len(len), _flags(flags) {};
             sg_node(const sg_node& n) :_paddr(n._paddr), _len(n._len), _flags(n._flags) {};
         };
+
+        void add_out_sg(void *vaddr, u32 len)
+        {
+            u64 paddr = mmu::virt_to_phys(vaddr);
+            _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_READ);
+        }
+
+        void add_in_sg(void *vaddr, u32 len)
+        {
+            u64 paddr = mmu::virt_to_phys(vaddr);
+            _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_WRITE);
+        }
+
 
         // holds a temporary sg_nodes that travel between the upper layer virtio to add_buf
         std::vector<sg_node> _sg_vec;

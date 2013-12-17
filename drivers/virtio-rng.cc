@@ -75,10 +75,9 @@ void virtio_rng::refill()
     u32 len;
     DROP_LOCK(_mtx) {
         void *data = buf.data();
-        auto paddr = mmu::virt_to_phys(data);
 
         _queue->_sg_vec.clear();
-        _queue->_sg_vec.emplace_back(paddr, remaining, vring_desc::VRING_DESC_F_WRITE);
+        _queue->add_in_sg(data, remaining);
 
         while (!_queue->add_buf(data)) {
             while (!_queue->avail_ring_has_room(_queue->_sg_vec.size())) {

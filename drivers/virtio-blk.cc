@@ -267,7 +267,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         hdr->sector = bio->bio_offset / sector_size;
 
         queue->_sg_vec.clear();
-        queue->_sg_vec.emplace_back(mmu::virt_to_phys(hdr), sizeof(struct virtio_blk_outhdr), vring_desc::VRING_DESC_F_READ);
+        queue->add_out_sg(hdr, sizeof(struct virtio_blk_outhdr));
 
         // need to break a contiguous buffers that > 4k into several physical page mapping
         // even if the virtual space is contiguous.
@@ -279,13 +279,17 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             if (offset + size > mmu::page_size)
                 size = mmu::page_size - offset;
             len += size;
-            queue->_sg_vec.emplace_back(mmu::virt_to_phys(base), size, (type == VIRTIO_BLK_T_OUT)? vring_desc::VRING_DESC_F_READ:vring_desc::VRING_DESC_F_WRITE);
+            if (type == VIRTIO_BLK_T_OUT)
+                queue->add_out_sg(base, size);
+            else
+                queue->add_in_sg(base, size);
+
             base += size;
             offset = 0;
         }
 
         req->res.status = 0;
-        queue->_sg_vec.emplace_back(mmu::virt_to_phys(&req->res), sizeof (struct virtio_blk_res), vring_desc::VRING_DESC_F_WRITE);
+        queue->add_in_sg(&req->res, sizeof (struct virtio_blk_res));
 
         while (!queue->add_buf(req)) {
             _waiting_request_thread = sched::thread::current();

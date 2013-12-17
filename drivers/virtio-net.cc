@@ -417,7 +417,7 @@ namespace virtio {
             u8 *mdata = mtod(m, u8*);
 
             _rx_queue->_sg_vec.clear();
-            _rx_queue->_sg_vec.emplace_back(mmu::virt_to_phys(mdata), m->m_hdr.mh_len, vring_desc::VRING_DESC_F_WRITE);
+            _rx_queue->add_in_sg(mdata, m->m_hdr.mh_len);
             if (!_rx_queue->add_buf(m)) {
                 m_freem(m);
                 break;
@@ -450,13 +450,13 @@ namespace virtio {
         }
 
         _tx_queue->_sg_vec.clear();
-        _tx_queue->_sg_vec.emplace_back(mmu::virt_to_phys(static_cast<void*>(&req->mhdr)), _hdr_size, vring_desc::VRING_DESC_F_READ);
+        _tx_queue->add_out_sg(static_cast<void*>(&req->mhdr), _hdr_size);
 
         for (m = m_head; m != NULL; m = m->m_hdr.mh_next) {
             if (m->m_hdr.mh_len != 0) {
                 virtio_net_d("Frag len=%d:", m->m_hdr.mh_len);
                 req->mhdr.num_buffers++;
-                _tx_queue->_sg_vec.emplace_back(mmu::virt_to_phys(m->m_hdr.mh_data), m->m_hdr.mh_len, vring_desc::VRING_DESC_F_READ);
+                _tx_queue->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
             }
         }
 
