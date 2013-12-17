@@ -53,7 +53,7 @@ __BEGIN_DECLS
 #define BIO_DELETE	0x04
 #define BIO_GETATTR	0x08
 #define BIO_FLUSH	0x10
-#define BIO_CMD0	0x20	/* Available for local hacks */
+#define BIO_SCSI	0x20
 #define BIO_CMD1	0x40	/* Available for local hacks */
 #define BIO_CMD2	0x80	/* Available for local hacks */
 
