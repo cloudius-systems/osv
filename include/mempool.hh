@@ -105,6 +105,10 @@ void enable_debug_allocator();
 
 extern bool tracker_enabled;
 
+namespace stats {
+    size_t free();
+    size_t total();
+}
 }
 
 #endif
