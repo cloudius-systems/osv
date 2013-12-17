@@ -26,6 +26,7 @@
 #include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
 #include "drivers/virtio-blk.hh"
+#include "drivers/virtio-scsi.hh"
 #include "drivers/virtio-rng.hh"
 #include "drivers/xenfront-xenbus.hh"
 
@@ -246,6 +247,7 @@ void* do_main_thread(void *_commands)
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
     drvman->register_driver(virtio::virtio_blk::probe);
+    drvman->register_driver(virtio::scsi::probe);
     drvman->register_driver(virtio::virtio_net::probe);
     drvman->register_driver(virtio::virtio_rng::probe);
     drvman->register_driver(xenfront::xenbus::probe);
