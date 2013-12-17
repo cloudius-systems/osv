@@ -291,7 +291,6 @@ void main_cont(int ac, char** av)
     elf::get_program()->set_search_path({"/", "/usr/lib"});
     std::vector<std::vector<std::string> > cmds;
 
-    sched::preempt_disable();
     std::tie(ac, av) = parse_options(ac, av);
     // multiple programs can be run -> separate their arguments
     cmds = prepare_commands(ac, av);
@@ -299,7 +298,6 @@ void main_cont(int ac, char** av)
     smp_launch();
     memory::enable_debug_allocator();
     acpi::init();
-    sched::preempt_enable();
     console::console_init();
     enable_trace();
     if (opt_log_backtrace) {
