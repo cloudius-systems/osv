@@ -86,6 +86,7 @@ struct bio {
 	int	bio_error;		/* Errno for BIO_ERROR. */
 	long	bio_resid;		/* Remaining I/O in bytes. */
 	void	*bio_caller1;		/* Private use by the consumer. */
+	void	*bio_private;		/* Private use low-level device driver. */
 	void	(*bio_done)(struct bio *);
 	struct disk *bio_disk;
 	daddr_t bio_pblkno;
