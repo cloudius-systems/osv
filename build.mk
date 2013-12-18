@@ -2,6 +2,7 @@
 arch = x64
 BSD_MACHINE_ARCH = amd64
 img_format ?= qcow2
+fs_size_mb ?= 10240
 local-includes =
 INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/include
 INCLUDES += -isystem $(src)/include/glibc-compat
@@ -238,7 +239,7 @@ loader.img: boot.bin loader-stripped.elf
 
 loader-size = $(shell stat --printf %s loader.img)
 zfs-start = $(shell echo $$(($(loader-size)+2097151 & ~2097151)))
-zfs-size = $(shell echo $$((10737418240 - $(zfs-start))))
+zfs-size = $(shell echo $$(($(fs_size_mb) * 1024 * 1024 - $(zfs-start))))
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
@@ -637,7 +638,7 @@ bare.raw: loader.img
 bare.img: scripts/mkzfs.py $(jni) bare.raw $(out)/bootfs.manifest
 	$(call quiet, echo Creating $@ as $(img_format))
 	$(call quiet, qemu-img convert -f raw -O $(img_format) bare.raw $@)
-	$(call quiet, qemu-img resize $@ +10G > /dev/null 2>&1)
+	$(call quiet, qemu-img resize $@ +$(fs_size_mb)M > /dev/null 2>&1)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest
 
 usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
