@@ -247,7 +247,7 @@ long sysconf(int name)
 {
     switch (name) {
     case _SC_CLK_TCK: return CLOCKS_PER_SEC;
-    case _SC_PAGESIZE: return 4096; // FIXME
+    case _SC_PAGESIZE: return mmu::page_size;
     case _SC_THREAD_PROCESS_SHARED: return true;
     case _SC_NPROCESSORS_ONLN: return sched::cpus.size();
     case _SC_NPROCESSORS_CONF: return sched::cpus.size();
