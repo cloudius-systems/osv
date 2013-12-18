@@ -1,24 +1,18 @@
 To measure networking throughput we use netperf-2.6.0,
 
 The netperf client isn't working in OS-v, only netserver.
+Netperf source needs to be patched to work properly on OSv.
 
-How to compile netperf from source so it'll run on osv:
+To compile and deploy netperf from source run deploy.sh script
 
-1. checkout the netperf-2.6.0 source from the following URL:
-http://www.netperf.org/netperf/DownloadNetperf.html
+The script will:
 
-2. compile regularly on linux, we're building the binaries that run on the host now.
-$ ./configure
-$ make
-$ sudo make install
-
-3. build again
-$ make clean
-$ make CFLAGS="-fPIC -shared"
-
-4. copy src/netserver and use it in OS-v.
-
-
+  1. Download netperf tarball
+  2. Build it for Linux
+  3. Install Linux version on local host
+  4. Apply patch needed to build netperf for OSv
+  5. Build netperf for OSv (make CFLAGS="-fPIC -shared")
+  6. Put OSv-ready netserver.so into netperf-2.6.0/osv/netserver.so
 
 Starting netserver
 

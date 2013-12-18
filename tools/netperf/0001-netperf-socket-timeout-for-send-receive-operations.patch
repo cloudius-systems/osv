@@ -1,0 +1,83 @@
+From f617803c69fc1806cc7e2a235d997a0118ff3a57 Mon Sep 17 00:00:00 2001
+From: Dmitry Fleytman <dmitry@daynix.com>
+Date: Sun, 15 Dec 2013 23:01:02 +0200
+Subject: [PATCH] netperf: socket timeout for send/receive operations
+
+Signed-off-by: Dmitry Fleytman <dmitry@daynix.com>
+---
+ src/netlib.h       |  7 +++++++
+ src/nettest_omni.c | 12 ++++++++++--
+ 2 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/src/netlib.h b/src/netlib.h
+index cf55141..cee5297 100644
+--- a/src/netlib.h
++++ b/src/netlib.h
+@@ -369,6 +369,8 @@ extern void PrintWin32Error(FILE *stream, LPSTR text);
+ 
+ #ifndef WIN32
+ #define SOCKET_EINTR(return_value) (errno == EINTR)
++#define SOCKET_TIMEOUT(return_value) (errno == EAGAIN)
++#define SOCKET_CLOSED(return_value) (errno == EPIPE)
+ #define SOCKET_EADDRINUSE(return_value) (errno == EADDRINUSE)
+ #define SOCKET_EADDRNOTAVAIL(return_value) (errno == EADDRNOTAVAIL)
+ 
+@@ -384,6 +386,11 @@ extern void PrintWin32Error(FILE *stream, LPSTR text);
+ 	      (errno == WSAECONNABORTED) || \
+ 	      (errno == WSAECONNRESET) || \
+ 	      (errno == ENOTSOCK) ))
++#define SOCKET_TIMEOUT(return_value) \
++	    ((return_value) == WSAETIMEDOUT)
++#define SOCKET_CLOSED(return_value) \
++	    ((return_value) == WSAECONNABORTED)
++
+ #define SOCKET_EADDRINUSE(return_value) \
+ 		(((return_value) == SOCKET_ERROR) && \
+ 	     ((errno == WSAEADDRINUSE) ))
+diff --git a/src/nettest_omni.c b/src/nettest_omni.c
+index 826167a..0c8f0d5 100644
+--- a/src/nettest_omni.c
++++ b/src/nettest_omni.c
+@@ -2825,6 +2825,10 @@ int
+ send_data(SOCKET data_socket, struct ring_elt *send_ring, uint32_t bytes_to_send, struct sockaddr *destination, int destlen) {
+ 
+   int len;
++  struct timeval tv = {0};
++  tv.tv_sec = 1;
++
++  setsockopt(data_socket, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+ 
+   /* if the user has supplied a destination, we use sendto, otherwise
+      we use send.  we ass-u-me blocking operations always, so no need
+@@ -2859,7 +2863,7 @@ send_data(SOCKET data_socket, struct ring_elt *send_ring, uint32_t bytes_to_send
+   if(len != bytes_to_send) {
+     /* don't forget that some platforms may do a partial send upon
+        receipt of the interrupt and not return an EINTR... */
+-    if (SOCKET_EINTR(len) || (len >= 0))
++    if (SOCKET_EINTR(len) || SOCKET_TIMEOUT(len) || SOCKET_CLOSED(len) || (len >= 0))
+       {
+ 	/* we hit the end of a  timed test. */
+ 	return -1;
+@@ -3071,7 +3075,7 @@ recv_data(SOCKET data_socket, struct ring_elt *recv_ring, uint32_t bytes_to_recv
+   /* OK, we are out of the loop - now what? */
+   if (bytes_recvd < 0) {
+     /* did the timer hit, or was there an error? */
+-    if (SOCKET_EINTR(bytes_recvd))
++    if (SOCKET_EINTR(bytes_recvd) || SOCKET_TIMEOUT(bytes_recvd) || SOCKET_CLOSED(bytes_recvd))
+       {
+ 	/* We hit the end of a timed test. */
+ 	return -1;
+@@ -5360,6 +5364,10 @@ recv_omni()
+        one :) */
+     if ((omni_request->direction & NETPERF_RECV) &&
+ 	((!times_up) || (units_remaining > 0))) {
++      struct timeval tv = {0};
++      tv.tv_sec = 1;
++      setsockopt(data_socket, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
++
+       ret = recv_data(data_socket,
+ 		      recv_ring,
+ 		      bytes_to_recv,
+-- 
+1.8.3.1
+
