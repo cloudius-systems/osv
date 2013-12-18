@@ -16,7 +16,6 @@
 #include "mempool.hh"
 #include "mmu.hh"
 
-#include <sstream>
 #include <string>
 #include <string.h>
 #include <map>
@@ -155,10 +154,7 @@ namespace virtio {
         _rx_queue = get_virt_queue(0);
         _tx_queue = get_virt_queue(1);
 
-        std::stringstream ss;
-        ss << "virtio-net";
-
-        _driver_name = ss.str();
+        _driver_name = "virtio-net";
         virtio_i("VIRTIO NET INSTANCE");
         _id = _instance++;
 
