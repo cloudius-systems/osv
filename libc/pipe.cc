@@ -5,7 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "af_local.h"
 #include "pipe_buffer.hh"
 
 #include <fs/fs.hh>
