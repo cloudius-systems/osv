@@ -57,18 +57,12 @@ static pthread_t ramdisk_thread;
 static int
 ramdisk_read(struct device *dev, struct uio *uio, int ioflags)
 {
-	if (uio->uio_offset + uio->uio_resid > dev->size)
-		return EIO;
-
 	return bdev_read(dev, uio, ioflags);
 }
 
 static int
 ramdisk_write(struct device *dev, struct uio *uio, int ioflags)
 {
-	if (uio->uio_offset + uio->uio_resid > dev->size)
-		return EIO;
-
 	return bdev_write(dev, uio, ioflags);
 }
 
