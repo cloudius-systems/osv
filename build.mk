@@ -1,5 +1,6 @@
 
 arch = x64
+BSD_MACHINE_ARCH = amd64
 img_format ?= qcow2
 local-includes =
 INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/include
@@ -350,7 +351,7 @@ bsd += bsd/sys/dev/xen/blkfront/blkfront.o
 
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_atomic.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/atomic/${BSD_MACHINE_ARCH}/opensolaris_atomic.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_cmn_err.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kmem.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kobj.o
@@ -497,6 +498,9 @@ $(solaris) $(solaris-tests): CFLAGS+= \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/common \
 	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common \
 	-I$(src)/bsd/sys
+
+$(solaris): ASFLAGS+= \
+	-I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common
 
 tests += $(solaris-tests)
 
