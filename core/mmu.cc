@@ -470,10 +470,8 @@ protected:
 class protection : public page_range_operation {
 private:
     unsigned int perm;
-    bool success;
 public:
-    protection(unsigned int perm) : perm(perm), success(true) { }
-    bool getsuccess(){ return success; }
+    protection(unsigned int perm) : perm(perm) { }
 protected:
     virtual void small_page(hw_ptep ptep, uintptr_t offset){
          if (ptep.read().empty()) {
@@ -491,8 +489,6 @@ protected:
             for (int i=0; i<pte_per_page; ++i) {
                 if (!pt.at(i).read().empty()) {
                     change_perm(pt.at(i), perm);
-                } else {
-                    success = false;
                 }
             }
         }
@@ -513,9 +509,8 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
  * Change protection for a virtual memory range.  Updates page tables and VMas
  * for populated memory regions and just VMAs for unpopulated ranges.
  *
- * \return 1 if memory protection was changed successfully; otherwise returns 0.
  */
-int protect(void *addr, size_t size, unsigned int perm)
+void protect(void *addr, size_t size, unsigned int perm)
 {
     uintptr_t start = reinterpret_cast<uintptr_t>(addr);
     uintptr_t end = start + size;
@@ -533,7 +528,6 @@ int protect(void *addr, size_t size, unsigned int perm)
     }
     protection p(perm);
     p.operate(addr, size);
-    return p.getsuccess();
 }
 
 uintptr_t find_hole(uintptr_t start, uintptr_t size)
