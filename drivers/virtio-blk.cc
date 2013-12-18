@@ -16,7 +16,6 @@
 #include "mempool.hh"
 #include "mmu.hh"
 
-#include <sstream>
 #include <string>
 #include <string.h>
 #include <map>
@@ -109,10 +108,8 @@ struct driver virtio_blk_driver = {
 virtio_blk::virtio_blk(pci::device& pci_dev)
     : virtio_driver(pci_dev), _ro(false)
 {
-    std::stringstream ss;
-    ss << "virtio-blk";
 
-    _driver_name = ss.str();
+    _driver_name = "virtio-blk";
     _id = _instance++;
     virtio_i("VIRTIO BLK INSTANCE %d", _id);
 
