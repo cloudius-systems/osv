@@ -34,6 +34,16 @@ long syscall(long number, ...)
         va_end(args);
         return clock_gettime(arg1, arg2);
         }
+    case __NR_clock_getres: {
+        va_list args;
+        clockid_t arg1;
+        struct timespec *arg2;
+        va_start(args, number);
+        arg1 = va_arg(args, typeof(arg1));
+        arg2 = va_arg(args, typeof(arg2));
+        va_end(args);
+        return clock_getres(arg1, arg2);
+        }
     }
 
     debug("syscall(): unimplemented system call %d\n", number);
