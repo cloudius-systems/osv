@@ -32,6 +32,8 @@ bdev_read(struct device *dev, struct uio *uio, int ioflags)
 	assert((uio->uio_offset % BSIZE) == 0);
 	assert((uio->uio_resid % BSIZE) == 0);
 
+	if (uio->uio_offset + uio->uio_resid > dev->size)
+		return EIO;
 	if (uio->uio_offset < 0)
 		return EINVAL;
 	if (uio->uio_resid == 0)
@@ -67,6 +69,8 @@ bdev_write(struct device *dev, struct uio *uio, int ioflags)
 	assert((uio->uio_offset % BSIZE) == 0);
 	assert((uio->uio_resid % BSIZE) == 0);
 
+	if (uio->uio_offset + uio->uio_resid > dev->size)
+		return EIO;
 	if (uio->uio_offset < 0)
 		return EINVAL;
 	if (uio->uio_resid == 0)
