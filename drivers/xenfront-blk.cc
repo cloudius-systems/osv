@@ -24,19 +24,12 @@ struct xenfront_blk_priv {
 static int
 xenfront_blk_read(struct device *dev, struct uio *uio, int ioflags)
 {
-    if (uio->uio_offset + uio->uio_resid > dev->size)
-        return EIO;
-
-    int x = bdev_read(dev, uio, ioflags);
-    return x;
+    return bdev_read(dev, uio, ioflags);
 }
 
 static int
 xenfront_blk_write(struct device *dev, struct uio *uio, int ioflags)
 {
-    if (uio->uio_offset + uio->uio_resid > dev->size)
-        return EIO;
-
     return bdev_write(dev, uio, ioflags);
 }
 
