@@ -157,10 +157,8 @@ namespace virtio {
         bool _ro;
         // This mutex protects parallel make_request invocations
         mutex _lock;
-        sched::thread* _waiting_request_thread = nullptr;
-        // The mutex protects the above thread ptr from going away of
-        // the waker
-        mutex _request_thread_lock;
+
+        sched::thread_handle _waiting_request_thread;
     };
 
 

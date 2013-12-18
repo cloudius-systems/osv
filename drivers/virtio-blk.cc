@@ -209,12 +209,7 @@ void virtio_blk::response_worker()
         }
 
         // wake up the requesting thread in case the ring was full before
-        _request_thread_lock.lock();
-        if (_waiting_request_thread) {
-           _waiting_request_thread->wake_with([&] { _request_thread_lock.unlock(); });
-        } else {
-            _request_thread_lock.unlock();
-        }
+        _waiting_request_thread.wake();
     }
 }
 
@@ -292,15 +287,12 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         queue->add_in_sg(&req->res, sizeof (struct virtio_blk_res));
 
         while (!queue->add_buf(req)) {
-            _waiting_request_thread = sched::thread::current();
-            std::atomic_thread_fence(std::memory_order_seq_cst);
+            _waiting_request_thread.reset(*sched::thread::current());
             while (!queue->avail_ring_has_room(queue->_sg_vec.size())) {
                 sched::thread::wait_until([queue] {return queue->used_ring_can_gc();});
                 queue->get_buf_gc();
             }
-            WITH_LOCK(_request_thread_lock) {
-                _waiting_request_thread = nullptr;
-            }
+            _waiting_request_thread.clear();
         }
 
         queue->kick();
