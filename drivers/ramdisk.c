@@ -57,9 +57,7 @@ static pthread_t ramdisk_thread;
 static int
 ramdisk_read(struct device *dev, struct uio *uio, int ioflags)
 {
-	struct ramdisk_softc *sc = dev->private_data;
-
-	if (uio->uio_offset + uio->uio_resid > sc->size)
+	if (uio->uio_offset + uio->uio_resid > dev->size)
 		return EIO;
 
 	return bdev_read(dev, uio, ioflags);
@@ -68,9 +66,7 @@ ramdisk_read(struct device *dev, struct uio *uio, int ioflags)
 static int
 ramdisk_write(struct device *dev, struct uio *uio, int ioflags)
 {
-	struct ramdisk_softc *sc = dev->private_data;
-
-	if (uio->uio_offset + uio->uio_resid > sc->size)
+	if (uio->uio_offset + uio->uio_resid > dev->size)
 		return EIO;
 
 	return bdev_write(dev, uio, ioflags);
