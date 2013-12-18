@@ -96,6 +96,7 @@ public:
     // Update contents.  Note: must not be called concurrently with
     // other assign() calls to the same objects.
     void assign(T* p);
+    void assign(std::nullptr_t p);
     // Access contents, must be called with exclusive access wrt.
     // mutator (i.e. in same context as assign().
     T* read_by_owner();
@@ -152,6 +153,13 @@ inline
 void rcu_ptr<T>::assign(T* p)
 {
     _ptr.store(p, std::memory_order_release);
+}
+
+template <typename T>
+inline
+void rcu_ptr<T>::assign(std::nullptr_t p)
+{
+    _ptr.store(p, std::memory_order_relaxed);
 }
 
 template <typename T>
