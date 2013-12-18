@@ -71,9 +71,6 @@ virtio_blk_strategy(struct bio *bio)
 static int
 virtio_blk_read(struct device *dev, struct uio *uio, int ioflags)
 {
-    if (uio->uio_offset + uio->uio_resid > dev->size)
-        return EIO;
-
     return bdev_read(dev, uio, ioflags);
 }
 
@@ -83,8 +80,6 @@ virtio_blk_write(struct device *dev, struct uio *uio, int ioflags)
     auto* prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
 
     if (prv->drv->is_readonly()) return EROFS;
-    if (uio->uio_offset + uio->uio_resid > dev->size)
-        return EIO;
 
     return bdev_write(dev, uio, ioflags);
 }
