@@ -605,7 +605,6 @@ struct fill_anon_page_noinit: fill_page {
 
 uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
 {
-    std::lock_guard<mutex> guard(vma_list_mutex);
     if (search) {
         // search for unallocated hole around start
         if (!start) {
@@ -645,6 +644,7 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
+    std::lock_guard<mutex> guard(vma_list_mutex);
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
         if (flags & mmap_uninitialized) {
@@ -667,8 +667,11 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     auto start = reinterpret_cast<uintptr_t>(addr);
     fill_anon_page zfill;
     auto *vma = new mmu::file_vma(addr_range(start, start + size), perm, f, offset, shared);
-    auto v = (void*) allocate(vma, start, asize, search);
-    populate(&zfill, perm | perm_write).operate(v, asize);
+    void *v;
+    WITH_LOCK(vma_list_mutex) {
+        v = (void*) allocate(vma, start, asize, search);
+        populate(&zfill, perm | perm_write).operate(v, asize);
+    }
     auto fsize = ::size(f);
     // FIXME: we pre-zeroed this, and now we're overwriting the zeroes
     if (offset < fsize) {
