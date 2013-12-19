@@ -282,6 +282,7 @@ public:
         cpu *pinned_cpu;
         bool detached = false;
         attr(cpu *pinned_cpu = nullptr) : pinned_cpu(pinned_cpu) { }
+        attr(size_t stacksize) : stack(nullptr, stacksize), pinned_cpu(nullptr) { }
     };
 
 private:
