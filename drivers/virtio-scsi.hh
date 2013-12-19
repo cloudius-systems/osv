@@ -196,8 +196,6 @@ private:
 
     // This mutex protects parallel make_request invocations
     mutex _lock;
-
-    sched::thread_handle _waiting_request_thread;
 };
 }
 #endif

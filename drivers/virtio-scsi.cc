@@ -104,15 +104,7 @@ int scsi::exec_cmd(struct bio *bio)
         queue->add_in_sg(&resp_cmd, sizeof(resp_cmd));
     }
 
-    while (!queue->add_buf(req)) {
-        _waiting_request_thread.reset(*sched::thread::current());
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-        while (!queue->avail_ring_has_room(queue->_sg_vec.size())) {
-            sched::thread::wait_until([queue] {return queue->used_ring_can_gc();});
-            queue->get_buf_gc();
-        }
-        _waiting_request_thread.clear();
-    }
+    queue->add_buf_wait(req);
 
     queue->kick();
 
@@ -437,7 +429,7 @@ void scsi::req_done()
         }
 
         // wake up the requesting thread in case the ring was full before
-        _waiting_request_thread.wake();
+        queue->wakeup_waiter();
     }
 }
 
