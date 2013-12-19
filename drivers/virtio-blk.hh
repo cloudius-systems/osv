@@ -13,7 +13,7 @@
 
 namespace virtio {
 
-    class virtio_blk : public virtio_driver {
+    class blk : public virtio_driver {
     public:
 
         // The feature bitmap for virtio blk
@@ -46,7 +46,7 @@ namespace virtio {
              */
         };
 
-        enum virtio_blk_request_type {
+        enum blk_request_type {
             VIRTIO_BLK_T_IN=0,
             VIRTIO_BLK_T_OUT=1,
             /* This bit says it's a scsi command, not an actual read or write. */
@@ -59,14 +59,14 @@ namespace virtio {
             VIRTIO_BLK_T_BARRIER=0x80000000,
         };
 
-        enum virtio_blk_res_code {
+        enum blk_res_code {
             /* And this is the final byte of the write scatter-gather list. */
             VIRTIO_BLK_S_OK=0,
             VIRTIO_BLK_S_IOERR=1,
             VIRTIO_BLK_S_UNSUPP=2,
         };
 
-        struct virtio_blk_config {
+        struct blk_config {
                 /* The capacity (in 512-byte sectors). */
                 u64 capacity;
                 /* The maximum segment size (if VIRTIO_BLK_F_SIZE_MAX) */
@@ -74,7 +74,7 @@ namespace virtio {
                 /* The maximum number of segments (if VIRTIO_BLK_F_SEG_MAX) */
                 u32 seg_max;
                 /* geometry the device (if VIRTIO_BLK_F_GEOMETRY) */
-                struct virtio_blk_geometry {
+                struct blk_geometry {
                         u16 cylinders;
                         u8 heads;
                         u8 sectors;
@@ -98,7 +98,7 @@ namespace virtio {
         } __attribute__((packed));
 
         /* This is the first element of the read scatter-gather list. */
-        struct virtio_blk_outhdr {
+        struct blk_outhdr {
                 /* VIRTIO_BLK_T* */
                 u32 type;
                 /* io priority. */
@@ -114,12 +114,12 @@ namespace virtio {
                 u32 residual;
         };
         
-        struct virtio_blk_res {
+        struct blk_res {
             u8 status;
         };
 
-        explicit virtio_blk(pci::device& dev);
-        virtual ~virtio_blk();
+        explicit blk(pci::device& dev);
+        virtual ~blk();
 
         virtual const std::string get_name(void) { return _driver_name; }
         bool read_config();
@@ -137,19 +137,19 @@ namespace virtio {
         static hw_driver* probe(hw_device* dev);
     private:
 
-        struct virtio_blk_req {
-            virtio_blk_req(struct bio* b=nullptr) :bio(b) {};
-            ~virtio_blk_req() {
+        struct blk_req {
+            blk_req(struct bio* b=nullptr) :bio(b) {};
+            ~blk_req() {
                 if (bio) biodone(bio, false);
             };
 
-            virtio_blk_outhdr hdr;
-            virtio_blk_res res;
+            blk_outhdr hdr;
+            blk_res res;
             struct bio* bio;
         };
 
         std::string _driver_name;
-        virtio_blk_config _config;
+        blk_config _config;
 
         //maintains the virtio instance number for multiple drives
         static int _instance;

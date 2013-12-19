@@ -51,17 +51,17 @@ using namespace memory;
 
 namespace virtio {
 
-int virtio_blk::_instance = 0;
+int blk::_instance = 0;
 
 
-struct virtio_blk_priv {
-    virtio_blk* drv;
+struct blk_priv {
+    blk* drv;
 };
 
 static void
-virtio_blk_strategy(struct bio *bio)
+blk_strategy(struct bio *bio)
 {
-    struct virtio_blk_priv *prv = reinterpret_cast<struct virtio_blk_priv*>(bio->bio_dev->private_data);
+    struct blk_priv *prv = reinterpret_cast<struct blk_priv*>(bio->bio_dev->private_data);
 
     trace_virtio_blk_strategy(bio);
     bio->bio_offset += bio->bio_dev->offset;
@@ -69,38 +69,38 @@ virtio_blk_strategy(struct bio *bio)
 }
 
 static int
-virtio_blk_read(struct device *dev, struct uio *uio, int ioflags)
+blk_read(struct device *dev, struct uio *uio, int ioflags)
 {
     return bdev_read(dev, uio, ioflags);
 }
 
 static int
-virtio_blk_write(struct device *dev, struct uio *uio, int ioflags)
+blk_write(struct device *dev, struct uio *uio, int ioflags)
 {
-    auto* prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+    auto* prv = reinterpret_cast<struct blk_priv*>(dev->private_data);
 
     if (prv->drv->is_readonly()) return EROFS;
 
     return bdev_write(dev, uio, ioflags);
 }
 
-static struct devops virtio_blk_devops {
+static struct devops blk_devops {
     no_open,
     no_close,
-    virtio_blk_read,
-    virtio_blk_write,
+    blk_read,
+    blk_write,
     no_ioctl,
     no_devctl,
-    virtio_blk_strategy,
+    blk_strategy,
 };
 
-struct driver virtio_blk_driver = {
+struct driver blk_driver = {
     "virtio_blk",
-    &virtio_blk_devops,
-    sizeof(struct virtio_blk_priv),
+    &blk_devops,
+    sizeof(struct blk_priv),
 };
 
-virtio_blk::virtio_blk(pci::device& pci_dev)
+blk::blk(pci::device& pci_dev)
     : virtio_driver(pci_dev), _ro(false)
 {
 
@@ -119,25 +119,25 @@ virtio_blk::virtio_blk(pci::device& pci_dev)
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-    struct virtio_blk_priv* prv;
+    struct blk_priv* prv;
     struct device *dev;
     std::string dev_name("vblk");
     dev_name += std::to_string(_id);
 
-    dev = device_create(&virtio_blk_driver, dev_name.c_str(), D_BLK);
-    prv = reinterpret_cast<struct virtio_blk_priv*>(dev->private_data);
+    dev = device_create(&blk_driver, dev_name.c_str(), D_BLK);
+    prv = reinterpret_cast<struct blk_priv*>(dev->private_data);
     prv->drv = this;
     dev->size = prv->drv->size();
     read_partition_table(dev);
 }
 
-virtio_blk::~virtio_blk()
+blk::~blk()
 {
     //TODO: In theory maintain the list of free instances and gc it
     // including the thread objects and their stack
 }
 
-bool virtio_blk::read_config()
+bool blk::read_config()
 {
     //read all of the block config (including size, mce, topology,..) in one shot
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
@@ -166,10 +166,10 @@ bool virtio_blk::read_config()
     return true;
 }
 
-void virtio_blk::response_worker()
+void blk::response_worker()
 {
     auto* queue = get_virt_queue(0);
-    virtio_blk_req* req;
+    blk_req* req;
 
     while (1) {
 
@@ -177,7 +177,7 @@ void virtio_blk::response_worker()
         trace_virtio_blk_wake();
 
         u32 len;
-        while((req = static_cast<virtio_blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
+        while((req = static_cast<blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
             if (req->bio) {
                 switch (req->res.status) {
                 case VIRTIO_BLK_S_OK:
@@ -205,14 +205,14 @@ void virtio_blk::response_worker()
     }
 }
 
-int64_t virtio_blk::size()
+int64_t blk::size()
 {
     return _config.capacity * _config.blk_size;
 }
 
 static const int sector_size = 512;
 
-int virtio_blk::make_virtio_request(struct bio* bio)
+int blk::make_virtio_request(struct bio* bio)
 {
     // The lock is here for parallel requests protection
     WITH_LOCK(_lock) {
@@ -225,7 +225,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         }
 
         auto* queue = get_virt_queue(0);
-        virtio_blk_request_type type;
+        blk_request_type type;
 
         switch (bio->bio_cmd) {
         case BIO_READ:
@@ -246,15 +246,15 @@ int virtio_blk::make_virtio_request(struct bio* bio)
             return ENOTBLK;
         }
 
-        auto* req = new virtio_blk_req;
+        auto* req = new blk_req;
         req->bio = bio;
-        virtio_blk_outhdr* hdr = &req->hdr;
+        blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
         hdr->sector = bio->bio_offset / sector_size;
 
         queue->init_sg();
-        queue->add_out_sg(hdr, sizeof(struct virtio_blk_outhdr));
+        queue->add_out_sg(hdr, sizeof(struct blk_outhdr));
 
         // need to break a contiguous buffers that > 4k into several physical page mapping
         // even if the virtual space is contiguous.
@@ -276,7 +276,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
         }
 
         req->res.status = 0;
-        queue->add_in_sg(&req->res, sizeof (struct virtio_blk_res));
+        queue->add_in_sg(&req->res, sizeof (struct blk_res));
 
         while (!queue->add_buf(req)) {
             _waiting_request_thread.reset(*sched::thread::current());
@@ -293,7 +293,7 @@ int virtio_blk::make_virtio_request(struct bio* bio)
     }
 }
 
-u32 virtio_blk::get_driver_features(void)
+u32 blk::get_driver_features(void)
 {
     auto base = virtio_driver::get_driver_features();
     return (base | ( 1 << VIRTIO_BLK_F_SIZE_MAX)
@@ -305,9 +305,9 @@ u32 virtio_blk::get_driver_features(void)
                  | ( 1 << VIRTIO_BLK_F_WCE));
 }
 
-hw_driver* virtio_blk::probe(hw_device* dev)
+hw_driver* blk::probe(hw_device* dev)
 {
-    return virtio::probe<virtio_blk, VIRTIO_BLK_DEVICE_ID>(dev);
+    return virtio::probe<blk, VIRTIO_BLK_DEVICE_ID>(dev);
 }
 
 }
