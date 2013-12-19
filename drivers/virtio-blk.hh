@@ -17,7 +17,7 @@ class blk : public virtio_driver {
 public:
 
     // The feature bitmap for virtio blk
-    enum BlkFeatures {
+    enum {
         VIRTIO_BLK_F_BARRIER=0,        /* Does host support barriers? */
         VIRTIO_BLK_F_SIZE_MAX=1,       /* Indicates maximum segment size */
         VIRTIO_BLK_F_SEG_MAX=2,        /* Indicates maximum # of segments */
