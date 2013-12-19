@@ -948,11 +948,8 @@ void timer_list::fired()
     // don't hold iterators across list iteration, since the list can change
     while (!_list.empty() && _list.begin()->_time <= now) {
         auto j = _list.begin();
+        _list.erase(j);
         j->expire();
-        // timer_base::expire may have re-added j to the timer_list
-        if (j->_state != timer_base::state::armed) {
-            _list.erase(j);
-        }
     }
     if (!_list.empty()) {
         rearm();
