@@ -26,16 +26,40 @@ int copyout(const void *kaddr, void *uaddr, size_t len)
     return (0);
 }
 
+static int
+do_copystr(const void *src, void *dest, size_t len, size_t *done)
+{
+    size_t n;
+    int err = 0;
+
+    // including the terminating NUL.
+    strncpy(dest, src, len);
+    n = strnlen(dest, len);
+
+    if (n == len) {
+        // on this case, destination buf isn't null-terminated.
+        err = ENAMETOOLONG;
+    } else {
+        // account terminating NUL already copied by strncpy from src.
+        n += 1;
+    }
+
+    if (done) {
+        // store number of bytes actually copied to dest.
+        *done = n;
+    }
+
+    return err;
+}
+
 int copystr(const void *kfaddr, void *kdaddr, size_t len, size_t *done)
 {
-    // FIXME: implement
-    return (0);
+    return do_copystr(kfaddr, kdaddr, len, done);
 }
 
 int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
 {
-    // FIXME: implement
-    return (0);
+    return do_copystr(uaddr, kaddr, len, done);
 }
 
 int ppsratecheck(struct timeval *lasttime, int *curpps, int maxpps)
