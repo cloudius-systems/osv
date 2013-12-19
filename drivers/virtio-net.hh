@@ -259,8 +259,23 @@ namespace virtio {
 
         u32 _hdr_size;
 
-        vring* _rx_queue;
-        vring* _tx_queue;
+         /* Single Rx queue object */
+        struct rxq {
+            rxq(vring* vq, std::function<void ()> poll_func)
+                : vqueue(vq), poll_task(poll_func) {};
+            vring* vqueue;
+            sched::thread  poll_task;
+        };
+
+        /* Single Tx queue object */
+        struct txq {
+            txq(vring* vq) : vqueue(vq) {};
+            vring* vqueue;
+        };
+
+        /* We currently support only a single Rx+Tx queue */
+        struct rxq _rxq;
+        struct txq _txq;
 
         //maintains the virtio instance number for multiple drives
         static int _instance;

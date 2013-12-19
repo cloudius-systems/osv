@@ -149,10 +149,11 @@ namespace virtio {
     }
 
     virtio_net::virtio_net(pci::device& dev)
-        : virtio_driver(dev)
+        : virtio_driver(dev),
+          _rxq(get_virt_queue(0), [this] { this->receiver(); }),
+          _txq(get_virt_queue(1))
     {
-        _rx_queue = get_virt_queue(0);
-        _tx_queue = get_virt_queue(1);
+        sched::thread* poll_task = &_rxq.poll_task;
 
         _driver_name = "virtio-net";
         virtio_i("VIRTIO NET INSTANCE");
@@ -162,10 +163,6 @@ namespace virtio {
         read_config();
 
         _hdr_size = (_mergeable_bufs)? sizeof(virtio_net_hdr_mrg_rxbuf):sizeof(virtio_net_hdr);
-
-        //register the 2 irq callback for the net
-        sched::thread* rx = new sched::thread([this] { this->receiver(); });
-        rx->start();
 
         //initialize the BSD interface _if
         _ifn = if_alloc(IFT_ETHER);
@@ -184,7 +181,7 @@ namespace virtio {
         _ifn->if_transmit = virtio_if_transmit;
         _ifn->if_qflush = virtio_if_qflush;
         _ifn->if_init = virtio_if_init;
-        IFQ_SET_MAXLEN(&_ifn->if_snd, _tx_queue->size());
+        IFQ_SET_MAXLEN(&_ifn->if_snd, _txq.vqueue->size());
 
         _ifn->if_capabilities = 0;
 
@@ -204,10 +201,13 @@ namespace virtio {
 
         _ifn->if_capenable = _ifn->if_capabilities;
 
+        //Start the polling thread before attaching it to the Rx interrupt
+        poll_task->start();
+
         ether_ifattach(_ifn, _config.mac);
         _msi.easy_register({
-            { 0, [&] { _rx_queue->disable_interrupts(); }, rx },
-            { 1, [&] { _tx_queue->disable_interrupts(); }, nullptr }
+            { 0, [&] { _rxq.vqueue->disable_interrupts(); }, poll_task },
+            { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
         });
 
         fill_rx_ring();
@@ -220,6 +220,11 @@ namespace virtio {
         //TODO: In theory maintain the list of free instances and gc it
         // including the thread objects and their stack
         // Will need to clear the pending requests in the ring too
+
+        // TODO: add a proper cleanup for a rx.poll_task() here.
+        //
+        // Since this will involve the rework of the virtio layer - make it for
+        // all virtio drivers in a separate patchset.
 
         ether_ifdetach(_ifn);
         if_free(_ifn);
@@ -314,29 +319,36 @@ namespace virtio {
         return false;
     }
 
-    void virtio_net::receiver() {
+    void virtio_net::receiver()
+    {
+        vring* vq = _rxq.vqueue;
 
         while (1) {
 
             // Wait for rx queue (used elements)
-            virtio_driver::wait_for_queue(_rx_queue, &vring::used_ring_not_empty);
+            virtio_driver::wait_for_queue(vq, &vring::used_ring_not_empty);
             trace_virtio_net_rx_wake();
 
             u32 len;
-            struct mbuf* m;
             int nbufs;
+            struct mbuf* m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
             u32 offset = _hdr_size;
-            //use local header that we copy out of the mbuf since we're truncating it
+
+            // use local header that we copy out of the mbuf since we're
+            // truncating it.
             struct virtio_net_hdr_mrg_rxbuf mhdr;
 
-            while ((m = static_cast<struct mbuf*>(_rx_queue->get_buf_elem(&len))) != nullptr) {
+            while (m != nullptr) {
 
                 // TODO: should get out of the loop
-                _rx_queue->get_buf_finalize();
+                vq->get_buf_finalize();
 
+                // Bad packet/buffer - discard and continue to the next one
                 if (len < _hdr_size + ETHER_HDR_LEN) {
                     _ifn->if_ierrors++;
                     m_free(m);
+
+                    m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
                     continue;
                 }
 
@@ -356,13 +368,15 @@ namespace virtio {
                 struct mbuf* m_head, *m_tail;
                 m_tail = m_head = m;
 
+                // Read the fragments
                 while (--nbufs > 0) {
-                    if ((m = static_cast<struct mbuf*>(_rx_queue->get_buf_elem(&len))) == nullptr) {
+                    m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
+                    if (m == nullptr) {
                         _ifn->if_ierrors++;
                         break;
                     }
 
-                    _rx_queue->get_buf_finalize();
+                    vq->get_buf_finalize();
 
                     if (m->m_hdr.mh_len < (int)len)
                         len = m->m_hdr.mh_len;
@@ -374,13 +388,14 @@ namespace virtio {
                     m_tail = m;
                 }
 
-                // skip over the virtio header bytes (offset) that aren't need for the above layer
+                // skip over the virtio header bytes (offset)
+                // that aren't need for the above layer
                 m_adj(m_head, offset);
 
-                if (_ifn->if_capenable & IFCAP_RXCSUM &&
-                    mhdr.hdr.flags & virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM) {
+                if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
+                    (mhdr.hdr.flags &
+                     virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM))
                     rx_csum(m_head, &mhdr.hdr);
-                }
 
                 _ifn->if_ipackets++;
                 (*_ifn->if_input)(_ifn, m_head);
@@ -391,11 +406,13 @@ namespace virtio {
                 // passing the packet up the network stack.
                 if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
                     break;
+
+                // Move to the next packet
+                m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
             }
 
-            if (_rx_queue->refill_ring_cond()) {
+            if (vq->refill_ring_cond())
                 fill_rx_ring();
-            }
         }
     }
 
@@ -403,8 +420,9 @@ namespace virtio {
     {
         trace_virtio_net_fill_rx_ring(_ifn->if_index);
         int added = 0;
+        vring* vq = _rxq.vqueue;
 
-        while (_rx_queue->avail_ring_not_empty()) {
+        while (vq->avail_ring_not_empty()) {
             struct mbuf *m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MCLBYTES);
             if (!m)
                 break;
@@ -412,9 +430,9 @@ namespace virtio {
             m->m_hdr.mh_len = MCLBYTES;
             u8 *mdata = mtod(m, u8*);
 
-            _rx_queue->init_sg();
-            _rx_queue->add_in_sg(mdata, m->m_hdr.mh_len);
-            if (!_rx_queue->add_buf(m)) {
+            vq->init_sg();
+            vq->add_in_sg(mdata, m->m_hdr.mh_len);
+            if (!vq->add_buf(m)) {
                 m_freem(m);
                 break;
             }
@@ -423,16 +441,19 @@ namespace virtio {
 
         trace_virtio_net_fill_rx_ring_added(_ifn->if_index, added);
 
-        if (added) _rx_queue->kick();
+        if (added)
+            vq->kick();
     }
 
-    /* TODO: Does it really have to be "locked"? */
+    // TODO: Does it really have to be "locked"?
     int virtio_net::tx_locked(struct mbuf *m_head, bool flush)
     {
         DEBUG_ASSERT(_tx_ring_lock.owned(), "_tx_ring_lock is not locked!");
 
         struct mbuf *m;
         virtio_net_req *req = new virtio_net_req;
+        vring* vq = _txq.vqueue;
+        auto vq_sg_vec = &vq->_sg_vec;
 
         req->um.reset(m_head);
 
@@ -445,20 +466,20 @@ namespace virtio {
             }
         }
 
-        _tx_queue->init_sg();
-        _tx_queue->add_out_sg(static_cast<void*>(&req->mhdr), _hdr_size);
+        vq->init_sg();
+        vq->add_out_sg(static_cast<void*>(&req->mhdr), _hdr_size);
 
         for (m = m_head; m != NULL; m = m->m_hdr.mh_next) {
             if (m->m_hdr.mh_len != 0) {
                 virtio_net_d("Frag len=%d:", m->m_hdr.mh_len);
                 req->mhdr.num_buffers++;
-                _tx_queue->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
+                vq->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
             }
         }
 
-        if (!_tx_queue->avail_ring_has_room(_tx_queue->_sg_vec.size())) {
+        if (!vq->avail_ring_has_room(vq->_sg_vec.size())) {
             // can't call it, this is a get buf thing
-            if (_tx_queue->used_ring_not_empty()) {
+            if (vq->used_ring_not_empty()) {
                 trace_virtio_net_tx_no_space_calling_gc(_ifn->if_index);
                 tx_gc();
             } else {
@@ -468,13 +489,13 @@ namespace virtio {
             }
         }
 
-        if (!_tx_queue->add_buf(req)) {
+        if (!vq->add_buf(req)) {
             trace_virtio_net_tx_failed_add_buf(_ifn->if_index);
             delete req;
             return ENOBUFS;
         }
 
-        trace_virtio_net_tx_packet(_ifn->if_index, _tx_queue->_sg_vec.size());
+        trace_virtio_net_tx_packet(_ifn->if_index, vq_sg_vec->size());
 
         return 0;
     }
@@ -565,12 +586,17 @@ namespace virtio {
     {
         virtio_net_req * req;
         u32 len;
+        vring* vq = _txq.vqueue;
 
-        while((req = static_cast<virtio_net_req*>(_tx_queue->get_buf_elem(&len))) != nullptr) {
+        req = static_cast<virtio_net_req*>(vq->get_buf_elem(&len));
+
+        while(req != nullptr) {
             delete req;
-            _tx_queue->get_buf_finalize();
+            vq->get_buf_finalize();
+
+            req = static_cast<virtio_net_req*>(vq->get_buf_elem(&len));
         }
-        _tx_queue->get_buf_gc();
+        vq->get_buf_gc();
     }
 
     u32 virtio_net::get_driver_features(void)
