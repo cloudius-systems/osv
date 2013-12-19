@@ -583,7 +583,8 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		m->m_hdr.mh_flags &= ~M_HASFCS;
 	}
 
-	ifp->if_ibytes += m->M_dat.MH.MH_pkthdr.len;
+	if (!(ifp->if_capenable & IFCAP_HWSTATS))
+		ifp->if_ibytes += m->M_dat.MH.MH_pkthdr.len;
 
 	/* Allow monitor mode to claim this frame, after stats are updated. */
 	if (ifp->if_flags & IFF_MONITOR) {
