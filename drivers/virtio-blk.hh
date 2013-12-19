@@ -126,7 +126,7 @@ namespace virtio {
 
         virtual u32 get_driver_features(void);
 
-        int make_virtio_request(struct bio*);
+        int make_request(struct bio*);
 
         void response_worker();
         int64_t size();

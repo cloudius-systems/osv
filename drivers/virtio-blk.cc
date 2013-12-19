@@ -38,8 +38,8 @@ TRACEPOINT(trace_virtio_blk_read_config_blk_size, "blk_size=%u", u32);
 TRACEPOINT(trace_virtio_blk_read_config_topology, "physical_block_exp=%u, alignment_offset=%u, min_io_size=%u, opt_io_size=%u", u32, u32, u32, u32);
 TRACEPOINT(trace_virtio_blk_read_config_wce, "wce=%u", u32);
 TRACEPOINT(trace_virtio_blk_read_config_ro, "readonly=true");
-TRACEPOINT(trace_virtio_blk_make_virtio_request_seg_max, "request of size %d needs more segment than the max %d", size_t, u32);
-TRACEPOINT(trace_virtio_blk_make_virtio_request_readonly, "write on readonly device");
+TRACEPOINT(trace_virtio_blk_make_request_seg_max, "request of size %d needs more segment than the max %d", size_t, u32);
+TRACEPOINT(trace_virtio_blk_make_request_readonly, "write on readonly device");
 TRACEPOINT(trace_virtio_blk_wake, "");
 TRACEPOINT(trace_virtio_blk_strategy, "bio=%p", struct bio*);
 TRACEPOINT(trace_virtio_blk_req_ok, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
@@ -65,7 +65,7 @@ blk_strategy(struct bio *bio)
 
     trace_virtio_blk_strategy(bio);
     bio->bio_offset += bio->bio_dev->offset;
-    prv->drv->make_virtio_request(bio);
+    prv->drv->make_request(bio);
 }
 
 static int
@@ -212,7 +212,7 @@ int64_t blk::size()
 
 static const int sector_size = 512;
 
-int blk::make_virtio_request(struct bio* bio)
+int blk::make_request(struct bio* bio)
 {
     // The lock is here for parallel requests protection
     WITH_LOCK(_lock) {
@@ -220,7 +220,7 @@ int blk::make_virtio_request(struct bio* bio)
         if (!bio) return EIO;
 
         if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
-            trace_virtio_blk_make_virtio_request_seg_max(bio->bio_bcount, _config.seg_max);
+            trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
             return EIO;
         }
 
@@ -233,7 +233,7 @@ int blk::make_virtio_request(struct bio* bio)
             break;
         case BIO_WRITE:
             if (is_readonly()) {
-                trace_virtio_blk_make_virtio_request_readonly();
+                trace_virtio_blk_make_request_readonly();
                 biodone(bio, false);
                 return EROFS;
             }
