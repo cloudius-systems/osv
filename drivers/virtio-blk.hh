@@ -138,7 +138,7 @@ public:
 private:
 
     struct blk_req {
-        blk_req(struct bio* b=nullptr) :bio(b) {};
+        blk_req(struct bio* b) :bio(b) {};
         ~blk_req() {};
 
         blk_outhdr hdr;

@@ -245,8 +245,7 @@ int blk::make_request(struct bio* bio)
             return ENOTBLK;
         }
 
-        auto* req = new blk_req;
-        req->bio = bio;
+        auto* req = new blk_req(bio);
         blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
