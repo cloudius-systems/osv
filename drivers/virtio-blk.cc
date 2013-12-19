@@ -112,7 +112,7 @@ blk::blk(pci::device& pci_dev)
     read_config();
 
     //register the single irq callback for the block
-    sched::thread* t = new sched::thread([this] { this->response_worker(); });
+    sched::thread* t = new sched::thread([this] { this->req_done(); });
     t->start();
     auto queue = get_virt_queue(0);
     _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
@@ -166,7 +166,7 @@ bool blk::read_config()
     return true;
 }
 
-void blk::response_worker()
+void blk::req_done()
 {
     auto* queue = get_virt_queue(0);
     blk_req* req;

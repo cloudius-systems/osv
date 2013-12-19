@@ -128,7 +128,7 @@ public:
 
     int make_request(struct bio*);
 
-    void response_worker();
+    void req_done();
     int64_t size();
 
     void set_readonly() {_ro = true;}
