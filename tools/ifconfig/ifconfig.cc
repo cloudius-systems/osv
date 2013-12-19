@@ -247,13 +247,16 @@ int main(int argc, const char **argv)
 {
     struct ifnet *ifp ;
     char phys_addr[64]/*, addr[16], broadcast[16], mask[16] */;
-    
+
     printf("%s argc=%d argv[0]=%s\n", prog_name, argc, argv[0]) ;
 
     for (u_short i = 0; i <= V_if_index; i++)
     {
         ifp = ifnet_byindex_ref(i) ;
+
         if (ifp != NULL) {
+            struct if_data cur_data = { 0 };
+
             interface_class interface(if_name(ifp)) ;
             if (ifp->if_addr && ifp->if_addrlen && ifp->if_type == IFT_ETHER)
             {
@@ -262,25 +265,32 @@ int main(int argc, const char **argv)
             }
             else
                 phys_addr[0] = '\0' ;
+
+            assert(ifp->if_get_if_info);
+            ifp->if_get_if_info(ifp, &cur_data);
+
             printf("\n") ;
             printf("%s: flags=%s  mtu %s\n",
                    interface.get_name().c_str(),
                    interface.get_flags().c_str(),
                    interface.get_mtu().c_str()) ;
             printf("        inet  %s  netmask %s  broadcast %s\n",
-                   interface.get_addr().c_str(), 
+                   interface.get_addr().c_str(),
                    interface.get_mask().c_str(),
                    interface.get_broadcast().c_str()) ;
             if (ifp->if_type == IFT_ETHER)
                 printf("        ether %s\n", phys_addr) ;
             printf("        RX packets %ld  bytes %ld %s\n",
-                   ifp->if_ipackets, ifp->if_ibytes,
-                   bytes2str(ifp->if_ibytes).c_str()) ;
+                   cur_data.ifi_ipackets, cur_data.ifi_ibytes,
+                   bytes2str(cur_data.ifi_ibytes).c_str());
+            printf("        Rx errors  %ld  dropped %ld\n",
+                   cur_data.ifi_ierrors, cur_data.ifi_iqdrops) ;
             printf("        TX packets %ld  bytes %ld %s\n",
-                   ifp->if_opackets, ifp->if_obytes,
-                   bytes2str(ifp->if_obytes).c_str()) ;
-            printf("        dropped    %ld  collisions %ld\n",
-                   ifp->if_iqdrops, ifp->if_collisions) ;
+                   cur_data.ifi_opackets, cur_data.ifi_obytes,
+                   bytes2str(cur_data.ifi_obytes).c_str());
+            printf("        Tx errors  %ld  dropped %ld collisions %ld\n",
+                   cur_data.ifi_oerrors, cur_data.ifi_noproto,
+                   cur_data.ifi_collisions);
             if_rele(ifp) ;
         }
     }
