@@ -18,21 +18,21 @@ public:
 
     // The feature bitmap for virtio blk
     enum {
-        VIRTIO_BLK_F_BARRIER=0,        /* Does host support barriers? */
-        VIRTIO_BLK_F_SIZE_MAX=1,       /* Indicates maximum segment size */
-        VIRTIO_BLK_F_SEG_MAX=2,        /* Indicates maximum # of segments */
-        VIRTIO_BLK_F_GEOMETRY=4,       /* Legacy geometry available  */
-        VIRTIO_BLK_F_RO=5,             /* Disk is read-only */
-        VIRTIO_BLK_F_BLK_SIZE=6,       /* Block size of disk is available*/
-        VIRTIO_BLK_F_SCSI=7,           /* Supports scsi command passthru */
-        VIRTIO_BLK_F_WCE=9,            /* Writeback mode enabled after reset */
-        VIRTIO_BLK_F_TOPOLOGY=10,      /* Topology information is available */
-        VIRTIO_BLK_F_CONFIG_WCE=11,    /* Writeback mode available in config */
+        VIRTIO_BLK_F_BARRIER    = 0,  /* Does host support barriers? */
+        VIRTIO_BLK_F_SIZE_MAX   = 1,  /* Indicates maximum segment size */
+        VIRTIO_BLK_F_SEG_MAX    = 2,  /* Indicates maximum # of segments */
+        VIRTIO_BLK_F_GEOMETRY   = 4,  /* Legacy geometry available  */
+        VIRTIO_BLK_F_RO         = 5,  /* Disk is read-only */
+        VIRTIO_BLK_F_BLK_SIZE   = 6,  /* Block size of disk is available*/
+        VIRTIO_BLK_F_SCSI       = 7,  /* Supports scsi command passthru */
+        VIRTIO_BLK_F_WCE        = 9,  /* Writeback mode enabled after reset */
+        VIRTIO_BLK_F_TOPOLOGY   = 10, /* Topology information is available */
+        VIRTIO_BLK_F_CONFIG_WCE = 11, /* Writeback mode available in config */
     };
 
     enum {
-        VIRTIO_BLK_DEVICE_ID=0x1001,
-        VIRTIO_BLK_ID_BYTES=20,      /* ID string length */
+        VIRTIO_BLK_DEVICE_ID = 0x1001,
+        VIRTIO_BLK_ID_BYTES = 20, /* ID string length */
 
         /*
          * Command types
@@ -47,23 +47,23 @@ public:
     };
 
     enum blk_request_type {
-        VIRTIO_BLK_T_IN=0,
-        VIRTIO_BLK_T_OUT=1,
+        VIRTIO_BLK_T_IN = 0,
+        VIRTIO_BLK_T_OUT = 1,
         /* This bit says it's a scsi command, not an actual read or write. */
-        VIRTIO_BLK_T_SCSI_CMD=2,
+        VIRTIO_BLK_T_SCSI_CMD = 2,
         /* Cache flush command */
-        VIRTIO_BLK_T_FLUSH=4,
+        VIRTIO_BLK_T_FLUSH = 4,
         /* Get device ID command */
-        VIRTIO_BLK_T_GET_ID=8,
+        VIRTIO_BLK_T_GET_ID = 8,
         /* Barrier before this op. */
-        VIRTIO_BLK_T_BARRIER=0x80000000,
+        VIRTIO_BLK_T_BARRIER = 0x80000000,
     };
 
     enum blk_res_code {
         /* And this is the final byte of the write scatter-gather list. */
-        VIRTIO_BLK_S_OK=0,
-        VIRTIO_BLK_S_IOERR=1,
-        VIRTIO_BLK_S_UNSUPP=2,
+        VIRTIO_BLK_S_OK = 0,
+        VIRTIO_BLK_S_IOERR = 1,
+        VIRTIO_BLK_S_UNSUPP = 2,
     };
 
     struct blk_config {
