@@ -35,7 +35,7 @@ depends.write('%s: \\\n' % (options.output,))
 
 image_path = os.path.abspath(options.output)
 
-osv = subprocess.Popen('cd ../..; scripts/run.py --unsafe-cache -c1 -i %s -u -s -e "--nomount tools/mkfs.so; tools/cpiod.so --prefix /zfs/zfs" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
+osv = subprocess.Popen('cd ../..; scripts/run.py -c1 -i %s -u -s -e "--nomount tools/mkfs.so; tools/cpiod.so --prefix /zfs/zfs" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
 
 upload_manifest.upload(osv, manifest, depends)
 
