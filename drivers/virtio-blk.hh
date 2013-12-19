@@ -139,9 +139,7 @@ private:
 
     struct blk_req {
         blk_req(struct bio* b=nullptr) :bio(b) {};
-        ~blk_req() {
-            if (bio) biodone(bio, false);
-        };
+        ~blk_req() {};
 
         blk_outhdr hdr;
         blk_res res;

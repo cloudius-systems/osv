@@ -195,7 +195,6 @@ void blk::response_worker()
                }
             }
 
-            req->bio = nullptr;
             delete req;
             queue->get_buf_finalize();
         }
