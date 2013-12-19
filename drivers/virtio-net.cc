@@ -199,7 +199,7 @@ namespace virtio {
                 _ifn->if_capabilities |= IFCAP_LRO;
         }
 
-        _ifn->if_capenable = _ifn->if_capabilities;
+        _ifn->if_capenable = _ifn->if_capabilities | IFCAP_HWSTATS;
 
         //Start the polling thread before attaching it to the Rx interrupt
         poll_task->start();
@@ -261,16 +261,17 @@ namespace virtio {
         return true;
     }
 
-    /*
+    /**
      * Original comment from FreeBSD
      * Alternative method of doing receive checksum offloading. Rather
      * than parsing the received frame down to the IP header, use the
      * csum_offset to determine which CSUM_* flags are appropriate. We
      * can get by with doing this only because the checksum offsets are
      * unique for the things we care about.
+     *
+     * @return true if csum is bad and false if csum is ok (!!!)
      */
-    bool
-    virtio_net::rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr)
+    bool virtio_net::bad_rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr)
     {
         struct ether_header *eh;
         struct ether_vlan_header *evh;
@@ -292,6 +293,7 @@ namespace virtio {
             eth_type = ntohs(evh->evl_proto);
         }
 
+        // How come - no support for IPv6?!
         if (eth_type != ETHERTYPE_IP) {
             return true;
         }
@@ -333,6 +335,8 @@ namespace virtio {
             int nbufs;
             struct mbuf* m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
             u32 offset = _hdr_size;
+            u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
+            u64 csum_err = 0, rx_bytes = 0;
 
             // use local header that we copy out of the mbuf since we're
             // truncating it.
@@ -345,7 +349,7 @@ namespace virtio {
 
                 // Bad packet/buffer - discard and continue to the next one
                 if (len < _hdr_size + ETHER_HDR_LEN) {
-                    _ifn->if_ierrors++;
+                    rx_drops++;
                     m_free(m);
 
                     m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
@@ -372,7 +376,7 @@ namespace virtio {
                 while (--nbufs > 0) {
                     m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
                     if (m == nullptr) {
-                        _ifn->if_ierrors++;
+                        rx_drops++;
                         break;
                     }
 
@@ -394,10 +398,17 @@ namespace virtio {
 
                 if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
                     (mhdr.hdr.flags &
-                     virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM))
-                    rx_csum(m_head, &mhdr.hdr);
+                     virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)) {
+                    if (bad_rx_csum(m_head, &mhdr.hdr))
+                        csum_err++;
+                    else
+                        csum_ok++;
 
-                _ifn->if_ipackets++;
+                }
+
+                rx_packets++;
+                rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
+
                 (*_ifn->if_input)(_ifn, m_head);
 
                 trace_virtio_net_rx_packet(_ifn->if_index, len);
@@ -413,6 +424,13 @@ namespace virtio {
 
             if (vq->refill_ring_cond())
                 fill_rx_ring();
+
+            // Update the stats
+            _rxq.stats.rx_drops      += rx_drops;
+            _rxq.stats.rx_packets    += rx_packets;
+            _rxq.stats.rx_csum       += csum_ok;
+            _rxq.stats.rx_csum_err   += csum_err;
+            _rxq.stats.rx_bytes      += rx_bytes;
         }
     }
 
@@ -454,6 +472,9 @@ namespace virtio {
         virtio_net_req *req = new virtio_net_req;
         vring* vq = _txq.vqueue;
         auto vq_sg_vec = &vq->_sg_vec;
+        int rc = 0;
+        struct vnet_txq_stats* stats = &_txq.stats;
+        u64 tx_bytes = 0;
 
         req->um.reset(m_head);
 
@@ -461,8 +482,10 @@ namespace virtio {
             m = tx_offload(m_head, &req->mhdr.hdr);
             if ((m_head = m) == nullptr) {
                 delete req;
+
                 /* The buffer is not well-formed */
-                return EINVAL;
+                rc = EINVAL;
+                goto out;
             }
         }
 
@@ -470,10 +493,14 @@ namespace virtio {
         vq->add_out_sg(static_cast<void*>(&req->mhdr), _hdr_size);
 
         for (m = m_head; m != NULL; m = m->m_hdr.mh_next) {
-            if (m->m_hdr.mh_len != 0) {
-                virtio_net_d("Frag len=%d:", m->m_hdr.mh_len);
+            int frag_len = m->m_hdr.mh_len;
+
+            if (frag_len != 0) {
+                virtio_net_d("Frag len=%d:", frag_len);
                 req->mhdr.num_buffers++;
+
                 vq->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
+                tx_bytes += frag_len;
             }
         }
 
@@ -485,19 +512,46 @@ namespace virtio {
             } else {
                 virtio_net_d("%s: no room", __FUNCTION__);
                 delete req;
-                return ENOBUFS;
+
+                rc = ENOBUFS;
+                goto out;
             }
         }
 
         if (!vq->add_buf(req)) {
             trace_virtio_net_tx_failed_add_buf(_ifn->if_index);
             delete req;
-            return ENOBUFS;
+
+            rc = ENOBUFS;
+            goto out;
         }
 
         trace_virtio_net_tx_packet(_ifn->if_index, vq_sg_vec->size());
 
-        return 0;
+    out:
+
+        /* Update the statistics */
+        switch (rc) {
+        case 0: /* success */
+            stats->tx_bytes += tx_bytes;
+            stats->tx_packets++;
+
+            if (req->mhdr.hdr.flags & virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)
+                stats->tx_csum++;
+
+            if (req->mhdr.hdr.gso_type)
+                stats->tx_tso++;
+
+            break;
+        case ENOBUFS:
+            stats->tx_drops++;
+
+            break;
+        default:
+            stats->tx_err++;
+        }
+
+        return rc;
     }
 
     struct mbuf*
@@ -509,7 +563,7 @@ namespace virtio {
         struct tcphdr *tcp;
         int ip_offset;
         u16 eth_type, csum_start;
-        u8 ip_proto, gso_type;
+        u8 ip_proto, gso_type = 0;
 
         ip_offset = sizeof(struct ether_header);
         if (m->m_hdr.mh_len < ip_offset) {

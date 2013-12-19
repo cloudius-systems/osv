@@ -210,7 +210,7 @@ namespace virtio {
         virtual u32 get_driver_features(void);
 
         void wait_for_queue(vring* queue);
-        bool rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr);
+        bool bad_rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr);
         void receiver();
         void fill_rx_ring();
 
@@ -259,18 +259,38 @@ namespace virtio {
 
         u32 _hdr_size;
 
+        struct vnet_rxq_stats {
+            u64 rx_packets; /* if_ipackets */
+            u64 rx_bytes;   /* if_ibytes */
+            u64 rx_drops;   /* if_iqdrops */
+            u64 rx_csum;    /* number of packets with correct csum */
+            u64 rx_csum_err;/* number of packets with a bad checksum */
+        };
+
+        struct vnet_txq_stats {
+            u64 tx_packets; /* if_opackets */
+            u64 tx_bytes;   /* if_obytes */
+            u64 tx_err;     /* Number of broken packets */
+            u64 tx_drops;   /* Number of dropped packets */
+            u64 tx_csum;    /* CSUM offload requests */
+            u64 tx_tso;     /* GSO/TSO packets */
+            /* u64 tx_rescheduled; */ /* TODO when we implement xoff */
+        };
+
          /* Single Rx queue object */
         struct rxq {
             rxq(vring* vq, std::function<void ()> poll_func)
                 : vqueue(vq), poll_task(poll_func) {};
             vring* vqueue;
             sched::thread  poll_task;
+            struct vnet_rxq_stats stats = { 0 };
         };
 
         /* Single Tx queue object */
         struct txq {
             txq(vring* vq) : vqueue(vq) {};
             vring* vqueue;
+			struct vnet_txq_stats stats = { 0 };
         };
 
         /* We currently support only a single Rx+Tx queue */
