@@ -92,6 +92,18 @@ ifdead_transmit(struct ifnet *ifp, struct mbuf *m)
 	return (ENXIO);
 }
 
+/**
+ * Default implementation: simply take the current if_data from the ifnet
+ *
+ * @param ifp interface handle
+ * @param out_info output buffer
+ */
+static void
+ifdead_getinfo(struct ifnet *ifp, struct if_data *out_data)
+{
+	memcpy(out_data, &ifp->if_data, sizeof(*out_data));
+}
+
 void
 if_dead(struct ifnet *ifp)
 {
@@ -103,4 +115,5 @@ if_dead(struct ifnet *ifp)
 	ifp->if_resolvemulti = ifdead_resolvemulti;
 	ifp->if_qflush = ifdead_qflush;
 	ifp->if_transmit = ifdead_transmit;
+	ifp->if_get_if_info = ifdead_getinfo;
 }

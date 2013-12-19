@@ -526,6 +526,18 @@ if_attach(struct ifnet *ifp)
 	if_attach_internal(ifp, 0);
 }
 
+/**
+ * Default implementation: simply take the current if_data from the ifnet
+ *
+ * @param ifp interface handle
+ * @param out_info output buffer
+ */
+static void
+if_get_if_info(struct ifnet *ifp, struct if_data *out_info)
+{
+	memcpy(out_info, &ifp->if_data, sizeof(*out_info));
+}
+
 static void
 if_attach_internal(struct ifnet *ifp, int vmove)
 {
@@ -543,6 +555,14 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 	getmicrotime(&ifp->if_lastchange);
 	ifp->if_data.ifi_epoch = time_uptime;
 	ifp->if_data.ifi_datalen = sizeof(struct if_data);
+
+	KASSERT(!(ifp->if_capenable & IFCAP_HWSTATS) ||
+		    (ifp->if_get_if_info != NULL),
+		    "get_if_info should be initialized if HW/SW support internal "
+		    "statistics handling");
+
+	if (ifp->if_get_if_info == NULL)
+		ifp->if_get_if_info = if_get_if_info;
 
 	KASSERT((ifp->if_transmit == NULL && ifp->if_qflush == NULL) ||
 	    (ifp->if_transmit != NULL && ifp->if_qflush != NULL),

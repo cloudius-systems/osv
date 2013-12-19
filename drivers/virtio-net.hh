@@ -230,6 +230,13 @@ namespace virtio {
         void tx_gc();
         static hw_driver* probe(hw_device* dev);
 
+        /**
+         * Fill the if_data buffer with data from our iface including those that
+         * we have gathered by ourselvs (e.g. FP queue stats).
+         * @param out_data output buffer
+         */
+        void fill_stats(struct if_data* out_data) const;
+
         // tx ring lock protects this ring for multiple access
         mutex _tx_ring_lock;
 
@@ -292,6 +299,20 @@ namespace virtio {
             vring* vqueue;
 			struct vnet_txq_stats stats = { 0 };
         };
+
+        /**
+         * Fill the Rx queue statistics in the general info struct
+         * @param rxq Rx queue handle
+         * @param out_data output buffer
+         */
+        void fill_qstats(const struct rxq& rxq, struct if_data* out_data) const;
+
+        /**
+         * Fill the Tx queue statistics in the general info struct
+         * @param txq Tx queue handle
+         * @param out_data output buffer
+         */
+        void fill_qstats(const struct txq& txq, struct if_data* out_data) const;
 
         /* We currently support only a single Rx+Tx queue */
         struct rxq _rxq;

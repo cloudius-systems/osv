@@ -148,6 +148,48 @@ namespace virtio {
         virtio_net_d("Virtio-net init");
     }
 
+    /**
+     * Return all the statistics we have gathered.
+     * @param ifp
+     * @param out_data
+     */
+    static void virtio_if_get_if_info(struct ifnet* ifp,
+                                      struct if_data* out_data)
+    {
+        virtio_net* vnet = (virtio_net*)ifp->if_softc;
+
+        // First - take the ifnet data
+        memcpy(out_data, &ifp->if_data, sizeof(*out_data));
+
+        // then fill the internal statistics we've gathered
+        vnet->fill_stats(out_data);
+    }
+
+    void virtio_net::fill_stats(struct if_data* out_data) const
+    {
+        // We currently support only a single Tx/Rx queue so no iteration so far
+        fill_qstats(_rxq, out_data);
+        fill_qstats(_txq, out_data);
+    }
+
+    void virtio_net::fill_qstats(const struct rxq& rxq,
+                                 struct if_data* out_data) const
+    {
+        out_data->ifi_ipackets += rxq.stats.rx_packets;
+        out_data->ifi_ibytes   += rxq.stats.rx_bytes;
+        out_data->ifi_iqdrops  += rxq.stats.rx_drops;
+        out_data->ifi_ierrors  += rxq.stats.rx_csum_err;
+    }
+
+    void virtio_net::fill_qstats(const struct txq& txq,
+                                 struct if_data* out_data) const
+    {
+        assert(!out_data->ifi_oerrors && !out_data->ifi_obytes && !out_data->ifi_opackets);
+        out_data->ifi_opackets += txq.stats.tx_packets;
+        out_data->ifi_obytes   += txq.stats.tx_bytes;
+        out_data->ifi_oerrors  += txq.stats.tx_err + txq.stats.tx_drops;
+    }
+
     virtio_net::virtio_net(pci::device& dev)
         : virtio_driver(dev),
           _rxq(get_virt_queue(0), [this] { this->receiver(); }),
@@ -181,6 +223,7 @@ namespace virtio {
         _ifn->if_transmit = virtio_if_transmit;
         _ifn->if_qflush = virtio_if_qflush;
         _ifn->if_init = virtio_if_init;
+        _ifn->if_get_if_info = virtio_if_get_if_info;
         IFQ_SET_MAXLEN(&_ifn->if_snd, _txq.vqueue->size());
 
         _ifn->if_capabilities = 0;
