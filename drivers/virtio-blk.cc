@@ -200,7 +200,7 @@ void blk::req_done()
         }
 
         // wake up the requesting thread in case the ring was full before
-        _waiting_request_thread.wake();
+        queue->wakeup_waiter();
     }
 }
 
@@ -276,14 +276,7 @@ int blk::make_request(struct bio* bio)
         req->res.status = 0;
         queue->add_in_sg(&req->res, sizeof (struct blk_res));
 
-        while (!queue->add_buf(req)) {
-            _waiting_request_thread.reset(*sched::thread::current());
-            while (!queue->avail_ring_has_room(queue->_sg_vec.size())) {
-                sched::thread::wait_until([queue] {return queue->used_ring_can_gc();});
-                queue->get_buf_gc();
-            }
-            _waiting_request_thread.clear();
-        }
+        queue->add_buf_wait(req);
 
         queue->kick();
 
