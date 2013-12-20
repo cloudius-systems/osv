@@ -21,7 +21,7 @@ namespace virtio {
 /**
  * virtio net device class
  */
-class virtio_net : public virtio_driver {
+class net : public virtio_driver {
 public:
 
     // The feature bitmap for virtio net
@@ -39,7 +39,7 @@ public:
         VIRTIO_NET_F_HOST_ECN = 13,      /* Host can handle TSO[6] w/ ECN in. */
         VIRTIO_NET_F_HOST_UFO = 14,      /* Host can handle UFO in. */
         VIRTIO_NET_F_MRG_RXBUF = 15,      /* Host can merge receive buffers. */
-        VIRTIO_NET_F_STATUS = 16,      /* virtio_net_config.status available */
+        VIRTIO_NET_F_STATUS = 16,      /* net_config.status available */
         VIRTIO_NET_F_CTRL_VQ  = 17,      /* Control channel available */
         VIRTIO_NET_F_CTRL_RX = 18,      /* Control channel RX mode support */
         VIRTIO_NET_F_CTRL_VLAN = 19,      /* Control channel VLAN filtering */
@@ -107,7 +107,7 @@ public:
         VIRTIO_NET_CSUM_OFFLOAD = CSUM_TCP | CSUM_UDP,
     };
 
-    struct virtio_net_config {
+    struct net_config {
         /* The config defining mac address (if VIRTIO_NET_F_MAC) */
         u8 mac[6];
         /* See VIRTIO_NET_F_STATUS and VIRTIO_NET_S_* above */
@@ -121,7 +121,7 @@ public:
 
     /* This is the first element of the scatter-gather list.  If you don't
      * specify GSO or CSUM features, you can simply ignore the header. */
-    struct virtio_net_hdr {
+    struct net_hdr {
         enum {
             VIRTIO_NET_HDR_F_NEEDS_CSUM  = 1,       // Use csum_start, csum_offset
             VIRTIO_NET_HDR_F_DATA_VALID = 2,       // Csum is valid
@@ -143,8 +143,8 @@ public:
 
     /* This is the version of the header to use when the MRG_RXBUF
      * feature has been negotiated. */
-    struct virtio_net_hdr_mrg_rxbuf {
-        struct virtio_net_hdr hdr;
+    struct net_hdr_mrg_rxbuf {
+        struct net_hdr hdr;
         u16 num_buffers;      /* Number of merged rx buffers */
     };
 
@@ -155,12 +155,12 @@ public:
      * and an ack/status response in the last entry.  Data for the
      * command goes in between.
      */
-    struct virtio_net_ctrl_hdr {
+    struct net_ctrl_hdr {
             u8 class_t;
             u8 cmd;
     } __attribute__((packed));
 
-    typedef u8 virtio_net_ctrl_ack;
+    typedef u8 net_ctrl_ack;
 
     /*
      * Control the MAC
@@ -181,7 +181,7 @@ public:
      * 6 bytes MAC address. This functionality is present if the
      * VIRTIO_NET_F_CTRL_MAC_ADDR feature is available.
      */
-    struct virtio_net_ctrl_mac {
+    struct net_ctrl_mac {
             u32 entries;
             u8 macs[][ETH_ALEN];
     } __attribute__((packed));
@@ -197,12 +197,12 @@ public:
      * Accordingly, driver should not transmit new packets  on virtqueues other than
      * specified.
      */
-    struct virtio_net_ctrl_mq {
+    struct net_ctrl_mq {
             u16 virtqueue_pairs;
     };
 
-    explicit virtio_net(pci::device& dev);
-    virtual ~virtio_net();
+    explicit net(pci::device& dev);
+    virtual ~net();
 
     virtual const std::string get_name(void) { return _driver_name; }
     bool read_config();
@@ -210,7 +210,7 @@ public:
     virtual u32 get_driver_features(void);
 
     void wait_for_queue(vring* queue);
-    bool bad_rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr);
+    bool bad_rx_csum(struct mbuf *m, struct net_hdr *hdr);
     void receiver();
     void fill_rx_ring();
 
@@ -225,7 +225,7 @@ public:
      */
     int tx_locked(struct mbuf* m_head, bool flush = false);
 
-    struct mbuf* tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr);
+    struct mbuf* tx_offload(struct mbuf* m, struct net_hdr* hdr);
     void kick(int queue) {_queues[queue]->kick();}
     void tx_gc();
     static hw_driver* probe(hw_device* dev);
@@ -242,19 +242,19 @@ public:
 
 private:
 
-    struct virtio_net_req {
-        struct virtio_net::virtio_net_hdr_mrg_rxbuf mhdr;
+    struct net_req {
+        struct net::net_hdr_mrg_rxbuf mhdr;
         struct free_deleter {
             void operator()(struct mbuf *m) {m_freem(m);}
         };
 
         std::unique_ptr<struct mbuf, free_deleter> um;
 
-        virtio_net_req() {memset(&mhdr,0,sizeof(mhdr));};
+        net_req() {memset(&mhdr,0,sizeof(mhdr));};
     };
 
     std::string _driver_name;
-    virtio_net_config _config;
+    net_config _config;
     bool _mergeable_bufs;
     bool _tso_ecn = false;
     bool _status = false;

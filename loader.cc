@@ -248,7 +248,7 @@ void* do_main_thread(void *_commands)
     hw::driver_manager* drvman = hw::driver_manager::instance();
     drvman->register_driver(virtio::blk::probe);
     drvman->register_driver(virtio::scsi::probe);
-    drvman->register_driver(virtio::virtio_net::probe);
+    drvman->register_driver(virtio::net::probe);
     drvman->register_driver(virtio::virtio_rng::probe);
     drvman->register_driver(xenfront::xenbus::probe);
     drvman->load_all();

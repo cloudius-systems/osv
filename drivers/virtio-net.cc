@@ -57,43 +57,43 @@ using namespace memory;
 
 namespace virtio {
 
-int virtio_net::_instance = 0;
+int net::_instance = 0;
 
-#define virtio_net_tag "virtio-net"
-#define virtio_net_d(...)   tprintf_d(virtio_net_tag, __VA_ARGS__)
-#define virtio_net_i(...)   tprintf_i(virtio_net_tag, __VA_ARGS__)
-#define virtio_net_w(...)   tprintf_w(virtio_net_tag, __VA_ARGS__)
-#define virtio_net_e(...)   tprintf_e(virtio_net_tag, __VA_ARGS__)
+#define net_tag "virtio-net"
+#define net_d(...)   tprintf_d(net_tag, __VA_ARGS__)
+#define net_i(...)   tprintf_i(net_tag, __VA_ARGS__)
+#define net_w(...)   tprintf_w(net_tag, __VA_ARGS__)
+#define net_e(...)   tprintf_e(net_tag, __VA_ARGS__)
 
 static int virtio_if_ioctl(
         struct ifnet *ifp,
         u_long command,
         caddr_t data)
 {
-    virtio_net_d("virtio_if_ioctl %x", command);
+    net_d("virtio_if_ioctl %x", command);
 
     int error = 0;
     switch(command) {
     case SIOCSIFMTU:
-        virtio_net_d("SIOCSIFMTU");
+        net_d("SIOCSIFMTU");
         break;
     case SIOCSIFFLAGS:
-        virtio_net_d("SIOCSIFFLAGS");
+        net_d("SIOCSIFFLAGS");
         /* Change status ifup, ifdown */
         if (ifp->if_flags & IFF_UP) {
             ifp->if_drv_flags |= IFF_DRV_RUNNING;
-            virtio_net_d("if_up");
+            net_d("if_up");
         } else {
             ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-            virtio_net_d("if_down");
+            net_d("if_down");
         }
         break;
     case SIOCADDMULTI:
     case SIOCDELMULTI:
-        virtio_net_d("SIOCDELMULTI");
+        net_d("SIOCDELMULTI");
         break;
     default:
-        virtio_net_d("redirecting to ether_ioctl()...");
+        net_d("redirecting to ether_ioctl()...");
         error = ether_ioctl(ifp, command, data);
         break;
     }
@@ -124,14 +124,14 @@ static void virtio_if_qflush(struct ifnet *ifp)
  */
 static int virtio_if_transmit(struct ifnet* ifp, struct mbuf* m_head)
 {
-    virtio_net* vnet = (virtio_net*)ifp->if_softc;
+    net* vnet = (net*)ifp->if_softc;
 
-    virtio_net_d("%s_start", __FUNCTION__);
+    net_d("%s_start", __FUNCTION__);
 
     /* Process packets */
     vnet->_tx_ring_lock.lock();
 
-    virtio_net_d("*** processing packet! ***");
+    net_d("*** processing packet! ***");
 
     int error = vnet->tx_locked(m_head);
 
@@ -145,7 +145,7 @@ static int virtio_if_transmit(struct ifnet* ifp, struct mbuf* m_head)
 
 static void virtio_if_init(void* xsc)
 {
-    virtio_net_d("Virtio-net init");
+    net_d("Virtio-net init");
 }
 
 /**
@@ -156,7 +156,7 @@ static void virtio_if_init(void* xsc)
 static void virtio_if_get_if_info(struct ifnet* ifp,
                                   struct if_data* out_data)
 {
-    virtio_net* vnet = (virtio_net*)ifp->if_softc;
+    net* vnet = (net*)ifp->if_softc;
 
     // First - take the ifnet data
     memcpy(out_data, &ifp->if_data, sizeof(*out_data));
@@ -165,14 +165,14 @@ static void virtio_if_get_if_info(struct ifnet* ifp,
     vnet->fill_stats(out_data);
 }
 
-void virtio_net::fill_stats(struct if_data* out_data) const
+void net::fill_stats(struct if_data* out_data) const
 {
     // We currently support only a single Tx/Rx queue so no iteration so far
     fill_qstats(_rxq, out_data);
     fill_qstats(_txq, out_data);
 }
 
-void virtio_net::fill_qstats(const struct rxq& rxq,
+void net::fill_qstats(const struct rxq& rxq,
                              struct if_data* out_data) const
 {
     out_data->ifi_ipackets += rxq.stats.rx_packets;
@@ -181,7 +181,7 @@ void virtio_net::fill_qstats(const struct rxq& rxq,
     out_data->ifi_ierrors  += rxq.stats.rx_csum_err;
 }
 
-void virtio_net::fill_qstats(const struct txq& txq,
+void net::fill_qstats(const struct txq& txq,
                              struct if_data* out_data) const
 {
     assert(!out_data->ifi_oerrors && !out_data->ifi_obytes && !out_data->ifi_opackets);
@@ -190,7 +190,7 @@ void virtio_net::fill_qstats(const struct txq& txq,
     out_data->ifi_oerrors  += txq.stats.tx_err + txq.stats.tx_drops;
 }
 
-virtio_net::virtio_net(pci::device& dev)
+net::net(pci::device& dev)
     : virtio_driver(dev),
       _rxq(get_virt_queue(0), [this] { this->receiver(); }),
       _txq(get_virt_queue(1))
@@ -204,14 +204,14 @@ virtio_net::virtio_net(pci::device& dev)
     setup_features();
     read_config();
 
-    _hdr_size = (_mergeable_bufs)? sizeof(virtio_net_hdr_mrg_rxbuf):sizeof(virtio_net_hdr);
+    _hdr_size = (_mergeable_bufs)? sizeof(net_hdr_mrg_rxbuf):sizeof(net_hdr);
 
     //initialize the BSD interface _if
     _ifn = if_alloc(IFT_ETHER);
     if (_ifn == NULL) {
        //FIXME: need to handle this case - expand the above function not to allocate memory and
        // do it within the constructor.
-       virtio_net_w("if_alloc failed!");
+       net_w("if_alloc failed!");
        return;
     }
 
@@ -258,7 +258,7 @@ virtio_net::virtio_net(pci::device& dev)
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 }
 
-virtio_net::~virtio_net()
+net::~net()
 {
     //TODO: In theory maintain the list of free instances and gc it
     // including the thread objects and their stack
@@ -273,13 +273,13 @@ virtio_net::~virtio_net()
     if_free(_ifn);
 }
 
-bool virtio_net::read_config()
+bool net::read_config()
 {
     //read all of the net config  in one shot
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
 
     if (get_guest_feature_bit(VIRTIO_NET_F_MAC))
-        virtio_net_i("The mac addr of the device is %x:%x:%x:%x:%x:%x",
+        net_i("The mac addr of the device is %x:%x:%x:%x:%x:%x",
                 (u32)_config.mac[0],
                 (u32)_config.mac[1],
                 (u32)_config.mac[2],
@@ -296,10 +296,10 @@ bool virtio_net::read_config()
     _guest_tso4 = get_guest_feature_bit(VIRTIO_NET_F_GUEST_TSO4);
     _host_tso4 = get_guest_feature_bit(VIRTIO_NET_F_HOST_TSO4);
 
-    virtio_net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
-    virtio_net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
-    virtio_net_i("Features: %s=%d,%s=%d", "Guest_csum", _guest_csum, "guest tso4", _guest_tso4);
-    virtio_net_i("Features: %s=%d", "host tso4", _host_tso4);
+    net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
+    net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
+    net_i("Features: %s=%d,%s=%d", "Guest_csum", _guest_csum, "guest tso4", _guest_tso4);
+    net_i("Features: %s=%d", "host tso4", _host_tso4);
 
     return true;
 }
@@ -314,7 +314,7 @@ bool virtio_net::read_config()
  *
  * @return true if csum is bad and false if csum is ok (!!!)
  */
-bool virtio_net::bad_rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr)
+bool net::bad_rx_csum(struct mbuf *m, struct net_hdr *hdr)
 {
     struct ether_header *eh;
     struct ether_vlan_header *evh;
@@ -364,7 +364,7 @@ bool virtio_net::bad_rx_csum(struct mbuf *m, struct virtio_net_hdr *hdr)
     return false;
 }
 
-void virtio_net::receiver()
+void net::receiver()
 {
     vring* vq = _rxq.vqueue;
 
@@ -383,7 +383,7 @@ void virtio_net::receiver()
 
         // use local header that we copy out of the mbuf since we're
         // truncating it.
-        struct virtio_net_hdr_mrg_rxbuf mhdr;
+        struct net_hdr_mrg_rxbuf mhdr;
 
         while (m != nullptr) {
 
@@ -441,7 +441,7 @@ void virtio_net::receiver()
 
             if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
                 (mhdr.hdr.flags &
-                 virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)) {
+                 net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)) {
                 if (bad_rx_csum(m_head, &mhdr.hdr))
                     csum_err++;
                 else
@@ -477,7 +477,7 @@ void virtio_net::receiver()
     }
 }
 
-void virtio_net::fill_rx_ring()
+void net::fill_rx_ring()
 {
     trace_virtio_net_fill_rx_ring(_ifn->if_index);
     int added = 0;
@@ -507,12 +507,12 @@ void virtio_net::fill_rx_ring()
 }
 
 // TODO: Does it really have to be "locked"?
-int virtio_net::tx_locked(struct mbuf *m_head, bool flush)
+int net::tx_locked(struct mbuf *m_head, bool flush)
 {
     DEBUG_ASSERT(_tx_ring_lock.owned(), "_tx_ring_lock is not locked!");
 
     struct mbuf *m;
-    virtio_net_req *req = new virtio_net_req;
+    net_req *req = new net_req;
     vring* vq = _txq.vqueue;
     auto vq_sg_vec = &vq->_sg_vec;
     int rc = 0;
@@ -539,7 +539,7 @@ int virtio_net::tx_locked(struct mbuf *m_head, bool flush)
         int frag_len = m->m_hdr.mh_len;
 
         if (frag_len != 0) {
-            virtio_net_d("Frag len=%d:", frag_len);
+            net_d("Frag len=%d:", frag_len);
             req->mhdr.num_buffers++;
 
             vq->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
@@ -553,7 +553,7 @@ int virtio_net::tx_locked(struct mbuf *m_head, bool flush)
             trace_virtio_net_tx_no_space_calling_gc(_ifn->if_index);
             tx_gc();
         } else {
-            virtio_net_d("%s: no room", __FUNCTION__);
+            net_d("%s: no room", __FUNCTION__);
             delete req;
 
             rc = ENOBUFS;
@@ -579,7 +579,7 @@ out:
         stats->tx_bytes += tx_bytes;
         stats->tx_packets++;
 
-        if (req->mhdr.hdr.flags & virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)
+        if (req->mhdr.hdr.flags & net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)
             stats->tx_csum++;
 
         if (req->mhdr.hdr.gso_type)
@@ -598,7 +598,7 @@ out:
 }
 
 struct mbuf*
-virtio_net::tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr)
+net::tx_offload(struct mbuf* m, struct net_hdr* hdr)
 {
     struct ether_header *eh;
     struct ether_vlan_header *evh;
@@ -637,7 +637,7 @@ virtio_net::tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr)
         ip = (struct ip *)(mtod(m, uint8_t *) + ip_offset);
         ip_proto = ip->ip_p;
         csum_start = ip_offset + (ip->ip_hl << 2);
-        gso_type = virtio_net::virtio_net_hdr::VIRTIO_NET_HDR_GSO_TCPV4;
+        gso_type = net::net_hdr::VIRTIO_NET_HDR_GSO_TCPV4;
         break;
 
     default:
@@ -645,7 +645,7 @@ virtio_net::tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr)
     }
 
     if (m->M_dat.MH.MH_pkthdr.csum_flags & VIRTIO_NET_CSUM_OFFLOAD) {
-        hdr->flags |= virtio_net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM;
+        hdr->flags |= net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM;
         hdr->csum_start = csum_start;
         hdr->csum_offset = m->M_dat.MH.MH_pkthdr.csum_data;
     }
@@ -672,31 +672,31 @@ virtio_net::tx_offload(struct mbuf* m, struct virtio_net_hdr* hdr)
                 return nullptr;
             }
 
-            hdr->flags |= virtio_net_hdr::VIRTIO_NET_HDR_GSO_ECN;
+            hdr->flags |= net_hdr::VIRTIO_NET_HDR_GSO_ECN;
         }
     }
 
     return m;
 }
 
-void virtio_net::tx_gc()
+void net::tx_gc()
 {
-    virtio_net_req * req;
+    net_req * req;
     u32 len;
     vring* vq = _txq.vqueue;
 
-    req = static_cast<virtio_net_req*>(vq->get_buf_elem(&len));
+    req = static_cast<net_req*>(vq->get_buf_elem(&len));
 
     while(req != nullptr) {
         delete req;
         vq->get_buf_finalize();
 
-        req = static_cast<virtio_net_req*>(vq->get_buf_elem(&len));
+        req = static_cast<net_req*>(vq->get_buf_elem(&len));
     }
     vq->get_buf_gc();
 }
 
-u32 virtio_net::get_driver_features(void)
+u32 net::get_driver_features(void)
 {
     u32 base = virtio_driver::get_driver_features();
     return (base | (1 << VIRTIO_NET_F_MAC)        \
@@ -711,9 +711,9 @@ u32 virtio_net::get_driver_features(void)
                  | (1 << VIRTIO_RING_F_INDIRECT_DESC));
 }
 
-hw_driver* virtio_net::probe(hw_device* dev)
+hw_driver* net::probe(hw_device* dev)
 {
-    return virtio::probe<virtio_net, VIRTIO_NET_DEVICE_ID>(dev);
+    return virtio::probe<net, VIRTIO_NET_DEVICE_ID>(dev);
 }
 
 }
