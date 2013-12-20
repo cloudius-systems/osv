@@ -222,7 +222,7 @@ void run_main(std::vector<std::string> &vec)
     }
 
     __libc_stack_end = __builtin_frame_address(0);
-    auto lib = *(new std::shared_ptr<elf::object>(osv::run(command, args, &ret)));
+    auto lib = osv::run(command, args, &ret);
 
     // success
     if (lib) {
