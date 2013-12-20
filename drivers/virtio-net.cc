@@ -65,12 +65,9 @@ int net::_instance = 0;
 #define net_w(...)   tprintf_w(net_tag, __VA_ARGS__)
 #define net_e(...)   tprintf_e(net_tag, __VA_ARGS__)
 
-static int virtio_if_ioctl(
-        struct ifnet *ifp,
-        u_long command,
-        caddr_t data)
+static int if_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 {
-    net_d("virtio_if_ioctl %x", command);
+    net_d("if_ioctl %x", command);
 
     int error = 0;
     switch(command) {
@@ -105,13 +102,13 @@ static int virtio_if_ioctl(
  * Invalidate the local Tx queues.
  * @param ifp upper layer instance handle
  */
-static void virtio_if_qflush(struct ifnet *ifp)
+static void if_qflush(struct ifnet *ifp)
 {
     /*
      * Since virtio_net currently doesn't have any Tx queue we just
      * flush the upper layer queues.
      */
-    if_qflush(ifp);
+    ::if_qflush(ifp);
 }
 
 /**
@@ -122,7 +119,7 @@ static void virtio_if_qflush(struct ifnet *ifp)
  * @return 0 in case of success and an appropriate error code
  *         otherwise
  */
-static int virtio_if_transmit(struct ifnet* ifp, struct mbuf* m_head)
+static int if_transmit(struct ifnet* ifp, struct mbuf* m_head)
 {
     net* vnet = (net*)ifp->if_softc;
 
@@ -143,7 +140,7 @@ static int virtio_if_transmit(struct ifnet* ifp, struct mbuf* m_head)
     return error;
 }
 
-static void virtio_if_init(void* xsc)
+static void if_init(void* xsc)
 {
     net_d("Virtio-net init");
 }
@@ -153,8 +150,7 @@ static void virtio_if_init(void* xsc)
  * @param ifp
  * @param out_data
  */
-static void virtio_if_get_if_info(struct ifnet* ifp,
-                                  struct if_data* out_data)
+static void if_get_if_info(struct ifnet* ifp, struct if_data* out_data)
 {
     net* vnet = (net*)ifp->if_softc;
 
@@ -219,11 +215,11 @@ net::net(pci::device& dev)
     _ifn->if_mtu = ETHERMTU;
     _ifn->if_softc = static_cast<void*>(this);
     _ifn->if_flags = IFF_BROADCAST /*| IFF_MULTICAST*/;
-    _ifn->if_ioctl = virtio_if_ioctl;
-    _ifn->if_transmit = virtio_if_transmit;
-    _ifn->if_qflush = virtio_if_qflush;
-    _ifn->if_init = virtio_if_init;
-    _ifn->if_get_if_info = virtio_if_get_if_info;
+    _ifn->if_ioctl = if_ioctl;
+    _ifn->if_transmit = if_transmit;
+    _ifn->if_qflush = if_qflush;
+    _ifn->if_init = if_init;
+    _ifn->if_get_if_info = if_get_if_info;
     IFQ_SET_MAXLEN(&_ifn->if_snd, _txq.vqueue->size());
 
     _ifn->if_capabilities = 0;
