@@ -173,7 +173,7 @@ struct ifnet {
 	/*
 	 * get the interface info and statistics including the one gathered by HW
 	 */
-	void (*if_get_if_info)(struct ifnet *, struct if_data *);
+	void (*if_getinfo)(struct ifnet *, struct if_data *);
 
 	struct	vnet *if_home_vnet;	/* where this ifnet originates from */
 	struct	bsd_ifaddr	*if_addr;	/* pointer to link-level address */

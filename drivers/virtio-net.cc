@@ -150,7 +150,7 @@ static void if_init(void* xsc)
  * @param ifp
  * @param out_data
  */
-static void if_get_if_info(struct ifnet* ifp, struct if_data* out_data)
+static void if_getinfo(struct ifnet* ifp, struct if_data* out_data)
 {
     net* vnet = (net*)ifp->if_softc;
 
@@ -219,7 +219,7 @@ net::net(pci::device& dev)
     _ifn->if_transmit = if_transmit;
     _ifn->if_qflush = if_qflush;
     _ifn->if_init = if_init;
-    _ifn->if_get_if_info = if_get_if_info;
+    _ifn->if_getinfo = if_getinfo;
     IFQ_SET_MAXLEN(&_ifn->if_snd, _txq.vqueue->size());
 
     _ifn->if_capabilities = 0;

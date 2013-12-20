@@ -266,8 +266,8 @@ int main(int argc, const char **argv)
             else
                 phys_addr[0] = '\0' ;
 
-            assert(ifp->if_get_if_info);
-            ifp->if_get_if_info(ifp, &cur_data);
+            assert(ifp->if_getinfo);
+            ifp->if_getinfo(ifp, &cur_data);
 
             printf("\n") ;
             printf("%s: flags=%s  mtu %s\n",

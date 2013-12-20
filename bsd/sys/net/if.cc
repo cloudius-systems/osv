@@ -533,7 +533,7 @@ if_attach(struct ifnet *ifp)
  * @param out_info output buffer
  */
 static void
-if_get_if_info(struct ifnet *ifp, struct if_data *out_info)
+if_getinfo(struct ifnet *ifp, struct if_data *out_info)
 {
 	memcpy(out_info, &ifp->if_data, sizeof(*out_info));
 }
@@ -557,12 +557,12 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 	ifp->if_data.ifi_datalen = sizeof(struct if_data);
 
 	KASSERT(!(ifp->if_capenable & IFCAP_HWSTATS) ||
-		    (ifp->if_get_if_info != NULL),
+		    (ifp->if_getinfo != NULL),
 		    "get_if_info should be initialized if HW/SW support internal "
 		    "statistics handling");
 
-	if (ifp->if_get_if_info == NULL)
-		ifp->if_get_if_info = if_get_if_info;
+	if (ifp->if_getinfo == NULL)
+		ifp->if_getinfo = if_getinfo;
 
 	KASSERT((ifp->if_transmit == NULL && ifp->if_qflush == NULL) ||
 	    (ifp->if_transmit != NULL && ifp->if_qflush != NULL),

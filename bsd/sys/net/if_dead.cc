@@ -115,5 +115,5 @@ if_dead(struct ifnet *ifp)
 	ifp->if_resolvemulti = ifdead_resolvemulti;
 	ifp->if_qflush = ifdead_qflush;
 	ifp->if_transmit = ifdead_transmit;
-	ifp->if_get_if_info = ifdead_getinfo;
+	ifp->if_getinfo = ifdead_getinfo;
 }
