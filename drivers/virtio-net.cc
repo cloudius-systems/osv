@@ -512,7 +512,7 @@ int net::tx_locked(struct mbuf *m_head, bool flush)
     vring* vq = _txq.vqueue;
     auto vq_sg_vec = &vq->_sg_vec;
     int rc = 0;
-    struct vnet_txq_stats* stats = &_txq.stats;
+    struct txq_stats* stats = &_txq.stats;
     u64 tx_bytes = 0;
 
     req->um.reset(m_head);
