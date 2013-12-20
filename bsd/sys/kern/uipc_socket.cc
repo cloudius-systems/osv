@@ -105,7 +105,7 @@
 
 #include <osv/poll.h>
 #include <osv/debug.h>
-#include <inttypes.h>
+#include <cinttypes>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
