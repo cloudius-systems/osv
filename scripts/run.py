@@ -55,8 +55,15 @@ def start_osv_qemu(options):
         "-vnc", ":1",
         "-gdb", "tcp::1234,server,nowait",
         "-m", options.memsize,
-        "-smp", options.vcpus,
-        "-drive", "file=%s,if=virtio,cache=%s" % (options.image_file, cache)]
+        "-smp", options.vcpus]
+
+    if (options.scsi):
+        args += [
+        "-device", "virtio-scsi-pci,id=scsi0",
+        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-device", "scsi-hd,bus=scsi0.0,drive=hd0,lun=0,bootindex=0"]
+    else:
+        args += ["-drive", "file=%s,if=virtio,cache=%s" % (options.image_file, cache)]
     
     if (options.no_shutdown):
         args += ["-no-reboot", "-no-shutdown"]
@@ -217,6 +224,8 @@ if (__name__ == "__main__"):
                         help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
+    parser.add_argument("-S", "--scsi", action="store_true", default=False,
+                        help="use virtio-scsi instead of virtio-blk")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root. tap networking, specify interface")
     parser.add_argument("-b", "--bridge", action="store", default="virbr0",
