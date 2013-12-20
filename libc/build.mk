@@ -641,3 +641,4 @@ libc += user.o
 libc += resource.o
 libc += mount.o
 libc += eventfd.o
+libc += timerfd.o
