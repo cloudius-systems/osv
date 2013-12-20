@@ -201,8 +201,8 @@ class osv_memory(gdb.Command):
 
         mmapmem = 0
         for vma in vma_list():
-            start = ulong(vma['_start'])
-            end   = ulong(vma['_end'])
+            start = ulong(vma['_range']['_start'])
+            end   = ulong(vma['_range']['_end'])
             size  = ulong(end - start)
             mmapmem += size
             
@@ -220,8 +220,8 @@ class osv_mmap(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         for vma in vma_list():
-            start = ulong(vma['_start'])
-            end   = ulong(vma['_end'])
+            start = ulong(vma['_range']['_start'])
+            end   = ulong(vma['_range']['_end'])
             size  = ulong(end - start)
             print '0x%016x 0x%016x [%s kB]' % (start, end, size / 1024)
     
