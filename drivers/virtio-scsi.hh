@@ -191,7 +191,6 @@ private:
 
     //maintains the virtio instance number for multiple drives
     static int _instance;
-    static int _disk_idx;
     int _id;
 
     // This mutex protects parallel make_request invocations

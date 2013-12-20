@@ -33,7 +33,6 @@ using namespace memory;
 namespace virtio {
 
 int scsi::_instance = 0;
-int scsi::_disk_idx = 0;
 
 struct scsi_priv {
     scsi* drv;
@@ -306,7 +305,7 @@ void scsi::add_lun(u16 target, u16 lun)
 
     exec_read_capacity(target, lun, devsize);
 
-    std::string dev_name("vscsi");
+    std::string dev_name("vblk");
     dev_name += std::to_string(_disk_idx++);
     dev = device_create(&scsi_driver, dev_name.c_str(), D_BLK);
     prv = static_cast<struct scsi_priv*>(dev->private_data);

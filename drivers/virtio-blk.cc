@@ -122,13 +122,15 @@ blk::blk(pci::device& pci_dev)
     struct blk_priv* prv;
     struct device *dev;
     std::string dev_name("vblk");
-    dev_name += std::to_string(_id);
+    dev_name += std::to_string(_disk_idx++);
 
     dev = device_create(&blk_driver, dev_name.c_str(), D_BLK);
     prv = reinterpret_cast<struct blk_priv*>(dev->private_data);
     prv->drv = this;
     dev->size = prv->drv->size();
     read_partition_table(dev);
+
+    printf("virtio-blk: Add blk device instances %d as %s, devsize=%lld\n", _id, dev_name.c_str(), dev->size);
 }
 
 blk::~blk()

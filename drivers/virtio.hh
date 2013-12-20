@@ -174,6 +174,7 @@ protected:
     pci::bar *_bar1;
     bool _cap_indirect_buf;
     bool _cap_event_idx = false;
+    static int _disk_idx;
 };
 
 template <typename T, u16 ID>
