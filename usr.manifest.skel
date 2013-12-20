@@ -141,6 +141,7 @@
 /&/tests/misc-bdev-write.so: ./&
 /&/tests/tst-threadcomplete.so: ./&
 /&/tests/tst-promise.so: ./&
+/&/tests/tst-timerfd.so: ./&
 /&/tests/bench/bench.jar: ./&
 /testrunner.so: ./tests/testrunner.so
 /java/Hello.class: ./tests/hello/Hello.class
