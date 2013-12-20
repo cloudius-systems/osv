@@ -13,7 +13,7 @@
 using namespace std;
 
 namespace virtio {
-virtio_rng::virtio_rng(pci::device& pci_dev)
+rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
     , _gsi(pci_dev.get_interrupt_line(), [&] { ack_irq(); }, [&] { handle_irq(); })
     , _thread([&] { worker(); })
@@ -27,11 +27,11 @@ virtio_rng::virtio_rng(pci::device& pci_dev)
     randomdev::random_device::register_source(this);
 }
 
-virtio_rng::~virtio_rng()
+rng::~rng()
 {
 }
 
-size_t virtio_rng::get_random_bytes(char *buf, size_t size)
+size_t rng::get_random_bytes(char *buf, size_t size)
 {
     WITH_LOCK(_mtx) {
         _consumer.wait_until(_mtx, [&] {
@@ -45,17 +45,17 @@ size_t virtio_rng::get_random_bytes(char *buf, size_t size)
     }
 }
 
-void virtio_rng::handle_irq()
+void rng::handle_irq()
 {
     _thread.wake();
 }
 
-void virtio_rng::ack_irq()
+void rng::ack_irq()
 {
     virtio_conf_readb(VIRTIO_PCI_ISR);
 }
 
-void virtio_rng::worker()
+void rng::worker()
 {
     for (;;) {
         WITH_LOCK(_mtx) {
@@ -68,7 +68,7 @@ void virtio_rng::worker()
     }
 }
 
-void virtio_rng::refill()
+void rng::refill()
 {
     auto remaining = _pool_size - _entropy.size();
     vector<char> buf(remaining);
@@ -95,9 +95,9 @@ void virtio_rng::refill()
     copy_n(buf.begin(), len, back_inserter(_entropy));
 }
 
-hw_driver* virtio_rng::probe(hw_device *dev)
+hw_driver* rng::probe(hw_device *dev)
 {
-    return virtio::probe<virtio_rng, VIRTIO_RNG_DEVICE_ID>(dev);
+    return virtio::probe<rng, VIRTIO_RNG_DEVICE_ID>(dev);
 }
 
 }

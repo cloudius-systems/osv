@@ -20,14 +20,14 @@
 
 namespace virtio {
 
-class virtio_rng : public virtio_driver, randomdev::hw_rng {
+class rng : public virtio_driver, randomdev::hw_rng {
 public:
     enum {
         VIRTIO_RNG_DEVICE_ID = 0x1005,
     };
 
-    explicit virtio_rng(pci::device& dev);
-    virtual ~virtio_rng();
+    explicit rng(pci::device& dev);
+    virtual ~rng();
 
     virtual const std::string get_name(void) { return "virtio-rng"; }
 

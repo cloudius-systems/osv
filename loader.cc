@@ -249,7 +249,7 @@ void* do_main_thread(void *_commands)
     drvman->register_driver(virtio::blk::probe);
     drvman->register_driver(virtio::scsi::probe);
     drvman->register_driver(virtio::net::probe);
-    drvman->register_driver(virtio::virtio_rng::probe);
+    drvman->register_driver(virtio::rng::probe);
     drvman->register_driver(xenfront::xenbus::probe);
     drvman->load_all();
     drvman->list_drivers();
