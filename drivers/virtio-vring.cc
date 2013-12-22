@@ -16,6 +16,7 @@
 #include "sched.hh"
 #include "interrupt.hh"
 #include "osv/trace.hh"
+#include <ilog2.hh>
 
 using namespace memory;
 using sched::thread;
@@ -36,6 +37,7 @@ namespace virtio {
         memset(_vring_ptr, 0, sz);
         
         // Set up pointers        
+        assert(is_power_of_two(num));
         _num = num;
         _desc = (vring_desc *)_vring_ptr;
         _avail = (vring_avail *)(_vring_ptr + num*sizeof(vring_desc));
@@ -89,7 +91,7 @@ namespace virtio {
         return false && // It degrades netperf performance
                 _dev->get_indirect_buf_cap() &&
                 desc_needed > 1 &&	// no need to use indirect for a single descriptor
-                _avail_count < _num / 3;  // use indirect only when low space
+                _avail_count < _num / 4;  // use indirect only when low space
     }
 
     void vring::enable_interrupts()
@@ -156,7 +158,7 @@ namespace virtio {
             _avail_count -= desc_needed;
 
             u16 avail_idx_cache = _avail->_idx.load(std::memory_order_relaxed);
-            _avail->_ring[avail_idx_cache % _num] = _avail_head;
+            _avail->_ring[avail_idx_cache & (_num - 1)] = _avail_head;
             //Cheaper than the operator++ that uses seq consistency
             _avail->_idx.store(avail_idx_cache + 1, std::memory_order_release);
             _avail_head = idx;
@@ -174,7 +176,7 @@ namespace virtio {
                 int i = 1;
 
                 // need to trim the free running counter w/ the array size
-                int used_ptr = _used_ring_guest_head % _num;
+                int used_ptr = _used_ring_guest_head & (_num - 1);
 
                 elem = _used->_used_elements[used_ptr];
                 int idx = elem._id;
@@ -202,7 +204,7 @@ namespace virtio {
             void* cookie = nullptr;
 
             // need to trim the free running counter w/ the array size
-            int used_ptr = _used_ring_host_head % _num;
+            int used_ptr = _used_ring_host_head & (_num - 1);
 
             if (_used_ring_host_head == _used->_idx.load(std::memory_order_acquire)) {
                 return nullptr;
