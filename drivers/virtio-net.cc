@@ -703,8 +703,7 @@ u32 net::get_driver_features(void)
                  | (1 << VIRTIO_NET_F_GUEST_TSO4) \
                  | (1 << VIRTIO_NET_F_HOST_ECN)   \
                  | (1 << VIRTIO_NET_F_HOST_TSO4)  \
-                 | (1 << VIRTIO_NET_F_GUEST_ECN)  \
-                 | (1 << VIRTIO_RING_F_INDIRECT_DESC));
+                 | (1 << VIRTIO_NET_F_GUEST_ECN));
 }
 
 hw_driver* net::probe(hw_device* dev)
