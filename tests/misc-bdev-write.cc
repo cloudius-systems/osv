@@ -20,10 +20,15 @@
 
 static std::chrono::high_resolution_clock s_clock;
 
+std::atomic<int> bio_inflights(0);
+std::atomic<int> bytes_written(0);
+
 static void bio_done(struct bio* bio)
 {
+    bytes_written += bio->bio_bcount;
     free(bio->bio_data);
     destroy_bio(bio);
+    bio_inflights--;
 }
 
 int main(int argc, char const *argv[])
@@ -41,8 +46,6 @@ int main(int argc, char const *argv[])
 
     const std::chrono::seconds test_duration(10);
     const int buf_size = 4*KB;
-
-    std::atomic<int> bytes_written(0);
     int total = 0;
     int offset = 0;
 
@@ -55,6 +58,7 @@ int main(int argc, char const *argv[])
 
     while (s_clock.now() < end_at) {
         auto bio = alloc_bio();
+        bio_inflights++;
         bio->bio_cmd = BIO_WRITE;
         bio->bio_dev = dev;
         bio->bio_data = malloc(buf_size);
@@ -62,11 +66,15 @@ int main(int argc, char const *argv[])
         bio->bio_bcount = buf_size;
         bio->bio_caller1 = bio;
         bio->bio_done = bio_done;
-        dev->driver->devops->strategy(bio);
-        offset += buf_size;
 
-        bytes_written += buf_size;
+        dev->driver->devops->strategy(bio);
+
+        offset += buf_size;
         total += buf_size;
+    }
+
+    while (bio_inflights != 0) {
+        usleep(2000);
     }
 
     auto test_end = s_clock.now();
