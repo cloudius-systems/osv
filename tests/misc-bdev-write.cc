@@ -80,6 +80,8 @@ int main(int argc, char const *argv[])
     auto test_end = s_clock.now();
     _stat_printer.stop();
 
-    printf("Wrote %.3f MB in %.2f s\n", (float) total / MB, to_seconds(test_end - test_start));
+    auto actual_test_duration = to_seconds(test_end - test_start);
+    printf("Wrote %.3f MB in %.2f s = %.3f Mb/s\n", (float) total / MB, actual_test_duration,
+            (float) total / MB / actual_test_duration);
     return 0;
 }
