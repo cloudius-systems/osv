@@ -121,7 +121,7 @@ void workman::pcpu_init()
 
     // Create PCPU Sheriff
     *_work_sheriff = new sched::thread([] { workman::call_of_duty(); },
-        sched::thread::attr(sched::cpu::current()));
+        sched::thread::attr().pin(sched::cpu::current()));
 
     (*_work_sheriff)->start();
 }

@@ -33,7 +33,7 @@ public:
         dbg_d("test2 - start");
 
         sched::thread::attr a;
-        a.detached = true;
+        a.detached();
         sched::thread *t21 = new sched::thread([this] {
             dbg_d("t21-before");
             msleep((void*)567, NULL, 0, "test1", 0);
@@ -70,7 +70,7 @@ public:
         dbg_d("test1 - start");
 
         sched::thread::attr a;
-        a.detached = true;
+        a.detached();
         sched::thread *t11 = new sched::thread([this] {
             dbg_d("t11-before");
             msleep((void*)123, NULL, 0, "test1", 0);
@@ -100,7 +100,7 @@ public:
 #if 0
         // Run the tests in detached threads
         sched::thread::attr a;
-        a.detached = true;
+        a.detached();
         sched::thread *t1 = new sched::thread([this] { test1(); }, a);
         t1->start();
 

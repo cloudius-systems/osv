@@ -278,11 +278,26 @@ public:
         static void default_deleter(stack_info si);
     };
     struct attr {
-        stack_info stack;
-        cpu *pinned_cpu;
-        bool detached = false;
-        attr(cpu *pinned_cpu = nullptr) : pinned_cpu(pinned_cpu) { }
-        attr(size_t stacksize) : stack(nullptr, stacksize), pinned_cpu(nullptr) { }
+        stack_info _stack;
+        cpu *_pinned_cpu;
+        bool _detached;
+        attr() : _pinned_cpu(nullptr), _detached(false) { }
+        attr &pin(cpu *c) {
+            _pinned_cpu = c;
+            return *this;
+        }
+        attr &stack(size_t stacksize) {
+            _stack = stack_info(nullptr, stacksize);
+            return *this;
+        }
+        attr &stack(const stack_info &s) {
+            _stack = s;
+            return *this;
+        }
+        attr &detached(bool val = true) {
+            _detached = val;
+            return *this;
+        }
     };
 
 private:

@@ -77,8 +77,8 @@ namespace pthread_private {
     sched::thread::attr pthread::attributes(thread_attr attr)
     {
         sched::thread::attr a;
-        a.stack = allocate_stack(attr);
-        a.detached = attr.detached;
+        a.stack(allocate_stack(attr));
+        a.detached(attr.detached);
         return a;
     }
 

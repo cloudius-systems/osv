@@ -111,14 +111,13 @@ void smp_launch()
             sched::thread::current()->_detached_state->_cpu = c;
             // c->init_on_cpu() already done in main().
             (new sched::thread([c] { c->load_balance(); },
-                    sched::thread::attr(c)))->start();
+                    sched::thread::attr().pin(c)))->start();
             c->init_idle_thread();
             c->idle_thread->start();
             continue;
         }
         sched::thread::attr attr;
-        attr.stack = { new char[81920], 81920 };
-        attr.pinned_cpu = c;
+        attr.stack(81920).pin(c);
         c->init_idle_thread();
         c->bringup_thread = new sched::thread([=] { ap_bringup(c); }, attr, true);
 

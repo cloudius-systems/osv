@@ -79,7 +79,7 @@ private:
 public:
     timerfd_object(sched::thread_handle &h, file *f)
         : _h(h), _f(f),  _wakeup_thread(
-                [&] { wakeup_thread_func(); }, sched::thread::attr(4096))
+                [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096))
     {
         _wakeup_thread.start();
     }

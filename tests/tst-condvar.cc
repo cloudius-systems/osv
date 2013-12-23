@@ -166,7 +166,7 @@ int main(int argc, char **argv)
             }
             auto end = nanotime();
             time += (end-start);
-        }, sched::thread::attr(sched::cpus[i]));
+        }, sched::thread::attr().pin(sched::cpus[i]));
         threads2[i]->start();
     }
     for(unsigned int i = 0; i < nthreads; i++) {

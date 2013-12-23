@@ -187,14 +187,14 @@ int main(int argc, char **argv)
         // and see that it properly TLB flushed also t1's CPU
         assert(!try_write(buf));
 
-    }, sched::thread::attr(sched::cpus[0]));
+    }, sched::thread::attr().pin(sched::cpus[0]));
     t2 = new sched::thread([&]{
         // wait for t1 to asks us to mprotect
         sched::thread::wait_until([&] { return state.load() == 1; });
         mprotect(buf, 4096, PROT_READ);
         state.store(2);
         t1->wake();
-    }, sched::thread::attr(sched::cpus[1]));
+    }, sched::thread::attr().pin(sched::cpus[1]));
     t1->start();
     t2->start();
     delete t1; // also join()s the thread

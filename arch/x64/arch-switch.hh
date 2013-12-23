@@ -98,7 +98,7 @@ void thread::switch_to_first()
 
 void thread::init_stack()
 {
-    auto& stack = _attr.stack;
+    auto& stack = _attr._stack;
     if (!stack.size) {
         stack.size = 65536;
     }

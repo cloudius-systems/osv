@@ -32,9 +32,9 @@ public:
         assert (sched::cpus.size() >= 2);
 
         sched::thread * thread1 = new sched::thread([&] { thread_push(0); },
-            sched::thread::attr(sched::cpus[0]));
+            sched::thread::attr().pin(sched::cpus[0]));
         sched::thread * thread2 = new sched::thread([&] { thread_pop(1); },
-            sched::thread::attr(sched::cpus[1]));
+            sched::thread::attr().pin(sched::cpus[1]));
 
         thread1->start();
         thread2->start();
@@ -106,13 +106,13 @@ public:
         assert (sched::cpus.size() >= 4);
 
         sched::thread * thread1 = new sched::thread([&] { thread_push(0); },
-            sched::thread::attr(sched::cpus[0]));
+            sched::thread::attr().pin(sched::cpus[0]));
         sched::thread * thread2 = new sched::thread([&] { thread_push(1); },
-            sched::thread::attr(sched::cpus[1]));
+            sched::thread::attr().pin(sched::cpus[1]));
         sched::thread * thread3 = new sched::thread([&] { thread_push(2); },
-            sched::thread::attr(sched::cpus[2]));
+            sched::thread::attr().pin(sched::cpus[2]));
         sched::thread * thread4 = new sched::thread([&] { thread_pop(3); },
-            sched::thread::attr(sched::cpus[3]));
+            sched::thread::attr().pin(sched::cpus[3]));
 
         thread1->start();
         thread2->start();
@@ -199,13 +199,13 @@ public:
         assert (sched::cpus.size() >= 4);
 
         sched::thread * thread1 = new sched::thread([&] { thread_push(0); },
-            sched::thread::attr(sched::cpus[0]));
+            sched::thread::attr().pin(sched::cpus[0]));
         sched::thread * thread2 = new sched::thread([&] { thread_push(1); },
-            sched::thread::attr(sched::cpus[1]));
+            sched::thread::attr().pin(sched::cpus[1]));
         sched::thread * thread3 = new sched::thread([&] { thread_push(2); },
-            sched::thread::attr(sched::cpus[2]));
+            sched::thread::attr().pin(sched::cpus[2]));
         sched::thread * thread4 = new sched::thread([&] { thread_pop(3); },
-            sched::thread::attr(sched::cpus[3]));
+            sched::thread::attr().pin(sched::cpus[3]));
 
         thread1->start();
         thread2->start();

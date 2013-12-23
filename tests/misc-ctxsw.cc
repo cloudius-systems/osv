@@ -40,7 +40,7 @@ pinned_thread::pinned_thread(std::function<void ()> f)
 
 void pinned_thread::pin(unsigned cpu)
 {
-    _attr.pinned_cpu = sched::cpus[cpu];
+    _attr.pin(sched::cpus[cpu]);
 }
 
 void pinned_thread::start()

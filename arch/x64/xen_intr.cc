@@ -88,7 +88,8 @@ void xen_irq::do_irq(void)
 
 void xen_irq::_cpu_init(sched::cpu *c)
 {
-    *(_thread.for_cpu(c)) = new sched::thread([this] { xen_irq::do_irq(); }, sched::thread::attr(c));
+    *(_thread.for_cpu(c)) = new sched::thread([this] { xen_irq::do_irq(); },
+            sched::thread::attr().pin(c));
     (*(_thread.for_cpu(c)))->start();
 }
 

@@ -155,7 +155,7 @@ cpu::cpu(unsigned _id)
 void cpu::init_idle_thread()
 {
     running_since = clock::get()->time();
-    idle_thread = new thread([this] { idle(); }, thread::attr(this));
+    idle_thread = new thread([this] { idle(); }, thread::attr().pin(this));
     idle_thread->set_priority(thread::priority_idle);
 }
 
@@ -427,7 +427,7 @@ void cpu::load_balance()
         }
         WITH_LOCK(irq_lock) {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-                    [](thread& t) { return !t._attr.pinned_cpu; });
+                    [](thread& t) { return !t._attr._pinned_cpu; });
             if (i == runqueue.rend()) {
                 continue;
             }
@@ -602,12 +602,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     }
     init_stack();
 
-    if (_attr.detached) {
+    if (_attr._detached) {
         _detach_state.store(detach_state::detached);
     }
 
     if (main) {
-        _detached_state->_cpu = attr.pinned_cpu;
+        _detached_state->_cpu = attr._pinned_cpu;
         _detached_state->st.store(status::running);
         if (_detached_state->_cpu == sched::cpus[0]) {
             s_current = this;
@@ -618,14 +618,14 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
 
 thread::~thread()
 {
-    if (!_attr.detached) {
+    if (!_attr._detached) {
         join();
     }
     WITH_LOCK(thread_map_mutex) {
         thread_map.erase(_id);
     }
-    if (_attr.stack.deleter) {
-        _attr.stack.deleter(_attr.stack);
+    if (_attr._stack.deleter) {
+        _attr._stack.deleter(_attr._stack);
     }
     free_tcb();
     rcu_dispose(_detached_state.release());
@@ -640,7 +640,7 @@ void thread::start()
         return;
     }
 
-    _detached_state->_cpu = _attr.pinned_cpu ? _attr.pinned_cpu : current()->tcpu();
+    _detached_state->_cpu = _attr._pinned_cpu ? _attr._pinned_cpu : current()->tcpu();
     remote_thread_local_var(percpu_base) = _detached_state->_cpu->percpu_base;
     remote_thread_local_var(current_cpu) = _detached_state->_cpu;
     _detached_state->st.store(status::waiting);
@@ -839,7 +839,7 @@ void thread::join()
 
 void thread::detach()
 {
-    _attr.detached = true;
+    _attr._detached = true;
     auto value = detach_state::attached;
     _detach_state.compare_exchange_strong(value, detach_state::detached);
     if (value == detach_state::attached_complete) {
@@ -851,7 +851,7 @@ void thread::detach()
 
 thread::stack_info thread::get_stack_info()
 {
-    return _attr.stack;
+    return _attr._stack;
 }
 
 void thread::set_cleanup(std::function<void ()> cleanup)
@@ -1086,7 +1086,7 @@ void thread::reaper::reap()
 
 void thread::reaper::add_zombie(thread* z)
 {
-    assert(z->_attr.detached);
+    assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
         _zombies.push_back(z);
         _thread.wake();
@@ -1121,8 +1121,7 @@ void start_early_threads()
 void init(std::function<void ()> cont)
 {
     thread::attr attr;
-    attr.stack = { new char[4096*10], 4096*10 };
-    attr.pinned_cpu = smp_initial_find_current_cpu();
+    attr.stack(4096*10).pin(smp_initial_find_current_cpu());
     thread t{cont, attr, true};
     t.switch_to_first();
 }

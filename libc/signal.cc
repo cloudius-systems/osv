@@ -222,9 +222,6 @@ int kill(pid_t pid, int sig)
         // care which of its threads handle the signal - why not just create
         // a completely new thread and run it there...
         const auto& sa = signal_actions[sig];
-        sched::thread::attr a;
-        a.detached = true;
-        a.stack.size = 65536; // TODO: what is a good size?
         auto t = new sched::thread([=] {
             if (sa.sa_flags & SA_SIGINFO) {
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
@@ -232,7 +229,7 @@ int kill(pid_t pid, int sig)
             } else {
                 sa.sa_handler(sig);
             }
-        }, a);
+        }, sched::thread::attr().detached().stack(65536));
         t->start();
     }
     return 0;

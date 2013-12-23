@@ -92,7 +92,7 @@ static void test(int N, long len, bool pinned, threadfunc<T> f)
     for(int i = 0; i < N; i++) {
         threads[i]= new sched::thread([i, len, &m, &shared, f] {
             f(i, &m, len, &shared);
-        }, pinned ? sched::thread::attr(sched::cpus[i]) : sched::thread::attr());
+        }, pinned ? sched::thread::attr().pin(sched::cpus[i]) : sched::thread::attr());
     }
     auto t1 = clock::get()->time();
     for(int i = 0; i < N; i++) {

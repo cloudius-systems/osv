@@ -107,11 +107,11 @@ void do_heap_test(bool quick)
                 return;
             }
             sched::thread::sleep_until(nanotime() + 10_ms);
-        }, sched::thread::attr(sched::cpus[0]));
+        }, sched::thread::attr().pin(sched::cpus[0]));
 
         t2 = new sched::thread([&]{
             t1->wake();
-        }, sched::thread::attr(sched::cpus[1]));
+        }, sched::thread::attr().pin(sched::cpus[1]));
 
         t1->start();
         t2->start();

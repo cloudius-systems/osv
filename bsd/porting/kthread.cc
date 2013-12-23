@@ -26,10 +26,8 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
     assert(flags == 0);
     assert(pages == NULL);
 
-    sched::thread::attr a;
-    a.detached = true;
-
-    sched::thread* t = new sched::thread([=] { func(arg); }, a);
+    sched::thread* t = new sched::thread([=] { func(arg); },
+            sched::thread::attr().detached());
     t->start();
 
     *newtdp = reinterpret_cast<struct thread *>(t);
@@ -40,10 +38,8 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
 int kproc_create(void (*func)(void *), void *arg, struct proc **p,
                 int flags, int pages, const char *str, ...)
 {
-    sched::thread::attr at;
-    at.detached = true;
-
-    sched::thread* t = new sched::thread([=] { func(arg); }, at);
+    sched::thread* t = new sched::thread([=] { func(arg); },
+            sched::thread::attr().detached());
     t->start();
 
     if (p) {

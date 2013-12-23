@@ -46,7 +46,7 @@ sched::cpu::notifier cpu_notifier([] {
 });
 
 cpu_quiescent_state_thread::cpu_quiescent_state_thread(sched::cpu* cpu)
-    : _t([=] { work(); }, sched::thread::attr(cpu))
+    : _t([=] { work(); }, sched::thread::attr().pin(cpu))
 {
     _t.start();
 }
