@@ -31,7 +31,7 @@ int select (int nfds,
     select_d("select(nfds=%d, readfds=0x%lx, writefds=0x%lx, exceptfds=0x%lx, timeout=0x%lx)",
         nfds, readfds, writefds, exceptfds, timeout);
 
-    if ((nfds < 0) || (nfds > FD_SETSIZE+1)) {
+    if ((nfds < 0) || (nfds > FD_SETSIZE)) {
         select_d("select() failed 1");
         errno = EINVAL;
         return -1;
