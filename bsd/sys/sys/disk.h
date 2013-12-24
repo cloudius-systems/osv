@@ -17,11 +17,18 @@
 
 #ifdef _KERNEL
 
+#include <sys/cdefs.h>
+
+
 #ifndef _SYS_CONF_H_
 #include <sys/conf.h>	/* XXX: temporary to avoid breakage */
 #endif
 
+__BEGIN_DECLS
+
 void disk_err(struct bio *bp, const char *what, int blkdone, int nl);
+
+__END_DECLS
 
 #endif
 

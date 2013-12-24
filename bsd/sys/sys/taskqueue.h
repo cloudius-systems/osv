@@ -33,9 +33,13 @@
 #error "no user-servicable parts inside"
 #endif
 
+#include <sys/cdefs.h>
+
 #include <bsd/sys/sys/queue.h>
 #include <bsd/sys/sys/_task.h>
 //#include <sys/_callout.h>
+
+__BEGIN_DECLS
 
 struct taskqueue;
 struct thread;
@@ -150,5 +154,7 @@ TASKQUEUE_DEFINE(name, taskqueue_thread_enqueue, &taskqueue_##name,	\
  * taskqueue_enqueue(taskqueue_thread, &task).
  */
 TASKQUEUE_DECLARE(thread);
+
+__END_DECLS
 
 #endif /* !_SYS_TASKQUEUE_H_ */

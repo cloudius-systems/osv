@@ -27,6 +27,8 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#define __STDC_FORMAT_MACROS
+
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -215,7 +217,7 @@ blkfront_vdevice_to_unit(uint32_t vdevice, int *unit, const char **name)
 
 struct disk *disk_alloc(void)
 {
-    return malloc(sizeof(struct disk) , 0, 0);
+    return (disk *)malloc(sizeof(struct disk) , 0, 0);
 }
 
 int
@@ -260,7 +262,7 @@ xlvbd_add(struct xb_softc *sc, blkif_sector_t sectors,
 static void
 xb_strategy(struct bio *bp)
 {
-	struct xb_softc	*sc = bp->bio_dev->softc;
+	struct xb_softc	*sc = (xb_softc *)bp->bio_dev->softc;
 
 	/* bogus disk? */
 	if (sc == NULL) {
@@ -343,10 +345,10 @@ xb_dump_complete(struct xb_command *cm)
 }
 
 static int
-xb_dump(void *arg, void *virtual, vm_offset_t physical, off_t offset,
+xb_dump(void *arg, void *vvirtual, vm_offset_t physical, off_t offset,
         size_t length)
 {
-	struct	disk   	*dp = arg;
+	struct	disk   	*dp = (disk *)arg;
 	struct xb_softc	*sc = (struct xb_softc *) dp->d_drv1;
 	struct xb_command *cm;
 	size_t		chunk;
@@ -383,7 +385,7 @@ xb_dump(void *arg, void *virtual, vm_offset_t physical, off_t offset,
 
 		chunk = length > sc->max_request_size
 		      ? sc->max_request_size : length;
-		cm->data = virtual;
+		cm->data = vvirtual;
 		cm->datalen = chunk;
 		cm->operation = BLKIF_OP_WRITE;
 		cm->sector_number = offset / dp->d_sectorsize;
@@ -393,7 +395,7 @@ xb_dump(void *arg, void *virtual, vm_offset_t physical, off_t offset,
 
 		length -= chunk;
 		offset += chunk;
-		virtual = (char *) virtual + chunk;
+		vvirtual = (char *) vvirtual + chunk;
 	}
 
 	/* Tell DOM0 to do the I/O */
@@ -505,7 +507,7 @@ blkfront_attach(device_t dev)
 	if (!strcmp(name, "vblk"))
 		device_set_unit(dev, unit);
 
-	sc = device_get_softc(dev);
+	sc = (xb_softc *)device_get_softc(dev);
 	mtx_init(&sc->xb_io_lock, "blkfront i/o lock", NULL, MTX_DEF);
 	xb_initq_free(sc);
 	xb_initq_busy(sc);
@@ -531,7 +533,7 @@ blkfront_attach(device_t dev)
 static int
 blkfront_suspend(device_t dev)
 {
-	struct xb_softc *sc = device_get_softc(dev);
+	struct xb_softc *sc = (xb_softc *)device_get_softc(dev);
 	int retval;
 	int saved_state;
 
@@ -560,7 +562,7 @@ blkfront_suspend(device_t dev)
 static int
 blkfront_resume(device_t dev)
 {
-	struct xb_softc *sc = device_get_softc(dev);
+	struct xb_softc *sc = (xb_softc *)device_get_softc(dev);
 
 	DPRINTK("blkfront_resume: %s\n", xenbus_get_node(dev));
 
@@ -704,7 +706,7 @@ blkfront_initialize(struct xb_softc *sc)
 	}
 
 	/* Per-transaction data allocation. */
-	sc->shadow = malloc(sizeof(*sc->shadow) * sc->max_requests,
+	sc->shadow = (xb_command *)malloc(sizeof(*sc->shadow) * sc->max_requests,
 			    M_XENBLOCKFRONT, M_NOWAIT|M_ZERO);
 	if (sc->shadow == NULL) {
 		bus_dma_tag_destroy(sc->xb_io_dmat);
@@ -717,7 +719,7 @@ blkfront_initialize(struct xb_softc *sc)
 		struct xb_command *cm;
 
 		cm = &sc->shadow[i];
-		cm->sg_refs = malloc(sizeof(grant_ref_t)
+		cm->sg_refs = (grant_ref_t *)malloc(sizeof(grant_ref_t)
 				   * sc->max_request_segments,
 				     M_XENBLOCKFRONT, M_NOWAIT);
 		if (cm->sg_refs == NULL)
@@ -810,7 +812,7 @@ setup_blkring(struct xb_softc *sc)
 	int error;
 	int i;
 
-	sring = malloc(sc->ring_pages * PAGE_SIZE, M_XENBLOCKFRONT,
+	sring = (blkif_sring_t *)malloc(sc->ring_pages * PAGE_SIZE, M_XENBLOCKFRONT,
 		       M_NOWAIT|M_ZERO);
 	if (sring == NULL) {
 		xenbus_dev_fatal(sc->xb_dev, ENOMEM, "allocating shared ring");
@@ -877,7 +879,7 @@ setup_blkring(struct xb_softc *sc)
 static void
 blkfront_backend_changed(device_t dev, XenbusState backend_state)
 {
-	struct xb_softc *sc = device_get_softc(dev);
+	struct xb_softc *sc = (xb_softc *)device_get_softc(dev);
 
 	DPRINTK("backend_state=%d\n", backend_state);
 
@@ -983,7 +985,7 @@ blkfront_connect(struct xb_softc *sc)
 static void
 blkfront_closing(device_t dev)
 {
-	struct xb_softc *sc = device_get_softc(dev);
+	struct xb_softc *sc = (xb_softc *)device_get_softc(dev);
 
 	xenbus_set_state(dev, XenbusStateClosing);
 
@@ -1001,7 +1003,7 @@ blkfront_closing(device_t dev)
 static int
 blkfront_detach(device_t dev)
 {
-	struct xb_softc *sc = device_get_softc(dev);
+	struct xb_softc *sc = (xb_softc *)device_get_softc(dev);
 
 	DPRINTK("blkfront_remove: %s removed\n", xenbus_get_node(dev));
 
@@ -1026,7 +1028,7 @@ flush_requests(struct xb_softc *sc)
 static void
 blkif_restart_queue_callback(void *arg)
 {
-	struct xb_softc *sc = arg;
+	struct xb_softc *sc = (xb_softc *)arg;
 
 	mtx_lock(&sc->xb_io_lock);
 
@@ -1195,7 +1197,7 @@ blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 	int op;
 	int block_segs;
 
-	cm = arg;
+	cm = (xb_command *)arg;
 	sc = cm->cm_sc;
 
 //printf("%s: Start\n", __func__);
@@ -1333,7 +1335,7 @@ xb_startio(struct xb_softc *sc)
 static void
 blkif_int(void *xsc)
 {
-	struct xb_softc *sc = xsc;
+	struct xb_softc *sc = (xb_softc *)xsc;
 	struct xb_command *cm;
 	blkif_response_t *bret;
 	RING_IDX i, rp;

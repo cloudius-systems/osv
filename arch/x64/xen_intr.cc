@@ -11,10 +11,8 @@
 #include <machine/intr_machdep.h>
 #include "bitops.h"
 
-extern "C" {
-    void unmask_evtchn(int vector);
-    int evtchn_from_irq(int irq);
-}
+void unmask_evtchn(int vector);
+int evtchn_from_irq(int irq);
 
 namespace xen {
 

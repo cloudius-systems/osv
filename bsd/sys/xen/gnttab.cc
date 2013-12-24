@@ -596,7 +596,7 @@ gnttab_resume(void)
 		return (ENOSYS);
 
 	if (shared == NULL) {
-		shared = malloc(PAGE_SIZE * max_nr_grant_frames(), 0, 0);
+		shared = (grant_entry_t *)malloc(PAGE_SIZE * max_nr_grant_frames(), 0, 0);
 		if (!shared) {
 			printf("can't allocate VM space for grant table");
 			return (ENOMEM);
@@ -647,7 +647,7 @@ gnttab_init()
 			       GREFS_PER_GRANT_FRAME /
 			       (PAGE_SIZE / sizeof(grant_ref_t)));
 
-	gnttab_list = malloc(max_nr_glist_frames * sizeof(grant_ref_t *),
+	gnttab_list = (grant_ref_t **)malloc(max_nr_glist_frames * sizeof(grant_ref_t *),
 	    M_DEVBUF, M_NOWAIT);
 
 	if (gnttab_list == NULL)

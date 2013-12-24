@@ -340,7 +340,7 @@ split(char *strings, u_int len, u_int *num)
 	*num = extract_strings(strings, /*dest*/NULL, len);
 
 	/* Transfer to one big alloc for easy freeing by the caller. */
-	ret = malloc(*num * sizeof(char *) + len, M_XENSTORE, M_WAITOK);
+	ret = (const char **)malloc(*num * sizeof(char *) + len, M_XENSTORE, M_WAITOK);
 	memcpy(&ret[*num], strings, len);
 	free(strings, M_XENSTORE);
 
@@ -599,7 +599,7 @@ xs_read_store(void *tdata, unsigned len)
 			return (EIO);
 		}
 
-		src = xs_get_input_chunk(cons, prod, xen_store->rsp, &avail);
+		src = (const char *)xs_get_input_chunk(cons, prod, xen_store->rsp, &avail);
 		if (avail > len)
 			avail = len;
 
@@ -649,14 +649,14 @@ xs_process_msg(enum xsd_sockmsg_type *type)
 	char *body;
 	int error;
 
-	msg = malloc(sizeof(*msg), M_XENSTORE, M_WAITOK);
+	msg = (xs_stored_msg *)malloc(sizeof(*msg), M_XENSTORE, M_WAITOK);
 	error = xs_read_store(&msg->hdr, sizeof(msg->hdr));
 	if (error) {
 		free(msg, M_XENSTORE);
 		return (error);
 	}
 
-	body = malloc(msg->hdr.len + 1, M_XENSTORE, M_WAITOK);
+	body = (char *)malloc(msg->hdr.len + 1, M_XENSTORE, M_WAITOK);
 	error = xs_read_store(body, msg->hdr.len);
 	if (error) {
 		free(body, M_XENSTORE);
@@ -665,7 +665,7 @@ xs_process_msg(enum xsd_sockmsg_type *type)
 	}
 	body[msg->hdr.len] = '\0';
 
-	*type = msg->hdr.type;
+	*type = (xsd_sockmsg_type)msg->hdr.type;
 	if (msg->hdr.type == XS_WATCH_EVENT) {
 		msg->u.watch.vec = split(body, msg->hdr.len,
 		    &msg->u.watch.vec_size);
@@ -795,7 +795,7 @@ xs_get_error(const char *errorstring)
  *          cause of failure.
  */
 static int
-xs_read_reply(enum xsd_sockmsg_type *type, u_int *len, void **result)
+xs_read_reply(uint32_t *type, u_int *len, void **result)
 {
 	struct xs_stored_msg *msg;
 	char *body;
@@ -814,7 +814,7 @@ xs_read_reply(enum xsd_sockmsg_type *type, u_int *len, void **result)
 	TAILQ_REMOVE(&xs.reply_list, msg, list);
 	mtx_unlock(&xs.reply_lock);
 
-	*type = msg->hdr.type;
+	*type = (xsd_sockmsg_type)msg->hdr.type;
 	if (len)
 		*len = msg->hdr.len;
 	body = msg->u.reply.body;
@@ -918,7 +918,7 @@ error_lock_held:
 		return (error);
 
 	if (msg.type == XS_ERROR) {
-		error = xs_get_error(ret);
+		error = xs_get_error((const char *)ret);
 		free(ret, M_XENSTORE);
 		return (error);
 	}
@@ -1020,7 +1020,7 @@ find_watch(const char *token)
 {
 	struct xs_watch *i, *cmp;
 
-	cmp = (void *)strtoul(token, NULL, 16);
+	cmp = (struct xs_watch *)strtoul(token, NULL, 16);
 
 	LIST_FOREACH(i, &xs.registered_watches, list)
 		if (i == cmp)
@@ -1178,7 +1178,7 @@ xs_attach(device_t dev)
 	if (is_xen_hvm()) {
 		xs.evtchn = hvm_get_parameter(HVM_PARAM_STORE_EVTCHN);
 		xs.gpfn = hvm_get_parameter(HVM_PARAM_STORE_PFN);
-		xen_store = pmap_mapdev(xs.gpfn * PAGE_SIZE, PAGE_SIZE);
+		xen_store = (xenstore_domain_interface *)pmap_mapdev(xs.gpfn * PAGE_SIZE, PAGE_SIZE);
 	} else {
 		printf("implement me\n");
 		abort();

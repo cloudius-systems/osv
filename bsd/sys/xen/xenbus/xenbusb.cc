@@ -214,7 +214,7 @@ xenbusb_device_exists(device_t dev, const char *node)
 
 	result = NULL;
 	for (i = 0; i < count; i++) {
-		ivars = device_get_ivars(kids[i]);
+		ivars = (xenbus_device_ivars *)device_get_ivars(kids[i]);
 		if (!strcmp(ivars->xd_node, node)) {
 			result = kids[i];
 			break;
@@ -230,7 +230,7 @@ xenbusb_delete_child(device_t dev, device_t child)
 {
 	struct xenbus_device_ivars *ivars;
 
-	ivars = device_get_ivars(child);
+	ivars = (xenbus_device_ivars *)device_get_ivars(child);
 
 	/*
 	 * We no longer care about the otherend of the
@@ -470,7 +470,7 @@ xenbusb_probe_children(device_t dev)
 			 * that can receive otherend state change events,
 			 * hook up a watch for them.
 			 */
-			ivars = device_get_ivars(kids[i]);
+			ivars = (xenbus_device_ivars *)device_get_ivars(kids[i]);
 			xs_register_watch(&ivars->xd_otherend_watch);
 			xs_register_watch(&ivars->xd_local_watch);
 		}
@@ -599,7 +599,7 @@ xenbusb_release_confighook(struct xenbusb_softc *xbs)
 	xbs->xbs_connecting_children--;
 	if (xbs->xbs_connecting_children == 0
 	 && (xbs->xbs_flags & XBS_ATTACH_CH_ACTIVE) != 0) {
-		xbs->xbs_flags &= ~XBS_ATTACH_CH_ACTIVE;
+		xbs->xbs_flags = xenbusb_softc_flag(xbs->xbs_flags & ~XBS_ATTACH_CH_ACTIVE);
 		mtx_unlock(&xbs->xbs_lock);
 		config_intrhook_disestablish(&xbs->xbs_attach_ch);
 	} else {
@@ -628,13 +628,13 @@ xenbusb_add_device(device_t dev, const char *type, const char *id)
 	struct xenbus_device_ivars *ivars;
 	int error;
 
-	xbs = device_get_softc(dev);
+	xbs = (xenbusb_softc *)device_get_softc(dev);
 	devpath_sbuf = sbuf_new_auto();
 	sbuf_printf(devpath_sbuf, "%s/%s/%s", xbs->xbs_node, type, id);
 	sbuf_finish(devpath_sbuf);
 	devpath = sbuf_data(devpath_sbuf);
 
-	ivars = malloc(sizeof(*ivars), M_XENBUS, M_ZERO|M_WAITOK);
+	ivars = (xenbus_device_ivars *)malloc(sizeof(*ivars), M_XENBUS, M_ZERO|M_WAITOK);
 	error = ENXIO;
 
 	if (xs_exists(XST_NIL, devpath, "") != 0) {
@@ -678,7 +678,7 @@ xenbusb_add_device(device_t dev, const char *type, const char *id)
 			goto out;
 		}
 
-		statepath = malloc(ivars->xd_otherend_path_len
+		statepath = (char *)malloc(ivars->xd_otherend_path_len
 		    + strlen("/state") + 1, M_XENBUS, M_WAITOK);
 		sprintf(statepath, "%s/state", ivars->xd_otherend_path);
 		ivars->xd_otherend_watch.node = statepath;
@@ -713,7 +713,7 @@ xenbusb_attach(device_t dev, char *bus_node, u_int id_components)
 {
 	struct xenbusb_softc *xbs;
 
-	xbs = device_get_softc(dev);
+	xbs = (xenbusb_softc *)device_get_softc(dev);
 	mtx_init(&xbs->xbs_lock, "xenbusb softc lock", NULL, MTX_DEF);
 	xbs->xbs_node = bus_node;
 	xbs->xbs_id_components = id_components;
@@ -731,7 +731,7 @@ xenbusb_attach(device_t dev, char *bus_node, u_int id_components)
 	xbs->xbs_attach_ch.ich_func = xenbusb_nop_confighook_cb;
 	xbs->xbs_attach_ch.ich_arg = dev;
 	config_intrhook_establish(&xbs->xbs_attach_ch);
-	xbs->xbs_flags |= XBS_ATTACH_CH_ACTIVE;
+	xbs->xbs_flags = xenbusb_softc_flag(xbs->xbs_flags | XBS_ATTACH_CH_ACTIVE);
 	xbs->xbs_connecting_children = 1;
 
 	/*
@@ -775,7 +775,7 @@ xenbusb_resume(device_t dev)
 			if (device_get_state(kids[i]) == DS_NOTPRESENT)
 				continue;
 
-			ivars = device_get_ivars(kids[i]);
+			ivars = (xenbus_device_ivars *)device_get_ivars(kids[i]);
 
 			xs_unregister_watch(&ivars->xd_otherend_watch);
 			xenbus_set_state(kids[i], XenbusStateInitialising);
@@ -788,7 +788,7 @@ xenbusb_resume(device_t dev)
 			if (error)
 				return (error);
 
-			statepath = malloc(ivars->xd_otherend_path_len
+			statepath = (char *)malloc(ivars->xd_otherend_path_len
 			    + strlen("/state") + 1, M_XENBUS, M_WAITOK);
 			sprintf(statepath, "%s/state", ivars->xd_otherend_path);
 
@@ -822,7 +822,7 @@ xenbusb_resume(device_t dev)
 int
 xenbusb_print_child(device_t dev, device_t child)
 {
-	struct xenbus_device_ivars *ivars = device_get_ivars(child);
+	struct xenbus_device_ivars *ivars = (xenbus_device_ivars *)device_get_ivars(child);
 	int	retval = 0;
 
 	retval += bus_print_child_header(dev, child);
@@ -835,7 +835,7 @@ xenbusb_print_child(device_t dev, device_t child)
 int
 xenbusb_read_ivar(device_t dev, device_t child, int index, uintptr_t *result)
 {
-	struct xenbus_device_ivars *ivars = device_get_ivars(child);
+	struct xenbus_device_ivars *ivars = (xenbus_device_ivars *)device_get_ivars(child);
 
 	switch (index) {
 	case XENBUS_IVAR_NODE:
@@ -865,7 +865,7 @@ xenbusb_read_ivar(device_t dev, device_t child, int index, uintptr_t *result)
 int
 xenbusb_write_ivar(device_t dev, device_t child, int index, uintptr_t value)
 {
-	struct xenbus_device_ivars *ivars = device_get_ivars(child);
+	struct xenbus_device_ivars *ivars = (xenbus_device_ivars *)device_get_ivars(child);
 	enum xenbus_state newstate;
 	int currstate;
 
@@ -908,8 +908,8 @@ xenbusb_write_ivar(device_t dev, device_t child, int index, uintptr_t value)
 		  || newstate == XenbusStateConnected)) {
 			struct xenbusb_softc *xbs;
 
-			ivars->xd_flags &= ~XDF_CONNECTING;
-			xbs = device_get_softc(dev);
+			ivars->xd_flags = xenbus_dev_flag(ivars->xd_flags & ~XDF_CONNECTING);
+			xbs = (xenbusb_softc *)device_get_softc(dev);
 			xenbusb_release_confighook(xbs);
 		}
 
@@ -945,7 +945,7 @@ xenbusb_localend_changed(device_t bus, device_t child, const char *path)
 	if (strcmp(path, "/state") != 0) {
 		struct xenbus_device_ivars *ivars;
 
-		ivars = device_get_ivars(child);
+		ivars = (xenbus_device_ivars *)device_get_ivars(child);
 		sx_xlock(&ivars->xd_lock);
 		ivars->xd_state = xenbus_read_driver_state(ivars->xd_node);
 		sx_xunlock(&ivars->xd_lock);

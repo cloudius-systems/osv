@@ -114,7 +114,7 @@ xenbusb_front_enumerate_type(device_t dev, const char *type)
 	unsigned int i, count;
 	int error;
 
-	xbs = device_get_softc(dev);
+	xbs = (xenbusb_softc *)device_get_softc(dev);
 	error = xs_directory(XST_NIL, xbs->xbs_node, type, &count, &dir);
 	if (error)
 		return (error);

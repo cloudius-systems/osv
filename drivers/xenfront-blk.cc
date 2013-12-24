@@ -11,8 +11,6 @@
 #include <bsd/sys/geom/geom_disk.h>
 #include <osv/bio.h>
 
-extern "C" {
-
 struct xb_softc;
 struct device *blkfront_from_softc(struct xb_softc *s);
 
@@ -70,4 +68,3 @@ void disk_create(struct disk *dp, int version)
     dev->size = dp->d_mediasize;
     dev->max_io_size = dp->d_maxsize;
 }
-};

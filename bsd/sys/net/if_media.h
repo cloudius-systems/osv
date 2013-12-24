@@ -52,6 +52,7 @@
 
 #ifdef _KERNEL
 
+#include <sys/cdefs.h>
 #include <sys/queue.h>
 
 /*
@@ -83,6 +84,8 @@ struct ifmedia {
 	ifm_stat_cb_t	ifm_status;	/* media status driver callback */
 };
 
+__BEGIN_DECLS
+
 /* Initialize an interface's struct if_media field. */
 void	ifmedia_init(struct ifmedia *ifm, int dontcare_mask,
 	    ifm_change_cb_t change_callback, ifm_stat_cb_t status_callback);
@@ -106,6 +109,8 @@ int	ifmedia_ioctl(struct ifnet *ifp, struct bsd_ifreq *ifr,
 
 /* Compute baudrate for a given media. */
 uint64_t	ifmedia_baudrate(int);
+
+__END_DECLS
 
 #endif /*_KERNEL */
 

@@ -108,7 +108,11 @@ static bool xen_pci_enabled()
 }
 
 #define HVM_PARAM_CALLBACK_IRQ 0
-extern "C" void evtchn_irq_is_legacy(void);
+}
+
+void evtchn_irq_is_legacy(void);
+
+namespace xen {
 
 static void xen_ack_irq()
 {

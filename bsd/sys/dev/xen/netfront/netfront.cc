@@ -496,7 +496,7 @@ netfront_attach(device_t dev)
 static int
 netfront_suspend(device_t dev)
 {
-	struct netfront_info *info = device_get_softc(dev);
+	struct netfront_info *info = (netfront_info *)device_get_softc(dev);
 
 	XN_RX_LOCK(info);
 	XN_TX_LOCK(info);
@@ -515,7 +515,7 @@ netfront_suspend(device_t dev)
 static int
 netfront_resume(device_t dev)
 {
-	struct netfront_info *info = device_get_softc(dev);
+	struct netfront_info *info = (netfront_info *)device_get_softc(dev);
 
 	netif_disconnect_backend(info);
 	return (0);
@@ -693,7 +693,7 @@ netfront_send_fake_arp(device_t dev, struct netfront_info *info)
 static void
 netfront_backend_changed(device_t dev, XenbusState newstate)
 {
-	struct netfront_info *sc = device_get_softc(dev);
+	struct netfront_info *sc = (netfront_info *)device_get_softc(dev);
 		
 	DPRINTK("newstate=%d\n", newstate);
 
@@ -1212,7 +1212,7 @@ xn_txeof(struct netfront_info *np)
 static void
 xn_intr(void *xsc)
 {
-	struct netfront_info *np = xsc;
+	struct netfront_info *np = (netfront_info *)xsc;
 	struct ifnet *ifp = np->xn_ifp;
 
 #if 0
@@ -1240,12 +1240,12 @@ static void
 xennet_move_rx_slot(struct netfront_info *np, struct mbuf *m,
 	grant_ref_t ref)
 {
-	int new = xennet_rxidx(np->rx.req_prod_pvt);
+	int neww = xennet_rxidx(np->rx.req_prod_pvt);
 
-	KASSERT(np->rx_mbufs[new] == NULL, ("rx_mbufs != NULL"));
-	np->rx_mbufs[new] = m;
-	np->grant_rx_ref[new] = ref;
-	RING_GET_REQUEST(&np->rx, np->rx.req_prod_pvt)->id = new;
+	KASSERT(np->rx_mbufs[neww] == NULL, ("rx_mbufs != NULL"));
+	np->rx_mbufs[neww] = m;
+	np->grant_rx_ref[neww] = ref;
+	RING_GET_REQUEST(&np->rx, np->rx.req_prod_pvt)->id = neww;
 	RING_GET_REQUEST(&np->rx, np->rx.req_prod_pvt)->gref = ref;
 	np->rx.req_prod_pvt++;
 }
@@ -1468,7 +1468,7 @@ xn_tick(void *xsc)
 {
 	struct netfront_info *sc;
     
-	sc = xsc;
+	sc = (netfront_info *)xsc;
 	XN_RX_LOCK(sc);
 	xn_tick_locked(sc);
 	XN_RX_UNLOCK(sc);
@@ -1671,7 +1671,7 @@ xn_start_locked(struct ifnet *ifp)
 	struct mbuf *m_head;
 	int notify;
 
-	sc = ifp->if_softc;
+	sc = (netfront_info *)ifp->if_softc;
 
 	if (!netfront_carrier_ok(sc))
 		return;
@@ -1706,7 +1706,7 @@ static void
 xn_start(struct ifnet *ifp)
 {
 	struct netfront_info *sc;
-	sc = ifp->if_softc;
+	sc = (netfront_info *)ifp->if_softc;
 	XN_TX_LOCK(sc);
 	xn_start_locked(ifp);
 	XN_TX_UNLOCK(sc);
@@ -1740,7 +1740,7 @@ xn_ifinit_locked(struct netfront_info *sc)
 static void 
 xn_ifinit(void *xsc)
 {
-	struct netfront_info *sc = xsc;
+	struct netfront_info *sc = (netfront_info *)xsc;
     
 	XN_LOCK(sc);
 	xn_ifinit_locked(sc);
@@ -1750,7 +1750,7 @@ xn_ifinit(void *xsc)
 static int
 xn_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
-	struct netfront_info *sc = ifp->if_softc;
+	struct netfront_info *sc = (netfront_info *)ifp->if_softc;
 	struct bsd_ifreq *ifr = (struct bsd_ifreq *) data;
 #ifdef INET
 	struct bsd_ifaddr *ifa = (struct bsd_ifaddr *)data;
@@ -2076,7 +2076,7 @@ create_netdev(device_t dev)
 	int err;
 	struct ifnet *ifp;
 
-	np = device_get_softc(dev);
+	np = (netfront_info *)device_get_softc(dev);
 	
 	np->xbdev         = dev;
     
@@ -2092,10 +2092,10 @@ create_netdev(device_t dev)
 
 	/* Initialise {tx,rx}_skbs to be a free chain containing every entry. */
 	for (i = 0; i <= NET_TX_RING_SIZE; i++) {
-		np->tx_mbufs[i] = (void *) ((u_long) i+1);
+		np->tx_mbufs[i] = (mbuf *) ((u_long) i+1);
 		np->grant_tx_ref[i] = GRANT_REF_INVALID;	
 	}
-	np->tx_mbufs[NET_TX_RING_SIZE] = (void *)0;
+	np->tx_mbufs[NET_TX_RING_SIZE] = (mbuf *)0;
 
 	for (i = 0; i <= NET_RX_RING_SIZE; i++) {
 
@@ -2175,7 +2175,7 @@ netfront_closing(device_t dev)
 static int
 netfront_detach(device_t dev)
 {
-	struct netfront_info *info = device_get_softc(dev);
+	struct netfront_info *info = (netfront_info *)device_get_softc(dev);
 
 	DPRINTK("%s\n", xenbus_get_node(dev));
 
@@ -2214,7 +2214,7 @@ netif_disconnect_backend(struct netfront_info *info)
 static void
 free_ring(grant_ref_t *ref, void *ring_ptr_ref)
 {
-	void **ring_ptr_ptr = ring_ptr_ref;
+	void **ring_ptr_ptr = (void **)ring_ptr_ref;
 
 	if (*ref != GRANT_REF_INVALID) {
 		/* This API frees the associated storage. */

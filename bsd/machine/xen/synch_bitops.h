@@ -70,35 +70,35 @@ struct __synch_xchg_dummy { unsigned long a[100]; };
 
 static inline unsigned long __synch_cmpxchg(volatile void *ptr,
 					    unsigned long old,
-					    unsigned long new, int size)
+					    unsigned long neww, int size)
 {
 	unsigned long prev;
 	switch (size) {
 	case 1:
 		__asm__ __volatile__("lock; cmpxchgb %b1,%2"
 				     : "=a"(prev)
-				     : "q"(new), "m"(*__synch_xg(ptr)),
+				     : "q"(neww), "m"(*__synch_xg(ptr)),
 				       "0"(old)
 				     : "memory");
 		return prev;
 	case 2:
 		__asm__ __volatile__("lock; cmpxchgw %w1,%2"
 				     : "=a"(prev)
-				     : "q"(new), "m"(*__synch_xg(ptr)),
+				     : "q"(neww), "m"(*__synch_xg(ptr)),
 				       "0"(old)
 				     : "memory");
 		return prev;
 	case 4:
 		__asm__ __volatile__("lock; cmpxchgl %k1,%2"
 				     : "=a"(prev)
-				     : "q"(new), "m"(*__synch_xg(ptr)),
+				     : "q"(neww), "m"(*__synch_xg(ptr)),
 				       "0"(old)
 				     : "memory");
 		return prev;
 	case 8:
 		__asm__ __volatile__("lock; cmpxchgq %1,%2"
 				     : "=a"(prev)
-				     : "q"(new), "m"(*__synch_xg(ptr)),
+				     : "q"(neww), "m"(*__synch_xg(ptr)),
 				       "0"(old)
 				     : "memory");
 		return prev;

@@ -480,7 +480,7 @@ bind_caller_port_to_irqhandler(unsigned int caller_port,
 
 	irq = bind_caller_port_to_irq(caller_port, &port);
 	intr_register_source(&xp->xp_pins[irq].xp_intsrc);
-	error = intr_add_handler(devname, irq, NULL, handler, arg, irqflags,
+	error = intr_add_handler(devname, irq, NULL, handler, arg, intr_type(irqflags),
 	    &xp->xp_pins[irq].xp_cookie);
 
 	if (error) {
@@ -507,7 +507,7 @@ bind_listening_port_to_irqhandler(unsigned int remote_domain,
 
 	irq = bind_listening_port_to_irq(remote_domain, &port);
 	intr_register_source(&xp->xp_pins[irq].xp_intsrc);
-	error = intr_add_handler(devname, irq, NULL, handler, arg, irqflags,
+	error = intr_add_handler(devname, irq, NULL, handler, arg, intr_type(irqflags),
 	    &xp->xp_pins[irq].xp_cookie);
 	if (error) {
 		unbind_from_irq(irq);
@@ -534,7 +534,7 @@ bind_interdomain_evtchn_to_irqhandler(unsigned int remote_domain,
 	irq = bind_interdomain_evtchn_to_irq(remote_domain, remote_port, &port);
 	intr_register_source(&xp->xp_pins[irq].xp_intsrc);
 	error = intr_add_handler(devname, irq, NULL, handler, arg,
-	    irqflags, &xp->xp_pins[irq].xp_cookie);
+	    intr_type(irqflags), &xp->xp_pins[irq].xp_cookie);
 	if (error) {
 		unbind_from_irq(irq);
 		return (error);
@@ -559,7 +559,7 @@ bind_virq_to_irqhandler(unsigned int virq, unsigned int cpu,
 	irq = bind_virq_to_irq(virq, cpu, &port);
 	intr_register_source(&xp->xp_pins[irq].xp_intsrc);
 	error = intr_add_handler(devname, irq, filter, handler,
-	    arg, irqflags, &xp->xp_pins[irq].xp_cookie);
+	    arg, intr_type(irqflags), &xp->xp_pins[irq].xp_cookie);
 	if (error) {
 		unbind_from_irq(irq);
 		return (error);
@@ -584,7 +584,7 @@ bind_ipi_to_irqhandler(unsigned int ipi, unsigned int cpu,
 	irq = bind_ipi_to_irq(ipi, cpu, &port);
 	intr_register_source(&xp->xp_pins[irq].xp_intsrc);
 	error = intr_add_handler(devname, irq, filter, NULL,
-	    NULL, irqflags, &xp->xp_pins[irq].xp_cookie);
+	    NULL, intr_type(irqflags), &xp->xp_pins[irq].xp_cookie);
 	if (error) {
 		unbind_from_irq(irq);
 		return (error);
@@ -683,17 +683,17 @@ struct pic xenpic_dynirq_template  =  {
 	.pic_resume		=	xenpic_resume 
 };
 
-struct pic xenpic_pirq_template  =  { 
-	.pic_enable_source	=	xenpic_pirq_enable_source, 
-	.pic_disable_source	=	xenpic_pirq_disable_source,
-	.pic_eoi_source		=	xenpic_pirq_eoi_source, 
-	.pic_enable_intr	=	xenpic_pirq_enable_intr, 
-	.pic_vector		=	xenpic_vector, 
-	.pic_source_pending	=	xenpic_source_pending,
-	.pic_suspend		=	xenpic_suspend, 
-	.pic_resume		=	xenpic_resume,
-	.pic_assign_cpu		=	xenpic_assign_cpu
-};
+struct pic xenpic_pirq_template  = initialize_with([] (pic& x) {
+	x.pic_enable_source	=	xenpic_pirq_enable_source;
+	x.pic_disable_source	=	xenpic_pirq_disable_source;
+	x.pic_eoi_source	=	xenpic_pirq_eoi_source;
+	x.pic_enable_intr	=	xenpic_pirq_enable_intr;
+	x.pic_vector		=	xenpic_vector;
+	x.pic_source_pending	=	xenpic_source_pending;
+	x.pic_suspend		=	xenpic_suspend;
+	x.pic_resume		=	xenpic_resume;
+	x.pic_assign_cpu	=	xenpic_assign_cpu;
+});
 
 
 
@@ -1107,7 +1107,7 @@ evtchn_init(void *dummy __unused)
 	for (i = 0; i < NR_IRQS; i++)
 		irq_info[i] = IRQ_UNBOUND;
 	
-	xp = malloc(sizeof(struct xenpic) + NR_IRQS*sizeof(struct xenpic_intsrc), 
+	xp = (xenpic *)malloc(sizeof(struct xenpic) + NR_IRQS*sizeof(struct xenpic_intsrc),
 		    M_DEVBUF, M_WAITOK);
 
 	xp->xp_dynirq_pic = &xenpic_dynirq_template;

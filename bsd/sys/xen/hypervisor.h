@@ -28,6 +28,7 @@
 #endif
 
 #include <sys/cdefs.h>
+#include <osv/initialize.hh>
 //#include <sys/systm.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/platform.h>
@@ -118,10 +119,10 @@ HYPERVISOR_poll(
 	evtchn_port_t *ports, unsigned int nr_ports, int ticks)
 {
 	int rc;
-	struct sched_poll sched_poll = {
-		.nr_ports = nr_ports,
-		.timeout = get_system_time(ticks)
-	};
+	struct sched_poll sched_poll = initialize_with([=] (struct sched_poll& x) {
+		x.nr_ports = nr_ports;
+		x.timeout = get_system_time(ticks);
+	});
 	set_xen_guest_handle(sched_poll.ports, ports);
 
 	rc = HYPERVISOR_sched_op(SCHEDOP_poll, &sched_poll);

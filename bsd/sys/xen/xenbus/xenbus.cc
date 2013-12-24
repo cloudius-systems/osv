@@ -74,7 +74,7 @@ MALLOC_DEFINE(M_XENBUS, "xenbus", "XenBus Support");
 static char *
 error_path(device_t dev)
 {
-	char *path_buffer = malloc(strlen("error/")
+	char *path_buffer = (char *)malloc(strlen("error/")
 	    + strlen(xenbus_get_node(dev)) + 1,M_XENBUS, M_WAITOK);
 
 	strcpy(path_buffer, "error/");
@@ -128,7 +128,7 @@ xenbus_watch_path2(device_t dev, const char *path,
     xs_watch_cb_t *callback, uintptr_t callback_data)
 {
 	int error;
-	char *state = malloc(strlen(path) + 1 + strlen(path2) + 1,
+	char *state = (char *)malloc(strlen(path) + 1 + strlen(path2) + 1,
 	   M_XENBUS, M_WAITOK);
 
 	strcpy(state, path);
@@ -151,7 +151,7 @@ xenbus_dev_verror(device_t dev, int err, const char *fmt, va_list ap)
 	char *printf_buffer = NULL, *path_buffer = NULL;
 
 #define PRINTF_BUFFER_SIZE 4096
-	printf_buffer = malloc(PRINTF_BUFFER_SIZE,M_XENBUS, M_WAITOK);
+	printf_buffer = (char *)malloc(PRINTF_BUFFER_SIZE,M_XENBUS, M_WAITOK);
 
 	len = sprintf(printf_buffer, "%i ", err);
 	ret = vsnprintf(printf_buffer+len, PRINTF_BUFFER_SIZE-len, fmt, ap);

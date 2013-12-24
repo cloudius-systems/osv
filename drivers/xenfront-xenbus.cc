@@ -23,18 +23,14 @@
 #include <xen/xenstore/xenstorevar.h>
 #include <xen/xenbus/xenbusb.h>
 
-extern "C" {
+int xs_attach(struct device *);
 
-    int xs_attach(struct device *);
+int xenpci_irq_init(device_t device, struct xenpci_softc *scp);
+void evtchn_init(void *arg);
 
-    int xenpci_irq_init(device_t device, struct xenpci_softc *scp);
-    void evtchn_init(void *arg);
-
-    int xenbusb_front_probe(device_t dev);
-    int xenbusb_front_attach(device_t dev);
-    int xenbusb_add_device(device_t dev, const char *type, const char *id);
-};
-
+int xenbusb_front_probe(device_t dev);
+int xenbusb_front_attach(device_t dev);
+int xenbusb_add_device(device_t dev, const char *type, const char *id);
 
 namespace xenfront {
 
