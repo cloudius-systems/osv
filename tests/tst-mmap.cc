@@ -105,7 +105,7 @@ int main(int argc, char **argv)
         mmap(buf, hugepagesize*9+4096, PROT_READ, MAP_ANONYMOUS|MAP_FIXED, -1, 0);
         assert(buf != MAP_FAILED);
     }
-    munmap(buf, hugepagesize*9+4096);
+    munmap(buf, hugepagesize*10);
 
     // Test for missing MAP_PRIVATE or MAP_SHARED flag
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS, -1, 0);
@@ -209,6 +209,7 @@ int main(int argc, char **argv)
     mprotect(buf, 4096, PROT_NONE); // hide the memory - but don't unmap
     mprotect(buf, 4096, PROT_READ); // get it back
     assert(*(char*)buf == 123);
+    munmap(buf, 4096);
 
 //        // Test that mprotect() on malloc() memory is currently not supported
 //        buf = malloc(8192);
