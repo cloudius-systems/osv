@@ -269,7 +269,7 @@ tcp_reass(struct tcpcb *tp, struct tcphdr *th, int *tlenp, struct mbuf *m)
 	 * Find a segment which begins after this one does.
 	 */
 	LIST_FOREACH(q, &tp->t_segq, tqe_q) {
-		if (SEQ_GT(q->tqe_th->th_seq, th->th_seq))
+		if (q->tqe_th->th_seq > th->th_seq)
 			break;
 		p = q;
 	}

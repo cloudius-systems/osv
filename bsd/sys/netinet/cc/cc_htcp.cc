@@ -355,8 +355,7 @@ htcp_post_recovery(struct cc_var *ccv)
 		 *
 		 * XXXLAS: Find a way to do this without needing curack
 		 */
-		if (SEQ_GT(ccv->curack + CCV(ccv, snd_ssthresh),
-		    CCV(ccv, snd_max)))
+		if (ccv->curack + CCV(ccv, snd_ssthresh) > CCV(ccv, snd_max))
 			CCV(ccv, snd_cwnd) = CCV(ccv, snd_max) - ccv->curack +
 			    CCV(ccv, t_maxseg);
 		else

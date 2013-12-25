@@ -32,18 +32,6 @@
 
 #ifndef _NETINET_TCP_SEQ_H_
 #define _NETINET_TCP_SEQ_H_
-/*
- * TCP sequence numbers are 32 bit integers operated
- * on with modular arithmetic.  These macros can be
- * used to compare such integers.
- */
-#define	SEQ_LT(a,b)	((int)((a).raw()-(b).raw()) < 0)
-#define	SEQ_LEQ(a,b)	((int)((a).raw()-(b).raw()) <= 0)
-#define	SEQ_GT(a,b)	((int)((a).raw()-(b).raw()) > 0)
-#define	SEQ_GEQ(a,b)	((int)((a).raw()-(b).raw()) >= 0)
-
-#define	SEQ_MIN(a, b)	((SEQ_LT(a, b)) ? (a) : (b))
-#define	SEQ_MAX(a, b)	((SEQ_GT(a, b)) ? (a) : (b))
 
 /* for modulo comparisons of timestamps */
 #define TSTMP_LT(a,b)	((int)((a)-(b)) < 0)

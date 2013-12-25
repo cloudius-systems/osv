@@ -521,8 +521,8 @@ void syncache_chkrst(struct in_conninfo *inc, struct tcphdr *th)
 	 *   send a reset with the sequence number at the rightmost edge
 	 *   of our receive window, and we have to handle this case.
 	 */
-	if (SEQ_GEQ(th->th_seq, sc->sc_irs)
-		&& SEQ_LEQ(th->th_seq, sc->sc_irs + sc->sc_wnd)) {
+	if (th->th_seq >= sc->sc_irs
+		&& th->th_seq <= sc->sc_irs + sc->sc_wnd) {
 		syncache_drop(sc, sch);
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
 			bsd_log(LOG_DEBUG, "%s; %s: Our SYN|ACK was rejected, "
@@ -905,8 +905,8 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 	 * The SEQ must fall in the window starting at the received
 	 * initial receive sequence number + 1 (the SYN).
 	 */
-	if ((SEQ_LEQ(th->th_seq, sc->sc_irs)
-		|| SEQ_GT(th->th_seq, sc->sc_irs + sc->sc_wnd))&&
+	if ((th->th_seq <= sc->sc_irs
+		|| th->th_seq > sc->sc_irs + sc->sc_wnd) &&
 	!TOEPCB_ISSET(sc)){
 		if ((s = tcp_log_addrs(inc, th, NULL, NULL )))
 			bsd_log(LOG_DEBUG, "%s; %s: SEQ %u != IRS+1 %u, segment "

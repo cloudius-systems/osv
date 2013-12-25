@@ -121,6 +121,9 @@
 #include <bsd/machine/in_cksum.h>
 #include <bsd/machine/atomic.h>
 
+#include <algorithm>
+using namespace std;
+
 VNET_DECLARE(struct uma_zone *, sack_hole_zone);
 #define	V_sack_hole_zone		VNET(sack_hole_zone)
 
@@ -167,7 +170,7 @@ tcp_update_sack_list(struct tcpcb *tp, tcp_seq rcv_start, tcp_seq rcv_end)
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 
 	/* Check arguments. */
-	KASSERT(SEQ_LT(rcv_start, rcv_end), ("rcv_start < rcv_end"));
+	KASSERT(rcv_start < rcv_end, ("rcv_start < rcv_end"));
 
 	/* SACK block for the received segment. */
 	head_blk.start = rcv_start;
@@ -182,19 +185,19 @@ tcp_update_sack_list(struct tcpcb *tp, tcp_seq rcv_start, tcp_seq rcv_end)
 	for (i = 0; i < tp->rcv_numsacks; i++) {
 		tcp_seq start = tp->sackblks[i].start;
 		tcp_seq end = tp->sackblks[i].end;
-		if (SEQ_GEQ(start, end) || SEQ_LEQ(start, tp->rcv_nxt)) {
+		if (start >= end || start <= tp->rcv_nxt) {
 			/*
 			 * Discard this SACK block.
 			 */
-		} else if (SEQ_LEQ(head_blk.start, end) &&
-			   SEQ_GEQ(head_blk.end, start)) {
+		} else if (head_blk.start <= end &&
+			   head_blk.end >= start) {
 			/*
 			 * Merge this SACK block into head_blk.  This SACK
 			 * block itself will be discarded.
 			 */
-			if (SEQ_GT(head_blk.start, start))
+			if (head_blk.start > start)
 				head_blk.start = start;
-			if (SEQ_LT(head_blk.end, end))
+			if (head_blk.end < end)
 				head_blk.end = end;
 		} else {
 			/*
@@ -210,7 +213,7 @@ tcp_update_sack_list(struct tcpcb *tp, tcp_seq rcv_start, tcp_seq rcv_end)
 	 * Update SACK list in tp->sackblks[].
 	 */
 	num_head = 0;
-	if (SEQ_GT(head_blk.start, tp->rcv_nxt)) {
+	if (head_blk.start > tp->rcv_nxt) {
 		/*
 		 * The received data segment is an out-of-order segment.  Put
 		 * head_blk at the top of SACK list.
@@ -358,7 +361,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 	 * If SND.UNA will be advanced by SEG.ACK, and if SACK holes exist,
 	 * treat [SND.UNA, SEG.ACK) as if it is a SACK block.
 	 */
-	if (SEQ_LT(tp->snd_una, th_ack) && !TAILQ_EMPTY(&tp->snd_holes)) {
+	if (tp->snd_una < th_ack && !TAILQ_EMPTY(&tp->snd_holes)) {
 		sack_blocks[num_sack_blks].start = tp->snd_una;
 		sack_blocks[num_sack_blks++].end = th_ack;
 	}
@@ -372,12 +375,12 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 			    &sack, sizeof(sack));
 			sack.start = ntohl(sack.start);
 			sack.end = ntohl(sack.end);
-			if (SEQ_GT(sack.end, sack.start) &&
-			    SEQ_GT(sack.start, tp->snd_una) &&
-			    SEQ_GT(sack.start, th_ack) &&
-			    SEQ_LT(sack.start, tp->snd_max) &&
-			    SEQ_GT(sack.end, tp->snd_una) &&
-			    SEQ_LEQ(sack.end, tp->snd_max))
+			if (sack.end > sack.start &&
+			    sack.start > tp->snd_una &&
+			    sack.start > th_ack &&
+			    sack.start < tp->snd_max &&
+			    sack.end > tp->snd_una &&
+			    sack.end <= tp->snd_max)
 				sack_blocks[num_sack_blks++] = sack;
 		}
 	}
@@ -395,7 +398,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 	 */
 	for (i = 0; i < num_sack_blks; i++) {
 		for (j = i + 1; j < num_sack_blks; j++) {
-			if (SEQ_GT(sack_blocks[i].end, sack_blocks[j].end)) {
+			if (sack_blocks[i].end > sack_blocks[j].end) {
 				sack = sack_blocks[i];
 				sack_blocks[i] = sack_blocks[j];
 				sack_blocks[j] = sack;
@@ -410,7 +413,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 		 * (in the logic that adds holes to the tail of the
 		 * scoreboard).
 		 */
-		tp->snd_fack = SEQ_MAX(tp->snd_una, th_ack);
+		tp->snd_fack = max(tp->snd_una, th_ack);
 	/*
 	 * In the while-loop below, incoming SACK blocks (sack_blocks[]) and
 	 * SACK holes (snd_holes) are traversed from their tails with just
@@ -425,7 +428,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 	 */
 	sblkp = &sack_blocks[num_sack_blks - 1];	/* Last SACK block */
 	tp->sackhint.last_sack_ack = sblkp->end;
-	if (SEQ_LT(tp->snd_fack, sblkp->start)) {
+	if (tp->snd_fack < sblkp->start) {
 		/*
 		 * The highest SACK block is beyond fack.  Append new SACK
 		 * hole at the tail.  If the second or later highest SACK
@@ -447,13 +450,13 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 			 * scoreboard for th_ack (which is sack_blocks[0]).
 			 */
 			while (sblkp >= sack_blocks && 
-			       SEQ_LT(tp->snd_fack, sblkp->start))
+			       tp->snd_fack < sblkp->start)
 				sblkp--;
 			if (sblkp >= sack_blocks && 
-			    SEQ_LT(tp->snd_fack, sblkp->end))
+			    tp->snd_fack < sblkp->end)
 				tp->snd_fack = sblkp->end;
 		}
-	} else if (SEQ_LT(tp->snd_fack, sblkp->end))
+	} else if (tp->snd_fack < sblkp->end)
 		/* fack is advanced. */
 		tp->snd_fack = sblkp->end;
 	/* We must have at least one SACK hole in scoreboard. */
@@ -465,7 +468,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 	 * making one sweep of the scoreboard.
 	 */
 	while (sblkp >= sack_blocks  && cur != NULL) {
-		if (SEQ_GEQ(sblkp->start, cur->end)) {
+		if (sblkp->start >= cur->end) {
 			/*
 			 * SACKs data beyond the current hole.  Go to the
 			 * previous sack block.
@@ -473,7 +476,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 			sblkp--;
 			continue;
 		}
-		if (SEQ_LEQ(sblkp->end, cur->start)) {
+		if (sblkp->end <= cur->start) {
 			/*
 			 * SACKs data before the current hole.  Go to the
 			 * previous hole.
@@ -484,9 +487,9 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 		tp->sackhint.sack_bytes_rexmit -= (cur->rxmit - cur->start);
 		KASSERT(tp->sackhint.sack_bytes_rexmit >= 0,
 		    ("sackhint bytes rtx >= 0"));
-		if (SEQ_LEQ(sblkp->start, cur->start)) {
+		if (sblkp->start <= cur->start) {
 			/* Data acks at least the beginning of hole. */
-			if (SEQ_GEQ(sblkp->end, cur->end)) {
+			if (sblkp->end >= cur->end) {
 				/* Acks entire hole, so delete hole. */
 				temp = cur;
 				cur = TAILQ_PREV(cur, sackhole_head, scblink);
@@ -500,14 +503,14 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 			} else {
 				/* Move start of hole forward. */
 				cur->start = sblkp->end;
-				cur->rxmit = SEQ_MAX(cur->rxmit, cur->start);
+				cur->rxmit = max(cur->rxmit, cur->start);
 			}
 		} else {
 			/* Data acks at least the end of hole. */
-			if (SEQ_GEQ(sblkp->end, cur->end)) {
+			if (sblkp->end >= cur->end) {
 				/* Move end of hole backward. */
 				cur->end = sblkp->start;
-				cur->rxmit = SEQ_MIN(cur->rxmit, cur->end);
+				cur->rxmit = min(cur->rxmit, cur->end);
 			} else {
 				/*
 				 * ACKs some data in middle of a hole; need
@@ -516,15 +519,14 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 				temp = tcp_sackhole_insert(tp, sblkp->end,
 				    cur->end, cur);
 				if (temp != NULL) {
-					if (SEQ_GT(cur->rxmit, temp->rxmit)) {
+					if (cur->rxmit > temp->rxmit) {
 						temp->rxmit = cur->rxmit;
 						tp->sackhint.sack_bytes_rexmit
 						    += (temp->rxmit
 						    - temp->start);
 					}
 					cur->end = sblkp->start;
-					cur->rxmit = SEQ_MIN(cur->rxmit,
-					    cur->end);
+					cur->rxmit = min(cur->rxmit, cur->end);
 				}
 			}
 		}
@@ -534,7 +536,7 @@ tcp_sack_doack(struct tcpcb *tp, struct tcpopt *to, tcp_seq th_ack)
 		 * we're done with the sack block or the sack hole.
 		 * Accordingly, we advance one or the other.
 		 */
-		if (SEQ_LEQ(sblkp->start, cur->start))
+		if (sblkp->start <= cur->start)
 			cur = TAILQ_PREV(cur, sackhole_head, scblink);
 		else
 			sblkp--;
@@ -599,8 +601,8 @@ tcp_sack_output_debug(struct tcpcb *tp, int *sack_bytes_rexmt)
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 	*sack_bytes_rexmt = 0;
 	TAILQ_FOREACH(p, &tp->snd_holes, scblink) {
-		if (SEQ_LT(p->rxmit, p->end)) {
-			if (SEQ_LT(p->rxmit, tp->snd_una)) {/* old SACK hole */
+		if (p->rxmit < p->end) {
+			if (p->rxmit < tp->snd_una) {/* old SACK hole */
 				continue;
 			}
 			*sack_bytes_rexmt += (p->rxmit - p->start);
@@ -637,10 +639,10 @@ tcp_sack_output(struct tcpcb *tp, int *sack_bytes_rexmt)
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 	*sack_bytes_rexmt = tp->sackhint.sack_bytes_rexmit;
 	hole = tp->sackhint.nexthole;
-	if (hole == NULL || SEQ_LT(hole->rxmit, hole->end))
+	if (hole == NULL || hole->rxmit < hole->end)
 		goto out;
 	while ((hole = TAILQ_NEXT(hole, scblink)) != NULL) {
-		if (SEQ_LT(hole->rxmit, hole->end)) {
+		if (hole->rxmit < hole->end) {
 			tp->sackhint.nexthole = hole;
 			break;
 		}
@@ -662,7 +664,7 @@ tcp_sack_adjust(struct tcpcb *tp)
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 	if (cur == NULL)
 		return; /* No holes */
-	if (SEQ_GEQ(tp->snd_nxt, tp->snd_fack))
+	if (tp->snd_nxt >= tp->snd_fack)
 		return; /* We're already beyond any SACKed blocks */
 	/*-
 	 * Two cases for which we want to advance snd_nxt:
@@ -670,16 +672,16 @@ tcp_sack_adjust(struct tcpcb *tp)
 	 * ii) snd_nxt lies between end of last hole and snd_fack
 	 */
 	while ((p = TAILQ_NEXT(cur, scblink)) != NULL) {
-		if (SEQ_LT(tp->snd_nxt, cur->end))
+		if (tp->snd_nxt < cur->end)
 			return;
-		if (SEQ_GEQ(tp->snd_nxt, p->start))
+		if (tp->snd_nxt >= p->start)
 			cur = p;
 		else {
 			tp->snd_nxt = p->start;
 			return;
 		}
 	}
-	if (SEQ_LT(tp->snd_nxt, cur->end))
+	if (tp->snd_nxt < cur->end)
 		return;
 	tp->snd_nxt = tp->snd_fack;
 }

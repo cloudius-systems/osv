@@ -1589,14 +1589,14 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		 * proposal of the tcplw@cray.com list (Braden 1993/04/26).
 		 */
 		if ((to.to_flags & TOF_TS) != 0 &&
-		    SEQ_LEQ(th->th_seq, tp->last_ack_sent)) {
+		    th->th_seq <= tp->last_ack_sent) {
 			tp->ts_recent_age = tcp_ts_getticks();
 			tp->ts_recent = to.to_tsval;
 		}
 
 		if (tlen == 0) {
-			if (SEQ_GT(th->th_ack, tp->snd_una) &&
-			    SEQ_LEQ(th->th_ack, tp->snd_max) &&
+			if (th->th_ack > tp->snd_una &&
+			    th->th_ack <= tp->snd_max &&
 			    !IN_RECOVERY(tp->t_flags) &&
 			    (to.to_flags & TOF_SACK) == 0 &&
 			    TAILQ_EMPTY(&tp->snd_holes)) {
@@ -1636,7 +1636,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					tcp_xmit_timer(tp,
 					    TCP_TS_TO_TICKS(t) + 1);
 				} else if (tp->t_rtttime &&
-				    SEQ_GT(th->th_ack, tp->t_rtseq)) {
+				    th->th_ack > tp->t_rtseq) {
 					if (!tp->t_rttlow ||
 					    tp->t_rttlow > bsd_ticks - tp->t_rtttime)
 						tp->t_rttlow = bsd_ticks - tp->t_rtttime;
@@ -1648,8 +1648,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				TCPSTAT_INC(tcps_rcvackpack);
 				TCPSTAT_ADD(tcps_rcvackbyte, acked);
 				sbdrop(&so->so_snd, acked);
-				if (SEQ_GT(tp->snd_una, tp->snd_recover) &&
-				    SEQ_LEQ(th->th_ack, tp->snd_recover))
+				if (tp->snd_una > tp->snd_recover &&
+				    th->th_ack <= tp->snd_recover)
 					tp->snd_recover = th->th_ack - 1;
 				
 				/*
@@ -1836,8 +1836,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 */
 	case TCPS_SYN_RECEIVED:
 		if ((thflags & TH_ACK) &&
-		    (SEQ_LEQ(th->th_ack, tp->snd_una) ||
-		     SEQ_GT(th->th_ack, tp->snd_max))) {
+		    (th->th_ack <= tp->snd_una ||
+		     th->th_ack > tp->snd_max)) {
 				rstreason = BANDLIM_RST_OPENPORT;
 				goto dropwithreset;
 		}
@@ -1859,8 +1859,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 */
 	case TCPS_SYN_SENT:
 		if ((thflags & TH_ACK) &&
-		    (SEQ_LEQ(th->th_ack, tp->iss) ||
-		     SEQ_GT(th->th_ack, tp->snd_max))) {
+		    (th->th_ack <= tp->iss ||
+		     th->th_ack > tp->snd_max)) {
 			rstreason = BANDLIM_UNLIMITED;
 			goto dropwithreset;
 		}
@@ -2042,8 +2042,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 *      RFC 1337.
 	 */
 	if (thflags & TH_RST) {
-		if (SEQ_GEQ(th->th_seq, tp->last_ack_sent - 1) &&
-		    SEQ_LEQ(th->th_seq, tp->last_ack_sent + tp->rcv_wnd)) {
+		if (th->th_seq >= tp->last_ack_sent - 1 &&
+		    th->th_seq <= tp->last_ack_sent + tp->rcv_wnd) {
 			switch (tp->t_state) {
 
 			case TCPS_SYN_RECEIVED:
@@ -2052,10 +2052,10 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 
 			case TCPS_ESTABLISHED:
 				if (V_tcp_insecure_rst == 0 &&
-				    !(SEQ_GEQ(th->th_seq, tp->rcv_nxt - 1) &&
-				    SEQ_LEQ(th->th_seq, tp->rcv_nxt + 1)) &&
-				    !(SEQ_GEQ(th->th_seq, tp->last_ack_sent - 1) &&
-				    SEQ_LEQ(th->th_seq, tp->last_ack_sent + 1))) {
+				    !(th->th_seq >= tp->rcv_nxt - 1) &&
+				    th->th_seq <= tp->rcv_nxt + 1 &&
+				    !(th->th_seq >= tp->last_ack_sent - 1) &&
+				    th->th_seq <= tp->last_ack_sent + 1) {
 					TCPSTAT_INC(tcps_badrst);
 					goto drop;
 				}
@@ -2127,7 +2127,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * the sequence numbers haven't wrapped.  This is a partial fix
 	 * for the "LAND" DoS attack.
 	 */
-	if (tp->t_state == TCPS_SYN_RECEIVED && SEQ_LT(th->th_seq, tp->irs)) {
+	if (tp->t_state == TCPS_SYN_RECEIVED && th->th_seq < tp->irs) {
 		rstreason = BANDLIM_RST_OPENPORT;
 		goto dropwithreset;
 	}
@@ -2253,9 +2253,9 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 *    RTT correctly when RCV.NXT == Last.ACK.Sent.
 	 */
 	if ((to.to_flags & TOF_TS) != 0 &&
-	    SEQ_LEQ(th->th_seq, tp->last_ack_sent) &&
-	    SEQ_LEQ(tp->last_ack_sent, th->th_seq + tlen +
-		((thflags & (TH_SYN|TH_FIN)) != 0))) {
+	    th->th_seq <= tp->last_ack_sent &&
+	    tp->last_ack_sent <= th->th_seq + tlen +
+		((thflags & (TH_SYN|TH_FIN)) != 0)) {
 		tp->ts_recent_age = tcp_ts_getticks();
 		tp->ts_recent = to.to_tsval;
 	}
@@ -2347,7 +2347,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	case TCPS_CLOSE_WAIT:
 	case TCPS_CLOSING:
 	case TCPS_LAST_ACK:
-		if (SEQ_GT(th->th_ack, tp->snd_max)) {
+		if (th->th_ack > tp->snd_max) {
 			TCPSTAT_INC(tcps_rcvacktoomuch);
 			goto dropafterack;
 		}
@@ -2356,7 +2356,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		     !TAILQ_EMPTY(&tp->snd_holes)))
 			tcp_sack_doack(tp, &to, th->th_ack);
 
-		if (SEQ_LEQ(th->th_ack, tp->snd_una)) {
+		if (th->th_ack <= tp->snd_una) {
 			if (tlen == 0 && tiwin == tp->snd_wnd) {
 				TCPSTAT_INC(tcps_rcvdupack);
 				/*
@@ -2429,8 +2429,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 							break;
 						}
 					} else {
-						if (SEQ_LEQ(th->th_ack,
-						    tp->snd_recover)) {
+						if (th->th_ack <= tp->snd_recover) {
 							tp->t_dupacks = 0;
 							break;
 						}
@@ -2457,7 +2456,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					tp->snd_cwnd = tp->snd_ssthresh +
 					     tp->t_maxseg *
 					     (tp->t_dupacks - tp->snd_limited);
-					if (SEQ_GT(onxt, tp->snd_nxt))
+					if (onxt > tp->snd_nxt)
 						tp->snd_nxt = onxt;
 					goto drop;
 				} else if (V_tcp_do_rfc3042) {
@@ -2496,7 +2495,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			break;
 		}
 
-		KASSERT(SEQ_GT(th->th_ack, tp->snd_una),
+		KASSERT(th->th_ack > tp->snd_una,
 		    ("%s: th_ack <= snd_una", __func__));
 
 		/*
@@ -2504,7 +2503,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		 * for the other side's cached packets, retract it.
 		 */
 		if (IN_FASTRECOVERY(tp->t_flags)) {
-			if (SEQ_LT(th->th_ack, tp->snd_recover)) {
+			if (th->th_ack < tp->snd_recover) {
 				if (tp->t_flags & TF_SACK_PERMIT)
 					tcp_sack_partialack(tp, th);
 				else
@@ -2574,7 +2573,7 @@ process_ACK:
 			if (!tp->t_rttlow || tp->t_rttlow > t)
 				tp->t_rttlow = t;
 			tcp_xmit_timer(tp, TCP_TS_TO_TICKS(t) + 1);
-		} else if (tp->t_rtttime && SEQ_GT(th->th_ack, tp->t_rtseq)) {
+		} else if (tp->t_rtttime && th->th_ack > tp->t_rtseq) {
 			if (!tp->t_rttlow || tp->t_rttlow > bsd_ticks - tp->t_rtttime)
 				tp->t_rttlow = bsd_ticks - tp->t_rtttime;
 			tcp_xmit_timer(tp, bsd_ticks - tp->t_rtttime);
@@ -2620,20 +2619,20 @@ process_ACK:
 		sowwakeup_locked(so);
 		/* Detect una wraparound. */
 		if (!IN_RECOVERY(tp->t_flags) &&
-		    SEQ_GT(tp->snd_una, tp->snd_recover) &&
-		    SEQ_LEQ(th->th_ack, tp->snd_recover))
+		    tp->snd_una > tp->snd_recover &&
+		    th->th_ack <= tp->snd_recover)
 			tp->snd_recover = th->th_ack - 1;
 		/* XXXLAS: Can this be moved up into cc_post_recovery? */
 		if (IN_RECOVERY(tp->t_flags) &&
-		    SEQ_GEQ(th->th_ack, tp->snd_recover)) {
+		    th->th_ack >= tp->snd_recover) {
 			EXIT_RECOVERY(tp->t_flags);
 		}
 		tp->snd_una = th->th_ack;
 		if (tp->t_flags & TF_SACK_PERMIT) {
-			if (SEQ_GT(tp->snd_una, tp->snd_recover))
+			if (tp->snd_una > tp->snd_recover)
 				tp->snd_recover = tp->snd_una;
 		}
-		if (SEQ_LT(tp->snd_nxt, tp->snd_una))
+		if (tp->snd_nxt < tp->snd_una)
 			tp->snd_nxt = tp->snd_una;
 
 		switch (tp->t_state) {
@@ -2707,8 +2706,8 @@ step6:
 	 * Don't look at window if no ACK: TAC's send garbage on first SYN.
 	 */
 	if ((thflags & TH_ACK) &&
-	    (SEQ_LT(tp->snd_wl1, th->th_seq) ||
-	    (tp->snd_wl1 == th->th_seq && (SEQ_LT(tp->snd_wl2, th->th_ack) ||
+	    (tp->snd_wl1 < th->th_seq ||
+	    (tp->snd_wl1 == th->th_seq && (tp->snd_wl2 < th->th_ack ||
 	     (tp->snd_wl2 == th->th_ack && tiwin > tp->snd_wnd))))) {
 		/* keep track of pure window updates */
 		if (tlen == 0 &&
@@ -2754,7 +2753,7 @@ step6:
 		 * of data past the urgent section as the original
 		 * spec states (in one of two places).
 		 */
-		if (SEQ_GT(th->th_seq+th->th_urp, tp->rcv_up)) {
+		if (th->th_seq+th->th_urp > tp->rcv_up) {
 			tp->rcv_up = th->th_seq + th->th_urp;
 			so->so_oobmark = so->so_rcv.sb_cc +
 			    (tp->rcv_up - tp->rcv_nxt) - 1;
@@ -2781,7 +2780,7 @@ step6:
 		 * pull receive urgent pointer along
 		 * with the receive window.
 		 */
-		if (SEQ_GT(tp->rcv_nxt, tp->rcv_up))
+		if (tp->rcv_nxt > tp->rcv_up)
 			tp->rcv_up = tp->rcv_nxt;
 	}
 dodata:							/* XXX */
@@ -2849,7 +2848,7 @@ dodata:							/* XXX */
 		 * buffer size.
 		 * XXX: Unused.
 		 */
-		if (SEQ_GT(tp->rcv_adv, tp->rcv_nxt))
+		if (tp->rcv_adv > tp->rcv_nxt)
 			len = so->so_rcv.sb_hiwat - (tp->rcv_adv - tp->rcv_nxt);
 		else
 			len = so->so_rcv.sb_hiwat;
@@ -2962,8 +2961,8 @@ dropafterack:
 	 * SYN segments, each with the source address of the other.
 	 */
 	if (tp->t_state == TCPS_SYN_RECEIVED && (thflags & TH_ACK) &&
-	    (SEQ_GT(tp->snd_una, th->th_ack) ||
-	     SEQ_GT(th->th_ack, tp->snd_max)) ) {
+	    (tp->snd_una > th->th_ack ||
+	     th->th_ack > tp->snd_max) ) {
 		rstreason = BANDLIM_RST_OPENPORT;
 		goto dropwithreset;
 	}
@@ -3615,7 +3614,7 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 	tp->t_flags |= TF_ACKNOW;
 	(void) tcp_output(tp);
 	tp->snd_cwnd = ocwnd;
-	if (SEQ_GT(onxt, tp->snd_nxt))
+	if (onxt > tp->snd_nxt)
 		tp->snd_nxt = onxt;
 	/*
 	 * Partial window deflation.  Relies on fact that tp->snd_una

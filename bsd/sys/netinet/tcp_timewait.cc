@@ -232,7 +232,7 @@ tcp_twstart(struct tcpcb *tp)
 	/*
 	 * Recover last window size sent.
 	 */
-	if (SEQ_GT(tp->rcv_adv, tp->rcv_nxt))
+	if (tp->rcv_adv > tp->rcv_nxt)
 		tw->last_win = (tp->rcv_adv - tp->rcv_nxt) >> tp->rcv_scale;
 	else
 		tw->last_win = 0;
@@ -326,7 +326,7 @@ tcp_twrecycleable(struct tcptw *tw)
 	new_iss += (ticks - tw->t_starttime) * (ISN_BYTES_PER_SECOND / hz);
 	new_irs += (ticks - tw->t_starttime) * (MS_ISN_BYTES_PER_SECOND / hz);
 
-	if (SEQ_GT(new_iss, tw->snd_nxt) && SEQ_GT(new_irs, tw->rcv_nxt))
+	if (new_iss > tw->snd_nxt && new_irs > tw->rcv_nxt)
 		return (1);
 	else
 		return (0);
@@ -397,7 +397,7 @@ tcp_twcheck(struct inpcb *inp, struct tcpopt *to, struct tcphdr *th,
 	 * and start over if the sequence numbers
 	 * are above the previous ones.
 	 */
-	if ((thflags & TH_SYN) && SEQ_GT(th->th_seq, tw->rcv_nxt)) {
+	if ((thflags & TH_SYN) && th->th_seq > tw->rcv_nxt) {
 		tcp_twclose(tw, 0);
 		return (1);
 	}

@@ -186,7 +186,7 @@ again:
 	 * resending already delivered data.  Adjust snd_nxt accordingly.
 	 */
 	if ((tp->t_flags & TF_SACK_PERMIT) &&
-	    SEQ_LT(tp->snd_nxt, tp->snd_max))
+	    tp->snd_nxt < tp->snd_max)
 		tcp_sack_adjust(tp);
 	sendalot = 0;
 	tso = 0;
@@ -217,13 +217,13 @@ again:
 		if (cwin < 0)
 			cwin = 0;
 		/* Do not retransmit SACK segments beyond snd_recover */
-		if (SEQ_GT(p->end, tp->snd_recover)) {
+		if (p->end > tp->snd_recover) {
 			/*
 			 * (At least) part of sack hole extends beyond
 			 * snd_recover. Check to see if we can rexmit data
 			 * for this hole.
 			 */
-			if (SEQ_GEQ(p->rxmit, tp->snd_recover)) {
+			if (p->rxmit >= tp->snd_recover) {
 				/*
 				 * Can't rexmit any more data for this hole.
 				 * That data will be rexmitted in the next
@@ -345,7 +345,7 @@ after_sack_rexmit:
 	 * is SYN-SENT state and if segment contains data and if we don't
 	 * know that foreign host supports TAO, suppress sending segment.
 	 */
-	if ((flags & TH_SYN) && SEQ_GT(tp->snd_nxt, tp->snd_una)) {
+	if ((flags & TH_SYN) && tp->snd_nxt > tp->snd_una) {
 		if (tp->t_state != TCPS_SYN_RECEIVED)
 			flags &= ~TH_SYN;
 		off--, len++;
@@ -461,10 +461,10 @@ after_sack_rexmit:
 		tso = 1;
 
 	if (sack_rxmit) {
-		if (SEQ_LT(p->rxmit + len, tp->snd_una + so->so_snd.sb_cc))
+		if (p->rxmit + len < tp->snd_una + so->so_snd.sb_cc)
 			flags &= ~TH_FIN;
 	} else {
-		if (SEQ_LT(tp->snd_nxt + len, tp->snd_una + so->so_snd.sb_cc))
+		if (tp->snd_nxt + len < tp->snd_una + so->so_snd.sb_cc)
 			flags &= ~TH_FIN;
 	}
 
@@ -502,7 +502,7 @@ after_sack_rexmit:
 			goto send;
 		if (len >= tp->max_sndwnd / 2 && tp->max_sndwnd > 0)
 			goto send;
-		if (SEQ_LT(tp->snd_nxt, tp->snd_max))	/* retransmit case */
+		if (tp->snd_nxt < tp->snd_max)	/* retransmit case */
 			goto send;
 		if (sack_rxmit)
 			goto send;
@@ -529,7 +529,7 @@ after_sack_rexmit:
 		int oldwin;
 
 		adv = bsd_min(recwin, (long)TCP_MAXWIN << tp->rcv_scale);
-		if (SEQ_GT(tp->rcv_adv, tp->rcv_nxt)) {
+		if (tp->rcv_adv > tp->rcv_nxt) {
 			oldwin = (tp->rcv_adv - tp->rcv_nxt);
 			adv -= oldwin;
 		} else
@@ -557,7 +557,7 @@ dontupdate:
 	if ((flags & TH_RST) ||
 	    ((flags & TH_SYN) && (tp->t_flags & TF_NEEDSYN) == 0))
 		goto send;
-	if (SEQ_GT(tp->snd_up, tp->snd_una))
+	if (tp->snd_up > tp->snd_una)
 		goto send;
 	/*
 	 * If our state indicates that FIN should be sent
@@ -572,7 +572,7 @@ dontupdate:
 	 * that the retransmission timer is set.
 	 */
 	if ((tp->t_flags & TF_SACK_PERMIT) &&
-	    SEQ_GT(tp->snd_max, tp->snd_una) &&
+	    tp->snd_max > tp->snd_una &&
 	    !tcp_timer_active(tp, TT_REXMT) &&
 	    !tcp_timer_active(tp, TT_PERSIST)) {
 		tcp_timer_activate(tp, TT_REXMT, tp->t_rxtcur);
@@ -776,7 +776,7 @@ send:
 
 		if ((tp->t_flags & TF_FORCEDATA) && len == 1)
 			TCPSTAT_INC(tcps_sndprobe);
-		else if (SEQ_LT(tp->snd_nxt, tp->snd_max) || sack_rxmit) {
+		else if (tp->snd_nxt < tp->snd_max || sack_rxmit) {
 			tp->t_sndrexmitpack++;
 			TCPSTAT_INC(tcps_sndrexmitpack);
 			TCPSTAT_ADD(tcps_sndrexmitbyte, len);
@@ -839,7 +839,7 @@ send:
 			TCPSTAT_INC(tcps_sndacks);
 		else if (flags & (TH_SYN|TH_FIN|TH_RST))
 			TCPSTAT_INC(tcps_sndctrl);
-		else if (SEQ_GT(tp->snd_up, tp->snd_una))
+		else if (tp->snd_up > tp->snd_una)
 			TCPSTAT_INC(tcps_sndurg);
 		else
 			TCPSTAT_INC(tcps_sndwinup);
@@ -906,7 +906,7 @@ send:
 		 * ECN capable transmission (ECT).
 		 * Ignore pure ack packets, retransmissions and window probes.
 		 */
-		if (len > 0 && SEQ_GEQ(tp->snd_nxt, tp->snd_max) &&
+		if (len > 0 && tp->snd_nxt >= tp->snd_max &&
 		    !((tp->t_flags & TF_FORCEDATA) && len == 1)) {
 #ifdef INET6
 			if (isipv6)
@@ -965,7 +965,7 @@ send:
 	if (recwin < (long)(so->so_rcv.sb_hiwat / 4) &&
 	    recwin < (long)tp->t_maxseg)
 		recwin = 0;
-	if (SEQ_GT(tp->rcv_adv, tp->rcv_nxt) &&
+	if (tp->rcv_adv > tp->rcv_nxt &&
 	    recwin < (long)(tp->rcv_adv - tp->rcv_nxt))
 		recwin = (long)(tp->rcv_adv - tp->rcv_nxt);
 	if (recwin > (long)TCP_MAXWIN << tp->rcv_scale)
@@ -995,7 +995,7 @@ send:
 		tp->t_flags |= TF_RXWIN0SENT;
 	} else
 		tp->t_flags &= ~TF_RXWIN0SENT;
-	if (SEQ_GT(tp->snd_up, tp->snd_nxt)) {
+	if (tp->snd_up > tp->snd_nxt) {
 		th->th_urp = htons((u_short)(tp->snd_up - tp->snd_nxt));
 		th->th_flags |= TH_URG;
 	} else
@@ -1091,7 +1091,7 @@ send:
 		if (sack_rxmit)
 			goto timer;
 		tp->snd_nxt += len;
-		if (SEQ_GT(tp->snd_nxt, tp->snd_max)) {
+		if (tp->snd_nxt > tp->snd_max) {
 			tp->snd_max = tp->snd_nxt;
 			/*
 			 * Time this transmission if not a retransmission and
@@ -1134,7 +1134,7 @@ timer:
 			++xlen;
 			tp->t_flags |= TF_SENTFIN;
 		}
-		if (SEQ_GT(tp->snd_nxt + xlen, tp->snd_max))
+		if (tp->snd_nxt + xlen > tp->snd_max)
 			tp->snd_max = tp->snd_nxt + len;
 	}
 
@@ -1302,7 +1302,7 @@ out:
 	 * then remember the size of the advertised window.
 	 * Any pending ACK has now been sent.
 	 */
-	if (recwin >= 0 && SEQ_GT(tp->rcv_nxt + recwin, tp->rcv_adv))
+	if (recwin >= 0 && tp->rcv_nxt + recwin > tp->rcv_adv)
 		tp->rcv_adv = tp->rcv_nxt + recwin;
 	tp->last_ack_sent = tp->rcv_nxt;
 	tp->t_flags &= ~(TF_ACKNOW | TF_DELACK);

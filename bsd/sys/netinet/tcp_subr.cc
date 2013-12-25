@@ -1348,8 +1348,8 @@ tcp_ctlinput(int cmd, struct bsd_sockaddr *sa, void *vip)
 			    !(inp->inp_socket == NULL)) {
 				icmp_tcp_seq = htonl(th->th_seq);
 				tp = intotcpcb(inp);
-				if (SEQ_GEQ(icmp_tcp_seq, tp->snd_una) &&
-				    SEQ_LT(icmp_tcp_seq, tp->snd_max)) {
+				if (icmp_tcp_seq >= tp->snd_una &&
+				    icmp_tcp_seq < tp->snd_max) {
 					if (cmd == PRC_MSGSIZE) {
 					    /*
 					     * MTU discovery:
@@ -1588,7 +1588,7 @@ tcp_new_isn(struct tcpcb *tp)
 	if (bsd_ticks != V_isn_last) {
 		projected_offset = V_isn_offset_old +
 		    ISN_BYTES_PER_SECOND / hz * (bsd_ticks - V_isn_last);
-		if (SEQ_GT(tcp_seq(projected_offset), tcp_seq(V_isn_offset)))
+		if (tcp_seq(projected_offset) > tcp_seq(V_isn_offset))
 			V_isn_offset = projected_offset;
 		V_isn_offset_old = V_isn_offset;
 		V_isn_last = bsd_ticks;
