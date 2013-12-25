@@ -264,7 +264,7 @@ struct tcpcb {
 #define	ENTER_RECOVERY(t_flags) t_flags |= (TF_CONGRECOVERY | TF_FASTRECOVERY)
 #define	EXIT_RECOVERY(t_flags) t_flags &= ~(TF_CONGRECOVERY | TF_FASTRECOVERY)
 
-#define	BYTES_THIS_ACK(tp, th)	(th->th_ack - tp->snd_una)
+#define	BYTES_THIS_ACK(tp, th)	unsigned(th->th_ack - tp->snd_una)
 
 /*
  * Flags for the t_oobflags field.

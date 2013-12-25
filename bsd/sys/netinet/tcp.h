@@ -53,14 +53,13 @@ public:
 	tcp_seq operator--(int) { return tcp_seq(_raw--); }
 	friend inline bool operator==(tcp_seq a, tcp_seq b) { return a._raw == b._raw; }
 	friend inline bool operator!=(tcp_seq a, tcp_seq b) { return a._raw != b._raw; }
-	friend inline u_int32_t operator-(tcp_seq a, tcp_seq b) { return a._raw - b._raw; }
+	friend inline int32_t operator-(tcp_seq a, tcp_seq b) { return a._raw - b._raw; }
 	friend inline tcp_seq operator+(tcp_seq a, u_int32_t delta) { return a += delta; }
 	friend inline tcp_seq operator-(tcp_seq a, u_int32_t delta) { return a -= delta; }
-	friend inline int32_t sdiff(tcp_seq a, tcp_seq b) { return a.raw() - b.raw(); }
-	friend inline bool operator<(tcp_seq a, tcp_seq b) { return sdiff(a, b) < 0; }
-	friend inline bool operator<=(tcp_seq a, tcp_seq b) { return sdiff(a, b) <= 0; }
-	friend inline bool operator>(tcp_seq a, tcp_seq b) { return sdiff(a, b) > 0; }
-	friend inline bool operator>=(tcp_seq a, tcp_seq b) { return sdiff(a, b) >= 0; }
+	friend inline bool operator<(tcp_seq a, tcp_seq b) { return a - b < 0; }
+	friend inline bool operator<=(tcp_seq a, tcp_seq b) { return a - b <= 0; }
+	friend inline bool operator>(tcp_seq a, tcp_seq b) { return a - b > 0; }
+	friend inline bool operator>=(tcp_seq a, tcp_seq b) { return a - b >= 0; }
 private:
 	u_int32_t _raw;
 };
