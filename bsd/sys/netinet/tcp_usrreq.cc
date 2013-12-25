@@ -1233,10 +1233,10 @@ tcp_fill_info(struct tcpcb *tp, struct tcp_info *ti)
 	 * FreeBSD-specific extension fields for tcp_info.
 	 */
 	ti->tcpi_rcv_space = tp->rcv_wnd;
-	ti->tcpi_rcv_nxt = tp->rcv_nxt;
+	ti->tcpi_rcv_nxt = tp->rcv_nxt.raw();
 	ti->tcpi_snd_wnd = tp->snd_wnd;
 	ti->tcpi_snd_bwnd = 0;		/* Unused, kept for compat. */
-	ti->tcpi_snd_nxt = tp->snd_nxt;
+	ti->tcpi_snd_nxt = tp->snd_nxt.raw();
 	ti->tcpi_snd_mss = tp->t_maxseg;
 	ti->tcpi_rcv_mss = tp->t_maxseg;
 	if (tp->t_flags & TF_TOE)

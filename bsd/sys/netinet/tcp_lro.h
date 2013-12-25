@@ -58,8 +58,8 @@ struct lro_entry
 	uint16_t		append_cnt;
 	uint32_t		p_len;		/* IP header payload length. */
 	uint32_t		ulp_csum;	/* TCP, etc. checksum. */
-	uint32_t		next_seq;	/* tcp_seq */
-	uint32_t		ack_seq;	/* tcp_seq */
+	tcp_seq			next_seq;	/* tcp_seq */
+	tcp_seq			ack_seq;	/* tcp_seq */
 	uint32_t		tsval;
 	uint32_t		tsecr;
 	uint16_t		window;

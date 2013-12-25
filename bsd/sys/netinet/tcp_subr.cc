@@ -416,8 +416,8 @@ tcpip_fillheaders(struct inpcb *inp, void *ip_ptr, void *tcp_ptr)
 #endif /* INET */
 	th->th_sport = inp->inp_lport;
 	th->th_dport = inp->inp_fport;
-	th->th_seq = 0;
-	th->th_ack = 0;
+	th->th_seq = tcp_seq(0);
+	th->th_ack = tcp_seq(0);
 	th->th_x2 = 0;
 	th->th_off = 5;
 	th->th_flags = 0;
@@ -1588,7 +1588,7 @@ tcp_new_isn(struct tcpcb *tp)
 	if (bsd_ticks != V_isn_last) {
 		projected_offset = V_isn_offset_old +
 		    ISN_BYTES_PER_SECOND / hz * (bsd_ticks - V_isn_last);
-		if (SEQ_GT(projected_offset, V_isn_offset))
+		if (SEQ_GT(tcp_seq(projected_offset), tcp_seq(V_isn_offset)))
 			V_isn_offset = projected_offset;
 		V_isn_offset_old = V_isn_offset;
 		V_isn_last = bsd_ticks;

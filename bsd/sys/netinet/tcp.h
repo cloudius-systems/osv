@@ -35,10 +35,40 @@
 
 #include <sys/cdefs.h>
 #include <sys/types.h>
+#include <bsd/sys/sys/param.h>
 
 #if __BSD_VISIBLE
 
-typedef	u_int32_t tcp_seq;
+class tcp_seq {
+public:
+	tcp_seq() {}
+	explicit tcp_seq(u_int32_t raw) : _raw(raw) {}
+	tcp_seq& operator=(const tcp_seq&) = default;
+	u_int32_t raw() const { return _raw; }
+	void to_host() { _raw = ntohl(_raw); }
+	void to_net() { _raw = htonl(_raw); }
+	tcp_seq& operator+=(uint32_t delta) { _raw += delta; return *this; }
+	tcp_seq& operator-=(uint32_t delta) { _raw -= delta; return *this; }
+	tcp_seq operator++(int) { return tcp_seq(_raw++); }
+	tcp_seq operator--(int) { return tcp_seq(_raw--); }
+	friend inline bool operator==(tcp_seq a, tcp_seq b) { return a._raw == b._raw; }
+	friend inline bool operator!=(tcp_seq a, tcp_seq b) { return a._raw != b._raw; }
+	friend inline u_int32_t operator-(tcp_seq a, tcp_seq b) { return a._raw - b._raw; }
+	friend inline tcp_seq operator+(tcp_seq a, u_int32_t delta) { return a += delta; }
+	friend inline tcp_seq operator-(tcp_seq a, u_int32_t delta) { return a -= delta; }
+private:
+	u_int32_t _raw;
+};
+
+inline tcp_seq __ntohl(tcp_seq s)
+{
+	return tcp_seq(ntohl(s.raw()));
+}
+
+inline tcp_seq __htonl(tcp_seq s)
+{
+	return tcp_seq(htonl(s.raw()));
+}
 
 #define tcp6_seq	tcp_seq	/* for KAME src sync over BSD*'s */
 #define tcp6hdr		tcphdr	/* for KAME src sync over BSD*'s */

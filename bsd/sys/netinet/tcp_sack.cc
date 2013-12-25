@@ -247,7 +247,7 @@ tcp_clean_sackreport(struct tcpcb *tp)
 	INP_WLOCK_ASSERT(tp->t_inpcb);
 	tp->rcv_numsacks = 0;
 	for (i = 0; i < MAX_SACK_BLKS; i++)
-		tp->sackblks[i].start = tp->sackblks[i].end=0;
+		tp->sackblks[i].start = tp->sackblks[i].end = tcp_seq(0);
 }
 
 /*

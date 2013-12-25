@@ -1158,7 +1158,7 @@ static void _syncache_add(struct in_conninfo *inc, struct tcpopt *to,
 	sc->sc_toepcb = toepcb;
 #endif
 	sc->sc_irs = th->th_seq;
-	sc->sc_iss = arc4random();
+	sc->sc_iss = tcp_seq(arc4random());
 	sc->sc_flags = 0;
 	sc->sc_flowlabel = 0;
 
@@ -1572,7 +1572,7 @@ static void syncookie_generate(struct syncache_head *sch, struct syncache *sc,
 	}
 
 	/* Secret rotation offset. */
-	off = sc->sc_iss & 0x7; /* iss was randomized before */
+	off = sc->sc_iss.raw() & 0x7; /* iss was randomized before */
 
 	/* Maximum segment size calculation. */
 	pmss = bsd_max(bsd_min(sc->sc_peer_mss, tcp_mssopt(&sc->sc_inc)), V_tcp_minmss);
@@ -1595,7 +1595,7 @@ static void syncookie_generate(struct syncache_head *sch, struct syncache *sc,
 	MD5Final((u_int8_t *)&md5_buffer, &ctx);
 
 	data |= (md5_buffer[0] << 7);
-	sc->sc_iss = data;
+	sc->sc_iss = tcp_seq(data);
 
 #ifdef INET6
 	*flowlabel = md5_buffer[1] & IPV6_FLOWLABEL_MASK;
@@ -1625,7 +1625,7 @@ syncookie_lookup(struct in_conninfo *inc, struct syncache_head *sch,
 	u_int32_t md5_buffer[MD5_DIGEST_LENGTH / sizeof(u_int32_t)];
 	u_int32_t data = 0;
 	u_int32_t *secbits;
-	tcp_seq ack, seq;
+	u_int32_t ack, seq;
 	int off, mss, wnd, flags;
 
 	SCH_LOCK_ASSERT(sch);
@@ -1634,8 +1634,8 @@ syncookie_lookup(struct in_conninfo *inc, struct syncache_head *sch,
 	 * Pull information out of SYN-ACK/ACK and
 	 * revert sequence number advances.
 	 */
-	ack = th->th_ack - 1;
-	seq = th->th_seq - 1;
+	ack = th->th_ack.raw() - 1;
+	seq = th->th_seq.raw() - 1;
 	off = (ack >> 1) & 0x7;
 	mss = (ack >> 4) & 0x7;
 	flags = ack & 0x7f;
@@ -1676,8 +1676,8 @@ syncookie_lookup(struct in_conninfo *inc, struct syncache_head *sch,
 	bcopy(inc, &sc->sc_inc, sizeof(struct in_conninfo));
 	sc->sc_ipopts = NULL;
 
-	sc->sc_irs = seq;
-	sc->sc_iss = ack;
+	sc->sc_irs = tcp_seq(seq);
+	sc->sc_iss = tcp_seq(ack);
 
 #ifdef INET6
 	if (inc->inc_flags & INC_ISIPV6) {
