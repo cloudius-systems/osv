@@ -296,10 +296,10 @@
 
 #define __bswap16_const(_x) (__uint16_t)((_x) << 8 | (_x) >> 8)
 
-#define __htonl(x)  __bswap32_const(x)
-#define __htons(x)  __bswap16_const(x)
-#define __ntohl(x)  __bswap32_const(x)
-#define __ntohs(x)  __bswap16_const(x)
+static inline u_int32_t __htonl(u_int32_t x) { return __bswap32_const(x); }
+static inline u_int16_t __htons(u_int16_t x) { return __bswap16_const(x); }
+static inline u_int32_t __ntohl(u_int32_t x) { return __bswap32_const(x); }
+static inline u_int16_t __ntohs(u_int16_t x) { return __bswap16_const(x); }
 
 /*
  * Basic byte order function prototypes for non-inline functions.
