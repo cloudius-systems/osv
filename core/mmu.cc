@@ -277,6 +277,167 @@ size_t page_size_level(unsigned level)
     return size_t(1) << (page_size_shift + pte_per_page_shift * level);
 }
 
+enum class allocate_intermediate_opt : bool {no = true, yes = false};
+enum class skip_empty_opt : bool {no = true, yes = false};
+enum class descend_opt : bool {no = true, yes = false};
+enum class once_opt : bool {no = true, yes = false};
+enum class split_opt : bool {no = true, yes = false};
+
+// Parameter descriptions:
+//  Allocate - if "yes" page walker will allocate intermediate page if one is missing
+//             otherwise it will skip to next address.
+//  Skip     - if "yes" page walker will not call leaf page handler (small_page/huge_page)
+//             on an empty pte.
+//  Descend  - if "yes" page walker will descend one level if large page range is mapped
+//             by small pages, otherwise it will call huge_page() on intermediate small pte
+//  Once     - if "yes" page walker will not loop over range of pages
+//  Split    - If "yes" page walker will split huge pages to small pages while walking
+template<allocate_intermediate_opt Allocate, skip_empty_opt Skip = skip_empty_opt::yes,
+        descend_opt Descend = descend_opt::yes, once_opt Once = once_opt::no, split_opt Split = split_opt::yes>
+class page_table_operation {
+private:
+    template<typename T>  bool opt2bool(T v) { return v == T::yes; }
+public:
+    bool allocate_intermediate(void) { return opt2bool(Allocate); }
+    bool skip_empty(void) { return opt2bool(Skip); }
+    bool descend(void) { return opt2bool(Descend); }
+    bool once(void) { return opt2bool(Once); }
+    bool split_large(hw_ptep ptep, int level) { return opt2bool(Split); }
+
+    // small_page() function is called on level 0 ptes. Each page table operation
+    // have to provide its own version.
+    void small_page(hw_ptep ptep, uintptr_t offset) { assert(0); }
+    // huge_page() function is called on leaf pte with level > 0 (currently only level 1,
+    // but may handle level 2 in the feature too). Each page table operation
+    // have to provide its own version.
+    void huge_page(hw_ptep ptep, uintptr_t offset) { assert(0); }
+    // if huge page range is covered by smaller pages some page table operations
+    // may want to have special handling for level 1 non leaf pte. intermediate_page_post()
+    // is called on such page after small_page() is called on all leaf pages in range
+    void intermediate_page_post(hw_ptep ptep, uintptr_t offset) { return; }
+    // Page walker calls small_page() when it has 4K region of virtual memory to
+    // deal with and huge_page() when it has 2M of virtual memory, but if it has
+    // 2M pte less then 2M of virt memory to operate upon and split is disabled
+    // neither of those two will be called, sup_page will be called instead. So
+    // if you are here it means that page walker encountered 2M pte and page table
+    // operation wants to do something special with sub-region of it since it disabled
+    // splitting.
+    void sub_page(hw_ptep ptep, int level, uintptr_t offset) { return; }
+};
+
+template<typename PageOp, int ParentLevel> class map_level;
+template<typename PageOp> struct map_level<PageOp, -1>
+{
+    map_level(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop) {}
+    void operator()(hw_ptep parent, uintptr_t base_virt, uintptr_t offset) {
+        assert(0);
+    }
+};
+
+typedef std::integral_constant<int, 4> max_level;
+
+template<typename PageOp, typename ParentLevel = max_level>
+        void map_range(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop = page_size,
+        hw_ptep ptep = hw_ptep::force(&page_table_root), ParentLevel level = max_level(),
+        uintptr_t base_virt = 0, uintptr_t offset = 0)
+{
+    map_level<PageOp, ParentLevel::value> pt_mapper(vstart, size, page_mapper, slop);
+    pt_mapper(ptep, base_virt, offset);
+}
+
+template<typename PageOp, int ParentLevel = 4> class map_level {
+private:
+    uintptr_t vstart;
+    uintptr_t vend;
+    size_t slop;
+    PageOp page_mapper;
+    typedef std::integral_constant<int, ParentLevel - 1> level;
+
+    bool skip_pte(hw_ptep ptep) {
+        return page_mapper.skip_empty() && ptep.read().empty();
+    }
+    bool descend(hw_ptep ptep) {
+        return page_mapper.descend() && !ptep.read().empty() && !ptep.read().large();
+    }
+public:
+    map_level(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop = page_size) :
+        vstart(vstart), vend(vstart + size - 1), slop(slop), page_mapper(page_mapper) {}
+    void operator()(hw_ptep parent, uintptr_t base_virt = 0, uintptr_t offset = 0) {
+        if (!parent.read().present()) {
+            if (!page_mapper.allocate_intermediate()) {
+                return;
+            }
+            allocate_intermediate_level(parent);
+        } else if (parent.read().large()) {
+            if (ParentLevel > 0 && page_mapper.split_large(parent, ParentLevel)) {
+                // We're trying to change a small page out of a huge page (or
+                // in the future, potentially also 2 MB page out of a 1 GB),
+                // so we need to first split the large page into smaller pages.
+                // Our implementation ensures that it is ok to free pieces of a
+                // alloc_huge_page() with free_page(), so it is safe to do such a
+                // split.
+                split_large_page(parent, ParentLevel);
+            } else {
+                // If page_mapper does not want to split, let it handle subpage by itself
+                page_mapper.sub_page(parent, ParentLevel, offset);
+                return;
+            }
+        }
+        hw_ptep pt = follow(parent.read());
+        phys step = phys(1) << (page_size_shift + level::value * pte_per_page_shift);
+        auto idx = pt_index(vstart, level::value);
+        auto eidx = pt_index(vend, level::value);
+        base_virt += idx * step;
+        base_virt = (int64_t(base_virt) << 16) >> 16; // extend 47th bit
+
+        do {
+            hw_ptep ptep = pt.at(idx);
+            uintptr_t vstart1 = vstart, vend1 = vend;
+            clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
+            if (level::value < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
+                if (level::value) {
+                    if (!skip_pte(ptep)) {
+                        if (descend(ptep) || !page_mapper.huge_page(ptep, offset)) {
+                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep,
+                                    level(), base_virt, offset);
+                            page_mapper.intermediate_page_post(ptep, offset);
+                        }
+                    }
+                } else {
+                    if (!skip_pte(ptep)) {
+                        page_mapper.small_page(ptep, offset);
+                    }
+                }
+            } else {
+                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep,
+                        level(), base_virt, offset);
+            }
+            base_virt += step;
+            offset += step;
+            ++idx;
+        } while(!page_mapper.once() && idx <= eidx);
+    }
+};
+
+class linear_page_mapper :
+        public page_table_operation<allocate_intermediate_opt::yes, skip_empty_opt::no, descend_opt::no> {
+    phys start;
+    phys end;
+public:
+    linear_page_mapper(phys start, size_t size) : start(start), end(start + size) {}
+    void small_page(hw_ptep ptep, uintptr_t offset) {
+        phys addr = start + offset;
+        assert(addr < end);
+        ptep.write(make_normal_pte(addr));
+    }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) {
+        phys addr = start + offset;
+        assert(addr < end);
+        ptep.write(make_large_pte(addr));
+        return true;
+    }
+};
+
 /*
  * a page_range_operation implementation operates (via the operate() method)
  * on a page-aligned byte range of virtual memory. The range is divided into a
@@ -937,39 +1098,13 @@ f_offset file_vma::offset(uintptr_t addr)
     return _offset + (addr - _range.start());
 }
 
-void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
-        phys delta, uintptr_t base_virt, size_t slop, unsigned level)
-{
-    --level;
-    if (!parent.read().present()) {
-        allocate_intermediate_level(parent);
-    }
-    hw_ptep pt = follow(parent.read());
-    phys step = phys(1) << (page_size_shift + level * pte_per_page_shift);
-    auto idx = pt_index(vstart, level);
-    auto eidx = pt_index(vend, level);
-    base_virt += idx * step;
-    base_virt = (s64(base_virt) << 16) >> 16; // extend 47th bit
-    while (idx <= eidx) {
-        uintptr_t vstart1 = vstart, vend1 = vend;
-        clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
-        if (level < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
-            pt.at(idx).write(make_pte(vstart1 + delta, level > 0));
-        } else {
-            linear_map_level(pt.at(idx), vstart1, vend1, delta, base_virt, slop, level);
-        }
-        base_virt += step;
-        ++idx;
-    }
-}
-
 void linear_map(void* _virt, phys addr, size_t size, size_t slop)
 {
     uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
-    linear_map_level(hw_ptep::force(&page_table_root), virt, virt + size - 1,
-            addr - virt, 0, slop, 4);
+    linear_page_mapper phys_map(addr, size);
+    map_range(virt, size, phys_map, slop);
 }
 
 void free_initial_memory_range(uintptr_t addr, size_t size)
