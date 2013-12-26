@@ -722,7 +722,6 @@ void vdepopulate(void* addr, size_t size)
     WITH_LOCK(vma_list_mutex) {
         operate_range(unpopulate(), addr, size);
     }
-    tlb_flush();
 }
 
 void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
