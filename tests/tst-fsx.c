@@ -832,7 +832,7 @@ dotruncate(unsigned size)
 	}
 }
 
-#ifdef FALLOC_FL_PUNCH_HOLE
+#if defined(FALLOC_FL_PUNCH_HOLE) && defined(FALLOCATE)
 void
 do_punch_hole(unsigned offset, unsigned length)
 {
@@ -1322,7 +1322,7 @@ test_fallocate()
 void
 test_punch_hole()
 {
-#ifdef FALLOC_FL_PUNCH_HOLE
+#if defined(FALLOC_FL_PUNCH_HOLE) && defined(FALLOCATE)
 	if (!lite && punch_hole_calls) {
 		if (fallocate(fd, FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE,
 				0, 1) && errno == EOPNOTSUPP) {
