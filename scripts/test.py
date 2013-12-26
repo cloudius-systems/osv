@@ -12,14 +12,29 @@ blacklist = [
 
 tests = sorted([os.path.basename(x) for x in glob.glob('build/release/tests/tst-*.so')])
 
-def scan_errors(s):
+def scan_errors(s, name):
     if not s:
         return False
     patterns = [
+        # These are a legacy error patterns printed outside the tests themselves
+        # The test writer should not assume these patterns are going to
+        # supported in the future and should indicate a test status as described
+        # below.
         "failures detected in test",
         "failure detected in test",
+        "FAIL",
+        "cannot execute tests/%s" % name,
+
+        # Below are generic error patterns for error case.
+        # A test should indicate it's status by a return value only:
+        #   0              - on success
+        #   non-zero value - on failure
+        # The below messages are printed by the OSv and are promissed to be
+        # supported in the future.
         "Assertion failed",
-        "FAIL"
+        "Aborted",
+        "program exited with status",
+        "program tests/%s returned" % name
     ]
     for pattern in patterns:
         if re.findall(pattern, s):
@@ -45,7 +60,7 @@ def run_test(name):
             sys.stdout.flush()
         line += ch
         if ch == '\n':
-            if not cmdargs.verbose and scan_errors(line):
+            if not cmdargs.verbose and scan_errors(line, name):
                 sys.stdout.write(out)
                 sys.stdout.flush()
                 cmdargs.verbose = True
@@ -53,7 +68,7 @@ def run_test(name):
 
     end = time.time()
 
-    if scan_errors(out) or process.returncode:
+    if scan_errors(out, name) or process.returncode:
         sys.stdout.write("Test %s FAILED\n" % name)
         sys.stdout.flush()
         exit(1)
