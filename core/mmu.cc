@@ -23,6 +23,7 @@
 #include <osv/error.h>
 #include <osv/trace.hh>
 #include "arch-mmu.hh"
+#include <stack>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -412,7 +413,14 @@ public:
 
 template<allocate_intermediate_opt Allocate, skip_empty_opt Skip = skip_empty_opt::yes>
 class vma_operation :
-        public page_table_operation<Allocate, Skip, descend_opt::yes, once_opt::no, split_opt::yes> {};
+        public page_table_operation<Allocate, Skip, descend_opt::yes, once_opt::no, split_opt::yes> {
+public:
+    // returns true if tlb flush is needed after address range processing is completed.
+    bool tlb_flush_needed(void) { return false; }
+    // this function is called at the very end of operate_range(). vma_operation may do
+    // whatever cleanup is needed here.
+    void finalize(void) { return; }
+};
 
 /*
  * populate() populates the page table with the entries it is (assumed to be)
@@ -460,6 +468,9 @@ public:
  * and marking the pages non-present.
  */
 class unpopulate : public vma_operation<allocate_intermediate_opt::no> {
+private:
+    std::stack<void*> small_pages;
+    std::stack<void*> huge_pages;
 public:
     void small_page(hw_ptep ptep, uintptr_t offset) {
         // Note: we free the page even if it is already marked "not present".
@@ -467,18 +478,29 @@ public:
         // not-present may only mean mprotect(PROT_NONE).
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        // FIXME: tlb flush
-        memory::free_page(phys_to_virt(pte.addr(false)));
+        small_pages.push(phys_to_virt(pte.addr(false)));
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        // FIXME: tlb flush
-        memory::free_huge_page(phys_to_virt(pte.addr(true)), huge_page_size);
+        huge_pages.push(phys_to_virt(pte.addr(false)));
         return true;
     }
     void intermediate_page(hw_ptep ptep, uintptr_t offset) {
         small_page(ptep, offset);
+    }
+    bool tlb_flush_needed(void) {
+        return !small_pages.empty() || !huge_pages.empty();
+    }
+    void finalize(void) {
+        while (!small_pages.empty()) {
+            memory::free_page(small_pages.top());
+            small_pages.pop();
+        }
+        while (!huge_pages.empty()) {
+            memory::free_huge_page(huge_pages.top(), huge_page_size);
+            huge_pages.pop();
+        }
     }
 };
 
@@ -494,6 +516,7 @@ public:
         change_perm(ptep, perm);
         return true;
     }
+    bool tlb_flush_needed(void) {return true;}
 };
 
 class virt_to_phys_map :
@@ -537,9 +560,10 @@ template<typename T> void operate_range(T mapper, void *start, size_t size)
     // instead try to make more judicious use of INVLPG - e.g., in
     // split_large_page() and other specific places where we modify specific
     // page table entries.
-    // TODO: Consider if we're doing tlb_flush() too often, e.g., twice
-    // in one mmap which first does evacuate() and then allocate().
-    tlb_flush();
+    if (mapper.tlb_flush_needed()) {
+        tlb_flush();
+    }
+    mapper.finalize();
 }
 
 template<typename T> void operate_range(T mapper, const vma &vma)
