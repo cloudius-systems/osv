@@ -450,7 +450,7 @@ void net::receiver()
 
             (*_ifn->if_input)(_ifn, m_head);
 
-            trace_virtio_net_rx_packet(_ifn->if_index, len);
+            trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
 
             // The interface may have been stopped while we were
             // passing the packet up the network stack.
