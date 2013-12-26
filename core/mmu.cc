@@ -135,9 +135,12 @@ void allocate_intermediate_level(hw_ptep ptep)
     ptep.write(make_normal_pte(pt_page));
 }
 
-void change_perm(hw_ptep ptep, unsigned int perm)
+bool change_perm(hw_ptep ptep, unsigned int perm)
 {
     pt_element pte = ptep.read();
+    unsigned int old = (pte.present() ? perm_read : 0) |
+            (pte.writable() ? perm_write : 0) |
+            (!pte.nx() ? perm_exec : 0);
     // Note: in x86, if the present bit (0x1) is off, not only read is
     // disallowed, but also write and exec. So in mprotect, if any
     // permission is requested, we must also grant read permission.
@@ -146,6 +149,8 @@ void change_perm(hw_ptep ptep, unsigned int perm)
     pte.set_writable(perm & perm_write);
     pte.set_nx(!(perm & perm_exec));
     ptep.write(pte);
+
+    return old & ~perm;
 }
 
 void split_large_page(hw_ptep ptep, unsigned level)
@@ -507,16 +512,17 @@ public:
 class protection : public vma_operation<allocate_intermediate_opt::no> {
 private:
     unsigned int perm;
+    bool do_flush;
 public:
-    protection(unsigned int perm) : perm(perm) { }
+    protection(unsigned int perm) : perm(perm), do_flush(false) { }
     void small_page(hw_ptep ptep, uintptr_t offset) {
-        change_perm(ptep, perm);
+        do_flush |= change_perm(ptep, perm);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        change_perm(ptep, perm);
+        do_flush |= change_perm(ptep, perm);
         return true;
     }
-    bool tlb_flush_needed(void) {return true;}
+    bool tlb_flush_needed(void) {return do_flush;}
 };
 
 class virt_to_phys_map :
