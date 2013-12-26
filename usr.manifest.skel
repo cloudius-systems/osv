@@ -102,7 +102,9 @@
 /tests/misc-mutex.so: ./tests/misc-mutex.so
 /tests/tst-hub.so: ./tests/tst-hub.so
 /tests/tst-condvar.so: ./tests/tst-condvar.so
+/tests/tst-commands.so: ./tests/tst-commands.so
 /tests/tst-queue-mpsc.so: ./tests/tst-queue-mpsc.so
+/tests/tst-fsx.so: ./tests/tst-fsx.so
 /&/tests/tst-af-local.so: ./&
 /&/tests/tst-pipe.so: ./&
 /&/tests/tst-bsd-kthread.so: ./&
