@@ -157,7 +157,9 @@ boost-tests := tests/tst-rename.so \
 	tests/tst-promise.so \
 	tests/tst-stat.so
 
-tests := tests/tst-pthread.so tests/tst-ramdisk.so tests/hello/Hello.class
+java_tests := tests/hello/Hello.class
+
+tests := tests/tst-pthread.so tests/tst-ramdisk.so
 tests += tests/tst-vblk.so tests/bench/bench.jar
 tests += tests/tst-bsd-evh.so tests/misc-bsd-callout.so
 tests += tests/tst-bsd-kthread.so
@@ -689,8 +691,23 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 
 $(src)/build.mk: $(generated-headers)
 
+# Generate a manifest of tests that inherits from the "tests" and ##############
+# "java_tests" variables                                          ##############
+
+# Func: append a first arg to a file name passed as a second arg
+append_to_file = $(shell echo $(1) >> $(2))
+
+# Generate a tests manifest
+$(out)/test.manifest.gen: $(src)/build.mk
+	$(shell rm -f $@)
+	touch $@
+	$(foreach test,$(tests),$(call append_to_file,/$(test): ./$(test),$@))
+	$(foreach test,$(java_tests),$(call append_to_file,/java/$(notdir $(test)): ./$(test),$@))
+
+################################################################################
+
 .PHONY: process-modules
-process-modules: bootfs.manifest.skel usr.manifest.skel
+process-modules: bootfs.manifest.skel usr.manifest.skel $(out)/test.manifest.gen
 	cd $(out)/module \
 	  && OSV_BASE=$(src) OSV_BUILD_PATH=$(out) $(src)/scripts/module.py --image-config $(image)
 

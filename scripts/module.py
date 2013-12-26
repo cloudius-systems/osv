@@ -23,6 +23,10 @@ class jvm(api.basic_app):
                 mains.write('\n'.join(app.get_multimain_lines()) + '\n')
 
         manifest.write('%s:%s\n' % (self.multimain_manifest, javamains_path))
+        # Add a generated content here
+        with open('%s/test.manifest.gen' % build_dir) as src_file:
+            for line in src_file:
+                manifest.write(line)
 
     def get_launcher_args(self):
         jvm_args = []
