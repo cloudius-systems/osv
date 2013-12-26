@@ -230,7 +230,7 @@ void clamp(uintptr_t& vstart1, uintptr_t& vend1,
     vend1 = std::min(vend1, max);
 }
 
-unsigned pt_index(uintptr_t virt, unsigned level)
+constexpr unsigned pt_index(uintptr_t virt, unsigned level)
 {
     return pt_index(reinterpret_cast<void*>(virt), level);
 }
@@ -244,7 +244,7 @@ void set_nr_page_sizes(unsigned nr)
 
 pt_element page_table_root;
 
-size_t page_size_level(unsigned level)
+constexpr size_t page_size_level(unsigned level)
 {
     return size_t(1) << (page_size_shift + pte_per_page_shift * level);
 }

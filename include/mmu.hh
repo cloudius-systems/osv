@@ -35,10 +35,9 @@ static char* const phys_mem = reinterpret_cast<char*>(0xffffc00000000000);
 // area for debug allocations:
 static char* const debug_base = reinterpret_cast<char*>(0xffffe00000000000);
 
-inline unsigned pt_index(void *virt, unsigned level)
+constexpr inline unsigned pt_index(void *virt, unsigned level)
 {
-    auto v = reinterpret_cast<ulong>(virt);
-    return (v >> (page_size_shift + level * pte_per_page_shift)) & (pte_per_page - 1);
+    return (reinterpret_cast<ulong>(virt) >> (page_size_shift + level * pte_per_page_shift)) & (pte_per_page - 1);
 }
 
 enum {
