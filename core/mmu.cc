@@ -85,8 +85,6 @@ phys pte_level_mask(unsigned level)
     return ~((phys(1) << shift) - 1);
 }
 
-const unsigned nlevels = 4;
-
 void* phys_to_virt(phys pa)
 {
     // The ELF is mapped 1:1
@@ -98,21 +96,7 @@ void* phys_to_virt(phys pa)
     return phys_mem + pa;
 }
 
-phys virt_to_phys_pt(void* virt)
-{
-    auto v = reinterpret_cast<uintptr_t>(virt);
-    auto pte = pt_element::force(processor::read_cr3());
-    unsigned level = nlevels;
-    while (level > 0 && !pte.large()) {
-        assert(pte.present() || level == nlevels);
-        --level;
-        auto pt = follow(pte);
-        pte = pt.at(pt_index(virt, level)).read();
-    }
-    assert(!pte.empty());
-    auto mask = pte_level_mask(level);
-    return (pte.addr(level != 0) & mask) | (v & ~mask);
-}
+phys virt_to_phys_pt(void* virt);
 
 phys virt_to_phys(void *virt)
 {
@@ -325,7 +309,7 @@ template<typename PageOp> struct map_level<PageOp, -1>
 typedef std::integral_constant<int, 4> max_level;
 
 template<typename PageOp, typename ParentLevel = max_level>
-        void map_range(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop = page_size,
+        void map_range(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size,
         hw_ptep ptep = hw_ptep::force(&page_table_root), ParentLevel level = max_level(),
         uintptr_t base_virt = 0, uintptr_t offset = 0)
 {
@@ -338,7 +322,7 @@ private:
     uintptr_t vstart;
     uintptr_t vend;
     size_t slop;
-    PageOp page_mapper;
+    PageOp& page_mapper;
     typedef std::integral_constant<int, ParentLevel - 1> level;
 
     bool skip_pte(hw_ptep ptep) {
@@ -348,7 +332,7 @@ private:
         return page_mapper.descend() && !ptep.read().empty() && !ptep.read().large();
     }
 public:
-    map_level(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop = page_size) :
+    map_level(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size) :
         vstart(vstart), vend(vstart + size - 1), slop(slop), page_mapper(page_mapper) {}
     void operator()(hw_ptep parent, uintptr_t base_virt = 0, uintptr_t offset = 0) {
         if (!parent.read().present()) {
@@ -512,6 +496,36 @@ public:
     }
 };
 
+class virt_to_phys_map :
+        public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
+        descend_opt::yes, once_opt::yes, split_opt::no> {
+private:
+    uintptr_t v;
+    phys result;
+    static constexpr phys null = ~0ull;
+    virt_to_phys_map(uintptr_t v) : v(v), result(null) {}
+
+    phys addr(void) {
+        assert(result != null);
+        return result;
+    }
+public:
+    friend phys virt_to_phys_pt(void* virt);
+    void small_page(hw_ptep ptep, uintptr_t offset) {
+        assert(result == null);
+        result = ptep.read().addr(false) | (v & ~pte_level_mask(0));
+    }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) {
+        assert(result == null);
+        result = ptep.read().addr(true) | (v & ~pte_level_mask(1));
+        return true;
+    }
+    void sub_page(hw_ptep ptep, int l, uintptr_t offset) {
+        assert(ptep.read().large());
+        huge_page(ptep, offset);
+    }
+};
+
 template<typename T> void operate_range(T mapper, void *start, size_t size)
 {
     start = align_down(start, page_size);
@@ -531,6 +545,15 @@ template<typename T> void operate_range(T mapper, void *start, size_t size)
 template<typename T> void operate_range(T mapper, const vma &vma)
 {
     operate_range(mapper, (void*)vma.start(), vma.size());
+}
+
+phys virt_to_phys_pt(void* virt)
+{
+    auto v = reinterpret_cast<uintptr_t>(virt);
+    auto vbase = align_down(v, page_size);
+    virt_to_phys_map v2p_mapper(v);
+    map_range(vbase, page_size, v2p_mapper);
+    return v2p_mapper.addr();
 }
 
 bool contains(uintptr_t start, uintptr_t end, vma& y)
