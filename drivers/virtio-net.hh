@@ -263,6 +263,7 @@ private:
     bool _guest_csum = false;
     bool _guest_tso4 = false;
     bool _host_tso4 = false;
+    bool _guest_ufo = false;
 
     u32 _hdr_size;
 

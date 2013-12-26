@@ -291,6 +291,7 @@ bool net::read_config()
     _guest_csum = get_guest_feature_bit(VIRTIO_NET_F_GUEST_CSUM);
     _guest_tso4 = get_guest_feature_bit(VIRTIO_NET_F_GUEST_TSO4);
     _host_tso4 = get_guest_feature_bit(VIRTIO_NET_F_HOST_TSO4);
+    _guest_ufo = get_guest_feature_bit(VIRTIO_NET_F_GUEST_UFO);
 
     net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
     net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
@@ -703,7 +704,9 @@ u32 net::get_driver_features(void)
                  | (1 << VIRTIO_NET_F_GUEST_TSO4) \
                  | (1 << VIRTIO_NET_F_HOST_ECN)   \
                  | (1 << VIRTIO_NET_F_HOST_TSO4)  \
-                 | (1 << VIRTIO_NET_F_GUEST_ECN));
+                 | (1 << VIRTIO_NET_F_GUEST_ECN)
+                 | (1 << VIRTIO_NET_F_GUEST_UFO)
+            );
 }
 
 hw_driver* net::probe(hw_device* dev)
