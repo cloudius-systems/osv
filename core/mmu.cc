@@ -249,6 +249,34 @@ void tlb_flush()
     });
 }
 
+void clamp(uintptr_t& vstart1, uintptr_t& vend1,
+           uintptr_t min, size_t max, size_t slop)
+{
+    vstart1 &= ~(slop - 1);
+    vend1 |= (slop - 1);
+    vstart1 = std::max(vstart1, min);
+    vend1 = std::min(vend1, max);
+}
+
+unsigned pt_index(uintptr_t virt, unsigned level)
+{
+    return pt_index(reinterpret_cast<void*>(virt), level);
+}
+
+unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
+
+void set_nr_page_sizes(unsigned nr)
+{
+    nr_page_sizes = nr;
+}
+
+pt_element page_table_root;
+
+size_t page_size_level(unsigned level)
+{
+    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
+}
+
 /*
  * a page_range_operation implementation operates (via the operate() method)
  * on a page-aligned byte range of virtual memory. The range is divided into a
@@ -909,29 +937,6 @@ f_offset file_vma::offset(uintptr_t addr)
     return _offset + (addr - _range.start());
 }
 
-unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
-
-void set_nr_page_sizes(unsigned nr)
-{
-    nr_page_sizes = nr;
-}
-
-pt_element page_table_root;
-
-void clamp(uintptr_t& vstart1, uintptr_t& vend1,
-           uintptr_t min, size_t max, size_t slop)
-{
-    vstart1 &= ~(slop - 1);
-    vend1 |= (slop - 1);
-    vstart1 = std::max(vstart1, min);
-    vend1 = std::min(vend1, max);
-}
-
-unsigned pt_index(uintptr_t virt, unsigned level)
-{
-    return pt_index(reinterpret_cast<void*>(virt), level);
-}
-
 void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
         phys delta, uintptr_t base_virt, size_t slop, unsigned level)
 {
@@ -956,11 +961,6 @@ void linear_map_level(hw_ptep parent, uintptr_t vstart, uintptr_t vend,
         base_virt += step;
         ++idx;
     }
-}
-
-size_t page_size_level(unsigned level)
-{
-    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
 }
 
 void linear_map(void* _virt, phys addr, size_t size, size_t slop)
