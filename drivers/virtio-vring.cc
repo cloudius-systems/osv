@@ -60,6 +60,8 @@ namespace virtio {
         _used_event = reinterpret_cast<std::atomic<u16>*>(&_avail->_ring[_num]);
 
         _sg_vec.reserve(max_sgs);
+
+        _use_indirect = false;
     }
 
     vring::~vring()
@@ -88,7 +90,7 @@ namespace virtio {
 
     bool vring::use_indirect(int desc_needed)
     {
-        return false && // It degrades netperf performance
+        return _use_indirect &&
                 _dev->get_indirect_buf_cap() &&
                 desc_needed > 1 &&	// no need to use indirect for a single descriptor
                 _avail_count < _num / 4;  // use indirect only when low space

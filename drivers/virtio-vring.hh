@@ -147,6 +147,8 @@ class virtio_driver;
         bool avail_ring_has_room(int n);
         bool refill_ring_cond();
         bool use_indirect(int desc_needed);
+        void set_use_indirect(bool flag) { _use_indirect = flag;}
+        bool get_use_indirect() { return _use_indirect;}
         bool kick();
         // Total number of descriptors in ring
         int size() {return _num;}
@@ -247,6 +249,8 @@ class virtio_driver;
         // pointer to the end of the used ring to get a glimpse of the host avail idx
         std::atomic<u16> *_avail_event;
         std::atomic<u16> *_used_event;
+        // A flag set by driver to turn on/off indirect descriptor
+        bool _use_indirect;
     };
 
 

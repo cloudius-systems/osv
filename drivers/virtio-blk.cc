@@ -117,6 +117,9 @@ blk::blk(pci::device& pci_dev)
     auto queue = get_virt_queue(0);
     _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
 
+    // Enable indirect descriptor
+    queue->set_use_indirect(true);
+
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     struct blk_priv* prv;

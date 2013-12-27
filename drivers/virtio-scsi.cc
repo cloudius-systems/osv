@@ -355,6 +355,9 @@ scsi::scsi(pci::device& dev)
             { VIRTIO_SCSI_QUEUE_REQ, [=] { queue->disable_interrupts(); }, t },
     });
 
+    // Enable indirect descriptor
+    queue->set_use_indirect(true);
+
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     scan();
