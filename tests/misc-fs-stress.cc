@@ -78,8 +78,8 @@ int main(int argc, char const *argv[])
     _stat_printer.stop();
 
     auto actual_test_duration = to_seconds(test_end - test_start);
-    printf("Wrote %.3f MB in %.2f s = %.3f Mb/s\n", (float) total / MB, actual_test_duration,
-        (float)total / MB / actual_test_duration);
+    printf("Wrote %.3f MB in %.2f s = %.3f Mb/s\n", (double) total / MB, actual_test_duration,
+        (double) total / MB / actual_test_duration);
 
     printf("\n");
     print_distribution(samples);
