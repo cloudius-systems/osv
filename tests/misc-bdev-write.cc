@@ -25,10 +25,14 @@ std::atomic<long> bytes_written(0);
 
 static void bio_done(struct bio* bio)
 {
+    auto err = bio->bio_flags & BIO_ERROR;
     bytes_written += bio->bio_bcount;
     free(bio->bio_data);
     destroy_bio(bio);
     bio_inflights--;
+    if (err) {
+        printf("bio err!\n");
+    }
 }
 
 int main(int argc, char const *argv[])
