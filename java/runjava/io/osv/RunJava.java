@@ -27,7 +27,6 @@ public class RunJava {
         try {
             parseArgs(args);
         } catch (Throwable ex) {
-            System.err.println("RunJava: Uncaught Java exception:"+ex);
             ex.printStackTrace();
         }
     }

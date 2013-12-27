@@ -79,7 +79,6 @@ public class OsvSystemClassLoader extends ClassLoader {
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
-                System.err.println("OsvSystemClassLoader: Uncaught Java exception:"+e);
                 e.printStackTrace();
             }
         });
