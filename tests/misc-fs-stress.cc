@@ -50,8 +50,8 @@ int main(int argc, char const *argv[])
     int fd = open(fname, O_CREAT | O_RDWR | O_LARGEFILE | O_DIRECT);
     FILE *f = fdopen(fd, "w");
 
-    std::atomic<int> stat_bytes_written(0);
-    int total = 0;
+    std::atomic<long> stat_bytes_written(0);
+    long total = 0;
 
     auto test_start = s_clock.now();
     auto end_at = test_start + test_duration;

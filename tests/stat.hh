@@ -14,12 +14,12 @@ class stat_printer {
 private:
     std::chrono::high_resolution_clock _clock;
     std::promise<bool> _done;
-    std::atomic<int>& _counter;
+    std::atomic<long>& _counter;
     std::function<void(float)> _formatter;
     std::chrono::milliseconds stat_period;
     std::thread _thread;
 public:
-    stat_printer(std::atomic<int>& counter,
+    stat_printer(std::atomic<long>& counter,
         std::function<void(float)> formatter,
         int period_millis = 500) :
          _clock(),

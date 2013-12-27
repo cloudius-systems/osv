@@ -21,7 +21,7 @@
 static std::chrono::high_resolution_clock s_clock;
 
 std::atomic<int> bio_inflights(0);
-std::atomic<int> bytes_written(0);
+std::atomic<long> bytes_written(0);
 
 static void bio_done(struct bio* bio)
 {
@@ -46,8 +46,9 @@ int main(int argc, char const *argv[])
 
     const std::chrono::seconds test_duration(10);
     const int buf_size = 4*KB;
-    int total = 0;
-    int offset = 0;
+
+    long total = 0;
+    long offset = 0;
 
     auto test_start = s_clock.now();
     auto end_at = test_start + test_duration;
