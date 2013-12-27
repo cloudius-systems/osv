@@ -13,8 +13,6 @@
 #include "processor.hh"
 #include <osv/types.h>
 
-class Driver;
-
 #define pci_tag "pci"
 #define pci_d(...)   tprintf_d(pci_tag, __VA_ARGS__)
 #define pci_i(...)   tprintf_i(pci_tag, __VA_ARGS__)
