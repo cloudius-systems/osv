@@ -38,6 +38,7 @@ bool logger::parse_configuration(void)
     add_tag("pci", logger_info);
     add_tag("poll", logger_info);
     add_tag("dhcp", logger_info);
+    add_tag("acpi", logger_error);
 
     return (true);
 }

@@ -31,6 +31,12 @@ extern "C" {
 
 #include "prio.hh"
 
+#define acpi_tag "acpi"
+#define acpi_d(...)   tprintf_d(acpi_tag, __VA_ARGS__)
+#define acpi_i(...)   tprintf_i(acpi_tag, __VA_ARGS__)
+#define acpi_w(...)   tprintf_w(acpi_tag, __VA_ARGS__)
+#define acpi_e(...)   tprintf_e(acpi_tag, __VA_ARGS__)
+
 ACPI_STATUS AcpiOsInitialize(void)
 {
     return AE_OK;
@@ -485,7 +491,7 @@ void AcpiOsVprintf(const char *Format, va_list Args)
 
     vsnprintf(msg, sizeof(msg), Format, Args);
 
-    console::write_ll(msg, strlen(msg));
+    acpi_i(msg);
 }
 
 namespace acpi {
@@ -500,7 +506,7 @@ void early_init()
 
     status = AcpiInitializeTables(TableArray, ACPI_MAX_INIT_TABLES, TRUE);
     if (ACPI_FAILURE(status)) {
-        debug("AcpiInitializeTables failed: %s\n", AcpiFormatException(status));
+        acpi_e("AcpiInitializeTables failed: %s\n", AcpiFormatException(status));
         return;
     }
 }
@@ -514,21 +520,21 @@ void init()
     // Initialize ACPICA subsystem
     status = AcpiInitializeSubsystem();
     if (ACPI_FAILURE(status)) {
-        debug("AcpiInitializeSubsystem failed: %s\n", AcpiFormatException(status));
+        acpi_e("AcpiInitializeSubsystem failed: %s\n", AcpiFormatException(status));
         return;
     }
 
     // Copy the root table list to dynamic memory
     status = AcpiReallocateRootTable();
     if (ACPI_FAILURE(status)) {
-        debug("AcpiReallocateRootTable failed: %s\n", AcpiFormatException(status));
+        acpi_e("AcpiReallocateRootTable failed: %s\n", AcpiFormatException(status));
         return;
     }
 
     // Create the ACPI namespace from ACPI tables
     status = AcpiLoadTables();
     if (ACPI_FAILURE(status)) {
-        debug("AcpiLoadTables failed: %s\n", AcpiFormatException(status));
+        acpi_e("AcpiLoadTables failed: %s\n", AcpiFormatException(status));
         return;
     }
 
@@ -537,14 +543,14 @@ void init()
     // Initialize the ACPI hardware
     status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
     if (ACPI_FAILURE(status)) {
-        debug("AcpiEnableSubsystem failed: %s\n", AcpiFormatException(status));
+        acpi_e("AcpiEnableSubsystem failed: %s\n", AcpiFormatException(status));
         return;
     }
 
     // Complete the ACPI namespace object initialization
     status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
     if (ACPI_FAILURE(status)) {
-        debug("AcpiInitializeObjects failed: %s\n", AcpiFormatException(status));
+        acpi_e("AcpiInitializeObjects failed: %s\n", AcpiFormatException(status));
     }
 }
 
