@@ -88,15 +88,15 @@ error_path(device_t dev)
 const char *
 xenbus_strstate(XenbusState state)
 {
-	static const char *const name[] = {
-		[ XenbusStateUnknown      ] = "Unknown",
-		[ XenbusStateInitialising ] = "Initialising",
-		[ XenbusStateInitWait     ] = "InitWait",
-		[ XenbusStateInitialised  ] = "Initialised",
-		[ XenbusStateConnected    ] = "Connected",
-		[ XenbusStateClosing      ] = "Closing",
-		[ XenbusStateClosed	  ] = "Closed",
-	};
+	static auto name = initialize_array<const char *, XenbusStateClosed + 1>({
+		{ XenbusStateUnknown, "Unknown" },
+		{ XenbusStateInitialising, "Initialising" },
+		{ XenbusStateInitWait, "InitWait" },
+		{ XenbusStateInitialised, "Initialised" },
+		{ XenbusStateConnected, "Connected" },
+		{ XenbusStateClosing, "Closing" },
+		{ XenbusStateClosed, "Closed" },
+	});
 
 	return ((state < (XenbusStateClosed + 1)) ? name[state] : "INVALID");
 }
