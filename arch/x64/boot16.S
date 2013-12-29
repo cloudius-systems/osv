@@ -62,6 +62,8 @@ init:
 	mov %ax, %es
 	mov %ax, %ss
 	mov $0x7c00, %sp
+	mov $0x2401, %ax # enable a20 gate
+	int $0x15
 	lea int1342_boot_struct, %si
 	mov $0x42, %ah
 	mov $0x80, %dl
