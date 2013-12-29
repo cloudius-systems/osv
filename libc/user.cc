@@ -16,6 +16,7 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <errno.h>
+#include <grp.h>
 
 #include <debug.hh>
 
@@ -39,6 +40,7 @@ static char password[] = "";
 static char gecos[] = "OSV User";
 static char homedir[] = "/";
 static char shell[] = "?";
+static char *group_members[] = { username };
 
 static struct passwd single_user = {
         username, password, 0, 0, gecos, homedir, shell
@@ -82,4 +84,23 @@ int setresgid(gid_t rgid, gid_t egid, gid_t sgid)
         errno = EPERM;
         return -1;
     }
+}
+
+static struct group single_group = {
+    username, password, getgid(), group_members
+};
+
+int
+getgrgid_r (gid_t gid, struct group *grp, char *buffer, size_t buflen,
+            struct group **result)
+{
+    if (gid != getgid()) {
+        *result = NULL;
+        return 0;
+    }
+
+    *grp = single_group;
+    *result = grp;
+
+    return 0;
 }
