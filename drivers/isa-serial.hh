@@ -39,6 +39,7 @@ private:
         // When bit 7 (DLAB) of LCR is set to 1, the two registers 0 and 1
         // change their meaning and become two bytes controlling the baud rate
         LCR_DLAB = 0x80,    // Divisor Latch Access Bit in LCR register
+        LCR_8BIT = 3,
         DLL_ADDRESS = 0,    // Divisor Latch LSB Register
         DLM_ADDRESS = 1,    // Divisor Latch MSB Register
         // Various bits of the Line Status Register
