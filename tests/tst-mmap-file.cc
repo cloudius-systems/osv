@@ -135,6 +135,14 @@ int main(int argc, char *argv[])
     report(munmap(aligned_addr, 0) == -1 && errno == EINVAL,
            "munmap: force EINVAL by passing length equals to zero.");
 
+    fd = open("/tmp/mmap-file-test", O_RDONLY);
+    report(fd > 0, "open file again: O_RDONLY");
+    void *b = mmap(0, 4096, PROT_READ, MAP_SHARED, fd, 0);
+    report(mprotect(b, 4096, PROT_READ | PROT_WRITE) == -1 && errno == EACCES,
+            "mprotect: try to add write permission to read only mmap.");
+    report(munmap(b, 4096) == 0, "munmap temporary mapping");
+    report(close(fd) == 0, "close again");
+
     // TODO: map an append-only file with prot asking for PROT_WRITE, mmap should return EACCES.
     // TODO: map a file under a fs mounted with the flag NO_EXEC and prot asked for PROT_EXEC (expect EPERM).
 
