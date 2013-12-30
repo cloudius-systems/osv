@@ -214,6 +214,110 @@ class osv_memory(gdb.Command):
         print ("Free Memory:  %d Bytes (%.2f%%)" % 
                (freemem, (freemem*100.0/memsize)))
 
+#
+# Returns a u64 value from arc_stats given a field name.
+#
+def get_arc_stat_by_name(arc_stats, field):
+    return long(gdb.parse_and_eval('((struct arc_stats *) '+str(arc_stats)+')->'+str(field)+'.value.ui64'))
+
+class osv_zfs(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv zfs',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        zil_replay_disable = gdb.parse_and_eval('zil_replay_disable')
+        zfs_nocacheflush = gdb.parse_and_eval('zfs_nocacheflush')
+        zfs_prefetch_disable = gdb.parse_and_eval('zfs_prefetch_disable')
+
+        print (":: ZFS TUNABLES ::")
+        print ("\tzil_replay_disable=%d" % zil_replay_disable)
+        print ("\tzfs_nocacheflush=%d" % zfs_nocacheflush)
+        print ("\tzfs_prefetch_disable=%d" % zfs_prefetch_disable)
+
+        # Get address of 'struct arc_stats arc_stats'
+        arc_stats_struct = long(gdb.parse_and_eval('(u64) &arc_stats'))
+
+        arc_size = get_arc_stat_by_name(arc_stats_struct, 'arcstat_size')
+        arc_target_size = get_arc_stat_by_name(arc_stats_struct, 'arcstat_c')
+        arc_min_size = get_arc_stat_by_name(arc_stats_struct, 'arcstat_c_min')
+        arc_max_size = get_arc_stat_by_name(arc_stats_struct, 'arcstat_c_max')
+
+        # Breakdown cache size
+        arc_mru_size = get_arc_stat_by_name(arc_stats_struct, 'arcstat_p')
+        arc_mfu_size = arc_target_size - arc_mru_size
+        arc_mru_perc = 100 * (float(arc_mru_size) / arc_target_size)
+        arc_mfu_perc = 100 * (float(arc_mfu_size) / arc_target_size)
+
+        print (":: ARC SIZES ::")
+        print ("\tActual ARC Size: %d" % arc_size)
+        print ("\tTarget size of ARC: %d" % arc_target_size)
+        print ("\tMin Target size of ARC: %d" % arc_min_size)
+        print ("\tMax Target size of ARC: %d" % arc_max_size)
+        print ("\t\tMost Recently Used (MRU) size: %d (%.2f%%)" %
+               (arc_mru_size, arc_mru_perc))
+        print ("\t\tMost Frequently Used (MFU) size: %d (%.2f%%)" %
+               (arc_mfu_size, arc_mfu_perc))
+
+        # Cache hits/misses
+        arc_hits = get_arc_stat_by_name(arc_stats_struct,'arcstat_hits')
+        arc_misses = get_arc_stat_by_name(arc_stats_struct, 'arcstat_misses')
+        arc_ac_total = arc_hits + arc_misses;
+        arc_hits_perc = 100 * (float(arc_hits) / arc_ac_total);
+        arc_misses_perc = 100 * (float(arc_misses) / arc_ac_total);
+
+        print (":: ARC EFFICIENCY ::")
+        print ("Total ARC accesses: %d" % arc_ac_total)
+        print ("\tARC hits: %d (%.2f%%)" %
+               (arc_hits, arc_hits_perc))
+
+        arc_mru_hits = get_arc_stat_by_name(arc_stats_struct, 'arcstat_mru_hits')
+        arc_mru_ghost_hits = get_arc_stat_by_name(arc_stats_struct, 'arcstat_mru_ghost_hits')
+        arc_mru_hits_perc = 100 * (float(arc_mru_hits) / arc_hits);
+
+        print ("\t\tARC MRU hits: %d (%.2f%%)" %
+               (arc_mru_hits, arc_mru_hits_perc))
+        print ("\t\t\tGhost Hits: %d" % arc_mru_ghost_hits)
+
+        arc_mfu_hits = get_arc_stat_by_name(arc_stats_struct, 'arcstat_mfu_hits')
+        arc_mfu_ghost_hits = get_arc_stat_by_name(arc_stats_struct, 'arcstat_mfu_ghost_hits')
+        arc_mfu_hits_perc = 100 * (float(arc_mfu_hits) / arc_hits);
+
+        print ("\t\tARC MFU hits: %d (%.2f%%)" %
+               (arc_mfu_hits, arc_mfu_hits_perc))
+        print ("\t\t\tGhost Hits: %d" % arc_mfu_ghost_hits)
+
+        print ("\tARC misses: %d (%.2f%%)" %
+               (arc_misses, arc_misses_perc))
+
+        # Hash data
+        arc_hash_elements = get_arc_stat_by_name(arc_stats_struct, 'arcstat_hash_elements')
+        arc_max_hash_elements = get_arc_stat_by_name(arc_stats_struct, 'arcstat_hash_elements_max')
+        arc_hash_collisions = get_arc_stat_by_name(arc_stats_struct, 'arcstat_hash_collisions')
+        arc_hash_chains = get_arc_stat_by_name(arc_stats_struct, 'arcstat_hash_chains')
+
+        print ("Total Hash elements: %d" % arc_hash_elements)
+        print ("\tMax Hash elements: %d" % arc_max_hash_elements)
+        print ("\tHash collisions: %d" % arc_hash_collisions)
+        print ("\tHash chains: %d" % arc_hash_chains)
+
+        # L2ARC (not displayed if not supported)
+        l2arc_size = get_arc_stat_by_name(arc_stats_struct, 'arcstat_l2_size')
+
+        if l2arc_size != 0:
+            l2arc_hits = get_arc_stat_by_name(arc_stats_struct, 'arcstat_l2_hits')
+            l2arc_misses = get_arc_stat_by_name(arc_stats_struct, 'arcstat_l2_misses')
+            l2arc_ac_total = l2arc_hits + l2arc_misses;
+            l2arc_hits_perc = 100 * (float(l2arc_hits) / l2arc_ac_total);
+            l2arc_misses_perc = 100 * (float(l2arc_misses) / l2arc_ac_total);
+
+            print (":: L2ARC ::")
+            print ("\tActual L2ARC Size: %d" % l2arc_size)
+            print ("Total L2ARC accesses: %d" % l2arc_ac_total)
+            print ("\tL2ARC hits: %d (%.2f%%)" %
+                   (l2arc_hits, l2arc_hits_perc))
+            print ("\tL2ARC misses: %d (%.2f%%)" %
+                   (l2arc_misses, l2arc_misses_perc))
+
 class osv_mmap(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv mmap',
@@ -1138,6 +1242,7 @@ osv()
 osv_heap()
 osv_memory()
 osv_mmap()
+osv_zfs()
 osv_syms()
 osv_info()
 osv_info_threads()
