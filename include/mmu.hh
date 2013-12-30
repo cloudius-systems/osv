@@ -89,6 +89,7 @@ public:
     virtual void fault(uintptr_t addr, exception_frame *ef) = 0;
     virtual void split(uintptr_t edge) = 0;
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
+    virtual int validate_perm(unsigned perm) { return 0; }
     class addr_compare;
 protected:
     addr_range _range;
@@ -124,6 +125,7 @@ public:
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
+    virtual int validate_perm(unsigned perm);
 private:
     f_offset offset(uintptr_t addr);
     fileref _file;
@@ -135,7 +137,7 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
               fileref file, f_offset offset);
 void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm);
 void unmap(void* addr, size_t size);
-void protect(void *addr, size_t size, unsigned int perm);
+error protect(void *addr, size_t size, unsigned int perm);
 error msync(void* addr, size_t length, int flags);
 bool is_linear_mapped(void *addr, size_t size);
 bool ismapped(void *addr, size_t size);

@@ -597,8 +597,9 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
  * Change protection for a virtual memory range.  Updates page tables and VMas
  * for populated memory regions and just VMAs for unpopulated ranges.
  *
+ * \return returns EACCESS/EPERM if requested permission cannot be granted
  */
-void protect(void *addr, size_t size, unsigned int perm)
+error protect(void *addr, size_t size, unsigned int perm)
 {
     uintptr_t start = reinterpret_cast<uintptr_t>(addr);
     uintptr_t end = start + size;
@@ -608,6 +609,10 @@ void protect(void *addr, size_t size, unsigned int perm)
     for (auto i = range.first; i != range.second; ++i) {
         if (i->perm() == perm)
             continue;
+        int err = i->validate_perm(perm);
+        if (err != 0) {
+            return make_error(err);
+        }
         i->split(end);
         i->split(start);
         if (contains(start, end, *i)) {
@@ -615,6 +620,7 @@ void protect(void *addr, size_t size, unsigned int perm)
         }
     }
     operate_range(protection(perm), addr, size);
+    return no_error();
 }
 
 uintptr_t find_hole(uintptr_t start, uintptr_t size)
@@ -970,6 +976,11 @@ file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offse
     , _offset(offset)
     , _shared(shared)
 {
+    int err = validate_perm(perm);
+
+    if (err != 0) {
+        throw make_error(err);
+    }
 }
 
 void file_vma::split(uintptr_t edge)
@@ -995,6 +1006,25 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
     write(_file, addr(), off, std::min(size, fsize - off));
     auto err = sys_fsync(_file.get());
     return make_error(err);
+}
+
+int file_vma::validate_perm(unsigned perm)
+{
+    // fail if mapping a file that is not opened for reading.
+    if (!(_file->f_flags & FREAD)) {
+        return EACCES;
+    }
+    if (perm & perm_write) {
+        if (_shared && !(_file->f_flags & FWRITE)) {
+            return EACCES;
+        }
+    }
+    // fail if prot asks for PROT_EXEC and the underlying FS was
+    // mounted no-exec.
+    if (perm & perm_exec && (_file->f_dentry->d_mount->m_flags & MNT_NOEXEC)) {
+        return EPERM;
+    }
+    return 0;
 }
 
 void file_vma::fault(uintptr_t addr, exception_frame *ef)

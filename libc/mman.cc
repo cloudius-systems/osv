@@ -72,9 +72,7 @@ int mprotect(void *addr, size_t len, int prot)
         return libc_error(ENOMEM);
     }
 
-    mmu::protect(addr, len, libc_prot_to_perm(prot));
-
-    return 0;
+    return mmu::protect(addr, len, libc_prot_to_perm(prot)).to_libc();
 }
 
 int mmap_validate(void *addr, size_t length, int flags, off_t offset)
@@ -91,37 +89,15 @@ int mmap_validate(void *addr, size_t length, int flags, off_t offset)
     return 0;
 }
 
-int mmap_validate_file(const fileref f, int prot, int flags)
-{
-    if (!f) {
-        return EBADF;
-    }
-    // fail if mapping a file that is not opened for reading.
-    if (!(f->f_flags & FREAD)) {
-        return EACCES;
-    }
-    if (prot & PROT_WRITE) {
-        if ((flags & MAP_SHARED) && !(f->f_flags & FWRITE)) {
-            return EACCES;
-        }
-    }
-    // fail if prot asks for PROT_EXEC and the underlying FS was
-    // mounted no-exec.
-    if (prot & PROT_EXEC && (f->f_dentry->d_mount->m_flags & MNT_NOEXEC)) {
-        return EPERM;
-    }
-    return 0;
-}
-
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
     trace_memory_mmap(addr, length, prot, flags, fd, offset);
 
-    int error = mmap_validate(addr, length, flags, offset);
-    if (error) {
-        errno = error;
-        trace_memory_mmap_err(error);
+    int err = mmap_validate(addr, length, flags, offset);
+    if (err) {
+        errno = err;
+        trace_memory_mmap_err(err);
         return MAP_FAILED;
     }
 
@@ -137,13 +113,18 @@ void *mmap(void *addr, size_t length, int prot, int flags,
         ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
     } else {
         fileref f(fileref_from_fd(fd));
-        error = mmap_validate_file(f, prot, flags);
-        if (error) {
-            errno = error;
-            trace_memory_mmap_err(error);
+        if (!f) {
+            errno = EBADF;
+            trace_memory_mmap_err(errno);
             return MAP_FAILED;
         }
-        ret = mmu::map_file(addr, length, mmap_flags, mmap_perm, f, offset);
+        try {
+            ret = mmu::map_file(addr, length, mmap_flags, mmap_perm, f, offset);
+        } catch (error& err) {
+            err.to_libc(); // sets errno
+            trace_memory_mmap_err(errno);
+            return MAP_FAILED;
+        }
     }
     trace_memory_mmap_ret(ret);
     return ret;
