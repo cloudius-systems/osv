@@ -7,6 +7,7 @@
 
 #include "debug.hh"
 #include <sys/time.h>
+#include <mempool.hh>
 
 #include <bsd/porting/callout.h>
 #include <bsd/porting/netport.h>
@@ -51,9 +52,16 @@ extern "C" {
     TASKQUEUE_DEFINE_THREAD(thread);
 }
 
+static void physmem_init()
+{
+    physmem = memory::phys_mem_size / memory::page_size;
+}
+
 void net_init(void)
 {
     debug("Initializing network stack...\n");
+
+    physmem_init();
 
     // main taskqueue
     taskqueue_define_thread(NULL);
