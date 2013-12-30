@@ -619,6 +619,9 @@ void protect(void *addr, size_t size, unsigned int perm)
 
 uintptr_t find_hole(uintptr_t start, uintptr_t size)
 {
+    bool small = size < huge_page_size;
+    uintptr_t good_enough = 0;
+
     // FIXME: use lower_bound or something
     auto p = vma_list.begin();
     auto n = std::next(p);
@@ -627,10 +630,19 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
             return start;
         }
         if (p->end() >= start && n->start() - p->end() >= size) {
-            return p->end();
+            good_enough = p->end();
+            if (small) {
+                return good_enough;
+            }
+            if (n->start() - align_up(good_enough, huge_page_size) >= size) {
+                return align_up(good_enough, huge_page_size);
+            }
         }
         p = n;
         ++n;
+    }
+    if (good_enough) {
+        return good_enough;
     }
     abort();
 }
