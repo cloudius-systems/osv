@@ -188,17 +188,7 @@ class virtio_driver;
             _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_WRITE);
         }
 
-        void add_buf_wait(void* cookie)
-        {
-            while (!add_buf(cookie)) {
-                _waiter.reset(*sched::thread::current());
-                while (!avail_ring_has_room(_sg_vec.size())) {
-                    sched::thread::wait_until([this] {return this->used_ring_can_gc();});
-                    get_buf_gc();
-                }
-                _waiter.clear();
-            }
-        }
+        void add_buf_wait(void* cookie);
 
         void wakeup_waiter()
         {
