@@ -51,6 +51,11 @@ def get_module_dir(module):
 def find_module_descriptor(module_name):
     config = read_config()
 
+    if "include" in config["modules"]:
+        for f in config["modules"]["include"]:
+            with open(os.path.expandvars(f)) as file:
+                config["modules"].update(json.load(file))
+
     if not module_name in config["modules"]:
         return None
 

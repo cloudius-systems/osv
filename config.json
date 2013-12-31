@@ -4,29 +4,8 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/mgmt/"
         },
-        "tomcat": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/apps/tomcat/"
-        },
-        "cassandra": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/apps/cassandra/"
-        },
-        "rogue": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/apps/rogue/"
-        },
-        "memcached": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/apps/memcached/"
-        },
-        "specjvm": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/apps/specjvm/"
-        },
-        "haproxy": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/apps/haproxy/"
-        }
+	"include": [
+	    "${OSV_BASE}/apps/modules.json"
+	]
    }
 }
