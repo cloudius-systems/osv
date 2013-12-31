@@ -304,8 +304,10 @@ public:
 };
 
 template<typename PageOp, int ParentLevel> class map_level;
-template<typename PageOp> struct map_level<PageOp, -1>
+template<typename PageOp> class map_level<PageOp, -1>
 {
+private:
+    friend class map_level<PageOp, 0>;
     map_level(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop) {}
     void operator()(hw_ptep parent, uintptr_t base_virt, uintptr_t offset) {
         assert(0);
@@ -327,6 +329,11 @@ private:
     PageOp& page_mapper;
     static constexpr int level = ParentLevel - 1;
 
+    friend void map_range<PageOp>(uintptr_t, size_t, PageOp&, size_t);
+    friend class map_level<PageOp, ParentLevel + 1>;
+
+    map_level(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop) :
+        vstart(vstart), vend(vstart + size - 1), slop(slop), page_mapper(page_mapper) {}
     bool skip_pte(hw_ptep ptep) {
         return page_mapper.skip_empty() && ptep.read().empty();
     }
@@ -339,10 +346,6 @@ private:
         map_level<PageOp, level> pt_mapper(vstart, size, page_mapper, slop);
         pt_mapper(ptep, base_virt, offset);
     }
-
-public:
-    map_level(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size) :
-        vstart(vstart), vend(vstart + size - 1), slop(slop), page_mapper(page_mapper) {}
     void operator()(hw_ptep parent, uintptr_t base_virt = 0, uintptr_t offset = 0) {
         if (!parent.read().present()) {
             if (!page_mapper.allocate_intermediate()) {
