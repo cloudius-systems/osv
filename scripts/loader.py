@@ -370,7 +370,7 @@ class vmstate(object):
         self.thread_list = sorted(unordered_map(gdb.lookup_global_symbol('sched::thread_map').value()), key=lambda x: int(x["_id"]))
 
     def cpu_from_thread(self, thread):
-        stack = thread['_attr']['stack']
+        stack = thread['_attr']['_stack']
         stack_begin = ulong(stack['begin'])
         stack_size = ulong(stack['size'])
         for c in self.cpu_list.viewvalues():
