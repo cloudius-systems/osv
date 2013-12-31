@@ -308,8 +308,8 @@ template<typename PageOp> class map_level<PageOp, -1>
 {
 private:
     friend class map_level<PageOp, 0>;
-    map_level(uintptr_t vstart, size_t size, PageOp page_mapper, size_t slop) {}
-    void operator()(hw_ptep parent, uintptr_t base_virt, uintptr_t offset) {
+    map_level(uintptr_t vcur, size_t size, PageOp page_mapper, size_t slop) {}
+    void operator()(hw_ptep parent, uintptr_t base_virt, uintptr_t vstart) {
         assert(0);
     }
 };
@@ -318,12 +318,12 @@ template<typename PageOp>
         void map_range(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
 {
     map_level<PageOp, 4> pt_mapper(vstart, size, page_mapper, slop);
-    pt_mapper(hw_ptep::force(&page_table_root), 0, 0);
+    pt_mapper(hw_ptep::force(&page_table_root), 0, vstart);
 }
 
 template<typename PageOp, int ParentLevel> class map_level {
 private:
-    uintptr_t vstart;
+    uintptr_t vcur;
     uintptr_t vend;
     size_t slop;
     PageOp& page_mapper;
@@ -332,21 +332,21 @@ private:
     friend void map_range<PageOp>(uintptr_t, size_t, PageOp&, size_t);
     friend class map_level<PageOp, ParentLevel + 1>;
 
-    map_level(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop) :
-        vstart(vstart), vend(vstart + size - 1), slop(slop), page_mapper(page_mapper) {}
+    map_level(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop) :
+        vcur(vcur), vend(vcur + size - 1), slop(slop), page_mapper(page_mapper) {}
     bool skip_pte(hw_ptep ptep) {
         return page_mapper.skip_empty() && ptep.read().empty();
     }
     bool descend(hw_ptep ptep) {
         return page_mapper.descend() && !ptep.read().empty() && !ptep.read().large();
     }
-    void map_range(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop,
-            hw_ptep ptep, uintptr_t base_virt, uintptr_t offset)
+    void map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
+            hw_ptep ptep, uintptr_t base_virt, uintptr_t vstart)
     {
-        map_level<PageOp, level> pt_mapper(vstart, size, page_mapper, slop);
-        pt_mapper(ptep, base_virt, offset);
+        map_level<PageOp, level> pt_mapper(vcur, size, page_mapper, slop);
+        pt_mapper(ptep, base_virt, vstart);
     }
-    void operator()(hw_ptep parent, uintptr_t base_virt = 0, uintptr_t offset = 0) {
+    void operator()(hw_ptep parent, uintptr_t base_virt = 0, uintptr_t vstart = 0) {
         if (!parent.read().present()) {
             if (!page_mapper.allocate_intermediate()) {
                 return;
@@ -363,26 +363,27 @@ private:
                 split_large_page(parent, ParentLevel);
             } else {
                 // If page_mapper does not want to split, let it handle subpage by itself
-                page_mapper.sub_page(parent, ParentLevel, offset);
+                page_mapper.sub_page(parent, ParentLevel, base_virt - vstart);
                 return;
             }
         }
         hw_ptep pt = follow(parent.read());
         phys step = phys(1) << (page_size_shift + level * pte_per_page_shift);
-        auto idx = pt_index(vstart, level);
+        auto idx = pt_index(vcur, level);
         auto eidx = pt_index(vend, level);
         base_virt += idx * step;
         base_virt = (int64_t(base_virt) << 16) >> 16; // extend 47th bit
 
         do {
             hw_ptep ptep = pt.at(idx);
-            uintptr_t vstart1 = vstart, vend1 = vend;
+            uintptr_t vstart1 = vcur, vend1 = vend;
             clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
             if (level < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
+                uintptr_t offset = base_virt - vstart;
                 if (level) {
                     if (!skip_pte(ptep)) {
                         if (descend(ptep) || !page_mapper.huge_page(ptep, offset)) {
-                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, offset);
+                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, vstart);
                             page_mapper.intermediate_page_post(ptep, offset);
                         }
                     }
@@ -392,10 +393,9 @@ private:
                     }
                 }
             } else {
-                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, offset);
+                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, vstart);
             }
             base_virt += step;
-            offset += step;
             ++idx;
         } while(!page_mapper.once() && idx <= eidx);
     }
