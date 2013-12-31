@@ -23,6 +23,10 @@
         "specjvm": {
             "type": "direct-dir",
             "path": "${OSV_BASE}/apps/specjvm/"
+        },
+        "haproxy": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/apps/haproxy/"
         }
    }
 }
