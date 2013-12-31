@@ -68,11 +68,8 @@ int mprotect(void *addr, size_t len, int prot)
         // address not page aligned
         return libc_error(EINVAL);
     }
-    if (!mmu::ismapped(addr, len)) {
-        return libc_error(ENOMEM);
-    }
 
-    return mmu::protect(addr, len, libc_prot_to_perm(prot)).to_libc();
+    return mmu::mprotect(addr, len, libc_prot_to_perm(prot)).to_libc();
 }
 
 int mmap_validate(void *addr, size_t length, int flags, off_t offset)
@@ -140,9 +137,6 @@ int munmap_validate(void *addr, size_t length)
     if (!mmu::is_page_aligned(addr) || length == 0) {
         return EINVAL;
     }
-    if (!mmu::ismapped(addr, length)) {
-        return EINVAL;
-    }
     return 0;
 }
 
@@ -155,19 +149,17 @@ int munmap(void *addr, size_t length)
         trace_memory_munmap_err(error);
         return -1;
     }
-    mmu::msync(addr, length, 0);
-    mmu::unmap(addr, length);
+    int ret = mmu::munmap(addr, length).to_libc();
+    if (ret == -1) {
+        trace_memory_munmap_err(errno);
+    }
     trace_memory_munmap_ret();
-    return 0;
+    return ret;
 }
 
 int msync(void *addr, size_t length, int flags)
 {
-    auto err = make_error(ENOMEM);
-    if (mmu::ismapped(addr, length)) {
-        err = mmu::msync(addr, length, flags);
-    }
-    return err.to_libc();
+    return mmu::msync(addr, length, flags).to_libc();
 }
 
 int mincore(void *addr, size_t length, unsigned char *vec)
@@ -175,17 +167,6 @@ int mincore(void *addr, size_t length, unsigned char *vec)
     if (!mmu::is_page_aligned(addr)) {
         return libc_error(EINVAL);
     }
-    if (!mmu::is_linear_mapped(addr, length) && !mmu::ismapped(addr, length)) {
-        return libc_error(ENOMEM);
-    }
-    char *end = align_up((char *)addr + length, mmu::page_size);
-    char tmp;
-    for (char *p = (char *)addr; p < end; p += mmu::page_size) {
-        if (safe_load(p, tmp)) {
-            *vec++ = 0x01;
-        } else {
-            *vec++ = 0x00;
-        }
-    }
-    return 0;
+
+    return mmu::mincore(addr, length, vec).to_libc();
 }

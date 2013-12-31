@@ -603,12 +603,11 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
  *
  * \return returns EACCESS/EPERM if requested permission cannot be granted
  */
-error protect(void *addr, size_t size, unsigned int perm)
+static error protect(void *addr, size_t size, unsigned int perm)
 {
     uintptr_t start = reinterpret_cast<uintptr_t>(addr);
     uintptr_t end = start + size;
     addr_range r(start, end);
-    std::lock_guard<mutex> guard(vma_list_mutex);
     auto range = vma_list.equal_range(r, vma::addr_compare());
     for (auto i = range.first; i != range.second; ++i) {
         if (i->perm() == perm)
@@ -660,7 +659,6 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
 void evacuate(uintptr_t start, uintptr_t end)
 {
     addr_range r(start, end);
-    std::lock_guard<mutex> guard(vma_list_mutex);
     auto range = vma_list.equal_range(r, vma::addr_compare());
     for (auto i = range.first; i != range.second; ++i) {
         i->split(end);
@@ -675,27 +673,25 @@ void evacuate(uintptr_t start, uintptr_t end)
     // FIXME: range also indicates where we can insert a new anon_vma, use it
 }
 
-void unmap(void* addr, size_t size)
+static void unmap(void* addr, size_t size)
 {
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     evacuate(start, start+size);
 }
 
-error msync(void* addr, size_t length, int flags)
+static error sync(void* addr, size_t length, int flags)
 {
     length = align_up(length, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto end = start+length;
     auto err = make_error(ENOMEM);
     addr_range r(start, end);
-    WITH_LOCK(vma_list_mutex) {
-        auto range = vma_list.equal_range(r, vma::addr_compare());
-        for (auto i = range.first; i != range.second; ++i) {
-            err = i->sync(start, end);
-            if (err.bad()) {
-                break;
-            }
+    auto range = vma_list.equal_range(r, vma::addr_compare());
+    for (auto i = range.first; i != range.second; ++i) {
+        err = i->sync(start, end);
+        if (err.bad()) {
+            break;
         }
     }
     return err;
@@ -806,8 +802,6 @@ bool ismapped(void *addr, size_t size)
     uintptr_t start = (uintptr_t) addr;
     uintptr_t end = start + size;
     addr_range r(start, end);
-
-    std::lock_guard<mutex> guard(vma_list_mutex);
 
     auto range = vma_list.equal_range(r, vma::addr_compare());
     for (auto p = range.first; p != range.second; ++p) {
@@ -1058,6 +1052,57 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
 void switch_to_runtime_page_table()
 {
     processor::write_cr3(page_table_root.next_pt_addr());
+}
+
+error mprotect(void *addr, size_t len, unsigned perm)
+{
+    std::lock_guard<mutex> guard(vma_list_mutex);
+
+    if (!ismapped(addr, len)) {
+        return make_error(ENOMEM);
+    }
+
+    return protect(addr, len, perm);
+}
+
+error munmap(void *addr, size_t length)
+{
+    std::lock_guard<mutex> guard(vma_list_mutex);
+
+    if (!ismapped(addr, length)) {
+        return make_error(EINVAL);
+    }
+    sync(addr, length, 0);
+    unmap(addr, length);
+    return no_error();
+}
+
+error msync(void* addr, size_t length, int flags)
+{
+    std::lock_guard<mutex> guard(vma_list_mutex);
+
+    if (!ismapped(addr, length)) {
+        return make_error(ENOMEM);
+    }
+    return sync(addr, length, flags);
+}
+
+error mincore(void *addr, size_t length, unsigned char *vec)
+{
+    char *end = ::align_up((char *)addr + length, page_size);
+    char tmp;
+    std::lock_guard<mutex> guard(vma_list_mutex);
+    if (!is_linear_mapped(addr, length) && !ismapped(addr, length)) {
+        return make_error(ENOMEM);
+    }
+    for (char *p = (char *)addr; p < end; p += page_size) {
+        if (safe_load(p, tmp)) {
+            *vec++ = 0x01;
+        } else {
+            *vec++ = 0x00;
+        }
+    }
+    return no_error();
 }
 
 }

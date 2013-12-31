@@ -89,7 +89,7 @@ namespace pthread_private {
         }
         size_t size = attr.stack_size;
         void *addr = mmu::map_anon(nullptr, size, mmu::mmap_populate, mmu::perm_rw);
-        mmu::protect(addr, attr.guard_size, 0);
+        mmu::mprotect(addr, attr.guard_size, 0);
         sched::thread::stack_info si{addr, size};
         si.deleter = free_stack;
         return si;
@@ -97,7 +97,7 @@ namespace pthread_private {
 
     void pthread::free_stack(sched::thread::stack_info si)
     {
-        mmu::unmap(si.begin, si.size);
+        mmu::munmap(si.begin, si.size);
     }
 
     int pthread::join(void** retval)

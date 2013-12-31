@@ -281,8 +281,8 @@ void file::unload_segment(const Elf64_Phdr& phdr)
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
     ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
-    mmu::unmap(_base + vstart, filesz);
-    mmu::unmap(_base + vstart + filesz, memsz - filesz);
+    mmu::munmap(_base + vstart, filesz);
+    mmu::munmap(_base + vstart + filesz, memsz - filesz);
 }
 
 void object::unload_segments()
