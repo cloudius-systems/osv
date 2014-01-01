@@ -89,7 +89,7 @@ typedef struct condvar {
 
 #ifdef __cplusplus
     // In C++, for convenience also provide methods.
-    condvar() { memset(this, 0, sizeof *this); }
+    condvar() : _m{}, _waiters_fifo{}, _user_mutex{} {}
     /**
      * Wait on the condition variable, or timer to expire
      *
