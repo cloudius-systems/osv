@@ -21,7 +21,6 @@
 #include <signal.h>
 
 #include <fs/fs.hh>
-#include <fs/unsupported.h>
 
 namespace console {
 
@@ -285,17 +284,14 @@ void console_init(void)
     device_create(&console_driver, "console", D_CHR);
 }
 
-class console_file : public file {
+class console_file : public special_file {
 public:
-    console_file() : file(FREAD|FWRITE, DTYPE_UNSPEC) {}
+    console_file() : special_file(FREAD|FWRITE, DTYPE_UNSPEC) {}
     virtual int read(struct uio *uio, int flags) override;
     virtual int write(struct uio *uio, int flags) override;
-    virtual int truncate(off_t len) override;
     virtual int ioctl(u_long com, void *data) override;
-    virtual int poll(int events) override;
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
-    virtual int chmod(mode_t mode) override;
 };
 
 // The above allows opening /dev/console to use the console. We currently
@@ -326,29 +322,14 @@ int console_file::write(struct uio *uio, int flags)
     return op_write<file>(this, uio, flags);
 }
 
-int console_file::truncate(off_t len)
-{
-    return unsupported_truncate(this, len);
-}
-
 int console_file::ioctl(u_long com, void *data)
 {
     return op_ioctl<file>(this, com, data);
 }
 
-int console_file::poll(int events)
-{
-    return unsupported_poll(this, events);
-}
-
 int console_file::close()
 {
     return 0;
-}
-
-int console_file::chmod(mode_t mode)
-{
-    return unsupported_chmod(this, mode);
 }
 
 int open() {

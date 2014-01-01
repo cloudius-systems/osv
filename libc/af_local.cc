@@ -10,7 +10,6 @@
 
 #include <fs/fs.hh>
 #include <osv/socket.hh>
-#include <fs/unsupported.h>
 #include <osv/fcntl.h>
 #include <libc/libc.hh>
 
@@ -21,20 +20,16 @@
 
 using namespace std;
 
-struct af_local final : public file {
+struct af_local final : public special_file {
     af_local(const pipe_buffer_ref& s, const pipe_buffer_ref& r)
-            : file(FREAD|FWRITE, DTYPE_UNSPEC), send(s), receive(r) { init(); }
+            : special_file(FREAD|FWRITE, DTYPE_UNSPEC), send(s), receive(r) { init(); }
     af_local(pipe_buffer_ref&& s, pipe_buffer_ref&& r)
-            : file(FREAD|FWRITE, DTYPE_UNSPEC), send(std::move(s)), receive(std::move(r)) { init(); }
+            : special_file(FREAD|FWRITE, DTYPE_UNSPEC), send(std::move(s)), receive(std::move(r)) { init(); }
     void init();
     virtual int read(uio* data, int flags) override;
     virtual int write(uio* data, int flags) override;
     virtual int poll(int events) override;
     virtual int close() override;
-    virtual int truncate(off_t off) override { return unsupported_truncate(this, off); }
-    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
-    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
-    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
 
     pipe_buffer_ref send;
     pipe_buffer_ref receive;

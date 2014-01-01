@@ -21,7 +21,6 @@
 #include <osv/file.h>
 #include <osv/poll.h>
 #include <fs/fs.hh>
-#include <fs/unsupported.h>
 #include <drivers/clock.hh>
 
 #include <debug.hh>
@@ -64,10 +63,10 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
     return e;
 }
 
-class epoll_file final : public file {
+class epoll_file final : public special_file {
     std::unordered_map<file*, epoll_event> map;
 public:
-    epoll_file() : file(0, DTYPE_UNSPEC) {}
+    epoll_file() : special_file(0, DTYPE_UNSPEC) {}
     virtual int close() override {
         for (auto& e : map) {
             auto fp = e.first;
@@ -141,14 +140,6 @@ private:
             fp->f_epolls->erase(i);
         }
     }
-public:
-    virtual int read(uio* data, int flags) override { return unsupported_read(this, data, flags); }
-    virtual int write(uio* data, int flags) override { return unsupported_write(this, data, flags); }
-    virtual int truncate(off_t off) override { return unsupported_truncate(this, off); }
-    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
-    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
-    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
-    virtual int poll(int events) override { return unsupported_poll(this, events); }
 };
 
 int epoll_create(int size)

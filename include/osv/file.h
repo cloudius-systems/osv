@@ -97,6 +97,23 @@ struct file {
 	std::unique_ptr<std::vector<file*>> f_epolls;
 };
 
+// struct file above is an abstract class; subclasses need to implement 8
+// methods. struct special_file defines a reasonable default implementation
+// for all methods except close(), making it less verbose and error-prone to
+// implement special files, which usually only need to define some of
+// these operations and fail (in the standard way) on the rest.
+struct special_file : public file {
+    special_file(unsigned flags, filetype_t type, void *opaque = nullptr) :
+        file(flags, type, opaque) { }
+    virtual int read(struct uio *uio, int flags) override;
+    virtual int write(struct uio *uio, int flags) override;
+    virtual int truncate(off_t len) override;
+    virtual int ioctl(u_long com, void *data) override;
+    virtual int poll(int events) override;
+    virtual int stat(struct stat* buf) override;
+    virtual int chmod(mode_t mode) override;
+};
+
 #endif
 
 // f_count rules:

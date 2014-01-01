@@ -8,7 +8,6 @@
 #include "pipe_buffer.hh"
 
 #include <fs/fs.hh>
-#include <fs/unsupported.h>
 #include <osv/fcntl.h>
 #include <libc/libc.hh>
 
@@ -28,7 +27,7 @@ struct pipe_reader {
     ~pipe_reader() { buf->detach_receiver(); }
 };
 
-class pipe_file final : public file {
+class pipe_file final : public special_file {
 public:
     explicit pipe_file(std::unique_ptr<pipe_reader>&& s);
     explicit pipe_file(std::unique_ptr<pipe_writer>&& s);
@@ -36,24 +35,20 @@ public:
     virtual int write(uio* data, int flags) override;
     virtual int poll(int events) override;
     virtual int close() override;
-    virtual int truncate(off_t len) override { return unsupported_truncate(this, len); }
-    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
-    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
-    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
 private:
     pipe_writer* writer = nullptr;
     pipe_reader* reader = nullptr;
 };
 
 pipe_file::pipe_file(std::unique_ptr<pipe_writer>&& s)
-    : file(FWRITE, DTYPE_UNSPEC)
+    : special_file(FWRITE, DTYPE_UNSPEC)
     , writer(s.release())
 {
     writer->buf->attach_sender(this);
 }
 
 pipe_file::pipe_file(std::unique_ptr<pipe_reader>&& s)
-    : file(FREAD, DTYPE_UNSPEC)
+    : special_file(FREAD, DTYPE_UNSPEC)
     , reader(s.release())
 {
     reader->buf->attach_receiver(this);

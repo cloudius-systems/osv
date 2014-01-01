@@ -37,7 +37,6 @@
 #include <osv/types.h>
 #include <osv/ioctl.h>
 #include <osv/socket.hh>
-#include <fs/unsupported.h>
 #include <osv/initialize.hh>
 
 #include <bsd/sys/sys/libkern.h>
@@ -284,5 +283,7 @@ socket_file::close()
 
 int socket_file::chmod(mode_t mode)
 {
-    return unsupported_chmod(this, mode);
+    // Posix specifies that EINVAL should be returned when trying to do
+    // fchmod() on a pipe, which doesn't support fchmod().
+    return EINVAL;
 }

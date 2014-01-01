@@ -6,7 +6,6 @@
  */
 
 #include <fs/fs.hh>
-#include <fs/unsupported.h>
 #include <osv/fcntl.h>
 #include <libc/libc.hh>
 #include <osv/stubbing.hh>
@@ -151,7 +150,7 @@ public:
 };
 
 
-class timerfd_file final : public file {
+class timerfd_file final : public special_file {
 public:
     explicit timerfd_file(int clockid, int flags);
     virtual ~timerfd_file() {}
@@ -159,19 +158,13 @@ public:
     virtual int poll(int events) override;
     virtual int close() override;
 
-    virtual int write(uio* data, int flags) override { return unsupported_write(this, data, flags); }
-    virtual int truncate(off_t len) override { return unsupported_truncate(this, len); }
-    virtual int ioctl(ulong com, void* data) override { return unsupported_ioctl(this, com, data); }
-    virtual int stat(struct stat* buf) override { return unsupported_stat(this, buf); }
-    virtual int chmod(mode_t mode) override { return unsupported_chmod(this, mode); }
-
     sched::thread_handle _h;
     timerfd_object _obj;
     mutex _read_mutex;
 };
 
 timerfd_file::timerfd_file(int clockid, int oflags)
-    : file(FREAD | oflags, DTYPE_UNSPEC), _h(), _obj(_h, this)
+    : special_file(FREAD | oflags, DTYPE_UNSPEC), _h(), _obj(_h, this)
 {
 }
 
@@ -229,7 +222,7 @@ int timerfd_file::close()
 int timerfd_create(int clockid, int flags) {
     switch (clockid) {
     case CLOCK_MONOTONIC:
-        WARN_ONCE("timerfd_create() does not yet support CLOCK_MONOTONIC");
+        WARN_ONCE("timerfd_create() does not yet support CLOCK_MONOTONIC\n");
         return libc_error(EINVAL);
     case CLOCK_REALTIME:
         // fine.

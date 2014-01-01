@@ -1,19 +1,19 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-/* The following are functions that can be used for filling struct fileops
+/* The following are functions that can be used for struct file
  * in file implementations that do not support these operations.
  */
 
 #include <sys/errno.h>
 
-#include "unsupported.h"
+#include <osv/file.h>
 
-int unsupported_truncate(struct file* f, off_t length)
+int special_file::truncate(off_t length)
 {
     /* ftruncate() should return EINVAL when the file descriptor does not
      * refer to a regular file.
@@ -21,9 +21,9 @@ int unsupported_truncate(struct file* f, off_t length)
     return EINVAL;
 }
 
-int unsupported_ioctl(struct file* f, ulong comm, void* data)
+int special_file::ioctl(ulong comm, void* data)
 {
-    /* ioctl() should return the anachronisticly named ENOTTY when the request
+    /* ioctl() should return the anachronistically named ENOTTY when the request
      * does not apply to the object that the file descriptor refers to. If an
      * object does not support any ioctls, it should return this error for any
      * ioctl request.
@@ -31,18 +31,17 @@ int unsupported_ioctl(struct file* f, ulong comm, void* data)
     return ENOTTY;
 }
 
-int unsupported_stat(struct file* f, struct stat* s)
+int special_file::stat(struct stat* s)
 {
     /* FIXME: There is no reasonable errno to return here; Posix, Linux and
      * BSD all seem to support fstat() on all kinds of file descriptors,
      * offering some partial information (such as the user id of the object's
-     * owner) as much as it makes sense.
-     * So this function shouldn't really exist.
+     * owner) as much as it makes sense. We should do the same.
      */
     return EBADF;
 }
 
-int unsupported_chmod(struct file* f, mode_t m)
+int special_file::chmod(mode_t m)
 {
     /* Posix specifies that EINVAL should be returned when trying to do
      * fchmod() on a pipe, which doesn't support fchmod(). By the way,
@@ -51,7 +50,7 @@ int unsupported_chmod(struct file* f, mode_t m)
     return EINVAL;
 }
 
-int unsupported_read(struct file *fp, struct uio *uio, int flags)
+int special_file::read(struct uio *uio, int flags)
 {
     /* The Linux read(2) manual page is not clear as to what to return when
      * the file is unsuitable for reading: It says that EBADF should be
@@ -66,12 +65,12 @@ int unsupported_read(struct file *fp, struct uio *uio, int flags)
     return EINVAL; /* as explained above, doesn't matter what we return */
 }
 
-int unsupported_write(struct file *fp, struct uio *uio, int flags)
+int special_file::write(struct uio *uio, int flags)
 {
     return EINVAL; /* as explained above, doesn't matter what we return */
 }
 
-int unsupported_poll(struct file *fp, int events)
+int special_file::poll(int events)
 {
     return 0;
 }
