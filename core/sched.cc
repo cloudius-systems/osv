@@ -571,6 +571,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _cleanup([this] { delete this; })
     , _joiner(nullptr)
 {
+    setup_tcb();
     WITH_LOCK(thread_map_mutex) {
         if (!main) {
             auto ttid = _s_idgen;
@@ -591,7 +592,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
             }
         }
     }
-    setup_tcb();
     // setup s_current before switching to the thread, so interrupts
     // can call thread::current()
     // remote_thread_local_var() doesn't work when there is no current
