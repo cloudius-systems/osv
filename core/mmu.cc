@@ -708,6 +708,39 @@ struct fill_anon_page_noinit: fill_page {
     }
 };
 
+struct fill_file_page : fill_page {
+    uint64_t fsize;
+    f_offset foffset;
+    ssize_t len;
+    uint64_t prev_off;
+    std::vector<iovec> iovecs;
+
+    fill_file_page(size_t fsize, f_offset foffset, size_t size) :
+        fsize(fsize), foffset(foffset), len(0), prev_off(0),
+        iovecs((size / huge_page_size) + pte_per_page) {}
+    virtual void fill(void* addr, uint64_t offset, uintptr_t size) {
+        assert(offset >= prev_off);
+        f_offset off = foffset + offset;
+        if (off < fsize) {
+            uint64_t tail = std::min(size, fsize - off);
+            iovecs.push_back(iovec {addr, tail});
+            len += tail;
+            size -= tail;
+            addr = (char*)addr + tail;
+        }
+        if (size) {
+            memset(addr, 0, size);
+        }
+    }
+    void finalize(file *f) {
+        if (iovecs.empty()) {
+            return;
+        }
+        uio data{iovecs.data(), static_cast<int>(iovecs.size()), off_t(foffset), len, UIO_READ};
+        f->read(&data, FOF_OFFSET);
+    }
+};
+
 uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
 {
     if (search) {
@@ -769,22 +802,14 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     bool shared = flags & mmu::mmap_shared;
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    fill_anon_page zfill;
+    fill_file_page fill(::size(f), offset, size);
     auto *vma = new mmu::file_vma(addr_range(start, start + size), perm, f, offset, shared);
     void *v;
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, asize, search);
-        operate_range(populate(&zfill, perm | perm_write), v, asize);
+        operate_range(populate(&fill, perm), v, asize);
     }
-    auto fsize = ::size(f);
-    // FIXME: we pre-zeroed this, and now we're overwriting the zeroes
-    if (offset < fsize) {
-        read(f, v, offset, std::min(size, fsize - offset));
-    }
-    // FIXME: do this more cleverly, avoiding a second pass
-    if (!(perm & perm_write)) {
-        protect(v, asize, perm);
-    }
+    fill.finalize(f.get());
     return v;
 }
 
