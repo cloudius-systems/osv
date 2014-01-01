@@ -8,6 +8,7 @@
 #ifndef MUTEX_H_
 #define MUTEX_H_
 
+#include <sys/cdefs.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
@@ -16,7 +17,6 @@
 // change #define LOCKFREE_MUTEX here to #undef.
 #define LOCKFREE_MUTEX
 
-#ifdef LOCKFREE_MUTEX
 #define LOCKFREE_MUTEX_ALIGN void*
 #define LOCKFREE_MUTEX_SIZE 40
 #ifdef __cplusplus
@@ -65,11 +65,8 @@ static inline bool mutex_owned(mutex_t *m) { return lockfree_mutex_owned(m); }
 static inline void mutex_init(mutex_t* m) { memset(m, 0, sizeof(mutex_t)); }
 static inline void mutex_destroy(mutex_t* m) { }
 #define MUTEX_INITIALIZER   {}
-#endif /* LOCKFREE_MUTEX */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+__BEGIN_DECLS
 
 // Spin lock. Use mutex instead, except where impossible:
 
@@ -90,6 +87,8 @@ static inline void spinlock_init(spinlock_t *sl)
 void spin_lock(spinlock_t *sl);
 void spin_unlock(spinlock_t *sl);
 
+__END_DECLS
+
 #ifdef __cplusplus
 void spinlock::lock()
 {
@@ -99,85 +98,6 @@ void spinlock::unlock()
 {
     spin_unlock(this);
 }
-#endif
-
-
-// Mutex:
-
-#ifndef LOCKFREE_MUTEX
-typedef struct mutex {
-    struct wait_list {
-        struct waiter *first;
-        struct waiter *last;
-    } _wait_list;
-    uint32_t _hole_for_pthread_compatiblity; // pthread_mutex_t's __kind
-    spinlock_t _wait_lock;
-    uint16_t _depth;
-    void *_owner;
-#ifdef __cplusplus
-    // additional convenience methods for C++
-    inline mutex();
-    inline ~mutex();
-    inline void lock();
-    inline bool try_lock();
-    inline void unlock();
-    inline bool owned();
-    // getdepth() should only be used by the thread holding the lock
-    inline unsigned int getdepth() const { return _depth; }
-#endif
-} mutex_t;
-
-#define MUTEX_INITIALIZER	{}
-
-void mutex_lock(mutex_t* m);
-bool mutex_trylock(mutex_t* m);
-void mutex_unlock(mutex_t* m);
-/* Is owned by current thread */
-bool mutex_owned(mutex_t* m);
-
-static inline void mutex_init(mutex_t* m)
-{
-    m->_depth = 0;
-    m->_owner = 0;
-    m->_wait_list.first = 0;
-    m->_wait_list.last = 0;
-    spinlock_init(&m->_wait_lock);
-}
-
-static inline void mutex_destroy(mutex_t* m)
-{
-}
-#endif
-
-#ifdef __cplusplus
-}
-
-#ifndef LOCKFREE_MUTEX
-mutex::mutex()
-{
-    mutex_init(this);
-}
-mutex::~mutex()
-{
-    mutex_destroy(this);
-}
-void mutex::lock()
-{
-    mutex_lock(this);
-}
-bool mutex::try_lock()
-{
-    return mutex_trylock(this);
-}
-void mutex::unlock()
-{
-    return mutex_unlock(this);
-}
-bool mutex::owned()
-{
-    return mutex_owned(this);
-}
-#endif
 
 #include <mutex>
 #include <cstdlib>
@@ -210,7 +130,6 @@ struct lock_guard_for_drop_lock {
     if (lock_guard_for_drop_lock<decltype(_dl_lock)> _dl_lock_guard{_dl_lock}) \
         std::abort(); \
     else /* unlocked statement comes here */
-
 
 #endif
 
