@@ -27,6 +27,7 @@
 #define CONDVAR_H_
 
 #include <stdint.h>
+#include <sys/cdefs.h>
 
 #include <osv/mutex.h>
 
@@ -91,6 +92,30 @@ typedef struct condvar {
     // In C++, for convenience also provide methods.
     condvar() : _m{}, _waiters_fifo{}, _user_mutex{} {}
     /**
+     * Wait on the condition variable, or for a specified time point to pass
+     *
+     * Wait to be woken (with wake_one() or wake_all()), or the given time point
+     * has passed, whichever occurs first.
+     *
+     * It is assumed that wait() is called with the given mutex locked.
+     * This mutex is unlocked during the wait, and re-locked before wait()
+     * returns.
+     *
+     * The current implementation assumes (as do Posix Threads) that when
+     * multiple threads wait on the same condition variable concurrently,
+     * they all do it with the same mutex. If two threads concurrently use
+     * two different mutexes to wait on the same condition variable, the
+     * results are undefined (currently, it causes an assertion failure).
+     *
+     * \return 0 if woken by a wake_one() or wake_all(), or ETIMEOUT (!=0)
+     * if was not woken, but the timer expired. Note if a wakeup and the
+     * timeout race, by the time wait() returns the timer may have already
+     * expired even if 0 is returned. What a return of 0 means is not that
+     * a timeout hasn't yet occurred, but rather that one wake_one()/wake_all()
+     * was consumed to wake us.
+     */
+    int wait(mutex* user_mutex, uint64_t expiration);
+    /**
      * Wait on the condition variable, or timer to expire
      *
      * Wait to be woken (with wake_one() or wake_all()), or the given timer
@@ -114,11 +139,11 @@ typedef struct condvar {
      * a timeout hasn't yet occurred, but rather that one wake_one()/wake_all()
      * was consumed to wake us.
      */
-    inline int wait(mutex_t *user_mutex, sched::timer *tmr = nullptr);
+    int wait(mutex* user_mutex, sched::timer *tmr = nullptr);
     /**
      * \overload
      */
-    inline int wait(mutex_t &user_mutex, sched::timer *tmr = nullptr);
+    int wait(mutex& user_mutex, sched::timer *tmr = nullptr);
     /**
      * Wake one thread waiting on the condition variable
      *
@@ -130,7 +155,7 @@ typedef struct condvar {
      * until the waking thread unlocks it and the target thread can have it.
      * This optimization is known as "wait morphing".
      */
-    inline void wake_one();
+    void wake_one();
     /**
      * Wake all threads waiting on the condition variable
      *
@@ -144,7 +169,7 @@ typedef struct condvar {
      * waiting list of the mutex, to be woken up one by one as the mutex
      * becomes available. This optimization is known as "wait morphing".
      */
-    inline void wake_all();
+    void wake_all();
     template <class Pred>
     void wait_until(mutex& mtx, Pred pred);
 #endif
@@ -152,32 +177,23 @@ typedef struct condvar {
 
 #define CONDVAR_INITIALIZER	{}
 
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+__BEGIN_DECLS
 
 int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration);
 void condvar_wake_one(condvar_t *condvar);
 void condvar_wake_all(condvar_t *condvar);
 
+__END_DECLS
+
 #ifdef __cplusplus
+
+inline int condvar::wait(mutex& user_mutex, sched::timer *tmr)
+{
+    return wait(&user_mutex, tmr);
 }
 
 // additional convenience functions for C++
 int condvar_wait(condvar_t *condvar, mutex_t *user_mutex, sched::timer *tmr);
-int condvar_t::wait(mutex_t *user_mutex, sched::timer *tmr) {
-    return condvar_wait(this, user_mutex, tmr);
-}
-int condvar_t::wait(mutex_t &user_mutex, sched::timer *tmr) {
-    return condvar_wait(this, &user_mutex, tmr);
-}
-void condvar_t::wake_one() {
-    return condvar_wake_one(this);
-}
-void condvar_t::wake_all() {
-    return condvar_wake_all(this);
-}
 
 template <class Pred>
 inline
