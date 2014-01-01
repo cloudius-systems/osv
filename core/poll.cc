@@ -123,7 +123,7 @@ int poll_scan(std::vector<poll_file>& _pfd)
             continue;
         }
 
-        entry->revents = fo_poll(fp, entry->events);
+        entry->revents = fp->poll(entry->events);
         if (entry->revents) {
             nr_events++;
         }
@@ -210,7 +210,7 @@ void poll_install(struct pollreq* p)
         FD_UNLOCK(fp);
         // We need to check if we missed an event on this file just before
         // installing the poll request on it above.
-        if(fo_poll(fp, entry->events)) {
+        if(fp->poll(entry->events)) {
             // Return immediately. poll() will call poll_scan() to get the
             // full list of events, and will call poll_uninstall() to undo
             // the partial installation we did here.

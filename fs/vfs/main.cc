@@ -1156,9 +1156,9 @@ int fcntl(int fd, int cmd, int arg)
 
         /* Sync nonblocking/async state with file flags */
         tmp = fp->f_flags & FNONBLOCK;
-        fo_ioctl(fp, FIONBIO, &tmp);
+        fp->ioctl(FIONBIO, &tmp);
         tmp = fp->f_flags & FASYNC;
-        fo_ioctl(fp, FIOASYNC, &tmp);
+        fp->ioctl(FIOASYNC, &tmp);
 
         break;
     default:

@@ -129,16 +129,6 @@ struct special_file : public file {
 
 #define FOF_OFFSET  0x0800    /* Use the offset in uio argument */
 
-typedef int fo_init_t(struct file *fp);
-typedef int fo_rdwr_t(struct file *fp, struct uio *uio, int flags);
-typedef int fo_truncate_t(struct file *fp, off_t length);
-typedef int fo_ioctl_t(struct file *fp, u_long com, void *data);
-typedef int fo_poll_t(struct file *fp, int events);
-typedef int fo_stat_t(struct file *fp, struct stat *sb);
-typedef int fo_close_t(struct file *fp);
-typedef int fo_chmod_t(struct file *fp, mode_t mode);
-
-
 /* Alloc an fd for fp */
 int _fdalloc(struct file *fp, int *newfd, int min_fd);
 int fdalloc(struct file* fp, int *newfd);
@@ -163,19 +153,6 @@ int fdrop(struct file* fp);
 int fget(int fd, struct file** fp);
 
 bool is_nonblock(struct file *f);
-
-/*
- * Easy inline functions for invoking the file operations
- */
-extern fo_init_t   fo_init;
-extern fo_rdwr_t   fo_read;
-extern fo_rdwr_t   fo_write;
-extern fo_truncate_t   fo_truncate;
-extern fo_ioctl_t  fo_ioctl;
-extern fo_poll_t   fo_poll;
-extern fo_stat_t   fo_stat;
-extern fo_close_t  fo_close;
-extern fo_chmod_t  fo_chmod;
 
 __END_DECLS
 

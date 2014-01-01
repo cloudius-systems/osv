@@ -200,7 +200,7 @@ sys_read(struct file *fp, struct iovec *iov, size_t niov,
 
 	uio->uio_rw = UIO_READ;
 	uio->uio_offset = offset;
-	error = fo_read(fp, uio, (offset == -1) ? 0 : FOF_OFFSET);
+	error = fp->read(uio, (offset == -1) ? 0 : FOF_OFFSET);
 	*count = bytes - uio->uio_resid;
 	free(uio);
 
@@ -235,7 +235,7 @@ sys_write(struct file *fp, struct iovec *iov, size_t niov,
 
 	uio->uio_rw = UIO_WRITE;
 	uio->uio_offset = offset;
-	error = fo_write(fp, uio, (offset == -1) ? 0 : FOF_OFFSET);
+	error = fp->write(uio, (offset == -1) ? 0 : FOF_OFFSET);
 	*count = bytes - uio->uio_resid;
 	free(uio);
 
@@ -304,7 +304,7 @@ sys_ioctl(struct file *fp, u_long request, void *buf)
 	if ((fp->f_flags & (FREAD | FWRITE)) == 0)
 		return EBADF;
 
-	error = fo_ioctl(fp, request, buf);
+	error = fp->ioctl(request, buf);
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_ioctl: comp error=%d\n", error));
 	return error;
@@ -335,7 +335,7 @@ sys_fstat(struct file *fp, struct stat *st)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_fstat: fp=%x\n", fp));
 
-	error = fo_stat(fp, st);
+	error = fp->stat(st);
 
 	return error;
 }

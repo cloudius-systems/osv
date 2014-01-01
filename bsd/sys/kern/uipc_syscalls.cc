@@ -288,9 +288,9 @@ kern_accept(int s, struct bsd_sockaddr *name,
 	}
 	/* Sync socket nonblocking/async state with file flags */
 	tmp = fflag & FNONBLOCK;
-	(void) fo_ioctl(nfp, FIONBIO, &tmp);
+	(void) nfp->ioctl(FIONBIO, &tmp);
 	tmp = fflag & FASYNC;
-	(void) fo_ioctl(nfp, FIOASYNC, &tmp);
+	(void) nfp->ioctl(FIOASYNC, &tmp);
 	sa = 0;
 	error = soaccept(so, &sa);
 	if (error)

@@ -179,7 +179,7 @@ int fdrop(struct file *fp)
      */
 
     fp->f_count = INT_MIN;
-    fo_close(fp);
+    fp->close();
     delete fp;
     return 1;
 }
@@ -204,54 +204,6 @@ dentry* file_dentry(file* fp)
 void file_setdata(file* fp, void* data)
 {
     fp->f_data = data;
-}
-
- int
-fo_read(struct file *fp, struct uio *uio, int flags)
-{
-        return fp->read(uio, flags);
-}
-
- int
-fo_write(struct file *fp, struct uio *uio, int flags)
-{
-        return fp->write(uio, flags);
-}
-
- int
-fo_truncate(struct file *fp, off_t length)
-{
-        return fp->truncate(length);
-}
-
- int
-fo_ioctl(struct file *fp, u_long com, void *data)
-{
-        return fp->ioctl(com, data);
-}
-
- int
-fo_poll(struct file *fp, int events)
-{
-        return fp->poll(events);
-}
-
- int
-fo_stat(struct file *fp, struct stat *sb)
-{
-        return fp->stat(sb);
-}
-
- int
-fo_close(struct file *fp)
-{
-        return fp->close();
-}
-
- int
-fo_chmod(struct file *fp, mode_t mode)
-{
-        return fp->chmod(mode);
 }
 
 bool is_nonblock(struct file *f)

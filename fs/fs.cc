@@ -12,7 +12,7 @@
 uint64_t size(fileref f)
 {
     struct stat st;
-    int r = fo_stat(f.get(), &st);
+    int r = f.get()->stat(&st);
     assert(r == 0);
     return st.st_size;
 }
@@ -22,7 +22,7 @@ void read(fileref f, void *buffer, uint64_t offset, uint64_t len)
     iovec iov{buffer, len};
     // FIXME: breaks on 32-bit
     uio data{&iov, 1, off_t(offset), ssize_t(len), UIO_READ};
-    int r = fo_read(f.get(), &data, FOF_OFFSET);
+    int r = f.get()->read(&data, FOF_OFFSET);
     assert(r == 0);
     assert(data.uio_resid == 0);
 }
@@ -32,7 +32,7 @@ void write(fileref f, const void* buffer, uint64_t offset, uint64_t len)
     iovec iov{const_cast<void*>(buffer), len};
     // FIXME: breaks on 32-bit
     uio data{&iov, 1, off_t(offset), ssize_t(len), UIO_WRITE};
-    int r = fo_write(f.get(), &data, FOF_OFFSET);
+    int r = f.get()->write(&data, FOF_OFFSET);
     assert(r == 0);
     assert(data.uio_resid == 0);
 }
