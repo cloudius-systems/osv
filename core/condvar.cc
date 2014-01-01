@@ -32,22 +32,22 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
     int ret = 0;
     wait_record wr(sched::thread::current());
 
-    mutex_lock(&condvar->m);
-    if (!condvar->waiters_fifo.oldest) {
-        condvar->waiters_fifo.oldest = &wr;
+    mutex_lock(&condvar->_m);
+    if (!condvar->_waiters_fifo.oldest) {
+        condvar->_waiters_fifo.oldest = &wr;
     } else {
-        condvar->waiters_fifo.newest->next = &wr;
+        condvar->_waiters_fifo.newest->next = &wr;
     }
-    condvar->waiters_fifo.newest = &wr;
+    condvar->_waiters_fifo.newest = &wr;
     // Remember user_mutex for "wait morphing" feature. Assert our assumption
     // that concurrent waits use the same mutex.
-    assert(!condvar->user_mutex || condvar->user_mutex == user_mutex);
-    condvar->user_mutex = user_mutex;
+    assert(!condvar->_user_mutex || condvar->_user_mutex == user_mutex);
+    condvar->_user_mutex = user_mutex;
     // This preempt_disable() is just an optimization, to avoid context
     // switch between the two unlocks.
     sched::preempt_disable();
     mutex_unlock(user_mutex);
-    mutex_unlock(&condvar->m);
+    mutex_unlock(&condvar->_m);
     sched::preempt_enable();
 
     // Wait until either the timer expires or condition variable signaled
@@ -55,19 +55,19 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
     if (!wr.woken()) {
         ret = ETIMEDOUT;
         // wr is still in the linked list (because of a timeout) so remove it:
-        mutex_lock(&condvar->m);
-        if (&wr == condvar->waiters_fifo.oldest) {
-            condvar->waiters_fifo.oldest = wr.next;
+        mutex_lock(&condvar->_m);
+        if (&wr == condvar->_waiters_fifo.oldest) {
+            condvar->_waiters_fifo.oldest = wr.next;
             if (!wr.next) {
-                condvar->waiters_fifo.newest = nullptr;
+                condvar->_waiters_fifo.newest = nullptr;
             }
         } else {
-            wait_record *p = condvar->waiters_fifo.oldest;
+            wait_record *p = condvar->_waiters_fifo.oldest;
             while (p) {
                 if (&wr == p->next) {
                     p->next = p->next->next;
                     if(!p->next) {
-                        condvar->waiters_fifo.newest = p;
+                        condvar->_waiters_fifo.newest = p;
                     }
                     break;
                 }
@@ -77,7 +77,7 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, sched::timer* tmr)
                 ret = 0;
             }
         }
-        mutex_unlock(&condvar->m);
+        mutex_unlock(&condvar->_m);
         if (!ret) {
             // wr is no longer in the queue, so either wr.wake() is
             // already done, or wake_all() has just taken the whole queue
@@ -105,47 +105,47 @@ void condvar_wake_one(condvar_t *condvar)
     // To make wake with no waiters faster, and avoid unnecessary contention
     // in that case, first check the queue head outside the lock. If it is not
     // empty, we still need to take the lock, and re-read the head.
-    if (!condvar->waiters_fifo.oldest) {
+    if (!condvar->_waiters_fifo.oldest) {
         return;
     }
 
-    mutex_lock(&condvar->m);
-    wait_record *wr = condvar->waiters_fifo.oldest;
+    mutex_lock(&condvar->_m);
+    wait_record *wr = condvar->_waiters_fifo.oldest;
     if (wr) {
-        condvar->waiters_fifo.oldest = wr->next;
+        condvar->_waiters_fifo.oldest = wr->next;
         if (wr->next == nullptr) {
-            condvar->waiters_fifo.newest = nullptr;
+            condvar->_waiters_fifo.newest = nullptr;
         }
         // Rather than wake the waiter here (wr->wake()) and have it wait
         // again for the mutex, we do "wait morphing" - have it continue to
         // sleep until the mutex becomes available.
-        condvar->user_mutex->send_lock(wr);
+        condvar->_user_mutex->send_lock(wr);
         // To help the assert() in condvar_wait(), we need to zero saved
         // user_mutex when all concurrent condvar_wait()s are done.
-        if (!condvar->waiters_fifo.oldest) {
-            condvar->user_mutex = nullptr;
+        if (!condvar->_waiters_fifo.oldest) {
+            condvar->_user_mutex = nullptr;
         }
     }
-    mutex_unlock(&condvar->m);
+    mutex_unlock(&condvar->_m);
 }
 
 void condvar_wake_all(condvar_t *condvar)
 {
     trace_condvar_wake_all(condvar);
-    if (!condvar->waiters_fifo.oldest) {
+    if (!condvar->_waiters_fifo.oldest) {
         return;
     }
 
-    mutex_lock(&condvar->m);
-    wait_record *wr = condvar->waiters_fifo.oldest;
+    mutex_lock(&condvar->_m);
+    wait_record *wr = condvar->_waiters_fifo.oldest;
 
     // To help the assert() in condvar_wait(), we need to zero saved
     // user_mutex when all concurrent condvar_wait()s are done.
-    auto user_mutex = condvar->user_mutex;
-    condvar->user_mutex = nullptr;
+    auto user_mutex = condvar->_user_mutex;
+    condvar->_user_mutex = nullptr;
 
-    condvar->waiters_fifo.oldest = condvar->waiters_fifo.newest = nullptr;
-    mutex_unlock(&condvar->m);
+    condvar->_waiters_fifo.oldest = condvar->_waiters_fifo.newest = nullptr;
+    mutex_unlock(&condvar->_m);
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
         auto cpu_wr = wr->thread()->tcpu();

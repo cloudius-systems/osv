@@ -72,7 +72,7 @@ struct wait_record;
  * counter in the waker, and decide exactly who to wake.
  */
 typedef struct condvar {
-    mutex_t m;
+    mutex_t _m;
     struct {
         // A FIFO queue of waiters - a linked list from oldest (next in line
         // to be woken) towards newest. The wait records themselves are held
@@ -80,12 +80,12 @@ typedef struct condvar {
         // allocation is needed for this list.
         struct wait_record *oldest;
         struct wait_record *newest;
-    } waiters_fifo;
+    } _waiters_fifo;
     // Remember mutex last used in a wait(), for use in "wait morphing"
     // feature. We disallow (as Posix Threads do) using different mutexes in
     // concurrent wait()s on the same condvar. We could lift this requirement,
     // but then we would need to remember the user_mutex on each wait_record.
-    mutex_t *user_mutex;
+    mutex_t *_user_mutex;
 
 #ifdef __cplusplus
     // In C++, for convenience also provide methods.

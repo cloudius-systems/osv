@@ -15,8 +15,8 @@
 
 void assert_idle(condvar *c)
 {
-    assert (!c->waiters_fifo.newest);
-    assert (!c->waiters_fifo.oldest);
+    assert (!c->_waiters_fifo.newest);
+    assert (!c->_waiters_fifo.oldest);
 }
 
 int main(int argc, char **argv)
