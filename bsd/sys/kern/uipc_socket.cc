@@ -130,7 +130,6 @@
 static int	soreceive_rcvoob(struct socket *so, struct uio *uio,
 		    int flags);
 
-uma_zone_t socket_zone;
 so_gen_t	so_gencnt;	/* generation count for sockets */
 
 int	maxsockets = 256;
@@ -239,14 +238,10 @@ soalloc(struct vnet *vnet)
 {
 	struct socket *so;
 
-	so = (struct socket *)uma_zalloc(socket_zone, M_NOWAIT | M_ZERO);
+	so = new socket{};
 	if (so == NULL)
 		return (NULL);
 	uipc_d("soalloc() so=%" PRIx64, (uint64_t)so);
-	SOCKBUF_LOCK_INIT(&so->so_snd, "so_snd");
-	SOCKBUF_LOCK_INIT(&so->so_rcv, "so_rcv");
-	rw_init(&so->so_snd.sb_rwlock, "so_snd_sx");
-	rw_init(&so->so_rcv.sb_rwlock, "so_rcv_sx");
 	TAILQ_INIT(&so->so_aiojobq);
 	mtx_lock(&so_global_mtx);
 	so->so_gencnt = ++so_gencnt;
@@ -283,11 +278,7 @@ sodealloc(struct socket *so)
 		do_setopt_accept_filter(so, NULL);
 # endif
 #endif
-	rw_destroy(&so->so_snd.sb_rwlock);
-	rw_destroy(&so->so_rcv.sb_rwlock);
-	SOCKBUF_LOCK_DESTROY(&so->so_snd);
-	SOCKBUF_LOCK_DESTROY(&so->so_rcv);
-	uma_zfree(socket_zone, so);
+	delete so;
 }
 
 /*

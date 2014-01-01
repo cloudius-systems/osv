@@ -113,9 +113,6 @@ struct	sockbuf {
  */
 __BEGIN_DECLS
 #define	SOCKBUF_MTX(_sb)		(&(_sb)->sb_mtx)
-#define	SOCKBUF_LOCK_INIT(_sb, _name) \
-	mtx_init(SOCKBUF_MTX(_sb), _name, NULL, MTX_DEF)
-#define	SOCKBUF_LOCK_DESTROY(_sb)	mtx_destroy(SOCKBUF_MTX(_sb))
 #define	SOCKBUF_LOCK(_sb)		mtx_lock(SOCKBUF_MTX(_sb))
 #define	SOCKBUF_OWNED(_sb)		mtx_owned(SOCKBUF_MTX(_sb))
 #define	SOCKBUF_UNLOCK(_sb)		mtx_unlock(SOCKBUF_MTX(_sb))

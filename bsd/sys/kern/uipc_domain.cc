@@ -212,29 +212,12 @@ domain_add(void *data)
 	mtx_unlock(&dom_mtx);
 }
 
-static void
-socket_zone_change(void *tag)
-{
-
-	uma_zone_set_max(socket_zone, maxsockets);
-}
-
 /* ARGSUSED*/
 void
 domaininit(void *dummy)
 {
 
     mtx_init(&dom_mtx, "domain list", 0, MTX_DEF);
-
-	/*
-	 * Before we do any setup, make sure to initialize the
-	 * zone allocator we get struct sockets from.
-	 */
-	socket_zone = uma_zcreate("socket", sizeof(struct socket), NULL, NULL,
-	    NULL, NULL, UMA_ALIGN_PTR, UMA_ZONE_NOFREE);
-	uma_zone_set_max(socket_zone, maxsockets);
-	EVENTHANDLER_REGISTER(maxsockets_change, (void*)socket_zone_change, NULL,
-		EVENTHANDLER_PRI_FIRST);
 
 	if (max_linkhdr < 16)		/* XXX */
 		max_linkhdr = 16;
