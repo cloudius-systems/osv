@@ -328,6 +328,7 @@ static int prio_find_thread(sched::thread **th, int which, int id)
 {
     errno = 0;
     if ((which == PRIO_USER) || (which == PRIO_PGRP)) {
+        *th = nullptr;
         return 0;
     }
 
