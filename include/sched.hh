@@ -334,6 +334,15 @@ public:
     static void wait_until(mutex_t& mtx, Pred pred);
     template <class Pred>
     static void wait_until(mutex_t* mtx, Pred pred);
+
+    // Wait for any of a number of waitable objects to be signalled
+    // waitable objects include: waitqueues, timers, predicates,
+    // and more.  If supplied, the mutex object is unlocked while waiting.
+    template <typename... waitable>
+    static void wait_for(waitable&&... waitables);
+    template <typename... waitable>
+    static void wait_for(mutex& mtx, waitable&&... waitables);
+
     void wake();
     bool interrupted();
     void interrupted(bool f);
@@ -390,6 +399,8 @@ private:
     void complete() __attribute__((__noreturn__));
     template <class IntrStrategy, class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
+    template <typename Mutex, typename... wait_object>
+    static void do_wait_for(Mutex& mtx, wait_object&&... wait_objects);
     struct dummy_lock {};
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
@@ -694,6 +705,116 @@ inline void thread::interrupted(bool f)
     if(f) {
         wake();
     }
+}
+
+// thread::wait_for() accepts an optional mutex, followed by a
+// number waitable objects.
+//
+// a waitable object's protocol is as follows:
+//
+// Given a waitable object 'wa', the class wait_object<waitable> defines
+// the waiting protocol using instance methods:
+//
+//   wait_object(wa, mtx) - initialization; if mutex is not required for waiting it can be optional
+//   poll() - check whether wa has finished waiting
+//   arm() - prepare for waiting; typically registering wa on some list
+//   disarm() - called after waiting is complete
+//
+// all of these are called with the mutex held, if supplied
+
+
+// wait_object<T> must be specialized for the particular waitable.
+template <typename T>
+class wait_object;
+
+template <typename... wait_object>
+void arm(wait_object&... objs);
+
+template <>
+inline
+void arm()
+{
+}
+
+template <typename wait_object_first, typename... wait_object_rest>
+inline
+void arm(wait_object_first& first, wait_object_rest&... rest)
+{
+    first.arm();
+    arm(rest...);
+}
+
+template <typename... wait_object>
+bool poll(wait_object&... objs);
+
+template <>
+inline
+bool poll()
+{
+    return false;
+}
+
+template <typename wait_object_first, typename... wait_object_rest>
+inline
+bool poll(wait_object_first& first, wait_object_rest&... rest)
+{
+    return first.poll() || poll(rest...);
+}
+
+template <typename... wait_object>
+void disarm(wait_object&... objs);
+
+template <>
+inline
+void disarm()
+{
+}
+
+template <typename wait_object_first, typename... wait_object_rest>
+inline
+void disarm(wait_object_first& first, wait_object_rest&... rest)
+{
+    disarm(rest...);
+    first.disarm();
+}
+
+template <typename Mutex, typename... wait_object>
+inline
+void thread::do_wait_for(Mutex& mtx, wait_object&&... wait_objects)
+{
+    if (poll(wait_objects...)) {
+        return;
+    }
+    arm(wait_objects...);
+    // must duplicate do_wait_until since gcc has a bug capturing parameter packs
+    thread* me = current();
+    while (true) {
+        {
+            wait_guard waiter(me);
+            if (poll(wait_objects...)) {
+                break;
+            }
+            release(mtx);
+            me->wait();
+        }
+        acquire(mtx);
+    }
+    disarm(wait_objects...);
+}
+
+template <typename... waitable>
+inline
+void thread::wait_for(mutex& mtx, waitable&&... waitables)
+{
+    do_wait_for(mtx, wait_object<typename std::remove_reference<waitable>::type>(waitables, &mtx)...);
+}
+
+template <typename... waitable>
+inline
+void thread::wait_for(waitable&&... waitables)
+{
+    dummy_lock mtx;
+    do_wait_for(mtx, wait_object<typename std::remove_reference<waitable>::type>(waitables)...);
 }
 
 // About wake_with():
