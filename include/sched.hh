@@ -55,6 +55,7 @@ class timer;
 class timer_list;
 class cpu_mask;
 class thread_runtime_compare;
+template <typename T> class wait_object;
 
 void schedule();
 
@@ -187,6 +188,20 @@ protected:
 class timer : public timer_base {
 public:
     explicit timer(thread& t);
+private:
+    class waiter;
+    friend class wait_object<timer>;
+};
+
+template <>
+class wait_object<timer> {
+public:
+    explicit wait_object(timer& tmr, mutex* mtx = nullptr) : _tmr(tmr) {}
+    bool poll() const { return _tmr.expired(); }
+    void arm() {}
+    void disarm() {}
+private:
+    timer& _tmr;
 };
 
 // thread_runtime is used to maintain the scheduler's view of the thread's
