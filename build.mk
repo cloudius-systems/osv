@@ -150,6 +150,7 @@ boost-tests := tests/tst-rename.so \
 	tests/tst-promise.so \
 	tests/tst-dlfcn.so \
 	tests/tst-stat.so
+boost-tests += tests/tst-wait-for.so
 
 java_tests := tests/hello/Hello.class
 
