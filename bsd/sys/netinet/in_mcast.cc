@@ -910,6 +910,7 @@ inm_merge(struct in_multi *inm, /*const*/ struct in_mfilter *imf)
 	schanged = 0;
 	error = 0;
 	nsrc1 = nsrc0 = 0;
+	nims = NULL;
 
 	/*
 	 * Update the source filters first, as this may fail.
