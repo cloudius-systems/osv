@@ -40,6 +40,7 @@ TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
+TRACEPOINT(trace_thread_create, "thread=%p", thread*);
 
 std::vector<cpu*> cpus __attribute__((init_priority((int)init_prio::cpus)));
 
@@ -571,6 +572,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _cleanup([this] { delete this; })
     , _joiner(nullptr)
 {
+    trace_thread_create(this);
     setup_tcb();
     WITH_LOCK(thread_map_mutex) {
         if (!main) {
