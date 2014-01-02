@@ -45,6 +45,7 @@
 #include "dhcp.hh"
 #include <osv/version.h>
 #include <osv/run.hh>
+#include <osv/shutdown.hh>
 #include "commands.hh"
 
 using namespace osv;
@@ -75,7 +76,6 @@ extern "C" {
     void premain();
     void vfs_init(void);
     void mount_zfs_rootfs(void);
-    void unmount_rootfs();
     void ramdisk_init(void);
 }
 
@@ -338,9 +338,7 @@ void main_cont(int ac, char** av)
         debug("Leak testing done. Please use 'osv leak show' in gdb to analyze results.\n");
         osv::halt();
     } else {
-        unmount_rootfs();
-        debug("Powering off.\n");
-        osv::poweroff();
+        osv::shutdown();
     }
 }
 
