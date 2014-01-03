@@ -29,93 +29,97 @@ void load_test(char *path, char *argv0)
         abort("Failed to execute or missing main()\n");
     }
 
-	++nr_tests;
-	if (ret) {
-	    ++nr_failures;
-		printf("failed.\n");
-	} else {
-		printf("ok.\n");
-	}
+    ++nr_tests;
+    if (ret) {
+        ++nr_failures;
+        printf("failed.\n");
+    } else {
+        printf("ok.\n");
+    }
 }
 
 int check_path(char *path)
 {
-	struct stat st;
-	if (stat(path, &st) < 0) {
-		printf("failed to stat %s\n", path);
-		return 0;
-	}
+    struct stat st;
+    if (stat(path, &st) < 0) {
+        printf("failed to stat %s\n", path);
+        return 0;
+    }
 
-	if (!S_ISREG(st.st_mode)) {
-		printf("ignoring %s, not a regular file\n", path);
-		return 0;
-	}
-	return 1;
+    if (!S_ISREG(st.st_mode)) {
+        printf("ignoring %s, not a regular file\n", path);
+        return 0;
+    }
+    return 1;
 }
 
 bool is_test_in_blacklist(const char *name, int argc, char **argv)
 {
-	/* Start from the index 2 as 1 would be -b */
-	for (int i = 2; i < argc; i++) {
-		if (!strcmp(argv[i], name)) {
-			return true;
-		}
-	}
+    /* Start from the index 2 as 1 would be -b */
+    for (int i = 2; i < argc; i++) {
+        if (!strcmp(argv[i], name)) {
+            return true;
+        }
+    }
 
-	return false;
+    return false;
 }
 
 int main(int argc, char **argv)
 {
-	char path[PATH_MAX];
-	bool blacklist = false;
+    char path[PATH_MAX];
+    bool blacklist = false;
 
-	if (argc > 1 && !strcmp(argv[1], "-b")) {
-		blacklist = true;
-	}
+    if (argc > 1 && !strcmp(argv[1], "-b")) {
+        blacklist = true;
+    }
 
-	if (argc == 1 || blacklist) {
-		DIR *dir = opendir(TESTDIR);
-		struct dirent *d;
+    if (argc == 1 || blacklist) {
+        DIR *dir = opendir(TESTDIR);
+        struct dirent *d;
 
-		if (!dir) {
-			perror("failed to open testdir");
-			return EXIT_FAILURE;
-		}
+        if (!dir) {
+            perror("failed to open testdir");
+            return EXIT_FAILURE;
+        }
 
-		while ((d = readdir(dir))) {
-			if (strcmp(d->d_name, ".") == 0 ||
-			    strcmp(d->d_name, "..") == 0)
-				continue;
+        while ((d = readdir(dir))) {
+            if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0) {
+                continue;
+            }
 
-			if (strncmp(d->d_name, "tst-", 4) != 0)
-				continue;
+            if (strncmp(d->d_name, "tst-", 4) != 0) {
+                continue;
+            }
 
-			if (blacklist && is_test_in_blacklist(d->d_name, argc, argv))
-				continue;
+            if (blacklist && is_test_in_blacklist(d->d_name, argc, argv)) {
+                continue;
+            }
 
-			snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
-			if (!check_path(path))
-				continue;
+            snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
+            if (!check_path(path)) {
+                continue;
+            }
 
-			load_test(path, d->d_name);
-		}
+            load_test(path, d->d_name);
+        }
 
-		if (closedir(dir) < 0) {
-			perror("failed to close testdir");
-			return EXIT_FAILURE;
-		}
-	} else {
-		for (int i = 1; i < argc; i++) {
-			snprintf(path, PATH_MAX, "%s/%s", TESTDIR, argv[i]);
-			if (!check_path(path))
-				continue;
+        if (closedir(dir) < 0) {
+            perror("failed to close testdir");
+            return EXIT_FAILURE;
+        }
+    } else {
+        for (int i = 1; i < argc; i++) {
+            snprintf(path, PATH_MAX, "%s/%s", TESTDIR, argv[i]);
+            if (!check_path(path)) {
+                continue;
+            }
 
-			load_test(path, argv[i]);
-		}
-	}
+            load_test(path, argv[i]);
+        }
+    }
 
-	printf("All tests complete - %d/%d failures\n", nr_failures, nr_tests);
+    printf("All tests complete - %d/%d failures\n", nr_failures, nr_tests);
 
-	return 0;
+    return 0;
 }
