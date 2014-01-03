@@ -52,6 +52,7 @@ class nbd_file(object):
         self._filename = filename
         self._offset = 0
         self._buf    = None
+        self._closed = True
         self._process = subprocess.Popen("qemu-nbd %s" % filename,
                                         shell = True, stdout=_devnull)
         # wait for qemu-nbd to start: this thing doesn't tell anything on stdout
@@ -60,6 +61,8 @@ class nbd_file(object):
                 self._client = nbd_client("localhost")
                 break
             except:
+                if self._process.poll() != None:
+                    raise Exception('Qemu terminated with exit code %d' % self._process.returncode)
                 time.sleep(0.1)
         self._closed = False
 
