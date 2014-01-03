@@ -35,7 +35,7 @@ static void dlerror_fmt(const char *fmt, ...)
 
 void* dlopen(const char* filename, int flags)
 {
-    if (!filename) {
+    if (!filename || !strcmp(filename, "")) {
         // It is strange that we are returning a program while
         // dlsym will always try to open an object. We may have to
         // revisit this later, specially if this affect the ordering
