@@ -81,7 +81,8 @@ class nbd_file(object):
         # send disconnect to nbd server
         self._client.close()
         # wait for server to exit
-        self._process.wait()
+        if self._process.wait():
+            raise Exception('Qemu terminated with exit code %d' % self._process.returncode)
         self._closed = True
 
     def seek(self, offset):
