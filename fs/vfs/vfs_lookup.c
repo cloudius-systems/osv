@@ -48,98 +48,99 @@ static struct mutex dentry_hash_lock;
 static u_int
 dentry_hash(struct mount *mp, const char *path)
 {
-	u_int val = 0;
+    u_int val = 0;
 
-	if (path) {
-		while (*path)
-			val = ((val << 5) + val) + *path++;
-	}
-	return (val ^ (unsigned long)mp) & (DENTRY_BUCKETS - 1);
+    if (path) {
+        while (*path) {
+            val = ((val << 5) + val) + *path++;
+        }
+    }
+    return (val ^ (unsigned long) mp) & (DENTRY_BUCKETS - 1);
 }
 
 
 struct dentry *
 dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 {
-	struct mount *mp = vp->v_mount;
-	struct dentry *dp = calloc(sizeof(*dp), 1);
+    struct mount *mp = vp->v_mount;
+    struct dentry *dp = calloc(sizeof(*dp), 1);
 
-	if (!dp)
-		return NULL;
+    if (!dp) {
+        return NULL;
+    }
 
-	vp->v_refcnt++;
+    vp->v_refcnt++;
 
-	dp->d_refcnt = 1;
-	dp->d_vnode = vp;
-	dp->d_mount = mp;
-	dp->d_path = strdup(path);
+    dp->d_refcnt = 1;
+    dp->d_vnode = vp;
+    dp->d_mount = mp;
+    dp->d_path = strdup(path);
 
-	if (parent_dp) {
-		dref(parent_dp);
-	}
-	dp->d_parent = parent_dp;
+    if (parent_dp) {
+        dref(parent_dp);
+    }
+    dp->d_parent = parent_dp;
 
-	vn_add_name(vp, dp);
+    vn_add_name(vp, dp);
 
-	mutex_lock(&dentry_hash_lock);
-	LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(mp, path)], dp, d_link);
-	mutex_unlock(&dentry_hash_lock);
-	return dp;
+    mutex_lock(&dentry_hash_lock);
+    LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(mp, path)], dp, d_link);
+    mutex_unlock(&dentry_hash_lock);
+    return dp;
 };
 
 static struct dentry *
 dentry_lookup(struct mount *mp, char *path)
 {
-	struct dentry *dp;
+    struct dentry *dp;
 
-	mutex_lock(&dentry_hash_lock);
-	LIST_FOREACH(dp, &dentry_hash_table[dentry_hash(mp, path)], d_link) {
-		if (dp->d_mount == mp &&
-		    !strncmp(dp->d_path, path, PATH_MAX)) {
-			dp->d_refcnt++;
-			mutex_unlock(&dentry_hash_lock);
-			return dp;
-		}
-	}
-	mutex_unlock(&dentry_hash_lock);
-	return NULL;		/* not found */
+    mutex_lock(&dentry_hash_lock);
+    LIST_FOREACH(dp, &dentry_hash_table[dentry_hash(mp, path)], d_link) {
+        if (dp->d_mount == mp && !strncmp(dp->d_path, path, PATH_MAX)) {
+            dp->d_refcnt++;
+            mutex_unlock(&dentry_hash_lock);
+            return dp;
+        }
+    }
+    mutex_unlock(&dentry_hash_lock);
+    return NULL;                /* not found */
 }
 
 void
 dref(struct dentry *dp)
 {
-	ASSERT(dp);
-	ASSERT(dp->d_refcnt > 0);
+    ASSERT(dp);
+    ASSERT(dp->d_refcnt > 0);
 
-	mutex_lock(&dentry_hash_lock);
-	dp->d_refcnt++;
-	mutex_unlock(&dentry_hash_lock);
+    mutex_lock(&dentry_hash_lock);
+    dp->d_refcnt++;
+    mutex_unlock(&dentry_hash_lock);
 }
 
 void
 drele(struct dentry *dp)
 {
-	ASSERT(dp);
-	ASSERT(dp->d_refcnt > 0);
+    ASSERT(dp);
+    ASSERT(dp->d_refcnt > 0);
 
-	mutex_lock(&dentry_hash_lock);
-	if (--dp->d_refcnt) {
-		mutex_unlock(&dentry_hash_lock);
-		return;
-	}
-	LIST_REMOVE(dp, d_link);
-	vn_del_name(dp->d_vnode, dp);
+    mutex_lock(&dentry_hash_lock);
+    if (--dp->d_refcnt) {
+        mutex_unlock(&dentry_hash_lock);
+        return;
+    }
+    LIST_REMOVE(dp, d_link);
+    vn_del_name(dp->d_vnode, dp);
 
-	mutex_unlock(&dentry_hash_lock);
+    mutex_unlock(&dentry_hash_lock);
 
-	if (dp->d_parent) {
-		drele(dp->d_parent);
-	}
+    if (dp->d_parent) {
+        drele(dp->d_parent);
+    }
 
-	vrele(dp->d_vnode);
+    vrele(dp->d_vnode);
 
-	free(dp->d_path);
-	free(dp);
+    free(dp->d_path);
+    free(dp);
 }
 
 /*
@@ -151,109 +152,115 @@ drele(struct dentry *dp)
 int
 namei(char *path, struct dentry **dpp)
 {
-	char *p;
-	char node[PATH_MAX];
-	char name[PATH_MAX];
-	struct mount *mp;
-	struct dentry *dp, *ddp;
-	struct vnode *dvp, *vp;
-	int error, i;
+    char *p;
+    char node[PATH_MAX];
+    char name[PATH_MAX];
+    struct mount *mp;
+    struct dentry *dp, *ddp;
+    struct vnode *dvp, *vp;
+    int error, i;
 
-	DPRINTF(VFSDB_VNODE, ("namei: path=%s\n", path));
+    DPRINTF(VFSDB_VNODE, ("namei: path=%s\n", path));
 
-	/*
-	 * Convert a full path name to its mount point and
-	 * the local node in the file system.
-	 */
-	if (vfs_findroot(path, &mp, &p))
-		return ENOTDIR;
-	strlcpy(node, "/", sizeof(node));
-	strlcat(node, p, sizeof(node));
-	dp = dentry_lookup(mp, node);
-	if (dp) {
-		/* vnode is already active. */
-		*dpp = dp;
-		return 0;
-	}
-	/*
-	 * Find target vnode, started from root directory.
-	 * This is done to attach the fs specific data to
-	 * the target vnode.
-	 */
-	ddp = mp->m_root;
-	if (!ddp)
-		sys_panic("VFS: no root");
-	dref(ddp);
+    /*
+     * Convert a full path name to its mount point and
+     * the local node in the file system.
+     */
+    if (vfs_findroot(path, &mp, &p)) {
+        return ENOTDIR;
+    }
+    strlcpy(node, "/", sizeof(node));
+    strlcat(node, p, sizeof(node));
+    dp = dentry_lookup(mp, node);
+    if (dp) {
+        /* vnode is already active. */
+        *dpp = dp;
+        return 0;
+    }
+    /*
+     * Find target vnode, started from root directory.
+     * This is done to attach the fs specific data to
+     * the target vnode.
+     */
+    ddp = mp->m_root;
+    if (!ddp) {
+        sys_panic("VFS: no root");
+    }
+    dref(ddp);
 
-	node[0] = '\0';
+    node[0] = '\0';
 
-	while (*p != '\0') {
-		/*
-		 * Get lower directory/file name.
-		 */
-		while (*p == '/')
-			p++;
+    while (*p != '\0') {
+        /*
+         * Get lower directory/file name.
+         */
+        while (*p == '/') {
+            p++;
+        }
 
-		if (*p == '\0')
-			break;
+        if (*p == '\0') {
+            break;
+        }
 
-		for (i = 0; i < PATH_MAX; i++) {
-			if (*p == '\0' || *p == '/')
-				break;
-			name[i] = *p++;
-		}
-		name[i] = '\0';
+        for (i = 0; i < PATH_MAX; i++) {
+            if (*p == '\0' || *p == '/') {
+                break;
+            }
+            name[i] = *p++;
+        }
+        name[i] = '\0';
 
-		/*
-		 * Get a vnode for the target.
-		 */
-		strlcat(node, "/", sizeof(node));
-		strlcat(node, name, sizeof(node));
-		dvp = ddp->d_vnode;
-		vn_lock(dvp);
-		dp = dentry_lookup(mp, node);
-		if (dp == NULL) {
-			/* Find a vnode in this directory. */
-			error = VOP_LOOKUP(dvp, name, &vp);
-			if (error) {
-				vn_unlock(dvp);
-				drele(ddp);
-				return error;
-			}
+        /*
+         * Get a vnode for the target.
+         */
+        strlcat(node, "/", sizeof(node));
+        strlcat(node, name, sizeof(node));
+        dvp = ddp->d_vnode;
+        vn_lock(dvp);
+        dp = dentry_lookup(mp, node);
+        if (dp == NULL) {
+            /* Find a vnode in this directory. */
+            error = VOP_LOOKUP(dvp, name, &vp);
+            if (error) {
+                vn_unlock(dvp);
+                drele(ddp);
+                return error;
+            }
 
-			dp = dentry_alloc(ddp, vp, node);
-			vput(vp);
+            dp = dentry_alloc(ddp, vp, node);
+            vput(vp);
 
-			if (!dp) {
-				vn_unlock(dvp);
-				drele(ddp);
-				return ENOMEM;
-			}
-		}
-		vn_unlock(dvp);
-		drele(ddp);
-		ddp = dp;
+            if (!dp) {
+                vn_unlock(dvp);
+                drele(ddp);
+                return ENOMEM;
+            }
+        }
+        vn_unlock(dvp);
+        drele(ddp);
+        ddp = dp;
 
-		if (*p == '/' && ddp->d_vnode->v_type != VDIR) {
-			drele(ddp);
-			return ENOTDIR;
-		}
+        if (*p == '/' && ddp->d_vnode->v_type != VDIR) {
+            drele(ddp);
+            return ENOTDIR;
+        }
 
-		while (*p != '\0' && *p != '/')
-			p++;
-	}
+        while (*p != '\0' && *p != '/') {
+            p++;
+        }
+    }
 
 #if 0
-	/*
-	 * Detemine X permission.
-	 */
-	if (vp->v_type != VDIR && sec_vnode_permission(path) != 0) {
-		vp->v_mode &= ~(0111);
-	}
+    /*
+     * Detemine X permission.
+     */
+    if (vp->v_type != VDIR && sec_vnode_permission(path) != 0) {
+        vp->v_mode &= ~(0111);
+    }
 #endif
 
-	*dpp = dp;
-	return 0;
+    *dpp = dp;
+    return 0;
 }
 
 /*
@@ -269,44 +276,46 @@ namei(char *path, struct dentry **dpp)
 int
 lookup(char *path, struct dentry **dpp, char **name)
 {
-	char buf[PATH_MAX];
-	char root[] = "/";
-	char *file, *dir;
-	struct dentry *dp;
-	int error;
+    char buf[PATH_MAX];
+    char root[] = "/";
+    char *file, *dir;
+    struct dentry *dp;
+    int error;
 
-	DPRINTF(VFSDB_VNODE, ("lookup: path=%s\n", path));
+    DPRINTF(VFSDB_VNODE, ("lookup: path=%s\n", path));
 
-	/*
-	 * Get the path for directory.
-	 */
-	strlcpy(buf, path, sizeof(buf));
-	file = strrchr(buf, '/');
-	if (!buf[0])
-		return ENOTDIR;
-	if (file == buf)
-		dir = root;
-	else {
-		*file = '\0';
-		dir = buf;
-	}
-	/*
-	 * Get the vnode for directory
-	 */
-	if ((error = namei(dir, &dp)) != 0)
-		return error;
-	if (dp->d_vnode->v_type != VDIR) {
-		drele(dp);
-		return ENOTDIR;
-	}
+    /*
+     * Get the path for directory.
+     */
+    strlcpy(buf, path, sizeof(buf));
+    file = strrchr(buf, '/');
+    if (!buf[0]) {
+        return ENOTDIR;
+    }
+    if (file == buf) {
+        dir = root;
+    } else {
+        *file = '\0';
+        dir = buf;
+    }
+    /*
+     * Get the vnode for directory
+     */
+    if ((error = namei(dir, &dp)) != 0) {
+        return error;
+    }
+    if (dp->d_vnode->v_type != VDIR) {
+        drele(dp);
+        return ENOTDIR;
+    }
 
-	*dpp = dp;
+    *dpp = dp;
 
-	/*
-	 * Get the file name
-	 */
-	*name = strrchr(path, '/') + 1;
-	return 0;
+    /*
+     * Get the file name
+     */
+    *name = strrchr(path, '/') + 1;
+    return 0;
 }
 
 /*
@@ -316,8 +325,9 @@ lookup(char *path, struct dentry **dpp, char **name)
 void
 lookup_init(void)
 {
-	int i;
+    int i;
 
-	for (i = 0; i < DENTRY_BUCKETS; i++)
-		LIST_INIT(&dentry_hash_table[i]);
+    for (i = 0; i < DENTRY_BUCKETS; i++) {
+        LIST_INIT(&dentry_hash_table[i]);
+    }
 }
