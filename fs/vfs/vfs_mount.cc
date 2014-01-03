@@ -313,6 +313,9 @@ sys_pivot_root(const char *new_root, const char *put_old)
 
         newmp->m_root->d_vnode->v_mount = newmp;
 
+        if (newmp->m_covered) {
+            drele(newmp->m_covered);
+        }
         newmp->m_covered = NULL;
 
         free(oldmp);
