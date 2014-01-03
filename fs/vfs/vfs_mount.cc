@@ -173,7 +173,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
     vp->v_flags = VROOT;
     vp->v_mode = S_IFDIR | S_IRUSR | S_IWUSR | S_IXUSR;
 
-    mp->m_root = dentry_alloc(vp, "/");
+    mp->m_root = dentry_alloc(NULL, vp, "/");
     if (!mp->m_root) {
         vput(vp);
         goto err3;
@@ -317,6 +317,11 @@ sys_pivot_root(const char *new_root, const char *put_old)
             drele(newmp->m_covered);
         }
         newmp->m_covered = NULL;
+
+        if (newmp->m_root->d_parent) {
+            drele(newmp->m_root->d_parent);
+        }
+        newmp->m_root->d_parent = NULL;
 
         free(oldmp);
 

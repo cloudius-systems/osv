@@ -59,7 +59,7 @@ dentry_hash(struct mount *mp, const char *path)
 
 
 struct dentry *
-dentry_alloc(struct vnode *vp, const char *path)
+dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 {
 	struct mount *mp = vp->v_mount;
 	struct dentry *dp = calloc(sizeof(*dp), 1);
@@ -73,6 +73,12 @@ dentry_alloc(struct vnode *vp, const char *path)
 	dp->d_vnode = vp;
 	dp->d_mount = mp;
 	dp->d_path = strdup(path);
+
+	if (parent_dp) {
+		dref(parent_dp);
+	}
+	dp->d_parent = parent_dp;
+
 	vn_add_name(vp, dp);
 
 	mutex_lock(&dentry_hash_lock);
@@ -125,6 +131,10 @@ drele(struct dentry *dp)
 	vn_del_name(dp->d_vnode, dp);
 
 	mutex_unlock(&dentry_hash_lock);
+
+	if (dp->d_parent) {
+		drele(dp->d_parent);
+	}
 
 	vrele(dp->d_vnode);
 
@@ -211,7 +221,7 @@ namei(char *path, struct dentry **dpp)
 				return error;
 			}
 
-			dp = dentry_alloc(vp, node);
+			dp = dentry_alloc(ddp, vp, node);
 			vput(vp);
 
 			if (!dp) {

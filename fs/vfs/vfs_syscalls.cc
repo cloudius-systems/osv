@@ -777,7 +777,7 @@ sys_link(char *oldpath, char *newpath)
 		goto out1;
 
 	/* Map newpath into dentry hash with the same vnode as oldpath */
-	if (!(newdp = dentry_alloc(vp, newpath))) {
+	if (!(newdp = dentry_alloc(newdirdp, vp, newpath))) {
 		error = ENOMEM;
 		goto out1;
 	}
