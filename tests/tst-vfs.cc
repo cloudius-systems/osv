@@ -16,6 +16,8 @@
 #include <unistd.h>
 #include <boost/test/unit_test.hpp>
 
+#include <osv/dentry.h>
+
 BOOST_AUTO_TEST_CASE(test_path_lookup)
 {
     TempDir dir;
@@ -43,6 +45,32 @@ BOOST_AUTO_TEST_CASE(test_path_lookup)
     for (auto path : valid_paths) {
         assert_exists(path);
     }
+}
+
+extern "C" {
+    int namei(char *, struct dentry **);
+    void drele(struct dentry *);
+}
+
+BOOST_AUTO_TEST_CASE(test_dentry_hierarchy)
+{
+    debug("Running dentry hierarchy tests\n");
+
+    char path[] = "/tests/tst-vfs.so";
+    struct dentry *dp;
+
+    BOOST_REQUIRE(!namei(path, &dp));
+
+    // Check if dentry hierarchy is exactly as expected.
+    BOOST_CHECK_EQUAL("/tests/tst-vfs.so", dp->d_path);
+    BOOST_REQUIRE(dp->d_parent);
+    BOOST_CHECK_EQUAL("/tests", dp->d_parent->d_path);
+    BOOST_REQUIRE(dp->d_parent->d_parent);
+    BOOST_CHECK_EQUAL("/", dp->d_parent->d_parent->d_path);
+
+    drele(dp);
+
+    debug("dentry hierarchy tests succeeded\n");
 }
 
 BOOST_AUTO_TEST_CASE(test_concurrent_file_operations)
