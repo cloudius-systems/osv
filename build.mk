@@ -155,6 +155,7 @@ boost-tests := tests/tst-rename.so \
 	tests/misc-fs-stress.so \
 	tests/misc-bdev-write.so \
 	tests/tst-promise.so \
+	tests/tst-dlfcn.so \
 	tests/tst-stat.so
 
 java_tests := tests/hello/Hello.class
