@@ -53,11 +53,28 @@ int check_path(char *path)
 	return 1;
 }
 
+bool is_test_in_blacklist(const char *name, int argc, char **argv)
+{
+	/* Start from the index 2 as 1 would be -b */
+	for (int i = 2; i < argc; i++) {
+		if (!strcmp(argv[i], name)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 int main(int argc, char **argv)
 {
 	char path[PATH_MAX];
+	bool blacklist = false;
 
-	if (argc == 1) {
+	if (argc > 1 && !strcmp(argv[1], "-b")) {
+		blacklist = true;
+	}
+
+	if (argc == 1 || blacklist) {
 		DIR *dir = opendir(TESTDIR);
 		struct dirent *d;
 
@@ -72,7 +89,10 @@ int main(int argc, char **argv)
 				continue;
 
 			if (strncmp(d->d_name, "tst-", 4) != 0)
-			    continue;
+				continue;
+
+			if (blacklist && is_test_in_blacklist(d->d_name, argc, argv))
+				continue;
 
 			snprintf(path, PATH_MAX, "%s/%s", TESTDIR, d->d_name);
 			if (!check_path(path))

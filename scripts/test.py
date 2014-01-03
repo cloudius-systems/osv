@@ -78,15 +78,24 @@ def run_test(name):
         sys.stdout.write(" OK  (%.3f s)\n" % duration)
         sys.stdout.flush()
 
+def run_tests_in_single_instance():
+    blacklist_tests = ' '.join(blacklist)
+
+    args = ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
+    subprocess.call(["./scripts/run.py"] + args)
+
 def run_tests():
     start = time.time()
 
-    for test in tests:
-        if not test in blacklist:
-            run_test(test)
-        else:
-            sys.stdout.write("  TEST %-25s SKIPPED\n" % test)
-            sys.stdout.flush()
+    if cmdargs.single:
+        run_tests_in_single_instance()
+    else:
+        for test in tests:
+            if not test in blacklist:
+                run_test(test)
+            else:
+                sys.stdout.write("  TEST %-25s SKIPPED\n" % test)
+                sys.stdout.flush()
 
     end = time.time()
 
@@ -103,5 +112,6 @@ if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='test')
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
     parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
+    parser.add_argument("-s", "--single", action="store_true", help="run all tests in a single OSv instance")
     cmdargs = parser.parse_args()
     main()
