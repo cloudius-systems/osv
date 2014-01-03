@@ -56,15 +56,11 @@ class nbd_file(object):
                                         shell = True, stdout=_devnull)
         # wait for qemu-nbd to start: this thing doesn't tell anything on stdout
         while True:
-            succeed = True
             try:
                 self._client = nbd_client("localhost")
+                break
             except:
                 time.sleep(0.1)
-                succeed = False
-                pass
-            if succeed:
-                break
         self._closed = False
 
     def __del__(self):
