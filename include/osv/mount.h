@@ -142,6 +142,8 @@ int	vfs_einval(void);
 void	 vfs_busy(struct mount *mp);
 void	 vfs_unbusy(struct mount *mp);
 
+void	 release_mp_dentries(struct mount *mp);
+
 #endif
 
 __END_DECLS

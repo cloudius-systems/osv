@@ -1674,11 +1674,14 @@ zfs_umount(vfs_t *vfsp /* , int fflag */)
 		rrw_exit(&zfsvfs->z_teardown_lock, FTAG);
 	}
 
+#ifdef __OSV__
+	release_mp_dentries(vfsp);
+#else
 	/*
 	 * Flush all the files.
 	 */
 	/* ret = */ vflush(vfsp /* , 1, (fflag & MS_FORCE) ? FORCECLOSE : 0, td */);
-#ifndef __OSV__
+
 	if (ret != 0) {
 		if (!zfsvfs->z_issnap) {
 			zfsctl_create(zfsvfs);

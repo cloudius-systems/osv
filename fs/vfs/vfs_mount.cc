@@ -138,6 +138,7 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
     mp->m_op = fs->vs_op;
     mp->m_flags = flags;
     mp->m_dev = device;
+    mp->m_data = NULL;
     strlcpy(mp->m_path, dir, sizeof(mp->m_path));
     strlcpy(mp->m_special, dev, sizeof(mp->m_special));
 
@@ -210,6 +211,18 @@ sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
     return error;
 }
 
+void
+release_mp_dentries(struct mount *mp)
+{
+    /* Decrement referece count of root vnode */
+    if (mp->m_covered) {
+        drele(mp->m_covered);
+    }
+
+    /* Release root dentry */
+    drele(mp->m_root);
+}
+
 int
 sys_umount2(const char *path, int flags)
 {
@@ -243,17 +256,10 @@ found:
         error = EINVAL;
         goto out;
     }
+
     if ((error = VFS_UNMOUNT(mp)) != 0)
         goto out;
     LIST_REMOVE(mp, m_link);
-
-    /* Decrement referece count of root vnode */
-    if (mp->m_covered) {
-        drele(mp->m_covered);
-    }
-
-    /* Release all vnodes */
-    vflush(mp);
 
 #ifdef HAVE_BUFFERS
     /* Flush all buffers */
@@ -308,8 +314,6 @@ sys_pivot_root(const char *new_root, const char *put_old)
         newmp->m_root->d_vnode->v_mount = newmp;
 
         newmp->m_covered = NULL;
-
-        vflush(oldmp);
 
         free(oldmp);
 

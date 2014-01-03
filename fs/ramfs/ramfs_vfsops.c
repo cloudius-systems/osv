@@ -83,5 +83,6 @@ ramfs_mount(struct mount *mp, char *dev, int flags, void *data)
 static int
 ramfs_unmount(struct mount *mp)
 {
+	release_mp_dentries(mp);
 	return 0;
 }

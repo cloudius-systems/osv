@@ -202,6 +202,13 @@ devfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
+static int
+devfs_unmount(struct mount *mp)
+{
+	release_mp_dentries(mp);
+	return 0;
+}
+
 extern "C"
 int
 devfs_init(void)
@@ -210,7 +217,6 @@ devfs_init(void)
 }
 
 #define devfs_mount	((vfsop_mount_t)vfs_nullop)
-#define devfs_unmount	((vfsop_umount_t)vfs_nullop)
 #define devfs_sync	((vfsop_sync_t)vfs_nullop)
 #define devfs_vget	((vfsop_vget_t)vfs_nullop)
 #define devfs_statfs	((vfsop_statfs_t)vfs_nullop)
