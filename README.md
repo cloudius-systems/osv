@@ -1,5 +1,18 @@
 # OSv
 
+OSv is a new open-source operating system for virtual-machines.
+OSv was designed from the ground up to execute a single application on top
+of a hypervisor, resulting in superior performance and effortless management
+when compared to traditional operating systems which were designed for
+a vast range of physical machines.
+
+OSv has new APIs for new applications, but also runs unmodified Linux
+applications (most of Linux's ABI is supported) and in particular can run
+an unmodified JVM, and applications built on top of one.
+
+For more information about OSv, see http://osv.io/ and
+https://github.com/cloudius-systems/osv/wiki
+
 ## Building
 
 OSv can only be built on a 64-bit x86 Linux distribution. Please note that
