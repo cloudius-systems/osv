@@ -429,6 +429,7 @@ private:
     unsigned int _id;
     std::function<void ()> _cleanup;
     std::vector<std::unique_ptr<char[]>> _tls;
+    u64 _total_cpu_time = 0;
     void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
@@ -443,6 +444,7 @@ private:
     friend void init(std::function<void ()> cont);
 public:
     std::atomic<thread *> _joiner;
+    u64 thread_clock() { return _total_cpu_time; }
     bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;

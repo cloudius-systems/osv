@@ -208,6 +208,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
     const auto p_status = p->_detached_state->st.load();
     assert(p_status != thread::status::queued);
 
+    p->_total_cpu_time += interval;
     p->_runtime.ran_for(interval);
 
     if (p_status == thread::status::running) {
