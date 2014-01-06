@@ -23,6 +23,8 @@
 #include <osv/stubbing.hh>
 #include <osv/lazy_indirect.hh>
 
+#include <api/time.h>
+
 namespace pthread_private {
 
     const unsigned tsd_nkeys = 100;
@@ -189,6 +191,16 @@ int pthread_setspecific(pthread_key_t key, const void* value)
 pthread_t pthread_self()
 {
     return current_pthread;
+}
+
+int pthread_getcpuclockid(pthread_t thread, clockid_t *clock_id)
+{
+    if (clock_id) {
+        pthread *p = pthread::from_libc(thread);
+        auto id = p->_thread.id();
+        *clock_id = id + _OSV_CLOCK_SLOTS;
+    }
+    return 0;
 }
 
 #ifdef LOCKFREE_MUTEX

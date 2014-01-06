@@ -81,6 +81,9 @@ struct itimerspec
 #define CLOCK_PROCESS_CPUTIME_ID 2
 #define CLOCK_THREAD_CPUTIME_ID  3
 
+// There are 9 types of clock defined by Linux. We reserve space for 16 slots,
+// the next power of 2. This is OSv specific and should not be reused.
+#define _OSV_CLOCK_SLOTS              16
 #define TIMER_ABSTIME 1
 
 int nanosleep (const struct timespec *, struct timespec *);
