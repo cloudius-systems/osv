@@ -66,39 +66,7 @@ static inline void mutex_init(mutex_t* m) { memset(m, 0, sizeof(mutex_t)); }
 static inline void mutex_destroy(mutex_t* m) { }
 #define MUTEX_INITIALIZER   {}
 
-__BEGIN_DECLS
-
-// Spin lock. Use mutex instead, except where impossible:
-
-typedef struct spinlock {
-    bool _lock;
 #ifdef __cplusplus
-    // additional convenience methods for C++
-    inline constexpr spinlock() : _lock(false) { }
-    inline void lock();
-    inline void unlock();
-#endif
-} spinlock_t;
-
-static inline void spinlock_init(spinlock_t *sl)
-{
-    sl->_lock = false;
-}
-void spin_lock(spinlock_t *sl);
-void spin_unlock(spinlock_t *sl);
-
-__END_DECLS
-
-#ifdef __cplusplus
-void spinlock::lock()
-{
-    spin_lock(this);
-}
-void spinlock::unlock()
-{
-    spin_unlock(this);
-}
-
 #include <mutex>
 #include <cstdlib>
 

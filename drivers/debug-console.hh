@@ -10,6 +10,7 @@
 
 #include "console.hh"
 #include <osv/mutex.h>
+#include <osv/spinlock.h>
 
 // Wrap a Console with a spinlock, used for debugging
 // (we can't use a mutex, since we might want to debug the scheduler)

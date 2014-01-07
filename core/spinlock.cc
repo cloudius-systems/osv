@@ -5,12 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/mutex.h>
+#include <osv/spinlock.h>
 #include <sched.hh>
-#include "arch.hh"
-#include <pthread.h>
-#include <cassert>
-#include "osv/trace.hh"
 
 void spin_lock(spinlock_t *sl)
 {

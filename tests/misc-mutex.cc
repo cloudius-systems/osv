@@ -9,6 +9,7 @@
 #include "debug.hh"
 #include "lockfree/mutex.hh"
 #include <osv/mutex.h>
+#include <osv/spinlock.h>
 #include "drivers/clock.hh"
 
 #include <string.h>
