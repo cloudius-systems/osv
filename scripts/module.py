@@ -63,6 +63,10 @@ def generate_manifests(modules, basic_apps):
             for module in modules:
                 module_manifest = os.path.join(module.local_path, manifest_name)
 
+                if not os.path.exists(module_manifest):
+                    print "No %s in %s" % (manifest_name, module.name)
+                    continue
+
                 print "Appending %s to %s" % (module_manifest, manifest_name)
                 append_manifest(module_manifest, manifest, variables={
                         'MODULE_DIR': module.local_path,
