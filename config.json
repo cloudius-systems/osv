@@ -4,8 +4,8 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/mgmt/"
         },
-	"include": [
-	    "${OSV_BASE}/apps/modules.json"
-	]
+    "include": [
+        "${OSV_BASE}/apps/modules.json"
+    ]
    }
 }
