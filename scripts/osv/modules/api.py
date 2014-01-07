@@ -16,7 +16,10 @@ class run(basic_app):
     def get_launcher_args(self):
         return self.cmdline
 
-class java_app:
+class java_app(object):
+    def __init__(self):
+        require('java')
+
     def get_multimain_lines(self):
         return []
 
@@ -25,6 +28,7 @@ class java_app:
 
 class run_java(java_app):
     def __init__(self, classpath=[], args=[], jvm_args=[]):
+        super(run_java, self).__init__()
         self.classpath = classpath
         self.args = args
         self.jvm_args = jvm_args
@@ -44,6 +48,7 @@ class run_java(java_app):
 
 class delayed(java_app):
     def __init__(self, app, delay=0):
+        super(delayed, self).__init__()
         self.app = app
         self.delay = delay
 
