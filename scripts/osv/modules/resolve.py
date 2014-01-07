@@ -3,8 +3,22 @@ import sys
 import json
 import re
 import subprocess
+import runpy
 
-_required_modules = []
+_modules = dict()
+_loading_modules = list()
+
+class Module(object):
+    def __init__(self, name, config, properties):
+        self.name = name
+        self.local_path = get_module_dir(config)
+        self.properties = properties
+
+    def __getattr__(self, name):
+        try:
+            return self.properties[name]
+        except KeyError:
+            raise AttributeError(name)
 
 def get_osv_base():
     return os.environ['OSV_BASE']
@@ -23,22 +37,10 @@ def read_config():
         return json.load(file)
 
 def local_import(path):
-    file_name = os.path.basename(path)
-    m = re.match(r'(.*)\.py', file_name)
-    if not m:
-        raise Exception("Invalid module file: " + file_name)
-
-    py_module_name = m.group(1);
-    module_dir = os.path.dirname(path)
-
-    sys.path.insert(0, module_dir)
-    py_module = __import__(py_module_name)
-    sys.path.remove(module_dir)
-    del sys.modules[py_module_name]
-    return py_module
+    return runpy.run_path(path)
 
 def get_required_modules():
-    return _required_modules
+    return _modules.values()
 
 def is_direct(module):
     return module["type"] == "direct-dir"
@@ -60,12 +62,7 @@ def find_module_descriptor(module_name):
         return None
 
     desc = config["modules"][module_name]
-
-    if not "name" in desc:
-        desc["name"] = module_name
-
     desc["path"] = os.path.expandvars(desc["path"])
-
     return desc
 
 def fetch_module(module, target_dir):
@@ -89,11 +86,16 @@ def fetch_module(module, target_dir):
         raise Exception("Command failed with exit code: %d" % returncode)
 
 def require(module_name):
+    if module_name in _loading_modules:
+        raise Exception("Recursive loading of '%s' module" % module_name)
+
+    module = _modules.get(module_name, None)
+    if module:
+        return module
+
     desc = find_module_descriptor(module_name)
     if not desc:
         raise Exception("Module not found: %s. Please check configuration: %s" % (module_name, get_config_path()))
-
-    _required_modules.append(desc)
 
     module_dir = get_module_dir(desc)
     if not os.path.exists(module_dir):
@@ -105,7 +107,15 @@ def require(module_name):
     module_config_file = os.path.join(module_dir, py_module_file)
     if not os.path.exists(module_config_file):
         print "No %s in %s" % (py_module_file, module_dir)
-        return {}
+        module_dict = {}
+    else:
+        print "Importing %s" % module_config_file
+        _loading_modules.append(module_name)
+        try:
+            module_dict = local_import(module_config_file)
+        finally:
+            _loading_modules.remove(module_name)
 
-    print "Importing %s" % module_config_file
-    return local_import(module_config_file)
+    module = Module(module_name, desc, module_dict)
+    _modules[module_name] = module
+    return module
