@@ -11,7 +11,7 @@ _loading_modules = list()
 class Module(object):
     def __init__(self, name, config, properties):
         self.name = name
-        self.local_path = get_module_dir(config)
+        self.local_path = _get_module_dir(config)
         self.properties = properties
 
     def __getattr__(self, name):
@@ -42,15 +42,15 @@ def local_import(path):
 def get_required_modules():
     return _modules.values()
 
-def is_direct(module):
-    return module["type"] == "direct-dir"
+def _is_direct(module_config):
+    return module_config["type"] == "direct-dir"
 
-def get_module_dir(module):
-    if is_direct(module):
-        return module["path"]
-    return os.path.join(get_build_path(), "module", module["name"])
+def _get_module_dir(module_config):
+    if _is_direct(module_config):
+        return module_config["path"]
+    return os.path.join(get_build_path(), "module", module_config["name"])
 
-def find_module_descriptor(module_name):
+def find_module_config(module_name):
     config = read_config()
 
     if "include" in config["modules"]:
@@ -61,20 +61,20 @@ def find_module_descriptor(module_name):
     if not module_name in config["modules"]:
         return None
 
-    desc = config["modules"][module_name]
-    desc["path"] = os.path.expandvars(desc["path"])
-    return desc
+    module_config = config["modules"][module_name]
+    module_config["path"] = os.path.expandvars(module_config["path"])
+    return module_config
 
-def fetch_module(module, target_dir):
-    print "Fetching %s" % module["name"]
+def fetch_module(module_config, target_dir):
+    print "Fetching %s" % module_config["name"]
 
-    module_type = module["type"]
+    module_type = module_config["type"]
     if module_type == "git":
-        cmd = "git clone -b %s %s %s" % (module["branch"], module["path"], target_dir)
+        cmd = "git clone -b %s %s %s" % (module_config["branch"], module_config["path"], target_dir)
     elif module_type == "svn":
-        cmd = "svn co %s %s" % (module["path"], target_dir)
+        cmd = "svn co %s %s" % (module_config["path"], target_dir)
     elif module_type == "dir":
-        cmd = "cp -a %s %s" % (module["path"], target_dir)
+        cmd = "cp -a %s %s" % (module_config["path"], target_dir)
     elif module_type == "direct-dir":
         raise Exception("Trying to fetch direct module")
     else:
@@ -93,29 +93,29 @@ def require(module_name):
     if module:
         return module
 
-    desc = find_module_descriptor(module_name)
-    if not desc:
+    module_config = find_module_config(module_name)
+    if not module_config:
         raise Exception("Module not found: %s. Please check configuration: %s" % (module_name, get_config_path()))
 
-    module_dir = get_module_dir(desc)
+    module_dir = _get_module_dir(module_config)
     if not os.path.exists(module_dir):
-        if is_direct(desc):
+        if _is_direct(module_config):
             raise Exception("Path does not exist: " + module_dir)
-        fetch_module(desc, module_dir)
+        fetch_module(module_config, module_dir)
 
     py_module_file = 'module.py'
-    module_config_file = os.path.join(module_dir, py_module_file)
-    if not os.path.exists(module_config_file):
+    module_file = os.path.join(module_dir, py_module_file)
+    if not os.path.exists(module_file):
         print "No %s in %s" % (py_module_file, module_dir)
-        module_dict = {}
+        module_properties = {}
     else:
-        print "Importing %s" % module_config_file
         _loading_modules.append(module_name)
         try:
-            module_dict = local_import(module_config_file)
+            print "Importing %s" % module_file
+            module_properties = local_import(module_file)
         finally:
             _loading_modules.remove(module_name)
 
-    module = Module(module_name, desc, module_dict)
+    module = Module(module_name, module_config, module_properties)
     _modules[module_name] = module
     return module
