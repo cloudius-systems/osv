@@ -7,7 +7,7 @@ import subprocess
 import operator
 import argparse
 import textwrap
-from osv.modules import api, resolve
+from osv.modules import api, resolve, filemap
 
 class jvm(api.basic_app):
     multimain_manifest = '/etc/javamains'
@@ -63,15 +63,16 @@ def generate_manifests(modules, basic_apps):
             for module in modules:
                 module_manifest = os.path.join(module.local_path, manifest_name)
 
-                if not os.path.exists(module_manifest):
-                    print "No %s in %s" % (manifest_name, module.name)
-                    continue
-
-                print "Appending %s to %s" % (module_manifest, manifest_name)
-                append_manifest(module_manifest, manifest, variables={
+                if os.path.exists(module_manifest):
+                    print "Appending %s to %s" % (module_manifest, manifest_name)
+                    append_manifest(module_manifest, manifest, variables={
                         'MODULE_DIR': module.local_path,
                         'OSV_BASE': resolve.get_osv_base()
                     })
+
+                filemap_attr = '%s_files' % manifest_type
+                if hasattr(module, filemap_attr):
+                    filemap.as_manifest(getattr(module, filemap_attr), manifest.write)
 
             for app in basic_apps:
                 app.prepare_manifest(resolve.get_build_path(), manifest_type, manifest)
