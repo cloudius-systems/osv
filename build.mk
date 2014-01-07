@@ -711,7 +711,7 @@ $(out)/test.manifest.gen: $(src)/build.mk
 .PHONY: process-modules
 process-modules: bootfs.manifest.skel usr.manifest.skel $(out)/test.manifest.gen
 	cd $(out)/module \
-	  && OSV_BASE=$(src) OSV_BUILD_PATH=$(out) $(src)/scripts/module.py --image-config $(image)
+	  && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) $(src)/scripts/module.py --image-config $(image)
 
 $(out)/cmdline: process-modules
 $(out)/bootfs.manifest: process-modules
