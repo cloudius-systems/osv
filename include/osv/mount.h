@@ -112,7 +112,7 @@ struct vfssw {
  */
 struct vfsops {
 	int (*vfs_mount)	(struct mount *, char *, int, void *);
-	int (*vfs_unmount)	(struct mount *);
+	int (*vfs_unmount)	(struct mount *, int flags);
 	int (*vfs_sync)		(struct mount *);
 	int (*vfs_vget)		(struct mount *, struct vnode *);
 	int (*vfs_statfs)	(struct mount *, struct statfs *);
@@ -129,7 +129,7 @@ typedef int (*vfsop_statfs_t)(struct mount *, struct statfs *);
  * VFS interface
  */
 #define VFS_MOUNT(MP, DEV, FL, DAT) ((MP)->m_op->vfs_mount)(MP, DEV, FL, DAT)
-#define VFS_UNMOUNT(MP)             ((MP)->m_op->vfs_unmount)(MP)
+#define VFS_UNMOUNT(MP, FL)         ((MP)->m_op->vfs_unmount)(MP, FL)
 #define VFS_SYNC(MP)                ((MP)->m_op->vfs_sync)(MP)
 #define VFS_VGET(MP, VP)            ((MP)->m_op->vfs_vget)(MP, VP)
 #define VFS_STATFS(MP, SFP)         ((MP)->m_op->vfs_statfs)(MP, SFP)

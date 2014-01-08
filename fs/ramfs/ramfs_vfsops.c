@@ -38,7 +38,7 @@
 extern struct vnops ramfs_vnops;
 
 static int ramfs_mount(struct mount *mp, char *dev, int flags, void *data);
-static int ramfs_unmount(struct mount *mp);
+static int ramfs_unmount(struct mount *mp, int flags);
 #define ramfs_sync	((vfsop_sync_t)vfs_nullop)
 #define ramfs_vget	((vfsop_vget_t)vfs_nullop)
 #define ramfs_statfs	((vfsop_statfs_t)vfs_nullop)
@@ -81,7 +81,7 @@ ramfs_mount(struct mount *mp, char *dev, int flags, void *data)
  *       directories, and it requires more work...
  */
 static int
-ramfs_unmount(struct mount *mp)
+ramfs_unmount(struct mount *mp, int flags)
 {
 	release_mp_dentries(mp);
 	return 0;

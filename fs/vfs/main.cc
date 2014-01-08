@@ -1553,9 +1553,15 @@ extern "C" void mount_zfs_rootfs(void)
 
 extern "C" void unmount_rootfs(void)
 {
+    int ret;
+
     sys_umount("/dev");
 
-    sys_umount2("/", MNT_FORCE);
+    ret = sys_umount2("/", MNT_FORCE);
+    if (ret) {
+        kprintf("Warning: unmount_rootfs: failed to unmount /, "
+            "error = %s\n", strerror(ret));
+    }
 }
 
 extern "C" void bio_init(void);

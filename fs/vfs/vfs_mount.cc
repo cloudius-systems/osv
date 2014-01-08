@@ -257,7 +257,7 @@ found:
         goto out;
     }
 
-    if ((error = VFS_UNMOUNT(mp)) != 0)
+    if ((error = VFS_UNMOUNT(mp, flags)) != 0)
         goto out;
     LIST_REMOVE(mp, m_link);
 
@@ -306,7 +306,7 @@ sys_pivot_root(const char *new_root, const char *put_old)
                 return EBUSY;
             }
         }
-        if ((error = VFS_UNMOUNT(oldmp)) != 0) {
+        if ((error = VFS_UNMOUNT(oldmp, 0)) != 0) {
             return error;
         }
         LIST_REMOVE(oldmp, m_link);

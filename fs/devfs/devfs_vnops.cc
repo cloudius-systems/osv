@@ -203,7 +203,7 @@ devfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 }
 
 static int
-devfs_unmount(struct mount *mp)
+devfs_unmount(struct mount *mp, int flags)
 {
 	release_mp_dentries(mp);
 	return 0;
