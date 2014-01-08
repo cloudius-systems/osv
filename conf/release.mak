@@ -1,1 +1,1 @@
-conf-opt = -O2
+conf-opt = -O3
