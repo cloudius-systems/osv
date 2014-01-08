@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "cpuid.hh"
+#include <osv/string.h>
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
@@ -47,6 +48,35 @@ void *(*resolve_memcpy())(void *__restrict dest, const void *__restrict src, siz
 void *memcpy(void *__restrict dest, const void *__restrict src, size_t n)
     __attribute__((ifunc("resolve_memcpy")));
 
+// According to Avi, this is likely to be faster than repmov with the direction
+// flag set. Still, although always copying it byte by byte would be a lot simpler,
+// it is faster to copy 8-byte aligned regions if we can. We'll go through the pain
+// of doing that.
+void *memcpy_backwards(void *dst, const void *src, size_t n)
+{
+    char *d = reinterpret_cast<char *>(dst);
+    const char *s = reinterpret_cast<const char *>(src);
+
+    if ((uintptr_t)s % sizeof(unsigned long) == (uintptr_t)d % sizeof(unsigned long)) {
+        while ((uintptr_t)(d+n) % sizeof(unsigned long)) {
+            if (!n--) {
+                return dst;
+            }
+            d[n] = s[n];
+        }
+
+        while (n >= sizeof(unsigned long)) {
+            n -= sizeof(unsigned long);
+            *(unsigned long *)(d+n) = *(unsigned long *)(s+n);
+        }
+    }
+
+    while (n--) {
+        d[n] = s[n];
+    }
+
+    return dst;
+}
 
 extern "C"
 void *memset_repstos_old(void *__restrict dest, int c, size_t n)
