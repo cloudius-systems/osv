@@ -669,9 +669,10 @@ void* alloc_huge_page(size_t N)
             int endsize = v+range->size-ret-N;
             // Make the original page range smaller, pointing to the part before
             // our ret (if there's nothing before, remove this page range)
+            size_t alloc_size;
             if (ret==v) {
+                alloc_size = range->size;
                 free_page_ranges.erase(*range);
-                on_alloc(N);
             } else {
                 // Note that this is is done conditionally because we are
                 // operating page ranges. That is what is left on our page
@@ -679,9 +680,10 @@ void* alloc_huge_page(size_t N)
                 // are currently allocating "N" bytes.  The difference will be
                 // later on wiped by the on_free() call that exists within
                 // free_page_range in the conditional right below us.
-                on_alloc(range->size - (ret - v));
+                alloc_size = range->size - (ret - v);
                 range->size = ret-v;
             }
+            on_alloc(alloc_size);
 
             // Create a new page range for the endsize part (if there is one)
             if (endsize > 0) {
