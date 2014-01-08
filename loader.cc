@@ -98,7 +98,7 @@ void premain()
 
 int main(int ac, char **av)
 {
-    debug("OSv " OSV_VERSION " Copyright 2013 Cloudius Systems\n");
+    debug("OSv " OSV_VERSION " Copyright 2013-2014 Cloudius Systems\n");
 
     smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
