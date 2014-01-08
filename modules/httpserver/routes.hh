@@ -29,15 +29,7 @@ namespace httpserver {
  */
 class routes {
 public:
-    /**
-     * Constructor.
-     * @param config the configuration parameter
-     */
-    routes(const boost::program_options::variables_map* config)
-        : config(config)
-    { }
-
-    /**
+	/**
      * The destructor deletes the match rules and handlers
      */
     ~routes();
@@ -118,7 +110,6 @@ private:
 
     std::unordered_map<std::string, handler_base*> map[2];
     std::vector<match_rule*> rules;
-    const boost::program_options::variables_map* config;
 };
 
 }

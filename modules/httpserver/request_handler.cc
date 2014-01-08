@@ -24,10 +24,8 @@ namespace http {
 
 namespace server {
 
-request_handler::request_handler(const boost::program_options::variables_map* config,
-                                 httpserver::routes* routes)
-    : config(config)
-    , routes(routes)
+request_handler::request_handler(httpserver::routes* routes)
+    : routes(routes)
 {
 }
 

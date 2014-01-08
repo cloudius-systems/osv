@@ -38,11 +38,9 @@ public:
     /**
      * Construct with the configuration and routes
      *
-     * @param config the configuration object
      * @param routes the routes object
      */
-    explicit request_handler(const boost::program_options::variables_map* config,
-                             httpserver::routes* routes);
+    explicit request_handler(httpserver::routes* routes);
 
     request_handler(const request_handler&) = delete;
 
@@ -57,7 +55,6 @@ public:
     void handle_request(const request& req, reply& rep);
 
 private:
-    const boost::program_options::variables_map* config;
     httpserver::routes* routes;
 
     /**

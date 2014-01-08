@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    routes routes(&config);
+    routes routes;
     function_handler* osHandler = new function_handler([](const_req req)
 		{ return "\"0.1\""; }, "json");
 

@@ -25,7 +25,7 @@ server::server(const boost::program_options::variables_map* config,
     , acceptor_(io_service_)
     , connection_manager_()
     , socket_(io_service_)
-    , request_handler_(config, routes)
+    , request_handler_(routes)
 {
     // Register to handle the signals that indicate when the server should exit.
     // It is safe to register for the same signal multiple times in a program,
