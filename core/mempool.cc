@@ -396,6 +396,7 @@ bi::set<page_range,
 static std::atomic<size_t> total_memory(0);
 static std::atomic<size_t> free_memory(0);
 static size_t watermark_lo(0);
+static std::atomic<size_t> current_jvm_heap_memory(0);
 
 // At least two (x86) huge pages worth of size;
 static size_t constexpr min_emergency_pool_size = 4 << 20;
@@ -427,6 +428,17 @@ static void on_new_memory(size_t mem)
 namespace stats {
     size_t free() { return free_memory.load(std::memory_order_relaxed); }
     size_t total() { return total_memory.load(std::memory_order_relaxed); }
+
+    void on_jvm_heap_alloc(size_t mem)
+    {
+        current_jvm_heap_memory.fetch_add(mem);
+        assert(current_jvm_heap_memory.load() < total_memory);
+    }
+    void on_jvm_heap_free(size_t mem)
+    {
+        current_jvm_heap_memory.fetch_sub(mem);
+    }
+    size_t jvm_heap() { return current_jvm_heap_memory.load(); }
 }
 
 void reclaimer::wake()

@@ -549,6 +549,19 @@ public:
     bool tlb_flush_needed(void) {return do_flush;}
 };
 
+class count_maps:
+    public vma_operation<allocate_intermediate_opt::no,
+                         skip_empty_opt::yes, account_opt::yes> {
+public:
+    void small_page(hw_ptep ptep, uintptr_t offset) {
+        this->account(mmu::page_size);
+    }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) {
+        this->account(mmu::huge_page_size);
+        return true;
+    }
+};
+
 class virt_to_phys_map :
         public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
         descend_opt::yes, once_opt::yes, split_opt::no> {
@@ -689,6 +702,9 @@ ulong evacuate(uintptr_t start, uintptr_t end)
             auto& dead = *i--;
             auto size = operate_range(unpopulate<account_opt::yes>(), dead);
             ret += size;
+            if (dead.has_flags(mmap_jvm_heap)) {
+                memory::stats::on_jvm_heap_free(size);
+            }
             vma_list.erase(dead);
             delete &dead;
         }
@@ -1019,12 +1035,17 @@ void anon_vma::fault(uintptr_t addr, exception_frame *ef)
         size = page_size;
     }
 
+    auto total = 0;
     if (_flags & mmap_uninitialized) {
         fill_anon_page_noinit zfill;
-        operate_range(populate<>(&zfill, _perm), (void*)addr, size);
+        total = operate_range(populate<account_opt::yes>(&zfill, _perm), (void*)addr, size);
     } else {
         fill_anon_page zfill;
-        operate_range(populate<>(&zfill, _perm), (void*)addr, size);
+        total = operate_range(populate<account_opt::yes>(&zfill, _perm), (void*)addr, size);
+    }
+
+    if (_flags & mmap_jvm_heap) {
+        memory::stats::on_jvm_heap_alloc(total);
     }
 }
 
@@ -1079,6 +1100,12 @@ static void mark_jvm_heap(void* addr)
         // It has to be somewhere!
         assert(v != vma_list.end());
         vma& vma = *v;
+
+        if (!vma.has_flags(mmap_jvm_heap)) {
+            auto mem = operate_range(count_maps(), vma);
+            memory::stats::on_jvm_heap_alloc(mem);
+        }
+
         vma.update_flags(mmap_jvm_heap);
     }
 }
