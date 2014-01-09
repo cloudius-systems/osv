@@ -32,6 +32,14 @@ SECTIONS
         *(.fixup)
         fault_fixup_end = .;
     } :text
+
+    . = ALIGN(8);
+    .memcpy_decode : {
+        memcpy_decode_start = .;
+        *(.memcpy_decode)
+        memcpy_decode_end = .;
+    } :text
+
     .eh_frame : { *(.eh_frame) } : text
     .rodata : { *(.rodata*) } :text
     .eh_frame : { *(.eh_frame) } :text
