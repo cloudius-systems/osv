@@ -23,10 +23,6 @@ class jvm(api.basic_app):
                 mains.write('\n'.join(app.get_multimain_lines()) + '\n')
 
         manifest.write('%s:%s\n' % (self.multimain_manifest, javamains_path))
-        # Add a generated content here
-        with open('%s/test.manifest.gen' % build_dir) as src_file:
-            for line in src_file:
-                manifest.write(line)
 
     def get_launcher_args(self):
         jvm_args = []
@@ -76,6 +72,12 @@ def generate_manifests(modules, basic_apps):
 
             for app in basic_apps:
                 app.prepare_manifest(resolve.get_build_path(), manifest_type, manifest)
+
+            # Add a generated content here
+            if manifest_type == 'usr':
+                with open(os.path.join(resolve.get_build_path(), 'test.manifest.gen')) as src_file:
+                    for line in src_file:
+                        manifest.write(line)
 
 def get_command_line(basic_apps):
     if not basic_apps:
