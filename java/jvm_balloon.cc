@@ -21,7 +21,7 @@ TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p", const unsigned char *, con
 // we find a balloon of the desired size: any will do.
 constexpr size_t balloon_size = (128ULL << 20);
 
-static constexpr unsigned flags = mmu::mmap_fixed | mmu::mmap_uninitialized;
+static constexpr unsigned flags = mmu::mmap_fixed | mmu::mmap_uninitialized | mmu::mmap_jvm_heap;
 static constexpr unsigned perms = mmu::perm_read | mmu::perm_write;
 
 class balloon {
@@ -90,7 +90,8 @@ size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
     // touched, we need not to worry about memory shortages. It is simpler to
     // do this rather than the other way around because then in case part of
     // the new balloon falls within this area, the vma->split() code will take
-    // care of arrange things for us.
+    // care of arrange things for us. Note that this area will be always marked
+    // as a jvm heap address.
     mmu::map_anon(_addr, hole_size(), flags, perms);
     empty_area();
     return _jvm_end_addr - dest;
@@ -228,6 +229,22 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
 {
     JNIEnv *env = NULL;
     int status = _attach(&env);
+
+    jbyteArray array = env->NewByteArray(mmu::page_size << 1);
+    jthrowable exc = env->ExceptionOccurred();
+    assert(!exc);
+
+    jboolean iscopy;
+    auto p = env->GetPrimitiveArrayCritical(array, &iscopy);
+    assert(!iscopy);
+    jobject jref = env->NewGlobalRef(array);
+    WITH_LOCK(balloons_lock) {
+        auto b = new balloon(static_cast<unsigned char *>(p), jref,
+                             mmu::page_size, mmu::page_size << 1);
+        b->empty_area();
+    }
+
+    env->ReleasePrimitiveArrayCritical(array, p, 0);
 
     auto monitor = env->FindClass("io/osv/OSvGCMonitor");
     if (!monitor) {

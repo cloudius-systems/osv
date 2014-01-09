@@ -976,6 +976,17 @@ unsigned vma::perm() const
     return _perm;
 }
 
+void vma::update_flags(unsigned flag)
+{
+    assert(mutex_owned(&vma_list_mutex));
+    _flags |= flag;
+}
+
+bool vma::has_flags(unsigned flag)
+{
+    return _flags & flag;
+}
+
 anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
     : vma(range, perm, flags)
 {
@@ -1052,9 +1063,31 @@ jvm_balloon_vma::~jvm_balloon_vma()
 {
 }
 
+// This function marks an anonymous vma as holding the JVM Heap. The JVM may
+// create mappings for a variety of reasons, not all of them being the heap.
+// Since we're interested in knowing how many pages does the heap hold (to make
+// shrinking decisions) we need to mark those regions. The criteria that we'll
+// use for that is to, every time we create a jvm_balloon_vma, we mark the
+// previous anon vma that was in its place as holding the heap. That will work
+// most of the time and with most GC algos. If that is not sufficient, the
+// JVM will have to tell us about its regions itself.
+static void mark_jvm_heap(void* addr)
+{
+    WITH_LOCK(vma_list_mutex) {
+        u64 a = reinterpret_cast<u64>(addr);
+        auto v = vma_list.find(addr_range(a, a+1), vma::addr_compare());
+        // It has to be somewhere!
+        assert(v != vma_list.end());
+        vma& vma = *v;
+        vma.update_flags(mmap_jvm_heap);
+    }
+}
+
 ulong map_jvm(void* addr, size_t size, balloon *b)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
+
+    mark_jvm_heap(addr);
 
     auto* vma = new mmu::jvm_balloon_vma(start, start + size, b);
     WITH_LOCK(vma_list_mutex) {

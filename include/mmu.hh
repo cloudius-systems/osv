@@ -74,6 +74,7 @@ enum {
     mmap_populate    = 1ul << 1,
     mmap_shared      = 1ul << 2,
     mmap_uninitialized = 1ul << 3,
+    mmap_jvm_heap    = 1ul << 4,
 };
 
 class vma {
@@ -91,6 +92,8 @@ public:
     virtual void split(uintptr_t edge) = 0;
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
     virtual int validate_perm(unsigned perm) { return 0; }
+    void update_flags(unsigned flag);
+    bool has_flags(unsigned flag);
     class addr_compare;
 protected:
     addr_range _range;
