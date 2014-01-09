@@ -260,6 +260,7 @@ enum class skip_empty_opt : bool {no = true, yes = false};
 enum class descend_opt : bool {no = true, yes = false};
 enum class once_opt : bool {no = true, yes = false};
 enum class split_opt : bool {no = true, yes = false};
+enum class account_opt: bool {no = true, yes = false};
 
 // Parameter descriptions:
 //  Allocate - if "yes" page walker will allocate intermediate page if one is missing
@@ -273,7 +274,7 @@ enum class split_opt : bool {no = true, yes = false};
 template<allocate_intermediate_opt Allocate, skip_empty_opt Skip = skip_empty_opt::yes,
         descend_opt Descend = descend_opt::yes, once_opt Once = once_opt::no, split_opt Split = split_opt::yes>
 class page_table_operation {
-private:
+protected:
     template<typename T>  bool opt2bool(T v) { return v == T::yes; }
 public:
     bool allocate_intermediate(void) { return opt2bool(Allocate); }
@@ -420,7 +421,8 @@ public:
     }
 };
 
-template<allocate_intermediate_opt Allocate, skip_empty_opt Skip = skip_empty_opt::yes>
+template<allocate_intermediate_opt Allocate, skip_empty_opt Skip = skip_empty_opt::yes,
+         account_opt Account = account_opt::no>
 class vma_operation :
         public page_table_operation<Allocate, Skip, descend_opt::yes, once_opt::no, split_opt::yes> {
 public:
@@ -429,6 +431,14 @@ public:
     // this function is called at the very end of operate_range(). vma_operation may do
     // whatever cleanup is needed here.
     void finalize(void) { return; }
+
+    ulong account_results(void) { return _total_operated; }
+    void account(size_t size) { if (this->opt2bool(Account)) _total_operated += size; }
+private:
+    // We don't need locking because each walk will create its own instance, so
+    // while two instances can operate over the same linear address (therefore
+    // all the cmpxcghs), the same instance will go linearly over its duty.
+    ulong _total_operated = 0;
 };
 
 /*
@@ -437,7 +447,8 @@ public:
  * (using the given fill function) these pages and sets their permissions to
  * the given ones. This is part of the mmap implementation.
  */
-class populate : public vma_operation<allocate_intermediate_opt::yes, skip_empty_opt::no> {
+template <account_opt T = account_opt::no>
+class populate : public vma_operation<allocate_intermediate_opt::yes, skip_empty_opt::no, T> {
 private:
     fill_page *fill;
     unsigned int perm;
@@ -451,6 +462,8 @@ public:
         fill->fill(phys_to_virt(page), offset, page_size);
         if (!ptep.compare_exchange(make_empty_pte(), make_normal_pte(page, perm))) {
             memory::free_page(phys_to_virt(page));
+        } else {
+            this->account(mmu::page_size);
         }
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset){
@@ -467,6 +480,8 @@ public:
         fill->fill(vpage, offset, huge_page_size);
         if (!ptep.compare_exchange(make_empty_pte(), make_large_pte(page, perm))) {
             memory::free_huge_page(phys_to_virt(page), huge_page_size);
+        } else {
+            this->account(mmu::huge_page_size);
         }
         return true;
     }
@@ -476,7 +491,8 @@ public:
  * Undo the operation of populate(), freeing memory allocated by populate()
  * and marking the pages non-present.
  */
-class unpopulate : public vma_operation<allocate_intermediate_opt::no> {
+template <account_opt T = account_opt::no>
+class unpopulate : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes, T> {
 private:
     std::stack<void*> small_pages;
     std::stack<void*> huge_pages;
@@ -488,11 +504,14 @@ public:
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
         small_pages.push(phys_to_virt(pte.addr(false)));
+        this->account(mmu::page_size);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
         huge_pages.push(phys_to_virt(pte.addr(false)));
+
+        this->account(mmu::huge_page_size);
         return true;
     }
     void intermediate_page(hw_ptep ptep, uintptr_t offset) {
@@ -513,7 +532,7 @@ public:
     }
 };
 
-class protection : public vma_operation<allocate_intermediate_opt::no> {
+class protection : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes> {
 private:
     unsigned int perm;
     bool do_flush;
@@ -559,7 +578,7 @@ public:
     }
 };
 
-template<typename T> void operate_range(T mapper, void *start, size_t size)
+template<typename T> ulong operate_range(T mapper, void *start, size_t size)
 {
     start = align_down(start, page_size);
     size = std::max(align_up(size, page_size), page_size);
@@ -574,11 +593,12 @@ template<typename T> void operate_range(T mapper, void *start, size_t size)
         tlb_flush();
     }
     mapper.finalize();
+    return mapper.account_results();
 }
 
-template<typename T> void operate_range(T mapper, const vma &vma)
+template<typename T> ulong operate_range(T mapper, const vma &vma)
 {
-    operate_range(mapper, (void*)vma.start(), vma.size());
+    return operate_range(mapper, (void*)vma.start(), vma.size());
 }
 
 phys virt_to_phys_pt(void* virt)
@@ -665,7 +685,7 @@ void evacuate(uintptr_t start, uintptr_t end)
         i->split(start);
         if (contains(start, end, *i)) {
             auto& dead = *i--;
-            operate_range(unpopulate(), dead);
+            operate_range(unpopulate<>(), dead);
             vma_list.erase(dead);
             delete &dead;
         }
@@ -764,14 +784,14 @@ void vpopulate(void* addr, size_t size)
 {
     fill_anon_page fill;
     WITH_LOCK(vma_list_mutex) {
-        operate_range(populate(&fill, perm_rwx), addr, size);
+        operate_range(populate<>(&fill, perm_rwx), addr, size);
     }
 }
 
 void vdepopulate(void* addr, size_t size)
 {
     WITH_LOCK(vma_list_mutex) {
-        operate_range(unpopulate(), addr, size);
+        operate_range(unpopulate<>(), addr, size);
     }
 }
 
@@ -786,10 +806,10 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     if (flags & mmap_populate) {
         if (flags & mmap_uninitialized) {
             fill_anon_page_noinit zfill;
-            operate_range(populate(&zfill, perm), v, size);
+            operate_range(populate<>(&zfill, perm), v, size);
         } else {
             fill_anon_page zfill;
-            operate_range(populate(&zfill, perm), v, size);
+            operate_range(populate<>(&zfill, perm), v, size);
         }
     }
     return v;
@@ -807,7 +827,7 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     void *v;
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, asize, search);
-        operate_range(populate(&fill, perm), v, asize);
+        operate_range(populate<>(&fill, perm), v, asize);
     }
     fill.finalize(f.get());
     return v;
@@ -986,10 +1006,10 @@ void anon_vma::fault(uintptr_t addr, exception_frame *ef)
 
     if (_flags & mmap_uninitialized) {
         fill_anon_page_noinit zfill;
-        operate_range(populate(&zfill, _perm), (void*)addr, size);
+        operate_range(populate<>(&zfill, _perm), (void*)addr, size);
     } else {
         fill_anon_page zfill;
-        operate_range(populate(&zfill, _perm), (void*)addr, size);
+        operate_range(populate<>(&zfill, _perm), (void*)addr, size);
     }
 }
 
