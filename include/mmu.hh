@@ -16,6 +16,7 @@
 #include <osv/error.h>
 
 struct exception_frame;
+class balloon;
 /**
  * MMU namespace
  */
@@ -133,9 +134,22 @@ private:
     bool _shared;
 };
 
+class jvm_balloon_vma : public vma {
+public:
+    jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b);
+    virtual ~jvm_balloon_vma();
+    virtual void split(uintptr_t edge) override;
+    virtual error sync(uintptr_t start, uintptr_t end) override;
+    virtual void fault(uintptr_t addr, exception_frame *ef) override;
+private:
+    balloon *_balloon;
+};
+
 void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
               fileref file, f_offset offset);
 void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm);
+ulong map_jvm(void* addr, size_t size, balloon *b);
+
 error munmap(void* addr, size_t size);
 error mprotect(void *addr, size_t size, unsigned int perm);
 error msync(void* addr, size_t length, int flags);
