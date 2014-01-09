@@ -15,12 +15,16 @@
 class semaphore {
 public:
     explicit semaphore(unsigned val);
-    void post(unsigned units = 1);
+    virtual ~semaphore() {}
+    virtual void post(unsigned units = 1) { WITH_LOCK(_mtx) { post_unlocked(units); } }
+
     bool wait(unsigned units = 1, sched::timer* tmr = nullptr);
     bool trywait(unsigned units = 1);
-private:
+protected:
     unsigned _val;
     mutex _mtx;
+    void post_unlocked(unsigned units = 1);
+
     struct wait_record : boost::intrusive::list_base_hook<> {
         sched::thread* owner;
         unsigned units;

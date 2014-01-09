@@ -12,19 +12,17 @@ semaphore::semaphore(unsigned val)
 {
 }
 
-void semaphore::post(unsigned units)
+void semaphore::post_unlocked(unsigned units)
 {
-    WITH_LOCK(_mtx) {
-        _val += units;
-        auto i = _waiters.begin();
-        while (_val > 0 && i != _waiters.end()) {
-            auto wr = i++;
-            if (wr->units <= _val) {
-                _val -= wr->units;
-                wr->owner->wake();
-                wr->owner = nullptr;
-                _waiters.erase(wr);
-            }
+    _val += units;
+    auto i = _waiters.begin();
+    while (_val > 0 && i != _waiters.end()) {
+        auto wr = i++;
+        if (wr->units <= _val) {
+            _val -= wr->units;
+            wr->owner->wake();
+            wr->owner = nullptr;
+            _waiters.erase(wr);
         }
     }
 }
