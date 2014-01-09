@@ -30,6 +30,17 @@ JavaVMOption mkoption(const char* s)
     return opt;
 }
 
+JavaVMOption mkoption(std::string str)
+{
+    return mkoption(str.c_str());
+}
+
+template <typename... args>
+JavaVMOption mkoption(const char *fmt, args... as)
+{
+    return mkoption(osv::sprintf(fmt, as...));
+}
+
 inline bool starts_with(const char *s, const char *prefix)
 {
     return !strncmp(s, prefix, strlen(prefix));
@@ -41,6 +52,25 @@ static bool is_jvm_option(const char *arg) {
            starts_with(arg, "-X") ||
            starts_with(arg, "-javaagent") ||
            starts_with(arg, "-agentlib");
+}
+
+static void mark_heap_option(char **arg, int index, int &has_xms, int &has_xmx)
+{
+    if (starts_with(arg[index], "-Xms") && !has_xms) {
+        has_xms = index;
+    }
+
+    if (starts_with(arg[index], "-Xmx") && !has_xmx) {
+        has_xmx = index;
+    }
+
+    if (starts_with(arg[index], "-mx")) {
+        has_xmx = index;
+    }
+
+    if (starts_with(arg[index], "-ms")) {
+        has_xms = index;
+    }
 }
 
 extern "C"
@@ -61,11 +91,15 @@ int main(int argc, char **argv)
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
 
     int orig_argc = argc;
+    int has_xms = 0, has_xmx = 0;
+
     for (int i = 1; i < orig_argc; i++) {
         // We are not supposed to look for verbose options after -jar
         // or class name. From that point on, they are user provided
         if (!strcmp(argv[i], "-jar") || !starts_with(argv[i], "-"))
             break;
+
+        mark_heap_option(argv, i, has_xms, has_xmx);
 
         // Pass some options directly to the JVM
         if (is_jvm_option(argv[i])) {
@@ -74,6 +108,17 @@ int main(int argc, char **argv)
             argc--;
         }
     }
+
+    if (!has_xmx) {
+        // FIXME: We should estimate how much memory the JVM itself is going to use
+        auto heap_size = memory::stats::free() >> 20;
+        options.push_back(mkoption("-Xmx%dM", heap_size));
+        if (!has_xms) {
+            options.push_back(mkoption("-Xms%dM", heap_size));
+        }
+        printf("Autotuning JVM heap size to %dMb\n", heap_size);
+    }
+
     vm_args.nOptions = options.size();
     vm_args.options = options.data();
 
