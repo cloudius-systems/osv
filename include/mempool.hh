@@ -9,12 +9,16 @@
 #define MEMPOOL_HH
 
 #include <cstdint>
+#include <functional>
+#include <list>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>
 #include <osv/mutex.h>
 #include <arch.hh>
 #include <osv/pagealloc.hh>
 #include <osv/percpu.hh>
+#include <osv/condvar.h>
+#include <osv/semaphore.hh>
 
 namespace memory {
 
@@ -104,6 +108,65 @@ void free_initial_memory_range(void* addr, size_t size);
 void enable_debug_allocator();
 
 extern bool tracker_enabled;
+
+enum class pressure { RELAXED, NORMAL, PRESSURE, EMERGENCY };
+
+class shrinker {
+public:
+    explicit shrinker(std::string name);
+    virtual ~shrinker() {}
+    virtual size_t request_memory(size_t n) = 0;
+    virtual size_t release_memory(size_t n) = 0;
+    std::string name() { return _name; };
+
+    bool should_shrink(ssize_t target) { return _enabled && (target > 0); }
+private:
+    std::string _name;
+    int _enabled = 1;
+};
+
+class reclaimer_waiters: public semaphore {
+public:
+    explicit reclaimer_waiters() : semaphore(0) { }
+    virtual  ~reclaimer_waiters() {}
+
+    virtual void post(unsigned units = 1);
+    bool has_waiters() { WITH_LOCK(_mtx) { return !_waiters.empty(); } }
+};
+
+class reclaimer {
+public:
+    reclaimer ();
+    void wake();
+    void wait_for_memory(size_t mem);
+    void wait_for_minimum_memory();
+
+    friend void start_reclaimer();
+    friend class shrinker;
+private:
+    void _do_reclaim();
+    // We could just check if the semaphore's wait_list is empty. But since we
+    // don't control the internals of the primitives we use for the
+    // implementation of semaphore, we are concerned that unlocked access may
+    // mean mayhem. Locked access, OTOH, will possibly deadlock us if someone allocates
+    // memory locked, and then we try to verify if we have waiters and need to hold the
+    // same lock
+    //std::atomic<int> _waiters_count = { 0 };
+    //bool _has_waiters() { return _waiters_count.load() != 0; }
+
+    reclaimer_waiters _oom_blocked; // Callers are blocked due to lack of memory
+    condvar _blocked;     // The reclaimer itself is blocked waiting for pressure condition
+    sched::thread *_thread;
+
+    std::vector<shrinker *> _shrinkers;
+    mutex _shrinkers_mutex;
+    unsigned int _active_shrinkers = 0;
+    bool _can_shrink();
+
+    pressure pressure_level();
+    ssize_t bytes_until_normal(pressure curr);
+    ssize_t bytes_until_normal() { return bytes_until_normal(pressure_level()); }
+};
 
 namespace stats {
     size_t free();
