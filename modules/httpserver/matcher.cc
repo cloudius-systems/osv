@@ -22,7 +22,7 @@ using namespace std;
  * when set to false, search for the next slash
  * @return the position in the url of the end of the parameter
  */
-size_t find_end_param(const string& url, size_t ind, bool entire_path)
+static size_t find_end_param(const string& url, size_t ind, bool entire_path)
 {
     size_t pos = (entire_path) ? url.length() : url.find('/', ind + 1);
     if (pos == string::npos) {

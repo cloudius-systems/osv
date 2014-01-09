@@ -63,7 +63,7 @@ public:
         , entire_path(entire_path) { }
 
     virtual size_t match(const std::string& url, size_t ind, parameters& param) override;
-
+private:
     std::string name;
     bool entire_path;
 };
