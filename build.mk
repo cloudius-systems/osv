@@ -638,7 +638,7 @@ $(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework-mt.so \
 bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
-	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so
+	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so java/jni/monitor.so
 
 bare.raw: loader.img
 	$(call quiet, qemu-img create $@ 100M, QEMU-IMG CREATE $@)
