@@ -24,6 +24,7 @@
 #include <osv/trace.hh>
 #include "arch-mmu.hh"
 #include <stack>
+#include "java/jvm_balloon.hh"
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -1039,7 +1040,12 @@ error jvm_balloon_vma::sync(uintptr_t start, uintptr_t end)
 
 void jvm_balloon_vma::fault(uintptr_t addr, exception_frame *ef)
 {
-    abort("Not yet");
+    std::lock_guard<mutex> guard(vma_list_mutex);
+    // Could block the creation of the next vma. No need to evacuate, we have no pages
+    vma_list.erase(*this);
+    jvm_balloon_fault(_balloon, ef);
+    // We now delete manually, since we've already erased it manually.
+    delete this;
 }
 
 jvm_balloon_vma::~jvm_balloon_vma()
