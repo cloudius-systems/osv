@@ -676,20 +676,23 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
     abort();
 }
 
-void evacuate(uintptr_t start, uintptr_t end)
+ulong evacuate(uintptr_t start, uintptr_t end)
 {
     addr_range r(start, end);
     auto range = vma_list.equal_range(r, vma::addr_compare());
+    ulong ret = 0;
     for (auto i = range.first; i != range.second; ++i) {
         i->split(end);
         i->split(start);
         if (contains(start, end, *i)) {
             auto& dead = *i--;
-            operate_range(unpopulate<>(), dead);
+            auto size = operate_range(unpopulate<account_opt::yes>(), dead);
+            ret += size;
             vma_list.erase(dead);
             delete &dead;
         }
     }
+    return ret;
     // FIXME: range also indicates where we can insert a new anon_vma, use it
 }
 
