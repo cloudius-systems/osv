@@ -120,6 +120,9 @@ public:
     std::string name() { return _name; };
 
     bool should_shrink(ssize_t target) { return _enabled && (target > 0); }
+
+    void deactivate_shrinker();
+    void activate_shrinker();
 private:
     std::string _name;
     int _enabled = 1;

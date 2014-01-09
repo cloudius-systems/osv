@@ -533,11 +533,26 @@ static void* malloc_large(size_t size)
     }
 }
 
+void shrinker::deactivate_shrinker()
+{
+    reclaimer_thread._active_shrinkers -= _enabled;
+    _enabled = 0;
+}
+
+void shrinker::activate_shrinker()
+{
+    reclaimer_thread._active_shrinkers += !_enabled;
+    _enabled = 1;
+}
+
 shrinker::shrinker(std::string name)
     : _name(name)
 {
+    // Since we already have to take that lock anyway in pretty much every
+    // operation, just reuse it.
     WITH_LOCK(reclaimer_thread._shrinkers_mutex) {
         reclaimer_thread._shrinkers.push_back(this);
+        reclaimer_thread._active_shrinkers += 1;
     }
 }
 
