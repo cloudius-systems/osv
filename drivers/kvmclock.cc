@@ -20,13 +20,15 @@ class kvmclock : public clock {
 public:
     kvmclock();
     virtual s64 time() __attribute__((no_instrument_function));
+    virtual s64 uptime() override __attribute__((no_instrument_function));
     static bool probe();
 private:
     u64 wall_clock_boot();
-    u64 system_time();
+    static u64 system_time();
     static void setup_cpu();
 private:
     static bool _smp_init;
+    static s64 _boot_systemtime;
     static bool _new_kvmclock_msrs;
     pvclock_wall_clock* _wall;
     u64  _wall_ns;
@@ -35,6 +37,7 @@ private:
 };
 
 bool kvmclock::_smp_init = false;
+s64 kvmclock::_boot_systemtime = 0;
 bool kvmclock::_new_kvmclock_msrs = true;
 PERCPU(pvclock_vcpu_time_info, kvmclock::_sys);
 
@@ -56,6 +59,7 @@ void kvmclock::setup_cpu()
     memset(&*_sys, 0, sizeof(*_sys));
     processor::wrmsr(system_time_msr, mmu::virt_to_phys(&*_sys) | 1);
     _smp_init = true;
+    _boot_systemtime = system_time();
 }
 
 bool kvmclock::probe()
@@ -81,6 +85,15 @@ s64 kvmclock::time()
         r += system_time();
     }
     return r;
+}
+
+s64 kvmclock::uptime()
+{
+    if (_smp_init) {
+        return system_time() - _boot_systemtime;
+    } else {
+        return 0;
+    }
 }
 
 u64 kvmclock::wall_clock_boot()

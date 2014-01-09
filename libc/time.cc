@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <osv/stubbing.hh>
 #include "libc.hh"
-#include "drivers/clock.hh"
+#include <osv/clock.hh>
 #include "sched.hh"
 
 u64 convert(const timespec& ts)
@@ -47,15 +47,28 @@ int usleep(useconds_t usec)
 
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
 {
-    if (clk_id != CLOCK_REALTIME) {
+    switch (clk_id) {
+    case CLOCK_REALTIME:
+    {
+        auto time = clock::get()->time();
+        auto sec = time / 1000000000;
+        auto nsec = time % 1000000000;
+        ts->tv_sec = sec;
+        ts->tv_nsec = nsec;
+        return 0;
+    }
+    case CLOCK_MONOTONIC:
+    {
+        auto t = osv::clock::uptime::now().time_since_epoch();
+        ts->tv_sec = std::chrono::duration_cast<std::chrono::seconds>(t).
+                        count();
+        ts->tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(t).
+                        count() % 1000000000;
+        return 0;
+    }
+    default:
         return libc_error(EINVAL);
     }
-    u64 time = clock::get()->time();
-    auto sec = time / 1000000000;
-    auto nsec = time % 1000000000;
-    ts->tv_sec = sec;
-    ts->tv_nsec = nsec;
-    return 0;
 }
 
 extern "C"
@@ -63,16 +76,17 @@ int __clock_gettime(clockid_t clk_id, struct timespec* ts) __attribute__((alias(
 
 int clock_getres(clockid_t clk_id, struct timespec* ts)
 {
-    if (clk_id != CLOCK_REALTIME) {
+    switch (clk_id) {
+    case CLOCK_REALTIME:
+    case CLOCK_MONOTONIC:
+        if (ts) {
+            ts->tv_sec = 0;
+            ts->tv_nsec = 1;
+        }
+        return 0;
+    default:
         return libc_error(EINVAL);
     }
-
-    if (ts) {
-        ts->tv_sec = 0;
-        ts->tv_nsec = 1;
-    }
-
-    return 0;
 }
 
 int clock_getcpuclockid(pid_t pid, clockid_t* clock_id)

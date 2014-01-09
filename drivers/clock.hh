@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -10,12 +10,56 @@
 
 #include <osv/types.h>
 
+/**
+ * OSv low-level time-keeping interface
+ *
+ * This is an abstract class providing an interface to OSv's basic
+ * time-keeping functions.
+ *
+ * clock::get() returns the single concrete instance of this interface,
+ * which may be a kvmclock, xenclock, or hpetclock - depending on which
+ * of these the hypervisor provides. This clock instance may then be
+ * queried for the current time - for example, clock::get()->time().
+ *
+ * The methods of this class are not type-safe, in that they return times
+ * as unadorned integers (s64) whose type does not specify the time units
+ * or the epoch. Prefer instead to use the types from <osv/clock.hh>:
+ * osv::clock::monotonic et al. Their efficiency is identical to the
+ * methods of this class, but they allow much better compile-time checking.
+ */
 class clock {
 public:
     virtual ~clock();
     virtual s64 time() = 0;
     static void register_clock(clock* c);
+    /**
+     * Get a pointer to the single concrete instance of the clock class.
+     *
+     * This instance can then be used to query the current time.
+     * For example, clock::get()->time().
+     *
+     * This function always returns the same clock, which OSv considers the
+     * best and most efficient way to query the time on the this hypervisor.
+     * On KVM and Xen, it can be kvmclock or xenclock respectively, which are
+     * very efficient para-virtual clocks. As a last resort, it defaults to
+     * hpetclock.
+     * \return A pointer to the concrete instance of the clock class.
+     */
     static clock* get() __attribute__((no_instrument_function));
+    /**
+     * Get the current value of the nanosecond-resolution uptime clock.
+     *
+     * The uptime clock is a *monotonic* clock, which can only go forward.
+     * It measures, in nanoseconds, the time that has passed since OSv's boot,
+     * and is usually used to measure time intervals.
+     *
+     * For improved type safety, it is recommended to use
+     * osv::clock::uptime::now() instead of clock::get()->uptime()
+     *
+     * Note that uptime() may remain at 0 without change for some time during
+     * the very early stages of the boot process.
+     */
+    virtual s64 uptime() = 0;
 private:
     static clock* _c;
 };
