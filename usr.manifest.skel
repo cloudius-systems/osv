@@ -3,4 +3,5 @@
 /usr/lib/&/libboost_filesystem-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
 /&/etc/hosts: ../../static/&
 /&/dev/.keep: ../../static/&
+/&/proc/.keep: ../../static/&
 /&/tmp/.keep: ../../static/&

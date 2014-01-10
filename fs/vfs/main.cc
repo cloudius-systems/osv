@@ -1549,6 +1549,10 @@ extern "C" void mount_zfs_rootfs(void)
     ret = sys_mount("", "/dev", "devfs", 0, NULL);
     if (ret)
         kprintf("failed to mount devfs, error = %s\n", strerror(ret));
+
+    ret = sys_mount("", "/proc", "procfs", 0, NULL);
+    if (ret)
+        kprintf("failed to mount procfs, error = %s\n", strerror(ret));
 }
 
 extern "C" void unmount_rootfs(void)
