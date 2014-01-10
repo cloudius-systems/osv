@@ -22,7 +22,7 @@ namespace console {
 
 void write(const char *msg, size_t len);
 void write_ll(const char *msg, size_t len);
-void console_init(void);
+void console_init(bool use_vga);
 int open(void);
 
 }

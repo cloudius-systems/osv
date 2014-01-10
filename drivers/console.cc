@@ -275,12 +275,17 @@ struct driver console_driver = {
     .devops	= &console_devops,
 };
 
-void console_init(void)
+void console_init(bool use_vga)
 {
     auto console_poll_thread = new sched::thread(console_poll);
-    Console* serial_console = new IsaSerialConsole(console_poll_thread, &tio);
+    Console* console;
+
+    if (use_vga)
+        console = new VGAConsole(console_poll_thread, &tio);
+    else
+        console = new IsaSerialConsole(console_poll_thread, &tio);
     console_poll_thread->start();
-    console::console.set_impl(serial_console);
+    console::console.set_impl(console);
     device_create(&console_driver, "console", D_CHR);
 }
 
