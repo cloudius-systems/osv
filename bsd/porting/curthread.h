@@ -9,6 +9,7 @@
 #define _BSD_PORTING_CURTHREAD_H
 
 #include <bsd/porting/netport.h>
+#include <bsd/porting/kthread.h>
 
 __BEGIN_DECLS;
 

@@ -43,8 +43,7 @@ int kproc_create(void (*func)(void *), void *arg, struct proc **p,
     t->start();
 
     if (p) {
-        *p = new proc;
-        (*p)->p_pid = t->id();
+        *p = reinterpret_cast<struct proc *>(sched::thread::current());
     }
     return 0;
 }
@@ -61,11 +60,8 @@ get_curthread(void)
     return reinterpret_cast<struct thread *>(sched::thread::current());
 }
 
-struct proc
+struct proc *
 get_curproc(void)
 {
-    auto cur = sched::thread::current();
-    struct proc p;
-    p.p_pid = cur->id();
-    return p;
+    return reinterpret_cast<struct proc *>(sched::thread::current());
 }

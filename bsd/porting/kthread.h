@@ -17,18 +17,18 @@
 
 __BEGIN_DECLS
 
-struct proc {
-    pid_t p_pid;
+struct proc {;
+    void *_bogus;
 };
 
 int
 kproc_create(void (*func)(void *), void *arg,
                     struct proc **newpp, int flags, int pages, const char *fmt, ...);
 
-struct proc get_curproc(void);
+struct proc *get_curproc(void);
 __END_DECLS
 
-#define curproc ({ struct proc _p = get_curproc(); &_p; })
+#define curproc (get_curproc())
 
 #endif
 

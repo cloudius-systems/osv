@@ -240,9 +240,9 @@ struct xs_softc {
 	struct sx suspend_mutex;
 
 	/**
-	 * The processid of the xenwatch thread.
+	 * The pointer of the xenwatch thread.
 	 */
-	pid_t xenwatch_pid;
+	struct proc *xenwatch_proc;
 
 	/**
 	 * Sleepable mutex used to gate the execution of XenStore
@@ -1206,7 +1206,7 @@ xs_attach(device_t dev)
 	    0, "xenwatch");
 	if (error)
 		return (error);
-	xs.xenwatch_pid = p->p_pid;
+	xs.xenwatch_proc = p;
 
 	error = kproc_create(xs_rcv_thread, NULL, NULL,
 	    RFHIGHPID, 0, "xenstore_rcv");
@@ -1686,7 +1686,7 @@ xs_unregister_watch(struct xs_watch *watch)
 	mtx_unlock(&xs.watch_events_lock);
 
 	/* Flush any currently-executing callback, unless we are it. :-) */
-	if (curproc->p_pid != xs.xenwatch_pid) {
+	if (curproc != xs.xenwatch_proc) {
 		sx_xlock(&xs.xenwatch_mutex);
 		sx_xunlock(&xs.xenwatch_mutex);
 	}
