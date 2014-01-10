@@ -59,7 +59,7 @@ static void physmem_init()
 
 void net_init(void)
 {
-    debug("Initializing network stack...\n");
+    debug("net: initializing");
 
     physmem_init();
 
@@ -108,5 +108,5 @@ void net_init(void)
     osv::ifup("lo0");
     zfs_init(NULL);
 
-    debug("Done!\n");
+    debug(" - done\n");
 }
