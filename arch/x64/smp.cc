@@ -45,7 +45,7 @@ void parse_madt()
     auto madt = get_parent_from_member(madt_header, &ACPI_TABLE_MADT::Header);
     void* subtable = madt + 1;
     void* madt_end = static_cast<void*>(madt) + madt->Header.Length;
-    unsigned idgen = 0;
+    unsigned nr_cpus = 0;
     while (subtable != madt_end) {
         auto s = static_cast<ACPI_SUBTABLE_HEADER*>(subtable);
         switch (s->Type) {
@@ -54,12 +54,11 @@ void parse_madt()
             if (!(lapic->LapicFlags & ACPI_MADT_ENABLED)) {
                 break;
             }
-            auto c = new sched::cpu(idgen++);
+            auto c = new sched::cpu(nr_cpus++);
             c->arch.apic_id = lapic->Id;
             c->arch.acpi_id = lapic->ProcessorId;
             c->arch.initstack.next = smp_stack_free;
             smp_stack_free = &c->arch.initstack;
-            debug(fmt("acpi %d apic %d\n") % c->arch.acpi_id % c->arch.apic_id);
             sched::cpus.push_back(c);
             break;
         }
@@ -68,6 +67,7 @@ void parse_madt()
         }
         subtable += s->Length;
     }
+    debug(fmt("%d CPUs detected\n") % nr_cpus);
 }
 
 void __attribute__((constructor(init_prio::sched))) smp_init()
