@@ -52,13 +52,15 @@ static void fill_ts(s64 time, struct timespec *ts)
     ts->tv_nsec =  time % 1000000000;
 }
 
-static void fill_ts(std::chrono::time_point<osv::clock::uptime>::duration t,
-                    struct timespec *ts)
+
+// Convenient inline function for converting std::chrono::duration,
+// of a clock with any period, into the classic Posix "struct timespec":
+template <class Rep, class Period>
+static inline void fill_ts(std::chrono::duration<Rep, Period> d, timespec *ts)
 {
-    ts->tv_sec = std::chrono::duration_cast<std::chrono::seconds>(t).
-                    count();
-    ts->tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(t).
-                    count() % 1000000000;
+    using namespace std::chrono;
+    ts->tv_sec = duration_cast<seconds>(d).count();
+    ts->tv_nsec = duration_cast<nanoseconds>(d).count() % 1000000000;
 }
 
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
