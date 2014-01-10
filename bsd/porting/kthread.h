@@ -30,6 +30,9 @@ __END_DECLS
 
 #define curproc (get_curproc())
 
+extern unsigned char *osv_reclaimer_thread;
+#define pageproc ((struct proc *)osv_reclaimer_thread)
+
 #endif
 
 #endif

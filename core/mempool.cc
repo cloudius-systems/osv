@@ -40,6 +40,7 @@ TRACEPOINT(trace_memory_huge_failure, "page ranges=%d", unsigned long);
 TRACEPOINT(trace_memory_reclaim, "shrinker %s, target=%d, delta=%d", const char *, long, long);
 
 bool smp_allocator = false;
+unsigned char *osv_reclaimer_thread;
 
 namespace memory {
 
@@ -615,6 +616,7 @@ reclaimer::reclaimer()
     // std::thread is implemented ontop of pthreads, so it is fine
     std::thread tmp([&] {
         _thread = sched::thread::current();
+        osv_reclaimer_thread = reinterpret_cast<unsigned char *>(_thread);
         allow_emergency_alloc = true;
         do {
             _do_reclaim();
