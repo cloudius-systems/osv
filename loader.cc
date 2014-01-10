@@ -226,15 +226,13 @@ void run_main(std::vector<std::string> &vec)
 
     __libc_stack_end = __builtin_frame_address(0);
     auto lib = osv::run(command, args, &ret);
-    if (ret) {
-        debug("program %s returned %d\n", command.c_str(), ret);
-    }
-
-    // success
     if (lib) {
+        // success
+        if (ret) {
+            debug("program %s returned %d\n", command.c_str(), ret);
+        }
         return;
     }
-
     debug("run_main(): cannot execute %s. Powering off.\n", command.c_str());
     osv::poweroff();
 }
