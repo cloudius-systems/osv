@@ -17,6 +17,8 @@ public:
     explicit VGAConsole(sched::thread* consumer, const termios *tio);
     virtual void write(const char *str, size_t len);
     virtual void newline();
+    virtual bool input_ready();
+    virtual char readch();
 private:
     unsigned _col = 0;
     static const unsigned ncols = 80, nrows = 25;

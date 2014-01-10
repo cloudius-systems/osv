@@ -44,3 +44,13 @@ void VGAConsole::newline()
     }
     _col = 0;
 }
+
+bool VGAConsole::input_ready()
+{
+    return false;
+}
+
+char VGAConsole::readch()
+{
+    return 0;
+}
