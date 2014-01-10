@@ -15,9 +15,10 @@
 /* See the FreeBSD sleep(9) manual entry for usage */
 
 __BEGIN_DECLS
-int msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
+int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
      int timo);
 
+#define msleep(_c, _m, _p, _w, _t) _msleep((_c), (struct mtx *)(_m), (_p), (_w), (_t))
 int tsleep(void *chan, int priority, const char *wmesg, int timo);
 
 void bsd_pause(const char *wmesg, int timo);

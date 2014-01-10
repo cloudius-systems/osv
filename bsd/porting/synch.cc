@@ -42,7 +42,7 @@ public:
         return (_instance);
     }
 
-    int msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
+    int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
          int timo);
 
     void wakeup(void* chan);
@@ -60,7 +60,7 @@ private:
 
 synch_port* synch_port::_instance = nullptr;
 
-int synch_port::msleep(void *chan, struct mtx *mtx,
+int synch_port::_msleep(void *chan, struct mtx *mtx,
     int priority, const char *wmesg, int timo_hz)
 {
     trace_synch_msleep(chan, mtx, timo_hz);
@@ -170,20 +170,20 @@ void synch_port::wakeup_one(void* chan)
     mutex_unlock(&_lock);
 }
 
-extern "C" int msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
+extern "C" int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
      int timo)
 {
-    return (synch_port::instance()->msleep(chan, mtx, priority, wmesg, timo));
+    return (synch_port::instance()->_msleep(chan, mtx, priority, wmesg, timo));
 }
 
 extern "C" int tsleep(void *chan, int priority, const char *wmesg, int timo)
 {
-    return (msleep(chan, 0, priority, wmesg, timo));
+    return (_msleep(chan, 0, priority, wmesg, timo));
 }
 
 extern "C" void bsd_pause(const char *wmesg, int timo)
 {
-    msleep(0, 0, 0, wmesg, timo);
+    _msleep(0, 0, 0, wmesg, timo);
 }
 
 extern "C" void wakeup(void* chan)
