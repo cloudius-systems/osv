@@ -97,8 +97,6 @@ void apic_driver::read_base()
 {
     static constexpr u64 base_addr_mask = 0xFFFFFF000;
     _apic_base = rdmsr(msr::IA32_APIC_BASE) & base_addr_mask;
-
-    debug(fmt("APIC base %p\n") % _apic_base);
 }
 
 xapic::xapic()
