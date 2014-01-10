@@ -23,3 +23,5 @@ fs +=	ramfs/ramfs_vfsops.o \
 
 fs +=	devfs/devfs_vnops.o \
 	devfs/device.o
+
+fs +=	procfs/procfs_vnops.o
