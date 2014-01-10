@@ -3790,7 +3790,6 @@ arc_tempreserve_space(uint64_t reserve, uint64_t txg)
 }
 
 static kmutex_t arc_lowmem_lock;
-#ifndef __OSV__
 #ifdef _KERNEL
 static eventhandler_tag arc_event_lowmem = NULL;
 
@@ -3816,7 +3815,6 @@ arc_lowmem(void *arg __unused2, int howto __unused2)
 	mutex_exit(&arc_reclaim_thr_lock);
 	mutex_exit(&arc_lowmem_lock);
 }
-#endif
 #endif
 
 void
@@ -3949,11 +3947,9 @@ arc_init(void)
 	(void) thread_create(NULL, 0, arc_reclaim_thread, NULL, 0, &p0,
 	    TS_RUN, minclsyspri);
 
-#ifndef __OSV__
 #ifdef _KERNEL
 	arc_event_lowmem = EVENTHANDLER_REGISTER(vm_lowmem, arc_lowmem, NULL,
 	    EVENTHANDLER_PRI_FIRST);
-#endif
 #endif
 
 	arc_dead = FALSE;
