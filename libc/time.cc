@@ -45,30 +45,50 @@ int usleep(useconds_t usec)
     return 0;
 }
 
+// Temporary until all clock primitives functions on std::chrono
+static void fill_ts(s64 time, struct timespec *ts)
+{
+    ts->tv_sec  =  time / 1000000000;
+    ts->tv_nsec =  time % 1000000000;
+}
+
+static void fill_ts(std::chrono::time_point<osv::clock::uptime>::duration t,
+                    struct timespec *ts)
+{
+    ts->tv_sec = std::chrono::duration_cast<std::chrono::seconds>(t).
+                    count();
+    ts->tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(t).
+                    count() % 1000000000;
+}
+
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
-    case CLOCK_REALTIME:
-    {
-        auto time = clock::get()->time();
-        auto sec = time / 1000000000;
-        auto nsec = time % 1000000000;
-        ts->tv_sec = sec;
-        ts->tv_nsec = nsec;
-        return 0;
-    }
     case CLOCK_MONOTONIC:
-    {
-        auto t = osv::clock::uptime::now().time_since_epoch();
-        ts->tv_sec = std::chrono::duration_cast<std::chrono::seconds>(t).
-                        count();
-        ts->tv_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(t).
-                        count() % 1000000000;
-        return 0;
-    }
+        fill_ts(osv::clock::uptime::now().time_since_epoch(), ts);
+        break;
+    case CLOCK_REALTIME:
+    case CLOCK_REALTIME_COARSE:
+        fill_ts(clock::get()->time(), ts);
+        break;
+    case CLOCK_PROCESS_CPUTIME_ID:
+        // FIXME: discount idle time
+        fill_ts(osv::clock::uptime::now().time_since_epoch() * sched::cpus.size(), ts);
+        break;
+    case CLOCK_THREAD_CPUTIME_ID:
+        fill_ts(sched::thread::current()->thread_clock(), ts);
+        break;
+
     default:
-        return libc_error(EINVAL);
+        if (clk_id < _OSV_CLOCK_SLOTS) {
+            return libc_error(EINVAL);
+        } else {
+            auto thread = sched::thread::find_by_id(clk_id - _OSV_CLOCK_SLOTS);
+            fill_ts(thread->thread_clock(), ts);
+        }
     }
+
+    return 0;
 }
 
 extern "C"
@@ -78,20 +98,27 @@ int clock_getres(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
     case CLOCK_REALTIME:
+    case CLOCK_REALTIME_COARSE:
+    case CLOCK_PROCESS_CPUTIME_ID:
+    case CLOCK_THREAD_CPUTIME_ID:
     case CLOCK_MONOTONIC:
-        if (ts) {
-            ts->tv_sec = 0;
-            ts->tv_nsec = 1;
-        }
-        return 0;
+        break;
     default:
-        return libc_error(EINVAL);
+        if (clk_id < _OSV_CLOCK_SLOTS) {
+            return libc_error(EINVAL);
+        }
     }
+
+    if (ts) {
+        ts->tv_sec = 0;
+        ts->tv_nsec = 1;
+    }
+    return 0;
 }
 
 int clock_getcpuclockid(pid_t pid, clockid_t* clock_id)
 {
-    return libc_error(ENOSYS);
+    return CLOCK_PROCESS_CPUTIME_ID;
 }
 
 clock_t clock (void)

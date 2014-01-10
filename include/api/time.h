@@ -80,6 +80,7 @@ struct itimerspec
 #define CLOCK_MONOTONIC          1
 #define CLOCK_PROCESS_CPUTIME_ID 2
 #define CLOCK_THREAD_CPUTIME_ID  3
+#define CLOCK_REALTIME_COARSE    5
 
 // There are 9 types of clock defined by Linux. We reserve space for 16 slots,
 // the next power of 2. This is OSv specific and should not be reused.
