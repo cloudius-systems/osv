@@ -11,23 +11,14 @@
 volatile unsigned short * const VGAConsole::buffer
 = reinterpret_cast<volatile unsigned short *>(mmu::phys_mem + 0xb8000);
 
-VGAConsole::VGAConsole(sched::thread* poll_thread, const termios *tio)
-    : _tio(tio)
-{
-}
 
 void VGAConsole::write(const char *str, size_t len)
 {
     while (len > 0) {
-        if ((*str == '\n') && (_tio->c_oflag & OPOST)
-            && (_tio->c_oflag & ONLCR))
-            newline();
-        else {
-            buffer[(nrows-1)*ncols + _col++] = 0x700 + *str;
-            if (_col == ncols)
-                newline();
-        }
-        str++;
+	buffer[(nrows-1)*ncols + _col++] = 0x700 + *str++;
+	if (_col == ncols) {
+	    newline();
+	}
         len--;
     }
 }

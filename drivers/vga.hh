@@ -9,15 +9,19 @@
 #define DRIVERS_VGA_HH
 
 #include "console.hh"
+#include "sched.hh"
+#include <termios.h>
 
 class VGAConsole : public Console {
 public:
+    explicit VGAConsole(sched::thread* consumer, const termios *tio);
     virtual void write(const char *str, size_t len);
     virtual void newline();
 private:
     unsigned _col = 0;
     static const unsigned ncols = 80, nrows = 25;
     static volatile unsigned short * const buffer;
+    const termios *_tio;
 };
 
 #endif
