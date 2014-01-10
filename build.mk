@@ -1,6 +1,7 @@
 
 arch = x64
 BSD_MACHINE_ARCH = amd64
+image ?= default
 img_format ?= qcow2
 fs_size_mb ?= 10240
 local-includes =
