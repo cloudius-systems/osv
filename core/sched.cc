@@ -29,6 +29,8 @@ extern char _percpu_start[], _percpu_end[];
 
 using namespace osv;
 
+void cancel_this_thread_alarm();
+
 namespace sched {
 
 TRACEPOINT(trace_sched_switch, "to %p vold=%g vnew=%g", thread*, float, float);
@@ -626,6 +628,8 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
 
 thread::~thread()
 {
+    cancel_this_thread_alarm();
+
     if (!_attr._detached) {
         join();
     }
