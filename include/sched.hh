@@ -327,12 +327,16 @@ public:
     ~thread();
     void start();
     template <class Pred>
+    static void wait_until_interruptible(Pred pred);
+    template <class Pred>
     static void wait_until(Pred pred);
     template <class Pred>
     static void wait_until(mutex_t& mtx, Pred pred);
     template <class Pred>
     static void wait_until(mutex_t* mtx, Pred pred);
     void wake();
+    bool interrupted();
+    void interrupted(bool f);
     template <class Action>
     inline void wake_with(Action action);
     static void sleep_until(s64 abstime);
@@ -384,7 +388,7 @@ private:
     void setup_tcb();
     void free_tcb();
     void complete() __attribute__((__noreturn__));
-    template <class Mutex, class Pred>
+    template <class IntrStrategy, class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
     struct dummy_lock {};
     friend void acquire(dummy_lock&) {}
@@ -427,6 +431,7 @@ private:
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned int _id;
+    std::atomic<bool> _interrupted;
     std::function<void ()> _cleanup;
     std::vector<std::unique_ptr<char[]>> _tls;
     u64 _total_cpu_time = 0;
@@ -602,7 +607,25 @@ inline void release(mutex_t* mtx)
     }
 }
 
-template <class Mutex, class Pred>
+class interruptible
+{
+public:
+    static void prepare(thread* target_thread) throw()
+        { target_thread->interrupted(false); }
+    static void check(thread* target_thread) throw(int)
+        { if(target_thread->interrupted()) throw int(EINTR); }
+};
+
+class noninterruptible
+{
+public:
+    static void prepare(thread* target_thread) throw()
+        {}
+    static void check(thread* target_thread) throw()
+        {}
+};
+
+template <class IntrStrategy, class Mutex, class Pred>
 inline
 void thread::do_wait_until(Mutex& mtx, Pred pred)
 {
@@ -610,12 +633,18 @@ void thread::do_wait_until(Mutex& mtx, Pred pred)
     assert(preemptable());
 
     thread* me = current();
+
+    IntrStrategy::prepare(me);
+
     while (true) {
         {
             wait_guard waiter(me);
             if (pred()) {
                 return;
             }
+
+            IntrStrategy::check(me);
+
             release(mtx);
             me->wait();
         }
@@ -628,21 +657,43 @@ inline
 void thread::wait_until(Pred pred)
 {
     dummy_lock mtx;
-    do_wait_until(mtx, pred);
+    do_wait_until<noninterruptible>(mtx, pred);
 }
 
 template <class Pred>
 inline
 void thread::wait_until(mutex_t& mtx, Pred pred)
 {
-    do_wait_until(mtx, pred);
+    do_wait_until<noninterruptible>(mtx, pred);
 }
 
 template <class Pred>
 inline
 void thread::wait_until(mutex_t* mtx, Pred pred)
 {
-    do_wait_until(mtx, pred);
+    do_wait_until<noninterruptible>(mtx, pred);
+}
+
+template <class Pred>
+inline
+void thread::wait_until_interruptible(Pred pred)
+{
+    dummy_lock mtx;
+    do_wait_until<interruptible>(mtx, pred);
+}
+
+inline bool thread::interrupted()
+{
+    return _interrupted.load(std::memory_order_relaxed);
+}
+
+inline void thread::interrupted(bool f)
+{
+    _interrupted.store(f, std::memory_order_relaxed);
+
+    if(f) {
+        wake();
+    }
 }
 
 // About wake_with():
