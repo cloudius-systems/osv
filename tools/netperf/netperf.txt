@@ -1,8 +1,6 @@
 To measure networking throughput we use netperf-2.6.0,
 
 The netperf client isn't working in OS-v, only netserver.
-Netperf source needs to be patched to work properly on OSv.
-
 To compile and deploy netperf from source run deploy.sh script
 
 The script will:
@@ -10,9 +8,8 @@ The script will:
   1. Download netperf tarball
   2. Build it for Linux
   3. Install Linux version on local host
-  4. Apply patch needed to build netperf for OSv
-  5. Build netperf for OSv (make CFLAGS="-fPIC -shared")
-  6. Put OSv-ready netserver.so into netperf-2.6.0/osv/netserver.so
+  4. Build netperf for OSv (make CFLAGS="-fPIC -shared")
+  5. Put OSv-ready netserver.so into netperf-2.6.0/osv/netserver.so
 
 Starting netserver
 

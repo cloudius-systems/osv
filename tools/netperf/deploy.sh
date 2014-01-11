@@ -8,7 +8,6 @@ cd netperf-2.6.0
 ./configure
 make
 sudo make install
-patch -p1 < ../0001-netperf-socket-timeout-for-send-receive-operations.patch
 make clean
 make CFLAGS="-fPIC -shared"
 mkdir osv
