@@ -267,6 +267,18 @@ void alarm_thread_func()
     }
 }
 
+static void cancel_alarm_ll()
+{
+    alarm_due = 0;
+    alarm_cond.wake_one();
+}
+
+static void set_alarm_ll(s64 new_alarm_due)
+{
+    alarm_due = new_alarm_due;
+    alarm_cond.wake_one();
+}
+
 unsigned int alarm(unsigned int seconds)
 {
     unsigned int ret = 0;
@@ -280,12 +292,11 @@ unsigned int alarm(unsigned int seconds)
             ret = (alarm_due - now) / 1_s;
         }
         if (seconds) {
-            alarm_due = now + seconds*1_s;
+            set_alarm_ll(now + seconds*1_s);
         } else {
             // alarm(0) means cancel alarm, not an alarm in 0 seconds.
-            alarm_due = 0;
+            cancel_alarm_ll();
         }
-        alarm_cond.wake_one();
     }
     return ret;
 }
