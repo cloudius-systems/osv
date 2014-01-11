@@ -9,6 +9,7 @@
 
 #include <sys/types.h>
 #include <signal.h>
+#include <sys/socket.h>
 
 #include "debug.hh"
 
@@ -74,6 +75,43 @@ int main(int ac, char** av)
     ar = alarm(0);
     sleep(1);
     report(global == 0, "1 more second after cancelling alarm - still global==0");
+
+    //Test that SIG_ALRM interrupts system calls
+    sr = signal(SIGALRM, handler1);
+    report(sr != SIG_ERR, "set SIGALRM handler");
+
+    auto s = socket(AF_INET,SOCK_DGRAM,0);
+    char buf[10];
+    struct sockaddr_storage ra;
+    socklen_t ralen = sizeof(ra);
+
+    alarm(1);
+
+    auto recv_result = recvfrom(s, buf, sizeof(buf), 0,
+                                (struct sockaddr*)&ra, &ralen);
+    auto recv_errno = errno;
+
+    report(recv_result == -1,   "syscall interrupted by SIG_ALRM returns -1");
+    report(recv_errno == EINTR, "errno for syscall interrupted by SIG_ALRM is EINTR");
+
+    //Test that SIG_ALRM doesn't interrupt system calls when
+    //signal action is SIG_IGN
+    sr = signal(SIGALRM, SIG_IGN);
+    report(sr != SIG_ERR, "set SIGALRM handlerto SIG_IGN");
+
+    struct timeval tv = {0};
+    tv.tv_sec = 2;
+    auto res = setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    report(res == 0, "set socket receive timeout 2 seconds");
+
+    alarm(1);
+
+    recv_result = recvfrom(s, buf, sizeof(buf), 0,
+                           (struct sockaddr*)&ra, &ralen);
+    recv_errno = errno;
+
+    report(recv_result == -1,   "timed out syscall returns -1");
+    report(recv_errno == EWOULDBLOCK, "timed out syscall doesn't return EINTR");
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
