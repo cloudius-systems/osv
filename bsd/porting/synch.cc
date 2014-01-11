@@ -96,11 +96,20 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         mutex_unlock(wait_lock);
     }
 
+    bool interrupted = false;
 
-    sched::thread::wait_until([&] {
-        return ( (timo_hz && t.expired()) ||
-                 (wait._awake) );
-    });
+    try
+    {
+        sched::thread::wait_until_interruptible([&] {
+            return ( (timo_hz && t.expired()) ||
+                     (wait._awake) );
+        });
+    }
+    catch (int e)
+    {
+        assert(e == EINTR);
+        interrupted = true;
+    }
 
     if (!(priority & PDROP) && wait_lock) {
         mutex_lock(wait_lock);
@@ -123,7 +132,7 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
             }
             mutex_unlock(&_lock);
         }
-        return (EWOULDBLOCK);
+        return interrupted ? (EINTR) : (EWOULDBLOCK);
     }
 
     return (0);
