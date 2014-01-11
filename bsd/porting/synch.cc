@@ -18,8 +18,7 @@
 #include <bsd/sys/sys/param.h>
 
 TRACEPOINT(trace_synch_msleep, "chan=%p mtx=%p timo_hz=%d", void *, void *, int);
-TRACEPOINT(trace_synch_msleep_wait, "chan=%p", void *);
-TRACEPOINT(trace_synch_msleep_timeout_wait, "chan=%p", void *);
+TRACEPOINT(trace_synch_msleep_wait, "chan=%p timo_hz=%d", void *, int);
 TRACEPOINT(trace_synch_msleep_expired, "chan=%p", void *);
 TRACEPOINT(trace_synch_wakeup, "chan=%p", void *);
 TRACEPOINT(trace_synch_wakeup_waking, "chan=%p thread=%p", void *, void *);
@@ -83,57 +82,48 @@ int synch_port::msleep(void *chan, struct mtx *mtx,
         mutex_unlock(&_lock);
     }
 
+    sched::timer t(*sched::thread::current());
+
     if (timo_hz) {
         u64 nanoseconds = ticks2ns(timo_hz);
         u64 cur_time = clock::get()->time();
-        sched::timer t(*sched::thread::current());
         t.set(cur_time + nanoseconds);
+    }
 
-        trace_synch_msleep_timeout_wait(chan);
-        if (wait_lock) {
-            mutex_unlock(wait_lock);
-        }
-        sched::thread::wait_until([&] {
-            return ( (t.expired()) || (wait._awake) );
-        });
+    trace_synch_msleep_wait(chan, timo_hz);
 
-        if (!(priority & PDROP) && wait_lock) {
-            mutex_lock(wait_lock);
-        }
-        // msleep timeout
-        if (!wait._awake) {
-            trace_synch_msleep_expired(chan);
-            if (chan) {
-                // A pointer to the local "wait" may still be on the list -
-                // need to remove it before we can return:
-                mutex_lock(&_lock);
-                auto ppp = _evlist.equal_range(chan);
-                for (auto it=ppp.first; it!=ppp.second; ++it) {
-                    if ((*it).second == &wait) {
-                        _evlist.erase(it);
-                        break;
-                    }
+    if (wait_lock) {
+        mutex_unlock(wait_lock);
+    }
+
+
+    sched::thread::wait_until([&] {
+        return ( (timo_hz && t.expired()) ||
+                 (wait._awake) );
+    });
+
+    if (!(priority & PDROP) && wait_lock) {
+        mutex_lock(wait_lock);
+    }
+    // msleep timeout
+    if (!wait._awake) {
+        trace_synch_msleep_expired(chan);
+        if (chan) {
+            // A pointer to the local "wait" may still be on the list -
+            // need to remove it before we can return:
+            // A pointer to the local "wait" may still be on the list -
+            // need to remove it before we can return:
+            mutex_lock(&_lock);
+            auto ppp = _evlist.equal_range(chan);
+            for (auto it=ppp.first; it!=ppp.second; ++it) {
+                if ((*it).second == &wait) {
+                    _evlist.erase(it);
+                    break;
                 }
-                mutex_unlock(&_lock);
             }
-            return (EWOULDBLOCK);
+            mutex_unlock(&_lock);
         }
-
-    } else {
-
-        trace_synch_msleep_wait(chan);
-
-        if (wait_lock) {
-            mutex_unlock(wait_lock);
-        }
-        sched::thread::wait_until([&] {
-            return (wait._awake);
-        });
-
-        if (!(priority & PDROP) && wait_lock) {
-            mutex_lock(wait_lock);
-        }
-
+        return (EWOULDBLOCK);
     }
 
     return (0);
