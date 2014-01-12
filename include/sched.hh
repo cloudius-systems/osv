@@ -431,6 +431,32 @@ private:
     std::function<void ()> _func;
     thread_state _state;
     thread_control_block* _tcb;
+
+    // State machine transition matrix
+    //
+    //   Initial       Next         Async?   Event         Notes
+    //
+    //   unstarted     waiting      sync     start()       followed by wake()
+    //   unstarted     prestarted   sync     start()       before scheduler startup
+    //
+    //   prestarted    unstarted    sync     scheduler startup  followed by start()
+    //
+    //   waiting       waking       async    wake()
+    //   waiting       running      sync     wait_until cancelled (predicate became true before context switch)
+    //
+    //   running       waiting      sync     prepare_wait()
+    //   running       queued       sync     context switch
+    //   running       terminating  sync     destroy()      thread function completion
+    //
+    //   queued        running      sync     context switch
+    //
+    //   waking        queued       async    scheduler poll of incoming thread wakeup queue
+    //   waking        running      sync     thread pulls self out of incoming wakeup queue
+    //
+    //   terminating   terminated   async    post context switch
+    //
+    // wake() on any state except waiting is discarded.
+
     enum class status {
         invalid,
         prestarted,
