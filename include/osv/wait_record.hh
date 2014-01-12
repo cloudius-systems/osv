@@ -33,7 +33,7 @@ public:
     explicit waiter(sched::thread *t) : t(t) { };
 
     inline void wake() {
-        t->wake_with([&] { t = nullptr; });
+        t->wake_with_from_mutex([&] { t = nullptr; });
     }
 
     inline void wait() const {

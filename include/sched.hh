@@ -359,10 +359,20 @@ public:
     static void wait_for(mutex& mtx, waitable&&... waitables);
 
     void wake();
+    // wake up after acquiring mtx
+    //
+    // mtx must be locked, and wr must be a free wait_record that will
+    // survive until the thread wakes up.  wake_lock() will not cause
+    // the thread to wake up immediately; only when it becomes possible
+    // for it to take the mutex.
+    void wake_lock(mutex* mtx, wait_record* wr);
     bool interrupted();
     void interrupted(bool f);
     template <class Action>
     inline void wake_with(Action action);
+    // for mutex internal use
+    template <class Action>
+    inline void wake_with_from_mutex(Action action);
     static void sleep_until(s64 abstime);
     static void yield();
     static void exit() __attribute__((__noreturn__));
@@ -401,7 +411,8 @@ public:
      */
     float priority() const;
 private:
-    static void wake_impl(detached_state* st);
+    static void wake_impl(detached_state* st,
+            unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
     void main();
     void switch_to();
     void switch_to_first();
@@ -412,11 +423,13 @@ private:
     void setup_tcb();
     void free_tcb();
     void complete() __attribute__((__noreturn__));
+    template <class Action>
+    inline void do_wake_with(Action action, unsigned allowed_initial_states_mask);
     template <class IntrStrategy, class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
     template <typename Mutex, typename... wait_object>
     static void do_wait_for(Mutex& mtx, wait_object&&... wait_objects);
-    struct dummy_lock {};
+    struct dummy_lock { void receive_lock() {} };
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
     friend void start_early_threads();
@@ -443,6 +456,10 @@ private:
     //
     //   waiting       waking       async    wake()
     //   waiting       running      sync     wait_until cancelled (predicate became true before context switch)
+    //   waiting       sending_lock async    wake_lock()   used for ensuring the thread does not wake
+    //                                                     up while we call receive_lock()
+    //
+    //   sending_lock  waking       async    mutex::unlock()
     //
     //   running       waiting      sync     prepare_wait()
     //   running       queued       sync     context switch
@@ -462,6 +479,7 @@ private:
         prestarted,
         unstarted,
         waiting,
+        sending_lock,
         running,
         queued,
         waking, // between waiting and queued
@@ -476,6 +494,7 @@ private:
         explicit detached_state(thread* t) : t(t) {}
         thread* t;
         cpu* _cpu;
+        bool lock_sent = false;   // send_lock() was called for us
         std::atomic<status> st = { status::unstarted };
     };
     std::unique_ptr<detached_state> _detached_state;
@@ -838,7 +857,12 @@ void thread::do_wait_for(Mutex& mtx, wait_object&&... wait_objects)
             release(mtx);
             me->wait();
         }
-        acquire(mtx);
+        if (me->_detached_state->lock_sent) {
+            me->_detached_state->lock_sent = false;
+            mtx.receive_lock();
+        } else {
+            acquire(mtx);
+        }
     }
     disarm(wait_objects...);
 }
@@ -879,13 +903,28 @@ void thread::wait_for(waitable&&... waitables)
 
 template <class Action>
 inline
-void thread::wake_with(Action action)
+void thread::do_wake_with(Action action, unsigned allowed_initial_states_mask)
 {
     WITH_LOCK(osv::rcu_read_lock) {
         auto ds = _detached_state.get();
         action();
-        wake_impl(ds);
+        wake_impl(ds, allowed_initial_states_mask);
     }
+}
+
+template <class Action>
+inline
+void thread::wake_with(Action action)
+{
+    return do_wake_with(action, (1 << unsigned(status::waiting)));
+}
+
+template <class Action>
+inline
+void thread::wake_with_from_mutex(Action action)
+{
+    return do_wake_with(action, (1 << unsigned(status::waiting))
+                              | (1 << unsigned(status::sending_lock)));
 }
 
 extern cpu __thread* current_cpu;
