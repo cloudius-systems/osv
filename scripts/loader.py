@@ -19,7 +19,7 @@ external = os.path.join(osv_dir, 'external')
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
 from osv.trace import Trace,TracePoint,BacktraceFormatter,format_time,format_duration
-
+from osv import trace
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
 
@@ -808,6 +808,9 @@ class TimedTrace:
         return self.duration
 
 def all_traces():
+    # XXX: needed for GDB to see 'trace_page_size'
+    gdb.lookup_global_symbol('gdb_trace_function_entry')
+
     inf = gdb.selected_inferior()
     trace_log = gdb.lookup_global_symbol('trace_log').value()
     max_trace = ulong(gdb.parse_and_eval('max_trace'))
@@ -849,6 +852,9 @@ def all_traces():
         i += size
         i = align_up(i, 8)
         yield Trace(tp, thread, time, cpu, data, backtrace=backtrace)
+
+def save_traces_to_file(filename):
+    trace.write_to_file(filename, list(all_traces()))
 
 def dump_trace(out_func):
     indents = defaultdict(int)
@@ -1120,6 +1126,17 @@ class osv_trace(gdb.Command):
     def invoke(self, arg, from_tty):
         dump_trace(gdb.write)
 
+class osv_trace_save(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv trace save', gdb.COMMAND_USER, gdb.COMPLETE_COMMAND, True)
+    def invoke(self, arg, from_tty):
+        if not arg:
+            gdb.write('Missing argument. Usage: osv trace save <filename>\n')
+            return
+
+        gdb.write('Saving traces to %s ...\n' % arg)
+        save_traces_to_file(arg)
+
 class osv_trace_summary(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace summary', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
@@ -1264,6 +1281,7 @@ osv_thread()
 osv_thread_apply()
 osv_thread_apply_all()
 osv_trace()
+osv_trace_save()
 osv_trace_summary()
 osv_trace_duration()
 osv_trace_file()
