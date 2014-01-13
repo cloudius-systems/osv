@@ -10,12 +10,15 @@
  */
 
 #include <string>
+#include <sys/utsname.h>
 
 namespace osv {
 
 std::string version()
 {
-    return "stub-os-version-for-testing";
+    struct utsname name;
+    uname(&name);
+    return name.release;
 }
 
 }
