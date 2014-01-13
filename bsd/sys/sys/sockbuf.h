@@ -38,6 +38,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
 #include <bsd/porting/rwlock.h>
+#include <osv/waitqueue.hh>
 
 #define	SB_MAX		(2*1024*1024)	/* default for max chars in sockbuf */
 
@@ -91,6 +92,7 @@ struct	sockbuf {
 	struct	mbuf *sb_sndptr; /* (c/d) pointer into mbuf chain */
 	u_int	sb_sndptroff;	/* (c/d) byte offset of ptr into chain */
 	u_int	sb_cc;		/* (c/d) actual chars in buffer */
+	waitqueue sb_cc_wq;	/* waiting on sb_cc change */
 	u_int	sb_hiwat;	/* (c/d) max actual char count */
 	u_int	sb_mbcnt;	/* (c/d) chars of mbufs used */
 	u_int   sb_mcnt;        /* (c/d) number of mbufs in buffer */

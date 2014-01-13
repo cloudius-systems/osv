@@ -32,6 +32,8 @@
 #include <sys/cdefs.h>
 
 #include <osv/poll.h>
+#include <drivers/clock.hh>
+#include <osv/signal.hh>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
@@ -122,8 +124,19 @@ sbwait(struct sockbuf *sb)
 	SOCKBUF_LOCK_ASSERT(sb);
 
 	sb->sb_flags |= SB_WAIT;
-	return (msleep(&sb->sb_cc, &sb->sb_mtx, 0, "sbwait",
-	    sb->sb_timeo));
+	sched::timer tmr(*sched::thread::current());
+	if (sb->sb_timeo) {
+		tmr.set(clock::get()->time() + ticks2ns(sb->sb_timeo));
+	}
+	signal_catcher sc;
+	sched::thread::wait_for(sb->sb_mtx._mutex, sb->sb_cc_wq, tmr, sc);
+	if (sc.interrupted()) {
+		return EINTR;
+	}
+	if (tmr.expired()) {
+		return EWOULDBLOCK;
+	}
+	return 0;
 }
 
 int
@@ -193,7 +206,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 
 	if (sb->sb_flags & SB_WAIT) {
 		sb->sb_flags &= ~SB_WAIT;
-		wakeup(&sb->sb_cc);
+		sb->sb_cc_wq.wake_all(sb->sb_mtx._mutex);
 	}
 	if (sb->sb_upcall != NULL) {
 		ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
