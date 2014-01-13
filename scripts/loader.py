@@ -810,6 +810,16 @@ class Trace:
         format = format.replace('%p', '0x%016x')
         return format % self.data
 
+    def __str__(self):
+        bt_formatter = BacktraceFormatter()
+        return '0x%016x %2d %19s %-20s %s%s' % (
+            self.thread,
+            self.cpu,
+            format_time(self.time),
+            self.name,
+            self.format_data(),
+            bt_formatter(self.backtrace))
+
 class TimedTrace:
     def __init__(self, trace):
         self.trace = trace
@@ -923,15 +933,7 @@ def dump_trace(out_func):
             indent = '  ' * indents[thread]
             trace_function(indent, '<-', trace.data)
         else:
-            out_func('0x%016x %2d %19s %-20s %s%s\n'
-                      % (thread,
-                         cpu,
-                         format_time(time),
-                         trace.name,
-                         trace.format_data(),
-                         bt_formatter(trace.backtrace),
-                         )
-                      )
+            out_func('%s\n' % str(trace))
 
 def get_name_of_ended_func(name):
         m = re.match('(?P<func>.*)(_ret|_err)', name)
