@@ -42,10 +42,6 @@ clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
 	$(call only-if, $(mgmt), $(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null, GRADLE CLEAN))
 
-external:
-	make -C external/glibc-testsuite
-.PHONY: external
-
 check: all
 	./scripts/test.py
 
