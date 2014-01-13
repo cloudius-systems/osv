@@ -116,6 +116,11 @@ def strip_garbage(backtrace):
 
     return backtrace
 
+def get_hit_profile(traces, trace_name):
+    for trace in traces:
+        if trace.backtrace and trace.name == trace_name:
+            yield ProfSample(trace.time, trace.thread, trace.backtrace)
+
 def get_duration_profile(traces, entry_trace_name, exit_trace_name):
     entry_traces_per_thread = {}
     last_time = None

@@ -126,6 +126,9 @@ def show_profile(args, sample_producer):
 def prof_wait(args):
     show_profile(args, get_wait_profile)
 
+def prof_hit(args):
+    show_profile(args, lambda traces: prof.get_hit_profile(traces, args.tracepoint))
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="trace file processing")
     subparsers = parser.add_subparsers(help="Command")
@@ -141,6 +144,13 @@ if __name__ == "__main__":
     add_trace_source_options(cmd_prof_wait)
     add_profile_options(cmd_prof_wait)
     cmd_prof_wait.set_defaults(func=prof_wait)
+
+    cmd_prof_hit = subparsers.add_parser("prof", help="Show trace hit profile")
+    add_symbol_resolution_options(cmd_prof_hit)
+    add_trace_source_options(cmd_prof_hit)
+    add_profile_options(cmd_prof_hit)
+    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of tracepint")
+    cmd_prof_hit.set_defaults(func=prof_hit)
 
     args = parser.parse_args()
     args.func(args)
