@@ -13,7 +13,13 @@ from collections import defaultdict
 from itertools import ifilter
 
 build_dir = os.path.dirname(gdb.current_objfile().filename)
-external = build_dir + '/../../external'
+osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
+external = os.path.join(osv_dir, 'external')
+
+sys.path.append(os.path.join(osv_dir, 'scripts'))
+
+from osv.trace import Trace,TracePoint,BacktraceFormatter,format_time,format_duration
+
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
 
@@ -792,34 +798,6 @@ def align_down(v, pagesize):
 def align_up(v, pagesize):
     return align_down(v + pagesize - 1, pagesize)
 
-class Trace:
-    def __init__(self, tp, thread, time, cpu, data, backtrace=None):
-        self.tp = tp
-        self.thread = thread
-        self.time = time
-        self.cpu = cpu
-        self.data = data
-        self.backtrace = backtrace
-
-    @property
-    def name(self):
-        return self.tp['name'].string()
-
-    def format_data(self):
-        format = self.tp['format'].string()
-        format = format.replace('%p', '0x%016x')
-        return format % self.data
-
-    def __str__(self):
-        bt_formatter = BacktraceFormatter()
-        return '0x%016x %2d %19s %-20s %s%s' % (
-            self.thread,
-            self.cpu,
-            format_time(self.time),
-            self.name,
-            self.format_data(),
-            bt_formatter(self.backtrace))
-
 class TimedTrace:
     def __init__(self, trace):
         self.trace = trace
@@ -828,12 +806,6 @@ class TimedTrace:
     @property
     def duration(self):
         return self.duration
-
-class BacktraceFormatter:
-    def __call__(self, backtrace):
-        if not backtrace:
-            return ''
-        return '   [' + ' '.join(str(syminfo(x)) for x in backtrace if x) + ']'
 
 def all_traces():
     inf = gdb.selected_inferior()
@@ -846,9 +818,10 @@ def all_traces():
     pivot = align_up(last, trace_page_size)
     trace_log = trace_log[pivot:] + trace_log[:pivot]
     last += max_trace - pivot
-    backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
 
     tp_ptr = gdb.lookup_type('tracepoint_base').pointer()
+    backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
+    tracepoints = {}
 
     i = 0
     while i < last:
@@ -856,8 +829,14 @@ def all_traces():
         if tp_key == 0:
             i = align_up(i + 8, trace_page_size)
             continue
-        tp = gdb.Value(tp_key).cast(tp_ptr)
-        sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
+
+        tp = tracepoints.get(tp_key, None)
+        if not tp:
+            tp_ref = gdb.Value(tp_key).cast(tp_ptr)
+            tp = TracePoint(tp_key, str(tp_ref["name"].string()),
+                sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
+            tracepoints[tp_key] = tp
+
         i += 32
 
         backtrace = None
@@ -865,27 +844,15 @@ def all_traces():
             backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
             i += 8 * backtrace_len
 
-        size = struct.calcsize(sig)
-        data = struct.unpack(sig, trace_log[i:i+size])
+        size = struct.calcsize(tp.signature)
+        data = struct.unpack(tp.signature, trace_log[i:i+size])
         i += size
         i = align_up(i, 8)
         yield Trace(tp, thread, time, cpu, data, backtrace=backtrace)
 
-def nanos_to_millis(nanos):
-    return float(nanos) / 1000000
-
-def nanos_to_seconds(nanos):
-    return float(nanos) / 1000000000
-
-def format_duration(time):
-    return "%4.3f" % nanos_to_millis(time)
-
-def format_time(time):
-    return "%12.6f" % nanos_to_seconds(time)
-
 def dump_trace(out_func):
     indents = defaultdict(int)
-    bt_formatter = BacktraceFormatter()
+    bt_formatter = BacktraceFormatter(syminfo)
 
     def lookup_tp(name):
         return gdb.lookup_global_symbol(name).value().dereference()
@@ -914,18 +881,18 @@ def dump_trace(out_func):
                          fn_name,
                          ))
 
-        if tp == tp_fn_entry.address:
+        if tp.key == tp_fn_entry.address:
             indent = '  ' * indents[thread]
             indents[thread] += 1
             trace_function(indent, '->', trace.data)
-        elif tp == tp_fn_exit.address:
+        elif tp.key == tp_fn_exit.address:
             indents[thread] -= 1
             if indents[thread] < 0:
                 indents[thread] = 0
             indent = '  ' * indents[thread]
             trace_function(indent, '<-', trace.data)
         else:
-            out_func('%s\n' % str(trace))
+            out_func('%s\n' % trace.format(bt_formatter))
 
 def get_name_of_ended_func(name):
         m = re.match('(?P<func>.*)(_ret|_err)', name)
@@ -992,7 +959,7 @@ def dump_trace_summary(out_func):
             ))
 
 def dump_timed_trace(out_func, filter=None, sort=False):
-    bt_formatter = BacktraceFormatter()
+    bt_formatter = BacktraceFormatter(syminfo)
 
     traces = ifilter(filter, all_traces())
     timed_traces = get_timed_traces(traces)
