@@ -142,14 +142,6 @@ tests/%.o: COMMON += -fPIC -DBOOST_TEST_DYN_LINK
 	$(makedir)
 	$(q-build-so)
 
-# Some .so's need to refer to libstdc++ so it will be linked at run time.
-# The majority of our .so don't actually need libstdc++, so didn't add it
-# by default.
-tests/tst-queue-mpsc.so: CFLAGS+=-lstdc++
-tests/tst-mutex.so: CFLAGS+=-lstdc++
-tests/tst-tcp.so: CFLAGS += -lstdc++
-tests/tst-strerror_r.so: CFLAGS += -lstdc++
-
 sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
 
@@ -681,8 +673,6 @@ bootfs.bin: scripts/mkbootfs.py $(out)/bootfs.manifest $(tests) $(java_tests) $(
 bootfs.o: bootfs.bin
 
 tools/mkfs/mkfs.so: tools/mkfs/mkfs.o libzfs.so
-
-tools/cpiod/cpiod.so: CFLAGS += -lstdc++
 
 tools/cpiod/cpiod.so: tools/cpiod/cpiod.o tools/cpiod/cpio.o libzfs.so
 
