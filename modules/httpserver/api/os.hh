@@ -8,10 +8,10 @@
  * General handlers comes with the handlers definitions
  */
 
-#ifndef HANDLERS_IMPLEMENTATION_HH_
-#define HANDLERS_IMPLEMENTATION_HH_
+#ifndef HTTPSERVER_API_OS_HH_
+#define HTTPSERVER_API_OS_HH_
 
-#include "../routes.hh"
+#include "routes.hh"
 
 namespace httpserver {
 
@@ -28,4 +28,4 @@ void init(routes& routes);
 }
 }
 }
-#endif /* HANDLERS_IMPLEMENTATION_HH_ */
+#endif /* HTTPSERVER_API_OS_HH_ */
