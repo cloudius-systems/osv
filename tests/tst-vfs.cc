@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(test_concurrent_file_operations)
             threads[i] = new sched::thread([] {
                     struct stat buf;
                     for (int j = 0; j < 1000; j++) {
-                        BOOST_REQUIRE(stat("/usr/lib/jvm/jre/lib/amd64/headless/libmawt.so", &buf)==0);
+                        BOOST_REQUIRE(stat("/tests/tst-vfs.so", &buf)==0);
                     }
             });
     }
