@@ -26,8 +26,10 @@
 // mechanism (e.g., see Event objects in Python and in Microsoft Windows),
 // except that waiter is limited to a single waiting thread.
 
+namespace lockfree { struct mutex; }
+
 class waiter {
-private:
+protected:
     sched::thread *t;
 public:
     explicit waiter(sched::thread *t) : t(t) { };
@@ -80,6 +82,8 @@ public:
 struct wait_record : public waiter {
     struct wait_record *next;
     explicit wait_record(sched::thread *t) : waiter(t), next(nullptr) { };
+    using mutex = lockfree::mutex;
+    void wake_lock(mutex* mtx) { t->wake_lock(mtx, this); }
 };
 
 #endif /* INCLUDED_OSV_WAIT_RECORD */

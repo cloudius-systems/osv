@@ -583,6 +583,7 @@ objects += core/dhcp.o
 objects += core/run.o
 objects += core/shutdown.o
 objects += core/version.o
+objects += core/waitqueue.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
