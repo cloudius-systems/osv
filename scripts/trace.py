@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 import argparse
-from osv import trace, debug
+from osv import trace, debug, prof
 
 class symbol_printer:
     def __init__(self, resolver, formatter):
@@ -85,9 +85,49 @@ def list_trace(args):
         for t in reader.get_traces():
             print t.format(backtrace_formatter)
 
+def add_profile_options(parser):
+    parser.add_argument("-r", "--caller-oriented", action='store_true', help="change orientation to caller-based; reverses order of frames")
+    parser.add_argument("-m", "--merge-threads", action='store_true', help="show one merged tree for all threads")
+    parser.add_argument("--function", action='store', help="use given function as tree root")
+    parser.add_argument("--since", action='store', help="show profile since this timestamp [ns]")
+    parser.add_argument("--until", action='store', help="show profile until this timestamp [ns]")
+    parser.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
+    parser.add_argument("--max-levels", action='store', help="maximum number of tree levels to show")
+
+def get_wait_profile(traces):
+    return prof.get_duration_profile(traces, "sched_wait", "sched_wait_ret")
+
+def int_or_none(value):
+    if value:
+        return int(value)
+    return None
+
+def show_profile(args, sample_producer):
+    resolver = symbol_resolver(args)
+    time_range = prof.TimeRange(int_or_none(args.since), int_or_none(args.until))
+
+    if args.min_duration:
+        min_duration = prof.parse_time_as_nanos(args.min_duration)
+        node_filter = lambda node: node.resident_time >= min_duration
+    else:
+        node_filter = None
+
+    with get_trace_reader(args) as reader:
+        prof.print_profile(sample_producer(reader.get_traces()),
+            symbol_resolver=resolver,
+            caller_oriented=args.caller_oriented,
+            merge_threads=args.merge_threads,
+            src_addr_formatter=src_addr_formatter(args),
+            root_function=args.function,
+            node_filter=node_filter,
+            time_range=time_range,
+            max_levels=int_or_none(args.max_levels))
+
+def prof_wait(args):
+    show_profile(args, get_wait_profile)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="trace file processing")
-
     subparsers = parser.add_subparsers(help="Command")
 
     cmd_list = subparsers.add_parser("list", help="List trace")
@@ -95,6 +135,12 @@ if __name__ == "__main__":
     cmd_list.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
     add_trace_source_options(cmd_list)
     cmd_list.set_defaults(func=list_trace)
+
+    cmd_prof_wait = subparsers.add_parser("prof-wait", help="Show wait profile")
+    add_symbol_resolution_options(cmd_prof_wait)
+    add_trace_source_options(cmd_prof_wait)
+    add_profile_options(cmd_prof_wait)
+    cmd_prof_wait.set_defaults(func=prof_wait)
 
     args = parser.parse_args()
     args.func(args)

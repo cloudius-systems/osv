@@ -45,7 +45,6 @@ def print_tree(root_node,
         branches = (" |-- ", " \-- ")
 
         label_lines = formatter(node).split('\n')
-
         prefix_without_branch = ''.join(map(stems.__getitem__, is_last_history[:-1]))
 
         if is_last_history:
@@ -58,10 +57,10 @@ def print_tree(root_node,
             printer("%s\n" % line)
 
         children = sorted(filter(node_filter, node.children), key=order_by)
-        for child in children[:-1]:
-           print_node(child, is_last_history + [False])
         if children:
-           print_node(children[-1], is_last_history + [True])
+            for child in children[:-1]:
+                print_node(child, is_last_history + [False])
+            print_node(children[-1], is_last_history + [True])
 
         is_last = not is_last_history or is_last_history[-1]
         if not is_last:
