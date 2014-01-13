@@ -1,8 +1,6 @@
 [manifest]
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
-/usr/lib/&/libboost_unit_test_framework-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libboost_filesystem-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
-/testrunner.so: ./tests/testrunner.so
 /&/etc/hosts: ../../static/&
 /&/dev/.keep: ../../static/&
 /&/tmp/.keep: ../../static/&

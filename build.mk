@@ -696,23 +696,18 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 
 $(src)/build.mk: $(generated-headers)
 
-# Generate a manifest of tests that inherits from the "tests" and ##############
-# "java_tests" variables                                          ##############
-
-# Func: append a first arg to a file name passed as a second arg
-append_to_file = $(shell echo $(1) >> $(2))
-
-# Generate a tests manifest
-$(out)/test.manifest.gen: $(src)/build.mk
-	$(shell rm -f $@)
-	touch $@
-	$(foreach test,$(tests),$(call append_to_file,/$(test): ./$(test),$@))
-	$(foreach test,$(java_tests),$(call append_to_file,/java/$(notdir $(test)): ./$(test),$@))
+# Automatically generate modules/tests/usr.manifest which includes all tests.
+$(src)/modules/tests/usr.manifest: $(src)/build.mk
+	@echo "  generating modules/tests/usr.manifest"
+	@cat $@.skel > $@
+	@echo $(tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@
+	@echo $(java_tests) | tr ' ' '\n' | \
+	    awk '{a=$$0; sub(".*/","",a); print "/java/" a ": ./" $$0}' >> $@
 
 ################################################################################
 
 .PHONY: process-modules
-process-modules: bootfs.manifest.skel usr.manifest.skel $(out)/test.manifest.gen
+process-modules: bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest
 	cd $(out)/module \
 	  && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) $(src)/scripts/module.py --image-config $(image)
 

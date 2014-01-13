@@ -1,0 +1,2 @@
+/usr/lib/&/libboost_unit_test_framework-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
+/testrunner.so: ./tests/testrunner.so

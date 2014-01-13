@@ -73,12 +73,6 @@ def generate_manifests(modules, basic_apps):
             for app in basic_apps:
                 app.prepare_manifest(resolve.get_build_path(), manifest_type, manifest)
 
-            # Add a generated content here
-            if manifest_type == 'usr':
-                with open(os.path.join(resolve.get_build_path(), 'test.manifest.gen')) as src_file:
-                    for line in src_file:
-                        manifest.write(line)
-
 def get_command_line(basic_apps):
     if not basic_apps:
         raise Exception("No apps")
