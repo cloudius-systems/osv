@@ -5,7 +5,7 @@ CXXFLAGS  = -g -Wall -std=c++11 -fPIC -I../../include
 
 # the build target executable:
 TARGET = httpserver
-CPP_FILES := $(wildcard *.cc)
+CPP_FILES := $(wildcard *.cc) $(wildcard json/*.cc) $(wildcard api/*.cc)
 STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
@@ -20,6 +20,8 @@ all: init $(TARGET) $(TARGET).so
 init:
 	$(call very-quiet, mkdir -p obj)
 	$(call very-quiet, mkdir -p obj/stub)
+	$(call very-quiet, mkdir -p obj/json)
+	$(call very-quiet, mkdir -p obj/api)
 
 $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)

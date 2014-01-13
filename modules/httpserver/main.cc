@@ -17,7 +17,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
-#include "osv/version.hh"
+#include "api/os.hh"
 
 using namespace httpserver;
 
@@ -43,10 +43,7 @@ int main(int argc, char* argv[])
     }
 
     routes routes;
-    function_handler* osHandler = new function_handler([](const_req req)
-		{ return "\"" + osv::version() + "\""; }, "json");
-
-    routes.put(GET,"/os/version",osHandler);
+    api::os::init(routes);
 
     try {
         http::server::server s(&config, &routes);
