@@ -16,7 +16,7 @@ def format_duration(time):
     return "%4.3f" % nanos_to_millis(time)
 
 def format_time(time):
-    return "%12.6f" % nanos_to_seconds(time)
+    return "%12.9f" % nanos_to_seconds(time)
 
 class BacktraceFormatter:
     def __init__(self, resolver):
