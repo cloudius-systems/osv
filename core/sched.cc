@@ -33,6 +33,7 @@ namespace sched {
 
 TRACEPOINT(trace_sched_switch, "to %p vold=%g vnew=%g", thread*, float, float);
 TRACEPOINT(trace_sched_wait, "");
+TRACEPOINT(trace_sched_wait_ret, "");
 TRACEPOINT(trace_sched_wake, "wake %p", thread*);
 TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
 TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
@@ -745,6 +746,7 @@ void thread::wait()
 {
     trace_sched_wait();
     schedule();
+    trace_sched_wait_ret();
 }
 
 void thread::sleep_until(s64 abstime)
