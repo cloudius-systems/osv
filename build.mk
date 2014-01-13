@@ -695,13 +695,13 @@ gen-ctype-data: gen-ctype-data.o
 	$(call quiet, $(CXX) -o $@ $^, LD $@)
 
 generated-headers = gen/include/bits/alltypes.h
-generated-headers += gen/include/osv/version.h
+generated-headers += $(out)/gen/include/osv/version.h
 
 gen/include/bits/alltypes.h: $(src)/include/api/x86_64/bits/alltypes.h.sh
 	$(call very-quiet, mkdir -p $(dir $@))
 	$(call quiet, sh $^ > $@, GEN $@)
 
-gen/include/osv/version.h: $(src)/scripts/gen-version-header
+gen/include/osv/version.h: $(src)/scripts/gen-version-header .FORCE
 	$(call quiet, sh $(src)/scripts/gen-version-header $@, GEN $@)
 
 $(src)/build.mk: $(generated-headers)
@@ -731,5 +731,7 @@ $(out)/bootfs.manifest: process-modules
 $(out)/usr.manifest: process-modules
 
 -include $(shell find -name '*.d')
+
+.FORCE:
 
 .DELETE_ON_ERROR:
