@@ -1,12 +1,14 @@
 # compiler flags:
 #  -g    adds debugging information to the executable file
 #  -Wall turns on most, but not all, compiler warnings
-CXXFLAGS  = -g -Wall -std=c++11 -fPIC
+CXXFLAGS  = -g -Wall -std=c++11 -fPIC -I../../include
 
 # the build target executable:
 TARGET = httpserver
 CPP_FILES := $(wildcard *.cc)
+STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
+STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
 LIBS = -lpthread -lboost_system-mt -lboost_filesystem-mt -lboost_program_options
 
@@ -17,8 +19,9 @@ all: init $(TARGET) $(TARGET).so
 
 init:
 	$(call very-quiet, mkdir -p obj)
+	$(call very-quiet, mkdir -p obj/stub)
 
-$(TARGET): $(OBJ_FILES)
+$(TARGET): $(OBJ_FILES) $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
 
 $(TARGET).so: $(OBJ_FILES)

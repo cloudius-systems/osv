@@ -16,6 +16,8 @@
 #include <boost/asio.hpp>
 #include <iostream>
 #include <string>
+#include <sstream>
+#include "osv/version.hh"
 
 using namespace httpserver;
 
@@ -42,7 +44,7 @@ int main(int argc, char* argv[])
 
     routes routes;
     function_handler* osHandler = new function_handler([](const_req req)
-		{ return "\"0.1\""; }, "json");
+		{ return "\"" + osv::version() + "\""; }, "json");
 
     routes.put(GET,"/os/version",osHandler);
 
