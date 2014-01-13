@@ -848,13 +848,15 @@ def all_traces():
     last += max_trace - pivot
     backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
 
+    tp_ptr = gdb.lookup_type('tracepoint_base').pointer()
+
     i = 0
     while i < last:
         tp_key, thread, time, cpu, flags = struct.unpack('QQQII', trace_log[i:i+32])
         if tp_key == 0:
             i = align_up(i + 8, trace_page_size)
             continue
-        tp = gdb.Value(tp_key).cast(gdb.lookup_type('tracepoint_base').pointer())
+        tp = gdb.Value(tp_key).cast(tp_ptr)
         sig = sig_to_string(ulong(tp['sig'])) # FIXME: cache
         i += 32
 
