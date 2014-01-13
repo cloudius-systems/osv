@@ -829,22 +829,13 @@ class TimedTrace:
     def duration(self):
         return self.duration
 
-class TraceConstants:
-    def __init__(self):
-        self.backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
-        self.bt_format = '   [' + str.join(' ', ['%s'] * self.backtrace_len) + ']'
-
 class BacktraceFormatter:
-    def __init__(self, trace_constants):
-        self.trace_constants = trace_constants
-
     def __call__(self, backtrace):
         if not backtrace:
             return ''
-        return self.trace_constants.bt_format % tuple([syminfo(x) for x in backtrace])
+        return '   [' + ' '.join(str(syminfo(x)) for x in backtrace if x) + ']'
 
 def all_traces():
-    constants = TraceConstants()
     inf = gdb.selected_inferior()
     trace_log = gdb.lookup_global_symbol('trace_log').value()
     max_trace = ulong(gdb.parse_and_eval('max_trace'))
@@ -855,7 +846,7 @@ def all_traces():
     pivot = align_up(last, trace_page_size)
     trace_log = trace_log[pivot:] + trace_log[:pivot]
     last += max_trace - pivot
-    backtrace_len = constants.backtrace_len
+    backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
 
     i = 0
     while i < last:
@@ -892,8 +883,7 @@ def format_time(time):
 
 def dump_trace(out_func):
     indents = defaultdict(int)
-    constants = TraceConstants()
-    bt_formatter = BacktraceFormatter(constants)
+    bt_formatter = BacktraceFormatter()
 
     def lookup_tp(name):
         return gdb.lookup_global_symbol(name).value().dereference()
@@ -1000,7 +990,7 @@ def dump_trace_summary(out_func):
             ))
 
 def dump_timed_trace(out_func, filter=None, sort=False):
-    bt_formatter = BacktraceFormatter(TraceConstants())
+    bt_formatter = BacktraceFormatter()
 
     traces = ifilter(filter, all_traces())
     timed_traces = get_timed_traces(traces)
