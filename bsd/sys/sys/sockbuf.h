@@ -80,7 +80,6 @@ struct	xsockbuf {
  * Variables for socket buffering.
  */
 struct	sockbuf {
-        int test_fn();
 	struct	mtx sb_mtx;	/* sockbuf lock */
 	struct	rwlock sb_rwlock;	/* prevent I/O interlacing */
 	short	sb_state;	/* (c/d) socket state on sockbuf */
