@@ -11,3 +11,6 @@
 /usr/mgmt/lib/**: ${OSV_BASE}/mgmt/web/lib/**
 /usr/mgmt/config/logging.properties: ${OSV_BASE}/mgmt/web/config/logging.properties
 /tmp/index.rb: ${OSV_BASE}/mgmt/web/views/index.rb
+/tools/ifconfig.so: ./tools/ifconfig/ifconfig.so
+/tools/lsroute.so: ./tools/route/lsroute.so
+/&/etc/inputrc: ../../static/&
