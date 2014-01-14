@@ -478,6 +478,7 @@ offset_t zfs_read_chunk_size = 1024 * 1024; /* Tunable */
  * Read bytes from specified file into supplied buffer.
  *
  *	IN:	vp	- vnode of file to be read from.
+ *		fp	- file to be read from.
  *		uio	- structure supplying read location, range info,
  *			  and return buffer.
  *		ioflag	- SYNC flags; used to provide FRSYNC semantics.
@@ -494,7 +495,7 @@ offset_t zfs_read_chunk_size = 1024 * 1024; /* Tunable */
  */
 /* ARGSUSED */
 static int
-zfs_read(vnode_t *vp, uio_t *uio, int ioflag)
+zfs_read(vnode_t *vp, struct file* fp, uio_t *uio, int ioflag)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;

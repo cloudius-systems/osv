@@ -102,7 +102,7 @@ devfs_close(struct vnode *vp, struct file *fp)
 }
 
 static int
-devfs_read(struct vnode *vp, struct uio *uio, int ioflags)
+devfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflags)
 {
 	return device_read((device*)vp->v_data, uio, ioflags);
 }

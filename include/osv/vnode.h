@@ -120,7 +120,7 @@ struct vattr {
 
 typedef	int (*vnop_open_t)	(struct file *);
 typedef	int (*vnop_close_t)	(struct vnode *, struct file *);
-typedef	int (*vnop_read_t)	(struct vnode *, struct uio *, int);
+typedef	int (*vnop_read_t)	(struct vnode *, struct file *, struct uio *, int);
 typedef	int (*vnop_write_t)	(struct vnode *, struct uio *, int);
 typedef	int (*vnop_seek_t)	(struct vnode *, struct file *, off_t, off_t);
 typedef	int (*vnop_ioctl_t)	(struct vnode *, struct file *, u_long, void *);
@@ -169,7 +169,7 @@ struct vnops {
  */
 #define VOP_OPEN(VP, FP)	   ((VP)->v_op->vop_open)(FP)
 #define VOP_CLOSE(VP, FP)	   ((VP)->v_op->vop_close)(VP, FP)
-#define VOP_READ(VP, U, F)	   ((VP)->v_op->vop_read)(VP, U, F)
+#define VOP_READ(VP, FP, U, F)	   ((VP)->v_op->vop_read)(VP, FP, U, F)
 #define VOP_WRITE(VP, U, F)	   ((VP)->v_op->vop_write)(VP, U, F)
 #define VOP_SEEK(VP, FP, OLD, NEW) ((VP)->v_op->vop_seek)(VP, FP, OLD, NEW)
 #define VOP_IOCTL(VP, FP, C, A)	   ((VP)->v_op->vop_ioctl)(VP, FP, C, A)

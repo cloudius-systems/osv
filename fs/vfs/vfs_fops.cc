@@ -49,7 +49,7 @@ int vfs_file::read(struct uio *uio, int flags)
 	if ((flags & FOF_OFFSET) == 0)
 		uio->uio_offset = fp->f_offset;
 
-	error = VOP_READ(vp, uio, 0);
+	error = VOP_READ(vp, fp, uio, 0);
 	if (!error) {
 		count = bytes - uio->uio_resid;
 		if ((flags & FOF_OFFSET) == 0)

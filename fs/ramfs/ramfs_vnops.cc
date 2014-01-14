@@ -295,7 +295,7 @@ ramfs_create(struct vnode *dvp, char *name, mode_t mode)
 }
 
 static int
-ramfs_read(struct vnode *vp, struct uio *uio, int ioflag)
+ramfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflag)
 {
 	struct ramfs_node *np = (ramfs_node*)vp->v_data;
 	size_t len;
