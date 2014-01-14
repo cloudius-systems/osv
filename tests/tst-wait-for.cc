@@ -89,3 +89,33 @@ BOOST_AUTO_TEST_CASE(test_waitqueue_2)
         waker.join();
     }
 }
+
+BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
+{
+    std::atomic<bool> x = { false };
+    auto sleeper = sched::thread::current();
+    sched::thread waker([&] {
+        sched::thread::sleep_until(nanotime() + 1_s);
+        x.store(true);
+        sleeper->wake();
+    });
+    waker.start();
+    // send some spurious wakeups for fun
+    sched::thread false_waker([&] {
+        for (auto i = 0; i < 100; ++i) {
+            sched::thread::sleep_until(nanotime() + 100_ms);
+            sleeper->wake();
+        }
+    });
+    sched::timer tmr(*sched::thread::current());
+    tmr.set(nanotime() + 500_ms);
+    sched::thread::wait_for(tmr, [&] { return x.load(); });
+    BOOST_REQUIRE(tmr.expired());
+    BOOST_REQUIRE(!x.load());
+    tmr.cancel();
+    sched::thread::wait_for(tmr, [&] { return x.load(); });
+    BOOST_REQUIRE(!tmr.expired());
+    BOOST_REQUIRE(x.load());
+    waker.join();
+    false_waker.join();
+}
