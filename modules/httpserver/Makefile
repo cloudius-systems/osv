@@ -10,7 +10,7 @@ STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
-LIBS = -lpthread -lboost_system-mt -lboost_filesystem-mt -lboost_program_options
+LIBS = -lpthread -lboost_system-mt -lboost_filesystem-mt -lboost_program_options-mt
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
