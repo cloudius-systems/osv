@@ -8,6 +8,7 @@
 #include <sys/utsname.h>
 #include "os.hh"
 #include "osv/version.hh"
+#include "json/formatter.hh"
 
 namespace httpserver {
 
@@ -20,7 +21,7 @@ void init(routes& routes)
 {
     function_handler* os_version = new function_handler([](const_req req)
     {
-        return "\"" + osv::version() + "\"";
+        return json::formatter::to_json(osv::version());
     }, "json");
 
     routes.put(GET, "/os/version", os_version);
