@@ -641,6 +641,31 @@ bool preemptable() __attribute__((no_instrument_function));
 
 thread* current();
 
+// wait_for() support for predicates
+//
+
+template <typename Pred>
+class predicate_wait_object {
+public:
+    predicate_wait_object(Pred pred, mutex* mtx = nullptr) : _pred(pred) {}
+    void arm() {}
+    void disarm() {}
+    bool poll() { return _pred(); }
+private:
+    Pred _pred;
+};
+
+
+// only instantiate wait_object<Pred> if Pred is indeed a predicate
+template <typename Pred>
+class wait_object
+    : public std::enable_if<std::is_same<bool, decltype((*static_cast<Pred*>(nullptr))())>::value,
+                           predicate_wait_object<Pred>>::type
+{
+    using predicate_wait_object<Pred>::predicate_wait_object;
+    // all contents from predicate_wait_object<>
+};
+
 class wait_guard {
 public:
     wait_guard(thread* t) : _t(t) { t->prepare_wait(); }
