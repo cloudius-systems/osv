@@ -31,7 +31,6 @@ private:
     static s64 _boot_systemtime;
     static bool _new_kvmclock_msrs;
     pvclock_wall_clock* _wall;
-    u64  _wall_ns;
     static percpu<pvclock_vcpu_time_info> _sys;
     sched::cpu::notifier cpu_notifier;
 };
@@ -49,7 +48,6 @@ kvmclock::kvmclock()
     _wall = new pvclock_wall_clock;
     memset(_wall, 0, sizeof(*_wall));
     processor::wrmsr(wall_time_msr, mmu::virt_to_phys(_wall));
-    _wall_ns = wall_clock_boot();
 }
 
 void kvmclock::setup_cpu()
@@ -76,11 +74,14 @@ bool kvmclock::probe()
 
 s64 kvmclock::time()
 {
-    auto r = _wall_ns;
-    // Due to problems in init order dependencies (the clock depends
-    // on the scheduler, for percpu initialization, and vice-versa, for
-    // idle thread initialization, don't loop up system time until at least
-    // one cpu is initialized.
+    auto r = wall_clock_boot();
+    // FIXME: during early boot, while _smp_init is still false, we don't
+    // add system_time() so we return the host's boot time instead of the
+    // current time. When _smp_init becomes true, the clock jumps forward
+    // to the correct current time.
+    // This happens due to problems in init order dependencies (the clock
+    // depends on the scheduler, for percpu initialization, and vice-versa,
+    // for idle thread initialization).
     if (_smp_init) {
         r += system_time();
     }

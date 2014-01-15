@@ -30,7 +30,6 @@
 class clock {
 public:
     virtual ~clock();
-    virtual s64 time() = 0;
     static void register_clock(clock* c);
     /**
      * Get a pointer to the single concrete instance of the clock class.
@@ -60,6 +59,26 @@ public:
      * the very early stages of the boot process.
      */
     virtual s64 uptime() = 0;
+    /**
+     * Get the current nanosecond-resolution wall-clock time.
+     *
+     * The wall-clock time is what humans normally think of as "the time", and
+     * Posix calls the "realtime clock". It is returned as the number of
+     * nanoseconds since the Unix epoch (midnight UTC, Jan 1st, 1970).
+     *
+     * For improved type safety, it is recommended to use
+     * osv::clock::wall::now() instead of clock::get()->time()
+     *
+     * This clock may be influenced by gradual or discontinuous adjustments
+     * to the time, made by an administrator or software like NTP. It can not
+     * even be assumed to be monotonic. In OSv, time adjustments are not
+     * supported in the guest (we do not offer a set_time() function), but
+     * when a paravirtual clock is available (kvmclock or xenclock), time
+     * adjustments made in the host (e.g., NTP running in the host) are made
+     * visible to the guest.
+     *
+     */
+    virtual s64 time() = 0;
 private:
     static clock* _c;
 };
