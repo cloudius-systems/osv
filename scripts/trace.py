@@ -2,6 +2,12 @@
 import sys
 import errno
 import argparse
+import re
+import math
+from itertools import ifilter
+from collections import defaultdict
+from operator import attrgetter
+
 from osv import trace, debug, prof
 
 class symbol_printer:
@@ -132,6 +138,41 @@ def prof_wait(args):
 def prof_hit(args):
     show_profile(args, lambda traces: prof.get_hit_profile(traces, args.tracepoint))
 
+def print_summary(args, printer=sys.stdout.write):
+    count_per_tp = defaultdict(lambda: 0)
+    count = 0
+    min_time = None
+    max_time = None
+
+    with get_trace_reader(args) as reader:
+        for t in reader.get_traces():
+            count += 1
+            count_per_tp[t.tp] += 1
+
+            if not min_time:
+                min_time = t.time
+            else:
+                min_time = min(min_time, t.time)
+
+            max_time = max(max_time, t.time)
+
+    if count == 0:
+        print "No samples"
+        return
+
+    print "Collected %d samples spanning %s" % (count, prof.format_time(max_time - min_time))
+
+    max_name_len = reduce(max, map(lambda tp: len(tp.name), count_per_tp.iterkeys()))
+    format = "  %%-%ds %%8s" % (max_name_len)
+    print "\nTracepoint statistics:\n"
+    print format % ("name", "count")
+    print format % ("----", "-----")
+
+    for tp, count in sorted(count_per_tp.iteritems(), key=lambda (tp, count): tp.name):
+        print format % (tp.name, count)
+
+    print
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="trace file processing")
     subparsers = parser.add_subparsers(help="Command")
@@ -141,6 +182,14 @@ if __name__ == "__main__":
     cmd_list.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
     add_trace_source_options(cmd_list)
     cmd_list.set_defaults(func=list_trace)
+
+    cmd_summary = subparsers.add_parser("summary", help="list timed traces", description="""
+        Prints block samples along with their duration in seconds with nanosecond precision. The duration
+        is calculated bu subtracting timestamps between entry sample and the matched ending sample.
+        The convention is that the ending sample has the same name as the entry sample plus '_ret' or '_err' suffix.
+        """)
+    add_trace_source_options(cmd_summary)
+    cmd_summary.set_defaults(func=print_summary)
 
     cmd_prof_wait = subparsers.add_parser("prof-wait", help="show wait profile", description="""
         Prints profile showing amount of time spent inside sched::thread::wait(). Among other
