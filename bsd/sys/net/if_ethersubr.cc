@@ -32,6 +32,7 @@
 
 #define _GNU_SOURCE 1
 
+#include "debug.hh"
 #include <assert.h>
 
 #include <osv/initialize.hh>
@@ -901,7 +902,7 @@ ether_ifattach(struct ifnet *ifp, const u_int8_t *lla)
 		if (lla[i] != 0)
 			break; 
 	if (i != ifp->if_addrlen)
-		printf("%s: ethernet address: %x:%x:%x:%x:%x:%x\n",
+		debugf("%s: ethernet address: %x:%x:%x:%x:%x:%x\n",
 		    ifp->if_xname, lla[0], lla[1], lla[2], lla[3], lla[4], lla[5]);
 }
 

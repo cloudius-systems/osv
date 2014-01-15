@@ -133,7 +133,7 @@ blk::blk(pci::device& pci_dev)
     dev->size = prv->drv->size();
     read_partition_table(dev);
 
-    printf("virtio-blk: Add blk device instances %d as %s, devsize=%lld\n", _id, dev_name.c_str(), dev->size);
+    debugf("virtio-blk: Add blk device instances %d as %s, devsize=%lld\n", _id, dev_name.c_str(), dev->size);
 }
 
 blk::~blk()

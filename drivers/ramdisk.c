@@ -42,6 +42,7 @@
 
 #include <osv/device.h>
 #include <osv/bio.h>
+#include "debug.h"
 
 struct ramdisk_softc {
 	char		*addr;		/* base address of image */
@@ -147,7 +148,7 @@ ramdisk_init(void)
 	pthread_mutex_init(&sc->bio_mutex, NULL);
 	pthread_cond_init(&sc->bio_wait, NULL);
 
-	printf("RAM disk at 0x%p (%zdK bytes)\n",
+	debugf("RAM disk at 0x%p (%zdK bytes)\n",
 	       sc->addr, sc->size/1024);
     
 	error = pthread_create(&ramdisk_thread, NULL, ramdisk_thread_fn, sc);
