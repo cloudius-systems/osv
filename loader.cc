@@ -110,6 +110,7 @@ static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
 static bool opt_vga = false;
+static bool opt_verbose = false;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -135,6 +136,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("nomount", "don't mount the file system")
         ("noshutdown", "continue running after main() returns")
         ("vga", "use vga as a console device")
+        ("verbose", "be verbose, print debug messages")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -163,6 +165,11 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("trace-backtrace")) {
         opt_log_backtrace = true;
+    }
+
+    if (vars.count("verbose")) {
+        opt_verbose = true;
+        enable_verbose();
     }
 
     if (vars.count("trace")) {
