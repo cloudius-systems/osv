@@ -117,6 +117,10 @@ class TimedTrace:
     def duration(self):
         return self.duration
 
+    @property
+    def time_range(self):
+        return TimeRange(self.trace.time, self.trace.time + self.duration)
+
 class SlidingUnpacker:
     def __init__(self, buffer):
         self.buffer = buffer

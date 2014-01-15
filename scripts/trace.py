@@ -89,17 +89,23 @@ def get_backtrace_formatter(args):
 
 def list_trace(args):
     backtrace_formatter = get_backtrace_formatter(args)
+    time_range = get_time_range(args)
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
-            print t.format(backtrace_formatter)
+            if t.time in time_range:
+                print t.format(backtrace_formatter)
+
+def add_time_slicing_options(parser):
+    group = parser.add_argument_group('time slicing')
+    group.add_argument("--since", action='store', help="show data starting on this timestamp [ns]")
+    group.add_argument("--until", action='store', help="show data ending on this timestamp [ns] (exclusive)")
 
 def add_profile_options(parser):
+    add_time_slicing_options(parser)
     group = parser.add_argument_group('profile options')
     group.add_argument("-r", "--caller-oriented", action='store_true', help="change orientation to caller-based; reverses order of frames")
     group.add_argument("-m", "--merge-threads", action='store_true', help="show one merged tree for all threads")
     group.add_argument("--function", action='store', help="use given function as tree root")
-    group.add_argument("--since", action='store', help="show profile since this timestamp [ns]")
-    group.add_argument("--until", action='store', help="show profile until this timestamp [ns]")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
     group.add_argument("--max-levels", action='store', help="maximum number of tree levels to show")
 
@@ -111,9 +117,12 @@ def int_or_none(value):
         return int(value)
     return None
 
+def get_time_range(args):
+    return trace.TimeRange(int_or_none(args.since), int_or_none(args.until))
+
 def show_profile(args, sample_producer):
     resolver = symbol_resolver(args)
-    time_range = trace.TimeRange(int_or_none(args.since), int_or_none(args.until))
+    time_range = get_time_range(args)
 
     if args.min_duration:
         min_duration = prof.parse_time_as_nanos(args.min_duration)
@@ -175,12 +184,12 @@ class timed_trace_producer(object):
                 raise Exception("Nested traces not supported: " + name)
             self.open_functions[t.thread][name] = trace.TimedTrace(t)
 
-def get_timed_traces(traces):
+def get_timed_traces(traces, time_range):
     producer = timed_trace_producer()
     for t in traces:
         timed = producer(t)
-        if timed:
-            yield timed
+        if timed and timed.time_range.intersection(time_range):
+                yield timed
 
 def get_timed_traces_per_function(timed_traces):
     traces_per_function = defaultdict(list)
@@ -262,8 +271,10 @@ def print_summary(args, printer=sys.stdout.write):
 
 def list_timed(args):
     bt_formatter = get_backtrace_formatter(args)
+    time_range = get_time_range(args)
+
     with get_trace_reader(args) as reader:
-        timed_traces = get_timed_traces(reader.get_traces())
+        timed_traces = get_timed_traces(reader.get_traces(), time_range)
 
         if args.sort:
             timed_traces = sorted(timed_traces, key=lambda timed: -getattr(timed, args.sort))
@@ -281,6 +292,7 @@ def list_timed(args):
                             ))
 
 def add_trace_listing_options(parser):
+    add_time_slicing_options(parser)
     add_trace_source_options(parser)
     add_symbol_resolution_options(parser)
     parser.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
@@ -297,6 +309,7 @@ if __name__ == "__main__":
         Prints block samples along with their duration in seconds with nanosecond precision. The duration
         is calculated bu subtracting timestamps between entry sample and the matched ending sample.
         The convention is that the ending sample has the same name as the entry sample plus '_ret' or '_err' suffix.
+        Specifying a time range will result in only those samples being printed which overlap with the time range.
         """)
     add_trace_listing_options(cmd_list_timed)
     cmd_list_timed.add_argument("--sort", action="store", choices=['duration'], help="sort samples by given field")
