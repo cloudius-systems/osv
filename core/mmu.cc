@@ -1262,4 +1262,20 @@ error mincore(void *addr, size_t length, unsigned char *vec)
     return no_error();
 }
 
+std::string procfs_maps()
+{
+    std::ostringstream os;
+    WITH_LOCK(vma_list_mutex) {
+        for (auto& vma : vma_list) {
+            char read    = vma.perm() & perm_read  ? 'r' : '-';
+            char write   = vma.perm() & perm_write ? 'w' : '-';
+            char execute = vma.perm() & perm_exec  ? 'x' : '-';
+            char priv    = 'p';
+            osv::fprintf(os, "%x-%x %c%c%c%c 00000000 00:00 0\n",
+                vma.start(), vma.end(), read, write, execute, priv);
+        }
+    }
+    return os.str();
+}
+
 }

@@ -194,6 +194,8 @@ void vdepopulate(void* addr, size_t size);
 
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
+std::string procfs_maps();
+
 }
 
 #endif
