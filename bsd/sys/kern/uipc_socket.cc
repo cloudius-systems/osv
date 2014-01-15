@@ -2312,7 +2312,7 @@ sosetopt(struct socket *so, struct sockopt *sopt)
 			}
 			/* assert(tick > 0); */
 			/* assert(ULONG_MAX - INT_MAX >= 1000000); */
-			val = (u_long)(tv.tv_sec * hz) + tv.tv_usec;
+			val = (u_long)(tv.tv_sec * hz) + (tv.tv_usec * hz / 1000000);
 			if (val > INT_MAX) {
 				error = EDOM;
 				goto bad;
