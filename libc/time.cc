@@ -25,11 +25,10 @@ int gettimeofday(struct timeval* tv, struct timezone* tz)
     if (!tv) {
         return 0;
     }
-    u64 time = clock::get()->time();
-    auto sec = time / 1000000000;
-    auto nsec = time % 1000000000;
-    tv->tv_sec = sec;
-    tv->tv_usec = nsec / 1000;
+    using namespace std::chrono;
+    auto d = osv::clock::wall::now().time_since_epoch();
+    tv->tv_sec = duration_cast<seconds>(d).count();
+    tv->tv_usec = duration_cast<microseconds>(d).count() % 1000000;
     return 0;
 }
 
@@ -71,7 +70,7 @@ int clock_gettime(clockid_t clk_id, struct timespec* ts)
         break;
     case CLOCK_REALTIME:
     case CLOCK_REALTIME_COARSE:
-        fill_ts(clock::get()->time(), ts);
+        fill_ts(osv::clock::wall::now().time_since_epoch(), ts);
         break;
     case CLOCK_PROCESS_CPUTIME_ID:
         // FIXME: discount idle time

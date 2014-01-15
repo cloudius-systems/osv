@@ -44,6 +44,37 @@ public:
 };
 
 /**
+ * Nanosecond-resolution wall clock.
+ *
+ * The wall clock tells what humans think of "the current time" (Posix calls
+ * it the "realtime clock"), and is returned as the number of nanoseconds
+ * since the Unix epoch (midnight UTC, Jan 1st, 1970).
+ *
+ * This clock may be influenced by modifications to the host time (either
+ * NTP or manual changes to the host's clock), and is not necessarily
+ * monotonic.
+ *
+ * This class is very similar to std::chrono::system_clock, except the
+ * latter is actually implemented on top of this one with clock_gettime()
+ * in the middle, so this class is faster.
+ */
+class wall {
+public:
+    typedef std::chrono::nanoseconds duration;
+    typedef std::chrono::time_point<osv::clock::wall> time_point;
+    /**
+     * Get the current value of the nanosecond-resolution wall clock.
+     *
+     * This is done using the most efficient clock available from the host.
+     * It can be a very efficient paravirtual clock (kvmclock or xenclock),
+     * or at last resort, the hpet clock (emulated by the host).
+     */
+    static time_point now() {
+        return time_point(duration(::clock::get()->time()));
+    }
+};
+
+/**
  * Convenient literals for specifying std::chrono::duration's.
  *
  * C++14 will support std::chrono::duration literals, used as in the following
