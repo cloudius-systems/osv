@@ -122,13 +122,22 @@ private:
     int _enabled = 1;
 };
 
-class reclaimer_waiters: public semaphore {
+class reclaimer_waiters {
 public:
-    explicit reclaimer_waiters() : semaphore(0) { }
-    virtual  ~reclaimer_waiters() {}
-
-    virtual void post(unsigned units = 1);
-    bool has_waiters() { WITH_LOCK(_mtx) { return !_waiters.empty(); } }
+    // return true if there were no waiters or if we could wait some. Returns false
+    // if there were waiters but we could not wake any of them.
+    bool wake_waiters();
+    void wait(size_t bytes);
+    bool has_waiters() { return !_waiters.empty(); }
+private:
+    struct wait_node: boost::intrusive::list_base_hook<> {
+        sched::thread* owner;
+        size_t bytes;
+    };
+    // Protected by mempool.cc's free_page_ranges_lock
+    boost::intrusive::list<wait_node,
+                          boost::intrusive::base_hook<wait_node>,
+                          boost::intrusive::constant_time_size<false>> _waiters;
 };
 
 class reclaimer {
@@ -140,6 +149,7 @@ public:
 
     friend void start_reclaimer();
     friend class shrinker;
+    friend class reclaimer_waiters;
 private:
     void _do_reclaim();
     // We could just check if the semaphore's wait_list is empty. But since we

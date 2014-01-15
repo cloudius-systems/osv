@@ -525,19 +525,11 @@ void reclaimer::wait_for_memory(size_t mem)
 {
 
     if (!_thread) {
-        auto would_block = _oom_blocked.trywait(mem);
-        assert(!would_block); // Too early for this, and would go negative
+        // Too early for this, and would go negative
         return;
     }
 
-    if (sched::thread::current() == _thread) {
-        oom();
-    }
-
-    DROP_LOCK(free_page_ranges_lock) {
-        reclaimer_thread.wake();
-        _oom_blocked.wait(mem);
-    }
+    _oom_blocked.wait(mem);
 }
 
 static void* malloc_large(size_t size)
@@ -596,36 +588,73 @@ shrinker::shrinker(std::string name)
     }
 }
 
-// We don't know from the outside of semaphore how many units we are waiting
-// for. But when we free memory, that is done by an arbitrary quantity that
-// depends on how much memory we were able to free, not on how much we were
-// waiting for.
-//
-// For instance, if we have two waiters waiting for 2Mb each, and we've just
-// freed 8Mb, the semaphore would now be 4Mb positive.  That means that a next
-// waiter will just go through smoothly, instead of waiting as it should.
-//
-// This specialization of the "post" method guarantees that this never happen.
-// Note that there are two possible cases:
-//
-// 1) We free at least as much memory as we need. In that case, we will wake up
-// everybody, and whatever would be left in the semaphore will just be capped.
-// All waiters are gone, and new waiters will correctly stall on wait().
-//
-// 2) We free less than the total waited for. In that case, we will wake up as
-// much waiters as we can, and the remaining memory still waited for is kept intact
-// in the queue. Because _val is also 0 in this case, new waiters will correctly
-// stall on wait().
-//
-// An alternative to that would be to initialize the semaphore with the amount
-// of free memory and update it every time we alloc/free. But that would be too
-// expensive. But more importantly, it would put us to sleep in random places.
-void reclaimer_waiters::post(unsigned units)
+bool reclaimer_waiters::wake_waiters()
 {
-    WITH_LOCK(_mtx) {
-        post_unlocked(units);
-        _val = 0;
+    bool woken = false;
+    assert(mutex_owned(&free_page_ranges_lock));
+    for (auto& fp : free_page_ranges) {
+        // We won't do the allocations, so simulate. Otherwise we can have
+        // 10Mb available in the whole system, and 4 threads that wait for
+        // it waking because they all believe that memory is available
+        auto in_this_page_range = fp.size;
+        // We expect less waiters than page ranges so the inner loop is one
+        // of waiters. But we cut the whole thing short if we're out of them.
+        if (_waiters.empty()) {
+            return true;
+        }
+
+        auto it = _waiters.begin();
+        while (it != _waiters.end()) {
+            auto& wr = *it;
+            it++;
+
+            if (in_this_page_range >= wr.bytes) {
+                in_this_page_range -= wr.bytes;
+                _waiters.erase(_waiters.iterator_to(wr));
+                wr.owner->wake();
+                wr.owner = nullptr;
+                woken = true;
+            }
+        }
     }
+
+    if (!_waiters.empty()) {
+        reclaimer_thread.wake();
+    }
+    return woken;
+}
+
+// Note for callers: Ideally, we would not only wake, but already allocate
+// memory here and pass it back to the waiter. However, memory is not always
+// allocated the same way (ex: refill_page_buffer is completely different from
+// malloc_large) and that could be cumbersome.
+//
+// That means that this returning will only mean allocation may succeed, not
+// that it will.  Because of that, it is of extreme importance that callers
+// pass the exact amount of memory they are waiting for. So for instance, if
+// your allocation is 2Mb in size + a 4k header, "bytes" bellow should be 2Mb +
+// 4k, not 2Mb. Failing to do so could livelock the system, that would forever
+// wake up believing there is enough memory, when in reality there is not.
+void reclaimer_waiters::wait(size_t bytes)
+{
+    assert(mutex_owned(&free_page_ranges_lock));
+
+    sched::thread *curr = sched::thread::current();
+
+    // Wait for whom?
+    if (curr == reclaimer_thread._thread) {
+        oom();
+     }
+
+    wait_node wr;
+    wr.owner = curr;
+    wr.bytes = bytes;
+    _waiters.push_back(wr);
+
+    // At this point the reclaimer thread already knows there are waiters,
+    // because the _waiters_list was already updated.
+    reclaimer_thread.wake();
+    sched::thread::wait_until(&free_page_ranges_lock, [&] { return !wr.owner; });
 }
 
 reclaimer::reclaimer()
@@ -662,7 +691,6 @@ bool reclaimer::_can_shrink()
 void reclaimer::_do_reclaim()
 {
     ssize_t target;
-    size_t memory_freed = 0;
     WITH_LOCK(free_page_ranges_lock) {
         _blocked.wait_until(free_page_ranges_lock,
             // We should only try to shrink if there are available shrinkers.
@@ -687,27 +715,17 @@ void reclaimer::_do_reclaim()
             if (s->should_shrink(target)) {
                 size_t freed = s->request_memory(target);
                 trace_memory_reclaim(s->name().c_str(), target, freed);
-                memory_freed += freed;
             }
         }
     }
 
     WITH_LOCK(free_page_ranges_lock) {
         if (target > 0) {
-            // Because we are not disposing of our waiters, we will be forced
-            // to enter this method again. Even if no waiters can be serviced,
-            // if we could free at least some memory at this stage, there is
-            // still hope. So we won't abort.  But if we have waiters, and
-            // we're already using up all our reserves, then it is time to give
-            // up.
-            if (_oom_blocked.has_waiters() && !memory_freed) {
+            // Wake up all waiters that are waiting and now have a chance to succeed.
+            // If we could not wake any, there is nothing really we can do.
+            if (!_oom_blocked.wake_waiters()) {
                 oom();
             }
-
-            // Wake up all waiters that are waiting for an ammount of memory that is
-            // smaller than the one we've just freed.
-            _oom_blocked.post(memory_freed);
-
         }
     }
 }
