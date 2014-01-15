@@ -42,9 +42,15 @@ int getrlimit(int resource, struct rlimit *rlim)
 {
     auto set = [=] (rlim_t r) { rlim->rlim_cur = rlim->rlim_max = r; };
     switch (resource) {
-    case RLIMIT_STACK:
-        set(64*1024); // FIXME: something realer
+    case RLIMIT_STACK: {
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        size_t stacksize;
+        pthread_attr_getstacksize(&attr, &stacksize);
+        set(stacksize);
+        pthread_attr_destroy(&attr);
         break;
+    }
     case RLIMIT_NOFILE:
         set(1024*10); // FIXME: larger?
         break;
