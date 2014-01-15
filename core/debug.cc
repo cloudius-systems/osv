@@ -18,6 +18,10 @@
 using namespace std;
 
 logger* logger::_instance = nullptr;
+char debug_buffer[DEBUG_BUFFER_SIZE];
+int debug_buffer_idx = 0;
+bool debug_buffer_full = false;
+bool verbose = false;
 
 logger::logger()
 {
@@ -145,9 +149,35 @@ void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
     va_end(ap);
 }
 }
+
+void fill_debug_buffer(const char *msg, size_t len)
+{
+    int buff_fspace;
+
+    if (debug_buffer_idx+len < DEBUG_BUFFER_SIZE)
+    {
+        memcpy(&debug_buffer[debug_buffer_idx],
+                msg, len);
+        debug_buffer_idx += len;
+    }
+    else
+    {
+        buff_fspace = DEBUG_BUFFER_SIZE-debug_buffer_idx;
+        memcpy(&debug_buffer[debug_buffer_idx], msg,
+                buff_fspace);
+        memcpy(&debug_buffer[0], &msg[DEBUG_BUFFER_SIZE-debug_buffer_idx],
+                len-buff_fspace);
+        debug_buffer_idx = len-buff_fspace;
+        debug_buffer_full = true;
+    }
+}
+
 void debug(std::string str)
 {
-    console::write(str.c_str(), str.length());
+    fill_debug_buffer(str.c_str(), str.length());
+    if (verbose) {
+        console::write(str.c_str(), str.length());
+    }
 }
 
 void debug(const boost::format& fmt)
@@ -155,16 +185,52 @@ void debug(const boost::format& fmt)
     debug(fmt.str());
 }
 
+void enable_verbose()
+{
+    verbose = true;
+    flush_debug_buffer();
+}
+
+void flush_debug_buffer()
+{
+    if (debug_buffer_full) {
+        console::write(&debug_buffer[debug_buffer_idx],
+                DEBUG_BUFFER_SIZE-debug_buffer_idx);
+    }
+    console::write(debug_buffer, debug_buffer_idx);
+}
+
 extern "C" {
+
+    void debugf(const char *msg, ...)
+    {
+        char fmt[512];
+
+        va_list argptr;
+        va_start(argptr, msg);
+        vsnprintf(fmt, 512, msg, argptr);
+        va_end(argptr);
+
+        fill_debug_buffer(fmt, strlen(msg));
+        if (verbose) {
+            console::write(fmt, strlen(msg));
+        }
+    }
 
     void debug(const char *msg)
     {
-        console::write(msg, strlen(msg));
+        fill_debug_buffer(msg, strlen(msg));
+        if (verbose) {
+            console::write(msg, strlen(msg));
+        }
     }
 
     void debug_write(const char *msg, size_t len)
     {
-        console::write(msg, len);
+        fill_debug_buffer(msg, len);
+        if (verbose) {
+            console::write(msg, len);
+        }
     }
 
     // lockless version

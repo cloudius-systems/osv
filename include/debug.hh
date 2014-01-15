@@ -18,6 +18,8 @@
 #include "boost/format.hpp"
 #include "api/assert.h"
 
+#define DEBUG_BUFFER_SIZE 1024*50 // 50kb buffer
+
 #ifndef NDEBUG
 /**
  * \note This assert will compile out completely when
@@ -88,7 +90,12 @@ private:
    mutex _lock;
 };
 
-extern "C" {void debug(const char *msg); }
+extern "C" {
+    void debug(const char *msg);
+    void debugf(const char *, ...);
+}
+void flush_debug_buffer();
+void enable_verbose();
 void debug(const boost::format& fmt);
 template <typename... args>
 void debug(boost::format& fmt, args... as);
