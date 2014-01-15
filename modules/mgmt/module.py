@@ -1,9 +1,4 @@
 from osv.modules.api import *
-from osv.modules.filemap import FileMap
-
-usr_files = FileMap()
-
-usr_files.add('${OSV_BASE}/mgmt/httpserver/httpserver.so').to('/usr/mgmt/httpserver.so')
 
 _web_jar = '/usr/mgmt/web-1.0.0.jar'
 _logging_opts = '-Djava.util.logging.config.file=/usr/mgmt/config/logging.properties'
