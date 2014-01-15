@@ -25,7 +25,7 @@ class BacktraceFormatter:
     def __call__(self, backtrace):
         if not backtrace:
             return ''
-        return '   [' + ', '.join((str(self.resolver(x)) for x in backtrace if x)) + ']'
+        return '   [' + ', '.join((str(self.resolver(x - 1)) for x in backtrace if x)) + ']'
 
 def simple_symbol_formatter(addr):
     return '0x%x' % frame
