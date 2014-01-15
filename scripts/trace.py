@@ -125,8 +125,8 @@ def int_or_none(value):
     return None
 
 def get_time_range(args):
-    start = int_or_none(args.since)
-    end = int_or_none(args.until)
+    start = prof.parse_time_as_nanos(args.since) if args.since else None
+    end = prof.parse_time_as_nanos(args.until) if args.until else None
 
     if args.period:
         if start and end:
