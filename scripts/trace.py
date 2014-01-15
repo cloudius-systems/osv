@@ -39,12 +39,13 @@ def get_trace_reader(args):
     return trace.read_file(args.tracefile)
 
 def add_symbol_resolution_options(parser):
-    parser.add_argument("-d", "--debug", action="store_true", help="use loader.elf from debug build")
-    parser.add_argument("-e", "--exe", action="store", help="path to the object file used for symbol resolution")
-    parser.add_argument("-x", "--no-resolve", action='store_true', help="do not resolve symbols")
-    parser.add_argument("-L", "--show-line-number", action='store_true', help="show line numbers")
-    parser.add_argument("-A", "--show-address", action='store_true', help="show raw addresses")
-    parser.add_argument("-F", "--show-file-name", action='store_true', help="show file names")
+    group = parser.add_argument_group('symbol resolution')
+    group.add_argument("-d", "--debug", action="store_true", help="use loader.elf from debug build")
+    group.add_argument("-e", "--exe", action="store", help="path to the object file used for symbol resolution")
+    group.add_argument("-x", "--no-resolve", action='store_true', help="do not resolve symbols")
+    group.add_argument("-L", "--show-line-number", action='store_true', help="show line numbers")
+    group.add_argument("-A", "--show-address", action='store_true', help="show raw addresses")
+    group.add_argument("-F", "--show-file-name", action='store_true', help="show file names")
 
 class BeautifyingResolver(object):
     def __init__(self, delegate):
@@ -86,13 +87,14 @@ def list_trace(args):
             print t.format(backtrace_formatter)
 
 def add_profile_options(parser):
-    parser.add_argument("-r", "--caller-oriented", action='store_true', help="change orientation to caller-based; reverses order of frames")
-    parser.add_argument("-m", "--merge-threads", action='store_true', help="show one merged tree for all threads")
-    parser.add_argument("--function", action='store', help="use given function as tree root")
-    parser.add_argument("--since", action='store', help="show profile since this timestamp [ns]")
-    parser.add_argument("--until", action='store', help="show profile until this timestamp [ns]")
-    parser.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
-    parser.add_argument("--max-levels", action='store', help="maximum number of tree levels to show")
+    group = parser.add_argument_group('profile options')
+    group.add_argument("-r", "--caller-oriented", action='store_true', help="change orientation to caller-based; reverses order of frames")
+    group.add_argument("-m", "--merge-threads", action='store_true', help="show one merged tree for all threads")
+    group.add_argument("--function", action='store', help="use given function as tree root")
+    group.add_argument("--since", action='store', help="show profile since this timestamp [ns]")
+    group.add_argument("--until", action='store', help="show profile until this timestamp [ns]")
+    group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
+    group.add_argument("--max-levels", action='store', help="maximum number of tree levels to show")
 
 def get_wait_profile(traces):
     return prof.get_duration_profile(traces, "sched_wait", "sched_wait_ret")
@@ -133,23 +135,31 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="trace file processing")
     subparsers = parser.add_subparsers(help="Command")
 
-    cmd_list = subparsers.add_parser("list", help="List trace")
+    cmd_list = subparsers.add_parser("list", help="list trace")
     add_symbol_resolution_options(cmd_list)
     cmd_list.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
     add_trace_source_options(cmd_list)
     cmd_list.set_defaults(func=list_trace)
 
-    cmd_prof_wait = subparsers.add_parser("prof-wait", help="Show wait profile")
+    cmd_prof_wait = subparsers.add_parser("prof-wait", help="show wait profile", description="""
+        Prints profile showing amount of time spent inside sched::thread::wait(). Among other
+        things this includes time a thread was blocked on a mutex or condvar.
+        Requires sched_wait and sched_wait_ret tracepoints.
+        Requires trace samples with backtrace.
+        """)
     add_symbol_resolution_options(cmd_prof_wait)
     add_trace_source_options(cmd_prof_wait)
     add_profile_options(cmd_prof_wait)
     cmd_prof_wait.set_defaults(func=prof_wait)
 
-    cmd_prof_hit = subparsers.add_parser("prof", help="Show trace hit profile")
+    cmd_prof_hit = subparsers.add_parser("prof", help="show trace hit profile", description="""
+        Prints profile showing number of times given tracepoint was reached.
+        Requires trace samples with backtrace.
+        """)
     add_symbol_resolution_options(cmd_prof_hit)
     add_trace_source_options(cmd_prof_hit)
     add_profile_options(cmd_prof_hit)
-    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of tracepint")
+    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of the tracepint to count")
     cmd_prof_hit.set_defaults(func=prof_hit)
 
     args = parser.parse_args()
