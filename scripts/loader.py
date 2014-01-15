@@ -798,15 +798,6 @@ def align_down(v, pagesize):
 def align_up(v, pagesize):
     return align_down(v + pagesize - 1, pagesize)
 
-class TimedTrace:
-    def __init__(self, trace):
-        self.trace = trace
-        self.duration = None
-
-    @property
-    def duration(self):
-        return self.duration
-
 def all_traces():
     # XXX: needed for GDB to see 'trace_page_size'
     gdb.lookup_global_symbol('gdb_trace_function_entry')
@@ -899,90 +890,6 @@ def dump_trace(out_func):
             trace_function(indent, '<-', trace.data)
         else:
             out_func('%s\n' % trace.format(bt_formatter))
-
-def get_name_of_ended_func(name):
-        m = re.match('(?P<func>.*)(_ret|_err)', name)
-        if not m:
-            return None
-
-        return m.group('func')
-
-# Block tracepoint begins a code block and is accompanied with
-# tracepoints for block exit whose names end with _ret and _err
-def get_block_tracepoints():
-    block_tracepoints = set()
-    for trace_point in intrusive_list(gdb.lookup_global_symbol("tracepoint_base::tp_list").value()):
-        ended = get_name_of_ended_func(trace_point['name'].string())
-        if ended:
-            block_tracepoints.add(ended)
-    return block_tracepoints
-
-def get_timed_traces(traces):
-    block_tracepoints = get_block_tracepoints()
-
-    # [thread][func] => TimedTrace
-    open_functions = defaultdict(dict)
-
-    for trace in traces:
-        name = trace.name
-        ended = get_name_of_ended_func(name)
-        if ended:
-            if ended in open_functions[trace.thread]:
-                timed = open_functions[trace.thread].pop(ended)
-                timed.duration = trace.time - timed.trace.time
-                yield timed
-        elif name in block_tracepoints:
-            if name in open_functions[trace.thread]:
-                raise Exception("Nested traces not supported: " + name)
-            open_functions[trace.thread][name] = TimedTrace(trace)
-
-def get_timed_traces_per_function(traces):
-    traces_per_function = defaultdict(list)
-    for timed in get_timed_traces(traces):
-        traces_per_function[timed.trace.name].append(timed)
-    return traces_per_function
-
-def get_percentile(sorted_samples, fraction):
-    return sorted_samples[int(math.ceil(float(len(sorted_samples) - 1) * fraction))]
-
-def dump_trace_summary(out_func):
-    format = "%-20s %8s %8s %8s %8s %8s %8s %8s %8s\n"
-    out_func("Execution times [ms]:\n")
-    out_func(format % ("name", "count", "min", "50%", "90%", "99%", "99.9%", "max", "total"))
-
-    for name, traces in get_timed_traces_per_function(all_traces()).iteritems():
-        samples = sorted(map(operator.attrgetter('duration'), traces))
-        out_func(format % (
-            name,
-            len(samples),
-            format_duration(get_percentile(samples, 0)),
-            format_duration(get_percentile(samples, 0.5)),
-            format_duration(get_percentile(samples, 0.9)),
-            format_duration(get_percentile(samples, 0.99)),
-            format_duration(get_percentile(samples, 0.999)),
-            format_duration(get_percentile(samples, 1)),
-            format_duration(sum(samples)),
-            ))
-
-def dump_timed_trace(out_func, filter=None, sort=False):
-    bt_formatter = BacktraceFormatter(syminfo)
-
-    traces = ifilter(filter, all_traces())
-    timed_traces = get_timed_traces(traces)
-    if sort:
-        timed_traces = sorted(timed_traces, key=lambda timed: -timed.duration)
-
-    for timed in timed_traces:
-        trace = timed.trace
-        out_func('0x%016x %2d %20s %7s %-20s %s%s\n'
-                    % (trace.thread,
-                        trace.cpu,
-                        format_time(trace.time),
-                        format_duration(timed.duration),
-                        trace.name,
-                        trace.format_data(),
-                        bt_formatter(trace.backtrace),
-                        ))
 
 def set_leak(val):
     gdb.parse_and_eval('memory::tracker_enabled=%s' % val)
@@ -1137,35 +1044,6 @@ class osv_trace_save(gdb.Command):
         gdb.write('Saving traces to %s ...\n' % arg)
         save_traces_to_file(arg)
 
-class osv_trace_summary(gdb.Command):
-    def __init__(self):
-        gdb.Command.__init__(self, 'osv trace summary', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
-    def invoke(self, arg, from_tty):
-        dump_trace_summary(gdb.write)
-
-class osv_trace_duration(gdb.Command):
-    def __init__(self):
-        gdb.Command.__init__(self, 'osv trace duration', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
-    def invoke(self, arg, from_tty):
-        sort = False
-        names = []
-        argv = gdb.string_to_argv(arg)
-        while argv:
-            option = argv.pop(0)
-            if not option.startswith('-'):
-                names.append(option)
-            elif option == '-s':
-                sort = True
-            else:
-                raise Exception("Unsupported option: " + option)
-
-        if names:
-            filter = lambda trace: trace.name in names or get_name_of_ended_func(trace.name) in names
-        else:
-            filter = None
-
-        dump_timed_trace(gdb.write, filter=filter, sort=sort)
-
 class osv_trace_file(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace2file', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
@@ -1282,8 +1160,6 @@ osv_thread_apply()
 osv_thread_apply_all()
 osv_trace()
 osv_trace_save()
-osv_trace_summary()
-osv_trace_duration()
 osv_trace_file()
 osv_leak()
 osv_leak_show()

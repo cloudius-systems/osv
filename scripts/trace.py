@@ -138,7 +138,66 @@ def prof_wait(args):
 def prof_hit(args):
     show_profile(args, lambda traces: prof.get_hit_profile(traces, args.tracepoint))
 
+def get_name_of_ended_func(name):
+        m = re.match('(?P<func>.*)(_ret|_err)', name)
+        if m:
+            return m.group('func')
+
+class block_tracepoint_collector(object):
+    def __init__(self):
+        self.block_tracepoints = set()
+
+    def __call__(self, tp):
+        ended = get_name_of_ended_func(tp.name)
+        if ended:
+            self.block_tracepoints.add(ended)
+
+    def __contains__(self, tp):
+        return tp.name in self.block_tracepoints
+
+class timed_trace_producer(object):
+    def __init__(self):
+        self.block_tracepoints = block_tracepoint_collector()
+        self.open_functions = defaultdict(dict)
+
+    def __call__(self, t):
+        self.block_tracepoints(t.tp)
+
+        name = t.name
+        ended = get_name_of_ended_func(name)
+        if ended:
+            if ended in self.open_functions[t.thread]:
+                timed = self.open_functions[t.thread].pop(ended)
+                timed.duration = t.time - timed.trace.time
+                return timed
+        elif t.tp in self.block_tracepoints:
+            if name in self.open_functions[t.thread]:
+                raise Exception("Nested traces not supported: " + name)
+            self.open_functions[t.thread][name] = trace.TimedTrace(t)
+
+def get_timed_traces(traces):
+    producer = timed_trace_producer()
+    for t in traces:
+        timed = producer(t)
+        if timed:
+            yield timed
+
+def get_timed_traces_per_function(timed_traces):
+    traces_per_function = defaultdict(list)
+    for timed in timed_traces:
+        traces_per_function[timed.trace.name].append(timed)
+    return traces_per_function
+
+def get_percentile(sorted_samples, fraction):
+    return sorted_samples[int(math.ceil(float(len(sorted_samples) - 1) * fraction))]
+
+def format_duration(nanos):
+    return "%4.3f" % (float(nanos) / 1e6)
+
 def print_summary(args, printer=sys.stdout.write):
+    timed_producer = timed_trace_producer()
+    timed_samples = []
+
     count_per_tp = defaultdict(lambda: 0)
     count = 0
     min_time = None
@@ -156,6 +215,11 @@ def print_summary(args, printer=sys.stdout.write):
 
             max_time = max(max_time, t.time)
 
+            if args.timed:
+                timed = timed_producer(t)
+                if timed:
+                    timed_samples.append(timed)
+
     if count == 0:
         print "No samples"
         return
@@ -171,17 +235,72 @@ def print_summary(args, printer=sys.stdout.write):
     for tp, count in sorted(count_per_tp.iteritems(), key=lambda (tp, count): tp.name):
         print format % (tp.name, count)
 
+    if args.timed:
+        format = "  %-20s %8s %8s %8s %8s %8s %8s %8s %15s"
+        print "\nTimed tracepoints [ms]:\n"
+
+        if not timed_samples:
+            print "  None"
+        else:
+            print format % ("name", "count", "min", "50%", "90%", "99%", "99.9%", "max", "total")
+            print format % ("----", "-----", "---", "---", "---", "---", "-----", "---", "-----")
+
+            for name, traces in get_timed_traces_per_function(timed_samples).iteritems():
+                    samples = sorted(map(attrgetter('duration'), traces))
+                    print format % (
+                        name,
+                        len(samples),
+                        format_duration(get_percentile(samples, 0)),
+                        format_duration(get_percentile(samples, 0.5)),
+                        format_duration(get_percentile(samples, 0.9)),
+                        format_duration(get_percentile(samples, 0.99)),
+                        format_duration(get_percentile(samples, 0.999)),
+                        format_duration(get_percentile(samples, 1)),
+                        format_duration(sum(samples)))
+
     print
+
+def list_timed(args):
+    bt_formatter = get_backtrace_formatter(args)
+    with get_trace_reader(args) as reader:
+        timed_traces = get_timed_traces(reader.get_traces())
+
+        if args.sort:
+            timed_traces = sorted(timed_traces, key=lambda timed: -getattr(timed, args.sort))
+
+        for timed in timed_traces:
+            t = timed.trace
+            print('0x%016x %2d %20s %7s %-20s %s%s\n'
+                         % (t.thread,
+                            t.cpu,
+                            trace.format_time(t.time),
+                            trace.format_duration(timed.duration),
+                            t.name,
+                            t.format_data(),
+                            bt_formatter(t.backtrace),
+                            ))
+
+def add_trace_listing_options(parser):
+    add_trace_source_options(parser)
+    add_symbol_resolution_options(parser)
+    parser.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="trace file processing")
     subparsers = parser.add_subparsers(help="Command")
 
     cmd_list = subparsers.add_parser("list", help="list trace")
-    add_symbol_resolution_options(cmd_list)
-    cmd_list.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
-    add_trace_source_options(cmd_list)
+    add_trace_listing_options(cmd_list)
     cmd_list.set_defaults(func=list_trace)
+
+    cmd_list_timed = subparsers.add_parser("list-timed", help="list timed traces", description="""
+        Prints block samples along with their duration in seconds with nanosecond precision. The duration
+        is calculated bu subtracting timestamps between entry sample and the matched ending sample.
+        The convention is that the ending sample has the same name as the entry sample plus '_ret' or '_err' suffix.
+        """)
+    add_trace_listing_options(cmd_list_timed)
+    cmd_list_timed.add_argument("--sort", action="store", choices=['duration'], help="sort samples by given field")
+    cmd_list_timed.set_defaults(func=list_timed)
 
     cmd_summary = subparsers.add_parser("summary", help="list timed traces", description="""
         Prints block samples along with their duration in seconds with nanosecond precision. The duration
@@ -189,6 +308,7 @@ if __name__ == "__main__":
         The convention is that the ending sample has the same name as the entry sample plus '_ret' or '_err' suffix.
         """)
     add_trace_source_options(cmd_summary)
+    cmd_summary.add_argument("--timed", action="store_true", help="print percentile table of timed trace samples")
     cmd_summary.set_defaults(func=print_summary)
 
     cmd_prof_wait = subparsers.add_parser("prof-wait", help="show wait profile", description="""

@@ -76,6 +76,14 @@ class Trace:
     def __str__(self):
         return self.format()
 
+class TimedTrace:
+    def __init__(self, trace):
+        self.trace = trace
+        self.duration = None
+
+    @property
+    def duration(self):
+        return self.duration
 
 class SlidingUnpacker:
     def __init__(self, buffer):
