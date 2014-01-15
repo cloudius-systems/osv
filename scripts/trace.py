@@ -114,15 +114,10 @@ def add_profile_options(parser):
     group.add_argument("-m", "--merge-threads", action='store_true', help="show one merged tree for all threads")
     group.add_argument("--function", action='store', help="use given function as tree root")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
-    group.add_argument("--max-levels", action='store', help="maximum number of tree levels to show")
+    group.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
 
 def get_wait_profile(traces):
     return prof.get_duration_profile(traces, "sched_wait", "sched_wait_ret")
-
-def int_or_none(value):
-    if value:
-        return int(value)
-    return None
 
 def get_time_range(args):
     start = prof.parse_time_as_nanos(args.since) if args.since else None
@@ -161,7 +156,7 @@ def show_profile(args, sample_producer):
             root_function=args.function,
             node_filter=node_filter,
             time_range=time_range,
-            max_levels=int_or_none(args.max_levels))
+            max_levels=args.max_levels)
 
 def prof_wait(args):
     show_profile(args, get_wait_profile)
