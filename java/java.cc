@@ -116,7 +116,7 @@ int main(int argc, char **argv)
         if (!has_xms) {
             options.push_back(mkoption("-Xms%dM", heap_size));
         }
-        printf("Autotuning JVM heap size to %dMb\n", heap_size);
+        debugf("Autotuning JVM heap size to %d MB\n", heap_size);
     }
 
     vm_args.nOptions = options.size();
