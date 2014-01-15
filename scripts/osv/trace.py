@@ -100,11 +100,9 @@ class SlidingUnpacker:
 class WritingPacker:
     def __init__(self, writer):
         self.writer = writer
-        self.offset = 0
 
     def pack(self, format, *data):
         self.writer(struct.pack(format, *data))
-        self.offset += struct.calcsize(format)
 
     def pack_str(self, *args):
         for arg in args:
