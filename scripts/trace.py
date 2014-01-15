@@ -332,10 +332,8 @@ if __name__ == "__main__":
     cmd_list_timed.add_argument("--sort", action="store", choices=['duration'], help="sort samples by given field")
     cmd_list_timed.set_defaults(func=list_timed)
 
-    cmd_summary = subparsers.add_parser("summary", help="list timed traces", description="""
-        Prints block samples along with their duration in seconds with nanosecond precision. The duration
-        is calculated bu subtracting timestamps between entry sample and the matched ending sample.
-        The convention is that the ending sample has the same name as the entry sample plus '_ret' or '_err' suffix.
+    cmd_summary = subparsers.add_parser("summary", help="print trace summery", description="""
+        Prints basic statistics about the trace.
         """)
     add_trace_source_options(cmd_summary)
     cmd_summary.add_argument("--timed", action="store_true", help="print percentile table of timed trace samples")
