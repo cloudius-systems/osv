@@ -684,7 +684,7 @@ class osv_info_threads(gdb.Command):
                     location = '??'
 
                 gdb.write('%4d (0x%x) cpu%s %-10s %s vruntime %12g\n' %
-                          (tid, ulong(t.address),
+                          (tid, ulong(t),
                            cpu['arch']['acpi_id'],
                            thread_status(t),
                            location,
