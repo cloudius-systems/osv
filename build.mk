@@ -209,6 +209,7 @@ tests += tests/tst-threadcomplete.so
 tests += tests/tst-timerfd.so
 tests += tests/tst-memmove.so
 tests += tests/tst-pthread-clock.so
+tests += tests/misc-procfs.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
