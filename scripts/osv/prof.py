@@ -20,38 +20,6 @@ class ProfNode(tree.TreeNode):
             'resident_time': self.resident_time
         }
 
-class TimeRange(object):
-    """
-    Represents time from @begin inclusive to @end exclusive.
-    None in any of these means open range from that side.
-
-    """
-    def __init__(self, begin, end):
-        self.begin = begin
-        self.end = end
-
-    def __contains__(self, timestamp):
-        if self.begin and timestamp < self.begin:
-            return False
-        if self.end and timestamp >= self.end:
-            return False
-        return True
-
-    def intersection(self, other):
-        begin = max(self.begin, other.begin)
-
-        if self.end is None:
-            end = other.end
-        elif other.end is None:
-            end = self.end
-        else:
-            end = min(self.end, other.end)
-
-        if begin and end and begin > end:
-            return None
-
-        return TimeRange(begin, end)
-
 class ProfSample:
     def __init__(self, timestamp, thread, backtrace, resident_time=None):
         self.thread = thread
@@ -61,7 +29,7 @@ class ProfSample:
 
     @property
     def time_range(self):
-        return TimeRange(self.timestamp, self.timestamp + self.resident_time)
+        return trace.TimeRange(self.timestamp, self.timestamp + self.resident_time)
 
     def intersection(self, time_range):
         intersection = self.time_range.intersection(time_range)

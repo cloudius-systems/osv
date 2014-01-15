@@ -113,7 +113,7 @@ def int_or_none(value):
 
 def show_profile(args, sample_producer):
     resolver = symbol_resolver(args)
-    time_range = prof.TimeRange(int_or_none(args.since), int_or_none(args.until))
+    time_range = trace.TimeRange(int_or_none(args.since), int_or_none(args.until))
 
     if args.min_duration:
         min_duration = prof.parse_time_as_nanos(args.min_duration)

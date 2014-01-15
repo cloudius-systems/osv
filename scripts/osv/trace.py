@@ -32,6 +32,38 @@ def simple_symbol_formatter(addr):
 
 default_backtrace_formatter = BacktraceFormatter(simple_symbol_formatter)
 
+class TimeRange(object):
+    """
+    Represents time from @begin inclusive to @end exclusive.
+    None in any of these means open range from that side.
+
+    """
+    def __init__(self, begin, end):
+        self.begin = begin
+        self.end = end
+
+    def __contains__(self, timestamp):
+        if self.begin and timestamp < self.begin:
+            return False
+        if self.end and timestamp >= self.end:
+            return False
+        return True
+
+    def intersection(self, other):
+        begin = max(self.begin, other.begin)
+
+        if self.end is None:
+            end = other.end
+        elif other.end is None:
+            end = self.end
+        else:
+            end = min(self.end, other.end)
+
+        if begin and end and begin > end:
+            return None
+
+        return TimeRange(begin, end)
+
 class TracePoint:
     def __init__(self, key, name, signature, format):
         self.key = key
