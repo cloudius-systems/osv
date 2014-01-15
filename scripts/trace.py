@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import sys
+import errno
 import argparse
 from osv import trace, debug, prof
 
@@ -163,4 +164,9 @@ if __name__ == "__main__":
     cmd_prof_hit.set_defaults(func=prof_hit)
 
     args = parser.parse_args()
-    args.func(args)
+
+    try:
+        args.func(args)
+    except IOError as e:
+        if e.errno != errno.EPIPE:
+            raise
