@@ -298,15 +298,14 @@ def list_timed(args):
 
         for timed in timed_traces:
             t = timed.trace
-            print('0x%016x %2d %20s %7s %-20s %s%s\n'
-                         % (t.thread,
+            print '0x%016x %2d %20s %7s %-20s %s%s' % (
+                            t.thread,
                             t.cpu,
                             trace.format_time(t.time),
                             trace.format_duration(timed.duration),
                             t.name,
                             t.format_data(),
-                            bt_formatter(t.backtrace),
-                            ))
+                            bt_formatter(t.backtrace))
 
 def add_trace_listing_options(parser):
     add_time_slicing_options(parser)
