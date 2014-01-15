@@ -42,8 +42,43 @@ public:
         return time_point(duration(::clock::get()->uptime()));
     }
 };
+
+/**
+ * Convenient literals for specifying std::chrono::duration's.
+ *
+ * C++14 will support std::chrono::duration literals, used as in the following
+ * example:
+ * @code
+ *     using namespace std::literals::chrono_literals;
+ *     auto d = 100ns;
+ * @endcode
+ * Because these are not yet available to us, we implement a similar feature
+ * but using different names:
+ * @code
+ *     using namespace osv::clock::literals;
+ *     auto d = 100_ns;
+ * @endcode
+ */
+namespace literals {
+/** Nanoseconds */
+constexpr std::chrono::nanoseconds operator "" _ns(unsigned long long c) {
+    return std::chrono::nanoseconds(c);
+}
+/** Microseconds */
+constexpr std::chrono::microseconds operator "" _us(unsigned long long c) {
+    return std::chrono::microseconds(c);
+}
+/** Milliseconds */
+constexpr std::chrono::milliseconds operator "" _ms(unsigned long long c) {
+    return std::chrono::milliseconds(c);
+}
+/** Seconds */
+constexpr std::chrono::seconds operator "" _s(unsigned long long c) {
+    return std::chrono::seconds(c);
 }
 }
 
+}
+}
 
 #endif /* OSV_CLOCK_HH_ */
