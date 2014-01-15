@@ -364,7 +364,7 @@ if __name__ == "__main__":
     add_symbol_resolution_options(cmd_prof_hit)
     add_trace_source_options(cmd_prof_hit)
     add_profile_options(cmd_prof_hit)
-    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of the tracepint to count")
+    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", required=True, help="name of the tracepint to count")
     cmd_prof_hit.set_defaults(func=prof_hit)
 
     args = parser.parse_args()
