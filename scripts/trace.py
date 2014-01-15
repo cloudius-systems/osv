@@ -10,6 +10,10 @@ from operator import attrgetter
 
 from osv import trace, debug, prof
 
+class InvalidArgumentsException(Exception):
+    def __init__(self, message):
+        self.message = message
+
 class symbol_printer:
     def __init__(self, resolver, formatter):
         self.resolver = resolver
@@ -99,6 +103,9 @@ def add_time_slicing_options(parser):
     group = parser.add_argument_group('time slicing')
     group.add_argument("--since", action='store', help="show data starting on this timestamp [ns]")
     group.add_argument("--until", action='store', help="show data ending on this timestamp [ns] (exclusive)")
+    group.add_argument("--period", action='store', help="""if only one of --since or --until is specified,
+        the amount of time passed in this option will be used to calculate the other. The value is interpreted
+        as nanoseconds unless unit is specified, eg: 500us""")
 
 def add_profile_options(parser):
     add_time_slicing_options(parser)
@@ -118,7 +125,22 @@ def int_or_none(value):
     return None
 
 def get_time_range(args):
-    return trace.TimeRange(int_or_none(args.since), int_or_none(args.until))
+    start = int_or_none(args.since)
+    end = int_or_none(args.until)
+
+    if args.period:
+        if start and end:
+            raise InvalidArgumentsException("--period cannot be used when both --since and --until are specified")
+
+        period = prof.parse_time_as_nanos(args.period)
+        if start:
+            end = start + period
+        elif end:
+            start = end - period
+        else:
+            raise InvalidArgumentsException("--period must be used with --since or --until specified")
+
+    return trace.TimeRange(start, end)
 
 def show_profile(args, sample_producer):
     resolver = symbol_resolver(args)
@@ -349,6 +371,8 @@ if __name__ == "__main__":
 
     try:
         args.func(args)
+    except InvalidArgumentsException as e:
+        print "Invalid arguments:", e.message
     except IOError as e:
         if e.errno != errno.EPIPE:
             raise
