@@ -100,9 +100,9 @@ int main(int ac, char** av)
     report(sr != SIG_ERR, "set SIGALRM handlerto SIG_IGN");
 
     struct timeval tv = {0};
-    tv.tv_sec = 2;
+    tv.tv_usec = 500000;
     auto res = setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    report(res == 0, "set socket receive timeout 2 seconds");
+    report(res == 0, "set socket receive timeout 0.5 seconds");
 
     alarm(1);
 
