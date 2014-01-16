@@ -5,6 +5,8 @@
 #include <osv/mutex.h>
 #include "stdio.h"
 
+__BEGIN_DECLS
+
 /* as long as we use the glibc header we'll need this hack */
 #ifndef O_LARGEFILE
 #define O_LARGEFILE	0
@@ -51,5 +53,7 @@ extern char **__environ;
 
 #undef LFS64
 #define LFS64(x) LFS64_2(x, x##64)
+
+__END_DECLS
 
 #endif

@@ -1,10 +1,11 @@
 #include "stdio_impl.h"
 #include <termios.h>
 #include <sys/ioctl.h>
-#include <osv/debug.h>
+#include <drivers/console.hh>
 
 extern int vfs_initialized;
 
+extern "C"
 size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len)
 {
 	struct termios tio;
@@ -14,9 +15,9 @@ size_t __stdout_write(FILE *f, const unsigned char *buf, size_t len)
 	// also sets vfs_initialized. Before that point, we can only use
 	// use debug_write().
 	if (!vfs_initialized) {
-		debug_write((const char *)f->wbase, f->wpos - f->wbase);
+		console::write((const char *)f->wbase, f->wpos - f->wbase);
 		f->wpos = f->wbase;
-		debug_write((const char *)buf, len);
+		console::write((const char *)buf, len);
 		return len;
 	}
 		

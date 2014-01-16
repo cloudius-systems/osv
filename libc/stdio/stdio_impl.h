@@ -2,8 +2,10 @@
 #define _STDIO_IMPL_H
 
 #include "stdio.h"
-#include "libc.h"
+#include "../internal/libc.h"
 #include <pthread.h>
+
+__BEGIN_DECLS
 
 #define UNGET 8
 
@@ -105,5 +107,7 @@ int __fclose_ca(FILE *);
 
 int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
 void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
+
+__END_DECLS
 
 #endif
