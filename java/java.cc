@@ -157,7 +157,12 @@ int main(int argc, char **argv)
         env->SetObjectArrayElement(args, index++, env->NewStringUTF(argv[i]));
     }
 
-    jvm_balloon_shrinker balloon(jvm);
+    // Manually setting the heap size is viewed as a declaration of intent. In
+    // that case, we'll leave the user alone. This may be revisited in the
+    // future, but it is certainly the safest option.
+    std::unique_ptr<jvm_balloon_shrinker>
+        balloon(has_xmx ? nullptr : new jvm_balloon_shrinker(jvm));
+
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
 
     // DestroyJavaVM() waits for all all non-daemon threads to end, and
