@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -17,6 +17,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
+#include <osv/mount.h>
 
 #define BUF_SIZE	4096
 
@@ -30,6 +31,48 @@ static void report(bool ok, const char* msg)
     fails += !ok;
     printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
+
+#ifdef __OSV__
+extern "C" int vfs_findroot(char *path, struct mount **mp, char **root);
+
+int check_zfs_refcnt_behavior(void)
+{
+    struct mount *mp;
+    char mount_path[] = "/";
+    char file[64];
+    int old_mcount;
+    int fd, ret = 0;
+
+    /* Get refcount value from the zfs mount point */
+    ret = vfs_findroot(mount_path, &mp, (char **) &file);
+    if (ret) {
+        return -1;
+    }
+    old_mcount = mp->m_count;
+
+    snprintf(file, 64, "/fileXXXXXX");
+    mktemp(file);
+
+    /* Create hard links, and remove them afterwards to exercise the refcount code */
+    for (int i = 0; i < 10; i++) {
+        fd = open(file, O_CREAT|O_TRUNC|O_WRONLY|O_SYNC, 0666);
+        if (fd <= 0) {
+            return -1;
+        }
+        close(fd);
+        unlink(file);
+    }
+
+    /* Get the new refcount value after doing strategical fs operations */
+    ret = vfs_findroot(mount_path, &mp, (char **) &file);
+    if (ret) {
+        return -1;
+    }
+
+    /* Must be equal */
+    return !(old_mcount == mp->m_count);
+}
+#endif
 
 int main(int argc, char **argv)
 {
@@ -114,6 +157,9 @@ int main(int argc, char **argv)
 		"rename /usr/testdir to /usr/testdir2");
 
 	report(rmdir("/usr/testdir2") == 0, "rmdir /usr/testdir2");
+#ifdef __OSV__
+	report(check_zfs_refcnt_behavior() == 0, "check zfs refcount consistency");
+#endif
 
 #if 0
 	fd = open("/mnt/tests/tst-zfs-simple.c", O_RDONLY);
