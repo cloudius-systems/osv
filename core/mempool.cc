@@ -604,12 +604,6 @@ void reclaimer_waiters::post(unsigned units)
 reclaimer::reclaimer()
     : _oom_blocked(), _thread(NULL)
 {
-    // Set the semaphore the the current amount of free memory. We don't do it
-    // in the constructor list so we can hold the lock and guarantee free
-    // memory is not wildly changing.
-    WITH_LOCK(free_page_ranges_lock) {
-        _oom_blocked.post(stats::free());
-    }
     // This cannot be a sched::thread because it may call into JNI functions,
     // if the JVM balloon is registered as a shrinker. It expects the full
     // pthread API to be functional, and for sched::threads it is not.
