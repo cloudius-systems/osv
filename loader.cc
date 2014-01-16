@@ -205,8 +205,7 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
     commands = osv::parse_command_line(line, ok);
 
     if (!ok) {
-        debug("Failed to parse commands line\n");
-        abort();
+        abort("Failed to parse commands line\n");
     }
 
     return commands;
@@ -240,7 +239,7 @@ void run_main(std::vector<std::string> &vec)
         }
         return;
     }
-    debug("run_main(): cannot execute %s. Powering off.\n", command.c_str());
+    printf("run_main(): cannot execute %s. Powering off.\n", command.c_str());
     osv::poweroff();
 }
 
