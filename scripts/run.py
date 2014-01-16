@@ -57,6 +57,10 @@ def start_osv_qemu(options):
         "-m", options.memsize,
         "-smp", options.vcpus]
 
+    if (options.graphics):
+        args += [
+        "-display", "sdl"]
+
     if (options.scsi):
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
@@ -250,6 +254,8 @@ if (__name__ == "__main__"):
                         help="qemu only. handle signals instead of passing keys to the guest. pressing ctrl+c from console will kill the emulator")
     parser.add_argument("-u", "--unsafe-cache", action="store_true",
                         help="Set cache to unsafe. Use it at your own risk.")
+    parser.add_argument("-g", "--graphics", action="store_true",
+                        help="Enable graphics mode.")
 
     parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
                         help = "add network forwarding RULE (QEMU syntax)")
