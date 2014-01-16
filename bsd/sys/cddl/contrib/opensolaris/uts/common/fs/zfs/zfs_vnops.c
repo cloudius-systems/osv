@@ -1436,6 +1436,8 @@ top:
 		zfs_unlinked_add(zp, tx);
 	}
 
+	zfs_zinactive(zp);
+
 	txtype = TX_REMOVE;
 	zfs_log_remove(zilog, tx, txtype, dzp, name, obj);
 
@@ -1699,6 +1701,8 @@ top:
 
 out:
 	zfs_dirent_unlock(dl);
+
+	zfs_zinactive(zp);
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
 		zil_commit(zilog, 0);
