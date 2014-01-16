@@ -374,6 +374,14 @@ int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
     return 0;
 }
 
+int pthread_attr_getstacksize(const pthread_attr_t *__restrict attr,
+                                  size_t * stacksize)
+{
+    auto a = from_libc(attr);
+    *stacksize = a->stack_size;
+    return 0;
+}
+
 int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
 {
     from_libc(attr)->stack_size = stacksize;
