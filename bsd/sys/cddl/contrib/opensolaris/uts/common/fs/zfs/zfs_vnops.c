@@ -3725,6 +3725,22 @@ zfs_inactive(vnode_t *vp)
 		return 0;
 	}
 
+#ifndef __OSV__
+	/*
+	 * The if clause below is used to speed up the recycle
+	 * of a inode which isn't present in the underlying
+	 * file system anymore.
+	 *
+	 * The problem is that OSv VFS layer doesn't support
+	 * vrecycle. The call to vrecycle in the test below was also removed.
+	 *
+	 * vrecycle consists of eliminating all activity associated
+	 * with a given unused vnode and putting it back to the list of
+	 * free vnode objects.
+	 *
+	 * Keeping this code alive prevents zfs_inactive from working properly
+	 * on unlinked znodes given the facts mentioned above.
+	 */
 	mutex_enter(&zp->z_lock);
 	if (zp->z_unlinked) {
 		/*
@@ -3735,6 +3751,7 @@ zfs_inactive(vnode_t *vp)
 		return 0;
 	}
 	mutex_exit(&zp->z_lock);
+#endif
 
 	if (zp->z_atime_dirty && zp->z_unlinked == 0) {
 		dmu_tx_t *tx = dmu_tx_create(zfsvfs->z_os);
