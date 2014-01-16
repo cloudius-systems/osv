@@ -143,7 +143,6 @@ devfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 	for (;;) {
 		error = device_info(&info);
 		if (error) {
-			printf("device %s not found\n", name);
 			return ENOENT;
 		}
 		if (!strncmp(info.name, name, MAXDEVNAME))
