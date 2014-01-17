@@ -92,11 +92,6 @@ endif
 
 arch-cflags = -msse4.1
 
-ifeq ($(img_format),qcow2)
-tmp_img_format = qcow2
-else
-tmp_img_format = raw
-endif
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -646,21 +641,17 @@ bare.raw: loader.img
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
 bare.img: scripts/mkzfs.py $(jni) bare.raw $(out)/bootfs.manifest
-	$(call quiet, echo Creating $@ as $(tmp_img_format))
-	$(call quiet, qemu-img convert -f raw -O $(tmp_img_format) bare.raw $@)
+	$(call quiet, echo Creating $@ as $(img_format))
+	$(call quiet, qemu-img convert -f raw -O $(img_format) bare.raw $@)
 	$(call quiet, qemu-img resize $@ +$(fs_size_mb)M > /dev/null 2>&1)
 	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest
 
-usr.tmp: bare.img $(out)/usr.manifest $(out)/cmdline
+usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
 	$(call quiet, cp bare.img $@)
 	$(src)/scripts/upload_manifest.py -o $@ -d $@.d -m $(out)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(shell cat $(out)/cmdline), IMGEDIT $@)
-
-usr.img: usr.tmp
-	$(call quiet, echo Convert $@ to $(img_format))
-	$(call quiet, qemu-img convert -f $(tmp_img_format) -O $(img_format) usr.tmp $@)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
