@@ -51,10 +51,10 @@
 
 #ifdef XEN
 #define HYPERCALL_STR(name)					\
-	"call hypercall_page + ("STR(__HYPERVISOR_##name)" * 32)"
+	"call hypercall_page + (" STR (__HYPERVISOR_##name)" * 32)"
 #else
 #define HYPERCALL_STR(name)					\
-	"mov $("STR(__HYPERVISOR_##name)" * 32),%%eax; "\
+	"mov $(" STR (__HYPERVISOR_##name)" * 32),%%eax; "\
 	"add hypercall_stubs(%%rip),%%rax; "			\
 	"call *%%rax"
 #endif
