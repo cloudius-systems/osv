@@ -139,6 +139,7 @@ namespace dhcp {
         std::vector<boost::asio::ip::address> get_dns_ips() { return _dns_ips; }
         boost::asio::ip::address_v4 get_subnet_mask() { return _subnet_mask; }
         boost::asio::ip::address_v4 get_broadcast_ip() { return _broadcast_ip; }
+        u16 get_interface_mtu() { return _mtu; }
         int get_lease_time_sec() { return _lease_time_sec; }
         int get_renewal_time_sec() { return _renewal_time_sec; }
         int get_rebind_time_sec() { return _rebind_time_sec; }

@@ -506,15 +506,20 @@ namespace dhcp {
             // TODO: check that the IP address is not responding with ARP
             // RFC2131 section 3.1.5
 
-            dhcp_i("Configuring %s: ip %s subnet mask %s gateway %s",
+            dhcp_i("Configuring %s: ip %s subnet mask %s gateway %s MTU %d",
                 _ifp->if_xname,
                  dm.get_your_ip().to_string().c_str(),
                  dm.get_subnet_mask().to_string().c_str(),
-                 dm.get_router_ip().to_string().c_str());
+                 dm.get_router_ip().to_string().c_str(),
+                 dm.get_interface_mtu());
 
             osv::start_if(_ifp->if_xname,
                          dm.get_your_ip().to_string().c_str(),
                          dm.get_subnet_mask().to_string().c_str());
+            if (dm.get_interface_mtu() != 0) {
+                osv::if_set_mtu(_ifp->if_xname, dm.get_interface_mtu());
+            }
+
             osv_route_add_network("0.0.0.0",
                                   "0.0.0.0",
                                   dm.get_router_ip().to_string().c_str());

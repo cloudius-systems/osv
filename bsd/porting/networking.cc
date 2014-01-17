@@ -34,6 +34,29 @@ void for_each_if(std::function<void (std::string)> func)
     IFNET_RUNLOCK_NOSLEEP();
 }
 
+int if_set_mtu(std::string if_name, u16 mtu)
+{
+    if (if_name.empty()) {
+        return (EINVAL);
+    }
+
+    struct bsd_ifreq ifreq = {0};
+
+    /* IF Name */
+    strncpy(ifreq.ifr_name, if_name.c_str(), IFNAMSIZ);
+    auto ifp = ifunit_ref(if_name.c_str());
+    if (!ifp) {
+        return (ENOENT);
+    }
+
+    /* MTU */
+    ifreq.ifr_mtu = mtu;
+    auto error = in_control(NULL, SIOCSIFMTU, (caddr_t)&ifreq, ifp, NULL);
+
+    if_rele(ifp);
+    return (error);
+}
+
 int start_if(std::string if_name, std::string ip_addr, std::string mask_addr)
 {
     int error, success;

@@ -8,6 +8,7 @@
 #ifndef __NETWORKING_H__
 #define __NETWORKING_H__
 
+#include <osv/types.h>
 #include <sys/cdefs.h>
 #include <string>
 #include <functional>
@@ -15,6 +16,7 @@
 namespace osv {
     void for_each_if(std::function<void (std::string)> func);
     /* Interface Functions */
+    int if_set_mtu(std::string if_name, u16 mtu);
     int start_if(std::string if_name, std::string ip_addr,
         std::string mask_addr);
     int ifup(std::string if_name);
