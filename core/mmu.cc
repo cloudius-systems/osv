@@ -380,7 +380,7 @@ private:
             hw_ptep ptep = pt.at(idx);
             uintptr_t vstart1 = vcur, vend1 = vend;
             clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
-            if (level < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
+            if (unsigned(level) < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
                 uintptr_t offset = base_virt - vstart;
                 if (level) {
                     if (!skip_pte(ptep)) {
