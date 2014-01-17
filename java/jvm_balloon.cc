@@ -318,6 +318,14 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
 
     auto monmethod = env->GetStaticMethodID(monitor, "MonitorGC", "(J)V");
     env->CallStaticVoidMethod(monitor, monmethod, this);
+    exc = env->ExceptionOccurred();
+    if (exc) {
+        printf("WARNING: Could not start OSV Monitor, and JVM Balloon is being disabled.\n"
+               "To fix this problem, please start OSv manually specifying the Heap Size.\n");
+        env->ExceptionDescribe();
+        env->ExceptionClear();
+        abort();
+    }
 
     // Reset statistics
     recent_jvm_heap();
