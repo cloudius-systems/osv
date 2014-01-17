@@ -648,7 +648,7 @@ bare.img: scripts/mkzfs.py $(jni) bare.raw $(out)/bootfs.manifest
 
 usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
 	$(call quiet, cp bare.img $@)
-	$(src)/scripts/upload_manifest.py -o $@ -d $@.d -m $(out)/usr.manifest \
+	$(src)/scripts/upload_manifest.py -o $@ -m $(out)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(shell cat $(out)/cmdline), IMGEDIT $@)
