@@ -45,8 +45,6 @@ virtio_driver::virtio_driver(pci::device& dev)
 
     // Generic init of virtqueues
     probe_virt_queues();
-
-    setup_features();
 }
 
 virtio_driver::~virtio_driver()
