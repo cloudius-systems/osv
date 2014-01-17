@@ -49,17 +49,11 @@ static void scsi_strategy(struct bio *bio)
 
 static int scsi_read(struct device *dev, struct uio *uio, int ioflags)
 {
-    if (uio->uio_offset + uio->uio_resid > dev->size)
-        return EIO;
-
     return bdev_read(dev, uio, ioflags);
 }
 
 static int scsi_write(struct device *dev, struct uio *uio, int ioflags)
 {
-    if (uio->uio_offset + uio->uio_resid > dev->size)
-        return EIO;
-
     return bdev_write(dev, uio, ioflags);
 }
 
