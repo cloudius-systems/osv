@@ -574,16 +574,23 @@ namespace dhcp {
         _dhcp_thread = new sched::thread([&] { dhcp_worker_fn(); });
         _dhcp_thread->start();
 
-        // Send discover packets!
-        for (auto &it: _universe) {
-            it.second->discover();
-        }
+        do {
+            // Send discover packets!
+            for (auto &it: _universe) {
+                it.second->discover();
+            }
 
-        if (wait) {
-            dhcp_i("Waiting for IP...");
-            _waiter = sched::thread::current();
-            sched::thread::wait_until([&]{ return _have_ip; });
-        }
+            if (wait) {
+                dhcp_i("Waiting for IP...");
+                _waiter = sched::thread::current();
+
+                sched::timer t(*sched::thread::current());
+                u64 cur_time = clock::get()->time();
+                t.set(cur_time + 3_s);
+
+                sched::thread::wait_until([&]{ return _have_ip || t.expired(); });
+            }
+        } while (!_have_ip && wait);
     }
 
     void dhcp_worker::dhcp_worker_fn()
