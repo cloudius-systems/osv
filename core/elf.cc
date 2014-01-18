@@ -635,10 +635,10 @@ dladdr_info object::lookup_addr(const void* addr)
         }
         symbol_module sm{&sym, this};
         auto s_addr = sm.relocated_addr();
-        if (s_addr < addr) {
+        if (s_addr > addr) {
             continue;
         }
-        if (!best.symbol || sm.relocated_addr() < best.relocated_addr()) {
+        if (!best.symbol || sm.relocated_addr() > best.relocated_addr()) {
             best = sm;
         }
     }
