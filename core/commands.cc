@@ -31,10 +31,11 @@ struct command : qi::grammar<sciter,
                        ("\\r", '\r')("\\t", '\t')("\\v", '\v')("\\\\", '\\')
                        ("\\\'", '\'')("\\\"", '\"');
 
-        string %= qi::no_skip[+(unesc_char | (char_ - ' ' - ';'))];
+        string %= qi::no_skip[+(unesc_char | (char_ - ' ' - ';' - '&'))];
         quoted_string %= lexeme['"' >> *(unesc_char | (char_ - '"')) >> '"'];
 
-        start %= (quoted_string | string) % *space;
+        start %= ((quoted_string | string) % *space) >>
+                (char_(';') | char_('&') | qi::eoi);
     }
 
     qi::rule<sciter, std::string(), ascii::space_type> string;
@@ -49,7 +50,7 @@ struct commands : qi::grammar<sciter,
 {
     commands() : commands::base_type(start)
     {
-        start %= cmd % ';';
+        start %= cmd % *space;
     }
 
     command cmd;

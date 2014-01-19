@@ -261,6 +261,12 @@ void run_main(std::vector<std::string> &vec)
     osv::poweroff();
 }
 
+void *_run_main(void *vecp)
+{
+    run_main(*(std::vector<std::string> *)vecp);
+    return nullptr;
+}
+
 void* do_main_thread(void *_commands)
 {
     auto commands =
@@ -313,8 +319,23 @@ void* do_main_thread(void *_commands)
     }
 
     // run each payload in order
+    // Our parse_command_line() leaves at the end of each command a delimiter,
+    // can be '&' if we need to run this command in a new thread, or ';' or
+    // empty otherwise, to run in this thread.
+    std::vector<pthread_t> bg;
     for (auto &it : *commands) {
-        run_main(it);
+        std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
+        if (it.back() != "&") {
+            run_main(newvec);
+        } else {
+            pthread_t t;
+            pthread_create(&t, nullptr, _run_main, &newvec);
+            bg.push_back(t);
+        }
+    }
+    void* retval;
+    for (auto t : bg) {
+        pthread_join(t, &retval);
     }
 
     return nullptr;
