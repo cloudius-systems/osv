@@ -26,8 +26,8 @@ def cleanups():
 
 def set_imgargs(options):
     if (not options.execute):
-        return
-    
+        with open ("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
+            options.execute = cmdline.read()
     args = ["setargs", options.image_file, options.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
 
