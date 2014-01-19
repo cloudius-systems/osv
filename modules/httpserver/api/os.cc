@@ -9,22 +9,27 @@
 #include "os.hh"
 #include "osv/version.hh"
 #include "json/formatter.hh"
+#include "autogen/os.json.hh"
 
 namespace httpserver {
 
 namespace api {
 
 namespace os {
+
 using namespace std;
+using namespace json;
 
 void init(routes& routes)
 {
+    os_json_init_path();
+
     function_handler* os_version = new function_handler([](const_req req)
     {
         return json::formatter::to_json(osv::version());
     }, "json");
 
-    routes.put(GET, "/os/version", os_version);
+    routes.add_path("getOSversion", os_version);
 }
 
 }
