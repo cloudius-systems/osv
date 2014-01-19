@@ -6,6 +6,7 @@
  */
 
 #include "formatter.hh"
+#include "json_elements.hh"
 
 using namespace std;
 
@@ -47,6 +48,14 @@ string formatter::to_json(const date_time& d)
     strftime(buff, 50, TIME_FORMAT, &d);
     res += buff;
     return res + "\"";
+}
+
+string to_json(const json_base& obj) {
+    return obj.to_json();
+}
+
+std::string formatter::to_json(unsigned long l) {
+    return to_string(l);
 }
 
 }
