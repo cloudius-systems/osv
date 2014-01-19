@@ -27,6 +27,12 @@ int __vsnprintf_chk(char *s, size_t maxlen, int flags, size_t slen,
     return vsnprintf(s, maxlen, format, args);
 }
 
+int __vasprintf_chk (char **__ptr, int __flag, const char *__fmt,
+                     va_list __arg)
+{
+    return vasprintf(__ptr, __fmt, __arg);
+}
+
 int __sprintf_chk(char *s, int flags, size_t slen, const char *format, ...)
 {
     va_list args;
@@ -36,6 +42,17 @@ int __sprintf_chk(char *s, int flags, size_t slen, const char *format, ...)
     if (ret > slen) {
         abort();
     }
+    va_end(args);
+    return ret;
+}
+
+int __snprintf_chk (char * s, size_t n, int flag, size_t slen,
+                    const char *format, ...)
+{
+    va_list args;
+    int ret;
+    va_start(args, format);
+    ret = __vsnprintf_chk(s, n, flag, slen, format, args);
     va_end(args);
     return ret;
 }
