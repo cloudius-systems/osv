@@ -379,7 +379,7 @@ struct bpf_if;
 
 extern	uint32_t ether_crc32_le(const uint8_t *, size_t);
 extern	uint32_t ether_crc32_be(const uint8_t *, size_t);
-extern	void ether_demux(struct ifnet *, struct mbuf *);
+extern	void ether_demux(struct ifnet *, struct mbuf *, uint16_t ether_type);
 extern	void ether_ifattach(struct ifnet *, const u_int8_t *);
 extern	void ether_ifdetach(struct ifnet *);
 extern	int  ether_ioctl(struct ifnet *, u_long, caddr_t);
@@ -391,6 +391,8 @@ void	ether_vlan_mtap(struct bpf_if *, struct mbuf *,
 struct mbuf  *ether_vlanencap(struct mbuf *, uint16_t);
 
 __END_DECLS
+
+bool ether_preprocess_packet(struct ifnet* ifp, struct mbuf* m, uint16_t& ether_type);
 
 #else /* _KERNEL */
 

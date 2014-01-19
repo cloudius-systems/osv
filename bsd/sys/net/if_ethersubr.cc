@@ -504,24 +504,23 @@ ether_ipfw_chk(struct mbuf **m0, struct ifnet *dst, int shared)
 #endif
 
 /*
- * Process a received Ethernet packet; the packet is in the
- * mbuf chain m with the ethernet header at the front.
+ * Verify an ethernet packet and strip header and trailer bits
  */
-static void
-ether_input_internal(struct ifnet *ifp, struct mbuf *m)
+bool
+ether_preprocess_packet(struct ifnet *ifp, struct mbuf *m, uint16_t& ether_type)
 {
 	struct ether_header *eh;
 	u_short etype;
 
 	if ((ifp->if_flags & IFF_UP) == 0) {
 		m_freem(m);
-		return;
+		return false;
 	}
 #ifdef DIAGNOSTIC
 	if ((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0) {
 		if_printf(ifp, "discard frame at !IFF_DRV_RUNNING\n");
 		m_freem(m);
-		return;
+		return false;
 	}
 #endif
 	/*
@@ -532,7 +531,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		if_printf(ifp, "discard frame w/o packet header\n");
 		ifp->if_ierrors++;
 		m_freem(m);
-		return;
+		return false;
 	}
 	if (m->m_hdr.mh_len < ETHER_HDR_LEN) {
 		/* XXX maybe should pullup? */
@@ -541,7 +540,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 				m->m_hdr.mh_len, m->M_dat.MH.MH_pkthdr.len);
 		ifp->if_ierrors++;
 		m_freem(m);
-		return;
+		return false;
 	}
 	eh = mtod(m, struct ether_header *);
 	etype = ntohs(eh->ether_type);
@@ -549,7 +548,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		if_printf(ifp, "discard frame w/o interface pointer\n");
 		ifp->if_ierrors++;
 		m_freem(m);
-		return;
+		return false;
 	}
 #ifdef DIAGNOSTIC
 	if (m->M_dat.MH.MH_pkthdr.rcvif != ifp) {
@@ -592,7 +591,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 	if (ifp->if_flags & IFF_MONITOR) {
 		m_freem(m);
 		CURVNET_RESTORE();
-		return;
+		return false;
 	}
 
 #if 0
@@ -605,7 +604,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 			ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 		else {
 			CURVNET_RESTORE();
-			return;
+			return false;
 		}
 	}
 #endif
@@ -630,7 +629,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 			ifp->if_ierrors++;
 			m_freem(m);
 			CURVNET_RESTORE();
-			return;
+			return false;
 		}
 
 		evl = mtod(m, struct ether_vlan_header *);
@@ -654,7 +653,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		(*ng_ether_input_p)(ifp, &m);
 		if (m == NULL) {
 			CURVNET_RESTORE();
-			return;
+			return false;
 		}
 	}
 #endif
@@ -670,7 +669,7 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 		BRIDGE_INPUT(ifp, m);
 		if (m == NULL) {
 			CURVNET_RESTORE();
-			return;
+			return false;
 		}
 	}
 #endif
@@ -687,15 +686,52 @@ ether_input_internal(struct ifnet *ifp, struct mbuf *m)
 			m->m_hdr.mh_flags |= M_PROMISC;
 	}
 
+	/*
+	 * Pass promiscuously received frames to the upper layer if the user
+	 * requested this by setting IFF_PPROMISC. Otherwise, drop them.
+	 */
+	if ((ifp->if_flags & IFF_PPROMISC) == 0 && (m->m_hdr.mh_flags & M_PROMISC)) {
+		m_freem(m);
+		CURVNET_RESTORE();
+		return false;
+	}
+
 #if 0
 	/* First chunk of an mbuf contains good entropy */
 	if (harvest.ethernet)
 		random_harvest(m, 16, 3, 0, RANDOM_NET);
 #endif
 
-	ether_demux(ifp, m);
+	ether_type = ntohs(eh->ether_type);
+
+	/*
+	 * Reset layer specific mbuf flags to avoid confusing upper layers.
+	 * Strip off Ethernet header.
+	 */
+	m->m_hdr.mh_flags &= ~M_VLANTAG;
+	m->m_hdr.mh_flags &= ~(M_PROTOFLAGS);
+	m_adj(m, ETHER_HDR_LEN);
+
+	CURVNET_RESTORE();
+	return true;
+}
+
+/*
+ * Process a received Ethernet packet; the packet is in the
+ * mbuf chain m with the ethernet header at the front.
+ */
+static void
+ether_input_internal(struct ifnet *ifp, struct mbuf *m)
+{
+	uint16_t ether_type;
+	if (!ether_preprocess_packet(ifp, m, ether_type)) {
+	    return;
+	}
+	CURVNET_SET_QUIET(ifp->if_vnet);
+	ether_demux(ifp, m, ether_type);
 	CURVNET_RESTORE();
 }
+
 
 /*
  * Ethernet input dispatch; by default, direct dispatch here regardless of
@@ -741,11 +777,9 @@ ether_input(struct ifnet *ifp, struct mbuf *m)
  * Upper layer processing for a received Ethernet packet.
  */
 void
-ether_demux(struct ifnet *ifp, struct mbuf *m)
+ether_demux(struct ifnet *ifp, struct mbuf *m, uint16_t ether_type)
 {
-	struct ether_header *eh;
 	int isr;
-	u_short ether_type;
 
 	KASSERT(ifp != NULL, ("%s: NULL interface pointer", __func__));
 
@@ -764,9 +798,6 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 	}
 #endif
 #endif
-
-	eh = mtod(m, struct ether_header *);
-	ether_type = ntohs(eh->ether_type);
 
 #if 0
 	/*
@@ -788,23 +819,6 @@ ether_demux(struct ifnet *ifp, struct mbuf *m)
 		return;
 	}
 #endif
-
-	/*
-	 * Pass promiscuously received frames to the upper layer if the user
-	 * requested this by setting IFF_PPROMISC. Otherwise, drop them.
-	 */
-	if ((ifp->if_flags & IFF_PPROMISC) == 0 && (m->m_hdr.mh_flags & M_PROMISC)) {
-		m_freem(m);
-		return;
-	}
-
-	/*
-	 * Reset layer specific mbuf flags to avoid confusing upper layers.
-	 * Strip off Ethernet header.
-	 */
-	m->m_hdr.mh_flags &= ~M_VLANTAG;
-	m->m_hdr.mh_flags &= ~(M_PROTOFLAGS);
-	m_adj(m, ETHER_HDR_LEN);
 
 	/*
 	 * Dispatch frame to upper layer.
