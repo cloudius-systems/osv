@@ -447,7 +447,10 @@ void net::receiver()
             rx_packets++;
             rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
 
-            (*_ifn->if_input)(_ifn, m_head);
+            bool fast_path = _ifn->if_classifier.post_packet(m_head);
+            if (!fast_path) {
+                (*_ifn->if_input)(_ifn, m_head);
+            }
 
             trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
 
