@@ -7,6 +7,7 @@
 
 #include "routes.hh"
 #include "reply.hh"
+#include "json/json_path.hh"
 
 namespace httpserver {
 
@@ -78,4 +79,24 @@ handler_base* routes::get_handler(operation_type type, const string& url,
     }
     return nullptr;
 }
+
+routes& routes::add_path(const string& nick, handler_base* handler)
+{
+    json::path_description* path = json::path_description::get(nick);
+    if (path == nullptr) {
+        cerr << "Failed adding path by nickname, no path found for nickname " << nick << endl;
+    }
+    if (path->params.size() == 0)
+        put(path->operations.method, path->path, handler);
+    else {
+        match_rule* rule = new match_rule(handler);
+        rule->addStr(path->path);
+        for (auto i = path->params.begin(); i != path->params.end(); ++i) {
+            rule->addParam(std::get<0>(*i), std::get<1>(*i));
+        }
+        add(rule);
+    }
+    return *this;
+}
+
 }

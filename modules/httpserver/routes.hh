@@ -62,6 +62,14 @@ public:
     }
 
     /**
+     * uses the predefined path from swagger to configure the path
+     * @param nick the nickname of the command as declared in
+     * swagger api definition
+     * @param handler a handler to be execute when the path is hit
+     */
+    routes& add_path(const std::string& nick, handler_base* handler);
+
+    /**
      * the main entry point.
      * the general handler calls this method with the request
      * the method takes the headers from the request and find the
@@ -105,8 +113,6 @@ private:
      * @return the url from the request without the last /
      */
     std::string normalize_url(const std::string& url, std::string& paramPart);
-
-
 
     std::unordered_map<std::string, handler_base*> map[2];
     std::vector<match_rule*> rules;
