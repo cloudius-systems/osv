@@ -28,6 +28,8 @@ def set_imgargs(options):
     if (not options.execute):
         with open ("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
             options.execute = cmdline.read()
+    if (options.verbose):
+        options.execute = "--verbose " + options.execute
     args = ["setargs", options.image_file, options.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
 
@@ -256,7 +258,8 @@ if (__name__ == "__main__"):
                         help="Set cache to unsafe. Use it at your own risk.")
     parser.add_argument("-g", "--graphics", action="store_true",
                         help="Enable graphics mode.")
-
+    parser.add_argument("-V", "--verbose", action="store_true",
+                        help="pass --verbose to OSv, to display more debugging information on the console")
     parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
                         help = "add network forwarding RULE (QEMU syntax)")
     cmdargs = parser.parse_args()
