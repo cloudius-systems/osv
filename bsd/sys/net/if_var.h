@@ -86,6 +86,7 @@ struct	vnet;
 #include <bsd/sys/sys/socket.h>
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/sync_stub.h>
+#include <osv/net_channel.hh>
 
 
 __BEGIN_DECLS
@@ -174,6 +175,7 @@ struct ifnet {
 	 * get the interface info and statistics including the one gathered by HW
 	 */
 	void (*if_getinfo)(struct ifnet *, struct if_data *);
+	classifier if_classifier;
 
 	struct	vnet *if_home_vnet;	/* where this ifnet originates from */
 	struct	bsd_ifaddr	*if_addr;	/* pointer to link-level address */
