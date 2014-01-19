@@ -12,6 +12,11 @@
 #include <osv/sched.hh>
 #include <lockfree/ring.hh>
 #include <functional>
+#include <unordered_map>
+#include <osv/rcu.hh>
+#include <bsd/porting/netport.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip.h>
 
 struct mbuf;
 
@@ -49,5 +54,52 @@ public:
 };
 
 }
+
+struct ipv4_tcp_conn_id {
+    ipv4_tcp_conn_id(in_addr src_addr, in_addr dst_addr, in_port_t src_port, in_port_t dst_port)
+        : src_addr(src_addr), dst_addr(dst_addr), src_port(src_port), dst_port(dst_port) {}
+
+    in_addr src_addr;
+    in_addr dst_addr;
+    in_port_t src_port;
+    in_port_t dst_port;
+
+    size_t hash() const {
+        // FIXME: protection against hash attacks?
+        return src_addr.s_addr ^ dst_addr.s_addr ^ src_port ^ dst_port;
+    }
+    bool operator==(const ipv4_tcp_conn_id& x) const {
+        return src_addr == x.src_addr
+            && dst_addr == x.dst_addr
+            && src_port == x.src_port
+            && dst_port == x.dst_port;
+    }
+};
+
+namespace std {
+
+template <>
+struct hash<ipv4_tcp_conn_id> {
+    size_t operator()(ipv4_tcp_conn_id x) const { return x.hash(); }
+};
+
+}
+
+class classifier {
+public:
+    classifier();
+    // consumer side operations
+    void add(ipv4_tcp_conn_id id, net_channel* channel);
+    void remove(ipv4_tcp_conn_id id);
+    // producer side operations
+    bool post_packet(mbuf* m);
+private:
+    net_channel* classify_ipv4_tcp(mbuf* m);
+private:
+    using ipv4_tcp_channels = std::unordered_map<ipv4_tcp_conn_id, net_channel*>;
+    mutex _mtx;
+    // FIXME: use a fine-grained rcu hash table
+    osv::rcu_ptr<ipv4_tcp_channels, osv::rcu_deleter<ipv4_tcp_channels>> _ipv4_tcp_channels;
+};
 
 #endif /* NETCHANNEL_HH_ */
