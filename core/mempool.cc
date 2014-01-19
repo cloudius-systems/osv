@@ -1226,7 +1226,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
     // that alignment is a multiple of sizeof(void*). We don't verify this
     // requirement, and rather always return memory which is aligned at least
     // to sizeof(void*), even if lesser alignment is requested.
-    if (!is_power_of_two(alignment) || (size & (alignment - 1))) {
+    if (!is_power_of_two(alignment)) {
         return EINVAL;
     }
     void *ret = malloc(size);
