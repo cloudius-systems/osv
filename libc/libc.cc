@@ -22,6 +22,8 @@
 #include <termios.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <osv/clock.hh>
+#include <mempool.hh>
 
 int libc_error(int err)
 {
@@ -132,7 +134,18 @@ int getloadavg(double loadavg[], int nelem)
 
 extern "C" int sysinfo(struct sysinfo *info)
 {
-    memset(info, 0, sizeof(struct sysinfo));
+    info->uptime = std::chrono::duration_cast<std::chrono::seconds>(
+                osv::clock::uptime::now().time_since_epoch()).count();
+    info->loads[0] = info->loads[1] = info->loads[2] = 0; // TODO
+    info->totalram = memory::stats::total();
+    info->freeram = memory::stats::free();
+    info->sharedram = 0; // TODO: anything more meaningful to return?
+    info->bufferram = 0; // TODO: anything more meaningful to return?
+    info->totalswap = 0; // Swap not supported in OSv
+    info->freeswap = 0; // Swap not supported in OSv
+    info->procs = 1; // Only one process in OSv
+    info->totalhigh = info->freehigh = 0; // No such concept in OSv
+    info->mem_unit = 1;
     return 0;
 }
 

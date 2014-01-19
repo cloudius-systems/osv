@@ -1,6 +1,8 @@
 #ifndef _SYS_SYSINFO_H
 #define _SYS_SYSINFO_H
 
+#include <osv/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,10 +18,10 @@ struct sysinfo {
 	unsigned long bufferram;
 	unsigned long totalswap;
 	unsigned long freeswap;
-	unsigned short procs, pad;
+	u16 procs, pad;
 	unsigned long totalhigh;
 	unsigned long freehigh;
-	unsigned mem_unit;
+	u32 mem_unit;
 };
 
 int sysinfo (struct sysinfo *);
