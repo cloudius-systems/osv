@@ -34,11 +34,15 @@ static bool test_parse_simplest()
         return false;
     }
 
-    if (result[0].size() != 1) {
+    if (result[0].size() != 2) {
         return false;
     }
 
     if (result[0][0] != std::string("mkfs.so")) {
+        return false;
+    }
+
+    if (result[0][1] != std::string("")) {
         return false;
     }
 
@@ -63,7 +67,7 @@ static bool test_parse_simplest_with_args()
         return false;
     }
 
-    if (result[0].size() != 3) {
+    if (result[0].size() != 4) {
         return false;
     }
 
@@ -76,6 +80,10 @@ static bool test_parse_simplest_with_args()
     }
 
     if (result[0][2] != std::string("--blah")) {
+        return false;
+    }
+
+    if (result[0][3] != std::string("")) {
         return false;
     }
 
@@ -99,7 +107,7 @@ static bool test_parse_simplest_with_quotes()
         return false;
     }
 
-    if (result[0].size() != 2) {
+    if (result[0].size() != 3) {
         return false;
     }
 
@@ -108,6 +116,10 @@ static bool test_parse_simplest_with_quotes()
     }
 
     if (result[0][1] != std::string("--blub ;  --blah")) {
+        return false;
+    }
+
+    if (result[0][2] != std::string("")) {
         return false;
     }
 
@@ -133,13 +145,16 @@ static bool test_parse_simple_multiple()
     }
 
     for (size_t i = 0; i < result.size(); i++) {
-        if (result[i].size() != 1) {
+        if (result[i].size() != 2) {
             return false;
         }
     }
 
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i][0] != res[i]) {
+            return false;
+        }
+        if (result[i][1] != std::string(";")) {
             return false;
         }
     }
@@ -165,20 +180,23 @@ static bool test_parse_multiple_with_args()
         return false;
     }
 
-    if (result[0].size() != 1) {
+    if (result[0].size() != 2) {
         return false;
     }
 
-    if (result[1].size() != 2) {
+    if (result[1].size() != 3) {
         return false;
     }
 
-    if (result[2].size() != 1) {
+    if (result[2].size() != 2) {
         return false;
     }
 
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i][0] != cmd[i]) {
+            return false;
+        }
+        if (result[i][result[i].size()-1] != std::string(";")) {
             return false;
         }
     }
@@ -208,20 +226,24 @@ static bool test_parse_multiple_with_quotes()
         return false;
     }
 
-    if (result[0].size() != 1) {
+    if (result[0].size() != 2) {
         return false;
     }
 
-    if (result[1].size() != 2) {
+    if (result[1].size() != 3) {
         return false;
     }
 
-    if (result[2].size() != 1) {
+    if (result[2].size() != 2) {
         return false;
     }
 
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i][0] != cmd[i]) {
+            return false;
+        }
+        if (result[i][result[i].size()-1] != std::string(";") &&
+                result[i][result[i].size()-1] != std::string("")) {
             return false;
         }
     }
@@ -251,11 +273,11 @@ static bool test_cpiod_haproxy()
         return false;
     }
 
-    if (result[0].size() != 1) {
+    if (result[0].size() != 2) {
         return false;
     }
 
-    if (result[1].size() != 3) {
+    if (result[1].size() != 4) {
         return false;
     }
 
