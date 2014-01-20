@@ -124,6 +124,12 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 			if (vp->v_type == VDIR)
 				goto out_drele;
 		}
+		if (flags & O_DIRECTORY) {
+		    if (vp->v_type != VDIR) {
+		        error = ENOTDIR;
+		        goto out_drele;
+		    }
+		}
 	}
 
 	vn_lock(vp);
