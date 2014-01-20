@@ -599,15 +599,6 @@ void so_linger_set(struct socket *, int);
 struct protosw *so_protosw_get(const struct socket *);
 void so_protosw_set(struct socket *, struct protosw *);
 
-void so_sorwakeup_locked(struct socket *so);
-void so_sowwakeup_locked(struct socket *so);
-
-void so_sorwakeup(struct socket *so);
-void so_sowwakeup(struct socket *so);
-
-void so_lock(struct socket *so);
-void so_unlock(struct socket *so);
-
 void so_listeners_apply_all(struct socket *so, void (*func)(struct socket *, void *), void *arg);
 
 #endif
