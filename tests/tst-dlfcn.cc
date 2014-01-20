@@ -26,3 +26,30 @@ BOOST_AUTO_TEST_CASE(test_dlopen_with_empty_file_name)
     BOOST_REQUIRE(dlsym(ref, "open") != NULL);
     BOOST_REQUIRE(dlclose(ref) == 0);
 }
+
+template<typename T>
+static void *adj_addr(T addr, int adj)
+{
+    return reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(addr) + adj);
+}
+
+BOOST_AUTO_TEST_CASE(test_dladdr)
+{
+    Dl_info info;
+
+    BOOST_REQUIRE(dladdr(adj_addr(vfprintf, -2), &info) != 0);
+    BOOST_REQUIRE(std::string("vfprintf") != std::string(info.dli_sname));
+    BOOST_REQUIRE(vfprintf != info.dli_saddr);
+
+    BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 0), &info) != 0);
+    BOOST_CHECK_EQUAL("vfprintf", info.dli_sname);
+    BOOST_CHECK_EQUAL(vfprintf, info.dli_saddr);
+
+    BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 2), &info) != 0);
+    BOOST_CHECK_EQUAL("vfprintf", info.dli_sname);
+    BOOST_CHECK_EQUAL(vfprintf, info.dli_saddr);
+
+    BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 4), &info) != 0);
+    BOOST_CHECK_EQUAL("vfprintf", info.dli_sname);
+    BOOST_CHECK_EQUAL(vfprintf, info.dli_saddr);
+}
