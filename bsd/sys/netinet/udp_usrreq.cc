@@ -287,13 +287,13 @@ udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
 	so = inp->inp_socket;
 	SOCKBUF_LOCK(&so->so_rcv);
 	if (sbappendaddr_locked(&so->so_rcv, append_sa, n, opts) == 0) {
-		SOCKBUF_UNLOCK(&so->so_rcv);
 		m_freem(n);
 		if (opts)
 			m_freem(opts);
 		UDPSTAT_INC(udps_fullsock);
 	} else
 		sorwakeup_locked(so);
+	SOCKBUF_UNLOCK(&so->so_rcv);
 }
 
 void

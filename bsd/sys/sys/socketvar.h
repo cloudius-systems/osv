@@ -242,18 +242,12 @@ extern "C" void sowakeup(socket* so, sockbuf* sb);
 
 /*
  * In sorwakeup() and sowwakeup(), acquire the socket buffer lock to
- * avoid a non-atomic test-and-wakeup.  However, sowakeup is
- * responsible for releasing the lock if it is called.  We unlock only
- * if we don't call into sowakeup.  If any code is introduced that
- * directly invokes the underlying sowakeup() primitives, it must
- * maintain the same semantics.
+ * avoid a non-atomic test-and-wakeup.
  */
 inline void sorwakeup_locked(socket* so) {
 	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 	if (sb_notify(&so->so_rcv)) {
 		sowakeup(so, &so->so_rcv);
-	} else {
-		SOCKBUF_UNLOCK(&so->so_rcv);
 	}
 }
 
@@ -261,6 +255,7 @@ inline void sorwakeup(socket* so)
 {
 	SOCKBUF_LOCK(&so->so_rcv);
 	sorwakeup_locked(so);
+	SOCKBUF_UNLOCK(&so->so_rcv);
 }
 
 inline void sowwakeup_locked(socket* so)
@@ -268,8 +263,6 @@ inline void sowwakeup_locked(socket* so)
 	SOCKBUF_LOCK_ASSERT(&so->so_snd);
 	if (sb_notify(&so->so_snd)) {
 		sowakeup(so, &so->so_snd);
-	} else {
-		SOCKBUF_UNLOCK(&so->so_snd);
 	}
 }
 
@@ -277,6 +270,7 @@ inline void sowwakeup(socket* so)
 {
 	SOCKBUF_LOCK(&so->so_snd);
 	sowwakeup_locked(so);
+	SOCKBUF_UNLOCK(&so->so_snd);
 }
 
 struct accept_filter {

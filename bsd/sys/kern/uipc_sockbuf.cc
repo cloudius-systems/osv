@@ -82,7 +82,6 @@ socantsendmore_locked(struct socket *so)
 
 	so->so_snd.sb_state |= SBS_CANTSENDMORE;
 	sowwakeup_locked(so);
-	mtx_assert(SOCKBUF_MTX(&so->so_snd), MA_NOTOWNED);
 }
 
 void
@@ -91,6 +90,7 @@ socantsendmore(struct socket *so)
 
 	SOCKBUF_LOCK(&so->so_snd);
 	socantsendmore_locked(so);
+	SOCKBUF_UNLOCK(&so->so_snd);
 	mtx_assert(SOCKBUF_MTX(&so->so_snd), MA_NOTOWNED);
 }
 
@@ -102,7 +102,6 @@ socantrcvmore_locked(struct socket *so)
 
 	so->so_rcv.sb_state |= SBS_CANTRCVMORE;
 	sorwakeup_locked(so);
-	mtx_assert(SOCKBUF_MTX(&so->so_rcv), MA_NOTOWNED);
 }
 
 void
@@ -111,6 +110,7 @@ socantrcvmore(struct socket *so)
 
 	SOCKBUF_LOCK(&so->so_rcv);
 	socantrcvmore_locked(so);
+	SOCKBUF_UNLOCK(&so->so_rcv);
 	mtx_assert(SOCKBUF_MTX(&so->so_rcv), MA_NOTOWNED);
 }
 
@@ -213,10 +213,7 @@ void so_wake_poll(struct socket *so, struct sockbuf *sb)
  * Wakeup processes waiting on a socket buffer.  Do asynchronous notification
  * via SIGIO if the socket has the SS_ASYNC flag set.
  *
- * Called with the socket buffer lock held; will release the lock by the end
- * of the function.  This allows the caller to acquire the socket buffer lock
- * while testing for the need for various sorts of wakeup and hold it through
- * to the point where it's no longer required.  We currently hold the lock
+ * Called with the socket buffer lock held;  we currently hold the lock
  * through calls out to other subsystems (with the exception of kqueue), and
  * then release it to avoid lock order issues.  It's not clear that's
  * correct.
@@ -243,10 +240,11 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 		}
 	} else
 		ret = SU_OK;
-	SOCKBUF_UNLOCK(sb);
-	if (ret == SU_ISCONNECTED)
-		soisconnected(so);
-	mtx_assert(SOCKBUF_MTX(sb), MA_NOTOWNED);
+	if (ret == SU_ISCONNECTED) {
+		DROP_LOCK(sb->sb_mtx._mutex) {
+			soisconnected(so);
+		}
+	}
 }
 
 /*

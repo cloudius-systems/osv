@@ -1801,8 +1801,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				m_adj(m, drop_hdrlen);	/* delayed header drop */
 				sbappendstream_locked(&so->so_rcv, m);
 			}
-			/* NB: sorwakeup_locked() does an implicit unlock. */
 			sorwakeup_locked(so);
+			SOCKBUF_UNLOCK(&so->so_rcv);
 			if (DELAY_ACK(tp)) {
 				tp->t_flags |= TF_DELACK;
 			} else {
@@ -2615,8 +2615,8 @@ process_ACK:
 			tp->snd_wnd -= acked;
 			ourfinisacked = 0;
 		}
-		/* NB: sowwakeup_locked() does an implicit unlock. */
 		sowwakeup_locked(so);
+		SOCKBUF_UNLOCK(&so->so_snd);
 		/* Detect una wraparound. */
 		if (!IN_RECOVERY(tp->t_flags) &&
 		    tp->snd_una > tp->snd_recover &&
@@ -2827,8 +2827,8 @@ dodata:							/* XXX */
 				m_freem(m);
 			else
 				sbappendstream_locked(&so->so_rcv, m);
-			/* NB: sorwakeup_locked() does an implicit unlock. */
 			sorwakeup_locked(so);
+			SOCKBUF_UNLOCK(&so->so_rcv);
 		} else {
 			/*
 			 * XXX: Due to the header drop above "th" is

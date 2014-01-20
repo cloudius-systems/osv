@@ -370,5 +370,6 @@ present:
 	} while (q && q->tqe_th->th_seq == tp->rcv_nxt);
 	ND6_HINT(tp);
 	sorwakeup_locked(so);
+	SOCKBUF_UNLOCK(&so->so_rcv);
 	return (flags);
 }

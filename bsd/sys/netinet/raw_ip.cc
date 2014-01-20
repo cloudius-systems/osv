@@ -251,9 +251,9 @@ rip_append(struct inpcb *last, struct ip *ip, struct mbuf *n,
 			m_freem(n);
 			if (opts)
 				m_freem(opts);
-			SOCKBUF_UNLOCK(&so->so_rcv);
 		} else
 			sorwakeup_locked(so);
+		SOCKBUF_UNLOCK(&so->so_rcv);
 	} else
 		m_freem(n);
 	return (policyfail);
