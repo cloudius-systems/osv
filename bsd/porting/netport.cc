@@ -33,8 +33,8 @@ do_copystr(const void *src, void *dest, size_t len, size_t *done)
     int err = 0;
 
     // including the terminating NUL.
-    strncpy(dest, src, len);
-    n = strnlen(dest, len);
+    strncpy((char*)dest, (const char*)src, len);
+    n = strnlen((const char *)dest, len);
 
     if (n == len) {
         // on this case, destination buf isn't null-terminated.
