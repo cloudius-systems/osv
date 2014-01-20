@@ -1647,7 +1647,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 
 				TCPSTAT_INC(tcps_rcvackpack);
 				TCPSTAT_ADD(tcps_rcvackbyte, acked);
-				sbdrop(&so->so_snd, acked);
+				sbdrop(so, &so->so_snd, acked);
 				if (tp->snd_una > tp->snd_recover &&
 				    th->th_ack <= tp->snd_recover)
 					tp->snd_recover = th->th_ack - 1;
@@ -1786,7 +1786,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			}
 
 			/* Add data to socket buffer. */
-			SOCKBUF_LOCK(&so->so_rcv);
+			SOCK_LOCK(so);
 			if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
 				m_freem(m);
 			} else {
@@ -1799,10 +1799,10 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 					    newsize, so, NULL))
 						so->so_rcv.sb_flags &= ~SB_AUTOSIZE;
 				m_adj(m, drop_hdrlen);	/* delayed header drop */
-				sbappendstream_locked(&so->so_rcv, m);
+				sbappendstream_locked(so, &so->so_rcv, m);
 			}
 			sorwakeup_locked(so);
-			SOCKBUF_UNLOCK(&so->so_rcv);
+			SOCK_UNLOCK(so);
 			if (DELAY_ACK(tp)) {
 				tp->t_flags |= TF_DELACK;
 			} else {
@@ -2605,18 +2605,18 @@ process_ACK:
 		 */
 		cc_ack_received(tp, th, CC_ACK);
 
-		SOCKBUF_LOCK(&so->so_snd);
+		SOCK_LOCK(so);
 		if (acked > so->so_snd.sb_cc) {
 			tp->snd_wnd -= so->so_snd.sb_cc;
-			sbdrop_locked(&so->so_snd, (int)so->so_snd.sb_cc);
+			sbdrop_locked(so, &so->so_snd, (int)so->so_snd.sb_cc);
 			ourfinisacked = 1;
 		} else {
-			sbdrop_locked(&so->so_snd, acked);
+			sbdrop_locked(so, &so->so_snd, acked);
 			tp->snd_wnd -= acked;
 			ourfinisacked = 0;
 		}
 		sowwakeup_locked(so);
-		SOCKBUF_UNLOCK(&so->so_snd);
+		SOCK_UNLOCK(so);
 		/* Detect una wraparound. */
 		if (!IN_RECOVERY(tp->t_flags) &&
 		    tp->snd_una > tp->snd_recover &&
@@ -2732,11 +2732,11 @@ step6:
 		 * soreceive.  It's hard to imagine someone
 		 * actually wanting to send this much urgent data.
 		 */
-		SOCKBUF_LOCK(&so->so_rcv);
+		SOCK_LOCK(so);
 		if (th->th_urp + so->so_rcv.sb_cc > sb_max) {
 			th->th_urp = 0;			/* XXX */
 			thflags &= ~TH_URG;		/* XXX */
-			SOCKBUF_UNLOCK(&so->so_rcv);	/* XXX */
+			SOCK_UNLOCK(so);		/* XXX */
 			goto dodata;			/* XXX */
 		}
 		/*
@@ -2762,7 +2762,7 @@ step6:
 			sohasoutofband(so);
 			tp->t_oobflags &= ~(TCPOOB_HAVEDATA | TCPOOB_HADDATA);
 		}
-		SOCKBUF_UNLOCK(&so->so_rcv);
+		SOCK_UNLOCK(so);
 		/*
 		 * Remove out of band data so doesn't get presented to user.
 		 * This can happen independent of advancing the URG pointer,
@@ -2822,13 +2822,13 @@ dodata:							/* XXX */
 			TCPSTAT_INC(tcps_rcvpack);
 			TCPSTAT_ADD(tcps_rcvbyte, tlen);
 			ND6_HINT(tp);
-			SOCKBUF_LOCK(&so->so_rcv);
+			SOCK_LOCK(so);
 			if (so->so_rcv.sb_state & SBS_CANTRCVMORE)
 				m_freem(m);
 			else
-				sbappendstream_locked(&so->so_rcv, m);
+				sbappendstream_locked(so, &so->so_rcv, m);
 			sorwakeup_locked(so);
-			SOCKBUF_UNLOCK(&so->so_rcv);
+			SOCK_UNLOCK(so);
 		} else {
 			/*
 			 * XXX: Due to the header drop above "th" is
@@ -3510,7 +3510,7 @@ tcp_mss(struct tcpcb *tp, int offer)
 	 * if the mss is larger than the socket buffer, decrease the mss.
 	 */
 	so = inp->inp_socket;
-	SOCKBUF_LOCK(&so->so_snd);
+	SOCK_LOCK(so);
 	if ((so->so_snd.sb_hiwat == tcp_sendspace) && metrics.rmx_sendpipe)
 		bufsize = metrics.rmx_sendpipe;
 	else
@@ -3524,10 +3524,8 @@ tcp_mss(struct tcpcb *tp, int offer)
 		if (bufsize > so->so_snd.sb_hiwat)
 			(void)sbreserve_locked(&so->so_snd, bufsize, so, NULL);
 	}
-	SOCKBUF_UNLOCK(&so->so_snd);
 	tp->t_maxseg = mss;
 
-	SOCKBUF_LOCK(&so->so_rcv);
 	if ((so->so_rcv.sb_hiwat == tcp_recvspace) && metrics.rmx_recvpipe)
 		bufsize = metrics.rmx_recvpipe;
 	else
@@ -3539,7 +3537,7 @@ tcp_mss(struct tcpcb *tp, int offer)
 		if (bufsize > so->so_rcv.sb_hiwat)
 			(void)sbreserve_locked(&so->so_rcv, bufsize, so, NULL);
 	}
-	SOCKBUF_UNLOCK(&so->so_rcv);
+	SOCK_UNLOCK(so);
 
 	/* Check the interface for TSO capabilities. */
 	if (mtuflags & CSUM_TSO)

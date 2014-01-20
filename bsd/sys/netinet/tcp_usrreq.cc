@@ -792,7 +792,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		m_freem(control);	/* empty control, just free it */
 	}
 	if (!(flags & PRUS_OOB)) {
-		sbappendstream(&so->so_snd, m);
+		sbappendstream(so, &so->so_snd, m);
 		if (nam && tp->t_state < TCPS_SYN_SENT) {
 			/*
 			 * Do implied connect if not yet connected,
@@ -835,9 +835,9 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		/*
 		 * XXXRW: PRUS_EOF not implemented with PRUS_OOB?
 		 */
-		SOCKBUF_LOCK(&so->so_snd);
+		SOCK_LOCK(so);
 		if (sbspace(&so->so_snd) < -512) {
-			SOCKBUF_UNLOCK(&so->so_snd);
+			SOCK_UNLOCK(so);
 			m_freem(m);
 			error = ENOBUFS;
 			goto out;
@@ -850,8 +850,8 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		 * of data past the urgent section.
 		 * Otherwise, snd_up should be one lower.
 		 */
-		sbappendstream_locked(&so->so_snd, m);
-		SOCKBUF_UNLOCK(&so->so_snd);
+		sbappendstream_locked(so, &so->so_snd, m);
+		SOCK_UNLOCK(so);
 		if (nam && tp->t_state < TCPS_SYN_SENT) {
 			/*
 			 * Do implied connect if not yet connected,
@@ -1643,7 +1643,7 @@ tcp_disconnect(struct tcpcb *tp)
 		    ("tcp_disconnect: tcp_drop() returned NULL"));
 	} else {
 		soisdisconnecting(so);
-		sbflush(&so->so_rcv);
+		sbflush(so, &so->so_rcv);
 		tcp_usrclosed(tp);
 		if (!(inp->inp_flags & INP_DROPPED))
 			tcp_output_disconnect(tp);

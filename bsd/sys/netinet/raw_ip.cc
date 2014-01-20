@@ -244,8 +244,8 @@ rip_append(struct inpcb *last, struct ip *ip, struct mbuf *n,
 		if ((last->inp_flags & INP_CONTROLOPTS) ||
 		    (so->so_options & (SO_TIMESTAMP | SO_BINTIME)))
 			ip_savecontrol(last, &opts, ip, n);
-		SOCKBUF_LOCK(&so->so_rcv);
-		if (sbappendaddr_locked(&so->so_rcv,
+		SOCK_LOCK(so);
+		if (sbappendaddr_locked(so, &so->so_rcv,
 		    (struct bsd_sockaddr *)ripsrc, n, opts) == 0) {
 			/* should notify about lost packet */
 			m_freem(n);
@@ -253,7 +253,7 @@ rip_append(struct inpcb *last, struct ip *ip, struct mbuf *n,
 				m_freem(opts);
 		} else
 			sorwakeup_locked(so);
-		SOCKBUF_UNLOCK(&so->so_rcv);
+		SOCK_UNLOCK(so);
 	} else
 		m_freem(n);
 	return (policyfail);

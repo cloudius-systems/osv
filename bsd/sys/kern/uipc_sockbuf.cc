@@ -78,7 +78,7 @@ void
 socantsendmore_locked(struct socket *so)
 {
 
-	SOCKBUF_LOCK_ASSERT(&so->so_snd);
+	SOCK_LOCK_ASSERT(so);
 
 	so->so_snd.sb_state |= SBS_CANTSENDMORE;
 	sowwakeup_locked(so);
@@ -88,17 +88,17 @@ void
 socantsendmore(struct socket *so)
 {
 
-	SOCKBUF_LOCK(&so->so_snd);
+	SOCK_LOCK(so);
 	socantsendmore_locked(so);
-	SOCKBUF_UNLOCK(&so->so_snd);
-	mtx_assert(SOCKBUF_MTX(&so->so_snd), MA_NOTOWNED);
+	SOCK_UNLOCK(so);
+	mtx_assert(SOCK_MTX(so), MA_NOTOWNED);
 }
 
 void
 socantrcvmore_locked(struct socket *so)
 {
 
-	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
+	SOCK_LOCK_ASSERT(so);
 
 	so->so_rcv.sb_state |= SBS_CANTRCVMORE;
 	sorwakeup_locked(so);
@@ -108,10 +108,10 @@ void
 socantrcvmore(struct socket *so)
 {
 
-	SOCKBUF_LOCK(&so->so_rcv);
+	SOCK_LOCK(so);
 	socantrcvmore_locked(so);
-	SOCKBUF_UNLOCK(&so->so_rcv);
-	mtx_assert(SOCKBUF_MTX(&so->so_rcv), MA_NOTOWNED);
+	SOCK_UNLOCK(so);
+	mtx_assert(SOCK_MTX(so), MA_NOTOWNED);
 }
 
 void sockbuf_iolock::lock(mutex& mtx)
@@ -142,10 +142,10 @@ void sockbuf_iolock::unlock(mutex& mtx)
  * Wait for data to arrive at/drain from a socket buffer.
  */
 int
-sbwait(struct sockbuf *sb)
+sbwait(socket* so, struct sockbuf *sb)
 {
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	sb->sb_flags |= SB_WAIT;
 	sched::timer tmr(*sched::thread::current());
@@ -153,7 +153,7 @@ sbwait(struct sockbuf *sb)
 	    tmr.set(std::chrono::nanoseconds(ticks2ns(sb->sb_timeo)));
 	}
 	signal_catcher sc;
-	sched::thread::wait_for(sb->sb_mtx._mutex, sb->sb_cc_wq, tmr, sc);
+	sched::thread::wait_for(so->so_mtx._mutex, sb->sb_cc_wq, tmr, sc);
 	if (sc.interrupted()) {
 		return EINTR;
 	}
@@ -164,17 +164,17 @@ sbwait(struct sockbuf *sb)
 }
 
 int
-sblock(struct sockbuf *sb, int flags)
+sblock(socket* so, struct sockbuf *sb, int flags)
 {
-   WITH_LOCK(sb->sb_mtx._mutex) {
+   WITH_LOCK(so->so_mtx._mutex) {
 	KASSERT((flags & SBL_VALID) == flags,
 	    ("sblock: flags invalid (0x%x)", flags));
 
 	if (flags & SBL_WAIT) {
-		sb->sb_iolock.lock(sb->sb_mtx._mutex);
+		sb->sb_iolock.lock(so->so_mtx._mutex);
 		return (0);
 	} else {
-		if (!sb->sb_iolock.try_lock(sb->sb_mtx._mutex))
+		if (!sb->sb_iolock.try_lock(so->so_mtx._mutex))
 			return (EWOULDBLOCK);
 		return (0);
 	}
@@ -182,10 +182,10 @@ sblock(struct sockbuf *sb, int flags)
 }
 
 void
-sbunlock(struct sockbuf *sb)
+sbunlock(socket* so, struct sockbuf *sb)
 {
-	WITH_LOCK(sb->sb_mtx._mutex) {
-		sb->sb_iolock.unlock(sb->sb_mtx._mutex);
+	WITH_LOCK(so->so_mtx._mutex) {
+		sb->sb_iolock.unlock(so->so_mtx._mutex);
 	}
 }
 
@@ -223,13 +223,13 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 {
 	int ret = 0;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	so_wake_poll(so, sb);
 
 	if (sb->sb_flags & SB_WAIT) {
 		sb->sb_flags &= ~SB_WAIT;
-		sb->sb_cc_wq.wake_all(sb->sb_mtx._mutex);
+		sb->sb_cc_wq.wake_all(so->so_mtx._mutex);
 	}
 	if (sb->sb_upcall != NULL) {
 		ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
@@ -241,7 +241,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 	} else
 		ret = SU_OK;
 	if (ret == SU_ISCONNECTED) {
-		DROP_LOCK(sb->sb_mtx._mutex) {
+		DROP_LOCK(so->so_mtx._mutex) {
 			soisconnected(so);
 		}
 	}
@@ -283,8 +283,7 @@ soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
 {
 	struct thread *td = NULL;
 
-	SOCKBUF_LOCK(&so->so_snd);
-	SOCKBUF_LOCK(&so->so_rcv);
+	SOCK_LOCK(so);
 	if (sbreserve_locked(&so->so_snd, sndcc, so, td) == 0)
 		goto bad;
 	if (sbreserve_locked(&so->so_rcv, rcvcc, so, td) == 0)
@@ -295,14 +294,12 @@ soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
 		so->so_snd.sb_lowat = MCLBYTES;
 	if ((u_int)so->so_snd.sb_lowat > so->so_snd.sb_hiwat)
 		so->so_snd.sb_lowat = so->so_snd.sb_hiwat;
-	SOCKBUF_UNLOCK(&so->so_rcv);
-	SOCKBUF_UNLOCK(&so->so_snd);
+	SOCK_UNLOCK(so);
 	return (0);
 bad2:
 	sbrelease_locked(&so->so_snd, so);
 bad:
-	SOCKBUF_UNLOCK(&so->so_rcv);
-	SOCKBUF_UNLOCK(&so->so_snd);
+	SOCK_UNLOCK(so);
 	return (ENOBUFS);
 }
 
@@ -332,7 +329,7 @@ int
 sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
     struct thread *td)
 {
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	/*
 	 * When a thread is passed, we take into account the thread's socket
@@ -358,9 +355,9 @@ sbreserve(struct sockbuf *sb, u_long cc, struct socket *so,
 {
 	int error;
 
-	SOCKBUF_LOCK(sb);
+	SOCK_LOCK(so);
 	error = sbreserve_locked(sb, cc, so, td);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_UNLOCK(so);
 	return (error);
 }
 
@@ -380,7 +377,7 @@ void
 sbrelease_locked(struct sockbuf *sb, struct socket *so)
 {
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	sbrelease_internal(sb, so);
 }
@@ -389,9 +386,9 @@ void
 sbrelease(struct sockbuf *sb, struct socket *so)
 {
 
-	SOCKBUF_LOCK(sb);
+	SOCK_LOCK(so);
 	sbrelease_locked(sb, so);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_UNLOCK(so);
 }
 
 void
@@ -473,8 +470,8 @@ sblastmbufchk(struct sockbuf *sb, const char *file, int line)
 }
 #endif /* SOCKBUF_DEBUG */
 
-#define SBLINKRECORD(sb, m0) do {					\
-	SOCKBUF_LOCK_ASSERT(sb);					\
+#define SBLINKRECORD(so, sb, m0) do {					\
+	SOCK_LOCK_ASSERT(so);						\
 	if ((sb)->sb_lastrecord != NULL)				\
 		(sb)->sb_lastrecord->m_hdr.mh_nextpkt = (m0);			\
 	else								\
@@ -488,11 +485,11 @@ sblastmbufchk(struct sockbuf *sb, const char *file, int line)
  * are discarded and mbufs are compacted where possible.
  */
 void
-sbappend_locked(struct sockbuf *sb, struct mbuf *m)
+sbappend_locked(socket* so, struct sockbuf *sb, struct mbuf *m)
 {
 	struct mbuf *n;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	if (m == 0)
 		return;
@@ -504,7 +501,7 @@ sbappend_locked(struct sockbuf *sb, struct mbuf *m)
 			n = n->m_hdr.mh_nextpkt;
 		do {
 			if (n->m_hdr.mh_flags & M_EOR) {
-				sbappendrecord_locked(sb, m); /* XXXXXX!!!! */
+				sbappendrecord_locked(so, sb, m); /* XXXXXX!!!! */
 				return;
 			}
 		} while (n->m_hdr.mh_next && (n = n->m_hdr.mh_next));
@@ -517,7 +514,7 @@ sbappend_locked(struct sockbuf *sb, struct mbuf *m)
 		if ((n = sb->sb_lastrecord) != NULL) {
 			do {
 				if (n->m_hdr.mh_flags & M_EOR) {
-					sbappendrecord_locked(sb, m); /* XXXXXX!!!! */
+					sbappendrecord_locked(so, sb, m); /* XXXXXX!!!! */
 					return;
 				}
 			} while (n->m_hdr.mh_next && (n = n->m_hdr.mh_next));
@@ -529,7 +526,7 @@ sbappend_locked(struct sockbuf *sb, struct mbuf *m)
 			sb->sb_lastrecord = m;
 		}
 	}
-	sbcompress(sb, m, n);
+	sbcompress(so, sb, m, n);
 	SBLASTRECORDCHK(sb);
 }
 
@@ -539,12 +536,12 @@ sbappend_locked(struct sockbuf *sb, struct mbuf *m)
  * are discarded and mbufs are compacted where possible.
  */
 void
-sbappend(struct sockbuf *sb, struct mbuf *m)
+sbappend(socket* so, struct sockbuf *sb, struct mbuf *m)
 {
 
-	SOCKBUF_LOCK(sb);
-	sbappend_locked(sb, m);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	sbappend_locked(so, sb, m);
+	SOCK_UNLOCK(so);
 }
 
 /*
@@ -553,16 +550,16 @@ sbappend(struct sockbuf *sb, struct mbuf *m)
  * that is, a stream protocol (such as TCP).
  */
 void
-sbappendstream_locked(struct sockbuf *sb, struct mbuf *m)
+sbappendstream_locked(socket* so, struct sockbuf *sb, struct mbuf *m)
 {
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	KASSERT(m->m_hdr.mh_nextpkt == NULL,("sbappendstream 0"));
 	KASSERT(sb->sb_mb == sb->sb_lastrecord,("sbappendstream 1"));
 
 	SBLASTMBUFCHK(sb);
 
-	sbcompress(sb, m, sb->sb_mbtail);
+	sbcompress(so, sb, m, sb->sb_mbtail);
 
 	sb->sb_lastrecord = sb->sb_mb;
 	SBLASTRECORDCHK(sb);
@@ -574,12 +571,12 @@ sbappendstream_locked(struct sockbuf *sb, struct mbuf *m)
  * that is, a stream protocol (such as TCP).
  */
 void
-sbappendstream(struct sockbuf *sb, struct mbuf *m)
+sbappendstream(socket* so, struct sockbuf *sb, struct mbuf *m)
 {
 
-	SOCKBUF_LOCK(sb);
-	sbappendstream_locked(sb, m);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	sbappendstream_locked(so, sb, m);
+	SOCK_UNLOCK(so);
 }
 
 #ifdef SOCKBUF_DEBUG
@@ -613,11 +610,11 @@ sbcheck(struct sockbuf *sb)
  * As above, except the mbuf chain begins a new record.
  */
 void
-sbappendrecord_locked(struct sockbuf *sb, struct mbuf *m0)
+sbappendrecord_locked(socket* so, struct sockbuf *sb, struct mbuf *m0)
 {
 	struct mbuf *m;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	if (m0 == 0)
 		return;
@@ -627,7 +624,7 @@ sbappendrecord_locked(struct sockbuf *sb, struct mbuf *m0)
 	 */
 	sballoc(sb, m0);
 	SBLASTRECORDCHK(sb);
-	SBLINKRECORD(sb, m0);
+	SBLINKRECORD(so, sb, m0);
 	sb->sb_mbtail = m0;
 	m = m0->m_hdr.mh_next;
 	m0->m_hdr.mh_next = 0;
@@ -636,19 +633,19 @@ sbappendrecord_locked(struct sockbuf *sb, struct mbuf *m0)
 		m->m_hdr.mh_flags |= M_EOR;
 	}
 	/* always call sbcompress() so it can do SBLASTMBUFCHK() */
-	sbcompress(sb, m, m0);
+	sbcompress(so, sb, m, m0);
 }
 
 /*
  * As above, except the mbuf chain begins a new record.
  */
 void
-sbappendrecord(struct sockbuf *sb, struct mbuf *m0)
+sbappendrecord(socket* so, struct sockbuf *sb, struct mbuf *m0)
 {
 
-	SOCKBUF_LOCK(sb);
-	sbappendrecord_locked(sb, m0);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	sbappendrecord_locked(so, sb, m0);
+	SOCK_UNLOCK(so);
 }
 
 /*
@@ -658,13 +655,13 @@ sbappendrecord(struct sockbuf *sb, struct mbuf *m0)
  * mbufs.
  */
 int
-sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
+sbappendaddr_locked(socket* so, struct sockbuf *sb, const struct bsd_sockaddr *asa,
     struct mbuf *m0, struct mbuf *control)
 {
 	struct mbuf *m, *n, *nlast;
 	int space = asa->sa_len;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	if (m0 && (m0->m_hdr.mh_flags & M_PKTHDR) == 0)
 		panic("sbappendaddr_locked");
@@ -692,7 +689,7 @@ sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
 		sballoc(sb, n);
 	sballoc(sb, n);
 	nlast = n;
-	SBLINKRECORD(sb, m);
+	SBLINKRECORD(so, sb, m);
 
 	sb->sb_mbtail = nlast;
 	SBLASTMBUFCHK(sb);
@@ -708,25 +705,25 @@ sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
  * mbufs.
  */
 int
-sbappendaddr(struct sockbuf *sb, const struct bsd_sockaddr *asa,
+sbappendaddr(socket* so, struct sockbuf *sb, const struct bsd_sockaddr *asa,
     struct mbuf *m0, struct mbuf *control)
 {
 	int retval;
 
-	SOCKBUF_LOCK(sb);
-	retval = sbappendaddr_locked(sb, asa, m0, control);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	retval = sbappendaddr_locked(so, sb, asa, m0, control);
+	SOCK_UNLOCK(so);
 	return (retval);
 }
 
 int
-sbappendcontrol_locked(struct sockbuf *sb, struct mbuf *m0,
+sbappendcontrol_locked(socket* so, struct sockbuf *sb, struct mbuf *m0,
     struct mbuf *control)
 {
 	struct mbuf *m, *n, *mlast;
 	int space;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	if (control == 0)
 		panic("sbappendcontrol_locked");
@@ -742,7 +739,7 @@ sbappendcontrol_locked(struct sockbuf *sb, struct mbuf *m0,
 		sballoc(sb, m);
 	sballoc(sb, m);
 	mlast = m;
-	SBLINKRECORD(sb, control);
+	SBLINKRECORD(so, sb, control);
 
 	sb->sb_mbtail = mlast;
 	SBLASTMBUFCHK(sb);
@@ -752,13 +749,13 @@ sbappendcontrol_locked(struct sockbuf *sb, struct mbuf *m0,
 }
 
 int
-sbappendcontrol(struct sockbuf *sb, struct mbuf *m0, struct mbuf *control)
+sbappendcontrol(socket* so, struct sockbuf *sb, struct mbuf *m0, struct mbuf *control)
 {
 	int retval;
 
-	SOCKBUF_LOCK(sb);
-	retval = sbappendcontrol_locked(sb, m0, control);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	retval = sbappendcontrol_locked(so, sb, m0, control);
+	SOCK_UNLOCK(so);
 	return (retval);
 }
 
@@ -783,12 +780,12 @@ sbappendcontrol(struct sockbuf *sb, struct mbuf *m0, struct mbuf *control)
  * end-of-record.
  */
 void
-sbcompress(struct sockbuf *sb, struct mbuf *m, struct mbuf *n)
+sbcompress(socket* so, struct sockbuf *sb, struct mbuf *m, struct mbuf *n)
 {
 	int eor = 0;
 	struct mbuf *o;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	while (m) {
 		eor |= m->m_hdr.mh_flags & M_EOR;
@@ -857,20 +854,20 @@ sbflush_internal(struct sockbuf *sb)
 }
 
 void
-sbflush_locked(struct sockbuf *sb)
+sbflush_locked(socket* so, struct sockbuf *sb)
 {
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 	sbflush_internal(sb);
 }
 
 void
-sbflush(struct sockbuf *sb)
+sbflush(socket* so, struct sockbuf *sb)
 {
 
-	SOCKBUF_LOCK(sb);
-	sbflush_locked(sb);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	sbflush_locked(so, sb);
+	SOCK_UNLOCK(so);
 }
 
 /*
@@ -931,21 +928,21 @@ sbdrop_internal(struct sockbuf *sb, int len)
  * Drop data from (the front of) a sockbuf.
  */
 void
-sbdrop_locked(struct sockbuf *sb, int len)
+sbdrop_locked(socket* so, struct sockbuf *sb, int len)
 {
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	sbdrop_internal(sb, len);
 }
 
 void
-sbdrop(struct sockbuf *sb, int len)
+sbdrop(socket* so, struct sockbuf *sb, int len)
 {
 
-	SOCKBUF_LOCK(sb);
-	sbdrop_locked(sb, len);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	sbdrop_locked(so, sb, len);
+	SOCK_UNLOCK(so);
 }
 
 /*
@@ -993,11 +990,11 @@ sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff)
  * front.
  */
 void
-sbdroprecord_locked(struct sockbuf *sb)
+sbdroprecord_locked(socket* so, struct sockbuf *sb)
 {
 	struct mbuf *m;
 
-	SOCKBUF_LOCK_ASSERT(sb);
+	SOCK_LOCK_ASSERT(so);
 
 	m = sb->sb_mb;
 	if (m) {
@@ -1015,12 +1012,12 @@ sbdroprecord_locked(struct sockbuf *sb)
  * front.
  */
 void
-sbdroprecord(struct sockbuf *sb)
+sbdroprecord(socket* so, struct sockbuf *sb)
 {
 
-	SOCKBUF_LOCK(sb);
-	sbdroprecord_locked(sb);
-	SOCKBUF_UNLOCK(sb);
+	SOCK_LOCK(so);
+	sbdroprecord_locked(so, sb);
+	SOCK_UNLOCK(so);
 }
 
 /*

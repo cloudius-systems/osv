@@ -60,14 +60,15 @@ struct file;
  * Locking key to struct socket:
  * (a) constant after allocation, no locking required.
  * (b) locked by SOCK_LOCK(so).
- * (c) locked by SOCKBUF_LOCK(&so->so_rcv).
- * (d) locked by SOCKBUF_LOCK(&so->so_snd).
+ * (c) locked by SOCK_LOCK(so).
+ * (d) locked by SOCK_LOCK(so).
  * (e) locked by ACCEPT_LOCK().
  * (f) not locked since integer reads/writes are atomic.
  * (g) used only as a sleep/wakeup address, no value.
  * (h) locked by global mutex so_global_mtx.
  */
 struct socket {
+	struct mtx so_mtx;
 	int	so_count;		/* (b) reference count */
 	short	so_type;		/* (a) generic type, see socket.h */
 	short	so_options;		/* from socket call, see socket.h */
@@ -136,16 +137,12 @@ extern struct mtx accept_mtx;
 #define	ACCEPT_LOCK()			mtx_lock(&accept_mtx)
 #define	ACCEPT_UNLOCK()			mtx_unlock(&accept_mtx)
 
-/*
- * Per-socket mutex: we reuse the receive socket buffer mutex for space
- * efficiency.  This decision should probably be revisited as we optimize
- * locking for the socket code.
- */
-#define	SOCK_MTX(_so)			SOCKBUF_MTX(&(_so)->so_rcv)
-#define	SOCK_LOCK(_so)			SOCKBUF_LOCK(&(_so)->so_rcv)
-#define	SOCK_OWNED(_so)			SOCKBUF_OWNED(&(_so)->so_rcv)
-#define	SOCK_UNLOCK(_so)		SOCKBUF_UNLOCK(&(_so)->so_rcv)
-#define	SOCK_LOCK_ASSERT(_so)		SOCKBUF_LOCK_ASSERT(&(_so)->so_rcv)
+#define	SOCK_MTX(_so)			(&(_so)->so_mtx)
+#define	SOCK_LOCK(_so)			(SOCK_MTX(_so)->_mutex.lock())
+#define	SOCK_OWNED(_so)			(SOCK_MTX(_so)->_mutex.owned())
+#define	SOCK_UNLOCK(_so)		(SOCK_MTX(_so)->_mutex.unlock())
+#define	SOCK_LOCK_ASSERT(_so)		assert(SOCK_OWNED(_so))
+#define	SOCK_UNLOCK_ASSERT(_so)		assert(!SOCK_OWNED(_so))
 
 /*
  * Socket state bits stored in so_qstate.
@@ -245,7 +242,7 @@ extern "C" void sowakeup(socket* so, sockbuf* sb);
  * avoid a non-atomic test-and-wakeup.
  */
 inline void sorwakeup_locked(socket* so) {
-	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
+	SOCK_LOCK_ASSERT(so);
 	if (sb_notify(&so->so_rcv)) {
 		sowakeup(so, &so->so_rcv);
 	}
@@ -253,14 +250,14 @@ inline void sorwakeup_locked(socket* so) {
 
 inline void sorwakeup(socket* so)
 {
-	SOCKBUF_LOCK(&so->so_rcv);
+	SOCK_LOCK(so);
 	sorwakeup_locked(so);
-	SOCKBUF_UNLOCK(&so->so_rcv);
+	SOCK_UNLOCK(so);
 }
 
 inline void sowwakeup_locked(socket* so)
 {
-	SOCKBUF_LOCK_ASSERT(&so->so_snd);
+	SOCK_LOCK_ASSERT(so);
 	if (sb_notify(&so->so_snd)) {
 		sowakeup(so, &so->so_snd);
 	}
@@ -268,9 +265,9 @@ inline void sowwakeup_locked(socket* so)
 
 inline void sowwakeup(socket* so)
 {
-	SOCKBUF_LOCK(&so->so_snd);
+	SOCK_LOCK(so);
 	sowwakeup_locked(so);
-	SOCKBUF_UNLOCK(&so->so_snd);
+	SOCK_UNLOCK(so);
 }
 
 struct accept_filter {

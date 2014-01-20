@@ -285,15 +285,15 @@ udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
 	m_adj(n, off);
 
 	so = inp->inp_socket;
-	SOCKBUF_LOCK(&so->so_rcv);
-	if (sbappendaddr_locked(&so->so_rcv, append_sa, n, opts) == 0) {
+	SOCK_LOCK(so);
+	if (sbappendaddr_locked(so, &so->so_rcv, append_sa, n, opts) == 0) {
 		m_freem(n);
 		if (opts)
 			m_freem(opts);
 		UDPSTAT_INC(udps_fullsock);
 	} else
 		sorwakeup_locked(so);
-	SOCKBUF_UNLOCK(&so->so_rcv);
+	SOCK_UNLOCK(so);
 }
 
 void

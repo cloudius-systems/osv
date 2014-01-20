@@ -353,7 +353,7 @@ present:
 	q = LIST_FIRST(&tp->t_segq);
 	if (!q || q->tqe_th->th_seq != tp->rcv_nxt)
 		return (0);
-	SOCKBUF_LOCK(&so->so_rcv);
+	SOCK_LOCK(so);
 	do {
 		tp->rcv_nxt += q->tqe_len;
 		flags = q->tqe_th->th_flags & TH_FIN;
@@ -362,7 +362,7 @@ present:
 		if (so->so_rcv.sb_state & SBS_CANTRCVMORE)
 			m_freem(q->tqe_m);
 		else
-			sbappendstream_locked(&so->so_rcv, q->tqe_m);
+			sbappendstream_locked(so, &so->so_rcv, q->tqe_m);
 		if (q != &tqs)
 			uma_zfree(V_tcp_reass_zone, q);
 		tp->t_segqlen--;
@@ -370,6 +370,6 @@ present:
 	} while (q && q->tqe_th->th_seq == tp->rcv_nxt);
 	ND6_HINT(tp);
 	sorwakeup_locked(so);
-	SOCKBUF_UNLOCK(&so->so_rcv);
+	SOCK_UNLOCK(so);
 	return (flags);
 }
