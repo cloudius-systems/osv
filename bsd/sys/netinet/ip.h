@@ -35,6 +35,7 @@
 #define	_NETINET_IP_H_
 
 #include <sys/cdefs.h>
+#include <bsd/sys/sys/param.h>
 
 /*
  * Definitions for internet protocol version 4.
@@ -70,6 +71,20 @@ struct ip {
 } __attribute__ ((aligned (4), packed));
 
 #define	IP_MAXPACKET	65535		/* maximum packet size */
+
+#ifdef __cplusplus
+
+inline in_addr ntoh(in_addr a)
+{
+    return { ntohl(a.s_addr) };
+}
+
+inline in_addr hton(in_addr a)
+{
+    return { htonl(a.s_addr) };
+}
+
+#endif
 
 /*
  * Maximum number of bytes to be reserved for L2 header.
