@@ -55,6 +55,7 @@ class timer;
 class timer_list;
 class cpu_mask;
 class thread_runtime_compare;
+template <typename T> class wait_object;
 
 void schedule();
 
@@ -187,6 +188,20 @@ protected:
 class timer : public timer_base {
 public:
     explicit timer(thread& t);
+private:
+    class waiter;
+    friend class wait_object<timer>;
+};
+
+template <>
+class wait_object<timer> {
+public:
+    explicit wait_object(timer& tmr, mutex* mtx = nullptr) : _tmr(tmr) {}
+    bool poll() const { return _tmr.expired(); }
+    void arm() {}
+    void disarm() {}
+private:
+    timer& _tmr;
 };
 
 // thread_runtime is used to maintain the scheduler's view of the thread's
@@ -334,11 +349,30 @@ public:
     static void wait_until(mutex_t& mtx, Pred pred);
     template <class Pred>
     static void wait_until(mutex_t* mtx, Pred pred);
+
+    // Wait for any of a number of waitable objects to be signalled
+    // waitable objects include: waitqueues, timers, predicates,
+    // and more.  If supplied, the mutex object is unlocked while waiting.
+    template <typename... waitable>
+    static void wait_for(waitable&&... waitables);
+    template <typename... waitable>
+    static void wait_for(mutex& mtx, waitable&&... waitables);
+
     void wake();
+    // wake up after acquiring mtx
+    //
+    // mtx must be locked, and wr must be a free wait_record that will
+    // survive until the thread wakes up.  wake_lock() will not cause
+    // the thread to wake up immediately; only when it becomes possible
+    // for it to take the mutex.
+    void wake_lock(mutex* mtx, wait_record* wr);
     bool interrupted();
     void interrupted(bool f);
     template <class Action>
     inline void wake_with(Action action);
+    // for mutex internal use
+    template <class Action>
+    inline void wake_with_from_mutex(Action action);
     static void sleep_until(s64 abstime);
     static void yield();
     static void exit() __attribute__((__noreturn__));
@@ -377,7 +411,8 @@ public:
      */
     float priority() const;
 private:
-    static void wake_impl(detached_state* st);
+    static void wake_impl(detached_state* st,
+            unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
     void main();
     void switch_to();
     void switch_to_first();
@@ -388,9 +423,13 @@ private:
     void setup_tcb();
     void free_tcb();
     void complete() __attribute__((__noreturn__));
+    template <class Action>
+    inline void do_wake_with(Action action, unsigned allowed_initial_states_mask);
     template <class IntrStrategy, class Mutex, class Pred>
     static void do_wait_until(Mutex& mtx, Pred pred);
-    struct dummy_lock {};
+    template <typename Mutex, typename... wait_object>
+    static void do_wait_for(Mutex& mtx, wait_object&&... wait_objects);
+    struct dummy_lock { void receive_lock() {} };
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
     friend void start_early_threads();
@@ -405,11 +444,42 @@ private:
     std::function<void ()> _func;
     thread_state _state;
     thread_control_block* _tcb;
+
+    // State machine transition matrix
+    //
+    //   Initial       Next         Async?   Event         Notes
+    //
+    //   unstarted     waiting      sync     start()       followed by wake()
+    //   unstarted     prestarted   sync     start()       before scheduler startup
+    //
+    //   prestarted    unstarted    sync     scheduler startup  followed by start()
+    //
+    //   waiting       waking       async    wake()
+    //   waiting       running      sync     wait_until cancelled (predicate became true before context switch)
+    //   waiting       sending_lock async    wake_lock()   used for ensuring the thread does not wake
+    //                                                     up while we call receive_lock()
+    //
+    //   sending_lock  waking       async    mutex::unlock()
+    //
+    //   running       waiting      sync     prepare_wait()
+    //   running       queued       sync     context switch
+    //   running       terminating  sync     destroy()      thread function completion
+    //
+    //   queued        running      sync     context switch
+    //
+    //   waking        queued       async    scheduler poll of incoming thread wakeup queue
+    //   waking        running      sync     thread pulls self out of incoming wakeup queue
+    //
+    //   terminating   terminated   async    post context switch
+    //
+    // wake() on any state except waiting is discarded.
+
     enum class status {
         invalid,
         prestarted,
         unstarted,
         waiting,
+        sending_lock,
         running,
         queued,
         waking, // between waiting and queued
@@ -424,6 +494,7 @@ private:
         explicit detached_state(thread* t) : t(t) {}
         thread* t;
         cpu* _cpu;
+        bool lock_sent = false;   // send_lock() was called for us
         std::atomic<status> st = { status::unstarted };
     };
     std::unique_ptr<detached_state> _detached_state;
@@ -570,6 +641,31 @@ bool preemptable() __attribute__((no_instrument_function));
 
 thread* current();
 
+// wait_for() support for predicates
+//
+
+template <typename Pred>
+class predicate_wait_object {
+public:
+    predicate_wait_object(Pred pred, mutex* mtx = nullptr) : _pred(pred) {}
+    void arm() {}
+    void disarm() {}
+    bool poll() { return _pred(); }
+private:
+    Pred _pred;
+};
+
+
+// only instantiate wait_object<Pred> if Pred is indeed a predicate
+template <typename Pred>
+class wait_object
+    : public std::enable_if<std::is_same<bool, decltype((*static_cast<Pred*>(nullptr))())>::value,
+                           predicate_wait_object<Pred>>::type
+{
+    using predicate_wait_object<Pred>::predicate_wait_object;
+    // all contents from predicate_wait_object<>
+};
+
 class wait_guard {
 public:
     wait_guard(thread* t) : _t(t) { t->prepare_wait(); }
@@ -696,6 +792,121 @@ inline void thread::interrupted(bool f)
     }
 }
 
+// thread::wait_for() accepts an optional mutex, followed by a
+// number waitable objects.
+//
+// a waitable object's protocol is as follows:
+//
+// Given a waitable object 'wa', the class wait_object<waitable> defines
+// the waiting protocol using instance methods:
+//
+//   wait_object(wa, mtx) - initialization; if mutex is not required for waiting it can be optional
+//   poll() - check whether wa has finished waiting
+//   arm() - prepare for waiting; typically registering wa on some list
+//   disarm() - called after waiting is complete
+//
+// all of these are called with the mutex held, if supplied
+
+
+// wait_object<T> must be specialized for the particular waitable.
+template <typename T>
+class wait_object;
+
+template <typename... wait_object>
+void arm(wait_object&... objs);
+
+template <>
+inline
+void arm()
+{
+}
+
+template <typename wait_object_first, typename... wait_object_rest>
+inline
+void arm(wait_object_first& first, wait_object_rest&... rest)
+{
+    first.arm();
+    arm(rest...);
+}
+
+template <typename... wait_object>
+bool poll(wait_object&... objs);
+
+template <>
+inline
+bool poll()
+{
+    return false;
+}
+
+template <typename wait_object_first, typename... wait_object_rest>
+inline
+bool poll(wait_object_first& first, wait_object_rest&... rest)
+{
+    return first.poll() || poll(rest...);
+}
+
+template <typename... wait_object>
+void disarm(wait_object&... objs);
+
+template <>
+inline
+void disarm()
+{
+}
+
+template <typename wait_object_first, typename... wait_object_rest>
+inline
+void disarm(wait_object_first& first, wait_object_rest&... rest)
+{
+    disarm(rest...);
+    first.disarm();
+}
+
+template <typename Mutex, typename... wait_object>
+inline
+void thread::do_wait_for(Mutex& mtx, wait_object&&... wait_objects)
+{
+    if (poll(wait_objects...)) {
+        return;
+    }
+    arm(wait_objects...);
+    // must duplicate do_wait_until since gcc has a bug capturing parameter packs
+    thread* me = current();
+    while (true) {
+        {
+            wait_guard waiter(me);
+            if (poll(wait_objects...)) {
+                break;
+            }
+            release(mtx);
+            me->wait();
+        }
+        if (me->_detached_state->lock_sent) {
+            me->_detached_state->lock_sent = false;
+            mtx.receive_lock();
+        } else {
+            acquire(mtx);
+        }
+    }
+    disarm(wait_objects...);
+}
+
+template <typename... waitable>
+inline
+void thread::wait_for(mutex& mtx, waitable&&... waitables)
+{
+    do_wait_for(mtx, wait_object<typename std::remove_reference<waitable>::type>(waitables, &mtx)...);
+}
+
+template <typename... waitable>
+inline
+void thread::wait_for(waitable&&... waitables)
+{
+    dummy_lock mtx;
+    do_wait_for(mtx, wait_object<typename std::remove_reference<waitable>::type>(waitables)...);
+}
+
 // About wake_with():
 //
 // Consider one thread doing:
@@ -717,13 +928,28 @@ inline void thread::interrupted(bool f)
 
 template <class Action>
 inline
-void thread::wake_with(Action action)
+void thread::do_wake_with(Action action, unsigned allowed_initial_states_mask)
 {
     WITH_LOCK(osv::rcu_read_lock) {
         auto ds = _detached_state.get();
         action();
-        wake_impl(ds);
+        wake_impl(ds, allowed_initial_states_mask);
     }
+}
+
+template <class Action>
+inline
+void thread::wake_with(Action action)
+{
+    return do_wake_with(action, (1 << unsigned(status::waiting)));
+}
+
+template <class Action>
+inline
+void thread::wake_with_from_mutex(Action action)
+{
+    return do_wake_with(action, (1 << unsigned(status::waiting))
+                              | (1 << unsigned(status::sending_lock)));
 }
 
 extern cpu __thread* current_cpu;

@@ -150,6 +150,7 @@ boost-tests := tests/tst-rename.so \
 	tests/tst-promise.so \
 	tests/tst-dlfcn.so \
 	tests/tst-stat.so
+boost-tests += tests/tst-wait-for.so
 
 java_tests := tests/hello/Hello.class
 
@@ -583,6 +584,7 @@ objects += core/dhcp.o
 objects += core/run.o
 objects += core/shutdown.o
 objects += core/version.o
+objects += core/waitqueue.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk

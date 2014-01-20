@@ -704,12 +704,19 @@ void thread::destroy()
 }
 
 // Must be called under rcu_read_lock
-void thread::wake_impl(detached_state* st)
+//
+// allowed_initial_states_mask *must* contain status::waiting, and
+// *may* contain status::sending_lock (for waitqueue wait morphing).
+// it will transition from one of the allowed initial states to the
+// waking state.
+void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
 {
     status old_status = status::waiting;
     trace_sched_wake(st->t);
-    if (!st->st.compare_exchange_strong(old_status, status::waking)) {
-        return;
+    while (!st->st.compare_exchange_weak(old_status, status::waking)) {
+        if (!((1 << unsigned(old_status)) & allowed_initial_states_mask)) {
+            return;
+        }
     }
     auto tcpu = st->_cpu;
     WITH_LOCK(preempt_lock_in_rcu) {
@@ -733,6 +740,24 @@ void thread::wake()
 {
     WITH_LOCK(rcu_read_lock) {
         wake_impl(_detached_state.get());
+    }
+}
+
+void thread::wake_lock(mutex* mtx, wait_record* wr)
+{
+    // must be called with mtx held
+    WITH_LOCK(rcu_read_lock) {
+        auto st = _detached_state.get();
+        // We want to send_lock() to this thread, but we want to be sure we're the only
+        // ones doing it, and that it doesn't wake up while we do
+        auto expected = status::waiting;
+        if (!st->st.compare_exchange_strong(expected, status::sending_lock, std::memory_order_relaxed)) {
+            // let the thread acquire the lock itself
+            return;
+        }
+        st->lock_sent = true;
+        mtx->send_lock(wr);
+        // since we're in status::sending_lock, no one can wake us except mutex::unlock
     }
 }
 
@@ -772,7 +797,7 @@ void thread::stop_wait()
         return;
     }
     preempt_enable();
-    while (st.load() == status::waking) {
+    while (st.load() == status::waking || st.load() == status::sending_lock) {
         schedule();
     }
     assert(st.load() == status::running);
