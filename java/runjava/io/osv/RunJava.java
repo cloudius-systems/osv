@@ -114,7 +114,7 @@ public class RunJava {
         OsvSystemClassLoader osvClassLoader = getOsvClassLoader();
         ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getParent());
 
-        osvClassLoader.run(appClassLoader,
+        Context context = ContextIsolator.getInstance().run(appClassLoader,
                 new SandBoxedProcess() {
 
                     @Override
@@ -123,6 +123,8 @@ public class RunJava {
                         runMain(loadClass(mainClass), args);
                     }
                 });
+
+        context.join();
     }
 
     private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {

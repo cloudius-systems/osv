@@ -15,7 +15,6 @@ import java.net.URL;
 import java.util.Enumeration;
 
 public class OsvSystemClassLoader extends ClassLoader {
-    private final InheritableThreadLocal<ClassLoader> delegate = new InheritableThreadLocal<>();
     private final ClassLoader defaultSystemClassLoader;
 
     static {
@@ -54,53 +53,12 @@ public class OsvSystemClassLoader extends ClassLoader {
         return method;
     }
 
-    public void run(final ClassLoader classLoader, final SandBoxedProcess process) throws Throwable {
-        Thread thread = new Thread() {
-            @Override
-            public void run() {
-                delegate.set(classLoader);
-
-                // We should not register 'this' as context class loader
-                // because Class.forName() would cache loaded classes
-                // for a shared instance (this) and thus cache for all
-                // contexts.
-                setContextClassLoader(classLoader);
-
-                try {
-                    process.run();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                } catch (Throwable throwable) {
-                    getUncaughtExceptionHandler().uncaughtException(this, throwable);
-                }
-            }
-        };
-
-        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                e.printStackTrace();
-            }
-        });
-
-        thread.start();
-
-        for (;;) {
-            try {
-                thread.join();
-                break;
-            } catch (InterruptedException e) {
-                thread.interrupt();
-            }
-        }
-    }
-
     private ClassLoader getDelegate() {
-        ClassLoader classLoader = delegate.get();
-        if (classLoader != null) {
+        ContextIsolator isolator = ContextIsolator.getInstance();
+        ClassLoader classLoader = isolator.getContext().getSystemClassLoader();
+        if (classLoader != null && classLoader != this) {
             return classLoader;
         }
-
         return defaultSystemClassLoader;
     }
 
