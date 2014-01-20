@@ -248,9 +248,6 @@ typedef void if_init_f_t(void *);
 /*
  * Locks for address lists on the network interface.
  */
-#define	IF_ADDR_LOCK_INIT(if)	mtx_init(&(if)->if_addr_mtx,		\
-				    "if_addr_mtx", NULL, MTX_DEF)
-#define	IF_ADDR_LOCK_DESTROY(if)	mtx_destroy(&(if)->if_addr_mtx)
 #define	IF_ADDR_WLOCK(if)	mtx_lock(&(if)->if_addr_mtx)
 #define	IF_ADDR_WUNLOCK(if)	mtx_unlock(&(if)->if_addr_mtx)
 #define	IF_ADDR_RLOCK(if)	mtx_lock(&(if)->if_addr_mtx)
@@ -409,9 +406,6 @@ EVENTHANDLER_DECLARE(group_detach_event, group_detach_event_handler_t);
 typedef void (*group_change_event_handler_t)(void *, const char *);
 EVENTHANDLER_DECLARE(group_change_event, group_change_event_handler_t);
 
-#define	IF_AFDATA_LOCK_INIT(ifp)	\
-	rw_init(&(ifp)->if_afdata_lock, "if_afdata")
-
 #define	IF_AFDATA_WLOCK(ifp)	rw_wlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_RLOCK(ifp)	rw_rlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_WUNLOCK(ifp)	rw_wunlock(&(ifp)->if_afdata_lock)
@@ -419,7 +413,6 @@ EVENTHANDLER_DECLARE(group_change_event, group_change_event_handler_t);
 #define	IF_AFDATA_LOCK(ifp)	IF_AFDATA_WLOCK(ifp)
 #define	IF_AFDATA_UNLOCK(ifp)	IF_AFDATA_WUNLOCK(ifp)
 #define	IF_AFDATA_TRYLOCK(ifp)	rw_try_wlock(&(ifp)->if_afdata_lock)
-#define	IF_AFDATA_DESTROY(ifp)	rw_destroy(&(ifp)->if_afdata_lock)
 
 #define	IF_AFDATA_LOCK_ASSERT(ifp)	rw_assert(&(ifp)->if_afdata_lock, RA_LOCKED)
 #define	IF_AFDATA_RLOCK_ASSERT(ifp)	rw_assert(&(ifp)->if_afdata_lock, RA_RLOCKED)

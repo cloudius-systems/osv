@@ -365,15 +365,15 @@ if_grow(void)
 struct ifnet *
 if_alloc(u_char type)
 {
-	struct ifnet *ifp;
+	// bsd defines a variable named 'ifnet', so we must do this ugliness
+	typedef struct ifnet s_ifnet;
+	std::unique_ptr<s_ifnet> ifp;
 	u_short idx;
 
-	ifp = (struct ifnet *)malloc(sizeof(struct ifnet));
-	bzero(ifp, sizeof(struct ifnet));
+	ifp.reset(new s_ifnet{});
 	IFNET_WLOCK();
 	if (ifindex_alloc_locked(&idx) != 0) {
 		IFNET_WUNLOCK();
-		free(ifp);
 		return (NULL);
 	}
 	ifnet_setbyindex_locked(idx, IFNET_HOLD);
@@ -382,26 +382,23 @@ if_alloc(u_char type)
 	ifp->if_type = type;
 	ifp->if_alloctype = type;
 	if (if_com_alloc[type] != NULL) {
-		ifp->if_l2com = if_com_alloc[type](type, ifp);
+		ifp->if_l2com = if_com_alloc[type](type, ifp.get());
 		if (ifp->if_l2com == NULL) {
-			free(ifp);
 			ifindex_free(idx);
 			return (NULL);
 		}
 	}
 
-	IF_ADDR_LOCK_INIT(ifp);
 	ifp->if_afdata_initialized = 0;
-	IF_AFDATA_LOCK_INIT(ifp);
 	TAILQ_INIT(&ifp->if_addrhead);
 	TAILQ_INIT(&ifp->if_prefixhead);
 	TAILQ_INIT(&ifp->if_multiaddrs);
 	TAILQ_INIT(&ifp->if_groups);
-	ifq_init(&ifp->if_snd, ifp);
+	ifq_init(&ifp->if_snd, ifp.get());
 
 	refcount_init(&ifp->if_refcount, 1);	/* Index reference. */
-	ifnet_setbyindex(ifp->if_index, ifp);
-	return (ifp);
+	ifnet_setbyindex(ifp->if_index, ifp.get());
+	return ifp.release();
 }
 
 /*
@@ -422,10 +419,8 @@ if_free_internal(struct ifnet *ifp)
 
 	if (ifp->if_description != NULL)
 		free(ifp->if_description);
-	IF_AFDATA_DESTROY(ifp);
-	IF_ADDR_LOCK_DESTROY(ifp);
 	ifq_delete(&ifp->if_snd);
-	free(ifp);
+	delete ifp;
 }
 
 /*
