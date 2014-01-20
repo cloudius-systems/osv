@@ -702,6 +702,9 @@ int chdir(const char *pathname)
     if (pathname == NULL)
         goto out_errno;
 
+    if ((error = task_conv(t, pathname, VREAD, path)) != 0)
+        goto out_errno;
+
     /* Check if directory exits */
     error = sys_open(path, O_RDONLY, 0, &fp);
     if (error) {
