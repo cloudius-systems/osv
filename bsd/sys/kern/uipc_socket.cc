@@ -953,7 +953,7 @@ sosend_generic(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	 */
 	if (resid < 0 || (so->so_type == SOCK_STREAM && (flags & MSG_EOR))) {
 		error = EINVAL;
-		goto out;
+		goto out_unlocked;
 	}
 
 	dontroute =
@@ -962,22 +962,20 @@ sosend_generic(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	if (control != NULL)
 		clen = control->m_hdr.mh_len;
 
+	SOCKBUF_LOCK(&so->so_snd);
 	error = sblock(&so->so_snd, SBLOCKWAIT(flags));
 	if (error)
 		goto out;
 
 restart:
 	do {
-		SOCKBUF_LOCK(&so->so_snd);
 		if (so->so_snd.sb_state & SBS_CANTSENDMORE) {
-			SOCKBUF_UNLOCK(&so->so_snd);
 			error = EPIPE;
 			goto release;
 		}
 		if (so->so_error) {
 			error = so->so_error;
 			so->so_error = 0;
-			SOCKBUF_UNLOCK(&so->so_snd);
 			goto release;
 		}
 		if ((so->so_state & SS_ISCONNECTED) == 0) {
@@ -991,7 +989,6 @@ restart:
 			    (so->so_proto->pr_flags & PR_IMPLOPCL) == 0) {
 				if ((so->so_state & SS_ISCONFIRMING) == 0 &&
 				    !(resid == 0 && clen != 0)) {
-					SOCKBUF_UNLOCK(&so->so_snd);
 					error = ENOTCONN;
 					goto release;
 				}
@@ -1009,24 +1006,20 @@ restart:
 			space += 1024;
 		if ((atomic && resid > so->so_snd.sb_hiwat) ||
 		    (u_int)clen > so->so_snd.sb_hiwat) {
-			SOCKBUF_UNLOCK(&so->so_snd);
 			error = EMSGSIZE;
 			goto release;
 		}
 		if (space < resid + clen &&
 		    (atomic || space < so->so_snd.sb_lowat || space < clen)) {
 			if ((so->so_state & SS_NBIO) || (flags & MSG_NBIO)) {
-				SOCKBUF_UNLOCK(&so->so_snd);
 				error = EWOULDBLOCK;
 				goto release;
 			}
 			error = sbwait(&so->so_snd);
-			SOCKBUF_UNLOCK(&so->so_snd);
 			if (error)
 				goto release;
 			goto restart;
 		}
-		SOCKBUF_UNLOCK(&so->so_snd);
 		space -= clen;
 		do {
 			if (uio == NULL) {
@@ -1051,9 +1044,11 @@ restart:
 				resid = uio->uio_resid;
 			}
 			if (dontroute) {
+				SOCKBUF_UNLOCK(&so->so_snd);
 				SOCK_LOCK(so);
 				so->so_options |= SO_DONTROUTE;
 				SOCK_UNLOCK(so);
+				SOCKBUF_LOCK(&so->so_snd);
 			}
 			/*
 			 * XXX all the SBS_CANTSENDMORE checks previously
@@ -1066,6 +1061,7 @@ restart:
 			 * this.
 			 */
 			VNET_SO_ASSERT(so);
+			SOCKBUF_UNLOCK(&so->so_snd);
 			error = (*so->so_proto->pr_usrreqs->pru_send)(so,
 			    (flags & MSG_OOB) ? PRUS_OOB :
 			/*
@@ -1080,10 +1076,13 @@ restart:
 			/* If there is more to send set PRUS_MORETOCOME. */
 			    (resid > 0 && space > 0) ? PRUS_MORETOCOME : 0,
 			    top, addr, control, td);
+			SOCKBUF_LOCK(&so->so_snd);
 			if (dontroute) {
+				SOCKBUF_UNLOCK(&so->so_snd);
 				SOCK_LOCK(so);
 				so->so_options &= ~SO_DONTROUTE;
 				SOCK_UNLOCK(so);
+				SOCKBUF_LOCK(&so->so_snd);
 			}
 			clen = 0;
 			control = NULL;
@@ -1096,6 +1095,8 @@ restart:
 release:
 	sbunlock(&so->so_snd);
 out:
+	SOCKBUF_UNLOCK(&so->so_snd);
+out_unlocked:
 	if (top != NULL)
 		m_freem(top);
 	if (control != NULL)
@@ -1232,12 +1233,12 @@ soreceive_generic(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 		(*pr->pr_usrreqs->pru_rcvd)(so, 0);
 	}
 
+	SOCKBUF_LOCK(&so->so_rcv);
 	error = sblock(&so->so_rcv, SBLOCKWAIT(flags));
 	if (error)
 		return (error);
 
 restart:
-	SOCKBUF_LOCK(&so->so_rcv);
 	m = so->so_rcv.sb_mb;
 	/*
 	 * If we have less data than requested, block awaiting more (subject
@@ -1258,13 +1259,11 @@ restart:
 			error = so->so_error;
 			if ((flags & MSG_PEEK) == 0)
 				so->so_error = 0;
-			SOCKBUF_UNLOCK(&so->so_rcv);
 			goto release;
 		}
 		SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 		if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
 			if (m == NULL) {
-				SOCKBUF_UNLOCK(&so->so_rcv);
 				goto release;
 			} else
 				goto dontblock;
@@ -1276,24 +1275,20 @@ restart:
 			}
 		if ((so->so_state & (SS_ISCONNECTED|SS_ISCONNECTING)) == 0 &&
 		    (so->so_proto->pr_flags & PR_CONNREQUIRED)) {
-			SOCKBUF_UNLOCK(&so->so_rcv);
 			error = ENOTCONN;
 			goto release;
 		}
 		if (uio->uio_resid == 0) {
-			SOCKBUF_UNLOCK(&so->so_rcv);
 			goto release;
 		}
 		if ((so->so_state & SS_NBIO) ||
 		    (flags & (MSG_DONTWAIT|MSG_NBIO))) {
-			SOCKBUF_UNLOCK(&so->so_rcv);
 			error = EWOULDBLOCK;
 			goto release;
 		}
 		SBLASTRECORDCHK(&so->so_rcv);
 		SBLASTMBUFCHK(&so->so_rcv);
 		error = sbwait(&so->so_rcv);
-		SOCKBUF_UNLOCK(&so->so_rcv);
 		if (error)
 			goto release;
 		goto restart;
@@ -1459,9 +1454,7 @@ dontblock:
 			SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 			SBLASTRECORDCHK(&so->so_rcv);
 			SBLASTMBUFCHK(&so->so_rcv);
-			SOCKBUF_UNLOCK(&so->so_rcv);
 			error = uiomove(mtod(m, char *) + moff, (int)len, uio);
-			SOCKBUF_LOCK(&so->so_rcv);
 			if (error) {
 				/*
 				 * The MT_SONAME mbuf has already been removed
@@ -1474,7 +1467,6 @@ dontblock:
 				if (m && pr->pr_flags & PR_ATOMIC &&
 				    ((flags & MSG_PEEK) == 0))
 					(void)sbdroprecord_locked(&so->so_rcv);
-				SOCKBUF_UNLOCK(&so->so_rcv);
 				goto release;
 			}
 		} else
@@ -1583,7 +1575,6 @@ dontblock:
 			if (so->so_rcv.sb_mb == NULL) {
 				error = sbwait(&so->so_rcv);
 				if (error) {
-					SOCKBUF_UNLOCK(&so->so_rcv);
 					goto release;
 				}
 			}
@@ -1631,15 +1622,14 @@ dontblock:
 	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
 	if (orig_resid == uio->uio_resid && orig_resid &&
 	    (flags & MSG_EOR) == 0 && (so->so_rcv.sb_state & SBS_CANTRCVMORE) == 0) {
-		SOCKBUF_UNLOCK(&so->so_rcv);
 		goto restart;
 	}
-	SOCKBUF_UNLOCK(&so->so_rcv);
 
 	if (flagsp != NULL)
 		*flagsp |= flags;
 release:
 	sbunlock(&so->so_rcv);
+	SOCKBUF_UNLOCK(&so->so_rcv);
 	return (error);
 }
 
@@ -1672,11 +1662,11 @@ soreceive_stream(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 
 	sb = &so->so_rcv;
 
+	SOCKBUF_LOCK(sb);
 	/* Prevent other readers from entering the socket. */
 	error = sblock(sb, SBLOCKWAIT(flags));
 	if (error)
 		goto out;
-	SOCKBUF_LOCK(sb);
 
 	/* Easy one, no space to copyout anything. */
 	if (uio->uio_resid == 0) {
@@ -1789,9 +1779,7 @@ deliver:
 		}
 	} else {
 		/* NB: Must unlock socket buffer as uiomove may sleep. */
-		SOCKBUF_UNLOCK(sb);
 		error = m_mbuftouio(uio, sb->sb_mb, len);
-		SOCKBUF_LOCK(sb);
 		if (error)
 			goto out;
 	}
@@ -1827,8 +1815,8 @@ out:
 	SOCKBUF_LOCK_ASSERT(sb);
 	SBLASTRECORDCHK(sb);
 	SBLASTMBUFCHK(sb);
-	SOCKBUF_UNLOCK(sb);
 	sbunlock(sb);
+	SOCKBUF_UNLOCK(sb);
 	return (error);
 }
 
@@ -2076,20 +2064,20 @@ sorflush(struct socket *so)
 	 * despite any existing socket disposition on interruptable waiting.
 	 */
 	socantrcvmore(so);
+	SOCKBUF_LOCK(sb);
 	(void) sblock(sb, SBL_WAIT | SBL_NOINTR);
 
 	/*
 	 * Invalidate/clear most of the sockbuf structure, but leave selinfo
 	 * and mutex data unchanged.
 	 */
-	SOCKBUF_LOCK(sb);
 	bzero(&asb, offsetof(struct sockbuf, sb_startzero));
 	bcopy(&sb->sb_startzero, &asb.sb_startzero,
 	    sizeof(*sb) - offsetof(struct sockbuf, sb_startzero));
 	bzero(&sb->sb_startzero,
 	    sizeof(*sb) - offsetof(struct sockbuf, sb_startzero));
-	SOCKBUF_UNLOCK(sb);
 	sbunlock(sb);
+	SOCKBUF_UNLOCK(sb);
 
 	/*
 	 * Dispose of special rights and flush the socket buffer.  Don't call
