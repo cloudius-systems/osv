@@ -244,11 +244,11 @@ tests += tests/tst-hello.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
-java-jars = java/runjava.jar java/cloudius.jar
-$(java-jars):
-	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(out) \
-		-e -f $(src)/$(basename $@)/build.xml jar $(if $V,,-q), ANT $@)
-.PHONY: $(java-jars)
+java-targets = java-jars java/java.so
+
+java-jars:
+	$(call quiet, cd $(src)/java && mvn package -q -DskipTests=true, MVN $@)
+.PHONY: java-jars
 
 tools/%.o: COMMON += -fPIC
 tools := tools/ifconfig/ifconfig.so
@@ -693,8 +693,8 @@ usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
-bootfs.bin: scripts/mkbootfs.py $(out)/bootfs.manifest $(tests) $(java_tests) $(tools) \
-		tests/testrunner.so java/java.so $(java-jars) \
+bootfs.bin: scripts/mkbootfs.py $(java-targets) $(out)/bootfs.manifest $(tests) $(java_tests) $(tools) \
+		tests/testrunner.so \
 		zpool.so zfs.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \

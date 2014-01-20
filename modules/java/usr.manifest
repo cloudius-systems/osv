@@ -45,5 +45,5 @@
 /&/etc/fonts/conf.d/59-liberation-sans.conf: %(miscbase)s/&
 /&/etc/fonts/conf.d/59-liberation-serif.conf: %(miscbase)s/&
 /java.so: java/java.so
-/java/runjava.jar: java/runjava.jar
-/java/cloudius.jar: java/cloudius.jar
+/java/runjava.jar: ${OSV_BASE}/java/runjava/target/runjava.jar
+/java/cloudius.jar: ${OSV_BASE}/java/cloudius/target/cloudius.jar
