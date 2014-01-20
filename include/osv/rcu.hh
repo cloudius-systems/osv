@@ -90,6 +90,8 @@ extern rcu_lock_in_preempt_type rcu_read_lock_in_preempt_disabled;
 template <typename T>
 class rcu_ptr {
 public:
+    rcu_ptr() {}
+    explicit rcu_ptr(T* p) : _ptr(p) {}
     // Access contents for reading.  Note: must be only called once
     // for an object within a lock()/unlock() pair.
     T* read() const;
