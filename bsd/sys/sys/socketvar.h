@@ -238,6 +238,8 @@ struct xsocket {
 	}								\
 } while (0)
 
+extern "C" void sowakeup(socket* so, sockbuf* sb);
+
 /*
  * In sorwakeup() and sowwakeup(), acquire the socket buffer lock to
  * avoid a non-atomic test-and-wakeup.  However, sowakeup is
@@ -246,31 +248,36 @@ struct xsocket {
  * directly invokes the underlying sowakeup() primitives, it must
  * maintain the same semantics.
  */
-#define	sorwakeup_locked(so) do {					\
-	SOCKBUF_LOCK_ASSERT(&(so)->so_rcv);				\
-	if (sb_notify(&(so)->so_rcv))					\
-		sowakeup((so), &(so)->so_rcv);	 			\
-	else								\
-		SOCKBUF_UNLOCK(&(so)->so_rcv);				\
-} while (0)
+inline void sorwakeup_locked(socket* so) {
+	SOCKBUF_LOCK_ASSERT(&so->so_rcv);
+	if (sb_notify(&so->so_rcv)) {
+		sowakeup(so, &so->so_rcv);
+	} else {
+		SOCKBUF_UNLOCK(&so->so_rcv);
+	}
+}
 
-#define	sorwakeup(so) do {						\
-	SOCKBUF_LOCK(&(so)->so_rcv);					\
-	sorwakeup_locked(so);						\
-} while (0)
+inline void sorwakeup(socket* so)
+{
+	SOCKBUF_LOCK(&so->so_rcv);
+	sorwakeup_locked(so);
+}
 
-#define	sowwakeup_locked(so) do {					\
-	SOCKBUF_LOCK_ASSERT(&(so)->so_snd);				\
-	if (sb_notify(&(so)->so_snd))					\
-		sowakeup((so), &(so)->so_snd); 				\
-	else								\
-		SOCKBUF_UNLOCK(&(so)->so_snd);				\
-} while (0)
+inline void sowwakeup_locked(socket* so)
+{
+	SOCKBUF_LOCK_ASSERT(&so->so_snd);
+	if (sb_notify(&so->so_snd)) {
+		sowakeup(so, &so->so_snd);
+	} else {
+		SOCKBUF_UNLOCK(&so->so_snd);
+	}
+}
 
-#define	sowwakeup(so) do {						\
-	SOCKBUF_LOCK(&(so)->so_snd);					\
-	sowwakeup_locked(so);						\
-} while (0)
+inline void sowwakeup(socket* so)
+{
+	SOCKBUF_LOCK(&so->so_snd);
+	sowwakeup_locked(so);
+}
 
 struct accept_filter {
 	char	accf_name[16];
