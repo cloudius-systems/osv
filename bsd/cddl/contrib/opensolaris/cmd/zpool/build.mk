@@ -7,6 +7,8 @@ cflags-zpool-cmd-includes = $(cflags-libzfs-include) -I$(src)/bsd/cddl/contrib/o
 
 $(zpool-cmd-objects): kernel-defines =
 
+$(zpool-cmd-objects): CFLAGS += -D_GNU_SOURCE
+
 $(zpool-cmd-objects): local-includes += $(cflags-zpool-cmd-includes)
 
 $(zpool-cmd-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \

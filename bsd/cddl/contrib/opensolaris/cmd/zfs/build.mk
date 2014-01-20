@@ -8,6 +8,8 @@ cflags-zfs-cmd-includes = $(cflags-libzfs-include)
 
 $(zfs-cmd-objects): kernel-defines =
 
+$(zfs-cmd-objects): CFLAGS += -D_GNU_SOURCE
+
 $(zfs-cmd-objects): local-includes += $(cflags-zfs-cmd-includes)
 
 $(zfs-cmd-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \

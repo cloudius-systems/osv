@@ -84,6 +84,7 @@ extern "C" {
 #include <sys/sysevent/dev.h>
 #include <machine/atomic.h>
 #include <sys/debug.h>
+#include <sys/resource.h>
 
 #define	ZFS_EXPORTS_PATH	"/etc/zfs/exports"
 
@@ -107,7 +108,6 @@ extern "C" {
 
 #define	ZFS_LOG(...)	do {  } while (0)
 
-typedef u_longlong_t      rlim64_t;
 #define	RLIM64_INFINITY	((rlim64_t)-3)
 
 #ifdef ZFS_DEBUG

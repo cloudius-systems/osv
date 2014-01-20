@@ -39,6 +39,7 @@
 #define _SYS_PARAM_H_
 
 #include <limits.h>
+#include <api/sys/param.h>
 
 #define	BSD	199506		/* System version (year & month). */
 #define BSD4_3	1
@@ -100,12 +101,6 @@
 #define	MAXINTERP	PATH_MAX	/* max interpreter file name length */
 #define	MAXLOGNAME	17		/* max login name length (incl. NUL) */
 #define	MAXUPRC		CHILD_MAX	/* max simultaneous processes */
-#define	NCARGS		ARG_MAX		/* max bytes for an exec function */
-#define	NGROUPS		(NGROUPS_MAX+1)	/* max number groups */
-#define	NOFILE		OPEN_MAX	/* max open files per process */
-#define	NOGROUP		65535		/* marker for empty group set member */
-#define MAXHOSTNAMELEN	256		/* max hostname size */
-#define SPECNAMELEN	63		/* max length of devicename */
 
 /* More types and definitions used throughout the kernel. */
 #ifdef _KERNEL
@@ -126,7 +121,6 @@
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
 #endif
-#define	DEV_BSIZE	(1<<DEV_BSHIFT)
 
 #ifndef BLKDEV_IOSIZE
 #define BLKDEV_IOSIZE  PAGE_SIZE	/* default block device I/O size */
@@ -237,35 +231,13 @@
 #define BKVASIZE	16384	/* must be power of 2 */
 #define BKVAMASK	(BKVASIZE-1)
 
-/*
- * MAXPATHLEN defines the longest permissible path length after expanding
- * symbolic links. It is used to allocate a temporary buffer from the buffer
- * pool in which to do the name expansion, hence should be a power of two,
- * and must be less than or equal to MAXBSIZE.  MAXSYMLINKS defines the
- * maximum number of symbolic links that may be expanded in a path name.
- * It should be set high enough to allow all legitimate uses, but halt
- * infinite loops reasonably quickly.
- */
-#define	MAXPATHLEN	PATH_MAX
-#define MAXSYMLINKS	32
-
-/* Bit map related macros. */
-#define	setbit(a,i)	(((unsigned char *)(a))[(i)/NBBY] |= 1<<((i)%NBBY))
-#define	clrbit(a,i)	(((unsigned char *)(a))[(i)/NBBY] &= ~(1<<((i)%NBBY)))
-#define	isset(a,i)							\
-	(((const unsigned char *)(a))[(i)/NBBY] & (1<<((i)%NBBY)))
-#define	isclr(a,i)							\
-	((((const unsigned char *)(a))[(i)/NBBY] & (1<<((i)%NBBY))) == 0)
-
 /* Macros for counting and rounding. */
 #ifndef howmany
 #define	howmany(x, y)	(((x)+((y)-1))/(y))
 #endif
 #define	nitems(x)	(sizeof((x)) / sizeof((x)[0]))
 #define	rounddown(x, y)	(((x)/(y))*(y))
-#define	roundup(x, y)	((((x)+((y)-1))/(y))*(y))  /* to any y */
 #define	roundup2(x, y)	(((x)+((y)-1))&(~((y)-1))) /* if y is powers of two */
-#define powerof2(x)	((((x)-1)&(x))==0)
 
 /* Macros for min/max. */
 #ifndef MIN

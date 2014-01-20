@@ -38,6 +38,8 @@ $(libzfs-objects): post-includes-bsd =
 
 $(libzfs-objects): kernel-defines =
 
+$(libzfs-objects): CFLAGS += -D_GNU_SOURCE
+
 $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \
 			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function
 
