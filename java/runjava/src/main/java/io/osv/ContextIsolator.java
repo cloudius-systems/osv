@@ -1,5 +1,9 @@
 package io.osv;
 
+import io.osv.jul.IsolatingLogManager;
+
+import java.util.logging.LogManager;
+
 /*
  * Copyright (C) 2014 Cloudius Systems, Ltd.
  *
@@ -9,6 +13,18 @@ package io.osv;
 public class ContextIsolator {
     private static final ContextIsolator instance = new ContextIsolator();
 
+    static {
+        verifyLogManagerIsInstalled();
+    }
+
+    private static void verifyLogManagerIsInstalled() {
+        LogManager manager = LogManager.getLogManager();
+        if (!(manager instanceof IsolatingLogManager)) {
+            throw new AssertionError("For isolation to work logging manager must be "
+                    + IsolatingLogManager.class.getName() + " but is: " + manager.getClass().getName());
+        }
+    }
+
     private final InheritableThreadLocal<Context> currentContext = new InheritableThreadLocal<>();
 
     public static ContextIsolator getInstance() {
@@ -16,8 +32,7 @@ public class ContextIsolator {
     }
 
     public ContextIsolator() {
-        Context mainContext = new Context(ClassLoader.getSystemClassLoader());
-        currentContext.set(mainContext);
+        currentContext.set(new Context(ClassLoader.getSystemClassLoader()));
     }
 
     public Context getContext() {

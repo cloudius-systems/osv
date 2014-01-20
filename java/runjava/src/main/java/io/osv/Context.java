@@ -1,5 +1,10 @@
 package io.osv;
 
+import io.osv.jul.LogManagerWrapper;
+import io.osv.util.LazilyInitialized;
+
+import java.util.concurrent.Callable;
+
 /*
  * Copyright (C) 2014 Cloudius Systems, Ltd.
  *
@@ -8,6 +13,15 @@ package io.osv;
  */
 public final class Context {
     private final ClassLoader systemClassLoader;
+
+    private final LazilyInitialized<LogManagerWrapper> logManagerWrapper = new LazilyInitialized<>(
+            new Callable<LogManagerWrapper>() {
+                @Override
+                public LogManagerWrapper call() throws Exception {
+                    return new LogManagerWrapper(Context.this);
+                }
+            });
+
     private Thread mainThread;
 
     public Context(ClassLoader systemClassLoader) {
@@ -29,5 +43,9 @@ public final class Context {
 
     public void join() throws InterruptedException {
         mainThread.join();
+    }
+
+    public LogManagerWrapper getLogManagerWrapper() {
+        return logManagerWrapper.get();
     }
 }

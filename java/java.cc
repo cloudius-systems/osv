@@ -89,6 +89,7 @@ int main(int argc, char **argv)
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=" RUNJAVA_PATH));
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
+    options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
 
     int orig_argc = argc;
     int has_xms = 0, has_xmx = 0;
