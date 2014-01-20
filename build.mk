@@ -206,6 +206,7 @@ tests += tests/tst-timerfd.so
 tests += tests/tst-memmove.so
 tests += tests/tst-pthread-clock.so
 tests += tests/misc-procfs.so
+tests += tests/tst-chdir.so
 
 tests/hello/Hello.class: javabase=tests/hello
 

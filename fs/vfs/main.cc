@@ -706,7 +706,7 @@ int chdir(const char *pathname)
         goto out_errno;
 
     /* Check if directory exits */
-    error = sys_open(path, O_RDONLY, 0, &fp);
+    error = sys_open(path, O_DIRECTORY, 0, &fp);
     if (error) {
         goto out_errno;
     }
@@ -721,8 +721,8 @@ int chdir(const char *pathname)
     trace_vfs_chdir_ret();
     return 0;
     out_errno:
-    trace_vfs_chdir_err(errno);
     errno = error;
+    trace_vfs_chdir_err(errno);
     return -1;
 }
 
