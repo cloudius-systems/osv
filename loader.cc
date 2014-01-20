@@ -111,6 +111,7 @@ static bool opt_log_backtrace = false;
 static bool opt_mount = true;
 static bool opt_vga = false;
 static bool opt_verbose = false;
+static std::string opt_chdir;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -137,6 +138,8 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("noshutdown", "continue running after main() returns")
         ("vga", "use vga as a console device")
         ("verbose", "be verbose, print debug messages")
+        ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())")
+        ("cwd", bpo::value<std::vector<std::string>>(), "set current working directory")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -184,6 +187,21 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     }
     opt_mount = !vars.count("nomount");
     opt_vga = vars.count("vga");
+
+    if (vars.count("env")) {
+        for (auto t : vars["env"].as<std::vector<std::string>>()) {
+            debug("Setting in environment: %s\n", t);
+            putenv(strdup(t.c_str()));
+        }
+    }
+
+    if (vars.count("cwd")) {
+        auto v = vars["cwd"].as<std::vector<std::string>>();
+        if (v.size() > 1) {
+            printf("Ignoring '--cwd' options after the first.");
+        }
+        opt_chdir = v.front();
+    }
 
     av += nr_options;
     ac -= nr_options;
@@ -283,6 +301,15 @@ void* do_main_thread(void *_commands)
     });
     if (has_if) {
         dhcp_start(true);
+    }
+
+    if (!opt_chdir.empty()) {
+        debug("Chdir to: '%s'\n", opt_chdir.c_str());
+
+        if (chdir(opt_chdir.c_str()) != 0) {
+            perror("chdir");
+        }
+        debug("chdir done\n");
     }
 
     // run each payload in order
