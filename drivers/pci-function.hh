@@ -74,13 +74,13 @@ namespace pci {
         void unmap(void);
         mmioaddr_t get_mmio(void);
 
-        // Access the pio bar
-        u32 read(u32 offset)  { return (inl(_addr_lo + offset)); }
-        u16 readw(u32 offset) { return (inw(_addr_lo + offset)); }
-        u8  readb(u32 offset) { return (inb(_addr_lo + offset)); }
-        void write(u32 offset, u32 val) { outl(val, _addr_lo+offset); }
-        void write(u32 offset, u16 val) { outw(val, _addr_lo+offset); }
-        void write(u32 offset, u8 val)  { outb(val, _addr_lo+offset); }
+        // Access the pio or mmio bar
+        u32 readl(u32 offset);
+        u16 readw(u32 offset);
+        u8 readb(u32 offset);
+        void writel(u32 offset, u32 val);
+        void writew(u32 offset, u16 val);
+        void writeb(u32 offset, u8 val);
 
     private:
 

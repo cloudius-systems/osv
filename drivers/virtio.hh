@@ -147,10 +147,10 @@ public:
     void virtio_conf_write(u32 offset, void* buf, int length);
     u8 virtio_conf_readb(u32 offset) { return _bar1->readb(offset);};
     u16 virtio_conf_readw(u32 offset) { return _bar1->readw(offset);};
-    u32 virtio_conf_readl(u32 offset) { return _bar1->read(offset);};
-    void virtio_conf_writeb(u32 offset, u8 val) { _bar1->write(offset, val);};
-    void virtio_conf_writew(u32 offset, u16 val) { _bar1->write(offset, val);};
-    void virtio_conf_writel(u32 offset, u32 val) { _bar1->write(offset, val);};
+    u32 virtio_conf_readl(u32 offset) { return _bar1->readl(offset);};
+    void virtio_conf_writeb(u32 offset, u8 val) { _bar1->writeb(offset, val);};
+    void virtio_conf_writew(u32 offset, u16 val) { _bar1->writew(offset, val);};
+    void virtio_conf_writel(u32 offset, u32 val) { _bar1->writel(offset, val);};
 
     bool kick(int queue);
     void reset_host_side();

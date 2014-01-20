@@ -290,7 +290,7 @@ void virtio_driver::virtio_conf_write(u32 offset, void* buf, int length)
 {
     u8* ptr = reinterpret_cast<u8*>(buf);
     for (int i=0;i<length;i++)
-        _bar1->write(offset+i, ptr[i]);
+        _bar1->writeb(offset+i, ptr[i]);
 }
 
 void virtio_driver::virtio_conf_read(u32 offset, void* buf, int length)
