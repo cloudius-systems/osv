@@ -147,10 +147,10 @@ sblock(struct sockbuf *sb, int flags)
 	    ("sblock: flags invalid (0x%x)", flags));
 
 	if (flags & SBL_WAIT) {
-		rw_rlock(&sb->sb_rwlock);
+		rw_wlock(&sb->sb_rwlock);
 		return (0);
 	} else {
-		if (rw_try_rlock(&sb->sb_rwlock) == 0)
+		if (rw_try_wlock(&sb->sb_rwlock) == 0)
 			return (EWOULDBLOCK);
 		return (0);
 	}
@@ -160,7 +160,7 @@ void
 sbunlock(struct sockbuf *sb)
 {
 
-    rw_runlock(&sb->sb_rwlock);
+    rw_wunlock(&sb->sb_rwlock);
 }
 
 void so_wake_poll(struct socket *so, struct sockbuf *sb)
