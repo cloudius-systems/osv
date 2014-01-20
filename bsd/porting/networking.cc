@@ -36,11 +36,13 @@ void for_each_if(std::function<void (std::string)> func)
 
 int if_set_mtu(std::string if_name, u16 mtu)
 {
+    struct bsd_ifreq ifreq;
+
     if (if_name.empty()) {
         return (EINVAL);
     }
 
-    struct bsd_ifreq ifreq = {0};
+    bzero(&ifreq, sizeof(struct bsd_ifreq));
 
     /* IF Name */
     strncpy(ifreq.ifr_name, if_name.c_str(), IFNAMSIZ);
