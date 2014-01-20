@@ -84,6 +84,11 @@ inline in_addr hton(in_addr a)
     return { htonl(a.s_addr) };
 }
 
+inline bool operator==(in_addr a, in_addr b)
+{
+    return a.s_addr == b.s_addr;
+}
+
 #endif
 
 /*
