@@ -375,6 +375,21 @@ class osv_zfs(gdb.Command):
             print ("\tL2ARC misses: %d (%.2f%%)" %
                    (l2arc_misses, l2arc_misses_perc))
 
+def bits2str(bits, chars):
+    r = ''
+    if bits == 0:
+        return 'none'.ljust(len(chars))
+    for i in range(len(chars)):
+        if bits & (1 << i):
+            r += chars[i]
+    return r.ljust(len(chars))
+
+def permstr(perm):
+    return bits2str(perm, ['r', 'w', 'x'])
+
+def flagstr(flags):
+    return bits2str(flags, ['f', 'p', 's', 'u', 'j'])
+
 class osv_mmap(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv mmap',
@@ -383,8 +398,10 @@ class osv_mmap(gdb.Command):
         for vma in vma_list():
             start = ulong(vma['_range']['_start'])
             end   = ulong(vma['_range']['_end'])
-            size  = ulong(end - start)
-            print '0x%016x 0x%016x [%s kB]' % (start, end, size / 1024)
+            flags =  flagstr(ulong(vma['_flags']))
+            perm =  permstr(ulong(vma['_perm']))
+            size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
+            print '0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm)
     
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer_base')
