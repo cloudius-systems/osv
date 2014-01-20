@@ -114,6 +114,30 @@ socantrcvmore(struct socket *so)
 	mtx_assert(SOCKBUF_MTX(&so->so_rcv), MA_NOTOWNED);
 }
 
+void sockbuf_iolock::lock(mutex& mtx)
+{
+	while (_owner) {
+		_wq.wait(mtx);
+	}
+	_owner = sched::thread::current();
+}
+
+bool sockbuf_iolock::try_lock(mutex& mtx)
+{
+	if (!_owner) {
+		_owner = sched::thread::current();
+		return true;
+	} else {
+		return false;
+	}
+}
+
+void sockbuf_iolock::unlock(mutex& mtx)
+{
+	_owner = nullptr;
+	_wq.wake_all(mtx);
+}
+
 /*
  * Wait for data to arrive at/drain from a socket buffer.
  */
@@ -142,25 +166,27 @@ sbwait(struct sockbuf *sb)
 int
 sblock(struct sockbuf *sb, int flags)
 {
-
+   WITH_LOCK(sb->sb_mtx._mutex) {
 	KASSERT((flags & SBL_VALID) == flags,
 	    ("sblock: flags invalid (0x%x)", flags));
 
 	if (flags & SBL_WAIT) {
-		rw_wlock(&sb->sb_rwlock);
+		sb->sb_iolock.lock(sb->sb_mtx._mutex);
 		return (0);
 	} else {
-		if (rw_try_wlock(&sb->sb_rwlock) == 0)
+		if (!sb->sb_iolock.try_lock(sb->sb_mtx._mutex))
 			return (EWOULDBLOCK);
 		return (0);
 	}
+   }
 }
 
 void
 sbunlock(struct sockbuf *sb)
 {
-
-    rw_wunlock(&sb->sb_rwlock);
+	WITH_LOCK(sb->sb_mtx._mutex) {
+		sb->sb_iolock.unlock(sb->sb_mtx._mutex);
+	}
 }
 
 void so_wake_poll(struct socket *so, struct sockbuf *sb)

@@ -77,12 +77,24 @@ struct	xsockbuf {
 	short	sb_flags;
 };
 
+// light-weight lock that depends on an external mutex for
+// synchronization.  Used for sockbuf I/O thread serialization.
+class sockbuf_iolock {
+public:
+	void lock(mutex& mtx);
+	bool try_lock(mutex& mtx);
+	void unlock(mutex& mtx);
+private:
+	waitqueue _wq;
+	sched::thread* _owner = nullptr;
+};
+
 /*
  * Variables for socket buffering.
  */
 struct	sockbuf {
 	struct	mtx sb_mtx;	/* sockbuf lock */
-	struct	rwlock sb_rwlock;	/* prevent I/O interlacing */
+	sockbuf_iolock sb_iolock;	/* prevent I/O interlacing */
 	short	sb_state;	/* (c/d) socket state on sockbuf */
 #define	sb_startzero	sb_mb
 	struct	mbuf *sb_mb;	/* (c/d) the mbuf chain */
