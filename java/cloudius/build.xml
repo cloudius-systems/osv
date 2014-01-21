@@ -8,7 +8,7 @@
     <mkdir dir="${build-dir}"/>
     <javac debug="true"
            includeantruntime="false"
-           srcdir="."
+           srcdir="src/main/java"
            includes="**/*.java"
            destdir="${build-dir}"
            source="1.7"
