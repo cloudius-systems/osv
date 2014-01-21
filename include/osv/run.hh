@@ -8,7 +8,7 @@
 #ifndef INCLUDED_OSV_RUN_H
 #define INCLUDED_OSV_RUN_H
 
-#include <elf.hh>
+#include <osv/elf.hh>
 #include <string>
 #include <vector>
 

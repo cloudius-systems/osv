@@ -9,7 +9,7 @@
 #include "mempool.hh"
 #include <osv/mmu.hh>
 #include "processor.hh"
-#include "elf.hh"
+#include <osv/elf.hh>
 #include <osv/types.h>
 #include <alloca.h>
 #include <string.h>

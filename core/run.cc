@@ -3,7 +3,7 @@
 #include <vector>
 #include <boost/range/algorithm/transform.hpp>
 
-#include <elf.hh>
+#include <osv/elf.hh>
 #include <osv/run.hh>
 
 #include <debug.hh>

@@ -12,7 +12,7 @@
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <cctype>
-#include "elf.hh"
+#include <osv/elf.hh>
 #include "tls.hh"
 #include "msr.hh"
 #include "exceptions.hh"

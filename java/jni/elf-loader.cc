@@ -1,7 +1,7 @@
 //#include <algorithm>
 #include "debug.hh"
 #include <osv/sched.hh>
-#include "elf.hh"
+#include <osv/elf.hh>
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>

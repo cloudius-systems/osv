@@ -19,7 +19,7 @@
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
 #include "prio.hh"
-#include "elf.hh"
+#include <osv/elf.hh>
 #include <stdlib.h>
 #include <unordered_map>
 

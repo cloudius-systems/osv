@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "elf.hh"
+#include <osv/elf.hh>
 #include <jni.h>
 #include <string.h>
 #include "debug.hh"

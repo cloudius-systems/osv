@@ -6,7 +6,7 @@
  */
 
 #include <dlfcn.h>
-#include "elf.hh"
+#include <osv/elf.hh>
 #include <link.h>
 #include <debug.hh>
 

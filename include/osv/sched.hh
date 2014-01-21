@@ -37,7 +37,7 @@ void smp_main();
 };
 void smp_launch();
 
-// Avoid #include "elf.hh", as it recursively includes sched.hh. We just
+// Avoid #include <osv/elf.hh>, as it recursively includes sched.hh. We just
 // need pointer to elf::tls_data
 namespace elf {
     struct tls_data;
