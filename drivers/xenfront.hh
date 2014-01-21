@@ -13,7 +13,7 @@
 #include "drivers/driver.hh"
 #include "drivers/pci-function.hh"
 #include "drivers/pci-device.hh"
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include <osv/device.h>
 #include <bsd/porting/bus.h>
 #include <xen/interface/io/xenbus.h>

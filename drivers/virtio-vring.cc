@@ -14,7 +14,7 @@
 #include "debug.hh"
 
 #include <osv/sched.hh>
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include "osv/trace.hh"
 #include <ilog2.hh>
 

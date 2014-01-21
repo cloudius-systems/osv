@@ -9,7 +9,7 @@
 #include "dump.hh"
 #include "mmu.hh"
 #include "processor.hh"
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include <boost/format.hpp>
 #include <osv/sched.hh>
 #include "debug.hh"

@@ -11,7 +11,7 @@
 #include "console.hh"
 #include "drivers/pci.hh"
 #include <osv/sched.hh>
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include <termios.h>
 
 class IsaSerialConsole : public Console {

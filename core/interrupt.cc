@@ -12,7 +12,7 @@
 #include <osv/sched.hh>
 #include "drivers/pci-function.hh"
 #include "exceptions.hh"
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include "apic.hh"
 #include <osv/trace.hh>
 

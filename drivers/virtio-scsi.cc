@@ -11,7 +11,7 @@
 #include "mmu.hh"
 #include "mempool.hh"
 #include <osv/sched.hh>
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include "drivers/pci-device.hh"
 #include "drivers/virtio.hh"
 #include "drivers/virtio-scsi.hh"

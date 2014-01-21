@@ -14,7 +14,7 @@
 #include "irqlock.hh"
 #include <osv/align.hh>
 #include "drivers/clock.hh"
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include "smp.hh"
 #include "osv/trace.hh"
 #include <osv/percpu.hh>

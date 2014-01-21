@@ -15,7 +15,7 @@
 #include <iterator>
 #include "libc/signal.hh"
 #include <osv/align.hh>
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include "ilog2.hh"
 #include "prio.hh"
 #include <safe-ptr.hh>

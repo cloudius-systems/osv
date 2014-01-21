@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 #include "exceptions.hh"
 #include "mmu.hh"
 #include <osv/mutex.h>

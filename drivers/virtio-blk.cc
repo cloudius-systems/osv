@@ -11,7 +11,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-blk.hh"
 #include "drivers/pci-device.hh"
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 
 #include "mempool.hh"
 #include "mmu.hh"

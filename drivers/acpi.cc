@@ -27,7 +27,7 @@ extern "C" {
 
 #include "drivers/console.hh"
 #include "drivers/pci.hh"
-#include "interrupt.hh"
+#include <osv/interrupt.hh>
 
 #include "prio.hh"
 
