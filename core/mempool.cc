@@ -17,7 +17,7 @@
 #include "libc/libc.hh"
 #include <osv/align.hh>
 #include <debug.hh>
-#include "alloctracker.hh"
+#include <osv/alloctracker.hh>
 #include <atomic>
 #include <osv/mmu.hh>
 #include <osv/trace.hh>

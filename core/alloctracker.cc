@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <execinfo.h>
 
-#include "alloctracker.hh"
+#include <osv/alloctracker.hh>
 
 namespace memory {
 
