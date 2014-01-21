@@ -6,7 +6,7 @@
  */
 
 #include <osv/mmu.hh>
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include "processor.hh"
 #include "debug.hh"
 #include "exceptions.hh"

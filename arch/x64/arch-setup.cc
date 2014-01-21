@@ -6,7 +6,7 @@
  */
 
 #include "arch-setup.hh"
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <osv/mmu.hh>
 #include "processor.hh"
 #include <osv/elf.hh>

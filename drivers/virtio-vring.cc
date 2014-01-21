@@ -6,7 +6,7 @@
  */
 
 #include <string.h>
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <osv/mmu.hh>
 
 #include "virtio.hh"

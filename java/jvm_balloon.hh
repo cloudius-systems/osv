@@ -9,7 +9,7 @@
 #define JVM_BALLOON_HH_
 
 #include <jni.h>
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include "exceptions.hh"
 
 class jvm_balloon_shrinker : public memory::shrinker {

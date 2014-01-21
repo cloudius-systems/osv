@@ -40,7 +40,7 @@
 #include "osv/trace.hh"
 #include <osv/power.hh>
 #include <osv/rcu.hh>
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <bsd/porting/networking.hh>
 #include <osv/dhcp.hh>
 #include <osv/version.h>

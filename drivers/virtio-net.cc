@@ -13,7 +13,7 @@
 #include "drivers/pci-device.hh"
 #include <osv/interrupt.hh>
 
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <osv/mmu.hh>
 
 #include <string>

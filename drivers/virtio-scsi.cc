@@ -9,7 +9,7 @@
 #include <sys/cdefs.h>
 
 #include <osv/mmu.hh>
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>
 #include "drivers/pci-device.hh"

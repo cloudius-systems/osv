@@ -10,7 +10,7 @@
 #include <string.h>
 #include "debug.hh"
 #include "jvm_balloon.hh"
-#include "mempool.hh"
+#include <osv/mempool.hh>
 
 // java.so is similar to the standard "java" command line launcher in Linux.
 //

@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <osv/ilog2.hh>
 #include "arch-setup.hh"
 #include <cassert>

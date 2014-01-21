@@ -33,7 +33,7 @@
 #include "processor.hh"
 #include "debug.hh"
 #include <boost/format.hpp>
-#include "mempool.hh"
+#include <osv/mempool.hh>
 #include <pwd.h>
 #include <fcntl.h>
 #include <osv/barrier.hh>

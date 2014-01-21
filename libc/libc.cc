@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <osv/clock.hh>
-#include <mempool.hh>
+#include <osv/mempool.hh>
 
 int libc_error(int err)
 {
