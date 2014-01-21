@@ -218,7 +218,7 @@ struct inpcb {
 	inp_gen_t	inp_gencnt;	/* (c) generation count */
 	struct llentry	*inp_lle;	/* cached L2 information */
 	struct rtentry	*inp_rt;	/* cached L3 information */
-	struct rwlock	inp_lock;
+	struct mtx	inp_lock;
 };
 #define	inp_fport	inp_inc.inc_fport
 #define	inp_lport	inp_inc.inc_lport
@@ -394,31 +394,14 @@ struct inpcbgroup {
 };
 
 #define INP_LOCK_INIT(inp, d, t) \
-	rw_init_flags(&(inp)->inp_lock, (t), RW_RECURSE |  RW_DUPOK)
-#define INP_LOCK_DESTROY(inp)	rw_destroy(&(inp)->inp_lock)
-#define INP_RLOCK(inp)		rw_rlock(&(inp)->inp_lock)
-#define INP_WLOCK(inp)		rw_wlock(&(inp)->inp_lock)
-#define INP_TRY_RLOCK(inp)	rw_try_rlock(&(inp)->inp_lock)
-#define INP_TRY_WLOCK(inp)	rw_try_wlock(&(inp)->inp_lock)
-#define INP_RUNLOCK(inp)	rw_runlock(&(inp)->inp_lock)
-#define INP_WUNLOCK(inp)	rw_wunlock(&(inp)->inp_lock)
-#define	INP_TRY_UPGRADE(inp)	rw_try_upgrade(&(inp)->inp_lock)
-#define	INP_DOWNGRADE(inp)	rw_downgrade(&(inp)->inp_lock)
-#define	INP_WLOCKED(inp)	rw_wowned(&(inp)->inp_lock)
-#define	INP_LOCK_ASSERT(inp)	rw_assert(&(inp)->inp_lock, RA_LOCKED)
-#define	INP_RLOCK_ASSERT(inp)	rw_assert(&(inp)->inp_lock, RA_RLOCKED)
-#define	INP_WLOCK_ASSERT(inp)	rw_assert(&(inp)->inp_lock, RA_WLOCKED)
-#define	INP_UNLOCK_ASSERT(inp)	rw_assert(&(inp)->inp_lock, RA_UNLOCKED)
-
-/*
- * These locking functions are for inpcb consumers outside of sys/netinet,
- * more specifically, they were added for the benefit of TOE drivers. The
- * macros are reserved for use by the stack.
- */
-void inp_wlock(struct inpcb *);
-void inp_wunlock(struct inpcb *);
-void inp_rlock(struct inpcb *);
-void inp_runlock(struct inpcb *);
+	mtx_init(&(inp)->inp_lock, (t), (t), MTX_DUPOK)
+#define INP_LOCK_DESTROY(inp)	mtx_destroy(&(inp)->inp_lock)
+#define INP_LOCK(inp)		mtx_lock(&(inp)->inp_lock)
+#define INP_TRY_LOCK(inp)	mtx_try_lock(&(inp)->inp_lock)
+#define INP_UNLOCK(inp)		mtx_unlock(&(inp)->inp_lock)
+#define	INP_LOCKED(inp)		mtx_owned(&(inp)->inp_lock)
+#define	INP_LOCK_ASSERT(inp)	mtx_assert(&(inp)->inp_lock, MA_OWNED)
+#define	INP_UNLOCK_ASSERT(inp)	mtx_assert(&(inp)->inp_lock, MA_NOTOWNED)
 
 #ifdef INVARIANTS
 void inp_lock_assert(struct inpcb *);
@@ -551,11 +534,9 @@ void 	inp_4tuple_get(struct inpcb *inp, uint32_t *laddr, uint16_t *lp,
  * Flags passed to in_pcblookup*() functions.
  */
 #define	INPLOOKUP_WILDCARD	0x00000001	/* Allow wildcard sockets. */
-#define	INPLOOKUP_RLOCKPCB	0x00000002	/* Return inpcb read-locked. */
-#define	INPLOOKUP_WLOCKPCB	0x00000004	/* Return inpcb write-locked. */
+#define	INPLOOKUP_LOCKPCB	0x00000002	/* Return read-locked. */
 
-#define	INPLOOKUP_MASK	(INPLOOKUP_WILDCARD | INPLOOKUP_RLOCKPCB | \
-			    INPLOOKUP_WLOCKPCB)
+#define	INPLOOKUP_MASK	(INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB)
 
 #define	sotoinpcb(so)	((struct inpcb *)(so)->so_pcb)
 #define	sotoin6pcb(so)	sotoinpcb(so) /* for KAME src sync over BSD*'s */
@@ -653,8 +634,7 @@ void	in_pcbref(struct inpcb *);
 void	in_pcbrehash(struct inpcb *);
 void	in_pcbrehash_mbuf(struct inpcb *, struct mbuf *);
 int	in_pcbrele(struct inpcb *);
-int	in_pcbrele_rlocked(struct inpcb *);
-int	in_pcbrele_wlocked(struct inpcb *);
+int	in_pcbrele_locked(struct inpcb *);
 void	in_pcbsetsolabel(struct socket *so);
 int	in_getpeeraddr(struct socket *so, struct bsd_sockaddr **nam);
 int	in_getsockaddr(struct socket *so, struct bsd_sockaddr **nam);

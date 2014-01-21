@@ -145,7 +145,7 @@ tcp_reass_flush(struct tcpcb *tp)
 {
 	struct tseg_qent *qe;
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	while ((qe = LIST_FIRST(&tp->t_segq)) != NULL) {
 		LIST_REMOVE(qe, tqe_q);
@@ -187,7 +187,7 @@ tcp_reass(struct tcpcb *tp, struct tcphdr *th, int *tlenp, struct mbuf *m)
 	int flags;
 	struct tseg_qent tqs;
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	/*
 	 * XXX: tcp_reass() is rather inefficient with its data structures

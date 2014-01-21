@@ -881,7 +881,7 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 		    sopt->sopt_dir == SOPT_SET) {
 			switch (sopt->sopt_name) {
 			case SO_REUSEADDR:
-				INP_WLOCK(inp);
+				INP_LOCK(inp);
 				if (IN_MULTICAST(ntohl(inp->inp_laddr.s_addr))) {
 					if ((so->so_options &
 					    (SO_REUSEADDR | SO_REUSEPORT)) != 0)
@@ -889,22 +889,22 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 					else
 						inp->inp_flags2 &= ~INP_REUSEPORT;
 				}
-				INP_WUNLOCK(inp);
+				INP_UNLOCK(inp);
 				error = 0;
 				break;
 			case SO_REUSEPORT:
-				INP_WLOCK(inp);
+				INP_LOCK(inp);
 				if ((so->so_options & SO_REUSEPORT) != 0)
 					inp->inp_flags2 |= INP_REUSEPORT;
 				else
 					inp->inp_flags2 &= ~INP_REUSEPORT;
-				INP_WUNLOCK(inp);
+				INP_UNLOCK(inp);
 				error = 0;
 				break;
 			case SO_SETFIB:
-				INP_WLOCK(inp);
+				INP_LOCK(inp);
 				inp->inp_inc.inc_fibnum = so->so_fibnum;
-				INP_WUNLOCK(inp);
+				INP_UNLOCK(inp);
 				error = 0;
 				break;
 			default:
@@ -939,9 +939,9 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 				m_free(m);
 				break;
 			}
-			INP_WLOCK(inp);
+			INP_LOCK(inp);
 			error = ip_pcbopts(inp, sopt->sopt_name, m);
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 			return (error);
 		}
 
@@ -987,12 +987,12 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 				break;
 
 #define	OPTSET(bit) do {						\
-	INP_WLOCK(inp);							\
+	INP_LOCK(inp);							\
 	if (optval)							\
 		inp->inp_flags |= bit;					\
 	else								\
 		inp->inp_flags &= ~bit;					\
-	INP_WUNLOCK(inp);						\
+	INP_UNLOCK(inp);						\
 } while (0)
 
 			case IP_RECVOPTS:
@@ -1065,7 +1065,7 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 			if (error)
 				break;
 
-			INP_WLOCK(inp);
+			INP_LOCK(inp);
 			switch (optval) {
 			case IP_PORTRANGE_DEFAULT:
 				inp->inp_flags &= ~(INP_LOWPORT);
@@ -1086,7 +1086,7 @@ ip_ctloutput(struct socket *so, struct sockopt *sopt)
 				error = EINVAL;
 				break;
 			}
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 			break;
 
 #ifdef IPSEC

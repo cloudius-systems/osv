@@ -628,7 +628,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 
 	inp = sotoinpcb(so);
 	inp->inp_inc.inc_fibnum = so->so_fibnum;
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	INP_HASH_WLOCK(&V_tcbinfo);
 
 	/* Insert new socket into PCB hash list. */
@@ -819,12 +819,12 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 	tp->t_keepcnt = sototcpcb(lso) ->t_keepcnt;
 	tcp_timer_activate(tp, TT_KEEP, TP_KEEPINIT(tp));
 
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	TCPSTAT_INC(tcps_accepts);
 	return (so);
 
-	abort: INP_WUNLOCK(inp);
+	abort: INP_UNLOCK(inp);
 	abort2: if (so != NULL )
 		soabort(so);
 	return (NULL );
@@ -1005,7 +1005,7 @@ static void _syncache_add(struct in_conninfo *inc, struct tcpopt *to,
 	struct syncache scs;
 
 	INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
-	INP_WLOCK_ASSERT(inp); /* listen socket */
+	INP_LOCK_ASSERT(inp); /* listen socket */
 	KASSERT((th->th_flags & (TH_RST|TH_ACK|TH_SYN)) == TH_SYN,
 		("%s: unexpected tcp flags", __func__));
 
@@ -1033,13 +1033,13 @@ static void _syncache_add(struct in_conninfo *inc, struct tcpopt *to,
 
 #ifdef MAC
 	if (mac_syncache_init(&maclabel) != 0) {
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 		goto done;
 	} else
 	mac_syncache_create(maclabel, inp);
 #endif
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	INP_INFO_WUNLOCK(&V_tcbinfo);
 
 	/*
@@ -1462,7 +1462,7 @@ void tcp_offload_syncache_add(struct in_conninfo *inc, struct toeopt *toeo,
 	to.to_flags = toeo->to_flags;
 
 	INP_INFO_WLOCK(&V_tcbinfo);
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 
 	_syncache_add(inc, &to, th, inp, lsop, NULL, tu, toepcb);
 }

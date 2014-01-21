@@ -286,7 +286,7 @@ in_pcballoc(struct socket *so, struct inpcbinfo *pcbinfo)
 	if (V_ip6_auto_flowlabel)
 		inp->inp_flags |= IN6P_AUTOFLOWLABEL;
 #endif
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	inp->inp_gencnt = ++pcbinfo->ipi_gencnt;
 	refcount_init(&inp->inp_refcount, 1);	/* Reference from inpcbinfo */
 #if defined(IPSEC) || defined(MAC)
@@ -305,7 +305,7 @@ in_pcbbind(struct inpcb *inp, struct bsd_sockaddr *nam, struct ucred *cred)
 {
 	int anonport, error;
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	INP_HASH_WLOCK_ASSERT(inp->inp_pcbinfo);
 
 	if (inp->inp_lport != 0 || inp->inp_laddr.s_addr != INADDR_ANY)
@@ -620,7 +620,7 @@ in_pcbconnect_mbuf(struct inpcb *inp, struct bsd_sockaddr *nam,
 	in_addr_t laddr, faddr;
 	int anonport, error;
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	INP_HASH_WLOCK_ASSERT(inp->inp_pcbinfo);
 
 	lport = inp->inp_lport;
@@ -919,7 +919,7 @@ void
 in_pcbdisconnect(struct inpcb *inp)
 {
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	INP_HASH_WLOCK_ASSERT(inp->inp_pcbinfo);
 
 	inp->inp_faddr.s_addr = INADDR_ANY;
@@ -985,13 +985,13 @@ in_pcbref(struct inpcb *inp)
  * about memory stability (and continued use of the write lock).
  */
 int
-in_pcbrele_rlocked(struct inpcb *inp)
+in_pcbrele_locked(struct inpcb *inp)
 {
 	struct inpcbinfo *pcbinfo;
 
 	KASSERT(inp->inp_refcount > 0, ("%s: refcount 0", __func__));
 
-	INP_RLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	if (refcount_release(&inp->inp_refcount) == 0) {
 		/*
@@ -999,7 +999,7 @@ in_pcbrele_rlocked(struct inpcb *inp)
 		 * this isn't the last reference.
 		 */
 		if (inp->inp_flags2 & INP_FREED) {
-			INP_RUNLOCK(inp);
+			INP_UNLOCK(inp);
 			return (1);
 		}
 		return (0);
@@ -1007,27 +1007,7 @@ in_pcbrele_rlocked(struct inpcb *inp)
 
 	KASSERT(inp->inp_socket == NULL, ("%s: inp_socket != NULL", __func__));
 
-	INP_RUNLOCK(inp);
-	pcbinfo = inp->inp_pcbinfo;
-	uma_zfree(pcbinfo->ipi_zone, inp);
-	return (1);
-}
-
-int
-in_pcbrele_wlocked(struct inpcb *inp)
-{
-	struct inpcbinfo *pcbinfo;
-
-	KASSERT(inp->inp_refcount > 0, ("%s: refcount 0", __func__));
-
-	INP_WLOCK_ASSERT(inp);
-
-	if (refcount_release(&inp->inp_refcount) == 0)
-		return (0);
-
-	KASSERT(inp->inp_socket == NULL, ("%s: inp_socket != NULL", __func__));
-
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	pcbinfo = inp->inp_pcbinfo;
 	uma_zfree(pcbinfo->ipi_zone, inp);
 	return (1);
@@ -1040,7 +1020,7 @@ int
 in_pcbrele(struct inpcb *inp)
 {
 
-	return (in_pcbrele_wlocked(inp));
+	return (in_pcbrele_locked(inp));
 }
 
 /*
@@ -1060,7 +1040,7 @@ in_pcbfree(struct inpcb *inp)
 	KASSERT(inp->inp_socket == NULL, ("%s: inp_socket != NULL", __func__));
 
 	INP_INFO_WLOCK_ASSERT(pcbinfo);
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	/* XXXRW: Do as much as possible here. */
 #ifdef IPSEC
@@ -1087,8 +1067,8 @@ in_pcbfree(struct inpcb *inp)
 #ifdef MAC
 	mac_inpcb_destroy(inp);
 #endif
-	if (!in_pcbrele_wlocked(inp))
-		INP_WUNLOCK(inp);
+	if (!in_pcbrele_locked(inp))
+		INP_UNLOCK(inp);
 }
 
 /*
@@ -1109,7 +1089,7 @@ void
 in_pcbdrop(struct inpcb *inp)
 {
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	/*
 	 * XXXRW: Possibly we should protect the setting of INP_DROPPED with
@@ -1163,10 +1143,10 @@ in_getsockaddr(struct socket *so, struct bsd_sockaddr **nam)
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("in_getsockaddr: inp == NULL"));
 
-	INP_RLOCK(inp);
+	INP_LOCK(inp);
 	port = inp->inp_lport;
 	addr = inp->inp_laddr;
-	INP_RUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	*nam = in_sockaddr(port, &addr);
 	return 0;
@@ -1182,10 +1162,10 @@ in_getpeeraddr(struct socket *so, struct bsd_sockaddr **nam)
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("in_getpeeraddr: inp == NULL"));
 
-	INP_RLOCK(inp);
+	INP_LOCK(inp);
 	port = inp->inp_fport;
 	addr = inp->inp_faddr;
-	INP_RUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	*nam = in_sockaddr(port, &addr);
 	return 0;
@@ -1199,20 +1179,20 @@ in_pcbnotifyall(struct inpcbinfo *pcbinfo, struct in_addr faddr, int errval,
 
 	INP_INFO_WLOCK(pcbinfo);
 	LIST_FOREACH_SAFE(inp, pcbinfo->ipi_listhead, inp_list, inp_temp) {
-		INP_WLOCK(inp);
+		INP_LOCK(inp);
 #ifdef INET6
 		if ((inp->inp_vflag & INP_IPV4) == 0) {
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 			continue;
 		}
 #endif
 		if (inp->inp_faddr.s_addr != faddr.s_addr ||
 		    inp->inp_socket == NULL) {
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 			continue;
 		}
 		if ((*notify)(inp, errval))
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 	}
 	INP_INFO_WUNLOCK(pcbinfo);
 }
@@ -1226,7 +1206,7 @@ in_pcbpurgeif0(struct inpcbinfo *pcbinfo, struct ifnet *ifp)
 
 	INP_INFO_RLOCK(pcbinfo);
 	LIST_FOREACH(inp, pcbinfo->ipi_listhead, inp_list) {
-		INP_WLOCK(inp);
+		INP_LOCK(inp);
 		imo = inp->inp_moptions;
 		if ((inp->inp_vflag & INP_IPV4) &&
 		    imo != NULL) {
@@ -1252,7 +1232,7 @@ in_pcbpurgeif0(struct inpcbinfo *pcbinfo, struct ifnet *ifp)
 			}
 			imo->imo_num_memberships -= gap;
 		}
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 	}
 	INP_INFO_RUNLOCK(pcbinfo);
 }
@@ -1649,17 +1629,13 @@ in_pcblookup_hash(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 
 	INP_HASH_RLOCK(pcbinfo);
 	inp = in_pcblookup_hash_locked(pcbinfo, faddr, fport, laddr, lport,
-	    (lookupflags & ~(INPLOOKUP_RLOCKPCB | INPLOOKUP_WLOCKPCB)), ifp);
+	    (lookupflags & ~(INPLOOKUP_LOCKPCB)), ifp);
 	if (inp != NULL) {
 		in_pcbref(inp);
 		INP_HASH_RUNLOCK(pcbinfo);
-		if (lookupflags & INPLOOKUP_WLOCKPCB) {
-			INP_WLOCK(inp);
-			if (in_pcbrele_wlocked(inp))
-				return (NULL);
-		} else if (lookupflags & INPLOOKUP_RLOCKPCB) {
-			INP_RLOCK(inp);
-			if (in_pcbrele_rlocked(inp))
+		if (lookupflags & INPLOOKUP_LOCKPCB) {
+			INP_LOCK(inp);
+			if (in_pcbrele_locked(inp))
 				return (NULL);
 		} else
 			panic("%s: locking bug", __func__);
@@ -1684,7 +1660,7 @@ in_pcblookup(struct inpcbinfo *pcbinfo, struct in_addr faddr, u_int fport,
 
 	KASSERT((lookupflags & ~INPLOOKUP_MASK) == 0,
 	    ("%s: invalid lookup flags %d", __func__, lookupflags));
-	KASSERT((lookupflags & (INPLOOKUP_RLOCKPCB | INPLOOKUP_WLOCKPCB)) != 0,
+	KASSERT((lookupflags & INPLOOKUP_LOCKPCB) != 0,
 	    ("%s: LOCKPCB not set", __func__));
 
 #if defined(PCBGROUP)
@@ -1710,7 +1686,7 @@ in_pcblookup_mbuf(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 
 	KASSERT((lookupflags & ~INPLOOKUP_MASK) == 0,
 	    ("%s: invalid lookup flags %d", __func__, lookupflags));
-	KASSERT((lookupflags & (INPLOOKUP_RLOCKPCB | INPLOOKUP_WLOCKPCB)) != 0,
+	KASSERT((lookupflags & (INPLOOKUP_LOCKPCB)) != 0,
 	    ("%s: LOCKPCB not set", __func__));
 
 #ifdef PCBGROUP
@@ -1743,8 +1719,8 @@ in_pcbinshash_internal(struct inpcb *inp, int do_pcbgroup_update)
 	struct inpcbport *phd;
 	u_int32_t hashkey_faddr;
 
-	INP_WLOCK_ASSERT(inp);
-	INP_HASH_WLOCK_ASSERT(pcbinfo);
+	INP_LOCK_ASSERT(inp);
+	INP_HASH_LOCK_ASSERT(pcbinfo);
 
 	KASSERT((inp->inp_flags & INP_INHASHLIST) == 0,
 	    ("in_pcbinshash: INP_INHASHLIST"));
@@ -1830,7 +1806,7 @@ in_pcbrehash_mbuf(struct inpcb *inp, struct mbuf *m)
 	struct inpcbhead *head;
 	u_int32_t hashkey_faddr;
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	INP_HASH_WLOCK_ASSERT(pcbinfo);
 
 	KASSERT(inp->inp_flags & INP_INHASHLIST,
@@ -1873,7 +1849,7 @@ in_pcbremlists(struct inpcb *inp)
 	struct inpcbinfo *pcbinfo = inp->inp_pcbinfo;
 
 	INP_INFO_WLOCK_ASSERT(pcbinfo);
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	inp->inp_gencnt = ++pcbinfo->ipi_gencnt;
 	if (inp->inp_flags & INP_INHASHLIST) {

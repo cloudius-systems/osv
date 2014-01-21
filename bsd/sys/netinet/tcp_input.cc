@@ -236,7 +236,7 @@ kmod_tcpstat_inc(int statnum)
 static void inline
 cc_ack_received(struct tcpcb *tp, struct tcphdr *th, uint16_t type)
 {
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	tp->ccv->bytes_this_ack = BYTES_THIS_ACK(tp, th);
 	if (tp->snd_cwnd == bsd_min(tp->snd_cwnd, tp->snd_wnd))
@@ -275,7 +275,7 @@ cc_conn_init(struct tcpcb *tp)
 	int isipv6 = ((inp->inp_vflag & INP_IPV6) != 0) ? 1 : 0;
 #endif
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	tcp_hc_get(&inp->inp_inc, &metrics);
 
@@ -358,7 +358,7 @@ cc_conn_init(struct tcpcb *tp)
 void
 cc_cong_signal(struct tcpcb *tp, struct tcphdr *th, uint32_t type)
 {
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	switch(type) {
 	case CC_NDUPACK:
@@ -410,7 +410,7 @@ cc_cong_signal(struct tcpcb *tp, struct tcphdr *th, uint32_t type)
 static void inline
 cc_post_recovery(struct tcpcb *tp, struct tcphdr *th)
 {
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	/* XXXLAS: KASSERT that we're in recovery? */
 
@@ -823,7 +823,7 @@ findpcb:
 		 * already got one like this?
 		 */
 		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src, th->th_sport,
-		    ip->ip_dst, th->th_dport, INPLOOKUP_WLOCKPCB,
+		    ip->ip_dst, th->th_dport, INPLOOKUP_LOCKPCB,
 		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 		if (!inp) {
 			/*
@@ -835,7 +835,7 @@ findpcb:
 			    th->th_sport, next_hop->sin_addr,
 			    next_hop->sin_port ? ntohs(next_hop->sin_port) :
 			    th->th_dport, INPLOOKUP_WILDCARD |
-			    INPLOOKUP_WLOCKPCB, m->M_dat.MH.MH_pkthdr.rcvif);
+			    INPLOOKUP_LOCKPCB, m->M_dat.MH.MH_pkthdr.rcvif);
 		}
 		/* Remove the tag from the packet.  We don't need it anymore. */
 		m_tag_delete(m, fwd_tag);
@@ -844,7 +844,7 @@ findpcb:
 	} else
 		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src,
 		    th->th_sport, ip->ip_dst, th->th_dport,
-		    INPLOOKUP_WILDCARD | INPLOOKUP_WLOCKPCB,
+		    INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB,
 		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 #endif /* INET */
 
@@ -875,7 +875,7 @@ findpcb:
 		rstreason = BANDLIM_RST_CLOSEDPORT;
 		goto dropwithreset;
 	}
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	if (!(inp->inp_flags & INP_HW_FLOWID)
 	    && (m->m_hdr.mh_flags & M_FLOWID)
 	    && ((inp->inp_socket == NULL)
@@ -931,11 +931,11 @@ relocked:
 		if (ti_locked == TI_UNLOCKED) {
 			if (INP_INFO_TRY_WLOCK(&V_tcbinfo) == 0) {
 				in_pcbref(inp);
-				INP_WUNLOCK(inp);
+				INP_UNLOCK(inp);
 				INP_INFO_WLOCK(&V_tcbinfo);
 				ti_locked = TI_WLOCKED;
-				INP_WLOCK(inp);
-				if (in_pcbrele_wlocked(inp)) {
+				INP_LOCK(inp);
+				if (in_pcbrele_locked(inp)) {
 					inp = NULL;
 					goto findpcb;
 				}
@@ -980,11 +980,11 @@ relocked:
 		if (ti_locked == TI_UNLOCKED) {
 			if (INP_INFO_TRY_WLOCK(&V_tcbinfo) == 0) {
 				in_pcbref(inp);
-				INP_WUNLOCK(inp);
+				INP_UNLOCK(inp);
 				INP_INFO_WLOCK(&V_tcbinfo);
 				ti_locked = TI_WLOCKED;
-				INP_WLOCK(inp);
-				if (in_pcbrele_wlocked(inp)) {
+				INP_LOCK(inp);
+				if (in_pcbrele_locked(inp)) {
 					inp = NULL;
 					goto findpcb;
 				}
@@ -996,7 +996,7 @@ relocked:
 	}
 
 #ifdef MAC
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	if (mac_inpcb_check_deliver(inp, m))
 		goto dropunlock;
 #endif
@@ -1099,9 +1099,9 @@ relocked:
 			 * Unlock the listen socket, lock the newly
 			 * created socket and update the tp variable.
 			 */
-			INP_WUNLOCK(inp);	/* listen socket */
+			INP_UNLOCK(inp);	/* listen socket */
 			inp = sotoinpcb(so);
-			INP_WLOCK(inp);		/* new connection */
+			INP_LOCK(inp);		/* new connection */
 			tp = intotcpcb(inp);
 			KASSERT(tp->t_state == TCPS_SYN_RECEIVED,
 			    ("%s: ", __func__));
@@ -1379,7 +1379,7 @@ dropwithreset:
 
 	if (inp != NULL) {
 		tcp_dropwithreset(m, th, tp, tlen, rstreason);
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 	} else
 		tcp_dropwithreset(m, th, NULL, tlen, rstreason);
 	m = NULL;	/* mbuf chain got consumed. */
@@ -1399,7 +1399,7 @@ dropunlock:
 #endif
 
 	if (inp != NULL)
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 
 drop:
 	INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
@@ -1460,7 +1460,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		}
 #endif
 	}
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 	KASSERT(tp->t_state > TCPS_LISTEN, ("%s: TCPS_LISTEN",
 	    __func__));
 	KASSERT(tp->t_state != TCPS_TIME_WAIT, ("%s: TCPS_TIME_WAIT",
@@ -1938,7 +1938,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		KASSERT(ti_locked == TI_WLOCKED, ("%s: trimthenstep6: "
 		    "ti_locked %d", __func__, ti_locked));
 		INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
-		INP_WLOCK_ASSERT(tp->t_inpcb);
+		INP_LOCK_ASSERT(tp->t_inpcb);
 
 		/*
 		 * Advance th->th_seq to correspond to first data byte.
@@ -2535,7 +2535,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		}
 
 process_ACK:
-		INP_WLOCK_ASSERT(tp->t_inpcb);
+		INP_LOCK_ASSERT(tp->t_inpcb);
 
 		acked = BYTES_THIS_ACK(tp, th);
 		TCPSTAT_INC(tcps_rcvackpack);
@@ -2699,7 +2699,7 @@ process_ACK:
 	}
 
 step6:
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	/*
 	 * Update window information.
@@ -2784,7 +2784,7 @@ step6:
 			tp->rcv_up = tp->rcv_nxt;
 	}
 dodata:							/* XXX */
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	/*
 	 * Process the segment text, merging it into the TCP sequencing queue,
@@ -2935,13 +2935,13 @@ check_delack:
 	KASSERT(ti_locked == TI_UNLOCKED, ("%s: check_delack ti_locked %d",
 	    __func__, ti_locked));
 	INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	if (tp->t_flags & TF_DELACK) {
 		tp->t_flags &= ~TF_DELACK;
 		tcp_timer_activate(tp, TT_DELACK, tcp_delacktime);
 	}
-	INP_WUNLOCK(tp->t_inpcb);
+	INP_UNLOCK(tp->t_inpcb);
 	return;
 
 dropafterack:
@@ -2977,7 +2977,7 @@ dropafterack:
 
 	tp->t_flags |= TF_ACKNOW;
 	(void) tcp_output(tp);
-	INP_WUNLOCK(tp->t_inpcb);
+	INP_UNLOCK(tp->t_inpcb);
 	m_freem(m);
 	return;
 
@@ -2988,7 +2988,7 @@ dropwithreset:
 
 	if (tp != NULL) {
 		tcp_dropwithreset(m, th, tp, tlen, rstreason);
-		INP_WUNLOCK(tp->t_inpcb);
+		INP_UNLOCK(tp->t_inpcb);
 	} else
 		tcp_dropwithreset(m, th, NULL, tlen, rstreason);
 	return;
@@ -3012,7 +3012,7 @@ drop:
 			  &tcp_savetcp, 0);
 #endif
 	if (tp != NULL)
-		INP_WUNLOCK(tp->t_inpcb);
+		INP_UNLOCK(tp->t_inpcb);
 	m_freem(m);
 }
 
@@ -3033,7 +3033,7 @@ tcp_dropwithreset(struct mbuf *m, struct tcphdr *th, struct tcpcb *tp,
 #endif
 
 	if (tp != NULL) {
-		INP_WLOCK_ASSERT(tp->t_inpcb);
+		INP_LOCK_ASSERT(tp->t_inpcb);
 	}
 
 	/* Don't bother if destination was broadcast/multicast. */
@@ -3189,7 +3189,7 @@ tcp_pulloutofband(struct socket *so, struct tcphdr *th, struct mbuf *m,
 			char *cp = mtod(m, caddr_t) + cnt;
 			struct tcpcb *tp = sototcpcb(so);
 
-			INP_WLOCK_ASSERT(tp->t_inpcb);
+			INP_LOCK_ASSERT(tp->t_inpcb);
 
 			tp->t_iobc = *cp;
 			tp->t_oobflags |= TCPOOB_HAVEDATA;
@@ -3216,7 +3216,7 @@ tcp_xmit_timer(struct tcpcb *tp, int rtt)
 {
 	int delta;
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	TCPSTAT_INC(tcps_rttupdated);
 	tp->t_rttupdated++;
@@ -3331,7 +3331,7 @@ tcp_mss_update(struct tcpcb *tp, int offer, int mtuoffer,
 	const size_t min_protoh = sizeof(struct tcpiphdr);
 #endif
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	if (mtuoffer != -1) {
 		KASSERT(offer == -1, ("%s: conflict", __func__));
@@ -3599,7 +3599,7 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 	tcp_seq onxt = tp->snd_nxt;
 	u_long  ocwnd = tp->snd_cwnd;
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	tcp_timer_activate(tp, TT_REXMT, 0);
 	tp->t_rtttime = 0;

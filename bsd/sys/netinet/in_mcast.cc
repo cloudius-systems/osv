@@ -1411,7 +1411,7 @@ inp_block_unblock_source(struct inpcb *inp, struct sockopt *sopt)
 		goto out_inp_locked;
 	}
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	/*
 	 * Begin state merge transaction at socket layer.
@@ -1459,7 +1459,7 @@ out_imf_rollback:
 	imf_reap(imf);
 
 out_inp_locked:
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (error);
 }
 
@@ -1478,11 +1478,11 @@ inp_findmoptions(struct inpcb *inp)
 	struct in_mfilter	 *imfp;
 	size_t			  idx;
 
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	if (inp->inp_moptions != NULL)
 		return (inp->inp_moptions);
 
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	imo = (ip_moptions *)malloc(sizeof(*imo));
 	immp = (in_multi **)malloc(sizeof(*immp) * IP_MIN_MEMBERSHIPS);
@@ -1503,7 +1503,7 @@ inp_findmoptions(struct inpcb *inp)
 		imf_init(&imfp[idx], MCAST_UNDEFINED, MCAST_EXCLUDE);
 	imo->imo_mfilters = imfp;
 
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	if (inp->inp_moptions != NULL) {
 		free(imfp);
 		free(immp);
@@ -1563,12 +1563,12 @@ inp_get_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	int			 error;
 	size_t			 idx, nsrcs, ncsrcs;
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	imo = inp->inp_moptions;
 	KASSERT(imo != NULL, ("%s: null ip_moptions", __func__));
 
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	error = sooptcopyin(sopt, &msfr, sizeof(struct __msfilterreq),
 	    sizeof(struct __msfilterreq));
@@ -1582,7 +1582,7 @@ inp_get_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	if (ifp == NULL)
 		return (EINVAL);
 
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 
 	/*
 	 * Lookup group on the socket.
@@ -1590,7 +1590,7 @@ inp_get_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	gsa = (sockunion_t *)&msfr.msfr_group;
 	idx = imo_match_group(imo, ifp, &gsa->sa);
 	if (idx == -1 || imo->imo_mfilters == NULL) {
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		return (EADDRNOTAVAIL);
 	}
 	imf = &imo->imo_mfilters[idx];
@@ -1599,7 +1599,7 @@ inp_get_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	 * Ignore memberships which are in limbo.
 	 */
 	if (imf->imf_st[1] == MCAST_UNDEFINED) {
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		return (EAGAIN);
 	}
 	msfr.msfr_fmode = imf->imf_st[1];
@@ -1615,7 +1615,7 @@ inp_get_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	if (msfr.msfr_srcs != NULL && msfr.msfr_nsrcs > 0) {
 		tss = (bsd_sockaddr_storage *)malloc(sizeof(struct bsd_sockaddr_storage) * msfr.msfr_nsrcs);
 		if (tss == NULL) {
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 			return (ENOBUFS);
 		}
 		bzero(tss, sizeof(struct bsd_sockaddr_storage) * msfr.msfr_nsrcs);
@@ -1645,7 +1645,7 @@ inp_get_source_filters(struct inpcb *inp, struct sockopt *sopt)
 		}
 	}
 
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	if (tss != NULL) {
 		error = copyout(tss, msfr.msfr_srcs,
@@ -1674,7 +1674,7 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 	int			 error, optval;
 	u_char			 coptval;
 
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	imo = inp->inp_moptions;
 	/*
 	 * If socket is neither of type SOCK_RAW or SOCK_DGRAM,
@@ -1683,7 +1683,7 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 	if (inp->inp_socket->so_proto->pr_protocol == IPPROTO_DIVERT ||
 	    (inp->inp_socket->so_proto->pr_type != SOCK_RAW &&
 	    inp->inp_socket->so_proto->pr_type != SOCK_DGRAM)) {
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		return (EOPNOTSUPP);
 	}
 
@@ -1694,7 +1694,7 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 			optval = imo->imo_multicast_vif;
 		else
 			optval = -1;
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		error = sooptcopyout(sopt, &optval, sizeof(int));
 		break;
 
@@ -1714,7 +1714,7 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 				}
 			}
 		}
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		if (sopt->sopt_valsize == sizeof(struct ip_mreqn)) {
 			error = sooptcopyout(sopt, &mreqn,
 			    sizeof(struct ip_mreqn));
@@ -1729,7 +1729,7 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 			optval = coptval = IP_DEFAULT_MULTICAST_TTL;
 		else
 			optval = coptval = imo->imo_multicast_ttl;
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		if (sopt->sopt_valsize == sizeof(u_char))
 			error = sooptcopyout(sopt, &coptval, sizeof(u_char));
 		else
@@ -1741,7 +1741,7 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 			optval = coptval = IP_DEFAULT_MULTICAST_LOOP;
 		else
 			optval = coptval = imo->imo_multicast_loop;
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		if (sopt->sopt_valsize == sizeof(u_char))
 			error = sooptcopyout(sopt, &coptval, sizeof(u_char));
 		else
@@ -1751,14 +1751,14 @@ inp_getmoptions(struct inpcb *inp, struct sockopt *sopt)
 	case IP_MSFILTER:
 		if (imo == NULL) {
 			error = EADDRNOTAVAIL;
-			INP_WUNLOCK(inp);
+			INP_UNLOCK(inp);
 		} else {
 			error = inp_get_source_filters(inp, sopt);
 		}
 		break;
 
 	default:
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		error = ENOPROTOOPT;
 		break;
 	}
@@ -2020,7 +2020,7 @@ inp_join_group(struct inpcb *inp, struct sockopt *sopt)
 	/*
 	 * Begin state merge transaction at socket layer.
 	 */
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	if (is_new) {
 		if (imo->imo_num_memberships == imo->imo_max_memberships) {
@@ -2108,7 +2108,7 @@ inp_join_group(struct inpcb *inp, struct sockopt *sopt)
 	IN_MULTI_UNLOCK();
 
 out_imf_rollback:
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	if (error) {
 		imf_rollback(imf);
 		if (is_new)
@@ -2126,7 +2126,7 @@ out_imo_free:
 	}
 
 out_inp_locked:
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (error);
 }
 
@@ -2265,7 +2265,7 @@ inp_leave_group(struct inpcb *inp, struct sockopt *sopt)
 	/*
 	 * Begin state merge transaction at socket layer.
 	 */
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	/*
 	 * If we were instructed only to leave a given source, do so.
@@ -2342,7 +2342,7 @@ out_imf_rollback:
 	}
 
 out_inp_locked:
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (error);
 }
 
@@ -2410,7 +2410,7 @@ inp_set_multicast_if(struct inpcb *inp, struct sockopt *sopt)
 	imo = inp_findmoptions(inp);
 	imo->imo_multicast_ifp = ifp;
 	imo->imo_multicast_addr.s_addr = INADDR_ANY;
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 
 	return (0);
 }
@@ -2477,7 +2477,7 @@ inp_set_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	/*
 	 * Begin state merge transaction at socket layer.
 	 */
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	imf->imf_st[1] = msfr.msfr_fmode;
 
@@ -2493,7 +2493,7 @@ inp_set_source_filters(struct inpcb *inp, struct sockopt *sopt)
 		struct bsd_sockaddr_storage	*kss, *pkss;
 		int			 i;
 
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
  
 		CTR2(KTR_IGMPV3, "%s: loading %lu source list entries",
 		    __func__, (unsigned long)msfr.msfr_nsrcs);
@@ -2505,7 +2505,7 @@ inp_set_source_filters(struct inpcb *inp, struct sockopt *sopt)
 			return (error);
 		}
 
-		INP_WLOCK(inp);
+		INP_LOCK(inp);
 
 		/*
 		 * Mark all source filters as UNDEFINED at t1.
@@ -2547,7 +2547,7 @@ inp_set_source_filters(struct inpcb *inp, struct sockopt *sopt)
 	if (error)
 		goto out_imf_rollback;
 
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	IN_MULTI_LOCK();
 
 	/*
@@ -2576,7 +2576,7 @@ out_imf_rollback:
 	imf_reap(imf);
 
 out_inp_locked:
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (error);
 }
 
@@ -2630,7 +2630,7 @@ inp_setmoptions(struct inpcb *inp, struct sockopt *sopt)
 		}
 		imo = inp_findmoptions(inp);
 		imo->imo_multicast_vif = vifi;
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		break;
 	}
 
@@ -2667,7 +2667,7 @@ inp_setmoptions(struct inpcb *inp, struct sockopt *sopt)
 		}
 		imo = inp_findmoptions(inp);
 		imo->imo_multicast_ttl = ttl;
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		break;
 	}
 
@@ -2696,7 +2696,7 @@ inp_setmoptions(struct inpcb *inp, struct sockopt *sopt)
 		}
 		imo = inp_findmoptions(inp);
 		imo->imo_multicast_loop = !!loop;
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 		break;
 	}
 
