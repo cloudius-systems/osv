@@ -11,7 +11,7 @@
 #include <mutex>
 #include "debug.hh"
 #include "drivers/clockevent.hh"
-#include "irqlock.hh"
+#include <osv/irqlock.hh>
 #include <osv/align.hh>
 #include "drivers/clock.hh"
 #include <osv/interrupt.hh>
