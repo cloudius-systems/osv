@@ -11,7 +11,7 @@
 #include <map>
 #include <ostream>
 
-#include "mmio.hh"
+#include <osv/mmio.hh>
 #include <osv/types.h>
 #include "processor.hh"
 #include "debug.hh"

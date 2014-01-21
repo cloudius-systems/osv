@@ -6,7 +6,7 @@
  */
 
 #include "debug.hh"
-#include "mmio.hh"
+#include <osv/mmio.hh>
 #include "pci.hh"
 #include "device.hh"
 #include "pci-function.hh"

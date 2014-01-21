@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <osv/mmu.hh> // OSV
 #include "mmu.h"  // Port
-#include "mmio.hh"
+#include <osv/mmio.hh>
 
 void *pmap_mapdev(uint64_t paddr, size_t size)
 {

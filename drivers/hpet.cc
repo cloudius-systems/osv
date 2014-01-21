@@ -14,7 +14,7 @@ extern "C" {
 #include "processor.hh"
 #include "clock.hh"
 #include <osv/mmu.hh>
-#include "mmio.hh"
+#include <osv/mmio.hh>
 #include "arch.hh"
 #include "xen.hh"
 #include "irqlock.hh"
