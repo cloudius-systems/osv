@@ -12,7 +12,7 @@
 #include "arch-thread-state.hh"
 #include "arch-cpu.hh"
 #include <functional>
-#include "tls.hh"
+#include <osv/tls.hh>
 #include "drivers/clockevent.hh"
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/list.hpp>

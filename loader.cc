@@ -13,7 +13,7 @@
 #include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <osv/elf.hh>
-#include "tls.hh"
+#include <osv/tls.hh>
 #include "msr.hh"
 #include "exceptions.hh"
 #include "debug.hh"
