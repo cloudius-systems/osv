@@ -29,7 +29,7 @@ extern "C" {
 #include "drivers/pci.hh"
 #include <osv/interrupt.hh>
 
-#include "prio.hh"
+#include <osv/prio.hh>
 
 #define acpi_tag "acpi"
 #define acpi_d(...)   tprintf_d(acpi_tag, __VA_ARGS__)

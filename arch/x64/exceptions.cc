@@ -15,7 +15,7 @@
 #include "debug.hh"
 #include <libc/signal.hh>
 #include <apic.hh>
-#include "prio.hh"
+#include <osv/prio.hh>
 
 typedef boost::format fmt;
 

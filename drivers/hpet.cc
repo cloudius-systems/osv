@@ -10,7 +10,7 @@ extern "C" {
 }
 #include <boost/intrusive/parent_from_member.hpp>
 #include <boost/date_time.hpp>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include "processor.hh"
 #include "clock.hh"
 #include <osv/mmu.hh>

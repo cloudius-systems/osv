@@ -16,7 +16,7 @@
 #include <list>
 #include <osv/mmu.hh>
 #include "debug.hh"
-#include "prio.hh"
+#include <osv/prio.hh>
 
 #include <osv/mutex.h>
 #include <osv/condvar.h>

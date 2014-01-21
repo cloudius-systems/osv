@@ -13,7 +13,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/range/algorithm/remove.hpp>
 #include <debug.hh>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include <osv/execinfo.hh>
 
 using namespace std;

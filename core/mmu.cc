@@ -17,7 +17,7 @@
 #include <osv/align.hh>
 #include <osv/interrupt.hh>
 #include <osv/ilog2.hh>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include <safe-ptr.hh>
 #include "fs/vfs/vfs.h"
 #include <osv/error.h>

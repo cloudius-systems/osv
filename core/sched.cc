@@ -18,7 +18,7 @@
 #include "smp.hh"
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include <osv/elf.hh>
 #include <stdlib.h>
 #include <unordered_map>

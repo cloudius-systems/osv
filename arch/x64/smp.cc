@@ -18,7 +18,7 @@ extern "C" {
 #include "debug.hh"
 #include <osv/sched.hh>
 #include <osv/barrier.hh>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include "osv/percpu.hh"
 
 extern "C" { void smp_main(void); }

@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include "cpuid.hh"
 #include <osv/string.h>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include "memcpy_decode.hh"
 
 extern "C"

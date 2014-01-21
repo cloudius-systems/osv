@@ -14,7 +14,7 @@
 #include <osv/barrier.hh>
 #include <osv/percpu.hh>
 #include <osv/pvclock-abi.hh>
-#include "prio.hh"
+#include <osv/prio.hh>
 
 class kvmclock : public clock {
 public:

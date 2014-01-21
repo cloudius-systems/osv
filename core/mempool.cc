@@ -26,7 +26,7 @@
 #include <preempt-lock.hh>
 #include <osv/sched.hh>
 #include <algorithm>
-#include "prio.hh"
+#include <osv/prio.hh>
 #include <stdlib.h>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
