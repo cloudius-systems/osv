@@ -6,7 +6,7 @@
  */
 
 #include <osv/spinlock.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 
 void spin_lock(spinlock_t *sl)
 {

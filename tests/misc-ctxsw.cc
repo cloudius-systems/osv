@@ -19,7 +19,7 @@ uint64_t target_time = 10; // seconds
 
 #ifdef __OSV__
 
-#include <sched.hh>
+#include <osv/sched.hh>
 
 class pinned_thread {
 public:

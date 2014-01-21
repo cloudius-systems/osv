@@ -12,7 +12,7 @@
 #include <osv/stubbing.hh>
 #include "libc.hh"
 #include <osv/clock.hh>
-#include "sched.hh"
+#include <osv/sched.hh>
 
 u64 convert(const timespec& ts)
 {

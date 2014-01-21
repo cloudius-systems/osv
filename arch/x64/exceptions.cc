@@ -11,7 +11,7 @@
 #include "processor.hh"
 #include "interrupt.hh"
 #include <boost/format.hpp>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 #include <libc/signal.hh>
 #include <apic.hh>

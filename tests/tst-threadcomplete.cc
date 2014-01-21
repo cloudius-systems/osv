@@ -19,7 +19,7 @@
 #include <thread>
 #include <iostream>
 #ifdef __OSV__
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "drivers/clock.hh"
 #endif
 

@@ -20,7 +20,7 @@
 #include <functional>
 #include <cxxabi.h>
 #include <iterator>
-#include <sched.hh>
+#include <osv/sched.hh>
 
 using namespace std;
 using namespace boost::range;

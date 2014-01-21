@@ -16,7 +16,7 @@ extern "C" {
 }
 #include <boost/intrusive/parent_from_member.hpp>
 #include "debug.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "barrier.hh"
 #include "prio.hh"
 #include "osv/percpu.hh"

@@ -8,7 +8,7 @@
 
 #include <osv/prex.h>
 #include <osv/device.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <queue>
 #include <deque>
 #include <vector>

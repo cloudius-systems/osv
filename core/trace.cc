@@ -6,7 +6,7 @@
  */
 
 #include "osv/trace.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "arch.hh"
 #include <atomic>
 #include <regex>

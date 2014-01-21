@@ -12,7 +12,7 @@
 // user supplied mutex for internal locking.
 
 #include <sys/cdefs.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/wait_record.hh>
 
 /**

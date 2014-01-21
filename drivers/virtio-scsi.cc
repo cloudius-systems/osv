@@ -10,7 +10,7 @@
 
 #include "mmu.hh"
 #include "mempool.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "interrupt.hh"
 #include "drivers/pci-device.hh"
 #include "drivers/virtio.hh"

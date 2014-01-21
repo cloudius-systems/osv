@@ -9,7 +9,7 @@
 #define __TST_RWLOCK__
 
 #include <osv/debug.h>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "tst-hub.hh"
 
 using namespace sched;

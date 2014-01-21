@@ -13,7 +13,7 @@
 #include <boost/format.hpp>
 #include <osv/types.h>
 #include <align.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <boost/intrusive/list.hpp>
 #include <string>
 #include <unordered_set>

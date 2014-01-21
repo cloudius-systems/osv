@@ -10,7 +10,7 @@
 
 #include <osv/mutex.h>
 #include <boost/intrusive/list.hpp>
-#include <sched.hh>
+#include <osv/sched.hh>
 
 class semaphore {
 public:

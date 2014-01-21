@@ -30,7 +30,7 @@
 #include "drivers/virtio-rng.hh"
 #include "drivers/xenfront-xenbus.hh"
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
 #include "drivers/console.hh"

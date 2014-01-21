@@ -9,7 +9,7 @@
 #define BOOST_TEST_MODULE tst-wait-for
 
 #include <boost/test/unit_test.hpp>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/waitqueue.hh>
 #include <drivers/clock.hh>
 #include <cstdlib>

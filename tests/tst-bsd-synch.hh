@@ -8,7 +8,7 @@
 #ifndef TST_SYNCH_H
 #define TST_SYNCH_H
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 #include "tst-hub.hh"
 

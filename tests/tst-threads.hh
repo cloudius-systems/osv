@@ -9,7 +9,7 @@
 #define __TST_THREADS__
 
 #include "tst-hub.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 
 class test_threads : public unit_tests::vtest {

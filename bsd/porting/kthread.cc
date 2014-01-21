@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <assert.h>
-#include "sched.hh"
+#include <osv/sched.hh>
 
 #include <bsd/porting/curthread.h>
 #include <bsd/porting/netport.h>

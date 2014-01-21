@@ -10,7 +10,7 @@
 //
 #include <cstdlib>
 #include <ctime>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <arch.hh>
 #include <drivers/clock.hh>
 #include <debug.hh>

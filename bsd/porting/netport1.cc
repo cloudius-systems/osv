@@ -7,7 +7,7 @@
 
 #include <osv/types.h>
 #include "drivers/clock.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "mempool.hh"
 #include "bsd/sys/cddl/compat/opensolaris/sys/kcondvar.h"
 #include "bsd/cddl/compat/opensolaris/include/mnttab.h"

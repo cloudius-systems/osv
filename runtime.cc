@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include <cstdlib>
 #include <cstring>
 #include <string.h>

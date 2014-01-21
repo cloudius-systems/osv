@@ -9,7 +9,7 @@
 #include <list>
 #include <map>
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "drivers/pci-function.hh"
 #include "exceptions.hh"
 #include "interrupt.hh"

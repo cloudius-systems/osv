@@ -8,7 +8,7 @@
 #ifndef PERCPU_HH_
 #define PERCPU_HH_
 
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <type_traits>
 #include <memory>
 

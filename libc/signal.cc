@@ -11,7 +11,7 @@
 #include <string.h>
 #include <debug.hh>
 #include <osv/printf.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <osv/power.hh>

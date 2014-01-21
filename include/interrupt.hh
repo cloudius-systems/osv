@@ -12,7 +12,7 @@
 #include <map>
 #include <list>
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "drivers/pci.hh"
 #include "drivers/pci-function.hh"
 #include <osv/types.h>

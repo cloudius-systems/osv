@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <osv/debug.h>
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "osv/trace.hh"
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"

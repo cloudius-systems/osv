@@ -6,7 +6,7 @@
  */
 
 #include <atomic>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include <bsd/porting/bus.h>
 #include <osv/percpu.hh>
 

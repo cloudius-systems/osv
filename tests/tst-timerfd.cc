@@ -11,7 +11,7 @@
 
 #include <debug.hh>
 #include <drivers/clock.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 
 #include <errno.h>
 int tests = 0, fails = 0;

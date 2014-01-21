@@ -13,7 +13,7 @@
 #include <osv/mutex.h>
 #include "debug.hh"
 #include "mmu.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 
 #define virtio_tag "virtio"
 #define virtio_d(...)   tprintf_d(virtio_tag, __VA_ARGS__)

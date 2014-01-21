@@ -6,7 +6,7 @@
  */
 
 #ifdef __OSV__
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "mempool.hh"
 #include "mmu.hh"
 #include "barrier.hh"

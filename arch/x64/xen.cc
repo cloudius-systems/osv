@@ -12,7 +12,7 @@
 #include "cpuid.hh"
 #include "exceptions.hh"
 #include "interrupt.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include <bsd/porting/pcpu.h>
 #include <bsd/machine/xen/xen-os.h>
 

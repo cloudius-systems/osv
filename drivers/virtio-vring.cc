@@ -13,7 +13,7 @@
 #include "drivers/virtio-vring.hh"
 #include "debug.hh"
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "interrupt.hh"
 #include "osv/trace.hh"
 #include <ilog2.hh>

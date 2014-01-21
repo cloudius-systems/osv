@@ -7,7 +7,7 @@
 
 #include <atomic>
 
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 #include <drivers/clock.hh>
 

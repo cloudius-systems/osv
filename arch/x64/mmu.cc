@@ -8,7 +8,7 @@
 #include "arch.hh"
 #include "arch-cpu.hh"
 #include "debug.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "mmu.hh"
 
 void page_fault(exception_frame *ef)

@@ -9,7 +9,7 @@
 #include <list>
 #include <errno.h>
 #include "drivers/clock.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "osv/trace.hh"
 
 #include <bsd/porting/netport.h>

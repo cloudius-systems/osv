@@ -9,7 +9,7 @@
 
 #include "debug.hh"
 #include <boost/format.hpp>
-#include "sched.hh"
+#include <osv/sched.hh>
 
 #include <syscall.h>
 #include <stdarg.h>

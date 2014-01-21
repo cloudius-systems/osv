@@ -12,7 +12,7 @@
 #define __LF_RING_HH__
 
 #include <atomic>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <arch.hh>
 
 //

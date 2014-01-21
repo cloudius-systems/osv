@@ -10,7 +10,7 @@
 // recieved / transmitted data. Uses TCP.
 //
 #include <debug.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <string>
 
 #include <unistd.h>

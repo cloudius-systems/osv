@@ -8,7 +8,7 @@
 #ifndef __PREEMPT_LOCK_H__
 #define __PREEMPT_LOCK_H__
 
-#include <sched.hh>
+#include <osv/sched.hh>
 
 class preempt_lock_t {
 public:

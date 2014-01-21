@@ -6,7 +6,7 @@
  */
 
 #include <mutex>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include <osv/rwlock.h>
 
 rwlock::rwlock()

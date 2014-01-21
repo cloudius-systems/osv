@@ -9,9 +9,9 @@
 #define PER_CPU_COUNTER_HH_
 
 #include <osv/types.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/percpu.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <vector>
 #include <memory>
 

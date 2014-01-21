@@ -8,7 +8,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <unistd.h>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 
 int tests = 0, fails = 0;

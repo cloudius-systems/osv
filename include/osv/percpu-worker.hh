@@ -12,7 +12,7 @@
 #include <functional>
 #include <osv/percpu.hh>
 #include <osv/condvar.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 
 #define PCPU_WORKERITEM(name, lambda) \
     worker_item name __attribute__((section(".percpu_workers"))) { lambda }

@@ -1,6 +1,6 @@
 //#include <algorithm>
 #include "debug.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "elf.hh"
 #include <jni.h>
 #include <stdlib.h>

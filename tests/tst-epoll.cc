@@ -8,7 +8,7 @@
 #include <sys/epoll.h>
 #include <sys/poll.h>
 #include <unistd.h>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 #include "drivers/clock.hh"
 

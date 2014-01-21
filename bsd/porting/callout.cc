@@ -10,7 +10,7 @@
 #include "drivers/clock.hh"
 #include "osv/trace.hh"
 #include "debug.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/callout.h>

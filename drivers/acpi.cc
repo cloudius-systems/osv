@@ -15,7 +15,7 @@ extern "C" {
 }
 #include <stdlib.h>
 #include "mmu.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "drivers/clock.hh"
 #include "processor.hh"
 #include "align.hh"

@@ -10,7 +10,7 @@
 
 #include "console.hh"
 #include "drivers/pci.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "interrupt.hh"
 #include <termios.h>
 

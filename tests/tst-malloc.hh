@@ -9,7 +9,7 @@
 #define __TST_MALLOC__
 
 #include <osv/mutex.h>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 #include <random>
 #include "tst-hub.hh"

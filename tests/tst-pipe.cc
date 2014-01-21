@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include "sched.hh"
+#include <osv/sched.hh>
 #include "debug.hh"
 
 int tests = 0, fails = 0;

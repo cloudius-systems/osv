@@ -6,7 +6,7 @@
  */
 
 #include <debug.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/trace.hh>
 #include <osv/percpu.hh>
 #include <osv/percpu-worker.hh>

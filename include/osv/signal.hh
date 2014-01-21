@@ -9,7 +9,7 @@
 #define OSV_SIGNAL_HH_
 
 #include <osv/error.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 
 class signal_catcher {
 public:

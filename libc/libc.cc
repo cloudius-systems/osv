@@ -6,7 +6,7 @@
  */
 
 #include "libc.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>

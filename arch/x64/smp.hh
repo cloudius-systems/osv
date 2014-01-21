@@ -8,7 +8,7 @@
 #ifndef SMP_HH_
 #define SMP_HH_
 
-#include "sched.hh"
+#include <osv/sched.hh>
 
 void smp_launch();
 sched::cpu* smp_initial_find_current_cpu();

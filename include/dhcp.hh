@@ -15,7 +15,7 @@
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/ip.h>
 #include <bsd/sys/netinet/udp.h>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/mutex.h>
 #include <osv/debug.h>
 

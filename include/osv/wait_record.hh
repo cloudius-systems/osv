@@ -8,7 +8,7 @@
 #ifndef INCLUDED_OSV_WAIT_RECORD
 #define INCLUDED_OSV_WAIT_RECORD
 
-#include <sched.hh>
+#include <osv/sched.hh>
 
 // A "waiter" is simple synchronization object, with which one thread calling
 // waiter->wait() goes to sleep, and a second thread, which finds this waiter

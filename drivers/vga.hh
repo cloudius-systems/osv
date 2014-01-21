@@ -9,7 +9,7 @@
 #define DRIVERS_VGA_HH
 
 #include "console.hh"
-#include "sched.hh"
+#include <osv/sched.hh>
 #include <termios.h>
 
 class VGAConsole : public Console {

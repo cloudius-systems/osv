@@ -24,7 +24,7 @@
 #include <lockfree/ring.hh>
 #include <osv/percpu-worker.hh>
 #include <preempt-lock.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <algorithm>
 #include "prio.hh"
 #include <stdlib.h>

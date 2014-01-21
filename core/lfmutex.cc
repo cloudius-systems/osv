@@ -7,7 +7,7 @@
 
 #include <lockfree/mutex.hh>
 #include <osv/trace.hh>
-#include <sched.hh>
+#include <osv/sched.hh>
 #include <osv/wait_record.hh>
 
 namespace lockfree {

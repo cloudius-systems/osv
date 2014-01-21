@@ -6,7 +6,7 @@
  */
 
 #ifdef __OSV__
-#include "sched.hh"
+#include <osv/sched.hh>
 #endif
 
 #include <sys/mman.h>
