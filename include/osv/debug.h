@@ -33,6 +33,7 @@ typedef enum logger_severity_e {
 
 __BEGIN_DECLS
 void debug(const char *msg);
+void debugf(const char *, ...);
 void debug_write(const char *msg, size_t len);
 
 /* a lockless version that doesn't take any locks before printing,

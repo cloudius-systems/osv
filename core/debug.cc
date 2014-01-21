@@ -13,7 +13,7 @@
 #include "drivers/console.hh"
 #include <osv/sched.hh>
 #include <osv/debug.hh>
-#include "osv/debug.h"
+#include <osv/debug.h>
 
 using namespace std;
 
