@@ -15,7 +15,7 @@
 #include <xen/interface/memory.h>
 #include <xen/interface/version.h>
 #include <xen/interface/hvm/hvm_op.h>
-#include "alternative.hh"
+#include <osv/alternative.hh>
 
 extern char hypercall_page[];
 extern uint8_t xen_features[];
