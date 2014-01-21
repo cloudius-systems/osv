@@ -1128,11 +1128,12 @@ relocked:
 			/*
 			 * Process the segment and the data it
 			 * contains.  tcp_do_segment() consumes
-			 * the mbuf chain and unlocks the inpcb.
+			 * the mbuf chain.
 			 */
 			tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen,
 			    iptos, ti_locked);
 			INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
+			INP_UNLOCK(inp);
 			return;
 		}
 		/*
@@ -1357,11 +1358,11 @@ relocked:
 
 	/*
 	 * Segment belongs to a connection in SYN_SENT, ESTABLISHED or later
-	 * state.  tcp_do_segment() always consumes the mbuf chain, unlocks
-	 * the inpcb, and unlocks pcbinfo.
+	 * state.  tcp_do_segment() always consumes the mbuf chain and unlocks pcbinfo.
 	 */
 	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, ti_locked);
 	INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
+	INP_UNLOCK(inp);
 	return;
 
 dropwithreset:
@@ -1418,6 +1419,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	int rstreason, todrop, win;
 	u_long tiwin;
 	struct tcpopt to;
+	auto inp = tp->t_inpcb;
 
 #ifdef TCPDEBUG
 	/*
@@ -2675,6 +2677,7 @@ process_ACK:
 				tcp_twstart(tp);
 				INP_INFO_WUNLOCK(&V_tcbinfo);
 				m_freem(m);
+				INP_LOCK(inp);
 				return;
 			}
 			break;
@@ -2905,6 +2908,7 @@ dodata:							/* XXX */
 
 			tcp_twstart(tp);
 			INP_INFO_WUNLOCK(&V_tcbinfo);
+			INP_LOCK(inp);
 			return;
 		}
 	}
@@ -2934,7 +2938,6 @@ check_delack:
 		tp->t_flags &= ~TF_DELACK;
 		tcp_timer_activate(tp, TT_DELACK, tcp_delacktime);
 	}
-	INP_UNLOCK(tp->t_inpcb);
 	return;
 
 dropafterack:
@@ -2970,7 +2973,6 @@ dropafterack:
 
 	tp->t_flags |= TF_ACKNOW;
 	(void) tcp_output(tp);
-	INP_UNLOCK(tp->t_inpcb);
 	m_freem(m);
 	return;
 
@@ -2981,9 +2983,10 @@ dropwithreset:
 
 	if (tp != NULL) {
 		tcp_dropwithreset(m, th, tp, tlen, rstreason);
-		INP_UNLOCK(tp->t_inpcb);
-	} else
+	} else {
 		tcp_dropwithreset(m, th, NULL, tlen, rstreason);
+		INP_LOCK(inp);
+	}
 	return;
 
 drop:
@@ -3004,9 +3007,10 @@ drop:
 		tcp_trace(TA_DROP, ostate, tp, (void *)tcp_saveipgen,
 			  &tcp_savetcp, 0);
 #endif
-	if (tp != NULL)
-		INP_UNLOCK(tp->t_inpcb);
 	m_freem(m);
+	if (!tp) {
+		INP_LOCK(inp);
+	}
 }
 
 /*
