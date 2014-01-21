@@ -7,7 +7,7 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <execinfo.h>
+#include <osv/execinfo.h>
 
 #include <osv/alloctracker.hh>
 

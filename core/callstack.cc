@@ -6,7 +6,7 @@
  */
 
 #include <osv/callstack.hh>
-#include <execinfo.h>
+#include <osv/execinfo.h>
 #include <stddef.h>
 #include <osv/execinfo.hh>
 

@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <execinfo.h>
+#include <osv/execinfo.h>
 
 #if 0
 // Implementation using libunwind.a. This implementation works even with code
