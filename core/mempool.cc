@@ -6,7 +6,7 @@
  */
 
 #include "mempool.hh"
-#include "ilog2.hh"
+#include <osv/ilog2.hh>
 #include "arch-setup.hh"
 #include <cassert>
 #include <cstdint>

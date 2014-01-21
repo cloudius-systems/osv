@@ -16,7 +16,7 @@
 #include "libc/signal.hh"
 #include <osv/align.hh>
 #include <osv/interrupt.hh>
-#include "ilog2.hh"
+#include <osv/ilog2.hh>
 #include "prio.hh"
 #include <safe-ptr.hh>
 #include "fs/vfs/vfs.h"

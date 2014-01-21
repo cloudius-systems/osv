@@ -16,7 +16,7 @@
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>
 #include "osv/trace.hh"
-#include <ilog2.hh>
+#include <osv/ilog2.hh>
 
 using namespace memory;
 using sched::thread;
