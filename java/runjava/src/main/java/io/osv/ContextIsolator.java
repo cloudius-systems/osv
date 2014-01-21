@@ -87,8 +87,17 @@ public class ContextIsolator {
 
     public void runSync(String[] args) throws Throwable {
         Context context = run(args);
-        if (context != null) {
-            context.join();
+        if (context == null) {
+            return;
+        }
+
+        while (true) {
+            try {
+                context.join();
+                return;
+            } catch (InterruptedException e) {
+                context.interrupt();
+            }
         }
     }
 

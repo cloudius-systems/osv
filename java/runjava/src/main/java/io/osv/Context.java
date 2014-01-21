@@ -48,4 +48,8 @@ public final class Context {
     public LogManagerWrapper getLogManagerWrapper() {
         return logManagerWrapper.get();
     }
+
+    public void interrupt() {
+        mainThread.interrupt();
+    }
 }
