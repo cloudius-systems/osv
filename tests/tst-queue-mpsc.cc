@@ -224,11 +224,12 @@ int main(int argc, char **argv) {
                 // we didn't, we might set wakeup=1 (and then notify_one())
                 // right after the other thread tested it, just before it
                 // began waiting.
-                mutexes[item->value.waiter].lock();
+                auto waiter = item->value.waiter;
+                mutexes[waiter].lock();
                 assert(*(item->value.wakeup)==0);// sanity check
                 *(item->value.wakeup) = 1;
-                mutexes[item->value.waiter].unlock();
-                condvars[item->value.waiter].notify_one();
+                mutexes[waiter].unlock();
+                condvars[waiter].notify_one();
             } else {
                 nnothing++;
             }
