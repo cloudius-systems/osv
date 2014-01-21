@@ -87,9 +87,6 @@ public class ContextIsolator {
 
     public void runSync(String[] args) throws Throwable {
         Context context = run(args);
-        if (context == null) {
-            return;
-        }
 
         while (true) {
             try {
@@ -106,14 +103,12 @@ public class ContextIsolator {
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-jar")) {
                 if (i + 1 >= args.length) {
-                    System.err.println("RunJava: Missing jar name after '-jar'.");
-                    return null;
+                    throw new IllegalArgumentException("Missing jar name after '-jar'.");
                 }
                 return runJar(args[i + 1], java.util.Arrays.copyOfRange(args, i + 2, args.length), classpath);
             } else if (args[i].equals("-classpath") || args[i].equals("-cp")) {
                 if (i + 1 >= args.length) {
-                    System.err.println("RunJava: Missing parameter after '" + args[i] + "'");
-                    return null;
+                    throw new IllegalArgumentException("Missing parameter after '" + args[i] + "'");
                 }
                 for (String c : expandClassPath(args[i + 1])) {
                     classpath.add(c);
@@ -122,8 +117,7 @@ public class ContextIsolator {
             } else if (args[i].startsWith("-D")) {
                 int eq = args[i].indexOf('=');
                 if (eq < 0) {
-                    System.err.println("RunJava: Missing '=' in parameter '" + args[i] + "'");
-                    return null;
+                    throw new IllegalArgumentException("Missing '=' in parameter '" + args[i] + "'");
                 }
                 String key = args[i].substring(2, eq);
                 String value = args[i].substring(eq + 1, args[i].length());
@@ -131,20 +125,17 @@ public class ContextIsolator {
             } else if (args[i].equals("-Xclassloader")) {
                 // Non-standard try - use a different class loader.
                 if (i + 1 >= args.length) {
-                    System.err.println("RunJava: Missing parameter after '" + args[i] + "'");
-                    return null;
+                    throw new IllegalArgumentException("Missing parameter after '" + args[i] + "'");
                 }
                 Xclassloader = args[i + 1];
                 i++;
             } else if (!args[i].startsWith("-")) {
                 return runClass(args[i], java.util.Arrays.copyOfRange(args, i + 1, args.length), classpath);
             } else {
-                System.err.println("RunJava: Unknown parameter '" + args[i] + "'");
-                return null;
+                throw new IllegalArgumentException("Unknown parameter '" + args[i] + "'");
             }
         }
-        System.err.println("RunJava: No jar or class specified to run.");
-        return null;
+        throw new IllegalArgumentException("No jar or class specified to run.");
     }
 
     private Context runJar(String jarname, String[] args, ArrayList<String> classpath) throws Throwable {
@@ -155,19 +146,15 @@ public class ContextIsolator {
             jar.close();
             String mainClass = mf.getMainAttributes().getValue("Main-Class");
             if (mainClass == null) {
-                System.err.println(
-                        "RunJava: No 'Main-Class' attribute in manifest of " +
-                                jarname);
-                return null;
+                throw new IllegalArgumentException("No 'Main-Class' attribute in manifest of " + jarname);
             }
             classpath.add(jarname);
             return runClass(mainClass, args, classpath);
         } catch (FileNotFoundException e) {
-            System.err.println("RunJava: File not found: " + jarname);
+            throw new IllegalArgumentException("File not found: " + jarname);
         } catch (ZipException e) {
-            System.err.println("RunJava: File is not a jar: " + jarname);
+            throw new IllegalArgumentException("File is not a jar: " + jarname);
         }
-        return null;
     }
 
     private Context runClass(final String mainClass, final String[] args, final Iterable<String> classpath) throws Throwable {

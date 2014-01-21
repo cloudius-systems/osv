@@ -24,6 +24,8 @@ public class RunJava {
 
         try {
             ContextIsolator.getInstance().runSync(args);
+        } catch (IllegalArgumentException ex) {
+            System.err.println("RunJava: " + ex.getMessage());
         } catch (Throwable ex) {
             ex.printStackTrace();
         }
