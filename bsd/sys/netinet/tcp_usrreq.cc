@@ -698,7 +698,7 @@ tcp_usr_shutdown(struct socket *so)
 	}
 	tp = intotcpcb(inp);
 	TCPDEBUG1();
-	socantsendmore(so);
+	socantsendmore_locked(so);
 	tcp_usrclosed(tp);
 	if (!(inp->inp_flags & INP_DROPPED))
 		error = tcp_output_disconnect(tp);
@@ -821,7 +821,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 			 * the data is sent.
 			 */
 			INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
-			socantsendmore(so);
+			socantsendmore_locked(so);
 			tcp_usrclosed(tp);
 		}
 		if (!(inp->inp_flags & INP_DROPPED)) {
@@ -835,7 +835,6 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		/*
 		 * XXXRW: PRUS_EOF not implemented with PRUS_OOB?
 		 */
-		SOCK_LOCK(so);
 		if (sbspace(&so->so_snd) < -512) {
 			SOCK_UNLOCK(so);
 			m_freem(m);
@@ -851,7 +850,6 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		 * Otherwise, snd_up should be one lower.
 		 */
 		sbappendstream_locked(so, &so->so_snd, m);
-		SOCK_UNLOCK(so);
 		if (nam && tp->t_state < TCPS_SYN_SENT) {
 			/*
 			 * Do implied connect if not yet connected,
@@ -917,9 +915,7 @@ tcp_usr_abort(struct socket *so)
 		TCPDEBUG2(PRU_ABORT);
 	}
 	if (!(inp->inp_flags & INP_DROPPED)) {
-		SOCK_LOCK(so);
 		so->so_state |= SS_PROTOREF;
-		SOCK_UNLOCK(so);
 		inp->inp_flags |= INP_SOCKREF;
 	}
 	INP_UNLOCK(inp);
@@ -1578,7 +1574,7 @@ tcp_attach(struct socket *so)
 	int error;
 
 	if (so->so_snd.sb_hiwat == 0 || so->so_rcv.sb_hiwat == 0) {
-		error = soreserve(so, tcp_sendspace, tcp_recvspace);
+		error = soreserve_internal(so, tcp_sendspace, tcp_recvspace);
 		if (error)
 			return (error);
 	}

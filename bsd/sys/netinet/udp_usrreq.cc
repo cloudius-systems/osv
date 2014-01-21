@@ -285,7 +285,7 @@ udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
 	m_adj(n, off);
 
 	so = inp->inp_socket;
-	SOCK_LOCK(so);
+	SOCK_LOCK_ASSERT(so);
 	if (sbappendaddr_locked(so, &so->so_rcv, append_sa, n, opts) == 0) {
 		m_freem(n);
 		if (opts)
@@ -293,7 +293,6 @@ udp_append(struct inpcb *inp, struct ip *ip, struct mbuf *n, int off,
 		UDPSTAT_INC(udps_fullsock);
 	} else
 		sorwakeup_locked(so);
-	SOCK_UNLOCK(so);
 }
 
 void
@@ -1371,7 +1370,7 @@ udp_attach(struct socket *so, int proto, struct thread *td)
 
 	inp = sotoinpcb(so);
 	KASSERT(inp == NULL, ("udp_attach: inp != NULL"));
-	error = soreserve(so, udp_sendspace, udp_recvspace);
+	error = soreserve_internal(so, udp_sendspace, udp_recvspace);
 	if (error)
 		return (error);
 	INP_INFO_WLOCK(&V_udbinfo);

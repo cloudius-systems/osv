@@ -247,6 +247,7 @@ rts_attach(struct socket *so, int proto, struct thread *td)
 	 */
 	s = splnet();
 	so->so_pcb = (caddr_t)rp;
+	so->set_mutex(&rtsock_mtx);
 	so->so_fibnum = 0;
 	error = raw_attach(so, proto);
 	rp = sotorawcb(so);
@@ -269,8 +270,8 @@ rts_attach(struct socket *so, int proto, struct thread *td)
 		break;
 	}
 	route_cb.any_count++;
-	RTSOCK_UNLOCK();
 	soisconnected(so);
+	RTSOCK_UNLOCK();
 	so->so_options |= SO_USELOOPBACK;
 	splx(s);
 	return 0;

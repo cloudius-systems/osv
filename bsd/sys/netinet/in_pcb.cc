@@ -282,6 +282,7 @@ in_pcballoc(struct socket *so, struct inpcbinfo *pcbinfo)
 	LIST_INSERT_HEAD(pcbinfo->ipi_listhead, inp, inp_list);
 	pcbinfo->ipi_count++;
 	so->so_pcb = (caddr_t)inp;
+	so->set_mutex(&inp->inp_lock);
 #ifdef INET6
 	if (V_ip6_auto_flowlabel)
 		inp->inp_flags |= IN6P_AUTOFLOWLABEL;

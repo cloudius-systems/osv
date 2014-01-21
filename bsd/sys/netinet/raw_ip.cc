@@ -740,7 +740,7 @@ rip_attach(struct socket *so, int proto, struct thread *td)
 		return (error);
 	if (proto >= IPPROTO_MAX || proto < 0)
 		return EPROTONOSUPPORT;
-	error = soreserve(so, rip_sendspace, rip_recvspace);
+	error = soreserve_internal(so, rip_sendspace, rip_recvspace);
 	if (error)
 		return (error);
 	INP_INFO_WLOCK(&V_ripcbinfo);

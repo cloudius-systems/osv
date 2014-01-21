@@ -1647,7 +1647,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 
 				TCPSTAT_INC(tcps_rcvackpack);
 				TCPSTAT_ADD(tcps_rcvackbyte, acked);
-				sbdrop(so, &so->so_snd, acked);
+				sbdrop_locked(so, &so->so_snd, acked);
 				if (tp->snd_una > tp->snd_recover &&
 				    th->th_ack <= tp->snd_recover)
 					tp->snd_recover = th->th_ack - 1;
@@ -1690,7 +1690,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				else if (!tcp_timer_active(tp, TT_PERSIST))
 					tcp_timer_activate(tp, TT_REXMT,
 						      tp->t_rxtcur);
-				sowwakeup(so);
+				sowwakeup_locked(so);
 				if (so->so_snd.sb_cc)
 					(void) tcp_output(tp);
 				goto check_delack;
@@ -1786,7 +1786,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			}
 
 			/* Add data to socket buffer. */
-			SOCK_LOCK(so);
+			SOCK_LOCK_ASSERT(so);
 			if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
 				m_freem(m);
 			} else {
@@ -1802,7 +1802,6 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				sbappendstream_locked(so, &so->so_rcv, m);
 			}
 			sorwakeup_locked(so);
-			SOCK_UNLOCK(so);
 			if (DELAY_ACK(tp)) {
 				tp->t_flags |= TF_DELACK;
 			} else {
@@ -2605,7 +2604,6 @@ process_ACK:
 		 */
 		cc_ack_received(tp, th, CC_ACK);
 
-		SOCK_LOCK(so);
 		if (acked > so->so_snd.sb_cc) {
 			tp->snd_wnd -= so->so_snd.sb_cc;
 			sbdrop_locked(so, &so->so_snd, (int)so->so_snd.sb_cc);
@@ -2616,7 +2614,6 @@ process_ACK:
 			ourfinisacked = 0;
 		}
 		sowwakeup_locked(so);
-		SOCK_UNLOCK(so);
 		/* Detect una wraparound. */
 		if (!IN_RECOVERY(tp->t_flags) &&
 		    tp->snd_una > tp->snd_recover &&
@@ -2732,11 +2729,10 @@ step6:
 		 * soreceive.  It's hard to imagine someone
 		 * actually wanting to send this much urgent data.
 		 */
-		SOCK_LOCK(so);
+		SOCK_LOCK_ASSERT(so);
 		if (th->th_urp + so->so_rcv.sb_cc > sb_max) {
 			th->th_urp = 0;			/* XXX */
 			thflags &= ~TH_URG;		/* XXX */
-			SOCK_UNLOCK(so);		/* XXX */
 			goto dodata;			/* XXX */
 		}
 		/*
@@ -2762,7 +2758,6 @@ step6:
 			sohasoutofband(so);
 			tp->t_oobflags &= ~(TCPOOB_HAVEDATA | TCPOOB_HADDATA);
 		}
-		SOCK_UNLOCK(so);
 		/*
 		 * Remove out of band data so doesn't get presented to user.
 		 * This can happen independent of advancing the URG pointer,
@@ -2822,13 +2817,11 @@ dodata:							/* XXX */
 			TCPSTAT_INC(tcps_rcvpack);
 			TCPSTAT_ADD(tcps_rcvbyte, tlen);
 			ND6_HINT(tp);
-			SOCK_LOCK(so);
 			if (so->so_rcv.sb_state & SBS_CANTRCVMORE)
 				m_freem(m);
 			else
 				sbappendstream_locked(so, &so->so_rcv, m);
 			sorwakeup_locked(so);
-			SOCK_UNLOCK(so);
 		} else {
 			/*
 			 * XXX: Due to the header drop above "th" is
@@ -2864,7 +2857,7 @@ dodata:							/* XXX */
 	 */
 	if (thflags & TH_FIN) {
 		if (TCPS_HAVERCVDFIN(tp->t_state) == 0) {
-			socantrcvmore(so);
+			socantrcvmore_locked(so);
 			/*
 			 * If connection is half-synchronized
 			 * (ie NEEDSYN flag on) then delay ACK,

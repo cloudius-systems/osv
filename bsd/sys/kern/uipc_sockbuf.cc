@@ -153,7 +153,7 @@ sbwait(socket* so, struct sockbuf *sb)
 	    tmr.set(std::chrono::nanoseconds(ticks2ns(sb->sb_timeo)));
 	}
 	signal_catcher sc;
-	sched::thread::wait_for(so->so_mtx._mutex, sb->sb_cc_wq, tmr, sc);
+	sched::thread::wait_for(so->so_mtx->_mutex, sb->sb_cc_wq, tmr, sc);
 	if (sc.interrupted()) {
 		return EINTR;
 	}
@@ -166,15 +166,15 @@ sbwait(socket* so, struct sockbuf *sb)
 int
 sblock(socket* so, struct sockbuf *sb, int flags)
 {
-   WITH_LOCK(so->so_mtx._mutex) {
+   WITH_LOCK(so->so_mtx->_mutex) {
 	KASSERT((flags & SBL_VALID) == flags,
 	    ("sblock: flags invalid (0x%x)", flags));
 
 	if (flags & SBL_WAIT) {
-		sb->sb_iolock.lock(so->so_mtx._mutex);
+		sb->sb_iolock.lock(so->so_mtx->_mutex);
 		return (0);
 	} else {
-		if (!sb->sb_iolock.try_lock(so->so_mtx._mutex))
+		if (!sb->sb_iolock.try_lock(so->so_mtx->_mutex))
 			return (EWOULDBLOCK);
 		return (0);
 	}
@@ -184,8 +184,8 @@ sblock(socket* so, struct sockbuf *sb, int flags)
 void
 sbunlock(socket* so, struct sockbuf *sb)
 {
-	WITH_LOCK(so->so_mtx._mutex) {
-		sb->sb_iolock.unlock(so->so_mtx._mutex);
+	WITH_LOCK(so->so_mtx->_mutex) {
+		sb->sb_iolock.unlock(so->so_mtx->_mutex);
 	}
 }
 
@@ -229,7 +229,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 
 	if (sb->sb_flags & SB_WAIT) {
 		sb->sb_flags &= ~SB_WAIT;
-		sb->sb_cc_wq.wake_all(so->so_mtx._mutex);
+		sb->sb_cc_wq.wake_all(so->so_mtx->_mutex);
 	}
 	if (sb->sb_upcall != NULL) {
 		ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
@@ -241,9 +241,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 	} else
 		ret = SU_OK;
 	if (ret == SU_ISCONNECTED) {
-		DROP_LOCK(so->so_mtx._mutex) {
-			soisconnected(so);
-		}
+		soisconnected(so);
 	}
 }
 
@@ -277,16 +275,18 @@ sowakeup(struct socket *so, struct sockbuf *sb)
  * some of the available buffer space in the system buffer pool for the
  * socket (currently, it does nothing but enforce limits).  The space should
  * be released by calling sbrelease() when the socket is destroyed.
+ *
+ * Used during construction, so we can't assert() the mutex is locked -
+ * it doesn't exist yet.
  */
 int
-soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
+soreserve_internal(struct socket *so, u_long sndcc, u_long rcvcc)
 {
 	struct thread *td = NULL;
 
-	SOCK_LOCK(so);
-	if (sbreserve_locked(&so->so_snd, sndcc, so, td) == 0)
+	if (sbreserve_internal(&so->so_snd, sndcc, so, td) == 0)
 		goto bad;
-	if (sbreserve_locked(&so->so_rcv, rcvcc, so, td) == 0)
+	if (sbreserve_internal(&so->so_rcv, rcvcc, so, td) == 0)
 		goto bad2;
 	if (so->so_rcv.sb_lowat == 0)
 		so->so_rcv.sb_lowat = 1;
@@ -294,13 +294,20 @@ soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
 		so->so_snd.sb_lowat = MCLBYTES;
 	if ((u_int)so->so_snd.sb_lowat > so->so_snd.sb_hiwat)
 		so->so_snd.sb_lowat = so->so_snd.sb_hiwat;
-	SOCK_UNLOCK(so);
 	return (0);
 bad2:
-	sbrelease_locked(&so->so_snd, so);
+	sbrelease_internal(&so->so_snd, so);
 bad:
-	SOCK_UNLOCK(so);
 	return (ENOBUFS);
+}
+
+int
+soreserve(struct socket *so, u_long sndcc, u_long rcvcc)
+{
+	SOCK_LOCK(so);
+	auto error = soreserve_internal(so, sndcc, rcvcc);
+	SOCK_UNLOCK(so);
+	return error;
 }
 
 #if 0
@@ -326,11 +333,9 @@ sysctl_handle_sb_max(SYSCTL_HANDLER_ARGS)
  * become limiting if buffering efficiency is near the normal case.
  */
 int
-sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
+sbreserve_internal(struct sockbuf *sb, u_long cc, struct socket *so,
     struct thread *td)
 {
-	SOCK_LOCK_ASSERT(so);
-
 	/*
 	 * When a thread is passed, we take into account the thread's socket
 	 * buffer size limit.  The caller will generally pass curthread, but
@@ -350,13 +355,21 @@ sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 }
 
 int
+sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
+		    struct thread *td)
+{
+	SOCK_LOCK_ASSERT(so);
+	return sbreserve_internal(sb, cc, so, td);
+}
+
+int
 sbreserve(struct sockbuf *sb, u_long cc, struct socket *so, 
     struct thread *td)
 {
 	int error;
 
 	SOCK_LOCK(so);
-	error = sbreserve_locked(sb, cc, so, td);
+	error = sbreserve_internal(sb, cc, so, td);
 	SOCK_UNLOCK(so);
 	return (error);
 }

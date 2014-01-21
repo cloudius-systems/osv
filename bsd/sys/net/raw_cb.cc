@@ -88,7 +88,7 @@ raw_attach(struct socket *so, int proto)
 	 */
 	KASSERT(rp != NULL, ("raw_attach: rp == NULL"));
 
-	error = soreserve(so, raw_sendspace, raw_recvspace);
+	error = soreserve_internal(so, raw_sendspace, raw_recvspace);
 	if (error)
 		return (error);
 	rp->rcb_socket = so;

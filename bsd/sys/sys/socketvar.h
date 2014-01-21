@@ -68,7 +68,7 @@ struct file;
  * (h) locked by global mutex so_global_mtx.
  */
 struct socket {
-	struct mtx so_mtx;
+	struct mtx* so_mtx = nullptr;   /* provided by so_pcb */
 	int	so_count;		/* (b) reference count */
 	short	so_type;		/* (a) generic type, see socket.h */
 	short	so_options;		/* from socket call, see socket.h */
@@ -123,6 +123,8 @@ struct socket {
 	/* FIXME: this is done for poll,
 	 * make sure there's only 1 ref to a fp */
 	struct file* fp;
+
+	void set_mutex(mtx* a_mtx) { so_mtx = a_mtx; }
 };
 
 /*
@@ -137,7 +139,7 @@ extern struct mtx accept_mtx;
 #define	ACCEPT_LOCK()			mtx_lock(&accept_mtx)
 #define	ACCEPT_UNLOCK()			mtx_unlock(&accept_mtx)
 
-#define	SOCK_MTX(_so)			(&(_so)->so_mtx)
+#define	SOCK_MTX(_so)			((_so)->so_mtx)
 #define	SOCK_LOCK(_so)			(SOCK_MTX(_so)->_mutex.lock())
 #define	SOCK_OWNED(_so)			(SOCK_MTX(_so)->_mutex.owned())
 #define	SOCK_UNLOCK(_so)		(SOCK_MTX(_so)->_mutex.unlock())
@@ -348,6 +350,7 @@ int	soreceive_generic(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
 int	soreserve(struct socket *so, u_long sndcc, u_long rcvcc);
+int	soreserve_internal(struct socket *so, u_long sndcc, u_long rcvcc);
 void	sorflush(struct socket *so);
 int	sosend(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	    struct mbuf *top, struct mbuf *control, int flags,

@@ -384,7 +384,7 @@ sonewconn(struct socket *head, int connstatus)
 	so->so_fibnum = head->so_fibnum;
 	so->so_proto = head->so_proto;
 	VNET_SO_ASSERT(head);
-	if (soreserve(so, head->so_snd.sb_hiwat, head->so_rcv.sb_hiwat) ||
+	if (soreserve_internal(so, head->so_snd.sb_hiwat, head->so_rcv.sb_hiwat) ||
 	    (*so->so_proto->pr_usrreqs->pru_attach)(so, 0, NULL)) {
 		sodealloc(so);
 		return (NULL);
@@ -557,6 +557,7 @@ sofree(struct socket *so)
 		(*pr->pr_domain->dom_dispose)(so->so_rcv.sb_mb);
 	if (pr->pr_usrreqs->pru_detach != NULL)
 		(*pr->pr_usrreqs->pru_detach)(so);
+	so->so_mtx = nullptr;
 
 	/*
 	 * From this point on, we assume that no other references to this
@@ -2869,6 +2870,7 @@ soisconnected(struct socket *so)
 	int ret;
 
 restart:
+	SOCK_UNLOCK(so);
 	ACCEPT_LOCK();
 	SOCK_LOCK(so);
 	so->so_state &= ~(SS_ISCONNECTING|SS_ISDISCONNECTING|SS_ISCONFIRMING);
@@ -2902,7 +2904,6 @@ restart:
 		}
 		return;
 	}
-	SOCK_UNLOCK(so);
 	ACCEPT_UNLOCK();
 	wakeup(&so->so_timeo);
 	sorwakeup(so);
@@ -2917,14 +2918,13 @@ soisdisconnecting(struct socket *so)
 	 * Note: This code assumes that SOCK_LOCK(so) and
 	 * SOCKBUF_LOCK(&so->so_rcv) are the same.
 	 */
-	SOCK_LOCK(so);
+	SOCK_LOCK_ASSERT(so);
 	so->so_state &= ~SS_ISCONNECTING;
 	so->so_state |= SS_ISDISCONNECTING;
 	so->so_rcv.sb_state |= SBS_CANTRCVMORE;
 	sorwakeup_locked(so);
 	so->so_snd.sb_state |= SBS_CANTSENDMORE;
 	sowwakeup_locked(so);
-	SOCK_UNLOCK(so);
 	wakeup(&so->so_timeo);
 }
 

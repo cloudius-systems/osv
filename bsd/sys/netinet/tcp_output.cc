@@ -259,7 +259,7 @@ after_sack_rexmit:
 	if (tp->t_flags & TF_NEEDSYN)
 		flags |= TH_SYN;
 
-	SOCK_LOCK(so);
+	SOCK_LOCK_ASSERT(so);
 	/*
 	 * If in persist timeout with window of 0, send 1 byte.
 	 * Otherwise, if window is small but nonzero
@@ -631,7 +631,6 @@ dontupdate:
 	 * No reason to send a segment, just return.
 	 */
 just_return:
-	SOCK_UNLOCK(so);
 	return (0);
 
 send:
@@ -807,7 +806,6 @@ send:
 		}
 		MGETHDR(m, M_DONTWAIT, MT_DATA);
 		if (m == NULL) {
-			SOCK_UNLOCK(so);
 			error = ENOBUFS;
 			goto out;
 		}
@@ -815,7 +813,6 @@ send:
 		if (MHLEN < hdrlen + max_linkhdr) {
 			MCLGET(m, M_DONTWAIT);
 			if ((m->m_hdr.mh_flags & M_EXT) == 0) {
-				SOCK_UNLOCK(so);
 				m_freem(m);
 				error = ENOBUFS;
 				goto out;
@@ -838,7 +835,6 @@ send:
 		} else {
 			m->m_hdr.mh_next = m_copy(mb, moff, (int)len);
 			if (m->m_hdr.mh_next == NULL) {
-				SOCK_UNLOCK(so);
 				(void) m_free(m);
 				error = ENOBUFS;
 				goto out;
@@ -853,9 +849,7 @@ send:
 		 */
 		if (off + len == so->so_snd.sb_cc)
 			flags |= TH_PUSH;
-		SOCK_UNLOCK(so);
 	} else {
-		SOCK_UNLOCK(so);
 		if (tp->t_flags & TF_ACKNOW)
 			TCPSTAT_INC(tcps_sndacks);
 		else if (flags & (TH_SYN|TH_FIN|TH_RST))
@@ -879,7 +873,6 @@ send:
 		m->m_hdr.mh_data += max_linkhdr;
 		m->m_hdr.mh_len = hdrlen;
 	}
-	SOCK_UNLOCK_ASSERT(so);
 	m->M_dat.MH.MH_pkthdr.rcvif = (struct ifnet *)0;
 #ifdef MAC
 	mac_inpcb_create_mbuf(tp->t_inpcb, m);
@@ -1274,7 +1267,6 @@ timer:
 				tp->snd_nxt -= len;
 		}
 out:
-		SOCK_UNLOCK_ASSERT(so);	/* Check gotos. */
 		switch (error) {
 		case EPERM:
 			tp->t_softerror = error;
