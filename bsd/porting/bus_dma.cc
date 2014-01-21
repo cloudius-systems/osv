@@ -9,7 +9,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/bus.h>
 #include <bsd/porting/mmu.h>
-#include <align.hh>
+#include <osv/align.hh>
 
 struct bus_dma_tag {
 	bus_size_t	  alignment;

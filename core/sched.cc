@@ -12,7 +12,7 @@
 #include "debug.hh"
 #include "drivers/clockevent.hh"
 #include "irqlock.hh"
-#include "align.hh"
+#include <osv/align.hh>
 #include "drivers/clock.hh"
 #include "interrupt.hh"
 #include "smp.hh"

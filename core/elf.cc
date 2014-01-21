@@ -11,7 +11,7 @@
 #include <exception>
 #include <memory>
 #include <string.h>
-#include "align.hh"
+#include <osv/align.hh>
 #include "debug.hh"
 #include <stdlib.h>
 #include <unistd.h>

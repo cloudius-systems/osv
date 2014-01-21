@@ -15,7 +15,7 @@
 #include <boost/utility.hpp>
 #include <string.h>
 #include "libc/libc.hh"
-#include "align.hh"
+#include <osv/align.hh>
 #include <debug.hh>
 #include "alloctracker.hh"
 #include <atomic>

@@ -46,7 +46,7 @@
 #include <api/sys/times.h>
 #include <map>
 #include <boost/range/adaptor/reversed.hpp>
-#include "align.hh"
+#include <osv/align.hh>
 #include <osv/stubbing.hh>
 #include "drivers/pvpanic.hh"
 #include <api/sys/resource.h>

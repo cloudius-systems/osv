@@ -18,7 +18,7 @@ extern "C" {
 #include <osv/sched.hh>
 #include "drivers/clock.hh"
 #include "processor.hh"
-#include "align.hh"
+#include <osv/align.hh>
 #include "xen.hh"
 
 #include <osv/debug.h>

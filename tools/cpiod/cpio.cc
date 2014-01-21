@@ -14,7 +14,7 @@
 #include <boost/iostreams/restrict.hpp>
 #include <cstdlib>
 #include <stdexcept>
-#include <align.hh>
+#include <osv/align.hh>
 #include <memory>
 #include <sstream>
 

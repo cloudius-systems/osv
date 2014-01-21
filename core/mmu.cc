@@ -14,7 +14,7 @@
 #include <string.h>
 #include <iterator>
 #include "libc/signal.hh"
-#include "align.hh"
+#include <osv/align.hh>
 #include "interrupt.hh"
 #include "ilog2.hh"
 #include "prio.hh"

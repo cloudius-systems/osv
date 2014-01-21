@@ -12,7 +12,7 @@
 #include <tuple>
 #include <boost/format.hpp>
 #include <osv/types.h>
-#include <align.hh>
+#include <osv/align.hh>
 #include <osv/sched.hh>
 #include <boost/intrusive/list.hpp>
 #include <string>

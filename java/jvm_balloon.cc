@@ -3,7 +3,7 @@
 #include <jni.h>
 #include <api/assert.h>
 #include <mmu.hh>
-#include <align.hh>
+#include <osv/align.hh>
 #include <exceptions.hh>
 #include <memcpy_decode.hh>
 #include <boost/intrusive/set.hpp>
