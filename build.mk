@@ -687,6 +687,7 @@ gen/include/bits/alltypes.h: $(src)/include/api/x86_64/bits/alltypes.h.sh
 
 gen/include/osv/version.h: $(src)/scripts/gen-version-header
 	$(call quiet, sh $(src)/scripts/gen-version-header $@, GEN $@)
+.PHONY: gen/include/osv/version.h
 
 $(src)/build.mk: $(generated-headers)
 
