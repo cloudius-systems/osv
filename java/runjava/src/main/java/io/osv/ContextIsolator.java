@@ -105,29 +105,29 @@ public class ContextIsolator {
         ArrayList<String> classpath = new ArrayList<String>();
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-jar")) {
-                if (i+1 >= args.length) {
+                if (i + 1 >= args.length) {
                     System.err.println("RunJava: Missing jar name after '-jar'.");
                     return null;
                 }
-                return runJar(args[i+1], java.util.Arrays.copyOfRange(args, i+2, args.length), classpath);
+                return runJar(args[i + 1], java.util.Arrays.copyOfRange(args, i + 2, args.length), classpath);
             } else if (args[i].equals("-classpath") || args[i].equals("-cp")) {
-                if (i+1 >= args.length) {
-                    System.err.println("RunJava: Missing parameter after '"+args[i]+"'");
+                if (i + 1 >= args.length) {
+                    System.err.println("RunJava: Missing parameter after '" + args[i] + "'");
                     return null;
                 }
-                for (String c : expandClassPath(args[i+1])) {
+                for (String c : expandClassPath(args[i + 1])) {
                     classpath.add(c);
                 }
                 i++;
             } else if (args[i].startsWith("-D")) {
                 int eq = args[i].indexOf('=');
-                if (eq<0) {
-                    System.err.println("RunJava: Missing '=' in parameter '"+args[i]+"'");
+                if (eq < 0) {
+                    System.err.println("RunJava: Missing '=' in parameter '" + args[i] + "'");
                     return null;
                 }
                 String key = args[i].substring(2, eq);
-                String value = args[i].substring(eq+1, args[i].length());
-                System.setProperty(key,  value);
+                String value = args[i].substring(eq + 1, args[i].length());
+                System.setProperty(key, value);
             } else if (args[i].equals("-version")) {
                 System.err.println("java version \"" +
                         System.getProperty("java.version") + "\"");
@@ -140,16 +140,16 @@ public class ContextIsolator {
                 return null;
             } else if (args[i].equals("-Xclassloader")) {
                 // Non-standard try - use a different class loader.
-                if (i+1 >= args.length) {
-                    System.err.println("RunJava: Missing parameter after '"+args[i]+"'");
+                if (i + 1 >= args.length) {
+                    System.err.println("RunJava: Missing parameter after '" + args[i] + "'");
                     return null;
                 }
-                Xclassloader = args[i+1];
+                Xclassloader = args[i + 1];
                 i++;
             } else if (!args[i].startsWith("-")) {
-                return runClass(args[i], java.util.Arrays.copyOfRange(args,  i+1,  args.length), classpath);
+                return runClass(args[i], java.util.Arrays.copyOfRange(args, i + 1, args.length), classpath);
             } else {
-                System.err.println("RunJava: Unknown parameter '"+args[i]+"'");
+                System.err.println("RunJava: Unknown parameter '" + args[i] + "'");
                 return null;
             }
         }
@@ -185,12 +185,12 @@ public class ContextIsolator {
         ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getParent());
 
         return run(appClassLoader, new SandBoxedProcess() {
-                    @Override
-                    public void run() throws Throwable {
-                        updateClassPathProperty(classpath);
-                        runMain(loadClass(mainClass), args);
-                    }
-                });
+            @Override
+            public void run() throws Throwable {
+                updateClassPathProperty(classpath);
+                runMain(loadClass(mainClass), args);
+            }
+        });
     }
 
     private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
@@ -217,7 +217,7 @@ public class ContextIsolator {
     static void runMain(Class<?> klass, String[] args) throws Throwable {
         Method main = klass.getMethod("main", String[].class);
         try {
-            main.invoke(null, new Object[] { args });
+            main.invoke(null, new Object[]{args});
         } catch (InvocationTargetException ex) {
             throw ex.getCause();
         }
@@ -235,6 +235,7 @@ public class ContextIsolator {
     }
 
     static String Xclassloader = null;
+
     private static URLClassLoader createAppClassLoader(URL[] urls, ClassLoader parent) {
         if (Xclassloader == null) {
             return new URLClassLoader(urls, parent);
@@ -286,7 +287,7 @@ public class ContextIsolator {
         for (String component : classpath.split(":")) {
             if (component.endsWith("/*")) {
                 File dir = new File(
-                        component.substring(0,  component.length()-2));
+                        component.substring(0, component.length() - 2));
                 if (dir.isDirectory()) {
                     for (File file : dir.listFiles()) {
                         String filename = file.getPath();
