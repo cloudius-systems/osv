@@ -10,6 +10,18 @@ package io.osv;
 public class RunJava {
 
     public static void main(String[] args) {
+        if (args[0].equals("-version")) {
+            System.err.println("java version \"" +
+                    System.getProperty("java.version") + "\"");
+            System.err.println(System.getProperty("java.runtime.name") +
+                    " (" + System.getProperty("java.runtime.version") +
+                    ")");
+            System.err.println(System.getProperty("java.vm.name") +
+                    " (build " + System.getProperty("java.vm.version") +
+                    ", " + System.getProperty("java.vm.info") + ")");
+            return;
+        }
+
         try {
             ContextIsolator.getInstance().runSync(args);
         } catch (Throwable ex) {
