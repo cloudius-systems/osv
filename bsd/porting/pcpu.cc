@@ -8,7 +8,7 @@
 #include <osv/sched.hh>
 #include "osv/percpu.hh"
 #include <bsd/porting/pcpu.h>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 PERCPU(struct pcpu, pcpu);
 

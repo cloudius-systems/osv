@@ -9,7 +9,7 @@
 #include <poll.h>
 #include <unistd.h>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <drivers/clock.hh>
 #include <osv/sched.hh>
 

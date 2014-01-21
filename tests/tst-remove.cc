@@ -12,7 +12,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 
 int tests = 0, fails = 0;
 

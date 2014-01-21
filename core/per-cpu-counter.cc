@@ -7,7 +7,7 @@
 
 #include <osv/per-cpu-counter.hh>
 #include <osv/mutex.h>
-#include <debug.hh>
+#include <osv/debug.hh>
 
 void per_cpu_counter::increment()
 {

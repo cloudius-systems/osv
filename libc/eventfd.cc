@@ -6,7 +6,7 @@
  */
 
 #include <sys/eventfd.h>
-#include <debug.hh>
+#include <osv/debug.hh>
 #include "libc.hh"
 
 int eventfd(unsigned init, int flags)

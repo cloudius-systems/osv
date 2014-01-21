@@ -13,7 +13,7 @@
 #include <osv/sched.hh>
 #include <arch.hh>
 #include <drivers/clock.hh>
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <lockfree/ring.hh>
 #include <lockfree/queue-mpsc.hh>
 

@@ -12,7 +12,7 @@
 #include "string.h"
 #include "cpuid.hh"
 #include <osv/barrier.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "xen.hh"
 #include "processor.hh"
 #include "xenfront.hh"

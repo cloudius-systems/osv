@@ -10,7 +10,7 @@
 
 #include "tst-hub.hh"
 #include "drivers/clock.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/sched.hh>
 
 class test_timer : public unit_tests::vtest {

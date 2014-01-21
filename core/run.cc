@@ -6,7 +6,7 @@
 #include <osv/elf.hh>
 #include <osv/run.hh>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 
 extern int optind;
 

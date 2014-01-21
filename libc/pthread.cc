@@ -15,7 +15,7 @@
 #include <string.h>
 #include <list>
 #include <osv/mmu.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/prio.hh>
 
 #include <osv/mutex.h>

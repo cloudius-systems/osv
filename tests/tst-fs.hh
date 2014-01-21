@@ -15,7 +15,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/filesystem/fstream.hpp>
 
-#include "debug.hh"
+#include <osv/debug.hh>
 
 namespace fs = boost::filesystem;
 

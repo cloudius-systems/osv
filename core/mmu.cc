@@ -8,7 +8,7 @@
 #include <osv/mmu.hh>
 #include <osv/mempool.hh>
 #include "processor.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "exceptions.hh"
 #include <boost/format.hpp>
 #include <string.h>

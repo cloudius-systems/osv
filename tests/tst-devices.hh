@@ -10,7 +10,7 @@
 
 #include "tst-hub.hh"
 #include "drivers/pci.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 
 class test_devices : public unit_tests::vtest {
 

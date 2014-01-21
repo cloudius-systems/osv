@@ -14,7 +14,7 @@
 #include <osv/mmio.hh>
 #include <osv/types.h>
 #include "processor.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "device.hh"
 
 using namespace processor;

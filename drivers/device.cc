@@ -8,7 +8,7 @@
 #include <functional>
 #include <map>
 
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "device.hh"
 
 namespace hw {

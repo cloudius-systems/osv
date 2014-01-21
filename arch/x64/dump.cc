@@ -6,7 +6,7 @@
  */
 
 #include "exceptions.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "dump.hh"
 
 void dump_registers(exception_frame* ef)

@@ -14,7 +14,7 @@
 // $ sudo service firewalld stop
 // $ nc -l -p 9999
 //
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <string>
 
 #include <unistd.h>

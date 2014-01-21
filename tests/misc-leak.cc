@@ -6,7 +6,7 @@
  */
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <sys/mman.h>
 #include <pthread.h>
 

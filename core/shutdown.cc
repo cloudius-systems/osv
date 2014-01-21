@@ -1,6 +1,6 @@
 #include <osv/shutdown.hh>
 #include <osv/power.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 extern "C" {
     void unmount_rootfs();

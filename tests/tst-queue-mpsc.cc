@@ -38,7 +38,7 @@ void assert(bool c) {
     }
 }
 #else
-#include "debug.hh"
+#include <osv/debug.hh>
 #endif
 
 #include <osv/sched.hh> // debugging

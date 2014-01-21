@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 int tests = 0, fails = 0;
 

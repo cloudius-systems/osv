@@ -6,7 +6,7 @@
  */
 
 #include <osv/trace.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 struct test_object {
     int i = 1;

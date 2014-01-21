@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <arch-cpu.hh>
-#include <debug.hh>
+#include <osv/debug.hh>
 
 namespace arch {
 

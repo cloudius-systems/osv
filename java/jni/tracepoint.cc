@@ -2,7 +2,7 @@
 #include <osv/trace.hh>
 #include <osv/per-cpu-counter.hh>
 #include <osv/callstack.hh>
-#include <debug.hh>
+#include <osv/debug.hh>
 
 static std::string get_string(JNIEnv* jni, jstring s)
 {

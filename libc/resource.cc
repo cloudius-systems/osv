@@ -9,7 +9,7 @@
 #include <sys/resource.h>
 #include <string.h>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 
 int getrusage(int who, struct rusage *usage)
 {

@@ -7,7 +7,7 @@
 
 #include "drivers/driver.hh"
 #include "drivers/pci.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 
 #include "driver.hh"
 

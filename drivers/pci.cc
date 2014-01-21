@@ -8,7 +8,7 @@
 #include <sstream>
 #include <iomanip>
 
-#include "debug.hh"
+#include <osv/debug.hh>
 
 #include "drivers/pci.hh"
 #include "drivers/driver.hh"

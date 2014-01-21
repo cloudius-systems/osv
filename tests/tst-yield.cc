@@ -6,7 +6,7 @@
  */
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 int main(int argc, char **argv)
 {

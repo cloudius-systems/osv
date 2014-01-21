@@ -8,7 +8,7 @@
 #include <atomic>
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <drivers/clock.hh>
 
 #include <osv/condvar.h>

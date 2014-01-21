@@ -23,7 +23,7 @@
 #include <fs/fs.hh>
 #include <drivers/clock.hh>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <unordered_map>
 #include <boost/range/algorithm/find.hpp>
 

@@ -12,7 +12,7 @@
 #include <memory>
 #include <string.h>
 #include <osv/align.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <stdlib.h>
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>

@@ -10,7 +10,7 @@ extern "C" {
 }
 
 #include "msr.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "drivers/acpi.hh"
 #include "drivers/pvpanic.hh"
 

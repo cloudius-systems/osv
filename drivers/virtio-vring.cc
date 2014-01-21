@@ -11,7 +11,7 @@
 
 #include "virtio.hh"
 #include "drivers/virtio-vring.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>

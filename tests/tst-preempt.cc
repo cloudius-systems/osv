@@ -6,7 +6,7 @@
  */
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 namespace sched {
     // For this to work, we need to implement __tls_get_addr()

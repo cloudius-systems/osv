@@ -11,7 +11,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "tst-hub.hh"
 
 #define dbg_d(...) tprintf_d("tst-tcp1", __VA_ARGS__)

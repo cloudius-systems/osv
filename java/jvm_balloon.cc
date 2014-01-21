@@ -9,7 +9,7 @@
 #include <boost/intrusive/set.hpp>
 #include <osv/trace.hh>
 #include "jvm_balloon.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 
 TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p", const unsigned char *, const unsigned char *);
 

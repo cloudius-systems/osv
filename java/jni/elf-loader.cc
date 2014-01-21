@@ -1,5 +1,5 @@
 //#include <algorithm>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <osv/elf.hh>
 #include <jni.h>

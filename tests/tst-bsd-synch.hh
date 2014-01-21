@@ -9,7 +9,7 @@
 #define TST_SYNCH_H
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "tst-hub.hh"
 
 extern "C" {

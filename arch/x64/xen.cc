@@ -6,7 +6,7 @@
  */
 
 #include "xen.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/mmu.hh>
 #include "processor.hh"
 #include "cpuid.hh"

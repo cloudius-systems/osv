@@ -8,7 +8,7 @@
 #include <osv/elf.hh>
 #include <jni.h>
 #include <string.h>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "jvm_balloon.hh"
 #include <osv/mempool.hh>
 

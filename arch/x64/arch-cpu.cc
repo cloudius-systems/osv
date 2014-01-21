@@ -7,7 +7,7 @@
 
 #include "arch-cpu.hh"
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 namespace sched {
 

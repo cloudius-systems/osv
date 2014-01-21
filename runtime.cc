@@ -31,7 +31,7 @@
 #include <cassert>
 #include <sys/sysinfo.h>
 #include "processor.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <boost/format.hpp>
 #include <osv/mempool.hh>
 #include <pwd.h>

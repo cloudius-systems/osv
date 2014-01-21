@@ -7,7 +7,7 @@
 
 // linux syscalls
 
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <boost/format.hpp>
 #include <osv/sched.hh>
 

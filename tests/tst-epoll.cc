@@ -9,7 +9,7 @@
 #include <sys/poll.h>
 #include <unistd.h>
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "drivers/clock.hh"
 
 int tests = 0, fails = 0;

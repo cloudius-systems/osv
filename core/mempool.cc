@@ -16,7 +16,7 @@
 #include <string.h>
 #include "libc/libc.hh"
 #include <osv/align.hh>
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <osv/alloctracker.hh>
 #include <atomic>
 #include <osv/mmu.hh>

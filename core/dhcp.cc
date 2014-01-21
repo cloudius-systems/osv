@@ -23,7 +23,7 @@
 #include <bsd/porting/networking.hh>
 #include <bsd/porting/route.h>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <osv/dhcp.hh>
 #include <drivers/clock.hh>
 

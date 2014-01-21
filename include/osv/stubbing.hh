@@ -8,7 +8,7 @@
 #ifndef STUBBING_HH_
 #define STUBBING_HH_
 
-#include "debug.hh"
+#include <osv/debug.hh>
 
 #define DO_ONCE(thing) do {				\
 	static bool _x;					\

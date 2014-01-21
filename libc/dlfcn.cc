@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 #include <osv/elf.hh>
 #include <link.h>
-#include <debug.hh>
+#include <osv/debug.hh>
 
 static __thread char dlerror_msg[128];
 static __thread char *dlerror_ptr;

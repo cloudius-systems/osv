@@ -12,7 +12,7 @@
 #include <osv/interrupt.hh>
 #include <boost/format.hpp>
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <libc/signal.hh>
 #include <apic.hh>
 #include <osv/prio.hh>

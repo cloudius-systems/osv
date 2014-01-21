@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <sys/time.h>
 #include <osv/mempool.hh>
 

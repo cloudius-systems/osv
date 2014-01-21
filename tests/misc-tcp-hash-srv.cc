@@ -9,7 +9,7 @@
 // Same as an Echo server but more practical to validate correctness of
 // recieved / transmitted data. Uses TCP.
 //
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <string>
 

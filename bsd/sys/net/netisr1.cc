@@ -1,5 +1,5 @@
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>

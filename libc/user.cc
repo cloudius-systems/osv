@@ -18,7 +18,7 @@
 #include <errno.h>
 #include <grp.h>
 
-#include <debug.hh>
+#include <osv/debug.hh>
 
 uid_t getuid()
 {

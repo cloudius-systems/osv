@@ -10,7 +10,7 @@
 
 #include "tst-hub.hh"
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 class test_threads : public unit_tests::vtest {
 

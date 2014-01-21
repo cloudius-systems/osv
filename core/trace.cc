@@ -12,7 +12,7 @@
 #include <regex>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/range/algorithm/remove.hpp>
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <osv/prio.hh>
 #include <osv/execinfo.hh>
 

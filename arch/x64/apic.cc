@@ -11,7 +11,7 @@
 #include <osv/percpu.hh>
 #include <cpuid.hh>
 #include <processor.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 
 namespace processor {
 

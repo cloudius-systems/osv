@@ -16,7 +16,7 @@
 #include <osv/tls.hh>
 #include "msr.hh"
 #include "exceptions.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "drivers/pci.hh"
 #include "smp.hh"
 #include "xen.hh"

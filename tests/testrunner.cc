@@ -15,7 +15,7 @@
 #include <limits.h>
 
 #include <osv/run.hh>
-#include <debug.hh>
+#include <osv/debug.hh>
 
 #define TESTDIR		"/tests"
 

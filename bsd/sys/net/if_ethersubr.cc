@@ -32,7 +32,7 @@
 
 #define _GNU_SOURCE 1
 
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <assert.h>
 
 #include <osv/initialize.hh>

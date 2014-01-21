@@ -8,7 +8,7 @@
 
 #include <osv/percpu.hh>
 #include <bitset>
-#include <debug.hh>
+#include <osv/debug.hh>
 
 static constexpr size_t dynamic_percpu_max = 65536;
 

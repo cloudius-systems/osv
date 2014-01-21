@@ -6,7 +6,7 @@
  */
 
 #include <osv/power.hh>
-#include <debug.hh>
+#include <osv/debug.hh>
 #include <smp.hh>
 #include <processor.hh>
 

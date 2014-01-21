@@ -8,7 +8,7 @@
 #include <sys/mman.h>
 #include <memory>
 #include <osv/mmu.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "osv/trace.hh"
 #include "osv/dentry.h"
 #include "osv/mount.h"

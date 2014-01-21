@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 #include <osv/poll.h>
 
-#include "debug.hh"
+#include <osv/debug.hh>
 
 #define dbg_d(...)   tprintf_d("tst-sockets", __VA_ARGS__)
 

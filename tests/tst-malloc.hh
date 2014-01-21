@@ -10,7 +10,7 @@
 
 #include <osv/mutex.h>
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <random>
 #include "tst-hub.hh"
 

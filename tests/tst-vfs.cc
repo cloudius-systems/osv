@@ -8,7 +8,7 @@
 #define BOOST_TEST_MODULE tst-vfs
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "tst-fs.hh"
 
 #include <sys/types.h>

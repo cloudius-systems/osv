@@ -15,7 +15,7 @@ extern "C" {
 #include "acpi.h"
 }
 #include <boost/intrusive/parent_from_member.hpp>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <osv/barrier.hh>
 #include <osv/prio.hh>

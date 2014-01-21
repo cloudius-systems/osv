@@ -7,7 +7,7 @@
 
 #include "arch.hh"
 #include "arch-cpu.hh"
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <osv/mmu.hh>
 

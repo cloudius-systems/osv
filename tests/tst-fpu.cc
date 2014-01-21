@@ -10,7 +10,7 @@
 #include <osv/sched.hh>
 #include <vector>
 #include <atomic>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <boost/format.hpp>
 #include <cmath>
 

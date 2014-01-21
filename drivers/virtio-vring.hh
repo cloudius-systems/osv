@@ -11,7 +11,7 @@
 #include <atomic>
 #include <functional>
 #include <osv/mutex.h>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include <osv/mmu.hh>
 #include <osv/sched.hh>
 

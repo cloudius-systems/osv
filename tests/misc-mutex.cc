@@ -6,7 +6,7 @@
  */
 
 #include <osv/sched.hh>
-#include "debug.hh"
+#include <osv/debug.hh>
 #include "lockfree/mutex.hh"
 #include <osv/mutex.h>
 #include <osv/spinlock.h>
