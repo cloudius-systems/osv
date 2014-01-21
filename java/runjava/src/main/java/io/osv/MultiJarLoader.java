@@ -115,7 +115,7 @@ public class MultiJarLoader {
         @Override
         public void run() {
             try {
-                RunJava.parseArgs(args.split("\\s+"));
+                ContextIsolator.getInstance().runSync(args.split("\\s+"));
             } catch (Throwable e) {
                 System.err.println("Exception was caught while running " + args
                         + " exception: " + e);
