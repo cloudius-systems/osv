@@ -21,4 +21,3 @@ namespace {
 }
 
 #endif // !__PREEMPT_LOCK_H__
-

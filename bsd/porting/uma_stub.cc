@@ -10,7 +10,7 @@
 #include <bsd/machine/param.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
-#include <preempt-lock.hh>
+#include <osv/preempt-lock.hh>
 
 void* uma_zone::cache::alloc()
 {

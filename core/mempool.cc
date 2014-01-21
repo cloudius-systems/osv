@@ -23,7 +23,7 @@
 #include <osv/trace.hh>
 #include <lockfree/ring.hh>
 #include <osv/percpu-worker.hh>
-#include <preempt-lock.hh>
+#include <osv/preempt-lock.hh>
 #include <osv/sched.hh>
 #include <algorithm>
 #include <osv/prio.hh>

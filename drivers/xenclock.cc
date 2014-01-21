@@ -17,7 +17,7 @@
 #include "xen.hh"
 #include "debug.hh"
 #include <osv/prio.hh>
-#include <preempt-lock.hh>
+#include <osv/preempt-lock.hh>
 
 class xenclock : public clock {
 public:
