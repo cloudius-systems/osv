@@ -46,7 +46,7 @@
 #include <osv/version.h>
 #include <osv/run.hh>
 #include <osv/shutdown.hh>
-#include "commands.hh"
+#include <osv/commands.hh>
 
 using namespace osv;
 

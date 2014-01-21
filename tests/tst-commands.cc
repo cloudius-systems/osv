@@ -8,7 +8,7 @@
 
 #include <cstdio>
 
-#include "commands.hh"
+#include <osv/commands.hh>
 
 static int tests = 0, fails = 0;
 

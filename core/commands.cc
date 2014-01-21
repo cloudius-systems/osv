@@ -9,7 +9,7 @@
 
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/include/qi.hpp>
-#include "commands.hh"
+#include <osv/commands.hh>
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
