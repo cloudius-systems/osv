@@ -88,6 +88,9 @@ net_channel* classifier::classify_ipv4_tcp(mbuf* m)
     auto dst_addr = ip_hdr->ip_dst;
     h += ip_size;
     auto tcp_hdr = reinterpret_cast<tcphdr*>(h);
+    if (tcp_hdr->th_flags & (TH_SYN | TH_FIN | TH_RST)) {
+	    return nullptr;
+    }
     auto src_port = ntohs(tcp_hdr->th_sport);
     auto dst_port = ntohs(tcp_hdr->th_dport);
     auto id = ipv4_tcp_conn_id{src_addr, dst_addr, src_port, dst_port};
