@@ -9,7 +9,7 @@
 #include "processor.hh"
 #include "msr.hh"
 #include "apic.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <string.h>
 extern "C" {
 #include "acpi.h"

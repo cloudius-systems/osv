@@ -8,7 +8,7 @@
 
 #include <sys/cdefs.h>
 
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "mempool.hh"
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>

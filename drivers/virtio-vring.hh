@@ -12,7 +12,7 @@
 #include <functional>
 #include <osv/mutex.h>
 #include "debug.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <osv/sched.hh>
 
 #define virtio_tag "virtio"

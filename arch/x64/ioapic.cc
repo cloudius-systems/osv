@@ -7,7 +7,7 @@
 
 #include <osv/interrupt.hh>
 #include "exceptions.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <osv/mutex.h>
 
 namespace ioapic {

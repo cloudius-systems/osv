@@ -8,7 +8,7 @@
 #ifdef __OSV__
 #include <osv/sched.hh>
 #include "mempool.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "barrier.hh"
 #endif
 

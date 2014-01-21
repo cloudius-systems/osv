@@ -9,7 +9,7 @@
 #include "arch-cpu.hh"
 #include "debug.hh"
 #include <osv/sched.hh>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 
 void page_fault(exception_frame *ef)
 {

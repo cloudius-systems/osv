@@ -9,7 +9,7 @@
 #define APIC_HH_
 
 #include <osv/types.h>
-#include <mmu.hh>
+#include <osv/mmu.hh>
 
 namespace processor {
 

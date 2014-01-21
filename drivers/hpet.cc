@@ -13,7 +13,7 @@ extern "C" {
 #include "prio.hh"
 #include "processor.hh"
 #include "clock.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "mmio.hh"
 #include "arch.hh"
 #include "xen.hh"

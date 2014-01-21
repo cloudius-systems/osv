@@ -19,7 +19,7 @@
 #include <debug.hh>
 #include "alloctracker.hh"
 #include <atomic>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <osv/trace.hh>
 #include <lockfree/ring.hh>
 #include <osv/percpu-worker.hh>

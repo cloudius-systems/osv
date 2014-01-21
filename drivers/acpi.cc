@@ -14,7 +14,7 @@ extern "C" {
     #include "acpixf.h"
 }
 #include <stdlib.h>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <osv/sched.hh>
 #include "drivers/clock.hh"
 #include "processor.hh"

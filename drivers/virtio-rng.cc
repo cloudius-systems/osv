@@ -6,7 +6,7 @@
  */
 
 #include "drivers/virtio-rng.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <algorithm>
 #include <iterator>
 

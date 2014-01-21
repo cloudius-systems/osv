@@ -7,7 +7,7 @@
 
 #include <errno.h>
 #include <stddef.h>
-#include <mmu.hh> // OSV
+#include <osv/mmu.hh> // OSV
 #include "mmu.h"  // Port
 #include "mmio.hh"
 

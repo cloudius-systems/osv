@@ -6,7 +6,7 @@
  */
 
 #include "vga.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 
 volatile unsigned short * const VGAConsole::buffer
 = reinterpret_cast<volatile unsigned short *>(mmu::phys_mem + 0xb8000);

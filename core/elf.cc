@@ -6,7 +6,7 @@
  */
 
 #include "elf.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include <boost/format.hpp>
 #include <exception>
 #include <memory>

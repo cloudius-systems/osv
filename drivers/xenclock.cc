@@ -10,7 +10,7 @@
 #include <osv/types.h>
 #include <osv/percpu.hh>
 #include <osv/pvclock-abi.hh>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "string.h"
 #include "cpuid.hh"
 #include "barrier.hh"

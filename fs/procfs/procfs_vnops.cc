@@ -10,7 +10,7 @@
 #include <osv/mount.h>
 #include <osv/prex.h>
 #include <osv/sched.hh>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 
 #include <functional>
 #include <memory>

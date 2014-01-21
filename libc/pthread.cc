@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <string.h>
 #include <list>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "debug.hh"
 #include "prio.hh"
 

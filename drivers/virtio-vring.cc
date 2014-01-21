@@ -7,7 +7,7 @@
 
 #include <string.h>
 #include "mempool.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 
 #include "virtio.hh"
 #include "drivers/virtio-vring.hh"

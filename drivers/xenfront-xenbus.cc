@@ -8,7 +8,7 @@
 #include "clock.hh"
 #include "msr.hh"
 #include <osv/types.h>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "string.h"
 #include "cpuid.hh"
 #include "barrier.hh"

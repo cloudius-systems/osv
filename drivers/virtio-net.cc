@@ -14,7 +14,7 @@
 #include <osv/interrupt.hh>
 
 #include "mempool.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 
 #include <string>
 #include <string.h>

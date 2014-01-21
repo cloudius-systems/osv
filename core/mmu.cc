@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "mempool.hh"
 #include "processor.hh"
 #include "debug.hh"

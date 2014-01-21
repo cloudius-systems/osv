@@ -7,7 +7,7 @@
 
 #include "exceptions.hh"
 #include "dump.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "processor.hh"
 #include <osv/interrupt.hh>
 #include <boost/format.hpp>

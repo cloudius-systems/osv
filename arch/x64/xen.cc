@@ -7,7 +7,7 @@
 
 #include "xen.hh"
 #include "debug.hh"
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "processor.hh"
 #include "cpuid.hh"
 #include "exceptions.hh"

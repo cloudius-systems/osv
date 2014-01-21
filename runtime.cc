@@ -41,7 +41,7 @@
 #include "bsd/sys/sys/sysctl.h"
 #include <osv/power.hh>
 #include <sys/time.h>
-#include "mmu.hh"
+#include <osv/mmu.hh>
 #include "libc/libc.hh"
 #include <api/sys/times.h>
 #include <map>
