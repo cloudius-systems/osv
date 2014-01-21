@@ -11,7 +11,7 @@
 #include <osv/mmu.hh>
 #include "string.h"
 #include "cpuid.hh"
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #include "debug.hh"
 #include "xen.hh"
 #include "processor.hh"

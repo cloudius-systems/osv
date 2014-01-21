@@ -9,7 +9,7 @@
 #define ARCH_SWITCH_HH_
 
 #include "msr.hh"
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #include <string.h>
 
 extern "C" {

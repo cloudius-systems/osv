@@ -11,7 +11,7 @@
 #include <osv/mmu.hh>
 #include "string.h"
 #include "cpuid.hh"
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #include <osv/percpu.hh>
 #include <osv/pvclock-abi.hh>
 #include "prio.hh"

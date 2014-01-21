@@ -11,7 +11,7 @@
 #include <atomic>
 #include <memory>
 #include <functional>
-#include <barrier.hh>
+#include <osv/barrier.hh>
 
 // Read-copy-update implementation
 //

@@ -35,7 +35,7 @@
 #include "drivers/clockevent.hh"
 #include "drivers/console.hh"
 #include "drivers/pvpanic.hh"
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #include "arch.hh"
 #include "osv/trace.hh"
 #include <osv/power.hh>

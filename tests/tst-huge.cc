@@ -9,7 +9,7 @@
 #include <osv/sched.hh>
 #include "mempool.hh"
 #include <osv/mmu.hh>
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #endif
 
 #include <sys/mman.h>

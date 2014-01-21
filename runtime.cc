@@ -36,7 +36,7 @@
 #include "mempool.hh"
 #include <pwd.h>
 #include <fcntl.h>
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #include "smp.hh"
 #include "bsd/sys/sys/sysctl.h"
 #include <osv/power.hh>

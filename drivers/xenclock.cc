@@ -13,7 +13,7 @@
 #include <osv/mmu.hh>
 #include "string.h"
 #include "cpuid.hh"
-#include "barrier.hh"
+#include <osv/barrier.hh>
 #include "xen.hh"
 #include "debug.hh"
 #include "prio.hh"

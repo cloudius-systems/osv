@@ -8,7 +8,7 @@
 #include <osv/types.h>
 #include <osv/pvclock-abi.hh>
 #include "processor.hh"
-#include "barrier.hh"
+#include <osv/barrier.hh>
 
 namespace pvclock {
 
