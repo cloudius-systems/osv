@@ -24,7 +24,7 @@
 #include <bsd/porting/route.h>
 
 #include <debug.hh>
-#include <dhcp.hh>
+#include <osv/dhcp.hh>
 #include <drivers/clock.hh>
 
 namespace osv {

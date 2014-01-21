@@ -42,7 +42,7 @@
 #include <osv/rcu.hh>
 #include "mempool.hh"
 #include <bsd/porting/networking.hh>
-#include "dhcp.hh"
+#include <osv/dhcp.hh>
 #include <osv/version.h>
 #include <osv/run.hh>
 #include <osv/shutdown.hh>
