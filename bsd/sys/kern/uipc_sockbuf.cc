@@ -153,13 +153,24 @@ sbwait(socket* so, struct sockbuf *sb)
 	    tmr.set(std::chrono::nanoseconds(ticks2ns(sb->sb_timeo)));
 	}
 	signal_catcher sc;
-	sched::thread::wait_for(so->so_mtx->_mutex, sb->sb_cc_wq, tmr, sc);
+	if (so->so_nc && !so->so_nc_busy) {
+		so->so_nc_busy = true;
+		sched::thread::wait_for(so->so_mtx->_mutex, *so->so_nc, sb->sb_cc_wq, tmr, sc);
+		so->so_nc_busy = false;
+		so->so_nc_wq.wake_all(so->so_mtx->_mutex);
+	} else {
+		sched::thread::wait_for(so->so_mtx->_mutex, so->so_nc_wq, sb->sb_cc_wq, tmr, sc);
+	}
 	if (sc.interrupted()) {
 		return EINTR;
 	}
 	if (tmr.expired()) {
 		return EWOULDBLOCK;
 	}
+	if (so->so_nc) {
+		so->so_nc->process_queue();
+	}
+
 	return 0;
 }
 

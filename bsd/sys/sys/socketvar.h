@@ -42,6 +42,7 @@
 #ifdef _KERNEL
 #include <bsd/sys/sys/sockopt.h>
 #endif
+#include <osv/net_channel.hh>
 
 struct vnet;
 
@@ -120,6 +121,10 @@ struct socket {
 	 */
 	int so_fibnum;		/* routing domain for this socket */
 	uint32_t so_user_cookie;
+	net_channel* so_nc = nullptr;
+	// a net channel only supports one consumer, so let others wait on a waitqueue instead
+	bool so_nc_busy = false;
+	waitqueue so_nc_wq;
 	/* FIXME: this is done for poll,
 	 * make sure there's only 1 ref to a fp */
 	struct file* fp;
