@@ -25,23 +25,24 @@ def cleanups():
     stty_restore()
 
 def set_imgargs(options):
-    if (not options.execute):
+    execute = options.execute
+    if (not execute):
         with open ("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
-            options.execute = cmdline.read()
+            execute = cmdline.read()
     if (options.verbose):
-        options.execute = "--verbose " + options.execute
+        execute = "--verbose " + execute
 
     if options.jvm_debug or options.jvm_suspend:
-        if '-agentlib:jdwp' in options.execute:
+        if '-agentlib:jdwp' in execute:
             raise Exception('The command line already has debugger options')
-        if not 'java.so' in options.execute:
+        if not 'java.so' in execute:
             raise Exception('java.so is not part of the command line')
 
         debug_options = '-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=5005' % \
             ('n', 'y')[options.jvm_suspend]
-        options.execute = options.execute.replace('java.so', 'java.so ' + debug_options)
+        execute = execute.replace('java.so', 'java.so ' + debug_options)
 
-    args = ["setargs", options.image_file, options.execute]
+    args = ["setargs", options.image_file, execute]
     subprocess.call(["scripts/imgedit.py"] + args)
 
 def is_direct_io_supported(path):
