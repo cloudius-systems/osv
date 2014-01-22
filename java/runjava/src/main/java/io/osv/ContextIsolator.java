@@ -98,7 +98,7 @@ public class ContextIsolator {
     }
 
     public Context run(String[] args) throws Throwable {
-        ArrayList<String> classpath = new ArrayList<String>();
+        ArrayList<String> classpath = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-jar")) {
                 if (i + 1 >= args.length) {
@@ -130,22 +130,22 @@ public class ContextIsolator {
         throw new IllegalArgumentException("No jar or class specified to run.");
     }
 
-    private Context runJar(String jarname, String[] args, ArrayList<String> classpath) throws Throwable {
-        File jarfile = new File(jarname);
+    private Context runJar(String jarName, String[] args, ArrayList<String> classpath) throws Throwable {
+        File jarFile = new File(jarName);
         try {
-            JarFile jar = new JarFile(jarfile);
+            JarFile jar = new JarFile(jarFile);
             Manifest mf = jar.getManifest();
             jar.close();
             String mainClass = mf.getMainAttributes().getValue("Main-Class");
             if (mainClass == null) {
-                throw new IllegalArgumentException("No 'Main-Class' attribute in manifest of " + jarname);
+                throw new IllegalArgumentException("No 'Main-Class' attribute in manifest of " + jarName);
             }
-            classpath.add(jarname);
+            classpath.add(jarName);
             return runClass(mainClass, args, classpath);
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("File not found: " + jarname);
+            throw new IllegalArgumentException("File not found: " + jarName);
         } catch (ZipException e) {
-            throw new IllegalArgumentException("File is not a jar: " + jarname);
+            throw new IllegalArgumentException("File is not a jar: " + jarName);
         }
     }
 
@@ -176,7 +176,7 @@ public class ContextIsolator {
     }
 
     private static List<URL> toUrls(Iterable<String> classpath) throws MalformedURLException {
-        ArrayList<URL> urls = new ArrayList<URL>();
+        ArrayList<URL> urls = new ArrayList<>();
         for (String path : classpath) {
             urls.add(toUrl(path));
         }
@@ -235,7 +235,7 @@ public class ContextIsolator {
     // where "dir/*" adds to the classpath all jar files in the given
     // directory.
     static Iterable<String> expandClassPath(String classpath) {
-        ArrayList<String> ret = new ArrayList<String>();
+        ArrayList<String> ret = new ArrayList<>();
         for (String component : classpath.split(":")) {
             if (component.endsWith("/*")) {
                 File dir = new File(
