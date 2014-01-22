@@ -1916,6 +1916,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				thflags &= ~TH_SYN;
 			} else {
 				tp->t_state = TCPS_ESTABLISHED;
+				tcp_setup_net_channel(tp, m->M_dat.MH.MH_pkthdr.rcvif);
 				cc_conn_init(tp);
 				tcp_timer_activate(tp, TT_KEEP,
 				    TP_KEEPIDLE(tp));
@@ -2321,6 +2322,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			tp->t_flags &= ~TF_NEEDFIN;
 		} else {
 			tp->t_state = TCPS_ESTABLISHED;
+			tcp_setup_net_channel(tp, m->M_dat.MH.MH_pkthdr.rcvif);
 			cc_conn_init(tp);
 			tcp_timer_activate(tp, TT_KEEP, TP_KEEPIDLE(tp));
 		}
@@ -2884,6 +2886,7 @@ dodata:							/* XXX */
 			tp->t_starttime = bsd_ticks;
 			/* FALLTHROUGH */
 		case TCPS_ESTABLISHED:
+			tcp_teardown_net_channel(tp);
 			tp->t_state = TCPS_CLOSE_WAIT;
 			break;
 
@@ -3620,4 +3623,39 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 	else
 		tp->snd_cwnd = 0;
 	tp->snd_cwnd += tp->t_maxseg;
+}
+
+// INP_LOCK held
+static void
+tcp_net_channel_packet(tcpcb* tp, mbuf* m)
+{
+}
+
+static ipv4_tcp_conn_id tcp_connection_id(tcpcb* tp)
+{
+	auto& conn = tp->t_inpcb->inp_inc.inc_ie;
+	return {
+		conn.ie_dependfaddr.ie46_foreign.ia46_addr4,
+		conn.ie_dependladdr.ie46_local.ia46_addr4,
+		ntohs(conn.ie_fport),
+		ntohs(conn.ie_lport)
+	};
+}
+
+void
+tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf)
+{
+	auto nc = new net_channel([=] (mbuf *m) { tcp_net_channel_packet(tp, m); });
+	tp->nc = nc;
+	tp->nc_intf = intf;
+	intf->add_net_channel(nc, tcp_connection_id(tp));
+	tp->t_inpcb->inp_socket->so_nc = nc;
+}
+
+void
+tcp_teardown_net_channel(tcpcb* tp)
+{
+	if (tp->nc_intf) {
+		tp->nc_intf->del_net_channel(tcp_connection_id(tp));
+	}
 }

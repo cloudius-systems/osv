@@ -101,6 +101,8 @@ do {								\
 #define ND6_HINT(tp)
 #endif
 
+struct net_channel;
+
 /*
  * Tcp control block, one per tcp; fields:
  * Organized for 16 byte cacheline efficiency.
@@ -213,6 +215,9 @@ struct tcpcb {
 	u_int	t_keepidle;		/* time before keepalive probes begin */
 	u_int	t_keepintvl;		/* interval between keepalives */
 	u_int	t_keepcnt;		/* number of keepalives before close */
+
+	net_channel* nc;
+	struct ifnet* nc_intf;
 
 	uint32_t t_ispare[8];		/* 5 UTO, 3 TBD */
 	void	*t_pspare2[4];		/* 4 TBD */
@@ -678,6 +683,8 @@ void	 tcp_reass_flush(struct tcpcb *);
 void	 tcp_reass_destroy(void);
 #endif
 void	 tcp_input(struct mbuf *, int);
+void	 tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf);
+void	 tcp_teardown_net_channel(tcpcb* tp);
 u_long	 tcp_maxmtu(struct in_conninfo *, int *);
 u_long	 tcp_maxmtu6(struct in_conninfo *, int *);
 void	 tcp_mss_update(struct tcpcb *, int, int, struct hc_metrics_lite *,

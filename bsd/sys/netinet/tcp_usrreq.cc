@@ -947,6 +947,7 @@ tcp_usr_close(struct socket *so)
 	if (!(inp->inp_flags & INP_TIMEWAIT) &&
 	    !(inp->inp_flags & INP_DROPPED)) {
 		tp = intotcpcb(inp);
+		tcp_teardown_net_channel(tp);
 		TCPDEBUG1();
 		tcp_disconnect(tp);
 		TCPDEBUG2(PRU_CLOSE);
@@ -1684,6 +1685,7 @@ tcp_usrclosed(struct tcpcb *tp)
 		break;
 
 	case TCPS_ESTABLISHED:
+		tcp_teardown_net_channel(tp);
 		tp->t_state = TCPS_FIN_WAIT_1;
 		break;
 
