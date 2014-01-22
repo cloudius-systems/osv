@@ -39,7 +39,7 @@ $(TARGET).so: $(OBJ_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET).so $^, LINK $@)
 
 autogen/%.cc: ../api/listings/%
-	$(call very-quiet,./json2code.py -f $< -ns json)
+	$(call quiet,./json2code.py -f $< -ns json, GEN $@)
 
 obj/%.o: %.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $@)
