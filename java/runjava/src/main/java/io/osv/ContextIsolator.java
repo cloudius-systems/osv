@@ -241,7 +241,11 @@ public class ContextIsolator {
                 File dir = new File(
                         component.substring(0, component.length() - 2));
                 if (dir.isDirectory()) {
-                    for (File file : dir.listFiles()) {
+                    File[] files = dir.listFiles();
+                    if (files == null) {
+                        continue;
+                    }
+                    for (File file : files) {
                         String filename = file.getPath();
                         if (filename.endsWith(".jar")) {
                             ret.add(filename);
