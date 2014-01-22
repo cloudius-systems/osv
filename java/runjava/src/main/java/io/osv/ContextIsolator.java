@@ -4,7 +4,6 @@ import io.osv.jul.IsolatingLogManager;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -122,13 +121,6 @@ public class ContextIsolator {
                 String key = args[i].substring(2, eq);
                 String value = args[i].substring(eq + 1, args[i].length());
                 System.setProperty(key, value);
-            } else if (args[i].equals("-Xclassloader")) {
-                // Non-standard try - use a different class loader.
-                if (i + 1 >= args.length) {
-                    throw new IllegalArgumentException("Missing parameter after '" + args[i] + "'");
-                }
-                Xclassloader = args[i + 1];
-                i++;
             } else if (!args[i].startsWith("-")) {
                 return runClass(args[i], java.util.Arrays.copyOfRange(args, i + 1, args.length), classpath);
             } else {
@@ -180,7 +172,7 @@ public class ContextIsolator {
         }
 
         URL[] urlArray = urls.toArray(new URL[urls.size()]);
-        return createAppClassLoader(urlArray, parent);
+        return new URLClassLoader(urlArray, parent);
     }
 
     private static List<URL> toUrls(Iterable<String> classpath) throws MalformedURLException {
@@ -209,23 +201,6 @@ public class ContextIsolator {
         }
 
         return (OsvSystemClassLoader) systemClassLoader;
-    }
-
-    static String Xclassloader = null;
-
-    private static URLClassLoader createAppClassLoader(URL[] urls, ClassLoader parent) {
-        if (Xclassloader == null) {
-            return new URLClassLoader(urls, parent);
-        } else {
-            try {
-                Class<?> classloader = loadClass(Xclassloader);
-                Constructor<?> c = classloader.getConstructor(URL[].class, ClassLoader.class);
-                return (URLClassLoader) c.newInstance(urls, parent);
-            } catch (Throwable e) {
-                e.printStackTrace();
-                return new URLClassLoader(urls, parent);
-            }
-        }
     }
 
     private static void updateClassPathProperty(Iterable<String> classpath) {
