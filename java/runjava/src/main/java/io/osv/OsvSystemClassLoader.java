@@ -53,9 +53,12 @@ public class OsvSystemClassLoader extends ClassLoader {
         return method;
     }
 
+    private Context getContext() {
+        return ContextIsolator.getInstance().getContext();
+    }
+
     private ClassLoader getDelegate() {
-        ContextIsolator isolator = ContextIsolator.getInstance();
-        ClassLoader classLoader = isolator.getContext().getSystemClassLoader();
+        ClassLoader classLoader = getContext().getSystemClassLoader();
         if (classLoader != null && classLoader != this) {
             return classLoader;
         }
@@ -174,5 +177,10 @@ public class OsvSystemClassLoader extends ClassLoader {
             }
             throw new RuntimeException(e);
         }
+    }
+
+    @SuppressWarnings("UnusedDeclaration")
+    public String getClasspath() {
+        return getContext().getProperty("java.class.path");
     }
 }
