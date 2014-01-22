@@ -30,6 +30,17 @@ def set_imgargs(options):
             options.execute = cmdline.read()
     if (options.verbose):
         options.execute = "--verbose " + options.execute
+
+    if options.jvm_debug or options.jvm_suspend:
+        if '-agentlib:jdwp' in options.execute:
+            raise Exception('The command line already has debugger options')
+        if not 'java.so' in options.execute:
+            raise Exception('java.so is not part of the command line')
+
+        debug_options = '-agentlib:jdwp=transport=dt_socket,server=y,suspend=%s,address=5005' % \
+            ('n', 'y')[options.jvm_suspend]
+        options.execute = options.execute.replace('java.so', 'java.so ' + debug_options)
+
     args = ["setargs", options.image_file, options.execute]
     subprocess.call(["scripts/imgedit.py"] + args)
 
@@ -262,6 +273,10 @@ if (__name__ == "__main__"):
                         help="pass --verbose to OSv, to display more debugging information on the console")
     parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
                         help = "add network forwarding RULE (QEMU syntax)")
+    parser.add_argument("--jvm-debug", action="store_true",
+                        help = "start JVM with a debugger server")
+    parser.add_argument("--jvm-suspend", action="store_true",
+                        help = "start JVM with a suspended debugger server")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
