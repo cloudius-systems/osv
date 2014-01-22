@@ -510,7 +510,7 @@ public:
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        huge_pages.push(phys_to_virt(pte.addr(false)));
+        huge_pages.push(phys_to_virt(pte.addr(true)));
 
         this->account(mmu::huge_page_size);
         return true;
