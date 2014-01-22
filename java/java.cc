@@ -127,25 +127,25 @@ int main(int argc, char **argv)
     auto JNI_CreateJavaVM
         = prog->lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
     if (!JNI_CreateJavaVM) {
-        debug("java.so: failed looking up JNI_CreateJavaVM()\n");
+        std::cerr << "java.so: failed looking up JNI_CreateJavaVM()\n";
         return 1;
     }
 
     JavaVM* jvm = nullptr;
     JNIEnv *env;
     if (JNI_CreateJavaVM(&jvm, &env, &vm_args) != 0) {
-        debug("java.so: Can't create VM.\n");
+        std::cerr << "java.so: Can't create VM.\n";
         return 1;
     }
     auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
-        debug("java.so: Can't find class %s in %s.\n", RUNJAVA, RUNJAVA_PATH);
+        std::cerr << "java.so: Can't find class " << RUNJAVA << " in " << RUNJAVA_PATH << ".\n";
         return 1;
     }
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
     if (!mainmethod) {
-        debug("java.so: Can't find main() in class %s.\n", RUNJAVA);
+        std::cerr << "java.so: Can't find main() in class " << RUNJAVA << ".\n";
         return 1;
     }
 
