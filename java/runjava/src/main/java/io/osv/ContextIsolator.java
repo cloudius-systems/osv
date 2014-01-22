@@ -84,7 +84,7 @@ public class ContextIsolator {
         return run(ClassLoader.getSystemClassLoader(), process);
     }
 
-    public void runSync(String[] args) throws Throwable {
+    public void runSync(String... args) throws Throwable {
         Context context = run(args);
 
         while (true) {
@@ -97,7 +97,7 @@ public class ContextIsolator {
         }
     }
 
-    public Context run(String[] args) throws Throwable {
+    public Context run(String... args) throws Throwable {
         ArrayList<String> classpath = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-jar")) {
