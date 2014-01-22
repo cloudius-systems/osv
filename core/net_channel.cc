@@ -13,6 +13,20 @@
 #include <bsd/sys/netinet/tcp.h>
 #include <bsd/sys/net/ethernet.h>
 
+#include <osv/debug.hh>
+
+std::ostream& operator<<(std::ostream& os, in_addr ia)
+{
+    auto x = ntohl(ia.s_addr);
+    return osv::fprintf(os, "%d.%d.%d.%d",
+            (x >> 24) & 255, (x >> 16) & 255, (x >> 8) & 255, x & 255);
+}
+
+std::ostream& operator<<(std::ostream& os, ipv4_tcp_conn_id id)
+{
+    return osv::fprintf(os, "{ ipv4 %s:%d -> %s:%d }", id.src_addr, id.src_port, id.dst_addr, id.dst_port);
+}
+
 void net_channel::process_queue()
 {
     mbuf* m;
