@@ -51,20 +51,21 @@ public class ContextIsolator {
         return currentContext.get();
     }
 
-    public Context run(final ClassLoader classLoader, final SandBoxedProcess process) throws Throwable {
+    private Context run(ClassLoader classLoader, final String classpath, final String mainClass, final String[] args) {
         final Context context = new Context(classLoader);
 
         Thread thread = new Thread() {
             @Override
             public void run() {
                 currentContext.set(context);
+                System.setProperty("java.class.path", classpath);
 
                 try {
-                    process.run();
+                    runMain(loadClass(mainClass), args);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                } catch (Throwable throwable) {
-                    getUncaughtExceptionHandler().uncaughtException(this, throwable);
+                } catch (Throwable e) {
+                    getUncaughtExceptionHandler().uncaughtException(this, e);
                 }
             }
         };
@@ -78,10 +79,6 @@ public class ContextIsolator {
         });
         thread.start();
         return context;
-    }
-
-    public Context run(SandBoxedProcess process) throws Throwable {
-        return run(ClassLoader.getSystemClassLoader(), process);
     }
 
     public void runSync(String... args) throws Throwable {
@@ -149,17 +146,10 @@ public class ContextIsolator {
         }
     }
 
-    private Context runClass(final String mainClass, final String[] args, final Iterable<String> classpath) throws Throwable {
+    private Context runClass(final String mainClass, final String[] args, Iterable<String> classpath) throws MalformedURLException {
         OsvSystemClassLoader osvClassLoader = getOsvClassLoader();
         ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getParent());
-
-        return run(appClassLoader, new SandBoxedProcess() {
-            @Override
-            public void run() throws Throwable {
-                updateClassPathProperty(classpath);
-                runMain(loadClass(mainClass), args);
-            }
-        });
+        return run(appClassLoader, joinClassPath(classpath), mainClass, args);
     }
 
     private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
@@ -203,7 +193,7 @@ public class ContextIsolator {
         return (OsvSystemClassLoader) systemClassLoader;
     }
 
-    private static void updateClassPathProperty(Iterable<String> classpath) {
+    private static String joinClassPath(Iterable<String> classpath) {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
         for (String path : classpath) {
@@ -213,7 +203,7 @@ public class ContextIsolator {
             first = false;
             sb.append(path);
         }
-        System.setProperty("java.class.path", sb.toString());
+        return sb.toString();
     }
 
     private static URL toUrl(String path) throws MalformedURLException {
