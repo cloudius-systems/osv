@@ -1232,6 +1232,9 @@ soreceive_generic(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 		return (error);
 
 restart:
+	if (so->so_nc) {
+		so->so_nc->process_queue();
+	}
 	m = so->so_rcv.sb_mb;
 	/*
 	 * If we have less data than requested, block awaiting more (subject
