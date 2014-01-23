@@ -145,7 +145,7 @@ def add_path(f, path, details):
         vals = path.split("{")
         vals.reverse()
         fprint(f, spacing, 'path_description::add_path("', clear_path_ending(vals.pop()),
-           '",', details.method, ',"', details["nickname"], '")')
+           '",', details["method"], ',"', details["nickname"], '")')
         while vals:
             param = clean_param(vals.pop())
             param_type = get_parameter_by_name(details, param)
