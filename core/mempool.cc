@@ -836,8 +836,7 @@ static void* early_alloc_page()
 {
     WITH_LOCK(free_page_ranges_lock) {
         if (free_page_ranges.empty()) {
-            debug("alloc_page(): out of memory\n");
-            abort();
+            abort("alloc_page(): out of memory\n");
         }
 
         auto p = &*free_page_ranges.begin();
