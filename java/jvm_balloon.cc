@@ -34,6 +34,7 @@ public:
     size_t size() { return _balloon_size; }
     size_t move_balloon(unsigned char *dest, unsigned char *src);
 private:
+    void conciliate(unsigned char *addr);
     unsigned char *_jvm_addr;
     unsigned char *_addr;
     unsigned char *_jvm_end_addr;
@@ -72,18 +73,23 @@ static ssize_t recent_jvm_heap()
     return curr - last_jvm_heap_memory.exchange(curr);
 }
 
-ulong balloon::empty_area()
+void balloon::conciliate(unsigned char *addr)
 {
+    _jvm_addr = addr;
     _jvm_end_addr = _jvm_addr + _balloon_size;
     _addr = align_up(_jvm_addr, _alignment);
     _end = align_down(_jvm_end_addr, _alignment);
+}
 
+ulong balloon::empty_area()
+{
     return mmu::map_jvm(_addr, hole_size(), this);
 }
 
 balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::huge_page_size, size_t size = balloon_size)
     : _jvm_addr(jvm_addr), _jref(jref), _alignment(alignment), _balloon_size(size)
 {
+    conciliate(_jvm_addr);
     assert(mutex_owned(&balloons_lock));
     balloons.push_back(this);
 }
