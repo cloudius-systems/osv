@@ -1075,18 +1075,17 @@ error jvm_balloon_vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
-void jvm_balloon_vma::fault(uintptr_t addr, exception_frame *ef)
+void jvm_balloon_vma::fault(uintptr_t fault_addr, exception_frame *ef)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
-    // Could block the creation of the next vma. No need to evacuate, we have no pages
-    vma_list.erase(*this);
-    jvm_balloon_fault(_balloon, ef);
-    // We now delete manually, since we've already erased it manually.
-    delete this;
+    jvm_balloon_fault(_balloon, ef, this);
 }
 
 jvm_balloon_vma::~jvm_balloon_vma()
 {
+    // Could block the creation of the next vma. No need to evacuate, we have no pages
+    vma_list.erase(*this);
+    mmu::map_anon(addr(), size(), _real_flags, _real_perm);
 }
 
 // This function marks an anonymous vma as holding the JVM Heap. The JVM may

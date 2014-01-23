@@ -2,7 +2,6 @@
 #include <sys/mman.h>
 #include <jni.h>
 #include <api/assert.h>
-#include <osv/mmu.hh>
 #include <osv/align.hh>
 #include <exceptions.hh>
 #include <memcpy_decode.hh>
@@ -10,6 +9,7 @@
 #include <osv/trace.hh>
 #include "jvm_balloon.hh"
 #include <osv/debug.hh>
+#include <unordered_map>
 
 TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p", const unsigned char *, const unsigned char *);
 
@@ -20,9 +20,6 @@ TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p", const unsigned char *, con
 // back to the JVM, since we don't need to search the list of balloons until
 // we find a balloon of the desired size: any will do.
 constexpr size_t balloon_size = (128ULL << 20);
-
-static constexpr unsigned flags = mmu::mmap_fixed | mmu::mmap_uninitialized | mmu::mmap_jvm_heap;
-static constexpr unsigned perms = mmu::perm_read | mmu::perm_write;
 
 class balloon {
 public:
@@ -48,6 +45,7 @@ private:
 
 mutex balloons_lock;
 std::list<balloon *> balloons;
+std::unordered_map<unsigned char *, unsigned char *> balloon_candidates;
 
 // We will use the following two statistics to aid our decision about whether
 // or not we should balloon. They allow us to make informed decisions about what
@@ -104,27 +102,44 @@ void balloon::release(JNIEnv *env)
 {
     assert(mutex_owned(&balloons_lock));
 
-    mmu::map_anon(_addr, hole_size(), flags, perms);
+    // No need to remap. Will happen automatically when JVM touches it again
     env->DeleteGlobalRef(_jref);
     balloons.remove(this);
 }
 
 size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
 {
+    // It could be that the other balloon candidates are still in flight.
+    // But if we are copying from this source, this has to be a balloon and
+    // we need to conciliate here to be able to correctly calculate the skipped
+    // portion.
+    if (src != _addr) {
+        auto candidate = balloon_candidates.find(src);
+        assert(candidate != balloon_candidates.end());
+        conciliate((*candidate).second);
+    }
+
     size_t skipped = _addr - _jvm_addr;
     assert(mutex_owned(&balloons_lock));
 
-    _jvm_addr = dest - skipped;
+    // We need to calculate how many bytes we will skip if this were the new
+    // balloon, but we won't touch the mappings yet. That will be done at conciliation
+    // time when we're sure of it.
+    auto candidate_jvm_addr = dest - skipped;
+    auto candidate_jvm_end_addr = candidate_jvm_addr + _balloon_size;
+    auto candidate_addr = align_up(candidate_jvm_addr, _alignment);
+    auto candidate_end = align_down(candidate_jvm_end_addr, _alignment);
 
-    // We re-map the area first. Since we won't fault in any pages there unless
-    // touched, we need not to worry about memory shortages. It is simpler to
-    // do this rather than the other way around because then in case part of
-    // the new balloon falls within this area, the vma->split() code will take
-    // care of arrange things for us. Note that this area will be always marked
-    // as a jvm heap address.
-    mmu::map_anon(_addr, hole_size(), flags, perms);
-    empty_area();
-    return _jvm_end_addr - dest;
+    balloon_candidates.insert(std::make_pair(candidate_addr, candidate_jvm_addr));
+    mmu::map_jvm(candidate_addr, candidate_end - candidate_addr, this);
+    return candidate_jvm_end_addr - dest;
+}
+
+void finish_move(mmu::jvm_balloon_vma *vma)
+{
+    unsigned char *addr = static_cast<unsigned char *>(vma->addr());
+    delete vma;
+    balloon_candidates.erase(addr);
 }
 
 // We can either be called from a java thread, or from the shrinking code in OSv.
@@ -271,14 +286,22 @@ size_t jvm_balloon_shrinker::release_memory(size_t size)
 // part.  That means copying the part that comes before the balloon, playing
 // with the maps for the balloon itself, and then finish copying the part that
 // comes after the balloon.
-void jvm_balloon_fault(balloon *b, exception_frame *ef)
+void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
 
     WITH_LOCK(balloons_lock) {
         assert(!balloons.empty());
 
+        if (ef->error_code == mmu::page_fault_write) {
+            finish_move(vma);
+            return;
+        }
+
         memcpy_decoder *decode = memcpy_find_decoder(ef);
-        assert(decode);
+        if (!decode) {
+            finish_move(vma);
+            return;
+        }
 
         unsigned char *dest = memcpy_decoder::dest(ef);
         unsigned char *src = memcpy_decoder::src(ef);
