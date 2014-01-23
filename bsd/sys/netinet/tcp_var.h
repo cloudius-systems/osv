@@ -683,6 +683,7 @@ void	 tcp_reass_flush(struct tcpcb *);
 void	 tcp_reass_destroy(void);
 #endif
 void	 tcp_input(struct mbuf *, int);
+void	 tcp_flush_net_channel(tcpcb* tp);
 void	 tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf);
 void	 tcp_teardown_net_channel(tcpcb* tp);
 u_long	 tcp_maxmtu(struct in_conninfo *, int *);

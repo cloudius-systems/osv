@@ -3676,3 +3676,12 @@ tcp_teardown_net_channel(tcpcb* tp)
 		tp->nc_intf->del_net_channel(tcp_connection_id(tp));
 	}
 }
+
+void
+tcp_flush_net_channel(tcpcb *tp)
+{
+	auto nc = tp->nc;
+	if (nc) {
+		nc->process_queue();
+	}
+}

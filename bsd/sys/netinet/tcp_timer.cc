@@ -178,6 +178,7 @@ tcp_timer_delack(void *xtp)
 		return;
 	}
 	INP_LOCK(inp);
+	tcp_flush_net_channel(tp);
 	if (callout_pending(&tp->t_timers->tt_delack) ||
 	    !callout_active(&tp->t_timers->tt_delack)) {
 		INP_UNLOCK(inp);
@@ -409,6 +410,7 @@ tcp_timer_persist(void *xtp)
 		return;
 	}
 	INP_LOCK(inp);
+	tcp_flush_net_channel(tp);
 	if (callout_pending(&tp->t_timers->tt_persist) ||
 	    !callout_active(&tp->t_timers->tt_persist)) {
 		INP_UNLOCK(inp);
@@ -487,6 +489,7 @@ tcp_timer_rexmt(void * xtp)
 		return;
 	}
 	INP_LOCK(inp);
+	tcp_flush_net_channel(tp);
 	if (callout_pending(&tp->t_timers->tt_rexmt) ||
 	    !callout_active(&tp->t_timers->tt_rexmt)) {
 		INP_UNLOCK(inp);
