@@ -85,7 +85,7 @@ balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::hug
     : _jvm_addr(jvm_addr), _jref(jref), _alignment(alignment), _balloon_size(size)
 {
     assert(mutex_owned(&balloons_lock));
-    balloons.push_front(this);
+    balloons.push_back(this);
 }
 
 // Giving memory back to the JVM only means deleting the reference.  Without
