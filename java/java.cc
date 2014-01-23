@@ -137,9 +137,16 @@ int main(int argc, char **argv)
         std::cerr << "java.so: Can't create VM.\n";
         return 1;
     }
+
     auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
-        std::cerr << "java.so: Can't find class " << RUNJAVA << " in " << RUNJAVA_PATH << ".\n";
+        if (env->ExceptionOccurred()) {
+            std::cerr << "java.so: Failed to load " << RUNJAVA << "\n";
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+        } else {
+            std::cerr << "java.so: Can't find class " << RUNJAVA << " in " << RUNJAVA_PATH << ".\n";
+        }
         return 1;
     }
 
