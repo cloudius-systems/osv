@@ -992,6 +992,11 @@ unsigned vma::perm() const
     return _perm;
 }
 
+unsigned vma::flags() const
+{
+    return _flags;
+}
+
 void vma::update_flags(unsigned flag)
 {
     assert(mutex_owned(&vma_list_mutex));
@@ -1049,8 +1054,8 @@ void anon_vma::fault(uintptr_t addr, exception_frame *ef)
     }
 }
 
-jvm_balloon_vma::jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b)
-    : vma(addr_range(start, end), perm_rw, 0), _balloon(b)
+jvm_balloon_vma::jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags)
+    : vma(addr_range(start, end), perm_rw, 0), _balloon(b), _real_perm(perm), _real_flags(flags)
 {
 }
 
@@ -1060,7 +1065,7 @@ void jvm_balloon_vma::split(uintptr_t edge)
     if (edge <= _range.start() || edge >= end) {
         return;
     }
-    auto * n = new jvm_balloon_vma(edge, end, _balloon);
+    auto * n = new jvm_balloon_vma(edge, end, _balloon, _real_perm, _real_flags);
     _range = addr_range(_range.start(), edge);
     vma_list.insert(*n);
 }
@@ -1092,7 +1097,7 @@ jvm_balloon_vma::~jvm_balloon_vma()
 // previous anon vma that was in its place as holding the heap. That will work
 // most of the time and with most GC algos. If that is not sufficient, the
 // JVM will have to tell us about its regions itself.
-static void mark_jvm_heap(void* addr)
+static vma *mark_jvm_heap(void* addr)
 {
     WITH_LOCK(vma_list_mutex) {
         u64 a = reinterpret_cast<u64>(addr);
@@ -1107,6 +1112,8 @@ static void mark_jvm_heap(void* addr)
         }
 
         vma.update_flags(mmap_jvm_heap);
+
+        return &vma;
     }
 }
 
@@ -1114,9 +1121,9 @@ ulong map_jvm(void* addr, size_t size, balloon *b)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
 
-    mark_jvm_heap(addr);
+    vma *v = mark_jvm_heap(addr);
 
-    auto* vma = new mmu::jvm_balloon_vma(start, start + size, b);
+    auto* vma = new mmu::jvm_balloon_vma(start, start + size, b, v->perm(), v->flags());
     WITH_LOCK(vma_list_mutex) {
         auto ret = evacuate(start, start + size);
         vma_list.insert(*vma);

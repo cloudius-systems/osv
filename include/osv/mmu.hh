@@ -88,6 +88,7 @@ public:
     void* addr() const;
     uintptr_t size() const;
     unsigned perm() const;
+    unsigned flags() const;
     virtual void fault(uintptr_t addr, exception_frame *ef) = 0;
     virtual void split(uintptr_t edge) = 0;
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
@@ -139,13 +140,19 @@ private:
 
 class jvm_balloon_vma : public vma {
 public:
-    jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b);
+    jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags);
     virtual ~jvm_balloon_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
+    // The following two are the flags and permissions of the vma we were
+    // derived from
+    unsigned real_perm() { return _real_perm; }
+    unsigned real_flags() { return _real_flags; }
 private:
     balloon *_balloon;
+    unsigned _real_perm;
+    unsigned _real_flags;
 };
 
 void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
