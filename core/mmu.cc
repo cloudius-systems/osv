@@ -1050,7 +1050,7 @@ void anon_vma::fault(uintptr_t addr, exception_frame *ef)
 }
 
 jvm_balloon_vma::jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b)
-    : vma(addr_range(start, end), mmu::perm_read, 0), _balloon(b)
+    : vma(addr_range(start, end), perm_rw, 0), _balloon(b)
 {
 }
 
