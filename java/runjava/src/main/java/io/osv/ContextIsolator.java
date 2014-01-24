@@ -42,13 +42,19 @@ public class ContextIsolator {
     }
 
     private final InheritableThreadLocal<Context> currentContext = new InheritableThreadLocal<>();
+    private final ClassLoader parentClassLoaderForIsolates;
 
     public static ContextIsolator getInstance() {
         return instance;
     }
 
     public ContextIsolator() {
-        currentContext.set(new Context(ClassLoader.getSystemClassLoader(), System.getProperties()));
+        ClassLoader originalSystemClassLoader = getOsvClassLoader().getParent();
+
+        currentContext.set(new Context(originalSystemClassLoader, System.getProperties()));
+
+        parentClassLoaderForIsolates = new TeeClassLoader(
+                new FilteringClassLoader(originalSystemClassLoader, "io.osv."));
 
         installSystemPropertiesProxy();
     }
@@ -180,20 +186,12 @@ public class ContextIsolator {
     }
 
     private Context runClass(String mainClass, String[] args, Iterable<String> classpath, Properties properties) throws MalformedURLException {
-        OsvSystemClassLoader osvClassLoader = getOsvClassLoader();
-        ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getParent());
+        ClassLoader appClassLoader = getClassLoader(classpath, parentClassLoaderForIsolates);
         return run(appClassLoader, joinClassPath(classpath), mainClass, args, properties);
     }
 
     private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
         List<URL> urls = toUrls(classpath);
-
-        // If no classpath was specified, don't touch the classloader at
-        // all, so we just inherit the one used to run us.
-        if (urls.isEmpty()) {
-            return parent;
-        }
-
         URL[] urlArray = urls.toArray(new URL[urls.size()]);
         return new URLClassLoader(urlArray, parent);
     }
