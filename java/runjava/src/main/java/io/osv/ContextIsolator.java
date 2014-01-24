@@ -114,6 +114,7 @@ public class ContextIsolator {
                 e.printStackTrace();
             }
         });
+        thread.setContextClassLoader(classLoader);
         thread.start();
         return context;
     }
