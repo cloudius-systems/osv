@@ -1,9 +1,12 @@
 package io.osv;
 
 import io.osv.jul.IsolatingLogManager;
+import net.sf.cglib.proxy.Dispatcher;
+import net.sf.cglib.proxy.Enhancer;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -11,6 +14,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 import java.util.logging.LogManager;
@@ -44,21 +48,48 @@ public class ContextIsolator {
     }
 
     public ContextIsolator() {
-        currentContext.set(new Context(ClassLoader.getSystemClassLoader()));
+        currentContext.set(new Context(ClassLoader.getSystemClassLoader(), System.getProperties()));
+
+        installSystemPropertiesProxy();
+    }
+
+    private static void installSystemPropertiesProxy() {
+        Enhancer enhancer = new Enhancer();
+        enhancer.setSuperclass(Properties.class);
+        enhancer.setCallback(new Dispatcher() {
+            @Override
+            public Object loadObject() throws Exception {
+                return instance.getContext().getProperties();
+            }
+        });
+        Properties contextAwareProperties = (Properties) enhancer.create();
+
+        try {
+            Field props = System.class.getDeclaredField("props");
+            props.setAccessible(true);
+            props.set(System.class, contextAwareProperties);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new AssertionError("Unable to override System.props", e);
+        }
     }
 
     public Context getContext() {
         return currentContext.get();
     }
 
-    private Context run(ClassLoader classLoader, final String classpath, final String mainClass, final String[] args) {
-        final Context context = new Context(classLoader);
+    private Context run(ClassLoader classLoader, final String classpath, final String mainClass,
+                        final String[] args, final Properties properties) {
+        Properties contextProperties = new Properties();
+        contextProperties.putAll(System.getProperties());
+        contextProperties.putAll(properties);
+
+        final Context context = new Context(classLoader, contextProperties);
 
         Thread thread = new Thread() {
             @Override
             public void run() {
                 currentContext.set(context);
-                System.setProperty("java.class.path", classpath);
+                context.setProperty("java.class.path", classpath);
 
                 try {
                     runMain(loadClass(mainClass), args);
@@ -95,13 +126,15 @@ public class ContextIsolator {
     }
 
     public Context run(String... args) throws Throwable {
+        Properties properties = new Properties();
+
         ArrayList<String> classpath = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-jar")) {
                 if (i + 1 >= args.length) {
                     throw new IllegalArgumentException("Missing jar name after '-jar'.");
                 }
-                return runJar(args[i + 1], java.util.Arrays.copyOfRange(args, i + 2, args.length), classpath);
+                return runJar(args[i + 1], java.util.Arrays.copyOfRange(args, i + 2, args.length), classpath, properties);
             } else if (args[i].equals("-classpath") || args[i].equals("-cp")) {
                 if (i + 1 >= args.length) {
                     throw new IllegalArgumentException("Missing parameter after '" + args[i] + "'");
@@ -117,9 +150,9 @@ public class ContextIsolator {
                 }
                 String key = args[i].substring(2, eq);
                 String value = args[i].substring(eq + 1, args[i].length());
-                System.setProperty(key, value);
+                properties.put(key, value);
             } else if (!args[i].startsWith("-")) {
-                return runClass(args[i], java.util.Arrays.copyOfRange(args, i + 1, args.length), classpath);
+                return runClass(args[i], java.util.Arrays.copyOfRange(args, i + 1, args.length), classpath, properties);
             } else {
                 throw new IllegalArgumentException("Unknown parameter '" + args[i] + "'");
             }
@@ -127,7 +160,7 @@ public class ContextIsolator {
         throw new IllegalArgumentException("No jar or class specified to run.");
     }
 
-    private Context runJar(String jarName, String[] args, ArrayList<String> classpath) throws Throwable {
+    private Context runJar(String jarName, String[] args, ArrayList<String> classpath, Properties properties) throws Throwable {
         File jarFile = new File(jarName);
         try {
             JarFile jar = new JarFile(jarFile);
@@ -138,7 +171,7 @@ public class ContextIsolator {
                 throw new IllegalArgumentException("No 'Main-Class' attribute in manifest of " + jarName);
             }
             classpath.add(jarName);
-            return runClass(mainClass, args, classpath);
+            return runClass(mainClass, args, classpath, properties);
         } catch (FileNotFoundException e) {
             throw new IllegalArgumentException("File not found: " + jarName);
         } catch (ZipException e) {
@@ -146,10 +179,10 @@ public class ContextIsolator {
         }
     }
 
-    private Context runClass(final String mainClass, final String[] args, Iterable<String> classpath) throws MalformedURLException {
+    private Context runClass(String mainClass, String[] args, Iterable<String> classpath, Properties properties) throws MalformedURLException {
         OsvSystemClassLoader osvClassLoader = getOsvClassLoader();
         ClassLoader appClassLoader = getClassLoader(classpath, osvClassLoader.getParent());
-        return run(appClassLoader, joinClassPath(classpath), mainClass, args);
+        return run(appClassLoader, joinClassPath(classpath), mainClass, args, properties);
     }
 
     private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {

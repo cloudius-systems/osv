@@ -3,6 +3,7 @@ package io.osv;
 import io.osv.jul.LogManagerWrapper;
 import io.osv.util.LazilyInitialized;
 
+import java.util.Properties;
 import java.util.concurrent.Callable;
 
 /*
@@ -22,10 +23,13 @@ public final class Context {
                 }
             });
 
+    private final Properties properties;
+
     private Thread mainThread;
 
-    public Context(ClassLoader systemClassLoader) {
+    public Context(ClassLoader systemClassLoader, Properties properties) {
         this.systemClassLoader = systemClassLoader;
+        this.properties = properties;
     }
 
     public ClassLoader getSystemClassLoader() {
@@ -38,7 +42,15 @@ public final class Context {
     }
 
     public String getProperty(String key) {
-        return System.getProperty(key); // TODO: isolate properties
+        return properties.getProperty(key);
+    }
+
+    public void setProperty(String key, String value) {
+        properties.setProperty(key, value);
+    }
+
+    public Properties getProperties() {
+        return properties;
     }
 
     public void join() throws InterruptedException {
