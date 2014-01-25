@@ -3625,10 +3625,27 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 	tp->snd_cwnd += tp->t_maxseg;
 }
 
+#include <bsd/sys/net/ethernet.h>
+
 // INP_LOCK held
 static void
 tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 {
+	caddr_t start = m->m_hdr.mh_data;
+	auto h = start;
+	h += ETHER_HDR_LEN;
+	auto ip_hdr = reinterpret_cast<ip*>(h);
+	unsigned ip_size = ip_hdr->ip_hl << 2;
+	h += ip_size;
+	auto th = reinterpret_cast<tcphdr*>(h);
+	h += th->th_off << 2;
+	auto drop_hdrlen = h - start;
+	tcp_fields_to_host(th);
+	auto so = tp->t_inpcb->inp_socket;
+	auto tlen = ntohs(ip_hdr->ip_len) - (ip_size + (th->th_off << 2));
+	auto iptos = ip_hdr->ip_tos;
+	SOCK_LOCK_ASSERT(so);
+	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED);
 }
 
 static ipv4_tcp_conn_id tcp_connection_id(tcpcb* tp)
