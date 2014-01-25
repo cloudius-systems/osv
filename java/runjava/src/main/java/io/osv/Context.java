@@ -26,6 +26,7 @@ public final class Context {
     private final Properties properties;
 
     private Thread mainThread;
+    private Throwable exception;
 
     public Context(ClassLoader systemClassLoader, Properties properties) {
         this.systemClassLoader = systemClassLoader;
@@ -53,8 +54,11 @@ public final class Context {
         return properties;
     }
 
-    public void join() throws InterruptedException {
+    public void join() throws InterruptedException, ContextFailedException {
         mainThread.join();
+        if (exception != null) {
+            throw new ContextFailedException(exception);
+        }
     }
 
     public LogManagerWrapper getLogManagerWrapper() {
@@ -63,5 +67,9 @@ public final class Context {
 
     public void interrupt() {
         mainThread.interrupt();
+    }
+
+    void setException(Throwable exception) {
+        this.exception = exception;
     }
 }

@@ -111,6 +111,7 @@ public class ContextIsolator {
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
+                context.setException(e);
                 e.printStackTrace();
             }
         });
