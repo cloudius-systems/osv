@@ -566,6 +566,10 @@ public:
     thread_handle() = default;
     thread_handle(const thread_handle& t) { _t.assign(t._t.read()); }
     thread_handle(thread& t) { reset(t); }
+    thread_handle& operator=(const thread_handle& x) {
+	_t.assign(x._t.read());
+	return *this;
+    }
     void reset(thread& t) { _t.assign(t._detached_state.get()); }
     void wake();
     void clear() { _t.assign(nullptr); }
