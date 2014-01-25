@@ -573,6 +573,7 @@ public:
     void reset(thread& t) { _t.assign(t._detached_state.get()); }
     void wake();
     void clear() { _t.assign(nullptr); }
+    operator bool() const { return _t; }
 private:
     osv::rcu_ptr<thread::detached_state> _t;
 };
