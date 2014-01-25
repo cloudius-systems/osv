@@ -255,54 +255,56 @@ void poll_uninstall(struct pollreq* p)
 int do_poll(std::vector<poll_file>& pfd, int _timeout)
 {
     int nr_events;
-    struct pollreq p = {};
+    unique_ptr<pollreq> p{new pollreq};
     sched::timer tmr(*sched::thread::current());
 
-    p._nfds = pfd.size();
-    p._timeout = _timeout;
-    p._pfd = std::move(pfd);
+    p->_nfds = pfd.size();
+    p->_timeout = _timeout;
+    p->_pfd = std::move(pfd);
 
     /* Any existing events return immediately */
-    nr_events = poll_scan(p._pfd);
+    nr_events = poll_scan(p->_pfd);
     if (nr_events) {
-        pfd = std::move(p._pfd);
+        pfd = std::move(p->_pfd);
         goto out;
     }
 
     /* Timeout -> Don't wait... */
-    if (p._timeout == 0) {
-        pfd = std::move(p._pfd);
+    if (p->_timeout == 0) {
+        pfd = std::move(p->_pfd);
         goto out;
     }
 
     /* Add pollreq references */
-    poll_install(&p);
+    poll_install(p.get());
 
     /* Timeout */
-    if (p._timeout > 0) {
+    if (p->_timeout > 0) {
         /* Convert timeout of ms to ns */
         using namespace osv::clock::literals;
-        tmr.set(p._timeout * 1_ms);
+        tmr.set(p->_timeout * 1_ms);
     }
 
     /* Block  */
     do {
         sched::thread::wait_until([&] {
-            return p._awake.load(memory_order_relaxed) || tmr.expired();
+            return p->_awake.load(memory_order_relaxed) || tmr.expired();
         });
 
         nr_events = 0;
-        if (p._awake.load(memory_order_relaxed)) {
-            p._awake.store(false, memory_order_relaxed);
-            nr_events = poll_scan(p._pfd);
+        if (p->_awake.load(memory_order_relaxed)) {
+            p->_awake.store(false, memory_order_relaxed);
+            nr_events = poll_scan(p->_pfd);
         }
     } while (!nr_events && !tmr.expired());
 
     /* Remove pollreq references */
-    poll_uninstall(&p);
+    poll_uninstall(p.get());
 
-    pfd = std::move(p._pfd);
+    pfd = std::move(p->_pfd);
 out:
+    p->_poll_thread = nullptr;
+    osv::rcu_dispose(p.release());
     return nr_events;
 }
 

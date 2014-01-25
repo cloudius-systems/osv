@@ -6,6 +6,7 @@
  */
 
 #include <osv/net_channel.hh>
+#include <osv/poll.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/netinet/ip.h>
@@ -32,6 +33,46 @@ void net_channel::process_queue()
     mbuf* m;
     while (_queue.pop(m)) {
         _process_packet(m);
+    }
+}
+
+void net_channel::wake_pollers()
+{
+    WITH_LOCK(osv::rcu_read_lock) {
+        auto& pl = *_pollers.read();
+        for (pollreq* pr : pl) {
+            // net_channel is self synchronizing
+            pr->_awake.store(true, std::memory_order_relaxed);
+            pr->_poll_thread->wake();
+        }
+    }
+}
+
+void net_channel::add_poller(pollreq& pr)
+{
+    WITH_LOCK(_pollers_mutex) {
+        auto old = _pollers.read_by_owner();
+        std::unique_ptr<std::vector<pollreq*>> neww{new std::vector<pollreq*>};
+        if (old) {
+            *neww = *old;
+        }
+        neww->push_back(&pr);
+        _pollers.assign(neww.release());
+        osv::rcu_dispose(old);
+    }
+}
+
+void net_channel::del_poller(pollreq& pr)
+{
+    WITH_LOCK(_pollers_mutex) {
+        auto old = _pollers.read_by_owner();
+        std::unique_ptr<std::vector<pollreq*>> neww{new std::vector<pollreq*>};
+        if (old) {
+            *neww = *old;
+        }
+        neww->erase(std::remove(neww->begin(), neww->end(), &pr), neww->end());
+        _pollers.assign(neww.release());
+        osv::rcu_dispose(old);
     }
 }
 

@@ -19,6 +19,7 @@
 #include <bsd/sys/netinet/ip.h>
 
 struct mbuf;
+struct pollreq;
 
 // Lock-free queue for moving packets to a single consumer
 // Supports waiting via sched::thread::wait_for()
@@ -27,15 +28,28 @@ private:
     std::function<void (mbuf*)> _process_packet;
     ring_spsc<mbuf*, 256> _queue;
     sched::thread_handle _waiting_thread CACHELINE_ALIGNED;
+    // extra list of threads to wake
+    osv::rcu_ptr<std::vector<pollreq*>> _pollers;
+    mutex _pollers_mutex;
 public:
     explicit net_channel(std::function<void (mbuf*)> process_packet)
         : _process_packet(std::move(process_packet)) {}
     // producer: try to push a packet
     bool push(mbuf* m) { return _queue.push(m); }
     // consumer: wake the consumer (best used after multiple push()s)
-    void wake() { _waiting_thread.wake(); }
+    void wake() {
+        _waiting_thread.wake();
+        if (_pollers) {
+            wake_pollers();
+        }
+    }
     // consumer: consume all available packets using process_packet()
     void process_queue();
+    // add/remove current thread from poller list
+    void add_poller(pollreq& pr);
+    void del_poller(pollreq& pr);
+private:
+    void wake_pollers();
 private:
     friend class sched::wait_object<net_channel>;
 };
