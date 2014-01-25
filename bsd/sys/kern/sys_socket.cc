@@ -230,7 +230,32 @@ socket_file::bsd_ioctl(u_long cmd, void *data)
 int
 socket_file::poll(int events)
 {
+    SOCK_LOCK(so);
+    if (so->so_nc) {
+        so->so_nc->process_queue();
+    }
+    SOCK_UNLOCK(so);
     return (sopoll(so, events, 0, 0));
+}
+
+void
+socket_file::poll_install(pollreq& pr)
+{
+    SOCK_LOCK(so);
+    if (so->so_nc) {
+        so->so_nc->add_poller(pr);
+    }
+    SOCK_UNLOCK(so);
+}
+
+void
+socket_file::poll_uninstall(pollreq& pr)
+{
+    SOCK_LOCK(so);
+    if (so->so_nc) {
+        so->so_nc->del_poller(pr);
+    }
+    SOCK_UNLOCK(so);
 }
 
 int
