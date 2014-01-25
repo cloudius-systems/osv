@@ -574,6 +574,9 @@ public:
     void wake();
     void clear() { _t.assign(nullptr); }
     operator bool() const { return _t; }
+    bool operator==(const thread_handle& x) const {
+        return _t.read_by_owner() == x._t.read_by_owner();
+    }
 private:
     osv::rcu_ptr<thread::detached_state> _t;
 };
