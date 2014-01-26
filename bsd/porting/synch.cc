@@ -86,8 +86,7 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
 
     if (timo_hz) {
         u64 nanoseconds = ticks2ns(timo_hz);
-        u64 cur_time = clock::get()->time();
-        t.set(cur_time + nanoseconds);
+        t.set(std::chrono::nanoseconds(nanoseconds));
     }
 
     trace_synch_msleep_wait(chan, timo_hz);
