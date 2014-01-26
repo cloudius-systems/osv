@@ -15,6 +15,7 @@
 #include <functional>
 #include <osv/error.h>
 #include <osv/addr_range.hh>
+#include <unordered_map>
 
 struct exception_frame;
 class balloon;
@@ -147,6 +148,18 @@ private:
     balloon *_balloon;
     unsigned _real_perm;
     unsigned _real_flags;
+};
+
+class shm_file final : public special_file {
+    size_t _size;
+    std::unordered_map<uintptr_t, void*> _pages;
+public:
+    shm_file(size_t size, int flags);
+    virtual int stat(struct stat* buf) override;
+    virtual int close() override;
+    virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
+    virtual void* get_page(uintptr_t offset, size_t size) override;
+    virtual void put_page(uintptr_t offset, size_t size) override;
 };
 
 void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,

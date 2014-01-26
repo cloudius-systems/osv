@@ -25,6 +25,8 @@
 #include "arch-mmu.hh"
 #include <stack>
 #include "java/jvm_balloon.hh"
+#include <fs/fs.hh>
+#include <osv/file.h>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -1424,6 +1426,48 @@ int file_vma::validate_perm(unsigned perm)
 f_offset file_vma::offset(uintptr_t addr)
 {
     return _offset + (addr - _range.start());
+}
+
+std::unique_ptr<file_vma> shm_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
+{
+    return map_file_mmap(this, range, flags, perm, offset);
+}
+
+void* shm_file::get_page(uintptr_t offset, size_t size)
+{
+    uintptr_t hp_off = ::align_down(offset, huge_page_size);
+    void *addr;
+
+    assert((size != huge_page_size) || (hp_off == offset));
+
+    auto p = _pages.find(hp_off);
+    if (p == _pages.end()) {
+        addr = memory::alloc_huge_page(huge_page_size);
+        memset(addr, 0, huge_page_size);
+        _pages.emplace(hp_off, addr);
+    } else {
+        addr = p->second;
+    }
+    return static_cast<char*>(addr) + offset - hp_off;
+}
+
+void shm_file::put_page(uintptr_t offset, size_t size) {}
+
+shm_file::shm_file(size_t size, int flags) : special_file(flags, DTYPE_UNSPEC), _size(size) {}
+
+int shm_file::stat(struct stat* buf)
+{
+    buf->st_size = _size;
+    return 0;
+}
+
+int shm_file::close()
+{
+    for (auto& i : _pages) {
+        memory::free_page(i.second);
+    }
+    _pages.clear();
+    return 0;
 }
 
 void linear_map(void* _virt, phys addr, size_t size, size_t slop)
