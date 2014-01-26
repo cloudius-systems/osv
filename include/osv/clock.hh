@@ -132,4 +132,39 @@ inline static struct clock* get() {
 }
 }
 
+// Durations cannot be compared with unit-less integers - one cannot just
+// check d < 7, and need to do something like d < 7_ms. Unfortunately, this
+// also applies to zero: d < 0 won't work, and users need to add a unit to
+// the zero. Of course, any unit would work: d < 0_ms, or d < 0_ns, or
+// any other time unit, will be equivalent.
+// The following trick will allow comparing a duration to 0 without needing to
+// add a unit, while still leaving comparison with a non-zero integer as an
+// error. This trick works by allowing to compare a duration with nullptr_t,
+// and noting that the compiler allows implicit conversion of the constant 0,
+// but not other integer constants, to nullptr_t.
+
+template<typename Rep, typename Period>
+inline bool operator<=(std::chrono::duration<Rep, Period> d, std::nullptr_t)
+{
+    return d.count() <= 0;
+}
+
+template<typename Rep, typename Period>
+inline bool operator<(std::chrono::duration<Rep, Period> d, std::nullptr_t)
+{
+    return d.count() < 0;
+}
+
+template<typename Rep, typename Period>
+inline bool operator>=(std::chrono::duration<Rep, Period> d, std::nullptr_t)
+{
+    return d.count() >= 0;
+}
+
+template<typename Rep, typename Period>
+inline bool operator>(std::chrono::duration<Rep, Period> d, std::nullptr_t)
+{
+    return d.count() > 0;
+}
+
 #endif /* OSV_CLOCK_HH_ */
