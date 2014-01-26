@@ -980,8 +980,8 @@ timer_list::callback_dispatch::callback_dispatch()
 
 void timer_list::fired()
 {
-    auto now = clock::get()->time();
-    _last = std::numeric_limits<s64>::max();
+    auto now = osv::clock::uptime::now();
+    _last = osv::clock::uptime::time_point::max();
     // don't hold iterators across list iteration, since the list can change
     while (!_list.empty() && _list.begin()->_time <= now) {
         auto j = _list.begin();
@@ -1051,9 +1051,9 @@ void timer_base::expire()
     _t.timer_fired();
 }
 
-void timer_base::set(s64 time)
+void timer_base::set(osv::clock::uptime::time_point time)
 {
-    trace_timer_set(this, time);
+    trace_timer_set(this, time.time_since_epoch().count());
     _state = state::armed;
     _time = time;
     irq_save_lock_type irq_lock;

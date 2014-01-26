@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 #include <osv/rcu.hh>
+#include <osv/clock.hh>
 
 // If RUNTIME_PSEUDOFLOAT, runtime_t is a pseudofloat<>. Otherwise, a float.
 #undef RUNTIME_PSEUDOFLOAT
@@ -169,7 +170,22 @@ public:
 public:
     explicit timer_base(client& t);
     ~timer_base();
-    void set(s64 time);
+    void set(osv::clock::uptime::time_point time);
+    // Set a timer using absolute wall-clock time.
+    // CAVEAT EMPTOR: Internally timers are kept using the monotonic (uptime)
+    // clock, so the wall-time given here is converted to an uptime.
+    // This basically means that the duration until the timer's expiration is
+    // fixed on the call to set(), even if the wall clock is later adjusted.
+    // When the timer expires, the current wall-time may not be identical to
+    // the intended expiration wall-time.
+    void set(osv::clock::wall::time_point time) {
+        set(osv::clock::uptime::time_point(
+                time - osv::clock::wall::boot_time()));
+    }
+    // Temporary, will be removed in a later patch
+    void set(s64 time) {
+        set(osv::clock::wall::time_point(std::chrono::nanoseconds(time)));
+    }
     bool expired() const;
     void cancel();
     friend bool operator<(const timer_base& t1, const timer_base& t2);
@@ -181,7 +197,7 @@ protected:
         free, armed, expired
     };
     state _state = state::free;
-    s64 _time;
+    osv::clock::uptime::time_point _time;
     friend class timer_list;
 };
 
@@ -556,7 +572,8 @@ public:
     void rearm();
 private:
     friend class timer_base;
-    s64 _last = std::numeric_limits<s64>::max();
+    osv::clock::uptime::time_point _last {
+            osv::clock::uptime::time_point::max() };
     bi::set<timer_base, bi::base_hook<bi::set_base_hook<>>> _list;
     class callback_dispatch : private clock_event_callback {
     public:
