@@ -8,7 +8,6 @@
 #include <map>
 #include <list>
 #include <errno.h>
-#include "drivers/clock.hh"
 #include <osv/sched.hh>
 #include "osv/trace.hh"
 

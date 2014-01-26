@@ -21,7 +21,6 @@
 #include <osv/file.h>
 #include <osv/poll.h>
 #include <fs/fs.hh>
-#include <drivers/clock.hh>
 
 #include <osv/debug.hh>
 #include <unordered_map>

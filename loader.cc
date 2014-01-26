@@ -31,7 +31,6 @@
 #include "drivers/xenfront-xenbus.hh"
 
 #include <osv/sched.hh>
-#include "drivers/clock.hh"
 #include "drivers/console.hh"
 #include "drivers/pvpanic.hh"
 #include <osv/barrier.hh>

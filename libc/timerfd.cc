@@ -10,7 +10,6 @@
 #include <libc/libc.hh>
 #include <osv/stubbing.hh>
 #include <osv/sched.hh>
-#include <drivers/clock.hh>
 #include <osv/poll.h>
 #include <osv/mutex.h>
 #include <osv/condvar.h>

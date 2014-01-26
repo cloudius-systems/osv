@@ -17,7 +17,6 @@
 #include "isa-serial.hh"
 #include "vga.hh"
 #include "debug-console.hh"
-#include "drivers/clock.hh"
 #include <termios.h>
 #include <signal.h>
 
