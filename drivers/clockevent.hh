@@ -29,6 +29,14 @@ public:
         s64 now = clock::get()->time();
         set(std::chrono::nanoseconds(time - now));
     }
+    // Can be used on a std::chrono::time_point of a clock which supports
+    // the now() method. For example osv::clock::uptime::time_point.
+    template<class timepoint>
+    inline void set(timepoint time) {
+        auto now = timepoint::clock::now();
+        using namespace std::chrono;
+        set(duration_cast<nanoseconds>(time - now));
+    }
     void set_callback(clock_event_callback* callback);
     clock_event_callback* callback() const;
 protected:
