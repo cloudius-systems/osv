@@ -49,12 +49,19 @@ private:
     bool _wakeup_thread_exit = false;
     condvar _blocked_reader;
     void wakeup_thread_func();
+
+    // Which clock to use to interpret s64 times.
+    int _clockid;
+    void set_timer(sched::timer &tmr, s64 time);
+public:
+    s64 time_now() const;
 };
 
 timerfd::timerfd(int clockid, int oflags)
     : special_file(FREAD | oflags, DTYPE_UNSPEC),
       _wakeup_thread(
-            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096))
+            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096)),
+      _clockid(clockid)
 {
     _wakeup_thread.start();
 }
@@ -67,13 +74,43 @@ timerfd::~timerfd() {
     _wakeup_thread.join();
 }
 
+void timerfd::set_timer(sched::timer &tmr, s64 t)
+{
+    using namespace osv::clock;
+    switch(_clockid) {
+    case CLOCK_REALTIME:
+        tmr.set(wall::time_point(std::chrono::nanoseconds(t)));
+        break;
+    case CLOCK_MONOTONIC:
+        tmr.set(uptime::time_point(std::chrono::nanoseconds(t)));
+        break;
+    default:
+        assert(false);
+    }
+}
+
+s64 timerfd::time_now() const
+{
+    using namespace std::chrono;
+    switch(_clockid) {
+    case CLOCK_REALTIME:
+        return duration_cast<nanoseconds>(
+                osv::clock::wall::now().time_since_epoch()).count();
+    case CLOCK_MONOTONIC:
+        return duration_cast<nanoseconds>(
+                osv::clock::uptime::now().time_since_epoch()).count();
+    default:
+        assert(false);
+    }
+}
+
 void timerfd::wakeup_thread_func()
 {
     sched::timer tmr(*sched::thread::current());
     WITH_LOCK(_mutex) {
         while (!_wakeup_thread_exit) {
             if (_wakeup_due != 0) {
-                tmr.set(_wakeup_due);
+                set_timer(tmr, _wakeup_due);
                 _wakeup_change_cond.wait(_mutex, &tmr);
                 if (tmr.expired()) {
                     _wakeup_due = 0;
@@ -109,7 +146,7 @@ void timerfd::get(s64 &expiration, s64 &interval) const
             if (!_interval) {
                 expiration = 0;
             } else {
-                auto now = nanotime();
+                auto now = time_now();
                 u64 count = (now - _expiration) / _interval;
                 expiration = _expiration + (count+1) * _interval;
             }
@@ -157,7 +194,7 @@ int timerfd::read(uio *data, int flags)
             ret = 1;
             _expiration = 0;
         } else {
-            auto now = nanotime();
+            auto now = time_now();
             // set next wakeup for the next multiple of interval from
             // _expiration which is after "now".
             assert (now >= _expiration);
@@ -195,10 +232,8 @@ int timerfd::close()
 
 int timerfd_create(int clockid, int flags) {
     switch (clockid) {
-    case CLOCK_MONOTONIC:
-        WARN_ONCE("timerfd_create() does not yet support CLOCK_MONOTONIC\n");
-        return libc_error(EINVAL);
     case CLOCK_REALTIME:
+    case CLOCK_MONOTONIC:
         // fine.
         break;
     default:
@@ -232,7 +267,7 @@ int timerfd_settime(int fd, int flags, const itimerspec *newval,
     }
 
     s64 expiration, interval;
-    s64 now = nanotime();
+    auto now = tf->time_now();
     if (oldval) {
         tf->get(expiration, interval);
         if (expiration) {
@@ -269,7 +304,7 @@ int timerfd_gettime(int fd, itimerspec *val)
     }
 
     s64 expiration, interval;
-    s64 now = nanotime();
+    auto now = tf->time_now();
     tf->get(expiration, interval);
     if (expiration) {
         // timerfd_gettime() wants relative time
