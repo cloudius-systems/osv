@@ -7,10 +7,11 @@
 
 #include <mutex>
 #include <set>
-#include "drivers/clock.hh"
 #include "osv/trace.hh"
 #include <osv/debug.hh>
 #include <osv/sched.hh>
+#include <osv/clock.hh>
+using namespace osv::clock::literals;
 
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/callout.h>
@@ -127,9 +128,9 @@ static void _callout_thread(void)
         // Wait for timeout //
         //////////////////////
 
-        uint64_t cur = clock::get()->time();
+        auto cur = osv::clock::uptime::now();
         bool expired = true;
-        if (cur < c->c_to_ns-TMILISECOND) {
+        if (cur < c->c_to_ns-1_ms) {
             sched::timer t(*sched::thread::current());
             t.set(c->c_to_ns);
 
@@ -213,8 +214,10 @@ static void _callout_thread(void)
 int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
     void *arg, int ignore_cpu)
 {
-    u64 cur = clock::get()->time();
-    int cur_ticks = ns2ticks(cur);
+    auto cur = osv::clock::uptime::now();
+    int cur_ticks = ns2ticks(
+            std::chrono::duration_cast<std::chrono::nanoseconds>
+                (cur.time_since_epoch()).count());
     int result = 0;
     bool queued_first = false;
 
@@ -227,7 +230,7 @@ int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
     // Reset the callout
     c->c_ticks = to_ticks;
     c->c_time = cur_ticks + to_ticks;           // for freebsd compatibility
-    c->c_to_ns = cur + ticks2ns(to_ticks);      // this is what we use
+    c->c_to_ns = cur + ticks2ns(to_ticks) * 1_ns;      // this is what we use
     c->c_fn = fn;
     c->c_arg = arg;
     c->c_flags |= (CALLOUT_PENDING | CALLOUT_ACTIVE);

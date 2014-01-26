@@ -39,6 +39,7 @@
 #define	_SYS__CALLOUT_H
 
 #include <osv/mutex.h>
+#include <osv/clock.hh>
 
 struct callout {
 	/* OSv waiter thread for drain (drain) */
@@ -48,7 +49,7 @@ struct callout {
 	uint64_t c_ticks;
 	/* Time when callout will be dispatched, both in ticks and in ns */
 	uint64_t c_time;
-	uint64_t c_to_ns;
+	osv::clock::uptime::time_point c_to_ns;
 	/* Callout Handler */
 	void (*c_fn)(void *);
 	void* c_arg;
