@@ -124,11 +124,6 @@ constexpr std::chrono::seconds operator "" _s(unsigned long long c) {
 }
 }
 
-// Temporary addition, just to get this patch series to bisect
-inline static struct clock* get() {
-    return ::clock::get();
-}
-
 }
 }
 

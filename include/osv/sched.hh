@@ -182,10 +182,6 @@ public:
         set(osv::clock::uptime::time_point(
                 time - osv::clock::wall::boot_time()));
     }
-    // Temporary, will be removed in a later patch
-    void set(s64 time) {
-        set(osv::clock::wall::time_point(std::chrono::nanoseconds(time)));
-    }
     // Duration (time relative to now) version of set():
     template <class Rep, class Period>
     void set(std::chrono::duration<Rep, Period> duration) {

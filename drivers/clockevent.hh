@@ -10,7 +10,6 @@
 
 #include <osv/types.h>
 #include <chrono>
-#include <drivers/clock.hh>
 
 class clock_event_callback {
 public:
@@ -25,10 +24,6 @@ public:
     virtual void setup_on_cpu() = 0;
     // set() is cpu-local: each processor has its own timer
     virtual void set(std::chrono::nanoseconds time) = 0;
-    inline void set(s64 time) {
-        s64 now = clock::get()->time();
-        set(std::chrono::nanoseconds(time - now));
-    }
     // Can be used on a std::chrono::time_point of a clock which supports
     // the now() method. For example osv::clock::uptime::time_point.
     template<class timepoint>
