@@ -278,13 +278,13 @@ void AcpiOsWaitEventsComplete(void)
 
 void AcpiOsSleep(UINT64 Milliseconds)
 {
-    sched::thread::sleep_until(clock::get()->time() + Milliseconds * 1000000);
+    sched::thread::sleep(std::chrono::milliseconds(Milliseconds));
 }
 
 void AcpiOsStall(UINT32 Microseconds)
 {
     // spec says to spin, but...
-    sched::thread::sleep_until(clock::get()->time() + u64(Microseconds) * 1000);
+    sched::thread::sleep(std::chrono::microseconds(Microseconds));
 }
 
 ACPI_STATUS AcpiOsReadPort(

@@ -395,7 +395,6 @@ public:
     // for mutex internal use
     template <class Action>
     inline void wake_with_from_mutex(Action action);
-    static void sleep_until(s64 abstime);
     template <class Rep, class Period>
     static void sleep(std::chrono::duration<Rep, Period> duration);
     static void yield();

@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(test_waitqueue_2)
     WITH_LOCK(mtx) {
         tmr.set(clock::get()->time() + 500_ms);
         sched::thread waker([&] {
-            sched::thread::sleep_until(clock::get()->time() + 1_s);
+            sched::thread::sleep(1_s);
             WITH_LOCK(mtx) {
                 ++counter;
                 wq.wake_one(mtx);
@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
     std::atomic<bool> x = { false };
     auto sleeper = sched::thread::current();
     sched::thread waker([&] {
-        sched::thread::sleep_until(nanotime() + 1_s);
+        sched::thread::sleep(1_s);
         x.store(true);
         sleeper->wake();
     });
@@ -103,7 +103,7 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
     // send some spurious wakeups for fun
     sched::thread false_waker([&] {
         for (auto i = 0; i < 100; ++i) {
-            sched::thread::sleep_until(nanotime() + 100_ms);
+            sched::thread::sleep(100_ms);
             sleeper->wake();
         }
     });

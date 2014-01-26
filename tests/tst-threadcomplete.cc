@@ -20,7 +20,7 @@
 #include <iostream>
 #ifdef __OSV__
 #include <osv/sched.hh>
-#include "drivers/clock.hh"
+#include <osv/clock.hh>
 #endif
 
 void detach_or_join(std::thread& t, bool detach)
@@ -106,7 +106,8 @@ void do_heap_test(bool quick)
             if (quick) {
                 return;
             }
-            sched::thread::sleep_until(nanotime() + 10_ms);
+            using namespace osv::clock::literals;
+            sched::thread::sleep(10_ms);
         }, sched::thread::attr().pin(sched::cpus[0]));
 
         t2 = new sched::thread([&]{

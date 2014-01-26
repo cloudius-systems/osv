@@ -34,13 +34,13 @@ int gettimeofday(struct timeval* tv, struct timezone* tz)
 
 int nanosleep(const struct timespec* req, struct timespec* rem)
 {
-    sched::thread::sleep_until(clock::get()->time() + convert(*req));
+    sched::thread::sleep(std::chrono::nanoseconds(convert(*req)));
     return 0;
 }
 
 int usleep(useconds_t usec)
 {
-    sched::thread::sleep_until(clock::get()->time() + usec * 1_us);
+    sched::thread::sleep(std::chrono::microseconds(usec));
     return 0;
 }
 

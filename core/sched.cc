@@ -778,13 +778,6 @@ void thread::wait()
     trace_sched_wait_ret();
 }
 
-void thread::sleep_until(s64 abstime)
-{
-    timer t(*current());
-    t.set(abstime);
-    wait_until([&] { return t.expired(); });
-}
-
 void thread::stop_wait()
 {
     // Can only re-enable preemption of this thread after it is no longer
