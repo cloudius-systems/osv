@@ -103,7 +103,7 @@
 #endif /*IPSEC*/
 
 #include <bsd/machine/in_cksum.h>
-
+#include <osv/poll.h>
 
 const int tcprexmtthresh = 3;
 
@@ -3666,15 +3666,36 @@ tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf)
 	tp->nc = nc;
 	tp->nc_intf = intf;
 	intf->add_net_channel(nc, tcp_connection_id(tp));
-	tp->t_inpcb->inp_socket->so_nc = nc;
+	auto so = tp->t_inpcb->inp_socket;
+	so->so_nc = nc;
+	poll_link* pl;
+	if (so->fp) {
+		WITH_LOCK(so->fp->f_lock) {
+			TAILQ_FOREACH(pl, &so->fp->f_poll_list, _link) {
+				so->so_nc->add_poller(*pl->_req);
+			}
+		}
+	}
 }
 
 void
 tcp_teardown_net_channel(tcpcb* tp)
 {
+	poll_link* pl;
+	auto so = tp->t_inpcb->inp_socket;
+	if (!so || !so->so_nc) {
+		return;
+	}
+	if (so->fp) {
+		TAILQ_FOREACH(pl, &so->fp->f_poll_list, _link) {
+			so->so_nc->del_poller(*pl->_req);
+		}
+	}
 	if (tp->nc_intf) {
 		tp->nc_intf->del_net_channel(tcp_connection_id(tp));
 	}
+	osv::rcu_dispose(so->so_nc);
+	so->so_nc = nullptr;
 }
 
 void
