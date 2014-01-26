@@ -17,7 +17,7 @@ public:
     explicit apic_clock_events();
     ~apic_clock_events();
     virtual void setup_on_cpu();
-    virtual void set(u64 time);
+    virtual void set(std::chrono::nanoseconds nanos);
 private:
     unsigned _vector;
 };
@@ -38,14 +38,13 @@ void apic_clock_events::setup_on_cpu()
     processor::apic->write(apicreg::LVTT, _vector); // one-shot
 }
 
-void apic_clock_events::set(u64 time)
+void apic_clock_events::set(std::chrono::nanoseconds nanos)
 {
-    u64 now = clock::get()->time();
-    if (time <= now) {
+    if (nanos.count() <= 0) {
         _callback->fired();
     } else {
         // FIXME: handle overflow
-        apic->write(apicreg::TMICT, time - now);
+        apic->write(apicreg::TMICT, nanos.count());
     }
 }
 
