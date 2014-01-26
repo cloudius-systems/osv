@@ -286,14 +286,17 @@ int do_poll(std::vector<poll_file>& pfd, int _timeout)
     }
 
     /* Block  */
-    sched::thread::wait_until([&] {
-        return p._awake.load(memory_order_relaxed) || tmr.expired();
-    });
+    do {
+        sched::thread::wait_until([&] {
+            return p._awake.load(memory_order_relaxed) || tmr.expired();
+        });
 
-    nr_events = 0;
-    if (p._awake.load(memory_order_relaxed)) {
-        nr_events = poll_scan(p._pfd);
-    }
+        nr_events = 0;
+        if (p._awake.load(memory_order_relaxed)) {
+            p._awake.store(false, memory_order_relaxed);
+            nr_events = poll_scan(p._pfd);
+        }
+    } while (!nr_events && !tmr.expired());
 
     /* Remove pollreq references */
     poll_uninstall(&p);
