@@ -32,7 +32,7 @@
 #include <sys/cdefs.h>
 
 #include <osv/poll.h>
-#include <drivers/clock.hh>
+#include <osv/clock.hh>
 #include <osv/signal.hh>
 
 #include <bsd/porting/netport.h>
@@ -150,7 +150,7 @@ sbwait(struct sockbuf *sb)
 	sb->sb_flags |= SB_WAIT;
 	sched::timer tmr(*sched::thread::current());
 	if (sb->sb_timeo) {
-		tmr.set(clock::get()->time() + ticks2ns(sb->sb_timeo));
+	    tmr.set(std::chrono::nanoseconds(ticks2ns(sb->sb_timeo)));
 	}
 	signal_catcher sc;
 	sched::thread::wait_for(sb->sb_mtx._mutex, sb->sb_cc_wq, tmr, sc);
