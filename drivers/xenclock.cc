@@ -24,6 +24,7 @@ public:
     xenclock();
     virtual s64 time() __attribute__((no_instrument_function));
     virtual s64 uptime() override __attribute__((no_instrument_function));
+    virtual s64 boot_time() override __attribute__((no_instrument_function));
 private:
     pvclock_wall_clock* _wall;
     static void setup_cpu();
@@ -82,6 +83,16 @@ s64 xenclock::uptime()
         return system_time() - _boot_systemtime;
     } else {
         return 0;
+    }
+}
+
+s64 xenclock::boot_time()
+{
+    // The following is time()-uptime():
+    if (_smp_init) {
+        return pvclock::wall_clock_boot(_wall) + _boot_systemtime;
+    } else {
+        return time();
     }
 }
 

@@ -79,6 +79,19 @@ public:
      *
      */
     virtual s64 time() = 0;
+    /*
+     * Return current estimate of wall-clock time at OSV's boot.
+     *
+     * Note that this is not necessarily constant. Rather, if we (or more
+     * likely, the host) adjust the wall-clock time, boot_time() will be
+     * adjusted so that always boot_time() + uptime() = time().
+     *
+     * In other words, boot_time() is the instantaneous value of
+     * time()-uptime(), but faster to calculate and doesn't suffer from
+     * the above expression evaluating time() and uptime() in slightly
+     * different times.
+     */
+    virtual s64 boot_time() = 0;
 private:
     static clock* _c;
 };

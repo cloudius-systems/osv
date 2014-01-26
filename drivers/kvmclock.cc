@@ -21,6 +21,7 @@ public:
     kvmclock();
     virtual s64 time() __attribute__((no_instrument_function));
     virtual s64 uptime() override __attribute__((no_instrument_function));
+    virtual s64 boot_time() override __attribute__((no_instrument_function));
     static bool probe();
 private:
     u64 wall_clock_boot();
@@ -95,6 +96,16 @@ s64 kvmclock::uptime()
     } else {
         return 0;
     }
+}
+
+s64 kvmclock::boot_time()
+{
+    // The following is time()-uptime():
+    auto r = wall_clock_boot();
+    if (_smp_init) {
+        r += _boot_systemtime;
+    }
+    return r;
 }
 
 u64 kvmclock::wall_clock_boot()

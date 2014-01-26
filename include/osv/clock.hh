@@ -72,6 +72,21 @@ public:
     static time_point now() {
         return time_point(duration(::clock::get()->time()));
     }
+    /*
+     * Return current estimate of wall-clock time at OSV's boot.
+     *
+     * This is defined as the current difference between uptime::now()
+     * and wall::now(), except that it is calculated faster, and
+     * instantaneously (without taking the two clocks at slightly different
+     * times).
+     *
+     * Note that boot_time() is not necessarily constant. Rather, if we (or
+     * more likely, the host) adjust the wall-clock time, boot_time() will be
+     * adjusted so that always boot_time() + uptime::now() = wall::now().
+     */
+    static time_point boot_time() {
+        return time_point(duration(::clock::get()->boot_time()));
+    }
 };
 
 /**

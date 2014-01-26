@@ -26,6 +26,7 @@ public:
     hpetclock(uint64_t hpet_address);
     virtual s64 time() __attribute__((no_instrument_function));
     virtual s64 uptime() override __attribute__((no_instrument_function));
+    virtual s64 boot_time() override __attribute__((no_instrument_function));
 private:
     mmioaddr_t _addr;
     uint64_t _wall;
@@ -155,6 +156,12 @@ s64 hpetclock::time()
 s64 hpetclock::uptime()
 {
     return (mmio_getq(_addr + HPET_COUNTER) * _period);
+}
+
+s64 hpetclock::boot_time()
+{
+    // The following is time()-uptime():
+    return _wall;
 }
 
 void __attribute__((constructor(init_prio::hpet))) hpet_init()
