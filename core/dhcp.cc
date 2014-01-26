@@ -514,12 +514,12 @@ namespace dhcp {
                  dm.get_router_ip().to_string().c_str(),
                  dm.get_interface_mtu());
 
-            osv::start_if(_ifp->if_xname,
-                         dm.get_your_ip().to_string().c_str(),
-                         dm.get_subnet_mask().to_string().c_str());
             if (dm.get_interface_mtu() != 0) {
                 osv::if_set_mtu(_ifp->if_xname, dm.get_interface_mtu());
             }
+            osv::start_if(_ifp->if_xname,
+                          dm.get_your_ip().to_string().c_str(),
+                          dm.get_subnet_mask().to_string().c_str());
 
             osv_route_add_network("0.0.0.0",
                                   "0.0.0.0",
