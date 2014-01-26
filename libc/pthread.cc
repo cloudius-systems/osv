@@ -281,13 +281,23 @@ int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
 }
 
 #ifdef LOCKFREE_MUTEX
-typedef lazy_indirect<condvar> indirect_condvar;
+struct pthread_condvar {
+    condvar cond;
+    clockid_t clock {CLOCK_REALTIME};
+};
+typedef lazy_indirect<pthread_condvar> indirect_condvar;
 static_assert(sizeof(indirect_condvar) < sizeof(pthread_cond_t), "condvar overflow");
 int pthread_cond_init(pthread_cond_t* __restrict c,
         const pthread_condattr_t* __restrict attr)
 {
-    // FIXME: respect attr
     new (c) indirect_condvar;
+    // There's not much that attr can say. OSv doesn't have processes so the
+    // pshared attribute is irrelevant. All that remains is the clock, and
+    // since this can only specify CLOCK_REALTIME or CLOCK_MONOTONIC, a
+    // single byte in pthread_condattr_t is enough for us.
+    if (attr && *reinterpret_cast<const char*>(attr)) {
+        reinterpret_cast<indirect_condvar*>(c)->get()->clock = CLOCK_MONOTONIC;
+    }
     return 0;
 }
 int pthread_cond_destroy(pthread_cond_t *c)
@@ -297,7 +307,7 @@ int pthread_cond_destroy(pthread_cond_t *c)
 }
 condvar* from_libc(pthread_cond_t* c)
 {
-    return reinterpret_cast<indirect_condvar*>(c)->get();
+    return &(reinterpret_cast<indirect_condvar*>(c)->get()->cond);
 }
 
 #else
@@ -343,7 +353,20 @@ int pthread_cond_timedwait(pthread_cond_t *__restrict cond,
                            const struct timespec* __restrict ts)
 {
     sched::timer tmr(*sched::thread::current());
-    tmr.set(u64(ts->tv_sec) * 1000000000 + ts->tv_nsec);
+    switch(reinterpret_cast<indirect_condvar*>(cond)->get()->clock) {
+    case CLOCK_REALTIME:
+        tmr.set(osv::clock::wall::time_point(
+                std::chrono::seconds(ts->tv_sec) +
+                std::chrono::nanoseconds(ts->tv_nsec)));
+        break;
+    case CLOCK_MONOTONIC:
+        tmr.set(osv::clock::uptime::time_point(
+                std::chrono::seconds(ts->tv_sec) +
+                std::chrono::nanoseconds(ts->tv_nsec)));
+        break;
+    default:
+        assert(0); // pthread_cond_init() will never allow this case
+    }
     return from_libc(cond)->wait(from_libc(mutex), &tmr);
 }
 
@@ -524,22 +547,46 @@ int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type)
     return EINVAL;
 }
 
-int pthread_condattr_init(pthread_condattr_t *)
+int pthread_condattr_init(pthread_condattr_t *attr)
 {
-    WARN_STUBBED();
+    // We assume there's room for at least one byte in pthread_condattr_t
+    // and use this single byte to specify the clockid. The default is 0
+    // (which we take to signify CLOCK_REALTIME).
+    *reinterpret_cast<char*>(attr) = 0;
     return 0;
 }
 
 int pthread_condattr_destroy(pthread_condattr_t *)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    return 0;
 }
 
-int pthread_condattr_setclock(pthread_condattr_t *, clockid_t)
+int pthread_condattr_setclock(pthread_condattr_t *attr, clockid_t clockid)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    char byte;
+    switch (clockid) {
+    case CLOCK_REALTIME:
+        byte = 0;
+        break;
+    case CLOCK_MONOTONIC:
+        byte = 1;
+        break;
+    default:
+        return EINVAL;
+    }
+    *reinterpret_cast<char*>(attr) = byte;
+    return 0;
+}
+
+int pthread_condattr_getclock(const pthread_condattr_t *__restrict attr,
+        clockid_t *__restrict clockid)
+{
+    if (*reinterpret_cast<const char*>(attr)) {
+        *clockid = CLOCK_MONOTONIC;
+    } else {
+        *clockid = CLOCK_REALTIME;
+    }
+    return 0;
 }
 
 int pthread_condattr_setpshared(pthread_condattr_t *, int)
@@ -548,11 +595,6 @@ int pthread_condattr_setpshared(pthread_condattr_t *, int)
     return EINVAL;
 }
 
-int pthread_condattr_getclock(const pthread_condattr_t *__restrict, clockid_t *__restrict)
-{
-    WARN_STUBBED();
-    return EINVAL;
-}
 
 int pthread_condattr_getpshared(const pthread_condattr_t *__restrict, int *__restrict)
 {

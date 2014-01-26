@@ -123,6 +123,41 @@ int main(void)
     void* ret;
     pthread_join(thread, &ret);
 
+    // Test that we can configure pthread_cond_timedwait to use
+    // CLOCK_MONOTONIC, and that it works as expected - we set a short but
+    // nonzero timeout, and expect to reach it, but not immediately (since
+    // the monotonic clock is much lower than the realtime clock, thinking
+    // it is a realtime clock value will result in an immediate timeout).
+    int r;
+    pthread_mutex_t mutex2;
+    pthread_cond_t cond2;
+    pthread_condattr_t attr2;
+    r = pthread_condattr_init(&attr2);
+    report("pthread_condattr_init", r == 0);
+    r= pthread_condattr_setclock(&attr2, CLOCK_MONOTONIC);
+    report("pthread_condattr_setclock", r == 0);
+    pthread_mutex_init(&mutex2, NULL);
+    r = pthread_cond_init(&cond2, &attr2);
+    report("pthread_cond_init", r == 0);
+    r = pthread_condattr_destroy(&attr2);
+    report("pthread_condattr_destroy", r == 0);
+    struct timespec ts;
+    r = clock_gettime(CLOCK_MONOTONIC, &ts);
+    report("clock_gettime(CLOCK_MONOTONIC)", r == 0);
+    struct timespec to = ts;
+    to.tv_nsec += 500000000;
+    pthread_mutex_lock(&mutex2);
+    r = pthread_cond_timedwait(&cond2, &mutex2, &to);
+    pthread_mutex_unlock(&mutex2);
+    report("pthread_cond_timedwait (short)", r == ETIMEDOUT);
+    struct timespec ts2;
+    clock_gettime(CLOCK_MONOTONIC, &ts2);
+    long ns = (ts2.tv_sec - ts.tv_sec)*1000000000 + (ts2.tv_nsec - ts.tv_nsec);
+    report("should have not returned immediately", ns > 400000000);
+    printf("ts  = %ld,%ld\n",ts.tv_sec, ts.tv_nsec);
+    printf("ts2 = %ld,%ld\n",ts2.tv_sec, ts2.tv_nsec);
+    printf("ns = %ld\n",ns);
+
     printf("SUMMARY: %u tests / %u failures\n", tests_total, tests_failed);
     return tests_failed == 0 ? 0 : 1;
 }
