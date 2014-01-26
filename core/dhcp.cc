@@ -25,7 +25,7 @@
 
 #include <osv/debug.hh>
 #include <osv/dhcp.hh>
-#include <drivers/clock.hh>
+#include <osv/clock.hh>
 
 namespace osv {
 void set_dns_config(std::vector<boost::asio::ip::address> nameservers,
@@ -160,7 +160,8 @@ namespace dhcp {
             DHCP_OPTION_BROADCAST_ADDRESS};
 
         // Header
-        srand(nanotime());
+        srand((unsigned int)
+                osv::clock::wall::now().time_since_epoch().count());
         pkt->op = BOOTREQUEST;
         pkt->htype = HTYPE_ETHERNET;
         pkt->hlen = ETHER_ADDR_LEN;

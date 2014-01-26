@@ -12,7 +12,7 @@
 #include <ctime>
 #include <osv/sched.hh>
 #include <arch.hh>
-#include <drivers/clock.hh>
+#include <osv/clock.hh>
 #include <osv/debug.hh>
 #include <lockfree/ring.hh>
 #include <lockfree/queue-mpsc.hh>
@@ -268,6 +268,11 @@ private:
         }
     }
 };
+
+s64 nanotime() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>
+                (osv::clock::wall::now().time_since_epoch()).count();
+}
 
 int main(int argc, char **argv)
 {

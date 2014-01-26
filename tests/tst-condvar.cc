@@ -9,7 +9,7 @@
 
 #include <osv/sched.hh>
 #include <osv/debug.hh>
-#include <drivers/clock.hh>
+#include <chrono>
 
 #include <osv/condvar.h>
 
@@ -144,12 +144,13 @@ int main(int argc, char **argv)
     debug("Measuring unwaited wake_all (one thread): ");
     int iterations = 100000000;
     condvar cv;
-    auto start = nanotime();
+    auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < iterations; i++) {
         cv.wake_all();
     }
-    auto end = nanotime();
-    debug ("%d ns\n", (end-start)/iterations);
+    auto end = std::chrono::high_resolution_clock::now();
+    debug ("%d ns\n", std::chrono::duration_cast<std::chrono::nanoseconds>
+        (end-start).count()/iterations);
 
 
     debug("Measuring unwaited wake_all (two threads): ");
@@ -160,12 +161,13 @@ int main(int argc, char **argv)
     std::atomic<u64> time(0);
     for(unsigned int i = 0; i < nthreads; i++) {
         threads2[i]= new sched::thread([iterations, &cv, &time] {
-            auto start = nanotime();
+            auto start = std::chrono::high_resolution_clock::now();
             for (int j = 0; j < iterations; j++) {
                 cv.wake_all();
             }
-            auto end = nanotime();
-            time += (end-start);
+            auto end = std::chrono::high_resolution_clock::now();
+            time += std::chrono::duration_cast<std::chrono::nanoseconds>
+                        (end-start).count();
         }, sched::thread::attr().pin(sched::cpus[i]));
         threads2[i]->start();
     }

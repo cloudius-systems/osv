@@ -95,8 +95,4 @@ public:
 private:
     static clock* _c;
 };
-static inline s64 nanotime() {
-    return clock::get()->time();
-}
-
 #endif /* CLOCK_HH_ */

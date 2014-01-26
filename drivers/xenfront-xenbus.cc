@@ -5,7 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "clock.hh"
 #include "msr.hh"
 #include <osv/types.h>
 #include <osv/mmu.hh>
