@@ -15,9 +15,11 @@
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <osv/power.hh>
-#include <drivers/clock.hh>
+#include <osv/clock.hh>
 #include <api/setjmp.h>
 #include <osv/stubbing.hh>
+
+using namespace osv::clock::literals;
 
 namespace osv {
 
@@ -245,18 +247,19 @@ static mutex alarm_mutex;
 static condvar alarm_cond;
 static sched::thread *alarm_thread = nullptr;
 static sched::thread *owner_thread = nullptr;
-static s64 alarm_due = 0;
+static constexpr osv::clock::uptime::time_point no_alarm {};
+static osv::clock::uptime::time_point alarm_due = no_alarm;
 
 void alarm_thread_func()
 {
     sched::timer tmr(*sched::thread::current());
     while (true) {
         WITH_LOCK(alarm_mutex) {
-            if (alarm_due != 0) {
+            if (alarm_due != no_alarm) {
                 tmr.set(alarm_due);
                 alarm_cond.wait(alarm_mutex, &tmr);
                 if (tmr.expired()) {
-                    alarm_due = 0;
+                    alarm_due = no_alarm;
                     kill(0, SIGALRM);
                     if(!is_sig_ign(signal_actions[SIGALRM])) {
                         owner_thread->interrupted(true);
@@ -273,12 +276,12 @@ void alarm_thread_func()
 
 static void cancel_alarm_ll()
 {
-    alarm_due = 0;
+    alarm_due = no_alarm;
     owner_thread = nullptr;
     alarm_cond.wake_one();
 }
 
-static void set_alarm_ll(s64 new_alarm_due)
+static void set_alarm_ll(decltype(alarm_due) new_alarm_due)
 {
     alarm_due = new_alarm_due;
     owner_thread = sched::thread::current();
@@ -304,8 +307,8 @@ unsigned int alarm(unsigned int seconds)
             alarm_thread = new sched::thread(alarm_thread_func);
             alarm_thread->start();
         }
-        s64 now = nanotime();
-        if (alarm_due) {
+        auto now = osv::clock::uptime::now();
+        if (alarm_due != no_alarm) {
             ret = (alarm_due - now) / 1_s;
         }
         if (seconds) {
