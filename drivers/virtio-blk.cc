@@ -25,7 +25,6 @@
 #include <osv/sched.hh>
 #include "osv/trace.hh"
 #include "drivers/clock.hh"
-#include "drivers/clockevent.hh"
 
 #include <osv/device.h>
 #include <osv/bio.h>

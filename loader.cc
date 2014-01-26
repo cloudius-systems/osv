@@ -32,7 +32,6 @@
 
 #include <osv/sched.hh>
 #include "drivers/clock.hh"
-#include "drivers/clockevent.hh"
 #include "drivers/console.hh"
 #include "drivers/pvpanic.hh"
 #include <osv/barrier.hh>

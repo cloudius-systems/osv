@@ -10,7 +10,6 @@
 #include <osv/mutex.h>
 #include <mutex>
 #include <osv/debug.hh>
-#include "drivers/clockevent.hh"
 #include <osv/irqlock.hh>
 #include <osv/align.hh>
 #include "drivers/clock.hh"
