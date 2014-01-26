@@ -186,6 +186,11 @@ public:
     void set(s64 time) {
         set(osv::clock::wall::time_point(std::chrono::nanoseconds(time)));
     }
+    // Duration (time relative to now) version of set():
+    template <class Rep, class Period>
+    void set(std::chrono::duration<Rep, Period> duration) {
+        set(osv::clock::uptime::now() + duration);
+    }
     bool expired() const;
     void cancel();
     friend bool operator<(const timer_base& t1, const timer_base& t2);
@@ -391,6 +396,8 @@ public:
     template <class Action>
     inline void wake_with_from_mutex(Action action);
     static void sleep_until(s64 abstime);
+    template <class Rep, class Period>
+    static void sleep(std::chrono::duration<Rep, Period> duration);
     static void yield();
     static void exit() __attribute__((__noreturn__));
     static thread* current() __attribute((no_instrument_function));
@@ -953,6 +960,14 @@ void thread::do_wake_with(Action action, unsigned allowed_initial_states_mask)
         action();
         wake_impl(ds, allowed_initial_states_mask);
     }
+}
+
+template <class Rep, class Period>
+void thread::sleep(std::chrono::duration<Rep, Period> duration)
+{
+    timer t(*current());
+    t.set(duration);
+    wait_until([&] { return t.expired(); });
 }
 
 template <class Action>
