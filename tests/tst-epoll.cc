@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <osv/sched.hh>
 #include <osv/debug.hh>
-#include "drivers/clock.hh"
+#include <osv/clock.hh>
 
 int tests = 0, fails = 0;
 
@@ -90,9 +90,10 @@ int main(int ac, char** av)
     report(r == 1, "write single character");
     t1.join();
 
-    auto ts = clock::get()->time();
+    auto ts = osv::clock::uptime::now();
     r = epoll_wait(ep, events, MAXEVENTS, 300);
-    auto te = clock::get()->time();
+    auto te = osv::clock::uptime::now();
+    using namespace osv::clock::literals;
     report(r == 0 && ((te - ts) > 200_ms), "epoll timeout");
 
 

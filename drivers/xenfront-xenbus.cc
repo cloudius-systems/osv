@@ -84,7 +84,8 @@ void xenbus::wait_for_devices()
 {
     WITH_LOCK(_children_mutex) {
         while (!_pending_children.empty() || _children.empty()) {
-            condvar_wait(&_pending_devices, &_children_mutex, nanotime() + 1000_ms);
+            using namespace osv::clock::literals;
+            _pending_devices.wait(&_children_mutex, 1000_ms);
         }
         for (auto device : _pending_children) {
             debug("Device %s bringup failed\n", device->get_name());

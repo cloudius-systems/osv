@@ -252,6 +252,8 @@ int timerfd_create(int clockid, int flags) {
     }
 }
 
+static constexpr s64 second = 1000000000;
+
 int timerfd_settime(int fd, int flags, const itimerspec *newval,
         itimerspec *oldval)
 {
@@ -274,14 +276,14 @@ int timerfd_settime(int fd, int flags, const itimerspec *newval,
             // oldval is always returned in relative time
             expiration -= now;
         }
-        oldval->it_value.tv_sec = expiration / 1_s;
-        oldval->it_value.tv_nsec = expiration % 1_s;
-        oldval->it_interval.tv_sec = interval / 1_s;
-        oldval->it_interval.tv_nsec = interval % 1_s;
+        oldval->it_value.tv_sec = expiration / second;
+        oldval->it_value.tv_nsec = expiration % second;
+        oldval->it_interval.tv_sec = interval / second;
+        oldval->it_interval.tv_nsec = interval % second;
     }
 
-    expiration = newval->it_value.tv_sec * 1_s + newval->it_value.tv_nsec;
-    interval = newval->it_interval.tv_sec * 1_s + newval->it_interval.tv_nsec;
+    expiration = newval->it_value.tv_sec * second + newval->it_value.tv_nsec;
+    interval = newval->it_interval.tv_sec * second + newval->it_interval.tv_nsec;
     if (flags != TFD_TIMER_ABSTIME && expiration) {
         expiration += now;
     }
@@ -310,9 +312,9 @@ int timerfd_gettime(int fd, itimerspec *val)
         // timerfd_gettime() wants relative time
         expiration -= now;
     }
-    val->it_value.tv_sec = expiration / 1_s;
-    val->it_value.tv_nsec = expiration % 1_s;
-    val->it_interval.tv_sec = interval / 1_s;
-    val->it_interval.tv_nsec = interval % 1_s;
+    val->it_value.tv_sec = expiration / second;
+    val->it_value.tv_nsec = expiration % second;
+    val->it_interval.tv_sec = interval / second;
+    val->it_interval.tv_nsec = interval % second;
     return 0;
 }

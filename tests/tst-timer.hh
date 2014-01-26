@@ -12,6 +12,17 @@
 #include "drivers/clock.hh"
 #include <osv/debug.hh>
 #include <osv/sched.hh>
+// TODO: change this test to check the newer <osv/clock.hh> APIs and the
+// monotonic clock.
+
+inline constexpr long long operator"" _ms(unsigned long long t)
+{
+    return t * 1000000ULL;
+}
+inline constexpr long long operator"" _s(unsigned long long t)
+{
+    return t * 1000_ms;
+}
 
 class test_timer : public unit_tests::vtest {
 
@@ -47,7 +58,7 @@ public:
         for (int i=0; i<tester_iteration; i++) {
             u64 ns = (random() % 1_s) - 500_ms;
             sched::timer t(*sched::thread::current());
-            t.set(clock::get()->time() + ns);
+            t.set(std::chrono::nanoseconds(ns));
 
             sched::thread::wait_until([&] { return (t.expired()); });
         }

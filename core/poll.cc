@@ -279,7 +279,8 @@ int do_poll(std::vector<poll_file>& pfd, int _timeout)
     /* Timeout */
     if (p._timeout > 0) {
         /* Convert timeout of ms to ns */
-        tmr.set(clock::get()->time() + p._timeout * 1_ms);
+        using namespace osv::clock::literals;
+        tmr.set(p._timeout * 1_ms);
     }
 
     /* Block  */

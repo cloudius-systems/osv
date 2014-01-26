@@ -16,7 +16,6 @@ extern "C" {
 #include <stdlib.h>
 #include <osv/mmu.hh>
 #include <osv/sched.hh>
-#include "drivers/clock.hh"
 #include "processor.hh"
 #include <osv/align.hh>
 #include "xen.hh"
@@ -138,7 +137,7 @@ ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE Handle,
         return AE_OK;
     default:
         sched::timer timer(*sched::thread::current());
-        timer.set(nanotime() + Timeout * 1_ms);
+        timer.set(std::chrono::milliseconds(Timeout));
         return sem->wait(Units, &timer) ? AE_OK : AE_TIME;
     }
 }

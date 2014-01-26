@@ -585,8 +585,8 @@ namespace dhcp {
                 _waiter = sched::thread::current();
 
                 sched::timer t(*sched::thread::current());
-                u64 cur_time = clock::get()->time();
-                t.set(cur_time + 3_s);
+                using namespace osv::clock::literals;
+                t.set(3_s);
 
                 sched::thread::wait_until([&]{ return _have_ip || t.expired(); });
             }
