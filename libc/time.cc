@@ -44,14 +44,6 @@ int usleep(useconds_t usec)
     return 0;
 }
 
-// Temporary until all clock primitives functions on std::chrono
-static void fill_ts(s64 time, struct timespec *ts)
-{
-    ts->tv_sec  =  time / 1000000000;
-    ts->tv_nsec =  time % 1000000000;
-}
-
-
 // Convenient inline function for converting std::chrono::duration,
 // of a clock with any period, into the classic Posix "struct timespec":
 template <class Rep, class Period>

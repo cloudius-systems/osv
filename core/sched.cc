@@ -27,6 +27,7 @@ __thread char* percpu_base;
 extern char _percpu_start[], _percpu_end[];
 
 using namespace osv;
+using namespace osv::clock::literals;
 
 void cancel_this_thread_alarm();
 
@@ -61,7 +62,7 @@ inter_processor_interrupt wakeup_ipi{[] {}};
 // In particular, it can be seen that if a thread has been monopolizing the
 // CPU, and a long-sleeping thread wakes up (or new thread is created),
 // the new thread will get to run for ln2*tau. (ln2 is roughly 0.7).
-constexpr s64 tau = 200_ms;
+constexpr thread_runtime::duration tau = 200_ms;
 
 // "thyst" controls the hysteresis algorithm which temporarily gives a
 // running thread some extra runtime before preempting it. We subtract thyst
@@ -69,23 +70,23 @@ constexpr s64 tau = 200_ms;
 // out. In particular, it can be shown that when two cpu-busy threads at equal
 // priority compete, they will alternate at time-slices of 2*thyst; Also,
 // the distance between two preemption interrupts cannot be lower than thyst.
-constexpr s64 thyst = 2_ms;
+constexpr thread_runtime::duration thyst = 2_ms;
 
-constexpr s64 context_switch_penalty = 10_us;
+constexpr thread_runtime::duration context_switch_penalty = 10_us;
 
 constexpr float cmax = 0x1P63;
 constexpr float cinitial = 0x1P-63;
 
-static inline float exp_tau(s64 t) {
+static inline float exp_tau(thread_runtime::duration t) {
     // return expf((float)t/(float)tau);
     // Approximate e^x as much faster 1+x for x<0.001 (the error is O(x^2)).
     // Further speed up by comparing and adding integers as much as we can:
-    static constexpr int m = tau / 1000;
-    static constexpr float invtau = 1.0f / tau;
-    if (t < m && t > -m)
-        return (tau + t) * invtau;
+    static constexpr int m = tau.count() / 1000;
+    static constexpr float invtau = 1.0f / tau.count();
+    if (t.count() < m && t.count() > -m)
+        return (tau.count() + t.count()) * invtau;
     else
-        return expf(t * invtau);
+        return expf(t.count() * invtau);
 }
 
 // fastlog2() is an approximation of log2, designed for speed over accuracy
@@ -109,7 +110,7 @@ static inline float taulog(float f) {
     // where it's fine to overshoot, even significantly, the correct time
     // because a thread running a bit too much will "pay" in runtime.
     // We multiply by 1.01 to ensure overshoot, not undershoot.
-    static constexpr float tau2 = tau * 0.69314718f * 1.01;
+    static constexpr float tau2 = tau.count() * 0.69314718f * 1.01;
     return tau2 * fastlog2(f);
 }
 
@@ -157,7 +158,7 @@ cpu::cpu(unsigned _id)
 
 void cpu::init_idle_thread()
 {
-    running_since = clock::get()->time();
+    running_since = osv::clock::uptime::now();
     idle_thread = new thread([this] { idle(); }, thread::attr().pin(this));
     idle_thread->set_priority(thread::priority_idle);
 }
@@ -195,8 +196,8 @@ void cpu::reschedule_from_interrupt(bool preempt)
 
     need_reschedule = false;
     handle_incoming_wakeups();
-    auto now = clock::get()->time();
 
+    auto now = osv::clock::uptime::now();
     auto interval = now - running_since;
     running_since = now;
     if (interval <= 0) {
@@ -414,7 +415,7 @@ void cpu::load_balance()
     notifier::fire();
     timer tmr(*thread::current());
     while (true) {
-        tmr.set(clock::get()->time() + 100_ms);
+        tmr.set(osv::clock::uptime::now() + 100_ms);
         thread::wait_until([&] { return tmr.expired(); });
         if (runqueue.empty()) {
             continue;
@@ -1201,7 +1202,7 @@ void thread_runtime::update_after_sleep()
     _renormalize_count = cpu_renormalize_count;
 }
 
-void thread_runtime::ran_for(s64 time)
+void thread_runtime::ran_for(thread_runtime::duration time)
 {
     assert (_priority > 0);
     assert (time >= 0);
@@ -1299,19 +1300,20 @@ void thread_runtime::add_context_switch_penalty()
 
 }
 
-s64 thread_runtime::time_until(runtime_t target_local_runtime) const
+thread_runtime::duration
+thread_runtime::time_until(runtime_t target_local_runtime) const
 {
     if (_priority == inf) {
-        return -1;
+        return thread_runtime::duration(-1);
     }
     if (target_local_runtime == inf) {
-        return -1;
+        return thread_runtime::duration(-1);
     }
     auto ret = taulog(runtime_t(1) +
             (target_local_runtime - _Rtt) / _priority / cpu::current()->c);
-    if (ret > (runtime_t)std::numeric_limits<s64>::max())
-        return -1;
-    return (s64) ret;
+    if (ret > thread_runtime::duration::max().count())
+        return thread_runtime::duration(-1);
+    return thread_runtime::duration((thread_runtime::duration::rep) ret);
 }
 
 }

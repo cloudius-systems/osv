@@ -229,6 +229,7 @@ private:
 // https://docs.google.com/document/d/1W7KCxOxP-1Fy5EyF2lbJGE2WuKmu5v0suYqoHas1jRM
 class thread_runtime {
 public:
+    using duration = osv::clock::uptime::duration;
     // Get the thread's CPU-local runtime, a number used to sort the runqueue
     // on this CPU (lowest runtime will be run first). local runtime cannot be
     // compared between different different CPUs - see export_runtime().
@@ -248,7 +249,7 @@ public:
     // nanoseconds at the current priority.
     // Remember that the run queue is ordered by local runtime, so never call
     // ran_for() or hysteresis_*() on a thread which is already in the queue.
-    void ran_for(s64 time);
+    void ran_for(duration time);
     // Temporarily decrease the running thread's runtime to provide hysteresis
     // (avoid switching threads quickly after deciding on one).
     // Use hystersis_run_start() when switching to a thread, and
@@ -260,7 +261,7 @@ public:
     // time (in nanoseconds) it would take until ran_for(time) would bring our
     // thread to the given target. Returns -1 if the time is too long to
     // express in s64.
-    s64 time_until(runtime_t target_local_runtime) const;
+    duration time_until(runtime_t target_local_runtime) const;
 
     void set_priority(runtime_t priority) {
         _priority = priority;
@@ -521,7 +522,7 @@ private:
     std::atomic<bool> _interrupted;
     std::function<void ()> _cleanup;
     std::vector<std::unique_ptr<char[]>> _tls;
-    u64 _total_cpu_time = 0;
+    thread_runtime::duration _total_cpu_time {0};
     void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
@@ -536,7 +537,7 @@ private:
     friend void init(std::function<void ()> cont);
 public:
     std::atomic<thread *> _joiner;
-    u64 thread_clock() { return _total_cpu_time; }
+    thread_runtime::duration thread_clock() { return _total_cpu_time; }
     bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
@@ -614,7 +615,7 @@ struct cpu : private timer_base::client {
     cpu_set incoming_wakeups_mask;
     incoming_wakeup_queue* incoming_wakeups;
     thread* terminating_thread;
-    s64 running_since;
+    osv::clock::uptime::time_point running_since;
     char* percpu_base;
     static cpu* current();
     void init_on_cpu();
