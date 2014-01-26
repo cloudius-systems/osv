@@ -114,7 +114,13 @@ typedef struct condvar {
      * a timeout hasn't yet occurred, but rather that one wake_one()/wake_all()
      * was consumed to wake us.
      */
-    int wait(mutex* user_mutex, uint64_t expiration);
+    template <class Clock, class Duration>
+    int wait(mutex *user_mutex, std::chrono::time_point<Clock, Duration> time)
+    {
+        sched::timer timer(*sched::thread::current());
+        timer.set(time);
+        return wait(user_mutex, &timer);
+    }
     /**
      * Wait on the condition variable, or for a specified duration to pass.
      *
@@ -208,7 +214,6 @@ typedef struct condvar {
 
 __BEGIN_DECLS
 
-int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration);
 void condvar_wake_one(condvar_t *condvar);
 void condvar_wake_all(condvar_t *condvar);
 
@@ -234,6 +239,12 @@ void condvar::wait_until(mutex& mtx, Pred pred)
 }
 
 
+#endif
+
+#ifndef __cplusplus
+// Note: "expiration" should use absolute times using the monotonic clock,
+// clock::get()->uptime().
+int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration);
 #endif
 
 #endif /* MUTEX_H_ */

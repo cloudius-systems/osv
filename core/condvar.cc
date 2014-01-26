@@ -15,17 +15,6 @@ TRACEPOINT(trace_condvar_wait, "%p", condvar *);
 TRACEPOINT(trace_condvar_wake_one, "%p", condvar *);
 TRACEPOINT(trace_condvar_wake_all, "%p", condvar *);
 
-int condvar::wait(mutex* user_mutex, uint64_t expiration)
-{
-    if (expiration) {
-        sched::timer timer(*sched::thread::current());
-        timer.set(expiration);
-        return wait(user_mutex, &timer);
-    } else {
-        return wait(user_mutex, nullptr);
-    }
-}
-
 int condvar::wait(mutex* user_mutex, sched::timer* tmr)
 {
     trace_condvar_wait(this);
@@ -172,9 +161,15 @@ void condvar::wake_all()
     }
 }
 
+extern "C"
 int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration)
 {
-    return condvar->wait(user_mutex, expiration);
+    if (expiration) {
+        return condvar->wait(user_mutex, osv::clock::uptime::time_point(
+            std::chrono::nanoseconds(expiration)));
+    } else {
+        return condvar->wait(user_mutex);
+    }
 }
 
 void condvar_wake_one(condvar_t *condvar)

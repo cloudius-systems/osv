@@ -63,7 +63,7 @@ int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo)
     if (tmo <= 0) {
         return -1;
     }
-    auto ret = condvar_wait(cv, mutex, clock::get()->time() + ticks2ns(tmo));
+    auto ret = cv->wait(mutex, std::chrono::nanoseconds(ticks2ns(tmo)));
     return ret == ETIMEDOUT ? -1 : 0;
 }
 
