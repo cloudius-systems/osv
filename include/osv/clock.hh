@@ -132,6 +132,16 @@ inline static struct clock* get() {
 }
 }
 
+// Strangely, C++11 does not provide std::abs on std::chrono::duration.
+// But it's easy to fix that lack:
+namespace std {
+template<typename Rep, typename Period>
+std::chrono::duration<Rep,Period> abs(std::chrono::duration<Rep, Period> d)
+{
+    return std::chrono::duration<Rep,Period>(std::abs(d.count()));
+}
+}
+
 // Durations cannot be compared with unit-less integers - one cannot just
 // check d < 7, and need to do something like d < 7_ms. Unfortunately, this
 // also applies to zero: d < 0 won't work, and users need to add a unit to

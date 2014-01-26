@@ -11,23 +11,25 @@
 #include <boost/test/unit_test.hpp>
 #include <osv/sched.hh>
 #include <osv/waitqueue.hh>
-#include <drivers/clock.hh>
+#include <osv/clock.hh>
 #include <cstdlib>
+
+using namespace osv::clock::literals;
 
 BOOST_AUTO_TEST_CASE(test_wait_for_one_timer)
 {
-    auto now = clock::get()->time();
+    auto now = osv::clock::uptime::now();
     sched::timer tmr(*sched::thread::current());
     tmr.set(now + 1_s);
     sched::thread::wait_for(tmr);
-    auto later = clock::get()->time();
+    auto later = osv::clock::uptime::now();
     BOOST_REQUIRE(std::abs(later - (now + 1_s)) < 20_ms);
     BOOST_REQUIRE(tmr.expired());
 }
 
 BOOST_AUTO_TEST_CASE(test_wait_for_two_timers)
 {
-    auto now = clock::get()->time();
+    auto now = osv::clock::uptime::now();
     sched::timer tmr1(*sched::thread::current());
     sched::timer tmr2(*sched::thread::current());
     tmr1.set(now + 2_s);
@@ -65,7 +67,7 @@ BOOST_AUTO_TEST_CASE(test_waitqueue_2)
     int counter = 0;
     sched::timer tmr(*sched::thread::current());
     WITH_LOCK(mtx) {
-        tmr.set(clock::get()->time() + 500_ms);
+        tmr.set(500_ms);
         sched::thread waker([&] {
             sched::thread::sleep(1_s);
             WITH_LOCK(mtx) {
@@ -108,7 +110,7 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
         }
     });
     sched::timer tmr(*sched::thread::current());
-    tmr.set(nanotime() + 500_ms);
+    tmr.set(500_ms);
     sched::thread::wait_for(tmr, [&] { return x.load(); });
     BOOST_REQUIRE(tmr.expired());
     BOOST_REQUIRE(!x.load());
