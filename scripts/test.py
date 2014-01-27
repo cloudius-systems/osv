@@ -82,7 +82,8 @@ def run_tests_in_single_instance():
     blacklist_tests = ' '.join(blacklist)
 
     args = ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
-    subprocess.call(["./scripts/run.py"] + args)
+    if subprocess.call(["./scripts/run.py"] + args):
+        exit(1)
 
 def run_tests():
     start = time.time()
