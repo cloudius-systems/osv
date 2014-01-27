@@ -24,6 +24,14 @@ def cleanups():
     "cleanups after execution"
     stty_restore()
 
+def format_args(args):
+    def format_arg(arg):
+        if ' ' in arg:
+            return '"%s"' % arg
+        return arg
+
+    return ' '.join(map(format_arg, args))
+
 def set_imgargs(options):
     execute = options.execute
     if (not execute):
@@ -42,8 +50,11 @@ def set_imgargs(options):
             ('n', 'y')[options.jvm_suspend]
         execute = execute.replace('java.so', 'java.so ' + debug_options)
 
-    args = ["setargs", options.image_file, execute]
-    subprocess.call(["scripts/imgedit.py"] + args)
+    cmdline = ["scripts/imgedit.py", "setargs", options.image_file, execute]
+    if options.dry_run:
+        print format_args(cmdline)
+    else:
+        subprocess.call(cmdline)
 
 def is_direct_io_supported(path):
     if not os.path.exists(path):
@@ -130,7 +141,11 @@ def start_osv_qemu(options):
         qemu_env = os.environ.copy()
 
         qemu_env['OSV_BRIDGE'] = options.bridge
-        subprocess.call(["qemu-system-x86_64"] + args, env = qemu_env)
+        cmdline = ["qemu-system-x86_64"] + args
+        if options.dry_run:
+            print format_args(cmdline)
+        else:
+            subprocess.call(cmdline, env = qemu_env)
     except OSError, e:
         if e.errno == errno.ENOENT:
           print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
@@ -201,7 +216,10 @@ def start_osv_xen(options):
         if not options.detach:
             cmdline += [ "-c" ]
         cmdline += [ xenfile.name ]
-        subprocess.call(cmdline)
+        if options.dry_run:
+            print format_args(cmdline)
+        else:
+            subprocess.call(cmdline)
     except:
         pass
     finally:
@@ -274,6 +292,8 @@ if (__name__ == "__main__"):
                         help="pass --verbose to OSv, to display more debugging information on the console")
     parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
                         help = "add network forwarding RULE (QEMU syntax)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help = "do not run, just print the command line")
     parser.add_argument("--jvm-debug", action="store_true",
                         help = "start JVM with a debugger server")
     parser.add_argument("--jvm-suspend", action="store_true",
