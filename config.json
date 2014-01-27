@@ -8,6 +8,10 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/java/"
         },
+        "java-tests": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/modules/java-tests/"
+        },
         "tests": {
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/tests/"
