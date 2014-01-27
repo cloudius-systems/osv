@@ -965,6 +965,10 @@ relocked:
 		goto dropwithreset;
 	}
 
+	// We may be processing a FIN here, process all preceding
+	// normal packets first.
+	tcp_flush_net_channel(tp);
+
 	/*
 	 * We've identified a valid inpcb, but it could be that we need an
 	 * inpcbinfo write lock but don't hold it.  In this case, attempt to
