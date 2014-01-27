@@ -42,6 +42,8 @@ clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
 	$(call only-if, $(mgmt), $(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null, GRADLE CLEAN))
 
+check: export image ?= tests
+
 check: all
 	./scripts/test.py
 
