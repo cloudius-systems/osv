@@ -206,7 +206,7 @@ public class ContextIsolator {
         return urls;
     }
 
-    static void runMain(Class<?> klass, String[] args) throws Throwable {
+    private static void runMain(Class<?> klass, String[] args) throws Throwable {
         Method main = klass.getMethod("main", String[].class);
         try {
             main.invoke(null, new Object[]{args});
@@ -247,7 +247,7 @@ public class ContextIsolator {
         return new File(path).isDirectory();
     }
 
-    static Class<?> loadClass(String name) throws ClassNotFoundException {
+    private static Class<?> loadClass(String name) throws ClassNotFoundException {
         return Thread.currentThread().getContextClassLoader().loadClass(name);
     }
 
@@ -257,7 +257,7 @@ public class ContextIsolator {
     // we also support the traditional (but awkward) Java wildcard syntax,
     // where "dir/*" adds to the classpath all jar files in the given
     // directory.
-    static Iterable<String> expandClassPath(String classpath) {
+    private static Iterable<String> expandClassPath(String classpath) {
         ArrayList<String> ret = new ArrayList<>();
         for (String component : classpath.split(":")) {
             if (component.endsWith("/*")) {
