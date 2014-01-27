@@ -871,7 +871,7 @@ private:
     }
 };
 
-class map_file_page : public uninitialized_anonymous_page_provider {
+class map_file_page_read : public uninitialized_anonymous_page_provider {
 private:
     file *_file;
     f_offset foffset;
@@ -890,11 +890,36 @@ private:
         return addr;
     }
 public:
-    map_file_page(file *file, f_offset foffset) :
+    map_file_page_read(file *file, f_offset foffset) :
         _file(file), foffset(foffset) {}
-    virtual ~map_file_page() {};
+    virtual ~map_file_page_read() {};
 
     void finalize() override {
+    }
+};
+
+class map_file_page_mmap : public page_allocator {
+private:
+    file* _file;
+
+public:
+    map_file_page_mmap(file *file) : _file(file) {}
+    virtual ~map_file_page_mmap() {};
+
+    virtual void* alloc(uintptr_t offset) override {
+        return _file->get_page(offset, page_size);
+    }
+    virtual void* alloc(size_t size, uintptr_t offset) override {
+        return _file->get_page(offset, size);
+    }
+    virtual void free(void *addr, uintptr_t offset) override {
+        _file->put_page(offset, page_size);
+    }
+    virtual void free(void *addr, size_t size, uintptr_t offset) override {
+        _file->put_page(offset, size);
+    }
+
+    void finalize() {
     }
 };
 
@@ -958,7 +983,12 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
 
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-    return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page(file, offset)));
+    return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page_read(file, offset)));
+}
+
+std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset)
+{
+    return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page_mmap(file)));
 }
 
 void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
