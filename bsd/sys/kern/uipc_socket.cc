@@ -969,6 +969,9 @@ sosend_generic(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 		goto out;
 
 restart:
+	if (so->so_nc) {
+		so->so_nc->process_queue();
+	}
 	do {
 		if (so->so_snd.sb_state & SBS_CANTSENDMORE) {
 			error = EPIPE;
