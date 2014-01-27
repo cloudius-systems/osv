@@ -281,4 +281,8 @@ public class ContextIsolator {
         }
         return ret;
     }
+
+    public Object receive() throws InterruptedException {
+        return getContext().takeMessage();
+    }
 }

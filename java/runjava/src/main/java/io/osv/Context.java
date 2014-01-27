@@ -4,7 +4,9 @@ import io.osv.jul.LogManagerWrapper;
 import io.osv.util.LazilyInitialized;
 
 import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
+import java.util.concurrent.SynchronousQueue;
 
 /*
  * Copyright (C) 2014 Cloudius Systems, Ltd.
@@ -24,6 +26,7 @@ public final class Context {
             });
 
     private final Properties properties;
+    private final BlockingQueue<Object> messageQueue = new SynchronousQueue<>();
 
     private Thread mainThread;
     private Throwable exception;
@@ -71,5 +74,13 @@ public final class Context {
 
     void setException(Throwable exception) {
         this.exception = exception;
+    }
+
+    public void send(Object message) throws InterruptedException {
+        messageQueue.put(message);
+    }
+
+    Object takeMessage() throws InterruptedException {
+        return messageQueue.take();
     }
 }
