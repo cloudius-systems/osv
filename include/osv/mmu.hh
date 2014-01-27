@@ -123,7 +123,7 @@ public:
 
 class file_vma : public vma {
 public:
-    file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared);
+    file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, map_page_ops *page_ops);
     ~file_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
@@ -161,6 +161,7 @@ error mincore(void *addr, size_t length, unsigned char *vec);
 bool is_linear_mapped(void *addr, size_t size);
 bool ismapped(void *addr, size_t size);
 bool isreadable(void *addr, size_t size);
+std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 typedef uint64_t phys;
 phys virt_to_phys(void *virt);

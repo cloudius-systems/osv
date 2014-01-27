@@ -956,14 +956,18 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     return v;
 }
 
+std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset)
+{
+    return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page(file, offset)));
+}
+
 void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
               fileref f, f_offset offset)
 {
     bool search = !(flags & mmu::mmap_fixed);
-    bool shared = flags & mmu::mmap_shared;
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto *vma = new mmu::file_vma(addr_range(start, start + size), perm, f, offset, shared);
+    auto *vma = f->mmap(addr_range(start, start + size), flags, perm, offset).release();
     map_page_ops *map = nullptr;
     void *v;
     WITH_LOCK(vma_list_mutex) {
@@ -1292,8 +1296,8 @@ ulong map_jvm(void* addr, size_t size, balloon *b)
     return 0;
 }
 
-file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared)
-    : vma(range, perm, 0, !shared)
+file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, map_page_ops* page_ops)
+    : vma(range, perm, 0, !shared, page_ops)
     , _file(file)
     , _offset(offset)
     , _shared(shared)
@@ -1303,8 +1307,6 @@ file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offse
     if (err != 0) {
         throw make_error(err);
     }
-
-    _page_ops = new map_file_page(_file.get(), _offset);
 }
 
 file_vma::~file_vma()
@@ -1318,7 +1320,7 @@ void file_vma::split(uintptr_t edge)
         return;
     }
     auto off = offset(edge);
-    vma* n = new file_vma(addr_range(edge, _range.end()), _perm, _file, off, _shared);
+    vma *n = _file->mmap(addr_range(edge, _range.end()), _flags, _perm, off).release();
     _range = addr_range(_range.start(), edge);
     vma_list.insert(*n);
 }

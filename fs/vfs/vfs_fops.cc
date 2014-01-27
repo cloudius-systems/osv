@@ -12,6 +12,7 @@
 #include <osv/poll.h>
 #include <fs/vfs/vfs.h>
 #include <osv/vfs_file.hh>
+#include <osv/mmu.hh>
 
 vfs_file::vfs_file(unsigned flags)
 	: file(flags, DTYPE_VNODE)
@@ -134,4 +135,9 @@ int vfs_file::chmod(mode_t mode)
 {
 	// somehow this is handled outside file ops
 	abort();
+}
+
+std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
+{
+    return mmu::default_file_mmap(this, range, flags, perm, offset);
 }
