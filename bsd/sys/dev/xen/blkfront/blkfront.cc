@@ -1409,6 +1409,7 @@ blkif_int(void *_xsc)
 	if (unlikely(sc->connected == BLKIF_STATE_SUSPENDED))
 		wakeup(&sc->cm_busy);
 
+    xsc->_bio_queue_waiters.wake_all();
 	mutex_unlock(&xsc->xb_io_lock);
 }
 

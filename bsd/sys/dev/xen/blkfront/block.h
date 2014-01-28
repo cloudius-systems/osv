@@ -35,6 +35,7 @@
 #define __XEN_DRIVERS_BLOCK_H__
 #include <xen/blkif.h>
 #include <list>
+#include <osv/condvar.h>
 
 /**
  * Given a number of blkif segments, compute the maximum I/O size supported.
@@ -196,6 +197,7 @@ class bf_softc {
 public:
     struct xb_softc sc;
     std::list<struct bio *> _bio_queue;
+    condvar _bio_queue_waiters;
     mutex   xb_io_lock;
 };
 
@@ -300,6 +302,11 @@ static __inline void
 xb_enqueue_bio(struct xb_softc *sc, struct bio *bp)
 {
     bf_softc *bf = reinterpret_cast<bf_softc *>(sc);
+
+    bf->_bio_queue_waiters.wait_until(bf->xb_io_lock,
+        [&] { return (bf->_bio_queue.size() < bf->sc.max_requests);
+    });
+
     bf->_bio_queue.push_back(bp);
 }
 
