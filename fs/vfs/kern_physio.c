@@ -137,6 +137,7 @@ void multiplex_strategy(struct bio *bio)
 		b->bio_cmd = bio->bio_cmd;
 		b->bio_dev = bio->bio_dev;
 		b->bio_caller1 = bio;
+		b->bio_private = bio->bio_private;
 		b->bio_done = multiplex_bio_done;
 
 		strategy(b);
