@@ -57,3 +57,36 @@ This document describe OSv coding style.
 
 6.3 Macro names and enum label should be capitalized. For "enum class",
 non-capitalized values are fine.
+
+## 7. Functions
+7.1 When declaring or defining a function taking no arguments in C++ code,
+avoid the unnecessary "void" as an argument list.
+
+This "void" was only necessary in C to maintain backward-compatibility with
+pre-1989 prototype-less declarations, but was never needed in C++ code.
+For example, write:
+
+```C++
+void abort() {
+```
+
+and not:
+
+```C++
+void abort(void) {
+```
+
+7.2 Put no space between function name and the argument list. For example:
+
+```C++
+double sqrt(double d) {
+```
+
+7.3 Avoid parantheses around return value
+
+"return" is not a function - it doesn't need parantheses. For example:
+
+```C++
+return 0;
+return a + b;
+```
