@@ -81,7 +81,8 @@ struct cdb_report_luns {
     u8 resreved_04;
     u8 resreved_05;
     u32 alloc_len;
-    u8 pad[6];
+    u8 resreved_0a;
+    u8 control;
 } __attribute__((packed));
 
 // SCSI CDB RESULT
