@@ -137,6 +137,7 @@ public:
     void exec_request_sense(u16 taget, u16 lun);
     std::vector<u16> exec_report_luns(u16 target);
     void add_lun(u16 target_id, u16 lun_id);
+    bool test_lun(u16 target_id, u16 lun_id);
     void exec_read_capacity(u16 target, u16 lun, size_t &devsize);
     void scan();
 

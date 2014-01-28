@@ -148,9 +148,18 @@ std::vector<u16> scsi::exec_report_luns(u16 target)
     if (response != VIRTIO_SCSI_S_OK)
         throw std::runtime_error("Fail to exec_report_luns");
 
-    auto list_len = be32toh(data->list_len);
-    for (unsigned i = 0; i < list_len / 8; i++)
-        luns.push_back((data->list[i] & 0xffff) >> 8);
+    auto status = req->resp.cmd.status;
+    if (status == VIRTIO_SCSI_S_OK) {
+        auto list_len = be32toh(data->list_len);
+        for (unsigned i = 0; i < list_len / 8; i++) {
+            luns.push_back((data->list[i] & 0xffff) >> 8);
+        }
+    } else {
+        // Report LUNS is not implemented
+        for (u16 lun = 0; lun < _config.max_lun; lun++) {
+                luns.push_back(lun);
+        }
+    }
     std::sort(luns.begin(),luns.end());
 
     delete req;
@@ -243,6 +252,11 @@ void scsi::exec_test_unit_ready(u16 target, u16 lun)
     if (response != VIRTIO_SCSI_S_OK)
         throw std::runtime_error("Fail to exec_test_unit_ready");
 
+    auto status = req->resp.cmd.status;
+    if (status != VIRTIO_SCSI_S_OK) {
+        throw std::runtime_error("Fail to exec_test_unit_ready");
+    }
+
     delete req;
 }
 
@@ -280,6 +294,24 @@ void scsi::exec_request_sense(u16 target, u16 lun)
     delete data;
 }
 
+bool scsi::test_lun(u16 target, u16 lun)
+{
+    bool ready = false;
+    u8 nr = 0;
+
+    do {
+        try {
+            exec_inquery(target, lun);
+            exec_test_unit_ready(target, lun);
+        } catch (std::runtime_error err) {
+            nr++;
+            continue;
+        }
+        ready = true;
+    } while (nr < 2 && !ready);
+
+    return ready;
+}
 
 void scsi::add_lun(u16 target, u16 lun)
 {
@@ -287,15 +319,8 @@ void scsi::add_lun(u16 target, u16 lun)
     struct device *dev;
     size_t devsize;
 
-    exec_inquery(target, lun);
-
-    try {
-        exec_test_unit_ready(target, lun);
-    } catch (std::runtime_error err) {
-        printf("virtio-scsi: %s\n", err.what());
-        exec_request_sense(target, lun);
+    if (!test_lun(target, lun))
         return;
-    }
 
     exec_read_capacity(target, lun, devsize);
 
