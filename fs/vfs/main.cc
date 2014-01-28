@@ -1164,6 +1164,12 @@ int fcntl(int fd, int cmd, int arg)
         fp->ioctl(FIOASYNC, &tmp);
 
         break;
+    case F_SETLK:
+        WARN_ONCE("fcntl(F_SETLK) stubbed\n");
+        break;
+    case F_GETLK:
+        WARN_ONCE("fcntl(F_GETLK) stubbed\n");
+        break;
     default:
         kprintf("unsupported fcntl cmd 0x%x\n", cmd);
         error = EINVAL;
