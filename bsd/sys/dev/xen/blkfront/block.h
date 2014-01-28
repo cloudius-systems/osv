@@ -6,6 +6,7 @@
  * Copyright (c) 2009 Doug F. Rabson, Citrix
  * Copyright (c) 2005 Kip Macy
  * Copyright (c) 2003-2004, Keir Fraser & Steve Hand
+ * Copyright (c) 2014, Glauber Costa, Cloudius Systems
  * Modifications by Mark A. Williamson are (c) Intel Research Cambridge
  *
  *
@@ -190,6 +191,11 @@ struct xb_softc {
 	struct mtx		xb_io_lock;
 
 	struct xb_command      *shadow;
+};
+
+class bf_softc {
+public:
+    struct xb_softc sc;
 };
 
 int xlvbd_add(struct xb_softc *, blkif_sector_t sectors, int device,

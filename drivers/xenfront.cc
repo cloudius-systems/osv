@@ -14,6 +14,9 @@
 #include <bsd/porting/bus.h>
 #include <xen/xenstore/xenstorevar.h>
 #include <xen/xenbus/xenbusb.h>
+#include <osv/bio.h>
+#include "sys/xen/gnttab.h"
+#include "sys/dev/xen/blkfront/block.h"
 
 extern driver_t netfront_driver;
 extern driver_t blkfront_driver;
@@ -62,10 +65,15 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
         // Very unfrequent, so don't care about how expensive and full of barriers this is
         _bsd_dev.unit = net_unit++;
 
+        _bsd_dev.softc = malloc(table->size);
+        // Simpler and we don't expect driver loading to fail anyway
+        assert(_bsd_dev.softc);
+        memset(_bsd_dev.softc, 0, table->size);
     } else if (!strcmp(ivars->xd_type, "vbd")) {
         table = &blkfront_driver;
         _irq_type = INTR_TYPE_BIO;
         ss << "vblk";
+        _bsd_dev.softc = reinterpret_cast<void *>(new bf_softc);
     } else
         return;
 
@@ -79,10 +87,6 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
         if (dm[i].id == bus_xenbus_otherend_changed)
             _backend_changed = reinterpret_cast<xenfront::backend_changed>(dm[i].func);
     }
-    _bsd_dev.softc = malloc(table->size);
-    // Simpler and we don't expect driver loading to fail anyway
-    assert(_bsd_dev.softc);
-    memset(_bsd_dev.softc, 0, table->size);
 }
 
 void xenfront_driver::finished()
