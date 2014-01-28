@@ -90,7 +90,7 @@ def start_osv_qemu(options):
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
         "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
-        "-device", "scsi-hd,bus=scsi0.0,drive=hd0,lun=0,bootindex=0"]
+        "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0,bootindex=0"]
     elif (options.ide):
         args += [
         "-hda", options.image_file]

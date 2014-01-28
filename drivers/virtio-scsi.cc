@@ -340,11 +340,10 @@ void scsi::add_lun(u16 target, u16 lun)
 
 }
 
-
 void scsi::scan()
 {
     /* TODO: Support more target */
-    for (u16 target = 0; target < 1; target++) {
+    for (u16 target = 1; target < 2; target++) {
         try {
             auto luns = exec_report_luns(target);
             for (auto &lun : luns) {
