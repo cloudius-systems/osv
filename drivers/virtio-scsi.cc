@@ -35,6 +35,7 @@ namespace virtio {
 int scsi::_instance = 0;
 
 struct scsi_priv {
+    devop_strategy_t strategy;
     scsi* drv;
     u16 target;
     u16 lun;
@@ -43,7 +44,6 @@ struct scsi_priv {
 static void scsi_strategy(struct bio *bio)
 {
     auto prv = scsi::get_priv(bio);
-    bio->bio_offset += bio->bio_dev->offset;
     prv->drv->make_request(bio);
 }
 
@@ -64,7 +64,7 @@ static struct devops scsi_devops {
     scsi_write,
     no_ioctl,
     no_devctl,
-    scsi_strategy,
+    multiplex_strategy,
 };
 
 struct driver scsi_driver = {
@@ -303,10 +303,12 @@ void scsi::add_lun(u16 target, u16 lun)
     dev_name += std::to_string(_disk_idx++);
     dev = device_create(&scsi_driver, dev_name.c_str(), D_BLK);
     prv = static_cast<struct scsi_priv*>(dev->private_data);
+    prv->strategy = scsi_strategy;
     prv->drv = this;
     prv->target = target;
     prv->lun = lun;
     dev->size = devsize;
+    dev->max_io_size = _config.max_sectors * VIRTIO_SCSI_SECTOR_SIZE;
     read_partition_table(dev);
 
     printf("virtio-scsi: Add scsi device target=%d, lun=%-3d as %s, devsize=%lld\n", target, lun, dev_name.c_str(), devsize);
