@@ -34,7 +34,7 @@ yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool 
 **Debian**
 
 ```
-apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant
+apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils
 ```
 
 **Ubuntu users**: you may use [Oracle JDK][] if you don't want to pull too many
