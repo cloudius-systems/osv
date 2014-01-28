@@ -146,6 +146,8 @@ public:
 
     void req_done();
 
+    bool ack_irq();
+
     static hw_driver* probe(hw_device* dev);
 private:
 
@@ -188,6 +190,8 @@ private:
 
     std::string _driver_name;
     scsi_config _config;
+
+    gsi_level_interrupt _gsi;
 
     //maintains the virtio instance number for multiple drives
     static int _instance;

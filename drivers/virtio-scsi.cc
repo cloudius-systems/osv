@@ -329,6 +329,20 @@ void scsi::scan()
     }
 }
 
+bool scsi::ack_irq()
+{
+    auto isr = virtio_conf_readb(VIRTIO_PCI_ISR);
+    auto queue = get_virt_queue(VIRTIO_SCSI_QUEUE_REQ);
+
+    if (isr) {
+        queue->disable_interrupts();
+        return true;
+    } else {
+        return false;
+    }
+
+}
+
 scsi::scsi(pci::device& dev)
     : virtio_driver(dev)
 {
@@ -344,11 +358,16 @@ scsi::scsi(pci::device& dev)
             sched::thread::attr().name("virtio-scsi"));
     t->start();
     auto queue = get_virt_queue(VIRTIO_SCSI_QUEUE_REQ);
-    _msi.easy_register({
-            { VIRTIO_SCSI_QUEUE_CTRL, nullptr, nullptr },
-            { VIRTIO_SCSI_QUEUE_EVT, nullptr, nullptr },
-            { VIRTIO_SCSI_QUEUE_REQ, [=] { queue->disable_interrupts(); }, t },
-    });
+
+    if (dev.is_msix()) {
+        _msi.easy_register({
+                { VIRTIO_SCSI_QUEUE_CTRL, nullptr, nullptr },
+                { VIRTIO_SCSI_QUEUE_EVT, nullptr, nullptr },
+                { VIRTIO_SCSI_QUEUE_REQ, [=] { queue->disable_interrupts(); }, t },
+        });
+    } else {
+        _gsi.set_ack_and_handler(dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { t->wake(); });
+    }
 
     // Enable indirect descriptor
     queue->set_use_indirect(true);
