@@ -134,6 +134,8 @@ public:
     void set_readonly() {_ro = true;}
     bool is_readonly() {return _ro;}
 
+    bool ack_irq();
+
     static hw_driver* probe(hw_device* dev);
 private:
 
@@ -155,6 +157,7 @@ private:
     bool _ro;
     // This mutex protects parallel make_request invocations
     mutex _lock;
+    gsi_level_interrupt _gsi;
 };
 
 }
