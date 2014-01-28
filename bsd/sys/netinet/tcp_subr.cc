@@ -904,6 +904,8 @@ tcp_discardcb(struct tcpcb *tp)
 		
 	tcp_free_sackholes(tp);
 
+	tcp_free_net_channel(tp);
+
 	/* Allow the CC algorithm to clean up after itself. */
 	if (CC_ALGO(tp)->cb_destroy != NULL)
 		CC_ALGO(tp)->cb_destroy(tp->ccv);

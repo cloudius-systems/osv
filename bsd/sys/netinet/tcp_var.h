@@ -686,6 +686,7 @@ void	 tcp_input(struct mbuf *, int);
 void	 tcp_flush_net_channel(tcpcb* tp);
 void	 tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf);
 void	 tcp_teardown_net_channel(tcpcb* tp);
+void	 tcp_free_net_channel(tcpcb* tp);
 u_long	 tcp_maxmtu(struct in_conninfo *, int *);
 u_long	 tcp_maxmtu6(struct in_conninfo *, int *);
 void	 tcp_mss_update(struct tcpcb *, int, int, struct hc_metrics_lite *,

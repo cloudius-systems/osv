@@ -3693,24 +3693,36 @@ tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf)
 	}
 }
 
-void
-tcp_teardown_net_channel(tcpcb* tp)
+void tcp_teardown_net_channel(tcpcb *tp)
 {
-	poll_link* pl;
-	auto so = tp->t_inpcb->inp_socket;
-	if (!so || !so->so_nc) {
+	if (!tp->nc_intf) {
 		return;
 	}
-	if (so->fp) {
+	tp->nc_intf->del_net_channel(tcp_connection_id(tp));
+	tp->nc_intf = nullptr;
+	// keep tp->nc around since it might still contain packets
+}
+
+void
+tcp_free_net_channel(tcpcb* tp)
+{
+	poll_link* pl;
+	if (!tp->nc) {
+		return;
+	}
+	tcp_teardown_net_channel(tp);
+	auto so = tp->t_inpcb->inp_socket;
+	if (so && so->fp) {
 		TAILQ_FOREACH(pl, &so->fp->f_poll_list, _link) {
 			so->so_nc->del_poller(*pl->_req);
 		}
+		so->so_nc = nullptr;
 	}
 	if (tp->nc_intf) {
 		tp->nc_intf->del_net_channel(tcp_connection_id(tp));
 	}
-	osv::rcu_dispose(so->so_nc);
-	so->so_nc = nullptr;
+	osv::rcu_dispose(tp->nc);
+	tp->nc = nullptr;
 }
 
 void

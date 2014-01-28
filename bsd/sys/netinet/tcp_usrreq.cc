@@ -1673,6 +1673,8 @@ tcp_usrclosed(struct tcpcb *tp)
 	INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 	INP_LOCK_ASSERT(tp->t_inpcb);
 
+	tcp_teardown_net_channel(tp);
+
 	switch (tp->t_state) {
 	case TCPS_LISTEN:
 		tcp_offload_listen_close(tp);
@@ -1694,7 +1696,6 @@ tcp_usrclosed(struct tcpcb *tp)
 		break;
 
 	case TCPS_ESTABLISHED:
-		tcp_teardown_net_channel(tp);
 		tp->t_state = TCPS_FIN_WAIT_1;
 		break;
 
