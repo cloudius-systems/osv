@@ -163,6 +163,7 @@ private:
         void init(struct bio* bio, u16 target, u16 lun)
         {
             memset(&req.cmd, 0, sizeof(req.cmd));
+            req.cmd.tag = reinterpret_cast<u64>(bio);
             req.cmd.lun[0] = 1;
             req.cmd.lun[1] = target;
             req.cmd.lun[2] = (lun >> 8) | 0x40;
