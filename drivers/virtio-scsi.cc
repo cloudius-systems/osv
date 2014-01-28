@@ -461,7 +461,7 @@ void scsi::req_done()
             auto response = req->resp.cmd.response;
             auto bio = req->bio;
 
-            assert(req->resp.cmd.response == VIRTIO_SCSI_S_OK);
+            assert(response == VIRTIO_SCSI_S_OK);
 
             // Other req type will be freed by the caller who send the bio
             if (req->bio->bio_cmd != BIO_SCSI)
