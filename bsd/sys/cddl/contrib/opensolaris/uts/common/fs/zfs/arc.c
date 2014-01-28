@@ -4047,11 +4047,9 @@ arc_fini(void)
 	ASSERT(arc_loaned_bytes == 0);
 
 	mutex_destroy(&arc_lowmem_lock);
-#ifndef __OSV__
 #ifdef _KERNEL
 	if (arc_event_lowmem != NULL)
 		EVENTHANDLER_DEREGISTER(vm_lowmem, arc_event_lowmem);
-#endif
 #endif
 }
 
