@@ -1427,6 +1427,17 @@ int fchmod(int fd, mode_t mode)
     return 0;
 }
 
+TRACEPOINT(trace_vfs_fchown, "\"%d\" %d %d", int, uid_t, gid_t);
+TRACEPOINT(trace_vfs_fchown_ret, "");
+
+int fchown(int fd, uid_t owner, gid_t group)
+{
+    trace_vfs_fchown(fd, owner, group);
+    WARN_STUBBED();
+    trace_vfs_fchown_ret();
+    return 0;
+}
+
 NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
 mode_t umask(mode_t newmask)
