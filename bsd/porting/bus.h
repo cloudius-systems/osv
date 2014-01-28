@@ -200,7 +200,7 @@ static inline void disk_destroy(struct disk *dp)
 {
 }
 
-#define device_printf(dev, ...) printf(__VA_ARGS__) 
+#define device_printf(dev, ...) debugf(__VA_ARGS__)
 __BEGIN_DECLS
 void device_set_ivars(device_t dev, void *ivars);
 int device_get_children(device_t dev, device_t **devlistp, int *devcountp);

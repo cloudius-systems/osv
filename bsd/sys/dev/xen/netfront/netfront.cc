@@ -2018,7 +2018,7 @@ xn_query_features(struct netfront_info *np)
 	np->maxfrags = 1;
 	if (val) {
 		np->maxfrags = MAX_TX_REQ_FRAGS;
-		printf(" feature-sg");
+		debug(" feature-sg");
 	}
 
 	if (xs_scanf(XST_NIL, xenbus_get_otherend_path(np->xbdev),
@@ -2028,10 +2028,10 @@ xn_query_features(struct netfront_info *np)
 	np->xn_ifp->if_capabilities &= ~(IFCAP_TSO4|IFCAP_LRO);
 	if (val) {
 		np->xn_ifp->if_capabilities |= IFCAP_TSO4|IFCAP_LRO;
-		printf(" feature-gso-tcp4");
+		debug(" feature-gso-tcp4");
 	}
 
-	printf("\n");
+	debug("\n");
 }
 
 static int
