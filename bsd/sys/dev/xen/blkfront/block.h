@@ -34,6 +34,7 @@
 #ifndef __XEN_DRIVERS_BLOCK_H__
 #define __XEN_DRIVERS_BLOCK_H__
 #include <xen/blkif.h>
+#include <list>
 
 /**
  * Given a number of blkif segments, compute the maximum I/O size supported.
@@ -157,7 +158,6 @@ union xb_statrequest {
 struct xb_softc {
 	device_t		xb_dev;
 	struct disk		*xb_disk;		/* disk params */
-	struct bio_queue_head   xb_bioq;		/* sort queue */
 	int			xb_unit;
 	int			xb_flags;
 #define XB_OPEN		(1<<0)		/* drive is open (can't shut down) */
@@ -196,6 +196,7 @@ struct xb_softc {
 class bf_softc {
 public:
     struct xb_softc sc;
+    std::list<struct bio *> _bio_queue;
 };
 
 int xlvbd_add(struct xb_softc *, blkif_sector_t sectors, int device,
@@ -293,22 +294,20 @@ XBQ_COMMAND_QUEUE(complete, XBQ_COMPLETE);
 static __inline void
 xb_initq_bio(struct xb_softc *sc)
 {
-	bioq_init(&sc->xb_bioq);
-	XBQ_INIT(sc, XBQ_BIO);
 }
 
 static __inline void
 xb_enqueue_bio(struct xb_softc *sc, struct bio *bp)
 {
-	bioq_insert_tail(&sc->xb_bioq, bp);
-	XBQ_ADD(sc, XBQ_BIO);
+    bf_softc *bf = reinterpret_cast<bf_softc *>(sc);
+    bf->_bio_queue.push_back(bp);
 }
 
 static __inline void
 xb_requeue_bio(struct xb_softc *sc, struct bio *bp)
 {
-	bioq_insert_head(&sc->xb_bioq, bp);
-	XBQ_ADD(sc, XBQ_BIO);
+    bf_softc *bf = reinterpret_cast<bf_softc *>(sc);
+    bf->_bio_queue.push_front(bp);
 }
 
 static __inline struct bio *
@@ -316,11 +315,14 @@ xb_dequeue_bio(struct xb_softc *sc)
 {
 	struct bio *bp;
 
-	if ((bp = bioq_first(&sc->xb_bioq)) != NULL) {
-		bioq_remove(&sc->xb_bioq, bp);
-		XBQ_REMOVE(sc, XBQ_BIO);
-	}
-	return (bp);
+    bf_softc *bf = reinterpret_cast<bf_softc *>(sc);
+    if (bf->_bio_queue.empty()) {
+        return nullptr;
+    }
+
+    bp = bf->_bio_queue.front();
+    bf->_bio_queue.pop_front();
+    return (bp);
 }
 
 #endif /* __XEN_DRIVERS_BLOCK_H__ */
