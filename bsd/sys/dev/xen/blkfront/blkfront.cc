@@ -263,6 +263,7 @@ static void
 xb_strategy(struct bio *bp)
 {
 	struct xb_softc	*sc = (xb_softc *)bp->bio_dev->softc;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
 	/* bogus disk? */
 	if (sc == NULL) {
@@ -282,12 +283,12 @@ xb_strategy(struct bio *bp)
 	/*
 	 * Place it in the queue of disk activities for this disk
 	 */
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 
 	xb_enqueue_bio(sc, bp);
 	xb_startio(sc);
 
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 	return;
 }
 
@@ -354,6 +355,7 @@ xb_dump(void *arg, void *vvirtual, vm_offset_t physical, off_t offset,
 	size_t		chunk;
 	int		sbp;
 	int		rc = 0;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
 	if (length <= 0)
 		return (rc);
@@ -364,13 +366,13 @@ xb_dump(void *arg, void *vvirtual, vm_offset_t physical, off_t offset,
 	 * If this lock is held, then this module is failing, and a
 	 * successful kernel dump is highly unlikely anyway.
 	 */
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 
 	/* Split the 64KB block as needed */
 	for (sbp=0; length > 0; sbp++) {
 		cm = xb_dequeue_free(sc);
 		if (cm == NULL) {
-			mtx_unlock(&sc->xb_io_lock);
+			mutex_unlock(&xsc->xb_io_lock);
 			device_printf(sc->xb_dev, "dump: no more commands?\n");
 			return (EBUSY);
 		}
@@ -378,7 +380,7 @@ xb_dump(void *arg, void *vvirtual, vm_offset_t physical, off_t offset,
 		if (gnttab_alloc_grant_references(sc->max_request_segments,
 						  &cm->gref_head) != 0) {
 			xb_free_command(cm);
-			mtx_unlock(&sc->xb_io_lock);
+			mutex_unlock(&xsc->xb_io_lock);
 			device_printf(sc->xb_dev, "no more grant allocs?\n");
 			return (EBUSY);
 		}
@@ -400,7 +402,7 @@ xb_dump(void *arg, void *vvirtual, vm_offset_t physical, off_t offset,
 
 	/* Tell DOM0 to do the I/O */
 	xb_startio(sc);
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 
 	/* Poll for the completion. */
 	xb_quiesce(sc);	/* All quite on the eastern front */
@@ -508,7 +510,6 @@ blkfront_attach(device_t dev)
 		device_set_unit(dev, unit);
 
 	sc = (xb_softc *)device_get_softc(dev);
-	mtx_init(&sc->xb_io_lock, "blkfront i/o lock", NULL, MTX_DEF);
 	xb_initq_free(sc);
 	xb_initq_busy(sc);
 	xb_initq_ready(sc);
@@ -534,24 +535,25 @@ static int
 blkfront_suspend(device_t dev)
 {
 	struct xb_softc *sc = (xb_softc *)device_get_softc(dev);
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 	int retval;
 	int saved_state;
 
 	/* Prevent new requests being issued until we fix things up. */
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 	saved_state = sc->connected;
 	sc->connected = BLKIF_STATE_SUSPENDED;
 
 	/* Wait for outstanding I/O to drain. */
 	retval = 0;
 	while (TAILQ_EMPTY(&sc->cm_busy) == 0) {
-		if (msleep(&sc->cm_busy, &sc->xb_io_lock,
+		if (msleep(&sc->cm_busy, &xsc->xb_io_lock,
 			   PRIBIO, "blkf_susp", 30 * hz) == EWOULDBLOCK) {
 			retval = EBUSY;
 			break;
 		}
 	}
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 
 	if (retval != 0)
 		sc->connected = saved_state;
@@ -579,6 +581,7 @@ blkfront_initialize(struct xb_softc *sc)
 	uint32_t max_ring_page_order;
 	int error;
 	int i;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
 	if (xenbus_get_state(sc->xb_dev) != XenbusStateInitialising) {
 		/* Initialization has already been performed. */
@@ -697,7 +700,7 @@ blkfront_initialize(struct xb_softc *sc)
 				   PAGE_SIZE,		/* maxsegsize */
 				   BUS_DMA_ALLOCNOW,	/* flags */
 				   busdma_lock_mutex,	/* lockfunc */
-				   &sc->xb_io_lock,	/* lockarg */
+				   &xsc->xb_io_lock,	/* lockarg */
 				   &sc->xb_io_dmat);
 	if (error != 0) {
 		xenbus_dev_fatal(sc->xb_dev, error,
@@ -922,6 +925,7 @@ blkfront_connect(struct xb_softc *sc)
 	unsigned long sectors, sector_size;
 	unsigned int binfo;
 	int err, feature_barrier, feature_flush;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
 	if( (sc->connected == BLKIF_STATE_CONNECTED) || 
 	    (sc->connected == BLKIF_STATE_SUSPENDED) )
@@ -963,17 +967,17 @@ blkfront_connect(struct xb_softc *sc)
 		xlvbd_add(sc, sectors, sc->vdevice, binfo, sector_size);
 	}
 
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 	sc->connected = BLKIF_STATE_CONNECTED;
 	sc->xb_flags |= XB_READY;
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 
 	(void)xenbus_set_state(dev, XenbusStateConnected); 
 
 	/* Kick pending requests. */
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 	xb_startio(sc);
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 }
 
 /**
@@ -1008,8 +1012,6 @@ blkfront_detach(device_t dev)
 	DPRINTK("blkfront_remove: %s removed\n", xenbus_get_node(dev));
 
 	blkif_free(sc);
-	mtx_destroy(&sc->xb_io_lock);
-
 	return 0;
 }
 
@@ -1029,12 +1031,13 @@ static void
 blkif_restart_queue_callback(void *arg)
 {
 	struct xb_softc *sc = (xb_softc *)arg;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 
 	xb_startio(sc);
 
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 }
 
 static int
@@ -1302,9 +1305,10 @@ static void
 xb_startio(struct xb_softc *sc)
 {
 	struct xb_command *cm;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 	int error, queued = 0;
 
-	mtx_assert(&sc->xb_io_lock, MA_OWNED);
+	assert(mutex_owned(&xsc->xb_io_lock));
 
 	if (sc->connected != BLKIF_STATE_CONNECTED)
 		return;
@@ -1333,18 +1337,19 @@ xb_startio(struct xb_softc *sc)
 }
 
 static void
-blkif_int(void *xsc)
+blkif_int(void *_xsc)
 {
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(_xsc);
 	struct xb_softc *sc = (xb_softc *)xsc;
 	struct xb_command *cm;
 	blkif_response_t *bret;
 	RING_IDX i, rp;
 	int op;
 
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 
 	if (unlikely(sc->connected == BLKIF_STATE_DISCONNECTED)) {
-		mtx_unlock(&sc->xb_io_lock);
+		mutex_unlock(&xsc->xb_io_lock);
 		return;
 	}
 
@@ -1404,19 +1409,20 @@ blkif_int(void *xsc)
 	if (unlikely(sc->connected == BLKIF_STATE_SUSPENDED))
 		wakeup(&sc->cm_busy);
 
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 }
 
 static void 
 blkif_free(struct xb_softc *sc)
 {
 	uint8_t *sring_page_ptr;
+	bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 	int i;
 	
 	/* Prevent new requests being issued until we fix things up. */
-	mtx_lock(&sc->xb_io_lock);
+	mutex_lock(&xsc->xb_io_lock);
 	sc->connected = BLKIF_STATE_DISCONNECTED; 
-	mtx_unlock(&sc->xb_io_lock);
+	mutex_unlock(&xsc->xb_io_lock);
 
 	/* Free resources associated with old device channel. */
 	if (sc->ring.sring != NULL) {

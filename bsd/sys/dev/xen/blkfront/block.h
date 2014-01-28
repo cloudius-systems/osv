@@ -188,7 +188,6 @@ struct xb_softc {
 	 * hot-unplug unless this is 0.
 	 */
 	int			users;
-	struct mtx		xb_io_lock;
 
 	struct xb_command      *shadow;
 };
@@ -197,6 +196,7 @@ class bf_softc {
 public:
     struct xb_softc sc;
     std::list<struct bio *> _bio_queue;
+    mutex   xb_io_lock;
 };
 
 int xlvbd_add(struct xb_softc *, blkif_sector_t sectors, int device,
