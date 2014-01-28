@@ -1416,6 +1416,17 @@ int chmod(const char *pathname, mode_t mode)
     return 0;
 }
 
+TRACEPOINT(trace_vfs_fchmod, "\"%d\" 0%0o", int, mode_t);
+TRACEPOINT(trace_vfs_fchmod_ret, "");
+
+int fchmod(int fd, mode_t mode)
+{
+    trace_vfs_fchmod(fd, mode);
+    WARN_STUBBED();
+    trace_vfs_fchmod_ret();
+    return 0;
+}
+
 NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
 mode_t umask(mode_t newmask)
