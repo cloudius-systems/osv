@@ -132,12 +132,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     image_config_file = os.path.join(image_configs_dir, args.image_config + '.py')
-    if not os.path.exists(image_config_file):
-        print "No such image configuration: " + args.image_config
-        sys.exit(1)
+    if os.path.exists(image_config_file):
+        print "Using image config: %s" % image_config_file
+        config = resolve.local_import(image_config_file)
+        run_list = config.get('run', [])
+    else:
+        print "No such image configuration: " + args.image_config + ". Trying module with this name"
+        run_list = api.require(args.image_config).default;
 
-    print "Using image config: %s" % image_config_file
-    config = resolve.local_import(image_config_file)
     modules = resolve.get_required_modules()
 
     print "Modules:"
@@ -148,7 +150,6 @@ if __name__ == "__main__":
 
     make_modules(modules)
 
-    run_list = config.get('run', [])
     apps_to_run = get_basic_apps(run_list)
     generate_manifests(modules, apps_to_run)
     generate_cmdline(apps_to_run)
