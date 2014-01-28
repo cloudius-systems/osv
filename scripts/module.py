@@ -84,7 +84,9 @@ def get_command_line(basic_apps):
 
 def make_modules(modules):
     for module in modules:
-        subprocess.call(["make module"], shell=True, cwd=module.local_path)
+        if os.path.exists(os.path.join(module.local_path, 'Makefile')):
+            if subprocess.call(["make module"], shell=True, cwd=module.local_path):
+                raise Exception('make failed for ' + module.name)
 
 def flatten_list(elememnts):
     if not elememnts:
