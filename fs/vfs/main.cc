@@ -1592,6 +1592,12 @@ extern "C" void unmount_rootfs(void)
 
     sys_umount("/dev");
 
+    ret = sys_umount("/proc");
+    if (ret) {
+        kprintf("Warning: unmount_rootfs: failed to unmount /proc, "
+            "error = %s\n", strerror(ret));
+    }
+
     ret = sys_umount2("/", MNT_FORCE);
     if (ret) {
         kprintf("Warning: unmount_rootfs: failed to unmount /, "
