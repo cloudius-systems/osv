@@ -54,7 +54,10 @@ SECTIONS
     .data.rel.ro : { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*) } : text
     .data : { *(.data) } :text
     _init_array_start = .;
-    .init_array : { *(SORT_BY_INIT_PRIORITY(.init_array.*)) } :text
+    .init_array : {
+        *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*))
+        *(.init_array .ctors)
+    } : text
     _init_array_end = .;
     . = ALIGN(4096);
     .percpu : {
