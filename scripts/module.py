@@ -133,8 +133,23 @@ if __name__ == "__main__":
         config = resolve.local_import(image_config_file)
         run_list = config.get('run', [])
     else:
-        print "No such image configuration: " + args.image_config + ". Trying module with this name"
-        run_list = api.require(args.image_config).default;
+        # If images/image_config doesn't exist, assume image_config is a
+        # comma-separated list of module names, and build an image from those
+        # modules (and their dependencies). The command line to run is to
+        # run each of the module's "default" command line, in parallel.
+        # You can choose a module's non-default command line, with a dot,
+        # e.g.: mgmt.shell use's mgmt's "shell" command line.
+        print "No such image configuration: " + args.image_config + ". Assuming list of modules."
+        run_list = []
+        for module in args.image_config.split(","):
+            a = module.split(".", 1)
+            name = a[0]
+            variant = a[1] if (len(a) > 1) else "default"
+            mod = api.require(name)
+            if hasattr(mod, variant):
+                run_list.append(getattr(mod, variant));
+            elif variant != "default" and variant != "none":
+                raise Exception("Attribute %s not set in module %s" % (variant, name))
 
     modules = resolve.get_required_modules()
 
