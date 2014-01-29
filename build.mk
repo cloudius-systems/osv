@@ -147,6 +147,7 @@ boost-tests := tests/tst-rename.so \
 	tests/tst-libc-locking.so \
 	tests/misc-fs-stress.so \
 	tests/misc-bdev-write.so \
+	tests/misc-bdev-wlatency.so \
 	tests/tst-promise.so \
 	tests/tst-dlfcn.so \
 	tests/tst-stat.so
