@@ -14,6 +14,7 @@
 #include <osv/device.h>
 #include <osv/bio.h>
 #include <osv/prex.h>
+#include <osv/mempool.hh>
 
 #define MB (1024*1024)
 #define KB (1024)
@@ -27,7 +28,7 @@ static void bio_done(struct bio* bio)
 {
     auto err = bio->bio_flags & BIO_ERROR;
     bytes_written += bio->bio_bcount;
-    free(bio->bio_data);
+    memory::free_page(bio->bio_data);
     destroy_bio(bio);
     bio_inflights--;
     if (err) {
@@ -66,7 +67,7 @@ int main(int argc, char const *argv[])
         bio_inflights++;
         bio->bio_cmd = BIO_WRITE;
         bio->bio_dev = dev;
-        bio->bio_data = malloc(buf_size);
+        bio->bio_data = memory::alloc_page();
         bio->bio_offset = offset;
         bio->bio_bcount = buf_size;
         bio->bio_caller1 = bio;
