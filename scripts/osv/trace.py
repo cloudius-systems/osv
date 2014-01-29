@@ -25,6 +25,10 @@ class BacktraceFormatter:
     def __call__(self, backtrace):
         if not backtrace:
             return ''
+
+        while self.resolver(backtrace[0] - 1).startswith("tracepoint"):
+            backtrace.pop(0)
+
         return '   [' + ', '.join((str(self.resolver(x - 1)) for x in backtrace if x)) + ']'
 
 def simple_symbol_formatter(addr):
