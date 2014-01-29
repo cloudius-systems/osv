@@ -655,7 +655,7 @@ usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
 	$(src)/scripts/upload_manifest.py -o $@ -m $(out)/usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
-	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(shell cat $(out)/cmdline), IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ "$(shell cat $(out)/cmdline)", IMGEDIT $@)
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 

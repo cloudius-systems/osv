@@ -73,18 +73,14 @@ def generate_manifests(modules, basic_apps):
             for app in basic_apps:
                 app.prepare_manifest(resolve.get_build_path(), manifest_type, manifest)
 
-def get_command_line(basic_apps):
-    if not basic_apps:
-        raise Exception("No apps")
-
-    if len(basic_apps) > 1:
-        raise Exception("Running more than one basic app not supported")
-
-    cmdline = basic_apps[0].get_launcher_args()
-    if isinstance(cmdline, basestring):
-        return cmdline
+def format_args(args):
+    if isinstance(args, basestring):
+        return args
     else:
-        return ' '.join(cmdline)
+        return ' '.join(args)
+
+def get_command_line(basic_apps):
+    return '&'.join((format_args(app.get_launcher_args()) for app in basic_apps))
 
 def make_modules(modules):
     for module in modules:
