@@ -37,15 +37,22 @@ int main(int argc, char const *argv[])
 {
     const int buf_size = 1024;
     char *buf = new char[buf_size];
+    const char * fname;
+    char default_fname[64] = "/tmpfileXXXXXX";
 
     const std::chrono::seconds test_duration(10);
 
-    if (argc < 2) {
+    if (argc > 2) {
         printf("Usage: %s <file-name>\n", argv[0]);
         return 1;
     }
 
-    const char * fname = argv[1];
+    if (argc == 2) {
+        fname = argv[1];
+    } else {
+        mktemp(default_fname);
+        fname = reinterpret_cast<const char *>(default_fname);
+    }
 
     int fd = open(fname, O_CREAT | O_RDWR | O_LARGEFILE | O_DIRECT);
     FILE *f = fdopen(fd, "w");
