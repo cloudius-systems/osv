@@ -1445,7 +1445,18 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * certain cases in tcp_input() (is this still true?).  Currently we
 	 * will never enter with no lock, so we try to drop it quickly in the
 	 * common pure ack/pure data cases.
+	 *
+	 * net channels process packets without the lock, so try to acquire it.
+	 * if we fail, drop the packet.  FIXME: invert the lock order so we don't
+	 * have to drop packets.
 	 */
+	if (tp->t_state != TCPS_ESTABLISHED && ti_locked == TI_UNLOCKED) {
+		if (INP_INFO_TRY_WLOCK(&V_tcbinfo)) {
+			ti_locked = TI_WLOCKED;
+		} else {
+			goto drop;
+		}
+	}
 	if ((thflags & (TH_SYN | TH_FIN | TH_RST)) != 0 ||
 	    tp->t_state != TCPS_ESTABLISHED) {
 		KASSERT(ti_locked == TI_WLOCKED, ("%s ti_locked %d for "
