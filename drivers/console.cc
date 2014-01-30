@@ -94,6 +94,9 @@ void console_poll()
         std::lock_guard<mutex> lock(console_mutex);
         sched::thread::wait_until(console_mutex, [&] { return console.input_ready(); });
         char c = console.readch();
+        if (c == 0)
+            continue;
+
         if (c == '\r' && tio.c_iflag & ICRNL) {
             c = '\n';
         }
