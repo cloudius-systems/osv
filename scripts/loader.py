@@ -429,10 +429,13 @@ class osv_syms(gdb.Command):
         while long(p.dereference()):
             obj = p.dereference().dereference()
             base = long(obj['_base'])
-            path = obj['_pathname']['_M_dataplus']['_M_p'].string()
-            path = translate(path)
-            print path, hex(base)
-            load_elf(path, base)
+            obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
+            path = translate(obj_path)
+            if not path:
+                print 'ERROR: Unable to locate object file for:', obj_path, hex(base)
+            else:
+                print path, hex(base)
+                load_elf(path, base)
             p += 1
 
 class osv_info(gdb.Command):
