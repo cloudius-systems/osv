@@ -554,7 +554,7 @@ libtsm += drivers/libtsm/tsm_vte.o
 libtsm += drivers/libtsm/tsm_vte_charsets.o
 
 drivers :=
-drivers += drivers/console.o drivers/vga.o drivers/isa-serial.o
+drivers += drivers/console.o drivers/vga.o drivers/kbd.o drivers/isa-serial.o
 drivers += drivers/debug-console.o
 drivers += drivers/ramdisk.o
 drivers += $(bsd) $(solaris) $(libtsm)
