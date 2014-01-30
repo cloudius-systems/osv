@@ -3707,6 +3707,7 @@ int
 zfs_inactive(vnode_t *vp)
 {
 	znode_t	*zp = VTOZ(vp);
+	uint32_t saved_z_ref_cnt;
 	zfsvfs_t *zfsvfs;
 	int error;
 
@@ -3772,6 +3773,16 @@ zfs_inactive(vnode_t *vp)
 	}
 
 	/*
+	 * Save the znode refcnt to determine later whether or not the
+	 * underlying object was destroyed by zfs_zinactive.
+	 * Do that by checking if the saved refcnt reaches zero after
+	 * decrementing it once.
+	 * This assignment must be done before the code below given that
+	 * the znode may not exist anymore.
+	 */
+	saved_z_ref_cnt = zp->z_ref_cnt;
+
+	/*
 	 * This might want to be moved into a separate VOP_RECLAIM eventually.
 	 */
 	if (zp->z_sa_hdl == NULL)
@@ -3780,7 +3791,16 @@ zfs_inactive(vnode_t *vp)
 		zfs_zinactive(zp);
 	rw_exit(&zfsvfs->z_teardown_inactive_lock);
 
-	vp->v_data = NULL;
+	/*
+	 * The following clause checks for the existence of the znode object,
+	 * if it no longer exists, then let's assign NULL to the v_data field
+	 * of the vnode meaning that it is completely inactive from the zfs
+	 * vnops perspective.
+	 */
+	if (--saved_z_ref_cnt == 0) {
+		vp->v_data = NULL;
+	}
+
 	return 0;
 }
 

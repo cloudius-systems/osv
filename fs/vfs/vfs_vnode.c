@@ -270,6 +270,14 @@ vrele(struct vnode *vp)
 
 	VNODE_LOCK();
 	DPRINTF(VFSDB_VNODE, ("vrele: ref=%d\n", vp->v_refcnt));
+
+	/*
+	 * VOP_INACTIVE details:
+	 * Used to release the refcnt of the fs specific vnode data.
+	 * When the refcnt reaches 0, then VOP_INACTIVE itself would
+	 * deallocate the data.
+	 */
+	VOP_INACTIVE(vp);
 	vp->v_refcnt--;
 	if (vp->v_refcnt > 0) {
 		VNODE_UNLOCK();
@@ -278,10 +286,6 @@ vrele(struct vnode *vp)
 	LIST_REMOVE(vp, v_link);
 	VNODE_UNLOCK();
 
-	/*
-	 * Deallocate fs specific vnode data
-	 */
-	VOP_INACTIVE(vp);
 	vfs_unbusy(vp->v_mount);
 	mutex_destroy(&vp->v_lock);
 	free(vp);

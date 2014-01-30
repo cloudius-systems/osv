@@ -660,6 +660,7 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
 	zp->z_seq = 0x7A4653;
 	zp->z_sync_cnt = 0;
 #ifdef __OSV__
+	zp->z_vnode = NULL;
 	zp->z_ref_cnt = 1;
 #endif
 
