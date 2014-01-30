@@ -39,9 +39,9 @@ int check_zfs_refcnt_behavior(void)
 {
     struct mount *mp;
     char mount_path[] = "/";
-    char file[64];
+    char file[64], newfile[64];
     int old_mcount;
-    int fd, ret = 0;
+    int i, fd, ret = 0;
 
     /* Get refcount value from the zfs mount point */
     ret = vfs_findroot(mount_path, &mp, (char **) &file);
@@ -50,11 +50,11 @@ int check_zfs_refcnt_behavior(void)
     }
     old_mcount = mp->m_count;
 
-    snprintf(file, 64, "/fileXXXXXX");
+    snprintf(file, 64, "%sfileXXXXXX", mount_path);
     mktemp(file);
 
     /* Create hard links, and remove them afterwards to exercise the refcount code */
-    for (int i = 0; i < 10; i++) {
+    for (i = 0; i < 10; i++) {
         fd = open(file, O_CREAT|O_TRUNC|O_WRONLY|O_SYNC, 0666);
         if (fd <= 0) {
             return -1;
@@ -62,6 +62,36 @@ int check_zfs_refcnt_behavior(void)
         close(fd);
         unlink(file);
     }
+
+    fd = open(file, O_CREAT|O_TRUNC|O_RDWR, 0666);
+    if (fd <= 0) {
+        return -1;
+    }
+    close(fd);
+
+    snprintf(newfile, 64, "%snewfileXXXXXX", mount_path);
+    mktemp(newfile);
+
+    /* Create a link to file into newfile */
+    ret = link(file, newfile);
+    if (ret != 0) {
+        return -1;
+    }
+
+    /*
+     * Force EEXIST on destination path, so the refcnt of the underlying znode
+     * will be bumped for each link below.
+     * VOP_INACTIVE should be called by each vrele to release one refcnt of
+     * the znode properly.
+     */
+    for (i = 0; i < 10; i++) {
+        ret = link(file, newfile);
+        if (ret != -1 || errno != EEXIST) {
+            return -1;
+        }
+    }
+    unlink(file);
+    unlink(newfile);
 
     /* Get the new refcount value after doing strategical fs operations */
     ret = vfs_findroot(mount_path, &mp, (char **) &file);
