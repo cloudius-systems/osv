@@ -29,13 +29,15 @@ debug_console console;
 
 void write(const char *msg, size_t len)
 {
-    console.write(msg, len);
+    if (len)
+        console.write(msg, len);
 }
 
 // lockless version
 void write_ll(const char *msg, size_t len)
 {
-    console.write_ll(msg, len);
+    if (len)
+        console.write_ll(msg, len);
 }
 
 mutex console_mutex;
