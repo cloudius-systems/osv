@@ -1,0 +1,12 @@
+TSM is a Terminal-emulator State Machine. It implements all common DEC-VT100
+to DEC-VT520 control codes and features. A state-machine is used to parse TTY
+input and saved in a virtual screen. TSM does not provide any rendering,
+glyph/font handling or anything more advanced. TSM is just a simple
+state-machine for control-codes handling.
+The main use-case for TSM are terminal-emulators. TSM has no dependencies
+other than an ISO-C99 compiler and C-library. Any terminal emulator for any
+window-environment or rendering-pipline can make use of TSM. However, TSM can
+also be used for control-code validation, TTY-screen-capturing or other
+advanced users of terminal escape-sequences.
+
+All source codes are licensed as MIT license, see licenses/libtsm.txt for more.
