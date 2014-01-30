@@ -1,7 +1,11 @@
+
+INCLUDES = -isystem $(miscbase)/usr/include
+INCLUDES += -I../../include -I.
+
 # compiler flags:
 #  -g    adds debugging information to the executable file
 #  -Wall turns on most, but not all, compiler warnings
-CXXFLAGS  = -g -Wall -std=c++11 -fPIC -I../../include -I.
+CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES)
 src = ../..
 miscbase = $(src)/external/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
