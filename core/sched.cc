@@ -159,7 +159,8 @@ cpu::cpu(unsigned _id)
 void cpu::init_idle_thread()
 {
     running_since = clock::get()->time();
-    idle_thread = new thread([this] { idle(); }, thread::attr().pin(this));
+    std::string name = osv::sprintf("idle%d", id);
+    idle_thread = new thread([this] { idle(); }, thread::attr().pin(this).name(name));
     idle_thread->set_priority(thread::priority_idle);
 }
 
@@ -1171,6 +1172,7 @@ void init(std::function<void ()> cont)
 {
     thread::attr attr;
     attr.stack(4096*10).pin(smp_initial_find_current_cpu());
+    attr.name("init");
     thread t{cont, attr, true};
     t.switch_to_first();
 }
