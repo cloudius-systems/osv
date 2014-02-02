@@ -53,6 +53,8 @@ private:
 public:
     constexpr queue_mpsc<LT>() : pushlist(nullptr), poplist(nullptr) { }
 
+    class iterator;
+
     inline void push(LT* item)
     {
         // We set up item to be the new head of the pushlist, pointing to the
@@ -109,6 +111,32 @@ public:
     {
            return (!poplist && !pushlist.load(std::memory_order_relaxed));
     }
+
+    class iterator {
+    public:
+        iterator(LT* pushlist, LT* poplist) : pushlist(pushlist), poplist(poplist) {}
+        LT& operator*() const { return pushlist ? *pushlist : *poplist; }
+        LT* operator->() const { return pushlist ? pushlist : poplist; }
+        bool operator!=(iterator x) { return pushlist != x.pushlist || poplist != x.poplist; }
+        iterator& operator++() { advance(pushlist) || advance(poplist); return *this; }
+    private:
+        bool advance(LT*& ptr) {
+            if (ptr) {
+                ptr = ptr->next;
+                return true;
+            } else {
+                return false;
+            }
+        }
+    private:
+        LT* pushlist;
+        LT* poplist;
+    };
+
+    // iteration; only valid from consumer side; invalidated by pop()s
+    // The iterator is NOT ordered.
+    iterator begin() { return { pushlist.load(std::memory_order_acquire), poplist }; }
+    iterator end() { return { nullptr, nullptr }; }
 };
 
 }
