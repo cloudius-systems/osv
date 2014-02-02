@@ -837,7 +837,8 @@ def all_traces():
 
     i = 0
     while i < last:
-        tp_key, thread, time, cpu, flags = struct.unpack('QQQII', trace_log[i:i+32])
+        tp_key, thread, thread_name, time, cpu, flags = struct.unpack('QQ16sQII', trace_log[i:i+48])
+        thread_name = thread_name.rstrip('\0')
         if tp_key == 0:
             i = align_up(i + 8, trace_page_size)
             continue
@@ -849,7 +850,7 @@ def all_traces():
                 sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
             tracepoints[tp_key] = tp
 
-        i += 32
+        i += 48
 
         backtrace = None
         if flags & 1:
@@ -860,7 +861,7 @@ def all_traces():
         data = struct.unpack(tp.signature, trace_log[i:i+size])
         i += size
         i = align_up(i, 8)
-        yield Trace(tp, thread, time, cpu, data, backtrace=backtrace)
+        yield Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
 
 def save_traces_to_file(filename):
     trace.write_to_file(filename, list(all_traces()))
