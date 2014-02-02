@@ -585,7 +585,7 @@ public class Shrew implements Runnable {
      * order). This method ignores format errors.
      */
     private static Hashtable parseQueryString(String query) {
-        Hashtable ht = new Hashtable();
+        Hashtable<String, String[]> ht = new Hashtable<String, String[]>();
         if (query == null)
             return ht;
         StringTokenizer st = new StringTokenizer(query, "&");
