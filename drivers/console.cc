@@ -278,7 +278,8 @@ struct driver console_driver = {
 
 void console_init(bool use_vga)
 {
-    auto console_poll_thread = new sched::thread(console_poll);
+    auto console_poll_thread = new sched::thread(console_poll,
+            sched::thread::attr().name("console"));
     Console* console;
 
     if (use_vga)
