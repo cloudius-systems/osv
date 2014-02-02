@@ -54,7 +54,7 @@ private:
 timerfd::timerfd(int clockid, int oflags)
     : special_file(FREAD | oflags, DTYPE_UNSPEC),
       _wakeup_thread(
-            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096))
+            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096).name("timerfd"))
 {
     _wakeup_thread.start();
 }
