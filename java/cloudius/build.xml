@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="cloudius" default="jar" basedir=".">
+  <property name="build-dir" location="${out}/java/cloudius"/>
+  <property name="dist-dir" location="${out}/java"/>
+  <property name="jar-file" location="${dist-dir}/cloudius.jar"/>
+
+  <target name="compile">
+    <mkdir dir="${build-dir}"/>
+    <javac debug="true"
+           includeantruntime="false"
+           srcdir="."
+           includes="**/*.java"
+           destdir="${build-dir}"
+           source="1.7"
+           target="1.7"/>
+  </target>
+
+  <target name="jar" depends="compile">
+    <jar jarfile="${jar-file}">
+      <fileset dir="${build-dir}"/>
+    </jar>
+  </target>
+
+  <target name="clean">
+    <delete dir="${build-dir}"/>
+    <delete dir="${jar-file}"/>
+  </target>
+</project>

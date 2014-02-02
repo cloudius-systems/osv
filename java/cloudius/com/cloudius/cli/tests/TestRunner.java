@@ -1,22 +1,12 @@
-/*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
- *
- * This work is open source software, licensed under the terms of the
- * BSD license as described in the LICENSE file in the top-level directory.
- */
-
 package com.cloudius.cli.tests;
 
 import java.io.File;
 import java.util.HashMap;
-
-import sun.org.mozilla.javascript.Context;
-import sun.org.mozilla.javascript.Scriptable;
-
-import com.cloudius.cli.main.RhinoCLI;
+import java.util.logging.Logger;
 
 public class TestRunner {
     
+    private final Logger log = Logger.getLogger(getClass().getName());
     private HashMap<String, Test> _tests;
     
     public TestRunner() {
@@ -45,6 +35,11 @@ public class TestRunner {
     
     public void registerELFTests() {
         File dir = new File("/tests");
+        if (!dir.isDirectory()) {
+            log.warning("No such directory: " + dir);
+            return;
+        }
+
         File[] files = dir.listFiles();
         for (File f: files) {
             try {
@@ -66,12 +61,7 @@ public class TestRunner {
         this.registerELFTests();
     }
     
-    public Scriptable getTestNames() {
-        Context cx = Context.enter();
-        Object[] names = _tests.keySet().toArray();
-        Scriptable tests = cx.newArray(cx.initStandardObjects(), names);
-        Context.exit();
-        
-        return (tests);
+    public String[] getTestNames() {
+        return _tests.keySet().toArray(new String[0]);
     }
 }

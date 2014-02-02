@@ -1,5 +1,6 @@
 from osv.modules.api import *
 
+_cloudius_jar = '/java/cloudius.jar'
 _web_jar = '/usr/mgmt/web-1.0.0.jar'
 _logging_opts = '-Djava.util.logging.config.file=/usr/mgmt/config/logging.properties'
 
@@ -8,6 +9,7 @@ shell = run_java(
         classpath=[
             '/usr/mgmt/lib/bcprov-jdk15on-147.jar',
             '/usr/mgmt/lib/bcpkix-jdk15on-147.jar',
+            _cloudius_jar,
             _web_jar,
         ],
         args=[

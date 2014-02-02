@@ -46,3 +46,4 @@
 /&/etc/fonts/conf.d/59-liberation-serif.conf: %(miscbase)s/&
 /java.so: java/java.so
 /java/runjava.jar: java/runjava.jar
+/java/cloudius.jar: java/cloudius.jar
