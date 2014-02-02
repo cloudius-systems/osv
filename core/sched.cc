@@ -908,6 +908,16 @@ unsigned long thread::id()
     return _id;
 }
 
+void thread::set_name(std::string name)
+{
+    _attr.name(name);
+}
+
+std::string thread::name() const
+{
+    return _attr._name.data();
+}
+
 void* thread::get_tls(ulong module)
 {
     if (module == elf::program::core_module_index) {

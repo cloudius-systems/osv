@@ -675,6 +675,7 @@ class osv_info_threads(gdb.Command):
             with thread_context(t, state):
                 cpu = thread_cpu(t)
                 tid = t['_id']
+                name = t['_attr']['_name']['_M_elems'].string()
                 newest_frame = gdb.selected_frame()
                 # Non-running threads have always, by definition, just called
                 # a reschedule, and the stack trace is filled with reschedule
@@ -700,8 +701,8 @@ class osv_info_threads(gdb.Command):
                 else:
                     location = '??'
 
-                gdb.write('%4d (0x%x) cpu%s %-10s %s vruntime %12g\n' %
-                          (tid, ulong(t),
+                gdb.write('%4d (0x%x) %-15s cpu%s %-10s %s vruntime %12g\n' %
+                          (tid, ulong(t), name,
                            cpu['arch']['acpi_id'],
                            thread_status(t),
                            location,

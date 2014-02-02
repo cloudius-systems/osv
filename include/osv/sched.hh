@@ -296,6 +296,7 @@ public:
         stack_info _stack;
         cpu *_pinned_cpu;
         bool _detached;
+        std::array<char, 16> _name = {};
         attr() : _pinned_cpu(nullptr), _detached(false) { }
         attr &pin(cpu *c) {
             _pinned_cpu = c;
@@ -311,6 +312,10 @@ public:
         }
         attr &detached(bool val = true) {
             _detached = val;
+            return *this;
+        }
+        attr& name(std::string n) {
+            strncpy(_name.data(), n.data(), sizeof(_name) - 1);
             return *this;
         }
     };
@@ -386,6 +391,9 @@ public:
     void* get_tls(ulong module);
     void* setup_tls(ulong module, const void* tls_template,
             size_t init_size, size_t uninit_size);
+    void set_name(std::string name);
+    std::string name() const;
+    std::array<char, 16> name_raw() const { return _attr._name; }
     /**
      * Set thread's priority
      *
