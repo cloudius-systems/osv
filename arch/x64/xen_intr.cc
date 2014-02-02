@@ -10,6 +10,7 @@
 #include <bsd/porting/bus.h>
 #include <machine/intr_machdep.h>
 #include "bitops.h"
+#include <osv/debug.hh>
 
 void unmask_evtchn(int vector);
 int evtchn_from_irq(int irq);
@@ -87,7 +88,7 @@ void xen_irq::do_irq(void)
 void xen_irq::_cpu_init(sched::cpu *c)
 {
     *(_thread.for_cpu(c)) = new sched::thread([this] { xen_irq::do_irq(); },
-            sched::thread::attr().pin(c));
+            sched::thread::attr().pin(c).name(osv::sprintf("xenirq%d\n", c->id)));
     (*(_thread.for_cpu(c)))->start();
 }
 
