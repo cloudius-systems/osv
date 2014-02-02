@@ -134,6 +134,33 @@ void mutex::send_lock(wait_record *wr)
     }
 }
 
+// A variant of send_lock() with the following differences:
+//  - the mutex must be held by the caller
+//  - we do nothing if the thread we're sending the lock to is already
+//    waiting (and return false)
+bool mutex::send_lock_unless_already_waiting(wait_record *wr)
+{
+    trace_mutex_send_lock(this, wr);
+    assert(owned());
+    // count could not have been zero, so no need to test for it
+    count.fetch_add(1, std::memory_order_acquire);
+
+    for (auto& x : waitqueue) {
+        if (wr->thread() == x.thread()) {
+            return false;
+        }
+    }
+    // Queue the wait record, to be woken by an eventual unlock().
+    waitqueue.push(wr);
+
+    // No need for the Responsibility Hand-Off protocol, since we're holding
+    // the lock - no concurrent unlock can be happening.
+
+    return true;
+}
+
+
+
 // A thread waking up knowing it received a lock from send_lock() as part of
 // a "wait morphing" protocol, must call receive_lock() to complete the lock's
 // adoption by this thread.

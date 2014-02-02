@@ -92,6 +92,7 @@ public:
 
     // For wait morphing. Do not use unless you know what you are doing :-)
     void send_lock(wait_record *wr);
+    bool send_lock_unless_already_waiting(wait_record *wr);
     void receive_lock();
 };
 

@@ -755,8 +755,13 @@ void thread::wake_lock(mutex* mtx, wait_record* wr)
             // let the thread acquire the lock itself
             return;
         }
-        st->lock_sent = true;
-        mtx->send_lock(wr);
+        // Send the lock to the thread, unless someone else already woke the us up,
+        // and we're sleeping in mutex::lock().
+        if (mtx->send_lock_unless_already_waiting(wr)) {
+            st->lock_sent = true;
+        } else {
+            st->st.store(status::waiting, std::memory_order_relaxed);
+        }
         // since we're in status::sending_lock, no one can wake us except mutex::unlock
     }
 }
