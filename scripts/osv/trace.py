@@ -3,8 +3,8 @@ import mmap
 import struct
 import sys
 
-
-_format_version = 1
+# version 2 introduced thread_name
+_format_version = 2
 
 def nanos_to_millis(nanos):
     return float(nanos) / 1000000
