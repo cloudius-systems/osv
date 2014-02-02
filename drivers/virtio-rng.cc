@@ -16,7 +16,7 @@ namespace virtio {
 rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
     , _gsi(pci_dev.get_interrupt_line(), [&] { ack_irq(); }, [&] { handle_irq(); })
-    , _thread([&] { worker(); })
+    , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
 {
     _queue = get_virt_queue(0);
 

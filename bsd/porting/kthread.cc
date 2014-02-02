@@ -25,9 +25,13 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
     assert(p == NULL || p == &proc0);
     assert(flags == 0);
     assert(pages == NULL);
-
+    char name_buf[20] = {};
+    va_list va;
+    va_start(va, fmt);
+    vsnprintf(name_buf, sizeof(name_buf), fmt, va);
+    va_end(va);
     sched::thread* t = new sched::thread([=] { func(arg); },
-            sched::thread::attr().detached());
+            sched::thread::attr().detached().name(name_buf));
     t->start();
 
     *newtdp = reinterpret_cast<struct thread *>(t);
@@ -38,8 +42,13 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
 int kproc_create(void (*func)(void *), void *arg, struct proc **p,
                 int flags, int pages, const char *str, ...)
 {
+    char name_buf[20] = {};
+    va_list va;
+    va_start(va, str);
+    vsnprintf(name_buf, sizeof(name_buf), str, va);
+    va_end(va);
     sched::thread* t = new sched::thread([=] { func(arg); },
-            sched::thread::attr().detached());
+            sched::thread::attr().detached().name(name_buf));
     t->start();
 
     if (p) {

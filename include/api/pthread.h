@@ -211,6 +211,7 @@ void _pthread_cleanup_pop(struct __ptcb *, int);
 
 #ifdef _GNU_SOURCE
 int pthread_getattr_np(pthread_t, pthread_attr_t *);
+int pthread_setname_np(pthread_t pthread, const char* name);
 #endif
 
 #ifdef __cplusplus

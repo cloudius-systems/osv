@@ -231,7 +231,7 @@ int kill(pid_t pid, int sig)
             } else {
                 sa.sa_handler(sig);
             }
-        }, sched::thread::attr().detached().stack(65536));
+        }, sched::thread::attr().detached().stack(65536).name("signal_handler"));
         t->start();
     }
     return 0;
@@ -304,7 +304,8 @@ unsigned int alarm(unsigned int seconds)
     unsigned int ret = 0;
     WITH_LOCK(alarm_mutex) {
         if (!alarm_thread) {
-            alarm_thread = new sched::thread(alarm_thread_func);
+            alarm_thread = new sched::thread(alarm_thread_func,
+                    sched::thread::attr().name("alarm"));
             alarm_thread->start();
         }
         auto now = osv::clock::uptime::now();

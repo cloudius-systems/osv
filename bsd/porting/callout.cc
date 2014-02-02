@@ -323,7 +323,8 @@ void callout_init_mtx(struct callout *c, struct mtx *mtx, int flags)
 void init_callouts(void)
 {
     // Start the callout thread
-    callouts::_callout_dispatcher = new sched::thread(_callout_thread);
+    callouts::_callout_dispatcher = new sched::thread(_callout_thread,
+            sched::thread::attr().name("callout"));
     callouts::_callout_dispatcher->start();
 }
 

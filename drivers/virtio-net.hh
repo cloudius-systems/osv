@@ -288,7 +288,7 @@ private:
      /* Single Rx queue object */
     struct rxq {
         rxq(vring* vq, std::function<void ()> poll_func)
-            : vqueue(vq), poll_task(poll_func) {};
+            : vqueue(vq), poll_task(poll_func, sched::thread::attr().name("virtio-net-rx")) {};
         vring* vqueue;
         sched::thread  poll_task;
         struct rxq_stats stats = { 0 };

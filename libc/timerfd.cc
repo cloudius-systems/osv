@@ -59,7 +59,7 @@ public:
 timerfd::timerfd(int clockid, int oflags)
     : special_file(FREAD | oflags, DTYPE_UNSPEC),
       _wakeup_thread(
-            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096)),
+            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096).name("timerfd")),
       _clockid(clockid)
 {
     _wakeup_thread.start();
