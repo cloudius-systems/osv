@@ -10,6 +10,7 @@
 #include <osv/semaphore.hh>
 #include <vector>
 #include <boost/algorithm/cxx11/all_of.hpp>
+#include <osv/debug.hh>
 
 namespace osv {
 
@@ -46,7 +47,7 @@ sched::cpu::notifier cpu_notifier([] {
 });
 
 cpu_quiescent_state_thread::cpu_quiescent_state_thread(sched::cpu* cpu)
-    : _t([=] { work(); }, sched::thread::attr().pin(cpu))
+    : _t([=] { work(); }, sched::thread::attr().pin(cpu).name(osv::sprintf("rcu%d", cpu->id)))
 {
     _t.start();
 }
@@ -139,7 +140,7 @@ void rcu_synchronize()
 
 void rcu_init()
 {
-    garbage_collector_thread = new sched::thread(collect_garbage);
+    garbage_collector_thread = new sched::thread(collect_garbage, sched::thread::attr().name("rcu_gc"));
     garbage_collector_thread->start();
 }
 
