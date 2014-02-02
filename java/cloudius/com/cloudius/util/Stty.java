@@ -38,4 +38,5 @@ public class Stty implements IStty {
         savedStateAddr = 0;
     }
 
+    public native void jlineMode();
 }
