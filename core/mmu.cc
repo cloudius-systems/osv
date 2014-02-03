@@ -1079,13 +1079,26 @@ void jvm_balloon_vma::fault(uintptr_t fault_addr, exception_frame *ef)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
     jvm_balloon_fault(_balloon, ef, this);
+    delete this;
+}
+
+void jvm_balloon_vma::detach_balloon()
+{
+    _balloon = nullptr;
+    // Could block the creation of the next vma. No need to evacuate, we have no pages
+    vma_list.erase(*this);
+    mmu::map_anon(addr(), size(), _real_flags, _real_perm);
 }
 
 jvm_balloon_vma::~jvm_balloon_vma()
 {
-    // Could block the creation of the next vma. No need to evacuate, we have no pages
-    vma_list.erase(*this);
-    mmu::map_anon(addr(), size(), _real_flags, _real_perm);
+    if (_balloon) {
+        // This is because the JVM may just decide to unmap a whole region if
+        // it believes the objects are no longer valid. It could be the case
+        // for a dangling mapping representing a balloon that was already moved
+        // out.
+        jvm_balloon_fault(_balloon, nullptr, this);
+    }
 }
 
 // This function marks an anonymous vma as holding the JVM Heap. The JVM may

@@ -145,6 +145,7 @@ public:
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
+    void detach_balloon();
 private:
     balloon *_balloon;
     unsigned _real_perm;

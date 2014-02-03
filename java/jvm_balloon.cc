@@ -138,7 +138,7 @@ size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
 void finish_move(mmu::jvm_balloon_vma *vma)
 {
     unsigned char *addr = static_cast<unsigned char *>(vma->addr());
-    delete vma;
+    vma->detach_balloon();
     balloon_candidates.erase(addr);
 }
 
@@ -292,7 +292,7 @@ void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vm
     WITH_LOCK(balloons_lock) {
         assert(!balloons.empty());
 
-        if (ef->error_code == mmu::page_fault_write) {
+        if (!ef || (ef->error_code == mmu::page_fault_write)) {
             finish_move(vma);
             return;
         }
