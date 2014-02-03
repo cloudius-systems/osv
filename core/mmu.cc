@@ -916,13 +916,18 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto *vma = new mmu::file_vma(addr_range(start, start + size), perm, f, offset, shared);
-    map_page_ops *map = vma->page_ops();
+    map_page_ops *map = nullptr;
     void *v;
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, asize, search);
-        vma->operate_range(populate<>(map, perm), v, asize);
+        if (flags & mmap_populate) {
+            map = vma->page_ops();
+            vma->operate_range(populate<>(map, perm), v, asize);
+        }
     }
-    map->finalize();
+    // call finalize outside of the lock so the file read will not happen under it
+    if (map)
+        map->finalize();
     return v;
 }
 
@@ -1093,6 +1098,27 @@ template<typename T> ulong vma::operate_range(T mapper)
     return mmu::operate_range(mapper, addr, addr, size());
 }
 
+void vma::fault(uintptr_t addr, exception_frame *ef)
+{
+    auto hp_start = ::align_up(_range.start(), huge_page_size);
+    auto hp_end = ::align_down(_range.end(), huge_page_size);
+    size_t size;
+    if (hp_start <= addr && addr < hp_end) {
+        addr = ::align_down(addr, huge_page_size);
+        size = huge_page_size;
+    } else {
+        size = page_size;
+    }
+
+    map_page_ops *map = page_ops();
+    auto total = operate_range(populate<account_opt::yes>(map, _perm), (void*)addr, size);
+    map->finalize();
+
+    if (_flags & mmap_jvm_heap) {
+        memory::stats::on_jvm_heap_alloc(total);
+    }
+}
+
 map_page_ops* vma::page_ops()
 {
     return _page_ops;
@@ -1120,25 +1146,6 @@ void anon_vma::split(uintptr_t edge)
 error anon_vma::sync(uintptr_t start, uintptr_t end)
 {
     return no_error();
-}
-
-void anon_vma::fault(uintptr_t addr, exception_frame *ef)
-{
-    auto hp_start = ::align_up(_range.start(), huge_page_size);
-    auto hp_end = ::align_down(_range.end(), huge_page_size);
-    size_t size;
-    if (hp_start <= addr && addr < hp_end) {
-        addr = ::align_down(addr, huge_page_size);
-        size = huge_page_size;
-    } else {
-        size = page_size;
-    }
-
-    auto total = operate_range(populate<account_opt::yes>(page_ops(), _perm), (void*)addr, size);
-
-    if (_flags & mmap_jvm_heap) {
-        memory::stats::on_jvm_heap_alloc(total);
-    }
 }
 
 jvm_balloon_vma::jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags)
@@ -1326,11 +1333,6 @@ int file_vma::validate_perm(unsigned perm)
         return EPERM;
     }
     return 0;
-}
-
-void file_vma::fault(uintptr_t addr, exception_frame *ef)
-{
-    abort("trying to fault-in file-backed vma");
 }
 
 f_offset file_vma::offset(uintptr_t addr)

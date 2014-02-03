@@ -91,7 +91,7 @@ public:
     uintptr_t size() const;
     unsigned perm() const;
     unsigned flags() const;
-    virtual void fault(uintptr_t addr, exception_frame *ef) = 0;
+    virtual void fault(uintptr_t addr, exception_frame *ef);
     virtual void split(uintptr_t edge) = 0;
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
     virtual int validate_perm(unsigned perm) { return 0; }
@@ -127,7 +127,6 @@ public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
-    virtual void fault(uintptr_t addr, exception_frame *ef) override;
 };
 
 class file_vma : public vma {
@@ -136,7 +135,6 @@ public:
     ~file_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
-    virtual void fault(uintptr_t addr, exception_frame *ef) override;
     virtual int validate_perm(unsigned perm);
 private:
     f_offset offset(uintptr_t addr);
