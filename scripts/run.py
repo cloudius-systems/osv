@@ -101,23 +101,27 @@ def start_osv_qemu(options):
 
     if (options.wait):
 		args += ["-S"]
-     
+
+    net_device_options = ['virtio-net-pci']
+    if options.mac:
+        net_device_options.append('mac=%s' % options.mac)
+
     if (options.networking):
         if (options.vhost):
             args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
-            args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
         else:
             args += ["-netdev", "bridge,id=hn0,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (options.bridge)]
-            args += ["-device", "virtio-net-pci,netdev=hn0,id=nic1"]
+        net_device_options.extend(['netdev=hn0', 'id=nic1'])
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
-        args += ["-device", "virtio-net-pci,netdev=un0"]
+        net_device_options.append('netdev=un0')
         args += ["-redir", "tcp:8080::8080"]
         args += ["-redir", "tcp:2222::22"]
 
         for rule in options.forward:
             args += ['-redir', rule]
-        
+
+    args += ["-device", ','.join(net_device_options)]
     args += ["-device", "virtio-rng-pci"]
 
     if options.hypervisor == "kvm":
@@ -298,6 +302,8 @@ if (__name__ == "__main__"):
                         help = "start JVM with a debugger server")
     parser.add_argument("--jvm-suspend", action="store_true",
                         help = "start JVM with a suspended debugger server")
+    parser.add_argument("--mac", action="store",
+                        help = "set MAC address for NIC")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
