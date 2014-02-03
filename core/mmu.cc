@@ -753,14 +753,13 @@ struct fill_file_page : fill_page {
     uint64_t fsize;
     f_offset foffset;
     ssize_t len;
-    uint64_t prev_off;
     std::vector<iovec> iovecs;
 
     fill_file_page(size_t fsize, f_offset foffset, size_t size) :
-        fsize(fsize), foffset(foffset), len(0), prev_off(0),
-        iovecs((size / huge_page_size) + pte_per_page) {}
+        fsize(fsize), foffset(foffset), len(0) {
+            iovecs.reserve((size / huge_page_size) + pte_per_page);
+        }
     virtual void fill(void* addr, uint64_t offset, uintptr_t size) {
-        assert(offset >= prev_off);
         f_offset off = foffset + offset;
         if (off < fsize) {
             uint64_t tail = std::min(size, fsize - off);
