@@ -310,32 +310,33 @@ template<typename PageOp> class map_level<PageOp, -1>
 {
 private:
     friend class map_level<PageOp, 0>;
-    map_level(uintptr_t vcur, size_t size, PageOp page_mapper, size_t slop) {}
-    void operator()(hw_ptep parent, uintptr_t base_virt, uintptr_t vstart) {
+    map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp page_mapper, size_t slop) {}
+    void operator()(hw_ptep parent, uintptr_t base_virt) {
         assert(0);
     }
 };
 
 template<typename PageOp>
-        void map_range(uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
+        void map_range(uintptr_t vma_start, uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
 {
-    map_level<PageOp, 4> pt_mapper(vstart, size, page_mapper, slop);
-    pt_mapper(hw_ptep::force(&page_table_root), 0, vstart);
+    map_level<PageOp, 4> pt_mapper(vma_start, vstart, size, page_mapper, slop);
+    pt_mapper(hw_ptep::force(&page_table_root));
 }
 
 template<typename PageOp, int ParentLevel> class map_level {
 private:
+    uintptr_t vma_start;
     uintptr_t vcur;
     uintptr_t vend;
     size_t slop;
     PageOp& page_mapper;
     static constexpr int level = ParentLevel - 1;
 
-    friend void map_range<PageOp>(uintptr_t, size_t, PageOp&, size_t);
+    friend void map_range<PageOp>(uintptr_t, uintptr_t, size_t, PageOp&, size_t);
     friend class map_level<PageOp, ParentLevel + 1>;
 
-    map_level(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop) :
-        vcur(vcur), vend(vcur + size - 1), slop(slop), page_mapper(page_mapper) {}
+    map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop) :
+        vma_start(vma_start), vcur(vcur), vend(vcur + size - 1), slop(slop), page_mapper(page_mapper) {}
     bool skip_pte(hw_ptep ptep) {
         return page_mapper.skip_empty() && ptep.read().empty();
     }
@@ -343,12 +344,12 @@ private:
         return page_mapper.descend() && !ptep.read().empty() && !ptep.read().large();
     }
     void map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
-            hw_ptep ptep, uintptr_t base_virt, uintptr_t vstart)
+            hw_ptep ptep, uintptr_t base_virt)
     {
-        map_level<PageOp, level> pt_mapper(vcur, size, page_mapper, slop);
-        pt_mapper(ptep, base_virt, vstart);
+        map_level<PageOp, level> pt_mapper(vma_start, vcur, size, page_mapper, slop);
+        pt_mapper(ptep, base_virt);
     }
-    void operator()(hw_ptep parent, uintptr_t base_virt = 0, uintptr_t vstart = 0) {
+    void operator()(hw_ptep parent, uintptr_t base_virt = 0) {
         if (!parent.read().present()) {
             if (!page_mapper.allocate_intermediate()) {
                 return;
@@ -365,7 +366,7 @@ private:
                 split_large_page(parent, ParentLevel);
             } else {
                 // If page_mapper does not want to split, let it handle subpage by itself
-                page_mapper.sub_page(parent, ParentLevel, base_virt - vstart);
+                page_mapper.sub_page(parent, ParentLevel, base_virt - vma_start);
                 return;
             }
         }
@@ -381,11 +382,11 @@ private:
             uintptr_t vstart1 = vcur, vend1 = vend;
             clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
             if (unsigned(level) < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
-                uintptr_t offset = base_virt - vstart;
+                uintptr_t offset = base_virt - vma_start;
                 if (level) {
                     if (!skip_pte(ptep)) {
                         if (descend(ptep) || !page_mapper.huge_page(ptep, offset)) {
-                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, vstart);
+                            map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt);
                             page_mapper.intermediate_page_post(ptep, offset);
                         }
                     }
@@ -395,7 +396,7 @@ private:
                     }
                 }
             } else {
-                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt, vstart);
+                map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt);
             }
             base_virt += step;
             ++idx;
@@ -592,12 +593,12 @@ public:
     }
 };
 
-template<typename T> ulong operate_range(T mapper, void *start, size_t size)
+template<typename T> ulong operate_range(T mapper, void *vma_start, void *start, size_t size)
 {
     start = align_down(start, page_size);
     size = std::max(align_up(size, page_size), page_size);
     uintptr_t virt = reinterpret_cast<uintptr_t>(start);
-    map_range(virt, size, mapper);
+    map_range(reinterpret_cast<uintptr_t>(vma_start), virt, size, mapper);
 
     // TODO: consider if instead of requesting a full TLB flush, we should
     // instead try to make more judicious use of INVLPG - e.g., in
@@ -610,9 +611,9 @@ template<typename T> ulong operate_range(T mapper, void *start, size_t size)
     return mapper.account_results();
 }
 
-template<typename T> ulong operate_range(T mapper, const vma &vma)
+template<typename T> ulong operate_range(T mapper, void *start, size_t size)
 {
-    return operate_range(mapper, (void*)vma.start(), vma.size());
+    return operate_range(mapper, start, start, size);
 }
 
 phys virt_to_phys_pt(void* virt)
@@ -620,7 +621,7 @@ phys virt_to_phys_pt(void* virt)
     auto v = reinterpret_cast<uintptr_t>(virt);
     auto vbase = align_down(v, page_size);
     virt_to_phys_map v2p_mapper(v);
-    map_range(vbase, page_size, v2p_mapper);
+    map_range(vbase, vbase, page_size, v2p_mapper);
     return v2p_mapper.addr();
 }
 
@@ -654,9 +655,9 @@ static error protect(void *addr, size_t size, unsigned int perm)
         i->split(start);
         if (contains(start, end, *i)) {
             i->protect(perm);
+            i->operate_range(protection(perm));
         }
     }
-    operate_range(protection(perm), addr, size);
     return no_error();
 }
 
@@ -700,7 +701,7 @@ ulong evacuate(uintptr_t start, uintptr_t end)
         i->split(start);
         if (contains(start, end, *i)) {
             auto& dead = *i--;
-            auto size = operate_range(unpopulate<account_opt::yes>(), dead);
+            auto size = dead.operate_range(unpopulate<account_opt::yes>());
             ret += size;
             if (dead.has_flags(mmap_jvm_heap)) {
                 memory::stats::on_jvm_heap_free(size);
@@ -826,10 +827,10 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     if (flags & mmap_populate) {
         if (flags & mmap_uninitialized) {
             fill_anon_page_noinit zfill;
-            operate_range(populate<>(&zfill, perm), v, size);
+            vma->operate_range(populate<>(&zfill, perm), v, size);
         } else {
             fill_anon_page zfill;
-            operate_range(populate<>(&zfill, perm), v, size);
+            vma->operate_range(populate<>(&zfill, perm), v, size);
         }
     }
     return v;
@@ -847,7 +848,7 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     void *v;
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, asize, search);
-        operate_range(populate<>(&fill, perm), v, asize);
+        vma->operate_range(populate<>(&fill, perm), v, asize);
     }
     fill.finalize(f.get());
     return v;
@@ -1008,6 +1009,17 @@ bool vma::has_flags(unsigned flag)
     return _flags & flag;
 }
 
+template<typename T> ulong vma::operate_range(T mapper, void *addr, size_t size)
+{
+    return mmu::operate_range(mapper, reinterpret_cast<void*>(start()), addr, size);
+}
+
+template<typename T> ulong vma::operate_range(T mapper)
+{
+    void *addr = reinterpret_cast<void*>(start());
+    return mmu::operate_range(mapper, addr, addr, size());
+}
+
 anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
     : vma(range, perm, flags)
 {
@@ -1119,7 +1131,7 @@ static vma *mark_jvm_heap(void* addr)
         vma& vma = *v;
 
         if (!vma.has_flags(mmap_jvm_heap)) {
-            auto mem = operate_range(count_maps(), vma);
+            auto mem = vma.operate_range(count_maps());
             memory::stats::on_jvm_heap_alloc(mem);
         }
 
@@ -1217,7 +1229,7 @@ void linear_map(void* _virt, phys addr, size_t size, size_t slop)
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
     linear_page_mapper phys_map(addr, size);
-    map_range(virt, size, phys_map, slop);
+    map_range(virt, virt, size, phys_map, slop);
 }
 
 void free_initial_memory_range(uintptr_t addr, size_t size)

@@ -95,6 +95,8 @@ public:
     virtual int validate_perm(unsigned perm) { return 0; }
     void update_flags(unsigned flag);
     bool has_flags(unsigned flag);
+    template<typename T> ulong operate_range(T mapper, void *start, size_t size);
+    template<typename T> ulong operate_range(T mapper);
     class addr_compare;
 protected:
     addr_range _range;
