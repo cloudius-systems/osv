@@ -8,6 +8,7 @@
 
 .macro exception_entry name, handler, has_error_code
 	.global \name
+        .type \name, @function
 	\name :
 	.cfi_startproc simple
 	.cfi_signal_frame
@@ -104,6 +105,7 @@ exception_error_entry interrupt_entry_common, interrupt
 
 .global thread_main
 thread_main:
+        .type thread_main, @function
 	.cfi_startproc simple
 	.cfi_undefined %rip
 	.cfi_def_cfa %rsp, 0
@@ -113,6 +115,7 @@ thread_main:
 
 .global call_signal_handler_thunk
 call_signal_handler_thunk:
+        .type call_signal_handler_thunk, @function
         .cfi_startproc simple
         .cfi_signal_frame
         .cfi_def_cfa %rsp, 0
@@ -158,6 +161,7 @@ call_signal_handler_thunk:
 
 .global stack_trampoline
 stack_trampoline:  # %rsi=arg, %rdi=func, %rdx=stack
+        .type stack_trampoline, @function
 	.cfi_startproc simple
 	.cfi_def_cfa %rsp, 0
 	# align the stack at 16 bytes for sse

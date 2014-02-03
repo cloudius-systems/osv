@@ -14,6 +14,7 @@
 // %rsp + 8: index
 // %rsp + 0:  object
 __elf_resolve_pltgot:
+        .type __elf_resolve_pltgot, @function
 	.cfi_startproc simple
 	.cfi_def_cfa %rsp, 0
 	.cfi_rel_offset %rip, 16
