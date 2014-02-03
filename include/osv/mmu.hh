@@ -77,9 +77,11 @@ enum {
     mmap_jvm_heap    = 1ul << 4,
 };
 
+struct map_page_ops;
+
 class vma {
 public:
-    vma(addr_range range, unsigned perm, unsigned flags);
+    vma(addr_range range, unsigned perm, unsigned flags, map_page_ops *page_ops = nullptr);
     virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
     void protect(unsigned perm);
@@ -93,6 +95,7 @@ public:
     virtual void split(uintptr_t edge) = 0;
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
     virtual int validate_perm(unsigned perm) { return 0; }
+    virtual map_page_ops* page_ops();
     void update_flags(unsigned flag);
     bool has_flags(unsigned flag);
     template<typename T> ulong operate_range(T mapper, void *start, size_t size);
@@ -102,6 +105,7 @@ protected:
     addr_range _range;
     unsigned _perm;
     unsigned _flags;
+    map_page_ops *_page_ops;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
@@ -129,6 +133,7 @@ public:
 class file_vma : public vma {
 public:
     file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared);
+    ~file_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
