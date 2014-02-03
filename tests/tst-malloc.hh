@@ -11,6 +11,7 @@
 #include <osv/mutex.h>
 #include <osv/sched.hh>
 #include <osv/debug.hh>
+#include <osv/condvar.h>
 #include <random>
 #include "tst-hub.hh"
 
@@ -28,7 +29,7 @@ public:
         bool die;
         bool alloc_finished;
         bool free_finished;
-        sched::thread* main;
+        condvar cond;
     };
 
     void alloc_thread(test_locks &t)
@@ -54,8 +55,10 @@ public:
         }
 
         //debug(fmt("alloc thread finished, allocated %d obj") % i);
+        t.lock.lock();
         t.alloc_finished = true;
-        t.main->wake();
+        t.cond.wake_one();
+        t.lock.unlock();
     }
 
     void free_thread(test_locks &t)
@@ -75,15 +78,16 @@ public:
             sched::thread::current()->yield();
         }
         //debug("free thread done");
+        t.lock.lock();
         t.free_finished = true;
-        t.main->wake();
+        t.cond.wake_one();
+        t.lock.unlock();
     }
 
     void run()
     {
         test_locks t;
         t.die = t.free_finished = t.alloc_finished = false;
-        t.main = sched::thread::current();
         sched::thread* t1 = new sched::thread([&] { alloc_thread(t); });
         sched::thread* t2 = new sched::thread([&] { free_thread(t); });
         t1->start();
@@ -95,7 +99,9 @@ public:
         nanosleep(&ts, nullptr);
 
         t.die = true;
-        t.main->wait_until([&] {return (t.alloc_finished && t.free_finished);});
+        t.lock.lock();
+        t.cond.wait_until(t.lock, [&] {return (t.alloc_finished && t.free_finished);});
+        t.lock.unlock();
 
         t1->join();
         t2->join();
