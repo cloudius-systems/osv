@@ -816,6 +816,12 @@ public:
             memset((char*)iovec.iov_base + iovec.iov_len - tail, 0, tail);
             data.uio_resid -= tail;
         }
+        // make object reusable for next mapping operation
+        len = start_offset = 0;
+        // force vector to release memory
+        std::vector<iovec> tmp;
+        tmp.reserve(1);
+        iovecs.swap(tmp);
     }
 };
 
