@@ -184,6 +184,7 @@ boost-tests := tests/tst-rename.so \
 	tests/tst-dlfcn.so \
 	tests/tst-stat.so
 boost-tests += tests/tst-wait-for.so
+boost-tests += tests/tst-bsd-tcp1.so
 
 java_tests := tests/hello/Hello.class
 
@@ -203,7 +204,6 @@ tests += tests/tst-mmap.so
 tests += tests/tst-huge.so
 tests += tests/misc-mutex.so
 tests += tests/misc-sockets.so
-tests += tests/tst-bsd-tcp1.so
 tests += tests/tst-condvar.so
 tests += tests/tst-queue-mpsc.so
 tests += tests/tst-af-local.so
