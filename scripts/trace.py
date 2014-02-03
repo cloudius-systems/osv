@@ -309,7 +309,11 @@ def list_timed(args):
         timed_traces = get_timed_traces(reader.get_traces(), time_range)
 
         if args.sort:
-            timed_traces = sorted(timed_traces, key=lambda timed: -getattr(timed, args.sort))
+            if args.sort == 'duration':
+                order = -1
+            elif args.sort == 'time':
+                order = 1
+            timed_traces = sorted(timed_traces, key=lambda timed: order * getattr(timed, args.sort))
 
         for timed in timed_traces:
             t = timed.trace
@@ -343,7 +347,7 @@ if __name__ == "__main__":
         Specifying a time range will result in only those samples being printed which overlap with the time range.
         """)
     add_trace_listing_options(cmd_list_timed)
-    cmd_list_timed.add_argument("--sort", action="store", choices=['duration'], help="sort samples by given field")
+    cmd_list_timed.add_argument("--sort", action="store", choices=['duration','time'], help="sort samples by given field")
     cmd_list_timed.set_defaults(func=list_timed)
 
     cmd_summary = subparsers.add_parser("summary", help="print trace summery", description="""

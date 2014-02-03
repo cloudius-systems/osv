@@ -124,6 +124,10 @@ class TimedTrace:
         return self.duration
 
     @property
+    def time(self):
+        return self.trace.time
+
+    @property
     def time_range(self):
         return TimeRange(self.trace.time, self.trace.time + self.duration)
 
