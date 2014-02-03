@@ -184,7 +184,6 @@ def start_osv_xen(options):
         elif memory[-1:].upper() == "G":
             memory = 1024 * int(memory[:-1])
         elif memory[-2:].upper() == "GB":
-            memory = memory[:-2]
             memory = 1024 * int(memory[:-2])
         else:
             print >> sys.stderr, "Unrecognized memory size"
