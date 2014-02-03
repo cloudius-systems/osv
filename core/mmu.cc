@@ -761,28 +761,27 @@ struct fill_file_page : fill_page {
             iovecs.reserve((size / huge_page_size) + pte_per_page);
         }
     virtual void fill(void* addr, uint64_t offset, uintptr_t size) {
-        f_offset off = foffset + offset;
         if (len == 0) {
-            start_offset = off;
+            start_offset = foffset + offset;
         }
-
-        if (off < fsize) {
-            uint64_t tail = std::min(size, fsize - off);
-            iovecs.push_back(iovec {addr, tail});
-            len += tail;
-            size -= tail;
-            addr = (char*)addr + tail;
-        }
-        if (size) {
-            memset(addr, 0, size);
-        }
+        iovecs.push_back(iovec {addr, size});
+        len += size;
     }
     void finalize(file *f) {
         if (iovecs.empty()) {
             return;
         }
-        uio data{iovecs.data(), static_cast<int>(iovecs.size()), off_t(start_offset), len, UIO_READ};
+        uio data{iovecs.data(), int(iovecs.size()), off_t(start_offset), len, UIO_READ};
         f->read(&data, FOF_OFFSET);
+        /* zero buffer tail on a short read */
+        int i = iovecs.size() - 1;
+        while (data.uio_resid) {
+            assert(i >= 0);
+            iovec iovec = iovecs[i--];
+            size_t tail = std::min(iovec.iov_len, size_t(data.uio_resid));
+            memset((char*)iovec.iov_base + iovec.iov_len - tail, 0, tail);
+            data.uio_resid -= tail;
+        }
     }
 };
 
