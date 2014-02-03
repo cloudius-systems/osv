@@ -458,14 +458,20 @@ class populate : public vma_operation<allocate_intermediate_opt::yes, skip_empty
 private:
     map_page_ops* _pops;
     unsigned int perm;
+    bool _map_dirty;
+    pt_element dirty(pt_element pte) {
+        pte.set_dirty(_map_dirty);
+        return pte;
+    }
 public:
-    populate(map_page_ops* pops, unsigned int perm) : _pops(pops), perm(perm) { }
+    populate(map_page_ops* pops, unsigned int perm, bool map_dirty = true) :
+        _pops(pops), perm(perm), _map_dirty(map_dirty) { }
     void small_page(hw_ptep ptep, uintptr_t offset){
         if (!ptep.read().empty()) {
             return;
         }
         phys page = virt_to_phys(_pops->alloc(offset));
-        if (!ptep.compare_exchange(make_empty_pte(), make_normal_pte(page, perm))) {
+        if (!ptep.compare_exchange(make_empty_pte(), dirty(make_normal_pte(page, perm)))) {
             _pops->free(phys_to_virt(page), offset);
         } else {
             this->account(mmu::page_size);
@@ -482,7 +488,7 @@ public:
         }
 
         phys page = virt_to_phys(vpage);
-        if (!ptep.compare_exchange(make_empty_pte(), make_large_pte(page, perm))) {
+        if (!ptep.compare_exchange(make_empty_pte(), dirty(make_large_pte(page, perm)))) {
             _pops->free(phys_to_virt(page), huge_page_size, offset);
         } else {
             this->account(mmu::huge_page_size);
@@ -903,7 +909,7 @@ void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
     std::lock_guard<mutex> guard(vma_list_mutex);
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
-        vma->operate_range(populate<>(vma->page_ops(), perm), v, size);
+        vma->operate_range(populate<>(vma->page_ops(), perm, vma->map_dirty()), v, size);
     }
     return v;
 }
@@ -922,7 +928,7 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
         v = (void*) allocate(vma, start, asize, search);
         if (flags & mmap_populate) {
             map = vma->page_ops();
-            vma->operate_range(populate<>(map, perm), v, asize);
+            vma->operate_range(populate<>(map, perm, vma->map_dirty()), v, asize);
         }
     }
     // call finalize outside of the lock so the file read will not happen under it
@@ -1024,10 +1030,11 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     trace_mmu_vm_fault_ret(addr, ef->error_code);
 }
 
-vma::vma(addr_range range, unsigned perm, unsigned flags, map_page_ops *page_ops)
+vma::vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, map_page_ops *page_ops)
     : _range(align_down(range.start()), align_up(range.end()))
     , _perm(perm)
     , _flags(flags)
+    , _map_dirty(map_dirty)
     , _page_ops(page_ops)
 {
 }
@@ -1098,6 +1105,11 @@ template<typename T> ulong vma::operate_range(T mapper)
     return mmu::operate_range(mapper, addr, addr, size());
 }
 
+bool vma::map_dirty()
+{
+    return _map_dirty;
+}
+
 void vma::fault(uintptr_t addr, exception_frame *ef)
 {
     auto hp_start = ::align_up(_range.start(), huge_page_size);
@@ -1111,7 +1123,7 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
     }
 
     map_page_ops *map = page_ops();
-    auto total = operate_range(populate<account_opt::yes>(map, _perm), (void*)addr, size);
+    auto total = operate_range(populate<account_opt::yes>(map, _perm, map_dirty()), (void*)addr, size);
     map->finalize();
 
     if (_flags & mmap_jvm_heap) {
@@ -1129,7 +1141,7 @@ static map_anon_page page_ops_init;
 static map_page_ops *page_ops_noinitp = &page_ops_noinit, *page_ops_initp = &page_ops_init;
 
 anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
-    : vma(range, perm, flags, (_flags & mmap_uninitialized) ? page_ops_noinitp : page_ops_initp)
+    : vma(range, perm, flags, true, (_flags & mmap_uninitialized) ? page_ops_noinitp : page_ops_initp)
 {
 }
 
@@ -1149,7 +1161,7 @@ error anon_vma::sync(uintptr_t start, uintptr_t end)
 }
 
 jvm_balloon_vma::jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags)
-    : vma(addr_range(start, end), perm_rw, 0), _balloon(b), _real_perm(perm), _real_flags(flags)
+    : vma(addr_range(start, end), perm_rw, 0, true), _balloon(b), _real_perm(perm), _real_flags(flags)
 {
 }
 
@@ -1239,7 +1251,7 @@ ulong map_jvm(void* addr, size_t size, balloon *b)
 }
 
 file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared)
-    : vma(range, perm, 0)
+    : vma(range, perm, 0, !shared)
     , _file(file)
     , _offset(offset)
     , _shared(shared)

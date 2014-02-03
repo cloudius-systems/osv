@@ -81,7 +81,7 @@ struct map_page_ops;
 
 class vma {
 public:
-    vma(addr_range range, unsigned perm, unsigned flags, map_page_ops *page_ops = nullptr);
+    vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, map_page_ops *page_ops = nullptr);
     virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
     void protect(unsigned perm);
@@ -100,11 +100,13 @@ public:
     bool has_flags(unsigned flag);
     template<typename T> ulong operate_range(T mapper, void *start, size_t size);
     template<typename T> ulong operate_range(T mapper);
+    bool map_dirty();
     class addr_compare;
 protected:
     addr_range _range;
     unsigned _perm;
     unsigned _flags;
+    bool _map_dirty;
     map_page_ops *_page_ops;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
