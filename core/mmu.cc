@@ -909,7 +909,7 @@ bool access_fault(vma& vma, unsigned long error_code)
 {
     auto perm = vma.perm();
     if (error_code & page_fault_insn) {
-        return true;
+        return !(perm & perm_exec);
     }
     if (error_code & page_fault_write) {
         return !(perm & perm_write);
