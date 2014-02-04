@@ -440,7 +440,22 @@ public:
     symbol_module lookup(const char* symbol);
     template <typename T>
     T* lookup_function(const char* symbol);
-    // run a function with all current modules (const std::vector<object*>&) as a parameter
+
+    struct modules_list {
+        // List of objects, in search priority order
+        std::vector<object*> objects;
+        // Count object additions and removals from _modules. dl_iterate_phdr
+        // callbacks can use this to know if the object list has not changed.
+        int adds = 0, subs = 0;
+    };
+    /**
+     * Safely run a function object with the current list of modules.
+     *
+     * The given function is run with a const elf::program::modules_list&
+     * parameter. The function is free to safely use the shared libraries
+     * on the list given to it, because with_modules() guarantees that none
+     * of them can get deleted until with_modules() call completes.
+     */
     template <typename functor>
     void with_modules(functor f);
     dladdr_info lookup_addr(const void* addr);
@@ -449,7 +464,6 @@ private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
     void* do_lookup_function(const char* symbol);
-    void set_object(std::string lib, std::shared_ptr<object> obj);
     void remove_object(object *obj);
     ulong register_dtv(object* obj);
     void free_dtv(object* obj);
@@ -458,14 +472,13 @@ private:
     void* _next_alloc;
     std::shared_ptr<object> _core;
     std::map<std::string, std::weak_ptr<object>> _files;
-    std::vector<object*> _modules; // in priority order
     // used to determine object::_module_index, so indexes
     // are stable even when objects are deleted:
     std::vector<object*> _module_index_list;
     std::vector<std::string> _search_path;
-    // Count object additions and removals from _modules. dl_iterate_phdr()
-    // callbacks can use this to know if the object list has not changed.
-    int _modules_adds = 0, _modules_subs = 0;
+    osv::rcu_ptr<modules_list> _modules_rcu;
+    modules_list modules_get() const;
+
     // debugger interface
     static object* s_objs[100];
 
@@ -497,9 +510,7 @@ template <typename functor>
 inline
 void program::with_modules(functor f)
 {
-    // FIXME: locking?
-    const std::vector<object*>& tmp = _modules;
-    f(tmp, _modules_adds, _modules_subs);
+    f(modules_get());
 }
 
 template <>

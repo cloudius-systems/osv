@@ -25,6 +25,8 @@
 
 TRACEPOINT(trace_elf_load, "%s", const char *);
 TRACEPOINT(trace_elf_unload, "%s", const char *);
+TRACEPOINT(trace_elf_lookup, "%s", const char *);
+TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
 using namespace std;
 using namespace boost::range;
@@ -760,29 +762,30 @@ program::program(void* addr)
     _core = make_shared<memory_image>(*this, reinterpret_cast<void*>(0x200000));
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
-    set_object("libc.so.6", _core);
-    set_object("libm.so.6", _core);
-    set_object("ld-linux-x86-64.so.2", _core);
-    set_object("libpthread.so.0", _core);
-    set_object("libdl.so.2", _core);
-    set_object("librt.so.1", _core);
-    set_object("libstdc++.so.6", _core);
-    set_object("libboost_system-mt.so.1.53.0", _core);
-    set_object("libboost_program_options-mt.so.1.53.0", _core);
+    // Our kernel already supplies the features of a bunch of traditional
+    // shared libraries:
+    static const auto supplied_modules = {
+          "libc.so.6",
+          "libm.so.6",
+          "ld-linux-x86-64.so.2",
+          "libpthread.so.0",
+          "libdl.so.2",
+          "librt.so.1",
+          "libstdc++.so.6",
+          "libboost_system-mt.so.1.53.0",
+          "libboost_program_options-mt.so.1.53.0",
+    };
+    auto ml = new modules_list();
+    ml->objects.push_back(_core.get());
+    for (auto name : supplied_modules) {
+        _files[name] = _core;
+    }
+    _modules_rcu.assign(ml);
 }
 
 void program::set_search_path(std::initializer_list<std::string> path)
 {
     _search_path = path;
-}
-
-void program::set_object(std::string name, std::shared_ptr<elf::object> obj)
-{
-    _files[name] = obj;
-    if (std::find(_modules.begin(), _modules.end(), obj.get()) == _modules.end()) {
-        _modules.push_back(obj.get());
-        _modules_adds++;
-    }
 }
 
 static std::string getcwd()
@@ -847,8 +850,14 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
         // shared object gets searched before the shared libraries it uses),
         // with one exception: the kernel needs to remain at the end of the
         // list - We want it to behave like a library, not the main program.
-        _modules.insert(std::prev(_modules.end()), ef.get());
-        _modules_adds++;
+        auto old_modules = _modules_rcu.read_by_owner();
+        std::unique_ptr<modules_list> new_modules (
+                new modules_list(*old_modules));
+        new_modules->objects.insert(
+                std::prev(new_modules->objects.end()), ef.get());
+        new_modules->adds++;
+        _modules_rcu.assign(new_modules.release());
+        osv::rcu_dispose(old_modules);
         ef->load_segments();
         _next_alloc = ef->end();
         add_debugger_obj(ef.get());
@@ -877,8 +886,14 @@ void program::remove_object(object *ef)
         _files.erase(ef->pathname());
     if (_files[ef->soname()].expired())
         _files.erase(ef->soname());
-    _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
-    _modules_subs++;
+    auto old_modules = _modules_rcu.read_by_owner();
+    std::unique_ptr<modules_list> new_modules (
+            new modules_list(*old_modules));
+    new_modules->objects.erase(std::find(
+            new_modules->objects.begin(), new_modules->objects.end(), ef));
+    new_modules->subs++;
+    _modules_rcu.assign(new_modules.release());
+    osv::rcu_dispose(old_modules);
     ef->unload_segments();
     // Note we don't delete(ef) here - the contrary, delete(ef) calls us.
 }
@@ -910,7 +925,11 @@ void program::del_debugger_obj(object* obj)
 
 symbol_module program::lookup(const char* name)
 {
-    for (auto module : _modules) {
+    trace_elf_lookup(name);
+    SCOPE_LOCK(osv::rcu_read_lock);
+    for (auto module : _modules_rcu.read()->objects) {
+        // NOTE: We are in rcu_read_lock, so code below must not sleep or
+        // malloc. If it does, we'll need to switch to use with_modules()s
         if (auto sym = module->lookup_symbol(name)) {
             return symbol_module(sym, module);
         }
@@ -932,7 +951,11 @@ void* program::do_lookup_function(const char* name)
 
 dladdr_info program::lookup_addr(const void* addr)
 {
-    for (auto module : _modules) {
+    trace_elf_lookup_addr(addr);
+    SCOPE_LOCK(osv::rcu_read_lock);
+    for (auto module : _modules_rcu.read()->objects) {
+        // NOTE: We are in rcu_read_lock, so code below must not sleep or
+        // malloc. If it does, we'll need to switch to use with_modules()s
         auto ret = module->lookup_addr(addr);
         if (ret.fname) {
             return ret;
@@ -1091,6 +1114,32 @@ void program::free_dtv(object* obj)
 void* program::tls_addr(ulong module)
 {
     return _module_index_list[module]->tls_addr();
+}
+
+// Used in implementation of program::with_modules. We cannot keep the RCU
+// read lock (which disables preemption) while a user function is running,
+// so we use this function to make a copy the current list of modules.
+program::modules_list program::modules_get() const
+{
+    modules_list ret;
+    WITH_LOCK(osv::rcu_read_lock) {
+        auto modules = _modules_rcu.read();
+        auto needed = modules->objects.size();
+        while (ret.objects.capacity() < needed) {
+            // tmp isn't large enough to copy the list without allocations,
+            // which are not allowed in rcu critical section.
+            DROP_LOCK(osv::rcu_read_lock) {
+                ret.objects.reserve(needed);
+            }
+            // After re-entering rcu critical section, need to reread
+            modules = _modules_rcu.read();
+            needed = modules->objects.size();
+        }
+        ret.objects.assign(modules->objects.begin(), modules->objects.end());
+        ret.adds = modules->adds;
+        ret.subs = modules->subs;
+    }
+    return ret;
 }
 
 }

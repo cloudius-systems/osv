@@ -91,8 +91,8 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
 {
     int ret = 0;
     elf::get_program()->with_modules([=, &ret] (
-            const std::vector<elf::object*>& m, int adds, int subs) {
-        for (auto obj : m) {
+            const elf::program::modules_list &ml) {
+        for (auto obj : ml.objects) {
             dl_phdr_info info;
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());
             std::string name = obj->pathname();
@@ -106,8 +106,9 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
             // hopefully, the libc and osv types match:
             info.dlpi_phdr = reinterpret_cast<const Elf64_Phdr*>(phdrs_array);
             info.dlpi_phnum = phdrs_size;
-            info.dlpi_adds = adds;
-            info.dlpi_subs = subs;
+            info.dlpi_adds = ml.adds;
+            info.dlpi_subs = ml.subs;
+            // FIXME: dlpi_tls_modid and dlpi_tls_data
             ret = callback(&info, sizeof(info), data);
             if (ret) {
                 break;
