@@ -43,6 +43,15 @@ struct request {
         }
         return "";
     }
+
+    /**
+     * Get the request url.
+     * @return the request url
+     */
+    std::string get_url() const
+    {
+        return "http://" + get_header("Host") + uri;
+    }
 };
 
 } // namespace server
