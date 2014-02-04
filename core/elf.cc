@@ -142,7 +142,6 @@ load_program_headers();
 
 file::~file()
 {
-    get_program()->remove_object(this);
 }
 
 memory_image::memory_image(program& prog, void* base)
@@ -843,7 +842,8 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
     }
     if (f) {
         trace_elf_load(name.c_str());
-        auto ef = std::make_shared<file>(*this, f, name);
+        auto ef = std::shared_ptr<object>(new file(*this, f, name),
+                [=](object *obj) { remove_object(obj); });
         ef->set_base(_next_alloc);
         ef->setprivate(true);
         // We need to push the object at the end of the list (so that the main
@@ -895,7 +895,7 @@ void program::remove_object(object *ef)
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
     ef->unload_segments();
-    // Note we don't delete(ef) here - the contrary, delete(ef) calls us.
+    delete ef;
 }
 
 object* program::s_objs[100];
