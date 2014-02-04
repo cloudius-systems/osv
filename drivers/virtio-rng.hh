@@ -29,7 +29,7 @@ public:
     explicit rng(pci::device& dev);
     virtual ~rng();
 
-    virtual const std::string get_name(void) { return "virtio-rng"; }
+    virtual const std::string get_name() { return "virtio-rng"; }
 
     virtual size_t get_random_bytes(char *buf, size_t size) override;
 
