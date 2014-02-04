@@ -21,12 +21,12 @@ namespace hw {
         hw_device_id(u16 vendor_id, u16 device_id)
             : _vendor_id(vendor_id), _device_id(device_id) {}
 
-        u32 make32(void) const {
-            return ((u32)_vendor_id<<16 | _device_id);
+        u32 make32() const {
+            return (u32)_vendor_id<<16 | _device_id;
         }
 
         bool operator<(const hw_device_id& other) const {
-            return (this->make32() < other.make32());
+            return this->make32() < other.make32();
         }
 
         bool operator==(const hw_device_id& other) const {
@@ -45,13 +45,13 @@ namespace hw {
         virtual ~hw_device() {};
 
         // Unique vendor/device ids
-        virtual hw_device_id get_id(void) = 0;
+        virtual hw_device_id get_id() = 0;
 
         // Debug print of device
-        virtual void print(void) = 0;
+        virtual void print() = 0;
 
         // After calling reset the device should be in init state
-        virtual void reset(void) = 0;
+        virtual void reset() = 0;
     };
 
 
@@ -65,7 +65,7 @@ namespace hw {
             if (_instance == nullptr) {
                 _instance = new device_manager();
             }
-            return (_instance);
+            return _instance;
         }
 
         // Adds to dictionary
@@ -76,7 +76,7 @@ namespace hw {
         unsigned get_num_devices(hw_device_id id);
 
         // System wide operations
-        void list_devices(void);
+        void list_devices();
         void for_each_device(std::function<void (hw_device*)> func);
 
     private:
