@@ -245,40 +245,40 @@ inline void sti_hlt() {
     asm volatile ("sti; hlt" : : : "memory");
 }
 
-inline u8 inb (u16 port)
+inline u8 inb(u16 port)
 {
     u8 r;
     asm volatile ("inb %1, %0":"=a" (r):"dN" (port));
     return r;
 }
 
-inline u16 inw (u16 port)
+inline u16 inw(u16 port)
 {
     u16 r;
     asm volatile ("inw %1, %0":"=a" (r):"dN" (port));
     return r;
 }
 
-inline u32 inl (u16 port)
+inline u32 inl(u16 port)
 {
     u32 r;
     asm volatile ("inl %1, %0":"=a" (r):"dN" (port));
     return r;
 }
 
-inline void outb (u8 val, u16 port)
+inline void outb(u8 val, u16 port)
 {
     asm volatile ("outb %0, %1"::"a" (val), "dN" (port));
 
 }
 
-inline void outw (u16 val, u16 port)
+inline void outw(u16 val, u16 port)
 {
     asm volatile ("outw %0, %1"::"a" (val), "dN" (port));
 
 }
 
-inline void outl (u32 val, u16 port)
+inline void outl(u32 val, u16 port)
 {
     asm volatile ("outl %0, %1"::"a" (val), "dN" (port));
 
