@@ -36,17 +36,17 @@ extern "C" {
 #define acpi_w(...)   tprintf_w(acpi_tag, __VA_ARGS__)
 #define acpi_e(...)   tprintf_e(acpi_tag, __VA_ARGS__)
 
-ACPI_STATUS AcpiOsInitialize(void)
+ACPI_STATUS AcpiOsInitialize()
 {
     return AE_OK;
 }
 
-ACPI_STATUS AcpiOsTerminate(void)
+ACPI_STATUS AcpiOsTerminate()
 {
     return AE_OK;
 }
 
-ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer(void)
+ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer()
 {
     ACPI_SIZE rsdp;
     auto st = AcpiFindRootPointer(&rsdp);
@@ -257,7 +257,7 @@ AcpiOsRemoveInterruptHandler(
     return AE_OK;
 }
 
-ACPI_THREAD_ID AcpiOsGetThreadId(void)
+ACPI_THREAD_ID AcpiOsGetThreadId()
 {
     return reinterpret_cast<uintptr_t>(sched::thread::current());
 }
@@ -270,7 +270,7 @@ ACPI_STATUS AcpiOsExecute(
     return AE_NOT_IMPLEMENTED;
 }
 
-void AcpiOsWaitEventsComplete(void)
+void AcpiOsWaitEventsComplete()
 {
     // FIXME: ?
 }
@@ -466,7 +466,7 @@ AcpiOsWritable(void *Pointer, ACPI_SIZE Length)
     return true;
 }
 
-UINT64 AcpiOsGetTimer(void)
+UINT64 AcpiOsGetTimer()
 {
     return clock::get()->time() / 100;
 }
