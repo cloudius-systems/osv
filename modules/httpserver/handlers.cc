@@ -8,6 +8,7 @@
 #include "handlers.hh"
 #include "mime_types.hh"
 
+#include <sys/stat.h>
 #include <fstream>
 
 namespace httpserver {
@@ -58,6 +59,14 @@ bool directory_handler::handle(const string& path, parameters* parts,
                                const http::server::request& req, http::server::reply& rep)
 {
     string full_path = doc_root + (*parts)["path"];
+    struct stat buf;
+    stat(full_path.c_str(), &buf);
+    if (S_ISDIR(buf.st_mode)) {
+        if (redirect_if_needed(req, rep)) {
+            return true;
+        }
+        full_path += "/index.html";
+    }
     return read(full_path, req, rep);
 }
 
