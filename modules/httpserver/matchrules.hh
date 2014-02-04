@@ -53,9 +53,6 @@ public:
     {
         size_t ind = 0;
         for (unsigned int i = 0; i < match_list.size(); i++) {
-            if (ind + 1 >= url.length()) {
-                return nullptr;
-            }
             ind = match_list.at(i)->match(url, ind, params);
             if (ind == std::string::npos) {
                 return nullptr;
