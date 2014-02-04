@@ -221,6 +221,9 @@ namespace pci {
         u16 get_device_id(void);
         u8 get_revision_id(void);
 
+        u8 get_base_class_code();
+        u8 get_sub_class_code();
+
         // Type
         bool is_device(void);
         bool is_bridge(void);

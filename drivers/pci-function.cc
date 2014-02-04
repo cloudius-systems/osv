@@ -265,6 +265,16 @@ namespace pci {
         return (_revision_id);
     }
 
+    u8 function::get_base_class_code()
+    {
+        return _base_class_code;
+    }
+
+    u8 function::get_sub_class_code()
+    {
+        return _sub_class_code;
+    }
+
     bool function::is_device(void)
     {
         return (_header_type == PCI_HDR_TYPE_DEVICE);
