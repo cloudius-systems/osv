@@ -834,9 +834,11 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
 
     if (_files.count(name)) {
         auto obj = _files[name].lock();
-        assert(obj);
-        return obj;
-    } else if (f) {
+        if (obj) {
+            return obj;
+        }
+    }
+    if (f) {
         trace_elf_load(name.c_str());
         auto ef = std::make_shared<file>(*this, f, name);
         ef->set_base(_next_alloc);
@@ -869,8 +871,12 @@ void program::remove_object(object *ef)
     ef->run_fini_funcs();
     ef->unload_needed();
     del_debugger_obj(ef);
-    _files.erase(ef->pathname());
-    _files.erase(ef->soname());
+    // Note that if we race with get_library() of the same library, we may
+    // find in _files a new copy of the same library, and mustn't remove it.
+    if (_files[ef->pathname()].expired())
+        _files.erase(ef->pathname());
+    if (_files[ef->soname()].expired())
+        _files.erase(ef->soname());
     _modules.erase(std::find(_modules.begin(), _modules.end(), ef));
     _modules_subs++;
     ef->unload_segments();
