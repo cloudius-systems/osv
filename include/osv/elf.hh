@@ -454,6 +454,7 @@ private:
     ulong register_dtv(object* obj);
     void free_dtv(object* obj);
 private:
+    mutex _mutex;
     void* _next_alloc;
     std::shared_ptr<object> _core;
     std::map<std::string, std::weak_ptr<object>> _files;

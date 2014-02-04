@@ -21,6 +21,10 @@
 #include <cxxabi.h>
 #include <iterator>
 #include <osv/sched.hh>
+#include <osv/trace.hh>
+
+TRACEPOINT(trace_elf_load, "%s", const char *);
+TRACEPOINT(trace_elf_unload, "%s", const char *);
 
 using namespace std;
 using namespace boost::range;
@@ -804,6 +808,9 @@ static std::string canonicalize(std::string p)
 std::shared_ptr<elf::object>
 program::get_library(std::string name, std::vector<std::string> extra_path)
 {
+    // Note: this lock can be recursive (get_library calls load_needed which
+    // calls get_library again).
+    SCOPE_LOCK(_mutex);
     fileref f;
     if (name.find('/') == name.npos) {
         std::vector<std::string> search_path;
@@ -830,6 +837,7 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
         assert(obj);
         return obj;
     } else if (f) {
+        trace_elf_load(name.c_str());
         auto ef = std::make_shared<file>(*this, f, name);
         ef->set_base(_next_alloc);
         ef->setprivate(true);
@@ -856,6 +864,8 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
 
 void program::remove_object(object *ef)
 {
+    SCOPE_LOCK(_mutex);
+    trace_elf_unload(ef->pathname().c_str());
     ef->run_fini_funcs();
     ef->unload_needed();
     del_debugger_obj(ef);
