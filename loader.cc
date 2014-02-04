@@ -29,6 +29,7 @@
 #include "drivers/virtio-scsi.hh"
 #include "drivers/virtio-rng.hh"
 #include "drivers/xenfront-xenbus.hh"
+#include "drivers/ide.hh"
 
 #include <osv/sched.hh>
 #include "drivers/console.hh"
@@ -283,6 +284,7 @@ void* do_main_thread(void *_commands)
     drvman->register_driver(virtio::net::probe);
     drvman->register_driver(virtio::rng::probe);
     drvman->register_driver(xenfront::xenbus::probe);
+    drvman->register_driver(ide::ide_drive::probe);
     drvman->load_all();
     drvman->list_drivers();
 
