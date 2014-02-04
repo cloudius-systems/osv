@@ -266,6 +266,15 @@ inline u32 inl (u16 port)
     return r;
 }
 
+/* cnt is not bytes, 4byte counter */
+inline void insl(void *addr, int cnt, u16 port)
+{
+    asm volatile ("rep insl"
+        :"+D" (addr), "+c" (cnt)
+        : "d" (port)
+        : "memory", "cc");
+}
+
 inline void outb (u8 val, u16 port)
 {
     asm volatile ("outb %0, %1"::"a" (val), "dN" (port));
@@ -282,6 +291,15 @@ inline void outl (u32 val, u16 port)
 {
     asm volatile ("outl %0, %1"::"a" (val), "dN" (port));
 
+}
+
+/* cnt is not bytes, 4byte counter */
+inline void outsl(void *addr, int cnt, u16 port)
+{
+    asm volatile ("rep outsl"
+        :"+S" (addr), "+c" (cnt)
+        : "d" (port)
+        : "cc");
 }
 
 inline void sti()
