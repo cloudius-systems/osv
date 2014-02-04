@@ -89,45 +89,47 @@ public:
 };
 
 /**
- * This is a base class for file parsers.
+ * This is a base class for file transformer.
  *
- * File parser adds the ability to modify a file content before returning
+ * File transformer adds the ability to modify a file content before returning
  * the results.
  *
- * The parser decides according to the file extension if parsing is needed.
+ * The transformer decides according to the file extension if transforming is
+ * needed.
  */
-class file_parser {
+class file_transformer {
 public:
     /**
-     * Any file parser should implement this method.
-     * @param content the content to parse
+     * Any file transformer should implement this method.
+     * @param content the content to transform
      * @param req the request
      * @param extension the file extension originating the content
      */
-    virtual void parse(std::string& content, const http::server::request& req,
-                       const std::string& extension) = 0;
+    virtual void transform(std::string& content,
+                           const http::server::request& req,
+                           const std::string& extension) = 0;
 
-    virtual ~file_parser() = default;
+    virtual ~file_transformer() = default;
 };
 
 /**
  * A base class for handlers that interact with files.
  * directory and file handlers both share some common logic
  * with regards to file handling.
- * they both needs to read a file from the disk, optionaly parse it,
+ * they both needs to read a file from the disk, optionally transform it,
  * and return the result or page not found on error
  */
 class file_interaction_handler : public handler_base {
 public:
 
     /**
-     * Allows setting a parser to be used with the files returned.
-     * @param p the file parser to use
+     * Allows setting a transformer to be used with the files returned.
+     * @param t the file transformer to use
      * @return this
      */
-    file_interaction_handler* set_parser(file_parser* p)
+    file_interaction_handler* set_transformer(file_transformer* t)
     {
-        parser = p;
+        transformer = t;
         return this;
     }
 
@@ -149,7 +151,7 @@ protected:
      */
     bool read(const std::string& file, const http::server::request& req,
               http::server::reply& rep);
-    file_parser* parser;
+    file_transformer* transformer;
 };
 
 /**
@@ -192,7 +194,10 @@ public:
      * The file handler map a file to a url
      * @param file the full path to the file on the disk
      */
-    explicit file_handler(const std::string& file) : file(file) { }
+    explicit file_handler(const std::string& file)
+        : file(file)
+    {
+    }
 
     bool handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)

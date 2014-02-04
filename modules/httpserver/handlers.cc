@@ -86,8 +86,8 @@ bool file_interaction_handler::read(const string& file,
     char buf[512];
     while (is.read(buf, sizeof(buf)).gcount() > 0)
         rep.content.append(buf, is.gcount());
-    if (parser != nullptr) {
-        parser->parse(rep.content, req, extension);
+    if (transformer != nullptr) {
+        transformer->transform(rep.content, req, extension);
     }
     set_headers(rep, extension);
     return true;
