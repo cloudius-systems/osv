@@ -21,6 +21,37 @@
 namespace httpserver {
 
 /**
+ * The url helps defining a route.
+ */
+class url {
+public:
+    /**
+     * Move constructor
+     */
+    url(url&&) = default;
+
+    /**
+     * Construct with a url path as it's parameter
+     * @param path the url path to be used
+     */
+    url(const std::string& path) : path(path) {}
+
+    /**
+     * Adds a parameter that matches untill the end of the URL.
+     * @param param the parmaeter name
+     * @return the current url
+     */
+    url& remainder(const std::string& param)
+    {
+        this->param = param;
+        return *this;
+    }
+
+    std::string path;
+    std::string param;
+};
+
+/**
  * routes object do the request dispatching according to the url.
  * It uses two decision mechanism exact match, if a url matches exactly
  * (an optional leading slash is permitted) it is choosen
@@ -60,6 +91,17 @@ public:
         rules.push_back(rule);
         return *this;
     }
+
+    /**
+     * Add a url match to a handler:
+     * Example  routes.add(GET, url("/api").remainder("path"), handler);
+     * @param type
+     * @param url
+     * @param handler
+     * @return
+     */
+    routes& add(operation_type type, const url& url, handler_base* handler);
+
 
     /**
      * uses the predefined path from swagger to configure the path

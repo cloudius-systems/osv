@@ -102,4 +102,11 @@ routes& routes::add_path(const string& nick, handler_base* handler)
     return *this;
 }
 
+routes& routes::add(operation_type type, const url& url, handler_base* handler) {
+    match_rule* rule = new match_rule(handler);
+    rule->add_str(url.path);
+    rule->add_param(url.param, true);
+    return add(rule);
+}
+
 }
