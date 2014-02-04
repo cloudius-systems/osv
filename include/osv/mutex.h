@@ -101,4 +101,9 @@ struct lock_guard_for_drop_lock {
 
 #endif
 
+
+// Like std::lock_guard<> but easier to use
+#define SCOPE_LOCK(lock) \
+    std::lock_guard<decltype(lock)> _SCOPE_LOCK_##__COUNTER__(lock)
+
 #endif /* MUTEX_H_ */
