@@ -1100,6 +1100,7 @@ init_table get_init(Elf64_Ehdr* header)
 
 ulong program::register_dtv(object* obj)
 {
+    SCOPE_LOCK(_module_index_list_mutex);
     auto i = find(_module_index_list, nullptr);
     if (i != _module_index_list.end()) {
         *i = obj;
@@ -1112,6 +1113,7 @@ ulong program::register_dtv(object* obj)
 
 void program::free_dtv(object* obj)
 {
+    SCOPE_LOCK(_module_index_list_mutex);
     auto i = find(_module_index_list, obj);
     assert(i != _module_index_list.end());
     *i = nullptr;
@@ -1119,6 +1121,7 @@ void program::free_dtv(object* obj)
 
 void* program::tls_addr(ulong module)
 {
+    SCOPE_LOCK(_module_index_list_mutex);
     return _module_index_list[module]->tls_addr();
 }
 

@@ -475,6 +475,7 @@ private:
     // used to determine object::_module_index, so indexes
     // are stable even when objects are deleted:
     std::vector<object*> _module_index_list;
+    mutex _module_index_list_mutex;
     std::vector<std::string> _search_path;
     osv::rcu_ptr<modules_list> _modules_rcu;
     modules_list modules_get() const;
