@@ -22,13 +22,13 @@ namespace xenfront {
         static hw_driver* probe(hw_device* dev);
         pci::device& pci_device() { return _dev; }
 
-        bool parse_pci_config(void);
-        void dump_config(void);
+        bool parse_pci_config();
+        void dump_config();
 
-        const std::string get_name(void) { return _driver_name; }
-        const std::string &get_node_path(void) { return _node_path; }
+        const std::string get_name() { return _driver_name; }
+        const std::string &get_node_path() { return _node_path; }
 
-        int num_children(void) { return _children.size(); }
+        int num_children() { return _children.size(); }
         void for_each_child(std::function<void(xenfront_driver *dev)> func);
 
         void remove_pending(xenfront_driver *dev);
@@ -37,7 +37,7 @@ namespace xenfront {
         static xenbus *from_device(struct device *dev) { return bsd_to_dev<xenbus>(dev); }
         struct device _bsd_dev;
     private:
-        void wait_for_devices(void);
+        void wait_for_devices();
         pci::device& _dev;
         std::unique_ptr<gsi_level_interrupt> _pgsi;
         struct device _xenstore_device;

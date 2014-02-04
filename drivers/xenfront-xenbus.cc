@@ -139,7 +139,7 @@ void xenbus::dump_config()
     _dev.dump_config();
 }
 
-bool xenbus::parse_pci_config(void)
+bool xenbus::parse_pci_config()
 {
     return _dev.parse_pci_config();
 }
