@@ -47,7 +47,7 @@ size_t param_matcher::match(const string& url, size_t ind, parameters& param)
 
 size_t str_matcher::match(const string& url, size_t ind, parameters& param)
 {
-    if (url.length() >= len + ind && (url.find_first_of(cmp, ind) == 0)
+    if (url.length() >= len + ind && (url.find(cmp, ind) == 0)
             && (url.length() == len + ind || url.at(len + ind) == '/')) {
         return len + ind;
     }
