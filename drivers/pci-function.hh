@@ -201,6 +201,14 @@ namespace pci {
             PCI_CAP_PCIAF       = 0x13     // PCI Advanced Features
         };
 
+        enum pci_class_codes {
+            PCI_CLASS_STORAGE   = 0x01
+        };
+
+        enum pci_sub_class_codes {
+            PCI_SUB_CLASS_STORAGE_IDE = 0x01
+        };
+
         function(u8 bus, u8 device, u8 func);
         virtual ~function();
 
