@@ -47,8 +47,10 @@ void handler_base::reply500(http::server::reply& rep, int err_code,
                                            &alternative_message);
 }
 
-directory_handler::directory_handler(const string& doc_root)
-    : doc_root(doc_root)
+directory_handler::directory_handler(const string& doc_root,
+                                     file_transformer* transformer)
+    : file_interaction_handler(transformer),
+      doc_root(doc_root)
 {
 }
 
@@ -57,6 +59,11 @@ bool directory_handler::handle(const string& path, parameters* parts,
 {
     string full_path = doc_root + (*parts)["path"];
     return read(full_path, req, rep);
+}
+
+file_interaction_handler::~file_interaction_handler()
+{
+    delete transformer;
 }
 
 string file_interaction_handler::get_extension(const string& file)

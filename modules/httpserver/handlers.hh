@@ -121,6 +121,13 @@ public:
  */
 class file_interaction_handler : public handler_base {
 public:
+    file_interaction_handler(file_transformer* p = nullptr)
+        : transformer(p)
+    {
+
+    }
+
+    ~file_interaction_handler();
 
     /**
      * Allows setting a transformer to be used with the files returned.
@@ -172,7 +179,8 @@ public:
      * For example if the root is '/usr/mgmt/public' and the path parameter
      * will be '/css/style.css' the file wil be /usr/mgmt/public/css/style.css'
      */
-    explicit directory_handler(const std::string& doc_root);
+    explicit directory_handler(const std::string& doc_root,
+                               file_transformer* transformer = nullptr);
 
     bool handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
@@ -194,8 +202,10 @@ public:
      * The file handler map a file to a url
      * @param file the full path to the file on the disk
      */
-    explicit file_handler(const std::string& file)
-        : file(file)
+    explicit file_handler(const std::string& file,
+                          file_transformer* transformer = nullptr)
+        : file_interaction_handler(transformer),
+          file(file)
     {
     }
 
