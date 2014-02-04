@@ -80,7 +80,7 @@ void pci_device_print(u8 bus, u8 slot, u8 func)
     }
 }
 
-void pci_devices_print(void)
+void pci_devices_print()
 {
     u16 bus, slot, func;
 
@@ -134,7 +134,7 @@ void check_bus(u16 bus)
                 pci_e("Error: couldn't register device %x:%x.%x",
                         bus, slot, func);
                 //TODO: Need to beautify it as multiple instances of the device may exist
-                delete (dev);
+                delete dev;
             }
 
             // test for multiple functions
@@ -144,7 +144,7 @@ void check_bus(u16 bus)
         }
     }
 }
-void pci_device_enumeration(void)
+void pci_device_enumeration()
 {
     u16 func;
 

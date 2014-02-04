@@ -58,8 +58,8 @@ using processor::outl;
     void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val);
     void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val);
     void pci_device_print(u8 bus, u8 slot, u8 func);
-    void pci_devices_print(void);
-    void pci_device_enumeration(void);
+    void pci_devices_print();
+    void pci_device_enumeration();
 
 };
 
