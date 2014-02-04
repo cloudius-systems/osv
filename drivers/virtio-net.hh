@@ -204,10 +204,10 @@ public:
     explicit net(pci::device& dev);
     virtual ~net();
 
-    virtual const std::string get_name(void) { return _driver_name; }
+    virtual const std::string get_name() { return _driver_name; }
     bool read_config();
 
-    virtual u32 get_driver_features(void);
+    virtual u32 get_driver_features();
 
     void wait_for_queue(vring* queue);
     bool bad_rx_csum(struct mbuf *m, struct net_hdr *hdr);

@@ -93,7 +93,7 @@ static int if_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
         break;
     }
 
-    return(error);
+    return error;
 }
 
 /**
@@ -691,7 +691,7 @@ void net::tx_gc()
     vq->get_buf_gc();
 }
 
-u32 net::get_driver_features(void)
+u32 net::get_driver_features()
 {
     u32 base = virtio_driver::get_driver_features();
     return (base | (1 << VIRTIO_NET_F_MAC)        \
