@@ -1,7 +1,7 @@
 # OSv Coding Style
 This document describe OSv coding style.
 
-## 1. Indentation and Spacing
+## 1. Indentation and layout
 1.1 We use 4 spaces for indentation, no tabs.
 
 1.2 switch statements, put the case with same indentation as the switch
@@ -23,11 +23,43 @@ This document describe OSv coding style.
     i++; j++;
 ```
 
-## 2. Breaking long lines and strings
-2.1 Line length should not exceed 80 characters
+1.4 Line length should not exceed 80 characters.
+
+## 2. Spaces
+2.1 Use spaces around binary and ternary operators.
+```
+   a = a + 3;
+   if (a == 1 || b < 2)
+   a += 1;
+   a = 1 + 2 * 3;
+   a = b < 1 ? b : 1;
+```
+
+2.2 Do not use spaces around unary operators.
+```
+   a = -2;
+   s = *p;
+   for (int i = 3; i < 10; ++i)
+```
+
+2.3 Do not use spaces between a function and its parameters, or a
+template and its paramters.
+```
+   sqrt(2.0)
+   std::vector<object*>
+```
 
 ## 3. Braces
 3.1 Always use curly braces for if statement, even if it is a one line if.
+
+3.2 When a brace-delimited block is part of a statement (e.g., if, for,
+switch, WITH_LOCK, etc.), separate the open brace from the statement
+with a single space - not with a newline.
+```
+    if (a == 3) {
+        ....
+    }
+````
 
 3.2 In inline method, you can use the open braces at the same line of the method.
 ```
