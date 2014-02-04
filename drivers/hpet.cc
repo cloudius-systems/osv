@@ -155,7 +155,7 @@ s64 hpetclock::time()
 
 s64 hpetclock::uptime()
 {
-    return (mmio_getq(_addr + HPET_COUNTER) * _period);
+    return mmio_getq(_addr + HPET_COUNTER) * _period;
 }
 
 s64 hpetclock::boot_time()
