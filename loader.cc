@@ -235,7 +235,7 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
 // osv::run.
 void *__libc_stack_end;
 
-void run_main(std::vector<std::string> &vec)
+void run_main(const std::vector<std::string> &vec)
 {
     auto b = std::begin(vec)++;
     auto e = std::end(vec);
@@ -261,9 +261,11 @@ void run_main(std::vector<std::string> &vec)
     osv::poweroff();
 }
 
-void *_run_main(void *vecp)
+void *_run_main(void *data)
 {
-    run_main(*(std::vector<std::string> *)vecp);
+    auto vecp = (std::vector<std::string> *)data;
+    run_main(*vecp);
+    delete vecp;
     return nullptr;
 }
 
@@ -331,7 +333,8 @@ void* do_main_thread(void *_commands)
             run_main(newvec);
         } else {
             pthread_t t;
-            pthread_create(&t, nullptr, _run_main, &newvec);
+            pthread_create(&t, nullptr, _run_main,
+                    new std::vector<std::string> (newvec));
             bg.push_back(t);
         }
     }
