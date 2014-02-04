@@ -121,10 +121,10 @@ public:
     explicit blk(pci::device& dev);
     virtual ~blk();
 
-    virtual const std::string get_name(void) { return _driver_name; }
+    virtual const std::string get_name() { return _driver_name; }
     bool read_config();
 
-    virtual u32 get_driver_features(void);
+    virtual u32 get_driver_features();
 
     int make_request(struct bio*);
 
