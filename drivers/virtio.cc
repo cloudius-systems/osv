@@ -53,7 +53,7 @@ virtio_driver::~virtio_driver()
     free_queues();
 }
 
-bool virtio_driver::setup_features(void)
+bool virtio_driver::setup_features()
 {
     u32 dev_features = get_device_features();
     u32 drv_features = this->get_driver_features();
@@ -74,7 +74,7 @@ bool virtio_driver::setup_features(void)
 
     set_guest_features(subset);
 
-    return (subset != 0);
+    return subset != 0;
 
 }
 
@@ -94,33 +94,33 @@ void virtio_driver::dump_config()
         virtio_d(" %d ", get_device_feature_bit(i));
 }
 
-bool virtio_driver::parse_pci_config(void)
+bool virtio_driver::parse_pci_config()
 {
     if (!_dev.parse_pci_config()) {
-        return (false);
+        return false;
     }
 
     // Test whether bar1 is present
     _bar1 = _dev.get_bar(1);
     if (_bar1 == nullptr) {
-        return (false);
+        return false;
     }
 
     // Check ABI version
     u8 rev = _dev.get_revision_id();
     if (rev != VIRTIO_PCI_ABI_VERSION) {
         virtio_e("Wrong virtio revision=%x", rev);
-        return (false);
+        return false;
     }
 
     // Check device ID
     u16 dev_id = _dev.get_device_id();
     if ((dev_id < VIRTIO_PCI_ID_MIN) || (dev_id > VIRTIO_PCI_ID_MAX)) {
         virtio_e("Wrong virtio dev id %x", dev_id);
-        return (false);
+        return false;
     }
 
-    return (true);
+    return true;
 }
 
 void virtio_driver::reset_host_side()
@@ -129,7 +129,7 @@ void virtio_driver::reset_host_side()
     virtio_conf_writel(VIRTIO_PCI_QUEUE_PFN,(u32)0);
 }
 
-void virtio_driver::free_queues(void)
+void virtio_driver::free_queues()
 {
     for (unsigned i=0; i < max_virtqueues_nr; i++) {
         if (nullptr != _queues[i]) {
@@ -145,7 +145,7 @@ bool virtio_driver::kick(int queue)
     return true;
 }
 
-bool virtio_driver::probe_virt_queues(void)
+bool virtio_driver::probe_virt_queues()
 {
     u16 qsize = 0;
 
@@ -193,10 +193,10 @@ bool virtio_driver::probe_virt_queues(void)
 vring* virtio_driver::get_virt_queue(unsigned idx)
 {
     if (idx >= _num_queues) {
-        return (nullptr);
+        return nullptr;
     }
 
-    return (_queues[idx]);
+    return _queues[idx];
 }
 
 void virtio_driver::wait_for_queue(vring* queue, bool (vring::*pred)() const)
@@ -221,14 +221,14 @@ void virtio_driver::wait_for_queue(vring* queue, bool (vring::*pred)() const)
     });
 }
 
-u32 virtio_driver::get_device_features(void)
+u32 virtio_driver::get_device_features()
 {
-    return (virtio_conf_readl(VIRTIO_PCI_HOST_FEATURES));
+    return virtio_conf_readl(VIRTIO_PCI_HOST_FEATURES);
 }
 
 bool virtio_driver::get_device_feature_bit(int bit)
 {
-    return (get_virtio_config_bit(VIRTIO_PCI_HOST_FEATURES, bit));
+    return get_virtio_config_bit(VIRTIO_PCI_HOST_FEATURES, bit);
 }
 
 void virtio_driver::set_guest_features(u32 features)
@@ -241,20 +241,20 @@ void virtio_driver::set_guest_feature_bit(int bit, bool on)
     set_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit, on);
 }
 
-u32 virtio_driver::get_guest_features(void)
+u32 virtio_driver::get_guest_features()
 {
-    return (virtio_conf_readl(VIRTIO_PCI_GUEST_FEATURES));
+    return virtio_conf_readl(VIRTIO_PCI_GUEST_FEATURES);
 }
 
 bool virtio_driver::get_guest_feature_bit(int bit)
 {
-    return (get_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit));
+    return get_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit);
 }
 
 
-u8 virtio_driver::get_dev_status(void)
+u8 virtio_driver::get_dev_status()
 {
-    return (virtio_conf_readb(VIRTIO_PCI_STATUS));
+    return virtio_conf_readb(VIRTIO_PCI_STATUS);
 }
 
 void virtio_driver::set_dev_status(u8 status)
@@ -274,7 +274,7 @@ void virtio_driver::del_dev_status(u8 status)
 
 bool virtio_driver::get_virtio_config_bit(u32 offset, int bit)
 {
-    return (virtio_conf_readl(offset) & (1 << bit));
+    return virtio_conf_readl(offset) & (1 << bit);
 }
 
 void virtio_driver::set_virtio_config_bit(u32 offset, int bit, bool on)
