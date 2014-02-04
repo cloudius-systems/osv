@@ -120,10 +120,10 @@ public:
     explicit scsi(pci::device& dev);
     virtual ~scsi();
 
-    virtual const std::string get_name(void) { return _driver_name; }
+    virtual const std::string get_name() { return _driver_name; }
     bool read_config();
 
-    virtual u32 get_driver_features(void);
+    virtual u32 get_driver_features();
 
     static struct scsi_priv *get_priv(struct bio *bio) {
         return reinterpret_cast<struct scsi_priv*>(bio->bio_dev->private_data);
@@ -138,7 +138,7 @@ public:
     std::vector<u16> exec_report_luns(u16 target);
     void add_lun(u16 target_id, u16 lun_id);
     void exec_read_capacity(u16 target, u16 lun, size_t &devsize);
-    void scan(void);
+    void scan();
 
     int exec_readwrite(struct bio *bio, u8 cmd);
     int exec_synccache(struct bio *bio, u8 cmd);
