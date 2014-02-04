@@ -44,7 +44,7 @@ inline unsigned long active_evtchns(unsigned long idx, unsigned long *cpu_mask)
                          ~(xen_shared_info.evtchn_mask[idx].load());
 }
 
-void xen_irq::do_irq(void)
+void xen_irq::do_irq()
 {
     unsigned long l1, l2;
     unsigned long l1i, l2i;
