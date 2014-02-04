@@ -18,6 +18,7 @@
 #include <string>
 #include <sstream>
 #include "api/os.hh"
+#include "api/files_mapping.hh"
 
 using namespace httpserver;
 
@@ -44,6 +45,7 @@ int main(int argc, char* argv[])
 
     routes routes;
     api::os::init(routes);
+    api::files_mapping::init(routes);
 
     try {
         http::server::server s(&config, &routes);
