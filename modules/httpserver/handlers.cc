@@ -55,9 +55,7 @@ directory_handler::directory_handler(const string& doc_root)
 bool directory_handler::handle(const string& path, parameters* parts,
                                const http::server::request& req, http::server::reply& rep)
 {
-    // Determine the file extension.
-    string relativePath = (*parts)["path"];
-    string full_path = doc_root + relativePath;
+    string full_path = doc_root + (*parts)["path"];
     return read(full_path, req, rep);
 }
 

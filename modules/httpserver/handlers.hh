@@ -125,7 +125,8 @@ public:
      * @param p the file parser to use
      * @return this
      */
-    file_interaction_handler* set_parser(file_parser* p) {
+    file_interaction_handler* set_parser(file_parser* p)
+    {
         parser = p;
         return this;
     }
@@ -172,7 +173,8 @@ public:
     explicit directory_handler(const std::string& doc_root);
 
     bool handle(const std::string& path, parameters* parts,
-                const http::server::request& req, http::server::reply& rep) override;
+                const http::server::request& req, http::server::reply& rep)
+    override;
 
 private:
     std::string doc_root;
@@ -193,7 +195,8 @@ public:
     explicit file_handler(const std::string& file) : file(file) { }
 
     bool handle(const std::string& path, parameters* parts,
-                const http::server::request& req, http::server::reply& rep) override;
+                const http::server::request& req, http::server::reply& rep)
+    override;
 
 private:
     std::string file;
@@ -216,7 +219,8 @@ public:
     }
 
     bool handle(const std::string& path, parameters* parts,
-                const http::server::request& req, http::server::reply& rep) override;
+                const http::server::request& req, http::server::reply& rep)
+    override;
 
     std::function<std::string(const_req req)> f_handle;
     std::string type;
