@@ -40,14 +40,14 @@ class virtio_driver;
             VRING_DESC_F_INDIRECT=4
         };
 
-        u64 get_paddr(void);
-        u32 get_len(void) { return (_len); }
-        u16 next_idx(void) { return (_next); }
+        u64 get_paddr();
+        u32 get_len() { return _len; }
+        u16 next_idx() { return _next; }
 
         // flags
-        bool is_chained(void) { return ((_flags & VRING_DESC_F_NEXT) == VRING_DESC_F_NEXT); };
-        bool is_write(void) { return ((_flags & VRING_DESC_F_WRITE) == VRING_DESC_F_WRITE); };
-        bool is_indirect(void) { return ((_flags & VRING_DESC_F_INDIRECT) == VRING_DESC_F_INDIRECT); };
+        bool is_chained() { return (_flags & VRING_DESC_F_NEXT) == VRING_DESC_F_NEXT; };
+        bool is_write() { return (_flags & VRING_DESC_F_WRITE) == VRING_DESC_F_WRITE; };
+        bool is_indirect() { return (_flags & VRING_DESC_F_INDIRECT) == VRING_DESC_F_INDIRECT; };
         
         u64 _paddr;
         u32 _len;
@@ -64,8 +64,8 @@ class virtio_driver;
             VRING_AVAIL_F_NO_INTERRUPT=1
         };
 
-        void disable_interrupt(void) { _flags.store(VRING_AVAIL_F_NO_INTERRUPT, std::memory_order_relaxed); }
-        void enable_interrupt(void) { _flags.store(0, std::memory_order_relaxed); }
+        void disable_interrupt() { _flags.store(VRING_AVAIL_F_NO_INTERRUPT, std::memory_order_relaxed); }
+        void enable_interrupt() { _flags.store(0, std::memory_order_relaxed); }
         bool interrupt_on() { return (_flags.load(std::memory_order_relaxed) & VRING_AVAIL_F_NO_INTERRUPT) == 0;}
 
         std::atomic<u16> _flags;
@@ -100,7 +100,7 @@ class virtio_driver;
             VRING_USED_F_NO_NOTIFY=1
         };
 
-        bool notifications_disabled(void) {
+        bool notifications_disabled() {
             return (_flags.load(std::memory_order_relaxed) & VRING_USED_F_NO_NOTIFY) != 0;
         }
         
@@ -121,7 +121,7 @@ class virtio_driver;
         vring(virtio_driver* const dev, u16 num, u16 q_index);
         virtual ~vring();
 
-        u64 get_paddr(void);
+        u64 get_paddr();
         static unsigned get_size(unsigned int num, unsigned long align);
 
         // Ring operations
@@ -171,7 +171,7 @@ class virtio_driver;
             sg_node(const sg_node& n) :_paddr(n._paddr), _len(n._len), _flags(n._flags) {};
         };
 
-        void init_sg(void)
+        void init_sg()
         {
             _sg_vec.clear();
         }

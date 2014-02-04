@@ -71,7 +71,7 @@ namespace virtio {
         delete [] _cookie;
     }
 
-    u64 vring::get_paddr(void)
+    u64 vring::get_paddr()
     {
         return mmu::virt_to_phys(_vring_ptr);
     }
@@ -238,13 +238,13 @@ namespace virtio {
     bool vring::avail_ring_not_empty()
     {
         u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
-        return (effective_avail_count > 0);
+        return effective_avail_count > 0;
     }
 
     bool vring::refill_ring_cond()
     {
         u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
-        return (effective_avail_count >= _num/2);
+        return effective_avail_count >= _num/2;
     }
 
     bool vring::avail_ring_has_room(int descriptors)
@@ -252,22 +252,22 @@ namespace virtio {
         u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
         if (use_indirect(descriptors))
             descriptors = 1;
-        return (effective_avail_count >= descriptors);
+        return effective_avail_count >= descriptors;
     }
 
     bool vring::used_ring_not_empty() const
     {
-        return (_used_ring_host_head != _used->_idx.load(std::memory_order_relaxed));
+        return _used_ring_host_head != _used->_idx.load(std::memory_order_relaxed);
     }
 
     bool vring::used_ring_is_half_empty() const
     {
-        return (_used->_idx.load(std::memory_order_relaxed) - _used_ring_host_head > (u16)(_num / 2));
+        return _used->_idx.load(std::memory_order_relaxed) - _used_ring_host_head > (u16)(_num / 2);
     }
 
     bool vring::used_ring_can_gc() const
     {
-        return (_used_ring_guest_head != _used_ring_host_head);
+        return _used_ring_guest_head != _used_ring_host_head;
     }
 
     bool
