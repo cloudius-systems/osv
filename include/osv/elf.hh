@@ -479,6 +479,14 @@ private:
     osv::rcu_ptr<modules_list> _modules_rcu;
     modules_list modules_get() const;
 
+    // If _module_delete_disable > 0, objects are not deleted but rather
+    // collected for deletion when _modules_delete_disable becomes 0.
+    mutex _modules_delete_mutex;
+    int _module_delete_disable = 0;
+    void module_delete_disable();
+    void module_delete_enable();
+    std::vector <object*> _modules_to_delete;
+
     // debugger interface
     static object* s_objs[100];
 
@@ -510,7 +518,9 @@ template <typename functor>
 inline
 void program::with_modules(functor f)
 {
+    module_delete_disable();
     f(modules_get());
+    module_delete_enable();
 }
 
 template <>

@@ -894,8 +894,14 @@ void program::remove_object(object *ef)
     new_modules->subs++;
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
-    ef->unload_segments();
-    delete ef;
+    // We want to unload and delete ef, but need to delay that until no
+    // concurrent dl_iterate_phdr() is still using the modules it got from
+    // modules_get().
+    module_delete_disable();
+    WITH_LOCK(_modules_delete_mutex) {
+        _modules_to_delete.push_back(ef);
+    }
+    module_delete_enable();
 }
 
 object* program::s_objs[100];
@@ -1140,6 +1146,40 @@ program::modules_list program::modules_get() const
         ret.subs = modules->subs;
     }
     return ret;
+}
+
+// Prevent actual freeing of modules by remove_object() until the
+// matching modules_delete_enable(). We need this so the user can iterate on
+// the output of dl_iterate_phdr() without fearing that concurrently some
+// of the modules are freed (they can be removed from the search path,
+// but not actually freed).
+void program::module_delete_disable()
+{
+    WITH_LOCK(_modules_delete_mutex) {
+        _module_delete_disable++;
+    }
+}
+
+void program::module_delete_enable()
+{
+    std::vector<object*> to_delete;
+    WITH_LOCK(_modules_delete_mutex) {
+        assert(_module_delete_disable >= 0);
+        if (--_module_delete_disable || _modules_to_delete.empty()) {
+            return;
+        }
+        to_delete = _modules_to_delete;
+        _modules_to_delete.clear();
+    }
+
+    // Need to delay the deletion a bit more, as we might have a
+    // program::lookup() in progress.
+    osv::rcu_synchronize();
+
+    for (auto ef : to_delete) {
+        ef->unload_segments();
+        delete ef;
+    }
 }
 
 }
