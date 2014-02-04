@@ -141,6 +141,14 @@ public:
     }
 
     /**
+     * if the url ends without a slash redirect
+     * @param req the request
+     * @param rep the reply
+     * @return true on redirect
+     */
+    bool redirect_if_needed(const http::server::request& req, http::server::reply& rep);
+
+    /**
      * A helper method that returns the file extension.
      * @param file the file to check
      * @return the file extension

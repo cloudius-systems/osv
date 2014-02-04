@@ -100,6 +100,22 @@ bool file_interaction_handler::read(const string& file,
     return true;
 }
 
+bool file_interaction_handler::redirect_if_needed(
+    const http::server::request& req, http::server::reply& rep)
+{
+    if (req.uri.length() == 0 || req.uri.back() != '/') {
+        rep = http::server::reply::stock_reply(
+                  http::server::reply::moved_permanently,
+                  nullptr);
+
+        rep.headers.push_back(http::server::header());
+        rep.headers.back().name = "Location";
+        rep.headers.back().value = req.get_url() + "/";
+        return true;
+    }
+    return false;
+}
+
 bool file_handler::handle(const string& path, parameters* parts,
                           const http::server::request& req, http::server::reply& rep)
 {
