@@ -15,14 +15,14 @@ using namespace std;
 
 routes::~routes()
 {
-	for (int i = 0; i < 2; i++) {
-		for (auto kv : map[i]) {
-			delete kv.second;
-		}
-	}
-	for (auto r : rules) {
-		delete r;
-	}
+    for (int i = 0; i < 2; i++) {
+        for (auto kv : map[i]) {
+            delete kv.second;
+        }
+    }
+    for (auto r : rules) {
+        delete r;
+    }
 
 }
 
@@ -30,15 +30,16 @@ bool routes::handle(const string& path, const http::server::request& req,
                     http::server::reply& rep)
 {
     parameters params;
-    string paramStr;
+    string param_str;
 
     handler_base* handler = get_handler(str2type(req.method),
-                                        normalize_url(path, paramStr), params);
+                                        normalize_url(path, param_str), params);
     if (handler != nullptr) {
         try {
             handler->handle(path, &params, req, rep);
         } catch (exception& e) {
-            cerr << "exception was caught for " << path << ": " << e.what() << endl;
+            cerr << "exception was caught for " << path << ": " << e.what()
+                 << endl;
             handler->reply500(rep, 500, e.what());
             return false;
         }
@@ -50,11 +51,11 @@ bool routes::handle(const string& path, const http::server::request& req,
 }
 
 std::string routes::normalize_url(const std::string& url,
-                                  std::string& paramPart)
+                                  std::string& param_part)
 {
     int param = url.find('?');
     if (param > 0) {
-        paramPart = url.substr(param, url.length() - param - 1);
+        param_part = url.substr(param, url.length() - param - 1);
         return (url.at(param - 1) == '/') ?
                url.substr(0, param - 2) :
                url.substr(0, param - 1);
@@ -84,15 +85,17 @@ routes& routes::add_path(const string& nick, handler_base* handler)
 {
     json::path_description* path = json::path_description::get(nick);
     if (path == nullptr) {
-        cerr << "Failed adding path by nickname, no path found for nickname " << nick << endl;
+        cerr << "Failed adding path by nickname, no path found for nickname "
+             << nick << endl;
+        return *this;
     }
     if (path->params.size() == 0)
         put(path->operations.method, path->path, handler);
     else {
         match_rule* rule = new match_rule(handler);
-        rule->addStr(path->path);
+        rule->add_str(path->path);
         for (auto i = path->params.begin(); i != path->params.end(); ++i) {
-            rule->addParam(std::get<0>(*i), std::get<1>(*i));
+            rule->add_param(std::get<0>(*i), std::get<1>(*i));
         }
         add(rule);
     }

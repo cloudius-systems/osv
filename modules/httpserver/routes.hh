@@ -91,8 +91,10 @@ private:
      * @return the handler if exists or nullptr if it does not
      */
     handler_base* get_exact_match(operation_type type,
-                                  const std::string& url) {
-        return (map[type].find(url) == map[type].end()) ? nullptr : map[type][url];
+                                  const std::string& url)
+    {
+        return (map[type].find(url) == map[type].end()) ?
+               nullptr : map[type][url];
     }
 
     /**
@@ -109,10 +111,10 @@ private:
      * Normalize the url to remove the last / if exists
      * and get the parameter part
      * @param url the full url path
-     * @param paramPart will hold the string with the parameters
+     * @param param_part will hold the string with the parameters
      * @return the url from the request without the last /
      */
-    std::string normalize_url(const std::string& url, std::string& paramPart);
+    std::string normalize_url(const std::string& url, std::string& param_part);
 
     std::unordered_map<std::string, handler_base*> map[2];
     std::vector<match_rule*> rules;

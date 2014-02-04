@@ -80,7 +80,7 @@ public:
      * @param str the string to search for
      * @return this
      */
-    match_rule& addStr(const std::string& str)
+    match_rule& add_str(const std::string& str)
     {
         add_matcher(new str_matcher(str));
         return *this;
@@ -93,7 +93,7 @@ public:
      * remaining url until its end
      * @return this
      */
-    match_rule& addParam(const std::string& str, bool fullpath = false)
+    match_rule& add_param(const std::string& str, bool fullpath = false)
     {
         add_matcher(new param_matcher(str, fullpath));
         return *this;
