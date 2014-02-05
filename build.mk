@@ -1,20 +1,28 @@
 
 arch = x64
-BSD_MACHINE_ARCH = amd64
 image ?= default
 img_format ?= qcow2
 fs_size_mb ?= 10240
 local-includes =
 INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/include
 INCLUDES += -isystem $(src)/include/glibc-compat
-gcc-inc-base = $(src)/external/gcc.bin/usr/include/c++/4.8.2
-gcc-inc-base2 = $(src)/external/gcc.bin/usr/lib/gcc/x86_64-redhat-linux/4.8.2/include
+
+glibcbase = $(src)/external/$(arch)/glibc.bin
+gccbase = $(src)/external/$(arch)/gcc.bin
+miscbase = $(src)/external/$(arch)/misc.bin
+jdkbase := $(shell find $(src)/external/$(arch)/openjdk.bin/usr/lib/jvm \
+                         -maxdepth 1 -type d -name 'java*')
+
+gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug -e profile))
+gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
+gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
+
 INCLUDES += -isystem $(gcc-inc-base)
-INCLUDES += -isystem $(gcc-inc-base)/x86_64-redhat-linux
-INCLUDES += -isystem $(src)/external/acpica/source/include
-INCLUDES += -isystem $(src)/external/misc.bin/usr/include
+INCLUDES += -isystem $(gcc-inc-base3)
+INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
+INCLUDES += -isystem $(src)/external/$(arch)/misc.bin/usr/include
 INCLUDES += -isystem $(src)/include/api
-INCLUDES += -isystem $(src)/include/api/x86_64
+INCLUDES += -isystem $(src)/include/api/$(arch)
 # must be after include/api, since it includes some libc-style headers:
 INCLUDES += -isystem $(gcc-inc-base2)
 INCLUDES += -isystem gen/include
@@ -90,8 +98,9 @@ ifeq ($(conf-DEBUG_BUILD),0)
 configuration += -DNDEBUG
 endif
 
+ifeq ($(arch),x64)
 arch-cflags = -msse4.1
-
+endif
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -107,7 +116,7 @@ build-so = $(CC) $(CFLAGS) -o $@ $^
 q-build-so = $(call quiet, $(build-so), CC $@)
 adjust-deps = sed -i 's! $(subst .,\.,$<)\b! !g' $(@:.o=.d)
 q-adjust-deps = $(call very-quiet, $(adjust-deps))
-	
+
 %.o: %.cc
 	$(makedir)
 	$(q-build-cxx)
@@ -359,7 +368,7 @@ bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-
 
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/atomic/${BSD_MACHINE_ARCH}/opensolaris_atomic.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/atomic/${arch}/opensolaris_atomic.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_cmn_err.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kmem.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kobj.o
@@ -599,15 +608,15 @@ objects += $(acpi)
 
 acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
 
-acpi-source := $(shell find $(src)/external/acpica/source/components -type f -name '*.c')
+acpi-source := $(shell find $(src)/external/$(arch)/acpica/source/components -type f -name '*.c')
 acpi = $(patsubst $(src)/%.c, %.o, $(acpi-source))
 
 $(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
 
-libstdc++.a = $(shell find $(gccbase) -name libstdc++.a)
-libsupc++.a = $(shell find $(gccbase) -name libsupc++.a)
-libgcc_s.a = $(shell find $(gccbase) -name libgcc.a |  grep -v /32/)
-libgcc_eh.a = $(shell find $(gccbase) -name libgcc_eh.a |  grep -v /32/)
+libstdc++.a = $(shell find $(gccbase)/ -name libstdc++.a)
+libsupc++.a = $(shell find $(gccbase)/ -name libsupc++.a)
+libgcc_s.a = $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
+libgcc_eh.a = $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 
 loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
         $(objects) dummy-shlib.so \
@@ -624,19 +633,15 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 dummy-shlib.so: dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
 
-jdkbase := $(shell find $(src)/external/openjdk.bin/usr/lib/jvm \
-                         -maxdepth 1 -type d -name 'java*')
-glibcbase = $(src)/external/glibc.bin
-gccbase = $(src)/external/gcc.bin
-miscbase = $(src)/external/misc.bin
-boost-lib-dir = $(miscbase)/usr/lib64
+boost-lib-dir := $(shell dirname `find $(miscbase)/ -name libboost_system-mt.a`)
+
 boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a \
               $(boost-lib-dir)/libboost_system-mt.a
 
 $(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework-mt.so \
                 $(boost-lib-dir)/libboost_filesystem-mt.so
 
-bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__' -D__x86_64__
+bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so java/jni/monitor.so
@@ -685,7 +690,7 @@ gen-ctype-data: gen-ctype-data.o
 generated-headers = gen/include/bits/alltypes.h
 generated-headers += gen/include/osv/version.h
 
-gen/include/bits/alltypes.h: $(src)/include/api/x86_64/bits/alltypes.h.sh
+gen/include/bits/alltypes.h: $(src)/include/api/$(arch)/bits/alltypes.h.sh
 	$(call very-quiet, mkdir -p $(dir $@))
 	$(call quiet, sh $^ > $@, GEN $@)
 

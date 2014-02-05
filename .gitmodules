@@ -1,23 +1,23 @@
-[submodule "external/libunwind"]
-	path = external/libunwind
+[submodule "external/x64/libunwind"]
+	path = external/x64/libunwind
 	url = ../../cloudius-systems/libunwind
-[submodule "external/openjdk.bin"]
-	path = external/openjdk.bin
+[submodule "external/x64/openjdk.bin"]
+	path = external/x64/openjdk.bin
 	url = ../../cloudius-systems/openjdk.bin
-[submodule "external/gcc.bin"]
-	path = external/gcc.bin
+[submodule "external/x64/gcc.bin"]
+	path = external/x64/gcc.bin
 	url = ../../cloudius-systems/gcc.bin
-[submodule "external/glibc.bin"]
-	path = external/glibc.bin
+[submodule "external/x64/glibc.bin"]
+	path = external/x64/glibc.bin
 	url = ../../cloudius-systems/glibc.bin
-[submodule "external/glibc-testsuite"]
-	path = external/glibc-testsuite
+[submodule "external/x64/glibc-testsuite"]
+	path = external/x64/glibc-testsuite
 	url = ../../cloudius-systems/glibc-testsuite
-[submodule "external/acpica"]
-	path = external/acpica
+[submodule "external/x64/acpica"]
+	path = external/x64/acpica
 	url = ../../cloudius-systems/acpica
-[submodule "external/misc.bin"]
-	path = external/misc.bin
+[submodule "external/x64/misc.bin"]
+	path = external/x64/misc.bin
 	url = ../../cloudius-systems/misc.bin.git
 [submodule "mgmt"]
 	path = mgmt
