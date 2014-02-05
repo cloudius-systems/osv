@@ -47,7 +47,7 @@ tracepoint_patch_sites_type tracepoint_patch_sites;
 constexpr size_t trace_page_size = 4096;  // need not match arch page size
 constexpr unsigned max_trace = trace_page_size * 1024;
 
-char trace_log[max_trace] __attribute__((may_alias, aligned(sizeof(long))));
+char *trace_log __attribute__((may_alias));
 std::atomic<size_t> trace_record_last;
 bool trace_enabled;
 
@@ -62,6 +62,10 @@ void enable_trace()
 
 void enable_tracepoint(std::string wildcard)
 {
+    if (!trace_log) {
+        trace_log = (char *) aligned_alloc(sizeof(long), max_trace);
+        bzero(trace_log, max_trace);
+    }
     wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("*"), std::string(".*"));
     wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
     std::regex re{wildcard};

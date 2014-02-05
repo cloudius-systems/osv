@@ -826,8 +826,10 @@ def all_traces():
 
     inf = gdb.selected_inferior()
     trace_log = gdb.lookup_global_symbol('trace_log').value()
+    if not trace_log:
+    	return
     max_trace = ulong(gdb.parse_and_eval('max_trace'))
-    trace_log = inf.read_memory(trace_log.address, max_trace)
+    trace_log = inf.read_memory(trace_log, max_trace)
     trace_page_size = ulong(gdb.parse_and_eval('trace_page_size'))
     last = ulong(gdb.lookup_global_symbol('trace_record_last').value()['_M_i'])
     last %= max_trace
