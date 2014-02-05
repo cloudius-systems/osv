@@ -12,6 +12,15 @@
 #include "bitops.h"
 #include <osv/debug.hh>
 
+#include <osv/trace.hh>
+
+// beware: this measures time between interrupts
+TRACEPOINT(trace_xen_irq, "");
+TRACEPOINT(trace_xen_irq_ret, "");
+// this measures time spent processing an interrupt
+TRACEPOINT(trace_xen_irq_exec, "");
+TRACEPOINT(trace_xen_irq_exec_ret, "");
+
 void unmask_evtchn(int vector);
 int evtchn_from_irq(int irq);
 
@@ -57,6 +66,7 @@ void xen_irq::do_irq()
     else
         memset(cpu_mask, 0, sizeof(cpu_mask));
 
+    trace_xen_irq();
     while (true) {
 
         sched::thread::wait_until([=, &l1] {
@@ -64,6 +74,8 @@ void xen_irq::do_irq()
             return l1;
         });
 
+        trace_xen_irq_ret();
+        trace_xen_irq_exec();
         while (l1 != 0) {
             l1i = bsrq(l1);
             l1 &= ~(1ULL << l1i);
@@ -82,6 +94,8 @@ void xen_irq::do_irq()
                 unmask_evtchn(port);
             }
         }
+        trace_xen_irq_exec_ret();
+        trace_xen_irq();
     }
 }
 
