@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include "arch.hh"
 #include "arch-setup.hh"
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
@@ -13,6 +14,7 @@
 #include <osv/types.h>
 #include <alloca.h>
 #include <string.h>
+#include <osv/boot.hh>
 
 using namespace mmu;
 
@@ -40,6 +42,12 @@ struct multiboot_info_type {
     u16 vbe_interface_len;
 } __attribute__((packed));
 
+struct osv_multiboot_info_type {
+    struct multiboot_info_type mb;
+    u32 tsc_init, tsc_init_hi;
+    u32 tsc_disk_done, tsc_disk_done_hi;
+} __attribute__((packed));
+
 struct e820ent {
     u32 ent_size;
     u64 addr;
@@ -47,7 +55,7 @@ struct e820ent {
     u32 type;
 } __attribute__((packed));
 
-multiboot_info_type* multiboot_info;
+osv_multiboot_info_type* osv_multiboot_info;
 
 extern char** __argv;
 extern int __argc;
@@ -110,13 +118,15 @@ e820ent truncate_above(e820ent ent, u64 a)
 extern elf::Elf64_Ehdr* elf_header;
 extern size_t elf_size;
 extern void* elf_start;
+extern boot_time_chart boot_time;
 
 void arch_setup_free_memory()
 {
     static ulong edata;
     asm ("movl $.edata, %0" : "=rm"(edata));
     // copy to stack so we don't free it now
-    auto mb = *multiboot_info;
+    auto omb = *osv_multiboot_info;
+    auto mb = omb.mb;
     auto e820_buffer = alloca(mb.mmap_length);
     auto e820_size = mb.mmap_length;
     memcpy(e820_buffer, reinterpret_cast<void*>(mb.mmap_addr), e820_size);
@@ -124,6 +134,16 @@ void arch_setup_free_memory()
         memory::phys_mem_size += ent.size;
     });
     constexpr u64 initial_map = 1 << 30; // 1GB mapped by startup code
+
+    u64 time;
+    time = omb.tsc_init_hi;
+    time = (time << 32) | omb.tsc_init;
+    boot_time.arrays[0] = { "", time };
+
+    time = omb.tsc_disk_done_hi;
+    time = (time << 32) | omb.tsc_disk_done;
+    boot_time.arrays[1] = { "disk read (real mode)", time };
+
     setup_temporary_phys_map();
 
     // setup all memory up to 1GB.  We can't free any more, because no
