@@ -519,6 +519,7 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 
 zfs-tests += tests/misc-zfs-disk.so
 zfs-tests += tests/misc-zfs-io.so
+zfs-tests += tests/misc-zfs-arc.so
 
 tests += tests/tst-zfs-mount.so
 
