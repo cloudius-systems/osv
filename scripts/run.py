@@ -77,7 +77,7 @@ def start_osv_qemu(options):
         cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
 
     args = [
-        "-vnc", ":1",
+        "-vnc", options.vnc,
         "-gdb", "tcp::1234,server,nowait",
         "-m", options.memsize,
         "-smp", options.vcpus]
@@ -194,6 +194,7 @@ def start_osv_xen(options):
 
 
     args += [
+        "vnc=%s" % (options.vnc),
         "memory=%d" % (memory),
         "vcpus=%s" % (options.vcpus),
         "maxcpus=%s" % (options.vcpus),
@@ -308,6 +309,8 @@ if (__name__ == "__main__"):
                         help = "start JVM with a suspended debugger server")
     parser.add_argument("--mac", action="store",
                         help = "set MAC address for NIC")
+    parser.add_argument("--vnc", action="store", default=":1",
+                        help="specify vnc port number")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
