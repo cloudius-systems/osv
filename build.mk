@@ -1,5 +1,28 @@
+ifndef CROSS_PREFIX
+    HOST_CXX=$(CXX)
+else
+    HOST_CXX=g++
+    CXX=$(CROSS_PREFIX)g++
+    CC=$(CROSS_PREFIX)gcc
+    LD=$(CROSS_PREFIX)ld
+endif
 
-arch = x64
+detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
+
+ifndef ARCH
+    ifeq ($(call detect_arch, __x86_64__),1)
+        arch = x64
+    endif
+    ifeq ($(call detect_arch, __aarch64__),1)
+        arch = aarch64
+    endif
+else
+    arch = $(ARCH)
+endif
+$(info build.mk:)
+$(info build.mk: building arch=$(arch), override with ARCH env)
+$(info build.mk:)
+
 image ?= default
 img_format ?= qcow2
 fs_size_mb ?= 10240
@@ -685,8 +708,8 @@ runtime.o: gen/include/ctype-data.h
 gen/include/ctype-data.h: gen-ctype-data
 	$(call quiet, ./gen-ctype-data > $@, GEN $@)
 
-gen-ctype-data: gen-ctype-data.o
-	$(call quiet, $(CXX) -o $@ $^, LD $@)
+gen-ctype-data: gen-ctype-data.cc
+	$(call quiet, $(HOST_CXX) -o $@ $^, HOST_CXX $@)
 
 generated-headers = gen/include/bits/alltypes.h
 generated-headers += gen/include/osv/version.h
