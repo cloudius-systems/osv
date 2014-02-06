@@ -607,7 +607,7 @@ def show_thread_timers(t):
         gdb.write('  timers:')
         for timer in timer_list:
             expired = '*' if timer['_state'] == timer_state_expired else ''
-            expiration = long(timer['_time']) / 1.0e9
+            expiration = long(timer['_time']['__d']['__r']) / 1.0e9
             gdb.write(' %11.9f%s' % (expiration, expired))
         gdb.write('\n')
 
