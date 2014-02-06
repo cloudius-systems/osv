@@ -368,7 +368,7 @@ bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-
 
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/atomic/${arch}/opensolaris_atomic.o
+solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_atomic.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_cmn_err.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kmem.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kobj.o

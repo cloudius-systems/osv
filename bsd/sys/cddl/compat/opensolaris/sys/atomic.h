@@ -31,6 +31,9 @@
 
 #include <sys/types.h>
 #include <bsd/machine/atomic.h>
+#include <sys/cdefs.h>
+
+__BEGIN_DECLS
 
 #define	casptr(_a, _b, _c)	\
 	atomic_cmpset_ptr((volatile uintptr_t *)(_a), (uintptr_t)(_b), (uintptr_t) (_c))
@@ -132,5 +135,7 @@ atomic_cas_ptr(volatile void *target, void *cmp,  void *newval)
 	    (uint32_t)cmp, (uint32_t)newval));
 }
 #endif	/* !defined(COMPAT_32BIT) && defined(__LP64__) */
+
+__END_DECLS
 
 #endif	/* !_OPENSOLARIS_SYS_ATOMIC_H_ */
