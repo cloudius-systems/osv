@@ -54,7 +54,7 @@ namespace hw {
         return _devices.count(id);
     }
 
-    void device_manager::list_devices(void)
+    void device_manager::list_devices()
     {
         debug("<list_devices>\n");
         for_each_device([](hw_device* dev) { dev->print(); });

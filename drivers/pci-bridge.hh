@@ -18,7 +18,7 @@ namespace pci {
         bridge(u8 bus, u8 device, u8 func);
         virtual ~bridge();
 
-        virtual bool parse_pci_config(void);
+        virtual bool parse_pci_config();
 
     protected:
     };

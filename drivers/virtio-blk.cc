@@ -288,7 +288,7 @@ int blk::make_request(struct bio* bio)
     }
 }
 
-u32 blk::get_driver_features(void)
+u32 blk::get_driver_features()
 {
     auto base = virtio_driver::get_driver_features();
     return (base | ( 1 << VIRTIO_BLK_F_SIZE_MAX)

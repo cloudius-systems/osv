@@ -32,7 +32,7 @@ namespace hw {
         _probes.push_back(probe);
     }
 
-    void driver_manager::load_all(void)
+    void driver_manager::load_all()
     {
         auto dm = device_manager::instance();
         dm->for_each_device([this] (hw_device* dev) {
@@ -45,7 +45,7 @@ namespace hw {
         });
     }
 
-    void driver_manager::unload_all(void)
+    void driver_manager::unload_all()
     {
         for (auto drv : _drivers) {
             delete drv;
@@ -53,7 +53,7 @@ namespace hw {
         _drivers.clear();
     }
 
-    void driver_manager::list_drivers(void)
+    void driver_manager::list_drivers()
     {
         for (auto drv : _drivers) {
             drv->dump_config();

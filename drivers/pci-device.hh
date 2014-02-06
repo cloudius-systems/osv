@@ -20,12 +20,12 @@ namespace pci {
         virtual ~device();
 
         // Parse configuration space of pci_device
-        virtual bool parse_pci_config(void);
+        virtual bool parse_pci_config();
 
-        u16 get_subsystem_id(void);
-        u16 get_subsystem_vid(void);
+        u16 get_subsystem_id();
+        u16 get_subsystem_vid();
 
-        virtual void dump_config(void);
+        virtual void dump_config();
 
     protected:
 

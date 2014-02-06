@@ -20,10 +20,10 @@ namespace hw {
         virtual ~hw_driver() {};
 
         // Drivers are indexed by their names
-        virtual const std::string get_name(void) = 0;
+        virtual const std::string get_name() = 0;
 
-        // virtual bool sleep(void) = 0;
-        // virtual bool wake(void) = 0;
+        // virtual bool sleep() = 0;
+        // virtual bool wake() = 0;
         // ...
 
         virtual void dump_config() = 0;
@@ -39,13 +39,13 @@ namespace hw {
                 _instance = new driver_manager();
             }
 
-            return (_instance);
+            return _instance;
         }
 
         void register_driver(std::function<hw_driver* (hw_device*)> probe);
-        void load_all(void);
-        void unload_all(void);
-        void list_drivers(void);
+        void load_all();
+        void unload_all();
+        void list_drivers();
 
     private:
         static driver_manager* _instance;

@@ -314,7 +314,7 @@ void scsi::add_lun(u16 target, u16 lun)
 }
 
 
-void scsi::scan(void)
+void scsi::scan()
 {
     /* TODO: Support more target */
     for (u16 target = 0; target < 1; target++) {
@@ -456,10 +456,10 @@ int scsi::make_request(struct bio* bio)
     return 0;
 }
 
-u32 scsi::get_driver_features(void)
+u32 scsi::get_driver_features()
 {
     auto base = virtio_driver::get_driver_features();
-    return (base | ( 1 << VIRTIO_SCSI_F_INOUT));
+    return base | ( 1 << VIRTIO_SCSI_F_INOUT);
 }
 
 hw_driver* scsi::probe(hw_device* dev)

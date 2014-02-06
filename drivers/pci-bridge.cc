@@ -22,10 +22,10 @@ namespace pci {
 
     }
 
-    bool bridge::parse_pci_config(void)
+    bool bridge::parse_pci_config()
     {
         function::parse_pci_config();
-        return (true);
+        return true;
     }
 
 }

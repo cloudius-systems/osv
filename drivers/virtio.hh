@@ -108,32 +108,32 @@ public:
     explicit virtio_driver(pci::device& dev);
     virtual ~virtio_driver();
 
-    virtual const std::string get_name(void) = 0;
+    virtual const std::string get_name() = 0;
 
-    virtual void dump_config(void);
+    virtual void dump_config();
 
     // The remaining space is defined by each driver as the per-driver
     // configuration space
     int virtio_pci_config_offset() {return (_dev.is_msix_enabled())? 24 : 20;}
 
-    bool parse_pci_config(void);
+    bool parse_pci_config();
 
-    bool probe_virt_queues(void);
+    bool probe_virt_queues();
     vring* get_virt_queue(unsigned idx);
 
     // block the calling thread until the queue has some used elements in it.
     void wait_for_queue(vring* queue, bool (vring::*pred)() const);
 
     // guest/host features physical access
-    u32 get_device_features(void);
+    u32 get_device_features();
     bool get_device_feature_bit(int bit);
     void set_guest_features(u32 features);
     void set_guest_feature_bit(int bit, bool on);
-    u32 get_guest_features(void);
+    u32 get_guest_features();
     bool get_guest_feature_bit(int bit);
 
     // device status
-    u8 get_dev_status(void);
+    u8 get_dev_status();
     void set_dev_status(u8 status);
     void add_dev_status(u8 status);
     void del_dev_status(u8 status);
@@ -154,7 +154,7 @@ public:
 
     bool kick(int queue);
     void reset_host_side();
-    void free_queues(void);
+    void free_queues();
 
     bool get_indirect_buf_cap() {return _cap_indirect_buf;}
     void set_indirect_buf_cap(bool on) {_cap_indirect_buf = on;}
@@ -164,8 +164,8 @@ public:
     pci::device& pci_device() { return _dev; }
 protected:
     // Actual drivers should implement this on top of the basic ring features
-    virtual u32 get_driver_features(void) { return (1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX); }
-    bool setup_features(void);
+    virtual u32 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
+    bool setup_features();
 protected:
     pci::device& _dev;
     interrupt_manager _msi;

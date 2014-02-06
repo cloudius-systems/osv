@@ -56,23 +56,23 @@ namespace pci {
         virtual ~bar();
 
         // pos is the offset within the configuration space
-        void test_bar_size(void);
+        void test_bar_size();
 
-        bool is_pio(void) { return (!_is_mmio); }
-        bool is_mmio(void) { return (_is_mmio); }
-        bool is_32(void) { return (!_is_64); }
-        bool is_64(void) { return (_is_64); }
-        bool is_prefetchable(void) { return (_is_prefetchable); }
+        bool is_pio() { return !_is_mmio; }
+        bool is_mmio() { return _is_mmio; }
+        bool is_32() { return !_is_64; }
+        bool is_64() { return _is_64; }
+        bool is_prefetchable() { return _is_prefetchable; }
 
-        u32 get_addr_lo(void) { return (_addr_lo); }
-        u32 get_addr_hi(void) { return (_addr_hi); }
-        u64 get_addr64(void) { return (_addr_64); }
-        u64 get_size(void) { return (_addr_size); }
+        u32 get_addr_lo() { return _addr_lo; }
+        u32 get_addr_hi() { return _addr_hi; }
+        u64 get_addr64() { return _addr_64; }
+        u64 get_size() { return _addr_size; }
 
         // map mmio region
-        void map(void);
-        void unmap(void);
-        mmioaddr_t get_mmio(void);
+        void map();
+        void unmap();
+        mmioaddr_t get_mmio();
 
         // Access the pio or mmio bar
         u32 readl(u32 offset);
@@ -84,7 +84,7 @@ namespace pci {
 
     private:
 
-        void init(void);
+        void init();
 
         // To which pci_function it relates
         function* _dev;
@@ -213,37 +213,37 @@ namespace pci {
         virtual ~function();
 
         // Implement device interface
-        virtual hw_device_id get_id(void);
-        virtual void print(void);
-        virtual void reset(void);
+        virtual hw_device_id get_id();
+        virtual void print();
+        virtual void reset();
 
         // Parses the PCI configuration space
-        virtual bool parse_pci_config(void);
+        virtual bool parse_pci_config();
 
         // Position
         void get_bdf(u8& bus, u8 &device, u8& func);
         void set_bdf(u8 bus, u8 device, u8 func);
 
         // Identification
-        u16 get_vendor_id(void);
-        u16 get_device_id(void);
-        u8 get_revision_id(void);
+        u16 get_vendor_id();
+        u16 get_device_id();
+        u8 get_revision_id();
 
         u8 get_base_class_code();
         u8 get_sub_class_code();
 
         // Type
-        bool is_device(void);
-        bool is_bridge(void);
-        bool is_pccard(void);
+        bool is_device();
+        bool is_bridge();
+        bool is_pccard();
 
         static bool is_device(u8 bus, u8 device, u8 function);
         static bool is_bridge(u8 bus, u8 device, u8 function);
         static bool is_pccard(u8 bus, u8 device, u8 function);
 
         // Command & Status
-        u16 get_command(void);
-        u16 get_status(void);
+        u16 get_command();
+        u16 get_status();
         void set_command(u16 command);
         void set_status(u16 status);
 
@@ -251,30 +251,30 @@ namespace pci {
         void set_bus_master(bool m);
 
         // Enable/Disable intx assertions
-        bool is_intx_enabled(void);
+        bool is_intx_enabled();
         // Enable intx assertion
         // intx assertions should be disabled in order to use MSI-x
-        void enable_intx(void);
-        void disable_intx(void);
+        void enable_intx();
+        void disable_intx();
 
         // Interrupts (PCI configuration)
-        u8 get_interrupt_line(void);
+        u8 get_interrupt_line();
         void set_interrupt_line(u8 irq);
-        u8 get_interrupt_pin(void);
+        u8 get_interrupt_pin();
 
         // Does this device support MSI-x
-        bool is_msix(void);
-        unsigned msix_get_num_entries(void);
-        void msix_mask_all(void);
-        void msix_unmask_all(void);
+        bool is_msix();
+        unsigned msix_get_num_entries();
+        void msix_mask_all();
+        void msix_unmask_all();
         bool msix_mask_entry(int entry_id);
         bool msix_unmask_entry(int entry_id);
         bool msix_write_entry(int entry_id, u64 address, u32 data);
 
         // Enable MSIx, start with all vectors masked
-        void msix_enable(void);
+        void msix_enable();
         // Good for reset maybe, call disable and enable
-        void msix_disable(void);
+        void msix_disable();
         bool is_msix_enabled() {return _msix_enabled;}
 
         // Access to PCI address space
@@ -292,13 +292,13 @@ namespace pci {
         void add_bar(int idx, bar* bar);
 
         // Useful function to print device
-        virtual void dump_config(void);
+        virtual void dump_config();
 
         friend std::ostream& operator << (std::ostream& out, const function &d);
         struct equal {
             bool operator()(const function* d1, const function* d2) const
             {
-                return (d1->_device_id == d2->_device_id && d1->_vendor_id == d2->_vendor_id);
+                return d1->_device_id == d2->_device_id && d1->_vendor_id == d2->_vendor_id;
             }
         };
 
@@ -310,13 +310,13 @@ namespace pci {
 
     protected:
         // Parsing of extra capabilities
-        virtual bool parse_pci_capabilities(void);
+        virtual bool parse_pci_capabilities();
         virtual bool parse_pci_msix(u8 off);
 
         // Don't call if msix capability is not present
         void msix_set_control(u16 ctrl);
-        u16 msix_get_control(void);
-        mmioaddr_t msix_get_table(void);
+        u16 msix_get_control();
+        mmioaddr_t msix_get_table();
 
         // Position
         u8  _bus, _device, _func;

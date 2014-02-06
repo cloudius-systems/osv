@@ -42,13 +42,13 @@ class xenfront_driver {
 public:
     explicit xenfront_driver(xenbus *bus);
 
-    const std::string get_name(void) { return _driver_name; }
+    const std::string get_name() { return _driver_name; }
 
-    const std::string &get_type(void) { return _type; }
-    const std::string &get_node_path(void) { return _node_path; }
-    const std::string &get_otherend_path(void) { return _otherend_path; };
+    const std::string &get_type() { return _type; }
+    const std::string &get_node_path() { return _node_path; }
+    const std::string &get_otherend_path() { return _otherend_path; };
 
-    const int get_otherend_id(void) { return _otherend_id; }
+    const int get_otherend_id() { return _otherend_id; }
     void set_ivars(struct xenbus_device_ivars *ivars);
 
     void localend_changed(std::string local) { };
