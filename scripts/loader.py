@@ -12,10 +12,11 @@ from glob import glob
 from collections import defaultdict
 from itertools import ifilter
 
+arch = 'x64'
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
 mgmt_dir = os.path.join(osv_dir, 'mgmt')
-external = os.path.join(osv_dir, 'external')
+external = os.path.join(osv_dir, 'external', arch)
 
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
