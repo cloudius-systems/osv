@@ -110,7 +110,6 @@ int main(int argc, char **argv)
         }
     }
 
-#if 0
     if (!has_xmx) {
         // FIXME: We should estimate how much memory the JVM itself is going to use
         auto heap_size = memory::stats::free() >> 20;
@@ -120,7 +119,6 @@ int main(int argc, char **argv)
         }
         debugf("Autotuning JVM heap size to %d MB\n", heap_size);
     }
-#endif
 
     vm_args.nOptions = options.size();
     vm_args.options = options.data();
@@ -167,13 +165,11 @@ int main(int argc, char **argv)
         env->SetObjectArrayElement(args, index++, env->NewStringUTF(argv[i]));
     }
 
-#if 0
     // Manually setting the heap size is viewed as a declaration of intent. In
     // that case, we'll leave the user alone. This may be revisited in the
     // future, but it is certainly the safest option.
     std::unique_ptr<jvm_balloon_shrinker>
         balloon(has_xmx ? nullptr : new jvm_balloon_shrinker(jvm));
-#endif
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
 
