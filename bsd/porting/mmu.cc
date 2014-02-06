@@ -10,6 +10,7 @@
 #include <osv/mmu.hh> // OSV
 #include "mmu.h"  // Port
 #include <osv/mmio.hh>
+#include <osv/mempool.hh>
 
 void *pmap_mapdev(uint64_t paddr, size_t size)
 {
@@ -21,3 +22,15 @@ uint64_t virt_to_phys(void *virt)
     return mmu::virt_to_phys(virt);
 }
 
+/*
+ * Get the amount of used memory.
+ */
+uint64_t kmem_used(void)
+{
+    return memory::stats::total() - memory::stats::free();
+}
+
+int vm_paging_needed(void)
+{
+    return 0;
+}

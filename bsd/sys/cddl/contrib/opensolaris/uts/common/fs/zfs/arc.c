@@ -133,6 +133,8 @@
 #include <zfs_fletcher.h>
 #include <sys/sdt.h>
 
+#include <bsd/porting/mmu.h>
+
 #ifdef illumos
 #ifndef _KERNEL
 /* set with ZFS_DEBUG=watch, to enable watchpoints on frozen buffers */
@@ -2279,7 +2281,7 @@ static int
 arc_reclaim_needed(void)
 {
 
-#if defined(_KERNEL) && !defined(__OSV__)
+#ifdef _KERNEL
 
 	if (needfree)
 		return (1);
