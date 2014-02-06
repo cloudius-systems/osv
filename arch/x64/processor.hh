@@ -309,6 +309,11 @@ inline u64 rdtsc()
     return lo | (u64(hi) << 32);
 }
 
+inline u64 ticks()
+{
+    return rdtsc();
+}
+
 struct fpu_state {
     char x[512];
     char extra[];
