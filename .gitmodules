@@ -1,6 +1,3 @@
-[submodule "external/x64/libunwind"]
-	path = external/x64/libunwind
-	url = ../../cloudius-systems/libunwind
 [submodule "external/x64/openjdk.bin"]
 	path = external/x64/openjdk.bin
 	url = ../../cloudius-systems/openjdk.bin
