@@ -36,6 +36,7 @@ $(submake) $(modulemk): Makefile
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
 	$(call only-if, $(mgmt), $(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null, GRADLE CLEAN))
+	$(call quiet, cd java && mvn clean -q, MVN CLEAN)
 
 check: export image ?= tests
 

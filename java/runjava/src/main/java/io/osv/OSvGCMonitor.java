@@ -1,15 +1,12 @@
 package io.osv;
 
-import java.util.List;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
+import com.sun.management.GarbageCollectionNotificationInfo;
+
+import javax.management.*;
+import javax.management.openmbean.CompositeData;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
-import javax.management.Notification;
-import javax.management.NotificationEmitter;
-import javax.management.NotificationListener;
-import javax.management.openmbean.CompositeData;
-import com.sun.management.GarbageCollectionNotificationInfo;
+import java.util.List;
 
 public class OSvGCMonitor {
 
@@ -18,17 +15,17 @@ public class OSvGCMonitor {
     }
 
     private native static void NotifyOSv(long h);
+
     static long handle;
-    static void MonitorGC(long h){
+
+    static void MonitorGC(long h) {
 
         handle = h;
         List<GarbageCollectorMXBean> gcbeans = java.lang.management.ManagementFactory.getGarbageCollectorMXBeans();
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        try
-        {
+        try {
             ObjectName gcName = new ObjectName(ManagementFactory.GARBAGE_COLLECTOR_MXBEAN_DOMAIN_TYPE + ",*");
-            for (ObjectName name : server.queryNames(gcName, null))
-            {
+            for (ObjectName name : server.queryNames(gcName, null)) {
                 GarbageCollectorMXBean gc = ManagementFactory.newPlatformMXBeanProxy(server, name.getCanonicalName(), GarbageCollectorMXBean.class);
                 gcbeans.add(gc);
 
@@ -56,9 +53,7 @@ public class OSvGCMonitor {
                 };
                 emitter.addNotificationListener(listener, null, null);
             }
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }

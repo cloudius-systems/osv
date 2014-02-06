@@ -12,15 +12,13 @@ import java.io.IOException;
  * the jar file, followed by their command lines.
  *
  * @author amnon
- *
  */
 public class MultiJarLoader {
     /**
      * the main file runs the loaded file.
      *
-     * @param args
-     *            - it looks for a javamains file, with the -mains flag e.g.
-     *            -mains /usr/mgmt/myfile.txt
+     * @param args - it looks for a javamains file, with the -mains flag e.g.
+     *             - mains /usr/mgmt/myfile.txt
      */
     public static void main(String[] args) {
         for (int i = 0; i < args.length; i++) {
@@ -41,8 +39,7 @@ public class MultiJarLoader {
      * runFromFile read a java mains file and execute each of the commands
      * each line with its own main, will be run on its own thread
      *
-     * @param fileName
-     *            the file name to read from
+     * @param fileName the file name to read from
      */
     private static void runFromFile(String fileName) {
         FileReader fr = null;
@@ -74,8 +71,7 @@ public class MultiJarLoader {
     /**
      * when reading the java mains file, check if a line is an executable line.
      *
-     * @param line
-     *            a line from the file
+     * @param line a line from the file
      * @return true if this is an executable line, comments and empty lines are
      *         ignored. sleep with a number in millisecond is supported, and
      *         would put the main thread into sleep
@@ -103,7 +99,6 @@ public class MultiJarLoader {
      * terminate the process
      *
      * @author amnon
-     *
      */
     private static class RunOnThread extends Thread {
         private String args;
@@ -115,7 +110,7 @@ public class MultiJarLoader {
         @Override
         public void run() {
             try {
-                RunJava.parseArgs(args.split("\\s+"));
+                ContextIsolator.getInstance().runSync(args.split("\\s+"));
             } catch (Throwable e) {
                 System.err.println("Exception was caught while running " + args
                         + " exception: " + e);

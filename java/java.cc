@@ -89,6 +89,7 @@ int main(int argc, char **argv)
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=" RUNJAVA_PATH));
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
+    options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
 
     int orig_argc = argc;
     int has_xms = 0, has_xmx = 0;
@@ -127,25 +128,32 @@ int main(int argc, char **argv)
     auto JNI_CreateJavaVM
         = prog->lookup_function<jint (JavaVM**, JNIEnv**, void*)>("JNI_CreateJavaVM");
     if (!JNI_CreateJavaVM) {
-        debug("java.so: failed looking up JNI_CreateJavaVM()\n");
+        std::cerr << "java.so: failed looking up JNI_CreateJavaVM()\n";
         return 1;
     }
 
     JavaVM* jvm = nullptr;
     JNIEnv *env;
     if (JNI_CreateJavaVM(&jvm, &env, &vm_args) != 0) {
-        debug("java.so: Can't create VM.\n");
+        std::cerr << "java.so: Can't create VM.\n";
         return 1;
     }
+
     auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
-        debug("java.so: Can't find class %s in %s.\n", RUNJAVA, RUNJAVA_PATH);
+        if (env->ExceptionOccurred()) {
+            std::cerr << "java.so: Failed to load " << RUNJAVA << "\n";
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+        } else {
+            std::cerr << "java.so: Can't find class " << RUNJAVA << " in " << RUNJAVA_PATH << ".\n";
+        }
         return 1;
     }
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");
     if (!mainmethod) {
-        debug("java.so: Can't find main() in class %s.\n", RUNJAVA);
+        std::cerr << "java.so: Can't find main() in class " << RUNJAVA << ".\n";
         return 1;
     }
 

@@ -7,13 +7,30 @@ import sys
 import os
 import re
 
+from operator import attrgetter
+
+
+class Test(object):
+    def __init__(self, name, command, handled_by_testrunner=False):
+        self.name = name
+        self.command = command
+        self.handled_by_testrunner = handled_by_testrunner
+
+class StandardOSvTest(Test):
+    def __init__(self, name):
+        super(StandardOSvTest, self).__init__(name, '/tests/%s' % name, True)
+
 blacklist = [
     "tst-fsx.so" # Test fails
 ]
 
-tests = sorted([os.path.basename(x) for x in glob.glob('build/release/tests/tst-*.so')])
+java_test = Test('java', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
+    -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTests')
 
-def scan_errors(s, name):
+standard_tests = [StandardOSvTest(os.path.basename(x)) for x in glob.glob('build/release/tests/tst-*.so')]
+tests = sorted([java_test] + standard_tests, key=attrgetter('name'))
+
+def scan_errors(s):
     if not s:
         return False
     patterns = [
@@ -24,7 +41,7 @@ def scan_errors(s, name):
         "failures detected in test",
         "failure detected in test",
         "FAIL",
-        "cannot execute tests/%s" % name,
+        "cannot execute ",
 
         # Below are generic error patterns for error case.
         # A test should indicate it's status by a return value only:
@@ -35,19 +52,21 @@ def scan_errors(s, name):
         "Assertion failed",
         "Aborted",
         "program exited with status",
-        "program tests/%s returned" % name
+        r"program tests/(.*?) returned",
+        "Exception was caught while running",
+        "at org.junit.runner.JUnitCore.main"
     ]
     for pattern in patterns:
         if re.findall(pattern, s):
             return True
     return False
 
-def run_test(name):
-    sys.stdout.write("  TEST %-25s" % name)
+def run_test(test):
+    sys.stdout.write("  TEST %-25s" % test.name)
     sys.stdout.flush()
 
     start = time.time()
-    args = ["-s", "-e", "tests/%s" % (name)]
+    args = ["-s", "-e", test.command]
     process = subprocess.Popen(["./scripts/run.py"] + args, stdout=subprocess.PIPE)
     out = ""
     line = ""
@@ -61,7 +80,7 @@ def run_test(name):
             sys.stdout.flush()
         line += ch
         if ch == '\n':
-            if not cmdargs.verbose and scan_errors(line, name):
+            if not cmdargs.verbose and scan_errors(line):
                 sys.stdout.write(out)
                 sys.stdout.flush()
                 cmdargs.verbose = True
@@ -69,8 +88,8 @@ def run_test(name):
 
     end = time.time()
 
-    if scan_errors(out, name) or process.returncode:
-        sys.stdout.write("Test %s FAILED\n" % name)
+    if scan_errors(out) or process.returncode:
+        sys.stdout.write("Test %s FAILED\n" % test.name)
         sys.stdout.flush()
         exit(1)
     else:
@@ -78,11 +97,24 @@ def run_test(name):
         sys.stdout.write(" OK  (%.3f s)\n" % duration)
         sys.stdout.flush()
 
-def run_tests_in_single_instance():
-    blacklist_tests = ' '.join(blacklist)
+def is_not_skipped(test):
+    return test.name not in blacklist
 
+def run_tests_in_single_instance():
+    run(filter(lambda test: not test.handled_by_testrunner, tests))
+
+    blacklist_tests = ' '.join(blacklist)
     args = ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
-    subprocess.call(["./scripts/run.py"] + args)
+    if subprocess.call(["./scripts/run.py"] + args):
+        exit(1)
+
+def run(tests):
+    for test in tests:
+        if is_not_skipped(test):
+            run_test(test)
+        else:
+            sys.stdout.write("  TEST %-25s SKIPPED\n" % test.name)
+            sys.stdout.flush()
 
 def run_tests():
     start = time.time()
@@ -90,12 +122,7 @@ def run_tests():
     if cmdargs.single:
         run_tests_in_single_instance()
     else:
-        for test in tests:
-            if not test in blacklist:
-                run_test(test)
-            else:
-                sys.stdout.write("  TEST %-25s SKIPPED\n" % test)
-                sys.stdout.flush()
+        run(tests)
 
     end = time.time()
 
@@ -112,6 +139,6 @@ if (__name__ == "__main__"):
     parser = argparse.ArgumentParser(prog='test')
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
     parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
-    parser.add_argument("-s", "--single", action="store_true", help="run all tests in a single OSv instance")
+    parser.add_argument("-s", "--single", action="store_true", help="run as much tests as possible in a single OSv instance")
     cmdargs = parser.parse_args()
     main()
