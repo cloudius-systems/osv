@@ -22,7 +22,6 @@ mgmt = 1
 all: $(submake) $(modulemk)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
-	$(call only-if, $(mgmt), cd mgmt && ./gradlew --daemon :web:jar build)
 	$(MAKE) -r -C $(dir $(submake)) $@
 
 $(submake) $(modulemk): Makefile
@@ -35,7 +34,7 @@ $(submake) $(modulemk): Makefile
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
-	$(call only-if, $(mgmt), $(call quiet, cd mgmt && ./gradlew --daemon clean >> /dev/null, GRADLE CLEAN))
+	$(call only-if, $(mgmt), $(MAKE) -C mgmt)
 	$(call quiet, cd java && mvn clean -q, MVN CLEAN)
 
 check: export image ?= tests

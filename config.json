@@ -2,7 +2,7 @@
    "modules": {
         "mgmt": {
             "type": "direct-dir",
-            "path": "${OSV_BASE}/modules/mgmt/"
+            "path": "${OSV_BASE}/mgmt/"
         },
         "java": {
             "type": "direct-dir",
