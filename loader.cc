@@ -41,6 +41,7 @@
 #include <osv/rcu.hh>
 #include <osv/mempool.hh>
 #include <bsd/porting/networking.hh>
+#include <bsd/porting/shrinker.h>
 #include <osv/dhcp.hh>
 #include <osv/version.h>
 #include <osv/run.hh>
@@ -292,6 +293,7 @@ void* do_main_thread(void *_commands)
 
     if (opt_mount) {
         mount_zfs_rootfs();
+        bsd_shrinker_init();
     }
 
     bool has_if = false;

@@ -3795,13 +3795,16 @@ static kmutex_t arc_lowmem_lock;
 #ifdef _KERNEL
 static eventhandler_tag arc_event_lowmem = NULL;
 
-static void
+static size_t
 arc_lowmem(void *arg __unused2, int howto __unused2)
 {
+	uint64_t old_arcsize, new_arcsize;
+	size_t freed = 0;
 
 	/* Serialize access via arc_lowmem_lock. */
 	mutex_enter(&arc_lowmem_lock);
 	mutex_enter(&arc_reclaim_thr_lock);
+	old_arcsize = arc_size;
 	needfree = 1;
 	cv_signal(&arc_reclaim_thr_cv);
 
@@ -3814,8 +3817,16 @@ arc_lowmem(void *arg __unused2, int howto __unused2)
 		while (needfree)
 			msleep(&needfree, &arc_reclaim_thr_lock, 0, "zfs:lowmem", 0);
 	}
+
+	new_arcsize = arc_size;
+	/* Check if memory was released, if so, calculate the amount. */
+	if (old_arcsize > new_arcsize) {
+		freed = old_arcsize - new_arcsize;
+	}
 	mutex_exit(&arc_reclaim_thr_lock);
 	mutex_exit(&arc_lowmem_lock);
+
+	return freed;
 }
 #endif
 
