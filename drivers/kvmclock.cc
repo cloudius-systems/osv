@@ -22,6 +22,7 @@ public:
     virtual s64 time() __attribute__((no_instrument_function));
     virtual s64 uptime() override __attribute__((no_instrument_function));
     virtual s64 boot_time() override __attribute__((no_instrument_function));
+    virtual u64 processor_to_nano(u64 ticks) override __attribute__((no_instrument_function));
     static bool probe();
 private:
     u64 wall_clock_boot();
@@ -120,6 +121,11 @@ u64 kvmclock::system_time()
     auto r = pvclock::system_time(sys);
     sched::preempt_enable();
     return r;
+}
+
+u64 kvmclock::processor_to_nano(u64 ticks)
+{
+    return pvclock::processor_to_nano(&*_sys, ticks);
 }
 
 static __attribute__((constructor(init_prio::clock))) void setup_kvmclock()

@@ -33,17 +33,8 @@ u64 system_time(pvclock_vcpu_time_info *sys)
     do {
         v1 = sys->version;
         barrier();
-        time = processor::rdtsc() - sys->tsc_timestamp;
-        if (sys->tsc_shift >= 0) {
-            time <<= sys->tsc_shift;
-        } else {
-            time >>= -sys->tsc_shift;
-        }
-        asm("mul %1; shrd $32, %%rdx, %0"
-                : "+a"(time)
-                : "rm"(u64(sys->tsc_to_system_mul))
-                : "rdx");
-        time += sys->system_time;
+        time = sys->system_time +
+               processor_to_nano(sys, processor::rdtsc() - sys->tsc_timestamp);
         barrier();
         v2 = sys->version;
     } while (v1 != v2);
