@@ -83,7 +83,12 @@ kstat_t *
 kstat_create(char *module, int instance, char *name, char *class,
     uchar_t type, ulong_t ndata, uchar_t ks_flag)
 {
-	return (NULL);
+    kstat_t *ksp = malloc(sizeof(kstat_t));
+    if (ksp) {
+        ksp->ks_data = NULL;
+        ksp->ks_ndata = ndata;
+    }
+    return ksp;
 }
 
 /*ARGSUSED*/
@@ -94,7 +99,9 @@ kstat_install(kstat_t *ksp)
 /*ARGSUSED*/
 void
 kstat_delete(kstat_t *ksp)
-{}
+{
+    free(ksp);
+}
 
 /*
  * =========================================================================
