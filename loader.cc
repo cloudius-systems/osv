@@ -115,6 +115,7 @@ static bool opt_mount = true;
 static bool opt_vga = false;
 static bool opt_verbose = false;
 static std::string opt_chdir;
+static bool opt_bootchart = false;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -143,6 +144,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("verbose", "be verbose, print debug messages")
         ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())")
         ("cwd", bpo::value<std::vector<std::string>>(), "set current working directory")
+        ("bootchart", "perform a test boot measuring a time distribution of the various operations\n")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -176,6 +178,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     if (vars.count("verbose")) {
         opt_verbose = true;
         enable_verbose();
+    }
+
+    if (vars.count("bootchart")) {
+        opt_bootchart = true;
     }
 
     if (vars.count("trace")) {
@@ -260,6 +266,11 @@ void run_main(std::vector<std::string> &vec)
         }
         return;
     }
+
+    if (opt_bootchart) {
+        boot_time.print_chart();
+    }
+
     printf("run_main(): cannot execute %s. Powering off.\n", command.c_str());
     osv::poweroff();
 }
