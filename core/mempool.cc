@@ -629,6 +629,7 @@ reclaimer::reclaimer()
     // std::thread is implemented ontop of pthreads, so it is fine
     std::thread tmp([&] {
         _thread = sched::thread::current();
+        _thread->set_name("reclaimer");
         osv_reclaimer_thread = reinterpret_cast<unsigned char *>(_thread);
         allow_emergency_alloc = true;
         do {
