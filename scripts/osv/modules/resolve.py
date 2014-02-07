@@ -40,7 +40,7 @@ def local_import(path):
     return runpy.run_path(path)
 
 def get_required_modules():
-    return _modules.values()
+    return list(set(_modules.values()))
 
 def _is_direct(module_config):
     return module_config["type"] == "direct-dir"
@@ -118,4 +118,7 @@ def require(module_name):
 
     module = Module(module_name, module_config, module_properties)
     _modules[module_name] = module
+    if hasattr(module, 'provides'):
+	for name in getattr(module, 'provides'):
+		_modules[name] = module;
     return module
