@@ -34,7 +34,7 @@ $(submake) $(modulemk): Makefile
 
 clean:
 	$(call quiet, rm -rf build/$(mode), CLEAN)
-	$(call only-if, $(mgmt), $(MAKE) -C mgmt)
+	$(call only-if, $(mgmt), $(call quiet, $(MAKE) -C mgmt clean >> /dev/null, MGMT CLEAN))
 	$(call quiet, cd java && mvn clean -q, MVN CLEAN)
 
 check: export image ?= tests
