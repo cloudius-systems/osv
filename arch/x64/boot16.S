@@ -12,6 +12,11 @@ target = 0x200000
 entry = 24+target
 
 mb_info = 0x1000
+// OSv information lays in the end of this struct, which is 88 bytes in size.
+mb_tsc1_lo = (mb_info + 88)
+mb_tsc1_hi = (mb_info + 88 + 4)
+mb_tsc_disk_lo = (mb_info + 88 + 8)
+mb_tsc_disk_hi = (mb_info + 88 + 12)
 mb_cmdline = (mb_info + 16)
 mb_mmap_len = (mb_info + 44)
 mb_mmap_addr = (mb_info + 48)
@@ -57,6 +62,9 @@ gdt:
 gdt_size = . - gdt
 
 init:
+	rdtsc
+	mov %eax, mb_tsc1_lo
+	mov %edx, mb_tsc1_hi
 	xor %ax, %ax
 	mov %ax, %ds
 	mov %ax, %es
@@ -109,6 +117,9 @@ read_disk:
 	decw count32
 	jnz read_disk
 done_disk:
+	rdtsc
+	mov %eax, mb_tsc_disk_lo
+	mov %edx, mb_tsc_disk_hi
 
 	mov $e820data, %edi
 	mov %edi, mb_mmap_addr

@@ -47,6 +47,7 @@
 #include <osv/run.hh>
 #include <osv/shutdown.hh>
 #include <osv/commands.hh>
+#include <osv/boot.hh>
 
 using namespace osv;
 
@@ -59,6 +60,8 @@ elf::Elf64_Ehdr* elf_header;
 size_t elf_size;
 void* elf_start;
 elf::tls_data tls_data;
+
+boot_time_chart boot_time;
 
 void setup_tls(elf::init_table inittab)
 {
@@ -91,9 +94,11 @@ void premain()
     disable_pic();
     auto inittab = elf::get_init(elf_header);
     setup_tls(inittab);
+    boot_time.event("TLS initialization");
     for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
         (*init)();
     }
+    boot_time.event(".init functions");
 }
 
 int main(int ac, char **av)
@@ -112,6 +117,7 @@ static bool opt_mount = true;
 static bool opt_vga = false;
 static bool opt_verbose = false;
 static std::string opt_chdir;
+static bool opt_bootchart = false;
 
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
@@ -140,6 +146,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("verbose", "be verbose, print debug messages")
         ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())")
         ("cwd", bpo::value<std::vector<std::string>>(), "set current working directory")
+        ("bootchart", "perform a test boot measuring a time distribution of the various operations\n")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -173,6 +180,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     if (vars.count("verbose")) {
         opt_verbose = true;
         enable_verbose();
+    }
+
+    if (vars.count("bootchart")) {
+        opt_bootchart = true;
     }
 
     if (vars.count("trace")) {
@@ -257,6 +268,11 @@ void run_main(const std::vector<std::string> &vec)
         }
         return;
     }
+
+    if (opt_bootchart) {
+        boot_time.print_chart();
+    }
+
     printf("run_main(): cannot execute %s. Powering off.\n", command.c_str());
     osv::poweroff();
 }
@@ -276,9 +292,11 @@ void* do_main_thread(void *_commands)
 
     // initialize panic drivers
     panic::pvpanic::probe_and_setup();
+    boot_time.event("pvpanic done");
 
     // Enumerate PCI devices
     pci::pci_device_enumeration();
+    boot_time.event("pci enumerated");
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
@@ -288,15 +306,18 @@ void* do_main_thread(void *_commands)
     drvman->register_driver(virtio::rng::probe);
     drvman->register_driver(xenfront::xenbus::probe);
     drvman->register_driver(ide::ide_drive::probe);
+    boot_time.event("drivers probe");
     drvman->load_all();
     drvman->list_drivers();
 
     randomdev::randomdev_init();
+    boot_time.event("drivers loaded");
 
     if (opt_mount) {
         mount_zfs_rootfs();
         bsd_shrinker_init();
     }
+    boot_time.event("ZFS mounted");
 
     bool has_if = false;
     osv::for_each_if([&has_if] (std::string if_name) {
@@ -322,6 +343,8 @@ void* do_main_thread(void *_commands)
         debug("chdir done\n");
     }
 
+    boot_time.event("Total time");
+
     // run each payload in order
     // Our parse_command_line() leaves at the end of each command a delimiter,
     // can be '&' if we need to run this command in a new thread, or ';' or
@@ -338,6 +361,7 @@ void* do_main_thread(void *_commands)
             bg.push_back(t);
         }
     }
+
     void* retval;
     for (auto t : bg) {
         pthread_join(t, &retval);
@@ -361,6 +385,7 @@ void main_cont(int ac, char** av)
     cmds = prepare_commands(ac, av);
     ioapic::init();
     smp_launch();
+    boot_time.event("SMP launched");
     memory::enable_debug_allocator();
     acpi::init();
     console::console_init(opt_vga);
@@ -372,11 +397,14 @@ void main_cont(int ac, char** av)
     }
     sched::init_detached_threads_reaper();
     rcu_init();
+    boot_time.event("RCU initialized");
 
     vfs_init();
+    boot_time.event("VFS initialized");
     ramdisk_init();
 
     net_init();
+    boot_time.event("Network initialized");
 
     processor::sti();
 

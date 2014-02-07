@@ -92,6 +92,13 @@ public:
      * different times.
      */
     virtual s64 boot_time() = 0;
+
+    /*
+     * convert a processor based timestamp (x86 tsc's for instance) to nanoseconds.
+     *
+     * Not all clocks are required to implement it.
+     */
+    virtual u64 processor_to_nano(u64 ticks) { return 0; }
 private:
     static clock* _c;
 };

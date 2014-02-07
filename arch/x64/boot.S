@@ -101,7 +101,7 @@ start64:
     xor %eax, %eax
     rep stosb
     mov %rbp, elf_header
-    mov %rbx, multiboot_info
+    mov %rbx, osv_multiboot_info
     lea init_stack_top, %rsp
     call premain
     mov __argc, %edi

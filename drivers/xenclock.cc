@@ -25,6 +25,7 @@ public:
     virtual s64 time() __attribute__((no_instrument_function));
     virtual s64 uptime() override __attribute__((no_instrument_function));
     virtual s64 boot_time() override __attribute__((no_instrument_function));
+    virtual u64 processor_to_nano(u64 ticks) override __attribute__((no_instrument_function));
 private:
     pvclock_wall_clock* _wall;
     static void setup_cpu();
@@ -74,6 +75,15 @@ u64 xenclock::system_time()
         auto cpu = sched::cpu::current()->id;
         auto sys = &xen::xen_shared_info.vcpu_info[cpu].time;
         return pvclock::system_time(sys);
+    }
+}
+
+u64 xenclock::processor_to_nano(u64 ticks)
+{
+    WITH_LOCK(preempt_lock) {
+        auto cpu = sched::cpu::current()->id;
+        auto sys = &xen::xen_shared_info.vcpu_info[cpu].time;
+        return pvclock::processor_to_nano(sys, ticks);
     }
 }
 
