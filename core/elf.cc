@@ -932,15 +932,16 @@ void program::del_debugger_obj(object* obj)
 symbol_module program::lookup(const char* name)
 {
     trace_elf_lookup(name);
-    SCOPE_LOCK(osv::rcu_read_lock);
-    for (auto module : _modules_rcu.read()->objects) {
-        // NOTE: We are in rcu_read_lock, so code below must not sleep or
-        // malloc. If it does, we'll need to switch to use with_modules()s
-        if (auto sym = module->lookup_symbol(name)) {
-            return symbol_module(sym, module);
+    symbol_module ret(nullptr,nullptr);
+    elf::get_program()->with_modules([&](const elf::program::modules_list &ml)
+    {
+        for (auto module : ml.objects) {
+            if (auto sym = module->lookup_symbol(name)) {
+                ret = symbol_module(sym, module);
+            }
         }
-    }
-    return symbol_module(nullptr, nullptr);
+    });
+    return ret;
 }
 
 void* program::do_lookup_function(const char* name)
@@ -958,16 +959,18 @@ void* program::do_lookup_function(const char* name)
 dladdr_info program::lookup_addr(const void* addr)
 {
     trace_elf_lookup_addr(addr);
-    SCOPE_LOCK(osv::rcu_read_lock);
-    for (auto module : _modules_rcu.read()->objects) {
-        // NOTE: We are in rcu_read_lock, so code below must not sleep or
-        // malloc. If it does, we'll need to switch to use with_modules()s
-        auto ret = module->lookup_addr(addr);
-        if (ret.fname) {
-            return ret;
+    dladdr_info ret;
+    elf::get_program()->with_modules([&](const elf::program::modules_list &ml)
+    {
+        for (auto module : ml.objects) {
+            ret = module->lookup_addr(addr);
+            if (ret.fname) {
+                return;
+            }
         }
-    }
-    return {};
+        ret = {};
+    });
+    return ret;
 }
 
 program* get_program()
@@ -1174,10 +1177,6 @@ void program::module_delete_enable()
         to_delete = _modules_to_delete;
         _modules_to_delete.clear();
     }
-
-    // Need to delay the deletion a bit more, as we might have a
-    // program::lookup() in progress.
-    osv::rcu_synchronize();
 
     for (auto ef : to_delete) {
         ef->unload_segments();
