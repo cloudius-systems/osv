@@ -171,7 +171,7 @@ hw_driver* ide_drive::probe(hw_device* dev)
     if (_instance > 0)
         return nullptr;
     if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
-        if (pci_dev->get_base_class_code() == pci::function::PCI_CLASS_STORAGE ||
+        if (pci_dev->get_base_class_code() == pci::function::PCI_CLASS_STORAGE &&
             pci_dev->get_sub_class_code() == pci::function::PCI_SUB_CLASS_STORAGE_IDE) {
 
             /* Reset controller */
