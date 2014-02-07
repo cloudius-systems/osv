@@ -948,10 +948,10 @@ void* program::do_lookup_function(const char* name)
 {
     auto sym = lookup(name);
     if (!sym.symbol) {
-        throw std::runtime_error("symbol not found");
+        throw std::runtime_error("symbol not found " + demangle(name));
     }
     if ((sym.symbol->st_info & 15) != STT_FUNC) {
-        throw std::runtime_error("symbol is not a function");
+        throw std::runtime_error("symbol is not a function " + demangle(name));
     }
     return sym.relocated_addr();
 }
