@@ -82,8 +82,7 @@ void* symbol_module::relocated_addr() const
     case STT_IFUNC:
         return reinterpret_cast<void *(*)()>(base + symbol->st_value)();
     default:
-        debug(fmt("unknown relocation type %d\n") % symbol_type(*symbol));
-        abort();
+        abort("Unknown relocation type %d\n", symbol_type(*symbol));
     }
 }
 
@@ -384,8 +383,7 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        debug(fmt("failed looking up symbol %1%\n") % demangle(name));
-        abort();
+        abort("Failed looking up symbol %s\n", demangle(name).c_str());
     }
     return ret;
 }
