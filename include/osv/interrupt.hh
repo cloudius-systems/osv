@@ -17,6 +17,7 @@
 #include "drivers/pci-function.hh"
 #include <osv/types.h>
 #include <initializer_list>
+#include <boost/optional.hpp>
 
 // max vectors per request
 const int max_vectors = 256;
@@ -118,12 +119,17 @@ private:
 
 class gsi_level_interrupt {
 public:
+    gsi_level_interrupt() {};
     gsi_level_interrupt(unsigned gsi,
                         std::function<bool ()> ack,
                         std::function<void ()> handler);
     ~gsi_level_interrupt();
+
+    void set_ack_and_handler(unsigned gsi,
+            std::function<bool ()> ack,
+            std::function<void ()> handler);
 private:
-    unsigned _vector;
+    boost::optional<unsigned> _vector;
     gsi_interrupt _gsi;
 };
 
