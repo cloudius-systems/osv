@@ -111,8 +111,7 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
                 auto n = new handler(o, pre_eoi, eoi, post_eoi);
 
                 _handlers[i].assign(n);
-                if (o)
-                    osv::rcu_dispose(o);
+                osv::rcu_dispose(o);
 
                 return i;
             }
@@ -135,8 +134,7 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
                 n->gsi = gsi;
 
                 _handlers[i].assign(n);
-                if (o)
-                    osv::rcu_dispose(o);
+                osv::rcu_dispose(o);
 
                 return i;
             }
@@ -163,8 +161,7 @@ void interrupt_descriptor_table::unregister_handler(unsigned vector)
     WITH_LOCK(_lock) {
         auto o = _handlers[vector].read_by_owner();
         _handlers[vector].assign(nullptr);
-        if (o)
-            osv::rcu_dispose(o);
+        osv::rcu_dispose(o);
     }
 }
 
