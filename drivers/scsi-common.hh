@@ -75,13 +75,13 @@ struct cdb_readwrite_10 {
 
 struct cdb_report_luns {
     u8 command;
-    u8 resreved_01;
+    u8 reserved_01;
     u8 select_report;
-    u8 resreved_03;
-    u8 resreved_04;
-    u8 resreved_05;
+    u8 reserved_03;
+    u8 reserved_04;
+    u8 reserved_05;
     u32 alloc_len;
-    u8 resreved_0a;
+    u8 reserved_0a;
     u8 control;
 } __attribute__((packed));
 
