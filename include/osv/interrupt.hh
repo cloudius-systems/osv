@@ -119,7 +119,7 @@ private:
 class gsi_level_interrupt {
 public:
     gsi_level_interrupt(unsigned gsi,
-                        std::function<void ()> ack,
+                        std::function<bool ()> ack,
                         std::function<void ()> handler);
     ~gsi_level_interrupt();
 private:

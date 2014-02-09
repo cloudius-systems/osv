@@ -15,7 +15,7 @@ using namespace std;
 namespace virtio {
 rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
-    , _gsi(pci_dev.get_interrupt_line(), [&] { ack_irq(); }, [&] { handle_irq(); })
+    , _gsi(pci_dev.get_interrupt_line(), [&] { return ack_irq(); }, [&] { handle_irq(); })
     , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
 {
     _queue = get_virt_queue(0);
@@ -50,9 +50,9 @@ void rng::handle_irq()
     _thread.wake();
 }
 
-void rng::ack_irq()
+bool rng::ack_irq()
 {
-    virtio_conf_readb(VIRTIO_PCI_ISR);
+    return virtio_conf_readb(VIRTIO_PCI_ISR);
 }
 
 void rng::worker()

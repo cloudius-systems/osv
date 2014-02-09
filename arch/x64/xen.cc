@@ -114,10 +114,11 @@ void evtchn_irq_is_legacy(void);
 
 namespace xen {
 
-static void xen_ack_irq()
+static bool xen_ack_irq()
 {
     auto cpu = sched::cpu::current();
     HYPERVISOR_shared_info->vcpu_info[cpu->id].evtchn_upcall_pending = 0; 
+    return true;
 }
 
 // For HVMOP_set_param the param vector is comprised of
@@ -134,7 +135,7 @@ void xen_set_callback()
     xhp.index = HVM_PARAM_CALLBACK_IRQ;
 
     auto vector = idt.register_interrupt_handler(
-        [] {}, // pre_eoi
+        [] { return true;}, // pre_eoi
         [] { xen_ack_irq(); }, // eoi
         [] { xen_handle_irq(); }// handler
     );
@@ -159,7 +160,7 @@ gsi_level_interrupt *xen_set_callback(int irqno)
 
     auto gsi = new gsi_level_interrupt(
         irqno,
-        [] { xen_ack_irq(); },
+        [] { return xen_ack_irq(); },
         [] { xen_handle_irq(); }
     );
 

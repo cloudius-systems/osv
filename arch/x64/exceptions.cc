@@ -98,7 +98,7 @@ interrupt_descriptor_table::load_on_cpu()
 }
 
 unsigned interrupt_descriptor_table::register_interrupt_handler(
-        std::function<void ()> pre_eoi,
+        std::function<bool ()> pre_eoi,
         std::function<void ()> eoi,
         std::function<void ()> handler)
 {
@@ -114,7 +114,7 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
 }
 
 unsigned interrupt_descriptor_table::register_level_triggered_handler(
-        std::function<void ()> pre_eoi,
+        std::function<bool ()> pre_eoi,
         std::function<void ()> handler)
 {
     return register_interrupt_handler(pre_eoi, [] { apic->eoi(); }, handler);
@@ -122,7 +122,7 @@ unsigned interrupt_descriptor_table::register_level_triggered_handler(
 
 unsigned interrupt_descriptor_table::register_handler(std::function<void ()> handler)
 {
-    return register_level_triggered_handler([] {}, handler);
+    return register_level_triggered_handler([] {return true;}, handler);
 }
 
 

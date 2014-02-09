@@ -43,8 +43,9 @@ public:
     interrupt_descriptor_table();
     void load_on_cpu();
     unsigned register_handler(std::function<void ()> handler);
-    unsigned register_level_triggered_handler(std::function<void ()> pre_eoi, std::function<void ()> handler);
-    unsigned register_interrupt_handler(std::function<void ()> eoi, std::function<void ()> pre_eoi, std::function<void ()> handler);
+    //The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
+    unsigned register_level_triggered_handler(std::function<bool ()> pre_eoi, std::function<void ()> handler);
+    unsigned register_interrupt_handler(std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
     void unregister_handler(unsigned vector);
     void invoke_interrupt(unsigned vector);
 private:
@@ -71,7 +72,7 @@ private:
     idt_entry _idt[256];
     struct handler {
         std::function<void ()> eoi;
-        std::function<void ()> pre_eoi;
+        std::function<bool ()> pre_eoi;
         std::function<void ()> post_eoi;
     };
     handler _handlers[256];
