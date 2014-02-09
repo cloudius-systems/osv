@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <functional>
 #include <osv/types.h>
+#include <osv/rcu.hh>
+#include <osv/mutex.h>
+#include <vector>
 
 struct exception_frame {
     ulong r15;
@@ -43,8 +46,9 @@ public:
     interrupt_descriptor_table();
     void load_on_cpu();
     unsigned register_handler(std::function<void ()> handler);
-    //The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
-    unsigned register_level_triggered_handler(std::function<bool ()> pre_eoi, std::function<void ()> handler);
+    // The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
+    unsigned register_level_triggered_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> handler);
+    unsigned register_interrupt_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
     unsigned register_interrupt_handler(std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
     void unregister_handler(unsigned vector);
     void invoke_interrupt(unsigned vector);
@@ -71,11 +75,25 @@ private:
     void add_entry(unsigned vec, unsigned ist, void (*handler)());
     idt_entry _idt[256];
     struct handler {
+        handler(handler *h,
+                std::function<bool ()> _pre_eoi,
+                std::function<void ()> _eoi,
+                std::function<void ()> _post_eoi)
+        {
+            if (h) {
+                *this = *h;
+            }
+            eoi = _eoi;
+            pre_eois.push_back(_pre_eoi);
+            post_eois.push_back(_post_eoi);
+        }
+        std::vector<std::function<bool ()>> pre_eois;
         std::function<void ()> eoi;
-        std::function<bool ()> pre_eoi;
-        std::function<void ()> post_eoi;
+        std::vector<std::function<void ()>> post_eois;
+        unsigned gsi;
     };
-    handler _handlers[256];
+    osv::rcu_ptr<handler> _handlers[256];
+    mutex _lock;
 };
 
 extern interrupt_descriptor_table idt;

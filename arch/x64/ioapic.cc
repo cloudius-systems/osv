@@ -82,9 +82,8 @@ gsi_edge_interrupt::~gsi_edge_interrupt()
 gsi_level_interrupt::gsi_level_interrupt(unsigned gsi,
                                          std::function<bool ()> ack,
                                          std::function<void ()> handler)
-    : _vector(idt.register_level_triggered_handler(ack, handler))
+    : _vector(idt.register_level_triggered_handler(gsi, ack, handler))
 {
-    //TODO: Interrupt sharing support
     _gsi.set(gsi, _vector);
 }
 
