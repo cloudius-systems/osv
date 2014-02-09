@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -8,17 +8,20 @@
 #include <sys/epoll.h>
 #include <sys/poll.h>
 #include <unistd.h>
-#include <osv/sched.hh>
-#include <osv/debug.hh>
-#include <osv/clock.hh>
+#include <errno.h>
 
-int tests = 0, fails = 0;
+#include <string>
+#include <iostream>
+#include <chrono>
+#include <thread>
 
-static void report(bool ok, const char* msg)
+static int tests = 0, fails = 0;
+
+static void report(bool ok, std::string msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    std::cout << (ok ? "PASS" : "FAIL") << ": " << msg << "\n";
 }
 
 int main(int ac, char** av)
@@ -30,7 +33,7 @@ int main(int ac, char** av)
     int r = pipe(s);
     report(r == 0, "create pipe");
 
-#define MAXEVENTS 1024
+    constexpr int MAXEVENTS = 1024;
     struct epoll_event events[MAXEVENTS];
 
     r = epoll_wait(ep, events, MAXEVENTS, 0);
@@ -73,7 +76,7 @@ int main(int ac, char** av)
     report(r == 0, "epoll after read");
 
 
-    sched::thread t1([&] {
+    std::thread t1([&] {
         int r2 = epoll_wait(ep, events, MAXEVENTS, 5000);
         report(r2 == 1 && (events[0].events & EPOLLIN) &&
                 (events[0].data.u32 == 123), "epoll_wait in thread");
@@ -84,20 +87,18 @@ int main(int ac, char** av)
         r = epoll_wait(ep, events, MAXEVENTS, 0);
         report(r == 0, "epoll after read");
     });
-    t1.start();
-    usleep(500000);
+    std::this_thread::sleep_for(std::chrono::microseconds(500000));
     r = write(s[1], &c, 1);
     report(r == 1, "write single character");
     t1.join();
 
-    auto ts = osv::clock::uptime::now();
+    auto ts = std::chrono::high_resolution_clock::now();
     r = epoll_wait(ep, events, MAXEVENTS, 300);
-    auto te = osv::clock::uptime::now();
-    using namespace osv::clock::literals;
-    report(r == 0 && ((te - ts) > 200_ms), "epoll timeout");
+    auto te = std::chrono::high_resolution_clock::now();
+    report(r == 0 && ((te - ts) > std::chrono::milliseconds(200)),
+            "epoll timeout");
 
-
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    std::cout << "SUMMARY: " << tests << ", " << fails << " failures\n";
 }
 
 
