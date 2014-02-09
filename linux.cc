@@ -46,6 +46,5 @@ long syscall(long number, ...)
         }
     }
 
-    debug("syscall(): unimplemented system call %d\n", number);
-    abort();
+    abort("syscall(): unimplemented system call %d. Aborting.\n", number);
 }
