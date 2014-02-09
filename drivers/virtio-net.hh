@@ -214,6 +214,8 @@ public:
     void receiver();
     void fill_rx_ring();
 
+    bool ack_irq();
+
     /**
      * Transmit a single mbuf.
      * @param m_head a buffer to transmits
@@ -266,6 +268,8 @@ private:
     bool _guest_ufo = false;
 
     u32 _hdr_size;
+
+    gsi_level_interrupt _gsi;
 
     struct rxq_stats {
         u64 rx_packets; /* if_ipackets */
