@@ -1,32 +1,32 @@
 [submodule "external/x64/openjdk.bin"]
 	path = external/x64/openjdk.bin
 	url = ../../cloudius-systems/openjdk.bin
-	ignore = all
+	ignore = dirty
 [submodule "external/x64/gcc.bin"]
 	path = external/x64/gcc.bin
 	url = ../../cloudius-systems/gcc.bin
-	ignore = all
+	ignore = dirty
 [submodule "external/x64/glibc.bin"]
 	path = external/x64/glibc.bin
 	url = ../../cloudius-systems/glibc.bin
-	ignore = all
+	ignore = dirty
 [submodule "external/x64/glibc-testsuite"]
 	path = external/x64/glibc-testsuite
 	url = ../../cloudius-systems/glibc-testsuite
-	ignore = all
+	ignore = dirty
 [submodule "external/x64/acpica"]
 	path = external/x64/acpica
 	url = ../../cloudius-systems/acpica
-	ignore = all
+	ignore = dirty
 [submodule "external/x64/misc.bin"]
 	path = external/x64/misc.bin
 	url = ../../cloudius-systems/misc.bin.git
-	ignore = all
+	ignore = dirty
 [submodule "mgmt"]
 	path = mgmt
 	url = ../../cloudius-systems/mgmt.git
-	ignore = all
+	ignore = dirty
 [submodule "apps"]
 	path = apps
 	url = ../../cloudius-systems/osv-apps
-	ignore = all
+	ignore = dirty
