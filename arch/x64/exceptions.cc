@@ -120,7 +120,7 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
     abort();
 }
 
-unsigned interrupt_descriptor_table::register_level_triggered_handler(
+shared_vector interrupt_descriptor_table::register_level_triggered_handler(
         unsigned gsi,
         std::function<bool ()> pre_eoi,
         std::function<void ()> post_eoi)
@@ -135,11 +135,32 @@ unsigned interrupt_descriptor_table::register_level_triggered_handler(
                 _handlers[i].assign(n);
                 osv::rcu_dispose(o);
 
-                return i;
+                return shared_vector(i, n->id);
             }
         }
     }
     abort();
+}
+
+void interrupt_descriptor_table::unregister_level_triggered_handler(shared_vector v)
+{
+    auto vector = v.vector;
+    auto id = v.id;
+    WITH_LOCK(_lock) {
+        auto o = _handlers[vector].read_by_owner();
+        assert(o);
+        interrupt_descriptor_table::handler *n;
+
+        if (o->size() > 1) {
+            // Remove shared vector with 'id' from handler
+            n = new handler(o, id);
+        } else {
+            // Last shared vector is unregistered.
+            n = nullptr;
+        }
+        _handlers[vector].assign(n);
+        osv::rcu_dispose(o);
+    }
 }
 
 unsigned interrupt_descriptor_table::register_handler(std::function<void ()> post_eoi)
@@ -167,7 +188,7 @@ void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
             return;
         }
 
-        nr_shared = ptr->pre_eois.size();
+        nr_shared = ptr->size();
         for (i = 0 ; i < nr_shared; i++) {
             handled = ptr->pre_eois[i]();
             if (handled) {

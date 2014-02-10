@@ -129,7 +129,7 @@ public:
             std::function<bool ()> ack,
             std::function<void ()> handler);
 private:
-    boost::optional<unsigned> _vector;
+    boost::optional<shared_vector> _vector;
     gsi_interrupt _gsi;
 };
 

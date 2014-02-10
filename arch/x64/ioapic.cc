@@ -84,7 +84,7 @@ gsi_level_interrupt::gsi_level_interrupt(unsigned gsi,
                                          std::function<void ()> handler)
     : _vector(idt.register_level_triggered_handler(gsi, ack, handler))
 {
-    _gsi.set(gsi, _vector.get());
+    _gsi.set(gsi, _vector.get().vector);
 }
 
 void gsi_level_interrupt::set_ack_and_handler(unsigned gsi,
@@ -92,13 +92,13 @@ void gsi_level_interrupt::set_ack_and_handler(unsigned gsi,
         std::function<void ()> handler)
 {
     _vector = idt.register_level_triggered_handler(gsi, ack, handler);
-    _gsi.set(gsi, _vector.get());
+    _gsi.set(gsi, _vector.get().vector);
 }
 
 gsi_level_interrupt::~gsi_level_interrupt()
 {
     _gsi.clear();
     if (_vector)
-        idt.unregister_handler(_vector.get());
+        idt.unregister_level_triggered_handler(_vector.get());
 }
 

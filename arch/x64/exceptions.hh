@@ -41,13 +41,22 @@ struct exception_frame {
 
 extern __thread exception_frame* current_interrupt_frame;
 
+struct shared_vector {
+    unsigned vector;
+    unsigned id;
+    shared_vector(unsigned v, unsigned i)
+        : vector(v), id(i)
+    {};
+};
+
 class interrupt_descriptor_table {
 public:
     interrupt_descriptor_table();
     void load_on_cpu();
     unsigned register_handler(std::function<void ()> handler);
     // The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
-    unsigned register_level_triggered_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> handler);
+    shared_vector register_level_triggered_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> handler);
+    void unregister_level_triggered_handler(shared_vector v);
     unsigned register_interrupt_handler(std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
     void unregister_handler(unsigned vector);
     void invoke_interrupt(unsigned vector);
@@ -74,6 +83,21 @@ private:
     void add_entry(unsigned vec, unsigned ist, void (*handler)());
     idt_entry _idt[256];
     struct handler {
+        handler(handler *h, unsigned d)
+        {
+            if (h) {
+                *this = *h;
+            }
+            for (unsigned i = 0; i < size(); i++) {
+                if (ids[i] == d) {
+                    ids.erase(ids.begin() + i);
+                    pre_eois.erase(pre_eois.begin() + i);
+                    post_eois.erase(post_eois.begin() + i);
+                    break;
+                }
+            }
+        }
+
         handler(handler *h,
                 std::function<bool ()> _pre_eoi,
                 std::function<void ()> _eoi,
@@ -83,12 +107,21 @@ private:
                 *this = *h;
             }
             eoi = _eoi;
+            ids.push_back(id++);
             pre_eois.push_back(_pre_eoi);
             post_eois.push_back(_post_eoi);
         }
+
+        unsigned size()
+        {
+            return ids.size();
+        }
+
         std::vector<std::function<bool ()>> pre_eois;
         std::function<void ()> eoi;
         std::vector<std::function<void ()>> post_eois;
+        std::vector<unsigned> ids;
+        unsigned id;
         unsigned gsi;
     };
     osv::rcu_ptr<handler> _handlers[256];
