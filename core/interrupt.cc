@@ -17,6 +17,8 @@
 #include <osv/trace.hh>
 
 TRACEPOINT(trace_msix_interrupt, "vector=0x%02x", unsigned);
+TRACEPOINT(trace_msix_migrate, "vector=0x%02x apic_id=0x%x",
+                               unsigned, unsigned);
 
 using namespace pci;
 
@@ -71,6 +73,14 @@ void msix_vector::interrupt(void)
     _handler();
 }
 
+void msix_vector::set_affinity(unsigned apic_id)
+{
+    msi_message msix_msg = apic->compose_msix(_vector, apic_id);
+    for (auto entry_id : _entryids) {
+        _dev->msix_write_entry(entry_id, msix_msg._addr, msix_msg._data);
+    }
+}
+
 interrupt_manager::interrupt_manager(pci::function* dev)
     : _dev(dev)
 {
@@ -79,6 +89,42 @@ interrupt_manager::interrupt_manager(pci::function* dev)
 interrupt_manager::~interrupt_manager()
 {
 
+}
+
+/**
+ * Changes the affinity of the MSI-X vector to the same CPU where its service
+ * routine thread is bound and then wakes that thread.
+ *
+ * @param current The CPU to which the MSI-X vector is currently bound
+ * @param v MSI-X vector handle
+ * @param t interrupt service routine thread
+ */
+static inline void set_affinity_and_wake(
+    sched::cpu*& current, msix_vector* v, sched::thread* t)
+{
+    auto cpu = t->get_cpu();;
+
+    if (cpu != current) {
+
+        //
+        // According to PCI spec chapter 6.8.3.5 the MSI-X table entry may be
+        // updated only if the entry is masked and the new values are promissed
+        // to be read only when the entry is unmasked.
+        //
+        v->msix_mask_entries();
+
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+
+        current = cpu;
+        trace_msix_migrate(v->get_vector(), cpu->arch.apic_id);
+        v->set_affinity(cpu->arch.apic_id);
+
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+
+        v->msix_unmask_entries();
+    }
+
+    t->wake();
 }
 
 bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindings)
@@ -103,7 +149,21 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
         auto isr = binding.isr;
         auto t = binding.t;
 
-        bool assign_ok = assign_isr(vec, [=] { if (isr) isr(); if (t) t->wake(); });
+        bool assign_ok;
+
+        if (t) {
+            sched::cpu* current = nullptr;
+            assign_ok =
+                assign_isr(vec,
+                    [=]() mutable {
+                                    if (isr)
+                                        isr();
+                                    set_affinity_and_wake(current, vec, t);
+                                  });
+        } else {
+            assign_ok = assign_isr(vec, [=]() { if (isr) isr(); });
+        }
+
         if (!assign_ok) {
             free_vectors(assigned);
             return false;

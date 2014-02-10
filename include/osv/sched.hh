@@ -382,6 +382,9 @@ public:
     static void wait_for(mutex& mtx, waitable&&... waitables);
 
     void wake();
+    cpu* get_cpu() const {
+        return _detached_state.get()->_cpu;
+    }
     // wake up after acquiring mtx
     //
     // mtx must be locked, and wr must be a free wait_record that will

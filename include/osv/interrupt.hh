@@ -35,6 +35,7 @@ public:
     void add_entryid(unsigned entry_id);
     void interrupt(void);
     void set_handler(std::function<void ()> handler);
+    void set_affinity(unsigned apic_id);
 
 private:
     // Handler to invoke...
