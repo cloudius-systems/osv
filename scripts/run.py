@@ -199,7 +199,7 @@ def start_osv_xen(options):
         "vcpus=%s" % (options.vcpus),
         "maxcpus=%s" % (options.vcpus),
         "name='osv-%d'" % (os.getpid()),
-        "disk=['%s,qcow2,hda,rw']" % options.image_file,
+        "disk=['/dev/loop%s,raw,hda,rw']" % os.getpid(),
         "serial='pty'",
         "paused=0",
         "on_crash='preserve'"
@@ -218,6 +218,8 @@ def start_osv_xen(options):
         # Save the current settings of the stty
         stty_save()
 
+        #create a loop device backed by image file
+        subprocess.call(["losetup", "/dev/loop%s" % os.getpid(), options.image_file])
         # Launch qemu
         cmdline = ["xl", "create" ]
         if not options.detach:
@@ -231,6 +233,8 @@ def start_osv_xen(options):
         pass
     finally:
         xenfile.close()
+        #delete loop device
+        subprocess.call(["losetup", "-d", "/dev/loop%s" % os.getpid()])
         cleanups()
 
 def start_osv(options):
