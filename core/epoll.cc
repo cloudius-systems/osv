@@ -34,9 +34,8 @@ TRACEPOINT(trace_epoll_ready, "file=%p, event=0x%x", file*, int);
 
 // We implement epoll using poll(), and therefore need to convert epoll's
 // event bits to and poll(). These are mostly the same, so the conversion
-// is trivial, but we verify this here with static_asserts. We also don't
-// support epoll-only flags (namely EPOLLET and EPOLLONESHOT) and assert
-// this at runtime.
+// is trivial, but we verify this here with static_asserts. We additionally
+// support the epoll-only EPOLLET, but not EPOLLONESHOT.
 static_assert(POLLIN == EPOLLIN, "POLLIN!=EPOLLIN");
 static_assert(POLLOUT == EPOLLOUT, "POLLOUT!=EPOLLOUT");
 static_assert(POLLRDHUP == EPOLLRDHUP, "POLLRDHUP!=EPOLLRDHUP");
@@ -44,15 +43,10 @@ static_assert(POLLPRI == EPOLLPRI, "POLLPRI!=EPOLLPRI");
 static_assert(POLLERR == EPOLLERR, "POLLERR!=EPOLLERR");
 static_assert(POLLHUP == EPOLLHUP, "POLLHUP!=EPOLLHUP");
 constexpr int SUPPORTED_EVENTS =
-        EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP;
+        EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP |
+        EPOLLET;
 inline uint32_t events_epoll_to_poll(uint32_t e)
 {
-    static bool warned;
-    if ((e & EPOLLET) && !warned) {
-        warned = true;
-        debug("EPOLLET ignored\n");
-    }
-    e &= ~EPOLLET;
     assert (!(e & ~SUPPORTED_EVENTS));
     return e;
 }
@@ -62,8 +56,14 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
     return e;
 }
 
+struct registered_epoll : epoll_event {
+    int last_poll_wake_count; // For implementing EPOLLET
+    registered_epoll(epoll_event e, int c) :
+        epoll_event(e), last_poll_wake_count(c) {}
+};
+
 class epoll_file final : public special_file {
-    std::unordered_map<file*, epoll_event> map;
+    std::unordered_map<file*, registered_epoll> map;
 public:
     epoll_file() : special_file(0, DTYPE_UNSPEC) {}
     virtual int close() override {
@@ -78,8 +78,11 @@ public:
         if (map.count(fp)) {
             return EEXIST;
         }
-        map.emplace(std::move(fp), *event);
         WITH_LOCK(fp->f_lock) {
+            // I used poll_wake_count-1, to ensure EPOLLET returns once when
+            // registering an epoll after data is already available.
+            map.emplace(std::move(fp),
+                    registered_epoll(*event, fp->poll_wake_count - 1));
             if (!fp->f_epolls) {
                 fp->f_epolls.reset(new std::vector<file*>);
             }
@@ -90,7 +93,9 @@ public:
     int mod(file* fp, struct epoll_event *event)
     {
         try {
-            map.at(fp) = *event;
+            WITH_LOCK(fp->f_lock) {
+                map.at(fp) = registered_epoll(*event, fp->poll_wake_count - 1);
+            }
             return 0;
         } catch (std::out_of_range &e) {
             return ENOENT;
@@ -112,7 +117,8 @@ public:
         for (auto &i : map) {
             int eevents = i.second.events;
             auto events = events_epoll_to_poll(eevents);
-            pollfds.emplace_back(i.first, events, 0);
+            pollfds.emplace_back(i.first, events, 0,
+                    i.second.last_poll_wake_count);
         }
         int r = do_poll(pollfds, timeout_ms);
         if (r > 0) {
@@ -122,10 +128,14 @@ public:
                 if (pollfds[i].revents) {
                     --remain;
                     assert(pollfds[i].fp);
-                    events[remain].data = map[pollfds[i].fp.get()].data;
+                    events[remain].data = map.at(pollfds[i].fp.get()).data;
                     events[remain].events =
                             events_poll_to_epoll(pollfds[i].revents);
                     trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
+                    if (pollfds[i].events & EPOLLET) {
+                        map.at(pollfds[i].fp.get()).last_poll_wake_count =
+                                pollfds[i].last_poll_wake_count;
+                    }
                 }
             }
         }

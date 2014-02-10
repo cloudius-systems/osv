@@ -125,11 +125,13 @@ struct poll_file;
 
 struct poll_file {
     poll_file() = default;
-    poll_file(fileref fp, short events, short revents)
-        : fp(fp), events(events), revents(revents) {}
+    // Note that events is int, not short, for EPOLLET support.
+    poll_file(fileref fp, int events, short revents, int c = 0)
+        : fp(fp), events(events), revents(revents), last_poll_wake_count(c) {}
     fileref fp;
-    short events;
+    int events;
     short revents;
+    int last_poll_wake_count;   // For implementing EPOLLET
 };
 
 /*

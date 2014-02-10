@@ -98,6 +98,9 @@ struct file {
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
 	std::unique_ptr<std::vector<file*>> f_epolls;
+	// poll_wake_count used for implementing epoll()'s EPOLLET using poll().
+	// Once we have a real epoll() implementation, it won't be needed.
+	int poll_wake_count = 0;
 };
 
 // struct file above is an abstract class; subclasses need to implement 8

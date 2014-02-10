@@ -104,6 +104,7 @@
 #include <stddef.h>
 
 #include <osv/poll.h>
+#include <sys/epoll.h>
 #include <osv/debug.h>
 #include <cinttypes>
 
@@ -2652,7 +2653,7 @@ sopoll_generic(struct socket *so, int events, struct ucred *active_cred,
 		}
 	}
 
-    if (revents == 0) {
+    if (revents == 0 || events & EPOLLET) {
         if (events & (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND)) {
             so->so_rcv.sb_flags |= SB_SEL;
         }

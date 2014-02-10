@@ -47,7 +47,7 @@
 
 #include <osv/file.h>
 #include <osv/poll.h>
-#include <osv/debug.h>
+#include <sys/epoll.h>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
@@ -124,6 +124,20 @@ int poll_scan(std::vector<poll_file>& _pfd)
         }
 
         entry->revents = fp->poll(entry->events);
+
+        // Hack for implementing epoll() over poll(). Note we can't avoid the
+        // above fp->poll() call, because sockets have the SB_SEL optimization
+        // where only their poll (so_poll_generic()) turns on SB_SEL.
+        if (entry->events & EPOLLET) {
+            WITH_LOCK(fp->f_lock) {
+                if (entry->last_poll_wake_count == fp->poll_wake_count) {
+                    entry->revents = 0;
+                    continue;
+                }
+                entry->last_poll_wake_count = fp->poll_wake_count;
+            }
+        }
+
         if (entry->revents) {
             nr_events++;
         }
@@ -165,6 +179,10 @@ int poll_wake(struct file* fp, int events)
             pl->_req->_poll_thread->wake();
         }
     }
+
+    // poll_wake_count is used for implementing epoll()'s EPOLLET
+    // over regular poll().
+    ++fp->poll_wake_count;
 
     FD_UNLOCK(fp);
     fdrop(fp);
@@ -208,6 +226,12 @@ void poll_install(struct pollreq* p)
         fp->poll_install(*p);
         FD_LOCK(fp);
         TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
+        if (entry->events & EPOLLET &&
+                entry->last_poll_wake_count == fp->poll_wake_count) {
+            // In this case, don't use fp->poll() to check for missed event
+            FD_UNLOCK(fp);
+            continue;
+        }
         FD_UNLOCK(fp);
         // We need to check if we missed an event on this file just before
         // installing the poll request on it above.
