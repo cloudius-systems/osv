@@ -49,6 +49,13 @@ int main(int argc, char const *argv[])
         return 1;
     }
 
+    long max_offset = 0;
+    if (argc > 2) {
+        max_offset = atol(argv[2]);
+    }
+
+    printf("bdev-write test offset limit: %ld byte(s)\n", max_offset);
+
     const std::chrono::seconds test_duration(10);
     const int buf_size = 4*KB;
 
@@ -77,6 +84,9 @@ int main(int argc, char const *argv[])
 
         offset += buf_size;
         total += buf_size;
+
+        if (max_offset != 0 && offset >= max_offset)
+            offset = 0;
     }
 
     while (bio_inflights != 0) {
