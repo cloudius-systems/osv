@@ -120,17 +120,16 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
     abort();
 }
 
-unsigned interrupt_descriptor_table::register_interrupt_handler(
+unsigned interrupt_descriptor_table::register_level_triggered_handler(
         unsigned gsi,
         std::function<bool ()> pre_eoi,
-        std::function<void ()> eoi,
         std::function<void ()> post_eoi)
 {
     WITH_LOCK(_lock) {
         for (unsigned i = 32; i < 256; ++i) {
             auto o = _handlers[i].read_by_owner();
             if ((o && o->gsi == gsi) || o == nullptr) {
-                auto n = new handler(o, pre_eoi, eoi, post_eoi);
+                auto n = new handler(o, pre_eoi, [] { apic->eoi(); }, post_eoi);
                 n->gsi = gsi;
 
                 _handlers[i].assign(n);
@@ -141,14 +140,6 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
         }
     }
     abort();
-}
-
-unsigned interrupt_descriptor_table::register_level_triggered_handler(
-        unsigned gsi,
-        std::function<bool ()> pre_eoi,
-        std::function<void ()> post_eoi)
-{
-    return register_interrupt_handler(gsi, pre_eoi, [] { apic->eoi(); }, post_eoi);
 }
 
 unsigned interrupt_descriptor_table::register_handler(std::function<void ()> post_eoi)

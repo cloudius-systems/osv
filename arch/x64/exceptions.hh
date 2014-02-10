@@ -48,7 +48,6 @@ public:
     unsigned register_handler(std::function<void ()> handler);
     // The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
     unsigned register_level_triggered_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> handler);
-    unsigned register_interrupt_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
     unsigned register_interrupt_handler(std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
     void unregister_handler(unsigned vector);
     void invoke_interrupt(unsigned vector);
