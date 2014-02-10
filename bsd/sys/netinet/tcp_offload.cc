@@ -106,7 +106,7 @@ tcp_offload_twstart(struct tcpcb *tp)
 {
 
 	INP_INFO_WLOCK(&V_tcbinfo);
-	INP_WLOCK(tp->t_inpcb);
+	INP_LOCK(tp->t_inpcb);
 	tcp_twstart(tp);
 	INP_INFO_WUNLOCK(&V_tcbinfo);
 }
@@ -116,11 +116,11 @@ tcp_offload_close(struct tcpcb *tp)
 {
 
 	INP_INFO_WLOCK(&V_tcbinfo);
-	INP_WLOCK(tp->t_inpcb);
+	INP_LOCK(tp->t_inpcb);
 	tp = tcp_close(tp);
 	INP_INFO_WUNLOCK(&V_tcbinfo);
 	if (tp)
-		INP_WUNLOCK(tp->t_inpcb);
+		INP_UNLOCK(tp->t_inpcb);
 
 	return (tp);
 }
@@ -130,11 +130,11 @@ tcp_offload_drop(struct tcpcb *tp, int error)
 {
 
 	INP_INFO_WLOCK(&V_tcbinfo);
-	INP_WLOCK(tp->t_inpcb);
+	INP_LOCK(tp->t_inpcb);
 	tp = tcp_drop(tp, error);
 	INP_INFO_WUNLOCK(&V_tcbinfo);
 	if (tp)
-		INP_WUNLOCK(tp->t_inpcb);
+		INP_UNLOCK(tp->t_inpcb);
 
 	return (tp);
 }

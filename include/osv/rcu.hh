@@ -112,7 +112,7 @@ public:
     void assign(std::nullptr_t p);
     // Access contents, must be called with exclusive access wrt.
     // mutator (i.e. in same context as assign().
-    T* read_by_owner();
+    T* read_by_owner() const;
     // Check if the pointer is non-null, can be done outside
     // rcu_read_lock
     operator bool() const;
@@ -203,7 +203,7 @@ void rcu_dispose(T* p)
 
 template <typename T, typename Disposer>
 inline
-T* rcu_ptr<T, Disposer>::read_by_owner()
+T* rcu_ptr<T, Disposer>::read_by_owner() const
 {
     return _ptr.load(std::memory_order_relaxed);
 }

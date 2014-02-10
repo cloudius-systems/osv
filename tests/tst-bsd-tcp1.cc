@@ -1,9 +1,13 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
+
+#define BOOST_TEST_MODULE tst-bsd-tcp1
+
+#include <boost/test/unit_test.hpp>
 
 #include <osv/sched.hh>
 
@@ -13,6 +17,8 @@
 
 #include <osv/debug.hh>
 #include "tst-hub.hh"
+
+#include <boost/asio.hpp>
 
 #define dbg_d(...) tprintf_d("tst-tcp1", __VA_ARGS__)
 
@@ -201,22 +207,30 @@ private:
     int _server_result;
 };
 
-int main(int argc, char *argv[])
+BOOST_AUTO_TEST_CASE(test_tcp_client_server)
 {
     dbg_d("BSD TCP1 Test - Begin");
 
     test_bsd_tcp1 tcp1;
     int rc = tcp1.run();
 
-    if (rc < 0) {
-        dbg_d("BSD TCP1 Test Failed");
-        return 1;
-    }
+    BOOST_REQUIRE(rc >= 0);
 
-    dbg_d("BSD TCP1 Test completed successfully!");
+    dbg_d("BSD TCP1 Test completed: %s!", rc >= 0 ? "PASS" : "FAIL");
     dbg_d("BSD TCP1 Test - End");
+}
 
-    return 0;
+
+BOOST_AUTO_TEST_CASE(test_shutdown_wr)
+{
+    using namespace boost::asio::ip;
+    boost::asio::io_service io_service;
+    tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 10000));
+    tcp::socket client(io_service);
+    client.connect(tcp::endpoint(address_v4::from_string("127.0.0.1"), 10000));
+    tcp::socket server(io_service);
+    acceptor.accept(server);
+    server.shutdown(tcp::socket::shutdown_send);
 }
 
 #undef ITERATIONS

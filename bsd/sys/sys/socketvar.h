@@ -42,6 +42,7 @@
 #ifdef _KERNEL
 #include <bsd/sys/sys/sockopt.h>
 #endif
+#include <osv/net_channel.hh>
 
 struct vnet;
 
@@ -60,14 +61,15 @@ struct file;
  * Locking key to struct socket:
  * (a) constant after allocation, no locking required.
  * (b) locked by SOCK_LOCK(so).
- * (c) locked by SOCKBUF_LOCK(&so->so_rcv).
- * (d) locked by SOCKBUF_LOCK(&so->so_snd).
+ * (c) locked by SOCK_LOCK(so).
+ * (d) locked by SOCK_LOCK(so).
  * (e) locked by ACCEPT_LOCK().
  * (f) not locked since integer reads/writes are atomic.
  * (g) used only as a sleep/wakeup address, no value.
  * (h) locked by global mutex so_global_mtx.
  */
 struct socket {
+	struct mtx* so_mtx = nullptr;   /* provided by so_pcb */
 	int	so_count;		/* (b) reference count */
 	short	so_type;		/* (a) generic type, see socket.h */
 	short	so_options;		/* from socket call, see socket.h */
@@ -119,9 +121,15 @@ struct socket {
 	 */
 	int so_fibnum;		/* routing domain for this socket */
 	uint32_t so_user_cookie;
+	net_channel* so_nc = nullptr;
+	// a net channel only supports one consumer, so let others wait on a waitqueue instead
+	bool so_nc_busy = false;
+	waitqueue so_nc_wq;
 	/* FIXME: this is done for poll,
 	 * make sure there's only 1 ref to a fp */
 	struct file* fp;
+
+	void set_mutex(mtx* a_mtx) { so_mtx = a_mtx; }
 };
 
 /*
@@ -136,16 +144,12 @@ extern struct mtx accept_mtx;
 #define	ACCEPT_LOCK()			mtx_lock(&accept_mtx)
 #define	ACCEPT_UNLOCK()			mtx_unlock(&accept_mtx)
 
-/*
- * Per-socket mutex: we reuse the receive socket buffer mutex for space
- * efficiency.  This decision should probably be revisited as we optimize
- * locking for the socket code.
- */
-#define	SOCK_MTX(_so)			SOCKBUF_MTX(&(_so)->so_rcv)
-#define	SOCK_LOCK(_so)			SOCKBUF_LOCK(&(_so)->so_rcv)
-#define	SOCK_OWNED(_so)			SOCKBUF_OWNED(&(_so)->so_rcv)
-#define	SOCK_UNLOCK(_so)		SOCKBUF_UNLOCK(&(_so)->so_rcv)
-#define	SOCK_LOCK_ASSERT(_so)		SOCKBUF_LOCK_ASSERT(&(_so)->so_rcv)
+#define	SOCK_MTX(_so)			((_so)->so_mtx)
+#define	SOCK_LOCK(_so)			(SOCK_MTX(_so)->_mutex.lock())
+#define	SOCK_OWNED(_so)			(SOCK_MTX(_so)->_mutex.owned())
+#define	SOCK_UNLOCK(_so)		(SOCK_MTX(_so)->_mutex.unlock())
+#define	SOCK_LOCK_ASSERT(_so)		assert(SOCK_OWNED(_so))
+#define	SOCK_UNLOCK_ASSERT(_so)		assert(!SOCK_OWNED(_so))
 
 /*
  * Socket state bits stored in so_qstate.
@@ -238,39 +242,40 @@ struct xsocket {
 	}								\
 } while (0)
 
+extern "C" void sowakeup(socket* so, sockbuf* sb);
+
 /*
  * In sorwakeup() and sowwakeup(), acquire the socket buffer lock to
- * avoid a non-atomic test-and-wakeup.  However, sowakeup is
- * responsible for releasing the lock if it is called.  We unlock only
- * if we don't call into sowakeup.  If any code is introduced that
- * directly invokes the underlying sowakeup() primitives, it must
- * maintain the same semantics.
+ * avoid a non-atomic test-and-wakeup.
  */
-#define	sorwakeup_locked(so) do {					\
-	SOCKBUF_LOCK_ASSERT(&(so)->so_rcv);				\
-	if (sb_notify(&(so)->so_rcv))					\
-		sowakeup((so), &(so)->so_rcv);	 			\
-	else								\
-		SOCKBUF_UNLOCK(&(so)->so_rcv);				\
-} while (0)
+inline void sorwakeup_locked(socket* so) {
+	SOCK_LOCK_ASSERT(so);
+	if (sb_notify(&so->so_rcv)) {
+		sowakeup(so, &so->so_rcv);
+	}
+}
 
-#define	sorwakeup(so) do {						\
-	SOCKBUF_LOCK(&(so)->so_rcv);					\
-	sorwakeup_locked(so);						\
-} while (0)
+inline void sorwakeup(socket* so)
+{
+	SOCK_LOCK(so);
+	sorwakeup_locked(so);
+	SOCK_UNLOCK(so);
+}
 
-#define	sowwakeup_locked(so) do {					\
-	SOCKBUF_LOCK_ASSERT(&(so)->so_snd);				\
-	if (sb_notify(&(so)->so_snd))					\
-		sowakeup((so), &(so)->so_snd); 				\
-	else								\
-		SOCKBUF_UNLOCK(&(so)->so_snd);				\
-} while (0)
+inline void sowwakeup_locked(socket* so)
+{
+	SOCK_LOCK_ASSERT(so);
+	if (sb_notify(&so->so_snd)) {
+		sowakeup(so, &so->so_snd);
+	}
+}
 
-#define	sowwakeup(so) do {						\
-	SOCKBUF_LOCK(&(so)->so_snd);					\
-	sowwakeup_locked(so);						\
-} while (0)
+inline void sowwakeup(socket* so)
+{
+	SOCK_LOCK(so);
+	sowwakeup_locked(so);
+	SOCK_UNLOCK(so);
+}
 
 struct accept_filter {
 	char	accf_name[16];
@@ -350,6 +355,7 @@ int	soreceive_generic(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
 int	soreserve(struct socket *so, u_long sndcc, u_long rcvcc);
+int	soreserve_internal(struct socket *so, u_long sndcc, u_long rcvcc);
 void	sorflush(struct socket *so);
 int	sosend(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 	    struct mbuf *top, struct mbuf *control, int flags,

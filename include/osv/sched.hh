@@ -566,9 +566,17 @@ public:
     thread_handle() = default;
     thread_handle(const thread_handle& t) { _t.assign(t._t.read()); }
     thread_handle(thread& t) { reset(t); }
+    thread_handle& operator=(const thread_handle& x) {
+	_t.assign(x._t.read());
+	return *this;
+    }
     void reset(thread& t) { _t.assign(t._detached_state.get()); }
     void wake();
     void clear() { _t.assign(nullptr); }
+    operator bool() const { return _t; }
+    bool operator==(const thread_handle& x) const {
+        return _t.read_by_owner() == x._t.read_by_owner();
+    }
 private:
     osv::rcu_ptr<thread::detached_state> _t;
 };

@@ -122,7 +122,7 @@ static void inline	cc_after_idle(struct tcpcb *tp);
 static void inline
 cc_after_idle(struct tcpcb *tp)
 {
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	if (CC_ALGO(tp)->after_idle != NULL)
 		CC_ALGO(tp)->after_idle(tp->ccv);
@@ -161,7 +161,7 @@ tcp_output(struct tcpcb *tp)
 	isipv6 = (tp->t_inpcb->inp_vflag & INP_IPV6) != 0;
 #endif
 
-	INP_WLOCK_ASSERT(tp->t_inpcb);
+	INP_LOCK_ASSERT(tp->t_inpcb);
 
 	/*
 	 * Determine length of data that should be transmitted,
@@ -259,7 +259,7 @@ after_sack_rexmit:
 	if (tp->t_flags & TF_NEEDSYN)
 		flags |= TH_SYN;
 
-	SOCKBUF_LOCK(&so->so_snd);
+	SOCK_LOCK_ASSERT(so);
 	/*
 	 * If in persist timeout with window of 0, send 1 byte.
 	 * Otherwise, if window is small but nonzero
@@ -631,11 +631,10 @@ dontupdate:
 	 * No reason to send a segment, just return.
 	 */
 just_return:
-	SOCKBUF_UNLOCK(&so->so_snd);
 	return (0);
 
 send:
-	SOCKBUF_LOCK_ASSERT(&so->so_snd);
+	SOCK_LOCK_ASSERT(so);
 	/*
 	 * Before ESTABLISHED, force sending of initial options
 	 * unless TCP set not to do any options.
@@ -807,7 +806,6 @@ send:
 		}
 		MGETHDR(m, M_DONTWAIT, MT_DATA);
 		if (m == NULL) {
-			SOCKBUF_UNLOCK(&so->so_snd);
 			error = ENOBUFS;
 			goto out;
 		}
@@ -815,7 +813,6 @@ send:
 		if (MHLEN < hdrlen + max_linkhdr) {
 			MCLGET(m, M_DONTWAIT);
 			if ((m->m_hdr.mh_flags & M_EXT) == 0) {
-				SOCKBUF_UNLOCK(&so->so_snd);
 				m_freem(m);
 				error = ENOBUFS;
 				goto out;
@@ -838,7 +835,6 @@ send:
 		} else {
 			m->m_hdr.mh_next = m_copy(mb, moff, (int)len);
 			if (m->m_hdr.mh_next == NULL) {
-				SOCKBUF_UNLOCK(&so->so_snd);
 				(void) m_free(m);
 				error = ENOBUFS;
 				goto out;
@@ -853,9 +849,7 @@ send:
 		 */
 		if (off + len == so->so_snd.sb_cc)
 			flags |= TH_PUSH;
-		SOCKBUF_UNLOCK(&so->so_snd);
 	} else {
-		SOCKBUF_UNLOCK(&so->so_snd);
 		if (tp->t_flags & TF_ACKNOW)
 			TCPSTAT_INC(tcps_sndacks);
 		else if (flags & (TH_SYN|TH_FIN|TH_RST))
@@ -879,7 +873,6 @@ send:
 		m->m_hdr.mh_data += max_linkhdr;
 		m->m_hdr.mh_len = hdrlen;
 	}
-	SOCKBUF_UNLOCK_ASSERT(&so->so_snd);
 	m->M_dat.MH.MH_pkthdr.rcvif = (struct ifnet *)0;
 #ifdef MAC
 	mac_inpcb_create_mbuf(tp->t_inpcb, m);
@@ -1274,7 +1267,6 @@ timer:
 				tp->snd_nxt -= len;
 		}
 out:
-		SOCKBUF_UNLOCK_ASSERT(&so->so_snd);	/* Check gotos. */
 		switch (error) {
 		case EPERM:
 			tp->t_softerror = error;

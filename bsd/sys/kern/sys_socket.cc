@@ -167,23 +167,15 @@ socket_file::bsd_ioctl(u_long cmd, void *data)
         if (*(int *)data) {
             SOCK_LOCK(so);
             so->so_state |= SS_ASYNC;
-            SOCK_UNLOCK(so);
-            SOCKBUF_LOCK(&so->so_rcv);
             so->so_rcv.sb_flags |= SB_ASYNC;
-            SOCKBUF_UNLOCK(&so->so_rcv);
-            SOCKBUF_LOCK(&so->so_snd);
             so->so_snd.sb_flags |= SB_ASYNC;
-            SOCKBUF_UNLOCK(&so->so_snd);
+            SOCK_UNLOCK(so);
         } else {
             SOCK_LOCK(so);
             so->so_state &= ~SS_ASYNC;
-            SOCK_UNLOCK(so);
-            SOCKBUF_LOCK(&so->so_rcv);
             so->so_rcv.sb_flags &= ~SB_ASYNC;
-            SOCKBUF_UNLOCK(&so->so_rcv);
-            SOCKBUF_LOCK(&so->so_snd);
             so->so_snd.sb_flags &= ~SB_ASYNC;
-            SOCKBUF_UNLOCK(&so->so_snd);
+            SOCK_UNLOCK(so);
         }
         break;
 
@@ -238,7 +230,32 @@ socket_file::bsd_ioctl(u_long cmd, void *data)
 int
 socket_file::poll(int events)
 {
+    SOCK_LOCK(so);
+    if (so->so_nc) {
+        so->so_nc->process_queue();
+    }
+    SOCK_UNLOCK(so);
     return (sopoll(so, events, 0, 0));
+}
+
+void
+socket_file::poll_install(pollreq& pr)
+{
+    SOCK_LOCK(so);
+    if (so->so_nc) {
+        so->so_nc->add_poller(pr);
+    }
+    SOCK_UNLOCK(so);
+}
+
+void
+socket_file::poll_uninstall(pollreq& pr)
+{
+    SOCK_LOCK(so);
+    if (so->so_nc) {
+        so->so_nc->del_poller(pr);
+    }
+    SOCK_UNLOCK(so);
 }
 
 int
@@ -250,12 +267,12 @@ socket_file::stat(struct stat *ub)
      * If SBS_CANTRCVMORE is set, but there's still data left in the
      * receive buffer, the socket is still readable.
      */
-    SOCKBUF_LOCK(&so->so_rcv);
+    SOCK_LOCK(so);
     if ((so->so_rcv.sb_state & SBS_CANTRCVMORE) == 0 ||
         so->so_rcv.sb_cc != 0)
         ub->st_mode |= S_IRUSR | S_IRGRP | S_IROTH;
     ub->st_size = so->so_rcv.sb_cc - so->so_rcv.sb_ctl;
-    SOCKBUF_UNLOCK(&so->so_rcv);
+    SOCK_UNLOCK(so);
     /* Unlocked read. */
     if ((so->so_snd.sb_state & SBS_CANTSENDMORE) == 0)
         ub->st_mode |= S_IWUSR | S_IWGRP | S_IWOTH;

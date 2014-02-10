@@ -33,6 +33,8 @@
 #ifndef	_NET_IF_VAR_H_
 #define	_NET_IF_VAR_H_
 
+#include <osv/net_channel.hh>
+
 /*
  * Structures defining a network interface, providing a packet
  * transport mechanism (ala level 0 of the PUP protocols).
@@ -86,6 +88,7 @@ struct	vnet;
 #include <bsd/sys/sys/socket.h>
 #include <bsd/porting/rwlock.h>
 #include <bsd/porting/sync_stub.h>
+#include <osv/net_channel.hh>
 
 
 __BEGIN_DECLS
@@ -174,6 +177,7 @@ struct ifnet {
 	 * get the interface info and statistics including the one gathered by HW
 	 */
 	void (*if_getinfo)(struct ifnet *, struct if_data *);
+	classifier if_classifier;
 
 	struct	vnet *if_home_vnet;	/* where this ifnet originates from */
 	struct	bsd_ifaddr	*if_addr;	/* pointer to link-level address */
@@ -210,6 +214,9 @@ struct ifnet {
 	char	if_cspare[3];
 	int	if_ispare[4];
 	void	*if_pspare[8];		/* 1 netmap, 7 TDB */
+
+	void add_net_channel(net_channel* nc, ipv4_tcp_conn_id id) { if_classifier.add(id, nc); }
+	void del_net_channel(ipv4_tcp_conn_id id) { if_classifier.remove(id); }
 };
 
 typedef void if_init_f_t(void *);

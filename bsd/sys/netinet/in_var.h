@@ -452,6 +452,7 @@ int	in_control(struct socket *, u_long, caddr_t, struct ifnet *,
 	    struct thread *);
 void	in_rtqdrain(void);
 void	ip_input(struct mbuf *);
+mbuf*	ip_preprocess_packet(struct mbuf *, uint8_t& protocol, int& hlen);
 int	in_ifadown(struct bsd_ifaddr *ifa, int);
 void	in_ifscrub(struct ifnet *, struct in_ifaddr *, u_int);
 struct	mbuf	*ip_fastforward(struct mbuf *);

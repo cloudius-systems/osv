@@ -91,7 +91,7 @@ raw_input_ext(struct mbuf *m0, struct sockproto *proto, struct bsd_sockaddr *src
 			struct mbuf *n;
 			n = m_copy(m, 0, (int)M_COPYALL);
 			if (n) {
-				if (sbappendaddr(&last->so_rcv, src,
+				if (sbappendaddr(last, &last->so_rcv, src,
 				    n, (struct mbuf *)0) == 0)
 					/* should notify about lost packet */
 					m_freem(n);
@@ -102,7 +102,7 @@ raw_input_ext(struct mbuf *m0, struct sockproto *proto, struct bsd_sockaddr *src
 		last = rp->rcb_socket;
 	}
 	if (last) {
-		if (sbappendaddr(&last->so_rcv, src,
+		if (sbappendaddr(last, &last->so_rcv, src,
 		    m, (struct mbuf *)0) == 0)
 			m_freem(m);
 		else

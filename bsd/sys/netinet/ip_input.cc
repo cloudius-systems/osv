@@ -361,19 +361,21 @@ ip_destroy(void)
 
 /*
  * Ip input routine.  Checksum and byte swap header.  If fragmented
- * try to reassemble.  Process options.  Pass to next level.
+ * try to reassemble.  Process options.  Compute protocol and header length.
  */
-void
-ip_input(struct mbuf *m)
+mbuf*
+ip_preprocess_packet(struct mbuf *m, uint8_t& protocol, int& hlen)
 {
 	struct ip *ip = NULL;
 	struct in_ifaddr *ia = NULL;
 	struct bsd_ifaddr *ifa;
 	struct ifnet *ifp;
-	int    checkif, hlen = 0;
+	int    checkif;
 	u_short sum;
 	int dchg = 0;				/* dest changed after fw */
 	struct in_addr odst;			/* original dst address */
+
+	hlen = 0;
 
 	M_ASSERTPKTHDR(m);
 
@@ -397,7 +399,7 @@ ip_input(struct mbuf *m)
 	if (m->m_hdr.mh_len < sizeof (struct ip) &&
 	    (m = m_pullup(m, sizeof (struct ip))) == NULL) {
 		IPSTAT_INC(ips_toosmall);
-		return;
+		return m;
 	}
 	ip = mtod(m, struct ip *);
 
@@ -414,7 +416,7 @@ ip_input(struct mbuf *m)
 	if (hlen > m->m_hdr.mh_len) {
 		if ((m = m_pullup(m, hlen)) == NULL) {
 			IPSTAT_INC(ips_badhlen);
-			return;
+			return m;
 		}
 		ip = mtod(m, struct ip *);
 	}
@@ -446,7 +448,7 @@ ip_input(struct mbuf *m)
 #ifdef ALTQ
 	if (altq_input != NULL && (*altq_input)(m, AF_INET) == 0)
 		/* packet is dropped by traffic conditioner */
-		return;
+		return nullptr;
 #endif
 
 	/*
@@ -489,7 +491,7 @@ tooshort:
 	 * DHCP
 	 */
 	if (dhcp_hook_rx(m)) {
-		return;
+		return nullptr;
 	}
 
 	/*
@@ -506,9 +508,9 @@ tooshort:
 
 	odst = ip->ip_dst;
 	if (pfil_run_hooks(&V_inet_pfil_hook, &m, ifp, PFIL_IN, NULL) != 0)
-		return;
+		return nullptr;
 	if (m == NULL)			/* consumed by filter */
-		return;
+		return m;
 
 	ip = mtod(m, struct ip *);
 	dchg = (odst.s_addr != ip->ip_dst.s_addr);
@@ -527,7 +529,7 @@ tooshort:
 			 * to some other directly connected host.
 			 */
 			ip_forward(m, 1);
-			return;
+			return nullptr;
 		}
 	}
 passin:
@@ -538,7 +540,7 @@ passin:
 	 * to be sent and the original packet to be freed).
 	 */
 	if (hlen > sizeof (struct ip) && ip_dooptions(m, 0))
-		return;
+		return nullptr;
 
         /* greedy RSVP, snatches any PATH packet of the RSVP protocol and no
          * matter if it is destined to another node, or whether it is 
@@ -635,7 +637,7 @@ passin:
 	if (IN_LINKLOCAL(ntohl(ip->ip_dst.s_addr))) {
 		IPSTAT_INC(ips_cantforward);
 		m_freem(m);
-		return;
+		return nullptr;
 	}
 	if (IN_MULTICAST(ntohl(ip->ip_dst.s_addr))) {
 		if (V_ip_mrouter) {
@@ -650,7 +652,7 @@ passin:
 			if (ip_mforward && ip_mforward(ip, ifp, m, 0) != 0) {
 				IPSTAT_INC(ips_cantforward);
 				m_freem(m);
-				return;
+				return nullptr;
 			}
 
 			/*
@@ -683,7 +685,7 @@ passin:
 				goto ours;
 		}
 		m_freem(m);
-		return;
+		return nullptr;
 	}
 
 	/*
@@ -699,7 +701,7 @@ passin:
 #endif /* IPSEC */
 		ip_forward(m, dchg);
 	}
-	return;
+	return nullptr;
 
 ours:
 #ifdef IPSTEALTH
@@ -710,7 +712,7 @@ ours:
 	if (V_ipstealth && hlen > sizeof (struct ip) && ip_dooptions(m, 1)) {
 		if (ia != NULL)
 			ifa_free(&ia->ia_ifa);
-		return;
+		return nullptr;
 	}
 #endif /* IPSTEALTH */
 
@@ -728,7 +730,7 @@ ours:
 	if (ip->ip_off & (IP_MF | IP_OFFMASK)) {
 		m = ip_reass(m);
 		if (m == NULL)
-			return;
+			return m;
 		ip = mtod(m, struct ip *);
 		/* Get the header length of the reassembled packet */
 		hlen = ip->ip_hl << 2;
@@ -754,11 +756,28 @@ ours:
 	 * Switch out to protocol's input routine.
 	 */
 	IPSTAT_INC(ips_delivered);
+	protocol = ip->ip_p;
 
-	(*inetsw[ip_protox[ip->ip_p]].pr_input)(m, hlen);
-	return;
+	return m;
 bad:
 	m_freem(m);
+	return nullptr;
+}
+
+/*
+ * Ip input routine.  Checksum and byte swap header.  If fragmented
+ * try to reassemble.  Process options.  Pass to next level.
+ */
+void
+ip_input(struct mbuf *m)
+{
+	uint8_t protocol;
+	int hlen;
+	m = ip_preprocess_packet(m, protocol, hlen);
+	if (!m) {
+		return;
+	}
+	(*inetsw[ip_protox[protocol]].pr_input)(m, hlen);
 }
 
 /*

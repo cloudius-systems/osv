@@ -147,7 +147,7 @@ rip_inshash(struct inpcb *inp)
 	int hash;
 
 	INP_INFO_WLOCK_ASSERT(pcbinfo);
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 	
 	if (inp->inp_ip_p != 0 &&
 	    inp->inp_laddr.s_addr != INADDR_ANY &&
@@ -165,7 +165,7 @@ rip_delhash(struct inpcb *inp)
 {
 
 	INP_INFO_WLOCK_ASSERT(inp->inp_pcbinfo);
-	INP_WLOCK_ASSERT(inp);
+	INP_LOCK_ASSERT(inp);
 
 	LIST_REMOVE(inp, inp_hash);
 }
@@ -244,16 +244,16 @@ rip_append(struct inpcb *last, struct ip *ip, struct mbuf *n,
 		if ((last->inp_flags & INP_CONTROLOPTS) ||
 		    (so->so_options & (SO_TIMESTAMP | SO_BINTIME)))
 			ip_savecontrol(last, &opts, ip, n);
-		SOCKBUF_LOCK(&so->so_rcv);
-		if (sbappendaddr_locked(&so->so_rcv,
+		SOCK_LOCK(so);
+		if (sbappendaddr_locked(so, &so->so_rcv,
 		    (struct bsd_sockaddr *)ripsrc, n, opts) == 0) {
 			/* should notify about lost packet */
 			m_freem(n);
 			if (opts)
 				m_freem(opts);
-			SOCKBUF_UNLOCK(&so->so_rcv);
 		} else
 			sorwakeup_locked(so);
+		SOCK_UNLOCK(so);
 	} else
 		m_freem(n);
 	return (policyfail);
@@ -303,9 +303,9 @@ rip_input(struct mbuf *m, int off)
 			if (n != NULL)
 		    	    (void) rip_append(last, ip, n, &ripsrc);
 			/* XXX count dropped packet */
-			INP_RUNLOCK(last);
+			INP_UNLOCK(last);
 		}
-		INP_RLOCK(inp);
+		INP_LOCK(inp);
 		last = inp;
 	}
 	LIST_FOREACH(inp, &V_ripcbinfo.ipi_hashbase[0], inp_hash) {
@@ -371,16 +371,16 @@ rip_input(struct mbuf *m, int off)
 			if (n != NULL)
 				(void) rip_append(last, ip, n, &ripsrc);
 			/* XXX count dropped packet */
-			INP_RUNLOCK(last);
+			INP_UNLOCK(last);
 		}
-		INP_RLOCK(inp);
+		INP_LOCK(inp);
 		last = inp;
 	}
 	INP_INFO_RUNLOCK(&V_ripcbinfo);
 	if (last != NULL) {
 		if (rip_append(last, ip, m, &ripsrc) != 0)
 			IPSTAT_INC(ips_delivered);
-		INP_RUNLOCK(last);
+		INP_UNLOCK(last);
 	} else {
 		m_freem(m);
 		IPSTAT_INC(ips_noproto);
@@ -414,7 +414,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		if (m == NULL)
 			return(ENOBUFS);
 
-		INP_RLOCK(inp);
+		INP_LOCK(inp);
 		ip = mtod(m, struct ip *);
 		ip->ip_tos = inp->inp_ip_tos;
 		if (inp->inp_flags & INP_DONTFRAG)
@@ -431,7 +431,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 			m_freem(m);
 			return(EMSGSIZE);
 		}
-		INP_RLOCK(inp);
+		INP_LOCK(inp);
 		ip = mtod(m, struct ip *);
 
 		/*
@@ -441,7 +441,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 		if (((ip->ip_hl != (sizeof (*ip) >> 2)) && inp->inp_options)
 		    || (ip->ip_len > m->M_dat.MH.MH_pkthdr.len)
 		    || (ip->ip_len < (ip->ip_hl << 2))) {
-			INP_RUNLOCK(inp);
+			INP_UNLOCK(inp);
 			m_freem(m);
 			return (EINVAL);
 		}
@@ -464,7 +464,7 @@ rip_output(struct mbuf *m, struct socket *so, u_long dst)
 
 	error = ip_output(m, inp->inp_options, NULL, flags,
 	    inp->inp_moptions, inp);
-	INP_RUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (error);
 }
 
@@ -740,7 +740,7 @@ rip_attach(struct socket *so, int proto, struct thread *td)
 		return (error);
 	if (proto >= IPPROTO_MAX || proto < 0)
 		return EPROTONOSUPPORT;
-	error = soreserve(so, rip_sendspace, rip_recvspace);
+	error = soreserve_internal(so, rip_sendspace, rip_recvspace);
 	if (error)
 		return (error);
 	INP_INFO_WLOCK(&V_ripcbinfo);
@@ -755,7 +755,7 @@ rip_attach(struct socket *so, int proto, struct thread *td)
 	inp->inp_ip_ttl = V_ip_defttl;
 	rip_inshash(inp);
 	INP_INFO_WUNLOCK(&V_ripcbinfo);
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (0);
 }
 
@@ -770,7 +770,7 @@ rip_detach(struct socket *so)
 	    ("rip_detach: not closed"));
 
 	INP_INFO_WLOCK(&V_ripcbinfo);
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	rip_delhash(inp);
 	if (so == V_ip_mrouter && ip_mrouter_done)
 		ip_mrouter_done();
@@ -790,14 +790,14 @@ rip_dodisconnect(struct socket *so, struct inpcb *inp)
 
 	pcbinfo = inp->inp_pcbinfo;
 	INP_INFO_WLOCK(pcbinfo);
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	rip_delhash(inp);
 	inp->inp_faddr.s_addr = INADDR_ANY;
 	rip_inshash(inp);
 	SOCK_LOCK(so);
 	so->so_state &= ~SS_ISCONNECTED;
 	SOCK_UNLOCK(so);
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	INP_INFO_WUNLOCK(pcbinfo);
 }
 
@@ -858,11 +858,11 @@ rip_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 		return (EADDRNOTAVAIL);
 
 	INP_INFO_WLOCK(&V_ripcbinfo);
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	rip_delhash(inp);
 	inp->inp_laddr = addr->sin_addr;
 	rip_inshash(inp);
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	INP_INFO_WUNLOCK(&V_ripcbinfo);
 	return (0);
 }
@@ -884,12 +884,12 @@ rip_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 	KASSERT(inp != NULL, ("rip_connect: inp == NULL"));
 
 	INP_INFO_WLOCK(&V_ripcbinfo);
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	rip_delhash(inp);
 	inp->inp_faddr = addr->sin_addr;
 	rip_inshash(inp);
 	soisconnected(so);
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	INP_INFO_WUNLOCK(&V_ripcbinfo);
 	return (0);
 }
@@ -902,9 +902,9 @@ rip_shutdown(struct socket *so)
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("rip_shutdown: inp == NULL"));
 
-	INP_WLOCK(inp);
+	INP_LOCK(inp);
 	socantsendmore(so);
-	INP_WUNLOCK(inp);
+	INP_UNLOCK(inp);
 	return (0);
 }
 
@@ -984,13 +984,13 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 	INP_INFO_RLOCK(&V_ripcbinfo);
 	for (inp = LIST_FIRST(V_ripcbinfo.ipi_listhead), i = 0; inp && i < n;
 	     inp = LIST_NEXT(inp, inp_list)) {
-		INP_WLOCK(inp);
+		INP_LOCK(inp);
 		if (inp->inp_gencnt <= gencnt &&
 		    cr_canseeinpcb(req->td->td_ucred, inp) == 0) {
 			in_pcbref(inp);
 			inp_list[i++] = inp;
 		}
-		INP_WUNLOCK(inp);
+		INP_UNLOCK(inp);
 	}
 	INP_INFO_RUNLOCK(&V_ripcbinfo);
 	n = i;
@@ -998,7 +998,7 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 	error = 0;
 	for (i = 0; i < n; i++) {
 		inp = inp_list[i];
-		INP_RLOCK(inp);
+		INP_LOCK(inp);
 		if (inp->inp_gencnt <= gencnt) {
 			struct xinpcb xi;
 
@@ -1008,17 +1008,17 @@ rip_pcblist(SYSCTL_HANDLER_ARGS)
 			bcopy(inp, &xi.xi_inp, sizeof *inp);
 			if (inp->inp_socket)
 				sotoxsocket(inp->inp_socket, &xi.xi_socket);
-			INP_RUNLOCK(inp);
+			INP_UNLOCK(inp);
 			error = SYSCTL_OUT(req, &xi, sizeof xi);
 		} else
-			INP_RUNLOCK(inp);
+			INP_UNLOCK(inp);
 	}
 	INP_INFO_WLOCK(&V_ripcbinfo);
 	for (i = 0; i < n; i++) {
 		inp = inp_list[i];
-		INP_RLOCK(inp);
-		if (!in_pcbrele_rlocked(inp))
-			INP_RUNLOCK(inp);
+		INP_LOCK(inp);
+		if (!in_pcbrele_locked(inp))
+			INP_UNLOCK(inp);
 	}
 	INP_INFO_WUNLOCK(&V_ripcbinfo);
 

@@ -93,7 +93,6 @@ private:
  * Variables for socket buffering.
  */
 struct	sockbuf {
-	struct	mtx sb_mtx;	/* sockbuf lock */
 	sockbuf_iolock sb_iolock;	/* prevent I/O interlacing */
 	short	sb_state;	/* (c/d) socket state on sockbuf */
 #define	sb_startzero	sb_mb
@@ -125,38 +124,32 @@ struct	sockbuf {
  * buffer.
  */
 __BEGIN_DECLS
-#define	SOCKBUF_MTX(_sb)		(&(_sb)->sb_mtx)
-#define	SOCKBUF_LOCK(_sb)		mtx_lock(SOCKBUF_MTX(_sb))
-#define	SOCKBUF_OWNED(_sb)		mtx_owned(SOCKBUF_MTX(_sb))
-#define	SOCKBUF_UNLOCK(_sb)		mtx_unlock(SOCKBUF_MTX(_sb))
-#define	SOCKBUF_LOCK_ASSERT(_sb)	mtx_assert(SOCKBUF_MTX(_sb), MA_OWNED)
-#define	SOCKBUF_UNLOCK_ASSERT(_sb)	mtx_assert(SOCKBUF_MTX(_sb), MA_NOTOWNED)
 
-void	sbappend(struct sockbuf *sb, struct mbuf *m);
-void	sbappend_locked(struct sockbuf *sb, struct mbuf *m);
-void	sbappendstream(struct sockbuf *sb, struct mbuf *m);
-void	sbappendstream_locked(struct sockbuf *sb, struct mbuf *m);
-int	sbappendaddr(struct sockbuf *sb, const struct bsd_sockaddr *asa,
+void	sbappend(socket* so, struct sockbuf *sb, struct mbuf *m);
+void	sbappend_locked(socket* so, struct sockbuf *sb, struct mbuf *m);
+void	sbappendstream(socket* so, struct sockbuf *sb, struct mbuf *m);
+void	sbappendstream_locked(socket* so, struct sockbuf *sb, struct mbuf *m);
+int	sbappendaddr(socket* so, struct sockbuf *sb, const struct bsd_sockaddr *asa,
 	    struct mbuf *m0, struct mbuf *control);
-int	sbappendaddr_locked(struct sockbuf *sb, const struct bsd_sockaddr *asa,
+int	sbappendaddr_locked(socket* so, struct sockbuf *sb, const struct bsd_sockaddr *asa,
 	    struct mbuf *m0, struct mbuf *control);
-int	sbappendcontrol(struct sockbuf *sb, struct mbuf *m0,
+int	sbappendcontrol(socket* so, struct sockbuf *sb, struct mbuf *m0,
 	    struct mbuf *control);
-int	sbappendcontrol_locked(struct sockbuf *sb, struct mbuf *m0,
+int	sbappendcontrol_locked(socket* so, struct sockbuf *sb, struct mbuf *m0,
 	    struct mbuf *control);
-void	sbappendrecord(struct sockbuf *sb, struct mbuf *m0);
-void	sbappendrecord_locked(struct sockbuf *sb, struct mbuf *m0);
+void	sbappendrecord(socket* so, struct sockbuf *sb, struct mbuf *m0);
+void	sbappendrecord_locked(socket* so, struct sockbuf *sb, struct mbuf *m0);
 void	sbcheck(struct sockbuf *sb);
-void	sbcompress(struct sockbuf *sb, struct mbuf *m, struct mbuf *n);
+void	sbcompress(socket* so, struct sockbuf *sb, struct mbuf *m, struct mbuf *n);
 struct mbuf *
 	sbcreatecontrol(caddr_t p, int size, int type, int level);
 void	sbdestroy(struct sockbuf *sb, struct socket *so);
-void	sbdrop(struct sockbuf *sb, int len);
-void	sbdrop_locked(struct sockbuf *sb, int len);
+void	sbdrop(socket* so, struct sockbuf *sb, int len);
+void	sbdrop_locked(socket* so, struct sockbuf *sb, int len);
 void	sbdroprecord(struct sockbuf *sb);
-void	sbdroprecord_locked(struct sockbuf *sb);
-void	sbflush(struct sockbuf *sb);
-void	sbflush_locked(struct sockbuf *sb);
+void	sbdroprecord_locked(socket* so, struct sockbuf *sb);
+void	sbflush(socket* so, struct sockbuf *sb);
+void	sbflush_locked(socket* so, struct sockbuf *sb);
 void	sbrelease(struct sockbuf *sb, struct socket *so);
 void	sbrelease_internal(struct sockbuf *sb, struct socket *so);
 void	sbrelease_locked(struct sockbuf *sb, struct socket *so);
@@ -164,12 +157,14 @@ int	sbreserve(struct sockbuf *sb, u_long cc, struct socket *so,
 	    struct thread *td);
 int	sbreserve_locked(struct sockbuf *sb, u_long cc, struct socket *so,
 	    struct thread *td);
+int	sbreserve_internal(struct sockbuf *sb, u_long cc, struct socket *so,
+	    struct thread *td);
 struct mbuf *
 	sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff);
 void	sbtoxsockbuf(struct sockbuf *sb, struct xsockbuf *xsb);
-int	sbwait(struct sockbuf *sb);
-int	sblock(struct sockbuf *sb, int flags);
-void	sbunlock(struct sockbuf *sb);
+int	sbwait(socket* so, struct sockbuf *sb);
+int	sblock(socket* so, struct sockbuf *sb, int flags);
+void	sbunlock(socket* so, struct sockbuf *sb);
 __END_DECLS
 
 /*
