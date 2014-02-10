@@ -38,7 +38,7 @@ public:
 private:
 
     void handle_irq();
-    void ack_irq();
+    bool ack_irq();
     void worker();
     void refill();
 

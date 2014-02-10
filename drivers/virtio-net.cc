@@ -184,6 +184,19 @@ void net::fill_qstats(const struct txq& txq,
     out_data->ifi_oerrors  += txq.stats.tx_err + txq.stats.tx_drops;
 }
 
+bool net::ack_irq()
+{
+    auto isr = virtio_conf_readb(VIRTIO_PCI_ISR);
+
+    if (isr) {
+        _rxq.vqueue->disable_interrupts();
+        return true;
+    } else {
+        return false;
+    }
+
+}
+
 net::net(pci::device& dev)
     : virtio_driver(dev),
       _rxq(get_virt_queue(0), [this] { this->receiver(); }),
@@ -242,10 +255,14 @@ net::net(pci::device& dev)
     poll_task->start();
 
     ether_ifattach(_ifn, _config.mac);
-    _msi.easy_register({
-        { 0, [&] { _rxq.vqueue->disable_interrupts(); }, poll_task },
-        { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
-    });
+    if (dev.is_msix()) {
+        _msi.easy_register({
+            { 0, [&] { _rxq.vqueue->disable_interrupts(); }, poll_task },
+            { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
+        });
+    } else {
+        _gsi.set_ack_and_handler(dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { poll_task->wake(); });
+    }
 
     fill_rx_ring();
 

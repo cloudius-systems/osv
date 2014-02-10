@@ -196,7 +196,9 @@ template <typename T>
 inline
 void rcu_dispose(T* p)
 {
-    rcu_defer(std::default_delete<T>(), p);
+    if (p) {
+        rcu_defer(std::default_delete<T>(), p);
+    }
 }
 
 template <typename T, typename Disposer>
@@ -210,7 +212,9 @@ template <typename T>
 inline
 void rcu_dispose_array(T* p)
 {
-    rcu_defer(std::default_delete<T[]>(), p);
+    if (p) {
+        rcu_defer(std::default_delete<T[]>(), p);
+    }
 }
 
 template <typename T, typename functor>

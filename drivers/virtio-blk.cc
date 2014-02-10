@@ -98,6 +98,20 @@ struct driver blk_driver = {
     sizeof(struct blk_priv),
 };
 
+bool blk::ack_irq()
+{
+    auto isr = virtio_conf_readb(VIRTIO_PCI_ISR);
+    auto queue = get_virt_queue(0);
+
+    if (isr) {
+        queue->disable_interrupts();
+        return true;
+    } else {
+        return false;
+    }
+
+}
+
 blk::blk(pci::device& pci_dev)
     : virtio_driver(pci_dev), _ro(false)
 {
@@ -114,7 +128,11 @@ blk::blk(pci::device& pci_dev)
             sched::thread::attr().name("virtio-blk"));
     t->start();
     auto queue = get_virt_queue(0);
-    _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
+    if (pci_dev.is_msix()) {
+        _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
+    } else {
+        _gsi.set_ack_and_handler(pci_dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { t->wake(); });
+    }
 
     // Enable indirect descriptor
     queue->set_use_indirect(true);

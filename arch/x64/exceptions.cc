@@ -16,6 +16,8 @@
 #include <libc/signal.hh>
 #include <apic.hh>
 #include <osv/prio.hh>
+#include <osv/rcu.hh>
+#include <osv/mutex.h>
 
 typedef boost::format fmt;
 
@@ -98,46 +100,108 @@ interrupt_descriptor_table::load_on_cpu()
 }
 
 unsigned interrupt_descriptor_table::register_interrupt_handler(
-        std::function<void ()> pre_eoi,
+        std::function<bool ()> pre_eoi,
         std::function<void ()> eoi,
-        std::function<void ()> handler)
+        std::function<void ()> post_eoi)
 {
-    for (unsigned i = 32; i < 256; ++i) {
-        if (!_handlers[i].post_eoi) {
-            _handlers[i].eoi = eoi;
-            _handlers[i].pre_eoi = pre_eoi;
-            _handlers[i].post_eoi = handler;
-            return i;
+    WITH_LOCK(_lock) {
+        for (unsigned i = 32; i < 256; ++i) {
+            auto o = _handlers[i].read_by_owner();
+            if (o == nullptr) {
+                auto n = new handler(o, pre_eoi, eoi, post_eoi);
+
+                _handlers[i].assign(n);
+                osv::rcu_dispose(o);
+
+                return i;
+            }
         }
     }
     abort();
 }
 
-unsigned interrupt_descriptor_table::register_level_triggered_handler(
-        std::function<void ()> pre_eoi,
-        std::function<void ()> handler)
+shared_vector interrupt_descriptor_table::register_level_triggered_handler(
+        unsigned gsi,
+        std::function<bool ()> pre_eoi,
+        std::function<void ()> post_eoi)
 {
-    return register_interrupt_handler(pre_eoi, [] { apic->eoi(); }, handler);
+    WITH_LOCK(_lock) {
+        for (unsigned i = 32; i < 256; ++i) {
+            auto o = _handlers[i].read_by_owner();
+            if ((o && o->gsi == gsi) || o == nullptr) {
+                auto n = new handler(o, pre_eoi, [] { apic->eoi(); }, post_eoi);
+                n->gsi = gsi;
+
+                _handlers[i].assign(n);
+                osv::rcu_dispose(o);
+
+                return shared_vector(i, n->id);
+            }
+        }
+    }
+    abort();
 }
 
-unsigned interrupt_descriptor_table::register_handler(std::function<void ()> handler)
+void interrupt_descriptor_table::unregister_level_triggered_handler(shared_vector v)
 {
-    return register_level_triggered_handler([] {}, handler);
+    auto vector = v.vector;
+    auto id = v.id;
+    WITH_LOCK(_lock) {
+        auto o = _handlers[vector].read_by_owner();
+        assert(o);
+        interrupt_descriptor_table::handler *n;
+
+        if (o->size() > 1) {
+            // Remove shared vector with 'id' from handler
+            n = new handler(o, id);
+        } else {
+            // Last shared vector is unregistered.
+            n = nullptr;
+        }
+        _handlers[vector].assign(n);
+        osv::rcu_dispose(o);
+    }
 }
 
+unsigned interrupt_descriptor_table::register_handler(std::function<void ()> post_eoi)
+{
+    return register_interrupt_handler([] { return true; }, [] { apic->eoi(); }, post_eoi);
+}
 
 void interrupt_descriptor_table::unregister_handler(unsigned vector)
 {
-    _handlers[vector].eoi = {};
-    _handlers[vector].pre_eoi = {};
-    _handlers[vector].post_eoi = {};
+    WITH_LOCK(_lock) {
+        auto o = _handlers[vector].read_by_owner();
+        _handlers[vector].assign(nullptr);
+        osv::rcu_dispose(o);
+    }
 }
 
 void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
 {
-    _handlers[vector].pre_eoi();
-    _handlers[vector].eoi();
-    _handlers[vector].post_eoi();
+    WITH_LOCK(osv::rcu_read_lock) {
+        unsigned i, nr_shared;
+        bool handled = false;
+
+        auto ptr = _handlers[vector].read();
+        if (!ptr) {
+            return;
+        }
+
+        nr_shared = ptr->size();
+        for (i = 0 ; i < nr_shared; i++) {
+            handled = ptr->pre_eois[i]();
+            if (handled) {
+                break;
+            }
+        }
+
+        ptr->eoi();
+
+        if (handled) {
+            ptr->post_eois[i]();
+        }
+    }
 }
 
 extern "C" { void interrupt(exception_frame* frame); }

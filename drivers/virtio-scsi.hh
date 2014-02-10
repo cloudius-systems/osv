@@ -137,6 +137,7 @@ public:
     void exec_request_sense(u16 taget, u16 lun);
     std::vector<u16> exec_report_luns(u16 target);
     void add_lun(u16 target_id, u16 lun_id);
+    bool test_lun(u16 target_id, u16 lun_id);
     void exec_read_capacity(u16 target, u16 lun, size_t &devsize);
     void scan();
 
@@ -145,6 +146,8 @@ public:
     int exec_cmd(struct bio *bio);
 
     void req_done();
+
+    bool ack_irq();
 
     static hw_driver* probe(hw_device* dev);
 private:
@@ -161,6 +164,7 @@ private:
         void init(struct bio* bio, u16 target, u16 lun)
         {
             memset(&req.cmd, 0, sizeof(req.cmd));
+            req.cmd.tag = reinterpret_cast<u64>(bio);
             req.cmd.lun[0] = 1;
             req.cmd.lun[1] = target;
             req.cmd.lun[2] = (lun >> 8) | 0x40;
@@ -188,6 +192,8 @@ private:
 
     std::string _driver_name;
     scsi_config _config;
+
+    gsi_level_interrupt _gsi;
 
     //maintains the virtio instance number for multiple drives
     static int _instance;

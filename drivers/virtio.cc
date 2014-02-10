@@ -126,7 +126,6 @@ bool virtio_driver::parse_pci_config()
 void virtio_driver::reset_host_side()
 {
     set_dev_status(0);
-    virtio_conf_writel(VIRTIO_PCI_QUEUE_PFN,(u32)0);
 }
 
 void virtio_driver::free_queues()
