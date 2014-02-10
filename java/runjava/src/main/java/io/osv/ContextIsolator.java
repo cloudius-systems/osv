@@ -33,6 +33,8 @@ public class ContextIsolator {
         verifyLogManagerIsInstalled();
     }
 
+    private final Context masterContext;
+
     private static void verifyLogManagerIsInstalled() {
         LogManager manager = LogManager.getLogManager();
         if (!(manager instanceof IsolatingLogManager)) {
@@ -41,7 +43,13 @@ public class ContextIsolator {
         }
     }
 
-    private final InheritableThreadLocal<Context> currentContext = new InheritableThreadLocal<>();
+    private final InheritableThreadLocal<Context> currentContext = new InheritableThreadLocal<Context>() {
+        @Override
+        protected Context initialValue() {
+            return masterContext;
+        }
+    };
+
     private final ClassLoader parentClassLoaderForIsolates;
 
     public static ContextIsolator getInstance() {
@@ -50,8 +58,7 @@ public class ContextIsolator {
 
     public ContextIsolator() {
         ClassLoader originalSystemClassLoader = getOsvClassLoader().getParent();
-
-        currentContext.set(new Context(originalSystemClassLoader, System.getProperties()));
+        masterContext = new Context(originalSystemClassLoader, System.getProperties());
 
         parentClassLoaderForIsolates = new TeeClassLoader(
                 new FilteringClassLoader(originalSystemClassLoader, "io.osv."));
