@@ -205,8 +205,8 @@ void poll_install(struct pollreq* p)
         // cannot be requested by the user (e.g., POLLHUP).
         pl->_events = entry->events | ~POLL_REQUESTABLE;
 
-        FD_LOCK(fp);
         fp->poll_install(*p);
+        FD_LOCK(fp);
         TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
         FD_UNLOCK(fp);
         // We need to check if we missed an event on this file just before
@@ -237,12 +237,12 @@ void poll_uninstall(struct pollreq* p)
             continue;
         }
 
+        fp->poll_uninstall(*p);
         /* Search for current pollreq and remove it from list */
         FD_LOCK(fp);
         TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
             if (pl->_req == p) {
                 TAILQ_REMOVE(&fp->f_poll_list, pl, _link);
-                fp->poll_uninstall(*p);
                 free(pl);
                 break;
             }
