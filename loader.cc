@@ -14,12 +14,10 @@
 #include <cctype>
 #include <osv/elf.hh>
 #include <osv/tls.hh>
-#include "msr.hh"
 #include "exceptions.hh"
 #include <osv/debug.hh>
 #include "drivers/pci.hh"
 #include "smp.hh"
-#include "xen.hh"
 #include "ioapic.hh"
 
 #include "drivers/acpi.hh"
@@ -36,6 +34,7 @@
 #include "drivers/pvpanic.hh"
 #include <osv/barrier.hh>
 #include "arch.hh"
+#include "arch-setup.hh"
 #include "osv/trace.hh"
 #include <osv/power.hh>
 #include <osv/rcu.hh>
@@ -72,7 +71,8 @@ void setup_tls(elf::init_table inittab)
     memcpy(tcb0, inittab.tls.start, inittab.tls.size);
     auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls.size);
     p->self = p;
-    processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<uint64_t>(p));
+
+    arch_setup_tls(p);
 }
 
 extern "C" {
@@ -82,16 +82,10 @@ extern "C" {
     void ramdisk_init(void);
 }
 
-
-void disable_pic()
-{
-    // PIC not present in Xen
-    XENPV_ALTERNATIVE({ outb(0xff, 0x21); outb(0xff, 0xa1); }, {});
-}
-
 void premain()
 {
-    disable_pic();
+    arch_init_premain();
+
     auto inittab = elf::get_init(elf_header);
     setup_tls(inittab);
     boot_time.event("TLS initialization");

@@ -10,6 +10,8 @@
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
 #include "processor.hh"
+#include "msr.hh"
+#include "xen.hh"
 #include <osv/elf.hh>
 #include <osv/types.h>
 #include <alloca.h>
@@ -187,4 +189,20 @@ void arch_setup_free_memory()
         mmu::linear_map(mmu::phys_mem + ent.addr, ent.addr, ent.size, ~0);
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
+}
+
+void arch_setup_tls(thread_control_block *tcb)
+{
+    processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<uint64_t>(tcb));
+}
+
+static inline void disable_pic()
+{
+    // PIC not present in Xen
+    XENPV_ALTERNATIVE({ processor::outb(0xff, 0x21); processor::outb(0xff, 0xa1); }, {});
+}
+
+void arch_init_premain()
+{
+    disable_pic();
 }
