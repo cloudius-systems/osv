@@ -244,10 +244,6 @@ namei(char *path, struct dentry **dpp)
             drele(ddp);
             return ENOTDIR;
         }
-
-        while (*p != '\0' && *p != '/') {
-            p++;
-        }
     }
 
 #if 0
