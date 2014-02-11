@@ -173,7 +173,7 @@ def vma_list(node = None):
         node = p['header_plus_size_']['header_']['parent_']
 
     if (long(node) != 0):
-        offset = gdb.parse_and_eval('(int)&((mmu::vma*)0)->_vma_list_hook');
+        offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook");
         vma = node.cast(gdb.lookup_type('void').pointer()) - offset
         vma = vma.cast(gdb.lookup_type('mmu::vma').pointer())
 
