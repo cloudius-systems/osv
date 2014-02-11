@@ -936,6 +936,7 @@ symbol_module program::lookup(const char* name)
         for (auto module : ml.objects) {
             if (auto sym = module->lookup_symbol(name)) {
                 ret = symbol_module(sym, module);
+                return;
             }
         }
     });
