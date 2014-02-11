@@ -1,17 +1,18 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
 #include <stdio.h>
+#define TARGET_VALUE 0x05050505
 
 // Check that OSV symbols like "debug" and "condvar_wait" don't prevent us
 // from using these names in the application (a shared object)
-int nonexistant = 0;
-int debug = 0;
-int condvar_wait = 0;
+int nonexistant = TARGET_VALUE;
+int debug = TARGET_VALUE;
+int condvar_wait = TARGET_VALUE;
 
 // On the other hand, check that symbols that we define here don't mess with
 // OSV's internal implementation. For example, OSV's time() uses
@@ -25,11 +26,11 @@ int clock_gettime = 0;
 int fail = 0;
 void check(const char *name, int val)
 {
-    if (val) {
-        printf("Failed: %s = %d\n", name, val);
+    if (val != TARGET_VALUE) {
+        printf("Failed:\t%s = 0x%08x\n", name, val);
         fail++;
     } else {
-        printf("Success: %s = %d\n", name, val);
+        printf("Success:\t%s = 0x%08x\n", name, val);
     }
 }
 
@@ -39,11 +40,12 @@ int time(int *t);
 
 int main(int ac, char** av)
 {
+    printf("Target value:\t0x%08x\n", TARGET_VALUE);
     CHECK(nonexistant);
     CHECK(debug);
     CHECK(condvar_wait);
 
-    printf("The time: %d\n", time(0));
+    printf("The time:\t%d\n", time(0));
 
     if (fail) {
         printf("%d failures.\n", fail);
