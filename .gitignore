@@ -2,8 +2,7 @@
 build/
 .\#*
 \#*\#
-java/${out}/
-java/lib/
+java/*/target
 
 .gradle
 tags
