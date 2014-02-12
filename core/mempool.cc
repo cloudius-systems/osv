@@ -365,8 +365,9 @@ struct mark_smp_allocator_intialized {
             for (auto j = 0U; j < ncpus; j++) {
                 static_assert(!(sizeof(free_objects_type) %
                         alignof(free_objects_type)), "free_objects_type align");
-                pcpu_free_list[i][j] = static_cast<free_objects_type *>(
+                auto p = pcpu_free_list[i][j] = static_cast<free_objects_type *>(
                         buf + sizeof(free_objects_type) * (i * ncpus + j));
+                new (p) free_objects_type;
             }
         }
         smp_allocator = true;
