@@ -141,14 +141,14 @@ bool virtio_driver::kick(int queue)
     return true;
 }
 
-bool virtio_driver::probe_virt_queues()
+void virtio_driver::probe_virt_queues()
 {
     u16 qsize = 0;
 
     do {
 
         if (_num_queues >= max_virtqueues_nr) {
-            return false;
+            return;
         }
 
         // Read queue size
@@ -167,7 +167,7 @@ bool virtio_driver::probe_virt_queues()
             virtio_conf_writew(VIRTIO_MSI_QUEUE_VECTOR, _num_queues);
             if (virtio_conf_readw(VIRTIO_MSI_QUEUE_VECTOR) != _num_queues) {
                 virtio_e("Setting MSIx entry for queue %d failed.", _num_queues);
-                return false;
+                return;
             }
         }
 
@@ -182,8 +182,6 @@ bool virtio_driver::probe_virt_queues()
         virtio_d("Queue[%d] -> size %d, paddr %x", (_num_queues-1), qsize, queue->get_paddr());
 
     } while (true);
-
-    return true;
 }
 
 vring* virtio_driver::get_virt_queue(unsigned idx)
