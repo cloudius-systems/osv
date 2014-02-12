@@ -49,6 +49,12 @@ template and its paramters.
    std::vector<object*>
 ```
 
+2.4 Bind '*' or '&' to the type, not the variable
+...
+   int* a;
+   int& b;
+...
+
 ## 3. Braces
 3.1 Always use curly braces for if statement, even if it is a one line if.
 
