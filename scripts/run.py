@@ -5,6 +5,7 @@ import argparse
 import os
 import tempfile
 import errno
+import re
 
 stty_params=None
 
@@ -197,9 +198,18 @@ def start_osv_xen(options):
             print >> sys.stderr, "Unrecognized memory size"
             return;
 
+    vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
+
+    if not vncoptions:
+        raise Exception('Invalid vnc option format: \"' + options.vnc + "\"")
+
+    if vncoptions.group("vncaddr"):
+        args += [ "vnclisten=%s" % (vncoptions.group("vncaddr")) ]
+
+    if vncoptions.group("vncdisplay"):
+        args += [ "vncdisplay=%s" % (vncoptions.group("vncdisplay")) ]
 
     args += [
-        "vnc=%s" % (options.vnc),
         "memory=%d" % (memory),
         "vcpus=%s" % (options.vcpus),
         "maxcpus=%s" % (options.vcpus),
