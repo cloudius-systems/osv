@@ -46,14 +46,22 @@ unsigned msix_vector::get_vector(void)
 void msix_vector::msix_unmask_entries(void)
 {
     for (auto entry_id : _entryids) {
-        _dev->msix_unmask_entry(entry_id);
+        if (_dev->is_msix()) {
+            _dev->msix_unmask_entry(entry_id);
+        } else {
+            _dev->msi_unmask_entry(entry_id);
+        }
     }
 }
 
 void msix_vector::msix_mask_entries(void)
 {
     for (auto entry_id : _entryids) {
-        _dev->msix_mask_entry(entry_id);
+        if (_dev->is_msix()) {
+            _dev->msix_mask_entry(entry_id);
+        } else {
+            _dev->msi_mask_entry(entry_id);
+        }
     }
 }
 
@@ -140,7 +148,12 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
 
     // Enable the device msix capability,
     // masks all interrupts...
-    _dev->msix_enable();
+
+    if (_dev->is_msix()) {
+        _dev->msix_enable();
+    } else {
+        _dev->msi_enable();
+    }
 
     int idx=0;
 
@@ -191,8 +204,15 @@ void interrupt_manager::easy_unregister()
 std::vector<msix_vector*> interrupt_manager::request_vectors(unsigned num_vectors)
 {
     std::vector<msix_vector*> results;
+    unsigned num_entries;
 
-    auto num = std::min(num_vectors, _dev->msix_get_num_entries());
+    if (_dev->is_msix()) {
+        num_entries = _dev->msix_get_num_entries();
+    } else {
+        num_entries = _dev->msi_get_num_entries();
+    }
+
+    auto num = std::min(num_vectors, num_entries);
 
     for (unsigned i = 0; i < num; ++i) {
         results.push_back(new msix_vector(_dev));
@@ -217,8 +237,14 @@ bool interrupt_manager::setup_entry(unsigned entry_id, msix_vector* msix)
         return (false);
     }
 
-    if (!_dev->msix_write_entry(entry_id, msix_msg._addr, msix_msg._data)) {
-        return (false);
+    if (_dev->is_msix()) {
+        if (!_dev->msix_write_entry(entry_id, msix_msg._addr, msix_msg._data)) {
+            return false;
+        }
+    } else {
+        if (!_dev->msi_write_entry(entry_id, msix_msg._addr, msix_msg._data)) {
+            return false;
+        }
     }
 
     msix->add_entryid(entry_id);
