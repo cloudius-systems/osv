@@ -31,7 +31,7 @@ rng::~rng()
 {
 }
 
-size_t rng::get_random_bytes(char *buf, size_t size)
+size_t rng::get_random_bytes(char* buf, size_t size)
 {
     WITH_LOCK(_mtx) {
         _consumer.wait_until(_mtx, [&] {
@@ -74,7 +74,7 @@ void rng::refill()
     vector<char> buf(remaining);
     u32 len;
     DROP_LOCK(_mtx) {
-        void *data = buf.data();
+        void* data = buf.data();
 
         _queue->init_sg();
         _queue->add_in_sg(data, remaining);
@@ -95,7 +95,7 @@ void rng::refill()
     copy_n(buf.begin(), len, back_inserter(_entropy));
 }
 
-hw_driver* rng::probe(hw_device *dev)
+hw_driver* rng::probe(hw_device* dev)
 {
     return virtio::probe<rng, VIRTIO_RNG_DEVICE_ID>(dev);
 }

@@ -31,7 +31,7 @@ public:
 
     virtual const std::string get_name() { return "virtio-rng"; }
 
-    virtual size_t get_random_bytes(char *buf, size_t size) override;
+    virtual size_t get_random_bytes(char* buf, size_t size) override;
 
     static hw_driver* probe(hw_device* dev);
 
