@@ -12,7 +12,7 @@ This document describe OSv coding style.
             break;
     case 2:
     case 3:
-           i *=2;
+           i *= 2;
            break;
     default:
            break;
