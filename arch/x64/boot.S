@@ -115,44 +115,44 @@ start64:
 .global smpboot
 smpboot:
 .code16
-	lgdtl smpboot_gdt_desc-smpboot
-	mov smpboot_cr0-smpboot, %eax
-	btr $31, %eax # disable paging
-	mov %eax, %cr0
-	ljmp $0x18, $1f-smpboot
+    lgdtl smpboot_gdt_desc-smpboot
+    mov smpboot_cr0-smpboot, %eax
+    btr $31, %eax # disable paging
+    mov %eax, %cr0
+    ljmp $0x18, $1f-smpboot
 1:
 .code32
-	mov $0x10, %eax
-	mov %eax, %ds
-	mov %eax, %es
-	mov %eax, %ss
-	mov %eax, %fs
-	mov %eax, %gs
-	mov smpboot_cr4-smpboot, %eax
-	mov %eax, %cr4
-	lea ident_pt_l4, %eax
-	mov %eax, %cr3
-	mov smpboot_efer-smpboot, %eax
-	mov smpboot_efer+4-smpboot, %edx
-	mov $0xc0000080, %ecx
-	wrmsr
-	mov smpboot_cr0-smpboot, %eax
-	#1: jmp 1b
-	mov %eax, %cr0 # now with paging
-	ljmp $8, $smpboot64
+    mov $0x10, %eax
+    mov %eax, %ds
+    mov %eax, %es
+    mov %eax, %ss
+    mov %eax, %fs
+    mov %eax, %gs
+    mov smpboot_cr4-smpboot, %eax
+    mov %eax, %cr4
+    lea ident_pt_l4, %eax
+    mov %eax, %cr3
+    mov smpboot_efer-smpboot, %eax
+    mov smpboot_efer+4-smpboot, %edx
+    mov $0xc0000080, %ecx
+    wrmsr
+    mov smpboot_cr0-smpboot, %eax
+    #1: jmp 1b
+    mov %eax, %cr0 # now with paging
+    ljmp $8, $smpboot64
 
 smpboot_gdt_desc:
-	.short gdt_end - gdt - 1
-	.long gdt
+    .short gdt_end - gdt - 1
+    .long gdt
 .global smpboot_cr0
 smpboot_cr0:
-	.long 0
+    .long 0
 .global smpboot_cr4
 smpboot_cr4:
-	.long 0
+    .long 0
 .global smpboot_efer
 smpboot_efer:
-	.quad 0
+    .quad 0
 
 .global smpboot_end
 smpboot_end = .
@@ -173,12 +173,12 @@ trlock: .byte 0
 .code64
 
 smpboot64:
-	mov smpboot_cr3, %rax
-	mov %rax, %cr3
+    mov smpboot_cr3, %rax
+    mov %rax, %cr3
 1:
-	mov smp_stack_free, %rax
-	mov 4096(%rax), %rbx
-	lock cmpxchg %rbx, smp_stack_free
-	jnz 1b
-	lea 4096(%rax), %rsp
-	call smp_main
+    mov smp_stack_free, %rax
+    mov 4096(%rax), %rbx
+    lock cmpxchg %rbx, smp_stack_free
+    jnz 1b
+    lea 4096(%rax), %rsp
+    call smp_main
