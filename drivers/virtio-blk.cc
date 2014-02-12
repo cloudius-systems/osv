@@ -159,7 +159,7 @@ blk::~blk()
     // including the thread objects and their stack
 }
 
-bool blk::read_config()
+void blk::read_config()
 {
     //read all of the block config (including size, mce, topology,..) in one shot
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
@@ -184,8 +184,6 @@ bool blk::read_config()
         set_readonly();
         trace_virtio_blk_read_config_ro();
     }
-
-    return true;
 }
 
 void blk::req_done()

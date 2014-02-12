@@ -440,10 +440,9 @@ scsi::scsi_req::scsi_req(struct bio* bio, u16 target, u16 lun, u8 cmd)
     };
 }
 
-bool scsi::read_config()
+void scsi::read_config()
 {
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
-    return true;
 }
 
 void scsi::req_done()

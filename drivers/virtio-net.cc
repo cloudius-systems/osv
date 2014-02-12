@@ -284,7 +284,7 @@ net::~net()
     if_free(_ifn);
 }
 
-bool net::read_config()
+void net::read_config()
 {
     //read all of the net config  in one shot
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
@@ -312,8 +312,6 @@ bool net::read_config()
     net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
     net_i("Features: %s=%d,%s=%d", "Guest_csum", _guest_csum, "guest tso4", _guest_tso4);
     net_i("Features: %s=%d", "host tso4", _host_tso4);
-
-    return true;
 }
 
 /**
