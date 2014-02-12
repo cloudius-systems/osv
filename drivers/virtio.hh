@@ -165,7 +165,7 @@ public:
 protected:
     // Actual drivers should implement this on top of the basic ring features
     virtual u32 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
-    bool setup_features();
+    void setup_features();
 protected:
     pci::device& _dev;
     interrupt_manager _msi;

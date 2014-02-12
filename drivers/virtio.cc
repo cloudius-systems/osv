@@ -53,7 +53,7 @@ virtio_driver::~virtio_driver()
     free_queues();
 }
 
-bool virtio_driver::setup_features()
+void virtio_driver::setup_features()
 {
     u32 dev_features = get_device_features();
     u32 drv_features = this->get_driver_features();
@@ -73,9 +73,6 @@ bool virtio_driver::setup_features()
             set_event_idx_cap(true);
 
     set_guest_features(subset);
-
-    return subset != 0;
-
 }
 
 void virtio_driver::dump_config()
