@@ -81,23 +81,6 @@
                     </execution>
                 </executions>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <testSourceDirectory>${basedir}/src/main/java/</testSourceDirectory>
-                    <testClassesDirectory>target/classes</testClassesDirectory>
-                    <argLine>-ea -Djava.system.class.loader=io.osv.OsvSystemClassLoader
-                        -Djava.util.logging.manager=io.osv.jul.IsolatingLogManager
-                    </argLine>
-                    <systemProperties>
-                        <property>
-                            <name>isolates.jar</name>
-                            <value>${io.osv:tests-isolates:jar:jar-with-dependencies}</value>
-                        </property>
-                    </systemProperties>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
 </project>
