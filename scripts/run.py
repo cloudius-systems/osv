@@ -86,7 +86,12 @@ def start_osv_qemu(options):
         args += [
         "-display", "sdl"]
 
-    if (options.scsi):
+    if (options.sata):
+        args += [
+        "-machine", "q35",
+        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-device", "ide-hd,drive=hd0,id=idehd0,bus=ide.0"]
+    elif (options.scsi):
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
         "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
@@ -275,6 +280,8 @@ if (__name__ == "__main__"):
                         help="path to disk image file. defaults to build/$mode/usr.img")
     parser.add_argument("-S", "--scsi", action="store_true", default=False,
                         help="use virtio-scsi instead of virtio-blk")
+    parser.add_argument("-A", "--sata", action="store_true", default=False,
+                        help="use AHCI instead of virtio-blk")
     parser.add_argument("-I", "--ide", action="store_true", default=False,
                         help="use ide instead of virtio-blk")
     parser.add_argument("-n", "--networking", action="store_true",
