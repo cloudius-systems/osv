@@ -28,7 +28,7 @@ First, install prerequisite packages:
 **Fedora**
 
 ```
-yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool flex bison qemu-system-x86 qemu-img
+yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool flex bison qemu-system-x86 qemu-img maven
 ```
 
 **Debian**
