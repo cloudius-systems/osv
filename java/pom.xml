@@ -18,6 +18,7 @@
         <module>runjava</module>
         <module>tests</module>
         <module>tests-isolates</module>
+        <module>tests-jre-extension</module>
     </modules>
 
     <dependencies>
@@ -54,6 +55,11 @@
             <dependency>
                 <groupId>io.osv</groupId>
                 <artifactId>tests-isolates</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.osv</groupId>
+                <artifactId>tests-jre-extension</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
