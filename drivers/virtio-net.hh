@@ -40,7 +40,7 @@ public:
         VIRTIO_NET_F_HOST_UFO = 14,      /* Host can handle UFO in. */
         VIRTIO_NET_F_MRG_RXBUF = 15,      /* Host can merge receive buffers. */
         VIRTIO_NET_F_STATUS = 16,      /* net_config.status available */
-        VIRTIO_NET_F_CTRL_VQ  = 17,      /* Control channel available */
+        VIRTIO_NET_F_CTRL_VQ = 17,      /* Control channel available */
         VIRTIO_NET_F_CTRL_RX = 18,      /* Control channel RX mode support */
         VIRTIO_NET_F_CTRL_VLAN = 19,      /* Control channel VLAN filtering */
         VIRTIO_NET_F_CTRL_RX_EXTRA = 20,   /* Extra RX mode control support */
@@ -50,7 +50,7 @@ public:
     };
 
     enum {
-        VIRTIO_NET_DEVICE_ID=0x1000,
+        VIRTIO_NET_DEVICE_ID = 0x1000,
         VIRTIO_NET_S_LINK_UP = 1,       /* Link is up */
         VIRTIO_NET_S_ANNOUNCE = 2,       /* Announcement is needed */
         VIRTIO_NET_OK = 0,
@@ -123,7 +123,7 @@ public:
      * specify GSO or CSUM features, you can simply ignore the header. */
     struct net_hdr {
         enum {
-            VIRTIO_NET_HDR_F_NEEDS_CSUM  = 1,       // Use csum_start, csum_offset
+            VIRTIO_NET_HDR_F_NEEDS_CSUM = 1,       // Use csum_start, csum_offset
             VIRTIO_NET_HDR_F_DATA_VALID = 2,       // Csum is valid
         };
         u8 flags;
@@ -210,7 +210,7 @@ public:
     virtual u32 get_driver_features();
 
     void wait_for_queue(vring* queue);
-    bool bad_rx_csum(struct mbuf *m, struct net_hdr *hdr);
+    bool bad_rx_csum(struct mbuf* m, struct net_hdr* hdr);
     void receiver();
     void fill_rx_ring();
 
@@ -247,7 +247,7 @@ private:
     struct net_req {
         struct net::net_hdr_mrg_rxbuf mhdr;
         struct free_deleter {
-            void operator()(struct mbuf *m) {m_freem(m);}
+            void operator()(struct mbuf* m) {m_freem(m);}
         };
 
         std::unique_ptr<struct mbuf, free_deleter> um;
