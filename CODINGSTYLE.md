@@ -1,5 +1,8 @@
 # OSv Coding Style
-This document describe OSv coding style.
+
+This is a coding style guide for OSv.  It is meant to be helpful, not a tool
+for bikeshedding patches on the mailing list.  The use of common sense when
+applying these rules is required.
 
 ## 1. Indentation and layout
 1.1 We use 4 spaces for indentation, no tabs.
@@ -53,6 +56,13 @@ template and its paramters.
 ...
    int* a;
    int& b;
+...
+
+Please note that the rule obviously does not make sense when multiple variables
+are declared on the same line.  In such cases, it is preferable to do:
+
+...
+   int *a, *b;
 ...
 
 ## 3. Braces
