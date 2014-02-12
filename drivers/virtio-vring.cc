@@ -237,19 +237,19 @@ namespace virtio {
 
     bool vring::avail_ring_not_empty()
     {
-        u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
+        u16 effective_avail_count = effective_avail_ring_count();
         return effective_avail_count > 0;
     }
 
     bool vring::refill_ring_cond()
     {
-        u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
+        u16 effective_avail_count = effective_avail_ring_count();
         return effective_avail_count >= _num/2;
     }
 
     bool vring::avail_ring_has_room(int descriptors)
     {
-        u16 effective_avail_count = _avail_count + (_used_ring_host_head - _used_ring_guest_head);
+        u16 effective_avail_count = effective_avail_ring_count();
         if (use_indirect(descriptors))
             descriptors = 1;
         return effective_avail_count >= descriptors;

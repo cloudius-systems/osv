@@ -138,6 +138,10 @@ class virtio_driver;
         // It was separated from the get_buf flow to allow parallelism of the two
         void get_buf_gc();
 
+        inline u16 effective_avail_ring_count()
+        {
+            return _avail_count + (_used_ring_host_head - _used_ring_guest_head);
+        }
         bool used_ring_not_empty() const;
         bool used_ring_is_half_empty() const;
         bool used_ring_can_gc() const;
