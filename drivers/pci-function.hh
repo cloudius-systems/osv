@@ -102,6 +102,18 @@ namespace pci {
     };
 
     //  MSI-X definitions
+    enum msi_pci_conf {
+        PCIR_MSI_CTRL       = 0x2,
+        PCIR_MSI_CTRL_ME    = 1 << 0,
+        PCIR_MSI_ADDR       = 0x4,
+        PCIR_MSI_UADDR      = 0x8,
+        PCIR_MSI_DATA_32    = 0x8,
+        PCIR_MSI_DATA_64    = 0x0C,
+        PCIR_MSI_MASK_32    = 0x0C,
+        PCIR_MSI_MASK_64    = 0x10,
+    };
+
+    //  MSI-X definitions
     enum msix_pci_conf {
         PCIR_MSIX_CTRL = 0x2,
         PCIM_MSIXCTRL_MSIX_ENABLE = 0x8000,
@@ -129,6 +141,14 @@ namespace pci {
         u8 msix_pba_bar;                        //  BAR containing PBA.
         u32 msix_table_offset;
         u32 msix_pba_offset;
+    };
+
+    struct pcicfg_msi {
+        u8 msi_location;                       //  Offset of MSI capability registers.
+        u16 msi_ctrl;                          //  Message Control
+        u16 msi_msgnum;                        //  Number of messages
+        bool is_64_address;                    //  64 bit address
+        bool is_vector_mask;                   //  Per-vector mask
     };
 
     // Represents a PCI function (pci device, bridge or virtio device)
@@ -277,6 +297,19 @@ namespace pci {
         void msix_disable();
         bool is_msix_enabled() {return _msix_enabled;}
 
+        // MSI
+        // Does this device support MSI
+        bool is_msi();
+        unsigned msi_get_num_entries();
+        void msi_mask_all();
+        void msi_unmask_all();
+        bool msi_mask_entry(int entry_id);
+        bool msi_unmask_entry(int entry_id);
+        bool msi_write_entry(int entry_id, u64 address, u32 data);
+        void msi_enable();
+        void msi_disable();
+        bool is_msi_enabled() {return _msi_enabled;}
+
         // Access to PCI address space
         virtual u8 pci_readb(u8 offset);
         virtual u16 pci_readw(u8 offset);
@@ -312,11 +345,15 @@ namespace pci {
         // Parsing of extra capabilities
         virtual bool parse_pci_capabilities();
         virtual bool parse_pci_msix(u8 off);
+        virtual bool parse_pci_msi(u8 off);
 
         // Don't call if msix capability is not present
         void msix_set_control(u16 ctrl);
         u16 msix_get_control();
         mmioaddr_t msix_get_table();
+
+        void msi_set_control(u16 ctrl);
+        u16 msi_get_control();
 
         // Position
         u8  _bus, _device, _func;
@@ -337,6 +374,11 @@ namespace pci {
         bool _have_msix;
         pcicfg_msix _msix;
         bool _msix_enabled;
+
+        // MSI-x
+        bool _have_msi;
+        pcicfg_msi _msi;
+        bool _msi_enabled;
     };
 }
 
