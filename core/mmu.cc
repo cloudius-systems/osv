@@ -1141,7 +1141,7 @@ static map_anon_page page_ops_init;
 static map_page_ops *page_ops_noinitp = &page_ops_noinit, *page_ops_initp = &page_ops_init;
 
 anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
-    : vma(range, perm, flags, true, (_flags & mmap_uninitialized) ? page_ops_noinitp : page_ops_initp)
+    : vma(range, perm, flags, true, (flags & mmap_uninitialized) ? page_ops_noinitp : page_ops_initp)
 {
 }
 
