@@ -127,7 +127,7 @@ class virtio_driver;
         // Ring operations
         bool add_buf(void* cookie);
         // Get the top item from the used ring
-        void* get_buf_elem(u32 *len);
+        void* get_buf_elem(u32* len);
         // Let the host know we consumed the used entry
         // We separate that from get_buf_elem so no one
         // will re-cycle the request header location until
@@ -176,13 +176,13 @@ class virtio_driver;
             _sg_vec.clear();
         }
 
-        void add_out_sg(void *vaddr, u32 len)
+        void add_out_sg(void* vaddr, u32 len)
         {
             u64 paddr = mmu::virt_to_phys(vaddr);
             _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_READ);
         }
 
-        void add_in_sg(void *vaddr, u32 len)
+        void add_in_sg(void* vaddr, u32 len)
         {
             u64 paddr = mmu::virt_to_phys(vaddr);
             _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_WRITE);
@@ -227,18 +227,18 @@ class virtio_driver;
         u16 _avail_count;
 
         // Flat list of chained descriptors
-        vring_desc *_desc;
+        vring_desc* _desc;
         // Available for host consumption
-        vring_avail *_avail;
+        vring_avail* _avail;
         // Available for guest consumption
-        vring_used *_used;
+        vring_used* _used;
         // cookies to store access to the upper layer pointers
         void** _cookie;
         //protects parallel get_bug /add_buf access, mainly the _avail_head variable
         mutex _lock;
         // pointer to the end of the used ring to get a glimpse of the host avail idx
-        std::atomic<u16> *_avail_event;
-        std::atomic<u16> *_used_event;
+        std::atomic<u16>* _avail_event;
+        std::atomic<u16>* _used_event;
         // A flag set by driver to turn on/off indirect descriptor
         bool _use_indirect;
     };

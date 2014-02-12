@@ -21,8 +21,8 @@
 using namespace memory;
 using sched::thread;
 
-TRACEPOINT(trace_virtio_enable_interrupts, "vring=%p", void *);
-TRACEPOINT(trace_virtio_disable_interrupts, "vring=%p", void *);
+TRACEPOINT(trace_virtio_enable_interrupts, "vring=%p", void*);
+TRACEPOINT(trace_virtio_disable_interrupts, "vring=%p", void*);
 TRACEPOINT(trace_virtio_kick, "queue=%d", u16);
 TRACEPOINT(trace_virtio_add_buf, "queue=%d, avail=%d", u16, u16);
 
@@ -40,13 +40,13 @@ namespace virtio {
         // Set up pointers        
         assert(is_power_of_two(num));
         _num = num;
-        _desc = (vring_desc *)_vring_ptr;
-        _avail = (vring_avail *)(_vring_ptr + num*sizeof(vring_desc));
-        _used = (vring_used *)(((unsigned long)&_avail->_ring[num] + 
-                sizeof(u16) + VIRTIO_PCI_VRING_ALIGN-1) & ~(VIRTIO_PCI_VRING_ALIGN-1));
+        _desc = (vring_desc*)_vring_ptr;
+        _avail = (vring_avail*)(_vring_ptr + num * sizeof(vring_desc));
+        _used = (vring_used*)(((unsigned long)&_avail->_ring[num] +
+                sizeof(u16) + VIRTIO_PCI_VRING_ALIGN - 1) & ~(VIRTIO_PCI_VRING_ALIGN - 1));
 
         // initialize the next pointer within the available ring
-        for (int i=0;i<num;i++) _desc[i]._next = i+1;
+        for (int i = 0; i < num; i++) _desc[i]._next = i + 1;
         _desc[num-1]._next = 0;
 
         _cookie = new void*[num];
@@ -139,7 +139,7 @@ namespace virtio {
                     return false;
                 _desc[idx]._flags = vring_desc::VRING_DESC_F_INDIRECT;
                 _desc[idx]._paddr = mmu::virt_to_phys(indirect);
-                _desc[idx]._len = (_sg_vec.size())*sizeof(vring_desc);
+                _desc[idx]._len = (_sg_vec.size()) * sizeof(vring_desc);
 
                 descp = indirect;
                 //initialize the next pointers
@@ -203,7 +203,7 @@ namespace virtio {
 
 
     void*
-    vring::get_buf_elem(u32 *len)
+    vring::get_buf_elem(u32* len)
     {
             vring_used_elem elem;
             void* cookie = nullptr;
