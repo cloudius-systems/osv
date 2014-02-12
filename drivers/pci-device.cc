@@ -39,7 +39,9 @@ namespace pci {
             u32 bar_v = pci_readl(pos);
 
             if (bar_v == 0) {
-                break;
+                pos += 4;
+                idx++;
+                continue;
             }
 
             bar * pbar = new bar(this, pos);
