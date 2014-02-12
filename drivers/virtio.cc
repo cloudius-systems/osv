@@ -28,7 +28,7 @@ virtio_driver::virtio_driver(pci::device& dev)
     , _bar1(nullptr)
     , _cap_indirect_buf(false)
 {
-    for (unsigned i=0; i < max_virtqueues_nr; i++) {
+    for (unsigned i = 0; i < max_virtqueues_nr; i++) {
         _queues[i] = nullptr;
     }
     parse_pci_config();
@@ -62,7 +62,7 @@ bool virtio_driver::setup_features()
 
     //notify the host about the features in used according
     //to the virtio spec
-    for (int i=0;i<32;i++)
+    for (int i = 0; i < 32; i++)
         if (subset & (1 << i))
             virtio_d("%s: found feature intersec of bit %d", __FUNCTION__,  i);
 
@@ -84,13 +84,13 @@ void virtio_driver::dump_config()
     _dev.get_bdf(B, D, F);
 
     _dev.dump_config();
-    virtio_d("%s [%x:%x.%x] vid:id= %x:%x", get_name().c_str(),
+    virtio_d("%s [%x:%x.%x] vid:id=%x:%x", get_name().c_str(),
         (u16)B, (u16)D, (u16)F,
         _dev.get_vendor_id(),
         _dev.get_device_id());
 
     virtio_d("    virtio features: ");
-    for (int i=0;i<32;i++)
+    for (int i = 0; i < 32; i++)
         virtio_d(" %d ", get_device_feature_bit(i));
 }
 
@@ -130,7 +130,7 @@ void virtio_driver::reset_host_side()
 
 void virtio_driver::free_queues()
 {
-    for (unsigned i=0; i < max_virtqueues_nr; i++) {
+    for (unsigned i = 0; i < max_virtqueues_nr; i++) {
         if (nullptr != _queues[i]) {
             delete (_queues[i]);
             _queues[i] = nullptr;
@@ -162,7 +162,7 @@ bool virtio_driver::probe_virt_queues()
         }
 
         // Init a new queue
-        vring * queue = new vring(this, qsize, _num_queues);
+        vring* queue = new vring(this, qsize, _num_queues);
         _queues[_num_queues] = queue;
 
         if (_dev.is_msix()) {
@@ -286,15 +286,15 @@ void virtio_driver::set_virtio_config_bit(u32 offset, int bit, bool on)
 void virtio_driver::virtio_conf_write(u32 offset, void* buf, int length)
 {
     u8* ptr = reinterpret_cast<u8*>(buf);
-    for (int i=0;i<length;i++)
-        _bar1->writeb(offset+i, ptr[i]);
+    for (int i = 0; i < length; i++)
+        _bar1->writeb(offset + i, ptr[i]);
 }
 
 void virtio_driver::virtio_conf_read(u32 offset, void* buf, int length)
 {
     unsigned char* ptr = reinterpret_cast<unsigned char*>(buf);
-    for (int i=0;i<length;i++)
-        ptr[i] = _bar1->readb(offset+i);
+    for (int i = 0; i < length; i++)
+        ptr[i] = _bar1->readb(offset + i);
 }
 
 }

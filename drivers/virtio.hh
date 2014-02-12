@@ -171,7 +171,7 @@ protected:
     interrupt_manager _msi;
     vring* _queues[max_virtqueues_nr];
     u32 _num_queues;
-    pci::bar *_bar1;
+    pci::bar* _bar1;
     bool _cap_indirect_buf;
     bool _cap_event_idx = false;
     static int _disk_idx;
