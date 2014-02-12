@@ -90,9 +90,22 @@ def upload(osv, manifest, depends):
                 + cpio_field(0, 8)                # check
                 + filename + '\0')
 
+    def strip_file(filename):
+        stripped_filename = filename
+        if(filename.endswith(".so") and \
+            (filename[0] != "/" or filename.startswith(os.getcwd()))):
+            stripped_filename = filename[:-3] + "-stripped.so"
+            if(not os.path.exists(stripped_filename) \
+                    or (os.path.getmtime(stripped_filename) < \
+                        os.path.getmtime(filename))):
+                subprocess.call(["strip", "-o", stripped_filename, filename])
+        return stripped_filename
+
+
     # Send the files to the guest
     for name, hostname in files:
         depends.write('\t%s \\\n' % (hostname,))
+        hostname = strip_file(hostname)
         cpio_send(cpio_header(name, os.stat(hostname).st_size))
         with open(hostname, 'r') as f:
             cpio_send(f.read())
