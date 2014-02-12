@@ -262,15 +262,15 @@ all: loader.img loader.bin usr.img
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
 
-image-size = $(shell stat --printf %s loader-stripped.elf)
+image-size = $(shell stat --printf %s lzloader.elf)
 
 loader-stripped.elf: loader.elf
 	$(call very-quiet, cp loader.elf loader-stripped.elf)
 	$(call quiet, strip loader-stripped.elf, STRIP loader.elf)
 
-loader.img: boot.bin loader-stripped.elf
+loader.img: boot.bin lzloader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
-	$(call quiet, dd if=loader-stripped.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
+	$(call quiet, dd if=lzloader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD $@ loader.elf)
 	$(call quiet, $(src)/scripts/imgedit.py setsize $@ $(image-size), IMGEDIT $@)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
@@ -666,6 +666,30 @@ loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
 	      $(boost-libs) \
 	    --no-whole-archive, \
 		LD $@)
+
+fastlz/fastlz.o:
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/fastlz.cc, CXX $@)
+
+fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLASG) -O2 -o $@ $(filter %.cc, $^), CXX $@)
+
+loader-stripped.elf.lz.o: loader-stripped.elf fastlz/lz
+	$(call quiet, $(out)/fastlz/lz $(out)/loader-stripped.elf, LZ $@)
+	$(call quiet, objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz $@, OBJCOPY $@)
+
+fastlz/lzloader.o: fastlz/lzloader.cc
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/lzloader.cc, CXX $@)
+
+lzloader.elf: loader-stripped.elf.lz.o fastlz/lzloader.o arch/x64/lzloader.ld \
+	fastlz/fastlz.o
+	$(call quiet, $(src)/scripts/check-image-size.sh loader-stripped.elf 23068672)
+	$(call quiet, $(LD) -o $@ \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
+	-T $(src)/arch/x64/lzloader.ld \
+	$(patsubst %.o,$(out)/%.o, $(filter %.o, $^)), LD $@)
+
 
 dummy-shlib.so: dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)

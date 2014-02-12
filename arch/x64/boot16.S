@@ -8,8 +8,10 @@
 tmp = 0x80000
 bootsect = 0x7c00
 cmdline = 0x7e00
-target = 0x200000
-entry = 24+target
+target =  0x1800000
+lzentry = 24+target
+loader = 0x200000
+entry = loader+24
 
 mb_info = 0x1000
 // OSv information lays in the end of this struct, which is 88 bytes in size.
@@ -144,16 +146,17 @@ done_e820:
 	lmsw %ax
 	ljmp $8, $1f
 1:
-	.code32
+    .code32
 	mov $0x10, %ax
 	mov %eax, %ds
 	mov %eax, %es
 	mov %eax, %gs
 	mov %eax, %fs
 	mov %eax, %ss
-	mov $target, %eax
+	call *lzentry
+	mov $loader, %eax
 	mov $mb_info, %ebx
-	jmp *entry
+	call *entry
 
 .org 0x1b8
 .byte 0x56, 0x53, 0x4F, 0, 0, 0
