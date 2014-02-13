@@ -7,6 +7,7 @@ import java.util.concurrent.CyclicBarrier;
 
 import static io.osv.TestIsolateLaunching.runIsolate;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 /*
  * Copyright (C) 2014 Cloudius Systems, Ltd.
@@ -65,5 +66,10 @@ public class ClassLoaderIsolationTest {
                 throw e;
             }
         }
+    }
+
+    @Test
+    public void testClassesFromExtensionDirectoryCanBeLoaded() throws Exception {
+        assertNotNull(SomeExtensionClass.class);
     }
 }

@@ -60,8 +60,7 @@ public class ContextIsolator {
         ClassLoader originalSystemClassLoader = getOsvClassLoader().getParent();
         masterContext = new Context(originalSystemClassLoader, System.getProperties());
 
-        parentClassLoaderForIsolates = new TeeClassLoader(
-                new FilteringClassLoader(originalSystemClassLoader, "io.osv."));
+        parentClassLoaderForIsolates = originalSystemClassLoader;
 
         installSystemPropertiesProxy();
     }
