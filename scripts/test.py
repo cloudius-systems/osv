@@ -27,7 +27,8 @@ blacklist = [
 java_test = Test('java', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
     -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTests')
 
-standard_tests = [StandardOSvTest(os.path.basename(x)) for x in glob.glob('build/release/tests/tst-*.so')]
+test_files = set(glob.glob('build/release/tests/tst-*.so')) - set(glob.glob('build/release/tests/*-stripped.so'))
+standard_tests = [StandardOSvTest(os.path.basename(x)) for x in test_files]
 tests = sorted([java_test] + standard_tests, key=attrgetter('name'))
 
 def scan_errors(s):
