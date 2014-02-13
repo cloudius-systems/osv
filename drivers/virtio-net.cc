@@ -393,7 +393,7 @@ void net::receiver()
 
         // use local header that we copy out of the mbuf since we're
         // truncating it.
-        struct net_hdr_mrg_rxbuf mhdr;
+        net_hdr_mrg_rxbuf* mhdr;
 
         while (m != nullptr) {
 
@@ -409,12 +409,12 @@ void net::receiver()
                 continue;
             }
 
-            memcpy(&mhdr, mtod(m, void*), _hdr_size);
+            mhdr = mtod(m, net_hdr_mrg_rxbuf*);
 
             if (!_mergeable_bufs) {
                 nbufs = 1;
             } else {
-                nbufs = mhdr.num_buffers;
+                nbufs = mhdr->num_buffers;
             }
 
             m->M_dat.MH.MH_pkthdr.len = len;
@@ -450,9 +450,9 @@ void net::receiver()
             m_adj(m_head, offset);
 
             if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
-                (mhdr.hdr.flags &
+                (mhdr->hdr.flags &
                  net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)) {
-                if (bad_rx_csum(m_head, &mhdr.hdr))
+                if (bad_rx_csum(m_head, &mhdr->hdr))
                     csum_err++;
                 else
                     csum_ok++;
