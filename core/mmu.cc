@@ -497,6 +497,41 @@ public:
     }
 };
 
+struct tlb_gather {
+    explicit tlb_gather(map_page_ops* ops) : ops(ops) {}
+    ~tlb_gather() { flush(); }
+    static constexpr size_t max_pages = 20;
+    struct tlb_page {
+        void* addr;
+        size_t size;
+        off_t offset; // FIXME: unneeded?
+    };
+    map_page_ops* ops;
+    size_t nr_pages = 0;
+    tlb_page pages[max_pages];
+    void push(void* addr, size_t size, off_t offset) {
+        if (nr_pages == max_pages) {
+            flush();
+        }
+        pages[nr_pages++] = { addr, size, offset };
+    }
+    void flush() {
+        if (!nr_pages) {
+            return;
+        }
+        tlb_flush();
+        for (auto i = 0u; i < nr_pages; ++i) {
+            auto&& tp = pages[i];
+            if (tp.size == page_size) {
+                ops->free(tp.addr, tp.offset);
+            } else {
+                ops->free(tp.addr, tp.size, tp.offset);
+            }
+        }
+        nr_pages = 0;
+    }
+};
+
 /*
  * Undo the operation of populate(), freeing memory allocated by populate()
  * and marking the pages non-present.
@@ -504,28 +539,22 @@ public:
 template <account_opt T = account_opt::no>
 class unpopulate : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes, T> {
 private:
-    struct page {
-        void *addr;
-        uintptr_t offset;
-    };
-    std::stack<page> small_pages;
-    std::stack<page> huge_pages;
-    map_page_ops* _pops;
+    tlb_gather _tlb_gather;
 public:
-    unpopulate(map_page_ops* pops) : _pops(pops) {}
+    unpopulate(map_page_ops* pops) : _tlb_gather(pops) {}
     void small_page(hw_ptep ptep, uintptr_t offset) {
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        small_pages.push(page {phys_to_virt(pte.addr(false)), offset});
+        _tlb_gather.push(phys_to_virt(pte.addr(false)), page_size, offset);
         this->account(mmu::page_size);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        huge_pages.push(page {phys_to_virt(pte.addr(true)), offset});
+        _tlb_gather.push(phys_to_virt(pte.addr(true)), huge_page_size, offset);
         this->account(mmu::huge_page_size);
         return true;
     }
@@ -533,18 +562,9 @@ public:
         small_page(ptep, offset);
     }
     bool tlb_flush_needed(void) {
-        return !small_pages.empty() || !huge_pages.empty();
+        return false; // ~tlb_gather will take care of everything
     }
-    void finalize(void) {
-        while (!small_pages.empty()) {
-            _pops->free(small_pages.top().addr, small_pages.top().offset);
-            small_pages.pop();
-        }
-        while (!huge_pages.empty()) {
-            _pops->free(huge_pages.top().addr, huge_page_size, huge_pages.top().offset);
-            huge_pages.pop();
-        }
-    }
+    void finalize(void) {}
 };
 
 class protection : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes> {
