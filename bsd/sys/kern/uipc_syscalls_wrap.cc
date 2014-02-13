@@ -154,6 +154,7 @@ ssize_t recvfrom(int fd, void *__restrict buf, size_t len, int flags,
 	return bytes;
 }
 
+extern "C"
 ssize_t recv(int fd, void *buf, size_t len, int flags)
 {
 	int error;
