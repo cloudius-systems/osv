@@ -1175,6 +1175,7 @@ void free(void* v)
     h->~header();
     mmu::vdepopulate(h, mmu::page_size);
     mmu::vdepopulate(v, asize);
+    mmu::vcleanup(h, pad_before + asize);
 }
 
 void* realloc(void* v, size_t size)

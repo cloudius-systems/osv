@@ -296,9 +296,11 @@ public:
     // have to provide its own version.
     void huge_page(hw_ptep ptep, uintptr_t offset) { assert(0); }
     // if huge page range is covered by smaller pages some page table operations
-    // may want to have special handling for level 1 non leaf pte. intermediate_page_post()
-    // is called on such page after small_page() is called on all leaf pages in range
-    void intermediate_page_post(hw_ptep ptep, uintptr_t offset) { return; }
+    // may want to have special handling for level 1 non leaf pte. intermediate_page_pre()
+    // is called just before descending into the next level, while intermediate_page_post()
+    // is called just after.
+    void intermediate_page_pre(hw_ptep ptep, uintptr_t offset) {}
+    void intermediate_page_post(hw_ptep ptep, uintptr_t offset) {}
     // Page walker calls small_page() when it has 4K region of virtual memory to
     // deal with and huge_page() when it has 2M of virtual memory, but if it has
     // 2M pte less then 2M of virt memory to operate upon and split is disabled
@@ -390,6 +392,7 @@ private:
                 if (level) {
                     if (!skip_pte(ptep)) {
                         if (descend(ptep) || !page_mapper.huge_page(ptep, offset)) {
+                            page_mapper.intermediate_page_pre(ptep, offset);
                             map_range(vstart1, vend1 - vstart1 + 1, page_mapper, slop, ptep, base_virt);
                             page_mapper.intermediate_page_post(ptep, offset);
                         }
@@ -660,6 +663,37 @@ public:
     }
 };
 
+class cleanup_intermediate_pages
+    : public page_table_operation<
+          allocate_intermediate_opt::no,
+          skip_empty_opt::yes,
+          descend_opt::yes,
+          once_opt::no,
+          split_opt::no> {
+public:
+    void small_page(hw_ptep ptep, uintptr_t offset) { ++live_ptes; }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) { return true; }
+    void intermediate_page_pre(hw_ptep ptep, uintptr_t offset) {
+        live_ptes = 0;
+    }
+    void intermediate_page_post(hw_ptep ptep, uintptr_t offset) {
+        if (!live_ptes) {
+            auto old = ptep.read();
+            auto v = phys_cast<u64*>(old.addr(false));
+            for (unsigned i = 0; i < 512; ++i) {
+                assert(v[i] == 0);
+            }
+            ptep.write(make_empty_pte());
+            memory::free_page(phys_to_virt(old.addr(false)));
+        }
+    }
+    void sub_page(hw_ptep ptep, int level, uintptr_t offset) {}
+private:
+    unsigned live_ptes;
+};
+
+
+
 template<typename T> ulong operate_range(T mapper, void *vma_start, void *start, size_t size)
 {
     start = align_down(start, page_size);
@@ -917,6 +951,15 @@ void vdepopulate(void* addr, size_t size)
     WITH_LOCK(vma_list_mutex) {
         map_anon_page map;
         operate_range(unpopulate<>(&map), addr, size);
+    }
+}
+
+void vcleanup(void* addr, size_t size)
+{
+    WITH_LOCK(vma_list_mutex) {
+        cleanup_intermediate_pages cleaner;
+        map_range(reinterpret_cast<uintptr_t>(addr), reinterpret_cast<uintptr_t>(addr), size,
+                cleaner, huge_page_size);
     }
 }
 
