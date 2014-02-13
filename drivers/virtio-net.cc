@@ -545,6 +545,10 @@ int net::tx_locked(struct mbuf* m_head, bool flush)
         }
     }
 
+    if (_mergeable_bufs) {
+        req->mhdr.num_buffers = 0;
+    }
+
     vq->init_sg();
     vq->add_out_sg(static_cast<void*>(&req->mhdr), _hdr_size);
 
@@ -553,7 +557,6 @@ int net::tx_locked(struct mbuf* m_head, bool flush)
 
         if (frag_len != 0) {
             net_d("Frag len=%d:", frag_len);
-            req->mhdr.num_buffers++;
 
             vq->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
             tx_bytes += frag_len;
