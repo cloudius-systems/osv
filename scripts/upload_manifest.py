@@ -90,10 +90,16 @@ def upload(osv, manifest, depends):
                 + cpio_field(0, 8)                # check
                 + filename + '\0')
 
+    def is_strippable(filename):
+        if not filename.endswith(".so"):
+            return False
+        if os.path.basename(filename).startswith("tst-"):
+            return False
+        return filename[0] != "/" or filename.startswith(os.getcwd())
+
     def strip_file(filename):
         stripped_filename = filename
-        if(filename.endswith(".so") and \
-            (filename[0] != "/" or filename.startswith(os.getcwd()))):
+        if is_strippable(filename):
             stripped_filename = filename[:-3] + "-stripped.so"
             if(not os.path.exists(stripped_filename) \
                     or (os.path.getmtime(stripped_filename) < \
