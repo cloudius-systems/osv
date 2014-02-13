@@ -134,7 +134,7 @@ namespace virtio {
             vring_desc* descp = _desc;
 
             if (indirect) {
-                vring_desc* indirect = reinterpret_cast<vring_desc*>(malloc((_sg_vec.size())*sizeof(vring_desc)));
+                vring_desc* indirect = reinterpret_cast<vring_desc*>(alloc_phys_contiguous_aligned((_sg_vec.size())*sizeof(vring_desc), 8));
                 if (!indirect)
                     return false;
                 _desc[idx]._flags = vring_desc::VRING_DESC_F_INDIRECT;
@@ -187,7 +187,7 @@ namespace virtio {
                 int idx = elem._id;
 
                 if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
-                    free(mmu::phys_to_virt(_desc[idx]._paddr));
+                    free_phys_contiguous_aligned(mmu::phys_to_virt(_desc[idx]._paddr));
                 } else
                     while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
                         idx = _desc[idx]._next;
