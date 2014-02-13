@@ -873,9 +873,12 @@ def all_traces():
 def save_traces_to_file(filename):
     trace.write_to_file(filename, list(all_traces()))
 
+def make_symbolic(addr):
+    return str(syminfo(addr))
+
 def dump_trace(out_func):
     indents = defaultdict(int)
-    bt_formatter = BacktraceFormatter(syminfo)
+    bt_formatter = BacktraceFormatter(make_symbolic)
 
     def lookup_tp(name):
         return gdb.lookup_global_symbol(name).value().dereference()
