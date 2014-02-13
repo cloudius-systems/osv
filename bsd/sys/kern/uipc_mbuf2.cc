@@ -309,7 +309,7 @@ m_tag_alloc(uint32_t cookie, int type, int len, int wait)
 	MBUF_CHECKSLEEP(wait);
 	if (len < 0)
 		return NULL;
-	t = malloc(len + sizeof(struct m_tag));
+	t = static_cast<m_tag*>(malloc(len + sizeof(struct m_tag)));
 	if (t == NULL)
 		return NULL;
 	m_tag_setup(t, cookie, type, len);

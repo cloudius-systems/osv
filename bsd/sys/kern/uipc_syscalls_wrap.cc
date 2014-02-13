@@ -7,10 +7,11 @@
 #include <osv/debug.h>
 #include "libc/af_local.h"
 
-#include "libc.h"
+#include "libc/internal/libc.h"
 
 #define sock_d(...)		tprintf_d("socket-api", __VA_ARGS__);
 
+extern "C"
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
 	int error;
@@ -31,6 +32,7 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 	return 0;
 }
 
+extern "C"
 int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 {
 	int error;
@@ -47,7 +49,8 @@ int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 	return 0;
 }
 
-int accept4(int fd, struct bsd_sockaddr *restrict addr, socklen_t *restrict len, int flg)
+extern "C"
+int accept4(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len, int flg)
 {
 	int fd2, error;
 
@@ -63,7 +66,8 @@ int accept4(int fd, struct bsd_sockaddr *restrict addr, socklen_t *restrict len,
 	return fd2;
 }
 
-int accept(int fd, struct bsd_sockaddr *restrict addr, socklen_t *restrict len)
+extern "C"
+int accept(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len)
 {
 	int fd2, error;
 
@@ -79,6 +83,7 @@ int accept(int fd, struct bsd_sockaddr *restrict addr, socklen_t *restrict len)
 	return fd2;
 }
 
+extern "C"
 int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
 	int error;
@@ -95,6 +100,7 @@ int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 	return 0;
 }
 
+extern "C"
 int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
 	int error;
@@ -111,6 +117,7 @@ int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 	return 0;
 }
 
+extern "C"
 int listen(int fd, int backlog)
 {
 	int error;
@@ -127,8 +134,9 @@ int listen(int fd, int backlog)
 	return 0;
 }
 
-ssize_t recvfrom(int fd, void *restrict buf, size_t len, int flags,
-		struct bsd_sockaddr *restrict addr, socklen_t *restrict alen)
+extern "C"
+ssize_t recvfrom(int fd, void *__restrict buf, size_t len, int flags,
+		struct bsd_sockaddr *__restrict addr, socklen_t *__restrict alen)
 {
 	int error;
 	ssize_t bytes;
@@ -163,6 +171,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	return bytes;
 }
 
+extern "C"
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
 {
 	ssize_t bytes;
@@ -180,6 +189,7 @@ ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
 	return bytes;
 }
 
+extern "C"
 ssize_t sendto(int fd, const void *buf, size_t len, int flags,
     const struct bsd_sockaddr *addr, socklen_t alen)
 {
@@ -199,6 +209,7 @@ ssize_t sendto(int fd, const void *buf, size_t len, int flags,
 	return bytes;
 }
 
+extern "C"
 ssize_t send(int fd, const void *buf, size_t len, int flags)
 {
 	int error;
@@ -216,6 +227,7 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 	return bytes;
 }
 
+extern "C"
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags)
 {
 	ssize_t bytes;
@@ -233,8 +245,9 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags)
 	return bytes;
 }
 
-int getsockopt(int fd, int level, int optname, void *restrict optval,
-		socklen_t *restrict optlen)
+extern "C"
+int getsockopt(int fd, int level, int optname, void *__restrict optval,
+		socklen_t *__restrict optlen)
 {
 	int error;
 
@@ -250,6 +263,7 @@ int getsockopt(int fd, int level, int optname, void *restrict optval,
 	return 0;
 }
 
+extern "C"
 int setsockopt(int fd, int level, int optname, const void *optval, socklen_t optlen)
 {
 	int error;
@@ -267,6 +281,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, socklen_t opt
 	return 0;
 }
 
+extern "C"
 int shutdown(int fd, int how)
 {
 	int error;
@@ -289,6 +304,7 @@ int shutdown(int fd, int how)
 	return 0;
 }
 
+extern "C"
 int socket(int domain, int type, int protocol)
 {
 	int s, error;
