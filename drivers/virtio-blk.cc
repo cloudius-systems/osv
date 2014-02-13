@@ -201,16 +201,16 @@ void blk::req_done()
             if (req->bio) {
                 switch (req->res.status) {
                 case VIRTIO_BLK_S_OK:
-                    biodone(req->bio, true);
                     trace_virtio_blk_req_ok(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
+                    biodone(req->bio, true);
                     break;
                 case VIRTIO_BLK_S_UNSUPP:
-                    biodone(req->bio, false);
                     trace_virtio_blk_req_unsupp(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
+                    biodone(req->bio, false);
                     break;
                 default:
-                    biodone(req->bio, false);
                     trace_virtio_blk_req_err(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
+                    biodone(req->bio, false);
                     break;
                }
             }
