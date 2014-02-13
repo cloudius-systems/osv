@@ -772,7 +772,7 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 ################################################################################
 
 .PHONY: process-modules
-process-modules: bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest
+process-modules: bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
 	cd $(out)/module \
 	  && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) $(src)/scripts/module.py --image-config $(image)
 
