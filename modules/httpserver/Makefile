@@ -58,10 +58,10 @@ stub-lib: $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET)-stub.so $^, LINK $@)
 
 $(TARGET): $(OBJ_FILES) $(STUB_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS), LINK $@)
 
 lib$(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o lib$(TARGET).so $^ $(LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(LIBS), LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
