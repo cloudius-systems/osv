@@ -52,6 +52,7 @@ init:
 	$(call very-quiet, mkdir -p obj/api)
 	$(call very-quiet, mkdir -p obj/autogen)
 	$(call very-quiet, mkdir -p autogen)
+.PHONY: init
 
 stub-lib: $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET)-stub.so $^, LINK $@)
