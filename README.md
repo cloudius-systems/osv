@@ -99,7 +99,7 @@ route add default gw 192.168.122.1
 Test networking:
 
 ```
-test TCPExternalCommunication
+test invoke TCPExternalCommunication
 ```
 
 Running Java or C applications that already reside within the image:
