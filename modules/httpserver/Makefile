@@ -7,7 +7,8 @@ INCLUDES += -I../../include -I.
 #  -Wall turns on most, but not all, compiler warnings
 CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES)
 src = ../..
-miscbase = $(src)/external/misc.bin
+arch = x64
+miscbase = $(src)/external/$(arch)/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
               $(boost-lib-dir)/libboost_filesystem-mt.so
