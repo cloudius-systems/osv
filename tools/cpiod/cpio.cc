@@ -81,6 +81,9 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         return false;
     }
     auto filesize = convert(h.c_filesize);
+    if (!filesize) {
+        return true;
+    }
     auto aligned_filesize = align_up(filesize, 4u);
 
     auto file_slice = io::restrict(is, 0, filesize);
