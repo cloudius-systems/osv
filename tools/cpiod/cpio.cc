@@ -17,12 +17,15 @@
 #include <osv/align.hh>
 #include <memory>
 #include <sstream>
+#include <cstring>
 
 using namespace std;
 
 namespace osv {
 
 namespace io = boost::iostreams;
+
+static const char* cpio_magic = "070701";
 
 struct cpio_newc_header {
     char c_magic[6];
@@ -66,6 +69,9 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     } header;
     is.read(header.data, sizeof(header));
     auto& h = header.header;
+    if (strncmp(cpio_magic, h.c_magic, 6) != 0) {
+        throw runtime_error("bad cpio magic");
+    }
     auto namesize = convert(h.c_namesize);
     auto aligned = align_up(sizeof(header) + namesize, sizeof(uint32_t)) - sizeof(header);
     unique_ptr<char[]> namebuf{new char[aligned]};
