@@ -180,18 +180,21 @@ struct object_serializer<const char*> {
         size_t len = 0;
         unsigned char tmp;
         // destination is in "pascal string" layout
-        while (len < max_len -1 && (tmp = try_load(buffer + len, '?')) != 0) {
+        while (len < max_len -1 && (tmp = try_load(val + len, '?')) != 0) {
             buffer[len++ + 1] = tmp;
         }
         *buffer = len;
     }
-    unsigned char try_load(unsigned char* bad_addr, unsigned char alt) {
-        unsigned char ret;
+
+    template<typename T>
+    T try_load(const T* bad_addr, T alt) {
+        T ret;
         if (!safe_load(bad_addr, ret)) {
             return alt;
         }
         return ret;
     }
+
     size_t size() { return max_len; }
     size_t alignment() { return 1; }
 };
