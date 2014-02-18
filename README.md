@@ -42,9 +42,8 @@ dependencies for ``openjdk-7-jdk``
 
 [Oracle JDK]: https://launchpad.net/~webupd8team/+archive/java
 
-To ensure functional C++11 support, Gcc 4.7 or above is required.  Gcc 4.8 or
-above is recommended, as this was the first version to fully comply with the
-C++11 standard.
+To ensure functional C++11 support, Gcc 4.8 or above is required, as this was
+the first version to fully comply with the C++11 standard.
 
 Make sure all git submodules are up-to-date:
 
