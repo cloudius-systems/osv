@@ -788,7 +788,7 @@ class osv_thread_apply_all(gdb.Command):
         exit_thread_context()
         state = vmstate()
         for t in state.thread_list:
-            gdb.write('thread %s\n\n' % t.address)
+            gdb.write('thread %s %s\n\n' % (t.address, t["_attr"]["_name"]["_M_elems"].string().strip('\0')))
             with thread_context(t, state):
                 gdb.execute(arg, from_tty)
             gdb.write('\n')
