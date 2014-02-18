@@ -66,7 +66,7 @@ class FileMap(object):
         def add(guest, host):
             if guest in guest_to_host:
                 old_mapping = guest_to_host[guest]
-                if old_mapping != host_file_path:
+                if old_mapping != host:
                     raise Exception("Guest path '%s' already mapped to '%s', tried to remap to '%s'"
                         % (guest, old_mapping, host))
             guest_to_host[guest] = host
