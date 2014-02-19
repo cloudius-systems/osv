@@ -106,9 +106,12 @@ def upload(osv, manifest, depends):
     for name, hostname in files:
         depends.write('\t%s \\\n' % (hostname,))
         hostname = strip_file(hostname)
-        cpio_send(cpio_header(name, stat.S_IFREG, os.stat(hostname).st_size))
-        with open(hostname, 'r') as f:
-            cpio_send(f.read())
+        if os.path.isdir(hostname) :
+            cpio_send(cpio_header(name, stat.S_IFDIR, 0))
+	else:
+            cpio_send(cpio_header(name, stat.S_IFREG, os.stat(hostname).st_size))
+            with open(hostname, 'r') as f:
+                cpio_send(f.read())
     cpio_send(cpio_header("TRAILER!!!", 0, 0))
     s.shutdown(socket.SHUT_WR)
 
