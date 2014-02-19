@@ -18,6 +18,7 @@ class cpio_in {
 public:
     virtual ~cpio_in();
     virtual void add_file(std::string name, std::istream& is) = 0;
+    virtual void add_symlink(std::string oldpath, std::string newpath) = 0;
 public:
     static void parse(std::istream& is, cpio_in& out);
 private:

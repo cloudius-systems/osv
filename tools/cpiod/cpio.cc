@@ -96,6 +96,13 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         out.add_file(name, file);
         break;
     }
+    case C_ISLNK: {
+        unique_ptr<char[]> targetbuf{new char[filesize]};
+        is.read(targetbuf.get(), filesize);
+        string target{targetbuf.get(), filesize};
+        out.add_symlink(name, target);
+	break;
+    }
     default:
         cout << name << ": unknown type " << type << "\n";
         is.ignore(filesize);
