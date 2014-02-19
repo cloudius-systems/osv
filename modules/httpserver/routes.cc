@@ -20,8 +20,10 @@ routes::~routes()
             delete kv.second;
         }
     }
-    for (auto r : rules) {
-        delete r;
+    for (int i = 0; i < 2; i++) {
+        for (auto r : rules[i]) {
+            delete r;
+        }
     }
 
 }
@@ -75,7 +77,8 @@ handler_base* routes::get_handler(operation_type type, const string& url,
     if (handler != nullptr) {
         return handler;
     }
-    for (auto rule = rules.cbegin(); rule != rules.cend(); ++rule) {
+
+    for (auto rule = rules[type].cbegin(); rule != rules[type].cend(); ++rule) {
         handler = (*rule)->get(url, params);
         if (handler != nullptr) {
             return handler;
@@ -101,16 +104,17 @@ routes& routes::add_path(const string& nick, handler_base* handler)
         for (auto i = path->params.begin(); i != path->params.end(); ++i) {
             rule->add_param(std::get<0>(*i), std::get<1>(*i));
         }
-        add(rule);
+        add(rule, path->operations.method);
     }
     return *this;
 }
 
-routes& routes::add(operation_type type, const url& url, handler_base* handler) {
+routes& routes::add(operation_type type, const url& url, handler_base* handler)
+{
     match_rule* rule = new match_rule(handler);
     rule->add_str(url.path);
     rule->add_param(url.param, true);
-    return add(rule);
+    return add(rule, type);
 }
 
 }
