@@ -72,7 +72,7 @@ public:
     static std::string to_json(const std::vector<T>& vec)
     {
         std::stringstream res;
-        res.str("[");
+        res << "[";
         bool first = true;
         for (auto i : vec) {
             if (first) {
