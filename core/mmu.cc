@@ -1072,7 +1072,7 @@ void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 {
     auto pc = reinterpret_cast<void*>(ef->rip);
     if (pc >= text_start && pc < text_end) {
-        abort("page fault outside application");
+        abort("page fault outside application, addr %lx", addr);
     }
     osv::handle_segmentation_fault(addr, ef);
 }
