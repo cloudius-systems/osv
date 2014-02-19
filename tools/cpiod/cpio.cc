@@ -18,6 +18,8 @@
 #include <memory>
 #include <sstream>
 #include <cstring>
+#include <cpio.h>
+#include <iostream>
 
 using namespace std;
 
@@ -80,14 +82,25 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     if (name == "TRAILER!!!") {
         return false;
     }
+    auto mode = convert(h.c_mode);
     auto filesize = convert(h.c_filesize);
     auto aligned_filesize = align_up(filesize, 4u);
 
-    auto file_slice = io::restrict(is, 0, filesize);
-    io::stream<decltype(file_slice)> file(file_slice);
-    file.rdbuf()->pubsetbuf(nullptr, 0);
+    auto type = mode & 0170000;
+    switch (type) {
+    case C_ISREG: {
+        auto file_slice = io::restrict(is, 0, filesize);
+        io::stream<decltype(file_slice)> file(file_slice);
+        file.rdbuf()->pubsetbuf(nullptr, 0);
 
-    out.add_file(name, file);
+        out.add_file(name, file);
+        break;
+    }
+    default:
+        cout << name << ": unknown type " << type << "\n";
+        is.ignore(filesize);
+        break;
+    }
     is.ignore(aligned_filesize - filesize);
     return true;
 }
