@@ -149,6 +149,12 @@ struct json_base {
 
     virtual ~json_base() = default;
 
+    json_base() = default;
+
+    json_base(const json_base&) = delete;
+
+    json_base operator=(const json_base&) = delete;
+
     /**
      * create a foramted string of the object.
      * @return the object formated.
