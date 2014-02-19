@@ -96,6 +96,13 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         out.add_file(name, file);
         break;
     }
+    case C_ISDIR: {
+        if (filesize > 0) {
+            throw runtime_error("bad directory size");
+        }
+        out.add_dir(name);
+        break;
+    }
     case C_ISLNK: {
         unique_ptr<char[]> targetbuf{new char[filesize]};
         is.read(targetbuf.get(), filesize);

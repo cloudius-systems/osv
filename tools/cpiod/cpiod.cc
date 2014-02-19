@@ -34,6 +34,11 @@ public:
         ofstream os(name);
         os << is.rdbuf();
     }
+    virtual void add_dir(string name) override {
+        cout << "Adding " << name << "...\n";
+        name = _prefix + name;
+        mkdirp(name.c_str(), 0755);
+    }
     virtual void add_symlink(string oldpath, string newpath) override {
         cout << "Skipping symlink " << oldpath << "...\n";
     }
