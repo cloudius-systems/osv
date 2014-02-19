@@ -197,6 +197,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
                 print_ind_comment(hfile, "", model["description"])
             fprint(hfile, "struct ", model_name, " : public json::json_base {")
             member_init = ''
+            member_assignment = ''
             for member_name in model["properties"]:
                 member = model["properties"][member_name]
                 if "description" in member:
@@ -206,9 +207,19 @@ def create_h_file(data, hfile_name, api_name, init_method):
                    member_name, ";\n")
                 member_init += "  add(&" + member_name + ',"'
                 member_init += member_name + '");\n'
-            fprint(hfile, model_name, '() {')
+                member_assignment += "  " + member_name + " = " + "e." + member_name + ";\n"
+            fprint(hfile, "void register_params() {")
             fprint(hfile, member_init)
             fprint(hfile, '}')
+            
+            fprint(hfile, model_name, '() {')
+            fprint(hfile, '  register_params();')
+            fprint(hfile, '}')
+            fprint(hfile, model_name, '(const ' + model_name + ' & e) {')
+            fprint(hfile, '  register_params();')
+            fprint(hfile, member_assignment)
+            fprint(hfile, '}')
+            
             fprint(hfile, "};\n\n")
 
     print_ind_comment(hfile, "", "Initialize the path")
