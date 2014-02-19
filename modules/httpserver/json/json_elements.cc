@@ -27,7 +27,7 @@ public:
     json_builder()
         : first(true)
     {
-        result.str(OPEN);
+        result << OPEN;
     }
 
     /**
@@ -37,9 +37,10 @@ public:
      */
     void add(const string& name, const string& str)
     {
-        if (!first) {
-            result << ",";
+        if (first) {
             first = false;
+        } else {
+            result << ", ";
         }
         result << '"' << name << "\": " << str;
     }
