@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 
-import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil, socket, time, threading
+import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil, socket, time, threading, stat
 
 defines = {}
 
@@ -73,10 +73,10 @@ def upload(osv, manifest, depends):
             s.sendall('\0'*(4-partial))
     def cpio_field(number, length):
         return "%.*x" % (length, number);
-    def cpio_header(filename, filesize):
+    def cpio_header(filename, mode, filesize):
         return ("070701"                          # magic
                 + cpio_field(0, 8)                # inode
-                + cpio_field(0, 8)                # mode
+                + cpio_field(mode, 8)             # mode
                 + cpio_field(0, 8)                # uid
                 + cpio_field(0, 8)                # gid
                 + cpio_field(0, 8)                # nlink
@@ -106,10 +106,10 @@ def upload(osv, manifest, depends):
     for name, hostname in files:
         depends.write('\t%s \\\n' % (hostname,))
         hostname = strip_file(hostname)
-        cpio_send(cpio_header(name, os.stat(hostname).st_size))
+        cpio_send(cpio_header(name, stat.S_IFREG, os.stat(hostname).st_size))
         with open(hostname, 'r') as f:
             cpio_send(f.read())
-    cpio_send(cpio_header("TRAILER!!!", 0))
+    cpio_send(cpio_header("TRAILER!!!", 0, 0))
     s.shutdown(socket.SHUT_WR)
 
     # Wait for the guest to actually finish writing and syncing
