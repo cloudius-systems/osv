@@ -52,10 +52,26 @@ public:
      * @param req the request to handle
      * @param rep the reply
      */
-    void handle_request(const request& req, reply& rep);
+    void handle_request(request& req, reply& rep);
 
 private:
     httpserver::routes* routes;
+
+    /**
+     * Add a parameter to the request
+     * @param req the original request
+     * @param bg the position in the url that parameter begins
+     * @param end the position in the url the parameter ends
+     */
+    static void update_param(request& req, size_t bg, size_t end);
+
+    /**
+     * A helper function that reads URL parameters
+     * @param req the original request, parameters that are found
+     * will be added to the request headrs
+     * @return the end of the url without the parameters
+     */
+    static size_t update_parameters(request& req);
 
     /**
      * Perform URL-decoding on a string. Returns false if the encoding was
@@ -64,7 +80,8 @@ private:
      * @param out the decode url string
      * @return true on success
      */
-    static bool url_decode(const std::string& in, std::string& out);
+    static bool url_decode(const std::string& in, std::string& out,
+            std::size_t max = std::string::npos);
 };
 
 } // namespace server
