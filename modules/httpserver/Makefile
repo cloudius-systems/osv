@@ -1,6 +1,6 @@
 
 INCLUDES = -isystem $(miscbase)/usr/include
-INCLUDES += -I../../include -I.
+INCLUDES += -I../../include -I. -I../../java
 
 # compiler flags:
 #  -g    adds debugging information to the executable file
