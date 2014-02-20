@@ -29,19 +29,26 @@ struct request {
     int http_version_major;
     int http_version_minor;
     std::vector<header> headers;
+    std::vector<header> query_parameters;
 
     /**
      * Search for the first header of a given name
      * @param name the header name
      * @return a pointer to the header value, if it exists or empty string
      */
-    std::string get_header(const std::string& name) const {
-        for (auto h: headers) {
-            if (h.name == name) {
-                return h.value;
-            }
-        }
-        return "";
+    std::string get_header(const std::string& name) const
+    {
+        return find_in_vector(headers, name);
+    }
+
+    /**
+     * Search for the first header of a given name
+     * @param name the header name
+     * @return a pointer to the header value, if it exists or empty string
+     */
+    std::string get_query_param(const std::string& name) const
+    {
+        return find_in_vector(query_parameters, name);
     }
 
     /**
@@ -51,6 +58,16 @@ struct request {
     std::string get_url() const
     {
         return "http://" + get_header("Host") + uri;
+    }
+    static std::string find_in_vector(const std::vector<header>& vec,
+                                      const std::string& name)
+    {
+        for (auto h : vec) {
+            if (h.name == name) {
+                return h.value;
+            }
+        }
+        return "";
     }
 };
 
