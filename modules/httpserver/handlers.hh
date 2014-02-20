@@ -48,9 +48,10 @@ public:
 
     /**
      * set headers must be called before returning the result.
+     * @param rep the reply to set
      * @param type is the type of the message content and is equivalent to the
-     * @param file extension that would have been used if it was a file
-     * e.g. html, json, js
+     *        file extension that would have been used if it was a file
+     *        e.g. html, json, js
      */
     virtual void set_headers(http::server::reply& rep, const std::string& type);
 
@@ -146,7 +147,8 @@ public:
      * @param rep the reply
      * @return true on redirect
      */
-    bool redirect_if_needed(const http::server::request& req, http::server::reply& rep);
+    bool redirect_if_needed(const http::server::request& req,
+                            http::server::reply& rep);
 
     /**
      * A helper method that returns the file extension.
