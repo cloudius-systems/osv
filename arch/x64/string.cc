@@ -12,6 +12,7 @@
 #include <osv/string.h>
 #include <osv/prio.hh>
 #include "memcpy_decode.hh"
+#include <assert.h>
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
@@ -20,6 +21,7 @@ void *memset_base(void *__restrict dest, int c, size_t n);
 
 extern "C" void memcpy_fixup_byte(exception_frame *ef, size_t fixup)
 {
+    assert(fixup <= ef->rcx);
     ef->rdi += fixup;
     ef->rsi += fixup;
     ef->rcx -= fixup;
@@ -27,6 +29,7 @@ extern "C" void memcpy_fixup_byte(exception_frame *ef, size_t fixup)
 
 extern "C" void memcpy_fixup_long(exception_frame *ef, size_t fixup)
 {
+    assert(fixup/sizeof(long) <= ef->rcx);
     ef->rdi += fixup;
     ef->rsi += fixup;
     ef->rcx -= fixup / sizeof(long);
@@ -134,6 +137,7 @@ void *memcpy(void *__restrict dest, const void *__restrict src, size_t n)
 // fixup for both versions here.
 extern "C" void backwards_fixup(exception_frame *ef, size_t fixup)
 {
+    assert(fixup <= ef->rcx);
     ef->rdi -= fixup;
     ef->rsi -= fixup;
     ef->rcx -= fixup;
