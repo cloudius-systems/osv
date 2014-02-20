@@ -14,10 +14,28 @@
 
 #include <unordered_map>
 #include <functional>
+#include <exception>
 
 namespace httpserver {
 
 typedef const http::server::request& const_req;
+
+class not_found_exception : public std::exception
+{
+public:
+    not_found_exception(const std::string& msg)
+        : _msg(msg)
+    {
+    }
+    virtual const char* what() const throw ()
+    {
+        return _msg.c_str();
+    }
+
+private:
+    std::string _msg;
+
+};
 
 /**
  * handlers holds the logic for serving an incoming request.
@@ -52,8 +70,11 @@ public:
      * @param type is the type of the message content and is equivalent to the
      *        file extension that would have been used if it was a file
      *        e.g. html, json, js
+     * @param is_ok when set to true set the rep to OK when false keep the
+     *        reply status
      */
-    virtual void set_headers(http::server::reply& rep, const std::string& type);
+    virtual void set_headers(http::server::reply& rep, const std::string& type,
+                             bool is_ok = true);
 
     /**
      * call set_headers with "html" as content type

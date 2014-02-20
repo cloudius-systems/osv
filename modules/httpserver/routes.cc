@@ -37,6 +37,10 @@ bool routes::handle(const string& path, const http::server::request& req,
     if (handler != nullptr) {
         try {
             handler->handle(path, &params, req, rep);
+        } catch (const not_found_exception& e) {
+            rep.content = e.what();
+            rep.status = http::server::reply::status_type::not_found;
+            handler->reply400(rep, 404, e.what());
         } catch (exception& e) {
             cerr << "exception was caught for " << path << ": " << e.what()
                  << endl;
