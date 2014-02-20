@@ -1364,8 +1364,10 @@ error anon_vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
-jvm_balloon_vma::jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags)
-    : vma(addr_range(start, end), perm_rw, 0, true), _balloon(b), _real_perm(perm), _real_flags(flags)
+jvm_balloon_vma::jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start,
+                                 uintptr_t end, balloon *b, unsigned perm, unsigned flags)
+    : vma(addr_range(start, end), perm_rw, flags | mmap_jvm_balloon, true), _balloon(b),
+      _jvm_addr(jvm_addr), _real_perm(perm), _real_flags(flags & ~mmap_jvm_balloon)
 {
 }
 
@@ -1375,7 +1377,7 @@ void jvm_balloon_vma::split(uintptr_t edge)
     if (edge <= _range.start() || edge >= end) {
         return;
     }
-    auto * n = new jvm_balloon_vma(edge, end, _balloon, _real_perm, _real_flags);
+    auto * n = new jvm_balloon_vma(_jvm_addr, edge, end, _balloon, _real_perm, _real_flags);
     _range = addr_range(_range.start(), edge);
     vma_list.insert(*n);
 }
@@ -1389,26 +1391,16 @@ void jvm_balloon_vma::fault(uintptr_t fault_addr, exception_frame *ef)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
     jvm_balloon_fault(_balloon, ef, this);
-    delete this;
-}
-
-void jvm_balloon_vma::detach_balloon()
-{
-    _balloon = nullptr;
-    // Could block the creation of the next vma. No need to evacuate, we have no pages
-    vma_list.erase(*this);
-    mmu::map_anon(addr(), size(), _real_flags, _real_perm);
 }
 
 jvm_balloon_vma::~jvm_balloon_vma()
 {
-    if (_balloon) {
-        // This is because the JVM may just decide to unmap a whole region if
-        // it believes the objects are no longer valid. It could be the case
-        // for a dangling mapping representing a balloon that was already moved
-        // out.
-        jvm_balloon_fault(_balloon, nullptr, this);
-    }
+    // it believes the objects are no longer valid. It could be the case
+    // for a dangling mapping representing a balloon that was already moved
+    // out.
+    vma_list.erase(*this);
+    assert(!(_real_flags & mmap_jvm_balloon));
+    mmu::map_anon(addr(), size(), _real_flags, _real_perm);
 }
 
 // This function marks an anonymous vma as holding the JVM Heap. The JVM may
@@ -1439,15 +1431,31 @@ static vma *mark_jvm_heap(const void* addr)
     }
 }
 
-ulong map_jvm(const void* addr, size_t size, balloon *b)
+ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon *b)
 {
+    auto addr = ::align_up(jvm_addr, align);
     auto start = reinterpret_cast<uintptr_t>(addr);
 
     vma *v = mark_jvm_heap(addr);
 
-    auto* vma = new mmu::jvm_balloon_vma(start, start + size, b, v->perm(), v->flags());
+    auto* vma = new mmu::jvm_balloon_vma(jvm_addr, start, start + size, b, v->perm(), v->flags());
+
     WITH_LOCK(vma_list_mutex) {
-        auto ret = evacuate(start, start + size);
+        auto ret = 0;
+        // This means that the mapping that we had before was a balloon mapping
+        // that was laying around and wasn't updated to an anon mapping. If we
+        // allow it to split it would significantly complicate our code, since
+        // now the finishing code would have to deal with the case where the
+        // bounds found in the vma are not the real bounds. We delete it right
+        // away and avoid it altogether.
+        if (v->has_flags(mmap_jvm_balloon)) {
+            // Finish the move. In practice, it will temporarily remap an anon mapping
+            // here, but this should be rare. Let's not complicate the code to optimize
+            // it. There are no guarantees that we are talking about the same balloon
+            // If this is the old balloon
+            delete v;
+        }
+        ret = evacuate(start, start + size);
         vma_list.insert(*vma);
         return ret;
     }

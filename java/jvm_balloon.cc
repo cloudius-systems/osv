@@ -32,23 +32,18 @@ public:
 
     ulong empty_area(void);
     size_t size() { return _balloon_size; }
-    size_t move_balloon(unsigned char *dest, unsigned char *src);
+    size_t move_balloon(mmu::jvm_balloon_vma *vma, unsigned char *dest);
 private:
     void conciliate(unsigned char *addr);
     unsigned char *_jvm_addr;
-    unsigned char *_addr;
-    unsigned char *_jvm_end_addr;
-    unsigned char *_end;
 
     jobject _jref;
     unsigned int _alignment;
-    size_t hole_size() { return _end - _addr; }
     size_t _balloon_size = balloon_size;
 };
 
 mutex balloons_lock;
 std::list<balloon *> balloons;
-std::unordered_map<unsigned char *, unsigned char *> balloon_candidates;
 
 // We will use the following two statistics to aid our decision about whether
 // or not we should balloon. They allow us to make informed decisions about what
@@ -74,23 +69,17 @@ static ssize_t recent_jvm_heap()
     return curr - last_jvm_heap_memory.exchange(curr);
 }
 
-void balloon::conciliate(unsigned char *addr)
-{
-    _jvm_addr = addr;
-    _jvm_end_addr = _jvm_addr + _balloon_size;
-    _addr = align_up(_jvm_addr, _alignment);
-    _end = align_down(_jvm_end_addr, _alignment);
-}
-
 ulong balloon::empty_area()
 {
-    return mmu::map_jvm(_addr, hole_size(), this);
+    auto jvm_end_addr = _jvm_addr + _balloon_size;
+    auto addr = align_up(_jvm_addr, _alignment);
+    auto end = align_down(jvm_end_addr, _alignment);
+    return mmu::map_jvm(_jvm_addr, end - addr, _alignment, this);
 }
 
 balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::huge_page_size, size_t size = balloon_size)
     : _jvm_addr(jvm_addr), _jref(jref), _alignment(alignment), _balloon_size(size)
 {
-    conciliate(_jvm_addr);
     assert(mutex_owned(&balloons_lock));
     balloons.push_back(this);
 }
@@ -110,19 +99,9 @@ void balloon::release(JNIEnv *env)
     balloons.remove(this);
 }
 
-size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
+size_t balloon::move_balloon(mmu::jvm_balloon_vma *vma, unsigned char *dest)
 {
-    // It could be that the other balloon candidates are still in flight.
-    // But if we are copying from this source, this has to be a balloon and
-    // we need to conciliate here to be able to correctly calculate the skipped
-    // portion.
-    if (src != _addr) {
-        auto candidate = balloon_candidates.find(src);
-        assert(candidate != balloon_candidates.end());
-        conciliate((*candidate).second);
-    }
-
-    size_t skipped = _addr - _jvm_addr;
+    size_t skipped = static_cast<unsigned char *>(vma->addr()) - vma->jvm_addr();
     assert(mutex_owned(&balloons_lock));
 
     // We need to calculate how many bytes we will skip if this were the new
@@ -134,16 +113,8 @@ size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
     auto candidate_end = align_down(candidate_jvm_end_addr, _alignment);
 
     trace_jvm_balloon_move(candidate_jvm_addr, candidate_jvm_end_addr, candidate_addr, candidate_end);
-    balloon_candidates.insert(std::make_pair(candidate_addr, candidate_jvm_addr));
-    mmu::map_jvm(candidate_addr, candidate_end - candidate_addr, this);
+    mmu::map_jvm(candidate_jvm_addr, candidate_end - candidate_addr, _alignment, this);
     return candidate_jvm_end_addr - dest;
-}
-
-void finish_move(mmu::jvm_balloon_vma *vma)
-{
-    unsigned char *addr = static_cast<unsigned char *>(vma->addr());
-    vma->detach_balloon();
-    balloon_candidates.erase(addr);
 }
 
 // We can either be called from a java thread, or from the shrinking code in OSv.
@@ -296,13 +267,13 @@ void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vm
 
     WITH_LOCK(balloons_lock) {
         if (!ef || (ef->error_code == mmu::page_fault_write)) {
-            finish_move(vma);
+            delete vma;
             return;
         }
 
         memcpy_decoder *decode = memcpy_find_decoder(ef);
         if (!decode) {
-            finish_move(vma);
+            delete vma;
             return;
         }
 
@@ -312,7 +283,7 @@ void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vm
         trace_jvm_balloon_fault(src, dest, size, vma->size());
         assert(size >= vma->size());
 
-        decode->memcpy_fixup(ef, b->move_balloon(dest, src));
+        decode->memcpy_fixup(ef, b->move_balloon(vma, dest));
     }
 }
 
