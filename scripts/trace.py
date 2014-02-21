@@ -108,11 +108,16 @@ def add_time_slicing_options(parser):
         the amount of time passed in this option will be used to calculate the other. The value is interpreted
         as nanoseconds unless unit is specified, eg: 500us""")
 
+groupers = {
+    'thread': prof.GroupByThread,
+    'none': lambda: None,
+}
+
 def add_profile_options(parser):
     add_time_slicing_options(parser)
     group = parser.add_argument_group('profile options')
     group.add_argument("-r", "--caller-oriented", action='store_true', help="change orientation to caller-based; reverses order of frames")
-    group.add_argument("-m", "--merge-threads", action='store_true', help="show one merged tree for all threads")
+    group.add_argument("-g", "--group-by", choices=groupers.keys(), default='none', help="show one merged tree for all threads")
     group.add_argument("--function", action='store', help="use given function as tree root")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
     group.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
@@ -152,7 +157,7 @@ def show_profile(args, sample_producer):
         prof.print_profile(sample_producer(reader.get_traces()),
             symbol_resolver=resolver,
             caller_oriented=args.caller_oriented,
-            merge_threads=args.merge_threads,
+            grouping=groupers[args.group_by](),
             src_addr_formatter=src_addr_formatter(args),
             root_function=args.function,
             node_filter=node_filter,

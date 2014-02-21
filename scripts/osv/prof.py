@@ -142,14 +142,17 @@ def find_frame_index(frames, name):
             return i
     return None
 
-def print_profile(samples, symbol_resolver, caller_oriented=False, merge_threads=True,
-        printer=sys.stdout.write, time_range=None, src_addr_formatter=debug.SourceAddress.__str__,
-        node_filter=None, order=None, root_function=None, max_levels=None):
-    thread_profiles = {}
+class GroupByThread:
+    def get_group(self, sample):
+        return sample.thread
 
-    if merge_threads:
-        root = ProfNode('All')
-        thread_profiles['All'] = root
+    def format(self, group):
+        return 'Thread 0x%x' % group
+
+def print_profile(samples, symbol_resolver, caller_oriented=False,
+        printer=sys.stdout.write, time_range=None, src_addr_formatter=debug.SourceAddress.__str__,
+        node_filter=None, order=None, root_function=None, max_levels=None, grouping=None):
+    groups = {}
 
     for sample in samples:
         if time_range:
@@ -170,13 +173,11 @@ def print_profile(samples, symbol_resolver, caller_oriented=False, merge_threads
                 frames = None
 
         if frames:
-            if merge_threads:
-                node = root
-            else:
-                node = thread_profiles.get(sample.thread, None)
-                if not node:
-                    node = ProfNode('All')
-                    thread_profiles[sample.thread] = node
+            key = grouping.get_group(sample) if grouping else None
+            node = groups.get(key, None)
+            if not node:
+                node = ProfNode('All')
+                groups[key] = node
 
             node.hit(sample.resident_time)
             for src_addr in frames:
@@ -204,14 +205,14 @@ def print_profile(samples, symbol_resolver, caller_oriented=False, merge_threads
     if not order:
         order = lambda node: (-node.resident_time, -node.hit_count)
 
-    for thread, tree_root in sorted(thread_profiles.iteritems(), key=lambda (thread, node): order(node)):
+    for group, tree_root in sorted(groups.iteritems(), key=lambda (thread, node): order(node)):
         collapse_similar(tree_root)
 
         if max_levels:
             strip_level(tree_root, max_levels)
 
-        if not merge_threads:
-            printer("\n=== Thread 0x%x ===\n\n" % thread)
+        if grouping:
+            printer('\n=== ' + grouping.format(group) + ' ===\n\n')
 
         tree.print_tree(tree_root,
                 formatter=lambda node: format_node(node, tree_root),
