@@ -13,5 +13,5 @@ usr_files.add('${OSV_BASE}/java/tests-isolates/target/tests-isolates-jar-with-de
 usr_files.add('${OSV_BASE}/java/tests-jre-extension/target/tests-jre-extension.jar') \
     .to('/usr/lib/jvm/jre/lib/ext/tests-jre-extension.jar')
 
-run_tests = api.run_java(classpath=[_jar, _isolates_jar],
+default = api.run_java(classpath=[_jar, _isolates_jar],
     args=['-Disolates.jar=' + _isolates_jar, 'org.junit.runner.JUnitCore', 'io.osv.AllTests'])
