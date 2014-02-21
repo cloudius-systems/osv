@@ -14,3 +14,8 @@ char *getenv(const char *name)
 	if (__environ[i]) return __environ[i] + l+1;
 	return NULL;
 }
+
+char *secure_getenv(const char *name)
+{
+	return getenv(name);
+}
