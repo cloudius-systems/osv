@@ -1044,7 +1044,7 @@ init_table get_init(Elf64_Ehdr* header)
                     u32 type = info & 0xffffffff;
                     void *addr = base + r->r_offset;
                     auto addend = r->r_addend;
-                    auto lookup = [=]() {
+                    auto lookup = [=]() -> const Elf64_Sym* {
                         auto name = strtab + symtab[sym].st_name;
                         for (auto ent = buckets[elf64_hash(name) % nbucket];
                                 ent != STN_UNDEF;
