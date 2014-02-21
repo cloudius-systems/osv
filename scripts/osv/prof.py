@@ -226,4 +226,4 @@ def print_profile(samples, symbol_resolver, caller_oriented=False,
                 formatter=lambda node: format_node(node, tree_root),
                 order_by=order,
                 printer=printer,
-                node_filter=node_filter)
+                node_filter=lambda node: node_filter(node, tree_root))

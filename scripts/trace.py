@@ -121,6 +121,8 @@ def add_profile_options(parser):
     group.add_argument("-g", "--group-by", choices=groupers.keys(), default='none', help="show one merged tree for all threads")
     group.add_argument("--function", action='store', help="use given function as tree root")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
+    group.add_argument("--min-hits", action='store',
+        help="show only nodes with hit count not smaller than this. can be absolute number or a percentage, eg. 10%")
     group.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
 
 def get_wait_profile(traces):
@@ -144,15 +146,47 @@ def get_time_range(args):
 
     return trace.TimeRange(start, end)
 
+def parse_percentage(text):
+    m = re.match(r'(?P<perc>[\d]+(\.[\d]*)?)%', text)
+    if not m:
+        raise InvalidArgumentsException('invalid format: ' + text)
+    return float(m.group('perc'))
+
+class MinHitPercentageFilter:
+    def __init__(self, min_percentage):
+        self.min_percentage = min_percentage
+
+    def __call__(self, node, tree_root):
+        return float(node.hit_count) / tree_root.hit_count * 100 >= self.min_percentage
+
+class MinHitCountFilter:
+    def __init__(self, min_hit_count):
+        self.min_hit_count = min_hit_count
+
+    def __call__(self, node, tree_root):
+        return node.hit_count >= self.min_hit_count
+
 def show_profile(args, sample_producer):
     resolver = symbol_resolver(args)
     time_range = get_time_range(args)
 
+    node_filters = []
+
     if args.min_duration:
         min_duration = prof.parse_time_as_nanos(args.min_duration)
-        node_filter = lambda node: node.resident_time >= min_duration
-    else:
-        node_filter = None
+        node_filters.append(lambda node, tree_root: node.resident_time >= min_duration)
+
+    if args.min_hits:
+        if args.min_hits.endswith('%'):
+            node_filters.append(MinHitPercentageFilter(parse_percentage(args.min_hits)))
+        else:
+            node_filters.append(MinHitCountFilter(int(args.min_hits)))
+
+    def node_filter(*args):
+        for filter in node_filters:
+            if not filter(*args):
+                return False
+        return True
 
     with get_trace_reader(args) as reader:
         prof.print_profile(sample_producer(reader.get_traces()),
