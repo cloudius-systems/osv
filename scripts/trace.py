@@ -110,6 +110,7 @@ def add_time_slicing_options(parser):
 
 groupers = {
     'thread': prof.GroupByThread,
+    'cpu': prof.GroupByCpu,
     'none': lambda: None,
 }
 

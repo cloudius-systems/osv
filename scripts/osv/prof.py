@@ -21,7 +21,8 @@ class ProfNode(tree.TreeNode):
         }
 
 class ProfSample:
-    def __init__(self, timestamp, thread, backtrace, resident_time=None):
+    def __init__(self, timestamp, cpu, thread, backtrace, resident_time=None):
+        self.cpu = cpu
         self.thread = thread
         self.backtrace = backtrace
         self.timestamp = timestamp
@@ -35,7 +36,7 @@ class ProfSample:
         intersection = self.time_range.intersection(time_range)
         if not intersection:
             return None
-        return ProfSample(intersection.begin, self.thread, self.backtrace,
+        return ProfSample(intersection.begin, self.cpu, self.thread, self.backtrace,
             resident_time=intersection.end - intersection.begin)
 
 time_units = [
@@ -87,7 +88,7 @@ def strip_garbage(backtrace):
 def get_hit_profile(traces, trace_name):
     for trace in traces:
         if trace.backtrace and trace.name == trace_name:
-            yield ProfSample(trace.time, trace.thread, trace.backtrace)
+            yield ProfSample(trace.time, trace.cpu, trace.thread, trace.backtrace)
 
 def get_duration_profile(traces, entry_trace_name, exit_trace_name):
     entry_traces_per_thread = {}
@@ -111,11 +112,11 @@ def get_duration_profile(traces, entry_trace_name, exit_trace_name):
                 continue
 
             duration = trace.time - entry_trace.time
-            yield ProfSample(entry_trace.time, trace.thread, entry_trace.backtrace, resident_time=duration)
+            yield ProfSample(entry_trace.time, trace.cpu, trace.thread, entry_trace.backtrace, resident_time=duration)
 
     for thread, trace in entry_traces_per_thread.iteritems():
         duration = last_time - trace.time
-        yield ProfSample(trace.time, thread, trace.backtrace, resident_time=duration)
+        yield ProfSample(trace.time, trace.cpu, thread, trace.backtrace, resident_time=duration)
 
 def collapse_similar(node):
     while node.has_only_one_child():
@@ -148,6 +149,13 @@ class GroupByThread:
 
     def format(self, group):
         return 'Thread 0x%x' % group
+
+class GroupByCpu:
+    def get_group(self, sample):
+        return sample.cpu
+
+    def format(self, group):
+        return 'CPU 0x%02x' % group
 
 def print_profile(samples, symbol_resolver, caller_oriented=False,
         printer=sys.stdout.write, time_range=None, src_addr_formatter=debug.SourceAddress.__str__,
