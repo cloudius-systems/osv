@@ -215,6 +215,13 @@ devfs_init(void)
 	return 0;
 }
 
+static int
+devfs_getattr(struct vnode *vnode, struct vattr *attr)
+{
+	attr->va_nodeid = vnode->v_ino;
+	return 0;
+}
+
 #define devfs_mount	((vfsop_mount_t)vfs_nullop)
 #define devfs_sync	((vfsop_sync_t)vfs_nullop)
 #define devfs_vget	((vfsop_vget_t)vfs_nullop)
@@ -227,7 +234,6 @@ devfs_init(void)
 #define devfs_rename	((vnop_rename_t)vop_einval)
 #define devfs_mkdir	((vnop_mkdir_t)vop_einval)
 #define devfs_rmdir	((vnop_rmdir_t)vop_einval)
-#define devfs_getattr	((vnop_getattr_t)vop_nullop)
 #define devfs_setattr	((vnop_setattr_t)vop_eperm)
 #define devfs_inactive	((vnop_inactive_t)vop_nullop)
 #define devfs_truncate	((vnop_truncate_t)vop_nullop)
