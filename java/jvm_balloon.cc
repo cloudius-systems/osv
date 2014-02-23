@@ -285,22 +285,6 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
     JNIEnv *env = NULL;
     int status = _attach(&env);
 
-    jbyteArray array = env->NewByteArray(mmu::page_size << 1);
-    jthrowable exc = env->ExceptionOccurred();
-    assert(!exc);
-
-    jboolean iscopy;
-    auto p = env->GetPrimitiveArrayCritical(array, &iscopy);
-    assert(!iscopy);
-    jobject jref = env->NewGlobalRef(array);
-    WITH_LOCK(balloons_lock) {
-        balloon_ptr b{new balloon(static_cast<unsigned char *>(p), jref,
-                                  mmu::page_size, mmu::page_size << 1)};
-        b->empty_area(b);
-    }
-
-    env->ReleasePrimitiveArrayCritical(array, p, 0);
-
     auto monitor = env->FindClass("io/osv/OSvGCMonitor");
     if (!monitor) {
         debug("java.so: Can't find monitor class\n");
@@ -314,7 +298,7 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
 
     auto monmethod = env->GetStaticMethodID(monitor, "MonitorGC", "(J)V");
     env->CallStaticVoidMethod(monitor, monmethod, this);
-    exc = env->ExceptionOccurred();
+    jthrowable exc = env->ExceptionOccurred();
     if (exc) {
         printf("WARNING: Could not start OSV Monitor, and JVM Balloon is being disabled.\n"
                "To fix this problem, please start OSv manually specifying the Heap Size.\n");
