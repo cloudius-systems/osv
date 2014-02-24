@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <osv/prio.hh>
 #include <stdlib.h>
+#include "java/jvm_balloon.hh"
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void *, size_t);
@@ -442,6 +443,7 @@ static void on_free(size_t mem)
 static void on_alloc(size_t mem)
 {
     free_memory.fetch_sub(mem);
+    jvm_balloon_adjust_memory(min_emergency_pool_size);
     if (stats::free() < watermark_lo) {
         reclaimer_thread.wake();
     }

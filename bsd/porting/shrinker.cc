@@ -18,7 +18,6 @@ class bsd_shrinker : public memory::shrinker {
 public:
     explicit bsd_shrinker(struct eventhandler_entry_generic *ee);
     size_t request_memory(size_t s);
-    virtual size_t release_memory(size_t s) { return 0; }
 private:
     struct eventhandler_entry_generic *_ee;
 };

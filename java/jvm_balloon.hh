@@ -26,11 +26,12 @@ constexpr size_t balloon_size = (128ULL << 20);
 constexpr size_t balloon_min_memory = (1ULL << 30) - (4 << 20);
 constexpr size_t balloon_alignment = mmu::huge_page_size;
 
-class jvm_balloon_shrinker : public memory::shrinker {
+class jvm_balloon_shrinker {
 public:
     explicit jvm_balloon_shrinker(JavaVM *vm);
-    virtual size_t request_memory(size_t s);
-    virtual size_t release_memory(size_t s);
+    size_t request_memory(size_t s);
+    size_t release_memory(size_t s);
+    virtual ~jvm_balloon_shrinker();
 private:
     JavaVM *_vm;
     int _attach(JNIEnv **env);
@@ -40,4 +41,11 @@ private:
 };
 
 bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma);
+
+namespace memory {
+    void return_jvm_heap(size_t size);
+    void reserve_jvm_heap(size_t size);
+    ssize_t jvm_heap_reserved();
+    void jvm_balloon_adjust_memory(size_t threshold);
+};
 #endif

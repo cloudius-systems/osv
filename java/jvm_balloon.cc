@@ -17,6 +17,46 @@ TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p, size %d, vma_size %d",
 TRACEPOINT(trace_jvm_balloon_move, "new_jvm_addr=%p, new_jvm_end=%p, new_addr %p, new_end %p",
         const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *);
 
+jvm_balloon_shrinker *balloon_shrinker = nullptr;
+
+namespace memory {
+
+static std::atomic<size_t> jvm_heap_allowance(0);
+void reserve_jvm_heap(size_t mem)
+{
+    jvm_heap_allowance.fetch_sub(mem, std::memory_order_relaxed);
+}
+
+void return_jvm_heap(size_t mem)
+{
+    jvm_heap_allowance.fetch_add(mem, std::memory_order_relaxed);
+}
+
+ssize_t jvm_heap_reserved()
+{
+    if (!balloon_shrinker) {
+        return 0;
+    }
+    return (stats::free() + stats::jvm_heap()) - jvm_heap_allowance.load(std::memory_order_relaxed);
+}
+
+void jvm_balloon_adjust_memory(size_t threshold)
+{
+    if (!balloon_shrinker) {
+        return;
+    }
+
+    // Core of the reservation system:
+    // The heap allowance starts as the initial memory that is reserved to
+    // the JVM. It means how much it can eventually use, and it is completely
+    // dissociated with the amount of memory it is using now. When we balloon,
+    // that number goes down, and when we return the balloon back, it goes
+    // up again.
+    if (jvm_heap_reserved() <= static_cast<ssize_t>(threshold)) {
+        balloon_shrinker->request_memory(1);
+    }
+}
+};
 
 class balloon {
 public:
@@ -28,6 +68,12 @@ public:
     size_t size() { return _balloon_size; }
     size_t move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest);
     unsigned char *candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest);
+    // This is useful when communicating back the size of the area that is now
+    // available for the OS.  The actual size can easily change. For instance,
+    // if one allocation happens to be aligned, this will be the entire size of
+    // the balloon. But that doesn't matter: In that case we will just return
+    // the minimum size, and some pages will be unavailable.
+    size_t minimum_size() { return _balloon_size - _alignment; }
 private:
     void conciliate(unsigned char *addr);
     unsigned char *_jvm_addr;
@@ -71,7 +117,9 @@ ulong balloon::empty_area(balloon_ptr b)
     auto end = align_down(jvm_end_addr, _alignment);
 
     balloons.push_back(b);
-    return mmu::map_jvm(_jvm_addr, end - addr, _alignment, b);
+    auto ret = mmu::map_jvm(_jvm_addr, end - addr, _alignment, b);
+    memory::reserve_jvm_heap(minimum_size());
+    return ret;
 }
 
 balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::huge_page_size, size_t size = balloon_size)
@@ -92,6 +140,7 @@ void balloon::release(JNIEnv *env)
 
     // No need to remap. Will happen automatically when JVM touches it again
     env->DeleteGlobalRef(_jref);
+    memory::return_jvm_heap(minimum_size());
 }
 
 unsigned char *
@@ -154,7 +203,6 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
         // can actually be 0.  For instance, if we allocated 100 Mb of JVM heap
         // and freed 100 Mb of file memory.
         if (last_used && ((last_heap * 100) / last_used  > 80)) {
-            deactivate_shrinker();
             return 0;
         }
     }
@@ -176,7 +224,6 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
         // Don't overstress the heap. If we have not enough heap size for a
         // balloon, we are unlikely to do any good.
         if ((free < balloon_size) || ((free * 100) / _total_heap) < 20) {
-            deactivate_shrinker();
             break;
         }
 
@@ -184,7 +231,6 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
         jthrowable exc = env->ExceptionOccurred();
         if (exc) {
             env->ExceptionClear();
-            deactivate_shrinker();
             break;
         }
 
@@ -233,10 +279,6 @@ size_t jvm_balloon_shrinker::release_memory(size_t size)
 
             ret += b->size();
             b->release(env);
-            // It might be that this shrinker was disabled due to excessive memory
-            // pressure, so we must take care to activate it. This should be a nop
-            // if the shrinker is already active, so do it always.
-            activate_shrinker();
         }
     }
 
@@ -312,8 +354,7 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
 }
 
 jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
-    : shrinker("jvm_shrinker")
-    , _vm(vm)
+    : _vm(vm)
 {
     JNIEnv *env = NULL;
     int status = _attach(&env);
@@ -345,4 +386,11 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
     recent_allocated();
 
     _detach(status);
+
+    balloon_shrinker = this;
+}
+
+jvm_balloon_shrinker::~jvm_balloon_shrinker()
+{
+    balloon_shrinker = nullptr;
 }
