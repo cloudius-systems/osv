@@ -86,30 +86,6 @@ private:
 mutex balloons_lock;
 std::list<balloon_ptr> balloons;
 
-// We will use the following two statistics to aid our decision about whether
-// or not we should balloon. They allow us to make informed decisions about what
-// is the memory usage figure since a given reference point.
-//
-// In the future, we may move these to common code (say, mempool.cc), and have
-// the checkpoints be independent of whether or not a call to balloon has happened.
-// That is particularly important if we have many other kinds of shrinking agents.
-// But right now, let's keep it here for simplicity.
-static std::atomic<size_t> last_freed_memory(0);
-static std::atomic<size_t> last_jvm_heap_memory(0);
-
-// allocated is the inverse of free
-static ssize_t recent_allocated()
-{
-    auto curr = memory::stats::free();
-    return last_freed_memory.exchange(curr) - curr;
-}
-
-static ssize_t recent_jvm_heap()
-{
-    auto curr = memory::stats::jvm_heap();
-    return curr - last_jvm_heap_memory.exchange(curr);
-}
-
 ulong balloon::empty_area(balloon_ptr b)
 {
     auto jvm_end_addr = _jvm_addr + _balloon_size;
@@ -195,38 +171,9 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
     JNIEnv *env = NULL;
     size_t ret = 0;
 
-    WITH_LOCK(balloons_lock) {
-        ssize_t last_heap = recent_jvm_heap();
-        ssize_t last_used = recent_allocated();
-
-        // Beware: because we are just estimating used from two timepoints, it
-        // can actually be 0.  For instance, if we allocated 100 Mb of JVM heap
-        // and freed 100 Mb of file memory.
-        if (last_used && ((last_heap * 100) / last_used  > 80)) {
-            return 0;
-        }
-    }
-
     int status = _attach(&env);
 
-    // It is unfortunate that we need to evaluate those every time, but the JNI
-    // functions are associated with a particular env pointer. So if we reuse
-    // any of those values, they will be invalid in the next invocation. The
-    // whole thing takes around 30 ms though, so it should be fine.
-    auto rtclass = env->FindClass("java/lang/Runtime");
-    auto rt = env->GetStaticMethodID(rtclass , "getRuntime", "()Ljava/lang/Runtime;");
-    auto rtinst = env->CallStaticObjectMethod(rtclass, rt);
-    auto free_memory  = env->GetMethodID(rtclass, "freeMemory", "()J");
-
     do {
-        size_t free = env->CallLongMethod(rtinst, free_memory);
-
-        // Don't overstress the heap. If we have not enough heap size for a
-        // balloon, we are unlikely to do any good.
-        if ((free < balloon_size) || ((free * 100) / _total_heap) < 20) {
-            break;
-        }
-
         jbyteArray array = env->NewByteArray(balloon_size);
         jthrowable exc = env->ExceptionOccurred();
         if (exc) {
@@ -380,10 +327,6 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
         env->ExceptionClear();
         abort();
     }
-
-    // Reset statistics
-    recent_jvm_heap();
-    recent_allocated();
 
     _detach(status);
 
