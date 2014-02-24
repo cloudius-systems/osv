@@ -1365,7 +1365,7 @@ error anon_vma::sync(uintptr_t start, uintptr_t end)
 }
 
 jvm_balloon_vma::jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start,
-                                 uintptr_t end, balloon *b, unsigned perm, unsigned flags)
+                                 uintptr_t end, balloon_ptr b, unsigned perm, unsigned flags)
     : vma(addr_range(start, end), perm_rw, flags | mmap_jvm_balloon, true), _balloon(b),
       _jvm_addr(jvm_addr), _real_perm(perm), _real_flags(flags & ~mmap_jvm_balloon)
 {
@@ -1431,7 +1431,7 @@ static vma *mark_jvm_heap(const void* addr)
     }
 }
 
-ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon *b)
+ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
 {
     auto addr = ::align_up(jvm_addr, align);
     auto start = reinterpret_cast<uintptr_t>(addr);

@@ -16,9 +16,12 @@
 #include <osv/error.h>
 #include <osv/addr_range.hh>
 #include <unordered_map>
+#include <memory>
 
 struct exception_frame;
 class balloon;
+typedef std::shared_ptr<balloon> balloon_ptr;
+
 /**
  * MMU namespace
  */
@@ -138,20 +141,20 @@ private:
     bool _shared;
 };
 
-ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon *b);
+ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon_ptr b);
 
 class jvm_balloon_vma : public vma {
 public:
-    jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags);
+    jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start, uintptr_t end, balloon_ptr b, unsigned perm, unsigned flags);
     virtual ~jvm_balloon_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
     void detach_balloon();
     unsigned char *jvm_addr() { return _jvm_addr; }
-    friend ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon *b);
+    friend ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b);
 protected:
-    balloon *_balloon;
+    balloon_ptr _balloon;
     unsigned char *_jvm_addr;
 private:
     unsigned _real_perm;

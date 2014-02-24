@@ -26,6 +26,5 @@ private:
     size_t _total_heap;
 };
 
-class balloon;
-void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vma);
+void jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma);
 #endif
