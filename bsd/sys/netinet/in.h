@@ -43,7 +43,7 @@
 #include <bits/alltypes.h>
 
 #include <sys/cdefs.h>
-#include <bsd/machine/endian.h>
+#include <machine/endian.h>
 
 #include <netinet/__in.h>
 

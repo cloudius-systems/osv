@@ -50,7 +50,7 @@
 #include <bsd/sys/netinet/ip_icmp.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 #include <string>
 using std::string ;

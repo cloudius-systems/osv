@@ -30,7 +30,7 @@
 #define	_OPENSOLARIS_SYS_ATOMIC_H_
 
 #include <sys/types.h>
-#include <bsd/machine/atomic.h>
+#include <machine/atomic.h>
 #include <sys/cdefs.h>
 
 __BEGIN_DECLS

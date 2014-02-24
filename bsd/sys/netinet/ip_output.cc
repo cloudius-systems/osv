@@ -63,7 +63,7 @@
 #include <netipsec/ipsec.h>
 #endif /* IPSEC*/
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 VNET_DEFINE(u_short, ip_id);
 

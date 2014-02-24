@@ -33,7 +33,7 @@
 #include <sys/types.h>
 #include <string.h>
 
-#include <bsd/machine/endian.h>
+#include <machine/endian.h>
 #include <bsd/sys/sys/md5.h>
 
 static void MD5Transform(u_int32_t [4], const unsigned char [64]);

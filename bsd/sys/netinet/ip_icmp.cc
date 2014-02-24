@@ -64,7 +64,7 @@
 #include <netipsec/key.h>
 #endif
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 #endif /* INET */
 

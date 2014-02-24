@@ -102,7 +102,7 @@
 #include <netipsec/ipsec6.h>
 #endif /*IPSEC*/
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 #include <osv/poll.h>
 
 const int tcprexmtthresh = 3;

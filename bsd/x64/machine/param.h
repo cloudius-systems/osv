@@ -42,7 +42,7 @@
 #define BSD4_3	1
 #define BSD4_4	1
 
-/* 
+/*
  * __FreeBSD_version numbers are documented in the Porter's Handbook.
  * If you bump the version for any reason, you should update the documentation
  * there.
@@ -144,7 +144,7 @@
 
 #define dbtoc(db)			/* calculates devblks to pages */ \
 	((db + (ctodb(1) - 1)) >> (PAGE_SHIFT - DEV_BSHIFT))
- 
+
 #define ctodb(db)			/* calculates pages to devblks */ \
 	((db) << (PAGE_SHIFT - DEV_BSHIFT))
 

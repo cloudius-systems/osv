@@ -7,7 +7,7 @@
 
 #include <stdint.h>
 #include <assert.h>
-#include <bsd/machine/param.h>
+#include <machine/param.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 #include <osv/preempt-lock.hh>

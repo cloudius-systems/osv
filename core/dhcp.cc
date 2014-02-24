@@ -18,7 +18,7 @@
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/ip.h>
 #include <bsd/sys/netinet/udp.h>
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 #include <bsd/porting/networking.hh>
 #include <bsd/porting/route.h>

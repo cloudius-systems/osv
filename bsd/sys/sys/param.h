@@ -116,7 +116,7 @@
 #endif
 
 /* Machine type dependent parameters. */
-#include <bsd/machine/param.h>
+#include <machine/param.h>
 
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */

@@ -32,7 +32,7 @@
 #include <bsd/sys/sys/queue.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/eventhandler.h>
-#include <bsd/machine/atomic.h>
+#include <machine/atomic.h>
 
 MALLOC_DEFINE(M_EVENTHANDLER, "eventhandler", "Event handler records");
 

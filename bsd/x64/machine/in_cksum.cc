@@ -46,7 +46,7 @@
 #include <bsd/sys/netinet/in_systm.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/ip.h>
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 /*
  * Checksum routine for Internet Protocol family headers

@@ -35,7 +35,7 @@
 #include <sys/cdefs.h>
 
 #include <stdint.h>
-#include <bsd/machine/param.h>
+#include <machine/param.h>
 
 #ifndef UMA_STUB_H
 #define UMA_STUB_H

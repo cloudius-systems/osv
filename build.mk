@@ -54,6 +54,7 @@ INCLUDES += $(post-includes-bsd)
 post-includes-bsd += -isystem $(src)/bsd/sys
 # For acessing machine/ in cpp xen drivers
 post-includes-bsd += -isystem $(src)/bsd/
+post-includes-bsd += -isystem $(src)/bsd/$(arch)
 
 ifneq ($(werror),0)
 	CFLAGS_WERROR = -Werror
@@ -100,8 +101,9 @@ ASFLAGS = -g $(autodepend) -DASSEMBLY
 fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
 
 bsd/%.o: INCLUDES += -isystem $(src)/bsd/sys
+bsd/%.o: INCLUDES += -isystem $(src)/bsd/
 # for machine/
-bsd/%.o: INCLUDES += -isystem $(src)/bsd/ 
+bsd/%.o: INCLUDES += -isystem $(src)/bsd/$(arch)
 
 configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
 
@@ -293,7 +295,7 @@ include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/cmd/zfs/build.mk
 
 bsd  = bsd/net.o  
-bsd += bsd/machine/in_cksum.o
+bsd += bsd/$(arch)/machine/in_cksum.o
 bsd += bsd/sys/crypto/sha2/sha2.o
 bsd += bsd/sys/libkern/arc4random.o
 bsd += bsd/sys/libkern/random.o

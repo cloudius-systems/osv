@@ -58,7 +58,7 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/ip_icmp.h>
 #include <bsd/sys/netinet/ip_options.h>
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 #ifdef IPSEC
 #include <netinet/ip_ipsec.h>
 #endif /* IPSEC */

@@ -91,7 +91,7 @@
 #include <sys/syslog.h>
 #endif /*IPSEC*/
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 #include <bsd/sys/sys/md5.h>
 
 VNET_DEFINE(int, tcp_mssdflt) = TCP_MSS;

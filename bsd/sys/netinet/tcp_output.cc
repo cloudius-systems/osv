@@ -73,7 +73,7 @@
 #include <bsd/sys/netipsec/ipsec.h>
 #endif /*IPSEC*/
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 VNET_DEFINE(int, path_mtu_discovery) = 1;
 SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, path_mtu_discovery, CTLFLAG_RW,

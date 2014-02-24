@@ -34,7 +34,7 @@
 
 #include <bsd/porting/uma_stub.h>
 #include <bsd/sys/sys/mbuf.h>
-#include <bsd/machine/atomic.h>
+#include <machine/atomic.h>
 
 int	max_linkhdr;
 int	max_protohdr;

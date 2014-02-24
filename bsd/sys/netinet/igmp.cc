@@ -70,7 +70,7 @@
 #include <bsd/sys/netinet/igmp.h>
 #include <bsd/sys/netinet/igmp_var.h>
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 
 #ifndef KTR_IGMPV3

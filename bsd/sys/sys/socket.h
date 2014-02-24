@@ -47,7 +47,7 @@
 
 #include <osv/uio.h>
 #include <sys/cdefs.h>
-#include <bsd/machine/_align.h>
+#include <machine/_align.h>
 
 
 /*

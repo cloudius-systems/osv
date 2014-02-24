@@ -39,7 +39,7 @@
 
 #include <osv/initialize.hh>
 #include <bsd/porting/netport.h>
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/domain.h>

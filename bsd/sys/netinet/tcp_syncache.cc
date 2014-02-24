@@ -81,7 +81,7 @@
 #include <bsd/sys/netipsec/key.h>
 #endif /*IPSEC*/
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 static VNET_DEFINE(int, tcp_syncookies) = 1;
 #define	V_tcp_syncookies		VNET(tcp_syncookies)

@@ -28,7 +28,7 @@ typedef u_char uchar_t;
 typedef u_long ulong_t;
 
 #include <bsd/sys/cddl/compat/opensolaris/sys/kstat.h>
-#include <bsd/machine/atomic.h>
+#include <machine/atomic.h>
 #include <bsd/porting/netport.h>
 
 #define MB (1024 * 1024)

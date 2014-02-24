@@ -33,7 +33,7 @@
 #define __SYS_REFCOUNT_H__
 
 #include <bsd/porting/netport.h>
-#include <bsd/machine/atomic.h>
+#include <machine/atomic.h>
 
 static __inline void
 refcount_init(volatile u_int *count, u_int value)

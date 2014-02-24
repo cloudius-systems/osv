@@ -118,8 +118,8 @@
 #include <bsd/sys/netinet/tcp_debug.h>
 #endif /* TCPDEBUG */
 
-#include <bsd/machine/in_cksum.h>
-#include <bsd/machine/atomic.h>
+#include <machine/in_cksum.h>
+#include <machine/atomic.h>
 
 #include <algorithm>
 using namespace std;

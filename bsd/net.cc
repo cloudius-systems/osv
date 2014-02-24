@@ -28,7 +28,7 @@
 #include <bsd/sys/netinet/cc.h>
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/route.h>
-#include <bsd/machine/param.h>
+#include <machine/param.h>
 
 /* Generation of ip ids */
 void ip_initid(void);

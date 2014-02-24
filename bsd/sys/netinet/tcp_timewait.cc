@@ -77,7 +77,7 @@
 #include <bsd/sys/netinet6/ip6protosw.h>
 #endif
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 static VNET_DEFINE(uma_zone_t, tcptw_zone);
 #define	V_tcptw_zone			VNET(tcptw_zone)

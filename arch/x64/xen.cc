@@ -14,7 +14,7 @@
 #include <osv/interrupt.hh>
 #include <osv/sched.hh>
 #include <bsd/porting/pcpu.h>
-#include <bsd/machine/xen/xen-os.h>
+#include <machine/xen/xen-os.h>
 
 shared_info_t *HYPERVISOR_shared_info;
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];

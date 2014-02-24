@@ -143,9 +143,9 @@ void	elcr_write_trigger(u_int irq, enum intr_trigger trigger);
 #ifdef SMP
 void	intr_add_cpu(u_int cpu);
 #endif
-int	intr_add_handler(const char *name, int vector, driver_filter_t filter, 
-			 driver_intr_t handler, void *arg, enum intr_type flags, 
-			 void **cookiep);    
+int	intr_add_handler(const char *name, int vector, driver_filter_t filter,
+			 driver_intr_t handler, void *arg, enum intr_type flags,
+			 void **cookiep);
 #ifdef SMP
 int	intr_bind(u_int vector, u_char cpu);
 #endif

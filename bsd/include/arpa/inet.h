@@ -72,7 +72,7 @@
 #include <sys/cdefs.h>
 
 /* Required for byteorder(3) functions. */
-#include <bsd/machine/endian.h>
+#include <machine/endian.h>
 
 #define	INET_ADDRSTRLEN		16
 #define	INET6_ADDRSTRLEN	46

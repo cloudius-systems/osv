@@ -57,7 +57,7 @@
 #include <netinet6/ip6_var.h>
 #endif
 
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 #ifndef LRO_ENTRIES
 #define	LRO_ENTRIES	8	/* # of LRO entries per RX queue. */

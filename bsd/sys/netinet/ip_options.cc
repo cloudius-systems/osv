@@ -56,7 +56,7 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/ip_options.h>
 #include <bsd/sys/netinet/ip_icmp.h>
-#include <bsd/machine/in_cksum.h>
+#include <machine/in_cksum.h>
 
 #include <bsd/sys/sys/socketvar.h>
 
