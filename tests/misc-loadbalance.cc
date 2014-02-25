@@ -19,7 +19,19 @@
 // 2. Run four concurrent loops, on the 2 CPUs available. We expect to see the
 //    loop time double from single-thread time ("x2" in the output).
 //
-// 3. Two concurrent loops, plus one "intermittent thread" - a thread which
+// 3. Run three concurrent loops, on the 2 CPUs available. We expect load
+//    balancing to constantly rebalance the threads, so as to get "x1.5"
+//    in the output for all three threads.
+//
+// 4. Run three concurrent loops, where thread 0 has priority 0.5 (meaning
+//    it gets to run twice the time of a normal thread) and our usual loop
+//    length, and thread 1 and 2 have normal priority and half the loop
+//    length. We expect the load balancer to put the priority-0.5 thread
+//    alone on a CPU, and the two priority-1 threads on the second CPU,
+//    so all threads will finish in time x1, and the priority 0.5 thread
+//    will get twice the CPU time as each priority-1.0.
+//
+// 5. Two concurrent loops, plus one "intermittent thread" - a thread which
 //    busy-loops for 1 millisecond, sleeps for 10 milliseconds, and so on
 //    ad infinitum.
 //    We expect fair a scheduler to let the intermittent thread run for 1ms
@@ -27,7 +39,7 @@
 //    balancing we expect a performance of (2-1/11)/2, i.e., the reported
 //    loop measurement to be x1.05.
 //
-// 4. Four concurrent loops and the one intermittent thread. Again the
+// 5. Four concurrent loops and the one intermittent thread. Again the
 //    intermittent thread should take 1/11th of one CPU, and the expected
 //    measurement is x2.1.
 //
@@ -94,6 +106,34 @@ void concurrent_loops(int looplen, int N, double secs, double expect)
     double d = sec.count();
     std::cout << "all done in " << d << " [x" << (d/secs) << "]\n";
 }
+
+#ifdef __OSV__
+
+#include <osv/sched.hh>
+void concurrent_loops_priority(int looplen, double secs)
+{
+    std::cout << "\nRunning 3 concurrent loops, one with 0.5 priority and twice the length. Expecting x1.\n";
+    auto start = std::chrono::system_clock::now();
+    std::vector<sched::thread*> threads;
+    for (int i = 0; i < 3; i++) {
+        auto t = new sched::thread([=]() {
+            double d = loop(looplen / (i == 0 ? 1 : 2));
+            std::cout << "thread " << i << ": " << d << " [x" << (d/secs) << "]\n";
+        });
+        t->set_priority(i == 0 ? 0.5 : 1.0);
+        threads.push_back(t);
+        t->start();
+    }
+    for (sched::thread *t : threads) {
+        t->join();
+        delete t;
+    }
+    auto end = std::chrono::system_clock::now();
+    std::chrono::duration<double> sec = end - start;
+    double d = sec.count();
+    std::cout << "all done in " << d << " [x" << (d/secs) << "]\n";
+}
+#endif
 
 class background_intermittent {
 public:
@@ -168,6 +208,9 @@ int main()
     // to run this to be the same as the time to run one loop.
     concurrent_loops(looplen, 2, secs, 1.0);
     concurrent_loops(looplen, 4, secs, 2.0);
+    concurrent_loops(looplen, 3, secs, 1.5);
+
+    concurrent_loops_priority(looplen, secs);
 
     std::cout << "\nStarting intermittent background thread:\n";
     // Estimate the loop length required for taking 1ms.
