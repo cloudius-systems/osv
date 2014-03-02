@@ -377,6 +377,7 @@ bool net::bad_rx_csum(struct mbuf* m, struct net_hdr* hdr)
 void net::receiver()
 {
     vring* vq = _rxq.vqueue;
+    std::vector<iovec> packet;
 
     while (1) {
 
@@ -386,8 +387,7 @@ void net::receiver()
 
         u32 len;
         int nbufs;
-        struct mbuf* m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
-        u32 offset = _hdr_size;
+        void* page = vq->get_buf_elem(&len);
         u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
         u64 csum_err = 0, rx_bytes = 0;
 
@@ -395,7 +395,7 @@ void net::receiver()
         // truncating it.
         net_hdr_mrg_rxbuf* mhdr;
 
-        while (m != nullptr) {
+        while (page) {
 
             // TODO: should get out of the loop
             vq->get_buf_finalize();
@@ -403,13 +403,12 @@ void net::receiver()
             // Bad packet/buffer - discard and continue to the next one
             if (len < _hdr_size + ETHER_HDR_LEN) {
                 rx_drops++;
-                m_free(m);
+                memory::free_page(page);
 
-                m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
                 continue;
             }
 
-            mhdr = mtod(m, net_hdr_mrg_rxbuf*);
+            mhdr = static_cast<net_hdr_mrg_rxbuf*>(page);
 
             if (!_mergeable_bufs) {
                 nbufs = 1;
@@ -417,37 +416,24 @@ void net::receiver()
                 nbufs = mhdr->num_buffers;
             }
 
-            m->M_dat.MH.MH_pkthdr.len = len;
-            m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
-            m->M_dat.MH.MH_pkthdr.csum_flags = 0;
-            m->m_hdr.mh_len = len;
-
-            struct mbuf* m_head, *m_tail;
-            m_tail = m_head = m;
+            packet.push_back({page + _hdr_size, len - _hdr_size});
 
             // Read the fragments
             while (--nbufs > 0) {
-                m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
-                if (m == nullptr) {
+                page = vq->get_buf_elem(&len);
+                if (!page) {
                     rx_drops++;
+                    for (auto&& v : packet) {
+                        free_buffer(v);
+                    }
                     break;
                 }
-
+                packet.push_back({page, len});
                 vq->get_buf_finalize();
-
-                if (m->m_hdr.mh_len < (int)len)
-                    len = m->m_hdr.mh_len;
-
-                m->m_hdr.mh_len = len;
-                m->m_hdr.mh_flags &= ~M_PKTHDR;
-                m_head->M_dat.MH.MH_pkthdr.len += len;
-                m_tail->m_hdr.mh_next = m;
-                m_tail = m;
             }
 
-            // skip over the virtio header bytes (offset)
-            // that aren't need for the above layer
-            m_adj(m_head, offset);
+            auto m_head = packet_to_mbuf(packet);
+            packet.clear();
 
             if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
                 (mhdr->hdr.flags &
@@ -475,7 +461,7 @@ void net::receiver()
                 break;
 
             // Move to the next packet
-            m = static_cast<struct mbuf*>(vq->get_buf_elem(&len));
+            page = vq->get_buf_elem(&len);
         }
 
         if (vq->refill_ring_cond())
@@ -490,6 +476,50 @@ void net::receiver()
     }
 }
 
+mbuf* net::packet_to_mbuf(const std::vector<iovec>& packet)
+{
+    auto m = m_gethdr(M_DONTWAIT, MT_DATA);
+    auto refcnt = new unsigned;
+    m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
+    m_extadd(m, static_cast<char*>(packet[0].iov_base), packet[0].iov_len,
+            &net::free_buffer_and_refcnt, packet[0].iov_base, refcnt, M_PKTHDR, EXT_EXTREF);
+    m->M_dat.MH.MH_pkthdr.len = packet[0].iov_len;
+    m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
+    m->M_dat.MH.MH_pkthdr.csum_flags = 0;
+    m->m_hdr.mh_len = packet[0].iov_len;
+    m->m_hdr.mh_next = nullptr;
+
+    auto m_head = m;
+    auto m_tail = m;
+    for (size_t idx = 1; idx != packet.size(); ++idx) {
+        auto&& iov = packet[idx];
+        auto m = m_get(M_DONTWAIT, MT_DATA);
+        refcnt = new unsigned;
+        m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
+        m_extadd(m, static_cast<char*>(iov.iov_base), iov.iov_len,
+                &net::free_buffer_and_refcnt, iov.iov_base, refcnt, 0, EXT_EXTREF);
+        m->m_hdr.mh_len = iov.iov_len;
+        m->m_hdr.mh_next = nullptr;
+        m_tail->m_hdr.mh_next = m;
+        m_tail = m;
+        m_head->M_dat.MH.MH_pkthdr.len += iov.iov_len;
+    }
+    return m_head;
+}
+
+// hook for EXT_EXTREF mbuf cleanup
+void net::free_buffer_and_refcnt(void* buffer, void* refcnt)
+{
+    do_free_buffer(buffer);
+    delete static_cast<unsigned*>(refcnt);
+}
+
+void net::do_free_buffer(void* buffer)
+{
+    buffer = align_down(buffer, page_size);
+    memory::free_page(buffer);
+}
+
 void net::fill_rx_ring()
 {
     trace_virtio_net_fill_rx_ring(_ifn->if_index);
@@ -497,17 +527,12 @@ void net::fill_rx_ring()
     vring* vq = _rxq.vqueue;
 
     while (vq->avail_ring_not_empty()) {
-        struct mbuf* m = m_getjcl(M_NOWAIT, MT_DATA, M_PKTHDR, MCLBYTES);
-        if (!m)
-            break;
-
-        m->m_hdr.mh_len = MCLBYTES;
-        u8* mdata = mtod(m, u8*);
+        auto page = memory::alloc_page();
 
         vq->init_sg();
-        vq->add_in_sg(mdata, m->m_hdr.mh_len);
-        if (!vq->add_buf(m)) {
-            m_freem(m);
+        vq->add_in_sg(page, memory::page_size);
+        if (!vq->add_buf(page)) {
+            memory::free_page(page);
             break;
         }
         added++;
