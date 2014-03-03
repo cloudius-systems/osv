@@ -176,7 +176,7 @@ int poll_wake(struct file* fp, int events)
     TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
         if (pl->_events & events) {
             pl->_req->_awake.store(true, memory_order_relaxed);
-            pl->_req->_poll_thread->wake();
+            pl->_req->_poll_thread.wake();
         }
     }
 
@@ -327,7 +327,7 @@ int do_poll(std::vector<poll_file>& pfd, int _timeout)
 
     pfd = std::move(p->_pfd);
 out:
-    p->_poll_thread = nullptr;
+    p->_poll_thread.clear();
     osv::rcu_dispose(p.release());
     return nr_events;
 }

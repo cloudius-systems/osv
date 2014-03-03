@@ -148,7 +148,7 @@ struct pollreq {
     nfds_t _nfds;
     int _timeout;
     std::atomic<bool> _awake = { false };
-    sched::thread* _poll_thread = sched::thread::current();
+    sched::thread_handle _poll_thread = { *sched::thread::current() };
 };
 
 #endif
