@@ -100,6 +100,7 @@ static uint32_t	zfs_active_fs_count = 0;
 static int
 zfs_sync(struct mount *mp)
 {
+#ifndef __OSV__
 	/*
 	 * Sync a specific filesystem.
 	 */
@@ -120,6 +121,9 @@ zfs_sync(struct mount *mp)
 		zil_commit(zfsvfs->z_log, 0);
 
 	ZFS_EXIT(zfsvfs);
+#else
+	spa_sync_allpools();
+#endif
 	return (0);
 }
 
