@@ -22,6 +22,7 @@ public:
     void memcpy_fixup(exception_frame *ef, size_t fixup) { _fixup_fn(ef, fixup); }
     static unsigned char *dest(exception_frame *ef);
     static unsigned char *src(exception_frame *ef);
+    static size_t size(exception_frame *ef);
 } __attribute__((packed));
 
 memcpy_decoder *memcpy_find_decoder(exception_frame *ef);

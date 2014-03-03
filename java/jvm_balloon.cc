@@ -305,6 +305,7 @@ void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vm
 
         unsigned char *dest = memcpy_decoder::dest(ef);
         unsigned char *src = memcpy_decoder::src(ef);
+        assert(memcpy_decoder::size(ef) >= vma->size());
 
         trace_jvm_balloon_fault(src, dest);
         decode->memcpy_fixup(ef, b->move_balloon(dest, src));

@@ -249,6 +249,11 @@ unsigned char *memcpy_decoder::src(exception_frame *ef)
     return reinterpret_cast<unsigned char *>(ef->rsi);
 }
 
+size_t memcpy_decoder::size(exception_frame *ef)
+{
+    return ef->rcx;
+}
+
 memcpy_decoder::memcpy_decoder(ulong pc, fixup_function fn)
     : _pc(pc), _fixup_fn(fn)
 {
