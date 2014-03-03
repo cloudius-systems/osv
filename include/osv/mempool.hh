@@ -91,13 +91,6 @@ struct pool::free_object {
     free_object* next;
 };
 
-class malloc_pool : public pool {
-public:
-    malloc_pool();
-private:
-    static size_t compute_object_size(unsigned pos);
-};
-
 struct page_range {
     explicit page_range(size_t size);
     size_t size;

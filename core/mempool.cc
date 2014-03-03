@@ -347,6 +347,13 @@ pool* pool::from_object(void* object)
     return header->owner;
 }
 
+class malloc_pool : public pool {
+public:
+    malloc_pool();
+private:
+    static size_t compute_object_size(unsigned pos);
+};
+
 malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size) + 1]
     __attribute__((init_priority((int)init_prio::malloc_pools)));
 
