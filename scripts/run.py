@@ -124,7 +124,8 @@ def start_osv_qemu(options):
     else:
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         net_device_options.append('netdev=un0')
-        args += ["-redir", "tcp:8080::8080"]
+        if options.api:
+            args += ["-redir", "tcp:8080::8080"]
         args += ["-redir", "tcp:2222::22"]
 
         for rule in options.forward:
@@ -332,6 +333,8 @@ if (__name__ == "__main__"):
                         help = "set MAC address for NIC")
     parser.add_argument("--vnc", action="store", default=":1",
                         help="specify vnc port number")
+    parser.add_argument("--api", action = "store_true",
+                        help = "redirect the API port (8080) for user-mode networking")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
