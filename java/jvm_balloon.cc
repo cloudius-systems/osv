@@ -290,8 +290,6 @@ void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vm
 {
 
     WITH_LOCK(balloons_lock) {
-        assert(!balloons.empty());
-
         if (!ef || (ef->error_code == mmu::page_fault_write)) {
             finish_move(vma);
             return;
