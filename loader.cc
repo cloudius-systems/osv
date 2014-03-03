@@ -366,10 +366,6 @@ void* do_main_thread(void *_commands)
     return nullptr;
 }
 
-namespace pthread_private {
-    void init_detached_pthreads_reaper();
-}
-
 void main_cont(int ac, char** av)
 {
     new elf::program();
