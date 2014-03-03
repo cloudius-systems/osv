@@ -156,6 +156,16 @@ bool change_perm(hw_ptep ptep, unsigned int perm)
     return old & ~perm;
 }
 
+// This is supposed to be lockless, so we need to rely heavily on atomics.  The
+// reason for this is that this will be called from an invalidation handler,
+// which can in turn be called by the filesystem mapper (for instance, if the
+// filesystem needs to evict some memory before reading more)
+bool clear_present(hw_ptep ptep)
+{
+    pt_element old = ptep.exchange(make_empty_pte());
+    return old.present();
+}
+
 void split_large_page(hw_ptep ptep, unsigned level)
 {
     pt_element pte_orig = ptep.read();
@@ -597,6 +607,20 @@ public:
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         do_flush |= change_perm(ptep, perm);
         return true;
+    }
+    bool tlb_flush_needed(void) {return do_flush;}
+};
+
+class page_out: public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes> {
+private:
+    bool do_flush = false;
+public:
+    page_out() { }
+    void small_page(hw_ptep ptep, uintptr_t offset) {
+        do_flush |= clear_present(ptep);
+    }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) {
+        abort();
     }
     bool tlb_flush_needed(void) {return do_flush;}
 };
