@@ -139,6 +139,8 @@ typedef	int (*vnop_setattr_t)	(struct vnode *, struct vattr *);
 typedef	int (*vnop_inactive_t)	(struct vnode *);
 typedef	int (*vnop_truncate_t)	(struct vnode *, off_t);
 typedef	int (*vnop_link_t)      (struct vnode *, struct vnode *, char *);
+typedef	int (*vnop_map_t)	(struct vnode *, struct file *, struct uio *);
+typedef	int (*vnop_unmap_t)	(struct vnode *, struct file *, struct uio *);
 
 /*
  * vnode operations
@@ -163,6 +165,8 @@ struct vnops {
 	vnop_inactive_t		vop_inactive;
 	vnop_truncate_t		vop_truncate;
 	vnop_link_t		vop_link;
+	vnop_map_t		vop_map;
+	vnop_unmap_t		vop_unmap;
 };
 
 /*
@@ -171,6 +175,8 @@ struct vnops {
 #define VOP_OPEN(VP, FP)	   ((VP)->v_op->vop_open)(FP)
 #define VOP_CLOSE(VP, FP)	   ((VP)->v_op->vop_close)(VP, FP)
 #define VOP_READ(VP, FP, U, F)	   ((VP)->v_op->vop_read)(VP, FP, U, F)
+#define VOP_MAP(VP, FP, U)	   ((VP)->v_op->vop_map)(VP, FP, U)
+#define VOP_UNMAP(VP, FP, U)	   ((VP)->v_op->vop_unmap)(VP, FP, U)
 #define VOP_WRITE(VP, U, F)	   ((VP)->v_op->vop_write)(VP, U, F)
 #define VOP_SEEK(VP, FP, OLD, NEW) ((VP)->v_op->vop_seek)(VP, FP, OLD, NEW)
 #define VOP_IOCTL(VP, FP, C, A)	   ((VP)->v_op->vop_ioctl)(VP, FP, C, A)
