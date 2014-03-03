@@ -1926,6 +1926,7 @@ evict_start:
 					}
 				}
 				if (HDR_SHARED_BUF(ab)) {
+					mmu_unmap(buf->b_data, ab->b_size);
 					ab->b_flags &= ~ARC_SHARED_BUF;
 				}
 				if (buf->b_efunc) {

@@ -994,6 +994,10 @@ ulong populate_vma(vma *vma, void *v, size_t size)
     return total;
 }
 
+void unmap_address(void *addr, size_t size)
+{
+}
+
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
 {
     bool search = !(flags & mmap_fixed);
