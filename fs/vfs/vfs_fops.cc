@@ -137,7 +137,71 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
+void* vfs_file::get_page(uintptr_t start, uintptr_t f_off, uintptr_t offset, size_t size)
+{
+	assert(size == mmu::page_size);
+
+	auto fp = this;
+	struct vnode *vp = fp->f_dentry->d_vnode;
+
+	auto off = f_off + offset;
+
+	iovec io;
+	io.iov_base = nullptr;
+	io.iov_len = 0;
+
+	uio_mapper map_data;
+	uio *data = &map_data.uio;
+
+	data->uio_iov = &io;
+	data->uio_iovcnt = 1;
+	data->uio_offset = off_t(off);
+	// FIXME: If the buffer can hold, remap other pages as well, up to the
+	// buffer size.  However, this would require heavy changes in the fill
+	// and map code. Let's try it later.
+	data->uio_resid = mmu::page_size;
+	data->uio_rw = UIO_READ;
+	map_data.buffer = nullptr;
+
+	vn_lock(vp);
+	assert(VOP_MAP(vp, fp, data) == 0);
+	vn_unlock(vp);
+
+	mmu::add_mapping(map_data.buffer, map_data.buf_size, start + offset - map_data.buf_off);
+	return io.iov_base + map_data.buf_off;
+}
+
+void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t f_off, uintptr_t offset, size_t size)
+{
+	assert(size == mmu::page_size);
+
+	auto fp = this;
+	struct vnode *vp = fp->f_dentry->d_vnode;
+
+	auto off = f_off + offset;
+
+	uio data;
+	data.uio_iov = nullptr;
+	data.uio_iovcnt = 0;
+	data.uio_offset = off_t(off);
+	data.uio_resid = mmu::page_size;
+	data.uio_rw = UIO_READ;
+
+	vn_lock(vp);
+	assert(VOP_UNMAP(vp, fp, &data) == 0);
+	vn_unlock(vp);
+
+	mmu::remove_mapping(addr, start + offset);
+}
+
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-    return mmu::default_file_mmap(this, range, flags, perm, offset);
+	auto fp = this;
+	struct vnode *vp = fp->f_dentry->d_vnode;
+	if ((perm & mmu::perm_write) || (!vp->v_op->vop_map)) {
+		return mmu::default_file_mmap(this, range, flags, perm, offset);
+	}
+	// Don't know what to do if we have one but not the other
+	assert(vp->v_op->vop_unmap);
+	return mmu::map_file_mmap(this, range, flags, perm, offset);
 }
