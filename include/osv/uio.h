@@ -60,6 +60,16 @@ struct uio {
 	enum	uio_rw uio_rw;		/* operation */
 };
 
+// This layout support only one buffer per uio, which means that it will
+// only work for a iovcnt of 1. We can extend later if needed, but because we
+// are reading it page by page, it should be fine for now.
+struct uio_mapper {
+    struct uio uio;
+    size_t buf_size;
+    size_t buf_off;
+    void *buffer;
+};
+
 int	copyinuio(struct iovec *iovp, u_int iovcnt, struct uio **uiop);
 int	uiomove(void *cp, int n, struct uio *uio);
 
