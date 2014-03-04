@@ -54,12 +54,12 @@ def add_include(f, includes):
 
 def trace_verbose(*params):
     if config.debug > 1:
-        print ''.join(params)
+        print(''.join(params))
 
 
 def trace_err(*params):
     if config.debug > 0:
-        print current_file +':' +''.join(params)
+        print(current_file +':' +''.join(params))
 
 
 def valid_type(param):
