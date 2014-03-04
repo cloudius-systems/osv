@@ -82,7 +82,7 @@ repmovsq(void *__restrict &dest, const void *__restrict &src, size_t &n)
        ("1: \n\t"
         "rep movsq\n\t"
         ".pushsection .memcpy_decode, \"ax\" \n\t"
-        ".quad 1b, memcpy_fixup_long\n\t"
+        ".quad 1b, 8, memcpy_fixup_long\n\t"
         ".popsection\n"
             : "+D"(dest), "+S"(src), "+c"(n) : : "memory");
 }
@@ -94,7 +94,7 @@ repmovsb(void *__restrict &dest, const void *__restrict &src, size_t &n)
        ("1: \n\t"
         "rep movsb\n\t"
         ".pushsection .memcpy_decode, \"ax\" \n\t"
-        ".quad 1b, memcpy_fixup_byte\n\t"
+        ".quad 1b, 1, memcpy_fixup_byte\n\t"
         ".popsection\n"
             : "+D"(dest), "+S"(src), "+c"(n) : : "memory");
 }
@@ -166,7 +166,7 @@ byte_backwards(char * &d, const char * &s, size_t& n)
          "mov (%1), %3\n\t"
          "mov %3, (%0)\n\t"
          ".pushsection .memcpy_decode, \"ax\" \n\t"
-         ".quad 1b, backwards_fixup\n\t"
+         ".quad 1b, 1, backwards_fixup\n\t"
          ".popsection\n"
             : "+D"(d), "+S"(s), "+c"(n) : "r"(tmp) : "memory");
     }
@@ -185,7 +185,7 @@ long_backwards(char * &d, const char * &s, size_t& n)
              "mov    (%1), %3\n\t"
              "mov    %3, (%0)\n\t"
              ".pushsection .memcpy_decode, \"ax\" \n\t"
-             ".quad 1b, backwards_fixup\n\t"
+             ".quad 1b, 8, backwards_fixup\n\t"
              ".popsection\n"
                 : "+D"(d), "+S"(s), "+c"(n) : "r"(tmp) : "memory");
     }
@@ -251,7 +251,7 @@ unsigned char *memcpy_decoder::src(exception_frame *ef)
 
 size_t memcpy_decoder::size(exception_frame *ef)
 {
-    return ef->rcx;
+    return ef->rcx * _size;
 }
 
 memcpy_decoder::memcpy_decoder(ulong pc, fixup_function fn)

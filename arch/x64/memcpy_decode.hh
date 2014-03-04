@@ -8,6 +8,7 @@ typedef void (*fixup_function)(exception_frame *ef, size_t fixup);
 class memcpy_decoder {
 private:
     unsigned long _pc;
+    unsigned long _size;
     fixup_function _fixup_fn;
 public:
     memcpy_decoder(unsigned long pc, fixup_function fn);
@@ -22,7 +23,7 @@ public:
     void memcpy_fixup(exception_frame *ef, size_t fixup) { _fixup_fn(ef, fixup); }
     static unsigned char *dest(exception_frame *ef);
     static unsigned char *src(exception_frame *ef);
-    static size_t size(exception_frame *ef);
+    size_t size(exception_frame *ef);
 } __attribute__((packed));
 
 memcpy_decoder *memcpy_find_decoder(exception_frame *ef);
