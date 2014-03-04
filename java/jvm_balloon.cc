@@ -11,7 +11,10 @@
 #include <osv/debug.hh>
 #include <unordered_map>
 
-TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p", const unsigned char *, const unsigned char *);
+TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p, size %d, vma_size %d",
+        const unsigned char *, const unsigned char *, size_t, size_t);
+TRACEPOINT(trace_jvm_balloon_move, "new_jvm_addr=%p, new_jvm_end=%p, new_addr %p, new_end %p",
+        const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *);
 
 // We will divide the balloon in units of 128Mb. That should increase the likelyhood
 // of having hugepages mapped in and out of it.
@@ -130,6 +133,7 @@ size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
     auto candidate_addr = align_up(candidate_jvm_addr, _alignment);
     auto candidate_end = align_down(candidate_jvm_end_addr, _alignment);
 
+    trace_jvm_balloon_move(candidate_jvm_addr, candidate_jvm_end_addr, candidate_addr, candidate_end);
     balloon_candidates.insert(std::make_pair(candidate_addr, candidate_jvm_addr));
     mmu::map_jvm(candidate_addr, candidate_end - candidate_addr, this);
     return candidate_jvm_end_addr - dest;
@@ -303,9 +307,10 @@ void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vm
 
         unsigned char *dest = memcpy_decoder::dest(ef);
         unsigned char *src = memcpy_decoder::src(ef);
-        assert(decode->size(ef) >= vma->size());
+        size_t size = decode->size(ef);
+        trace_jvm_balloon_fault(src, dest, size, vma->size());
+        assert(size >= vma->size());
 
-        trace_jvm_balloon_fault(src, dest);
         decode->memcpy_fixup(ef, b->move_balloon(dest, src));
     }
 }
