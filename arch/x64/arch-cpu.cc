@@ -15,7 +15,7 @@ __thread unsigned exception_depth = 0;
 
 inline void arch_cpu::enter_exception()
 {
-    if (exception_depth == nr_exception_stacks - 1) {
+    if (exception_depth == nr_exception_stacks) {
         abort("exception nested too deeply");
     }
     auto& s = percpu_exception_stack[exception_depth++];
