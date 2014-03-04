@@ -15,7 +15,7 @@
 
 namespace virtio {
 
-class scsi : public virtio_driver {
+class scsi : public virtio_driver, public scsi_common {
 public:
     // The feature bitmap for virtio scsi
     enum {
@@ -117,51 +117,10 @@ public:
         u32 reason;
     } __attribute__((packed));
 
-    explicit scsi(pci::device& dev);
-    virtual ~scsi();
-
-    virtual const std::string get_name() { return _driver_name; }
-    void read_config();
-
-    virtual u32 get_driver_features();
-
-    static struct scsi_priv *get_priv(struct bio *bio) {
-        return reinterpret_cast<struct scsi_priv*>(bio->bio_dev->private_data);
-    }
-
-    bool cdb_data_in(const u8 *cdb);
-    int make_request(struct bio*);
-
-    void exec_inquery(u16 target, u16 lun);
-    void exec_test_unit_ready(u16 taget, u16 lun);
-    void exec_request_sense(u16 taget, u16 lun);
-    std::vector<u16> exec_report_luns(u16 target);
-    void add_lun(u16 target_id, u16 lun_id);
-    bool test_lun(u16 target_id, u16 lun_id);
-    void exec_read_capacity(u16 target, u16 lun, size_t &devsize);
-    void scan();
-
-    int exec_readwrite(struct bio *bio, u8 cmd);
-    int exec_synccache(struct bio *bio, u8 cmd);
-    int exec_cmd(struct bio *bio);
-
-    void req_done();
-
-    bool ack_irq();
-
-    static hw_driver* probe(hw_device* dev);
-private:
-
-    struct scsi_req {
-
-        scsi_req(struct bio* bio, u16 target, u16 lun) : bio(bio)
-        {
-            init(bio, target, lun);
-        }
-        scsi_req(struct bio* bio, u16 target, u16 lun, u8 cmd);
-        ~scsi_req() { };
-
-        void init(struct bio* bio, u16 target, u16 lun)
+    class scsi_virtio_req: public scsi_common_req {
+    public:
+        scsi_virtio_req(struct bio *bio, u16 target, u16 lun, u8 cmd)
+            : scsi_common_req(bio, target, lun, cmd)
         {
             memset(&req.cmd, 0, sizeof(req.cmd));
             req.cmd.tag = reinterpret_cast<u64>(bio);
@@ -169,9 +128,6 @@ private:
             req.cmd.lun[1] = target;
             req.cmd.lun[2] = (lun >> 8) | 0x40;
             req.cmd.lun[3] = (lun & 0xff);
-
-            bio->bio_cmd = BIO_SCSI;
-            bio->bio_private = this;
         }
 
         union {
@@ -186,9 +142,34 @@ private:
             struct scsi_ctrl_an_resp  an;
             struct scsi_event         evt;
         } resp;
-
-        struct bio* bio;
     };
+
+
+    scsi(pci::device& dev);
+    ~scsi();
+
+    virtual const std::string get_name() { return _driver_name; }
+    void read_config();
+
+    virtual u32 get_driver_features();
+
+    static struct scsi_priv *get_priv(struct bio *bio) {
+        return reinterpret_cast<struct scsi_priv*>(bio->bio_dev->private_data);
+    }
+
+    void req_done();
+    bool ack_irq();
+    static hw_driver* probe(hw_device* dev);
+
+    int make_request(struct bio*) override;
+    void add_lun(u16 target_id, u16 lun_id) override;
+    int exec_cmd(struct bio *bio) override;
+    scsi_virtio_req *alloc_scsi_req(struct bio *bio, u16 target, u16 lun, u8 cmd) override
+    {
+        return new scsi_virtio_req(bio, target, lun, cmd);
+    }
+
+private:
 
     std::string _driver_name;
     scsi_config _config;

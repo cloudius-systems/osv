@@ -9,6 +9,14 @@
 #define SCSI_COMMON_H
 
 #include <osv/types.h>
+#include <osv/device.h>
+#include <osv/bio.h>
+#include <vector>
+
+enum {
+    SCSI_OK = 0,
+    SCSI_SECTOR_SIZE = 512,
+};
 
 // SCSI OPERATION CODE
 enum {
@@ -128,4 +136,46 @@ struct cdbres_report_luns {
     u32 reserved_04;
     u64 list[256];
 } __attribute__((packed));
+
+struct scsi_common_config {
+    u16 max_lun = 256;
+    u32 max_sectors = 8192; // Maxium 4MB
+    u32 cdb_size = 16;
+};
+
+class scsi_common_req {
+public:
+    scsi_common_req(struct bio* bio, u16 _target, u16 _lun, u8 cmd);
+    ~scsi_common_req() { };
+
+    struct bio* bio;
+    u16 target;
+    u16 lun;
+    u8 cdb[16];
+    u8 response = 0;
+    u8 status = 0;
+};
+
+class scsi_common {
+public:
+
+    virtual int make_request(struct bio* bio) = 0;
+    virtual void add_lun(u16 target_id, u16 lun_id) = 0;
+    virtual int exec_cmd(struct bio *bio) = 0;
+    virtual scsi_common_req *alloc_scsi_req(struct bio *bio, u16 target, u16 lun, u8 cmd) = 0;
+
+    void scan();
+    bool cdb_data_rw(const u8 *cdb);
+    bool cdb_data_in(const u8 *cdb);
+    void exec_inquery(u16 target, u16 lun);
+    void exec_test_unit_ready(u16 taget, u16 lun);
+    void exec_request_sense(u16 taget, u16 lun);
+    std::vector<u16> exec_report_luns(u16 target);
+    bool test_lun(u16 target_id, u16 lun_id);
+    void exec_read_capacity(u16 target, u16 lun, size_t &devsize);
+    int exec_readwrite(u16 target, u16 lun, struct bio *bio, u8 cmd);
+    int exec_synccache(u16 target, u16 lun, struct bio *bio, u8 cmd);
+
+    scsi_common_config config;
+};
 #endif
