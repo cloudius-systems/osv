@@ -484,9 +484,7 @@ namespace stats {
 
 void reclaimer::wake()
 {
-    if (_thread) {
-        _blocked.wake_one();
-    }
+    _blocked.wake_one();
 }
 
 pressure reclaimer::pressure_level()
@@ -536,12 +534,6 @@ void reclaimer::wait_for_minimum_memory()
 // memory, there is very little hope and we would might as well give up.
 void reclaimer::wait_for_memory(size_t mem)
 {
-
-    if (!_thread) {
-        // Too early for this, and would go negative
-        return;
-    }
-
     _oom_blocked.wait(mem);
 }
 
@@ -655,7 +647,7 @@ void reclaimer_waiters::wait(size_t bytes)
     sched::thread *curr = sched::thread::current();
 
     // Wait for whom?
-    if (curr == reclaimer_thread._thread) {
+    if (curr == &reclaimer_thread._thread) {
         oom();
      }
 
@@ -671,22 +663,10 @@ void reclaimer_waiters::wait(size_t bytes)
 }
 
 reclaimer::reclaimer()
-    : _oom_blocked(), _thread(NULL)
+    : _oom_blocked(), _thread([&] { _do_reclaim(); }, sched::thread::attr().detached().name("reclaimer").stack(mmu::page_size))
 {
-    // This cannot be a sched::thread because it may call into JNI functions,
-    // if the JVM balloon is registered as a shrinker. It expects the full
-    // pthread API to be functional, and for sched::threads it is not.
-    // std::thread is implemented ontop of pthreads, so it is fine
-    std::thread tmp([&] {
-        _thread = sched::thread::current();
-        _thread->set_name("reclaimer");
-        osv_reclaimer_thread = reinterpret_cast<unsigned char *>(_thread);
-        allow_emergency_alloc = true;
-        do {
-            _do_reclaim();
-        } while (true);
-    });
-    tmp.detach();
+    osv_reclaimer_thread = reinterpret_cast<unsigned char *>(&_thread);
+    _thread.start();
 }
 
 bool reclaimer::_can_shrink()
@@ -704,40 +684,42 @@ bool reclaimer::_can_shrink()
 void reclaimer::_do_reclaim()
 {
     ssize_t target;
-    WITH_LOCK(free_page_ranges_lock) {
-        _blocked.wait_until(free_page_ranges_lock,
-            // We should only try to shrink if there are available shrinkers.
-            // But if we have waiters, we need to wake up the reclaimer anyway.
-            // Of course, if there are no shrinkers we won't free anything. But
-            // we need to wake up to be able to at least notice that and OOM.
-            [=] { return _oom_blocked.has_waiters() ||
-                (_can_shrink() && (pressure_level() != pressure::NORMAL)); }
-        );
-        target = bytes_until_normal();
-    }
+    allow_emergency_alloc = true;
 
-    // FIXME: This simple loop works only because we have a single shrinker
-    // When we have more, we need to probe them and decide how much to take from
-    // each of them.
-    WITH_LOCK(_shrinkers_mutex) {
-        // We execute this outside the free_page_ranges lock, so the threads
-        // freeing memory (or allocating, for that matter) will have the chance
-        // to manipulate the free_page_ranges structure.  Executing the
-        // shrinkers with the lock held would result in a deadlock.
-        for (auto s : _shrinkers) {
-            if (s->should_shrink(target)) {
+    while (true) {
+        WITH_LOCK(free_page_ranges_lock) {
+            _blocked.wait_until(free_page_ranges_lock,
+                // We should only try to shrink if there are available shrinkers.
+                // But if we have waiters, we need to wake up the reclaimer anyway.
+                // Of course, if there are no shrinkers we won't free anything. But
+                // we need to wake up to be able to at least notice that and OOM.
+                [=] { return _oom_blocked.has_waiters() ||
+                    (_can_shrink() && (pressure_level() != pressure::NORMAL)); }
+            );
+            target = bytes_until_normal();
+        }
+
+        // FIXME: This simple loop works only because we have a single shrinker
+        // When we have more, we need to probe them and decide how much to take from
+        // each of them.
+        WITH_LOCK(_shrinkers_mutex) {
+            // We execute this outside the free_page_ranges lock, so the threads
+            // freeing memory (or allocating, for that matter) will have the chance
+            // to manipulate the free_page_ranges structure.  Executing the
+            // shrinkers with the lock held would result in a deadlock.
+            for (auto s : _shrinkers) {
                 size_t freed = s->request_memory(target);
                 trace_memory_reclaim(s->name().c_str(), target, freed);
             }
         }
-    }
 
-    WITH_LOCK(free_page_ranges_lock) {
-        if (target > 0) {
-            // Wake up all waiters that are waiting and now have a chance to succeed.
-            // If we could not wake any, there is nothing really we can do.
-            if (!_oom_blocked.wake_waiters()) {
-                oom();
+        WITH_LOCK(free_page_ranges_lock) {
+            if (target > 0) {
+                // Wake up all waiters that are waiting and now have a chance to succeed.
+                // If we could not wake any, there is nothing really we can do.
+                if (!_oom_blocked.wake_waiters()) {
+                    oom();
+                }
             }
         }
     }
