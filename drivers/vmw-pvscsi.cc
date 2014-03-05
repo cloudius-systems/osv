@@ -220,6 +220,9 @@ pvscsi::pvscsi(pci::device& pci_dev)
 
     parse_pci_config();
 
+    // PVSCSI supports target 0 to target 15
+    config.max_target = 16;
+
     pci_dev.set_bus_master(true);
 
     setup();

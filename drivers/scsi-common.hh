@@ -139,6 +139,7 @@ struct cdbres_report_luns {
 
 struct scsi_common_config {
     u16 max_lun = 256;
+    u16 max_target = 256;
     u32 max_sectors = 8192; // Maxium 4MB
     u32 cdb_size = 16;
 };

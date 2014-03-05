@@ -184,6 +184,7 @@ void scsi::read_config()
 {
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
     config.max_lun = _config.max_lun;
+    config.max_target = _config.max_target;
 }
 
 void scsi::req_done()
