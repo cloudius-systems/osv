@@ -36,6 +36,14 @@ using namespace boost::asio;
 
 dhcp::dhcp_worker net_dhcp_worker;
 
+u8 requested_options[] = {
+    dhcp::DHCP_OPTION_SUBNET_MASK,
+    dhcp::DHCP_OPTION_ROUTER,
+    dhcp::DHCP_OPTION_DOMAIN_NAME_SERVERS,
+    dhcp::DHCP_OPTION_INTERFACE_MTU,
+    dhcp::DHCP_OPTION_BROADCAST_ADDRESS
+};
+
 // Returns whether we hooked the packet
 int dhcp_hook_rx(struct mbuf* m)
 {
@@ -155,9 +163,6 @@ namespace dhcp {
         size_t dhcp_len = sizeof(struct dhcp_packet);
         struct dhcp_packet* pkt = pdhcp();
         *pkt = {};
-        u8 requested_options[] = {DHCP_OPTION_SUBNET_MASK, DHCP_OPTION_ROUTER,
-            DHCP_OPTION_DOMAIN_NAME_SERVERS, DHCP_OPTION_INTERFACE_MTU,
-            DHCP_OPTION_BROADCAST_ADDRESS};
 
         // Header
         srand((unsigned int)
@@ -216,6 +221,8 @@ namespace dhcp {
         options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_REQUEST);
         options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
         options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
+        options = add_option(options, DHCP_OPTION_PARAMETER_REQUEST_LIST,
+            sizeof(requested_options), requested_options);
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
