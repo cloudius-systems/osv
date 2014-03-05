@@ -53,8 +53,6 @@ libc += ctype/__ctype_b_loc.o
 
 libc += errno/strerror.o
 
-libc += exit/assert.o
-
 libc += locale/catclose.o
 libc += locale/catgets.o
 libc += locale/catopen.o

@@ -98,6 +98,13 @@ void abort(const char *fmt, ...)
     osv::halt();
 }
 
+// __assert_fail() is used by the assert() macros
+void __assert_fail(const char *expr, const char *file, int line, const char *func)
+{
+    abort("Assertion failed: %s (%s: %s: %d)\n", expr, file, func, line);
+}
+
+
 // __cxa_atexit and __cxa_finalize:
 // Gcc implements static constructors and destructors in shared-objects (DSO)
 // in the following way: Static constructors are added to a list DT_INIT_ARRAY
