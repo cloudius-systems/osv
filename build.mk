@@ -36,7 +36,7 @@ miscbase = $(src)/external/$(arch)/misc.bin
 jdkbase := $(shell find $(src)/external/$(arch)/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 
-gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug -e profile))
+gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$))
 gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
 gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
 
