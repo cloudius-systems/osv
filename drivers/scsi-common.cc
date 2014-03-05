@@ -277,15 +277,14 @@ bool scsi_common::test_lun(u16 target, u16 lun)
 
 void scsi_common::scan()
 {
-    /* TODO: Support more target */
-    for (u16 target = 1; target < 2; target++) {
+    for (u16 target = 0; target < config.max_target; target++) {
         try {
             auto luns = exec_report_luns(target);
             for (auto &lun : luns) {
                 add_lun(target, lun);
             }
         } catch(std::runtime_error err) {
-            printf("scsi: %s\n", err.what());
+            continue;
         }
     }
 }
