@@ -220,6 +220,9 @@ pvscsi::pvscsi(pci::device& pci_dev)
 
     parse_pci_config();
 
+    // PVSCSI supports only 1 lun per target
+    config.max_lun = 1;
+
     // PVSCSI supports target 0 to target 15
     config.max_target = 16;
 
