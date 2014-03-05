@@ -172,6 +172,7 @@ struct object_serializer {
 template <>
 struct object_serializer<const char*> {
     static constexpr size_t max_len = 50;
+    [[gnu::always_inline]]
     void serialize(const char* val, void* _buffer) {
         if (!val) {
             val = "<null>";
@@ -187,6 +188,7 @@ struct object_serializer<const char*> {
     }
 
     template<typename T>
+    [[gnu::always_inline]]
     T try_load(const T* bad_addr, T alt) {
         T ret;
         if (!safe_load(bad_addr, ret)) {
@@ -201,6 +203,7 @@ struct object_serializer<const char*> {
 
 template <size_t idx, size_t N, typename... args>
 struct serializer {
+    [[gnu::always_inline]] // otherwise ld can discard a duplicate function (due to safe_load())
     static void write(void* buffer, size_t offset, std::tuple<args...> as) {
         auto arg = std::get<idx>(as);
         object_serializer<decltype(arg)> s;

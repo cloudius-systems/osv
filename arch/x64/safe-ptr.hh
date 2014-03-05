@@ -11,6 +11,7 @@
 #include <osv/compiler.h>
 
 template <typename T>
+[[gnu::always_inline]] // if not inline, ld can discard a duplicate function
 static inline bool
 safe_load(const T* potentially_bad_pointer, T& data)
 {
@@ -34,6 +35,7 @@ safe_load(const T* potentially_bad_pointer, T& data)
 }
 
 template <typename T>
+[[gnu::always_inline]] // if not inline, ld can discard a duplicate function
 static inline bool
 safe_store(const T* potentially_bad_pointer, const T& data)
 {
