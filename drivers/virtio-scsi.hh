@@ -161,10 +161,10 @@ public:
     bool ack_irq();
     static hw_driver* probe(hw_device* dev);
 
-    int make_request(struct bio*) override;
-    void add_lun(u16 target_id, u16 lun_id) override;
-    int exec_cmd(struct bio *bio) override;
-    scsi_virtio_req *alloc_scsi_req(struct bio *bio, u16 target, u16 lun, u8 cmd) override
+    virtual int make_request(struct bio*) override;
+    virtual void add_lun(u16 target_id, u16 lun_id) override;
+    virtual int exec_cmd(struct bio *bio) override;
+    virtual scsi_virtio_req *alloc_scsi_req(struct bio *bio, u16 target, u16 lun, u8 cmd) override
     {
         return new scsi_virtio_req(bio, target, lun, cmd);
     }
