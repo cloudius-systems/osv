@@ -498,6 +498,7 @@ libc += stdio/wprintf.o
 libc += stdio/wscanf.o
 
 libc += stdlib/abs.o
+libc += stdlib/atof.o
 libc += stdlib/atoi.o
 libc += stdlib/atol.o
 libc += stdlib/atoll.o
