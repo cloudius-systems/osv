@@ -1,4 +1,5 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
+from __future__ import print_function
 import subprocess
 import sys
 import argparse
@@ -16,7 +17,7 @@ def stty_save():
     p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE, stderr=devnull)
     stty_params, err = p.communicate()
     stty_params = stty_params.strip()
-    
+
 def stty_restore():
     if (stty_params):
         subprocess.call(["stty", stty_params], stderr=devnull)
@@ -53,7 +54,7 @@ def set_imgargs(options):
 
     cmdline = ["scripts/imgedit.py", "setargs", options.image_file, execute]
     if options.dry_run:
-        print format_args(cmdline)
+        print(format_args(cmdline))
     else:
         subprocess.call(cmdline)
 
@@ -65,11 +66,11 @@ def is_direct_io_supported(path):
         file = os.open(path, os.O_RDONLY | os.O_DIRECT)
         os.close(file)
         return True
-    except OSError, e:
+    except OSError as e:
         if e.errno == errno.EINVAL:
             return False;
         raise
-    
+
 def start_osv_qemu(options):
 
     if (options.unsafe_cache):
@@ -104,12 +105,12 @@ def start_osv_qemu(options):
         args += [
         "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
         "-drive", "file=%s,if=none,id=hd0,aio=native,cache=%s" % (options.image_file, cache)]
-    
+
     if (options.no_shutdown):
         args += ["-no-reboot", "-no-shutdown"]
 
     if (options.wait):
-		args += ["-S"]
+        args += ["-S"]
 
     net_device_options = ['virtio-net-pci']
     if options.mac:
@@ -157,10 +158,10 @@ def start_osv_qemu(options):
         qemu_env['OSV_BRIDGE'] = options.bridge
         cmdline = ["qemu-system-x86_64"] + args
         if options.dry_run:
-            print format_args(cmdline)
+            print(format_args(cmdline))
         else:
             subprocess.call(cmdline, env = qemu_env)
-    except OSError, e:
+    except OSError as e:
         if e.errno == errno.ENOENT:
           print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
         else:
@@ -181,7 +182,6 @@ def start_osv_xen(options):
     else:
         args = [ "kernel='%s/build/%s/loader.elf'" % (os.getcwd(), options.opt_path) ]
 
-
     try:
         memory = int(options.memsize)
     except ValueError:
@@ -196,7 +196,7 @@ def start_osv_xen(options):
         elif memory[-2:].upper() == "GB":
             memory = 1024 * int(memory[:-2])
         else:
-            print >> sys.stderr, "Unrecognized memory size"
+            print("Unrecognized memory size", file=sys.stderr)
             return;
 
     vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
@@ -242,7 +242,7 @@ def start_osv_xen(options):
             cmdline += [ "-c" ]
         cmdline += [ xenfile.name ]
         if options.dry_run:
-            print format_args(cmdline)
+            print(format_args(cmdline))
         else:
             subprocess.call(cmdline)
     except:
@@ -264,8 +264,8 @@ def start_osv(options):
     try:
         launchers[options.hypervisor](options)
     except KeyError: 
-        print >> sys.stderr, "Unrecognized hypervisor selected"
-        return;
+        print("Unrecognized hypervisor selected", file=sys.stderr)
+        return
 
 def choose_hypervisor(external_networking):
     if os.path.exists('/dev/kvm'):
@@ -338,9 +338,8 @@ if (__name__ == "__main__"):
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
-    
+
     if(cmdargs.hypervisor == "auto"):
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
     # Call main
     main(cmdargs)
-    
