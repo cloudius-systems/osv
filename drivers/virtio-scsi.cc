@@ -225,30 +225,14 @@ int scsi::make_request(struct bio* bio)
             return EIO;
 
         struct scsi_priv *prv;
-        u16 target, lun;
+        u16 target = 0, lun = 0;
         if (bio->bio_cmd != BIO_SCSI) {
             prv = scsi::get_priv(bio);
             target = prv->target;
             lun = prv->lun;
         }
 
-        switch (bio->bio_cmd) {
-        case BIO_READ:
-            exec_readwrite(target, lun, bio, CDB_CMD_READ_16);
-            break;
-        case BIO_WRITE:
-            exec_readwrite(target, lun, bio, CDB_CMD_WRITE_16);
-            break;
-        case BIO_FLUSH:
-            exec_synccache(target, lun, bio, CDB_CMD_SYNCHRONIZE_CACHE_10);
-            break;
-        case BIO_SCSI:
-            exec_cmd(bio);
-            break;
-        default:
-            return ENOTBLK;
-        }
-        return 0;
+        return handle_bio(target, lun, bio);
     }
 }
 

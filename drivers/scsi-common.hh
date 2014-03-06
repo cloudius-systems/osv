@@ -176,6 +176,7 @@ public:
     void exec_read_capacity(u16 target, u16 lun, size_t &devsize);
     int exec_readwrite(u16 target, u16 lun, struct bio *bio, u8 cmd);
     int exec_synccache(u16 target, u16 lun, struct bio *bio, u8 cmd);
+    int handle_bio(u16 target, u16 lun, struct bio *bio);
 
     scsi_common_config config;
 };

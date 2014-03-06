@@ -288,3 +288,24 @@ void scsi_common::scan()
         }
     }
 }
+
+int scsi_common::handle_bio(u16 target, u16 lun, struct bio *bio)
+{
+        switch (bio->bio_cmd) {
+        case BIO_READ:
+            exec_readwrite(target, lun, bio, CDB_CMD_READ_16);
+            break;
+        case BIO_WRITE:
+            exec_readwrite(target, lun, bio, CDB_CMD_WRITE_16);
+            break;
+        case BIO_FLUSH:
+            exec_synccache(target, lun, bio, CDB_CMD_SYNCHRONIZE_CACHE_10);
+            break;
+        case BIO_SCSI:
+            exec_cmd(bio);
+            break;
+        default:
+            return ENOTBLK;
+        }
+        return 0;
+}
