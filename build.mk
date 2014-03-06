@@ -640,6 +640,7 @@ objects += core/version.o
 objects += core/waitqueue.o
 objects += core/chart.o
 objects += core/net_channel.o
+objects += core/demangle.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
