@@ -28,6 +28,8 @@ struct request {
     std::string uri;
     int http_version_major;
     int http_version_minor;
+    bool is_multi_part;
+    size_t content_length;
     std::vector<header> headers;
     std::vector<header> query_parameters;
 
