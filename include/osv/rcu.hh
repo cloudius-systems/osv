@@ -60,6 +60,31 @@ void preempt_enable();
 
 }
 
+// rcu_dispose_deleter is a helper class used by rcu_dispose.
+// gcc's std::function does not store functors, even small ones, inside the
+// std::function, unless we mark them with "is_location_invariant". By doing
+// this, rcu_dispose() can avoid an extra memory allocation.
+namespace osv {
+template<class T>
+struct rcu_dispose_deleter {
+    T* p;
+    void operator()() const { delete p; }
+};
+// Allow rcu_dispose(void*), doing "operator delete" (i.e., free()).
+template<>
+struct rcu_dispose_deleter<void> {
+    void* p;
+    void operator()() const { ::operator delete(p); }
+};
+}
+namespace std {
+template<class T>
+struct __is_location_invariant<osv::rcu_dispose_deleter<T>> {
+    static const bool value = true;
+};
+}
+
+
 namespace osv {
 
 class rcu_lock_type {
@@ -197,7 +222,7 @@ inline
 void rcu_dispose(T* p)
 {
     if (p) {
-        rcu_defer(std::default_delete<T>(), p);
+        rcu_defer(rcu_dispose_deleter<T>{p});
     }
 }
 
