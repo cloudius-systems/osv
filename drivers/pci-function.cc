@@ -309,38 +309,38 @@ namespace pci {
 
     bool function::is_device()
     {
-        return _header_type == PCI_HDR_TYPE_DEVICE;
+        return (_header_type & PCI_HDR_TYPE_MASK) == PCI_HDR_TYPE_DEVICE;
     }
 
     bool function::is_bridge()
     {
-        return _header_type == PCI_HDR_TYPE_BRIDGE;
+        return (_header_type & PCI_HDR_TYPE_MASK) == PCI_HDR_TYPE_BRIDGE;
     }
 
     bool function::is_pccard()
     {
-        return _header_type == PCI_HDR_TYPE_PCCARD;
+        return (_header_type & PCI_HDR_TYPE_MASK)== PCI_HDR_TYPE_PCCARD;
     }
 
     bool function::is_device(u8 bus, u8 device, u8 function)
     {
         u8 header_type = read_pci_config_byte(bus, device, function,
             PCI_CFG_HEADER_TYPE);
-        return header_type == PCI_HDR_TYPE_DEVICE;
+        return (header_type & PCI_HDR_TYPE_MASK) == PCI_HDR_TYPE_DEVICE;
     }
 
     bool function::is_bridge(u8 bus, u8 device, u8 function)
     {
         u8 header_type = read_pci_config_byte(bus, device, function,
             PCI_CFG_HEADER_TYPE);
-        return header_type == PCI_HDR_TYPE_BRIDGE;
+        return (header_type & PCI_HDR_TYPE_MASK) == PCI_HDR_TYPE_BRIDGE;
     }
 
     bool function::is_pccard(u8 bus, u8 device, u8 function)
     {
         u8 header_type = read_pci_config_byte(bus, device, function,
             PCI_CFG_HEADER_TYPE);
-        return header_type == PCI_HDR_TYPE_PCCARD;
+        return (header_type & PCI_HDR_TYPE_MASK)  == PCI_HDR_TYPE_PCCARD;
     }
 
     // Command & Status

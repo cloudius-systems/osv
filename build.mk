@@ -584,6 +584,8 @@ drivers += drivers/pvpanic.o
 drivers += drivers/random.o
 drivers += drivers/ahci.o
 drivers += drivers/ide.o
+drivers += drivers/scsi-common.o
+drivers += drivers/vmw-pvscsi.o
 drivers += java/jvm_balloon.o
 
 objects = bootfs.o

@@ -190,7 +190,8 @@ namespace pci {
         enum pci_header_type {
             PCI_HDR_TYPE_DEVICE = 0x00,
             PCI_HDR_TYPE_BRIDGE = 0x01,
-            PCI_HDR_TYPE_PCCARD = 0x02
+            PCI_HDR_TYPE_PCCARD = 0x02,
+            PCI_HDR_TYPE_MASK   = 0x03
         };
 
         //  Capability Register Offsets

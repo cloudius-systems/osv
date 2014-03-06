@@ -73,17 +73,14 @@ struct driver scsi_driver = {
     sizeof(struct scsi_priv),
 };
 
-bool scsi::cdb_data_in(const u8 *cdb)
-{
-   return cdb[0] != CDB_CMD_WRITE_16;
-}
-
 int scsi::exec_cmd(struct bio *bio)
 {
     auto queue = get_virt_queue(VIRTIO_SCSI_QUEUE_REQ);
-    auto req = static_cast<scsi_req*>(bio->bio_private);
+    auto req = static_cast<scsi_virtio_req*>(bio->bio_private);
     auto &req_cmd = req->req.cmd;
     auto &resp_cmd = req->resp.cmd;
+
+    memcpy(req_cmd.cdb, req->cdb, 16);
 
     queue->init_sg();
     queue->add_out_sg(&req_cmd, sizeof(req_cmd));
@@ -102,215 +99,6 @@ int scsi::exec_cmd(struct bio *bio)
     queue->kick();
 
     return 0;
-}
-
-int scsi::exec_readwrite(struct bio *bio, u8 cmd)
-{
-    auto prv = scsi::get_priv(bio);
-    new scsi_req(bio, prv->target, prv->lun, cmd);
-
-    return exec_cmd(bio);
-}
-
-int scsi::exec_synccache(struct bio *bio, u8 cmd)
-{
-    auto prv = get_priv(bio);
-    new scsi_req(bio, prv->target, prv->lun, cmd);
-
-    return exec_cmd(bio);
-}
-
-std::vector<u16> scsi::exec_report_luns(u16 target)
-{
-    std::vector<u16> luns;
-    struct bio *bio = alloc_bio();
-    if (!bio)
-        throw std::runtime_error("Fail to allocate bio");
-
-    auto req = new scsi_req(bio, target, 0);
-    auto data = new cdbres_report_luns;
-
-    bio->bio_bcount = sizeof(*data);
-    bio->bio_data = data;
-
-    struct cdb_report_luns cdb;
-    memset(&cdb, 0, sizeof(cdb));
-    cdb.command = CDB_CMD_REPORT_LUNS;
-    cdb.select_report = 0;
-    cdb.alloc_len=htobe32(sizeof(*data));
-    memcpy(req->req.cmd.cdb, &cdb, sizeof(cdb));
-
-    make_request(bio);
-    bio_wait(bio);
-    destroy_bio(bio);
-
-    auto response = req->resp.cmd.response;
-    if (response != VIRTIO_SCSI_S_OK)
-        throw std::runtime_error("Fail to exec_report_luns");
-
-    auto status = req->resp.cmd.status;
-    if (status == VIRTIO_SCSI_S_OK) {
-        auto list_len = be32toh(data->list_len);
-        for (unsigned i = 0; i < list_len / 8; i++) {
-            luns.push_back((data->list[i] & 0xffff) >> 8);
-        }
-    } else {
-        // Report LUNS is not implemented
-        for (u16 lun = 0; lun < _config.max_lun; lun++) {
-                luns.push_back(lun);
-        }
-    }
-    std::sort(luns.begin(),luns.end());
-
-    delete req;
-    delete data;
-
-    return luns;
-}
-
-void scsi::exec_inquery(u16 target, u16 lun)
-{
-    struct bio *bio = alloc_bio();
-    if (!bio)
-        throw std::runtime_error("Fail to alloate bio");
-
-    auto req = new scsi_req(bio, target, lun);
-    auto data = new cdbres_inquiry;
-
-    bio->bio_bcount = sizeof(*data);
-    bio->bio_data = data;
-
-    struct cdb_inquery cdb;
-    memset(&cdb, 0, sizeof(cdb));
-    cdb.command = CDB_CMD_INQUIRY;
-    cdb.alloc_len = htobe16(sizeof(*data));
-    memcpy(req->req.cmd.cdb, &cdb, sizeof(cdb));
-
-    make_request(bio);
-    bio_wait(bio);
-    destroy_bio(bio);
-
-    auto response = req->resp.cmd.response;
-    if (response != VIRTIO_SCSI_S_OK)
-        throw std::runtime_error("Fail to exec_inquery");
-}
-
-void scsi::exec_read_capacity(u16 target, u16 lun, size_t &devsize)
-{
-    struct bio *bio = alloc_bio();
-    if (!bio)
-        throw std::runtime_error("Fail to allocate bio");
-
-    auto req = new scsi_req(bio, target, lun);
-    auto data = new cdbres_read_capacity;
-
-    bio->bio_bcount = sizeof(*data);
-    bio->bio_data = data;
-
-    struct cdb_read_capacity cdb;
-    memset(&cdb, 0, sizeof(cdb));
-    cdb.command = CDB_CMD_READ_CAPACITY;
-    cdb.service_action = 0x10;
-    cdb.alloc_len = htobe32(sizeof(*data));
-    memcpy(req->req.cmd.cdb, &cdb, sizeof(cdb));
-
-    make_request(bio);
-    bio_wait(bio);
-    destroy_bio(bio);
-
-    // sectors returned by this cmd is the address of laster sector
-    u64 sectors = be64toh(data->sectors) + 1;
-    u32 blksize = be32toh(data->blksize);
-    devsize = sectors * blksize;
-
-    auto response = req->resp.cmd.response;
-    if (response != VIRTIO_SCSI_S_OK)
-        throw std::runtime_error("Fail to exec_read_capacity");
-
-    delete req;
-    delete data;
-}
-
-void scsi::exec_test_unit_ready(u16 target, u16 lun)
-{
-    struct bio *bio = alloc_bio();
-    if (!bio)
-        throw std::runtime_error("Fail to allocate bio");
-
-    auto req = new scsi_req(bio, target, lun);
-
-    struct cdb_test_unit_ready cdb;
-    memset(&cdb, 0, sizeof(cdb));
-    cdb.command = CDB_CMD_TEST_UNIT_READY;
-    memcpy(req->req.cmd.cdb, &cdb, sizeof(cdb));
-
-    make_request(bio);
-    bio_wait(bio);
-    destroy_bio(bio);
-
-    auto response = req->resp.cmd.response;
-    if (response != VIRTIO_SCSI_S_OK)
-        throw std::runtime_error("Fail to exec_test_unit_ready");
-
-    auto status = req->resp.cmd.status;
-    if (status != VIRTIO_SCSI_S_OK) {
-        throw std::runtime_error("Fail to exec_test_unit_ready");
-    }
-
-    delete req;
-}
-
-void scsi::exec_request_sense(u16 target, u16 lun)
-{
-
-    struct bio *bio = alloc_bio();
-    if (!bio)
-        throw std::runtime_error("Fail to allocate bio");
-
-    auto req = new scsi_req(bio, target, lun);
-    auto data = new cdbres_request_sense;
-
-    bio->bio_bcount = sizeof(*data);
-    bio->bio_data = data;
-
-    struct cdb_request_sense cdb;
-    memset(&cdb, 0, sizeof(cdb));
-    cdb.command = CDB_CMD_REQUEST_SENSE;
-    cdb.alloc_len = sizeof(*data);
-    memcpy(req->req.cmd.cdb, &cdb, sizeof(cdb));
-
-    make_request(bio);
-    bio_wait(bio);
-    destroy_bio(bio);
-
-    if (data->asc == 0x3a)
-        printf("virtio-scsi: target %d lun %d reports medium not present\n", target, lun);
-
-    auto response = req->resp.cmd.response;
-    if (response != VIRTIO_SCSI_S_OK)
-        throw std::runtime_error("Fail to exec_request_sense");
-
-    delete req;
-    delete data;
-}
-
-bool scsi::test_lun(u16 target, u16 lun)
-{
-    bool ready = false;
-    u8 nr = 0;
-
-    do {
-        try {
-            exec_inquery(target, lun);
-            exec_test_unit_ready(target, lun);
-        } catch (std::runtime_error err) {
-            nr++;
-            continue;
-        }
-        ready = true;
-    } while (nr < 2 && !ready);
-
-    return ready;
 }
 
 void scsi::add_lun(u16 target, u16 lun)
@@ -337,22 +125,6 @@ void scsi::add_lun(u16 target, u16 lun)
     read_partition_table(dev);
 
     printf("virtio-scsi: Add scsi device target=%d, lun=%-3d as %s, devsize=%lld\n", target, lun, dev_name.c_str(), devsize);
-
-}
-
-void scsi::scan()
-{
-    /* TODO: Support more target */
-    for (u16 target = 1; target < 2; target++) {
-        try {
-            auto luns = exec_report_luns(target);
-            for (auto &lun : luns) {
-                add_lun(target, lun);
-            }
-        } catch(std::runtime_error err) {
-            printf("virtio-scsi: %s\n", err.what());
-        }
-    }
 }
 
 bool scsi::ack_irq()
@@ -408,41 +180,11 @@ scsi::~scsi()
     // TODO: cleanup resouces
 }
 
-scsi::scsi_req::scsi_req(struct bio* bio, u16 target, u16 lun, u8 cmd)
-    : bio(bio)
-{
-
-    init(bio, target, lun);
-    switch (cmd) {
-        case CDB_CMD_READ_16:
-        case CDB_CMD_WRITE_16: {
-           u64 lba = bio->bio_offset / VIRTIO_SCSI_SECTOR_SIZE;
-           u32 count = bio->bio_bcount / VIRTIO_SCSI_SECTOR_SIZE;
-           struct cdb_readwrite_16 cdb;
-           memset(&cdb, 0, sizeof(cdb));
-           cdb.command = cmd;
-           cdb.lba = htobe64(lba);
-           cdb.count = htobe32(count);
-           memcpy(this->req.cmd.cdb, &cdb, sizeof(cdb));
-           break;
-        }
-        case CDB_CMD_SYNCHRONIZE_CACHE_10: {
-           struct cdb_readwrite_10 cdb;
-           memset(&cdb, 0, sizeof(cdb));
-           cdb.command = cmd;
-           cdb.lba = 0;
-           cdb.count = 0;
-           memcpy(this->req.cmd.cdb, &cdb, sizeof(cdb));
-           break;
-        }
-        default:
-            break;
-    };
-}
-
 void scsi::read_config()
 {
     virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
+    config.max_lun = _config.max_lun;
+    config.max_target = _config.max_target;
 }
 
 void scsi::req_done()
@@ -453,13 +195,15 @@ void scsi::req_done()
 
         virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
 
-        scsi_req* req;
+        scsi_virtio_req* req;
         u32 len;
-        while ((req = static_cast<scsi_req*>(queue->get_buf_elem(&len))) != nullptr) {
+        while ((req = static_cast<scsi_virtio_req*>(queue->get_buf_elem(&len))) != nullptr) {
             auto response = req->resp.cmd.response;
+            auto status = req->resp.cmd.response;
             auto bio = req->bio;
 
-            assert(response == VIRTIO_SCSI_S_OK);
+            req->response = response;
+            req->status = status;
 
             // Other req type will be freed by the caller who send the bio
             if (req->bio->bio_cmd != BIO_SCSI)
@@ -480,24 +224,16 @@ int scsi::make_request(struct bio* bio)
         if (!bio)
             return EIO;
 
-        switch (bio->bio_cmd) {
-        case BIO_READ:
-            exec_readwrite(bio, CDB_CMD_READ_16);
-            break;
-        case BIO_WRITE:
-            exec_readwrite(bio, CDB_CMD_WRITE_16);
-            break;
-        case BIO_FLUSH:
-            exec_synccache(bio, CDB_CMD_SYNCHRONIZE_CACHE_10);
-            break;
-        case BIO_SCSI:
-            exec_cmd(bio);
-            break;
-        default:
-            return ENOTBLK;
+        struct scsi_priv *prv;
+        u16 target = 0, lun = 0;
+        if (bio->bio_cmd != BIO_SCSI) {
+            prv = scsi::get_priv(bio);
+            target = prv->target;
+            lun = prv->lun;
         }
+
+        return handle_bio(target, lun, bio);
     }
-    return 0;
 }
 
 u32 scsi::get_driver_features()
