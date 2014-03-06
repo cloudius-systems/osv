@@ -148,6 +148,9 @@ def start_osv_qemu(options):
         args += ["-mon", "chardev=stdio,mode=readline,default"]
         args += ["-device", "isa-serial,chardev=stdio"]
 
+    for a in options.pass_args or []:
+        args += a.split()
+
     try:
         # Save the current settings of the stty
         stty_save()
@@ -335,6 +338,8 @@ if (__name__ == "__main__"):
                         help="specify vnc port number")
     parser.add_argument("--api", action = "store_true",
                         help = "redirect the API port (8080) for user-mode networking")
+    parser.add_argument("--pass-args", action="append",
+                        help = "pass arguments to underlying hypervisor (e.g. qemu)")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
