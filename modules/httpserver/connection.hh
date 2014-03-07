@@ -24,6 +24,8 @@ namespace http {
 
 namespace server {
 
+typedef std::array<char, 8192> buffer_type;
+
 class connection_manager;
 
 /**
@@ -92,7 +94,7 @@ private:
      * Buffer for incoming data.
      *
      */
-    std::array<char, 8192> buffer_;
+    buffer_type buffer_;
 
     /**
      * The incoming request.
