@@ -202,6 +202,7 @@ tests += tests/tst-hub.so
 tests += tests/misc-leak.so
 tests += tests/misc-mmap-anon-perf.so
 tests += tests/tst-mmap-file.so
+tests += tests/misc-mmap-big-file.so
 tests += tests/tst-mmap.so
 tests += tests/tst-huge.so
 tests += tests/misc-mutex.so
