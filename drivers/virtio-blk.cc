@@ -274,23 +274,11 @@ int blk::make_request(struct bio* bio)
         queue->init_sg();
         queue->add_out_sg(hdr, sizeof(struct blk_outhdr));
 
-        // need to break a contiguous buffers that > 4k into several physical page mapping
-        // even if the virtual space is contiguous.
-        size_t len = 0;
-        auto offset = reinterpret_cast<size_t>(bio->bio_data) & 0xfff;
-        auto *base = bio->bio_data;
-        while (len != bio->bio_bcount) {
-            auto size = std::min(bio->bio_bcount - len, mmu::page_size);
-            if (offset + size > mmu::page_size)
-                size = mmu::page_size - offset;
-            len += size;
+        if (bio->bio_data && bio->bio_bcount > 0) {
             if (type == VIRTIO_BLK_T_OUT)
-                queue->add_out_sg(base, size);
+                queue->add_out_sg(bio->bio_data, bio->bio_bcount);
             else
-                queue->add_in_sg(base, size);
-
-            base += size;
-            offset = 0;
+                queue->add_in_sg(bio->bio_data, bio->bio_bcount);
         }
 
         req->res.status = 0;
