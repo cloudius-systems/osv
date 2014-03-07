@@ -96,7 +96,6 @@ void balloon::release(JNIEnv *env)
 size_t balloon::move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest)
 {
     size_t skipped = static_cast<unsigned char *>(vma->addr()) - vma->jvm_addr();
-    assert(mutex_owned(&balloons_lock));
 
     // We need to calculate how many bytes we will skip if this were the new
     // balloon, but we won't touch the mappings yet. That will be done at conciliation
@@ -256,26 +255,24 @@ size_t jvm_balloon_shrinker::release_memory(size_t size)
 void jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
 
-    WITH_LOCK(balloons_lock) {
-        if (!ef || (ef->error_code == mmu::page_fault_write)) {
-            delete vma;
-            return;
-        }
-
-        memcpy_decoder *decode = memcpy_find_decoder(ef);
-        if (!decode) {
-            delete vma;
-            return;
-        }
-
-        unsigned char *dest = memcpy_decoder::dest(ef);
-        unsigned char *src = memcpy_decoder::src(ef);
-        size_t size = decode->size(ef);
-        trace_jvm_balloon_fault(src, dest, size, vma->size());
-        assert(size >= vma->size());
-
-        decode->memcpy_fixup(ef, b->move_balloon(b, vma, dest));
+    if (!ef || (ef->error_code == mmu::page_fault_write)) {
+        delete vma;
+        return;
     }
+
+    memcpy_decoder *decode = memcpy_find_decoder(ef);
+    if (!decode) {
+        delete vma;
+        return;
+    }
+
+    unsigned char *dest = memcpy_decoder::dest(ef);
+    unsigned char *src = memcpy_decoder::src(ef);
+    size_t size = decode->size(ef);
+    trace_jvm_balloon_fault(src, dest, size, vma->size());
+    assert(size >= vma->size());
+
+    decode->memcpy_fixup(ef, b->move_balloon(b, vma, dest));
 }
 
 jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
