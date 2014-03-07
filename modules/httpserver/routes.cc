@@ -15,12 +15,12 @@ using namespace std;
 
 routes::~routes()
 {
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < NUM_OPERATION; i++) {
         for (auto kv : map[i]) {
             delete kv.second;
         }
     }
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < NUM_OPERATION; i++) {
         for (auto r : rules[i]) {
             delete r;
         }

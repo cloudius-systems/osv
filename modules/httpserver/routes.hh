@@ -159,8 +159,8 @@ private:
      */
     std::string normalize_url(const std::string& url, std::string& param_part);
 
-    std::unordered_map<std::string, handler_base*> map[2];
-    std::vector<match_rule*> rules[2];
+    std::unordered_map<std::string, handler_base*> map[NUM_OPERATION];
+    std::vector<match_rule*> rules[NUM_OPERATION];
 };
 
 }

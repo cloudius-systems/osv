@@ -16,7 +16,7 @@ namespace httpserver {
 typedef std::unordered_map<std::string, std::string> parameters;
 
 enum operation_type {
-    GET, POST, PUT, DELETE
+    GET, POST, PUT, DELETE, NUM_OPERATION
 };
 
 /**

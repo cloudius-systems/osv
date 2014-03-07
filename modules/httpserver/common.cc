@@ -10,7 +10,16 @@ namespace httpserver {
 
 operation_type str2type(const std::string& type)
 {
-    return (type == "GET") ? GET : POST;
+    if (type == "DELETE") {
+        return DELETE;
+    }
+    if (type == "POST") {
+        return POST;
+    }
+    if (type == "PUT") {
+        return PUT;
+    }
+    return GET;
 }
 
 }
