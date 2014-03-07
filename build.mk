@@ -188,6 +188,7 @@ boost-tests += tests/tst-dlfcn.so
 boost-tests += tests/tst-stat.so
 boost-tests += tests/tst-wait-for.so
 boost-tests += tests/tst-bsd-tcp1.so
+boost-tests += tests/tst-async.so
 
 java_tests := tests/hello/Hello.class
 
@@ -648,6 +649,7 @@ objects += core/waitqueue.o
 objects += core/chart.o
 objects += core/net_channel.o
 objects += core/demangle.o
+objects += core/async.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
