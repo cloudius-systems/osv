@@ -741,7 +741,7 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
  *
  * \return returns EACCESS/EPERM if requested permission cannot be granted
  */
-static error protect(void *addr, size_t size, unsigned int perm)
+static error protect(const void *addr, size_t size, unsigned int perm)
 {
     uintptr_t start = reinterpret_cast<uintptr_t>(addr);
     uintptr_t end = start + size;
@@ -817,14 +817,14 @@ ulong evacuate(uintptr_t start, uintptr_t end)
     // FIXME: range also indicates where we can insert a new anon_vma, use it
 }
 
-static void unmap(void* addr, size_t size)
+static void unmap(const void* addr, size_t size)
 {
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     evacuate(start, start+size);
 }
 
-static error sync(void* addr, size_t length, int flags)
+static error sync(const void* addr, size_t length, int flags)
 {
     length = align_up(length, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
@@ -969,7 +969,7 @@ void vcleanup(void* addr, size_t size)
     }
 }
 
-void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm)
+void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
 {
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
@@ -993,7 +993,7 @@ std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned f
     return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page_mmap(file)));
 }
 
-void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
+void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
               fileref f, f_offset offset)
 {
     bool search = !(flags & mmu::mmap_fixed);
@@ -1015,7 +1015,7 @@ void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
     return v;
 }
 
-bool is_linear_mapped(void *addr, size_t size)
+bool is_linear_mapped(const void *addr, size_t size)
 {
     if ((addr >= elf_start) && (addr + size <= elf_start + elf_size)) {
         return true;
@@ -1024,7 +1024,7 @@ bool is_linear_mapped(void *addr, size_t size)
 }
 
 // Checks if the entire given memory region is mmap()ed (in vma_list).
-bool ismapped(void *addr, size_t size)
+bool ismapped(const void *addr, size_t size)
 {
     uintptr_t start = (uintptr_t) addr;
     uintptr_t end = start + size;
@@ -1293,7 +1293,7 @@ jvm_balloon_vma::~jvm_balloon_vma()
 // previous anon vma that was in its place as holding the heap. That will work
 // most of the time and with most GC algos. If that is not sufficient, the
 // JVM will have to tell us about its regions itself.
-static vma *mark_jvm_heap(void* addr)
+static vma *mark_jvm_heap(const void* addr)
 {
     WITH_LOCK(vma_list_mutex) {
         u64 a = reinterpret_cast<u64>(addr);
@@ -1313,7 +1313,7 @@ static vma *mark_jvm_heap(void* addr)
     }
 }
 
-ulong map_jvm(void* addr, size_t size, balloon *b)
+ulong map_jvm(const void* addr, size_t size, balloon *b)
 {
     auto start = reinterpret_cast<uintptr_t>(addr);
 
@@ -1489,7 +1489,7 @@ void switch_to_runtime_page_table()
     processor::write_cr3(page_table_root.next_pt_addr());
 }
 
-error mprotect(void *addr, size_t len, unsigned perm)
+error mprotect(const void *addr, size_t len, unsigned perm)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
 
@@ -1500,7 +1500,7 @@ error mprotect(void *addr, size_t len, unsigned perm)
     return protect(addr, len, perm);
 }
 
-error munmap(void *addr, size_t length)
+error munmap(const void *addr, size_t length)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
 
@@ -1512,7 +1512,7 @@ error munmap(void *addr, size_t length)
     return no_error();
 }
 
-error msync(void* addr, size_t length, int flags)
+error msync(const void* addr, size_t length, int flags)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
 
@@ -1522,7 +1522,7 @@ error msync(void* addr, size_t length, int flags)
     return sync(addr, length, flags);
 }
 
-error mincore(void *addr, size_t length, unsigned char *vec)
+error mincore(const void *addr, size_t length, unsigned char *vec)
 {
     char *end = ::align_up((char *)addr + length, page_size);
     char tmp;

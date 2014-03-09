@@ -162,17 +162,17 @@ public:
     virtual void put_page(uintptr_t offset, size_t size) override;
 };
 
-void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
+void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
               fileref file, f_offset offset);
-void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm);
-ulong map_jvm(void* addr, size_t size, balloon *b);
+void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm);
+ulong map_jvm(const void* addr, size_t size, balloon *b);
 
-error munmap(void* addr, size_t size);
-error mprotect(void *addr, size_t size, unsigned int perm);
-error msync(void* addr, size_t length, int flags);
-error mincore(void *addr, size_t length, unsigned char *vec);
-bool is_linear_mapped(void *addr, size_t size);
-bool ismapped(void *addr, size_t size);
+error munmap(const void* addr, size_t size);
+error mprotect(const void *addr, size_t size, unsigned int perm);
+error msync(const void* addr, size_t length, int flags);
+error mincore(const void *addr, size_t length, unsigned char *vec);
+bool is_linear_mapped(const void *addr, size_t size);
+bool ismapped(const void *addr, size_t size);
 bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
