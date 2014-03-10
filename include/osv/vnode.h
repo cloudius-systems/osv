@@ -97,6 +97,7 @@ struct vattr {
 	nlink_t		va_nlink;
 	uid_t		va_uid;
 	gid_t		va_gid;
+	dev_t           va_fsid;        /* id of the underlying filesystem */
 	ino_t		va_nodeid;
 	struct timespec	va_atime;
 	struct timespec	va_mtime;

@@ -40,6 +40,7 @@ typedef	struct mount	vfs_t;
 
 #define	vfs_flag	m_flags
 #define	vfs_data	m_data
+#define	vfs_fsid	m_fsid
 #if 0
 #define	vfs_count	mnt_ref
 #define	vfs_fsid	mnt_stat.f_fsid

@@ -1924,6 +1924,9 @@ zfs_getattr(vnode_t *vp, vattr_t *vap)
 	vap->va_mode = zp->z_mode & ~S_IFMT;
 #ifdef sun
 	vap->va_fsid = zp->z_zfsvfs->z_vfs->vfs_dev;
+#else
+	vap->va_fsid =  zp->z_zfsvfs->z_vfs->vfs_fsid.__val[0] |
+		((dev_t) zp->z_zfsvfs->z_vfs->vfs_fsid.__val[1] << 32);
 #endif
 	vap->va_nodeid = zp->z_id;
 	if ((vp->v_flags & VROOT) && zfs_show_ctldir(zp))
