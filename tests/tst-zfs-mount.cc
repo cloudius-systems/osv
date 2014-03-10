@@ -187,8 +187,10 @@ int main(int argc, char **argv)
 		"rename /usr/testdir to /usr/testdir2");
 
 	report(rmdir("/usr/testdir2") == 0, "rmdir /usr/testdir2");
+#if 0
 #ifdef __OSV__
 	report(check_zfs_refcnt_behavior() == 0, "check zfs refcount consistency");
+#endif
 #endif
 
 #if 0
