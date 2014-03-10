@@ -874,48 +874,27 @@ private:
 class map_file_page : public map_anon_page_noinit {
 private:
     file *_file;
-    uint64_t fsize;
     f_offset foffset;
-    ssize_t len = 0;
-    uint64_t start_offset = 0;
-    std::vector<iovec> iovecs;
 
-    virtual void* fill(void* addr, uint64_t offset, uintptr_t size) {
-        if (len == 0) {
-            start_offset = foffset + offset;
+    virtual void* fill(void* addr, uint64_t offset, uintptr_t size) override {
+        if (addr) {
+            iovec iovec {addr, size};
+            uio data {&iovec, 1, off_t(foffset + offset), ssize_t(size), UIO_READ};
+            _file->read(&data, FOF_OFFSET);
+            /* zero buffer tail on a short read */
+            if (data.uio_resid) {
+                size_t tail = std::min(size, size_t(data.uio_resid));
+                memset((char*)addr + size - tail, 0, tail);
+            }
         }
-        iovecs.push_back(iovec {addr, size});
-        len += size;
         return addr;
     }
 public:
-    map_file_page(file *file, size_t fsize, f_offset foffset, size_t size) :
-        _file(file), fsize(fsize), foffset(foffset) {
-            iovecs.reserve((size / huge_page_size) + pte_per_page);
-        }
+    map_file_page(file *file, f_offset foffset) :
+        _file(file), foffset(foffset) {}
     virtual ~map_file_page() {};
 
-    void finalize() {
-        if (iovecs.empty()) {
-            return;
-        }
-        uio data{iovecs.data(), int(iovecs.size()), off_t(start_offset), len, UIO_READ};
-        _file->read(&data, FOF_OFFSET);
-        /* zero buffer tail on a short read */
-        int i = iovecs.size() - 1;
-        while (data.uio_resid) {
-            assert(i >= 0);
-            iovec iovec = iovecs[i--];
-            size_t tail = std::min(iovec.iov_len, size_t(data.uio_resid));
-            memset((char*)iovec.iov_base + iovec.iov_len - tail, 0, tail);
-            data.uio_resid -= tail;
-        }
-        // make object reusable for next mapping operation
-        len = start_offset = 0;
-        // force vector to release memory
-        std::vector<iovec> tmp;
-        tmp.reserve(1);
-        iovecs.swap(tmp);
+    void finalize() override {
     }
 };
 
@@ -1325,7 +1304,7 @@ file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offse
         throw make_error(err);
     }
 
-    _page_ops = new map_file_page(_file.get(), ::size(_file), _offset, size());
+    _page_ops = new map_file_page(_file.get(), _offset);
 }
 
 file_vma::~file_vma()
