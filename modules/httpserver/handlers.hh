@@ -37,6 +37,23 @@ private:
 
 };
 
+class bad_param_exception : public std::exception
+{
+public:
+    bad_param_exception(const std::string& msg)
+        : _msg(msg)
+    {
+    }
+    virtual const char* what() const throw ()
+    {
+        return _msg.c_str();
+    }
+
+private:
+    std::string _msg;
+
+};
+
 /**
  * handlers holds the logic for serving an incoming request.
  * All handlers inherit from the base httpserver_handler and
