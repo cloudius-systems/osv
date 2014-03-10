@@ -1470,6 +1470,8 @@ zfs_statfs(struct mount *mp, struct statfs *statp)
 
 	statp->f_namelen = ZFS_MAXNAMELEN;
 
+	statp->f_fsid = mp->m_fsid; /* File system identifier */
+
 	ZFS_EXIT(zfsvfs);
 	return (0);
 }
