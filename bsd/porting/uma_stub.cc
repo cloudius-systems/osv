@@ -14,7 +14,7 @@
 
 void* uma_zone::cache::alloc()
 {
-    if (len && CONF_debug_memory) {
+    if (len && !CONF_debug_memory) {
         return a[--len];
     }
     return nullptr;
@@ -22,7 +22,7 @@ void* uma_zone::cache::alloc()
 
 bool uma_zone::cache::free(void* obj)
 {
-    if (len < max_size && CONF_debug_memory) {
+    if (len < max_size && !CONF_debug_memory) {
         a[len++] = obj;
         return true;
     }
