@@ -137,14 +137,12 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
-void* vfs_file::get_page(uintptr_t start, uintptr_t f_off, uintptr_t offset, size_t size)
+void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 {
 	assert(size == mmu::page_size);
 
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
-
-	auto off = f_off + offset;
 
 	iovec io;
 	io.iov_base = nullptr;
@@ -167,18 +165,16 @@ void* vfs_file::get_page(uintptr_t start, uintptr_t f_off, uintptr_t offset, siz
 	assert(VOP_MAP(vp, fp, data) == 0);
 	vn_unlock(vp);
 
-	mmu::add_mapping(map_data.buffer, map_data.buf_size, start + offset - map_data.buf_off);
+	mmu::add_mapping(map_data.buffer, map_data.buf_size, start - map_data.buf_off);
 	return io.iov_base + map_data.buf_off;
 }
 
-void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t f_off, uintptr_t offset, size_t size)
+void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t off, size_t size)
 {
 	assert(size == mmu::page_size);
 
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
-
-	auto off = f_off + offset;
 
 	uio data;
 	data.uio_iov = nullptr;
@@ -191,7 +187,7 @@ void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t f_off, uintptr_t 
 	assert(VOP_UNMAP(vp, fp, &data) == 0);
 	vn_unlock(vp);
 
-	mmu::remove_mapping(addr, start + offset);
+	mmu::remove_mapping(addr, start);
 }
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)

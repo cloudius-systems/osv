@@ -979,34 +979,22 @@ public:
 
 typedef std::shared_ptr<mapped_buffer> map_ptr;
 // In the general case, we expect only one element in the list.
-// FIXME: Still need to handle the case for multiple mappings in the same file.
-static std::unordered_map<void *, map_ptr> shared_fs_maps;
+static std::unordered_multimap<void *, map_ptr> shared_fs_maps;
 // Can't use the vma_list_mutex, because if we do, we can have a deadlock where
 // we call into the filesystem to read data with the vma_list_mutex held - because
 // we do that for complex operate operations, and if the filesystem decides to evict
 // a page to read the selected buffer, we will need to access those data structures.
 static mutex shared_fs_mutex;
 
-static map_ptr find_mapping(void *buf_addr)
-{
-    auto sh = shared_fs_maps.find(buf_addr);
-    if (sh == shared_fs_maps.end()) {
-        return 0;
-    }
-    return (*sh).second;
-}
-
 void add_mapping(void *buf_addr, uintptr_t size, uintptr_t vaddr)
 {
     WITH_LOCK(shared_fs_mutex) {
-        auto buf = find_mapping(buf_addr);
-
-        if (buf != 0) {
-            if (vaddr == buf->vaddr) {
+        auto buf = shared_fs_maps.equal_range(buf_addr);
+        for (auto it = buf.first; it != buf.second; it++) {
+            auto& v = (*it).second;
+            if (*v == vaddr) {
                 return;
             }
-            // FIXME: Handle multiple mappings
-            abort();
         }
         map_ptr vb(new mapped_buffer { vaddr, size });
         shared_fs_maps.insert(std::make_pair(buf_addr, vb));
@@ -1016,7 +1004,14 @@ void add_mapping(void *buf_addr, uintptr_t size, uintptr_t vaddr)
 void remove_mapping(void *buf_addr, uintptr_t addr)
 {
     WITH_LOCK(shared_fs_mutex) {
-        shared_fs_maps.erase(buf_addr);
+        auto buf = shared_fs_maps.equal_range(buf_addr);
+        for (auto it = buf.first; it != buf.second; it++) {
+            auto &v = (*it).second;
+            if (*v == addr) {
+                shared_fs_maps.erase(it);
+                break;
+            }
+        }
     }
 }
 
@@ -1079,15 +1074,16 @@ ulong populate_vma(vma *vma, void *v, size_t size)
 TRACEPOINT(trace_mmu_invalidate, "addr=%p, vaddr=%p", void *, uintptr_t);
 void unmap_address(void *addr, size_t size)
 {
-    map_ptr buf;
     WITH_LOCK(shared_fs_mutex) {
-        buf = find_mapping(addr);
-        assert(buf);
-        assert(buf->size == size);
+        auto buf = shared_fs_maps.equal_range(addr);
+        for (auto it = buf.first; it != buf.second; it++) {
+            auto& v = (*it).second;
+            trace_mmu_invalidate(addr, v->vaddr);
+            operate_range(page_out(), (void *)v->vaddr, v->size);
+        }
+
         shared_fs_maps.erase(addr);
     }
-    trace_mmu_invalidate(addr, buf->vaddr);
-    operate_range(page_out(), (void *)buf->vaddr, buf->size);
 }
 
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
