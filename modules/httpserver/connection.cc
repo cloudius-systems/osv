@@ -15,10 +15,26 @@
 
 #include <utility>
 #include <vector>
+#include <exception>
 
 namespace http {
 
 namespace server {
+
+class message_handling_exception : public std::exception {
+public:
+    message_handling_exception(const std::string& msg)
+        : _msg(msg)
+    {
+    }
+    virtual const char* what() const throw ()
+    {
+        return _msg.c_str();
+    }
+
+private:
+    std::string _msg;
+};
 
 connection::connection(boost::asio::ip::tcp::socket socket,
                        connection_manager& manager, request_handler& handler)
