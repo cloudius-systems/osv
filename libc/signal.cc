@@ -151,12 +151,12 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 
 // using signal() is not recommended (use sigaction instead!), but some
 // programs like to call to do simple things, like ignoring a certain signal.
-sighandler_t signal(int signum, sighandler_t handler)
+static sighandler_t signal(int signum, sighandler_t handler, int sa_flags)
 {
     struct sigaction act;
     memset(&act, 0, sizeof(act));
     act.sa_handler = handler;
-    act.sa_flags = SA_RESTART;
+    act.sa_flags = sa_flags;
     struct sigaction old;
     if (sigaction(signum, &act, &old) < 0) {
         return SIG_ERR;
@@ -167,6 +167,17 @@ sighandler_t signal(int signum, sighandler_t handler)
     } else {
         return old.sa_handler;
     }
+}
+
+sighandler_t signal(int signum, sighandler_t handler)
+{
+    return signal(signum, handler, SA_RESTART);
+}
+
+extern "C"
+sighandler_t __sysv_signal(int signum, sighandler_t handler)
+{
+    return signal(signum, handler, SA_RESETHAND | SA_NODEFER);
 }
 
 // using sigignore() and friends is not recommended as it is obsolete System V
