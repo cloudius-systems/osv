@@ -62,6 +62,122 @@ static std::string buf_str(buffer_type::pointer & b,
     return res.str();
 }
 
+/**
+ * Generate a temporary file name
+ * @return a temporary file name
+ */
+static std::string tmp_file()
+{
+    char buffer [L_tmpnam];
+
+    tmpnam (buffer);
+
+    return buffer;
+}
+
+multipart_parser::multipart_parser()
+    :
+    mode(WAIT_BOUNDARY),
+    empty_lines(0),
+    pos_in_file(0),
+    header_length(0)
+
+{
+
+}
+
+void multipart_parser::set_boundary(const std::string& _boundary)
+{
+    boundary = _boundary;
+}
+
+void multipart_parser::set_original_file(request& req, const std::string val)
+{
+    auto p = val.find("filename=\"") + 10;
+    auto end_name = val.find("\"", p + 1);
+    std::string orig_fname = val.substr(p, end_name - p);
+
+    req.headers.push_back(header());
+    req.headers.back().name = "original_file_name";
+    req.headers.back().value = orig_fname;
+}
+
+void multipart_parser::open_tmp_file(request& req)
+{
+    std::string fname = tmp_file();
+    req.headers.push_back(header());
+    req.headers.back().name = "file_name";
+    req.headers.back().value = fname;
+    upload_file.open(fname, std::ios::binary | std::ios::out);
+    if (!upload_file.is_open() || upload_file.bad()) {
+        std::cerr << "failed opening file for output " << fname << std::endl;
+        throw message_handling_exception(
+            "Failed opening temporary file for output");
+    }
+}
+
+request_parser::result_type multipart_parser::parse(request& req,
+        buffer_type::pointer & bg,
+        const buffer_type::pointer & end)
+{
+    if (mode == DONE) {
+        return request_parser::good;
+    }
+    std::string cur;
+    buffer_type::pointer start_pos = bg;
+    while (bg < end) {
+        switch (mode) {
+        case WAIT_BOUNDARY:
+            if (buf_str(bg, end).find(boundary) != std::string::npos) {
+                mode = WAIT_CONTENT_DISPOSITION;
+            }
+            break;
+
+        case WAIT_CONTENT_DISPOSITION:
+            if ((cur = buf_str(bg, end)).find("Content-Disposition")
+                    != std::string::npos) {
+                set_original_file(req, cur);
+                open_tmp_file(req);
+                mode = WAIT_EMPTY;
+                empty_lines = 0;
+            }
+            break;
+
+        case WAIT_EMPTY:
+            if ((cur = buf_str(bg, end)) == "") {
+                empty_lines++;
+            } else {
+                empty_lines = 0;
+            }
+
+            if (empty_lines >= 3) {
+                mode = WRITE_TO_FILE;
+                header_length += (bg - start_pos);
+                req.content_length -= header_length;
+            }
+            break;
+
+        case WRITE_TO_FILE:
+            if (pos_in_file >= req.content_length) {
+                mode = DONE;
+                return request_parser::good;
+            }
+            {
+                char c = *bg;
+                upload_file << c;
+                bg++;
+                pos_in_file++;
+            }
+            break;
+
+        default:
+            break;
+        }
+    }
+    header_length += (bg - start_pos);
+    return request_parser::indeterminate;
+}
+
 connection::connection(boost::asio::ip::tcp::socket socket,
                        connection_manager& manager, request_handler& handler)
     : socket_(std::move(socket))
