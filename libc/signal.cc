@@ -135,6 +135,11 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
 
 int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 {
+    // FIXME: We do not support any sa_flags besides SA_SIGINFO.
+    if (signum < 0 || signum >= (int)nsignals) {
+        errno = EINVAL;
+        return -1;
+    }
     if (oldact) {
         *oldact = signal_actions[signum];
     }
