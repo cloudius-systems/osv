@@ -153,13 +153,14 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 // programs like to call to do simple things, like ignoring a certain signal.
 sighandler_t signal(int signum, sighandler_t handler)
 {
-    if (signum < 0 || signum >= (int)nsignals) {
-        errno = EINVAL;
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = handler;
+    act.sa_flags = SA_RESTART;
+    struct sigaction old;
+    if (sigaction(signum, &act, &old) < 0) {
         return SIG_ERR;
     }
-    struct sigaction old = signal_actions[signum];
-    memset(&signal_actions[signum], 0, sizeof(signal_actions[signum]));
-    signal_actions[signum].sa_handler = handler;
     if (old.sa_flags & SA_SIGINFO) {
         // TODO: Is there anything sane to do here?
         return nullptr;
