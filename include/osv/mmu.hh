@@ -14,6 +14,7 @@
 #include <osv/types.h>
 #include <functional>
 #include <osv/error.h>
+#include <osv/addr_range.hh>
 
 struct exception_frame;
 class balloon;
@@ -48,17 +49,6 @@ enum {
     perm_rx = perm_read | perm_exec,
     perm_rw = perm_read | perm_write,
     perm_rwx = perm_read | perm_write | perm_exec,
-};
-
-class addr_range {
-public:
-    addr_range(uintptr_t start, uintptr_t end)
-        : _start(start), _end(end) {}
-    uintptr_t start() const { return _start; }
-    uintptr_t end() const { return _end; }
-private:
-    uintptr_t _start;
-    uintptr_t _end;
 };
 
 enum {
