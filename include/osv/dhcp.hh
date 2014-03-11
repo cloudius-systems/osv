@@ -32,8 +32,8 @@ namespace dhcp {
     #define dhcp_w(...)   tprintf_w(dhcp_tag, __VA_ARGS__)
     #define dhcp_e(...)   tprintf_e(dhcp_tag, __VA_ARGS__)
 
-    const u_short dhcp_client_port = 68;
-    const u_short dhcp_server_port = 67;
+    constexpr u_short dhcp_client_port = 68;
+    constexpr u_short dhcp_server_port = 67;
 
     enum dhcp_type {
         BOOTREQUEST = 1,
@@ -94,11 +94,11 @@ namespace dhcp {
         DHCP_MT_INVALID = 255
     };
 
-    const u16 min_ip_len = sizeof(struct ip);
-    const u16 udp_len = sizeof(struct udphdr);
-    const u16 dhcp_bootp_len = sizeof(struct dhcp_packet);
-    const u16 min_options_len = 4;
-    const u16 min_dhcp_len = dhcp_bootp_len + min_options_len;
+    constexpr u16 min_ip_len = sizeof(struct ip);
+    constexpr u16 udp_len = sizeof(struct udphdr);
+    constexpr u16 dhcp_bootp_len = sizeof(struct dhcp_packet);
+    constexpr u16 min_options_len = 4;
+    constexpr u16 min_dhcp_len = dhcp_bootp_len + min_options_len;
 
     ///////////////////////////////////////////////////////////////////////////
 
