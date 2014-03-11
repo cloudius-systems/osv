@@ -196,6 +196,33 @@ void connection::stop()
     socket_.close();
 }
 
+bool connection::set_content_type()
+{
+    request_.is_multi_part = false;
+    auto ct = request_.get_header("Content-Type");
+    if (ct == "") {
+        return true;
+    }
+    std::string lng = request_.get_header("Content-Length");
+    if (lng == "") {
+        return false;
+    } else {
+        std::stringstream strm(lng);
+        strm >> request_.content_length;
+    }
+    if (ct.find("multipart/form-data;") == 0) {
+        auto p = ct.find("boundary=");
+        if (p > 0) {
+            std::string boundry = ct.substr(p + 9, std::string::npos);
+            multipart.set_boundry(boundry);
+            request_.content_length -= boundry.length();
+            request_.content_length -= 8; // remove eol, leading and edning slahes
+            request_.is_multi_part = true;
+        }
+    }
+    return true;
+}
+
 void connection::do_read()
 {
     auto self(shared_from_this());

@@ -116,6 +116,13 @@ private:
     void do_write();
 
     /**
+     * check if the request has content
+     * and update it accordingly.
+     * @return false on error
+     */
+    bool set_content_type();
+
+    /**
      * Socket for the connection.
      *
      */
