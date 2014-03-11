@@ -36,6 +36,8 @@ def format_args(args):
 
 def set_imgargs(options):
     execute = options.execute
+    if options.image and not execute:
+        return
     if (not execute):
         with open ("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
             execute = cmdline.read()
