@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 #include <exception>
+#include <sstream>
 
 namespace http {
 
@@ -35,6 +36,31 @@ public:
 private:
     std::string _msg;
 };
+
+/**
+ * This helper function reads a string from a buffer.
+ * It reads till an end of line and consume the FF/NL chars
+ * @param b buffer pointer
+ * @return a string
+ */
+static std::string buf_str(buffer_type::pointer & b,
+                           const buffer_type::pointer & end)
+{
+    char c;
+    std::stringstream res;
+    while (b < end && (c = *b) != '\r' && c != '\n') {
+        res << c;
+        b++;
+    }
+    if (b >= end) {
+        throw message_handling_exception("Error parsing message, missing EOL");
+    }
+
+    if (c == '\r' || c == '\n') {
+        b++; // consume the new line
+    }
+    return res.str();
+}
 
 connection::connection(boost::asio::ip::tcp::socket socket,
                        connection_manager& manager, request_handler& handler)
