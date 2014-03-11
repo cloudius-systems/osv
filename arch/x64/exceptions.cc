@@ -33,7 +33,6 @@ extern "C" {
     void ex_br();
     void ex_ud();
     void ex_nm();
-    void ex_pf();
     void ex_df();
     void ex_ts();
     void ex_np();
