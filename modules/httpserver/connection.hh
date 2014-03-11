@@ -110,6 +110,13 @@ private:
     void do_read();
 
     /**
+     * Perform an asynchronous read operation of a multipart.
+     * and save it to file
+     *
+     */
+    void do_read_mp();
+
+    /**
      * Perform an asynchronous write operation.
      *
      */
@@ -121,6 +128,12 @@ private:
      * @return false on error
      */
     bool set_content_type();
+
+
+    /**
+     * handle complete of multipart read.
+     */
+    void on_complete_multiplart();
 
     /**
      * Socket for the connection.
@@ -163,6 +176,8 @@ private:
      *
      */
     reply reply_;
+
+    multipart_parser multipart;
 };
 
 typedef std::shared_ptr<connection> connection_ptr;

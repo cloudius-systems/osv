@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 #include <exception>
+#include <boost/range/iterator_range.hpp>
 #include <sstream>
 
 namespace http {
@@ -214,7 +215,7 @@ bool connection::set_content_type()
         auto p = ct.find("boundary=");
         if (p > 0) {
             std::string boundry = ct.substr(p + 9, std::string::npos);
-            multipart.set_boundry(boundry);
+            multipart.set_boundary(boundry);
             request_.content_length -= boundry.length();
             request_.content_length -= 8; // remove eol, leading and edning slahes
             request_.is_multi_part = true;
@@ -232,14 +233,35 @@ void connection::do_read()
     {
         if (!ec)
         {
-            request_parser::result_type result;
-            std::tie(result, std::ignore) = request_parser_.parse(
-                                                request_, buffer_.data(), buffer_.data() +
-                                                bytes_transferred);
-
+            auto r = request_parser_.parse(
+                         request_, buffer_.data(), buffer_.data() +
+                         bytes_transferred);
+            auto result = std::get<0>(r);
             if (result == request_parser::good)
             {
-                request_handler_.handle_request(request_, reply_);
+                if (set_content_type()) {
+                    if (request_.is_multi_part) {
+                        auto bg = std::get<1>(r);
+                        if (multipart.parse(request_, bg, buffer_.data() +
+                                            bytes_transferred) == request_parser::bad) {
+                            reply_ = reply::stock_reply(reply::bad_request);
+                            do_write();
+                        } else {
+                            if (multipart.is_done()) {
+                                on_complete_multiplart();
+                            } else {
+                                do_read_mp();
+                            }
+                        }
+
+                        return;
+                    } else {
+                        request_handler_.handle_request(request_, reply_);
+                    }
+                } else {
+                    reply_ = reply::stock_reply(reply::bad_request);
+                }
+
                 do_write();
             }
             else if (result == request_parser::bad)
@@ -257,6 +279,44 @@ void connection::do_read()
             connection_manager_.stop(shared_from_this());
         }
     });
+}
+
+void connection::on_complete_multiplart()
+{
+    multipart.close();
+    request_handler_.handle_request(request_, reply_);
+    do_write();
+    remove(request_.get_header("file_name").c_str());
+}
+
+void connection::do_read_mp()
+{
+    auto self(shared_from_this());
+    socket_.async_read_some(boost::asio::buffer(buffer_),
+                            [this, self](boost::system::error_code ec,
+                                         std::size_t bytes_transferred)
+    {
+        if (!ec)
+        {
+            auto bg = buffer_.data();
+            auto end = bg + bytes_transferred;
+            auto result = multipart.parse(request_, bg,end);
+            if (result == request_parser::bad)
+            {
+                reply_ = reply::stock_reply(reply::bad_request);
+                do_write();
+            } else if (result == request_parser::good) {
+                on_complete_multiplart();
+            } else {
+                do_read_mp();
+            }
+        } else {
+            std::cerr << " error while reading " << ec.message() << std::endl;
+            reply_ = reply::stock_reply(reply::bad_request);
+            do_write();
+        }
+    });
+
 }
 
 void connection::do_write()
