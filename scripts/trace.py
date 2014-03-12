@@ -118,7 +118,7 @@ def add_profile_options(parser):
     add_time_slicing_options(parser)
     group = parser.add_argument_group('profile options')
     group.add_argument("-r", "--caller-oriented", action='store_true', help="change orientation to caller-based; reverses order of frames")
-    group.add_argument("-g", "--group-by", choices=groupers.keys(), default='none', help="show one merged tree for all threads")
+    group.add_argument("-g", "--group-by", choices=groupers.keys(), default='none', help="group samples by given criteria")
     group.add_argument("--function", action='store', help="use given function as tree root")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
     group.add_argument("--min-hits", action='store',
