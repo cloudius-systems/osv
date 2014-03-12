@@ -825,6 +825,28 @@ def align_down(v, pagesize):
 def align_up(v, pagesize):
     return align_down(v + pagesize - 1, pagesize)
 
+class concat(object):
+    def __init__(self, view1, view2):
+        self.view1 = view1
+        self.view2 = view2
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            l  = len(self.view1)
+            if index.start >= l:
+                return self.view2.__getitem__(slice(index.start - l, index.stop - l, index.step))
+            if index.stop >= l:
+                return self.view1.__getitem__(slice(index.start, l, index.step)) + \
+                    self.view2.__getitem__(slice(0, index.stop - l, index.step))
+            return self.view1.__getitem__(index)
+
+        if index < len(self.view1):
+            return self.view1[index]
+        return self.view2[index - len(self.view1)]
+
+    def __len__(self):
+        return len(self.view1) + len(self.view2)
+
 def all_traces():
     # XXX: needed for GDB to see 'trace_page_size'
     gdb.lookup_global_symbol('gdb_trace_function_entry')
@@ -839,7 +861,7 @@ def all_traces():
     last = ulong(gdb.lookup_global_symbol('trace_record_last').value()['_M_i'])
     last %= max_trace
     pivot = align_up(last, trace_page_size)
-    trace_log = trace_log[pivot:] + trace_log[:pivot]
+    trace_log = concat(trace_log[pivot:], trace_log[:pivot])
     last += max_trace - pivot
 
     tp_ptr = gdb.lookup_type('tracepoint_base').pointer()
