@@ -157,8 +157,11 @@ class GroupByCpu:
     def format(self, group):
         return 'CPU 0x%02x' % group
 
+def default_printer(args):
+    sys.stdout.write(args)
+
 def print_profile(samples, symbol_resolver, caller_oriented=False,
-        printer=sys.stdout.write, time_range=None, src_addr_formatter=debug.SourceAddress.__str__,
+        printer=default_printer, time_range=None, src_addr_formatter=debug.SourceAddress.__str__,
         node_filter=None, order=None, root_function=None, max_levels=None, grouping=None):
     groups = {}
 

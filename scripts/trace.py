@@ -5,6 +5,7 @@ import argparse
 import re
 import os
 import math
+import subprocess
 from itertools import ifilter
 from collections import defaultdict
 from operator import attrgetter
@@ -382,7 +383,7 @@ if __name__ == "__main__":
 
     cmd_list = subparsers.add_parser("list", help="list trace")
     add_trace_listing_options(cmd_list)
-    cmd_list.set_defaults(func=list_trace)
+    cmd_list.set_defaults(func=list_trace, paginate=True)
 
     cmd_list_timed = subparsers.add_parser("list-timed", help="list timed traces", description="""
         Prints block samples along with their duration in seconds with nanosecond precision. The duration
@@ -392,7 +393,7 @@ if __name__ == "__main__":
         """)
     add_trace_listing_options(cmd_list_timed)
     cmd_list_timed.add_argument("--sort", action="store", choices=['duration','time'], help="sort samples by given field")
-    cmd_list_timed.set_defaults(func=list_timed)
+    cmd_list_timed.set_defaults(func=list_timed, paginate=True)
 
     cmd_summary = subparsers.add_parser("summary", help="print trace summery", description="""
         Prints basic statistics about the trace.
@@ -410,7 +411,7 @@ if __name__ == "__main__":
     add_symbol_resolution_options(cmd_prof_wait)
     add_trace_source_options(cmd_prof_wait)
     add_profile_options(cmd_prof_wait)
-    cmd_prof_wait.set_defaults(func=prof_wait)
+    cmd_prof_wait.set_defaults(func=prof_wait, paginate=True)
 
     cmd_prof_hit = subparsers.add_parser("prof", help="show trace hit profile", description="""
         Prints profile showing number of times given tracepoint was reached.
@@ -420,7 +421,7 @@ if __name__ == "__main__":
     add_trace_source_options(cmd_prof_hit)
     add_profile_options(cmd_prof_hit)
     cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of the tracepoint to count")
-    cmd_prof_hit.set_defaults(func=prof_hit)
+    cmd_prof_hit.set_defaults(func=prof_hit, paginate=True)
 
     cmd_extract = subparsers.add_parser("extract", help="extract trace from running instance", description="""
         Extracts trace from a running OSv instance via GDB.
@@ -431,6 +432,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    if getattr(args, 'paginate', False):
+        less_process = subprocess.Popen(['less', '-F'], stdin=subprocess.PIPE)
+        sys.stdout = less_process.stdin
+    else:
+        less_process = None
+
     try:
         args.func(args)
     except InvalidArgumentsException as e:
@@ -438,3 +445,7 @@ if __name__ == "__main__":
     except IOError as e:
         if e.errno != errno.EPIPE:
             raise
+    finally:
+        sys.stdout.close()
+        if less_process:
+            less_process.wait()
