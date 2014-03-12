@@ -153,7 +153,7 @@ def free_page_ranges(node = None):
         p = fpr['tree_']['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
     
-    if (long(node) != 0):
+    if (int(node) != 0):
         page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
         page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
         
@@ -171,7 +171,7 @@ def vma_list(node = None):
         p = fpr['tree_']['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
 
-    if (long(node) != 0):
+    if (int(node) != 0):
         offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook");
         vma = node.cast(gdb.lookup_type('void').pointer()) - offset
         vma = vma.cast(gdb.lookup_type('mmu::vma').pointer())
@@ -225,7 +225,7 @@ class osv_memory(gdb.Command):
 # Returns a u64 value from a stats given a field name.
 #
 def get_stat_by_name(stats, stats_cast, field):
-    return long(gdb.parse_and_eval('('+str(stats_cast)+' '+str(stats)+')->'+str(field)+'.value.ui64'))
+    return int(gdb.parse_and_eval('('+str(stats_cast)+' '+str(stats)+')->'+str(field)+'.value.ui64'))
 
 class osv_zfs(gdb.Command):
     def __init__(self):
@@ -268,7 +268,7 @@ class osv_zfs(gdb.Command):
             print ("\tvdev_cache_bshift: %d" % vdev_cache_bshift)
 
             # Get address of 'struct vdc_stats vdc_stats'
-            vdc_stats_struct = long(gdb.parse_and_eval('(u64) &vdc_stats'))
+            vdc_stats_struct = int(gdb.parse_and_eval('(u64) &vdc_stats'))
             vdc_stats_cast = '(struct vdc_stats *)'
 
             vdev_delegations = get_stat_by_name(vdc_stats_struct, vdc_stats_cast, 'vdc_stat_delegations')
@@ -280,7 +280,7 @@ class osv_zfs(gdb.Command):
             print ("\t\tvdev_cache_misses:       %d" % vdev_misses)
 
         # Get address of 'struct arc_stats arc_stats'
-        arc_stats_struct = long(gdb.parse_and_eval('(u64) &arc_stats'))
+        arc_stats_struct = int(gdb.parse_and_eval('(u64) &arc_stats'))
         arc_stats_cast = '(struct arc_stats *)'
 
         arc_size = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_size')
@@ -413,9 +413,9 @@ active_thread_context = None
 def ulong(x):
     if isinstance(x, gdb.Value):
         x = x.cast(ulong_type)
-    x = long(x)
+    x = int(x)
     if x < 0:
-        x += 1L << 64
+        x += 1 << 64
     return x
 
 class osv_syms(gdb.Command):
@@ -426,9 +426,9 @@ class osv_syms(gdb.Command):
         syminfo.clear_cache()
         p = gdb.lookup_global_symbol('elf::program::s_objs').value()
         p = p.dereference().address
-        while long(p.dereference()):
+        while int(p.dereference()):
             obj = p.dereference().dereference()
-            base = long(obj['_base'])
+            base = int(obj['_base'])
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
             path = translate(obj_path)
             if not path:
@@ -606,7 +606,7 @@ def show_thread_timers(t):
         gdb.write('  timers:')
         for timer in timer_list:
             expired = '*' if timer['_state'] == timer_state_expired else ''
-            expiration = long(timer['_time']['__d']['__r']) / 1.0e9
+            expiration = int(timer['_time']['__d']['__r']) / 1.0e9
             gdb.write(' %11.9f%s' % (expiration, expired))
         gdb.write('\n')
 
@@ -763,10 +763,10 @@ class osv_thread(gdb.Command):
         state = vmstate()
         thread = None
         for t in state.thread_list:
-            if t.address.cast(ulong_type) == long(arg, 0):
+            if t.address.cast(ulong_type) == int(arg, 0):
                 thread = t
             with thread_context(t, state):
-                if t['_id'] == long(arg, 0):
+                if t['_id'] == int(arg, 0):
                     thread = t
         if not thread:
             print 'Not found'
@@ -896,7 +896,7 @@ def dump_trace(out_func):
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
-                block = gdb.block_for_pc(long(fn))
+                block = gdb.block_for_pc(int(fn))
                 fn_name = block.function.print_name
             except:
                 fn_name = '???'
@@ -1143,7 +1143,7 @@ def runqueue(cpuid, node = None):
         p = rq['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
 
-    if (long(node) != 0):
+    if (int(node) != 0):
         offset = gdb.parse_and_eval('(int)&((sched::thread *)0)->_runqueue_link');
         thread = node.cast(gdb.lookup_type('void').pointer()) - offset
         thread = thread.cast(gdb.lookup_type('sched::thread').pointer())
