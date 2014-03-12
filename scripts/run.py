@@ -54,6 +54,9 @@ def set_imgargs(options):
             ('n', 'y')[options.jvm_suspend]
         execute = execute.replace('java.so', 'java.so ' + debug_options)
 
+    if options.trace:
+        execute = '--trace=%s %s' % (options.trace, execute)
+
     cmdline = ["scripts/imgedit.py", "setargs", options.image_file, execute]
     if options.dry_run:
         print(format_args(cmdline))
@@ -342,6 +345,8 @@ if (__name__ == "__main__"):
                         help = "redirect the API port (8080) for user-mode networking")
     parser.add_argument("--pass-args", action="append",
                         help = "pass arguments to underlying hypervisor (e.g. qemu)")
+    parser.add_argument("--trace", action="store",
+                        help="enable tracepoint")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
