@@ -856,7 +856,7 @@ def all_traces():
         i += 8
 
         thread, thread_name, time, cpu, flags = struct.unpack('Q16sQII', trace_log[i:i+40])
-        thread_name = thread_name.rstrip('\0')
+        thread_name = thread_name.partition(b'\0')[0].decode()
         i += 40
 
         tp = tracepoints.get(tp_key, None)
