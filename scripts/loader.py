@@ -808,7 +808,7 @@ def setup_libstdcxx():
                  glob(gcc + '/usr/share/gcc-*/python')[0],
                  ]
     main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
-    execfile(main)
+    exec(compile(open(main).read(), main, 'exec'))
 
 def sig_to_string(sig):
     '''Convert a tracepoing signature encoded in a u64 to a string'''
@@ -1167,7 +1167,7 @@ class osv_runqueue(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         ncpus = gdb.parse_and_eval('sched::cpus._M_impl._M_finish - sched::cpus._M_impl._M_start');
-        for cpu in xrange(ncpus) :
+        for cpu in range(ncpus) :
             gdb.write("CPU %d:\n" % cpu)
             for thread in runqueue(cpu):
                 print('%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt']))
