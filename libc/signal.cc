@@ -223,12 +223,20 @@ int kill(pid_t pid, int sig)
         // very Unix-like behavior, but if we assume that the program doesn't
         // care which of its threads handle the signal - why not just create
         // a completely new thread and run it there...
-        const auto& sa = signal_actions[sig];
+        const auto sa = signal_actions[sig];
         auto t = new sched::thread([=] {
+            if (sa.sa_flags & SA_RESETHAND) {
+                signal_actions[sig].sa_flags = 0;
+                signal_actions[sig].sa_handler = SIG_DFL;
+            }
             if (sa.sa_flags & SA_SIGINFO) {
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
                 sa.sa_sigaction(sig, nullptr, nullptr);
             } else {
+                if (sa.sa_flags & SA_RESETHAND) {
+                    signal_actions[sig].sa_flags = 0;
+                    signal_actions[sig].sa_handler = SIG_DFL;
+                }
                 sa.sa_handler(sig);
             }
         }, sched::thread::attr().detached().stack(65536).name("signal_handler"));

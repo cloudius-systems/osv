@@ -113,6 +113,36 @@ int main(int ac, char** av)
     report(recv_result == -1,   "timed out syscall returns -1");
     report(recv_errno == EWOULDBLOCK, "timed out syscall doesn't return EINTR");
 
+    // Test with and without SA_RESETHAND (for __sysv_signal support)
+    struct sigaction act = {};
+    act.sa_handler = handler1;
+    global = 0;
+    r = sigaction(SIGUSR1, &act, nullptr);
+    report(r == 0, "set SIGUSR1 handler");
+    r = kill(0, SIGUSR1);
+    report(r == 0, "kill SIGUSR1 succeeds");
+    for (int i=0; i<100; i++) {
+        if (global == 1) break;
+        usleep(10000);
+    }
+    report(global == 1, "'global' is now 1");
+    struct sigaction oldact;
+    r = sigaction(SIGUSR1, nullptr, &oldact);
+    report(r == 0 && oldact.sa_handler == handler1, "without SA_RESETHAND, signal handler is not reset");
+    act.sa_flags = SA_RESETHAND;
+    r = sigaction(SIGUSR1, &act, nullptr);
+    report(r == 0, "set SIGUSR1 handler with SA_RESETHAND");
+    r = kill(0, SIGUSR1);
+    report(r == 0, "kill SIGUSR1 succeeds");
+    for (int i=0; i<100; i++) {
+        if (global == 1) break;
+        usleep(10000);
+    }
+    report(global == 1, "'global' is now 1");
+    r = sigaction(SIGUSR1, nullptr, &oldact);
+    report(r == 0 && oldact.sa_handler == SIG_DFL, "with SA_RESETHAND, signal handler is reset");
+
+
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
 
