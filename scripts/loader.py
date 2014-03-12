@@ -195,7 +195,7 @@ class osv_heap(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         for page_range in free_page_ranges():
-            print '%s 0x%016x' % (page_range, page_range['size'])
+            print('%s 0x%016x' % (page_range, page_range['size']))
 
 class osv_memory(gdb.Command):
     def __init__(self):
@@ -402,7 +402,7 @@ class osv_mmap(gdb.Command):
             flags =  flagstr(ulong(vma['_flags']))
             perm =  permstr(ulong(vma['_perm']))
             size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
-            print '0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm)
+            print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
     
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer_base')
@@ -432,9 +432,9 @@ class osv_syms(gdb.Command):
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
             path = translate(obj_path)
             if not path:
-                print 'ERROR: Unable to locate object file for:', obj_path, hex(base)
+                print('ERROR: Unable to locate object file for:', obj_path, hex(base))
             else:
-                print path, hex(base)
+                print(path, hex(base))
                 load_elf(path, base)
             p += 1
 
@@ -769,7 +769,7 @@ class osv_thread(gdb.Command):
                 if t['_id'] == int(arg, 0):
                     thread = t
         if not thread:
-            print 'Not found'
+            print('Not found')
             return
         active_thread_context = thread_context(thread, state)
         active_thread_context.__enter__()
@@ -1165,7 +1165,7 @@ class osv_runqueue(gdb.Command):
         for cpu in xrange(ncpus) :
             gdb.write("CPU %d:\n" % cpu)
             for thread in runqueue(cpu):
-                print '%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt'])
+                print('%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt']))
 
 class osv_info_virtio(gdb.Command):
     def __init__(self):
