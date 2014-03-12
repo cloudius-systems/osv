@@ -123,7 +123,7 @@ def add_profile_options(parser):
     group.add_argument("--function", action='store', help="use given function as tree root")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
     group.add_argument("--min-hits", action='store',
-        help="show only nodes with hit count not smaller than this. can be absolute number or a percentage, eg. 10%")
+        help="show only nodes with hit count not smaller than this. can be absolute number or a percentage, eg. 10%%")
     group.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
 
 def get_wait_profile(traces):
