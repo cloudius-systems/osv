@@ -36,6 +36,11 @@ def pt_index(addr, level):
 def phys_cast(addr, type):
     return gdb.Value(addr + phys_mem).cast(type.pointer())
 
+def values(_dict):
+    if hasattr(_dict, 'viewvalues'):
+        return _dict.viewvalues()
+    return _dict.values()
+
 def read_vector(v):
     impl = v['_M_impl']
     ptr = impl['_M_start']
@@ -555,7 +560,7 @@ class vmstate(object):
         stack = thread['_attr']['_stack']
         stack_begin = ulong(stack['begin'])
         stack_size = ulong(stack['size'])
-        for c in self.cpu_list.viewvalues():
+        for c in values(self.cpu_list):
             if c.rsp > stack_begin and c.rsp <= stack_begin + stack_size:
                 return c
         return None
