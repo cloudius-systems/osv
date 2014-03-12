@@ -10,7 +10,6 @@ import itertools
 import operator
 from glob import glob
 from collections import defaultdict
-from itertools import ifilter
 
 arch = 'x64'
 build_dir = os.path.dirname(gdb.current_objfile().filename)
