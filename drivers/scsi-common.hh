@@ -153,6 +153,7 @@ public:
     u16 target;
     u16 lun;
     u8 cdb[16];
+    u8 cdb_len;
     u8 response = 0;
     u8 status = 0;
     bool free_by_driver = false;

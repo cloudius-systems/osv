@@ -100,7 +100,7 @@ bool pvscsi::add_desc(struct bio *bio)
     desc->lun[1] = req->lun;
     desc->sense_len = 0;
     desc->sense_addr = 0;
-    desc->cdb_len = config.cdb_size;
+    desc->cdb_len = req->cdb_len;
     desc->vcpu_hint = 0;
     memcpy(desc->cdb, req->cdb, config.cdb_size);
     desc->tag = PVSCSI_SIMPLE_QUEUE_TAG;

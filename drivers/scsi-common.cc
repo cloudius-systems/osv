@@ -23,61 +23,68 @@ scsi_common_req::scsi_common_req(struct bio* bio, u16 _target, u16 _lun, u8 cmd)
            u64 lba = bio->bio_offset / SCSI_SECTOR_SIZE;
            u32 count = bio->bio_bcount / SCSI_SECTOR_SIZE;
            struct cdb_readwrite_16 c;
-           memset(&c, 0, sizeof(c));
+           cdb_len = sizeof(c);
+           memset(&c, 0, cdb_len);
            c.command = cmd;
            c.lba = htobe64(lba);
            c.count = htobe32(count);
-           memcpy(cdb, &c, sizeof(c));
+           memcpy(cdb, &c, cdb_len);
            break;
         }
         case CDB_CMD_SYNCHRONIZE_CACHE_10: {
            struct cdb_readwrite_10 c;
-           memset(&c, 0, sizeof(c));
+           cdb_len = sizeof(c);
+           memset(&c, 0, cdb_len);
            c.command = cmd;
            c.lba = 0;
            c.count = 0;
-           memcpy(cdb, &c, sizeof(c));
+           memcpy(cdb, &c, cdb_len);
            break;
         }
         case CDB_CMD_INQUIRY: {
             struct cdb_inquery c;
-            memset(&c, 0, sizeof(c));
+            cdb_len = sizeof(c);
+            memset(&c, 0, cdb_len);
             c.command = CDB_CMD_INQUIRY;
             c.alloc_len = htobe16(bio->bio_bcount);
-            memcpy(cdb, &c, sizeof(c));
+            memcpy(cdb, &c, cdb_len);
             break;
         }
         case CDB_CMD_READ_CAPACITY: {
             struct cdb_read_capacity c;
-            memset(&c, 0, sizeof(c));
+            cdb_len = sizeof(c);
+            memset(&c, 0, cdb_len);
             c.command = CDB_CMD_READ_CAPACITY;
             c.service_action = 0x10;
             c.alloc_len = htobe32(bio->bio_bcount);
-            memcpy(cdb, &c, sizeof(c));
+            memcpy(cdb, &c, cdb_len);
             break;
         }
         case CDB_CMD_TEST_UNIT_READY: {
             struct cdb_test_unit_ready c;
-            memset(&c, 0, sizeof(c));
+            cdb_len = sizeof(c);
+            memset(&c, 0, cdb_len);
             c.command = CDB_CMD_TEST_UNIT_READY;
-            memcpy(cdb, &c, sizeof(c));
+            memcpy(cdb, &c, cdb_len);
             break;
         }
         case CDB_CMD_REQUEST_SENSE: {
             struct cdb_request_sense c;
-            memset(&c, 0, sizeof(c));
+            cdb_len = sizeof(c);
+            memset(&c, 0, cdb_len);
             c.command = CDB_CMD_REQUEST_SENSE;
             c.alloc_len = bio->bio_bcount;
-            memcpy(cdb, &c, sizeof(c));
+            memcpy(cdb, &c, cdb_len);
             break;
         }
         case CDB_CMD_REPORT_LUNS: {
             struct cdb_report_luns c;
-            memset(&c, 0, sizeof(c));
+            cdb_len = sizeof(c);
+            memset(&c, 0, cdb_len);
             c.command = CDB_CMD_REPORT_LUNS;
             c.select_report = 0;
             c.alloc_len=htobe32(bio->bio_bcount);
-            memcpy(cdb, &c, sizeof(c));
+            memcpy(cdb, &c, cdb_len);
             break;
         }
         default:
