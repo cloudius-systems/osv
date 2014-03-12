@@ -85,9 +85,9 @@ def strip_garbage(backtrace):
 
     return backtrace
 
-def get_hit_profile(traces, trace_name):
+def get_hit_profile(traces, filter=None):
     for trace in traces:
-        if trace.backtrace and trace.name == trace_name:
+        if trace.backtrace and (not filter or filter(trace)):
             yield ProfSample(trace.time, trace.cpu, trace.thread, trace.backtrace)
 
 def get_duration_profile(traces, entry_trace_name, exit_trace_name):

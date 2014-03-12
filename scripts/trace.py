@@ -217,7 +217,11 @@ def prof_wait(args):
     show_profile(args, get_wait_profile)
 
 def prof_hit(args):
-    show_profile(args, lambda traces: prof.get_hit_profile(traces, args.tracepoint))
+    if args.tracepoint:
+        filter = lambda trace: trace.name == args.tracepoint
+    else:
+        filter = None
+    show_profile(args, lambda traces: prof.get_hit_profile(traces, filter))
 
 def get_name_of_ended_func(name):
         m = re.match('(?P<func>.*)(_ret|_err)', name)
@@ -415,7 +419,7 @@ if __name__ == "__main__":
     add_symbol_resolution_options(cmd_prof_hit)
     add_trace_source_options(cmd_prof_hit)
     add_profile_options(cmd_prof_hit)
-    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", required=True, help="name of the tracepint to count")
+    cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of the tracepoint to count")
     cmd_prof_hit.set_defaults(func=prof_hit)
 
     cmd_extract = subparsers.add_parser("extract", help="extract trace from running instance", description="""
