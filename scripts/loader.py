@@ -844,11 +844,16 @@ def all_traces():
 
     i = 0
     while i < last:
-        tp_key, thread, thread_name, time, cpu, flags = struct.unpack('QQ16sQII', trace_log[i:i+48])
-        thread_name = thread_name.rstrip('\0')
+        tp_key, = struct.unpack('Q', trace_log[i:i+8])
         if tp_key == 0:
             i = align_up(i + 8, trace_page_size)
             continue
+
+        i += 8
+
+        thread, thread_name, time, cpu, flags = struct.unpack('Q16sQII', trace_log[i:i+40])
+        thread_name = thread_name.rstrip('\0')
+        i += 40
 
         tp = tracepoints.get(tp_key, None)
         if not tp:
@@ -856,8 +861,6 @@ def all_traces():
             tp = TracePoint(tp_key, str(tp_ref["name"].string()),
                 sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
             tracepoints[tp_key] = tp
-
-        i += 48
 
         backtrace = None
         if flags & 1:
