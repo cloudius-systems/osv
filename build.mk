@@ -176,15 +176,15 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
-boost-tests := tests/tst-rename.so \
-	tests/tst-vfs.so \
-	tests/tst-libc-locking.so \
-	tests/misc-fs-stress.so \
-	tests/misc-bdev-write.so \
-	tests/misc-bdev-wlatency.so \
-	tests/tst-promise.so \
-	tests/tst-dlfcn.so \
-	tests/tst-stat.so
+boost-tests := tests/tst-rename.so
+boost-tests += tests/tst-vfs.so
+boost-tests += tests/tst-libc-locking.so
+boost-tests += tests/misc-fs-stress.so
+boost-tests += tests/misc-bdev-write.so
+boost-tests += tests/misc-bdev-wlatency.so
+boost-tests += tests/tst-promise.so
+boost-tests += tests/tst-dlfcn.so
+boost-tests += tests/tst-stat.so
 boost-tests += tests/tst-wait-for.so
 boost-tests += tests/tst-bsd-tcp1.so
 
