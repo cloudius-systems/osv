@@ -118,6 +118,9 @@ void scsi_common::exec_inquery(u16 target, u16 lun)
     auto response = req->response;
     if (response != SCSI_OK)
         throw std::runtime_error("Fail to exec_inquery");
+
+    delete req;
+    delete data;
 }
 
 void scsi_common::exec_read_capacity(u16 target, u16 lun, size_t &devsize)
