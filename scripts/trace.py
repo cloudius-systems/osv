@@ -46,7 +46,7 @@ class src_addr_formatter:
         return text
 
 def add_trace_source_options(parser):
-    parser.add_argument("tracefile", help="Path to trace file")
+    parser.add_argument("tracefile", help="Path to trace file", nargs='?', default="tracefile")
 
 def get_trace_reader(args):
     return trace.read_file(args.tracefile)
