@@ -165,7 +165,7 @@ class WritingPacker:
 
             count = len(arg)
             self.writer(struct.pack('H', count))
-            self.writer(struct.pack('c' * count, *arg))
+            self.writer(struct.pack('c' * count, *(map(str.encode, arg))))
 
 def read(buffer_view):
     unpacker = SlidingUnpacker(buffer_view)
@@ -207,7 +207,7 @@ def write(traces, writer):
         packer.pack_str(tp.name, tp.signature, tp.format)
 
     for trace in traces:
-        packer.pack('QQ16sQI', trace.tp.key, trace.thread, trace.thread_name,
+        packer.pack('QQ16sQI', trace.tp.key, trace.thread, trace.thread_name.encode(),
                     trace.time, trace.cpu)
 
         if trace.backtrace:
