@@ -155,6 +155,7 @@ public:
     u8 cdb[16];
     u8 response = 0;
     u8 status = 0;
+    bool free_by_driver = false;
 };
 
 class scsi_common {

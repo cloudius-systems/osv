@@ -87,14 +87,16 @@ scsi_common_req::scsi_common_req(struct bio* bio, u16 _target, u16 _lun, u8 cmd)
 
 int scsi_common::exec_readwrite(u16 target, u16 lun, struct bio *bio, u8 cmd)
 {
-    alloc_scsi_req(bio, target, lun, cmd);
+    auto req = alloc_scsi_req(bio, target, lun, cmd);
+    req->free_by_driver = true;
 
     return exec_cmd(bio);
 }
 
 int scsi_common::exec_synccache(u16 target, u16 lun, struct bio *bio, u8 cmd)
 {
-    alloc_scsi_req(bio, target, lun, cmd);
+    auto req = alloc_scsi_req(bio, target, lun, cmd);
+    req->free_by_driver = true;
 
     return exec_cmd(bio);
 }

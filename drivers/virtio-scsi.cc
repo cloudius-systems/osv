@@ -205,8 +205,7 @@ void scsi::req_done()
             req->response = response;
             req->status = status;
 
-            // Other req type will be freed by the caller who send the bio
-            if (req->bio->bio_cmd != BIO_SCSI)
+            if (req->free_by_driver)
                 delete req;
 
             biodone(bio, response == VIRTIO_SCSI_S_OK);

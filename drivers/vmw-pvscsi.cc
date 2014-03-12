@@ -272,7 +272,7 @@ void pvscsi::req_done()
 
             auto response = req->response;
 
-            if (req->bio->bio_cmd != BIO_SCSI)
+            if (req->free_by_driver)
                 delete req;
 
             _req_free++;
