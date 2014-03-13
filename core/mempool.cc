@@ -457,6 +457,12 @@ namespace stats {
     size_t free() { return free_memory.load(std::memory_order_relaxed); }
     size_t total() { return total_memory.load(std::memory_order_relaxed); }
 
+    size_t max_no_reclaim()
+    {
+        auto total = total_memory.load(std::memory_order_relaxed);
+        return total - watermark_lo;
+    }
+
     void on_jvm_heap_alloc(size_t mem)
     {
         current_jvm_heap_memory.fetch_add(mem);

@@ -13,6 +13,18 @@
 #include "exceptions.hh"
 #include <osv/mmu.hh>
 
+// We will divide the balloon in units of 128Mb. That should increase the likelyhood
+// of having hugepages mapped in and out of it.
+//
+// Using constant sized balloons should help with the process of giving memory
+// back to the JVM, since we don't need to search the list of balloons until
+// we find a balloon of the desired size: any will do.
+constexpr size_t balloon_size = (128ULL << 20);
+// FIXME: Can probably do better than this. We are counting 4Mb before 1Gb to
+// account for ROMs and the such. 4Mb is probably too much (in kvm with no vga
+// we lose around 400k), but it doesn't hurt.
+constexpr size_t balloon_min_memory = (1ULL << 30) - (4 << 20);
+
 class jvm_balloon_shrinker : public memory::shrinker {
 public:
     explicit jvm_balloon_shrinker(JavaVM *vm);

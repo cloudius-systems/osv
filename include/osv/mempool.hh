@@ -178,6 +178,7 @@ private:
 namespace stats {
     size_t free();
     size_t total();
+    size_t max_no_reclaim();
     size_t jvm_heap();
     void on_jvm_heap_alloc(size_t mem);
     void on_jvm_heap_free(size_t mem);

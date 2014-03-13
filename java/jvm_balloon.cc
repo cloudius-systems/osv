@@ -17,13 +17,6 @@ TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p, size %d, vma_size %d",
 TRACEPOINT(trace_jvm_balloon_move, "new_jvm_addr=%p, new_jvm_end=%p, new_addr %p, new_end %p",
         const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *);
 
-// We will divide the balloon in units of 128Mb. That should increase the likelyhood
-// of having hugepages mapped in and out of it.
-//
-// Using constant sized balloons should help with the process of giving memory
-// back to the JVM, since we don't need to search the list of balloons until
-// we find a balloon of the desired size: any will do.
-constexpr size_t balloon_size = (128ULL << 20);
 
 class balloon {
 public:
