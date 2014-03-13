@@ -27,7 +27,7 @@ uint64_t virt_to_phys(void *virt)
  */
 uint64_t kmem_used(void)
 {
-    return memory::stats::total() - memory::stats::free();
+    return memory::stats::total() - memory::stats::jvm_heap() - memory::stats::free();
 }
 
 int vm_paging_needed(void)
