@@ -505,7 +505,6 @@ bool hba::ack_irq()
         return handled;
 
     auto host_is = hba_readl(HOST_IS);
-    //if (!(host_is & 1))
     if (!host_is)
         return handled;
 
