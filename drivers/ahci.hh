@@ -249,7 +249,7 @@ public:
     int make_request(struct bio *bio);
     void enable_irq();
     void wait_device_ready();
-    void wait_ci_ready();
+    void wait_ci_ready(u8 slot);
     void wakeup() { _waiter.wake(); }
     void inc_cmd_done_nr() { _cmd_done_nr++; }
     u64 get_cmd_done_nr() { return _cmd_done_nr.load(std::memory_order_relaxed); }

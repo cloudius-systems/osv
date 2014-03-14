@@ -173,10 +173,9 @@ void port::wait_device_ready()
     }
 }
 
-void port::wait_ci_ready()
+void port::wait_ci_ready(u8 slot)
 {
     // Wait for Command Issue Becoming Ready
-    u8 slot = 0;
     for (;;) {
         auto ci = port_readl(PORT_CI);
         if (!(ci & (1U << slot)))
@@ -233,7 +232,7 @@ void port::wait_cmd_poll()
             port_writel(PORT_IS, is);
 
             wait_device_ready();
-            wait_ci_ready();
+            wait_ci_ready(slot);
 
            if (is & 0x02) {
                auto error  = _recv_fis->psfis[3];
