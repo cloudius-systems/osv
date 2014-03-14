@@ -1507,7 +1507,6 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
     auto* vma = new mmu::jvm_balloon_vma(jvm_addr, start, start + size, b, v->perm(), v->flags());
 
     WITH_LOCK(vma_list_mutex) {
-        auto ret = 0;
         // This means that the mapping that we had before was a balloon mapping
         // that was laying around and wasn't updated to an anon mapping. If we
         // allow it to split it would significantly complicate our code, since
@@ -1521,9 +1520,9 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
             // If this is the old balloon
             delete v;
         }
-        ret = evacuate(start, start + size);
+        evacuate(start, start + size);
         vma_list.insert(*vma);
-        return ret;
+        return vma->size();
     }
     return 0;
 }
