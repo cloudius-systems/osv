@@ -209,6 +209,7 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
     wait_ci_ready();
 
     port_writel(PORT_SACT, 1U << slot);
+    _cmd_active |= 1U << slot;
     port_writel(PORT_CI, 1U << slot);
 
     return 0;
@@ -217,10 +218,10 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
 void port::wait_cmd_irq(u8 slot)
 {
     _waiter.reset(*sched::thread::current());
-    sched::thread::wait_until([=] { return _cmd_send_nr <= get_cmd_done_nr(); });
-    wait_ci_ready();
-    _cmd_done_nr = _cmd_send_nr;
+    sched::thread::wait_until([=] { return this->done_mask() != 0; });
     _waiter.clear();
+
+    _cmd_active &= ~(1U << slot);
 }
 
 void port::wait_cmd_poll(u8 slot)
@@ -248,6 +249,8 @@ void port::wait_cmd_poll(u8 slot)
         }
     }
     _hba->hba_writel(HOST_IS, host_is);
+
+    _cmd_active &= ~(1U << slot);
 }
 
 int port::make_request(struct bio* bio)
@@ -299,7 +302,6 @@ void port::disk_rw(struct bio *bio, bool iswrite)
     cmd.fis.device = (1 << 6) | (1 << 4); // must have bit 6 set
 
     send_cmd(slot, iswrite, buf, len);
-    _cmd_send_nr++;
 
     if (_hba->poll_mode()) {
         wait_cmd_poll(slot);
@@ -321,7 +323,6 @@ void port::disk_flush(struct bio *bio)
     cmd.fis.command = ATA_CMD_FLUSH_CACHE_EXT;
 
     send_cmd(slot, 0, nullptr, 0);
-    _cmd_send_nr++;
 
     if (_hba->poll_mode()) {
         wait_cmd_poll(slot);
@@ -522,7 +523,6 @@ bool hba::ack_irq()
         u8 error = port->recv_fis_error();
         assert (error == 0);
         if ((is & 1)) {
-            port->inc_cmd_done_nr();
             port->wakeup();
             handled = true;
         }
