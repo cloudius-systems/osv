@@ -152,11 +152,17 @@ public:
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
     void detach_balloon();
     unsigned char *jvm_addr() { return _jvm_addr; }
+    unsigned char *effective_jvm_addr() { return _effective_jvm_addr; }
+    bool add_partial(size_t partial, unsigned char *eff);
     friend ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b);
 protected:
     balloon_ptr _balloon;
     unsigned char *_jvm_addr;
 private:
+    unsigned char *_effective_jvm_addr = nullptr;
+    uintptr_t _partial_addr = 0;
+    anon_vma *_partial_vma = nullptr;
+    size_t _partial_copy = 0;
     unsigned _real_perm;
     unsigned _real_flags;
 };

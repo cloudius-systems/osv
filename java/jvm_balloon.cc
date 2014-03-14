@@ -27,6 +27,7 @@ public:
     ulong empty_area(balloon_ptr b);
     size_t size() { return _balloon_size; }
     size_t move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest);
+    unsigned char *candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest);
 private:
     void conciliate(unsigned char *addr);
     unsigned char *_jvm_addr;
@@ -93,14 +94,19 @@ void balloon::release(JNIEnv *env)
     env->DeleteGlobalRef(_jref);
 }
 
-size_t balloon::move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest)
+unsigned char *
+balloon::candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest)
 {
     size_t skipped = static_cast<unsigned char *>(vma->addr()) - vma->jvm_addr();
+    return dest - skipped;
+}
 
+size_t balloon::move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest)
+{
     // We need to calculate how many bytes we will skip if this were the new
     // balloon, but we won't touch the mappings yet. That will be done at conciliation
     // time when we're sure of it.
-    auto candidate_jvm_addr = dest - skipped;
+    auto candidate_jvm_addr = candidate_addr(vma, dest);
     auto candidate_jvm_end_addr = candidate_jvm_addr + _balloon_size;
     auto candidate_addr = align_up(candidate_jvm_addr, _alignment);
     auto candidate_end = align_down(candidate_jvm_end_addr, _alignment);
@@ -252,27 +258,57 @@ size_t jvm_balloon_shrinker::release_memory(size_t size)
 // part.  That means copying the part that comes before the balloon, playing
 // with the maps for the balloon itself, and then finish copying the part that
 // comes after the balloon.
-void jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
+bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
-
     if (!ef || (ef->error_code == mmu::page_fault_write)) {
+        if (vma->effective_jvm_addr()) {
+            return false;
+        }
         delete vma;
-        return;
+        return true;
     }
 
     memcpy_decoder *decode = memcpy_find_decoder(ef);
     if (!decode) {
+        if (vma->effective_jvm_addr()) {
+            return false;
+        }
         delete vma;
-        return;
+        return true;
     }
 
     unsigned char *dest = memcpy_decoder::dest(ef);
     unsigned char *src = memcpy_decoder::src(ef);
     size_t size = decode->size(ef);
-    trace_jvm_balloon_fault(src, dest, size, vma->size());
-    assert(size >= vma->size());
 
-    decode->memcpy_fixup(ef, b->move_balloon(b, vma, dest));
+    trace_jvm_balloon_fault(src, dest, size, vma->size());
+
+    auto skip = size;
+    if (size < vma->size()) {
+        unsigned char *base = static_cast<unsigned char *>(vma->addr());
+        // In case the copy does not start from the beginning of the balloon,
+        // we calculate where should the begin be. We always want to move the
+        // balloon in its entirety.
+        auto offset = src - base;
+
+        auto candidate = b->candidate_addr(vma, dest - offset);
+
+        if ((src + size) > reinterpret_cast<unsigned char *>(vma->end())) {
+            skip = (reinterpret_cast<unsigned char *>(vma->end()) - src);
+        }
+
+        if (vma->add_partial(skip, candidate)) {
+            delete vma;
+        }
+    } else {
+        // If the JVM is also copying objects that are laid after the balloon, we
+        // need to copy only the bytes up until the end of the balloon. If the
+        // copy is a partial copy in the middle of the object, then we should
+        // drain the counter completely
+        skip = b->move_balloon(b, vma, dest);
+    }
+    decode->memcpy_fixup(ef, std::min(skip, size));
+    return true;
 }
 
 jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)

@@ -24,6 +24,7 @@ constexpr size_t balloon_size = (128ULL << 20);
 // account for ROMs and the such. 4Mb is probably too much (in kvm with no vga
 // we lose around 400k), but it doesn't hurt.
 constexpr size_t balloon_min_memory = (1ULL << 30) - (4 << 20);
+constexpr size_t balloon_alignment = mmu::huge_page_size;
 
 class jvm_balloon_shrinker : public memory::shrinker {
 public:
@@ -38,5 +39,5 @@ private:
     size_t _total_heap;
 };
 
-void jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma);
+bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma);
 #endif

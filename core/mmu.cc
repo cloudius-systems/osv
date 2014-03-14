@@ -1321,7 +1321,7 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
     auto hp_start = ::align_up(_range.start(), huge_page_size);
     auto hp_end = ::align_down(_range.end(), huge_page_size);
     size_t size;
-    if (!has_flags(mmap_small) && (hp_start <= addr && addr < hp_end)) {
+    if (!has_flags(mmap_jvm_balloon|mmap_small) && (hp_start <= addr && addr < hp_end)) {
         addr = ::align_down(addr, huge_page_size);
         size = huge_page_size;
     } else {
@@ -1364,11 +1364,71 @@ error anon_vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
+// Balloon is backed by no pages, but in the case of partial copy, we may have
+// to back some of the pages. For that and for that only, we initialize a page
+// allocator. It is fine in this case to use the noinit allocator. Since this
+// area was supposed to be holding the balloon object before, so the JVM will
+// not count on it being initialized to any value.
 jvm_balloon_vma::jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start,
                                  uintptr_t end, balloon_ptr b, unsigned perm, unsigned flags)
-    : vma(addr_range(start, end), perm_rw, flags | mmap_jvm_balloon, true), _balloon(b),
-      _jvm_addr(jvm_addr), _real_perm(perm), _real_flags(flags & ~mmap_jvm_balloon)
+    : vma(addr_range(start, end), perm_rw, flags | mmap_jvm_balloon, true, page_allocator_noinitp),
+      _balloon(b), _jvm_addr(jvm_addr),
+      _real_perm(perm), _real_flags(flags & ~mmap_jvm_balloon)
 {
+}
+
+// IMPORTANT: This code assumes that opportunistic copying never happens during
+// partial copying.  In general, this assumption is wrong. There is nothing
+// that prevents the JVM from doing both at the same time from the same object.
+// However, hotspot seems not to do it, which simplifies a lot our code.
+//
+// If that assumption fails to hold in some real life scenario (be it a hotspot
+// corner case or another JVM), the assertion eff == _effective_jvm_addr will
+// crash us and we will find it out.  If we need it, it is not impossible to
+// handle this case: all we have to do is create a list of effective addresses
+// and keep the partial counts independently.
+//
+// Explanation about partial copy:
+//
+// There are situations during which some Garbage Collectors will copy a large
+// object in parallel, using various threads, each being responsible for a part
+// of the object.
+//
+// If that happens, the simple balloon move algorithm will break. However,
+// because offset 'x' in the source will always be copied to offset 'x' in the
+// destination, we can still calculate the final destination object. This
+// address is the _effective_jvm_addr in the code bellow.
+//
+// The problem is that we cannot open the new balloon yet. Since the JVM
+// believes it is copying only a part of the object, the destination may (and
+// usually will) contain valid objects, that need to be themselves moved
+// somewhere else before we can install our object there.
+//
+// Also, we can't close the object fully when someone writes to it: because a
+// part of the object is now already freed, the JVM may and will go ahead and
+// copy another object to this location. To handle this case, we use the
+// variable _partial_copy, which keeps track of how much data has being copied
+// from this location to somewhere else. Because we know that the JVM has to
+// copy the whole object, when that counter reaches the amount of bytes we
+// expect in this vma, this means we can close this object (assuming no
+// opportunistic copy)
+//
+// It is also possible that the region will be written to during partial copy.
+// Although it is invalid to overwrite pieces of the object, it is perfectly
+// valid to write to locations that were already copied from. This is handled
+// in the fault handler itself, by mapping pages to the location that currently
+// holds the balloon vma. At some point, we will create an anonymous vma in its
+// place.
+bool jvm_balloon_vma::add_partial(size_t partial, unsigned char *eff)
+{
+    if (_effective_jvm_addr) {
+        assert(eff == _effective_jvm_addr);
+    } else {
+        _effective_jvm_addr= eff;
+    }
+
+    _partial_copy += partial;
+    return _partial_copy == size();
 }
 
 void jvm_balloon_vma::split(uintptr_t edge)
@@ -1390,7 +1450,19 @@ error jvm_balloon_vma::sync(uintptr_t start, uintptr_t end)
 void jvm_balloon_vma::fault(uintptr_t fault_addr, exception_frame *ef)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
-    jvm_balloon_fault(_balloon, ef, this);
+    if (jvm_balloon_fault(_balloon, ef, this)) {
+        return;
+    }
+    // Can only reach this case if we are doing partial copies
+    assert(_effective_jvm_addr);
+    // FIXME : This will always use a small page, due to the flag check we have
+    // in vma::fault. We can try to map the original worker with a huge page,
+    // and try to see if we succeed. Using a huge page is harder than it seems,
+    // because the JVM is not guaranteed to copy objects in huge page
+    // increments - and it usually won't.  If we go ahead and map a huge page
+    // subsequent copies *from* this location will not fault and we will lose
+    // track of the partial copy count.
+    vma::fault(fault_addr, ef);
 }
 
 jvm_balloon_vma::~jvm_balloon_vma()
@@ -1401,6 +1473,14 @@ jvm_balloon_vma::~jvm_balloon_vma()
     vma_list.erase(*this);
     assert(!(_real_flags & mmap_jvm_balloon));
     mmu::map_anon(addr(), size(), _real_flags, _real_perm);
+
+    if (_effective_jvm_addr) {
+        // Can't just use size(), because although rare, the source and destination can
+        // have different alignments
+        auto end = ::align_down(_effective_jvm_addr + balloon_size, balloon_alignment);
+        auto s = end - ::align_up(_effective_jvm_addr, balloon_alignment);
+        mmu::map_jvm(_effective_jvm_addr, s, mmu::huge_page_size, _balloon);
+    }
 }
 
 ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
