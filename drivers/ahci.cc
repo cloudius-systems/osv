@@ -205,9 +205,6 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
         _cmd_table[slot].prdt[0].flags = bsize - 1;
     }
 
-    wait_device_ready();
-    wait_ci_ready();
-
     port_writel(PORT_SACT, 1U << slot);
     _cmd_active |= 1U << slot;
     port_writel(PORT_CI, 1U << slot);
