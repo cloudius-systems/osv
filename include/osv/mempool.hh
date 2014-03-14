@@ -21,6 +21,8 @@
 #include <osv/semaphore.hh>
 #include <osv/mmu.hh>
 
+extern "C" void thread_mark_emergency();
+
 namespace memory {
 
 const size_t page_size = 4096;

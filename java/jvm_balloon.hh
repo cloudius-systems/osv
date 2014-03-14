@@ -12,6 +12,8 @@
 #include <osv/mempool.hh>
 #include "exceptions.hh"
 #include <osv/mmu.hh>
+#include <osv/condvar.h>
+#include <atomic>
 
 // We will divide the balloon in units of 128Mb. That should increase the likelyhood
 // of having hugepages mapped in and out of it.
@@ -29,15 +31,22 @@ constexpr size_t balloon_alignment = mmu::huge_page_size;
 class jvm_balloon_shrinker {
 public:
     explicit jvm_balloon_shrinker(JavaVM *vm);
-    size_t request_memory(size_t s);
-    size_t release_memory(size_t s);
+    void request_memory(size_t s) { _pending.fetch_add(s); _blocked.wake_one(); }
+    void release_memory(size_t s) { _pending_release.fetch_add(s); _blocked.wake_one(); }
     virtual ~jvm_balloon_shrinker();
 private:
+    void _release_memory(JNIEnv *env, size_t s);
+    size_t _request_memory(JNIEnv *env, size_t s);
+    void _thread_loop();
     JavaVM *_vm;
     int _attach(JNIEnv **env);
     void _detach(int status);
     // FIXME: It can grow, but we will ignore it for now.
     size_t _total_heap;
+    sched::thread *_thread;
+    condvar _blocked;
+    std::atomic<size_t> _pending = {0};
+    std::atomic<size_t> _pending_release = {0};
 };
 
 bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma);

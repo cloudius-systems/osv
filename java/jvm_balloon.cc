@@ -11,6 +11,7 @@
 #include <osv/debug.hh>
 #include <osv/mmu.hh>
 #include <unordered_map>
+#include <thread>
 
 TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p, size %d, vma_size %d",
         const unsigned char *, const unsigned char *, size_t, size_t);
@@ -150,7 +151,8 @@ int jvm_balloon_shrinker::_attach(JNIEnv **env)
 {
     int status = _vm->GetEnv((void **)env, JNI_VERSION_1_6);
     if (status == JNI_EDETACHED) {
-        if (_vm->AttachCurrentThread((void **) env, NULL) != 0) {
+        // Need to span a daemon, otherwise we will block JVM exit.
+        if (_vm->AttachCurrentThreadAsDaemon((void **) env, NULL) != 0) {
             assert(0);
         }
     } else {
@@ -166,19 +168,16 @@ void jvm_balloon_shrinker::_detach(int status)
     }
 }
 
-size_t jvm_balloon_shrinker::request_memory(size_t size)
+size_t jvm_balloon_shrinker::_request_memory(JNIEnv *env, size_t size)
 {
-    JNIEnv *env = NULL;
     size_t ret = 0;
-
-    int status = _attach(&env);
 
     do {
         jbyteArray array = env->NewByteArray(balloon_size);
         jthrowable exc = env->ExceptionOccurred();
         if (exc) {
             env->ExceptionClear();
-            break;
+            return -1;
         }
 
         jboolean iscopy=0;
@@ -203,34 +202,70 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
             }
         }
         env->ReleasePrimitiveArrayCritical(array, p, 0);
+        env->DeleteLocalRef(array);
         // Avoid entering any endless loops. Fail imediately
         if (!iscopy)
             break;
     } while (ret < size);
 
-    _detach(status);
     return ret;
 }
 
-size_t jvm_balloon_shrinker::release_memory(size_t size)
+void jvm_balloon_shrinker::_release_memory(JNIEnv *env, size_t size)
 {
-    JNIEnv *env = NULL;
-    int status = _attach(&env);
-
-    size_t ret = 0;
     WITH_LOCK(balloons_lock) {
-        while ((ret < size) && !balloons.empty()) {
-            auto b = balloons.back();
+        auto b = balloons.back();
 
-            balloons.pop_back();
 
-            ret += b->size();
-            b->release(env);
+        balloons.pop_back();
+
+        size -= b->size();
+        b->release(env);
+    }
+}
+
+extern "C" size_t arc_sized_adjust(int64_t to_reclaim);
+
+void jvm_balloon_shrinker::_thread_loop()
+{
+    JNIEnv *env;
+    int status = _attach(&env);
+    _thread = sched::thread::current();
+    _thread->set_name("JVMBalloon");
+    _thread->set_priority(0.001);
+
+    thread_mark_emergency();
+
+    while (true) {
+        WITH_LOCK(balloons_lock) {
+            _blocked.wait_until(balloons_lock, [&] { return (_pending.load() + _pending_release.load()) > 0; });
+
+            while (_pending_release.load()) {
+                if (balloons.empty()) {
+                    _pending_release.store(0);
+                    break;
+                }
+                size_t freed = 1;
+                while ((memory::jvm_heap_reserved() < static_cast<ssize_t>(balloon_size)) && (freed != 0)) {
+                    uint64_t to_free = balloon_size - memory::jvm_heap_reserved();
+                    freed = arc_sized_adjust(to_free);
+                }
+
+                if (memory::jvm_heap_reserved() >= static_cast<ssize_t>(balloon_size)) {
+                    _pending_release.fetch_sub(1);
+                    _release_memory(env, memory::jvm_heap_reserved());
+                } else {
+                    _pending_release.store(0);
+                }
+            }
+
+            while ((memory::jvm_heap_reserved() <= 0)) {
+                _request_memory(env, 1);
+            }
+            _pending.store(0);
         }
     }
-
     _detach(status);
-    return ret;
 }
 
 // We have created a byte array and evacuated its addresses. Java is not ever
@@ -331,6 +366,13 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
     _detach(status);
 
     balloon_shrinker = this;
+
+    // This cannot be a sched::thread because it may call into JNI functions,
+    // if the JVM balloon is registered as a shrinker. It expects the full pthread
+    // API to be functional, and for sched::threads it is not.
+    // std::thread is implemented ontop of pthreads, so it is fine
+    std::thread tmp([=] { _thread_loop(); });
+    tmp.detach();
 }
 
 jvm_balloon_shrinker::~jvm_balloon_shrinker()

@@ -432,6 +432,11 @@ static size_t constexpr min_emergency_pool_size = 4 << 20;
 
 __thread bool allow_emergency_alloc = false;
 
+extern "C" void thread_mark_emergency()
+{
+    allow_emergency_alloc = true;
+}
+
 reclaimer reclaimer_thread
     __attribute__((init_priority((int)init_prio::reclaimer)));
 
