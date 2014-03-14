@@ -241,8 +241,8 @@ public:
     void reset();
     void setup();
     int send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize);
-    void wait_cmd_poll();
-    void wait_cmd_irq();
+    void wait_cmd_poll(u8 slot);
+    void wait_cmd_irq(u8 slot);
     void disk_identify();
     void disk_flush(struct bio *bio);
     void disk_rw(struct bio *bio, bool iswrite);

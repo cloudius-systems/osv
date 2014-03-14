@@ -214,7 +214,7 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
     return 0;
 }
 
-void port::wait_cmd_irq()
+void port::wait_cmd_irq(u8 slot)
 {
     _waiter.reset(*sched::thread::current());
     sched::thread::wait_until([=] { return _cmd_send_nr <= get_cmd_done_nr(); });
@@ -223,7 +223,7 @@ void port::wait_cmd_irq()
     _waiter.clear();
 }
 
-void port::wait_cmd_poll()
+void port::wait_cmd_poll(u8 slot)
 {
     auto host_is = _hba->hba_readl(HOST_IS);
     for (;;) {
@@ -302,9 +302,9 @@ void port::disk_rw(struct bio *bio, bool iswrite)
     _cmd_send_nr++;
 
     if (_hba->poll_mode()) {
-        wait_cmd_poll();
+        wait_cmd_poll(slot);
     } else {
-        wait_cmd_irq();
+        wait_cmd_irq(slot);
     }
 
     biodone(bio, true);
@@ -324,9 +324,9 @@ void port::disk_flush(struct bio *bio)
     _cmd_send_nr++;
 
     if (_hba->poll_mode()) {
-        wait_cmd_poll();
+        wait_cmd_poll(slot);
     } else {
-        wait_cmd_irq();
+        wait_cmd_irq(slot);
     }
 
     biodone(bio, true);
@@ -345,7 +345,7 @@ void port::disk_identify()
     cmd.fis.command = ATA_CMD_IDENTIFY_DEVICE;
 
     send_cmd(slot, 0, buffer, 512);
-    wait_cmd_poll();
+    wait_cmd_poll(slot);
 
     // Word 75 queue depth
     _queue_depth = buffer[75] & 0x1F;
