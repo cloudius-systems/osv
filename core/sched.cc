@@ -40,6 +40,7 @@ TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
 TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
 TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
+TRACEPOINT(trace_timer_reset, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
 TRACEPOINT(trace_timer_fired, "timer=%p", timer_base*);
 TRACEPOINT(trace_thread_create, "thread=%p", thread*);
@@ -1095,6 +1096,31 @@ void timer_base::cancel()
     // even if we remove the first timer, allow it to expire rather than
     // reprogramming the timer
 }
+
+void timer_base::reset(osv::clock::uptime::time_point time)
+{
+    trace_timer_reset(this, time.time_since_epoch().count());
+
+    auto& timers = cpu::current()->timers;
+
+    irq_save_lock_type irq_lock;
+    WITH_LOCK(irq_lock) {
+        if (_state == state::armed) {
+            timers._list.erase(timers._list.iterator_to(*this));
+        } else {
+            _t._active_timers.push_back(*this);
+            _state = state::armed;
+        }
+
+        _time = time;
+
+        timers._list.insert(*this);
+
+        if (timers._list.iterator_to(*this) == timers._list.begin()) {
+            timers.rearm();
+        }
+    }
+};
 
 bool timer_base::expired() const
 {

@@ -171,6 +171,7 @@ public:
     explicit timer_base(client& t);
     ~timer_base();
     void set(osv::clock::uptime::time_point time);
+    void reset(osv::clock::uptime::time_point time);
     // Set a timer using absolute wall-clock time.
     // CAVEAT EMPTOR: Internally timers are kept using the monotonic (uptime)
     // clock, so the wall-time given here is converted to an uptime.
