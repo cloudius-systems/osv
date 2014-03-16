@@ -48,8 +48,10 @@ struct arch_cpu {
     u64 gdt[nr_gdt];
     void init_on_cpu();
     void set_ist_entry(unsigned ist, char* base, size_t size);
-    void set_exception_stack(char* base, size_t size);
+    char* get_ist_entry(unsigned ist);
+    void set_exception_stack(char* base, size_t size = 0);
     void set_exception_stack(arch_thread* t);
+    char* get_exception_stack();
     void set_interrupt_stack(arch_thread* t);
     void enter_exception();
     void exit_exception();
@@ -103,6 +105,11 @@ inline void arch_cpu::set_ist_entry(unsigned ist, char* base, size_t size)
     atss.tss.ist[ist] = reinterpret_cast<u64>(base + size);
 }
 
+inline char* arch_cpu::get_ist_entry(unsigned ist)
+{
+    return reinterpret_cast<char*>(atss.tss.ist[ist]);
+}
+
 inline void arch_cpu::set_exception_stack(char* base, size_t size)
 {
     set_ist_entry(1, base, size);
@@ -112,6 +119,11 @@ inline void arch_cpu::set_exception_stack(arch_thread* t)
 {
     auto& s = t->exception_stack;
     set_ist_entry(1, s, sizeof(s));
+}
+
+inline char* arch_cpu::get_exception_stack()
+{
+    return get_ist_entry(1);
 }
 
 inline void arch_cpu::set_interrupt_stack(arch_thread* t)

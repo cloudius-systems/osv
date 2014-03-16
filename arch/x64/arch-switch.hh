@@ -54,8 +54,9 @@ void thread::switch_to()
     set_fsbase(reinterpret_cast<u64>(_tcb));
     barrier();
     auto c = _detached_state->_cpu;
+    old->_state.exception_stack = c->arch.get_exception_stack();
     c->arch.set_interrupt_stack(&_arch);
-    c->arch.set_exception_stack(&_arch);
+    c->arch.set_exception_stack(_state.exception_stack);
     asm volatile
         ("mov %%rbp, %c[rbp](%0) \n\t"
          "movq $1f, %c[rip](%0) \n\t"
@@ -110,6 +111,7 @@ void thread::init_stack()
     _state.rbp = this;
     _state.rip = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;
+    _state.exception_stack = _arch.exception_stack + sizeof(_arch.exception_stack);
 }
 
 void thread::setup_tcb()
