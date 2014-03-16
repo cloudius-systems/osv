@@ -10,6 +10,7 @@
 #include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <osv/mmu.hh>
+#include <osv/irqlock.hh>
 
 void page_fault(exception_frame *ef)
 {
@@ -28,10 +29,10 @@ void page_fault(exception_frame *ef)
     assert(ef->rflags & processor::rflags_if);
 
     // And since we may sleep, make sure interrupts are enabled.
-    arch::irq_enable();
-
-    sched::inplace_arch_fpu fpu;
-    fpu.save();
-    mmu::vm_fault(addr, ef);
-    fpu.restore();
+    DROP_LOCK(irq_lock) { // irq_lock is acquired by HW
+        sched::inplace_arch_fpu fpu;
+        fpu.save();
+        mmu::vm_fault(addr, ef);
+        fpu.restore();
+    }
 }

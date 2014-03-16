@@ -9,6 +9,7 @@
 #define ARCH_THREAD_STATE_HH_
 
 struct thread_state {
+    char *exception_stack;
     void* rsp;
     void* rbp;
     void* rip;
