@@ -241,18 +241,16 @@ public:
     void reset();
     void setup();
     int send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize);
-    void wait_cmd_poll();
-    void wait_cmd_irq();
+    void wait_cmd_poll(u8 slot);
+    void wait_cmd_irq(u8 slot);
     void disk_identify();
     void disk_flush(struct bio *bio);
     void disk_rw(struct bio *bio, bool iswrite);
     int make_request(struct bio *bio);
     void enable_irq();
     void wait_device_ready();
-    void wait_ci_ready();
+    void wait_ci_ready(u8 slot);
     void wakeup() { _waiter.wake(); }
-    void inc_cmd_done_nr() { _cmd_done_nr++; }
-    u64 get_cmd_done_nr() { return _cmd_done_nr.load(std::memory_order_relaxed); }
     bool linkup() { return _linkup; }
 
     u32 port2hba(u32 port_reg)
@@ -283,11 +281,12 @@ public:
         return error;
     }
 
+    u32 done_mask() { auto cmd_active = port_readl(PORT_CI); return (_cmd_active > 0) && (_cmd_active ^ cmd_active); }
+
 private:
-    std::atomic<uint64_t> _cmd_done_nr{0};
     sched::thread_handle _waiter;
-    u64 _cmd_send_nr = 0;
     bool _linkup = false;
+    u32 _cmd_active = 0;
     u8 _queue_depth;
     size_t _devsize;
     mutex _lock;

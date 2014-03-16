@@ -173,10 +173,9 @@ void port::wait_device_ready()
     }
 }
 
-void port::wait_ci_ready()
+void port::wait_ci_ready(u8 slot)
 {
     // Wait for Command Issue Becoming Ready
-    u8 slot = 0;
     for (;;) {
         auto ci = port_readl(PORT_CI);
         if (!(ci & (1U << slot)))
@@ -206,25 +205,22 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
         _cmd_table[slot].prdt[0].flags = bsize - 1;
     }
 
-    wait_device_ready();
-    wait_ci_ready();
-
-    port_writel(PORT_SACT, 1U << slot);
+    _cmd_active |= 1U << slot;
     port_writel(PORT_CI, 1U << slot);
 
     return 0;
 }
 
-void port::wait_cmd_irq()
+void port::wait_cmd_irq(u8 slot)
 {
     _waiter.reset(*sched::thread::current());
-    sched::thread::wait_until([=] { return _cmd_send_nr <= get_cmd_done_nr(); });
-    wait_ci_ready();
-    _cmd_done_nr = _cmd_send_nr;
+    sched::thread::wait_until([=] { return this->done_mask() != 0; });
     _waiter.clear();
+
+    _cmd_active &= ~(1U << slot);
 }
 
-void port::wait_cmd_poll()
+void port::wait_cmd_poll(u8 slot)
 {
     auto host_is = _hba->hba_readl(HOST_IS);
     for (;;) {
@@ -233,7 +229,7 @@ void port::wait_cmd_poll()
             port_writel(PORT_IS, is);
 
             wait_device_ready();
-            wait_ci_ready();
+            wait_ci_ready(slot);
 
            if (is & 0x02) {
                auto error  = _recv_fis->psfis[3];
@@ -249,6 +245,8 @@ void port::wait_cmd_poll()
         }
     }
     _hba->hba_writel(HOST_IS, host_is);
+
+    _cmd_active &= ~(1U << slot);
 }
 
 int port::make_request(struct bio* bio)
@@ -300,12 +298,11 @@ void port::disk_rw(struct bio *bio, bool iswrite)
     cmd.fis.device = (1 << 6) | (1 << 4); // must have bit 6 set
 
     send_cmd(slot, iswrite, buf, len);
-    _cmd_send_nr++;
 
     if (_hba->poll_mode()) {
-        wait_cmd_poll();
+        wait_cmd_poll(slot);
     } else {
-        wait_cmd_irq();
+        wait_cmd_irq(slot);
     }
 
     biodone(bio, true);
@@ -322,12 +319,11 @@ void port::disk_flush(struct bio *bio)
     cmd.fis.command = ATA_CMD_FLUSH_CACHE_EXT;
 
     send_cmd(slot, 0, nullptr, 0);
-    _cmd_send_nr++;
 
     if (_hba->poll_mode()) {
-        wait_cmd_poll();
+        wait_cmd_poll(slot);
     } else {
-        wait_cmd_irq();
+        wait_cmd_irq(slot);
     }
 
     biodone(bio, true);
@@ -346,7 +342,7 @@ void port::disk_identify()
     cmd.fis.command = ATA_CMD_IDENTIFY_DEVICE;
 
     send_cmd(slot, 0, buffer, 512);
-    wait_cmd_poll();
+    wait_cmd_poll(slot);
 
     // Word 75 queue depth
     _queue_depth = buffer[75] & 0x1F;
@@ -509,7 +505,6 @@ bool hba::ack_irq()
         return handled;
 
     auto host_is = hba_readl(HOST_IS);
-    //if (!(host_is & 1))
     if (!host_is)
         return handled;
 
@@ -523,7 +518,6 @@ bool hba::ack_irq()
         u8 error = port->recv_fis_error();
         assert (error == 0);
         if ((is & 1)) {
-            port->inc_cmd_done_nr();
             port->wakeup();
             handled = true;
         }
