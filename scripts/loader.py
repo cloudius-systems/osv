@@ -158,7 +158,7 @@ def free_page_ranges(node = None):
         p = fpr['tree_']['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
     
-    if (int(node) != 0):
+    if node:
         page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
         page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
         
@@ -176,7 +176,7 @@ def vma_list(node = None):
         p = fpr['tree_']['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
 
-    if (int(node) != 0):
+    if node:
         offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook");
         vma = node.cast(gdb.lookup_type('void').pointer()) - offset
         vma = vma.cast(gdb.lookup_type('mmu::vma').pointer())
@@ -423,6 +423,12 @@ def ulong(x):
         x += 1 << 64
     return x
 
+def to_int(gdb_value):
+    if hasattr(globals()['__builtins__'], 'long'):
+        # For GDB with python2
+        return long(gdb_value)
+    return int(gdb_value)
+
 class osv_syms(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv syms',
@@ -431,9 +437,9 @@ class osv_syms(gdb.Command):
         syminfo.clear_cache()
         p = gdb.lookup_global_symbol('elf::program::s_objs').value()
         p = p.dereference().address
-        while int(p.dereference()):
+        while p.dereference():
             obj = p.dereference().dereference()
-            base = int(obj['_base'])
+            base = to_int(obj['_base'])
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
             path = translate(obj_path)
             if not path:
@@ -923,7 +929,7 @@ def dump_trace(out_func):
         def trace_function(indent, annotation, data):
             fn, caller = data
             try:
-                block = gdb.block_for_pc(int(fn))
+                block = gdb.block_for_pc(to_int(fn))
                 fn_name = block.function.print_name
             except:
                 fn_name = '???'
@@ -1170,7 +1176,7 @@ def runqueue(cpuid, node = None):
         p = rq['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
 
-    if (int(node) != 0):
+    if node:
         offset = gdb.parse_and_eval('(int)&((sched::thread *)0)->_runqueue_link');
         thread = node.cast(gdb.lookup_type('void').pointer()) - offset
         thread = thread.cast(gdb.lookup_type('sched::thread').pointer())
