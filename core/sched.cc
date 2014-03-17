@@ -194,6 +194,7 @@ void cpu::reschedule_from_interrupt(bool preempt)
         thread::current()->_fpu.save();
     }
 
+    assert(sched::exception_depth <= 1);
     need_reschedule = false;
     handle_incoming_wakeups();
 

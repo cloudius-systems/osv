@@ -1015,6 +1015,8 @@ void thread::wake_with_from_mutex(Action action)
 
 extern cpu __thread* current_cpu;
 
+extern __thread unsigned exception_depth;
+
 inline cpu* thread::tcpu() const
 {
     return _detached_state->_cpu;
