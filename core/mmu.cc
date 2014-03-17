@@ -210,13 +210,13 @@ void tlb_flush_this_processor()
 // correctness so that, for example, after mprotect() returns, no thread on
 // no cpu can write to the protected page.
 mutex tlb_flush_mutex;
-sched::thread *tlb_flush_waiter;
+sched::thread_handle tlb_flush_waiter;
 std::atomic<int> tlb_flush_pendingconfirms;
 
 inter_processor_interrupt tlb_flush_ipi{[] {
         tlb_flush_this_processor();
         if (tlb_flush_pendingconfirms.fetch_add(-1) == 1) {
-            tlb_flush_waiter->wake();
+            tlb_flush_waiter.wake();
         }
 }};
 
@@ -226,12 +226,13 @@ void tlb_flush()
     if (sched::cpus.size() <= 1)
         return;
     std::lock_guard<mutex> guard(tlb_flush_mutex);
-    tlb_flush_waiter = sched::thread::current();
+    tlb_flush_waiter.reset(*sched::thread::current());
     tlb_flush_pendingconfirms.store((int)sched::cpus.size() - 1);
     tlb_flush_ipi.send_allbutself();
     sched::thread::wait_until([] {
             return tlb_flush_pendingconfirms.load() == 0;
     });
+    tlb_flush_waiter.clear();
 }
 
 void clamp(uintptr_t& vstart1, uintptr_t& vend1,
