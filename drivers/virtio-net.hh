@@ -213,6 +213,10 @@ public:
     bool bad_rx_csum(struct mbuf* m, struct net_hdr* hdr);
     void receiver();
     void fill_rx_ring();
+    mbuf* packet_to_mbuf(const std::vector<iovec>& iovec);
+    static void free_buffer_and_refcnt(void* buffer, void* refcnt);
+    static void free_buffer(iovec iov) { do_free_buffer(iov.iov_base); }
+    static void do_free_buffer(void* buffer);
 
     bool ack_irq();
 

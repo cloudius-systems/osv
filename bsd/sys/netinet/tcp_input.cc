@@ -198,7 +198,7 @@ VNET_DEFINE(struct inpcbinfo, tcbinfo);
 static void	 tcp_dooptions(struct tcpopt *, u_char *, int, int);
 static void	 tcp_do_segment(struct mbuf *, struct tcphdr *,
 		     struct socket *, struct tcpcb *, int, int, uint8_t,
-		     int);
+		     int, bool& want_close);
 static void	 tcp_dropwithreset(struct mbuf *, struct tcphdr *,
 		     struct tcpcb *, int, int);
 static void	 tcp_pulloutofband(struct socket *,
@@ -1134,10 +1134,14 @@ relocked:
 			 * contains.  tcp_do_segment() consumes
 			 * the mbuf chain.
 			 */
+			bool want_close;
 			tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen,
-			    iptos, ti_locked);
+			    iptos, ti_locked, want_close);
 			INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
-			INP_UNLOCK(inp);
+			// if tcp_close() indeed closes, it also unlocks
+			if (!want_close || tcp_close(tp)) {
+				INP_UNLOCK(inp);
+			}
 			return;
 		}
 		/*
@@ -1364,9 +1368,14 @@ relocked:
 	 * Segment belongs to a connection in SYN_SENT, ESTABLISHED or later
 	 * state.  tcp_do_segment() always consumes the mbuf chain and unlocks pcbinfo.
 	 */
-	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, ti_locked);
+	bool want_close;
+	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, ti_locked, want_close);
 	INP_INFO_UNLOCK_ASSERT(&V_tcbinfo);
-	INP_UNLOCK(inp);
+	// if tcp_close() indeed closes, it also unlocks
+	if (!want_close || tcp_close(tp)) {
+		INP_UNLOCK(inp);
+	}
+
 	return;
 
 dropwithreset:
@@ -1417,13 +1426,15 @@ drop:
 static void
 tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
     struct tcpcb *tp, int drop_hdrlen, int tlen, uint8_t iptos,
-    int ti_locked)
+    int ti_locked, bool& want_close)
 {
 	int thflags, acked, ourfinisacked, needoutput = 0;
 	int rstreason, todrop, win;
 	u_long tiwin;
 	struct tcpopt to;
 	auto inp = tp->t_inpcb;
+
+	want_close = false;
 
 #ifdef TCPDEBUG
 	/*
@@ -2089,7 +2100,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 
 				tp->t_state = TCPS_CLOSED;
 				TCPSTAT_INC(tcps_drops);
-				tp = tcp_close(tp);
+				want_close = true;
 				break;
 
 			case TCPS_CLOSING:
@@ -2099,7 +2110,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				    ti_locked));
 				INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 
-				tp = tcp_close(tp);
+				want_close = true;
 				break;
 			}
 		}
@@ -2217,7 +2228,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			    s, __func__, tcpstates[tp->t_state], tlen);
 			free(s);
 		}
-		tp = tcp_close(tp);
+		want_close = true;
 		TCPSTAT_INC(tcps_rcvafterclose);
 		rstreason = BANDLIM_UNLIMITED;
 		goto dropwithreset;
@@ -2708,7 +2719,7 @@ process_ACK:
 		case TCPS_LAST_ACK:
 			if (ourfinisacked) {
 				INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
-				tp = tcp_close(tp);
+				want_close = true;
 				goto drop;
 			}
 			break;
@@ -2999,12 +3010,7 @@ dropwithreset:
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 	ti_locked = TI_UNLOCKED;
 
-	if (tp != NULL) {
-		tcp_dropwithreset(m, th, tp, tlen, rstreason);
-	} else {
-		tcp_dropwithreset(m, th, NULL, tlen, rstreason);
-		INP_LOCK(inp);
-	}
+	tcp_dropwithreset(m, th, !want_close ? tp : nullptr, tlen, rstreason);
 	return;
 
 drop:
@@ -3026,9 +3032,6 @@ drop:
 			  &tcp_savetcp, 0);
 #endif
 	m_freem(m);
-	if (!tp) {
-		INP_LOCK(inp);
-	}
 }
 
 /*
@@ -3660,7 +3663,10 @@ tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 	auto tlen = ntohs(ip_hdr->ip_len) - (ip_size + (th->th_off << 2));
 	auto iptos = ip_hdr->ip_tos;
 	SOCK_LOCK_ASSERT(so);
-	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED);
+	bool want_close;
+	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED, want_close);
+	// since a socket is still attached, we should not be closing
+	assert(!want_close);
 }
 
 static ipv4_tcp_conn_id tcp_connection_id(tcpcb* tp)
