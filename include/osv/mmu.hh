@@ -14,6 +14,8 @@
 #include <osv/types.h>
 #include <functional>
 #include <osv/error.h>
+#include <osv/addr_range.hh>
+#include <unordered_map>
 
 struct exception_frame;
 class balloon;
@@ -50,17 +52,6 @@ enum {
     perm_rwx = perm_read | perm_write | perm_exec,
 };
 
-class addr_range {
-public:
-    addr_range(uintptr_t start, uintptr_t end)
-        : _start(start), _end(end) {}
-    uintptr_t start() const { return _start; }
-    uintptr_t end() const { return _end; }
-private:
-    uintptr_t _start;
-    uintptr_t _end;
-};
-
 enum {
     page_fault_prot  = 1ul << 0,
     page_fault_write = 1ul << 1,
@@ -77,11 +68,11 @@ enum {
     mmap_jvm_heap    = 1ul << 4,
 };
 
-struct map_page_ops;
+struct page_allocator;
 
 class vma {
 public:
-    vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, map_page_ops *page_ops = nullptr);
+    vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, page_allocator *page_ops = nullptr);
     virtual ~vma();
     void set(uintptr_t start, uintptr_t end);
     void protect(unsigned perm);
@@ -95,7 +86,7 @@ public:
     virtual void split(uintptr_t edge) = 0;
     virtual error sync(uintptr_t start, uintptr_t end) = 0;
     virtual int validate_perm(unsigned perm) { return 0; }
-    virtual map_page_ops* page_ops();
+    virtual page_allocator* page_ops();
     void update_flags(unsigned flag);
     bool has_flags(unsigned flag);
     template<typename T> ulong operate_range(T mapper, void *start, size_t size);
@@ -107,7 +98,7 @@ protected:
     unsigned _perm;
     unsigned _flags;
     bool _map_dirty;
-    map_page_ops *_page_ops;
+    page_allocator *_page_ops;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
@@ -133,7 +124,7 @@ public:
 
 class file_vma : public vma {
 public:
-    file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared);
+    file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, page_allocator *page_ops);
     ~file_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
@@ -159,18 +150,31 @@ private:
     unsigned _real_flags;
 };
 
-void* map_file(void* addr, size_t size, unsigned flags, unsigned perm,
-              fileref file, f_offset offset);
-void* map_anon(void* addr, size_t size, unsigned flags, unsigned perm);
-ulong map_jvm(void* addr, size_t size, balloon *b);
+class shm_file final : public special_file {
+    size_t _size;
+    std::unordered_map<uintptr_t, void*> _pages;
+public:
+    shm_file(size_t size, int flags);
+    virtual int stat(struct stat* buf) override;
+    virtual int close() override;
+    virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
+    virtual void* get_page(uintptr_t offset, size_t size) override;
+    virtual void put_page(uintptr_t offset, size_t size) override;
+};
 
-error munmap(void* addr, size_t size);
-error mprotect(void *addr, size_t size, unsigned int perm);
-error msync(void* addr, size_t length, int flags);
-error mincore(void *addr, size_t length, unsigned char *vec);
-bool is_linear_mapped(void *addr, size_t size);
-bool ismapped(void *addr, size_t size);
+void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
+              fileref file, f_offset offset);
+void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm);
+ulong map_jvm(const void* addr, size_t size, balloon *b);
+
+error munmap(const void* addr, size_t size);
+error mprotect(const void *addr, size_t size, unsigned int perm);
+error msync(const void* addr, size_t length, int flags);
+error mincore(const void *addr, size_t length, unsigned char *vec);
+bool is_linear_mapped(const void *addr, size_t size);
+bool ismapped(const void *addr, size_t size);
 bool isreadable(void *addr, size_t size);
+std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 typedef uint64_t phys;
 phys virt_to_phys(void *virt);

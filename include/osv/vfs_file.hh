@@ -21,6 +21,7 @@ public:
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual int chmod(mode_t mode) override;
+    virtual std::unique_ptr<mmu::file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 };
 
 #endif /* VFS_FILE_HH_ */
