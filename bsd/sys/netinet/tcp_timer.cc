@@ -29,6 +29,8 @@
  *	@(#)tcp_timer.c	8.2 (Berkeley) 5/24/95
  */
 
+#include <functional>
+
 #include <sys/cdefs.h>
 
 #include <bsd/porting/netport.h>
@@ -149,43 +151,31 @@ int	tcp_backoff[TCP_MAXRXTSHIFT + 1] =
 
 static int tcp_totbackoff = 2559;	/* sum of tcp_backoff[] */
 
-static int tcp_timer_race;
-SYSCTL_INT(_net_inet_tcp, OID_AUTO, timer_race, CTLFLAG_RD, &tcp_timer_race,
-    0, "Count of t_inpcb races on tcp_discardcb");
-
 /*
  * TCP timer processing.
  */
 
-void
-tcp_timer_delack(void *xtp)
+static void
+tcp_timer_delack(serial_timer_task& timer, struct tcpcb *tp)
 {
-	struct tcpcb *tp = (tcpcb *)xtp;
 	struct inpcb *inp;
 	CURVNET_SET(tp->t_vnet);
 
 	inp = tp->t_inpcb;
-	/*
-	 * XXXRW: While this assert is in fact correct, bugs in the tcpcb
-	 * tear-down mean we need it as a work-around for races between
-	 * timers and tcp_discardcb().
-	 *
-	 * KASSERT(inp != NULL, ("tcp_timer_delack: inp == NULL"));
-	 */
-	if (inp == NULL) {
-		tcp_timer_race++;
-		CURVNET_RESTORE();
-		return;
-	}
+
+	KASSERT(inp != NULL, ("tcp_timer_delack: inp == NULL"));
 	INP_LOCK(inp);
-	tcp_flush_net_channel(tp);
-	if (callout_pending(&tp->t_timers->tt_delack) ||
-	    !callout_active(&tp->t_timers->tt_delack)) {
+
+	if (timer.can_fire()) {
+		tcp_flush_net_channel(tp);
+	}
+
+	if (!timer.try_fire()) {
 		INP_UNLOCK(inp);
 		CURVNET_RESTORE();
 		return;
 	}
-	callout_deactivate(&tp->t_timers->tt_delack);
+
 	if ((inp->inp_flags & INP_DROPPED) != 0) {
 		INP_UNLOCK(inp);
 		CURVNET_RESTORE();
@@ -199,10 +189,9 @@ tcp_timer_delack(void *xtp)
 	CURVNET_RESTORE();
 }
 
-void
-tcp_timer_2msl(void *xtp)
+static void
+tcp_timer_2msl(serial_timer_task& timer, struct tcpcb *tp)
 {
-	struct tcpcb *tp = (tcpcb *)xtp;
 	struct inpcb *inp;
 	CURVNET_SET(tp->t_vnet);
 #ifdef TCPDEBUG
@@ -214,30 +203,23 @@ tcp_timer_2msl(void *xtp)
 	 * XXXRW: Does this actually happen?
 	 */
 	INP_INFO_WLOCK(&V_tcbinfo);
+
 	inp = tp->t_inpcb;
-	/*
-	 * XXXRW: While this assert is in fact correct, bugs in the tcpcb
-	 * tear-down mean we need it as a work-around for races between
-	 * timers and tcp_discardcb().
-	 *
-	 * KASSERT(inp != NULL, ("tcp_timer_2msl: inp == NULL"));
-	 */
-	if (inp == NULL) {
-		tcp_timer_race++;
-		INP_INFO_WUNLOCK(&V_tcbinfo);
-		CURVNET_RESTORE();
-		return;
-	}
+
+	KASSERT(inp != NULL, ("tcp_timer_2msl: inp == NULL"));
 	INP_LOCK(inp);
-	tcp_free_sackholes(tp);
-	if (callout_pending(&tp->t_timers->tt_2msl) ||
-	    !callout_active(&tp->t_timers->tt_2msl)) {
+
+	if (timer.can_fire()) {
+		tcp_free_sackholes(tp);
+	}
+
+	if (!timer.try_fire()) {
 		INP_UNLOCK(tp->t_inpcb);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 		return;
 	}
-	callout_deactivate(&tp->t_timers->tt_2msl);
+
 	if ((inp->inp_flags & INP_DROPPED) != 0) {
 		INP_UNLOCK(inp);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
@@ -262,8 +244,7 @@ tcp_timer_2msl(void *xtp)
 	} else {
 		if (tp->t_state != TCPS_TIME_WAIT &&
 		   bsd_ticks - tp->t_rcvtime <= TP_MAXIDLE(tp))
-		       callout_reset_on(&tp->t_timers->tt_2msl,
-			   TP_KEEPINTVL(tp), tcp_timer_2msl, tp, 0);
+		       reschedule(timer, TP_KEEPINTVL(tp));
 	       else
 		       tp = tcp_close(tp);
        }
@@ -279,10 +260,9 @@ tcp_timer_2msl(void *xtp)
 	CURVNET_RESTORE();
 }
 
-void
-tcp_timer_keep(void *xtp)
+static void
+tcp_timer_keep(serial_timer_task& timer, struct tcpcb *tp)
 {
-	struct tcpcb *tp = (tcpcb *)xtp;
 	struct tcptemp *t_template;
 	struct inpcb *inp;
 	CURVNET_SET(tp->t_vnet);
@@ -292,29 +272,19 @@ tcp_timer_keep(void *xtp)
 	ostate = tp->t_state;
 #endif
 	INP_INFO_WLOCK(&V_tcbinfo);
+
 	inp = tp->t_inpcb;
-	/*
-	 * XXXRW: While this assert is in fact correct, bugs in the tcpcb
-	 * tear-down mean we need it as a work-around for races between
-	 * timers and tcp_discardcb().
-	 *
-	 * KASSERT(inp != NULL, ("tcp_timer_keep: inp == NULL"));
-	 */
-	if (inp == NULL) {
-		tcp_timer_race++;
-		INP_INFO_WUNLOCK(&V_tcbinfo);
-		CURVNET_RESTORE();
-		return;
-	}
+
+	KASSERT(inp != NULL, ("tcp_timer_keep: inp == NULL"));
 	INP_LOCK(inp);
-	if (callout_pending(&tp->t_timers->tt_keep) ||
-	    !callout_active(&tp->t_timers->tt_keep)) {
+
+	if (!timer.try_fire()) {
 		INP_UNLOCK(inp);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 		return;
 	}
-	callout_deactivate(&tp->t_timers->tt_keep);
+
 	if ((inp->inp_flags & INP_DROPPED) != 0) {
 		INP_UNLOCK(inp);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
@@ -352,11 +322,10 @@ tcp_timer_keep(void *xtp)
 				    tp->rcv_nxt, tp->snd_una - 1, 0);
 			free(t_template);
 		}
-		callout_reset_on(&tp->t_timers->tt_keep, TP_KEEPINTVL(tp),
-		    tcp_timer_keep, tp, 0);
-	} else
-		callout_reset_on(&tp->t_timers->tt_keep, TP_KEEPIDLE(tp),
-		    tcp_timer_keep, tp, 0);
+		reschedule(timer, TP_KEEPINTVL(tp));
+	} else {
+		reschedule(timer, TP_KEEPIDLE(tp));
+	}
 
 #ifdef TCPDEBUG
 	if (inp->inp_socket->so_options & SO_DEBUG)
@@ -383,10 +352,9 @@ dropit:
 	CURVNET_RESTORE();
 }
 
-void
-tcp_timer_persist(void *xtp)
+static void
+tcp_timer_persist(serial_timer_task& timer, struct tcpcb *tp)
 {
-	struct tcpcb *tp = (tcpcb *)xtp;
 	struct inpcb *inp;
 	CURVNET_SET(tp->t_vnet);
 #ifdef TCPDEBUG
@@ -395,30 +363,23 @@ tcp_timer_persist(void *xtp)
 	ostate = tp->t_state;
 #endif
 	INP_INFO_WLOCK(&V_tcbinfo);
+
 	inp = tp->t_inpcb;
-	/*
-	 * XXXRW: While this assert is in fact correct, bugs in the tcpcb
-	 * tear-down mean we need it as a work-around for races between
-	 * timers and tcp_discardcb().
-	 *
-	 * KASSERT(inp != NULL, ("tcp_timer_persist: inp == NULL"));
-	 */
-	if (inp == NULL) {
-		tcp_timer_race++;
-		INP_INFO_WUNLOCK(&V_tcbinfo);
-		CURVNET_RESTORE();
-		return;
-	}
+
+	KASSERT(inp != NULL, ("tcp_timer_persist: inp == NULL"));
 	INP_LOCK(inp);
-	tcp_flush_net_channel(tp);
-	if (callout_pending(&tp->t_timers->tt_persist) ||
-	    !callout_active(&tp->t_timers->tt_persist)) {
+
+	if (timer.can_fire()) {
+		tcp_flush_net_channel(tp);
+	}
+
+	if (!timer.try_fire()) {
 		INP_UNLOCK(inp);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 		return;
 	}
-	callout_deactivate(&tp->t_timers->tt_persist);
+
 	if ((inp->inp_flags & INP_DROPPED) != 0) {
 		INP_UNLOCK(inp);
 		INP_INFO_WUNLOCK(&V_tcbinfo);
@@ -460,10 +421,9 @@ out:
 	CURVNET_RESTORE();
 }
 
-void
-tcp_timer_rexmt(void * xtp)
+static void
+tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 {
-	struct tcpcb *tp = (tcpcb *)xtp;
 	CURVNET_SET(tp->t_vnet);
 	int rexmt;
 	int headlocked;
@@ -474,30 +434,23 @@ tcp_timer_rexmt(void * xtp)
 	ostate = tp->t_state;
 #endif
 	INP_INFO_RLOCK(&V_tcbinfo);
+
 	inp = tp->t_inpcb;
-	/*
-	 * XXXRW: While this assert is in fact correct, bugs in the tcpcb
-	 * tear-down mean we need it as a work-around for races between
-	 * timers and tcp_discardcb().
-	 *
-	 * KASSERT(inp != NULL, ("tcp_timer_rexmt: inp == NULL"));
-	 */
-	if (inp == NULL) {
-		tcp_timer_race++;
-		INP_INFO_RUNLOCK(&V_tcbinfo);
-		CURVNET_RESTORE();
-		return;
-	}
+
+	KASSERT(inp != NULL, ("tcp_timer_rexmt: inp == NULL"));
 	INP_LOCK(inp);
-	tcp_flush_net_channel(tp);
-	if (callout_pending(&tp->t_timers->tt_rexmt) ||
-	    !callout_active(&tp->t_timers->tt_rexmt)) {
+
+	if (timer.can_fire()) {
+		tcp_flush_net_channel(tp);
+	}
+
+	if (!timer.try_fire()) {
 		INP_UNLOCK(inp);
 		INP_INFO_RUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 		return;
 	}
-	callout_deactivate(&tp->t_timers->tt_rexmt);
+
 	if ((inp->inp_flags & INP_DROPPED) != 0) {
 		INP_UNLOCK(inp);
 		INP_INFO_RUNLOCK(&V_tcbinfo);
@@ -622,65 +575,47 @@ out:
 }
 
 void
-tcp_timer_activate(struct tcpcb *tp, int timer_type, u_int delta)
+tcp_timer_activate(struct tcpcb *tp, tcp_timer_type timer_type, ticks_t delta)
 {
-	struct callout *t_callout;
-	void (*f_callout)(void *);
-
-	switch (timer_type) {
-		case TT_DELACK:
-			t_callout = &tp->t_timers->tt_delack;
-			f_callout = tcp_timer_delack;
-			break;
-		case TT_REXMT:
-			t_callout = &tp->t_timers->tt_rexmt;
-			f_callout = tcp_timer_rexmt;
-			break;
-		case TT_PERSIST:
-			t_callout = &tp->t_timers->tt_persist;
-			f_callout = tcp_timer_persist;
-			break;
-		case TT_KEEP:
-			t_callout = &tp->t_timers->tt_keep;
-			f_callout = tcp_timer_keep;
-			break;
-		case TT_2MSL:
-			t_callout = &tp->t_timers->tt_2msl;
-			f_callout = tcp_timer_2msl;
-			break;
-		default:
-			panic("bad timer_type");
-		}
+	auto& timer = tp->t_timers->get(timer_type);
 	if (delta == 0) {
-		callout_stop(t_callout);
+		timer.cancel();
 	} else {
-		callout_reset_on(t_callout, delta, f_callout, tp, 0);
+		reschedule(timer, delta);
 	}
 }
 
 int
-tcp_timer_active(struct tcpcb *tp, int timer_type)
+tcp_timer_active(struct tcpcb *tp, tcp_timer_type timer_type)
 {
-	struct callout *t_callout;
+	auto& timer = tp->t_timers->get(timer_type);
+	return timer.is_active();
+}
 
-	switch (timer_type) {
-		case TT_DELACK:
-			t_callout = &tp->t_timers->tt_delack;
-			break;
-		case TT_REXMT:
-			t_callout = &tp->t_timers->tt_rexmt;
-			break;
-		case TT_PERSIST:
-			t_callout = &tp->t_timers->tt_persist;
-			break;
-		case TT_KEEP:
-			t_callout = &tp->t_timers->tt_keep;
-			break;
-		case TT_2MSL:
-			t_callout = &tp->t_timers->tt_2msl;
-			break;
-		default:
-			panic("bad timer_type");
-		}
-	return callout_active(t_callout);
+void
+init_timers(struct tcp_timer* timers, struct tcpcb *tp, struct inpcb *inp)
+{
+	using namespace std::placeholders;
+
+	timers->timers[tcp_timer_type::TT_DELACK] =
+		new serial_timer_task(inp->inp_lock, std::bind(tcp_timer_delack, _1, tp));
+
+	timers->timers[tcp_timer_type::TT_REXMT] =
+		new serial_timer_task(inp->inp_lock, std::bind(tcp_timer_rexmt, _1, tp));
+
+	timers->timers[tcp_timer_type::TT_PERSIST] =
+		new serial_timer_task(inp->inp_lock, std::bind(tcp_timer_persist, _1, tp));
+
+	timers->timers[tcp_timer_type::TT_KEEP] =
+		new serial_timer_task(inp->inp_lock, std::bind(tcp_timer_keep, _1, tp));
+
+	timers->timers[tcp_timer_type::TT_2MSL] =
+		new serial_timer_task(inp->inp_lock, std::bind(tcp_timer_2msl, _1, tp));
+}
+
+serial_timer_task&
+tcp_timer::get(tcp_timer_type timer_type)
+{
+	assert(timer_type < tcp_timer_type::COUNT);
+	return *timers[timer_type];
 }
