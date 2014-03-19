@@ -1283,7 +1283,7 @@ void anon_vma::split(uintptr_t edge)
         return;
     }
     vma* n = new anon_vma(addr_range(edge, _range.end()), _perm, _flags);
-    _range = addr_range(_range.start(), edge);
+    set(_range.start(), edge);
     vma_list.insert(*n);
 }
 
@@ -1407,7 +1407,7 @@ void file_vma::split(uintptr_t edge)
     }
     auto off = offset(edge);
     vma *n = _file->mmap(addr_range(edge, _range.end()), _flags, _perm, off).release();
-    _range = addr_range(_range.start(), edge);
+    set(_range.start(), edge);
     vma_list.insert(*n);
 }
 
