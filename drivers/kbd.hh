@@ -41,7 +41,7 @@ public:
     explicit Keyboard(sched::thread* consumer);
     virtual bool input_ready();
     virtual uint32_t readkey();
-    unsigned int shift;
+    uint32_t shift;
 private:
     gsi_edge_interrupt _irq;
 };
