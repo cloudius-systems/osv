@@ -133,7 +133,6 @@ uint32_t Keyboard::readkey()
     unsigned char st, data;
     uint32_t c;
 
-    shift = 0;
     st = processor::inb(KBSTATP);
     if ((st & KBS_DIB) == 0)
         return 0;
