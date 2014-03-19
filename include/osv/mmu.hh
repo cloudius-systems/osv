@@ -159,8 +159,8 @@ public:
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
-    virtual void* get_page(uintptr_t offset, size_t size) override;
-    virtual void put_page(uintptr_t offset, size_t size) override;
+    virtual void* get_page(uintptr_t start, uintptr_t offset, size_t size) override;
+    virtual void put_page(void *addr, uintptr_t start, uintptr_t offset, size_t size) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
