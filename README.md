@@ -48,7 +48,7 @@ the first version to fully comply with the C++11 standard.
 Make sure all git submodules are up-to-date:
 
 ```
-git submodule update --init
+git submodule update --init --recursive
 ```
 
 Finally, build everything at once:
