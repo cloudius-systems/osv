@@ -901,7 +901,7 @@ void thread::timer_fired()
     wake();
 }
 
-unsigned long thread::id()
+unsigned int thread::id()
 {
     return _id;
 }

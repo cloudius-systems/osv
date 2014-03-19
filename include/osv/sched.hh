@@ -409,7 +409,21 @@ public:
     void join();
     void detach();
     void set_cleanup(std::function<void ()> cleanup);
-    unsigned long id() __attribute__((no_instrument_function)); // guaranteed unique over system lifetime
+    /**
+     * Return thread's numeric id
+     *
+     * In OSv, threads are sched::thread objects and are usually referred to
+     * with a pointer, not a numeric id. Nevertheless, for Linux compatibility
+     * it is convenient for each thread to have a numeric id which emulates
+     * Linux's thread ids. The id() function returns this thread id.
+     *
+     * id() returns the same value for the life-time of the thread. A thread's
+     * id is guaranteed to be unique among currently running threads, but may
+     * not be unique for the lifetime of the system: Thread ids are assigned
+     * sequentially to new threads (skipping ids which are currently in use),
+     * and this sequential 32-bit counter can wrap around.
+     */
+    unsigned int id() __attribute__((no_instrument_function));
     void* get_tls(ulong module);
     void* setup_tls(ulong module, const void* tls_template,
             size_t init_size, size_t uninit_size);
