@@ -134,7 +134,7 @@ def start_osv_qemu(options):
         args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
         net_device_options.append('netdev=un0')
         if options.api:
-            args += ["-redir", "tcp:8080::8080"]
+            args += ["-redir", "tcp:8000::8000"]
         args += ["-redir", "tcp:2222::22"]
 
         for rule in options.forward:
@@ -345,7 +345,7 @@ if (__name__ == "__main__"):
     parser.add_argument("--vnc", action="store", default=":1",
                         help="specify vnc port number")
     parser.add_argument("--api", action = "store_true",
-                        help = "redirect the API port (8080) for user-mode networking")
+                        help = "redirect the API port (8000) for user-mode networking")
     parser.add_argument("--pass-args", action="append",
                         help = "pass arguments to underlying hypervisor (e.g. qemu)")
     parser.add_argument("--trace", action="store",
