@@ -12,6 +12,7 @@
 
 __BEGIN_DECLS
 /* Routing functions */
+void osv_route_add_interface(const char* destination, const char* interface);
 void osv_route_add_host(const char* destination,
     const char* gateway);
 void osv_route_add_network(const char* destination, const char* netmask,

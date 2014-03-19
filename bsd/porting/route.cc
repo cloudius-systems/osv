@@ -44,6 +44,11 @@
 
 int sysctl_rtsock(SYSCTL_HANDLER_ARGS) ;
 
+enum class gw_type: u8 {
+    inet    = 0, // Gateway is a internet address
+    link    = 1  // Gateway is a link address
+};
+
 /*
  * Routing message structure -
  *
@@ -164,7 +169,7 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
 
 /* Compose a routing message to be sent on socket */
 static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
-    const char* gateway, const char* netmask, int flags)
+    const char* gateway, const char* netmask, int flags, gw_type type)
 {
     static int msg_seq = 0;
     struct mbuf* m;
@@ -173,11 +178,15 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     int l = 0;
     int rtm_addrs;
     struct bsd_ifaddr *ifa;
+    bool is_link = type == gw_type::link;
 
     /* IPv4: Addresses */
     struct bsd_sockaddr_in dst;
     struct bsd_sockaddr_in gw;
     struct bsd_sockaddr_in mask;
+
+    /* Link: Address*/
+    struct bsd_sockaddr_dl sdl;
 
     /*
      * Init
@@ -198,15 +207,32 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
 
     bzero(&dst, sizeof(dst));
     bzero(&gw, sizeof(gw));
+    bzero(&sdl, sizeof(sdl));
     bzero(&mask, sizeof(mask));
 
     dst.sin_family = AF_INET;
     dst.sin_len = sizeof(struct bsd_sockaddr_in);
     inet_aton(destination, &dst.sin_addr);
 
-    gw.sin_family = AF_INET;
-    gw.sin_len = sizeof(struct bsd_sockaddr_in);
-    inet_aton(gateway, &gw.sin_addr);
+    if (is_link) {
+        /* Get ifindex from name */
+        auto ifp = ifunit_ref(gateway);
+        if (ifp == nullptr) {
+            abort();
+        }
+        sdl.sdl_len = sizeof(sdl);
+        sdl.sdl_family = AF_LINK;
+        sdl.sdl_alen = ETHER_ADDR_LEN;
+        sdl.sdl_type = IFT_ETHER;
+        sdl.sdl_index = ifp->if_index;
+        auto ea = (struct ether_addr *)LLADDR(&sdl);
+        memcpy(ea, IF_LLADDR(ifp), ETHER_ADDR_LEN);
+        if_rele(ifp);
+    } else {
+        gw.sin_family = AF_INET;
+        gw.sin_len = sizeof(struct bsd_sockaddr_in);
+        inet_aton(gateway, &gw.sin_addr);
+    }
 
     if (netmask) {
         mask.sin_family = AF_INET;
@@ -224,7 +250,7 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     m_rtmsg->m_rtm.rtm_seq = ++msg_seq;
     m_rtmsg->m_rtm.rtm_addrs = rtm_addrs;
 
-    if (flags & RTF_GATEWAY) {
+    if ((flags & RTF_GATEWAY) && !is_link) {
         ifa = ifa_ifwithnet((struct bsd_sockaddr *)&gw, 1);
         if (ifa) {
             m_rtmsg->m_rtm.rtm_rmx.rmx_mtu = ifa->ifa_ifp->if_mtu;
@@ -240,7 +266,11 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     l = SA_SIZE_ALWAYS(&(sa)); bcopy(&(sa), cp, l); cp += l;\
 
     CP_ADDR(RTA_DST, dst);
-    CP_ADDR(RTA_GATEWAY, gw);
+    if (is_link) {
+        CP_ADDR(RTA_GATEWAY, sdl);
+    } else {
+        CP_ADDR(RTA_GATEWAY, gw);
+    }
     if (netmask) {
         CP_ADDR(RTA_NETMASK, mask);
     }
@@ -253,6 +283,21 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     return (m);
 }
 
+void osv_route_add_interface(const char* destination, const char* interface)
+{
+    /* Create socket */
+    struct socket* s;
+    struct mbuf *m;
+
+    m = osv_route_rtmsg(RTM_ADD, destination, interface, NULL,
+        (RTF_STATIC | RTF_UP | RTF_HOST), gw_type::link);
+
+    /* Send routing message */
+    socreate(PF_ROUTE, &s, SOCK_RAW, 0, NULL, NULL);
+    sosend(s, 0, 0, m, 0, 0, NULL);
+    soclose(s);
+}
+
 void osv_route_add_host(const char* destination,
     const char* gateway)
 {
@@ -261,7 +306,7 @@ void osv_route_add_host(const char* destination,
     struct mbuf *m;
 
     m = osv_route_rtmsg(RTM_ADD, destination, gateway, NULL,
-        (RTF_STATIC | RTF_UP | RTF_HOST) );
+        (RTF_STATIC | RTF_UP | RTF_HOST), gw_type::inet);
 
     /* Send routing message */
     socreate(PF_ROUTE, &s, SOCK_RAW, 0, NULL, NULL);
@@ -277,7 +322,7 @@ void osv_route_add_network(const char* destination, const char* netmask,
     struct mbuf *m;
 
     m = osv_route_rtmsg(RTM_ADD, destination, gateway, netmask,
-        (RTF_STATIC | RTF_UP | RTF_GATEWAY ) );
+        (RTF_STATIC | RTF_UP | RTF_GATEWAY ), gw_type::inet);
 
     /* Send routing message */
     socreate(PF_ROUTE, &s, SOCK_RAW, 0, NULL, NULL);

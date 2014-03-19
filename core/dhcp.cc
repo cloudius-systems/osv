@@ -528,6 +528,9 @@ namespace dhcp {
                           dm.get_your_ip().to_string().c_str(),
                           dm.get_subnet_mask().to_string().c_str());
 
+            if (dm.get_subnet_mask() == ip::address_v4({0xff, 0xff, 0xff, 0xff})) {
+                osv_route_add_interface(dm.get_router_ip().to_string().c_str(), _ifp->if_xname);
+            }
             osv_route_add_network("0.0.0.0",
                                   "0.0.0.0",
                                   dm.get_router_ip().to_string().c_str());
