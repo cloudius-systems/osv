@@ -387,7 +387,6 @@ void net::receiver()
 
         u32 len;
         int nbufs;
-        void* page = vq->get_buf_elem(&len);
         u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
         u64 csum_err = 0, rx_bytes = 0;
 
@@ -395,7 +394,7 @@ void net::receiver()
         // truncating it.
         net_hdr_mrg_rxbuf* mhdr;
 
-        while (page) {
+        while (void* page = vq->get_buf_elem(&len)) {
 
             // TODO: should get out of the loop
             vq->get_buf_finalize();
@@ -459,9 +458,6 @@ void net::receiver()
             // passing the packet up the network stack.
             if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
                 break;
-
-            // Move to the next packet
-            page = vq->get_buf_elem(&len);
         }
 
         if (vq->refill_ring_cond())
