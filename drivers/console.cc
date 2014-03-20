@@ -14,8 +14,11 @@
 #include <vector>
 #include <sys/ioctl.h>
 
+#ifdef __x86_64__
 #include "isa-serial.hh"
 #include "vga.hh"
+#endif /* __x86_64__ */
+
 #include "debug-console.hh"
 #include <termios.h>
 #include <signal.h>
@@ -282,6 +285,9 @@ struct driver console_driver = {
 
 void console_init(bool use_vga)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     auto console_poll_thread = new sched::thread(console_poll,
             sched::thread::attr().name("console"));
     Console* console;
@@ -293,6 +299,7 @@ void console_init(bool use_vga)
     console_poll_thread->start();
     console::console.set_impl(console);
     device_create(&console_driver, "console", D_CHR);
+#endif /* !AARCH64_PORT_STUB */
 }
 
 class console_file : public special_file {
