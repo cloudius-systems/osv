@@ -290,6 +290,7 @@ public:
     bool descend(void) { return opt2bool(Descend); }
     bool once(void) { return opt2bool(Once); }
     bool split_large(hw_ptep ptep, int level) { return opt2bool(Split); }
+    int nr_page_sizes(void) { return mmu::nr_page_sizes; }
 
     // small_page() function is called on level 0 ptes. Each page table operation
     // have to provide its own version.
@@ -390,7 +391,7 @@ private:
             hw_ptep ptep = pt.at(idx);
             uintptr_t vstart1 = vcur, vend1 = vend;
             clamp(vstart1, vend1, base_virt, base_virt + step - 1, slop);
-            if (unsigned(level) < nr_page_sizes && vstart1 == base_virt && vend1 == base_virt + step - 1) {
+            if (unsigned(level) < page_mapper.nr_page_sizes() && vstart1 == base_virt && vend1 == base_virt + step - 1) {
                 uintptr_t offset = base_virt - vma_start;
                 if (level) {
                     if (!skip_pte(ptep)) {
@@ -501,6 +502,17 @@ public:
         }
         return true;
     }
+};
+
+template <account_opt Account = account_opt::no>
+class populate_small : public populate<Account> {
+public:
+    populate_small(page_allocator* pops, unsigned int perm, bool map_dirty = true) : populate<Account>(pops, perm, map_dirty) { }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) {
+        assert(0);
+        return false;
+    }
+    int nr_page_sizes(void) { return 1; }
 };
 
 struct tlb_gather {
@@ -970,6 +982,18 @@ void vcleanup(void* addr, size_t size)
     }
 }
 
+template<account_opt Account = account_opt::no>
+ulong populate_vma(vma *vma, void *v, size_t size)
+{
+    page_allocator *map = vma->page_ops();
+    auto total = vma->has_flags(mmap_small) ?
+        vma->operate_range(populate_small<Account>(map, vma->perm(), vma->map_dirty()), v, size) :
+        vma->operate_range(populate<Account>(map, vma->perm(), vma->map_dirty()), v, size);
+    map->finalize();
+
+    return total;
+}
+
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
 {
     bool search = !(flags & mmap_fixed);
@@ -979,7 +1003,7 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     std::lock_guard<mutex> guard(vma_list_mutex);
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
-        vma->operate_range(populate<>(vma->page_ops(), perm, vma->map_dirty()), v, size);
+        populate_vma(vma, v, size);
     }
     return v;
 }
@@ -1001,18 +1025,13 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     auto asize = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto *vma = f->mmap(addr_range(start, start + size), flags, perm, offset).release();
-    page_allocator *palloc = nullptr;
     void *v;
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, asize, search);
         if (flags & mmap_populate) {
-            palloc = vma->page_ops();
-            vma->operate_range(populate<>(palloc, perm, vma->map_dirty()), v, asize);
+            populate_vma(vma, v, asize);
         }
     }
-    // call finalize outside of the lock so the file read will not happen under it
-    if (palloc)
-        palloc->finalize();
     return v;
 }
 
@@ -1194,16 +1213,14 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
     auto hp_start = ::align_up(_range.start(), huge_page_size);
     auto hp_end = ::align_down(_range.end(), huge_page_size);
     size_t size;
-    if (hp_start <= addr && addr < hp_end) {
+    if (!has_flags(mmap_small) && (hp_start <= addr && addr < hp_end)) {
         addr = ::align_down(addr, huge_page_size);
         size = huge_page_size;
     } else {
         size = page_size;
     }
 
-    page_allocator *map = page_ops();
-    auto total = operate_range(populate<account_opt::yes>(map, _perm, map_dirty()), (void*)addr, size);
-    map->finalize();
+    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size);
 
     if (_flags & mmap_jvm_heap) {
         memory::stats::on_jvm_heap_alloc(total);

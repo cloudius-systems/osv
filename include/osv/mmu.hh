@@ -66,6 +66,7 @@ enum {
     mmap_shared      = 1ul << 2,
     mmap_uninitialized = 1ul << 3,
     mmap_jvm_heap    = 1ul << 4,
+    mmap_small       = 1ul << 5,
 };
 
 struct page_allocator;
