@@ -636,7 +636,7 @@ out:
 static int zfs_truncate(struct vnode *vp, off_t new_size);
 
 static int
-zfs_manage_mapping(vnode_t *vp, struct file* fp, uio_t *uio, bool map)
+zfs_arc(vnode_t *vp, struct file* fp, uio_t *uio, unsigned action)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
@@ -682,7 +682,7 @@ zfs_manage_mapping(vnode_t *vp, struct file* fp, uio_t *uio, bool map)
 	nbytes = MIN(nbytes, zfs_read_chunk_size -
 		P2PHASE(uio->uio_loffset, zfs_read_chunk_size));
 
-	error = dmu_map_uio(os, zp->z_id, uio, nbytes, map);
+	error = dmu_map_uio(os, zp->z_id, uio, nbytes, action);
 	if (error) {
 		/* convert checksum errors into IO errors */
 		if (error == ECKSUM)
@@ -694,19 +694,6 @@ zfs_manage_mapping(vnode_t *vp, struct file* fp, uio_t *uio, bool map)
 	ZFS_ACCESSTIME_STAMP(zfsvfs, zp);
 	ZFS_EXIT(zfsvfs);
 	return (error);
-}
-
-static int
-zfs_map(vnode_t *vp, struct file* fp, uio_t *uio)
-{
-	return zfs_manage_mapping(vp, fp, uio, true);
-}
-
-
-static int
-zfs_unmap(vnode_t *vp, struct file* fp, uio_t *uio)
-{
-	return zfs_manage_mapping(vp, fp, uio, false);
 }
 
 /*
@@ -4961,6 +4948,5 @@ struct vnops zfs_vnops = {
 	zfs_inactive,			/* inactive */
 	zfs_truncate,			/* truncate */
 	zfs_link,			/* link */
-	zfs_map,			/* map */
-	zfs_unmap,			/* unmap */
+	zfs_arc,            /* arc */
 };

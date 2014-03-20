@@ -991,28 +991,29 @@ static void fs_buf_get(void *buf_addr)
 {
     auto b = shared_fs_buf_refcnt.find(buf_addr);
     if (b == shared_fs_buf_refcnt.end()) {
-        shared_fs_buf_refcnt.insert(std::make_pair(buf_addr, 1));
+        shared_fs_buf_refcnt.emplace(buf_addr, 1);
         return;
     }
     b->second++;
 }
 
-static bool fs_buf_put(void *buf_addr)
+static bool fs_buf_put(void *buf_addr, unsigned dec = 1)
 {
     auto b = shared_fs_buf_refcnt.find(buf_addr);
     assert(b != shared_fs_buf_refcnt.end());
-    auto old = --b->second;
-    if (old == 0) {
+    assert(b->second >= dec);
+    b->second -= dec;
+    if (b->second == 0) {
         shared_fs_buf_refcnt.erase(buf_addr);
         return true;
     }
     return false;
 }
 
-void add_mapping(void *buf_addr, uintptr_t off, hw_ptep ptep)
+void add_mapping(void *buf_addr, void *page, hw_ptep ptep)
 {
     WITH_LOCK(shared_fs_mutex) {
-        shared_fs_maps.insert(std::make_pair(buf_addr + off, ptep));
+        shared_fs_maps.emplace(page, ptep);
         fs_buf_get(buf_addr);
     }
 }
@@ -1025,11 +1026,25 @@ bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep)
             auto stored = (*it).second;
             if (stored == ptep) {
                 shared_fs_maps.erase(it);
-                break;
+                return fs_buf_put(buf_addr);
             }
         }
-        return fs_buf_put(buf_addr);
     }
+    return false;
+}
+
+bool lookup_mapping(void *paddr, hw_ptep ptep)
+{
+    WITH_LOCK(shared_fs_mutex) {
+        auto buf = shared_fs_maps.equal_range(paddr);
+        for (auto it = buf.first; it != buf.second; it++) {
+            auto stored = (*it).second;
+            if (stored == ptep) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
@@ -1088,27 +1103,32 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
     return total;
 }
 
-void clear_ptes(std::unordered_multimap<void *, hw_ptep>::iterator start,  std::unordered_multimap<void *, hw_ptep>::iterator end)
+void clear_pte(hw_ptep ptep)
 {
-    for (auto it = start; it != end; it++) {
-        hw_ptep ptep = (*it).second;
-        ptep.write(make_empty_pte());
-    }
+    ptep.write(make_empty_pte());
 }
 
-void unmap_address(void *addr, size_t size)
+void clear_pte(std::pair<void* const, hw_ptep>& pair)
 {
+    clear_pte(pair.second);
+}
+
+bool unmap_address(void *buf_addr, void *addr, size_t size)
+{
+    bool last;
+    unsigned refs = 0;
     size = align_up(size, page_size);
     WITH_LOCK(shared_fs_mutex) {
-        shared_fs_buf_refcnt.erase(addr);
         for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
             addr = reinterpret_cast<void*>(a);
             auto buf = shared_fs_maps.equal_range(addr);
-            clear_ptes(buf.first, buf.second);
+            refs += clear_ptes(buf.first, buf.second);
             shared_fs_maps.erase(addr);
         }
+        last = refs ? fs_buf_put(buf_addr, refs) : false;
     }
     tlb_flush();
+    return last;
 }
 
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)

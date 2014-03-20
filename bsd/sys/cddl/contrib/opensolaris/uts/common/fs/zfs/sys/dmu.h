@@ -602,7 +602,7 @@ void dmu_write(objset_t *os, uint64_t object, uint64_t offset, uint64_t size,
 	const void *buf, dmu_tx_t *tx);
 void dmu_prealloc(objset_t *os, uint64_t object, uint64_t offset, uint64_t size,
 	dmu_tx_t *tx);
-int dmu_map_uio(objset_t *os, uint64_t object, struct uio *uio, uint64_t size, bool map);
+int dmu_map_uio(objset_t *os, uint64_t object, struct uio *uio, uint64_t size, unsigned action);
 int dmu_read_uio(objset_t *os, uint64_t object, struct uio *uio, uint64_t size);
 int dmu_write_uio(objset_t *os, uint64_t object, struct uio *uio, uint64_t size,
     dmu_tx_t *tx);

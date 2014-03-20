@@ -980,14 +980,11 @@ xuio_stat_wbuf_nocopy()
 #ifdef _KERNEL
 
 int
-dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size, bool map)
+dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size, unsigned action)
 {
 	dmu_buf_t **dbp;
 	int err;
-	struct uio_mapper *uio_map = (struct uio_mapper *)uio;
 	struct iovec *iov;
-	int tocpy;
-	int bufoff;
 	int numbufs = 0;
 
 	// This will acquire a reference both in the dbuf, and in the ARC buffer.
@@ -1003,33 +1000,19 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size, bool map)
 	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *)db;
 	arc_buf_t *dbuf_abuf = dbi->db_buf;
 
-	if (map) {
+	iov = uio->uio_iov;
+	iov->iov_base = dbuf_abuf->b_data;
+	iov->iov_len = db->db_size;
+	uio->uio_loffset = uio->uio_loffset - db->db_offset;
+
+	if (action == ARC_ACTION_HOLD)
 		arc_share_buf(dbi->db_buf);
-
-		bufoff = uio->uio_loffset - db->db_offset;
-		tocpy = (int)MIN(db->db_size - bufoff, size);
-
-		uio_map->buffer = dbuf_abuf->b_data;
-		// FIXME: Should be the ARC size, but that is private. They should be the same.
-		uio_map->buf_size = db->db_size;
-		uio_map->buf_off = bufoff;
-		iov = uio->uio_iov;
-		iov->iov_base = (char *)dbuf_abuf->b_data;
-		iov->iov_len = tocpy;
-	} else {
-		iov = uio->uio_iov;
-		// empty iov is a query operation.
-		if (iov->iov_base) {
-			assert(iov->iov_base == (char *)dbuf_abuf->b_data);
-			arc_unshare_buf(dbi->db_buf);
-		} else {
-			iov->iov_base = (char *)dbuf_abuf->b_data;
-			iov->iov_len = db->db_size;
-		}
-	}
+	else if (action == ARC_ACTION_RELEASE)
+		arc_unshare_buf(dbi->db_buf);
 
 	dmu_buf_rele_array(dbp, numbufs, FTAG);
-	return 0;
+
+	return (0);
 }
 
 int

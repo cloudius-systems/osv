@@ -42,5 +42,5 @@ int vm_throttling_needed(void)
 
 void mmu_unmap(void *addr, size_t size)
 {
-    mmu::unmap_address(addr, size);
+    mmu::unmap_address(addr, addr, size);
 }

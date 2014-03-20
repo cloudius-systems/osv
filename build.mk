@@ -622,6 +622,7 @@ objects += core/semaphore.o
 objects += core/condvar.o
 objects += core/debug.o
 objects += core/rcu.o
+objects += core/pagecache.o
 objects += drivers/pci.o
 objects += core/mempool.o
 objects += core/alloctracker.o

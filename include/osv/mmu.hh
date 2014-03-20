@@ -160,9 +160,13 @@ bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
-void unmap_address(void *addr, size_t size);
-void add_mapping(void *buf_addr, uintptr_t offset, hw_ptep ptep);
+bool unmap_address(void* buf, void *addr, size_t size);
+void add_mapping(void *buf_addr, void* addr, hw_ptep ptep);
 bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep);
+bool lookup_mapping(void *paddr, hw_ptep ptep);
+void tlb_flush();
+void clear_pte(hw_ptep ptep);
+void clear_pte(std::pair<void* const, hw_ptep>& pair);
 
 phys virt_to_phys(void *virt);
 void* phys_to_virt(phys pa);
@@ -198,6 +202,17 @@ void vcleanup(void* addr, size_t size);
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
+
+template<typename I>
+unsigned clear_ptes(I start,  I end)
+{
+    unsigned i = 0;
+    for (auto it = start; it != end; it++) {
+        clear_pte(*it);
+        i++;
+    }
+    return i;
+}
 
 }
 
