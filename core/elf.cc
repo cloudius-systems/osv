@@ -228,14 +228,17 @@ void file::load_program_headers()
     }
 }
 
+#ifndef AARCH64_PORT_STUB
 namespace {
 
 ulong page_size = 4096;
 
 }
+#endif /* !AARCH64_PORT_STUB */
 
 void file::load_segment(const Elf64_Phdr& phdr)
 {
+#ifndef AARCH64_PORT_STUB
     ulong vstart = align_down(phdr.p_vaddr, page_size);
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
@@ -244,6 +247,9 @@ void file::load_segment(const Elf64_Phdr& phdr)
                   _f, align_down(phdr.p_offset, page_size));
     memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
     mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::mmap_fixed, mmu::perm_rwx);
+#else /* AARCH64_PORT_STUB */
+    abort();
+#endif /* AARCH64_PORT_STUB */
 }
 
 void object::load_segments()
@@ -281,12 +287,16 @@ void object::load_segments()
 
 void file::unload_segment(const Elf64_Phdr& phdr)
 {
+#ifndef AARCH64_PORT_STUB
     ulong vstart = align_down(phdr.p_vaddr, page_size);
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
     ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
     mmu::munmap(_base + vstart, filesz);
     mmu::munmap(_base + vstart + filesz, memsz - filesz);
+#else /* AARCH64_PORT_STUB */
+    abort();
+#endif
 }
 
 void object::unload_segments()
@@ -390,6 +400,9 @@ symbol_module object::symbol(unsigned idx)
 
 void object::relocate_rela()
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#endif
     auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
     assert(dynamic_val(DT_RELAENT) == sizeof(Elf64_Rela));
     unsigned nb = dynamic_val(DT_RELASZ) / sizeof(Elf64_Rela);
@@ -1057,6 +1070,7 @@ init_table get_init(Elf64_Ehdr* header)
                         abort();
                     };
                     switch (type) {
+#ifdef __x86_64__
                     case R_X86_64_NONE:
                         break;
                     case R_X86_64_64:
@@ -1083,7 +1097,20 @@ init_table get_init(Elf64_Ehdr* header)
                     case R_X86_64_IRELATIVE:
                         *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(base + addend)();
                         break;
+#endif /* __x86_64__ */
+#ifdef __aarch64__
+                    case R_AARCH64_NONE:
+                    case R_AARCH64_NONE2:
+                        break;
+                    case R_AARCH64_GLOB_DAT:
+                        *static_cast<u64*>(addr) = lookup()->st_value + addend;
+                        break;
+                    case R_AARCH64_TLS_TPREL64:
+                        *static_cast<u64*>(addr) = lookup()->st_value + addend;
+                        break;
+#endif /* __aarch64__ */
                     default:
+                        debug_early_u64("Unsupported relocation type=", (u64)type);
                         abort();
                     }
 
@@ -1202,5 +1229,9 @@ struct module_and_offset {
 extern "C"
 void* __tls_get_addr(module_and_offset* mao)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#endif /* AARCH64_PORT_STUB */
+
     return s_program->tls_addr(mao->module) + mao->offset;
 }
