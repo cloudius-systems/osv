@@ -38,7 +38,7 @@ init_stack:
         ret
 
 validate_el:
-	mrs     x0, currentel
+        mrs     x0, currentel
         ubfm    x0, x0, #2, #3 // current EL[3:2] -> X0
         cmp     x0, #1
         b.ne    halt

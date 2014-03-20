@@ -17,6 +17,7 @@ union \1 \2;\
 /'
 
 #define __NEED_socklen_t
+#define __NEED_size_t
 
 TYPEDEF unsigned long size_t;
 #define _SIZE_T_DECLARED
@@ -25,7 +26,7 @@ TYPEDEF long ptrdiff_t;
 TYPEDEF __builtin_va_list va_list;
 
 #ifndef __cplusplus
-TYPEDEF int wchar_t;
+TYPEDEF unsigned int wchar_t;
 #endif
 TYPEDEF int wint_t;
 TYPEDEF const int * wctrans_t;
