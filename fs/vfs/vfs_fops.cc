@@ -165,7 +165,7 @@ void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 	assert(VOP_MAP(vp, fp, data) == 0);
 	vn_unlock(vp);
 
-	mmu::add_mapping(map_data.buffer, map_data.buf_size, start - map_data.buf_off);
+	mmu::add_mapping(map_data.buffer, start);
 	return io.iov_base + map_data.buf_off;
 }
 

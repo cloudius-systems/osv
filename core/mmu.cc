@@ -969,35 +969,18 @@ public:
     }
 };
 
-class mapped_buffer {
-public:
-    explicit mapped_buffer(uintptr_t vaddr, uintptr_t size) : vaddr(vaddr), size(size) {}
-    uintptr_t vaddr;
-    uintptr_t size;
-    bool operator==(const uintptr_t a)  { return a == vaddr; }
-};
-
-typedef std::shared_ptr<mapped_buffer> map_ptr;
 // In the general case, we expect only one element in the list.
-static std::unordered_multimap<void *, map_ptr> shared_fs_maps;
+static std::unordered_multimap<void *, uintptr_t> shared_fs_maps;
 // Can't use the vma_list_mutex, because if we do, we can have a deadlock where
 // we call into the filesystem to read data with the vma_list_mutex held - because
 // we do that for complex operate operations, and if the filesystem decides to evict
 // a page to read the selected buffer, we will need to access those data structures.
 static mutex shared_fs_mutex;
 
-void add_mapping(void *buf_addr, uintptr_t size, uintptr_t vaddr)
+void add_mapping(void *buf_addr, uintptr_t vaddr)
 {
     WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(buf_addr);
-        for (auto it = buf.first; it != buf.second; it++) {
-            auto& v = (*it).second;
-            if (*v == vaddr) {
-                return;
-            }
-        }
-        map_ptr vb(new mapped_buffer { vaddr, size });
-        shared_fs_maps.insert(std::make_pair(buf_addr, vb));
+        shared_fs_maps.insert(std::make_pair(buf_addr, vaddr));
     }
 }
 
@@ -1006,8 +989,8 @@ void remove_mapping(void *buf_addr, uintptr_t addr)
     WITH_LOCK(shared_fs_mutex) {
         auto buf = shared_fs_maps.equal_range(buf_addr);
         for (auto it = buf.first; it != buf.second; it++) {
-            auto &v = (*it).second;
-            if (*v == addr) {
+            auto v = (*it).second;
+            if (v == addr) {
                 shared_fs_maps.erase(it);
                 break;
             }
@@ -1077,9 +1060,9 @@ void unmap_address(void *addr, size_t size)
     WITH_LOCK(shared_fs_mutex) {
         auto buf = shared_fs_maps.equal_range(addr);
         for (auto it = buf.first; it != buf.second; it++) {
-            auto& v = (*it).second;
-            trace_mmu_invalidate(addr, v->vaddr);
-            operate_range(page_out(), (void *)v->vaddr, v->size);
+            auto vaddr = (*it).second;
+            trace_mmu_invalidate(addr, vaddr);
+            operate_range(page_out(), (void *)vaddr, page_size);
         }
 
         shared_fs_maps.erase(addr);

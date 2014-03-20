@@ -179,7 +179,7 @@ std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsign
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 void unmap_address(void *addr, size_t size);
-void add_mapping(void *buf_addr, uintptr_t size, uintptr_t vaddr);
+void add_mapping(void *buf_addr, uintptr_t vaddr);
 void remove_mapping(void *buf_addr, uintptr_t addr);
 
 typedef uint64_t phys;
