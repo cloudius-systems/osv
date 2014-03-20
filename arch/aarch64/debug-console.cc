@@ -1,26 +1,22 @@
 /*
  * Copyright (C) 2013 Cloudius Systems, Ltd.
  *
+ * Copyright (C) 2014 Huawei Technologies Duesseldorf GmbH
+ *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "debug-console.hh"
-#include "processor.hh"
+#include <drivers/debug-console.hh>
 
-// Write to the serial port if the console is not yet initialized.  Because we
-// are just dumping output, no initialization is necessary.  We take advantage
-// of the fact that we are running on virtual hardware that probably does not
-// implement buffering like real UART does.  If it ever becomes a problem we
-// may need to improve this. But since we run only for a small amount of time
-// and very early - your real console is soon to be set up, I don't anticipate
-// any.
+static volatile char *const uart = (char *)0x9000000; /* UART0DR */
+
 static void simple_write(const char *str, size_t len)
 {
     while (len > 0) {
         if ((*str == '\n'))
-            processor::outb('\r', 0x3f8);
-        processor::outb(*str++, 0x3f8);
+            *uart = '\r';
+        *uart = *str++;
         len--;
     }
 }
