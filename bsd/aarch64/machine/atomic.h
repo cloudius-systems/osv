@@ -34,9 +34,9 @@
 #endif
 #endif
 
-#define	mb()	__asm __volatile("dsb SY;" : : : "memory")
-#define	wmb()	__asm __volatile("dsb SY;" : : : "memory")
-#define	rmb()	__asm __volatile("dsb SY;" : : : "memory")
+#define	mb()	__asm __volatile("dmb ISH;" : : : "memory")
+#define	wmb()	__asm __volatile("dmb ISHST;" : : : "memory")
+#define	rmb()	__asm __volatile("dmb ISHLD;" : : : "memory")
 
 /*
  * Various simple operations on memory, each of which is atomic in the
@@ -81,52 +81,52 @@ void atomic_##NAME##_barr_##TYPE(volatile u_##TYPE *p, u_##TYPE v)
 int	atomic_cmpset_int(volatile u_int *dst, u_int expect, u_int src);
 int	atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src);
 
-static __inline u_int atomic_fetchadd_int(volatile u_int *p, register u_int val)
+static __inline u_int atomic_fetchadd_int(volatile u_int *p, u_int val)
 {
-    register u_int result asm ("w0");
-    __asm __volatile("1: ldaxr %0, %1 ; "
-                     "   add   %2, %2, %0 ; "
-                     "   stlxr w3, %2, %1 ; "
-                     "   cbnz  w3, 1b ; "
-                     : "=r"(result), "+Q"(p), "+r"(val)
+    u_int result;
+    u_int status;
+    __asm __volatile("1: ldaxr %w0, %1 ; "
+                     "   add   %w2, %w2, %w0 ; "
+                     "   stlxr %w3, %w2, %1 ; "
+                     "   cbnz  %w3, 1b ; "
+                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status)
                      :
-                     : "memory", "cc", "x3");
+                     : "cc");
     return result;
 }
 
-static __inline u_long atomic_fetchadd_long(volatile u_long *p, register u_long val)
+static __inline u_long atomic_fetchadd_long(volatile u_long *p, u_long val)
 {
-    register u_long result asm ("x0");
+    u_long result;
+    u_int status;
     __asm __volatile("1: ldaxr %0, %1 ; "
                      "   add   %2, %2, %0 ; "
-                     "   stlxr w3, %2, %1 ; "
-                     "   cbnz  w3, 1b ; "
-                     : "=r"(result), "+Q"(p), "+r"(val)
+                     "   stlxr %w3, %2, %1 ; "
+                     "   cbnz  %w3, 1b ; "
+                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status)
                      :
-                     : "memory", "cc", "x3");
+                     : "cc");
     return result;
 }
 
-static __inline void atomic_store_rel_int(volatile u_int *p, register u_int val)
+static __inline void atomic_store_rel_int(volatile u_int *p, u_int val)
 {
-    register u_int old;
-    __asm __volatile("1: ldaxr %0, %1 ; "
-                     "   stlxr w3, %2, %1 ; "
-                     "   cbnz  w3, 1b ; "
-                     : "=r"(old), "+Q"(p)
+    u_int status;
+    __asm __volatile("1: stxr %w1, %w2, %0 ; "
+                     "   cbnz %w1, 1b ; "
+                     : "+Q"(*p), "=&r"(status)
                      : "r"(val)
-                     : "memory", "cc", "x3");
+                     : "cc");
 }
 
-static __inline void atomic_store_rel_long(volatile u_long *p, register u_long val)
+static __inline void atomic_store_rel_long(volatile u_long *p, u_long val)
 {
-    register u_long old;
-    __asm __volatile("1: ldaxr %0, %1 ; "
-                     "   stlxr w3, %2, %1 ; "
-                     "   cbnz  w3, 1b ; "
-                     : "=r"(old), "+Q"(p)
+    u_int status;
+    __asm __volatile("1: stxr %w1, %2, %0 ; "
+                     "   cbnz %w1, 1b ; "
+                     : "+Q"(*p), "=&r"(status)
                      : "r"(val)
-                     : "memory", "cc", "x3");
+                     : "cc");
 }
 
 static __inline void atomic_add_int(volatile u_int *p, u_int val)
@@ -149,22 +149,14 @@ static __inline void atomic_add_barr_long(volatile u_long *p, u_long val)
     (void)atomic_fetchadd_long(p, val);
 }
 
-static __inline void atomic_subtract_int(volatile u_int *p, register u_int val)
+static __inline void atomic_subtract_int(volatile u_int *p, u_int val)
 {
-    __asm __volatile("neg %0, %0"
-                     : "+r"(val)
-                     :
-                     :);
-    (void)atomic_fetchadd_int(p, val);
+    (void)atomic_fetchadd_int(p, -val);
 }
 
 static __inline void atomic_subtract_long(volatile u_long *p, u_long val)
 {
-    __asm __volatile("neg %0, %0"
-                     : "+r"(val)
-                     :
-                     :);
-    (void)atomic_fetchadd_long(p, val);
+    (void)atomic_fetchadd_long(p, -val);
 }
 
 #define	ATOMIC_LOAD(TYPE, LOP)					\
