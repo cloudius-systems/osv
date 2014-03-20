@@ -169,9 +169,13 @@ void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 	assert(VOP_MAP(vp, fp, data) == 0);
 	vn_unlock(vp);
 
+#ifdef AARCH64_PORT_STUB
+	abort();
+#else
 	mmu::add_mapping(io.iov_base, map_data.buf_off, start);
 	assert((reinterpret_cast<uintptr_t>(io.iov_base) & (mmu::page_size - 1)) == 0);
 	return io.iov_base + map_data.buf_off;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t off, size_t size)
@@ -193,20 +197,27 @@ void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t off, size_t size)
 	data.uio_rw = UIO_READ;
 
 	vn_lock(vp);
+
 	// This first call will only query the buffer address. The result will be
 	// in uio_iov.iov_base. If this is the last reference to the buffer, then
 	// we call it again, with the iov update. (automatically done after this
 	// call) Usually it won't be, so we'll do only one call.
 	assert(VOP_UNMAP(vp, fp, &data) == 0);
+#ifdef AARCH64_PORT_STUB
+	abort();
+#else
 	if (mmu::remove_mapping(io.iov_base, addr, start)) {
 		assert(VOP_UNMAP(vp, fp, &data) == 0);
 	}
 	vn_unlock(vp);
-
+#endif /* !AARCH64_PORT_STUB */
 }
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
+#ifdef AARCH64_PORT_STUB
+	abort();
+#else /* !AARCH64_PORT_STUB */
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	if ((perm & mmu::perm_write) || (!vp->v_op->vop_map) || (vp->v_size < (off_t)mmu::page_size)) {
@@ -215,4 +226,5 @@ std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, 
 	// Don't know what to do if we have one but not the other
 	assert(vp->v_op->vop_unmap);
 	return mmu::map_file_mmap(this, range, flags, perm, offset);
+#endif /* !AARCH64_PORT_STUB */
 }
