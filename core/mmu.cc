@@ -977,11 +977,11 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
             start = 0x200000000000ul;
         }
         start = find_hole(start, size);
-        v->set(start, start+size);
     } else {
         // we don't know if the given range is free, need to evacuate it first
         evacuate(start, start+size);
     }
+    v->set(start, start+size);
 
     vma_list.insert(*v);
 
