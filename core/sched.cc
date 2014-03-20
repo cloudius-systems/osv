@@ -12,7 +12,11 @@
 #include <osv/debug.hh>
 #include <osv/irqlock.hh>
 #include <osv/align.hh>
+
+#ifndef AARCH64_PORT_STUB
 #include <osv/interrupt.hh>
+#endif /* !AARCH64_PORT_STUB */
+
 #include "smp.hh"
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
@@ -54,7 +58,9 @@ bool __thread need_reschedule = false;
 
 elf::tls_data tls;
 
+#ifndef AARCH64_PORT_STUB
 inter_processor_interrupt wakeup_ipi{[] {}};
+#endif /* !AARCH64_PORT_STUB */
 
 // "tau" controls the length of the history we consider for scheduling,
 // or more accurately the rate of decay of an exponential moving average.
@@ -315,10 +321,12 @@ void cpu::idle_poll_end()
 
 void cpu::send_wakeup_ipi()
 {
+#ifndef AARCH64_PORT_STUB
     std::atomic_thread_fence(std::memory_order_seq_cst);
     if (!idle_poll.load(std::memory_order_relaxed)) {
         wakeup_ipi.send(this);
     }
+#endif /* !AARCH64_PORT_STUB */
 }
 
 void cpu::do_idle()
