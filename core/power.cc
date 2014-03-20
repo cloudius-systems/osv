@@ -9,10 +9,13 @@
 #include <osv/debug.hh>
 #include <smp.hh>
 #include <processor.hh>
+#include <arch.hh>
 
+#ifndef AARCH64_PORT_STUB
 extern "C" {
 #include "acpi.h"
 }
+#endif /* !AARCH64_PORT_STUB */
 
 namespace osv {
 
@@ -23,13 +26,18 @@ namespace osv {
 
 void halt(void)
 {
+#ifndef AARCH64_PORT_STUB
     crash_other_processors();
-    while (true)
-        processor::halt_no_interrupts();
+#endif /* !AARCH64_PORT_STUB */
+
+    while (true) {
+        arch::halt_no_interrupts();
+    }
 }
 
 void poweroff(void)
 {
+#ifndef AARCH64_PORT_STUB
     ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
     if (ACPI_FAILURE(status)) {
         debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
@@ -40,7 +48,9 @@ void poweroff(void)
         debug("AcpiEnterSleepState failed: %s\n", AcpiFormatException(status));
         halt();
     }
-    // We shouldn't get here.
+#endif /* !AARCH64_PORT_STUB */
+
+    // We shouldn't get here on x86.
     halt();
 }
 
@@ -48,10 +58,13 @@ void poweroff(void)
 // some reson fails.
 void reboot(void)
 {
+#ifdef __x86_64__
     // It would be nice if AcpiReset() worked, but it doesn't seem to work
     // (on qemu & kvm), so let's resort to brute force...
     processor::outb(1, 0x92);
     debug("osv::reboot() did not work :(\n");
+#endif /* __x86_64__ */
+    halt();
 }
 
 

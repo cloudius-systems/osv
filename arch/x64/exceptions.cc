@@ -263,7 +263,7 @@ void divide_error(exception_frame *ef)
 extern "C" void nmi(exception_frame* ef)
 {
     while (true) {
-        processor::halt_no_interrupts();
+        processor::cli_hlt();
     }
 }
 

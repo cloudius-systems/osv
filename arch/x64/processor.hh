@@ -237,7 +237,7 @@ inline void wrfsbase(u64 data)
     asm volatile("wrfsbase %0" : : "r"(data));
 }
 
-inline void halt_no_interrupts() {
+inline void cli_hlt() {
     asm volatile ("cli; hlt" : : : "memory");
 }
 
