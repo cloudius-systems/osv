@@ -1375,7 +1375,7 @@ ulong map_jvm(const void* addr, size_t size, balloon *b)
 }
 
 file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, page_allocator* page_ops)
-    : vma(range, perm, 0, !shared, page_ops)
+    : vma(range, perm, shared ? mmap_small : 0, !shared, page_ops)
     , _file(file)
     , _offset(offset)
     , _shared(shared)
