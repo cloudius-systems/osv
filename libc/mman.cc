@@ -57,6 +57,9 @@ unsigned libc_prot_to_perm(int prot)
 
 int mprotect(void *addr, size_t len, int prot)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
     // because that could leave the linear map a mess.
     if (reinterpret_cast<long>(addr) < 0) {
@@ -70,10 +73,14 @@ int mprotect(void *addr, size_t len, int prot)
     }
 
     return mmu::mprotect(addr, len, libc_prot_to_perm(prot)).to_libc();
+#endif /* !AARCH64_PORT_STUB */
 }
 
 int mmap_validate(void *addr, size_t length, int flags, off_t offset)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     int type = flags & (MAP_SHARED|MAP_PRIVATE);
     // Either MAP_SHARED or MAP_PRIVATE must be set, but not both.
     if (!type || type == (MAP_SHARED|MAP_PRIVATE)) {
@@ -84,11 +91,15 @@ int mmap_validate(void *addr, size_t length, int flags, off_t offset)
         return EINVAL;
     }
     return 0;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     trace_memory_mmap(addr, length, prot, flags, fd, offset);
 
     int err = mmap_validate(addr, length, flags, offset);
@@ -125,6 +136,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     }
     trace_memory_mmap_ret(ret);
     return ret;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
@@ -134,14 +146,21 @@ extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
 
 int munmap_validate(void *addr, size_t length)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     if (!mmu::is_page_aligned(addr) || length == 0) {
         return EINVAL;
     }
     return 0;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 int munmap(void *addr, size_t length)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     trace_memory_munmap(addr, length);
     int error = munmap_validate(addr, length);
     if (error) {
@@ -155,18 +174,27 @@ int munmap(void *addr, size_t length)
     }
     trace_memory_munmap_ret();
     return ret;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 int msync(void *addr, size_t length, int flags)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     return mmu::msync(addr, length, flags).to_libc();
+#endif /* !AARCH64_PORT_STUB */
 }
 
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     if (!mmu::is_page_aligned(addr)) {
         return libc_error(EINVAL);
     }
 
     return mmu::mincore(addr, length, vec).to_libc();
+#endif /* !AARCH64_PORT_STUB */
 }
