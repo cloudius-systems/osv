@@ -5,7 +5,10 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#ifdef __x86_64__
 #include "drivers/isa-serial.hh"
+#endif /* __x86_64__ */
+
 #include "fs/fs.hh"
 #include <bsd/net.hh>
 #include <boost/format.hpp>
@@ -14,12 +17,14 @@
 #include <cctype>
 #include <osv/elf.hh>
 #include <osv/tls.hh>
-#include "exceptions.hh"
 #include <osv/debug.hh>
-#include "drivers/pci.hh"
-#include "smp.hh"
-#include "ioapic.hh"
 
+#include "smp.hh"
+
+#ifndef AARCH64_PORT_STUB
+#include "exceptions.hh"
+#include "drivers/pci.hh"
+#include "ioapic.hh"
 #include "drivers/acpi.hh"
 #include "drivers/driver.hh"
 #include "drivers/virtio-net.hh"
@@ -32,10 +37,10 @@
 #include "drivers/vmw-pvscsi.hh"
 #include "drivers/vmxnet3.hh"
 #include "drivers/zfs.hh"
+#include "drivers/pvpanic.hh"
+#endif /* !AARCH64_PORT_STUB */
 
 #include <osv/sched.hh>
-#include "drivers/console.hh"
-#include "drivers/pvpanic.hh"
 #include <osv/barrier.hh>
 #include "arch.hh"
 #include "arch-setup.hh"
@@ -59,7 +64,13 @@ asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".asciz \"scripts/loader.py\" \n"
     ".popsection \n");
 
-elf::Elf64_Ehdr* elf_header;
+#ifdef AARCH64_PORT_STUB
+#define ALIGN_ELF_HEADER_ADDR 4096
+#else
+#define ALIGN_ELF_HEADER_ADDR 8
+#endif
+elf::Elf64_Ehdr* elf_header __attribute__ ((aligned(ALIGN_ELF_HEADER_ADDR)));
+
 size_t elf_size;
 void* elf_start;
 elf::tls_data tls_data;
@@ -97,15 +108,27 @@ void premain()
         (*init)();
     }
     boot_time.event(".init functions");
+
+#ifdef AARCH64_PORT_STUB
+    printf("OSv AArch64: end of premain reached, halting.\n");
+    while (1) {
+        asm ("wfi;");
+    }
+#endif /* AARCH64_PORT_STUB */
 }
 
 int main(int ac, char **av)
 {
+    printf("OSv " OSV_VERSION "\n");
+
+#ifndef AARCH64_PORT_STUB
     smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
     sched::init([=] { main_cont(ac, av); });
+#endif /* !AARCH64_PORT_STUB */
 }
 
+#ifndef AARCH64_PORT_STUB
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
@@ -428,6 +451,8 @@ void main_cont(int ac, char** av)
         osv::shutdown();
     }
 }
+
+#endif /* !AARCH64_PORT_STUB */
 
 int __argc;
 char** __argv;
