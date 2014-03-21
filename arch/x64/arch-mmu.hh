@@ -73,6 +73,10 @@ public:
         std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
         return x->compare_exchange_strong(oldval.x, newval.x, std::memory_order_relaxed);
     }
+    pt_element exchange(pt_element newval) {
+        std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
+        return pt_element(x->exchange(newval.x));
+    }
     hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
     static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
     // no longer using this as a page table

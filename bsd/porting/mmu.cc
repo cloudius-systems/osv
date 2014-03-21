@@ -34,3 +34,8 @@ int vm_paging_needed(void)
 {
     return 0;
 }
+
+void mmu_unmap(void *addr, size_t size)
+{
+    mmu::unmap_address(addr, size);
+}

@@ -66,6 +66,7 @@ enum {
     mmap_shared      = 1ul << 2,
     mmap_uninitialized = 1ul << 3,
     mmap_jvm_heap    = 1ul << 4,
+    mmap_small       = 1ul << 5,
 };
 
 struct page_allocator;
@@ -158,8 +159,8 @@ public:
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
-    virtual void* get_page(uintptr_t offset, size_t size) override;
-    virtual void put_page(uintptr_t offset, size_t size) override;
+    virtual void* get_page(uintptr_t start, uintptr_t offset, size_t size) override;
+    virtual void put_page(void *addr, uintptr_t start, uintptr_t offset, size_t size) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -175,6 +176,11 @@ bool is_linear_mapped(const void *addr, size_t size);
 bool ismapped(const void *addr, size_t size);
 bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
+std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
+
+void unmap_address(void *addr, size_t size);
+void add_mapping(void *buf_addr, uintptr_t vaddr);
+void remove_mapping(void *buf_addr, uintptr_t addr);
 
 typedef uint64_t phys;
 phys virt_to_phys(void *virt);

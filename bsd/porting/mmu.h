@@ -49,6 +49,8 @@ static inline vm_paddr_t pmap_kextract(vm_offset_t va)
 uint64_t kmem_used(void);
 int vm_paging_needed(void);
 
+void mmu_unmap(void *addr, size_t size);
+
 #define vtophys(_va) virt_to_phys((void *)_va)
 __END_DECLS
 #endif
