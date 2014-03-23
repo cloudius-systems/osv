@@ -385,6 +385,9 @@ libc += arch/$(arch)/setjmp/longjmp.o
 
 libc += signal/sigrtmax.o
 libc += signal/sigrtmin.o
+libc += signal/siglongjmp.o
+libc += signal/sigsetjmp.o
+libc += signal/block.o
 
 libc += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o

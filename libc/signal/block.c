@@ -1,4 +1,3 @@
-#include "pthread_impl.h"
 #include "syscall.h"
 #include <signal.h>
 
@@ -30,15 +29,15 @@ static const unsigned long app_mask[] = {
 
 void __block_all_sigs(void *set)
 {
-	__syscall(SYS_rt_sigprocmask, SIG_BLOCK, &all_mask, set, _NSIG/8);
+	sigprocmask(SIG_BLOCK, (void*)&all_mask, set);
 }
 
 void __block_app_sigs(void *set)
 {
-	__syscall(SYS_rt_sigprocmask, SIG_BLOCK, &app_mask, set, _NSIG/8);
+	sigprocmask(SIG_BLOCK, (void*)&app_mask, set);
 }
 
 void __restore_sigs(void *set)
 {
-	__syscall(SYS_rt_sigprocmask, SIG_SETMASK, set, 0, _NSIG/8);
+	sigprocmask(SIG_SETMASK, set, 0);
 }
