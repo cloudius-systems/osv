@@ -613,14 +613,55 @@ blkif_claim_gref(grant_ref_t *gref_head,
 }
 
 static void
+blkfront_alloc_commands(struct xb_softc* sc)
+{
+    bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
+
+    /* Allocate datastructures based on negotiated values. */
+    auto error = bus_dma_tag_create(bus_get_dma_tag(sc->xb_dev),    /* parent */
+                                    512, PAGE_SIZE,    /* algnmnt, boundary */
+                                    BUS_SPACE_MAXADDR,    /* lowaddr */
+                                    BUS_SPACE_MAXADDR,    /* highaddr */
+                                    NULL, NULL,        /* filter, filterarg */
+                                    sc->max_request_size,
+                                    sc->max_request_segments,
+                                    PAGE_SIZE,        /* maxsegsize */
+                                    BUS_DMA_ALLOCNOW,    /* flags */
+                                    busdma_lock_mutex,    /* lockfunc */
+                                    &xsc->xb_io_lock,    /* lockarg */
+                                    &sc->xb_io_dmat);
+    if (error != 0) {
+        xenbus_dev_fatal(sc->xb_dev, error,
+                 "Cannot allocate parent DMA tag\n");
+        return;
+    }
+
+    /* Per-transaction data allocation. */
+    sc->shadow = (xb_command *)malloc(sizeof(*sc->shadow) * sc->max_requests,
+                                      M_XENBLOCKFRONT, M_NOWAIT|M_ZERO);
+
+    for (uint32_t i = 0; i < sc->max_requests; i++) {
+        struct xb_command *cm;
+
+        cm = &sc->shadow[i];
+        cm->sg_refs = (grant_ref_t *)malloc(sizeof(grant_ref_t)
+                   * sc->max_request_segments,
+                     M_XENBLOCKFRONT, M_NOWAIT);
+        cm->id = i;
+        cm->cm_sc = sc;
+        if (bus_dmamap_create(sc->xb_io_dmat, 0, &cm->map) != 0)
+            break;
+        xb_free_command(cm);
+    }
+}
+
+static void
 blkfront_initialize(struct xb_softc *sc)
 {
     const char *otherend_path;
     const char *node_path;
     uint32_t max_ring_page_order;
     int error;
-    int i;
-    bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
     if (xenbus_get_state(sc->xb_dev) != XenbusStateInitialising) {
         /* Initialization has already been performed. */
@@ -728,50 +769,7 @@ blkfront_initialize(struct xb_softc *sc)
 
     sc->max_request_blocks = BLKIF_SEGS_TO_BLOCKS(sc->max_request_segments);
 
-    /* Allocate datastructures based on negotiated values. */
-    error = bus_dma_tag_create(bus_get_dma_tag(sc->xb_dev),    /* parent */
-                   512, PAGE_SIZE,    /* algnmnt, boundary */
-                   BUS_SPACE_MAXADDR,    /* lowaddr */
-                   BUS_SPACE_MAXADDR,    /* highaddr */
-                   NULL, NULL,        /* filter, filterarg */
-                   sc->max_request_size,
-                   sc->max_request_segments,
-                   PAGE_SIZE,        /* maxsegsize */
-                   BUS_DMA_ALLOCNOW,    /* flags */
-                   busdma_lock_mutex,    /* lockfunc */
-                   &xsc->xb_io_lock,    /* lockarg */
-                   &sc->xb_io_dmat);
-    if (error != 0) {
-        xenbus_dev_fatal(sc->xb_dev, error,
-                 "Cannot allocate parent DMA tag\n");
-        return;
-    }
-
-    /* Per-transaction data allocation. */
-    sc->shadow = (xb_command *)malloc(sizeof(*sc->shadow) * sc->max_requests,
-                M_XENBLOCKFRONT, M_NOWAIT|M_ZERO);
-    if (sc->shadow == NULL) {
-        bus_dma_tag_destroy(sc->xb_io_dmat);
-        xenbus_dev_fatal(sc->xb_dev, error,
-                 "Cannot allocate request structures\n");
-        return;
-    }
-
-    for (i = 0; i < sc->max_requests; i++) {
-        struct xb_command *cm;
-
-        cm = &sc->shadow[i];
-        cm->sg_refs = (grant_ref_t *)malloc(sizeof(grant_ref_t)
-                   * sc->max_request_segments,
-                     M_XENBLOCKFRONT, M_NOWAIT);
-        if (cm->sg_refs == NULL)
-            break;
-        cm->id = i;
-        cm->cm_sc = sc;
-        if (bus_dmamap_create(sc->xb_io_dmat, 0, &cm->map) != 0)
-            break;
-        xb_free_command(cm);
-    }
+    blkfront_alloc_commands(sc);
 
     if (setup_blkring(sc) != 0)
         return;
