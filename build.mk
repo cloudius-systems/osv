@@ -182,6 +182,7 @@ boost-tests += tests/tst-libc-locking.so
 boost-tests += tests/misc-fs-stress.so
 boost-tests += tests/misc-bdev-write.so
 boost-tests += tests/misc-bdev-wlatency.so
+boost-tests += tests/misc-bdev-rw.so
 boost-tests += tests/tst-promise.so
 boost-tests += tests/tst-dlfcn.so
 boost-tests += tests/tst-stat.so
