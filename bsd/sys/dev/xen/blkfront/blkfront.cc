@@ -573,6 +573,23 @@ blkfront_resume(device_t dev)
     return (0);
 }
 
+static unsigned int
+blkfront_read_feature(device_t dev, char *name)
+{
+    unsigned int res = 0;
+
+    auto err = xs_gather(XST_NIL, xenbus_get_otherend_path(dev),
+        name, "%u", &res, NULL);
+
+    return err ? 0 : res;
+}
+
+static inline unsigned int
+blkfront_check_feature(device_t dev, char *name, int flag)
+{
+    return blkfront_read_feature(dev, name) ? flag : 0;
+}
+
 static void
 blkfront_initialize(struct xb_softc *sc)
 {
@@ -924,7 +941,7 @@ blkfront_connect(struct xb_softc *sc)
     device_t dev = sc->xb_dev;
     unsigned long sectors, sector_size;
     unsigned int binfo;
-    int err, feature_barrier, feature_flush;
+    int err;
     bf_softc *xsc = reinterpret_cast<bf_softc *>(sc);
 
     if( (sc->connected == BLKIF_STATE_CONNECTED) ||
@@ -944,18 +961,9 @@ blkfront_connect(struct xb_softc *sc)
             xenbus_get_otherend_path(dev));
         return;
     }
-    err = xs_gather(XST_NIL, xenbus_get_otherend_path(dev),
-            "feature-barrier", "%u", &feature_barrier,
-            NULL);
-    if (!err || feature_barrier)
-        sc->xb_flags |= XB_BARRIER;
 
-    err = xs_gather(XST_NIL, xenbus_get_otherend_path(dev),
-            "feature-flush-cache", "%u", &feature_flush,
-            NULL);
-    if (err == 0 && feature_flush != 0)
-        sc->xb_flags |= XB_FLUSH;
-
+    sc->xb_flags |= blkfront_check_feature(dev, "feature-barrier", XB_BARRIER);
+    sc->xb_flags |= blkfront_check_feature(dev, "feature-flush-cache", XB_FLUSH);
 
     if (sc->xb_disk == NULL) {
         device_printf(dev, "%juMB <%s> at %s",
