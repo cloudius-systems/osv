@@ -28,7 +28,7 @@ static void bio_done(struct bio* bio)
 {
     auto err = bio->bio_flags & BIO_ERROR;
     bytes_written += bio->bio_bcount;
-    memory::free_page(bio->bio_data);
+    delete [] (char*) bio->bio_data;
     destroy_bio(bio);
     bio_inflights--;
     if (err) {
@@ -36,34 +36,18 @@ static void bio_done(struct bio* bio)
     }
 }
 
-int main(int argc, char const *argv[])
+void do_test_cycle(struct device *dev, int buf_size_pages, long max_offset)
 {
-    struct device *dev;
-    if (argc < 2) {
-        printf("Usage: %s <dev-name>\n", argv[0]);
-        return 1;
-    }
-
-    if (device_open(argv[1], DO_RDWR, &dev)) {
-        printf("open failed\n");
-        return 1;
-    }
-
-    long max_offset = 0;
-    if (argc > 2) {
-        max_offset = atol(argv[2]);
-    }
-
-    printf("bdev-write test offset limit: %ld byte(s)\n", max_offset);
-
     const std::chrono::seconds test_duration(10);
-    const int buf_size = 4*KB;
+    const int buf_size = buf_size_pages * memory::page_size;
 
     long total = 0;
     long offset = 0;
 
     auto test_start = s_clock.now();
     auto end_at = test_start + test_duration;
+
+    printf("Testing with %d page(s) buffers:\n", buf_size_pages);
 
     stat_printer _stat_printer(bytes_written, [] (float bytes_per_second) {
         printf("%.3f Mb/s\n", (float)bytes_per_second / MB);
@@ -74,7 +58,7 @@ int main(int argc, char const *argv[])
         bio_inflights++;
         bio->bio_cmd = BIO_WRITE;
         bio->bio_dev = dev;
-        bio->bio_data = memory::alloc_page();
+        bio->bio_data = new char[buf_size];
         bio->bio_offset = offset;
         bio->bio_bcount = buf_size;
         bio->bio_caller1 = bio;
@@ -97,7 +81,42 @@ int main(int argc, char const *argv[])
     _stat_printer.stop();
 
     auto actual_test_duration = to_seconds(test_end - test_start);
-    printf("Wrote %.3f MB in %.2f s = %.3f Mb/s\n", (double) total / MB, actual_test_duration,
-            (double) total / MB / actual_test_duration);
+    printf("Wrote %.3f MB in %.2f s = %.3f Mb/s\n", (double) total / MB,
+            actual_test_duration, (double) total / MB / actual_test_duration);
+}
+
+int main(int argc, char const *argv[])
+{
+    struct device *dev;
+    if (argc < 2) {
+        printf("Usage: %s <dev-name> [max-write-offset] "
+               "[buffer size in pages]\n", argv[0]);
+        return 1;
+    }
+
+    if (device_open(argv[1], DO_RDWR, &dev)) {
+        printf("open failed\n");
+        return 1;
+    }
+
+    long max_offset = 0;
+    if (argc > 2) {
+        max_offset = atol(argv[2]);
+    }
+
+    long buffer_size_pages = 0;
+    if (argc > 3) {
+        buffer_size_pages = atol(argv[3]);
+    }
+
+    printf("bdev-write test offset limit: %ld byte(s)\n", max_offset);
+
+    if (buffer_size_pages == 0) {
+        do_test_cycle(dev, 32, max_offset);
+        do_test_cycle(dev, 1, max_offset);
+    } else {
+        do_test_cycle(dev, buffer_size_pages, max_offset);
+    }
+
     return 0;
 }
