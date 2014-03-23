@@ -590,6 +590,28 @@ blkfront_check_feature(device_t dev, char *name, int flag)
     return blkfront_read_feature(dev, name) ? flag : 0;
 }
 
+static int
+blkif_claim_gref(grant_ref_t *gref_head,
+                 device_t dev,
+                 bus_addr_t addr,
+                 int readonly)
+{
+    auto ref = gnttab_claim_grant_reference(gref_head);
+    /*
+    * GNTTAB_LIST_END == 0xffffffff, but it is private
+    * to gnttab.c.
+    */
+    KASSERT(ref != ~0, ("grant_reference failed"));
+
+    gnttab_grant_foreign_access_ref(
+            ref,
+            xenbus_get_otherend_id(dev),
+            addr >> PAGE_SHIFT,
+            readonly);
+
+    return ref;
+}
+
 static void
 blkfront_initialize(struct xb_softc *sc)
 {
@@ -1194,6 +1216,16 @@ blkif_queue_request(struct xb_softc *sc, struct xb_command *cm)
 }
 
 static void
+blkif_claim_data_grefs(device_t dev, struct xb_command *cm,
+                       bus_dma_segment_t *segs, int nsegs)
+{
+    for (auto i = 0; i < nsegs; i++) {
+        cm->sg_refs[i] = blkif_claim_gref(&cm->gref_head, dev, segs[i].ds_addr,
+            cm->operation == BLKIF_OP_WRITE);
+    }
+}
+
+static void
 blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 {
     struct xb_softc *sc;
@@ -1204,7 +1236,6 @@ blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
     grant_ref_t *sg_ref;
     vm_paddr_t buffer_ma;
     uint64_t fsect, lsect;
-    int ref;
     int op;
     int block_segs;
 
@@ -1235,6 +1266,8 @@ blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
     last_block_sg = sg + block_segs;
     sg_ref        = cm->sg_refs;
 
+    blkif_claim_data_grefs(sc->xb_dev, cm, segs, nsegs);
+
     while (1) {
 
         while (sg < last_block_sg) {
@@ -1245,24 +1278,8 @@ blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
             KASSERT(lsect <= 7, ("XEN disk driver data cannot "
                 "cross a page boundary"));
 
-            /* install a grant reference. */
-            ref = gnttab_claim_grant_reference(&cm->gref_head);
-
-            /*
-             * GNTTAB_LIST_END == 0xffffffff, but it is private
-             * to gnttab.c.
-             */
-            KASSERT(ref != ~0, ("grant_reference failed"));
-
-            gnttab_grant_foreign_access_ref(
-                ref,
-                xenbus_get_otherend_id(sc->xb_dev),
-                buffer_ma >> PAGE_SHIFT,
-                ring_req->operation == BLKIF_OP_WRITE);
-
-            *sg_ref = ref;
             *sg = (struct blkif_request_segment) {
-                .gref       = ref,
+                .gref       = *sg_ref,
                 .first_sect = fsect,
                 .last_sect  = lsect };
             sg++;
