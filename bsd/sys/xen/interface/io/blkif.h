@@ -456,12 +456,16 @@
  */
 #define BLKIF_OP_DISCARD           5
 
+#define BLKIF_OP_INDIRECT          6
+
 /*
  * Maximum scatter/gather segments associated with a request header block.
  * This is carefully chosen so that sizeof(blkif_ring_t) <= PAGE_SIZE.
  * NB. This could be 12 if the ring indexes weren't stored in the same page.
  */
 #define BLKIF_MAX_SEGMENTS_PER_HEADER_BLOCK  11
+
+#define BLKIF_MAX_INDIRECT_PAGES_PER_HEADER_BLOCK 8
 
 /*
  * Maximum scatter/gather segments associated with a segment block.
@@ -472,6 +476,11 @@
  * Maximum scatter/gather segments per request (header + segment blocks).
  */
 #define BLKIF_MAX_SEGMENTS_PER_REQUEST 255
+
+ /*
+  * Maximum indirect segments per request
+  */
+#define BLKIF_MAX_INDIRECT_SEGMENTS 64U
 
 /*
  * NB. first_sect and last_sect in blkif_request_segment, as well as
@@ -515,6 +524,28 @@ struct blkif_request {
     blkif_request_segment_t seg[BLKIF_MAX_SEGMENTS_PER_HEADER_BLOCK];
 };
 typedef struct blkif_request blkif_request_t;
+
+struct blkif_segment_indirect {
+    grant_ref_t gref;
+    uint8_t     first_sect;
+    uint8_t     last_sect;
+    uint16_t    _pad;
+} __attribute__((__packed__));
+typedef struct blkif_segment_indirect blkif_segment_indirect_t;
+
+struct blkif_request_indirect {
+    uint8_t        operation;
+    uint8_t        indirect_op;
+    uint16_t       nr_segments;
+    uint32_t       _pad1;
+    uint64_t       id;
+    blkif_sector_t sector_number;
+    blkif_vdev_t   handle;
+    uint16_t       _pad2;
+    grant_ref_t    indirect_grefs[BLKIF_MAX_INDIRECT_PAGES_PER_HEADER_BLOCK];
+    uint32_t      _pad3;
+} __attribute__((__packed__));
+typedef struct blkif_request_indirect blkif_request_indirect_t;
 
 /*
  * A segment block is a ring request structure that contains only
@@ -563,6 +594,8 @@ typedef struct blkif_response blkif_response_t;
  * Generate blkif ring structures and types.
  */
 DEFINE_RING_TYPES(blkif, struct blkif_request, struct blkif_response);
+DEFINE_RING_TYPES(blkif_indirect,
+                  struct blkif_request_indirect, struct blkif_response);
 
 /*
  * Index to, and treat as a segment block, an entry in the ring.
@@ -578,6 +611,9 @@ DEFINE_RING_TYPES(blkif, struct blkif_request, struct blkif_response);
     ((((_segs - BLKIF_MAX_SEGMENTS_PER_HEADER_BLOCK)                    \
      + (BLKIF_MAX_SEGMENTS_PER_SEGMENT_BLOCK - 1))                      \
     / BLKIF_MAX_SEGMENTS_PER_SEGMENT_BLOCK) + /*header_block*/1)
+
+#define BLKIF_SEGS_TO_IND_BLOCKS(_segs, _ind_req_capacity)              \
+    (((_segs) - 1) / (_ind_req_capacity) + 1)
 
 #define VDISK_CDROM        0x1
 #define VDISK_REMOVABLE    0x2

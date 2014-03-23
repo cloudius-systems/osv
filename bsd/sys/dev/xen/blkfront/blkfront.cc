@@ -32,6 +32,7 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
+#include <osv/mempool.hh>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
 #include <bsd/porting/bus.h>
@@ -82,6 +83,8 @@ __FBSDID("$FreeBSD$");
 #include <dev/xen/blkfront/block.h>
 
 #include "xenbus_if.h"
+
+#include <stack>
 
 /* prototypes */
 static void xb_free_command(struct xb_command *cm);
@@ -612,6 +615,278 @@ blkif_claim_gref(grant_ref_t *gref_head,
     return ref;
 }
 
+class indirect_page
+{
+public:
+    indirect_page()
+        : _va(memory::alloc_page()) {}
+
+    ~indirect_page() { memory::free_page(_va); }
+
+    static constexpr unsigned capacity()
+        { return memory::page_size / sizeof(blkif_segment_indirect_t); }
+
+    grant_ref_t alloc_gref(device_t dev);
+    void free_gref();
+
+    void set_segment(int seg_num, grant_ref_t gref,
+                     u8 first_sect, u8 last_seq);
+
+private:
+    void* _va;
+
+    grant_ref_t _gref_list;
+    grant_ref_t _gref;
+};
+
+class blkfront_indirect_descriptor
+{
+public:
+    blkfront_indirect_descriptor(int max_segs)
+        : _pages(pages_required(max_segs))
+        , _max_segs(max_segs)
+        {}
+
+    static constexpr unsigned total_capacity()
+    {
+        return indirect_page::capacity()
+            * BLKIF_MAX_INDIRECT_PAGES_PER_HEADER_BLOCK;
+    }
+
+    void attach(blkif_request_indirect_t *descr)
+    {
+        _descr = descr;
+        _seg_number = 0;
+    }
+
+    void configure(uint64_t id,
+                   uint8_t operation,
+                   blkif_sector_t sector_number,
+                   blkif_vdev_t handle);
+
+    void add_segment(grant_ref_t gref, u8 first_sect, u8 last_seq);
+    void map(device_t dev);
+    void unmap();
+    bool has_space() { return _seg_number < _max_segs; }
+private:
+    static constexpr unsigned pages_required(unsigned max_segs)
+    {
+        return (max_segs + indirect_page::capacity() - 1) /
+            indirect_page::capacity();
+    }
+
+    std::vector<indirect_page> _pages;
+    int _max_segs;
+    int _seg_number = 0;
+    blkif_request_indirect_t *_descr = nullptr;
+};
+
+class blkfront_indirect_descriptors
+{
+public:
+    blkfront_indirect_descriptors(device_t &dev, uint32_t max_requests);
+    ~blkfront_indirect_descriptors();
+
+    blkfront_indirect_descriptor *get()
+    {
+        auto descr = _descriptors.top();
+        _descriptors.pop();
+        return descr;
+    }
+    void put(blkfront_indirect_descriptor *descr)
+    {
+        _descriptors.push(descr);
+    }
+
+    unsigned descriptor_capacity()
+    {
+        return std::min(_max_segs,
+            blkfront_indirect_descriptor::total_capacity());
+    }
+
+    bool empty() { return _descriptors.empty(); }
+private:
+    std::stack<blkfront_indirect_descriptor *> _descriptors;
+    unsigned _max_segs;
+};
+
+class blkfront_head_descr_base
+{
+public:
+    void attach(blkif_request_t *descr)
+    {
+      _descr = descr;
+      _curr_seg = &descr->seg[0];
+    }
+
+    void configure(uint64_t id,
+                   uint8_t operation,
+                   blkif_sector_t sector_number,
+                   blkif_vdev_t handle,
+                   uint8_t nr_segments);
+
+    static constexpr unsigned capacity()
+        { return BLKIF_MAX_SEGMENTS_PER_HEADER_BLOCK; }
+
+    bool has_space()
+    {
+        return _curr_seg != &_descr->seg[BLKIF_MAX_SEGMENTS_PER_HEADER_BLOCK];
+    }
+
+protected:
+    blkif_request_t *_descr = nullptr;
+    blkif_request_segment_t *_curr_seg = nullptr;
+};
+
+class blkfront_segment_descr_base
+{
+public:
+    void attach(blkif_segment_block_t *descr)
+    {
+      _descr = descr;
+      _curr_seg = &_descr->seg[0];
+    }
+
+    bool has_space()
+    {
+        return _curr_seg != &_descr->seg[BLKIF_MAX_SEGMENTS_PER_SEGMENT_BLOCK];
+    }
+
+protected:
+    blkif_segment_block_t *_descr = nullptr;
+    blkif_request_segment_t *_curr_seg = nullptr;
+};
+
+template<typename baseT>
+class blkfront_descriptor : public baseT
+{
+public:
+    void add_segment(grant_ref_t gref, u8 first_sect, u8 last_seq)
+    {
+        assert(baseT::has_space());
+
+        baseT::_curr_seg->gref = gref;
+        baseT::_curr_seg->first_sect = first_sect;
+        baseT::_curr_seg->last_sect = last_seq;
+
+        baseT::_curr_seg++;
+    }
+};
+
+typedef blkfront_descriptor<blkfront_head_descr_base> blkfront_head_descr;
+typedef blkfront_descriptor<blkfront_segment_descr_base> blkfront_segment_descr;
+
+void indirect_page::set_segment(int seg_num, grant_ref_t gref,
+                                u8 first_sect, u8 last_seq)
+{
+    assert(seg_num < capacity());
+
+    auto seg = static_cast<blkif_segment_indirect_t *>(_va) + seg_num;
+    seg->gref = gref;
+    seg->first_sect = first_sect;
+    seg->last_sect = last_seq;
+}
+
+grant_ref_t indirect_page::alloc_gref(device_t dev)
+{
+    if (gnttab_alloc_grant_references(1, &_gref_list) != 0) {
+            device_printf(dev, "No memory for grant references");
+            abort();
+    }
+
+    auto pa = virt_to_phys(_va);
+    _gref = blkif_claim_gref(&_gref_list, dev, pa, 1);
+    return _gref;
+}
+
+void indirect_page::free_gref()
+{
+    gnttab_end_foreign_access_references(1, &_gref);
+    gnttab_free_grant_references(_gref_list);
+}
+
+void blkfront_indirect_descriptor::configure(uint64_t id,
+                                             uint8_t operation,
+                                             blkif_sector_t sector_number,
+                                             blkif_vdev_t handle)
+{
+    assert(operation == BLKIF_OP_READ ||
+           operation == BLKIF_OP_WRITE ||
+           operation == BLKIF_OP_WRITE_BARRIER);
+
+    _descr->operation = BLKIF_OP_INDIRECT;
+    _descr->indirect_op = operation;
+    _descr->id = id;
+    _descr->sector_number = sector_number;
+    _descr->handle = handle;
+}
+
+void blkfront_indirect_descriptor::add_segment(grant_ref_t gref,
+                                               u8 first_sect,
+                                               u8 last_seq)
+{
+    assert(has_space());
+
+    auto page_num = _seg_number / indirect_page::capacity();
+    auto in_page_num = _seg_number % indirect_page::capacity();
+    _pages[page_num].set_segment(in_page_num, gref, first_sect, last_seq);
+    _seg_number++;
+}
+
+void blkfront_indirect_descriptor::map(device_t dev)
+{
+    for(auto i = 0; i < pages_required(_seg_number); i++)
+    {
+        _descr->indirect_grefs[i] = _pages[i].alloc_gref(dev);
+    }
+
+    _descr->nr_segments = _seg_number;
+}
+
+void blkfront_indirect_descriptor::unmap()
+{
+    for(auto i = 0; i < pages_required(_seg_number); i++)
+    {
+        _pages[i].free_gref();
+    }
+}
+
+blkfront_indirect_descriptors::blkfront_indirect_descriptors(device_t &dev,
+    uint32_t max_requests)
+{
+    _max_segs = blkfront_read_feature(dev, "feature-max-indirect-segments");
+
+    _max_segs = std::min(_max_segs, BLKIF_MAX_INDIRECT_SEGMENTS);
+
+    if (_max_segs != 0) {
+        for(auto i = 0; i < max_requests; i++) {
+            _descriptors.emplace(new blkfront_indirect_descriptor(_max_segs));
+        }
+    }
+}
+
+blkfront_indirect_descriptors::~blkfront_indirect_descriptors()
+{
+    while (!_descriptors.empty())
+    {
+        delete _descriptors.top();
+        _descriptors.pop();
+    }
+}
+
+void blkfront_head_descr_base::configure(uint64_t id,
+                                         uint8_t operation,
+                                         blkif_sector_t sector_number,
+                                         blkif_vdev_t handle,
+                                         uint8_t nr_segments)
+{
+    _descr->id = id;
+    _descr->operation = operation;
+    _descr->sector_number = sector_number;
+    _descr->handle = handle;
+    _descr->nr_segments = nr_segments;
+}
+
 static void
 blkfront_alloc_commands(struct xb_softc* sc)
 {
@@ -768,8 +1043,6 @@ blkfront_initialize(struct xb_softc *sc)
      }
 
     sc->max_request_blocks = BLKIF_SEGS_TO_BLOCKS(sc->max_request_segments);
-
-    blkfront_alloc_commands(sc);
 
     if (setup_blkring(sc) != 0)
         return;
@@ -984,6 +1257,18 @@ blkfront_connect(struct xb_softc *sc)
 
     sc->xb_flags |= blkfront_check_feature(dev, "feature-barrier", XB_BARRIER);
     sc->xb_flags |= blkfront_check_feature(dev, "feature-flush-cache", XB_FLUSH);
+
+    sc->indirect_descriptors =
+        new blkfront_indirect_descriptors(sc->xb_dev, sc->max_requests);
+
+    if (!sc->indirect_descriptors->empty()) {
+        sc->max_request_segments =
+            sc->indirect_descriptors->descriptor_capacity();
+        sc->max_request_blocks = 1;
+        sc->max_request_size = XBF_SEGS_TO_SIZE(sc->max_request_segments);
+    }
+
+    blkfront_alloc_commands(sc);
 
     if (sc->xb_disk == NULL) {
         device_printf(dev, "%juMB <%s> at %s",
@@ -1223,19 +1508,111 @@ blkif_claim_data_grefs(device_t dev, struct xb_command *cm,
     }
 }
 
+template<typename DescrT>
+static void
+blkif_put_segments(DescrT &descr,
+                   bus_dma_segment_t *&segs, int &nsegs,
+                   grant_ref_t *&sg_ref)
+{
+    while (descr.has_space() && nsegs != 0) {
+        auto buffer_ma = segs->ds_addr;
+        uint8_t fsect = (buffer_ma & PAGE_MASK) >> XBD_SECTOR_SHFT;
+        uint8_t lsect = fsect + (segs->ds_len  >> XBD_SECTOR_SHFT) - 1;
+
+        KASSERT(lsect <= 7, ("XEN disk driver data cannot "
+            "cross a page boundary"));
+
+        descr.add_segment(*sg_ref, fsect, lsect);
+
+        sg_ref++;
+        segs++;
+        nsegs--;
+    }
+}
+
+static void
+blkif_put_to_ring_inplace(struct xb_softc *sc, xb_command *cm,
+                          bus_dma_segment_t *&segs, int &nsegs,
+                          blkif_vdev_t dev_handle, grant_ref_t *&sg_ref)
+{
+    /* Fill out a communications ring structure. */
+    auto ring_req = RING_GET_REQUEST(&sc->ring, sc->ring.req_prod_pvt);
+
+    blkfront_head_descr descr;
+    descr.attach(ring_req);
+    descr.configure(cm->id,
+                    cm->operation,
+                    cm->sector_number,
+                    dev_handle,
+                    nsegs);
+
+    blkif_put_segments(descr, segs, nsegs, sg_ref);
+
+    sc->ring.req_prod_pvt++;
+
+    while (nsegs != 0) {
+        ring_req = RING_GET_REQUEST(&sc->ring, sc->ring.req_prod_pvt);
+        blkfront_segment_descr descr;
+        descr.attach(reinterpret_cast<blkif_segment_block_t*>(ring_req));
+
+        blkif_put_segments(descr, segs, nsegs, sg_ref);
+
+        sc->ring.req_prod_pvt++;
+    }
+}
+
+static blkfront_indirect_descriptor*
+blkif_put_to_ring_indirect(struct xb_softc *sc, xb_command *cm,
+                           bus_dma_segment_t *&segs, int &nsegs,
+                           blkif_vdev_t dev_handle, grant_ref_t *&sg_ref)
+{
+    assert(nsegs <= sc->indirect_descriptors->descriptor_capacity());
+
+    /* Fill out a communications ring structure. */
+    auto ring_req = RING_GET_REQUEST(&sc->ring, sc->ring.req_prod_pvt);
+
+    auto descr = sc->indirect_descriptors->get();
+    assert(descr != nullptr);
+    descr->attach(reinterpret_cast<blkif_request_indirect_t*>(ring_req));
+    descr->configure(cm->id,
+                     cm->operation,
+                     cm->sector_number,
+                     dev_handle);
+    blkif_put_segments(*descr, segs, nsegs, sg_ref);
+    descr->map(sc->xb_dev);
+
+    sc->ring.req_prod_pvt++;
+
+    return descr;
+}
+
+static inline bool
+blkif_use_indirect_descr(struct xb_softc *sc, int nsegs)
+{
+    return (nsegs > blkfront_head_descr::capacity() &&
+            !sc->indirect_descriptors->empty());
+}
+
+static void
+blkif_put_to_ring(struct xb_softc *sc, xb_command *cm,
+                  bus_dma_segment_t *segs, int nsegs,
+                  blkif_vdev_t dev_handle, grant_ref_t *sg_ref)
+{
+    if (blkif_use_indirect_descr(sc, nsegs)) {
+        cm->ind_descr = blkif_put_to_ring_indirect(sc, cm, segs, nsegs,
+                                                   dev_handle, sg_ref);
+    } else {
+        blkif_put_to_ring_inplace(sc, cm, segs, nsegs, dev_handle, sg_ref);
+        cm->ind_descr = nullptr;
+    }
+}
+
 static void
 blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
 {
     struct xb_softc *sc;
     struct xb_command *cm;
-    blkif_request_t    *ring_req;
-    struct blkif_request_segment *sg;
-    struct blkif_request_segment *last_block_sg;
-    grant_ref_t *sg_ref;
-    vm_paddr_t buffer_ma;
-    uint64_t fsect, lsect;
     int op;
-    int block_segs;
 
     cm = (xb_command *)arg;
     sc = cm->cm_sc;
@@ -1249,50 +1626,12 @@ blkif_queue_cb(void *arg, bus_dma_segment_t *segs, int nsegs, int error)
         return;
     }
 
-    /* Fill out a communications ring structure. */
-    ring_req = RING_GET_REQUEST(&sc->ring, sc->ring.req_prod_pvt);
-    sc->ring.req_prod_pvt++;
-    ring_req->id = cm->id;
-    ring_req->operation = cm->operation;
-    ring_req->sector_number = cm->sector_number;
-    ring_req->handle = (blkif_vdev_t)(uintptr_t)sc->xb_disk;
-    ring_req->nr_segments = nsegs;
     cm->nseg = nsegs;
-
-    block_segs    = MIN(nsegs, BLKIF_MAX_SEGMENTS_PER_HEADER_BLOCK);
-    sg            = ring_req->seg;
-    last_block_sg = sg + block_segs;
-    sg_ref        = cm->sg_refs;
-
     blkif_claim_data_grefs(sc->xb_dev, cm, segs, nsegs);
 
-    while (1) {
-
-        while (sg < last_block_sg) {
-            buffer_ma = segs->ds_addr;
-            fsect = (buffer_ma & PAGE_MASK) >> XBD_SECTOR_SHFT;
-            lsect = fsect + (segs->ds_len  >> XBD_SECTOR_SHFT) - 1;
-
-            KASSERT(lsect <= 7, ("XEN disk driver data cannot "
-                "cross a page boundary"));
-
-            *sg = (struct blkif_request_segment) {
-                .gref       = *sg_ref,
-                .first_sect = fsect,
-                .last_sect  = lsect };
-            sg++;
-            sg_ref++;
-            segs++;
-            nsegs--;
-        }
-        block_segs = MIN(nsegs, BLKIF_MAX_SEGMENTS_PER_SEGMENT_BLOCK);
-        if (block_segs == 0)
-            break;
-
-        sg = BLKRING_GET_SEG_BLOCK(&sc->ring, sc->ring.req_prod_pvt);
-        sc->ring.req_prod_pvt++;
-        last_block_sg = sg + block_segs;
-    }
+    blkif_put_to_ring(sc, cm, segs, nsegs,
+                      (blkif_vdev_t)(uintptr_t)sc->xb_disk,
+                      cm->sg_refs);
 
     if (cm->operation == BLKIF_OP_READ)
         op = BUS_DMASYNC_PREREAD;
@@ -1489,6 +1828,8 @@ blkif_free(struct xb_softc *sc)
         unbind_from_irqhandler(sc->irq);
         sc->irq = 0;
     }
+
+    delete sc->indirect_descriptors;
 }
 
 static int
@@ -1496,6 +1837,11 @@ blkif_completion(struct xb_command *s)
 {
 //printf("%s: Req %p(%d)\n", __func__, s, s->nseg);
     gnttab_end_foreign_access_references(s->nseg, s->sg_refs);
+    if (s->ind_descr) {
+        s->ind_descr->unmap();
+        s->cm_sc->indirect_descriptors->put(s->ind_descr);
+        return 1;
+    }
     return (BLKIF_SEGS_TO_BLOCKS(s->nseg));
 }
 

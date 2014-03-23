@@ -87,7 +87,8 @@ DEFINE_RING_TYPES(blkif_x86_64, struct blkif_x86_64_request, struct blkif_x86_64
 #define BLKIF_MAX_RING_REQUESTS(_sz) \
 	MAX(__RING_SIZE((blkif_x86_64_sring_t *)NULL, _sz),	\
 	    MAX(__RING_SIZE((blkif_x86_32_sring_t *)NULL, _sz),	\
-		__RING_SIZE((blkif_sring_t *)NULL, _sz)))
+            MIN(__RING_SIZE((blkif_indirect_sring_t *)NULL, _sz), \
+                __RING_SIZE((blkif_sring_t *)NULL, _sz))))
 
 /*
  * The number of ring pages required to support a given number of requests

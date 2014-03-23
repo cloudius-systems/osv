@@ -34,6 +34,7 @@
 #ifndef __XEN_DRIVERS_BLOCK_H__
 #define __XEN_DRIVERS_BLOCK_H__
 #include <xen/blkif.h>
+#include <vector>
 #include <list>
 #include <osv/condvar.h>
 
@@ -111,6 +112,8 @@ struct xlbd_major_info
     struct xlbd_type_info *type;
 };
 
+class blkfront_indirect_descriptor;
+
 struct xb_command {
     TAILQ_ENTRY(xb_command)    cm_link;
     struct xb_softc        *cm_sc;
@@ -133,6 +136,7 @@ struct xb_command {
     int            operation;
     blkif_sector_t        sector_number;
     int            status;
+    blkfront_indirect_descriptor *ind_descr;
     void            (* cm_complete)(struct xb_command *);
 };
 
@@ -153,6 +157,7 @@ union xb_statrequest {
     struct xb_qstat        ms_qstat;
 };
 
+class blkfront_indirect_descriptors;
 /*
  * We have one of these per vbd, whether ide, scsi or 'other'.
  */
@@ -175,6 +180,7 @@ struct xb_softc {
     uint32_t        max_request_size;
     grant_ref_t        ring_ref[XBF_MAX_RING_PAGES];
     blkif_front_ring_t    ring;
+    blkfront_indirect_descriptors *indirect_descriptors;
     unsigned int        irq;
     struct gnttab_free_callback    callback;
     TAILQ_HEAD(,xb_command)    cm_free;
