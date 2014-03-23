@@ -43,6 +43,7 @@ libc += ctype/wctrans.o
 libc += ctype/wcwidth.o
 
 libc += dirent/alphasort.o
+libc += dirent/scandir.o
 
 libc += env/__environ.o
 libc += env/clearenv.o
