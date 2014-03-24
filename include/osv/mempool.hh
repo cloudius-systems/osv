@@ -19,6 +19,7 @@
 #include <osv/percpu.hh>
 #include <osv/condvar.h>
 #include <osv/semaphore.hh>
+#include <osv/mmu.hh>
 
 namespace memory {
 
@@ -171,6 +172,32 @@ namespace stats {
     void on_jvm_heap_alloc(size_t mem);
     void on_jvm_heap_free(size_t mem);
 }
+
+class phys_contiguous_memory final {
+public:
+    phys_contiguous_memory(size_t size, size_t align) {
+        _va = alloc_phys_contiguous_aligned(size, align);
+        if(!_va)
+            throw std::bad_alloc();
+        _pa = mmu::virt_to_phys(_va);
+        _size = size;
+    }
+
+    ~phys_contiguous_memory() {
+        free_phys_contiguous_aligned(_va);
+    }
+
+    void* get_va(void) const { return _va; }
+    mmu::phys get_pa(void) const { return _pa; }
+    size_t get_size(void) const { return _size; }
+
+private:
+
+    void *_va;
+    mmu::phys _pa;
+    size_t _size;
+};
+
 }
 
 #endif
