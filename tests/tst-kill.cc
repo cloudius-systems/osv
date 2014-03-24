@@ -144,6 +144,11 @@ int main(int ac, char** av)
 
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+
+    // At this point, handler1 might still be running, and if we return this
+    // module, including handler1, might be unmapped. So sleep to make sure
+    // that handler1 is done.
+    sleep(1);
 }
 
 
