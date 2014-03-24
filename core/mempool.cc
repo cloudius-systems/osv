@@ -39,6 +39,7 @@ TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
 TRACEPOINT(trace_memory_page_free, "page=%p", void*);
 TRACEPOINT(trace_memory_huge_failure, "page ranges=%d", unsigned long);
 TRACEPOINT(trace_memory_reclaim, "shrinker %s, target=%d, delta=%d", const char *, long, long);
+TRACEPOINT(trace_memory_wait, "allocation size=%d", size_t);
 
 bool smp_allocator = false;
 unsigned char *osv_reclaimer_thread;
@@ -534,6 +535,7 @@ void reclaimer::wait_for_minimum_memory()
 // memory, there is very little hope and we would might as well give up.
 void reclaimer::wait_for_memory(size_t mem)
 {
+    trace_memory_wait(mem);
     _oom_blocked.wait(mem);
 }
 
