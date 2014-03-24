@@ -684,6 +684,7 @@ class osv_info_threads(gdb.Command):
         gdb.Command.__init__(self, 'osv info threads',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
+        thread_nr = 0
         exit_thread_context()
         state = vmstate()
         for t in state.thread_list:
@@ -729,6 +730,8 @@ class osv_info_threads(gdb.Command):
                     gdb.write("\tjoining on %s\n" % fr.frame.read_var("this"))
 
                 show_thread_timers(t)
+                thread_nr += 1
+        gdb.write('Number of threads: %d\n' % thread_nr)
 
 class osv_info_callouts(gdb.Command):
     def __init__(self):
