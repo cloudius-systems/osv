@@ -18,6 +18,7 @@ namespace ahci {
 int hba::_disk_idx = 0;
 
 struct hba_priv {
+    devop_strategy_t strategy;
     class hba *hba;
     class port *port;
 };
@@ -25,7 +26,6 @@ struct hba_priv {
 static void hba_strategy(struct bio *bio)
 {
     auto prv = hba::get_priv(bio);
-    bio->bio_offset += bio->bio_dev->offset;
     prv->port->make_request(bio);
 }
 
@@ -46,7 +46,7 @@ static struct devops hba_devops {
     hba_write,
     no_ioctl,
     no_devctl,
-    hba_strategy,
+    multiplex_strategy,
 };
 
 struct driver hba_driver = {
@@ -458,7 +458,9 @@ void hba::scan()
         auto prv = static_cast<struct hba_priv*>(dev->private_data);
         prv->hba = this;
         prv->port = p;
+        prv->strategy = hba_strategy;
         dev->size = p->get_devsize();
+        dev->max_io_size = 4 * 1024 * 1024; // one PRDT entry contains 4MB at most
 
         add_port(pnr, p);
         read_partition_table(dev);
