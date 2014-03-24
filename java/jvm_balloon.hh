@@ -57,4 +57,5 @@ namespace memory {
     ssize_t jvm_heap_reserved();
     void jvm_balloon_adjust_memory(size_t threshold);
 };
+void jvm_balloon_voluntary_return();
 #endif

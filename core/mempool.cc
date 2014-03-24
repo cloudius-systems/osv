@@ -719,6 +719,8 @@ void reclaimer::_do_reclaim()
                     oom();
                 }
             }
+
+            jvm_balloon_voluntary_return();
         }
     }
 }

@@ -28,6 +28,12 @@ jvm_balloon_shrinker *balloon_shrinker = nullptr;
 
 namespace memory {
 
+// If we are under pressure, we will end up setting the voluntary return flag
+// many times. To avoid returning one balloon per call, let's use a boolean to
+// control that. When the balloon we have given back is finally returned, we
+// reset the process.
+static std::atomic<bool> balloon_voluntary_return = { true };
+
 static std::atomic<size_t> jvm_heap_allowance(0);
 void reserve_jvm_heap(size_t mem)
 {
@@ -37,6 +43,7 @@ void reserve_jvm_heap(size_t mem)
 void return_jvm_heap(size_t mem)
 {
     jvm_heap_allowance.fetch_add(mem, std::memory_order_relaxed);
+    balloon_voluntary_return = true;
 }
 
 ssize_t jvm_heap_reserved()
@@ -73,6 +80,25 @@ bool throttling_needed()
     return balloon_shrinker->ballooning();
 }
 };
+
+void jvm_balloon_voluntary_return()
+{
+    if (!balloon_shrinker) {
+        return;
+    }
+
+    // If we freed memory and now we have more than a balloon + 20 % worth of
+    // reserved memory, give it back to the Java Heap. This is because it is a
+    // lot harder to react to JVM memory shortages than it is to react to OSv
+    // memory shortages - which are effectively under our control. Don't doing
+    // this can result in Heap exhaustions in situations where JVM allocation
+    // rates are very high and memory is tight
+    if ((memory::jvm_heap_reserved() > 6 * static_cast<ssize_t>(balloon_size/5)) &&
+        memory::balloon_voluntary_return.exchange(false))
+    {
+        balloon_shrinker->release_memory(1);
+    }
+}
 
 class balloon {
 public:
