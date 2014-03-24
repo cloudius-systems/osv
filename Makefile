@@ -42,6 +42,10 @@ check: export image ?= tests
 check: all
 	./scripts/test.py
 
+osv.vmdk osv.vdi:
+	$(MAKE) -r -C $(dir $(submake)) $@
+.PHONY: osv.vmdk osv.vdi
+
 # "tags" is the default output file of ctags, "TAGS" is that of etags
 tags TAGS:
 	rm -f -- "$@"
