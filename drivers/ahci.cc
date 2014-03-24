@@ -192,6 +192,8 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
              (5U << 0)) |                //FIS Length 5 DWORDS, 20 Bytes
              (iswrite ? (1U << 6) : 0);
     mmu::phys base = mmu::virt_to_phys(&_cmd_table[slot]);
+    // cmd_table needs to be aligned on 128-bytes, indicated by bit 6-0 being zero.
+    assert((base & 0x7F) == 0);
     _cmd_list[slot].flags = flags;
     _cmd_list[slot].bytes = 0;
     _cmd_list[slot].base = base & 0xFFFFFFFF;
@@ -200,8 +202,12 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
     if (buffer) {
         // Setup Command Table
         mmu::phys buf = mmu::virt_to_phys(buffer);
+        // Data Base Address must be 2-bytes aligned, indicated by bit 0 being zero.
+        assert((buf & 0x01) == 0);
         _cmd_table[slot].prdt[0].base = buf & 0xFFFFFFFF;
         _cmd_table[slot].prdt[0].baseu = buf >> 32;
+        // Data Byte Count. Bit ‘0’ of this field must always be ‘1’ to indicate an even byte count.
+        assert(((bsize - 1) & 0x01) == 1);
         _cmd_table[slot].prdt[0].flags = bsize - 1;
     }
 
