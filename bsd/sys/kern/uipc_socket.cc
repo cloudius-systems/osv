@@ -998,7 +998,6 @@ restart:
 					goto release;
 				}
 			} else if (addr == NULL) {
-				SOCK_UNLOCK(so);
 				if (so->so_proto->pr_flags & PR_CONNREQUIRED)
 					error = ENOTCONN;
 				else
