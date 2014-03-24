@@ -100,8 +100,6 @@ void premain()
 
 int main(int ac, char **av)
 {
-    printf("OSv " OSV_VERSION "\n");
-
     smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
     sched::init([=] { main_cont(ac, av); });
@@ -385,6 +383,9 @@ void main_cont(int ac, char** av)
     memory::enable_debug_allocator();
     acpi::init();
     console::console_init(opt_vga);
+    // Print only after console is initialized.
+    printf("OSv " OSV_VERSION "\n");
+
     enable_trace();
     if (opt_log_backtrace) {
         // can only do this after smp_launch, otherwise the IDT is not initialized,
