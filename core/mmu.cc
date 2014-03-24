@@ -949,13 +949,13 @@ public:
     virtual ~map_file_page_mmap() {};
 
     virtual void* alloc(uintptr_t offset) override {
-        return _file->get_page(_start + offset, offset + _map_offset, page_size);
+        return alloc(page_size, offset);
     }
     virtual void* alloc(size_t size, uintptr_t offset) override {
         return _file->get_page(_start + offset, offset + _map_offset, size);
     }
     virtual void free(void *addr, uintptr_t offset) override {
-        _file->put_page(addr, _start + offset, offset + _map_offset, page_size);
+        free(addr, page_size, offset);
     }
     virtual void free(void *addr, size_t size, uintptr_t offset) override {
         _file->put_page(addr, _start + offset, offset + _map_offset, size);
