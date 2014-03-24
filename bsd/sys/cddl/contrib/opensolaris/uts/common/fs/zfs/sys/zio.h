@@ -435,6 +435,9 @@ struct zio {
 #ifdef _KERNEL
 	/* FreeBSD only. */
 	struct ostask	io_task;
+	struct ostask	io_tqent;
+#else
+	void		*io_tqent;
 #endif
 };
 
