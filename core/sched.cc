@@ -1064,10 +1064,11 @@ void timer_base::expire()
 void timer_base::set(osv::clock::uptime::time_point time)
 {
     trace_timer_set(this, time.time_since_epoch().count());
-    _state = state::armed;
-    _time = time;
     irq_save_lock_type irq_lock;
     WITH_LOCK(irq_lock) {
+        _state = state::armed;
+        _time = time;
+
         auto& timers = cpu::current()->timers;
         timers._list.insert(*this);
         _t._active_timers.push_back(*this);
