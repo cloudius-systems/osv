@@ -174,7 +174,6 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
 {
     JNIEnv *env = NULL;
     size_t ret = 0;
-    int status = _attach(&env);
 
     WITH_LOCK(balloons_lock) {
         ssize_t last_heap = recent_jvm_heap();
@@ -188,6 +187,8 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
             return 0;
         }
     }
+
+    int status = _attach(&env);
 
     // It is unfortunate that we need to evaluate those every time, but the JNI
     // functions are associated with a particular env pointer. So if we reuse
