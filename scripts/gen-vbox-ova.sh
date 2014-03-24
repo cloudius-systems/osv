@@ -3,7 +3,7 @@
 # Setup name and dir
 name=osv
 vmdir=~/VirtualBox\ VMs/$name
-origin_img=build/release/usr.img
+vdi_img=build/release/osv.vdi
 ova_img=build/release/osv.ova
 
 # Stop vm
@@ -21,7 +21,8 @@ VBoxManage registervm "$vmdir/$name.vbox"
 VBoxManage modifyvm osv --memory 1024
 
 # Setup SATA controller
-qemu-img convert $origin_img -O vdi "$vmdir/$name.vdi"
+make osv.vdi
+cp $vdi_img "$vmdir/$name.vdi"
 VBoxManage storagectl  $name  --name SATA --add sata --controller IntelAHCI
 VBoxManage storageattach  $name --storagectl SATA --port 0 --type hdd --medium "$vmdir/$name.vdi"
 
