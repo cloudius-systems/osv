@@ -108,18 +108,22 @@ void premain()
         (*init)();
     }
     boot_time.event(".init functions");
-
-#ifdef AARCH64_PORT_STUB
-    printf("OSv AArch64: end of premain reached, halting.\n");
-    while (1) {
-        asm ("wfi;");
-    }
-#endif /* AARCH64_PORT_STUB */
 }
 
 int main(int ac, char **av)
 {
-    printf("OSv " OSV_VERSION "\n");
+#ifdef AARCH64_PORT_STUB
+    printf("argc=%d\n", ac);
+
+    for (int i = 0; i < ac; i++) {
+        printf("argv[%d] = %s\n", i, av[i]);
+    }
+
+    printf("OSv AArch64: main reached, halting.\n");
+    while (1) {
+        asm ("wfi;");
+    }
+#endif /* AARCH64_PORT_STUB */
 
 #ifndef AARCH64_PORT_STUB
     smp_initial_find_current_cpu()->init_on_cpu();

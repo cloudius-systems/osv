@@ -22,6 +22,27 @@ extern size_t elf_size;
 extern void* elf_start;
 extern boot_time_chart boot_time;
 
+char *cmdline;
+
+extern char** __argv;
+extern int __argc;
+
+void parse_cmdline(char* cmdline)
+{
+    char* p = cmdline;
+    char* cmd = strdup(cmdline);
+
+    static std::vector<char*> args;
+    char* save;
+    while ((p = strtok_r(cmd, " \t\n", &save)) != nullptr) {
+        args.push_back(p);
+        cmd = nullptr;
+    }
+    args.push_back(nullptr);
+    __argv = args.data();
+    __argc = args.size() - 1;
+}
+
 void arch_setup_free_memory()
 {
     register u64 edata;
@@ -35,6 +56,8 @@ void arch_setup_free_memory()
     addr = addr & ~0xffffull;
 
     memory::free_initial_memory_range((void*)addr, 0x20000000);
+
+    parse_cmdline(cmdline);
 }
 
 void arch_setup_tls(thread_control_block *tcb)

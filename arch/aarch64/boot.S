@@ -10,29 +10,38 @@
 .globl start_elf
 start_elf:
         /* elf program start address */
-        /* input: x0 = elf header address */
-        mov     x2, x0      // elf_header ptr => x2
-        bl      validate_el // check that we are at EL1 or die
+        /* input: x3 = elf header address x4 = command line addr */
+        adrp    x0, exception_vectors
+        msr     vbar_el1, x0
+        isb
 
+        bl      validate_el // check that we are at EL1 or die
         bl      init_stack
         bl      zero_bss    // initialize bss contents to 0
         bl      init_boot_cpu
 
-        adrp    x1, elf_header // requires page alignment */
-        str     x2, [x1]    // store elf header address
+        adrp    x1, elf_header           // requires page alignment
+        str     x3, [x1]                 // store elf header address
+        adrp    x1, cmdline              // no align requirements
+        str     x4, [x1, #:lo12:cmdline] // store cmdline (arch-setup.cc)
 
         mov     x29, xzr
         mov     x30, xzr
         bl      premain
-        /*
-        adrp    x2, __argc
-        ldr     x0, [x2]
-        adrp    x2, __argv
-        ldr     x1, [x2]
-        b       main
-        */
+
+        adrp    x3, __argc
+        ldr     x0, [x3, #:lo12:__argc]
+        adrp    x3, __argv
+        ldr     x1, [x3, #:lo12:__argv]
+        bl      main
+
+        bl      halt
 
 init_stack:
+        mov     x0, #1     // select SP_ELx
+        msr     spsel, x0
+        isb
+
         adrp    x0, init_stack_top
         mov     sp, x0
         ret
