@@ -327,7 +327,7 @@ void pvscsi::add_lun(u16 target, u16 lun)
     dev->max_io_size = config.max_sectors * SCSI_SECTOR_SIZE;
     read_partition_table(dev);
 
-    printf("vmw-pvscsi: Add pvscsi device target=%d, lun=%-3d as %s, devsize=%lld\n", target, lun, dev_name.c_str(), devsize);
+    debug("vmw-pvscsi: Add pvscsi device target=%d, lun=%-3d as %s, devsize=%lld\n", target, lun, dev_name.c_str(), devsize);
 }
 
 hw_driver* pvscsi::probe(hw_device* hw_dev)
