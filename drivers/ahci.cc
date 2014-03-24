@@ -153,6 +153,13 @@ void port::setup()
     // Start Device
     cmd |= PORT_CMD_ST;
     port_writel(PORT_CMD, cmd);
+
+    // Register the per-port irq thread
+    std::string name("ahci-port");
+    name += std::to_string(_pnr);
+    _irq_thread = new sched::thread([this] { this->req_done(); },
+            sched::thread::attr().name(name));
+    _irq_thread->start();
 }
 
 void port::enable_irq()
@@ -211,19 +218,18 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
         _cmd_table[slot].prdt[0].flags = bsize - 1;
     }
 
-    _cmd_active |= 1U << slot;
-    port_writel(PORT_CI, 1U << slot);
+    // Use _cmd_lock to close the following race:
+    // Cmd send             Cmd completion
+    // 1) set _cmd_active
+    //                      2) read PORT_CI for cmd completion
+    //                         done_mask would think this cmd was completed
+    // 3) set PORT_CI
+    WITH_LOCK(_cmd_lock) {
+        _cmd_active |= 1U << slot;
+        port_writel(PORT_CI, 1U << slot);
+    }
 
     return 0;
-}
-
-void port::wait_cmd_irq(u8 slot)
-{
-    _waiter.reset(*sched::thread::current());
-    sched::thread::wait_until([=] { return this->done_mask() != 0; });
-    _waiter.clear();
-
-    _cmd_active &= ~(1U << slot);
 }
 
 void port::wait_cmd_poll(u8 slot)
@@ -255,6 +261,52 @@ void port::wait_cmd_poll(u8 slot)
     _cmd_active &= ~(1U << slot);
 }
 
+u32 port::done_mask()
+{
+    if (_cmd_active == 0x0)
+        return 0x0;
+
+    if (!used_slot())
+        return 0x0;
+
+    auto ci = port_readl(PORT_CI);
+
+    return _cmd_active & (~ci);
+}
+
+void port::req_done()
+{
+    while (1) {
+        u32 mask;
+
+        WITH_LOCK(_cmd_lock) {
+            sched::thread::wait_until(_cmd_lock, [&] { mask = this->done_mask(); return mask != 0x0; });
+        }
+
+        while (mask) {
+            u8 slot = ffs(mask) - 1;
+            assert(slot >= 0 && slot < 32);
+
+            struct bio *bio = _bios[slot].load(std::memory_order_relaxed);
+            _bios[slot] = nullptr;
+            assert(bio != nullptr);
+
+            biodone(bio, true);
+
+            mask &= ~(1U << slot);
+
+            // Mark the slot available
+            _cmd_active &= ~(1U << slot);
+
+            // Increase slot free number
+            _slot_free++;
+
+            // Wakeup the thread waiting for a free slot
+            _cmd_send_waiter.wake();
+        }
+    }
+}
+
 int port::make_request(struct bio* bio)
 {
     WITH_LOCK(_lock) {
@@ -278,13 +330,24 @@ int port::make_request(struct bio* bio)
     }
 }
 
+void port::poll_mode_done(struct bio *bio, u8 slot)
+{
+    if (_hba->poll_mode()) {
+        wait_cmd_poll(slot);
+        biodone(bio, true);
+    }
+}
+
 void port::disk_rw(struct bio *bio, bool iswrite)
 {
     auto len = bio->bio_bcount;
     auto buf = bio->bio_data;
     u64 lba = bio->bio_offset / 512;
     u32 nr_sec = len / 512;
-    u8 command, slot = 0;
+    u8 command, slot;
+
+    slot = get_slot_wait();
+
     struct cmd_table &cmd = _cmd_table[slot];
 
     memset(&cmd.fis, 0, sizeof(cmd.fis));
@@ -303,20 +366,16 @@ void port::disk_rw(struct bio *bio, bool iswrite)
     cmd.fis.lba_ext_high = (lba >> 40) & 0xFF;
     cmd.fis.device = (1 << 6) | (1 << 4); // must have bit 6 set
 
+    _bios[slot] = bio;
     send_cmd(slot, iswrite, buf, len);
 
-    if (_hba->poll_mode()) {
-        wait_cmd_poll(slot);
-    } else {
-        wait_cmd_irq(slot);
-    }
-
-    biodone(bio, true);
+    poll_mode_done(bio, slot);
 }
 
 void port::disk_flush(struct bio *bio)
 {
-    u8 slot = 0;
+    auto slot = get_slot_wait();
+
     struct cmd_table &cmd = _cmd_table[slot];
 
     memset(&cmd.fis, 0, sizeof(cmd.fis));
@@ -324,15 +383,10 @@ void port::disk_flush(struct bio *bio)
     cmd.fis.flags = 1 << 7;
     cmd.fis.command = ATA_CMD_FLUSH_CACHE_EXT;
 
+    _bios[slot] = bio;
     send_cmd(slot, 0, nullptr, 0);
 
-    if (_hba->poll_mode()) {
-        wait_cmd_poll(slot);
-    } else {
-        wait_cmd_irq(slot);
-    }
-
-    biodone(bio, true);
+    poll_mode_done(bio, slot);
 }
 
 void port::disk_identify()
@@ -365,6 +419,40 @@ void port::disk_identify()
     _devsize = sectors * 512;
 
     delete [] buffer;
+}
+
+bool port::used_slot()
+{
+    return _slot_free.load(std::memory_order_relaxed) != _slot_nr;
+}
+
+bool port::avail_slot()
+{
+    return _slot_free.load(std::memory_order_relaxed) >= 1;
+}
+
+bool port::get_slot(u8 &slot)
+{
+    if (!avail_slot()) {
+        return false;
+    }
+
+    _slot_free--;
+
+    slot = ffs(~_cmd_active) - 1;
+
+    return true;
+}
+
+u8 port::get_slot_wait()
+{
+    u8 slot;
+    while (!get_slot(slot)) {
+        _cmd_send_waiter.reset(*sched::thread::current());
+        sched::thread::wait_until([this] {return this->avail_slot();});
+        _cmd_send_waiter.clear();
+    }
+    return slot;
 }
 
 void hba::enable_irq()

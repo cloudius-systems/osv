@@ -251,7 +251,7 @@ public:
     void enable_irq();
     void wait_device_ready();
     void wait_ci_ready(u8 slot);
-    void wakeup() { _waiter.wake(); }
+    void wakeup() { _irq_thread->wake(); }
     bool linkup() { return _linkup; }
 
     u32 port2hba(u32 port_reg)
@@ -282,15 +282,21 @@ public:
         return error;
     }
 
-    u32 done_mask() { auto cmd_active = port_readl(PORT_CI); return (_cmd_active > 0) && (_cmd_active ^ cmd_active); }
+    void poll_mode_done(struct bio *bio, u8 slot);
+    u32 done_mask();
+    bool avail_slot();
+    bool used_slot();
+    bool get_slot(u8 &slot);
+    u8 get_slot_wait();
+    void req_done();
 
 private:
-    sched::thread_handle _waiter;
+    sched::thread_handle _cmd_send_waiter;
     bool _linkup = false;
-    u32 _cmd_active = 0;
     u8 _queue_depth;
     size_t _devsize;
     mutex _lock;
+    mutex _cmd_lock;
     u32 _pnr;
     hba *_hba;
 
@@ -301,6 +307,11 @@ private:
     mmu::phys _cmd_table_pa;
     mmu::phys _recv_fis_pa;
 
+    static constexpr u32 _slot_nr = 32;
+    std::atomic<struct bio *> _bios[_slot_nr];
+    std::atomic<u32> _slot_free{_slot_nr};
+    std::atomic<u32> _cmd_active{0};
+    sched::thread *_irq_thread;
 };
 
 }
