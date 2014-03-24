@@ -16,12 +16,14 @@ namespace files_mapping {
 
 void init(routes& routes)
 {
-    routes.add(GET, url("/ui").remainder("path"),
-               new directory_handler("/usr/mgmt/swagger-ui/dist"));
+    file_handler* index = new file_handler("/usr/mgmt/swagger-ui/dist/index.html");
+    routes.put(GET,"/",index);
 
     directory_handler* api = new directory_handler("/usr/mgmt/api",
             new content_replace("json"));
     routes.add(GET, url("/api").remainder("path"), api);
+    routes.add(GET, url("").remainder("path"),
+                   new directory_handler("/usr/mgmt/swagger-ui/dist"));
 }
 
 }
