@@ -173,8 +173,8 @@ void split_large_page(hw_ptep ptep, unsigned level)
 }
 
 struct page_allocator {
-    virtual void* alloc(uintptr_t offset, hw_ptep ptep) = 0;
-    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep) = 0;
+    virtual void* alloc(uintptr_t offset, hw_ptep ptep, bool write) = 0;
+    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) = 0;
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) = 0;
     virtual void free(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) = 0;
     virtual void finalize() = 0;
@@ -465,19 +465,20 @@ class populate : public vma_operation<allocate_intermediate_opt::yes, skip_empty
 private:
     page_allocator* _page_provider;
     unsigned int perm;
+    bool _write;
     bool _map_dirty;
     pt_element dirty(pt_element pte) {
         pte.set_dirty(_map_dirty);
         return pte;
     }
 public:
-    populate(page_allocator* pops, unsigned int perm, bool map_dirty = true) :
-        _page_provider(pops), perm(perm), _map_dirty(map_dirty) { }
+    populate(page_allocator* pops, unsigned int perm, bool write = false, bool map_dirty = true) :
+        _page_provider(pops), perm(perm), _write(write), _map_dirty(map_dirty) { }
     void small_page(hw_ptep ptep, uintptr_t offset){
         if (!ptep.read().empty()) {
             return;
         }
-        phys page = virt_to_phys(_page_provider->alloc(offset, ptep));
+        phys page = virt_to_phys(_page_provider->alloc(offset, ptep, _write));
         if (!ptep.compare_exchange(make_empty_pte(), dirty(make_normal_pte(page, perm)))) {
             _page_provider->free(phys_to_virt(page), offset, ptep);
         } else {
@@ -489,7 +490,7 @@ public:
         if (!pte.empty()) {
             return true;
         }
-        void *vpage = _page_provider->alloc(huge_page_size, offset, ptep);
+        void *vpage = _page_provider->alloc(huge_page_size, offset, ptep, _write);
         if (!vpage) {
             return false;
         }
@@ -507,7 +508,8 @@ public:
 template <account_opt Account = account_opt::no>
 class populate_small : public populate<Account> {
 public:
-    populate_small(page_allocator* pops, unsigned int perm, bool map_dirty = true) : populate<Account>(pops, perm, map_dirty) { }
+    populate_small(page_allocator* pops, unsigned int perm, bool write = false, bool map_dirty = true) :
+        populate<Account>(pops, perm, write, map_dirty) { }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         assert(0);
         return false;
@@ -861,10 +863,10 @@ private:
         return addr;
     }
 public:
-    virtual void* alloc(uintptr_t offset, hw_ptep ptep) override {
+    virtual void* alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
         return fill(memory::alloc_page(), offset, page_size);
     }
-    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep) override {
+    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
         return fill(memory::alloc_huge_page(size), offset, size);
     }
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
@@ -923,10 +925,10 @@ public:
     map_file_page_mmap(file *file, off_t off) : _file(file), _map_offset(off) {}
     virtual ~map_file_page_mmap() {};
 
-    virtual void* alloc(uintptr_t offset, hw_ptep ptep) override {
-        return alloc(page_size, offset, ptep);
+    virtual void* alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
+        return alloc(page_size, offset, ptep, write);
     }
-    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep) override {
+    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
         return _file->get_page(offset + _map_offset, size, ptep);
     }
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
@@ -1041,12 +1043,12 @@ void vcleanup(void* addr, size_t size)
 }
 
 template<account_opt Account = account_opt::no>
-ulong populate_vma(vma *vma, void *v, size_t size)
+ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
 {
     page_allocator *map = vma->page_ops();
     auto total = vma->has_flags(mmap_small) ?
-        vma->operate_range(populate_small<Account>(map, vma->perm(), vma->map_dirty()), v, size) :
-        vma->operate_range(populate<Account>(map, vma->perm(), vma->map_dirty()), v, size);
+        vma->operate_range(populate_small<Account>(map, vma->perm(), write, vma->map_dirty()), v, size) :
+        vma->operate_range(populate<Account>(map, vma->perm(), write, vma->map_dirty()), v, size);
     map->finalize();
 
     return total;
@@ -1301,7 +1303,7 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
         size = page_size;
     }
 
-    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size);
+    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size, ef->error_code & page_fault_write);
 
     if (_flags & mmap_jvm_heap) {
         memory::stats::on_jvm_heap_alloc(total);
