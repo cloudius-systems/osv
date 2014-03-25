@@ -179,8 +179,8 @@ std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsign
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 void unmap_address(void *addr, size_t size);
-void add_mapping(void *buf_addr, uintptr_t vaddr);
-void remove_mapping(void *buf_addr, uintptr_t addr);
+void add_mapping(void *buf_addr, uintptr_t offset, uintptr_t vaddr);
+bool remove_mapping(void *buf_addr, void *paddr, uintptr_t addr);
 
 typedef uint64_t phys;
 phys virt_to_phys(void *virt);

@@ -1017,7 +1017,15 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size, bool map)
 		iov->iov_base = (char *)dbuf_abuf->b_data;
 		iov->iov_len = tocpy;
 	} else {
-		arc_unshare_buf(dbi->db_buf);
+		iov = uio->uio_iov;
+		// empty iov is a query operation.
+		if (iov->iov_base) {
+			assert(iov->iov_base == (char *)dbuf_abuf->b_data);
+			arc_unshare_buf(dbi->db_buf);
+		} else {
+			iov->iov_base = (char *)dbuf_abuf->b_data;
+			iov->iov_len = db->db_size;
+		}
 	}
 
 	dmu_buf_rele_array(dbp, numbufs, FTAG);

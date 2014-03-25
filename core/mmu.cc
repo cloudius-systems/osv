@@ -971,23 +971,50 @@ public:
 
 // In the general case, we expect only one element in the list.
 static std::unordered_multimap<void *, uintptr_t> shared_fs_maps;
+// We need to reference count the buffer, but first we need to store the
+// buffer somewhere we can find
+static std::unordered_map<void *, unsigned int> shared_fs_buf_refcnt;
+
 // Can't use the vma_list_mutex, because if we do, we can have a deadlock where
 // we call into the filesystem to read data with the vma_list_mutex held - because
 // we do that for complex operate operations, and if the filesystem decides to evict
 // a page to read the selected buffer, we will need to access those data structures.
 static mutex shared_fs_mutex;
 
-void add_mapping(void *buf_addr, uintptr_t vaddr)
+static void fs_buf_get(void *buf_addr)
+{
+    auto b = shared_fs_buf_refcnt.find(buf_addr);
+    if (b == shared_fs_buf_refcnt.end()) {
+        shared_fs_buf_refcnt.insert(std::make_pair(buf_addr, 1));
+        return;
+    }
+    b->second++;
+}
+
+static bool fs_buf_put(void *buf_addr)
+{
+    auto b = shared_fs_buf_refcnt.find(buf_addr);
+    assert(b != shared_fs_buf_refcnt.end());
+    auto old = --b->second;
+    if (old == 0) {
+        shared_fs_buf_refcnt.erase(buf_addr);
+        return true;
+    }
+    return false;
+}
+
+void add_mapping(void *buf_addr, uintptr_t off, uintptr_t vaddr)
 {
     WITH_LOCK(shared_fs_mutex) {
-        shared_fs_maps.insert(std::make_pair(buf_addr, vaddr));
+        shared_fs_maps.insert(std::make_pair(buf_addr + off, vaddr));
+        fs_buf_get(buf_addr);
     }
 }
 
-void remove_mapping(void *buf_addr, uintptr_t addr)
+bool remove_mapping(void *buf_addr, void *paddr, uintptr_t addr)
 {
     WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(buf_addr);
+        auto buf = shared_fs_maps.equal_range(paddr);
         for (auto it = buf.first; it != buf.second; it++) {
             auto v = (*it).second;
             if (v == addr) {
@@ -995,6 +1022,7 @@ void remove_mapping(void *buf_addr, uintptr_t addr)
                 break;
             }
         }
+        return fs_buf_put(buf_addr);
     }
 }
 
@@ -1059,6 +1087,7 @@ void unmap_address(void *addr, size_t size)
 {
     size = align_up(size, page_size);
     WITH_LOCK(shared_fs_mutex) {
+        shared_fs_buf_refcnt.erase(addr);
         for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
             addr = reinterpret_cast<void*>(a);
             auto buf = shared_fs_maps.equal_range(addr);
