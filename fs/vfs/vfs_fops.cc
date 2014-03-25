@@ -166,6 +166,7 @@ void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 	vn_unlock(vp);
 
 	mmu::add_mapping(io.iov_base + map_data.buf_off, start);
+	assert((reinterpret_cast<uintptr_t>(io.iov_base) & (mmu::page_size - 1)) == 0);
 	return io.iov_base + map_data.buf_off;
 }
 
@@ -194,7 +195,7 @@ std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, 
 {
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
-	if ((perm & mmu::perm_write) || (!vp->v_op->vop_map)) {
+	if ((perm & mmu::perm_write) || (!vp->v_op->vop_map) || (vp->v_size < (off_t)mmu::page_size)) {
 		return mmu::default_file_mmap(this, range, flags, perm, offset);
 	}
 	// Don't know what to do if we have one but not the other

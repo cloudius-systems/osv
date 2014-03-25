@@ -641,7 +641,7 @@ zfs_manage_mapping(vnode_t *vp, struct file* fp, uio_t *uio, bool map)
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
 	objset_t	*os;
-	ssize_t		nbytes;
+	ssize_t		nbytes = uio->uio_resid;
 	int			error = EIO;
 	rl_t		*rl;
 
@@ -663,7 +663,7 @@ zfs_manage_mapping(vnode_t *vp, struct file* fp, uio_t *uio, bool map)
 	}
 
 	if ((uio->uio_loffset + uio->uio_resid) > zp->z_size) {
-		zfs_truncate(vp, uio->uio_loffset + uio->uio_resid);
+		nbytes -= (uio->uio_loffset + uio->uio_resid) - zp->z_size;
 	}
 
 	/*
@@ -679,7 +679,7 @@ zfs_manage_mapping(vnode_t *vp, struct file* fp, uio_t *uio, bool map)
 	 */
 	rl = zfs_range_lock(zp, uio->uio_loffset, uio->uio_resid, RL_READER);
 
-	nbytes = MIN(uio->uio_resid, zfs_read_chunk_size -
+	nbytes = MIN(nbytes, zfs_read_chunk_size -
 		P2PHASE(uio->uio_loffset, zfs_read_chunk_size));
 
 	error = dmu_map_uio(os, zp->z_id, uio, nbytes, map);
