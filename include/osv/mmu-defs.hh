@@ -54,5 +54,15 @@ enum {
     mmap_jvm_balloon = 1ul << 6,
 };
 
+class mmupage {
+    void* _page;
+    bool _cow;
+public:
+    mmupage(void *page, bool cow = false) : _page(page), _cow(cow) {}
+    void* vaddr() const;
+    phys paddr() const;
+    bool cow() const;
+};
+
 }
 #endif

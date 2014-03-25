@@ -121,6 +121,24 @@ phys virt_to_phys(void *virt)
     return static_cast<char*>(virt) - phys_mem;
 }
 
+void* mmupage::vaddr() const
+{
+    return _page;
+}
+
+phys mmupage::paddr() const
+{
+    if (!_page) {
+        throw std::exception();
+    }
+    return virt_to_phys(_page);
+}
+
+bool mmupage::cow() const
+{
+    return _cow;
+}
+
 phys allocate_intermediate_level()
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
@@ -173,8 +191,8 @@ void split_large_page(hw_ptep ptep, unsigned level)
 }
 
 struct page_allocator {
-    virtual void* alloc(uintptr_t offset, hw_ptep ptep, bool write) = 0;
-    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) = 0;
+    virtual mmupage alloc(uintptr_t offset, hw_ptep ptep, bool write) = 0;
+    virtual mmupage alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) = 0;
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) = 0;
     virtual void free(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) = 0;
     virtual void finalize() = 0;
@@ -464,42 +482,57 @@ template <account_opt T = account_opt::no>
 class populate : public vma_operation<allocate_intermediate_opt::yes, skip_empty_opt::no, T> {
 private:
     page_allocator* _page_provider;
-    unsigned int perm;
+    unsigned int _perm;
     bool _write;
     bool _map_dirty;
     pt_element dirty(pt_element pte) {
         pte.set_dirty(_map_dirty);
         return pte;
     }
+    bool skip(pt_element pte) {
+        if (pte.empty()) {
+            return false;
+        }
+        return !_write || pte.writable();
+    }
+    unsigned int perm(bool cow) {
+        unsigned int p = _perm;
+        if (cow) {
+            p &= ~perm_write;
+        }
+        return p;
+    }
 public:
     populate(page_allocator* pops, unsigned int perm, bool write = false, bool map_dirty = true) :
-        _page_provider(pops), perm(perm), _write(write), _map_dirty(map_dirty) { }
+        _page_provider(pops), _perm(perm), _write(write), _map_dirty(map_dirty) { }
     void small_page(hw_ptep ptep, uintptr_t offset){
-        if (!ptep.read().empty()) {
+        pt_element pte = ptep.read();
+        if (skip(pte)) {
             return;
         }
-        phys page = virt_to_phys(_page_provider->alloc(offset, ptep, _write));
-        if (!ptep.compare_exchange(make_empty_pte(), dirty(make_normal_pte(page, perm)))) {
-            _page_provider->free(phys_to_virt(page), offset, ptep);
+        mmupage page = _page_provider->alloc(offset, ptep, _write);
+        if (!ptep.compare_exchange(pte, dirty(make_normal_pte(page.paddr(), perm(page.cow()))))) {
+            _page_provider->free(page.vaddr(), offset, ptep);
         } else {
             this->account(mmu::page_size);
         }
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset){
-        auto pte = ptep.read();
-        if (!pte.empty()) {
+        pt_element pte = ptep.read();
+        if (skip(pte)) {
             return true;
         }
-        void *vpage = _page_provider->alloc(huge_page_size, offset, ptep, _write);
-        if (!vpage) {
-            return false;
-        }
 
-        phys page = virt_to_phys(vpage);
-        if (!ptep.compare_exchange(make_empty_pte(), dirty(make_large_pte(page, perm)))) {
-            _page_provider->free(phys_to_virt(page), huge_page_size, offset, ptep);
-        } else {
-            this->account(mmu::huge_page_size);
+        try {
+            mmupage page = _page_provider->alloc(huge_page_size, offset, ptep, _write);
+
+            if (!ptep.compare_exchange(pte, dirty(make_large_pte(page.paddr(), perm(page.cow()))))) {
+                _page_provider->free(page.vaddr(), huge_page_size, offset, ptep);
+            } else {
+                this->account(mmu::huge_page_size);
+            }
+        } catch(std::exception&) {
+            return false;
         }
         return true;
     }
@@ -863,10 +896,10 @@ private:
         return addr;
     }
 public:
-    virtual void* alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
+    virtual mmupage alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
         return fill(memory::alloc_page(), offset, page_size);
     }
-    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
+    virtual mmupage alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
         return fill(memory::alloc_huge_page(size), offset, size);
     }
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
@@ -925,10 +958,10 @@ public:
     map_file_page_mmap(file *file, off_t off) : _file(file), _map_offset(off) {}
     virtual ~map_file_page_mmap() {};
 
-    virtual void* alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
+    virtual mmupage alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
         return alloc(page_size, offset, ptep, write);
     }
-    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
+    virtual mmupage alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
         return _file->get_page(offset + _map_offset, size, ptep);
     }
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
