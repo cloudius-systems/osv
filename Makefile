@@ -42,7 +42,7 @@ check: export image ?= tests
 check: all
 	./scripts/test.py
 
-osv.vmdk osv.vdi:
+osv.vmdk osv.vdi: all
 	$(MAKE) -r -C $(dir $(submake)) $@
 .PHONY: osv.vmdk osv.vdi
 
