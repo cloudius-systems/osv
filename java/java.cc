@@ -11,6 +11,7 @@
 #include <osv/debug.hh>
 #include "jvm_balloon.hh"
 #include <osv/mempool.hh>
+#include "java_api.hh"
 
 // java.so is similar to the standard "java" command line launcher in Linux.
 //
@@ -137,6 +138,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    java_api::set(jvm);
     auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
         if (env->ExceptionOccurred()) {

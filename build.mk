@@ -591,6 +591,7 @@ drivers += drivers/ide.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
 drivers += java/jvm_balloon.o
+drivers += java/java_api.o
 
 objects = bootfs.o
 objects += arch/x64/dump.o
