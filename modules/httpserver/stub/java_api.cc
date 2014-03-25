@@ -52,3 +52,8 @@ void java_api::set_mbean_info(const std::string& jmx_path,
 void java_api::call_gc()
 {
 }
+
+bool java_api::is_valid()
+{
+    return true;
+}
