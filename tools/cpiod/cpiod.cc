@@ -12,6 +12,9 @@
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
 #include "cpio.hh"
+#include <sys/mount.h>
+#include <errno.h>
+#include <stdio.h>
 
 using namespace osv;
 using namespace std;
@@ -79,4 +82,19 @@ int main(int ac, char** av)
     cpio_in_expand expand_files(prefix);
     cpio_in::parse(socket, expand_files);
     sync();
+
+    // File systems mounted while running mkfs.so will be unmounted here.
+    if (prefix == "/zfs/zfs") {
+        int ret;
+
+        ret = umount("/zfs/zfs");
+        if (ret == -1) {
+            fprintf(stderr, "umount /zfs/zfs failed, error = %s\n", strerror(errno));
+        }
+
+        ret = umount("/zfs");
+        if (ret == -1) {
+            fprintf(stderr, "umount /zfs failed, error = %s\n", strerror(errno));
+        }
+    }
 }
