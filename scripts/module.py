@@ -46,6 +46,7 @@ def expand(text, variables):
 def append_manifest(file_path, dst_file, variables={}):
     with open(file_path) as src_file:
         for line in src_file:
+            line = line.rstrip() + '\n'
             dst_file.write(expand(line, variables))
 
 def generate_manifests(modules, basic_apps):
