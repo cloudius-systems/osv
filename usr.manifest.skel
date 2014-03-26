@@ -2,6 +2,7 @@
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/&/libboost_filesystem-mt.so.1.53.0: %(miscbase)s/usr/lib64/&
 /&/etc/hosts: ../../static/&
+/etc/mnttab: /dev/null
 /dev: ../../static
 /proc: ../../static
 /tmp: ../../static
