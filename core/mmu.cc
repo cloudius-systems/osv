@@ -1057,15 +1057,18 @@ ulong populate_vma(vma *vma, void *v, size_t size)
 TRACEPOINT(trace_mmu_invalidate, "addr=%p, vaddr=%p", void *, uintptr_t);
 void unmap_address(void *addr, size_t size)
 {
+    size = align_up(size, page_size);
     WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(addr);
-        for (auto it = buf.first; it != buf.second; it++) {
-            auto vaddr = (*it).second;
-            trace_mmu_invalidate(addr, vaddr);
-            operate_range(page_out(), (void *)vaddr, page_size);
+        for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
+            addr = reinterpret_cast<void*>(a);
+            auto buf = shared_fs_maps.equal_range(addr);
+            for (auto it = buf.first; it != buf.second; it++) {
+                auto vaddr = (*it).second;
+                trace_mmu_invalidate(addr, vaddr);
+                operate_range(page_out(), (void *)vaddr, page_size);
+            }
+            shared_fs_maps.erase(addr);
         }
-
-        shared_fs_maps.erase(addr);
     }
 }
 
