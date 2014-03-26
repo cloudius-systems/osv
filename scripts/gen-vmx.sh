@@ -6,7 +6,7 @@ cat << 'EOF' > $VMX_FILE
 #!/usr/bin/vmware
 .encoding = "UTF-8"
 config.version = "8"
-virtualHW.version = "10"
+virtualHW.version = "8"
 vcpu.hotadd = "TRUE"
 scsi0.present = "TRUE"
 scsi0.virtualDev = "pvscsi"
