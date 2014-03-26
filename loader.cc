@@ -31,6 +31,7 @@
 #include "drivers/ide.hh"
 #include "drivers/vmw-pvscsi.hh"
 #include "drivers/vmxnet3.hh"
+#include "drivers/zfs.hh"
 
 #include <osv/sched.hh>
 #include "drivers/console.hh"
@@ -314,6 +315,7 @@ void* do_main_thread(void *_commands)
     if (opt_mount) {
         mount_zfs_rootfs();
         bsd_shrinker_init();
+        zfsdev::zfsdev_init();
     }
     boot_time.event("ZFS mounted");
 

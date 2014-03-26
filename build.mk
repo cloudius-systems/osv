@@ -590,6 +590,7 @@ drivers += drivers/ahci.o
 drivers += drivers/ide.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
+drivers += drivers/zfs.o
 drivers += java/jvm_balloon.o
 drivers += java/java_api.o
 
