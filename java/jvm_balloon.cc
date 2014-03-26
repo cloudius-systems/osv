@@ -204,7 +204,7 @@ size_t jvm_balloon_shrinker::_request_memory(JNIEnv *env, size_t size)
         env->ReleasePrimitiveArrayCritical(array, p, 0);
         env->DeleteLocalRef(array);
         // Avoid entering any endless loops. Fail imediately
-        if (!iscopy)
+        if (iscopy)
             break;
     } while (ret < size);
 
