@@ -13,10 +13,16 @@
 #include <unordered_map>
 #include <thread>
 
+TRACEPOINT(trace_jvm_balloon_new, "obj=%p, aligned %p, size %d, vma_size %d",
+        const unsigned char *, const unsigned char *, size_t, size_t);
+TRACEPOINT(trace_jvm_balloon_free, "");
 TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p, size %d, vma_size %d",
         const unsigned char *, const unsigned char *, size_t, size_t);
 TRACEPOINT(trace_jvm_balloon_move, "new_jvm_addr=%p, new_jvm_end=%p, new_addr %p, new_end %p",
         const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *);
+TRACEPOINT(trace_jvm_balloon_close, "from=%p, to=%p, condition=%s",
+        uintptr_t, uintptr_t, const char *);
+
 
 jvm_balloon_shrinker *balloon_shrinker = nullptr;
 
@@ -96,6 +102,7 @@ ulong balloon::empty_area(balloon_ptr b)
     balloons.push_back(b);
     auto ret = mmu::map_jvm(_jvm_addr, end - addr, _alignment, b);
     memory::reserve_jvm_heap(minimum_size());
+    trace_jvm_balloon_new(_jvm_addr, addr, end - addr, ret);
     return ret;
 }
 
@@ -118,6 +125,7 @@ void balloon::release(JNIEnv *env)
     // No need to remap. Will happen automatically when JVM touches it again
     env->DeleteGlobalRef(_jref);
     memory::return_jvm_heap(minimum_size());
+    trace_jvm_balloon_free();
 }
 
 unsigned char *
@@ -288,6 +296,7 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
         if (vma->effective_jvm_addr()) {
             return false;
         }
+        trace_jvm_balloon_close(vma->start(), vma->end(), "write");
         delete vma;
         return true;
     }
@@ -298,6 +307,7 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
             return false;
         }
         delete vma;
+        trace_jvm_balloon_close(vma->start(), vma->end(), "nodecoder");
         return true;
     }
 
@@ -332,6 +342,7 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
         }
 
         if (vma->add_partial(skip, candidate)) {
+            trace_jvm_balloon_close(vma->start(), vma->end(), "partialclose");
             delete vma;
         }
     } else {
