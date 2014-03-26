@@ -308,7 +308,7 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
     trace_jvm_balloon_fault(src, dest, size, vma->size());
 
     auto skip = size;
-    if (size < vma->size()) {
+    if (size < vma->real_size()) {
         unsigned char *base = static_cast<unsigned char *>(vma->addr());
         // In case the copy does not start from the beginning of the balloon,
         // we calculate where should the begin be. We always want to move the
@@ -325,6 +325,9 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
             delete vma;
         }
     } else {
+        // For the partial size it can actually happen that we got lowered in size
+        assert(vma->size() >= b->minimum_size());
+
         // If the JVM is also copying objects that are laid after the balloon, we
         // need to copy only the bytes up until the end of the balloon. If the
         // copy is a partial copy in the middle of the object, then we should

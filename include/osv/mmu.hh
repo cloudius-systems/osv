@@ -154,6 +154,11 @@ public:
     unsigned char *jvm_addr() { return _jvm_addr; }
     unsigned char *effective_jvm_addr() { return _effective_jvm_addr; }
     bool add_partial(size_t partial, unsigned char *eff);
+    size_t partial() { return _partial_copy; }
+    // Iff we have a partial, the size may be temporarily changed. We keep it in a different
+    // variable so don't risk breaking any mmu core code that relies on the derived size()
+    // being the same.
+    uintptr_t real_size() const { return _real_size; }
     friend ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b);
 protected:
     balloon_ptr _balloon;
@@ -165,6 +170,7 @@ private:
     size_t _partial_copy = 0;
     unsigned _real_perm;
     unsigned _real_flags;
+    uintptr_t _real_size;
 };
 
 class shm_file final : public special_file {
