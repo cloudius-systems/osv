@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 import subprocess
 import argparse
 import glob
@@ -72,7 +72,7 @@ def run_test(test):
     out = ""
     line = ""
     while True:
-        ch = process.stdout.read(1)
+        ch = process.stdout.read(1).decode()
         if ch == '' and process.poll() != None:
             break
         out += ch
