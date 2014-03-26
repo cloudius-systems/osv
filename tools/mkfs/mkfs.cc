@@ -10,35 +10,15 @@
 #include <osv/run.hh>
 #include <fs/vfs/vfs.h>
 #include <iostream>
+#include "drivers/zfs.hh"
 
 using namespace osv;
-
-extern "C" int osv_zfs_ioctl(unsigned long req, void* buffer);
-
-static int zfs_ioctl(device* dev, ulong req, void* buffer)
-{
-    return osv_zfs_ioctl(req, buffer);
-}
-
-static devops zfs_devops = {
-    no_open,
-    no_close,
-    no_read,
-    no_write,
-    zfs_ioctl,
-    no_devctl,
-};
-
 using namespace std;
 
 void mkfs()
 {
-    auto zfs_driver = new driver;
-    zfs_driver->devops = &zfs_devops;
-    zfs_driver->devsz = 0;
-    zfs_driver->flags = 0;
-    zfs_driver->name = "zfs";
-    device_create(zfs_driver, "zfs", D_CHR);
+    /* Create zfs device, then /etc/mnttab which is required by libzfs */
+    zfsdev::zfsdev_init();
     mkdir("/etc", 0755);
     int fd = creat("/etc/mnttab", 0644);
     assert(fd != -1);
