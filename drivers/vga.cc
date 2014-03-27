@@ -40,6 +40,15 @@ static int tsm_draw_cb(struct tsm_screen *screen, uint32_t id,
     return 0;
 }
 
+static int tsm_cursor_cb(struct tsm_screen *screen, unsigned int posx,
+    unsigned int posy, void *data)
+{
+    VGAConsole *vga = reinterpret_cast<VGAConsole *>(data);
+
+    vga->move_cursor(posx, posy);
+    return 0;
+}
+
 VGAConsole::VGAConsole(sched::thread* poll_thread, const termios *tio)
     : _tio(tio), kbd(poll_thread)
 {
@@ -70,6 +79,14 @@ void VGAConsole::draw(const uint32_t c, const struct tsm_screen_attr *attr,
     }
  }
 
+void VGAConsole::move_cursor(unsigned int x, unsigned int y)
+{
+    uint16_t pos = x + (y * 80);
+
+    processor::outw((VGA_CRTC_CURSOR_LO) | (pos & 0xff) << 8, VGA_CRT_IC);
+    processor::outw((VGA_CRTC_CURSOR_HI) | ((pos >> 8) & 0xff) << 8, VGA_CRT_IC);
+}
+
 void VGAConsole::write(const char *str, size_t len)
 {
     while (len > 0) {
@@ -78,7 +95,7 @@ void VGAConsole::write(const char *str, size_t len)
         tsm_vte_input(tsm_vte, str++, 1);
         len--;
     }
-    tsm_screen_draw(tsm_screen, tsm_draw_cb, this);
+    tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, this);
 }
 
 bool VGAConsole::input_ready()
@@ -116,19 +133,19 @@ char VGAConsole::readch()
         switch (key) {
         case KEY_Up:
             tsm_screen_sb_up(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, this);
+            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, this);
             break;
         case KEY_Down:
             tsm_screen_sb_down(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, this);
+            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, this);
             break;
         case KEY_Page_Up:
             tsm_screen_sb_page_up(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, this);
+            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, this);
             break;
         case KEY_Page_Down:
             tsm_screen_sb_page_down(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, this);
+            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, this);
             break;
         default:
             if (tsm_vte_handle_keyboard(tsm_vte, key, mods))

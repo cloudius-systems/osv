@@ -98,6 +98,7 @@ struct tsm_screen {
 	 * bigger than size_x if new-line is pending */
 	unsigned int cursor_x;		/* current cursor x-pos */
 	unsigned int cursor_y;		/* current cursor y-pos */
+        bool cursor_dirty;
 
 	/* tab ruler */
 	bool *tab_ruler;		/* tab-flag for all cells of one row */

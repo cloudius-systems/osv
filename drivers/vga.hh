@@ -22,8 +22,15 @@ public:
     virtual bool input_ready();
     virtual char readch();
     void draw(const uint32_t c, const struct tsm_screen_attr *attr, unsigned int x, unsigned int y);
+    void move_cursor(unsigned int x, unsigned int y);
     void push_queue(const char *str, size_t len);
 private:
+    enum {
+        VGA_CRT_IC = 0x3d4,
+        VGA_CRT_DC = 0x3d5,
+        VGA_CRTC_CURSOR_HI = 0x0e,
+        VGA_CRTC_CURSOR_LO = 0x0f,
+    };
     unsigned _col = 0;
     static const unsigned ncols = 80, nrows = 25;
     static volatile unsigned short * const buffer;

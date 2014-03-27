@@ -43,7 +43,7 @@
 
 SHL_EXPORT
 tsm_age_t tsm_screen_draw(struct tsm_screen *con, tsm_screen_draw_cb draw_cb,
-			  void *data)
+			  tsm_screen_cursor_cb cursor_cb, void *data)
 {
 	unsigned int cur_x, cur_y;
 	unsigned int i, j, k;
@@ -178,6 +178,15 @@ tsm_age_t tsm_screen_draw(struct tsm_screen *con, tsm_screen_draw_cb draw_cb,
 		}
 	}
 
+	if (con->cursor_dirty) {
+		ret = cursor_cb(con, con->cursor_x, con->cursor_y, data);
+		if (ret && warned++ < 3) {
+			llog_debug(con,
+				   "cannot draw cursor at %ux%u via text-renderer",
+				   con->cursor_x, con->cursor_y);
+ 		}
+ 		con->cursor_dirty = false;
+ 	}
 	if (con->age_reset) {
 		con->age_reset = 0;
 		return 0;

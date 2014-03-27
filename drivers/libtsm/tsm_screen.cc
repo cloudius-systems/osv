@@ -108,6 +108,8 @@ static void move_cursor(struct tsm_screen *con, unsigned int x, unsigned int y)
 
 	c = get_cursor_cell(con);
 	c->age = con->age_cnt;
+
+        con->cursor_dirty = true;
 }
 
 void screen_cell_init(struct tsm_screen *con, struct cell *cell)
@@ -479,6 +481,7 @@ int tsm_screen_new(struct tsm_screen **out, tsm_log_t log, void *log_data)
 	con->llog_data = log_data;
 	con->age_cnt = 1;
 	con->age = con->age_cnt;
+        con->cursor_dirty = false;
 
 	ret = tsm_screen_resize(con, 80, 24);
 	if (ret)
