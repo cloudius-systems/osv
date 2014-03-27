@@ -156,16 +156,6 @@ bool change_perm(hw_ptep ptep, unsigned int perm)
     return old & ~perm;
 }
 
-// This is supposed to be lockless, so we need to rely heavily on atomics.  The
-// reason for this is that this will be called from an invalidation handler,
-// which can in turn be called by the filesystem mapper (for instance, if the
-// filesystem needs to evict some memory before reading more)
-bool clear_present(hw_ptep ptep)
-{
-    pt_element old = ptep.exchange(make_empty_pte());
-    return old.present();
-}
-
 void split_large_page(hw_ptep ptep, unsigned level)
 {
     pt_element pte_orig = ptep.read();
@@ -183,11 +173,10 @@ void split_large_page(hw_ptep ptep, unsigned level)
 }
 
 struct page_allocator {
-    virtual void* alloc(uintptr_t offset) = 0;
-    virtual void* alloc(size_t size, uintptr_t offset) = 0;
-    virtual void free(void *addr, uintptr_t offset) = 0;
-    virtual void free(void *addr, size_t size, uintptr_t offset) = 0;
-    virtual void set_addr(uintptr_t addr) {}
+    virtual void* alloc(uintptr_t offset, hw_ptep ptep) = 0;
+    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep) = 0;
+    virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) = 0;
+    virtual void free(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) = 0;
     virtual void finalize() = 0;
     virtual ~page_allocator() {}
 };
@@ -488,9 +477,9 @@ public:
         if (!ptep.read().empty()) {
             return;
         }
-        phys page = virt_to_phys(_page_provider->alloc(offset));
+        phys page = virt_to_phys(_page_provider->alloc(offset, ptep));
         if (!ptep.compare_exchange(make_empty_pte(), dirty(make_normal_pte(page, perm)))) {
-            _page_provider->free(phys_to_virt(page), offset);
+            _page_provider->free(phys_to_virt(page), offset, ptep);
         } else {
             this->account(mmu::page_size);
         }
@@ -500,14 +489,14 @@ public:
         if (!pte.empty()) {
             return true;
         }
-        void *vpage = _page_provider->alloc(huge_page_size, offset);
+        void *vpage = _page_provider->alloc(huge_page_size, offset, ptep);
         if (!vpage) {
             return false;
         }
 
         phys page = virt_to_phys(vpage);
         if (!ptep.compare_exchange(make_empty_pte(), dirty(make_large_pte(page, perm)))) {
-            _page_provider->free(phys_to_virt(page), huge_page_size, offset);
+            _page_provider->free(phys_to_virt(page), huge_page_size, offset, ptep);
         } else {
             this->account(mmu::huge_page_size);
         }
@@ -534,15 +523,16 @@ struct tlb_gather {
         void* addr;
         size_t size;
         off_t offset; // FIXME: unneeded?
+        pt_element* ptep;
     };
     page_allocator* page_provider;
     size_t nr_pages = 0;
     tlb_page pages[max_pages];
-    void push(void* addr, size_t size, off_t offset) {
+    void push(void* addr, size_t size, off_t offset, hw_ptep ptep) {
         if (nr_pages == max_pages) {
             flush();
         }
-        pages[nr_pages++] = { addr, size, offset };
+        pages[nr_pages++] = { addr, size, offset, ptep.release() };
     }
     void flush() {
         if (!nr_pages) {
@@ -552,9 +542,9 @@ struct tlb_gather {
         for (auto i = 0u; i < nr_pages; ++i) {
             auto&& tp = pages[i];
             if (tp.size == page_size) {
-                page_provider->free(tp.addr, tp.offset);
+                page_provider->free(tp.addr, tp.offset, hw_ptep::force(tp.ptep));
             } else {
-                page_provider->free(tp.addr, tp.size, tp.offset);
+                page_provider->free(tp.addr, tp.size, tp.offset, hw_ptep::force(tp.ptep));
             }
         }
         nr_pages = 0;
@@ -577,13 +567,13 @@ public:
         // not-present may only mean mprotect(PROT_NONE).
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        _tlb_gather.push(phys_to_virt(pte.addr(false)), page_size, offset);
+        _tlb_gather.push(phys_to_virt(pte.addr(false)), page_size, offset, ptep);
         this->account(mmu::page_size);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         pt_element pte = ptep.read();
         ptep.write(make_empty_pte());
-        _tlb_gather.push(phys_to_virt(pte.addr(true)), huge_page_size, offset);
+        _tlb_gather.push(phys_to_virt(pte.addr(true)), huge_page_size, offset, ptep);
         this->account(mmu::huge_page_size);
         return true;
     }
@@ -608,20 +598,6 @@ public:
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         do_flush |= change_perm(ptep, perm);
         return true;
-    }
-    bool tlb_flush_needed(void) {return do_flush;}
-};
-
-class page_out: public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes> {
-private:
-    bool do_flush = false;
-public:
-    page_out() { }
-    void small_page(hw_ptep ptep, uintptr_t offset) {
-        do_flush |= clear_present(ptep);
-    }
-    bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        abort();
     }
     bool tlb_flush_needed(void) {return do_flush;}
 };
@@ -885,16 +861,16 @@ private:
         return addr;
     }
 public:
-    virtual void* alloc(uintptr_t offset) override {
+    virtual void* alloc(uintptr_t offset, hw_ptep ptep) override {
         return fill(memory::alloc_page(), offset, page_size);
     }
-    virtual void* alloc(size_t size, uintptr_t offset) override {
+    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep) override {
         return fill(memory::alloc_huge_page(size), offset, size);
     }
-    virtual void free(void *addr, uintptr_t offset) override {
+    virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
         return memory::free_page(addr);
     }
-    virtual void free(void *addr, size_t size, uintptr_t offset) override {
+    virtual void free(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
         return memory::free_huge_page(addr, size);
     }
     virtual void finalize() override {
@@ -942,27 +918,22 @@ class map_file_page_mmap : public page_allocator {
 private:
     file* _file;
     off_t _map_offset;
-    uintptr_t _start = 0;
 
 public:
     map_file_page_mmap(file *file, off_t off) : _file(file), _map_offset(off) {}
     virtual ~map_file_page_mmap() {};
 
-    virtual void* alloc(uintptr_t offset) override {
-        return alloc(page_size, offset);
+    virtual void* alloc(uintptr_t offset, hw_ptep ptep) override {
+        return alloc(page_size, offset, ptep);
     }
-    virtual void* alloc(size_t size, uintptr_t offset) override {
-        return _file->get_page(_start + offset, offset + _map_offset, size);
+    virtual void* alloc(size_t size, uintptr_t offset, hw_ptep ptep) override {
+        return _file->get_page(offset + _map_offset, size, ptep);
     }
-    virtual void free(void *addr, uintptr_t offset) override {
-        free(addr, page_size, offset);
+    virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
+        free(addr, page_size, offset, ptep);
     }
-    virtual void free(void *addr, size_t size, uintptr_t offset) override {
-        _file->put_page(addr, _start + offset, offset + _map_offset, size);
-    }
-
-    virtual void set_addr(uintptr_t addr) override {
-        _start = addr;
+    virtual void free(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
+        _file->put_page(addr, offset + _map_offset, size, ptep);
     }
 
     void finalize() {
@@ -970,11 +941,10 @@ public:
 };
 
 // In the general case, we expect only one element in the list.
-static std::unordered_multimap<void *, uintptr_t> shared_fs_maps;
+static std::unordered_multimap<void *, hw_ptep> shared_fs_maps;
 // We need to reference count the buffer, but first we need to store the
 // buffer somewhere we can find
 static std::unordered_map<void *, unsigned int> shared_fs_buf_refcnt;
-
 // Can't use the vma_list_mutex, because if we do, we can have a deadlock where
 // we call into the filesystem to read data with the vma_list_mutex held - because
 // we do that for complex operate operations, and if the filesystem decides to evict
@@ -1003,21 +973,21 @@ static bool fs_buf_put(void *buf_addr)
     return false;
 }
 
-void add_mapping(void *buf_addr, uintptr_t off, uintptr_t vaddr)
+void add_mapping(void *buf_addr, uintptr_t off, hw_ptep ptep)
 {
     WITH_LOCK(shared_fs_mutex) {
-        shared_fs_maps.insert(std::make_pair(buf_addr + off, vaddr));
+        shared_fs_maps.insert(std::make_pair(buf_addr + off, ptep));
         fs_buf_get(buf_addr);
     }
 }
 
-bool remove_mapping(void *buf_addr, void *paddr, uintptr_t addr)
+bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep)
 {
     WITH_LOCK(shared_fs_mutex) {
         auto buf = shared_fs_maps.equal_range(paddr);
         for (auto it = buf.first; it != buf.second; it++) {
-            auto v = (*it).second;
-            if (v == addr) {
+            auto stored = (*it).second;
+            if (stored == ptep) {
                 shared_fs_maps.erase(it);
                 break;
             }
@@ -1082,7 +1052,14 @@ ulong populate_vma(vma *vma, void *v, size_t size)
     return total;
 }
 
-TRACEPOINT(trace_mmu_invalidate, "addr=%p, vaddr=%p", void *, uintptr_t);
+void clear_ptes(std::unordered_multimap<void *, hw_ptep>::iterator start,  std::unordered_multimap<void *, hw_ptep>::iterator end)
+{
+    for (auto it = start; it != end; it++) {
+        hw_ptep ptep = (*it).second;
+        ptep.write(make_empty_pte());
+    }
+}
+
 void unmap_address(void *addr, size_t size)
 {
     size = align_up(size, page_size);
@@ -1091,14 +1068,11 @@ void unmap_address(void *addr, size_t size)
         for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
             addr = reinterpret_cast<void*>(a);
             auto buf = shared_fs_maps.equal_range(addr);
-            for (auto it = buf.first; it != buf.second; it++) {
-                auto vaddr = (*it).second;
-                trace_mmu_invalidate(addr, vaddr);
-                operate_range(page_out(), (void *)vaddr, page_size);
-            }
+            clear_ptes(buf.first, buf.second);
             shared_fs_maps.erase(addr);
         }
     }
+    tlb_flush();
 }
 
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
@@ -1251,7 +1225,6 @@ vma::~vma()
 void vma::set(uintptr_t start, uintptr_t end)
 {
     _range = addr_range(align_down(start), align_up(end));
-    _page_ops->set_addr(start);
 }
 
 void vma::protect(unsigned perm)
@@ -1666,7 +1639,7 @@ std::unique_ptr<file_vma> shm_file::mmap(addr_range range, unsigned flags, unsig
     return map_file_mmap(this, range, flags, perm, offset);
 }
 
-void* shm_file::get_page(uintptr_t start, uintptr_t offset, size_t size)
+void* shm_file::get_page(uintptr_t offset, size_t size, hw_ptep ptep)
 {
     uintptr_t hp_off = ::align_down(offset, huge_page_size);
     void *addr;
@@ -1684,7 +1657,7 @@ void* shm_file::get_page(uintptr_t start, uintptr_t offset, size_t size)
     return static_cast<char*>(addr) + offset - hp_off;
 }
 
-void shm_file::put_page(void *addr, uintptr_t start, uintptr_t offset, size_t size) {}
+void shm_file::put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) {}
 
 shm_file::shm_file(size_t size, int flags) : special_file(flags, DTYPE_UNSPEC), _size(size) {}
 

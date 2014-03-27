@@ -82,6 +82,7 @@ public:
     static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
     // no longer using this as a page table
     pt_element* release() { return p; }
+    bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
 private:
     hw_ptep(pt_element* ptep) : p(ptep) {}
     pt_element* p;

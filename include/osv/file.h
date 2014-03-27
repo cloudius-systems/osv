@@ -49,6 +49,7 @@
 #include <osv/addr_range.hh>
 #include <osv/rcu.hh>
 #include <osv/error.h>
+#include "arch-mmu.hh"
 
 #endif
 
@@ -96,8 +97,8 @@ struct file {
 	virtual std::unique_ptr<mmu::file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) {
 	    throw make_error(ENODEV);
 	}
-	virtual void* get_page(uintptr_t start, uintptr_t offset, size_t size) { throw make_error(ENOSYS);}
-	virtual void put_page(void *addr, uintptr_t start, uintptr_t offset, size_t size) { throw make_error(ENOSYS);}
+	virtual void* get_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep) { throw make_error(ENOSYS); }
+	virtual void put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep) { throw make_error(ENOSYS); }
 
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */

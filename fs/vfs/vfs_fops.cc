@@ -13,6 +13,7 @@
 #include <fs/vfs/vfs.h>
 #include <osv/vfs_file.hh>
 #include <osv/mmu.hh>
+#include "arch-mmu.hh"
 
 vfs_file::vfs_file(unsigned flags)
 	: file(flags, DTYPE_VNODE)
@@ -141,7 +142,7 @@ int vfs_file::chmod(mode_t mode)
 // eviction that will hold the mmu-side lock that protects the mappings
 // Always follow that order. We however can't just get rid of the mmu-side lock,
 // because not all invalidations will be synchronous.
-void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
+void* vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep)
 {
 	assert(size == mmu::page_size);
 
@@ -169,12 +170,12 @@ void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 	assert(VOP_MAP(vp, fp, data) == 0);
 	vn_unlock(vp);
 
-	mmu::add_mapping(io.iov_base, map_data.buf_off, start);
+	mmu::add_mapping(io.iov_base, map_data.buf_off, ptep);
 	assert((reinterpret_cast<uintptr_t>(io.iov_base) & (mmu::page_size - 1)) == 0);
 	return io.iov_base + map_data.buf_off;
 }
 
-void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t off, size_t size)
+void vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)
 {
 	assert(size == mmu::page_size);
 
@@ -198,11 +199,10 @@ void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t off, size_t size)
 	// we call it again, with the iov update. (automatically done after this
 	// call) Usually it won't be, so we'll do only one call.
 	assert(VOP_UNMAP(vp, fp, &data) == 0);
-	if (mmu::remove_mapping(io.iov_base, addr, start)) {
+	if (mmu::remove_mapping(io.iov_base, addr, ptep)) {
 		assert(VOP_UNMAP(vp, fp, &data) == 0);
 	}
 	vn_unlock(vp);
-
 }
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)

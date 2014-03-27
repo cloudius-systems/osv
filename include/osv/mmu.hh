@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <memory>
 #include <osv/mmu-defs.hh>
+#include "arch-mmu.hh"
 
 struct exception_frame;
 class balloon;
@@ -141,8 +142,8 @@ public:
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
-    virtual void* get_page(uintptr_t start, uintptr_t offset, size_t size) override;
-    virtual void put_page(void *addr, uintptr_t start, uintptr_t offset, size_t size) override;
+    virtual void* get_page(uintptr_t offset, size_t size, hw_ptep ptep) override;
+    virtual void put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -161,8 +162,8 @@ std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsign
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 void unmap_address(void *addr, size_t size);
-void add_mapping(void *buf_addr, uintptr_t offset, uintptr_t vaddr);
-bool remove_mapping(void *buf_addr, void *paddr, uintptr_t addr);
+void add_mapping(void *buf_addr, uintptr_t offset, hw_ptep ptep);
+bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep);
 
 phys virt_to_phys(void *virt);
 void* phys_to_virt(phys pa);

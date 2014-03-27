@@ -22,8 +22,8 @@ public:
     virtual int close() override;
     virtual int chmod(mode_t mode) override;
     virtual std::unique_ptr<mmu::file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
-    virtual void* get_page(uintptr_t start, uintptr_t offset, size_t size);
-    virtual void put_page(void *addr, uintptr_t start, uintptr_t offset, size_t size);
+    virtual void* get_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep);
+    virtual void put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep);
 };
 
 #endif /* VFS_FILE_HH_ */
