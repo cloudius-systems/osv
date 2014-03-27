@@ -22,6 +22,7 @@ class StandardOSvTest(Test):
 
 blacklist = [
     "tst-fsx.so" # Test fails
+  , "tst-dns-resolver.so"
 ]
 
 java_test = Test('java', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
