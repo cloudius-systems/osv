@@ -983,7 +983,7 @@ int
 dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size, bool map)
 {
 	dmu_buf_t **dbp;
-	int i, err;
+	int err;
 	struct uio_mapper *uio_map = (struct uio_mapper *)uio;
 	struct iovec *iov;
 	int tocpy;
@@ -1013,11 +1013,19 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size, bool map)
 		// FIXME: Should be the ARC size, but that is private. They should be the same.
 		uio_map->buf_size = db->db_size;
 		uio_map->buf_off = bufoff;
-		iov = uio->uio_iov + i;
+		iov = uio->uio_iov;
 		iov->iov_base = (char *)dbuf_abuf->b_data;
 		iov->iov_len = tocpy;
 	} else {
-		arc_unshare_buf(dbi->db_buf);
+		iov = uio->uio_iov;
+		// empty iov is a query operation.
+		if (iov->iov_base) {
+			assert(iov->iov_base == (char *)dbuf_abuf->b_data);
+			arc_unshare_buf(dbi->db_buf);
+		} else {
+			iov->iov_base = (char *)dbuf_abuf->b_data;
+			iov->iov_len = db->db_size;
+		}
 	}
 
 	dmu_buf_rele_array(dbp, numbufs, FTAG);

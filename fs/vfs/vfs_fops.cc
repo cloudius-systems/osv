@@ -137,6 +137,10 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
+// Locking: vn_lock will call into the filesystem, and that can trigger an
+// eviction that will hold the mmu-side lock that protects the mappings
+// Always follow that order. We however can't just get rid of the mmu-side lock,
+// because not all invalidations will be synchronous.
 void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 {
 	assert(size == mmu::page_size);
@@ -165,7 +169,8 @@ void* vfs_file::get_page(uintptr_t start, uintptr_t off, size_t size)
 	assert(VOP_MAP(vp, fp, data) == 0);
 	vn_unlock(vp);
 
-	mmu::add_mapping(map_data.buffer, start);
+	mmu::add_mapping(io.iov_base, map_data.buf_off, start);
+	assert((reinterpret_cast<uintptr_t>(io.iov_base) & (mmu::page_size - 1)) == 0);
 	return io.iov_base + map_data.buf_off;
 }
 
@@ -176,25 +181,35 @@ void vfs_file::put_page(void *addr, uintptr_t start, uintptr_t off, size_t size)
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 
+	iovec io;
+	io.iov_base = nullptr;
+	io.iov_len = 0;
+
 	uio data;
-	data.uio_iov = nullptr;
+	data.uio_iov = &io;
 	data.uio_iovcnt = 0;
 	data.uio_offset = off_t(off);
 	data.uio_resid = mmu::page_size;
 	data.uio_rw = UIO_READ;
 
 	vn_lock(vp);
+	// This first call will only query the buffer address. The result will be
+	// in uio_iov.iov_base. If this is the last reference to the buffer, then
+	// we call it again, with the iov update. (automatically done after this
+	// call) Usually it won't be, so we'll do only one call.
 	assert(VOP_UNMAP(vp, fp, &data) == 0);
+	if (mmu::remove_mapping(io.iov_base, addr, start)) {
+		assert(VOP_UNMAP(vp, fp, &data) == 0);
+	}
 	vn_unlock(vp);
 
-	mmu::remove_mapping(addr, start);
 }
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
-	if ((perm & mmu::perm_write) || (!vp->v_op->vop_map)) {
+	if ((perm & mmu::perm_write) || (!vp->v_op->vop_map) || (vp->v_size < (off_t)mmu::page_size)) {
 		return mmu::default_file_mmap(this, range, flags, perm, offset);
 	}
 	// Don't know what to do if we have one but not the other

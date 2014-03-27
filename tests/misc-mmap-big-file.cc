@@ -26,6 +26,9 @@
 #define PAGE_SIZE (4 << 10)
 #define FNAME "/tmp/mmap-file-test"
 #define FNAMEANON "/tmp/mmap-file-anon"
+#define FNAMESMALL "/tmp/mmap-file-test-small"
+#define FNAMESMALL2 "/tmp/mmap-file-test-small2"
+#define FNAMESMALL3 "/tmp/mmap-file-test-small3"
 
 char buf[PAGE_SIZE];
 
@@ -62,6 +65,7 @@ void map_pass(const char *phase, unsigned char *addr, unsigned long passes,
 }
 
 char safe_buffers[PAGE_SIZE][2];
+char test_string[] = "test_string";
 
 int main(int ac, char** av)
 {
@@ -69,6 +73,22 @@ int main(int ac, char** av)
     assert(fd >= 0);
     int fdanon = open(FNAMEANON, O_RDWR | O_CREAT, 0666);
     assert(fdanon >= 0);
+    int fdsmall = open(FNAMESMALL, O_RDWR | O_CREAT, 0666);
+    assert(fdsmall >= 0);
+
+    int fdsmall2 = open(FNAMESMALL2, O_RDWR | O_CREAT, 0666);
+    assert(fdsmall2 >= 0);
+
+    int fdsmall3 = open(FNAMESMALL3, O_RDWR | O_CREAT, 0666);
+    assert(fdsmall3 >= 0);
+
+    assert(write(fdsmall, test_string, sizeof(test_string)) == sizeof(test_string));
+
+    lseek(fdsmall2, PAGE_SIZE, SEEK_SET);
+    assert(write(fdsmall2, test_string, sizeof(test_string)) == sizeof(test_string));
+
+    lseek(fdsmall3, 128 << 10, SEEK_SET);
+    assert(write(fdsmall3, test_string, sizeof(test_string)) == sizeof(test_string));
 
     struct sysinfo sinfo;
     assert(sysinfo(&sinfo) == 0);
@@ -89,7 +109,33 @@ int main(int ac, char** av)
 
     close(fd);
     close(fdanon);
+    close(fdsmall);
+    close(fdsmall2);
+    close(fdsmall3);
     std::cout << "Write done\n";
+
+    fdsmall2 = open(FNAMESMALL2, O_RDONLY);
+    assert(fd >= 0);
+    void *retsmall2 = mmap(nullptr, 2 * PAGE_SIZE, PROT_READ, MAP_SHARED, fdsmall2, PAGE_SIZE);
+    assert(memcmp(test_string, retsmall2, sizeof(test_string)) == 0);
+
+    fdsmall3 = open(FNAMESMALL3, O_RDONLY);
+    assert(fd >= 0);
+    void *retsmall3 = mmap(nullptr, (128 << 10) + PAGE_SIZE, PROT_READ, MAP_SHARED, fdsmall3, 128 << 10);
+    assert(memcmp(test_string, retsmall3, sizeof(test_string)) == 0);
+
+    fdsmall = open(FNAMESMALL, O_RDONLY);
+    assert(fd >= 0);
+    void *retsmall = mmap(nullptr, PAGE_SIZE, PROT_READ, MAP_SHARED, fdsmall, 0);
+    assert(memcmp(test_string, retsmall, sizeof(test_string)) == 0);
+
+    munmap(retsmall, PAGE_SIZE);
+    munmap(retsmall2, PAGE_SIZE);
+    munmap(retsmall3, PAGE_SIZE);
+    close(fdsmall);
+    close(fdsmall2);
+    close(fdsmall3);
+    std::cout << "Small files ended OK\n";
 
     // We need to be careful with mappings in the edges of the file mapping. If we are not careful, invalidation will also
     // destroy adjacent mappings. It is hard for us to destroy a specific mapping, so what we are going to do is to map a
