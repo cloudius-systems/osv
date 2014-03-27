@@ -203,18 +203,18 @@ void flush_debug_buffer()
 
 extern "C" {
 
-    void debugf(const char *msg, ...)
+    void debugf(const char *fmt, ...)
     {
-        char fmt[512];
+        char msg[512];
 
         va_list argptr;
-        va_start(argptr, msg);
-        vsnprintf(fmt, 512, msg, argptr);
+        va_start(argptr, fmt);
+        vsnprintf(msg, 512, fmt, argptr);
         va_end(argptr);
 
-        fill_debug_buffer(fmt, strlen(msg));
+        fill_debug_buffer(msg, strlen(msg));
         if (verbose) {
-            console::write(fmt, strlen(msg));
+            console::write(msg, strlen(msg));
         }
     }
 
