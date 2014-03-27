@@ -17,6 +17,7 @@
 #include <osv/addr_range.hh>
 #include <unordered_map>
 #include <memory>
+#include <osv/mmu-defs.hh>
 
 struct exception_frame;
 class balloon;
@@ -27,51 +28,10 @@ typedef std::shared_ptr<balloon> balloon_ptr;
  */
 namespace mmu {
 
-constexpr uintptr_t page_size = 4096;
-constexpr int page_size_shift = 12; // log2(page_size)
-
-constexpr int pte_per_page = 512;
-constexpr int pte_per_page_shift = 9; // log2(pte_per_page)
-
-constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
-
-typedef uint64_t f_offset;
-
-static char* const phys_mem = reinterpret_cast<char*>(0xffffc00000000000);
-// area for debug allocations:
-static char* const debug_base = reinterpret_cast<char*>(0xffffe00000000000);
-
 constexpr inline unsigned pt_index(void *virt, unsigned level)
 {
     return (reinterpret_cast<ulong>(virt) >> (page_size_shift + level * pte_per_page_shift)) & (pte_per_page - 1);
 }
-
-enum {
-    perm_read = 1,
-    perm_write = 2,
-    perm_exec = 4,
-    perm_rx = perm_read | perm_exec,
-    perm_rw = perm_read | perm_write,
-    perm_rwx = perm_read | perm_write | perm_exec,
-};
-
-enum {
-    page_fault_prot  = 1ul << 0,
-    page_fault_write = 1ul << 1,
-    page_fault_user  = 1ul << 2,
-    page_fault_rsvd  = 1ul << 3,
-    page_fault_insn  = 1ul << 4,
-};
-
-enum {
-    mmap_fixed       = 1ul << 0,
-    mmap_populate    = 1ul << 1,
-    mmap_shared      = 1ul << 2,
-    mmap_uninitialized = 1ul << 3,
-    mmap_jvm_heap    = 1ul << 4,
-    mmap_small       = 1ul << 5,
-    mmap_jvm_balloon = 1ul << 6,
-};
 
 struct page_allocator;
 
@@ -204,7 +164,6 @@ void unmap_address(void *addr, size_t size);
 void add_mapping(void *buf_addr, uintptr_t offset, uintptr_t vaddr);
 bool remove_mapping(void *buf_addr, void *paddr, uintptr_t addr);
 
-typedef uint64_t phys;
 phys virt_to_phys(void *virt);
 void* phys_to_virt(phys pa);
 

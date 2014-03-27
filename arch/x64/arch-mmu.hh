@@ -9,7 +9,8 @@
 #define ARCH_MMU_HH_
 
 #include <osv/ilog2.hh>
-#include <osv/mmu.hh>
+#include <osv/types.h>
+#include <osv/mmu-defs.hh>
 
 namespace mmu {
 
