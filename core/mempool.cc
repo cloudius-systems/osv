@@ -690,14 +690,7 @@ void reclaimer::_do_reclaim()
 
     while (true) {
         WITH_LOCK(free_page_ranges_lock) {
-            _blocked.wait_until(free_page_ranges_lock,
-                // We should only try to shrink if there are available shrinkers.
-                // But if we have waiters, we need to wake up the reclaimer anyway.
-                // Of course, if there are no shrinkers we won't free anything. But
-                // we need to wake up to be able to at least notice that and OOM.
-                [=] { return _oom_blocked.has_waiters() ||
-                    (_can_shrink() && (pressure_level() != pressure::NORMAL)); }
-            );
+            _blocked.wait(free_page_ranges_lock);
             target = bytes_until_normal();
         }
 
