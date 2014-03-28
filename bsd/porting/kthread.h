@@ -26,6 +26,7 @@ kproc_create(void (*func)(void *), void *arg,
                     struct proc **newpp, int flags, int pages, const char *fmt, ...);
 
 struct proc *get_curproc(void);
+extern void thread_mark_emergency();
 __END_DECLS
 
 #define curproc (get_curproc())

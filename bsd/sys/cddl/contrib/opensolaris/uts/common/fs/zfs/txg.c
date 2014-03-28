@@ -368,6 +368,8 @@ txg_sync_thread(void *arg)
 	callb_cpr_t cpr;
 	uint64_t start, delta;
 
+	thread_mark_emergency();
+
 	txg_thread_enter(tx, &cpr);
 
 	start = delta = 0;
