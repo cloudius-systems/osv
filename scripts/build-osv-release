@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+build=./scripts/build-capstan-img
+
+$build cloudius/osv-base      mgmt.httpserver           "OSv base image for developers"
+$build cloudius/osv           default                   "OSv with shell for users"
+$build cloudius/osv-cassandra cassandra,mgmt.httpserver "Apache Cassandra/OSv"
+$build cloudius/osv-tomcat    tomcat,mgmt.httpserver    "Apache Tomcat/OSv"
+$build cloudius/osv-iperf     iperf,mgmt.httpserver     "iperf/OSv"
