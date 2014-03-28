@@ -1,0 +1,42 @@
+#!/bin/sh
+
+program=$(basename $0)
+
+set -e
+
+if [ $# -lt 2 ]; then
+    echo "usage: $program [name] [image] [description]"
+    exit 1
+fi
+
+name=$1
+image=$2
+description=$3
+
+version=$(scripts/osv-version.sh)
+now=$(date +"%Y-%m-%dT%R:%S")
+
+out=build/capstan/$name
+qemuimage=build/release/usr.img
+vboximage=build/release/usr.vdi
+index=$out/index.yaml
+build="make image=$image"
+
+mkdir -p $out
+
+echo "==> Building '$name'..."
+
+echo "format_version: 1" > $index
+echo "version: $version" >> $index
+echo "created: $now" >> $index
+echo "description: $description" >> $index
+echo "build: $build" >> $index
+
+$build
+
+qemu-img convert -O vdi $qemuimage $vboximage
+
+gzip < $qemuimage > $out/$(basename $name).qemu.gz
+gzip < $vboximage > $out/$(basename $name).vbox.gz
+
+echo "==> '$name' image built to '$out'."
