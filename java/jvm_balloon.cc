@@ -283,6 +283,17 @@ void jvm_balloon_shrinker::_thread_loop()
         WITH_LOCK(balloons_lock) {
             _blocked.wait_until(balloons_lock, [&] { return (_pending.load() + _pending_release.load()) > 0; });
 
+            if (balloons.size() >= _soft_max_balloons) {
+                memory::wake_reclaimer();
+            }
+
+            if (_pending_release.load() != 0) {
+                int extra = balloons.size() - _soft_max_balloons;
+                if (extra > 0) {
+                    _pending_release.fetch_add(extra);
+                }
+            }
+
             while (_pending_release.load()) {
                 if (balloons.empty()) {
                     _pending_release.store(0);
@@ -410,6 +421,12 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
     auto rtinst = env->CallStaticObjectMethod(rtclass, rt);
     auto total_memory = env->GetMethodID(rtclass, "maxMemory", "()J");
     _total_heap = env->CallLongMethod(rtinst, total_memory);
+    // As the name implies, this is a soft maximum. We are allowed to go over
+    // it, but as soon as we need to give memory back to the JVM, we will go
+    // down towards number. This is because if the JVM is very short on
+    // memory, it can quickly fill up the new balloon and may not have time
+    // for a new GC cycle.
+    _soft_max_balloons = (_total_heap / ( 2 * balloon_size)) - 1;
 
     auto monmethod = env->GetStaticMethodID(monitor, "MonitorGC", "(J)V");
     env->CallStaticVoidMethod(monitor, monmethod, this);

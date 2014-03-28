@@ -43,6 +43,7 @@ private:
     int _attach(JNIEnv **env);
     void _detach(int status);
     size_t _total_heap;
+    unsigned int _soft_max_balloons;
     sched::thread *_thread;
     condvar _blocked;
     std::atomic<size_t> _pending = {0};

@@ -143,6 +143,8 @@ private:
 
 bool throttling_needed();
 
+void wake_reclaimer();
+
 class reclaimer {
 public:
     reclaimer ();

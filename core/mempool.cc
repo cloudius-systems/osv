@@ -441,6 +441,11 @@ extern "C" void thread_mark_emergency()
 reclaimer reclaimer_thread
     __attribute__((init_priority((int)init_prio::reclaimer)));
 
+void wake_reclaimer()
+{
+    reclaimer_thread.wake();
+}
+
 static void on_free(size_t mem)
 {
     free_memory.fetch_add(mem);
