@@ -382,7 +382,7 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
     auto rtclass = env->FindClass("java/lang/Runtime");
     auto rt = env->GetStaticMethodID(rtclass , "getRuntime", "()Ljava/lang/Runtime;");
     auto rtinst = env->CallStaticObjectMethod(rtclass, rt);
-    auto total_memory = env->GetMethodID(rtclass, "totalMemory", "()J");
+    auto total_memory = env->GetMethodID(rtclass, "maxMemory", "()J");
     _total_heap = env->CallLongMethod(rtinst, total_memory);
 
     auto monmethod = env->GetStaticMethodID(monitor, "MonitorGC", "(J)V");
