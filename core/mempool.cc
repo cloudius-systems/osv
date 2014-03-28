@@ -509,7 +509,7 @@ ssize_t reclaimer::bytes_until_normal(pressure curr)
 
 void oom()
 {
-    abort("Out of memory: could not reclaim any further");
+    abort("Out of memory: could not reclaim any further. Current memory: %d Kb", stats::free() >> 10);
 }
 
 void reclaimer::wait_for_minimum_memory()
