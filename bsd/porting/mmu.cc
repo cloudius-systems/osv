@@ -35,6 +35,11 @@ int vm_paging_needed(void)
     return 0;
 }
 
+int vm_throttling_needed(void)
+{
+    return memory::throttling_needed();
+}
+
 void mmu_unmap(void *addr, size_t size)
 {
     mmu::unmap_address(addr, size);

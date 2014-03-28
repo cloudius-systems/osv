@@ -63,6 +63,15 @@ void jvm_balloon_adjust_memory(size_t threshold)
         balloon_shrinker->request_memory(1);
     }
 }
+
+bool throttling_needed()
+{
+    if (!balloon_shrinker) {
+        return false;
+    }
+
+    return balloon_shrinker->ballooning();
+}
 };
 
 class balloon {

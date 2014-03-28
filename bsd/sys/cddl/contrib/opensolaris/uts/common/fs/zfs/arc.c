@@ -2621,6 +2621,11 @@ arc_evict_needed(arc_buf_contents_t type)
 	if (arc_reclaim_needed())
 		return (1);
 
+#ifdef __OSV__
+	if (vm_throttling_needed())
+		return (1);
+#endif
+
 	return (arc_size > arc_c);
 }
 

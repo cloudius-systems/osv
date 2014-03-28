@@ -141,6 +141,8 @@ private:
                           boost::intrusive::constant_time_size<false>> _waiters;
 };
 
+bool throttling_needed();
+
 class reclaimer {
 public:
     reclaimer ();
