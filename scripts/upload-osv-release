@@ -1,0 +1,3 @@
+#!/bin/sh
+
+s3cmd sync -P --delete-removed build/capstan/ s3://osv.capstan/
