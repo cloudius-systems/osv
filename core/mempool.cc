@@ -703,7 +703,10 @@ void reclaimer::_do_reclaim()
             // to manipulate the free_page_ranges structure.  Executing the
             // shrinkers with the lock held would result in a deadlock.
             for (auto s : _shrinkers) {
-                size_t freed = s->request_memory(target);
+                // FIXME: If needed, in the future we can introduce another
+                // intermediate threshold that will put is into hard mode even
+                // before we have waiters.
+                size_t freed = s->request_memory(target, _oom_blocked.has_waiters());
                 trace_memory_reclaim(s->name().c_str(), target, freed);
             }
         }

@@ -111,7 +111,7 @@ class shrinker {
 public:
     explicit shrinker(std::string name);
     virtual ~shrinker() {}
-    virtual size_t request_memory(size_t n) = 0;
+    virtual size_t request_memory(size_t n, bool hard) = 0;
     std::string name() { return _name; };
 
     bool should_shrink(ssize_t target) { return _enabled && (target > 0); }
