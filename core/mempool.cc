@@ -450,7 +450,7 @@ static void on_alloc(size_t mem)
 {
     free_memory.fetch_sub(mem);
     jvm_balloon_adjust_memory(min_emergency_pool_size);
-    if (stats::free() < watermark_lo) {
+    if ((stats::free() + stats::jvm_heap()) < watermark_lo) {
         reclaimer_thread.wake();
     }
 }
