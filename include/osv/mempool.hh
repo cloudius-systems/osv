@@ -155,6 +155,7 @@ public:
     friend class reclaimer_waiters;
 private:
     void _do_reclaim();
+    void _shrinker_loop(size_t target, std::function<bool ()> hard);
     // We could just check if the semaphore's wait_list is empty. But since we
     // don't control the internals of the primitives we use for the
     // implementation of semaphore, we are concerned that unlocked access may

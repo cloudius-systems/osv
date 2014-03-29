@@ -683,6 +683,26 @@ bool reclaimer::_can_shrink()
     return false;
 }
 
+void reclaimer::_shrinker_loop(size_t target, std::function<bool ()> hard)
+{
+    // FIXME: This simple loop works only because we have a single shrinker
+    // When we have more, we need to probe them and decide how much to take from
+    // each of them.
+    WITH_LOCK(_shrinkers_mutex) {
+        // We execute this outside the free_page_ranges lock, so the threads
+        // freeing memory (or allocating, for that matter) will have the chance
+        // to manipulate the free_page_ranges structure.  Executing the
+        // shrinkers with the lock held would result in a deadlock.
+        for (auto s : _shrinkers) {
+            // FIXME: If needed, in the future we can introduce another
+            // intermediate threshold that will put is into hard mode even
+            // before we have waiters.
+            size_t freed = s->request_memory(target, hard());
+            trace_memory_reclaim(s->name().c_str(), target, freed);
+        }
+    }
+}
+
 void reclaimer::_do_reclaim()
 {
     ssize_t target;
@@ -694,22 +714,20 @@ void reclaimer::_do_reclaim()
             target = bytes_until_normal();
         }
 
-        // FIXME: This simple loop works only because we have a single shrinker
-        // When we have more, we need to probe them and decide how much to take from
-        // each of them.
-        WITH_LOCK(_shrinkers_mutex) {
-            // We execute this outside the free_page_ranges lock, so the threads
-            // freeing memory (or allocating, for that matter) will have the chance
-            // to manipulate the free_page_ranges structure.  Executing the
-            // shrinkers with the lock held would result in a deadlock.
-            for (auto s : _shrinkers) {
-                // FIXME: If needed, in the future we can introduce another
-                // intermediate threshold that will put is into hard mode even
-                // before we have waiters.
-                size_t freed = s->request_memory(target, _oom_blocked.has_waiters());
-                trace_memory_reclaim(s->name().c_str(), target, freed);
+        // This means that we are currently ballooning, we should
+        // try to serve the waiters from temporary memory without
+        // going on hard mode. A big batch of more memory is likely
+        // in its way.
+        if (_oom_blocked.has_waiters() && throttling_needed()) {
+            _shrinker_loop(target, [] { return false; });
+            WITH_LOCK(free_page_ranges_lock) {
+                if (_oom_blocked.wake_waiters()) {
+                        continue;
+                }
             }
         }
+
+        _shrinker_loop(target, [this] { return _oom_blocked.has_waiters(); });
 
         WITH_LOCK(free_page_ranges_lock) {
             if (target > 0) {
