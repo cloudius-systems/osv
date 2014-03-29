@@ -22,6 +22,12 @@ private:
     struct eventhandler_entry_generic *_ee;
 };
 
+class arc_shrinker : public memory::shrinker {
+public:
+    explicit arc_shrinker();
+    size_t request_memory(size_t s);
+};
+
 bsd_shrinker::bsd_shrinker(struct eventhandler_entry_generic *ee)
     : shrinker("BSD"), _ee(ee)
 {
@@ -31,6 +37,17 @@ size_t bsd_shrinker::request_memory(size_t s)
 {
     // Return the amount of released memory.
     return _ee->func(_ee->ee.ee_arg);
+}
+
+arc_shrinker::arc_shrinker()
+    : shrinker("ARC")
+{
+}
+
+extern "C" size_t arc_lowmem(void *arg, int howto);
+size_t arc_shrinker::request_memory(size_t s)
+{
+    return arc_lowmem(nullptr, 0);
 }
 
 void bsd_shrinker_init(void)
@@ -44,7 +61,13 @@ void bsd_shrinker_init(void)
         debug("\tBSD shrinker found: %p\n",
                 ((struct eventhandler_entry_generic *)ep)->func);
 
-        new bsd_shrinker((struct eventhandler_entry_generic *)ep);
+        auto *_ee = (struct eventhandler_entry_generic *)ep;
+
+        if ((void *)_ee->func == (void *)arc_lowmem) {
+            new arc_shrinker();
+        } else {
+            new bsd_shrinker(_ee);
+        }
     }
     EHL_UNLOCK(list);
 

@@ -3856,7 +3856,7 @@ static kmutex_t arc_lowmem_lock;
 #ifdef _KERNEL
 static eventhandler_tag arc_event_lowmem = NULL;
 
-static size_t
+size_t
 arc_lowmem(void *arg __unused2, int howto __unused2)
 {
 	uint64_t old_arcsize, new_arcsize;
