@@ -952,23 +952,23 @@ public:
 class map_file_page_mmap : public page_allocator {
 private:
     file* _file;
-    off_t _map_offset;
+    off_t _foffset;
 
 public:
-    map_file_page_mmap(file *file, off_t off) : _file(file), _map_offset(off) {}
+    map_file_page_mmap(file *file, off_t off) : _file(file), _foffset(off) {}
     virtual ~map_file_page_mmap() {};
 
     virtual mmupage alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
         return alloc(page_size, offset, ptep, write);
     }
     virtual mmupage alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
-        return _file->get_page(offset + _map_offset, size, ptep);
+        return _file->get_page(offset + _foffset, size, ptep);
     }
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
         free(addr, page_size, offset, ptep);
     }
     virtual void free(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
-        _file->put_page(addr, offset + _map_offset, size, ptep);
+        _file->put_page(addr, offset + _foffset, size, ptep);
     }
 
     void finalize() {
