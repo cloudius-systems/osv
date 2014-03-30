@@ -1443,7 +1443,6 @@ error jvm_balloon_vma::sync(uintptr_t start, uintptr_t end)
 
 void jvm_balloon_vma::fault(uintptr_t fault_addr, exception_frame *ef)
 {
-    std::lock_guard<mutex> guard(vma_list_mutex);
     if (jvm_balloon_fault(_balloon, ef, this)) {
         return;
     }
