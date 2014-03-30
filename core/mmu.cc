@@ -1535,7 +1535,7 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
 }
 
 file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, page_allocator* page_ops)
-    : vma(range, perm, shared ? mmap_small : 0, !shared, page_ops)
+    : vma(range, perm, mmap_small, !shared, page_ops)
     , _file(file)
     , _offset(offset)
     , _shared(shared)
