@@ -142,7 +142,7 @@ int vfs_file::chmod(mode_t mode)
 // eviction that will hold the mmu-side lock that protects the mappings
 // Always follow that order. We however can't just get rid of the mmu-side lock,
 // because not all invalidations will be synchronous.
-void* vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep)
+mmu::mmupage vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, bool write, bool shared)
 {
 	assert(size == mmu::page_size);
 

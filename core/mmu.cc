@@ -953,16 +953,17 @@ class map_file_page_mmap : public page_allocator {
 private:
     file* _file;
     off_t _foffset;
+    bool _shared;
 
 public:
-    map_file_page_mmap(file *file, off_t off) : _file(file), _foffset(off) {}
+    map_file_page_mmap(file *file, off_t off, bool shared) : _file(file), _foffset(off), _shared(shared) {}
     virtual ~map_file_page_mmap() {};
 
     virtual mmupage alloc(uintptr_t offset, hw_ptep ptep, bool write) override {
         return alloc(page_size, offset, ptep, write);
     }
     virtual mmupage alloc(size_t size, uintptr_t offset, hw_ptep ptep, bool write) override {
-        return _file->get_page(offset + _foffset, size, ptep);
+        return _file->get_page(offset + _foffset, size, ptep, write, _shared);
     }
     virtual void free(void *addr, uintptr_t offset, hw_ptep ptep) override {
         free(addr, page_size, offset, ptep);
@@ -1131,7 +1132,7 @@ std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsign
 
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-    return std::unique_ptr<file_vma>(new file_vma(range, perm, flags, file, offset, new map_file_page_mmap(file, offset)));
+    return std::unique_ptr<file_vma>(new file_vma(range, perm, flags, file, offset, new map_file_page_mmap(file, offset, flags & mmap_shared)));
 }
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -1673,7 +1674,7 @@ std::unique_ptr<file_vma> shm_file::mmap(addr_range range, unsigned flags, unsig
     return map_file_mmap(this, range, flags, perm, offset);
 }
 
-void* shm_file::get_page(uintptr_t offset, size_t size, hw_ptep ptep)
+mmupage shm_file::get_page(uintptr_t offset, size_t size, hw_ptep ptep, bool write, bool shared)
 {
     uintptr_t hp_off = ::align_down(offset, huge_page_size);
     void *addr;
