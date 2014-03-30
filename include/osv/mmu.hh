@@ -90,7 +90,7 @@ public:
 
 class file_vma : public vma {
 public:
-    file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, page_allocator *page_ops);
+    file_vma(addr_range range, unsigned perm, unsigned flags, fileref file, f_offset offset, page_allocator *page_ops);
     ~file_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
@@ -99,7 +99,6 @@ private:
     f_offset offset(uintptr_t addr);
     fileref _file;
     f_offset _offset;
-    bool _shared;
 };
 
 ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon_ptr b);

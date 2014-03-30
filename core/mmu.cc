@@ -1091,12 +1091,12 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
 
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-    return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page_read(file, offset)));
+    return std::unique_ptr<file_vma>(new file_vma(range, perm, flags, file, offset, new map_file_page_read(file, offset)));
 }
 
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-    return std::unique_ptr<file_vma>(new file_vma(range, perm, file, offset, flags & mmu::mmap_shared, new map_file_page_mmap(file, offset)));
+    return std::unique_ptr<file_vma>(new file_vma(range, perm, flags, file, offset, new map_file_page_mmap(file, offset)));
 }
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -1534,11 +1534,10 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
     return 0;
 }
 
-file_vma::file_vma(addr_range range, unsigned perm, fileref file, f_offset offset, bool shared, page_allocator* page_ops)
-    : vma(range, perm, mmap_small, !shared, page_ops)
+file_vma::file_vma(addr_range range, unsigned perm, unsigned flags, fileref file, f_offset offset, page_allocator* page_ops)
+    : vma(range, perm, flags | mmap_small, !(flags & mmap_shared), page_ops)
     , _file(file)
     , _offset(offset)
-    , _shared(shared)
 {
     int err = validate_perm(perm);
 
@@ -1596,7 +1595,7 @@ private:
 
 error file_vma::sync(uintptr_t start, uintptr_t end)
 {
-    if (!_shared)
+    if (!has_flags(mmap_shared))
         return make_error(ENOMEM);
     start = std::max(start, _range.start());
     end = std::min(end, _range.end());
@@ -1617,7 +1616,7 @@ int file_vma::validate_perm(unsigned perm)
         return EACCES;
     }
     if (perm & perm_write) {
-        if (_shared && !(_file->f_flags & FWRITE)) {
+        if (has_flags(mmap_shared) && !(_file->f_flags & FWRITE)) {
             return EACCES;
         }
     }
