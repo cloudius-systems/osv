@@ -226,6 +226,20 @@ class osv_memory(gdb.Command):
         print ("Free Memory:  %d Bytes (%.2f%%)" % 
                (freemem, (freemem*100.0/memsize)))
 
+class osv_waiters(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv waiters',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, from_tty):
+        reclaimer = gdb.lookup_global_symbol("memory::reclaimer_thread")
+        waiters = reclaimer.value()["_oom_blocked"]["_waiters"]
+        waiters_list = intrusive_list(waiters)
+        gdb.write('waiters:\n')
+        for w in waiters_list:
+            t = w["owner"].dereference().cast(thread_type)["_id"]
+            print t
+            gdb.write("Thread %d waits for %d Bytes\n" % (t, int(w["bytes"])))
+
 #
 # Returns a u64 value from a stats given a field name.
 #
@@ -1215,6 +1229,7 @@ class osv_info_virtio(gdb.Command):
 osv()
 osv_heap()
 osv_memory()
+osv_waiters()
 osv_mmap()
 osv_zfs()
 osv_syms()
