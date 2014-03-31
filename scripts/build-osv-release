@@ -9,3 +9,4 @@ $build cloudius/osv           default                   "OSv with shell for user
 $build cloudius/osv-cassandra cassandra,mgmt.httpserver "Apache Cassandra/OSv"
 $build cloudius/osv-tomcat    tomcat,mgmt.httpserver    "Apache Tomcat/OSv"
 $build cloudius/osv-iperf     iperf,mgmt.httpserver     "iperf/OSv"
+$build cloudius/osv-memcached-opt osv-memcached,mgmt.httpserver "OSv memcached server (optimized)"
