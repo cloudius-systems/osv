@@ -289,3 +289,120 @@ BOOST_AUTO_TEST_CASE(test_is_pending)
     BOOST_REQUIRE(task.cancel());
     BOOST_REQUIRE(!task.is_pending());
 }
+
+BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_waits_for_callback)
+{
+    std::atomic<int> counter {0};
+    std::promise<bool> proceed;
+
+    mutex lock;
+
+    serial_timer_task task(lock, [&] (serial_timer_task& timer) {
+            proceed.set_value(true);
+
+            std::this_thread::sleep_for(10_ms);
+            WITH_LOCK(lock) {
+                counter++;
+                if (timer.try_fire()) {
+                    std::cerr << "Should have been cancelled";
+                    abort();
+                }
+            }
+    });
+
+    WITH_LOCK(lock) {
+        task.reschedule(1_ms);
+    }
+
+    assert_resolves(proceed, 100_ms);
+
+    WITH_LOCK(lock) {
+        task.cancel_sync();
+        BOOST_REQUIRE(counter == 1);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_waits_for_many_callbacks)
+{
+    std::atomic<int> counter {0};
+    std::promise<bool> proceed;
+
+    mutex lock;
+
+    serial_timer_task task(lock, [&] (serial_timer_task& timer) {
+        if (counter++ == 0) {
+            WITH_LOCK(lock) {
+                timer.reschedule(1_ms);
+            }
+        } else {
+            proceed.set_value(true);
+        }
+
+        std::this_thread::sleep_for(10_ms);
+
+        WITH_LOCK(lock) {
+            counter++;
+            if (timer.try_fire()) {
+                std::cerr << "Should have been cancelled";
+                abort();
+            }
+        }
+    });
+
+    WITH_LOCK(lock) {
+        task.reschedule(1_ms);
+    }
+
+    assert_resolves(proceed, 100_ms);
+
+    WITH_LOCK(lock) {
+        task.cancel_sync();
+        BOOST_REQUIRE(counter == 4);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_does_not_wait_if_callback_has_not_yet_fired)
+{
+    mutex lock;
+
+    serial_timer_task task(lock, [&] (serial_timer_task& timer) {
+        abort();
+    });
+
+    WITH_LOCK(lock) {
+        task.reschedule(2_s);
+    }
+
+    WITH_LOCK(lock) {
+        task.cancel_sync();
+    }
+}
+
+BOOST_AUTO_TEST_CASE(test_serial_timer__callback_fires_if_not_cancelled)
+{
+    std::promise<bool> proceed;
+    int counter = 0;
+    mutex lock;
+
+    serial_timer_task task(lock, [&] (serial_timer_task& timer) {
+        proceed.set_value(true);
+
+        WITH_LOCK(lock) {
+            if (timer.try_fire()) {
+                counter++;
+            }
+        }
+    });
+
+    WITH_LOCK(lock) {
+        task.reschedule(1_ms);
+    }
+
+    assert_resolves(proceed, 100_ms);
+
+    WITH_LOCK(lock) {
+        task.cancel_sync();
+    }
+
+    BOOST_REQUIRE(counter == 1);
+}

@@ -147,6 +147,79 @@ private:
 };
 
 /**
+ * Specialized version of timer_task which serializes all
+ * timer operations and callbacks using supplied lock.
+ *
+ * All methods should be invoked with the serializing lock held.
+ *
+ * The callback needs to consult try_fire() after it acquired the lock
+ * but before it does its task, to check if it hasn't been cancelled
+ * or rescheduled.
+ */
+class serial_timer_task {
+public:
+    using callback_t = std::function<void(serial_timer_task&)>;
+
+    serial_timer_task(mutex& lock, callback_t&& callback);
+    ~serial_timer_task();
+
+    /**
+     * Schedules callback to run in given amount of time from now.
+     * If any callback is currently pending it is cancelled.
+     *
+     * Callbacks which have already fired but have not yet called
+     * try_fire() will be rejected when they call try_fire(). If there
+     * are multiple callbacks waiting to take the lock, only one of them
+     * will be allowed to pass by try_lock().
+     */
+    void reschedule(clock::duration delay);
+
+    /**
+     * Cancels pending callback, if any. Does not wait for callbacks which
+     * are currently running.
+     */
+    void cancel();
+
+    /**
+     * Cancels pending callback if any and waits for callbacks which fired but
+     * have not yet finished. A callback is considered to finish firing after it
+     * called try_fire() and released the lock.
+     *
+     * This method should be used to safely cancel this timer before it is
+     * deleted.
+     *
+     * This method may drop the lock temporarily.
+     */
+    void cancel_sync();
+
+    /**
+     * Timer is active if it has been scheduled but has not yet fired. The moment
+     * of firing happens when try_fire() is called.
+     */
+    bool is_active();
+
+    /**
+     * Should be called from the callback to determine if the callback
+     * is eligible to fire but without marking this callback as have fired (yet).
+     * Returns true if the callback can proceed.
+     */
+    bool can_fire();
+
+    /**
+     * Should be called by the callback after taking the lock but before taking any
+     * action to check if it is eligible to fire. It can proceed only if this returns true.
+     */
+    bool try_fire();
+
+private:
+    bool _active;
+    int _n_scheduled;
+    mutex& _lock;
+    timer_task _task;
+    waitqueue _all_done;
+};
+
+/**
  * Schedules given callback for execution in worker's thread. It will be executed as
  * soon as possible although there are no guarantees as for when that will happen.
  */
