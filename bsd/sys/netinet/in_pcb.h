@@ -218,7 +218,7 @@ struct inpcb {
 	inp_gen_t	inp_gencnt;	/* (c) generation count */
 	struct llentry	*inp_lle;	/* cached L2 information */
 	struct rtentry	*inp_rt;	/* cached L3 information */
-	struct mtx	inp_lock;
+	mutex	inp_lock;
 };
 #define	inp_fport	inp_inc.inc_fport
 #define	inp_lport	inp_inc.inc_lport
@@ -394,14 +394,14 @@ struct inpcbgroup {
 };
 
 #define INP_LOCK_INIT(inp, d, t) \
-	mtx_init(&(inp)->inp_lock, (t), (t), MTX_DUPOK)
-#define INP_LOCK_DESTROY(inp)	mtx_destroy(&(inp)->inp_lock)
-#define INP_LOCK(inp)		mtx_lock(&(inp)->inp_lock)
-#define INP_TRY_LOCK(inp)	mtx_try_lock(&(inp)->inp_lock)
-#define INP_UNLOCK(inp)		mtx_unlock(&(inp)->inp_lock)
-#define	INP_LOCKED(inp)		mtx_owned(&(inp)->inp_lock)
-#define	INP_LOCK_ASSERT(inp)	mtx_assert(&(inp)->inp_lock, MA_OWNED)
-#define	INP_UNLOCK_ASSERT(inp)	mtx_assert(&(inp)->inp_lock, MA_NOTOWNED)
+	mutex_init(&(inp)->inp_lock)
+#define INP_LOCK_DESTROY(inp)	mutex_destroy(&(inp)->inp_lock)
+#define INP_LOCK(inp)		mutex_lock(&(inp)->inp_lock)
+#define INP_TRY_LOCK(inp)	mutex_try_lock(&(inp)->inp_lock)
+#define INP_UNLOCK(inp)		mutex_unlock(&(inp)->inp_lock)
+#define	INP_LOCKED(inp)		mutex_owned(&(inp)->inp_lock)
+#define	INP_LOCK_ASSERT(inp)	assert(mutex_owned(&(inp)->inp_lock))
+#define	INP_UNLOCK_ASSERT(inp)	assert(!mutex_owned(&(inp)->inp_lock))
 
 #ifdef INVARIANTS
 void inp_lock_assert(struct inpcb *);

@@ -69,7 +69,7 @@ struct file;
  * (h) locked by global mutex so_global_mtx.
  */
 struct socket {
-	struct mtx* so_mtx = nullptr;   /* provided by so_pcb */
+	mutex* so_mtx = nullptr;   /* provided by so_pcb */
 	int	so_count;		/* (b) reference count */
 	short	so_type;		/* (a) generic type, see socket.h */
 	short	so_options;		/* from socket call, see socket.h */
@@ -129,7 +129,7 @@ struct socket {
 	 * make sure there's only 1 ref to a fp */
 	struct file* fp;
 
-	void set_mutex(mtx* a_mtx) { so_mtx = a_mtx; }
+	void set_mutex(mutex* a_mtx) { so_mtx = a_mtx; }
 };
 
 /*
@@ -145,9 +145,10 @@ extern struct mtx accept_mtx;
 #define	ACCEPT_UNLOCK()			mtx_unlock(&accept_mtx)
 
 #define	SOCK_MTX(_so)			((_so)->so_mtx)
-#define	SOCK_LOCK(_so)			(SOCK_MTX(_so)->_mutex.lock())
-#define	SOCK_OWNED(_so)			(SOCK_MTX(_so)->_mutex.owned())
-#define	SOCK_UNLOCK(_so)		(SOCK_MTX(_so)->_mutex.unlock())
+#define	SOCK_MTX_REF(_so)		(*SOCK_MTX(so))
+#define	SOCK_LOCK(_so)			(SOCK_MTX(_so)->lock())
+#define	SOCK_OWNED(_so)			(SOCK_MTX(_so)->owned())
+#define	SOCK_UNLOCK(_so)		(SOCK_MTX(_so)->unlock())
 #define	SOCK_LOCK_ASSERT(_so)		assert(SOCK_OWNED(_so))
 #define	SOCK_UNLOCK_ASSERT(_so)		assert(!SOCK_OWNED(_so))
 

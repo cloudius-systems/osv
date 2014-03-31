@@ -87,15 +87,15 @@ static struct {
 	int	any_count;	/* total attached */
 } route_cb;
 
-struct mtx rtsock_mtx;
+mutex rtsock_mtx;
 
 #if 0
 MTX_SYSINIT(rtsock, &rtsock_mtx, "rtsock route_cb lock", MTX_DEF);
 #endif
 
-#define	RTSOCK_LOCK()	mtx_lock(&rtsock_mtx)
-#define	RTSOCK_UNLOCK()	mtx_unlock(&rtsock_mtx)
-#define	RTSOCK_LOCK_ASSERT()	mtx_assert(&rtsock_mtx, MA_OWNED)
+#define	RTSOCK_LOCK()	mutex_lock(&rtsock_mtx)
+#define	RTSOCK_UNLOCK()	mutex_unlock(&rtsock_mtx)
+#define	RTSOCK_LOCK_ASSERT()	assert(rtsock_mtx.owned())
 
 #if 0
 SYSCTL_NODE(_net, OID_AUTO, route, CTLFLAG_RD, 0, "");
@@ -155,7 +155,7 @@ rts_init(void)
 	if (TUNABLE_INT_FETCH("net.route.netisr_maxqlen", &tmp))
 		rtsock_nh.nh_qlimit = tmp;
 #endif
-	mtx_init(&rtsock_mtx, "rtsock route_cb lock", 0, MTX_DEF);
+	mutex_init(&rtsock_mtx);
 	netisr_register(&rtsock_nh);
 }
 SYSINIT(rtsock, SI_SUB_PROTO_DOMAIN, SI_ORDER_THIRD, rts_init, 0);
