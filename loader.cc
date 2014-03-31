@@ -395,8 +395,6 @@ void main_cont(int ac, char** av)
         tracepoint_base::log_backtraces();
     }
     sched::init_detached_threads_reaper();
-    rcu_init();
-    boot_time.event("RCU initialized");
 
     vfs_init();
     boot_time.event("VFS initialized");
