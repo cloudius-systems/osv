@@ -32,7 +32,7 @@ class BacktraceFormatter:
         return '   [' + ', '.join((str(self.resolver(x - 1)) for x in backtrace if x)) + ']'
 
 def simple_symbol_formatter(addr):
-    return '0x%x' % frame
+    return '0x%x' % addr
 
 default_backtrace_formatter = BacktraceFormatter(simple_symbol_formatter)
 
