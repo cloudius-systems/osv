@@ -317,6 +317,16 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
 
         auto candidate = b->candidate_addr(vma, dest - offset);
 
+        // shortcut partial moves to self. If we are moving to ourselves, we
+        // will eventually complete, there is no need to keep track. This is
+        // not only an optimization, this is also a correctness issue. Because
+        // of the move to self, some writes that fall into the same range may
+        // have returned false in the closing tests.
+        if (vma->addr() == align_up(candidate, balloon_alignment)) {
+            decode->memcpy_fixup(ef, size);
+            return true;
+        }
+
         if ((src + size) > reinterpret_cast<unsigned char *>(vma->end())) {
             skip = (reinterpret_cast<unsigned char *>(vma->end()) - src);
         }
