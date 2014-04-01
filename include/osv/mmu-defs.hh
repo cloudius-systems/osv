@@ -50,6 +50,10 @@ enum {
     advise_dontneed = 1ul << 0,
 };
 
+enum {
+    pte_cow = 0,
+};
+
 class mmupage {
     void* _page;
     bool _cow;
@@ -83,6 +87,7 @@ public:
     inline u64 pfn(bool large) const;
     inline phys next_pt_addr() const;
     inline u64 next_pt_pfn() const;
+    inline bool sw_bit(unsigned off) const;
 
     inline void set_valid(bool v);
     inline void set_writable(bool v);
@@ -91,6 +96,7 @@ public:
     inline void set_large(bool v);
     inline void set_addr(phys addr, bool large);
     inline void set_pfn(u64 pfn, bool large);
+    inline void set_sw_bit(unsigned off, bool v);
 
 private:
     inline void set_bit(unsigned nr, bool v) {

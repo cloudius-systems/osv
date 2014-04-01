@@ -158,12 +158,28 @@ void allocate_intermediate_level(hw_ptep ptep)
     ptep.write(make_normal_pte(pt_page));
 }
 
+pt_element pte_mark_cow(pt_element pte, bool cow)
+{
+   pte.set_sw_bit(pte_cow, cow);
+   return pte;
+}
+
+bool pte_is_cow(pt_element pte)
+{
+   return pte.sw_bit(pte_cow);
+}
+
 bool change_perm(hw_ptep ptep, unsigned int perm)
 {
     pt_element pte = ptep.read();
     unsigned int old = (pte.valid() ? perm_read : 0) |
         (pte.writable() ? perm_write : 0) |
         (pte.executable() ? perm_exec : 0);
+
+    if (pte_is_cow(pte)) {
+        perm &= ~perm_write;
+    }
+
     // Note: in x86, if the present bit (0x1) is off, not only read is
     // disallowed, but also write and exec. So in mprotect, if any
     // permission is requested, we must also grant read permission.
@@ -453,9 +469,9 @@ private:
     unsigned int _perm;
     bool _write;
     bool _map_dirty;
-    pt_element dirty(pt_element pte) {
+    pt_element adjust(pt_element pte, bool cow) {
         pte.set_dirty(_map_dirty || _write);
-        return pte;
+        return pte_mark_cow(pte, cow);
     }
     bool skip(pt_element pte) {
         if (pte.empty()) {
@@ -479,7 +495,7 @@ public:
             return;
         }
         mmupage page = _page_provider->alloc(offset, ptep, _write);
-        if (!ptep.compare_exchange(pte, dirty(make_normal_pte(page.paddr(), perm(page.cow()))))) {
+        if (!ptep.compare_exchange(pte, adjust(make_normal_pte(page.paddr(), perm(page.cow())), page.cow()))) {
             _page_provider->free(page.vaddr(), offset, ptep);
         } else {
             this->account(mmu::page_size);
@@ -494,7 +510,7 @@ public:
         try {
             mmupage page = _page_provider->alloc(huge_page_size, offset, ptep, _write);
 
-            if (!ptep.compare_exchange(pte, dirty(make_large_pte(page.paddr(), perm(page.cow()))))) {
+            if (!ptep.compare_exchange(pte, adjust(make_large_pte(page.paddr(), perm(page.cow())), page.cow()))) {
                 _page_provider->free(page.vaddr(), huge_page_size, offset, ptep);
             } else {
                 this->account(mmu::huge_page_size);
