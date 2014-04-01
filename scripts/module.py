@@ -47,8 +47,9 @@ def expand(text, variables):
 def append_manifest(file_path, dst_file, variables={}):
     with open(file_path) as src_file:
         for line in src_file:
-            line = line.rstrip() + '\n'
-            dst_file.write(expand(line, variables))
+            line = line.rstrip()
+            if line != '[manifest]':
+                dst_file.write(expand(line + '\n', variables))
 
 def generate_manifests(modules, basic_apps):
     for manifest_type in ["usr", "bootfs"]:
@@ -56,6 +57,8 @@ def generate_manifests(modules, basic_apps):
         print("Preparing %s" % manifest_name)
 
         with open(os.path.join(resolve.get_build_path(), manifest_name), "w") as manifest:
+            manifest.write('[manifest]\n')
+
             append_manifest(os.path.join(resolve.get_osv_base(), "%s.skel" % manifest_name), manifest)
 
             for module in modules:
