@@ -1,6 +1,5 @@
 import os
 import re
-from itertools import ifilter
 
 def _path_has_pattern(path):
     return '*' in path or '?' in path
@@ -94,7 +93,7 @@ class FileMap(object):
                         if m.includes_path(rel_path):
                             add(os.path.join(m.guest_path, rel_path), host_path)
 
-        for mapping in guest_to_host.iteritems():
+        for mapping in guest_to_host.items():
             yield mapping
 
 
@@ -117,12 +116,12 @@ class Mapping(object):
         return self
 
     def includes_path(self, path):
-        has_includes = any(ifilter(PathFilter.is_include, self.filters))
+        has_includes = any(filter(PathFilter.is_include, self.filters))
         include = not has_includes
 
-        for filter in self.filters:
-            if filter(path):
-                include = filter.is_include()
+        for f in self.filters:
+            if f(path):
+                include = f.is_include()
 
         return include
 
