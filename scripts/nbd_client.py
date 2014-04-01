@@ -11,7 +11,6 @@
 # BSD license as described in the LICENSE file in the top-level directory.
 #
 
-from exceptions import ValueError
 import socket
 import struct
 
@@ -47,7 +46,7 @@ class nbd_client(object):
 
     def _old_style_handshake(self):
         nbd_magic = self._s.recv(len("NBDMAGIC"))
-        assert(nbd_magic == "NBDMAGIC")
+        assert(nbd_magic == b'NBDMAGIC')
         buf = self._s.recv(8 + 8 + 4)
         (magic, self._size, self._flags) = struct.unpack(">QQL", buf)
         assert(magic == 0x00420281861253)
