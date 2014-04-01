@@ -1,6 +1,10 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
-import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil, socket, time, threading
+import os, sys, struct, optparse, io, subprocess, shutil, socket, time, threading
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 import upload_manifest
 
 make_option = optparse.make_option
@@ -23,15 +27,15 @@ opt = optparse.OptionParser(option_list = [
 
 (options, args) = opt.parse_args()
 
-depends = StringIO.StringIO()
+depends = io.StringIO()
 if options.depends:
-    depends = file(options.depends, 'w')
+    depends = open(options.depends, 'w')
 
-manifest = ConfigParser.SafeConfigParser()
+manifest = configparser.SafeConfigParser()
 manifest.optionxform = str # avoid lowercasing
 manifest.read(options.manifest)
 
-depends.write('%s: \\\n' % (options.output,))
+depends.write(u'%s: \\\n' % (options.output,))
 
 image_path = os.path.abspath(options.output)
 
@@ -41,5 +45,5 @@ upload_manifest.upload(osv, manifest, depends)
 
 osv.wait()
 
-depends.write('\n\n')
+depends.write(u'\n\n')
 depends.close()
