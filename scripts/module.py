@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
 import sys
 import re
@@ -7,6 +7,7 @@ import subprocess
 import operator
 import argparse
 import textwrap
+from functools import reduce
 from osv.modules import api, resolve, filemap
 
 class jvm(api.basic_app):
@@ -52,7 +53,7 @@ def append_manifest(file_path, dst_file, variables={}):
 def generate_manifests(modules, basic_apps):
     for manifest_type in ["usr", "bootfs"]:
         manifest_name = "%s.manifest" % manifest_type
-        print "Preparing %s" % manifest_name
+        print("Preparing %s" % manifest_name)
 
         with open(os.path.join(resolve.get_build_path(), manifest_name), "w") as manifest:
             append_manifest(os.path.join(resolve.get_osv_base(), "%s.skel" % manifest_name), manifest)
@@ -61,7 +62,7 @@ def generate_manifests(modules, basic_apps):
                 module_manifest = os.path.join(module.local_path, manifest_name)
 
                 if os.path.exists(module_manifest):
-                    print "Appending %s to %s" % (module_manifest, manifest_name)
+                    print("Appending %s to %s" % (module_manifest, manifest_name))
                     append_manifest(module_manifest, manifest, variables={
                         'MODULE_DIR': module.local_path,
                         'OSV_BASE': resolve.get_osv_base()
@@ -75,7 +76,7 @@ def generate_manifests(modules, basic_apps):
                 app.prepare_manifest(resolve.get_build_path(), manifest_type, manifest)
 
 def format_args(args):
-    if isinstance(args, basestring):
+    if isinstance(args, str):
         return args
     else:
         return ' '.join(args)
@@ -115,12 +116,12 @@ def get_basic_apps(apps):
 
 def generate_cmdline(apps):
     cmdline_path = os.path.join(resolve.get_build_path(), "cmdline")
-    print "Saving command line to %s" % cmdline_path
+    print("Saving command line to %s" % cmdline_path)
     with open(cmdline_path, "w") as cmdline_file:
         if apps:
             cmdline_file.write(get_command_line(apps))
         else:
-            print "No apps selected"
+            print("No apps selected")
 
 if __name__ == "__main__":
     image_configs_dir = resolve.get_images_dir()
@@ -132,7 +133,7 @@ if __name__ == "__main__":
 
     image_config_file = os.path.join(image_configs_dir, args.image_config + '.py')
     if os.path.exists(image_config_file):
-        print "Using image config: %s" % image_config_file
+        print("Using image config: %s" % image_config_file)
         config = resolve.local_import(image_config_file)
         run_list = config.get('run', [])
     else:
@@ -142,7 +143,7 @@ if __name__ == "__main__":
         # run each of the module's "default" command line, in parallel.
         # You can choose a module's non-default command line, with a dot,
         # e.g.: mgmt.shell use's mgmt's "shell" command line.
-        print "No such image configuration: " + args.image_config + ". Assuming list of modules."
+        print("No such image configuration: " + args.image_config + ". Assuming list of modules.")
         run_list = []
         for module in args.image_config.split(","):
             a = module.split(".", 1)
@@ -156,11 +157,11 @@ if __name__ == "__main__":
 
     modules = resolve.get_required_modules()
 
-    print "Modules:"
+    print("Modules:")
     if not modules:
-        print "  None"
+        print("  None")
     for module in modules:
-        print "  " + module.name
+        print("  " + module.name)
 
     make_modules(modules)
 
