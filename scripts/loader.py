@@ -237,7 +237,7 @@ class osv_waiters(gdb.Command):
         gdb.write('waiters:\n')
         for w in waiters_list:
             t = w["owner"].dereference().cast(thread_type)["_id"]
-            print t
+            print(t)
             gdb.write("Thread %d waits for %d Bytes\n" % (t, int(w["bytes"])))
 
 #
