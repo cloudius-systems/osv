@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
 import sys, os, optparse, struct
 import subprocess
@@ -17,8 +17,8 @@ def chs(x):
     sec_per_track = 63
     heads = 255 
 
-    c = (x / sec_per_track) / heads
-    h = (x / sec_per_track) % heads
+    c = (x // sec_per_track) // heads
+    h = (x // sec_per_track) % heads
     s = x % sec_per_track + 1
 
     # see http://en.wikipedia.org/wiki/Master_Boot_Record
@@ -43,8 +43,8 @@ def read_cstr(file):
     return ''.join(read_chars_up_to_null(file))
 
 def write_cstr(file, str):
-    file.write(str)
-    file.write('\0')
+    file.write(str.encode())
+    file.write(b'\0')
 
 class nbd_file(object):
 
@@ -89,14 +89,14 @@ class nbd_file(object):
         self._offset = offset
 
     def _sect_begin(self, offset):
-        return (offset / 512) * 512
+        return (offset // 512) * 512
 
     def _offset_in_sect(self, offset):
         return offset % 512
 
     def _sect_size(self, offset, count):
         size = self._offset_in_sect(offset) + count
-        return ((size / 512) + 1) * 512
+        return ((size // 512) + 1) * 512
 
     def read(self, count):
         sect_begin = self._sect_begin(self._offset)
@@ -143,12 +143,12 @@ elif cmd == 'getargs':
     img = args[0]
     with nbd_file(img) as f:
         f.seek(args_offset)
-        print read_cstr(f)
+        print(read_cstr(f))
 elif cmd == 'setsize':
     img = args[0]
     size = int(args[1])
     block_size = 32 * 1024
-    blocks = (size + block_size - 1) / block_size
+    blocks = (size + block_size - 1) // block_size
     f = nbd_file(img)
     f.seek(0x10)
     f.write(struct.pack('H', blocks))
@@ -163,8 +163,8 @@ elif cmd == 'setpartition':
 
     fsize = f.size()
 
-    cyl, head, sec = chs(start / 512);
-    cyl_end, head_end, sec_end = chs((start + size) / 512);
+    cyl, head, sec = chs(start // 512);
+    cyl_end, head_end, sec_end = chs((start + size) // 512);
 
     f.seek(partition + 1)
     f.write(struct.pack('B', head))
@@ -181,7 +181,7 @@ elif cmd == 'setpartition':
     f.write(struct.pack('B', system_id))
 
     f.seek(partition + 8)
-    f.write(struct.pack('I', start / 512))
+    f.write(struct.pack('I', start // 512))
     f.seek(partition + 12)
-    f.write(struct.pack('I', size / 512))
+    f.write(struct.pack('I', size // 512))
     f.close()
