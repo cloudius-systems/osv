@@ -791,10 +791,10 @@ class osv_thread(gdb.Command):
         state = vmstate()
         thread = None
         for t in state.thread_list:
-            if t.address.cast(ulong_type) == int(arg, 0):
+            if ulong(t.address) == int(arg, 0):
                 thread = t
             with thread_context(t, state):
-                if t['_id'] == int(arg, 0):
+                if to_int(t['_id']) == int(arg, 0):
                     thread = t
         if not thread:
             print('Not found')
