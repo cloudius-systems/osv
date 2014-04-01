@@ -1,6 +1,10 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
-import os, sys, struct, optparse, StringIO, ConfigParser, subprocess, shutil, socket, time, threading, stat
+import os, sys, struct, optparse, io, subprocess, shutil, socket, time, threading, stat
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
 defines = {}
 
@@ -49,10 +53,10 @@ def upload(osv, manifest, depends):
 
     # Wait for the guest to come up and tell us it's listening
     while True:
-        line = osv.stdout.readline()
+        line = osv.stdout.readline().decode()
         if not line or line.find("Waiting for connection")>=0:
             break;
-        print line.rstrip();
+        print(line.rstrip())
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(("127.0.0.1", 10000));
@@ -61,8 +65,8 @@ def upload(osv, manifest, depends):
     # hang, and so the user can see what's happening. Easiest to do this with
     # a thread.
     def consumeoutput(file):
-        for line in iter(file.readline, ''):
-            print line.rstrip()
+        for line in iter(lambda: file.readline().decode(), ''):
+            print(line.rstrip())
     threading.Thread(target = consumeoutput, args = (osv.stdout,)).start()
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
@@ -70,11 +74,11 @@ def upload(osv, manifest, depends):
         s.sendall(data)
         partial = len(data)%4
         if partial > 0:
-            s.sendall('\0'*(4-partial))
+            s.sendall(b'\0'*(4-partial))
     def cpio_field(number, length):
-        return "%.*x" % (length, number);
+        return ("%.*x" % (length, number)).encode()
     def cpio_header(filename, mode, filesize):
-        return ("070701"                          # magic
+        return (b"070701"                         # magic
                 + cpio_field(0, 8)                # inode
                 + cpio_field(mode, 8)             # mode
                 + cpio_field(0, 8)                # uid
@@ -88,7 +92,7 @@ def upload(osv, manifest, depends):
                 + cpio_field(0, 8)                # rdevminor
                 + cpio_field(len(filename)+1, 8)  # namesize
                 + cpio_field(0, 8)                # check
-                + filename + '\0')
+                + filename.encode() + b'\0')
 
     def strip_file(filename):
         stripped_filename = filename
@@ -104,13 +108,13 @@ def upload(osv, manifest, depends):
 
     # Send the files to the guest
     for name, hostname in files:
-        depends.write('\t%s \\\n' % (hostname,))
+        depends.write(u'\t%s \\\n' % (hostname,))
         hostname = strip_file(hostname)
         if os.path.isdir(hostname) :
             cpio_send(cpio_header(name, stat.S_IFDIR, 0))
-	else:
+        else:
             cpio_send(cpio_header(name, stat.S_IFREG, os.stat(hostname).st_size))
-            with open(hostname, 'r') as f:
+            with open(hostname, 'rb') as f:
                 cpio_send(f.read())
     cpio_send(cpio_header("TRAILER!!!", 0, 0))
     s.shutdown(socket.SHUT_WR)
@@ -146,15 +150,14 @@ def main():
 
     (options, args) = opt.parse_args()
 
-    depends = StringIO.StringIO()
+    depends = io.StringIO()
     if options.depends:
         depends = file(options.depends, 'w')
-    #out = file(options.output, 'w')
-    manifest = ConfigParser.SafeConfigParser()
+    manifest = configparser.SafeConfigParser()
     manifest.optionxform = str # avoid lowercasing
     manifest.read(options.manifest)
 
-    depends.write('%s: \\\n' % (options.output,))
+    depends.write(u'%s: \\\n' % (options.output,))
 
     image_path = os.path.abspath(options.output)
     osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "/tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
@@ -163,7 +166,7 @@ def main():
 
     osv.wait()
 
-    depends.write('\n\n')
+    depends.write(u'\n\n')
     depends.close()
 
 if __name__ == "__main__":
