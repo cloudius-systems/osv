@@ -66,7 +66,7 @@ def find_module_config(module_name):
     return module_config
 
 def fetch_module(module_config, target_dir):
-    print "Fetching %s" % module_config["name"]
+    print("Fetching %s" % module_config["name"])
 
     module_type = module_config["type"]
     if module_type == "git":
@@ -80,7 +80,7 @@ def fetch_module(module_config, target_dir):
     else:
         raise Exception("%s is unknown type" % module_type)
 
-    print cmd
+    print(cmd)
     returncode = subprocess.call([cmd], shell=True)
     if returncode:
         raise Exception("Command failed with exit code: %d" % returncode)
@@ -106,12 +106,12 @@ def require(module_name):
     py_module_file = 'module.py'
     module_file = os.path.join(module_dir, py_module_file)
     if not os.path.exists(module_file):
-        print "No %s in %s" % (py_module_file, module_dir)
+        print("No %s in %s" % (py_module_file, module_dir))
         module_properties = {}
     else:
         _loading_modules.append(module_name)
         try:
-            print "Importing %s" % module_file
+            print("Importing %s" % module_file)
             module_properties = local_import(module_file)
         finally:
             _loading_modules.remove(module_name)
@@ -119,6 +119,6 @@ def require(module_name):
     module = Module(module_name, module_config, module_properties)
     _modules[module_name] = module
     if hasattr(module, 'provides'):
-	for name in getattr(module, 'provides'):
-		_modules[name] = module;
+        for name in getattr(module, 'provides'):
+            _modules[name] = module
     return module
