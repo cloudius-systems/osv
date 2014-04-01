@@ -1,6 +1,10 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
-import os, sys, struct, optparse, StringIO, ConfigParser
+import os, sys, struct, optparse, io
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
 make_option = optparse.make_option
 
@@ -34,15 +38,15 @@ opt = optparse.OptionParser(option_list = [
 (options, args) = opt.parse_args()
 
 metadata_size = 128
-depends = StringIO.StringIO()
+depends = io.StringIO()
 if options.depends:
-    depends = file(options.depends, 'w')
-out = file(options.output, 'w')
-manifest = ConfigParser.SafeConfigParser()
+    depends = open(options.depends, 'w')
+out = open(options.output, 'wb')
+manifest = configparser.SafeConfigParser()
 manifest.optionxform = str # avoid lowercasing
 manifest.read(options.manifest)
 
-depends.write('%s: \\\n' % (options.output,))
+depends.write(u'%s: \\\n' % (options.output,))
 
 files = dict([(f, manifest.get('manifest', f, vars = defines))
               for f in manifest.options('manifest')])
@@ -86,17 +90,17 @@ pos = (len(files) + 1) * metadata_size
 
 for name, hostname in files:
     size = os.stat(hostname).st_size
-    metadata = struct.pack('QQ112s', size, pos, name)
+    metadata = struct.pack('QQ112s', size, pos, name.encode())
     out.write(metadata)
     pos += size
-    depends.write('\t%s \\\n' % (hostname,))
+    depends.write(u'\t%s \\\n' % (hostname,))
 
-out.write(struct.pack('128s', ''))
+out.write(struct.pack('128s', b''))
 
 for name, hostname in files:
-    out.write(file(hostname).read())
+    out.write(open(hostname, 'rb').read())
 
-depends.write('\n\n')
+depends.write(u'\n\n')
 
 out.close()
 depends.close()
