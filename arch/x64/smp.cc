@@ -144,7 +144,7 @@ void smp_main()
 
 void crash_other_processors()
 {
-    if (apic) {
+    if (apic && smp_processors > 1) {
         apic->nmi_allbutself();
     }
 }
