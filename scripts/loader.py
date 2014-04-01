@@ -34,7 +34,7 @@ def pt_index(addr, level):
     return (addr >> (12 + 9 * level)) & 511
 
 def phys_cast(addr, type):
-    return gdb.Value(addr + phys_mem).cast(type.pointer())
+    return gdb.parse_and_eval('0x%x' % (addr + phys_mem)).cast(type.pointer())
 
 def values(_dict):
     if hasattr(_dict, 'viewvalues'):
