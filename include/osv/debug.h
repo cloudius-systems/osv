@@ -40,6 +40,26 @@ void debug_write(const char *msg, size_t len);
    should be used only to debug faults */
 void debug_ll(const char *fmt, ...);
 
+/* an early debug that does not need any c/c++ init before being usable */
+void debug_early(const char *msg);
+void debug_early_u64(const char *msg, unsigned long long val);
+
+#ifdef __aarch64__
+#define debug_early_entry(msg) \
+    { \
+    register unsigned long long lr; \
+    asm("mov %0, x30" : "=r"(lr)); \
+    debug_early_u64(msg " ENTERED, lr=", lr); \
+    } \
+
+#else
+#define debug_early_entry(msg) \
+    { \
+    debug_early(msg " ENTERED\n"); \
+    } \
+
+#endif /* !__aarch64__ */
+
 int vkprintf(const char *__restrict fmt, va_list ap)
 	__attribute__((format(printf, 1, 0)));
 int kprintf(const char *__restrict fmt, ...)

@@ -23,6 +23,9 @@ static std::unordered_map<const void*, int> shmmap;
 
 void *shmat(int shmid, const void *shmaddr, int shmflg)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     fileref f(fileref_from_fd(shmid));
     void *addr;
     try {
@@ -36,6 +39,7 @@ void *shmat(int shmid, const void *shmaddr, int shmflg)
         shmmap.emplace(addr, shmid);
     }
     return addr;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 int shmctl(int shmid, int cmd, struct shmid_ds *buf)
@@ -49,6 +53,9 @@ int shmctl(int shmid, int cmd, struct shmid_ds *buf)
 
 int shmdt(const void *shmaddr)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else /* !AARCH64_PORT_STUB */
     int fd;
     WITH_LOCK(shm_lock) {
         auto s = shmmap.find(shmaddr);
@@ -61,6 +68,7 @@ int shmdt(const void *shmaddr)
     fileref f(fileref_from_fd(fd));
     mmu::munmap(shmaddr, ::size(f));
     return 0;
+#endif /* !AARCH64_PORT_STUB */
 }
 
 /*
@@ -69,6 +77,9 @@ int shmdt(const void *shmaddr)
  */
 int shmget(key_t key, size_t size, int shmflg)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else
     int fd;
     int flags = FREAD | FWRITE;
     size = align_up(size, mmu::page_size);
@@ -96,4 +107,5 @@ int shmget(key_t key, size_t size, int shmflg)
         return libc_error(error);
     }
     return fd;
+#endif /* !AARCH64_PORT_STUB */
 }

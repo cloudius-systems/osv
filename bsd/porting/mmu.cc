@@ -19,7 +19,11 @@ void *pmap_mapdev(uint64_t paddr, size_t size)
 
 uint64_t virt_to_phys(void *virt)
 {
+#ifdef AARCH64_PORT_STUB
+    return (uint64_t)virt;
+#else /* !AARCH64_PORT_STUB */
     return mmu::virt_to_phys(virt);
+#endif /* !AARCH64_PORT_STUB */
 }
 
 /*
@@ -42,5 +46,9 @@ int vm_throttling_needed(void)
 
 void mmu_unmap(void *addr, size_t size)
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else
     mmu::unmap_address(addr, addr, size);
+#endif /* !AARCH64_PORT_STUB */
 }

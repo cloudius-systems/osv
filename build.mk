@@ -1,10 +1,14 @@
 ifndef CROSS_PREFIX
     HOST_CXX=$(CXX)
+    STRIP=strip
+    OBJCOPY=objcopy
 else
     HOST_CXX=g++
     CXX=$(CROSS_PREFIX)g++
     CC=$(CROSS_PREFIX)gcc
     LD=$(CROSS_PREFIX)ld
+    STRIP=$(CROSS_PREFIX)strip
+    OBJCOPY=$(CROSS_PREFIX)objcopy
 endif
 
 detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
@@ -42,8 +46,12 @@ gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | gre
 
 INCLUDES += -isystem $(gcc-inc-base)
 INCLUDES += -isystem $(gcc-inc-base3)
+
+ifeq ($(arch),x64)
 INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
-INCLUDES += -isystem $(src)/external/$(arch)/misc.bin/usr/include
+endif
+
+INCLUDES += -isystem $(miscbase)/usr/include
 INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/$(arch)
 # must be after include/api, since it includes some libc-style headers:
@@ -125,6 +133,18 @@ endif
 
 ifeq ($(arch),x64)
 arch-cflags = -msse4.1
+endif
+
+ifeq ($(arch),aarch64)
+# You will die horribly without -mstrict-align, due to
+# unaligned access to a stack attr variable with stp.
+# Relaxing alignment checks via sctlr_el1 A bit setting should solve
+# but it doesn't - setting ignored?
+#
+# Also, mixed TLS models resulted in different var addresses seen by
+# different objects depending on the TLS model used.
+# Force all __thread variables encountered to local exec.
+arch-cflags = -mstrict-align -mtls-dialect=desc -ftls-model=local-exec -DAARCH64_PORT_STUB
 endif
 
 quiet = $(if $V, $1, @echo " $2"; $1)
@@ -264,6 +284,8 @@ tools += tools/route/lsroute.so
 tools += tools/mkfs/mkfs.so
 tools += tools/cpiod/cpiod.so
 
+ifeq ($(arch),x64)
+
 all: loader.img loader.bin usr.img
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
@@ -273,24 +295,76 @@ image-size = $(shell stat --printf %s lzloader.elf)
 
 loader-stripped.elf: loader.elf
 	$(call very-quiet, cp loader.elf loader-stripped.elf)
-	$(call quiet, strip loader-stripped.elf, STRIP loader.elf)
+	$(call quiet, $(STRIP) loader-stripped.elf, STRIP loader.elf)
 
 loader.img: boot.bin lzloader.elf
 	$(call quiet, dd if=boot.bin of=$@ > /dev/null 2>&1, DD $@ boot.bin)
 	$(call quiet, dd if=lzloader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
-		DD $@ loader.elf)
+		DD $@ lzloader.elf)
 	$(call quiet, $(src)/scripts/imgedit.py setsize $@ $(image-size), IMGEDIT $@)
 	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
-
-loader-size = $(shell stat --printf %s loader.img)
-zfs-start = $(shell echo $$(($(loader-size)+2097151 & ~2097151)))
-zfs-size = $(shell echo $$(($(fs_size_mb) * 1024 * 1024 - $(zfs-start))))
 
 loader.bin: arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
 	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
 
 arch/x64/boot32.o: loader.elf
+
+fastlz/fastlz.o:
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/fastlz.cc, CXX $@)
+
+fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLASG) -O2 -o $@ $(filter %.cc, $^), CXX $@)
+
+loader-stripped.elf.lz.o: loader-stripped.elf fastlz/lz
+	$(call quiet, $(out)/fastlz/lz $(out)/loader-stripped.elf, LZ $@)
+	$(call quiet, objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz $@, OBJCOPY $@)
+
+fastlz/lzloader.o: fastlz/lzloader.cc
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/lzloader.cc, CXX $@)
+
+lzloader.elf: loader-stripped.elf.lz.o fastlz/lzloader.o arch/x64/lzloader.ld \
+	fastlz/fastlz.o
+	$(call quiet, $(src)/scripts/check-image-size.sh loader-stripped.elf 23068672)
+	$(call quiet, $(LD) -o $@ \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
+	-T $(src)/arch/x64/lzloader.ld \
+	$(patsubst %.o,$(out)/%.o, $(filter %.o, $^)), LD $@)
+
+acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
+
+acpi-source := $(shell find $(src)/external/$(arch)/acpica/source/components -type f -name '*.c')
+acpi = $(patsubst $(src)/%.c, %.o, $(acpi-source))
+
+$(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
+
+endif # x64
+
+ifeq ($(arch),aarch64)
+
+all: loader.img
+
+preboot.elf: arch/$(arch)/preboot.ld arch/$(arch)/preboot.o
+	$(call quiet, $(LD) -o $@ -T $^, LD $@)
+
+preboot.bin: preboot.elf
+	$(call quiet, $(OBJCOPY) -O binary $^ $@, OBJCOPY $@)
+
+image-size = $(shell stat --printf %s loader-stripped.elf)
+
+loader-stripped.elf: loader.elf
+	$(call very-quiet, cp loader.elf loader-stripped.elf)
+	$(call quiet, $(STRIP) loader-stripped.elf, STRIP loader.elf)
+
+loader.img: preboot.bin loader-stripped.elf
+	$(call quiet, dd if=preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
+	$(call quiet, dd if=loader-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ loader-stripped.elf)
+	$(call quiet, $(src)/scripts/imgedit.py setsize $@ $(image-size), IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
+
+endif # aarch64
 
 bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
 
@@ -386,6 +460,7 @@ bsd += bsd/sys/xdr/xdr.o
 bsd += bsd/sys/xdr/xdr_array.o
 bsd += bsd/sys/xdr/xdr_mem.o
 
+ifeq ($(arch),x64)
 bsd/%.o: COMMON += -DXEN -DXENHVM
 bsd += bsd/sys/xen/gnttab.o
 bsd += bsd/sys/xen/evtchn.o
@@ -395,6 +470,7 @@ bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
 bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
+endif
 
 bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-parentheses -Wno-unused-but-set-variable
 
@@ -561,17 +637,22 @@ libtsm += drivers/libtsm/tsm_screen.o
 libtsm += drivers/libtsm/tsm_vte.o
 libtsm += drivers/libtsm/tsm_vte_charsets.o
 
-drivers :=
-drivers += drivers/console.o drivers/vga.o drivers/kbd.o drivers/isa-serial.o
-drivers += drivers/debug-console.o
+drivers := $(bsd) $(solaris)
+drivers += drivers/console.o
+drivers += arch/$(arch)/debug-console.o
+drivers += drivers/clock.o
+drivers += drivers/clockevent.o
 drivers += drivers/ramdisk.o
-drivers += $(bsd) $(solaris) $(libtsm)
-drivers += core/mmu.o
 drivers += core/elf.o
+
+ifeq ($(arch),x64)
+drivers += $(libtsm)
+drivers += drivers/vga.o drivers/kbd.o drivers/isa-serial.o
+drivers += core/mmu.o
 drivers += core/interrupt.o
 drivers += core/pvclock-abi.o
 drivers += drivers/device.o
-drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o 
+drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o
 drivers += drivers/driver.o
 drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
@@ -581,8 +662,7 @@ drivers += drivers/vmxnet3-queues.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
-drivers += drivers/clock.o drivers/kvmclock.o drivers/xenclock.o
-drivers += drivers/clockevent.o
+drivers += drivers/kvmclock.o drivers/xenclock.o
 drivers += drivers/acpi.o
 drivers += drivers/hpet.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
@@ -590,31 +670,39 @@ drivers += drivers/pvpanic.o
 drivers += drivers/random.o
 drivers += drivers/ahci.o
 drivers += drivers/ide.o
+drivers += drivers/pci.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
 drivers += drivers/zfs.o
 drivers += java/jvm_balloon.o
 drivers += java/java_api.o
+endif # x64
 
-objects = bootfs.o
+objects := bootfs.o
+objects += arch/$(arch)/arch-setup.o
+objects += arch/$(arch)/signal.o
+objects += arch/$(arch)/string.o
+objects += arch/$(arch)/arch-cpu.o
+objects += arch/$(arch)/backtrace.o
+objects += arch/$(arch)/smp.o
+objects += arch/$(arch)/elf-dl.o
+objects += arch/$(arch)/entry.o
+
+ifeq ($(arch),x64)
 objects += arch/x64/dump.o
 objects += arch/x64/exceptions.o
-objects += arch/x64/entry.o
 objects += arch/x64/ioapic.o
 objects += arch/x64/mmu.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
-objects += arch/x64/arch-setup.o
-objects += arch/x64/smp.o
-objects += arch/x64/signal.o
 objects += arch/x64/cpuid.o
-objects += arch/x64/string.o
-objects += arch/x64/arch-cpu.o
 objects += arch/x64/entry-xen.o
 objects += arch/x64/xen.o
-objects += arch/x64/backtrace.o
 objects += arch/x64/xen_intr.o
+objects += $(acpi)
+endif # x64
+
 objects += core/spinlock.o
 objects += core/lfmutex.o
 objects += core/rwlock.o
@@ -623,11 +711,10 @@ objects += core/condvar.o
 objects += core/debug.o
 objects += core/rcu.o
 objects += core/pagecache.o
-objects += drivers/pci.o
 objects += core/mempool.o
 objects += core/alloctracker.o
 objects += core/printf.o
-objects += arch/x64/elf-dl.o
+
 objects += linux.o
 objects += core/commands.o
 objects += core/sched.o
@@ -657,58 +744,11 @@ include $(src)/libc/build.mk
 
 objects += $(addprefix fs/, $(fs))
 objects += $(addprefix libc/, $(libc))
-objects += $(acpi)
-
-acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
-
-acpi-source := $(shell find $(src)/external/$(arch)/acpica/source/components -type f -name '*.c')
-acpi = $(patsubst $(src)/%.c, %.o, $(acpi-source))
-
-$(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
 
 libstdc++.a = $(shell find $(gccbase)/ -name libstdc++.a)
 libsupc++.a = $(shell find $(gccbase)/ -name libsupc++.a)
 libgcc_s.a = $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
 libgcc_eh.a = $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
-
-loader.elf: arch/x64/boot.o arch/x64/loader.ld loader.o runtime.o $(drivers) \
-        $(objects) dummy-shlib.so \
-		bootfs.bin
-	$(call quiet, $(LD) -o $@ \
-		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
-	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
-	    --whole-archive \
-	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
-	      $(boost-libs) \
-	    --no-whole-archive, \
-		LD $@)
-
-fastlz/fastlz.o:
-	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/fastlz.cc, CXX $@)
-
-fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
-	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLASG) -O2 -o $@ $(filter %.cc, $^), CXX $@)
-
-loader-stripped.elf.lz.o: loader-stripped.elf fastlz/lz
-	$(call quiet, $(out)/fastlz/lz $(out)/loader-stripped.elf, LZ $@)
-	$(call quiet, objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz $@, OBJCOPY $@)
-
-fastlz/lzloader.o: fastlz/lzloader.cc
-	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/lzloader.cc, CXX $@)
-
-lzloader.elf: loader-stripped.elf.lz.o fastlz/lzloader.o arch/x64/lzloader.ld \
-	fastlz/fastlz.o
-	$(call quiet, $(src)/scripts/check-image-size.sh loader-stripped.elf 23068672)
-	$(call quiet, $(LD) -o $@ \
-		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
-	-T $(src)/arch/x64/lzloader.ld \
-	$(patsubst %.o,$(out)/%.o, $(filter %.o, $^)), LD $@)
-
-
-dummy-shlib.so: dummy-shlib.o
-	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
 
 boost-lib-dir := $(shell dirname `find $(miscbase)/ -name libboost_system-mt.a`)
 
@@ -718,10 +758,28 @@ boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a \
 $(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework-mt.so \
                 $(boost-lib-dir)/libboost_filesystem-mt.so
 
+dummy-shlib.so: dummy-shlib.o
+	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
+
+loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(drivers) \
+	$(objects) dummy-shlib.so bootfs.bin
+	$(call quiet, $(LD) -o $@ \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
+	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
+	    --whole-archive \
+	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
+	      $(boost-libs) \
+	    --no-whole-archive, \
+		LD $@)
+
 bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
 jni = java/jni/balloon.so java/jni/elf-loader.so java/jni/networking.so \
 	java/jni/stty.so java/jni/tracepoint.so java/jni/power.so java/jni/monitor.so
+
+loader-size = $(shell stat --printf %s loader.img)
+zfs-start = $(shell echo $$(($(loader-size)+2097151 & ~2097151)))
+zfs-size = $(shell echo $$(($(fs_size_mb) * 1024 * 1024 - $(zfs-start))))
 
 bare.raw: loader.img
 	$(call quiet, qemu-img create $@ 100M, QEMU-IMG CREATE $@)
@@ -749,12 +807,17 @@ osv.vmdk osv.vdi:
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
+ifeq ($(arch),aarch64)
+bootfs.bin:
+	touch bootfs.bin
+else
 bootfs.bin: scripts/mkbootfs.py $(java-targets) $(out)/bootfs.manifest $(tests) $(java_tests) $(tools) \
 		tests/testrunner.so \
 		zpool.so zfs.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
+endif
 
 bootfs.o: bootfs.bin
 

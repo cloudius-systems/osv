@@ -177,9 +177,13 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
                 }
             } else {
                 // remove mapping to ARC page if exists
+#ifdef AARCH64_PORT_STUB
+                abort();
+#else
                 if (mmu::remove_mapping(start, page, ptep)) {
                     fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
                 }
+#endif
                 // cow of private page from ARC
                 return newcp->release();
             }
@@ -192,7 +196,11 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
     } else if (!cp) {
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
         fp->get_arcbuf(offset, ARC_ACTION_HOLD, &start, &len, &page);
+#ifdef AARCH64_PORT_STUB
+        abort();
+#else
         mmu::add_mapping(start, page, ptep);
+#endif
         return mmu::mmupage(page, true);
     }
 
@@ -218,9 +226,13 @@ void release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
         size_t len;
         fp->get_arcbuf(offset, ARC_ACTION_QUERY, &start, &len, &page);
         assert (addr == page);
+#ifdef AARCH64_PORT_STUB
+        abort();
+#else
         if (mmu::remove_mapping(start, page, ptep)) {
             fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
         }
+#endif
     } else {
         // private page
         memory::free_page(addr);

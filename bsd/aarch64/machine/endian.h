@@ -71,7 +71,7 @@ static __inline __uint32_t
 __bswap32_var(__uint32_t _x)
 {
 
-	__asm ("REV %0" : "+r" (_x));
+	__asm ("REV %w0" : "+r" (_x));
 	return (_x);
 }
 

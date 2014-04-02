@@ -27,3 +27,13 @@ misaligned:
 	}
 	return dest;
 }
+
+void *memcpy_base_backwards(void *__restrict dest, const void *__restrict src, size_t n)
+{
+	unsigned char *d = dest + n - 1;
+	const unsigned char *s = src + n - 1;
+
+	for (; n; n--) *d-- = *s--;
+
+	return dest;
+}

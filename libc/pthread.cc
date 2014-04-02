@@ -14,7 +14,11 @@
 #include <algorithm>
 #include <string.h>
 #include <list>
+
+#ifndef AARCH64_PORT_STUB
 #include <osv/mmu.hh>
+#endif /* !AARCH64_PORT_STUB */
+
 #include <osv/debug.hh>
 #include <osv/prio.hh>
 
@@ -90,8 +94,13 @@ namespace pthread_private {
             return {attr.stack_begin, attr.stack_size};
         }
         size_t size = attr.stack_size;
+#ifdef AARCH64_PORT_STUB
+        size = (size + (0xfff)) & (~0xfffull);
+        void *addr = malloc(size);
+#else  /* !AARCH64_PORT_STUB */
         void *addr = mmu::map_anon(nullptr, size, mmu::mmap_populate, mmu::perm_rw);
         mmu::mprotect(addr, attr.guard_size, 0);
+#endif /* !AARCH64_PORT_STUB */
         sched::thread::stack_info si{addr, size};
         si.deleter = free_stack;
         return si;
@@ -99,7 +108,11 @@ namespace pthread_private {
 
     void pthread::free_stack(sched::thread::stack_info si)
     {
+#ifdef AARCH64_PORT_STUB
+        free(si.begin);
+#else  /* !AARCH64_PORT_STUB */
         mmu::munmap(si.begin, si.size);
+#endif /* !AARCH64_PORT_STUB */
     }
 
     int pthread::join(void** retval)

@@ -41,6 +41,11 @@ inline void wait_for_interrupt()
     processor::sti_hlt();
 }
 
+inline void halt_no_interrupts()
+{
+    processor::cli_hlt();
+}
+
 class irq_flag {
 public:
     // need to clear the red zone when playing with the stack. also, can't

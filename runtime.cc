@@ -84,6 +84,10 @@ static void print_backtrace(void)
     int len;
 
     debug_ll("\n[backtrace]\n");
+#ifdef AARCH64_PORT_STUB
+    debug_ll("NIY\n");
+    return;
+#endif
 
     len = backtrace_safe(addrs, 128);
 
@@ -114,7 +118,7 @@ void abort()
 void abort(const char *fmt, ...)
 {
     if (!already_aborted) {
-        processor::cli();
+        arch::irq_disable();
         already_aborted = true;
 
         static char msg[1024];
@@ -126,7 +130,9 @@ void abort(const char *fmt, ...)
 
         debug_ll(msg);
         print_backtrace();
+#ifndef AARCH64_PORT_STUB
         panic::pvpanic::panicked();
+#endif /* !AARCH64_PORT_STUB */
     }
     osv::halt();
 }

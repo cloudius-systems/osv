@@ -248,4 +248,27 @@ extern "C" {
         console::write_ll(msg, strlen(msg));
     }
 
+    void debug_early(const char *msg)
+    {
+        console::write_ll(msg, strlen(msg));
+    }
+
+    void debug_early_u64(const char *msg, unsigned long long val)
+    {
+        char nr[16] = { 0 };
+
+        for (int i = 15; i >= 0; i--) {
+            unsigned char nibble = val & 0x0f;
+            if (nibble <= 9) {
+                nr[i] = nibble + '0';
+            } else {
+                nr[i] = nibble - 0x0a + 'a';
+            }
+            val >>= 4;
+        }
+
+        console::write_ll(msg, strlen(msg));
+        console::write_ll(nr, 16);
+        console::write_ll("\n", 1);
+    }
 }

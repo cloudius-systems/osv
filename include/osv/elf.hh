@@ -208,6 +208,20 @@ enum {
     };
 
 enum {
+    R_AARCH64_NONE = 0,
+    R_AARCH64_NONE2 = 256,
+    R_AARCH64_COPY = 1024,
+    R_AARCH64_GLOB_DAT = 1025,
+    R_AARCH64_JUMP_SLOT = 1026,
+    R_AARCH64_RELATIVE = 1027,
+    R_AARCH64_TLS_DTPREL64 = 1028,
+    R_AARCH64_TLS_DTPMOD64 = 1029,
+    R_AARCH64_TLS_TPREL64 = 1030,
+    R_AARCH64_TLSDESC = 1031,
+    R_AARCH64_IRELATIVE = 1032
+    };
+
+enum {
     STB_LOCAL = 0, //  Not visible outside the object ﬁle
     STB_GLOBAL = 1, // Global symbol, visible to all object ﬁles
     STB_WEAK = 2, // Global scope, but with lower precedence than global symbols
