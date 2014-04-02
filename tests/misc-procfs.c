@@ -11,8 +11,26 @@
 #include <string.h>
 #include <unistd.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #define BUF_SIZE 4096
+
+static void proc_readdir(const char *procdir)
+{
+	DIR *dirp;
+	struct dirent *dp;
+
+	if ((dirp = opendir(procdir)) == NULL) {
+		perror("opendir");
+		return;
+	}
+	printf("Reading directory entries at %s...\n", procdir);
+	while ((dp = readdir(dirp)) != NULL) {
+		printf("dentry name: %s\n", dp->d_name);
+	}
+	(void) closedir(dirp);
+}
 
 int main(int argc, char **argv)
 {
@@ -39,5 +57,9 @@ int main(int argc, char **argv)
 	if (close(fd) < 0) {
 		perror("close");
 	}
+
+	proc_readdir("/proc");
+	proc_readdir("/proc/self");
+
 	return 0;
 }
