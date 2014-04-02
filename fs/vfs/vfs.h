@@ -134,6 +134,7 @@ void	 vnode_init(void);
 void	 lookup_init(void);
 
 int	 vfs_findroot(char *path, struct mount **mp, char **root);
+int	 vfs_dname_copy(char *dest, const char *src, size_t size);
 
 int	 fs_noop(void);
 

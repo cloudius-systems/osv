@@ -15,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <map>
+#include "fs/vfs/vfs.h"
 
 namespace procfs {
 
@@ -22,30 +23,30 @@ using namespace std;
 
 class proc_node {
 public:
-    proc_node(uint64_t ino) : _ino(ino) { }
+    proc_node(uint64_t ino, int type) : _ino(ino), _type(type) { }
     virtual ~proc_node() { }
 
+    typedef map<string, shared_ptr<proc_node>> nmap;
+
     uint64_t ino() const { return _ino; };
+    int type() const { return _type; };
 
     virtual off_t    size() const = 0;
-    virtual int      type() const = 0;
     virtual mode_t   mode() const = 0;
 private:
     uint64_t _ino;
+    int _type;
 };
 
 class proc_file_node : public proc_node {
 public:
     proc_file_node(uint64_t ino, function<string ()> gen)
-        : proc_node(ino)
+        : proc_node(ino, VREG)
         , _gen(gen)
     { }
 
     virtual off_t size() const override {
         return 0;
-    }
-    virtual int type() const override {
-        return VREG;
     }
     virtual mode_t mode() const override {
         return S_IRUSR|S_IRGRP|S_IROTH;
@@ -59,7 +60,7 @@ private:
 
 class proc_dir_node : public proc_node {
 public:
-    proc_dir_node(uint64_t ino) : proc_node(ino) { }
+    proc_dir_node(uint64_t ino) : proc_node(ino, VDIR) { }
 
     shared_ptr<proc_node> lookup(string name) {
         auto it = _children.find(name);
@@ -67,6 +68,15 @@ public:
             return nullptr;
         }
         return it->second;
+    }
+    proc_node::nmap::iterator dir_entries_begin() {
+        return _children.begin();
+    }
+    proc_node::nmap::iterator dir_entries_end() {
+        return _children.end();
+    }
+    bool is_empty() {
+        return _children.empty();
     }
     void add(string name, uint64_t ino, function<string ()> gen) {
         _children.insert({name, make_shared<proc_file_node>(ino, gen)});
@@ -77,16 +87,14 @@ public:
     virtual off_t size() const override {
         return 0;
     }
-    virtual int type() const override {
-        return VDIR;
-    }
     virtual mode_t mode() const override {
         return S_IRUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH;
     }
 private:
-    map<string, shared_ptr<proc_node>> _children;
+    proc_node::nmap _children;
 };
 
+static mutex_t procfs_mutex;
 static uint64_t inode_count = 1; /* inode 0 is reserved to root */
 
 static proc_node* to_node(vnode* vp)
@@ -200,7 +208,51 @@ procfs_lookup(vnode* dvp, char* name, vnode** vpp)
 static int
 procfs_readdir(vnode *vp, file *fp, dirent *dir)
 {
-    return ENOENT;
+    proc_dir_node *dnp;
+    std::lock_guard<mutex_t> lock(procfs_mutex);
+
+    if (fp->f_offset == 0) {
+        dir->d_type = DT_DIR;
+        if (vfs_dname_copy((char *)&dir->d_name, ".", sizeof(dir->d_name))) {
+            return EINVAL;
+        }
+    } else if (fp->f_offset == 1) {
+        dir->d_type = DT_DIR;
+        if (vfs_dname_copy((char *)&dir->d_name, "..", sizeof(dir->d_name))) {
+            return EINVAL;
+        }
+    } else {
+        dnp = to_dir_node(vp);
+        if (dnp->is_empty()) {
+            return ENOENT;
+        }
+
+        auto dir_entry = dnp->dir_entries_begin();
+        for (int i = 0; i != (fp->f_offset - 2) &&
+            dir_entry != dnp->dir_entries_end(); i++) {
+            dir_entry++;
+        }
+        if (dir_entry == dnp->dir_entries_end()) {
+            return ENOENT;
+        }
+
+        auto np = dir_entry->second;
+        if (np->type() == VDIR) {
+            dir->d_type = DT_DIR;
+        } else {
+            dir->d_type = DT_REG;
+        }
+
+        if (vfs_dname_copy((char *)&dir->d_name, dir_entry->first.c_str(),
+                sizeof(dir->d_name))) {
+            return EINVAL;
+        }
+    }
+    dir->d_fileno = fp->f_offset;
+
+    fp->f_offset++;
+
+    return 0;
 }
 
 #ifdef AARCH64_PORT_STUB

@@ -136,3 +136,14 @@ task_conv(struct task *t, const char *cpath, int acc, char *full)
 	/* Check if the client task has required permission */
 	return 0; //sec_file_permission(t->t_taskid, full, acc);
 }
+
+/*
+ * Safe copying function that checks for overflow.
+ */
+int vfs_dname_copy(char *dest, const char *src, size_t size)
+{
+    if (strlcpy(dest, src, size) >= size) {
+        return -1;
+    }
+    return 0;
+}
