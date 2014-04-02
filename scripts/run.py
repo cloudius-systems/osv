@@ -55,7 +55,7 @@ def set_imgargs(options):
         execute = execute.replace('java.so', 'java.so ' + debug_options)
 
     if options.trace:
-        execute = '--trace=%s %s' % (options.trace, execute)
+        execute = ' '.join('--trace=%s' % name for name in options.trace) + ' ' + execute
 
     if options.trace_backtrace:
         execute = '--trace-backtrace ' + execute
@@ -354,8 +354,8 @@ if (__name__ == "__main__"):
                         help = "redirect the API port (8000) for user-mode networking")
     parser.add_argument("--pass-args", action="append",
                         help = "pass arguments to underlying hypervisor (e.g. qemu)")
-    parser.add_argument("--trace", action="store",
-                        help="enable tracepoint")
+    parser.add_argument("--trace", default=[], action='append',
+                        help="enable tracepoints")
     parser.add_argument("--trace-backtrace", action="store_true",
                         help="enable collecting of backtrace at tracepoints")
     cmdargs = parser.parse_args()
