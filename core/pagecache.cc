@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <deque>
+#include <boost/variant.hpp>
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>
 #include <fs/vfs/vfs.h>
@@ -48,7 +49,63 @@ private:
     const hashkey _key;
     struct dentry* _dp;
     void* _page;
-    std::unordered_set<mmu::hw_ptep> _ptes; // set of pointers to ptes that map the page
+    typedef boost::variant<std::nullptr_t, mmu::hw_ptep, std::unique_ptr<std::unordered_set<mmu::hw_ptep>>> ptep_list;
+    ptep_list _ptes; // set of pointers to ptes that map the page
+
+    class ptes_visitor : public boost::static_visitor<> {
+    protected:
+        ptep_list& _ptes;
+    public:
+        ptes_visitor(ptep_list& ptes) : _ptes(ptes) {}
+    };
+    class ptep_add : public ptes_visitor {
+        mmu::hw_ptep& _ptep;
+    public:
+        ptep_add(ptep_list& ptes, mmu::hw_ptep& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
+        void operator()(std::nullptr_t& v) {
+            _ptes = _ptep;
+        }
+        void operator()(mmu::hw_ptep& ptep) {
+            auto ptes = std::unique_ptr<std::unordered_set<mmu::hw_ptep>>(new std::unordered_set<mmu::hw_ptep>({ptep}));
+            ptes->emplace(_ptep);
+            _ptes = std::move(ptes);
+        }
+        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+            set->emplace(_ptep);
+        }
+    };
+    class ptep_remove : public ptes_visitor {
+        mmu::hw_ptep& _ptep;
+    public:
+        ptep_remove(ptep_list& ptes, mmu::hw_ptep& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
+        void operator()(std::nullptr_t &v) {
+            assert(0);
+        }
+        void operator()(mmu::hw_ptep& ptep) {
+            _ptes = nullptr;
+        }
+        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+            set->erase(_ptep);
+            if (set->size() == 1) {
+                auto pte = *(set->begin());
+                _ptes = pte;
+            }
+        }
+    };
+    class ptep_flush : public ptes_visitor {
+    public:
+        ptep_flush(ptep_list& ptes) : ptes_visitor(ptes) {}
+        void operator()(std::nullptr_t &v) {
+            // nothing to flush
+        }
+        void operator()(mmu::hw_ptep& ptep) {
+            clear_pte(ptep);
+        }
+        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+            mmu::clear_ptes(set->begin(), set->end());
+        }
+    };
+
 public:
     cached_page(hashkey key, vfs_file* fp) : _key(key) {
         _dp = fp->f_dentry;
@@ -78,22 +135,25 @@ public:
     }
 
     void map(mmu::hw_ptep ptep) {
-        _ptes.emplace(ptep);
+        ptep_add add(_ptes, ptep);
+        boost::apply_visitor(add, _ptes);
     }
     void unmap(mmu::hw_ptep ptep) {
-        _ptes.erase(ptep);
+        ptep_remove rm(_ptes, ptep);
+        boost::apply_visitor(rm, _ptes);
     }
     void* addr() {
         return _page;
     }
     void flush() {
-        mmu::clear_ptes(_ptes.begin(), _ptes.end());
+        ptep_flush flush(_ptes);
+        boost::apply_visitor(flush, _ptes);
     }
     const hashkey& key() {
         return _key;
     }
     void* release() { // called to demote a page from cache page to anonymous
-        assert(_ptes.size() == 0);
+        assert(boost::get<std::nullptr_t>(_ptes) == nullptr);
         void *p = _page;
         _page = nullptr;
         drele(_dp);
