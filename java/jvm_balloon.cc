@@ -9,20 +9,96 @@
 #include <osv/trace.hh>
 #include "jvm_balloon.hh"
 #include <osv/debug.hh>
+#include <osv/mmu.hh>
 #include <unordered_map>
+#include <thread>
 
+TRACEPOINT(trace_jvm_balloon_new, "obj=%p, aligned %p, size %d, vma_size %d",
+        const unsigned char *, const unsigned char *, size_t, size_t);
+TRACEPOINT(trace_jvm_balloon_free, "");
 TRACEPOINT(trace_jvm_balloon_fault, "from=%p, to=%p, size %d, vma_size %d",
         const unsigned char *, const unsigned char *, size_t, size_t);
 TRACEPOINT(trace_jvm_balloon_move, "new_jvm_addr=%p, new_jvm_end=%p, new_addr %p, new_end %p",
         const unsigned char *, const unsigned char *, const unsigned char *, const unsigned char *);
+TRACEPOINT(trace_jvm_balloon_close, "from=%p, to=%p, condition=%s",
+        uintptr_t, uintptr_t, const char *);
 
-// We will divide the balloon in units of 128Mb. That should increase the likelyhood
-// of having hugepages mapped in and out of it.
-//
-// Using constant sized balloons should help with the process of giving memory
-// back to the JVM, since we don't need to search the list of balloons until
-// we find a balloon of the desired size: any will do.
-constexpr size_t balloon_size = (128ULL << 20);
+
+jvm_balloon_shrinker *balloon_shrinker = nullptr;
+
+namespace memory {
+
+// If we are under pressure, we will end up setting the voluntary return flag
+// many times. To avoid returning one balloon per call, let's use a boolean to
+// control that. When the balloon we have given back is finally returned, we
+// reset the process.
+static std::atomic<bool> balloon_voluntary_return = { true };
+
+static std::atomic<size_t> jvm_heap_allowance(0);
+void reserve_jvm_heap(size_t mem)
+{
+    jvm_heap_allowance.fetch_sub(mem, std::memory_order_relaxed);
+}
+
+void return_jvm_heap(size_t mem)
+{
+    jvm_heap_allowance.fetch_add(mem, std::memory_order_relaxed);
+    balloon_voluntary_return = true;
+}
+
+ssize_t jvm_heap_reserved()
+{
+    if (!balloon_shrinker) {
+        return 0;
+    }
+    return (stats::free() + stats::jvm_heap()) - jvm_heap_allowance.load(std::memory_order_relaxed);
+}
+
+void jvm_balloon_adjust_memory(size_t threshold)
+{
+    if (!balloon_shrinker) {
+        return;
+    }
+
+    // Core of the reservation system:
+    // The heap allowance starts as the initial memory that is reserved to
+    // the JVM. It means how much it can eventually use, and it is completely
+    // dissociated with the amount of memory it is using now. When we balloon,
+    // that number goes down, and when we return the balloon back, it goes
+    // up again.
+    if (jvm_heap_reserved() <= static_cast<ssize_t>(threshold)) {
+        balloon_shrinker->request_memory(1);
+    }
+}
+
+bool throttling_needed()
+{
+    if (!balloon_shrinker) {
+        return false;
+    }
+
+    return balloon_shrinker->ballooning();
+}
+};
+
+void jvm_balloon_voluntary_return()
+{
+    if (!balloon_shrinker) {
+        return;
+    }
+
+    // If we freed memory and now we have more than a balloon + 20 % worth of
+    // reserved memory, give it back to the Java Heap. This is because it is a
+    // lot harder to react to JVM memory shortages than it is to react to OSv
+    // memory shortages - which are effectively under our control. Don't doing
+    // this can result in Heap exhaustions in situations where JVM allocation
+    // rates are very high and memory is tight
+    if ((memory::jvm_heap_reserved() > 6 * static_cast<ssize_t>(balloon_size/5)) &&
+        memory::balloon_voluntary_return.exchange(false))
+    {
+        balloon_shrinker->release_memory(1);
+    }
+}
 
 class balloon {
 public:
@@ -30,69 +106,45 @@ public:
 
     void release(JNIEnv *env);
 
-    ulong empty_area(void);
+    ulong empty_area(balloon_ptr b);
     size_t size() { return _balloon_size; }
-    size_t move_balloon(unsigned char *dest, unsigned char *src);
+    size_t move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest);
+    unsigned char *candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest);
+    // This is useful when communicating back the size of the area that is now
+    // available for the OS.  The actual size can easily change. For instance,
+    // if one allocation happens to be aligned, this will be the entire size of
+    // the balloon. But that doesn't matter: In that case we will just return
+    // the minimum size, and some pages will be unavailable.
+    size_t minimum_size() { return _balloon_size - _alignment; }
 private:
     void conciliate(unsigned char *addr);
     unsigned char *_jvm_addr;
-    unsigned char *_addr;
-    unsigned char *_jvm_end_addr;
-    unsigned char *_end;
 
     jobject _jref;
     unsigned int _alignment;
-    size_t hole_size() { return _end - _addr; }
     size_t _balloon_size = balloon_size;
 };
 
 mutex balloons_lock;
-std::list<balloon *> balloons;
-std::unordered_map<unsigned char *, unsigned char *> balloon_candidates;
+std::list<balloon_ptr> balloons;
 
-// We will use the following two statistics to aid our decision about whether
-// or not we should balloon. They allow us to make informed decisions about what
-// is the memory usage figure since a given reference point.
-//
-// In the future, we may move these to common code (say, mempool.cc), and have
-// the checkpoints be independent of whether or not a call to balloon has happened.
-// That is particularly important if we have many other kinds of shrinking agents.
-// But right now, let's keep it here for simplicity.
-static std::atomic<size_t> last_freed_memory(0);
-static std::atomic<size_t> last_jvm_heap_memory(0);
-
-// allocated is the inverse of free
-static ssize_t recent_allocated()
+ulong balloon::empty_area(balloon_ptr b)
 {
-    auto curr = memory::stats::free();
-    return last_freed_memory.exchange(curr) - curr;
-}
+    auto jvm_end_addr = _jvm_addr + _balloon_size;
+    auto addr = align_up(_jvm_addr, _alignment);
+    auto end = align_down(jvm_end_addr, _alignment);
 
-static ssize_t recent_jvm_heap()
-{
-    auto curr = memory::stats::jvm_heap();
-    return curr - last_jvm_heap_memory.exchange(curr);
-}
-
-void balloon::conciliate(unsigned char *addr)
-{
-    _jvm_addr = addr;
-    _jvm_end_addr = _jvm_addr + _balloon_size;
-    _addr = align_up(_jvm_addr, _alignment);
-    _end = align_down(_jvm_end_addr, _alignment);
-}
-
-ulong balloon::empty_area()
-{
-    return mmu::map_jvm(_addr, hole_size(), this);
+    balloons.push_back(b);
+    auto ret = mmu::map_jvm(_jvm_addr, end - addr, _alignment, b);
+    memory::reserve_jvm_heap(minimum_size());
+    trace_jvm_balloon_new(_jvm_addr, addr, end - addr, ret);
+    return ret;
 }
 
 balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::huge_page_size, size_t size = balloon_size)
     : _jvm_addr(jvm_addr), _jref(jref), _alignment(alignment), _balloon_size(size)
 {
-    conciliate(_jvm_addr);
     assert(mutex_owned(&balloons_lock));
-    balloons.push_back(this);
 }
 
 // Giving memory back to the JVM only means deleting the reference.  Without
@@ -107,43 +159,31 @@ void balloon::release(JNIEnv *env)
 
     // No need to remap. Will happen automatically when JVM touches it again
     env->DeleteGlobalRef(_jref);
-    balloons.remove(this);
+    memory::return_jvm_heap(minimum_size());
+    trace_jvm_balloon_free();
 }
 
-size_t balloon::move_balloon(unsigned char *dest, unsigned char *src)
+unsigned char *
+balloon::candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest)
 {
-    // It could be that the other balloon candidates are still in flight.
-    // But if we are copying from this source, this has to be a balloon and
-    // we need to conciliate here to be able to correctly calculate the skipped
-    // portion.
-    if (src != _addr) {
-        auto candidate = balloon_candidates.find(src);
-        assert(candidate != balloon_candidates.end());
-        conciliate((*candidate).second);
-    }
+    size_t skipped = static_cast<unsigned char *>(vma->addr()) - vma->jvm_addr();
+    return dest - skipped;
+}
 
-    size_t skipped = _addr - _jvm_addr;
-    assert(mutex_owned(&balloons_lock));
-
+size_t balloon::move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest)
+{
     // We need to calculate how many bytes we will skip if this were the new
     // balloon, but we won't touch the mappings yet. That will be done at conciliation
     // time when we're sure of it.
-    auto candidate_jvm_addr = dest - skipped;
+    auto candidate_jvm_addr = candidate_addr(vma, dest);
     auto candidate_jvm_end_addr = candidate_jvm_addr + _balloon_size;
     auto candidate_addr = align_up(candidate_jvm_addr, _alignment);
     auto candidate_end = align_down(candidate_jvm_end_addr, _alignment);
 
     trace_jvm_balloon_move(candidate_jvm_addr, candidate_jvm_end_addr, candidate_addr, candidate_end);
-    balloon_candidates.insert(std::make_pair(candidate_addr, candidate_jvm_addr));
-    mmu::map_jvm(candidate_addr, candidate_end - candidate_addr, this);
-    return candidate_jvm_end_addr - dest;
-}
+    mmu::map_jvm(candidate_jvm_addr, candidate_end - candidate_addr, _alignment, b);
 
-void finish_move(mmu::jvm_balloon_vma *vma)
-{
-    unsigned char *addr = static_cast<unsigned char *>(vma->addr());
-    vma->detach_balloon();
-    balloon_candidates.erase(addr);
+    return candidate_jvm_end_addr - dest;
 }
 
 // We can either be called from a java thread, or from the shrinking code in OSv.
@@ -154,7 +194,8 @@ int jvm_balloon_shrinker::_attach(JNIEnv **env)
 {
     int status = _vm->GetEnv((void **)env, JNI_VERSION_1_6);
     if (status == JNI_EDETACHED) {
-        if (_vm->AttachCurrentThread((void **) env, NULL) != 0) {
+        // Need to span a daemon, otherwise we will block JVM exit.
+        if (_vm->AttachCurrentThreadAsDaemon((void **) env, NULL) != 0) {
             assert(0);
         }
     } else {
@@ -170,51 +211,16 @@ void jvm_balloon_shrinker::_detach(int status)
     }
 }
 
-size_t jvm_balloon_shrinker::request_memory(size_t size)
+size_t jvm_balloon_shrinker::_request_memory(JNIEnv *env, size_t size)
 {
-    JNIEnv *env = NULL;
     size_t ret = 0;
 
-    WITH_LOCK(balloons_lock) {
-        ssize_t last_heap = recent_jvm_heap();
-        ssize_t last_used = recent_allocated();
-
-        // Beware: because we are just estimating used from two timepoints, it
-        // can actually be 0.  For instance, if we allocated 100 Mb of JVM heap
-        // and freed 100 Mb of file memory.
-        if (last_used && ((last_heap * 100) / last_used  > 80)) {
-            deactivate_shrinker();
-            return 0;
-        }
-    }
-
-    int status = _attach(&env);
-
-    // It is unfortunate that we need to evaluate those every time, but the JNI
-    // functions are associated with a particular env pointer. So if we reuse
-    // any of those values, they will be invalid in the next invocation. The
-    // whole thing takes around 30 ms though, so it should be fine.
-    auto rtclass = env->FindClass("java/lang/Runtime");
-    auto rt = env->GetStaticMethodID(rtclass , "getRuntime", "()Ljava/lang/Runtime;");
-    auto rtinst = env->CallStaticObjectMethod(rtclass, rt);
-    auto free_memory  = env->GetMethodID(rtclass, "freeMemory", "()J");
-
     do {
-        size_t free = env->CallLongMethod(rtinst, free_memory);
-
-        // Don't overstress the heap. If we have not enough heap size for a
-        // balloon, we are unlikely to do any good.
-        if ((free < balloon_size) || ((free * 100) / _total_heap) < 20) {
-            deactivate_shrinker();
-            break;
-        }
-
         jbyteArray array = env->NewByteArray(balloon_size);
         jthrowable exc = env->ExceptionOccurred();
         if (exc) {
             env->ExceptionClear();
-            deactivate_shrinker();
-            break;
+            return -1;
         }
 
         jboolean iscopy=0;
@@ -234,47 +240,86 @@ size_t jvm_balloon_shrinker::request_memory(size_t size)
             // longer want this balloon to stay around.
             jobject jref = env->NewGlobalRef(array);
             WITH_LOCK(balloons_lock) {
-                auto b = new balloon(static_cast<unsigned char *>(p), jref);
-                ret += b->empty_area();
-                // Call the recent_* functions again here so the newly disposed of memory does
-                // not influence future measurements.
-                recent_jvm_heap();
-                recent_allocated();
+                balloon_ptr b{new balloon(static_cast<unsigned char *>(p), jref)};
+                ret += b->empty_area(b);
             }
         }
         env->ReleasePrimitiveArrayCritical(array, p, 0);
+        env->DeleteLocalRef(array);
         // Avoid entering any endless loops. Fail imediately
-        if (!iscopy)
+        if (iscopy)
             break;
     } while (ret < size);
 
-    _detach(status);
     return ret;
 }
 
-size_t jvm_balloon_shrinker::release_memory(size_t size)
+void jvm_balloon_shrinker::_release_memory(JNIEnv *env, size_t size)
 {
-    JNIEnv *env = NULL;
-    int status = _attach(&env);
-
-    size_t ret = 0;
     WITH_LOCK(balloons_lock) {
-        while ((ret < size) && !balloons.empty()) {
-            auto b = balloons.back();
+        auto b = balloons.back();
 
-            ret += b->size();
-            b->release(env);
-            delete b;
 
-            // It might be that this shrinker was disabled due to excessive memory
-            // pressure, so we must take care to activate it. This should be a nop
-            // if the shrinker is already active, so do it always.
-            activate_shrinker();
+        balloons.pop_back();
+
+        size -= b->size();
+        b->release(env);
+    }
+}
+
+extern "C" size_t arc_sized_adjust(int64_t to_reclaim);
+
+void jvm_balloon_shrinker::_thread_loop()
+{
+    JNIEnv *env;
+    int status = _attach(&env);
+    _thread = sched::thread::current();
+    _thread->set_name("JVMBalloon");
+    _thread->set_priority(0.001);
+
+    thread_mark_emergency();
+
+    while (true) {
+        WITH_LOCK(balloons_lock) {
+            _blocked.wait_until(balloons_lock, [&] { return (_pending.load() + _pending_release.load()) > 0; });
+
+            if (balloons.size() >= _soft_max_balloons) {
+                memory::wake_reclaimer();
+            }
+
+            if (_pending_release.load() != 0) {
+                int extra = balloons.size() - _soft_max_balloons;
+                if (extra > 0) {
+                    _pending_release.fetch_add(extra);
+                }
+            }
+
+            while (_pending_release.load()) {
+                if (balloons.empty()) {
+                    _pending_release.store(0);
+                    break;
+                }
+                size_t freed = 1;
+                while ((memory::jvm_heap_reserved() < static_cast<ssize_t>(balloon_size)) && (freed != 0)) {
+                    uint64_t to_free = balloon_size - memory::jvm_heap_reserved();
+                    freed = arc_sized_adjust(to_free);
+                }
+
+                if (memory::jvm_heap_reserved() >= static_cast<ssize_t>(balloon_size)) {
+                    _pending_release.fetch_sub(1);
+                    _release_memory(env, memory::jvm_heap_reserved());
+                } else {
+                    _pending_release.store(0);
+                }
+            }
+
+            while ((memory::jvm_heap_reserved() <= 0)) {
+                _request_memory(env, 1);
+            }
+            _pending.store(0);
         }
     }
-
     _detach(status);
-    return ret;
 }
 
 // We have created a byte array and evacuated its addresses. Java is not ever
@@ -291,53 +336,80 @@ size_t jvm_balloon_shrinker::release_memory(size_t size)
 // part.  That means copying the part that comes before the balloon, playing
 // with the maps for the balloon itself, and then finish copying the part that
 // comes after the balloon.
-void jvm_balloon_fault(balloon *b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
+bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
-
-    WITH_LOCK(balloons_lock) {
-        if (!ef || (ef->error_code == mmu::page_fault_write)) {
-            finish_move(vma);
-            return;
+    if (!ef || (ef->error_code == mmu::page_fault_write)) {
+        if (vma->effective_jvm_addr()) {
+            return false;
         }
-
-        memcpy_decoder *decode = memcpy_find_decoder(ef);
-        if (!decode) {
-            finish_move(vma);
-            return;
-        }
-
-        unsigned char *dest = memcpy_decoder::dest(ef);
-        unsigned char *src = memcpy_decoder::src(ef);
-        size_t size = decode->size(ef);
-        trace_jvm_balloon_fault(src, dest, size, vma->size());
-        assert(size >= vma->size());
-
-        decode->memcpy_fixup(ef, b->move_balloon(dest, src));
+        trace_jvm_balloon_close(vma->start(), vma->end(), "write");
+        delete vma;
+        return true;
     }
+
+    memcpy_decoder *decode = memcpy_find_decoder(ef);
+    if (!decode) {
+        if (vma->effective_jvm_addr()) {
+            return false;
+        }
+        delete vma;
+        trace_jvm_balloon_close(vma->start(), vma->end(), "nodecoder");
+        return true;
+    }
+
+    unsigned char *dest = memcpy_decoder::dest(ef);
+    unsigned char *src = memcpy_decoder::src(ef);
+    size_t size = decode->size(ef);
+
+    trace_jvm_balloon_fault(src, dest, size, vma->size());
+
+    auto skip = size;
+    if (size < vma->real_size()) {
+        unsigned char *base = static_cast<unsigned char *>(vma->addr());
+        // In case the copy does not start from the beginning of the balloon,
+        // we calculate where should the begin be. We always want to move the
+        // balloon in its entirety.
+        auto offset = src - base;
+
+        auto candidate = b->candidate_addr(vma, dest - offset);
+
+        // shortcut partial moves to self. If we are moving to ourselves, we
+        // will eventually complete, there is no need to keep track. This is
+        // not only an optimization, this is also a correctness issue. Because
+        // of the move to self, some writes that fall into the same range may
+        // have returned false in the closing tests.
+        if (vma->addr() == align_up(candidate, balloon_alignment)) {
+            decode->memcpy_fixup(ef, size);
+            return true;
+        }
+
+        if ((src + size) > reinterpret_cast<unsigned char *>(vma->end())) {
+            skip = (reinterpret_cast<unsigned char *>(vma->end()) - src);
+        }
+
+        if (vma->add_partial(skip, candidate)) {
+            trace_jvm_balloon_close(vma->start(), vma->end(), "partialclose");
+            delete vma;
+        }
+    } else {
+        // For the partial size it can actually happen that we got lowered in size
+        assert(vma->size() >= b->minimum_size());
+
+        // If the JVM is also copying objects that are laid after the balloon, we
+        // need to copy only the bytes up until the end of the balloon. If the
+        // copy is a partial copy in the middle of the object, then we should
+        // drain the counter completely
+        skip = b->move_balloon(b, vma, dest);
+    }
+    decode->memcpy_fixup(ef, std::min(skip, size));
+    return true;
 }
 
 jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
-    : shrinker("jvm_shrinker")
-    , _vm(vm)
+    : _vm(vm)
 {
     JNIEnv *env = NULL;
     int status = _attach(&env);
-
-    jbyteArray array = env->NewByteArray(mmu::page_size << 1);
-    jthrowable exc = env->ExceptionOccurred();
-    assert(!exc);
-
-    jboolean iscopy;
-    auto p = env->GetPrimitiveArrayCritical(array, &iscopy);
-    assert(!iscopy);
-    jobject jref = env->NewGlobalRef(array);
-    WITH_LOCK(balloons_lock) {
-        auto b = new balloon(static_cast<unsigned char *>(p), jref,
-                             mmu::page_size, mmu::page_size << 1);
-        b->empty_area();
-    }
-
-    env->ReleasePrimitiveArrayCritical(array, p, 0);
 
     auto monitor = env->FindClass("io/osv/OSvGCMonitor");
     if (!monitor) {
@@ -347,12 +419,18 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
     auto rtclass = env->FindClass("java/lang/Runtime");
     auto rt = env->GetStaticMethodID(rtclass , "getRuntime", "()Ljava/lang/Runtime;");
     auto rtinst = env->CallStaticObjectMethod(rtclass, rt);
-    auto total_memory = env->GetMethodID(rtclass, "totalMemory", "()J");
+    auto total_memory = env->GetMethodID(rtclass, "maxMemory", "()J");
     _total_heap = env->CallLongMethod(rtinst, total_memory);
+    // As the name implies, this is a soft maximum. We are allowed to go over
+    // it, but as soon as we need to give memory back to the JVM, we will go
+    // down towards number. This is because if the JVM is very short on
+    // memory, it can quickly fill up the new balloon and may not have time
+    // for a new GC cycle.
+    _soft_max_balloons = (_total_heap / ( 2 * balloon_size)) - 1;
 
     auto monmethod = env->GetStaticMethodID(monitor, "MonitorGC", "(J)V");
     env->CallStaticVoidMethod(monitor, monmethod, this);
-    exc = env->ExceptionOccurred();
+    jthrowable exc = env->ExceptionOccurred();
     if (exc) {
         printf("WARNING: Could not start OSV Monitor, and JVM Balloon is being disabled.\n"
                "To fix this problem, please start OSv manually specifying the Heap Size.\n");
@@ -361,9 +439,19 @@ jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)
         abort();
     }
 
-    // Reset statistics
-    recent_jvm_heap();
-    recent_allocated();
-
     _detach(status);
+
+    balloon_shrinker = this;
+
+    // This cannot be a sched::thread because it may call into JNI functions,
+    // if the JVM balloon is registered as a shrinker. It expects the full pthread
+    // API to be functional, and for sched::threads it is not.
+    // std::thread is implemented ontop of pthreads, so it is fine
+    std::thread tmp([=] { _thread_loop(); });
+    tmp.detach();
+}
+
+jvm_balloon_shrinker::~jvm_balloon_shrinker()
+{
+    balloon_shrinker = nullptr;
 }

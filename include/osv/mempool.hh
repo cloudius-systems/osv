@@ -21,6 +21,8 @@
 #include <osv/semaphore.hh>
 #include <osv/mmu.hh>
 
+extern "C" void thread_mark_emergency();
+
 namespace memory {
 
 const size_t page_size = 4096;
@@ -109,8 +111,7 @@ class shrinker {
 public:
     explicit shrinker(std::string name);
     virtual ~shrinker() {}
-    virtual size_t request_memory(size_t n) = 0;
-    virtual size_t release_memory(size_t n) = 0;
+    virtual size_t request_memory(size_t n, bool hard) = 0;
     std::string name() { return _name; };
 
     bool should_shrink(ssize_t target) { return _enabled && (target > 0); }
@@ -122,14 +123,27 @@ private:
     int _enabled = 1;
 };
 
-class reclaimer_waiters: public semaphore {
+class reclaimer_waiters {
 public:
-    explicit reclaimer_waiters() : semaphore(0) { }
-    virtual  ~reclaimer_waiters() {}
-
-    virtual void post(unsigned units = 1);
-    bool has_waiters() { WITH_LOCK(_mtx) { return !_waiters.empty(); } }
+    // return true if there were no waiters or if we could wait some. Returns false
+    // if there were waiters but we could not wake any of them.
+    bool wake_waiters();
+    void wait(size_t bytes);
+    bool has_waiters() { return !_waiters.empty(); }
+private:
+    struct wait_node: boost::intrusive::list_base_hook<> {
+        sched::thread* owner;
+        size_t bytes;
+    };
+    // Protected by mempool.cc's free_page_ranges_lock
+    boost::intrusive::list<wait_node,
+                          boost::intrusive::base_hook<wait_node>,
+                          boost::intrusive::constant_time_size<false>> _waiters;
 };
+
+bool throttling_needed();
+
+void wake_reclaimer();
 
 class reclaimer {
 public:
@@ -140,8 +154,10 @@ public:
 
     friend void start_reclaimer();
     friend class shrinker;
+    friend class reclaimer_waiters;
 private:
     void _do_reclaim();
+    void _shrinker_loop(size_t target, std::function<bool ()> hard);
     // We could just check if the semaphore's wait_list is empty. But since we
     // don't control the internals of the primitives we use for the
     // implementation of semaphore, we are concerned that unlocked access may
@@ -153,7 +169,7 @@ private:
 
     reclaimer_waiters _oom_blocked; // Callers are blocked due to lack of memory
     condvar _blocked;     // The reclaimer itself is blocked waiting for pressure condition
-    sched::thread *_thread;
+    sched::thread _thread;
 
     std::vector<shrinker *> _shrinkers;
     mutex _shrinkers_mutex;
@@ -168,6 +184,7 @@ private:
 namespace stats {
     size_t free();
     size_t total();
+    size_t max_no_reclaim();
     size_t jvm_heap();
     void on_jvm_heap_alloc(size_t mem);
     void on_jvm_heap_free(size_t mem);

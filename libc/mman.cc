@@ -8,12 +8,14 @@
 #include <sys/mman.h>
 #include <memory>
 #include <osv/mmu.hh>
+#include <osv/mempool.hh>
 #include <osv/debug.hh>
 #include "osv/trace.hh"
 #include "osv/dentry.h"
 #include "osv/mount.h"
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
+#include <java/jvm_balloon.hh>
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
@@ -21,6 +23,11 @@ TRACEPOINT(trace_memory_mmap_ret, "%p", void *);
 TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 TRACEPOINT(trace_memory_munmap_err, "%d", int);
 TRACEPOINT(trace_memory_munmap_ret, "");
+
+// Needs to be here, because java.so won't end up composing the kernel
+size_t jvm_heap_size = 0;
+void *jvm_heap_region = nullptr;
+void *jvm_heap_region_end = nullptr;
 
 unsigned libc_flags_to_mmap(int flags)
 {
@@ -107,7 +114,26 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     auto mmap_perm  = libc_prot_to_perm(prot);
 
     if (flags & MAP_ANONYMOUS) {
+        // We have already determined (see below) the region where the heap must be located. Now the JVM will request
+        // fixed mappings inside that region
+        if (jvm_heap_size && (addr >= jvm_heap_region) && (addr + length <= jvm_heap_region_end) && (mmap_flags & mmu::mmap_fixed)) {
+            // Aside from the heap areas, the JVM will also span a new area for
+            // the card table, which has variable size but is always small,
+            // around 20 something MB even for heap sizes as large as 8G. With
+            // the current code, this area will also be marked with the JVM
+            // heap flag, even though it shouldn't technically be. I will leave
+            // it this way now because it is simpler and I don't expect that to
+            // ever be harmful.
+            mmap_flags |= mmu::mmap_jvm_heap;
+            memory::return_jvm_heap(length);
+        }
         ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
+
+        // has a hint, is bigger than the heap size, and we don't request a fixed address. The heap will later on be here.
+        if (addr && jvm_heap_size && (length >= jvm_heap_size) && !(mmap_flags & mmu::mmap_fixed)) {
+            jvm_heap_region = ret;
+            jvm_heap_region_end = ret + length;
+        }
     } else {
         fileref f(fileref_from_fd(fd));
         if (!f) {

@@ -31,6 +31,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
 #include <bsd/porting/sync_stub.h>
+#include <bsd/porting/kthread.h>
 
 #include <bsd/sys/sys/kthread.h>
 #include <bsd/sys/sys/queue.h>
@@ -455,6 +456,8 @@ void
 taskqueue_thread_loop(void *arg)
 {
 	struct taskqueue **tqp, *tq;
+
+	thread_mark_emergency();
 
 	tqp = arg;
 	tq = *tqp;

@@ -16,9 +16,12 @@
 #include <osv/error.h>
 #include <osv/addr_range.hh>
 #include <unordered_map>
+#include <memory>
 
 struct exception_frame;
 class balloon;
+typedef std::shared_ptr<balloon> balloon_ptr;
+
 /**
  * MMU namespace
  */
@@ -67,6 +70,7 @@ enum {
     mmap_uninitialized = 1ul << 3,
     mmap_jvm_heap    = 1ul << 4,
     mmap_small       = 1ul << 5,
+    mmap_jvm_balloon = 1ul << 6,
 };
 
 struct page_allocator;
@@ -137,18 +141,36 @@ private:
     bool _shared;
 };
 
+ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon_ptr b);
+
 class jvm_balloon_vma : public vma {
 public:
-    jvm_balloon_vma(uintptr_t start, uintptr_t end, balloon *b, unsigned perm, unsigned flags);
+    jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start, uintptr_t end, balloon_ptr b, unsigned perm, unsigned flags);
     virtual ~jvm_balloon_vma();
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual void fault(uintptr_t addr, exception_frame *ef) override;
     void detach_balloon();
+    unsigned char *jvm_addr() { return _jvm_addr; }
+    unsigned char *effective_jvm_addr() { return _effective_jvm_addr; }
+    bool add_partial(size_t partial, unsigned char *eff);
+    size_t partial() { return _partial_copy; }
+    // Iff we have a partial, the size may be temporarily changed. We keep it in a different
+    // variable so don't risk breaking any mmu core code that relies on the derived size()
+    // being the same.
+    uintptr_t real_size() const { return _real_size; }
+    friend ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b);
+protected:
+    balloon_ptr _balloon;
+    unsigned char *_jvm_addr;
 private:
-    balloon *_balloon;
+    unsigned char *_effective_jvm_addr = nullptr;
+    uintptr_t _partial_addr = 0;
+    anon_vma *_partial_vma = nullptr;
+    size_t _partial_copy = 0;
     unsigned _real_perm;
     unsigned _real_flags;
+    uintptr_t _real_size;
 };
 
 class shm_file final : public special_file {

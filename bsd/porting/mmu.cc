@@ -27,12 +27,17 @@ uint64_t virt_to_phys(void *virt)
  */
 uint64_t kmem_used(void)
 {
-    return memory::stats::total() - memory::stats::free();
+    return memory::stats::total() - memory::stats::jvm_heap() - memory::stats::free();
 }
 
 int vm_paging_needed(void)
 {
     return 0;
+}
+
+int vm_throttling_needed(void)
+{
+    return memory::throttling_needed();
 }
 
 void mmu_unmap(void *addr, size_t size)

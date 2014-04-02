@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <osv/prio.hh>
 #include <stdlib.h>
+#include "java/jvm_balloon.hh"
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
 TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void *, size_t);
@@ -38,6 +39,7 @@ TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
 TRACEPOINT(trace_memory_page_free, "page=%p", void*);
 TRACEPOINT(trace_memory_huge_failure, "page ranges=%d", unsigned long);
 TRACEPOINT(trace_memory_reclaim, "shrinker %s, target=%d, delta=%d", const char *, long, long);
+TRACEPOINT(trace_memory_wait, "allocation size=%d", size_t);
 
 bool smp_allocator = false;
 unsigned char *osv_reclaimer_thread;
@@ -431,8 +433,18 @@ static size_t constexpr min_emergency_pool_size = 4 << 20;
 
 __thread bool allow_emergency_alloc = false;
 
+extern "C" void thread_mark_emergency()
+{
+    allow_emergency_alloc = true;
+}
+
 reclaimer reclaimer_thread
     __attribute__((init_priority((int)init_prio::reclaimer)));
+
+void wake_reclaimer()
+{
+    reclaimer_thread.wake();
+}
 
 static void on_free(size_t mem)
 {
@@ -442,7 +454,8 @@ static void on_free(size_t mem)
 static void on_alloc(size_t mem)
 {
     free_memory.fetch_sub(mem);
-    if (stats::free() < watermark_lo) {
+    jvm_balloon_adjust_memory(min_emergency_pool_size);
+    if ((stats::free() + stats::jvm_heap()) < watermark_lo) {
         reclaimer_thread.wake();
     }
 }
@@ -456,6 +469,12 @@ static void on_new_memory(size_t mem)
 namespace stats {
     size_t free() { return free_memory.load(std::memory_order_relaxed); }
     size_t total() { return total_memory.load(std::memory_order_relaxed); }
+
+    size_t max_no_reclaim()
+    {
+        auto total = total_memory.load(std::memory_order_relaxed);
+        return total - watermark_lo;
+    }
 
     void on_jvm_heap_alloc(size_t mem)
     {
@@ -471,9 +490,7 @@ namespace stats {
 
 void reclaimer::wake()
 {
-    if (_thread) {
-        _blocked.wake_one();
-    }
+    _blocked.wake_one();
 }
 
 pressure reclaimer::pressure_level()
@@ -497,7 +514,7 @@ ssize_t reclaimer::bytes_until_normal(pressure curr)
 
 void oom()
 {
-    abort("Out of memory: could not reclaim any further");
+    abort("Out of memory: could not reclaim any further. Current memory: %d Kb", stats::free() >> 10);
 }
 
 void reclaimer::wait_for_minimum_memory()
@@ -523,21 +540,8 @@ void reclaimer::wait_for_minimum_memory()
 // memory, there is very little hope and we would might as well give up.
 void reclaimer::wait_for_memory(size_t mem)
 {
-
-    if (!_thread) {
-        auto would_block = _oom_blocked.trywait(mem);
-        assert(!would_block); // Too early for this, and would go negative
-        return;
-    }
-
-    if (sched::thread::current() == _thread) {
-        oom();
-    }
-
-    DROP_LOCK(free_page_ranges_lock) {
-        reclaimer_thread.wake();
-        _oom_blocked.wait(mem);
-    }
+    trace_memory_wait(mem);
+    _oom_blocked.wait(mem);
 }
 
 static void* malloc_large(size_t size)
@@ -596,55 +600,80 @@ shrinker::shrinker(std::string name)
     }
 }
 
-// We don't know from the outside of semaphore how many units we are waiting
-// for. But when we free memory, that is done by an arbitrary quantity that
-// depends on how much memory we were able to free, not on how much we were
-// waiting for.
-//
-// For instance, if we have two waiters waiting for 2Mb each, and we've just
-// freed 8Mb, the semaphore would now be 4Mb positive.  That means that a next
-// waiter will just go through smoothly, instead of waiting as it should.
-//
-// This specialization of the "post" method guarantees that this never happen.
-// Note that there are two possible cases:
-//
-// 1) We free at least as much memory as we need. In that case, we will wake up
-// everybody, and whatever would be left in the semaphore will just be capped.
-// All waiters are gone, and new waiters will correctly stall on wait().
-//
-// 2) We free less than the total waited for. In that case, we will wake up as
-// much waiters as we can, and the remaining memory still waited for is kept intact
-// in the queue. Because _val is also 0 in this case, new waiters will correctly
-// stall on wait().
-//
-// An alternative to that would be to initialize the semaphore with the amount
-// of free memory and update it every time we alloc/free. But that would be too
-// expensive. But more importantly, it would put us to sleep in random places.
-void reclaimer_waiters::post(unsigned units)
+bool reclaimer_waiters::wake_waiters()
 {
-    WITH_LOCK(_mtx) {
-        post_unlocked(units);
-        _val = 0;
+    bool woken = false;
+    assert(mutex_owned(&free_page_ranges_lock));
+    for (auto& fp : free_page_ranges) {
+        // We won't do the allocations, so simulate. Otherwise we can have
+        // 10Mb available in the whole system, and 4 threads that wait for
+        // it waking because they all believe that memory is available
+        auto in_this_page_range = fp.size;
+        // We expect less waiters than page ranges so the inner loop is one
+        // of waiters. But we cut the whole thing short if we're out of them.
+        if (_waiters.empty()) {
+            return true;
+        }
+
+        auto it = _waiters.begin();
+        while (it != _waiters.end()) {
+            auto& wr = *it;
+            it++;
+
+            if (in_this_page_range >= wr.bytes) {
+                in_this_page_range -= wr.bytes;
+                _waiters.erase(_waiters.iterator_to(wr));
+                wr.owner->wake();
+                wr.owner = nullptr;
+                woken = true;
+            }
+        }
     }
+
+    if (!_waiters.empty()) {
+        reclaimer_thread.wake();
+    }
+    return woken;
+}
+
+// Note for callers: Ideally, we would not only wake, but already allocate
+// memory here and pass it back to the waiter. However, memory is not always
+// allocated the same way (ex: refill_page_buffer is completely different from
+// malloc_large) and that could be cumbersome.
+//
+// That means that this returning will only mean allocation may succeed, not
+// that it will.  Because of that, it is of extreme importance that callers
+// pass the exact amount of memory they are waiting for. So for instance, if
+// your allocation is 2Mb in size + a 4k header, "bytes" bellow should be 2Mb +
+// 4k, not 2Mb. Failing to do so could livelock the system, that would forever
+// wake up believing there is enough memory, when in reality there is not.
+void reclaimer_waiters::wait(size_t bytes)
+{
+    assert(mutex_owned(&free_page_ranges_lock));
+
+    sched::thread *curr = sched::thread::current();
+
+    // Wait for whom?
+    if (curr == &reclaimer_thread._thread) {
+        oom();
+     }
+
+    wait_node wr;
+    wr.owner = curr;
+    wr.bytes = bytes;
+    _waiters.push_back(wr);
+
+    // At this point the reclaimer thread already knows there are waiters,
+    // because the _waiters_list was already updated.
+    reclaimer_thread.wake();
+    sched::thread::wait_until(&free_page_ranges_lock, [&] { return !wr.owner; });
 }
 
 reclaimer::reclaimer()
-    : _oom_blocked(), _thread(NULL)
+    : _oom_blocked(), _thread([&] { _do_reclaim(); }, sched::thread::attr().detached().name("reclaimer").stack(mmu::page_size))
 {
-    // This cannot be a sched::thread because it may call into JNI functions,
-    // if the JVM balloon is registered as a shrinker. It expects the full
-    // pthread API to be functional, and for sched::threads it is not.
-    // std::thread is implemented ontop of pthreads, so it is fine
-    std::thread tmp([&] {
-        _thread = sched::thread::current();
-        _thread->set_name("reclaimer");
-        osv_reclaimer_thread = reinterpret_cast<unsigned char *>(_thread);
-        allow_emergency_alloc = true;
-        do {
-            _do_reclaim();
-        } while (true);
-    });
-    tmp.detach();
+    osv_reclaimer_thread = reinterpret_cast<unsigned char *>(&_thread);
+    _thread.start();
 }
 
 bool reclaimer::_can_shrink()
@@ -659,22 +688,8 @@ bool reclaimer::_can_shrink()
     return false;
 }
 
-void reclaimer::_do_reclaim()
+void reclaimer::_shrinker_loop(size_t target, std::function<bool ()> hard)
 {
-    ssize_t target;
-    size_t memory_freed = 0;
-    WITH_LOCK(free_page_ranges_lock) {
-        _blocked.wait_until(free_page_ranges_lock,
-            // We should only try to shrink if there are available shrinkers.
-            // But if we have waiters, we need to wake up the reclaimer anyway.
-            // Of course, if there are no shrinkers we won't free anything. But
-            // we need to wake up to be able to at least notice that and OOM.
-            [=] { return _oom_blocked.has_waiters() ||
-                (_can_shrink() && (pressure_level() != pressure::NORMAL)); }
-        );
-        target = bytes_until_normal();
-    }
-
     // FIXME: This simple loop works only because we have a single shrinker
     // When we have more, we need to probe them and decide how much to take from
     // each of them.
@@ -684,30 +699,51 @@ void reclaimer::_do_reclaim()
         // to manipulate the free_page_ranges structure.  Executing the
         // shrinkers with the lock held would result in a deadlock.
         for (auto s : _shrinkers) {
-            if (s->should_shrink(target)) {
-                size_t freed = s->request_memory(target);
-                trace_memory_reclaim(s->name().c_str(), target, freed);
-                memory_freed += freed;
-            }
+            // FIXME: If needed, in the future we can introduce another
+            // intermediate threshold that will put is into hard mode even
+            // before we have waiters.
+            size_t freed = s->request_memory(target, hard());
+            trace_memory_reclaim(s->name().c_str(), target, freed);
         }
     }
+}
 
-    WITH_LOCK(free_page_ranges_lock) {
-        if (target > 0) {
-            // Because we are not disposing of our waiters, we will be forced
-            // to enter this method again. Even if no waiters can be serviced,
-            // if we could free at least some memory at this stage, there is
-            // still hope. So we won't abort.  But if we have waiters, and
-            // we're already using up all our reserves, then it is time to give
-            // up.
-            if (_oom_blocked.has_waiters() && !memory_freed) {
-                oom();
+void reclaimer::_do_reclaim()
+{
+    ssize_t target;
+    allow_emergency_alloc = true;
+
+    while (true) {
+        WITH_LOCK(free_page_ranges_lock) {
+            _blocked.wait(free_page_ranges_lock);
+            target = bytes_until_normal();
+        }
+
+        // This means that we are currently ballooning, we should
+        // try to serve the waiters from temporary memory without
+        // going on hard mode. A big batch of more memory is likely
+        // in its way.
+        if (_oom_blocked.has_waiters() && throttling_needed()) {
+            _shrinker_loop(target, [] { return false; });
+            WITH_LOCK(free_page_ranges_lock) {
+                if (_oom_blocked.wake_waiters()) {
+                        continue;
+                }
+            }
+        }
+
+        _shrinker_loop(target, [this] { return _oom_blocked.has_waiters(); });
+
+        WITH_LOCK(free_page_ranges_lock) {
+            if (target > 0) {
+                // Wake up all waiters that are waiting and now have a chance to succeed.
+                // If we could not wake any, there is nothing really we can do.
+                if (!_oom_blocked.wake_waiters()) {
+                    oom();
+                }
             }
 
-            // Wake up all waiters that are waiting for an ammount of memory that is
-            // smaller than the one we've just freed.
-            _oom_blocked.post(memory_freed);
-
+            jvm_balloon_voluntary_return();
         }
     }
 }

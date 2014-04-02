@@ -193,7 +193,7 @@ boost-tests += tests/tst-async.so
 java_tests := tests/hello/Hello.class
 
 tests := tests/tst-pthread.so tests/tst-ramdisk.so
-tests += tests/tst-vblk.so tests/bench/bench.jar
+tests += tests/tst-vblk.so tests/bench/bench.jar tests/reclaim/reclaim.jar
 tests += tests/tst-bsd-evh.so tests/misc-bsd-callout.so
 tests += tests/tst-bsd-kthread.so
 tests += tests/tst-bsd-taskqueue.so

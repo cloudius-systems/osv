@@ -13,6 +13,8 @@
 #include <osv/mempool.hh>
 #include "java_api.hh"
 
+extern size_t jvm_heap_size;
+
 // java.so is similar to the standard "java" command line launcher in Linux.
 //
 // This program does very little - basically it starts the JVM and asks it
@@ -111,14 +113,18 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!has_xmx) {
-        // FIXME: We should estimate how much memory the JVM itself is going to use
-        auto heap_size = memory::stats::free() >> 20;
-        options.push_back(mkoption("-Xmx%dM", heap_size));
+    size_t auto_heap = 0;
+    // Do not use total(), since that won't reflect the whole memory for the
+    // machine. It then becomes counterintuitive to tell the user what is the
+    // minimum he has to set to balloon
+    if (!has_xmx && (memory::phys_mem_size >= balloon_min_memory)) {
+        auto_heap = std::min(memory::stats::free(), memory::stats::max_no_reclaim()) >> 20;
+        options.push_back(mkoption("-Xmx%dM", auto_heap));
         if (!has_xms) {
-            options.push_back(mkoption("-Xms%dM", heap_size));
+            options.push_back(mkoption("-Xms%dM", auto_heap));
         }
-        debugf("Autotuning JVM heap size to %d MB\n", heap_size);
+        auto_heap <<= 20;
+        jvm_heap_size = auto_heap;
     }
 
     vm_args.nOptions = options.size();
@@ -137,6 +143,7 @@ int main(int argc, char **argv)
         std::cerr << "java.so: Can't create VM.\n";
         return 1;
     }
+    jvm_heap_size = 0;
 
     java_api::set(jvm);
     auto mainclass = env->FindClass(RUNJAVA);
@@ -171,7 +178,7 @@ int main(int argc, char **argv)
     // that case, we'll leave the user alone. This may be revisited in the
     // future, but it is certainly the safest option.
     std::unique_ptr<jvm_balloon_shrinker>
-        balloon(has_xmx ? nullptr : new jvm_balloon_shrinker(jvm));
+        balloon(auto_heap == 0 ? nullptr : new jvm_balloon_shrinker(jvm));
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
 

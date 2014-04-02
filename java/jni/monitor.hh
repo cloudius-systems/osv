@@ -13,7 +13,7 @@ extern "C" {
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_io_osv_OSvGCMonitor_NotifyOSv
-  (JNIEnv *, jclass, jlong);
+  (JNIEnv *, jclass, jlong, jlong);
 
 #ifdef __cplusplus
 }
