@@ -454,7 +454,7 @@ private:
     bool _write;
     bool _map_dirty;
     pt_element dirty(pt_element pte) {
-        pte.set_dirty(_map_dirty);
+        pte.set_dirty(_map_dirty || _write);
         return pte;
     }
     bool skip(pt_element pte) {
