@@ -9,7 +9,8 @@
 #define ARCH_MMU_HH_
 
 #include <osv/ilog2.hh>
-#include <osv/mmu.hh>
+#include <osv/types.h>
+#include <osv/mmu-defs.hh>
 
 namespace mmu {
 
@@ -68,19 +69,20 @@ class hw_ptep {
 public:
     hw_ptep(const hw_ptep& a) : p(a.p) {}
     pt_element read() const { return *p; }
-    void write(pt_element pte) { *const_cast<volatile u64*>(&p->x) = pte.x; }
-    bool compare_exchange(pt_element oldval, pt_element newval) {
+    void write(pt_element pte) const { *const_cast<volatile u64*>(&p->x) = pte.x; }
+    bool compare_exchange(pt_element oldval, pt_element newval) const {
         std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
         return x->compare_exchange_strong(oldval.x, newval.x, std::memory_order_relaxed);
     }
-    pt_element exchange(pt_element newval) {
+    pt_element exchange(pt_element newval) const {
         std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
         return pt_element(x->exchange(newval.x));
     }
-    hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
+    hw_ptep at(unsigned idx) const { return hw_ptep(p + idx); }
     static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
     // no longer using this as a page table
-    pt_element* release() { return p; }
+    pt_element* release() const { return p; }
+    bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
 private:
     hw_ptep(pt_element* ptep) : p(ptep) {}
     pt_element* p;
