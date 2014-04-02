@@ -686,12 +686,7 @@ tcp_newtcpcb(struct inpcb *inp)
 #endif /* INET6 */
 		V_tcp_mssdflt;
 
-	/* Set up our timeouts. */
-	callout_init(&tp->t_timers->tt_rexmt, CALLOUT_MPSAFE);
-	callout_init(&tp->t_timers->tt_persist, CALLOUT_MPSAFE);
-	callout_init(&tp->t_timers->tt_keep, CALLOUT_MPSAFE);
-	callout_init(&tp->t_timers->tt_2msl, CALLOUT_MPSAFE);
-	callout_init(&tp->t_timers->tt_delack, CALLOUT_MPSAFE);
+	init_timers(tp->t_timers, tp, inp);
 
 	if (V_tcp_do_rfc1323)
 		tp->t_flags = (TF_REQ_SCALE|TF_REQ_TSTMP);
@@ -820,26 +815,9 @@ tcp_discardcb(struct tcpcb *tp)
 
 	INP_LOCK_ASSERT(inp);
 
-	/*
-	 * Make sure that all of our timers are stopped before we delete the
-	 * PCB.
-	 *
-	 * XXXRW: Really, we would like to use callout_drain() here in order
-	 * to avoid races experienced in tcp_timer.c where a timer is already
-	 * executing at this point.  However, we can't, both because we're
-	 * running in a context where we can't sleep, and also because we
-	 * hold locks required by the timers.  What we instead need to do is
-	 * test to see if callout_drain() is required, and if so, defer some
-	 * portion of the remainder of tcp_discardcb() to an asynchronous
-	 * context that can callout_drain() and then continue.  Some care
-	 * will be required to ensure that no further processing takes place
-	 * on the tcpcb, even though it hasn't been freed (a flag?).
-	 */
-	callout_stop(&tp->t_timers->tt_rexmt);
-	callout_stop(&tp->t_timers->tt_persist);
-	callout_stop(&tp->t_timers->tt_keep);
-	callout_stop(&tp->t_timers->tt_2msl);
-	callout_stop(&tp->t_timers->tt_delack);
+	for (auto& t : *tp->t_timers) {
+		t->cancel();
+	}
 
 	/*
 	 * If we got enough samples through the srtt filter,
@@ -912,8 +890,28 @@ tcp_discardcb(struct tcpcb *tp)
 
 	CC_ALGO(tp) = NULL;
 	inp->inp_ppcb = NULL;
-	tp->t_inpcb = NULL;
-	uma_zfree(V_tcpcb_zone, tp);
+
+	/*
+	 * We must prevent inpcb from being freed until all
+	 * timers are stopped because they try to take a lock on it.
+	 */
+	in_pcbref(tp->t_inpcb);
+
+	async::run_later([inp, tp] {
+		INP_LOCK(inp);
+
+		for (auto& t : *tp->t_timers) {
+			t->cancel_sync();
+			delete t;
+		}
+
+		if (!in_pcbrele_locked(inp)) {
+			INP_UNLOCK(inp);
+		}
+
+		tp->t_inpcb = NULL;
+		uma_zfree(V_tcpcb_zone, tp);
+	});
 }
 
 /*

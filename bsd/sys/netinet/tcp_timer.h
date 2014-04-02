@@ -33,7 +33,11 @@
 #ifndef _NETINET_TCP_TIMER_H_
 #define _NETINET_TCP_TIMER_H_
 
-#include <bsd/porting/callout.h>
+#include <osv/async.hh>
+#include <osv/clock.hh>
+#include <osv/trace.hh>
+
+using namespace osv::clock::literals;
 
 /*
  * The TCPT_REXMT timer is used to force retransmissions.
@@ -142,18 +146,38 @@ static const char *tcptimers[] =
 
 struct xtcp_timer;
 
-struct tcp_timer {
-	struct	callout tt_rexmt;	/* retransmit timer */
-	struct	callout tt_persist;	/* retransmit persistence */
-	struct	callout tt_keep;	/* keepalive */
-	struct	callout tt_2msl;	/* 2*msl TIME_WAIT timer */
-	struct	callout tt_delack;	/* delayed ACK timer */
+using ticks_t = u64;
+using async::serial_timer_task;
+
+enum tcp_timer_type {
+	TT_DELACK,	/* retransmit timer */
+	TT_REXMT,	/* retransmit persistence */
+	TT_PERSIST,	/* keepalive */
+	TT_KEEP,	/* 2*msl TIME_WAIT timer */
+	TT_2MSL,	/* delayed ACK timer */
+	COUNT
 };
-#define TT_DELACK	0x01
-#define TT_REXMT	0x02
-#define TT_PERSIST	0x04
-#define TT_KEEP		0x08
-#define TT_2MSL		0x10
+
+struct tcp_timer {
+	std::array<serial_timer_task*,tcp_timer_type::COUNT> timers;
+	serial_timer_task& get(tcp_timer_type timer_type);
+
+	using iterator = decltype(timers)::iterator;
+	iterator begin() { return timers.begin(); }
+	iterator end() { return timers.end(); }
+};
+
+static inline
+async::clock::duration ticks_to_duration(ticks_t ticks)
+{
+	return ticks2ns(ticks) * 1_ns;
+}
+
+static inline
+void reschedule(serial_timer_task& timer, ticks_t delay)
+{
+	timer.reschedule(ticks_to_duration(delay));
+}
 
 #define	TP_KEEPINIT(tp)	((tp)->t_keepinit ? (tp)->t_keepinit : tcp_keepinit)
 #define	TP_KEEPIDLE(tp)	((tp)->t_keepidle ? (tp)->t_keepidle : tcp_keepidle)
@@ -177,15 +201,13 @@ extern int tcp_finwait2_timeout;
 extern int tcp_fast_finwait2_recycle;
 
 void	tcp_timer_init(void);
-void	tcp_timer_2msl(void *xtp);
 struct tcptw *
 	tcp_tw_2msl_scan(int _reuse);		/* XXX temporary */
-void	tcp_timer_keep(void *xtp);
-void	tcp_timer_persist(void *xtp);
-void	tcp_timer_rexmt(void *xtp);
-void	tcp_timer_delack(void *xtp);
-void	tcp_timer_to_xtimer(struct tcpcb *tp, struct tcp_timer *timer,
-	struct xtcp_timer *xtimer);
+void tcp_timer_activate(struct tcpcb *tp, tcp_timer_type timer_type, ticks_t delta);
+int tcp_timer_active(struct tcpcb *tp, tcp_timer_type timer_type);
+
+void init_timers(struct tcp_timer* timers, struct tcpcb *tp, struct inpcb *inp);
+
 
 #endif /* _KERNEL */
 

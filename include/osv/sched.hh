@@ -171,6 +171,7 @@ public:
     explicit timer_base(client& t);
     ~timer_base();
     void set(osv::clock::uptime::time_point time);
+    void reset(osv::clock::uptime::time_point time);
     // Set a timer using absolute wall-clock time.
     // CAVEAT EMPTOR: Internally timers are kept using the monotonic (uptime)
     // clock, so the wall-time given here is converted to an uptime.
@@ -543,6 +544,7 @@ private:
     };
     std::unique_ptr<detached_state> _detached_state;
     attr _attr;
+    int _migration_lock_counter;
     arch_thread _arch;
     arch_fpu _fpu;
     unsigned int _id;
@@ -559,6 +561,8 @@ private:
     friend class thread_runtime_compare;
     friend struct arch_cpu;
     friend class thread_runtime;
+    friend void migrate_enable();
+    friend void migrate_disable();
     friend void ::smp_main();
     friend void ::smp_launch();
     friend void init(std::function<void ()> cont);
@@ -1039,6 +1043,17 @@ timer::timer(thread& t)
 }
 
 extern std::vector<cpu*> cpus;
+
+inline void migrate_disable()
+{
+    thread::current()->_migration_lock_counter++;
+}
+
+inline void migrate_enable()
+{
+    thread::current()->_migration_lock_counter--;
+}
+
 
 }
 

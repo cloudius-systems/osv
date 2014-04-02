@@ -81,6 +81,12 @@
 #include <bsd/sys/netipsec/key.h>
 #endif /* IPSEC */
 
+#include <osv/trace.hh>
+
+TRACEPOINT(trace_inpcb_ref, "inp=%x", struct inpcb *);
+TRACEPOINT(trace_inpcb_rele, "inp=%x", struct inpcb *);
+TRACEPOINT(trace_inpcb_free, "inp=%x", struct inpcb *);
+
 static struct callout	ipport_tick_callout;
 
 /*
@@ -969,7 +975,7 @@ in_pcbref(struct inpcb *inp)
 {
 
 	KASSERT(inp->inp_refcount > 0, ("%s: refcount 0", __func__));
-
+	trace_inpcb_ref(inp);
 	refcount_acquire(&inp->inp_refcount);
 }
 
@@ -991,6 +997,7 @@ in_pcbrele_locked(struct inpcb *inp)
 	struct inpcbinfo *pcbinfo;
 
 	KASSERT(inp->inp_refcount > 0, ("%s: refcount 0", __func__));
+	trace_inpcb_rele(inp);
 
 	INP_LOCK_ASSERT(inp);
 
@@ -1007,6 +1014,8 @@ in_pcbrele_locked(struct inpcb *inp)
 	}
 
 	KASSERT(inp->inp_socket == NULL, ("%s: inp_socket != NULL", __func__));
+
+	trace_inpcb_free(inp);
 
 	INP_UNLOCK(inp);
 	pcbinfo = inp->inp_pcbinfo;

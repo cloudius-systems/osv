@@ -91,7 +91,7 @@ socantsendmore(struct socket *so)
 	SOCK_LOCK(so);
 	socantsendmore_locked(so);
 	SOCK_UNLOCK(so);
-	mtx_assert(SOCK_MTX(so), MA_NOTOWNED);
+	SOCK_UNLOCK_ASSERT(so);
 }
 
 void
@@ -111,7 +111,7 @@ socantrcvmore(struct socket *so)
 	SOCK_LOCK(so);
 	socantrcvmore_locked(so);
 	SOCK_UNLOCK(so);
-	mtx_assert(SOCK_MTX(so), MA_NOTOWNED);
+	SOCK_UNLOCK_ASSERT(so);
 }
 
 void sockbuf_iolock::lock(mutex& mtx)
@@ -155,11 +155,11 @@ sbwait(socket* so, struct sockbuf *sb)
 	signal_catcher sc;
 	if (so->so_nc && !so->so_nc_busy) {
 		so->so_nc_busy = true;
-		sched::thread::wait_for(so->so_mtx->_mutex, *so->so_nc, sb->sb_cc_wq, tmr, sc);
+		sched::thread::wait_for(SOCK_MTX_REF(so), *so->so_nc, sb->sb_cc_wq, tmr, sc);
 		so->so_nc_busy = false;
-		so->so_nc_wq.wake_all(so->so_mtx->_mutex);
+		so->so_nc_wq.wake_all(SOCK_MTX_REF(so));
 	} else {
-		sched::thread::wait_for(so->so_mtx->_mutex, so->so_nc_wq, sb->sb_cc_wq, tmr, sc);
+		sched::thread::wait_for(SOCK_MTX_REF(so), so->so_nc_wq, sb->sb_cc_wq, tmr, sc);
 	}
 	if (sc.interrupted()) {
 		return EINTR;
@@ -177,15 +177,15 @@ sbwait(socket* so, struct sockbuf *sb)
 int
 sblock(socket* so, struct sockbuf *sb, int flags)
 {
-   WITH_LOCK(so->so_mtx->_mutex) {
+   WITH_LOCK(SOCK_MTX_REF(so)) {
 	KASSERT((flags & SBL_VALID) == flags,
 	    ("sblock: flags invalid (0x%x)", flags));
 
 	if (flags & SBL_WAIT) {
-		sb->sb_iolock.lock(so->so_mtx->_mutex);
+		sb->sb_iolock.lock(SOCK_MTX_REF(so));
 		return (0);
 	} else {
-		if (!sb->sb_iolock.try_lock(so->so_mtx->_mutex))
+		if (!sb->sb_iolock.try_lock(SOCK_MTX_REF(so)))
 			return (EWOULDBLOCK);
 		return (0);
 	}
@@ -195,8 +195,8 @@ sblock(socket* so, struct sockbuf *sb, int flags)
 void
 sbunlock(socket* so, struct sockbuf *sb)
 {
-	WITH_LOCK(so->so_mtx->_mutex) {
-		sb->sb_iolock.unlock(so->so_mtx->_mutex);
+	WITH_LOCK(SOCK_MTX_REF(so)) {
+		sb->sb_iolock.unlock(SOCK_MTX_REF(so));
 	}
 }
 
@@ -240,7 +240,7 @@ sowakeup(struct socket *so, struct sockbuf *sb)
 
 	if (sb->sb_flags & SB_WAIT) {
 		sb->sb_flags &= ~SB_WAIT;
-		sb->sb_cc_wq.wake_all(so->so_mtx->_mutex);
+		sb->sb_cc_wq.wake_all(SOCK_MTX_REF(so));
 	}
 	if (sb->sb_upcall != NULL) {
 		ret = sb->sb_upcall(so, sb->sb_upcallarg, M_DONTWAIT);
