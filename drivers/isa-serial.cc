@@ -71,4 +71,9 @@ void IsaSerialConsole::reset() {
 
     // enable interrupts
     pci::outb(1, ioport + IER_ADDRESS);
+
+    // Most physical UARTs need the MCR AUX_OUTPUT_2 bit set to 1 for
+    // interrupts to be generated. QEMU doesn't bother checking this
+    // bit, but interestingly VMWare does, so we must set it.
+    pci::outb(MCR_AUX_OUTPUT_2, ioport + MCR_ADDRESS);
 }

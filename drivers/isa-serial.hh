@@ -50,6 +50,12 @@ private:
         LSR_TRANSMIT_HOLD_EMPTY = 0x20,
         LSR_TRANSMIT_EMPTY = 0x40,
         LSR_FIFO_ERROR = 0x80,
+        // Various bits of the Modem Control Register
+        MCR_DTR = 0x1,
+        MCR_RTS = 0x2,
+        MCR_AUX_OUTPUT_1 = 0x4,
+        MCR_AUX_OUTPUT_2 = 0x8,
+        MCR_LOOPBACK_MODE = 0x16,
     };
 
     void reset();
