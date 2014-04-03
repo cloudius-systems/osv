@@ -69,7 +69,7 @@ make img_format=raw
 ./scripts/run.py
 ```
 
-By default, this runs OSv under KVM, with 4 VCPUs and 1GB of memory,
+By default, this runs OSv under KVM, with 4 VCPUs and 2GB of memory,
 and runs the default management application (containing a shell, Web
 server, and SSH server).
 
