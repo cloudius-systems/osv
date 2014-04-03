@@ -4,6 +4,10 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/"
         },
+        "httpserver": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/mgmt/httpserver"
+        },
         "java": {
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/java/"
