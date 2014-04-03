@@ -174,7 +174,7 @@ static std::unique_ptr<cached_page> create_write_cached_page(vfs_file* fp, hashk
     cached_page* cp = new cached_page(key, fp);
     struct iovec iov {cp->addr(), mmu::page_size};
 
-    sys_read(fp, &iov, 1, key.offset, &bytes);
+    assert(sys_read(fp, &iov, 1, key.offset, &bytes) == 0);
     return std::unique_ptr<cached_page>(cp);
 }
 
