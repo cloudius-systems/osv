@@ -20,6 +20,7 @@ out=build/capstan/$name
 qemuimage=build/release/usr.img
 vboximage=build/release/usr.vdi
 gceimage=build/release/osv.tar.gz
+vmwimage=build/release/usr.vmdk
 index=$out/index.yaml
 build="make image=$image"
 
@@ -35,12 +36,18 @@ echo "build: $build" >> $index
 
 $build
 
+# Generate QEMU image
 qemu-img convert -O vdi $qemuimage $vboximage
+
+# Generate VMW image
+qemu-img convert -O vmdk $qemuimage $vmwimage
+
 # Generate GCE image
 scripts/gen-gce-tarball.sh
 
 gzip < $qemuimage > $out/$(basename $name).qemu.gz
 gzip < $vboximage > $out/$(basename $name).vbox.gz
+gzip < $vmwimage  > $out/$(basename $name).vmw.gz
 gzip < $gceimage  > $out/$(basename $name).gce.gz
 
 echo "==> '$name' image built to '$out'."
