@@ -15,8 +15,8 @@ boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
 
 # the build target executable:
 TARGET = httpserver
-JSON_FILES := $(wildcard ../api/listings/*.json)
-JSON_CC_FILES := $(subst .json,.json.cc,$(subst ../api/listings/,autogen/,$(JSON_FILES)))
+JSON_FILES := $(wildcard api-doc/listings/*.json)
+JSON_CC_FILES := $(subst .json,.json.cc,$(subst api-doc/listings/,autogen/,$(JSON_FILES)))
 CPP_FILES := $(JSON_CC_FILES) $(wildcard *.cc) $(wildcard json/*.cc) $(wildcard api/*.cc)
 STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
@@ -27,7 +27,10 @@ LIBS = -lpthread -lboost_program_options-mt $(boost-libs)
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-all: init $(TARGET).so
+
+module: all swagger-ui-lib
+
+all: init api-doc/.git $(TARGET).so
 
 init:
 	$(call very-quiet, mkdir -p obj)
@@ -43,7 +46,7 @@ $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 $(TARGET).so: $(OBJ_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET).so $^, LINK $@)
 
-autogen/%.cc: ../api/listings/%
+autogen/%.cc: api-doc/listings/%
 	$(call quiet,./json2code.py -f $< -ns json, GEN $@)
 
 obj/%.o: %.cc
@@ -53,5 +56,19 @@ clean:
 	$(call quiet, $(RM) $(TARGET), CLEAN)
 	$(call very-quiet, $(RM) $(TARGET).so)
 	$(call very-quiet, $(RM) -rf obj/*)
+
+check:
+	cd ../.. && mgmt/httpserver/tests/testhttpserver.py
+
+swagger-ui-lib: swagger-ui/.git
+.PHONY: swagger-ui-lib
+
+submodules:
+	cd .. && git submodule update --init -f
+.PHONY: submodules
+
+swagger-ui/.git: submodules
+
+api-doc/.git: submodules
 
 .SECONDARY:
