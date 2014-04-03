@@ -1,0 +1,68 @@
+#!/bin/sh
+set -e
+
+version=$(`dirname $0`/osv-version.sh)
+name=$1
+image=$2
+description=$3
+out=build/standalone/$name
+build="make image=$image"
+
+function usage()
+{
+	echo "Usage: scripts/build-standalone-img [name] [image] [description]"
+	exit 1
+}
+
+if [ $# -ne 3 ];then
+	usage
+fi
+
+### Build image
+echo "==> Building '$name'..."
+$build
+
+### Prepare output dir
+rm -rf $out
+mkdir -p $out
+
+### Image for KVM
+img=build/release/usr.img
+hypervisor=kvm
+format=qcow2
+cp $img $out/$(basename $name).qemu.qcow2
+
+### Image for VirtualBox
+scripts/gen-vbox-ova.sh >/dev/null
+img=build/release/osv.ova
+hypervisor=vbox
+format=ova
+mv $img $out/$(basename $name).vbox.ova
+
+### Image for Google Compute Engine
+scripts/gen-gce-tarball.sh >/dev/null
+img=build/release/osv.tar.gz
+hypervisor=gce
+format=tar.gz
+mv $img $out/$(basename $name).gce.tar.gz
+
+### Image for VMware Workstation
+make osv.vmdk >/dev/null
+scripts/gen-vmx.sh
+cd build/release
+zip osv-vmw.zip osv.vmx osv.vmdk >/dev/null
+cd -
+img=build/release/osv-vmw.zip
+hypervisor=vmw
+format=zip
+mv $img $out/$(basename $name).vmw.zip
+
+### Image for VMware ESXi
+rm -f build/release/osv-esx.ova
+ovftool build/release/osv.vmx build/release/osv-esx.ova >/dev/null
+img=build/release/osv-esx.ova
+hypervisor=esx
+format=ova
+mv $img $out/$(basename $name).esx.ova
+
+echo "==> '$name' image built to '$out'."
