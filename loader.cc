@@ -180,7 +180,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     } catch(std::exception &e) {
         std::cout << e.what() << '\n';
         std::cout << desc << '\n';
-        abort();
+        osv::poweroff();
     }
     bpo::notify(vars);
 
@@ -245,6 +245,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 // return the std::string and the commands_args poiting to them as a move
 std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
 {
+    if (ac == 0) {
+        puts("This image has an empty command line. Nothing to run.");
+        osv::poweroff();
+    }
     std::vector<std::vector<std::string> > commands;
     std::string line = std::string("");
     bool ok;
@@ -257,7 +261,8 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
     commands = osv::parse_command_line(line, ok);
 
     if (!ok) {
-        abort("Failed to parse commands line\n");
+        puts("Failed to parse command line.");
+        osv::poweroff();
     }
 
     return commands;
