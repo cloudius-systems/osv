@@ -88,7 +88,7 @@ class test_httpserver(unittest.TestCase):
 
     def test_os_version(self):
         path = self.path_by_nick(self.os_api, "getOSversion")
-        self.assertRegexpMatches(self.curl(path), "v0\\.\\d+\\-\\d+\\-[0-9a-z]+" , path)
+        self.assertRegexpMatches(self.curl(path), r"v0\.\d+(-rc\d+)?-\d+-[0-9a-z]+" , path)
 
     def test_manufactor(self):
         self.validate_path(self.os_api, "getOSmanufacturer", "cloudius-systems")
