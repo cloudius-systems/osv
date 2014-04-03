@@ -170,10 +170,13 @@ void cpu::init_idle_thread()
     idle_thread->set_priority(thread::priority_idle);
 }
 
+// Note that this is a static (class) function, which can only reschedule
+// on the current CPU, not on an arbitrary CPU. Allowing to run one CPU's
+// scheduler on a different CPU would be disastrous.
 void cpu::schedule()
 {
     WITH_LOCK(irq_lock) {
-        reschedule_from_interrupt();
+        current()->reschedule_from_interrupt();
     }
 }
 
@@ -492,11 +495,6 @@ void cpu::notifier::fire()
     }
 }
 
-void schedule()
-{
-    cpu::current()->schedule();
-}
-
 void thread::yield()
 {
     auto t = current();
@@ -790,7 +788,7 @@ thread* thread::current()
 void thread::wait()
 {
     trace_sched_wait();
-    schedule();
+    cpu::schedule();
     trace_sched_wait_ret();
 }
 
@@ -807,7 +805,7 @@ void thread::stop_wait()
     }
     preempt_enable();
     while (st.load() == status::waking || st.load() == status::sending_lock) {
-        schedule();
+        cpu::schedule();
     }
     assert(st.load() == status::running);
 }
@@ -834,7 +832,7 @@ void thread::complete()
     // The thread is now in the "terminating" state, so on call to schedule()
     // it will never get to run again.
     while (true) {
-        schedule();
+        cpu::schedule();
     }
 }
 
@@ -969,7 +967,7 @@ void preempt_enable()
 {
     --preempt_counter;
     if (preemptable() && need_reschedule && arch::irq_enabled()) {
-        schedule();
+        cpu::schedule();
     }
 }
 

@@ -58,8 +58,6 @@ class cpu_mask;
 class thread_runtime_compare;
 template <typename T> class wait_object;
 
-void schedule();
-
 extern "C" {
     void thread_main_c(thread* t);
 };
@@ -658,7 +656,7 @@ struct cpu : private timer_base::client {
     char* percpu_base;
     static cpu* current();
     void init_on_cpu();
-    void schedule();
+    static void schedule();
     void handle_incoming_wakeups();
     bool poll_wakeup_queue();
     void idle();
