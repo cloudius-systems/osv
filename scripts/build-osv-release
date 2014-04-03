@@ -4,10 +4,10 @@ set -e
 
 build=./scripts/build-capstan-img
 
-$build cloudius/osv-base      empty                     "OSv base image for developers"
+$build cloudius/osv-base      httpserver                "OSv base image for developers"
 $build cloudius/osv           default                   "OSv with shell for users"
-$build cloudius/osv-cassandra cassandra,mgmt.httpserver "Apache Cassandra/OSv"
-$build cloudius/osv-tomcat    tomcat,mgmt.httpserver    "Apache Tomcat/OSv"
-$build cloudius/osv-iperf     iperf,mgmt.httpserver     "iperf/OSv"
-$build cloudius/osv-memcached-opt osv-memcached,mgmt.httpserver "OSv memcached server (optimized)"
-$build cloudius/osv-openjdk   java,mgmt.httpserver      "OpenJDK 7/OSv base image for developers"
+$build cloudius/osv-cassandra cassandra,httpserver      "Apache Cassandra/OSv"
+$build cloudius/osv-tomcat    tomcat,httpserver         "Apache Tomcat/OSv"
+$build cloudius/osv-iperf     iperf,httpserver          "iperf/OSv"
+$build cloudius/osv-memcached-opt osv-memcached,httpserver "OSv memcached server (optimized)"
+$build cloudius/osv-openjdk   java,httpserver           "OpenJDK 7/OSv base image for developers"
