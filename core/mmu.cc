@@ -1639,7 +1639,10 @@ private:
         while(!queue.empty()) {
             elm w = queue.top();
             uio data{&w.iov, 1, w.offset, ssize_t(w.iov.iov_len), UIO_WRITE};
-            _file->write(&data, FOF_OFFSET);
+            int error = _file->write(&data, FOF_OFFSET);
+            if (error) {
+                throw make_error(error);
+            }
             queue.pop();
         }
     }
@@ -1655,8 +1658,12 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
 
     dirty_page_sync sync(_file.get(), _offset, ::size(_file));
     error err = no_error();
-    if (operate_range(dirty_cleaner<dirty_page_sync, account_opt::yes>(sync), (void*)start, size) != 0) {
-        err = make_error(sys_fsync(_file.get()));
+    try {
+        if (operate_range(dirty_cleaner<dirty_page_sync, account_opt::yes>(sync), (void*)start, size) != 0) {
+            err = make_error(sys_fsync(_file.get()));
+        }
+    } catch (error e) {
+        err = e;
     }
     return err;
 }
