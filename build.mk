@@ -644,6 +644,7 @@ drivers += drivers/clock.o
 drivers += drivers/clockevent.o
 drivers += drivers/ramdisk.o
 drivers += core/elf.o
+drivers += java/jvm_balloon.o
 
 ifeq ($(arch),x64)
 drivers += $(libtsm)
@@ -674,7 +675,6 @@ drivers += drivers/pci.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
 drivers += drivers/zfs.o
-drivers += java/jvm_balloon.o
 drivers += java/java_api.o
 endif # x64
 
@@ -701,6 +701,7 @@ objects += arch/x64/entry-xen.o
 objects += arch/x64/xen.o
 objects += arch/x64/xen_intr.o
 objects += $(acpi)
+objects += core/pagecache.o
 endif # x64
 
 objects += core/spinlock.o
@@ -710,7 +711,6 @@ objects += core/semaphore.o
 objects += core/condvar.o
 objects += core/debug.o
 objects += core/rcu.o
-objects += core/pagecache.o
 objects += core/mempool.o
 objects += core/alloctracker.o
 objects += core/printf.o

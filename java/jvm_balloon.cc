@@ -4,7 +4,11 @@
 #include <api/assert.h>
 #include <osv/align.hh>
 #include <exceptions.hh>
+
+#ifndef AARCH64_PORT_STUB
 #include <memcpy_decode.hh>
+#endif /* !AARCH64_PORT_STUB */
+
 #include <boost/intrusive/set.hpp>
 #include <osv/trace.hh>
 #include "jvm_balloon.hh"
@@ -130,6 +134,7 @@ std::list<balloon_ptr> balloons;
 
 ulong balloon::empty_area(balloon_ptr b)
 {
+#ifndef AARCH64_PORT_STUB
     auto jvm_end_addr = _jvm_addr + _balloon_size;
     auto addr = align_up(_jvm_addr, _alignment);
     auto end = align_down(jvm_end_addr, _alignment);
@@ -139,6 +144,9 @@ ulong balloon::empty_area(balloon_ptr b)
     memory::reserve_jvm_heap(minimum_size());
     trace_jvm_balloon_new(_jvm_addr, addr, end - addr, ret);
     return ret;
+#else /* AARCH64_PORT_STUB */
+    abort();
+#endif /* AARCH64_PORT_STUB */
 }
 
 balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::huge_page_size, size_t size = balloon_size)
@@ -166,8 +174,12 @@ void balloon::release(JNIEnv *env)
 unsigned char *
 balloon::candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest)
 {
+#ifndef AARCH64_PORT_STUB
     size_t skipped = static_cast<unsigned char *>(vma->addr()) - vma->jvm_addr();
     return dest - skipped;
+#else  /* AARCH64_PORT_STUB */
+    abort();
+#endif /* AARCH64_PORT_STUB */
 }
 
 size_t balloon::move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest)
@@ -338,6 +350,7 @@ void jvm_balloon_shrinker::_thread_loop()
 // comes after the balloon.
 bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
+#ifndef AARCH64_PORT_STUB
     if (!ef || (ef->error_code == mmu::page_fault_write)) {
         if (vma->effective_jvm_addr()) {
             return false;
@@ -403,6 +416,9 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
     }
     decode->memcpy_fixup(ef, std::min(skip, size));
     return true;
+#else /* AARCH64_PORT_STUB */
+    abort();
+#endif /* AARCH64_PORT_STUB */
 }
 
 jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)

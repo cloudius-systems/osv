@@ -13,8 +13,11 @@
 #include <fs/vfs/vfs.h>
 #include <osv/vfs_file.hh>
 #include <osv/mmu.hh>
+
+#ifndef AARCH64_PORT_STUB
 #include "arch-mmu.hh"
 #include <osv/pagecache.hh>
+#endif /* !AARCH64_PORT_STUB */
 
 vfs_file::vfs_file(unsigned flags)
 	: file(flags, DTYPE_VNODE)
@@ -139,6 +142,7 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
+#ifndef AARCH64_PORT_STUB
 mmu::mmupage vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, bool write, bool shared)
 {
     return pagecache::get(this, off, ptep, write, shared);
@@ -148,6 +152,7 @@ void vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep pte
 {
     pagecache::release(this, addr, off, ptep);
 }
+#endif /* !AARCH64_PORT_STUB */
 
 // Locking: vn_lock will call into the filesystem, and that can trigger an
 // eviction that will hold the mmu-side lock that protects the mappings

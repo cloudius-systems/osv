@@ -18,7 +18,10 @@
 #include <unordered_map>
 #include <memory>
 #include <osv/mmu-defs.hh>
+
+#ifndef AARCH64_PORT_STUB
 #include "arch-mmu.hh"
+#endif /* !AARCH64_PORT_STUB */
 
 struct exception_frame;
 class balloon;
@@ -141,8 +144,11 @@ public:
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
+
+#ifndef AARCH64_PORT_STUB
     virtual mmupage get_page(uintptr_t offset, size_t size, hw_ptep ptep, bool write, bool shared) override;
     virtual void put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
+#endif /* !AARCH64_PORT_STUB */
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -160,6 +166,7 @@ bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
+#ifndef AARCH64_PORT_STUB
 bool unmap_address(void* buf, void *addr, size_t size);
 void add_mapping(void *buf_addr, void* addr, hw_ptep ptep);
 bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep);
@@ -167,6 +174,7 @@ bool lookup_mapping(void *paddr, hw_ptep ptep);
 void tlb_flush();
 void clear_pte(hw_ptep ptep);
 void clear_pte(std::pair<void* const, hw_ptep>& pair);
+#endif /* !AARCH64_PORT_STUB */
 
 phys virt_to_phys(void *virt);
 void* phys_to_virt(phys pa);
