@@ -1093,7 +1093,7 @@ def drivers():
 def show_virtio_driver(v):
     gdb.write('%s at %s\n' % (v.dereference().dynamic_type, v))
     vb = v.cast(virtio_driver_type.pointer())
-    for qidx in range(0, vb['_num_queues']):
+    for qidx in range(0, to_int(vb['_num_queues'])):
         q = vb['_queues'][qidx]
         gdb.write('  queue %d at %s\n' % (qidx, q))
         avail_guest_idx = q['_avail']['_idx']['_M_i']
