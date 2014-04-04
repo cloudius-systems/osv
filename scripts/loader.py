@@ -574,7 +574,8 @@ class vmstate(object):
         self.cpu_list = cpu_list
 
     def load_thread_list(self):
-        self.thread_list = sorted(unordered_map(gdb.lookup_global_symbol('sched::thread_map').value()), key=lambda x: int(x["_id"]))
+        threads = map(gdb.Value.dereference, unordered_map(gdb.lookup_global_symbol('sched::thread_map').value()))
+        self.thread_list = sorted(threads, key=lambda x: int(x["_id"]))
 
     def cpu_from_thread(self, thread):
         stack = thread['_attr']['_stack']
