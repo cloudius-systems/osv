@@ -1118,6 +1118,7 @@ bool unmap_address(void *buf_addr, void *addr, size_t size)
     bool last;
     unsigned refs = 0;
     size = align_up(size, page_size);
+    assert(mutex_owned(&vma_list_mutex));
     WITH_LOCK(shared_fs_mutex) {
         for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
             addr = reinterpret_cast<void*>(a);

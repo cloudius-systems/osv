@@ -1916,6 +1916,17 @@ evict_start:
 					missed += 1;
 					break;
 				}
+				if (HDR_SHARED_BUF(ab)) {
+				    if (mmu_vma_list_trylock()) {
+				        mmu_unmap(buf->b_data, ab->b_size);
+			            ab->b_flags &= ~ARC_SHARED_BUF;
+			            mmu_vma_list_unlock();
+				    } else {
+				        mutex_exit(&buf->b_evict_lock);
+				        missed += 1;
+				        break;
+				    }
+				}
 				if (buf->b_data) {
 					bytes_evicted += ab->b_size;
 					if (recycle && ab->b_type == type &&
@@ -1924,10 +1935,6 @@ evict_start:
 						stolen = buf->b_data;
 						recycle = FALSE;
 					}
-				}
-				if (HDR_SHARED_BUF(ab)) {
-					mmu_unmap(buf->b_data, ab->b_size);
-					ab->b_flags &= ~ARC_SHARED_BUF;
 				}
 				if (buf->b_efunc) {
 					mutex_enter(&arc_eviction_mtx);

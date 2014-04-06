@@ -52,3 +52,17 @@ void mmu_unmap(void *addr, size_t size)
     mmu::unmap_address(addr, addr, size);
 #endif /* !AARCH64_PORT_STUB */
 }
+
+namespace mmu {
+extern mutex vma_list_mutex;
+}
+
+bool mmu_vma_list_trylock()
+{
+    return mutex_trylock(&mmu::vma_list_mutex);
+}
+
+void mmu_vma_list_unlock()
+{
+    mutex_unlock(&mmu::vma_list_mutex);
+}
