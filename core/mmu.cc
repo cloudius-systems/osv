@@ -994,14 +994,17 @@ static bool fs_buf_put(void *buf_addr, unsigned dec = 1)
     return false;
 }
 
+TRACEPOINT(trace_add_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
 void add_mapping(void *buf_addr, void *page, hw_ptep ptep)
 {
     WITH_LOCK(shared_fs_mutex) {
+        trace_add_mapping(buf_addr, page, ptep.release());
         shared_fs_maps.emplace(page, ptep);
         fs_buf_get(buf_addr);
     }
 }
 
+TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
 bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep)
 {
     WITH_LOCK(shared_fs_mutex) {
@@ -1010,6 +1013,7 @@ bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep)
             auto stored = (*it).second;
             if (stored == ptep) {
                 shared_fs_maps.erase(it);
+                trace_remove_mapping(buf_addr, paddr, ptep.release());
                 return fs_buf_put(buf_addr);
             }
         }
@@ -1109,8 +1113,10 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
     return total;
 }
 
+TRACEPOINT(trace_clear_pte, "ptep=%p, cow=%d, pte=%x", void*, bool, uint64_t);
 void clear_pte(hw_ptep ptep)
 {
+    trace_clear_pte(ptep.release(), pte_is_cow(ptep.read()), ptep.read().addr(false));
     ptep.write(make_empty_pte());
 }
 
@@ -1119,6 +1125,7 @@ void clear_pte(std::pair<void* const, hw_ptep>& pair)
     clear_pte(pair.second);
 }
 
+TRACEPOINT(trace_unmap_address, "buf=%p, addr=%p, len=%x", void*, void*, uint64_t);
 bool unmap_address(void *buf_addr, void *addr, size_t size)
 {
     bool last;
@@ -1126,6 +1133,7 @@ bool unmap_address(void *buf_addr, void *addr, size_t size)
     size = align_up(size, page_size);
     assert(mutex_owned(&vma_list_mutex));
     WITH_LOCK(shared_fs_mutex) {
+        trace_unmap_address(buf_addr, addr, size);
         for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
             addr = reinterpret_cast<void*>(a);
             auto buf = shared_fs_maps.equal_range(addr);
