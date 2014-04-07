@@ -245,6 +245,7 @@ tests += tests/tst-sleep.so
 tests += tests/tst-resolve.so
 tests += tests/tst-except.so
 tests += tests/misc-tcp-sendonly.so
+tests += tests/tst-tcp-nbwrite.so
 tests += tests/misc-tcp-hash-srv.so
 tests += tests/misc-loadbalance.so
 tests += tests/misc-scheduler.so

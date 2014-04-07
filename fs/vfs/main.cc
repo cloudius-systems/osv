@@ -236,6 +236,19 @@ TRACEPOINT(trace_vfs_pread, "%d %p 0x%x 0x%x", int, void*, size_t, off_t);
 TRACEPOINT(trace_vfs_pread_ret, "0x%x", ssize_t);
 TRACEPOINT(trace_vfs_pread_err, "%d", int);
 
+// In BSD's internal implementation of read() and write() code, for example
+// sosend_generic(), a partial read or write returns both an EWOULDBLOCK error
+// *and* a non-zero number of written bytes. In that case, we need to zero the
+// error, so the system call appear a successful partial read/write.
+// In FreeBSD, dofilewrite() and dofileread() (sys_generic.c) do this too.
+static inline bool has_error(int error, int bytes)
+{
+    return error && (
+            (bytes == 0) ||
+            (error != EWOULDBLOCK && error != EINTR && error != ERESTART));
+}
+
+
 ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
     trace_vfs_pread(fd, buf, count, offset);
@@ -254,7 +267,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
     error = sys_read(fp, &iov, 1, offset, &bytes);
     fdrop(fp);
 
-    if (error)
+    if (has_error(error, bytes))
         goto out_errno;
     trace_vfs_pread_ret(bytes);
     return bytes;
@@ -294,7 +307,7 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
     error = sys_write(fp, &iov, 1, offset, &bytes);
     fdrop(fp);
 
-    if (error)
+    if (has_error(error, bytes))
         goto out_errno;
     trace_vfs_pwrite_ret(bytes);
     return bytes;
@@ -325,7 +338,7 @@ ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     error = sys_read(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
     fdrop(fp);
 
-    if (error)
+    if (has_error(error, bytes))
         goto out_errno;
     return bytes;
 
@@ -357,7 +370,7 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     error = sys_write(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
     fdrop(fp);
 
-    if (error)
+    if (has_error(error, bytes))
         goto out_errno;
     trace_vfs_pwritev_ret(bytes);
     return bytes;
