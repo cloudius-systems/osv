@@ -53,16 +53,26 @@ void mmu_unmap(void *addr, size_t size)
 #endif /* !AARCH64_PORT_STUB */
 }
 
+#ifndef AARCH64_PORT_STUB
 namespace mmu {
 extern mutex vma_list_mutex;
 }
+#endif /* !AARCH64_PORT_STUB */
 
 bool mmu_vma_list_trylock()
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else  /* !AARCH64_PORT_STUB */
     return mutex_trylock(&mmu::vma_list_mutex);
+#endif /* !AARCH64_PORT_STUB */
 }
 
 void mmu_vma_list_unlock()
 {
+#ifdef AARCH64_PORT_STUB
+    abort();
+#else  /* !AARCH64_PORT_STUB */
     mutex_unlock(&mmu::vma_list_mutex);
+#endif /* !AARCH64_PORT_STUB */
 }
