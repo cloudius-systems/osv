@@ -155,7 +155,6 @@ namespace dhcp {
         // Writes a new option to pos, returns new pos
         u8* add_option(u8* pos, u8 type, u8 len, u8* buf); // memcpy
         u8* add_option(u8* pos, u8 type, u8 len, u8 data); // memset
-        u8* lookup_option(dhcp_option_code type, u8 *len);
 
         // Packet assembly
         void build_udp_ip_headers(size_t dhcp_len);

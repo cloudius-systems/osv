@@ -337,30 +337,6 @@ namespace dhcp {
         return true;
     }
 
-    u8* dhcp_mbuf::lookup_option(dhcp_option_code type, u8 *len)
-    {
-        u8* packet_start = mtod(_m, u8*);
-        u8* options = poptions();
-
-        // Skip magic
-        options += 4;
-
-        dhcp_option_code op = DHCP_OPTION_PAD;
-        while (((options - packet_start) < _m->m_hdr.mh_len) && (op != DHCP_OPTION_END)) {
-            dhcp_option_code op = dhcp_option_code(*options++);
-            u8 op_len = *options++;
-
-            if ((op == type) && ((options - packet_start) + op_len < _m->m_hdr.mh_len)) {
-                *len = op_len;
-                return (options);
-            }
-
-            options += op_len;
-        }
-
-        return nullptr;
-    }
-
     struct ip* dhcp_mbuf::pip()
     {
         return mtod(_m, struct ip*);
