@@ -159,11 +159,11 @@ std::string object::section_name(const Elf64_Shdr& shdr)
 }
 
 file::file(program& prog, ::fileref f, std::string pathname)
-: object(prog, pathname)
+    : object(prog, pathname)
     , _f(f)
 {
-load_elf_header();
-load_program_headers();
+    load_elf_header();
+    load_program_headers();
 }
 
 file::~file()
