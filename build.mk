@@ -209,6 +209,7 @@ boost-tests += tests/tst-stat.so
 boost-tests += tests/tst-wait-for.so
 boost-tests += tests/tst-bsd-tcp1.so
 boost-tests += tests/tst-async.so
+boost-tests += tests/tst-rcu-list.so
 
 java_tests := tests/hello/Hello.class
 
