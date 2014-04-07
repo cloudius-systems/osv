@@ -30,21 +30,21 @@ mkdir -p $out
 img=build/release/usr.img
 hypervisor=kvm
 format=qcow2
-cp $img $out/$(basename $name).qemu.qcow2
+cp $img $out/$(basename $name)-$(version).qemu.qcow2
 
 ### Image for VirtualBox
 scripts/gen-vbox-ova.sh >/dev/null
 img=build/release/osv.ova
 hypervisor=vbox
 format=ova
-mv $img $out/$(basename $name).vbox.ova
+mv $img $out/$(basename $name)-$(version).vbox.ova
 
 ### Image for Google Compute Engine
 scripts/gen-gce-tarball.sh >/dev/null
 img=build/release/osv.tar.gz
 hypervisor=gce
 format=tar.gz
-mv $img $out/$(basename $name).gce.tar.gz
+mv $img $out/$(basename $name)-$(version).gce.tar.gz
 
 ### Image for VMware Workstation
 make osv.vmdk >/dev/null
@@ -55,7 +55,7 @@ cd -
 img=build/release/osv-vmw.zip
 hypervisor=vmw
 format=zip
-mv $img $out/$(basename $name).vmw.zip
+mv $img $out/$(basename $name)-$(version).vmw.zip
 
 ### Image for VMware ESXi
 rm -f build/release/osv-esx.ova
@@ -63,6 +63,6 @@ ovftool build/release/osv.vmx build/release/osv-esx.ova >/dev/null
 img=build/release/osv-esx.ova
 hypervisor=esx
 format=ova
-mv $img $out/$(basename $name).esx.ova
+mv $img $out/$(basename $name)-$(version).esx.ova
 
 echo "==> '$name' image built to '$out'."
