@@ -15,6 +15,9 @@
 #include <osv/types.h>
 #include <atomic>
 
+/// Marks a shared object as locked in memory so OSv APIs like preempt_disable() can be used
+#define OSV_ELF_MLOCK_OBJECT() asm(".pushsection .note.osv-mlock, \"a\"; .popsection")
+
 /**
  * elf namespace
  */
@@ -383,6 +386,8 @@ protected:
     virtual void load_segment(const Elf64_Phdr& phdr);
     virtual void unload_segment(const Elf64_Phdr& phdr);
     virtual void read(Elf64_Off offset, void* data, size_t size) override;
+private:
+    bool mlocked();
 private:
     ::fileref _f;
 };
