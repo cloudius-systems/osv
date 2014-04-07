@@ -295,7 +295,7 @@ void jvm_balloon_shrinker::_thread_loop()
         WITH_LOCK(balloons_lock) {
             _blocked.wait_until(balloons_lock, [&] { return (_pending.load() + _pending_release.load()) > 0; });
 
-            if (balloons.size() >= _soft_max_balloons) {
+            if (balloons.size() > _soft_max_balloons) {
                 memory::wake_reclaimer();
             }
 
