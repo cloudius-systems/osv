@@ -240,11 +240,9 @@ namespace dhcp {
         _ip_len = ip->ip_hl << 2;
     }
 
-#define LENGTH_OK ((options - packet_start) + op_len + len_check_hdr < _m->m_hdr.mh_len)
 #define PARSE_OP(type, cast, var) do {              \
-    if ((op_len >= (sizeof(cast))) && (LENGTH_OK))  \
-        var = type(*(cast *)(options));             \
-    else return false;                              \
+    assert(op_len >= (sizeof(cast)));               \
+    var = type(*(cast *)(options));                 \
 } while(0);
 
     bool dhcp_mbuf::decode()
@@ -262,20 +260,28 @@ namespace dhcp {
 
         // Parse options
         u8* packet_start = mtod(_m, u8*);
+        u8* limit = packet_start + _m->m_hdr.mh_len;
         u8* options = poptions();
 
         // Skip magic
         options += 4;
 
-        dhcp_option_code op = DHCP_OPTION_PAD;
-        u8 op_len = 0;
-        u8 len_check_hdr = 2;
-
-        while (LENGTH_OK && (op != DHCP_OPTION_END)) {
+        while (options < limit) {
             dhcp_option_code op = dhcp_option_code(*options++);
-            op_len = *options++;
+            if (op == DHCP_OPTION_END) {
+                break;
+            }
 
-            len_check_hdr = 0;
+            if (op == DHCP_OPTION_PAD) {
+                continue;
+            }
+
+            assert(options < limit);
+
+            u8 op_len = *options++;
+
+            assert(options + op_len <= limit);
+
             switch (op) {
             case DHCP_OPTION_MESSAGE_TYPE:
                 PARSE_OP(dhcp_message_type, u8, _message_type);
@@ -331,7 +337,6 @@ namespace dhcp {
             }
 
             options += op_len;
-            len_check_hdr = 2;
         }
 
         return true;
