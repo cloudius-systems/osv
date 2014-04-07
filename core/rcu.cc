@@ -161,6 +161,7 @@ void cpu_quiescent_state_thread::work()
             p->ncallbacks[b] = 0;
             for (unsigned i = 0; i < ncallbacks; i++) {
                 (callbacks[i])();
+                callbacks[i] = nullptr;
             }
         } else {
             // Wait until we have a generation request from another CPU who
