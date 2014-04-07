@@ -936,7 +936,16 @@ void program::remove_object(object *ef)
 {
     SCOPE_LOCK(_mutex);
     trace_elf_unload(ef->pathname().c_str());
+
+    // ensure that any module rcu callbacks are completed before static destructors
+    osv::rcu_flush();
+
     ef->run_fini_funcs();
+
+    // ensure that any module rcu callbacks launched by static destructors
+    // are completed before we delete the module
+    osv::rcu_flush();
+
     ef->unload_needed();
     del_debugger_obj(ef);
     // Note that if we race with get_library() of the same library, we may
@@ -953,6 +962,7 @@ void program::remove_object(object *ef)
     new_modules->subs++;
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
+
     // We want to unload and delete ef, but need to delay that until no
     // concurrent dl_iterate_phdr() is still using the modules it got from
     // modules_get().
