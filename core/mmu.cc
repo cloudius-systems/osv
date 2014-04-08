@@ -1211,20 +1211,6 @@ bool isreadable(void *addr, size_t size)
     return true;
 }
 
-namespace {
-
-uintptr_t align_down(uintptr_t ptr)
-{
-    return ptr & ~(page_size - 1);
-}
-
-uintptr_t align_up(uintptr_t ptr)
-{
-    return align_down(ptr + page_size - 1);
-}
-
-}
-
 bool access_fault(vma& vma, unsigned long error_code)
 {
     auto perm = vma.perm();
@@ -1253,7 +1239,7 @@ void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 void vm_fault(uintptr_t addr, exception_frame* ef)
 {
     trace_mmu_vm_fault(addr, ef->error_code);
-    addr = align_down(addr);
+    addr = align_down(addr, mmu::page_size);
     WITH_LOCK(vma_list_mutex) {
         auto vma = vma_list.find(addr_range(addr, addr+1), vma::addr_compare());
         if (vma == vma_list.end() || access_fault(*vma, ef->error_code)) {
@@ -1267,7 +1253,7 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
 }
 
 vma::vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, page_allocator *page_ops)
-    : _range(align_down(range.start()), align_up(range.end()))
+    : _range(align_down(range.start(), mmu::page_size), align_up(range.end(), mmu::page_size))
     , _perm(perm)
     , _flags(flags)
     , _map_dirty(map_dirty)
@@ -1281,7 +1267,7 @@ vma::~vma()
 
 void vma::set(uintptr_t start, uintptr_t end)
 {
-    _range = addr_range(align_down(start), align_up(end));
+    _range = addr_range(align_down(start, mmu::page_size), align_up(end, mmu::page_size));
 }
 
 void vma::protect(unsigned perm)
@@ -1348,11 +1334,11 @@ bool vma::map_dirty()
 
 void vma::fault(uintptr_t addr, exception_frame *ef)
 {
-    auto hp_start = ::align_up(_range.start(), huge_page_size);
-    auto hp_end = ::align_down(_range.end(), huge_page_size);
+    auto hp_start = align_up(_range.start(), huge_page_size);
+    auto hp_end = align_down(_range.end(), huge_page_size);
     size_t size;
     if (!has_flags(mmap_jvm_balloon|mmap_small) && (hp_start <= addr && addr < hp_end)) {
-        addr = ::align_down(addr, huge_page_size);
+        addr = align_down(addr, huge_page_size);
         size = huge_page_size;
     } else {
         size = page_size;
@@ -1500,15 +1486,15 @@ jvm_balloon_vma::~jvm_balloon_vma()
     if (_effective_jvm_addr) {
         // Can't just use size(), because although rare, the source and destination can
         // have different alignments
-        auto end = ::align_down(_effective_jvm_addr + balloon_size, balloon_alignment);
-        auto s = end - ::align_up(_effective_jvm_addr, balloon_alignment);
+        auto end = align_down(_effective_jvm_addr + balloon_size, balloon_alignment);
+        auto s = end - align_up(_effective_jvm_addr, balloon_alignment);
         mmu::map_jvm(_effective_jvm_addr, s, mmu::huge_page_size, _balloon);
     }
 }
 
 ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
 {
-    auto addr = ::align_up(jvm_addr, align);
+    auto addr = align_up(jvm_addr, align);
     auto start = reinterpret_cast<uintptr_t>(addr);
 
     vma* v;
@@ -1697,7 +1683,7 @@ std::unique_ptr<file_vma> shm_file::mmap(addr_range range, unsigned flags, unsig
 
 mmupage shm_file::get_page(uintptr_t offset, size_t size, hw_ptep ptep, bool write, bool shared)
 {
-    uintptr_t hp_off = ::align_down(offset, huge_page_size);
+    uintptr_t hp_off = align_down(offset, huge_page_size);
     void *addr;
 
     assert((size != huge_page_size) || (hp_off == offset));
@@ -1766,7 +1752,7 @@ error munmap(const void *addr, size_t length)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
 
-    length = ::align_up(length, mmu::page_size);
+    length = align_up(length, mmu::page_size);
     if (!ismapped(addr, length)) {
         return make_error(EINVAL);
     }
@@ -1787,7 +1773,7 @@ error msync(const void* addr, size_t length, int flags)
 
 error mincore(const void *addr, size_t length, unsigned char *vec)
 {
-    char *end = ::align_up((char *)addr + length, page_size);
+    char *end = align_up((char *)addr + length, page_size);
     char tmp;
     std::lock_guard<mutex> guard(vma_list_mutex);
     if (!is_linear_mapped(addr, length) && !ismapped(addr, length)) {
