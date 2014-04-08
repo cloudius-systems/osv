@@ -15,7 +15,6 @@
 #include <iterator>
 #include "libc/signal.hh"
 #include <osv/align.hh>
-#include <osv/interrupt.hh>
 #include <osv/ilog2.hh>
 #include <osv/prio.hh>
 #include <safe-ptr.hh>
@@ -213,44 +212,6 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
             debug_count_ptes(pt.at(i).read(), level-1, nsmall, nhuge);
         }
     }
-}
-
-
-void tlb_flush_this_processor()
-{
-    // TODO: we can use page_table_root instead of read_cr3(), can be faster
-    // when shadow page tables are used.
-    processor::write_cr3(processor::read_cr3());
-}
-
-// tlb_flush() does TLB flush on *all* processors, not returning before all
-// processors confirm flushing their TLB. This is slow, but necessary for
-// correctness so that, for example, after mprotect() returns, no thread on
-// no cpu can write to the protected page.
-mutex tlb_flush_mutex;
-sched::thread_handle tlb_flush_waiter;
-std::atomic<int> tlb_flush_pendingconfirms;
-
-inter_processor_interrupt tlb_flush_ipi{[] {
-        tlb_flush_this_processor();
-        if (tlb_flush_pendingconfirms.fetch_add(-1) == 1) {
-            tlb_flush_waiter.wake();
-        }
-}};
-
-void tlb_flush()
-{
-    tlb_flush_this_processor();
-    if (sched::cpus.size() <= 1)
-        return;
-    std::lock_guard<mutex> guard(tlb_flush_mutex);
-    tlb_flush_waiter.reset(*sched::thread::current());
-    tlb_flush_pendingconfirms.store((int)sched::cpus.size() - 1);
-    tlb_flush_ipi.send_allbutself();
-    sched::thread::wait_until([] {
-            return tlb_flush_pendingconfirms.load() == 0;
-    });
-    tlb_flush_waiter.clear();
 }
 
 void clamp(uintptr_t& vstart1, uintptr_t& vend1,
@@ -573,7 +534,7 @@ struct tlb_gather {
         if (!nr_pages) {
             return;
         }
-        tlb_flush();
+        mmu::flush_tlb_all();
         for (auto i = 0u; i < nr_pages; ++i) {
             auto&& tp = pages[i];
             if (tp.size == page_size) {
@@ -757,7 +718,7 @@ template<typename T> ulong operate_range(T mapper, void *vma_start, void *start,
     // split_large_page() and other specific places where we modify specific
     // page table entries.
     if (mapper.tlb_flush_needed()) {
-        tlb_flush();
+        mmu::flush_tlb_all();
     }
     mapper.finalize();
     return mapper.account_results();
@@ -1128,7 +1089,7 @@ bool unmap_address(void *buf_addr, void *addr, size_t size)
         }
         last = refs ? fs_buf_put(buf_addr, refs) : false;
     }
-    tlb_flush();
+    mmu::flush_tlb_all();
     return last;
 }
 

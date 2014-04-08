@@ -131,7 +131,7 @@ static void insert(cached_page* cp) {
             p->flush();
             tofree[i] = p;
         }
-        mmu::tlb_flush();
+        mmu::flush_tlb_all();
         for (auto p: tofree) {
             delete p;
         }

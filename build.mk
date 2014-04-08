@@ -693,6 +693,7 @@ objects += arch/$(arch)/backtrace.o
 objects += arch/$(arch)/smp.o
 objects += arch/$(arch)/elf-dl.o
 objects += arch/$(arch)/entry.o
+objects += arch/$(arch)/mmu.o
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
@@ -702,7 +703,6 @@ ifeq ($(arch),x64)
 objects += arch/x64/dump.o
 objects += arch/x64/exceptions.o
 objects += arch/x64/ioapic.o
-objects += arch/x64/mmu.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o

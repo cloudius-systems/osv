@@ -64,5 +64,10 @@ public:
     bool cow() const;
 };
 
+/* flush tlb for the current processor */
+void flush_tlb_local();
+/* flush tlb for all */
+void flush_tlb_all();
+
 }
 #endif
