@@ -224,6 +224,12 @@ def create_h_file(data, hfile_name, api_name, init_method):
 
     print_ind_comment(hfile, "", "Initialize the path")
     fprint(hfile, init_method + "();")
+    open_namespace(hfile, api_name)
+    for item in data["apis"]:
+        if "operations" in item:
+            for oper in item["operations"]:
+                fprint(hfile, 'static const std::string ', oper["nickname"], ' = "', oper["nickname"], '";')
+    close_namespace(hfile)
     close_namespace(hfile)
     close_namespace(hfile)
     hfile.write("#endif //__JSON_AUTO_GENERATED_HEADERS\n")
