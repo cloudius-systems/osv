@@ -21,6 +21,7 @@ namespace file {
 
 using namespace json;
 using namespace std;
+using namespace file_json;
 
 /**
  * A helper function to set the op and path param
@@ -89,9 +90,9 @@ void init(routes& routes)
 {
     file_json_init_path();
 
-    routes.add_path("getFile", new get_file_handler());
-    routes.add_path("delFile", new del_file_handler());
-    routes.add_path("upload", new post_file_handler());
+    routes.add_path(getFile, new get_file_handler());
+    routes.add_path(delFile, new del_file_handler());
+    routes.add_path(upload, new post_file_handler());
 }
 
 }
