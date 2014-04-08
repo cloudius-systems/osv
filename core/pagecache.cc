@@ -13,6 +13,11 @@
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>
 #include <fs/vfs/vfs.h>
+#include <osv/trace.hh>
+
+namespace mmu {
+    extern mutex vma_list_mutex;
+};
 
 namespace pagecache {
 struct hashkey {
@@ -168,6 +173,102 @@ static mutex lock;
 static std::unordered_map<hashkey, cached_page*> cache;
 static std::deque<cached_page*> lru;
 
+// In the general case, we expect only one element in the list.
+static std::unordered_multimap<void *, mmu::hw_ptep> shared_fs_maps;
+// We need to reference count the buffer, but first we need to store the
+// buffer somewhere we can find
+static std::unordered_map<void *, unsigned int> shared_fs_buf_refcnt;
+// Can't use the vma_list_mutex, because if we do, we can have a deadlock where
+// we call into the filesystem to read data with the vma_list_mutex held - because
+// we do that for complex operate operations, and if the filesystem decides to evict
+// a page to read the selected buffer, we will need to access those data structures.
+static mutex shared_fs_mutex;
+
+static void fs_buf_get(void *buf_addr)
+{
+    auto b = shared_fs_buf_refcnt.find(buf_addr);
+    if (b == shared_fs_buf_refcnt.end()) {
+        shared_fs_buf_refcnt.emplace(buf_addr, 1);
+        return;
+    }
+    b->second++;
+}
+
+static bool fs_buf_put(void *buf_addr, unsigned dec = 1)
+{
+    auto b = shared_fs_buf_refcnt.find(buf_addr);
+    assert(b != shared_fs_buf_refcnt.end());
+    assert(b->second >= dec);
+    b->second -= dec;
+    if (b->second == 0) {
+        shared_fs_buf_refcnt.erase(buf_addr);
+        return true;
+    }
+    return false;
+}
+
+TRACEPOINT(trace_add_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
+void add_mapping(void *buf_addr, void *page, mmu::hw_ptep ptep)
+{
+    WITH_LOCK(shared_fs_mutex) {
+        trace_add_mapping(buf_addr, page, ptep.release());
+        shared_fs_maps.emplace(page, ptep);
+        fs_buf_get(buf_addr);
+    }
+}
+
+TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
+bool remove_mapping(void *buf_addr, void *paddr, mmu::hw_ptep ptep)
+{
+    WITH_LOCK(shared_fs_mutex) {
+        auto buf = shared_fs_maps.equal_range(paddr);
+        for (auto it = buf.first; it != buf.second; it++) {
+            auto stored = (*it).second;
+            if (stored == ptep) {
+                shared_fs_maps.erase(it);
+                trace_remove_mapping(buf_addr, paddr, ptep.release());
+                return fs_buf_put(buf_addr);
+            }
+        }
+    }
+    return false;
+}
+
+bool lookup_mapping(void *paddr, mmu::hw_ptep ptep)
+{
+    WITH_LOCK(shared_fs_mutex) {
+        auto buf = shared_fs_maps.equal_range(paddr);
+        for (auto it = buf.first; it != buf.second; it++) {
+            auto stored = (*it).second;
+            if (stored == ptep) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+TRACEPOINT(trace_unmap_address, "buf=%p, addr=%p, len=%x", void*, void*, uint64_t);
+bool unmap_address(void *buf_addr, void *addr, size_t size)
+{
+    bool last;
+    unsigned refs = 0;
+    size = align_up(size, mmu::page_size);
+    assert(mutex_owned(&mmu::vma_list_mutex));
+    WITH_LOCK(shared_fs_mutex) {
+        trace_unmap_address(buf_addr, addr, size);
+        for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += mmu::page_size, size -= mmu::page_size) {
+            addr = reinterpret_cast<void*>(a);
+            auto buf = shared_fs_maps.equal_range(addr);
+            refs += clear_ptes(buf.first, buf.second);
+            shared_fs_maps.erase(addr);
+        }
+        last = refs ? fs_buf_put(buf_addr, refs) : false;
+    }
+    mmu::flush_tlb_all();
+    return last;
+}
+
 static std::unique_ptr<cached_page> create_write_cached_page(vfs_file* fp, hashkey& key)
 {
     size_t bytes;
@@ -232,12 +333,12 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
                 // page is moved from ARC to write cache
                 // remove any mapping to ARC page
                 // FIXME: if pte we are changing is the only one, no need to unmap
-                if (mmu::unmap_address(start, page, mmu::page_size)) {
+                if (unmap_address(start, page, mmu::page_size)) {
                     fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
                 }
             } else {
                 // remove mapping to ARC page if exists
-                if (mmu::remove_mapping(start, page, ptep)) {
+                if (remove_mapping(start, page, ptep)) {
                     fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
                 }
                 // cow of private page from ARC
@@ -252,7 +353,7 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
     } else if (!cp) {
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
         fp->get_arcbuf(offset, ARC_ACTION_HOLD, &start, &len, &page);
-        mmu::add_mapping(start, page, ptep);
+        add_mapping(start, page, ptep);
         return mmu::mmupage(page, true);
     }
 
@@ -273,13 +374,13 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     if (cp && cp->addr() == addr) {
         // page is in write cache
         cp->unmap(ptep);
-    } else if (mmu::lookup_mapping(addr, ptep)) {
+    } else if (lookup_mapping(addr, ptep)) {
         // page is in ARC
         void *start, *page;
         size_t len;
         fp->get_arcbuf(offset, ARC_ACTION_QUERY, &start, &len, &page);
         assert (addr == page);
-        if (mmu::remove_mapping(start, page, ptep)) {
+        if (remove_mapping(start, page, ptep)) {
             fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
         }
     } else {

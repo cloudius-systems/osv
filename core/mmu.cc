@@ -971,81 +971,6 @@ public:
     }
 };
 
-// In the general case, we expect only one element in the list.
-static std::unordered_multimap<void *, hw_ptep> shared_fs_maps;
-// We need to reference count the buffer, but first we need to store the
-// buffer somewhere we can find
-static std::unordered_map<void *, unsigned int> shared_fs_buf_refcnt;
-// Can't use the vma_list_mutex, because if we do, we can have a deadlock where
-// we call into the filesystem to read data with the vma_list_mutex held - because
-// we do that for complex operate operations, and if the filesystem decides to evict
-// a page to read the selected buffer, we will need to access those data structures.
-static mutex shared_fs_mutex;
-
-static void fs_buf_get(void *buf_addr)
-{
-    auto b = shared_fs_buf_refcnt.find(buf_addr);
-    if (b == shared_fs_buf_refcnt.end()) {
-        shared_fs_buf_refcnt.emplace(buf_addr, 1);
-        return;
-    }
-    b->second++;
-}
-
-static bool fs_buf_put(void *buf_addr, unsigned dec = 1)
-{
-    auto b = shared_fs_buf_refcnt.find(buf_addr);
-    assert(b != shared_fs_buf_refcnt.end());
-    assert(b->second >= dec);
-    b->second -= dec;
-    if (b->second == 0) {
-        shared_fs_buf_refcnt.erase(buf_addr);
-        return true;
-    }
-    return false;
-}
-
-TRACEPOINT(trace_add_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void add_mapping(void *buf_addr, void *page, hw_ptep ptep)
-{
-    WITH_LOCK(shared_fs_mutex) {
-        trace_add_mapping(buf_addr, page, ptep.release());
-        shared_fs_maps.emplace(page, ptep);
-        fs_buf_get(buf_addr);
-    }
-}
-
-TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep)
-{
-    WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(paddr);
-        for (auto it = buf.first; it != buf.second; it++) {
-            auto stored = (*it).second;
-            if (stored == ptep) {
-                shared_fs_maps.erase(it);
-                trace_remove_mapping(buf_addr, paddr, ptep.release());
-                return fs_buf_put(buf_addr);
-            }
-        }
-    }
-    return false;
-}
-
-bool lookup_mapping(void *paddr, hw_ptep ptep)
-{
-    WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(paddr);
-        for (auto it = buf.first; it != buf.second; it++) {
-            auto stored = (*it).second;
-            if (stored == ptep) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
 {
     if (search) {
@@ -1134,27 +1059,6 @@ void clear_pte(hw_ptep ptep)
 void clear_pte(std::pair<void* const, hw_ptep>& pair)
 {
     clear_pte(pair.second);
-}
-
-TRACEPOINT(trace_unmap_address, "buf=%p, addr=%p, len=%x", void*, void*, uint64_t);
-bool unmap_address(void *buf_addr, void *addr, size_t size)
-{
-    bool last;
-    unsigned refs = 0;
-    size = align_up(size, page_size);
-    assert(mutex_owned(&vma_list_mutex));
-    WITH_LOCK(shared_fs_mutex) {
-        trace_unmap_address(buf_addr, addr, size);
-        for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += page_size, size -= page_size) {
-            addr = reinterpret_cast<void*>(a);
-            auto buf = shared_fs_maps.equal_range(addr);
-            refs += clear_ptes(buf.first, buf.second);
-            shared_fs_maps.erase(addr);
-        }
-        last = refs ? fs_buf_put(buf_addr, refs) : false;
-    }
-    mmu::flush_tlb_all();
-    return last;
 }
 
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)

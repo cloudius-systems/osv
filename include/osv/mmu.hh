@@ -163,11 +163,6 @@ bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
-bool unmap_address(void* buf, void *addr, size_t size);
-void add_mapping(void *buf_addr, void* addr, hw_ptep ptep);
-bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep);
-bool lookup_mapping(void *paddr, hw_ptep ptep);
-void tlb_flush();
 void clear_pte(hw_ptep ptep);
 void clear_pte(std::pair<void* const, hw_ptep>& pair);
 

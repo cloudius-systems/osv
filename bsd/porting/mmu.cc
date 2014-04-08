@@ -11,6 +11,7 @@
 #include "mmu.h"  // Port
 #include <osv/mmio.hh>
 #include <osv/mempool.hh>
+#include <osv/pagecache.hh>
 
 void *pmap_mapdev(uint64_t paddr, size_t size)
 {
@@ -42,7 +43,7 @@ int vm_throttling_needed(void)
 
 void mmu_unmap(void *addr, size_t size)
 {
-    mmu::unmap_address(addr, addr, size);
+    pagecache::unmap_address(addr, addr, size);
 }
 
 namespace mmu {
