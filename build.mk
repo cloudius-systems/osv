@@ -711,7 +711,6 @@ objects += arch/x64/entry-xen.o
 objects += arch/x64/xen.o
 objects += arch/x64/xen_intr.o
 objects += $(acpi)
-objects += core/pagecache.o
 endif # x64
 
 objects += core/spinlock.o
@@ -721,6 +720,7 @@ objects += core/semaphore.o
 objects += core/condvar.o
 objects += core/debug.o
 objects += core/rcu.o
+objects += core/pagecache.o
 objects += core/mempool.o
 objects += core/alloctracker.o
 objects += core/printf.o

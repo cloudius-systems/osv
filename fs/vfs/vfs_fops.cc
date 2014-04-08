@@ -14,10 +14,8 @@
 #include <osv/vfs_file.hh>
 #include <osv/mmu.hh>
 
-#ifndef AARCH64_PORT_STUB
 #include "arch-mmu.hh"
 #include <osv/pagecache.hh>
-#endif /* !AARCH64_PORT_STUB */
 
 vfs_file::vfs_file(unsigned flags)
 	: file(flags, DTYPE_VNODE)
@@ -142,7 +140,6 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
-#ifndef AARCH64_PORT_STUB
 mmu::mmupage vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, bool write, bool shared)
 {
     return pagecache::get(this, off, ptep, write, shared);
@@ -152,7 +149,6 @@ void vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep pte
 {
     pagecache::release(this, addr, off, ptep);
 }
-#endif /* !AARCH64_PORT_STUB */
 
 // Locking: vn_lock will call into the filesystem, and that can trigger an
 // eviction that will hold the mmu-side lock that protects the mappings
@@ -183,9 +179,6 @@ void vfs_file::get_arcbuf(uintptr_t offset, unsigned action, void** start, size_
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-#ifdef AARCH64_PORT_STUB
-	abort();
-#else /* !AARCH64_PORT_STUB */
 	// FIXME: temporarily disabled due to Issue #261
 	return mmu::default_file_mmap(this, range, flags, perm, offset);
 
@@ -195,5 +188,4 @@ std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, 
 		return mmu::default_file_mmap(this, range, flags, perm, offset);
 	}
 	return mmu::map_file_mmap(this, range, flags, perm, offset);
-#endif /* !AARCH64_PORT_STUB */
 }

@@ -15,9 +15,7 @@
 #include <string.h>
 #include <list>
 
-#ifndef AARCH64_PORT_STUB
 #include <osv/mmu.hh>
-#endif /* !AARCH64_PORT_STUB */
 
 #include <osv/debug.hh>
 #include <osv/prio.hh>

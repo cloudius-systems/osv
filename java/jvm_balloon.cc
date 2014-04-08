@@ -134,7 +134,6 @@ std::list<balloon_ptr> balloons;
 
 ulong balloon::empty_area(balloon_ptr b)
 {
-#ifndef AARCH64_PORT_STUB
     auto jvm_end_addr = _jvm_addr + _balloon_size;
     auto addr = align_up(_jvm_addr, _alignment);
     auto end = align_down(jvm_end_addr, _alignment);
@@ -144,9 +143,6 @@ ulong balloon::empty_area(balloon_ptr b)
     memory::reserve_jvm_heap(minimum_size());
     trace_jvm_balloon_new(_jvm_addr, addr, end - addr, ret);
     return ret;
-#else /* AARCH64_PORT_STUB */
-    abort();
-#endif /* AARCH64_PORT_STUB */
 }
 
 balloon::balloon(unsigned char *jvm_addr, jobject jref, int alignment = mmu::huge_page_size, size_t size = balloon_size)
@@ -174,12 +170,8 @@ void balloon::release(JNIEnv *env)
 unsigned char *
 balloon::candidate_addr(mmu::jvm_balloon_vma *vma, unsigned char *dest)
 {
-#ifndef AARCH64_PORT_STUB
     size_t skipped = static_cast<unsigned char *>(vma->addr()) - vma->jvm_addr();
     return dest - skipped;
-#else  /* AARCH64_PORT_STUB */
-    abort();
-#endif /* AARCH64_PORT_STUB */
 }
 
 size_t balloon::move_balloon(balloon_ptr b, mmu::jvm_balloon_vma *vma, unsigned char *dest)

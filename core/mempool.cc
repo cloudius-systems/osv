@@ -1213,9 +1213,6 @@ static const size_t pad_after = mmu::page_size;
 
 void* malloc(size_t size, size_t alignment)
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#else /* !AARCH64_PORT_STUB */
     if (!enabled) {
         return std_malloc(size, alignment);
     }
@@ -1238,14 +1235,10 @@ void* malloc(size_t size, size_t alignment)
     uint8_t garbage = 3;
     std::generate_n(v, size, [&] { return garbage++; });
     return v;
-#endif /* !AARCH64_PORT_STUB */
 }
 
 void free(void* v)
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#else /* !AARCH64_PORT_STUB */
     if (v < debug_base) {
         return std_free(v);
     }
@@ -1258,7 +1251,6 @@ void free(void* v)
     mmu::vdepopulate(h, mmu::page_size);
     mmu::vdepopulate(v, asize);
     mmu::vcleanup(h, pad_before + asize);
-#endif /* !AARCH64_PORT_STUB */
 }
 
 void* realloc(void* v, size_t size)

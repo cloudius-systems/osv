@@ -19,11 +19,7 @@ void *pmap_mapdev(uint64_t paddr, size_t size)
 
 uint64_t virt_to_phys(void *virt)
 {
-#ifdef AARCH64_PORT_STUB
-    return (uint64_t)virt;
-#else /* !AARCH64_PORT_STUB */
     return mmu::virt_to_phys(virt);
-#endif /* !AARCH64_PORT_STUB */
 }
 
 /*
@@ -46,33 +42,19 @@ int vm_throttling_needed(void)
 
 void mmu_unmap(void *addr, size_t size)
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#else
     mmu::unmap_address(addr, addr, size);
-#endif /* !AARCH64_PORT_STUB */
 }
 
-#ifndef AARCH64_PORT_STUB
 namespace mmu {
 extern mutex vma_list_mutex;
 }
-#endif /* !AARCH64_PORT_STUB */
 
 bool mmu_vma_list_trylock()
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#else  /* !AARCH64_PORT_STUB */
     return mutex_trylock(&mmu::vma_list_mutex);
-#endif /* !AARCH64_PORT_STUB */
 }
 
 void mmu_vma_list_unlock()
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#else  /* !AARCH64_PORT_STUB */
     mutex_unlock(&mmu::vma_list_mutex);
-#endif /* !AARCH64_PORT_STUB */
 }

@@ -255,25 +255,13 @@ procfs_readdir(vnode *vp, file *fp, dirent *dir)
     return 0;
 }
 
-#ifdef AARCH64_PORT_STUB
-static std::string procfs_maps_tmp()
-{
-    std::string s("0-0 rwxp 00000000 00:00 0\n");
-    return s;
-}
-#endif /* AARCH64_PORT_STUB */
-
 static int
 procfs_mount(mount* mp, char *dev, int flags, void* data)
 {
     auto* vp = mp->m_root->d_vnode;
 
     auto self = make_shared<proc_dir_node>(inode_count++);
-#ifdef AARCH64_PORT_STUB
-    self->add("maps", inode_count++, procfs_maps_tmp);
-#else /* !AARCH64_PORT_STUB */
     self->add("maps", inode_count++, mmu::procfs_maps);
-#endif /* !AARCH64_PORT_STUB */
 
     auto* root = new proc_dir_node(vp->v_ino);
     root->add("self", self);
