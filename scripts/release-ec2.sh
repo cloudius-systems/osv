@@ -114,8 +114,8 @@ S3_CREDENTIALS="-O $AWS_ACCESS_KEY_ID -W $AWS_SECRET_ACCESS_KEY"
 export AWS_DEFAULT_REGION=us-east-1
 OSV_INITIAL_ZONE="${AWS_DEFAULT_REGION}a"
 
-#We use OSv-v0.03 AMI in us-east-1 as a template
-TEMPLATE_AMI_ID=ami-45d2882c
+#We use OSv-v0.06 AMI in us-east-1 as a template
+TEMPLATE_AMI_ID=ami-e7ced38e
 
 amend_rstatus() {
  echo \[`timestamp`\] $* >> $OSV_RSTATUS
@@ -180,7 +180,7 @@ wait_import_completion() {
 }
 
 launch_template_instance() {
- $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone $OSV_INITIAL_ZONE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
+ $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone $OSV_INITIAL_ZONE --instance-type m3.medium | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
 }
 
 get_instance_state() {
