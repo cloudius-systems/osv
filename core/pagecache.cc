@@ -169,7 +169,6 @@ public:
 constexpr unsigned lru_max_length = 100;
 constexpr unsigned lru_free_count = 20;
 
-static mutex lock;
 static std::unordered_map<hashkey, cached_page*> cache;
 static std::deque<cached_page*> lru;
 
@@ -178,11 +177,6 @@ static std::unordered_multimap<void *, mmu::hw_ptep> shared_fs_maps;
 // We need to reference count the buffer, but first we need to store the
 // buffer somewhere we can find
 static std::unordered_map<void *, unsigned int> shared_fs_buf_refcnt;
-// Can't use the vma_list_mutex, because if we do, we can have a deadlock where
-// we call into the filesystem to read data with the vma_list_mutex held - because
-// we do that for complex operate operations, and if the filesystem decides to evict
-// a page to read the selected buffer, we will need to access those data structures.
-static mutex shared_fs_mutex;
 
 static void fs_buf_get(void *buf_addr)
 {
@@ -210,25 +204,21 @@ static bool fs_buf_put(void *buf_addr, unsigned dec = 1)
 TRACEPOINT(trace_add_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
 void add_mapping(void *buf_addr, void *page, mmu::hw_ptep ptep)
 {
-    WITH_LOCK(shared_fs_mutex) {
-        trace_add_mapping(buf_addr, page, ptep.release());
-        shared_fs_maps.emplace(page, ptep);
-        fs_buf_get(buf_addr);
-    }
+    trace_add_mapping(buf_addr, page, ptep.release());
+    shared_fs_maps.emplace(page, ptep);
+    fs_buf_get(buf_addr);
 }
 
 TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
 bool remove_mapping(void *buf_addr, void *paddr, mmu::hw_ptep ptep)
 {
-    WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(paddr);
-        for (auto it = buf.first; it != buf.second; it++) {
-            auto stored = (*it).second;
-            if (stored == ptep) {
-                shared_fs_maps.erase(it);
-                trace_remove_mapping(buf_addr, paddr, ptep.release());
-                return fs_buf_put(buf_addr);
-            }
+    auto buf = shared_fs_maps.equal_range(paddr);
+    for (auto it = buf.first; it != buf.second; it++) {
+        auto stored = (*it).second;
+        if (stored == ptep) {
+            shared_fs_maps.erase(it);
+            trace_remove_mapping(buf_addr, paddr, ptep.release());
+            return fs_buf_put(buf_addr);
         }
     }
     return false;
@@ -236,13 +226,11 @@ bool remove_mapping(void *buf_addr, void *paddr, mmu::hw_ptep ptep)
 
 bool lookup_mapping(void *paddr, mmu::hw_ptep ptep)
 {
-    WITH_LOCK(shared_fs_mutex) {
-        auto buf = shared_fs_maps.equal_range(paddr);
-        for (auto it = buf.first; it != buf.second; it++) {
-            auto stored = (*it).second;
-            if (stored == ptep) {
-                return true;
-            }
+    auto buf = shared_fs_maps.equal_range(paddr);
+    for (auto it = buf.first; it != buf.second; it++) {
+        auto stored = (*it).second;
+        if (stored == ptep) {
+            return true;
         }
     }
     return false;
@@ -255,16 +243,14 @@ bool unmap_address(void *buf_addr, void *addr, size_t size)
     unsigned refs = 0;
     size = align_up(size, mmu::page_size);
     assert(mutex_owned(&mmu::vma_list_mutex));
-    WITH_LOCK(shared_fs_mutex) {
-        trace_unmap_address(buf_addr, addr, size);
-        for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += mmu::page_size, size -= mmu::page_size) {
-            addr = reinterpret_cast<void*>(a);
-            auto buf = shared_fs_maps.equal_range(addr);
-            refs += clear_ptes(buf.first, buf.second);
-            shared_fs_maps.erase(addr);
-        }
-        last = refs ? fs_buf_put(buf_addr, refs) : false;
+    trace_unmap_address(buf_addr, addr, size);
+    for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += mmu::page_size, size -= mmu::page_size) {
+        addr = reinterpret_cast<void*>(a);
+        auto buf = shared_fs_maps.equal_range(addr);
+        refs += clear_ptes(buf.first, buf.second);
+        shared_fs_maps.erase(addr);
     }
+    last = refs ? fs_buf_put(buf_addr, refs) : false;
     mmu::flush_tlb_all();
     return last;
 }
@@ -317,7 +303,6 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
-    SCOPE_LOCK(lock);
     cached_page* cp = find_in_write_cache(key);
 
     if (write) {
@@ -367,7 +352,6 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
-    SCOPE_LOCK(lock);
     cached_page *cp = find_in_write_cache(key);
 
     // page is either in ARC cache or write cache or private page
