@@ -48,8 +48,8 @@ This script assumes following packages are installed and functional:
 This script receives following command line arguments:
 
     $PARAM_HELP - print this help screen and exit
-    $PARAM_IMAGE - do not rebuild OSv, upload specified image instead
-    $PARAM_VERSION - do not generate version based on repository, use specified string instead
+    $PARAM_IMAGE <image file> - do not rebuild OSv, upload specified image instead
+    $PARAM_VERSION <version string> - do not generate version based on repository, use specified string instead
     $PARAM_PRIVATE_ONLY - do not publish or replicate AMI - useful for pre-release build verification
     $PARAM_INSTANCE - do not rebuild, upload existing image and stop afer instance creation - useful for development phase
 
