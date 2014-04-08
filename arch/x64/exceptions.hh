@@ -37,6 +37,9 @@ struct exception_frame {
     ulong rflags;
     ulong rsp;
     ulong ss;
+
+    void *get_pc(void) { return (void*)rip; }
+    unsigned int get_error(void) { return error_code; }
 };
 
 extern __thread exception_frame* current_interrupt_frame;

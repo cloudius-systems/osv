@@ -351,7 +351,7 @@ void jvm_balloon_shrinker::_thread_loop()
 bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
 #ifndef AARCH64_PORT_STUB
-    if (!ef || (ef->error_code == mmu::page_fault_write)) {
+    if (!ef || (ef->get_error() == mmu::page_fault_write)) {
         if (vma->effective_jvm_addr()) {
             return false;
         }

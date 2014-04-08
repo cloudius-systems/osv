@@ -1211,7 +1211,7 @@ bool isreadable(void *addr, size_t size)
     return true;
 }
 
-bool access_fault(vma& vma, unsigned long error_code)
+bool access_fault(vma& vma, unsigned int error_code)
 {
     auto perm = vma.perm();
     if (error_code & page_fault_insn) {
@@ -1223,13 +1223,13 @@ bool access_fault(vma& vma, unsigned long error_code)
     return !(perm & perm_read);
 }
 
-TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, u16);
-TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x", uintptr_t, u16);
-TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, u16);
+TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, unsigned int);
+TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x", uintptr_t, unsigned int);
+TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, unsigned int);
 
 void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 {
-    auto pc = reinterpret_cast<void*>(ef->rip);
+    void *pc = ef->get_pc();
     if (pc >= text_start && pc < text_end) {
         abort("page fault outside application, addr %lx", addr);
     }
@@ -1238,18 +1238,18 @@ void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 
 void vm_fault(uintptr_t addr, exception_frame* ef)
 {
-    trace_mmu_vm_fault(addr, ef->error_code);
+    trace_mmu_vm_fault(addr, ef->get_error());
     addr = align_down(addr, mmu::page_size);
     WITH_LOCK(vma_list_mutex) {
         auto vma = vma_list.find(addr_range(addr, addr+1), vma::addr_compare());
-        if (vma == vma_list.end() || access_fault(*vma, ef->error_code)) {
+        if (vma == vma_list.end() || access_fault(*vma, ef->get_error())) {
             vm_sigsegv(addr, ef);
-            trace_mmu_vm_fault_sigsegv(addr, ef->error_code);
+            trace_mmu_vm_fault_sigsegv(addr, ef->get_error());
             return;
         }
         vma->fault(addr, ef);
     }
-    trace_mmu_vm_fault_ret(addr, ef->error_code);
+    trace_mmu_vm_fault_ret(addr, ef->get_error());
 }
 
 vma::vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, page_allocator *page_ops)
@@ -1344,7 +1344,7 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
         size = page_size;
     }
 
-    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size, ef->error_code & page_fault_write);
+    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size, ef->get_error() & page_fault_write);
 
     if (_flags & mmap_jvm_heap) {
         memory::stats::on_jvm_heap_alloc(total);

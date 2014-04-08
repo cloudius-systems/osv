@@ -22,8 +22,12 @@ struct exception_frame {
     u64 sp;
     u64 pc;
     u64 pstate;
-    u64 error_code;
-    u64 reserved; /* align to 16 */
+    u32 esr;
+    u32 align1;
+    u64 align2; /* align to 16 */
+
+    void *get_pc(void) { return (void *)pc; }
+    unsigned int get_error(void) { return esr; }
 };
 
 extern __thread exception_frame* current_interrupt_frame;
