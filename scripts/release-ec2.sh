@@ -11,6 +11,7 @@ PARAM_PRIVATE_ONLY="--private-ami-only"
 PARAM_INSTANCE="--instance-only"
 PARAM_IMAGE="--override-image"
 PARAM_VERSION="--override-version"
+PARAM_REGIONS="--override-regions"
 
 print_help() {
  cat <<HLPEND
@@ -52,6 +53,7 @@ This script receives following command line arguments:
     $PARAM_VERSION <version string> - do not generate version based on repository, use specified string instead
     $PARAM_PRIVATE_ONLY - do not publish or replicate AMI - useful for pre-release build verification
     $PARAM_INSTANCE - do not rebuild, upload existing image and stop afer instance creation - useful for development phase
+    $PARAM_REGIONS <regions list> - replicate to specified regions only
 
 HLPEND
 }
@@ -80,6 +82,10 @@ do
       INSTANCE_ONLY=1
       DONT_BUILD=1
       shift
+      ;;
+    "$PARAM_REGIONS")
+      REGIONS_LIST=$2
+      shift 2
       ;;
     "$PARAM_HELP")
       print_help
@@ -310,8 +316,20 @@ make_ami_private() {
  $EC2_HOME/bin/ec2-modify-image-attribute $AMI_ID --launch-permission --remove all $*
 }
 
+list_regions() {
+
+ if test x"$REGIONS_LIST" = x""; then
+     $EC2_HOME/bin/ec2-describe-regions | ec2_response_value REGION REGION
+ else
+     for region in $REGIONS_LIST; do echo $region; done
+ fi
+
+}
+
 list_additional_regions() {
- $EC2_HOME/bin/ec2-describe-regions | ec2_response_value REGION REGION | grep -v $AWS_DEFAULT_REGION
+
+ list_regions | grep -v $AWS_DEFAULT_REGION
+
 }
 
 get_own_ami_info() {
