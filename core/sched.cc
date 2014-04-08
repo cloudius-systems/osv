@@ -24,6 +24,7 @@
 #include <osv/elf.hh>
 #include <stdlib.h>
 #include <unordered_map>
+#include <osv/wait_record.hh>
 
 __thread char* percpu_base;
 
@@ -761,6 +762,9 @@ void thread::wake_lock(mutex* mtx, wait_record* wr)
         // ones doing it, and that it doesn't wake up while we do
         auto expected = status::waiting;
         if (!st->st.compare_exchange_strong(expected, status::sending_lock, std::memory_order_relaxed)) {
+            // make sure the thread can see wr->woken() == true.  We're still protected by
+            // the mutex, so so need for extra protection
+            wr->clear();
             // let the thread acquire the lock itself
             return;
         }

@@ -61,6 +61,12 @@ public:
         return !t;
     }
 
+    // Signal the wait record as woken without actually waking it up.  Use
+    // only with external synchronization.
+    void clear() noexcept {
+        t = nullptr;
+    }
+
     // A waiter object cannot be copied or moved, as wake() on the copy will
     // simply zero its copy of the content - not the original content on which
     // wait() is waiting on.
