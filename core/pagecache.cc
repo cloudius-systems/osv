@@ -251,7 +251,8 @@ bool unmap_address(void *buf_addr, void *addr, size_t size)
         shared_fs_maps.erase(addr);
     }
     last = refs ? fs_buf_put(buf_addr, refs) : false;
-    mmu::flush_tlb_all();
+    if (refs) // do not flush if no pte were cleared
+        mmu::flush_tlb_all();
     return last;
 }
 
