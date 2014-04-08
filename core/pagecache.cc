@@ -260,8 +260,9 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
     return cp->addr();
 }
 
-void release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
+bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
 {
+    bool free = false;
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
@@ -283,7 +284,8 @@ void release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
         }
     } else {
         // private page
-        memory::free_page(addr);
+        free = true;
     }
+    return free;
 }
 }

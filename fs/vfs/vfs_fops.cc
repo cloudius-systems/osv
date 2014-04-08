@@ -145,9 +145,9 @@ mmu::mmupage vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, b
     return pagecache::get(this, off, ptep, write, shared);
 }
 
-void vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)
+bool vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)
 {
-    pagecache::release(this, addr, off, ptep);
+    return pagecache::release(this, addr, off, ptep);
 }
 
 // Locking: vn_lock will call into the filesystem, and that can trigger an

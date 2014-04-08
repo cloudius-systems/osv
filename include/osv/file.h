@@ -99,7 +99,7 @@ struct file {
 	    throw make_error(ENODEV);
 	}
 	virtual mmu::mmupage get_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep, bool write, bool shared) { throw make_error(ENOSYS); }
-	virtual void put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep) { throw make_error(ENOSYS); }
+	virtual bool put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep) { throw make_error(ENOSYS); }
 
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */

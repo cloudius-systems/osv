@@ -145,7 +145,7 @@ public:
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 
     virtual mmupage get_page(uintptr_t offset, size_t size, hw_ptep ptep, bool write, bool shared) override;
-    virtual void put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
+    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
