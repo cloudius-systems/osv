@@ -63,12 +63,10 @@ check:
 swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib
 
-submodules:
-	cd .. && git submodule update --init -f
-.PHONY: submodules
+api-doc/.git:
+	cd .. && git submodule update --init -f httpserver/api-doc
 
-swagger-ui/.git: submodules
-
-api-doc/.git: submodules
+swagger-ui/.git:
+	cd .. && git submodule update --init -f httpserver/swagger-ui
 
 .SECONDARY:
