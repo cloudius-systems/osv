@@ -694,6 +694,10 @@ objects += arch/$(arch)/smp.o
 objects += arch/$(arch)/elf-dl.o
 objects += arch/$(arch)/entry.o
 
+ifeq ($(arch),aarch64)
+objects += arch/$(arch)/arm-clock.o
+endif
+
 ifeq ($(arch),x64)
 objects += arch/x64/dump.o
 objects += arch/x64/exceptions.o

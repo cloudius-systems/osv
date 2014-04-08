@@ -40,6 +40,5 @@ void arm_clock_events::set(std::chrono::nanoseconds nanos)
 
 void __attribute__((constructor)) init_arm_clock()
 {
-    debug_early_entry("init_arm_clock()");
     clock_event = new arm_clock_events;
 }
