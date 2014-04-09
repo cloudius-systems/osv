@@ -25,6 +25,11 @@
 #include <osv/clock.hh>
 #include <osv/mempool.hh>
 
+// FIXME: If we ever support multiple different executables we will have to maybe put those
+// on a shared library
+char *program_invocation_name;
+char *program_invocation_short_name;
+
 int libc_error(int err)
 {
     errno = err;

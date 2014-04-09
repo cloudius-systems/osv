@@ -7,6 +7,8 @@
 #include <osv/run.hh>
 
 #include <osv/debug.hh>
+#include <errno.h>
+#include <libgen.h>
 
 extern int optind;
 
@@ -27,6 +29,11 @@ std::shared_ptr<elf::object> run(std::string path,
     if (!main) {
         return nullptr;
     }
+
+    char *c_path = (char *)(path.c_str());
+    // path is guaranteed to keep existing this function
+    program_invocation_name = c_path;
+    program_invocation_short_name = basename(c_path);
     // make sure to have a fresh optind across calls
     // FIXME: fails if run() is executed in parallel
     int old_optind = optind;
