@@ -227,6 +227,7 @@ tests += tests/misc-mmap-anon-perf.so
 tests += tests/tst-mmap-file.so
 tests += tests/misc-mmap-big-file.so
 tests += tests/tst-mmap.so
+tests/tst-mmap.so: COMMON += -Wl,-z,now
 tests += tests/tst-huge.so
 tests += tests/tst-elf-permissions.so
 tests/tst-elf-permissions.so: COMMON += -Wl,-z,relro
