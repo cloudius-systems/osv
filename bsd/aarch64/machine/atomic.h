@@ -89,9 +89,8 @@ static __inline u_int atomic_fetchadd_int(volatile u_int *p, u_int val)
                      "   add   %w2, %w2, %w0 ; "
                      "   stlxr %w3, %w2, %1 ; "
                      "   cbnz  %w3, 1b ; "
-                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status)
-                     :
-                     : "cc");
+                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status));
+
     return result;
 }
 
@@ -103,9 +102,8 @@ static __inline u_long atomic_fetchadd_long(volatile u_long *p, u_long val)
                      "   add   %2, %2, %0 ; "
                      "   stlxr %w3, %2, %1 ; "
                      "   cbnz  %w3, 1b ; "
-                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status)
-                     :
-                     : "cc");
+                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status));
+
     return result;
 }
 
@@ -115,8 +113,7 @@ static __inline void atomic_store_rel_int(volatile u_int *p, u_int val)
     __asm __volatile("1: stxr %w1, %w2, %0 ; "
                      "   cbnz %w1, 1b ; "
                      : "+Q"(*p), "=&r"(status)
-                     : "r"(val)
-                     : "cc");
+                     : "r"(val));
 }
 
 static __inline void atomic_store_rel_long(volatile u_long *p, u_long val)
@@ -125,8 +122,7 @@ static __inline void atomic_store_rel_long(volatile u_long *p, u_long val)
     __asm __volatile("1: stxr %w1, %2, %0 ; "
                      "   cbnz %w1, 1b ; "
                      : "+Q"(*p), "=&r"(status)
-                     : "r"(val)
-                     : "cc");
+                     : "r"(val));
 }
 
 static __inline void atomic_add_int(volatile u_int *p, u_int val)
