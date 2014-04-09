@@ -1766,6 +1766,7 @@ error munmap(const void *addr, size_t length)
 {
     std::lock_guard<mutex> guard(vma_list_mutex);
 
+    length = ::align_up(length, mmu::page_size);
     if (!ismapped(addr, length)) {
         return make_error(EINVAL);
     }
