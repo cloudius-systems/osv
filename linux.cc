@@ -74,6 +74,19 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 long syscall(long number, ...)
 {
     switch (number) {
+    case __NR_write: {
+        va_list args;
+        int arg1;
+        const void *arg2;
+        size_t arg3;
+        va_start(args, number);
+        arg1 = va_arg(args, typeof(arg1));
+        arg2 = va_arg(args, typeof(arg2));
+        arg3 = va_arg(args, typeof(arg3));
+        va_end(args);
+
+        return write(arg1, arg2, arg3);
+    }
     case __NR_gettid: return gettid();
     case __NR_clock_gettime: {
         va_list args;
