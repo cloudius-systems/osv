@@ -283,6 +283,13 @@ int main(int argc, char **argv)
     assert(mincore(align_page_down(y)+1, 1, vec) == -1);
     free(y);
 
+    // If we are able to map a smaller-than-a-page region (that will be
+    // obviously aligned internally), we should be able to unmap using the same
+    // size.
+    void *small = mmap(NULL, 64, PROT_READ, MAP_ANON | MAP_PRIVATE, -1, 0);
+    assert(small != nullptr);
+    assert(munmap(small, 64) == 0);
+
     // TODO: verify that mmapping more than available physical memory doesn't
     // panic just return -1 and ENOMEM.
     // TODO: verify that huge-page-sized allocations get a huge-page aligned address
