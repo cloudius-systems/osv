@@ -58,8 +58,8 @@ inline u64 ticks()
 
 struct fpu_state {
     __uint128_t vregs[32];
-    unsigned long fpsr;
-    unsigned long fpcr;
+    u32 fpsr;
+    u32 fpcr;
 };
 
 inline void fpu_state_save(fpu_state *s)
