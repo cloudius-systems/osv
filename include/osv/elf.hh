@@ -151,7 +151,7 @@ enum {
       // segment.
     DT_JMPREL = 23, // d_ptr Address of the relocations associated with the procedure
       // linkage table.
-    DT_BIND_NOW = 24, // ignored The presence of this dynamic table entry signals that the
+    DT_BIND_NOW = 24, // The presence of this dynamic table entry signals that the
       // dynamic loader should process all relocations for this object
       // before transferring control to the program.
     DT_INIT_ARRAY = 25, // d_ptr Pointer to an array of pointers to initialization functions.

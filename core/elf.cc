@@ -520,24 +520,30 @@ void object::relocate_pltgot()
         // The prelinker saved us in pltgot[1] the address of .plt + 0x16.
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
+    bool bind_now = dynamic_exists(DT_BIND_NOW);
 
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
     for (auto p = rel; p < rel + nrel; ++p) {
         auto info = p->r_info;
-          u32 type = info & 0xffffffff;
-          assert(type == R_X86_64_JUMP_SLOT);
-          void *addr = _base + p->r_offset;
-          if (original_plt) {
-              // Restore the link to the original plt.
-              // We know the JUMP_SLOT entries are in plt order, and that
-              // each plt entry is 16 bytes.
-              *static_cast<void**>(addr) = original_plt + (p-rel)*16;
-          } else {
-              // The JUMP_SLOT entry already points back to the PLT, just
-              // make sure it is relocated relative to the object base.
-              *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
-          }
+        u32 type = info & 0xffffffff;
+        assert(type == R_X86_64_JUMP_SLOT);
+        void *addr = _base + p->r_offset;
+        if (bind_now) {
+            // If on-load binding is requested (instead of the default lazy
+            // binding), resolve all the PLT entries now.
+            u32 idx = info >> 32;
+            *static_cast<void**>(addr) = symbol(idx).relocated_addr();
+        } else if (original_plt) {
+            // Restore the link to the original plt.
+            // We know the JUMP_SLOT entries are in plt order, and that
+            // each plt entry is 16 bytes.
+            *static_cast<void**>(addr) = original_plt + (p-rel)*16;
+        } else {
+            // The JUMP_SLOT entry already points back to the PLT, just
+            // make sure it is relocated relative to the object base.
+            *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+        }
     }
     // PLTGOT resolution has a special calling convention, with the symbol
     // index and some word pushed on the stack, so we need an assembly
