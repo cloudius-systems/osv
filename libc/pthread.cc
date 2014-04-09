@@ -180,9 +180,25 @@ int pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
     return 0;
 }
 
-extern "C"
-int __pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
-    __attribute__((alias("pthread_key_create")));
+int pthread_atfork(void (*prepare)(void), void (*parent)(void),
+                   void (*child)(void))
+{
+    return 0;
+}
+
+extern "C" int register_atfork(void (*prepare)(void), void (*parent)(void),
+                                void (*child)(void), void *__dso_handle)
+{
+    return 0;
+}
+
+extern "C" {
+    int __register_atfork(void (*prepare)(void), void (*parent)(void),
+                          void (*child)(void), void *__dso_handle) __attribute__((alias("register_atfork")));
+    int __pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
+        __attribute__((alias("pthread_key_create")));
+}
+
 
 int pthread_key_delete(pthread_key_t key)
 {
