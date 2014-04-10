@@ -51,7 +51,7 @@ uint64_t kmem_used(void);
 int vm_paging_needed(void);
 int vm_throttling_needed(void);
 
-void mmu_unmap(void *addr, size_t size);
+void mmu_unmap(void* ab);
 bool mmu_vma_list_trylock();
 void mmu_vma_list_unlock();
 

@@ -15,6 +15,8 @@
 #include <fs/vfs/vfs.h>
 #include <osv/trace.hh>
 
+extern "C" void arc_unshare_buf(arc_buf_t*);
+
 namespace mmu {
     extern mutex vma_list_mutex;
 };
@@ -50,20 +52,20 @@ template<> struct hash<mmu::hw_ptep> {
 namespace pagecache {
 
 class cached_page {
-private:
+protected:
     const hashkey _key;
-    struct dentry* _dp;
     void* _page;
     typedef boost::variant<std::nullptr_t, mmu::hw_ptep, std::unique_ptr<std::unordered_set<mmu::hw_ptep>>> ptep_list;
     ptep_list _ptes; // set of pointers to ptes that map the page
 
-    class ptes_visitor : public boost::static_visitor<> {
+    template<typename T>
+    class ptes_visitor : public boost::static_visitor<T> {
     protected:
         ptep_list& _ptes;
     public:
         ptes_visitor(ptep_list& ptes) : _ptes(ptes) {}
     };
-    class ptep_add : public ptes_visitor {
+    class ptep_add : public ptes_visitor<void> {
         mmu::hw_ptep& _ptep;
     public:
         ptep_add(ptep_list& ptes, mmu::hw_ptep& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
@@ -79,52 +81,86 @@ private:
             set->emplace(_ptep);
         }
     };
-    class ptep_remove : public ptes_visitor {
+    class ptep_remove : public ptes_visitor<int> {
         mmu::hw_ptep& _ptep;
     public:
         ptep_remove(ptep_list& ptes, mmu::hw_ptep& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
-        void operator()(std::nullptr_t &v) {
+        int operator()(std::nullptr_t &v) {
             assert(0);
+            return -1;
         }
-        void operator()(mmu::hw_ptep& ptep) {
+        int operator()(mmu::hw_ptep& ptep) {
             _ptes = nullptr;
+            return 0;
         }
-        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
             set->erase(_ptep);
             if (set->size() == 1) {
                 auto pte = *(set->begin());
                 _ptes = pte;
+                return 1;
             }
+            return set->size();
         }
     };
-    class ptep_flush : public ptes_visitor {
+    class ptep_flush : public ptes_visitor<int> {
     public:
         ptep_flush(ptep_list& ptes) : ptes_visitor(ptes) {}
-        void operator()(std::nullptr_t &v) {
+        int operator()(std::nullptr_t &v) {
             // nothing to flush
+            return 0;
         }
-        void operator()(mmu::hw_ptep& ptep) {
+        int operator()(mmu::hw_ptep& ptep) {
             clear_pte(ptep);
+            return 1;
         }
-        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
             mmu::clear_ptes(set->begin(), set->end());
+            return set->size();
         }
     };
 
 public:
-    cached_page(hashkey key, vfs_file* fp) : _key(key) {
-        _dp = fp->f_dentry;
-        dref(_dp);
-        _page = memory::alloc_page();
+    cached_page(hashkey key, void* page) : _key(key), _page(page) {
     }
     ~cached_page() {
+    }
+
+    void map(mmu::hw_ptep ptep) {
+        ptep_add add(_ptes, ptep);
+        boost::apply_visitor(add, _ptes);
+    }
+    int unmap(mmu::hw_ptep ptep) {
+        ptep_remove rm(_ptes, ptep);
+        return boost::apply_visitor(rm, _ptes);
+    }
+    void* addr() {
+        return _page;
+    }
+    int flush() {
+        ptep_flush flush(_ptes);
+        return boost::apply_visitor(flush, _ptes);
+    }
+    const hashkey& key() {
+        return _key;
+    }
+};
+
+class cached_page_write : public cached_page {
+private:
+    struct dentry* _dp;
+public:
+    cached_page_write(hashkey key, vfs_file* fp) : cached_page(key, memory::alloc_page()) {
+        _dp = fp->f_dentry;
+        dref(_dp);
+    }
+    ~cached_page_write() {
         if (_page) {
             writeback();
             memory::free_page(_page);
             drele(_dp);
         }
     }
-
     int writeback()
     {
         struct vnode *vp = _dp->d_vnode;
@@ -138,25 +174,6 @@ public:
 
         return error;
     }
-
-    void map(mmu::hw_ptep ptep) {
-        ptep_add add(_ptes, ptep);
-        boost::apply_visitor(add, _ptes);
-    }
-    void unmap(mmu::hw_ptep ptep) {
-        ptep_remove rm(_ptes, ptep);
-        boost::apply_visitor(rm, _ptes);
-    }
-    void* addr() {
-        return _page;
-    }
-    void flush() {
-        ptep_flush flush(_ptes);
-        boost::apply_visitor(flush, _ptes);
-    }
-    const hashkey& key() {
-        return _key;
-    }
     void* release() { // called to demote a page from cache page to anonymous
         assert(boost::get<std::nullptr_t>(_ptes) == nullptr);
         void *p = _page;
@@ -166,116 +183,146 @@ public:
     }
 };
 
+class cached_page_arc;
+
+unsigned drop_read_cached_page(cached_page_arc* cp, bool flush = true);
+
+class cached_page_arc : public cached_page {
+public:
+    typedef std::unordered_multimap<arc_buf_t*, cached_page_arc*> arc_map;
+
+private:
+    arc_buf_t* _ab;
+    bool _removed = false;
+
+    static arc_map arc_cache_map;
+
+    static arc_buf_t* ref(arc_buf_t* ab, cached_page_arc* pc)
+    {
+        arc_cache_map.emplace(ab, pc);
+        return ab;
+    }
+
+    static bool unref(arc_buf_t* ab, cached_page_arc* pc)
+    {
+        auto it = arc_cache_map.equal_range(ab);
+
+        arc_cache_map.erase(std::find(it.first, it.second, pc));
+
+        return arc_cache_map.find(ab) == arc_cache_map.end();
+    }
+
+
+public:
+    cached_page_arc(hashkey key, void* page, arc_buf_t* ab) : cached_page(key, page), _ab(ref(ab, this)) {}
+    ~cached_page_arc() {
+        if (!_removed && unref(_ab, this)) {
+            arc_unshare_buf(_ab);
+        }
+    }
+    arc_buf_t* arcbuf() {
+        return _ab;
+    }
+    static void unmap_arc_buf(arc_buf_t* ab) {
+        auto it = arc_cache_map.equal_range(ab);
+        unsigned count = 0;
+
+        std::for_each(it.first, it.second, [&count](arc_map::value_type& p) {
+                auto cp = p.second;
+                cp->_removed = true;
+                count += drop_read_cached_page(cp, false);
+        });
+        arc_cache_map.erase(ab);
+        if (count) {
+            mmu::flush_tlb_all();
+        }
+    }
+};
+
+static bool operator==(const cached_page_arc::arc_map::value_type& l, const cached_page_arc* r) {
+    return l.second == r;
+}
+
 constexpr unsigned lru_max_length = 100;
 constexpr unsigned lru_free_count = 20;
 
-static std::unordered_map<hashkey, cached_page*> cache;
-static std::deque<cached_page*> lru;
-
-// In the general case, we expect only one element in the list.
-static std::unordered_multimap<void *, mmu::hw_ptep> shared_fs_maps;
-// We need to reference count the buffer, but first we need to store the
-// buffer somewhere we can find
-static std::unordered_map<void *, unsigned int> shared_fs_buf_refcnt;
-
-static void fs_buf_get(void *buf_addr)
-{
-    auto b = shared_fs_buf_refcnt.find(buf_addr);
-    if (b == shared_fs_buf_refcnt.end()) {
-        shared_fs_buf_refcnt.emplace(buf_addr, 1);
-        return;
-    }
-    b->second++;
-}
-
-static bool fs_buf_put(void *buf_addr, unsigned dec = 1)
-{
-    auto b = shared_fs_buf_refcnt.find(buf_addr);
-    assert(b != shared_fs_buf_refcnt.end());
-    assert(b->second >= dec);
-    b->second -= dec;
-    if (b->second == 0) {
-        shared_fs_buf_refcnt.erase(buf_addr);
-        return true;
-    }
-    return false;
-}
+std::unordered_multimap<arc_buf_t*, cached_page_arc*> cached_page_arc::arc_cache_map;
+static std::unordered_map<hashkey, cached_page_arc*> read_cache;
+static std::unordered_map<hashkey, cached_page_write*> write_cache;
+static std::deque<cached_page_write*> write_lru;
 
 TRACEPOINT(trace_add_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void add_mapping(void *buf_addr, void *page, mmu::hw_ptep ptep)
+void add_mapping(cached_page_arc *cp, mmu::hw_ptep ptep)
 {
-    trace_add_mapping(buf_addr, page, ptep.release());
-    shared_fs_maps.emplace(page, ptep);
-    fs_buf_get(buf_addr);
+    trace_add_mapping(cp->arcbuf(), cp->addr(), ptep.release());
+    cp->map(ptep);
 }
 
 TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-bool remove_mapping(void *buf_addr, void *paddr, mmu::hw_ptep ptep)
+void remove_mapping(cached_page_arc* cp, mmu::hw_ptep ptep)
 {
-    auto buf = shared_fs_maps.equal_range(paddr);
-    for (auto it = buf.first; it != buf.second; it++) {
-        auto stored = (*it).second;
-        if (stored == ptep) {
-            shared_fs_maps.erase(it);
-            trace_remove_mapping(buf_addr, paddr, ptep.release());
-            return fs_buf_put(buf_addr);
-        }
+    trace_remove_mapping(cp->arcbuf(), cp->addr(), ptep.release());
+    if (cp->unmap(ptep) == 0) {
+        read_cache.erase(cp->key());
+        delete cp;
     }
-    return false;
 }
 
-bool lookup_mapping(void *paddr, mmu::hw_ptep ptep)
+TRACEPOINT(trace_drop_read_cached_page, "buf=%p, addr=%p", void*, void*);
+unsigned drop_read_cached_page(cached_page_arc* cp, bool flush)
 {
-    auto buf = shared_fs_maps.equal_range(paddr);
-    for (auto it = buf.first; it != buf.second; it++) {
-        auto stored = (*it).second;
-        if (stored == ptep) {
-            return true;
-        }
-    }
-    return false;
-}
+    trace_drop_read_cached_page(cp->arcbuf(), cp->addr());
+    int flushed = cp->flush();
+    read_cache.erase(cp->key());
 
-TRACEPOINT(trace_unmap_address, "buf=%p, addr=%p, len=%x", void*, void*, uint64_t);
-bool unmap_address(void *buf_addr, void *addr, size_t size)
-{
-    bool last;
-    unsigned refs = 0;
-    size = align_up(size, mmu::page_size);
-    assert(mutex_owned(&mmu::vma_list_mutex));
-    trace_unmap_address(buf_addr, addr, size);
-    for (uintptr_t a = reinterpret_cast<uintptr_t>(addr); size; a += mmu::page_size, size -= mmu::page_size) {
-        addr = reinterpret_cast<void*>(a);
-        auto buf = shared_fs_maps.equal_range(addr);
-        refs += clear_ptes(buf.first, buf.second);
-        shared_fs_maps.erase(addr);
-    }
-    last = refs ? fs_buf_put(buf_addr, refs) : false;
-    if (refs) // do not flush if no pte were cleared
+    if (flush && flushed > 1) { // if there was only one pte it is the one we are faulting on; no need to flush.
         mmu::flush_tlb_all();
-    return last;
+    }
+
+    delete cp;
+
+    return flushed;
 }
 
-static std::unique_ptr<cached_page> create_write_cached_page(vfs_file* fp, hashkey& key)
+TRACEPOINT(trace_unmap_arc_buf, "buf=%p", void*);
+void unmap_arc_buf(arc_buf_t* ab)
+{
+    assert(mutex_owned(&mmu::vma_list_mutex));
+    trace_unmap_arc_buf(ab);
+    cached_page_arc::unmap_arc_buf(ab);
+}
+
+static cached_page_arc* create_read_cached_page(vfs_file* fp, hashkey& key)
+{
+    cached_page_arc *pc;
+    arc_buf_t* ab;
+    void* page;
+    fp->get_arcbuf(key.offset, &ab, &page);
+    pc = new cached_page_arc(key, page, ab);
+    read_cache.emplace(key, pc);
+    return pc;
+}
+
+static std::unique_ptr<cached_page_write> create_write_cached_page(vfs_file* fp, hashkey& key)
 {
     size_t bytes;
-    cached_page* cp = new cached_page(key, fp);
+    cached_page_write* cp = new cached_page_write(key, fp);
     struct iovec iov {cp->addr(), mmu::page_size};
 
     assert(sys_read(fp, &iov, 1, key.offset, &bytes) == 0);
-    return std::unique_ptr<cached_page>(cp);
+    return std::unique_ptr<cached_page_write>(cp);
 }
 
-static void insert(cached_page* cp) {
-    static cached_page* tofree[lru_free_count];
-    cache.emplace(cp->key(), cp);
-    lru.push_front(cp);
+static void insert(cached_page_write* cp) {
+    static cached_page_write* tofree[lru_free_count];
+    write_cache.emplace(cp->key(), cp);
+    write_lru.push_front(cp);
 
-    if (lru.size() > lru_max_length) {
+    if (write_lru.size() > lru_max_length) {
         for (unsigned i = 0; i < lru_free_count; i++) {
-            cached_page *p = lru.back();
-            lru.pop_back();
-            cache.erase(p->key());
+            cached_page_write *p = write_lru.back();
+            write_lru.pop_back();
+            write_cache.erase(p->key());
             p->flush();
             tofree[i] = p;
         }
@@ -286,7 +333,8 @@ static void insert(cached_page* cp) {
     }
 }
 
-static cached_page *find_in_write_cache(hashkey& key)
+template<typename T>
+static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
 {
     auto cpi = cache.find(key);
 
@@ -299,52 +347,49 @@ static cached_page *find_in_write_cache(hashkey& key)
 
 mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool shared)
 {
-    void *start, *page;
-    size_t len;
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
-    cached_page* cp = find_in_write_cache(key);
+    cached_page_write* wcp = find_in_cache(write_cache, key);
+    cached_page_arc* rcp = find_in_cache(read_cache, key);
 
     if (write) {
-        if (!cp) {
+        if (!wcp) {
             auto newcp = create_write_cached_page(fp, key);
-            // FIXME: if page is not in ARC it will be read here,
-            // FIXME: we need a function that return NULL if page is not in ARC
-            fp->get_arcbuf(offset, ARC_ACTION_QUERY, &start, &len, &page);
             if (shared) {
                 // write fault into shared mapping, there page is not in write cache yet, add it.
-                cp = newcp.release();
-                insert(cp);
+                wcp = newcp.release();
+                insert(wcp);
                 // page is moved from ARC to write cache
-                // remove any mapping to ARC page
-                // FIXME: if pte we are changing is the only one, no need to unmap
-                if (unmap_address(start, page, mmu::page_size)) {
-                    fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
+                // drop ARC page if exists, removing all mappings
+                 if (rcp) {
+                    drop_read_cached_page(rcp);
                 }
             } else {
                 // remove mapping to ARC page if exists
-                if (remove_mapping(start, page, ptep)) {
-                    fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
+                if (rcp) {
+                    remove_mapping(rcp, ptep);
                 }
                 // cow of private page from ARC
                 return newcp->release();
             }
         } else if (!shared) {
             // cow of private page from write cache
-            page = memory::alloc_page();
-            memcpy(page, cp->addr(), mmu::page_size);
+            void* page = memory::alloc_page();
+            memcpy(page, wcp->addr(), mmu::page_size);
             return page;
         }
-    } else if (!cp) {
+    } else if (!wcp) {
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
-        fp->get_arcbuf(offset, ARC_ACTION_HOLD, &start, &len, &page);
-        add_mapping(start, page, ptep);
-        return mmu::mmupage(page, true);
+        if (!rcp) {
+            rcp = create_read_cached_page(fp, key);
+        }
+        add_mapping(rcp, ptep);
+        return mmu::mmupage(rcp->addr(), true);
     }
 
-    cp->map(ptep);
-    return cp->addr();
+    wcp->map(ptep);
+    return mmu::mmupage(wcp->addr(), !shared);
 }
 
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
@@ -353,21 +398,16 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
-    cached_page *cp = find_in_write_cache(key);
+    cached_page_write *wcp = find_in_cache(write_cache, key);
+    cached_page_arc *rcp = find_in_cache(read_cache, key);
 
     // page is either in ARC cache or write cache or private page
-    if (cp && cp->addr() == addr) {
+    if (wcp && wcp->addr() == addr) {
         // page is in write cache
-        cp->unmap(ptep);
-    } else if (lookup_mapping(addr, ptep)) {
+        wcp->unmap(ptep);
+    } else if (rcp && rcp->addr() == addr) {
         // page is in ARC
-        void *start, *page;
-        size_t len;
-        fp->get_arcbuf(offset, ARC_ACTION_QUERY, &start, &len, &page);
-        assert (addr == page);
-        if (remove_mapping(start, page, ptep)) {
-            fp->get_arcbuf(offset, ARC_ACTION_RELEASE, &start, &len, &page);
-        }
+        remove_mapping(rcp, ptep);
     } else {
         // private page
         free = true;

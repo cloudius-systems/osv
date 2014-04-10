@@ -14,6 +14,6 @@ namespace pagecache {
 
 mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool shared);
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep);
-bool unmap_address(void *buf_addr, void *addr, size_t size);
+void unmap_arc_buf(arc_buf_t* ab);
 
 }

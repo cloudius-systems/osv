@@ -154,27 +154,24 @@ bool vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep pte
 // eviction that will hold the mmu-side lock that protects the mappings
 // Always follow that order. We however can't just get rid of the mmu-side lock,
 // because not all invalidations will be synchronous.
-void vfs_file::get_arcbuf(uintptr_t offset, unsigned action, void** start, size_t* len, void** page)
+void vfs_file::get_arcbuf(uintptr_t offset, arc_buf_t** arcbuf, void** page)
 {
     struct vnode *vp = f_dentry->d_vnode;
 
-    iovec io;
-    io.iov_base = nullptr;
-    io.iov_len = 0;
+    iovec io[2]; // 0 - pointer to page, 1 - pointer to ARC buffer
 
     uio data;
-    data.uio_iov = &io;
-    data.uio_iovcnt = 1;
+    data.uio_iov = io;
+    data.uio_iovcnt = 2;
     data.uio_offset = off_t(offset);
     data.uio_resid = mmu::page_size;
     data.uio_rw = UIO_READ;
 
     vn_lock(vp);
-    assert(VOP_CACHE(vp, this, &data, action) == 0);
+    assert(VOP_CACHE(vp, this, &data) == 0);
     vn_unlock(vp);
-    *start = io.iov_base;
-    *len = io.iov_len;
-    *page = static_cast<char*>(io.iov_base) + data.uio_offset;
+    *page = io[0].iov_base;
+    *arcbuf = static_cast<arc_buf_t*>(io[1].iov_base);
 }
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)

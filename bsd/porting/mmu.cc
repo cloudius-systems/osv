@@ -41,9 +41,9 @@ int vm_throttling_needed(void)
     return memory::throttling_needed();
 }
 
-void mmu_unmap(void *addr, size_t size)
+void mmu_unmap(void* ab)
 {
-    pagecache::unmap_address(addr, addr, size);
+    pagecache::unmap_arc_buf((arc_buf_t*)ab);
 }
 
 namespace mmu {

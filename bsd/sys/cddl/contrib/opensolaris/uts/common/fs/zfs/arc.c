@@ -1918,7 +1918,7 @@ evict_start:
 				}
 				if (HDR_SHARED_BUF(ab)) {
 				    if (mmu_vma_list_trylock()) {
-				        mmu_unmap(buf->b_data, ab->b_size);
+				        mmu_unmap(buf);
 			            ab->b_flags &= ~ARC_SHARED_BUF;
 			            mmu_vma_list_unlock();
 				    } else {
