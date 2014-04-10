@@ -101,12 +101,14 @@ Test networking:
 test invoke TCPExternalCommunication
 ```
 
-Running Java or C applications that already reside within the image:
+## Running Java or C applications that already reside within the image:
 
 ```
-# The default Java-based shell and web server
-sudo scripts/run.py -nv -m4G -e "java.so -jar /usr/mgmt/web-1.0.0.jar app prod"
+# Building and running a simple java application example
+$ make image=java-example
+$ scripts/run.py -e "java.so -cp /java-example Hello"
 
-# One of the unit tests (compiled C++ code)
-$ sudo scripts/run.py -nv -m4G -e "/tests/tst-pipe.so"
+# Running an ifconfig by explicit execution of ifconfig.so (compiled C++ code)
+$ make
+$ sudo scripts/run.py -nv -e "/tools/ifconfig.so"
 ```
