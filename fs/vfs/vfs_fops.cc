@@ -186,6 +186,9 @@ std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, 
 #ifdef AARCH64_PORT_STUB
 	abort();
 #else /* !AARCH64_PORT_STUB */
+	// FIXME: temporarily disabled due to Issue #261
+	return mmu::default_file_mmap(this, range, flags, perm, offset);
+
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	if (!vp->v_op->vop_cache || (vp->v_size < (off_t)mmu::page_size)) {
