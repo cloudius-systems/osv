@@ -645,3 +645,4 @@ libc += mount.o
 libc += eventfd.o
 libc += timerfd.o
 libc += shm.o
+libc += inotify.o
