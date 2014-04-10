@@ -93,7 +93,8 @@ static void print_backtrace(void)
 
     /* Skip abort(const char *) and abort(void)  */
     for (int i = 2; i < len; i++) {
-        auto ei = elf::get_program()->lookup_addr(addrs[i]);
+        auto addr = addrs[i] - 1;
+        auto ei = elf::get_program()->lookup_addr(addr);
         const char *sname = ei.sym;
         char demangled[1024];
 
@@ -103,8 +104,8 @@ static void print_backtrace(void)
             sname = demangled;
 
         debug_ll("%p <%s+%d>\n",
-            addrs[i], sname,
-            reinterpret_cast<uintptr_t>(addrs[i])
+            addr, sname,
+            reinterpret_cast<uintptr_t>(addr)
             - reinterpret_cast<uintptr_t>(ei.addr));
     }
 }
