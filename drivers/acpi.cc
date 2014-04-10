@@ -508,13 +508,6 @@ void early_init()
         acpi_e("AcpiInitializeTables failed: %s\n", AcpiFormatException(status));
         return;
     }
-}
-
-// must be called after the scheduler, apic and smp where started to run
-// The following function comes from the documentation example page 262
-void init()
-{
-    ACPI_STATUS status;
 
     // Initialize ACPICA subsystem
     status = AcpiInitializeSubsystem();
@@ -536,6 +529,14 @@ void init()
         acpi_e("AcpiLoadTables failed: %s\n", AcpiFormatException(status));
         return;
     }
+}
+
+// must be called after the scheduler, apic and smp where started to run
+// The following function comes from the documentation example page 262
+void init()
+{
+    ACPI_STATUS status;
+
 
     // TODO: Installation of Local handlers
 
