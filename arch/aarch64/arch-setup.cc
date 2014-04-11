@@ -7,7 +7,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "arch.hh"
 #include "arch-setup.hh"
 #include <osv/sched.hh>
 #include <osv/mempool.hh>
@@ -16,6 +15,8 @@
 #include <string.h>
 #include <osv/boot.hh>
 #include <osv/debug.hh>
+
+#include "arch-mmu.hh"
 
 extern elf::Elf64_Ehdr* elf_header;
 extern size_t elf_size;
@@ -43,19 +44,41 @@ void parse_cmdline(char* cmdline)
     __argc = args.size() - 1;
 }
 
+void setup_temporary_phys_map()
+{
+    // duplicate 1:1 mapping into phys_mem
+    u64 *pt_ttbr0 = reinterpret_cast<u64*>(processor::read_ttbr0());
+    u64 *pt_ttbr1 = reinterpret_cast<u64*>(processor::read_ttbr1());
+    pt_ttbr1[mmu::pt_index(mmu::phys_mem, 3)] = pt_ttbr0[0];
+    mmu::flush_tlb_all();
+}
+
 void arch_setup_free_memory()
 {
+    setup_temporary_phys_map();
+
     register u64 edata;
     asm ("adrp %0, .edata" : "=r"(edata));
 
     elf_start = reinterpret_cast<void*>(elf_header);
     elf_size = (u64)edata - (u64)elf_start;
 
-    /* just a test for now, we hardcode 512MB of memory */
-    u64 addr = (u64)elf_start + elf_size + 0x10000;
-    addr = addr & ~0xffffull;
+    mmu::phys addr = (mmu::phys)elf_start + elf_size + 0x200000;
+    addr = addr & ~0x1fffffull;
 
-    memory::free_initial_memory_range((void*)addr, 0x20000000);
+    /* set in stone for now, 512MB */
+    memory::phys_mem_size = 0x20000000;
+    mmu::free_initial_memory_range(addr, memory::phys_mem_size);
+
+    /* linear_map [TTBR1] */
+    mmu::linear_map(mmu::phys_mem + addr, addr, memory::phys_mem_size);
+
+    /* linear_map [TTBR0 - ELF] */
+    mmu::linear_map((void*)0x40000000, (mmu::phys)0x40000000, addr - 0x40000000);
+    /* linear_map [TTBR0 - UART] */
+    mmu::linear_map((void *)0x9000000, (mmu::phys)0x9000000, 0x1000);
+
+    mmu::switch_to_runtime_page_tables();
 
     parse_cmdline(cmdline);
 }

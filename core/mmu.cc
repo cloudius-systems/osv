@@ -158,16 +158,16 @@ void allocate_intermediate_level(hw_ptep ptep)
 bool change_perm(hw_ptep ptep, unsigned int perm)
 {
     pt_element pte = ptep.read();
-    unsigned int old = (pte.present() ? perm_read : 0) |
-            (pte.writable() ? perm_write : 0) |
-            (!pte.nx() ? perm_exec : 0);
+    unsigned int old = (pte.valid() ? perm_read : 0) |
+        (pte.writable() ? perm_write : 0) |
+        (pte.executable() ? perm_exec : 0);
     // Note: in x86, if the present bit (0x1) is off, not only read is
     // disallowed, but also write and exec. So in mprotect, if any
     // permission is requested, we must also grant read permission.
     // Linux does this too.
-    pte.set_present(perm);
+    pte.set_valid(perm);
     pte.set_writable(perm & perm_write);
-    pte.set_nx(!(perm & perm_exec));
+    pte.set_executable(perm & perm_exec);
     ptep.write(pte);
 
     return old & ~perm;
@@ -200,7 +200,7 @@ struct page_allocator {
 
 void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
 {
-    if (level<4 && !pte.present()){
+    if (level<4 && !pte.valid()){
         // nothing
     } else if (pte.large()) {
         nhuge++;
@@ -234,8 +234,6 @@ void set_nr_page_sizes(unsigned nr)
 {
     nr_page_sizes = nr;
 }
-
-pt_element page_table_root;
 
 constexpr size_t page_size_level(unsigned level)
 {
@@ -309,7 +307,7 @@ template<typename PageOp>
         void map_range(uintptr_t vma_start, uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
 {
     map_level<PageOp, 4> pt_mapper(vma_start, vstart, size, page_mapper, slop);
-    pt_mapper(hw_ptep::force(&page_table_root));
+    pt_mapper(hw_ptep::force(mmu::get_root_pt(vstart)));
 }
 
 template<typename PageOp, int ParentLevel> class map_level {
@@ -339,7 +337,7 @@ private:
         pt_mapper(ptep, base_virt);
     }
     void operator()(hw_ptep parent, uintptr_t base_virt = 0) {
-        if (!parent.read().present()) {
+        if (!parent.read().valid()) {
             if (!page_mapper.allocate_intermediate()) {
                 return;
             }
@@ -1175,12 +1173,14 @@ bool isreadable(void *addr, size_t size)
 bool access_fault(vma& vma, unsigned int error_code)
 {
     auto perm = vma.perm();
-    if (error_code & page_fault_insn) {
+    if (mmu::is_page_fault_insn(error_code)) {
         return !(perm & perm_exec);
     }
-    if (error_code & page_fault_write) {
+
+    if (mmu::is_page_fault_write(error_code)) {
         return !(perm & perm_write);
     }
+
     return !(perm & perm_read);
 }
 
@@ -1305,7 +1305,8 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
         size = page_size;
     }
 
-    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size, ef->get_error() & page_fault_write);
+    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size,
+        mmu::is_page_fault_write(ef->get_error()));
 
     if (_flags & mmap_jvm_heap) {
         memory::stats::on_jvm_heap_alloc(total);
@@ -1691,11 +1692,6 @@ void linear_map(void* _virt, phys addr, size_t size, size_t slop)
 void free_initial_memory_range(uintptr_t addr, size_t size)
 {
     memory::free_initial_memory_range(phys_cast<void>(addr), size);
-}
-
-void switch_to_runtime_page_table()
-{
-    processor::write_cr3(page_table_root.next_pt_addr());
 }
 
 error mprotect(const void *addr, size_t len, unsigned perm)

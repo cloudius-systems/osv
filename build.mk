@@ -644,6 +644,7 @@ libtsm += drivers/libtsm/tsm_vte.o
 libtsm += drivers/libtsm/tsm_vte_charsets.o
 
 drivers := $(bsd) $(solaris)
+drivers += core/mmu.o
 drivers += drivers/console.o
 drivers += arch/$(arch)/debug-console.o
 drivers += drivers/clock.o
@@ -655,7 +656,6 @@ drivers += java/jvm_balloon.o
 ifeq ($(arch),x64)
 drivers += $(libtsm)
 drivers += drivers/vga.o drivers/kbd.o drivers/isa-serial.o
-drivers += core/mmu.o
 drivers += core/interrupt.o
 drivers += core/pvclock-abi.o
 drivers += drivers/device.o

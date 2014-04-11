@@ -177,7 +177,7 @@ void arch_setup_free_memory()
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
-    mmu::switch_to_runtime_page_table();
+    mmu::switch_to_runtime_page_tables();
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
         // Ignore memory already freed above
         if (ent.addr + ent.size <= initial_map) {

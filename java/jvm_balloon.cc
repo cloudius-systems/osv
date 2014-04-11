@@ -350,8 +350,7 @@ void jvm_balloon_shrinker::_thread_loop()
 // comes after the balloon.
 bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma)
 {
-#ifndef AARCH64_PORT_STUB
-    if (!ef || (ef->get_error() == mmu::page_fault_write)) {
+    if (!ef || mmu::is_page_fault_write_exclusive(ef->get_error())) {
         if (vma->effective_jvm_addr()) {
             return false;
         }
@@ -360,7 +359,12 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
         return true;
     }
 
+#ifdef AARCH64_PORT_STUB
+    void *decode = NULL;
+#else
     memcpy_decoder *decode = memcpy_find_decoder(ef);
+#endif /* AARCH64_PORT_STUB */
+
     if (!decode) {
         if (vma->effective_jvm_addr()) {
             return false;
@@ -370,6 +374,7 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
         return true;
     }
 
+#ifndef AARCH64_PORT_STUB
     unsigned char *dest = memcpy_decoder::dest(ef);
     unsigned char *src = memcpy_decoder::src(ef);
     size_t size = decode->size(ef);
@@ -415,10 +420,8 @@ bool jvm_balloon_fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma 
         skip = b->move_balloon(b, vma, dest);
     }
     decode->memcpy_fixup(ef, std::min(skip, size));
+#endif /* !AARCH64_PORT_STUB */
     return true;
-#else /* AARCH64_PORT_STUB */
-    abort();
-#endif /* AARCH64_PORT_STUB */
 }
 
 jvm_balloon_shrinker::jvm_balloon_shrinker(JavaVM_ *vm)

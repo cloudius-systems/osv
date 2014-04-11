@@ -75,4 +75,72 @@ void flush_tlb_all()
     tlb_flush_waiter.clear();
 }
 
+static pt_element page_table_root;
+
+void switch_to_runtime_page_tables()
+{
+    processor::write_cr3(page_table_root.next_pt_addr());
+}
+
+pt_element *get_root_pt(uintptr_t virt __attribute__((unused))) {
+    return &page_table_root;
+}
+
+pt_element make_empty_pte() { return pt_element(); }
+
+pt_element make_pte(phys addr, bool large, unsigned perm)
+{
+    pt_element pte;
+    pte.set_valid(perm != 0);
+    pte.set_writable(perm & perm_write);
+    pte.set_executable(perm & perm_exec);
+    pte.set_dirty(true);
+    pte.set_large(large);
+    pte.set_addr(addr, large);
+
+    arch_pt_element::set_user(&pte, true);
+    arch_pt_element::set_accessed(&pte, true);
+
+    return pte;
+}
+
+pt_element make_normal_pte(phys addr, unsigned perm)
+{
+    return make_pte(addr, false, perm);
+}
+
+pt_element make_large_pte(phys addr, unsigned perm)
+{
+    return make_pte(addr, true, perm);
+}
+
+enum {
+    page_fault_prot  = 1ul << 0,
+    page_fault_write = 1ul << 1,
+    page_fault_user  = 1ul << 2,
+    page_fault_rsvd  = 1ul << 3,
+    page_fault_insn  = 1ul << 4,
+};
+
+bool is_page_fault_insn(unsigned int error_code) {
+    return error_code & page_fault_insn;
+}
+
+bool is_page_fault_write(unsigned int error_code) {
+    return error_code & page_fault_write;
+}
+
+/* Glauber Costa: if page faults because we are trying to execute code here,
+ * we shouldn't be closing the balloon. We should [...] despair.
+ * So by checking only for == page_fault_write, we are guaranteed to close
+ * the balloon in the next branch - which although still bizarre, at least
+ * will give us tracing information that I can rely on for debugging that.
+ * (the reason for that is that there are only fixups for memcpy, and memcpy
+ * can only be used to read or write).
+ * The other bits like present and user should not matter in this case.
+ */
+bool is_page_fault_write_exclusive(unsigned int error_code) {
+    return error_code == page_fault_write;
+}
+
 }

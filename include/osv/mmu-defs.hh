@@ -37,14 +37,6 @@ enum {
 };
 
 enum {
-    page_fault_prot  = 1ul << 0,
-    page_fault_write = 1ul << 1,
-    page_fault_user  = 1ul << 2,
-    page_fault_rsvd  = 1ul << 3,
-    page_fault_insn  = 1ul << 4,
-};
-
-enum {
     mmap_fixed       = 1ul << 0,
     mmap_populate    = 1ul << 1,
     mmap_shared      = 1ul << 2,
@@ -68,6 +60,86 @@ public:
 void flush_tlb_local();
 /* flush tlb for all */
 void flush_tlb_all();
+
+    /* static class arch_pt_element; */
+
+/* common arch-independent interface for pt_element */
+class pt_element {
+public:
+    constexpr pt_element() : x(0) {}
+    explicit pt_element(u64 x) : x(x) {}
+
+    inline bool empty() const;
+    inline bool valid() const;
+    inline bool writable() const;
+    inline bool executable() const;
+    inline bool dirty() const;
+    inline bool large() const;
+    inline phys addr(bool large) const;
+    inline u64 pfn(bool large) const;
+    inline phys next_pt_addr() const;
+    inline u64 next_pt_pfn() const;
+
+    inline void set_valid(bool v);
+    inline void set_writable(bool v);
+    inline void set_executable(bool v);
+    inline void set_dirty(bool v);
+    inline void set_large(bool v);
+    inline void set_addr(phys addr, bool large);
+    inline void set_pfn(u64 pfn, bool large);
+
+private:
+    inline void set_bit(unsigned nr, bool v) {
+        x &= ~(u64(1) << nr);
+        x |= u64(v) << nr;
+    }
+    u64 x;
+    friend class hw_ptep;
+    friend class arch_pt_element;
+};
+
+/* arch must also implement these: */
+pt_element make_empty_pte();
+pt_element make_normal_pte(phys addr,
+                           unsigned perm = perm_read | perm_write | perm_exec);
+pt_element make_large_pte(phys addr,
+                          unsigned perm = perm_read | perm_write | perm_exec);
+
+/* get the root of the page table responsible for virtual address virt */
+pt_element *get_root_pt(uintptr_t virt);
+
+/* take an error code coming from the exception frame, and return
+   whether the error reports a page fault (insn/write) */
+bool is_page_fault_insn(unsigned int err);
+bool is_page_fault_write(unsigned int err);
+bool is_page_fault_write_exclusive(unsigned int err);
+
+/* a pointer to a pte mapped by hardware.
+   The arch must implement change_perm for this class. */
+class hw_ptep {
+public:
+    hw_ptep(const hw_ptep& a) : p(a.p) {}
+    pt_element read() const { return *p; }
+    void write(pt_element pte) { *const_cast<volatile u64*>(&p->x) = pte.x; }
+
+    pt_element exchange(pt_element newval) {
+        std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
+        return pt_element(x->exchange(newval.x));
+    }
+    bool compare_exchange(pt_element oldval, pt_element newval) {
+        std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&p->x);
+        return x->compare_exchange_strong(oldval.x, newval.x, std::memory_order_relaxed);
+    }
+    hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
+    static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
+    // no longer using this as a page table
+    pt_element* release() const { return p; }
+    bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
+private:
+    hw_ptep(pt_element* ptep) : p(ptep) {}
+    pt_element* p;
+    friend class hw_pte_ref;
+};
 
 }
 #endif
