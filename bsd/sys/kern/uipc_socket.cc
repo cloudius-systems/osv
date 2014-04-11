@@ -655,6 +655,7 @@ drop:
 	}
 	ACCEPT_LOCK();
 	SOCK_LOCK(so);
+	flush_net_channel(so);
 	KASSERT((so->so_state & SS_NOFDREF) == 0, ("soclose: NOFDREF"));
 	so->so_state |= SS_NOFDREF;
 	so->fp = NULL;
