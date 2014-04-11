@@ -1232,7 +1232,7 @@ soreceive_generic(struct socket *so, struct bsd_sockaddr **psa, struct uio *uio,
 	SOCK_LOCK(so);
 	error = sblock(so, &so->so_rcv, SBLOCKWAIT(flags));
 	if (error)
-		return (error);
+		goto out;
 
 restart:
 	if (so->so_nc) {
@@ -1628,6 +1628,7 @@ dontblock:
 		*flagsp |= flags;
 release:
 	sbunlock(so, &so->so_rcv);
+out:
 	SOCK_UNLOCK(so);
 	return (error);
 }
