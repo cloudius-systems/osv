@@ -71,15 +71,27 @@ def pluralize(word, count):
 def run_tests():
     start = time.time()
 
+    if cmdargs.test:
+        test = next((t for t in tests if t.name == cmdargs.test), None)
+        if not test:
+            print 'No such test: ' + cmdargs.test
+            exit(1)
+        tests_to_run = [test]
+    else:
+        tests_to_run = tests
+
     if cmdargs.single:
+        if tests_to_run != tests:
+            print 'Cannot restrict the set of tests when --single option is used'
+            exit(1)
         run_tests_in_single_instance()
     else:
-        run(tests)
+        run(tests_to_run)
 
     end = time.time()
 
     duration = end - start
-    print("OK (%d %s run, %.3f s)" % (len(tests), pluralize("test", len(tests)), duration))
+    print("OK (%d %s run, %.3f s)" % (len(tests_to_run), pluralize("test", len(tests_to_run)), duration))
 
 def main():
     while True:
@@ -92,6 +104,7 @@ if (__name__ == "__main__"):
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
     parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
     parser.add_argument("-s", "--single", action="store_true", help="run as much tests as possible in a single OSv instance")
+    parser.add_argument("--test", action="store", help="run a single test")
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
     main()
