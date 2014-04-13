@@ -272,6 +272,7 @@ tests += tests/tst-concurrent-init.so
 tests += tests/tst-ring-spsc-wraparound.so
 tests += tests/tst-shm.so
 tests += tests/tst-align.so
+tests += tests/misc-tcp-close-without-reading.so
 
 tests/hello/Hello.class: javabase=tests/hello
 

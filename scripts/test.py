@@ -7,6 +7,8 @@ import sys
 import os
 import re
 
+import tests.test_net
+
 from operator import attrgetter
 from tests.testing import *
 
