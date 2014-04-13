@@ -153,7 +153,7 @@ SYSCTL_VNET_UINT(_net_inet_tcp_syncache, OID_AUTO, rexmtlimit, CTLFLAG_RW,
 	&VNET_NAME(tcp_syncache.rexmt_limit), 0,
 	"Limit on SYN/ACK retransmissions");
 
-VNET_DEFINE(int, tcp_sc_rst_sock_fail) = 1;
+VNET_DEFINE(int, tcp_sc_rst_sock_fail) = 0; // match Linux behavior
 SYSCTL_VNET_INT(_net_inet_tcp_syncache, OID_AUTO, rst_on_sock_fail,
     CTLFLAG_RW, &VNET_NAME(tcp_sc_rst_sock_fail), 0,
     "Send reset on socket allocation failure");
