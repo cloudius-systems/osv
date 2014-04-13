@@ -63,6 +63,11 @@ def run(tests):
             sys.stdout.write("  TEST %-25s SKIPPED\n" % test.name)
             sys.stdout.flush()
 
+def pluralize(word, count):
+    if count == 1:
+        return word
+    return word + 's'
+
 def run_tests():
     start = time.time()
 
@@ -74,7 +79,7 @@ def run_tests():
     end = time.time()
 
     duration = end - start
-    print("OK (%d tests run, %.3f s)" % (len(tests), duration))
+    print("OK (%d %s run, %.3f s)" % (len(tests), pluralize("test", len(tests)), duration))
 
 def main():
     while True:
