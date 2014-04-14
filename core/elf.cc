@@ -374,6 +374,24 @@ void object::unload_segments()
      }
 }
 
+void object::fix_permissions()
+{
+#ifndef AARCH64_PORT_STUB
+    for (auto&& phdr : _phdrs) {
+        if (phdr.p_type != PT_GNU_RELRO)
+            continue;
+
+        ulong vstart = align_down(phdr.p_vaddr, page_size);
+        ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
+
+        assert((phdr.p_flags & (PF_R | PF_W | PF_X)) == PF_R);
+        mmu::mprotect(_base + vstart, memsz, mmu::perm_read);
+    }
+#else /* AARCH64_PORT_STUB */
+    abort();
+#endif
+}
+
 template <typename T>
 T* object::dynamic_ptr(unsigned tag)
 {
@@ -935,6 +953,7 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
         add_debugger_obj(ef.get());
         ef->load_needed();
         ef->relocate();
+        ef->fix_permissions();
         ef->run_init_funcs();
         ef->setprivate(false);
         _files[name] = ef;

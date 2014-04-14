@@ -319,6 +319,7 @@ public:
     Elf64_Sym* lookup_symbol(const char* name);
     void load_segments();
     void unload_segments();
+    void fix_permissions();
     void* resolve_pltgot(unsigned index);
     const std::vector<Elf64_Phdr> *phdrs();
     std::string soname();
