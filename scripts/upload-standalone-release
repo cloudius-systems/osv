@@ -1,0 +1,10 @@
+#!/bin/sh
+
+images=build/standalone/
+
+if [ ! -d "$images" ]; then
+  echo "error: $images directory does not exist."
+  exit 1
+fi
+
+s3cmd sync -P $images s3://downloads.osv
