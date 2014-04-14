@@ -9,6 +9,7 @@
 #define LIBC_HH_
 
 #include <errno.h>
+#include "internal/libc.h" // for the macros
 
 int libc_error(int err);
 

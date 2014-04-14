@@ -82,6 +82,8 @@ int setrlimit(int resource, const struct rlimit *rlim)
     // osv - no limits
     return 0;
 }
+LFS64(getrlimit);
+LFS64(setrlimit);
 
 uid_t geteuid()
 {
