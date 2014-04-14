@@ -223,7 +223,7 @@ inline bool wrmsr_safe(u32 index, u64 data) {
                   "xor %[ret], %[ret]\n\t"
                   "jmp 2b \n\t"
                   ".popsection \n\t"
-                  ".pushsection .fixup, \"a\" \n\t"
+                  ".pushsection .fixup, \"aw\" \n\t"
                   ".quad 1b, 3b \n\t"
                   ".popsection\n"
             :  [ret]"+r"(ret)

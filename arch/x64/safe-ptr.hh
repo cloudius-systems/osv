@@ -26,7 +26,7 @@ safe_load(const T* potentially_bad_pointer, T& data)
         "movb $0, %[ok] \n\t"
         "jmp 2b \n\t"
         ".popsection \n\t"
-        ".pushsection .fixup, \"a\" \n\t"
+        ".pushsection .fixup, \"aw\" \n\t"
         ".quad 1b, 3b \n\t"
         ".popsection\n"
             : [data]"=r"(data), [ok]"+rm"(ok)
@@ -42,7 +42,7 @@ safe_store(const T* potentially_bad_pointer, const T& data)
     asm goto
        ("1: \n\t"
         "mov %[data], %[ptr] \n\t"
-        ".pushsection .fixup, \"a\" \n\t"
+        ".pushsection .fixup, \"aw\" \n\t"
         ".quad 1b, %l[fail] \n\t"
         ".popsection\n"
             :
