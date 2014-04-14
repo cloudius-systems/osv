@@ -132,7 +132,7 @@ configuration += -DNDEBUG
 endif
 
 ifeq ($(arch),x64)
-arch-cflags = -msse4.1
+arch-cflags = -msse2
 endif
 
 ifeq ($(arch),aarch64)
