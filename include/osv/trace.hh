@@ -301,7 +301,7 @@ public:
     void operator()(r_args... as) {
 #ifdef __x86_64__
         asm goto("1: .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 \n\t"  // 5-byte nop
-                 ".pushsection .tracepoint_patch_sites, \"a\", @progbits \n\t"
+                 ".pushsection .tracepoint_patch_sites, \"aw\", @progbits \n\t"
                  ".quad %c[id] \n\t"
                  ".quad %c[type] \n\t"
                  ".quad 1b \n\t"
