@@ -280,11 +280,24 @@ void file::load_segment(const Elf64_Phdr& phdr)
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
     ulong filesz = align_up(filesz_unaligned, page_size);
     ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
+
+    unsigned perm = 0;
+    if (phdr.p_flags & PF_X)
+        perm |= mmu::perm_exec;
+    if (phdr.p_flags & PF_W)
+        perm |= mmu::perm_write;
+    if (phdr.p_flags & PF_R)
+        perm |= mmu::perm_read;
+
     auto mlock_flag = mlocked() ? mmu::mmap_populate : 0;
-    mmu::map_file(_base + vstart, filesz, mmu::mmap_fixed | mlock_flag, mmu::perm_rwx,
+    mmu::map_file(_base + vstart, filesz, mmu::mmap_fixed | mlock_flag, perm,
                   _f, align_down(phdr.p_offset, page_size));
-    memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
-    mmu::map_anon(_base + vstart + filesz, memsz - filesz, mmu::mmap_fixed | mlock_flag, mmu::perm_rwx);
+    if (phdr.p_filesz != phdr.p_memsz) {
+        assert(perm & mmu::perm_write);
+        memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
+        mmu::map_anon(_base + vstart + filesz, memsz - filesz,
+                      mmu::mmap_fixed | mlock_flag, perm);
+    }
 #else /* AARCH64_PORT_STUB */
     abort();
 #endif /* AARCH64_PORT_STUB */

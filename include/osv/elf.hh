@@ -97,6 +97,14 @@ enum {
     PT_PAX_FLAGS = 0x65041580,
 };
 
+enum {
+    PF_X = 1, // Executable
+    PF_W = 2, // Writable
+    PF_R = 4, // Readable
+    PF_MASKOS = 0x00ff0000, // Environment-specific
+    PF_MASKPROC = 0xff000000, // Processor-specific
+};
+
 struct Elf64_Phdr {
     Elf64_Word p_type; /* Type of segment */
     Elf64_Word p_flags; /* Segment attributes */
