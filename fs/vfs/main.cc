@@ -703,12 +703,36 @@ TRACEPOINT(trace_vfs_chdir, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_chdir_ret, "");
 TRACEPOINT(trace_vfs_chdir_err, "%d", int);
 
+static int replace_cwd(struct task *t, struct file *new_cwdfp,
+                       std::function<int (void)> chdir_func)
+{
+    struct file *old = nullptr;
+
+    if (!t) {
+        return 0;
+    }
+
+    if (t->t_cwdfp) {
+        old = t->t_cwdfp;
+    }
+
+    /* Do the actual chdir operation here */
+    int error = chdir_func();
+
+    t->t_cwdfp = new_cwdfp;
+    if (old) {
+        fdrop(old);
+    }
+
+    return error;
+}
+
 int chdir(const char *pathname)
 {
     trace_vfs_chdir(pathname);
     struct task *t = main_task;
     char path[PATH_MAX];
-    struct file *fp, *old = NULL;
+    struct file *fp;
     int error;
 
     error = ENOENT;
@@ -724,13 +748,8 @@ int chdir(const char *pathname)
         goto out_errno;
     }
 
-    if (t->t_cwdfp)
-        old = t->t_cwdfp;
-    t->t_cwdfp = fp;
-    strlcpy(t->t_cwd, path, sizeof(t->t_cwd));
+    replace_cwd(t, fp, [&]() { strlcpy(t->t_cwd, path, sizeof(t->t_cwd)); return 0; });
 
-    if (old)
-        fdrop(old);
     trace_vfs_chdir_ret();
     return 0;
     out_errno:
@@ -747,25 +766,19 @@ int fchdir(int fd)
 {
     trace_vfs_fchdir(fd);
     struct task *t = main_task;
-    struct file *fp, *old = NULL;
+    struct file *fp;
     int error;
 
     error = fget(fd, &fp);
     if (error)
         goto out_errno;
 
-    if (t->t_cwdfp)
-        old = t->t_cwdfp;
-
-    error = sys_fchdir(fp, t->t_cwd);
+    error = replace_cwd(t, fp, [&]() { return sys_fchdir(fp, t->t_cwd); });
     if (error) {
         fdrop(fp);
         goto out_errno;
     }
 
-    t->t_cwdfp = fp;
-    if (old)
-        fdrop(old);
     trace_vfs_fchdir_ret();
     return 0;
 
@@ -1655,6 +1668,14 @@ vfs_init(void)
     if (dup(0) != 2)
         kprintf("failed to dup console (2)\n");
     vfs_initialized = 1;
+}
+
+void vfs_exit(void)
+{
+    /* Free up main_task (stores cwd data) resources */
+    replace_cwd(main_task, nullptr, []() { return 0; });
+    /* Unmount all file systems */
+    unmount_rootfs();
 }
 
 void sys_panic(const char *str)

@@ -2,15 +2,13 @@
 #include <osv/power.hh>
 #include <osv/debug.hh>
 
-extern "C" {
-    void unmount_rootfs();
-}
+extern void vfs_exit(void);
 
 namespace osv {
 
 void shutdown()
 {
-    unmount_rootfs();
+    vfs_exit();
     debug("Powering off.\n");
     osv::poweroff();
 }
