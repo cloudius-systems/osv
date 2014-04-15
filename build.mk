@@ -229,6 +229,7 @@ tests += tests/misc-mmap-big-file.so
 tests += tests/tst-mmap.so
 tests += tests/tst-huge.so
 tests += tests/tst-elf-permissions.so
+tests/tst-elf-permissions.so: COMMON += -Wl,-z,relro
 tests += tests/misc-mutex.so
 tests += tests/misc-sockets.so
 tests += tests/tst-condvar.so
