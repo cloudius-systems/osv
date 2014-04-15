@@ -46,9 +46,13 @@ unsigned char *osv_reclaimer_thread;
 
 // malloc(3) specifies that malloc(), calloc() and realloc() need to return
 // a pointer which "is suitably aligned for any kind of variable.". By "any"
-// variable they actually refer only to standard types (int, long, double)
-// and the longest of these is 8 bytes.
-static const int MALLOC_ALIGNMENT = 8;
+// variable they actually refer only to standard types, but the longest of
+// these is usually "long double", which is 16 bytes. Glibc's malloc(),
+// with which we intend to be compatible, takes the maximum of 2*sizeof(size_t)
+// and the alignof(long double), so we must do the same.
+static constexpr int MALLOC_ALIGNMENT =
+        (2 * sizeof(size_t) < alignof(long double)) ?
+                alignof(long double) : (2 * sizeof(size_t));
 
 namespace memory {
 
