@@ -1,3 +1,4 @@
 #!/bin/sh
 
-git describe --tags
+GITDIR=$(dirname $0)/../.git
+git --git-dir $GITDIR describe --tags
