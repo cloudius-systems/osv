@@ -8,6 +8,7 @@ import json
 import math
 import itertools
 import operator
+import heapq
 from glob import glob
 from collections import defaultdict
 
@@ -876,52 +877,70 @@ def all_traces():
     gdb.lookup_global_symbol('gdb_trace_function_entry')
 
     inf = gdb.selected_inferior()
-    trace_log = gdb.lookup_global_symbol('trace_log').value()
-    if not trace_log:
-    	return
-    max_trace = ulong(gdb.parse_and_eval('max_trace'))
-    trace_log = inf.read_memory(trace_log, max_trace)
     trace_page_size = ulong(gdb.parse_and_eval('trace_page_size'))
-    last = ulong(gdb.lookup_global_symbol('trace_record_last').value()['_M_i'])
-    last %= max_trace
-    pivot = align_up(last, trace_page_size)
-    trace_log = concat(trace_log[pivot:], trace_log[:pivot])
-    last += max_trace - pivot
-
     tp_ptr = gdb.lookup_type('tracepoint_base').pointer()
     backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
     tracepoints = {}
 
-    i = 0
-    while i < last:
-        tp_key, = struct.unpack('Q', trace_log[i:i+8])
-        if tp_key == 0:
-            i = align_up(i + 8, trace_page_size)
-            continue
+    state = vmstate();
 
-        i += 8
+    trace_buffer_offset = ulong(gdb.parse_and_eval('&percpu_trace_buffer._var'))
 
-        thread, thread_name, time, cpu, flags = struct.unpack('Q16sQII', trace_log[i:i+40])
-        thread_name = thread_name.partition(b'\0')[0].decode()
-        i += 40
+    def one_cpu_trace(cpu):
+        precpu_base = ulong(cpu.obj['percpu_base'])
+        trace_buffer = gdb.parse_and_eval('(trace_buf *)0x%x' % (precpu_base + trace_buffer_offset))
+        trace_log_base_ptr = trace_buffer['_base']
+        trace_log_base  = unique_ptr_get(trace_log_base_ptr)
+        last = ulong(trace_buffer['_last'])
+        max_trace = ulong(trace_buffer['_size'])
 
-        tp = tracepoints.get(tp_key, None)
-        if not tp:
-            tp_ref = gdb.Value(tp_key).cast(tp_ptr)
-            tp = TracePoint(tp_key, str(tp_ref["name"].string()),
-                sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
-            tracepoints[tp_key] = tp
+        if not trace_log_base:
+            raise StopIteration
 
-        backtrace = None
-        if flags & 1:
-            backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
-            i += 8 * backtrace_len
+        trace_log = inf.read_memory(trace_log_base, max_trace)
 
-        size = struct.calcsize(tp.signature)
-        data = struct.unpack(tp.signature, trace_log[i:i+size])
-        i += size
-        i = align_up(i, 8)
-        yield Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
+        last %= max_trace
+        pivot = align_up(last, trace_page_size)
+        trace_log = concat(trace_log[pivot:], trace_log[:pivot])
+        last += max_trace - pivot
+
+        i = 0
+        while i < last:
+            tp_key, = struct.unpack('Q', trace_log[i:i+8])
+            if tp_key == 0:
+                i = align_up(i + 8, trace_page_size)
+                continue
+
+            # end marker. record being written
+            if tp_key == -1:
+                break
+
+            i += 8
+
+            thread, thread_name, time, cpu, flags = struct.unpack('Q16sQII', trace_log[i:i+40])
+            thread_name = thread_name.partition(b'\0')[0].decode()
+            i += 40
+
+            tp = tracepoints.get(tp_key, None)
+            if not tp:
+                tp_ref = gdb.Value(tp_key).cast(tp_ptr)
+                tp = TracePoint(tp_key, str(tp_ref["name"].string()),
+                    sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
+                tracepoints[tp_key] = tp
+
+            backtrace = None
+            if flags & 1:
+                backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
+                i += 8 * backtrace_len
+
+            size = struct.calcsize(tp.signature)
+            data = struct.unpack(tp.signature, trace_log[i:i+size])
+            i += size
+            i = align_up(i, 8)
+            yield Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
+
+    iters = map(lambda cpu: one_cpu_trace(cpu), values(state.cpu_list))
+    return heapq.merge(*iters)
 
 def save_traces_to_file(filename):
     trace.write_to_file(filename, list(all_traces()))
