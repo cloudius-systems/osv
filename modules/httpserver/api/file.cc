@@ -17,6 +17,7 @@
 #include <pwd.h>
 #include "json/formatter.hh"
 #include <system_error>
+#include "connection.hh"
 
 namespace httpserver {
 
@@ -87,6 +88,24 @@ static string file_name(const string& path)
         return path;
     }
     return path.substr(found + 1);
+}
+
+/**
+ * Generate a temporary file name in a target directory
+ * according to a file name
+ *
+ * @return a temporary file name
+ */
+static string tmp_name(const string& file)
+{
+
+    unsigned found = file.find_last_of("/");
+    string directory = file.substr(0, found);
+    char* name_ptr = tempnam(directory.c_str(), nullptr);
+
+    string res = name_ptr;
+    free(name_ptr);
+    return res;
 }
 
 /**
@@ -252,8 +271,28 @@ class post_file_handler : public handler_base {
                         const http::server::request& req, http::server::reply& rep)
     {
         string full_path = (*params)["path"];
-        string from = req.get_header("file_name");
-        copy(from, full_path);
+
+        http::server::connection_function set_name =
+            [full_path](http::server::connection& conn)
+        {
+            conn.get_multipart_parser().set_tmp_file(tmp_name(full_path));
+        };
+        req.connection_ptr->get_multipart_parser().set_call_back(
+            http::server::multipart_parser::WAIT_CONTENT_DISPOSITION,
+            set_name);
+
+        http::server::connection_function when_done =
+            [full_path](http::server::connection& conn)
+        {
+            auto target = full_path;
+            string from = conn.get_request().get_header("file_name");
+            rename(from.c_str(), target.c_str());
+        };
+        req.connection_ptr->get_multipart_parser().set_call_back(
+            http::server::multipart_parser::CLOSED, when_done);
+
+        req.connection_ptr->upload();
+
         set_headers(rep, "json");
         return true;
     }
