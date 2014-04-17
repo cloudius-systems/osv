@@ -63,25 +63,14 @@ static std::string buf_str(buffer_type::pointer & b,
     return res.str();
 }
 
-/**
- * Generate a temporary file name
- * @return a temporary file name
- */
-static std::string tmp_file()
-{
-    char buffer [L_tmpnam];
-
-    tmpnam (buffer);
-
-    return buffer;
-}
-
-multipart_parser::multipart_parser()
+multipart_parser::multipart_parser(connection* connect)
     :
     mode(WAIT_BOUNDARY),
     empty_lines(0),
     pos_in_file(0),
-    header_length(0)
+    header_length(0),
+    end(nullptr),
+    connect(*connect)
 
 {
 
@@ -105,16 +94,22 @@ void multipart_parser::set_original_file(request& req, const std::string val)
 
 void multipart_parser::open_tmp_file(request& req)
 {
-    std::string fname = tmp_file();
     req.headers.push_back(header());
     req.headers.back().name = "file_name";
-    req.headers.back().value = fname;
-    upload_file.open(fname, std::ios::binary | std::ios::out);
+    req.headers.back().value = name;
+    upload_file.open(name, std::ios::binary | std::ios::out);
     if (!upload_file.is_open() || upload_file.bad()) {
-        std::cerr << "failed opening file for output " << fname << std::endl;
+        std::cerr << "failed opening file for output " << name << std::endl;
         throw message_handling_exception(
             "Failed opening temporary file for output");
     }
+}
+
+void multipart_parser::set_in_message(const buffer_type::pointer& bg,
+                                      const buffer_type::pointer& end)
+{
+    std::copy(bg, end, in_message_content.data());
+    this->end = in_message_content.data() + (end - bg);
 }
 
 request_parser::result_type multipart_parser::parse(request& req,
@@ -130,7 +125,7 @@ request_parser::result_type multipart_parser::parse(request& req,
         switch (mode) {
         case WAIT_BOUNDARY:
             if (buf_str(bg, end).find(boundary) != std::string::npos) {
-                mode = WAIT_CONTENT_DISPOSITION;
+                set_mode(WAIT_CONTENT_DISPOSITION);
             }
             break;
 
@@ -139,7 +134,7 @@ request_parser::result_type multipart_parser::parse(request& req,
                     != std::string::npos) {
                 set_original_file(req, cur);
                 open_tmp_file(req);
-                mode = WAIT_EMPTY;
+                set_mode(WAIT_EMPTY);
                 empty_lines = 0;
             }
             break;
@@ -152,7 +147,7 @@ request_parser::result_type multipart_parser::parse(request& req,
             }
 
             if (empty_lines >= 3) {
-                mode = WRITE_TO_FILE;
+                set_mode(WRITE_TO_FILE);
                 header_length += (bg - start_pos);
                 req.content_length -= header_length;
             }
@@ -160,7 +155,7 @@ request_parser::result_type multipart_parser::parse(request& req,
 
         case WRITE_TO_FILE:
             if (pos_in_file >= req.content_length) {
-                mode = DONE;
+                set_mode(DONE);
                 return request_parser::good;
             }
             {
@@ -184,6 +179,8 @@ connection::connection(boost::asio::ip::tcp::socket socket,
     : socket_(std::move(socket))
     , connection_manager_(manager)
     , request_handler_(handler)
+    , multipart(this)
+    , delayed_reply(false)
 {
 }
 
@@ -200,6 +197,7 @@ void connection::stop()
 bool connection::set_content_type()
 {
     request_.is_multi_part = false;
+    request_.connection_ptr = this;
     auto ct = request_.get_header("Content-Type");
     if (ct == "") {
         return true;
@@ -242,18 +240,12 @@ void connection::do_read()
                 if (set_content_type()) {
                     if (request_.is_multi_part) {
                         auto bg = std::get<1>(r);
-                        if (multipart.parse(request_, bg, buffer_.data() +
-                                            bytes_transferred) == request_parser::bad) {
-                            reply_ = reply::stock_reply(reply::bad_request);
+                        multipart.set_in_message(bg, buffer_.data() +
+                                                 bytes_transferred);
+                        request_handler_.handle_request(request_, reply_);
+                        if (!delayed_reply) {
                             do_write();
-                        } else {
-                            if (multipart.is_done()) {
-                                on_complete_multiplart();
-                            } else {
-                                do_read_mp();
-                            }
                         }
-
                         return;
                     } else {
                         request_handler_.handle_request(request_, reply_);
@@ -284,9 +276,7 @@ void connection::do_read()
 void connection::on_complete_multiplart()
 {
     multipart.close();
-    request_handler_.handle_request(request_, reply_);
     do_write();
-    remove(request_.get_header("file_name").c_str());
 }
 
 void connection::do_read_mp()
@@ -338,6 +328,23 @@ void connection::do_write()
             connection_manager_.stop(shared_from_this());
         }
     });
+}
+
+void connection::upload()
+{
+    delayed_reply = true;
+
+    if (multipart.parse_in_message(request_) == request_parser::bad) {
+        reply_ = reply::stock_reply(reply::bad_request);
+        do_write();
+    } else {
+        if (multipart.is_done()) {
+            on_complete_multiplart();
+        } else {
+            do_read_mp();
+        }
+    }
+
 }
 
 } // namespace server

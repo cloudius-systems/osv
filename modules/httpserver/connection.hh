@@ -27,36 +27,75 @@ namespace http {
 namespace server {
 
 typedef std::array<char, 8192> buffer_type;
+typedef std::function<void(connection& connect)> connection_function;
 
 class connection_manager;
 
 class multipart_parser {
 public:
-    multipart_parser();
+    multipart_parser(connection* connect);
     void set_boundary(const std::string& _boundary);
 
     request_parser::result_type parse(request& req, buffer_type::pointer & bg,
                                       const buffer_type::pointer & end);
+
+    request_parser::result_type parse_in_message(request& req)
+    {
+        buffer_type::pointer bg = in_message_content.data();
+        return parse(req, bg, end);
+    }
+
     void close()
     {
         upload_file.close();
+        set_mode(CLOSED);
     }
 
-    bool is_done() {
-        return mode == DONE;
+    bool is_done()
+    {
+        return mode == DONE || mode == CLOSED;
     }
-private:
+
+    /**
+     * Set the name of the temporary file that will be used
+     * by the multipart parser to upload a file.
+     * @param name the name of the temporary file
+     */
+    void set_tmp_file(const std::string& name)
+    {
+        this->name = name;
+    }
+
+    void set_in_message(const buffer_type::pointer& bg,
+                        const buffer_type::pointer& end);
+
     enum reading_mode {
         WAIT_BOUNDARY,
         WAIT_CONTENT_DISPOSITION,
         WAIT_EMPTY,
         WRITE_TO_FILE,
-        DONE
+        DONE,
+        CLOSED
     };
 
+    void set_call_back(reading_mode mode, connection_function fun)
+    {
+        func[mode] = fun;
+    }
+
+private:
+    connection_function func[CLOSED + 1] = { };
     void set_original_file(request& req, const std::string val);
 
     void open_tmp_file(request& req);
+
+    void set_mode(reading_mode m)
+    {
+        mode = m;
+        if (func[mode] != nullptr) {
+            func[mode](connect);
+        }
+    }
 
     reading_mode mode;
 
@@ -69,6 +108,15 @@ private:
     std::ofstream upload_file;
 
     size_t header_length;
+
+    std::string name;
+
+    buffer_type in_message_content;
+
+    buffer_type::pointer end;
+
+    connection& connect;
+
 };
 
 /**
@@ -102,6 +150,25 @@ public:
      */
     void stop();
 
+    /**
+     * Start parse and upload a multipart message
+     */
+    void upload();
+
+    multipart_parser& get_multipart_parser()
+    {
+        return multipart;
+    }
+
+    request& get_request()
+    {
+        return request_;
+    }
+
+    reply& get_reply()
+    {
+        return reply_;
+    }
 private:
     /**
      * Perform an asynchronous read operation.
@@ -178,6 +245,9 @@ private:
     reply reply_;
 
     multipart_parser multipart;
+
+    bool delayed_reply;
+
 };
 
 typedef std::shared_ptr<connection> connection_ptr;

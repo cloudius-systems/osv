@@ -20,6 +20,8 @@ namespace http {
 
 namespace server {
 
+class connection;
+
 /**
  * A request received from a client.
  */
@@ -32,6 +34,7 @@ struct request {
     size_t content_length;
     std::vector<header> headers;
     std::vector<header> query_parameters;
+    connection* connection_ptr;
 
     /**
      * Search for the first header of a given name
