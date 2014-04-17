@@ -181,7 +181,34 @@ class test_httpserver(unittest.TestCase):
         self.curl_command(path + "/etc/hosts2?op=DELETE", 'DELETE')
         hosts = self.curl(path + "/etc/hosts2?op=GETFILESTATUS")
         self.assertEqual(hosts, '')
-        
+
+    def make_temp_file(self):
+        f = open('temp-test-file.txt', 'w')
+        for x in range(0, 128000):
+            f.write(str(x))
+            f.write("\n")
+        f.close()
+
+    def test_file_upload(self):
+        self.make_temp_file()
+        path = "/file"
+        target = path + "/usr/mgmt/test-file.txt"
+        cmd = "curl -F filedata=@temp-test-file.txt " + self.get_url(target)
+        os.system(cmd)
+        hosts = self.curl(target + "?op=GETFILESTATUS")
+        self.assertEqual(hosts["type"], "FILE")
+        os.remove('temp-test-file.txt')
+        cmd = "wget -O tmp-test-dwnld.txt " + self.get_url(target) + "?op=GET "
+        os.system(cmd)
+        count = 0
+        with open('tmp-test-dwnld.txt', 'r') as f:
+            for read_data in f:
+                self.assertEqual(str(count)+'\n', read_data)
+                count = count + 1
+        self.assertEqual(count,128000)
+        f.closed
+        os.remove('tmp-test-dwnld.txt')
+
     @classmethod
     def curl(cls, api, post=False):
         url = cls.get_url(api)
