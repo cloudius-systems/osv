@@ -73,6 +73,9 @@ vma_list_type vma_list;
 // A fairly coarse-grained mutex serializing modifications to both
 // vma_list and the page table itself.
 mutex vma_list_mutex;
+// A mutex serializing modifications to the high part of the page table
+// (linear map, etc.) which are not part of vma_list.
+mutex page_table_high_mutex;
 
 hw_ptep follow(pt_element pte)
 {
@@ -1025,9 +1028,15 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
     return start;
 }
 
+inline bool in_vma_range(void* addr)
+{
+    return reinterpret_cast<long>(addr) >= 0;
+}
+
 void vpopulate(void* addr, size_t size)
 {
-    WITH_LOCK(vma_list_mutex) {
+    assert(!in_vma_range(addr));
+    WITH_LOCK(page_table_high_mutex) {
         initialized_anonymous_page_provider map;
         operate_range(populate<>(&map, perm_rwx), addr, size);
     }
@@ -1035,7 +1044,8 @@ void vpopulate(void* addr, size_t size)
 
 void vdepopulate(void* addr, size_t size)
 {
-    WITH_LOCK(vma_list_mutex) {
+    assert(!in_vma_range(addr));
+    WITH_LOCK(page_table_high_mutex) {
         initialized_anonymous_page_provider map;
         operate_range(unpopulate<>(&map), addr, size);
     }
@@ -1043,7 +1053,8 @@ void vdepopulate(void* addr, size_t size)
 
 void vcleanup(void* addr, size_t size)
 {
-    WITH_LOCK(vma_list_mutex) {
+    assert(!in_vma_range(addr));
+    WITH_LOCK(page_table_high_mutex) {
         cleanup_intermediate_pages cleaner;
         map_range(reinterpret_cast<uintptr_t>(addr), reinterpret_cast<uintptr_t>(addr), size,
                 cleaner, huge_page_size);
