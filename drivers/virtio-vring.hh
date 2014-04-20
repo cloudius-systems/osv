@@ -29,7 +29,7 @@ class virtio_driver;
     // Buffer descriptors in the ring
     class vring_desc {
     public:
-        enum {
+        enum flags {
             // Read only buffer
             VRING_DESC_F_READ=0,
             // This marks a buffer as continuing via the next field.
@@ -182,14 +182,18 @@ class virtio_driver;
 
         void add_out_sg(void* vaddr, u32 len)
         {
-            u64 paddr = mmu::virt_to_phys(vaddr);
-            _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_READ);
+            add_sg(vaddr, len, vring_desc::VRING_DESC_F_READ);
         }
 
         void add_in_sg(void* vaddr, u32 len)
         {
-            u64 paddr = mmu::virt_to_phys(vaddr);
-            _sg_vec.emplace_back(paddr, len, vring_desc::VRING_DESC_F_WRITE);
+            add_sg(vaddr, len, vring_desc::VRING_DESC_F_WRITE);
+        }
+
+        void add_sg(void* vaddr, u32 len, vring_desc::flags desc_flags) {
+            mmu::virt_to_phys(vaddr, len, [this, desc_flags] (mmu::phys paddr, size_t len) {
+                _sg_vec.emplace_back(paddr, len, desc_flags);
+            });
         }
 
         void add_buf_wait(void* cookie);
