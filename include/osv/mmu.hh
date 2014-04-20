@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <memory>
 #include <osv/mmu-defs.hh>
+#include <osv/align.hh>
 
 #include "arch-mmu.hh"
 
@@ -171,6 +172,24 @@ void clear_pte(hw_ptep ptep);
 void clear_pte(std::pair<void* const, hw_ptep>& pair);
 
 phys virt_to_phys(void *virt);
+
+template <typename OutputFunc>
+inline
+void virt_to_phys(void* vaddr, size_t len, OutputFunc out)
+{
+    if (CONF_debug_memory && vaddr >= debug_base) {
+        while (len) {
+            auto next = std::min(align_down(vaddr + page_size, page_size), vaddr + len);
+            size_t delta = static_cast<char*>(next) - static_cast<char*>(vaddr);
+            out(virt_to_phys(vaddr), delta);
+            vaddr = next;
+            len -= delta;
+        }
+    } else {
+        out(virt_to_phys(vaddr), len);
+    }
+}
+
 void* phys_to_virt(phys pa);
 
 template <typename T>
