@@ -69,8 +69,9 @@ int main(int ac, char** av)
         test_posix_memalign(s, s);
         test_posix_memalign(s, s*2);
         test_posix_memalign(s, s*10);
-//        test_posix_memalign(s, s/2); // doesn't work yet
-//        test_posix_memalign(s, 8);  // doesn't work yet
+        test_posix_memalign(1024, s);
+        test_posix_memalign(s, s/2);
+        test_posix_memalign(s, 8);
     }
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";

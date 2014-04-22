@@ -1117,9 +1117,18 @@ static inline void* std_malloc(size_t size, size_t alignment)
     if ((ssize_t)size < 0)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
+
+    // Currently, we can't allocate a small object with large alignment,
+    // so need to increase the allocation size.
+    if (alignment > size) {
+        if (alignment <= memory::pool::max_object_size) {
+            size = alignment;
+        } else {
+            size = std::max(size, memory::pool::max_object_size * 2);
+        }
+    }
+
     if (size <= memory::pool::max_object_size) {
-        // FIXME: handle alignment requirement even when alignment < size
-        // (can happen in posix_memalign(), but not with aligned_alloc().
         if (!smp_allocator) {
             return memory::alloc_page() + memory::non_mempool_obj_offset;
         }
