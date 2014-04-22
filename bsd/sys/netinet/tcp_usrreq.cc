@@ -1548,6 +1548,21 @@ tcp_ctloutput(struct socket *so, struct sockopt *sopt)
 			INP_UNLOCK(inp);
 			error = sooptcopyout(sopt, buf, TCP_CA_NAME_MAX);
 			break;
+		case TCP_KEEPINTVL:
+			optval = tp->t_keepintvl;
+			INP_UNLOCK(inp);
+			error = sooptcopyout(sopt, &optval, sizeof optval);
+			break;
+		case TCP_KEEPIDLE:
+			optval = tp->t_keepidle;
+			INP_UNLOCK(inp);
+			error = sooptcopyout(sopt, &optval, sizeof optval);
+			break;
+		case TCP_KEEPINIT:
+			optval = tp->t_keepinit;
+			INP_UNLOCK(inp);
+			error = sooptcopyout(sopt, &optval, sizeof optval);
+			break;
 		default:
 			INP_UNLOCK(inp);
 			error = ENOPROTOOPT;
