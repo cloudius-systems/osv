@@ -69,6 +69,8 @@ int getrlimit(int resource, struct rlimit *rlim)
         set(RLIM_INFINITY);
         break;
     case RLIMIT_AS:
+    case RLIMIT_DATA:
+    case RLIMIT_RSS:
         set(RLIM_INFINITY);
         break;
     default:
