@@ -345,7 +345,7 @@ static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
     }
 }
 
-mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool shared)
+bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared)
 {
     struct stat st;
     fp->stat(&st);
@@ -371,13 +371,13 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
                     remove_mapping(rcp, ptep);
                 }
                 // cow of private page from ARC
-                return newcp->release();
+                return mmu::write_pte(newcp->release(), ptep, pte);
             }
         } else if (!shared) {
             // cow of private page from write cache
             void* page = memory::alloc_page();
             memcpy(page, wcp->addr(), mmu::page_size);
-            return page;
+            return mmu::write_pte(page, ptep, pte);
         }
     } else if (!wcp) {
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
@@ -385,11 +385,12 @@ mmu::mmupage get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, bool write, bool
             rcp = create_read_cached_page(fp, key);
         }
         add_mapping(rcp, ptep);
-        return mmu::mmupage(rcp->addr(), true);
+        return mmu::write_pte(rcp->addr(), ptep, mmu::pte_mark_cow(pte, true));
     }
 
     wcp->map(ptep);
-    return mmu::mmupage(wcp->addr(), !shared);
+
+    return mmu::write_pte(wcp->addr(), ptep, mmu::pte_mark_cow(pte, !shared));
 }
 
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)

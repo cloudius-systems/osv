@@ -140,9 +140,9 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
-mmu::mmupage vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, bool write, bool shared)
+bool vfs_file::map_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared)
 {
-    return pagecache::get(this, off, ptep, write, shared);
+    return pagecache::get(this, off, ptep, pte, write, shared);
 }
 
 bool vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)

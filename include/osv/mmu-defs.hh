@@ -54,16 +54,6 @@ enum {
     pte_cow = 0,
 };
 
-class mmupage {
-    void* _page;
-    bool _cow;
-public:
-    mmupage(void *page, bool cow = false) : _page(page), _cow(cow) {}
-    void* vaddr() const;
-    phys paddr() const;
-    bool cow() const;
-};
-
 /* flush tlb for the current processor */
 void flush_tlb_local();
 /* flush tlb for all */
@@ -98,6 +88,9 @@ public:
     inline void set_pfn(u64 pfn, bool large);
     inline void set_sw_bit(unsigned off, bool v);
 
+    inline void mod_addr(phys addr) {
+        set_addr(addr, large());
+    }
 private:
     inline void set_bit(unsigned nr, bool v) {
         x &= ~(u64(1) << nr);
