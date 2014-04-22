@@ -1187,6 +1187,23 @@ linux_shutdown(int s, int how)
 	return (sys_shutdown(s, how));
 }
 
+int linux_to_bsd_tcp_sockopt(int name)
+{
+	// Not using the constants because we never know what will the compiler
+	// will insert here. They are interface, so they shouldn't change.
+	switch (name) {
+	case 4: // TCP_KEEPIDLE
+		return 0x100;
+	case 5:  // TCP_KEEPINTVL
+		return 0x200;
+	case 6:  // TCP_KEEPCNT
+		return 0x400;
+	case 13: // TCP_CONGESTION
+		return 0x40;
+	}
+	return name;
+}
+
 int
 linux_setsockopt(int s, int level, int name, caddr_t val, int valsize)
 {
@@ -1199,6 +1216,7 @@ linux_setsockopt(int s, int level, int name, caddr_t val, int valsize)
 	case IPPROTO_IP:
 		break;
 	case IPPROTO_TCP:
+		name = linux_to_bsd_tcp_sockopt(name);
 		/* Linux TCP option values match BSD's */
 		break;
 	default:
@@ -1234,7 +1252,7 @@ linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize)
 	case IPPROTO_IP:
 		break;
 	case IPPROTO_TCP:
-		/* Linux TCP option values match BSD's */
+		name = linux_to_bsd_tcp_sockopt(name);
 		break;
 	default:
 		name = -1;
