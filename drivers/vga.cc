@@ -53,21 +53,25 @@ static int tsm_scroll_cb(struct tsm_screen *screen, int scroll_count, void *data
 {
     VGAConsole *vga = reinterpret_cast<VGAConsole *>(data);
 
-    vga->scroll(scroll_count);
+    vga->update_offset(scroll_count);
     return 0;
 }
 
 VGAConsole::VGAConsole(sched::thread* poll_thread, const termios *tio)
-    : _tio(tio), kbd(poll_thread)
+    : _tio(tio)
+    , kbd(poll_thread)
+    , offset_dirty(false)
 {
     tsm_screen_new(&tsm_screen, tsm_log_cb, this);
     tsm_screen_resize(tsm_screen, ncols, nrows);
     tsm_screen_set_max_sb(tsm_screen, 1024);
     tsm_vte_new(&tsm_vte, tsm_screen, tsm_write_cb, this, tsm_log_cb, this);
 
-    for (unsigned y = 0; y < nrows; y++)
-        for (unsigned x = 0; x < ncols; x++)
-            history[y * ncols + x] = buffer[y * ncols + x] = 0x700;
+    /* Leave first 8 lines 0x0, to clear BIOS message. */
+    for (unsigned i = ncols * 8; i < BUFFER_SIZE; i++)
+        history[i] = 0x700 | ' ';
+
+    /* This driver does not clear framebuffer, since most of hypervisor clears on start up */
 }
 
 void VGAConsole::push_queue(const char *str, size_t len)
@@ -81,22 +85,37 @@ void VGAConsole::draw(const uint32_t c, const struct tsm_screen_attr *attr,
 {
     uint32_t c2 = ((attr->bccode << 4) | (attr->fccode & 0xf) << 8) |
         (c & 0xff);
-    if (history[y * ncols + x] != c2) {
-        buffer[y * ncols + x] = c2;
-        history[y * ncols + x] = c2;
+    unsigned idx = (y + offset) * ncols + x;
+
+    if (history[idx] != c2) {
+        buffer[idx] = c2;
+        history[idx] = c2;
     }
  }
 
 void VGAConsole::move_cursor(unsigned int x, unsigned int y)
 {
-    uint16_t pos = x + (y * 80);
+    uint16_t cursor = (y + offset) * ncols + x;
 
-    processor::outw((VGA_CRTC_CURSOR_LO) | (pos & 0xff) << 8, VGA_CRT_IC);
-    processor::outw((VGA_CRTC_CURSOR_HI) | ((pos >> 8) & 0xff) << 8, VGA_CRT_IC);
+    processor::outw((VGA_CRTC_CURSOR_LO) | (cursor & 0xff) << 8, VGA_CRT_IC);
+    processor::outw((VGA_CRTC_CURSOR_HI) | ((cursor >> 8) & 0xff) << 8, VGA_CRT_IC);
 }
 
-void VGAConsole::scroll(int scroll_count)
+void VGAConsole::update_offset(int scroll_count)
 {
+    offset += scroll_count;
+
+    /* Don't have anymore buffer, need to rotate */
+    if (offset > OFFSET_LIMIT || offset < 0)
+        offset = 0;
+    offset_dirty = true;
+}
+
+void VGAConsole::apply_offset()
+{
+    uint16_t start = offset * ncols;
+    processor::outw((VGA_CRTC_START_LO) | (start & 0xff) << 8, VGA_CRT_IC);
+    processor::outw((VGA_CRTC_START_HI) | ((start >> 8) & 0xff) << 8, VGA_CRT_IC);
 }
 
 void VGAConsole::write(const char *str, size_t len)
@@ -108,6 +127,8 @@ void VGAConsole::write(const char *str, size_t len)
         len--;
     }
     tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
+    if (offset_dirty)
+        apply_offset();
 }
 
 bool VGAConsole::input_ready()
