@@ -231,6 +231,12 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 }
 LFS64(posix_fadvise);
 
+int posix_fallocate(int fd, off_t offset, off_t len)
+{
+    return ENOSYS;
+}
+LFS64(posix_fallocate);
+
 int getpid()
 {
     return 0;
