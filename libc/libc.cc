@@ -24,6 +24,7 @@
 #include <sys/ioctl.h>
 #include <osv/clock.hh>
 #include <osv/mempool.hh>
+#include <osv/version.h>
 
 // FIXME: If we ever support multiple different executables we will have to maybe put those
 // on a shared library
@@ -197,4 +198,16 @@ int tcflush(int fd, int what)
 speed_t cfgetospeed(const termios *p)
 {
     return p->__c_ospeed;
+}
+
+extern "C" {
+    const char *gnu_get_libc_version(void)
+    {
+        return OSV_VERSION;
+    }
+
+    const char *gnu_get_libc_release(void)
+    {
+        return "OSv";
+    }
 }
