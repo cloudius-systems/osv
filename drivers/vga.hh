@@ -35,19 +35,20 @@ private:
         VGA_CRTC_CURSOR_HI = 0x0e,
         VGA_CRTC_CURSOR_LO = 0x0f,
         BUFFER_SIZE = 0x4000,
-        OFFSET_LIMIT = 178
+        OFFSET_LIMIT = 178,
+        NCOLS = 80,
+        NROWS = 25
     };
     unsigned _col = 0;
-    static const unsigned ncols = 80, nrows = 25;
-    static volatile unsigned short * const buffer;
+    static volatile unsigned short * const _buffer;
     const termios *_tio;
-    struct tsm_screen *tsm_screen;
-    struct tsm_vte *tsm_vte;
-    Keyboard kbd;
-    std::queue<char> read_queue;
-    unsigned short history[BUFFER_SIZE];
-    unsigned offset;
-    bool offset_dirty;
+    struct tsm_screen *_tsm_screen;
+    struct tsm_vte *_tsm_vte;
+    Keyboard _kbd;
+    std::queue<char> _read_queue;
+    unsigned short _history[BUFFER_SIZE];
+    unsigned _offset;
+    bool _offset_dirty;
 };
 
 #endif

@@ -8,7 +8,7 @@
 #include "vga.hh"
 #include <osv/mmu.hh>
 
-volatile unsigned short * const VGAConsole::buffer
+volatile unsigned short * const VGAConsole::_buffer
 = reinterpret_cast<volatile unsigned short *>(mmu::phys_mem + 0xb8000);
 
 static void tsm_log_cb(void *data, const char *file, int line, const char *func,
@@ -59,17 +59,17 @@ static int tsm_scroll_cb(struct tsm_screen *screen, int scroll_count, void *data
 
 VGAConsole::VGAConsole(sched::thread* poll_thread, const termios *tio)
     : _tio(tio)
-    , kbd(poll_thread)
-    , offset_dirty(false)
+    , _kbd(poll_thread)
+    , _offset_dirty(false)
 {
-    tsm_screen_new(&tsm_screen, tsm_log_cb, this);
-    tsm_screen_resize(tsm_screen, ncols, nrows);
-    tsm_screen_set_max_sb(tsm_screen, 1024);
-    tsm_vte_new(&tsm_vte, tsm_screen, tsm_write_cb, this, tsm_log_cb, this);
+    tsm_screen_new(&_tsm_screen, tsm_log_cb, this);
+    tsm_screen_resize(_tsm_screen, NCOLS, NROWS);
+    tsm_screen_set_max_sb(_tsm_screen, 1024);
+    tsm_vte_new(&_tsm_vte, _tsm_screen, tsm_write_cb, this, tsm_log_cb, this);
 
     /* Leave first 8 lines 0x0, to clear BIOS message. */
-    for (unsigned i = ncols * 8; i < BUFFER_SIZE; i++)
-        history[i] = 0x700 | ' ';
+    for (unsigned i = NCOLS * 8; i < BUFFER_SIZE; i++)
+        _history[i] = 0x700 | ' ';
 
     /* This driver does not clear framebuffer, since most of hypervisor clears on start up */
 }
@@ -77,7 +77,7 @@ VGAConsole::VGAConsole(sched::thread* poll_thread, const termios *tio)
 void VGAConsole::push_queue(const char *str, size_t len)
 {
     for (size_t i = 0; i < len; i++)
-        read_queue.push(str[i]);
+        _read_queue.push(str[i]);
 }
 
 void VGAConsole::draw(const uint32_t c, const struct tsm_screen_attr *attr,
@@ -85,17 +85,17 @@ void VGAConsole::draw(const uint32_t c, const struct tsm_screen_attr *attr,
 {
     uint32_t c2 = ((attr->bccode << 4) | (attr->fccode & 0xf) << 8) |
         (c & 0xff);
-    unsigned idx = (y + offset) * ncols + x;
+    unsigned idx = (y + _offset) * NCOLS + x;
 
-    if (history[idx] != c2) {
-        buffer[idx] = c2;
-        history[idx] = c2;
+    if (_history[idx] != c2) {
+        _buffer[idx] = c2;
+        _history[idx] = c2;
     }
  }
 
 void VGAConsole::move_cursor(unsigned int x, unsigned int y)
 {
-    uint16_t cursor = (y + offset) * ncols + x;
+    uint16_t cursor = (y + _offset) * NCOLS + x;
 
     processor::outw((VGA_CRTC_CURSOR_LO) | (cursor & 0xff) << 8, VGA_CRT_IC);
     processor::outw((VGA_CRTC_CURSOR_HI) | ((cursor >> 8) & 0xff) << 8, VGA_CRT_IC);
@@ -103,37 +103,38 @@ void VGAConsole::move_cursor(unsigned int x, unsigned int y)
 
 void VGAConsole::update_offset(int scroll_count)
 {
-    offset += scroll_count;
+    _offset += scroll_count;
 
     /* Don't have anymore buffer, need to rotate */
-    if (offset > OFFSET_LIMIT || offset < 0)
-        offset = 0;
-    offset_dirty = true;
+    if (_offset > OFFSET_LIMIT || _offset < 0)
+        _offset = 0;
+    _offset_dirty = true;
 }
 
 void VGAConsole::apply_offset()
 {
-    uint16_t start = offset * ncols;
+    uint16_t start = _offset * NCOLS;
     processor::outw((VGA_CRTC_START_LO) | (start & 0xff) << 8, VGA_CRT_IC);
     processor::outw((VGA_CRTC_START_HI) | ((start >> 8) & 0xff) << 8, VGA_CRT_IC);
+    _offset_dirty = false;
 }
 
 void VGAConsole::write(const char *str, size_t len)
 {
     while (len > 0) {
         if ((*str == '\n') && (_tio->c_oflag & OPOST) && (_tio->c_oflag & ONLCR))
-            tsm_vte_input(tsm_vte, "\r", 1);
-        tsm_vte_input(tsm_vte, str++, 1);
+            tsm_vte_input(_tsm_vte, "\r", 1);
+        tsm_vte_input(_tsm_vte, str++, 1);
         len--;
     }
-    tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
-    if (offset_dirty)
+    tsm_screen_draw(_tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
+    if (_offset_dirty)
         apply_offset();
 }
 
 bool VGAConsole::input_ready()
 {
-    return !read_queue.empty() || kbd.input_ready();
+    return !_read_queue.empty() || _kbd.input_ready();
 }
 
 char VGAConsole::readch()
@@ -143,48 +144,48 @@ char VGAConsole::readch()
     char c;
 
     while(1) {
-        if (!read_queue.empty()) {
-            c = read_queue.front();
-            read_queue.pop();
+        if (!_read_queue.empty()) {
+            c = _read_queue.front();
+            _read_queue.pop();
             return c;
         }
 
-        key = kbd.readkey();
+        key = _kbd.readkey();
         if (!key) {
-            if (read_queue.empty())
+            if (_read_queue.empty())
                 return 0;
             continue;
         }
 
-        if (kbd.shift & MOD_SHIFT)
+        if (_kbd.shift & MOD_SHIFT)
             mods |= TSM_SHIFT_MASK;
-        if (kbd.shift & MOD_CTL)
+        if (_kbd.shift & MOD_CTL)
             mods |= TSM_CONTROL_MASK;
-        if (kbd.shift & MOD_ALT)
+        if (_kbd.shift & MOD_ALT)
             mods |= TSM_ALT_MASK;
 
         switch (key) {
         case KEY_Up:
-            tsm_screen_sb_up(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
+            tsm_screen_sb_up(_tsm_screen, 1);
+            tsm_screen_draw(_tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
             break;
         case KEY_Down:
-            tsm_screen_sb_down(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
+            tsm_screen_sb_down(_tsm_screen, 1);
+            tsm_screen_draw(_tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
             break;
         case KEY_Page_Up:
-            tsm_screen_sb_page_up(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
+            tsm_screen_sb_page_up(_tsm_screen, 1);
+            tsm_screen_draw(_tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
             break;
         case KEY_Page_Down:
-            tsm_screen_sb_page_down(tsm_screen, 1);
-            tsm_screen_draw(tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
+            tsm_screen_sb_page_down(_tsm_screen, 1);
+            tsm_screen_draw(_tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
             break;
         default:
-            if (tsm_vte_handle_keyboard(tsm_vte, key, mods))
-                tsm_screen_sb_reset(tsm_screen);
+            if (tsm_vte_handle_keyboard(_tsm_vte, key, mods))
+                tsm_screen_sb_reset(_tsm_screen);
         }
-        if (read_queue.empty())
+        if (_read_queue.empty())
             return 0;
     }
 }
