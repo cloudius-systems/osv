@@ -364,6 +364,13 @@ void exit(int status)
     osv::shutdown();
 }
 
+// "The function _exit() is like exit(3), but does not call any functions
+// registered with atexit(3) or on_exit(3)."
+//
+// Since we do nothing for those anyway, they are equal.
+void _exit(int status) __attribute((alias("exit")));
+void _Exit(int status) __attribute((alias("exit")));
+
 int atexit(void (*func)())
 {
     // nothing to do
