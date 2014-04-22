@@ -175,9 +175,6 @@ void vfs_file::get_arcbuf(void* key, off_t offset)
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-	// FIXME: temporarily disabled due to Issue #261
-	return mmu::default_file_mmap(this, range, flags, perm, offset);
-
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	if (!vp->v_op->vop_cache || (vp->v_size < (off_t)mmu::page_size)) {
