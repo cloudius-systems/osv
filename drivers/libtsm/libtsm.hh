@@ -201,6 +201,10 @@ typedef int (*tsm_screen_cursor_cb) (struct tsm_screen *con,
 				   unsigned int posy,
 				   void *data);
 
+typedef int (*tsm_screen_scroll_cb) (struct tsm_screen *con,
+                                     int scroll_count,
+                                     void *data);
+
 int tsm_screen_new(struct tsm_screen **out, tsm_log_t log, void *log_data);
 void tsm_screen_ref(struct tsm_screen *con);
 void tsm_screen_unref(struct tsm_screen *con);
@@ -270,7 +274,8 @@ void tsm_screen_erase_cursor_to_screen(struct tsm_screen *con,
 void tsm_screen_erase_screen(struct tsm_screen *con, bool protect);
 
 tsm_age_t tsm_screen_draw(struct tsm_screen *con, tsm_screen_draw_cb draw_cb,
-			  tsm_screen_cursor_cb cursor_cb, void *data);
+			  tsm_screen_cursor_cb cursor_cb,
+                          tsm_screen_scroll_cb scroll_cb, void *data);
 
 /** @} */
 

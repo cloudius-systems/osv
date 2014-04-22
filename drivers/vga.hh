@@ -23,6 +23,7 @@ public:
     virtual char readch();
     void draw(const uint32_t c, const struct tsm_screen_attr *attr, unsigned int x, unsigned int y);
     void move_cursor(unsigned int x, unsigned int y);
+    void scroll(int scroll_count);
     void push_queue(const char *str, size_t len);
 private:
     enum {

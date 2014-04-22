@@ -43,7 +43,8 @@
 
 SHL_EXPORT
 tsm_age_t tsm_screen_draw(struct tsm_screen *con, tsm_screen_draw_cb draw_cb,
-			  tsm_screen_cursor_cb cursor_cb, void *data)
+			  tsm_screen_cursor_cb cursor_cb,
+                          tsm_screen_scroll_cb scroll_cb, void *data)
 {
 	unsigned int cur_x, cur_y;
 	unsigned int i, j, k;
@@ -59,6 +60,11 @@ tsm_age_t tsm_screen_draw(struct tsm_screen *con, tsm_screen_draw_cb draw_cb,
 
 	if (!con || !draw_cb)
 		return 0;
+
+        if (con->scroll_count != 0) {
+            scroll_cb(con, con->scroll_count, data);
+            con->scroll_count = 0;
+        }
 
 	screen_cell_init(con, &empty);
 

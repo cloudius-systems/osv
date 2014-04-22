@@ -328,6 +328,8 @@ static void screen_scroll_up(struct tsm_screen *con, unsigned int num)
 			}
 		}
 	}
+
+        con->scroll_count += num;
 }
 
 static void screen_scroll_down(struct tsm_screen *con, unsigned int num)
@@ -372,6 +374,8 @@ static void screen_scroll_down(struct tsm_screen *con, unsigned int num)
 		if (!con->sel_end.line && con->sel_end.y >= 0)
 			con->sel_end.y += num;
 	}
+
+        con->scroll_count -= num;
 }
 
 static void screen_write(struct tsm_screen *con, unsigned int x,
