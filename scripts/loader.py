@@ -1189,7 +1189,7 @@ class osv_pagetable_walk(gdb.Command):
     def invoke(self, arg, from_tty):
         addr = gdb.parse_and_eval(arg)
         addr = ulong(addr)
-        ptep = ulong(gdb.lookup_global_symbol('mmu::page_table_root').value().address)
+        ptep = ulong(gdb.lookup_symbol('mmu::page_table_root')[0].value().address)
         level = 4
         while level >= 0:
             ptep1 = phys_cast(ptep, ulong_type)
