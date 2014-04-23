@@ -497,3 +497,10 @@ struct group *getgrnam(const char *name)
     }
     return &it->second;
 }
+
+int initgroups(const char *user, gid_t group)
+{
+    WARN_STUBBED();
+    return -1;
+}
+
