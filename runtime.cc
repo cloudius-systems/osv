@@ -58,6 +58,7 @@
 #include <processor.hh>
 #include <grp.h>
 #include <unordered_map>
+#include <api/sys/prctl.h>
 
 #define __LC_LAST 13
 
@@ -504,3 +505,12 @@ int initgroups(const char *user, gid_t group)
     return -1;
 }
 
+int prctl(int option, ...)
+{
+    switch (option) {
+    case PR_SET_DUMPABLE:
+        return 0;
+    }
+    errno = EINVAL;
+    return -1;
+}
