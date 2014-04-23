@@ -724,12 +724,19 @@ void vmxnet3::txq_gc(vmxnet3_txqueue &txq)
         }
 
         auto sop = txr.next;
-        auto m = txq.buf[sop];
+        auto m_head = txq.buf[sop];
 
-        if (m != NULL) {
-            m_freem(m);
+        if (m_head != NULL) {
+            int count = 0;
+
+            for (auto m = m_head; m != NULL;) {
+                auto m_next = m->m_hdr.mh_next;
+                ++count;
+                m_free(m);
+                m = m_next;
+            }
             txq.buf[sop] = NULL;
-            ++txq.avail;
+            txq.avail += count;
         }
 
         txr.next =
