@@ -114,10 +114,11 @@ int clock_getcpuclockid(pid_t pid, clockid_t* clock_id)
     return CLOCK_PROCESS_CPUTIME_ID;
 }
 
-clock_t clock (void)
+clock_t clock(void)
 {
-    WARN_STUBBED();
-    return -1;
+    struct timespec ts;
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+    return ts.tv_sec * 1000000000L + ts.tv_nsec;
 }
 
 NO_SYS(int utime(const char *, const struct utimbuf *));
