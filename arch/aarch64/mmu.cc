@@ -1,5 +1,6 @@
 #include <osv/mmu.hh>
 #include <osv/prio.hh>
+#include <osv/debug.h>
 
 namespace mmu {
 
@@ -42,10 +43,16 @@ pt_element make_pte(phys addr, bool large,
 
     arch_pt_element::set_user(&pte, false);
     arch_pt_element::set_accessed(&pte, true);
-    /* at the moment we hardcode memory attributes,
-       but the API would need to be adapted for device direct assignment */
     arch_pt_element::set_share(&pte, true);
-    arch_pt_element::set_attridx(&pte, 4);
+
+    if (addr >= mmu::device_range_start && addr < mmu::device_range_stop) {
+        /* we need to mark device memory as such, because the
+           semantics of the load/store instructions change */
+        debug_early_u64("make_pte: device memory at ", (u64)addr);
+        arch_pt_element::set_attridx(&pte, 0);
+    } else {
+        arch_pt_element::set_attridx(&pte, 4);
+    }
 
     return pte;
 }

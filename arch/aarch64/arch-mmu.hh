@@ -21,6 +21,8 @@
 
 namespace mmu {
 constexpr int max_phys_addr_size = 48;
+constexpr int device_range_start = 0x8000000;
+constexpr int device_range_stop = 0x10000000;
 
 class arch_pt_element {
 public:
