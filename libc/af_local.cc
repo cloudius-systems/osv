@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <utility>
+#include <sys/ioctl.h>
 
 using namespace std;
 
@@ -26,6 +27,7 @@ struct af_local final : public special_file {
     af_local(pipe_buffer_ref&& s, pipe_buffer_ref&& r)
             : special_file(FREAD|FWRITE, DTYPE_UNSPEC), send(std::move(s)), receive(std::move(r)) { init(); }
     void init();
+    virtual int ioctl(u_long com, void *data) override;
     virtual int read(uio* data, int flags) override;
     virtual int write(uio* data, int flags) override;
     virtual int poll(int events) override;
@@ -34,6 +36,23 @@ struct af_local final : public special_file {
     pipe_buffer_ref send;
     pipe_buffer_ref receive;
 };
+
+int af_local::ioctl(u_long cmd, void *data)
+{
+    int error = ENOTTY;
+    switch (cmd) {
+    case FIONBIO:
+        SCOPE_LOCK(f_lock);
+        if (*(int *)data)
+            f_flags |= FNONBLOCK;
+        else
+            f_flags &= ~FNONBLOCK;
+        error = 0;
+        break;
+    }
+
+    return error;
+}
 
 void af_local::init()
 {
@@ -48,7 +67,6 @@ int af_local::read(uio* data, int flags)
 
 int af_local::write(uio* data, int flags)
 {
-    assert(!(f_flags & FNONBLOCK));
     return send->write(data, is_nonblock(this));
 }
 
