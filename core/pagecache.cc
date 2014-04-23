@@ -15,21 +15,9 @@
 #include <fs/vfs/vfs.h>
 #include <osv/trace.hh>
 
-extern "C" void arc_unshare_buf(arc_buf_t*);
-
-namespace mmu {
-    extern mutex vma_list_mutex;
-};
-
-namespace pagecache {
-struct hashkey {
-    dev_t dev;
-    ino_t ino;
-    off_t offset;
-    bool operator==(const hashkey& a) const noexcept {
-        return (dev == a.dev) && (ino == a.ino) && (offset == a.offset);
-    }
-};
+extern "C" {
+void arc_unshare_buf(arc_buf_t*);
+void arc_share_buf(arc_buf_t*);
 }
 
 namespace std {
@@ -250,21 +238,43 @@ std::unordered_multimap<arc_buf_t*, cached_page_arc*> cached_page_arc::arc_cache
 static std::unordered_map<hashkey, cached_page_arc*> read_cache;
 static std::unordered_map<hashkey, cached_page_write*> write_cache;
 static std::deque<cached_page_write*> write_lru;
+static mutex arc_lock; // protects against parallel eviction, parallel creation impossible due to vma_list_lock
 
-TRACEPOINT(trace_add_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void add_mapping(cached_page_arc *cp, mmu::hw_ptep ptep)
+template<typename T>
+static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
 {
-    trace_add_mapping(cp->arcbuf(), cp->addr(), ptep.release());
+    auto cpi = cache.find(key);
+
+    if (cpi == cache.end()) {
+        return nullptr;
+    } else {
+        return cpi->second;
+    }
+}
+
+TRACEPOINT(trace_add_read_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
+void add_read_mapping(cached_page_arc *cp, mmu::hw_ptep ptep)
+{
+    trace_add_read_mapping(cp->arcbuf(), cp->addr(), ptep.release());
     cp->map(ptep);
 }
 
 TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void remove_mapping(cached_page_arc* cp, mmu::hw_ptep ptep)
+void remove_read_mapping(cached_page_arc* cp, mmu::hw_ptep ptep)
 {
     trace_remove_mapping(cp->arcbuf(), cp->addr(), ptep.release());
     if (cp->unmap(ptep) == 0) {
         read_cache.erase(cp->key());
         delete cp;
+    }
+}
+
+void remove_read_mapping(hashkey& key, mmu::hw_ptep ptep)
+{
+    SCOPE_LOCK(arc_lock);
+    cached_page_arc* cp = find_in_cache(read_cache, key);
+    if (cp) {
+        remove_read_mapping(cp, ptep);
     }
 }
 
@@ -284,23 +294,36 @@ unsigned drop_read_cached_page(cached_page_arc* cp, bool flush)
     return flushed;
 }
 
+void drop_read_cached_page(hashkey& key)
+{
+    SCOPE_LOCK(arc_lock);
+    cached_page_arc* cp = find_in_cache(read_cache, key);
+    if (cp) {
+        drop_read_cached_page(cp, true);
+    }
+}
+
 TRACEPOINT(trace_unmap_arc_buf, "buf=%p", void*);
 void unmap_arc_buf(arc_buf_t* ab)
 {
-    assert(mutex_owned(&mmu::vma_list_mutex));
     trace_unmap_arc_buf(ab);
+    SCOPE_LOCK(arc_lock);
     cached_page_arc::unmap_arc_buf(ab);
 }
 
-static cached_page_arc* create_read_cached_page(vfs_file* fp, hashkey& key)
+TRACEPOINT(trace_map_arc_buf, "buf=%p page=%p", void*, void*);
+void map_arc_buf(hashkey *key, arc_buf_t* ab, void *page)
 {
-    cached_page_arc *pc;
-    arc_buf_t* ab;
-    void* page;
-    fp->get_arcbuf(key.offset, &ab, &page);
-    pc = new cached_page_arc(key, page, ab);
-    read_cache.emplace(key, pc);
-    return pc;
+    trace_map_arc_buf(ab, page);
+    SCOPE_LOCK(arc_lock);
+    cached_page_arc* pc = new cached_page_arc(*key, page, ab);
+    read_cache.emplace(*key, pc);
+    arc_share_buf(ab);
+}
+
+static void create_read_cached_page(vfs_file* fp, hashkey& key)
+{
+    fp->get_arcbuf(&key, key.offset);
 }
 
 static std::unique_ptr<cached_page_write> create_write_cached_page(vfs_file* fp, hashkey& key)
@@ -333,25 +356,12 @@ static void insert(cached_page_write* cp) {
     }
 }
 
-template<typename T>
-static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
-{
-    auto cpi = cache.find(key);
-
-    if (cpi == cache.end()) {
-        return nullptr;
-    } else {
-        return cpi->second;
-    }
-}
-
 bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared)
 {
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
     cached_page_write* wcp = find_in_cache(write_cache, key);
-    cached_page_arc* rcp = find_in_cache(read_cache, key);
 
     if (write) {
         if (!wcp) {
@@ -362,14 +372,10 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, boo
                 insert(wcp);
                 // page is moved from ARC to write cache
                 // drop ARC page if exists, removing all mappings
-                 if (rcp) {
-                    drop_read_cached_page(rcp);
-                }
+                drop_read_cached_page(key);
             } else {
                 // remove mapping to ARC page if exists
-                if (rcp) {
-                    remove_mapping(rcp, ptep);
-                }
+                remove_read_mapping(key, ptep);
                 // cow of private page from ARC
                 return mmu::write_pte(newcp->release(), ptep, pte);
             }
@@ -381,11 +387,17 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, boo
         }
     } else if (!wcp) {
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
-        if (!rcp) {
-            rcp = create_read_cached_page(fp, key);
-        }
-        add_mapping(rcp, ptep);
-        return mmu::write_pte(rcp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+        do {
+            WITH_LOCK(arc_lock) {
+                cached_page_arc* cp = find_in_cache(read_cache, key);
+                if (cp) {
+                    add_read_mapping(cp, ptep);
+                    return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+                }
+            }
+            // page is not in cache yet, create and try again
+            create_read_cached_page(fp, key);
+        } while (true);
     }
 
     wcp->map(ptep);
@@ -395,24 +407,29 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, boo
 
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
 {
-    bool free = false;
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
-    cached_page_write *wcp = find_in_cache(write_cache, key);
-    cached_page_arc *rcp = find_in_cache(read_cache, key);
+    cached_page_write* wcp = find_in_cache(write_cache, key);
 
     // page is either in ARC cache or write cache or private page
+
     if (wcp && wcp->addr() == addr) {
         // page is in write cache
         wcp->unmap(ptep);
-    } else if (rcp && rcp->addr() == addr) {
-        // page is in ARC
-        remove_mapping(rcp, ptep);
-    } else {
-        // private page
-        free = true;
+        return false;
     }
-    return free;
+
+    WITH_LOCK(arc_lock) {
+        cached_page_arc* rcp = find_in_cache(read_cache, key);
+        if (rcp && rcp->addr() == addr) {
+            // page is in ARC
+            remove_read_mapping(rcp, ptep);
+            return false;
+        }
+    }
+
+    // private page, a caller will free it
+    return true;
 }
 }

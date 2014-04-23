@@ -10,9 +10,6 @@
 
 #include <osv/file.h>
 
-struct arc_buf;
-typedef arc_buf arc_buf_t;
-
 class vfs_file final : public file {
 public:
     explicit vfs_file(unsigned flags);
@@ -28,7 +25,7 @@ public:
     virtual bool map_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared);
     virtual bool put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep);
 
-    void get_arcbuf(uintptr_t offset, arc_buf_t** arcbuf, void** page);
+    void get_arcbuf(void *key, off_t offset);
 };
 
 #endif /* VFS_FILE_HH_ */

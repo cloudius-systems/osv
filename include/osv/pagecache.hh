@@ -10,10 +10,22 @@
 #include <osv/mmu.hh>
 #include "arch-mmu.hh"
 
+struct arc_buf;
+typedef arc_buf arc_buf_t;
+
 namespace pagecache {
+
+struct hashkey {
+    dev_t dev;
+    ino_t ino;
+    off_t offset;
+    bool operator==(const hashkey& a) const noexcept {
+        return (dev == a.dev) && (ino == a.ino) && (offset == a.offset);
+    }
+};
 
 bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared);
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep);
 void unmap_arc_buf(arc_buf_t* ab);
-
+void map_arc_buf(hashkey* key, arc_buf_t* ab, void* page);
 }

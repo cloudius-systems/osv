@@ -533,6 +533,8 @@ struct arc_buf_hdr {
 
 	l2arc_buf_hdr_t		*b_l2hdr;
 	list_node_t		b_l2node;
+
+	uint32_t         b_mmaped;
 };
 
 static arc_buf_t *arc_eviction_list;
@@ -570,7 +572,6 @@ static boolean_t l2arc_write_eligible(uint64_t spa_guid, arc_buf_hdr_t *ab);
 #define	ARC_L2_WRITING		(1 << 16)	/* L2ARC write in progress */
 #define	ARC_L2_EVICTED		(1 << 17)	/* evicted during I/O */
 #define	ARC_L2_WRITE_HEAD	(1 << 18)	/* head of write list */
-#define	ARC_SHARED_BUF		(1 << 19)	/* shared in OS' page cache */
 
 #define	HDR_IN_HASH_TABLE(hdr)	((hdr)->b_flags & ARC_IN_HASH_TABLE)
 #define	HDR_IO_IN_PROGRESS(hdr)	((hdr)->b_flags & ARC_IO_IN_PROGRESS)
@@ -585,7 +586,6 @@ static boolean_t l2arc_write_eligible(uint64_t spa_guid, arc_buf_hdr_t *ab);
 #define	HDR_L2_WRITING(hdr)	((hdr)->b_flags & ARC_L2_WRITING)
 #define	HDR_L2_EVICTED(hdr)	((hdr)->b_flags & ARC_L2_EVICTED)
 #define	HDR_L2_WRITE_HEAD(hdr)	((hdr)->b_flags & ARC_L2_WRITE_HEAD)
-#define	HDR_SHARED_BUF(hdr)	((hdr)->b_flags & ARC_SHARED_BUF)
 
 /*
  * Other sizes
@@ -1479,24 +1479,17 @@ void
 arc_share_buf(arc_buf_t *abuf)
 {
 	arc_buf_hdr_t *hdr = abuf->b_hdr;
-	uint64_t idx = BUF_HASH_INDEX(hdr->b_spa, &hdr->b_dva, hdr->b_birth);
-	kmutex_t *hash_lock = BUF_HASH_LOCK(idx);
 
-	mutex_lock(hash_lock);
-	hdr->b_flags |= ARC_SHARED_BUF;
-	mutex_unlock(hash_lock);
+	hdr->b_mmaped = 1;
 }
 
 void
 arc_unshare_buf(arc_buf_t *abuf)
 {
 	arc_buf_hdr_t *hdr = abuf->b_hdr;
-	uint64_t idx = BUF_HASH_INDEX(hdr->b_spa, &hdr->b_dva, hdr->b_birth);
-	kmutex_t *hash_lock = BUF_HASH_LOCK(idx);
 
-	mutex_lock(hash_lock);
-	hdr->b_flags &= ~ARC_SHARED_BUF;
-	mutex_unlock(hash_lock);
+	ASSERT(hdr->b_mmaped != 1);
+	hdr->b_mmaped = 0;
 }
 
 /*
@@ -1619,6 +1612,10 @@ arc_buf_destroy(arc_buf_t *buf, boolean_t recycle, boolean_t all)
 		arc_state_t *state = buf->b_hdr->b_state;
 		uint64_t size = buf->b_hdr->b_size;
 		arc_buf_contents_t type = buf->b_hdr->b_type;
+
+		if (buf->b_hdr->b_mmaped) {
+			mmu_unmap(buf);
+		}
 
 		arc_cksum_verify(buf);
 #ifdef illumos
@@ -1915,17 +1912,6 @@ evict_start:
 				if (!mutex_tryenter(&buf->b_evict_lock)) {
 					missed += 1;
 					break;
-				}
-				if (HDR_SHARED_BUF(ab)) {
-				    if (mmu_vma_list_trylock()) {
-				        mmu_unmap(buf);
-			            ab->b_flags &= ~ARC_SHARED_BUF;
-			            mmu_vma_list_unlock();
-				    } else {
-				        mutex_exit(&buf->b_evict_lock);
-				        missed += 1;
-				        break;
-				    }
 				}
 				if (buf->b_data) {
 					bytes_evicted += ab->b_size;

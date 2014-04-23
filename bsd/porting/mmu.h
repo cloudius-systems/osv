@@ -52,8 +52,7 @@ int vm_paging_needed(void);
 int vm_throttling_needed(void);
 
 void mmu_unmap(void* ab);
-bool mmu_vma_list_trylock();
-void mmu_vma_list_unlock();
+void mmu_map(void* key, void* ab, void* page);
 
 #define vtophys(_va) virt_to_phys((void *)_va)
 __END_DECLS

@@ -46,6 +46,8 @@
 #include <sys/zfs_znode.h>
 #endif
 
+#include <bsd/porting/mmu.h>
+
 /*
  * Enable/disable nopwrite feature.
  */
@@ -984,7 +986,6 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size)
 {
 	dmu_buf_t **dbp;
 	int err;
-	struct iovec *iov;
 	int numbufs = 0;
 
 	// This will acquire a reference both in the dbuf, and in the ARC buffer.
@@ -1000,14 +1001,7 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size)
 	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *)db;
 	arc_buf_t *dbuf_abuf = dbi->db_buf;
 
-	iov = &uio->uio_iov[0];
-	iov->iov_base = dbuf_abuf->b_data + (uio->uio_loffset - db->db_offset);
-	iov->iov_len = db->db_size;
-
-	iov = &uio->uio_iov[1];
-	iov->iov_base = dbuf_abuf;
-
-	arc_share_buf(dbuf_abuf);
+	mmu_map(uio->uio_iov->iov_base, dbuf_abuf, dbuf_abuf->b_data + (uio->uio_loffset - db->db_offset));
 
 	dmu_buf_rele_array(dbp, numbufs, FTAG);
 
