@@ -117,6 +117,10 @@ class Trace:
     def __cmp__(self, b):
         return cmp(self.time, b.time)
 
+    def __lt__(self, b):
+        return self.time < b.time
+
+
 class TimedTrace:
     def __init__(self, trace):
         self.trace = trace
