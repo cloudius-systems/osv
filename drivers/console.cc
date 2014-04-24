@@ -9,6 +9,7 @@
 #include <osv/prex.h>
 #include <osv/device.h>
 #include <osv/sched.hh>
+#include <osv/spinlock.h>
 #include <queue>
 #include <deque>
 #include <vector>
@@ -19,7 +20,6 @@
 #include "vga.hh"
 #endif /* __x86_64__ */
 
-#include "debug-console.hh"
 #include <termios.h>
 #include <signal.h>
 
@@ -28,19 +28,38 @@
 namespace console {
 
 // should eventually become a list of console device that we chose the best from
-debug_console console;
+static Console* console = nullptr;
+static spinlock early_write_lock;
+
+static void early_write(const char *str, size_t len)
+{
+    IsaSerialConsole::early_write(str, len);
+}
 
 void write(const char *msg, size_t len)
 {
-    if (len)
-        console.write(msg, len);
+    if (len == 0)
+        return;
+
+    if (console != nullptr) {
+        console->write(msg, len);
+    } else {
+        WITH_LOCK(early_write_lock) {
+            early_write(msg, len);
+        }
+    }
 }
 
 // lockless version
 void write_ll(const char *msg, size_t len)
 {
-    if (len)
-        console.write_ll(msg, len);
+    if (len == 0)
+        return;
+
+    if (console != nullptr)
+        console->write(msg, len);
+    else
+        early_write(msg, len);
 }
 
 mutex console_mutex;
@@ -97,8 +116,8 @@ void console_poll()
 {
     while (true) {
         std::lock_guard<mutex> lock(console_mutex);
-        sched::thread::wait_until(console_mutex, [&] { return console.input_ready(); });
-        char c = console.readch();
+        sched::thread::wait_until(console_mutex, [&] { return console->input_ready(); });
+        char c = console->readch();
         if (c == 0)
             continue;
 
@@ -122,7 +141,7 @@ void console_poll()
             // user can edit it with backspace, etc.).
             if (c == '\n') {
                 if (tio.c_lflag && ECHO)
-                    console.write(&c, 1);
+                    console->write(&c, 1);
                 line_buffer.push_back('\n');
                 while (!line_buffer.empty()) {
                     console_queue.push(line_buffer.front());
@@ -142,15 +161,15 @@ void console_poll()
                     static const char eraser[] = {'\b',' ','\b','\b',' ','\b'};
                     if (tio.c_lflag && ECHOE) {
                         if (isctrl(e)) { // Erase the two characters ^X
-                            console.write(eraser, 6);
+                            console->write(eraser, 6);
                         } else {
-                            console.write(eraser, 3);
+                            console->write(eraser, 3);
                         }
                     } else {
                         if (isctrl(e)) {
-                            console.write(eraser+2, 2);
+                            console->write(eraser+2, 2);
                         } else {
-                            console.write(eraser, 1);
+                            console->write(eraser, 1);
                         }
                     }
                     continue; // already echoed
@@ -171,9 +190,9 @@ void console_poll()
                 char out[2];
                 out[0] = '^';
                 out[1] = c^'@';
-                console.write(out, 2);
+                console->write(out, 2);
             } else {
-                console.write(&c, 1);
+                console->write(&c, 1);
             }
         }
     }
@@ -290,14 +309,12 @@ void console_init(bool use_vga)
 #else /* !AARCH64_PORT_STUB */
     auto console_poll_thread = new sched::thread(console_poll,
             sched::thread::attr().name("console"));
-    Console* console;
 
     if (use_vga)
         console = new VGAConsole(console_poll_thread, &tio);
     else
         console = new IsaSerialConsole(console_poll_thread, &tio);
     console_poll_thread->start();
-    console::console.set_impl(console);
     device_create(&console_driver, "console", D_CHR);
 #endif /* !AARCH64_PORT_STUB */
 }

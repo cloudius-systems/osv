@@ -80,4 +80,9 @@ void IsaSerialConsole::reset() {
     pci::outb(MCR_AUX_OUTPUT_2, ioport + MCR_ADDRESS);
 }
 
+void IsaSerialConsole::early_write(const char *str, size_t len) {
+    while (len-- > 0)
+        writeByte(*str++);
+}
+
 }

@@ -22,6 +22,7 @@ public:
     virtual void write(const char *str, size_t len);
     virtual bool input_ready() override;
     virtual char readch();
+    static void early_write(const char *str, size_t len);
 private:
     gsi_edge_interrupt _irq;
     static const u16 ioport = 0x3f8;
@@ -61,7 +62,7 @@ private:
     };
 
     void reset();
-    void writeByte(const char letter);
+    static void writeByte(const char letter);
 };
 
 }

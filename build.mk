@@ -664,7 +664,6 @@ libtsm += drivers/libtsm/tsm_vte_charsets.o
 drivers := $(bsd) $(solaris)
 drivers += core/mmu.o
 drivers += drivers/console.o
-drivers += arch/$(arch)/debug-console.o
 drivers += drivers/clock.o
 drivers += drivers/clockevent.o
 drivers += drivers/ramdisk.o
