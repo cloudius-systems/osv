@@ -552,6 +552,22 @@ mutex thread_map_mutex;
 std::unordered_map<unsigned long, thread *> thread_map
     __attribute__((init_priority((int)init_prio::threadlist)));
 
+static thread_runtime::duration total_app_time_exited(0);
+
+std::chrono::nanoseconds osv_run_stats()
+{
+    thread_runtime::duration total_app_time;
+
+    WITH_LOCK(thread_map_mutex) {
+        total_app_time = total_app_time_exited;
+        for (auto th : thread_map) {
+            thread *t = th.second;
+            total_app_time += t->thread_clock();
+        }
+    }
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(total_app_time);
+}
+
 // We reserve a space in the end of the PID space, so we can reuse those
 // special purpose ids for other things. 4096 positions is arbitrary, but
 // <<should be enough for anybody>> (tm)
@@ -645,6 +661,7 @@ thread::~thread()
     }
     WITH_LOCK(thread_map_mutex) {
         thread_map.erase(_id);
+        total_app_time_exited += _total_cpu_time;
     }
     if (_attr._stack.deleter) {
         _attr._stack.deleter(_attr._stack);

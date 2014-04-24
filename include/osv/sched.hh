@@ -621,6 +621,8 @@ private:
     static callback_dispatch _dispatch;
 };
 
+std::chrono::nanoseconds osv_run_stats();
+
 class thread_runtime_compare {
 public:
     bool operator()(const thread& t1, const thread& t2) const {
