@@ -66,6 +66,11 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include <sys/file.h>
+
+#include "fs/fs.hh"
+#include "libc/libc.hh"
+
 using namespace std;
 
 
@@ -496,6 +501,26 @@ int fstat(int fd, struct stat *st)
 }
 
 LFS64(fstat);
+
+extern "C" int flock(int fd, int operation)
+{
+    if (!fileref_from_fd(fd)) {
+        return libc_error(EBADF);
+    }
+
+    switch (operation) {
+    case LOCK_SH:
+    case LOCK_SH | LOCK_NB:
+    case LOCK_EX:
+    case LOCK_EX | LOCK_NB:
+    case LOCK_UN:
+        break;
+    default:
+        return libc_error(EINVAL);
+    }
+
+    return 0;
+}
 
 TRACEPOINT(trace_vfs_readdir, "%d %p", int, dirent*);
 TRACEPOINT(trace_vfs_readdir_ret, "");
