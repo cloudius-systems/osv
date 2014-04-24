@@ -236,6 +236,8 @@ unsigned clear_ptes(I start,  I end)
     return i;
 }
 
+unsigned long all_vmas_size();
+
 }
 
 #endif /* MMU_HH */

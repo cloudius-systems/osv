@@ -217,6 +217,12 @@ void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
     }
 }
 
+unsigned long all_vmas_size()
+{
+    SCOPE_LOCK(vma_list_mutex);
+    return std::accumulate(vma_list.begin(), vma_list.end(), size_t(0), [](size_t s, vma& v) { return s + v.size(); });
+}
+
 void clamp(uintptr_t& vstart1, uintptr_t& vend1,
            uintptr_t min, size_t max, size_t slop)
 {
