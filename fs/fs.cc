@@ -8,12 +8,15 @@
 #include "fs.hh"
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <osv/error.h>
 
 uint64_t size(fileref f)
 {
     struct stat st;
     int r = f.get()->stat(&st);
-    assert(r == 0);
+    if (r) {
+        throw make_error(r);
+    }
     return st.st_size;
 }
 
@@ -23,7 +26,11 @@ void read(fileref f, void *buffer, uint64_t offset, uint64_t len)
     // FIXME: breaks on 32-bit
     uio data{&iov, 1, off_t(offset), ssize_t(len), UIO_READ};
     int r = f.get()->read(&data, FOF_OFFSET);
-    assert(r == 0);
+    if (r) {
+        throw make_error(r);
+    }
+    // FIXME: uio_resid!=0 is possible on a non-blocking file.
+    // We should improve the read() API to say how much was read...
     assert(data.uio_resid == 0);
 }
 
@@ -33,7 +40,11 @@ void write(fileref f, const void* buffer, uint64_t offset, uint64_t len)
     // FIXME: breaks on 32-bit
     uio data{&iov, 1, off_t(offset), ssize_t(len), UIO_WRITE};
     int r = f.get()->write(&data, FOF_OFFSET);
-    assert(r == 0);
+    if (r) {
+        throw make_error(r);
+    }
+    // FIXME: uio_resid!=0 is possible on a non-blocking file.
+    // We should improve the write() API to say how much was written...
     assert(data.uio_resid == 0);
 }
 
@@ -62,6 +73,7 @@ fdesc::fdesc(file* f)
 {
     int r = fdalloc(f, &_fd);
     if (r) {
+        // FIXME: do throw make_error(r);
         throw r;
     }
 }
