@@ -507,6 +507,11 @@ zfs_read(vnode_t *vp, struct file* fp, uio_t *uio, int ioflag)
 	xuio_t		*xuio = NULL;
 #endif
 
+	// Return EISDIR when reading from a directory, as Linux does.
+	if (vp->v_type == VDIR) {
+	    return EISDIR;
+	}
+
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 	os = zfsvfs->z_os;
