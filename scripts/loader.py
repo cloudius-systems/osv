@@ -860,9 +860,9 @@ class concat(object):
             l  = len(self.view1)
             if index.start >= l:
                 return self.view2.__getitem__(slice(index.start - l, index.stop - l, index.step))
-            if index.stop >= l:
-                return self.view1.__getitem__(slice(index.start, l, index.step)) + \
-                    self.view2.__getitem__(slice(0, index.stop - l, index.step))
+            if index.stop > l:
+                raise Exception('Slice spans view boundary, index.start=%d, index.stop=%d, l=%d'
+                    % (index.start, index.stop, l))
             return self.view1.__getitem__(index)
 
         if index < len(self.view1):
@@ -901,42 +901,36 @@ def all_traces():
 
         last %= max_trace
         pivot = align_up(last, trace_page_size)
-        trace_log = concat(trace_log[pivot:], trace_log[:pivot])
-        last += max_trace - pivot
+        trace_log = concat(trace_log[pivot:], trace_log[:last])
 
-        i = 0
-        while i < last:
-            tp_key, = struct.unpack('Q', trace_log[i:i+8])
+        unpacker = trace.SlidingUnpacker(trace_log)
+        while unpacker:
+            tp_key, = unpacker.unpack('Q')
             if tp_key == 0:
-                i = align_up(i + 8, trace_page_size)
+                unpacker.align_up(trace_page_size)
                 continue
 
             # end marker. record being written
             if tp_key == -1:
                 break
 
-            i += 8
-
-            thread, thread_name, time, cpu, flags = struct.unpack('Q16sQII', trace_log[i:i+40])
+            thread, thread_name, time, cpu, flags = unpacker.unpack('Q16sQII')
             thread_name = thread_name.partition(b'\0')[0].decode()
-            i += 40
 
             tp = tracepoints.get(tp_key, None)
             if not tp:
                 tp_ref = gdb.Value(tp_key).cast(tp_ptr)
+
                 tp = TracePoint(tp_key, str(tp_ref["name"].string()),
                     sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
                 tracepoints[tp_key] = tp
 
             backtrace = None
             if flags & 1:
-                backtrace = struct.unpack('Q' * backtrace_len, trace_log[i:i+8*backtrace_len])
-                i += 8 * backtrace_len
+                backtrace = unpacker.unpack('Q' * backtrace_len)
 
-            size = struct.calcsize(tp.signature)
-            data = struct.unpack(tp.signature, trace_log[i:i+size])
-            i += size
-            i = align_up(i, 8)
+            data = unpacker.unpack(tp.signature)
+            unpacker.align_up(8)
             yield Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
 
     iters = map(lambda cpu: one_cpu_trace(cpu), values(state.cpu_list))

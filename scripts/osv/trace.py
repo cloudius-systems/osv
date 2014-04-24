@@ -4,7 +4,8 @@ import struct
 import sys
 
 # version 2 introduced thread_name
-_format_version = 2
+# version 3 introduced variable-length arguments (blob)
+_format_version = 3
 
 def nanos_to_millis(nanos):
     return float(nanos) / 1000000
@@ -99,7 +100,8 @@ class Trace:
     def format_data(self):
         format = self.tp.format
         format = format.replace('%p', '0x%016x')
-        return format % self.data
+        data = [get_formatter(fmt)(arg) for fmt, arg in zip(split_format(self.tp.signature), self.data)]
+        return format % tuple(data)
 
     def format(self, bt_formatter=default_backtrace_formatter):
         return '0x%016x %-15s %2d %19s %-20s %s%s' % (
@@ -138,41 +140,127 @@ class TimedTrace:
     def time_range(self):
         return TimeRange(self.trace.time, self.trace.time + self.duration)
 
+def align_down(v, pagesize):
+    return v & ~(pagesize - 1)
+
+def align_up(v, pagesize):
+    return align_down(v + pagesize - 1, pagesize)
+
+def split_format(format_str):
+    chars = iter(format_str)
+    while True:
+        c = next(chars)
+        if c in '<>=!@':
+            raise Exception('Not supported: ' + c)
+        if c == '*':
+            yield c
+        else:
+            fmt = str(c)
+            while c.isdigit():
+                c = next(chars)
+                fmt += c
+            yield fmt
+
+formatters = {
+    '*': lambda bytes: '{' + ' '.join('%02x' % ord(b) for b in bytes) + '}'
+}
+
+def get_alignment_of(fmt):
+    if fmt == '*':
+        return 2
+    return struct.calcsize('c' + fmt) - struct.calcsize(fmt)
+
+def get_formatter(format_code):
+    def identity(x):
+        return x
+
+    return formatters.get(format_code, identity)
+
 class SlidingUnpacker:
-    def __init__(self, buffer):
+    def __init__(self, buffer, offset=0):
         self.buffer = buffer
-        self.offset = 0
+        self.offset = offset
+
+    def align_up(self, alignment):
+        self.offset = align_up(self.offset, alignment)
+
+    def unpack_blob(self):
+        len_size = struct.calcsize('H')
+        len, = struct.unpack_from('H', self.buffer[self.offset:self.offset+len_size])
+        self.offset += len_size
+        blob, = struct.unpack('%ds' % len, self.buffer[self.offset:self.offset+len])
+        self.offset += len
+        return blob
 
     def unpack_str(self):
-        len, = struct.unpack_from('H', self.buffer, offset=self.offset)
-        self.offset += struct.calcsize('H')
-        string = ''.join(struct.unpack_from('c' * len, self.buffer, offset=self.offset))
-        self.offset += len
-        return string
+        return self.unpack_blob().decode()
 
     def unpack(self, format):
-        values = struct.unpack_from(format, self.buffer, offset=self.offset)
-        self.offset += struct.calcsize(format)
-        return values
+        values = []
+        start_offset = self.offset
+
+        for fmt in split_format(format):
+            delta = self.offset - start_offset
+            padding = align_up(delta, get_alignment_of(fmt)) - delta
+            self.offset += padding
+
+            if fmt == '*':
+                values.append(self.unpack_blob())
+            else:
+                size = struct.calcsize(fmt)
+                val, = struct.unpack_from(fmt, self.buffer[self.offset:self.offset+size])
+                self.offset += size
+                values.append(val)
+
+        return tuple(values)
 
     def __nonzero__(self):
         return self.offset < len(self.buffer)
 
+    # Python3
+    def __bool__(self):
+        return self.__nonzero__()
+
 class WritingPacker:
     def __init__(self, writer):
         self.writer = writer
+        self.offset = 0
 
     def pack(self, format, *data):
-        self.writer(struct.pack(format, *data))
+        args = iter(data)
+        start_offset = self.offset
+        for fmt in split_format(format):
+            arg = next(args)
+
+            alignment = get_alignment_of(fmt)
+            delta = self.offset - start_offset
+            padding = align_up(delta, alignment) - delta
+            if padding:
+                self.writer(b'\0' * padding)
+                self.offset += padding
+
+            if fmt == '*':
+                self.pack_blob(arg)
+            else:
+                self.writer(struct.pack(fmt, arg))
+                self.offset += struct.calcsize(fmt)
+
+    def pack_blob(self, arg):
+        count = len(arg)
+        self.writer(struct.pack('H', count))
+        try:
+            self.writer(struct.pack('%ds' % count, arg))
+        except:
+            print(type(arg))
+            print(arg)
+            raise
+        self.offset += 2 + count
 
     def pack_str(self, *args):
         for arg in args:
             if not type(arg) == str:
                 raise Exception('Should be string but is %s' % type(arg))
-
-            count = len(arg)
-            self.writer(struct.pack('H', count))
-            self.writer(struct.pack('c' * count, *(map(str.encode, arg))))
+            self.pack_blob(arg.encode())
 
 def read(buffer_view):
     unpacker = SlidingUnpacker(buffer_view)

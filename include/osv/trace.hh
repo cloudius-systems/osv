@@ -9,6 +9,7 @@
 #define TRACE_HH_
 
 #include <iostream>
+#include <iterator>
 #include <tuple>
 #include <boost/format.hpp>
 #include <osv/types.h>
@@ -27,6 +28,11 @@ void enable_trace();
 void enable_tracepoint(std::string wildcard);
 
 class tracepoint_base;
+
+struct blob_tag {};
+
+template<typename T>
+using is_blob = std::is_base_of<blob_tag, T>;
 
 struct trace_record {
     tracepoint_base* tp;
@@ -75,7 +81,7 @@ boost::format format_tuple(const char* fmt, std::tuple<args...> as)
     return format_tuple(format, as);
 }
 
-template <typename T>
+template <typename T, typename = void>
 struct signature_char;
 
 template <>
@@ -148,6 +154,11 @@ struct signature_char<const char*> {
     static const char sig = 'p';  // "pascal string"
 };
 
+template <typename T>
+struct signature_char<T, typename std::enable_if<is_blob<T>::value>::type> {
+    static const char sig = '*';
+};
+
 template <typename... args>
 struct signature_helper;
 
@@ -162,11 +173,36 @@ struct signature_helper<arg0, args...> {
                     | (signature_helper<args...>::sig << 8);
 };
 
+template <typename, typename = void>
+struct object_serializer;
+
 template <typename arg>
-struct object_serializer {
+struct object_serializer<arg, typename std::enable_if<!is_blob<arg>::value>::type> {
     void serialize(arg val, void* buffer) { *static_cast<arg*>(buffer) = val; }
-    size_t size() { return sizeof(arg); }
+    size_t size(arg val) { return sizeof(arg); }
     size_t alignment() { return std::min(sizeof(arg), sizeof(long)); } // FIXME: want to use alignof here
+};
+
+template <typename T>
+struct object_serializer<T, typename std::enable_if<is_blob<T>::value>::type> {
+    using len_t = u16;
+    typedef typename std::iterator_traits<typename T::iterator>::value_type value_type;
+    static_assert(sizeof(value_type) == 1, "value must be one byte long");
+
+    [[gnu::always_inline]]
+    void serialize(T range, void* _buffer) {
+        auto data_buf = reinterpret_cast<value_type*>(_buffer + sizeof(len_t));
+        size_t count = 0;
+        for (auto& item : range) {
+            *data_buf++ = item;
+            count++;
+        }
+        assert(count <= std::numeric_limits<len_t>::max());
+        *static_cast<len_t*>(_buffer) = count;
+    }
+
+    size_t size(T range) { return std::distance(std::begin(range), std::end(range)) + sizeof(len_t); }
+    size_t alignment() { return sizeof(len_t); }
 };
 
 template <>
@@ -174,6 +210,7 @@ struct object_serializer<const char*> {
     static constexpr size_t max_len = 50;
     [[gnu::always_inline]]
     void serialize(const char* val, void* _buffer) {
+
         if (!val) {
             val = "<null>";
         }
@@ -197,7 +234,7 @@ struct object_serializer<const char*> {
         return ret;
     }
 
-    size_t size() { return max_len; }
+    size_t size(const char* arg) { return max_len; }
     size_t alignment() { return 1; }
 };
 
@@ -208,14 +245,15 @@ struct serializer {
         auto arg = std::get<idx>(as);
         object_serializer<decltype(arg)> s;
         offset = align_up(offset, s.alignment());
-        s.serialize(arg, buffer + offset);
-        return serializer<idx + 1, N, args...>::write(buffer, offset + s.size(), as);
+        s.serialize(arg, (u8*)buffer + offset);
+        return serializer<idx + 1, N, args...>::write(buffer, offset + s.size(arg), as);
     }
-    static size_t size(size_t offset) {
+    static size_t size(size_t offset, const std::tuple<args...>& as) {
+        auto arg = std::get<idx>(as);
         typedef typename std::tuple_element<idx, std::tuple<args...>>::type argtype;
         object_serializer<argtype> s;
         offset = align_up(offset, s.alignment());
-        return serializer<idx + 1, N, args...>::size(offset + s.size());
+        return serializer<idx + 1, N, args...>::size(offset + s.size(arg), as);
     }
 };
 
@@ -223,7 +261,7 @@ template <size_t N, typename... args>
 struct serializer<N, N, args...> {
     static void write(void* buffer, size_t offset, std::tuple<args...> as) {
     }
-    static size_t size(size_t offset) {
+    static size_t size(size_t offset, const std::tuple<args...>& as) {
         return offset;
     }
 };
@@ -327,7 +365,7 @@ public:
         if (!logging) {
             return;
         }
-        auto tr = allocate_trace_record(size());
+        auto tr = allocate_trace_record(size(as));
         tr->thread = sched::thread::current();
         tr->thread_name = tr->thread->name_raw();
         tr->time = 0;
@@ -346,8 +384,8 @@ public:
     void serialize(void* buffer, std::tuple<s_args...> as) {
         serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
     }
-    size_t size() {
-        return base_size() + serializer<0, sizeof...(s_args), s_args...>::size(0);
+    size_t size(const std::tuple<s_args...>& as) {
+        return base_size() + serializer<0, sizeof...(s_args), s_args...>::size(0, as);
     }
     // Python struct style signature H=u16, I=u32, Q=u64 etc, packed into a
     // u64, lsb=first parameter

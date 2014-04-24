@@ -44,8 +44,9 @@ int main(int ac, char** av)
         u32 a0;
         s64 a1;
     } tmp = {};
-    trace_1.serialize(&tmp, std::make_tuple(u32(10), s64(20)));
-    auto size = trace_1.size();
+    auto args = std::make_tuple(u32(10), s64(20));
+    trace_1.serialize(&tmp, args);
+    auto size = trace_1.size(args);
     assert(size == 16 && tmp.a0 == 10 && tmp.a1 == 20);
     trace_2(obj);
     trace_string("foo", 6, "bar");
