@@ -1067,6 +1067,20 @@ void vcleanup(void* addr, size_t size)
     }
 }
 
+error advise(void* addr, size_t size, int advice)
+{
+    WITH_LOCK(vma_list_mutex) {
+        if (!ismapped(addr, size)) {
+            return make_error(ENOMEM);
+        }
+        if (advice == advise_dontneed) {
+            vdepopulate(addr, size);
+            return no_error();
+        }
+        return make_error(EINVAL);
+    }
+}
+
 template<account_opt Account = account_opt::no>
 ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
 {

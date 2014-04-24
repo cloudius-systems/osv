@@ -46,6 +46,10 @@ enum {
     mmap_jvm_balloon = 1ul << 6,
 };
 
+enum {
+    advise_dontneed = 1ul << 0,
+};
+
 class mmupage {
     void* _page;
     bool _cow;

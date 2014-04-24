@@ -62,6 +62,14 @@ unsigned libc_prot_to_perm(int prot)
     return perm;
 }
 
+unsigned libc_madvise_to_advise(int advice)
+{
+    if (advice == MADV_DONTNEED) {
+        return mmu::advise_dontneed;
+    }
+    return 0;
+}
+
 int mprotect(void *addr, size_t len, int prot)
 {
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
@@ -195,4 +203,10 @@ int mincore(void *addr, size_t length, unsigned char *vec)
     }
 
     return mmu::mincore(addr, length, vec).to_libc();
+}
+
+int madvise(void *addr, size_t length, int advice)
+{
+    auto err = mmu::advise(addr, length, libc_madvise_to_advise(advice));
+    return err.to_libc();
 }

@@ -221,6 +221,8 @@ void vpopulate(void* addr, size_t size);
 void vdepopulate(void* addr, size_t size);
 void vcleanup(void* addr, size_t size);
 
+error  advise(void* addr, size_t size, int advice);
+
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
