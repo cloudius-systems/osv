@@ -10,6 +10,8 @@
 
 #include <boost/format.hpp>
 
+namespace console {
+
 class Console {
 public:
     virtual ~Console() {}
@@ -17,8 +19,6 @@ public:
     virtual bool input_ready() = 0;
     virtual char readch() = 0;
 };
-
-namespace console {
 
 void write(const char *msg, size_t len);
 void write_ll(const char *msg, size_t len);

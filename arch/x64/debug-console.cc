@@ -8,6 +8,8 @@
 #include <drivers/debug-console.hh>
 #include "processor.hh"
 
+namespace console {
+
 // Write to the serial port if the console is not yet initialized.  Because we
 // are just dumping output, no initialization is necessary.  We take advantage
 // of the fact that we are running on virtual hardware that probably does not
@@ -62,4 +64,6 @@ bool debug_console::input_ready()
     WITH_LOCK(_lock) {
         return _impl && _impl->input_ready();
     }
+}
+
 }

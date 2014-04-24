@@ -15,6 +15,8 @@
 // Wrap a Console with a spinlock, used for debugging
 // (we can't use a mutex, since we might want to debug the scheduler)
 
+namespace console {
+
 class debug_console : public Console {
 public:
     void set_impl(Console* impl);
@@ -28,5 +30,6 @@ private:
     spinlock _lock;
 };
 
+}
 
 #endif /* DEBUG_CONSOLE_HH_ */

@@ -14,6 +14,8 @@
 #include <osv/interrupt.hh>
 #include <termios.h>
 
+namespace console {
+
 class IsaSerialConsole : public Console {
 public:
     explicit IsaSerialConsole(sched::thread* consumer, const termios *tio);
@@ -61,5 +63,7 @@ private:
     void reset();
     void writeByte(const char letter);
 };
+
+}
 
 #endif

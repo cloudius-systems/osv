@@ -15,6 +15,8 @@
 #include "libtsm/libtsm.hh"
 #include <queue>
 
+namespace console {
+
 class VGAConsole : public Console {
 public:
     explicit VGAConsole(sched::thread* consumer, const termios *tio);
@@ -50,5 +52,7 @@ private:
     unsigned _offset;
     bool _offset_dirty;
 };
+
+}
 
 #endif

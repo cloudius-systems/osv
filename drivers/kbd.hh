@@ -10,7 +10,6 @@
 
 #include "console.hh"
 #include <osv/interrupt.hh>
-#include <termios.h>
 
 enum modifiers {
     MOD_SHIFT = 1<<0,

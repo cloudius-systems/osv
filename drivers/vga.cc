@@ -8,6 +8,8 @@
 #include "vga.hh"
 #include <osv/mmu.hh>
 
+namespace console {
+
 volatile unsigned short * const VGAConsole::_buffer
 = reinterpret_cast<volatile unsigned short *>(mmu::phys_mem + 0xb8000);
 
@@ -188,4 +190,6 @@ char VGAConsole::readch()
         if (_read_queue.empty())
             return 0;
     }
+}
+
 }
