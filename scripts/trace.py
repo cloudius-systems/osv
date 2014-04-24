@@ -94,12 +94,17 @@ def get_backtrace_formatter(args):
         symbol_printer(symbol_resolver(args), src_addr_formatter(args)))
 
 def list_trace(args):
+    def data_formatter(sample):
+        if args.tcpdump and is_net_packet_sample(sample):
+            return format_packet_sample(sample)
+        return sample.format_data(sample)
+
     backtrace_formatter = get_backtrace_formatter(args)
     time_range = get_time_range(args)
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
             if t.time in time_range:
-                print t.format(backtrace_formatter)
+                print t.format(backtrace_formatter, data_formatter=data_formatter)
 
 def add_time_slicing_options(parser):
     group = parser.add_argument_group('time slicing')
@@ -217,28 +222,54 @@ def extract(args):
 def prof_wait(args):
     show_profile(args, get_wait_profile)
 
-def pcap_dump(args, target=None):
-    if not target:
-        target = sys.stdout
 
+def needs_dpkt():
+    global dpkt
     try:
         import dpkt
     except ImportError:
         raise Exception("""Cannot import dpkt. If you don't have it installed you can get it from
              https://code.google.com/p/dpkt/downloads""")
 
+def write_sample_to_pcap(sample, pcap_writer):
+    ts = sample.time / 1e9
+    if sample.name == "net_packet_eth":
+        pcap_writer.writepkt(str(sample.data[1]), ts=ts)
+    elif sample.name == "net_packet_loopback":
+        pkt = dpkt.ethernet.Ethernet()
+        pkt.data = sample.data[0]
+        pcap_writer.writepkt(pkt, ts=ts)
+    else:
+        raise Exception('Unsupported tracepoint: ' + sample.name)
+
+def format_packet_sample(sample):
+    assert(is_net_packet_sample(sample))
+    needs_dpkt()
+    proc = subprocess.Popen(['tcpdump', '-tn', '-r', '-'], stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    pcap = dpkt.pcap.Writer(proc.stdin)
+    write_sample_to_pcap(sample, pcap)
+    pcap.close()
+    assert(proc.stdout.readline() == "reading from file -, link-type EN10MB (Ethernet)\n")
+    packet_line = proc.stdout.readline().rstrip()
+    proc.wait()
+    return packet_line
+
+def is_net_packet_sample(sample):
+    return sample.name in ["net_packet_eth", "net_packet_loopback"]
+
+def pcap_dump(args, target=None):
+    needs_dpkt()
+
+    if not target:
+        target = sys.stdout
+
     pcap_file = dpkt.pcap.Writer(target)
     try:
         with get_trace_reader(args) as reader:
             for sample in reader.get_traces():
-                ts = sample.time / 1e9
-                if sample.name == "net_packet_eth":
-                    pcap_file.writepkt(sample.data[1], ts=ts)
-                elif sample.name == "net_packet_loopback":
-                    pkt = dpkt.ethernet.Ethernet()
-                    pkt.data = sample.data[1]
-                    pcap_file.writepkt(pkt, ts=ts)
-
+                if is_net_packet_sample(sample):
+                    write_sample_to_pcap(sample, pcap_file)
     finally:
         pcap_file.close()
 
@@ -418,6 +449,7 @@ if __name__ == "__main__":
 
     cmd_list = subparsers.add_parser("list", help="list trace")
     add_trace_listing_options(cmd_list)
+    cmd_list.add_argument("--tcpdump", action="store_true")
     cmd_list.set_defaults(func=list_trace, paginate=True)
 
     cmd_list_timed = subparsers.add_parser("list-timed", help="list timed traces", description="""

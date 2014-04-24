@@ -97,20 +97,24 @@ class Trace:
     def name(self):
         return self.tp.name
 
-    def format_data(self):
-        format = self.tp.format
+    @staticmethod
+    def format_data(sample):
+        format = sample.tp.format
         format = format.replace('%p', '0x%016x')
-        data = [get_formatter(fmt)(arg) for fmt, arg in zip(split_format(self.tp.signature), self.data)]
+        data = [get_formatter(fmt)(arg) for fmt, arg in zip(split_format(sample.tp.signature), sample.data)]
         return format % tuple(data)
 
-    def format(self, bt_formatter=default_backtrace_formatter):
+    def format(self, bt_formatter=default_backtrace_formatter, data_formatter=None):
+        if not data_formatter:
+            data_formatter = self.format_data
+
         return '0x%016x %-15s %2d %19s %-20s %s%s' % (
             self.thread,
             self.thread_name,
             self.cpu,
             format_time(self.time),
             self.name,
-            self.format_data(),
+            data_formatter(self),
             bt_formatter(self.backtrace))
 
     def __str__(self):
