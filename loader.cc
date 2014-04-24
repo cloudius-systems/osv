@@ -5,10 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#ifdef __x86_64__
-#include "drivers/isa-serial.hh"
-#endif /* __x86_64__ */
-
 #include "fs/fs.hh"
 #include <bsd/net.hh>
 #include <boost/format.hpp>
@@ -38,6 +34,7 @@
 #include "drivers/vmxnet3.hh"
 #include "drivers/zfs.hh"
 #include "drivers/pvpanic.hh"
+#include "drivers/console.hh"
 #endif /* !AARCH64_PORT_STUB */
 
 #include <osv/sched.hh>
