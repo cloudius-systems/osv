@@ -4,9 +4,12 @@ import sys
 import subprocess
 import threading
 import traceback
+import socket
 
 tests = []
 _verbose_output = False
+
+osv_base = '.'
 
 class TestFailed(Exception):
     pass
@@ -24,7 +27,7 @@ class SingleCommandTest(Test):
         self.command = command
 
     def run(self):
-        run_guest_sync(self.command)
+        run_command_in_guest(self.command).join()
 
 class test(Test):
     """
@@ -72,13 +75,14 @@ def scan_errors(s):
     return False
 
 class SupervisedProcess:
-    def __init__(self, args, show_output=False):
+    def __init__(self, args, show_output=False, show_output_on_error=True):
         self.process = subprocess.Popen(args, stdout=subprocess.PIPE)
         self.cv = threading.Condition()
         self.lines = []
         self.output_collector_done = False
         self.has_errors = False
         self.show_output = show_output
+        self.show_output_on_error = show_output_on_error
 
         self.output_collector_thread = threading.Thread(target=self._output_collector)
         self.output_collector_thread.start()
@@ -89,7 +93,7 @@ class SupervisedProcess:
 
             if not self.has_errors and scan_errors(line):
                 self.has_errors = True
-                if not self.show_output:
+                if self.show_output_on_error and not self.show_output:
                     sys.stdout.write(self.output)
                     sys.stdout.flush()
                     self.show_output = True
@@ -162,21 +166,35 @@ class SupervisedProcess:
         assert not self.output_collector_thread.isAlive()
         return self.has_errors or self.process.returncode
 
+def run_command_in_guest(command, **kwargs):
+    return Guest(["-s", "-e", command], **kwargs)
 
-def run_guest(command, forward=[]):
-    osv_base = '.'
-    run_script = os.path.join(osv_base, "scripts/run.py")
-    args = ["-s", "-e", command]
+class Guest(SupervisedProcess):
+    def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True):
+        run_script = os.path.join(osv_base, "scripts/run.py")
 
-    for rule in forward:
-        args.extend(['--forward', 'tcp:%s::%s' % rule])
+        if hold_with_poweroff:
+            args.append('-H')
 
-    return SupervisedProcess([run_script] + args, show_output=_verbose_output)
+        self.monitor_socket = 'qemu-monitor'
+        args.extend(['--pass-args=-monitor unix:%s,server,nowait' % self.monitor_socket])
 
-def run_guest_sync(*args, **kwargs):
-    guest = run_guest(*args, **kwargs)
-    guest.join()
-    return guest
+        for rule in forward:
+            args.extend(['--forward', 'tcp:%s::%s' % rule])
+
+        SupervisedProcess.__init__(self, [run_script] + args,
+            show_output=_verbose_output,
+            show_output_on_error=show_output_on_error)
+
+    def send_command(self, command):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(self.monitor_socket)
+        s.send(command)
+        s.send('\n')
+        s.close()
+
+    def kill(self):
+        self.send_command('quit')
 
 def wait_for_line(guest, text):
     for line in guest.read_lines():
