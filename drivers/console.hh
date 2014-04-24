@@ -9,12 +9,14 @@
 #define DRIVERS_CONSOLE_HH
 
 #include <boost/format.hpp>
+#include "console-driver.hh"
 
 namespace console {
 
 void write(const char *msg, size_t len);
 void write_ll(const char *msg, size_t len);
-void console_init(bool use_vga);
+void console_init();
+void console_driver_add(ConsoleDriver *driver);
 int open(void);
 
 }

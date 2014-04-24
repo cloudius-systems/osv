@@ -18,7 +18,6 @@
 #include "console-multiplexer.hh"
 
 #ifdef __x86_64__
-#include "drivers/vga.hh"
 #include "drivers/isa-serial.hh"
 #endif
 
@@ -124,14 +123,13 @@ struct driver console_driver = {
     .devops	= &console_devops,
 };
 
-void console_init(bool use_vga)
+void console_driver_add(ConsoleDriver *driver)
 {
-#ifdef __x86_64__
-    if (!use_vga)
-        mux.driver_add(&early_driver);
-    else
-        mux.driver_add(new VGAConsole());
-#endif
+    mux.driver_add(driver);
+}
+
+void console_init()
+{
     device_create(&console_driver, "console", D_CHR);
     mux.start();
 }
