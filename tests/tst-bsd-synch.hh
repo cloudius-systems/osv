@@ -12,8 +12,8 @@
 #include <osv/debug.hh>
 #include "tst-hub.hh"
 
+#include <bsd/porting/netport.h>
 extern "C" {
-    #include <bsd/porting/netport.h>
     #include <bsd/porting/synch.h>
 }
 
