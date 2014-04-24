@@ -59,10 +59,8 @@ static int tsm_scroll_cb(struct tsm_screen *screen, int scroll_count, void *data
     return 0;
 }
 
-VGAConsole::VGAConsole(sched::thread* poll_thread, const termios *tio)
-    : _tio(tio)
-    , _kbd(poll_thread)
-    , _offset_dirty(false)
+VGAConsole::VGAConsole()
+    : _offset_dirty(false)
 {
     tsm_screen_new(&_tsm_screen, tsm_log_cb, this);
     tsm_screen_resize(_tsm_screen, NCOLS, NROWS);
@@ -123,12 +121,11 @@ void VGAConsole::apply_offset()
 
 void VGAConsole::write(const char *str, size_t len)
 {
-    while (len > 0) {
-        if ((*str == '\n') && (_tio->c_oflag & OPOST) && (_tio->c_oflag & ONLCR))
-            tsm_vte_input(_tsm_vte, "\r", 1);
-        tsm_vte_input(_tsm_vte, str++, 1);
-        len--;
-    }
+    tsm_vte_input(_tsm_vte, str, len);
+}
+
+void VGAConsole::flush()
+{
     tsm_screen_draw(_tsm_screen, tsm_draw_cb, tsm_cursor_cb, tsm_scroll_cb, this);
     if (_offset_dirty)
         apply_offset();
@@ -136,7 +133,7 @@ void VGAConsole::write(const char *str, size_t len)
 
 bool VGAConsole::input_ready()
 {
-    return !_read_queue.empty() || _kbd.input_ready();
+    return !_read_queue.empty() || _kbd->input_ready();
 }
 
 char VGAConsole::readch()
@@ -152,18 +149,18 @@ char VGAConsole::readch()
             return c;
         }
 
-        key = _kbd.readkey();
+        key = _kbd->readkey();
         if (!key) {
             if (_read_queue.empty())
                 return 0;
             continue;
         }
 
-        if (_kbd.shift & MOD_SHIFT)
+        if (_kbd->shift & MOD_SHIFT)
             mods |= TSM_SHIFT_MASK;
-        if (_kbd.shift & MOD_CTL)
+        if (_kbd->shift & MOD_CTL)
             mods |= TSM_CONTROL_MASK;
-        if (_kbd.shift & MOD_ALT)
+        if (_kbd->shift & MOD_ALT)
             mods |= TSM_ALT_MASK;
 
         switch (key) {
@@ -190,6 +187,11 @@ char VGAConsole::readch()
         if (_read_queue.empty())
             return 0;
     }
+}
+
+void VGAConsole::dev_start()
+{
+    _kbd = new Keyboard(_thread);
 }
 
 }

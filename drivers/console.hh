@@ -12,14 +12,6 @@
 
 namespace console {
 
-class Console {
-public:
-    virtual ~Console() {}
-    virtual void write(const char *str, size_t len) = 0;
-    virtual bool input_ready() = 0;
-    virtual char readch() = 0;
-};
-
 void write(const char *msg, size_t len);
 void write_ll(const char *msg, size_t len);
 void console_init(bool use_vga);

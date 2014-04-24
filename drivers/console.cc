@@ -8,17 +8,19 @@
 
 #include <osv/prex.h>
 #include <osv/device.h>
-#include <osv/sched.hh>
-#include <osv/spinlock.h>
+#include <osv/debug.hh>
+#include <osv/prio.hh>
 #include <queue>
 #include <deque>
 #include <vector>
 #include <sys/ioctl.h>
+#include "console.hh"
+#include "console-multiplexer.hh"
 
 #ifdef __x86_64__
-#include "isa-serial.hh"
-#include "vga.hh"
-#endif /* __x86_64__ */
+#include "drivers/vga.hh"
+#include "drivers/isa-serial.hh"
+#endif
 
 #include <termios.h>
 #include <signal.h>
@@ -26,47 +28,6 @@
 #include <fs/fs.hh>
 
 namespace console {
-
-// should eventually become a list of console device that we chose the best from
-static Console* console = nullptr;
-static spinlock early_write_lock;
-
-static void early_write(const char *str, size_t len)
-{
-    IsaSerialConsole::early_write(str, len);
-}
-
-void write(const char *msg, size_t len)
-{
-    if (len == 0)
-        return;
-
-    if (console != nullptr) {
-        console->write(msg, len);
-    } else {
-        WITH_LOCK(early_write_lock) {
-            early_write(msg, len);
-        }
-    }
-}
-
-// lockless version
-void write_ll(const char *msg, size_t len)
-{
-    if (len == 0)
-        return;
-
-    if (console != nullptr)
-        console->write(msg, len);
-    else
-        early_write(msg, len);
-}
-
-mutex console_mutex;
-// characters available to be returned on read() from the console
-std::queue<char> console_queue;
-// who to wake when characters are added to console_queue
-std::list<sched::thread*> readers;
 
 termios tio = {
     .c_iflag = ICRNL,
@@ -80,170 +41,31 @@ termios tio = {
             /*VREPRINT*/0, /*VDISCARD*/0, /*VWERASE*/0,
             /*VLNEXT*/0, /*VEOL2*/0},
 };
+#ifdef __x86_64__
+IsaSerialConsole early_driver
+    __attribute__((init_priority((int)init_prio::console)));
+ConsoleMultiplexer mux __attribute__((init_priority((int)init_prio::console)))
+    (&tio, &early_driver);
+#else
+ConsoleMultiplexer mux __attribute__((init_priority((int)init_prio::console)))
+    (&tio, nullptr);
+#endif
 
-// Console line discipline thread.
-//
-// The "line discipline" is an intermediate layer between a physical device
-// (here a serial port) and a character-device interface (here console_read())
-// implementing features such as input echo, line editing, etc. In OSv, this
-// is implemented in a thread, which is also responsible for read-ahead (input
-// characters are read, echoed and buffered even if no-one is yet reading).
-//
-// The code below implements a fixed line discipline (actually two - canonical
-// and non-canonical). We resisted the temptation to make the line discipline
-// a stand-alone pluggable object: In the early 1980s, 8th Edition Research
-// Unix experimented with pluggable line disciplines, providing improved
-// editing features such as CRT erase (backspace outputs backspace-space-
-// backspace), word erase, etc. These pluggable line-disciplines led to the
-// development of Unix "STREAMS". However, today, these concepts are all but
-// considered obsolete: In the mid 80s it was realized that these editing
-// features can better be implemented in userspace code - Contemporary shells
-// introduced sophisticated command-line editing (tcsh and ksh were both
-// announced in 1983), and the line-editing libraries appeared (GNU Readline,
-// in 1989). Posix's standardization of termios(3) also more-or-less set in
-// stone the features that Posix-compliant line discipline should support.
-//
-// We currently support only a subset of the termios(3) features, which we
-// considered most useful. More of the features can be added as needed.
-
-static inline bool isctrl(char c) {
-    return ((c<' ' && c!='\t' && c!='\n') || c=='\177');
-}
-// inputed characters not yet made available to read() in ICANON mode
-std::deque<char> line_buffer;
-
-void console_poll()
+void write(const char *msg, size_t len)
 {
-    while (true) {
-        std::lock_guard<mutex> lock(console_mutex);
-        sched::thread::wait_until(console_mutex, [&] { return console->input_ready(); });
-        char c = console->readch();
-        if (c == 0)
-            continue;
+    if (len == 0)
+        return;
 
-        if (c == '\r' && tio.c_iflag & ICRNL) {
-            c = '\n';
-        }
-        if (tio.c_lflag & ISIG) {
-            // Currently, INTR and QUIT signal OSv's only process, process 0.
-            if (c == tio.c_cc[VINTR]) {
-                kill(0, SIGINT);
-                continue;
-            } else if (c == tio.c_cc[VQUIT]) {
-                kill(0, SIGQUIT);
-                continue;
-            }
-        }
-
-        if (tio.c_lflag & ICANON) {
-            // canonical ("cooked") mode, where input is only made
-            // available to the reader after a newline (until then, the
-            // user can edit it with backspace, etc.).
-            if (c == '\n') {
-                if (tio.c_lflag && ECHO)
-                    console->write(&c, 1);
-                line_buffer.push_back('\n');
-                while (!line_buffer.empty()) {
-                    console_queue.push(line_buffer.front());
-                    line_buffer.pop_front();
-                }
-                for (auto t : readers) {
-                    t->wake();
-                }
-                continue; // already echoed
-            } else if (c == tio.c_cc[VERASE]) {
-                if (line_buffer.empty()) {
-                    continue; // do nothing, and echo nothing
-                }
-                char e = line_buffer.back();
-                line_buffer.pop_back();
-                if (tio.c_lflag && ECHO) {
-                    static const char eraser[] = {'\b',' ','\b','\b',' ','\b'};
-                    if (tio.c_lflag && ECHOE) {
-                        if (isctrl(e)) { // Erase the two characters ^X
-                            console->write(eraser, 6);
-                        } else {
-                            console->write(eraser, 3);
-                        }
-                    } else {
-                        if (isctrl(e)) {
-                            console->write(eraser+2, 2);
-                        } else {
-                            console->write(eraser, 1);
-                        }
-                    }
-                    continue; // already echoed
-                }
-            } else {
-                line_buffer.push_back(c);
-            }
-        } else {
-            // non-canonical ("cbreak") mode, where characters are made
-            // available for reading as soon as they are typed.
-            console_queue.push(c);
-            for (auto t : readers) {
-                t->wake();
-            }
-        }
-        if (tio.c_lflag & ECHO) {
-            if (isctrl(c) && (tio.c_lflag & ECHOCTL)) {
-                char out[2];
-                out[0] = '^';
-                out[1] = c^'@';
-                console->write(out, 2);
-            } else {
-                console->write(&c, 1);
-            }
-        }
-    }
+    mux.write(msg, len);
 }
 
-static int
-console_read(struct uio *uio, int ioflag)
+// lockless version
+void write_ll(const char *msg, size_t len)
 {
-    WITH_LOCK(console_mutex) {
-        readers.push_back(sched::thread::current());
-        sched::thread::wait_until(console_mutex, [] { return !console_queue.empty(); });
-        readers.remove(sched::thread::current());
-        while (uio->uio_resid && !console_queue.empty()) {
-            struct iovec *iov = uio->uio_iov;
-            auto n = std::min(console_queue.size(), iov->iov_len);
-            for (size_t i = 0; i < n; ++i) {
-                static_cast<char*>(iov->iov_base)[i] = console_queue.front();
-                console_queue.pop();
-            }
+    if (len == 0)
+        return;
 
-            uio->uio_resid -= n;
-            uio->uio_offset += n;
-            if (n == iov->iov_len) {
-                uio->uio_iov++;
-                uio->uio_iovcnt--;
-            }
-        }
-        return 0;
-    }
-}
-
-static int
-console_write(struct uio *uio, int ioflag)
-{
-    while (uio->uio_resid > 0) {
-        struct iovec *iov = uio->uio_iov;
-
-        if (iov->iov_len) {
-            WITH_LOCK(console_mutex) {
-                console::write(reinterpret_cast<const char *>(iov->iov_base),
-                               iov->iov_len);
-            }
-        }
-
-        uio->uio_iov++;
-        uio->uio_iovcnt--;
-        uio->uio_resid -= iov->iov_len;
-        uio->uio_offset += iov->iov_len;
-    }
-
-    return 0;
+    mux.write_ll(msg, len);
 }
 
 static int
@@ -261,9 +83,7 @@ console_ioctl(u_long request, void *arg)
         return 0;
     case FIONREAD:
         // used in OpenJDK's os::available (os_linux.cpp)
-        console_mutex.lock();
-        *static_cast<int*>(arg) = console_queue.size();
-        console_mutex.unlock();
+        *static_cast<int*>(arg) = mux.read_queue_size();
         return 0;
     default:
         return -ENOTTY;
@@ -273,13 +93,15 @@ console_ioctl(u_long request, void *arg)
 template <class T> static int
 op_read(T *ignore, struct uio *uio, int ioflag)
 {
-    return console_read(uio, ioflag);
+    mux.read(uio, ioflag);
+    return 0;
 }
 
 template <class T> static int
 op_write(T *ignore, struct uio *uio, int ioflag)
 {
-    return console_write(uio, ioflag);
+    mux.write(uio, ioflag);
+    return 0;
 }
 
 template <class T> static int
@@ -304,19 +126,14 @@ struct driver console_driver = {
 
 void console_init(bool use_vga)
 {
-#ifdef AARCH64_PORT_STUB
-    abort();
-#else /* !AARCH64_PORT_STUB */
-    auto console_poll_thread = new sched::thread(console_poll,
-            sched::thread::attr().name("console"));
-
-    if (use_vga)
-        console = new VGAConsole(console_poll_thread, &tio);
+#ifdef __x86_64__
+    if (!use_vga)
+        mux.driver_add(&early_driver);
     else
-        console = new IsaSerialConsole(console_poll_thread, &tio);
-    console_poll_thread->start();
+        mux.driver_add(new VGAConsole());
+#endif
     device_create(&console_driver, "console", D_CHR);
-#endif /* !AARCH64_PORT_STUB */
+    mux.start();
 }
 
 class console_file : public special_file {

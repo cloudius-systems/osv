@@ -10,20 +10,10 @@
 
 namespace console {
 
-IsaSerialConsole::IsaSerialConsole(sched::thread* poll_thread, const termios *tio)
-    : _irq(4, [=] { poll_thread->wake(); }), _tio(tio)
-{
-	reset();
-}
-
 void IsaSerialConsole::write(const char *str, size_t len)
 {
-    while (len > 0) {
-        if ((*str == '\n') && (_tio->c_oflag & OPOST) && (_tio->c_oflag & ONLCR))
-            writeByte('\r');
+    while (len-- > 0)
         writeByte(*str++);
-        len--;
-    }
 }
 
 bool IsaSerialConsole::input_ready()
@@ -80,9 +70,9 @@ void IsaSerialConsole::reset() {
     pci::outb(MCR_AUX_OUTPUT_2, ioport + MCR_ADDRESS);
 }
 
-void IsaSerialConsole::early_write(const char *str, size_t len) {
-    while (len-- > 0)
-        writeByte(*str++);
+void IsaSerialConsole::dev_start() {
+    _irq = new gsi_edge_interrupt(4, [&] { _thread->wake(); });
+    reset();
 }
 
 }

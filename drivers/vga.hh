@@ -8,19 +8,19 @@
 #ifndef DRIVERS_VGA_HH
 #define DRIVERS_VGA_HH
 
-#include "console.hh"
+#include "console-driver.hh"
 #include <osv/sched.hh>
-#include <termios.h>
 #include "kbd.hh"
 #include "libtsm/libtsm.hh"
 #include <queue>
 
 namespace console {
 
-class VGAConsole : public Console {
+class VGAConsole : public ConsoleDriver {
 public:
-    explicit VGAConsole(sched::thread* consumer, const termios *tio);
+    explicit VGAConsole();
     virtual void write(const char *str, size_t len);
+    virtual void flush();
     virtual bool input_ready();
     virtual char readch();
     void draw(const uint32_t c, const struct tsm_screen_attr *attr, unsigned int x, unsigned int y);
@@ -43,14 +43,15 @@ private:
     };
     unsigned _col = 0;
     static volatile unsigned short * const _buffer;
-    const termios *_tio;
     struct tsm_screen *_tsm_screen;
     struct tsm_vte *_tsm_vte;
-    Keyboard _kbd;
+    Keyboard *_kbd;
     std::queue<char> _read_queue;
     unsigned short _history[BUFFER_SIZE];
     unsigned _offset;
     bool _offset_dirty;
+    virtual void dev_start();
+    virtual const char *thread_name() { return "kbd-input"; }
 };
 
 }
