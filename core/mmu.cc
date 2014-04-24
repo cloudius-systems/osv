@@ -204,7 +204,6 @@ struct page_allocator {
     virtual bool map(size_t size, uintptr_t offset, hw_ptep ptep, pt_element pte, bool write) = 0;
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep ptep) = 0;
     virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) = 0;
-    virtual void finalize() = 0;
     virtual ~page_allocator() {}
 };
 
@@ -895,8 +894,6 @@ public:
     virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
         return true;
     }
-    virtual void finalize() override {
-    }
 };
 
 class initialized_anonymous_page_provider : public uninitialized_anonymous_page_provider {
@@ -931,9 +928,6 @@ public:
     map_file_page_read(file *file, f_offset foffset) :
         _file(file), foffset(foffset) {}
     virtual ~map_file_page_read() {};
-
-    void finalize() override {
-    }
 };
 
 class map_file_page_mmap : public page_allocator {
@@ -957,9 +951,6 @@ public:
     }
     virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
         return _file->put_page(addr, offset + _foffset, size, ptep);
-    }
-
-    void finalize() {
     }
 };
 
@@ -1036,7 +1027,6 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
     auto total = vma->has_flags(mmap_small) ?
         vma->operate_range(populate_small<Account>(map, vma->perm(), write, vma->map_dirty()), v, size) :
         vma->operate_range(populate<Account>(map, vma->perm(), write, vma->map_dirty()), v, size);
-    map->finalize();
 
     return total;
 }
