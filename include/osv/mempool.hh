@@ -215,6 +215,17 @@ private:
     size_t _size;
 };
 
+extern __thread unsigned emergency_alloc_level;
+
+class reclaimer_lock_type {
+public:
+    static void lock() { ++emergency_alloc_level; }
+    static void unlock() { --emergency_alloc_level; }
+};
+
+/// Hold to mark self as a memory reclaimer
+extern reclaimer_lock_type reclaimer_lock;
+
 }
 
 #endif

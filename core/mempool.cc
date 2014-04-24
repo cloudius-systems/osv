@@ -446,11 +446,13 @@ static std::atomic<size_t> current_jvm_heap_memory(0);
 // At least two (x86) huge pages worth of size;
 static size_t constexpr min_emergency_pool_size = 4 << 20;
 
-__thread bool allow_emergency_alloc = false;
+__thread unsigned emergency_alloc_level = 0;
+
+reclaimer_lock_type reclaimer_lock;
 
 extern "C" void thread_mark_emergency()
 {
-    allow_emergency_alloc = true;
+    emergency_alloc_level = 1;
 }
 
 reclaimer reclaimer_thread
@@ -534,7 +536,7 @@ void oom()
 
 void reclaimer::wait_for_minimum_memory()
 {
-    if (allow_emergency_alloc) {
+    if (emergency_alloc_level) {
         return;
     }
 
@@ -738,7 +740,7 @@ void reclaimer::_shrinker_loop(size_t target, std::function<bool ()> hard)
 void reclaimer::_do_reclaim()
 {
     ssize_t target;
-    allow_emergency_alloc = true;
+    emergency_alloc_level = 1;
 
     while (true) {
         WITH_LOCK(free_page_ranges_lock) {
