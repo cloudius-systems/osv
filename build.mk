@@ -750,6 +750,7 @@ objects += core/chart.o
 objects += core/net_channel.o
 objects += core/demangle.o
 objects += core/async.o
+objects += core/net_trace.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
