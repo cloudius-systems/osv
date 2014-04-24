@@ -1223,24 +1223,33 @@ void* malloc(size_t size, size_t alignment)
         return std_malloc(size, alignment);
     }
 
-    auto asize = align_up(size, mmu::page_size);
-    auto padded_size = pad_before + asize + pad_after;
-    if (alignment > mmu::page_size) {
-        // Our allocations are page-aligned - might need more
-        padded_size += alignment - mmu::page_size;
+    WITH_LOCK(memory::free_page_ranges_lock) {
+        memory::reclaimer_thread.wait_for_minimum_memory();
     }
-    char* v = free_area.fetch_add(padded_size, std::memory_order_relaxed);
-    // change v so that (v + pad_before) is aligned.
-    v += align_up(v + pad_before, alignment) - (v + pad_before);
-    mmu::vpopulate(v, mmu::page_size);
-    new (v) header(size);
-    v += pad_before;
-    mmu::vpopulate(v, asize);
-    memset(v + size, '$', asize - size);
-    // fill the memory with garbage, to catch use-before-init
-    uint8_t garbage = 3;
-    std::generate_n(v, size, [&] { return garbage++; });
-    return v;
+
+    // There will be multiple allocations needed to satisfy this allocation; request
+    // access to the emergency pool to avoid us holding some lock and then waiting
+    // in an internal allocation
+    WITH_LOCK(memory::reclaimer_lock) {
+        auto asize = align_up(size, mmu::page_size);
+        auto padded_size = pad_before + asize + pad_after;
+        if (alignment > mmu::page_size) {
+            // Our allocations are page-aligned - might need more
+            padded_size += alignment - mmu::page_size;
+        }
+        char* v = free_area.fetch_add(padded_size, std::memory_order_relaxed);
+        // change v so that (v + pad_before) is aligned.
+        v += align_up(v + pad_before, alignment) - (v + pad_before);
+        mmu::vpopulate(v, mmu::page_size);
+        new (v) header(size);
+        v += pad_before;
+        mmu::vpopulate(v, asize);
+        memset(v + size, '$', asize - size);
+        // fill the memory with garbage, to catch use-before-init
+        uint8_t garbage = 3;
+        std::generate_n(v, size, [&] { return garbage++; });
+        return v;
+    }
 }
 
 void free(void* v)
@@ -1248,15 +1257,17 @@ void free(void* v)
     if (v < debug_base) {
         return std_free(v);
     }
-    auto h = static_cast<header*>(v - pad_before);
-    auto size = h->size;
-    auto asize = align_up(size, mmu::page_size);
-    char* vv = reinterpret_cast<char*>(v);
-    assert(std::all_of(vv + size, vv + asize, [=](char c) { return c == '$'; }));
-    h->~header();
-    mmu::vdepopulate(h, mmu::page_size);
-    mmu::vdepopulate(v, asize);
-    mmu::vcleanup(h, pad_before + asize);
+    WITH_LOCK(memory::reclaimer_lock) {
+        auto h = static_cast<header*>(v - pad_before);
+        auto size = h->size;
+        auto asize = align_up(size, mmu::page_size);
+        char* vv = reinterpret_cast<char*>(v);
+        assert(std::all_of(vv + size, vv + asize, [=](char c) { return c == '$'; }));
+        h->~header();
+        mmu::vdepopulate(h, mmu::page_size);
+        mmu::vdepopulate(v, asize);
+        mmu::vcleanup(h, pad_before + asize);
+    }
 }
 
 void* realloc(void* v, size_t size)
