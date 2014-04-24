@@ -195,7 +195,12 @@ void memory_image::read(Elf64_Off offset, void* data, size_t size)
 
 void file::load_elf_header()
 {
-    read(0, &_ehdr, sizeof(_ehdr));
+    try {
+        read(0, &_ehdr, sizeof(_ehdr));
+    } catch(error &e) {
+        throw std::runtime_error(
+                std::string("can't read elf header: ") + strerror(e.get()));
+    }
     if (!(_ehdr.e_ident[EI_MAG0] == '\x7f'
           && _ehdr.e_ident[EI_MAG1] == 'E'
           && _ehdr.e_ident[EI_MAG2] == 'L'

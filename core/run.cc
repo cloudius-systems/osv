@@ -20,7 +20,14 @@ namespace osv {
 std::shared_ptr<elf::object> run(std::string path,
                                  int argc, char** argv, int *return_code)
 {
-    auto lib = elf::get_program()->get_library(path);
+    std::shared_ptr<elf::object> lib;
+
+    try {
+        lib = elf::get_program()->get_library(path);
+    } catch(std::exception &e) {
+        // TODO: expose more information about the failure.
+        return nullptr;
+    }
 
     if (!lib) {
         return nullptr;
