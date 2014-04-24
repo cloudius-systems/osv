@@ -213,8 +213,16 @@ def extract(args):
     else:
         elf_path = 'build/release/loader.elf'
 
-    if (os.path.isfile(elf_path)):
-       sys.exit(os.system("gdb %s -batch -ex conn -ex \"osv trace save %s\"" % (elf_path, args.tracefile)))
+    if os.path.isfile(elf_path):
+        if os.path.exists(args.tracefile):
+            os.remove(args.tracefile)
+            assert(not os.path.exists(args.tracefile))
+        proc = subprocess.Popen(['gdb', elf_path, '-batch', '-ex', 'conn', '-ex', 'osv trace save ' + args.tracefile],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        _stdout, _ = proc.communicate()
+        if proc.returncode or not os.path.exists(args.tracefile):
+            print(_stdout)
+            sys.exit(1)
     else:
         print("error: %s not found" % (elf_path))
         sys.exit(1)
