@@ -217,6 +217,41 @@ def extract(args):
 def prof_wait(args):
     show_profile(args, get_wait_profile)
 
+def pcap_dump(args, target=None):
+    if not target:
+        target = sys.stdout
+
+    try:
+        import dpkt
+    except ImportError:
+        raise Exception("""Cannot import dpkt. If you don't have it installed you can get it from
+             https://code.google.com/p/dpkt/downloads""")
+
+    pcap_file = dpkt.pcap.Writer(target)
+    try:
+        with get_trace_reader(args) as reader:
+            for sample in reader.get_traces():
+                ts = sample.time / 1e9
+                if sample.name == "net_packet_eth":
+                    pcap_file.writepkt(sample.data[1], ts=ts)
+                elif sample.name == "net_packet_loopback":
+                    pkt = dpkt.ethernet.Ethernet()
+                    pkt.data = sample.data[1]
+                    pcap_file.writepkt(pkt, ts=ts)
+
+    finally:
+        pcap_file.close()
+
+def tcpdump(args):
+    proc = subprocess.Popen(['tcpdump', '-n', '-r', '-'], stdin=subprocess.PIPE, stdout=sys.stdout,
+        stderr=subprocess.STDOUT)
+    try:
+        pcap_dump(args, target=proc.stdin)
+    except:
+        proc.kill()
+        raise
+    proc.wait()
+
 def prof_hit(args):
     if args.tracepoint:
         filter = lambda trace: trace.name == args.tracepoint
@@ -429,6 +464,14 @@ if __name__ == "__main__":
     add_symbol_resolution_options(cmd_extract)
     add_trace_source_options(cmd_extract)
     cmd_extract.set_defaults(func=extract)
+
+    cmd_pcap_dump = subparsers.add_parser("pcap-dump")
+    add_trace_source_options(cmd_pcap_dump)
+    cmd_pcap_dump.set_defaults(func=pcap_dump)
+
+    cmd_tcpdump = subparsers.add_parser("tcpdump")
+    add_trace_source_options(cmd_tcpdump)
+    cmd_tcpdump.set_defaults(func=tcpdump, paginate=True)
 
     args = parser.parse_args()
 
