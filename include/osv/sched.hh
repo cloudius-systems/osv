@@ -572,6 +572,8 @@ public:
     lockless_queue_link<thread> _wakeup_link;
     static unsigned long _s_idgen;
     static thread *find_by_id(unsigned int id);
+
+    static int numthreads();
 private:
     class reaper;
     friend class reaper;

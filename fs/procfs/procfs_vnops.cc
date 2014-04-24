@@ -17,6 +17,12 @@
 #include <map>
 #include "fs/vfs/vfs.h"
 
+#include <libgen.h>
+#include <osv/mempool.hh>
+#include <osv/printf.hh>
+
+#include <sys/resource.h>
+
 namespace procfs {
 
 using namespace std;
@@ -255,6 +261,71 @@ procfs_readdir(vnode *vp, file *fp, dirent *dir)
     return 0;
 }
 
+static std::string procfs_stats()
+{
+    int pid = 0, ppid = 0, pgrp = 0, session = 0, tty = 0, tpgid = -1,
+        flags = 0;
+    // Postpone this one. We need to hook into ZFS statistics to properly figure
+    // out which faults are maj, which are min.
+    int min_flt = 0, cmin_flt = 0, maj_flt = 0, cmaj_flt = 0;
+    unsigned long stime = 0, cutime = 0, cstime = 0;
+
+    using namespace std::chrono;
+    unsigned long utime = duration_cast<microseconds>(sched::osv_run_stats()).count();
+    char state = 'R';
+    int priority = getpriority(PRIO_PROCESS, 0);
+    int nice = priority;
+    int nlwp = sched::thread::numthreads();
+    int start_time = 0; // boot is reference, so it is 0.
+    unsigned long rss = memory::stats::total() - memory::stats::free();
+    unsigned long vsize = mmu::all_vmas_size();
+    unsigned long rss_rlim = memory::stats::total();
+    void *start_code = nullptr;
+    void *end_code = nullptr;
+    void *start_stack = nullptr;
+    void *kstk_esp = nullptr;
+    void *kstk_eip = nullptr;
+
+    // All the signal stuff is marked in the manpage as obsolete.
+    unsigned long pending = 0;
+    unsigned long blocked = 0;
+    unsigned long sigign = 0;
+    unsigned long sigcatch = 0;
+    unsigned long nextalarm = 0;
+    // Except for this. This is maintained, but we also don't deliver any signal
+    unsigned long exit_signal = 0;
+    int cpu = sched::cpu::current()->id;
+    int wchan = 0, rt_priority = 0, policy = 0; // SCHED_OTHER = 0
+    int zero = 0;
+
+    std::ostringstream os;
+    osv::fprintf(os, "%d (%s) %c "
+                     "%d %d %d %d %d "
+                     "%lu %lu %lu %lu %lu "
+                     "%lu %lu %ld %ld "
+                     "%ld %ld %ld %ld "
+                     "%lu %lu "
+                     "%lu %lu "
+                     "%p %p %p %p %p "
+                     "%lu %lx %lu %lu "
+                     "%d %d %d "
+                     "%lu %d %d %d",
+                     pid, program_invocation_short_name, state,
+                     ppid, pgrp, session, tty, tpgid,
+                     flags, min_flt, cmin_flt, maj_flt, cmaj_flt,
+                     utime, stime, cutime, cstime,
+                     priority, nice, nlwp, nextalarm,
+                     start_time, vsize,
+                     rss, rss_rlim,
+                     start_code, end_code, start_stack, kstk_esp, kstk_eip,
+                     pending, blocked, sigign, sigcatch,
+                     wchan, zero, zero,
+                     exit_signal, cpu, rt_priority, policy
+                );
+    return os.str();
+
+}
+
 static int
 procfs_mount(mount* mp, char *dev, int flags, void* data)
 {
@@ -262,9 +333,11 @@ procfs_mount(mount* mp, char *dev, int flags, void* data)
 
     auto self = make_shared<proc_dir_node>(inode_count++);
     self->add("maps", inode_count++, mmu::procfs_maps);
+    self->add("stat", inode_count++, procfs_stats);
 
     auto* root = new proc_dir_node(vp->v_ino);
     root->add("self", self);
+    root->add("0", self); // our standard pid
 
     vp->v_data = static_cast<void*>(root);
 

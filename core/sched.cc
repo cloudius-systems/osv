@@ -568,6 +568,12 @@ std::chrono::nanoseconds osv_run_stats()
     return std::chrono::duration_cast<std::chrono::nanoseconds>(total_app_time);
 }
 
+int thread::numthreads()
+{
+    SCOPE_LOCK(thread_map_mutex);
+    return thread_map.size();
+}
+
 // We reserve a space in the end of the PID space, so we can reuse those
 // special purpose ids for other things. 4096 positions is arbitrary, but
 // <<should be enough for anybody>> (tm)
