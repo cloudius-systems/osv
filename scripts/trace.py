@@ -253,7 +253,7 @@ def write_sample_to_pcap(sample, pcap_writer):
 def format_packet_sample(sample):
     assert(is_net_packet_sample(sample))
     needs_dpkt()
-    proc = subprocess.Popen(['tcpdump', '-tn', '-r', '-'], stdin=subprocess.PIPE,
+    proc = subprocess.Popen(['tcpdump', '-nn', '-t', '-r', '-'], stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     pcap = dpkt.pcap.Writer(proc.stdin)
     write_sample_to_pcap(sample, pcap)
@@ -282,7 +282,7 @@ def pcap_dump(args, target=None):
         pcap_file.close()
 
 def tcpdump(args):
-    proc = subprocess.Popen(['tcpdump', '-n', '-r', '-'], stdin=subprocess.PIPE, stdout=sys.stdout,
+    proc = subprocess.Popen(['tcpdump', '-nn', '-r', '-'], stdin=subprocess.PIPE, stdout=sys.stdout,
         stderr=subprocess.STDOUT)
     try:
         pcap_dump(args, target=proc.stdin)
