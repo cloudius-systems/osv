@@ -11,5 +11,6 @@
 #include <osv/sched.hh>
 
 sched::cpu* smp_initial_find_current_cpu();
+void smp_launch();
 
 #endif /* ARCH_SMP_HH_ */

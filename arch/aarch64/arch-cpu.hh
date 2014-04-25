@@ -13,6 +13,7 @@
 #include "processor.hh"
 #include "osv/pagealloc.hh"
 #include <osv/debug.h>
+#include "exceptions.hh"
 
 namespace sched {
 
@@ -20,11 +21,8 @@ struct arch_cpu;
 struct arch_thread;
 
 struct arch_cpu {
-    arch_cpu();
-
-    unsigned int gic_id;
-
     void init_on_cpu();
+    int smp_idx;
 };
 
 struct arch_thread {
@@ -36,13 +34,13 @@ struct arch_fpu {
     void restore() { processor::fpu_state_load(&s); }
 };
 
-inline arch_cpu::arch_cpu()
-{
-}
-
 inline void arch_cpu::init_on_cpu()
 {
-    processor::halt_no_interrupts();
+    if (this->smp_idx != 0) {
+        gic::gic->init_cpu(this->smp_idx);
+    }
+
+    idt.enable_irqs();
 }
 
 }
