@@ -8,8 +8,7 @@ def is_broken_pipe_error(e):
 @test
 def tcp_close_without_reading():
     host_port = 7777
-    server = run_command_in_guest('/tests/misc-tcp-close-without-reading.so',
-        forward=[(host_port, 7777)])
+    server = run_guest('/tests/misc-tcp-close-without-reading.so', forward=[(host_port, 7777)])
 
     wait_for_line(server, 'listening...')
 
