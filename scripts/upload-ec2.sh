@@ -12,14 +12,17 @@ print_help() {
  cat <<HLPEND
 
 This script is intended to upload prebuilt OSv images to Amazon EC2 service.
-The script expects a list of images on standard input
+The script expects a list of images on standard input and supported instance size
+directives on input.
 
 Input format:
 
 <version/name>
 <QCOW image URL>
+<instance types to support (small|large)>
 <version/name>
 <QCOW image URL>
+<instance types to support (small|large)>
 ...
 
 The script uses release-ec2.sh internally, see its help screen for configuration
@@ -40,6 +43,7 @@ upload_image() {
 
  local IMAGE_NAME=$1
  local IMAGE_URL=$2
+ local SUPPORTED_INSTANCE_TYPES=$3
  echo_progress Uploading image $IMAGE_NAME from $IMAGE_URL
 
  rm -rf $working_dir
@@ -56,12 +60,22 @@ upload_image() {
  local file_name=`ls`
  qemu-img convert -f qcow2 -O raw $file_name ${file_name}.raw
 
+ echo_progress Reading supported instance sizes
+
+ if test x"$SUPPORTED_INSTANCE_TYPES" = x"small"; then
+   EXTRA_PARAMETERS="--small-instances"
+   echo AMI will support all instance types including small and micro
+ else
+   echo AMI will support large instance types only
+ fi
+
  echo_progress Running the release script
 
  cd $last_cwd
  `dirname $0`/release-ec2.sh --override-version $name \
                              --override-regions \"$upload_regions\" \
-                             --override-image $working_dir/${file_name}.raw
+                             --override-image $working_dir/${file_name}.raw \
+                             $EXTRA_PARAMETERS
 
  echo_progress Cleaning up
 
@@ -78,7 +92,8 @@ esac
 
 while read name; do
     read url
-    upload_image $name $url
+    read instance_size
+    upload_image $name $url $instance_size
 done
 
 echo_progress Done!

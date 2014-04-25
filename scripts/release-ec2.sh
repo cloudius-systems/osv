@@ -12,6 +12,7 @@ PARAM_INSTANCE="--instance-only"
 PARAM_IMAGE="--override-image"
 PARAM_VERSION="--override-version"
 PARAM_REGIONS="--override-regions"
+PARAM_SMALL="--small-instances"
 
 print_help() {
  cat <<HLPEND
@@ -54,6 +55,7 @@ This script receives following command line arguments:
     $PARAM_PRIVATE_ONLY - do not publish or replicate AMI - useful for pre-release build verification
     $PARAM_INSTANCE - do not rebuild, upload existing image and stop afer instance creation - useful for development phase
     $PARAM_REGIONS <regions list> - replicate to specified regions only
+    $PARAM_SMALL - create AMI suitable for small and micro instances
 
 HLPEND
 }
@@ -87,6 +89,10 @@ do
       REGIONS_LIST=$2
       shift 2
       ;;
+    "$PARAM_SMALL")
+      SMALL_INSTANCE=1
+      shift
+      ;;
     "$PARAM_HELP")
       print_help
       exit 0
@@ -114,8 +120,21 @@ S3_CREDENTIALS="-O $AWS_ACCESS_KEY_ID -W $AWS_SECRET_ACCESS_KEY"
 export AWS_DEFAULT_REGION=us-east-1
 OSV_INITIAL_ZONE="${AWS_DEFAULT_REGION}a"
 
-#We use OSv-v0.06 AMI in us-east-1 as a template
+if test x"$SMALL_INSTANCE" = x""; then
+
+#Use OSv-v0.06 AMI in us-east-1 as a template
+#Linux based but suitable for large instances only
 TEMPLATE_AMI_ID=ami-e7ced38e
+TEMPLATE_INSTANCE_TYPE=m3.medium
+
+else
+
+#Use OSv-v0.03 AMI in us-east-1 as a template
+#Windows based but supportes all instance types including small and micro
+TEMPLATE_AMI_ID=ami-45d2882c
+TEMPLATE_INSTANCE_TYPE=t1.micro
+
+fi
 
 amend_rstatus() {
  echo \[`timestamp`\] $* >> $OSV_RSTATUS
@@ -180,7 +199,7 @@ wait_import_completion() {
 }
 
 launch_template_instance() {
- $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone $OSV_INITIAL_ZONE --instance-type m3.medium | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
+ $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone $OSV_INITIAL_ZONE --instance-type $TEMPLATE_INSTANCE_TYPE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
 }
 
 get_instance_state() {
