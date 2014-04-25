@@ -162,7 +162,7 @@ def split_format(format_str):
             fmt = str(c)
             while c.isdigit():
                 c = next(chars)
-                fmt += c
+                fmt += str(c)
             yield fmt
 
 formatters = {
