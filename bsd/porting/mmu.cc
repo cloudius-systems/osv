@@ -11,6 +11,7 @@
 #include "mmu.h"  // Port
 #include <osv/mmio.hh>
 #include <osv/mempool.hh>
+#include <osv/pagecache.hh>
 
 void *pmap_mapdev(uint64_t paddr, size_t size)
 {
@@ -40,21 +41,12 @@ int vm_throttling_needed(void)
     return memory::throttling_needed();
 }
 
-void mmu_unmap(void *addr, size_t size)
+void mmu_unmap(void* ab)
 {
-    mmu::unmap_address(addr, addr, size);
+    pagecache::unmap_arc_buf((arc_buf_t*)ab);
 }
 
-namespace mmu {
-extern mutex vma_list_mutex;
-}
-
-bool mmu_vma_list_trylock()
+void mmu_map(void* key, void* ab, void* page)
 {
-    return mutex_trylock(&mmu::vma_list_mutex);
-}
-
-void mmu_vma_list_unlock()
-{
-    mutex_unlock(&mmu::vma_list_mutex);
+    pagecache::map_arc_buf((pagecache::hashkey*)key, (arc_buf_t*)ab, page);
 }

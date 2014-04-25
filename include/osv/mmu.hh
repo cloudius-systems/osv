@@ -144,8 +144,8 @@ public:
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 
-    virtual mmupage get_page(uintptr_t offset, size_t size, hw_ptep ptep, bool write, bool shared) override;
-    virtual void put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
+    virtual bool map_page(uintptr_t offset, size_t size, hw_ptep ptep, pt_element pte, bool write, bool shared) override;
+    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -163,13 +163,10 @@ bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
-bool unmap_address(void* buf, void *addr, size_t size);
-void add_mapping(void *buf_addr, void* addr, hw_ptep ptep);
-bool remove_mapping(void *buf_addr, void *paddr, hw_ptep ptep);
-bool lookup_mapping(void *paddr, hw_ptep ptep);
-void tlb_flush();
 void clear_pte(hw_ptep ptep);
 void clear_pte(std::pair<void* const, hw_ptep>& pair);
+pt_element pte_mark_cow(pt_element pte, bool cow);
+bool write_pte(void *addr, hw_ptep ptep, pt_element pte);
 
 phys virt_to_phys(void *virt);
 

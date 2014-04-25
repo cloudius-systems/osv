@@ -140,48 +140,41 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
-mmu::mmupage vfs_file::get_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, bool write, bool shared)
+bool vfs_file::map_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared)
 {
-    return pagecache::get(this, off, ptep, write, shared);
+    return pagecache::get(this, off, ptep, pte, write, shared);
 }
 
-void vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)
+bool vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)
 {
-    pagecache::release(this, addr, off, ptep);
+    return pagecache::release(this, addr, off, ptep);
 }
 
 // Locking: vn_lock will call into the filesystem, and that can trigger an
 // eviction that will hold the mmu-side lock that protects the mappings
 // Always follow that order. We however can't just get rid of the mmu-side lock,
 // because not all invalidations will be synchronous.
-void vfs_file::get_arcbuf(uintptr_t offset, unsigned action, void** start, size_t* len, void** page)
+void vfs_file::get_arcbuf(void* key, off_t offset)
 {
     struct vnode *vp = f_dentry->d_vnode;
 
-    iovec io;
-    io.iov_base = nullptr;
-    io.iov_len = 0;
+    iovec io[1];
 
+    io[0].iov_base = key;
     uio data;
-    data.uio_iov = &io;
+    data.uio_iov = io;
     data.uio_iovcnt = 1;
-    data.uio_offset = off_t(offset);
+    data.uio_offset = offset;
     data.uio_resid = mmu::page_size;
     data.uio_rw = UIO_READ;
 
     vn_lock(vp);
-    assert(VOP_CACHE(vp, this, &data, action) == 0);
+    assert(VOP_CACHE(vp, this, &data) == 0);
     vn_unlock(vp);
-    *start = io.iov_base;
-    *len = io.iov_len;
-    *page = static_cast<char*>(io.iov_base) + data.uio_offset;
 }
 
 std::unique_ptr<mmu::file_vma> vfs_file::mmap(addr_range range, unsigned flags, unsigned perm, off_t offset)
 {
-	// FIXME: temporarily disabled due to Issue #261
-	return mmu::default_file_mmap(this, range, flags, perm, offset);
-
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	if (!vp->v_op->vop_cache || (vp->v_size < (off_t)mmu::page_size)) {

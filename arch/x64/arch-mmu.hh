@@ -11,6 +11,7 @@
 #include <osv/ilog2.hh>
 #include <osv/types.h>
 #include <osv/mmu-defs.hh>
+#include <api/assert.h>
 
 namespace mmu {
 
@@ -32,6 +33,11 @@ inline bool pt_element::executable() const { return !(x >> 63); } /* NX */
 inline bool pt_element::dirty() const { return x & 0x40; }
 inline bool pt_element::large() const { return x & 0x80; }
 
+inline bool pt_element::sw_bit(unsigned off) const {
+    assert(off < 10);
+    return (x >> (53 + off)) & 1;
+}
+
 inline phys pt_element::addr(bool large) const {
     auto v = x & ((u64(1) << (64-page_size_shift)) - 1);
     v &= ~u64(0xfff);
@@ -51,6 +57,11 @@ inline void pt_element::set_writable(bool v) { set_bit(1, v); }
 inline void pt_element::set_executable(bool v) { set_bit(63, !v); } /* NX */
 inline void pt_element::set_dirty(bool v) { set_bit(6, v); }
 inline void pt_element::set_large(bool v) { set_bit(7, v); }
+
+inline void pt_element::set_sw_bit(unsigned off, bool v) {
+    assert(off < 10);
+    set_bit(53 + off, v);
+}
 
 inline void pt_element::set_addr(phys addr, bool large) {
     auto mask = 0x8000000000000fff | (u64(large) << page_size_shift);

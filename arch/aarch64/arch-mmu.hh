@@ -55,6 +55,11 @@ inline bool pt_element::executable() const { return !(x & (1ul << 53)); } // Pri
 inline bool pt_element::dirty() const { return x & (1ul << 55); } // Software Use[0]
 inline bool pt_element::large() const { return (x & 0x3) == 0x1; }
 
+inline bool pt_element::sw_bit(unsigned off) const {
+    assert(off < 3);
+    return (x >> (56 + off)) & 1;
+}
+
 inline phys pt_element::addr(bool large) const {
     u64 v = x & ((1ul << max_phys_addr_size) - 1);
     if (large)
@@ -73,6 +78,11 @@ inline void pt_element::set_writable(bool v) { set_bit(7, !v); } // AP[2]
 inline void pt_element::set_executable(bool v) { set_bit(53, !v); } // Priv. Execute Never
 inline void pt_element::set_dirty(bool v) { set_bit(55, v); }
 inline void pt_element::set_large(bool v) { set_bit(1, !v); }
+
+inline void pt_element::set_sw_bit(unsigned off, bool v) {
+    assert(off < 3);
+    set_bit(56 + off, v);
+}
 
 inline void pt_element::set_addr(phys addr, bool large) {
     u64 mask = large ? 0xffff0000001ffffful : 0xffff000000000ffful;

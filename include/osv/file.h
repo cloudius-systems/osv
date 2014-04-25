@@ -98,8 +98,8 @@ struct file {
 	virtual std::unique_ptr<mmu::file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) {
 	    throw make_error(ENODEV);
 	}
-	virtual mmu::mmupage get_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep, bool write, bool shared) { throw make_error(ENOSYS); }
-	virtual void put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep) { throw make_error(ENOSYS); }
+	virtual bool map_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared) { throw make_error(ENOSYS); }
+	virtual bool put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep) { throw make_error(ENOSYS); }
 
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
