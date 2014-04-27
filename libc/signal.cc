@@ -268,83 +268,203 @@ int kill(pid_t pid, int sig)
 // alarm() is an archaic Unix API and didn't age well. It should should never
 // be used in new programs.
 
-static mutex alarm_mutex;
-static condvar alarm_cond;
-static sched::thread *alarm_thread = nullptr;
-static sched::thread *owner_thread = nullptr;
-static constexpr osv::clock::uptime::time_point no_alarm {};
-static osv::clock::uptime::time_point alarm_due = no_alarm;
+class itimer {
+public:
+    explicit itimer(int signum, const char *name);
+    void cancel_this_thread();
+    int set(const struct itimerval *new_value,
+        struct itimerval *old_value);
+    int get(struct itimerval *curr_value);
 
-void alarm_thread_func()
+private:
+    void work();
+
+    // Fllowing functions doesn't take mutex, caller has responsibility
+    // to take it
+    void cancel();
+    void set_interval(const struct timeval *tv);
+    void set_value(const struct timeval *tv);
+    void get_interval(struct timeval *tv);
+    void get_value(struct timeval *tv);
+
+    mutex _mutex;
+    condvar _cond;
+    sched::thread *_alarm_thread;
+    sched::thread *_owner_thread = nullptr;
+    const osv::clock::uptime::time_point _no_alarm {};
+    osv::clock::uptime::time_point _due = _no_alarm;
+    std::chrono::nanoseconds _interval;
+    int _signum;
+    bool _started = false;
+};
+
+static itimer itimer_real(SIGALRM, "itimer-real");
+static itimer itimer_virt(SIGVTALRM, "itimer-virt");
+
+itimer::itimer(int signum, const char *name)
+    : _alarm_thread(new sched::thread([&] { work(); },
+                    sched::thread::attr().name(name)))
+    , _signum(signum)
+{
+}
+
+void itimer::cancel_this_thread()
+{
+    if(_owner_thread == sched::thread::current()) {
+        WITH_LOCK(_mutex) {
+            if(_owner_thread == sched::thread::current()) {
+                cancel();
+            }
+        }
+    }
+}
+
+int itimer::set(const struct itimerval *new_value,
+    struct itimerval *old_value)
+{
+    if (!new_value)
+        return EINVAL;
+
+    WITH_LOCK(_mutex) {
+        if (old_value) {
+            get_interval(&old_value->it_value);
+            get_value(&old_value->it_value);
+        }
+        cancel();
+        if (new_value->it_value.tv_sec || new_value->it_value.tv_usec) {
+            set_interval(&new_value->it_interval);
+            set_value(&new_value->it_value);
+        }
+     }
+    return 0;
+}
+
+int itimer::get(struct itimerval *curr_value)
+{
+    WITH_LOCK(_mutex) {
+        get_interval(&curr_value->it_value);
+        get_value(&curr_value->it_value);
+    }
+    return 0;
+}
+ 
+void itimer::work()
 {
     sched::timer tmr(*sched::thread::current());
     while (true) {
-        WITH_LOCK(alarm_mutex) {
-            if (alarm_due != no_alarm) {
-                tmr.set(alarm_due);
-                alarm_cond.wait(alarm_mutex, &tmr);
+        WITH_LOCK(_mutex) {
+            if (_due != _no_alarm) {
+                tmr.set(_due);
+                _cond.wait(_mutex, &tmr);
                 if (tmr.expired()) {
-                    alarm_due = no_alarm;
-                    kill(0, SIGALRM);
-                    if(!is_sig_ign(signal_actions[SIGALRM])) {
-                        owner_thread->interrupted(true);
+                    if (_interval != decltype(_interval)::zero()) {
+                        auto now = osv::clock::uptime::now();
+                        _due = now + _interval;
+                    } else {
+                        _due = _no_alarm;
+                    }
+                    kill(0, _signum);
+                    if(!is_sig_ign(signal_actions[_signum])) {
+                        _owner_thread->interrupted(true);
                     }
                 } else {
                     tmr.cancel();
                 }
             } else {
-                alarm_cond.wait(alarm_mutex);
+                _cond.wait(_mutex);
             }
         }
     }
 }
 
-static void cancel_alarm_ll()
+void itimer::cancel()
 {
-    alarm_due = no_alarm;
-    owner_thread = nullptr;
-    alarm_cond.wake_one();
+    _due = _no_alarm;
+    _interval = decltype(_interval)::zero();
+    _owner_thread = nullptr;
+    _cond.wake_one();
 }
 
-static void set_alarm_ll(decltype(alarm_due) new_alarm_due)
+void itimer::set_value(const struct timeval *tv)
 {
-    alarm_due = new_alarm_due;
-    owner_thread = sched::thread::current();
-    alarm_cond.wake_one();
+    auto now = osv::clock::uptime::now();
+
+    if (!_started) {
+        _alarm_thread->start();
+        _started = true;
+    }
+    _due = now + tv->tv_sec * 1_s + tv->tv_usec * 1_us;
+    _owner_thread = sched::thread::current();
+    _cond.wake_one();
+}
+
+void itimer::set_interval(const struct timeval *tv)
+{
+    _interval = tv->tv_sec * 1_s + tv->tv_usec * 1_us;
+}
+
+void itimer::get_value(struct timeval *tv)
+{
+    if (_due == _no_alarm) {
+        tv->tv_sec = tv->tv_usec = 0;
+    } else {
+        auto now = osv::clock::uptime::now();
+        fill_tv(_due - now, tv);
+    }
+}
+
+void itimer::get_interval(struct timeval *tv)
+{
+    fill_tv(_interval, tv);
 }
 
 void cancel_this_thread_alarm()
 {
-    if(owner_thread == sched::thread::current()) {
-        WITH_LOCK(alarm_mutex) {
-            if(owner_thread == sched::thread::current()) {
-                cancel_alarm_ll();
-            }
-        }
-    }
+    itimer_real.cancel_this_thread();
+    itimer_virt.cancel_this_thread();
 }
 
 unsigned int alarm(unsigned int seconds)
 {
-    unsigned int ret = 0;
-    WITH_LOCK(alarm_mutex) {
-        if (!alarm_thread) {
-            alarm_thread = new sched::thread(alarm_thread_func,
-                    sched::thread::attr().name("alarm"));
-            alarm_thread->start();
-        }
-        auto now = osv::clock::uptime::now();
-        if (alarm_due != no_alarm) {
-            ret = (alarm_due - now) / 1_s;
-        }
-        if (seconds) {
-            set_alarm_ll(now + seconds*1_s);
-        } else {
-            // alarm(0) means cancel alarm, not an alarm in 0 seconds.
-            cancel_alarm_ll();
-        }
-    }
+    unsigned int ret;
+    struct itimerval old_value{}, new_value{};
+
+    new_value.it_value.tv_sec = seconds;
+
+    setitimer(ITIMER_REAL, &new_value, &old_value);
+
+    ret = old_value.it_value.tv_sec;
+
+    if ((ret == 0 && old_value.it_value.tv_usec) ||
+        old_value.it_value.tv_usec >= 500000)
+        ret++;
+
     return ret;
+}
+
+extern "C" int setitimer(int which, const struct itimerval *new_value,
+    struct itimerval *old_value)
+{
+    switch (which) {
+    case ITIMER_REAL:
+        return itimer_real.set(new_value, old_value);
+    case ITIMER_VIRTUAL:
+        return itimer_virt.set(new_value, old_value);
+    default:
+        return EINVAL;
+    }
+}
+
+extern "C" int getitimer(int which, struct itimerval *curr_value)
+{
+    switch (which) {
+    case ITIMER_REAL:
+        return itimer_real.get(curr_value);
+    case ITIMER_VIRTUAL:
+        return itimer_virt.get(curr_value);
+    default:
+        return EINVAL;
+    }
 }
 
 int sigaltstack(const stack_t *ss, stack_t *oss)
