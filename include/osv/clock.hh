@@ -10,6 +10,7 @@
 
 #include <drivers/clock.hh>
 #include <chrono>
+#include <sys/time.h>
 
 namespace osv {
 /**
@@ -170,6 +171,18 @@ template<typename Rep, typename Period>
 inline bool operator>(std::chrono::duration<Rep, Period> d, std::nullptr_t)
 {
     return d.count() > 0;
+}
+
+// Convenient inline function for converting std::chrono::duration,
+// of a clock with any period, into the classic Posix "struct timeval":
+template <class Rep, class Period>
+static inline void fill_tv(std::chrono::duration<Rep, Period> d, timeval *tv)
+{
+    using namespace std::chrono;
+    auto sec = duration_cast<seconds>(d);
+    auto usec = duration_cast<microseconds>(d - sec);
+    tv->tv_sec = sec.count();
+    tv->tv_usec = usec.count();
 }
 
 #endif /* OSV_CLOCK_HH_ */
