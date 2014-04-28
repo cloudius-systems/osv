@@ -236,8 +236,7 @@ def needs_dpkt():
     try:
         import dpkt
     except ImportError:
-        raise Exception("""Cannot import dpkt. If you don't have it installed you can get it from
-             https://code.google.com/p/dpkt/downloads""")
+        raise Exception("""Cannot import dpkt. Please install 'python-dpkt' system package.""")
 
 def write_sample_to_pcap(sample, pcap_writer):
     ts = sample.time / 1e9
