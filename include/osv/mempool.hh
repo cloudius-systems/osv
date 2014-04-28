@@ -215,6 +215,56 @@ private:
     size_t _size;
 };
 
+struct phys_deleter {
+    void operator()(void* p) { free_phys_contiguous_aligned(p); }
+};
+
+template <typename T>
+using phys_ptr = std::unique_ptr<T, memory::phys_deleter>;
+
+template <typename T, size_t align, typename... Args>
+inline
+phys_ptr<T> make_phys_ptr(Args&&... args)
+{
+    static_assert(!std::is_array<T>::value, "use make_phys_array() to allocate arrays");
+    void* ptr = memory::alloc_phys_contiguous_aligned(sizeof(T), align);
+    // we can't put ptr into a phys_ptr<T> until it's fully constructed, otherwise
+    // if the constructor throws, we'll run the destructor
+    try {
+        new (ptr) T(std::forward<Args>(args)...);
+    } catch (...) {
+        memory::free_phys_contiguous_aligned(ptr);
+    }
+    return phys_ptr<T>(static_cast<T*>(ptr));
+}
+
+template <typename T, size_t align>
+inline
+phys_ptr<T[]> make_phys_array(size_t n)
+{
+    // we have nowhere to store n, so we can't run any destructors
+    static_assert(std::is_trivially_destructible<T>::value,
+            "make_phys_ptr<T[]> must have a trivially destructible type");
+    void* ptr = memory::alloc_phys_contiguous_aligned(sizeof(T) * n, align);
+    // we can't put ptr into a phys_ptr<T> until it's fully constructed, otherwise
+    // if the constructor throws, we'll run the destructor
+    try {
+        new (ptr) T[n];
+    } catch (...) {
+        memory::free_phys_contiguous_aligned(ptr);
+    }
+    return phys_ptr<T[]>(static_cast<T*>(ptr));
+}
+
+template <typename T>
+inline
+mmu::phys
+virt_to_phys(const phys_ptr<T>& p)
+{
+    return mmu::virt_to_phys_dynamic_phys(p.get());
+}
+
+
 extern __thread unsigned emergency_alloc_level;
 
 class reclaimer_lock_type {

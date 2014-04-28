@@ -31,6 +31,12 @@ typedef std::shared_ptr<balloon> balloon_ptr;
  */
 namespace mmu {
 
+// when we know it was dynamically allocated
+inline phys virt_to_phys_dynamic_phys(void* virt)
+{
+    return static_cast<char*>(virt) - phys_mem;
+}
+
 constexpr inline unsigned pt_index(void *virt, unsigned level)
 {
     return (reinterpret_cast<ulong>(virt) >> (page_size_shift + level * pte_per_page_shift)) & (pte_per_page - 1);
