@@ -52,6 +52,7 @@ cpuid_bit cpuid_bits[] = {
     { 1, 'c', 27, &f::xsave },
     { 1, 'c', 28, &f::avx },
     { 1, 'c', 30, &f::rdrand },
+    { 1, 'd', 19, &f::clflush },
     { 7, 'b', 0, &f::fsgsbase, 0 },
     { 7, 'b', 9, &f::repmovsb, 0 },
     { 0x80000001, 'd', 26, &f::gbpage },

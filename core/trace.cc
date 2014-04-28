@@ -206,11 +206,7 @@ void tracepoint_base::activate()
     active = true;
     for (auto& tps : tracepoint_patch_sites) {
         if (id == tps.id) {
-            auto dst = static_cast<char*>(tps.slow_path);
-            auto src = static_cast<char*>(tps.patch_site) + 5;
-            // FIXME: can fail on smp.
-            *static_cast<u8*>(tps.patch_site) = 0xe9; // jmp
-            *static_cast<u32*>(tps.patch_site + 1) = dst - src;
+            activate(id, tps.patch_site, tps.slow_path);
         }
     }
 }
@@ -220,13 +216,7 @@ void tracepoint_base::deactivate()
     active = false;
     for (auto& tps : tracepoint_patch_sites) {
         if (id == tps.id) {
-            auto p = static_cast<u8*>(tps.patch_site);
-            // FIXME: can fail on smp.
-            p[0] = 0x0f;
-            p[1] = 0x1f;
-            p[2] = 0x44;
-            p[3] = 0x00;
-            p[4] = 0x00;
+            deactivate(id, tps.patch_site, tps.slow_path);
         }
     }
 }

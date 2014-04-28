@@ -313,6 +313,8 @@ private:
     void try_enable();
     void activate();
     void deactivate();
+    void activate(const tracepoint_id &, void * site, void * slow_path);
+    void deactivate(const tracepoint_id &, void * site, void * slow_path);
     void update();
     static std::unordered_set<tracepoint_id>& known_ids();
     static bool _log_backtrace;
@@ -336,21 +338,9 @@ public:
         : tracepoint_base(_id, typeid(*this), name, format) {
         sig = signature();
     }
-    void operator()(r_args... as) {
-#ifdef __x86_64__
-        asm goto("1: .byte 0x0f, 0x1f, 0x44, 0x00, 0x00 \n\t"  // 5-byte nop
-                 ".pushsection .tracepoint_patch_sites, \"aw\", @progbits \n\t"
-                 ".quad %c[id] \n\t"
-                 ".quad %c[type] \n\t"
-                 ".quad 1b \n\t"
-                 ".quad %l[slow_path] \n\t"
-                 ".popsection"
-                 : : [type]"i"(&typeid(*this)), [id]"i"(_id) : : slow_path);
-        return;
-        slow_path:
-#endif /* __x86_64__ */
-        trace_slow_path(assign(as...));
-    }
+
+    inline void operator()(r_args... as);
+
     void trace_slow_path(std::tuple<s_args...> as) __attribute__((cold)) {
         if (active) {
             arch::irq_flag_notrace irq;
@@ -419,5 +409,7 @@ static inline const char *trace_strip_prefix(const char *name)
 #define TRACEPOINTV(name, fmt, assign) \
     tracepointv<__COUNTER__, decltype(assign), assign> name(trace_strip_prefix(#name), fmt);
 
+
+#include <arch-trace.hh>
 
 #endif /* TRACE_HH_ */

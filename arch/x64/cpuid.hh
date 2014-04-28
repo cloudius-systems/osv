@@ -22,6 +22,7 @@ struct features_type {
     bool xsave;
     bool avx;
     bool rdrand;
+    bool clflush;
     bool fsgsbase;
     bool repmovsb;
     bool gbpage;

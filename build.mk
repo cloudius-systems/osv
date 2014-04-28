@@ -687,6 +687,7 @@ drivers += java/java_api.o
 endif # x64
 
 objects := bootfs.o
+objects += arch/$(arch)/arch-trace.o
 objects += arch/$(arch)/arch-setup.o
 objects += arch/$(arch)/signal.o
 objects += arch/$(arch)/string.o
@@ -702,6 +703,7 @@ objects += arch/$(arch)/arm-clock.o
 endif
 
 ifeq ($(arch),x64)
+objects += arch/x64/arch-trace.o
 objects += arch/x64/dump.o
 objects += arch/x64/exceptions.o
 objects += arch/x64/ioapic.o
