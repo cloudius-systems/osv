@@ -277,6 +277,7 @@ tests += tests/tst-ring-spsc-wraparound.so
 tests += tests/tst-shm.so
 tests += tests/tst-align.so
 tests += tests/misc-tcp-close-without-reading.so
+tests += tests/tst-sigwait.so
 
 tests/hello/Hello.class: javabase=tests/hello
 
