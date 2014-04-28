@@ -722,6 +722,8 @@ sys_rename(char *src, char *dest)
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
 
 	dentry_move(dp1, ddp2, dname);
+	if (dp2)
+		dentry_remove(dp2);
 
  err4:
 	vn_unlock(dvp2);
