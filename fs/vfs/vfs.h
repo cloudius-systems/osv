@@ -139,6 +139,7 @@ int	 vfs_dname_copy(char *dest, const char *src, size_t size);
 int	 fs_noop(void);
 
 struct dentry *dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path);
+void dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path);
 void	dref(struct dentry *dp);
 void	drele(struct dentry *dp);
 

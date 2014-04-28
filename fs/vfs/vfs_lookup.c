@@ -107,6 +107,29 @@ dentry_lookup(struct mount *mp, char *path)
 }
 
 void
+dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
+{
+    struct dentry *old_pdp = dp->d_parent;
+    char *old_path = dp->d_path;
+
+    if (parent_dp) {
+        dref(parent_dp);
+    }
+    mutex_lock(&dentry_hash_lock);
+    LIST_REMOVE(dp, d_link);
+    dp->d_path = strdup(path);
+    dp->d_parent = parent_dp;
+    LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)], dp, d_link);
+    mutex_unlock(&dentry_hash_lock);
+
+    if (old_pdp) {
+        drele(old_pdp);
+    }
+
+    free(old_path);
+}
+
+void
 dref(struct dentry *dp)
 {
     ASSERT(dp);
