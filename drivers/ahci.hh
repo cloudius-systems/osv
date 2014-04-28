@@ -237,7 +237,6 @@ private:
 class port {
 public:
     port(u32 pnr, hba *hba);
-    ~port();
 
     void reset();
     void setup();
@@ -300,12 +299,9 @@ private:
     u32 _pnr;
     hba *_hba;
 
-    struct cmd_list *_cmd_list;
-    struct cmd_table *_cmd_table;
-    struct recv_fis *_recv_fis;
-    mmu::phys _cmd_list_pa;
-    mmu::phys _cmd_table_pa;
-    mmu::phys _recv_fis_pa;
+    memory::phys_ptr<cmd_list[]> _cmd_list = memory::make_phys_array<cmd_list, sizeof(cmd_list)*32>(32);
+    memory::phys_ptr<cmd_table[]> _cmd_table = memory::make_phys_array<cmd_table, 128>(32);
+    memory::phys_ptr<recv_fis> _recv_fis = memory::make_phys_ptr<recv_fis, sizeof(recv_fis)>();
 
     static constexpr u32 _slot_nr = 32;
     std::atomic<struct bio *> _bios[_slot_nr];
