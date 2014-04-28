@@ -596,12 +596,6 @@ void* thread::do_remote_thread_local_var(void* var)
     return tls_this + offset;
 }
 
-template <typename T>
-T& thread::remote_thread_local_var(T& var)
-{
-    return *static_cast<T*>(do_remote_thread_local_var(&var));
-}
-
 thread::thread(std::function<void ()> func, attr attr, bool main)
     : _func(func)
     , _runtime(thread::priority_default)

@@ -476,9 +476,20 @@ private:
     friend void acquire(dummy_lock&) {}
     friend void release(dummy_lock&) {}
     friend void start_early_threads();
-    template <typename T> T& remote_thread_local_var(T& var);
     void* do_remote_thread_local_var(void* var);
     thread_handle handle();
+public:
+    template <typename T>
+    T& remote_thread_local_var(T& var)
+    {
+        return *static_cast<T*>(do_remote_thread_local_var(&var));
+    }
+
+    template <typename T>
+    T* remote_thread_local_ptr(void* var)
+    {
+        return static_cast<T*>(do_remote_thread_local_var(var));
+    }
 private:
     virtual void timer_fired() override;
     struct detached_state;
