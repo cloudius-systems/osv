@@ -28,14 +28,14 @@ static std::string read_line(const fs::path& path)
 	return line;
 }
 
-static void prepare_file(const fs::path& path)
+static void prepare_file(const fs::path& path, const char *secret = SECRET)
 {
 	BOOST_REQUIRE_MESSAGE(!fs::exists(path), "File should not exist");
 
 	BOOST_TEST_MESSAGE("Writing secret to " + path.string());
 	fs::ofstream file(path);
 	BOOST_REQUIRE_MESSAGE(file, "File should be open");
-	file << SECRET;
+	file << secret;
 }
 
 static void check_file(const fs::path& path)
@@ -104,6 +104,20 @@ static void test_rename_from_open_file(const fs::path& src, const fs::path& dst)
 	BOOST_CHECK_MESSAGE(fs::remove(dst), "Sould be possible to remove new file");
 }
 
+static void test_rename_to_open_file(const fs::path& src, const fs::path& dst)
+{
+	prepare_file(src);
+	prepare_file(dst, "old");
+
+    fs::ifstream before(dst);
+
+	assert_renames(src, dst);
+
+	check_file(dst);
+	BOOST_CHECK_MESSAGE(!fs::exists(src), "Old file should not exist");
+	BOOST_CHECK_MESSAGE(fs::remove(dst), "Sould be possible to remove new file");
+}
+
 static void test_file_rename_fails(const fs::path& src, const fs::path& dst, std::vector<int> errnos)
 {
 	prepare_file(src);
@@ -121,6 +135,10 @@ BOOST_AUTO_TEST_CASE(test_renaming_in_the_same_directory)
 		dir / "file2");
 
 	test_rename_from_open_file(
+		dir / "file1",
+		dir / "file2");
+
+	test_rename_to_open_file(
 		dir / "file1",
 		dir / "file2");
 
