@@ -652,6 +652,14 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     }
 }
 
+static std::list<std::function<void (thread *)>> exit_notifiers;
+void thread::register_exit_notifier(std::function<void (thread *)> &&n)
+{
+    WITH_LOCK(thread_map_mutex) {
+        exit_notifiers.push_front(std::move(n));
+    }
+}
+
 thread::~thread()
 {
     cancel_this_thread_alarm();
@@ -662,6 +670,10 @@ thread::~thread()
     WITH_LOCK(thread_map_mutex) {
         thread_map.erase(_id);
         total_app_time_exited += _total_cpu_time;
+
+        for (auto& notifier : exit_notifiers) {
+            notifier(this);
+        }
     }
     if (_attr._stack.deleter) {
         _attr._stack.deleter(_attr._stack);
