@@ -91,6 +91,19 @@ static void test_rename(const fs::path& src, const fs::path& dst)
 	BOOST_CHECK_MESSAGE(fs::remove(dst), "Sould be possible to remove new file");
 }
 
+static void test_rename_from_open_file(const fs::path& src, const fs::path& dst)
+{
+	prepare_file(src);
+
+    fs::ifstream file(src);
+
+	assert_renames(src, dst);
+
+	check_file(dst);
+	BOOST_CHECK_MESSAGE(!fs::exists(src), "Old file should not exist");
+	BOOST_CHECK_MESSAGE(fs::remove(dst), "Sould be possible to remove new file");
+}
+
 static void test_file_rename_fails(const fs::path& src, const fs::path& dst, std::vector<int> errnos)
 {
 	prepare_file(src);
@@ -104,6 +117,10 @@ BOOST_AUTO_TEST_CASE(test_renaming_in_the_same_directory)
 	TempDir dir;
 
 	test_rename(
+		dir / "file1",
+		dir / "file2");
+
+	test_rename_from_open_file(
 		dir / "file1",
 		dir / "file2");
 
