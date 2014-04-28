@@ -43,6 +43,11 @@ int main(int argc, char **argv)
     // unlink() normal file succeeds
     expect(mknod("/tmp/tst-remove/f", 0777|S_IFREG, 0), 0);
     expect(unlink("/tmp/tst-remove/f"), 0);
+    // unlink() normal file succeeds while file is open
+    int fd = open("/tmp/tst-remove/f", O_CREAT | O_RDWR, 0777);
+    expect(unlink("/tmp/tst-remove/f"), 0);
+    expect_errno(unlink("/tmp/tst-remove/f"), ENOENT);
+    close(fd);
     // unlink() directory returns EISDIR on Linux (not EPERM as in Posix)
     expect(mkdir("/tmp/tst-remove/d", 0777), 0);
     expect_errno(unlink("/tmp/tst-remove/d"), EISDIR);
