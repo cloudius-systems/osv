@@ -27,6 +27,12 @@ namespace osv {
 __thread __attribute__((aligned(sizeof(sigset))))
     char thread_signal_mask[sizeof(sigset)];
 
+// Let's ignore rt signals. For standard signals, signal(7) says order is
+// unspecified over multiple deliveries, so we always record the last one.  It
+// also relieves us of any need for locking, since it doesn't matter if the
+// pending signal changes: returning any one is fine
+__thread int thread_pending_signal;
+
 struct sigaction signal_actions[nsignals];
 
 sigset* from_libc(sigset_t* s)
@@ -44,6 +50,11 @@ sigset* thread_signals()
     return reinterpret_cast<sigset*>(thread_signal_mask);
 }
 
+sigset* thread_signals(sched::thread *t)
+{
+    return t->remote_thread_local_ptr<sigset>(&thread_signal_mask);
+}
+
 inline bool is_sig_dfl(const struct sigaction &sa) {
     return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_DFL);
 }
@@ -52,11 +63,64 @@ inline bool is_sig_ign(const struct sigaction &sa) {
     return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_IGN);
 }
 
+typedef std::list<sched::thread *> thread_list;
+static std::array<thread_list, nsignals> waiters;
+mutex waiters_mutex;
+
+int wake_up_signal_waiters(int signo)
+{
+    SCOPE_LOCK(waiters_mutex);
+    int woken = 0;
+
+    for (auto& t: waiters[signo]) {
+        woken++;
+        t->remote_thread_local_var<int>(thread_pending_signal) = signo;
+        t->wake();
+    }
+    return woken;
+}
+
+void wait_for_signal(int signo)
+{
+    SCOPE_LOCK(waiters_mutex);
+    waiters[signo].push_front(sched::thread::current());
+}
+
+void unwait_for_signal(sched::thread *t, int signo)
+{
+    SCOPE_LOCK(waiters_mutex);
+    waiters[signo].remove(t);
+}
+
+void unwait_for_signal(int signo)
+{
+    unwait_for_signal(sched::thread::current(), signo);
+}
+
+void __attribute__((constructor)) signals_register_thread_notifier()
+{
+    sched::thread::register_exit_notifier(
+        [](sched::thread *t) {
+            sigset *set = thread_signals(t);
+            if (!set->mask.any()) { return; }
+            for (unsigned i = 0; i < nsignals; ++i) {
+                if (set->mask.test(i)) {
+                    unwait_for_signal(t, i);
+                }
+            }
+        }
+    );
+}
+
 void generate_signal(siginfo_t &siginfo, exception_frame* ef)
 {
     if (pthread_self() && thread_signals()->mask[siginfo.si_signo]) {
         // FIXME: need to find some other thread to deliver
-        // FIXME: the signal to
+        // FIXME: the signal to.
+        //
+        // There are certainly no waiters for this, because since we
+        // only deliver signals through this method directly, the thread
+        // needs to be running to generate them. So definitely not waiting.
         abort();
     }
     if (is_sig_dfl(signal_actions[siginfo.si_signo])) {
@@ -118,12 +182,28 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
     if (set) {
         switch (how) {
         case SIG_BLOCK:
+            for (unsigned i = 0; i < nsignals; ++i) {
+                if (set->mask.test(i)) {
+                    wait_for_signal(i);
+                }
+            }
             thread_signals()->mask |= set->mask;
             break;
         case SIG_UNBLOCK:
+            for (unsigned i = 0; i < nsignals; ++i) {
+                if (set->mask.test(i)) {
+                    unwait_for_signal(i);
+                }
+            }
             thread_signals()->mask &= ~set->mask;
             break;
         case SIG_SETMASK:
+            for (unsigned i = 0; i < nsignals; ++i) {
+                unwait_for_signal(i);
+                if (set->mask.test(i)) {
+                    wait_for_signal(i);
+                }
+            }
             thread_signals()->mask = set->mask;
             break;
         default:
@@ -191,6 +271,13 @@ int sigignore(int signum)
     return sigaction(signum, &act, nullptr);
 }
 
+int sigwait(const sigset_t *set, int *sig)
+{
+    sched::thread::wait_until([sig] { return *sig = thread_pending_signal; });
+    thread_pending_signal = 0;
+    return 0;
+}
+
 // Partially-Linux-compatible support for kill(2).
 // Note that this is different from our generate_signal() - the latter is only
 // suitable for delivering SIGFPE and SIGSEGV to the same thread that called
@@ -236,6 +323,22 @@ int kill(pid_t pid, int sig)
                 sig, strsignal(sig));
         osv::poweroff();
     } else if(!is_sig_ign(signal_actions[sig])) {
+        if ((pid == 0) || (pid == -1)) {
+            // That semantically means signalling everybody (or that, or the
+            // user did getpid() and got 0, all the same. So we will signal
+            // every thread that is waiting for this.
+            //
+            // The thread does not expect the signal handler to still be delivered,
+            // so if we wake up some folks (usually just the one waiter), we should
+            // not continue processing.
+            //
+            // FIXME: Maybe it could be a good idea for our getpid() to start
+            // returning 1 so we can differentiate between those cases?
+            if (wake_up_signal_waiters(sig)) {
+                return 0;
+            }
+        }
+
         // User-defined signal handler. Run it in a new thread. This isn't
         // very Unix-like behavior, but if we assume that the program doesn't
         // care which of its threads handle the signal - why not just create
