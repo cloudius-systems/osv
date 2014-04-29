@@ -41,7 +41,15 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 #include <sys/sysctl.h>
 
+#ifdef __OSV__
+
+#define log(prio, msg) do { printf(msg); } while(0)
+#define kproc_exit(v) do { kthread_exit(); } while(0)
+extern uint64_t get_cyclecount(void);
+
+#else
 #include <machine/cpu.h>
+#endif
 
 #include <dev/random/randomdev_soft.h>
 
@@ -92,12 +100,14 @@ random_harvest(const void *entropy, u_int count, u_int bits, enum esource origin
 		(*reap_func)(get_cyclecount(), entropy, count, bits, origin);
 }
 
+#ifndef __OSV__
 /* Userland-visible version of read_random */
 int
 read_random(void *buf, int count)
 {
 	return ((*read_func)(buf, count));
 }
+#endif
 
 /* If the entropy device is not loaded, make a token effort to
  * provide _some_ kind of randomness. This should only be used

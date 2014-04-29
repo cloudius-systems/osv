@@ -42,7 +42,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
 #include <sys/malloc.h>
@@ -56,7 +56,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 
 #include <machine/bus.h>
+#ifndef __OSV__
 #include <machine/cpu.h>
+#endif
 
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
@@ -69,6 +71,9 @@ __FBSDID("$FreeBSD$");
 #include <dev/random/fortuna.h>
 #endif
 
+#ifdef __OSV__
+#include <osv/debug.h>
+#endif
 
 static int randomdev_poll(int event, struct thread *td);
 static int randomdev_block(int flag);
@@ -106,12 +111,17 @@ static struct random_adaptor random_context = {
 #define RANDOM_CSPRNG_NAME	"fortuna"
 #endif
 
+#ifdef __OSV__
+struct random_adaptor *random_adaptor = &random_context;
+#else
 TUNABLE_INT("kern.random.sys.seeded", &random_context.seeded);
 
 /* List for the dynamic sysctls */
 static struct sysctl_ctx_list random_clist;
+#endif
 
 /* ARGSUSED */
+#ifndef __OSV__
 static int
 random_check_boolean(SYSCTL_HANDLER_ARGS)
 {
@@ -119,19 +129,23 @@ random_check_boolean(SYSCTL_HANDLER_ARGS)
 		*(u_int *)(oidp->oid_arg1) = 1;
 	return (sysctl_handle_int(oidp, oidp->oid_arg1, oidp->oid_arg2, req));
 }
+#endif
 
 void
 randomdev_init(void)
 {
+#ifndef __OSV__
 	struct sysctl_oid *random_sys_o, *random_sys_harvest_o;
+#endif
 
 #if defined(RANDOM_YARROW)
-	random_yarrow_init_alg(&random_clist);
+	random_yarrow_init_alg(/*&random_clist*/);
 #endif
 #if defined(RANDOM_FORTUNA)
-	random_fortuna_init_alg(&random_clist);
+	random_fortuna_init_alg(/*&random_clist*/);
 #endif
 
+#ifndef __OSV__
 	random_sys_o = SYSCTL_ADD_NODE(&random_clist,
 	    SYSCTL_STATIC_CHILDREN(_kern_random),
 	    OID_AUTO, "sys", CTLFLAG_RW, 0,
@@ -168,7 +182,7 @@ randomdev_init(void)
 	    OID_AUTO, "swi", CTLTYPE_INT | CTLFLAG_RW,
 	    &harvest.swi, 1, random_check_boolean, "I",
 	    "Harvest SWI entropy");
-
+#endif
 	random_harvestq_init(random_process_event);
 
 	/* Register the randomness harvesting routine */
@@ -195,28 +209,34 @@ randomdev_deinit(void)
 	random_fortuna_deinit_alg();
 #endif
 
+#ifndef __OSV__
 	sysctl_ctx_free(&random_clist);
+#endif
 }
 
 void
 randomdev_unblock(void)
 {
 	if (!random_context.seeded) {
+#ifndef __OSV__
 		selwakeuppri(&random_context.rsel, PUSER);
+#endif
 		wakeup(&random_context);
-                printf("random: unblocking device.\n");
+		debug("random: unblocking device.\n");
 		random_context.seeded = 1;
 	}
+#ifndef __OSV__
 	/* Do arc4random(9) a favour while we are about it. */
 	(void)atomic_cmpset_int(&arc4rand_iniseed_state, ARC4_ENTR_NONE,
 	    ARC4_ENTR_HAVE);
+#endif
 }
 
 static int
 randomdev_poll(int events, struct thread *td)
 {
 	int revents = 0;
-
+#ifndef __OSV__
 	mtx_lock(&random_reseed_mtx);
 
 	if (random_context.seeded)
@@ -225,6 +245,7 @@ randomdev_poll(int events, struct thread *td)
 		selrecord(td, &random_context.rsel);
 
 	mtx_unlock(&random_reseed_mtx);
+#endif
 	return (revents);
 }
 
@@ -240,7 +261,7 @@ randomdev_block(int flag)
 		if (flag & O_NONBLOCK)
 			error = EWOULDBLOCK;
 		else {
-			printf("random: blocking on read.\n");
+			debug("random: blocking on read.\n");
 			error = msleep(&random_context,
 			    &random_reseed_mtx,
 			    PUSER | PCATCH, "block", 0);
@@ -258,7 +279,7 @@ randomdev_flush_reseed(void)
 	/* Command a entropy queue flush and wait for it to finish */
 	random_kthread_control = 1;
 	while (random_kthread_control)
-		pause("-", hz / 10);
+		bsd_pause("-", hz / 10);
 
 #if defined(RANDOM_YARROW)
 	/* This ultimately calls randomdev_unblock() */
@@ -270,6 +291,7 @@ randomdev_flush_reseed(void)
 #endif
 }
 
+#ifndef __OSV__
 static int
 randomdev_modevent(module_t mod __unused, int type, void *unused __unused)
 {
@@ -297,3 +319,4 @@ randomdev_modevent(module_t mod __unused, int type, void *unused __unused)
 }
 
 RANDOM_ADAPTOR_MODULE(RANDOM_MODULE_NAME, randomdev_modevent, 1);
+#endif

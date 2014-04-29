@@ -37,7 +37,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/eventhandler.h>
 #include <sys/kernel.h>
 #include <sys/kthread.h>
+#ifndef __OSV__
 #include <sys/linker.h>
+#endif
 #include <sys/lock.h>
 #include <sys/malloc.h>
 #include <sys/mutex.h>
@@ -45,8 +47,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/selinfo.h>
 #include <sys/sysctl.h>
 #include <sys/unistd.h>
-
+#ifndef __OSV__
 #include <machine/cpu.h>
+#endif
 #include <machine/vmparam.h>
 
 #include <dev/random/randomdev.h>
@@ -54,9 +57,16 @@ __FBSDID("$FreeBSD$");
 #include <dev/random/random_adaptors.h>
 #include <dev/random/random_harvestq.h>
 #include <dev/random/live_entropy_sources.h>
+#ifndef __OSV__
 #include <dev/random/rwfile.h>
+#endif
 
 #define RANDOM_FIFO_MAX	1024	/* How many events to queue up */
+
+#ifdef __OSV__
+#include <stddef.h>
+#include <sys/bus.h>
+#endif
 
 /*
  * The harvest mutex protects the consistency of the entropy fifos and
@@ -88,6 +98,7 @@ static const char *entropy_files[] = {
 };
 #endif
 
+#ifndef __OSV__
 /* Deal with entropy cached externally if this is present.
  * Lots of policy may eventually arrive in this function.
  * Called after / is mounted.
@@ -147,6 +158,7 @@ random_harvestq_cache(void *arg __unused)
 #endif
 }
 EVENTHANDLER_DEFINE(mountroot, random_harvestq_cache, NULL, 0);
+#endif
 
 static void
 random_kthread(void *arg)
@@ -205,9 +217,14 @@ random_kthread(void *arg)
 		if (random_kthread_control == 1)
 			random_kthread_control = 0;
 
+#ifdef __OSV__
+		msleep(&random_kthread_control, &harvest_mtx,
+			   0, "-", hz/10);
+#else
 		/* Work done, so don't belabour the issue */
 		msleep_spin_sbt(&random_kthread_control, &harvest_mtx,
 		    "-", SBT_1S/10, 0, C_PREL(1));
+#endif
 
 	}
 	mtx_unlock_spin(&harvest_mtx);

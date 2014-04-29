@@ -39,8 +39,10 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/systm.h>
 #include <sys/unistd.h>
+#include <sys/bus.h>
 
-#include <machine/cpu.h>
+//#include <machine/cpu.h>
+extern uint64_t get_cyclecount(void);
 
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
@@ -90,6 +92,7 @@ live_entropy_source_deregister(struct random_hardware_source *rsource)
 		free(les, M_ENTROPY);
 }
 
+#ifndef __OSV__
 static int
 live_entropy_source_handler(SYSCTL_HANDLER_ARGS)
 {
@@ -119,16 +122,17 @@ live_entropy_source_handler(SYSCTL_HANDLER_ARGS)
 
 	return (error);
 }
+#endif
 
-static void
+static __unused void
 live_entropy_sources_init(void *unused)
 {
-
+#ifndef __OSV__
 	SYSCTL_PROC(_kern_random, OID_AUTO, live_entropy_sources,
 	    CTLTYPE_STRING | CTLFLAG_RD | CTLFLAG_MPSAFE,
 	    NULL, 0, live_entropy_source_handler, "",
 	    "List of Active Live Entropy Sources");
-
+#endif
 	sx_init(&les_lock, "live_entropy_sources");
 }
 
@@ -182,14 +186,16 @@ live_entropy_sources_feed(int rounds, event_proc_f entropy_processor)
 	sx_sunlock(&les_lock);
 }
 
-static void
+static __unused void
 live_entropy_sources_deinit(void *unused)
 {
 
 	sx_destroy(&les_lock);
 }
 
+#ifndef __OSV__
 SYSINIT(random_adaptors, SI_SUB_DRIVERS, SI_ORDER_FIRST,
     live_entropy_sources_init, NULL);
 SYSUNINIT(random_adaptors, SI_SUB_DRIVERS, SI_ORDER_FIRST,
     live_entropy_sources_deinit, NULL);
+#endif

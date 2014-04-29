@@ -27,9 +27,7 @@
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
-
 #include "opt_random.h"
-
 #include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/lock.h>
@@ -76,11 +74,13 @@ static struct random_state {
 	u_int which;		/* toggle - sets the current insertion pool */
 } random_state;
 
+#ifndef __OSV__
 RANDOM_CHECK_UINT(gengateinterval, 4, 64);
 RANDOM_CHECK_UINT(bins, 2, 16);
 RANDOM_CHECK_UINT(fastthresh, (BLOCKSIZE*8)/4, (BLOCKSIZE*8)); /* Bit counts */
 RANDOM_CHECK_UINT(slowthresh, (BLOCKSIZE*8)/4, (BLOCKSIZE*8)); /* Bit counts */
 RANDOM_CHECK_UINT(slowoverthresh, 1, 5);
+#endif
 
 static void generator_gate(void);
 static void reseed(u_int);
@@ -160,9 +160,10 @@ random_process_event(struct harvest *event)
 }
 
 void
-random_yarrow_init_alg(struct sysctl_ctx_list *clist)
+random_yarrow_init_alg(void)
 {
 	int i;
+#ifndef __OSV__
 	struct sysctl_oid *random_yarrow_o;
 
 	/* Yarrow parameters. Do not adjust these unless you have
@@ -207,7 +208,7 @@ random_yarrow_init_alg(struct sysctl_ctx_list *clist)
 		&random_state.slowoverthresh, 2,
 		random_check_uint_slowoverthresh, "I",
 		"Slow over-threshold reseed");
-
+#endif
 	random_state.gengateinterval = 10;
 	random_state.bins = 10;
 	random_state.pool[0].thresh = (3*(BLOCKSIZE*8))/4;

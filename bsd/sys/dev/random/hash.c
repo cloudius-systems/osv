@@ -30,6 +30,10 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 #include <sys/systm.h>
+#ifdef __OSV__
+#include <stddef.h>
+#include <sys/types.h>
+#endif
 
 #include <crypto/rijndael/rijndael-api-fst.h>
 #include <crypto/sha2/sha2.h>

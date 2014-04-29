@@ -486,6 +486,15 @@ bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
 endif
 
+ifeq ($(arch),x64)
+bsd += bsd/sys/dev/random/hash.o
+bsd += bsd/sys/dev/random/randomdev_soft.o
+bsd += bsd/sys/dev/random/yarrow.o
+bsd += bsd/sys/dev/random/random_harvestq.o
+bsd += bsd/sys/dev/random/harvest.o
+bsd += bsd/sys/dev/random/live_entropy_sources.o
+endif
+
 bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-parentheses -Wno-unused-but-set-variable
 
 solaris :=
