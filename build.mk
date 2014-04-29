@@ -265,6 +265,7 @@ tests += tests/tst-utimes.so
 tests += tests/misc-tcp.so
 tests += tests/tst-strerror_r.so
 tests += tests/misc-random.so
+tests += tests/misc-urandom.so
 tests += tests/tst-commands.so
 tests += tests/tst-threadcomplete.so
 tests += tests/tst-timerfd.so
