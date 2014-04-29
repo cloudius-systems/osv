@@ -6,8 +6,18 @@
  */
 
 #include <osv/sched.hh>
+#include <bsd/porting/netport.h>
 
 extern "C" int get_cpuid(void)
 {
     return sched::cpu::current()->id;
+}
+
+/*
+ * Return contents of in-cpu fast counter as a sort of "bogo-time"
+ * for random-harvesting purposes.
+ */
+extern "C" uint64_t get_cyclecount(void)
+{
+    return get_ticks();
 }

@@ -31,6 +31,10 @@
 
 #include <sys/cdefs.h>
 
+#ifdef __OSV__
+#include "bsd/porting/netport.h"
+#endif
+
 __BEGIN_DECLS
 
 #if 0

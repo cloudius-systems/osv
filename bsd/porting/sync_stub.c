@@ -54,6 +54,11 @@ void sx_init(struct sx *s, const char *name)
     rwlock_init(&s->_rw);
 }
 
+void sx_destroy(struct sx *s)
+{
+    rwlock_destroy(&s->_rw);
+}
+
 void sx_xlock(struct sx *s)
 {
     rw_wlock(&s->_rw);

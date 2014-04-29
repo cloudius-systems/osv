@@ -31,7 +31,9 @@
 
 #ifdef _KERNEL
 
+#ifndef __OSV__
 #include <machine/elf.h>
+#endif
 #include <sys/kobj.h>
 
 #ifdef MALLOC_DECLARE

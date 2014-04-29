@@ -36,6 +36,7 @@ void mtx_unlock(struct mtx *mp);
 void mtx_assert(struct mtx *mp, int flag);
 
 void sx_init(struct sx *m, const char *name);
+void sx_destroy(struct sx *);
 void sx_xlock(struct sx *mp);
 void sx_xunlock(struct sx *mp);
 void sx_slock(struct sx *mp);
