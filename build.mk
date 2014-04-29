@@ -377,6 +377,7 @@ loader.img: preboot.bin loader-stripped.elf
 endif # aarch64
 
 bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
+bsd/sys/crypto/rijndael/rijndael-api-fst.o: CFLAGS+=-Wno-strict-aliasing
 
 include $(src)/bsd/cddl/contrib/opensolaris/lib/libuutil/common/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/build.mk
@@ -385,6 +386,9 @@ include $(src)/bsd/cddl/contrib/opensolaris/cmd/zfs/build.mk
 
 bsd  = bsd/net.o  
 bsd += bsd/$(arch)/machine/in_cksum.o
+bsd += bsd/sys/crypto/rijndael/rijndael-alg-fst.o
+bsd += bsd/sys/crypto/rijndael/rijndael-api.o
+bsd += bsd/sys/crypto/rijndael/rijndael-api-fst.o
 bsd += bsd/sys/crypto/sha2/sha2.o
 bsd += bsd/sys/libkern/arc4random.o
 bsd += bsd/sys/libkern/random.o
