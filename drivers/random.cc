@@ -47,6 +47,11 @@
 #include <dev/random/randomdev_soft.h>
 #include <dev/random/random_adaptors.h>
 
+extern "C" {
+    void live_entropy_source_register(struct random_hardware_source *);
+    void live_entropy_source_deregister(struct random_hardware_source *);
+};
+
 namespace randomdev {
 
 struct random_device_priv {
@@ -116,10 +121,28 @@ struct driver random_device_driver = {
     sizeof(struct random_device_priv),
 };
 
+static hw_rng* s_hwrng;
+static int virtio_rng_read(void *buf, int size);
+
+struct random_hardware_source rsource = {
+    "virtio-rng",
+    RANDOM_PURE_VIRTIO,
+    &virtio_rng_read,
+};
+
+static int virtio_rng_read(void *buf, int size)
+{
+    if (s_hwrng) {
+        return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
+    }
+    return 0;
+}
+
 random_device::random_device()
 {
     struct random_device_priv *prv;
 
+    live_entropy_source_register(&rsource);
     (random_adaptor->init)();
 
     // Create random
@@ -135,13 +158,12 @@ random_device::random_device()
 
 random_device::~random_device()
 {
+    live_entropy_source_deregister(&rsource);
     (random_adaptor->deinit)();
 
     device_destroy(_random_dev);
     device_destroy(_urandom_dev);
 }
-
-static hw_rng* s_hwrng;
 
 void random_device::register_source(hw_rng* hwrng)
 {
