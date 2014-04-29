@@ -485,8 +485,7 @@ solisten_proto(struct socket *so, int backlog)
 
 	SOCK_LOCK_ASSERT(so);
 
-	if (backlog < 0 || backlog > somaxconn)
-		backlog = somaxconn;
+	backlog = somaxconn;
 	so->so_qlimit = backlog;
 	so->so_options |= SO_ACCEPTCONN;
 }
