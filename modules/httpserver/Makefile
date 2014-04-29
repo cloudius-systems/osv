@@ -46,7 +46,7 @@ $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 $(TARGET).so: $(OBJ_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET).so $^, LINK $@)
 
-autogen/%.cc: api-doc/listings/%
+autogen/%.cc: api-doc/listings/% json2code.py
 	$(call quiet,./json2code.py -f $< -ns json, GEN $@)
 
 obj/%.o: %.cc
@@ -56,6 +56,7 @@ clean:
 	$(call quiet, $(RM) $(TARGET), CLEAN)
 	$(call very-quiet, $(RM) $(TARGET).so)
 	$(call very-quiet, $(RM) -rf obj/*)
+	$(call very-quiet, $(RM) -rf autogen/*)
 
 check:
 	cd ../.. && mgmt/httpserver/tests/testhttpserver.py
