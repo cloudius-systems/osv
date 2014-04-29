@@ -382,12 +382,11 @@ libc += prng/random.o
 
 libc += arch/$(arch)/setjmp/setjmp.o
 libc += arch/$(arch)/setjmp/longjmp.o
-
-libc += signal/sigrtmax.o
-libc += signal/sigrtmin.o
-libc += signal/siglongjmp.o
-libc += signal/sigsetjmp.o
-libc += signal/block.o
+libc += arch/$(arch)/setjmp/sigrtmax.o
+libc += arch/$(arch)/setjmp/sigrtmin.o
+libc += arch/$(arch)/setjmp/siglongjmp.o
+libc += arch/$(arch)/setjmp/sigsetjmp.o
+libc += arch/$(arch)/setjmp/block.o
 
 libc += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
