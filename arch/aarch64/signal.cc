@@ -42,7 +42,7 @@ void build_signal_frame(exception_frame* ef,
     frame->state = *ef;
     frame->si = si;
     frame->sa = sa;
-    ef->pc = reinterpret_cast<ulong>(call_signal_handler_thunk);
+    ef->elr = reinterpret_cast<ulong>(call_signal_handler_thunk);
     ef->sp = reinterpret_cast<ulong>(sp);
 }
 

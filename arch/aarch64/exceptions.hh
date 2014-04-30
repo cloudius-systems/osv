@@ -22,13 +22,13 @@
 struct exception_frame {
     u64 regs[31];
     u64 sp;
-    u64 pc;
-    u64 pstate;
+    u64 elr;
+    u64 spsr;
     u32 esr;
     u32 align1;
     u64 align2; /* align to 16 */
 
-    void *get_pc(void) { return (void *)pc; }
+    void *get_pc(void) { return (void *)elr; }
     unsigned int get_error(void) { return esr; }
 };
 
