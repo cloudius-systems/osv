@@ -836,6 +836,17 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 	return (NULL );
 }
 
+static void
+syncache_remove_and_free(struct syncache_head *sch, struct syncache *sc)
+{
+	SCH_LOCK_ASSERT(sch);
+	TAILQ_REMOVE(&sch->sch_bucket, sc, sc_hash);
+	sch->sch_length--;
+	V_tcp_syncache.cache_count--;
+	SCH_UNLOCK(sch);
+	syncache_free(sc);
+}
+
 /*
  * This function gets called when we receive an ACK for a
  * socket in the LISTEN state.  We look up the connection
@@ -888,12 +899,6 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 				"(probably spoofed)\n", s, __func__);
 			goto failed;
 		}
-	} else {
-		/* Pull out the entry to unlock the bucket row. */
-		TAILQ_REMOVE(&sch->sch_bucket, sc, sc_hash);
-		sch->sch_length--;
-		V_tcp_syncache.cache_count--;
-		SCH_UNLOCK(sch);
 	}
 
 	/*
@@ -941,17 +946,19 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 
 	*lsop = syncache_socket(sc, *lsop, m);
 
-	if (*lsop == NULL )
+	if (*lsop == NULL) {
 		TCPSTAT_INC(tcps_sc_aborted);
-	else
+	} else {
 		TCPSTAT_INC(tcps_sc_completed);
-
-	/* how do we find the inp for the new socket? */
-	if (sc != &scs)
-		syncache_free(sc);
+		if (sc != &scs) {
+			syncache_remove_and_free(sch, sc);
+		}
+	}
 	return (1);
-	failed: if (sc != NULL && sc != &scs)
-		syncache_free(sc);
+failed:
+	if (sc != NULL && sc != &scs) {
+		syncache_remove_and_free(sch, sc);
+	}
 	if (s != NULL )
 		free(s);
 	*lsop = NULL;
