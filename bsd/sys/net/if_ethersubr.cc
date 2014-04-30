@@ -33,6 +33,7 @@
 #define _GNU_SOURCE 1
 
 #include <osv/debug.hh>
+#include <osv/net_trace.hh>
 #include <assert.h>
 
 #include <osv/initialize.hh>
@@ -388,6 +389,7 @@ ether_output_frame(struct ifnet *ifp, struct mbuf *m)
 	 * Queue message on interface, update output statistics if
 	 * successful, and start output if interface not yet active.
 	 */
+	log_packet_out(m, NETISR_ETHER);
 	return ((ifp->if_transmit)(ifp, m));
 }
 

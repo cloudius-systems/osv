@@ -288,7 +288,6 @@ if_simloop(struct ifnet *ifp, struct mbuf *m, int af, int hlen)
 	}
 	ifp->if_ipackets++;
 	ifp->if_ibytes += m->M_dat.MH.MH_pkthdr.len;
-	log_loopback_packet(m);
 	netisr_queue(isr, m);	/* mbuf is free'd on failure. */
 	return (0);
 }

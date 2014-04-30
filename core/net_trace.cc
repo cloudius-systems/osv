@@ -134,15 +134,21 @@ public:
 static constexpr size_t capture_limit = 128;
 using slice_t = mbuf_slice<capture_limit>;
 
-TRACEPOINT(trace_net_packet_eth, "if=%d, data=%s", int, slice_t);
-TRACEPOINT(trace_net_packet_loopback, "data=%s", slice_t);
+TRACEPOINT(trace_net_packet_in, "proto=%d, data=%s", int, slice_t);
+TRACEPOINT(trace_net_packet_out, "proto=%d, data=%s", int, slice_t);
+TRACEPOINT(trace_net_packet_handling, "proto=%d, data=%s", int, slice_t);
 
-void log_eth_packet(struct ifnet *ifp, struct mbuf* m)
+void log_packet_in(struct mbuf* m, int proto)
 {
-    trace_net_packet_eth(ifp->if_index, slice_t(m));
+    trace_net_packet_in(proto, slice_t(m));
 }
 
-void log_loopback_packet(struct mbuf* m)
+void log_packet_out(struct mbuf* m, int proto)
 {
-    trace_net_packet_loopback(slice_t(m));
+    trace_net_packet_out(proto, slice_t(m));
+}
+
+void log_packet_handling(struct mbuf* m, int proto)
+{
+    trace_net_packet_handling(proto, slice_t(m));
 }

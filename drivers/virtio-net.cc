@@ -121,8 +121,6 @@ static int if_transmit(struct ifnet* ifp, struct mbuf* m_head)
 {
     net* vnet = (net*)ifp->if_softc;
 
-    log_eth_packet(ifp, m_head);
-
     net_d("%s_start", __FUNCTION__);
 
     /* Process packets */
@@ -448,8 +446,6 @@ void net::receiver()
 
             rx_packets++;
             rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
-
-            log_eth_packet(_ifn, m_head);
 
             bool fast_path = _ifn->if_classifier.post_packet(m_head);
             if (!fast_path) {

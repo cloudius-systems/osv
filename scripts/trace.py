@@ -238,19 +238,43 @@ def needs_dpkt():
     except ImportError:
         raise Exception("""Cannot import dpkt. Please install 'python-dpkt' system package.""")
 
+class Protocol:
+    IP = 1
+    IGMP = 2
+    ROUTE = 3
+    AARP = 4
+    ATALK2 = 5
+    ATALK1 = 6
+    ARP = 7
+    IPX = 8
+    ETHER = 9
+    IPV6 = 10
+    NATM = 11
+    EPAIR = 12
+
 def write_sample_to_pcap(sample, pcap_writer):
+    assert(is_net_packet_sample(sample))
+
     ts = sample.time / 1e9
-    if sample.name == "net_packet_eth":
-        pcap_writer.writepkt(str(sample.data[1]), ts=ts)
-    elif sample.name == "net_packet_loopback":
-        pkt = dpkt.ethernet.Ethernet()
-        pkt.data = sample.data[0]
-        pcap_writer.writepkt(pkt, ts=ts)
+    proto = int(sample.data[0])
+    if proto == Protocol.ETHER:
+        pcap_writer.writepkt(sample.data[1], ts=ts)
     else:
-        raise Exception('Unsupported tracepoint: ' + sample.name)
+        eth_types = {
+            Protocol.IP: dpkt.ethernet.ETH_TYPE_IP,
+            Protocol.ROUTE: dpkt.ethernet.ETH_TYPE_REVARP,
+            Protocol.AARP: dpkt.ethernet.ETH_TYPE_ARP,
+            Protocol.ARP: dpkt.ethernet.ETH_TYPE_ARP,
+            Protocol.IPX: dpkt.ethernet.ETH_TYPE_IPX,
+            Protocol.IPV6: dpkt.ethernet.ETH_TYPE_IP6,
+        }
+
+        pkt = dpkt.ethernet.Ethernet()
+        pkt.data = sample.data[1]
+        pkt.type = eth_types[proto]
+        pcap_writer.writepkt(pkt, ts=ts)
 
 def format_packet_sample(sample):
-    assert(is_net_packet_sample(sample))
     needs_dpkt()
     proc = subprocess.Popen(['tcpdump', '-nn', '-t', '-r', '-'], stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -263,7 +287,13 @@ def format_packet_sample(sample):
     return packet_line
 
 def is_net_packet_sample(sample):
-    return sample.name in ["net_packet_eth", "net_packet_loopback"]
+    return sample.name.startswith('net_packet_');
+
+def is_input_net_packet_sample(sample):
+    return sample.name == "net_packet_in"
+
+def is_output_net_packet_sample(sample):
+    return sample.name == "net_packet_out"
 
 def pcap_dump(args, target=None):
     needs_dpkt()
@@ -275,7 +305,7 @@ def pcap_dump(args, target=None):
     try:
         with get_trace_reader(args) as reader:
             for sample in reader.get_traces():
-                if is_net_packet_sample(sample):
+                if is_input_net_packet_sample(sample) or is_output_net_packet_sample(sample):
                     write_sample_to_pcap(sample, pcap_file)
     finally:
         pcap_file.close()

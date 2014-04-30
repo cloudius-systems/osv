@@ -75,6 +75,8 @@
 #include <bsd/sys/net/netisr_internal.h>
 #include <bsd/sys/net/vnet.h>
 
+#include <osv/net_trace.hh>
+
 /*-
  * Synchronize use and modification of the registered netisr data structures;
  * acquire a read lock while modifying the set of registered protocols to
@@ -570,6 +572,7 @@ netisr_process_workstream_proto(struct netisr_workstream *nwsp, u_int proto)
 		VNET_ASSERT(m->M_dat.MH.MH_pkthdr.rcvif != NULL,
 		    ("%s:%d rcvif == NULL: m=%p", __func__, __LINE__, m));
 		CURVNET_SET(m->M_dat.MH.MH_pkthdr.rcvif->if_vnet);
+		log_packet_handling(m, proto);
 		netisr_proto[proto].np_handler(m);
 		CURVNET_RESTORE();
 	}
@@ -626,6 +629,8 @@ netisr_queue_workstream(struct netisr_workstream *nwsp, u_int proto,
 {
 
 	NWS_LOCK_ASSERT(nwsp);
+
+	log_packet_in(m, proto);
 
 	*dosignalp = 0;
 	if (npwp->nw_len < npwp->nw_qlimit) {
@@ -716,7 +721,6 @@ netisr_queue_src(u_int proto, uintptr_t source, struct mbuf *m)
 int
 netisr_queue(u_int proto, struct mbuf *m)
 {
-
 	return (netisr_queue_src(proto, 0, m));
 }
 
@@ -761,6 +765,7 @@ netisr_dispatch_src(u_int proto, uintptr_t source, struct mbuf *m)
 		npwp = &nwsp->nws_work[proto];
 		npwp->nw_dispatched++;
 		npwp->nw_handled++;
+		log_packet_in(m, proto);
 		netisr_proto[proto].np_handler(m);
 		error = 0;
 		goto out_unlock;
@@ -808,6 +813,7 @@ netisr_dispatch_src(u_int proto, uintptr_t source, struct mbuf *m)
 	 */
 	nwsp->nws_flags |= NWS_DISPATCHING;
 	NWS_UNLOCK(nwsp);
+	log_packet_in(m, proto);
 	netisr_proto[proto].np_handler(m);
 	NWS_LOCK(nwsp);
 	nwsp->nws_flags &= ~NWS_DISPATCHING;

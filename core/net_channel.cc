@@ -13,8 +13,10 @@
 #include <bsd/sys/netinet/ip.h>
 #include <bsd/sys/netinet/tcp.h>
 #include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/netisr.h>
 
 #include <osv/debug.hh>
+#include <osv/net_trace.hh>
 
 std::ostream& operator<<(std::ostream& os, in_addr ia)
 {
@@ -107,6 +109,7 @@ bool classifier::post_packet(mbuf* m)
 {
     WITH_LOCK(osv::rcu_read_lock) {
         if (auto nc = classify_ipv4_tcp(m)) {
+            log_packet_in(m, NETISR_ETHER);
             nc->push(m);
             // FIXME: find a way to batch wakes
             nc->wake();

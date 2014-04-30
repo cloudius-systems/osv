@@ -104,6 +104,7 @@
 
 #include <machine/in_cksum.h>
 #include <osv/poll.h>
+#include <osv/net_trace.hh>
 
 const int tcprexmtthresh = 3;
 
@@ -3644,11 +3645,13 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 }
 
 #include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/netisr.h>
 
 // INP_LOCK held
 static void
 tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 {
+	log_packet_handling(m, NETISR_ETHER);
 	caddr_t start = m->m_hdr.mh_data;
 	auto h = start;
 	h += ETHER_HDR_LEN;

@@ -11,7 +11,8 @@
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/net/if.h>
 
-void log_eth_packet(struct ifnet *ifp, struct mbuf *m);
-void log_loopback_packet(struct mbuf *m);
+void log_packet_in(struct mbuf *m, int proto);
+void log_packet_out(struct mbuf *m, int proto);
+void log_packet_handling(struct mbuf *m, int proto);
 
 #endif
