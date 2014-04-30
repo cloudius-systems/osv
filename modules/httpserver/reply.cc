@@ -212,9 +212,10 @@ reply reply::stock_reply(reply::status_type status,
     reply rep;
     if (content != nullptr) {
         rep.content = *content;
+    } else {
+        rep.content = stock_replies::to_string(status);
     }
     rep.status = status;
-    rep.content = stock_replies::to_string(status);
     rep.headers.resize(2);
     rep.headers[0].name = "Content-Length";
     rep.headers[0].value = std::to_string(rep.content.size());
