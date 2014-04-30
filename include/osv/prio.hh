@@ -13,6 +13,7 @@ enum class init_prio : int {
     cpus,
     fpranges,
     mempool,
+    pagecache,
     threadlist,
     pthread,
     notifiers,

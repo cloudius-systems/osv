@@ -987,6 +987,13 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size)
 	dmu_buf_t **dbp;
 	int err;
 	int numbufs = 0;
+	uint64_t noff = uio->uio_loffset;
+
+	err = dmu_offset_next(os, object, FALSE, &noff);
+
+	if ((err == ESRCH) || noff != uio->uio_loffset) {
+		return (0);
+	}
 
 	// This will acquire a reference both in the dbuf, and in the ARC buffer.
 	// The ARC buffer reference will also update the access statistics
@@ -1002,6 +1009,7 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size)
 	arc_buf_t *dbuf_abuf = dbi->db_buf;
 
 	mmu_map(uio->uio_iov->iov_base, dbuf_abuf, dbuf_abuf->b_data + (uio->uio_loffset - db->db_offset));
+	uio->uio_resid = 0;
 
 	dmu_buf_rele_array(dbp, numbufs, FTAG);
 

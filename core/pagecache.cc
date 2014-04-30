@@ -14,6 +14,7 @@
 #include <osv/mempool.hh>
 #include <fs/vfs/vfs.h>
 #include <osv/trace.hh>
+#include <osv/prio.hh>
 
 extern "C" {
 void arc_unshare_buf(arc_buf_t*);
@@ -38,6 +39,14 @@ template<> struct hash<mmu::hw_ptep> {
 }
 
 namespace pagecache {
+
+static void* zero_page;
+
+void  __attribute__((constructor(init_prio::pagecache))) setup()
+{
+    zero_page = memory::alloc_page();
+    memset(zero_page, 0, mmu::page_size);
+}
 
 class cached_page {
 protected:
@@ -321,9 +330,9 @@ void map_arc_buf(hashkey *key, arc_buf_t* ab, void *page)
     arc_share_buf(ab);
 }
 
-static void create_read_cached_page(vfs_file* fp, hashkey& key)
+static int create_read_cached_page(vfs_file* fp, hashkey& key)
 {
-    fp->get_arcbuf(&key, key.offset);
+    return fp->get_arcbuf(&key, key.offset);
 }
 
 static std::unique_ptr<cached_page_write> create_write_cached_page(vfs_file* fp, hashkey& key)
@@ -396,8 +405,10 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, boo
                 }
             }
             // page is not in cache yet, create and try again
-            create_read_cached_page(fp, key);
-        } while (true);
+        } while (create_read_cached_page(fp, key) != -1);
+
+        // try to access a hole in a file, map by zero_page
+        return mmu::write_pte(zero_page, ptep, mmu::pte_mark_cow(pte, true));
     }
 
     wcp->map(ptep);
@@ -412,7 +423,7 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     hashkey key {st.st_dev, st.st_ino, offset};
     cached_page_write* wcp = find_in_cache(write_cache, key);
 
-    // page is either in ARC cache or write cache or private page
+    // page is either in ARC cache or write cache or zero page or private page
 
     if (wcp && wcp->addr() == addr) {
         // page is in write cache
@@ -429,7 +440,7 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
         }
     }
 
-    // private page, a caller will free it
-    return true;
+    // if a private page, caller will free it
+    return addr != zero_page;
 }
 }

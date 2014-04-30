@@ -25,7 +25,7 @@ public:
     virtual bool map_page(uintptr_t offset, size_t size, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared);
     virtual bool put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep ptep);
 
-    void get_arcbuf(void *key, off_t offset);
+    int get_arcbuf(void *key, off_t offset);
 };
 
 #endif /* VFS_FILE_HH_ */
