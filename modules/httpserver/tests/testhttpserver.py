@@ -157,6 +157,31 @@ class test_httpserver(unittest.TestCase):
         usage1 = next((item for item in mbean1 if item["name"] == "UsageThreshold"), None)
         self.assertEqual(usage["value"] + 1, usage1["value"])
 
+    def test_list_file_cmd(self):
+        path = "/file"
+        lst = self.curl(path + "/etc?op=LISTSTATUS")
+        hosts = next((item for item in lst if item["pathSuffix"] == "hosts"), None)
+        self.assertEqual(hosts["owner"], "osv")
+
+    def test_file_status_cmd(self):
+        path = "/file"
+        hosts = self.curl(path + "/etc/hosts?op=GETFILESTATUS")
+        self.assertEqual(hosts["type"], "FILE")
+
+    def test_put_file_cmd(self):
+        path = "/file"
+        self.curl_command(path + "/etc/hosts?op=COPY&destination="+urllib.quote("/etc/hosts1"), 'PUT')
+        hosts = self.curl(path + "/etc/hosts1?op=GETFILESTATUS")
+        self.assertEqual(hosts["type"], "FILE")
+        self.curl_command(path + "/etc/hosts1?op=RENAME&destination="+urllib.quote("/etc/hosts2"), 'PUT')
+        hosts = self.curl(path + "/etc/hosts2?op=GETFILESTATUS")
+        self.assertEqual(hosts["type"], "FILE")
+        hosts = self.curl(path + "/etc/hosts1?op=GETFILESTATUS")
+        self.assertEqual(hosts, '')
+        self.curl_command(path + "/etc/hosts2?op=DELETE", 'DELETE')
+        hosts = self.curl(path + "/etc/hosts2?op=GETFILESTATUS")
+        self.assertEqual(hosts, '')
+        
     @classmethod
     def curl(cls, api, post=False):
         url = cls.get_url(api)
@@ -171,6 +196,14 @@ class test_httpserver(unittest.TestCase):
             except:
                 return ""
         return json.load(response)
+
+    @classmethod
+    def curl_command(cls, api, command):
+        url = cls.get_url(api)
+        opener = urllib2.build_opener(urllib2.HTTPHandler)
+        request = urllib2.Request(url, data='')
+        request.get_method = lambda: command
+        opener.open(request)
 
     @classmethod
     def exec_os(cls):
@@ -199,6 +232,7 @@ class test_httpserver(unittest.TestCase):
             cls.os_process = cls.exec_os()
         cls.os_api = cls.get_json_api("os.json")
         cls.jvm_api = cls.get_json_api("jvm.json")
+        cls.file_api = cls.get_json_api("file.json")
         retry = 10
         while not cls.is_reachable():
             time.sleep(1)
