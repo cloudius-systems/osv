@@ -104,6 +104,8 @@ do {								\
 
 struct net_channel;
 
+static TRACEPOINT(trace_tcp_state, "tp=%p, %d -> %d", struct tcpcb*, int, int);
+
 /*
  * Tcp control block, one per tcp; fields:
  * Organized for 16 byte cacheline efficiency.
@@ -228,6 +230,7 @@ public:
 	uint64_t _pad[6];		/* 6 TBD (1-2 CC/RTT?) */
 public:
 	inline void set_state(int state) {
+		trace_tcp_state(this, t_state, state);
 		t_state = state;
 	}
 
