@@ -90,11 +90,11 @@ void interrupt(exception_frame* frame)
     /* note that special values 1022 and 1023 are used for
        group 1 and spurious interrupts respectively. */
     if (irq >= gic::gic->nr_irqs) {
-        printf("special InterruptID %x detected!\n");
+        debug_early_u64("special InterruptID detected irq=", irq);
 
     } else {
         if (!idt.invoke_interrupt(irq))
-            printf("unhandled InterruptID %x!\n", irq);
+            debug_early_u64("unhandled InterruptID irq=", irq);
         gic::gic->end_irq(iar);
     }
 
