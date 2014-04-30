@@ -348,7 +348,7 @@ present:
 	 * Present data to user, advancing rcv_nxt through
 	 * completed sequence space.
 	 */
-	if (!TCPS_HAVEESTABLISHED(tp->t_state))
+	if (!TCPS_HAVEESTABLISHED(tp->get_state()))
 		return (0);
 	q = LIST_FIRST(&tp->t_segq);
 	if (!q || q->tqe_th->th_seq != tp->rcv_nxt)

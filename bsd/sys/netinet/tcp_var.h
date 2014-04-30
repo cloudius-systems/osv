@@ -36,6 +36,7 @@
 #include <bsd/sys/sys/queue.h>
 #include <bsd/sys/netinet/tcp.h>
 #include <sys/cdefs.h>
+#include <osv/trace.hh>
 
 __BEGIN_DECLS
 
@@ -107,7 +108,8 @@ struct net_channel;
  * Tcp control block, one per tcp; fields:
  * Organized for 16 byte cacheline efficiency.
  */
-struct tcpcb {
+class tcpcb {
+public:
 	struct	tsegqe_head t_segq;	/* segment reassembly queue */
 	void	*t_pspare[2];		/* new reassembly queue */
 	int	t_segqlen;		/* segment reassembly queue length */
@@ -116,7 +118,9 @@ struct tcpcb {
 	struct tcp_timer *t_timers;	/* All the TCP timers in one struct */
 
 	struct	inpcb *t_inpcb;		/* back pointer to internet pcb */
+private:
 	int	t_state;		/* state of this connection */
+public:
 	u_int	t_flags;
 
 	struct	vnet *t_vnet;		/* back pointer to parent vnet */
@@ -222,6 +226,14 @@ struct tcpcb {
 	uint32_t t_ispare[8];		/* 5 UTO, 3 TBD */
 	void	*t_pspare2[4];		/* 4 TBD */
 	uint64_t _pad[6];		/* 6 TBD (1-2 CC/RTT?) */
+public:
+	inline void set_state(int state) {
+		t_state = state;
+	}
+
+	inline int get_state() {
+		return t_state;
+	}
 };
 
 /*

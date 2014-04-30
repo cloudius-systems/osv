@@ -792,8 +792,8 @@ tcp_drop(struct tcpcb *tp, int errval)
 	INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 	INP_LOCK_ASSERT(tp->t_inpcb);
 
-	if (TCPS_HAVERCVDSYN(tp->t_state)) {
-		tp->t_state = TCPS_CLOSED;
+	if (TCPS_HAVERCVDSYN(tp->get_state())) {
+		tp->set_state(TCPS_CLOSED);
 		(void) tcp_output_reset(tp);
 		TCPSTAT_INC(tcps_drops);
 	} else
@@ -928,7 +928,7 @@ tcp_close(struct tcpcb *tp)
 	INP_LOCK_ASSERT(inp);
 
 	/* Notify any offload devices of listener close */
-	if (tp->t_state == TCPS_LISTEN)
+	if (tp->get_state() == TCPS_LISTEN)
 		tcp_offload_listen_close(tp);
 	in_pcbdrop(inp);
 	TCPSTAT_INC(tcps_closed);
@@ -1018,11 +1018,11 @@ tcp_notify(struct inpcb *inp, int error)
 	 * than waiting a long time to establish a connection that
 	 * can never complete.
 	 */
-	if (tp->t_state == TCPS_ESTABLISHED &&
+	if (tp->get_state() == TCPS_ESTABLISHED &&
 	    (error == EHOSTUNREACH || error == ENETUNREACH ||
 	     error == EHOSTDOWN)) {
 		return (inp);
-	} else if (tp->t_state < TCPS_ESTABLISHED && tp->t_rxtshift > 3 &&
+	} else if (tp->get_state() < TCPS_ESTABLISHED && tp->t_rxtshift > 3 &&
 	    tp->t_softerror) {
 		tp = tcp_drop(tp, error);
 		if (tp != NULL)
@@ -1616,7 +1616,7 @@ tcp_drop_syn_sent(struct inpcb *inp, int errval)
 		return (inp);
 
 	tp = intotcpcb(inp);
-	if (tp->t_state != TCPS_SYN_SENT)
+	if (tp->get_state() != TCPS_SYN_SENT)
 		return (inp);
 
 	tp = tcp_drop(tp, errval);

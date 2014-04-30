@@ -197,7 +197,7 @@ tcp_timer_2msl(serial_timer_task& timer, struct tcpcb *tp)
 #ifdef TCPDEBUG
 	int ostate;
 
-	ostate = tp->t_state;
+	ostate = tp->get_state();
 #endif
 	/*
 	 * XXXRW: Does this actually happen?
@@ -236,13 +236,13 @@ tcp_timer_2msl(serial_timer_task& timer, struct tcpcb *tp)
 	 * there's no point in hanging onto FIN_WAIT_2 socket. Just close it. 
 	 * Ignore fact that there were recent incoming segments.
 	 */
-	if (tcp_fast_finwait2_recycle && tp->t_state == TCPS_FIN_WAIT_2 &&
+	if (tcp_fast_finwait2_recycle && tp->get_state() == TCPS_FIN_WAIT_2 &&
 	    tp->t_inpcb && tp->t_inpcb->inp_socket && 
 	    (tp->t_inpcb->inp_socket->so_rcv.sb_state & SBS_CANTRCVMORE)) {
 		TCPSTAT_INC(tcps_finwait2_drops);
 		tp = tcp_close(tp);             
 	} else {
-		if (tp->t_state != TCPS_TIME_WAIT &&
+		if (tp->get_state() != TCPS_TIME_WAIT &&
 		   bsd_ticks - tp->t_rcvtime <= TP_MAXIDLE(tp))
 		       reschedule(timer, TP_KEEPINTVL(tp));
 	       else
@@ -269,7 +269,7 @@ tcp_timer_keep(serial_timer_task& timer, struct tcpcb *tp)
 #ifdef TCPDEBUG
 	int ostate;
 
-	ostate = tp->t_state;
+	ostate = tp->get_state();
 #endif
 	INP_INFO_WLOCK(&V_tcbinfo);
 
@@ -296,10 +296,10 @@ tcp_timer_keep(serial_timer_task& timer, struct tcpcb *tp)
 	 * or drop connection if idle for too long.
 	 */
 	TCPSTAT_INC(tcps_keeptimeo);
-	if (tp->t_state < TCPS_ESTABLISHED)
+	if (tp->get_state() < TCPS_ESTABLISHED)
 		goto dropit;
 	if ((always_keepalive || inp->inp_socket->so_options & SO_KEEPALIVE) &&
-	    tp->t_state <= TCPS_CLOSING) {
+	    tp->get_state() <= TCPS_CLOSING) {
 		if (bsd_ticks - tp->t_rcvtime >= TP_KEEPIDLE(tp) + TP_MAXIDLE(tp))
 			goto dropit;
 		/*
@@ -360,7 +360,7 @@ tcp_timer_persist(serial_timer_task& timer, struct tcpcb *tp)
 #ifdef TCPDEBUG
 	int ostate;
 
-	ostate = tp->t_state;
+	ostate = tp->get_state();
 #endif
 	INP_INFO_WLOCK(&V_tcbinfo);
 
@@ -431,7 +431,7 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 #ifdef TCPDEBUG
 	int ostate;
 
-	ostate = tp->t_state;
+	ostate = tp->get_state();
 #endif
 	INP_INFO_RLOCK(&V_tcbinfo);
 
@@ -516,7 +516,7 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 	} else
 		tp->t_flags &= ~TF_PREVVALID;
 	TCPSTAT_INC(tcps_rexmttimeo);
-	if (tp->t_state == TCPS_SYN_SENT)
+	if (tp->get_state() == TCPS_SYN_SENT)
 		rexmt = TCP_REXMTVAL(tp) * tcp_syn_backoff[tp->t_rxtshift];
 	else
 		rexmt = TCP_REXMTVAL(tp) * tcp_backoff[tp->t_rxtshift];
@@ -529,7 +529,7 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 	 * header compression code which trashes TCP segments containing
 	 * unknown-to-them TCP options.
 	 */
-	if ((tp->t_state == TCPS_SYN_SENT) && (tp->t_rxtshift == 3))
+	if ((tp->get_state() == TCPS_SYN_SENT) && (tp->t_rxtshift == 3))
 		tp->t_flags &= ~(TF_REQ_SCALE|TF_REQ_TSTMP);
 	/*
 	 * If we backed off this far, our srtt estimate is probably bogus.

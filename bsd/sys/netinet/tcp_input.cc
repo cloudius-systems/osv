@@ -960,7 +960,7 @@ relocked:
 	 * segment and send an appropriate response.
 	 */
 	tp = intotcpcb(inp);
-	if (tp == NULL || tp->t_state == TCPS_CLOSED) {
+	if (tp == NULL || tp->get_state() == TCPS_CLOSED) {
 		rstreason = BANDLIM_RST_CLOSEDPORT;
 		goto dropwithreset;
 	}
@@ -980,7 +980,7 @@ relocked:
 	if ((thflags & (TH_SYN | TH_FIN | TH_RST)) != 0)
 		INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 #endif
-	if (tp->t_state != TCPS_ESTABLISHED) {
+	if (tp->get_state() != TCPS_ESTABLISHED) {
 		if (ti_locked == TI_UNLOCKED) {
 			if (INP_INFO_TRY_WLOCK(&V_tcbinfo) == 0) {
 				in_pcbref(inp);
@@ -1008,7 +1008,7 @@ relocked:
 	KASSERT(so != NULL, ("%s: so == NULL", __func__));
 #ifdef TCPDEBUG
 	if (so->so_options & SO_DEBUG) {
-		ostate = tp->t_state;
+		ostate = tp->get_state();
 #ifdef INET6
 		if (isipv6) {
 			bcopy((char *)ip6, (char *)tcp_saveipgen, sizeof(*ip6));
@@ -1028,7 +1028,7 @@ relocked:
 	if (so->so_options & SO_ACCEPTCONN) {
 		struct in_conninfo inc;
 
-		KASSERT(tp->t_state == TCPS_LISTEN, ("%s: so accepting but "
+		KASSERT(tp->get_state() == TCPS_LISTEN, ("%s: so accepting but "
 		    "tp not listening", __func__));
 		INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 
@@ -1107,7 +1107,7 @@ relocked:
 			inp = sotoinpcb(so);
 			INP_LOCK(inp);		/* new connection */
 			tp = intotcpcb(inp);
-			KASSERT(tp->t_state == TCPS_SYN_RECEIVED,
+			KASSERT(tp->get_state() == TCPS_SYN_RECEIVED,
 			    ("%s: ", __func__));
 #ifdef TCP_SIGNATURE
 			if (sig_checked == 0)  {
@@ -1122,7 +1122,7 @@ relocked:
 					 * processing.
 					 */
 					if ((thflags & TH_RST) == 0 ||
-					    (tp->t_state == TCPS_SYN_SENT) == 0)
+					    (tp->get_state() == TCPS_SYN_SENT) == 0)
 						goto dropunlock;
 				}
 				sig_checked = 1;
@@ -1357,7 +1357,7 @@ relocked:
 			 * allowed for further processing.
 			 */
 			if ((thflags & TH_RST) == 0 ||
-			    (tp->t_state == TCPS_SYN_SENT) == 0)
+			    (tp->get_state() == TCPS_SYN_SENT) == 0)
 				goto dropunlock;
 		}
 		sig_checked = 1;
@@ -1465,7 +1465,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * if we fail, drop the packet.  FIXME: invert the lock order so we don't
 	 * have to drop packets.
 	 */
-	if (tp->t_state != TCPS_ESTABLISHED && ti_locked == TI_UNLOCKED) {
+	if (tp->get_state() != TCPS_ESTABLISHED && ti_locked == TI_UNLOCKED) {
 		if (INP_INFO_TRY_WLOCK(&V_tcbinfo)) {
 			ti_locked = TI_WLOCKED;
 		} else {
@@ -1473,7 +1473,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		}
 	}
 	if ((thflags & (TH_SYN | TH_FIN | TH_RST)) != 0 ||
-	    tp->t_state != TCPS_ESTABLISHED) {
+	    tp->get_state() != TCPS_ESTABLISHED) {
 		KASSERT(ti_locked == TI_WLOCKED, ("%s ti_locked %d for "
 		    "SYN/FIN/RST/!EST", __func__, ti_locked));
 		INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
@@ -1489,9 +1489,9 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 #endif
 	}
 	INP_LOCK_ASSERT(tp->t_inpcb);
-	KASSERT(tp->t_state > TCPS_LISTEN, ("%s: TCPS_LISTEN",
+	KASSERT(tp->get_state() > TCPS_LISTEN, ("%s: TCPS_LISTEN",
 	    __func__));
-	KASSERT(tp->t_state != TCPS_TIME_WAIT, ("%s: TCPS_TIME_WAIT",
+	KASSERT(tp->get_state() != TCPS_TIME_WAIT, ("%s: TCPS_TIME_WAIT",
 	    __func__));
 
 	/*
@@ -1501,7 +1501,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * validation to ignore broken/spoofed segs.
 	 */
 	tp->t_rcvtime = bsd_ticks;
-	if (TCPS_HAVEESTABLISHED(tp->t_state))
+	if (TCPS_HAVEESTABLISHED(tp->get_state()))
 		tcp_timer_activate(tp, TT_KEEP, TP_KEEPIDLE(tp));
 
 	/*
@@ -1560,7 +1560,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * or <SYN,ACK>) segment itself is never scaled.
 	 * XXX this is traditional behavior, may need to be cleaned up.
 	 */
-	if (tp->t_state == TCPS_SYN_SENT && (thflags & TH_SYN)) {
+	if (tp->get_state() == TCPS_SYN_SENT && (thflags & TH_SYN)) {
 		if ((to.to_flags & TOF_SCALE) &&
 		    (tp->t_flags & TF_REQ_SCALE)) {
 			tp->t_flags |= TF_RCVD_SCALE;
@@ -1600,7 +1600,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * Since we check for TCPS_ESTABLISHED first, it can only
 	 * be TH_NEEDSYN.
 	 */
-	if (tp->t_state == TCPS_ESTABLISHED &&
+	if (tp->get_state() == TCPS_ESTABLISHED &&
 	    th->th_seq == tp->rcv_nxt &&
 	    (thflags & (TH_SYN|TH_FIN|TH_RST|TH_URG|TH_ACK)) == TH_ACK &&
 	    tp->snd_nxt == tp->snd_max &&
@@ -1855,7 +1855,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	tp->rfbuf_ts = 0;
 	tp->rfbuf_cnt = 0;
 
-	switch (tp->t_state) {
+	switch (tp->get_state()) {
 
 	/*
 	 * If the state is SYN_RECEIVED:
@@ -1937,11 +1937,11 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			 */
 			tp->t_starttime = bsd_ticks;
 			if (tp->t_flags & TF_NEEDFIN) {
-				tp->t_state = TCPS_FIN_WAIT_1;
+				tp->set_state(TCPS_FIN_WAIT_1);
 				tp->t_flags &= ~TF_NEEDFIN;
 				thflags &= ~TH_SYN;
 			} else {
-				tp->t_state = TCPS_ESTABLISHED;
+				tp->set_state(TCPS_ESTABLISHED);
 				tcp_setup_net_channel(tp, m->M_dat.MH.MH_pkthdr.rcvif);
 				cc_conn_init(tp);
 				tcp_timer_activate(tp, TT_KEEP,
@@ -1960,7 +1960,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			 */
 			tp->t_flags |= (TF_ACKNOW | TF_NEEDSYN);
 			tcp_timer_activate(tp, TT_REXMT, 0);
-			tp->t_state = TCPS_SYN_RECEIVED;
+			tp->set_state(TCPS_SYN_RECEIVED);
 		}
 
 		KASSERT(ti_locked == TI_WLOCKED, ("%s: trimthenstep6: "
@@ -2072,7 +2072,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	if (thflags & TH_RST) {
 		if (th->th_seq >= tp->last_ack_sent - 1 &&
 		    th->th_seq <= tp->last_ack_sent + tp->rcv_wnd) {
-			switch (tp->t_state) {
+			switch (tp->get_state()) {
 
 			case TCPS_SYN_RECEIVED:
 				so->so_error = ECONNREFUSED;
@@ -2098,7 +2098,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 				    ti_locked));
 				INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 
-				tp->t_state = TCPS_CLOSED;
+				tp->set_state(TCPS_CLOSED);
 				TCPSTAT_INC(tcps_drops);
 				want_close = true;
 				break;
@@ -2155,7 +2155,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * the sequence numbers haven't wrapped.  This is a partial fix
 	 * for the "LAND" DoS attack.
 	 */
-	if (tp->t_state == TCPS_SYN_RECEIVED && th->th_seq < tp->irs) {
+	if (tp->get_state() == TCPS_SYN_RECEIVED && th->th_seq < tp->irs) {
 		rstreason = BANDLIM_RST_OPENPORT;
 		goto dropwithreset;
 	}
@@ -2215,7 +2215,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * user processes are gone, then RST the other end.
 	 */
 	if ((so->so_state & SS_NOFDREF) &&
-	    tp->t_state > TCPS_CLOSE_WAIT && tlen) {
+	    tp->get_state() > TCPS_CLOSE_WAIT && tlen) {
 		char *s;
 
 		KASSERT(ti_locked == TI_WLOCKED, ("%s: SS_NOFDEREF && "
@@ -2225,7 +2225,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		if ((s = tcp_log_addrs(&tp->t_inpcb->inp_inc, th, NULL, NULL))) {
 			bsd_log(LOG_DEBUG, "%s; %s: %s: Received %d bytes of data after socket "
 			    "was closed, sending RST and removing tcpcb\n",
-			    s, __func__, tcpstates[tp->t_state], tlen);
+			    s, __func__, tcpstates[tp->get_state()], tlen);
 			free(s);
 		}
 		want_close = true;
@@ -2308,7 +2308,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * later processing; else drop segment and return.
 	 */
 	if ((thflags & TH_ACK) == 0) {
-		if (tp->t_state == TCPS_SYN_RECEIVED ||
+		if (tp->get_state() == TCPS_SYN_RECEIVED ||
 		    (tp->t_flags & TF_NEEDSYN))
 			goto step6;
 		else if (tp->t_flags & TF_ACKNOW)
@@ -2320,7 +2320,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	/*
 	 * Ack processing.
 	 */
-	switch (tp->t_state) {
+	switch (tp->get_state()) {
 
 	/*
 	 * In SYN_RECEIVED state, the ack ACKs our SYN, so enter
@@ -2344,10 +2344,10 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		 */
 		tp->t_starttime = bsd_ticks;
 		if (tp->t_flags & TF_NEEDFIN) {
-			tp->t_state = TCPS_FIN_WAIT_1;
+			tp->set_state(TCPS_FIN_WAIT_1);
 			tp->t_flags &= ~TF_NEEDFIN;
 		} else {
-			tp->t_state = TCPS_ESTABLISHED;
+			tp->set_state(TCPS_ESTABLISHED);
 			tcp_setup_net_channel(tp, m->M_dat.MH.MH_pkthdr.rcvif);
 			cc_conn_init(tp);
 			tcp_timer_activate(tp, TT_KEEP, TP_KEEPIDLE(tp));
@@ -2662,7 +2662,7 @@ process_ACK:
 		if (tp->snd_nxt < tp->snd_una)
 			tp->snd_nxt = tp->snd_una;
 
-		switch (tp->t_state) {
+		switch (tp->get_state()) {
 
 		/*
 		 * In FIN_WAIT_1 STATE in addition to the processing
@@ -2689,7 +2689,7 @@ process_ACK:
 					    tcp_finwait2_timeout :
 					    TP_MAXIDLE(tp)));
 				}
-				tp->t_state = TCPS_FIN_WAIT_2;
+				tp->set_state(TCPS_FIN_WAIT_2);
 			}
 			break;
 
@@ -2753,7 +2753,7 @@ step6:
 	 * Process segments with URG.
 	 */
 	if ((thflags & TH_URG) && th->th_urp &&
-	    TCPS_HAVERCVDFIN(tp->t_state) == 0) {
+	    TCPS_HAVERCVDFIN(tp->get_state()) == 0) {
 		/*
 		 * This is a kludge, but if we receive and accept
 		 * random urgent pointers, we'll crash in
@@ -2821,7 +2821,7 @@ dodata:							/* XXX */
 	 * connection then we just ignore the text.
 	 */
 	if ((tlen || (thflags & TH_FIN)) &&
-	    TCPS_HAVERCVDFIN(tp->t_state) == 0) {
+	    TCPS_HAVERCVDFIN(tp->get_state()) == 0) {
 		tcp_seq save_start = th->th_seq;
 		m_adj(m, drop_hdrlen);	/* delayed header drop */
 		/*
@@ -2838,7 +2838,7 @@ dodata:							/* XXX */
 		 */
 		if (th->th_seq == tp->rcv_nxt &&
 		    LIST_EMPTY(&tp->t_segq) &&
-		    TCPS_HAVEESTABLISHED(tp->t_state)) {
+		    TCPS_HAVEESTABLISHED(tp->get_state())) {
 			if (DELAY_ACK(tp))
 				tp->t_flags |= TF_DELACK;
 			else
@@ -2887,7 +2887,7 @@ dodata:							/* XXX */
 	 * that the connection is closing.
 	 */
 	if (thflags & TH_FIN) {
-		if (TCPS_HAVERCVDFIN(tp->t_state) == 0) {
+		if (TCPS_HAVERCVDFIN(tp->get_state()) == 0) {
 			socantrcvmore_locked(so);
 			/*
 			 * If connection is half-synchronized
@@ -2902,7 +2902,7 @@ dodata:							/* XXX */
 				tp->t_flags |= TF_ACKNOW;
 			tp->rcv_nxt++;
 		}
-		switch (tp->t_state) {
+		switch (tp->get_state()) {
 
 		/*
 		 * In SYN_RECEIVED and ESTABLISHED STATES
@@ -2913,7 +2913,7 @@ dodata:							/* XXX */
 			/* FALLTHROUGH */
 		case TCPS_ESTABLISHED:
 			tcp_teardown_net_channel(tp);
-			tp->t_state = TCPS_CLOSE_WAIT;
+			tp->set_state(TCPS_CLOSE_WAIT);
 			break;
 
 		/*
@@ -2921,7 +2921,7 @@ dodata:							/* XXX */
 		 * enter the CLOSING state.
 		 */
 		case TCPS_FIN_WAIT_1:
-			tp->t_state = TCPS_CLOSING;
+			tp->set_state(TCPS_CLOSING);
 			break;
 
 		/*
@@ -2985,7 +2985,7 @@ dropafterack:
 	 * between two listening ports that have been sent forged
 	 * SYN segments, each with the source address of the other.
 	 */
-	if (tp->t_state == TCPS_SYN_RECEIVED && (thflags & TH_ACK) &&
+	if (tp->get_state() == TCPS_SYN_RECEIVED && (thflags & TH_ACK) &&
 	    (tp->snd_una > th->th_ack ||
 	     th->th_ack > tp->snd_max) ) {
 		rstreason = BANDLIM_RST_OPENPORT;

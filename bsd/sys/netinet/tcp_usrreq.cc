@@ -103,7 +103,7 @@ static void	tcp_fill_info(struct tcpcb *, struct tcp_info *);
 
 #ifdef TCPDEBUG
 #define	TCPDEBUG0	int ostate = 0
-#define	TCPDEBUG1()	ostate = tp ? tp->t_state : 0
+#define	TCPDEBUG1()	ostate = tp ? tp->get_state() : 0
 #define	TCPDEBUG2(req)	if (tp && (so->so_options & SO_DEBUG)) \
 				tcp_trace(TA_USER, ostate, tp, 0, 0, req)
 #else
@@ -204,7 +204,7 @@ tcp_detach(struct socket *so, struct inpcb *inp)
 		 * XXXRW: Does the second case still occur?
 		 */
 		if (inp->inp_flags & INP_DROPPED ||
-		    tp->t_state < TCPS_SYN_SENT) {
+		    tp->get_state() < TCPS_SYN_SENT) {
 			tcp_discardcb(tp);
 			in_pcbdetach(inp);
 			in_pcbfree(inp);
@@ -368,7 +368,7 @@ tcp_usr_listen(struct socket *so, int backlog, struct thread *td)
 		error = in_pcbbind(inp, (struct bsd_sockaddr *)0, 0);
 	INP_HASH_WUNLOCK(&V_tcbinfo);
 	if (error == 0) {
-		tp->t_state = TCPS_LISTEN;
+		tp->set_state(TCPS_LISTEN);
 		solisten_proto(so, backlog);
 		tcp_offload_listen_open(tp);
 	}
@@ -410,7 +410,7 @@ tcp6_usr_listen(struct socket *so, int backlog, struct thread *td)
 	}
 	INP_HASH_WUNLOCK(&V_tcbinfo);
 	if (error == 0) {
-		tp->t_state = TCPS_LISTEN;
+		tp->set_state(TCPS_LISTEN);
 		solisten_proto(so, backlog);
 	}
 	SOCK_UNLOCK(so);
@@ -802,7 +802,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 	}
 	if (!(flags & PRUS_OOB)) {
 		sbappendstream(so, &so->so_snd, m);
-		if (nam && tp->t_state < TCPS_SYN_SENT) {
+		if (nam && tp->get_state() < TCPS_SYN_SENT) {
 			/*
 			 * Do implied connect if not yet connected,
 			 * initialize window to default value, and
@@ -859,7 +859,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		 * Otherwise, snd_up should be one lower.
 		 */
 		sbappendstream_locked(so, &so->so_snd, m);
-		if (nam && tp->t_state < TCPS_SYN_SENT) {
+		if (nam && tp->get_state() < TCPS_SYN_SENT) {
 			/*
 			 * Do implied connect if not yet connected,
 			 * initialize window to default value, and
@@ -1116,7 +1116,7 @@ tcp_connect(struct tcpcb *tp, struct bsd_sockaddr *nam, struct thread *td)
 
 	soisconnecting(so);
 	TCPSTAT_INC(tcps_connattempt);
-	tp->t_state = TCPS_SYN_SENT;
+	tp->set_state(TCPS_SYN_SENT);
 	tcp_timer_activate(tp, TT_KEEP, TP_KEEPINIT(tp));
 	tp->iss = tcp_new_isn(tp);
 	tcp_sendseqinit(tp);
@@ -1189,7 +1189,7 @@ tcp6_connect(struct tcpcb *tp, struct bsd_sockaddr *nam, struct thread *td)
 
 	soisconnecting(so);
 	TCPSTAT_INC(tcps_connattempt);
-	tp->t_state = TCPS_SYN_SENT;
+	tp->set_state(TCPS_SYN_SENT);
 	tcp_timer_activate(tp, TT_KEEP, TP_KEEPINIT(tp));
 	tp->iss = tcp_new_isn(tp);
 	tcp_sendseqinit(tp);
@@ -1216,7 +1216,7 @@ tcp_fill_info(struct tcpcb *tp, struct tcp_info *ti)
 	INP_LOCK_ASSERT(tp->t_inpcb);
 	bzero(ti, sizeof(*ti));
 
-	ti->tcpi_state = tp->t_state;
+	ti->tcpi_state = tp->get_state();
 	if ((tp->t_flags & TF_REQ_TSTMP) && (tp->t_flags & TF_RCVD_TSTMP))
 		ti->tcpi_options |= TCPI_OPT_TIMESTAMPS;
 	if (tp->t_flags & TF_SACK_PERMIT)
@@ -1364,7 +1364,7 @@ tcp_ctloutput(struct socket *so, struct sockopt *sopt)
 				tp->t_flags |= TF_NOPUSH;
 			else if (tp->t_flags & TF_NOPUSH) {
 				tp->t_flags &= ~TF_NOPUSH;
-				if (TCPS_HAVEESTABLISHED(tp->t_state))
+				if (TCPS_HAVEESTABLISHED(tp->get_state()))
 					error = tcp_output(tp);
 			}
 			INP_UNLOCK(inp);
@@ -1461,22 +1461,22 @@ tcp_ctloutput(struct socket *so, struct sockopt *sopt)
 				 * XXX: better check current remaining
 				 * timeout and "merge" it with new value.
 				 */
-				if ((tp->t_state > TCPS_LISTEN) &&
-				    (tp->t_state <= TCPS_CLOSING))
+				if ((tp->get_state() > TCPS_LISTEN) &&
+				    (tp->get_state() <= TCPS_CLOSING))
 					tcp_timer_activate(tp, TT_KEEP,
 					    TP_KEEPIDLE(tp));
 				break;
 			case TCP_KEEPINTVL:
 				tp->t_keepintvl = ui;
-				if ((tp->t_state == TCPS_FIN_WAIT_2) &&
+				if ((tp->get_state() == TCPS_FIN_WAIT_2) &&
 				    (TP_MAXIDLE(tp) > 0))
 					tcp_timer_activate(tp, TT_2MSL,
 					    TP_MAXIDLE(tp));
 				break;
 			case TCP_KEEPINIT:
 				tp->t_keepinit = ui;
-				if (tp->t_state == TCPS_SYN_RECEIVED ||
-				    tp->t_state == TCPS_SYN_SENT)
+				if (tp->get_state() == TCPS_SYN_RECEIVED ||
+				    tp->get_state() == TCPS_SYN_SENT)
 					tcp_timer_activate(tp, TT_KEEP,
 					    TP_KEEPINIT(tp));
 				break;
@@ -1492,7 +1492,7 @@ tcp_ctloutput(struct socket *so, struct sockopt *sopt)
 
 			INP_LOCK_RECHECK(inp);
 			tp->t_keepcnt = ui;
-			if ((tp->t_state == TCPS_FIN_WAIT_2) &&
+			if ((tp->get_state() == TCPS_FIN_WAIT_2) &&
 			    (TP_MAXIDLE(tp) > 0))
 				tcp_timer_activate(tp, TT_2MSL,
 				    TP_MAXIDLE(tp));
@@ -1627,7 +1627,7 @@ tcp_attach(struct socket *so)
 		INP_INFO_WUNLOCK(&V_tcbinfo);
 		return (ENOBUFS);
 	}
-	tp->t_state = TCPS_CLOSED;
+	tp->set_state(TCPS_CLOSED);
 	INP_UNLOCK(inp);
 	INP_INFO_WUNLOCK(&V_tcbinfo);
 	return (0);
@@ -1654,7 +1654,7 @@ tcp_disconnect(struct tcpcb *tp)
 	 * Neither tcp_close() nor tcp_drop() should return NULL, as the
 	 * socket is still open.
 	 */
-	if (tp->t_state < TCPS_ESTABLISHED) {
+	if (tp->get_state() < TCPS_ESTABLISHED) {
 		tp = tcp_close(tp);
 		KASSERT(tp != NULL,
 		    ("tcp_disconnect: tcp_close() returned NULL"));
@@ -1690,12 +1690,12 @@ tcp_usrclosed(struct tcpcb *tp)
 
 	tcp_teardown_net_channel(tp);
 
-	switch (tp->t_state) {
+	switch (tp->get_state()) {
 	case TCPS_LISTEN:
 		tcp_offload_listen_close(tp);
 		/* FALLTHROUGH */
 	case TCPS_CLOSED:
-		tp->t_state = TCPS_CLOSED;
+		tp->set_state(TCPS_CLOSED);
 		tp = tcp_close(tp);
 		/*
 		 * tcp_close() should never return NULL here as the socket is
@@ -1711,17 +1711,17 @@ tcp_usrclosed(struct tcpcb *tp)
 		break;
 
 	case TCPS_ESTABLISHED:
-		tp->t_state = TCPS_FIN_WAIT_1;
+		tp->set_state(TCPS_FIN_WAIT_1);
 		break;
 
 	case TCPS_CLOSE_WAIT:
-		tp->t_state = TCPS_LAST_ACK;
+		tp->set_state(TCPS_LAST_ACK);
 		break;
 	}
-	if (tp->t_state >= TCPS_FIN_WAIT_2) {
+	if (tp->get_state() >= TCPS_FIN_WAIT_2) {
 		soisdisconnected(tp->t_inpcb->inp_socket);
 		/* Prevent the connection hanging in FIN_WAIT_2 forever. */
-		if (tp->t_state == TCPS_FIN_WAIT_2) {
+		if (tp->get_state() == TCPS_FIN_WAIT_2) {
 			int timeout;
 
 			timeout = (tcp_fast_finwait2_recycle) ? 
@@ -1938,8 +1938,8 @@ db_print_tcpcb(struct tcpcb *tp, const char *name, int indent)
 	    &tp->t_timers->tt_delack, tp->t_inpcb);
 
 	db_print_indent(indent);
-	db_printf("t_state: %d (", tp->t_state);
-	db_print_tstate(tp->t_state);
+	db_printf("t_state: %d (", tp->get_state());
+	db_print_tstate(tp->get_state());
 	db_printf(")\n");
 
 	db_print_indent(indent);

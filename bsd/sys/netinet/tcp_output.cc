@@ -194,7 +194,7 @@ again:
 	off = tp->snd_nxt - tp->snd_una;
 	sendwin = bsd_min(tp->snd_wnd, tp->snd_cwnd);
 
-	flags = tcp_outflags[tp->t_state];
+	flags = tcp_outflags[tp->get_state()];
 	/*
 	 * Send any SACK-generated retransmissions.  If we're explicitly trying
 	 * to send out new data (when sendalot is 1), bypass this function.
@@ -346,7 +346,7 @@ after_sack_rexmit:
 	 * know that foreign host supports TAO, suppress sending segment.
 	 */
 	if ((flags & TH_SYN) && tp->snd_nxt > tp->snd_una) {
-		if (tp->t_state != TCPS_SYN_RECEIVED)
+		if (tp->get_state() != TCPS_SYN_RECEIVED)
 			flags &= ~TH_SYN;
 		off--, len++;
 	}
@@ -538,7 +538,7 @@ after_sack_rexmit:
 	 * half-open state.
 	 */
 	if (recwin > 0 && !(tp->t_flags & TF_NEEDSYN) &&
-	    !TCPS_HAVERCVDFIN(tp->t_state)) {
+	    !TCPS_HAVERCVDFIN(tp->get_state())) {
 		/*
 		 * "adv" is the amount we could increase the window,
 		 * taking into account that we are limited by
@@ -685,7 +685,7 @@ send:
 		if (tp->t_flags & TF_SACK_PERMIT) {
 			if (flags & TH_SYN)
 				to.to_flags |= TOF_SACKPERM;
-			else if (TCPS_HAVEESTABLISHED(tp->t_state) &&
+			else if (TCPS_HAVEESTABLISHED(tp->get_state()) &&
 			    (tp->t_flags & TF_SACK_PERMIT) &&
 			    tp->rcv_numsacks > 0) {
 				to.to_flags |= TOF_SACK;
@@ -905,7 +905,7 @@ send:
 	 * resend those bits a number of times as per
 	 * RFC 3168.
 	 */
-	if (tp->t_state == TCPS_SYN_SENT && V_tcp_do_ecn) {
+	if (tp->get_state() == TCPS_SYN_SENT && V_tcp_do_ecn) {
 		if (tp->t_rxtshift >= 1) {
 			if (tp->t_rxtshift <= V_tcp_ecn_maxretries)
 				flags |= TH_ECE|TH_CWR;
@@ -913,7 +913,7 @@ send:
 			flags |= TH_ECE|TH_CWR;
 	}
 	
-	if (tp->t_state == TCPS_ESTABLISHED &&
+	if (tp->get_state() == TCPS_ESTABLISHED &&
 	    (tp->t_flags & TF_ECN_PERMIT)) {
 		/*
 		 * If the peer has ECN, mark data packets with
@@ -1165,7 +1165,7 @@ timer:
 			save = ipov->ih_len;
 			ipov->ih_len = htons(m->M_dat.MH.MH_pkthdr.len /* - hdrlen + (th->th_off << 2) */);
 		}
-		tcp_trace(TA_OUTPUT, tp->t_state, tp, mtod(m, void *), th, 0);
+		tcp_trace(TA_OUTPUT, tp->get_state(), tp, mtod(m, void *), th, 0);
 #ifdef INET6
 		if (!isipv6)
 #endif
@@ -1298,7 +1298,7 @@ out:
 		case EHOSTUNREACH:
 		case ENETDOWN:
 		case ENETUNREACH:
-			if (TCPS_HAVERCVDSYN(tp->t_state)) {
+			if (TCPS_HAVERCVDSYN(tp->get_state())) {
 				tp->t_softerror = error;
 				return (0);
 			}
