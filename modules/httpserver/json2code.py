@@ -163,7 +163,7 @@ def add_path(f, path, details):
 def get_base_name(param):
     return os.path.basename(param)
 
-def create_c_file(data, cfile_name, hfile_name, init_method):
+def create_c_file(data, cfile_name, hfile_name, init_method, api_name):
     cfile = open(cfile_name, "w")
     print_copyrights(cfile)
     add_include(cfile, ['"' + hfile_name + '"' , '"' + config.jsoninc +
@@ -178,6 +178,22 @@ def create_c_file(data, cfile_name, hfile_name, init_method):
             for oper in item["operations"]:
                 add_path(cfile, item["path"], oper)
     fprint(cfile, "}")
+    for item in data["apis"]:
+        if "operations" in item:
+            for oper in item["operations"]:
+                if "parameters" in oper:
+                    for param in oper["parameters"]:
+                        if "enum" in param:
+                            enm = 'ns_' + oper["nickname"] + '::' + param["name"]
+                            fprint(cfile, api_name , '::', enm, ' ',api_name , '::ns_', oper["nickname"], '::str2', param["name"], '(const std::string& str)\n{')
+                            fprint(cfile, '  static const std::string arr[] = {"', '","'.join(param["enum"]) , '"};')
+                            fprint(cfile, '  int i;')
+                            fprint(cfile, '  for (i=0; i < ', str(len(param["enum"])), '; i++)')
+                            fprint(cfile, '    if (arr[i] == str) {return (', api_name , '::', enm , ')i;}')
+                            fprint(cfile, '  return (', api_name , '::', enm , ')i;')
+                            fprint(cfile, '}')
+
+
     close_namespace(cfile)
     close_namespace(cfile)
     cfile.close()
@@ -229,6 +245,19 @@ def create_h_file(data, hfile_name, api_name, init_method):
         if "operations" in item:
             for oper in item["operations"]:
                 fprint(hfile, 'static const std::string ', oper["nickname"], ' = "', oper["nickname"], '";')
+                if "parameters" in oper:
+                    for param in oper["parameters"]:
+                        if "enum" in param:
+                            open_namespace(hfile, 'ns_' + oper["nickname"])
+                            enm =  param["name"]
+                            fprint(hfile, 'enum class ', enm , ' {')
+                            for val in param["enum"]:
+                                hfile.write(val)
+                                hfile.write(", ")
+                            fprint(hfile, 'NUM_ITEMS};')
+                            fprint(hfile, enm, ' str2', enm, '(const std::string& str);')
+                            close_namespace(hfile)
+                            
     close_namespace(hfile)
     close_namespace(hfile)
     close_namespace(hfile)
@@ -251,7 +280,7 @@ def parse_file(param, combined):
     cfile_name = config.outdir + "/" + base_file_name + ".cc"
     if (combined):
         fprint(combined, '#include "', base_file_name, ".cc", '"')
-    create_c_file(data, cfile_name, hfile_name, init_method)
+    create_c_file(data, cfile_name, hfile_name, init_method, api_name)
     create_h_file(data, hfile_name, api_name, init_method)
 
 
