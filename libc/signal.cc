@@ -430,7 +430,7 @@ int itimer::set(const struct itimerval *new_value,
 
     WITH_LOCK(_mutex) {
         if (old_value) {
-            get_interval(&old_value->it_value);
+            get_interval(&old_value->it_interval);
             get_value(&old_value->it_value);
         }
         cancel();
@@ -445,7 +445,7 @@ int itimer::set(const struct itimerval *new_value,
 int itimer::get(struct itimerval *curr_value)
 {
     WITH_LOCK(_mutex) {
-        get_interval(&curr_value->it_value);
+        get_interval(&curr_value->it_interval);
         get_value(&curr_value->it_value);
     }
     return 0;
