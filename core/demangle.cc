@@ -7,6 +7,9 @@
 
 #include <string.h>
 #include <algorithm>
+#include <osv/elf.hh>
+
+namespace osv {
 
 extern "C" int __gcclibcxx_demangle_callback (const char *,
     void (*)(const char *, size_t, void *),
@@ -34,4 +37,21 @@ bool demangle(const char *name, char *buf, size_t len)
     int ret = __gcclibcxx_demangle_callback(name, demangle_callback,
             &arg);
     return (ret == 0);
+}
+
+void lookup_name_demangled(void *addr, char *buf, size_t len)
+{
+    auto ei = elf::get_program()->lookup_addr(addr);
+    int funclen;
+
+    if (!ei.sym)
+        strncpy(buf, "???", len);
+    else if (!demangle(ei.sym, buf, len))
+        strncpy(buf, ei.sym, len);
+    funclen = strlen(buf);
+    snprintf(buf + funclen, len - funclen, "+%d",
+        reinterpret_cast<uintptr_t>(addr)
+        - reinterpret_cast<uintptr_t>(ei.addr));
+}
+
 }

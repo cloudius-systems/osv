@@ -8,6 +8,11 @@
 #ifndef DEMANGLE_HH_
 #define DEMANGLE_HH_
 
+namespace osv {
+
 bool demangle(const char *name, char *buf, size_t len);
+void lookup_name_demangled(void *addr, char *buf, size_t len);
+
+}
 
 #endif /* DEMANGLE_HH_ */
