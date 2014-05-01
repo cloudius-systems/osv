@@ -26,6 +26,7 @@
 #include "java/jvm_balloon.hh"
 #include <fs/fs.hh>
 #include <osv/file.h>
+#include "dump.hh"
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -1144,7 +1145,9 @@ void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 {
     void *pc = ef->get_pc();
     if (pc >= text_start && pc < text_end) {
-        abort("page fault outside application, addr %lx", addr);
+        debug_ll("page fault outside application, addr: 0x%016lx\n", addr);
+        dump_registers(ef);
+        abort();
     }
     osv::handle_segmentation_fault(addr, ef);
 }
