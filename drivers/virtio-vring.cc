@@ -281,7 +281,17 @@ namespace virtio {
         } else if (_used->notifications_disabled())
             return false;
 
-        if (kicked) {
+        //
+        // Kick when the avail_event has moved or at least every half u16 range
+        // packets since "kicked" above may loose an avail_event if it's update
+        // is delayed for more than u16 range packets.
+        //
+        // Flushing every half range sounds like a feasible heuristics.
+        // We don't want to flush at the levels close to the wrap around since
+        // the call to kick() itself is not issued for every separate buffer
+        // and _avail_added_since_kick might wrap around due to this bulking.
+        //
+        if (kicked || (_avail_added_since_kick >= (u16)(~0) / 2)) {
             trace_virtio_kick(_q_index);
             _dev->kick(_q_index);
             _avail_added_since_kick = 0;
