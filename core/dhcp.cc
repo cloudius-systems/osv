@@ -495,6 +495,9 @@ namespace dhcp {
             // TODO: check that the IP address is not responding with ARP
             // RFC2131 section 3.1.5
 
+            printf("%s: %s\n",
+                _ifp->if_xname,
+                 dm.get_your_ip().to_string().c_str());
             dhcp_i("Configuring %s: ip %s subnet mask %s gateway %s MTU %d",
                 _ifp->if_xname,
                  dm.get_your_ip().to_string().c_str(),
