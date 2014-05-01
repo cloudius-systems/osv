@@ -6,7 +6,6 @@
  */
 
 #include <osv/sched.hh>
-#include <osv/elf.hh>
 #include <cstdlib>
 #include <cstring>
 #include <string.h>
@@ -96,20 +95,9 @@ static void print_backtrace(void)
 
     /* Skip abort(const char *) and abort(void)  */
     for (int i = 2; i < len; i++) {
-        auto addr = addrs[i] - 1;
-        auto ei = elf::get_program()->lookup_addr(addr);
-        const char *sname = ei.sym;
-        char demangled[1024];
-
-        if (!ei.sym)
-            sname = "???";
-        else if (demangle(ei.sym, demangled, sizeof(demangled)))
-            sname = demangled;
-
-        debug_ll("%p <%s+%d>\n",
-            addr, sname,
-            reinterpret_cast<uintptr_t>(addr)
-            - reinterpret_cast<uintptr_t>(ei.addr));
+        char name[1024];
+        osv::lookup_name_demangled(addrs[i], name, sizeof(name));
+        debug_ll("0x%016x <%s>\n", addrs[i], name);
     }
 }
 
