@@ -24,14 +24,10 @@ tracepointv<10002, decltype(test_object::unpack), test_object::unpack>
 tracepoint<10003, const char*, long, const char*> trace_string("tp3", "%s %d %s");
 
 
-std::string signature_string(u64 s)
+
+std::string signature_string(const char* s)
 {
-    std::string ret;
-    while (s) {
-        ret.push_back(s & 255);
-        s >>= 8;
-    }
-    return ret;
+    return s;
 }
 
 int main(int ac, char** av)

@@ -836,13 +836,8 @@ def setup_libstdcxx():
     exec(compile(open(main).read(), main, 'exec'))
 
 def sig_to_string(sig):
-    '''Convert a tracepoing signature encoded in a u64 to a string'''
-    ret = ''
-    while sig != 0:
-        ret += chr(sig & 255)
-        sig >>= 8
-    ret = ret.replace('p', '50p')
-    return ret
+    '''Convert a tracepoing signature to a string'''
+    return sig.replace('p', '50p')
 
 def align_down(v, pagesize):
     return v & ~(pagesize - 1)
@@ -922,7 +917,7 @@ def all_traces():
                 tp_ref = gdb.Value(tp_key).cast(tp_ptr)
 
                 tp = TracePoint(tp_key, str(tp_ref["name"].string()),
-                    sig_to_string(ulong(tp_ref['sig'])), str(tp_ref["format"].string()))
+                    sig_to_string(str(tp_ref["sig"].string())), str(tp_ref["format"].string()))
                 tracepoints[tp_key] = tp
 
             backtrace = None

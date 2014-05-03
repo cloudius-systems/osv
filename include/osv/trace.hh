@@ -159,19 +159,13 @@ struct signature_char<T, typename std::enable_if<is_blob<T>::value>::type> {
     static const char sig = '*';
 };
 
-template <typename... args>
-struct signature_helper;
-
-template <>
-struct signature_helper<> {
-    static const u64 sig = 0;
+template <typename... Args>
+struct signature_helper {
+    static constexpr const char sig[] = { signature_char<Args>::sig..., '\0'};
 };
 
-template <typename arg0, typename... args>
-struct signature_helper<arg0, args...> {
-    static const u64 sig = signature_char<arg0>::sig
-                    | (signature_helper<args...>::sig << 8);
-};
+template <typename... Args>
+constexpr const char signature_helper<Args...>::sig[];
 
 template <typename, typename = void>
 struct object_serializer;
@@ -285,7 +279,7 @@ public:
     tracepoint_id id;
     const char* name;
     const char* format;
-    u64 sig;
+    const char* sig;
     typedef boost::intrusive::list_member_hook<> tp_list_link_type;
     tp_list_link_type tp_list_link;
     static boost::intrusive::list<
@@ -377,9 +371,9 @@ public:
     size_t size(const std::tuple<s_args...>& as) {
         return base_size() + serializer<0, sizeof...(s_args), s_args...>::size(0, as);
     }
-    // Python struct style signature H=u16, I=u32, Q=u64 etc, packed into a
-    // u64, lsb=first parameter
-    u64 signature() const {
+    // Python struct style signature H=u16, I=u32, Q=u64 etc
+    // Parsed by SlidingUnpacker from scripts/osv/trace.py
+    const char* signature() const {
         return signature_helper<s_args...>::sig;
     }
 };
