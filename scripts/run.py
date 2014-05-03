@@ -268,6 +268,81 @@ def start_osv_xen(options):
         subprocess.call(["losetup", "-d", "/dev/loop%s" % os.getpid()])
         cleanups()
 
+def start_osv_vmware(options):
+    args = [
+        '#!/usr/bin/vmware',
+        '.encoding = "UTF-8"',
+        'config.version = "8"',
+        'virtualHW.version = "8"',
+        'scsi0.present = "TRUE"',
+        'scsi0.virtualDev = "pvscsi"',
+        'scsi0:0.fileName = "osv.vmdk"',
+        'ethernet0.present = "TRUE"',
+        'ethernet0.connectionType = "nat"',
+        'ethernet0.virtualDev = "vmxnet3"',
+        'ethernet0.addressType = "generated"',
+        'pciBridge0.present = "TRUE"',
+        'pciBridge4.present = "TRUE"',
+        'pciBridge4.virtualDev = "pcieRootPort"',
+        'pciBridge4.functions = "8"',
+        'hpet0.present = "TRUE"',
+        'guestOS = "ubuntu-64"',
+        'scsi0:0.present = "TRUE"',
+        'floppy0.present = "FALSE"',
+        'serial0.present = "TRUE"',
+        'serial0.fileType = "network"',
+        'serial0.fileName = "telnet://127.0.0.1:10000"',
+        'debugStub.listen.guest64 = "TRUE"',
+        'debugStub.listen.guest64.remote = "TRUE"',
+    ]
+    try:
+        memory = int(options.memsize)
+    except ValueError:
+        memory = options.memsize
+
+        if memory[-1:].upper() == "M":
+            memory = int(memory[:-1])
+        elif memory[-2:].upper() == "MB":
+            memory = int(memory[:-2])
+        elif memory[-1:].upper() == "G":
+            memory = 1024 * int(memory[:-1])
+        elif memory[-2:].upper() == "GB":
+            memory = 1024 * int(memory[:-2])
+        else:
+            print("Unrecognized memory size", file=sys.stderr)
+            return;
+
+    args += [
+        'memsize = "%d"' % (memory),
+        'numvcpus = "%s"' % (options.vcpus),
+        'displayName = "osv-%d"' % (os.getpid()),
+    ]
+
+    vmxfile = open("build/%s/osv.vmx" % options.opt_path, "w")
+    vmxfile.writelines( "%s\n" % item for item in args )
+    vmxfile.flush()
+
+    try:
+        # Convert disk image to vmdk
+        subprocess.call(["qemu-img", "convert", "-O", "vmdk", options.image_file, "build/%s/osv.vmdk" % options.opt_path])
+        # Launch vmware
+        cmdline = ["vmrun", "start", vmxfile.name]
+        if options.graphics:
+            cmdline += ["gui"]
+        else:
+            cmdline += ["nogui"]
+        if options.dry_run:
+            print(format_args(cmdline))
+        else:
+            subprocess.call(cmdline)
+        # Connect serial console via TCP
+        subprocess.call(["telnet", "127.0.0.1", "10000"])
+    except:
+        pass
+    finally:
+        vmxfile.close()
+        cleanups()
+
 def start_osv(options):
     launchers = {
             "xen" : start_osv_xen,
@@ -275,6 +350,7 @@ def start_osv(options):
             "none" : start_osv_qemu,
             "qemu" : start_osv_qemu,
             "kvm" : start_osv_qemu,
+            "vmware" : start_osv_vmware,
     }
     try:
         launchers[options.hypervisor](options)
@@ -325,7 +401,7 @@ if (__name__ == "__main__"):
     parser.add_argument("-e", "--execute", action="store", default=None, metavar="CMD",
                         help="edit command line before execution")
     parser.add_argument("-p", "--hypervisor", action="store", default="auto",
-                        help="choose hypervisor to run: kvm, xen, xenpv, none (plain qemu)")
+                        help="choose hypervisor to run: kvm, xen, xenpv, vmware, none (plain qemu)")
     parser.add_argument("-D", "--detach", action="store_true",
                         help="run in background, do not connect the console")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
