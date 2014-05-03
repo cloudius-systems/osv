@@ -23,7 +23,8 @@ tracepointv<10002, decltype(test_object::unpack), test_object::unpack>
     trace_2("tp2", "%d %d");
 tracepoint<10003, const char*, long, const char*> trace_string("tp3", "%s %d %s");
 
-
+tracepoint<10004, int, int, int, int, int, int, int, int, int>
+trace_with_nine_args("tp4", "%d %d %d %d %d %d %d %d %d");
 
 std::string signature_string(const char* s)
 {
@@ -46,5 +47,6 @@ int main(int ac, char** av)
     assert(size == 16 && tmp.a0 == 10 && tmp.a1 == 20);
     trace_2(obj);
     trace_string("foo", 6, "bar");
-}
 
+    assert(signature_string(trace_with_nine_args.signature()) == "iiiiiiiii");
+}
