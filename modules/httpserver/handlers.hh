@@ -14,45 +14,11 @@
 
 #include <unordered_map>
 #include <functional>
-#include <exception>
+#include "exception.hh"
 
 namespace httpserver {
 
 typedef const http::server::request& const_req;
-
-class not_found_exception : public std::exception
-{
-public:
-    not_found_exception(const std::string& msg)
-        : _msg(msg)
-    {
-    }
-    virtual const char* what() const throw ()
-    {
-        return _msg.c_str();
-    }
-
-private:
-    std::string _msg;
-
-};
-
-class bad_param_exception : public std::exception
-{
-public:
-    bad_param_exception(const std::string& msg)
-        : _msg(msg)
-    {
-    }
-    virtual const char* what() const throw ()
-    {
-        return _msg.c_str();
-    }
-
-private:
-    std::string _msg;
-
-};
 
 /**
  * handlers holds the logic for serving an incoming request.

@@ -47,7 +47,7 @@ void handler_base::reply400(http::server::reply& rep, int err_code,
 void handler_base::reply500(http::server::reply& rep, int err_code,
                             const std::string& alternative_message)
 {
-    rep = http::server::reply::stock_reply(http::server::reply::bad_request,
+    rep = http::server::reply::stock_reply(http::server::reply::internal_server_error,
                                            &alternative_message);
 }
 
