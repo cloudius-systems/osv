@@ -217,8 +217,14 @@ def extract(args):
         if os.path.exists(args.tracefile):
             os.remove(args.tracefile)
             assert(not os.path.exists(args.tracefile))
-        proc = subprocess.Popen(['gdb', elf_path, '-batch', '-ex', 'conn', '-ex', 'osv trace save ' + args.tracefile],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cmdline = ['gdb', elf_path, '-batch']
+        if args.remote:
+            cmdline.extend(['-ex', 'target remote ' + args.remote])
+        else:
+            cmdline.extend(['-ex', 'conn'])
+        cmdline.extend(['-ex', 'osv trace save ' + args.tracefile])
+        proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT)
         _stdout, _ = proc.communicate()
         if proc.returncode or not os.path.exists(args.tracefile):
             print(_stdout)
@@ -532,6 +538,7 @@ if __name__ == "__main__":
         """)
     add_symbol_resolution_options(cmd_extract)
     add_trace_source_options(cmd_extract)
+    cmd_extract.add_argument("-r", "--remote", action="store", help="remote node address:port")
     cmd_extract.set_defaults(func=extract)
 
     cmd_pcap_dump = subparsers.add_parser("pcap-dump")
