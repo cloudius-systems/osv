@@ -24,4 +24,7 @@ guestOS = "ubuntu-64"
 scsi0:0.present = "TRUE"
 scsi0:0.fileName = "osv.vmdk"
 floppy0.present = "FALSE"
+serial0.present = "TRUE"
+serial0.fileType = "network"
+serial0.fileName = "telnet://127.0.0.1:10000"
 EOF
