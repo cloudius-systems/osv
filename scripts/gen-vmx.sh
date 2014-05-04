@@ -27,4 +27,6 @@ floppy0.present = "FALSE"
 serial0.present = "TRUE"
 serial0.fileType = "network"
 serial0.fileName = "telnet://127.0.0.1:10000"
+debugStub.listen.guest64 = "TRUE"
+debugStub.listen.guest64.remote = "TRUE"
 EOF
