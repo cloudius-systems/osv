@@ -67,7 +67,8 @@ unimportant_functions = set([
     'std::function<void ()>::operator()() const',
     'tracepoint_base::do_log_backtrace',
     'tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
-    'tracepoint_base::do_log_backtrace(trace_record*, unsigned char*&)'
+    'tracepoint_base::do_log_backtrace(trace_record*, unsigned char*&)',
+    '_M_invoke',
     ])
 
 bottom_of_stack = set(['thread_main', 'thread_main_c'])
