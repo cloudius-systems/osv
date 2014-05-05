@@ -34,7 +34,7 @@
 #define _NETINET_TCP_SYNCACHE_H_
 
 #include <sys/cdefs.h>
-#include <bsd/porting/callout.h>
+#include <osv/async.hh>
 
 __BEGIN_DECLS
 
@@ -110,9 +110,9 @@ TAILQ_HEAD(sch_head, syncache);
 
 struct syncache_head {
 	struct vnet	*sch_vnet;
-	struct mtx	sch_mtx;
+	mutex	sch_mtx;
 	TAILQ_HEAD(sch_head, syncache)	sch_bucket;
-	struct callout	sch_timer;
+	serial_timer_task*	sch_timer;
 	int		sch_nextc;
 	u_int		sch_length;
 	u_int		sch_oddeven;

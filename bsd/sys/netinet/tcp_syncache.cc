@@ -82,6 +82,7 @@
 #endif /*IPSEC*/
 
 #include <machine/in_cksum.h>
+#include <functional>
 
 static VNET_DEFINE(int, tcp_syncookies) = 1;
 #define	V_tcp_syncookies		VNET(tcp_syncookies)
@@ -110,7 +111,7 @@ static struct socket *syncache_socket(struct syncache *, struct socket *,
 	struct mbuf *m);
 static void syncache_timeout(struct syncache *sc, struct syncache_head *sch,
 	int docallout);
-static void syncache_timer(void *);
+static void syncache_timer(struct syncache_head *sch, serial_timer_task& timer);
 static void syncookie_generate(struct syncache_head *, struct syncache *,
 	u_int32_t *);
 static struct syncache
@@ -181,9 +182,9 @@ MALLOC_DEFINE(M_SYNCACHE, "syncache", "TCP syncache");
 
 #define ENDPTS6_EQ(a, b) (memcmp(a, b, sizeof(*a)) == 0)
 
-#define	SCH_LOCK(sch)		mtx_lock(&(sch)->sch_mtx)
-#define	SCH_UNLOCK(sch)		mtx_unlock(&(sch)->sch_mtx)
-#define	SCH_LOCK_ASSERT(sch)	mtx_assert(&(sch)->sch_mtx, MA_OWNED)
+#define	SCH_LOCK(sch)		mutex_lock(&(sch)->sch_mtx)
+#define	SCH_UNLOCK(sch)		mutex_unlock(&(sch)->sch_mtx)
+#define	SCH_LOCK_ASSERT(sch)	assert(mutex_owned(&(sch)->sch_mtx))
 
 /*
  * Requires the syncache entry to be already removed from the bucket list.
@@ -231,15 +232,17 @@ void syncache_init(void)
 
 	/* Initialize the hash buckets. */
 	for (i = 0; i < V_tcp_syncache.hashsize; i++) {
+		auto& sch = V_tcp_syncache.hashbase[i];
 #ifdef VIMAGE
-		V_tcp_syncache.hashbase[i].sch_vnet = curvnet;
+		sch.sch_vnet = curvnet;
 #endif
-		TAILQ_INIT(&V_tcp_syncache.hashbase[i].sch_bucket);
-		mtx_init(&V_tcp_syncache.hashbase[i].sch_mtx, "tcp_sc_head", NULL,
-			MTX_DEF);
-		callout_init_mtx(&V_tcp_syncache.hashbase[i].sch_timer,
-			&V_tcp_syncache.hashbase[i].sch_mtx, 0);
-		V_tcp_syncache.hashbase[i].sch_length = 0;
+		TAILQ_INIT(&sch.sch_bucket);
+		mutex_init(&sch.sch_mtx);
+
+		sch.sch_timer = new serial_timer_task(sch.sch_mtx,
+			std::bind(syncache_timer, &sch, std::placeholders::_1));
+
+		sch.sch_length = 0;
 	}
 
 	/* Create the syncache entry zone. */V_tcp_syncache.zone = uma_zcreate(
@@ -258,9 +261,10 @@ syncache_destroy(void)
 
 	/* Cleanup hash buckets: stop timers, free entries, destroy locks. */
 	for (i = 0; i < V_tcp_syncache.hashsize; i++) {
-
 		sch = &V_tcp_syncache.hashbase[i];
-		callout_drain(&sch->sch_timer);
+
+		sch->sch_timer->cancel_sync();
+		delete sch->sch_timer;
 
 		SCH_LOCK(sch);
 		TAILQ_FOREACH_SAFE(sc, &sch->sch_bucket, sc_hash, nsc)
@@ -270,7 +274,7 @@ syncache_destroy(void)
 			("%s: sch->sch_bucket not empty", __func__));
 		KASSERT(sch->sch_length == 0, ("%s: sch->sch_length %d not 0",
 				__func__, sch->sch_length));
-		mtx_destroy(&sch->sch_mtx);
+		mutex_destroy(&sch->sch_mtx);
 	}
 
 	KASSERT(V_tcp_syncache.cache_count == 0, ("%s: cache_count %d not 0",
@@ -348,9 +352,9 @@ static void syncache_timeout(struct syncache *sc, struct syncache_head *sch,
 	sc->sc_rxmits++;
 	if (TSTMP_LT(sc->sc_rxttime, sch->sch_nextc)) {
 		sch->sch_nextc = sc->sc_rxttime;
-		if (docallout)
-			callout_reset(&sch->sch_timer, sch->sch_nextc - bsd_ticks,
-				syncache_timer, (void *)sch);
+		if (docallout) {
+			reschedule(*sch->sch_timer, sch->sch_nextc - bsd_ticks);
+		}
 	}
 }
 
@@ -359,17 +363,19 @@ static void syncache_timeout(struct syncache *sc, struct syncache_head *sch,
  * If we have retransmitted an entry the maximum number of times, expire it.
  * One separate timer for each bucket row.
  */
-static void syncache_timer(void *xsch)
+static void syncache_timer(struct syncache_head *sch, serial_timer_task& timer)
 {
-	struct syncache_head *sch = (struct syncache_head *)xsch;
 	struct syncache *sc, *nsc;
 	int tick = bsd_ticks;
 	char *s;
 
 	CURVNET_SET(sch->sch_vnet);
 
-	/* NB: syncache_head has already been locked by the callout. */
-	SCH_LOCK_ASSERT(sch);
+	SCOPE_LOCK(sch->sch_mtx);
+
+	if (!timer.try_fire()) {
+		return;
+	}
 
 	/*
 	 * In the following cycle we may remove some entries and/or
@@ -412,9 +418,9 @@ static void syncache_timer(void *xsch)
 		TCPSTAT_INC(tcps_sc_retransmitted);
 		syncache_timeout(sc, sch, 0);
 	}
-	if (!TAILQ_EMPTY(&(sch)->sch_bucket))
-		callout_reset(&(sch)->sch_timer, (sch)->sch_nextc - tick,
-			syncache_timer, (void *)(sch));
+	if (!TAILQ_EMPTY(&(sch)->sch_bucket)) {
+		reschedule(timer, (sch)->sch_nextc - tick);
+	}
 	CURVNET_RESTORE();
 }
 
