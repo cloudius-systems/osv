@@ -1,6 +1,7 @@
 import sys
 from operator import attrgetter
 from osv import trace, tree, debug
+import itertools
 
 class ProfNode(tree.TreeNode):
     def __init__(self, key):
@@ -171,7 +172,7 @@ def print_profile(samples, symbol_resolver, caller_oriented=False,
             if not sample:
                 continue
 
-        frames = [symbol_resolver(addr - 1) for addr in sample.backtrace]
+        frames = list(debug.resolve_all(symbol_resolver, (addr - 1 for addr in sample.backtrace)))
         frames = strip_garbage(frames)
         if caller_oriented:
             frames.reverse()

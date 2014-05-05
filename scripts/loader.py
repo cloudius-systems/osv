@@ -21,7 +21,7 @@ external = os.path.join(osv_dir, 'external', arch)
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
 from osv.trace import Trace,TracePoint,BacktraceFormatter,format_time,format_duration
-from osv import trace
+from osv import trace, debug
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
 
@@ -73,37 +73,48 @@ def load_elf(path, base):
 
     gdb.execute('add-symbol-file %s %s %s' % (path, text_addr, args))
 
-class syminfo(object):
+class syminfo_resolver(object):
     cache = dict()
-    def __init__(self, addr):
-        if addr in syminfo.cache:
-            cobj = syminfo.cache[addr]
-            self.func = cobj.func
-            self.source = cobj.source
-            return
+
+    def __call__(self, addr):
+        if addr in syminfo_resolver.cache:
+            return self.cache[addr]
         infosym = gdb.execute('info symbol 0x%x' % addr, False, True)
-        self.func = infosym[:infosym.find(" + ")]
+        func = infosym[:infosym.find(" + ")]
         sal = gdb.find_pc_line(addr)
         try :
             # prefer (filename:line),
-            self.source = '%s:%s' % (sal.symtab.filename, sal.line)
+            filename = sal.symtab.filename
+            line = sal.line
         except :
             # but if can't get it, at least give the name of the object
-            if infosym.startswith("No symbol matches") :
-                self.source = None
-            else:
-                self.source = infosym[infosym.rfind("/")+1:].rstrip()
-        if self.source and self.source.startswith('../../'):
-            self.source = self.source[6:]
-        syminfo.cache[addr] = self
-    def __str__(self):
-        ret = self.func
-        if self.source:
-            ret += ' (%s)' % (self.source,)
-        return ret
+            if not infosym.startswith("No symbol matches") :
+                filename = infosym[infosym.rfind("/")+1:].rstrip()
+
+        if filename and filename.startswith('../../'):
+            filename = filename[6:]
+        result = [debug.SourceAddress(addr, name=func, filename=filename, line=line)]
+        syminfo_resolver.cache[addr] = result
+        return result
+
     @classmethod
     def clear_cache(clazz):
         clazz.cache.clear()
+
+symbol_resolver = syminfo_resolver()
+
+def symbol_formatter(src_addr):
+    ret = src_addr.name
+    if src_addr.filename or src_addr.line:
+        ret += ' ('
+        ret += src_addr.filename
+        if src_addr.line:
+            ret += ':' + str(src_addr.line)
+        ret += ')'
+    return ret
+
+def syminfo(addr):
+    return symbol_formatter(syminfo_resolver(addr))
 
 def translate(path):
     '''given a path, try to find it on the host OS'''
@@ -449,7 +460,7 @@ class osv_syms(gdb.Command):
         gdb.Command.__init__(self, 'osv syms',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        syminfo.clear_cache()
+        syminfo_resolver.clear_cache()
         p = gdb.lookup_global_symbol('elf::program::s_objs').value()
         p = p.dereference().address
         while p.dereference():
@@ -939,7 +950,7 @@ def make_symbolic(addr):
 
 def dump_trace(out_func):
     indents = defaultdict(int)
-    bt_formatter = BacktraceFormatter(make_symbolic)
+    bt_formatter = BacktraceFormatter(symbol_resolver, symbol_formatter)
 
     def lookup_tp(name):
         return gdb.lookup_global_symbol(name).value().dereference()

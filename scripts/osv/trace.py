@@ -2,6 +2,7 @@ import os
 import mmap
 import struct
 import sys
+from osv import debug
 
 # version 2 introduced thread_name
 # version 3 introduced variable-length arguments (blob)
@@ -20,22 +21,25 @@ def format_time(time):
     return "%12.9f" % nanos_to_seconds(time)
 
 class BacktraceFormatter:
-    def __init__(self, resolver):
+    def __init__(self, resolver, formatter):
         self.resolver = resolver
+        self.formatter = formatter
 
     def __call__(self, backtrace):
         if not backtrace:
             return ''
 
-        while self.resolver(backtrace[0] - 1).startswith("tracepoint"):
-            backtrace.pop(0)
+        frames = list(debug.resolve_all(self.resolver, (x - 1 for x in backtrace if x)))
 
-        return '   [' + ', '.join((str(self.resolver(x - 1)) for x in backtrace if x)) + ']'
+        while frames[0].name and frames[0].name.startswith("tracepoint"):
+            frames.pop(0)
 
-def simple_symbol_formatter(addr):
-    return '0x%x' % addr
+        return '   [' + ', '.join(map(self.formatter, frames)) + ']'
 
-default_backtrace_formatter = BacktraceFormatter(simple_symbol_formatter)
+def simple_symbol_formatter(src_addr):
+    return '0x%x' % src_addr.addr
+
+default_backtrace_formatter = BacktraceFormatter(debug.DummyResolver, simple_symbol_formatter)
 
 class TimeRange(object):
     """

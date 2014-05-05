@@ -56,6 +56,7 @@ def add_symbol_resolution_options(parser):
     group.add_argument("-d", "--debug", action="store_true", help="use loader.elf from debug build")
     group.add_argument("-e", "--exe", action="store", help="path to the object file used for symbol resolution")
     group.add_argument("-x", "--no-resolve", action='store_true', help="do not resolve symbols")
+    group.add_argument("--no-inlined-by", action='store_true', help="do not show inlined-by functions")
     group.add_argument("-L", "--show-line-number", action='store_true', help="show line numbers")
     group.add_argument("-A", "--show-address", action='store_true', help="show raw addresses")
     group.add_argument("-F", "--show-file-name", action='store_true', help="show file names")
@@ -65,13 +66,14 @@ class BeautifyingResolver(object):
         self.delegate = delegate
 
     def __call__(self, addr):
-        src_addr = self.delegate(addr)
-        if src_addr.name:
-            if src_addr.name.startswith("void sched::thread::do_wait_until<"):
-                src_addr.name = "sched::thread::do_wait_until"
-            elif src_addr.name.startswith("do_wait_until<"):
-                src_addr.name = "do_wait_until"
-        return src_addr
+        resolution = self.delegate(addr)
+        for src_addr in resolution:
+            if src_addr.name:
+                if src_addr.name.startswith("void sched::thread::do_wait_until<"):
+                    src_addr.name = "sched::thread::do_wait_until"
+                elif src_addr.name.startswith("do_wait_until<"):
+                    src_addr.name = "do_wait_until"
+        return resolution
 
 def symbol_resolver(args):
     if args.no_resolve:
@@ -84,14 +86,14 @@ def symbol_resolver(args):
     else:
         elf_path = 'build/release/loader.elf'
 
-    return BeautifyingResolver(debug.SymbolResolver(elf_path))
+    return BeautifyingResolver(debug.SymbolResolver(elf_path, show_inline=not args.no_inlined_by))
 
 def get_backtrace_formatter(args):
     if not args.backtrace:
         return lambda backtrace: ''
 
     return trace.BacktraceFormatter(
-        symbol_printer(symbol_resolver(args), src_addr_formatter(args)))
+        symbol_resolver(args), src_addr_formatter(args))
 
 def list_trace(args):
     def data_formatter(sample):
