@@ -201,10 +201,17 @@ static void syncache_free(struct syncache *sc)
 	uma_zfree(V_tcp_syncache.zone, sc);
 }
 
+syncache_head::syncache_head()
+	: sch_timer(sch_mtx, std::bind(syncache_timer, this, std::placeholders::_1))
+{
+#ifdef VIMAGE
+	sch_vnet = curvnet;
+#endif
+	TAILQ_INIT(&sch_bucket);
+}
+
 void syncache_init(void)
 {
-	int i;
-
 	V_tcp_syncache.cache_count = 0;
 	V_tcp_syncache.hashsize = TCP_SYNCACHE_HASHSIZE;
 	V_tcp_syncache.bucket_limit = TCP_SYNCACHE_BUCKETLIMIT;
@@ -225,25 +232,8 @@ void syncache_init(void)
 	TUNABLE_INT_FETCH("net.inet.tcp.syncache.cachelimit",
 		&V_tcp_syncache.cache_limit);
 
-	/* Allocate the hash table. */V_tcp_syncache.hashbase = (syncache_head *)malloc(
-		V_tcp_syncache.hashsize * sizeof(struct syncache_head));
-	bzero(V_tcp_syncache.hashbase,
-		V_tcp_syncache.hashsize * sizeof(struct syncache_head));
-
-	/* Initialize the hash buckets. */
-	for (i = 0; i < V_tcp_syncache.hashsize; i++) {
-		auto& sch = V_tcp_syncache.hashbase[i];
-#ifdef VIMAGE
-		sch.sch_vnet = curvnet;
-#endif
-		TAILQ_INIT(&sch.sch_bucket);
-		mutex_init(&sch.sch_mtx);
-
-		sch.sch_timer = new serial_timer_task(sch.sch_mtx,
-			std::bind(syncache_timer, &sch, std::placeholders::_1));
-
-		sch.sch_length = 0;
-	}
+	/* Allocate the hash table. */
+	V_tcp_syncache.hashbase = new syncache_head[V_tcp_syncache.hashsize];
 
 	/* Create the syncache entry zone. */V_tcp_syncache.zone = uma_zcreate(
 		"syncache", sizeof(struct syncache), NULL, NULL, NULL, NULL,
@@ -263,8 +253,7 @@ syncache_destroy(void)
 	for (i = 0; i < V_tcp_syncache.hashsize; i++) {
 		sch = &V_tcp_syncache.hashbase[i];
 
-		sch->sch_timer->cancel_sync();
-		delete sch->sch_timer;
+		sch->sch_timer.cancel_sync();
 
 		SCH_LOCK(sch);
 		TAILQ_FOREACH_SAFE(sc, &sch->sch_bucket, sc_hash, nsc)
@@ -274,7 +263,6 @@ syncache_destroy(void)
 			("%s: sch->sch_bucket not empty", __func__));
 		KASSERT(sch->sch_length == 0, ("%s: sch->sch_length %d not 0",
 				__func__, sch->sch_length));
-		mutex_destroy(&sch->sch_mtx);
 	}
 
 	KASSERT(V_tcp_syncache.cache_count == 0, ("%s: cache_count %d not 0",
@@ -282,7 +270,7 @@ syncache_destroy(void)
 
 	/* Free the allocated global resources. */
 	uma_zdestroy(V_tcp_syncache.zone);
-	free(V_tcp_syncache.hashbase, M_SYNCACHE);
+	delete[] V_tcp_syncache.hashbase;
 }
 #endif
 
@@ -353,7 +341,7 @@ static void syncache_timeout(struct syncache *sc, struct syncache_head *sch,
 	if (TSTMP_LT(sc->sc_rxttime, sch->sch_nextc)) {
 		sch->sch_nextc = sc->sc_rxttime;
 		if (docallout) {
-			reschedule(*sch->sch_timer, sch->sch_nextc - bsd_ticks);
+			reschedule(sch->sch_timer, sch->sch_nextc - bsd_ticks);
 		}
 	}
 }
