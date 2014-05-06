@@ -46,7 +46,7 @@ unsigned symbol_type(Elf64_Sym& sym)
     return sym.st_info & 15;
 }
 
-unsigned symbol_binding(Elf64_Sym& sym)
+unsigned __attribute__((unused)) symbol_binding(Elf64_Sym& sym)
 {
     return sym.st_info >> 4;
 }
