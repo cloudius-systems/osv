@@ -874,7 +874,10 @@ void vmxnet3::rxq_input(vmxnet3_rxqueue &rxq, vmxnet3_rx_compdesc *rxcd,
         rx_csum(rxcd, m);
     _rxq_stats.rx_packets++;
     _rxq_stats.rx_bytes += m->M_dat.MH.MH_pkthdr.len;
-    (*_ifn->if_input)(_ifn, m);
+    bool fast_path = _ifn->if_classifier.post_packet(m);
+    if (!fast_path) {
+        (*_ifn->if_input)(_ifn, m);
+    }
 }
 
 void vmxnet3::get_mac_address(u_int8_t *macaddr)
