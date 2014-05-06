@@ -16,6 +16,7 @@
 #include <sys/ioctl.h>
 #include "console.hh"
 #include "console-multiplexer.hh"
+#include "early-console.hh"
 
 #ifdef __x86_64__
 #include "drivers/isa-serial.hh"
@@ -40,15 +41,9 @@ termios tio = {
             /*VREPRINT*/0, /*VDISCARD*/0, /*VWERASE*/0,
             /*VLNEXT*/0, /*VEOL2*/0},
 };
-#ifdef __x86_64__
-IsaSerialConsole early_driver
-    __attribute__((init_priority((int)init_prio::console)));
+
 ConsoleMultiplexer mux __attribute__((init_priority((int)init_prio::console)))
-    (&tio, &early_driver);
-#else
-ConsoleMultiplexer mux __attribute__((init_priority((int)init_prio::console)))
-    (&tio, nullptr);
-#endif
+    (&tio, &arch_early_console);
 
 void write(const char *msg, size_t len)
 {

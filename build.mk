@@ -663,6 +663,7 @@ libtsm += drivers/libtsm/tsm_vte_charsets.o
 
 drivers := $(bsd) $(solaris)
 drivers += core/mmu.o
+drivers += arch/$(arch)/early-console.o
 drivers += drivers/console.o
 drivers += drivers/console-multiplexer.o
 drivers += drivers/console-driver.o
@@ -703,6 +704,10 @@ drivers += drivers/vmw-pvscsi.o
 drivers += drivers/zfs.o
 drivers += java/java_api.o
 endif # x64
+
+ifeq ($(arch),aarch64)
+drivers += drivers/pl011.o
+endif # aarch64
 
 objects := bootfs.o
 objects += arch/$(arch)/arch-trace.o
