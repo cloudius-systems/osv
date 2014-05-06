@@ -46,7 +46,7 @@ unsigned symbol_type(Elf64_Sym& sym)
     return sym.st_info & 15;
 }
 
-unsigned __attribute__((unused)) symbol_binding(Elf64_Sym& sym)
+unsigned symbol_binding(Elf64_Sym& sym)
 {
     return sym.st_info >> 4;
 }
@@ -458,7 +458,7 @@ symbol_module object::symbol(unsigned idx)
     auto nameidx = sym->st_name;
     auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
     auto ret = _prog.lookup(name);
-    auto binding = sym->st_info >> 4;
+    auto binding = symbol_binding(*sym);
     if (!ret.symbol && binding == STB_WEAK) {
         return symbol_module(sym, this);
     }
@@ -718,7 +718,7 @@ dladdr_info object::lookup_addr(const void* addr)
         if (type != STT_OBJECT && type != STT_FUNC) {
             continue;
         }
-        auto bind = (sym.st_info >> 4) & 15;
+        auto bind = symbol_binding(sym);
         if (bind != STB_GLOBAL && bind != STB_WEAK) {
             continue;
         }
