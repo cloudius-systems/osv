@@ -253,6 +253,11 @@ int timerfd_create(int clockid, int flags) {
 
 static constexpr s64 second = 1000000000;
 
+static bool check_nsec_validity(long nsec)
+{
+    return (nsec >= 0 && nsec < second);
+}
+
 int timerfd_settime(int fd, int flags, const itimerspec *newval,
         itimerspec *oldval)
 {
@@ -263,6 +268,11 @@ int timerfd_settime(int fd, int flags, const itimerspec *newval,
     }
     auto tf = dynamic_cast<timerfd*>(f.get());
     if (!tf) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!check_nsec_validity(newval->it_value.tv_nsec) ||
+        !check_nsec_validity(newval->it_interval.tv_nsec)) {
         errno = EINVAL;
         return -1;
     }
