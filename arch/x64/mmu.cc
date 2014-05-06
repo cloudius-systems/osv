@@ -11,6 +11,7 @@
 #include <osv/mmu.hh>
 #include <osv/irqlock.hh>
 #include <osv/interrupt.hh>
+#include <osv/prio.hh>
 
 void page_fault(exception_frame *ef)
 {
@@ -75,7 +76,7 @@ void flush_tlb_all()
     tlb_flush_waiter.clear();
 }
 
-static pt_element page_table_root;
+static pt_element page_table_root __attribute__((init_priority((int)init_prio::pt_root)));
 
 void switch_to_runtime_page_tables()
 {

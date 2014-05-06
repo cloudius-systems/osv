@@ -10,7 +10,7 @@ void flush_tlb_local() {
     asm volatile("dsb sy; tlbi vmalle1; dsb sy; isb;");
 }
 
-static pt_element page_table_root[2];
+static pt_element page_table_root[2] __attribute__((init_priority((int)init_prio::pt_root)));
 
 void switch_to_runtime_page_tables()
 {
@@ -74,3 +74,4 @@ bool is_page_fault_write_exclusive(unsigned int esr) {
 }
 
 }
+#include <osv/prio.hh>
