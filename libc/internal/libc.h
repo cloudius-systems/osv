@@ -34,8 +34,20 @@ extern struct __libc __libc ATTR_LIBC_VISIBILITY;
 
 int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
 void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
-#define LOCK(x) (mutex_lock(&(x)),1)
-#define UNLOCK(x) (mutex_unlock(&(x)),1)
+#define LOCK(x) _LOCK(&(x))
+#define UNLOCK(x) _UNLOCK(&(x))
+
+static inline int _LOCK(mutex_t *m)
+{
+	mutex_lock(m);
+	return 1;
+}
+
+static inline int _UNLOCK(mutex_t *m)
+{
+	mutex_unlock(m);
+	return 1;
+}
 
 extern char **__environ;
 
