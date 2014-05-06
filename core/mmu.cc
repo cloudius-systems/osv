@@ -282,7 +282,7 @@ public:
     bool descend(void) { return opt2bool(Descend); }
     bool once(void) { return opt2bool(Once); }
     bool split_large(hw_ptep ptep, int level) { return opt2bool(Split); }
-    int nr_page_sizes(void) { return mmu::nr_page_sizes; }
+    unsigned nr_page_sizes(void) { return mmu::nr_page_sizes; }
 
     // small_page() function is called on level 0 ptes. Each page table operation
     // have to provide its own version.
@@ -512,7 +512,7 @@ public:
         assert(0);
         return false;
     }
-    int nr_page_sizes(void) { return 1; }
+    unsigned nr_page_sizes(void) { return 1; }
 };
 
 struct tlb_gather {
