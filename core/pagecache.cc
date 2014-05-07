@@ -145,29 +145,28 @@ public:
 
 class cached_page_write : public cached_page {
 private:
-    struct dentry* _dp;
+    struct vnode* _vp;
 public:
     cached_page_write(hashkey key, vfs_file* fp) : cached_page(key, memory::alloc_page()) {
-        _dp = fp->f_dentry;
-        dref(_dp);
+        _vp = fp->f_dentry->d_vnode;
+        vref(_vp);
     }
     ~cached_page_write() {
         if (_page) {
             writeback();
             memory::free_page(_page);
-            drele(_dp);
+            vrele(_vp);
         }
     }
     int writeback()
     {
-        struct vnode *vp = _dp->d_vnode;
         int error;
         struct iovec iov {_page, mmu::page_size};
         struct uio uio {&iov, 1, _key.offset, mmu::page_size, UIO_WRITE};
 
-        vn_lock(vp);
-        error = VOP_WRITE(vp, &uio, 0);
-        vn_unlock(vp);
+        vn_lock(_vp);
+        error = VOP_WRITE(_vp, &uio, 0);
+        vn_unlock(_vp);
 
         return error;
     }
@@ -175,7 +174,7 @@ public:
         assert(boost::get<std::nullptr_t>(_ptes) == nullptr);
         void *p = _page;
         _page = nullptr;
-        drele(_dp);
+        vrele(_vp);
         return p;
     }
 };
