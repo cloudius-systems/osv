@@ -78,8 +78,60 @@ int main(int argc, char **argv)
     iret = closedir(dir);
     report(iret == 0, "closedir");
     free(ent);
+
+    // test rewinddir(), still on a directory with one file
+    dir = opendir("/tmp/tst-readdir");
+    report(dir != NULL, "opendir");
+    ent = (struct dirent *)malloc(4096);
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "."), "first entry is .");
+    rewinddir(dir);
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "."), "first entry is .");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, ".."), "second entry is ..");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "aaa"), "third entry is aaa");
+    report(readdir_r(dir, ent, &r)==0 && r==NULL, "no more entries");
+    rewinddir(dir);
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "."), "first entry is .");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, ".."), "second entry is ..");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "aaa"), "third entry is aaa");
+    report(readdir_r(dir, ent, &r)==0 && r==NULL, "no more entries");
+    iret = closedir(dir);
+    report(iret == 0, "closedir");
+    free(ent);
+
+    // test telldir(), seekdir()
+    dir = opendir("/tmp/tst-readdir");
+    report(dir != NULL, "opendir");
+    ent = (struct dirent *)malloc(4096);
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "."), "first entry is .");
+    auto p = telldir(dir);
+    report(p >= 0, "telldir");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, ".."), "second entry is ..");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "aaa"), "third entry is aaa");
+    report(readdir_r(dir, ent, &r)==0 && r==NULL, "no more entries");
+    seekdir(dir,p);
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, ".."), "second entry is ..");
+    report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
+    report(!strcmp(ent->d_name, "aaa"), "third entry is aaa");
+    report(readdir_r(dir, ent, &r)==0 && r==NULL, "no more entries");
+    iret = closedir(dir);
+    report(iret == 0, "closedir");
+    free(ent);
+
+    // clean up the temporary directory we created with one file.
     report(unlink("/tmp/tst-readdir/aaa")==0, "unlink aaa");
     report(rmdir("/tmp/tst-readdir")==0, "rmdir");
+
 
     // test removal of all a directory's nodes
     report(mkdir("/tmp/tst-readdir", 0777) == 0, "mkdir");

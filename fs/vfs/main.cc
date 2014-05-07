@@ -592,57 +592,59 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
     return error == ENOENT ? 0 : error;
 }
 
+// FIXME: in 64bit dirent64 and dirent are identical, so it's safe to alias
+extern "C" int readdir64_r(DIR *dir, struct dirent64 *entry,
+        struct dirent64 **result)
+        __attribute__((alias("readdir_r")));
+
 #undef readdir64
 extern "C" struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
 
-#if 0
-static int
-fs_rewinddir(struct task *t, struct msg *msg)
+void rewinddir(DIR *dirp)
 {
-    struct task *t = main_task;
-    file_t fp;
+    struct file *fp;
 
-    error = fget(fd, &fp);
-    if (error)
-        return EBADF;
+    auto error = fget(dirp->fd, &fp);
+    if (error) {
+        // POSIX specifies that what rewinddir() does in the case of error
+        // is undefined...
+        return;
+    }
 
-    return sys_rewinddir(fp);
+    sys_rewinddir(fp);
+    // Again, error code from sys_rewinddir() is ignored.
+    fdrop(fp);
 }
 
-static int
-fs_seekdir(struct task *t, struct msg *msg)
+long telldir(DIR *dirp)
 {
-    struct task *t = main_task;
-    file_t fp;
+    struct file *fp;
+    int error = fget(dirp->fd, &fp);
+    if (error) {
+        return libc_error(error);
+    }
+
     long loc;
-
-    error = fget(fd, &fp);
-    if (error)
-        return EBADF;
-    loc = msg->data[1];
-
-    return sys_seekdir(fp, loc);
+    error = sys_telldir(fp, &loc);
+    fdrop(fp);
+    if (error) {
+        return libc_error(error);
+    }
+    return loc;
 }
 
-static int
-fs_telldir(struct task *t, struct msg *msg)
+void seekdir(DIR *dirp, long loc)
 {
-    struct task *t = main_task;
-    file_t fp;
-    long loc;
-    int error;
-
-    error = fget(fd, &fp);
-    if (error)
-        return EBADF;
-    loc = msg->data[1];
-
-    if ((error = sys_telldir(fp, &loc)) != 0)
-        return error;
-    msg->data[0] = loc;
-    return 0;
+    struct file *fp;
+    int error = fget(dirp->fd, &fp);
+    if (error) {
+        // POSIX specifies seekdir() cannot return errors.
+        return;
+    }
+    sys_seekdir(fp, loc);
+    // Again, error code from sys_seekdir() is ignored.
+    fdrop(fp);
 }
-#endif
 
 TRACEPOINT(trace_vfs_mkdir, "\"%s\" 0%0o", const char*, mode_t);
 TRACEPOINT(trace_vfs_mkdir_ret, "");
