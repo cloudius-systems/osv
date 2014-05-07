@@ -137,12 +137,6 @@ entry_fiq:
 entry_serror:
         b       entry_invalid
 
-.global thread_main
-thread_main:
-        .type thread_main, @function
-	mov x0, x29
-	bl thread_main_c
-
 .global call_signal_handler_thunk
 call_signal_handler_thunk:
         .type call_signal_handler_thunk, @function

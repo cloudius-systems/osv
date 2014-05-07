@@ -9,8 +9,10 @@
 #define ARCH_THREAD_STATE_HH_
 
 struct thread_state {
-    void* sp;
     void* fp;
+    void* thread;
+
+    void* sp;
     void* pc;
 };
 
