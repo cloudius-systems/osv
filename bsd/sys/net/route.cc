@@ -336,7 +336,7 @@ rtalloc1_fib(struct bsd_sockaddr *dst, int report, u_long ignflags,
 	/*
 	 * Look up the address in the table for that Address Family
 	 */
-	needlock = !(ignflags & RTF_RNH_LOCKED);
+	needlock = false;
 	if (needlock)
 		RADIX_NODE_HEAD_RLOCK(rnh);
 #ifdef INVARIANTS	
