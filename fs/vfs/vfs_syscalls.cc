@@ -635,12 +635,6 @@ sys_rename(char *src, char *dest)
 	if ((error = vn_access(vp1, VWRITE)) != 0)
 		goto err1;
 
-	/* Is the source busy ? */
-	if (vcount(vp1) >= 2) {
-		error = EBUSY;
-		goto err1;
-	}
-
 	/* Check type of source & target */
 	error = namei(dest, &dp2);
 	if (error == 0) {
@@ -658,11 +652,6 @@ sys_rename(char *src, char *dest)
 		}
 		if (vp2->v_type == VDIR && check_dir_empty(dest)) {
 			error = EEXIST;
-			goto err2;
-		}
-
-		if (vcount(vp2) >= 2) {
-			error = EBUSY;
 			goto err2;
 		}
 	} else if (error == ENOENT) {
