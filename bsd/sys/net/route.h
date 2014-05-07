@@ -139,7 +139,9 @@ struct rtentry {
 	u_int	rt_fibnum;		/* which FIB */
 #ifdef _KERNEL
 	/* XXX ugly, user apps use this definition but don't have a mtx def */
+#if 0
 	struct	mtx rt_mtx;		/* mutex for routing entry */
+#endif
 #endif
 };
 
@@ -319,6 +321,28 @@ struct rt_addrinfo {
 #define RT_LINK_IS_UP(ifp)	(!((ifp)->if_capabilities & IFCAP_LINKSTATE) \
 				 || (ifp)->if_link_state == LINK_STATE_UP)
 
+#if 1
+#define	RT_LOCK_INIT(_rt)
+#define	RT_LOCK(_rt)
+#define	RT_UNLOCK(_rt)
+#define	RT_LOCK_DESTROY(_rt)
+#define	RT_LOCK_ASSERT(_rt)
+
+#define	RT_ADDREF(_rt)	do {					\
+} while (0)
+
+#define	RT_REMREF(_rt)	do {					\
+} while (0)
+
+#define	RTFREE_LOCKED(_rt) do {					\
+} while (0)
+
+#define	RTFREE(_rt) do {					\
+} while (0)
+
+#define	RO_RTFREE(_ro) do {					\
+} while (0)
+#else
 #define	RT_LOCK_INIT(_rt) \
 	mtx_init(&(_rt)->rt_mtx, "rtentry", NULL, MTX_DEF | MTX_DUPOK)
 #define	RT_LOCK(_rt)		mtx_lock(&(_rt)->rt_mtx)
@@ -367,6 +391,7 @@ struct rt_addrinfo {
 		}						\
 	}							\
 } while (0)
+#endif
 
 struct radix_node_head *rt_tables_get_rnh(int, int);
 
