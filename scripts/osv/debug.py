@@ -45,18 +45,22 @@ class SymbolResolver(object):
     def next_line(self):
         return self.addr2line.stdout.readline().rstrip('\n')
 
-    def parse_line(self, addr, line):
+    def consume_unknown(self, line):
         # addr2line ver. 2.23.2 (Ubuntu)
         m = re.match(r'^\?\?$', line)
         if m:
             line = self.next_line()
             if not re.match(r'^\?\?:0$', line):
                 raise Exception('Unexpected response: ' + line)
-            return SourceAddress(addr)
+            return True
 
         # addr2line ver. 2.23.52.0.1-9.fc19
         m = re.match(r'^\?\? \?\?:0$', line)
         if m:
+            return True
+
+    def parse_line(self, addr, line):
+        if self.consume_unknown(line):
             return SourceAddress(addr)
 
         m = re.match(r'(?P<name>.*) at ((?P<file>.*?)|\?+):((?P<line>\d+)|\?+)', line)
@@ -85,6 +89,7 @@ class SymbolResolver(object):
             while line.startswith(self.inline_prefix):
                 result.append(self.parse_line(addr, line[len(self.inline_prefix):]))
                 line = self.next_line()
+            self.consume_unknown(line)
 
         self.cache[addr] = result
         return result
