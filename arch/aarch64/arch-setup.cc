@@ -77,6 +77,10 @@ void arch_setup_free_memory()
     mmu::linear_map((void*)0x40000000, (mmu::phys)0x40000000, addr - 0x40000000);
     /* linear_map [TTBR0 - UART] */
     mmu::linear_map((void *)0x9000000, (mmu::phys)0x9000000, 0x1000);
+    /* linear_map [TTBR0 - GIC DIST] */
+    mmu::linear_map((void *)0x8001000, (mmu::phys)0x8001000, 0x1000);
+    /* linear_map [TTBR0 - GIC CPU interface] */
+    mmu::linear_map((void *)0x8002000, (mmu::phys)0x8002000, 0x1000);
 
     mmu::switch_to_runtime_page_tables();
 

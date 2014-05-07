@@ -723,6 +723,7 @@ objects += arch/$(arch)/mmu.o
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
+objects += arch/$(arch)/gic.o
 endif
 
 ifeq ($(arch),x64)
