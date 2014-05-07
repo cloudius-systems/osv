@@ -166,7 +166,7 @@ int vfs_file::get_arcbuf(void* key, off_t offset)
     data.uio_iovcnt = 1;
     data.uio_offset = offset;
     data.uio_resid = mmu::page_size;
-    data.uio_rw = UIO_WRITE;
+    data.uio_rw = UIO_READ;
 
     vn_lock(vp);
     assert(VOP_CACHE(vp, this, &data) == 0);
