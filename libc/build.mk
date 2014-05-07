@@ -631,7 +631,6 @@ libc += unistd/gethostname.o
 libc += unistd/sync.o
 
 libc += pthread.o
-libc += dir.o
 libc += libc.o
 libc += dlfcn.o
 libc += time.o

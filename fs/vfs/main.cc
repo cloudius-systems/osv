@@ -526,30 +526,74 @@ TRACEPOINT(trace_vfs_readdir, "%d %p", int, dirent*);
 TRACEPOINT(trace_vfs_readdir_ret, "");
 TRACEPOINT(trace_vfs_readdir_err, "%d", int);
 
-extern "C"
-int
-ll_readdir(int fd, struct dirent *d)
+struct __DIR_s {
+    int fd;
+};
+
+DIR *opendir(const char *path)
+{
+    DIR *dir = new DIR;
+
+    if (!dir)
+        return libc_error_ptr<DIR>(ENOMEM);
+
+    dir->fd = open(path, O_RDONLY);
+    if (dir->fd < 0) {
+        delete dir;
+        return NULL;
+    }
+    return dir;
+}
+
+int closedir(DIR *dir)
+{
+    close(dir->fd);
+    delete dir;
+    return 0;
+}
+
+struct dirent *readdir(DIR *dir)
+{
+    static __thread struct dirent entry, *result;
+    int ret;
+
+    ret = readdir_r(dir, &entry, &result);
+    if (ret)
+        return libc_error_ptr<struct dirent>(ret);
+
+    errno = 0;
+    return result;
+}
+
+int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 {
     int error;
     struct file *fp;
 
-    trace_vfs_readdir(fd, d);
-    error = fget(fd, &fp);
-    if (error) {
-        trace_vfs_readdir_err(error);
-        return error;
-    }
-
-    error = sys_readdir(fp, d);
-    fdrop(fp);
+    trace_vfs_readdir(dir->fd, entry);
+    error = fget(dir->fd, &fp);
     if (error) {
         trace_vfs_readdir_err(error);
     } else {
-        trace_vfs_readdir_ret();
+        error = sys_readdir(fp, entry);
+        fdrop(fp);
+        if (error) {
+            trace_vfs_readdir_err(error);
+        } else {
+            trace_vfs_readdir_ret();
+        }
     }
 
-    return error;
+    if (error) {
+        *result = NULL;
+    } else {
+        *result = entry;
+    }
+    return error == ENOENT ? 0 : error;
 }
+
+#undef readdir64
+extern "C" struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
 
 #if 0
 static int
