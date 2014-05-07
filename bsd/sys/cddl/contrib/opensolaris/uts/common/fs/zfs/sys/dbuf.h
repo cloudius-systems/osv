@@ -247,6 +247,7 @@ void dbuf_spill_hold(struct dnode *dn, dmu_buf_impl_t **dbp, void *tag);
 
 void dbuf_rm_spill(struct dnode *dn, dmu_tx_t *tx);
 
+dmu_buf_impl_t *dbuf_hold_sparse(struct dnode *dn, uint64_t blkid, void *tag, int fail_sparse);
 dmu_buf_impl_t *dbuf_hold(struct dnode *dn, uint64_t blkid, void *tag);
 dmu_buf_impl_t *dbuf_hold_level(struct dnode *dn, int level, uint64_t blkid,
     void *tag);

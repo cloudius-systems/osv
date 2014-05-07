@@ -1947,11 +1947,17 @@ top:
 }
 
 dmu_buf_impl_t *
-dbuf_hold(dnode_t *dn, uint64_t blkid, void *tag)
+dbuf_hold_sparse(dnode_t *dn, uint64_t blkid, void *tag, int fail_sparse)
 {
 	dmu_buf_impl_t *db;
-	int err = dbuf_hold_impl(dn, 0, blkid, FALSE, tag, &db);
+	int err = dbuf_hold_impl(dn, 0, blkid, fail_sparse, tag, &db);
 	return (err ? NULL : db);
+}
+
+dmu_buf_impl_t *
+dbuf_hold(dnode_t *dn, uint64_t blkid, void *tag)
+{
+	return dbuf_hold_sparse(dn, blkid, tag, FALSE);
 }
 
 dmu_buf_impl_t *

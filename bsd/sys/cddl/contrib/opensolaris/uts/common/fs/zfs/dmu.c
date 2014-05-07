@@ -371,8 +371,8 @@ dmu_spill_hold_by_bonus(dmu_buf_t *bonus, void *tag, dmu_buf_t **dbp)
  * whose dnodes are in the same block.
  */
 static int
-dmu_buf_hold_array_by_dnode(dnode_t *dn, uint64_t offset, uint64_t length,
-    int read, void *tag, int *numbufsp, dmu_buf_t ***dbpp, uint32_t flags)
+dmu_buf_hold_array_by_dnode_sparse(dnode_t *dn, uint64_t offset, uint64_t length,
+    int read, void *tag, int *numbufsp, dmu_buf_t ***dbpp, uint32_t flags, int fail_sparse)
 {
 	dsl_pool_t *dp = NULL;
 	dmu_buf_t **dbp;
@@ -415,12 +415,12 @@ dmu_buf_hold_array_by_dnode(dnode_t *dn, uint64_t offset, uint64_t length,
 	zio = zio_root(dn->dn_objset->os_spa, NULL, NULL, ZIO_FLAG_CANFAIL);
 	blkid = dbuf_whichblock(dn, offset);
 	for (i = 0; i < nblks; i++) {
-		dmu_buf_impl_t *db = dbuf_hold(dn, blkid+i, tag);
+		dmu_buf_impl_t *db = dbuf_hold_sparse(dn, blkid+i, tag, fail_sparse);
 		if (db == NULL) {
 			rw_exit(&dn->dn_struct_rwlock);
 			dmu_buf_rele_array(dbp, nblks, tag);
 			zio_nowait(zio);
-			return (EIO);
+			return (fail_sparse ? ENOENT : EIO);
 		}
 		/* initiate async i/o */
 		if (read)
@@ -469,8 +469,15 @@ dmu_buf_hold_array_by_dnode(dnode_t *dn, uint64_t offset, uint64_t length,
 }
 
 static int
-dmu_buf_hold_array(objset_t *os, uint64_t object, uint64_t offset,
-    uint64_t length, int read, void *tag, int *numbufsp, dmu_buf_t ***dbpp)
+dmu_buf_hold_array_by_dnode(dnode_t *dn, uint64_t offset, uint64_t length,
+    int read, void *tag, int *numbufsp, dmu_buf_t ***dbpp, uint32_t flags)
+{
+	return dmu_buf_hold_array_by_dnode_sparse(dn, offset, length, read, tag, numbufsp, dbpp, flags, FALSE);
+}
+
+static int
+dmu_buf_hold_array_sparse(objset_t *os, uint64_t object, uint64_t offset,
+    uint64_t length, int read, void *tag, int *numbufsp, dmu_buf_t ***dbpp, int fail_sparce)
 {
 	dnode_t *dn;
 	int err;
@@ -479,12 +486,19 @@ dmu_buf_hold_array(objset_t *os, uint64_t object, uint64_t offset,
 	if (err)
 		return (err);
 
-	err = dmu_buf_hold_array_by_dnode(dn, offset, length, read, tag,
-	    numbufsp, dbpp, DMU_READ_PREFETCH);
+	err = dmu_buf_hold_array_by_dnode_sparse(dn, offset, length, read, tag,
+	    numbufsp, dbpp, DMU_READ_PREFETCH, fail_sparce);
 
 	dnode_rele(dn, FTAG);
 
 	return (err);
+}
+
+static int
+dmu_buf_hold_array(objset_t *os, uint64_t object, uint64_t offset,
+    uint64_t length, int read, void *tag, int *numbufsp, dmu_buf_t ***dbpp)
+{
+	return dmu_buf_hold_array_sparse(os, object, offset, length, read, tag, numbufsp, dbpp, FALSE);
 }
 
 int
@@ -987,20 +1001,13 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size)
 	dmu_buf_t **dbp;
 	int err;
 	int numbufs = 0;
-	uint64_t noff = uio->uio_loffset;
-
-	err = dmu_offset_next(os, object, FALSE, &noff);
-
-	if ((err == ESRCH) || noff != uio->uio_loffset) {
-		return (0);
-	}
 
 	// This will acquire a reference both in the dbuf, and in the ARC buffer.
 	// The ARC buffer reference will also update the access statistics
-	err = dmu_buf_hold_array(os, object, uio->uio_loffset, size, TRUE, FTAG,
-		&numbufs, &dbp);
+	err = dmu_buf_hold_array_sparse(os, object, uio->uio_loffset, size, TRUE, FTAG,
+		&numbufs, &dbp, TRUE);
 	if (err)
-		return (err);
+		return (err == ENOENT ? 0 : err);
 
 	assert(numbufs == 1);
 	dmu_buf_t *db = dbp[0];
@@ -1013,7 +1020,7 @@ dmu_map_uio(objset_t *os, uint64_t object, uio_t *uio, uint64_t size)
 
 	dmu_buf_rele_array(dbp, numbufs, FTAG);
 
-	return (0);
+	return (err);
 }
 
 int
