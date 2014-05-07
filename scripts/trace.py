@@ -238,6 +238,10 @@ def extract(args):
 def prof_wait(args):
     show_profile(args, get_wait_profile)
 
+def prof_lock(args):
+    def get_profile(traces):
+        return prof.get_duration_profile(traces, "mutex_lock_wait", "mutex_lock_wake")
+    show_profile(args, get_profile)
 
 def needs_dpkt():
     global dpkt
@@ -524,6 +528,15 @@ if __name__ == "__main__":
     add_trace_source_options(cmd_prof_wait)
     add_profile_options(cmd_prof_wait)
     cmd_prof_wait.set_defaults(func=prof_wait, paginate=True)
+
+    cmd_prof_lock = subparsers.add_parser("prof-lock", help="show lock contention profile", description="""
+        Prints profile showing amount of time for which threads were blocked witing on a mutex.
+        This can be used to estimate lock contention.
+        """)
+    add_symbol_resolution_options(cmd_prof_lock)
+    add_trace_source_options(cmd_prof_lock)
+    add_profile_options(cmd_prof_lock)
+    cmd_prof_lock.set_defaults(func=prof_lock, paginate=True)
 
     cmd_prof_hit = subparsers.add_parser("prof", help="show trace hit profile", description="""
         Prints profile showing number of times given tracepoint was reached.
