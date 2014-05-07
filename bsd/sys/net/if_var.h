@@ -413,10 +413,18 @@ EVENTHANDLER_DECLARE(group_detach_event, group_detach_event_handler_t);
 typedef void (*group_change_event_handler_t)(void *, const char *);
 EVENTHANDLER_DECLARE(group_change_event, group_change_event_handler_t);
 
+#if 0
 #define	IF_AFDATA_WLOCK(ifp)	rw_wlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_RLOCK(ifp)	rw_rlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_WUNLOCK(ifp)	rw_wunlock(&(ifp)->if_afdata_lock)
 #define	IF_AFDATA_RUNLOCK(ifp)	rw_runlock(&(ifp)->if_afdata_lock)
+#else
+#define	IF_AFDATA_WLOCK(ifp)	do { } while (0)
+#define	IF_AFDATA_RLOCK(ifp)	do { } while (0)
+#define	IF_AFDATA_WUNLOCK(ifp)	do { } while (0)
+#define	IF_AFDATA_RUNLOCK(ifp)	do { } while (0)
+#endif
+
 #define	IF_AFDATA_LOCK(ifp)	IF_AFDATA_WLOCK(ifp)
 #define	IF_AFDATA_UNLOCK(ifp)	IF_AFDATA_WUNLOCK(ifp)
 #define	IF_AFDATA_TRYLOCK(ifp)	rw_try_wlock(&(ifp)->if_afdata_lock)

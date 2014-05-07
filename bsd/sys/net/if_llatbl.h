@@ -87,15 +87,15 @@ struct llentry {
 	/* NB: struct bsd_sockaddr must immediately follow */
 };
 
-#define	LLE_WLOCK(lle)		rw_wlock(&(lle)->lle_lock)
-#define	LLE_RLOCK(lle)		rw_rlock(&(lle)->lle_lock)
-#define	LLE_WUNLOCK(lle)	rw_wunlock(&(lle)->lle_lock)
-#define	LLE_RUNLOCK(lle)	rw_runlock(&(lle)->lle_lock)
-#define	LLE_DOWNGRADE(lle)	rw_downgrade(&(lle)->lle_lock)
-#define	LLE_TRY_UPGRADE(lle)	rw_try_upgrade(&(lle)->lle_lock)
+#define	LLE_WLOCK(lle) do { } while (0)
+#define	LLE_RLOCK(lle) do { } while (0)
+#define	LLE_WUNLOCK(lle) do { } while (0)
+#define	LLE_RUNLOCK(lle) do { } while (0)
+#define	LLE_DOWNGRADE(lle) do { } while (0)
+#define	LLE_WLOCK_ASSERT(lle) do { } while (0)
+#define	LLE_TRY_UPGRADE(lle)	true
 #define	LLE_LOCK_INIT(lle)	rw_init_flags(&(lle)->lle_lock, "lle", RW_DUPOK)
 #define	LLE_LOCK_DESTROY(lle)	rw_destroy(&(lle)->lle_lock)
-#define	LLE_WLOCK_ASSERT(lle)	rw_assert(&(lle)->lle_lock, RA_WLOCKED)
 
 #define LLE_IS_VALID(lle)	(((lle) != NULL) && ((lle) != (void *)-1))
 
