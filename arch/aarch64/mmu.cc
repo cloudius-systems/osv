@@ -1,4 +1,5 @@
 #include <osv/mmu.hh>
+#include <osv/prio.hh>
 
 namespace mmu {
 
