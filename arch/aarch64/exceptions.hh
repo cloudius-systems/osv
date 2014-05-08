@@ -17,6 +17,8 @@
 #include <osv/mutex.h>
 #include <vector>
 
+#include "gic.hh"
+
 struct exception_frame {
     u64 regs[31];
     u64 sp;
@@ -32,28 +34,32 @@ struct exception_frame {
 
 extern __thread exception_frame* current_interrupt_frame;
 
-struct shared_vector {
-    unsigned vector;
-    unsigned id;
-    shared_vector(unsigned v, unsigned i)
-        : vector(v), id(i)
-    {};
+typedef void (*interrupt_handler)(struct interrupt_desc *);
+
+struct interrupt_desc {
+    interrupt_desc(int i, interrupt_handler h, gic::irq_type t)
+        : id(i), handler(h), type(t) {}
+
+    int id;
+    interrupt_handler handler;
+    gic::irq_type type;
 };
 
 class interrupt_table {
 public:
     interrupt_table();
-    void load_on_cpu();
-    unsigned register_handler(std::function<void ()> handler);
-    // The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
-    shared_vector register_level_triggered_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> handler);
-    void unregister_level_triggered_handler(shared_vector v);
-    unsigned register_interrupt_handler(std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
-    void unregister_handler(unsigned vector);
-    void invoke_interrupt(unsigned vector);
+    void enable_irqs();
+
+    void register_handler(int id, interrupt_handler h, gic::irq_type t);
+    int invoke_interrupt(int id); /* returns 0 if no handler registered */
+
+protected:
+    int nr_irqs; /* number of supported InterruptIDs, read from gic */
+    osv::rcu_ptr<struct interrupt_desc> irq_desc[gic::max_nr_irqs];
+    mutex _lock;
 };
 
-extern interrupt_table interrupt_table;
+extern class interrupt_table idt;
 
 extern "C" {
     void page_fault(exception_frame* ef);

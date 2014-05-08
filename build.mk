@@ -720,6 +720,7 @@ objects += arch/$(arch)/smp.o
 objects += arch/$(arch)/elf-dl.o
 objects += arch/$(arch)/entry.o
 objects += arch/$(arch)/mmu.o
+objects += arch/$(arch)/exceptions.o
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
@@ -729,7 +730,6 @@ endif
 ifeq ($(arch),x64)
 objects += arch/x64/arch-trace.o
 objects += arch/x64/dump.o
-objects += arch/x64/exceptions.o
 objects += arch/x64/ioapic.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
