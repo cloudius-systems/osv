@@ -13,6 +13,9 @@
 #include <sys/sysinfo.h>
 #include <time.h>
 #include <osv/shutdown.hh>
+#include <osv/debug.hh>
+
+extern char debug_buffer[DEBUG_BUFFER_SIZE];
 
 namespace httpserver {
 
@@ -79,6 +82,12 @@ void init(routes& routes)
         return formatter::to_json("");
     }, "json");
     routes.add_path("shutdown", shutdown);
+
+    function_handler* dmesg = new function_handler([](const_req req)
+    {
+        return string(debug_buffer);
+    }, "json");
+    routes.add_path("getDebugMessages",dmesg);
 }
 
 }
