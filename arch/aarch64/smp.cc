@@ -27,6 +27,10 @@ void __attribute__((constructor(init_prio::sched))) smp_init()
     c->arch.smp_idx = 0;
     sched::cpus.push_back(c);
     sched::current_cpu = sched::cpus[0];
+
+    for (auto c : sched::cpus) {
+        c->incoming_wakeups = new sched::cpu::incoming_wakeup_queue[sched::cpus.size()];
+    }
 }
 
 void smp_launch()
