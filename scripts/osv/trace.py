@@ -39,7 +39,7 @@ class BacktraceFormatter:
 def simple_symbol_formatter(src_addr):
     return '0x%x' % src_addr.addr
 
-default_backtrace_formatter = BacktraceFormatter(debug.DummyResolver, simple_symbol_formatter)
+default_backtrace_formatter = BacktraceFormatter(debug.DummyResolver(), simple_symbol_formatter)
 
 class TimeRange(object):
     """
