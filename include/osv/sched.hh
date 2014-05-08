@@ -119,8 +119,9 @@ public:
         }
         unsigned operator*() { return _idx; }
         iterator& operator++() {
-            ++_idx;
-            advance();
+            if (++_idx < max_cpus) {
+                advance();
+            }
             return *this;
         }
         iterator operator++(int) {
