@@ -8,6 +8,8 @@ libzpool-objects = $(foreach file, $(libzpool-file-list), bsd/cddl/contrib/opens
 libzfs-objects += $(libzpool-objects)
 libzfs-objects += bsd/cddl/compat/opensolaris/misc/mkdirp.o
 libzfs-objects += bsd/cddl/compat/opensolaris/misc/zmount.o
+libzfs-objects += bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o
+libzfs-objects += bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o
 
 define libzfs-includes
   bsd/cddl/compat/opensolaris/lib/libumem
@@ -41,7 +43,17 @@ $(libzfs-objects): kernel-defines =
 $(libzfs-objects): CFLAGS += -D_GNU_SOURCE
 
 $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \
-			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function
+			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function \
+			-D_OPENSOLARIS_SYS_UIO_H_
+
+# Note: zfs_prop.c and zprop_common.c are also used by the kernel, thus the manual targets.
+bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.c
+	$(makedir)
+	$(q-build-c)
+
+bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.c
+	$(makedir)
+	$(q-build-c)
 
 libzfs.so: $(libzfs-objects) libuutil.so
 	$(makedir)
