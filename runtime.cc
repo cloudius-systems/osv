@@ -142,7 +142,7 @@ void abort(const char *fmt, ...)
 }
 
 // __assert_fail() is used by the assert() macros
-void __assert_fail(const char *expr, const char *file, int line, const char *func)
+void __assert_fail(const char *expr, const char *file, unsigned int line, const char *func)
 {
     abort("Assertion failed: %s (%s: %s: %d)\n", expr, file, func, line);
 }
