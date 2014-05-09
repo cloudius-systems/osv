@@ -36,7 +36,6 @@ public class TestRunner {
     public void registerELFTests() {
         File dir = new File("/tests");
         if (!dir.isDirectory()) {
-            log.warning("No such directory: " + dir);
             return;
         }
 
