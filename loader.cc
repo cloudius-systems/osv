@@ -117,27 +117,11 @@ void premain()
 
 int main(int ac, char **av)
 {
-#ifdef AARCH64_PORT_STUB
-    printf("argc=%d\n", ac);
-
-    for (int i = 0; i < ac; i++) {
-        printf("argv[%d] = %s\n", i, av[i]);
-    }
-
-    printf("OSv AArch64: main reached, halting.\n");
-    while (1) {
-        asm ("wfi;");
-    }
-#endif /* AARCH64_PORT_STUB */
-
-#ifndef AARCH64_PORT_STUB
     smp_initial_find_current_cpu()->init_on_cpu();
     void main_cont(int ac, char** av);
     sched::init([=] { main_cont(ac, av); });
-#endif /* !AARCH64_PORT_STUB */
 }
 
-#ifndef AARCH64_PORT_STUB
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
@@ -343,6 +327,7 @@ void* do_main_thread(void *_commands)
     auto commands =
          static_cast<std::vector<std::vector<std::string> > *>(_commands);
 
+#ifndef AARCH64_PORT_STUB
     // initialize panic drivers
     panic::pvpanic::probe_and_setup();
     boot_time.event("pvpanic done");
@@ -402,6 +387,8 @@ void* do_main_thread(void *_commands)
 
     boot_time.event("Total time");
 
+#endif /* AARCH64_PORT_STUB */
+
     // run each payload in order
     // Our parse_command_line() leaves at the end of each command a delimiter,
     // can be '&' if we need to run this command in a new thread, or ';' or
@@ -436,6 +423,8 @@ void main_cont(int ac, char** av)
     std::tie(ac, av) = parse_options(ac, av);
     // multiple programs can be run -> separate their arguments
     cmds = prepare_commands(ac, av);
+
+#ifndef AARCH64_PORT_STUB
     ioapic::init();
     smp_launch();
     boot_time.event("SMP launched");
@@ -475,12 +464,14 @@ void main_cont(int ac, char** av)
     net_init();
     boot_time.event("Network initialized");
 
-    processor::sti();
+    arch::irq_enable();
 
+#ifndef AARCH64_PORT_STUB
     if (opt_enable_sampler) {
         prof::config config{std::chrono::nanoseconds(1000000000 / sampler_frequency)};
         prof::start_sampler(config);
     }
+#endif /* !AARCH64_PORT_STUB */
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
@@ -495,6 +486,8 @@ void main_cont(int ac, char** av)
         sched::thread::wait_until([] { return false; });
     }
 
+#endif /* !AARCH64_PORT_STUB */
+
     if (memory::tracker_enabled) {
         debug("Leak testing done. Please use 'osv leak show' in gdb to analyze results.\n");
         osv::halt();
@@ -502,8 +495,6 @@ void main_cont(int ac, char** av)
         osv::shutdown();
     }
 }
-
-#endif /* !AARCH64_PORT_STUB */
 
 int __argc;
 char** __argv;
