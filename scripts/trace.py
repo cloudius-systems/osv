@@ -483,7 +483,7 @@ def list_timed(args):
                             trace.format_time(t.time),
                             trace.format_duration(timed.duration),
                             t.name,
-                            t.format_data(),
+                            trace.Trace.format_data(t),
                             bt_formatter(t.backtrace))
 
 def add_trace_listing_options(parser):
