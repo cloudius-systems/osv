@@ -133,8 +133,15 @@ def add_profile_options(parser):
         help="show only nodes with hit count not smaller than this. can be absolute number or a percentage, eg. 10%%")
     group.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
 
+class sample_name_is(object):
+    def __init__(self, name):
+        self.name = name
+
+    def __call__(self, sample):
+        return sample.name == self.name
+
 def get_wait_profile(traces):
-    return prof.get_duration_profile(traces, "sched_wait", "sched_wait_ret")
+    return prof.get_duration_profile(traces, sample_name_is("sched_wait"))
 
 def get_time_range(args):
     start = prof.parse_time_as_nanos(args.since) if args.since else None
@@ -240,7 +247,7 @@ def prof_wait(args):
 
 def prof_lock(args):
     def get_profile(traces):
-        return prof.get_duration_profile(traces, "mutex_lock_wait", "mutex_lock_wake")
+        return prof.get_duration_profile(traces, sample_name_is("mutex_lock_wait"))
     show_profile(args, get_profile)
 
 def needs_dpkt():
@@ -332,56 +339,12 @@ def tcpdump(args):
         raise
     proc.wait()
 
-def prof_hit(args):
+def get_trace_filter(args):
     if args.tracepoint:
-        filter = lambda trace: trace.name == args.tracepoint
-    else:
-        filter = None
-    show_profile(args, lambda traces: prof.get_hit_profile(traces, filter))
+        return sample_name_is(args.tracepoint)
 
-def get_name_of_ended_func(name):
-        m = re.match('(?P<func>.*)(_ret|_err)', name)
-        if m:
-            return m.group('func')
-
-class block_tracepoint_collector(object):
-    def __init__(self):
-        self.block_tracepoints = set()
-
-    def __call__(self, tp):
-        ended = get_name_of_ended_func(tp.name)
-        if ended:
-            self.block_tracepoints.add(ended)
-
-    def __contains__(self, tp):
-        return tp.name in self.block_tracepoints
-
-class timed_trace_producer(object):
-    def __init__(self):
-        self.block_tracepoints = block_tracepoint_collector()
-        self.open_functions = defaultdict(dict)
-
-    def __call__(self, t):
-        self.block_tracepoints(t.tp)
-
-        name = t.name
-        ended = get_name_of_ended_func(name)
-        if ended:
-            if ended in self.open_functions[t.thread]:
-                timed = self.open_functions[t.thread].pop(ended)
-                timed.duration = t.time - timed.trace.time
-                return timed
-        elif t.tp in self.block_tracepoints:
-            if name in self.open_functions[t.thread]:
-                raise Exception("Nested traces not supported: " + name)
-            self.open_functions[t.thread][name] = trace.TimedTrace(t)
-
-def get_timed_traces(traces, time_range):
-    producer = timed_trace_producer()
-    for t in traces:
-        timed = producer(t)
-        if timed and timed.time_range.intersection(time_range):
-                yield timed
+def prof_hit(args):
+    show_profile(args, lambda traces: prof.get_hit_profile(traces, get_trace_filter(args)))
 
 def get_timed_traces_per_function(timed_traces):
     traces_per_function = defaultdict(list)
@@ -396,7 +359,7 @@ def format_duration(nanos):
     return "%4.3f" % (float(nanos) / 1e6)
 
 def print_summary(args, printer=sys.stdout.write):
-    timed_producer = timed_trace_producer()
+    timed_producer = prof.timed_trace_producer()
     timed_samples = []
 
     count_per_tp = defaultdict(lambda: 0)
@@ -420,6 +383,9 @@ def print_summary(args, printer=sys.stdout.write):
                 timed = timed_producer(t)
                 if timed:
                     timed_samples.append(timed)
+
+    if args.timed:
+        timed_samples.extend((timed_producer.finish()))
 
     if count == 0:
         print "No samples"
@@ -466,7 +432,7 @@ def list_timed(args):
     time_range = get_time_range(args)
 
     with get_trace_reader(args) as reader:
-        timed_traces = get_timed_traces(reader.get_traces(), time_range)
+        timed_traces = prof.get_timed_traces(reader.get_traces(), time_range)
 
         if args.sort:
             if args.sort == 'duration':

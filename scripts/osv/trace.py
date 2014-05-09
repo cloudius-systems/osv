@@ -132,9 +132,9 @@ class Trace:
 
 
 class TimedTrace:
-    def __init__(self, trace):
+    def __init__(self, trace, duration=None):
         self.trace = trace
-        self.duration = None
+        self.duration = duration
 
     @property
     def duration(self):

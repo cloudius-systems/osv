@@ -2,6 +2,7 @@ import sys
 from operator import attrgetter
 from osv import trace, tree, debug
 import itertools
+import re
 
 class ProfNode(tree.TreeNode):
     def __init__(self, key):
@@ -92,33 +93,123 @@ def get_hit_profile(traces, filter=None):
         if trace.backtrace and (not filter or filter(trace)):
             yield ProfSample(trace.time, trace.cpu, trace.thread, trace.backtrace)
 
-def get_duration_profile(traces, entry_trace_name, exit_trace_name):
-    entry_traces_per_thread = {}
-    last_time = None
 
-    for trace in traces:
-        last_time = max(last_time, trace.time)
+class TimedTraceMatcher(object):
+    def is_entry_or_exit(self, sample):
+        """
+        True => entry, False => exit, None => neither
+        """
+        pass
 
-        if not trace.backtrace:
-            continue
+    def get_correlation_id(self, sample):
+        """
+        Returns an object which identifies the pair within the set
+        of pairs maintained by this matcher
+        """
+        pass
 
-        if trace.name == entry_trace_name:
-            if trace.thread in entry_traces_per_thread:
-                old = entry_traces_per_thread[trace.thread]
-                raise Exception('Double entry:\n%s\n%s\n' % (str(old), str(trace)))
-            entry_traces_per_thread[trace.thread] = trace
+class PairTimedTraceMatcher(TimedTraceMatcher):
+    def __init__(self, entry_trace_name, exit_trace_name):
+        self.entry_trace_name = entry_trace_name
+        self.exit_trace_name = exit_trace_name
 
-        elif trace.name == exit_trace_name:
-            entry_trace = entry_traces_per_thread.pop(trace.thread, None)
+    def is_entry_or_exit(self, sample):
+        if sample.name == self.entry_trace_name:
+            return True
+        if sample.name == self.exit_trace_name:
+            return False
+
+    def get_correlation_id(self, sample):
+        return sample.thread
+
+class TimedConventionMatcher(TimedTraceMatcher):
+    def __init__(self):
+        self.block_tracepoints = set()
+
+    def get_name_of_ended_func(self, name):
+        m = re.match('(?P<func>.*)(_ret|_err)', name)
+        if m:
+            return m.group('func')
+
+    def is_entry_or_exit(self, sample):
+        ended = self.get_name_of_ended_func(sample.name)
+        if ended:
+            self.block_tracepoints.add(ended)
+            return False
+
+        if sample.name in self.block_tracepoints:
+            return True
+
+    def get_correlation_id(self, sample):
+        ended = self.get_name_of_ended_func(sample.name)
+        if ended:
+            return (sample.thread, ended)
+        return (sample.thread, sample.name)
+
+class timed_trace_producer(object):
+    pair_matchers = [
+        PairTimedTraceMatcher('mutex_lock_wait', 'mutex_lock_wake')
+    ]
+
+    def __init__(self):
+        self.matcher_by_name = dict()
+        for m in self.pair_matchers:
+            self.matcher_by_name[m.entry_trace_name] = m
+            self.matcher_by_name[m.exit_trace_name] = m
+
+        self.convention_matcher = TimedConventionMatcher()
+        self.open_samples = {}
+        self.last_time = None
+
+    def __call__(self, sample):
+        self.last_time = max(self.last_time, sample.time)
+
+        matcher = self.matcher_by_name.get(sample.name, None)
+        if not matcher:
+            matcher = self.convention_matcher
+
+        is_entry = matcher.is_entry_or_exit(sample)
+        if is_entry == None:
+            return
+
+        id = (matcher, matcher.get_correlation_id(sample))
+        if is_entry:
+            if id in self.open_samples:
+                old = self.open_samples[id]
+                raise Exception('Nested entry:\n%s\n%s\n' % (str(old), str(sample)))
+            self.open_samples[id] = sample
+        else:
+            entry_trace = self.open_samples.pop(id, None)
             if not entry_trace:
-                continue
+                return
 
-            duration = trace.time - entry_trace.time
-            yield ProfSample(entry_trace.time, trace.cpu, trace.thread, entry_trace.backtrace, resident_time=duration)
+            duration = sample.time - entry_trace.time
+            return trace.TimedTrace(entry_trace, duration)
 
-    for thread, trace in entry_traces_per_thread.iteritems():
-        duration = last_time - trace.time
-        yield ProfSample(trace.time, trace.cpu, thread, trace.backtrace, resident_time=duration)
+    def finish(self):
+        for sample in self.open_samples.itervalues():
+            duration = self.last_time - sample.time
+            yield trace.TimedTrace(sample, duration)
+
+    def get_all(self, traces):
+        for t in traces:
+            timed = self(t)
+            if timed:
+                yield timed
+        for timed in self.finish():
+            yield timed
+
+def get_timed_traces(traces, time_range=None):
+    producer = timed_trace_producer()
+    for timed in producer.get_all(traces):
+        if not time_range or timed.time_range.intersection(time_range):
+            yield timed
+
+def get_duration_profile(traces, filter=None):
+    for timed in get_timed_traces(traces):
+        t = timed.trace
+        if (not filter or filter(t)) and t.backtrace:
+            yield ProfSample(t.time, t.cpu, t.thread, t.backtrace, resident_time=timed.duration)
 
 def collapse_similar(node):
     while node.has_only_one_child():
