@@ -159,9 +159,13 @@ class timed_trace_producer(object):
 
         self.convention_matcher = TimedConventionMatcher()
         self.open_samples = {}
+        self.earliest_trace_per_cpu = {}
         self.last_time = None
 
     def __call__(self, sample):
+        if not sample.cpu in self.earliest_trace_per_cpu:
+            self.earliest_trace_per_cpu[sample.cpu] = sample
+
         self.last_time = max(self.last_time, sample.time)
 
         matcher = self.matcher_by_name.get(sample.name, None)
@@ -176,13 +180,17 @@ class timed_trace_producer(object):
         if is_entry:
             if id in self.open_samples:
                 old = self.open_samples[id]
-                raise Exception('Nested entry:\n%s\n%s\n' % (str(old), str(sample)))
+                if self.earliest_trace_per_cpu[sample.cpu] > old:
+                    pass
+                else:
+                    raise Exception('Nested entry:\n%s\n%s\n' % (str(old), str(sample)))
             self.open_samples[id] = sample
         else:
             entry_trace = self.open_samples.pop(id, None)
             if not entry_trace:
                 return
-
+            if entry_trace.cpu != sample.cpu and self.earliest_trace_per_cpu[sample.cpu] > entry_trace:
+                return
             duration = sample.time - entry_trace.time
             return trace.TimedTrace(entry_trace, duration)
 
