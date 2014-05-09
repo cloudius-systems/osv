@@ -82,6 +82,8 @@ class syminfo_resolver(object):
         infosym = gdb.execute('info symbol 0x%x' % addr, False, True)
         func = infosym[:infosym.find(" + ")]
         sal = gdb.find_pc_line(addr)
+        filename = None
+        line = None
         try :
             # prefer (filename:line),
             filename = sal.symtab.filename
@@ -114,7 +116,7 @@ def symbol_formatter(src_addr):
     return ret
 
 def syminfo(addr):
-    return symbol_formatter(syminfo_resolver(addr))
+    return symbol_formatter(symbol_resolver(addr)[0])
 
 def translate(path):
     '''given a path, try to find it on the host OS'''
