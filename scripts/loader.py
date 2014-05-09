@@ -997,7 +997,7 @@ def set_leak(val):
 
 def show_leak():
     tracker = gdb.parse_and_eval('memory::tracker')
-    size_allocations = tracker['size_allocations']
+    size_allocations = to_int(tracker['size_allocations'])
     allocations = tracker['allocations']
     # Build a list of allocations to be sorted lexicographically by call chain
     # and summarize allocations with the same call chain:
@@ -1015,7 +1015,7 @@ def show_leak():
         addr = ulong(a['addr'])
         if addr == 0 :
             continue
-        nbacktrace = a['nbacktrace']
+        nbacktrace = to_int(a['nbacktrace'])
         backtrace = a['backtrace']
         callchain = []
         for j in range(nbacktrace) :
