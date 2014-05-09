@@ -346,6 +346,9 @@ def get_trace_filter(args):
 def prof_hit(args):
     show_profile(args, lambda traces: prof.get_hit_profile(traces, get_trace_filter(args)))
 
+def prof_timed(args):
+    show_profile(args, lambda traces: prof.get_duration_profile(traces, get_trace_filter(args)))
+
 def get_timed_traces_per_function(timed_traces):
     traces_per_function = defaultdict(list)
     for timed in timed_traces:
@@ -513,6 +516,14 @@ if __name__ == "__main__":
     add_profile_options(cmd_prof_hit)
     cmd_prof_hit.add_argument("-t", "--tracepoint", action="store", help="name of the tracepoint to count")
     cmd_prof_hit.set_defaults(func=prof_hit, paginate=True)
+
+    cmd_prof_timed = subparsers.add_parser("prof-timed", help="show duration profile of timed samples")
+    add_symbol_resolution_options(cmd_prof_timed)
+    add_trace_source_options(cmd_prof_timed)
+    add_profile_options(cmd_prof_timed)
+    cmd_prof_timed.add_argument("-t", "--tracepoint", action="store", required=True,
+        help="name of the timed tracepoint to show; shows all by default")
+    cmd_prof_timed.set_defaults(func=prof_timed, paginate=True)
 
     cmd_extract = subparsers.add_parser("extract", help="extract trace from running instance", description="""
         Extracts trace from a running OSv instance via GDB.
