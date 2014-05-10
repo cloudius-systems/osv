@@ -33,7 +33,7 @@ void
 destroy_bio(struct bio *bio)
 {
 	pthread_cond_destroy(&bio->bio_wait);
-//	pthread_mutex_destroy(&bio->bio_mutex);
+	pthread_mutex_destroy(&bio->bio_mutex);
 	free(bio);
 }
 
