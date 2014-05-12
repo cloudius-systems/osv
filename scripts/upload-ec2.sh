@@ -63,7 +63,7 @@ upload_image() {
  echo_progress Reading supported instance sizes
 
  if test x"$SUPPORTED_INSTANCE_TYPES" = x"small"; then
-   EXTRA_PARAMETERS="--small-instances"
+   local EXTRA_PARAMETERS="--small-instances"
    echo AMI will support all instance types including small and micro
  else
    echo AMI will support large instance types only
