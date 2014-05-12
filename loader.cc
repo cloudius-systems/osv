@@ -98,6 +98,8 @@ extern "C" {
 
 void premain()
 {
+    debug_early_entry("early-console test: premain");
+
     arch_init_premain();
 
     auto inittab = elf::get_init(elf_header);

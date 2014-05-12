@@ -15,6 +15,8 @@
 #include <osv/debug.hh>
 #include <osv/debug.h>
 
+#include "early-console.hh"
+
 using namespace std;
 
 logger* logger::_instance = nullptr;
@@ -248,9 +250,19 @@ extern "C" {
         console::write_ll(msg, strlen(msg));
     }
 
+    /* Early Console Output
+     *
+     * For early output functionality (from boot code, premain) we need
+     * to access the write() method of the arch-specific early console
+     * directly, because cannot wait for the console framework to be
+     * initialized, not even its "early" functionality.
+     * Therefore the write() method of the early console needs
+     * to work without requiring any class construction.
+     */
+
     void debug_early(const char *msg)
     {
-        console::write_ll(msg, strlen(msg));
+        console::arch_early_console.write(msg, strlen(msg));
     }
 
     void debug_early_u64(const char *msg, unsigned long long val)
@@ -267,8 +279,8 @@ extern "C" {
             val >>= 4;
         }
 
-        console::write_ll(msg, strlen(msg));
-        console::write_ll(nr, 16);
-        console::write_ll("\n", 1);
+        console::arch_early_console.write(msg, strlen(msg));
+        console::arch_early_console.write(nr, 16);
+        console::arch_early_console.write("\n", 1);
     }
 }
