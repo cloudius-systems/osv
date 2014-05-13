@@ -380,6 +380,9 @@ libc += network/if_indextoname.o
 libc += prng/rand.o
 libc += prng/random.o
 
+libc += process/execve.o
+libc += process/execle.o
+
 libc += arch/$(arch)/setjmp/setjmp.o
 libc += arch/$(arch)/setjmp/longjmp.o
 libc += arch/$(arch)/setjmp/sigrtmax.o
