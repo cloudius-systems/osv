@@ -14,6 +14,7 @@ All the files under the following directories are imported from musl:
   network
   passwd
   prng
+  process
   setjmp
   signal
   stdio
