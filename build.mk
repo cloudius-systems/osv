@@ -210,6 +210,9 @@ autodepend = -MD -MT $@ -MP
 
 do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
+ifeq ($(arch),aarch64)
+boost-tests :=
+else
 boost-tests := tests/tst-rename.so
 boost-tests += tests/tst-vfs.so
 boost-tests += tests/tst-libc-locking.so
@@ -225,9 +228,17 @@ boost-tests += tests/tst-bsd-tcp1.so
 boost-tests += tests/tst-async.so
 boost-tests += tests/tst-rcu-list.so
 boost-tests += tests/tst-tcp-listen.so
+endif
 
+ifeq ($(arch),aarch64)
+java_tests :=
+else
 java_tests := tests/hello/Hello.class
+endif
 
+ifeq ($(arch),aarch64)
+tests :=
+else
 tests := tests/tst-pthread.so tests/tst-ramdisk.so
 tests += tests/tst-vblk.so tests/bench/bench.jar tests/reclaim/reclaim.jar
 tests += tests/tst-bsd-evh.so tests/misc-bsd-callout.so
@@ -296,10 +307,15 @@ tests += tests/tst-align.so
 tests += tests/misc-tcp-close-without-reading.so
 tests += tests/tst-sigwait.so
 tests += tests/tst-sampler.so
+endif
 
 tests/hello/Hello.class: javabase=tests/hello
 
-java-targets = java-jars java/java.so
+ifeq ($(arch),aarch64)
+java-targets :=
+else
+java-targets := java-jars java/java.so
+endif
 
 java-jars:
 	$(call quiet, cd $(src)/java && mvn package -q -DskipTests=true, MVN $@)
@@ -310,6 +326,11 @@ tools := tools/ifconfig/ifconfig.so
 tools += tools/route/lsroute.so
 tools += tools/mkfs/mkfs.so
 tools += tools/cpiod/cpiod.so
+
+ifeq ($(arch),aarch64)
+tools += tests/tst-hello.so
+cmdline = tests/tst-hello.so
+endif
 
 ifeq ($(arch),x64)
 
@@ -860,17 +881,12 @@ osv.vmdk osv.vdi:
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
-ifeq ($(arch),aarch64)
-bootfs.bin:
-	touch bootfs.bin
-else
 bootfs.bin: scripts/mkbootfs.py $(java-targets) $(out)/bootfs.manifest $(tests) $(java_tests) $(tools) \
 		tests/testrunner.so \
 		zpool.so zfs.so
 	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
-endif
 
 bootfs.o: bootfs.bin
 
