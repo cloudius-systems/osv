@@ -95,3 +95,22 @@ void arch_setup_tls(thread_control_block *tcb)
 void arch_init_premain()
 {
 }
+
+void arch_init_drivers()
+{
+}
+
+#include "drivers/console.hh"
+#include "drivers/pl011.hh"
+
+bool arch_setup_console(std::string opt_console)
+{
+    if (opt_console.compare("pl011") == 0) {
+        console::console_driver_add(new console::PL011_Console());
+    } else if (opt_console.compare("all") == 0) {
+        console::console_driver_add(new console::PL011_Console());
+    } else {
+        return false;
+    }
+    return true;
+}

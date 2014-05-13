@@ -503,14 +503,12 @@ bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
 endif
 
-ifeq ($(arch),x64)
 bsd += bsd/sys/dev/random/hash.o
 bsd += bsd/sys/dev/random/randomdev_soft.o
 bsd += bsd/sys/dev/random/yarrow.o
 bsd += bsd/sys/dev/random/random_harvestq.o
 bsd += bsd/sys/dev/random/harvest.o
 bsd += bsd/sys/dev/random/live_entropy_sources.o
-endif
 
 bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-parentheses -Wno-unused-but-set-variable
 
@@ -689,6 +687,9 @@ drivers += drivers/clockevent.o
 drivers += drivers/ramdisk.o
 drivers += core/elf.o
 drivers += java/jvm_balloon.o
+drivers += java/java_api.o
+drivers += drivers/random.o
+drivers += drivers/zfs.o
 
 ifeq ($(arch),x64)
 drivers += $(libtsm)
@@ -711,14 +712,11 @@ drivers += drivers/acpi.o
 drivers += drivers/hpet.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/pvpanic.o
-drivers += drivers/random.o
 drivers += drivers/ahci.o
 drivers += drivers/ide.o
 drivers += drivers/pci.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
-drivers += drivers/zfs.o
-drivers += java/java_api.o
 endif # x64
 
 ifeq ($(arch),aarch64)

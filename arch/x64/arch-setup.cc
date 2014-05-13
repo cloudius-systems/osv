@@ -18,8 +18,6 @@
 #include <string.h>
 #include <osv/boot.hh>
 
-using namespace mmu;
-
 struct multiboot_info_type {
     u32 flags;
     u32 mem_lower;
@@ -82,7 +80,7 @@ void setup_temporary_phys_map()
     // duplicate 1:1 mapping into phys_mem
     u64 cr3 = processor::read_cr3();
     auto pt = reinterpret_cast<u64*>(cr3);
-    pt[pt_index(phys_mem, 3)] = pt[0];
+    pt[mmu::pt_index(mmu::phys_mem, 3)] = pt[0];
 }
 
 void for_each_e820_entry(void* e820_buffer, unsigned size, void (*f)(e820ent e))
@@ -205,4 +203,62 @@ static inline void disable_pic()
 void arch_init_premain()
 {
     disable_pic();
+}
+
+#include "drivers/driver.hh"
+#include "drivers/pvpanic.hh"
+#include "drivers/virtio.hh"
+#include "drivers/virtio-blk.hh"
+#include "drivers/virtio-scsi.hh"
+#include "drivers/virtio-net.hh"
+#include "drivers/virtio-rng.hh"
+#include "drivers/xenfront-xenbus.hh"
+#include "drivers/ahci.hh"
+#include "drivers/vmw-pvscsi.hh"
+#include "drivers/vmxnet3.hh"
+#include "drivers/ide.hh"
+
+void arch_init_drivers()
+{
+    // initialize panic drivers
+    panic::pvpanic::probe_and_setup();
+    boot_time.event("pvpanic done");
+
+    // Enumerate PCI devices
+    pci::pci_device_enumeration();
+    boot_time.event("pci enumerated");
+
+    // Initialize all drivers
+    hw::driver_manager* drvman = hw::driver_manager::instance();
+    drvman->register_driver(virtio::blk::probe);
+    drvman->register_driver(virtio::scsi::probe);
+    drvman->register_driver(virtio::net::probe);
+    drvman->register_driver(virtio::rng::probe);
+    drvman->register_driver(xenfront::xenbus::probe);
+    drvman->register_driver(ahci::hba::probe);
+    drvman->register_driver(vmw::pvscsi::probe);
+    drvman->register_driver(vmw::vmxnet3::probe);
+    drvman->register_driver(ide::ide_drive::probe);
+    boot_time.event("drivers probe");
+    drvman->load_all();
+    drvman->list_drivers();
+}
+
+#include "drivers/console.hh"
+#include "drivers/isa-serial.hh"
+#include "drivers/vga.hh"
+
+bool arch_setup_console(std::string opt_console)
+{
+    if (opt_console.compare("serial") == 0) {
+        console::console_driver_add(new console::IsaSerialConsole());
+    } else if (opt_console.compare("vga") == 0) {
+        console::console_driver_add(new console::VGAConsole());
+    } else if (opt_console.compare("all") == 0) {
+        console::console_driver_add(new console::IsaSerialConsole());
+        console::console_driver_add(new console::VGAConsole());
+    } else {
+        return false;
+    }
+    return true;
 }

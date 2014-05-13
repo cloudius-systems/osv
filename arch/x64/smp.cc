@@ -9,6 +9,7 @@
 #include "processor.hh"
 #include "msr.hh"
 #include "apic.hh"
+#include "ioapic.hh"
 #include <osv/mmu.hh>
 #include <string.h>
 extern "C" {
@@ -104,6 +105,7 @@ sched::cpu* smp_initial_find_current_cpu()
 
 void smp_launch()
 {
+    ioapic::init();
     processor::kvm_pv_eoi_init();
     auto boot_cpu = smp_initial_find_current_cpu();
     for (auto c : sched::cpus) {

@@ -11,10 +11,13 @@
 #define ARCH_SETUP_HH_
 
 #include <osv/tls.hh>
+#include <string>
 
 void arch_init_premain();
 void arch_setup_tls(thread_control_block *tcb);
 
 void arch_setup_free_memory();
+void arch_init_drivers();
+bool arch_setup_console(std::string opt_console);
 
 #endif /* ARCH_SETUP_HH_ */
