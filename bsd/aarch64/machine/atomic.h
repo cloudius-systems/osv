@@ -109,20 +109,14 @@ static __inline u_long atomic_fetchadd_long(volatile u_long *p, u_long val)
 
 static __inline void atomic_store_rel_int(volatile u_int *p, u_int val)
 {
-    u_int status;
-    __asm __volatile("1: stxr %w1, %w2, %0 ; "
-                     "   cbnz %w1, 1b ; "
-                     : "+Q"(*p), "=&r"(status)
-                     : "r"(val));
+    __asm __volatile("" : : : "memory");
+    *p = val;
 }
 
 static __inline void atomic_store_rel_long(volatile u_long *p, u_long val)
 {
-    u_int status;
-    __asm __volatile("1: stxr %w1, %2, %0 ; "
-                     "   cbnz %w1, 1b ; "
-                     : "+Q"(*p), "=&r"(status)
-                     : "r"(val));
+    __asm __volatile("" : : : "memory");
+    *p = val;
 }
 
 static __inline void atomic_add_int(volatile u_int *p, u_int val)
