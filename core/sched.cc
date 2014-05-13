@@ -381,13 +381,12 @@ void cpu::handle_incoming_wakeups()
         return;
     }
     for (auto i : queues_with_wakes) {
-        incoming_wakeup_queue q;
-        incoming_wakeups[i].copy_and_clear(q);
-        while (!q.empty()) {
-            auto& t = q.front();
-            q.pop_front_nonatomic();
-            irq_save_lock_type irq_lock;
-            WITH_LOCK(irq_lock) {
+        irq_save_lock_type irq_lock;
+        WITH_LOCK(irq_lock) {
+            auto& q = incoming_wakeups[i];
+            while (!q.empty()) {
+                auto& t = q.front();
+                q.pop_front();
                 if (&t == thread::current()) {
                     // Special case of current thread being woken before
                     // having a chance to be scheduled out.
@@ -463,7 +462,7 @@ void cpu::load_balance()
             mig._runtime.export_runtime();
             mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
             mig.remote_thread_local_var(current_cpu) = min;
-            min->incoming_wakeups[id].push_front(mig);
+            min->incoming_wakeups[id].push_back(mig);
             min->incoming_wakeups_mask.set(id);
             // FIXME: avoid if the cpu is alive and if the priority does not
             // FIXME: warrant an interruption
@@ -762,7 +761,10 @@ void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
         unsigned c = cpu::current()->id;
         // we can now use st->t here, since the thread cannot terminate while
         // it's waking, but not afterwards, when it may be running
-        tcpu->incoming_wakeups[c].push_front(*st->t);
+        irq_save_lock_type irq_lock;
+        WITH_LOCK(irq_lock) {
+            tcpu->incoming_wakeups[c].push_back(*st->t);
+        }
         if (!tcpu->incoming_wakeups_mask.test_all_and_set(c)) {
             // FIXME: avoid if the cpu is alive and if the priority does not
             // FIXME: warrant an interruption

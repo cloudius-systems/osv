@@ -10,6 +10,9 @@
 
 #include <atomic>
 
+#include <arch.hh>
+
+template <class T> struct lockless_queue_helper;
 template <class T> class lockless_queue_link;
 template <class T, lockless_queue_link<T> T::*link> class lockless_queue;
 
@@ -19,62 +22,86 @@ template <class T, lockless_queue_link<T> T::*link>
 class lockless_queue {
 public:
     lockless_queue();
+    ~lockless_queue();
     bool empty() const;
-    void copy_and_clear(lockless_queue& to);
-    void push_front(T& elem);
+    void push_back(T& elem);
     T& front();
-    void pop_front_nonatomic();
+    void pop_front();
 private:
-    std::atomic<T*> _head;
+    lockless_queue_helper<T>* _head CACHELINE_ALIGNED;
+    lockless_queue_helper<T>* _tail CACHELINE_ALIGNED;
+};
+
+template <class T>
+struct lockless_queue_helper {
+    std::atomic<T*> _next;
 };
 
 template <class T>
 class lockless_queue_link
 {
 public:
-    T* _next;
+    lockless_queue_link();
+    ~lockless_queue_link();
+
+    lockless_queue_helper<T>* _helper;
+    lockless_queue_helper<T>* _next;
 };
+
+template <class T>
+lockless_queue_link<T>::lockless_queue_link()
+    : _helper(new lockless_queue_helper<T>)
+{
+}
+
+template <class T>
+lockless_queue_link<T>::~lockless_queue_link()
+{
+    delete _helper;
+}
 
 template <class T, lockless_queue_link<T> T::*link>
 lockless_queue<T, link>::lockless_queue()
-    : _head(nullptr)
+    : _head(new lockless_queue_helper<T>)
+    , _tail(_head)
 {
-
+    _head->_next.store(nullptr, std::memory_order_relaxed);
 }
 
 template <class T, lockless_queue_link<T> T::*link>
-void lockless_queue<T, link>::copy_and_clear(lockless_queue& to)
+lockless_queue<T, link>::~lockless_queue()
 {
-    to._head = _head.exchange(nullptr);
-}
-
-template <class T, lockless_queue_link<T> T::*link>
-void lockless_queue<T, link>::push_front(T& elem)
-{
-    // no ABA, since we are sole producer
-    T* old;
-    do {
-        old = _head.load();
-        (elem.*link)._next = old;
-    } while (!_head.compare_exchange_weak(old, &elem));
+    delete _tail;
 }
 
 template <class T, lockless_queue_link<T> T::*link>
 bool lockless_queue<T, link>::empty() const
 {
-    return !_head.load();
+    return !_head->_next.load(std::memory_order_relaxed);
+}
+
+template <class T, lockless_queue_link<T> T::*link>
+void lockless_queue<T, link>::push_back(T& elem)
+{
+    lockless_queue_helper<T>* helper = (elem.*link)._helper;
+    (elem.*link)._next = helper;
+    (elem.*link)._helper = _tail;
+    helper->_next.store(nullptr, std::memory_order_relaxed);
+    _tail->_next.store(&elem, std::memory_order_release);
+    _tail = helper;
 }
 
 template <class T, lockless_queue_link<T> T::*link>
 T& lockless_queue<T, link>::front()
 {
-    return *_head.load();
+    return *_head->_next.load(std::memory_order_consume);
 }
 
 template <class T, lockless_queue_link<T> T::*link>
-void lockless_queue<T, link>::pop_front_nonatomic()
+void lockless_queue<T, link>::pop_front()
 {
-    _head = (_head.load()->*link)._next;
+    auto elem = _head->_next.load(std::memory_order_consume);
+    _head = (elem->*link)._next;
 }
 
 #endif /* LOCKLESS_QUEUE_HH_ */
