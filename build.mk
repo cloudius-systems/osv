@@ -269,6 +269,7 @@ tests += tests/misc-urandom.so
 tests += tests/tst-commands.so
 tests += tests/tst-threadcomplete.so
 tests += tests/tst-timerfd.so
+tests += tests/tst-nway-merger.so
 tests += tests/tst-memmove.so
 tests += tests/tst-pthread-clock.so
 tests += tests/misc-procfs.so

@@ -15,6 +15,7 @@
 #include <osv/sched.hh>
 #include <arch.hh>
 #include <osv/ilog2.hh>
+#include <osv/debug.hh>
 
 //
 // spsc ring of fixed size
@@ -41,9 +42,8 @@ public:
     bool pop(T& element)
     {
         unsigned beg = _begin.load(std::memory_order_relaxed);
-        unsigned end = _end.load(std::memory_order_acquire);
 
-        if (beg == end) {
+        if (empty()) {
             return false;
         }
 
@@ -51,6 +51,26 @@ public:
         _begin.store(beg + 1, std::memory_order_relaxed);
 
         return true;
+    }
+
+    /**
+     * Checks if the ring is empty(). May be called by both producer and the
+     * consumer.
+     *
+     * @return TRUE if there are no elements
+     */
+    bool empty() const {
+        unsigned beg = _begin.load(std::memory_order_relaxed);
+        unsigned end = _end.load(std::memory_order_acquire);
+        return beg == end;
+    }
+
+    const T& front() const {
+        DEBUG_ASSERT(!empty(), "calling front() on an empty queue!");
+
+        unsigned beg = _begin.load(std::memory_order_relaxed);
+
+        return _ring[beg & MaxSizeMask];
     }
 
     /**
