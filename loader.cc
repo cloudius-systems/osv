@@ -99,7 +99,10 @@ extern "C" {
 
 void premain()
 {
-    debug_early_entry("early-console test: premain");
+    /* besides reporting the OSV version, this string has the function
+       to check if the early console really works early enough,
+       without depending on prior initialization. */
+    debug_early("OSv " OSV_VERSION "\n");
 
     arch_init_premain();
 
@@ -448,9 +451,6 @@ void main_cont(int ac, char** av)
     }
 #endif /* __x86_64__ */
     console::console_init();
-
-    // Print only after console is initialized.
-    printf("OSv " OSV_VERSION "\n");
 
     if (sched::cpus.size() > sched::max_cpus) {
         printf("Too many cpus, can't boot with greater than %u cpus.\n", sched::max_cpus);
