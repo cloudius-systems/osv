@@ -273,7 +273,7 @@ public:
                              const char* _name, const char* _format);
     ~tracepoint_base();
     void enable();
-    static void log_backtraces();
+    static bool log_backtraces(bool should_log = true);
     void add_probe(probe* p);
     void del_probe(probe* p);
     tracepoint_id id;
@@ -311,7 +311,7 @@ private:
     void deactivate(const tracepoint_id &, void * site, void * slow_path);
     void update();
     static std::unordered_set<tracepoint_id>& known_ids();
-    static bool _log_backtrace;
+    static std::atomic<bool> _log_backtrace;
     static const size_t backtrace_len = 10;
 };
 

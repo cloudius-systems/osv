@@ -291,11 +291,11 @@ std::unordered_set<tracepoint_id>& tracepoint_base::known_ids()
     return _known_ids;
 }
 
-bool tracepoint_base::_log_backtrace;
+std::atomic<bool> tracepoint_base::_log_backtrace;
 
-void tracepoint_base::log_backtraces()
+bool tracepoint_base::log_backtraces(bool should_log)
 {
-    _log_backtrace = true;
+    return _log_backtrace.exchange(should_log);
 }
 
 void tracepoint_base::do_log_backtrace(trace_record* tr, u8*& buffer)
