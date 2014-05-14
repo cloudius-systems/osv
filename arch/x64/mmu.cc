@@ -11,6 +11,7 @@
 #include <osv/mmu.hh>
 #include <osv/irqlock.hh>
 #include <osv/interrupt.hh>
+#include <osv/migration-lock.hh>
 #include <osv/prio.hh>
 
 void page_fault(exception_frame *ef)
@@ -63,9 +64,13 @@ inter_processor_interrupt tlb_flush_ipi{[] {
 
 void flush_tlb_all()
 {
-    mmu::flush_tlb_local();
-    if (sched::cpus.size() <= 1)
+    if (sched::cpus.size() <= 1) {
+        mmu::flush_tlb_local();
         return;
+    }
+
+    SCOPE_LOCK(migration_lock);
+    mmu::flush_tlb_local();
     std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_waiter.reset(*sched::thread::current());
     tlb_flush_pendingconfirms.store((int)sched::cpus.size() - 1);
