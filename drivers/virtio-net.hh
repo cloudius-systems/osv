@@ -21,6 +21,7 @@
 namespace virtio {
 
 /**
+ * @class net
  * virtio net device class
  */
 class net : public virtio_driver {
@@ -425,7 +426,7 @@ private:
          * Transmit a single packet. Will wait for completions if there is no
          * room on a HW ring.
          *
-         * Must run with a "running" lock taken.
+         * Must run with "running" lock taken.
          * @param req Tx request handle
          */
         void xmit_one_locked(void* req);

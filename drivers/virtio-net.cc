@@ -102,10 +102,10 @@ static int if_ioctl(struct ifnet* ifp, u_long command, caddr_t data)
  */
 static void if_qflush(struct ifnet* ifp)
 {
-    /*
-     * Since virtio_net currently doesn't have any Tx queue we just
-     * flush the upper layer queues.
-     */
+    //
+    // TODO: Add per-CPU Tx queues flushing here. Most easily checked with
+    // change MTU use case.
+    //
     ::if_qflush(ifp);
 }
 
@@ -158,6 +158,7 @@ inline void net::txq::wake_worker()
     worker.wake();
 }
 
+
 static void if_init(void* xsc)
 {
     net_d("Virtio-net init");
@@ -196,7 +197,7 @@ void net::fill_qstats(const struct rxq& rxq,
 }
 
 void net::fill_qstats(const struct txq& txq,
-                             struct if_data* out_data) const
+                      struct if_data* out_data) const
 {
     assert(!out_data->ifi_oerrors && !out_data->ifi_obytes && !out_data->ifi_opackets);
     out_data->ifi_opackets += txq.stats.tx_packets;
@@ -291,13 +292,15 @@ net::net(pci::device& dev)
     tx_worker_task->start();
 
     ether_ifattach(_ifn, _config.mac);
+
     if (dev.is_msix()) {
         _msi.easy_register({
             { 0, [&] { _rxq.vqueue->disable_interrupts(); }, poll_task },
             { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
         });
     } else {
-        _gsi.set_ack_and_handler(dev.get_interrupt_line(), [=] { return this->ack_irq(); }, [=] { poll_task->wake(); });
+        _gsi.set_ack_and_handler(dev.get_interrupt_line(),
+            [=] { return this->ack_irq(); }, [=] { poll_task->wake(); });
     }
 
     fill_rx_ring();
@@ -839,5 +842,5 @@ hw_driver* net::probe(hw_device* dev)
     return virtio::probe<net, VIRTIO_NET_DEVICE_ID>(dev);
 }
 
-}
+} // namespace virtio
 
