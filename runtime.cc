@@ -92,8 +92,9 @@ static void print_backtrace(void)
     /* Skip abort(const char *) and abort(void)  */
     for (int i = 2; i < len; i++) {
         char name[1024];
-        osv::lookup_name_demangled(addrs[i], name, sizeof(name));
-        debug_ll("0x%016x <%s>\n", addrs[i], name);
+        void *addr = addrs[i] - INSTR_SIZE_MIN;
+        osv::lookup_name_demangled(addr, name, sizeof(name));
+        debug_ll("0x%016lx <%s>\n", addr, name);
     }
 }
 
