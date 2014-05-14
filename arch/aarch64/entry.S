@@ -121,7 +121,11 @@ entry_invalid:
 
 .global entry_sync
 entry_sync:
-        b       entry_invalid
+        push_state_to_exception_frame
+        mov     x0, sp  // save exception_frame to x0
+        bl      page_fault
+        pop_state_from_exception_frame
+        eret
 
 .global entry_irq
 entry_irq:

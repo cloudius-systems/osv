@@ -1,6 +1,44 @@
+/*
+ * Copyright (C) 2014 Huawei Technologies Duesseldorf GmbH
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
 #include <osv/mmu.hh>
 #include <osv/prio.hh>
+#include <osv/sched.hh>
 #include <osv/debug.h>
+#include <osv/irqlock.hh>
+
+#include "arch-cpu.hh"
+#include "exceptions.hh"
+
+void page_fault(exception_frame *ef)
+{
+    debug_early_entry("page_fault");
+    u64 addr;
+    asm volatile ("mrs %0, far_el1" : "=r"(addr));
+    debug_early_u64("faulting address ", (u64)addr);
+
+    if (!ef->elr) {
+        debug_early("trying to execute null pointer\n");
+        abort();
+    }
+
+    // vm_fault might sleep, so check state and enable irqs
+    assert(sched::preemptable());
+    assert(ef->spsr & processor::daif_i);
+
+    DROP_LOCK(irq_lock) {
+        sched::arch_fpu fpu;
+        fpu.save();
+        mmu::vm_fault(addr, ef);
+        fpu.restore();
+    }
+
+    debug_early("leaving page_fault()\n");
+}
 
 namespace mmu {
 
