@@ -27,9 +27,8 @@ public:
     bool push(const T& element)
     {
         unsigned end = _end.load(std::memory_order_relaxed);
-        unsigned beg = _begin.load(std::memory_order_relaxed);
 
-        if (end - beg >= MaxSize) {
+        if (size() >= MaxSize) {
             return false;
         }
 
@@ -54,7 +53,13 @@ public:
         return true;
     }
 
-    unsigned size() {
+    /**
+     * Should be called by the producer. When called by the consumer may
+     * someties return a smaller value than the actual elements count.
+     *
+     * @return the current number of the elements.
+     */
+    unsigned size() const {
         unsigned end = _end.load(std::memory_order_relaxed);
         unsigned beg = _begin.load(std::memory_order_relaxed);
 
