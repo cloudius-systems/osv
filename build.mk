@@ -722,6 +722,7 @@ objects += arch/$(arch)/elf-dl.o
 objects += arch/$(arch)/entry.o
 objects += arch/$(arch)/mmu.o
 objects += arch/$(arch)/exceptions.o
+objects += arch/$(arch)/dump.o
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
@@ -730,7 +731,6 @@ endif
 
 ifeq ($(arch),x64)
 objects += arch/x64/arch-trace.o
-objects += arch/x64/dump.o
 objects += arch/x64/ioapic.o
 objects += arch/x64/math.o
 objects += arch/x64/apic.o
@@ -739,6 +739,7 @@ objects += arch/x64/cpuid.o
 objects += arch/x64/entry-xen.o
 objects += arch/x64/xen.o
 objects += arch/x64/xen_intr.o
+objects += core/sampler.o
 objects += $(acpi)
 endif # x64
 
@@ -778,7 +779,6 @@ objects += core/net_channel.o
 objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
-objects += core/sampler.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
