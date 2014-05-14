@@ -128,11 +128,30 @@ class virtio_driver;
         bool add_buf(void* cookie);
         // Get the top item from the used ring
         void* get_buf_elem(u32* len);
-        // Let the host know we consumed the used entry
-        // We separate that from get_buf_elem so no one
-        // will re-cycle the request header location until
-        // we're finished with it in the upper layer
-        void get_buf_finalize();
+
+        /**
+         * Increment the _used_ring_host_head and doorbell if requested.
+         *
+         * Let the host know we consumed the used entry. We separate that from
+         * get_buf_elem so no one will re-cycle the request header location
+         * until we're finished with it in the upper layer.
+         *
+         * @param doorbell if TRUE - doorbell the host
+         */
+        void get_buf_finalize(bool doorbell = true) {
+            _used_ring_host_head++;
+
+            if (doorbell) {
+                db_used();
+            }
+        }
+
+        void db_used() {
+            // only let the host know about our used idx in case irq are enabled
+            if (_avail->interrupt_on()) {
+                set_used_event(_used_ring_host_head, std::memory_order_release);
+            }
+        }
         // GC the used items that were already read to be emptied
         // within the ring. Should be called by add_buf
         // It was separated from the get_buf flow to allow parallelism of the two
