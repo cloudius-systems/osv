@@ -63,14 +63,16 @@ def format_time(time, format="%.2f %s"):
     return str(time)
 
 unimportant_functions = set([
-    'trace_slow_path',
     'operator()',
     'std::function<void ()>::operator()() const',
-    'tracepoint_base::do_log_backtrace',
-    'tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
-    'tracepoint_base::do_log_backtrace(trace_record*, unsigned char*&)',
     '_M_invoke',
     ])
+
+unimportant_prefixes = [
+    ('tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
+     'log',
+     'trace_slow_path'),
+]
 
 bottom_of_stack = set(['thread_main', 'thread_main_c'])
 
@@ -79,6 +81,12 @@ def strip_garbage(backtrace):
         if not src_addr.name:
             return True
         return not src_addr.name in unimportant_functions
+
+    for chain in unimportant_prefixes:
+        if len(backtrace) >= len(chain) and \
+                tuple(map(attrgetter('name'), backtrace[:len(chain)])) == chain:
+            backtrace = backtrace[len(chain):]
+            break
 
     backtrace = list(filter(is_good, backtrace))
 
