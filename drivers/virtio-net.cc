@@ -721,15 +721,35 @@ void net::tx_gc()
     net_req* req;
     u32 len;
     vring* vq = _txq.vqueue;
+    u16 req_cnt = 0;
+
+    //
+    // "finalize" at least every quoter of a ring to let the host work in
+    // paralel with us.
+    //
+    const u16 fin_thr = static_cast<u16>(vq->size()) / 4;
 
     req = static_cast<net_req*>(vq->get_buf_elem(&len));
 
     while(req != nullptr) {
         delete req;
-        vq->get_buf_finalize();
+
+        req_cnt++;
+
+        if (req_cnt >= fin_thr) {
+            vq->get_buf_finalize(true);
+            req_cnt = 0;
+        } else {
+            vq->get_buf_finalize(false);
+        }
 
         req = static_cast<net_req*>(vq->get_buf_elem(&len));
     }
+
+    if (req_cnt) {
+        vq->db_used();
+    }
+
     vq->get_buf_gc();
 }
 
