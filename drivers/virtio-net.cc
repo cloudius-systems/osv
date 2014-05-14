@@ -123,19 +123,39 @@ static int if_transmit(struct ifnet* ifp, struct mbuf* m_head)
 
     net_d("%s_start", __FUNCTION__);
 
-    /* Process packets */
-    vnet->_tx_ring_lock.lock();
+    return vnet->xmit(m_head);
+}
 
-    net_d("*** processing packet! ***");
+inline int net::xmit(struct mbuf* buff)
+{
+    //
+    // We currently have only a single TX queue. Select a proper TXq here when
+    // we implement a multi-queue.
+    //
+    return _txq.xmit(buff);
+}
 
-    int error = vnet->tx_locked(m_head);
+inline int net::txq::xmit(mbuf* buff)
+{
+    return _xmitter.xmit(buff);
+}
 
-    if (!error)
-        vnet->kick(1);
+inline bool net::txq::kick_hw()
+{
+    return vqueue->kick();
+}
 
-    vnet->_tx_ring_lock.unlock();
+inline void net::txq::kick_pending(u16 thresh)
+{
+    if (_pkts_to_kick >= thresh) {
+        _pkts_to_kick = 0;
+        kick_hw();
+    }
+}
 
-    return error;
+inline void net::txq::wake_worker()
+{
+    worker.wake();
 }
 
 static void if_init(void* xsc)
@@ -203,6 +223,7 @@ net::net(pci::device& dev)
       _txq(this, get_virt_queue(1))
 {
     sched::thread* poll_task = &_rxq.poll_task;
+    sched::thread* tx_worker_task = &_txq.worker;
 
     _driver_name = "virtio-net";
     virtio_i("VIRTIO NET INSTANCE");
@@ -265,6 +286,9 @@ net::net(pci::device& dev)
 
     //Start the polling thread before attaching it to the Rx interrupt
     poll_task->start();
+
+    // TODO: What if_init() is for?
+    tx_worker_task->start();
 
     ether_ifattach(_ifn, _config.mac);
     if (dev.is_msix()) {
@@ -552,16 +576,23 @@ void net::fill_rx_ring()
         vq->kick();
 }
 
-inline int net::tx_locked(struct mbuf* m_head)
+inline int net::txq::try_xmit_one_locked(void* _req)
 {
-    return _txq.xmit_one_locked(m_head);
+    net_req* req = static_cast<net_req*>(_req);
+    int rc = try_xmit_one_locked(req);
+
+    if (rc) {
+        return rc;
+    }
+
+    update_stats(req);
+    return 0;
 }
 
-inline int net::txq::xmit_prep(mbuf* m_head, net_req*& cooky)
+inline int net::txq::xmit_prep(mbuf* m_head, void*& cooky)
 {
-    net_req* req = new net_req;
+    net_req* req = new net_req(m_head);
     mbuf* m;
-    req->um.reset(m_head);
 
     if (m_head->M_dat.MH.MH_pkthdr.csum_flags != 0) {
         m = offload(m_head, &req->mhdr.hdr);
@@ -581,10 +612,11 @@ inline int net::txq::xmit_prep(mbuf* m_head, net_req*& cooky)
 
 int net::txq::try_xmit_one_locked(net_req* req)
 {
-    mbuf *m_head = req->um.get(), *m;
+    mbuf *m_head = req->mb, *m;
     u16 vec_sz = 0;
     u64 tx_bytes = 0;
 
+    DEBUG_ASSERT(!try_lock_running(), "RUNNING lock not taken!\n");
 
     if (_parent->_mergeable_bufs) {
         req->mhdr.num_buffers = 0;
@@ -638,16 +670,15 @@ inline void net::txq::update_stats(net_req* req)
         stats.tx_tso++;
 }
 
-int net::txq::xmit_one_locked(mbuf* m_head)
+
+void net::txq::xmit_one_locked(void* _req)
 {
-    net_req* req;
-    int rc = xmit_prep(m_head, req);
-    if (rc) {
-        return rc;
-    }
+    net_req* req = static_cast<net_req*>(_req);
 
     if (try_xmit_one_locked(req)) {
         do {
+            // We are going to poll - flush the pending packets
+            kick_pending();
             if (!vqueue->used_ring_not_empty()) {
                 do {
                     sched::thread::yield();
@@ -662,7 +693,11 @@ int net::txq::xmit_one_locked(mbuf* m_head)
     // Update the statistics
     update_stats(req);
 
-    return 0;
+    //
+    // It was a good packet - increase the counter of a "pending for a kick"
+    // packets.
+    //
+    _pkts_to_kick++;
 }
 
 mbuf* net::txq::offload(mbuf* m, net_hdr* hdr)
@@ -761,6 +796,7 @@ void net::txq::gc()
     req = static_cast<net_req*>(vqueue->get_buf_elem(&len));
 
     while(req != nullptr) {
+        m_freem(req->mb);
         delete req;
 
         req_cnt++;
