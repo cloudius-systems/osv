@@ -254,6 +254,7 @@ private:
         std::unique_ptr<struct mbuf, free_deleter> um;
 
         net_req() {memset(&mhdr,0,sizeof(mhdr));};
+        u64 tx_bytes;
     };
 
     std::string _driver_name;
@@ -305,19 +306,35 @@ private:
             vqueue(vq), _parent(parent) {};
 
         /**
-         * Try to send a Tx frame.
-         * @param m_head
+         * Transmit a single packet. Will wait for completions if there is no
+         * room on a HW ring.
          *
-         * @return 0 if packet has been successfully sent, EINVAL if a packet is
-         *         not well-formed and ENOBUFS if there was no room on a HW ring
-         *         to send the packet.
+         * @param req Tx request handle
+         *
+         * @return 0 if packet has been successfully sent and EINVAL if it was
+         *         not well-formed.
          */
-        int try_xmit_one_locked(mbuf* m_head);
+
+        int xmit_one_locked(mbuf* m_head);
 
         vring* vqueue;
         txq_stats stats = { 0 };
 
     private:
+        /**
+         * This is a private version of try_xmit_one_locked() that acually does
+         * the work.
+         * This function won't update Tx statistics - the caller should do this
+         * after the packet is actually sent.
+         * @param m_head
+         * @param req
+         *
+         * @return 0 if packet has been successfully sent, EINVAL if a packet is
+         *         not well-formed and ENOBUFS if there was no room on a HW ring
+         *         to send the packet.
+         */
+        int try_xmit_one_locked(net_req* req);
+
         /**
          * Checks the packet and returns the net_req (returned in a "cooky")
          * @param m_head
@@ -342,6 +359,12 @@ private:
          *         nullptr will be returned.
          */
         mbuf* offload(mbuf* m, net_hdr* hdr);
+
+        /**
+         * Update Tx stats for a single packet in case of a successful xmit.
+         * @param req Appropriate net_req for this packet (we need its mhdr)
+         */
+        void update_stats(net_req* req);
 
         net* _parent;
     };

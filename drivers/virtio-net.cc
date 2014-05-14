@@ -554,7 +554,7 @@ void net::fill_rx_ring()
 
 inline int net::tx_locked(struct mbuf* m_head)
 {
-    return _txq.try_xmit_one_locked(m_head);
+    return _txq.xmit_one_locked(m_head);
 }
 
 inline int net::txq::xmit_prep(mbuf* m_head, net_req*& cooky)
@@ -566,6 +566,8 @@ inline int net::txq::xmit_prep(mbuf* m_head, net_req*& cooky)
     if (m_head->M_dat.MH.MH_pkthdr.csum_flags != 0) {
         m = offload(m_head, &req->mhdr.hdr);
         if ((m_head = m) == nullptr) {
+            stats.tx_err++;
+
             delete req;
 
             /* The buffer is not well-formed */
@@ -577,17 +579,12 @@ inline int net::txq::xmit_prep(mbuf* m_head, net_req*& cooky)
     return 0;
 }
 
-int net::txq::try_xmit_one_locked(mbuf *m_head)
+int net::txq::try_xmit_one_locked(net_req* req)
 {
-    mbuf* m;
+    mbuf *m_head = req->um.get(), *m;
     u16 vec_sz = 0;
     u64 tx_bytes = 0;
-    net_req* req;
 
-    int rc = xmit_prep(m_head, req);
-    if (rc) {
-        goto out;
-    }
 
     if (_parent->_mergeable_bufs) {
         req->mhdr.num_buffers = 0;
@@ -608,53 +605,64 @@ int net::txq::try_xmit_one_locked(mbuf *m_head)
         }
     }
 
+    req->tx_bytes = tx_bytes;
+
     if (!vqueue->avail_ring_has_room(vec_sz)) {
         if (vqueue->used_ring_not_empty()) {
             trace_virtio_net_tx_no_space_calling_gc(_parent->_ifn->if_index);
             gc();
+            if (!vqueue->avail_ring_has_room(vec_sz)) {
+                return ENOBUFS;
+            }
         } else {
-            net_d("%s: no room", __FUNCTION__);
-            delete req;
-
-            rc = ENOBUFS;
-            goto out;
+            return ENOBUFS;
         }
     }
 
     if (!vqueue->add_buf(req)) {
-        trace_virtio_net_tx_failed_add_buf(_parent->_ifn->if_index);
-        delete req;
-
-        rc = ENOBUFS;
-        goto out;
+        assert(0);
     }
 
-    trace_virtio_net_tx_packet(_parent->_ifn->if_index, vec_sz);
+    return 0;
+}
 
-out:
+inline void net::txq::update_stats(net_req* req)
+{
+    stats.tx_bytes += req->tx_bytes;
+    stats.tx_packets++;
 
-    /* Update the statistics */
-    switch (rc) {
-    case 0: /* success */
-        stats.tx_bytes += tx_bytes;
-        stats.tx_packets++;
+    if (req->mhdr.hdr.flags & net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)
+        stats.tx_csum++;
 
-        if (req->mhdr.hdr.flags & net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)
-            stats.tx_csum++;
+    if (req->mhdr.hdr.gso_type)
+        stats.tx_tso++;
+}
 
-        if (req->mhdr.hdr.gso_type)
-            stats.tx_tso++;
-
-        break;
-    case ENOBUFS:
-        stats.tx_drops++;
-
-        break;
-    default:
-        stats.tx_err++;
+int net::txq::xmit_one_locked(mbuf* m_head)
+{
+    net_req* req;
+    int rc = xmit_prep(m_head, req);
+    if (rc) {
+        return rc;
     }
 
-    return rc;
+    if (try_xmit_one_locked(req)) {
+        do {
+            if (!vqueue->used_ring_not_empty()) {
+                do {
+                    sched::thread::yield();
+                } while (!vqueue->used_ring_not_empty());
+            }
+            gc();
+        } while (!vqueue->add_buf(req));
+    }
+
+    trace_virtio_net_tx_packet(_parent->_ifn->if_index, vqueue->_sg_vec.size());
+
+    // Update the statistics
+    update_stats(req);
+
+    return 0;
 }
 
 mbuf* net::txq::offload(mbuf* m, net_hdr* hdr)
