@@ -80,8 +80,6 @@ struct fpu_state {
 
 inline void fpu_state_save(fpu_state *s)
 {
-    debug_early_entry("fpu_state_save(s)");
-
     asm volatile("stp q0, q1, %0" : "=Ump"(s->vregs[0]) :: "memory");
     asm volatile("stp q2, q3, %0" : "=Ump"(s->vregs[2]) :: "memory");
     asm volatile("stp q4, q5, %0" : "=Ump"(s->vregs[4]) :: "memory");
@@ -105,8 +103,6 @@ inline void fpu_state_save(fpu_state *s)
 
 inline void fpu_state_load(fpu_state *s)
 {
-    debug_early_entry("fpu_state_load(s)");
-
     asm volatile("ldp q0, q1, %0" :: "Ump"(s->vregs[0]) : "q0", "q1");
     asm volatile("ldp q2, q3, %0" :: "Ump"(s->vregs[2]) : "q2", "q3");
     asm volatile("ldp q4, q5, %0" :: "Ump"(s->vregs[4]) : "q4", "q5");
