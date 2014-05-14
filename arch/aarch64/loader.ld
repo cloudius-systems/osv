@@ -51,10 +51,18 @@ SECTIONS
         text_start = .;
         *(.text.unlikely .text.*_unlikely .text.unlikely.*)
         *(.text.exit .text.exit.*)
+        *(.text.fixup)
         *(.text.startup .text.startup.*)
         *(.text.hot .text.hot.*)
         *(.text .stub .text.* .gnu.linkonce.t.*)
         text_end = .;
+    } : text
+
+    . = ALIGN(16);
+    .fixup : {
+        fault_fixup_start = .;
+        *(.fixup)
+        fault_fixup_end = .;
     } : text
 
     .eh_frame : { *(.eh_frame) } : text

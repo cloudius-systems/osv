@@ -21,6 +21,11 @@ void page_fault(exception_frame *ef)
     asm volatile ("mrs %0, far_el1" : "=r"(addr));
     debug_early_u64("faulting address ", (u64)addr);
 
+    if (fixup_fault(ef)) {
+        debug_early("fixed up with fixup_fault\n");
+        return;
+    }
+
     if (!ef->elr) {
         debug_early("trying to execute null pointer\n");
         abort();

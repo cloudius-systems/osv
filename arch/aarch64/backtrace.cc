@@ -15,16 +15,18 @@ struct frame {
 
 int backtrace_safe(void** pc, int nr)
 {
-    register frame* fp;
+    frame* fp;
     frame* next;
 
-    asm("mov %0, x29" : "=r"(fp));
+    asm ("mov %0, x29" : "=r"(fp));
 
     int i = 0;
     while (i < nr
+#ifndef AARCH64_PORT_STUB
+           && fp
+#endif /* !AARCH64_PORT_STUB */
            && safe_load(&fp->next, next)
-           && safe_load(&fp->pc, pc[i])
-           && pc[i]) {
+           && safe_load(&fp->pc, pc[i])) {
         fp = next;
         ++i;
     }

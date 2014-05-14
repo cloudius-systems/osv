@@ -269,6 +269,9 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
 {
     if (ac == 0) {
         puts("This image has an empty command line. Nothing to run.");
+#ifdef AARCH64_PORT_STUB
+        abort(); // a good test for the backtrace code
+#endif
         osv::poweroff();
     }
     std::vector<std::vector<std::string> > commands;

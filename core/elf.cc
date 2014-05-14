@@ -23,6 +23,8 @@
 #include <osv/sched.hh>
 #include <osv/trace.hh>
 
+#include "arch.hh"
+
 TRACEPOINT(trace_elf_load, "%s", const char *);
 TRACEPOINT(trace_elf_unload, "%s", const char *);
 TRACEPOINT(trace_elf_lookup, "%s", const char *);
@@ -842,7 +844,7 @@ program::program(void* addr)
 {
     assert(!s_program);
     s_program = this;
-    _core = make_shared<memory_image>(*this, reinterpret_cast<void*>(0x200000));
+    _core = make_shared<memory_image>(*this, (void*)ELF_IMAGE_START);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
     // Our kernel already supplies the features of a bunch of traditional
@@ -850,13 +852,20 @@ program::program(void* addr)
     static const auto supplied_modules = {
           "libc.so.6",
           "libm.so.6",
+#ifdef __x86_64__
           "ld-linux-x86-64.so.2",
+          "libboost_system-mt.so.1.53.0",
+          "libboost_program_options-mt.so.1.53.0",
+#endif /* __x86_64__ */
+#ifdef __aarch64__
+          "ld-linux-aarch64.so.1",
+          "libboost_system-mt.so.1.55.0",
+          "libboost_program_options-mt.so.1.55.0",
+#endif /* __aarch64__ */
           "libpthread.so.0",
           "libdl.so.2",
           "librt.so.1",
           "libstdc++.so.6",
-          "libboost_system-mt.so.1.53.0",
-          "libboost_program_options-mt.so.1.53.0",
     };
     auto ml = new modules_list();
     ml->objects.push_back(_core.get());

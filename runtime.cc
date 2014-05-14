@@ -86,10 +86,6 @@ static void print_backtrace(void)
     int len;
 
     debug_ll("\n[backtrace]\n");
-#ifdef AARCH64_PORT_STUB
-    debug_ll("NIY\n");
-    return;
-#endif
 
     len = backtrace_safe(addrs, 128);
 
