@@ -223,17 +223,14 @@ public:
     /**
      * Transmit a single mbuf.
      * @param m_head a buffer to transmits
-     * @param flush kick() if TRUE
+     *
      * @note should be called under the _tx_ring_lock.
      *
      * @return 0 in case of success and an appropriate error code
      *         otherwise
      */
-    int tx_locked(struct mbuf* m_head, bool flush = false);
+    int tx_locked(struct mbuf* m_head);
 
-    struct mbuf* tx_offload(struct mbuf* m, struct net_hdr* hdr);
-    void kick(int queue) {_queues[queue]->kick();}
-    void tx_gc();
     static hw_driver* probe(hw_device* dev);
 
     /**
@@ -304,9 +301,49 @@ private:
 
     /* Single Tx queue object */
     struct txq {
-        txq(vring* vq) : vqueue(vq) {};
+        txq(net* parent, vring* vq) :
+            vqueue(vq), _parent(parent) {};
+
+        /**
+         * Try to send a Tx frame.
+         * @param m_head
+         *
+         * @return 0 if packet has been successfully sent, EINVAL if a packet is
+         *         not well-formed and ENOBUFS if there was no room on a HW ring
+         *         to send the packet.
+         */
+        int try_xmit_one_locked(mbuf* m_head);
+
         vring* vqueue;
-        struct txq_stats stats = { 0 };
+        txq_stats stats = { 0 };
+
+    private:
+        /**
+         * Checks the packet and returns the net_req (returned in a "cooky")
+         * @param m_head
+         * @param cooky
+         *
+         * @return 0 if packet is ok and EINVAL if it's not well-formed.
+         */
+        int xmit_prep(mbuf* m_head, net_req*& cooky);
+
+        /**
+         * Free the descriptors for the completed packets.
+         */
+        void gc();
+
+        /**
+         * Update the packet handle and the net_hdr according to various offload
+         * features.
+         * @param m     Tx packet handle
+         * @param hdr   net_hdr to update
+         *
+         * @return The updated Tx packet handle. If packet wasn't well-formed
+         *         nullptr will be returned.
+         */
+        mbuf* offload(mbuf* m, net_hdr* hdr);
+
+        net* _parent;
     };
 
     /**
