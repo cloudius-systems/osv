@@ -55,6 +55,7 @@
 #include <osv/shutdown.hh>
 #include <osv/commands.hh>
 #include <osv/boot.hh>
+#include <osv/sampler.hh>
 
 using namespace osv;
 
@@ -143,6 +144,9 @@ static bool opt_verbose = false;
 static std::string opt_chdir;
 static bool opt_bootchart = false;
 
+static int sampler_frequency;
+static bool opt_enable_sampler = false;
+
 std::tuple<int, char**> parse_options(int ac, char** av)
 {
     namespace bpo = boost::program_options;
@@ -161,6 +165,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     bpo::options_description desc("OSv options");
     desc.add_options()
         ("help", "show help text")
+        ("sampler", bpo::value<int>(), "start stack sampling profiler")
         ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable")
         ("trace-backtrace", "log backtraces in the tracepoint log")
         ("leak", "start leak detector after boot")
@@ -204,6 +209,11 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     if (vars.count("verbose")) {
         opt_verbose = true;
         enable_verbose();
+    }
+
+    if (vars.count("sampler")) {
+        sampler_frequency = vars["sampler"].as<int>();
+        opt_enable_sampler = true;
     }
 
     if (vars.count("bootchart")) {
@@ -464,6 +474,10 @@ void main_cont(int ac, char** av)
 
     processor::sti();
 
+    if (opt_enable_sampler) {
+        prof::config config{std::chrono::nanoseconds(1000000000 / sampler_frequency)};
+        prof::start_sampler(config);
+    }
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work

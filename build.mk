@@ -777,6 +777,7 @@ objects += core/net_channel.o
 objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
+objects += core/sampler.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk

@@ -71,6 +71,17 @@ unimportant_functions = set([
 unimportant_prefixes = [
     ('tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
      'log',
+     'trace_slow_path',
+     'operator()',
+     'prof::cpu_sampler::timer_fired()',
+     'sched::timer_base::expire()',
+     'sched::timer_list::fired()',
+     'interrupt_descriptor_table::invoke_interrupt(unsigned int)',
+     'interrupt',
+     'interrupt_entry_common'),
+
+    ('tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
+     'log',
      'trace_slow_path'),
 ]
 
