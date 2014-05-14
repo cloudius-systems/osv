@@ -251,6 +251,18 @@ net::net(pci::device& dev)
 
     _ifn->if_capenable = _ifn->if_capabilities | IFCAP_HWSTATS;
 
+    //
+    // Enable indirect descriptors utilization.
+    //
+    // TODO:
+    // Optimize the indirect descriptors infrastructure:
+    //  - Preallocate a ring of indirect descriptors per vqueue.
+    //  - Consume/recycle from this pool while u can.
+    //  - If there is no more free descriptors in the pool above - allocate like
+    //    we do today.
+    //
+    _txq.vqueue->set_use_indirect(true);
+
     //Start the polling thread before attaching it to the Rx interrupt
     poll_task->start();
 
