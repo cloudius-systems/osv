@@ -7,6 +7,7 @@
 
 #include "osv/trace.hh"
 #include <osv/sched.hh>
+#include <osv/mutex.h>
 #include "arch.hh"
 #include <atomic>
 #include <regex>
@@ -116,11 +117,20 @@ void enable_trace()
     trace_enabled = true;
 }
 
-void enable_tracepoint(std::string wildcard)
+void ensure_log_initialized()
 {
-    static bool buffers_initialized;
+    static std::mutex _mutex;
+    static std::atomic<bool> buffers_initialized;
 
-    if (!buffers_initialized) {
+    if (buffers_initialized.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    WITH_LOCK(_mutex) {
+        if (buffers_initialized.load(std::memory_order_relaxed)) {
+            return;
+        }
+
         // Ensure we're using power of two sizes * trace_page_size, so round num cpus to ^2
         const size_t ncpu = 1 << size_t(ilog2_roundup(sched::cpus.size()));
         // TODO: examine these defaults. I'm guessing less than 256*mt sized buffers
@@ -130,8 +140,13 @@ void enable_tracepoint(std::string wildcard)
             auto * tbp = percpu_trace_buffer.for_cpu(c);
             *tbp = trace_buf(size);
         }
-        buffers_initialized = true;
+
+        buffers_initialized.store(true, std::memory_order_release);
     }
+}
+
+void enable_tracepoint(std::string wildcard)
+{
     wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("*"), std::string(".*"));
     wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
     std::regex re{wildcard};
@@ -179,6 +194,7 @@ tracepoint_base::~tracepoint_base()
 
 void tracepoint_base::enable()
 {
+    ensure_log_initialized();
     logging = true;
     update();
 }
