@@ -31,7 +31,7 @@ image ?= default
 img_format ?= qcow2
 fs_size_mb ?= 10240
 local-includes =
-INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/include
+INCLUDES = $(local-includes) -I$(src)/arch/$(arch) -I$(src) -I$(src)/include  -I$(src)/arch/common
 INCLUDES += -isystem $(src)/include/glibc-compat
 
 glibcbase = $(src)/external/$(arch)/glibc.bin
