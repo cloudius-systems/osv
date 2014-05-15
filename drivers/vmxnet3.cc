@@ -272,7 +272,8 @@ void vmxnet3_rxqueue::newbuf(int rid)
     buf[rid][idx] = m;
 
     rxd->layout->addr = mmu::virt_to_phys(m->m_hdr.mh_data);
-    rxd->layout->len = m->m_hdr.mh_len;
+    rxd->layout->len = std::min(static_cast<u32>(m->m_hdr.mh_len),
+                                static_cast<u32>(VMXNET3_MAX_DESC_LEN));
     rxd->layout->btype = btype;
     rxd->layout->gen = rxr.gen;
 
