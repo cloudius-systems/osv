@@ -76,6 +76,9 @@ public:
     cmdRingT cmd_rings[VMXNET3_RXRINGS_PERQ];
     compRingT comp_ring;
     struct mbuf *buf[VMXNET3_RXRINGS_PERQ][VMXNET3_MAX_RX_NDESC];
+
+    struct mbuf *m_currpkt_head = nullptr;
+    struct mbuf *m_currpkt_tail = nullptr;
 };
 
 class vmxnet3 : public hw_driver {

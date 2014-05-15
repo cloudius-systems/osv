@@ -740,7 +740,6 @@ void vmxnet3::txq_gc(vmxnet3_txqueue &txq)
 void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
 {
     auto &rxc = rxq.comp_ring;
-    struct mbuf *m_head = NULL, *m_tail = NULL;
 
     while(1) {
         auto rxcd = rxc.get_desc(rxc.next);
@@ -774,7 +773,7 @@ void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
         if (rxcd->layout->sop) {
             assert(rxd->layout->btype == VMXNET3_BTYPE_HEAD);
             assert((idx % 1) == 0);
-            assert(m_head == NULL);
+            assert(rxq.m_currpkt_head == nullptr);
 
             if (length == 0) {
                 rxq.discard(rid, idx);
@@ -792,30 +791,30 @@ void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
             m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
             m->M_dat.MH.MH_pkthdr.csum_flags = 0;
             m->m_hdr.mh_len = length;
-            m_head = m_tail = m;
+            rxq.m_currpkt_head = rxq.m_currpkt_tail = m;
         } else {
             assert(rxd->layout->btype == VMXNET3_BTYPE_BODY);
-            assert(m_head != NULL);
+            assert(rxq.m_currpkt_head != nullptr);
 
             if (rxq.newbuf(rid) != 0) {
                 rxq.discard(rid, idx);
                 if (!rxcd->layout->eop)
                     rxq.discard_chain(rid);
-                m_freem(m_head);
+                m_freem(rxq.m_currpkt_head);
                 _rxq_stats.rx_drops++;
-                m_head = m_tail = NULL;
+                rxq.m_currpkt_head = rxq.m_currpkt_tail = nullptr;
                 goto next;
             }
 
             m->m_hdr.mh_len = length;
-            m_head->M_dat.MH.MH_pkthdr.len += length;
-            m_tail->m_hdr.mh_next = m;
-            m_tail = m;
+            rxq.m_currpkt_head->M_dat.MH.MH_pkthdr.len += length;
+            rxq.m_currpkt_tail->m_hdr.mh_next = m;
+            rxq.m_currpkt_tail = m;
         }
 
         if (rxcd->layout->eop) {
-            rxq_input(rxq, rxcd, m_head);
-            m_head = m_tail = NULL;
+            rxq_input(rxq, rxcd, rxq.m_currpkt_head);
+            rxq.m_currpkt_head = rxq.m_currpkt_tail = nullptr;
         }
 
 next:
