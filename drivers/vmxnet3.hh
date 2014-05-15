@@ -67,8 +67,7 @@ public:
     void init();
     void set_intr_idx(unsigned idx) { layout->intr_idx = static_cast<u8>(idx); }
     void discard(int rid, int idx);
-    void discard_chain(int rid);
-    int newbuf(int rid);
+    void newbuf(int rid);
 
     typedef vmxnet3_ring<vmxnet3_rx_desc, VMXNET3_MAX_RX_NDESC> cmdRingT;
     typedef vmxnet3_ring<vmxnet3_rx_compdesc, VMXNET3_MAX_RX_NCOMPDESC> compRingT;

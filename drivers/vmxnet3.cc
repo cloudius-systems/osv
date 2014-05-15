@@ -224,9 +224,7 @@ void vmxnet3_rxqueue::init()
         rxr.clear_descs();
 
         for (unsigned idx = 0; idx < rxr.get_desc_num(); idx++) {
-            auto error = newbuf(i);
-            if (error)
-                throw std::runtime_error("buf allocation failed");
+            newbuf(i);
         }
     }
 
@@ -244,29 +242,7 @@ void vmxnet3_rxqueue::discard(int rid, int idx)
     rxr.increment_fill();
 }
 
-void vmxnet3_rxqueue::discard_chain(int rid)
-{
-    while (1) {
-        auto &rxc = comp_ring;
-        auto rxcd = rxc.get_desc(rxc.next);
-        if (rxcd->layout->gen != rxc.gen)
-            break;
-        rmb();
-
-        if (++rxc.next == rxc.get_desc_num()) {
-            rxc.next = 0;
-            rxc.gen ^= 1;
-        }
-
-        auto idx = rxcd->layout->rxd_idx;
-        auto eof = rxcd->layout->eop;
-        discard(rid, idx);
-        if (eof)
-            break;
-    }
-}
-
-int vmxnet3_rxqueue::newbuf(int rid)
+void vmxnet3_rxqueue::newbuf(int rid)
 {
     auto &rxr = cmd_rings[rid];
     auto idx = rxr.fill;
@@ -285,7 +261,7 @@ int vmxnet3_rxqueue::newbuf(int rid)
     auto m = m_getjcl(M_NOWAIT, MT_DATA, flags, clsize);
     if (m == NULL) {
         panic("mbuf allocation failed");
-        return -1;
+        return;
     }
     if (btype == vmxnet3::VMXNET3_BTYPE_HEAD) {
         m->m_hdr.mh_len = m->M_dat.MH.MH_pkthdr.len = clsize;
@@ -301,7 +277,6 @@ int vmxnet3_rxqueue::newbuf(int rid)
     rxd->layout->gen = rxr.gen;
 
     rxr.increment_fill();
-    return 0;
 }
 
 
@@ -780,12 +755,7 @@ void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
                 goto next;
             }
 
-            if (rxq.newbuf(rid) != 0) {
-                rxq.discard(rid, idx);
-                if (!rxcd->layout->eop)
-                    rxq.discard_chain(rid);
-                goto next;
-            }
+            rxq.newbuf(rid);
 
             m->M_dat.MH.MH_pkthdr.len = length;
             m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
@@ -796,15 +766,7 @@ void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
             assert(rxd->layout->btype == VMXNET3_BTYPE_BODY);
             assert(rxq.m_currpkt_head != nullptr);
 
-            if (rxq.newbuf(rid) != 0) {
-                rxq.discard(rid, idx);
-                if (!rxcd->layout->eop)
-                    rxq.discard_chain(rid);
-                m_freem(rxq.m_currpkt_head);
-                _rxq_stats.rx_drops++;
-                rxq.m_currpkt_head = rxq.m_currpkt_tail = nullptr;
-                goto next;
-            }
+            rxq.newbuf(rid);
 
             m->m_hdr.mh_len = length;
             rxq.m_currpkt_head->M_dat.MH.MH_pkthdr.len += length;
