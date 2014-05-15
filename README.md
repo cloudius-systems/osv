@@ -32,9 +32,14 @@ yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool 
 ```
 
 **Debian**
-
+Debian stable(wheezy) is not able to install gcc 4.8, Debian testing(jessie) or later is required.
 ```
-apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils maven libmaven-shade-plugin-java python-dpkt tcpdump gdb
+apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils maven libmaven-shade-plugin-java python-dpkt tcpdump gdb qemu-system-x86
+```
+
+Before start building OSv, you'll need to add your account to kvm group.
+```
+usermod -aG kvm <user name>
 ```
 
 **Ubuntu users**: you may use [Oracle JDK][] if you don't want to pull too many
