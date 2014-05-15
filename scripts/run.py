@@ -174,7 +174,7 @@ def start_osv_qemu(options):
         qemu_env = os.environ.copy()
 
         qemu_env['OSV_BRIDGE'] = options.bridge
-        cmdline = ["qemu-system-x86_64"] + args
+        cmdline = [options.qemu_path] + args
         if options.dry_run:
             print(format_args(cmdline))
         else:
@@ -439,6 +439,9 @@ if (__name__ == "__main__"):
                         help="enable collecting of backtrace at tracepoints")
     parser.add_argument("--sampler", action="store", nargs='?', const='1000',
                         help="start sampling profiler. optionally specify sampling frequency in Hz")
+    parser.add_argument("--qemu-path", action="store",
+                        default="qemu-system-x86_64",
+                        help="specify qemu command path")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
