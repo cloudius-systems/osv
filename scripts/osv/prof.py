@@ -63,8 +63,6 @@ def format_time(time, format="%.2f %s"):
     return str(time)
 
 unimportant_functions = set([
-    'operator()',
-    'std::function<void ()>::operator()() const',
     '_M_invoke',
     ])
 
@@ -82,7 +80,8 @@ unimportant_prefixes = [
 
     ('tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
      'log',
-     'trace_slow_path'),
+     'trace_slow_path',
+     'operator()'),
 ]
 
 bottom_of_stack = set(['thread_main', 'thread_main_c'])
