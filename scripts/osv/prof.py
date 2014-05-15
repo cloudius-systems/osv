@@ -82,6 +82,10 @@ unimportant_prefixes = [
      'log',
      'trace_slow_path',
      'operator()'),
+
+    ('log',
+     'trace_slow_path',
+     'operator()'),
 ]
 
 bottom_of_stack = set(['thread_main', 'thread_main_c'])
