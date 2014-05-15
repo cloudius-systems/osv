@@ -230,13 +230,6 @@ void vmxnet3_rxqueue::init()
         }
     }
 
-    for (unsigned i = 1; i < VMXNET3_RXRINGS_PERQ; i++) {
-        auto &rxr = cmd_rings[i];
-        rxr.fill = 0;
-        rxr.gen = 0;
-        rxr.clear_descs();
-    }
-
     auto &rxc = comp_ring;
     rxc.next = 0;
     rxc.gen = vmxnet3::VMXNET3_INIT_GEN;
