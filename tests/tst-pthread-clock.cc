@@ -118,6 +118,20 @@ int main(int ac, char** av)
     run_subthread = false;
     pthread_join(thread, nullptr);
 
+    // Test for bug #302 (the cpu time wasn't updated until the scheduler
+    // updated it)
+    auto first = pclock(CLOCK_THREAD_CPUTIME_ID);
+    // On near-future computers, a single function call may complete in less
+    // then a nanosecond. But lets hope that the following loop will spend at
+    // least a nanosecond.
+    for (register int j=0; j<1000; j++) {
+        // To force gcc to not optimize this loop away
+        asm volatile("" : : : "memory");
+    }
+    auto second = pclock(CLOCK_THREAD_CPUTIME_ID);
+    std::cerr << "before " << first << " after " << second << "\n";
+    pass_if(first != second, "thread cputime is not updated");
+
     std::cerr << "PASSED\n";
 
     return 0;

@@ -584,7 +584,7 @@ private:
     friend void init(std::function<void ()> cont);
 public:
     std::atomic<thread *> _joiner;
-    thread_runtime::duration thread_clock() { return _total_cpu_time; }
+    thread_runtime::duration thread_clock();
     bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;

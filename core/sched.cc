@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <unordered_map>
 #include <osv/wait_record.hh>
+#include <osv/preempt-lock.hh>
 
 // By taking the address of these functions, we force the compiler to generate
 // a symbol for it even when the function is inlined into all call sites. In a
@@ -564,6 +565,27 @@ std::unordered_map<unsigned long, thread *> thread_map
     __attribute__((init_priority((int)init_prio::threadlist)));
 
 static thread_runtime::duration total_app_time_exited(0);
+
+thread_runtime::duration thread::thread_clock() {
+    if (this == current()) {
+        WITH_LOCK (preempt_lock) {
+            // Inside preempt_lock, we are running and the scheduler can't
+            // intervene and change _total_cpu_time or _running_since
+            return _total_cpu_time +
+                    (osv::clock::uptime::now() - tcpu()->running_since);
+        }
+    } else {
+        // _total_cpu_time is the accurate answer, *unless* the thread is
+        // currently running on a different CPU. If it is running on a
+        // different CPU, correcting for the partial time slice is very tricky
+        // (and probably will require some additional memory ordering) so we
+        // will leave this as a TODO.
+        // FIXME: we assume reads/writes to _total_cpu_time are atomic.
+        // They are, but we should use std::atomic to guarantee that.
+        return _total_cpu_time;
+    }
+}
+
 
 std::chrono::nanoseconds osv_run_stats()
 {
