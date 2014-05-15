@@ -23,7 +23,10 @@
 template<class T, unsigned MaxSize, unsigned MaxSizeMask = MaxSize - 1>
 class ring_spsc {
 public:
-    ring_spsc(): _begin(0), _end(0) { assert(is_power_of_two(MaxSize)); }
+    ring_spsc(): _begin(0), _end(0)
+    {
+        static_assert(is_power_of_two(MaxSize), "size must be a power of two");
+    }
 
     bool push(const T& element)
     {
