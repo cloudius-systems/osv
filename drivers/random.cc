@@ -132,17 +132,16 @@ struct random_hardware_source rsource = {
 
 static int virtio_rng_read(void *buf, int size)
 {
-    if (s_hwrng) {
-        return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
-    }
-    return 0;
+    return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
 }
 
 random_device::random_device()
 {
     struct random_device_priv *prv;
 
-    live_entropy_source_register(&rsource);
+    if (s_hwrng) {
+        live_entropy_source_register(&rsource);
+    }
     (random_adaptor->init)();
 
     // Create random
@@ -158,7 +157,9 @@ random_device::random_device()
 
 random_device::~random_device()
 {
-    live_entropy_source_deregister(&rsource);
+    if (s_hwrng) {
+        live_entropy_source_deregister(&rsource);
+    }
     (random_adaptor->deinit)();
 
     device_destroy(_random_dev);
