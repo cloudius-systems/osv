@@ -15,8 +15,6 @@
 extern "C" {
 void thread_main(void);
 void thread_main_c(sched::thread* t);
-void stack_trampoline(sched::thread* t, void (*func)(sched::thread*),
-                      void** stacktop);
 }
 
 namespace sched {

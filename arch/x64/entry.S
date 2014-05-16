@@ -159,19 +159,3 @@ call_signal_handler_thunk:
         iretq
         .cfi_endproc
 
-.global stack_trampoline
-stack_trampoline:  # %rsi=arg, %rdi=func, %rdx=stack
-        .type stack_trampoline, @function
-	.cfi_startproc simple
-	.cfi_def_cfa %rsp, 0
-	# align the stack at 16 bytes for sse
-	andq $-16, %rdx
-	sub $8, %rdx
-	mov %rsp, -8(%rdx)
-	lea -8(%rdx), %rsp
-	.cfi_rel_offset %rsp, 0
-	call *%rsi
-	pop %rsp
-	.cfi_restore %rsp
-	ret
-	.cfi_endproc
