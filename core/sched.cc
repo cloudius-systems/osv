@@ -26,6 +26,13 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 
+// By taking the address of these functions, we force the compiler to generate
+// a symbol for it even when the function is inlined into all call sites. In a
+// situation like that, the symbol would simply not be generated. That seems to
+// be true even if we use "inline" instead of "static inline"
+#define OSV_SYM(module, name) void *__address##name __attribute__((visibility("hidden"))) = (void *)&module::name
+OSV_SYM(sched::thread, current);
+
 __thread char* percpu_base;
 
 extern char _percpu_start[], _percpu_end[];
@@ -813,11 +820,6 @@ void thread::wake_lock(mutex* mtx, wait_record* wr)
 void thread::main()
 {
     _func();
-}
-
-thread* thread::current()
-{
-    return sched::s_current;
 }
 
 void thread::wait()

@@ -222,6 +222,7 @@ private:
     timer& _tmr;
 };
 
+extern thread __thread * s_current;
 // thread_runtime is used to maintain the scheduler's view of the thread's
 // priority relative to other threads. It knows about a static priority of the
 // thread (allowing a certain thread to get more runtime than another threads)
@@ -404,7 +405,11 @@ public:
     static void sleep(std::chrono::duration<Rep, Period> duration);
     static void yield();
     static void exit() __attribute__((__noreturn__));
-    static thread* current() __attribute((no_instrument_function));
+#ifdef __OSV_CORE__
+    static inline thread* current() { return s_current; };
+#else
+    static thread* current();
+#endif
     stack_info get_stack_info();
     cpu* tcpu() const __attribute__((no_instrument_function));
     void join();
