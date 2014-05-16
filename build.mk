@@ -82,6 +82,20 @@ libc/%.o: source-dialects =
 
 kernel-defines = -D_KERNEL $(source-dialects)
 
+# This play the same role as "_KERNEL", but _KERNEL unfortunately is too
+# overloaded. A lot of files will expect it to be set no matter what, specially
+# in headers. "userspace" inclusion of such headers is valid, and lacking
+# _KERNEL will make them fail to compile. That is specially true for the BSD
+# imported stuff like ZFS commands.
+#
+# To add something to the kernel build, you can write for your object:
+#
+#   mydir/*.o COMMON += <MY_STUFF>
+#
+# To add something that will *not* be part of the main kernel, you can do:
+#
+#   mydir/*.o EXTRA_FLAGS = <MY_STUFF>
+EXTRA_FLAGS = -D__OSV_CORE__
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(kernel-defines) \
@@ -89,7 +103,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-include $(src)/compiler/include/intrinsics.hh \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
-	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207"
+	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" $(EXTRA_FLAGS)
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
@@ -186,7 +200,7 @@ q-adjust-deps = $(call very-quiet, $(adjust-deps))
 
 tests/%.o: COMMON += -fPIC -DBOOST_TEST_DYN_LINK
 
-%.so: COMMON += -fPIC -shared
+%.so: EXTRA_FLAGS = -fPIC -shared
 %.so: %.o
 	$(makedir)
 	$(q-build-so)
