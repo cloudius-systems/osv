@@ -126,6 +126,9 @@ struct random_hardware_source rsource = {
     &virtio_rng_read,
 };
 
+// NOTE: This function is not intended to be called directly.
+// Instead, it's registered as a callback into the structure used to register
+// virtio-rng as a hardware source of entropy, so being called whenever needed.
 static int virtio_rng_read(void *buf, int size)
 {
     return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
