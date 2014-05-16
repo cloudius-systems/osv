@@ -67,7 +67,7 @@ static int
 random_read(struct device *dev, struct uio *uio, int ioflags)
 {
     int c, error = 0;
-    char *random_buf;
+    char random_buf[PAGE_SIZE];
 
     // Blocking logic
     if (!random_adaptor->seeded) {
@@ -75,8 +75,6 @@ random_read(struct device *dev, struct uio *uio, int ioflags)
     }
 
     if (!error) {
-        random_buf = new char[PAGE_SIZE];
-
         while (uio->uio_resid > 0 && !error) {
             c = std::min(uio->uio_resid, static_cast<long int>(PAGE_SIZE));
             c = (*random_adaptor->read)(static_cast<void *>(random_buf), c);
@@ -86,8 +84,6 @@ random_read(struct device *dev, struct uio *uio, int ioflags)
         // Finished reading; let the source know so it can do some
         // optional housekeeping */
         (*random_adaptor->read)(nullptr, 0);
-
-        delete [] random_buf;
     }
 
     return error;
