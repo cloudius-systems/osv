@@ -32,6 +32,11 @@
 // be true even if we use "inline" instead of "static inline"
 #define OSV_SYM(module, name) void *__address##name __attribute__((visibility("hidden"))) = (void *)&module::name
 OSV_SYM(sched::thread, current);
+OSV_SYM(sched, get_preempt_counter);
+OSV_SYM(sched, preemptable);
+OSV_SYM(sched, preempt);
+OSV_SYM(sched, preempt_disable);
+OSV_SYM(sched, preempt_enable);
 
 __thread char* percpu_base;
 
@@ -992,39 +997,6 @@ void thread_handle::wake()
         if (ds) {
             thread::wake_impl(ds);
         }
-    }
-}
-
-void preempt_disable()
-{
-    ++preempt_counter;
-}
-
-void preempt_enable()
-{
-    --preempt_counter;
-    if (preemptable() && need_reschedule && arch::irq_enabled()) {
-        cpu::schedule();
-    }
-}
-
-bool preemptable()
-{
-    return (!preempt_counter);
-}
-
-unsigned int get_preempt_counter()
-{
-    return preempt_counter;
-}
-
-void preempt()
-{
-    if (preemptable()) {
-        sched::cpu::current()->reschedule_from_interrupt(true);
-    } else {
-        // preempt_enable() will pick this up eventually
-        need_reschedule = true;
     }
 }
 
