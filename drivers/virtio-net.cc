@@ -789,8 +789,8 @@ void net::txq::gc()
     u16 req_cnt = 0;
 
     //
-    // "finalize" at least every quoter of a ring to let the host work in
-    // paralel with us.
+    // "finalize" at least every quarter of a ring to let the host work in
+    // parallel with us.
     //
     const u16 fin_thr = static_cast<u16>(vqueue->size()) / 4;
 
