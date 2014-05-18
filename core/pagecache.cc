@@ -15,10 +15,13 @@
 #include <fs/vfs/vfs.h>
 #include <osv/trace.hh>
 #include <osv/prio.hh>
+#include <chrono>
 
 extern "C" {
 void arc_unshare_buf(arc_buf_t*);
 void arc_share_buf(arc_buf_t*);
+void arc_buf_accessed(const uint64_t[4]);
+void arc_buf_get_hashkey(arc_buf_t*, uint64_t[4]);
 }
 
 namespace std {
@@ -36,6 +39,24 @@ template<> struct hash<mmu::hw_ptep> {
         return h(ptep.release());
     }
 };
+template<>
+struct hash<pagecache::arc_hashkey> {
+    size_t operator()(const pagecache::arc_hashkey& key) const noexcept {
+        hash<uint64_t> h;
+        return h(key.key[0]) ^ h(key.key[1]) ^ h(key.key[2]) ^ h(key.key[3]);
+    }
+};
+
+std::unordered_set<mmu::hw_ptep>::iterator begin(std::unique_ptr<std::unordered_set<mmu::hw_ptep>> const& e)
+{
+    return e->begin();
+}
+
+std::unordered_set<mmu::hw_ptep>::iterator end(std::unique_ptr<std::unordered_set<mmu::hw_ptep>> const& e)
+{
+    return e->end();
+}
+
 }
 
 namespace pagecache {
@@ -116,6 +137,23 @@ protected:
             return set->size();
         }
     };
+    class ptep_accessed : public ptes_visitor<int> {
+    public:
+        ptep_accessed(ptep_list& ptes) : ptes_visitor(ptes) {}
+        int operator()(std::nullptr_t &v) {
+            return 0;
+        }
+        int operator()(mmu::hw_ptep& ptep) {
+            return mmu::clear_accessed(ptep);
+        }
+        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+            int cleared = 0;
+            for (auto&& i: set) {
+                cleared += mmu::clear_accessed(i);
+            }
+            return cleared;
+        }
+    };
 
 public:
     cached_page(hashkey key, void* page) : _key(key), _page(page) {
@@ -137,6 +175,10 @@ public:
     int flush() {
         ptep_flush flush(_ptes);
         return boost::apply_visitor(flush, _ptes);
+    }
+    int clear_accessed() {
+        ptep_accessed accessed(_ptes);
+        return boost::apply_visitor(accessed, _ptes);
     }
     const hashkey& key() {
         return _key;
@@ -187,11 +229,11 @@ class cached_page_arc : public cached_page {
 public:
     typedef std::unordered_multimap<arc_buf_t*, cached_page_arc*> arc_map;
 
+    static arc_map arc_cache_map;
+
 private:
     arc_buf_t* _ab;
     bool _removed = false;
-
-    static arc_map arc_cache_map;
 
     static arc_buf_t* ref(arc_buf_t* ab, cached_page_arc* pc)
     {
@@ -207,7 +249,6 @@ private:
 
         return arc_cache_map.find(ab) == arc_cache_map.end();
     }
-
 
 public:
     cached_page_arc(hashkey key, void* page, arc_buf_t* ab) : cached_page(key, page), _ab(ref(ab, this)) {}
@@ -442,4 +483,97 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     // if a private page, caller will free it
     return addr != zero_page;
 }
+
+TRACEPOINT(trace_access_scanner, "scanned=%u, cleared=%u, %%cpu=%g", unsigned, unsigned, double);
+static class access_scanner {
+    static constexpr double _max_cpu = 20;
+    static constexpr double _min_cpu = 0.1;
+    static constexpr unsigned _freq = 1000;
+    double _cpu = _min_cpu;
+    sched::thread _thread;
+public:
+    access_scanner() : _thread(std::bind(&access_scanner::run, this), sched::thread::attr().name("page-access-scanner")) {
+        _thread.start();
+    }
+
+private:
+    bool mark_accessed(std::unordered_set<arc_hashkey>& accessed) {
+        if (accessed.empty()) {
+            return false;
+        }
+        for (auto&& arc_hashkey: accessed) {
+            arc_buf_accessed(arc_hashkey.key);
+        }
+        accessed.clear();
+        return true;
+    }
+    void run()
+    {
+        cached_page_arc::arc_map::size_type current_bucket = 0;
+        std::unordered_set<arc_hashkey> accessed;
+        unsigned scanned = 0, cleared = 0;
+
+        while (true) {
+            unsigned buckets_scanned = 0;
+            bool flush = false;
+            auto bucket_count = cached_page_arc::arc_cache_map.bucket_count();
+
+            double work = (1000000000 * _cpu)/100;
+            double sleep = 1000000000 - work;
+
+            sched::thread::sleep(std::chrono::nanoseconds(static_cast<unsigned long>(sleep/_freq)));
+
+            auto start = sched::thread::current()->thread_clock();
+            auto deadline = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::nanoseconds(static_cast<unsigned long>(work/_freq))) + start;
+
+            WITH_LOCK(arc_lock) {
+                while (sched::thread::current()->thread_clock() < deadline && buckets_scanned < bucket_count) {
+                    if (current_bucket >= cached_page_arc::arc_cache_map.bucket_count()) {
+                        current_bucket = 0;
+                    }
+                    std::for_each(cached_page_arc::arc_cache_map.begin(current_bucket), cached_page_arc::arc_cache_map.end(current_bucket),
+                            [&accessed, &scanned, &cleared](cached_page_arc::arc_map::value_type& p) {
+                        auto arcbuf = p.first;
+                        auto cp = p.second;
+                        if (cp->clear_accessed()) {
+                            arc_hashkey arc_hashkey;
+                            arc_buf_get_hashkey(arcbuf, arc_hashkey.key);
+                            accessed.emplace(arc_hashkey);
+                            cleared++;
+                        }
+                        scanned++;
+                    });
+                    current_bucket++;
+                    buckets_scanned++;
+
+                    // mark ARC buffers as accessed when we have 1024 of them
+                    if (!(cleared % 1024)) {
+                        DROP_LOCK(arc_lock) {
+                            flush = mark_accessed(accessed);
+                        }
+                    }
+                }
+            }
+
+            // mark leftovers ARC buffers as accessed
+            flush = mark_accessed(accessed);
+
+            if (flush) {
+                mmu::flush_tlb_all();
+            }
+
+            if (buckets_scanned == bucket_count || !scanned) {
+                _cpu = _min_cpu;
+            } else {
+                _cpu = std::max(_min_cpu, std::min(_max_cpu, _max_cpu * ((cleared*5.0)/scanned)));
+            }
+
+            trace_access_scanner(scanned, cleared, _cpu);
+
+            // decay old results a bit
+            scanned /= 4;
+            cleared /= 2;
+        }
+    }
+} access_scanner;
 }

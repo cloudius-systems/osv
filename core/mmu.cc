@@ -1090,6 +1090,18 @@ void clear_pte(std::pair<void* const, hw_ptep>& pair)
     clear_pte(pair.second);
 }
 
+bool clear_accessed(hw_ptep ptep)
+{
+    pt_element pte = ptep.read();
+    bool accessed = arch_pt_element::accessed(&pte);
+    if (accessed) {
+        pt_element clear = pte;
+        arch_pt_element::set_accessed(&clear, false);
+        ptep.compare_exchange(pte, clear);
+    }
+    return accessed;
+}
+
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
 {
     bool search = !(flags & mmap_fixed);

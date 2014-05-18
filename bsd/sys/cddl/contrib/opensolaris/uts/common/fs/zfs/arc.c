@@ -1492,6 +1492,34 @@ arc_unshare_buf(arc_buf_t *abuf)
 	hdr->b_mmaped = 0;
 }
 
+void
+arc_buf_get_hashkey(arc_buf_t *abuf, uint64_t hashkey[4])
+{
+	arc_buf_hdr_t* hdr = abuf->b_hdr;
+	hashkey[0] = hdr->b_spa;
+	hashkey[1] = hdr->b_dva.dva_word[0];
+	hashkey[2] = hdr->b_dva.dva_word[1];
+	hashkey[3] = hdr->b_birth;
+}
+
+void
+arc_buf_accessed(const uint64_t hashkey[4])
+{
+	kmutex_t *hash_lock;
+	dva_t dva = {hashkey[1], hashkey[2]};
+	arc_buf_hdr_t* hdr = buf_hash_find(hashkey[0], &dva, hashkey[3], &hash_lock);
+
+	if (!hdr)
+		return;
+
+	if (hdr->b_state != arc_anon) {
+		add_reference(hdr, hash_lock, "accessed");
+		arc_access(hdr, hash_lock);
+		remove_reference(hdr, hash_lock, "accessed");
+	}
+	mutex_exit(hash_lock);
+}
+
 /*
  * Return a loaned arc buffer to the arc.
  */
