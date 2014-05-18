@@ -31,8 +31,30 @@ public:
     bool push(const T& element)
     {
         unsigned end = _end.load(std::memory_order_relaxed);
+        //
+        // Use "acquire" memory order to prevent the reordering of this load and
+        // the "_ring[end & MaxSizeMask] = element" store below since otherwise
+        // the following race is possible on a platform that may perform
+        // speculative stores:
+        //
+        // Initial indices values: _begin = 0, _end = MaxSize.
+        //
+        // 1) [CPU0]: load _end (end <- MaxSize)
+        // 2) [CPU0]: (speculative) store to _ring[end & MaxSizeMask == 0]
+        //                _ring[0] <- element
+        // 3) [CPU1]: (pop's) loads from _ring[_begin & MaxSizeMask == 0]
+        //                element1 <- _ring[0] (which is trashed at (2))
+        // 4) [CPU1]: increments _begin: _begin <- 1
+        // 5) [CPU0]: loads _begin: beg <- 1
+        // 6) [CPU0]: "if (end (==MaxSize) - beg (==1) >= MaxSize)" is FALSE and
+        //            speculative write in (2) is not rolled back.
+        //
+        // As a result push() will succeed, pop() also succeed but will return a
+        // trashed (by push() in step (3)) value.
+        //
+        unsigned beg = _begin.load(std::memory_order_acquire);
 
-        if (size() >= MaxSize) {
+        if (end - beg >= MaxSize) {
             return false;
         }
 
@@ -51,7 +73,15 @@ public:
         }
 
         element = _ring[beg & MaxSizeMask];
-        _begin.store(beg + 1, std::memory_order_relaxed);
+        //
+        // Use "release" memory order to prevent the reordering of this store
+        // and load from the _ring[beg & MaxSizeMask] above.
+        //
+        // Otherwise there's a possible race when push() already succeeds to
+        // trash the element at index "_begin & MaxSizeMask" (when the ring is
+        // full) with the new value before the load in this function occurs.
+        //
+        _begin.store(beg + 1, std::memory_order_release);
 
         return true;
     }
