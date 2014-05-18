@@ -458,7 +458,7 @@ void cpu::load_balance()
         }
         WITH_LOCK(irq_lock) {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-                    [](thread& t) { return !t._attr._pinned_cpu && t._migration_lock_counter == 0; });
+                    [](thread& t) { return t._migration_lock_counter == 0; });
             if (i == runqueue.rend()) {
                 continue;
             }
@@ -673,6 +673,10 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
 
     if (_attr._detached) {
         _detach_state.store(detach_state::detached);
+    }
+
+    if (_attr._pinned_cpu) {
+        ++_migration_lock_counter;
     }
 
     if (main) {
