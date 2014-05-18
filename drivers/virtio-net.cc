@@ -813,7 +813,7 @@ void net::txq::gc()
     }
 
     if (req_cnt) {
-        vqueue->db_used();
+        vqueue->update_used_event();
     }
 
     vqueue->get_buf_gc();

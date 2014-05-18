@@ -132,21 +132,22 @@ class virtio_driver;
         /**
          * Increment the _used_ring_host_head and doorbell if requested.
          *
-         * Let the host know we consumed the used entry. We separate that from
-         * get_buf_elem so no one will re-cycle the request header location
-         * until we're finished with it in the upper layer.
+         * If requested let the host know we consumed the used entry.
+         * We separate that from get_buf_elem so no one will re-cycle the
+         * request header location until we're finished with it in the upper
+         * layer.
          *
-         * @param doorbell if TRUE - doorbell the host
+         * @param update_host if TRUE - update the host as well
          */
-        void get_buf_finalize(bool doorbell = true) {
+        void get_buf_finalize(bool update_host = true) {
             _used_ring_host_head++;
 
-            if (doorbell) {
-                db_used();
+            if (update_host) {
+                update_used_event();
             }
         }
 
-        void db_used() {
+        void update_used_event() {
             // only let the host know about our used idx in case irq are enabled
             if (_avail->interrupt_on()) {
                 set_used_event(_used_ring_host_head, std::memory_order_release);
