@@ -619,8 +619,6 @@ int net::txq::try_xmit_one_locked(net_req* req)
     u16 vec_sz = 0;
     u64 tx_bytes = 0;
 
-    DEBUG_ASSERT(!try_lock_running(), "RUNNING lock not taken!\n");
-
     if (_parent->_mergeable_bufs) {
         req->mhdr.num_buffers = 0;
     }
