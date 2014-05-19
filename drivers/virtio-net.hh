@@ -8,6 +8,8 @@
 #ifndef VIRTIO_NET_DRIVER_H
 #define VIRTIO_NET_DRIVER_H
 
+#include <boost/function_output_iterator.hpp>
+
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
@@ -299,31 +301,26 @@ private:
 
     struct txq;
     /**
-     * @class tx_xmit_iterator
+     * @class xmitter_functor
      *
-     * This iterator will be used as an output iterator by the nway_merger
-     * instance that will merge the per-CPU tx_cpu_queue instances.
-     *
-     * It's operator=() will actually sent the packet to the (virtual) HW.
+     * This functor (through boost::function_output_iterator) will be used as an
+     * output iterator by the nway_merger instance that will merge the per-CPU
+     * tx_cpu_queue instances.
      */
-    class tx_xmit_iterator {
-    public:
-        tx_xmit_iterator(txq* txq) : _q(txq) { }
-
-        // These ones will do nothing
-        tx_xmit_iterator& operator *() { return *this; }
-        tx_xmit_iterator& operator++() { return *this; }
+    struct xmitter_functor {
+        xmitter_functor(txq* txq) : _q(txq) {}
 
         /**
          * Push the packet downstream
-         * @param tx_desc
+         * @param cooky opaque pointer representing the descriptor of the
+         *              current packet to be sent.
          */
-        void operator=(void* cooky) {
-            _q->xmit_one_locked(cooky);
-        }
-    private:
+        void operator()(void* cooky) const { _q->xmit_one_locked(cooky); }
+
         txq* _q;
     };
+
+    typedef boost::function_output_iterator<xmitter_functor> tx_xmit_iterator;
 
     /**
      * @class txq
@@ -332,7 +329,7 @@ private:
      *  TODO: Make it a class!
      */
     struct txq {
-        friend class tx_xmit_iterator;
+        friend xmitter_functor;
 
         txq(net* parent, vring* vq) :
             vqueue(vq), _parent(parent), _xmit_it(this),
