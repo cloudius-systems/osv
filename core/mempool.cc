@@ -879,7 +879,7 @@ static void refill_page_buffer()
                 total_size += size;
                 void* pages = static_cast<void*>(p) + p->size;
                 if (!p->size) {
-                    free_page_ranges.erase(*p);
+                    free_page_ranges.erase(it);
                 }
                 while (size) {
                     pbuf.free[pbuf.nr++] = pages;
@@ -941,12 +941,13 @@ static void* early_alloc_page()
             abort();
         }
 
-        auto p = &*free_page_ranges.begin();
+        auto begin = free_page_ranges.begin();
+        auto p = &*begin;
         p->size -= page_size;
         on_alloc(page_size);
         void* page = static_cast<void*>(p) + p->size;
         if (!p->size) {
-            free_page_ranges.erase(*p);
+            free_page_ranges.erase(begin);
         }
         return page;
     }
@@ -1023,7 +1024,7 @@ void* alloc_huge_page(size_t N)
             size_t alloc_size;
             if (ret==v) {
                 alloc_size = range->size;
-                free_page_ranges.erase(*range);
+                free_page_ranges.erase(i);
             } else {
                 // Note that this is is done conditionally because we are
                 // operating page ranges. That is what is left on our page
