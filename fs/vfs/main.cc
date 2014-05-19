@@ -73,7 +73,6 @@
 
 using namespace std;
 
-
 #ifdef DEBUG_VFS
 int	vfs_debug = VFSDB_FLAGS;
 #endif
@@ -892,6 +891,48 @@ int link(const char *oldpath, const char *newpath)
     trace_vfs_link_err(error);
     errno = error;
     return -1;
+}
+
+
+TRACEPOINT(trace_vfs_symlink, "\"%s\" \"%s\"", const char*, const char*);
+TRACEPOINT(trace_vfs_symlink_ret, "");
+TRACEPOINT(trace_vfs_symlink_err, "%d", int);
+
+int symlink(const char *oldpath, const char *newpath)
+{
+    struct task *t = main_task;
+    char path1[PATH_MAX];
+    char path2[PATH_MAX];
+    int error;
+
+    trace_vfs_symlink(oldpath, newpath);
+
+    error = ENOENT;
+    if (oldpath == NULL || newpath == NULL) {
+        goto out_errno;
+    }
+
+    if ((error = task_conv(t, oldpath, VWRITE, path1)) != 0) {
+        goto out_errno;
+    }
+
+    if ((error = task_conv(t, newpath, VWRITE, path2)) != 0) {
+        goto out_errno;
+    }
+
+    error = sys_symlink(path1, path2);
+    if (error) {
+        goto out_errno;
+    }
+
+    trace_vfs_symlink_ret();
+    return 0;
+
+    out_errno:
+    trace_vfs_symlink_err(error);
+    errno = error;
+    return -1;
+
 }
 
 TRACEPOINT(trace_vfs_unlink, "\"%s\"", const char*);

@@ -191,7 +191,6 @@ int fork()
 }
 
 NO_SYS(int execvp(const char *, char *const []));
-NO_SYS(int symlink(const char *, const char *));
 
 int mlockall(int flags)
 {

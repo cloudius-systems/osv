@@ -110,6 +110,7 @@ int	 sys_mknod(char *path, mode_t mode);
 int	 sys_rename(char *src, char *dest);
 int	 sys_link(char *oldpath, char *newpath);
 int	 sys_unlink(char *path);
+int	 sys_symlink(char*oldpath, char* newpath);
 int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);
 int	 sys_statfs(char *path, struct statfs *buf);

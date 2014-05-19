@@ -277,6 +277,7 @@ tests += tests/tst-yield.so
 tests += tests/misc-ctxsw.so
 tests += tests/tst-readdir.so
 tests += tests/tst-read.so
+tests += tests/tst-symlink.so
 tests += tests/tst-remove.so
 tests += tests/misc-wake.so
 tests += tests/tst-epoll.so

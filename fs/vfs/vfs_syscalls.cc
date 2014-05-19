@@ -732,6 +732,54 @@ sys_rename(char *src, char *dest)
 }
 
 int
+sys_symlink(char *oldpath, char *newpath)
+{
+	int error;
+	struct dentry *olddp;
+	struct dentry *newdp;
+	struct dentry *newdirdp;
+	struct vnode *vp;
+	char *name;
+
+	if (oldpath == NULL || newpath == NULL) {
+		return (EFAULT);
+	}
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
+				oldpath, newpath));
+
+	/* oldpath must exist */
+	if ((error = namei(oldpath, &olddp)) != 0) {
+		return (error);
+	}
+
+	/* newpath should not already exist */
+	if (namei(newpath, &newdp) == 0) {
+		return (EEXIST);
+	}
+
+	/* parent directory for new path must exist */
+	if ((error = lookup(newpath, &newdirdp, &name)) != 0) {
+		return (ENOENT);
+	}
+
+	vp = olddp->d_vnode;
+	vn_lock(vp);
+	vn_lock(newdirdp->d_vnode);
+
+	/* check for write access at newpath */
+	if ((error = vn_access(newdirdp->d_vnode, VWRITE)) != 0) {
+		goto out;
+	}
+
+	error = VOP_SYMLINK(newdirdp->d_vnode, name, oldpath);
+out:
+	vn_unlock(newdirdp->d_vnode);
+	vn_unlock(vp);
+	return (error);
+}
+
+int
 sys_link(char *oldpath, char *newpath)
 {
 	struct dentry *olddp, *newdp, *newdirdp;
