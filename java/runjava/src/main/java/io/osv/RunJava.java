@@ -26,7 +26,13 @@ public class RunJava {
             ContextIsolator.getInstance().runSync(args);
         } catch (IllegalArgumentException ex) {
             System.err.println("RunJava: " + ex.getMessage());
-        } catch (Throwable ex) {
+        } catch (ContextFailedException ex) {
+	    if (ex.getCause() instanceof MainClassNotFoundException) {
+	        System.err.println("Error: Could not find or load main class " + ((MainClassNotFoundException)ex.getCause()).getClassName());
+	    } else {
+	        ex.printStackTrace();
+	    }
+	} catch (Throwable ex) {
             ex.printStackTrace();
         }
     }
