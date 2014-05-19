@@ -416,9 +416,8 @@ private:
          * @param m_head
          * @param req
          *
-         * @return 0 if packet has been successfully sent, EINVAL if a packet is
-         *         not well-formed and ENOBUFS if there was no room on a HW ring
-         *         to send the packet.
+         * @return 0 if packet has been successfully sent and ENOBUFS if there
+         *         was no room on a HW ring to send the packet.
          */
         int try_xmit_one_locked(net_req* req);
 
