@@ -1121,7 +1121,7 @@ extern std::vector<cpu*> cpus;
 inline void migrate_disable()
 {
     thread::current()->_migration_lock_counter++;
-    std::atomic_signal_fence(std::memory_order_acquire);
+    std::atomic_signal_fence(std::memory_order_seq_cst);
 }
 
 inline void migrate_enable()
