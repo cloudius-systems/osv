@@ -175,6 +175,7 @@ pt_element pte_mark_cow(pt_element pte, bool cow);
 bool write_pte(void *addr, hw_ptep ptep, pt_element pte);
 
 phys virt_to_phys(void *virt);
+pt_element virt_to_pte_rcu(uintptr_t virt);
 
 template <typename OutputFunc>
 inline
@@ -240,6 +241,12 @@ unsigned clear_ptes(I start,  I end)
     }
     return i;
 }
+
+inline bool pte_is_cow(pt_element pte)
+{
+   return pte.sw_bit(pte_cow);
+}
+
 
 unsigned long all_vmas_size();
 

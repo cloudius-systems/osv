@@ -156,11 +156,24 @@ bool is_page_fault_write_exclusive(unsigned int error_code) {
     return error_code == page_fault_write;
 }
 
+bool is_page_fault_prot_write(unsigned int error_code) {
+    return (error_code & (page_fault_write | page_fault_prot)) == (page_fault_write | page_fault_prot);
+}
+
 bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef)
 {
     if (is_page_fault_rsvd(ef->get_error())) {
         return true;
     }
+
+    // if page is present, but write protected without cow bit set
+    // it means that this address belong to PROT_READ vma, so no need
+    // to search vma to verify permission
+    if (is_page_fault_prot_write(ef->get_error())) {
+        auto pte = virt_to_pte_rcu(addr);
+        return !pte_is_cow(pte);
+    }
+
     return false;
 }
 }

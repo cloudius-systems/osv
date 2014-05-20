@@ -27,6 +27,7 @@
 #include <fs/fs.hh>
 #include <osv/file.h>
 #include "dump.hh"
+#include <osv/rcu.hh>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -148,11 +149,6 @@ pt_element pte_mark_cow(pt_element pte, bool cow)
     }
     pte.set_sw_bit(pte_cow, cow);
     return pte;
-}
-
-bool pte_is_cow(pt_element pte)
-{
-   return pte.sw_bit(pte_cow);
 }
 
 bool change_perm(hw_ptep ptep, unsigned int perm)
@@ -286,6 +282,8 @@ public:
     bool split_large(hw_ptep ptep, int level) { return opt2bool(Split); }
     unsigned nr_page_sizes(void) { return mmu::nr_page_sizes; }
 
+    pt_element ptep_read(hw_ptep ptep) { return ptep.read(); }
+
     // small_page() function is called on level 0 ptes. Each page table operation
     // have to provide its own version.
     void small_page(hw_ptep ptep, uintptr_t offset) { assert(0); }
@@ -341,11 +339,14 @@ private:
 
     map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop) :
         vma_start(vma_start), vcur(vcur), vend(vcur + size - 1), slop(slop), page_mapper(page_mapper) {}
+    pt_element read(hw_ptep ptep) {
+        return page_mapper.ptep_read(ptep);
+    }
     bool skip_pte(hw_ptep ptep) {
-        return page_mapper.skip_empty() && ptep.read().empty();
+        return page_mapper.skip_empty() && read(ptep).empty();
     }
     bool descend(hw_ptep ptep) {
-        return page_mapper.descend() && !ptep.read().empty() && !ptep.read().large();
+        return page_mapper.descend() && !read(ptep).empty() && !read(ptep).large();
     }
     void map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
             hw_ptep ptep, uintptr_t base_virt)
@@ -354,12 +355,12 @@ private:
         pt_mapper(ptep, base_virt);
     }
     void operator()(hw_ptep parent, uintptr_t base_virt = 0) {
-        if (!parent.read().valid()) {
+        if (!read(parent).valid()) {
             if (!page_mapper.allocate_intermediate()) {
                 return;
             }
             allocate_intermediate_level(parent);
-        } else if (parent.read().large()) {
+        } else if (read(parent).large()) {
             if (ParentLevel > 0 && page_mapper.split_large(parent, ParentLevel)) {
                 // We're trying to change a small page out of a huge page (or
                 // in the future, potentially also 2 MB page out of a 1 GB),
@@ -374,7 +375,7 @@ private:
                 return;
             }
         }
-        hw_ptep pt = follow(parent.read());
+        hw_ptep pt = follow(read(parent));
         phys step = phys(1) << (page_size_shift + level * pte_per_page_shift);
         auto idx = pt_index(vcur, level);
         auto eidx = pt_index(vend, level);
@@ -587,7 +588,8 @@ public:
         return true;
     }
     void intermediate_page_post(hw_ptep ptep, uintptr_t offset) {
-        small_page(ptep, offset);
+        osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(ptep.read().addr(false)));
+        ptep.write(make_empty_pte());
     }
     bool tlb_flush_needed(void) {
         return !_tlb_gather.flush() && do_flush;
@@ -709,7 +711,7 @@ public:
                 assert(v[i] == 0);
             }
             ptep.write(make_empty_pte());
-            memory::free_page(phys_to_virt(old.addr(false)));
+            osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr(false)));
         }
     }
     void sub_page(hw_ptep ptep, int level, uintptr_t offset) {}
@@ -717,7 +719,33 @@ private:
     unsigned live_ptes;
 };
 
+class virt_to_pte_map_rcu :
+        public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
+        descend_opt::yes, once_opt::yes, split_opt::no> {
+private:
+    pt_element _result;
+    virt_to_pte_map_rcu() {}
 
+    pt_element pte(void) {
+        return _result;
+    }
+public:
+    friend pt_element virt_to_pte_rcu(uintptr_t virt);
+    pt_element pte_read(hw_ptep ptep) {
+        return ptep.ll_read();
+    }
+    void small_page(hw_ptep ptep, uintptr_t offset) {
+        _result = pte_read(ptep);
+    }
+    bool huge_page(hw_ptep ptep, uintptr_t offset) {
+        _result = pte_read(ptep);
+        assert(_result.large());
+        return true;
+    }
+    void sub_page(hw_ptep ptep, int l, uintptr_t offset) {
+        huge_page(ptep, offset);
+    }
+};
 
 template<typename T> ulong operate_range(T mapper, void *vma_start, void *start, size_t size)
 {
@@ -749,6 +777,17 @@ phys virt_to_phys_pt(void* virt)
     virt_to_phys_map v2p_mapper(v);
     map_range(vbase, vbase, page_size, v2p_mapper);
     return v2p_mapper.addr();
+}
+
+pt_element virt_to_pte_rcu(uintptr_t virt)
+{
+    auto vbase = align_down(virt, page_size);
+    virt_to_pte_map_rcu v2pte_mapper;
+    WITH_LOCK(osv::rcu_read_lock) {
+        map_range(vbase, vbase, page_size, v2pte_mapper);
+    }
+    return v2pte_mapper.pte();
+
 }
 
 bool contains(uintptr_t start, uintptr_t end, vma& y)
@@ -1139,7 +1178,7 @@ bool access_fault(vma& vma, unsigned int error_code)
 }
 
 TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, unsigned int);
-TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x %s", uintptr_t, unsigned int, const char*);
+TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x, %s", uintptr_t, unsigned int, const char*);
 TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, unsigned int);
 
 void vm_sigsegv(uintptr_t addr, exception_frame* ef)
