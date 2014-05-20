@@ -41,6 +41,8 @@ void page_fault(exception_frame *ef)
 
 namespace mmu {
 
+uint8_t phys_bits = max_phys_bits, virt_bits = 52;
+
 void flush_tlb_local() {
     // TODO: we can use page_table_root instead of read_cr3(), can be faster
     // when shadow page tables are used.

@@ -15,6 +15,10 @@
 
 namespace mmu {
 
+extern uint8_t phys_bits, virt_bits;
+constexpr uint8_t rsvd_bits_used = 0;
+constexpr uint8_t max_phys_bits = 52 - rsvd_bits_used;
+
 class arch_pt_element {
 public:
     arch_pt_element() = delete;
