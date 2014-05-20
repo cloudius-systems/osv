@@ -166,6 +166,10 @@ def main():
 
     osv.wait()
 
+    # Disable ZFS compression; it stops taking effect from this point on.
+    osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "/zfs.so set compression=off osv"' % image_path, shell = True, stdout=subprocess.PIPE)
+    osv.wait()
+
     depends.write(u'\n\n')
     depends.close()
 

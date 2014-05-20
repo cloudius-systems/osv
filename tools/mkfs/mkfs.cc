@@ -41,6 +41,10 @@ void mkfs()
 
     // Create a zfs dataset within the pool named osv.
     run_cmd("/zfs.so", {"zfs", "create", "osv/zfs"});
+
+    // Enable lz4 compression on the created zfs dataset
+    // NOTE: Compression is disabled after image creation.
+    run_cmd("/zfs.so", {"zfs", "set", "compression=lz4", "osv"});
 }
 
 int main(int ac, char** av)
