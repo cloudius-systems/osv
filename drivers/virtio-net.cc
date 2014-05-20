@@ -25,6 +25,7 @@
 #include <osv/sched.hh>
 #include <osv/trace.hh>
 #include <osv/net_trace.hh>
+#include <lockfree/unordered-queue-mpsc.hh>
 
 #include <osv/device.h>
 #include <osv/ioctl.h>
@@ -549,10 +550,15 @@ void net::free_buffer_and_refcnt(void* buffer, void* refcnt)
     delete static_cast<unsigned*>(refcnt);
 }
 
+struct page_chain {
+    page_chain *next;
+};
+
+static lockfree::unordered_queue_mpsc<page_chain> page_cache;
+
 void net::do_free_buffer(void* buffer)
 {
-    buffer = align_down(buffer, page_size);
-    memory::free_page(buffer);
+    page_cache.push(reinterpret_cast<page_chain*>(align_down(buffer, page_size)));
 }
 
 void net::fill_rx_ring()
@@ -562,12 +568,15 @@ void net::fill_rx_ring()
     vring* vq = _rxq.vqueue;
 
     while (vq->avail_ring_not_empty()) {
-        auto page = memory::alloc_page();
+        auto page = page_cache.pop();
+        if (!page) {
+            page = reinterpret_cast<page_chain*>(memory::alloc_page());
+        }
 
         vq->init_sg();
         vq->add_in_sg(page, memory::page_size);
         if (!vq->add_buf(page)) {
-            memory::free_page(page);
+            page_cache.push(page);
             break;
         }
         added++;
