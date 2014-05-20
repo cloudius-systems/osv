@@ -147,7 +147,6 @@ public:
 private:
     hw_ptep(pt_element* ptep) : p(ptep) {}
     pt_element* p;
-    friend class hw_pte_ref;
 };
 
 }
