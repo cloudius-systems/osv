@@ -41,6 +41,10 @@ namespace bi = boost::intrusive;
 // pre-mempool object smaller than a page
 static constexpr size_t non_mempool_obj_offset = 8;
 
+struct free_object {
+    free_object* next;
+};
+
 class pool {
 public:
     explicit pool(unsigned size);
@@ -49,9 +53,9 @@ public:
     void free(void* object);
     unsigned get_size();
     static pool* from_object(void* object);
+    static void collect_garbage();
 private:
     struct page_header;
-    struct free_object;
 private:
     bool have_full_pages();
     void add_page();
@@ -59,7 +63,7 @@ private:
 
     // should get called with the preemption lock taken
     void free_same_cpu(free_object* obj, unsigned cpu_id);
-    void free_different_cpu(free_object* obj, unsigned obj_cpu);
+    void free_different_cpu(free_object* obj, unsigned obj_cpu, unsigned cur_cpu);
 private:
     unsigned _size;
 
@@ -88,10 +92,6 @@ private:
 public:
     static const size_t max_object_size;
     static const size_t min_object_size;
-};
-
-struct pool::free_object {
-    free_object* next;
 };
 
 struct page_range {
