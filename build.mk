@@ -259,6 +259,7 @@ tests += tests/tst-preempt.so
 tests += tests/tst-tracepoint.so
 tests += tests/tst-hub.so
 tests += tests/misc-leak.so
+tests += tests/misc-readbench.so
 tests += tests/misc-mmap-anon-perf.so
 tests += tests/tst-mmap-file.so
 tests += tests/misc-mmap-big-file.so
