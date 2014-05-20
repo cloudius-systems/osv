@@ -19,6 +19,11 @@ extern uint8_t phys_bits, virt_bits;
 constexpr uint8_t rsvd_bits_used = 0;
 constexpr uint8_t max_phys_bits = 52 - rsvd_bits_used;
 
+constexpr uint64_t pte_addr_mask(bool large)
+{
+    return ((1ull << max_phys_bits) - 1) & ~(0xfffull) & ~(uint64_t(large) << page_size_shift);
+}
+
 class arch_pt_element {
 public:
     arch_pt_element() = delete;
@@ -43,10 +48,7 @@ inline bool pt_element::sw_bit(unsigned off) const {
 }
 
 inline phys pt_element::addr(bool large) const {
-    auto v = x & ((u64(1) << (64-page_size_shift)) - 1);
-    v &= ~u64(0xfff);
-    v &= ~(u64(large) << page_size_shift);
-    return v;
+    return x & pte_addr_mask(large);
 }
 
 inline u64 pt_element::pfn(bool large) const {
@@ -68,8 +70,7 @@ inline void pt_element::set_sw_bit(unsigned off, bool v) {
 }
 
 inline void pt_element::set_addr(phys addr, bool large) {
-    auto mask = 0x8000000000000fff | (u64(large) << page_size_shift);
-    x = (x & mask) | addr;
+    x = (x & ~pte_addr_mask(large)) | addr;
 }
 
 inline void pt_element::set_pfn(u64 pfn, bool large) {
