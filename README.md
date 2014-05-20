@@ -31,8 +31,16 @@ First, install prerequisite packages:
 yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool flex bison qemu-system-x86 qemu-img maven maven-shade-plugin python-dpkt tcpdump gdb
 ```
 
-**Debian**
-Debian stable(wheezy) is not able to install gcc 4.8, Debian testing(jessie) or later is required.
+**Debian stable(wheezy)**
+Debian stable(wheezy) requires to compile gcc, gdb and qemu.
+And also need to configure bridge manually.
+
+More details are available on wiki page:
+[Building OSv on Debian stable][]
+
+[Building OSv on Debian stable]: https://github.com/cloudius-systems/osv/wiki/Building-OSv-on-Debian-stable
+
+**Debian testing(jessie)**
 ```
 apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils maven libmaven-shade-plugin-java python-dpkt tcpdump gdb qemu-system-x86
 ```
