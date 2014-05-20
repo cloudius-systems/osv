@@ -170,9 +170,10 @@ bool change_perm(hw_ptep ptep, unsigned int perm)
     // disallowed, but also write and exec. So in mprotect, if any
     // permission is requested, we must also grant read permission.
     // Linux does this too.
-    pte.set_valid(perm);
+    pte.set_valid(true);
     pte.set_writable(perm & perm_write);
     pte.set_executable(perm & perm_exec);
+    pte.set_rsvd_bit(0, !perm);
     ptep.write(pte);
 
     return old & ~perm;
@@ -1138,7 +1139,7 @@ bool access_fault(vma& vma, unsigned int error_code)
 }
 
 TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, unsigned int);
-TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x", uintptr_t, unsigned int);
+TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x %s", uintptr_t, unsigned int, const char*);
 TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, unsigned int);
 
 void vm_sigsegv(uintptr_t addr, exception_frame* ef)
@@ -1155,12 +1156,17 @@ void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 void vm_fault(uintptr_t addr, exception_frame* ef)
 {
     trace_mmu_vm_fault(addr, ef->get_error());
+    if (fast_sigsegv_check(addr, ef)) {
+        vm_sigsegv(addr, ef);
+        trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "fast");
+        return;
+    }
     addr = align_down(addr, mmu::page_size);
     WITH_LOCK(vma_list_mutex) {
         auto vma = vma_list.find(addr_range(addr, addr+1), vma::addr_compare());
         if (vma == vma_list.end() || access_fault(*vma, ef->get_error())) {
             vm_sigsegv(addr, ef);
-            trace_mmu_vm_fault_sigsegv(addr, ef->get_error());
+            trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
             return;
         }
         vma->fault(addr, ef);

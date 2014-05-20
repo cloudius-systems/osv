@@ -124,4 +124,7 @@ bool is_page_fault_write_exclusive(unsigned int esr) {
     return is_page_fault_write(esr);
 }
 
+bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef) {
+    return false;
+}
 }

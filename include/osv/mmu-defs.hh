@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+struct exception_frame;
+
 namespace mmu {
 
 constexpr uintptr_t page_size = 4096;
@@ -78,6 +80,7 @@ public:
     inline phys next_pt_addr() const;
     inline u64 next_pt_pfn() const;
     inline bool sw_bit(unsigned off) const;
+    inline bool rsvd_bit(unsigned off) const;
 
     inline void set_valid(bool v);
     inline void set_writable(bool v);
@@ -87,6 +90,7 @@ public:
     inline void set_addr(phys addr, bool large);
     inline void set_pfn(u64 pfn, bool large);
     inline void set_sw_bit(unsigned off, bool v);
+    inline void set_rsvd_bit(unsigned off, bool v);
 
     inline void mod_addr(phys addr) {
         set_addr(addr, large());
@@ -116,6 +120,8 @@ pt_element *get_root_pt(uintptr_t virt);
 bool is_page_fault_insn(unsigned int err);
 bool is_page_fault_write(unsigned int err);
 bool is_page_fault_write_exclusive(unsigned int err);
+
+bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef);
 
 /* a pointer to a pte mapped by hardware.
    The arch must implement change_perm for this class. */

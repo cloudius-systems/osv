@@ -62,6 +62,10 @@ inline bool pt_element::sw_bit(unsigned off) const {
     return (x >> (56 + off)) & 1;
 }
 
+inline bool pt_element::rsvd_bit(unsigned off) const {
+    return false;
+}
+
 inline phys pt_element::addr(bool large) const {
     u64 v = x & ((1ul << max_phys_addr_size) - 1);
     if (large)
@@ -84,6 +88,9 @@ inline void pt_element::set_large(bool v) { set_bit(1, !v); }
 inline void pt_element::set_sw_bit(unsigned off, bool v) {
     assert(off < 3);
     set_bit(56 + off, v);
+}
+
+inline void pt_element::set_rsvd_bit(unsigned off, bool v) {
 }
 
 inline void pt_element::set_addr(phys addr, bool large) {

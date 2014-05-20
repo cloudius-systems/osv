@@ -13,6 +13,7 @@
 #include <osv/interrupt.hh>
 #include <osv/migration-lock.hh>
 #include <osv/prio.hh>
+#include "exceptions.hh"
 
 void page_fault(exception_frame *ef)
 {
@@ -138,6 +139,10 @@ bool is_page_fault_write(unsigned int error_code) {
     return error_code & page_fault_write;
 }
 
+bool is_page_fault_rsvd(unsigned int error_code) {
+    return error_code & page_fault_rsvd;
+}
+
 /* Glauber Costa: if page faults because we are trying to execute code here,
  * we shouldn't be closing the balloon. We should [...] despair.
  * So by checking only for == page_fault_write, we are guaranteed to close
@@ -151,4 +156,11 @@ bool is_page_fault_write_exclusive(unsigned int error_code) {
     return error_code == page_fault_write;
 }
 
+bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef)
+{
+    if (is_page_fault_rsvd(ef->get_error())) {
+        return true;
+    }
+    return false;
+}
 }
