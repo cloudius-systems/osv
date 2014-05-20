@@ -586,7 +586,7 @@ public:
         this->account(mmu::huge_page_size);
         return true;
     }
-    void intermediate_page(hw_ptep ptep, uintptr_t offset) {
+    void intermediate_page_post(hw_ptep ptep, uintptr_t offset) {
         small_page(ptep, offset);
     }
     bool tlb_flush_needed(void) {
