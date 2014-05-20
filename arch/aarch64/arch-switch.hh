@@ -27,9 +27,10 @@ void thread::switch_to()
 
 void thread::switch_to_first()
 {
-    barrier();
-    arch_setup_tls(_tcb);
-    barrier();
+    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(_tcb) : "memory");
+
+    /* check that the tls variable preempt_counter is correct */
+    assert(sched::get_preempt_counter() == 1);
 
     s_current = this;
     current_cpu = _detached_state->_cpu;
@@ -67,17 +68,17 @@ void thread::init_stack()
 void thread::setup_tcb()
 {
     assert(tls.size);
+    void* p = malloc(sched::tls.size + 1024);
+    memset(p, 0, sched::tls.size + 1024);
 
-    void* p = malloc(sched::tls.size + sizeof(*_tcb));
-    memcpy(p, sched::tls.start, sched::tls.size);
-    _tcb = static_cast<thread_control_block*>(p + tls.size);
-    _tcb->self = _tcb;
-    _tcb->tls_base = p;
+    _tcb = (thread_control_block *)p;
+    _tcb[0].tls_base = &_tcb[1];
+    memcpy(&_tcb[1], sched::tls.start, sched::tls.size);
 }
 
 void thread::free_tcb()
 {
-    free(_tcb->tls_base);
+    free(_tcb);
 }
 
 void thread_main_c(thread* t)

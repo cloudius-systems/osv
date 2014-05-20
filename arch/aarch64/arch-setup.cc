@@ -87,9 +87,19 @@ void arch_setup_free_memory()
     parse_cmdline(cmdline);
 }
 
-void arch_setup_tls(thread_control_block *tcb)
+void arch_setup_tls(void *tls, void *start, size_t size)
 {
-    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(tcb));
+    struct thread_control_block *tcb;
+    memset(tls, 0, size + 1024);
+
+    tcb = (thread_control_block *)tls;
+    tcb[0].tls_base = &tcb[1];
+
+    memcpy(&tcb[1], start, size);
+    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(tcb) : "memory");
+
+    /* check that the tls variable preempt_counter is correct */
+    assert(sched::get_preempt_counter() == 1);
 }
 
 void arch_init_premain()

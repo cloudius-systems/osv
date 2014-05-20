@@ -10,11 +10,11 @@
 #ifndef ARCH_SETUP_HH_
 #define ARCH_SETUP_HH_
 
-#include <osv/tls.hh>
+#include "arch-tls.hh"
 #include <string>
 
 void arch_init_premain();
-void arch_setup_tls(thread_control_block *tcb);
+void arch_setup_tls(void *tls, void *start, size_t size);
 
 void arch_setup_free_memory();
 void arch_init_drivers();

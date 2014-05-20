@@ -12,7 +12,7 @@
 #include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <osv/elf.hh>
-#include <osv/tls.hh>
+#include "arch-tls.hh"
 #include <osv/debug.hh>
 
 #include "smp.hh"
@@ -68,12 +68,9 @@ void setup_tls(elf::init_table inittab)
     tls_data = inittab.tls;
     sched::init_tls(tls_data);
     memset(tls_data.start + tls_data.filesize, 0, tls_data.size - tls_data.filesize);
-    extern char tcb0[]; // defined by linker script
-    memcpy(tcb0, inittab.tls.start, inittab.tls.size);
-    auto p = reinterpret_cast<thread_control_block*>(tcb0 + inittab.tls.size);
-    p->self = p;
 
-    arch_setup_tls(p);
+    extern char tcb0[]; // defined by linker script
+    arch_setup_tls(tcb0, inittab.tls.start, inittab.tls.size);
 }
 
 extern "C" {

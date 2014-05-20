@@ -5,12 +5,12 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#ifndef TLS_HH_
-#define TLS_HH_
+#ifndef ARCH_TLS_HH
+#define ARCH_TLS_HH
 
 struct thread_control_block {
     thread_control_block* self;
     void* tls_base;
 };
 
-#endif /* TLS_HH_ */
+#endif /* ARCH_TLS_HH */
