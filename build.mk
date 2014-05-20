@@ -11,6 +11,15 @@ else
     OBJCOPY=$(CROSS_PREFIX)objcopy
 endif
 
+build_env ?= external
+ifeq ($(build_env), host)
+    gcc_lib_env ?= host
+    cxx_lib_env ?= host
+else
+    gcc_lib_env ?= external
+    cxx_lib_env ?= external
+endif
+
 detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
 
 ifndef ARCH
@@ -25,6 +34,7 @@ else
 endif
 $(info build.mk:)
 $(info build.mk: building arch=$(arch), override with ARCH env)
+$(info build.mk: building build_env=$(build_env) gcc_lib_env=$(gcc_lib_env) cxx_lib_env=$(cxx_lib_env))
 $(info build.mk:)
 
 image ?= default
@@ -820,10 +830,35 @@ include $(src)/libc/build.mk
 objects += $(addprefix fs/, $(fs))
 objects += $(addprefix libc/, $(libc))
 
-libstdc++.a = $(shell find $(gccbase)/ -name libstdc++.a)
-libsupc++.a = $(shell find $(gccbase)/ -name libsupc++.a)
-libgcc_s.a = $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
-libgcc_eh.a = $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
+ifeq ($(cxx_lib_env), host)
+    libstdc++.a := $(shell $(CXX) -print-file-name=libstdc++.a)
+    ifeq ($(filter /%,$(libstdc++.a)),)
+        $(error Error: libstdc++.a needs to be installed.)
+    endif
+
+    libsupc++.a := $(shell $(CXX) -print-file-name=libsupc++.a)
+    ifeq ($(filter /%,$(libsupc++.a)),)
+        $(error Error: libsupc++.a needs to be installed.)
+    endif
+else
+    libstdc++.a := $(shell find $(gccbase)/ -name libstdc++.a)
+    libsupc++.a := $(shell find $(gccbase)/ -name libsupc++.a)
+endif
+
+ifeq ($(gcc_lib_env), host)
+    libgcc.a := $(shell $(CC) -print-libgcc-file-name)
+    ifeq ($(filter /%,$(libgcc.a)),)
+        $(error Error: libgcc.a needs to be installed.)
+    endif
+
+    libgcc_eh.a := $(shell $(CC) -print-file-name=libgcc_eh.a)
+    ifeq ($(filter /%,$(libgcc_eh.a)),)
+        $(error Error: libgcc_eh.a needs to be installed.)
+    endif
+else
+    libgcc_s.a := $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
+    libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
+endif
 
 boost-lib-dir := $(shell dirname `find $(miscbase)/ -name libboost_system-mt.a`)
 
