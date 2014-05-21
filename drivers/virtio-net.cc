@@ -616,7 +616,7 @@ inline int net::txq::xmit_prep(mbuf* m_head, void*& cooky)
 int net::txq::try_xmit_one_locked(net_req* req)
 {
     mbuf *m_head = req->mb, *m;
-    u16 vec_sz = 0;
+    u16 vec_sz = 1;
     u64 tx_bytes = 0;
 
     if (_parent->_mergeable_bufs) {
