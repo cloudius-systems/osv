@@ -87,7 +87,7 @@ static inline void tracker_forget(void *addr)
 // sched::cpu::current() uses TLS which is set only later on.
 //
 
-static unsigned mempool_cpuid() {
+static inline unsigned mempool_cpuid() {
     unsigned c = (smp_allocator ? sched::cpu::current()->id: 0);
     assert(c < 64);
     return c;
