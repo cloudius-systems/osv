@@ -748,7 +748,7 @@ class osv_info_threads(gdb.Command):
 
                 gdb.write('%4d (0x%x) %-15s cpu%s %-10s %s vruntime %12g\n' %
                           (tid, ulong(t), name,
-                           cpu['arch']['acpi_id'],
+                           cpu['arch']['acpi_id'] if cpu != 0 else "?",
                            thread_status(t),
                            location,
                            t['_runtime']['_Rtt'],
