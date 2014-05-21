@@ -352,6 +352,8 @@ ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     return -1;
 }
 
+LFS64(preadv);
+
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     return preadv(fd, iov, iovcnt, -1);
@@ -385,6 +387,7 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     errno = error;
     return -1;
 }
+LFS64(pwritev);
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
