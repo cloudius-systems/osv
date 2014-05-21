@@ -11,15 +11,18 @@ static float to_seconds(T duration)
 }
 
 class stat_printer {
+public:
+    using value_type = long;
 private:
     std::chrono::high_resolution_clock _clock;
     std::promise<bool> _done;
-    std::atomic<long>& _counter;
+    std::atomic<value_type>& _counter;
     std::function<void(float)> _formatter;
     std::chrono::milliseconds stat_period;
     std::thread _thread;
+    value_type total = 0;
 public:
-    stat_printer(std::atomic<long>& counter,
+    stat_printer(std::atomic<value_type>& counter,
         std::function<void(float)> formatter,
         int period_millis = 500) :
          _clock(),
@@ -38,7 +41,8 @@ public:
                 auto period = to_seconds(_now - last_stat_dump);
                 last_stat_dump = _now;
 
-                auto value = counter.exchange(0);
+                auto value = _counter.exchange(0);
+                total += value;
 
                 _formatter((float)value / period);
             }
@@ -47,5 +51,13 @@ public:
     void stop() {
         _done.set_value(true);
         _thread.join();
+
+        auto value = _counter.exchange(0);
+        total += value;
+    }
+
+    value_type get_total()
+    {
+        return total;
     }
 };

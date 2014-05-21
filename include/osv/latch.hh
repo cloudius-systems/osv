@@ -1,3 +1,9 @@
+/*
+ * Copyright (C) 2014 Cloudius Systems, Ltd.
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
 #ifndef _OSV_LATCH_HH
 #define _OSV_LATCH_HH
 
@@ -12,7 +18,7 @@ private:
     std::mutex _mutex;
     std::condition_variable _condvar;
 public:
-    latch(int count)
+    latch(int count = 1)
         : _count(count)
     {
     }
@@ -51,6 +57,23 @@ public:
 
         std::unique_lock<std::mutex> l(_mutex);
         return _condvar.wait_for(l, duration, [&] () -> bool { return is_released(); });
+    }
+};
+
+class thread_barrier
+{
+private:
+    latch _latch;
+public:
+    thread_barrier(int count)
+        : _latch(count)
+    {
+    }
+
+    void arrive()
+    {
+        _latch.count_down();
+        _latch.await();
     }
 };
 
