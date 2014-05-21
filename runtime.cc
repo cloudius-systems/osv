@@ -291,7 +291,8 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
 	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)] + 128;
         return result_ptr;
     }
-    abort();
+    errno = ENOENT;
+    return nullptr;
 }
 
 long sysconf(int name)
