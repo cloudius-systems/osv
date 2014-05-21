@@ -29,6 +29,7 @@
 .endm
 
 .global exception_vectors
+.type exception_vectors, @function
 .align 12
 exception_vectors:
         /* Current Exception level with SP_EL0 : unused */
@@ -107,6 +108,7 @@ exception_vectors:
 .equ ESR_ISS_LEN,24         // Instruction-Specific Syndrome field len in ESR
 
 .global entry_invalid
+.type entry_invalid, @function
 entry_invalid:
         mrs     x20, elr_el1       // Exception Link Register -> X20
         mrs     x21, spsr_el1      // Saved PSTATE -> X21
@@ -120,6 +122,7 @@ entry_invalid:
         b       1b
 
 .global entry_sync
+.type entry_sync, @function
 entry_sync:
         push_state_to_exception_frame
         mov     x0, sp  // save exception_frame to x0
@@ -128,6 +131,7 @@ entry_sync:
         eret
 
 .global entry_irq
+.type entry_irq, @function
 entry_irq:
         push_state_to_exception_frame
         mov     x0, sp
@@ -136,8 +140,10 @@ entry_irq:
         eret
 
 .global entry_fiq
+.type entry_fiq, @function
 entry_fiq:
 .global entry_serror
+.type entry_serror, @function
 entry_serror:
         b       entry_invalid
 
