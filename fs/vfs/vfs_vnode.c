@@ -117,6 +117,20 @@ vn_lookup(struct mount *mp, uint64_t ino)
 	return NULL;		/* not found */
 }
 
+#ifdef DEBUG_VFS
+static const char *
+vn_path(struct vnode *vp)
+{
+	struct dentry *dp;
+
+	if (LIST_EMPTY(&vp->v_names) == 1) {
+		return (" ");
+	}
+	dp = LIST_FIRST(&vp->v_names);
+	return (dp->d_path);
+}
+#endif
+
 /*
  * Lock vnode
  */
@@ -128,7 +142,7 @@ vn_lock(struct vnode *vp)
 
 	mutex_lock(&vp->v_lock);
 	vp->v_nrlocks++;
-	DPRINTF(VFSDB_VNODE, ("vn_lock:   %s\n", vp->v_path));
+	DPRINTF(VFSDB_VNODE, ("vn_lock:   %s\n", vn_path(vp)));
 }
 
 /*
@@ -141,9 +155,9 @@ vn_unlock(struct vnode *vp)
 	ASSERT(vp->v_refcnt > 0);
 	ASSERT(vp->v_nrlocks > 0);
 
-	DPRINTF(VFSDB_VNODE, ("vn_unlock: %s\n", vp->v_path));
 	vp->v_nrlocks--;
 	mutex_unlock(&vp->v_lock);
+	DPRINTF(VFSDB_VNODE, ("vn_lock:   %s\n", vn_path(vp)));
 }
 
 /*
@@ -215,8 +229,7 @@ vput(struct vnode *vp)
 	ASSERT(vp);
 	ASSERT(vp->v_nrlocks > 0);
 	ASSERT(vp->v_refcnt > 0);
-	DPRINTF(VFSDB_VNODE, ("vput: ref=%d %s\n", vp->v_refcnt,
-			      vp->v_path));
+	DPRINTF(VFSDB_VNODE, ("vput: ref=%d %s\n", vp->v_refcnt, vn_path(vp)));
 
 	VNODE_LOCK();
 	vp->v_refcnt--;
@@ -440,21 +453,21 @@ vnode_dump(void)
 			   "VLNK ", "VSOCK", "VFIFO" };
 
 	VNODE_LOCK();
-	dprintf("Dump vnode\n");
-	dprintf(" vnode    mount    type  refcnt blkno    path\n");
-	dprintf(" -------- -------- ----- ------ -------- ------------------------------\n");
+	kprintf("Dump vnode\n");
+	kprintf(" vnode    mount    type  refcnt blkno    path\n");
+	kprintf(" -------- -------- ----- ------ -------- ------------------------------\n");
 
 	for (i = 0; i < VNODE_BUCKETS; i++) {
 	        LIST_FOREACH(vp, &vnode_table[i], v_link) {
 			mp = vp->v_mount;
 
-			dprintf(" %08x %08x %s %6d %8d %s%s\n", (u_int)vp,
-				(u_int)mp, type[vp->v_type], vp->v_refcnt,
+			kprintf(" %08x %08x %s %6d %8d %s%s\n", (u_long)vp,
+				(u_long)mp, type[vp->v_type], vp->v_refcnt,
 				(strlen(mp->m_path) == 1) ? "\0" : mp->m_path,
-				vp->v_path);
+				vn_path(vp));
 		}
 	}
-	dprintf("\n");
+	kprintf("\n");
 	VNODE_UNLOCK();
 }
 #endif

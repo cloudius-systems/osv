@@ -1554,7 +1554,7 @@ fs_noop(void)
     return 0;
 }
 
-#ifdef DEBUG_VFS
+#ifdef NOTYET
 /*
  * Dump internal data.
  */

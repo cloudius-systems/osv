@@ -54,6 +54,8 @@
 #define FSMAXNAMES	16		/* max length of 'file system' name */
 
 #ifdef DEBUG_VFS
+#include <osv/debug.h>
+
 extern int vfs_debug;
 
 #define	VFSDB_CORE	0x00000001

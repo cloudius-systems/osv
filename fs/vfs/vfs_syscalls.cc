@@ -186,8 +186,8 @@ sys_read(struct file *fp, struct iovec *iov, size_t niov,
 	ssize_t bytes;
 	int error;
 
-	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x buf=%x size=%d\n",
-				(u_int)fp, (u_int)buf, size));
+	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x offset=%d\n",
+				(u_long)fp, (u_int)offset));
 
 	if ((fp->f_flags & FREAD) == 0)
 		return EBADF;
@@ -221,8 +221,8 @@ sys_write(struct file *fp, struct iovec *iov, size_t niov,
 	ssize_t bytes;
 	int error;
 
-	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x uio=%x niv=%zu\n",
-				(u_long)fp, (u_long)uio, niv));
+	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x uio=%x niov=%zu\n",
+				(u_long)fp, (u_long)uio, niov));
 
 	if ((fp->f_flags & FWRITE) == 0)
 		return EBADF;
@@ -254,7 +254,7 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 	struct vnode *vp;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_seek: fp=%x off=%d type=%d\n",
-				(u_int)fp, (u_int)off, type));
+				(u_long)fp, (u_int)off, type));
 
 	if (!fp->f_dentry) {
 	    // Linux doesn't implement lseek() on pipes, sockets, or ttys.
