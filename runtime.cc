@@ -268,28 +268,28 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     __THROW
 {
     if (category_mask == 1 << LC_ALL) {
-	category_mask = ((1 << __LC_LAST) - 1) & ~(1 << LC_ALL);
+        category_mask = ((1 << __LC_LAST) - 1) & ~(1 << LC_ALL);
     }
     assert(locale);
     if (base == &c_locale) {
-	base = NULL;
+        base = NULL;
     }
     if ((base == NULL || all_categories(category_mask))
-	&& (category_mask == 0 || strcmp(locale, "C") == 0)) {
-	return &c_locale;
+            && (category_mask == 0 || strcmp(locale, "C") == 0)) {
+        return &c_locale;
     }
     struct __locale_struct result = base ? *base : c_locale;
     if (category_mask == 0) {
-	auto result_ptr = new __locale_struct;
-	*result_ptr = result;
-	auto ctypes = result_ptr->__locales[LC_CTYPE]->values;
-	result_ptr->__ctype_b = (const unsigned short *)
-	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_CLASS)] + 128;
-	result_ptr->__ctype_tolower = (const int *)
-	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOLOWER)] + 128;
-	result_ptr->__ctype_toupper = (const int *)
-	    ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)] + 128;
-	return result_ptr;
+        auto result_ptr = new __locale_struct;
+        *result_ptr = result;
+        auto ctypes = result_ptr->__locales[LC_CTYPE]->values;
+        result_ptr->__ctype_b = (const unsigned short *)
+	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_CLASS)] + 128;
+        result_ptr->__ctype_tolower = (const int *)
+	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOLOWER)] + 128;
+        result_ptr->__ctype_toupper = (const int *)
+	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)] + 128;
+        return result_ptr;
     }
     abort();
 }
