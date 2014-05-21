@@ -317,6 +317,7 @@ tests += tests/tst-align.so
 tests += tests/misc-tcp-close-without-reading.so
 tests += tests/tst-sigwait.so
 tests += tests/tst-sampler.so
+tests += tests/misc-malloc.so
 endif
 
 tests/hello/Hello.class: javabase=tests/hello
