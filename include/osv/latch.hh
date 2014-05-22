@@ -41,6 +41,17 @@ public:
             _condvar.wait(l);
         }
     }
+
+    template<typename Rep, typename Period>
+    bool await_for(const std::chrono::duration<Rep, Period>& duration)
+    {
+        if (is_released()) {
+            return true;
+        }
+
+        std::unique_lock<std::mutex> l(_mutex);
+        return _condvar.wait_for(l, duration, [&] () -> bool { return is_released(); });
+    }
 };
 
 #endif
