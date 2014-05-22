@@ -29,12 +29,6 @@ This script requires following Amazon credentials to be provided via environment
     See http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSGettingStartedGuide/AWSCredentials.html
     for more details
 
-    EC2_PRIVATE_KEY=<Location of EC2 private key file>
-    EC2_CERT=<Location of EC2 certificate file>
-
-    See http://docs.aws.amazon.com/AWSSecurityCredentials/1.0/AboutAWSCredentials.html#X509Credentials
-    for more details
-
 This script assumes following packages are installed and functional:
 
     1. Amazon EC2 API Tools (http://aws.amazon.com/developertools/351)
@@ -115,7 +109,8 @@ OSV_RSTATUS=rstatus-$OSV_VER-`timestamp`.txt
 OSV_BUCKET=osv-$OSV_VER-$USER-at-`hostname`-`timestamp`
 
 EC2_CREDENTIALS="-o $AWS_ACCESS_KEY_ID -w $AWS_SECRET_ACCESS_KEY"
-S3_CREDENTIALS="-O $AWS_ACCESS_KEY_ID -W $AWS_SECRET_ACCESS_KEY"
+export AWS_ACCESS_KEY=$AWS_ACCESS_KEY_ID
+export AWS_SECRET_KEY=$AWS_SECRET_ACCESS_KEY
 
 export AWS_DEFAULT_REGION=us-east-1
 OSV_INITIAL_ZONE="${AWS_DEFAULT_REGION}a"
@@ -166,8 +161,7 @@ import_osv_volume() {
                                  -f raw \
                                  -b $OSV_BUCKET \
                                  -z $OSV_INITIAL_ZONE \
-                                 $EC2_CREDENTIALS \
-                                 $S3_CREDENTIALS | tee /dev/tty | ec2_response_value IMPORTVOLUME TaskId
+                                 $EC2_CREDENTIALS | tee /dev/tty | ec2_response_value IMPORTVOLUME TaskId
 }
 
 get_volume_conversion_status() {
