@@ -125,20 +125,33 @@ phys virt_to_phys(void *virt)
     return static_cast<char*>(virt) - phys_mem;
 }
 
-phys allocate_intermediate_level()
+phys allocate_intermediate_level(std::function<pt_element (int)> pte)
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
     // since the pt is not yet mapped, we don't need to use hw_ptep
     pt_element* pt = phys_cast<pt_element>(pt_page);
     for (auto i = 0; i < pte_per_page; ++i) {
-        pt[i] = make_empty_pte();
+        pt[i] = pte(i);
     }
     return pt_page;
 }
 
+void allocate_intermediate_level(hw_ptep ptep, pt_element org)
+{
+    phys pt_page = allocate_intermediate_level([org](int i) mutable {
+        auto tmp = org;
+        phys addend = phys(i) << page_size_shift;
+        tmp.set_addr(tmp.addr(false) | addend, false);
+        return tmp;
+    });
+    ptep.write(make_normal_pte(pt_page));
+}
+
 void allocate_intermediate_level(hw_ptep ptep)
 {
-    phys pt_page = allocate_intermediate_level();
+    phys pt_page = allocate_intermediate_level([](int i) {
+        return make_empty_pte();
+    });
     ptep.write(make_normal_pte(pt_page));
 }
 
@@ -187,14 +200,7 @@ void split_large_page(hw_ptep ptep, unsigned level)
     if (level == 1) {
         pte_orig.set_large(false);
     }
-    allocate_intermediate_level(ptep);
-    auto pt = follow(ptep.read());
-    for (auto i = 0; i < pte_per_page; ++i) {
-        pt_element tmp = pte_orig;
-        phys addend = phys(i) << (page_size_shift + pte_per_page_shift * (level - 1));
-        tmp.set_addr(tmp.addr(level > 1) | addend, level > 1);
-        pt.at(i).write(tmp);
-    }
+    allocate_intermediate_level(ptep, pte_orig);
 }
 
 struct page_allocator {
