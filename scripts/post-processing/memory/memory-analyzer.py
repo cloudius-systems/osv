@@ -12,7 +12,7 @@ def is_free(x):
     return x.find("memory_free ") > 0
 
 def get_len(x):
-    return re.findall("len=(.*)\n", x)[0]
+    return re.findall("len=(\d*)", x)[0]
 
 def get_buf(x):
     return re.findall("buf=(0x................)", x)[0]
