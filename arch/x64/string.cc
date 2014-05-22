@@ -99,24 +99,62 @@ repmovsb(void *__restrict &dest, const void *__restrict &src, size_t &n)
             : "+D"(dest), "+S"(src), "+c"(n) : : "memory");
 }
 
+static inline void small_memcpy(void *dest, const void *src, size_t n)
+{
+    size_t qty = n / 8;
+    unsigned long *to_8 = (unsigned long *)dest;
+    unsigned long *from_8 = (unsigned long *)src;
+
+    while (qty--) {
+        *to_8++ = *from_8++;
+    }
+
+    qty = n % 8;
+    unsigned int *to_4 = (unsigned int *)to_8;
+    unsigned int *from_4 = (unsigned int *)from_8;
+    if (qty / 4) {
+        *to_4++ = *from_4++;
+    }
+    qty = qty % 4;
+    unsigned short *to_2 = (unsigned short *)to_4;
+    unsigned short *from_2 = (unsigned short *)from_4;
+    if (qty / 2) {
+        *to_2++ = *from_2++;
+    }
+    unsigned char *to = (unsigned char *)to_2;
+    unsigned char *from = (unsigned char *)from_2;
+    if (qty % 2) {
+        *to++ = *from++;
+    }
+}
+
 extern "C"
 void *memcpy_repmov_old(void *__restrict dest, const void *__restrict src, size_t n)
 {
     auto ret = dest;
-    auto nw = n / 8;
-    auto nb = n & 7;
+    if (n <= 256) {
+        small_memcpy(dest, src, n);
+    } else {
+        auto nw = n / 8;
+        auto nb = n & 7;
 
-    repmovsq(dest, src, nw);
-    repmovsb(dest, src, nb);
+        repmovsq(dest, src, nw);
+        repmovsb(dest, src, nb);
+    }
     return ret;
 }
-
 
 extern "C"
 void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 {
     auto ret = dest;
-    repmovsb(dest, src, n);
+
+    if (n <= 256) {
+        small_memcpy(dest, src, n);
+    } else {
+        repmovsb(dest, src, n);
+    }
+
     return ret;
 }
 
