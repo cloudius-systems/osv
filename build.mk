@@ -314,6 +314,7 @@ tests += tests/tst-concurrent-init.so
 tests += tests/tst-ring-spsc-wraparound.so
 tests += tests/tst-shm.so
 tests += tests/tst-align.so
+tests += tests/tst-cxxlocale.so
 tests += tests/misc-tcp-close-without-reading.so
 tests += tests/tst-sigwait.so
 tests += tests/tst-sampler.so
