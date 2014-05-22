@@ -125,7 +125,7 @@ void console_driver_add(ConsoleDriver *driver)
 
 void console_init()
 {
-    device_create(&console_driver, "console", D_CHR);
+    device_create(&console_driver, "console", D_CHR | D_TTY);
     mux.start();
 }
 
