@@ -1,5 +1,4 @@
 from collections import Counter
-import gdb
 import re
 
 print("-=[ Mem0ry Allocations Analyz3r ]=-")
