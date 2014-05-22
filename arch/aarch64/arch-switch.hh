@@ -22,7 +22,28 @@ namespace sched {
 
 void thread::switch_to()
 {
-    abort();
+    thread* old = current();
+    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(_tcb) : "memory");
+
+    asm volatile("\n"
+                 "str x29,     %0  \n"
+                 "mov x2, sp       \n"
+                 "adr x1, 1f       \n" /* address of label */
+                 "stp x2, x1,  %1  \n"
+
+                 "ldp x29, x0, %2  \n"
+                 "ldp x2, x1,  %3  \n"
+
+                 "mov sp, x2       \n"
+                 "blr x1           \n"
+
+                 "1:               \n" /* label */
+                 :
+                 : "Q"(old->_state.fp), "Ump"(old->_state.sp),
+                   "Ump"(this->_state.fp), "Ump"(this->_state.sp)
+                 : "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8",
+                   "x9", "x10", "x11", "x12", "x13", "x14", "x15",
+                   "x16", "x17", "x18", "x30", "memory");
 }
 
 void thread::switch_to_first()
