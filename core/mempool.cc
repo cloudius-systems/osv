@@ -31,9 +31,12 @@
 #include <osv/shrinker.h>
 #include "java/jvm_balloon.hh"
 
-TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d", void *, size_t);
-TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void *, size_t);
+TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
+           size_t);
+TRACEPOINT(trace_memory_malloc_mempool, "buf=%p, len=%d", void*, size_t);
+TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void*, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
+TRACEPOINT(trace_memory_free_mempool, "buf=%p", void*);
 TRACEPOINT(trace_memory_free_large, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
 TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
@@ -1142,6 +1145,7 @@ static inline void* std_malloc(size_t size, size_t alignment)
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
+        trace_memory_malloc_mempool(ret, 1 << n);
     } else {
         ret = memory::malloc_large(size, alignment);
     }
@@ -1200,6 +1204,7 @@ static inline void std_free(void* object)
     if (offset == memory::non_mempool_obj_offset) {
         memory::free_page(object - offset);
     } else if (offset) {
+        trace_memory_free_mempool(object);
         return memory::pool::from_object(object)->free(object);
     } else {
         trace_memory_free_large(object);
@@ -1315,7 +1320,7 @@ void* malloc(size_t size)
     void* buf = dbg::malloc(size, MALLOC_ALIGNMENT);
 #endif
 
-    trace_memory_malloc(buf, size);
+    trace_memory_malloc(buf, size, MALLOC_ALIGNMENT);
     return buf;
 }
 
@@ -1363,6 +1368,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 #else
     void* ret = dbg::malloc(size, alignment);
 #endif
+    trace_memory_malloc(ret, size, alignment);
     if (!ret) {
         return ENOMEM;
     }
