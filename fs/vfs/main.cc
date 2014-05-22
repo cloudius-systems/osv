@@ -62,6 +62,7 @@
 #include "vfs.h"
 
 #include "libc/internal/libc.h"
+#include "libc/dirent/dirent.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -528,10 +529,6 @@ extern "C" int flock(int fd, int operation)
 TRACEPOINT(trace_vfs_readdir, "%d %p", int, dirent*);
 TRACEPOINT(trace_vfs_readdir_ret, "");
 TRACEPOINT(trace_vfs_readdir_err, "%d", int);
-
-struct __DIR_s {
-    int fd;
-};
 
 DIR *opendir(const char *path)
 {
