@@ -22,7 +22,7 @@ namespace {
 
 int main(int ac, char **av)
 {
-    for (int i = -127; i < 256; ++i) {
+    for (int i = -128; i < 256; ++i) {
 	std::cout << "0";
 	DO(alnum);
 	DO(alpha);
