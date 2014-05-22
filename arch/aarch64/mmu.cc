@@ -31,9 +31,12 @@ void page_fault(exception_frame *ef)
         abort();
     }
 
-    // vm_fault might sleep, so check state and enable irqs
+    /* vm_fault might sleep, so check that the thread is preemptable,
+     * and that interrupts in the saved pstate are enabled.
+     * Then enable interrupts for the vm_fault.
+     */
     assert(sched::preemptable());
-    assert(ef->spsr & processor::daif_i);
+    assert(!(ef->spsr & processor::daif_i));
 
     DROP_LOCK(irq_lock) {
         sched::arch_fpu fpu;
