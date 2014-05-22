@@ -88,9 +88,7 @@ static inline void tracker_forget(void *addr)
 //
 
 static inline unsigned mempool_cpuid() {
-    unsigned c = (smp_allocator ? sched::cpu::current()->id: 0);
-    assert(c < 64);
-    return c;
+    return (smp_allocator ? sched::cpu::current()->id: 0);
 }
 
 //
