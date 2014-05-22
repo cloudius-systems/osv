@@ -64,8 +64,6 @@ using namespace std;
 static int do_sendfile(struct thread *td, struct sendfile_args *uap, int compat);
 static int getsockname1(struct thread *td, struct getsockname_args *uap,
 			int compat);
-static int getpeername1(struct thread *td, struct getpeername_args *uap,
-			int compat);
 #endif
 
 /*
@@ -906,47 +904,10 @@ ogetsockname(td, uap)
 }
 #endif /* COMPAT_OLDSOCK */
 
-/*
- * getpeername1() - Get name of peer for connected socket.
- */
-/* ARGSUSED */
-static int
-getpeername1(td, uap, compat)
-	struct thread *td;
-	struct getpeername_args /* {
-		int	fdes;
-		struct bsd_sockaddr * __restrict	asa;
-		socklen_t * __restrict	alen;
-	} */ *uap;
-	int compat;
-{
-	struct bsd_sockaddr *sa;
-	socklen_t len;
-	int error;
-
-	error = copyin(uap->alen, &len, sizeof (len));
-	if (error)
-		return (error);
-
-	error = kern_getpeername(td, uap->fdes, &sa, &len);
-	if (error)
-		return (error);
-
-	if (len != 0) {
-#ifdef COMPAT_OLDSOCK
-		if (compat)
-			((struct bsd_osockaddr *)sa)->sa_family = sa->sa_family;
 #endif
-		error = copyout(sa, uap->asa, (u_int)len);
-	}
-	free(sa, M_SONAME);
-	if (error == 0)
-		error = copyout(&len, uap->alen, sizeof(len));
-	return (error);
-}
 
-int
-kern_getpeername(struct thread *td, int fd, struct bsd_sockaddr **sa,
+static int
+kern_getpeername(int fd, struct bsd_sockaddr **sa,
     socklen_t *alen)
 {
 	struct socket *so;
@@ -957,11 +918,10 @@ kern_getpeername(struct thread *td, int fd, struct bsd_sockaddr **sa,
 	if (*alen < 0)
 		return (EINVAL);
 
-	AUDIT_ARG_FD(fd);
-	error = getsock_cap(td->td_proc->p_fd, fd, CAP_GETPEERNAME, &fp, NULL);
+	error = getsock_cap(fd, &fp, NULL);
 	if (error)
 		return (error);
-	so = fp->f_data;
+	so = (socket*)file_data(fp);
 	if ((so->so_state & (SS_ISCONNECTED|SS_ISCONFIRMING)) == 0) {
 		error = ENOTCONN;
 		goto done;
@@ -977,29 +937,39 @@ kern_getpeername(struct thread *td, int fd, struct bsd_sockaddr **sa,
 	else
 		len = MIN(*alen, (*sa)->sa_len);
 	*alen = len;
-#ifdef KTRACE
-	if (KTRPOINT(td, KTR_STRUCT))
-		ktrbsd_sockaddr(*sa);
-#endif
 bad:
 	if (error && *sa) {
-		free(*sa, M_SONAME);
+		free(*sa);
 		*sa = NULL;
 	}
 done:
-	fdrop(fp, td);
+	fdrop(fp);
 	return (error);
 }
 
 int
-sys_getpeername(td, uap)
-	struct thread *td;
-	struct getpeername_args *uap;
+sys_getpeername(int fdes, struct bsd_sockaddr * __restrict asa, socklen_t * __restrict alen)
 {
+	struct bsd_sockaddr *sa;
+	socklen_t len;
+	int error;
 
-	return (getpeername1(td, uap, 0));
+	error = copyin(alen, &len, sizeof (len));
+	if (error)
+		return (error);
+
+	error = kern_getpeername(fdes, &sa, &len);
+	if (error)
+		return (error);
+
+	if (len != 0) {
+		error = copyout(sa, asa, (u_int)len);
+	}
+	free(sa);
+	if (error == 0)
+		error = copyout(&len, alen, sizeof(len));
+	return (error);
 }
-#endif
 
 int
 sockargs(struct mbuf **mp, caddr_t buf, int buflen, int type)

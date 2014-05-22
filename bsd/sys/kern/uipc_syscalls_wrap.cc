@@ -50,6 +50,23 @@ int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 }
 
 extern "C"
+int getpeername(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
+{
+	int error;
+
+	sock_d("getpeername(sockfd=%d, ...)", sockfd);
+
+	error = linux_getpeername(sockfd, addr, addrlen);
+	if (error) {
+		sock_d("getpeername() failed, errno=%d", error);
+		errno = error;
+		return -1;
+	}
+
+	return 0;
+}
+
+extern "C"
 int accept4(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len, int flg)
 {
 	int fd2, error;

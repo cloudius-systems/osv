@@ -47,6 +47,7 @@ int sys_setsockopt(int s, int level, int name, caddr_t val, int valsize);
 int sys_getsockopt(int s, int level, int name, void * __restrict val,
     socklen_t * __restrict avalsize);
 int sys_getsockname(int fdes, struct bsd_sockaddr * __restrict asa, socklen_t * __restrict alen);
+int sys_getpeername(int fdes, struct bsd_sockaddr * __restrict asa, socklen_t * __restrict alen);
 
 /* Linux Interface */
 int linux_socket(int domain, int type, int protocol, int *out_fd);
@@ -67,7 +68,7 @@ int linux_setsockopt(int s, int level, int name, caddr_t val, int valsize);
 int linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize);
 int linux_socketpair(int domain, int type, int protocol, int* rsv);
 int linux_getsockname(int s, struct bsd_sockaddr *addr, socklen_t *addrlen);
-
+int linux_getpeername(int s, struct bsd_sockaddr *addr, socklen_t *addrlen);
 
 __END_DECLS
 

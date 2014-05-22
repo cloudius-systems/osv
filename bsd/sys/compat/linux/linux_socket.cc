@@ -756,38 +756,20 @@ linux_getsockname(int s, struct bsd_sockaddr *addr, socklen_t *addrlen)
 	return (0);
 }
 
-/* FIXME: OSv - few functions have not been ported */
-#if 0
-struct linux_getpeername_args {
-	int s;
-	l_uintptr_t addr;
-	l_uintptr_t namelen;
-};
-
-static int
-linux_getpeername(struct thread *td, struct linux_getpeername_args *args)
+int
+linux_getpeername(int s, struct bsd_sockaddr *addr, socklen_t *namelen)
 {
-	struct getpeername_args /* {
-		int fdes;
-		caddr_t asa;
-		int *alen;
-	} */ bsd_args;
 	int error;
 
-	bsd_args.fdes = args->s;
-	bsd_args.asa = (struct bsd_sockaddr *)PTRIN(args->addr);
-	bsd_args.alen = (int *)PTRIN(args->namelen);
-	error = sys_getpeername(td, &bsd_args);
-	bsd_to_linux_sockaddr((struct bsd_sockaddr *)bsd_args.asa);
+	error = sys_getpeername(s, addr, namelen);
+	bsd_to_linux_sockaddr(addr);
 	if (error)
 		return (error);
-	error = linux_sa_put(PTRIN(args->addr));
+	error = linux_sa_put((struct bsd_osockaddr *)addr);
 	if (error)
 		return (error);
 	return (0);
 }
-
-#endif
 
 int
 linux_socketpair(int domain, int type, int protocol, int* rsv)
