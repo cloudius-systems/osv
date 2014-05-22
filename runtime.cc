@@ -500,3 +500,9 @@ int prctl(int option, ...)
     errno = EINVAL;
     return -1;
 }
+
+int daemon(int nochdir, int noclose)
+{
+    WARN_STUBBED();
+    return -1;
+}
