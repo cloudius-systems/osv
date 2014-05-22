@@ -144,8 +144,9 @@ def get_wait_profile(traces):
     return prof.get_duration_profile(traces, sample_name_is("sched_wait"))
 
 def get_time_range(args):
-    start = prof.parse_time_as_nanos(args.since) if args.since else None
-    end = prof.parse_time_as_nanos(args.until) if args.until else None
+    default_unit = 's'
+    start = prof.parse_time_as_nanos(args.since, default_unit=default_unit) if args.since else None
+    end = prof.parse_time_as_nanos(args.until, default_unit=default_unit) if args.until else None
 
     if args.period:
         if start and end:

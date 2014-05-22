@@ -50,11 +50,14 @@ time_units = [
     (1, "ns")
 ]
 
-def parse_time_as_nanos(text):
+def parse_time_as_nanos(text, default_unit='ns'):
     for level, name in sorted(time_units, key=lambda (level, name): -len(name)):
         if text.endswith(name):
             return float(text.rstrip(name)) * level
-    return float(text)
+    for level, name in time_units:
+        if name == default_unit:
+            return float(text) * level
+    raise Exception('Unknown unit: ' + default_unit)
 
 def format_time(time, format="%.2f %s"):
     for level, name in sorted(time_units, key=lambda (level, name): -level):
