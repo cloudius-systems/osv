@@ -363,6 +363,7 @@ def format_duration(nanos):
     return "%4.3f" % (float(nanos) / 1e6)
 
 def print_summary(args, printer=sys.stdout.write):
+    time_range = get_time_range(args)
     timed_producer = prof.timed_trace_producer()
     timed_samples = []
 
@@ -373,15 +374,16 @@ def print_summary(args, printer=sys.stdout.write):
 
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
-            count += 1
-            count_per_tp[t.tp] += 1
+            if t.time in time_range:
+                count += 1
+                count_per_tp[t.tp] += 1
 
-            if not min_time:
-                min_time = t.time
-            else:
-                min_time = min(min_time, t.time)
+                if not min_time:
+                    min_time = t.time
+                else:
+                    min_time = min(min_time, t.time)
 
-            max_time = max(max_time, t.time)
+                max_time = max(max_time, t.time)
 
             if args.timed:
                 timed = timed_producer(t)
@@ -410,6 +412,8 @@ def print_summary(args, printer=sys.stdout.write):
         format = "  %-20s %8s %8s %8s %8s %8s %8s %8s %15s"
         print "\nTimed tracepoints [ms]:\n"
 
+        timed_samples = filter(lambda t: t.time_range.intersection(time_range), timed_samples)
+
         if not timed_samples:
             print "  None"
         else:
@@ -417,7 +421,7 @@ def print_summary(args, printer=sys.stdout.write):
             print format % ("----", "-----", "---", "---", "---", "---", "-----", "---", "-----")
 
             for name, traces in get_timed_traces_per_function(timed_samples).iteritems():
-                    samples = sorted(map(attrgetter('duration'), traces))
+                    samples = sorted(list((t.time_range.intersection(time_range).length() for t in traces)))
                     print format % (
                         name,
                         len(samples),
@@ -484,6 +488,7 @@ if __name__ == "__main__":
     cmd_summary = subparsers.add_parser("summary", help="print trace summery", description="""
         Prints basic statistics about the trace.
         """)
+    add_time_slicing_options(cmd_summary)
     add_trace_source_options(cmd_summary)
     cmd_summary.add_argument("--timed", action="store_true", help="print percentile table of timed trace samples")
     cmd_summary.set_defaults(func=print_summary)

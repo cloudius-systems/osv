@@ -58,6 +58,11 @@ class TimeRange(object):
             return False
         return True
 
+    def length(self):
+        if self.begin is None or self.end is None:
+            return None
+        return self.end - self.begin
+
     def intersection(self, other):
         begin = max(self.begin, other.begin)
 
