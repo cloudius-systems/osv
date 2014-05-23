@@ -195,7 +195,7 @@ lz4_decompress(void *s_start, void *d_start, size_t s_len, size_t d_len, int n)
 /* 32 or 64 bits ? */
 #if (defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || \
     defined(__amd64) || defined(__ppc64__) || defined(_WIN64) || \
-    defined(__LP64__) || defined(_LP64))
+    defined(__LP64__) || defined(_LP64) || defined(__aarch64__))
 #define	LZ4_ARCH64 1
 /*
  * Illumos: On amd64 we have 20k of stack and 24k on sun4u and sun4v, so we
