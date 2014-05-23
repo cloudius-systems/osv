@@ -91,11 +91,12 @@ int main(int argc, char **argv)
 	report(access(N1, R_OK | W_OK) == 0, "access");
 
 	rc = access(N2, R_OK | W_OK);
-	if (rc < 0) {
-		error = errno;
-		printf("error = %d\n", error);
-	}
 	report(access(N2, R_OK | W_OK) == 0, "access");
+
+	rc = readlink(N2, path, sizeof(path));
+	report(rc >= 0, "readlink");
+	path[rc] = 0;
+	report(strcmp(path, N1) == 0, "readlink path");
 
 	report(lstat(N2, &buf) == 0, "lstat");
 	report(S_ISLNK(buf.st_mode) == 1, "file mode");

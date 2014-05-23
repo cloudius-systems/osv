@@ -56,6 +56,8 @@
 #include "vfs.h"
 #include <fs/fs.hh>
 
+extern struct task *main_task;
+
 int
 sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 {
@@ -732,14 +734,17 @@ sys_rename(char *src, char *dest)
 }
 
 int
-sys_symlink(char *oldpath, char *newpath)
+sys_symlink(const char *oldpath, const char *newpath)
 {
-	int error;
-	struct dentry *olddp;
-	struct dentry *newdp;
-	struct dentry *newdirdp;
-	struct vnode *vp;
-	char *name;
+	struct task	*t = main_task;
+	int		error;
+	char		op[PATH_MAX];
+	char		np[PATH_MAX];
+	struct dentry	*olddp;
+	struct dentry	*newdp;
+	struct dentry	*newdirdp;
+	struct vnode	*vp;
+	char		*name;
 
 	if (oldpath == NULL || newpath == NULL) {
 		return (EFAULT);
@@ -748,19 +753,37 @@ sys_symlink(char *oldpath, char *newpath)
 	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
 				oldpath, newpath));
 
+	olddp		= NULL;
+	newdp		= NULL;
+	newdirdp	= NULL;
+	vp		= NULL;
+
+	error = task_conv(t, oldpath, VWRITE, op);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = task_conv(t, newpath, VWRITE, np);
+	if (error != 0) {
+		return (error);
+	}
+
 	/* oldpath must exist */
-	if ((error = namei(oldpath, &olddp)) != 0) {
+	if ((error = namei(op, &olddp)) != 0) {
 		return (error);
 	}
 
 	/* newpath should not already exist */
-	if (namei(newpath, &newdp) == 0) {
-		return (EEXIST);
+	if (namei(np, &newdp) == 0) {
+		drele(newdp);
+		error = EEXIST;
+		goto out;
 	}
 
 	/* parent directory for new path must exist */
-	if ((error = lookup(newpath, &newdirdp, &name)) != 0) {
-		return (ENOENT);
+	if ((error = lookup(np, &newdirdp, &name)) != 0) {
+		error = ENOENT;
+		goto out;
 	}
 
 	vp = olddp->d_vnode;
@@ -772,10 +795,24 @@ sys_symlink(char *oldpath, char *newpath)
 		goto out;
 	}
 
-	error = VOP_SYMLINK(newdirdp->d_vnode, name, oldpath);
+	/* oldpath may not be const char * to VOP_SYMLINK - need to copy */
+	strlcpy(op, oldpath, sizeof(op));
+	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
+
 out:
-	vn_unlock(newdirdp->d_vnode);
-	vn_unlock(vp);
+	if (newdirdp != NULL) {
+		vn_unlock(newdirdp->d_vnode);
+		drele(newdirdp);
+	}
+
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (olddp != NULL) {
+		drele(olddp);
+	}
+
 	return (error);
 }
 
@@ -1021,18 +1058,42 @@ sys_fchdir(struct file *fp, char *cwd)
 }
 
 ssize_t
-sys_readlink(char *path, char *buf, size_t bufsize)
+sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size)
 {
-	int error;
-	struct dentry *dp;
+	int		error;
+	struct dentry	*dp;
+	struct vnode	*vp;
+	struct iovec	vec;
+	struct uio	uio;
 
+	*size = 0;
 	error = namei(path, &dp);
-	if (error)
-		return error;
+	if (error != 0) {
+		return (error);
+	}
 
-	/* no symlink support (yet) in OSv */
+	vec.iov_base	= buf;
+	vec.iov_len	= bufsize;
+
+	uio.uio_iov	= &vec;
+	uio.uio_iovcnt	= 1;
+	uio.uio_offset	= 0;
+	uio.uio_resid	= bufsize;
+	uio.uio_rw	= UIO_READ;
+
+	vp = dp->d_vnode;
+	vn_lock(vp);
+	error = VOP_READLINK(vp, &uio);
+	vn_unlock(vp);
+
 	drele(dp);
-	return EINVAL;
+
+	if (error != 0) {
+		return (error);
+	}
+
+	*size = bufsize - uio.uio_resid;
+	return (*size);
 }
 
 /*

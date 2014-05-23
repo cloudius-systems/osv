@@ -110,12 +110,12 @@ int	 sys_mknod(char *path, mode_t mode);
 int	 sys_rename(char *src, char *dest);
 int	 sys_link(char *oldpath, char *newpath);
 int	 sys_unlink(char *path);
-int	 sys_symlink(char*oldpath, char* newpath);
+int	 sys_symlink(const char *oldpath, const char *newpath);
 int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);
 int	 sys_statfs(char *path, struct statfs *buf);
 int	 sys_truncate(char *path, off_t length);
-ssize_t	 sys_readlink(char *path, char *buf, size_t bufsize);
+ssize_t	 sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size);
 int  sys_utimes(char *path, const struct timeval times[2]);
 
 int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);

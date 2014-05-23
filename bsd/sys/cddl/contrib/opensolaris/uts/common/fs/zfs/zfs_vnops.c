@@ -3361,7 +3361,6 @@ top:
 	return (error);
 }
 
-#ifdef NOTYET
 /*
  * Return, in the buffer contained in the provided uio structure,
  * the symbolic path referred to by vp.
@@ -3381,7 +3380,7 @@ top:
  */
 /* ARGSUSED */
 static int
-zfs_readlink(vnode_t *vp, uio_t *uio, cred_t *cr, caller_context_t *ct)
+zfs_readlink(vnode_t *vp, uio_t *uio)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
@@ -3403,7 +3402,6 @@ zfs_readlink(vnode_t *vp, uio_t *uio, cred_t *cr, caller_context_t *ct)
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
-#endif /* NOTYET */
 
 /*
  * Insert a new entry into directory tdvp referencing svp.
@@ -4957,4 +4955,5 @@ struct vnops zfs_vnops = {
 	zfs_link,			/* link */
 	zfs_arc,            /* arc */
 	zfs_symlink,			/* symbolic link */
+	zfs_readlink,			/* read link */
 };
