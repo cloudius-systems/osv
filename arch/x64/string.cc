@@ -307,15 +307,48 @@ memcpy_decoder *memcpy_find_decoder(exception_frame *ef)
     return nullptr;
 }
 
+static inline void small_memset(void *dest, int c, size_t n)
+{
+    size_t qty = n / 8;
+    unsigned long *to_8 = (unsigned long *)dest;
+
+    while (qty--) {
+        *to_8++ = (uint8_t)c * 0x0101010101010101ull;
+    }
+
+    qty = n % 8;
+    unsigned int *to_4 = (unsigned int *)to_8;
+
+    if (qty / 4) {
+        *to_4++ = (uint8_t)c * 0x01010101ul;
+    }
+
+    qty = qty % 4;
+    unsigned short *to_2 = (unsigned short *)to_4;
+    if (qty / 2) {
+        *to_2++ = (uint8_t)c * 0x0101ul;
+    }
+
+    unsigned char *to = (unsigned char *)to_2;
+    if (qty % 2) {
+        *to++ = (uint8_t)c;
+    }
+}
+
 extern "C"
 void *memset_repstos_old(void *__restrict dest, int c, size_t n)
 {
     auto ret = dest;
-    auto nw = n / 8;
-    auto nb = n & 7;
-    auto cw = (uint8_t)c * 0x0101010101010101ull;
-    asm volatile("rep stosq" : "+D"(dest), "+c"(nw) : "a"(cw) : "memory");
-    asm volatile("rep stosb" : "+D"(dest), "+c"(nb) : "a"(cw) : "memory");
+    if (n <= 64) {
+        small_memset(dest, c, n);
+    }
+    else {
+        auto nw = n / 8;
+        auto nb = n & 7;
+        auto cw = (uint8_t)c * 0x0101010101010101ull;
+        asm volatile("rep stosq" : "+D"(dest), "+c"(nw) : "a"(cw) : "memory");
+        asm volatile("rep stosb" : "+D"(dest), "+c"(nb) : "a"(cw) : "memory");
+    }
     return ret;
 }
 
@@ -323,7 +356,11 @@ extern "C"
 void *memset_repstosb(void *__restrict dest, int c, size_t n)
 {
     auto ret = dest;
-    asm volatile("rep stosb" : "+D"(dest), "+c"(n) : "a"(c) : "memory");
+    if (n <= 64) {
+        small_memset(dest, c, n);
+    } else {
+        asm volatile("rep stosb" : "+D"(dest), "+c"(n) : "a"(c) : "memory");
+    }
     return ret;
 }
 
