@@ -28,29 +28,14 @@ static unsigned long gtime()
     return tv.tv_sec * 1000000000 + tv.tv_usec * 1000;
 }
 
-void test_memcpy(size_t size)
+void statistics(const char *name, int size)
 {
-    void *src = malloc(size);
-    void *dest= malloc(size);
-    int r, i;
-
-    memset(src, 'c', size);
-
-    for (r = 0; r < RUNS; ++r) {
-        unsigned long t1 = gtime();
-        for (i= 0; i < LOOPS; ++i) {
-            memcpy(dest, src, size);
-        }
-        unsigned long t2 = gtime();
-
-        vector[r] = (float)(t2-t1) / LOOPS;
-    }
-
     float min, max, mean, stdev;
     min = INT_MAX;
     max = 0;
     mean = 0;
     stdev = 0;
+    int r;
 
     for (r = 0; r < RUNS; ++r) {
         mean += vector[r];
@@ -70,12 +55,54 @@ void test_memcpy(size_t size)
     }
     stdev = sqrtf(stdev / RUNS);
 
-    printf("%d,%f,%f,%f,%f\n", size, min, max, mean, stdev);
+    printf("%s,%d,%f,%f,%f,%f\n", name, size, min, max, mean, stdev);
+
+}
+
+void test_memcpy(size_t size)
+{
+    void *src = malloc(size);
+    void *dest= malloc(size);
+    int r, i;
+
+    memset(src, 'c', size);
+
+    for (r = 0; r < RUNS; ++r) {
+        unsigned long t1 = gtime();
+        for (i= 0; i < LOOPS; ++i) {
+            memcpy(dest, src, size);
+        }
+        unsigned long t2 = gtime();
+
+        vector[r] = (float)(t2-t1) / LOOPS;
+    }
+
+    statistics("memcpy", size);
 
     free(src);
     free(dest);
 }
 
+void test_memset(size_t size)
+{
+    void *buf= malloc(size);
+    int r, i;
+
+
+    for (r = 0; r < RUNS; ++r) {
+        unsigned long t1 = gtime();
+        for (i= 0; i < LOOPS; ++i) {
+            memset(buf, 'c', size);
+        }
+        unsigned long t2 = gtime();
+
+        vector[r] = (float)(t2-t1) / LOOPS;
+    }
+
+    statistics("memset", size);
+
+    free(buf);
+}
 
 int main()
 {
@@ -83,6 +110,11 @@ int main()
     for (i = MIN_SIZE; i <= MAX_SIZE; i <<= 1) {
         test_memcpy(i);
     }
+
+    for (i = MIN_SIZE; i <= MAX_SIZE; i <<= 1) {
+        test_memset(i);
+    }
+
 
     return 0;
 }
