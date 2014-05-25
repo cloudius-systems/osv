@@ -575,5 +575,10 @@ private:
             cleared /= 2;
         }
     }
-} access_scanner;
+} s_access_scanner;
+
+constexpr double access_scanner::_max_cpu;
+constexpr double access_scanner::_min_cpu;
+
+
 }
