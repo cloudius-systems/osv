@@ -1047,10 +1047,11 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
 }
 
 TRACEPOINT(trace_clear_pte, "ptep=%p, cow=%d, pte=%x", void*, bool, uint64_t);
-void clear_pte(hw_ptep ptep)
+pt_element clear_pte(hw_ptep ptep)
 {
-    trace_clear_pte(ptep.release(), pte_is_cow(ptep.read()), ptep.read().addr(false));
-    ptep.write(make_empty_pte());
+    auto old = ptep.exchange(make_empty_pte());
+    trace_clear_pte(ptep.release(), pte_is_cow(old), old.addr(false));
+    return old;
 }
 
 bool clear_accessed(hw_ptep ptep)

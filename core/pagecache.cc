@@ -187,6 +187,7 @@ public:
 class cached_page_write : public cached_page {
 private:
     struct vnode* _vp;
+    bool _dirty = false;
 public:
     cached_page_write(hashkey key, vfs_file* fp) : cached_page(key, memory::alloc_page()) {
         _vp = fp->f_dentry->d_vnode;
@@ -194,7 +195,9 @@ public:
     }
     ~cached_page_write() {
         if (_page) {
-            writeback();
+            if (_dirty) {
+                writeback();
+            }
             memory::free_page(_page);
             vrele(_vp);
         }
@@ -204,6 +207,8 @@ public:
         int error;
         struct iovec iov {_page, mmu::page_size};
         struct uio uio {&iov, 1, _key.offset, mmu::page_size, UIO_WRITE};
+
+        _dirty = false;
 
         vn_lock(_vp);
         error = VOP_WRITE(_vp, &uio, 0);
@@ -217,6 +222,12 @@ public:
         _page = nullptr;
         vrele(_vp);
         return p;
+    }
+    void mark_dirty() {
+        _dirty |= true;
+    }
+    bool flush_check_dirty() {
+        return for_each_pte([] (mmu::hw_ptep pte) { return mmu::clear_pte(pte).dirty(); }, std::logical_or<bool>(), false);
     }
 };
 
@@ -394,7 +405,9 @@ static void insert(cached_page_write* cp) {
             cached_page_write *p = write_lru.back();
             write_lru.pop_back();
             write_cache.erase(p->key());
-            p->flush();
+            if (p->flush_check_dirty()) {
+                p->mark_dirty();
+            }
             tofree[i] = p;
         }
         mmu::flush_tlb_all();
@@ -462,13 +475,17 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     hashkey key {st.st_dev, st.st_ino, offset};
     cached_page_write* wcp = find_in_cache(write_cache, key);
 
-    clear_pte(ptep);
+    auto old = clear_pte(ptep);
 
     // page is either in ARC cache or write cache or zero page or private page
 
     if (wcp && wcp->addr() == addr) {
         // page is in write cache
         wcp->unmap(ptep);
+        if (old.dirty()) {
+            // unmapped pte was dirty, mark page dirty for writeback
+            wcp->mark_dirty();
+        }
         return false;
     }
 
