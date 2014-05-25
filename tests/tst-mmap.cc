@@ -5,6 +5,9 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+// To compile this test on Linux, use:
+// g++ -g -pthread -std=c++11 -Wno-pointer-arith tests/tst-mmap.cc
+
 #include "tst-mmap.hh"
 
 #ifdef __OSV__
@@ -12,6 +15,7 @@
 #endif
 
 #include <sys/mman.h>
+#include <string.h>
 
 #include <iostream>
 #include <cassert>
