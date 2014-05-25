@@ -462,6 +462,8 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     hashkey key {st.st_dev, st.st_ino, offset};
     cached_page_write* wcp = find_in_cache(write_cache, key);
 
+    clear_pte(ptep);
+
     // page is either in ARC cache or write cache or zero page or private page
 
     if (wcp && wcp->addr() == addr) {

@@ -572,24 +572,24 @@ private:
 public:
     unpopulate(page_allocator* pops) : _pops(pops) {}
     void small_page(hw_ptep ptep, uintptr_t offset) {
+        void* addr = phys_to_virt(ptep.read().addr(false));
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
-        if (_pops->unmap(phys_to_virt(ptep.read().addr(false)), offset, ptep)) {
-            do_flush = !_tlb_gather.push(phys_to_virt(ptep.read().addr(false)), page_size);
+        if (_pops->unmap(addr, offset, ptep)) {
+            do_flush = !_tlb_gather.push(addr, page_size);
         } else {
             do_flush = true;
         }
-        ptep.write(make_empty_pte());
         this->account(mmu::page_size);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        if (_pops->unmap(phys_to_virt(ptep.read().addr(true)), offset, ptep)) {
-            do_flush = !_tlb_gather.push(phys_to_virt(ptep.read().addr(true)), huge_page_size);
+        void* addr = phys_to_virt(ptep.read().addr(true));
+        if (_pops->unmap(addr, offset, ptep)) {
+            do_flush = !_tlb_gather.push(addr, huge_page_size);
         } else {
             do_flush = true;
         }
-        ptep.write(make_empty_pte());
         this->account(mmu::huge_page_size);
         return true;
     }
@@ -902,9 +902,11 @@ public:
         return set_pte(fill(memory::alloc_huge_page(size), offset, size), ptep, pte);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep ptep) override {
+        clear_pte(ptep);
         return true;
     }
     virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
+        clear_pte(ptep);
         return true;
     }
 };
