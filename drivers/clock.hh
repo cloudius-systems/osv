@@ -24,7 +24,7 @@
  * The methods of this class are not type-safe, in that they return times
  * as unadorned integers (s64) whose type does not specify the time units
  * or the epoch. Prefer instead to use the types from <osv/clock.hh>:
- * osv::clock::monotonic et al. Their efficiency is identical to the
+ * osv::clock::uptime et al. Their efficiency is identical to the
  * methods of this class, but they allow much better compile-time checking.
  */
 class clock {
