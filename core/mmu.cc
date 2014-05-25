@@ -1085,11 +1085,6 @@ void clear_pte(hw_ptep ptep)
     ptep.write(make_empty_pte());
 }
 
-void clear_pte(std::pair<void* const, hw_ptep>& pair)
-{
-    clear_pte(pair.second);
-}
-
 bool clear_accessed(hw_ptep ptep)
 {
     pt_element pte = ptep.read();

@@ -170,7 +170,6 @@ std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsign
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 void clear_pte(hw_ptep ptep);
-void clear_pte(std::pair<void* const, hw_ptep>& pair);
 bool clear_accessed(hw_ptep ptep);
 pt_element pte_mark_cow(pt_element pte, bool cow);
 bool write_pte(void *addr, hw_ptep ptep, pt_element pte);
@@ -231,17 +230,6 @@ error  advise(void* addr, size_t size, int advice);
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
-
-template<typename I>
-unsigned clear_ptes(I start,  I end)
-{
-    unsigned i = 0;
-    for (auto it = start; it != end; it++) {
-        clear_pte(*it);
-        i++;
-    }
-    return i;
-}
 
 inline bool pte_is_cow(pt_element pte)
 {

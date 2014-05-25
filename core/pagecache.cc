@@ -121,39 +121,36 @@ protected:
             return set->size();
         }
     };
-    class ptep_flush : public ptes_visitor<int> {
+
+    template<typename Map, typename Reduce, typename Ret>
+    class map_reduce : public boost::static_visitor<Ret> {
+    private:
+        Map _mapper;
+        Reduce _reducer;
+        Ret _initial;
     public:
-        ptep_flush(ptep_list& ptes) : ptes_visitor(ptes) {}
-        int operator()(std::nullptr_t &v) {
-            // nothing to flush
-            return 0;
+        map_reduce(Map mapper, Reduce reducer, Ret initial) : _mapper(mapper), _reducer(reducer), _initial(initial) {}
+        Ret operator()(std::nullptr_t &v) {
+            return _initial;
         }
-        int operator()(mmu::hw_ptep& ptep) {
-            clear_pte(ptep);
-            return 1;
+        Ret operator()(mmu::hw_ptep& ptep) {
+            return _reducer(_initial, _mapper(ptep));
         }
-        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
-            mmu::clear_ptes(set->begin(), set->end());
-            return set->size();
-        }
-    };
-    class ptep_accessed : public ptes_visitor<int> {
-    public:
-        ptep_accessed(ptep_list& ptes) : ptes_visitor(ptes) {}
-        int operator()(std::nullptr_t &v) {
-            return 0;
-        }
-        int operator()(mmu::hw_ptep& ptep) {
-            return mmu::clear_accessed(ptep);
-        }
-        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
-            int cleared = 0;
+        Ret operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+            Ret acc = _initial;
             for (auto&& i: set) {
-                cleared += mmu::clear_accessed(i);
+              acc = _reducer(acc, _mapper(i));
             }
-            return cleared;
+            return acc;
         }
     };
+
+    template <typename Map, typename Reduce = std::plus<int>, typename Ret = int>
+    Ret for_each_pte(Map mapper, Reduce reducer = std::plus<int>(), Ret initial = 0)
+    {
+        map_reduce<Map, Reduce, Ret> mr(mapper, reducer, initial);
+        return boost::apply_visitor(mr, _ptes);
+    }
 
 public:
     cached_page(hashkey key, void* page) : _key(key), _page(page) {
@@ -173,12 +170,10 @@ public:
         return _page;
     }
     int flush() {
-        ptep_flush flush(_ptes);
-        return boost::apply_visitor(flush, _ptes);
+        return for_each_pte([] (mmu::hw_ptep pte) { mmu::clear_pte(pte); return 1;});
     }
     int clear_accessed() {
-        ptep_accessed accessed(_ptes);
-        return boost::apply_visitor(accessed, _ptes);
+        return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_accessed(pte); });
     }
     const hashkey& key() {
         return _key;
