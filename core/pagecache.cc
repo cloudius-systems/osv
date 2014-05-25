@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <deque>
+#include <stack>
 #include <boost/variant.hpp>
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>
@@ -174,6 +175,9 @@ public:
     }
     int clear_accessed() {
         return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_accessed(pte); });
+    }
+    int clear_dirty() {
+        return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_dirty(pte); });
     }
     const hashkey& key() {
         return _key;
@@ -477,6 +481,31 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
 
     // if a private page, caller will free it
     return addr != zero_page;
+}
+
+void sync(vfs_file* fp, off_t start, off_t end)
+{
+    static std::stack<cached_page_write*> dirty; // protected by vma_list_mutex
+    struct stat st;
+    fp->stat(&st);
+    hashkey key {st.st_dev, st.st_ino, 0};
+    for (key.offset = start; key.offset < end; key.offset += mmu::page_size) {
+        cached_page_write* cp = find_in_cache(write_cache, key);
+        if (cp && cp->clear_dirty()) {
+            dirty.push(cp);
+        }
+    }
+
+    mmu::flush_tlb_all();
+
+    while(!dirty.empty()) {
+        auto cp = dirty.top();
+        auto err = cp->writeback();
+        if (err) {
+            throw make_error(err);
+        }
+        dirty.pop();
+    }
 }
 
 TRACEPOINT(trace_access_scanner, "scanned=%u, cleared=%u, %%cpu=%g", unsigned, unsigned, double);

@@ -171,6 +171,7 @@ std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned f
 
 void clear_pte(hw_ptep ptep);
 bool clear_accessed(hw_ptep ptep);
+bool clear_dirty(hw_ptep ptep);
 pt_element pte_mark_cow(pt_element pte, bool cow);
 bool write_pte(void *addr, hw_ptep ptep, pt_element pte);
 

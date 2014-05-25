@@ -632,40 +632,6 @@ public:
     }
 };
 
-template <typename T, account_opt Account = account_opt::no>
-class dirty_cleaner : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes, Account> {
-private:
-    bool do_flush;
-    T handler;
-public:
-    dirty_cleaner(T handler) : do_flush(false), handler(handler) {}
-    void small_page(hw_ptep ptep, uintptr_t offset) {
-        pt_element pte = ptep.read();
-        if (!pte.dirty()) {
-            return;
-        }
-        do_flush |= true;
-        pte.set_dirty(false);
-        ptep.write(pte);
-        handler(ptep.read().addr(false), offset);
-    }
-    bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        pt_element pte = ptep.read();
-        if (!pte.dirty()) {
-            return true;
-        }
-        do_flush |= true;
-        pte.set_dirty(false);
-        ptep.write(pte);
-        handler(ptep.read().addr(true), offset, huge_page_size);
-        return true;
-    }
-    bool tlb_flush_needed(void) {return do_flush;}
-    void finalize() {
-        handler.finalize();
-    }
-};
-
 class virt_to_phys_map :
         public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
         descend_opt::yes, once_opt::yes, split_opt::no> {
@@ -1095,6 +1061,18 @@ bool clear_accessed(hw_ptep ptep)
         ptep.compare_exchange(pte, clear);
     }
     return accessed;
+}
+
+bool clear_dirty(hw_ptep ptep)
+{
+    pt_element pte = ptep.read();
+    bool dirty = pte.dirty();
+    if (dirty) {
+        pt_element clear = pte;
+        clear.set_dirty(false);
+        ptep.compare_exchange(pte, clear);
+    }
+    return dirty;
 }
 
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
@@ -1580,58 +1558,18 @@ void file_vma::split(uintptr_t edge)
     vma_list.insert(*n);
 }
 
-class dirty_page_sync {
-    friend dirty_cleaner<dirty_page_sync, account_opt::yes>;
-    friend file_vma;
-private:
-    file *_file;
-    f_offset _offset;
-    uint64_t _size;
-    struct elm {
-        iovec iov;
-        off_t offset;
-    };
-    std::stack<elm> queue;
-    dirty_page_sync(file *file, f_offset offset, uint64_t size) : _file(file), _offset(offset), _size(size) {}
-    void operator()(phys addr, uintptr_t offset, size_t size) {
-        off_t off = _offset + offset;
-        size_t len = std::min(size, _size - off);
-        queue.push(elm{{phys_to_virt(addr), len}, off});
-    }
-    void operator()(phys addr, uintptr_t offset) {
-        (*this)(addr, offset, page_size);
-    }
-    void finalize() {
-        while(!queue.empty()) {
-            elm w = queue.top();
-            uio data{&w.iov, 1, w.offset, ssize_t(w.iov.iov_len), UIO_WRITE};
-            int error = _file->write(&data, FOF_OFFSET);
-            if (error) {
-                throw make_error(error);
-            }
-            queue.pop();
-        }
-    }
-};
-
 error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!has_flags(mmap_shared))
         return make_error(ENOMEM);
-    start = std::max(start, _range.start());
-    end = std::min(end, _range.end());
-    uintptr_t size = end - start;
 
-    dirty_page_sync sync(_file.get(), _offset, ::size(_file));
-    error err = no_error();
     try {
-        if (operate_range(dirty_cleaner<dirty_page_sync, account_opt::yes>(sync), (void*)start, size) != 0) {
-            err = make_error(sys_fsync(_file.get()));
-        }
-    } catch (error e) {
-        err = e;
+        _file->sync(std::max(start, _range.start()), std::min(end, _range.end()));
+    } catch (error& err) {
+        return err;
     }
-    return err;
+
+    return make_error(sys_fsync(_file.get()));
 }
 
 int file_vma::validate_perm(unsigned perm)
