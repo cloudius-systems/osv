@@ -92,7 +92,11 @@ int pipe_file::close()
     return 0;
 }
 
-int pipe(int pipefd[2]) {
+int pipe2(int pipefd[2], int flags) {
+    if (flags & ~(O_NONBLOCK | O_CLOEXEC)) {
+        return libc_error(EINVAL);
+    }
+
     auto b = new pipe_buffer;
     std::unique_ptr<pipe_reader> s1{new pipe_reader(b)};
     std::unique_ptr<pipe_writer> s2{new pipe_writer(b)};
@@ -101,6 +105,13 @@ int pipe(int pipefd[2]) {
         fileref f2 = make_file<pipe_file>(move(s2));
         fdesc fd1(f1);
         fdesc fd2(f2);
+
+        // O_CLOEXEC ignored by now
+        if (flags & O_NONBLOCK) {
+            f1->f_flags &= FNONBLOCK;
+            f2->f_flags &= FNONBLOCK;
+        }
+
         // all went well, user owns descriptors now
         pipefd[0] = fd1.release();
         pipefd[1] = fd2.release();
@@ -108,4 +119,9 @@ int pipe(int pipefd[2]) {
     } catch (int error) {
         return libc_error(error);
     }
+}
+
+int pipe(int pipefd[2])
+{
+    return pipe2(pipefd, 0);
 }
