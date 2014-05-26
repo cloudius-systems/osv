@@ -195,7 +195,6 @@ void syncfs(int);
 //#define pwrite64 pwrite
 //#define truncate64 truncate
 //#define ftruncate64 ftruncate
-#define lockf64 lockf
 #define off64_t off_t
 #endif
 

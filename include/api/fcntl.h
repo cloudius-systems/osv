@@ -160,7 +160,6 @@ ssize_t tee(int, int, size_t, unsigned);
 //#define open64 open
 #define openat64 openat
 #define creat64 creat
-#define lockf64 lockf
 #define off64_t off_t
 #endif
 
