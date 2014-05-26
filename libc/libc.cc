@@ -170,6 +170,39 @@ speed_t cfgetospeed(const termios *p)
     return p->__c_ospeed;
 }
 
+int cfsetospeed(struct termios *tio, speed_t speed)
+{
+	if (speed & ~CBAUD) {
+		errno = EINVAL;
+		return -1;
+	}
+	tio->c_cflag &= ~CBAUD;
+	tio->c_cflag |= speed;
+	return 0;
+}
+
+int cfsetispeed(struct termios *tio, speed_t speed)
+{
+	return speed ? cfsetospeed(tio, speed) : 0;
+}
+weak_alias(cfsetospeed, cfsetspeed);
+
+int tcsendbreak(int fd, int dur)
+{
+	return ioctl(fd, TCSBRK, 0);
+}
+
+void cfmakeraw(struct termios *t)
+{
+	t->c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL|IXON);
+	t->c_oflag &= ~OPOST;
+	t->c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
+	t->c_cflag &= ~(CSIZE|PARENB);
+	t->c_cflag |= CS8;
+	t->c_cc[VMIN] = 1;
+	t->c_cc[VTIME] = 0;
+}
+
 extern "C" {
     const char *gnu_get_libc_version(void)
     {
