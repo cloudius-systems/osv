@@ -29,6 +29,12 @@ int sem_init(sem_t* s, int pshared, unsigned val)
     return 0;
 }
 
+int sem_destroy(sem_t *s)
+{
+    from_libc(s).~indirect_semaphore();
+    return 0;
+}
+
 int sem_post(sem_t* s)
 {
     from_libc(s)->post();
