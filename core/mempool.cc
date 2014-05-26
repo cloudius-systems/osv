@@ -14,6 +14,7 @@
 #include <thread>
 #include <boost/utility.hpp>
 #include <string.h>
+#include <lockfree/unordered-queue-mpsc.hh>
 #include "libc/libc.hh"
 #include <osv/align.hh>
 #include <osv/debug.hh>
@@ -87,11 +88,12 @@ static inline void tracker_forget(void *addr)
 // sched::cpu::current() uses TLS which is set only later on.
 //
 
-static unsigned mempool_cpuid() {
-    unsigned c = (smp_allocator ? sched::cpu::current()->id: 0);
-    assert(c < 64);
-    return c;
+static inline unsigned mempool_cpuid() {
+    return (smp_allocator ? sched::cpu::current()->id: 0);
 }
+
+static void garbage_collector_fn();
+PCPU_WORKERITEM(garbage_collector, garbage_collector_fn);
 
 //
 // Since the small pools are managed per-cpu, malloc() always access the correct
@@ -107,57 +109,50 @@ static unsigned mempool_cpuid() {
 // 2nd index -> local cpu
 //
 
-const unsigned free_objects_ring_size = 256;
-typedef ring_spsc<void*, free_objects_ring_size> free_objects_type;
-free_objects_type ***pcpu_free_list;
-
-struct freelist_full_sync_object {
-    mutex _mtx;
-    condvar _cond;
-    void * _free_obj;
-};
-
-//
-// we use a pcpu sync object to synchronize between the freeing thread and the
-// worker item in the edge case of when the above ring is full.
-//
-// the sync object array performs as a secondary queue with the length of 1
-// item (_free_obj), and freeing threads will wait until it was handled by
-// the worker item. Their first priority is still to push the object to the
-// ring, only if they fail, a single thread may get a hold of,
-// _mtx and set _free_obj, all other threads will wait for the worker to drain
-// the its ring and this secondary 1-item queue.
-//
-freelist_full_sync_object freelist_full_sync[sched::max_cpus];
-
-static void free_worker_fn()
-{
-    unsigned cpu_id = mempool_cpuid();
-
-    // drain the ring, free all objects
-    for (unsigned i=0; i < sched::cpus.size(); i++) {
-        void* obj = nullptr;
-        while (pcpu_free_list[cpu_id][i]->pop(obj)) {
-            memory::pool::from_object(obj)->free(obj);
+class garbage_sink {
+private:
+    static const int signal_threshold = 256;
+    lockfree::unordered_queue_mpsc<free_object> queue;
+    int pushed_since_last_signal {};
+public:
+    void free(unsigned obj_cpu, free_object* obj)
+    {
+        queue.push(obj);
+        if (++pushed_since_last_signal > signal_threshold) {
+            garbage_collector.signal(sched::cpus[obj_cpu]);
+            pushed_since_last_signal = 0;
         }
     }
 
-    // handle secondary 1-item queue.
-    // if we have any waiters, wake them up
-    auto& sync = freelist_full_sync[cpu_id];
-    void* free_obj = nullptr;
-    WITH_LOCK(sync._mtx) {
-        free_obj = sync._free_obj;
-        sync._free_obj = nullptr;
+    free_object* pop()
+    {
+        return queue.pop();
     }
+};
 
-    if (free_obj) {
-        sync._cond.wake_all();
-        memory::pool::from_object(free_obj)->free(free_obj);
+static garbage_sink ***pcpu_free_list;
+
+void pool::collect_garbage()
+{
+    assert(!sched::preemptable());
+
+    unsigned cpu_id = mempool_cpuid();
+
+    for (unsigned i = 0; i < sched::cpus.size(); i++) {
+        auto sink = pcpu_free_list[cpu_id][i];
+        free_object* obj;
+        while ((obj = sink->pop())) {
+            memory::pool::from_object(obj)->free_same_cpu(obj, cpu_id);
+        }
     }
 }
 
-PCPU_WORKERITEM(free_worker, free_worker_fn);
+static void garbage_collector_fn()
+{
+    WITH_LOCK(preempt_lock) {
+        pool::collect_garbage();
+    }
+}
 
 // Memory allocation strategy
 //
@@ -191,7 +186,7 @@ pool::~pool()
 
 // FIXME: handle larger sizes better, while preserving alignment:
 const size_t pool::max_object_size = page_size / 2;
-const size_t pool::min_object_size = sizeof(pool::free_object);
+const size_t pool::min_object_size = sizeof(free_object);
 
 pool::page_header* pool::to_header(free_object* object)
 {
@@ -301,43 +296,12 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
     }
 }
 
-void pool::free_different_cpu(free_object* obj, unsigned obj_cpu)
+void pool::free_different_cpu(free_object* obj, unsigned obj_cpu, unsigned cur_cpu)
 {
-    void* object = static_cast<void*>(obj);
-    trace_pool_free_different_cpu(this, object, obj_cpu);
-    free_objects_type *ring;
-
-    ring = memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
-    if (!ring->push(object)) {
-        DROP_LOCK(preempt_lock) {
-            // The ring is full, take a mutex and use the sync object, hand
-            // the object to the secondary 1-item queue
-            auto& sync = freelist_full_sync[obj_cpu];
-            WITH_LOCK(sync._mtx) {
-                sync._cond.wait_until(sync._mtx, [&] {
-                    return (sync._free_obj == nullptr);
-                });
-
-                WITH_LOCK(preempt_lock) {
-                    ring = memory::pcpu_free_list[obj_cpu][mempool_cpuid()];
-                    if (!ring->push(object)) {
-                        // If the ring is full, use the secondary queue.
-                        // sync._free_obj is guaranteed null as we're
-                        // the only thread which broke out of the cond.wait
-                        // loop under the mutex
-                        sync._free_obj = object;
-                    }
-
-                    // Wake the worker item in case at least half of the queue is full
-                    if (ring->size() > free_objects_ring_size/2) {
-                        memory::free_worker.signal(sched::cpus[obj_cpu]);
-                    }
-                }
-            }
-        }
-    }
+    trace_pool_free_different_cpu(this, obj, obj_cpu);
+    auto sink = memory::pcpu_free_list[obj_cpu][cur_cpu];
+    sink->free(obj_cpu, obj);
 }
-
 
 void pool::free(void* object)
 {
@@ -357,7 +321,7 @@ void pool::free(void* object)
             // free from a different CPU. we try to hand the buffer
             // to the proper worker item that is pinned to the CPU that this buffer
             // was allocated from, so it'll free it.
-            free_different_cpu(obj, obj_cpu);
+            free_different_cpu(obj, obj_cpu, cur_cpu);
         }
     }
 }
@@ -382,20 +346,20 @@ struct mark_smp_allocator_intialized {
     mark_smp_allocator_intialized() {
         // FIXME: Handle CPU hot-plugging.
         auto ncpus = sched::cpus.size();
-        // Our malloc() is very coarse, and can use 2 pages for allocating a
-        // free_objects_type which is a little over half a page. So allocate
-        // all the queues in one large buffer.
-        auto buf = aligned_alloc(alignof(free_objects_type),
-                    sizeof(free_objects_type) * ncpus * ncpus);
-        pcpu_free_list = new free_objects_type**[ncpus];
+        // Our malloc() is very coarse so allocate all the queues in one large buffer.
+        // We allocate at least one page because current implementation of aligned_alloc()
+        // is not capable of ensuring aligned allocation for small allocations.
+        auto buf = aligned_alloc(alignof(garbage_sink),
+                    std::max(page_size, sizeof(garbage_sink) * ncpus * ncpus));
+        pcpu_free_list = new garbage_sink**[ncpus];
         for (auto i = 0U; i < ncpus; i++) {
-            pcpu_free_list[i] = new free_objects_type*[ncpus];
+            pcpu_free_list[i] = new garbage_sink*[ncpus];
             for (auto j = 0U; j < ncpus; j++) {
-                static_assert(!(sizeof(free_objects_type) %
-                        alignof(free_objects_type)), "free_objects_type align");
-                auto p = pcpu_free_list[i][j] = static_cast<free_objects_type *>(
-                        buf + sizeof(free_objects_type) * (i * ncpus + j));
-                new (p) free_objects_type;
+                static_assert(!(sizeof(garbage_sink) %
+                        alignof(garbage_sink)), "garbage_sink align");
+                auto p = pcpu_free_list[i][j] = static_cast<garbage_sink *>(
+                        buf + sizeof(garbage_sink) * (i * ncpus + j));
+                new (p) garbage_sink;
             }
         }
         smp_allocator = true;
@@ -881,7 +845,7 @@ static void refill_page_buffer()
                 total_size += size;
                 void* pages = static_cast<void*>(p) + p->size;
                 if (!p->size) {
-                    free_page_ranges.erase(*p);
+                    free_page_ranges.erase(it);
                 }
                 while (size) {
                     pbuf.free[pbuf.nr++] = pages;
@@ -943,12 +907,13 @@ static void* early_alloc_page()
             abort();
         }
 
-        auto p = &*free_page_ranges.begin();
+        auto begin = free_page_ranges.begin();
+        auto p = &*begin;
         p->size -= page_size;
         on_alloc(page_size);
         void* page = static_cast<void*>(p) + p->size;
         if (!p->size) {
-            free_page_ranges.erase(*p);
+            free_page_ranges.erase(begin);
         }
         return page;
     }
@@ -1025,7 +990,7 @@ void* alloc_huge_page(size_t N)
             size_t alloc_size;
             if (ret==v) {
                 alloc_size = range->size;
-                free_page_ranges.erase(*range);
+                free_page_ranges.erase(i);
             } else {
                 // Note that this is is done conditionally because we are
                 // operating page ranges. That is what is left on our page
