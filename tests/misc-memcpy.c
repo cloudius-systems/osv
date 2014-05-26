@@ -107,12 +107,17 @@ void test_memset(size_t size)
 int main()
 {
     size_t i;
-    for (i = MIN_SIZE; i <= MAX_SIZE; i <<= 1) {
-        test_memcpy(i);
+    size_t sizes[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 15, 16, 17,
+            31, 32, 33, 64, 128, 255, 256, 257, 512, 1024, 2048,
+            4096, 8192, 16386, 32768
+    };
+    size_t nsizes = sizeof(sizes) / sizeof(*sizes);
+    for (i = 0; i < nsizes; ++i) {
+        test_memcpy(sizes[i]);
     }
 
-    for (i = MIN_SIZE; i <= MAX_SIZE; i <<= 1) {
-        test_memset(i);
+    for (i = 0; i < nsizes; ++i) {
+        test_memset(sizes[i]);
     }
 
 
