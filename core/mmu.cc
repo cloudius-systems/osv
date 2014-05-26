@@ -1021,6 +1021,18 @@ void vcleanup(void* addr, size_t size)
     }
 }
 
+static void depopulate(void* addr, size_t length)
+{
+    length = align_up(length, mmu::page_size);
+    auto start = reinterpret_cast<uintptr_t>(addr);
+    auto range = vma_list.equal_range(addr_range(start, start + length), vma::addr_compare());
+    for (auto i = range.first; i != range.second; ++i) {
+        i->operate_range(unpopulate<>(i->page_ops()), reinterpret_cast<void*>(start), std::min(length, i->size()));
+        start += i->size();
+        length -= i->size();
+    }
+}
+
 error advise(void* addr, size_t size, int advice)
 {
     WITH_LOCK(vma_list_mutex) {
@@ -1028,7 +1040,7 @@ error advise(void* addr, size_t size, int advice)
             return make_error(ENOMEM);
         }
         if (advice == advise_dontneed) {
-            vdepopulate(addr, size);
+            depopulate(addr, size);
             return no_error();
         }
         return make_error(EINVAL);
