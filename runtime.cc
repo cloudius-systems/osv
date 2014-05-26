@@ -190,6 +190,12 @@ int fork()
     return -1;
 }
 
+pid_t setsid(void)
+{
+    WARN_STUBBED();
+    return -1;
+}
+
 NO_SYS(int execvp(const char *, char *const []));
 NO_SYS(int symlink(const char *, const char *));
 
