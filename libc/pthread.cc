@@ -712,6 +712,11 @@ int pthread_kill(pthread_t thread, int sig)
     return EINVAL;
 }
 
+int raise(int sig)
+{
+    return pthread_kill(pthread_self(), sig);
+}
+
 int pthread_setname_np(pthread_t p, const char* name)
 {
     if (strlen(name) > 16) {
