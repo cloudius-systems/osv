@@ -209,6 +209,8 @@ extern "C" { void interrupt(exception_frame* frame); }
 
 void interrupt(exception_frame* frame)
 {
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
     // Rather that force the exception frame down the call stack,
     // remember it in a global here.  This works because our interrupts
     // don't nest.
@@ -255,6 +257,8 @@ extern "C" void nmi(exception_frame* ef)
 extern "C"
 void general_protection(exception_frame* ef)
 {
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
     if (fixup_fault(ef)) {
         return;
     }

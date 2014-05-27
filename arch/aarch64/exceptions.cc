@@ -82,6 +82,8 @@ extern "C" { void interrupt(exception_frame* frame); }
 
 void interrupt(exception_frame* frame)
 {
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
     /* remember frame in a global, need to change if going to nested */
     current_interrupt_frame = frame;
 

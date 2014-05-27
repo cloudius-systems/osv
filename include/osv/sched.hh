@@ -562,7 +562,6 @@ private:
     attr _attr;
     int _migration_lock_counter;
     arch_thread _arch;
-    arch_fpu _fpu;
     unsigned int _id;
     std::atomic<bool> _interrupted;
     std::function<void ()> _cleanup;

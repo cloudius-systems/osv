@@ -17,6 +17,8 @@
 
 void page_fault(exception_frame *ef)
 {
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
     sched::exception_guard g;
     auto addr = processor::read_cr2();
     if (fixup_fault(ef)) {
@@ -33,10 +35,7 @@ void page_fault(exception_frame *ef)
 
     // And since we may sleep, make sure interrupts are enabled.
     DROP_LOCK(irq_lock) { // irq_lock is acquired by HW
-        sched::inplace_arch_fpu fpu;
-        fpu.save();
         mmu::vm_fault(addr, ef);
-        fpu.restore();
     }
 }
 

@@ -87,6 +87,13 @@ struct fpu_state_inplace {
 typedef save_fpu<fpu_state_alloc_page> arch_fpu;
 typedef save_fpu<fpu_state_inplace> inplace_arch_fpu;
 
+// lock adapter for inplace_arch_fpu
+class fpu_lock {
+    inplace_arch_fpu _state;
+public:
+    void lock() { _state.save(); }
+    void unlock() { _state.restore(); }
+};
 
 inline arch_cpu::arch_cpu()
     : gdt{0, 0x00af9b000000ffff, 0x00cf93000000ffff, 0x00cf9b000000ffff,

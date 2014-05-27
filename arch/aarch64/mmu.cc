@@ -16,6 +16,8 @@
 
 void page_fault(exception_frame *ef)
 {
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
     debug_early_entry("page_fault");
     u64 addr;
     asm volatile ("mrs %0, far_el1" : "=r"(addr));
@@ -39,10 +41,7 @@ void page_fault(exception_frame *ef)
     assert(!(ef->spsr & processor::daif_i));
 
     DROP_LOCK(irq_lock) {
-        sched::arch_fpu fpu;
-        fpu.save();
         mmu::vm_fault(addr, ef);
-        fpu.restore();
     }
 
     debug_early("leaving page_fault()\n");

@@ -216,10 +216,6 @@ static constexpr bool scheduler_uses_fpu = true;
 
 void cpu::reschedule_from_interrupt(bool preempt)
 {
-    if (scheduler_uses_fpu && preempt) {
-        thread::current()->_fpu.save();
-    }
-
     assert(sched::exception_depth <= 1);
     need_reschedule = false;
     handle_incoming_wakeups();
@@ -246,9 +242,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
         // lowest runtime, and update the timer until the next thread's turn.
         if (runqueue.empty()) {
             preemption_timer.cancel();
-            if (scheduler_uses_fpu && preempt) {
-                p->_fpu.restore();
-            }
             return;
         } else {
             auto &t = *runqueue.begin();
@@ -257,9 +250,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
                 auto delta = p->_runtime.time_until(t._runtime.get_local());
                 if (delta > 0) {
                     preemption_timer.set(now + delta);
-                }
-                if (scheduler_uses_fpu && preempt) {
-                    p->_fpu.restore();
                 }
                 return;
             }
@@ -287,11 +277,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
 
     if (preempt) {
         trace_sched_preempt();
-        if (!scheduler_uses_fpu) {
-            // If runtime is not a float, we only need to save the FPU here,
-            // just when deciding to switch threads.
-            p->_fpu.save();
-        }
     }
     if (p->_detached_state->st.load(std::memory_order_relaxed) == thread::status::queued
             && p != idle_thread) {
@@ -309,10 +294,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
     if (p->_detached_state->_cpu->terminating_thread) {
         p->_detached_state->_cpu->terminating_thread->destroy();
         p->_detached_state->_cpu->terminating_thread = nullptr;
-    }
-
-    if (preempt) {
-        p->_fpu.restore();
     }
 }
 
