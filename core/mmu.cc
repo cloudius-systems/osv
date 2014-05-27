@@ -572,24 +572,24 @@ private:
 public:
     unpopulate(page_allocator* pops) : _pops(pops) {}
     void small_page(hw_ptep ptep, uintptr_t offset) {
+        void* addr = phys_to_virt(ptep.read().addr(false));
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
-        if (_pops->unmap(phys_to_virt(ptep.read().addr(false)), offset, ptep)) {
-            do_flush = !_tlb_gather.push(phys_to_virt(ptep.read().addr(false)), page_size);
+        if (_pops->unmap(addr, offset, ptep)) {
+            do_flush = !_tlb_gather.push(addr, page_size);
         } else {
             do_flush = true;
         }
-        ptep.write(make_empty_pte());
         this->account(mmu::page_size);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        if (_pops->unmap(phys_to_virt(ptep.read().addr(true)), offset, ptep)) {
-            do_flush = !_tlb_gather.push(phys_to_virt(ptep.read().addr(true)), huge_page_size);
+        void* addr = phys_to_virt(ptep.read().addr(true));
+        if (_pops->unmap(addr, offset, ptep)) {
+            do_flush = !_tlb_gather.push(addr, huge_page_size);
         } else {
             do_flush = true;
         }
-        ptep.write(make_empty_pte());
         this->account(mmu::huge_page_size);
         return true;
     }
@@ -629,40 +629,6 @@ public:
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         this->account(mmu::huge_page_size);
         return true;
-    }
-};
-
-template <typename T, account_opt Account = account_opt::no>
-class dirty_cleaner : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes, Account> {
-private:
-    bool do_flush;
-    T handler;
-public:
-    dirty_cleaner(T handler) : do_flush(false), handler(handler) {}
-    void small_page(hw_ptep ptep, uintptr_t offset) {
-        pt_element pte = ptep.read();
-        if (!pte.dirty()) {
-            return;
-        }
-        do_flush |= true;
-        pte.set_dirty(false);
-        ptep.write(pte);
-        handler(ptep.read().addr(false), offset);
-    }
-    bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        pt_element pte = ptep.read();
-        if (!pte.dirty()) {
-            return true;
-        }
-        do_flush |= true;
-        pte.set_dirty(false);
-        ptep.write(pte);
-        handler(ptep.read().addr(true), offset, huge_page_size);
-        return true;
-    }
-    bool tlb_flush_needed(void) {return do_flush;}
-    void finalize() {
-        handler.finalize();
     }
 };
 
@@ -936,9 +902,11 @@ public:
         return set_pte(fill(memory::alloc_huge_page(size), offset, size), ptep, pte);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep ptep) override {
+        clear_pte(ptep);
         return true;
     }
     virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep ptep) override {
+        clear_pte(ptep);
         return true;
     }
 };
@@ -1079,15 +1047,11 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
 }
 
 TRACEPOINT(trace_clear_pte, "ptep=%p, cow=%d, pte=%x", void*, bool, uint64_t);
-void clear_pte(hw_ptep ptep)
+pt_element clear_pte(hw_ptep ptep)
 {
-    trace_clear_pte(ptep.release(), pte_is_cow(ptep.read()), ptep.read().addr(false));
-    ptep.write(make_empty_pte());
-}
-
-void clear_pte(std::pair<void* const, hw_ptep>& pair)
-{
-    clear_pte(pair.second);
+    auto old = ptep.exchange(make_empty_pte());
+    trace_clear_pte(ptep.release(), pte_is_cow(old), old.addr(false));
+    return old;
 }
 
 bool clear_accessed(hw_ptep ptep)
@@ -1100,6 +1064,18 @@ bool clear_accessed(hw_ptep ptep)
         ptep.compare_exchange(pte, clear);
     }
     return accessed;
+}
+
+bool clear_dirty(hw_ptep ptep)
+{
+    pt_element pte = ptep.read();
+    bool dirty = pte.dirty();
+    if (dirty) {
+        pt_element clear = pte;
+        clear.set_dirty(false);
+        ptep.compare_exchange(pte, clear);
+    }
+    return dirty;
 }
 
 void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
@@ -1585,58 +1561,18 @@ void file_vma::split(uintptr_t edge)
     vma_list.insert(*n);
 }
 
-class dirty_page_sync {
-    friend dirty_cleaner<dirty_page_sync, account_opt::yes>;
-    friend file_vma;
-private:
-    file *_file;
-    f_offset _offset;
-    uint64_t _size;
-    struct elm {
-        iovec iov;
-        off_t offset;
-    };
-    std::stack<elm> queue;
-    dirty_page_sync(file *file, f_offset offset, uint64_t size) : _file(file), _offset(offset), _size(size) {}
-    void operator()(phys addr, uintptr_t offset, size_t size) {
-        off_t off = _offset + offset;
-        size_t len = std::min(size, _size - off);
-        queue.push(elm{{phys_to_virt(addr), len}, off});
-    }
-    void operator()(phys addr, uintptr_t offset) {
-        (*this)(addr, offset, page_size);
-    }
-    void finalize() {
-        while(!queue.empty()) {
-            elm w = queue.top();
-            uio data{&w.iov, 1, w.offset, ssize_t(w.iov.iov_len), UIO_WRITE};
-            int error = _file->write(&data, FOF_OFFSET);
-            if (error) {
-                throw make_error(error);
-            }
-            queue.pop();
-        }
-    }
-};
-
 error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!has_flags(mmap_shared))
         return make_error(ENOMEM);
-    start = std::max(start, _range.start());
-    end = std::min(end, _range.end());
-    uintptr_t size = end - start;
 
-    dirty_page_sync sync(_file.get(), _offset, ::size(_file));
-    error err = no_error();
     try {
-        if (operate_range(dirty_cleaner<dirty_page_sync, account_opt::yes>(sync), (void*)start, size) != 0) {
-            err = make_error(sys_fsync(_file.get()));
-        }
-    } catch (error e) {
-        err = e;
+        _file->sync(std::max(start, _range.start()), std::min(end, _range.end()));
+    } catch (error& err) {
+        return err;
     }
-    return err;
+
+    return make_error(sys_fsync(_file.get()));
 }
 
 int file_vma::validate_perm(unsigned perm)

@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <deque>
+#include <stack>
 #include <boost/variant.hpp>
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>
@@ -121,39 +122,36 @@ protected:
             return set->size();
         }
     };
-    class ptep_flush : public ptes_visitor<int> {
+
+    template<typename Map, typename Reduce, typename Ret>
+    class map_reduce : public boost::static_visitor<Ret> {
+    private:
+        Map _mapper;
+        Reduce _reducer;
+        Ret _initial;
     public:
-        ptep_flush(ptep_list& ptes) : ptes_visitor(ptes) {}
-        int operator()(std::nullptr_t &v) {
-            // nothing to flush
-            return 0;
+        map_reduce(Map mapper, Reduce reducer, Ret initial) : _mapper(mapper), _reducer(reducer), _initial(initial) {}
+        Ret operator()(std::nullptr_t &v) {
+            return _initial;
         }
-        int operator()(mmu::hw_ptep& ptep) {
-            clear_pte(ptep);
-            return 1;
+        Ret operator()(mmu::hw_ptep& ptep) {
+            return _reducer(_initial, _mapper(ptep));
         }
-        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
-            mmu::clear_ptes(set->begin(), set->end());
-            return set->size();
-        }
-    };
-    class ptep_accessed : public ptes_visitor<int> {
-    public:
-        ptep_accessed(ptep_list& ptes) : ptes_visitor(ptes) {}
-        int operator()(std::nullptr_t &v) {
-            return 0;
-        }
-        int operator()(mmu::hw_ptep& ptep) {
-            return mmu::clear_accessed(ptep);
-        }
-        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
-            int cleared = 0;
+        Ret operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+            Ret acc = _initial;
             for (auto&& i: set) {
-                cleared += mmu::clear_accessed(i);
+              acc = _reducer(acc, _mapper(i));
             }
-            return cleared;
+            return acc;
         }
     };
+
+    template <typename Map, typename Reduce = std::plus<int>, typename Ret = int>
+    Ret for_each_pte(Map mapper, Reduce reducer = std::plus<int>(), Ret initial = 0)
+    {
+        map_reduce<Map, Reduce, Ret> mr(mapper, reducer, initial);
+        return boost::apply_visitor(mr, _ptes);
+    }
 
 public:
     cached_page(hashkey key, void* page) : _key(key), _page(page) {
@@ -173,12 +171,13 @@ public:
         return _page;
     }
     int flush() {
-        ptep_flush flush(_ptes);
-        return boost::apply_visitor(flush, _ptes);
+        return for_each_pte([] (mmu::hw_ptep pte) { mmu::clear_pte(pte); return 1;});
     }
     int clear_accessed() {
-        ptep_accessed accessed(_ptes);
-        return boost::apply_visitor(accessed, _ptes);
+        return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_accessed(pte); });
+    }
+    int clear_dirty() {
+        return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_dirty(pte); });
     }
     const hashkey& key() {
         return _key;
@@ -188,6 +187,7 @@ public:
 class cached_page_write : public cached_page {
 private:
     struct vnode* _vp;
+    bool _dirty = false;
 public:
     cached_page_write(hashkey key, vfs_file* fp) : cached_page(key, memory::alloc_page()) {
         _vp = fp->f_dentry->d_vnode;
@@ -195,7 +195,9 @@ public:
     }
     ~cached_page_write() {
         if (_page) {
-            writeback();
+            if (_dirty) {
+                writeback();
+            }
             memory::free_page(_page);
             vrele(_vp);
         }
@@ -205,6 +207,8 @@ public:
         int error;
         struct iovec iov {_page, mmu::page_size};
         struct uio uio {&iov, 1, _key.offset, mmu::page_size, UIO_WRITE};
+
+        _dirty = false;
 
         vn_lock(_vp);
         error = VOP_WRITE(_vp, &uio, 0);
@@ -218,6 +222,12 @@ public:
         _page = nullptr;
         vrele(_vp);
         return p;
+    }
+    void mark_dirty() {
+        _dirty |= true;
+    }
+    bool flush_check_dirty() {
+        return for_each_pte([] (mmu::hw_ptep pte) { return mmu::clear_pte(pte).dirty(); }, std::logical_or<bool>(), false);
     }
 };
 
@@ -395,7 +405,9 @@ static void insert(cached_page_write* cp) {
             cached_page_write *p = write_lru.back();
             write_lru.pop_back();
             write_cache.erase(p->key());
-            p->flush();
+            if (p->flush_check_dirty()) {
+                p->mark_dirty();
+            }
             tofree[i] = p;
         }
         mmu::flush_tlb_all();
@@ -463,11 +475,17 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
     hashkey key {st.st_dev, st.st_ino, offset};
     cached_page_write* wcp = find_in_cache(write_cache, key);
 
+    auto old = clear_pte(ptep);
+
     // page is either in ARC cache or write cache or zero page or private page
 
     if (wcp && wcp->addr() == addr) {
         // page is in write cache
         wcp->unmap(ptep);
+        if (old.dirty()) {
+            // unmapped pte was dirty, mark page dirty for writeback
+            wcp->mark_dirty();
+        }
         return false;
     }
 
@@ -482,6 +500,31 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
 
     // if a private page, caller will free it
     return addr != zero_page;
+}
+
+void sync(vfs_file* fp, off_t start, off_t end)
+{
+    static std::stack<cached_page_write*> dirty; // protected by vma_list_mutex
+    struct stat st;
+    fp->stat(&st);
+    hashkey key {st.st_dev, st.st_ino, 0};
+    for (key.offset = start; key.offset < end; key.offset += mmu::page_size) {
+        cached_page_write* cp = find_in_cache(write_cache, key);
+        if (cp && cp->clear_dirty()) {
+            dirty.push(cp);
+        }
+    }
+
+    mmu::flush_tlb_all();
+
+    while(!dirty.empty()) {
+        auto cp = dirty.top();
+        auto err = cp->writeback();
+        if (err) {
+            throw make_error(err);
+        }
+        dirty.pop();
+    }
 }
 
 TRACEPOINT(trace_access_scanner, "scanned=%u, cleared=%u, %%cpu=%g", unsigned, unsigned, double);
