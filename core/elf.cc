@@ -496,7 +496,7 @@ void object::relocate_rela()
             break;
         case R_X86_64_DPTMOD64:
             if (sym == STN_UNDEF) {
-                *static_cast<u64*>(addr) = 0;
+                *static_cast<u64*>(addr) = _module_index;
             } else {
                 *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
             }
