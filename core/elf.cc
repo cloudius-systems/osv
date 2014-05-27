@@ -1311,7 +1311,11 @@ extern "C" { void* elf_resolve_pltgot(unsigned long index, elf::object* obj); }
 
 void* elf_resolve_pltgot(unsigned long index, elf::object* obj)
 {
-    return obj->resolve_pltgot(index);
+    // symbol resolution of a variable can happen with a dirty fpu
+    sched::fpu_lock fpu;
+    WITH_LOCK(fpu) {
+        return obj->resolve_pltgot(index);
+    }
 }
 
 struct module_and_offset {
