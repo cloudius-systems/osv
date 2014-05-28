@@ -19,6 +19,7 @@
 #include <grp.h>
 
 #include <osv/debug.hh>
+#include "libc.hh"
 
 uid_t getuid()
 {
@@ -49,6 +50,38 @@ static struct passwd single_user = {
 struct passwd *getpwnam(const char *name)
 {
    return &single_user;
+}
+
+int getpwuid_r(uid_t uid, struct passwd *pwd,
+               char *buf, size_t buflen, struct passwd **result)
+{
+    auto alloc = [&](int n) { auto tmp = buf; buf += n; return tmp; };
+    auto save = [&](const char* s) { return strcpy(alloc(strlen(s) + 1), s); };
+
+    pwd->pw_name = save("osv");
+    pwd->pw_passwd = save("*");
+    pwd->pw_uid = 0;
+    pwd->pw_gid = 0;
+    pwd->pw_gecos = save("");
+    pwd->pw_dir = save("");
+    pwd->pw_shell = save("");
+    *result = pwd;
+    return 0;
+}
+
+struct passwd* getpwuid(uid_t uid)
+{
+    static struct passwd ret;
+    static char buf[300];
+    struct passwd *p;
+    int e;
+
+    e = getpwuid_r(uid, &ret, buf, sizeof(buf), &p);
+    if (e == 0) {
+        return &ret;
+    } else {
+        return libc_error_ptr<passwd>(e);
+    }
 }
 
 int setuid(uid_t uid)
