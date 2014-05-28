@@ -113,7 +113,6 @@ export AWS_ACCESS_KEY=$AWS_ACCESS_KEY_ID
 export AWS_SECRET_KEY=$AWS_SECRET_ACCESS_KEY
 
 export AWS_DEFAULT_REGION=us-east-1
-OSV_INITIAL_ZONE="${AWS_DEFAULT_REGION}a"
 
 if test x"$SMALL_INSTANCE" = x""; then
 
@@ -160,7 +159,7 @@ import_osv_volume() {
  $EC2_HOME/bin/ec2-import-volume $OSV_VOLUME \
                                  -f raw \
                                  -b $OSV_BUCKET \
-                                 -z $OSV_INITIAL_ZONE \
+                                 -z `get_availability_zone` \
                                  $EC2_CREDENTIALS | tee /dev/tty | ec2_response_value IMPORTVOLUME TaskId
 }
 
@@ -193,7 +192,7 @@ wait_import_completion() {
 }
 
 launch_template_instance() {
- $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone $OSV_INITIAL_ZONE --instance-type $TEMPLATE_INSTANCE_TYPE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
+ $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` --instance-type $TEMPLATE_INSTANCE_TYPE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
 }
 
 get_instance_state() {
@@ -337,6 +336,15 @@ list_regions() {
      for region in $REGIONS_LIST; do echo $region; done
  fi
 
+}
+
+get_availability_zone() {
+
+ if test x"$OSV_AVAILABILITY_ZONE" = x""; then
+     OSV_AVAILABILITY_ZONE=`$EC2_HOME/bin/ec2-describe-availability-zones | ec2_response_value AVAILABILITYZONE AVAILABILITYZONE | head -1`
+ fi
+
+ echo $OSV_AVAILABILITY_ZONE
 }
 
 list_additional_regions() {
