@@ -11,8 +11,6 @@
 
 rwlock::rwlock()
     : _readers(0),
-      _read_waiters(0),
-      _write_waiters(0),
       _wowner(nullptr),
       _wrecurse(0)
 { }
@@ -21,8 +19,8 @@ rwlock::~rwlock()
 {
     assert(_wowner == nullptr);
     assert(_readers == 0);
-    assert(_read_waiters == 0);
-    assert(_write_waiters == 0);
+    assert(_read_waiters.empty());
+    assert(_write_waiters.empty());
 }
 
 void rwlock::rlock()
@@ -46,22 +44,15 @@ bool rwlock::try_rlock()
 
 void rwlock::runlock()
 {
-    bool need_wake = false;
-
     WITH_LOCK(_mtx) {
         assert(_wowner == nullptr);
         assert(_readers > 0);
 
         // If we are the last reader and we have a write waiter,
         // then wake up one writer
-        if ((--_readers == 0) && (_write_waiters)) {
-            need_wake = true;
+        if (--_readers == 0) {
+            _write_waiters.wake_one(_mtx);
         }
-    }
-
-    // wake() only after releasing the mutex
-    if (need_wake) {
-        _cond_writers.wake_one();
     }
 }
 
@@ -70,7 +61,7 @@ bool rwlock::try_upgrade()
     std::lock_guard<mutex> guard(_mtx);
 
     // if we don't have any write waiters and we are the only reader
-    if ((_readers == 1) && (!_write_waiters)) {
+    if ((_readers == 1) && (_write_waiters.empty())) {
         assert(_wowner == nullptr);
         _readers = 0;
         _wowner = sched::thread::current();
@@ -119,13 +110,12 @@ void rwlock::wunlock()
         } else {
             _wowner = nullptr;
         }
-    }
 
-    // wake() only after releasing the mutex
-    if (_write_waiters) {
-        _cond_writers.wake_one();
-    } else if (_read_waiters) {
-        _cond_readers.wake_all();
+        if (!_write_waiters.empty()) {
+            _write_waiters.wake_one(_mtx);
+        } else {
+            _read_waiters.wake_all(_mtx);
+        }
     }
 }
 
@@ -154,7 +144,7 @@ bool rwlock::wowned()
 
 bool rwlock::read_lockable()
 {
-    return ((!_wowner) && (!_write_waiters));
+    return ((!_wowner) && (_write_waiters.empty()));
 }
 
 bool rwlock::write_lockable()
@@ -170,9 +160,7 @@ void rwlock::writer_wait_lockable()
             return;
         }
 
-        _write_waiters++;
-        _cond_writers.wait(&_mtx, nullptr);
-        _write_waiters--;
+        _write_waiters.wait(_mtx);
     }
 }
 
@@ -183,9 +171,7 @@ void rwlock::reader_wait_lockable()
             return;
         }
 
-        _read_waiters++;
-        _cond_readers.wait(&_mtx, nullptr);
-        _read_waiters--;
+        _read_waiters.wait(_mtx);
     }
 }
 

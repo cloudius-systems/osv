@@ -11,6 +11,7 @@
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <sys/cdefs.h>
+#include <osv/waitqueue.hh>
 
 #define RWLOCK_INITIALIZER {}
 
@@ -89,12 +90,9 @@ private:
 #endif // __cplusplus
 
     mutex_t _mtx;
-    condvar_t _cond_readers;
-    condvar_t _cond_writers;
-
     unsigned _readers;
-    unsigned _read_waiters;
-    unsigned _write_waiters;
+    waitqueue _read_waiters;
+    waitqueue _write_waiters;
 
     void* _wowner;
     unsigned _wrecurse;

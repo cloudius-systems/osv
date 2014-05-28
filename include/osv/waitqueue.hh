@@ -11,6 +11,9 @@
 // A waitqueue is similar to a condition variable, but relies on the
 // user supplied mutex for internal locking.
 
+#ifdef __cplusplus
+
+
 #include <sys/cdefs.h>
 #include <osv/sched.hh>
 #include <osv/wait_record.hh>
@@ -72,6 +75,13 @@ public:
      * wake_all() must be called with the mutex held.
      */
     void wake_all(mutex& mtx);
+    /**
+     * Query whether any threads are waiting on the waitqueue.
+     *
+     * Query whether or not any threads are waiting on the waitqueue.
+     * The mutex associated with the waitqueue must be held.
+     */
+    bool empty() const { return !_waiters_fifo.oldest; }
 private:
     void arm(mutex& mtx);
     bool poll() const;
@@ -96,5 +106,16 @@ private:
 };
 
 }
+
+#else
+
+struct waitqueue {
+    struct wait_record *oldest;
+    struct wait_record *newest;
+};
+
+typedef struct waitqueue waitqueue;
+
+#endif
 
 #endif /* WAITQUEUE_HH_ */
