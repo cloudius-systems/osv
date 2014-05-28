@@ -13,6 +13,9 @@ PARAM_IMAGE="--override-image"
 PARAM_VERSION="--override-version"
 PARAM_REGIONS="--override-regions"
 PARAM_SMALL="--small-instances"
+PARAM_MODULES="--modules-list"
+
+MODULES_LIST=default
 
 print_help() {
  cat <<HLPEND
@@ -50,6 +53,7 @@ This script receives following command line arguments:
     $PARAM_INSTANCE - do not rebuild, upload existing image and stop afer instance creation - useful for development phase
     $PARAM_REGIONS <regions list> - replicate to specified regions only
     $PARAM_SMALL - create AMI suitable for small and micro instances
+    $PARAM_MODULES <modules list> - list of modules to build (incompatible with $PARAM_IMAGE and $PARAM_INSTANCE)
 
 HLPEND
 }
@@ -86,6 +90,10 @@ do
     "$PARAM_SMALL")
       SMALL_INSTANCE=1
       shift
+      ;;
+    "$PARAM_MODULES")
+      MODULES_LIST=$2
+      shift 2
       ;;
     "$PARAM_HELP")
       print_help
@@ -435,12 +443,12 @@ BUCKET_CREATED=0
 
 while true; do
 
-    echo_progress Releasing version $OSV_VER
-    amend_rstatus Release status for version $OSV_VER
+    echo_progress Releasing version $OSV_VER \(modules $MODULES_LIST\)
+    amend_rstatus Release status for version $OSV_VER \(modules $MODULES_LIST\)
 
     if test x"$DONT_BUILD" != x"1"; then
         echo_progress Building from the scratch
-        make clean && git submodule update && make external && make -j `nproc` img_format=raw
+        make clean && git submodule update && make external && make -j `nproc` img_format=raw image=$MODULES_LIST
 
         if test x"$?" != x"0"; then
             handle_error Build failed.
