@@ -58,13 +58,13 @@ int getpwuid_r(uid_t uid, struct passwd *pwd,
     auto alloc = [&](int n) { auto tmp = buf; buf += n; return tmp; };
     auto save = [&](const char* s) { return strcpy(alloc(strlen(s) + 1), s); };
 
-    pwd->pw_name = save("osv");
-    pwd->pw_passwd = save("*");
+    pwd->pw_name = save(username);
+    pwd->pw_passwd = save(password);
     pwd->pw_uid = 0;
     pwd->pw_gid = 0;
-    pwd->pw_gecos = save("");
-    pwd->pw_dir = save("");
-    pwd->pw_shell = save("");
+    pwd->pw_gecos = save(gecos);
+    pwd->pw_dir = save(homedir);
+    pwd->pw_shell = save(shell);
     *result = pwd;
     return 0;
 }
