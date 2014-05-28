@@ -177,25 +177,45 @@ drele(struct dentry *dp)
     free(dp);
 }
 
-/*
- * Convert a pathname into a pointer to a dentry
- *
- * @path: full path name.
- * @dpp:  dentry to be returned.
- */
+static inline size_t read_link(struct vnode *vp, char *buf, size_t size)
+{
+    struct iovec iov = {
+        .iov_base = buf,
+        .iov_len  = size,
+    };
+
+    struct uio uio = {
+        .uio_iov	= &iov,
+        .uio_iovcnt	= 1,
+        .uio_offset	= 0,
+        .uio_resid	= size,
+        .uio_rw		= UIO_READ,
+    };
+
+    return (VOP_READLINK(vp, &uio));
+}
+
 int
-namei(char *path, struct dentry **dpp)
+__namei(char *path, struct dentry **dpp, int flag)
 {
     char *p;
     char node[PATH_MAX];
     char name[PATH_MAX];
+    char fp[PATH_MAX];
     struct mount *mp;
     struct dentry *dp, *ddp;
     struct vnode *dvp, *vp;
     int error, i;
+    int follow;
 
     DPRINTF(VFSDB_VNODE, ("namei: path=%s\n", path));
 
+    follow = 0;
+    if ((flag & AT_SYMLINK_FOLLOW) != 0) {
+        follow = 1;
+    }
+
+start:
     /*
      * Convert a full path name to its mount point and
      * the local node in the file system.
@@ -270,9 +290,45 @@ namei(char *path, struct dentry **dpp)
                 return ENOMEM;
             }
         }
+
         vn_unlock(dvp);
         drele(ddp);
         ddp = dp;
+
+        if (dp->d_vnode->v_type == VLNK && follow == 1) {
+            char t[PATH_MAX];
+            char l[PATH_MAX];
+
+            memset(l, 0, sizeof(l));
+            error = read_link(dp->d_vnode, l, sizeof(l));
+            if (error != 0) {
+                drele(dp);
+                return (error);
+            }
+
+            if (l[0] == '/') {
+                /*
+                 * p might be pointing to fp already, use another
+                 * temporary buffer t
+                 */
+                strlcpy(t, l, sizeof(t));
+                strlcat(t, p, sizeof(t));
+                strlcpy(fp, t, sizeof(fp));
+            } else {
+                strlcpy(t, node, strlen(node) - strlen(name));
+                path_conv(t, l, fp);
+            }
+
+            drele(dp);
+            path	= fp;
+            dp		= NULL;
+            ddp		= NULL;
+            vp		= NULL;
+            dvp		= NULL;
+            name[0]	= 0;
+            node[0]	= 0;
+            goto start;
+        }
 
         if (*p == '/' && ddp->d_vnode->v_type != VDIR) {
             drele(ddp);
@@ -291,6 +347,24 @@ namei(char *path, struct dentry **dpp)
 
     *dpp = dp;
     return 0;
+}
+
+/*
+ * Convert a pathname into a pointer to a dentry
+ *
+ * @path: full path name.
+ * @dpp:  dentry to be returned.
+ */
+int
+namei(char *path, struct dentry **dpp)
+{
+    return (__namei(path, dpp, AT_SYMLINK_FOLLOW));
+}
+
+
+int namei_nofollow(char *path, struct dentry **dpp)
+{
+    return (__namei(path, dpp, AT_SYMLINK_NOFOLLOW));
 }
 
 /*

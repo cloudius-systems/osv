@@ -627,7 +627,7 @@ sys_rename(char *src, char *dest)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
 
-	error = namei(src, &dp1);
+	error = namei_nofollow(src, &dp1);
 	if (error)
 		return error;
 
@@ -888,7 +888,7 @@ sys_unlink(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
 
-	if ((error = namei(path, &dp)) != 0)
+	if ((error = namei_nofollow(path, &dp)) != 0)
 		return error;
 
 	vp = dp->d_vnode;
@@ -959,6 +959,21 @@ sys_stat(char *path, struct stat *st)
 	DPRINTF(VFSDB_SYSCALL, ("sys_stat: path=%s\n", path));
 
 	error = namei(path, &dp);
+	if (error)
+		return error;
+	error = vn_stat(dp->d_vnode, st);
+	drele(dp);
+	return error;
+}
+
+int sys_lstat(char *path, struct stat *st)
+{
+	struct dentry *dp;
+	int error;
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_lstat: path=%s\n", path));
+
+	error = namei_nofollow(path, &dp);
 	if (error)
 		return error;
 	error = vn_stat(dp->d_vnode, st);
@@ -1067,7 +1082,7 @@ sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size)
 	struct uio	uio;
 
 	*size = 0;
-	error = namei(path, &dp);
+	error = namei_nofollow(path, &dp);
 	if (error != 0) {
 		return (error);
 	}

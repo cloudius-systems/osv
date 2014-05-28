@@ -16,8 +16,6 @@
 #include <limits.h>
 #include <stdlib.h>
 
-//#include <osv/debug.hh>
-
 #define debug printf
 
 #define TESTDIR	"/tmp"
@@ -38,13 +36,13 @@ static void report(bool ok, const char* msg)
 	exit(0);
 }
 
-void fill_buf(char *b, size_t size, unsigned int no)
+static void fill_buf(char *b, unsigned int no)
 {
 	memset(b, 'A', no - 1);
 	b[no - 1] = 0;
 }
 
-bool search_dir(const char *dir, const char *name)
+static bool search_dir(const char *dir, const char *name)
 {
 	DIR		*d = opendir(dir);
 	struct dirent	*e;
@@ -67,6 +65,10 @@ int main(int argc, char **argv)
 	int		error;
 	time_t		t1;
 	char		path[PATH_MAX];
+	int		fd;
+	int		fd1;
+	char		b1[4097];
+	char		b2[4097];
 
 	debug("Testing symlink() and related functions.\n");
 
@@ -79,7 +81,8 @@ int main(int argc, char **argv)
 	 *	access to symlink
 	 *	file type
 	 */
-	report(creat(N1, 0777) >= 0, "creat");
+	fd = creat(N1, 0777);
+	report(fd >= 0, "creat");
 	report(search_dir(TESTDIR, N1) == true, "search dir");
 
 	report(lstat(N1, &buf) == 0, "lstat");
@@ -101,6 +104,7 @@ int main(int argc, char **argv)
 	report(lstat(N2, &buf) == 0, "lstat");
 	report(S_ISLNK(buf.st_mode) == 1, "file mode");
 
+	close(fd);
 	report(unlink(N1) == 0, "unlink");
 	report(lstat(N2, &buf) == 0, "lstat");
 	report(S_ISLNK(buf.st_mode) == 1, "file mode");
@@ -114,8 +118,72 @@ int main(int argc, char **argv)
 	unlink(N2);
 
 	/*
-	 * creating a symlink inside direct must change time
+	 * IO Tests 1: write(file), read(symlink), truncate(symlink)
 	 */
+	fd = creat(N1, 0777);
+	report(fd >= 0, "creat");
+	report(symlink(N1, N2) == 0, "symlink");
+
+	fd1 = open(N2, O_RDONLY);
+	report(fd1 >= 0, "symlink open");
+
+	fill_buf(b1, sizeof(b1));
+
+	rc = write(fd, b1, sizeof(b1));
+	report(rc == sizeof(b1), "file write");
+	fsync(fd);
+
+	rc = read(fd1, b2, sizeof(b2));
+	report(rc == sizeof(b2), "symlink read");
+
+	report(memcmp(b1, b2, sizeof(b1)) == 0, "data verification");
+
+#ifdef NOT_YET
+	rc = ftruncate(fd1, 0);
+	report(rc != 0 && errno == EINVAL, "symlink fd truncate");
+#endif
+	report(ftruncate(fd, 0) == 0, "file fd truncate");
+	report(fstat(fd, &buf) == 0, "fstat file");
+	report(buf.st_size == 0, "file size after truncate");
+
+	close(fd);
+	close(fd1);
+
+	/*
+	 * IO Tests 2: write(symlink), read(file)
+	 */
+	fd = open(N1, O_RDONLY);
+	report(fd >= 0, "file open");
+
+	fd1 = open(N2, O_WRONLY);
+	report(fd1 >= 0, "symlink open");
+
+	fill_buf(b1, sizeof(b1));
+
+	rc = write(fd1, b1, sizeof(b1));
+	report(rc == sizeof(b1), "file write");
+	fsync(fd1);
+	close(fd1);
+
+	rc = read(fd, b2, sizeof(b2));
+	report(rc == sizeof(b2), "symlink read");
+
+	report(memcmp(b1, b2, sizeof(b1)) == 0, "data verification");
+
+	/* truncate using symlink path */
+	report(truncate(N2, 0) == 0, "symlink truncate");
+	report(fstat(fd, &buf) == 0, "fstat file");
+	report(buf.st_size == 0, "file size after truncate");
+
+	close(fd);
+	unlink(N2);
+	unlink(N1);
+
+	/*
+	 * creating a symlink inside directory must change time
+	 */
+	fd = creat(N1, 0777);
+	report(fd >= 0, "creat");
 	report(mkdir(D1, 0777) == 0, "mkdir");
 	report(stat(D1, &buf) == 0, "stat");
 	t1 = buf.st_ctime;
@@ -128,7 +196,9 @@ int main(int argc, char **argv)
 	report(t1 < buf.st_ctime, "ctime");
 	report(t1 < buf.st_mtime, "mtime");
 
+	close(fd);
 	unlink(path);
+	unlink(N1);
 	rmdir(D1);
 
 	/* ENOTDIR test */
@@ -138,23 +208,20 @@ int main(int argc, char **argv)
 	report(error == ENOTDIR || error == ENOENT, "ENOTDIR or ENOENT expected");
 
 	/* name too long */
-	report(creat(N1, 0777) >= 0, "creat");
-	fill_buf(path, sizeof(path), 255);
+	fd = creat(N1, 0777);
+	report(fd >= 0, "creat");
+
+	fill_buf(path, 255);
 	report(symlink(N1, path) == 0, "symlink");
 	unlink(path);
 
-	fill_buf(path, sizeof(path), 257);
+	fill_buf(path, 257);
 	rc      = symlink(N1, path);
 	error   = errno;
 	report(rc < 0, "symlink");
 	report(error == ENAMETOOLONG, "ENAMETOOLONG expected 1");
-	unlink(N1);
 
-	fill_buf(path, sizeof(path), 1024);
-	report(symlink(path, N1) == 0, "symlink");
-	unlink(N1);
-
-	fill_buf(path, sizeof(path), 4097);
+	fill_buf(path, 4097);
 	rc      = symlink(path, N1);
 	error   = errno;
 	report(rc < 0, "symlink");
@@ -164,7 +231,8 @@ int main(int argc, char **argv)
 	error   = errno;
 	report(rc < 0, "symlink");
 	report(error == ENAMETOOLONG, "ENAMETOOLONG expected 3");
-
+	close(fd);
+	unlink(N1);
 
 	debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 	return (fails == 0 ? 0 : 1);

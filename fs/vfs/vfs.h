@@ -113,6 +113,7 @@ int	 sys_unlink(char *path);
 int	 sys_symlink(const char *oldpath, const char *newpath);
 int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);
+int	 sys_lstat(char *path, struct stat *st);
 int	 sys_statfs(char *path, struct statfs *buf);
 int	 sys_truncate(char *path, off_t length);
 ssize_t	 sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size);
@@ -127,11 +128,13 @@ int	 sys_sync(void);
 
 int	 task_alloc(struct task **pt);
 int	 task_conv(struct task *t, const char *path, int mode, char *full);
+int	 path_conv(char *wd, const char *cpath, char *full);
 
 //int	 sec_file_permission(task_t task, char *path, int mode);
 int	 sec_vnode_permission(char *path);
 
 int	 namei(char *path, struct dentry **dpp);
+int	 namei_nofollow(char *path, struct dentry **dpp);
 int	 lookup(char *path, struct dentry **dpp, char **name);
 void	 vnode_init(void);
 void	 lookup_init(void);
