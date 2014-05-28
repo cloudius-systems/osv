@@ -118,7 +118,9 @@ def mem_analys(args):
 
     with get_trace_reader(args) as reader:
         memory_analyzer.process_records(mallocs, reader.get_traces())
-        memory_analyzer.show_results(mallocs, node_filters)
+        memory_analyzer.show_results(mallocs,
+            node_filters=node_filters,
+            sorter=args.sort)
 
 def add_time_slicing_options(parser):
     group = parser.add_argument_group('time slicing')
@@ -567,6 +569,9 @@ if __name__ == "__main__":
     add_trace_source_options(cmd_memory_analyzer)
     cmd_memory_analyzer.add_argument("--min-count", action='store', type=int,
         help="show only allocations at least as frequent as the specified threshold")
+    cmd_memory_analyzer.add_argument("-s", "--sort",
+        choices=memory_analyzer.sorters, default='size',
+           help='sort allocations by given criteria')
     cmd_memory_analyzer.set_defaults(func=mem_analys, paginate=True)
 
     args = parser.parse_args()

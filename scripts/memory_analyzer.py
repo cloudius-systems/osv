@@ -129,6 +129,12 @@ class TreeKey(object):
         self.unfreed_bytes = 0
         self.lost_bytes = 0
 
+    @property
+    def lost_percentage(self):
+        if self.unfreed_bytes > 0:
+            return self.lost_bytes * 100 / self.unfreed_bytes
+        return 0
+
     def __str__(self):
         if not self.desc == None:
             name = "%s %s" % (self.this, self.desc)
@@ -142,7 +148,7 @@ class TreeKey(object):
             if self.lost_bytes > 0:
                 name += ", unused: %d %d%%" % (
                     self.lost_bytes,
-                    self.lost_bytes * 100 / self.unfreed_bytes)
+                    self.lost_percentage)
             name += ")"
         return name
 
@@ -158,7 +164,15 @@ class TreeKey(object):
 def filter_min_count(min_count):
     return lambda node: node.key.alloc >= min_count
 
-def show_results(mallocs, node_filters):
+sorters = {
+    'count': lambda node: -node.key.alloc,
+    'size': lambda node: node.key.this,
+    'unfreed_count': lambda node: -node.key.unfreed_count,
+    'unfreed_bytes': lambda node: -node.key.unfreed_bytes,
+    'unused': lambda node: -node.key.lost_percentage,
+}
+
+def show_results(mallocs, node_filters, sorter):
     root = tree.TreeNode(TreeKey('All', None))
 
     lost = 0
@@ -197,4 +211,6 @@ def show_results(mallocs, node_filters):
                 return False
         return True
 
-    tree.print_tree(root, formatter, node_filter=node_filter)
+    tree.print_tree(root, formatter,
+        order_by=sorters[sorter],
+        node_filter=node_filter)
