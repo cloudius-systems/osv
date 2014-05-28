@@ -13,6 +13,7 @@
 #include <osv/prio.hh>
 #include "memcpy_decode.hh"
 #include <assert.h>
+#include <x86intrin.h>
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
@@ -99,63 +100,131 @@ repmovsb(void *__restrict &dest, const void *__restrict &src, size_t &n)
             : "+D"(dest), "+S"(src), "+c"(n) : : "memory");
 }
 
-static inline void small_memcpy(void *dest, const void *src, size_t n)
+template <size_t N>
+__attribute__((optimize("omit-frame-pointer")))
+void* do_small_memcpy(void *dest, const void *src)
 {
-    size_t qty = n / 8;
-    unsigned long *to_8 = (unsigned long *)dest;
-    unsigned long *from_8 = (unsigned long *)src;
+    struct [[gnu::packed]] data {
+        char x[N];
+    };
+    *static_cast<data*>(dest) = *static_cast<const data*>(src);
+    return dest;
+}
 
-    while (qty--) {
-        *to_8++ = *from_8++;
-    }
+static void* (* const small_memcpy_table[16])(void*, const void*) = {
+    do_small_memcpy<0>,
+    do_small_memcpy<1>,
+    do_small_memcpy<2>,
+    do_small_memcpy<3>,
+    do_small_memcpy<4>,
+    do_small_memcpy<5>,
+    do_small_memcpy<6>,
+    do_small_memcpy<7>,
+    do_small_memcpy<8>,
+    do_small_memcpy<9>,
+    do_small_memcpy<10>,
+    do_small_memcpy<11>,
+    do_small_memcpy<12>,
+    do_small_memcpy<13>,
+    do_small_memcpy<14>,
+    do_small_memcpy<15>,
+};
 
-    qty = n % 8;
-    unsigned int *to_4 = (unsigned int *)to_8;
-    unsigned int *from_4 = (unsigned int *)from_8;
-    if (qty / 4) {
-        *to_4++ = *from_4++;
+static inline void* small_memcpy(void *dest, const void *src, size_t n)
+{
+    return small_memcpy_table[n](dest, src);
+}
+
+template <unsigned N>
+struct sse_register_file;
+
+template <>
+struct sse_register_file<0> {
+    void load(const __m128i* p) {}
+    void store(__m128i* p) {}
+};
+
+template <unsigned N>
+struct sse_register_file : sse_register_file<N-1> {
+    __m128i reg;
+    void load(const __m128i* p) {
+        sse_register_file<N-1>::load(p);
+        reg = _mm_loadu_si128(&p[N-1]);
     }
-    qty = qty % 4;
-    unsigned short *to_2 = (unsigned short *)to_4;
-    unsigned short *from_2 = (unsigned short *)from_4;
-    if (qty / 2) {
-        *to_2++ = *from_2++;
+    void store(__m128i* p) {
+        sse_register_file<N-1>::store(p);
+        _mm_storeu_si128(&p[N-1], reg);
     }
-    unsigned char *to = (unsigned char *)to_2;
-    unsigned char *from = (unsigned char *)from_2;
-    if (qty % 2) {
-        *to++ = *from++;
-    }
+};
+
+template <unsigned N>
+__attribute__((optimize("unroll-loops"), optimize("omit-frame-pointer")))
+void do_sse_memcpy(void* dest, const void* src)
+{
+    auto sse_dest = static_cast<__m128i*>(dest);
+    auto sse_src = static_cast<const __m128i*>(src);
+    sse_register_file<N> regs;
+    regs.load(sse_src);
+    regs.store(sse_dest);
+}
+
+static void (* const sse_memcpy_table[16])(void*, const void*) = {
+    do_sse_memcpy<0>,
+    do_sse_memcpy<1>,
+    do_sse_memcpy<2>,
+    do_sse_memcpy<3>,
+    do_sse_memcpy<4>,
+    do_sse_memcpy<5>,
+    do_sse_memcpy<6>,
+    do_sse_memcpy<7>,
+    do_sse_memcpy<8>,
+    do_sse_memcpy<9>,
+    do_sse_memcpy<10>,
+    do_sse_memcpy<11>,
+    do_sse_memcpy<12>,
+    do_sse_memcpy<13>,
+    do_sse_memcpy<14>,
+    do_sse_memcpy<15>,
+};
+
+static inline void* sse_memcpy(void* dest, const void* src, size_t n)
+{
+    sse_memcpy_table[n/16](dest, src);
+    small_memcpy(dest + (n & ~15), src + (n & ~15), n & 15);
+    return dest;
 }
 
 extern "C"
 void *memcpy_repmov_old(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    auto ret = dest;
-    if (n <= 256) {
-        small_memcpy(dest, src, n);
+    if (n <= 15) {
+        return small_memcpy(dest, src, n);
+    } else if (n < 256) {
+        return sse_memcpy(dest, src, n);
     } else {
+        auto ret = dest;
         auto nw = n / 8;
         auto nb = n & 7;
 
         repmovsq(dest, src, nw);
         repmovsb(dest, src, nb);
+
+        return ret;
     }
-    return ret;
 }
 
 extern "C"
 void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    auto ret = dest;
-
-    if (n <= 256) {
-        small_memcpy(dest, src, n);
+    if (n <= 15) {
+        return small_memcpy(dest, src, n);
+    } else if (n < 256) {
+        return sse_memcpy(dest, src, n);
     } else {
+        auto ret = dest;
         repmovsb(dest, src, n);
+        return ret;
     }
-
-    return ret;
 }
 
 extern "C"
