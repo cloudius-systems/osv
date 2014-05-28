@@ -1,0 +1,18 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "apis": [
+        {
+            "path": "/../listings/os.json",
+            "description": "OS core API"
+        },
+        {
+            "path": "/../listings/jvm.json",
+            "description": "JVM API"
+        },
+        {
+            "path": "/../listings/file.json",
+            "description": "file API"
+        }
+    ]
+}

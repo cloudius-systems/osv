@@ -1,0 +1,162 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "http://{{Host}}",
+    "resourcePath": "/os",
+    "produces": [
+        "application/json",
+        "application/xml"
+    ],
+    "apis": [
+        {
+            "path": "/os/version",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "OS version",
+                    "notes": "return the version of the OS",
+                    "responseClass": "string",
+                    "nickname": "getOSversion",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/manufacturer",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "OS manufacturer",
+                    "notes": "return the OS vendor",
+                    "responseClass": "string",
+                    "nickname": "getOSmanufacturer",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/uptime",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Time in seconds since the system was boot",
+                    "notes": "Time in seconds since the system was boot",
+                    "responseClass": "long",
+                    "nickname": "getLastBootUpTime",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/date",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "current time and date",
+                    "notes": "return the OS time and date",
+                    "responseClass": "dateTime",
+                    "nickname": "getDate",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/memory/total",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "return OS Total Virtual Memory Size in bytes",
+                    "notes": "",
+                    "responseClass": "long",
+                    "nickname": "getTotalVirtualMemorySize",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/memory/free",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "return OS Free Virtual Memory in bytes",
+                    "notes": "",
+                    "responseClass": "long",
+                    "nickname": "getFreeVirtualMemory",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/shutdown",
+            "operations": [
+                {
+                    "method": "POST",
+                    "summary": "shutdown the OS",
+                    "notes": "",
+                    "responseClass": "",
+                    "nickname": "shutdown",
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+	    ]
+	},
+	{
+	    "path": "/os/dmesg",
+	    "operations": [
+		{
+		    "method": "GET",
+		    "summary": "return the boot up debug messages",
+		    "notes": "",
+		    "responseClass": "string",
+		    "nickname" : "getDebugMessages",
+		    "produces": [
+		        "application/json",
+			"application/xml"
+		    ],
+		    "parameters": [
+		    ],
+		    "deprecated": "false"
+		}
+	    ]
+
+	}
+    ]
+
+}

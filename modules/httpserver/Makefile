@@ -31,7 +31,7 @@ DEPS := $(OBJ_FILES:.o=.d)
 
 module: all swagger-ui-lib
 
-all: init api-doc/.git $(TARGET).so
+all: init $(TARGET).so
 
 init:
 	$(call very-quiet, mkdir -p obj)
@@ -68,9 +68,6 @@ check:
 
 swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib
-
-api-doc/.git:
-	cd .. && git submodule update --init -f httpserver/api-doc
 
 swagger-ui/.git:
 	cd .. && git submodule update --init -f httpserver/swagger-ui
