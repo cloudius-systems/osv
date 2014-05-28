@@ -1,9 +1,6 @@
-#!/usr/bin/env python
 from collections import Counter
 from osv import tree
 import re
-
-print("-=[ Mem0ry Allocations Analyz3r ]=-")
 
 def is_malloc(x):
     return x.find("malloc ") > 0
@@ -53,7 +50,8 @@ class Buffer(object):
         self.is_freed = True
 
 def process_records(mallocs, trace_records):
-    for l in trace_records:
+    for t in trace_records:
+        l = str(t)
         try:
             #
             # Maintain a hash dictionary that maps between buffer address and
@@ -192,10 +190,3 @@ def show_results(mallocs):
         return key.key.__str__()
 
     tree.print_tree(root, formatter)
-
-
-if __name__ == "__main__":
-    mallocs = {}
-    trace_records = open("trace.txt", "rt").readlines()
-    process_records(mallocs, trace_records)
-    show_results(mallocs)

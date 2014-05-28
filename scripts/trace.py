@@ -11,6 +11,7 @@ from collections import defaultdict
 from operator import attrgetter
 
 from osv import trace, debug, prof
+import memory_analyzer
 
 class InvalidArgumentsException(Exception):
     def __init__(self, message):
@@ -107,6 +108,12 @@ def list_trace(args):
         for t in reader.get_traces():
             if t.time in time_range:
                 print t.format(backtrace_formatter, data_formatter=data_formatter)
+
+def mem_analys(args):
+    mallocs = {}
+    with get_trace_reader(args) as reader:
+        memory_analyzer.process_records(mallocs, reader.get_traces())
+        memory_analyzer.show_results(mallocs)
 
 def add_time_slicing_options(parser):
     group = parser.add_argument_group('time slicing')
@@ -546,6 +553,14 @@ if __name__ == "__main__":
     cmd_tcpdump = subparsers.add_parser("tcpdump")
     add_trace_source_options(cmd_tcpdump)
     cmd_tcpdump.set_defaults(func=tcpdump, paginate=True)
+
+    cmd_memory_analyzer = subparsers.add_parser("memory-analyzer",
+        help="show memory allocation analysis", description="""
+        Prints profile showing number of memory allocations, their size, alignment and allocator.
+        Requires memory_* tracepoints enabled.
+        """)
+    add_trace_source_options(cmd_memory_analyzer)
+    cmd_memory_analyzer.set_defaults(func=mem_analys, paginate=True)
 
     args = parser.parse_args()
 
