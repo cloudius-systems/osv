@@ -785,7 +785,6 @@ endif
 ifeq ($(arch),x64)
 objects += arch/x64/arch-trace.o
 objects += arch/x64/ioapic.o
-objects += arch/x64/math.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/cpuid.o
@@ -796,6 +795,7 @@ objects += core/sampler.o
 objects += $(acpi)
 endif # x64
 
+objects += core/math.o
 objects += core/spinlock.o
 objects += core/lfmutex.o
 objects += core/rwlock.o
