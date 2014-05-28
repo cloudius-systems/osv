@@ -219,6 +219,7 @@ static int
 devfs_getattr(struct vnode *vnode, struct vattr *attr)
 {
 	attr->va_nodeid = vnode->v_ino;
+	attr->va_size = vnode->v_size;
 	return 0;
 }
 

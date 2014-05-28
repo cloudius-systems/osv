@@ -356,6 +356,14 @@ procfs_unmount(mount* mp, int flags)
     return 0;
 }
 
+static int
+procfs_getattr(vnode *vp, vattr *attr)
+{
+    attr->va_nodeid = vp->v_ino;
+    attr->va_size = vp->v_size;
+    return 0;
+}
+
 } // namespace procfs
 
 extern "C"
@@ -379,7 +387,7 @@ vnops procfs_vnops = {
     (vnop_rename_t)   vop_einval, // vop_remame
     (vnop_mkdir_t)    vop_einval, // vop_mkdir
     (vnop_rmdir_t)    vop_einval, // vop_rmdir
-    (vnop_getattr_t)  vop_nullop, // vop_getattr
+    procfs::procfs_getattr,       // vop_getattr
     (vnop_setattr_t)  vop_eperm,  // vop_setattr
     (vnop_inactive_t) vop_nullop, // vop_inactive
     (vnop_truncate_t) vop_nullop, // vop_truncate

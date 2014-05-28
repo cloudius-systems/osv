@@ -455,12 +455,19 @@ ramfs_init(void)
 	return 0;
 }
 
+static int
+ramfs_getattr(struct vnode *vnode, struct vattr *attr)
+{
+	attr->va_nodeid = vnode->v_ino;
+	attr->va_size = vnode->v_size;
+	return 0;
+}
+
 #define ramfs_open	((vnop_open_t)vop_nullop)
 #define ramfs_close	((vnop_close_t)vop_nullop)
 #define ramfs_seek	((vnop_seek_t)vop_nullop)
 #define ramfs_ioctl	((vnop_ioctl_t)vop_einval)
 #define ramfs_fsync	((vnop_fsync_t)vop_nullop)
-#define ramfs_getattr	((vnop_getattr_t)vop_nullop)
 #define ramfs_setattr	((vnop_setattr_t)vop_eperm)
 #define ramfs_inactive	((vnop_inactive_t)vop_nullop)
 #define ramfs_link	((vnop_link_t)vop_eperm)

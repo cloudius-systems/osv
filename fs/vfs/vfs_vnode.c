@@ -341,7 +341,7 @@ vn_stat(struct vnode *vp, struct stat *st)
 		return error;
 
 	st->st_ino = (ino_t)vap->va_nodeid;
-	st->st_size = vp->v_size;
+	st->st_size = vap->va_size;
 	mode = vp->v_mode;
 	switch (vp->v_type) {
 	case VREG:
