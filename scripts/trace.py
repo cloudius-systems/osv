@@ -120,7 +120,8 @@ def mem_analys(args):
         memory_analyzer.process_records(mallocs, reader.get_traces())
         memory_analyzer.show_results(mallocs,
             node_filters=node_filters,
-            sorter=args.sort)
+            sorter=args.sort,
+            group_by=args.group_by)
 
 def add_time_slicing_options(parser):
     group = parser.add_argument_group('time slicing')
@@ -572,6 +573,10 @@ if __name__ == "__main__":
     cmd_memory_analyzer.add_argument("-s", "--sort",
         choices=memory_analyzer.sorters, default='size',
            help='sort allocations by given criteria')
+    cmd_memory_analyzer.add_argument("-g", "--group-by",
+        choices=memory_analyzer.groups, action='store',
+        default=['allocator', 'alignment', 'allocated', 'requested'],
+        nargs='*', help='groups allocations by given criteria')
     cmd_memory_analyzer.set_defaults(func=mem_analys, paginate=True)
 
     args = parser.parse_args()

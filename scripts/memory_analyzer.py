@@ -172,7 +172,14 @@ sorters = {
     'unused': lambda node: -node.key.lost_percentage,
 }
 
-def show_results(mallocs, node_filters, sorter):
+groups = {
+    'allocator': lambda desc: TreeKey(desc.alloc_type, None),
+    'alignment': lambda desc: TreeKey(desc.align, 'alignment'),
+    'allocated': lambda desc: TreeKey(desc.alloc_len, 'allocated'),
+    'requested': lambda desc: TreeKey(desc.req_len, 'requested'),
+}
+
+def show_results(mallocs, node_filters, sorter, group_by):
     root = tree.TreeNode(TreeKey('All', None))
 
     lost = 0
@@ -180,16 +187,15 @@ def show_results(mallocs, node_filters, sorter):
 
     for buf in mallocs:
         for desc in mallocs[buf]:
-            alloc_type = root.get_or_add(TreeKey(desc.alloc_type, None))
-            align = alloc_type.get_or_add(TreeKey(desc.align, 'alignment'))
-            alloc_size = align.get_or_add(TreeKey(desc.alloc_len, 'allocated'))
-            req_size = alloc_size.get_or_add(TreeKey(desc.req_len, 'requested'))
+            node = root
+            for gr in group_by:
+                node = node.get_or_add(groups[gr](desc))
 
-            req_size.key.alloc += 1
+            node.key.alloc += 1
             if not desc.is_freed:
-                req_size.key.unfreed_count += 1
-                req_size.key.unfreed_bytes += desc.alloc_len
-                req_size.key.lost_bytes += desc.alloc_len - desc.req_len
+                node.key.unfreed_count += 1
+                node.key.unfreed_bytes += desc.alloc_len
+                node.key.lost_bytes += desc.alloc_len - desc.req_len
 
     def propagate(parent, node):
         for child in node.children:
