@@ -1479,6 +1479,36 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
     return -1;
 }
 
+TRACEPOINT(trace_vfs_fallocate, "%d %d 0x%x 0x%x", int, int, loff_t, loff_t);
+TRACEPOINT(trace_vfs_fallocate_ret, "");
+TRACEPOINT(trace_vfs_fallocate_err, "%d", int);
+
+int fallocate(int fd, int mode, loff_t offset, loff_t len)
+{
+    struct file *fp;
+    int error;
+
+    trace_vfs_fallocate(fd, mode, offset, len);
+    error = fget(fd, &fp);
+    if (error)
+        goto out_errno;
+
+    error = sys_fallocate(fp, mode, offset, len);
+    fdrop(fp);
+
+    if (error)
+        goto out_errno;
+    trace_vfs_fallocate_ret();
+    return 0;
+
+    out_errno:
+    trace_vfs_fallocate_err(error);
+    errno = error;
+    return -1;
+}
+
+LFS64(fallocate);
+
 TRACEPOINT(trace_vfs_utimes, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_utimes_ret, "");
 TRACEPOINT(trace_vfs_utimes_err, "%d", int);

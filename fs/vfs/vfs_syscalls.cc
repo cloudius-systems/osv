@@ -1034,3 +1034,48 @@ sys_utimes(char *path, const struct timeval times[2])
     drele(dp);
     return error;
 }
+
+int
+sys_fallocate(struct file *fp, int mode, loff_t offset, loff_t len)
+{
+    int error;
+    struct vnode *vp;
+
+    DPRINTF(VFSDB_SYSCALL, ("sys_fallocate: fp=%x", fp));
+
+    if (!fp->f_dentry || !(fp->f_flags & FWRITE)) {
+        return EBADF;
+    }
+
+    if (offset < 0 || len <= 0) {
+        return EINVAL;
+    }
+
+    // Strange, but that's what Linux returns.
+    if ((mode & FALLOC_FL_PUNCH_HOLE) && !(mode & FALLOC_FL_KEEP_SIZE)) {
+        return ENOTSUP;
+    }
+
+    vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    // NOTE: It's not detected here whether or not the device underlying
+    // the fs is a block device. It's up to the fs itself tell us whether
+    // or not fallocate is supported. See below:
+    if (vp->v_type != VREG && vp->v_type != VDIR) {
+        error = ENODEV;
+        goto ret;
+    }
+
+    // EOPNOTSUPP here means that the underlying file system
+    // referred by vp doesn't support fallocate.
+    if (!vp->v_op->vop_fallocate) {
+        error = EOPNOTSUPP;
+        goto ret;
+    }
+
+    error = VOP_FALLOCATE(vp, mode, offset, len);
+ret:
+    vn_unlock(vp);
+    return error;
+}
