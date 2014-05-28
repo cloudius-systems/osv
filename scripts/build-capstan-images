@@ -1,17 +1,8 @@
 #!/bin/sh
 
-program=$(basename $0)
-
 set -e
 
-if [ $# -lt 1 ]; then
-    echo "usage: $program [standalone|capstan]"
-    exit 1
-fi
-
-type=$1
-
-build=./scripts/build-$type-img
+build=./scripts/build-capstan-img
 
 $build cloudius/osv-base      httpserver                "OSv base image for developers"
 $build cloudius/osv           default                   "OSv with shell for users"
