@@ -115,13 +115,24 @@ def mem_analys(args):
     node_filters = []
     if args.min_count:
         node_filters.append(memory_analyzer.filter_min_count(args.min_count))
+    if args.min_hits:
+        if args.min_hits.endswith('%'):
+            min_percent = parse_percentage(args.min_hits)
+            node_filters.append(memory_analyzer.filter_min_bt_percentage(min_percent))
+        else:
+            min_count = int(args.min_hits)
+            node_filters.append(memory_analyzer.filter_min_bt_count(min_count))
 
     with get_trace_reader(args) as reader:
         memory_analyzer.process_records(mallocs, reader.get_traces())
         memory_analyzer.show_results(mallocs,
             node_filters=node_filters,
             sorter=args.sort,
-            group_by=args.group_by)
+            group_by=args.group_by,
+            show_backtrace=args.backtrace,
+            symbol_resolver=symbol_resolver(args),
+            src_addr_formatter=src_addr_formatter(args),
+            max_levels=args.max_levels)
 
 def add_time_slicing_options(parser):
     group = parser.add_argument_group('time slicing')
@@ -137,6 +148,11 @@ groupers = {
     'none': lambda: None,
 }
 
+def add_backtrace_options(parser):
+    parser.add_argument("--min-hits", action='store',
+        help="show only nodes with hit count not smaller than this. can be absolute number or a percentage, eg. 10%%")
+    parser.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
+
 def add_profile_options(parser):
     add_time_slicing_options(parser)
     group = parser.add_argument_group('profile options')
@@ -144,9 +160,7 @@ def add_profile_options(parser):
     group.add_argument("-g", "--group-by", choices=groupers.keys(), default='none', help="group samples by given criteria")
     group.add_argument("--function", action='store', help="use given function as tree root")
     group.add_argument("--min-duration", action='store', help="show only nodes with resident time not shorter than this, eg: 200ms")
-    group.add_argument("--min-hits", action='store',
-        help="show only nodes with hit count not smaller than this. can be absolute number or a percentage, eg. 10%%")
-    group.add_argument("--max-levels", type=int, action='store', help="maximum number of tree levels to show")
+    add_backtrace_options(group)
 
 class sample_name_is(object):
     def __init__(self, name):
@@ -577,6 +591,11 @@ if __name__ == "__main__":
         choices=memory_analyzer.groups, action='store',
         default=['allocator', 'alignment', 'allocated', 'requested'],
         nargs='*', help='groups allocations by given criteria')
+    cmd_memory_analyzer.add_argument("--no-backtrace", action="store_false",
+        default=True, dest='backtrace', help="never show backtrace")
+    add_symbol_resolution_options(cmd_memory_analyzer)
+    group = cmd_memory_analyzer.add_argument_group('backtrace options')
+    add_backtrace_options(group)
     cmd_memory_analyzer.set_defaults(func=mem_analys, paginate=True)
 
     args = parser.parse_args()
