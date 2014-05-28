@@ -1,6 +1,7 @@
 from collections import Counter
 from osv import debug, tree, prof
 import re
+import sys
 
 def is_malloc(x):
     return x.find("malloc ") > 0
@@ -45,12 +46,12 @@ class Buffer(object):
         self.is_freed = False
         self.backtrace = backtrace
 
-    def set_freed(self):
+    def set_freed(self, printer):
         if self.is_freed:
-            print("Buffer %s has already been freed." % self.buf)
+            printer("Buffer %s has already been freed." % self.buf)
         self.is_freed = True
 
-def process_records(mallocs, trace_records):
+def process_records(mallocs, trace_records, printer=prof.default_printer):
     for t in trace_records:
         l = str(t)
         try:
@@ -65,7 +66,7 @@ def process_records(mallocs, trace_records):
                     mallocs[buf][-1].req_len = get_len(l)
                     mallocs[buf][-1].align = get_align(l)
                 else:
-                    print("Buffer %s allocated by unknown allocator." % buf)
+                    printer("Buffer %s allocated by unknown allocator.\n" % buf)
                     b = Buffer(buf, '<unknown>', 0, t.backtrace)
                     if buf in mallocs:
                         mallocs[buf] += [b]
@@ -77,7 +78,7 @@ def process_records(mallocs, trace_records):
                 b = Buffer(buf, get_type(l), get_len(l), t.backtrace)
                 if buf in mallocs:
                     if not mallocs[buf][-1].is_freed:
-                        print("Buffer %s was already allocated." % buf)
+                        printer("Buffer %s was already allocated.\n" % buf)
                     mallocs[buf] += [b]
                 else:
                     mallocs[buf] = [b]
@@ -89,7 +90,7 @@ def process_records(mallocs, trace_records):
                     # print "Buffer %s never been allocated." % buf
                     pass
                 else:
-                    mallocs[buf][-1].set_freed()
+                    mallocs[buf][-1].set_freed(printer)
 
         #
         # TODO: It is possible to alloc_huge_page() and then free_page()
@@ -102,7 +103,7 @@ def process_records(mallocs, trace_records):
                 b.align = 4096
                 if page in mallocs:
                     if not mallocs[page][-1].is_freed:
-                        print("Page %s was already allocated." % page)
+                        printer("Page %s was already allocated.\n" % page)
                     mallocs[page] += [b]
                 else:
                     mallocs[page] = [b]
@@ -115,10 +116,10 @@ def process_records(mallocs, trace_records):
                     pass
                 else:
                     # check if page already freed
-                    mallocs[page][-1].set_freed()
+                    mallocs[page][-1].set_freed(printer)
 
         except:
-            print("Problem parsing line: '%s'" % l)
+            printer("Problem parsing line: '%s'\n" % l)
             raise
 
 class TreeKey(object):
@@ -216,7 +217,7 @@ def strip_malloc(frames):
 
 def show_results(mallocs, node_filters, sorter, group_by, symbol_resolver,
         src_addr_formatter=debug.SourceAddress.__str__, max_levels=None,
-        show_backtrace=True):
+        show_backtrace=True, printer=prof.default_printer):
     root = tree.TreeNode(TreeKey('All', None))
 
     lost = 0
@@ -287,5 +288,6 @@ def show_results(mallocs, node_filters, sorter, group_by, symbol_resolver,
         return sorters[sorter](node)
 
     tree.print_tree(root, formatter,
+        printer=printer,
         order_by=order_by,
         node_filter=node_filter)
