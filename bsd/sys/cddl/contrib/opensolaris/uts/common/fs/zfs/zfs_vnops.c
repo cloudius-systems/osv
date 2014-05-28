@@ -26,6 +26,10 @@
 /* Portions Copyright 2007 Jeremy Teo */
 /* Portions Copyright 2010 Robert Milkowski */
 
+/*
+ * Copyright (c) 2011, Lawrence Livermore National Security, LLC.
+ */
+
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/time.h>
@@ -67,6 +71,7 @@
 #include <sys/extdirent.h>
 #include <sys/kidmap.h>
 #include <sys/acl.h>
+#include <sys/fcntl.h>
 
 /*
  * Programming rules.
@@ -4221,6 +4226,56 @@ zfs_delmap(vnode_t *vp, offset_t off, struct as *as, caddr_t addr,
 
 	return (0);
 }
+#endif  /* sun */
+#endif  /* NOTYET */
+
+/*
+ * convoff - converts the given data (start, whence) to the
+ * given whence.
+ */
+int
+convoff(vnode_t *vp, flock64_t *lckdat, int  whence, offset_t offset)
+{
+	vattr_t vap;
+	int error;
+
+	if ((lckdat->l_whence == 2) || (whence == 2)) {
+		if ((error = zfs_getattr(vp, &vap) != 0))
+			return (error);
+	}
+
+	switch (lckdat->l_whence) {
+	case 1:
+		lckdat->l_start += offset;
+		break;
+	case 2:
+		lckdat->l_start += vap.va_size;
+		/* FALLTHRU */
+		case 0:
+		break;
+	default:
+		return (EINVAL);
+	}
+
+	if (lckdat->l_start < 0)
+		return (EINVAL);
+
+	switch (whence) {
+	case 1:
+		lckdat->l_start -= offset;
+		break;
+	case 2:
+		lckdat->l_start -= vap.va_size;
+		/* FALLTHRU */
+	case 0:
+		break;
+	default:
+		return (EINVAL);
+	}
+
+	lckdat->l_whence = (short)whence;
+	return (0);
+}
 
 /*
  * Free or allocate space in a file.  Currently, this function only
@@ -4229,7 +4284,8 @@ zfs_delmap(vnode_t *vp, offset_t off, struct as *as, caddr_t addr,
  * well as free space.
  *
  *	IN:	vp	- vnode of file to free data in.
- *		cmd	- action to take (only F_FREESP supported).
+ *		cmd	- action to take (F_FREESP and
+ * 			  (F_FREESP | F_KEEPSP) supported).
  *		bfp	- section of file to free/alloc.
  *		flag	- current file open mode flags.
  *		offset	- current file offset.
@@ -4245,17 +4301,18 @@ zfs_delmap(vnode_t *vp, offset_t off, struct as *as, caddr_t addr,
 /* ARGSUSED */
 static int
 zfs_space(vnode_t *vp, int cmd, flock64_t *bfp, int flag,
-    offset_t offset, cred_t *cr, caller_context_t *ct)
+    offset_t offset)
 {
 	znode_t		*zp = VTOZ(vp);
 	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
-	uint64_t	off, len;
+	uint64_t	off, len, original_size;
 	int		error;
 
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 
-	if (cmd != F_FREESP) {
+	if (cmd != F_FREESP &&
+	    ((cmd & (F_FREESP | F_KEEPSP)) != (F_FREESP | F_KEEPSP))) {
 		ZFS_EXIT(zfsvfs);
 		return (EINVAL);
 	}
@@ -4270,16 +4327,45 @@ zfs_space(vnode_t *vp, int cmd, flock64_t *bfp, int flag,
 		return (EINVAL);
 	}
 
+	original_size = zp->z_size;
 	off = bfp->l_start;
 	len = bfp->l_len; /* 0 means from off to end of file */
 
-	error = zfs_freesp(zp, off, len, flag, TRUE);
+	if (error = zfs_freesp(zp, off, len, flag, TRUE)) {
+		ZFS_EXIT(zfsvfs);
+		return (error);
+	}
+
+	if (cmd & F_KEEPSP) {
+		error = zfs_freesp(zp, original_size, 0, 0, TRUE);
+	}
 
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
-#endif	/* sun */
 
+static int
+zfs_fallocate(vnode_t *vp, int mode, loff_t offset, loff_t len)
+{
+	int error = EOPNOTSUPP;
+
+	if ((mode & (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE)) ==
+	    (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE)) {
+		flock64_t bf;
+
+		bf.l_type = F_WRLCK;
+		bf.l_whence = 0;
+		bf.l_start = offset;
+		bf.l_len = len;
+		bf.l_pid = 0;
+
+		error = zfs_space(vp, F_FREESP | F_KEEPSP, &bf, FWRITE, offset);
+	}
+
+	return (error);
+}
+
+#ifdef NOTYET
 CTASSERT(sizeof(struct zfid_short) <= sizeof(struct fid));
 CTASSERT(sizeof(struct zfid_long) <= sizeof(struct fid));
 
@@ -4953,5 +5039,6 @@ struct vnops zfs_vnops = {
 	zfs_inactive,			/* inactive */
 	zfs_truncate,			/* truncate */
 	zfs_link,			/* link */
-	zfs_arc,            /* arc */
+	zfs_arc,			/* arc */
+	zfs_fallocate,			/* fallocate */
 };
