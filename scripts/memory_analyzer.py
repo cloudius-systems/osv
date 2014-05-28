@@ -155,8 +155,10 @@ class TreeKey(object):
     def __hash__(self):
         return self.this.__hash__()
 
+def filter_min_count(min_count):
+    return lambda node: node.key.alloc >= min_count
 
-def show_results(mallocs):
+def show_results(mallocs, node_filters):
     root = tree.TreeNode(TreeKey('All', None))
 
     lost = 0
@@ -189,4 +191,10 @@ def show_results(mallocs):
     def formatter(key):
         return key.key.__str__()
 
-    tree.print_tree(root, formatter)
+    def node_filter(*args):
+        for filter in node_filters:
+            if not filter(*args):
+                return False
+        return True
+
+    tree.print_tree(root, formatter, node_filter=node_filter)
