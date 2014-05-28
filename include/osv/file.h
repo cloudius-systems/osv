@@ -90,6 +90,20 @@ struct file {
 	virtual int truncate(off_t len) = 0;
 	virtual int ioctl(u_long com, void *data) = 0;
 	virtual int poll(int events) = 0;
+
+	/**
+	 * Block until any of the events is ready on this file. If timeout is
+	 * greater than zero it specifies maxmimum wait time in milliseconds.
+	 * If timeout is 0 the function will not block. If timeout is less than
+	 * zero the function may block indefinitely.
+	 *
+	 * On success returns the event mask with ready events. Returns 0 if
+	 * timeout elapsed and requested events not arrived. Returns -1 if
+	 * operation cannot be performed. In this case the caller
+	 * should fall back to regular poll().
+	 */
+	virtual int poll_sync(int events, int timeout) = 0;
+
 	virtual int stat(struct stat* buf) = 0;
 	virtual int close() = 0;
 	virtual int chmod(mode_t mode) = 0;
@@ -129,6 +143,7 @@ struct special_file : public file {
     virtual int truncate(off_t len) override;
     virtual int ioctl(u_long com, void *data) override;
     virtual int poll(int events) override;
+    virtual int poll_sync(int events, int timeout) override;
     virtual int stat(struct stat* buf) override;
     virtual int chmod(mode_t mode) override;
 };

@@ -39,6 +39,8 @@
 #include <osv/socket.hh>
 #include <osv/initialize.hh>
 
+#include <poll.h>
+
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/protosw.h>
@@ -236,6 +238,34 @@ socket_file::poll(int events)
     }
     SOCK_UNLOCK(so);
     return (sopoll(so, events, 0, 0));
+}
+
+int
+socket_file::poll_sync(int events, int timeout)
+{
+    SCOPE_LOCK(SOCK_MTX_REF(so));
+
+    constexpr auto supprted_events = POLLIN | POLLRDNORM;
+    assert(!(events & ~supprted_events));
+
+    if (so->so_nc) {
+        so->so_nc->process_queue();
+    }
+
+    int revents = sopoll_generic_locked(so, events);
+    if (!revents) {
+        if (timeout == 0) {
+            return 0;
+        }
+
+        if (sbwait_tmo(so, &so->so_rcv, timeout > 0 ? timeout : 0)) {
+            return 0;
+        }
+
+        revents = sopoll_generic_locked(so, events);
+    }
+
+    return revents;
 }
 
 void

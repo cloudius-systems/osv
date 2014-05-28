@@ -344,6 +344,7 @@ int	sopoll(struct socket *so, int events, struct ucred *active_cred,
 	    struct thread *td);
 int	sopoll_generic(struct socket *so, int events,
 	    struct ucred *active_cred, struct thread *td);
+int sopoll_generic_locked(struct socket *so, int events);
 int	soreceive(struct socket *so, struct bsd_sockaddr **paddr, struct uio *uio,
 	    struct mbuf **mp0, struct mbuf **controlp, int *flagsp);
 int	soreceive_stream(struct socket *so, struct bsd_sockaddr **paddr,

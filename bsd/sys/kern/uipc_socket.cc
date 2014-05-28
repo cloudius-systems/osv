@@ -2633,9 +2633,15 @@ int
 sopoll_generic(struct socket *so, int events, struct ucred *active_cred,
     struct thread *td)
 {
+	SCOPE_LOCK(SOCK_MTX_REF(so));
+	return sopoll_generic_locked(so, events);
+}
+
+int
+sopoll_generic_locked(struct socket *so, int events)
+{
 	int revents = 0;
 
-	SOCK_LOCK(so);
 	if (events & (POLLIN | POLLRDNORM))
 		if (soreadabledata(so))
 			revents |= events & (POLLIN | POLLRDNORM);
@@ -2666,10 +2672,8 @@ sopoll_generic(struct socket *so, int events, struct ucred *active_cred,
         }
     }
 
-	SOCK_UNLOCK(so);
-	return (revents);
+    return revents;
 }
-
 
 /*
  * Some routines that return EOPNOTSUPP for entry points that are not

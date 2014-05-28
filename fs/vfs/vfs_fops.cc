@@ -128,6 +128,11 @@ int vfs_file::poll(int events)
 	return poll_no_poll(events);
 }
 
+int vfs_file::poll_sync(int events, int timeout)
+{
+	return poll_no_poll(events);
+}
+
 int vfs_file::truncate(off_t len)
 {
 	// somehow this is handled outside file ops

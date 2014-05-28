@@ -99,7 +99,6 @@ void poll_drain(struct file* fp)
     FD_UNLOCK(fp);
 }
 
-
 /*
  * Iterate all file descriptors and search for existing events,
  * Fill-in the revents for each fd in the poll.
@@ -332,6 +331,28 @@ out:
     return nr_events;
 }
 
+int poll_one(struct pollfd& pfd, int events, int timeout)
+{
+    if (pfd.fd < 0) {
+        pfd.revents = 0;
+        return 0;
+    }
+
+    auto fref = fileref_from_fd(pfd.fd);
+
+    if (!fref.get()) {
+        pfd.revents = POLLNVAL;
+        return 1;
+    }
+
+    auto revents = fref->poll_sync(events, timeout);
+    if (revents >= 0) {
+        pfd.revents = revents;
+        return !!revents;
+    }
+    return -1;
+}
+
 int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
 {
     trace_poll(_pfd, _nfds, _timeout);
@@ -340,6 +361,14 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
         errno = EINVAL;
         trace_poll_err(errno);
         return -1;
+    }
+
+    if (_nfds == 1 && ((_pfd[0].events & POLL_REQUESTABLE) == POLLIN)) {
+        auto ret = poll_one(_pfd[0], _pfd[0].events & POLL_REQUESTABLE, _timeout);
+        if (ret >= 0) {
+            trace_poll_ret(ret);
+            return ret;
+        }
     }
 
     std::vector<poll_file> pfd;

@@ -163,6 +163,7 @@ struct mbuf *
 	sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff);
 void	sbtoxsockbuf(struct sockbuf *sb, struct xsockbuf *xsb);
 int	sbwait(socket* so, struct sockbuf *sb);
+int	sbwait_tmo(socket* so, struct sockbuf *sb, int);
 int	sblock(socket* so, struct sockbuf *sb, int flags);
 void	sbunlock(socket* so, struct sockbuf *sb);
 __END_DECLS

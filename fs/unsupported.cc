@@ -74,3 +74,8 @@ int special_file::poll(int events)
 {
     return 0;
 }
+
+int special_file::poll_sync(int events, int timeout)
+{
+    return -1;
+}
