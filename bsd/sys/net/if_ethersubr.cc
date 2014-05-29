@@ -611,7 +611,10 @@ ether_preprocess_packet(struct ifnet *ifp, struct mbuf *m, uint16_t& ether_type)
 	}
 #endif
 
-	assert(etype != ETHERTYPE_VLAN);
+	if (ETHERTYPE_VLAN == etype) {
+		m_freem(m);
+		return false;
+	}
 
 #if 0
 	/*
