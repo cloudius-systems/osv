@@ -25,13 +25,7 @@
 #include <osv/rcu.hh>
 #include <osv/clock.hh>
 
-// If RUNTIME_PSEUDOFLOAT, runtime_t is a pseudofloat<>. Otherwise, a float.
-#undef RUNTIME_PSEUDOFLOAT
-#ifdef RUNTIME_PSEUDOFLOAT
-#include <osv/pseudofloat.hh>
-#else
 typedef float runtime_t;
-#endif
 
 extern "C" {
 void smp_main();

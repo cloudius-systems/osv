@@ -196,24 +196,6 @@ void cpu::schedule()
     }
 }
 
-// In the x86 ABI, the FPU state is callee-saved, meaning that a program must
-// not call a function in the middle of an FPU calculation. But if we get a
-// preemption, i.e., the scheduler is called by an interrupt, the currently
-// running thread might be in the middle of a floating point calculation,
-// which we must not trample over.
-// When the scheduler code itself doesn't use the FPU (!scheduler_uses_fpu),
-// we need to save the running thread's FPU state only before switching to
-// a different thread (and restore this thread's FPU state when coming back
-// to this thread). However, if the scheduler itself uses the FPU in its
-// calculations (scheduler_uses_fpu), we always (when in preemption) need
-// to save and restore this thread's FPU state when we enter and exit the
-// scheduler.
-#ifdef RUNTIME_PSEUDOFLOAT
-static constexpr bool scheduler_uses_fpu = false;
-#else
-static constexpr bool scheduler_uses_fpu = true;
-#endif
-
 void cpu::reschedule_from_interrupt()
 {
     assert(sched::exception_depth <= 1);
