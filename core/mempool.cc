@@ -597,6 +597,7 @@ shrinker::shrinker(std::string name)
     }
 }
 
+extern "C"
 void *osv_register_shrinker(const char *name,
                             size_t (*func)(size_t target, bool hard))
 {
