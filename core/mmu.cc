@@ -619,19 +619,6 @@ public:
     bool tlb_flush_needed(void) {return do_flush;}
 };
 
-class count_maps:
-    public vma_operation<allocate_intermediate_opt::no,
-                         skip_empty_opt::yes, account_opt::yes> {
-public:
-    void small_page(hw_ptep ptep, uintptr_t offset) {
-        this->account(mmu::page_size);
-    }
-    bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        this->account(mmu::huge_page_size);
-        return true;
-    }
-};
-
 class virt_to_phys_map :
         public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
         descend_opt::yes, once_opt::yes, split_opt::no> {
