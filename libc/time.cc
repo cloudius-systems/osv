@@ -54,6 +54,39 @@ static inline void fill_ts(std::chrono::duration<Rep, Period> d, timespec *ts)
     ts->tv_nsec = duration_cast<nanoseconds>(d).count() % 1000000000;
 }
 
+// Return the total amount of cpu time used by the process. This is the amount
+// of time that passed since boot multiplied by the number of CPUs, from which
+// we subtract the time spent in the idle threads.
+// Besides the idle thread, we do not currently account for "steal time",
+// i.e., time in which the hypervisor preempted us and ran other things.
+// In other words, when a hypervisor gives us only a part of a CPU, we pretend
+// it is still a full CPU, just a slower one. Ordinary CPUs behave similarly
+// when faced with variable-speed CPUs.
+static osv::clock::uptime::duration process_cputime()
+{
+    // FIXME: This code does not handle the possibility of CPU hot-plugging.
+    // See issue #152 for a suggested solution.
+    auto ret = osv::clock::uptime::now().time_since_epoch();
+    ret *= sched::cpus.size();
+    for (sched::cpu *cpu : sched::cpus) {
+        ret -= cpu->idle_thread->thread_clock();
+    }
+    // Currently, idle_thread->thread_clock() isn't updated while that thread
+    // is running, which means that in the middle of idle time-slices, we
+    // think this time-slice has been busy. We "cover up" this error by
+    // monotonizing the return value. This is good enough when idle time-
+    // slices are relatively short (e.g., always interrupted by the load
+    // balancer waking up). In the future we should have a better fix.
+    static std::atomic<osv::clock::uptime::duration> lastret;
+    auto l = lastret.load(std::memory_order_relaxed);
+    while (ret > l &&
+           !lastret.compare_exchange_weak(l, ret, std::memory_order_relaxed));
+    if (ret < l) {
+        ret = l;
+    }
+    return ret;
+}
+
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
@@ -65,8 +98,7 @@ int clock_gettime(clockid_t clk_id, struct timespec* ts)
         fill_ts(osv::clock::wall::now().time_since_epoch(), ts);
         break;
     case CLOCK_PROCESS_CPUTIME_ID:
-        // FIXME: discount idle time
-        fill_ts(osv::clock::uptime::now().time_since_epoch() * sched::cpus.size(), ts);
+        fill_ts(process_cputime(), ts);
         break;
     case CLOCK_THREAD_CPUTIME_ID:
         fill_ts(sched::thread::current()->thread_clock(), ts);
