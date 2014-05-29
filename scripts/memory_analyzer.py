@@ -3,20 +3,17 @@ from osv import debug, tree, prof
 import re
 import sys
 
-def is_malloc(x):
-    return x.find("malloc ") > 0
-
 def is_mempool(x):
     return x.find("malloc_mempool ") > 0
 
 def is_large(x):
     return x.find("malloc_large ") > 0
 
-def is_free(x):
-    return x.find("memory_free ") > 0
+def get_alloc_len(x):
+    return int(re.findall("alloc_len=(\d*)", x)[0])
 
-def get_len(x):
-    return int(re.findall("len=(\d*)", x)[0])
+def get_req_len(x):
+    return int(re.findall("req_len=(\d*)", x)[0])
 
 def get_buf(x):
     return re.findall("buf=(0x................)", x)[0]
@@ -37,19 +34,13 @@ def get_page(x):
     return re.findall("page=(0x................)", x)[0]
 
 class Buffer(object):
-    def __init__(self, buf, alloc_type, alloc_len, backtrace):
+    def __init__(self, buf, alloc_type, alloc_len, req_len, align, backtrace):
         self.buf = buf
         self.alloc_type = alloc_type
         self.alloc_len = alloc_len
-        self.req_len = 0
-        self.align = 0
-        self.is_freed = False
+        self.req_len = req_len
+        self.align = align
         self.backtrace = backtrace
-
-    def set_freed(self, printer):
-        if self.is_freed:
-            printer("Buffer %s has already been freed." % self.buf)
-        self.is_freed = True
 
 def process_records(mallocs, trace_records, printer=prof.default_printer):
     for t in trace_records:
@@ -58,39 +49,20 @@ def process_records(mallocs, trace_records, printer=prof.default_printer):
             #
             # Maintain a hash dictionary that maps between buffer address and
             # a list of object, each describing the buffer: its requested and
-            # actual size, alignment, allocator and whether it had been freed.
+            # actual size, alignment and allocator.
             #
-            if is_malloc(l):
+            if is_mempool(l) or is_large(l):
                 buf = get_buf(l)
-                if buf in mallocs and not mallocs[buf][-1].is_freed:
-                    mallocs[buf][-1].req_len = get_len(l)
-                    mallocs[buf][-1].align = get_align(l)
-                else:
-                    printer("Buffer %s allocated by unknown allocator.\n" % buf)
-                    b = Buffer(buf, '<unknown>', 0, t.backtrace)
-                    if buf in mallocs:
-                        mallocs[buf] += [b]
-                    else:
-                        mallocs[buf] = [b]
-
-            elif is_mempool(l) or is_large(l):
-                buf = get_buf(l)
-                b = Buffer(buf, get_type(l), get_len(l), t.backtrace)
+                b = Buffer(buf,
+                           alloc_type=get_type(l),
+                           alloc_len=get_alloc_len(l),
+                           req_len=get_req_len(l),
+                           align=get_align(l),
+                           backtrace=t.backtrace)
                 if buf in mallocs:
-                    if not mallocs[buf][-1].is_freed:
-                        printer("Buffer %s was already allocated.\n" % buf)
                     mallocs[buf] += [b]
                 else:
                     mallocs[buf] = [b]
-
-            elif is_free(l):
-                buf = get_buf(l)
-                # check if buffer had been allocated
-                if not buf in mallocs:
-                    # print "Buffer %s never been allocated." % buf
-                    pass
-                else:
-                    mallocs[buf][-1].set_freed(printer)
 
         #
         # TODO: It is possible to alloc_huge_page() and then free_page()
@@ -127,15 +99,12 @@ class TreeKey(object):
         self.this = this
         self.desc = desc
         self.alloc = 0
-        self.unfreed_count = 0
-        self.unfreed_bytes = 0
+        self.total_bytes = 0
         self.lost_bytes = 0
 
     @property
     def lost_percentage(self):
-        if self.unfreed_bytes > 0:
-            return self.lost_bytes * 100 / self.unfreed_bytes
-        return 0
+        return self.lost_bytes * 100 / self.total_bytes
 
     def __str__(self):
         if not self.desc == None:
@@ -143,15 +112,8 @@ class TreeKey(object):
         else:
             name = "%s" % self.this
         name += "\ncount: %d" % self.alloc
-        if self.unfreed_count > 0:
-            name += "\nunfreed: %d (%d bytes" % (
-                self.unfreed_count,
-                self.unfreed_bytes)
-            if self.lost_bytes > 0:
-                name += ", unused: %d %d%%" % (
-                    self.lost_bytes,
-                    self.lost_percentage)
-            name += ")"
+        if self.lost_bytes > 0:
+            name += "\nunused: %d%%" % self.lost_percentage
         return name
 
     def __eq__(self, other):
@@ -197,8 +159,6 @@ def filter_min_bt_count(min_count):
 sorters = {
     'count': lambda node: -node.key.alloc,
     'size': lambda node: node.key.this,
-    'unfreed_count': lambda node: -node.key.unfreed_count,
-    'unfreed_bytes': lambda node: -node.key.unfreed_bytes,
     'unused': lambda node: -node.key.lost_percentage,
 }
 
@@ -247,10 +207,8 @@ def show_results(mallocs, node_filters, sorter, group_by, symbol_resolver,
                             break
 
             node.key.alloc += 1
-            if not desc.is_freed:
-                node.key.unfreed_count += 1
-                node.key.unfreed_bytes += desc.alloc_len
-                node.key.lost_bytes += desc.alloc_len - desc.req_len
+            node.key.total_bytes += desc.alloc_len
+            node.key.lost_bytes += desc.alloc_len - desc.req_len
 
     def flatten(node):
         for child in node.children:
@@ -267,8 +225,7 @@ def show_results(mallocs, node_filters, sorter, group_by, symbol_resolver,
             propagate(node, child)
         if parent:
             parent.key.alloc += node.key.alloc
-            parent.key.unfreed_count += node.key.unfreed_count
-            parent.key.unfreed_bytes += node.key.unfreed_bytes
+            parent.key.total_bytes += node.key.total_bytes
             parent.key.lost_bytes += node.key.lost_bytes
 
     propagate(None, root)

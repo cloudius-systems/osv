@@ -34,11 +34,11 @@
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
            size_t);
-TRACEPOINT(trace_memory_malloc_mempool, "buf=%p, len=%d", void*, size_t);
-TRACEPOINT(trace_memory_malloc_large, "buf=%p, len=%d", void*, size_t);
+TRACEPOINT(trace_memory_malloc_mempool, "buf=%p, req_len=%d, alloc_len=%d,"
+           " align=%d", void*, size_t, size_t, size_t);
+TRACEPOINT(trace_memory_malloc_large, "buf=%p, req_len=%d, alloc_len=%d,"
+           " align=%d", void*, size_t, size_t, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
-TRACEPOINT(trace_memory_free_mempool, "buf=%p", void*);
-TRACEPOINT(trace_memory_free_large, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
 TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
 TRACEPOINT(trace_memory_page_free, "page=%p", void*);
@@ -531,6 +531,7 @@ void reclaimer::wait_for_memory(size_t mem)
 
 static void* malloc_large(size_t size, size_t alignment)
 {
+    auto requested_size = size;
     size = (size + page_size - 1) & ~(page_size - 1);
     size += page_size;
 
@@ -565,7 +566,8 @@ static void* malloc_large(size_t size, size_t alignment)
                     on_alloc(size);
                     void* obj = ret_header;
                     obj += page_size;
-                    trace_memory_malloc_large(obj, size);
+                    trace_memory_malloc_large(obj, requested_size, size,
+                                              alignment);
                     return obj;
                 }
             }
@@ -1088,6 +1090,7 @@ extern "C" {
 // allocated from a pool.
 // FIXME: be less wasteful
 
+
 static inline void* std_malloc(size_t size, size_t alignment)
 {
     if ((ssize_t)size < 0)
@@ -1096,6 +1099,7 @@ static inline void* std_malloc(size_t size, size_t alignment)
 
     // Currently, we can't allocate a small object with large alignment,
     // so need to increase the allocation size.
+    auto requested_size = size;
     if (alignment > size) {
         if (alignment <= memory::pool::max_object_size) {
             size = alignment;
@@ -1111,7 +1115,7 @@ static inline void* std_malloc(size_t size, size_t alignment)
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
-        trace_memory_malloc_mempool(ret, 1 << n);
+        trace_memory_malloc_mempool(ret, requested_size, 1 << n, alignment);
     } else {
         ret = memory::malloc_large(size, alignment);
     }
@@ -1170,10 +1174,8 @@ static inline void std_free(void* object)
     if (offset == memory::non_mempool_obj_offset) {
         memory::free_page(object - offset);
     } else if (offset) {
-        trace_memory_free_mempool(object);
         return memory::pool::from_object(object)->free(object);
     } else {
-        trace_memory_free_large(object);
         return memory::free_large(object);
     }
 }
@@ -1305,7 +1307,6 @@ void* realloc(void* obj, size_t size)
 void free(void* obj)
 {
     trace_memory_free(obj);
-
 #if CONF_debug_memory == 0
     std_free(obj);
 #else
