@@ -99,7 +99,6 @@ void poll_drain(struct file* fp)
     FD_UNLOCK(fp);
 }
 
-
 /*
  * Iterate all file descriptors and search for existing events,
  * Fill-in the revents for each fd in the poll.
@@ -276,14 +275,13 @@ void poll_uninstall(struct pollreq* p)
     } /* End of clearing pollreq references from the other fds */
 }
 
-int do_poll(std::vector<poll_file>& pfd, int _timeout)
+int do_poll(std::vector<poll_file>& pfd, file::timeout_t _timeout)
 {
     int nr_events;
     unique_ptr<pollreq> p{new pollreq};
     sched::timer tmr(*sched::thread::current());
 
     p->_nfds = pfd.size();
-    p->_timeout = _timeout;
     p->_pfd = std::move(pfd);
 
     /* Any existing events return immediately */
@@ -294,7 +292,7 @@ int do_poll(std::vector<poll_file>& pfd, int _timeout)
     }
 
     /* Timeout -> Don't wait... */
-    if (p->_timeout == 0) {
+    if (!_timeout) {
         pfd = std::move(p->_pfd);
         goto out;
     }
@@ -303,10 +301,8 @@ int do_poll(std::vector<poll_file>& pfd, int _timeout)
     poll_install(p.get());
 
     /* Timeout */
-    if (p->_timeout > 0) {
-        /* Convert timeout of ms to ns */
-        using namespace osv::clock::literals;
-        tmr.set(p->_timeout * 1_ms);
+    if (_timeout) {
+        tmr.set(*_timeout);
     }
 
     /* Block  */
@@ -332,6 +328,41 @@ out:
     return nr_events;
 }
 
+int file::poll_many(struct pollfd _pfd[], nfds_t _nfds, timeout_t timeout)
+{
+    std::vector<poll_file> pfd;
+    pfd.reserve(_nfds);
+
+    for (nfds_t i = 0; i < _nfds; ++i) {
+        pfd.emplace_back(fileref_from_fd(_pfd[i].fd), _pfd->events, _pfd->revents);
+    }
+
+    auto ret = do_poll(pfd, timeout);
+
+    for (nfds_t i = 0; i < pfd.size(); ++i) {
+        _pfd[i].revents = pfd[i].revents;
+    }
+
+    return ret;
+}
+
+static int poll_one(struct pollfd& pfd, file::timeout_t timeout)
+{
+    if (pfd.fd < 0) {
+        pfd.revents = 0;
+        return 0;
+    }
+
+    auto fref = fileref_from_fd(pfd.fd);
+
+    if (!fref) {
+        pfd.revents = POLLNVAL;
+        return 1;
+    }
+
+    return fref->poll_sync(pfd, timeout);
+}
+
 int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
 {
     trace_poll(_pfd, _nfds, _timeout);
@@ -342,17 +373,13 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
         return -1;
     }
 
-    std::vector<poll_file> pfd;
-    pfd.reserve(_nfds);
+    auto timeout = parse_poll_timeout(_timeout);
 
-    for (nfds_t i = 0; i < _nfds; ++i) {
-        pfd.emplace_back(fileref_from_fd(_pfd[i].fd), _pfd->events, _pfd->revents);
-    }
-
-    auto ret = do_poll(pfd, _timeout);
-
-    for (nfds_t i = 0; i < pfd.size(); ++i) {
-        _pfd[i].revents = pfd[i].revents;
+    int ret;
+    if (_nfds == 1) {
+        ret = poll_one(_pfd[0], timeout);
+    } else {
+        ret = file::poll_many(_pfd, _nfds, timeout);
     }
 
     trace_poll_ret(ret);

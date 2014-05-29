@@ -39,6 +39,8 @@
 #include <bsd/porting/sync_stub.h>
 #include <bsd/porting/rwlock.h>
 #include <osv/waitqueue.hh>
+#include <chrono>
+#include <boost/optional/optional.hpp>
 
 #define	SB_MAX		(2*1024*1024)	/* default for max chars in sockbuf */
 
@@ -163,9 +165,13 @@ struct mbuf *
 	sbsndptr(struct sockbuf *sb, u_int off, u_int len, u_int *moff);
 void	sbtoxsockbuf(struct sockbuf *sb, struct xsockbuf *xsb);
 int	sbwait(socket* so, struct sockbuf *sb);
+
 int	sblock(socket* so, struct sockbuf *sb, int flags);
 void	sbunlock(socket* so, struct sockbuf *sb);
 __END_DECLS
+
+template<typename Clock>
+int	sbwait_tmo(socket* so, struct sockbuf *sb, boost::optional<std::chrono::time_point<Clock>> timeout);
 
 /*
  * How much space is there in a socket buffer (so->so_snd or so->so_rcv)?

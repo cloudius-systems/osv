@@ -146,7 +146,6 @@ struct poll_file {
 struct pollreq {
     std::vector<poll_file> _pfd;
     nfds_t _nfds;
-    int _timeout;
     std::atomic<bool> _awake = { false };
     sched::thread_handle _poll_thread = { *sched::thread::current() };
 };
@@ -171,7 +170,21 @@ __END_DECLS
 
 #ifdef __cplusplus
 
-int do_poll(std::vector<poll_file>& pfd, int _timeout);
+static inline file::timeout_t parse_poll_timeout(int timeout_ms)
+{
+    if (timeout_ms == 0) {
+        return file::timeout_t();
+    }
+
+    if (timeout_ms == -1) {
+        return file::timeout_t(file::clock::time_point::max());
+    }
+
+    return file::timeout_t(
+            file::clock::now() + std::chrono::milliseconds(timeout_ms));
+}
+
+int do_poll(std::vector<poll_file>& pfd, file::timeout_t _timeout);
 void epoll_file_closed(file* epoller, file* client);
 
 #endif

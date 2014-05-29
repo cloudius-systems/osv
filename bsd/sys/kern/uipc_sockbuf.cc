@@ -138,19 +138,15 @@ void sockbuf_iolock::unlock(mutex& mtx)
 	_wq.wake_all(mtx);
 }
 
-/*
- * Wait for data to arrive at/drain from a socket buffer.
- */
-int
-sbwait(socket* so, struct sockbuf *sb)
+template<typename Clock>
+int sbwait_tmo(socket* so, struct sockbuf *sb, boost::optional<std::chrono::time_point<Clock>> timeout)
 {
-
 	SOCK_LOCK_ASSERT(so);
 
 	sb->sb_flags |= SB_WAIT;
 	sched::timer tmr(*sched::thread::current());
-	if (sb->sb_timeo) {
-	    tmr.set(std::chrono::nanoseconds(ticks2ns(sb->sb_timeo)));
+	if (timeout) {
+		tmr.set(*timeout);
 	}
 	signal_catcher sc;
 	if (so->so_nc && !so->so_nc_busy) {
@@ -172,6 +168,26 @@ sbwait(socket* so, struct sockbuf *sb)
 	}
 
 	return 0;
+}
+
+template<typename Clock>
+static inline boost::optional<std::chrono::time_point<Clock>> parse_timeout(int timeout)
+{
+    if (timeout == 0) {
+        return boost::optional<std::chrono::time_point<Clock>>();
+    }
+
+    return boost::optional<std::chrono::time_point<Clock>>(
+            Clock::now() + std::chrono::nanoseconds(ticks2ns(timeout)));
+}
+
+/*
+ * Wait for data to arrive at/drain from a socket buffer.
+ */
+int
+sbwait(socket* so, struct sockbuf *sb)
+{
+	return sbwait_tmo(so, sb, parse_timeout<osv::clock::uptime>(sb->sb_timeo));
 }
 
 int

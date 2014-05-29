@@ -38,6 +38,7 @@
 #include <osv/ioctl.h>
 #include <osv/socket.hh>
 #include <osv/initialize.hh>
+#include <osv/poll.h>
 
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
@@ -236,6 +237,34 @@ socket_file::poll(int events)
     }
     SOCK_UNLOCK(so);
     return (sopoll(so, events, 0, 0));
+}
+
+int
+socket_file::poll_sync(struct pollfd& pfd, timeout_t timeout)
+{
+    constexpr auto supported_events = POLLIN | POLLRDNORM;
+    if ((pfd.events & POLL_REQUESTABLE) & ~supported_events) {
+        return poll_many(&pfd, 1, timeout);
+    }
+
+    SCOPE_LOCK(SOCK_MTX_REF(so));
+
+    if (so->so_nc) {
+        so->so_nc->process_queue();
+    }
+
+    int revents = sopoll_generic_locked(so, pfd.events);
+    if (!revents) {
+        if (!timeout || sbwait_tmo(so, &so->so_rcv, timeout)) {
+            pfd.revents = 0;
+            return 0;
+        }
+
+        revents = sopoll_generic_locked(so, pfd.events);
+    }
+
+    pfd.revents = revents;
+    return !!revents;
 }
 
 void

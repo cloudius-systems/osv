@@ -120,7 +120,7 @@ public:
             pollfds.emplace_back(i.first, events, 0,
                     i.second.last_poll_wake_count);
         }
-        int r = do_poll(pollfds, timeout_ms);
+        int r = do_poll(pollfds, parse_poll_timeout(timeout_ms));
         if (r > 0) {
             r = std::min(r, maxevents);
             int remain = r;

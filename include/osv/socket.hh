@@ -31,6 +31,7 @@ public:
     virtual int truncate(off_t len) override;
     virtual int ioctl(u_long com, void *data) override;
     virtual int poll(int events) override;
+    virtual int poll_sync(struct pollfd& pfd, timeout_t timeout) override;
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual int chmod(mode_t mode) override;
