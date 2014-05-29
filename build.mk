@@ -238,6 +238,7 @@ boost-tests += tests/tst-bsd-tcp1.so
 boost-tests += tests/tst-async.so
 boost-tests += tests/tst-rcu-list.so
 boost-tests += tests/tst-tcp-listen.so
+boost-tests += tests/tst-poll.so
 endif
 
 ifeq ($(arch),aarch64)
