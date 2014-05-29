@@ -214,7 +214,7 @@ static constexpr bool scheduler_uses_fpu = false;
 static constexpr bool scheduler_uses_fpu = true;
 #endif
 
-void cpu::reschedule_from_interrupt(bool preempt)
+void cpu::reschedule_from_interrupt()
 {
     assert(sched::exception_depth <= 1);
     need_reschedule = false;
@@ -275,9 +275,6 @@ void cpu::reschedule_from_interrupt(bool preempt)
 
     assert(n!=p);
 
-    if (preempt) {
-        trace_sched_preempt();
-    }
     if (p->_detached_state->st.load(std::memory_order_relaxed) == thread::status::queued
             && p != idle_thread) {
         n->_runtime.add_context_switch_penalty();
@@ -510,7 +507,7 @@ void thread::yield()
     t->_runtime.set_local(tnext._runtime);
     // Note that reschedule_from_interrupt will further increase t->_runtime
     // by thyst, giving the other thread 2*thyst to run before going back to t
-    t->_detached_state->_cpu->reschedule_from_interrupt(false);
+    t->_detached_state->_cpu->reschedule_from_interrupt();
 }
 
 void thread::set_priority(float priority)

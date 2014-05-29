@@ -699,7 +699,7 @@ struct cpu : private timer_base::client {
     void send_wakeup_ipi();
     void load_balance();
     unsigned load();
-    void reschedule_from_interrupt(bool preempt = false);
+    void reschedule_from_interrupt();
     void enqueue(thread& t);
     void init_idle_thread();
     virtual void timer_fired() override;
@@ -804,7 +804,7 @@ inline bool preemptable()
 inline void preempt()
 {
     if (preemptable()) {
-        sched::cpu::current()->reschedule_from_interrupt(true);
+        sched::cpu::current()->reschedule_from_interrupt();
     } else {
         // preempt_enable() will pick this up eventually
         need_reschedule = true;
