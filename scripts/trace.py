@@ -257,6 +257,9 @@ def extract(args):
             os.remove(args.tracefile)
             assert(not os.path.exists(args.tracefile))
         cmdline = ['gdb', elf_path, '-batch']
+        # enable adding OSv's python modules to gdb, see
+        # http://sourceware.org/gdb/onlinedocs/gdb/Auto_002dloading-safe-path.html
+        cmdline.extend(['-iex', 'set auto-load safe-path .'])
         if args.remote:
             cmdline.extend(['-ex', 'target remote ' + args.remote])
         else:
