@@ -72,6 +72,8 @@
 #include "fs/fs.hh"
 #include "libc/libc.hh"
 
+#include <mntent.h>
+
 using namespace std;
 
 
@@ -1704,13 +1706,28 @@ extern "C" void mount_zfs_rootfs(void)
     if (ret)
         kprintf("failed to pivot root, error = %s\n", strerror(ret));
 
-    ret = sys_mount("", "/dev", "devfs", 0, NULL);
-    if (ret)
-        kprintf("failed to mount devfs, error = %s\n", strerror(ret));
+    auto ent = setmntent("/etc/fstab", "r");
+    if (!ent) {
+        return;
+    }
 
-    ret = sys_mount("", "/proc", "procfs", 0, NULL);
-    if (ret)
-        kprintf("failed to mount procfs, error = %s\n", strerror(ret));
+    struct mntent *m = nullptr;
+    while ((m = getmntent(ent)) != nullptr) {
+        if (!strcmp(m->mnt_dir, "/")) {
+            continue;
+        }
+
+        if ((m->mnt_opts != nullptr) && strcmp(m->mnt_opts, MNTOPT_DEFAULTS)) {
+            printf("Warning: opts %s, ignored for fs %s\n", m->mnt_opts, m->mnt_type);
+        }
+
+        // FIXME: Right now, ignoring mntops. In the future we may have an option parser
+        ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, NULL);
+        if (ret) {
+            printf("failed to mount %s, error = %s\n", m->mnt_type, strerror(ret));
+        }
+    } while (m != nullptr);
+    endmntent(ent);
 }
 
 extern "C" void unmount_rootfs(void)
