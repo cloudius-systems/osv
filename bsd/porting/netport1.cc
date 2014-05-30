@@ -66,30 +66,3 @@ int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo)
     auto ret = cv->wait(mutex, std::chrono::nanoseconds(ticks2ns(tmo)));
     return ret == ETIMEDOUT ? -1 : 0;
 }
-
-extern "C"
-int getmntent(FILE* fp, struct mnttab* me)
-{
-    // FIXME: ignore fp but return the mounts directly from vfs instead
-    // should be replaced by a virtual file
-    // FIXME: we're using a static here in lieu of the file offset
-    static size_t last = 0;
-    auto mounts = osv::current_mounts();
-    if (last >= mounts.size()) {
-        last = 0;
-        return -1;
-    } else {
-        // We're using statics here, but there's nothing else we can do with
-        // this horrible interface
-        static char path[PATH_MAX];
-        static char special[PATH_MAX];
-        static char options[PATH_MAX];
-        static char type[30];
-        auto& m = mounts[last++];
-        strcpy(me->mnt_mountp = path, m.path.c_str());
-        strcpy(me->mnt_fstype = type, m.type.c_str());
-        strcpy(me->mnt_mntopts = options, m.options.c_str());
-        strcpy(me->mnt_special = special, m.special.c_str());
-        return 0;
-    }
-}

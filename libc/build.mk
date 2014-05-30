@@ -344,6 +344,7 @@ libc += misc/realpath.o
 libc += misc/backtrace.o
 libc += misc/uname.o
 libc += misc/lockf.o
+libc += misc/mntent.o
 
 libc += multibyte/btowc.o
 libc += multibyte/internal.o

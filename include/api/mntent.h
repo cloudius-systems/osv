@@ -5,6 +5,8 @@
 extern "C" {
 #endif
 
+#define OSV_DYNMOUNTS reinterpret_cast<FILE *>(-1ULL)
+
 #define __NEED_FILE
 #include <bits/alltypes.h>
 
