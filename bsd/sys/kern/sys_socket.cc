@@ -49,6 +49,8 @@
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/net/vnet.h>
 
+#include <mutex>
+
 using namespace std;
 
 extern "C" int linux_ioctl_socket(socket_file *fp, u_long cmd, void *data) ;
@@ -247,7 +249,12 @@ socket_file::poll_sync(struct pollfd& pfd, timeout_t timeout)
         return poll_many(&pfd, 1, timeout);
     }
 
-    SCOPE_LOCK(SOCK_MTX_REF(so));
+    std::unique_lock<::mutex> guard(SOCK_MTX_REF(so));
+
+    if (!(so->so_state & SS_ISCONNECTED)) {
+        guard.unlock();
+        return poll_many(&pfd, 1, timeout);
+    }
 
     if (so->so_nc) {
         so->so_nc->process_queue();
