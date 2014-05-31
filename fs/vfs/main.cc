@@ -894,9 +894,9 @@ int link(const char *oldpath, const char *newpath)
 }
 
 
-TRACEPOINT(trace_vfs_symlink, "\"%s\" \"%s\"", const char*, const char*);
+TRACEPOINT(trace_vfs_symlink, "oldpath=%s, newpath=%s", const char*, const char*);
 TRACEPOINT(trace_vfs_symlink_ret, "");
-TRACEPOINT(trace_vfs_symlink_err, "%d", int);
+TRACEPOINT(trace_vfs_symlink_err, "errno=%d", int);
 
 int symlink(const char *oldpath, const char *newpath)
 {
@@ -990,9 +990,9 @@ int stat(const char *pathname, struct stat *st)
 
 LFS64(stat);
 
-TRACEPOINT(trace_vfs_lstat, "\"%s\" %p", const char*, struct stat*);
+TRACEPOINT(trace_vfs_lstat, "pathname=%s, stat=%p", const char*, struct stat*);
 TRACEPOINT(trace_vfs_lstat_ret, "");
-TRACEPOINT(trace_vfs_lstat_err, "%d", int);
+TRACEPOINT(trace_vfs_lstat_err, "errno=%d", int);
 extern "C"
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {

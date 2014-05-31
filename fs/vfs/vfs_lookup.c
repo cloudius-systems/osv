@@ -31,6 +31,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/param.h>
 
 #include <osv/dentry.h>
 #include <osv/vnode.h>
@@ -177,22 +178,21 @@ drele(struct dentry *dp)
     free(dp);
 }
 
-static inline size_t read_link(struct vnode *vp, char *buf, size_t size)
+static ssize_t
+read_link(struct vnode *vp, char *buf, size_t bufsz, ssize_t *sz)
 {
-    struct iovec iov = {
-        .iov_base = buf,
-        .iov_len  = size,
-    };
+    struct iovec iov = {buf, bufsz};
+    struct uio   uio = {&iov, 1, 0, (ssize_t) bufsz, UIO_READ};
+    int rc;
 
-    struct uio uio = {
-        .uio_iov	= &iov,
-        .uio_iovcnt	= 1,
-        .uio_offset	= 0,
-        .uio_resid	= size,
-        .uio_rw		= UIO_READ,
-    };
+    *sz = 0;
+    rc  = VOP_READLINK(vp, &uio);
+    if (rc != 0) {
+        return (rc);
+    }
 
-    return (VOP_READLINK(vp, &uio));
+    *sz = bufsz - uio.uio_resid;
+    return (0);
 }
 
 int
@@ -201,26 +201,35 @@ __namei(char *path, struct dentry **dpp, int flag)
     char *p;
     char node[PATH_MAX];
     char name[PATH_MAX];
-    char fp[PATH_MAX];
+    char *fp;
     struct mount *mp;
     struct dentry *dp, *ddp;
     struct vnode *dvp, *vp;
     int error, i;
-    int follow;
+    int links_followed;
+    bool follow;
 
     DPRINTF(VFSDB_VNODE, ("namei: path=%s\n", path));
 
-    follow = 0;
-    if ((flag & AT_SYMLINK_FOLLOW) != 0) {
-        follow = 1;
+    links_followed = 0;
+    follow = false;
+    if (flag & AT_SYMLINK_FOLLOW) {
+        follow = true;
     }
+
+    fp = malloc(PATH_MAX);
+    if (fp == NULL) {
+        return (ENOMEM);
+    }
+    strlcpy(fp, path, PATH_MAX);
 
 start:
     /*
      * Convert a full path name to its mount point and
      * the local node in the file system.
      */
-    if (vfs_findroot(path, &mp, &p)) {
+    if (vfs_findroot(fp, &mp, &p)) {
+        free(fp);
         return ENOTDIR;
     }
     strlcpy(node, "/", sizeof(node));
@@ -229,6 +238,7 @@ start:
     if (dp) {
         /* vnode is already active. */
         *dpp = dp;
+        free(fp);
         return 0;
     }
     /*
@@ -278,6 +288,7 @@ start:
             if (error) {
                 vn_unlock(dvp);
                 drele(ddp);
+                free(fp);
                 return error;
             }
 
@@ -287,51 +298,55 @@ start:
             if (!dp) {
                 vn_unlock(dvp);
                 drele(ddp);
+                free(fp);
                 return ENOMEM;
             }
         }
-
         vn_unlock(dvp);
         drele(ddp);
         ddp = dp;
 
-        if (dp->d_vnode->v_type == VLNK && follow == 1) {
-            char t[PATH_MAX];
-            char l[PATH_MAX];
+        if (dp->d_vnode->v_type == VLNK && follow) {
+            ssize_t sz;
+            int     c;
 
-            memset(l, 0, sizeof(l));
-            error = read_link(dp->d_vnode, l, sizeof(l));
+            c     = strlen(node) - strlen(name);
+            error = read_link(dp->d_vnode, name, sizeof(name), &sz);
             if (error != 0) {
                 drele(dp);
+                free(fp);
                 return (error);
             }
+            name[sz] = 0;
 
-            if (l[0] == '/') {
-                /*
-                 * p might be pointing to fp already, use another
-                 * temporary buffer t
-                 */
-                strlcpy(t, l, sizeof(t));
-                strlcat(t, p, sizeof(t));
-                strlcpy(fp, t, sizeof(fp));
+            if (name[0] == '/') {
+                strlcat(name, p, sizeof(name));
+                strlcpy(fp, name, PATH_MAX);
             } else {
-                strlcpy(t, node, strlen(node) - strlen(name));
-                path_conv(t, l, fp);
+                node[c] = 0;
+                path_conv(node, name, fp);
             }
 
             drele(dp);
-            path	= fp;
-            dp		= NULL;
-            ddp		= NULL;
-            vp		= NULL;
-            dvp		= NULL;
-            name[0]	= 0;
-            node[0]	= 0;
+
+            p       = fp;
+            dp      = NULL;
+            ddp     = NULL;
+            vp      = NULL;
+            dvp     = NULL;
+            name[0] = 0;
+            node[0] = 0;
+
+            if (++links_followed >= MAXSYMLINKS) {
+                free(fp);
+                return (ELOOP);
+            }
             goto start;
         }
 
         if (*p == '/' && ddp->d_vnode->v_type != VDIR) {
             drele(ddp);
+            free(fp);
             return ENOTDIR;
         }
     }
@@ -345,6 +360,7 @@ start:
     }
 #endif
 
+    free(fp);
     *dpp = dp;
     return 0;
 }
@@ -361,8 +377,8 @@ namei(char *path, struct dentry **dpp)
     return (__namei(path, dpp, AT_SYMLINK_FOLLOW));
 }
 
-
-int namei_nofollow(char *path, struct dentry **dpp)
+int
+namei_nofollow(char *path, struct dentry **dpp)
 {
     return (__namei(path, dpp, AT_SYMLINK_NOFOLLOW));
 }

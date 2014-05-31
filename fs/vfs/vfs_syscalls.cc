@@ -58,6 +58,36 @@
 
 extern struct task *main_task;
 
+static int
+open_no_follow_chk(char *path)
+{
+	int           error;
+	struct dentry *ddp;
+	char          *filename;
+	struct vnode  *dvp;
+	struct vnode  *vp;
+
+	error = lookup(path, &ddp, &filename);
+	if (error) {
+		return (error);
+	}
+
+	dvp = ddp->d_vnode;
+	vn_lock(dvp);
+	error = VOP_LOOKUP(dvp, filename, &vp);
+	vn_unlock(dvp);
+	drele(ddp);
+
+	if (error) {
+		return (error);
+	}
+
+	if (vp->v_type == VLNK) {
+		return (ELOOP);
+	}
+	return (0);
+}
+
 int
 sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 {
@@ -111,6 +141,12 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 		flags &= ~O_CREAT;
 	} else {
 		/* Open */
+		if (flags & O_NOFOLLOW) {
+			error = open_no_follow_chk(path);
+			if (error != 0) {
+				return (error);
+			}
+		}
 		error = namei(path, &dp);
 		if (error)
 			return error;

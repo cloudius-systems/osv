@@ -22,7 +22,6 @@
 
 #define N1	"f1"
 #define N2	"f2"
-#define N3	"f3"
 #define D1	"d1"
 
 int tests = 0, fails = 0;
@@ -92,8 +91,6 @@ int main(int argc, char **argv)
 	report(search_dir(TESTDIR, N2) == true, "search dir");
 
 	report(access(N1, R_OK | W_OK) == 0, "access");
-
-	rc = access(N2, R_OK | W_OK);
 	report(access(N2, R_OK | W_OK) == 0, "access");
 
 	rc = readlink(N2, path, sizeof(path));
@@ -233,6 +230,34 @@ int main(int argc, char **argv)
 	report(error == ENAMETOOLONG, "ENAMETOOLONG expected 3");
 	close(fd);
 	unlink(N1);
+
+	/* O_NOFOLLOW test 1 */
+	fd = creat(N1, 0777);
+	report(fd >= 0, "creat");
+	report(symlink(N1, N2) == 0, "symlink");
+
+	rc = open(N2, O_RDONLY | O_NOFOLLOW);
+	report(rc < 0 && errno == ELOOP, "open(symlink, O_NOFOLLOW) must fail");
+	unlink(N2);
+	unlink(N1);
+
+	/* O_NOFOLLOW test 2 */
+	report(mkdir(D1, 0777) == 0, "mkdir"); /* create dir /tmp/d1 */
+	snprintf(path, sizeof(path), "%s/%s", D1, N1);
+	fd = creat(path, 0777);  /* create file /tmp/d1/f1 */
+	report(fd >= 0, "creat");
+	close(fd);
+
+	report(symlink(D1, N2) == 0, "symlink to directory");
+	rc = open(N2, O_RDONLY | O_NOFOLLOW);
+	report(rc < 0 && errno == ELOOP, "open(symlink, O_NOFOLLOW) must fail");
+
+	rc = open(path, O_RDONLY | O_NOFOLLOW);
+	report(rc >= 0, "open");
+	close(rc);
+	unlink(path);
+	unlink(N2);
+	rmdir(D1);
 
 	debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 	return (fails == 0 ? 0 : 1);
