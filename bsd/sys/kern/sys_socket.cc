@@ -261,7 +261,7 @@ socket_file::poll_sync(struct pollfd& pfd, timeout_t timeout)
     }
 
     int revents = sopoll_generic_locked(so, pfd.events);
-    if (!revents) {
+    while (!revents) {
         if (!timeout || sbwait_tmo(so, &so->so_rcv, timeout)) {
             pfd.revents = 0;
             return 0;
