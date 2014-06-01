@@ -63,29 +63,46 @@ open_no_follow_chk(char *path)
 {
 	int           error;
 	struct dentry *ddp;
-	char          *filename;
-	struct vnode  *dvp;
+	char          *name;
+	struct dentry *dp;
 	struct vnode  *vp;
 
-	error = lookup(path, &ddp, &filename);
+	ddp = NULL;
+	dp  = NULL;
+	vp  = NULL;
+
+	error = lookup(path, &ddp, &name);
 	if (error) {
 		return (error);
 	}
 
-	dvp = ddp->d_vnode;
-	vn_lock(dvp);
-	error = VOP_LOOKUP(dvp, filename, &vp);
-	vn_unlock(dvp);
-	drele(ddp);
-
+	error = namei_last_nofollow(path, ddp, &dp);
 	if (error) {
-		return (error);
+		goto out;
 	}
 
+	vp = dp->d_vnode;
+	vn_lock(vp);
 	if (vp->v_type == VLNK) {
-		return (ELOOP);
+		error = ELOOP;
+		goto out;
 	}
-	return (0);
+
+	error = 0;
+out:
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (dp != NULL) {
+		drele(dp);
+	}
+
+	if (ddp != NULL) {
+		drele(ddp);
+	}
+
+	return (error);
 }
 
 int
@@ -569,6 +586,7 @@ sys_rmdir(char *path)
 	vn_unlock(ddp->d_vnode);
 
 	vn_unlock(vp);
+	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
 	return error;
@@ -663,9 +681,16 @@ sys_rename(char *src, char *dest)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
 
-	error = namei_nofollow(src, &dp1);
-	if (error)
-		return error;
+	error = lookup(src, &ddp1, &sname);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(src, ddp1, &dp1);
+	if (error != 0) {
+		drele(ddp1);
+		return (error);
+	}
 
 	vp1 = dp1->d_vnode;
 	vn_lock(vp1);
@@ -728,9 +753,6 @@ sys_rename(char *src, char *dest)
 	*dname = 0;
 	dname++;
 
-	if ((error = lookup(src, &ddp1, &sname)) != 0)
-		goto err2;
-
 	dvp1 = ddp1->d_vnode;
 	vn_lock(dvp1);
 
@@ -757,13 +779,13 @@ sys_rename(char *src, char *dest)
 	drele(ddp2);
  err3:
 	vn_unlock(dvp1);
-	drele(ddp1);
  err2:
 	if (vp2) {
 		vn_unlock(vp2);
 		drele(dp2);
 	}
  err1:
+	drele(ddp1);
 	vn_unlock(vp1);
 	drele(dp1);
 	return error;
@@ -924,8 +946,19 @@ sys_unlink(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
 
-	if ((error = namei_nofollow(path, &dp)) != 0)
-		return error;
+	ddp   = NULL;
+	dp    = NULL;
+	vp    = NULL;
+
+	error = lookup(path, &ddp, &name);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error != 0) {
+		goto out;
+	}
 
 	vp = dp->d_vnode;
 	vn_lock(vp);
@@ -941,8 +974,6 @@ sys_unlink(char *path)
 		error = EBUSY;
 		goto out;
 	}
-	if ((error = lookup(path, &ddp, &name)) != 0)
-		goto out;
 
 	vn_lock(ddp->d_vnode);
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
@@ -952,10 +983,19 @@ sys_unlink(char *path)
 	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
-	return 0;
+	return error;
  out:
-	vn_unlock(vp);
-	drele(dp);
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (dp != NULL) {
+		drele(dp);
+	}
+
+	if (ddp != NULL) {
+		drele(ddp);
+	}
 	return error;
 }
 

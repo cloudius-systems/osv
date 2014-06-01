@@ -202,6 +202,7 @@ __namei(char *path, struct dentry **dpp, int flag)
     char node[PATH_MAX];
     char name[PATH_MAX];
     char *fp;
+    char *t;
     struct mount *mp;
     struct dentry *dp, *ddp;
     struct vnode *dvp, *vp;
@@ -222,6 +223,7 @@ __namei(char *path, struct dentry **dpp, int flag)
         return (ENOMEM);
     }
     strlcpy(fp, path, PATH_MAX);
+    t = NULL;
 
 start:
     /*
@@ -230,6 +232,7 @@ start:
      */
     if (vfs_findroot(fp, &mp, &p)) {
         free(fp);
+        free(t);
         return ENOTDIR;
     }
     strlcpy(node, "/", sizeof(node));
@@ -239,6 +242,7 @@ start:
         /* vnode is already active. */
         *dpp = dp;
         free(fp);
+        free(t);
         return 0;
     }
     /*
@@ -289,6 +293,7 @@ start:
                 vn_unlock(dvp);
                 drele(ddp);
                 free(fp);
+                free(t);
                 return error;
             }
 
@@ -299,6 +304,7 @@ start:
                 vn_unlock(dvp);
                 drele(ddp);
                 free(fp);
+                free(t);
                 return ENOMEM;
             }
         }
@@ -310,11 +316,21 @@ start:
             ssize_t sz;
             int     c;
 
+            if (t == NULL) {
+                t = malloc(PATH_MAX);
+                if (t == NULL) {
+                    drele(dp);
+                    free(fp);
+                    return (ENOMEM);
+                }
+            }
+
             c     = strlen(node) - strlen(name);
             error = read_link(dp->d_vnode, name, sizeof(name), &sz);
             if (error != 0) {
                 drele(dp);
                 free(fp);
+                free(t);
                 return (error);
             }
             name[sz] = 0;
@@ -323,8 +339,10 @@ start:
                 strlcat(name, p, sizeof(name));
                 strlcpy(fp, name, PATH_MAX);
             } else {
-                node[c] = 0;
+                node[c-1] = 0;
+                strlcpy(t, p, PATH_MAX);
                 path_conv(node, name, fp);
+                strlcat(fp, t, PATH_MAX);
             }
 
             drele(dp);
@@ -339,6 +357,7 @@ start:
 
             if (++links_followed >= MAXSYMLINKS) {
                 free(fp);
+                free(t);
                 return (ELOOP);
             }
             goto start;
@@ -347,6 +366,7 @@ start:
         if (*p == '/' && ddp->d_vnode->v_type != VDIR) {
             drele(ddp);
             free(fp);
+            free(t);
             return ENOTDIR;
         }
     }
@@ -362,6 +382,7 @@ start:
 
     free(fp);
     *dpp = dp;
+    free(t);
     return 0;
 }
 
@@ -381,6 +402,79 @@ int
 namei_nofollow(char *path, struct dentry **dpp)
 {
     return (__namei(path, dpp, AT_SYMLINK_NOFOLLOW));
+}
+
+/*
+ * Convert last component in the path to pointer to dentry
+ *
+ * @path: full path name
+ * @ddp : pointer to dentry of parent
+ * @dpp : dentry to be returned
+ */
+int
+namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
+{
+    char          *name;
+    int           error;
+    struct mount  *mp;
+    char          *p;
+    char          *node;
+    struct dentry *dp;
+    struct vnode  *dvp;
+    struct vnode  *vp;
+
+    node = NULL;
+    dvp  = NULL;
+
+    if (path[0] != '/') {
+        return (ENOTDIR);
+    }
+
+    name = strrchr(path, '/');
+    if (name == NULL) {
+        return (ENOENT);
+    }
+    name++;
+
+    error = vfs_findroot(path, &mp, &p);
+    if (error != 0) {
+        return (ENOTDIR);
+    }
+
+    node = malloc(PATH_MAX);
+    if (node == NULL) {
+        return (ENOMEM);
+    }
+
+    strlcpy(node, "/", PATH_MAX);
+    strlcat(node, p, PATH_MAX);
+
+    dvp = ddp->d_vnode;
+    vn_lock(dvp);
+    dp = dentry_lookup(mp, node);
+    if (dp == NULL) {
+        error = VOP_LOOKUP(dvp, name, &vp);
+        if (error != 0) {
+            goto out;
+        }
+
+        dp = dentry_alloc(ddp, vp, node);
+        vput(vp);
+
+        if (dp == NULL) {
+            error = ENOMEM;
+            goto out;
+        }
+    }
+
+    *dpp  = dp;
+    error = 0;
+out:
+    if (dvp != NULL) {
+        vn_unlock(dvp);
+    }
+    free(node);
+    return (error);
 }
 
 /*

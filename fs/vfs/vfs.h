@@ -135,6 +135,7 @@ int	 sec_vnode_permission(char *path);
 
 int	 namei(char *path, struct dentry **dpp);
 int	 namei_nofollow(char *path, struct dentry **dpp);
+int	 namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dp);
 int	 lookup(char *path, struct dentry **dpp, char **name);
 void	 vnode_init(void);
 void	 lookup_init(void);

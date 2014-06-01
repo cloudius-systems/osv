@@ -21,8 +21,14 @@
 #define TESTDIR	"/tmp"
 
 #define N1	"f1"
-#define N2	"f2"
+#define N2	"f2_AAA"
+#define N3	"f3"
+#define N4	"f4"
+#define N5	"f5"
 #define D1	"d1"
+#define D2	"d2_AAA"
+#define D3	"d3"
+#define D4	"d4"
 
 int tests = 0, fails = 0;
 
@@ -50,9 +56,11 @@ static bool search_dir(const char *dir, const char *name)
 
 	while ((e = readdir(d)) != NULL) {
 		if (strcmp(e->d_name, name) == 0) {
+			closedir(d);
 			return (true);
 		}
 	}
+	closedir(d);
 
 	return (false);
 }
@@ -68,6 +76,7 @@ int main(int argc, char **argv)
 	int		fd1;
 	char		b1[4097];
 	char		b2[4097];
+	char		path1[PATH_MAX];
 
 	debug("Testing symlink() and related functions.\n");
 
@@ -111,8 +120,10 @@ int main(int argc, char **argv)
 	report(rc < 0, "stat");
 	report(error == ENOENT, "ENOENT expected");
 
-	unlink(N1);
-	unlink(N2);
+	rc	= unlink(N1);
+	error	= errno;
+	report(rc < 0 && errno == ENOENT, "ENOENT expected");
+	report(unlink(N2) == 0, "unlink");
 
 	/*
 	 * IO Tests 1: write(file), read(symlink), truncate(symlink)
@@ -173,8 +184,8 @@ int main(int argc, char **argv)
 	report(buf.st_size == 0, "file size after truncate");
 
 	close(fd);
-	unlink(N2);
-	unlink(N1);
+	report(unlink(N2) == 0, "unlink");
+	report(unlink(N1) == 0, "unlink");
 
 	/*
 	 * creating a symlink inside directory must change time
@@ -194,9 +205,9 @@ int main(int argc, char **argv)
 	report(t1 < buf.st_mtime, "mtime");
 
 	close(fd);
-	unlink(path);
-	unlink(N1);
-	rmdir(D1);
+	report(unlink(path) == 0, "unlink");
+	report(unlink(N1) == 0, "unlink");
+	report(rmdir(D1) == 0, "rmdir");
 
 	/* ENOTDIR test */
 	rc	= symlink(N1, path);
@@ -210,7 +221,7 @@ int main(int argc, char **argv)
 
 	fill_buf(path, 255);
 	report(symlink(N1, path) == 0, "symlink");
-	unlink(path);
+	report(unlink(path) == 0, "unlink");
 
 	fill_buf(path, 257);
 	rc      = symlink(N1, path);
@@ -229,7 +240,7 @@ int main(int argc, char **argv)
 	report(rc < 0, "symlink");
 	report(error == ENAMETOOLONG, "ENAMETOOLONG expected 3");
 	close(fd);
-	unlink(N1);
+	report(unlink(N1) == 0, "unlink");
 
 	/* O_NOFOLLOW test 1 */
 	fd = creat(N1, 0777);
@@ -238,8 +249,8 @@ int main(int argc, char **argv)
 
 	rc = open(N2, O_RDONLY | O_NOFOLLOW);
 	report(rc < 0 && errno == ELOOP, "open(symlink, O_NOFOLLOW) must fail");
-	unlink(N2);
-	unlink(N1);
+	report(unlink(N2) == 0, "unlink");
+	report(unlink(N1) == 0, "unlink");
 
 	/* O_NOFOLLOW test 2 */
 	report(mkdir(D1, 0777) == 0, "mkdir"); /* create dir /tmp/d1 */
@@ -255,9 +266,86 @@ int main(int argc, char **argv)
 	rc = open(path, O_RDONLY | O_NOFOLLOW);
 	report(rc >= 0, "open");
 	close(rc);
-	unlink(path);
-	unlink(N2);
-	rmdir(D1);
+	report(unlink(path) == 0, "unlink");
+	report(unlink(N2) == 0, "unlink");
+	report(rmdir(D1) == 0, "rmdir");
+
+	/* unlink test */
+	report(mkdir(D1, 0777) == 0, "mkdir"); /* create dir /tmp/d1 */
+	snprintf(path, sizeof(path), "%s/%s", D1, N1);
+	fd = creat(path, 0777);  /* create file /tmp/d1/f1 */
+	report(fd >= 0, "creat");
+	close(fd);
+
+	report(symlink(D1, N2) == 0, "symlink to directory");
+	report(search_dir(D1, N1) == true, "Directory search");
+	report(search_dir(N2, N1) == true, "Symlink search");
+
+	snprintf(path, sizeof(path), "%s/%s", N2, N1);
+	report(unlink(path) == 0, "Unlink file through symlink");
+	report(unlink(N2) == 0, "unlink");
+	report(rmdir(D1) == 0, "rmdir");
+
+	/* rename tests */
+	fd = creat(N1, 0777);
+	close(fd);
+	report(rename(N1, N2) == 0, "rename file");
+	report(unlink(N2) == 0, "unlink file");
+
+	report(mkdir(D1, 0777) == 0, "mkdir");
+	report(rename(D1, D2) == 0, "rename directory");
+	report(rmdir(D2) == 0, "rmdir");
+
+	report(mkdir(D1, 0777) == 0, "mkdir");		/* /tmp/d1 */
+	snprintf(path, sizeof(path), "%s/%s", D1, N1);	/* /tmp/d1/f1 */
+	fd = creat(path, 0777);
+	report(fd >= 0, "create file");
+	close(fd);
+
+	report(symlink(D1, D2) == 0, "symlink to directory"); /* /tmp/d2 -> /tmp/d1 */
+	snprintf(path1, sizeof(path1), "%s/%s", D1, N2);
+	report(rename(path, path1) == 0, "rename(f1,f2)");
+
+	snprintf(path, sizeof(path), "%s/%s", D1, N2);
+	snprintf(path1, sizeof(path1), "%s/%s", D2, N3);
+	report(rename(path, path1) == 0, "rename(d1/f2, d2/f3)");
+	report(search_dir(D1, N3) == true, "Directory search");
+	report(search_dir(D2, N3) == true, "Symlink search");
+
+	snprintf(path, sizeof(path), "%s/%s", D2, N3);
+	snprintf(path1, sizeof(path1), "%s/%s", D1, N4);
+	report(rename(path, path1) == 0, "rename(d2/f3, d1/f4)");
+	report(search_dir(D1, N4) == true, "Directory search");
+	report(search_dir(D2, N4) == true, "Symlink search");
+
+	snprintf(path, sizeof(path), "%s/%s", D2, N4);
+	snprintf(path1, sizeof(path1), "%s/%s", D2, N5);
+	report(rename(path, path1) == 0, "rename(d2/f4, d2/f5)");
+	report(search_dir(D1, N5) == true, "Directory search");
+	report(search_dir(D2, N5) == true, "Symlink search");
+
+	report(rename(D2, D3) == 0, "rename(d2, d3)");
+	rc = readlink(D3, path, sizeof(path));
+	report(rc >= 0, "readlink");
+	path[rc] = 0;
+	report(strcmp(path, D1) == 0, "readlink path");
+
+	report(rename(D1, D4) == 0, "rename(d1, d4)");
+	rc = readlink(D3, path, sizeof(path));
+	report(rc >= 0, "readlink");
+	path[rc] = 0;
+	report(strcmp(path, D1) == 0, "readlink path");
+	report(lstat(D3, &buf) == 0, "lstat");
+	report(S_ISLNK(buf.st_mode) == 1, "file mode");
+	rc	= stat(D3, &buf);
+	error	= errno;
+	report(rc < 0, "stat");
+	report(error == ENOENT, "ENOENT expected");
+
+	snprintf(path, sizeof(path), "%s/%s", D4, N5);
+	report(unlink(path) == 0, "unlink(d4/f5)");
+	report(unlink(D3) == 0, "unlink(d3)");
+	report(rmdir(D4) == 0, "rmdir");
 
 	debug("SUMMARY: %d tests, %d failures\n", tests, fails);
 	return (fails == 0 ? 0 : 1);
