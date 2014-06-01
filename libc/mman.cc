@@ -66,6 +66,8 @@ unsigned libc_madvise_to_advise(int advice)
 {
     if (advice == MADV_DONTNEED) {
         return mmu::advise_dontneed;
+    } else if (advice == MADV_NOHUGEPAGE) {
+        return mmu::advise_nohugepage;
     }
     return 0;
 }

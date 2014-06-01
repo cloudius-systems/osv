@@ -54,6 +54,7 @@ enum {
 
 enum {
     advise_dontneed = 1ul << 0,
+    advise_nohugepage = 1ul << 1,
 };
 
 enum {
