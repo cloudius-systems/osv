@@ -28,7 +28,7 @@ class thread_allocator
 {
 private:
     std::vector<sched::thread*> threads;
-    int next_core {};
+    unsigned next_core {};
 public:
     template<typename Func>
     void add(Func func)
