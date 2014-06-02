@@ -668,7 +668,6 @@ public:
             osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr(false)));
         }
     }
-    void sub_page(hw_ptep ptep, int level, uintptr_t offset) {}
 private:
     unsigned live_ptes;
 };
