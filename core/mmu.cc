@@ -580,7 +580,7 @@ public:
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
         void* addr = phys_to_virt(ptep.read().addr(true));
-        if (_pops->unmap(addr, offset, ptep)) {
+        if (_pops->unmap(addr, huge_page_size, offset, ptep)) {
             do_flush = !_tlb_gather.push(addr, huge_page_size);
         } else {
             do_flush = true;
