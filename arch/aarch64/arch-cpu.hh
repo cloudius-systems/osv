@@ -34,6 +34,14 @@ struct arch_fpu {
     void restore() { processor::fpu_state_load(&s); }
 };
 
+// lock adapter for arch_fpu
+class fpu_lock {
+    arch_fpu _state;
+public:
+    void lock() { _state.save(); }
+    void unlock() { _state.restore(); }
+};
+
 inline void arch_cpu::init_on_cpu()
 {
     if (this->smp_idx != 0) {
