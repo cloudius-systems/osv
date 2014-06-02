@@ -7,4 +7,4 @@ if [ ! -d "$images" ]; then
   exit 1
 fi
 
-s3cmd sync -P $images s3://downloads.osv
+s3cmd sync -P $images s3://downloads.osv.io
