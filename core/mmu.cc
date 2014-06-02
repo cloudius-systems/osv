@@ -211,22 +211,6 @@ struct page_allocator {
     virtual ~page_allocator() {}
 };
 
-void debug_count_ptes(pt_element pte, int level, size_t &nsmall, size_t &nhuge)
-{
-    if (level<4 && !pte.valid()){
-        // nothing
-    } else if (pte.large()) {
-        nhuge++;
-    } else if (level==0){
-        nsmall++;
-    } else {
-        hw_ptep pt = follow(pte);
-        for(int i=0; i<pte_per_page; ++i) {
-            debug_count_ptes(pt.at(i).read(), level-1, nsmall, nhuge);
-        }
-    }
-}
-
 unsigned long all_vmas_size()
 {
     SCOPE_LOCK(vma_list_mutex);
