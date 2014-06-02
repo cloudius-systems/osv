@@ -309,7 +309,7 @@ class object {
 public:
     explicit object(program& prog, std::string pathname);
     virtual ~object();
-    void load_needed();
+    void load_needed(std::vector<std::shared_ptr<object>>& loaded_objects);
     void unload_needed();
     void relocate();
     void set_base(void* base);
@@ -514,6 +514,9 @@ private:
     void remove_object(object *obj);
     ulong register_dtv(object* obj);
     void free_dtv(object* obj);
+    std::shared_ptr<object> load_object(std::string name,
+            std::vector<std::string> extra_path,
+            std::vector<std::shared_ptr<object>> &loaded_objects);
 private:
     mutex _mutex;
     void* _next_alloc;

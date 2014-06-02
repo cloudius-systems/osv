@@ -752,7 +752,7 @@ static std::string dirname(std::string path)
     return path.substr(0, pos);
 }
 
-void object::load_needed()
+void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
 {
     std::vector<std::string> rpath;
     if (dynamic_exists(DT_RPATH)) {
@@ -762,7 +762,7 @@ void object::load_needed()
     }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
-        auto obj = _prog.get_library(lib, rpath);
+        auto obj = _prog.load_object(lib, rpath, loaded_objects);
         if (obj) {
             // Keep a reference to the needed object, so it won't be
             // unloaded until this object is unloaded.
@@ -900,12 +900,17 @@ static std::string canonicalize(std::string p)
     }
 }
 
+// This is the part of program::get_library() which loads an object and all
+// its dependencies, but doesn't yet run the objects' init functions. We can
+// only do this after loading all the dependent objects, as we need to run the
+// init functions of the deepest needed object first, yet it may use symbols
+// from the shalower objects (as those are first in the search path).
+// So while loading the objects, we just collect a list of them, and
+// get_library() will run the init functions later.
 std::shared_ptr<elf::object>
-program::get_library(std::string name, std::vector<std::string> extra_path)
+program::load_object(std::string name, std::vector<std::string> extra_path,
+        std::vector<std::shared_ptr<object>> &loaded_objects)
 {
-    // Note: this lock can be recursive (get_library calls load_needed which
-    // calls get_library again).
-    SCOPE_LOCK(_mutex);
     fileref f;
     if (name.find('/') == name.npos) {
         std::vector<std::string> search_path;
@@ -954,17 +959,35 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
         ef->load_segments();
         _next_alloc = ef->end();
         add_debugger_obj(ef.get());
-        ef->load_needed();
+        loaded_objects.push_back(ef);
+        ef->load_needed(loaded_objects);
         ef->relocate();
         ef->fix_permissions();
-        ef->run_init_funcs();
-        ef->setprivate(false);
         _files[name] = ef;
         _files[ef->soname()] = ef;
         return ef;
     } else {
         return std::shared_ptr<object>();
     }
+}
+
+std::shared_ptr<object>
+program::get_library(std::string name, std::vector<std::string> extra_path)
+{
+    SCOPE_LOCK(_mutex);
+    std::vector<std::shared_ptr<object>> loaded_objects;
+    auto ret = load_object(name, extra_path, loaded_objects);
+    // After loading the object and all its needed objects, run these objects'
+    // init functions in reverse order (so those of deepest needed object runs
+    // first) and finally make the loaded objects visible in search order.
+    auto size = loaded_objects.size();
+    for (int i = size - 1; i >= 0; i--) {
+        loaded_objects[i]->run_init_funcs();
+    }
+    for (unsigned i = 0; i < size; i++) {
+        loaded_objects[i]->setprivate(false);
+    }
+    return ret;
 }
 
 void program::remove_object(object *ef)
