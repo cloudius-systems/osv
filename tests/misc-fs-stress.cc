@@ -39,6 +39,7 @@ int main(int argc, char const *argv[])
     char *buf = new char[buf_size];
     const char * fname;
     char default_fname[64] = "/tmpfileXXXXXX";
+    int oflags = O_CREAT | O_RDWR | O_LARGEFILE | O_DIRECT;
 
     const std::chrono::seconds test_duration(10);
 
@@ -54,7 +55,22 @@ int main(int argc, char const *argv[])
         fname = reinterpret_cast<const char *>(default_fname);
     }
 
-    int fd = open(fname, O_CREAT | O_RDWR | O_LARGEFILE | O_DIRECT);
+    int fd = open(fname, oflags);
+    if (fd == -1) {
+        // O_DIRECT flag isn't supported on ZFS on Linux as open returns EINVAL.
+        // manpage says: EINVAL The filesystem does not support the O_DIRECT flag.
+        switch(errno) {
+        case EINVAL:
+            fd = open(fname, oflags & ~O_DIRECT);
+            if (fd >= 0) {
+                break;
+            }
+            // fallthrough
+        default:
+            perror("open");
+            return -1;
+        }
+    }
     FILE *f = fdopen(fd, "w");
 
     std::atomic<long> stat_bytes_written(0);
