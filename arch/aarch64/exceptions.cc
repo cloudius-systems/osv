@@ -20,7 +20,7 @@ interrupt_table::interrupt_table() {
     debug_early_entry("interrupt_table::interrupt_table()");
 
     /* XXX hardcoded addresses */
-    gic::gic = new gic::gic_driver(0x8001000, 0x8002000);
+    gic::gic = new gic::gic_driver(0x8000000, 0x8010000);
     gic::gic->init_cpu(0);
     gic::gic->init_dist(0);
 

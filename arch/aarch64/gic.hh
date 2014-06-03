@@ -99,9 +99,8 @@ enum class gicc_reg : unsigned int {
     GICC_APR    = 0x00d0, /* Active Priorities Registers */
     GICC_NSAPR  = 0x00e0, /* Non-secure APR */
     GICC_IIDR   = 0x00fc, /* CPU Interface Identification Reg */
-    /* GICC_DIR: we will not use the two-step mechanism,
-     * reg is also outside of the range in the machvirt map.
-     * GICC_DIR    = 0x1000 Deactivate Interrupt Reg */
+    GICC_DIR    = 0x1000  /* Deactivate Interrupt Reg */
+    /* Note: we will not use GICC_DIR (the two-step mechanism) */
 };
 
 /* GIC CPU Interface */
