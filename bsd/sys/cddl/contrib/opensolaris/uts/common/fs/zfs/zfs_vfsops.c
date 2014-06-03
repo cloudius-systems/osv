@@ -2029,8 +2029,19 @@ zfs_freevfs(vfs_t *vfsp)
 #endif	/* sun */
 
 	zfsvfs_free(zfsvfs);
-
+#ifdef __OSV__
+	/*
+	 * This approach is being used to address a considerable slowness
+	 * during the load of an existent pool when one of its dataset has
+	 * previously gone through some I/O activity.
+	 * It consists of syncing all the pools when the last ZFS dataset
+	 * is about to be unmounted.
+	 */
+	if (atomic_fetchadd_32(&zfs_active_fs_count, -1) == 1)
+		spa_sync_allpools();
+#else
 	atomic_add_32(&zfs_active_fs_count, -1);
+#endif
 }
 
 #ifdef notyet
