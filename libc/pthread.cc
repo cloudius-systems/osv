@@ -675,8 +675,9 @@ int pthread_condattr_getpshared(const pthread_condattr_t *__restrict, int *__res
 
 void pthread_exit(void *retval)
 {
-    WARN_STUBBED();
-    abort();
+    auto t = pthread::from_libc(current_pthread);
+    t->_retval = retval;
+    t->_thread.exit();
 }
 
 int sched_get_priority_max(int policy)
