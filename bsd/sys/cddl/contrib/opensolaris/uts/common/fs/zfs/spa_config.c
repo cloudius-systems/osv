@@ -74,9 +74,6 @@ const char *spa_config_path = ZPOOL_CACHE;
 void
 spa_config_load(void)
 {
-#ifdef __OSV__
-	return;
-#else
 	void *buf = NULL;
 	nvlist_t *nvlist, *child;
 	nvpair_t *nvpair;
@@ -140,7 +137,6 @@ out:
 		kmem_free(buf, fsize);
 
 	kobj_close_file(file);
-#endif
 }
 
 #ifdef _HAVE_ZFS_CONFIG_WRITE_SUPPORT
