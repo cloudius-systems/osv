@@ -685,14 +685,14 @@ private:
     }
 public:
     friend pt_element virt_to_pte_rcu(uintptr_t virt);
-    pt_element pte_read(hw_ptep ptep) {
+    pt_element ptep_read(hw_ptep ptep) {
         return ptep.ll_read();
     }
     void small_page(hw_ptep ptep, uintptr_t offset) {
-        _result = pte_read(ptep);
+        _result = ptep_read(ptep);
     }
     bool huge_page(hw_ptep ptep, uintptr_t offset) {
-        _result = pte_read(ptep);
+        _result = ptep_read(ptep);
         assert(_result.large());
         return true;
     }
