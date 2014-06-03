@@ -1516,6 +1516,50 @@ TRACEPOINT(trace_vfs_utimes_ret, "");
 TRACEPOINT(trace_vfs_utimes_err, "%d", int);
 
 extern "C"
+int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
+{
+    struct stat st;
+    struct file *fp;
+    char *absolute_path;
+    int length;
+    int error;
+
+    if ((pathname && pathname[0] == '/') || dirfd == AT_FDCWD)
+        return utimes(pathname, times);
+
+    error = fstat(dirfd, &st);
+    if (error)
+        goto out_errno;
+
+    if (!S_ISDIR(st.st_mode)){
+        error = ENOTDIR;
+        goto out_errno;
+    }
+
+    error = fget(dirfd, &fp);
+    if (error)
+        goto out_errno;
+
+    length = strlen(fp->f_dentry->d_path) + strlen(pathname) + 2;
+    absolute_path = (char*)malloc(length);
+    if (pathname)
+        snprintf(absolute_path, length, "%s/%s", fp->f_dentry->d_path, pathname);
+    else
+        strcpy(absolute_path, fp->f_dentry->d_path);
+    error = utimes(absolute_path, times);
+    free(absolute_path);
+    fdrop(fp);
+
+    if (error)
+        goto out_errno;
+    return 0;
+
+    out_errno:
+    errno = error;
+    return -1;
+}
+
+extern "C"
 int utimes(const char *pathname, const struct timeval times[2])
 {
     struct task *t = main_task;
