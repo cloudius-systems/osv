@@ -44,7 +44,7 @@ struct percpu_timer_task {
 
     async_worker& _worker;
 
-    bi::set_member_hook<> hook;
+    bi::list_member_hook<> hook;
 
     bi::list_member_hook<> registrations_hook;
 
@@ -61,6 +61,10 @@ struct percpu_timer_task {
 
     friend bool operator<(const percpu_timer_task& a, const percpu_timer_task& b) {
         return a.fire_at < b.fire_at;
+    }
+
+    clock::time_point get_timeout() {
+        return fire_at;
     }
 };
 

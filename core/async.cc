@@ -22,6 +22,7 @@
 #include <lockfree/queue-mpsc.hh>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/parent_from_member.hpp>
+#include <osv/timer-set.hh>
 
 namespace async {
 
@@ -111,12 +112,12 @@ public:
             trace_async_timer_task_insert(this, &task);
 
             assert(!task.queued);
-            _timer_tasks.insert_equal(task);
-            task.queued = true;
 
-            if (_timer_tasks.iterator_to(task) == _timer_tasks.begin()) {
-                rearm(task.fire_at);
+            if (_timer_tasks.insert(task)) {
+                rearm(task.get_timeout());
             }
+
+            task.queued = true;
         }
     }
 
@@ -167,27 +168,21 @@ public:
                 _timer.cancel();
 
                 auto now = clock::now();
-                while (!_timer_tasks.empty()) {
-                    auto& task = *_timer_tasks.begin();
+                _timer_tasks.expire(now);
+                percpu_timer_task* task;
+                while ((task = _timer_tasks.pop_expired())) {
+                    mark_removed(*task);
 
-                    if (task._state.load(std::memory_order_relaxed) ==
+                    if (task->_state.load(std::memory_order_relaxed) !=
                             percpu_timer_task::state::RELEASED)
                     {
-                        remove_locked(task);
-                        continue;
+                        trace_async_worker_timer_fire(this, task, (now - task->get_timeout()).count());
+                        fire(*task);
+                        trace_async_worker_timer_fire_ret();
                     }
-
-                    if (task.fire_at > now) {
-                        rearm(task.fire_at);
-                        break;
-                    }
-
-                    remove_locked(task);
-
-                    trace_async_worker_timer_fire(this, &task, (now - task.fire_at).count());
-                    fire(task);
-                    trace_async_worker_timer_fire_ret();
                 }
+
+                rearm(_timer_tasks.get_next_timeout());
 
                 while (!_queue.empty()) {
                     auto& task = *_queue.begin();
@@ -209,12 +204,17 @@ private:
         _timer.reset(time_point);
     }
 
+    void mark_removed(percpu_timer_task& task)
+    {
+        assert(task.queued);
+        trace_async_timer_task_remove(this, &task);
+        task.queued = false;
+    }
+
     void remove_locked(percpu_timer_task& task)
     {
-        trace_async_timer_task_remove(this, &task);
-        assert(task.queued);
-        _timer_tasks.erase(_timer_tasks.iterator_to(task));
-        task.queued = false;
+        mark_removed(task);
+        _timer_tasks.remove(task);
     }
 
     void fire(percpu_timer_task& task)
@@ -234,10 +234,7 @@ private:
     }
 
 private:
-    bi::rbtree<percpu_timer_task,
-        bi::member_hook<percpu_timer_task,
-            bi::set_member_hook<>,
-            &percpu_timer_task::hook>> _timer_tasks;
+    timer_set<percpu_timer_task, &percpu_timer_task::hook, clock> _timer_tasks;
 
     bi::slist<one_shot_task,
         bi::cache_last<true>,
