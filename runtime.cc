@@ -385,8 +385,21 @@ int get_nprocs()
 
 clock_t times(struct tms *buffer)
 {
-    debug("times not implemented\n");
-    return 0;
+    using namespace std::chrono;
+    struct timespec ts;
+
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
+
+    typedef duration<u64, std::ratio<1, CLOCKS_PER_SEC>> clockseconds;
+    clockseconds time;
+    time = duration_cast<clockseconds>(seconds(ts.tv_sec) + nanoseconds(ts.tv_nsec));
+
+    buffer->tms_utime = time.count();
+    buffer->tms_stime = 0;
+    buffer->tms_cutime = 0;
+    buffer->tms_cstime = 0;
+
+    return buffer->tms_utime;
 }
 
 static int prio_find_thread(sched::thread **th, int which, int id)
