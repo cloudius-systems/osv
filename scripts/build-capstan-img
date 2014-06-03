@@ -48,6 +48,12 @@ scripts/gen-gce-tarball.sh
 gzip < $qemuimage > $out/$(basename $name).qemu.gz
 gzip < $vboximage > $out/$(basename $name).vbox.gz
 gzip < $vmwimage  > $out/$(basename $name).vmw.gz
-gzip < $gceimage  > $out/$(basename $name).gce.gz
+
+gce_url_file=$out/$(basename $name).gce
+gce_tar_ball=$out/$(basename $name).gce.tar.gz
+echo "gs://osv/$version/$(basename $name).gce.tar.gz" > $gce_url_file
+gzip <$gce_url_file > $gce_url_file.gz
+rm -f $gce_url_file  $gce_tar_ball
+mv -f $gceimage $gce_tar_ball
 
 echo "==> '$name' image built to '$out'."
