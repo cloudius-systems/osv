@@ -38,13 +38,13 @@ char IsaSerialConsole::readch()
 
 void IsaSerialConsole::writeByte(const char letter)
 {
-	u8 lsr;
+    u8 lsr;
 
-	do {
-		lsr = pci::inb(ioport + LSR_ADDRESS);
-	} while (!(lsr & LSR_TRANSMIT_HOLD_EMPTY));
+    do {
+        lsr = pci::inb(ioport + LSR_ADDRESS);
+    } while (!(lsr & LSR_TRANSMIT_HOLD_EMPTY));
 
-	pci::outb(letter, ioport);
+    pci::outb(letter, ioport);
 }
 
 void IsaSerialConsole::reset() {

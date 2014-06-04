@@ -30,8 +30,8 @@ private:
         // UART registers, offsets to ioport:
         IER_ADDRESS = 1,    // Interrupt Enable Register
         FCR_ADDRESS = 2,    // FIFO Control Register
-    	LCR_ADDRESS = 3,    // Line Control Register
-    	MCR_ADDRESS = 4,    // Modem Control Register
+        LCR_ADDRESS = 3,    // Line Control Register
+        MCR_ADDRESS = 4,    // Modem Control Register
         LSR_ADDRESS = 5,    // Line Control Register
         MSR_ADDRESS = 6,    // Modem Status Register
         SCR_ADDRESS = 7,    // Scratch Register
