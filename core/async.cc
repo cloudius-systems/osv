@@ -19,7 +19,7 @@
 #include <osv/irqlock.hh>
 #include <osv/preempt-lock.hh>
 #include <osv/migration-lock.hh>
-#include <lockfree/queue-mpsc.hh>
+#include <lockfree/unordered-queue-mpsc.hh>
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/parent_from_member.hpp>
 #include <osv/timer-set.hh>
@@ -242,7 +242,7 @@ private:
             bi::slist_member_hook<>,
             &one_shot_task::_hook>> _queue;
 
-    lockfree::queue_mpsc<percpu_timer_task> released_timer_tasks;
+    lockfree::unordered_queue_mpsc<percpu_timer_task> released_timer_tasks;
 
     sched::thread _thread;
     sched::timer _timer;
