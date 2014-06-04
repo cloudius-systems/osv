@@ -1528,8 +1528,10 @@ int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
         return utimes(pathname, times);
 
     error = fstat(dirfd, &st);
-    if (error)
+    if (error) {
+        error = errno;
         goto out_errno;
+    }
 
     if (!S_ISDIR(st.st_mode)){
         error = ENOTDIR;
