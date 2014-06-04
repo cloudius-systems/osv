@@ -239,6 +239,7 @@ boost-tests += tests/tst-async.so
 boost-tests += tests/tst-rcu-list.so
 boost-tests += tests/tst-tcp-listen.so
 boost-tests += tests/tst-poll.so
+boost-tests += tests/tst-bitset-iter.so
 endif
 
 ifeq ($(arch),aarch64)
