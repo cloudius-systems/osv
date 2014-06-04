@@ -24,7 +24,6 @@ public:
 private:
     gsi_edge_interrupt* _irq;
     static const u16 ioport = 0x3f8;
-    u8 lcr;
 
     enum IsaSerialValues {
         // UART registers, offsets to ioport:

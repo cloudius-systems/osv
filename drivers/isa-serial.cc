@@ -52,11 +52,10 @@ void IsaSerialConsole::reset() {
     // Divisor Latch registers, but to access these we need to temporarily
     // set the Divisor Latch Access Bit (DLAB) on the LSR register, because
     // the UART has fewer ports than registers...
-    lcr = LCR_8BIT;
-    pci::outb(lcr | LCR_DLAB, ioport + LCR_ADDRESS);
+    pci::outb(LCR_8BIT | LCR_DLAB, ioport + LCR_ADDRESS);
     pci::outb(1, ioport + DLL_ADDRESS);
     pci::outb(0, ioport + DLM_ADDRESS);
-    pci::outb(lcr, ioport + LCR_ADDRESS);
+    pci::outb(LCR_8BIT, ioport + LCR_ADDRESS);
 
     //  interrupt threshold
     pci::outb(0, ioport + FCR_ADDRESS);
