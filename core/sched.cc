@@ -997,12 +997,11 @@ void timer_list::fired()
 {
     auto now = osv::clock::uptime::now();
     _last = osv::clock::uptime::time_point::max();
-    // don't hold iterators across list iteration, since the list can change
-    while (!_list.empty() && _list.begin()->_time <= now) {
-        auto j = _list.begin();
-        assert(j->_state == timer_base::state::armed);
-        _list.erase(j);
-        j->expire();
+    _list.expire(now);
+    timer_base* timer;
+    while ((timer = _list.pop_expired())) {
+        assert(timer->_state == timer_base::state::armed);
+        timer->expire();
     }
     if (!_list.empty()) {
         rearm();
@@ -1011,7 +1010,7 @@ void timer_list::fired()
 
 void timer_list::rearm()
 {
-    auto t = _list.begin()->_time;
+    auto t = _list.get_next_timeout();
     if (t < _last) {
         _last = t;
         clock_event->set(t);
@@ -1019,25 +1018,24 @@ void timer_list::rearm()
 }
 
 // call with irq disabled
-void timer_list::suspend(bi::list<timer_base>& timers)
+void timer_list::suspend(timer_base::client_list_t& timers)
 {
     for (auto& t : timers) {
         assert(t._state == timer::state::armed);
-        _list.erase(_list.iterator_to(t));
+        _list.remove(t);
     }
 }
 
 // call with irq disabled
-void timer_list::resume(bi::list<timer_base>& timers)
+void timer_list::resume(timer_base::client_list_t& timers)
 {
     bool rearm = false;
     for (auto& t : timers) {
         assert(t._state == timer::state::armed);
-        auto i = _list.insert(t).first;
-        rearm |= i == _list.begin();
+        rearm |= _list.insert(t);
     }
     if (rearm) {
-        clock_event->set(_list.begin()->_time);
+        clock_event->set(_list.get_next_timeout());
     }
 }
 
@@ -1075,9 +1073,8 @@ void timer_base::set(osv::clock::uptime::time_point time)
         _time = time;
 
         auto& timers = cpu::current()->timers;
-        timers._list.insert(*this);
         _t._active_timers.push_back(*this);
-        if (timers._list.iterator_to(*this) == timers._list.begin()) {
+        if (timers._list.insert(*this)) {
             timers.rearm();
         }
     }
@@ -1093,7 +1090,7 @@ void timer_base::cancel()
     WITH_LOCK(irq_lock) {
         if (_state == state::armed) {
             _t._active_timers.erase(_t._active_timers.iterator_to(*this));
-            cpu::current()->timers._list.erase(cpu::current()->timers._list.iterator_to(*this));
+            cpu::current()->timers._list.remove(*this);
         }
         _state = state::free;
     }
@@ -1110,7 +1107,7 @@ void timer_base::reset(osv::clock::uptime::time_point time)
     irq_save_lock_type irq_lock;
     WITH_LOCK(irq_lock) {
         if (_state == state::armed) {
-            timers._list.erase(timers._list.iterator_to(*this));
+            timers._list.remove(*this);
         } else {
             _t._active_timers.push_back(*this);
             _state = state::armed;
@@ -1118,9 +1115,7 @@ void timer_base::reset(osv::clock::uptime::time_point time)
 
         _time = time;
 
-        timers._list.insert(*this);
-
-        if (timers._list.iterator_to(*this) == timers._list.begin()) {
+        if (timers._list.insert(*this)) {
             timers.rearm();
         }
     }
