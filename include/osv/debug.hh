@@ -48,7 +48,7 @@ do {                                                         \
 
 typedef boost::format fmt;
 
-class IsaSerialConsole;
+class isa_serial_console;
 
 class logger {
 public:

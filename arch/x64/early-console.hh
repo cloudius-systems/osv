@@ -12,7 +12,7 @@
 
 namespace console {
 
-extern IsaSerialConsole arch_early_console;
+extern isa_serial_console arch_early_console;
 
 }
 

@@ -50,19 +50,19 @@ enum mcr {
     LOOPBACK_MODE       = 0x16,
 };
 
-void IsaSerialConsole::write(const char *str, size_t len)
+void isa_serial_console::write(const char *str, size_t len)
 {
     while (len-- > 0)
         putchar(*str++);
 }
 
-bool IsaSerialConsole::input_ready()
+bool isa_serial_console::input_ready()
 {
     u8 val = pci::inb(ioport + regs::LSR);
     return val & lsr::RECEIVE_DATA_READY;
 }
 
-char IsaSerialConsole::readch()
+char isa_serial_console::readch()
 {
     u8 val;
     char letter;
@@ -76,7 +76,7 @@ char IsaSerialConsole::readch()
     return letter;
 }
 
-void IsaSerialConsole::putchar(const char ch)
+void isa_serial_console::putchar(const char ch)
 {
     u8 val;
 
@@ -87,7 +87,7 @@ void IsaSerialConsole::putchar(const char ch)
     pci::outb(ch, ioport);
 }
 
-void IsaSerialConsole::reset() {
+void isa_serial_console::reset() {
     // Set the UART speed to to 115,200 bps, This is done by writing 1,0 to
     // Divisor Latch registers, but to access these we need to temporarily
     // set the Divisor Latch Access Bit (DLAB) on the LSR register, because
@@ -109,7 +109,7 @@ void IsaSerialConsole::reset() {
     pci::outb(mcr::AUX_OUTPUT_2, ioport + regs::MCR);
 }
 
-void IsaSerialConsole::dev_start() {
+void isa_serial_console::dev_start() {
     _irq = new gsi_edge_interrupt(4, [&] { _thread->wake(); });
     reset();
 }

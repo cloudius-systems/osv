@@ -10,6 +10,6 @@
 
 namespace console {
 
-IsaSerialConsole arch_early_console __attribute__((init_priority((int)init_prio::console)));
+isa_serial_console arch_early_console __attribute__((init_priority((int)init_prio::console)));
 
 }

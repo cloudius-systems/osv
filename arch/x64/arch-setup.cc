@@ -263,11 +263,11 @@ void arch_init_drivers()
 bool arch_setup_console(std::string opt_console)
 {
     if (opt_console.compare("serial") == 0) {
-        console::console_driver_add(new console::IsaSerialConsole());
+        console::console_driver_add(new console::isa_serial_console());
     } else if (opt_console.compare("vga") == 0) {
         console::console_driver_add(new console::VGAConsole());
     } else if (opt_console.compare("all") == 0) {
-        console::console_driver_add(new console::IsaSerialConsole());
+        console::console_driver_add(new console::isa_serial_console());
         console::console_driver_add(new console::VGAConsole());
     } else {
         return false;

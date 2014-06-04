@@ -15,7 +15,7 @@
 
 namespace console {
 
-class IsaSerialConsole : public console_driver {
+class isa_serial_console : public console_driver {
 public:
     virtual void write(const char *str, size_t len);
     virtual void flush() {}
