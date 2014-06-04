@@ -53,7 +53,7 @@ enum mcr {
 void IsaSerialConsole::write(const char *str, size_t len)
 {
     while (len-- > 0)
-        writeByte(*str++);
+        putchar(*str++);
 }
 
 bool IsaSerialConsole::input_ready()
@@ -76,7 +76,7 @@ char IsaSerialConsole::readch()
     return letter;
 }
 
-void IsaSerialConsole::writeByte(const char letter)
+void IsaSerialConsole::putchar(const char ch)
 {
     u8 val;
 
@@ -84,7 +84,7 @@ void IsaSerialConsole::writeByte(const char letter)
         val = pci::inb(ioport + regs::LSR);
     } while (!(val & lsr::TRANSMIT_HOLD_EMPTY));
 
-    pci::outb(letter, ioport);
+    pci::outb(ch, ioport);
 }
 
 void IsaSerialConsole::reset() {

@@ -27,7 +27,7 @@ private:
 
     virtual void dev_start();
     void reset();
-    static void writeByte(const char letter);
+    static void putchar(const char ch);
     virtual const char *thread_name() { return "isa-serial-input"; }
 };
 
