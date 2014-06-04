@@ -1029,13 +1029,13 @@ void timer_list::suspend(timer_base::client_list_t& timers)
 // call with irq disabled
 void timer_list::resume(timer_base::client_list_t& timers)
 {
-    bool rearm = false;
+    bool do_rearm = false;
     for (auto& t : timers) {
         assert(t._state == timer::state::armed);
-        rearm |= _list.insert(t);
+        do_rearm |= _list.insert(t);
     }
-    if (rearm) {
-        clock_event->set(_list.get_next_timeout());
+    if (do_rearm) {
+        rearm();
     }
 }
 
