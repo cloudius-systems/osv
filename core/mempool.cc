@@ -741,7 +741,7 @@ void reclaimer::_do_reclaim()
         _shrinker_loop(target, [this] { return _oom_blocked.has_waiters(); });
 
         WITH_LOCK(free_page_ranges_lock) {
-            if (target > 0) {
+            if (target >= 0) {
                 // Wake up all waiters that are waiting and now have a chance to succeed.
                 // If we could not wake any, there is nothing really we can do.
                 if (!_oom_blocked.wake_waiters()) {
