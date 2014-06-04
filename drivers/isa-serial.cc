@@ -6,7 +6,6 @@
  */
 
 #include "isa-serial.hh"
-#include <string.h>
 
 namespace console {
 
