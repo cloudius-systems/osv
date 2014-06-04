@@ -1044,16 +1044,27 @@ sys_stat(char *path, struct stat *st)
 
 int sys_lstat(char *path, struct stat *st)
 {
+	int           error;
+	struct dentry *ddp;
+	char          *name;
 	struct dentry *dp;
-	int error;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_lstat: path=%s\n", path));
 
-	error = namei_nofollow(path, &dp);
-	if (error)
-		return error;
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		goto out;
+	}
+
 	error = vn_stat(dp->d_vnode, st);
 	drele(dp);
+out:
+	drele(ddp);
 	return error;
 }
 
@@ -1152,14 +1163,22 @@ ssize_t
 sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size)
 {
 	int		error;
+	struct dentry	*ddp;
+	char		*name;
 	struct dentry	*dp;
 	struct vnode	*vp;
 	struct iovec	vec;
 	struct uio	uio;
 
 	*size = 0;
-	error = namei_nofollow(path, &dp);
-	if (error != 0) {
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		drele(ddp);
 		return (error);
 	}
 
@@ -1178,6 +1197,7 @@ sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size)
 	vn_unlock(vp);
 
 	drele(dp);
+	drele(ddp);
 
 	if (error != 0) {
 		return (error);

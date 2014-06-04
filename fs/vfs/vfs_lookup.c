@@ -195,8 +195,15 @@ read_link(struct vnode *vp, char *buf, size_t bufsz, ssize_t *sz)
     return (0);
 }
 
+/*
+ * Convert a pathname into a pointer to a dentry
+ *
+ * @path: full path name.
+ * @dpp:  dentry to be returned.
+ */
+
 int
-__namei(char *path, struct dentry **dpp, int flag)
+namei(char *path, struct dentry **dpp)
 {
     char *p;
     char node[PATH_MAX];
@@ -208,16 +215,10 @@ __namei(char *path, struct dentry **dpp, int flag)
     struct vnode *dvp, *vp;
     int error, i;
     int links_followed;
-    bool follow;
 
     DPRINTF(VFSDB_VNODE, ("namei: path=%s\n", path));
 
     links_followed = 0;
-    follow = false;
-    if (flag & AT_SYMLINK_FOLLOW) {
-        follow = true;
-    }
-
     fp = malloc(PATH_MAX);
     if (fp == NULL) {
         return (ENOMEM);
@@ -312,7 +313,7 @@ start:
         drele(ddp);
         ddp = dp;
 
-        if (dp->d_vnode->v_type == VLNK && follow) {
+        if (dp->d_vnode->v_type == VLNK) {
             ssize_t sz;
             int     c;
 
@@ -384,24 +385,6 @@ start:
     *dpp = dp;
     free(t);
     return 0;
-}
-
-/*
- * Convert a pathname into a pointer to a dentry
- *
- * @path: full path name.
- * @dpp:  dentry to be returned.
- */
-int
-namei(char *path, struct dentry **dpp)
-{
-    return (__namei(path, dpp, AT_SYMLINK_FOLLOW));
-}
-
-int
-namei_nofollow(char *path, struct dentry **dpp)
-{
-    return (__namei(path, dpp, AT_SYMLINK_NOFOLLOW));
 }
 
 /*
