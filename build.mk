@@ -300,6 +300,7 @@ tests += tests/tst-truncate.so
 tests += $(boost-tests)
 tests += tests/misc-panic.so
 tests += tests/tst-utimes.so
+tests += tests/tst-futimesat.so
 tests += tests/misc-tcp.so
 tests += tests/tst-strerror_r.so
 tests += tests/misc-random.so
