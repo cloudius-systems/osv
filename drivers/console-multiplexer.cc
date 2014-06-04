@@ -11,18 +11,18 @@
 
 namespace console {
 
-ConsoleMultiplexer::ConsoleMultiplexer(const termios *tio, console_driver *early_driver)
+console_multiplexer::console_multiplexer(const termios *tio, console_driver *early_driver)
     : _tio(tio)
     , _early_driver(early_driver)
 {
 }
 
-void ConsoleMultiplexer::driver_add(console_driver *driver)
+void console_multiplexer::driver_add(console_driver *driver)
 {
     _drivers.push_back(driver);
 }
 
-void ConsoleMultiplexer::start()
+void console_multiplexer::start()
 {
     _ldisc = new LineDiscipline(_tio);
     for (auto driver : _drivers)
@@ -30,25 +30,25 @@ void ConsoleMultiplexer::start()
     _started = true;
 }
 
-void ConsoleMultiplexer::read(struct uio *uio, int ioflag) {
+void console_multiplexer::read(struct uio *uio, int ioflag) {
     if (!_started)
         return;
     _ldisc->read(uio, ioflag);
 }
 
-void ConsoleMultiplexer::drivers_write(const char *str, size_t len)
+void console_multiplexer::drivers_write(const char *str, size_t len)
 {
     for (auto driver : _drivers)
         driver->write(str, len);
 }
 
-void ConsoleMultiplexer::drivers_flush()
+void console_multiplexer::drivers_flush()
 {
     for (auto driver : _drivers)
         driver->flush();
 }
 
-void ConsoleMultiplexer::write_ll(const char *str, size_t len)
+void console_multiplexer::write_ll(const char *str, size_t len)
 {
     if (!_started) {
         if (_early_driver != nullptr) {
@@ -62,7 +62,7 @@ void ConsoleMultiplexer::write_ll(const char *str, size_t len)
     }
 }
 
-void ConsoleMultiplexer::write(const char *str, size_t len)
+void console_multiplexer::write(const char *str, size_t len)
 {
     if (!_started) {
         WITH_LOCK(_early_lock) {
@@ -75,14 +75,14 @@ void ConsoleMultiplexer::write(const char *str, size_t len)
     }
 }
 
-void ConsoleMultiplexer::write(struct uio *uio, int ioflag)
+void console_multiplexer::write(struct uio *uio, int ioflag)
 {
     linearize_uio_write(uio, ioflag, [&] (const char *str, size_t len) {
         write(str, len);
     });
 }
 
-int ConsoleMultiplexer::read_queue_size()
+int console_multiplexer::read_queue_size()
 {
     if (!_started)
         return -1;

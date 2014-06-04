@@ -14,10 +14,10 @@
 
 namespace console {
 
-class ConsoleMultiplexer {
+class console_multiplexer {
 public:
-    explicit ConsoleMultiplexer(const termios *tio, console_driver *early_driver = nullptr);
-    ~ConsoleMultiplexer() {};
+    explicit console_multiplexer(const termios *tio, console_driver *early_driver = nullptr);
+    ~console_multiplexer() {};
     void driver_add(console_driver *driver);
     void start();
     void read(struct uio *uio, int ioflag);

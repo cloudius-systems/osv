@@ -42,7 +42,7 @@ termios tio = {
             /*VLNEXT*/0, /*VEOL2*/0},
 };
 
-ConsoleMultiplexer mux __attribute__((init_priority((int)init_prio::console)))
+console_multiplexer mux __attribute__((init_priority((int)init_prio::console)))
     (&tio, &arch_early_console);
 
 void write(const char *msg, size_t len)
