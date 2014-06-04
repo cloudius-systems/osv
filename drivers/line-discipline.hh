@@ -21,7 +21,7 @@ class LineDiscipline {
 public:
     explicit LineDiscipline(const termios *tio);
     void read(struct uio *uio, int ioflag);
-    void read_poll(ConsoleDriver *driver);
+    void read_poll(console_driver *driver);
     int read_queue_size() { return _read_queue.size(); }
     void write(const char *str, size_t len,
         std::function<void(const char *str, size_t len)> writer);

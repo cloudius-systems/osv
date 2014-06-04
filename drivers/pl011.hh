@@ -12,7 +12,7 @@
 
 namespace console {
 
-class PL011_Console : public ConsoleDriver {
+class PL011_Console : public console_driver {
 public:
     virtual void write(const char *str, size_t len);
     virtual void flush();

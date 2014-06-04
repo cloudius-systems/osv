@@ -113,19 +113,19 @@ static struct devops console_devops = {
     .devctl	= no_devctl,
 };
 
-struct driver console_driver = {
+struct driver console_drv = {
     .name	= "console",
     .devops	= &console_devops,
 };
 
-void console_driver_add(ConsoleDriver *driver)
+void console_driver_add(console_driver *driver)
 {
     mux.driver_add(driver);
 }
 
 void console_init()
 {
-    device_create(&console_driver, "console", D_CHR | D_TTY);
+    device_create(&console_drv, "console", D_CHR | D_TTY);
     mux.start();
 }
 

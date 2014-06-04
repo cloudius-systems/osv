@@ -13,9 +13,9 @@
 
 namespace console {
 
-class ConsoleDriver {
+class console_driver {
 public:
-    virtual ~ConsoleDriver() {}
+    virtual ~console_driver() {}
     virtual void write(const char *str, size_t len) = 0;
     virtual void flush() = 0;
     virtual bool input_ready() = 0;

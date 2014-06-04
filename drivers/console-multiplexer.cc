@@ -11,13 +11,13 @@
 
 namespace console {
 
-ConsoleMultiplexer::ConsoleMultiplexer(const termios *tio, ConsoleDriver *early_driver)
+ConsoleMultiplexer::ConsoleMultiplexer(const termios *tio, console_driver *early_driver)
     : _tio(tio)
     , _early_driver(early_driver)
 {
 }
 
-void ConsoleMultiplexer::driver_add(ConsoleDriver *driver)
+void ConsoleMultiplexer::driver_add(console_driver *driver)
 {
     _drivers.push_back(driver);
 }

@@ -16,7 +16,7 @@
 
 namespace console {
 
-class VGAConsole : public ConsoleDriver {
+class VGAConsole : public console_driver {
 public:
     explicit VGAConsole();
     virtual void write(const char *str, size_t len);

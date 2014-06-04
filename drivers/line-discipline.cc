@@ -67,7 +67,7 @@ static inline bool isctrl(char c) {
     return ((c<' ' && c!='\t' && c!='\n') || c=='\177');
 }
 
-void LineDiscipline::read_poll(ConsoleDriver *driver)
+void LineDiscipline::read_poll(console_driver *driver)
 {
     while (true) {
         std::lock_guard<mutex> lock(_mutex);
