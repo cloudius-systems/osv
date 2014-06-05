@@ -1380,7 +1380,7 @@ jvm_balloon_vma::jvm_balloon_vma(unsigned char *jvm_addr, uintptr_t start,
 // If that happens, the simple balloon move algorithm will break. However,
 // because offset 'x' in the source will always be copied to offset 'x' in the
 // destination, we can still calculate the final destination object. This
-// address is the _effective_jvm_addr in the code bellow.
+// address is the _effective_jvm_addr in the code below.
 //
 // The problem is that we cannot open the new balloon yet. Since the JVM
 // believes it is copying only a part of the object, the destination may (and

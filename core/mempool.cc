@@ -650,7 +650,7 @@ bool reclaimer_waiters::wake_waiters()
 // That means that this returning will only mean allocation may succeed, not
 // that it will.  Because of that, it is of extreme importance that callers
 // pass the exact amount of memory they are waiting for. So for instance, if
-// your allocation is 2Mb in size + a 4k header, "bytes" bellow should be 2Mb +
+// your allocation is 2Mb in size + a 4k header, "bytes" below should be 2Mb +
 // 4k, not 2Mb. Failing to do so could livelock the system, that would forever
 // wake up believing there is enough memory, when in reality there is not.
 void reclaimer_waiters::wait(size_t bytes)

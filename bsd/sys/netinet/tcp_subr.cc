@@ -298,7 +298,7 @@ tcp_init(void)
 	if (!IS_DEFAULT_VNET(curvnet))
 		return;
 
-	/* XXX virtualize those bellow? */
+	/* XXX virtualize those below? */
 	tcp_delacktime = TCPTV_DELACK;
 	tcp_keepinit = TCPTV_KEEP_INIT;
 	tcp_keepidle = (int)TCPTV_KEEP_IDLE;
