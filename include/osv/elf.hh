@@ -35,14 +35,14 @@ typedef u64 Elf64_Xword;
 typedef signed long Elf64_Sxword;
 
 enum {
-    EI_MAG0 = 0, // File identiﬁcation
+    EI_MAG0 = 0, // File identification
     EI_MAG1 = 1,
     EI_MAG2 = 2,
     EI_MAG3 = 3,
     EI_CLASS = 4, // File class
     EI_DATA = 5, // Data encoding
     EI_VERSION = 6, // File version
-    EI_OSABI = 7, // OS/ABI identiﬁcation
+    EI_OSABI = 7, // OS/ABI identification
     EI_ABIVERSION = 8, // ABI version
     EI_PAD = 9, // Start of padding bytes
     EI_NIDENT = 16, // Size of e_ident[]
@@ -54,8 +54,8 @@ enum {
 };
 
 enum {
-    ELFDATA2LSB = 1, // Object ﬁle data structures are little-endian
-    ELFDATA2MSB = 2, // Object ﬁle data structures are big-endian
+    ELFDATA2LSB = 1, // Object file data structures are little-endian
+    ELFDATA2MSB = 2, // Object file data structures are big-endian
 };
 
 enum {
@@ -125,7 +125,7 @@ enum {
     DT_PLTRELSZ = 2, // d_val Total size, in bytes, of the relocation entries associated with
       // the procedure linkage table.
     DT_PLTGOT = 3, // d_ptr Contains an address associated with the linkage table. The
-      // speciﬁc meaning of this ﬁeld is processor-dependent.
+      // specific meaning of this field is processor-dependent.
     DT_HASH = 4, // d_ptr Address of the symbol hash table, described below.
     DT_STRTAB = 5, // d_ptr Address of the dynamic string table.
     DT_SYMTAB = 6, // d_ptr Address of the dynamic symbol table.
@@ -138,9 +138,9 @@ enum {
     DT_FINI = 13, // d_ptr Address of the termination function.
     DT_SONAME = 14, // d_val The string table offset of the name of this shared object.
     DT_RPATH = 15, // d_val The string table offset of a shared library search path string.
-    DT_SYMBOLIC = 16, // ignored The presence of this dynamic table entry modiﬁes the
+    DT_SYMBOLIC = 16, // ignored The presence of this dynamic table entry modifies the
       // symbol resolution algorithm for references within the
-      // library. Symbols deﬁned within the library are used to
+      // library. Symbols defined within the library are used to
       // resolve references before the dynamic linker searches the
       // usual search path.
     DT_REL = 17, // d_ptr Address of a relocation table with Elf64_Rel entries.
@@ -161,11 +161,11 @@ enum {
     DT_FINI_ARRAY = 26, // d_ptr Pointer to an array of pointers to termination functions.
     DT_INIT_ARRAYSZ = 27, // d_val Size, in bytes, of the array of initialization functions.
     DT_FINI_ARRAYSZ = 28, // d_val Size, in bytes, of the array of termination functions.
-    DT_LOOS = 0x60000000, // Deﬁnes a range of dynamic table tags that are reserved for
-      // environment-speciﬁc use.
+    DT_LOOS = 0x60000000, // Defines a range of dynamic table tags that are reserved for
+      // environment-specific use.
     DT_HIOS = 0x6FFFFFFF, //
-    DT_LOPROC = 0x70000000, // Deﬁnes a range of dynamic table tags that are reserved for
-      // processor-speciﬁc use.
+    DT_LOPROC = 0x70000000, // Defines a range of dynamic table tags that are reserved for
+      // processor-specific use.
     DT_HIPROC = 0x7FFFFFFF, //
     DT_GNU_HASH = 0x6ffffef5,
 };
@@ -189,33 +189,33 @@ struct Elf64_Rela {
 };
 
 enum {
-    STB_LOCAL = 0, //  Not visible outside the object ﬁle
-    STB_GLOBAL = 1, // Global symbol, visible to all object ﬁles
+    STB_LOCAL = 0, //  Not visible outside the object file
+    STB_GLOBAL = 1, // Global symbol, visible to all object files
     STB_WEAK = 2, // Global scope, but with lower precedence than global symbols
-    STB_LOOS = 10, // Environment-speciﬁc use
+    STB_LOOS = 10, // Environment-specific use
     STB_HIOS = 12,
-    STB_LOPROC = 13, // Processor-speciﬁc use
+    STB_LOPROC = 13, // Processor-specific use
     STB_HIPROC = 15,
 };
 
 enum {
-    STT_NOTYPE = 0, // No type speciﬁed (e.g., an absolute symbol)
+    STT_NOTYPE = 0, // No type specified (e.g., an absolute symbol)
     STT_OBJECT = 1, // Data object
     STT_FUNC = 2, // Function entry point
     STT_SECTION = 3, // Symbol is associated with a section
-    STT_FILE = 4, // Source ﬁle associated with the object ﬁle
-    STT_LOOS = 10, // Environment-speciﬁc use
+    STT_FILE = 4, // Source file associated with the object file
+    STT_LOOS = 10, // Environment-specific use
     STT_HIOS = 12,
-    STT_LOPROC = 13, // Processor-speciﬁc use
+    STT_LOPROC = 13, // Processor-specific use
     STT_HIPROC = 15,
     STT_IFUNC = 10, // Indirect function
 };
 
 enum {
-    SHN_UNDEF = 0, // Used to mark an undeﬁned or meaningless section reference
-    SHN_LOPROC = 0xFF00, // Processor-speciﬁc use
+    SHN_UNDEF = 0, // Used to mark an undefined or meaningless section reference
+    SHN_LOPROC = 0xFF00, // Processor-specific use
     SHN_HIPROC = 0xFF1F,
-    SHN_LOOS = 0xFF20, // Environment-speciﬁc use
+    SHN_LOOS = 0xFF20, // Environment-specific use
     SHN_HIOS = 0xFF3F,
     SHN_ABS = 0xFFF1, // Indicates that the corresponding reference is an absolute value
     SHN_COMMON = 0xFFF2, // Indicates a symbol that has been declared as a common block
