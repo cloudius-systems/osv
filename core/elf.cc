@@ -551,6 +551,9 @@ void object::relocate_pltgot()
         // .GOT.PLT entries point not to the .PLT but to a prelinked address
         // of the actual function. We'll need to return the link to the .PLT.
         // The prelinker saved us in pltgot[1] the address of .plt + 0x16.
+#ifdef AARCH64_PORT_STUB
+        assert(0);
+#endif /* AARCH64_PORT_STUB */
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
     bool bind_now = dynamic_exists(DT_BIND_NOW);
@@ -566,7 +569,13 @@ void object::relocate_pltgot()
             // If on-load binding is requested (instead of the default lazy
             // binding), resolve all the PLT entries now.
             u32 idx = info >> 32;
+
+#if defined(__x86_64__)
             *static_cast<void**>(addr) = symbol(idx).relocated_addr();
+#elif defined(__aarch64__)
+            *static_cast<void**>(addr) = symbol(idx).relocated_addr() + p->r_addend;
+#endif
+
         } else if (original_plt) {
             // Restore the link to the original plt.
             // We know the JUMP_SLOT entries are in plt order, and that
@@ -578,9 +587,12 @@ void object::relocate_pltgot()
             *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
         }
     }
-    // PLTGOT resolution has a special calling convention, with the symbol
-    // index and some word pushed on the stack, so we need an assembly
-    // stub to convert it back to the standard calling convention.
+
+    // PLTGOT resolution has a special calling convention,
+    // for x64 the symbol index and some word is pushed on the stack,
+    // for AArch64 &pltgot[n] and LR are pushed on the stack,
+    // so we need an assembly stub to convert it back to the
+    // standard calling convention.
     pltgot[1] = this;
     pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
 }
@@ -598,7 +610,13 @@ void* object::resolve_pltgot(unsigned index)
     WITH_LOCK(_used_by_resolve_plt_got_mutex) {
         _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
     }
+
+#if defined(__x86_64__)
     auto ret = *static_cast<void**>(addr) = sm.relocated_addr();
+#elif defined(__aarch64__)
+    auto ret = *static_cast<void**>(addr) = sm.relocated_addr() + slot.r_addend;
+#endif
+
     return ret;
 }
 
