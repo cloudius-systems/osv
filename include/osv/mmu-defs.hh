@@ -31,11 +31,15 @@ typedef uint64_t phys;
 
 enum class mem_area {
     main,
+    early,
+    mempool,
     debug,
 };
 
 constexpr mem_area identity_mapped_areas[] = {
     mem_area::main,
+    mem_area::early,
+    mem_area::mempool,
 };
 
 constexpr uintptr_t mem_area_size = uintptr_t(1) << 44;
@@ -43,6 +47,17 @@ constexpr uintptr_t mem_area_size = uintptr_t(1) << 44;
 constexpr char* get_mem_area_base(mem_area area)
 {
     return reinterpret_cast<char*>(0xffff800000000000 | uintptr_t(area) << 44);
+}
+
+constexpr mem_area get_mem_area(void* addr)
+{
+    return mem_area(reinterpret_cast<uintptr_t>(addr) >> 44 & 7);
+}
+
+constexpr void* translate_mem_area(mem_area from, mem_area to, void* addr)
+{
+    return reinterpret_cast<void*>(reinterpret_cast<char*>(addr)
+                                   - get_mem_area_base(from) + get_mem_area_base(to));
 }
 
 static char* const phys_mem = get_mem_area_base(mem_area::main);
