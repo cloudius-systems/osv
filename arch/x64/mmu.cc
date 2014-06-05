@@ -170,7 +170,7 @@ bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef)
     // to search vma to verify permission
     if (is_page_fault_prot_write(ef->get_error())) {
         auto pte = virt_to_pte_rcu(addr);
-        return !pte_is_cow(pte);
+        return !pte_is_cow(pte) && !pte.writable();
     }
 
     return false;
