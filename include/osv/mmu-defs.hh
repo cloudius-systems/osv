@@ -29,9 +29,25 @@ constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
 typedef uint64_t f_offset;
 typedef uint64_t phys;
 
-static char* const phys_mem = reinterpret_cast<char*>(0xffffc00000000000);
+enum class mem_area {
+    main,
+    debug,
+};
+
+constexpr mem_area identity_mapped_areas[] = {
+    mem_area::main,
+};
+
+constexpr uintptr_t mem_area_size = uintptr_t(1) << 44;
+
+constexpr char* get_mem_area_base(mem_area area)
+{
+    return reinterpret_cast<char*>(0xffff800000000000 | uintptr_t(area) << 44);
+}
+
+static char* const phys_mem = get_mem_area_base(mem_area::main);
 // area for debug allocations:
-static char* const debug_base = reinterpret_cast<char*>(0xffffe00000000000);
+static char* const debug_base = get_mem_area_base(mem_area::debug);
 
 enum {
     perm_read = 1,

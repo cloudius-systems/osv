@@ -29,7 +29,7 @@ class status_enum_class(object):
     pass
 status_enum = status_enum_class()
 
-phys_mem = 0xffffc00000000000
+phys_mem = 0xffff800000000000
 
 def pt_index(addr, level):
     return (addr >> (12 + 9 * level)) & 511

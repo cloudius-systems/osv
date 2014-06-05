@@ -49,7 +49,10 @@ void setup_temporary_phys_map()
     // duplicate 1:1 mapping into phys_mem
     u64 *pt_ttbr0 = reinterpret_cast<u64*>(processor::read_ttbr0());
     u64 *pt_ttbr1 = reinterpret_cast<u64*>(processor::read_ttbr1());
-    pt_ttbr1[mmu::pt_index(mmu::phys_mem, 3)] = pt_ttbr0[0];
+    for (auto&& area : mmu::identity_mapped_areas) {
+        auto base = get_mem_area_base(area);
+        pt_ttbr1[mmu::pt_index(base, 3)] = pt_ttbr0[0];
+    }
     mmu::flush_tlb_all();
 }
 
@@ -71,7 +74,10 @@ void arch_setup_free_memory()
     mmu::free_initial_memory_range(addr, memory::phys_mem_size);
 
     /* linear_map [TTBR1] */
-    mmu::linear_map(mmu::phys_mem + addr, addr, memory::phys_mem_size);
+    for (auto&& area : mmu::identity_mapped_areas) {
+        auto base = get_mem_area_base(area);
+        mmu::linear_map(base + addr, addr, memory::phys_mem_size);
+    }
 
     /* linear_map [TTBR0 - ELF] */
     mmu::linear_map((void*)0x40000000, (mmu::phys)0x40000000, addr - 0x40000000);

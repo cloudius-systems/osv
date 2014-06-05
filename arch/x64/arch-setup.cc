@@ -80,7 +80,10 @@ void setup_temporary_phys_map()
     // duplicate 1:1 mapping into phys_mem
     u64 cr3 = processor::read_cr3();
     auto pt = reinterpret_cast<u64*>(cr3);
-    pt[mmu::pt_index(mmu::phys_mem, 3)] = pt[0];
+    for (auto&& area : mmu::identity_mapped_areas) {
+        auto base = get_mem_area_base(area);
+        pt[mmu::pt_index(base, 3)] = pt[0];
+    }
 }
 
 void for_each_e820_entry(void* e820_buffer, unsigned size, void (*f)(e820ent e))
@@ -174,7 +177,10 @@ void arch_setup_free_memory()
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
-    mmu::linear_map(mmu::phys_mem, 0, initial_map, initial_map);
+    for (auto&& area : mmu::identity_mapped_areas) {
+        auto base = get_mem_area_base(area);
+        mmu::linear_map(base, 0, initial_map, initial_map);
+    }
     // map the core, loaded 1:1 by the boot loader
     mmu::phys elf_phys = reinterpret_cast<mmu::phys>(elf_header);
     elf_start = reinterpret_cast<void*>(elf_header);
@@ -192,7 +198,10 @@ void arch_setup_free_memory()
         if (intersects(ent, initial_map)) {
             ent = truncate_below(ent, initial_map);
         }
-        mmu::linear_map(mmu::phys_mem + ent.addr, ent.addr, ent.size, ~0);
+        for (auto&& area : mmu::identity_mapped_areas) {
+            auto base = get_mem_area_base(area);
+            mmu::linear_map(base + ent.addr, ent.addr, ent.size, ~0);
+        }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
 }
