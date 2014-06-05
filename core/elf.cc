@@ -482,6 +482,9 @@ void object::relocate_rela()
         void *addr = _base + p->r_offset;
         auto addend = p->r_addend;
         switch (type) {
+
+#if defined(__x86_64__)
+
         case R_X86_64_NONE:
             break;
         case R_X86_64_64:
@@ -507,6 +510,29 @@ void object::relocate_rela()
         case R_X86_64_TPOFF64:
             *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
             break;
+
+#elif defined(__aarch64__)
+
+        case R_AARCH64_NONE:
+        case R_AARCH64_NONE2:
+            break;
+        case R_AARCH64_ABS64:
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+            break;
+        case R_AARCH64_COPY:
+            abort();
+            break;
+        case R_AARCH64_GLOB_DAT:
+        case R_AARCH64_JUMP_SLOT:
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+            break;
+        case R_AARCH64_RELATIVE:
+            *static_cast<void**>(addr) = _base + addend;
+            break;
+        case R_AARCH64_TLS_TPREL64:
+            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+            break;
+#endif
         default:
             debug("unknown relocation type %d\n", type);
             abort();
@@ -534,7 +560,7 @@ void object::relocate_pltgot()
     for (auto p = rel; p < rel + nrel; ++p) {
         auto info = p->r_info;
         u32 type = info & 0xffffffff;
-        assert(type == R_X86_64_JUMP_SLOT);
+        assert(type == ARCH_JUMP_SLOT);
         void *addr = _base + p->r_offset;
         if (bind_now) {
             // If on-load binding is requested (instead of the default lazy
@@ -566,7 +592,7 @@ void* object::resolve_pltgot(unsigned index)
     auto info = slot.r_info;
     u32 sym = info >> 32;
     u32 type = info & 0xffffffff;
-    assert(type == R_X86_64_JUMP_SLOT);
+    assert(type == ARCH_JUMP_SLOT);
     void *addr = _base + slot.r_offset;
     auto sm = symbol(sym);
     WITH_LOCK(_used_by_resolve_plt_got_mutex) {
