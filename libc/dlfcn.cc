@@ -55,12 +55,7 @@ void* dlopen(const char* filename, int flags)
 
 int dlclose(void* handle)
 {
-    // FIXME: before we allow dlclose(), we need to keep for each object a set
-    // of shared_ptr to other objects which were used to resolve its symbols,
-    // so that we don't unmap an object while its symbols are being used by
-    // another.
-    // delete ((std::shared_ptr<elf::object>*) handle);
-    debug("stub dlclose()\n");
+    delete ((std::shared_ptr<elf::object>*) handle);
     return 0;
 }
 

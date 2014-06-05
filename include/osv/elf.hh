@@ -12,6 +12,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <unordered_set>
 #include <osv/types.h>
 #include <atomic>
 
@@ -305,7 +306,7 @@ struct [[gnu::packed]] Elf64_Shdr {
     Elf64_Xword sh_entsize; /* Size of entries, if section has table */
 };
 
-class object {
+class object: public std::enable_shared_from_this<elf::object> {
 public:
     explicit object(program& prog, std::string pathname);
     virtual ~object();
@@ -371,9 +372,8 @@ protected:
     // unloaded. When this object is unloaded, the reference count of all
     // objects listed here goes down, and they too may be unloaded.
     std::vector<std::shared_ptr<elf::object>> _needed;
-    // TODO: we also need a set<shared_ptr<object>> for other objects used in
-    // resolving symbols from this symbol.
-
+    std::unordered_set<std::shared_ptr<elf::object>> _used_by_resolve_plt_got;
+    mutex _used_by_resolve_plt_got_mutex;
     // Allow objects on program->_modules to be usable for the threads
     // currently initializing them, but not yet visible for other threads.
     // This simplifies the code (the initializer can use the regular lookup

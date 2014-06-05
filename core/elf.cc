@@ -568,7 +568,11 @@ void* object::resolve_pltgot(unsigned index)
     u32 type = info & 0xffffffff;
     assert(type == R_X86_64_JUMP_SLOT);
     void *addr = _base + slot.r_offset;
-    auto ret = *static_cast<void**>(addr) = symbol(sym).relocated_addr();
+    auto sm = symbol(sym);
+    WITH_LOCK(_used_by_resolve_plt_got_mutex) {
+        _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
+    }
+    auto ret = *static_cast<void**>(addr) = sm.relocated_addr();
     return ret;
 }
 
