@@ -570,6 +570,9 @@ class intrusive_list:
     def __nonzero__(self):
         return self.root['next_'] != self.root.address
 
+    def __bool__(self):
+        return self.__nonzero__()
+
 class vmstate(object):
     def __init__(self):
         self.reload()
