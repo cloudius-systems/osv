@@ -481,60 +481,9 @@ void object::relocate_rela()
         u32 type = info & 0xffffffff;
         void *addr = _base + p->r_offset;
         auto addend = p->r_addend;
-        switch (type) {
 
-#if defined(__x86_64__)
-
-        case R_X86_64_NONE:
-            break;
-        case R_X86_64_64:
-            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
-            break;
-        case R_X86_64_RELATIVE:
-            *static_cast<void**>(addr) = _base + addend;
-            break;
-        case R_X86_64_JUMP_SLOT:
-        case R_X86_64_GLOB_DAT:
-            *static_cast<void**>(addr) = symbol(sym).relocated_addr();
-            break;
-        case R_X86_64_DPTMOD64:
-            if (sym == STN_UNDEF) {
-                *static_cast<u64*>(addr) = _module_index;
-            } else {
-                *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
-            }
-            break;
-        case R_X86_64_DTPOFF64:
-            *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
-            break;
-        case R_X86_64_TPOFF64:
-            *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
-            break;
-
-#elif defined(__aarch64__)
-
-        case R_AARCH64_NONE:
-        case R_AARCH64_NONE2:
-            break;
-        case R_AARCH64_ABS64:
-            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
-            break;
-        case R_AARCH64_COPY:
-            abort();
-            break;
-        case R_AARCH64_GLOB_DAT:
-        case R_AARCH64_JUMP_SLOT:
-            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
-            break;
-        case R_AARCH64_RELATIVE:
-            *static_cast<void**>(addr) = _base + addend;
-            break;
-        case R_AARCH64_TLS_TPREL64:
-            *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
-            break;
-#endif
-        default:
-            debug("unknown relocation type %d\n", type);
+        if (!arch_relocate_rela(type, sym, addr, addend)) {
+            debug_early_u64("relocate_rela(): unknown relocation type ", type);
             abort();
         }
     }

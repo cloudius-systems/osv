@@ -779,6 +779,7 @@ objects += arch/$(arch)/entry.o
 objects += arch/$(arch)/mmu.o
 objects += arch/$(arch)/exceptions.o
 objects += arch/$(arch)/dump.o
+objects += arch/$(arch)/arch-elf.o
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o

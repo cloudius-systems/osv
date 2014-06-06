@@ -333,6 +333,10 @@ protected:
     // currently initializing them, but not yet visible for other threads.
     // This simplifies the code (the initializer can use the regular lookup
     // functions).
+
+protected:
+    bool arch_relocate_rela(u32 type, u32 sym, void *addr,
+                            Elf64_Sxword addend);
 private:
     std::atomic<void*> _visibility;
     bool visible(void) const;
