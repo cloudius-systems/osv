@@ -108,8 +108,8 @@ public class ContextIsolator {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (MainClassNotFoundException e) {
-		    context.setException(e);
-		} catch (Throwable e) {
+                    context.setException(e);
+                } catch (Throwable e) {
                     getUncaughtExceptionHandler().uncaughtException(this, e);
                 }
             }
@@ -257,11 +257,11 @@ public class ContextIsolator {
 
     private static Class<?> loadClass(String name) throws MainClassNotFoundException {
         try {
-	    Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass(name);
-	    return clazz;
-	} catch (ClassNotFoundException ex) {
-	    throw new MainClassNotFoundException(name);
-	}
+            Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass(name);
+            return clazz;
+        } catch (ClassNotFoundException ex) {
+            throw new MainClassNotFoundException(name);
+        }
     }
 
     // Expand classpath, as given in the "-classpath" option, to a list of

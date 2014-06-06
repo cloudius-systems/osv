@@ -27,12 +27,12 @@ public class RunJava {
         } catch (IllegalArgumentException ex) {
             System.err.println("RunJava: " + ex.getMessage());
         } catch (ContextFailedException ex) {
-	    if (ex.getCause() instanceof MainClassNotFoundException) {
-	        System.err.println("Error: Could not find or load main class " + ((MainClassNotFoundException)ex.getCause()).getClassName());
-	    } else {
-	        ex.printStackTrace();
-	    }
-	} catch (Throwable ex) {
+            if (ex.getCause() instanceof MainClassNotFoundException) {
+                System.err.println("Error: Could not find or load main class " + ((MainClassNotFoundException) ex.getCause()).getClassName());
+            } else {
+                ex.printStackTrace();
+            }
+        } catch (Throwable ex) {
             ex.printStackTrace();
         }
     }
