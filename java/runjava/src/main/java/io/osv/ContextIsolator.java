@@ -257,8 +257,7 @@ public class ContextIsolator {
 
     private static Class<?> loadClass(String name) throws MainClassNotFoundException {
         try {
-            Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass(name);
-            return clazz;
+            return Thread.currentThread().getContextClassLoader().loadClass(name);
         } catch (ClassNotFoundException ex) {
             throw new MainClassNotFoundException(name);
         }
