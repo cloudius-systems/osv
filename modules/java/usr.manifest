@@ -1,3 +1,10 @@
+#
+# Copyright (C) 2013-2014 Cloudius Systems, Ltd.
+#
+# This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+#
+
 [manifest]
 /usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1
 /usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
