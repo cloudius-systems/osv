@@ -120,7 +120,6 @@ public class ContextIsolator {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
                 context.setException(e);
-                e.printStackTrace();
             }
         });
         thread.setContextClassLoader(classLoader);
