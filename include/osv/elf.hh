@@ -335,8 +335,13 @@ protected:
     // functions).
 
 protected:
+    // arch-specific relocations
+    // ADDR is written to, based on the input params and the object state.
+    // The return value is true on success, false on failure.
     bool arch_relocate_rela(u32 type, u32 sym, void *addr,
                             Elf64_Sxword addend);
+    bool arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend);
+
 private:
     std::atomic<void*> _visibility;
     bool visible(void) const;

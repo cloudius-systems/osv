@@ -39,4 +39,10 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     return true;
 }
 
+bool object::arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend)
+{
+    *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+    return true;
+}
+
 }

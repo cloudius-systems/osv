@@ -517,14 +517,11 @@ void object::relocate_pltgot()
         if (bind_now) {
             // If on-load binding is requested (instead of the default lazy
             // binding), resolve all the PLT entries now.
-            u32 idx = info >> 32;
-
-#if defined(__x86_64__)
-            *static_cast<void**>(addr) = symbol(idx).relocated_addr();
-#elif defined(__aarch64__)
-            *static_cast<void**>(addr) = symbol(idx).relocated_addr() + p->r_addend;
-#endif
-
+            u32 sym = info >> 32;
+            if (!arch_relocate_jump_slot(sym, addr, p->r_addend)) {
+                debug_early("relocate_pltgot(): failed jump slot relocation\n");
+                abort();
+            }
         } else if (original_plt) {
             // Restore the link to the original plt.
             // We know the JUMP_SLOT entries are in plt order, and that
@@ -560,13 +557,12 @@ void* object::resolve_pltgot(unsigned index)
         _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
     }
 
-#if defined(__x86_64__)
-    auto ret = *static_cast<void**>(addr) = sm.relocated_addr();
-#elif defined(__aarch64__)
-    auto ret = *static_cast<void**>(addr) = sm.relocated_addr() + slot.r_addend;
-#endif
+    if (!arch_relocate_jump_slot(sym, addr, slot.r_addend)) {
+        debug_early("resolve_pltgot(): failed jump slot relocation\n");
+        abort();
+    }
 
-    return ret;
+    return *static_cast<void**>(addr);
 }
 
 void object::relocate()
