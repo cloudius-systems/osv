@@ -514,11 +514,25 @@ private:
  */
 program* get_program();
 
+/* tables needed for initial dynamic segment relocations */
+struct init_dyn_tabs {
+    const Elf64_Sym *symtab;
+    const Elf64_Word *hashtab;
+    const char *strtab;
+    const Elf64_Sym *lookup(u32 sym);
+};
+
 struct init_table {
     void (**start)();
     unsigned count;
     tls_data tls;
+
+    struct init_dyn_tabs dyn_tabs;
 };
+
+/* arch-specific relocation for initial dynamic segment relocations */
+bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
+                         void *addr, void *base, Elf64_Sxword addend);
 
 init_table get_init(Elf64_Ehdr* header);
 

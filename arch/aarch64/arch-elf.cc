@@ -9,6 +9,25 @@
 
 namespace elf {
 
+bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
+                         void *addr, void *base, Elf64_Sxword addend)
+{
+    switch (type) {
+    case R_AARCH64_NONE:
+    case R_AARCH64_NONE2:
+        break;
+    case R_AARCH64_GLOB_DAT:
+        *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
+        break;
+    case R_AARCH64_TLS_TPREL64:
+        *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
+
 bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
                                 Elf64_Sxword addend)
 {

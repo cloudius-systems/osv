@@ -1099,6 +1099,26 @@ program* get_program()
     return s_program;
 }
 
+const Elf64_Sym *init_dyn_tabs::lookup(u32 sym)
+{
+    auto nbucket = this->hashtab[0];
+    auto buckets = hashtab + 2;
+    auto chain = buckets + nbucket;
+    auto name = strtab + symtab[sym].st_name;
+
+    for (auto ent = buckets[elf64_hash(name) % nbucket];
+         ent != STN_UNDEF;
+         ent = chain[ent]) {
+
+        auto &sym = symtab[ent];
+        if (strcmp(name, &strtab[sym.st_name]) == 0) {
+            return &sym;
+        }
+    }
+
+    return nullptr;
+};
+
 init_table get_init(Elf64_Ehdr* header)
 {
     void* pbase = static_cast<void*>(header);
@@ -1115,13 +1135,14 @@ init_table get_init(Elf64_Ehdr* header)
         if (phdr->p_type == PT_DYNAMIC) {
             auto dyn = reinterpret_cast<Elf64_Dyn*>(phdr->p_vaddr);
             unsigned ndyn = phdr->p_memsz / sizeof(*dyn);
+            ret.dyn_tabs = {
+                .symtab = nullptr, .hashtab = nullptr, .strtab = nullptr,
+            };
             const Elf64_Rela* rela = nullptr;
             const Elf64_Rela* jmp = nullptr;
-            const Elf64_Sym* symtab = nullptr;
-            const Elf64_Word* hashtab = nullptr;
-            const char* strtab = nullptr;
             unsigned nrela = 0;
             unsigned njmp = 0;
+
             for (auto d = dyn; d < dyn + ndyn; ++d) {
                 switch (d->d_tag) {
                 case DT_INIT_ARRAY:
@@ -1137,13 +1158,13 @@ init_table get_init(Elf64_Ehdr* header)
                     nrela = d->d_un.d_val / sizeof(*rela);
                     break;
                 case DT_SYMTAB:
-                    symtab = reinterpret_cast<const Elf64_Sym*>(d->d_un.d_ptr);
+                    ret.dyn_tabs.symtab = reinterpret_cast<const Elf64_Sym*>(d->d_un.d_ptr);
                     break;
                 case DT_HASH:
-                    hashtab = reinterpret_cast<const Elf64_Word*>(d->d_un.d_ptr);
+                    ret.dyn_tabs.hashtab = reinterpret_cast<const Elf64_Word*>(d->d_un.d_ptr);
                     break;
                 case DT_STRTAB:
-                    strtab = reinterpret_cast<const char*>(d->d_un.d_ptr);
+                    ret.dyn_tabs.strtab = reinterpret_cast<const char*>(d->d_un.d_ptr);
                     break;
                 case DT_JMPREL:
                     jmp = reinterpret_cast<const Elf64_Rela*>(d->d_un.d_ptr);
@@ -1153,10 +1174,8 @@ init_table get_init(Elf64_Ehdr* header)
                     break;
                 }
             }
-            auto nbucket = hashtab[0];
-            auto buckets = hashtab + 2;
-            auto chain = buckets + nbucket;
-            auto relocate_table = [=](const Elf64_Rela *rtab, unsigned n) {
+            auto relocate_table = [=](struct init_table *t,
+                                      const Elf64_Rela *rtab, unsigned n) {
                 if (!rtab) {
                     return;
                 }
@@ -1166,67 +1185,16 @@ init_table get_init(Elf64_Ehdr* header)
                     u32 type = info & 0xffffffff;
                     void *addr = base + r->r_offset;
                     auto addend = r->r_addend;
-                    auto lookup = [=]() -> const Elf64_Sym* {
-                        auto name = strtab + symtab[sym].st_name;
-                        for (auto ent = buckets[elf64_hash(name) % nbucket];
-                                ent != STN_UNDEF;
-                                ent = chain[ent]) {
-                            auto &sym = symtab[ent];
-                            if (strcmp(name, &strtab[sym.st_name]) == 0) {
-                                return &sym;
-                            }
-                        }
-                        abort();
-                    };
-                    switch (type) {
-#ifdef __x86_64__
-                    case R_X86_64_NONE:
-                        break;
-                    case R_X86_64_64:
-                        *static_cast<u64*>(addr) = lookup()->st_value + addend;
-                        break;
-                    case R_X86_64_RELATIVE:
-                        *static_cast<void**>(addr) = base + addend;
-                        break;
-                    case R_X86_64_JUMP_SLOT:
-                    case R_X86_64_GLOB_DAT:
-                        *static_cast<u64*>(addr) = lookup()->st_value;
-                        break;
-                    case R_X86_64_DPTMOD64:
-                        abort();
-                        //*static_cast<u64*>(addr) = symbol_module(sym);
-                        break;
-                    case R_X86_64_DTPOFF64:
-                        *static_cast<u64*>(addr) = lookup()->st_value;
-                        break;
-                    case R_X86_64_TPOFF64:
-                        // FIXME: assumes TLS segment comes before DYNAMIC segment
-                        *static_cast<u64*>(addr) = lookup()->st_value - ret.tls.size;
-                        break;
-                    case R_X86_64_IRELATIVE:
-                        *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(base + addend)();
-                        break;
-#endif /* __x86_64__ */
-#ifdef __aarch64__
-                    case R_AARCH64_NONE:
-                    case R_AARCH64_NONE2:
-                        break;
-                    case R_AARCH64_GLOB_DAT:
-                        *static_cast<u64*>(addr) = lookup()->st_value + addend;
-                        break;
-                    case R_AARCH64_TLS_TPREL64:
-                        *static_cast<u64*>(addr) = lookup()->st_value + addend;
-                        break;
-#endif /* __aarch64__ */
-                    default:
-                        debug_early_u64("Unsupported relocation type=", (u64)type);
+
+                    if (!arch_init_reloc_dyn(t, type, sym,
+                                             addr, base, addend)) {
+                        debug_early_u64("Unsupported relocation type=", type);
                         abort();
                     }
-
                 }
             };
-            relocate_table(rela, nrela);
-            relocate_table(jmp, njmp);
+            relocate_table(&ret, rela, nrela);
+            relocate_table(&ret, jmp, njmp);
         } else if (phdr->p_type == PT_TLS) {
             ret.tls.start = reinterpret_cast<void*>(phdr->p_vaddr);
             ret.tls.filesize = phdr->p_filesz;
