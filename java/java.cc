@@ -23,7 +23,6 @@ extern size_t jvm_heap_size;
 // parameters.
 
 #define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
-#define RUNJAVA_PATH    "/java/runjava.jar"
 #define RUNJAVA         "io/osv/RunJava"    // separated by slashes, not dots
 
 JavaVMOption mkoption(const char* s)
@@ -90,7 +89,6 @@ int main(int argc, char **argv)
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
 
     std::vector<JavaVMOption> options;
-    options.push_back(mkoption("-Djava.class.path=" RUNJAVA_PATH));
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
     options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
 
@@ -153,7 +151,7 @@ int main(int argc, char **argv)
             env->ExceptionDescribe();
             env->ExceptionClear();
         } else {
-            std::cerr << "java.so: Can't find class " << RUNJAVA << " in " << RUNJAVA_PATH << ".\n";
+            std::cerr << "java.so: Can't find class " << RUNJAVA << ".\n";
         }
         return 1;
     }
