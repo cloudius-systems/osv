@@ -733,6 +733,7 @@ drivers += java/jvm_balloon.o
 drivers += java/java_api.o
 drivers += drivers/random.o
 drivers += drivers/zfs.o
+drivers += drivers/null.o
 
 ifeq ($(arch),x64)
 drivers += $(libtsm)

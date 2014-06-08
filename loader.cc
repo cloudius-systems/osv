@@ -42,6 +42,7 @@
 #include "drivers/zfs.hh"
 #include "drivers/random.hh"
 #include "drivers/console.hh"
+#include "drivers/null.hh"
 
 using namespace osv;
 
@@ -311,7 +312,7 @@ void* do_main_thread(void *_commands)
          static_cast<std::vector<std::vector<std::string> > *>(_commands);
 
     arch_init_drivers();
-
+    nulldev::nulldev_init();
     randomdev::randomdev_init();
     boot_time.event("drivers loaded");
 
