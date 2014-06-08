@@ -170,7 +170,7 @@ done_e820:
 .org 0x1de
 .space 16, 0
 
-.org 0x1ee,
+.org 0x1ee
 .space 16, 0
 
 .org 0x1fe
