@@ -1110,11 +1110,15 @@ static inline void* std_malloc(size_t size, size_t alignment)
 
     if (size <= memory::pool::max_object_size) {
         if (!smp_allocator) {
-            return memory::alloc_page() + memory::non_mempool_obj_offset;
+            return mmu::translate_mem_area(mmu::mem_area::main,
+                                           mmu::mem_area::early,
+                                           memory::alloc_page());
         }
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
+        ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,
+                                 ret);
         trace_memory_malloc_mempool(ret, requested_size, 1 << n, alignment);
     } else {
         ret = memory::malloc_large(size, alignment);
@@ -1137,10 +1141,15 @@ void* calloc(size_t nmemb, size_t size)
 
 static size_t object_size(void *object)
 {
-    if (reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1)) {
-        return memory::pool::from_object(object)->get_size();
-    } else {
+    switch (mmu::get_mem_area(object)) {
+    case mmu::mem_area::main:
         return memory::large_object_size(object);
+    case mmu::mem_area::mempool:
+        object = mmu::translate_mem_area(mmu::mem_area::mempool,
+                                         mmu::mem_area::main, object);
+        return memory::pool::from_object(object)->get_size();
+    default:
+        abort();
     }
 }
 
@@ -1170,13 +1179,19 @@ static inline void std_free(void* object)
         return;
     }
     memory::tracker_forget(object);
-    auto offset = reinterpret_cast<uintptr_t>(object) & (memory::page_size - 1);
-    if (offset == memory::non_mempool_obj_offset) {
-        memory::free_page(object - offset);
-    } else if (offset) {
+    switch (mmu::get_mem_area(object)) {
+    case mmu::mem_area::early:
+        object = mmu::translate_mem_area(mmu::mem_area::early,
+                                         mmu::mem_area::main, object);
+        return memory::free_page(object);
+    case mmu::mem_area::main:
+         return memory::free_large(object);
+    case mmu::mem_area::mempool:
+        object = mmu::translate_mem_area(mmu::mem_area::mempool,
+                                         mmu::mem_area::main, object);
         return memory::pool::from_object(object)->free(object);
-    } else {
-        return memory::free_large(object);
+    default:
+        abort();
     }
 }
 
@@ -1370,16 +1385,16 @@ void enable_debug_allocator()
 void* alloc_phys_contiguous_aligned(size_t size, size_t align)
 {
     assert(is_power_of_two(align));
-    // make use of the standard allocator returning properly aligned
+    // make use of the standard large allocator returning properly aligned
     // physically contiguous memory:
-    auto ret = std_malloc(size, align);
+    auto ret = malloc_large(size, align);
     assert (!(reinterpret_cast<uintptr_t>(ret) & (align - 1)));
     return ret;
 }
 
 void free_phys_contiguous_aligned(void* p)
 {
-    std_free(p);
+    free_large(p);
 }
 
 }

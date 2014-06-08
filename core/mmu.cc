@@ -122,7 +122,7 @@ phys virt_to_phys(void *virt)
     // For now, only allow non-mmaped areas.  Later, we can either
     // bounce such addresses, or lock them in memory and translate
     assert(virt >= phys_mem);
-    return static_cast<char*>(virt) - phys_mem;
+    return reinterpret_cast<uintptr_t>(virt) & (mem_area_size - 1);
 }
 
 phys allocate_intermediate_level(std::function<pt_element (int)> pte)
