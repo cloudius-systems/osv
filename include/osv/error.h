@@ -13,7 +13,7 @@
 struct error {
 #ifdef __cplusplus
 public:
-    explicit error() = default;
+    explicit error() : _errno(0) {}
     explicit error(int _errno) : _errno(_errno) {}
     error(const error& e) = default;
     bool bad() const { return _errno != 0; }
@@ -21,7 +21,7 @@ public:
     int to_libc() const;
 private:
 #endif
-    int _errno = 0;
+    int _errno;
 };
 
 typedef struct error error;
