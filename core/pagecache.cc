@@ -34,8 +34,8 @@ struct hash<pagecache::hashkey> {
     }
 };
 
-template<> struct hash<mmu::hw_ptep> {
-    size_t operator()(const mmu::hw_ptep& ptep) const noexcept {
+template<> struct hash<mmu::hw_ptep<0>> {
+    size_t operator()(const mmu::hw_ptep<0>& ptep) const noexcept {
         hash<const mmu::pt_element*> h;
         return h(ptep.release());
     }
@@ -48,12 +48,12 @@ struct hash<pagecache::arc_hashkey> {
     }
 };
 
-std::unordered_set<mmu::hw_ptep>::iterator begin(std::unique_ptr<std::unordered_set<mmu::hw_ptep>> const& e)
+std::unordered_set<mmu::hw_ptep<0>>::iterator begin(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>> const& e)
 {
     return e->begin();
 }
 
-std::unordered_set<mmu::hw_ptep>::iterator end(std::unique_ptr<std::unordered_set<mmu::hw_ptep>> const& e)
+std::unordered_set<mmu::hw_ptep<0>>::iterator end(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>> const& e)
 {
     return e->end();
 }
@@ -74,7 +74,7 @@ class cached_page {
 protected:
     const hashkey _key;
     void* _page;
-    typedef boost::variant<std::nullptr_t, mmu::hw_ptep, std::unique_ptr<std::unordered_set<mmu::hw_ptep>>> ptep_list;
+    typedef boost::variant<std::nullptr_t, mmu::hw_ptep<0>, std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>> ptep_list;
     ptep_list _ptes; // set of pointers to ptes that map the page
 
     template<typename T>
@@ -85,34 +85,34 @@ protected:
         ptes_visitor(ptep_list& ptes) : _ptes(ptes) {}
     };
     class ptep_add : public ptes_visitor<void> {
-        mmu::hw_ptep& _ptep;
+        mmu::hw_ptep<0>& _ptep;
     public:
-        ptep_add(ptep_list& ptes, mmu::hw_ptep& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
+        ptep_add(ptep_list& ptes, mmu::hw_ptep<0>& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
         void operator()(std::nullptr_t& v) {
             _ptes = _ptep;
         }
-        void operator()(mmu::hw_ptep& ptep) {
-            auto ptes = std::unique_ptr<std::unordered_set<mmu::hw_ptep>>(new std::unordered_set<mmu::hw_ptep>({ptep}));
+        void operator()(mmu::hw_ptep<0>& ptep) {
+            auto ptes = std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>(new std::unordered_set<mmu::hw_ptep<0>>({ptep}));
             ptes->emplace(_ptep);
             _ptes = std::move(ptes);
         }
-        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
             set->emplace(_ptep);
         }
     };
     class ptep_remove : public ptes_visitor<int> {
-        mmu::hw_ptep& _ptep;
+        mmu::hw_ptep<0>& _ptep;
     public:
-        ptep_remove(ptep_list& ptes, mmu::hw_ptep& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
+        ptep_remove(ptep_list& ptes, mmu::hw_ptep<0>& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
         int operator()(std::nullptr_t &v) {
             assert(0);
             return -1;
         }
-        int operator()(mmu::hw_ptep& ptep) {
+        int operator()(mmu::hw_ptep<0>& ptep) {
             _ptes = nullptr;
             return 0;
         }
-        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
             set->erase(_ptep);
             if (set->size() == 1) {
                 auto pte = *(set->begin());
@@ -134,10 +134,10 @@ protected:
         Ret operator()(std::nullptr_t &v) {
             return _initial;
         }
-        Ret operator()(mmu::hw_ptep& ptep) {
+        Ret operator()(mmu::hw_ptep<0>& ptep) {
             return _reducer(_initial, _mapper(ptep));
         }
-        Ret operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep>>& set) {
+        Ret operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
             Ret acc = _initial;
             for (auto&& i: set) {
               acc = _reducer(acc, _mapper(i));
@@ -159,11 +159,11 @@ public:
     ~cached_page() {
     }
 
-    void map(mmu::hw_ptep ptep) {
+    void map(mmu::hw_ptep<0> ptep) {
         ptep_add add(_ptes, ptep);
         boost::apply_visitor(add, _ptes);
     }
-    int unmap(mmu::hw_ptep ptep) {
+    int unmap(mmu::hw_ptep<0> ptep) {
         ptep_remove rm(_ptes, ptep);
         return boost::apply_visitor(rm, _ptes);
     }
@@ -171,13 +171,13 @@ public:
         return _page;
     }
     int flush() {
-        return for_each_pte([] (mmu::hw_ptep pte) { mmu::clear_pte(pte); return 1;});
+        return for_each_pte([] (mmu::hw_ptep<0> pte) { mmu::clear_pte(pte); return 1;});
     }
     int clear_accessed() {
-        return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_accessed(pte); });
+        return for_each_pte([] (mmu::hw_ptep<0> pte) -> int { return mmu::clear_accessed(pte); });
     }
     int clear_dirty() {
-        return for_each_pte([] (mmu::hw_ptep pte) -> int { return mmu::clear_dirty(pte); });
+        return for_each_pte([] (mmu::hw_ptep<0> pte) -> int { return mmu::clear_dirty(pte); });
     }
     const hashkey& key() {
         return _key;
@@ -227,7 +227,7 @@ public:
         _dirty |= true;
     }
     bool flush_check_dirty() {
-        return for_each_pte([] (mmu::hw_ptep pte) { return mmu::clear_pte(pte).dirty(); }, std::logical_or<bool>(), false);
+        return for_each_pte([] (mmu::hw_ptep<0> pte) { return mmu::clear_pte(pte).dirty(); }, std::logical_or<bool>(), false);
     }
 };
 
@@ -312,14 +312,14 @@ static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
 }
 
 TRACEPOINT(trace_add_read_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void add_read_mapping(cached_page_arc *cp, mmu::hw_ptep ptep)
+void add_read_mapping(cached_page_arc *cp, mmu::hw_ptep<0> ptep)
 {
     trace_add_read_mapping(cp->arcbuf(), cp->addr(), ptep.release());
     cp->map(ptep);
 }
 
 TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void remove_read_mapping(cached_page_arc* cp, mmu::hw_ptep ptep)
+void remove_read_mapping(cached_page_arc* cp, mmu::hw_ptep<0> ptep)
 {
     trace_remove_mapping(cp->arcbuf(), cp->addr(), ptep.release());
     if (cp->unmap(ptep) == 0) {
@@ -328,7 +328,7 @@ void remove_read_mapping(cached_page_arc* cp, mmu::hw_ptep ptep)
     }
 }
 
-void remove_read_mapping(hashkey& key, mmu::hw_ptep ptep)
+void remove_read_mapping(hashkey& key, mmu::hw_ptep<0> ptep)
 {
     SCOPE_LOCK(arc_lock);
     cached_page_arc* cp = find_in_cache(read_cache, key);
@@ -417,7 +417,7 @@ static void insert(cached_page_write* cp) {
     }
 }
 
-bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared)
+bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element pte, bool write, bool shared)
 {
     struct stat st;
     fp->stat(&st);
@@ -468,7 +468,7 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep ptep, mmu::pt_element pte, boo
     return mmu::write_pte(wcp->addr(), ptep, mmu::pte_mark_cow(pte, !shared));
 }
 
-bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep ptep)
+bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
 {
     struct stat st;
     fp->stat(&st);

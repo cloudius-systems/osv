@@ -140,12 +140,12 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
-bool vfs_file::map_page(uintptr_t off, size_t size, mmu::hw_ptep ptep, mmu::pt_element pte, bool write, bool shared)
+bool vfs_file::map_page(uintptr_t off, size_t size, mmu::hw_ptep<0> ptep, mmu::pt_element pte, bool write, bool shared)
 {
     return pagecache::get(this, off, ptep, pte, write, shared);
 }
 
-bool vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep ptep)
+bool vfs_file::put_page(void *addr, uintptr_t off, size_t size, mmu::hw_ptep<0> ptep)
 {
     return pagecache::release(this, addr, off, ptep);
 }

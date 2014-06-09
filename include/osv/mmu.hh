@@ -144,14 +144,17 @@ private:
 class shm_file final : public special_file {
     size_t _size;
     std::unordered_map<uintptr_t, void*> _pages;
+    void* page(uintptr_t hp_off);
 public:
     shm_file(size_t size, int flags);
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 
-    virtual bool map_page(uintptr_t offset, size_t size, hw_ptep ptep, pt_element pte, bool write, bool shared) override;
-    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep ptep) override;
+    virtual bool map_page(uintptr_t offset, size_t size, hw_ptep<0> ptep, pt_element pte, bool write, bool shared) override;
+    virtual bool map_page(uintptr_t offset, size_t size, hw_ptep<1> ptep, pt_element pte, bool write, bool shared) override;
+    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep<0> ptep) override;
+    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep<1> ptep) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
@@ -169,14 +172,52 @@ bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
-pt_element clear_pte(hw_ptep ptep);
-bool clear_accessed(hw_ptep ptep);
-bool clear_dirty(hw_ptep ptep);
-pt_element pte_mark_cow(pt_element pte, bool cow);
-bool write_pte(void *addr, hw_ptep ptep, pt_element pte);
+template<int N>
+inline pt_element clear_pte(hw_ptep<N> ptep)
+{
+    auto old = ptep.exchange(make_empty_pte());
+    //trace_clear_pte(ptep.release(), pte_is_cow(old), old.addr(false));
+    return old;
+}
+
+template<int N>
+inline bool clear_accessed(hw_ptep<N> ptep)
+{
+    pt_element pte = ptep.read();
+    bool accessed = arch_pt_element::accessed(&pte);
+    if (accessed) {
+        pt_element clear = pte;
+        arch_pt_element::set_accessed(&clear, false);
+        ptep.compare_exchange(pte, clear);
+    }
+    return accessed;
+}
+
+template<int N>
+inline bool clear_dirty(hw_ptep<N> ptep)
+{
+    static_assert(N == 0 || N == 1, "non leaf pte");
+    pt_element pte = ptep.read();
+    bool dirty = pte.dirty();
+    if (dirty) {
+        pt_element clear = pte;
+        clear.set_dirty(false);
+        ptep.compare_exchange(pte, clear);
+    }
+    return dirty;
+}
 
 phys virt_to_phys(void *virt);
 pt_element virt_to_pte_rcu(uintptr_t virt);
+
+template<int N>
+inline bool write_pte(void *addr, hw_ptep<N> ptep, pt_element pte)
+{
+    pte.mod_addr(virt_to_phys(addr));
+    return ptep.compare_exchange(ptep.read(), pte);
+}
+
+pt_element pte_mark_cow(pt_element pte, bool cow);
 
 template <typename OutputFunc>
 inline
