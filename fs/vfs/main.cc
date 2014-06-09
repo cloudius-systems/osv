@@ -1632,6 +1632,13 @@ fs_noop(void)
     return 0;
 }
 
+int chroot(const char *path)
+{
+    WARN_STUBBED();
+    errno = ENOSYS;
+    return -1;
+}
+
 #ifdef NOTYET
 /*
  * Dump internal data.
