@@ -534,8 +534,14 @@ void reclaimer::wait_for_memory(size_t mem)
 static void* malloc_large(size_t size, size_t alignment)
 {
     auto requested_size = size;
-    size = (size + page_size - 1) & ~(page_size - 1);
-    size += page_size;
+    size_t offset;
+    if (alignment < page_size) {
+        offset = align_up(sizeof(page_range), alignment);
+    } else {
+        offset = page_size;
+    }
+    size += offset;
+    size = align_up(size, page_size);
 
     while (true) {
         WITH_LOCK(free_page_ranges_lock) {
@@ -567,7 +573,7 @@ static void* malloc_large(size_t size, size_t alignment)
                     }
                     on_alloc(size);
                     void* obj = ret_header;
-                    obj += page_size;
+                    obj += offset;
                     trace_memory_malloc_large(obj, requested_size, size,
                                               alignment);
                     return obj;
@@ -803,12 +809,13 @@ static void free_page_range(void *addr, size_t size)
 
 static void free_large(void* obj)
 {
-    free_page_range(static_cast<page_range*>(obj - page_size));
+    obj = align_down(obj - 1, page_size);
+    free_page_range(static_cast<page_range*>(obj));
 }
 
 static unsigned large_object_size(void *obj)
 {
-    obj -= page_size;
+    obj = align_down(obj - 1, page_size);
     auto header = static_cast<page_range*>(obj);
     return header->size;
 }
