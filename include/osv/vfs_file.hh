@@ -22,8 +22,8 @@ public:
     virtual int close() override;
     virtual int chmod(mode_t mode) override;
     virtual std::unique_ptr<mmu::file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
-    virtual bool map_page(uintptr_t offset, size_t size, mmu::hw_ptep<0> ptep, mmu::pt_element pte, bool write, bool shared);
-    virtual bool put_page(void *addr, uintptr_t offset, size_t size, mmu::hw_ptep<0> ptep);
+    virtual bool map_page(uintptr_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element pte, bool write, bool shared);
+    virtual bool put_page(void *addr, uintptr_t offset, mmu::hw_ptep<0> ptep);
     virtual void sync(off_t start, off_t end);
 
     int get_arcbuf(void *key, off_t offset);

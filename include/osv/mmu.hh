@@ -151,10 +151,10 @@ public:
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 
-    virtual bool map_page(uintptr_t offset, size_t size, hw_ptep<0> ptep, pt_element pte, bool write, bool shared) override;
-    virtual bool map_page(uintptr_t offset, size_t size, hw_ptep<1> ptep, pt_element pte, bool write, bool shared) override;
-    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep<0> ptep) override;
-    virtual bool put_page(void *addr, uintptr_t offset, size_t size, hw_ptep<1> ptep) override;
+    virtual bool map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write, bool shared) override;
+    virtual bool map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write, bool shared) override;
+    virtual bool put_page(void *addr, uintptr_t offset, hw_ptep<0> ptep) override;
+    virtual bool put_page(void *addr, uintptr_t offset, hw_ptep<1> ptep) override;
 };
 
 void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,

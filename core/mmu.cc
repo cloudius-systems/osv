@@ -202,9 +202,9 @@ void split_large_page(hw_ptep<1> ptep)
 
 struct page_allocator {
     virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write) = 0;
-    virtual bool map(size_t size, uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) = 0;
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) = 0;
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) = 0;
-    virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep<1> ptep) = 0;
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) = 0;
     virtual ~page_allocator() {}
 };
 
@@ -233,11 +233,6 @@ unsigned nr_page_sizes = 2; // FIXME: detect 1GB pages
 void set_nr_page_sizes(unsigned nr)
 {
     nr_page_sizes = nr;
-}
-
-constexpr size_t page_size_level(unsigned level)
-{
-    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
 }
 
 enum class allocate_intermediate_opt : bool {no = true, yes = false};
@@ -559,7 +554,7 @@ public:
         pte = dirty(make_large_pte(0, _perm));
 
         try {
-            if (_page_provider->map(huge_page_size, offset, ptep, pte, _write)) {
+            if (_page_provider->map(offset, ptep, pte, _write)) {
                 this->account(huge_page_size);
             }
         } catch(std::exception&) {
@@ -653,7 +648,7 @@ public:
     }
     bool huge_page(hw_ptep<1> ptep, uintptr_t offset) {
         void* addr = phys_to_virt(ptep.read().addr(true));
-        if (_pops->unmap(addr, huge_page_size, offset, ptep)) {
+        if (_pops->unmap(addr, offset, ptep)) {
             do_flush = !_tlb_gather.push(addr, huge_page_size);
         } else {
             do_flush = true;
@@ -954,14 +949,15 @@ public:
     virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write) override {
         return set_pte(fill(memory::alloc_page(), offset, page_size), ptep, pte);
     }
-    virtual bool map(size_t size, uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) override {
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) override {
+        size_t size = ptep.size();
         return set_pte(fill(memory::alloc_huge_page(size), offset, size), ptep, pte);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {
         clear_pte(ptep);
         return true;
     }
-    virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep<1> ptep) override {
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) override {
         clear_pte(ptep);
         return true;
     }
@@ -1012,16 +1008,16 @@ public:
     virtual ~map_file_page_mmap() {};
 
     virtual bool map(uintptr_t offset, hw_ptep<0> ptep,  pt_element pte, bool write) override {
-        return _file->map_page(offset + _foffset, page_size, ptep, pte, write, _shared);
+        return _file->map_page(offset + _foffset, ptep, pte, write, _shared);
     }
-    virtual bool map(size_t size, uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) override {
-        return _file->map_page(offset + _foffset, size, ptep, pte, write, _shared);
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) override {
+        return _file->map_page(offset + _foffset, ptep, pte, write, _shared);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {
-        return _file->put_page(addr, offset + _foffset, page_size, ptep);
+        return _file->put_page(addr, offset + _foffset, ptep);
     }
-    virtual bool unmap(void *addr, size_t size, uintptr_t offset, hw_ptep<1> ptep) override {
-        return _file->put_page(addr, offset + _foffset, size, ptep);
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) override {
+        return _file->put_page(addr, offset + _foffset, ptep);
     }
 };
 
@@ -1676,14 +1672,14 @@ void* shm_file::page(uintptr_t hp_off)
     return addr;
 }
 
-bool shm_file::map_page(uintptr_t offset, size_t size, hw_ptep<0> ptep, pt_element pte, bool write, bool shared)
+bool shm_file::map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write, bool shared)
 {
     uintptr_t hp_off = align_down(offset, huge_page_size);
 
     return write_pte(static_cast<char*>(page(hp_off)) + offset - hp_off, ptep, pte);
 }
 
-bool shm_file::map_page(uintptr_t offset, size_t size, hw_ptep<1> ptep, pt_element pte, bool write, bool shared)
+bool shm_file::map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write, bool shared)
 {
     uintptr_t hp_off = align_down(offset, huge_page_size);
 
@@ -1692,8 +1688,8 @@ bool shm_file::map_page(uintptr_t offset, size_t size, hw_ptep<1> ptep, pt_eleme
     return write_pte(static_cast<char*>(page(hp_off)) + offset - hp_off, ptep, pte);
 }
 
-bool shm_file::put_page(void *addr, uintptr_t offset, size_t size, hw_ptep<0> ptep) {return false;}
-bool shm_file::put_page(void *addr, uintptr_t offset, size_t size, hw_ptep<1> ptep) {return false;}
+bool shm_file::put_page(void *addr, uintptr_t offset, hw_ptep<0> ptep) {return false;}
+bool shm_file::put_page(void *addr, uintptr_t offset, hw_ptep<1> ptep) {return false;}
 
 shm_file::shm_file(size_t size, int flags) : special_file(flags, DTYPE_UNSPEC), _size(size) {}
 

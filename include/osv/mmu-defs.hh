@@ -167,6 +167,11 @@ bool is_page_fault_write_exclusive(unsigned int err);
 
 bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef);
 
+constexpr size_t page_size_level(unsigned level)
+{
+    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
+}
+
 class hw_ptep_impl_base {
 protected:
     hw_ptep_impl_base(pt_element *ptep) : p(ptep) {}
@@ -225,6 +230,7 @@ public:
     // no longer using this as a page table
     pt_element* release() const { return p; }
     bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
+    size_t size() const { return page_size_level(N); }
 private:
     hw_ptep(pt_element* ptep) : hw_ptep_base<N>(ptep) {}
     using hw_ptep_base<N>::p;
