@@ -38,7 +38,7 @@
 
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_NODE(_vfs_zfs, OID_AUTO, zio, CTLFLAG_RW, 0, "ZFS ZIO");
-static int zio_use_uma = 0;
+static int zio_use_uma = 1;
 TUNABLE_INT("vfs.zfs.zio.use_uma", &zio_use_uma);
 SYSCTL_INT(_vfs_zfs_zio, OID_AUTO, use_uma, CTLFLAG_RDTUN, &zio_use_uma, 0,
     "Use uma(9) for ZIO allocations");
@@ -170,6 +170,9 @@ zio_init(void)
 		} else if (IS_P2ALIGNED(size, p2 >> 2)) {
 			align = p2 >> 2;
 		}
+#ifdef __OSV__
+		align = PAGESIZE;
+#endif
 
 		if (align != 0) {
 			char name[36];
