@@ -9,6 +9,9 @@ def is_mempool(x):
 def is_large(x):
     return x.find("malloc_large ") > 0
 
+def is_page(x):
+    return x.find("malloc_page ") > 0
+
 def get_alloc_len(x):
     return int(re.findall("alloc_len=(\d*)", x)[0])
 
@@ -23,15 +26,6 @@ def get_align(x):
 
 def get_type(x):
     return re.findall("malloc_(\S*) ", x)[0]
-
-def is_page_alloc(x):
-    return x.find("memory_page_alloc ") > 0
-
-def is_page_free(x):
-    return x.find("memory_page_free ") > 0
-
-def get_page(x):
-    return re.findall("page=(0x................)", x)[0]
 
 class Buffer(object):
     def __init__(self, buf, alloc_type, alloc_len, req_len, align, backtrace):
@@ -51,7 +45,7 @@ def process_records(mallocs, trace_records, printer=prof.default_printer):
             # a list of object, each describing the buffer: its requested and
             # actual size, alignment and allocator.
             #
-            if is_mempool(l) or is_large(l):
+            if is_mempool(l) or is_large(l) or is_page(l):
                 buf = get_buf(l)
                 b = Buffer(buf,
                            alloc_type=get_type(l),
@@ -63,33 +57,6 @@ def process_records(mallocs, trace_records, printer=prof.default_printer):
                     mallocs[buf] += [b]
                 else:
                     mallocs[buf] = [b]
-
-        #
-        # TODO: It is possible to alloc_huge_page() and then free_page()
-        # it in 512 pieces, and vice versa. Add support for that.
-        #
-            elif is_page_alloc(l):
-                page = get_page(l)
-                b = Buffer(page, 'page', 4096, t.backtrace)
-                b.req_len = 4096
-                b.align = 4096
-                if page in mallocs:
-                    if not mallocs[page][-1].is_freed:
-                        printer("Page %s was already allocated.\n" % page)
-                    mallocs[page] += [b]
-                else:
-                    mallocs[page] = [b]
-
-            elif is_page_free(l):
-                page = get_page(l)
-                # check if page had been allocated
-                if not page in mallocs:
-                    # print "Page %s never been allocated." % page
-                    pass
-                else:
-                    # check if page already freed
-                    mallocs[page][-1].set_freed(printer)
-
         except:
             printer("Problem parsing line: '%s'\n" % l)
             raise

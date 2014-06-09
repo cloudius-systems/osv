@@ -38,6 +38,8 @@ TRACEPOINT(trace_memory_malloc_mempool, "buf=%p, req_len=%d, alloc_len=%d,"
            " align=%d", void*, size_t, size_t, size_t);
 TRACEPOINT(trace_memory_malloc_large, "buf=%p, req_len=%d, alloc_len=%d,"
            " align=%d", void*, size_t, size_t, size_t);
+TRACEPOINT(trace_memory_malloc_page, "buf=%p, req_len=%d, alloc_len=%d,"
+           " align=%d", void*, size_t, size_t, size_t);
 TRACEPOINT(trace_memory_free, "buf=%p", void *);
 TRACEPOINT(trace_memory_realloc, "in=%p, newlen=%d, out=%p", void *, size_t, void *);
 TRACEPOINT(trace_memory_page_alloc, "page=%p", void*);
@@ -1101,25 +1103,25 @@ static inline void* std_malloc(size_t size, size_t alignment)
     // so need to increase the allocation size.
     auto requested_size = size;
     if (alignment > size) {
-        if (alignment <= memory::pool::max_object_size) {
+        if (alignment <= mmu::page_size) {
             size = alignment;
         } else {
-            size = std::max(size, memory::pool::max_object_size * 2);
+            size = std::max(size, mmu::page_size * 2);
         }
     }
 
-    if (size <= memory::pool::max_object_size) {
-        if (!smp_allocator) {
-            return mmu::translate_mem_area(mmu::mem_area::main,
-                                           mmu::mem_area::early,
-                                           memory::alloc_page());
-        }
+    if (size <= memory::pool::max_object_size && smp_allocator) {
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
         ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,
                                  ret);
         trace_memory_malloc_mempool(ret, requested_size, 1 << n, alignment);
+    } else if (size <= mmu::page_size) {
+        ret = mmu::translate_mem_area(mmu::mem_area::main, mmu::mem_area::page,
+                                       memory::alloc_page());
+        trace_memory_malloc_page(ret, requested_size, mmu::page_size,
+                                 alignment);
     } else {
         ret = memory::malloc_large(size, alignment);
     }
@@ -1148,6 +1150,8 @@ static size_t object_size(void *object)
         object = mmu::translate_mem_area(mmu::mem_area::mempool,
                                          mmu::mem_area::main, object);
         return memory::pool::from_object(object)->get_size();
+    case mmu::mem_area::page:
+        return mmu::page_size;
     default:
         abort();
     }
@@ -1180,8 +1184,8 @@ static inline void std_free(void* object)
     }
     memory::tracker_forget(object);
     switch (mmu::get_mem_area(object)) {
-    case mmu::mem_area::early:
-        object = mmu::translate_mem_area(mmu::mem_area::early,
+    case mmu::mem_area::page:
+        object = mmu::translate_mem_area(mmu::mem_area::page,
                                          mmu::mem_area::main, object);
         return memory::free_page(object);
     case mmu::mem_area::main:

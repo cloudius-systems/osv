@@ -31,14 +31,14 @@ typedef uint64_t phys;
 
 enum class mem_area {
     main,
-    early,
+    page,
     mempool,
     debug,
 };
 
 constexpr mem_area identity_mapped_areas[] = {
     mem_area::main,
-    mem_area::early,
+    mem_area::page,
     mem_area::mempool,
 };
 
