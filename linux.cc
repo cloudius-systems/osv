@@ -70,62 +70,73 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
     }
 }
 
+#define SYSCALL0(fn) case (__NR_##fn): return fn()
+
+#define SYSCALL1(fn, __t1)                  \
+        case (__NR_##fn): do {              \
+        va_list args;                       \
+        __t1 arg1;                          \
+        va_start(args, number);             \
+        arg1 = va_arg(args, __t1);          \
+        va_end(args);                       \
+        return fn(arg1);                    \
+        } while (0)
+
+#define SYSCALL2(fn, __t1, __t2)            \
+        case (__NR_##fn): do {              \
+        va_list args;                       \
+        __t1 arg1;                          \
+        __t2 arg2;                          \
+        va_start(args, number);             \
+        arg1 = va_arg(args, __t1);          \
+        arg2 = va_arg(args, __t2);          \
+        va_end(args);                       \
+        return fn(arg1, arg2);              \
+        } while (0)
+
+#define SYSCALL3(fn, __t1, __t2, __t3)          \
+        case (__NR_##fn): do {                  \
+        va_list args;                           \
+        __t1 arg1;                              \
+        __t2 arg2;                              \
+        __t3 arg3;                              \
+        va_start(args, number);                 \
+        arg1 = va_arg(args, __t1);              \
+        arg2 = va_arg(args, __t2);              \
+        arg3 = va_arg(args, __t3);              \
+        va_end(args);                           \
+        return fn(arg1, arg2, arg3);            \
+        } while (0)
+
+#define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)        \
+        case (__NR_##fn): do {                                  \
+        va_list args;                                           \
+        __t1 arg1;                                              \
+        __t2 arg2;                                              \
+        __t3 arg3;                                              \
+        __t4 arg4;                                              \
+        __t5 arg5;                                              \
+        __t6 arg6;                                              \
+        va_start(args, number);                                 \
+        arg1 = va_arg(args, __t1);                              \
+        arg2 = va_arg(args, __t2);                              \
+        arg3 = va_arg(args, __t3);                              \
+        arg4 = va_arg(args, __t4);                              \
+        arg5 = va_arg(args, __t5);                              \
+        arg6 = va_arg(args, __t6);                              \
+        va_end(args);                                           \
+        return fn(arg1, arg2, arg3, arg4, arg5, arg6);          \
+        } while (0)
+
 
 long syscall(long number, ...)
 {
     switch (number) {
-    case __NR_write: {
-        va_list args;
-        int arg1;
-        const void *arg2;
-        size_t arg3;
-        va_start(args, number);
-        arg1 = va_arg(args, typeof(arg1));
-        arg2 = va_arg(args, typeof(arg2));
-        arg3 = va_arg(args, typeof(arg3));
-        va_end(args);
-
-        return write(arg1, arg2, arg3);
-    }
-    case __NR_gettid: return gettid();
-    case __NR_clock_gettime: {
-        va_list args;
-        clockid_t arg1;
-        struct timespec *arg2;
-        va_start(args, number);
-        arg1 = va_arg(args, typeof(arg1));
-        arg2 = va_arg(args, typeof(arg2));
-        va_end(args);
-        return clock_gettime(arg1, arg2);
-        }
-    case __NR_clock_getres: {
-        va_list args;
-        clockid_t arg1;
-        struct timespec *arg2;
-        va_start(args, number);
-        arg1 = va_arg(args, typeof(arg1));
-        arg2 = va_arg(args, typeof(arg2));
-        va_end(args);
-        return clock_getres(arg1, arg2);
-        }
-    case __NR_futex: {
-        va_list args;
-        int *arg1;
-        int arg2;
-        int arg3;
-        const struct timespec *arg4;
-        int *arg5;
-        int arg6;
-        va_start(args, number);
-        arg1 = va_arg(args, typeof(arg1));
-        arg2 = va_arg(args, typeof(arg2));
-        arg3 = va_arg(args, typeof(arg3));
-        arg4 = va_arg(args, typeof(arg4));
-        arg5 = va_arg(args, typeof(arg5));
-        arg6 = va_arg(args, typeof(arg6));
-        va_end(args);
-        return futex(arg1, arg2, arg3, arg4, arg5, arg6);
-    }
+    SYSCALL3(write, int, const void *, size_t);
+    SYSCALL0(gettid);
+    SYSCALL2(clock_gettime, clockid_t, struct timespec *);
+    SYSCALL2(clock_getres, clockid_t, struct timespec *);
+    SYSCALL6(futex, int *, int, int, const struct timespec *, int *, int);
     }
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
