@@ -110,6 +110,7 @@ static bool opt_leak = false;
 static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
+static bool opt_random = true;
 static std::string opt_console = "all";
 static bool opt_verbose = false;
 static std::string opt_chdir;
@@ -141,6 +142,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("trace-backtrace", "log backtraces in the tracepoint log")
         ("leak", "start leak detector after boot")
         ("nomount", "don't mount the file system")
+        ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
         ("verbose", "be verbose, print debug messages")
         ("console", bpo::value<std::vector<std::string>>(), "select console driver")
@@ -202,6 +204,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         }
     }
     opt_mount = !vars.count("nomount");
+    opt_random = !vars.count("norandom");
 
     if (vars.count("console")) {
         auto v = vars["console"].as<std::vector<std::string>>();
@@ -313,7 +316,9 @@ void* do_main_thread(void *_commands)
 
     arch_init_drivers();
     nulldev::nulldev_init();
-    randomdev::randomdev_init();
+    if (opt_random) {
+        randomdev::randomdev_init();
+    }
     boot_time.event("drivers loaded");
 
     if (opt_mount) {
