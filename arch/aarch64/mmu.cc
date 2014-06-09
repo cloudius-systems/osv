@@ -75,8 +75,7 @@ pt_element *get_root_pt(uintptr_t virt)
 
 pt_element make_empty_pte() { return pt_element(); }
 
-pt_element make_pte(phys addr, bool large,
-                    unsigned perm = perm_read | perm_write | perm_exec)
+pt_element make_pte(phys addr, bool large, unsigned perm)
 {
     pt_element pte;
     pte.set_valid(perm != 0);

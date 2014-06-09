@@ -155,6 +155,7 @@ pt_element make_normal_pte(phys addr,
                            unsigned perm = perm_read | perm_write | perm_exec);
 pt_element make_large_pte(phys addr,
                           unsigned perm = perm_read | perm_write | perm_exec);
+pt_element make_pte(phys addr, bool large, unsigned perm = perm_read | perm_write | perm_exec);
 
 /* get the root of the page table responsible for virtual address virt */
 pt_element *get_root_pt(uintptr_t virt);
@@ -230,6 +231,7 @@ public:
     // no longer using this as a page table
     pt_element* release() const { return p; }
     bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
+    bool large() const { return N > 0; }
     size_t size() const { return page_size_level(N); }
 private:
     hw_ptep(pt_element* ptep) : hw_ptep_base<N>(ptep) {}
