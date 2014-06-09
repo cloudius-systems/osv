@@ -11,7 +11,7 @@
  *	File:	fsx.c
  *	Author:	Avadis Tevanian, Jr.
  *
- *	File system exerciser. 
+ *	File system exerciser.
  *
  *	Rewritten 8/98 by Conrad Minshall.
  *
@@ -264,7 +264,7 @@ logdump(void)
 		lp = &oplog[i];
 		if ((closeopen = lp->operation < 0))
 			lp->operation = ~ lp->operation;
-			
+
 		switch (lp->operation) {
 		case OP_MAPREAD:
 			prt("MAPREAD  0x%x thru 0x%x\t(0x%x bytes)",
@@ -371,7 +371,7 @@ save_buffer(char *buffer, off_t bufferlength, int fd)
 	ret = lseek(fd, (off_t)0, SEEK_SET);
 	if (ret == (off_t)-1)
 		prterr("save_buffer: lseek 0");
-	
+
 	byteswritten = write(fd, buffer, (size_t)bufferlength);
 	if (byteswritten != bufferlength) {
 		if (byteswritten == -1)
@@ -388,7 +388,7 @@ void
 report_failure(int status)
 {
 	logdump();
-	
+
 	if (fsxgoodfd) {
 		if (good_buf) {
 			save_buffer(good_buf, file_size, fsxgoodfd);
@@ -576,7 +576,7 @@ check_eofpage(char *s, unsigned offset, char *p, int size)
 		return;
 	/*
 	 * we landed in the last page of the file
-	 * test to make sure the VM system provided 0's 
+	 * test to make sure the VM system provided 0's
 	 * beyond the true end of the file mapping
 	 * (as required by mmap def in 1996 posix 1003.1)
 	 */
@@ -654,7 +654,7 @@ void
 gendata(char *original_buf, char *good_buf, unsigned offset, unsigned size)
 {
 	while (size--) {
-		good_buf[offset] = testcalls % 256; 
+		good_buf[offset] = testcalls % 256;
 		if (offset % 2)
 			good_buf[offset] += original_buf[offset];
 		offset++;
@@ -820,7 +820,7 @@ dotruncate(unsigned size)
 
 	if (testcalls <= simulatedopcount)
 		return;
-	
+
 	if ((progressinterval && testcalls % progressinterval == 0) ||
 	    (fsx_debug && (monitorstart == -1 || monitorend == -1 ||
 		      size <= monitorend)))
@@ -929,7 +929,7 @@ do_preallocate(unsigned offset, unsigned length)
 
 	if (testcalls <= simulatedopcount)
 		return;
-	
+
 	if ((progressinterval && testcalls % progressinterval == 0) ||
 	    (fsx_debug && (monitorstart == -1 || monitorend == -1 ||
 		      end_offset <= monitorend)))
@@ -977,7 +977,7 @@ writefileimage()
 
 void
 docloseopen(void)
-{ 
+{
 	if (testcalls <= simulatedopcount)
 		return;
 
@@ -1248,7 +1248,7 @@ __aio_rw(int rw, int fd, char *buf, unsigned len, unsigned offset)
 		else {
 			fprintf(stderr, "errcode=%d\n", -ret);
 			fprintf(stderr, "aio_rw: io_getevents failed: %s\n",
-				 	strerror(-ret));
+					strerror(-ret));
 		}
 		goto out_error;
 	}
@@ -1351,7 +1351,7 @@ main(int argc, char **argv)
 	page_size = getpagesize();
 	page_mask = page_size - 1;
 	mmap_mask = page_mask;
-	
+
 
 	setvbuf(stdout, (char *)0, _IOLBF, 0); /* line buffered stdout */
 
@@ -1561,7 +1561,7 @@ main(int argc, char **argv)
 	}
 
 #ifdef AIO
-	if (aio) 
+	if (aio)
 		aio_setup();
 #endif
 
@@ -1604,7 +1604,7 @@ main(int argc, char **argv)
 					maxfilelen);
 			exit(98);
 		}
-	} else 
+	} else
 		check_trunc_hack();
 
 	test_fallocate();
