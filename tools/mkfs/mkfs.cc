@@ -40,7 +40,7 @@ void mkfs()
         {"zpool", "create", "-f", "-R", "/zfs", "osv", "/dev/vblk0.1"});
 
     // Create a zfs dataset within the pool named osv.
-    run_cmd("/zfs.so", {"zfs", "create", "osv/zfs"});
+    run_cmd("/zfs.so", {"zfs", "create", "-o", "relatime=on", "osv/zfs"});
 
     // Enable lz4 compression on the created zfs dataset
     // NOTE: Compression is disabled after image creation.
