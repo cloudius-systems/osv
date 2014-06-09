@@ -397,6 +397,12 @@ libc += arch/$(arch)/setjmp/sigrtmin.o
 libc += arch/$(arch)/setjmp/siglongjmp.o
 libc += arch/$(arch)/setjmp/sigsetjmp.o
 libc += arch/$(arch)/setjmp/block.o
+ifeq ($(arch),x64)
+libc += arch/$(arch)/ucontext/getcontext.o
+libc += arch/$(arch)/ucontext/setcontext.o
+libc += arch/$(arch)/ucontext/start_context.o
+libc += arch/$(arch)/ucontext/ucontext.o
+endif
 
 libc += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
