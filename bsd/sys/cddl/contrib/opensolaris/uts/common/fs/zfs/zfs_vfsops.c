@@ -22,6 +22,7 @@
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2011 Pawel Jakub Dawidek <pawel@dawidek.net>.
  * All rights reserved.
+ * Copyright (c) 2013 by Delphix. All rights reserved.
  */
 
 /* Portions Copyright 2010 Robert Milkowski */
@@ -194,6 +195,12 @@ atime_changed_cb(void *arg, uint64_t newval)
 }
 
 static void
+relatime_changed_cb(void *arg, uint64_t newval)
+{
+	((struct zfsvfs *)arg)->z_relatime = newval;
+}
+
+static void
 xattr_changed_cb(void *arg, uint64_t newval)
 {
 }
@@ -358,6 +365,8 @@ zfs_register_callbacks(vfs_t *vfsp)
 	ds = dmu_objset_ds(os);
 	error = dsl_prop_register(ds, "atime", atime_changed_cb, zfsvfs);
 	error = error ? error : dsl_prop_register(ds,
+	    "relatime", relatime_changed_cb, zfsvfs);
+	error = error ? error : dsl_prop_register(ds,
 	    "xattr", xattr_changed_cb, zfsvfs);
 	error = error ? error : dsl_prop_register(ds,
 	    "recordsize", blksz_changed_cb, zfsvfs);
@@ -403,6 +412,7 @@ unregister:
 	 * which we will ignore.
 	 */
 	(void) dsl_prop_unregister(ds, "atime", atime_changed_cb, zfsvfs);
+	(void) dsl_prop_unregister(ds, "relatime", relatime_changed_cb, zfsvfs);
 	(void) dsl_prop_unregister(ds, "xattr", xattr_changed_cb, zfsvfs);
 	(void) dsl_prop_unregister(ds, "recordsize", blksz_changed_cb, zfsvfs);
 	(void) dsl_prop_unregister(ds, "readonly", readonly_changed_cb, zfsvfs);
@@ -1056,6 +1066,9 @@ zfs_unregister_callbacks(zfsvfs_t *zfsvfs)
 	if (!dmu_objset_is_snapshot(os)) {
 		ds = dmu_objset_ds(os);
 		VERIFY(dsl_prop_unregister(ds, "atime", atime_changed_cb,
+		    zfsvfs) == 0);
+
+		VERIFY(dsl_prop_unregister(ds, "relatime", relatime_changed_cb,
 		    zfsvfs) == 0);
 
 		VERIFY(dsl_prop_unregister(ds, "xattr", xattr_changed_cb,

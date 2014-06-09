@@ -49,6 +49,8 @@
 #define	MNTOPT_REMOUNT	"remount"	/* Change mount options */
 #define	MNTOPT_ATIME	"atime"		/* update atime for files */
 #define	MNTOPT_NOATIME  "noatime"	/* do not update atime for files */
+#define	MNTOPT_RELATIME "relatime"	/* allow relative time updates */
+#define	MNTOPT_NORELATIME "norelatime"	/* do not allow relative time updates */
 #define	MNTOPT_XATTR	"xattr"		/* enable extended attributes */
 #define	MNTOPT_NOXATTR	"noxattr"	/* disable extended attributes */
 #define	MNTOPT_EXEC	"exec"		/* enable executables */

@@ -20,7 +20,7 @@
  */
 /*
  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012 by Delphix. All rights reserved.
+ * Copyright (c) 2013 by Delphix. All rights reserved.
  */
 
 /* Portions Copyright 2007 Jeremy Teo */
@@ -1393,23 +1393,92 @@ zfs_znode_free(znode_t *zp)
 	VFS_RELE(zfsvfs->z_vfs);
 }
 
+static inline int
+zfs_compare_timespec(uint64_t *t1, uint64_t *t2)
+{
+	if (t1[0] < t2[0])
+		return (-1);
+
+	if (t1[0] > t2[0])
+		return (1);
+
+	return (t1[1] - t2[1]);
+}
+
+/*
+ *  Determine whether the znode's atime must be updated.  The logic mostly
+ *  duplicates the Linux kernel's relatime_need_update() functionality.
+ *  This function is only called if the underlying filesystem actually has
+ *  atime updates enabled.
+ */
+static inline boolean_t
+zfs_atime_need_update(znode_t *zp, timestruc_t *now)
+{
+	uint64_t mtime[2], ctime[2];
+
+	if (!zp->z_zfsvfs->z_relatime)
+		return (B_TRUE);
+
+	sa_lookup(zp->z_sa_hdl, SA_ZPL_MTIME(zp->z_zfsvfs), &mtime, 16);
+	sa_lookup(zp->z_sa_hdl, SA_ZPL_CTIME(zp->z_zfsvfs), &ctime, 16);
+
+	/*
+	 * In relatime mode, only update the atime if the previous atime
+	 * is earlier than either the ctime or mtime or if at least a day
+	 * has passed since the last update of atime.
+	 */
+	if (zfs_compare_timespec(mtime, zp->z_atime) >= 0)
+		return (B_TRUE);
+
+	if (zfs_compare_timespec(ctime, zp->z_atime) >= 0)
+		return (B_TRUE);
+
+	if ((long)now->tv_sec - (zp->z_atime)[0] >= 24*60*60)
+		return (B_TRUE);
+
+	return (B_FALSE);
+}
+
+/*
+ * Prepare to update znode time stamps.
+ *
+ *	IN:	zp	- znode requiring timestamp update
+ *		flag	- ATTR_MTIME, ATTR_CTIME, ATTR_ATIME flags
+ *		have_tx	- true of caller is creating a new txg
+ *
+ *	OUT:	zp	- new atime (via underlying inode's i_atime)
+ *		mtime	- new mtime
+ *		ctime	- new ctime
+ *
+ * NOTE: The arguments are somewhat redundant.  The following condition
+ * is always true:
+ *
+ *		have_tx == !(flag & AT_ATIME)
+ */
 void
 zfs_tstamp_update_setup(znode_t *zp, uint_t flag, uint64_t mtime[2],
     uint64_t ctime[2], boolean_t have_tx)
 {
 	timestruc_t	now;
 
+	ASSERT(have_tx == !(flag & AT_ATIME));
 	gethrestime(&now);
 
-	if (have_tx) {	/* will sa_bulk_update happen really soon? */
+	/*
+	 * NOTE: The following test intentionally does not update z_atime_dirty
+	 * in the case where an ATIME update has been requested but for which
+	 * the update is omitted due to relatime logic.  The rationale being
+	 * that if the flag was set somewhere else, we should leave it alone
+	 * here.
+	 */
+	if (flag & AT_ATIME) {
+		if (zfs_atime_need_update(zp, &now)) {
+			ZFS_TIME_ENCODE(&now, zp->z_atime);
+			zp->z_atime_dirty = 1;
+		}
+	} else {
 		zp->z_atime_dirty = 0;
 		zp->z_seq++;
-	} else {
-		zp->z_atime_dirty = 1;
-	}
-
-	if (flag & AT_ATIME) {
-		ZFS_TIME_ENCODE(&now, zp->z_atime);
 	}
 
 	if (flag & AT_MTIME) {
