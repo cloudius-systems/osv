@@ -13,7 +13,6 @@ namespace nulldev {
 static int
 null_read(struct device *dev, struct uio *uio, int ioflags)
 {
-    uio->uio_resid = 0;
     return 0;
 }
 
