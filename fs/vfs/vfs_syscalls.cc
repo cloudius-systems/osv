@@ -152,7 +152,9 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	    error = err;
 	    goto out_vn_unlock;
 	}
-	fp->f_dentry = dp;
+	// change to std::move once dp is a dentry_ref
+	fp->f_dentry = dentry_ref(dp, false);
+	dp = nullptr;
 
 	error = VOP_OPEN(vp, fp);
 	if (error)
@@ -167,7 +169,9 @@ out_free_fp:
 out_vn_unlock:
 	vn_unlock(vp);
 out_drele:
-	drele(dp);
+	if (dp) {
+		drele(dp);
+	}
 	return error;
 }
 

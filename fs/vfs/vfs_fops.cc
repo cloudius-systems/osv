@@ -35,7 +35,7 @@ int vfs_file::close()
 	if (error)
 		return error;
 
-	drele(fp->f_dentry);
+	fp->f_dentry.reset();
 	return 0;
 }
 

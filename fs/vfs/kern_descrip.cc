@@ -198,7 +198,7 @@ file::~file()
 
 dentry* file_dentry(file* fp)
 {
-    return fp->f_dentry;
+    return fp->f_dentry.get();
 }
 
 void file_setdata(file* fp, void* data)

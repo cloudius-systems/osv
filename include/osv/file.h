@@ -42,6 +42,7 @@
 #include <osv/uio.h>
 
 #include <bsd/sys/sys/queue.h>
+#include <osv/dentry.h>
 
 #ifdef __cplusplus
 
@@ -116,7 +117,7 @@ struct file {
 	int		f_flags;	/* open flags */
 	int		f_count;	/* reference count, see below */
 	off_t		f_offset = 0;	/* current position in file */
-	struct dentry	*f_dentry = nullptr; /* dentry */
+	dentry_ref	f_dentry;	/* dentry */
 	void		*f_data;        /* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
 	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
