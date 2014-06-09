@@ -40,6 +40,7 @@
 #include <osv/mount.h>
 #include <osv/vnode.h>
 #include <osv/dentry.h>
+#include <osv/error.h>
 
 /*
  * Import vnode attributes flags
@@ -153,5 +154,25 @@ void	 mount_dump(void);
 #endif
 
 __END_DECLS
+
+#ifdef __cplusplus
+
+// Convert a path to a dentry_ref.  Returns an empty
+// reference if not found (ENOENT) for efficiency, throws
+// an error on other errors.
+inline dentry_ref namei(char* path)
+{
+	dentry* dp;
+	auto err = namei(path, &dp);
+	if (err == ENOENT) {
+		return dentry_ref();
+	} else if (err) {
+		throw make_error(err);
+	} else {
+		return dentry_ref(dp, false);
+	}
+}
+
+#endif
 
 #endif /* !_VFS_H */
