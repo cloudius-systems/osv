@@ -102,8 +102,8 @@ void flush_tlb_all();
 /* common arch-independent interface for pt_element */
 class pt_element {
 public:
-    constexpr pt_element() : x(0) {}
-    explicit pt_element(u64 x) : x(x) {}
+    constexpr pt_element() noexcept : x(0) {}
+    explicit pt_element(u64 x) noexcept : x(x) {}
 
     inline bool empty() const;
     inline bool valid() const;
@@ -162,32 +162,31 @@ bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef);
 /* a pointer to a pte mapped by hardware.
    The arch must implement change_perm for this class. */
 class hw_ptep {
-    typedef osv::rcu_ptr<pt_element> pt_ptr;
 public:
-    hw_ptep(const hw_ptep& a) : p(a.release()) {}
-    void operator=(const hw_ptep& a) {
-        p.assign(a.release());
-    }
-    pt_element read() const { return *release(); }
-    pt_element ll_read() const { return *p.read(); }
-    void write(pt_element pte) { reinterpret_cast<pt_ptr*>(release())->assign(reinterpret_cast<pt_element*>(pte.x)); }
+    hw_ptep(const hw_ptep& a) : p(a.p) {}
+    hw_ptep& operator=(const hw_ptep& a) = default;
+
+    pt_element read() const { return x->load(std::memory_order_relaxed); }
+    pt_element ll_read() const { return x->load(std::memory_order_consume); }
+    void write(pt_element pte) { x->store(pte, std::memory_order_release); }
 
     pt_element exchange(pt_element newval) {
-        std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&release()->x);
-        return pt_element(x->exchange(newval.x));
+        return x->exchange(newval);
     }
     bool compare_exchange(pt_element oldval, pt_element newval) {
-        std::atomic<u64> *x = reinterpret_cast<std::atomic<u64>*>(&release()->x);
-        return x->compare_exchange_strong(oldval.x, newval.x, std::memory_order_relaxed);
+        return x->compare_exchange_strong(oldval, newval, std::memory_order_relaxed);
     }
-    hw_ptep at(unsigned idx) { return hw_ptep(release() + idx); }
+    hw_ptep at(unsigned idx) { return hw_ptep(p + idx); }
     static hw_ptep force(pt_element* ptep) { return hw_ptep(ptep); }
     // no longer using this as a page table
-    pt_element* release() const { return p.read_by_owner(); }
-    bool operator==(const hw_ptep& a) const noexcept { return release() == a.release(); }
+    pt_element* release() const { return p; }
+    bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
 private:
     hw_ptep(pt_element* ptep) : p(ptep) {}
-    pt_ptr p;
+    union {
+        std::atomic<pt_element>* x;
+        pt_element* p;
+    };
 };
 
 }
