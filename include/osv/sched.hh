@@ -24,6 +24,7 @@
 #include <vector>
 #include <osv/rcu.hh>
 #include <osv/clock.hh>
+#include <osv/timer-set.hh>
 
 typedef float runtime_t;
 
@@ -148,7 +149,12 @@ private:
     std::atomic<unsigned long> _mask;
 };
 
-class timer_base : public bi::set_base_hook<>, public bi::list_base_hook<> {
+class timer_base {
+public:
+    bi::list_member_hook<> hook;
+    bi::list_member_hook<> client_hook;
+    using client_list_t = bi::list<timer_base,
+        bi::member_hook<timer_base, bi::list_member_hook<>, &timer_base::client_hook>>;
 public:
     class client {
     public:
@@ -158,7 +164,7 @@ public:
         void resume_timers();
     private:
         bool _timers_need_reload = false;
-        bi::list<timer_base> _active_timers;
+        client_list_t _active_timers;
         friend class timer_base;
     };
 public:
@@ -181,6 +187,9 @@ public:
     template <class Rep, class Period>
     void set(std::chrono::duration<Rep, Period> duration) {
         set(osv::clock::uptime::now() + duration);
+    }
+    osv::clock::uptime::time_point get_timeout() {
+        return _time;
     }
     bool expired() const;
     void cancel();
@@ -630,14 +639,14 @@ void init_detached_threads_reaper();
 class timer_list {
 public:
     void fired();
-    void suspend(bi::list<timer_base>& t);
-    void resume(bi::list<timer_base>& t);
+    void suspend(timer_base::client_list_t& t);
+    void resume(timer_base::client_list_t& t);
     void rearm();
 private:
     friend class timer_base;
     osv::clock::uptime::time_point _last {
             osv::clock::uptime::time_point::max() };
-    bi::set<timer_base, bi::base_hook<bi::set_base_hook<>>> _list;
+    timer_set<timer_base, &timer_base::hook, osv::clock::uptime> _list;
     class callback_dispatch : private clock_event_callback {
     public:
         callback_dispatch();
