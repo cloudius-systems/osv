@@ -48,6 +48,7 @@
 typedef struct kmem_cache {
 	char		kc_name[32];
 	size_t		kc_size;
+	size_t		kc_align;
 	int		(*kc_constructor)(void *, void *, int);
 	void		(*kc_destructor)(void *, void *);
 	void		*kc_private;

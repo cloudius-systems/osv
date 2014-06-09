@@ -81,6 +81,7 @@ kmem_cache_create(char *name, size_t bufsize, size_t align,
 	cache->kc_destructor = destructor;
 	cache->kc_private = private;
 	cache->kc_size = bufsize;
+	cache->kc_align = align;
 
 	return (cache);
 }
@@ -95,8 +96,14 @@ void *
 kmem_cache_alloc(kmem_cache_t *cache, int flags)
 {
 	void *p;
-
-	p = kmem_alloc(cache->kc_size, flags);
+	if (cache->kc_align) {
+		int error = posix_memalign(&p, cache->kc_align, cache->kc_size);
+		if (error)
+			p = NULL;
+	} else
+		p = malloc(cache->kc_size);
+	if (p && (flags & M_ZERO))
+		memset(p, 0, cache->kc_size);
 	if (p != NULL && cache->kc_constructor != NULL)
 		kmem_std_constructor(p, cache->kc_size, cache, flags);
 	return (p);
@@ -107,7 +114,7 @@ kmem_cache_free(kmem_cache_t *cache, void *buf)
 {
 	if (cache->kc_destructor != NULL)
 		kmem_std_destructor(buf, cache->kc_size, cache);
-	kmem_free(buf, cache->kc_size);
+	free(buf);
 }
 
 void
