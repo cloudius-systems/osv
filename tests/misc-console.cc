@@ -15,6 +15,10 @@ int main(void)
     char buf[32], ch;
     int i, ret;
 
+    if (!isatty(0)) {
+        fprintf(stderr, "original fd 0 isn't a tty\n");
+        return -1;
+    }
     if (close(0) == -1) {
         perror("close fd 0");
         return -1;

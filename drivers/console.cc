@@ -129,9 +129,9 @@ void console_init()
     mux.start();
 }
 
-class console_file : public special_file {
+class console_file : public tty_file {
 public:
-    console_file() : special_file(FREAD|FWRITE, DTYPE_UNSPEC) {}
+    console_file() : tty_file(FREAD|FWRITE, DTYPE_UNSPEC) {}
     virtual int read(struct uio *uio, int flags) override;
     virtual int write(struct uio *uio, int flags) override;
     virtual int ioctl(u_long com, void *data) override;

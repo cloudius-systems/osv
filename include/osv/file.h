@@ -148,6 +148,11 @@ struct special_file : public file {
     virtual int chmod(mode_t mode) override;
 };
 
+struct tty_file : public special_file {
+    tty_file(unsigned flags, filetype_t type) :
+        special_file(flags, type) { }
+};
+
 #endif
 
 // f_count rules:

@@ -1376,23 +1376,23 @@ int isatty(int fd)
 {
     struct file *fp;
     int istty = 0;
-    int error;
 
     trace_vfs_isatty(fd);
-    error = fget(fd, &fp);
-    if (error)
-        goto out_errno;
+    fileref f(fileref_from_fd(fd));
+    if (!f) {
+        errno = EBADF;
+        trace_vfs_isatty_err(errno);
+        return -1;
+    }
 
-    if (fp->f_dentry && fp->f_dentry->d_vnode->v_flags & VISTTY)
+    fp = f.get();
+    if (dynamic_cast<tty_file*>(fp) ||
+        (fp->f_dentry && fp->f_dentry->d_vnode->v_flags & VISTTY)) {
         istty = 1;
-    fdrop(fp);
+    }
 
     trace_vfs_isatty_ret(istty);
     return istty;
-    out_errno:
-    errno = error;
-    trace_vfs_isatty_err(error);
-    return -1;
 }
 
 TRACEPOINT(trace_vfs_truncate, "\"%s\" 0x%x", const char*, off_t);
