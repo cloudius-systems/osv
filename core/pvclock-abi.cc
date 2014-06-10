@@ -33,6 +33,7 @@ u64 system_time(pvclock_vcpu_time_info *sys)
     do {
         v1 = sys->version;
         barrier();
+        processor::lfence();
         time = sys->system_time +
                processor_to_nano(sys, processor::rdtsc() - sys->tsc_timestamp);
         barrier();
