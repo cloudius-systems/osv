@@ -37,7 +37,7 @@ void gic_driver::init_cpu(int smp_idx)
     }
 
     if (!my_mask) {
-        abort("gic: failed to read cpu mask");
+        debug_early("gic: failed to read cpu mask, assuming uniprocessor\n");
     }
 
     /* disable all PPI interrupts */
@@ -86,13 +86,17 @@ void gic_driver::init_dist(int smp_idx)
         this->gicd.write_reg_raw((u32)gicd_reg_irq2::GICD_ICFGR, i / 4, 0);
 
     unsigned int mask = this->cpu_targets[smp_idx];
-    mask |= mask << 8;  /* duplicate pattern (x2) */
-    mask |= mask << 16; /* duplicate pattern (x4) */
+    if (mask) {
+        mask |= mask << 8;  /* duplicate pattern (x2) */
+        mask |= mask << 16; /* duplicate pattern (x4) */
+    }
 
     /* send all SPIs to this only, set priority */
     for (int i = 32; i < this->nr_irqs; i += 4) {
-        this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_ITARGETSR, i,
-                                 mask);
+        if (mask) {
+            this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_ITARGETSR, i,
+                                     mask);
+        }
         this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_IPRIORITYR, i,
                                  0xc0c0c0c0);
     }

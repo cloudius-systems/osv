@@ -164,7 +164,9 @@ protected:
     /* cpu_targets: our smp cpu index is not necessarily equal
        to the gic interface target. We query the gic to get
        the cpumask corresponding to each smp cpu (gic_init_on_cpu),
-       and put the result here at the right smp index. */
+       and put the result here at the right smp index.
+       Note that for uniprocessor we will have just a zero
+       stored in cpu_targets[0] instead. */
     unsigned char cpu_targets[max_cpu_if];
     mutex gic_lock;
 };
