@@ -871,13 +871,17 @@ else
     libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 endif
 
-boost-lib-dir := $(shell dirname `find $(miscbase)/ -name libboost_system-mt.a`)
+boost-lib-dir := $(shell dirname `find $(miscbase)/ -name libboost_system*.a`)
 
-boost-libs := $(boost-lib-dir)/libboost_program_options-mt.a \
-              $(boost-lib-dir)/libboost_system-mt.a
+# link with -mt if present, else the base version (and hope it is multithreaded)
 
-$(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework-mt.so \
-                $(boost-lib-dir)/libboost_filesystem-mt.so
+boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+
+boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
+              $(boost-lib-dir)/libboost_system$(boost-mt).a
+
+$(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework$(boost-mt).so \
+                $(boost-lib-dir)/libboost_filesystem$(boost-mt).so
 
 dummy-shlib.so: dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LD $@)
