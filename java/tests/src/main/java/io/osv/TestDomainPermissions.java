@@ -15,6 +15,13 @@ import static java.security.AccessController.checkPermission;
 public class TestDomainPermissions {
     public static void main(String[] args) throws ClassNotFoundException, IOException {
         checkHasAccessToFilesFromItsJar();
+        checkCanCallSystemExit();
+    }
+
+    private static void checkCanCallSystemExit() throws IOException {
+        try (TemporarySecurityManager ignored = new TemporarySecurityManager()) {
+            System.exit(0);
+        }
     }
 
     private static void checkHasAccessToFilesFromItsJar() throws IOException {
