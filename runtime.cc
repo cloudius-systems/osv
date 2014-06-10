@@ -486,24 +486,6 @@ int setpriority(int which, int id, int prio)
     return 0;
 }
 
-//man getgrnam: "The return value may point to a static area, and may be
-//overwritten by subsequent calls to getgrent(3), getgrgid(), or getgrnam().
-//(Do not pass the returned pointer to free(3).)"
-//
-//OSv will recognize a few groups - as of right now, just nobody. For the
-//others we will return a NULL structure, signalling an error
-std::unordered_map<std::string, struct group> osv_groups  = { { "nobody", { (char *)"nobody", (char *)"", 0, nullptr } } };
-
-struct group *getgrnam(const char *name)
-{
-    auto it = osv_groups.find(name);
-
-    if (it == osv_groups.end()) {
-        return nullptr;
-    }
-    return &it->second;
-}
-
 int initgroups(const char *user, gid_t group)
 {
     WARN_STUBBED();
