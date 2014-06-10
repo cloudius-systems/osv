@@ -92,6 +92,8 @@ libc/%.o: source-dialects =
 
 kernel-defines = -D_KERNEL $(source-dialects)
 
+gcc-sysroot = $(if $(CROSS_PREFIX), --sysroot $(src)/external/$(arch)/gcc.bin) \
+
 # This play the same role as "_KERNEL", but _KERNEL unfortunately is too
 # overloaded. A lot of files will expect it to be set no matter what, specially
 # in headers. "userspace" inclusion of such headers is valid, and lacking
@@ -112,7 +114,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include $(src)/compiler/include/intrinsics.hh \
 	$(do-sys-includes) \
-	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) \
+	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" $(EXTRA_FLAGS)
 
 tracing-flags-0 =
@@ -878,7 +880,7 @@ $(boost-tests): $(boost-lib-dir)/libboost_unit_test_framework-mt.so \
                 $(boost-lib-dir)/libboost_filesystem-mt.so
 
 dummy-shlib.so: dummy-shlib.o
-	$(call quiet, $(CXX) -nodefaultlibs -shared -o $@ $^, LD $@)
+	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LD $@)
 
 loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(drivers) \
 	$(objects) dummy-shlib.so bootfs.bin
