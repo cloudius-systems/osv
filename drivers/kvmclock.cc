@@ -15,6 +15,8 @@
 #include <osv/percpu.hh>
 #include <osv/pvclock-abi.hh>
 #include <osv/prio.hh>
+#include <mutex>
+#include <atomic>
 
 class kvmclock : public clock {
 public:
@@ -29,7 +31,8 @@ private:
     static u64 system_time();
     static void setup_cpu();
 private:
-    static bool _smp_init;
+    static std::atomic<bool> _smp_init;
+    static std::once_flag _boot_systemtime_init_flag;
     static s64 _boot_systemtime;
     static bool _new_kvmclock_msrs;
     pvclock_wall_clock* _wall;
@@ -37,7 +40,8 @@ private:
     sched::cpu::notifier cpu_notifier;
 };
 
-bool kvmclock::_smp_init = false;
+std::atomic<bool> kvmclock::_smp_init { false };
+std::once_flag kvmclock::_boot_systemtime_init_flag;
 s64 kvmclock::_boot_systemtime = 0;
 bool kvmclock::_new_kvmclock_msrs = true;
 PERCPU(pvclock_vcpu_time_info, kvmclock::_sys);
@@ -58,8 +62,11 @@ void kvmclock::setup_cpu()
                            msr::KVM_SYSTEM_TIME_NEW : msr::KVM_SYSTEM_TIME;
     memset(&*_sys, 0, sizeof(*_sys));
     processor::wrmsr(system_time_msr, mmu::virt_to_phys(&*_sys) | 1);
-    _smp_init = true;
-    _boot_systemtime = system_time();
+
+    std::call_once(_boot_systemtime_init_flag, [] {
+        _boot_systemtime = system_time();
+        _smp_init.store(true, std::memory_order_release);
+    });
 }
 
 bool kvmclock::probe()
@@ -84,7 +91,7 @@ s64 kvmclock::time()
     // This happens due to problems in init order dependencies (the clock
     // depends on the scheduler, for percpu initialization, and vice-versa,
     // for idle thread initialization).
-    if (_smp_init) {
+    if (_smp_init.load(std::memory_order_acquire)) {
         r += system_time();
     }
     return r;
@@ -92,7 +99,7 @@ s64 kvmclock::time()
 
 s64 kvmclock::uptime()
 {
-    if (_smp_init) {
+    if (_smp_init.load(std::memory_order_acquire)) {
         return system_time() - _boot_systemtime;
     } else {
         return 0;
@@ -103,7 +110,7 @@ s64 kvmclock::boot_time()
 {
     // The following is time()-uptime():
     auto r = wall_clock_boot();
-    if (_smp_init) {
+    if (_smp_init.load(std::memory_order_acquire)) {
         r += _boot_systemtime;
     }
     return r;
