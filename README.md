@@ -45,6 +45,11 @@ More details are available on wiki page:
 apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils maven libmaven-shade-plugin-java python-dpkt tcpdump gdb qemu-system-x86
 ```
 
+**Arch Linux**
+```
+pacman -S base-devel git python apache-ant maven qemu gdb boost
+```
+
 Before start building OSv, you'll need to add your account to kvm group.
 ```
 usermod -aG kvm <user name>
