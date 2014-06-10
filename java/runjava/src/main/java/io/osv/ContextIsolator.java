@@ -309,6 +309,7 @@ public class ContextIsolator {
         protected PermissionCollection getPermissions(CodeSource codesource) {
             PermissionCollection permissions = super.getPermissions(codesource);
             permissions.add(new FilePermission("/usr/lib/jvm/jre/lib/ext/runjava.jar", "read"));
+            permissions.add(new RuntimePermission("exitVM"));
             return permissions;
         }
     }
