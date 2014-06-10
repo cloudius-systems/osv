@@ -365,6 +365,11 @@ inline void xrstor(const fpu_state* s, u64 mask)
     asm volatile("xrstorq %[fpu]" : : [fpu]"m"(*s), "a"(a), "d"(d));
 }
 
+inline void lfence()
+{
+    asm volatile("lfence");
+}
+
 struct task_state_segment {
     u32 reserved0;
     u64 rsp[3];
