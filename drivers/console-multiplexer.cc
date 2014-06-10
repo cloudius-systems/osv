@@ -25,8 +25,9 @@ void console_multiplexer::driver_add(console_driver *driver)
 void console_multiplexer::start()
 {
     _ldisc = new LineDiscipline(_tio);
-    for (auto driver : _drivers)
-        driver->start([&] { _ldisc->read_poll(driver); });
+    for (auto driver : _drivers) {
+        driver->start([=] { _ldisc->read_poll(driver); });
+    }
     _started = true;
 }
 
