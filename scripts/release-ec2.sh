@@ -124,16 +124,16 @@ export AWS_DEFAULT_REGION=us-east-1
 
 if test x"$SMALL_INSTANCE" = x""; then
 
-#Use OSv-v0.06 AMI in us-east-1 as a template
+#Use OSv-v0.09 AMI in us-east-1 as a template
 #Linux based but suitable for large instances only
-TEMPLATE_AMI_ID=ami-e7ced38e
+TEMPLATE_AMI_ID=ami-d6f90fbe
 TEMPLATE_INSTANCE_TYPE=m3.medium
 
 else
 
-#Use OSv-v0.03 AMI in us-east-1 as a template
+#Use OSv-v0.09-small AMI in us-east-1 as a template
 #Windows based but supportes all instance types including small and micro
-TEMPLATE_AMI_ID=ami-45d2882c
+TEMPLATE_AMI_ID=ami-b4f80edc
 TEMPLATE_INSTANCE_TYPE=t1.micro
 
 fi
