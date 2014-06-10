@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2014 Cloudius Systems, Ltd.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -22,5 +22,21 @@ struct dentry {
 	struct dentry   *d_parent; /* pointer to parent */
 	LIST_ENTRY(dentry) d_names_link; /* link fo vnode::d_names */
 };
+
+#ifdef __cplusplus
+
+#include <boost/intrusive_ptr.hpp>
+
+using dentry_ref = boost::intrusive_ptr<dentry>;
+
+extern "C" {
+    void dref(struct dentry* dp);
+    void drele(struct dentry* dp);
+};
+
+inline void intrusive_ptr_add_ref(dentry* dp) { dref(dp); }
+inline void intrusive_ptr_release(dentry* dp) { drele(dp); }
+
+#endif
 
 #endif /* _OSV_DENTRY_H */

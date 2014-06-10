@@ -152,7 +152,9 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	    error = err;
 	    goto out_vn_unlock;
 	}
-	fp->f_dentry = dp;
+	// change to std::move once dp is a dentry_ref
+	fp->f_dentry = dentry_ref(dp, false);
+	dp = nullptr;
 
 	error = VOP_OPEN(vp, fp);
 	if (error)
@@ -167,7 +169,9 @@ out_free_fp:
 out_vn_unlock:
 	vn_unlock(vp);
 out_drele:
-	drele(dp);
+	if (dp) {
+		drele(dp);
+	}
 	return error;
 }
 
@@ -868,35 +872,32 @@ sys_access(char *path, int mode)
 int
 sys_stat(char *path, struct stat *st)
 {
-	struct dentry *dp;
-	int error;
-
 	DPRINTF(VFSDB_SYSCALL, ("sys_stat: path=%s\n", path));
 
-	error = namei(path, &dp);
-	if (error)
-		return error;
-	error = vn_stat(dp->d_vnode, st);
-	drele(dp);
-	return error;
+	try {
+		dentry_ref dp = namei(path);
+		if (!dp) {
+			return ENOENT;
+		}
+		return vn_stat(dp->d_vnode, st);
+	} catch (error e) {
+		return e.get();
+	}
 }
 
 int
 sys_statfs(char *path, struct statfs *buf)
 {
-	struct dentry *dp;
-	int error;
-
 	memset(buf, 0, sizeof(*buf));
-
-	error = namei(path, &dp);
-	if (error)
-		return error;
-
-	error = VFS_STATFS(dp->d_mount, buf);
-	drele(dp);
-
-	return error;
+	try {
+		dentry_ref dp = namei(path);
+		if (!dp) {
+			return ENOENT;
+		}
+		return VFS_STATFS(dp->d_mount, buf);
+	} catch (error e) {
+		return e.get();
+	}
 }
 
 int
