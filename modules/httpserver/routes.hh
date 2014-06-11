@@ -163,6 +163,14 @@ private:
     std::vector<match_rule*> rules[NUM_OPERATION];
 };
 
+/**
+ * A helper function that check if a parameter is found in the params object
+ * if it does not the function would throw a parameter not found exception
+ * @param params the parameters object
+ * @param param the parameter to look for
+ */
+void verify_param(const http::server::request& req, const std::string& param);
+
 }
 
 #endif /* ROUTES_HH_ */
