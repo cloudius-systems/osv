@@ -143,6 +143,17 @@ int setresgid(gid_t rgid, gid_t egid, gid_t sgid)
     }
 }
 
+int setregid(gid_t rgid, gid_t egid)
+{
+    if ( (rgid == (uid_t)-1 || rgid == 0) &&
+         (egid == (uid_t)-1 || egid == 0)) {
+        return 0;
+    } else {
+        errno = EPERM;
+        return -1;
+    }
+}
+
 static struct group single_group = {
     username, password, getgid(), group_members
 };
