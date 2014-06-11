@@ -5,7 +5,8 @@ INCLUDES += -I../../include -I. -I../../java
 # compiler flags:
 #  -g    adds debugging information to the executable file
 #  -Wall turns on most, but not all, compiler warnings
-CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2
+autodepend = -MD -MT $@ -MP
+CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend)
 src = ../..
 arch = x64
 miscbase = $(src)/external/$(arch)/misc.bin
