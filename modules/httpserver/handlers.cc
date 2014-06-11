@@ -137,7 +137,7 @@ bool file_handler::handle(const string& path, parameters* parts,
 bool function_handler::handle(const string& path, parameters* parts,
                               const http::server::request& req, http::server::reply& rep)
 {
-    rep.content.append(f_handle(req));
+    rep.content.append(f_handle(req, rep));
     set_headers(rep, type);
     return true;
 }

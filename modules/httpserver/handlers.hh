@@ -232,6 +232,19 @@ private:
 };
 
 /**
+ * A request function is a lambda expression that gets only the request
+ * as its parameter
+ */
+typedef std::function<std::string(const_req req)> request_function;
+
+/**
+ * A handle function is a lambda expression that gets request and reply
+ */
+typedef std::function<
+std::string(const_req req,
+            http::server::reply&)> handle_function;
+
+/**
  * The function handler get a lambda expression in the constructor.
  * it will call that expression to get the result
  * This is suited for very simple handlers
@@ -240,10 +253,19 @@ private:
 class function_handler : public handler_base {
 public:
 
-    function_handler(const std::function<std::string(const_req req)> & f_handle,
+    function_handler(const handle_function & f_handle,
                      const std::string& type)
         : f_handle(f_handle)
         , type(type)
+    {
+    }
+
+    function_handler(const request_function & _handle,
+                     const std::string& type)
+        : f_handle([_handle](const_req req, http::server::reply& rep) {
+        return _handle(req);
+    }),
+    type(type)
     {
     }
 
@@ -251,7 +273,7 @@ public:
                 const http::server::request& req, http::server::reply& rep)
     override;
 
-    std::function<std::string(const_req req)> f_handle;
+    handle_function f_handle;
     std::string type;
 };
 
