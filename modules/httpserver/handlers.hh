@@ -88,9 +88,22 @@ public:
                               http::server::reply::internal_server_error,
                           const std::string& alternative_message = ERROR_500_PAGE);
 
+    /**
+     * Add a mandatory parameter
+     * @param param a parameter name
+     * @return a reference to the handler
+     */
+    handler_base& mandatory(const std::string& param)
+    {
+        mandatory_param.push_back(param);
+        return *this;
+    }
     static const std::string ERROR_500_PAGE;
 
     static const std::string ERROR_404_PAGE;
+
+    std::vector<std::string> mandatory_param;
+
 };
 
 /**
