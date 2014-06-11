@@ -206,7 +206,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
     hfile = open(config.outdir + "/" + hfile_name, "w")
     print_h_file_headers(hfile, api_name)
     add_include(hfile, ['<string>', '"' + config.jsoninc +
-                       'json_elements.hh"'])
+                       'json_elements.hh"', '"path_holder.hh"'])
     open_namespace(hfile, "httpserver")
     open_namespace(hfile)
     if "models" in data:
@@ -248,7 +248,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
     for item in data["apis"]:
         if "operations" in item:
             for oper in item["operations"]:
-                fprint(hfile, 'static const std::string ', oper["nickname"], ' = "', oper["nickname"], '";')
+                fprint(hfile, 'static const path_holder ', oper["nickname"], '("', oper["nickname"], '");')
                 if "parameters" in oper:
                     for param in oper["parameters"]:
                         if "enum" in param:
