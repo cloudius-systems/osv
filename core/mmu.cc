@@ -120,13 +120,14 @@ phys virt_to_phys(void *virt)
     return reinterpret_cast<uintptr_t>(virt) & (mem_area_size - 1);
 }
 
-phys allocate_intermediate_level(std::function<pt_element (int)> pte)
+template <typename MakePTE>
+phys allocate_intermediate_level(MakePTE make_pte)
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
     // since the pt is not yet mapped, we don't need to use hw_ptep
     pt_element* pt = phys_cast<pt_element>(pt_page);
     for (auto i = 0; i < pte_per_page; ++i) {
-        pt[i] = pte(i);
+        pt[i] = make_pte(i);
     }
     return pt_page;
 }
