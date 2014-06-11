@@ -648,6 +648,7 @@ libc += unistd/sync.o
 libc += unistd/getpgid.o
 libc += unistd/setpgid.o
 libc += unistd/getpgrp.o
+libc += unistd/getppid.o
 
 libc += pthread.o
 libc += libc.o
