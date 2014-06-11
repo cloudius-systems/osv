@@ -20,6 +20,7 @@ blacklist = [
 add_tests([
     SingleCommandTest('java', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTests'),
+    SingleCommandTest('java-perms', '/java.so -cp /tests/java/tests.jar io.osv.TestDomainPermissions'),
 ])
 
 class TestRunnerTest(SingleCommandTest):

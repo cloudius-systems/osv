@@ -67,7 +67,8 @@ def scan_errors(s):
         "program exited with status",
         r"program tests/(.*?) returned",
         "Exception was caught while running",
-        "at org.junit.runner.JUnitCore.main"
+        "at org.junit.runner.JUnitCore.main",
+        "ContextFailedException",
     ]
     for pattern in patterns:
         if re.findall(pattern, s):

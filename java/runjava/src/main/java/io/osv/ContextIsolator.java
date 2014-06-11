@@ -6,12 +6,15 @@ import net.sf.cglib.proxy.Enhancer;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FilePermission;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.security.CodeSource;
+import java.security.PermissionCollection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -108,8 +111,8 @@ public class ContextIsolator {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (MainClassNotFoundException e) {
-		    context.setException(e);
-		} catch (Throwable e) {
+                    context.setException(e);
+                } catch (Throwable e) {
                     getUncaughtExceptionHandler().uncaughtException(this, e);
                 }
             }
@@ -120,7 +123,6 @@ public class ContextIsolator {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
                 context.setException(e);
-                e.printStackTrace();
             }
         });
         thread.setContextClassLoader(classLoader);
@@ -203,7 +205,7 @@ public class ContextIsolator {
     private static ClassLoader getClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
         List<URL> urls = toUrls(classpath);
         URL[] urlArray = urls.toArray(new URL[urls.size()]);
-        return new URLClassLoader(urlArray, parent);
+        return new AppClassLoader(urlArray, parent);
     }
 
     private static List<URL> toUrls(Iterable<String> classpath) throws MalformedURLException {
@@ -257,11 +259,10 @@ public class ContextIsolator {
 
     private static Class<?> loadClass(String name) throws MainClassNotFoundException {
         try {
-	    Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass(name);
-	    return clazz;
-	} catch (ClassNotFoundException ex) {
-	    throw new MainClassNotFoundException(name);
-	}
+            return Thread.currentThread().getContextClassLoader().loadClass(name);
+        } catch (ClassNotFoundException ex) {
+            throw new MainClassNotFoundException(name);
+        }
     }
 
     // Expand classpath, as given in the "-classpath" option, to a list of
@@ -298,4 +299,19 @@ public class ContextIsolator {
     public Object receive() throws InterruptedException {
         return getContext().takeMessage();
     }
+
+    private static class AppClassLoader extends URLClassLoader {
+        public AppClassLoader(URL[] urlArray, ClassLoader parent) {
+            super(urlArray, parent);
+        }
+
+        @Override
+        protected PermissionCollection getPermissions(CodeSource codesource) {
+            PermissionCollection permissions = super.getPermissions(codesource);
+            permissions.add(new FilePermission("/usr/lib/jvm/jre/lib/ext/runjava.jar", "read"));
+            permissions.add(new RuntimePermission("exitVM"));
+            return permissions;
+        }
+    }
+
 }
