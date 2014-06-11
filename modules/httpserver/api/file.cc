@@ -347,11 +347,10 @@ class put_file_handler : public handler_base {
 void init(routes& routes)
 {
     file_json_init_path();
-
-    routes.add_path(getFile, new get_file_handler());
-    routes.add_path(delFile, new del_file_handler());
-    routes.add_path(putFile, new put_file_handler());
-    routes.add_path(upload, new post_file_handler());
+    getFile.set_handler(new get_file_handler());
+    delFile.set_handler(new del_file_handler());
+    putFile.set_handler(new put_file_handler());
+    upload.set_handler(new post_file_handler());
 }
 
 }
