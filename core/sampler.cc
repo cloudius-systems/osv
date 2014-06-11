@@ -77,7 +77,7 @@ template <typename T>
 static bool fetch_and_inc_if_less(std::atomic<T>& var, T& previous, T max_value)
 {
     do {
-        previous = _active_cpus;
+        previous = var;
         if (previous >= max_value) {
             return false;
         }
