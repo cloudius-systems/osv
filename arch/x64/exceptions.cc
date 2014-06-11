@@ -257,6 +257,7 @@ extern "C" void nmi(exception_frame* ef)
 extern "C"
 void general_protection(exception_frame* ef)
 {
+    sched::exception_guard g;
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
     if (fixup_fault(ef)) {
