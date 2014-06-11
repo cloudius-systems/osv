@@ -645,6 +645,8 @@ libc += time/wcsftime.o
 libc += unistd/sleep.o
 libc += unistd/gethostname.o
 libc += unistd/sync.o
+libc += unistd/getpgid.o
+libc += unistd/setpgid.o
 
 libc += pthread.o
 libc += libc.o
