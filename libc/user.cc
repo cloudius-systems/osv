@@ -108,6 +108,12 @@ int setgid(gid_t gid)
     return 0;
 }
 
+int setegid(gid_t gid)
+{
+    assert(gid == 0);
+    return 0;
+}
+
 int setresuid(uid_t ruid, uid_t euid, uid_t suid)
 {
     if ( (ruid == (uid_t)-1 || ruid == 0) &&
