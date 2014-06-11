@@ -647,6 +647,7 @@ libc += unistd/gethostname.o
 libc += unistd/sync.o
 libc += unistd/getpgid.o
 libc += unistd/setpgid.o
+libc += unistd/getpgrp.o
 
 libc += pthread.o
 libc += libc.o
