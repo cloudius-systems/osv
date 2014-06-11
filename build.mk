@@ -751,7 +751,7 @@ ifeq ($(arch),x64)
 drivers += $(libtsm)
 drivers += drivers/vga.o drivers/kbd.o drivers/isa-serial.o
 drivers += core/interrupt.o
-drivers += core/pvclock-abi.o
+drivers += arch/$(arch)/pvclock-abi.o
 drivers += drivers/device.o
 drivers += drivers/pci-device.o drivers/pci-function.o drivers/pci-bridge.o
 drivers += drivers/driver.o
