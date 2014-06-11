@@ -131,6 +131,18 @@ int setresuid(uid_t ruid, uid_t euid, uid_t suid)
         return -1;
     }
 }
+
+int setreuid(uid_t ruid, uid_t euid)
+{
+    if ( (ruid == (uid_t)-1 || ruid == 0) &&
+         (euid == (uid_t)-1 || euid == 0)) {
+        return 0;
+    } else {
+        errno = EPERM;
+        return -1;
+    }
+}
+
 int setresgid(gid_t rgid, gid_t egid, gid_t sgid)
 {
     if ( (rgid == (gid_t)-1 || rgid == 0) &&
