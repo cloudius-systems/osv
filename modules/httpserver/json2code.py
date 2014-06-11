@@ -154,10 +154,14 @@ def add_path(f, path, details):
                 fprint(f, spacing, '  ->pushparam("', param, '",true)')
             else:
                 fprint(f, spacing, '  ->pushparam("', param, '")')
-        fprint(f, ";")
     else:
         fprint(f, spacing, 'path_description::add_path("', clear_path_ending(path), '",',
-           details["method"], ',"', details["nickname"], '");')
+           details["method"], ',"', details["nickname"], '")')
+    if "parameters" in details:
+        for param in details["parameters"]:
+            if "required" in param and param["required"] and  param["paramType"] == "query":
+                fprint(f, spacing, '  ->pushmandatory_param("', param["name"], '")')
+    fprint(f, spacing, ";")
 
 
 def get_base_name(param):
