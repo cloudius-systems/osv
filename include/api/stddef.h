@@ -15,4 +15,6 @@
 #define offsetof(type, member) ((size_t)( (char *)&(((type *)0)->member) - (char *)0 ))
 #endif
 
+typedef union { long long ll; long double ld; void* p; } max_align_t;
+
 #endif
