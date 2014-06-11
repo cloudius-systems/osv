@@ -60,7 +60,7 @@ static int tsm_scroll_cb(struct tsm_screen *screen, int scroll_count, void *data
 }
 
 VGAConsole::VGAConsole()
-    : _offset_dirty(false)
+    : _offset(), _offset_dirty(false)
 {
     tsm_screen_new(&_tsm_screen, tsm_log_cb, this);
     tsm_screen_resize(_tsm_screen, NCOLS, NROWS);
