@@ -74,6 +74,16 @@ public:
     }
 };
 
+
+class missing_param_exception : public bad_request_exception
+{
+public:
+    missing_param_exception(const std::string& param)
+        : bad_request_exception(std::string("Missing mandatory parameter '") + param +"'")
+    {
+    }
+};
+
 }
 
 #endif /* EXCEPTION_HH_ */
