@@ -52,8 +52,8 @@ struct passwd *getpwnam(const char *name)
    return &single_user;
 }
 
-int getpwuid_r(uid_t uid, struct passwd *pwd,
-               char *buf, size_t buflen, struct passwd **result)
+static int getpw_r(const char *name, uid_t uid, struct passwd *pwd,
+                   char *buf, size_t buflen, struct passwd **result)
 {
     auto alloc = [&](int n) { auto tmp = buf; buf += n; return tmp; };
     auto save = [&](const char* s) { return strcpy(alloc(strlen(s) + 1), s); };
@@ -67,6 +67,18 @@ int getpwuid_r(uid_t uid, struct passwd *pwd,
     pwd->pw_shell = save(shell);
     *result = pwd;
     return 0;
+}
+
+int getpwnam_r(const char *name, struct passwd *pwd,
+               char *buf, size_t buflen, struct passwd **result)
+{
+    return getpw_r(name, 0, pwd, buf, buflen, result);
+}
+
+int getpwuid_r(uid_t uid, struct passwd *pwd,
+               char *buf, size_t buflen, struct passwd **result)
+{
+    return getpw_r(0, uid, pwd, buf, buflen, result);
 }
 
 struct passwd* getpwuid(uid_t uid)
