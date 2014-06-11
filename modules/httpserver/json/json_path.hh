@@ -120,10 +120,23 @@ struct path_description {
         return this;
     }
 
+    /**
+     * adds a mandatory query parameter to the path
+     * this parameter will be check before calling a handler
+     * @param param the parameter to head
+     * @return a pointer to the current path description
+     */
+    path_description* pushmandatory_param(const std::string& param)
+    {
+        mandatory_queryparams.push_back(param);
+        return this;
+    }
+
     std::vector<std::tuple<std::string, bool>> params;
     std::string path;
     json_operation operations;
 
+    std::vector<std::string> mandatory_queryparams;
     static std::unordered_map<std::string, path_description*> path_by_nickname;
 };
 
