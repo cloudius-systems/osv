@@ -349,10 +349,6 @@ procfs_unmount(mount* mp, int flags)
 {
     release_mp_dentries(mp);
 
-    auto* vp = to_node(mp->m_root->d_vnode);
-
-    delete vp;
-
     return 0;
 }
 
