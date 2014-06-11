@@ -30,6 +30,7 @@
 #include <osv/prio.hh>
 #include <stdlib.h>
 #include <osv/shrinker.h>
+#include <osv/defer.hh>
 #include "java/jvm_balloon.hh"
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
@@ -1233,11 +1234,16 @@ struct header {
 static const size_t pad_before = 2 * mmu::page_size;
 static const size_t pad_after = mmu::page_size;
 
+static __thread bool recursed;
+
 void* malloc(size_t size, size_t alignment)
 {
-    if (!enabled) {
+    if (!enabled || recursed) {
         return std_malloc(size, alignment);
     }
+
+    recursed = true;
+    auto unrecurse = defer([&] { recursed = false; });
 
     WITH_LOCK(memory::free_page_ranges_lock) {
         memory::reclaimer_thread.wait_for_minimum_memory();
@@ -1273,6 +1279,9 @@ void free(void* v)
     if (v < debug_base) {
         return std_free(v);
     }
+    assert(!recursed);
+    recursed = true;
+    auto unrecurse = defer([&] { recursed = false; });
     WITH_LOCK(memory::reclaimer_lock) {
         auto h = static_cast<header*>(v - pad_before);
         auto size = h->size;
