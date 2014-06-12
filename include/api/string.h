@@ -105,6 +105,11 @@ char *basename();
 #endif
 #endif
 
+#ifdef _GNU_SOURCE
+int ffsl(long int i);
+int ffsll(long long int i);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
