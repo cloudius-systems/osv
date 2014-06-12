@@ -503,7 +503,7 @@ namespace dhcp {
                  dm.get_your_ip().to_string().c_str(),
                  dm.get_subnet_mask().to_string().c_str(),
                  dm.get_router_ip().to_string().c_str(),
-                 dm.get_interface_mtu());
+                 dm.get_interface_mtu() != 0 ? dm.get_interface_mtu() : ETHERMTU);
 
             if (dm.get_interface_mtu() != 0) {
                 osv::if_set_mtu(_ifp->if_xname, dm.get_interface_mtu());
