@@ -659,6 +659,9 @@ libc += unistd/getppid.o
 libc += unistd/getsid.o
 libc += unistd/setsid.o
 
+libc += regex/fnmatch.o
+libc += regex/glob.o
+
 libc += pthread.o
 libc += libc.o
 libc += dlfcn.o

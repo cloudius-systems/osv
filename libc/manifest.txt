@@ -23,6 +23,7 @@ All the files under the following directories are imported from musl:
   temp
   time
   unistd
+  regex
 
 With the following exceptions:
 
