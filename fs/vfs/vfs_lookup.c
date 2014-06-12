@@ -184,7 +184,7 @@ drele(struct dentry *dp)
  * @dpp:  dentry to be returned.
  */
 int
-namei(char *path, struct dentry **dpp)
+namei(const char *path, struct dentry **dpp)
 {
     char *p;
     char node[PATH_MAX];

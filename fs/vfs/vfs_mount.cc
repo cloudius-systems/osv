@@ -352,7 +352,7 @@ sys_sync(void)
  * @root: vfs root path as mount point.
  */
 static size_t
-count_match(char *path, char *mount_root)
+count_match(const char *path, char *mount_root)
 {
     size_t len = 0;
 
@@ -379,7 +379,7 @@ count_match(char *path, char *mount_root)
  * @root: pointer to root directory in path.
  */
 int
-vfs_findroot(char *path, struct mount **mp, char **root)
+vfs_findroot(const char *path, struct mount **mp, char **root)
 {
     struct mount *m = NULL, *tmp;
     size_t len, max_len = 0;
