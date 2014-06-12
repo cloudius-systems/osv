@@ -1036,6 +1036,120 @@ sys_utimes(char *path, const struct timeval times[2])
     return error;
 }
 
+/*
+ * Check the validity of members of a struct timespec
+ */
+static bool is_timespec_valid(const struct timespec &time)
+{
+    return (time.tv_sec >= 0) &&
+	   ((time.tv_nsec >= 0 && time.tv_nsec <= 999999999) ||
+	    time.tv_nsec == UTIME_NOW ||
+	    time.tv_nsec == UTIME_OMIT);
+}
+
+void init_timespec(struct timespec &_times, const struct timespec *times)
+{
+    if (times == nullptr || times->tv_nsec == UTIME_NOW) {
+        clock_gettime(CLOCK_REALTIME, &_times);
+    } else {
+        _times.tv_sec = times->tv_sec;
+        _times.tv_nsec = times->tv_nsec;
+    }
+    return;
+}
+
+int
+sys_utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flags)
+{
+    int error;
+    std::string ap;
+    struct timespec timespec_times[2];
+    extern struct task *main_task;
+    struct dentry *dp;
+
+    /* utimensat should return ENOENT when pathname is empty */
+    if(pathname && pathname[0] == 0)
+        return ENOENT;
+
+    if (flags && !(flags & AT_SYMLINK_NOFOLLOW))
+        return EINVAL;
+
+    if (times && (!is_timespec_valid(times[0]) || !is_timespec_valid(times[1])))
+        return EINVAL;
+
+    init_timespec(timespec_times[0], times ? times + 0 : nullptr);
+    init_timespec(timespec_times[1], times ? times + 1 : nullptr);
+
+    if (pathname && pathname[0] == '/') {
+	ap = pathname;
+    } else if (dirfd == AT_FDCWD) {
+	if (!pathname)
+	    return EFAULT;
+	ap = std::string(main_task->t_cwd) + "/" + pathname;
+    } else {
+        struct file *fp;
+        fileref f(fileref_from_fd(dirfd));
+
+        if (!f)
+	    return EBADF;
+
+	fp = f.get();
+
+	if(!fp->f_dentry)
+	    return EBADF;
+
+	if (!(fp->f_dentry->d_vnode->v_type & VDIR))
+	    return ENOTDIR;
+
+	if (pathname)
+	    ap = std::string(fp->f_dentry->d_path) + "/" + pathname;
+	else
+	    ap = fp->f_dentry->d_path;
+    }
+
+    /* FIXME: Add support for AT_SYMLINK_NOFOLLOW */
+
+    error = namei(ap.c_str(), &dp);
+
+    if (error)
+        return error;
+
+    if (dp->d_mount->m_flags & MNT_RDONLY) {
+        error = EROFS;
+    } else {
+	    if (!(dp->d_vnode->v_mode & VWRITE))
+	        return EACCES;
+	    if (times &&
+               (times[0].tv_nsec != UTIME_NOW || times[1].tv_nsec != UTIME_NOW) &&
+               (times[0].tv_nsec != UTIME_OMIT || times[1].tv_nsec != UTIME_OMIT) &&
+	       (!(dp->d_vnode->v_mode & ~VAPPEND)))
+	        return EPERM;
+        error = vn_settimes(dp->d_vnode, timespec_times);
+    }
+
+    drele(dp);
+    return error;
+}
+
+int
+sys_futimens(int fd, const struct timespec times[2])
+{
+    struct file *fp;
+
+    fileref f(fileref_from_fd(fd));
+    if (!f)
+        return EBADF;
+
+    fp = f.get();
+
+    if (!fp->f_dentry)
+        return EBADF;
+
+    std::string pathname = fp->f_dentry->d_path;
+    auto error = sys_utimensat(AT_FDCWD, pathname.c_str(), times, 0);
+    return error;
+}
+
 int
 sys_fallocate(struct file *fp, int mode, loff_t offset, loff_t len)
 {

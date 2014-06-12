@@ -400,8 +400,8 @@ vn_settimes(struct vnode *vp, struct timespec times[2])
 
     vap->va_atime = times[0];
     vap->va_mtime = times[1];
-    vap->va_mask = AT_ATIME | AT_MTIME;
-
+    vap->va_mask = ((times[0].tv_nsec == UTIME_OMIT) ? 0 : AT_ATIME)
+                    | ((times[1].tv_nsec == UTIME_OMIT) ? 0 : AT_MTIME);
     vn_lock(vp);
     error = VOP_SETATTR(vp, vap);
     vn_unlock(vp);

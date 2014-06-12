@@ -1561,6 +1561,46 @@ int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
     return -1;
 }
 
+TRACEPOINT(trace_vfs_utimensat, "\"%s\"", const char*);
+TRACEPOINT(trace_vfs_utimensat_ret, "");
+TRACEPOINT(trace_vfs_utimensat_err, "%d", int);
+
+extern "C"
+int utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flags)
+{
+    trace_vfs_utimensat(pathname);
+
+    auto error = sys_utimensat(dirfd, pathname, times, flags);
+    if (error) {
+        trace_vfs_utimensat_err(error);
+        errno = error;
+        return -1;
+    }
+
+    trace_vfs_utimensat_ret();
+    return 0;
+}
+
+TRACEPOINT(trace_vfs_futimens, "%d", int);
+TRACEPOINT(trace_vfs_futimens_ret, "");
+TRACEPOINT(trace_vfs_futimens_err, "%d", int);
+
+extern "C"
+int futimens(int fd, const struct timespec times[2])
+{
+    trace_vfs_futimens(fd);
+
+    auto error = sys_futimens(fd, times);
+    if (error) {
+        trace_vfs_futimens_err(error);
+        errno = error;
+        return -1;
+    }
+
+    trace_vfs_futimens_ret();
+    return 0;
+}
+
 extern "C"
 int utimes(const char *pathname, const struct timeval times[2])
 {
