@@ -22,6 +22,7 @@
 #include "api/jvm.hh"
 #include "api/file.hh"
 #include "path_holder.hh"
+#include "api/env.hh"
 
 using namespace httpserver;
 
@@ -51,6 +52,7 @@ int main(int argc, char* argv[])
     api::os::init(routes);
     api::file::init(routes);
     api::jvm::init(routes);
+    api::env::init(routes);
     api::files_mapping::init(routes);
     try {
         http::server::server s(&config, &routes);
