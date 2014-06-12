@@ -13,6 +13,10 @@
         {
             "path": "/../listings/file.json",
             "description": "file API"
+        },
+        {
+            "path": "/../listings/env.json",
+            "description": "Environment Variables API"
         }
     ]
 }
