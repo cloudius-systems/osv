@@ -15,6 +15,14 @@ extern int optind;
 using namespace std;
 using namespace boost::range;
 
+// We will handle all the initialization ourselves with the osv::run() API.
+// Still, if objects are linked with the -z now flag, they may possibly
+// require this symbol to run. The symbol, though, should never be reached.
+extern "C" void __libc_start_main()
+{
+    abort("Invalid call to __libc_start_main");
+}
+
 namespace osv {
 
 std::shared_ptr<elf::object> run(std::string path,
