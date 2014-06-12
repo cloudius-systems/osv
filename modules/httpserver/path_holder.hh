@@ -45,8 +45,8 @@ public:
      * @param type the type of the reply, that would be used to set the headers
      * @return a reference to the handler that would be created
      */
-    handler_base& set_handler(const request_function& fun,
-                              const std::string& type) const;
+    handler_base& set_handler(const std::string& type,
+                              const request_function& fun) const;
 
     /**
      * assign a handle function to the path
@@ -54,8 +54,8 @@ public:
      * @param type the type of the reply, that would be used to set the headers
      * @return a reference to the handler that would be created
      */
-    handler_base& set_handler(const handle_function& fun,
-                              const std::string& type) const;
+    handler_base& set_handler(const std::string& type,
+                              const handle_function& fun) const;
     /**
      * set the routes object this should be done once when
      * the routes are created

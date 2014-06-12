@@ -71,26 +71,23 @@ class set_jmx_handler : public handler_base {
 void init(routes& routes)
 {
     jvm_json_init_path();
-    request_function java_version = [](const_req req)
+    getJavaVersion.set_handler("json", [](const_req req)
     {
         validate_jvm();
         return formatter::to_json(java_api::instance().get_system_property("java.version") );
-    };
-    getJavaVersion.set_handler(java_version, "json");
+    });
 
     getJMXvalue.set_handler(new get_jmx_handler());
 
     setJMXvalue.set_handler(new set_jmx_handler());
 
-    request_function mbean_list = [](const_req req)
+    getMbeanList.set_handler("json", [](const_req req)
     {
         validate_jvm();
         return formatter::to_json(java_api::instance().get_all_mbean() );
-    };
+    });
 
-    getMbeanList.set_handler(mbean_list, "json");
-
-    request_function gc_info_handler = [](const_req req)
+    getGCinfo.set_handler("json", [](const_req req)
     {
         validate_jvm();
         vector<MemoryManager> res;
@@ -103,16 +100,14 @@ void init(routes& routes)
 
         }
         return formatter::to_json(res);
-    };
-    getGCinfo.set_handler(gc_info_handler, "json");
+    });
 
-    request_function gc_handler = [](const_req req)
+    forceGC.set_handler("json", [](const_req req)
     {
         validate_jvm();
         java_api::instance().call_gc();
         return "";
-    };
-    forceGC.set_handler(gc_handler, "json");
+    });
 }
 
 }

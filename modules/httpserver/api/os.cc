@@ -31,65 +31,56 @@ void init(routes& routes)
 {
     os_json_init_path();
 
-    request_function os_version = [](const_req req)
+    getOSversion.set_handler("json", [](const_req req)
     {
         return formatter::to_json(osv::version());
-    };
-    getOSversion.set_handler(os_version, "json");
+    });
 
-    request_function manufacturer = [](const_req req)
+    getOSmanufacturer.set_handler("json", [](const_req req)
     {
         return formatter::to_json("cloudius-systems");
-    };
-    getOSmanufacturer.set_handler(manufacturer, "json");
+    });
 
-    request_function bootup = [](const_req req)
+    getLastBootUpTime.set_handler("json",[](const_req req)
     {
         struct sysinfo info;
         sysinfo(&info);
         return formatter::to_json(info.uptime);
-    };
+    });
 
-    getLastBootUpTime.set_handler(bootup, "json");
-
-    request_function get_date = [](const_req req)
+    getDate.set_handler("json", [](const_req req)
     {
         time_t t;
         time(&t);
         date_time result;
         localtime_r(&t,&result);
         return formatter::to_json(result);
-    };
-    getDate.set_handler(get_date, "json");
+    });
 
-    request_function total_mem = [](const_req req)
+    getTotalVirtualMemorySize.set_handler("json", [](const_req req)
     {
         struct sysinfo info;
         sysinfo(&info);
         return formatter::to_json(info.totalram);
-    };
-    getTotalVirtualMemorySize.set_handler(total_mem, "json");
+    });
 
-    request_function free_mem = [](const_req req)
+    getFreeVirtualMemory.set_handler("json", [](const_req req)
     {
         struct sysinfo info;
         sysinfo(&info);
         return formatter::to_json(info.freeram);
-    };
-    getFreeVirtualMemory.set_handler(free_mem, "json");
+    });
 
-    request_function shutdown = [](const_req req)
+    os_json::shutdown.set_handler("json", [](const_req req)
     {
         osv::shutdown();
         return formatter::to_json("");
-    };
-    os_json::shutdown.set_handler(shutdown, "json");
+    });
 
-    request_function dmesg = [](const_req req)
+    getDebugMessages.set_handler("json", [](const_req req)
     {
         return string(debug_buffer);
-    };
-    getDebugMessages.set_handler(dmesg, "json");
+    });
 }
 
 }
