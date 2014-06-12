@@ -1266,6 +1266,39 @@ class osv_info_virtio(gdb.Command):
             if derived_from(driver.dereference().dynamic_type, virtio_driver_type):
                 show_virtio_driver(driver)
 
+class osv_percpu(gdb.Command):
+    '''osv percpu var prints the value of a PERCPU(type, var) for all CPUs
+    if there are fields after var, gdb would print this specific field in "var", for
+    each CPU.
+    typical example is:
+    osv percpu memory::percpu_page_buffer # print the percpu_page_buffer on all cpus
+    osv percpu memory::percpu_page_buffer nr # print size of buffer on each cpu
+    osv percpu memory::percpu_page_buffer free 2 # print second argument in buffer'''
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv percpu', gdb.COMMAND_USER, gdb.COMPLETE_COMMAND, True)
+    def invoke(self, args, from_tty):
+        args = args.split()
+        try:
+            percpu = gdb.parse_and_eval(args[0])['_var']
+        except gdb.error as e:
+            gdb.write('%s\n'%e)
+            return
+        percpu_addr = percpu.address
+        for cpu in vmstate().cpu_list.values():
+            gdb.write("CPU %d:\n" % cpu.id)
+            base = cpu.obj['percpu_base']
+            addr = base+to_int(percpu_addr)
+            addr = addr.cast(percpu_addr.type)
+            target = addr.dereference()
+            for field in args[1:]:
+                if field.isdigit():
+                    field = int(field)
+                try:
+                    target = target[field]
+                except gdb.error as e:
+                    gdb.write('%s\n'%e)
+                    return
+            gdb.write('%s\n'%target)
 
 osv()
 osv_heap()
@@ -1292,5 +1325,6 @@ osv_leak_off()
 osv_pagetable()
 osv_pagetable_walk()
 osv_runqueue()
+osv_percpu()
 
 setup_libstdcxx()
