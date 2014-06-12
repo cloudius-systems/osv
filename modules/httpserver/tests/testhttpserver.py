@@ -209,6 +209,14 @@ class test_httpserver(unittest.TestCase):
         f.closed
         os.remove('tmp-test-dwnld.txt')
 
+    def test_env(self):
+        param = "test-param"
+        get_path = self.path_by_nick(self.env_api, "getEnv") + param 
+        set_path =get_path + "?val=TEST"
+        self.curl(set_path, True)        
+        val = self.curl(get_path)
+        self.assertEqual(val, "TEST")
+
     @classmethod
     def curl(cls, api, post=False):
         url = cls.get_url(api)
@@ -260,6 +268,7 @@ class test_httpserver(unittest.TestCase):
         cls.os_api = cls.get_json_api("os.json")
         cls.jvm_api = cls.get_json_api("jvm.json")
         cls.file_api = cls.get_json_api("file.json")
+        cls.env_api = cls.get_json_api("env.json")
         retry = 10
         while not cls.is_reachable():
             time.sleep(1)
