@@ -1093,6 +1093,7 @@ void debug_memory_pool(size_t *total, size_t *contig)
 extern "C" {
     void* malloc(size_t size);
     void free(void* object);
+    size_t malloc_usable_size(void *object);
 }
 
 // malloc_large returns a page-aligned object as a marker that it is not
@@ -1338,6 +1339,14 @@ void free(void* obj)
 #else
     dbg::free(obj);
 #endif
+}
+
+size_t malloc_usable_size(void* obj)
+{
+    if ( obj == nullptr ) {
+        return 0;
+    }
+    return object_size(obj);
 }
 
 // posix_memalign() and C11's aligned_alloc() return an aligned memory block
