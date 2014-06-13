@@ -477,6 +477,13 @@ int pthread_attr_setstacksize(pthread_attr_t *attr, size_t stacksize)
     return 0;
 }
 
+int pthread_attr_getguardsize(const pthread_attr_t *attr, size_t *guardsize)
+{
+    auto a = from_libc(attr);
+    *guardsize = a->guard_size;
+    return 0;
+}
+
 int pthread_attr_setguardsize(pthread_attr_t *attr, size_t guardsize)
 {
     from_libc(attr)->guard_size = guardsize;
