@@ -8,32 +8,53 @@
 
 #include "pl011.hh"
 
-static volatile char *const uart = (char *)0x9000000; /* UARTDR */
-
 namespace console {
+
+static volatile char *const uart = (char *)0x9000000; /* base addr */
+
+enum {
+    UARTDR    = 0x000,
+    UARTFR    = 0x018,
+    UARTIMSC  = 0x038,
+    UARTICR   = 0x044
+};
 
 void PL011_Console::flush() {
     return;
 }
 
 bool PL011_Console::input_ready() {
-    return false;
+    /* Check if Receive FIFO is not empty */
+    return !(uart[UARTFR] & 0x10); /* RXFE */
 }
 
 char PL011_Console::readch() {
-    return 0;
+    return uart[UARTDR];
+}
+
+void PL011_Console::irq_handler(struct interrupt_desc *desc) {
+    PL011_Console *that = (PL011_Console *)desc->obj;
+    /* Interrupt Clear Register, clear UARTRXINTR */
+    uart[UARTICR] = 0x10;
+    that->_thread->wake();
 }
 
 void PL011_Console::dev_start() {
-    return;
+    /* trigger interrupt on Receive */
+    uart[UARTIMSC] = 0x10; /* UARTRXINTR */
+
+    this->irqid = 33; /* UART irq = SPI 1 = 32 + 1 */
+    idt.register_handler(this, this->irqid, &PL011_Console::irq_handler,
+                         gic::irq_type::IRQ_TYPE_EDGE);
+    idt.enable_spi(this->irqid);
 }
 
 void PL011_Console::write(const char *str, size_t len) {
     while (len > 0) {
         if ((*str == '\n'))
-            *uart = '\r';
+            uart[UARTDR] = '\r';
 
-        *uart = *str++;
+        uart[UARTDR] = *str++;
         len--;
     }
 }

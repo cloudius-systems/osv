@@ -9,6 +9,7 @@
 #define PL011_HH
 
 #include "console-driver.hh"
+#include "exceptions.hh"
 
 namespace console {
 
@@ -21,6 +22,8 @@ public:
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }
+    unsigned int irqid;
+    static void irq_handler(struct interrupt_desc *desc);
 };
 
 }
