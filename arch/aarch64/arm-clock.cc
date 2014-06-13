@@ -91,13 +91,14 @@ arm_clock_events::arm_clock_events()
     /* XXX hardcoded, and also note that on the hardware it's
        level-sensitive, but kvm/qemu make it edge for the guest */
     this->irqid = 27;
-    idt.register_handler(this->irqid, &arm_clock_events::irq_handler,
+    idt.register_handler(this, this->irqid, &arm_clock_events::irq_handler,
                          gic::irq_type::IRQ_TYPE_EDGE);
 }
 
 void arm_clock_events::irq_handler(struct interrupt_desc *desc)
 {
-    clock_event->callback()->fired();
+    arm_clock_events *that = (arm_clock_events *)desc->obj;
+    that->_callback->fired();
 }
 
 arm_clock_events::~arm_clock_events()

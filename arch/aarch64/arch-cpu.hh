@@ -48,7 +48,7 @@ inline void arch_cpu::init_on_cpu()
         gic::gic->init_cpu(this->smp_idx);
     }
 
-    idt.enable_irqs();
+    idt.enable_ppis();
 }
 
 }

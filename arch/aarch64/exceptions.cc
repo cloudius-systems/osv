@@ -29,22 +29,35 @@ interrupt_table::interrupt_table() {
     debug_early("interrupt table: gic driver created.\n");
 }
 
-void interrupt_table::enable_irqs()
+void interrupt_table::enable_irq(struct interrupt_desc *desc)
+{
+    if (desc && desc->handler) {
+        debug_early_u64("enabling InterruptID=", desc->id);
+        gic::gic->set_irq_type(desc->id, desc->type);
+        gic::gic->unmask_irq(desc->id);
+    }
+}
+
+void interrupt_table::enable_ppis()
 {
     WITH_LOCK(osv::rcu_read_lock) {
-        for (int i = 0; i < this->nr_irqs; i++) {
+        for (int i = 16; i < 32; i++) {
             struct interrupt_desc *desc = this->irq_desc[i].read();
-            if (desc && desc->handler) {
-                debug_early_u64("enabling InterruptID=", desc->id);
-                gic::gic->set_irq_type(desc->id, desc->type);
-                gic::gic->unmask_irq(desc->id);
-            }
+            this->enable_irq(desc);
         }
     }
 }
 
-void interrupt_table::register_handler(int i, interrupt_handler h,
-                                       gic::irq_type t)
+void interrupt_table::enable_spi(int i)
+{
+    WITH_LOCK(osv::rcu_read_lock) {
+        struct interrupt_desc *desc = this->irq_desc[i].read();
+        this->enable_irq(desc);
+    }
+}
+
+void interrupt_table::register_handler(void *obj, int i,
+                                       interrupt_handler h, gic::irq_type t)
 {
     WITH_LOCK(_lock) {
         assert(i < this->nr_irqs);
@@ -55,7 +68,7 @@ void interrupt_table::register_handler(int i, interrupt_handler h,
             return;
         }
 
-        struct interrupt_desc *desc = new interrupt_desc(i, h, t);
+        struct interrupt_desc *desc = new interrupt_desc(obj, i, h, t);
         this->irq_desc[i].assign(desc);
         osv::rcu_dispose(old);
 
