@@ -149,8 +149,8 @@ public:
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 
-    virtual bool map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write, bool shared) override;
-    virtual bool map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write, bool shared) override;
+    virtual bool map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bool write, bool shared) override;
+    virtual bool map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write, bool shared) override;
     virtual bool put_page(void *addr, uintptr_t offset, hw_ptep<0> ptep) override;
     virtual bool put_page(void *addr, uintptr_t offset, hw_ptep<1> ptep) override;
 };
@@ -171,9 +171,9 @@ std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsign
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
 template<int N>
-inline pt_element clear_pte(hw_ptep<N> ptep)
+inline pt_element<N> clear_pte(hw_ptep<N> ptep)
 {
-    auto old = ptep.exchange(make_empty_pte());
+    auto old = ptep.exchange(make_empty_pte<N>());
     //trace_clear_pte(ptep.release(), pte_is_cow(old), old.addr(false));
     return old;
 }
@@ -181,10 +181,10 @@ inline pt_element clear_pte(hw_ptep<N> ptep)
 template<int N>
 inline bool clear_accessed(hw_ptep<N> ptep)
 {
-    pt_element pte = ptep.read();
+    pt_element<N> pte = ptep.read();
     bool accessed = pte.accessed();
     if (accessed) {
-        pt_element clear = pte;
+        pt_element<N> clear = pte;
         clear.set_accessed(false);
         ptep.compare_exchange(pte, clear);
     }
@@ -195,10 +195,10 @@ template<int N>
 inline bool clear_dirty(hw_ptep<N> ptep)
 {
     static_assert(N == 0 || N == 1, "non leaf pte");
-    pt_element pte = ptep.read();
+    pt_element<N> pte = ptep.read();
     bool dirty = pte.dirty();
     if (dirty) {
-        pt_element clear = pte;
+        pt_element<N> clear = pte;
         clear.set_dirty(false);
         ptep.compare_exchange(pte, clear);
     }
@@ -206,16 +206,23 @@ inline bool clear_dirty(hw_ptep<N> ptep)
 }
 
 phys virt_to_phys(void *virt);
-pt_element virt_to_pte_rcu(uintptr_t virt);
+
+class virt_pte_visitor {
+public:
+    virtual void pte(pt_element<0>) = 0;
+    virtual void pte(pt_element<1>) = 0;
+};
+
+void virt_visit_pte_rcu(uintptr_t virt, virt_pte_visitor& visitor);
 
 template<int N>
-inline bool write_pte(void *addr, hw_ptep<N> ptep, pt_element pte)
+inline bool write_pte(void *addr, hw_ptep<N> ptep, pt_element<N> pte)
 {
     pte.mod_addr(virt_to_phys(addr));
     return ptep.compare_exchange(ptep.read(), pte);
 }
 
-pt_element pte_mark_cow(pt_element pte, bool cow);
+pt_element<0> pte_mark_cow(pt_element<0> pte, bool cow);
 
 template <typename OutputFunc>
 inline
@@ -271,11 +278,17 @@ void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
 
-inline bool pte_is_cow(pt_element pte)
+template<int N>
+inline bool pte_is_cow(pt_element<N> pte)
 {
-   return pte.sw_bit(pte_cow);
+    return false;
 }
 
+template<>
+inline bool pte_is_cow(pt_element<0> pte)
+{
+    return pte.sw_bit(pte_cow); // only 4k pages can be cow for now
+}
 
 unsigned long all_vmas_size();
 

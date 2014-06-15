@@ -36,7 +36,7 @@ struct hash<pagecache::hashkey> {
 
 template<> struct hash<mmu::hw_ptep<0>> {
     size_t operator()(const mmu::hw_ptep<0>& ptep) const noexcept {
-        hash<const mmu::pt_element*> h;
+        hash<const mmu::pt_element<0>*> h;
         return h(ptep.release());
     }
 };
@@ -417,7 +417,7 @@ static void insert(cached_page_write* cp) {
     }
 }
 
-bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element pte, bool write, bool shared)
+bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pte, bool write, bool shared)
 {
     struct stat st;
     fp->stat(&st);
