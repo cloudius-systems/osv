@@ -160,10 +160,5 @@ pt_element<N> make_normal_pte(phys addr, unsigned perm = perm_read | perm_write 
     return make_pte<N>(addr, false, perm);
 }
 
-pt_element<1> make_large_pte(phys addr, unsigned perm = perm_read | perm_write | perm_exec)
-{
-    return make_pte<1>(addr, true, perm);
-}
-
 }
 #endif /* ARCH_MMU_HH */
