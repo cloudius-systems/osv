@@ -36,7 +36,11 @@ inline bool pt_element_common<N>::writable() const { return x & 2; }
 template<int N>
 inline bool pt_element_common<N>::executable() const { return !(x >> 63); } /* NX */
 template<int N>
-inline bool pt_element_common<N>::dirty() const { return x & 0x40; }
+inline bool pt_element_common<N>::dirty() const {
+    static_assert(pt_level_traits<N>::leaf_capable::value, "only leaf pte can be dirty");
+    assert(!pt_level_traits<N>::large_capable::value || large());
+    return x & 0x40;
+}
 template<int N>
 inline bool pt_element_common<N>::large() const {
     return pt_level_traits<N>::large_capable::value && (x & 0x80);
