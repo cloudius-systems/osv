@@ -214,7 +214,7 @@ using hw_ptep_base = typename std::conditional<
    The arch must implement change_perm for this class. */
 template <int N>
 class hw_ptep : public hw_ptep_base<N> {
-    static_assert(N >= -1 && N <= 4, "Wrong hw_pte level");
+    static_assert(N >= 0 && N <= 4, "Wrong hw_pte level");
 public:
     hw_ptep(const hw_ptep& a) : hw_ptep_base<N>(a.p) {}
     hw_ptep& operator=(const hw_ptep& a) = default;

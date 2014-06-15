@@ -341,15 +341,6 @@ intermediate_page_post(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 }
 
 template<typename PageOp, int ParentLevel> class map_level;
-template<typename PageOp> class map_level<PageOp, -1>
-{
-private:
-    friend class map_level<PageOp, 0>;
-    map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp page_mapper, size_t slop) {}
-    void operator()(hw_ptep<-1> parent, uintptr_t base_virt) {
-        assert(0);
-    }
-};
 
 template<typename PageOp>
         void map_range(uintptr_t vma_start, uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
@@ -388,8 +379,16 @@ private:
     bool descend(hw_ptep<level> ptep) {
         return page_mapper.descend() && !read(ptep).empty() && !read(ptep).large();
     }
-    void map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
-            hw_ptep<level> ptep, uintptr_t base_virt)
+    template<int N>
+    typename std::enable_if<N == 0>::type
+    map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
+            hw_ptep<N> ptep, uintptr_t base_virt)
+    {
+    }
+    template<int N>
+    typename std::enable_if<N == level && N != 0>::type
+    map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
+            hw_ptep<N> ptep, uintptr_t base_virt)
     {
         map_level<PageOp, level> pt_mapper(vma_start, vcur, size, page_mapper, slop);
         pt_mapper(ptep, base_virt);
