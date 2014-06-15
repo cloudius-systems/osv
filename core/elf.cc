@@ -553,8 +553,11 @@ void* object::resolve_pltgot(unsigned index)
     assert(type == ARCH_JUMP_SLOT);
     void *addr = _base + slot.r_offset;
     auto sm = symbol(sym);
-    WITH_LOCK(_used_by_resolve_plt_got_mutex) {
-        _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
+
+    if (sm.obj != this) {
+        WITH_LOCK(_used_by_resolve_plt_got_mutex) {
+            _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
+        }
     }
 
     if (!arch_relocate_jump_slot(sym, addr, slot.r_addend)) {
