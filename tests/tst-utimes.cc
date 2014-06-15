@@ -114,6 +114,10 @@ int main(int argc, char *argv[])
     report(ret == -1 && errno == EINVAL,
         "check if utimes failed as desired!");
 
+    /* Check if utimes works with NULL as argument */
+    ret = utimes(path, NULL);
+    report(ret == 0, "utimes works with NULL as argument");
+
     // Clean up the temporary file.
     report(unlink(path) == 0, "remove the file");
 
