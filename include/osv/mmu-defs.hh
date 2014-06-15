@@ -117,8 +117,8 @@ public:
     inline bool user();
     inline bool accessed();
 
-    inline phys addr(bool large) const;
-    inline u64 pfn(bool large) const;
+    inline phys addr() const;
+    inline u64 pfn() const;
     inline phys next_pt_addr() const;
     inline u64 next_pt_pfn() const;
     inline bool sw_bit(unsigned off) const;

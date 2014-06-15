@@ -76,9 +76,9 @@ inline bool pt_element_common<N>::rsvd_bit(unsigned off) const {
 }
 
 template<int N>
-inline phys pt_element_common<N>::addr(bool large) const {
+inline phys pt_element_common<N>::addr() const {
     u64 v = x & ((1ul << max_phys_addr_size) - 1);
-    if (large)
+    if (large())
         v &= ~0x1ffffful;
     else
         v &= ~0xffful;
@@ -86,11 +86,17 @@ inline phys pt_element_common<N>::addr(bool large) const {
 }
 
 template<int N>
-inline u64 pt_element_common<N>::pfn(bool large) const { return addr(large) >> page_size_shift; }
+inline u64 pt_element_common<N>::pfn() const { return addr() >> page_size_shift; }
 template<int N>
-inline phys pt_element_common<N>::next_pt_addr() const { return addr(false); }
+inline phys pt_element_common<N>::next_pt_addr() const {
+    assert(!large());
+    return addr();
+}
 template<int N>
-inline u64 pt_element_common<N>::next_pt_pfn() const { return pfn(false); }
+inline u64 pt_element_common<N>::next_pt_pfn() const {
+    assert(!large());
+    return pfn();
+}
 
 template<int N>
 inline void pt_element_common<N>::set_valid(bool v) { set_bit(0, v); }

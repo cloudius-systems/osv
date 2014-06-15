@@ -137,7 +137,7 @@ void allocate_intermediate_level(hw_ptep<N> ptep, pt_element<N> org)
     phys pt_page = allocate_intermediate_level<N>([org](int i) {
         auto tmp = org;
         phys addend = phys(i) << page_size_shift;
-        tmp.set_addr(tmp.addr(false) | addend, false);
+        tmp.set_addr(tmp.addr() | addend, false);
         return tmp;
     });
     ptep.write(make_normal_pte<N>(pt_page));
@@ -606,7 +606,7 @@ public:
     unpopulate(page_allocator* pops) : _pops(pops) {}
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        void* addr = phys_to_virt(ptep.read().addr(ptep.large()));
+        void* addr = phys_to_virt(ptep.read().addr());
         size_t size = ptep.size();
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
@@ -620,7 +620,7 @@ public:
         return true;
     }
     void intermediate_page_post(hw_ptep<1> ptep, uintptr_t offset) {
-        osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(ptep.read().addr(false)));
+        osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(ptep.read().addr()));
         ptep.write(make_empty_pte<1>());
     }
     bool tlb_flush_needed(void) {
@@ -661,7 +661,7 @@ public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         assert(result == null);
-        result = ptep.read().addr(ptep.large()) | (v & ~pte_level_mask(N));
+        result = ptep.read().addr() | (v & ~pte_level_mask(N));
         return true;
     }
     void sub_page(hw_ptep<1> ptep, int l, uintptr_t offset) {
@@ -691,12 +691,12 @@ public:
     void intermediate_page_post(hw_ptep<1> ptep, uintptr_t offset) {
         if (!live_ptes) {
             auto old = ptep.read();
-            auto v = phys_cast<u64*>(old.addr(false));
+            auto v = phys_cast<u64*>(old.addr());
             for (unsigned i = 0; i < 512; ++i) {
                 assert(v[i] == 0);
             }
             ptep.write(make_empty_pte<1>());
-            osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr(false)));
+            osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr()));
         }
     }
 private:
