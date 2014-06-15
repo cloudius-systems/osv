@@ -29,8 +29,7 @@ void vmxnet3_drv_shared::attach(void *storage)
 
     // DriverInfo
     layout->version = VMXNET3_DRIVER_VERSION;
-    layout->guest = VMXNET3_GOS_FREEBSD | VMXNET3_GUEST_OS_VERSION |
-        (sizeof(void*) == sizeof(u32) ? VMXNET3_GOS_32BIT : VMXNET3_GOS_64BIT);
+    layout->guest = VMXNET3_GOS_LINUX | (sizeof(void*) == sizeof(u32) ? VMXNET3_GOS_32BIT : VMXNET3_GOS_64BIT);
 
     layout->vmxnet3_revision = VMXNET3_REVISION;
     layout->upt_version = VMXNET3_UPT_VERSION;

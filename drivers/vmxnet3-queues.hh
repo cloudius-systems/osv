@@ -29,14 +29,12 @@ enum {
 
     VMXNET3_REV1_MAGIC = 0XBABEFEE1,
 
-    VMXNET3_GOS_FREEBSD = 0x10,
+    VMXNET3_GOS_LINUX = (0x01 << 2),
     VMXNET3_GOS_32BIT = 0x01,
     VMXNET3_GOS_64BIT = 0x02,
 
     //Mimic FreeBSD driver behavior
-    VMXNET3_DRIVER_VERSION = 0x00010000,
-    //TODO: Should we be more specific?
-    VMXNET3_GUEST_OS_VERSION = 0x01,
+    VMXNET3_DRIVER_VERSION = 0x01020000,
 
     //Queues parameters
     VMXNET3_MAX_TX_QUEUES = 8,
