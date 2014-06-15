@@ -399,7 +399,7 @@ private:
                 return;
             }
             allocate_intermediate_level(parent);
-        } else if (ParentLevel > 0 && read(parent).large()) {
+        } else if (read(parent).large()) {
             if (page_mapper.split_large(parent, ParentLevel)) {
                 // We're trying to change a small page out of a huge page (or
                 // in the future, potentially also 2 MB page out of a 1 GB),

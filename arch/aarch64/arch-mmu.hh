@@ -56,7 +56,9 @@ inline bool pt_element_common<N>::executable() const { return !(x & (1ul << 53))
 template<int N>
 inline bool pt_element_common<N>::dirty() const { return x & (1ul << 55); } // Software Use[0]
 template<int N>
-inline bool pt_element_common<N>::large() const { return (x & 0x3) == 0x1; }
+inline bool pt_element_common<N>::large() const {
+    return (N == 1 || N == 2) && (x & 0x3) == 0x1;
+}
 template<int N>
 inline bool pt_element_common<N>::user() { return x & (1 << 6); } // AP[1]
 template<int N>
