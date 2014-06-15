@@ -608,12 +608,6 @@ int vmxnet3::txq_encap(vmxnet3_txqueue &txq, struct mbuf *m_head)
         txq.layout->npending = 0;
         _bar0->writel(VMXNET3_BAR0_TXH, txr.head);
     }
-    if (tx > 0) {
-        if (txq.layout->npending > 0) {
-            txq.layout->npending = 0;
-            _bar0->writel(VMXNET3_BAR0_TXH, txr.head);
-        }
-    }
 
     _txq_stats.tx_bytes += tx_bytes;
     _txq_stats.tx_packets++;
