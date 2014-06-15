@@ -112,6 +112,7 @@ HYPERVISOR_crash(void)
         for (;;) ; /* eliminate noreturn error */ 
 }
 
+#if 0
 /* Transfer control to hypervisor until an event is detected on one */
 /* of the specified ports or the specified number of ticks elapse */
 static inline int
@@ -132,6 +133,7 @@ HYPERVISOR_poll(
 #endif	
 	return (rc);
 }
+#endif
 
 static inline void
 MULTI_update_va_mapping(
