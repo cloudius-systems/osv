@@ -28,11 +28,6 @@ public:
     constexpr pt_element() noexcept : pt_element_common(0) {}
     explicit pt_element(u64 x) noexcept : pt_element_common(x) {}
 
-    inline bool user() { return x & (1 << 6); } // AP[1]
-    inline bool accessed() { return x & (1 << 10); } // AF
-    inline void set_user(bool v) { set_bit(6, v); } // AP[1]
-    inline void set_accessed(bool v) { set_bit(10, v); } // AF
-
     /* false->non-shareable true->Inner Shareable */
     inline void set_share(bool v) {
         x &= ~(3ul << 8);
@@ -55,6 +50,8 @@ inline bool pt_element_common::writable() const { return !(x & (1ul << 7)); } //
 inline bool pt_element_common::executable() const { return !(x & (1ul << 53)); } // Priv. Execute Never
 inline bool pt_element_common::dirty() const { return x & (1ul << 55); } // Software Use[0]
 inline bool pt_element_common::large() const { return (x & 0x3) == 0x1; }
+inline bool pt_element_common::user() { return x & (1 << 6); } // AP[1]
+inline bool pt_element_common::accessed() { return x & (1 << 10); } // AF
 
 inline bool pt_element_common::sw_bit(unsigned off) const {
     assert(off < 3);
@@ -83,6 +80,8 @@ inline void pt_element_common::set_writable(bool v) { set_bit(7, !v); } // AP[2]
 inline void pt_element_common::set_executable(bool v) { set_bit(53, !v); } // Priv. Execute Never
 inline void pt_element_common::set_dirty(bool v) { set_bit(55, v); }
 inline void pt_element_common::set_large(bool v) { set_bit(1, !v); }
+inline void pt_element_common::set_user(bool v) { set_bit(6, v); } // AP[1]
+inline void pt_element_common::set_accessed(bool v) { set_bit(10, v); } // AF
 
 inline void pt_element_common::set_sw_bit(unsigned off, bool v) {
     assert(off < 3);

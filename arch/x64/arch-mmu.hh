@@ -22,10 +22,6 @@ class pt_element : public pt_element_common {
 public:
     constexpr pt_element() noexcept : pt_element_common(0) {}
     explicit pt_element(u64 x) noexcept : pt_element_common(x) {}
-    inline bool user() { return x & 4; }
-    inline bool accessed() { return x & 0x20; }
-    inline void set_user(bool v) { set_bit(2, v); }
-    inline void set_accessed(bool v) { set_bit(5, v); }
 };
 
 /* common interface implementation */
@@ -36,6 +32,8 @@ inline bool pt_element_common::writable() const { return x & 2; }
 inline bool pt_element_common::executable() const { return !(x >> 63); } /* NX */
 inline bool pt_element_common::dirty() const { return x & 0x40; }
 inline bool pt_element_common::large() const { return x & 0x80; }
+inline bool pt_element_common::user() { return x & 4; }
+inline bool pt_element_common::accessed() { return x & 0x20; }
 
 inline bool pt_element_common::sw_bit(unsigned off) const {
     assert(off < 10);
@@ -63,6 +61,8 @@ inline void pt_element_common::set_writable(bool v) { set_bit(1, v); }
 inline void pt_element_common::set_executable(bool v) { set_bit(63, !v); } /* NX */
 inline void pt_element_common::set_dirty(bool v) { set_bit(6, v); }
 inline void pt_element_common::set_large(bool v) { set_bit(7, v); }
+inline void pt_element_common::set_user(bool v) { set_bit(2, v); }
+inline void pt_element_common::set_accessed(bool v) { set_bit(5, v); }
 
 inline void pt_element_common::set_sw_bit(unsigned off, bool v) {
     assert(off < 10);

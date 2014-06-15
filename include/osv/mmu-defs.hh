@@ -111,6 +111,9 @@ public:
     inline bool executable() const;
     inline bool dirty() const;
     inline bool large() const;
+    inline bool user();
+    inline bool accessed();
+
     inline phys addr(bool large) const;
     inline u64 pfn(bool large) const;
     inline phys next_pt_addr() const;
@@ -123,6 +126,8 @@ public:
     inline void set_executable(bool v);
     inline void set_dirty(bool v);
     inline void set_large(bool v);
+    inline void set_user(bool v);
+    inline void set_accessed(bool v);
     inline void set_addr(phys addr, bool large);
     inline void set_pfn(u64 pfn, bool large);
     inline void set_sw_bit(unsigned off, bool v);
