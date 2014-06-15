@@ -33,6 +33,8 @@ void smp_main();
 };
 void smp_launch();
 
+void cancel_this_thread_alarm();
+
 // Avoid #include <osv/elf.hh>, as it recursively includes sched.hh. We just
 // need pointer to elf::tls_data
 namespace elf {

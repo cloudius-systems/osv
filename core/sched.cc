@@ -48,8 +48,6 @@ extern char _percpu_start[], _percpu_end[];
 using namespace osv;
 using namespace osv::clock::literals;
 
-void cancel_this_thread_alarm();
-
 namespace sched {
 
 TRACEPOINT(trace_sched_switch, "to %p vold=%g vnew=%g", thread*, float, float);

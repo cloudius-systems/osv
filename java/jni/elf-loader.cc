@@ -27,6 +27,8 @@ bool run_elf(int argc, char** argv, int *return_code)
         sched::thread::current());
     int rc = main(argc, argv);
 
+    cancel_this_thread_alarm();
+
     /* set the return code */
     if (return_code) {
         *return_code = rc;
