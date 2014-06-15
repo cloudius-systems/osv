@@ -8,13 +8,7 @@
 #ifndef ARCH_MMU_HH_
 #define ARCH_MMU_HH_
 
-#include <osv/ilog2.hh>
-#include <osv/types.h>
-#include <osv/mmu-defs.hh>
-#include <api/assert.h>
-
 namespace mmu {
-
 extern uint8_t phys_bits, virt_bits;
 constexpr uint8_t rsvd_bits_used = 1;
 constexpr uint8_t max_phys_bits = 52 - rsvd_bits_used;
@@ -24,69 +18,126 @@ constexpr uint64_t pte_addr_mask(bool large)
     return ((1ull << max_phys_bits) - 1) & ~(0xfffull) & ~(uint64_t(large) << page_size_shift);
 }
 
-class arch_pt_element {
+template<int N>
+class pt_element : public pt_element_common<N> {
 public:
-    arch_pt_element() = delete;
-    static inline bool user(pt_element *e) { return e->x & 4; }
-    static inline bool accessed(pt_element *e) { return e->x & 0x20; }
-    static inline void set_user(pt_element *e, bool v) { e->set_bit(2, v); }
-    static inline void set_accessed(pt_element *e, bool v) { e->set_bit(5, v); }
+    constexpr pt_element() noexcept : pt_element_common<N>(0) {}
+    explicit pt_element(u64 x) noexcept : pt_element_common<N>(x) {}
 };
 
 /* common interface implementation */
 
-inline bool pt_element::empty() const { return !x; }
-inline bool pt_element::valid() const { return x & 1; }
-inline bool pt_element::writable() const { return x & 2; }
-inline bool pt_element::executable() const { return !(x >> 63); } /* NX */
-inline bool pt_element::dirty() const { return x & 0x40; }
-inline bool pt_element::large() const { return x & 0x80; }
+template<int N>
+inline bool pt_element_common<N>::empty() const { return !x; }
+template<int N>
+inline bool pt_element_common<N>::valid() const { return x & 1; }
+template<int N>
+inline bool pt_element_common<N>::writable() const { return x & 2; }
+template<int N>
+inline bool pt_element_common<N>::executable() const { return !(x >> 63); } /* NX */
+template<int N>
+inline bool pt_element_common<N>::dirty() const {
+    static_assert(pt_level_traits<N>::leaf_capable::value, "only leaf pte can be dirty");
+    assert(!pt_level_traits<N>::large_capable::value || large());
+    return x & 0x40;
+}
+template<int N>
+inline bool pt_element_common<N>::large() const {
+    return pt_level_traits<N>::large_capable::value && (x & 0x80);
+}
+template<int N>
+inline bool pt_element_common<N>::user() { return x & 4; }
+template<int N>
+inline bool pt_element_common<N>::accessed() { return x & 0x20; }
 
-inline bool pt_element::sw_bit(unsigned off) const {
+template<int N>
+inline bool pt_element_common<N>::sw_bit(unsigned off) const {
     assert(off < 10);
     return (x >> (53 + off)) & 1;
 }
 
-inline bool pt_element::rsvd_bit(unsigned off) const {
+template<int N>
+inline bool pt_element_common<N>::rsvd_bit(unsigned off) const {
     assert(off < rsvd_bits_used);
     return (x >> (51 - off)) & 1;
 }
 
-inline phys pt_element::addr(bool large) const {
-    return x & pte_addr_mask(large);
+template<int N>
+inline phys pt_element_common<N>::addr() const {
+    return x & pte_addr_mask(large());
 }
 
-inline u64 pt_element::pfn(bool large) const {
-    return addr(large) >> page_size_shift;
+template<int N>
+inline u64 pt_element_common<N>::pfn() const {
+    return addr() >> page_size_shift;
 }
 
-inline phys pt_element::next_pt_addr() const { return addr(false); }
-inline u64 pt_element::next_pt_pfn() const { return pfn(false); }
+template<int N>
+inline phys pt_element_common<N>::next_pt_addr() const {
+    assert(!large());
+    return addr();
+}
+template<int N>
+inline u64 pt_element_common<N>::next_pt_pfn() const {
+    assert(!large());
+    return pfn();
+}
 
-inline void pt_element::set_valid(bool v) { set_bit(0, v); }
-inline void pt_element::set_writable(bool v) { set_bit(1, v); }
-inline void pt_element::set_executable(bool v) { set_bit(63, !v); } /* NX */
-inline void pt_element::set_dirty(bool v) { set_bit(6, v); }
-inline void pt_element::set_large(bool v) { set_bit(7, v); }
+template<int N>
+inline void pt_element_common<N>::set_valid(bool v) { set_bit(0, v); }
+template<int N>
+inline void pt_element_common<N>::set_writable(bool v) { set_bit(1, v); }
+template<int N>
+inline void pt_element_common<N>::set_executable(bool v) { set_bit(63, !v); } /* NX */
+template<int N>
+inline void pt_element_common<N>::set_dirty(bool v) { set_bit(6, v); }
+template<int N>
+inline void pt_element_common<N>::set_large(bool v) { set_bit(7, v); }
+template<int N>
+inline void pt_element_common<N>::set_user(bool v) { set_bit(2, v); }
+template<int N>
+inline void pt_element_common<N>::set_accessed(bool v) { set_bit(5, v); }
 
-inline void pt_element::set_sw_bit(unsigned off, bool v) {
+template<int N>
+inline void pt_element_common<N>::set_sw_bit(unsigned off, bool v) {
     assert(off < 10);
     set_bit(53 + off, v);
 }
 
-inline void pt_element::set_rsvd_bit(unsigned off, bool v) {
+template<int N>
+inline void pt_element_common<N>::set_rsvd_bit(unsigned off, bool v) {
     assert(off < rsvd_bits_used);
     set_bit(51 - off, v);
 }
 
-inline void pt_element::set_addr(phys addr, bool large) {
+template<int N>
+inline void pt_element_common<N>::set_addr(phys addr, bool large) {
     x = (x & ~pte_addr_mask(large)) | addr;
 }
 
-inline void pt_element::set_pfn(u64 pfn, bool large) {
+template<int N>
+inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
     set_addr(pfn << page_size_shift, large);
 }
 
+template<int N>
+pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
+{
+    assert(pt_level_traits<N>::leaf_capable::value || !leaf);
+    bool large = pt_level_traits<N>::large_capable::value && leaf;
+    pt_element<N> pte;
+
+    pte.set_valid(perm != 0);
+    pte.set_writable(perm & perm_write);
+    pte.set_executable(perm & perm_exec);
+    pte.set_dirty(true);
+    pte.set_large(large);
+    pte.set_addr(addr, large);
+    pte.set_user(true);
+    pte.set_accessed(true);
+
+    return pte;
 }
 
+}
 #endif /* ARCH_MMU_HH_ */

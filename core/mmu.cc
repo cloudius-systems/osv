@@ -21,7 +21,6 @@
 #include "fs/vfs/vfs.h"
 #include <osv/error.h>
 #include <osv/trace.hh>
-#include "arch-mmu.hh"
 #include <stack>
 #include "java/jvm_balloon.hh"
 #include <fs/fs.hh>
@@ -120,12 +119,12 @@ phys virt_to_phys(void *virt)
     return reinterpret_cast<uintptr_t>(virt) & (mem_area_size - 1);
 }
 
-template <typename MakePTE>
+template <int N, typename MakePTE>
 phys allocate_intermediate_level(MakePTE make_pte)
 {
     phys pt_page = virt_to_phys(memory::alloc_page());
     // since the pt is not yet mapped, we don't need to use hw_ptep
-    pt_element* pt = phys_cast<pt_element>(pt_page);
+    pt_element<N>* pt = phys_cast<pt_element<N>>(pt_page);
     for (auto i = 0; i < pte_per_page; ++i) {
         pt[i] = make_pte(i);
     }
@@ -133,27 +132,28 @@ phys allocate_intermediate_level(MakePTE make_pte)
 }
 
 template<int N>
-void allocate_intermediate_level(hw_ptep<N> ptep, pt_element org)
+void allocate_intermediate_level(hw_ptep<N> ptep, pt_element<N> org)
 {
-    phys pt_page = allocate_intermediate_level([org](int i) mutable {
+    phys pt_page = allocate_intermediate_level<N>([org](int i) {
         auto tmp = org;
         phys addend = phys(i) << page_size_shift;
-        tmp.set_addr(tmp.addr(false) | addend, false);
+        tmp.set_addr(tmp.addr() | addend, false);
         return tmp;
     });
-    ptep.write(make_normal_pte(pt_page));
+    ptep.write(make_intermediate_pte(ptep, pt_page));
 }
 
 template<int N>
 void allocate_intermediate_level(hw_ptep<N> ptep)
 {
-    phys pt_page = allocate_intermediate_level([](int i) {
-        return make_empty_pte();
+    phys pt_page = allocate_intermediate_level<N>([](int i) {
+        return make_empty_pte<N>();
     });
-    ptep.write(make_normal_pte(pt_page));
+    ptep.write(make_intermediate_pte(ptep, pt_page));
 }
 
-pt_element pte_mark_cow(pt_element pte, bool cow)
+// only 4k can be cow for now
+pt_element<0> pte_mark_cow(pt_element<0> pte, bool cow)
 {
     if (cow) {
         pte.set_writable(false);
@@ -165,8 +165,8 @@ pt_element pte_mark_cow(pt_element pte, bool cow)
 template<int N>
 bool change_perm(hw_ptep<N> ptep, unsigned int perm)
 {
-    static_assert(N == 0 || N == 1, "non leaf pte");
-    pt_element pte = ptep.read();
+    static_assert(pt_level_traits<N>::leaf_capable::value, "non leaf pte");
+    pt_element<N> pte = ptep.read();
     unsigned int old = (pte.valid() ? perm_read : 0) |
         (pte.writable() ? perm_write : 0) |
         (pte.executable() ? perm_exec : 0);
@@ -196,14 +196,14 @@ void split_large_page(hw_ptep<N> ptep)
 template<>
 void split_large_page(hw_ptep<1> ptep)
 {
-    pt_element pte_orig = ptep.read();
+    pt_element<1> pte_orig = ptep.read();
     pte_orig.set_large(false);
     allocate_intermediate_level(ptep, pte_orig);
 }
 
 struct page_allocator {
-    virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write) = 0;
-    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) = 0;
+    virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bool write) = 0;
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write) = 0;
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) = 0;
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) = 0;
     virtual ~page_allocator() {}
@@ -266,7 +266,7 @@ public:
     unsigned nr_page_sizes(void) { return mmu::nr_page_sizes; }
 
     template<int N>
-    pt_element ptep_read(hw_ptep<N> ptep) { return ptep.read(); }
+    pt_element<N> ptep_read(hw_ptep<N> ptep) { return ptep.read(); }
 
     // page() function is called on leaf ptes. Each page table operation
     // have to provide its own version.
@@ -287,27 +287,27 @@ public:
 };
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 1>::type
+static inline typename std::enable_if<pt_level_traits<N>::large_capable::value>::type
 sub_page(PageOps& pops, hw_ptep<N> ptep, int level, uintptr_t offset)
 {
     pops.sub_page(ptep, level, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 1>::type
+static inline typename std::enable_if<!pt_level_traits<N>::large_capable::value>::type
 sub_page(PageOps& pops, hw_ptep<N> ptep, int level, uintptr_t offset)
 {
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 0 || N == 1, bool>::type
+static inline typename std::enable_if<pt_level_traits<N>::leaf_capable::value, bool>::type
 page(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     return pops.page(ptep, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 0 & N != 1, bool>::type
+static inline typename std::enable_if<!pt_level_traits<N>::leaf_capable::value, bool>::type
 page(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     assert(0);
@@ -315,41 +315,32 @@ page(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 1>::type
+static inline typename std::enable_if<pt_level_traits<N>::large_capable::value>::type
 intermediate_page_pre(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     pops.intermediate_page_pre(ptep, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 1>::type
+static inline typename std::enable_if<!pt_level_traits<N>::large_capable::value>::type
 intermediate_page_pre(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 1>::type
+static inline typename std::enable_if<pt_level_traits<N>::large_capable::value>::type
 intermediate_page_post(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     pops.intermediate_page_post(ptep, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 1>::type
+static inline typename std::enable_if<!pt_level_traits<N>::large_capable::value>::type
 intermediate_page_post(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
 }
 
 template<typename PageOp, int ParentLevel> class map_level;
-template<typename PageOp> class map_level<PageOp, -1>
-{
-private:
-    friend class map_level<PageOp, 0>;
-    map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp page_mapper, size_t slop) {}
-    void operator()(hw_ptep<-1> parent, uintptr_t base_virt) {
-        assert(0);
-    }
-};
 
 template<typename PageOp>
         void map_range(uintptr_t vma_start, uintptr_t vstart, size_t size, PageOp& page_mapper, size_t slop = page_size)
@@ -372,15 +363,15 @@ private:
 
     map_level(uintptr_t vma_start, uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop) :
         vma_start(vma_start), vcur(vcur), vend(vcur + size - 1), slop(slop), page_mapper(page_mapper) {}
-    pt_element read(const hw_ptep<ParentLevel>& ptep) const {
+    pt_element<ParentLevel> read(const hw_ptep<ParentLevel>& ptep) const {
         return page_mapper.ptep_read(ptep);
     }
-    pt_element read(const hw_ptep<level>& ptep) const {
+    pt_element<level> read(const hw_ptep<level>& ptep) const {
         return page_mapper.ptep_read(ptep);
     }
     hw_ptep<level> follow(hw_ptep<ParentLevel> ptep)
     {
-        return hw_ptep<level>::force(phys_cast<pt_element>(read(ptep).next_pt_addr()));
+        return hw_ptep<level>::force(phys_cast<pt_element<level>>(read(ptep).next_pt_addr()));
     }
     bool skip_pte(hw_ptep<level> ptep) {
         return page_mapper.skip_empty() && read(ptep).empty();
@@ -388,8 +379,16 @@ private:
     bool descend(hw_ptep<level> ptep) {
         return page_mapper.descend() && !read(ptep).empty() && !read(ptep).large();
     }
-    void map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
-            hw_ptep<level> ptep, uintptr_t base_virt)
+    template<int N>
+    typename std::enable_if<N == 0>::type
+    map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
+            hw_ptep<N> ptep, uintptr_t base_virt)
+    {
+    }
+    template<int N>
+    typename std::enable_if<N == level && N != 0>::type
+    map_range(uintptr_t vcur, size_t size, PageOp& page_mapper, size_t slop,
+            hw_ptep<N> ptep, uintptr_t base_virt)
     {
         map_level<PageOp, level> pt_mapper(vma_start, vcur, size, page_mapper, slop);
         pt_mapper(ptep, base_virt);
@@ -401,7 +400,7 @@ private:
             }
             allocate_intermediate_level(parent);
         } else if (read(parent).large()) {
-            if (ParentLevel > 0 && page_mapper.split_large(parent, ParentLevel)) {
+            if (page_mapper.split_large(parent, ParentLevel)) {
                 // We're trying to change a small page out of a huge page (or
                 // in the future, potentially also 2 MB page out of a 1 GB),
                 // so we need to first split the large page into smaller pages.
@@ -460,7 +459,7 @@ public:
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         phys addr = start + offset;
         assert(addr < end);
-        ptep.write(make_pte(addr, ptep.large()));
+        ptep.write(make_leaf_pte(ptep, addr));
         return true;
     }
 };
@@ -498,13 +497,15 @@ private:
     unsigned int _perm;
     bool _write;
     bool _map_dirty;
-    bool skip(pt_element pte) {
+    template<int N>
+    bool skip(pt_element<N> pte) {
         if (pte.empty()) {
             return false;
         }
         return !_write || pte.writable();
     }
-    inline pt_element dirty(pt_element pte) {
+    template<int N>
+    inline pt_element<N> dirty(pt_element<N> pte) {
         pte.set_dirty(_map_dirty || _write);
         return pte;
     }
@@ -513,16 +514,16 @@ public:
         _page_provider(pops), _perm(perm), _write(write), _map_dirty(map_dirty) { }
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        pt_element pte = ptep.read();
+        auto pte = ptep.read();
         if (skip(pte)) {
             return true;
         }
 
-        pte = dirty(make_pte(0, ptep.large(), _perm));
+        pte = dirty(make_leaf_pte(ptep, 0, _perm));
 
         try {
             if (_page_provider->map(offset, ptep, pte, _write)) {
-                this->account(ptep.size());
+                this->account(pt_level_traits<N>::size::value);
             }
         } catch(std::exception&) {
             return false;
@@ -538,7 +539,7 @@ public:
         populate<Account>(pops, perm, write, map_dirty) { }
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        assert(!ptep.large());
+        assert(!pt_level_traits<N>::large_capable::value);
         return populate<Account>::page(ptep, offset);
     }
     unsigned nr_page_sizes(void) { return 1; }
@@ -550,7 +551,7 @@ public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset)
     {
-        assert(!ptep.large());
+        assert(!pt_level_traits<N>::large_capable::value);
         return true;
     }
     unsigned nr_page_sizes(void) { return 1; }
@@ -605,8 +606,8 @@ public:
     unpopulate(page_allocator* pops) : _pops(pops) {}
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        void* addr = phys_to_virt(ptep.read().addr(ptep.large()));
-        size_t size = ptep.size();
+        void* addr = phys_to_virt(ptep.read().addr());
+        size_t size = pt_level_traits<N>::size::value;
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
@@ -619,8 +620,8 @@ public:
         return true;
     }
     void intermediate_page_post(hw_ptep<1> ptep, uintptr_t offset) {
-        osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(ptep.read().addr(false)));
-        ptep.write(make_empty_pte());
+        osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(ptep.read().addr()));
+        ptep.write(make_empty_pte<1>());
     }
     bool tlb_flush_needed(void) {
         return !_tlb_gather.flush() && do_flush;
@@ -660,7 +661,7 @@ public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         assert(result == null);
-        result = ptep.read().addr(ptep.large()) | (v & ~pte_level_mask(N));
+        result = ptep.read().addr() | (v & ~pte_level_mask(N));
         return true;
     }
     void sub_page(hw_ptep<1> ptep, int l, uintptr_t offset) {
@@ -679,7 +680,7 @@ class cleanup_intermediate_pages
 public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        if (!ptep.large()) {
+        if (!pt_level_traits<N>::large_capable::value) {
             ++live_ptes;
         }
         return true;
@@ -690,12 +691,12 @@ public:
     void intermediate_page_post(hw_ptep<1> ptep, uintptr_t offset) {
         if (!live_ptes) {
             auto old = ptep.read();
-            auto v = phys_cast<u64*>(old.addr(false));
+            auto v = phys_cast<u64*>(old.addr());
             for (unsigned i = 0; i < 512; ++i) {
                 assert(v[i] == 0);
             }
-            ptep.write(make_empty_pte());
-            osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr(false)));
+            ptep.write(make_empty_pte<1>());
+            osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr()));
         }
     }
 private:
@@ -706,22 +707,20 @@ class virt_to_pte_map_rcu :
         public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
         descend_opt::yes, once_opt::yes, split_opt::no> {
 private:
-    pt_element _result;
-    virt_to_pte_map_rcu() {}
+    virt_pte_visitor& _visitor;
+    virt_to_pte_map_rcu(virt_pte_visitor& visitor) : _visitor(visitor) {}
 
-    pt_element pte(void) {
-        return _result;
-    }
 public:
-    friend pt_element virt_to_pte_rcu(uintptr_t virt);
+    friend void virt_visit_pte_rcu(uintptr_t, virt_pte_visitor&);
     template<int N>
-    pt_element ptep_read(hw_ptep<N> ptep) {
+    pt_element<N> ptep_read(hw_ptep<N> ptep) {
         return ptep.ll_read();
     }
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        _result = ptep_read(ptep);
-        assert(ptep.large() == _result.large());
+        auto pte = ptep_read(ptep);
+        _visitor.pte(pte);
+        assert(pt_level_traits<N>::large_capable::value == pte.large());
         return true;
     }
     void sub_page(hw_ptep<1> ptep, int l, uintptr_t offset) {
@@ -761,15 +760,13 @@ phys virt_to_phys_pt(void* virt)
     return v2p_mapper.addr();
 }
 
-pt_element virt_to_pte_rcu(uintptr_t virt)
+void virt_visit_pte_rcu(uintptr_t virt, virt_pte_visitor& visitor)
 {
     auto vbase = align_down(virt, page_size);
-    virt_to_pte_map_rcu v2pte_mapper;
+    virt_to_pte_map_rcu v2pte_mapper(visitor);
     WITH_LOCK(osv::rcu_read_lock) {
         map_range(vbase, vbase, page_size, v2pte_mapper);
     }
-    return v2pte_mapper.pte();
-
 }
 
 bool contains(uintptr_t start, uintptr_t end, vma& y)
@@ -891,13 +888,13 @@ private:
         return addr;
     }
     template<int N>
-    bool set_pte(void *addr, hw_ptep<N> ptep, pt_element pte) {
+    bool set_pte(void *addr, hw_ptep<N> ptep, pt_element<N> pte) {
         if (!addr) {
             throw std::exception();
         }
         if (!write_pte(addr, ptep, pte)) {
-            if (pte.large()) {
-                memory::free_huge_page(addr, huge_page_size);
+            if (pt_level_traits<N>::large_capable::value) {
+                memory::free_huge_page(addr, pt_level_traits<N>::size::value);
             } else {
                 memory::free_page(addr);
             }
@@ -906,11 +903,11 @@ private:
         return true;
     }
 public:
-    virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write) override {
+    virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bool write) override {
         return set_pte(fill(memory::alloc_page(), offset, page_size), ptep, pte);
     }
-    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) override {
-        size_t size = ptep.size();
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write) override {
+        size_t size = pt_level_traits<1>::size::value;
         return set_pte(fill(memory::alloc_huge_page(size), offset, size), ptep, pte);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {
@@ -967,10 +964,10 @@ public:
     map_file_page_mmap(file *file, off_t off, bool shared) : _file(file), _foffset(off), _shared(shared) {}
     virtual ~map_file_page_mmap() {};
 
-    virtual bool map(uintptr_t offset, hw_ptep<0> ptep,  pt_element pte, bool write) override {
+    virtual bool map(uintptr_t offset, hw_ptep<0> ptep,  pt_element<0> pte, bool write) override {
         return _file->map_page(offset + _foffset, ptep, pte, write, _shared);
     }
-    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write) override {
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write) override {
         return _file->map_page(offset + _foffset, ptep, pte, write, _shared);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {
@@ -1632,14 +1629,14 @@ void* shm_file::page(uintptr_t hp_off)
     return addr;
 }
 
-bool shm_file::map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element pte, bool write, bool shared)
+bool shm_file::map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bool write, bool shared)
 {
     uintptr_t hp_off = align_down(offset, huge_page_size);
 
     return write_pte(static_cast<char*>(page(hp_off)) + offset - hp_off, ptep, pte);
 }
 
-bool shm_file::map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element pte, bool write, bool shared)
+bool shm_file::map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write, bool shared)
 {
     uintptr_t hp_off = align_down(offset, huge_page_size);
 

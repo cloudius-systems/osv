@@ -83,43 +83,15 @@ void flush_tlb_all()
     tlb_flush_waiter.clear();
 }
 
-static pt_element page_table_root __attribute__((init_priority((int)init_prio::pt_root)));
+static pt_element<4> page_table_root __attribute__((init_priority((int)init_prio::pt_root)));
+
+pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
+    return &page_table_root;
+}
 
 void switch_to_runtime_page_tables()
 {
     processor::write_cr3(page_table_root.next_pt_addr());
-}
-
-pt_element *get_root_pt(uintptr_t virt __attribute__((unused))) {
-    return &page_table_root;
-}
-
-pt_element make_empty_pte() { return pt_element(); }
-
-pt_element make_pte(phys addr, bool large, unsigned perm)
-{
-    pt_element pte;
-    pte.set_valid(perm != 0);
-    pte.set_writable(perm & perm_write);
-    pte.set_executable(perm & perm_exec);
-    pte.set_dirty(true);
-    pte.set_large(large);
-    pte.set_addr(addr, large);
-
-    arch_pt_element::set_user(&pte, true);
-    arch_pt_element::set_accessed(&pte, true);
-
-    return pte;
-}
-
-pt_element make_normal_pte(phys addr, unsigned perm)
-{
-    return make_pte(addr, false, perm);
-}
-
-pt_element make_large_pte(phys addr, unsigned perm)
-{
-    return make_pte(addr, true, perm);
 }
 
 enum {
@@ -165,12 +137,22 @@ bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef)
         return true;
     }
 
+    struct check_cow : public virt_pte_visitor {
+        bool _result = false;
+        void pte(pt_element<0> pte) override {
+            _result = !pte_is_cow(pte) && !pte.writable();
+        }
+        void pte(pt_element<1> pte) override {
+            // large ptes are never cow yet
+        }
+    } visitor;
+
     // if page is present, but write protected without cow bit set
     // it means that this address belong to PROT_READ vma, so no need
     // to search vma to verify permission
     if (is_page_fault_prot_write(ef->get_error())) {
-        auto pte = virt_to_pte_rcu(addr);
-        return !pte_is_cow(pte) && !pte.writable();
+        virt_visit_pte_rcu(addr, visitor);
+        return visitor._result;
     }
 
     return false;

@@ -8,10 +8,7 @@
 #ifndef ARCH_MMU_HH
 #define ARCH_MMU_HH
 
-#include <osv/ilog2.hh>
-#include <osv/types.h>
-#include <osv/mmu-defs.hh>
-#include <assert.h>
+#include <osv/debug.h>
 
 /* AArch64 MMU
  *
@@ -24,85 +21,148 @@ constexpr int max_phys_addr_size = 48;
 constexpr int device_range_start = 0x8000000;
 constexpr int device_range_stop = 0x10000000;
 
-class arch_pt_element {
+template<int N>
+class pt_element : public pt_element_common<N> {
 public:
-    arch_pt_element() = delete;
-
-    static inline bool user(pt_element *e) { return e->x & (1 << 6); } // AP[1]
-    static inline bool accessed(pt_element *e) { return e->x & (1 << 10); } // AF
-
-    static inline void set_user(pt_element *e, bool v) { e->set_bit(6, v); } // AP[1]
-    static inline void set_accessed(pt_element *e, bool v) { e->set_bit(10, v); } // AF
+    constexpr pt_element() noexcept : pt_element_common<N>(0) {}
+    explicit pt_element(u64 x) noexcept : pt_element_common<N>(x) {}
 
     /* false->non-shareable true->Inner Shareable */
-    static inline void set_share(pt_element *e, bool v) {
-        e->x &= ~(3ul << 8);
+    inline void set_share(bool v) {
+        x &= ~(3ul << 8);
         if (v)
-            e->x |= (3ul << 8);
+            x |= (3ul << 8);
     }
 
-    static inline void set_attridx(pt_element *e, unsigned char c) {
+    inline void set_attridx(unsigned char c) {
         assert(c <= 7);
-        e->x &= ~(7ul << 2);
-        e->x |= (c << 2);
+        x &= ~(7ul << 2);
+        x |= (c << 2);
     }
+private:
+    using pt_element_common<N>::x;
 };
 
+
 /* common interface implementation */
+template<int N>
+inline bool pt_element_common<N>::empty() const { return !x; }
+template<int N>
+inline bool pt_element_common<N>::valid() const { return x & 0x1; }
+template<int N>
+inline bool pt_element_common<N>::writable() const { return !(x & (1ul << 7)); } // AP[2]
+template<int N>
+inline bool pt_element_common<N>::executable() const { return !(x & (1ul << 53)); } // Priv. Execute Never
+template<int N>
+inline bool pt_element_common<N>::dirty() const { return x & (1ul << 55); } // Software Use[0]
+template<int N>
+inline bool pt_element_common<N>::large() const {
+    return pt_level_traits<N>::large_capable::value && (x & 0x3) == 0x1;
+}
+template<int N>
+inline bool pt_element_common<N>::user() { return x & (1 << 6); } // AP[1]
+template<int N>
+inline bool pt_element_common<N>::accessed() { return x & (1 << 10); } // AF
 
-inline bool pt_element::empty() const { return !x; }
-inline bool pt_element::valid() const { return x & 0x1; }
-inline bool pt_element::writable() const { return !(x & (1ul << 7)); } // AP[2]
-inline bool pt_element::executable() const { return !(x & (1ul << 53)); } // Priv. Execute Never
-inline bool pt_element::dirty() const { return x & (1ul << 55); } // Software Use[0]
-inline bool pt_element::large() const { return (x & 0x3) == 0x1; }
-
-inline bool pt_element::sw_bit(unsigned off) const {
+template<int N>
+inline bool pt_element_common<N>::sw_bit(unsigned off) const {
     assert(off < 3);
     return (x >> (56 + off)) & 1;
 }
 
-inline bool pt_element::rsvd_bit(unsigned off) const {
+template<int N>
+inline bool pt_element_common<N>::rsvd_bit(unsigned off) const {
     return false;
 }
 
-inline phys pt_element::addr(bool large) const {
+template<int N>
+inline phys pt_element_common<N>::addr() const {
     u64 v = x & ((1ul << max_phys_addr_size) - 1);
-    if (large)
+    if (large())
         v &= ~0x1ffffful;
     else
         v &= ~0xffful;
     return v;
 }
 
-inline u64 pt_element::pfn(bool large) const { return addr(large) >> page_size_shift; }
-inline phys pt_element::next_pt_addr() const { return addr(false); }
-inline u64 pt_element::next_pt_pfn() const { return pfn(false); }
+template<int N>
+inline u64 pt_element_common<N>::pfn() const { return addr() >> page_size_shift; }
+template<int N>
+inline phys pt_element_common<N>::next_pt_addr() const {
+    assert(!large());
+    return addr();
+}
+template<int N>
+inline u64 pt_element_common<N>::next_pt_pfn() const {
+    assert(!large());
+    return pfn();
+}
 
-inline void pt_element::set_valid(bool v) { set_bit(0, v); }
-inline void pt_element::set_writable(bool v) { set_bit(7, !v); } // AP[2]
-inline void pt_element::set_executable(bool v) { set_bit(53, !v); } // Priv. Execute Never
-inline void pt_element::set_dirty(bool v) { set_bit(55, v); }
-inline void pt_element::set_large(bool v) { set_bit(1, !v); }
+template<int N>
+inline void pt_element_common<N>::set_valid(bool v) { set_bit(0, v); }
+template<int N>
+inline void pt_element_common<N>::set_writable(bool v) { set_bit(7, !v); } // AP[2]
+template<int N>
+inline void pt_element_common<N>::set_executable(bool v) { set_bit(53, !v); } // Priv. Execute Never
+template<int N>
+inline void pt_element_common<N>::set_dirty(bool v) { set_bit(55, v); }
+template<int N>
+inline void pt_element_common<N>::set_large(bool v) { set_bit(1, !v); }
+template<int N>
+inline void pt_element_common<N>::set_user(bool v) { set_bit(6, v); } // AP[1]
+template<int N>
+inline void pt_element_common<N>::set_accessed(bool v) { set_bit(10, v); } // AF
 
-inline void pt_element::set_sw_bit(unsigned off, bool v) {
+template<int N>
+inline void pt_element_common<N>::set_sw_bit(unsigned off, bool v) {
     assert(off < 3);
     set_bit(56 + off, v);
 }
 
-inline void pt_element::set_rsvd_bit(unsigned off, bool v) {
+template<int N>
+inline void pt_element_common<N>::set_rsvd_bit(unsigned off, bool v) {
 }
 
-inline void pt_element::set_addr(phys addr, bool large) {
+template<int N>
+inline void pt_element_common<N>::set_addr(phys addr, bool large) {
     u64 mask = large ? 0xffff0000001ffffful : 0xffff000000000ffful;
     x = (x & mask) | (addr & ~mask);
     x |= large ? 1 : 3;
 }
 
-inline void pt_element::set_pfn(u64 pfn, bool large) {
+template<int N>
+inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
     set_addr(pfn << page_size_shift, large);
 }
 
+template<int N>
+pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
+{
+    assert(pt_level_traits<N>::leaf_capable::value || !leaf);
+    bool large = pt_level_traits<N>::large_capable::value && leaf;
+    pt_element<N> pte;
+    pte.set_valid(perm != 0);
+    pte.set_writable(perm & perm_write);
+    pte.set_executable(perm & perm_exec);
+    pte.set_dirty(true);
+    pte.set_large(large);
+    pte.set_addr(addr, large);
+
+    pte.set_user(false);
+    pte.set_accessed(true);
+    pte.set_share(true);
+
+    if (addr >= mmu::device_range_start && addr < mmu::device_range_stop) {
+        /* we need to mark device memory as such, because the
+           semantics of the load/store instructions change */
+        debug_early_u64("make_pte: device memory at ", (u64)addr);
+        pte.set_attridx(0);
+    } else {
+        pte.set_attridx(4);
+    }
+
+    return pte;
 }
 
+}
 #endif /* ARCH_MMU_HH */

@@ -13,8 +13,6 @@
 #include <fs/vfs/vfs.h>
 #include <osv/vfs_file.hh>
 #include <osv/mmu.hh>
-
-#include "arch-mmu.hh"
 #include <osv/pagecache.hh>
 
 vfs_file::vfs_file(unsigned flags)
@@ -140,7 +138,7 @@ int vfs_file::chmod(mode_t mode)
 	abort();
 }
 
-bool vfs_file::map_page(uintptr_t off, mmu::hw_ptep<0> ptep, mmu::pt_element pte, bool write, bool shared)
+bool vfs_file::map_page(uintptr_t off, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pte, bool write, bool shared)
 {
     return pagecache::get(this, off, ptep, pte, write, shared);
 }
