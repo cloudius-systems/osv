@@ -1000,10 +1000,14 @@ static bool is_timeval_valid(const struct timeval *time)
 /*
  * Convert a timeval struct to a timespec one.
  */
-static void convert_timeval(struct timespec *to, const struct timeval *from)
+static void convert_timeval(struct timespec &to, const struct timeval *from)
 {
-    to->tv_sec = from->tv_sec;
-    to->tv_nsec = from->tv_usec * 1000; // Convert microseconds to nanoseconds
+    if (from) {
+        to.tv_sec = from->tv_sec;
+        to.tv_nsec = from->tv_usec * 1000; // Convert microseconds to nanoseconds
+    } else {
+        clock_gettime(CLOCK_REALTIME, &to);
+    }
 }
 
 int
@@ -1015,12 +1019,12 @@ sys_utimes(char *path, const struct timeval times[2])
 
     DPRINTF(VFSDB_SYSCALL, ("sys_utimes: path=%s\n", path));
 
-    if (!is_timeval_valid(&times[0]) || !is_timeval_valid(&times[1]))
+    if (times && (!is_timeval_valid(&times[0]) || !is_timeval_valid(&times[1])))
         return EINVAL;
 
     // Convert each element of timeval array to the timespec type
-    convert_timeval(&timespec_times[0], &times[0]);
-    convert_timeval(&timespec_times[1], &times[1]);
+    convert_timeval(timespec_times[0], times ? times + 0 : nullptr);
+    convert_timeval(timespec_times[1], times ? times + 1 : nullptr);
 
     error = namei(path, &dp);
     if (error)
