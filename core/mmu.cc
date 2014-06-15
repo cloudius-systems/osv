@@ -400,8 +400,8 @@ private:
                 return;
             }
             allocate_intermediate_level(parent);
-        } else if (read(parent).large()) {
-            if (ParentLevel > 0 && page_mapper.split_large(parent, ParentLevel)) {
+        } else if (ParentLevel > 0 && read(parent).large()) {
+            if (page_mapper.split_large(parent, ParentLevel)) {
                 // We're trying to change a small page out of a huge page (or
                 // in the future, potentially also 2 MB page out of a 1 GB),
                 // so we need to first split the large page into smaller pages.
