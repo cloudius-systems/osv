@@ -13,8 +13,6 @@
 #include <fs/vfs/vfs.h>
 #include <osv/vfs_file.hh>
 #include <osv/mmu.hh>
-
-#include "arch-mmu.hh"
 #include <osv/pagecache.hh>
 
 vfs_file::vfs_file(unsigned flags)

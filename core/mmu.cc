@@ -21,7 +21,6 @@
 #include "fs/vfs/vfs.h"
 #include <osv/error.h>
 #include <osv/trace.hh>
-#include "arch-mmu.hh"
 #include <stack>
 #include "java/jvm_balloon.hh"
 #include <fs/fs.hh>

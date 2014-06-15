@@ -97,16 +97,14 @@ void flush_tlb_local();
 /* flush tlb for all */
 void flush_tlb_all();
 
-    /* static class arch_pt_element; */
-
 template<int N> class hw_ptep;
 
 /* common arch-independent interface for pt_element */
-class pt_element {
-public:
-    constexpr pt_element() noexcept : x(0) {}
-    explicit pt_element(u64 x) noexcept : x(x) {}
+class pt_element_common {
+protected:
+    explicit constexpr pt_element_common(u64 x) noexcept : x(x) {}
 
+public:
     inline bool empty() const;
     inline bool valid() const;
     inline bool writable() const;
@@ -133,7 +131,7 @@ public:
     inline void mod_addr(phys addr) {
         set_addr(addr, large());
     }
-private:
+protected:
     inline void set_bit(unsigned nr, bool v) {
         x &= ~(u64(1) << nr);
         x |= u64(v) << nr;
@@ -146,9 +144,12 @@ private:
     friend class hw_ptep<4>;
     friend class hw_ptep_rcu_impl;
     friend class hw_ptep_impl;
-    friend class arch_pt_element;
 };
+}
 
+#include "arch-mmu.hh"
+
+namespace mmu {
 /* arch must also implement these: */
 pt_element make_empty_pte();
 pt_element make_normal_pte(phys addr,
@@ -240,4 +241,5 @@ private:
 };
 
 }
+
 #endif

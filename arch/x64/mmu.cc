@@ -105,9 +105,8 @@ pt_element make_pte(phys addr, bool large, unsigned perm)
     pte.set_dirty(true);
     pte.set_large(large);
     pte.set_addr(addr, large);
-
-    arch_pt_element::set_user(&pte, true);
-    arch_pt_element::set_accessed(&pte, true);
+    pte.set_user(true);
+    pte.set_accessed(true);
 
     return pte;
 }

@@ -20,8 +20,6 @@
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
 
-#include "arch-mmu.hh"
-
 struct exception_frame;
 class balloon;
 typedef std::shared_ptr<balloon> balloon_ptr;
@@ -184,10 +182,10 @@ template<int N>
 inline bool clear_accessed(hw_ptep<N> ptep)
 {
     pt_element pte = ptep.read();
-    bool accessed = arch_pt_element::accessed(&pte);
+    bool accessed = pte.accessed();
     if (accessed) {
         pt_element clear = pte;
-        arch_pt_element::set_accessed(&clear, false);
+        clear.set_accessed(false);
         ptep.compare_exchange(pte, clear);
     }
     return accessed;

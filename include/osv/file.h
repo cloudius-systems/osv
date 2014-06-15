@@ -53,8 +53,7 @@
 #include <osv/error.h>
 #include <osv/clock.hh>
 #include <boost/optional/optional.hpp>
-
-#include "arch-mmu.hh"
+#include <osv/mmu-defs.hh>
 
 #endif
 

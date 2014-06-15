@@ -85,17 +85,17 @@ pt_element make_pte(phys addr, bool large, unsigned perm)
     pte.set_large(large);
     pte.set_addr(addr, large);
 
-    arch_pt_element::set_user(&pte, false);
-    arch_pt_element::set_accessed(&pte, true);
-    arch_pt_element::set_share(&pte, true);
+    pte.set_user(false);
+    pte.set_accessed(true);
+    pte.set_share(true);
 
     if (addr >= mmu::device_range_start && addr < mmu::device_range_stop) {
         /* we need to mark device memory as such, because the
            semantics of the load/store instructions change */
         debug_early_u64("make_pte: device memory at ", (u64)addr);
-        arch_pt_element::set_attridx(&pte, 0);
+        pte.set_attridx(0);
     } else {
-        arch_pt_element::set_attridx(&pte, 4);
+        pte.set_attridx(4);
     }
 
     return pte;

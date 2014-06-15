@@ -8,7 +8,6 @@
 #include <osv/file.h>
 #include <osv/vfs_file.hh>
 #include <osv/mmu.hh>
-#include "arch-mmu.hh"
 
 struct arc_buf;
 typedef arc_buf arc_buf_t;
