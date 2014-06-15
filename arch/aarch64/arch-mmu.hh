@@ -136,8 +136,9 @@ inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
 }
 
 template<int N>
-pt_element<N> make_pte(phys addr, bool large, unsigned perm = perm_read | perm_write | perm_exec)
+pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
 {
+    bool large = N > 0 && N < 3 && leaf;
     pt_element<N> pte;
     pte.set_valid(perm != 0);
     pte.set_writable(perm & perm_write);
@@ -160,12 +161,6 @@ pt_element<N> make_pte(phys addr, bool large, unsigned perm = perm_read | perm_w
     }
 
     return pte;
-}
-
-template<int N>
-pt_element<N> make_normal_pte(phys addr, unsigned perm = perm_read | perm_write | perm_exec)
-{
-    return make_pte<N>(addr, false, perm);
 }
 
 }

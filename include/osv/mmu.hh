@@ -205,6 +205,20 @@ inline bool clear_dirty(hw_ptep<N> ptep)
     return dirty;
 }
 
+template<int N>
+inline pt_element<N> make_intermediate_pte(hw_ptep<N> ptep, phys addr)
+{
+    static_assert(N != 0, "level 0 pte cannot be intermediate");
+    return make_pte<N>(addr, false);
+}
+
+template<int N>
+inline pt_element<N> make_leaf_pte(hw_ptep<N> ptep, phys addr, unsigned perm = perm_read | perm_write | perm_exec)
+{   
+    static_assert(N == 0 || N == 1, "non leaf pte");
+    return make_pte<N>(addr, true, perm);
+}
+
 phys virt_to_phys(void *virt);
 
 class virt_pte_visitor {

@@ -140,7 +140,7 @@ void allocate_intermediate_level(hw_ptep<N> ptep, pt_element<N> org)
         tmp.set_addr(tmp.addr() | addend, false);
         return tmp;
     });
-    ptep.write(make_normal_pte<N>(pt_page));
+    ptep.write(make_intermediate_pte(ptep, pt_page));
 }
 
 template<int N>
@@ -149,7 +149,7 @@ void allocate_intermediate_level(hw_ptep<N> ptep)
     phys pt_page = allocate_intermediate_level<N>([](int i) {
         return make_empty_pte<N>();
     });
-    ptep.write(make_normal_pte<N>(pt_page));
+    ptep.write(make_intermediate_pte(ptep, pt_page));
 }
 
 // only 4k can be cow for now
@@ -459,7 +459,7 @@ public:
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         phys addr = start + offset;
         assert(addr < end);
-        ptep.write(make_pte<N>(addr, ptep.large()));
+        ptep.write(make_leaf_pte(ptep, addr));
         return true;
     }
 };
@@ -519,7 +519,7 @@ public:
             return true;
         }
 
-        pte = dirty(make_pte<N>(0, ptep.large(), _perm));
+        pte = dirty(make_leaf_pte(ptep, 0, _perm));
 
         try {
             if (_page_provider->map(offset, ptep, pte, _write)) {
