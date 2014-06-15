@@ -194,7 +194,7 @@ inline bool clear_accessed(hw_ptep<N> ptep)
 template<int N>
 inline bool clear_dirty(hw_ptep<N> ptep)
 {
-    static_assert(N == 0 || N == 1, "non leaf pte");
+    static_assert(pt_level_traits<N>::leaf_capable::value, "non leaf pte");
     pt_element<N> pte = ptep.read();
     bool dirty = pte.dirty();
     if (dirty) {
@@ -208,14 +208,14 @@ inline bool clear_dirty(hw_ptep<N> ptep)
 template<int N>
 inline pt_element<N> make_intermediate_pte(hw_ptep<N> ptep, phys addr)
 {
-    static_assert(N != 0, "level 0 pte cannot be intermediate");
+    static_assert(pt_level_traits<N>::intermediate_capable::value, "level 0 pte cannot be intermediate");
     return make_pte<N>(addr, false);
 }
 
 template<int N>
 inline pt_element<N> make_leaf_pte(hw_ptep<N> ptep, phys addr, unsigned perm = perm_read | perm_write | perm_exec)
 {   
-    static_assert(N == 0 || N == 1, "non leaf pte");
+    static_assert(pt_level_traits<N>::leaf_capable::value, "non leaf pte");
     return make_pte<N>(addr, true, perm);
 }
 

@@ -165,7 +165,7 @@ pt_element<0> pte_mark_cow(pt_element<0> pte, bool cow)
 template<int N>
 bool change_perm(hw_ptep<N> ptep, unsigned int perm)
 {
-    static_assert(N == 0 || N == 1, "non leaf pte");
+    static_assert(pt_level_traits<N>::leaf_capable::value, "non leaf pte");
     pt_element<N> pte = ptep.read();
     unsigned int old = (pte.valid() ? perm_read : 0) |
         (pte.writable() ? perm_write : 0) |
@@ -287,27 +287,27 @@ public:
 };
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 1>::type
+static inline typename std::enable_if<pt_level_traits<N>::large_capable::value>::type
 sub_page(PageOps& pops, hw_ptep<N> ptep, int level, uintptr_t offset)
 {
     pops.sub_page(ptep, level, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 1>::type
+static inline typename std::enable_if<!pt_level_traits<N>::large_capable::value>::type
 sub_page(PageOps& pops, hw_ptep<N> ptep, int level, uintptr_t offset)
 {
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 0 || N == 1, bool>::type
+static inline typename std::enable_if<pt_level_traits<N>::leaf_capable::value, bool>::type
 page(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     return pops.page(ptep, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 0 & N != 1, bool>::type
+static inline typename std::enable_if<!pt_level_traits<N>::leaf_capable::value, bool>::type
 page(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     assert(0);
@@ -315,27 +315,27 @@ page(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 1>::type
+static inline typename std::enable_if<pt_level_traits<N>::large_capable::value>::type
 intermediate_page_pre(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     pops.intermediate_page_pre(ptep, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 1>::type
+static inline typename std::enable_if<!pt_level_traits<N>::large_capable::value>::type
 intermediate_page_pre(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N == 1>::type
+static inline typename std::enable_if<pt_level_traits<N>::large_capable::value>::type
 intermediate_page_post(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
     pops.intermediate_page_post(ptep, offset);
 }
 
 template<typename PageOps, int N>
-static inline typename std::enable_if<N != 1>::type
+static inline typename std::enable_if<!pt_level_traits<N>::large_capable::value>::type
 intermediate_page_post(PageOps& pops, hw_ptep<N> ptep, uintptr_t offset)
 {
 }
@@ -523,7 +523,7 @@ public:
 
         try {
             if (_page_provider->map(offset, ptep, pte, _write)) {
-                this->account(ptep.size());
+                this->account(pt_level_traits<N>::size::value);
             }
         } catch(std::exception&) {
             return false;
@@ -539,7 +539,7 @@ public:
         populate<Account>(pops, perm, write, map_dirty) { }
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        assert(!ptep.large());
+        assert(!pt_level_traits<N>::large_capable::value);
         return populate<Account>::page(ptep, offset);
     }
     unsigned nr_page_sizes(void) { return 1; }
@@ -551,7 +551,7 @@ public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset)
     {
-        assert(!ptep.large());
+        assert(!pt_level_traits<N>::large_capable::value);
         return true;
     }
     unsigned nr_page_sizes(void) { return 1; }
@@ -607,7 +607,7 @@ public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         void* addr = phys_to_virt(ptep.read().addr());
-        size_t size = ptep.size();
+        size_t size = pt_level_traits<N>::size::value;
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
@@ -680,7 +680,7 @@ class cleanup_intermediate_pages
 public:
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        if (!ptep.large()) {
+        if (!pt_level_traits<N>::large_capable::value) {
             ++live_ptes;
         }
         return true;
@@ -720,7 +720,7 @@ public:
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         auto pte = ptep_read(ptep);
         _visitor.pte(pte);
-        assert(ptep.large() == pte.large());
+        assert(pt_level_traits<N>::large_capable::value == pte.large());
         return true;
     }
     void sub_page(hw_ptep<1> ptep, int l, uintptr_t offset) {
@@ -893,8 +893,8 @@ private:
             throw std::exception();
         }
         if (!write_pte(addr, ptep, pte)) {
-            if (pte.large()) {
-                memory::free_huge_page(addr, huge_page_size);
+            if (pt_level_traits<N>::large_capable::value) {
+                memory::free_huge_page(addr, pt_level_traits<N>::size::value);
             } else {
                 memory::free_page(addr);
             }
@@ -907,7 +907,7 @@ public:
         return set_pte(fill(memory::alloc_page(), offset, page_size), ptep, pte);
     }
     virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write) override {
-        size_t size = ptep.size();
+        size_t size = pt_level_traits<1>::size::value;
         return set_pte(fill(memory::alloc_huge_page(size), offset, size), ptep, pte);
     }
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {

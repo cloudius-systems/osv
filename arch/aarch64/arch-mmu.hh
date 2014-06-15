@@ -57,7 +57,7 @@ template<int N>
 inline bool pt_element_common<N>::dirty() const { return x & (1ul << 55); } // Software Use[0]
 template<int N>
 inline bool pt_element_common<N>::large() const {
-    return (N == 1 || N == 2) && (x & 0x3) == 0x1;
+    return pt_level_traits<N>::large_capable::value && (x & 0x3) == 0x1;
 }
 template<int N>
 inline bool pt_element_common<N>::user() { return x & (1 << 6); } // AP[1]
@@ -138,7 +138,8 @@ inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
 template<int N>
 pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
 {
-    bool large = N > 0 && N < 3 && leaf;
+    assert(pt_level_traits<N>::leaf_capable::value || !leaf);
+    bool large = pt_level_traits<N>::large_capable::value && leaf;
     pt_element<N> pte;
     pte.set_valid(perm != 0);
     pte.set_writable(perm & perm_write);

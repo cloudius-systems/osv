@@ -97,6 +97,19 @@ void flush_tlb_local();
 /* flush tlb for all */
 void flush_tlb_all();
 
+constexpr size_t page_size_level(unsigned level)
+{
+    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
+}
+
+template<int N>
+struct pt_level_traits {
+    typedef typename std::integral_constant<bool, N == 0 || N == 1>::type leaf_capable;
+    typedef typename std::integral_constant<bool, N == 1>::type large_capable;
+    typedef typename std::integral_constant<bool, N != 0>::type intermediate_capable;
+    typedef typename std::integral_constant<size_t, page_size_level(N)>::type size;
+};
+
 template<int N> class hw_ptep;
 template<int N> class hw_ptep_impl;
 template<int N> class hw_ptep_rcu_impl;
@@ -169,11 +182,6 @@ bool is_page_fault_write_exclusive(unsigned int err);
 
 bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef);
 
-constexpr size_t page_size_level(unsigned level)
-{
-    return size_t(1) << (page_size_shift + pte_per_page_shift * level);
-}
-
 template<int N>
 class hw_ptep_impl_base {
 protected:
@@ -236,8 +244,6 @@ public:
     // no longer using this as a page table
     pt_element<N>* release() const { return p; }
     bool operator==(const hw_ptep& a) const noexcept { return p == a.p; }
-    bool large() const { return N > 0; }
-    size_t size() const { return page_size_level(N); }
 private:
     hw_ptep(pt_element<N>* ptep) : hw_ptep_base<N>(ptep) {}
     using hw_ptep_base<N>::p;
