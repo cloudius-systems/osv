@@ -17,7 +17,7 @@
 #include "xen.hh"
 #include <osv/debug.hh>
 #include <osv/prio.hh>
-#include <osv/preempt-lock.hh>
+#include <osv/migration-lock.hh>
 
 class xenclock : public pv_based_clock {
 public:
@@ -44,7 +44,7 @@ u64 xenclock::wall_clock_boot()
 
 u64 xenclock::system_time()
 {
-    WITH_LOCK(preempt_lock) {
+    WITH_LOCK(migration_lock) {
         auto cpu = sched::cpu::current();
         auto cpu_id = cpu ? cpu->id : 0;
         auto sys = &xen::xen_shared_info.vcpu_info[cpu_id].time;
@@ -54,7 +54,7 @@ u64 xenclock::system_time()
 
 u64 xenclock::processor_to_nano(u64 ticks)
 {
-    WITH_LOCK(preempt_lock) {
+    WITH_LOCK(migration_lock) {
         auto cpu = sched::cpu::current()->id;
         auto sys = &xen::xen_shared_info.vcpu_info[cpu].time;
         return pvclock::processor_to_nano(sys, ticks);

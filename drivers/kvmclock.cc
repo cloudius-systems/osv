@@ -15,6 +15,7 @@
 #include <osv/percpu.hh>
 #include <osv/pvclock-abi.hh>
 #include <osv/prio.hh>
+#include <osv/migration-lock.hh>
 #include <mutex>
 #include <atomic>
 
@@ -83,11 +84,10 @@ u64 kvmclock::wall_clock_boot()
 
 u64 kvmclock::system_time()
 {
-    sched::preempt_disable();
-    auto sys = &*_sys;  // avoid recaclulating address each access
-    auto r = _pvclock.system_time(sys);
-    sched::preempt_enable();
-    return r;
+    WITH_LOCK(migration_lock) {
+        auto sys = &*_sys;  // avoid recalculating address each access
+        return _pvclock.system_time(sys);
+    }
 }
 
 u64 kvmclock::processor_to_nano(u64 ticks)
