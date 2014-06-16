@@ -891,8 +891,19 @@ sys_unlink(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
 
-	if ((error = namei(path, &dp)) != 0)
-		return error;
+	ddp   = NULL;
+	dp    = NULL;
+	vp    = NULL;
+
+	error = lookup(path, &ddp, &name);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error != 0) {
+		goto out;
+	}
 
 	vp = dp->d_vnode;
 	vn_lock(vp);
@@ -908,8 +919,6 @@ sys_unlink(char *path)
 		error = EBUSY;
 		goto out;
 	}
-	if ((error = lookup(path, &ddp, &name)) != 0)
-		goto out;
 
 	vn_lock(ddp->d_vnode);
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
@@ -919,10 +928,19 @@ sys_unlink(char *path)
 	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
-	return 0;
+	return error;
  out:
-	vn_unlock(vp);
-	drele(dp);
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (dp != NULL) {
+		drele(dp);
+	}
+
+	if (ddp != NULL) {
+		drele(ddp);
+	}
 	return error;
 }
 
