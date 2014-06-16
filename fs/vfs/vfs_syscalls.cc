@@ -680,30 +680,67 @@ sys_rename(char *src, char *dest)
 	char *sname, *dname;
 	int error;
 	char root[] = "/";
+	bool ts; /* trailing slash */
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
 
-	error = namei(src, &dp1);
-	if (error)
-		return error;
+	ts = false;
+	if (has_trailing(src, '/') == true) {
+		if (strlen(src) != 1) {
+			/* remove trailing slash iff path is none root */
+			strip_trailing(src, '/');
+			ts = true;
+		}
+	}
+
+	error = lookup(src, &ddp1, &sname);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(src, ddp1, &dp1);
+	if (error != 0) {
+		drele(ddp1);
+		return (error);
+	}
 
 	vp1 = dp1->d_vnode;
 	vn_lock(vp1);
 
+	if (vp1->v_type != VDIR && ts == true) {
+		error = ENOTDIR;
+		goto err1;
+	}
+
 	if ((error = vn_access(vp1, VWRITE)) != 0)
 		goto err1;
 
-	/* Check type of source & target */
-	error = namei(dest, &dp2);
+	ts = false;
+	if (has_trailing(dest, '/') == true) {
+		if (strlen(dest) != 1) {
+			/* remove trailing slash iff path is none root */
+			strip_trailing(dest, '/');
+			ts = true;
+		}
+	}
+
+	error = lookup(dest, &ddp2, &dname);
+	if (error != 0) {
+		goto err1;
+	}
+
+	error = namei_last_nofollow(dest, ddp2, &dp2);
 	if (error == 0) {
 		/* target exists */
 
 		vp2 = dp2->d_vnode;
 		vn_lock(vp2);
 
-		if (vp1->v_type == VDIR && vp2->v_type != VDIR) {
-			error = ENOTDIR;
-			goto err2;
+		if (vp2->v_type != VDIR && vp2->v_type != VLNK) {
+			if (vp1->v_type == VDIR || ts == true) {
+				error = ENOTDIR;
+				goto err2;
+			}
 		} else if (vp1->v_type != VDIR && vp2->v_type == VDIR) {
 			error = EISDIR;
 			goto err2;
@@ -713,7 +750,7 @@ sys_rename(char *src, char *dest)
 			goto err2;
 		}
 	} else if (error == ENOENT) {
-		if (vp1->v_type != VDIR && has_trailing(dest, '/')) {
+		if (vp1->v_type != VDIR && ts == true) {
 			error = ENOTDIR;
 			goto err2;
 		}
@@ -748,14 +785,8 @@ sys_rename(char *src, char *dest)
 	*dname = 0;
 	dname++;
 
-	if ((error = lookup(src, &ddp1, &sname)) != 0)
-		goto err2;
-
 	dvp1 = ddp1->d_vnode;
 	vn_lock(dvp1);
-
-	if ((error = namei(dest, &ddp2)) != 0)
-		goto err3;
 
 	dvp2 = ddp2->d_vnode;
 	vn_lock(dvp2);
@@ -763,7 +794,7 @@ sys_rename(char *src, char *dest)
 	/* The source and dest must be same file system */
 	if (dvp1->v_mount != dvp2->v_mount) {
 		error = EXDEV;
-		goto err4;
+		goto err3;
 	}
 
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
@@ -772,20 +803,19 @@ sys_rename(char *src, char *dest)
 	if (dp2)
 		dentry_remove(dp2);
 
- err4:
-	vn_unlock(dvp2);
-	drele(ddp2);
  err3:
+	vn_unlock(dvp2);
 	vn_unlock(dvp1);
-	drele(ddp1);
  err2:
 	if (vp2) {
 		vn_unlock(vp2);
 		drele(dp2);
 	}
+	drele(ddp2);
  err1:
 	vn_unlock(vp1);
 	drele(dp1);
+	drele(ddp1);
 	return error;
 }
 
