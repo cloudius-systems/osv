@@ -1460,6 +1460,7 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
     struct task *t = main_task;
     char path[PATH_MAX];
     int error;
+    ssize_t size;
 
     error = -EINVAL;
     if (bufsize <= 0)
@@ -1472,10 +1473,13 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
     if (error)
         goto out_errno;
 
-    error = sys_readlink(path, buf, bufsize);
-    if (error)
+    size  = 0;
+    error = sys_readlink(path, buf, bufsize, &size);
+
+    if (error != 0)
         goto out_errno;
-    return 0;
+
+    return size;
     out_errno:
     errno = error;
     return -1;

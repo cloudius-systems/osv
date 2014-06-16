@@ -974,19 +974,57 @@ sys_fchdir(struct file *fp, char *cwd)
 	return 0;
 }
 
-ssize_t
-sys_readlink(char *path, char *buf, size_t bufsize)
+int
+sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size)
 {
-	int error;
-	struct dentry *dp;
+	int		error;
+	struct dentry	*ddp;
+	char		*name;
+	struct dentry	*dp;
+	struct vnode	*vp;
+	struct iovec	vec;
+	struct uio	uio;
 
-	error = namei(path, &dp);
-	if (error)
-		return error;
+	*size = 0;
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
 
-	/* no symlink support (yet) in OSv */
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		drele(ddp);
+		return (error);
+	}
+
+	if (dp->d_vnode->v_type != VLNK) {
+		drele(dp);
+		drele(ddp);
+		return (EINVAL);
+	}
+	vec.iov_base	= buf;
+	vec.iov_len	= bufsize;
+
+	uio.uio_iov	= &vec;
+	uio.uio_iovcnt	= 1;
+	uio.uio_offset	= 0;
+	uio.uio_resid	= bufsize;
+	uio.uio_rw	= UIO_READ;
+
+	vp = dp->d_vnode;
+	vn_lock(vp);
+	error = VOP_READLINK(vp, &uio);
+	vn_unlock(vp);
+
 	drele(dp);
-	return EINVAL;
+	drele(ddp);
+
+	if (error) {
+		return (error);
+	}
+
+	*size = bufsize - uio.uio_resid;
+	return (0);
 }
 
 /*

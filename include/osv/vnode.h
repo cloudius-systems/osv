@@ -147,6 +147,7 @@ typedef	int (*vnop_truncate_t)	(struct vnode *, off_t);
 typedef	int (*vnop_link_t)      (struct vnode *, struct vnode *, char *);
 typedef int (*vnop_cache_t) (struct vnode *, struct file *, struct uio *);
 typedef int (*vnop_fallocate_t) (struct vnode *, int, loff_t, loff_t);
+typedef int (*vnop_readlink_t)  (struct vnode *, struct uio *);
 
 /*
  * vnode operations
@@ -173,6 +174,7 @@ struct vnops {
 	vnop_link_t		vop_link;
 	vnop_cache_t		vop_cache;
 	vnop_fallocate_t	vop_fallocate;
+	vnop_readlink_t		vop_readlink;
 };
 
 /*
@@ -200,6 +202,7 @@ struct vnops {
 #define VOP_TRUNCATE(VP, N)	   ((VP)->v_op->vop_truncate)(VP, N)
 #define VOP_LINK(DVP, SVP, N) 	   ((DVP)->v_op->vop_link)(DVP, SVP, N)
 #define VOP_FALLOCATE(VP, M, OFF, LEN) ((VP)->v_op->vop_fallocate)(VP, M, OFF, LEN)
+#define VOP_READLINK(VP, U)        ((VP)->v_op->vop_readlink)(VP, U)
 
 int	 vop_nullop(void);
 int	 vop_einval(void);
