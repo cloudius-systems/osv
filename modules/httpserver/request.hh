@@ -15,6 +15,7 @@
 
 #include <string>
 #include <vector>
+#include "common.hh"
 
 namespace http {
 
@@ -35,6 +36,7 @@ struct request {
     std::vector<header> headers;
     std::vector<header> query_parameters;
     connection* connection_ptr;
+    httpserver::parameters param;
 
     /**
      * Search for the first header of a given name

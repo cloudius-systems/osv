@@ -35,20 +35,19 @@ routes::~routes()
 
 }
 
-bool routes::handle(const string& path, const http::server::request& req,
+bool routes::handle(const string& path, http::server::request& req,
                     http::server::reply& rep)
 {
-    parameters params;
     string param_str;
 
     handler_base* handler = get_handler(str2type(req.method),
-                                        normalize_url(path, param_str), params);
+                                        normalize_url(path, param_str), req.param);
     if (handler != nullptr) {
         try {
             for (auto& i : handler->mandatory_param) {
                 verify_param(req, i);
             }
-            handler->handle(path, &params, req, rep);
+            handler->handle(path, &req.param, req, rep);
         } catch (const base_exception& e) {
             rep.content = e.what();
             rep.status = e.status();

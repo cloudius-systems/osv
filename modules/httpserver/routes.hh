@@ -123,7 +123,7 @@ public:
      * @param rep the http reply
      * @return true on success
      */
-    bool handle(const std::string& path, const http::server::request& req,
+    bool handle(const std::string& path, http::server::request& req,
                 http::server::reply& rep);
 
 private:
