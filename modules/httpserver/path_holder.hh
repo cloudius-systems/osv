@@ -57,6 +57,26 @@ public:
     handler_base& set_handler(const std::string& type,
                               const handle_function& fun) const;
     /**
+     * assign a request function to the path
+     * set the type to json
+     * @param fun a request function
+     * @return a reference to the handler that would be created
+     */
+    handler_base& set_handler(const request_function& fun) const {
+        return set_handler("json", fun);
+    }
+
+    /**
+     * assign a handle function to the path
+     * set the type to json
+     * @param fun a handle function
+     * @return a reference to the handler that would be created
+     */
+    handler_base& set_handler(const handle_function& fun) const {
+        return set_handler("json", fun);
+    }
+
+    /**
      * set the routes object this should be done once when
      * the routes are created
      * @param route the route object
