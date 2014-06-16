@@ -959,10 +959,34 @@ int stat(const char *pathname, struct stat *st)
 
 LFS64(stat);
 
+TRACEPOINT(trace_vfs_lstat, "pathname=%s, stat=%p", const char*, struct stat*);
+TRACEPOINT(trace_vfs_lstat_ret, "");
+TRACEPOINT(trace_vfs_lstat_err, "errno=%d", int);
 extern "C"
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {
-    return __xstat(ver, pathname, st);
+    struct task *t = main_task;
+    char path[PATH_MAX];
+    int error;
+
+    trace_vfs_lstat(pathname, st);
+
+    error = task_conv(t, pathname, 0, path);
+    if (error) {
+        errno = error;
+        trace_vfs_lstat_err(error);
+        return (-1);
+    }
+
+    error = sys_lstat(path, st);
+    if (error) {
+        errno = error;
+        trace_vfs_lstat_err(error);
+        return (-1);
+    }
+
+    trace_vfs_lstat_ret();
+    return 0;
 }
 
 LFS64(__lxstat);

@@ -987,6 +987,32 @@ sys_stat(char *path, struct stat *st)
 	}
 }
 
+int sys_lstat(char *path, struct stat *st)
+{
+	int           error;
+	struct dentry *ddp;
+	char          *name;
+	struct dentry *dp;
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_lstat: path=%s\n", path));
+
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		drele(ddp);
+		return error;
+	}
+
+	error = vn_stat(dp->d_vnode, st);
+	drele(dp);
+	drele(ddp);
+	return error;
+}
+
 int
 sys_statfs(char *path, struct statfs *buf)
 {

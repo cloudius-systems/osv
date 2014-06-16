@@ -113,6 +113,7 @@ int	 sys_link(char *oldpath, char *newpath);
 int	 sys_unlink(char *path);
 int	 sys_access(char *path, int mode);
 int	 sys_stat(char *path, struct stat *st);
+int	 sys_lstat(char *path, struct stat *st);
 int	 sys_statfs(char *path, struct statfs *buf);
 int	 sys_truncate(char *path, off_t length);
 int	 sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size);
