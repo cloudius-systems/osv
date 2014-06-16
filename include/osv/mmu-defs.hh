@@ -56,8 +56,8 @@ constexpr mem_area get_mem_area(void* addr)
 
 constexpr void* translate_mem_area(mem_area from, mem_area to, void* addr)
 {
-    return reinterpret_cast<void*>(reinterpret_cast<char*>(addr)
-                                   - get_mem_area_base(from) + get_mem_area_base(to));
+    return static_cast<void*>(static_cast<char*>(addr)
+                              - get_mem_area_base(from) + get_mem_area_base(to));
 }
 
 constexpr uintptr_t main_mem_area_base = get_mem_area_base(mem_area::main);
