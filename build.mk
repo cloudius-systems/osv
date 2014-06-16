@@ -336,6 +336,7 @@ tests += tests/misc-printf.so
 tests += tests/libstatic-thread-variable.so tests/tst-static-thread-variable.so
 tests/tst-static-thread-variable.so: tests/libstatic-thread-variable.so
 tests/tst-static-thread-variable.so: COMMON += -L./tests -lstatic-thread-variable
+tests += tests/misc-lock-perf.so
 endif
 
 ifeq ($(arch),aarch64)
