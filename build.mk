@@ -889,7 +889,7 @@ else
     libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 endif
 
-boost-lib-dir := $(shell dirname `find $(miscbase)/ -name libboost_system*.a`)
+boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
 
 # link with -mt if present, else the base version (and hope it is multithreaded)
 
