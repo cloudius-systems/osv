@@ -535,6 +535,7 @@ sys_rmdir(char *path)
 	vn_unlock(ddp->d_vnode);
 
 	vn_unlock(vp);
+	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
 	return error;
