@@ -893,6 +893,35 @@ int link(const char *oldpath, const char *newpath)
     return -1;
 }
 
+
+TRACEPOINT(trace_vfs_symlink, "oldpath=%s, newpath=%s", const char*, const char*);
+TRACEPOINT(trace_vfs_symlink_ret, "");
+TRACEPOINT(trace_vfs_symlink_err, "errno=%d", int);
+
+int symlink(const char *oldpath, const char *newpath)
+{
+    int error;
+
+    trace_vfs_symlink(oldpath, newpath);
+
+    error = ENOENT;
+    if (oldpath == NULL || newpath == NULL) {
+        errno = ENOENT;
+        trace_vfs_symlink_err(error);
+        return (-1);
+    }
+
+    error = sys_symlink(oldpath, newpath);
+    if (error) {
+        errno = error;
+        trace_vfs_symlink_err(error);
+        return (-1);
+    }
+
+    trace_vfs_symlink_ret();
+    return 0;
+}
+
 TRACEPOINT(trace_vfs_unlink, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_unlink_ret, "");
 TRACEPOINT(trace_vfs_unlink_err, "%d", int);

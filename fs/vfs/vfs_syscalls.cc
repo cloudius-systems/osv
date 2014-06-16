@@ -56,6 +56,8 @@
 #include "vfs.h"
 #include <fs/fs.hh>
 
+extern struct task *main_task;
+
 static int
 open_no_follow_chk(char *path)
 {
@@ -817,6 +819,96 @@ sys_rename(char *src, char *dest)
 	drele(dp1);
 	drele(ddp1);
 	return error;
+}
+
+int
+sys_symlink(const char *oldpath, const char *newpath)
+{
+	struct task	*t = main_task;
+	int		error;
+	std::unique_ptr<char []> up_op (new char[PATH_MAX]);
+	char		*op = up_op.get();
+	std::unique_ptr<char []> up_np (new char[PATH_MAX]);
+	char		*np = up_np.get();
+	struct dentry	*olddp;
+	struct dentry	*newdp;
+	struct dentry	*newdirdp;
+	struct vnode	*vp;
+	char		*name;
+
+	if (oldpath == NULL || newpath == NULL) {
+		return (EFAULT);
+	}
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
+				oldpath, newpath));
+
+	olddp		= NULL;
+	newdp		= NULL;
+	newdirdp	= NULL;
+	vp		= NULL;
+
+	error = task_conv(t, oldpath, VWRITE, op);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = task_conv(t, newpath, VWRITE, np);
+	if (error != 0) {
+		return (error);
+	}
+
+	/* oldpath must exist */
+	if ((error = namei(op, &olddp)) != 0) {
+		return (error);
+	}
+
+	/* parent directory for new path must exist */
+	if ((error = lookup(np, &newdirdp, &name)) != 0) {
+		error = ENOENT;
+		goto out;
+	}
+	vn_lock(newdirdp->d_vnode);
+
+	/* newpath should not already exist */
+	if (namei_last_nofollow(np, newdirdp, &newdp) == 0) {
+		drele(newdp);
+		error = EEXIST;
+		goto out;
+	}
+
+	vp = olddp->d_vnode;
+	vn_lock(vp);
+
+	/* check for write access at newpath */
+	if ((error = vn_access(newdirdp->d_vnode, VWRITE)) != 0) {
+		goto out;
+	}
+
+	/* oldpath may not be const char * to VOP_SYMLINK - need to copy */
+	size_t tocopy;
+	tocopy = strlcpy(op, oldpath, PATH_MAX);
+	if (tocopy >= PATH_MAX - 1) {
+		error = ENAMETOOLONG;
+		goto out;
+	}
+	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
+
+out:
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (newdirdp != NULL) {
+		vn_unlock(newdirdp->d_vnode);
+		drele(newdirdp);
+	}
+
+	if (olddp != NULL) {
+		drele(olddp);
+	}
+
+	return (error);
 }
 
 int

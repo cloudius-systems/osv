@@ -3211,7 +3211,6 @@ out:
 	return (error);
 }
 
-#ifdef NOTYET
 /*
  * Insert the indicated symbolic reference entry into the directory.
  *
@@ -3231,8 +3230,7 @@ out:
  */
 /*ARGSUSED*/
 static int
-zfs_symlink(vnode_t *dvp, vnode_t **vpp, char *name, vattr_t *vap, char *link,
-    cred_t *cr, kthread_t *td)
+zfs_symlink(vnode_t *dvp, char *name, char *link)
 {
 	znode_t		*zp, *dzp = VTOZ(dvp);
 	zfs_dirlock_t	*dl;
@@ -3244,8 +3242,16 @@ zfs_symlink(vnode_t *dvp, vnode_t **vpp, char *name, vattr_t *vap, char *link,
 	int		zflg = ZNEW;
 	zfs_acl_ids_t	acl_ids;
 	boolean_t	fuid_dirtied;
+	cred_t		*cr = CRED();
 	uint64_t	txtype = TX_SYMLINK;
-	int		flags = 0;
+	vattr_t		va = {
+		.va_mask	= AT_TYPE|AT_MODE,
+		.va_type	= VLNK,
+		.va_size	= len,
+
+		/* symlink permissions are irrelevant */
+		.va_mode	= S_IRWXU|S_IRWXG|S_IRWXO,
+	}, *vap = &va;
 
 	ASSERT(vap->va_type == VLNK);
 
@@ -3258,8 +3264,6 @@ zfs_symlink(vnode_t *dvp, vnode_t **vpp, char *name, vattr_t *vap, char *link,
 		ZFS_EXIT(zfsvfs);
 		return (EILSEQ);
 	}
-	if (flags & FIGNORECASE)
-		zflg |= ZCILOOK;
 
 	if (len > MAXPATHLEN) {
 		ZFS_EXIT(zfsvfs);
@@ -3347,10 +3351,7 @@ top:
 	 */
 	(void) zfs_link_create(dl, zp, tx, ZNEW);
 
-	if (flags & FIGNORECASE)
-		txtype |= TX_CI;
 	zfs_log_symlink(zilog, tx, txtype, dzp, zp, name, link);
-	*vpp = ZTOV(zp);
 
 	zfs_acl_ids_free(&acl_ids);
 
@@ -3364,7 +3365,6 @@ top:
 	ZFS_EXIT(zfsvfs);
 	return (error);
 }
-#endif /* NOTYET */
 
 /*
  * Return, in the buffer contained in the provided uio structure,
@@ -5042,4 +5042,5 @@ struct vnops zfs_vnops = {
 	zfs_arc,			/* arc */
 	zfs_fallocate,			/* fallocate */
 	zfs_readlink,			/* read link */
+	zfs_symlink,			/* symbolic link */
 };
