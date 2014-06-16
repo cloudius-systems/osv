@@ -40,7 +40,7 @@
 
 static LIST_HEAD(dentry_hash_head, dentry) dentry_hash_table[DENTRY_BUCKETS];
 static LIST_HEAD(fake, dentry) fake;
-static struct mutex dentry_hash_lock;
+static mutex dentry_hash_lock;
 
 /*
  * Get the hash value from the mount point and path name.
@@ -64,7 +64,7 @@ struct dentry *
 dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 {
     struct mount *mp = vp->v_mount;
-    struct dentry *dp = calloc(sizeof(*dp), 1);
+    struct dentry *dp = (dentry*)calloc(sizeof(*dp), 1);
 
     if (!dp) {
         return NULL;
