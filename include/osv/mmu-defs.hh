@@ -49,7 +49,7 @@ constexpr uintptr_t get_mem_area_base(mem_area area)
     return 0xffff800000000000 | uintptr_t(area) << 44;
 }
 
-constexpr mem_area get_mem_area(void* addr)
+static inline mem_area get_mem_area(void* addr)
 {
     return mem_area(reinterpret_cast<uintptr_t>(addr) >> 44 & 7);
 }
