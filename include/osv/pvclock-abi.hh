@@ -8,6 +8,7 @@
 #ifndef _OSV_PVCLOCK_ABI_H_
 #define _OSV_PVCLOCK_ABI_H_
 #include <osv/types.h>
+#include <atomic>
 
 struct pvclock_wall_clock {
         u32   version;
@@ -26,23 +27,35 @@ struct pvclock_vcpu_time_info {
          u8    pad[2];
 } __attribute__((__packed__)); /* 32 bytes */
 
-namespace pvclock {
-
-inline u64 processor_to_nano(pvclock_vcpu_time_info *sys, u64 time)
-{
-    if (sys->tsc_shift >= 0) {
-        time <<= sys->tsc_shift;
-    } else {
-        time >>= -sys->tsc_shift;
+class pvclock {
+public:
+    static const u8 TSC_STABLE_BIT = (1 << 0);
+public:
+    pvclock(u8 valid_flags)
+        : _valid_flags(valid_flags)
+        , _last(0)
+    {
     }
-    asm("mul %1; shrd $32, %%rdx, %0"
-            : "+a"(time)
-            : "rm"(u64(sys->tsc_to_system_mul))
-            : "rdx");
-    return time;
-}
 
-u64 wall_clock_boot(pvclock_wall_clock *_wall);
-u64 system_time(pvclock_vcpu_time_info *sys);
+    u64 wall_clock_boot(pvclock_wall_clock *_wall);
+    u64 system_time(pvclock_vcpu_time_info *sys);
+
+    static inline u64 processor_to_nano(pvclock_vcpu_time_info *sys, u64 time)
+    {
+        if (sys->tsc_shift >= 0) {
+            time <<= sys->tsc_shift;
+        } else {
+            time >>= -sys->tsc_shift;
+        }
+        asm("mul %1; shrd $32, %%rdx, %0"
+                : "+a"(time)
+                : "rm"(u64(sys->tsc_to_system_mul))
+                : "rdx");
+        return time;
+    }
+private:
+    u8 _valid_flags;
+    std::atomic<u64> _last;
 };
+
 #endif

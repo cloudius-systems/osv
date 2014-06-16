@@ -28,8 +28,8 @@ public:
     static bool probe();
 private:
     u64 wall_clock_boot();
-    static u64 system_time();
-    static void setup_cpu();
+    u64 system_time();
+    void setup_cpu();
 private:
     static std::atomic<bool> _smp_init;
     static std::once_flag _boot_systemtime_init_flag;
@@ -38,6 +38,7 @@ private:
     pvclock_wall_clock* _wall;
     static percpu<pvclock_vcpu_time_info> _sys;
     sched::cpu::notifier cpu_notifier;
+    pvclock _pvclock;
 };
 
 std::atomic<bool> kvmclock::_smp_init { false };
@@ -46,8 +47,18 @@ s64 kvmclock::_boot_systemtime = 0;
 bool kvmclock::_new_kvmclock_msrs = true;
 PERCPU(pvclock_vcpu_time_info, kvmclock::_sys);
 
+static u8 get_pvclock_flags()
+{
+    u8 flags = 0;
+    if (processor::features().kvm_clocksource_stable) {
+        flags |= pvclock::TSC_STABLE_BIT;
+    }
+    return flags;
+}
+
 kvmclock::kvmclock()
-    : cpu_notifier(&kvmclock::setup_cpu)
+    : cpu_notifier([&] { setup_cpu(); })
+    , _pvclock(get_pvclock_flags())
 {
     auto wall_time_msr = (_new_kvmclock_msrs) ?
                          msr::KVM_WALL_CLOCK_NEW : msr::KVM_WALL_CLOCK;
@@ -63,7 +74,7 @@ void kvmclock::setup_cpu()
     memset(&*_sys, 0, sizeof(*_sys));
     processor::wrmsr(system_time_msr, mmu::virt_to_phys(&*_sys) | 1);
 
-    std::call_once(_boot_systemtime_init_flag, [] {
+    std::call_once(_boot_systemtime_init_flag, [&] {
         _boot_systemtime = system_time();
         _smp_init.store(true, std::memory_order_release);
     });
@@ -118,14 +129,14 @@ s64 kvmclock::boot_time()
 
 u64 kvmclock::wall_clock_boot()
 {
-    return pvclock::wall_clock_boot(_wall);
+    return _pvclock.wall_clock_boot(_wall);
 }
 
 u64 kvmclock::system_time()
 {
     sched::preempt_disable();
     auto sys = &*_sys;  // avoid recaclulating address each access
-    auto r = pvclock::system_time(sys);
+    auto r = _pvclock.system_time(sys);
     sched::preempt_enable();
     return r;
 }
