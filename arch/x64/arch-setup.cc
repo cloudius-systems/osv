@@ -81,7 +81,7 @@ void setup_temporary_phys_map()
     u64 cr3 = processor::read_cr3();
     auto pt = reinterpret_cast<u64*>(cr3);
     for (auto&& area : mmu::identity_mapped_areas) {
-        auto base = get_mem_area_base(area);
+        auto base = reinterpret_cast<void*>(get_mem_area_base(area));
         pt[mmu::pt_index(base, 3)] = pt[0];
     }
 }
@@ -178,7 +178,7 @@ void arch_setup_free_memory()
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
     for (auto&& area : mmu::identity_mapped_areas) {
-        auto base = get_mem_area_base(area);
+        auto base = reinterpret_cast<void*>(get_mem_area_base(area));
         mmu::linear_map(base, 0, initial_map, initial_map);
     }
     // map the core, loaded 1:1 by the boot loader
@@ -199,7 +199,7 @@ void arch_setup_free_memory()
             ent = truncate_below(ent, initial_map);
         }
         for (auto&& area : mmu::identity_mapped_areas) {
-            auto base = get_mem_area_base(area);
+        auto base = reinterpret_cast<void*>(get_mem_area_base(area));
             mmu::linear_map(base + ent.addr, ent.addr, ent.size, ~0);
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);

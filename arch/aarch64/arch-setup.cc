@@ -50,7 +50,7 @@ void setup_temporary_phys_map()
     u64 *pt_ttbr0 = reinterpret_cast<u64*>(processor::read_ttbr0());
     u64 *pt_ttbr1 = reinterpret_cast<u64*>(processor::read_ttbr1());
     for (auto&& area : mmu::identity_mapped_areas) {
-        auto base = get_mem_area_base(area);
+        auto base = reinterpret_cast<void*>(get_mem_area_base(area));
         pt_ttbr1[mmu::pt_index(base, 3)] = pt_ttbr0[0];
     }
     mmu::flush_tlb_all();
@@ -75,7 +75,7 @@ void arch_setup_free_memory()
 
     /* linear_map [TTBR1] */
     for (auto&& area : mmu::identity_mapped_areas) {
-        auto base = get_mem_area_base(area);
+        auto base = reinterpret_cast<void*>(get_mem_area_base(area));
         mmu::linear_map(base + addr, addr, memory::phys_mem_size);
     }
 
