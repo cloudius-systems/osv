@@ -741,6 +741,7 @@ drivers += drivers/console-multiplexer.o
 drivers += drivers/console-driver.o
 drivers += drivers/line-discipline.o
 drivers += drivers/clock.o
+drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
 drivers += drivers/ramdisk.o
 drivers += core/elf.o
