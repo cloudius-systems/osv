@@ -151,7 +151,9 @@ void ensure_log_initialized()
 
 void enable_tracepoint(std::string wildcard)
 {
-    std::regex re = trace::glob_to_regex(wildcard);
+    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("*"), std::string(".*"));
+    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
+    std::regex re(wildcard);
     trace::set_event_state(re, true);
     enabled_tracepoint_regexs.push_back(re);
 }
@@ -374,14 +376,6 @@ extern "C" void __cyg_profile_func_exit(void *this_fn, void *call_site)
     }
     --func_trace_nesting;
     irq.restore();
-}
-
-std::regex
-trace::glob_to_regex(const std::string & s)
-{
-    auto wildcard = boost::algorithm::replace_all_copy(s, std::string("*"), std::string(".*"));
-    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
-    return std::regex(wildcard);
 }
 
 trace::event_info::event_info(const tracepoint_base & tp)

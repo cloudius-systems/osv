@@ -27,10 +27,6 @@ struct event_info {
     bool        backtrace;
 };
 
-// Maybe not declare here, but...
-std::regex
-glob_to_regex(const std::string &);
-
 std::vector<event_info>
 get_event_info();
 
