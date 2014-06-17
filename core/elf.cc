@@ -272,18 +272,12 @@ void file::load_program_headers()
     }
 }
 
-namespace {
-
-ulong page_size = 4096;
-
-}
-
 void file::load_segment(const Elf64_Phdr& phdr)
 {
-    ulong vstart = align_down(phdr.p_vaddr, page_size);
+    ulong vstart = align_down(phdr.p_vaddr, mmu::page_size);
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
-    ulong filesz = align_up(filesz_unaligned, page_size);
-    ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
+    ulong filesz = align_up(filesz_unaligned, mmu::page_size);
+    ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, mmu::page_size) - vstart;
 
     unsigned perm = 0;
     if (phdr.p_flags & PF_X)
@@ -295,7 +289,7 @@ void file::load_segment(const Elf64_Phdr& phdr)
 
     auto mlock_flag = mlocked() ? mmu::mmap_populate : 0;
     mmu::map_file(_base + vstart, filesz, mmu::mmap_fixed | mlock_flag, perm,
-                  _f, align_down(phdr.p_offset, page_size));
+                  _f, align_down(phdr.p_offset, mmu::page_size));
     if (phdr.p_filesz != phdr.p_memsz) {
         assert(perm & mmu::perm_write);
         memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
@@ -349,10 +343,10 @@ void object::load_segments()
 
 void file::unload_segment(const Elf64_Phdr& phdr)
 {
-    ulong vstart = align_down(phdr.p_vaddr, page_size);
+    ulong vstart = align_down(phdr.p_vaddr, mmu::page_size);
     ulong filesz_unaligned = phdr.p_vaddr + phdr.p_filesz - vstart;
-    ulong filesz = align_up(filesz_unaligned, page_size);
-    ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
+    ulong filesz = align_up(filesz_unaligned, mmu::page_size);
+    ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, mmu::page_size) - vstart;
     mmu::munmap(_base + vstart, filesz);
     mmu::munmap(_base + vstart + filesz, memsz - filesz);
 }
@@ -377,8 +371,8 @@ void object::fix_permissions()
         if (phdr.p_type != PT_GNU_RELRO)
             continue;
 
-        ulong vstart = align_down(phdr.p_vaddr, page_size);
-        ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, page_size) - vstart;
+        ulong vstart = align_down(phdr.p_vaddr, mmu::page_size);
+        ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, mmu::page_size) - vstart;
 
         assert((phdr.p_flags & (PF_R | PF_W | PF_X)) == PF_R);
         mmu::mprotect(_base + vstart, memsz, mmu::perm_read);
