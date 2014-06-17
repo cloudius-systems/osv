@@ -44,8 +44,6 @@ struct rusage
 	long	ru_nsignals;
 	long	ru_nvcsw;
 	long	ru_nivcsw;
-	/* room for more... */
-	long    __reserved[16];
 };
 
 int getrlimit (int, struct rlimit *);
