@@ -1,3 +1,32 @@
+build_env ?= external
+ifeq ($(build_env), host)
+    gcc_lib_env ?= host
+    cxx_lib_env ?= host
+else
+    gcc_lib_env ?= external
+    cxx_lib_env ?= external
+endif
+
+detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
+
+ifeq ($(call detect_arch, __x86_64__),1)
+    host_arch = x64
+endif
+ifeq ($(call detect_arch, __aarch64__),1)
+    host_arch = aarch64
+endif
+
+ifndef ARCH
+  ARCH = $(host_arch)
+endif
+$(info build.mk:)
+$(info build.mk: building arch=$(arch), override with ARCH env)
+$(info build.mk: building build_env=$(build_env) gcc_lib_env=$(gcc_lib_env) cxx_lib_env=$(cxx_lib_env))
+$(info build.mk:)
+arch = $(ARCH)
+
+CROSS_PREFIX = $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
+
 ifndef CROSS_PREFIX
     HOST_CXX=$(CXX)
     STRIP=strip
@@ -10,32 +39,6 @@ else
     STRIP=$(CROSS_PREFIX)strip
     OBJCOPY=$(CROSS_PREFIX)objcopy
 endif
-
-build_env ?= external
-ifeq ($(build_env), host)
-    gcc_lib_env ?= host
-    cxx_lib_env ?= host
-else
-    gcc_lib_env ?= external
-    cxx_lib_env ?= external
-endif
-
-detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
-
-ifndef ARCH
-    ifeq ($(call detect_arch, __x86_64__),1)
-        arch = x64
-    endif
-    ifeq ($(call detect_arch, __aarch64__),1)
-        arch = aarch64
-    endif
-else
-    arch = $(ARCH)
-endif
-$(info build.mk:)
-$(info build.mk: building arch=$(arch), override with ARCH env)
-$(info build.mk: building build_env=$(build_env) gcc_lib_env=$(gcc_lib_env) cxx_lib_env=$(cxx_lib_env))
-$(info build.mk:)
 
 image ?= default
 img_format ?= qcow2
