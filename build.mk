@@ -27,18 +27,12 @@ arch = $(ARCH)
 
 CROSS_PREFIX = $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
 
-ifndef CROSS_PREFIX
-    HOST_CXX=$(CXX)
-    STRIP=strip
-    OBJCOPY=objcopy
-else
-    HOST_CXX=g++
-    CXX=$(CROSS_PREFIX)g++
-    CC=$(CROSS_PREFIX)gcc
-    LD=$(CROSS_PREFIX)ld
-    STRIP=$(CROSS_PREFIX)strip
-    OBJCOPY=$(CROSS_PREFIX)objcopy
-endif
+HOST_CXX=g++
+CXX=$(CROSS_PREFIX)g++
+CC=$(CROSS_PREFIX)gcc
+LD=$(CROSS_PREFIX)ld
+STRIP=$(CROSS_PREFIX)strip
+OBJCOPY=$(CROSS_PREFIX)objcopy
 
 image ?= default
 img_format ?= qcow2
