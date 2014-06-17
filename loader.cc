@@ -91,6 +91,12 @@ void premain()
     arch_init_premain();
 
     auto inittab = elf::get_init(elf_header);
+
+    if (inittab.tls.start == nullptr) {
+        debug_early("premain: failed to get TLS data from ELF\n");
+        arch::halt_no_interrupts();
+    }
+
     setup_tls(inittab);
     boot_time.event("TLS initialization");
     for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {

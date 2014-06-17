@@ -1129,7 +1129,7 @@ init_table get_init(Elf64_Ehdr* header)
     auto phdr = static_cast<Elf64_Phdr*>(pbase + header->e_phoff);
     auto n = header->e_phnum;
     bool base_adjusted = false;
-    init_table ret;
+    init_table ret = { 0 };
     for (auto i = 0; i < n; ++i, ++phdr) {
         if (!base_adjusted && phdr->p_type == PT_LOAD) {
             base_adjusted = true;
