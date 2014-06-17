@@ -26,6 +26,7 @@
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
+void enable_backtraces(bool = true);
 
 class tracepoint_base;
 
@@ -46,8 +47,6 @@ struct trace_record {
         long align[0];
     };
 };
-
-trace_record* allocate_trace_record(size_t size);
 
 template <size_t idx, size_t N, typename... args>
 struct tuple_formatter
@@ -272,11 +271,21 @@ public:
     explicit tracepoint_base(unsigned _id, const std::type_info& _tp_type,
                              const char* _name, const char* _format);
     ~tracepoint_base();
-    void enable();
-    static bool log_backtraces(bool should_log = true);
+
     void add_probe(probe* p);
     void del_probe(probe* p);
-    tracepoint_id id;
+
+    bool enabled() const {
+        return _logging;
+    }
+    bool backtrace() const {
+        return _backtrace;
+    }
+
+    void enable(bool = true);
+    void backtrace(bool);
+    
+    const tracepoint_id id;
     const char* name;
     const char* format;
     const char* sig;
@@ -290,19 +299,20 @@ public:
         boost::intrusive::constant_time_size<false>
         > tp_list;
 protected:
+    bool _backtrace = false;
+    bool _logging = false;
     bool active = false; // logging || !probes.empty()
-    bool logging = false;
     osv::rcu_ptr<std::vector<probe*>> probes_ptr;
     mutex probes_mutex;
     void run_probes();
     void log_backtrace(trace_record* tr, u8*& buffer) {
-        if (!_log_backtrace) {
+        if (!tr->backtrace) {
             return;
         }
         do_log_backtrace(tr, buffer);
     }
     void do_log_backtrace(trace_record* tr, u8*& buffer);
-    size_t base_size() { return _log_backtrace ? backtrace_len * sizeof(void*) : 0; }
+    trace_record* allocate_trace_record(size_t size);
 private:
     void try_enable();
     void activate();
@@ -311,7 +321,6 @@ private:
     void deactivate(const tracepoint_id &, void * site, void * slow_path);
     void update();
     static std::unordered_set<tracepoint_id>& known_ids();
-    static std::atomic<bool> _log_backtrace;
     static const size_t backtrace_len = 10;
 };
 
@@ -346,20 +355,11 @@ public:
         }
     }
     void log(const std::tuple<s_args...>& as) {
-        if (!logging) {
+        if (!_logging) {
             return;
         }
-        auto tr = allocate_trace_record(size(as));
-        tr->thread = sched::thread::current();
-        tr->thread_name = tr->thread->name_raw();
-        tr->time = 0;
-        tr->cpu = -1;
+        auto tr = allocate_trace_record(payload_size(as));
         auto buffer = tr->buffer;
-        if (tr->thread) {
-            tr->time = clock::get()->time();
-            tr->cpu = tr->thread->tcpu()->id;
-        }
-        tr->backtrace = false;
         log_backtrace(tr, buffer);
         serialize(buffer, as);
         barrier();
@@ -368,8 +368,8 @@ public:
     void serialize(void* buffer, std::tuple<s_args...> as) {
         serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
     }
-    size_t size(const std::tuple<s_args...>& as) {
-        return base_size() + serializer<0, sizeof...(s_args), s_args...>::size(0, as);
+    size_t payload_size(const std::tuple<s_args...>& as) const {
+        return serializer<0, sizeof...(s_args), s_args...>::size(0, as);
     }
     // Python struct style signature H=u16, I=u32, Q=u64 etc
     // Parsed by SlidingUnpacker from scripts/osv/trace.py

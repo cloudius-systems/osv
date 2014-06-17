@@ -25,7 +25,6 @@ static std::atomic<bool> _started;
 static unsigned int _n_cpus;
 static config _config;
 static sched::thread_handle _controller;
-static bool _old_log_backtraces;
 static mutex _control_lock;
 
 class cpu_sampler : public sched::timer_base::client {
@@ -137,8 +136,9 @@ bool start_sampler(config new_config) throw()
     _controller.reset(*sched::thread::current());
 
     assert(_active_cpus == 0);
-    _old_log_backtraces = tracepoint_base::log_backtraces(true);
-    trace_sampler_tick.enable();
+
+    trace_sampler_tick.enable(true);
+    trace_sampler_tick.backtrace(true);
 
     _n_cpus = sched::cpus.size();
     _config = new_config;
@@ -176,7 +176,8 @@ void stop_sampler() throw()
     sched::thread::wait_until([] { return _active_cpus == 0; });
     _controller.clear();
 
-    tracepoint_base::log_backtraces(_old_log_backtraces);
+    trace_sampler_tick.backtrace(false);
+    trace_sampler_tick.enable(false);
 
     _started = false;
     debug("Sampler stopped.\n");

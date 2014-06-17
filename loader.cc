@@ -411,7 +411,7 @@ void main_cont(int ac, char** av)
     if (opt_log_backtrace) {
         // can only do this after smp_launch, otherwise the IDT is not initialized,
         // and backtrace_safe() fails as soon as we get an exception
-        tracepoint_base::log_backtraces();
+        enable_backtraces();
     }
     sched::init_detached_threads_reaper();
 

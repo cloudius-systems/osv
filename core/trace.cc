@@ -6,6 +6,7 @@
  */
 
 #include "osv/trace.hh"
+#include "osv/tracecontrol.hh"
 #include <osv/sched.hh>
 #include <osv/mutex.h>
 #include "arch.hh"
@@ -107,9 +108,12 @@ private:
 
 PERCPU(trace_buf, percpu_trace_buffer);
 bool trace_enabled;
+static bool global_backtrace_enabled;
 
 typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_priority((int)init_prio::tracepoint_base)));
 
+// Note: the definition of this list is: "expressions from command line",
+// and its only use is to deal with late initialization of tp:s
 std::vector<std::regex> enabled_tracepoint_regexs;
 
 void enable_trace()
@@ -147,14 +151,15 @@ void ensure_log_initialized()
 
 void enable_tracepoint(std::string wildcard)
 {
-    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("*"), std::string(".*"));
-    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
-    std::regex re{wildcard};
+    std::regex re = trace::glob_to_regex(wildcard);
+    trace::set_event_state(re, true);
     enabled_tracepoint_regexs.push_back(re);
+}
+
+void enable_backtraces(bool backtrace) {
+    global_backtrace_enabled = backtrace;
     for (auto& tp : tracepoint_base::tp_list) {
-        if (std::regex_match(std::string(tp.name), re)) {
-            tp.enable();
-        }
+        tp.backtrace(backtrace);
     }
 }
 
@@ -192,28 +197,45 @@ tracepoint_base::~tracepoint_base()
     delete probes_ptr.read();
 }
 
-void tracepoint_base::enable()
+static lockfree::mutex trace_control_lock;
+
+void tracepoint_base::enable(bool enable)
 {
-    ensure_log_initialized();
-    logging = true;
-    update();
+    if (enable) {
+        ensure_log_initialized();
+    }
+    // Need lock around this since "update" is a 1+ process
+    WITH_LOCK(trace_control_lock) {
+        _logging = enable;
+        update();
+    }
+}
+
+void tracepoint_base::backtrace(bool enable)
+{
+    _backtrace = enable;
 }
 
 void tracepoint_base::update()
 {
-    bool empty;
+    // take this here as well, just to ensure we're
+    // synced with _logging being updated when coming here from
+    // "add_probe" et al.
+    WITH_LOCK(trace_control_lock) {
+        bool empty;
 
-    WITH_LOCK(osv::rcu_read_lock) {
-        auto& probes = *probes_ptr.read();
+        WITH_LOCK(osv::rcu_read_lock) {
+            auto& probes = *probes_ptr.read();
 
-        empty = probes.empty();
-    }
+            empty = probes.empty();
+        }
 
-    bool new_active = logging || !empty;
-    if (new_active && !active) {
-        activate();
-    } else if (!new_active && active) {
-        deactivate();
+        bool new_active = _logging || !empty;
+        if (new_active && !active) {
+            activate();
+        } else if (!new_active && active) {
+            deactivate();
+        }
     }
 }
 
@@ -250,6 +272,9 @@ void tracepoint_base::try_enable()
 {
     for (auto& re : enabled_tracepoint_regexs) {
         if (std::regex_match(std::string(name), re)) {
+            // keep the same semantics for command line enabled
+            // tp:s as before individually controlled points.
+            backtrace(global_backtrace_enabled);
             enable();
         }
     }
@@ -291,25 +316,32 @@ std::unordered_set<tracepoint_id>& tracepoint_base::known_ids()
     return _known_ids;
 }
 
-std::atomic<bool> tracepoint_base::_log_backtrace;
-
-bool tracepoint_base::log_backtraces(bool should_log)
-{
-    return _log_backtrace.exchange(should_log);
-}
-
 void tracepoint_base::do_log_backtrace(trace_record* tr, u8*& buffer)
 {
-    tr->backtrace = true;
+    assert(tr->backtrace);
     auto bt = reinterpret_cast<void**>(buffer);
     auto done = backtrace_safe(bt, backtrace_len);
     fill(bt + done, bt + backtrace_len, nullptr);
     buffer += backtrace_len * sizeof(void*);
 }
 
-trace_record* allocate_trace_record(size_t size)
+trace_record* tracepoint_base::allocate_trace_record(size_t size)
 {
-    return percpu_trace_buffer->allocate_trace_record(size);
+    const bool bt = _backtrace;
+    if (bt) {
+        size += backtrace_len * sizeof(void*);
+    }
+    auto * tr = percpu_trace_buffer->allocate_trace_record(size);
+    tr->backtrace = bt;
+    tr->thread = sched::thread::current();
+    tr->thread_name = tr->thread->name_raw();
+    tr->time = 0;
+    tr->cpu = -1;
+    if (tr->thread) {
+        tr->time = clock::get()->time();
+        tr->cpu = tr->thread->tcpu()->id;
+    }
+    return tr;
 }
 
 static __thread unsigned func_trace_nesting;
@@ -342,5 +374,108 @@ extern "C" void __cyg_profile_func_exit(void *this_fn, void *call_site)
     }
     --func_trace_nesting;
     irq.restore();
+}
+
+std::regex
+trace::glob_to_regex(const std::string & s)
+{
+    auto wildcard = boost::algorithm::replace_all_copy(s, std::string("*"), std::string(".*"));
+    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
+    return std::regex(wildcard);
+}
+
+trace::event_info::event_info(const tracepoint_base & tp)
+    : id(tp.name)
+    , name(tp.name) // TODO: human friendly? desc?
+    , enabled(tp.enabled())
+    , backtrace(tp.backtrace())
+{}
+
+std::vector<trace::event_info>
+trace::get_event_info()
+{
+    std::vector<event_info> res;
+
+    WITH_LOCK(trace_control_lock) {
+        std::copy(tracepoint_base::tp_list.begin()
+                , tracepoint_base::tp_list.end()
+                , std::back_inserter(res)
+        );
+    }
+
+    return res;
+}
+
+std::vector<trace::event_info>
+trace::get_event_info(const std::regex & ex)
+{
+    std::vector<event_info> res;
+
+    WITH_LOCK(trace_control_lock) {
+        for (auto & tp : tracepoint_base::tp_list) {
+            if (std::regex_match(std::string(tp.name), ex)) {
+                res.emplace_back(tp);
+            }
+        }
+    }
+
+    return res;
+}
+
+std::vector<trace::event_info>
+trace::set_event_state(const std::regex & ex, bool enable, bool backtrace) {
+    std::vector<event_info> res;
+
+    // Note: expressions sent here are only treated as instantaneous requests.
+    // unlike command line, which is "persisted" and queried on a late tp init.
+    WITH_LOCK(trace_control_lock) {
+        for (auto & tp : tracepoint_base::tp_list) {
+            if (std::regex_match(std::string(tp.name), ex)) {
+                res.emplace_back(tp);
+                tp.enable(enable);
+                tp.backtrace(backtrace);
+            }
+        }
+    }
+
+    return res;
+}
+
+trace::event_info
+trace::get_event_info(const ext_id & id)
+{
+    // Note: assuming all tracepoints are created at load time
+    // -> no locks for the tp_list. If this changes (hello dynamic tp:s)
+    // the lock should be embracing this as well.
+    for (auto & tp : tracepoint_base::tp_list) {
+        if (id == tp.name) {
+            WITH_LOCK(trace_control_lock) {
+                return event_info(tp);
+            }
+        }
+    }
+    throw std::invalid_argument(id);
+}
+
+trace::event_info
+trace::set_event_state(const ext_id & id, bool enable, bool backtrace)
+{
+    for (auto & tp : tracepoint_base::tp_list) {
+        if (id == tp.name) {
+            return set_event_state(tp, enable, backtrace);
+        }
+    }
+    throw std::invalid_argument(id);
+}
+
+trace::event_info
+trace::set_event_state(tracepoint_base & tp, bool enable, bool backtrace)
+{
+    WITH_LOCK(trace_control_lock) {
+        event_info old(tp);
+        tp.enable(enable);
+        tp.backtrace(backtrace);
+        return old;
+    }
 }
 
