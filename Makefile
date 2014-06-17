@@ -1,6 +1,8 @@
 
 mode=release
+ARCH := $(subst x86_64,x64,$(shell uname -m))
 
+outdir = build/$(mode).$(ARCH)
 out = build/$(mode)
 submake = $(out)/Makefile
 modulemk = $(out)/module/module.mk
@@ -26,7 +28,7 @@ all: $(submake) $(modulemk)
 		-e -f tests/reclaim/build.xml $(if $V,,-q), ANT tests/reclaim)
 	$(MAKE) -r -C $(dir $(submake)) $@
 
-$(submake) $(modulemk): Makefile
+$(submake) $(modulemk): Makefile prepare-dir
 	mkdir -p $(dir $@)
 	echo 'mode = $(mode)' > $@
 	echo 'src = $(abspath .)' >> $@
@@ -34,8 +36,17 @@ $(submake) $(modulemk): Makefile
 	echo 'VPATH = $(abspath .)' >> $@
 	echo 'include $(abspath build.mk)' >> $@
 
+.PHONEY: prepare-dir
+
+prepare-dir:
+	# transition from build/release being the output directory
+	# to build/release being a symlink to build/release.x64
+	[ ! -e $(out) -o -L $(out) ] || rm -rf $(out)
+	mkdir -p $(outdir)
+	ln -nsf $(notdir $(outdir)) $(out)
+
 clean:
-	$(call quiet, rm -rf build/$(mode), CLEAN)
+	$(call quiet, rm -rf $(outdir) $(out), CLEAN)
 	$(call only-if, $(mgmt), $(call quiet, $(MAKE) -C mgmt clean >> /dev/null, MGMT CLEAN))
 	$(call quiet, cd java && mvn clean -q, MVN CLEAN)
 
