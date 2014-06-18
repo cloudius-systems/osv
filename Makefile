@@ -2,8 +2,8 @@
 mode=release
 ARCH := $(subst x86_64,x64,$(shell uname -m))
 
-outdir = build/$(mode).$(ARCH)
-out = build/$(mode)
+outlink = build/$(mode)
+out = build/$(mode).$(ARCH)
 submake = $(out)/Makefile
 modulemk = $(out)/module/module.mk
 
@@ -41,12 +41,12 @@ $(submake) $(modulemk): Makefile prepare-dir
 prepare-dir:
 	# transition from build/release being the output directory
 	# to build/release being a symlink to build/release.x64
-	[ ! -e $(out) -o -L $(out) ] || rm -rf $(out)
-	mkdir -p $(outdir)
-	ln -nsf $(notdir $(outdir)) $(out)
+	[ ! -e $(out) -o -L $(outlink) ] || rm -rf $(outlink)
+	mkdir -p $(out)
+	ln -nsf $(notdir $(out)) $(outlink)
 
 clean:
-	$(call quiet, rm -rf $(outdir) $(out), CLEAN)
+	$(call quiet, rm -rf $(outlink) $(out), CLEAN)
 	$(call only-if, $(mgmt), $(call quiet, $(MAKE) -C mgmt clean >> /dev/null, MGMT CLEAN))
 	$(call quiet, cd java && mvn clean -q, MVN CLEAN)
 

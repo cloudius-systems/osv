@@ -1,0 +1,1 @@
+arch-cflags = -msse2
