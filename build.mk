@@ -141,15 +141,15 @@ configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
 
-include $(src)/conf/base.mak
-include $(src)/conf/$(mode).mak
+include $(src)/conf/base.mk
+include $(src)/conf/$(mode).mk
 
 ifeq ($(mode),debug)
 CFLAGS += -Wno-maybe-uninitialized
 CXXFLAGS += -Wno-maybe-uninitialized
 endif
 
-# Add -DNDEBUG if conf-DEBUG_BUILD is set to 0 in *.mak files above
+# Add -DNDEBUG if conf-DEBUG_BUILD is set to 0 in *.mk files above
 ifeq ($(conf-DEBUG_BUILD),0)
 configuration += -DNDEBUG
 endif
