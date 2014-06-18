@@ -23,6 +23,7 @@
 #include "api/file.hh"
 #include "path_holder.hh"
 #include "api/env.hh"
+#include "api/trace.hh"
 
 using namespace httpserver;
 
@@ -53,6 +54,7 @@ int main(int argc, char* argv[])
     api::file::init(routes);
     api::jvm::init(routes);
     api::env::init(routes);
+    api::trace::init(routes);
     api::files_mapping::init(routes);
     try {
         http::server::server s(&config, &routes);
