@@ -12,6 +12,7 @@
 #include "jvm_balloon.hh"
 #include <osv/mempool.hh>
 #include "java_api.hh"
+#include "osv/version.hh"
 
 extern size_t jvm_heap_size;
 
@@ -91,6 +92,7 @@ int main(int argc, char **argv)
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
     options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
+    options.push_back(mkoption("-Dosv.version=" + osv::version()));
 
     int orig_argc = argc;
     int has_xms = 0, has_xmx = 0;
