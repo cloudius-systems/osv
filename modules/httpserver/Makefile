@@ -42,6 +42,9 @@ init:
 	$(call very-quiet, mkdir -p obj/autogen)
 	$(call very-quiet, mkdir -p autogen)
 
+stub-lib: $(STUB_FILES)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET)-stub.so $^, LINK $@)
+
 $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
 
