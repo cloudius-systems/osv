@@ -867,7 +867,7 @@ sosend_dgram(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
 		 * If no data is to be copied in, a single empty mbuf
 		 * is returned.
 		 */
-		top = m_uiotombuf(uio, M_WAITOK, space, max_hdr,
+		top = m_uiotombuf(uio, M_WAITOK, space, max_hdr, 1,
 		    (M_PKTHDR | ((flags & MSG_EOR) ? M_EOR : 0)));
 		if (top == NULL) {
 			error = EFAULT;	/* only possible error */
@@ -1042,7 +1042,7 @@ restart:
 				 * a single empty mbuf is returned.
 				 */
 				top = m_uiotombuf(uio, M_WAITOK, space,
-				    (atomic ? max_hdr : 0),
+				    (atomic ? max_hdr : 0), MCLBYTES,
 				    (atomic ? M_PKTHDR : 0) |
 				    ((flags & MSG_EOR) ? M_EOR : 0));
 				if (top == NULL) {

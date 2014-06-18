@@ -1680,7 +1680,8 @@ nospace:
  * Copy the contents of uio into a properly sized mbuf chain.
  */
 struct mbuf *
-m_uiotombuf(struct uio *uio, int how, int len, int align, int flags)
+m_uiotombuf(struct uio *uio, int how, int len, int align, int min_size,
+		    int flags)
 {
 	struct mbuf *m, *mb;
 	int error, length;
@@ -1707,7 +1708,7 @@ m_uiotombuf(struct uio *uio, int how, int len, int align, int flags)
 	 * Give us the full allocation or nothing.
 	 * If len is zero return the smallest empty mbuf.
 	 */
-	m = m_getm2(NULL, bsd_max(total + align, 1), how, MT_DATA, flags);
+	m = m_getm2(NULL, bsd_max(total + align, min_size), how, MT_DATA, flags);
 	if (m == NULL)
 		return (NULL);
 	m->m_hdr.mh_data += align;
