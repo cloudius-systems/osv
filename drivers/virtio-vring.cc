@@ -89,7 +89,7 @@ namespace virtio {
         _avail->disable_interrupt();
     }
 
-    bool vring::use_indirect(int desc_needed)
+    inline bool vring::use_indirect(int desc_needed)
     {
         return _use_indirect &&
                _dev->get_indirect_buf_cap() &&
