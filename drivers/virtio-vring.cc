@@ -92,9 +92,13 @@ namespace virtio {
     bool vring::use_indirect(int desc_needed)
     {
         return _use_indirect &&
-                _dev->get_indirect_buf_cap() &&
-                desc_needed > 1 &&	// no need to use indirect for a single descriptor
-                _avail_count < _num / 4;  // use indirect only when low space
+               _dev->get_indirect_buf_cap() &&
+               // don't let the posting fail due to low available buffers number
+               (desc_needed > _avail_count ||
+               // no need to use indirect for a single descriptor
+               (desc_needed > 1 &&
+               // use indirect only when low space
+               _avail_count < _num / 4));
     }
 
     void vring::enable_interrupts()
