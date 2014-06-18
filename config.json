@@ -8,6 +8,10 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/httpserver"
         },
+        "osvinit": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/mgmt/osvinit"
+        },
         "java": {
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/java/"
