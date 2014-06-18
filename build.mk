@@ -400,7 +400,7 @@ fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
 	$(call quiet, $(CXX) $(CXXFLASG) -O2 -o $@ $(filter %.cc, $^), CXX $@)
 
 loader-stripped.elf.lz.o: loader-stripped.elf fastlz/lz
-	$(call quiet, $(out)/fastlz/lz $(out)/loader-stripped.elf, LZ $@)
+	$(call quiet, fastlz/lz loader-stripped.elf, LZ $@)
 	$(call quiet, objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz $@, OBJCOPY $@)
 
 fastlz/lzloader.o: fastlz/lzloader.cc
@@ -411,8 +411,8 @@ lzloader.elf: loader-stripped.elf.lz.o fastlz/lzloader.o arch/x64/lzloader.ld \
 	$(call quiet, $(src)/scripts/check-image-size.sh loader-stripped.elf 23068672)
 	$(call quiet, $(LD) -o $@ \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
-	-T $(src)/arch/x64/lzloader.ld \
-	$(patsubst %.o,$(out)/%.o, $(filter %.o, $^)), LD $@)
+		-T $(src)/arch/x64/lzloader.ld \
+		$(filter %.o, $^), LD $@)
 
 acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
 
@@ -927,18 +927,18 @@ bare.raw: loader.img
 	$(call quiet, dd if=loader.img of=$@ conv=notrunc > /dev/null 2>&1)
 	$(call quiet, $(src)/scripts/imgedit.py setpartition $@ 2 $(zfs-start) $(zfs-size), IMGEDIT $@)
 
-bare.img: scripts/mkzfs.py $(jni) bare.raw $(out)/bootfs.manifest
+bare.img: scripts/mkzfs.py $(jni) bare.raw bootfs.manifest
 	$(call quiet, echo Creating $@ as $(img_format))
 	$(call quiet, qemu-img convert -f raw -O $(img_format) bare.raw $@)
 	$(call quiet, qemu-img resize $@ +$(fs_size_mb)M > /dev/null 2>&1)
-	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest
+	$(src)/scripts/mkzfs.py -o $@ -d $@.d -m bootfs.manifest
 
-usr.img: bare.img $(out)/usr.manifest $(out)/cmdline
+usr.img: bare.img usr.manifest cmdline
 	$(call quiet, cp bare.img $@)
-	$(src)/scripts/upload_manifest.py -o $@ -m $(out)/usr.manifest \
+	$(src)/scripts/upload_manifest.py -o $@ -m usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
-	$(call quiet, $(src)/scripts/imgedit.py setargs $@ "$(shell cat $(out)/cmdline)", IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ "$(shell cat cmdline)", IMGEDIT $@)
 
 osv.vmdk osv.vdi:
 	$(call quiet, echo Creating $@ as $(subst osv.,,$@))
@@ -947,10 +947,10 @@ osv.vmdk osv.vdi:
 
 $(jni): INCLUDES += -I /usr/lib/jvm/java/include -I /usr/lib/jvm/java/include/linux/
 
-bootfs.bin: scripts/mkbootfs.py $(java-targets) $(out)/bootfs.manifest $(tests) $(java_tests) $(tools) \
+bootfs.bin: scripts/mkbootfs.py $(java-targets) bootfs.manifest $(tests) $(java_tests) $(tools) \
 		tests/testrunner.so \
 		zpool.so zfs.so
-	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m $(out)/bootfs.manifest \
+	$(call quiet, $(src)/scripts/mkbootfs.py -o $@ -d $@.d -m bootfs.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
@@ -995,12 +995,12 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 
 .PHONY: process-modules
 process-modules: bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
-	cd $(out)/module \
+	cd module \
 	  && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= $(src)/scripts/module.py --image-config $(image)
 
-$(out)/cmdline: process-modules
-$(out)/bootfs.manifest: process-modules
-$(out)/usr.manifest: process-modules
+cmdline: process-modules
+bootfs.manifest: process-modules
+usr.manifest: process-modules
 
 -include $(shell find -name '*.d')
 
