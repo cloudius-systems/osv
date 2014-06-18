@@ -14,16 +14,7 @@
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/asio.hpp>
-#include <iostream>
-#include <string>
-#include <sstream>
-#include "api/os.hh"
-#include "api/files_mapping.hh"
-#include "api/jvm.hh"
-#include "api/file.hh"
-#include "path_holder.hh"
-#include "api/env.hh"
-#include "api/trace.hh"
+#include "global_server.hh"
 
 using namespace httpserver;
 
@@ -48,20 +39,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    routes routes;
-    path_holder::set_routes(&routes);
-    api::os::init(routes);
-    api::file::init(routes);
-    api::jvm::init(routes);
-    api::env::init(routes);
-    api::trace::init(routes);
-    api::files_mapping::init(routes);
-    try {
-        http::server::server s(&config, &routes);
-        s.run();
-    } catch (std::exception& e) {
-        std::cerr << "exception: " << e.what() << "\n";
-    }
+    global_server::set(config);
+    global_server::run();
 
     return 0;
 }
