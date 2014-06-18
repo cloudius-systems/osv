@@ -6,6 +6,7 @@
  */
 
 #include <osv/sched.hh>
+#include <osv/elf.hh>
 #include <cstdlib>
 #include <cstring>
 #include <string.h>
@@ -117,8 +118,16 @@ void abort(const char *fmt, ...)
         vsnprintf(msg, sizeof(msg), fmt, ap);
         va_end(ap);
 
-        debug_ll(msg);
-        print_backtrace();
+        debug_early(msg);
+        // backtrace requires threads to be available, and also
+        // ELF s_program to be initialized. Since s_program happens
+        // later, this check is enough to ensure a minimal fallback
+        // functionality even early on.
+        if (elf::get_program() != nullptr) {
+            print_backtrace();
+        } else {
+            debug_early("Halting.\n");
+        }
 #ifndef AARCH64_PORT_STUB
         panic::pvpanic::panicked();
 #endif /* !AARCH64_PORT_STUB */
