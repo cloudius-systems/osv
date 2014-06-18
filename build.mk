@@ -143,22 +143,7 @@ configuration = $(foreach cf,$(configuration-defines), \
 
 include $(src)/conf/base.mk
 include $(src)/conf/$(mode).mk
-
-ifeq ($(arch),x64)
-arch-cflags = -msse2
-endif
-
-ifeq ($(arch),aarch64)
-# You will die horribly without -mstrict-align, due to
-# unaligned access to a stack attr variable with stp.
-# Relaxing alignment checks via sctlr_el1 A bit setting should solve
-# but it doesn't - setting ignored?
-#
-# Also, mixed TLS models resulted in different var addresses seen by
-# different objects depending on the TLS model used.
-# Force all __thread variables encountered to local exec.
-arch-cflags = -mstrict-align -mtls-dialect=desc -ftls-model=local-exec -DAARCH64_PORT_STUB
-endif
+include $(src)/conf/$(ARCH).mk
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
