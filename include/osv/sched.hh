@@ -658,6 +658,7 @@ private:
 };
 
 std::chrono::nanoseconds osv_run_stats();
+osv::clock::uptime::duration process_cputime();
 
 class thread_runtime_compare {
 public:
