@@ -144,16 +144,6 @@ configuration = $(foreach cf,$(configuration-defines), \
 include $(src)/conf/base.mk
 include $(src)/conf/$(mode).mk
 
-ifeq ($(mode),debug)
-CFLAGS += -Wno-maybe-uninitialized
-CXXFLAGS += -Wno-maybe-uninitialized
-endif
-
-# Add -DNDEBUG if conf-DEBUG_BUILD is set to 0 in *.mk files above
-ifeq ($(conf-DEBUG_BUILD),0)
-configuration += -DNDEBUG
-endif
-
 ifeq ($(arch),x64)
 arch-cflags = -msse2
 endif
