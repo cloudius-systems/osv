@@ -906,7 +906,7 @@ again:
 		nbytes = MIN(n, max_blksz - P2PHASE(woff, max_blksz));
 
 		if (woff + nbytes > zp->z_size)
-			vp->v_size = woff + nbytes;
+			vnode_pager_setsize(vp, woff + nbytes);
 
 		if (abuf == NULL) {
 			tx_bytes = uio->uio_resid;
