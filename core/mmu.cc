@@ -1113,14 +1113,14 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
               fileref f, f_offset offset)
 {
     bool search = !(flags & mmu::mmap_fixed);
-    auto asize = align_up(size, mmu::page_size);
+    size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto *vma = f->mmap(addr_range(start, start + size), flags, perm, offset).release();
     void *v;
     WITH_LOCK(vma_list_mutex) {
-        v = (void*) allocate(vma, start, asize, search);
+        v = (void*) allocate(vma, start, size, search);
         if (flags & mmap_populate) {
-            populate_vma(vma, v, asize);
+            populate_vma(vma, v, size);
         }
     }
     return v;
