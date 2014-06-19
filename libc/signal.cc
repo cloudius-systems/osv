@@ -131,10 +131,10 @@ void generate_signal(siginfo_t &siginfo, exception_frame* ef)
     }
 }
 
-void handle_segmentation_fault(ulong addr, exception_frame* ef)
+void handle_mmap_fault(ulong addr, int sig, exception_frame* ef)
 {
     siginfo_t si;
-    si.si_signo = SIGSEGV;
+    si.si_signo = sig;
     si.si_addr = reinterpret_cast<void*>(addr);
     generate_signal(si, ef);
 }

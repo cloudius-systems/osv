@@ -102,6 +102,7 @@ public:
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
     virtual int validate_perm(unsigned perm);
+    virtual void fault(uintptr_t addr, exception_frame *ef) override;
 private:
     f_offset offset(uintptr_t addr);
     fileref _file;
