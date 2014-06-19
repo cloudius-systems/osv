@@ -9,7 +9,7 @@
 #define GIC_HH
 
 #include <osv/types.h>
-#include <osv/mmu.hh>
+#include <osv/mmu-defs.hh>
 #include <osv/mutex.h>
 
 /* This is GICv2. Revisit for v3 if/when needed. */

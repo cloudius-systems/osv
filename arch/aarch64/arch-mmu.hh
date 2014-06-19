@@ -8,7 +8,7 @@
 #ifndef ARCH_MMU_HH
 #define ARCH_MMU_HH
 
-#include <osv/debug.h>
+#include <osv/debug.hh>
 
 /* AArch64 MMU
  *

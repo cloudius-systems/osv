@@ -19,6 +19,7 @@
 #include <memory>
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
+#include <osv/trace.hh>
 
 struct exception_frame;
 class balloon;
@@ -170,11 +171,26 @@ bool isreadable(void *addr, size_t size);
 std::unique_ptr<file_vma> default_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 std::unique_ptr<file_vma> map_file_mmap(file* file, addr_range range, unsigned flags, unsigned perm, off_t offset);
 
+
+template<int N>
+inline bool pte_is_cow(pt_element<N> pte)
+{
+    return false;
+}
+
+template<>
+inline bool pte_is_cow(pt_element<0> pte)
+{
+    return pte.sw_bit(pte_cow); // only 4k pages can be cow for now
+}
+
+static TRACEPOINT(trace_clear_pte, "ptep=%p, cow=%d, pte=%x", void*, bool, uint64_t);
+
 template<int N>
 inline pt_element<N> clear_pte(hw_ptep<N> ptep)
 {
     auto old = ptep.exchange(make_empty_pte<N>());
-    //trace_clear_pte(ptep.release(), pte_is_cow(old), old.addr(false));
+    trace_clear_pte(ptep.release(), pte_is_cow(old), old.addr());
     return old;
 }
 
@@ -291,18 +307,6 @@ error  advise(void* addr, size_t size, int advice);
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
-
-template<int N>
-inline bool pte_is_cow(pt_element<N> pte)
-{
-    return false;
-}
-
-template<>
-inline bool pte_is_cow(pt_element<0> pte)
-{
-    return pte.sw_bit(pte_cow); // only 4k pages can be cow for now
-}
 
 unsigned long all_vmas_size();
 
