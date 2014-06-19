@@ -1120,7 +1120,7 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, size, search);
         if (flags & mmap_populate) {
-            populate_vma(vma, v, size);
+            populate_vma(vma, v, std::min(size, align_up(::size(f), page_size)));
         }
     }
     return v;
