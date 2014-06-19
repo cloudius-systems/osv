@@ -8,6 +8,8 @@
 #ifndef VIRTIO_NET_DRIVER_H
 #define VIRTIO_NET_DRIVER_H
 
+//#define DEBUG_VIRTIO_TX
+
 #include <boost/function_output_iterator.hpp>
 
 #include <bsd/porting/netport.h>
@@ -288,12 +290,19 @@ private:
         u64 tx_csum;    /* CSUM offload requests */
         u64 tx_tso;     /* GSO/TSO packets */
         /* u64 tx_rescheduled; */ /* TODO when we implement xoff */
+#ifdef DEBUG_VIRTIO_TX
+        u64 tx_worker_kicks;
+        u64 tx_kicks;
+        u64 tx_worker_wakeups;
+        u64 tx_worker_packets;
+#endif
     };
 
      /* Single Rx queue object */
     struct rxq {
         rxq(vring* vq, std::function<void ()> poll_func)
-            : vqueue(vq), poll_task(poll_func, sched::thread::attr().name("virtio-net-rx")) {};
+            : vqueue(vq), poll_task(poll_func, sched::thread::attr().
+                                    name("virtio-net-rx")) {};
         vring* vqueue;
         sched::thread  poll_task;
         struct rxq_stats stats = { 0 };
@@ -315,7 +324,13 @@ private:
          * @param cooky opaque pointer representing the descriptor of the
          *              current packet to be sent.
          */
-        void operator()(void* cooky) const { _q->xmit_one_locked(cooky); }
+        void operator()(void* cooky) const
+        {
+            _q->xmit_one_locked(cooky);
+#ifdef DEBUG_VIRTIO_TX
+            _q->stats.tx_worker_packets++;
+#endif
+        }
 
         txq* _q;
     };
@@ -337,7 +352,7 @@ private:
             worker([this] {
                 // TODO: implement a proper StopPred when we fix a SP code
                 _xmitter.poll_until([] { return false; }, _xmit_it);
-            })
+            }, sched::thread::attr().name("virtio-tx-worker"))
         {
             //
             // Kick at least every full ring of packets (see _kick_thresh
