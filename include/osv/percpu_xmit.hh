@@ -233,8 +233,7 @@ public:
 
         // Alright!!!
         if (!rc) {
-            if (_txq->kick_hw()) {
-            }
+            _txq->kick_hw();
         }
 
         unlock_running();
