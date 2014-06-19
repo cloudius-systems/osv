@@ -395,6 +395,7 @@ static std::unique_ptr<cached_page_write> create_write_cached_page(vfs_file* fp,
     return std::unique_ptr<cached_page_write>(cp);
 }
 
+TRACEPOINT(trace_drop_write_cached_page, "addr=%p", void*);
 static void insert(cached_page_write* cp) {
     static cached_page_write* tofree[lru_free_count];
     write_cache.emplace(cp->key(), cp);
@@ -404,6 +405,7 @@ static void insert(cached_page_write* cp) {
         for (unsigned i = 0; i < lru_free_count; i++) {
             cached_page_write *p = write_lru.back();
             write_lru.pop_back();
+            trace_drop_write_cached_page(p->addr());
             write_cache.erase(p->key());
             if (p->flush_check_dirty()) {
                 p->mark_dirty();
