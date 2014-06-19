@@ -833,7 +833,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 	struct dentry	*olddp;
 	struct dentry	*newdp;
 	struct dentry	*newdirdp;
-	struct vnode	*vp;
 	char		*name;
 
 	if (oldpath == NULL || newpath == NULL) {
@@ -846,20 +845,9 @@ sys_symlink(const char *oldpath, const char *newpath)
 	olddp		= NULL;
 	newdp		= NULL;
 	newdirdp	= NULL;
-	vp		= NULL;
-
-	error = task_conv(t, oldpath, VWRITE, op);
-	if (error != 0) {
-		return (error);
-	}
 
 	error = task_conv(t, newpath, VWRITE, np);
 	if (error != 0) {
-		return (error);
-	}
-
-	/* oldpath must exist */
-	if ((error = namei(op, &olddp)) != 0) {
 		return (error);
 	}
 
@@ -877,9 +865,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 		goto out;
 	}
 
-	vp = olddp->d_vnode;
-	vn_lock(vp);
-
 	/* check for write access at newpath */
 	if ((error = vn_access(newdirdp->d_vnode, VWRITE)) != 0) {
 		goto out;
@@ -895,10 +880,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
 
 out:
-	if (vp != NULL) {
-		vn_unlock(vp);
-	}
-
 	if (newdirdp != NULL) {
 		vn_unlock(newdirdp->d_vnode);
 		drele(newdirdp);
