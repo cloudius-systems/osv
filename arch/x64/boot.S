@@ -134,6 +134,7 @@ smpboot:
     mov %eax, %cr3
     mov smpboot_efer-smpboot, %eax
     mov smpboot_efer+4-smpboot, %edx
+    btr $10, %eax
     mov $0xc0000080, %ecx
     wrmsr
     mov smpboot_cr0-smpboot, %eax
