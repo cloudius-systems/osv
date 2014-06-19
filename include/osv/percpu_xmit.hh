@@ -208,7 +208,7 @@ public:
         void* cooky = nullptr;
         int rc = _txq->xmit_prep(buff, cooky);
 
-        if (rc == EINVAL) {
+        if (rc) {
             m_freem(buff);
             return rc;
         }
