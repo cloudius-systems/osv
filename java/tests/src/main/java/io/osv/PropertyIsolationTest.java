@@ -8,6 +8,8 @@ import java.util.concurrent.CyclicBarrier;
 
 import static io.osv.TestIsolateLaunching.runIsolate;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 /*
  * Copyright (C) 2014 Cloudius Systems, Ltd.
@@ -19,6 +21,7 @@ public class PropertyIsolationTest {
     public static final String PROPERTY_NAME = "test.property";
     public static final String VALUE_1 = "value1";
     public static final String VALUE_2 = "value2";
+    public static final String LINE_SEPARATOR = "line.separator";
 
     private final CyclicBarrier barrier = new CyclicBarrier(2);
 
@@ -51,10 +54,10 @@ public class PropertyIsolationTest {
     }
 
     @Test
-    public void testPropertyValuesAreInheritedButChangesInParentContextDoNotAffectInheritedValue() throws Throwable {
+    public void testPropertiesAreNotInheritedAndChangesInParentContextDoNotAffectValuesInTheChild() throws Throwable {
         System.setProperty(PROPERTY_NAME, VALUE_1);
 
-        Context context = runIsolate(PropertyReader.class, PROPERTY_NAME, VALUE_1);
+        Context context = runIsolate(PropertyReader.class, PROPERTY_NAME, null);
         context.send(barrier);
 
         System.setProperty(PROPERTY_NAME, VALUE_2);
@@ -64,16 +67,15 @@ public class PropertyIsolationTest {
     }
 
     @Test
-    public void testPropertySetInOneContextDoesNotAffectInheritedValueInAnother() throws Throwable {
-        System.setProperty(PROPERTY_NAME, VALUE_2);
+    public void testInitialSystemPropertiesAreVisibleInChildContexts() throws Throwable {
+        String lineSeparator = System.getProperty(LINE_SEPARATOR);
+        assertNotNull(lineSeparator);
+        assertNotEquals("", lineSeparator);
 
-        Context context1 = runIsolate(PropertySetter.class, PROPERTY_NAME, VALUE_1);
-        Context context2 = runIsolate(PropertyReader.class, PROPERTY_NAME, VALUE_2);
+        Context context = runIsolate(PropertyReader.class, LINE_SEPARATOR, lineSeparator);
+        context.send(barrier);
 
-        context1.send(barrier);
-        context2.send(barrier);
-
-        context1.join();
-        context2.join();
+        barrier.await();
+        context.join();
     }
 }

@@ -37,6 +37,7 @@ public class ContextIsolator {
     }
 
     private final Context masterContext;
+    private final Properties commonSystemProperties;
 
     private static void verifyLogManagerIsInstalled() {
         LogManager manager = LogManager.getLogManager();
@@ -61,11 +62,18 @@ public class ContextIsolator {
 
     public ContextIsolator() {
         ClassLoader originalSystemClassLoader = getOsvClassLoader().getParent();
-        masterContext = new Context(originalSystemClassLoader, System.getProperties());
+        commonSystemProperties = copyOf(System.getProperties());
+        masterContext = new Context(originalSystemClassLoader, copyOf(commonSystemProperties));
 
         parentClassLoaderForIsolates = originalSystemClassLoader;
 
         installSystemPropertiesProxy();
+    }
+
+    private Properties copyOf(Properties properties) {
+        Properties result = new Properties();
+        result.putAll(properties);
+        return result;
     }
 
     private static void installSystemPropertiesProxy() {
@@ -95,7 +103,7 @@ public class ContextIsolator {
     private Context run(ClassLoader classLoader, final String classpath, final String mainClass,
                         final String[] args, final Properties properties) {
         Properties contextProperties = new Properties();
-        contextProperties.putAll(System.getProperties());
+        contextProperties.putAll(commonSystemProperties);
         contextProperties.putAll(properties);
 
         final Context context = new Context(classLoader, contextProperties);
