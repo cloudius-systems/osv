@@ -1900,6 +1900,7 @@ extern "C" void unmount_rootfs(void)
 }
 
 extern "C" void bio_init(void);
+extern "C" void bio_sync(void);
 
 int vfs_initialized;
 
@@ -1944,6 +1945,8 @@ void vfs_exit(void)
     replace_cwd(main_task, nullptr, []() { return 0; });
     /* Unmount all file systems */
     unmount_rootfs();
+    /* Finish with the bio layer */
+    bio_sync();
 }
 
 void sys_panic(const char *str)
