@@ -14,7 +14,8 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
         LoggingIsolationTest.class,
         ClassLoaderIsolationTest.class,
-        PropertyIsolationTest.class
+        PropertyIsolationTest.class,
+        OsvApiTest.class
 })
 public class AllTests {
 }
