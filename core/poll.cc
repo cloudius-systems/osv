@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <osv/file.h>
 #include <osv/poll.h>
@@ -386,6 +387,19 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     return ret;
 }
 
+int ppoll(struct pollfd *fds, nfds_t nfds,
+           const struct timespec *timeout_ts, const sigset_t *sigmask)
+{
+    sigset_t origmask;
+    int timeout;
+
+    timeout = (timeout_ts == NULL) ? -1 :
+                (timeout_ts->tv_sec * 1000 + timeout_ts->tv_nsec / 1000000);
+    sigprocmask(SIG_SETMASK, sigmask, &origmask);
+    auto ret = poll(fds, nfds, timeout);
+    sigprocmask(SIG_SETMASK, &origmask, NULL);
+    return ret;
+}
 /* Used by code compiled on Linux with -D_FORTIFY_SOURCE */
 extern "C"
 int __poll_chk (struct pollfd _pfd[], nfds_t _nfds, int _timeout, size_t pdflen)
