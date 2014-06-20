@@ -31,6 +31,7 @@
 
 #include <sys/utsname.h>
 #include <sys/limits.h>
+#include <sys/filio.h>
 
 #define	MAXUID	UID_MAX
 
