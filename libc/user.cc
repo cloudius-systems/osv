@@ -207,3 +207,13 @@ getgrgid_r (gid_t gid, struct group *grp, char *buffer, size_t buflen,
 
     return 0;
 }
+
+int getgroups(int size, gid_t list[])
+{
+    return 0;
+}
+
+int setgroups(size_t size, const gid_t *list)
+{
+    return 0;
+}
