@@ -766,6 +766,7 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
 void object::unload_needed()
 {
     _needed.clear();
+    _used_by_resolve_plt_got.clear();
 }
 
 ulong object::get_tls_size()
