@@ -1373,6 +1373,12 @@ int access(const char *pathname, int mode)
     return -1;
 }
 
+extern "C" 
+int eaccess(const char *pathname, int mode)
+{
+    return access(pathname, mode);
+}
+
 #if 0
 static int
 fs_pipe(struct task *t, struct msg *msg)
