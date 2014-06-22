@@ -23,6 +23,9 @@ https://github.com/cloudius-systems/osv/wiki
 OSv can only be built on a 64-bit x86 Linux distribution. Please note that
 this means the "x86_64" or "amd64" version, not the 32-bit "i386" version.
 
+If you wish, you can run the script 'scripts/setup.py' as root to install all dependencies.
+Otherwise, you may follow the manual instructions below.
+
 First, install prerequisite packages:
 
 **Fedora**
