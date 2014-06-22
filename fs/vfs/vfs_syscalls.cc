@@ -56,6 +56,55 @@
 #include "vfs.h"
 #include <fs/fs.hh>
 
+extern struct task *main_task;
+
+static int
+open_no_follow_chk(char *path)
+{
+	int           error;
+	struct dentry *ddp;
+	char          *name;
+	struct dentry *dp;
+	struct vnode  *vp;
+
+	ddp = NULL;
+	dp  = NULL;
+	vp  = NULL;
+
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		goto out;
+	}
+
+	vp = dp->d_vnode;
+	vn_lock(vp);
+	if (vp->v_type == VLNK) {
+		error = ELOOP;
+		goto out;
+	}
+
+	error = 0;
+out:
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (dp != NULL) {
+		drele(dp);
+	}
+
+	if (ddp != NULL) {
+		drele(ddp);
+	}
+
+	return (error);
+}
+
 int
 sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 {
@@ -109,6 +158,12 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 		flags &= ~O_CREAT;
 	} else {
 		/* Open */
+		if (flags & O_NOFOLLOW) {
+			error = open_no_follow_chk(path);
+			if (error != 0) {
+				return (error);
+			}
+		}
 		error = namei(path, &dp);
 		if (error)
 			return error;
@@ -535,6 +590,7 @@ sys_rmdir(char *path)
 	vn_unlock(ddp->d_vnode);
 
 	vn_unlock(vp);
+	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
 	return error;
@@ -626,30 +682,67 @@ sys_rename(char *src, char *dest)
 	char *sname, *dname;
 	int error;
 	char root[] = "/";
+	bool ts; /* trailing slash */
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
 
-	error = namei(src, &dp1);
-	if (error)
-		return error;
+	ts = false;
+	if (has_trailing(src, '/') == true) {
+		if (strlen(src) != 1) {
+			/* remove trailing slash iff path is none root */
+			strip_trailing(src, '/');
+			ts = true;
+		}
+	}
+
+	error = lookup(src, &ddp1, &sname);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(src, ddp1, &dp1);
+	if (error != 0) {
+		drele(ddp1);
+		return (error);
+	}
 
 	vp1 = dp1->d_vnode;
 	vn_lock(vp1);
 
+	if (vp1->v_type != VDIR && ts == true) {
+		error = ENOTDIR;
+		goto err1;
+	}
+
 	if ((error = vn_access(vp1, VWRITE)) != 0)
 		goto err1;
 
-	/* Check type of source & target */
-	error = namei(dest, &dp2);
+	ts = false;
+	if (has_trailing(dest, '/') == true) {
+		if (strlen(dest) != 1) {
+			/* remove trailing slash iff path is none root */
+			strip_trailing(dest, '/');
+			ts = true;
+		}
+	}
+
+	error = lookup(dest, &ddp2, &dname);
+	if (error != 0) {
+		goto err1;
+	}
+
+	error = namei_last_nofollow(dest, ddp2, &dp2);
 	if (error == 0) {
 		/* target exists */
 
 		vp2 = dp2->d_vnode;
 		vn_lock(vp2);
 
-		if (vp1->v_type == VDIR && vp2->v_type != VDIR) {
-			error = ENOTDIR;
-			goto err2;
+		if (vp2->v_type != VDIR && vp2->v_type != VLNK) {
+			if (vp1->v_type == VDIR || ts == true) {
+				error = ENOTDIR;
+				goto err2;
+			}
 		} else if (vp1->v_type != VDIR && vp2->v_type == VDIR) {
 			error = EISDIR;
 			goto err2;
@@ -659,7 +752,7 @@ sys_rename(char *src, char *dest)
 			goto err2;
 		}
 	} else if (error == ENOENT) {
-		if (vp1->v_type != VDIR && has_trailing(dest, '/')) {
+		if (vp1->v_type != VDIR && ts == true) {
 			error = ENOTDIR;
 			goto err2;
 		}
@@ -694,14 +787,8 @@ sys_rename(char *src, char *dest)
 	*dname = 0;
 	dname++;
 
-	if ((error = lookup(src, &ddp1, &sname)) != 0)
-		goto err2;
-
 	dvp1 = ddp1->d_vnode;
 	vn_lock(dvp1);
-
-	if ((error = namei(dest, &ddp2)) != 0)
-		goto err3;
 
 	dvp2 = ddp2->d_vnode;
 	vn_lock(dvp2);
@@ -709,7 +796,7 @@ sys_rename(char *src, char *dest)
 	/* The source and dest must be same file system */
 	if (dvp1->v_mount != dvp2->v_mount) {
 		error = EXDEV;
-		goto err4;
+		goto err3;
 	}
 
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
@@ -718,21 +805,91 @@ sys_rename(char *src, char *dest)
 	if (dp2)
 		dentry_remove(dp2);
 
- err4:
-	vn_unlock(dvp2);
-	drele(ddp2);
  err3:
+	vn_unlock(dvp2);
 	vn_unlock(dvp1);
-	drele(ddp1);
  err2:
 	if (vp2) {
 		vn_unlock(vp2);
 		drele(dp2);
 	}
+	drele(ddp2);
  err1:
 	vn_unlock(vp1);
 	drele(dp1);
+	drele(ddp1);
 	return error;
+}
+
+int
+sys_symlink(const char *oldpath, const char *newpath)
+{
+	struct task	*t = main_task;
+	int		error;
+	std::unique_ptr<char []> up_op (new char[PATH_MAX]);
+	char		*op = up_op.get();
+	std::unique_ptr<char []> up_np (new char[PATH_MAX]);
+	char		*np = up_np.get();
+	struct dentry	*olddp;
+	struct dentry	*newdp;
+	struct dentry	*newdirdp;
+	char		*name;
+
+	if (oldpath == NULL || newpath == NULL) {
+		return (EFAULT);
+	}
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
+				oldpath, newpath));
+
+	olddp		= NULL;
+	newdp		= NULL;
+	newdirdp	= NULL;
+
+	error = task_conv(t, newpath, VWRITE, np);
+	if (error != 0) {
+		return (error);
+	}
+
+	/* parent directory for new path must exist */
+	if ((error = lookup(np, &newdirdp, &name)) != 0) {
+		error = ENOENT;
+		goto out;
+	}
+	vn_lock(newdirdp->d_vnode);
+
+	/* newpath should not already exist */
+	if (namei_last_nofollow(np, newdirdp, &newdp) == 0) {
+		drele(newdp);
+		error = EEXIST;
+		goto out;
+	}
+
+	/* check for write access at newpath */
+	if ((error = vn_access(newdirdp->d_vnode, VWRITE)) != 0) {
+		goto out;
+	}
+
+	/* oldpath may not be const char * to VOP_SYMLINK - need to copy */
+	size_t tocopy;
+	tocopy = strlcpy(op, oldpath, PATH_MAX);
+	if (tocopy >= PATH_MAX - 1) {
+		error = ENAMETOOLONG;
+		goto out;
+	}
+	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
+
+out:
+	if (newdirdp != NULL) {
+		vn_unlock(newdirdp->d_vnode);
+		drele(newdirdp);
+	}
+
+	if (olddp != NULL) {
+		drele(olddp);
+	}
+
+	return (error);
 }
 
 int
@@ -807,8 +964,19 @@ sys_unlink(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
 
-	if ((error = namei(path, &dp)) != 0)
-		return error;
+	ddp   = NULL;
+	dp    = NULL;
+	vp    = NULL;
+
+	error = lookup(path, &ddp, &name);
+	if (error != 0) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error != 0) {
+		goto out;
+	}
 
 	vp = dp->d_vnode;
 	vn_lock(vp);
@@ -824,8 +992,6 @@ sys_unlink(char *path)
 		error = EBUSY;
 		goto out;
 	}
-	if ((error = lookup(path, &ddp, &name)) != 0)
-		goto out;
 
 	vn_lock(ddp->d_vnode);
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
@@ -835,10 +1001,19 @@ sys_unlink(char *path)
 	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
-	return 0;
+	return error;
  out:
-	vn_unlock(vp);
-	drele(dp);
+	if (vp != NULL) {
+		vn_unlock(vp);
+	}
+
+	if (dp != NULL) {
+		drele(dp);
+	}
+
+	if (ddp != NULL) {
+		drele(ddp);
+	}
 	return error;
 }
 
@@ -883,6 +1058,32 @@ sys_stat(char *path, struct stat *st)
 	} catch (error e) {
 		return e.get();
 	}
+}
+
+int sys_lstat(char *path, struct stat *st)
+{
+	int           error;
+	struct dentry *ddp;
+	char          *name;
+	struct dentry *dp;
+
+	DPRINTF(VFSDB_SYSCALL, ("sys_lstat: path=%s\n", path));
+
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
+
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		drele(ddp);
+		return error;
+	}
+
+	error = vn_stat(dp->d_vnode, st);
+	drele(dp);
+	drele(ddp);
+	return error;
 }
 
 int
@@ -973,19 +1174,57 @@ sys_fchdir(struct file *fp, char *cwd)
 	return 0;
 }
 
-ssize_t
-sys_readlink(char *path, char *buf, size_t bufsize)
+int
+sys_readlink(char *path, char *buf, size_t bufsize, ssize_t *size)
 {
-	int error;
-	struct dentry *dp;
+	int		error;
+	struct dentry	*ddp;
+	char		*name;
+	struct dentry	*dp;
+	struct vnode	*vp;
+	struct iovec	vec;
+	struct uio	uio;
 
-	error = namei(path, &dp);
-	if (error)
-		return error;
+	*size = 0;
+	error = lookup(path, &ddp, &name);
+	if (error) {
+		return (error);
+	}
 
-	/* no symlink support (yet) in OSv */
+	error = namei_last_nofollow(path, ddp, &dp);
+	if (error) {
+		drele(ddp);
+		return (error);
+	}
+
+	if (dp->d_vnode->v_type != VLNK) {
+		drele(dp);
+		drele(ddp);
+		return (EINVAL);
+	}
+	vec.iov_base	= buf;
+	vec.iov_len	= bufsize;
+
+	uio.uio_iov	= &vec;
+	uio.uio_iovcnt	= 1;
+	uio.uio_offset	= 0;
+	uio.uio_resid	= bufsize;
+	uio.uio_rw	= UIO_READ;
+
+	vp = dp->d_vnode;
+	vn_lock(vp);
+	error = VOP_READLINK(vp, &uio);
+	vn_unlock(vp);
+
 	drele(dp);
-	return EINVAL;
+	drele(ddp);
+
+	if (error) {
+		return (error);
+	}
+
+	*size = bufsize - uio.uio_resid;
+	return (0);
 }
 
 /*

@@ -59,19 +59,16 @@ task_alloc(struct task **pt)
 
 /*
  * Convert to full path from the cwd of task and path.
- * @t:    task structure
+ * @wd:   working directory
  * @path: target path
  * @full: full path to be returned
- * @acc: access mode
  */
 int
-task_conv(struct task *t, const char *cpath, int acc, char *full)
+path_conv(char *wd, const char *cpath, char *full)
 {
 	char path[PATH_MAX];
-	char *src, *tgt, *p, *end, *cwd;
+	char *src, *tgt, *p, *end;
 	size_t len = 0;
-
-	cwd = t->t_cwd;
 
 	strlcpy(path, cpath, PATH_MAX);
 	path[PATH_MAX - 1] = '\0';
@@ -79,7 +76,7 @@ task_conv(struct task *t, const char *cpath, int acc, char *full)
 	len = strlen(path);
 	if (len >= PATH_MAX)
 		return ENAMETOOLONG;
-	if (strlen(cwd) + len >= PATH_MAX)
+	if (strlen(wd) + len >= PATH_MAX)
 		return ENAMETOOLONG;
 	src = path;
 	tgt = full;
@@ -88,8 +85,8 @@ task_conv(struct task *t, const char *cpath, int acc, char *full)
 		*tgt++ = *src++;
 		len = 1;
 	} else {
-		strlcpy(full, cwd, PATH_MAX);
-		len = strlen(cwd);
+		strlcpy(full, wd, PATH_MAX);
+		len = strlen(wd);
 		tgt += len;
 		if (len > 1 && path[0] != '.') {
 			*tgt = '/';
@@ -133,8 +130,28 @@ task_conv(struct task *t, const char *cpath, int acc, char *full)
 	}
 	*tgt = '\0';
 
+	return (0);
+}
+
+/*
+ * Convert to full path from the cwd of task and path.
+ * @t:    task structure
+ * @path: target path
+ * @full: full path to be returned
+ * @acc: access mode
+ */
+int
+task_conv(struct task *t, const char *cpath, int acc, char *full)
+{
+	int rc;
+
+	rc = path_conv(t->t_cwd, cpath, full);
+	if (rc != 0) {
+		return (rc);
+	}
+
 	/* Check if the client task has required permission */
-	return 0; //sec_file_permission(t->t_taskid, full, acc);
+	return (0); //sec_file_permission(t->t_taskid, full, acc);
 }
 
 /*

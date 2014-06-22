@@ -107,7 +107,7 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         unique_ptr<char[]> targetbuf{new char[filesize]};
         is.read(targetbuf.get(), filesize);
         string target{targetbuf.get(), filesize};
-        out.add_symlink(name, target);
+        out.add_symlink(target, name);
 	break;
     }
     default:

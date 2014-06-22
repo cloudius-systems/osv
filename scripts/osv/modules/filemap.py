@@ -78,12 +78,15 @@ class FileMap(object):
             if not m.guest_path:
                 raise Exception('Unfinished mapping for %s. Did you forget to call .to()?' % root)
 
-            if not os.path.exists(root):
+            if not os.path.lexists(root):
                 raise Exception('Path does not exist: ' + root)
 
-            if os.path.isfile(root):
+            if (os.path.isfile(root)
+                or (os.path.islink(root) and m._allow_symlink)):
                 if m.filters:
                     raise Exception('Filters only allowed when adding directory')
+                if m._allow_symlink:
+                    root = '!' + root
                 add(m.guest_path, root)
             else:
                 for dirpath, dirnames, filenames in os.walk(root):
@@ -106,6 +109,7 @@ class Mapping(object):
         self.has_include = False
         self.filters = []
         self.guest_path = None
+        self._allow_symlink = False
 
     def include(self, path):
         self.filters.append(PathFilter(path, exclude=False))
@@ -130,6 +134,9 @@ class Mapping(object):
             raise Exception('Already mapped to %s, tried to remap to %s' % (self.guest_path, guest_path))
         self.guest_path = guest_path
         return self
+
+    def allow_symlink(self):
+        self._allow_symlink = True
 
 
 def as_manifest(filemap, appender):
