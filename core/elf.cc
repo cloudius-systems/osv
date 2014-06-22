@@ -315,6 +315,7 @@ bool file::mlocked()
 
 void object::load_segments()
 {
+    bool is_executable = false;
     for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
         auto &phdr = _phdrs[i];
         switch (phdr.p_type) {
@@ -327,6 +328,8 @@ void object::load_segments()
             _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
             break;
         case PT_INTERP:
+	    is_executable = true;
+	    break;
         case PT_NOTE:
         case PT_PHDR:
         case PT_GNU_STACK:
@@ -343,6 +346,13 @@ void object::load_segments()
             abort();
             throw std::runtime_error("bad p_type");
         }
+    }
+    // As explained in issue #352, we currently don't correctly support TLS
+    // used in PIEs.
+    if (is_executable && _tls_segment) {
+        std::cout << "WARNING: " << pathname() << " is a PIE using TLS. This "
+                  << "is currently unsupported (see issue #352). Link with "
+                  << "'-shared' instead of '-pie'.\n";
     }
 }
 
