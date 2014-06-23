@@ -103,9 +103,16 @@ exception_vectors:
         ldr     x30, [sp], #48
 .endm /* pop_state_to_exception_frame */
 
-.equ ESR_EC_SHIFT,26        // Exception Class field bit position in ESR
+.equ ESR_EC_BEG,26          // Exception Class field begin in ESR
+.equ ESR_EC_END,31          // Exception Class field end in ESR
 .equ ESR_EC_DATA_ABORT,0x25 // Exception Class Data Abort value
-.equ ESR_ISS_LEN,24         // Instruction-Specific Syndrome field len in ESR
+
+.equ ESR_ISS_BEG,0          // Instruction-Specific Syndrome field begin in ESR
+.equ ESR_ISS_END,23         // Instruction-Specific Syndrome field end in ESR
+
+.equ ESR_TFLT_BEG,2         // Translation Fault = 0b0001LL ; we strip level.
+.equ ESR_TFLT_END,5         // Translation Fault field end in ESR
+.equ ESR_TFLT,1             // Translation Fault value = 0xb0001
 
 .global entry_invalid
 .type entry_invalid, @function
@@ -114,9 +121,8 @@ entry_invalid:
         mrs     x21, spsr_el1      // Saved PSTATE -> X21
         mrs     x22, esr_el1       // Exception Syndrome Register -> X22
 
-        ubfm    x23, x22, #ESR_EC_SHIFT, #31 // Exception Class -> X23
-        ubfm    x24, x22, #0, #ESR_ISS_LEN   // Instruction-Specific Syndrome -> X24
-        ubfm    x25, x22, #25, #25 // Instruction Length -> X25
+        ubfm    x23, x22, #ESR_EC_BEG, #ESR_EC_END   // Exception Class -> X23
+        ubfm    x24, x22, #ESR_ISS_BEG, #ESR_ISS_END // Instruction-Specific Syndrome -> X24
 
 1:      wfi
         b       1b
@@ -125,6 +131,14 @@ entry_invalid:
 .type entry_sync, @function
 entry_sync:
         push_state_to_exception_frame
+        mrs     x1, esr_el1
+        ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
+        ubfm    x3, x1, #ESR_TFLT_BEG, #ESR_TFLT_END // TFLT? -> X3
+        cmp     x2, #ESR_EC_DATA_ABORT
+        b.ne    entry_invalid
+        cmp     x3, #ESR_TFLT
+        b.ne    entry_invalid
+
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
         pop_state_from_exception_frame
