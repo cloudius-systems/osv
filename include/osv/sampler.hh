@@ -19,12 +19,11 @@ struct config {
 /**
  * Starts the sampler.
  *
- * Returns true if sampler was started with the new config, false otherwise.
- * If sampler was already running, false is returned.
+ * If sampler is already running it is stopped and restarted with the new config atomically.
  *
  * May block.
  */
-bool start_sampler(config) throw();
+void start_sampler(config) throw();
 
 /**
  * Stops the sampler.

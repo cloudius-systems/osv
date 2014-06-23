@@ -123,12 +123,13 @@ static long to_nanoseconds(Duration duration)
     return std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
 }
 
-bool start_sampler(config new_config) throw()
+void start_sampler(config new_config) throw()
 {
     SCOPE_LOCK(_control_lock);
 
     if (_started) {
-        return false;
+        stop_sampler();
+        assert(!_started);
     }
 
     debug("Starting sampler, period = %d ns\n", to_nanoseconds(new_config.period));
@@ -153,7 +154,6 @@ bool start_sampler(config new_config) throw()
     _controller.clear();
 
     debug("Sampler started.\n");
-    return true;
 }
 
 void stop_sampler() throw()
