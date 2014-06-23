@@ -40,9 +40,8 @@ public:
      * @param params optional parameter object
      * @param req the original request
      * @param rep the reply
-     * @return true if completed without any errorrs
      */
-    virtual bool handle(const std::string& path, parameters* params,
+    virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep) = 0;
 
     virtual ~handler_base() = default;
@@ -176,9 +175,8 @@ protected:
      * @param file the full path to a file on the disk
      * @param req the reuest
      * @param rep the reply
-     * @return true on success
      */
-    bool read(const std::string& file, const http::server::request& req,
+    void read(const std::string& file, const http::server::request& req,
               http::server::reply& rep);
     file_transformer* transformer;
 };
@@ -204,7 +202,7 @@ public:
     explicit directory_handler(const std::string& doc_root,
                                file_transformer* transformer = nullptr);
 
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override;
 
@@ -231,7 +229,7 @@ public:
     {
     }
 
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override;
 
@@ -277,7 +275,7 @@ public:
     {
     }
 
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override;
 

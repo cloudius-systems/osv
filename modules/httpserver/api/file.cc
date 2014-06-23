@@ -146,7 +146,7 @@ static void copy(const std::string& from, const std::string& to)
 }
 
 class get_file_handler : public file_interaction_handler {
-    virtual bool handle(const std::string& path, parameters* params,
+    virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
     {
         string opStr, full_path;
@@ -154,15 +154,17 @@ class get_file_handler : public file_interaction_handler {
         ns_getFile::op op = ns_getFile::str2op(opStr);
         switch (op) {
         case ns_getFile::op::GET:
-            return read(full_path, req, rep);
+            read(full_path, req, rep);
+            break;
         case ns_getFile::op::GETFILESTATUS:
-            return file_status(full_path, req, rep);
+            file_status(full_path, req, rep);
+            break;
         case ns_getFile::op::LISTSTATUS:
-            return list_directory(full_path, req, rep);
+            list_directory(full_path, req, rep);
+            break;
         default:
             throw bad_param_exception("Bad op parameter " + opStr);
         }
-        return true;
     }
 
     bool file_status(const string& path, const http::server::request& req,
@@ -249,7 +251,7 @@ class get_file_handler : public file_interaction_handler {
 };
 
 class del_file_handler : public handler_base {
-    virtual bool handle(const std::string& path, parameters* params,
+    virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
     {
         string opStr, full_path;
@@ -262,12 +264,11 @@ class del_file_handler : public handler_base {
             throw bad_param_exception("Bad op parameter " + opStr);
         }
         set_headers(rep, "json");
-        return true;
     }
 };
 
 class post_file_handler : public handler_base {
-    virtual bool handle(const std::string& path, parameters* params,
+    virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
     {
         string full_path = (*params)["path"];
@@ -294,12 +295,11 @@ class post_file_handler : public handler_base {
         req.connection_ptr->upload();
 
         set_headers(rep, "json");
-        return true;
     }
 };
 
 class put_file_handler : public handler_base {
-    virtual bool handle(const std::string& path, parameters* params,
+    virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
     {
         string opStr, full_path;
@@ -340,7 +340,6 @@ class put_file_handler : public handler_base {
             throw bad_param_exception("Bad op parameter " + opStr);
         }
         set_headers(rep, "json");
-        return true;
     }
 };
 

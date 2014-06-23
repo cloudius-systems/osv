@@ -52,7 +52,7 @@ directory_handler::directory_handler(const string& doc_root,
 {
 }
 
-bool directory_handler::handle(const string& path, parameters* parts,
+void directory_handler::handle(const string& path, parameters* parts,
                                const http::server::request& req, http::server::reply& rep)
 {
     string full_path = doc_root + (*parts)["path"];
@@ -60,11 +60,11 @@ bool directory_handler::handle(const string& path, parameters* parts,
     stat(full_path.c_str(), &buf);
     if (S_ISDIR(buf.st_mode)) {
         if (redirect_if_needed(req, rep)) {
-            return true;
+            return;
         }
         full_path += "/index.html";
     }
-    return read(full_path, req, rep);
+    read(full_path, req, rep);
 }
 
 file_interaction_handler::~file_interaction_handler()
@@ -83,13 +83,13 @@ string file_interaction_handler::get_extension(const string& file)
     return extension;
 }
 
-bool file_interaction_handler::read(const string& file,
+void file_interaction_handler::read(const string& file,
                                     const http::server::request& req, http::server::reply& rep)
 {
     ifstream is(file, ios::in | ios::binary);
     if (!is) {
         reply400(rep);
-        return false;
+        return;
     }
 
     string extension = get_extension(file);
@@ -103,7 +103,6 @@ bool file_interaction_handler::read(const string& file,
         transformer->transform(rep.content, req, extension);
     }
     set_headers(rep, extension);
-    return true;
 }
 
 bool file_interaction_handler::redirect_if_needed(
@@ -122,18 +121,17 @@ bool file_interaction_handler::redirect_if_needed(
     return false;
 }
 
-bool file_handler::handle(const string& path, parameters* parts,
+void file_handler::handle(const string& path, parameters* parts,
                           const http::server::request& req, http::server::reply& rep)
 {
-    return read(file, req, rep);
+    read(file, req, rep);
 }
 
-bool function_handler::handle(const string& path, parameters* parts,
+void function_handler::handle(const string& path, parameters* parts,
                               const http::server::request& req, http::server::reply& rep)
 {
     rep.content.append(f_handle(req, rep));
     set_headers(rep, type);
-    return true;
 }
 
 }

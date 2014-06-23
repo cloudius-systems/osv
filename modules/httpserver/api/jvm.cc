@@ -28,7 +28,7 @@ static void validate_jvm()
 }
 
 class get_jmx_handler : public handler_base {
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override
     {
@@ -37,29 +37,27 @@ class get_jmx_handler : public handler_base {
             java_api::instance().get_mbean_info(
                 (*parts)["mbean"].substr(1)));
         set_headers(rep, "json");
-        return true;
     }
 };
 
 class set_jmx_handler : public handler_base {
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override
     {
         if (!java_api::instance().is_valid()) {
             reply400(rep, "JVM is not available");
-            return false;
+            return;
         }
         string value = req.get_query_param("value");
         string attr = (*parts)["attribute"].substr(1);
         string mbean = (*parts)["mbean"].substr(1);
         if (value == "" || attr == "" || mbean == "") {
             reply500(rep);
-            return false;
+            return;
         }
         java_api::instance().set_mbean_info(mbean, attr, value);
         set_headers(rep, "json");
-        return true;
     }
 };
 

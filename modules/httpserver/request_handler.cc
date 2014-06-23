@@ -80,10 +80,8 @@ void request_handler::handle_request(request& req, reply& rep)
         rep = reply::stock_reply(reply::bad_request);
         return;
     }
-    if (!routes->handle(request_path, req, rep)) {
-        return;
-    }
 
+    routes->handle(request_path, req, rep);
 }
 
 bool request_handler::url_decode(const std::string& in, std::string& out,

@@ -20,7 +20,7 @@ using namespace std;
 using namespace env_json;
 
 class get_env : public handler_base {
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override
     {
@@ -31,12 +31,11 @@ class get_env : public handler_base {
         }
         rep.content = formatter::to_json(val);
         set_headers(rep, "json");
-        return true;
     }
 };
 
 class set_env : public handler_base {
-    bool handle(const std::string& path, parameters* parts,
+    void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override
     {
@@ -46,7 +45,6 @@ class set_env : public handler_base {
             throw bad_param_exception("invalid environment variable " + param);
         }
         set_headers(rep, "json");
-        return true;
     }
 };
 

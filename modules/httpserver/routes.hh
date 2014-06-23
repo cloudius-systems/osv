@@ -121,9 +121,8 @@ public:
      * @param path the url path found
      * @param req the http request
      * @param rep the http reply
-     * @return true on success
      */
-    bool handle(const std::string& path, http::server::request& req,
+    void handle(const std::string& path, http::server::request& req,
                 http::server::reply& rep);
 
 private:
