@@ -51,7 +51,7 @@ bool routes::handle(const string& path, http::server::request& req,
         } catch (const base_exception& e) {
             rep.content = e.what();
             rep.status = e.status();
-            handler->set_headers(rep, "http", false);
+            handler->set_headers(rep, "http");
         } catch (exception& e) {
             cerr << "exception was caught for " << path << ": " << e.what()
                  << endl;

@@ -19,12 +19,8 @@ const std::string handler_base::ERROR_500_PAGE("<h1>Something went wrong</h1>");
 const std::string handler_base::ERROR_404_PAGE(
     "<h1>We didn't find the page you were looking for</h1>");
 
-void handler_base::set_headers(http::server::reply& rep, const string& type,
-                               bool is_ok)
+void handler_base::set_headers(http::server::reply& rep, const string& type)
 {
-    if (is_ok) {
-        rep.status = http::server::reply::ok;
-    }
     rep.headers.resize(2);
     rep.headers[0].name = "Content-Length";
     rep.headers[0].value = to_string(rep.content.size());

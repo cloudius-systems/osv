@@ -76,6 +76,9 @@ struct reply {
      * @return the reply to be sent to the client
      */
     static reply stock_reply(status_type status, const std::string* content = nullptr);
+
+    reply()
+        : status(status_type::ok) {}
 };
 
 } // namespace server
