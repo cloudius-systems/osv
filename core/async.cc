@@ -11,11 +11,6 @@
 #include <osv/trace.hh>
 #include <osv/printf.hh>
 
-#ifndef AARCH64_PORT_STUB
-#include <osv/interrupt.hh>
-#endif /* !AARCH64_PORT_STUB */
-
-
 #include <osv/irqlock.hh>
 #include <osv/preempt-lock.hh>
 #include <osv/migration-lock.hh>
