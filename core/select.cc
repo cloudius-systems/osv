@@ -8,6 +8,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <signal.h>
 #include <osv/poll.h>
 #include <osv/debug.h>
 #include <api/sys/select.h>
@@ -154,4 +155,24 @@ int select (int nfds,
 
     select_d("select() return: %d", num_fds);
     return num_fds;
+}
+
+/* Basic pselect() on top of select() */
+int pselect(int nfds, fd_set *readfds, fd_set *writefds,
+            fd_set *exceptfds, const struct timespec *timeout_ts,
+            const sigset_t *sigmask)
+{
+    sigset_t origmask;
+    struct timeval timeout;
+
+    if (timeout_ts) {
+        timeout.tv_sec = timeout_ts->tv_sec;
+        timeout.tv_usec = timeout_ts->tv_nsec / 1000;
+    }
+
+    sigprocmask(SIG_SETMASK, sigmask, &origmask);
+    auto ret = select(nfds, readfds, writefds, exceptfds,
+                                        timeout_ts == NULL? NULL : &timeout);
+    sigprocmask(SIG_SETMASK, &origmask, NULL);
+    return ret;
 }
