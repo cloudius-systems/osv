@@ -137,6 +137,31 @@
                     "deprecated": "false"
                 }
             ]
+        },
+        {
+            "path": "/trace/sampler",
+            "operations": [
+                {
+                    "method": "POST",
+                    "summary": "Control sampling profiler",
+                    "responseClass": "string",
+                    "nickname": "setSamplerState",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                        {
+                            "name": "freq",
+                            "description": "Frequency of sampling. Zero disables sampling.",
+                            "required": true,
+                            "allowMultiple": false,
+                            "dataType": "integer",
+                            "paramType": "query"
+                        }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
         }
     ],
     "models" : {

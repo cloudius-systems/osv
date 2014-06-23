@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <osv/tracecontrol.hh>
+#include <osv/sampler.hh>
 
 using namespace httpserver::json;
 using namespace httpserver::json::trace_json;
@@ -79,5 +80,24 @@ void httpserver::api::trace::init(routes & routes)
         const auto backtrace = str2bool(req.get_query_param("backtrace"));
         const auto e = ::trace::set_event_state(eventid, enabled, backtrace);
         return formatter::to_json(jstrace_event_info(e));
+    });
+
+    trace_json::setSamplerState.set_handler("json", [](const_req req, http::server::reply& rep) {
+        auto freq = std::stoi(req.get_query_param("freq"));
+        if (freq == 0) {
+            prof::stop_sampler();
+            return formatter::to_json("Sampler stopped successfully");
+        }
+
+        const int max_frequency = 100000;
+        if (freq > max_frequency) {
+            rep.status = http::server::reply::status_type::bad_request;
+            return formatter::to_json("Frequency too large. Maximum is " + std::to_string(max_frequency));
+        }
+
+        prof::config config;
+        config.period = std::chrono::nanoseconds(1000000000 / freq);
+        prof::start_sampler(config);
+        return formatter::to_json("Sampler started successfully");
     });
 }
