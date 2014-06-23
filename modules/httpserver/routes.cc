@@ -55,7 +55,7 @@ bool routes::handle(const string& path, http::server::request& req,
         } catch (exception& e) {
             cerr << "exception was caught for " << path << ": " << e.what()
                  << endl;
-            handler->reply500(rep, 500, e.what());
+            handler->reply500(rep, e.what());
             return false;
         }
     } else {

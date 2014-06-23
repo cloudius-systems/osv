@@ -47,8 +47,7 @@ class set_jmx_handler : public handler_base {
     override
     {
         if (!java_api::instance().is_valid()) {
-            reply400(rep, http::server::reply::status_type::not_found,
-                     "JVM is not available");
+            reply400(rep, "JVM is not available");
             return false;
         }
         string value = req.get_query_param("value");

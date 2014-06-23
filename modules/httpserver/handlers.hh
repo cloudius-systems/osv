@@ -69,8 +69,7 @@ public:
      * @param err_code the error code to use (default 404)
      * @param alternative_message alternative error message to use
      */
-    virtual void reply400(http::server::reply& rep, int err_code =
-                              http::server::reply::not_found,
+    virtual void reply400(http::server::reply& rep,
                           const std::string& alternative_message = ERROR_404_PAGE);
 
     /**
@@ -81,8 +80,7 @@ public:
      * @param err_code the error code to use (default 500)
      * @param alternative_message alternative error message to use
      */
-    virtual void reply500(http::server::reply& rep, int err_code =
-                              http::server::reply::internal_server_error,
+    virtual void reply500(http::server::reply& rep,
                           const std::string& alternative_message = ERROR_500_PAGE);
 
     /**
