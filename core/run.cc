@@ -1,6 +1,7 @@
 #include <string.h>
 #include <algorithm>
 #include <vector>
+#include <memory>
 #include <boost/range/algorithm/transform.hpp>
 
 #include <osv/elf.hh>
@@ -49,11 +50,30 @@ std::shared_ptr<elf::object> run(std::string path,
     // path is guaranteed to keep existing this function
     program_invocation_name = c_path;
     program_invocation_short_name = basename(c_path);
+
+    auto sz = argc; // for the trailing 0's.
+    for (int i = 0; i < argc; ++i) {
+        sz += strlen(argv[i]);
+    }
+
+    std::unique_ptr<char []> argv_buf(new char[sz]);
+    char *ab = argv_buf.get();
+    char *contig_argv[argc + 1];
+
+    for (int i = 0; i < argc; ++i) {
+        size_t asize = strlen(argv[i]);
+        memcpy(ab, argv[i], asize);
+        ab[asize] = '\0';
+        contig_argv[i] = ab;
+        ab += asize + 1;
+    }
+    contig_argv[argc] = nullptr;
+
     // make sure to have a fresh optind across calls
     // FIXME: fails if run() is executed in parallel
     int old_optind = optind;
     optind = 0;
-    int rc = main(argc, argv);
+    int rc = main(argc, contig_argv);
     optind = old_optind;
     if (return_code) {
         *return_code = rc;
