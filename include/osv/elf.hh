@@ -379,6 +379,8 @@ public:
     symbol_module();
     symbol_module(Elf64_Sym* sym, object* object);
     void* relocated_addr() const;
+    u64 size() const;
+
     Elf64_Sym* symbol;
     object* obj;
 };

@@ -88,6 +88,11 @@ void* symbol_module::relocated_addr() const
     }
 }
 
+u64 symbol_module::size() const
+{
+    return symbol->st_size;
+}
+
 object::object(program& prog, std::string pathname)
     : _prog(prog)
     , _pathname(pathname)

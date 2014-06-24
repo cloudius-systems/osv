@@ -17,6 +17,11 @@ bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
     switch (type) {
     case R_X86_64_NONE:
         break;
+    case R_X86_64_COPY: {
+        const Elf64_Sym *st = t->dyn_tabs.lookup(sym);
+        memcpy(addr, (void *)st->st_value, st->st_size);
+        break;
+    }
     case R_X86_64_64:
         *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
         break;
@@ -53,6 +58,11 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     switch (type) {
     case R_X86_64_NONE:
         break;
+    case R_X86_64_COPY: {
+        symbol_module sm = symbol(sym);
+        memcpy(addr, sm.relocated_addr(), sm.size());
+        break;
+    }
     case R_X86_64_64:
         *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
         break;
