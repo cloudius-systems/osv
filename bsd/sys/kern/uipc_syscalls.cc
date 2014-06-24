@@ -487,8 +487,11 @@ kern_sendit(int s,
 		return (error);
 	so = (struct socket *)file_data(fp);
 
-	auio.uio_iov = mp->msg_iov;
-	auio.uio_iovcnt = mp->msg_iovlen;
+	// Create a local copy of the user's iovec - sosend() is going to change it!
+	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
+
+	auio.uio_iov = uio_iov.data();
+	auio.uio_iovcnt = uio_iov.size();
 	auio.uio_rw = UIO_WRITE;
 	auio.uio_offset = 0;			/* XXX */
 	auio.uio_resid = 0;
