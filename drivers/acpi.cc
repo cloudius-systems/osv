@@ -217,7 +217,47 @@ AcpiOsReleaseObject (
  */
 
 namespace osv {
-    std::map<UINT32, std::unique_ptr<gsi_edge_interrupt>> acpi_interrupts;
+
+class acpi_interrupt {
+public:
+    acpi_interrupt(unsigned gsi, ACPI_OSD_HANDLER sr, void* ctxt)
+        : _service_routine(sr)
+        , _context(ctxt)
+        , _stopped(false)
+        , _counter(0)
+        , _thread([this] { process_interrupts(); })
+        , _intr(gsi, [this] { _counter.fetch_add(1); _thread.wake(); })
+    {
+        _thread.start();
+    }
+    ~acpi_interrupt() {
+        _stopped.store(true);
+        _thread.wake();
+        _thread.join();
+    }
+private:
+    void process_interrupts() {
+        uint64_t local_counter = 0;
+        while (!_stopped.load()) {
+            sched::thread::wait_for(
+                    [=] { return _stopped.load(); },
+                    [=] { return local_counter != _counter.load(); });
+            if (local_counter != _counter.load()) {
+                local_counter = _counter.load();
+                _service_routine(_context);
+            }
+        }
+    }
+private:
+    ACPI_OSD_HANDLER _service_routine;
+    void* _context;
+    std::atomic<bool> _stopped;
+    std::atomic<uint64_t> _counter;
+    sched::thread _thread;
+    gsi_edge_interrupt _intr;
+};
+
+std::map<UINT32, std::unique_ptr<acpi_interrupt>> acpi_interrupts;
 }
 
 ACPI_STATUS
@@ -234,9 +274,8 @@ AcpiOsInstallInterruptHandler(
         return AE_ALREADY_EXISTS;
     }
 
-    osv::acpi_interrupts[InterruptNumber] = std::unique_ptr<gsi_edge_interrupt>(
-        new gsi_edge_interrupt(InterruptNumber,
-                               [=] { ServiceRoutine(Context); }));
+    osv::acpi_interrupts[InterruptNumber] = std::unique_ptr<osv::acpi_interrupt>(
+        new osv::acpi_interrupt(InterruptNumber, ServiceRoutine, Context));
 
     return AE_OK;
 }
