@@ -309,6 +309,7 @@ tests += tests/misc-memcpy.so
 tests += tests/misc-free-perf.so
 tests += tests/tst-fallocate.so
 tests += tests/misc-printf.so
+tests += tests/tst-hostname.so
 tests += tests/libstatic-thread-variable.so tests/tst-static-thread-variable.so
 tests/tst-static-thread-variable.so: tests/libstatic-thread-variable.so
 tests/tst-static-thread-variable.so: COMMON += -L./tests -lstatic-thread-variable
