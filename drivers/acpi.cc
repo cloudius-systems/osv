@@ -16,6 +16,7 @@ extern "C" {
 #include <stdlib.h>
 #include <osv/mmu.hh>
 #include <osv/sched.hh>
+#include <osv/shutdown.hh>
 #include "processor.hh"
 #include <osv/align.hh>
 #include "xen.hh"
@@ -531,6 +532,12 @@ void early_init()
     }
 }
 
+UINT32 acpi_poweroff(void *unused)
+{
+    osv::shutdown();
+    return 1;
+}
+
 // must be called after the scheduler, apic and smp where started to run
 // The following function comes from the documentation example page 262
 void init()
@@ -552,6 +559,9 @@ void init()
     if (ACPI_FAILURE(status)) {
         acpi_e("AcpiInitializeObjects failed: %s\n", AcpiFormatException(status));
     }
+
+    AcpiInstallFixedEventHandler(ACPI_EVENT_POWER_BUTTON, acpi_poweroff, nullptr);
+    AcpiEnableEvent(ACPI_EVENT_POWER_BUTTON, 0);
 }
 
 }
