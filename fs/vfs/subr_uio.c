@@ -93,35 +93,3 @@ uiomove_frombuf(void *buf, int buflen, struct uio *uio)
 		return (EINVAL);
 	return (uiomove((char *)buf + offset, n, uio));
 }
-
-/*
- * In OSv we don't really copy the iovect in because it lives in the same
- * address space.  But keeping this abstraction still allows keeping the
- * checks in one place and eases porting code.
- */
-int
-copyinuio(struct iovec *iovp, u_int iovcnt, struct uio **uiop)
-{
-	struct uio *uio;
-	int i;
-
-	*uiop = NULL;
-	if (iovcnt > UIO_MAXIOV)
-		return (EINVAL);
-	uio = malloc(sizeof(*uio));
-
-	uio->uio_iov = iovp;
-	uio->uio_iovcnt = iovcnt;
-	uio->uio_offset = -1;
-	uio->uio_resid = 0;
-	for (i = 0; i < iovcnt; i++) {
-		if (iovp->iov_len > IOSIZE_MAX - uio->uio_resid) {
-			free(uio);
-			return (EINVAL);
-		}
-		uio->uio_resid += iovp->iov_len;
-		iovp++;
-	}
-	*uiop = uio;
-	return (0);
-}

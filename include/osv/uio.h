@@ -60,7 +60,6 @@ struct uio {
 	enum	uio_rw uio_rw;		/* operation */
 };
 
-int	copyinuio(struct iovec *iovp, u_int iovcnt, struct uio **uiop);
 int	uiomove(void *cp, int n, struct uio *uio);
 
 __END_DECLS
