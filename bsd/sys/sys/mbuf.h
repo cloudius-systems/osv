@@ -1047,6 +1047,24 @@ m_tag_unlink(struct mbuf *m, struct m_tag *t)
 	SLIST_REMOVE(&m->M_dat.MH.MH_pkthdr.tags, t, m_tag, m_tag_link);
 }
 
+/*
+ * Ensures the mbuf is no longer than 'len'
+ */
+static __inline void
+m_trim(struct mbuf* m, int len)
+{
+	if (m->M_dat.MH.MH_pkthdr.len <= len) {
+		return;
+	}
+
+	if (m->m_hdr.mh_len == m->M_dat.MH.MH_pkthdr.len) {
+		m->m_hdr.mh_len = len;
+		m->M_dat.MH.MH_pkthdr.len = len;
+	} else {
+		m_adj(m, len - m->M_dat.MH.MH_pkthdr.len);
+	}
+}
+
 /* These are for OpenBSD compatibility. */
 #define	MTAG_ABI_COMPAT		0		/* compatibility ABI */
 

@@ -472,13 +472,7 @@ tooshort:
 		IPSTAT_INC(ips_tooshort);
 		goto bad;
 	}
-	if (m->M_dat.MH.MH_pkthdr.len > ip->ip_len) {
-		if (m->m_hdr.mh_len == m->M_dat.MH.MH_pkthdr.len) {
-			m->m_hdr.mh_len = ip->ip_len;
-			m->M_dat.MH.MH_pkthdr.len = ip->ip_len;
-		} else
-			m_adj(m, ip->ip_len - m->M_dat.MH.MH_pkthdr.len);
-	}
+	m_trim(m, ip->ip_len);
 #ifdef IPSEC
 	/*
 	 * Bypass packet filtering for packets previously handled by IPsec.

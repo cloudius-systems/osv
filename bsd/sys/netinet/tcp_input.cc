@@ -3663,10 +3663,12 @@ tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 	auto drop_hdrlen = h - start;
 	tcp_fields_to_host(th);
 	auto so = tp->t_inpcb->inp_socket;
-	auto tlen = ntohs(ip_hdr->ip_len) - (ip_size + (th->th_off << 2));
+	auto ip_len = ntohs(ip_hdr->ip_len);
+	auto tlen = ip_len - (ip_size + (th->th_off << 2));
 	auto iptos = ip_hdr->ip_tos;
 	SOCK_LOCK_ASSERT(so);
 	bool want_close;
+	m_trim(m, ETHER_HDR_LEN + ip_len);
 	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED, want_close);
 	// since a socket is still attached, we should not be closing
 	assert(!want_close);
