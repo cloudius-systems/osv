@@ -194,7 +194,12 @@ int cfsetispeed(struct termios *tio, speed_t speed)
     tio->__c_ispeed = speed;
     return 0;
 }
-weak_alias(cfsetospeed, cfsetspeed);
+
+int cfsetspeed(struct termios *tio, speed_t speed)
+{
+    cfsetispeed(tio, speed);
+    return cfsetospeed(tio, speed);
+}
 
 int tcsendbreak(int fd, int dur)
 {
