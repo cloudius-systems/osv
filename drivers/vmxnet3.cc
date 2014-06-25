@@ -56,6 +56,7 @@
 #include <bsd/sys/netinet/udp.h>
 #include <bsd/sys/netinet/tcp.h>
 #include <bsd/x64/machine/atomic.h>
+#include <bsd/x64/machine/in_cksum.h>
 #include <typeinfo>
 #include <cxxabi.h>
 
@@ -619,6 +620,7 @@ int vmxnet3::txq_offload(struct mbuf *m, int *etype, int *proto, int *start)
 {
     struct ether_vlan_header *evh;
     int offset;
+    struct ip *ip, iphdr;
 
     evh = mtod(m, struct ether_vlan_header *);
     if (evh->evl_encap_proto == htons(ETHERTYPE_VLAN)) {
@@ -632,7 +634,6 @@ int vmxnet3::txq_offload(struct mbuf *m, int *etype, int *proto, int *start)
 
     switch (*etype) {
     case ETHERTYPE_IP: {
-        struct ip *ip, iphdr;
         if (__predict_false(m->m_hdr.mh_len < offset + static_cast<int>(sizeof(struct ip)))) {
             m_copydata(m, offset, sizeof(struct ip),
                 (caddr_t) &iphdr);
@@ -649,18 +650,33 @@ int vmxnet3::txq_offload(struct mbuf *m, int *etype, int *proto, int *start)
 
     if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_TSO) {
         struct tcphdr *tcp, tcphdr;
+        uint16_t sum;
 
         if (__predict_false(*proto != IPPROTO_TCP)) {
             /* Likely failed to correctly parse the mbuf. */
             return (EINVAL);
         }
 
+        switch (*etype) {
+            case ETHERTYPE_IP:
+                sum = in_pseudo(ip->ip_src.s_addr, ip->ip_dst.s_addr,
+                    htons(IPPROTO_TCP));
+                break;
+            default:
+                sum = 0;
+                break;
+        }
+
         if (m->m_hdr.mh_len < *start + static_cast<int>(sizeof(struct tcphdr))) {
-            m_copydata(m, offset, sizeof(struct tcphdr),
+            m_copyback(m, *start + offsetof(struct tcphdr, th_sum),
+                sizeof(uint16_t), (caddr_t) &sum);
+            m_copydata(m, *start, sizeof(struct tcphdr),
                 (caddr_t) &tcphdr);
             tcp = &tcphdr;
-        } else
+        } else {
             tcp = (struct tcphdr *)(m->m_hdr.mh_data + *start);
+            tcp->th_sum = sum;
+        }
 
         /*
          * For TSO, the size of the protocol header is also
