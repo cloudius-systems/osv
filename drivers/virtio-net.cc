@@ -612,8 +612,7 @@ int net::txq::try_xmit_one_locked(net_req* req)
     }
 
     vqueue->init_sg();
-    vqueue->add_out_sg(static_cast<void*>(&req->mhdr),
-                       sizeof(net_hdr_mrg_rxbuf));
+    vqueue->add_out_sg(static_cast<void*>(&req->mhdr), _parent->_hdr_size);
 
     for (m = m_head; m != NULL; m = m->m_hdr.mh_next) {
         int frag_len = m->m_hdr.mh_len;
