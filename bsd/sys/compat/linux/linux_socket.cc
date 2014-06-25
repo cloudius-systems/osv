@@ -46,7 +46,6 @@
 
 
 #include <bsd/sys/net/if.h>
-#include <bsd/sys/sys/socketvar.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/in_systm.h>
 #include <bsd/sys/netinet/ip.h>
