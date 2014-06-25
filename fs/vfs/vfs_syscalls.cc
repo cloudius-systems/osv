@@ -238,38 +238,39 @@ sys_close(struct file *fp)
 }
 
 int
-sys_read(struct file *fp, struct iovec *iov, size_t niov,
+sys_read(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
-	struct uio *uio = NULL;
-	ssize_t bytes;
-	int error;
+    if ((fp->f_flags & FREAD) == 0)
+        return EBADF;
 
-	DPRINTF(VFSDB_SYSCALL, ("sys_write: fp=%x offset=%d\n",
-				(u_long)fp, (u_int)offset));
+    size_t bytes = 0;
+    auto iovp = iov;
+    for (unsigned i = 0; i < niov; i++) {
+        if (iovp->iov_len > IOSIZE_MAX - bytes) {
+            return EINVAL;
+        }
+        bytes += iovp->iov_len;
+        iovp++;
+    }
 
-	if ((fp->f_flags & FREAD) == 0)
-		return EBADF;
+    if (bytes == 0) {
+        *count = 0;
+        return 0;
+    }
 
-	error = copyinuio(iov, niov, &uio);
-	if (error)
-		return error;
-
-	bytes = uio->uio_resid;
-
-	if (uio->uio_resid == 0) {
-		*count = 0;
-		free(uio);
-		return 0;
-	}
-
-	uio->uio_rw = UIO_READ;
-	uio->uio_offset = offset;
-	error = fp->read(uio, (offset == -1) ? 0 : FOF_OFFSET);
-	*count = bytes - uio->uio_resid;
-	free(uio);
-
-	return error;
+    struct uio uio;
+    // Unfortunately, the current implementation of fp->read zeros the
+    // iov_len fields when it reads from disk, so we have to copy iov.
+    std::vector<iovec> copy_iov(iov, iov + niov);
+    uio.uio_iov = copy_iov.data();
+    uio.uio_iovcnt = niov;
+    uio.uio_offset = offset;
+    uio.uio_resid = bytes;
+    uio.uio_rw = UIO_READ;
+    auto error = fp->read(&uio, (offset == -1) ? 0 : FOF_OFFSET);
+    *count = bytes - uio.uio_resid;
+    return error;
 }
 
 int
