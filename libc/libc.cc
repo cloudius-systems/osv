@@ -172,13 +172,12 @@ speed_t cfgetospeed(const termios *p)
 
 int cfsetospeed(struct termios *tio, speed_t speed)
 {
-	if (speed & ~CBAUD) {
-		errno = EINVAL;
-		return -1;
-	}
-	tio->c_cflag &= ~CBAUD;
-	tio->c_cflag |= speed;
-	return 0;
+    if (!tio) {
+        errno = EINVAL;
+        return -1;
+    }
+    tio->__c_ospeed = speed;
+    return 0;
 }
 
 speed_t cfgetispeed(const termios *p)
@@ -188,7 +187,12 @@ speed_t cfgetispeed(const termios *p)
 
 int cfsetispeed(struct termios *tio, speed_t speed)
 {
-	return speed ? cfsetospeed(tio, speed) : 0;
+    if (!tio) {
+        errno = EINVAL;
+        return -1;
+    }
+    tio->__c_ispeed = speed;
+    return 0;
 }
 weak_alias(cfsetospeed, cfsetspeed);
 
