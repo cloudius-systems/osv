@@ -181,6 +181,11 @@ int cfsetospeed(struct termios *tio, speed_t speed)
 	return 0;
 }
 
+speed_t cfgetispeed(const termios *p)
+{
+    return p->__c_ispeed;
+}
+
 int cfsetispeed(struct termios *tio, speed_t speed)
 {
 	return speed ? cfsetospeed(tio, speed) : 0;
