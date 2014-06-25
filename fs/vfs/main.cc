@@ -377,7 +377,7 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     if (error)
         goto out_errno;
 
-    error = sys_write(fp, (struct iovec *)iov, iovcnt, offset, &bytes);
+    error = sys_write(fp, iov, iovcnt, offset, &bytes);
     fdrop(fp);
 
     if (has_error(error, bytes))

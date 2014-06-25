@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/uio.h>
+#include <string.h>
 
 #include <iostream>
 
@@ -86,6 +87,27 @@ int main()
     expect(iov[0].iov_len, sizeof(buf1));
     expect(iov[1].iov_len, sizeof(buf2));
     close(fd);
+
+    // Test that writev() does not modify its iovec parameter.
+    const char* tmp = "/tmp/tst-uio-tmp";
+    expect_success(fd, open(tmp, O_WRONLY|O_CREAT, 0777));
+    char s1[]={'y','o',' '}, s2[]={'m','a','n','\0'};
+    struct iovec siov[2] = {
+        { .iov_base = s1, .iov_len = sizeof(s1) },
+        { .iov_base = s2, .iov_len = sizeof(s2) }
+    };
+    expect_success(x, (int)writev(fd, siov, 2));
+    expect(x, 7);
+    expect(siov[0].iov_len, sizeof(s1));
+    expect(siov[1].iov_len, sizeof(s2));
+    close(fd);
+    expect_success(fd, open(tmp, O_RDONLY));
+    expect(read(fd, buf1, sizeof(buf1)), (long)7);
+    expect(strcmp(buf1, "yo man"), 0);
+    close(fd);
+    unlink(tmp);
+
+
 
 
     /////////////////////////////////////////////////////////////////////////

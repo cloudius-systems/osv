@@ -90,7 +90,7 @@ __BEGIN_DECLS
 int	 sys_open(char *path, int flags, mode_t mode, struct file **fp);
 int	 sys_read(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count);
-int	 sys_write(struct file *fp, struct iovec *iov, size_t niov,
+int	 sys_write(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count);
 int	 sys_lseek(struct file *fp, off_t off, int type, off_t * cur_off);
 int	 sys_ioctl(struct file *fp, u_long request, void *buf);
