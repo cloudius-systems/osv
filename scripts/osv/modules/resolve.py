@@ -58,12 +58,19 @@ def find_module_config(module_name):
             with open(os.path.expandvars(f)) as file:
                 config["modules"].update(json.load(file))
 
-    if not module_name in config["modules"]:
-        return None
+    if module_name in config["modules"]:
+        module_config = config["modules"][module_name]
+        module_config["path"] = os.path.expandvars(module_config["path"])
+        return module_config
 
-    module_config = config["modules"][module_name]
-    module_config["path"] = os.path.expandvars(module_config["path"])
-    return module_config
+    if "repositories" in config["modules"]:
+        for repo_path in config["modules"]["repositories"]:
+            module_path = os.path.join(os.path.expandvars(repo_path), module_name)
+            if os.path.exists(module_path):
+                return {
+                    'path': module_path,
+                    'type': 'direct-dir'
+                }
 
 def fetch_module(module_config, target_dir):
     print("Fetching %s" % module_config["name"])
