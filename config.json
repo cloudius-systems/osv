@@ -24,6 +24,10 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/tests/"
         },
+        "uush": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/modules/uush/"
+        },
     "include": [
         "${OSV_BASE}/apps/modules.json"
     ]

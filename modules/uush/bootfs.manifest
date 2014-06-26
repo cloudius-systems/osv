@@ -1,0 +1,3 @@
+[manifest]
+/tools/uush.so: tools/uush/uush.so
+/tools/tst-hello.so: tests/tst-hello.so

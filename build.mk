@@ -339,6 +339,7 @@ tools := tools/ifconfig/ifconfig.so
 tools += tools/route/lsroute.so
 tools += tools/mkfs/mkfs.so
 tools += tools/cpiod/cpiod.so
+tools += tools/uush/uush.so
 
 ifeq ($(arch),aarch64)
 tools += tests/tst-hello.so
