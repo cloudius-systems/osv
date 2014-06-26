@@ -439,6 +439,10 @@ make_replicas_public() {
   done
 }
 
+get_image_type() {
+    qemu-img info $1 | grep "file format" | awk '{print $NF}'
+}
+
 BUCKET_CREATED=0
 
 while true; do
@@ -454,6 +458,12 @@ while true; do
             handle_error Build failed.
             break;
         fi
+    else
+       IMAGE_FORMAT=`get_image_type $OSV_VOLUME`
+       if test x"$IMAGE_FORMAT" != x"raw"; then
+            handle_error Image format \"$IMAGE_FORMAT\" is not supported by EC2, please build a \"raw\" image.
+            break;
+       fi
     fi
 
     echo_progress Creating bucket $OSV_BUCKET
