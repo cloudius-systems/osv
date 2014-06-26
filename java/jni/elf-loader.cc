@@ -1,7 +1,6 @@
-//#include <algorithm>
 #include <osv/debug.hh>
 #include <osv/sched.hh>
-#include <osv/elf.hh>
+#include <osv/run.hh>
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,20 +12,14 @@ bool run_elf(int argc, char** argv, int *return_code)
         return (false);
     }
 
-    auto obj = elf::get_program()->get_library(argv[0]);
-    if (!obj) {
-        return (false);
-    }
-
-    auto main = obj->lookup<int (int, char**)>("main");
-    if (!main) {
-       return (false);
-    }
 
     debug("run_elf(): running main() in the context of thread %p\n",
         sched::thread::current());
-    int rc = main(argc, argv);
-
+    int rc;
+    auto obj = osv::run(argv[0], argc, argv, &rc);
+    if (!obj) {
+        return false;
+    }
     cancel_this_thread_alarm();
 
     /* set the return code */
