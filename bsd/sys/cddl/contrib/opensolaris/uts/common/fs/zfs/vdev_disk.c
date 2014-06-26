@@ -260,7 +260,11 @@ vdev_disk_read_rootlabel(char *devname, nvlist_t **config)
 		return error;
 
 	size = P2ALIGN_TYPED(dev->size, sizeof (vdev_label_t), uint64_t);
+#ifdef __OSV__
+	posix_memalign((void**)&label, PAGE_SIZE, sizeof(vdev_label_t));
+#else
 	label = kmem_alloc(sizeof (vdev_label_t), KM_SLEEP);
+#endif
 
 	*config = NULL;
 	for (l = 0; l < VDEV_LABELS; l++) {
