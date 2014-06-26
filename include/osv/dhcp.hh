@@ -75,6 +75,7 @@ namespace dhcp {
         DHCP_OPTION_PARAMETER_REQUEST_LIST = 55,
         DHCP_OPTION_RENEWAL_TIME = 58,
         DHCP_OPTION_REBINDING_TIME = 59,
+        DHCP_OPTION_CLASSLESS_ROUTE = 121,
         DHCP_OPTION_END = 255
     };
 
@@ -105,6 +106,7 @@ namespace dhcp {
     // Representing a DHCP packet, wraps mbuf
     class dhcp_mbuf {
     public:
+        typedef std::tuple<boost::asio::ip::address_v4, boost::asio::ip::address_v4, boost::asio::ip::address_v4> route_type;
         enum packet_type {
             DHCP_REQUEST = 1,
             DHCP_REPLY = 2,
@@ -143,6 +145,7 @@ namespace dhcp {
         int get_lease_time_sec() { return _lease_time_sec; }
         int get_renewal_time_sec() { return _renewal_time_sec; }
         int get_rebind_time_sec() { return _rebind_time_sec; }
+        std::vector<route_type>& get_routes() { return _routes; }
 
     private:
 
@@ -179,6 +182,7 @@ namespace dhcp {
         u32 _renewal_time_sec;
         u32 _rebind_time_sec;
         u16 _mtu;
+        std::vector<route_type> _routes;
     };
 
     ///////////////////////////////////////////////////////////////////////////

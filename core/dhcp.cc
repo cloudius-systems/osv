@@ -332,6 +332,26 @@ namespace dhcp {
                 PARSE_OP(u32, u32, _rebind_time_sec);
                 _rebind_time_sec = ntohl(_rebind_time_sec);
                 break;
+            case DHCP_OPTION_CLASSLESS_ROUTE:
+                while (op_len) {
+                    u8 mask;
+                    PARSE_OP(u8, u8, mask);
+                    options++; op_len--;
+                    u8 len = (mask + 7) / 8;
+                    u32 net = 0;
+                    for (int i = 0; i < len; i++) {
+                        u8 byte;
+                        PARSE_OP(u8, u8, byte);
+                        options++; op_len--;
+                        net |= (byte << 8*i);
+                    }
+                    PARSE_OP(ip::address_v4::bytes_type,
+                             ip::address_v4::bytes_type,
+                             bytes);
+                    options += 4; op_len -= 4;
+                    _routes.emplace_back(ip::address_v4(ntohl(net)), ip::address_v4(u32(((1ull<<mask)-1) << (32-mask))), ip::address_v4(bytes));
+                }
+                break;
             default:
                 break;
             }
@@ -513,11 +533,28 @@ namespace dhcp {
                           dm.get_subnet_mask().to_string().c_str());
 
             if (dm.get_subnet_mask() == ip::address_v4({0xff, 0xff, 0xff, 0xff})) {
-                osv_route_add_interface(dm.get_router_ip().to_string().c_str(), _ifp->if_xname);
+                osv_route_add_interface(dm.get_router_ip().to_string().c_str(), nullptr, _ifp->if_xname);
             }
             osv_route_add_network("0.0.0.0",
                                   "0.0.0.0",
                                   dm.get_router_ip().to_string().c_str());
+
+            std::for_each(dm.get_routes().begin(), dm.get_routes().end(), [&] (dhcp_mbuf::route_type& r) {
+                auto dst = std::get<0>(r);
+                auto mask = std::get<1>(r);
+                auto gw = std::get<2>(r);
+
+                dhcp_i("adding route: %s/%s -> %s", dst.to_string().c_str(), mask.to_string().c_str(), gw.to_string().c_str());
+
+                if (gw == ip::address_v4::any()) {
+                    osv_route_add_interface(dst.to_string().c_str(), mask.to_string().c_str(),
+                            _ifp->if_xname);
+                } else {
+                    osv_route_add_network(dst.to_string().c_str(), mask.to_string().c_str(),
+                            gw.to_string().c_str());
+                }
+            });
+
             osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
             // TODO: setup lease
         } else if (dm.get_message_type() == DHCP_MT_NAK) {

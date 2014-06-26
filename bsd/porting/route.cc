@@ -283,14 +283,19 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     return (m);
 }
 
-void osv_route_add_interface(const char* destination, const char* interface)
+void osv_route_add_interface(const char* destination, const char* netmask, const char* interface)
 {
     /* Create socket */
     struct socket* s;
     struct mbuf *m;
+    int flags = 0;
 
-    m = osv_route_rtmsg(RTM_ADD, destination, interface, NULL,
-        (RTF_STATIC | RTF_UP | RTF_HOST), gw_type::link);
+    if (!netmask) {
+        flags = RTF_HOST;
+    }
+
+    m = osv_route_rtmsg(RTM_ADD, destination, interface, netmask,
+        (RTF_STATIC | RTF_UP | flags), gw_type::link);
 
     /* Send routing message */
     socreate(PF_ROUTE, &s, SOCK_RAW, 0, NULL, NULL);
