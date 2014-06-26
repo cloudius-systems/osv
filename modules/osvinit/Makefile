@@ -23,7 +23,7 @@ CPP_FILES := $(wildcard *.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 
 STUB_HTTPSERVER_LIBS = $(HTTPSERVER_DIR)/httpserver-stub.so
-DEPEDNDS_LIBS = -lyaml-cpp -L$(HTTPSERVER_DIR)/ -lhttpserver
+DEPEDNDS_LIBS = -lyaml-cpp -L$(HTTPSERVER_DIR)/ -lhttpserver -L$(boost-lib-dir)
 LIBS = -lpthread -lboost_program_options-mt $(boost-libs) $(STUB_HTTPSERVER_LIBS) $(DEPEDNDS_LIBS)
 
 quiet = $(if $V, $1, @echo " $2"; $1)
