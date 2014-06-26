@@ -26,12 +26,19 @@ class java_app(object):
     def get_jvm_args(self):
         return []
 
+def _to_args_list(text_or_list):
+    if not text_or_list:
+        return []
+    if isinstance(text_or_list, basestring):
+        return text_or_list.split()
+    return text_or_list
+
 class run_java(java_app):
-    def __init__(self, classpath=[], args=[], jvm_args=[]):
+    def __init__(self, args=None, classpath=None, jvm_args=None):
         super(run_java, self).__init__()
+        self.args = _to_args_list(args)
         self.classpath = classpath
-        self.args = args
-        self.jvm_args = jvm_args
+        self.jvm_args = _to_args_list(jvm_args)
 
     def get_multimain_lines(self):
         args = []
