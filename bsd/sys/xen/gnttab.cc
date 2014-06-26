@@ -588,6 +588,7 @@ gnttab_map(unsigned int start_idx, unsigned int end_idx)
 int
 gnttab_resume(void)
 {
+	int error;
 	unsigned int max_nr_gframes, nr_gframes;
 
 	nr_gframes = nr_grant_frames;
@@ -596,8 +597,9 @@ gnttab_resume(void)
 		return (ENOSYS);
 
 	if (shared == NULL) {
-		shared = (grant_entry_t *)malloc(PAGE_SIZE * max_nr_grant_frames(), 0, 0);
-		if (!shared) {
+		error = posix_memalign((void**)&shared, PAGE_SIZE,
+			PAGE_SIZE * max_nr_grant_frames());
+		if (error) {
 			printf("can't allocate VM space for grant table");
 			return (ENOMEM);
 		}
