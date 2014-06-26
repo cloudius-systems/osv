@@ -106,13 +106,17 @@ exception_vectors:
 .equ ESR_EC_BEG,26          // Exception Class field begin in ESR
 .equ ESR_EC_END,31          // Exception Class field end in ESR
 .equ ESR_EC_DATA_ABORT,0x25 // Exception Class Data Abort value
+.equ ESR_EC_INSN_ABORT,0x21 // Exception Class Instruction Abort value
 
 .equ ESR_ISS_BEG,0          // Instruction-Specific Syndrome field begin in ESR
 .equ ESR_ISS_END,23         // Instruction-Specific Syndrome field end in ESR
 
-.equ ESR_TFLT_BEG,2         // Translation Fault = 0b0001LL ; we strip level.
-.equ ESR_TFLT_END,5         // Translation Fault field end in ESR
-.equ ESR_TFLT,1             // Translation Fault value = 0xb0001
+// Faults are fault status codes 1, 2 and 3. Applies to INSN and DATA abort.
+// Translation Fault = 0b0001LL
+// Access Flag Fault = 0b0010LL
+// Permission Fault  = 0b0011LL
+.equ ESR_FLT_BEG,2 // we strip LL
+.equ ESR_FLT_END,5
 
 .global entry_invalid
 .type entry_invalid, @function
@@ -133,11 +137,15 @@ entry_sync:
         push_state_to_exception_frame
         mrs     x1, esr_el1
         ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
-        ubfm    x3, x1, #ESR_TFLT_BEG, #ESR_TFLT_END // TFLT? -> X3
+        ubfm    x3, x1, #ESR_FLT_BEG, #ESR_FLT_END // FLT -> X3
         cmp     x2, #ESR_EC_DATA_ABORT
+        b.eq    handle_mem_abort
+        cmp     x2, #ESR_EC_INSN_ABORT
         b.ne    entry_invalid
-        cmp     x3, #ESR_TFLT
-        b.ne    entry_invalid
+handle_mem_abort:
+        cbz     x3, entry_invalid
+        cmp     x3, #3
+        b.hi    entry_invalid
 
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
