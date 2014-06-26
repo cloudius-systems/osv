@@ -490,6 +490,13 @@ int pthread_attr_getstack(const pthread_attr_t * __restrict attr,
     return 0;
 }
 
+int pthread_attr_setinheritsched(pthread_attr_t *attr, int inheritsched)
+{
+    if (inheritsched != PTHREAD_INHERIT_SCHED && inheritsched != PTHREAD_EXPLICIT_SCHED)
+        return EINVAL;
+    return 0;
+}
+
 int pthread_setcancelstate(int state, int *oldstate)
 {
     WARN_STUBBED();
