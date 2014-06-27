@@ -212,6 +212,10 @@ double      fmod(double, double);
 float       fmodf(float, float);
 long double fmodl(long double, long double);
 
+double      finite(double);
+float       finitef(float);
+long double finitel(long double);
+
 double      frexp(double, int *);
 float       frexpf(float, int *);
 long double frexpl(long double, int *);
