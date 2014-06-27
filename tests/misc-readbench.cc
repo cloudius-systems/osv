@@ -90,6 +90,7 @@ static void list_dir(const char *dir)
 
     for (;;) {
         struct dirent *entry;
+        struct stat st;
         const char *d_name;
         char path[PATH_MAX];
 
@@ -99,13 +100,14 @@ static void list_dir(const char *dir)
         }
         d_name = entry->d_name;
 
-        if (entry->d_type & DT_DIR) {
+        path_cat(path, dir, d_name);
+        assert(stat(path, &st) == 0);
+
+        if (S_ISDIR(st.st_mode)) {
             if (strcmp(d_name, "..") != 0 && strcmp(d_name, ".") != 0) {
-                path_cat(path, dir, d_name);
                 list_dir(path);
             }
-        } else if (entry->d_type & DT_REG) {
-            path_cat(path, dir, d_name);
+        } else if (S_ISREG(st.st_mode)) {
             read_file(path);
         }
     }
