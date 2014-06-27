@@ -19,7 +19,7 @@
 
 #include <unordered_map>
 
-long gettid()
+extern "C" long gettid()
 {
     return sched::thread::current()->id();
 }
