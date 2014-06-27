@@ -6,8 +6,7 @@ import tests.*;
 import java.util.concurrent.CyclicBarrier;
 
 import static io.osv.TestIsolateLaunching.runIsolate;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.*;
 
 /*
  * Copyright (C) 2014 Cloudius Systems, Ltd.
@@ -16,6 +15,7 @@ import static org.junit.Assert.assertNotNull;
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 public class ClassLoaderIsolationTest {
+    private static final Class<?> THIS_CLASS = ClassLoaderIsolationTest.class;
 
     @Test
     public void testParentContextDoesNotSeeModificationsOfStaticFields() throws Throwable {
@@ -71,5 +71,10 @@ public class ClassLoaderIsolationTest {
     @Test
     public void testClassesFromExtensionDirectoryCanBeLoaded() throws Exception {
         assertNotNull(SomeExtensionClass.class);
+    }
+
+    @Test
+    public void testClassPutInRootDirectoryIsNotPickedUpByDefaultSystemClassLoader() throws Exception {
+        assertSame(ClassPutInRoot.class.getClassLoader(), THIS_CLASS.getClassLoader());
     }
 }
