@@ -90,6 +90,7 @@ int main(int argc, char **argv)
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
 
     std::vector<JavaVMOption> options;
+    options.push_back(mkoption("-Djava.class.path=/dev/null"));
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
     options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
     options.push_back(mkoption("-Dosv.version=" + osv::version()));
