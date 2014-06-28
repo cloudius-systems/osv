@@ -1374,10 +1374,12 @@ int access(const char *pathname, int mode)
 }
 
 extern "C" 
-int eaccess(const char *pathname, int mode)
+int euidaccess(const char *pathname, int mode)
 {
     return access(pathname, mode);
 }
+
+weak_alias(euidaccess,eaccess);
 
 #if 0
 static int
