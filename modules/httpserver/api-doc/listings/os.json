@@ -156,7 +156,46 @@
 		}
 	    ]
 
-	}
+	},
+	{
+	    "path": "/os/hostname",
+	    "operations": [
+                {
+		    "method": "GET",
+		    "summary": "get the hostname",
+		    "responseClass": "string",
+		    "nickname": "getHostname",
+		    "produces": [
+		        "application/json",
+		        "application/xml"
+		    ],
+		    "parameters": [
+		    ],
+		    "deprecated": "false"
+                },
+	        {
+		    "method": "POST",
+		    "summary": "set the hostname",
+		    "responseClass": "string",
+		    "nickname": "setHostname",
+		    "produces": [
+		        "application/json",
+		        "application/xml"
+		    ],
+		    "parameters": [
+		        {
+			    "name": "name",
+			    "description": "new hostname",
+			    "required": true,
+			    "allowMultiple":false,
+			    "dataType":"string",
+			    "paramType":"query"
+		        }
+		    ],
+		    "deprecated": "false"
+	        }
+            ]
+        }
     ]
 
 }

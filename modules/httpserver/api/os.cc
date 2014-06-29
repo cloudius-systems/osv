@@ -14,6 +14,7 @@
 #include <time.h>
 #include <osv/shutdown.hh>
 #include <osv/debug.hh>
+#include <api/unistd.h>
 
 extern char debug_buffer[DEBUG_BUFFER_SIZE];
 
@@ -80,6 +81,20 @@ void init(routes& routes)
     getDebugMessages.set_handler("json", [](const_req req)
     {
         return string(debug_buffer);
+    });
+
+    getHostname.set_handler("json", [](const_req req)
+    {
+        char hostname[65];
+        gethostname(hostname,65);
+        return formatter::to_json(hostname);
+    });
+
+    setHostname.set_handler("json", [](const_req req)
+    {
+        string hostname = req.get_query_param("name");
+        sethostname(hostname.c_str(), hostname.size());
+        return formatter::to_json("");
     });
 }
 
