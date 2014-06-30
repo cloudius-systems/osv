@@ -16,7 +16,6 @@
 #include <osv/mutex.h>
 #include <osv/printf.hh>
 #include "boost/format.hpp"
-#include "api/assert.h"
 
 #define DEBUG_BUFFER_SIZE 1024*50 // 50kb buffer
 
