@@ -218,6 +218,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
             fprint(hfile, "struct ", model_name, " : public json::json_base {")
             member_init = ''
             member_assignment = ''
+            member_copy = ''
             for member_name in model["properties"]:
                 member = model["properties"][member_name]
                 if "description" in member:
@@ -228,6 +229,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
                 member_init += "  add(&" + member_name + ',"'
                 member_init += member_name + '");\n'
                 member_assignment += "  " + member_name + " = " + "e." + member_name + ";\n"
+                member_copy += "  e." + member_name + " = "  + member_name + ";\n"
             fprint(hfile, "void register_params() {")
             fprint(hfile, member_init)
             fprint(hfile, '}')
@@ -239,7 +241,16 @@ def create_h_file(data, hfile_name, api_name, init_method):
             fprint(hfile, '  register_params();')
             fprint(hfile, member_assignment)
             fprint(hfile, '}')
-            
+            fprint(hfile,"template<class T>")
+            fprint(hfile,model_name,"& set(const T& e) {")
+            fprint(hfile,member_assignment)
+            fprint(hfile,"  return *this;")
+            fprint(hfile,"}")
+            fprint(hfile,"template<class T>")
+            fprint(hfile,model_name,"& update(T& e) {")
+            fprint(hfile,member_copy)
+            fprint(hfile,"  return *this;")
+            fprint(hfile,"}")
             fprint(hfile, "};\n\n")
 
     print_ind_comment(hfile, "", "Initialize the path")
