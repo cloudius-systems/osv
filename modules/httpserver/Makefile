@@ -21,9 +21,9 @@ ifndef OSV_BUILD_PATH
 	OSV_BUILD_PATH = $(src)/build/$(mode).$(ARCH)
 endif
 miscbase = $(src)/external/$(ARCH)/misc.bin
-boost-lib-dir = $(miscbase)/usr/lib64
-boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
-              $(boost-lib-dir)/libboost_filesystem-mt.so
+libs-dir = $(miscbase)/usr/lib64
+boost-libs := $(libs-dir)/libboost_system-mt.so \
+              $(libs-dir)/libboost_filesystem-mt.so
 
 # the build target executable:
 TARGET = httpserver
@@ -34,8 +34,18 @@ STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
-LIBS = -lpthread $(boost-libs) -L$(OSV_BUILD_PATH)/tools -ltools -L$(boost-lib-dir) -lyaml-cpp
-STATIC_LIBS = $(boost-lib-dir)/libboost_program_options-mt.a
+STATIC_LIBS = $(libs-dir)/libboost_program_options-mt.a
+DYN_LIBS = -lpthread -ldl -L$(OSV_BUILD_PATH)/tools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
+
+ifeq ($(use_host),y)
+	DYN_LIBS += -lssl -lcrypto
+else
+	DYN_LIBS += $(libs-dir)/libssl.so.10 \
+		$(libs-dir)/libcrypto.so.10
+endif
+
+LIBS = $(DYN_LIBS) $(STATIC_LIBS)
+
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
@@ -61,7 +71,7 @@ $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS), LINK $@)
 
 lib$(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(DYN_LIBS), LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
