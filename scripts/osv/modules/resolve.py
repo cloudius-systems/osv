@@ -4,8 +4,9 @@ import json
 import re
 import subprocess
 import runpy
+import collections
 
-_modules = dict()
+_modules = collections.OrderedDict()
 _loading_modules = list()
 
 class Module(object):
@@ -39,8 +40,17 @@ def read_config():
 def local_import(path):
     return runpy.run_path(path)
 
+def unique(items):
+    seen = set()
+    return (x for x in items if not x in seen and not seen.add(x))
+
 def get_required_modules():
-    return list(set(_modules.values()))
+    """
+    Returns a list of modules in inverse topological order
+    according to dependency graph
+
+    """
+    return list(unique(_modules.values()))
 
 def _is_direct(module_config):
     return module_config["type"] == "direct-dir"
