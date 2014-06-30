@@ -326,7 +326,7 @@ vmxnet3::vmxnet3(pci::device &dev)
     if_initname(_ifn, "eth", _id);
     _ifn->if_mtu = ETHERMTU;
     _ifn->if_softc = static_cast<void*>(this);
-    _ifn->if_flags = IFF_BROADCAST /*| IFF_MULTICAST*/;
+    _ifn->if_flags = IFF_BROADCAST | IFF_MULTICAST;
     _ifn->if_ioctl = if_ioctl;
     _ifn->if_transmit = if_transmit;
     _ifn->if_qflush = if_qflush;
