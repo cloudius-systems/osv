@@ -116,4 +116,16 @@ struct l_ucred {
 	uint32_t	gid;
 };
 
+/* Socket options */
+#define	LINUX_IP_TOS		1
+#define	LINUX_IP_TTL		2
+#define	LINUX_IP_HDRINCL	3
+#define	LINUX_IP_OPTIONS	4
+
+#define	LINUX_IP_MULTICAST_IF		32
+#define	LINUX_IP_MULTICAST_TTL		33
+#define	LINUX_IP_MULTICAST_LOOP		34
+#define	LINUX_IP_ADD_MEMBERSHIP		35
+#define	LINUX_IP_DROP_MEMBERSHIP	36
+
 #endif /* _LINUX_SOCKET_H_ */
