@@ -38,10 +38,10 @@ def tracing_smoke_test():
         assert('elf::program::get_library' in profile)
 
         profile = subprocess.check_output([trace_script, 'prof-wait'])
-        assert('osv::poweroff' in profile)
+        assert('sched::thread::wait()' in profile)
 
         profile = subprocess.check_output([trace_script, 'prof'])
-        assert('osv::poweroff' in profile)
+        assert('sched::thread::wait()' in profile)
         assert('elf::program::get_library' in profile)
 
         tcpdump = subprocess.check_output([trace_script, 'tcpdump'])
