@@ -180,11 +180,16 @@ int fdrop(struct file *fp)
 
     fp->f_count = INT_MIN;
     fp->close();
+    fp->stop_polls();
     delete fp;
     return 1;
 }
 
 file::~file()
+{
+}
+
+void file::stop_polls()
 {
     auto fp = this;
 

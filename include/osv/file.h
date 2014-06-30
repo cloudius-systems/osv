@@ -127,6 +127,7 @@ struct file {
 	// poll_wake_count used for implementing epoll()'s EPOLLET using poll().
 	// Once we have a real epoll() implementation, it won't be needed.
 	int poll_wake_count = 0;
+	void stop_polls();
 };
 
 
