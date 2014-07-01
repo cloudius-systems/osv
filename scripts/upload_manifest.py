@@ -33,6 +33,8 @@ def expand(items):
 def unsymlink(f):
     if f.startswith('!'):
         return f[1:]
+    if f.startswith('->'):
+        return f
     try:
         link = os.readlink(f)
         if link.startswith('/'):
@@ -110,18 +112,23 @@ def upload(osv, manifest, depends):
 
     # Send the files to the guest
     for name, hostname in files:
-        depends.write(u'\t%s \\\n' % (hostname,))
-        hostname = strip_file(hostname)
-        if os.path.islink(hostname):
-            link = os.readlink(hostname)
+        if hostname.startswith("->"):
+            link = hostname[2:]
             cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
             cpio_send(link)
-        elif os.path.isdir(hostname):
-            cpio_send(cpio_header(name, stat.S_IFDIR, 0))
         else:
-            cpio_send(cpio_header(name, stat.S_IFREG, os.stat(hostname).st_size))
-            with open(hostname, 'rb') as f:
-                cpio_send(f.read())
+            depends.write(u'\t%s \\\n' % (hostname,))
+            hostname = strip_file(hostname)
+            if os.path.islink(hostname):
+                link = os.readlink(hostname)
+                cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
+                cpio_send(link)
+            elif os.path.isdir(hostname):
+                cpio_send(cpio_header(name, stat.S_IFDIR, 0))
+            else:
+                cpio_send(cpio_header(name, stat.S_IFREG, os.stat(hostname).st_size))
+                with open(hostname, 'rb') as f:
+                    cpio_send(f.read())
     cpio_send(cpio_header("TRAILER!!!", 0, 0))
     s.shutdown(socket.SHUT_WR)
 
