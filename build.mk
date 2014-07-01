@@ -328,7 +328,7 @@ tests/hello/Hello.class: javabase=tests/hello
 ifeq ($(arch),aarch64)
 java-targets :=
 else
-java-targets := java/java.so
+java-targets := java-jars java/java.so
 endif
 
 java-jars:
