@@ -2,6 +2,7 @@
 
 # set up a development environment for OSv.  Run as root.
 
+import sys
 import os, os.path, distutils.version
 import subprocess, StringIO
 
@@ -29,9 +30,10 @@ for distro in distros:
             if version == distutils.version.LooseVersion(dver.version):
                 pkg = distro.packages + dver.packages
                 subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell = True)
-                os.exit(0)
+                sys.exit(0)
         print 'Your distribution version is not supported by this script'
-        os.exit(1)
-    print 'Your distribution is not supported by this script.'
-    os.exit(2)
+        sys.exit(1)
+
+print 'Your distribution is not supported by this script.'
+sys.exit(2)
 
