@@ -10,8 +10,7 @@ usr_files.add(os.path.join('${OSV_BASE}', 'external/x64/misc.bin/usr/lib64/libya
 usr_files.add(os.path.join(_module, 'osvinit.so')).to('/usr/mgmt/osvinit.so')
 usr_files.add(os.path.join(_module, 'osvinit.yaml')).to('/usr/mgmt/osvinit.yaml')
 
-# Compiling osvinit depends on httpserver already having been compiled
-compileafter = ['httpserver']
+api.require('httpserver')
 
 #default = api.run('/usr/mgmt/osvinit.so --skip-error --file /usr/mgmt/osvinit.yaml')
 default = ""
