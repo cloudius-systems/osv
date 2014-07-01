@@ -290,7 +290,10 @@ void run_main(const std::vector<std::string> &vec)
     }
 
     __libc_stack_end = __builtin_frame_address(0);
+    auto oldname = sched::thread::current()->name();
+    sched::thread::current()->set_name(command);
     auto lib = osv::run(command, args, &ret);
+    sched::thread::current()->set_name(oldname);
     if (lib) {
         // success
         if (ret) {
