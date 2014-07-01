@@ -2,6 +2,8 @@ import os
 import mmap
 import struct
 import sys
+import heapq
+
 from osv import debug
 
 # version 2 introduced thread_name
@@ -274,6 +276,113 @@ class WritingPacker:
             if not type(arg) == str:
                 raise Exception('Should be string but is %s' % type(arg))
             self.pack_blob(arg.encode())
+
+class TraceDumpReader :
+    def __init__(self, filename):
+        self.tracepoints = {}
+        self.trace_buffers = []
+        self.endian = '<'
+        self.backtrace_len = 10
+        self.file = open(filename, 'rb')
+        try:
+            tag = self.file.read(4)
+            if tag == "OSVT":
+                endian = '>'
+            elif tag != "TVSO":
+                raise SyntaxError("Not a trace dump file")
+            self.read('Q') # size. ignore, do not support embedded yet.
+            if self.read('I') != 1: #endian check. verify tag check
+                raise SyntaxError
+            self.read('I') # version. should check
+            while self.readStruct():
+                pass
+        finally:
+            self.file.close()
+
+    def align(self, a):
+        while (self.file.tell() & (a - 1)) != 0:
+            self.file.seek(1, 1)
+
+    def read(self, type):
+        siz = struct.calcsize(type)
+        self.align(siz)
+        val = self.file.read(siz)
+        if len(val) != siz:
+            raise EOFError(str(len(val)) + "!=" + str(siz))
+        return struct.unpack(self.endian + type, val)[0]
+
+    def readStruct(self):
+        self.align(8)
+        try:
+            tag = self.read('I')
+        except EOFError:
+            return False
+        size = self.read('Q')
+        if tag == 0x54524344: # 'TRCD'
+            return self.readTraceDict(size)
+        elif tag == 0x54524353: #'TRCS'
+            data = self.file.read(size)
+            self.trace_buffers.append(data)
+            return True
+        else:
+            self.file.seek(size, 1)
+            return True
+
+    def readString(self):
+        len = self.read('H')
+        return self.file.read(len)
+
+    def readTraceDict(self, size):
+        self.backtrace_len = self.read('I');
+        n_types = self.read('I')
+        for i in range(0, n_types):
+            tp_key = self.read('Q')
+            id = self.readString()
+            name = self.readString()
+            prov = self.readString()
+            fmt = self.readString()
+            n_args = self.read('I')
+            sig = ""
+            for j in range(0, n_args):
+                arg_name = self.readString()
+                arg_sig = self.file.read(1)
+                if arg_sig == 'p':
+                    arg_sig = '50p'
+                sig += arg_sig
+            tp = TracePoint(tp_key, name, sig, fmt)
+            self.tracepoints[tp_key] = tp
+        return True;
+
+    def oneTrace(self, trace_log):
+        last_tp = None;
+        last_trace = None;
+        unpacker = SlidingUnpacker(trace_log)
+        while unpacker:
+            tp_key, = unpacker.unpack('Q')
+            if (tp_key == 0) or (tp_key == -1):
+                break
+
+            thread, thread_name, time, cpu, flags = unpacker.unpack('Q16sQII')
+
+            tp = self.tracepoints.get(tp_key, None)
+            if not tp:
+                raise SyntaxError(("Unknown trace point 0x%x" % tp_key))
+
+            thread_name = thread_name.partition(b'\0')[0].decode()
+
+            backtrace = None
+            if flags & 1:
+                backtrace = unpacker.unpack('Q' * self.backtrace_len)
+
+            data = unpacker.unpack(tp.signature)
+            unpacker.align_up(8)
+            last_tp = tp;
+            last_trace = Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
+            yield last_trace;
+
+    def traces(self):
+        iters = map(lambda data: self.oneTrace(data), self.trace_buffers)
+        return heapq.merge(*iters)
 
 def read(buffer_view):
     unpacker = SlidingUnpacker(buffer_view)

@@ -298,6 +298,7 @@ public:
                                       &tracepoint_base::tp_list_link>,
         boost::intrusive::constant_time_size<false>
         > tp_list;
+    static const size_t backtrace_len = 10;
 protected:
     bool _backtrace = false;
     bool _logging = false;
@@ -321,7 +322,6 @@ private:
     void deactivate(const tracepoint_id &, void * site, void * slow_path);
     void update();
     static std::unordered_set<tracepoint_id>& known_ids();
-    static const size_t backtrace_len = 10;
 };
 
 namespace {

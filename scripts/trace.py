@@ -6,6 +6,10 @@ import re
 import os
 import math
 import subprocess
+import struct
+import tempfile
+import urllib
+
 from itertools import ifilter
 from collections import defaultdict
 from operator import attrgetter
@@ -498,6 +502,52 @@ def add_trace_listing_options(parser):
     add_symbol_resolution_options(parser)
     parser.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
 
+def convert_dump(args) :
+    if os.path.isfile(args.dumpfile):
+        if os.path.exists(args.tracefile):
+            os.remove(args.tracefile)
+            assert(not os.path.exists(args.tracefile))
+        print "Converting dump %s -> %s" % (args.dumpfile, args.tracefile)
+        td = trace.TraceDumpReader(args.dumpfile)
+        trace.write_to_file(args.tracefile, list(td.traces()))
+    else:
+        print("error: %s not found" % (args.dumpfile))
+        sys.exit(1)
+
+def download_dump(args) :
+    out = None;
+    if args.dumpfile == None:
+        if args.convert:
+            out = tempfile.NamedTemporaryFile()
+            args.dumpfile = out.name
+        else:
+            args.dumpfile = "buffers"
+    if out == None:
+        out = open(args.dumpfile, "wb")
+
+    try:
+        url = args.url
+        if not url.endswith('/'):
+            url += '/'
+        url += "trace/buffers"
+
+        print "Downloading %s -> %s" % (url, out.name)
+
+        def report(blocknr, blocksize, size):
+            current = min(blocknr*blocksize, size)
+            sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current/1024, size/1024, 100.0*current/size, ('='*32*(current/size)) + '>'))
+            if current >= size:
+                sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        urllib.urlretrieve(url, out.name, report)
+
+        if args.convert:
+            convert_dump(args)
+    finally:
+        out.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="trace file processing")
     subparsers = parser.add_subparsers(help="Command")
@@ -600,6 +650,33 @@ if __name__ == "__main__":
     group = cmd_memory_analyzer.add_argument_group('backtrace options')
     add_backtrace_options(group)
     cmd_memory_analyzer.set_defaults(func=mem_analys, paginate=True)
+
+    cmd_convert_dump = subparsers.add_parser("convert-dump", help="convert trace dump file (REST)"
+                                             , description="""
+                                             Converts trace dump acquired via REST Api to trace listing format
+                                             """)
+    add_trace_source_options(cmd_convert_dump)
+    cmd_convert_dump.add_argument("-f", "--dumpfile", action="store",
+                                  help="Trace dump file",
+                                  default="buffers")
+    cmd_convert_dump.set_defaults(func=convert_dump, paginate=False)
+
+    cmd_download_dump = subparsers.add_parser("download", help="download trace dump file (REST)"
+                                             , description="""
+                                             Downloads a trace dump via REST Api
+                                             """)
+    cmd_download_dump.add_argument("-u", "--url", action="store",
+                                  help="Source URL for REST connections",
+                                  default="http://192.168.122.89:8000/")
+    cmd_download_dump.add_argument("-c", "--convert", action="store_true",
+                                  help="Convert the dump to tracefile",
+                                  )
+    cmd_download_dump.add_argument("-f", "--dumpfile", action="store",
+                                  help="Trace dump file",
+                                  )
+    add_trace_source_options(cmd_download_dump)
+    cmd_download_dump.set_defaults(func=download_dump, paginate=False)
+
 
     args = parser.parse_args()
 
