@@ -28,8 +28,8 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/uush/"
         },
-    "include": [
-        "${OSV_BASE}/apps/modules.json"
+    "repositories": [
+        "${OSV_BASE}/apps"
     ]
    }
 }
