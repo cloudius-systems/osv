@@ -29,3 +29,10 @@ trace::set_event_state(const ext_id & id, bool enable, bool backtrace)
 {
     throw std::invalid_argument(id);
 }
+
+std::string
+trace::create_trace_dump()
+{
+    throw std::invalid_argument("this is just a dummy stub");
+}
+

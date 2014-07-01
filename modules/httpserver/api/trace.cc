@@ -8,10 +8,13 @@
 #include "trace.hh"
 #include "autogen/trace.json.hh"
 #include "json/formatter.hh"
+#include "mime_types.hh"
 
 #include <string>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
+#include <sys/stat.h>
 #include <osv/tracecontrol.hh>
 #include <osv/sampler.hh>
 
@@ -100,4 +103,50 @@ void httpserver::api::trace::init(routes & routes)
         prof::start_sampler(config);
         return formatter::to_json("Sampler started successfully");
     });
+
+    class create_trace_dump_file {
+    public:
+        create_trace_dump_file()
+            : _filename(::trace::create_trace_dump()), _size(0)
+        {
+            struct stat st;
+            if (::stat(_filename.c_str(), &st) != 0) {
+                throw std::runtime_error("Could not create trace dump file");
+            }
+            _size = st.st_size;
+        }
+        ~create_trace_dump_file() {
+            if (_size != 0) {
+                // We are responsible for deleting the file
+                ::unlink(_filename.c_str());
+            }
+        }
+        operator const std::string &() const {
+            return _filename;
+        }
+        size_t size() const {
+            return _size;
+        }
+    private:
+        const std::string _filename;
+        size_t _size;
+    };
+
+    class create_trace_dump : public file_interaction_handler {
+    public:
+        void handle(const std::string& path, parameters* params,
+                const http::server::request& req, http::server::reply& rep)
+                        override {
+            create_trace_dump_file dump;
+
+            // TODO: at some point we can forsee files becoming
+            // large enough that this very naive way of sending a file
+            // via http will not work. Need to add streaming ability
+            // to the server.
+            rep.content.reserve(dump.size());
+            read(dump, req, rep);
+        }
+    };
+
+    trace_json::getTraceBuffers.set_handler(new create_trace_dump());
 }
