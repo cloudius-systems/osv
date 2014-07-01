@@ -17,5 +17,6 @@
 /usr/lib/&/jni/tracepoint.so: java/&
 /usr/lib/&/jni/power.so: java/&
 /java.so: java/java.so
+/usr/lib/libosv.so: libosv.so
 /usr/lib/jvm/java/jre/lib/ext/runjava.jar: ${OSV_BASE}/java/runjava/target/runjava.jar
 /java/cloudius.jar: ${OSV_BASE}/java/cloudius/target/cloudius.jar

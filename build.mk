@@ -349,7 +349,7 @@ endif
 
 ifeq ($(arch),x64)
 
-all: loader.img loader.bin usr.img
+all: loader.img loader.bin libosv.so usr.img
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
@@ -894,6 +894,11 @@ loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(driv
 	      $(boost-libs) \
 	    --no-whole-archive, \
 		LD $@)
+
+libosv.so: loader.elf
+	$(call quiet, readelf --dyn-syms loader.elf > osv.syms)
+	$(call quiet, $(src)/scripts/libosv.py osv.syms libosv.ld | $(CC) -c -o osv.o -x assembler -)
+	$(call quiet, $(CC) osv.o -nostdlib -shared -o libosv.so -T libosv.ld, LIBOSV.SO)
 
 bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
