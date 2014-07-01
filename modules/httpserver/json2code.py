@@ -219,14 +219,12 @@ def resolve_model_order(data):
     res = []
     models = set()
     for model_name in data:
-        print ("model " + model_name)
         visited = set(model_name)
         missing = is_model_valid(model_name, data)
         resolved = missing == ''
         if not resolved:
             stack = [model_name]
             while not resolved:
-                print("resolving "+missing)
                 if missing in visited:
                     trace_err ("Cyclic dependency found: ", missing)
                 missing_depends = is_model_valid(missing, data)
@@ -234,7 +232,6 @@ def resolve_model_order(data):
                     if missing not in models:
                         res.append(missing)
                         models.add(missing)
-                    print("debug "+ missing)
                     resolved = len(stack) == 0
                     if not resolved:
                         missing = stack.pop()
