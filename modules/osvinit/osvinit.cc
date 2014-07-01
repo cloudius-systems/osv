@@ -145,8 +145,9 @@ void osvinit::do_api(http::server::request& req)
 {
     http::server::reply rep;
 
-    if (!httpserver::global_server::get_routes().handle(req.uri, req, rep) ||
-            rep.status != 200) {
+    httpserver::global_server::get_routes().handle(req.uri, req, rep);
+
+    if (rep.status != 200) {
         throw osvinit_exception(rep.content);
     }
 }
