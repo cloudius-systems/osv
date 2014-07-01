@@ -49,11 +49,17 @@ class PathFilter(object):
 class FileMap(object):
     def __init__(self):
         self.mappings = []
+        self.symlinks = []
 
     def add(self, host_path, to=None):
         mapping = Mapping(os.path.expandvars(host_path))
         self.mappings.append(mapping)
         return mapping
+
+    def link(self, guest_path):
+        m = SymlinkMapping(guest_path)
+        self.symlinks.append(m)
+        return m
 
     def expand(self):
         """
@@ -99,6 +105,11 @@ class FileMap(object):
         for mapping in guest_to_host.items():
             yield mapping
 
+    def expand_symlinks(self):
+        for s in self.symlinks:
+            if not s.old_path:
+                raise Exception('Unfinished symlink mapping for ' + mapping.new_path)
+            yield (s.new_path, s.old_path)
 
 class Mapping(object):
     def __init__(self, host_path):
@@ -138,10 +149,19 @@ class Mapping(object):
     def allow_symlink(self):
         self._allow_symlink = True
 
+class SymlinkMapping(object):
+    def __init__(self, new_path):
+        self.new_path = new_path
+
+    def to(self, old_path):
+        self.old_path = old_path
 
 def as_manifest(filemap, appender):
     for mapping in filemap.expand():
         appender("%s: %s\n" % mapping)
+
+    for mapping in filemap.expand_symlinks():
+        appender("%s: ->%s\n" % mapping)
 
 def save_as_manifest(filemap, filename):
     with open(filename, 'w') as file:
