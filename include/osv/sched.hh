@@ -1135,6 +1135,16 @@ inline void migrate_enable()
     thread::current()->_migration_lock_counter--;
 }
 
+// with_all_threads(f) iterates over all threads, calling the given function
+// f() on each one. The implementation is safe, in that it is guaranteed that
+// while f is operating on a thread, the thread will not be concurrently
+// destroyed.
+//
+// NOTE: The current implementation holds a mutex (thread_map_mutex) during
+// the entire with_all_threads() run. This delays, among other things, thread
+// creation and destruction that happen in this duration. For this reason,
+// this function should be used sparingly, e.g., for debugging.
+void with_all_threads(std::function<void(sched::thread &)>);
 
 }
 

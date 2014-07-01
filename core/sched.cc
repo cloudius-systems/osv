@@ -1382,6 +1382,15 @@ thread_runtime::time_until(runtime_t target_local_runtime) const
     return thread_runtime::duration((thread_runtime::duration::rep) ret);
 }
 
+void with_all_threads(std::function<void(thread &)> f) {
+    WITH_LOCK(thread_map_mutex) {
+        for (auto th : thread_map) {
+            f(*th.second);
+        }
+    }
+}
+
+
 }
 
 irq_lock_type irq_lock;
