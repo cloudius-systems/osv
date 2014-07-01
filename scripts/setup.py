@@ -12,6 +12,8 @@ class Fedora(object):
     install = 'yum -y install'
     packages = ['gcc-c++', 'gcc-c++-aarch64-linux-gnu', 'git', 'gdb', 'qemu-img',
                 'qemu-system-x86', 'libvirt', 'maven', 'java-1.7.0-openjdk',
+                'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
+                'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb'
                 ]
     class Fedora_20(object):
         packages = []
