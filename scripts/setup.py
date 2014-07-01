@@ -19,8 +19,22 @@ class Fedora(object):
         version = '20'
     versions = [Fedora_20]
 
+class Ubuntu(object):
+    name = 'Ubuntu'
+    install = 'apt-get -y install'
+    packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
+                'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
+                'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump gdb', 'qemu-system-x86',
+                'gawk'
+                ]
+    class Ubuntu_14_04(object):
+        packages = []
+        version = '14.04'
+    versions = [Ubuntu_14_04]
+
 distros = [
            Fedora(),
+           Ubuntu()
            ]
 
 (name, version, id) = platform.linux_distribution()
