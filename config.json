@@ -12,24 +12,9 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/osvinit"
         },
-        "java": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/modules/java/"
-        },
-        "java-tests": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/modules/java-tests/"
-        },
-        "tests": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/modules/tests/"
-        },
-        "uush": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/modules/uush/"
-        },
     "repositories": [
-        "${OSV_BASE}/apps"
+        "${OSV_BASE}/apps",
+        "${OSV_BASE}/modules"
     ]
    }
 }
