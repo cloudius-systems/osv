@@ -897,7 +897,7 @@ loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(driv
 
 libosv.so: loader.elf
 	$(call quiet, readelf --dyn-syms loader.elf > osv.syms)
-	$(call quiet, $(src)/scripts/libosv.py osv.syms libosv.ld | $(CC) -c -o osv.o -x assembler -)
+	$(call quiet, $(src)/scripts/libosv.py osv.syms libosv.ld `$(src)/scripts/osv-version.sh` | $(CC) -c -o osv.o -x assembler -)
 	$(call quiet, $(CC) osv.o -nostdlib -shared -o libosv.so -T libosv.ld, LIBOSV.SO)
 
 bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'

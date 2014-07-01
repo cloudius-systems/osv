@@ -22,6 +22,7 @@
 #include <iterator>
 #include <osv/sched.hh>
 #include <osv/trace.hh>
+#include <osv/version.hh>
 
 #include "arch.hh"
 
@@ -313,6 +314,24 @@ bool file::mlocked()
     return false;
 }
 
+Elf64_Note::Elf64_Note(void *_base)
+{
+    Elf64_Word *base = reinterpret_cast<Elf64_Word *>(_base);
+    char *str = align_up(static_cast<char *>(_base) + 3 * sizeof(*base), 4);
+
+    n_type = base[2];
+
+    n_owner.reserve(base[0]);
+    n_value.reserve(base[1]);
+
+    // The note section strings will include the trailing 0. std::string
+    // doesn't like that very much, and comparisons against a string that is
+    // constructed from this string will fail. Therefore the - 1 at the end
+    n_owner.assign(str, base[0] - 1);
+    str = align_up(str + base[0], 4);
+    n_value.assign(str, base[1] - 1);
+}
+
 void object::load_segments()
 {
     bool is_executable = false;
@@ -330,7 +349,25 @@ void object::load_segments()
         case PT_INTERP:
 	    is_executable = true;
 	    break;
-        case PT_NOTE:
+        case PT_NOTE: {
+            struct Elf64_Note header(_base + phdr.p_vaddr);
+
+            if (header.n_type != NT_VERSION) {
+                break;
+            }
+
+            if (header.n_owner != "OSv") {
+                break;
+            }
+
+            // FIXME: In the future, we should probably prevent loading of libosv.so in this
+            // situation.
+            if (header.n_value != osv::version()) {
+                printf("WARNING: libosv.so version mismatch. Kernel is %s, lib is %s\n",
+                        osv::version().c_str(), header.n_value.c_str());
+            }
+            break;
+        }
         case PT_PHDR:
         case PT_GNU_STACK:
         case PT_GNU_RELRO:
