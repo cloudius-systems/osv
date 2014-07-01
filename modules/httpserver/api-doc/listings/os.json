@@ -195,7 +195,58 @@
 		    "deprecated": "false"
 	        }
             ]
+        },
+        {
+            "path": "/os/threads",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "list threads",
+                    "notes": "",
+                    "responseClass": "Threads",
+                    "nickname" : "listThreads",
+                    "produces": [
+                        "application/json",
+                                "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
         }
-    ]
-
+    ],
+    "models" : {
+        "Thread": {
+           "description": "Information on one thread",
+               "properties": {
+                "id": {
+                    "type": "long",
+                    "description": "32-bit thread id"
+                },
+                "cpu_ms" : {
+                    "type": "long",
+                    "description": "Total CPU time used by the thread (in milliseconds)"
+                },
+                "name" : {
+                     "type": "string",
+                    "description": "Thread description (not necessarily unique)"
+                }
+            }
+        },
+        "Threads": {
+           "description": "List of threads",
+               "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {"type": "Thread"},
+                    "description": "List of thread objects"
+                },
+                "time_ms": {
+                    "type": "long",
+                    "description": "Time when thread list was taken (milliseconds since epoche)"
+                }
+            }
+        }
+    }
 }

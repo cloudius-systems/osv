@@ -14,6 +14,7 @@
 #include <time.h>
 #include <osv/shutdown.hh>
 #include <osv/debug.hh>
+#include <osv/sched.hh>
 #include <api/unistd.h>
 
 extern char debug_buffer[DEBUG_BUFFER_SIZE];
@@ -96,6 +97,23 @@ void init(routes& routes)
         sethostname(hostname.c_str(), hostname.size());
         return formatter::to_json("");
     });
+
+    listThreads.set_handler("json", [](const_req req)
+    {
+        using namespace std::chrono;
+        httpserver::json::Threads threads;
+        threads.time_ms = duration_cast<milliseconds>
+            (osv::clock::wall::now().time_since_epoch()).count();
+        httpserver::json::Thread thread;
+        sched::with_all_threads([&](sched::thread &t) {
+            thread.id = t.id();
+            thread.cpu_ms = duration_cast<milliseconds>(t.thread_clock()).count();
+            thread.name = t.name();
+            threads.list.push(thread);
+        });
+        return formatter::to_json(threads);
+    });
+
 }
 
 }
