@@ -26,8 +26,8 @@ from top of OSv source tree.
 
 This script requires following Amazon credentials to be provided via environment variables:
 
-    AWS_ACCESS_KEY_ID=<Access key ID>
-    AWS_SECRET_ACCESS_KEY<Secret access key>
+    export AWS_ACCESS_KEY_ID=<Access key ID>
+    export AWS_SECRET_ACCESS_KEY<Secret access key>
 
     See http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSGettingStartedGuide/AWSCredentials.html
     for more details
@@ -449,6 +449,11 @@ while true; do
 
     echo_progress Releasing version $OSV_VER \(modules $MODULES_LIST\)
     amend_rstatus Release status for version $OSV_VER \(modules $MODULES_LIST\)
+
+    if test x"$AWS_ACCESS_KEY_ID" = x"" || test x"$AWS_SECRET_ACCESS_KEY" = x""; then
+        handle_error No AWS credentials found. Please define AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+        break;
+    fi
 
     if test x"$DONT_BUILD" != x"1"; then
         echo_progress Building from the scratch
