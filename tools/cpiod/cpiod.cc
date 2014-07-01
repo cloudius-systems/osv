@@ -43,6 +43,7 @@ public:
         mkdirp(name.c_str(), 0755);
     }
     virtual void add_symlink(string oldpath, string newpath) override {
+        cout << "Link " << newpath << " to " << oldpath << " ...\n";
         auto pos = newpath.rfind('/');
         if (pos != newpath.npos) {
             mkdirp(newpath.substr(0, pos).c_str(), 0755);
