@@ -67,6 +67,22 @@ get_volume_state() {
  aws ec2 describe-volumes --volume-ids $VOLUME_ID | get_json_value '["Volumes"][0]["State"]'
 }
 
+get_instance_id_by_name() {
+ local INSTANCE_NAME=$1
+ aws ec2 describe-instances --filters "Name=tag:Name,Values=$1" | get_json_value '["Reservations"][0]["Instances"][0]["InstanceId"]'
+}
+
+get_instance_private_ip() {
+ local INSTANCE_ID=$1
+ aws ec2 describe-instances --instance-ids $INSTANCE_ID | get_json_value '["Reservations"][0]["Instances"][0]["PrivateIpAddress"]'
+}
+
+change_instance_type() {
+  local INSTANCE_ID=$1
+  local INSTANCE_TYPE=$2
+ aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID --instance-type "{\"Value\": \"$INSTANCE_TYPE\"}"
+}
+
 get_ami_state() {
  local AMI_ID=$1
  shift
@@ -154,6 +170,9 @@ wait_for_volume_attach() {
  wait_for_volume_state $1 in-use
 }
 
+start_instances() {
+ $EC2_HOME/bin/ec2-start-instances $*
+}
 stop_instance_forcibly() {
  $EC2_HOME/bin/ec2-stop-instances $1 --force
 }
