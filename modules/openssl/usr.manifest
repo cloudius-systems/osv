@@ -1,0 +1,17 @@
+#
+# Copyright (C) 2014 Cloudius Systems, Ltd.
+#
+# This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+#
+
+# From openssl-libs
+/usr/lib/openssl/**: %(miscbase)s/usr/lib64/openssl/**
+/usr/lib/&/libssl.so.1.0.1h: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libssl.so.10: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libcrypto.so.1.0.1h: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libcrypto.so.10: %(miscbase)s/usr/lib64/&
+
+# From libcom_err
+/usr/lib/&/libcom_err.so.2: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libcom_err.so.2.1: %(miscbase)s/usr/lib64/&
