@@ -67,6 +67,15 @@ static inline bool isctrl(char c) {
     return ((c<' ' && c!='\t' && c!='\n') || c=='\177');
 }
 
+// Note that by writing only to the driver we read from, it means input in one
+// console of a console-multiplexer will only be echoed on the same console,
+// while ordinary output will appear in all of them.
+static inline void echo(console_driver *driver, const char *str, size_t len)
+{
+    driver->write(str, len);
+    driver->flush();
+}
+
 void LineDiscipline::read_poll(console_driver *driver)
 {
     while (true) {
@@ -96,7 +105,7 @@ void LineDiscipline::read_poll(console_driver *driver)
             // user can edit it with backspace, etc.).
             if (c == '\n') {
                 if (_tio->c_lflag && ECHO)
-                    driver->write(&c, 1);
+                    echo(driver, &c, 1);
                 _line_buffer.push_back('\n');
                 while (!_line_buffer.empty()) {
                     _read_queue.push(_line_buffer.front()); _line_buffer.pop_front();
@@ -115,15 +124,15 @@ void LineDiscipline::read_poll(console_driver *driver)
                     static const char eraser[] = {'\b',' ','\b','\b',' ','\b'};
                     if (_tio->c_lflag && ECHOE) {
                         if (isctrl(e)) { // Erase the two characters ^X
-                            driver->write(eraser, 6);
+                            echo(driver, eraser, 6);
                         } else {
-                            driver->write(eraser, 3);
+                            echo(driver, eraser, 3);
                         }
                     } else {
                         if (isctrl(e)) {
-                            driver->write(eraser+2, 2);
+                            echo(driver, eraser+2, 2);
                         } else {
-                            driver->write(eraser, 1);
+                            echo(driver, eraser, 1);
                         }
                     }
                     continue; // already echoed
@@ -144,9 +153,9 @@ void LineDiscipline::read_poll(console_driver *driver)
                 char out[2];
                 out[0] = '^';
                 out[1] = c^'@';
-                driver->write(out, 2);
+                echo(driver, out, 2);
             } else {
-                driver->write(&c, 1);
+                echo(driver, &c, 1);
             }
         }
     }
