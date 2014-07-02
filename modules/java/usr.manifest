@@ -6,7 +6,6 @@
 #
 
 [manifest]
-/usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1
 /usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libjpeg.so.62: %(miscbase)s/usr/lib64/&
 /usr/lib/jni/balloon.so: java/jni/balloon.so
