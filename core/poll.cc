@@ -335,13 +335,20 @@ int file::poll_many(struct pollfd _pfd[], nfds_t _nfds, timeout_t timeout)
     pfd.reserve(_nfds);
 
     for (nfds_t i = 0; i < _nfds; ++i) {
-        pfd.emplace_back(fileref_from_fd(_pfd[i].fd), _pfd[i].events, _pfd[i].revents);
+	if (_pfd[i].fd >= 0) {
+           pfd.emplace_back(fileref_from_fd(_pfd[i].fd), _pfd[i].events, _pfd[i].revents);
+	}
     }
 
     auto ret = do_poll(pfd, timeout);
 
-    for (nfds_t i = 0; i < pfd.size(); ++i) {
-        _pfd[i].revents = pfd[i].revents;
+    for (nfds_t i = 0, j = 0; i < _nfds; ++i) {
+	if (_pfd[i].fd >= 0) {
+           _pfd[i].revents = pfd[j].revents;
+	    j++;
+	} else {
+	    _pfd[i].revents = 0;
+	}
     }
 
     return ret;
