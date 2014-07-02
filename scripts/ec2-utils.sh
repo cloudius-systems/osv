@@ -115,19 +115,30 @@ delete_instance() {
 wait_for_instance_state() {
  local INSTANCE_ID=$1
  local REQUESTED_STATE=$2
+ local TIMEOUT_SEC=$3
 
  local STATE="unknown"
+ local TIME_PASSED=0
+ local QUANTUM_SEC=5
 
  while test x"$STATE" != x"$REQUESTED_STATE"
  do
-   sleep 5
+   sleep $QUANTUM_SEC
    STATE=`get_instance_state $INSTANCE_ID`
    echo Instance is $STATE
+
+   TIME_PASSED=`expr $TIME_PASSED + $QUANTUM_SEC`
+
+   if test x"$TIMEOUT_SEC" != x""; then
+     if test $TIME_PASSED -ge $TIMEOUT_SEC; then
+       return 123
+     fi
+   fi
  done
 }
 
 wait_for_instance_startup() {
- wait_for_instance_state $1 running
+ wait_for_instance_state $1 running $2
 }
 
 wait_for_instance_shutdown() {
