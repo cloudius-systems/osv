@@ -268,17 +268,18 @@ void arch_init_drivers()
 #include "drivers/console.hh"
 #include "drivers/isa-serial.hh"
 #include "drivers/vga.hh"
+#include "early-console.hh"
 
 bool arch_setup_console(std::string opt_console)
 {
     hw::driver_manager* drvman = hw::driver_manager::instance();
 
     if (opt_console.compare("serial") == 0) {
-        console::console_driver_add(new console::isa_serial_console());
+        console::console_driver_add(&console::arch_early_console);
     } else if (opt_console.compare("vga") == 0) {
         drvman->register_driver(console::VGAConsole::probe);
     } else if (opt_console.compare("all") == 0) {
-        console::console_driver_add(new console::isa_serial_console());
+        console::console_driver_add(&console::arch_early_console);
         drvman->register_driver(console::VGAConsole::probe);
     } else {
         return false;
