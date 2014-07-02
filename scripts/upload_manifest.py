@@ -41,6 +41,8 @@ def unsymlink(f):
             # try to find a match
             base = os.path.dirname(f)
             while not os.path.exists(base + link):
+                if base == '/':
+                    return f
                 base = os.path.dirname(base)
         else:
             base = os.path.dirname(f) + '/'
