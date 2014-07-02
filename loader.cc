@@ -323,7 +323,11 @@ void* do_main_thread(void *_commands)
     auto commands =
          static_cast<std::vector<std::vector<std::string> > *>(_commands);
 
+    if (!arch_setup_console(opt_console)) {
+        abort("Unknown console:%s\n", opt_console.c_str());
+    }
     arch_init_drivers();
+    console::console_init();
     nulldev::nulldev_init();
     if (opt_random) {
         randomdev::randomdev_init();
@@ -405,11 +409,6 @@ void main_cont(int ac, char** av)
 #ifndef AARCH64_PORT_STUB
     acpi::init();
 #endif /* !AARCH64_PORT_STUB */
-
-    if (!arch_setup_console(opt_console)) {
-        abort("Unknown console:%s\n", opt_console.c_str());
-    }
-    console::console_init();
 
     if (sched::cpus.size() > sched::max_cpus) {
         printf("Too many cpus, can't boot with greater than %u cpus.\n", sched::max_cpus);

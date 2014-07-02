@@ -13,12 +13,13 @@
 #include "kbd.hh"
 #include "libtsm/libtsm.hh"
 #include <queue>
+#include "driver.hh"
 
 namespace console {
 
-class VGAConsole : public console_driver {
+class VGAConsole : public console_driver, public hw_driver {
 public:
-    explicit VGAConsole();
+    explicit VGAConsole(pci::device& pci_dev);
     virtual void write(const char *str, size_t len);
     virtual void flush();
     virtual bool input_ready();
@@ -28,6 +29,9 @@ public:
     void update_offset(int scroll_count);
     void apply_offset();
     void push_queue(const char *str, size_t len);
+    static hw_driver* probe(hw_device* hw_dev);
+    const std::string get_name() { return std::string("VGAConsole"); }
+    void dump_config();
 private:
     enum {
         VGA_CRT_IC = 0x3d4,
@@ -39,8 +43,15 @@ private:
         BUFFER_SIZE = 0x4000,
         OFFSET_LIMIT = 178,
         NCOLS = 80,
-        NROWS = 25
+        NROWS = 25,
+        VGA_VENDOR_ID_VBOX = 0x80EE,
+        VGA_DEVICE_ID_VBOX = 0xBEEF,
+        VGA_VENDOR_ID_VMW = 0x15AD,
+        VGA_DEVICE_ID_VMW = 0x0405,
+        VGA_VENDOR_ID_QEMU = 0x1013,
+        VGA_DEVICE_ID_QEMU = 0x00B8,
     };
+    pci::device& _pci_dev;
     unsigned _col = 0;
     static volatile unsigned short * const _buffer;
     struct tsm_screen *_tsm_screen;

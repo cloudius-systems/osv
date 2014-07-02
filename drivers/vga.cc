@@ -6,6 +6,7 @@
  */
 
 #include "vga.hh"
+#include "console.hh"
 #include <osv/mmu.hh>
 
 namespace console {
@@ -59,8 +60,11 @@ static int tsm_scroll_cb(struct tsm_screen *screen, int scroll_count, void *data
     return 0;
 }
 
-VGAConsole::VGAConsole()
-    : _offset(), _offset_dirty(false)
+VGAConsole::VGAConsole(pci::device& pci_dev)
+    :  hw_driver()
+    , _pci_dev(pci_dev)
+    , _offset()
+    , _offset_dirty(false)
 {
     tsm_screen_new(&_tsm_screen, tsm_log_cb, this);
     tsm_screen_resize(_tsm_screen, NCOLS, NROWS);
@@ -72,12 +76,38 @@ VGAConsole::VGAConsole()
         _history[i] = 0x700 | ' ';
 
     /* This driver does not clear framebuffer, since most of hypervisor clears on start up */
+
+    debugf("vga: Add VGA device instance\n");
+
+    console::console_driver_add(this);
 }
 
 void VGAConsole::push_queue(const char *str, size_t len)
 {
     for (size_t i = 0; i < len; i++)
         _read_queue.push(str[i]);
+}
+
+hw_driver* VGAConsole::probe(hw_device* hw_dev)
+{
+    if (auto pci_dev = dynamic_cast<pci::device*>(hw_dev)) {
+        auto id = pci_dev->get_id();
+        if (id == hw_device_id(VGA_VENDOR_ID_VBOX, VGA_DEVICE_ID_VBOX) ||
+            id == hw_device_id(VGA_VENDOR_ID_VMW, VGA_DEVICE_ID_VMW) ||
+            id == hw_device_id(VGA_VENDOR_ID_QEMU, VGA_DEVICE_ID_QEMU)) {
+            return new VGAConsole(*pci_dev);
+        }
+    }
+    return nullptr;
+}
+
+void VGAConsole::dump_config()
+{
+    u8 B, D, F;
+
+    _pci_dev.get_bdf(B, D, F);
+
+    _pci_dev.dump_config();
 }
 
 void VGAConsole::draw(const uint32_t c, const struct tsm_screen_attr *attr,
