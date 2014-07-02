@@ -63,7 +63,7 @@ while True:
     print("")
 
     print("%5s  %s %7s %s" % ("ID", "%CPU", "TIME", "NAME"))
-    for id in sorted(diff, key=diff.get, reverse=True)[:20]:
+    for id in sorted(diff, key=lambda x : (diff[x], prevtime[x]), reverse=True)[:20]:
         percent = 100.0*diff[id]/(newtimems - timems)
         print("%5d %5.1f %7.2f %s" % (id, percent, prevtime[id]/1000.0, name[id]))
     timems = newtimems
