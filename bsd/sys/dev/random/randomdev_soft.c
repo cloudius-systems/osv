@@ -222,7 +222,7 @@ randomdev_unblock(void)
 		selwakeuppri(&random_context.rsel, PUSER);
 #endif
 		wakeup(&random_context);
-		debug("random: unblocking device.\n");
+		debug("random: device unblocked.\n");
 		random_context.seeded = 1;
 	}
 #ifndef __OSV__
