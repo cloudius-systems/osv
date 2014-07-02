@@ -34,7 +34,6 @@ BOOST_AUTO_TEST_CASE(test_polling_on_negative_fd_yields_no_events)
     BOOST_REQUIRE(poll(pfd_array, 1, 0) == 0);
     BOOST_REQUIRE(pfd_array[0].revents == 0);
 
-    /* See issue #323
 
     BOOST_MESSAGE("test many files case");
     pfd_array[0].revents = POLLIN;
@@ -43,7 +42,6 @@ BOOST_AUTO_TEST_CASE(test_polling_on_negative_fd_yields_no_events)
     BOOST_REQUIRE(pfd_array[0].revents == 0);
     BOOST_REQUIRE(pfd_array[1].revents == 0);
 
-    */
 }
 
 BOOST_AUTO_TEST_CASE(test_polling_on_invalid_fd_yields_pollnval_event)
