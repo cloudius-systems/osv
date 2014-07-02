@@ -1,6 +1,7 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 import sys
 import re
+from __future__ import print_function
 
 elf = re.compile(r"\s*?\d+:\s*([0-9a-f]+)\s+\d+\s+(FUNC|OBJECT)\s+GLOBAL\s+DEFAULT\s+\d+\s+(\w+)\s*")
 
