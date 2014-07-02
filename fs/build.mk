@@ -16,7 +16,8 @@ fs +=	vfs/main.o \
 	vfs/vfs_vnode.o \
 	vfs/vfs_task.o \
 	vfs/vfs_syscalls.o \
-	vfs/vfs_fops.o
+	vfs/vfs_fops.o \
+	vfs/vfs_dentry.o
 
 fs +=	ramfs/ramfs_vfsops.o \
 	ramfs/ramfs_vnops.o
