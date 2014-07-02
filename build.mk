@@ -968,10 +968,11 @@ gen/include/osv/version.h: $(src)/scripts/gen-version-header
 
 $(src)/build.mk: $(generated-headers)
 
-# Automatically generate modules/tests/usr.manifest which includes all tests.
-$(src)/modules/tests/usr.manifest: $(src)/build.mk
-	@echo "  generating modules/tests/usr.manifest"
-	@cat $@.skel > $@
+# Automatically generate $(out)/modules/tests/usr.manifest which includes all tests.
+$(out)/modules/tests/usr.manifest: $(src)/build.mk
+	@echo "  generating $(out)/modules/tests/usr.manifest"
+	@mkdir -p $(out)/modules/tests
+	@cat $(src)/usr.manifest.skel > $@
 	@echo $(tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(lib_tests) | tr ' ' '\n' | \
 		awk '{name=$$0; name=gensub(".*/([^/]*)", "\\1", name); print "/usr/lib/" name ": ./" $$0}' >> $@
@@ -981,7 +982,7 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 ################################################################################
 
 .PHONY: process-modules
-process-modules: bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
+process-modules: bootfs.manifest.skel usr.manifest.skel $(out)/modules/tests/usr.manifest $(java-targets)
 	cd module \
 	  && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= $(src)/scripts/module.py --image-config $(image)
 
