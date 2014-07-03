@@ -1,0 +1,17 @@
+#!/bin/sh
+
+version=$(scripts/osv-version.sh)
+
+function upload {
+	module=$1
+	gsutil cp -a public-read build/capstan/cloudius/$module/$module.gce.tar.gz gs://osv/$version/$module.gce.tar.gz
+}
+
+upload "osv"
+upload "osv-base"
+upload "osv-cassandra"
+upload "osv-iperf"
+upload "osv-memcached-opt"
+upload "osv-openjdk"
+upload "osv-openjdk8"
+upload "osv-tomcat"
