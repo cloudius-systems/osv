@@ -68,7 +68,7 @@ clean:
 	$(call very-quiet, $(RM) -rf autogen/*)
 
 check:
-	cd ../.. && mgmt/httpserver/tests/testhttpserver.py
+	cd ../.. && modules/httpserver/tests/testhttpserver.py
 
 swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib
