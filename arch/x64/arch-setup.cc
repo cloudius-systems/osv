@@ -17,6 +17,7 @@
 #include <alloca.h>
 #include <string.h>
 #include <osv/boot.hh>
+#include <osv/commands.hh>
 
 struct multiboot_info_type {
     u32 flags;
@@ -57,22 +58,10 @@ struct e820ent {
 
 osv_multiboot_info_type* osv_multiboot_info;
 
-extern char** __argv;
-extern int __argc;
-
 void parse_cmdline(multiboot_info_type& mb)
 {
     auto p = reinterpret_cast<char*>(mb.cmdline);
-    char* cmdline = strdup(p);
-    static std::vector<char*> args;
-    char* save;
-    while ((p = strtok_r(cmdline, " \t\n", &save)) != nullptr) {
-        args.push_back(p);
-        cmdline = nullptr;
-    }
-    args.push_back(nullptr);
-    __argv = args.data();
-    __argc = args.size() - 1;
+    osv::parse_cmdline(p);
 }
 
 void setup_temporary_phys_map()

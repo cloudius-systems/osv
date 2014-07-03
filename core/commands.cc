@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 Nodalink, SARL.
+ * Copyright (C) 2014 Cloudius Systems.
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -74,6 +75,27 @@ parse_command_line(const std::string line, bool &ok)
                       result);
 
     return result;
+}
+
+static std::vector<char*> args;
+
+int parse_cmdline(char *p)
+{
+    char* save;
+
+    args.resize(0);
+
+    char* cmdline = strdup(p);
+
+    while ((p = strtok_r(cmdline, " \t\n", &save)) != nullptr) {
+        args.push_back(p);
+        cmdline = nullptr;
+    }
+    args.push_back(nullptr);
+    __argv = args.data();
+    __argc = args.size() - 1;
+
+    return 0;
 }
 
 }
