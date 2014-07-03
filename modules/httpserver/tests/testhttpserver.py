@@ -21,9 +21,7 @@ osv_base = os.path.join(module_base, '..', '..')
 
 parser.add_argument('--connect', help='Connect to an existing image', action='store_true')
 parser.add_argument('--run_script', help='path to the run image script', default=os.path.join(osv_base, 'scripts', 'run.py'))
-parser.add_argument('--cmd', help='the command to execute',
-                    default="/usr/mgmt/httpserver.so&"
-                    "java.so io.osv.MultiJarLoader -mains /etc/javamains")
+parser.add_argument('--cmd', help='the command to execute')
 parser.add_argument('--use_sudo', help='Use sudo with -n option instead of port forwarding', action='store_true')
 parser.add_argument('--jsondir', help='location of the json files', default=os.path.join(module_base, 'api-doc/listings/'))
 parser.add_argument('--port', help='set the port number', type=int,
@@ -242,9 +240,16 @@ class test_httpserver(unittest.TestCase):
 
     @classmethod
     def exec_os(cls):
+        args = []
         if config.use_sudo:
-            return subprocess.Popen(["/usr/bin/sudo", config.run_script, "-n", "-e", config.cmd])
-        return subprocess.Popen([config.run_script, "--forward", "tcp:" + str(config.port) + "::" + str(config.port), "-e", config.cmd])
+            args += ["/usr/bin/sudo", config.run_script, "-n"]
+        else:
+            args += [config.run_script, "--forward", "tcp:" + str(config.port) + "::" + str(config.port)]
+
+        if config.cmd:
+            args += ["-e", config.cmd]
+
+        return subprocess.Popen(args)
 
     @classmethod
     def shutdown(cls):
