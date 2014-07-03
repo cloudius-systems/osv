@@ -77,13 +77,26 @@ parse_command_line(const std::string line, bool &ok)
     return result;
 }
 
+// std::string is not fully functional when parse_cmdline is used for the first
+// time.  So let's go for a more traditional memory management to avoid testing
+// early / not early, etc
+char *osv_cmdline = nullptr;
 static std::vector<char*> args;
+
+std::string getcmdline()
+{
+    return std::string(osv_cmdline);
+}
 
 int parse_cmdline(char *p)
 {
     char* save;
 
     args.resize(0);
+    if (osv_cmdline) {
+        free(osv_cmdline);
+    }
+    osv_cmdline = strdup(p);
 
     char* cmdline = strdup(p);
 
