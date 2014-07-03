@@ -16,6 +16,8 @@
 #include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <api/unistd.h>
+#include <osv/commands.hh>
+#include <algorithm>
 
 extern char debug_buffer[DEBUG_BUFFER_SIZE];
 
@@ -112,6 +114,27 @@ void init(routes& routes)
             threads.list.push(thread);
         });
         return formatter::to_json(threads);
+    });
+
+    getCmdline.set_handler("json", [](const_req req)
+    {
+        return formatter::to_json(osv::getcmdline());
+    });
+
+    replaceCmdline.set_handler("json", [](const_req req)
+    {
+        string newcmd = req.get_query_param("cmdline");
+
+        try {
+            osv::save_cmdline(newcmd);
+        } catch(std::length_error &e) {
+            throw bad_request_exception("command line too long");
+        } catch(std::system_error &e) {
+            throw server_error_exception(e.what());
+        }
+
+        return formatter::to_json(osv::getcmdline());
+
     });
 
 }

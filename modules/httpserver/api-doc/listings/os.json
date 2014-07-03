@@ -214,7 +214,46 @@
                     "deprecated": "false"
                 }
             ]
-        }
+        },
+        {
+            "path": "/os/cmdline",
+            "operations": [
+                    {
+                "method": "GET",
+                "summary": "get the current boot cmdline",
+                "responseClass": "string",
+                "nickname": "getCmdline",
+                "produces": [
+                    "application/json",
+                    "application/xml"
+                ],
+                "parameters": [
+                ],
+                "deprecated": "false"
+                    },
+                {
+                "method": "POST",
+                "summary": "modify command line",
+                "responseClass": "string",
+                "nickname": "replaceCmdline",
+                "produces": [
+                    "application/json",
+                    "application/xml"
+                ],
+                "parameters": [
+                    {
+                    "name": "cmdline",
+                    "description": "new cmdline",
+                    "required": true,
+                    "allowMultiple":false,
+                    "dataType":"string",
+                    "paramType":"query"
+                    }
+                ],
+                "deprecated": "false"
+                }
+                ]
+         }
     ],
     "models" : {
         "Thread": {
