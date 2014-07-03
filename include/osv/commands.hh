@@ -11,9 +11,11 @@
 
 #include <string>
 #include <vector>
+#include <system_error>
 
 extern int __argc;
 extern char** __argv;
+static constexpr size_t max_cmdline = 1024;
 
 namespace osv {
 
@@ -22,6 +24,7 @@ parse_command_line(const std::string line, bool &ok);
 
 std::string getcmdline();
 int parse_cmdline(char *p);
+void save_cmdline(std::string newcmd);
 }
 
 #endif // !__OSV_COMMANDS_HH__

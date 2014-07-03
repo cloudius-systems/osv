@@ -11,6 +11,10 @@
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <osv/commands.hh>
+#include <osv/align.hh>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
@@ -109,6 +113,33 @@ int parse_cmdline(char *p)
     __argc = args.size() - 1;
 
     return 0;
+}
+
+void save_cmdline(std::string newcmd)
+{
+    if (newcmd.size() > max_cmdline) {
+        throw std::length_error("command line too long");
+    }
+
+    int fd = open("/dev/vblk0", O_WRONLY);
+    if (fd < 0) {
+        throw std::system_error(std::error_code(errno, std::system_category()), "error opening block device");
+    }
+
+    lseek(fd, 512, SEEK_SET);
+
+    // writes to the block device must be 512-byte aligned
+    int size = align_up(std::min(max_cmdline, newcmd.size()), 512UL);
+    int ret = write(fd, newcmd.c_str(), size);
+    close(fd);
+
+    if (ret != size) {
+        throw std::system_error(std::error_code(errno, std::system_category()), "error writing command line to disk");
+    }
+
+    char buf[newcmd.size() + 1];
+    newcmd.copy((char *)buf, newcmd.size(), 0);
+    osv::parse_cmdline(buf);
 }
 
 }
