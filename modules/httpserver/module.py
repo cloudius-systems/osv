@@ -3,7 +3,7 @@ from osv.modules.api import *
 from osv.modules.filemap import FileMap
 from osv.modules import api
 
-_module = '${OSV_BASE}/mgmt/httpserver'
+_module = '${OSV_BASE}/modules/httpserver'
 
 usr_files = FileMap()
 usr_files.add(os.path.join(_module, 'libhttpserver.so')).to('/libhttpserver.so')
