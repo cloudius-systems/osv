@@ -4,10 +4,6 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/"
         },
-        "httpserver": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/mgmt/httpserver"
-        },
         "osvinit": {
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/osvinit"
