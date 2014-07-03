@@ -80,6 +80,14 @@ namespace mmu {
 class file_vma;
 };
 
+/* linked list of pollreq links */
+struct poll_link {
+    TAILQ_ENTRY(poll_link) _link;
+    struct pollreq* _req;
+    /* Events being polled... */
+    int _events;
+};
+
 /*
  * File structure
  */
