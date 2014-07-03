@@ -314,11 +314,9 @@ bool file::mlocked()
     return false;
 }
 
-Elf64_Note::Elf64_Note(void *_base)
+Elf64_Note::Elf64_Note(void *_base, char *str)
 {
     Elf64_Word *base = reinterpret_cast<Elf64_Word *>(_base);
-    char *str = align_up(static_cast<char *>(_base) + 3 * sizeof(*base), 4);
-
     n_type = base[2];
 
     n_owner.reserve(base[0]);
@@ -350,7 +348,17 @@ void object::load_segments()
 	    is_executable = true;
 	    break;
         case PT_NOTE: {
-            struct Elf64_Note header(_base + phdr.p_vaddr);
+            if (phdr.p_memsz < 16) {
+                /* we have the PT_NOTE segment in the linker scripts,
+                 * but if we have no note sections we will end up with
+                 * a zero length segment. Handle this case by validating
+                 * the phdr length.
+                 */
+                break;
+            }
+            void *start = _base + phdr.p_vaddr;
+            char *str = align_up((char *)start + 3 * sizeof(Elf64_Word), 4);
+            struct Elf64_Note header(start, str);
 
             if (header.n_type != NT_VERSION) {
                 break;

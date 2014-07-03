@@ -127,7 +127,7 @@ struct Elf64_Phdr {
 
 class Elf64_Note {
 public:
-    explicit Elf64_Note(void *base);
+    explicit Elf64_Note(void *base, char *str);
     std::string n_owner;
     std::string n_value;
     Elf64_Word n_type;
