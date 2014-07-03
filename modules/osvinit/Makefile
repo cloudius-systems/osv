@@ -14,7 +14,7 @@ boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
               $(boost-lib-dir)/libboost_filesystem-mt.so
               
               
-HTTPSERVER_DIR = ../httpserver
+HTTPSERVER_DIR = ../../modules/httpserver
 INCLUDES += -I$(HTTPSERVER_DIR)
 
 # the build target executable:
