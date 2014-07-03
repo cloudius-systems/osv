@@ -84,6 +84,15 @@ public:
     }
 };
 
+class server_error_exception : public base_exception
+{
+public:
+    server_error_exception(const std::string& msg)
+        : base_exception(msg, http::server::reply::internal_server_error)
+    {
+    }
+};
+
 }
 
 #endif /* EXCEPTION_HH_ */
