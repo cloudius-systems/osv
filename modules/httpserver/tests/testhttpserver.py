@@ -64,7 +64,10 @@ class test_httpserver(unittest.TestCase):
     
     @classmethod
     def is_jvm_up(cls):
-         return cls.curl(cls.path_by_nick(cls.jvm_api, "getJavaVersion")) != ""
+        try:
+            return cls.curl(cls.path_by_nick(cls.jvm_api, "getJavaVersion")) != ""
+        except urllib2.HTTPError:
+            return False
 
     @classmethod
     def is_reachable(cls):
@@ -166,6 +169,14 @@ class test_httpserver(unittest.TestCase):
         hosts = self.curl(path + "/etc/hosts?op=GETFILESTATUS")
         self.assertEqual(hosts["type"], "FILE")
 
+    def assertHttpError(self, url, code=404):
+        try:
+            self.curl(url)
+            raise Exception('The request for %s should have failed!' % url)
+        except urllib2.HTTPError as e:
+            if e.code != code:
+                raise Exception('Expected error code %d but got %d' % (code, e.code))
+
     def test_put_file_cmd(self):
         path = "/file"
         self.curl_command(path + "/etc/hosts?op=COPY&destination="+urllib.quote("/etc/hosts1"), 'PUT')
@@ -174,11 +185,9 @@ class test_httpserver(unittest.TestCase):
         self.curl_command(path + "/etc/hosts1?op=RENAME&destination="+urllib.quote("/etc/hosts2"), 'PUT')
         hosts = self.curl(path + "/etc/hosts2?op=GETFILESTATUS")
         self.assertEqual(hosts["type"], "FILE")
-        hosts = self.curl(path + "/etc/hosts1?op=GETFILESTATUS")
-        self.assertEqual(hosts, '')
+        self.assertHttpError(path + "/etc/hosts1?op=GETFILESTATUS")
         self.curl_command(path + "/etc/hosts2?op=DELETE", 'DELETE')
-        hosts = self.curl(path + "/etc/hosts2?op=GETFILESTATUS")
-        self.assertEqual(hosts, '')
+        self.assertHttpError(path + "/etc/hosts2?op=GETFILESTATUS")
 
     def make_temp_file(self):
         f = open('temp-test-file.txt', 'w')
@@ -222,13 +231,13 @@ class test_httpserver(unittest.TestCase):
             data = urllib.urlencode({'Fake' : 'data-to-become-post'})
             req = urllib2.Request(url, data)
             response = urllib2.urlopen(req)
-            return ""
         else:
-            try:
-                response = urllib2.urlopen(url)
-            except:
-                return ""
-        return json.load(response)
+            response = urllib2.urlopen(url)
+
+        response_text = ''.join(response.readlines())
+
+        if response_text:
+            return json.loads(response_text)
 
     @classmethod
     def curl_command(cls, api, command):
