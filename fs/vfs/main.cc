@@ -1724,6 +1724,12 @@ int fchown(int fd, uid_t owner, gid_t group)
     return 0;
 }
 
+int chown(const char *path, uid_t owner, gid_t group)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
 NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
 mode_t umask(mode_t newmask)
