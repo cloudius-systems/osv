@@ -11,6 +11,7 @@
 #include "api/jvm.hh"
 #include "api/file.hh"
 #include "api/trace.hh"
+#include "api/env.hh"
 #include "path_holder.hh"
 
 #include <iostream>
@@ -72,6 +73,7 @@ void global_server::set_routes()
     api::file::init(_routes);
     api::jvm::init(_routes);
     api::trace::init(_routes);
+    api::env::init(_routes);
     api::files_mapping::init(_routes);
 }
 
