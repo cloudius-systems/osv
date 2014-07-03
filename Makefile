@@ -49,6 +49,7 @@ clean:
 	$(call quiet, rm -rf $(outlink) $(out), CLEAN)
 	$(call only-if, $(mgmt), $(call quiet, $(MAKE) -C mgmt clean >> /dev/null, MGMT CLEAN))
 	$(call quiet, cd java && mvn clean -q, MVN CLEAN)
+	+$(call quiet, make -C modules/httpserver clean, HTTP CLEAN)
 
 check: export image ?= tests
 
