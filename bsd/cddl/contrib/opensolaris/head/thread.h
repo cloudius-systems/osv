@@ -30,7 +30,6 @@
 #pragma ident	"%Z%%M%	%I%	%E% SMI"
 
 #include <pthread.h>
-#include <pthread_np.h>
 #include <assert.h>
 
 /*
