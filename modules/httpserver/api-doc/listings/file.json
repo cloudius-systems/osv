@@ -1,0 +1,319 @@
+{
+   "apiVersion":"0.0.1",
+   "swaggerVersion":"1.2",
+   "basePath":"http://{{Host}}",
+   "resourcePath":"/file",
+   "produces":[
+      "application/json",
+      "application/xml"
+   ],
+   "apis":[
+      {
+         "path":"/file/{path}",
+         "operations":[
+            {
+               "method":"GET",
+               "summary":"Get File/Directory information",
+               "notes":"return File or Directory related information",
+               "responseClass":"Object",
+               "errorResponses":[
+                  {
+                     "code":404,
+                     "reason":"File not found"
+                  },
+                  {
+                     "code":400,
+                     "reason":"Bad Request"
+                  }
+               ],
+               "nickname":"getFile",
+               "produces":[
+                  "application/json",
+                  "application/xml"
+               ],
+               "parameters":[
+                  {
+                     "name":"path",
+                     "description":"Full path of file or directory",
+                     "required":true,
+                     "allowMultiple":true,
+                     "dataType":"string",
+                     "paramType":"path"
+                  },
+                  {
+                     "name":"op",
+                     "description":"The operation to perform",
+                     "required":true,
+                     "allowMultiple":false,
+                     "dataType":"string",
+                     "paramType":"query",
+                     "enum":["GET", "LISTSTATUS", "GETFILESTATUS"]
+                  },
+                  {
+                     "name":"offset",
+                     "description":"Offset in a file",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"long",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"length",
+                     "description":"The number of bytes to be processed.",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"long",
+                     "paramType":"query"
+                  }
+               ]
+            },
+            {
+               "method":"DELETE",
+               "summary":"Del File/Directory",
+               "notes":"Delete a File or Directory",
+               "responseClass":"Object",
+               "errorResponses":[
+                  {
+                     "code":404,
+                     "reason":"File not found"
+                  },
+                  {
+                     "code":400,
+                     "reason":"Bad Request"
+                  }
+               ],
+               "nickname":"delFile",
+               "produces":[
+                  "application/json",
+                  "application/xml"
+               ],
+               "parameters":[
+                  {
+                     "name":"path",
+                     "description":"Full path of file or directory to delete",
+                     "required":true,
+                     "allowMultiple":true,
+                     "dataType":"string",
+                     "paramType":"path"
+                  },
+                  {
+                     "name":"op",
+                     "description":"The operation to perform: DELETE",
+                     "required":true,
+                     "allowMultiple":false,
+                     "dataType":"string",
+                     "paramType":"query",
+                     "enum":["DELETE"]
+                  }
+               ]
+            },
+            {
+               "method":"POST",
+               "summary":"Upload a file",
+               "notes":"Upload a file",
+               "responseClass":"string",
+               "nickname":"upload",
+               "produces":[
+                  "application/json",
+                  "application/xml"
+               ],
+               "parameters":[
+                  {
+                     "name":"path",
+                     "description":"Full path to the uploaded file",
+                     "required":true,
+                     "allowMultiple":true,
+                     "dataType":"string",
+                     "paramType":"path"
+                  },
+                  {
+                     "name":"file",
+                     "description":"file to upload",
+                     "required":false,
+                     "allowMultiple":false,
+                     "type":"File",
+                     "paramType":"body"
+                  }
+               ]
+            },
+            {
+               "method":"PUT",
+               "summary":"Create or change File/Directory",
+               "notes":"Operation that create or change a file, directory or symbolic link",
+               "responseClass":"Object",
+               "errorResponses":[
+                  {
+                     "code":404,
+                     "reason":"File not found"
+                  },
+                  {
+                     "code":400,
+                     "reason":"Bad Request"
+                  }
+               ],
+               "nickname":"putFile",
+               "produces":[
+                  "application/json",
+                  "application/xml"
+               ],
+               "parameters":[
+                  {
+                     "name":"path",
+                     "description":"Full path of file or directory",
+                     "required":true,
+                     "allowMultiple":true,
+                     "dataType":"string",
+                     "paramType":"path"
+                  },
+                  {
+                     "name":"op",
+                     "description":"The operation to perform",
+                     "enum":["MKDIRS", "RENAME", "COPY"],
+                     "required":true,
+                     "allowMultiple":false,
+                     "dataType":"string",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"permission",
+                     "description":"The permission of a file/directory as a octal string.",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"string",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"destination",
+                     "description":"The destination path.",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"string",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"createParent",
+                     "description":"If the parent directories do not exist, should they be created",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"boolean",
+                     "paramType":"query"
+                  }
+               ]
+            }
+         ]
+      }
+   ],
+   "models":{
+      "ContentSummary":{
+         "properties":{
+            "directoryCount":{
+               "description":"The number of directories.",
+               "type":"int",
+               "required":true
+            },
+            "fileCount":{
+               "description":"The number of files.",
+               "type":"int",
+               "required":true
+            },
+            "length":{
+               "description":"The number of bytes used by the content.",
+               "type":"int",
+               "required":true
+            },
+            "quota":{
+               "description":"The namespace quota of this directory.",
+               "type":"int",
+               "required":true
+            },
+            "spaceConsumed":{
+               "description":"The disk space consumed by the content.",
+               "type":"int",
+               "required":true
+            },
+            "spaceQuota":{
+               "description":"The disk space quota.",
+               "type":"int",
+               "required":true
+            }
+         }
+      },
+      "FileChecksum":{
+         "properties":{
+            "algorithm":{
+               "description":"The name of the checksum algorithm.",
+               "type":"string",
+               "required":true
+            },
+            "bytes":{
+               "description":"The byte sequence of the checksum in hexadecimal.",
+               "type":"string",
+               "required":true
+            },
+            "length":{
+               "description":"The length of the bytes (not the length of the string).",
+               "type":"int",
+               "required":true
+            }
+         }
+      },
+      "FileStatusProperties":{
+         "properties":{
+            "accessTime":{
+               "description":"The access time.",
+               "type":"int",
+               "required":true
+            },
+            "blockSize":{
+               "description":"The block size of a file.",
+               "type":"int",
+               "required":true
+            },
+            "group":{
+               "description":"The group owner.",
+               "type":"string",
+               "required":true
+            },
+            "length":{
+               "description":"The number of bytes in a file.",
+               "type":"int",
+               "required":true
+            },
+            "modificationTime":{
+               "description":"The modification time.",
+               "type":"int",
+               "required":true
+            },
+            "owner":{
+               "description":"The user who is the owner.",
+               "type":"string",
+               "required":true
+            },
+            "pathSuffix":{
+               "description":"The path suffix.",
+               "type":"string",
+               "required":true
+            },
+            "permission":{
+               "description":"The permission represented as a octal string.",
+               "type":"string",
+               "required":true
+            },
+            "replication":{
+               "description":"The number of replication of a file.",
+               "type":"int",
+               "required":true
+            },
+            "symlink":{
+               "description":"The link target of a symlink.",
+               "type":"string"
+            },
+            "type":{
+               "description":"The type of the path object.",
+               "type":"string",
+               "required":true
+            }
+         }
+      }
+   }
+}

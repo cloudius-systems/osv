@@ -1,0 +1,185 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "http://{{Host}}",
+    "resourcePath": "/jvm",
+    "produces": [
+        "application/json",
+        "application/xml"
+    ],
+    "apis": [
+        {
+            "path": "/jvm/version",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "JAVA version",
+                    "notes": "return the version of the JAVA runtime",
+                    "responseClass": "string",
+                    "nickname": "getJavaVersion",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/jvm/memory/gc",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "get GC related information",
+                    "notes": "return a list of Memory Managers, each with its related information",
+                    "responseClass": "List[MemoryManager]",
+                    "nickname": "getGCinfo",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/jvm/memory/gc",
+            "operations": [
+                {
+                    "method": "POST",
+                    "summary": "Force GC",
+                    "notes": "",
+                    "responseClass": "void",
+                    "nickname": "forceGC",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/jvm/jmx/{mbean}",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "get a runtime MBean value",
+                    "notes": "get a runtime Mbean value",
+                    "responseClass": "object",
+                    "nickname": "getJMXvalue",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                        {
+                            "name": "mbean",
+                            "description": "JMX path to probe",
+                            "required": true,
+                            "allowMultiple": false,
+                            "dataType": "string",
+                            "paramType": "path"
+                        }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/jvm/jmx/",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "get a list of all MBean names",
+                    "notes": "",
+                    "responseClass":  "List[String]",
+                    "nickname": "getMbeanList",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/jvm/jmx/{mbean}/{attribute}",
+            "operations": [
+                {
+                    "method": "POST",
+                    "summary": "set a configuration MBean value",
+                    "notes": "",
+                    "responseClass": "void",
+                    "nickname": "setJMXvalue",
+                    "parameters": [
+                        {
+                            "name": "mbean",
+                            "description": "JMX path to update",
+                            "required": true,
+                            "allowMultiple": false,
+                            "dataType": "string",
+                            "paramType": "path"
+                        },
+                        {
+                            "name": "attribute",
+                            "description": "the attribute name to set",
+                            "required": true,
+                            "allowMultiple": true,
+                            "dataType": "string",
+                            "paramType": "path"
+                        },
+                        {
+                            "name": "value",
+                            "description": "value to set",
+                            "required": true,
+                            "allowMultiple": false,
+                            "dataType": "string",
+                            "paramType": "query"
+                        }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        }
+    ],
+    "models" : {
+        "Balloon": {
+            "properties": {
+                "size": {
+                    "type": "long"
+                }
+            }
+        },
+        "MemoryManager" : {
+            "description" : "memory manager",
+            "properties": {
+                "name":  {
+                    "type": "string",
+                    "description": "memory manager name"
+                },
+                "count": {
+                    "type": "long",
+                    "description": "total number of collections that have occurred"
+                },
+                "time": {
+                    "type": "long",
+                    "description": "accumulated collection elapsed time in ms"
+                },
+                "pools": {
+                    "type": "array",
+                    "items":{"type":"string"},
+                    "description": "List of Memory Pool names"
+                }
+            }
+        }
+    }
+}

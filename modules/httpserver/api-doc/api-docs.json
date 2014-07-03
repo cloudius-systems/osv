@@ -1,0 +1,26 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "apis": [
+        {
+            "path": "/../listings/os.json",
+            "description": "OS core API"
+        },
+        {
+            "path": "/../listings/jvm.json",
+            "description": "JVM API"
+        },
+        {
+            "path": "/../listings/file.json",
+            "description": "file API"
+        },
+        {
+            "path": "/../listings/env.json",
+            "description": "Environment Variables API"
+		},
+		{
+            "path": "/../listings/trace.json",
+            "description": "trace API"
+        }
+    ]
+}
