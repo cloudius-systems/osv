@@ -158,8 +158,6 @@ file::file(unsigned flags, filetype_t type, void *opaque)
     , f_data(opaque)
     , f_type(type)
 {
-    auto fp = this;
-    TAILQ_INIT(&fp->f_poll_list);
 }
 
 void fhold(struct file* fp)

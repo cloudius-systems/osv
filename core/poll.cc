@@ -86,16 +86,15 @@ void poll_drain(struct file* fp)
     trace_poll_drain(fp);
 
     FD_LOCK(fp);
-    while (!TAILQ_EMPTY(&fp->f_poll_list)) {
-        struct poll_link *pl = TAILQ_FIRST(&fp->f_poll_list);
+    while (!fp->f_poll_list.empty()) {
+        struct poll_link *pl = &fp->f_poll_list.front();
 
         /* FIXME: TODO -
          * Should we mark POLLHUP?
          * Should we wake the pollers?
          */
 
-        TAILQ_REMOVE(&fp->f_poll_list, pl, _link);
-        free(pl);
+        delete pl;
     }
     FD_UNLOCK(fp);
 }
@@ -159,8 +158,6 @@ int poll_scan(std::vector<poll_file>& _pfd)
  */
 int poll_wake(struct file* fp, int events)
 {
-    struct poll_link *pl;
-
     if (!fp)
         return 0;
 
@@ -173,10 +170,10 @@ int poll_wake(struct file* fp, int events)
      * There may be several pollreqs associated with this fd.
      * Wake each and every one.
      */
-    TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
-        if (pl->_events & events) {
-            pl->_req->_awake.store(true, memory_order_relaxed);
-            pl->_req->_poll_thread.wake();
+    for (auto&& pl : fp->f_poll_list) {
+        if (pl._events & events) {
+            pl._req->_awake.store(true, memory_order_relaxed);
+            pl._req->_poll_thread.wake();
         }
     }
 
@@ -200,7 +197,6 @@ int poll_wake(struct file* fp, int events)
 void poll_install(struct pollreq* p)
 {
     unsigned i;
-    struct poll_link* pl;
     struct poll_file* entry;
 
     dbg_d("poll_install()");
@@ -212,8 +208,7 @@ void poll_install(struct pollreq* p)
         assert(fp);
 
         /* Allocate a link */
-        pl = (struct poll_link *) malloc(sizeof(struct poll_link));
-        memset(pl, 0, sizeof(struct poll_link));
+        std::unique_ptr<poll_link> pl{new poll_link};
 
         /* Save a reference to request on current file structure.
          * will be cleared on wakeup()
@@ -225,7 +220,7 @@ void poll_install(struct pollreq* p)
 
         fp->poll_install(*p);
         FD_LOCK(fp);
-        TAILQ_INSERT_TAIL(&fp->f_poll_list, pl, _link);
+        fp->f_poll_list.push_back(*pl.release());
         if (entry->events & EPOLLET &&
                 entry->last_poll_wake_count == fp->poll_wake_count) {
             // In this case, don't use fp->poll() to check for missed event
@@ -248,7 +243,6 @@ void poll_install(struct pollreq* p)
 void poll_uninstall(struct pollreq* p)
 {
     unsigned i;
-    struct poll_link* pl;
 
     dbg_d("poll_uninstall()");
 
@@ -264,10 +258,9 @@ void poll_uninstall(struct pollreq* p)
         fp->poll_uninstall(*p);
         /* Search for current pollreq and remove it from list */
         FD_LOCK(fp);
-        TAILQ_FOREACH(pl, &fp->f_poll_list, _link) {
+        for (auto pl = fp->f_poll_list.begin(); pl != fp->f_poll_list.end(); ++pl) {
             if (pl->_req == p) {
-                TAILQ_REMOVE(&fp->f_poll_list, pl, _link);
-                free(pl);
+                fp->f_poll_list.erase_and_dispose(pl, std::default_delete<poll_link>());
                 break;
             }
         }

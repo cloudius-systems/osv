@@ -54,6 +54,7 @@
 #include <osv/clock.hh>
 #include <boost/optional/optional.hpp>
 #include <osv/mmu-defs.hh>
+#include <boost/intrusive/list.hpp>
 
 #endif
 
@@ -82,10 +83,10 @@ class file_vma;
 
 /* linked list of pollreq links */
 struct poll_link {
-    TAILQ_ENTRY(poll_link) _link;
-    struct pollreq* _req;
+    boost::intrusive::list_member_hook<> _link;
+    struct pollreq* _req = nullptr;
     /* Events being polled... */
-    int _events;
+    int _events = 0;
 };
 
 /*
@@ -129,7 +130,12 @@ struct file {
 	dentry_ref	f_dentry;	/* dentry */
 	void		*f_data;        /* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
-	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
+	boost::intrusive::list<poll_link,
+	                       boost::intrusive::member_hook<poll_link,
+	                                                     boost::intrusive::list_member_hook<>,
+	                                                     &poll_link::_link>,
+	                       boost::intrusive::constant_time_size<false>>
+	                f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
 	std::unique_ptr<std::vector<file*>> f_epolls;
 	// poll_wake_count used for implementing epoll()'s EPOLLET using poll().
