@@ -29,6 +29,12 @@ int __isinf(double v)
 }
 
 extern "C"
+int __isinff(float v)
+{
+    return std::isinf(v);
+}
+
+extern "C"
 int __isinfl(double v)
 {
     return std::isinf(v);
