@@ -1,4 +1,5 @@
 import os
+from urlparse import urlparse
 
 _osv_base = '.'
 _default_cert_base = os.path.join(_osv_base, 'modules', 'certs', 'build')
@@ -10,16 +11,22 @@ def _pass_if_exists(path):
 
 class Client(object):
     @staticmethod
-    def add_arguments(parser):
+    def add_arguments(parser, use_full_url=False):
         parser.add_argument('--cert', help='path to client\'s SSL certifcate')
         parser.add_argument('--key', help='path to client\'s private key')
         parser.add_argument('--cacert', help='path to CA certifcate')
         parser.add_argument('--no-verify', help='skip validation of server''s certificate')
-        parser.add_argument("host", nargs='?', default="localhost")
-        parser.add_argument("port", nargs='?', default=8000, type=int)
+        if use_full_url:
+            parser.add_argument("-u", "--url", action="store",
+                                  help="Source URL for REST connections",
+                                  default="http://localhost:8000/")
+        else:
+            parser.add_argument("host", nargs='?', default="localhost")
+            parser.add_argument("port", nargs='?', default=8000, type=int)
 
     def __init__(self, args):
         self.args = args
+        self.use_full_url = hasattr(args, 'url')
 
     def get_client_cert_path(self):
         if not self.args.cert:
@@ -37,17 +44,23 @@ class Client(object):
         return _pass_if_exists(self.args.cacert)
 
     def get_host(self):
-        return self.args.host
+       return urlparse(self.get_url()).hostname
 
     def get_port(self):
-        return self.args.port
+        return urlparse(self.get_url()).port
 
     def is_ssl(self):
         return bool(self.args.key)
 
     def get_url(self):
+        if self.use_full_url:
+            url = self.args.url
+            if url.endswith('/'):
+                return url[:-1]
+            return url
+
         protocol = ["http", "https"][self.is_ssl()]
-        return protocol + '://%s:%d' % (self.get_host(), self.get_port())
+        return protocol + '://%s:%d' % (self.args.host, self.args.port)
 
     def get_request_kwargs(self):
         """Returns keyword arguments which should be passed to functions from the 'requests' library."""
