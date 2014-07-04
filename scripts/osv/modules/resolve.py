@@ -35,7 +35,14 @@ def get_config_path():
 
 def read_config():
     with open(get_config_path()) as file:
-        return json.load(file)
+        config = json.load(file)
+
+        if "include" in config["modules"]:
+            for f in config["modules"]["include"]:
+                with open(os.path.expandvars(f)) as file:
+                    config["modules"].update(json.load(file))
+
+        return config
 
 def local_import(path):
     return runpy.run_path(path)
@@ -63,11 +70,6 @@ def _get_module_dir(module_config):
 def find_module_config(module_name):
     config = read_config()
 
-    if "include" in config["modules"]:
-        for f in config["modules"]["include"]:
-            with open(os.path.expandvars(f)) as file:
-                config["modules"].update(json.load(file))
-
     if module_name in config["modules"]:
         module_config = config["modules"][module_name]
         module_config["path"] = os.path.expandvars(module_config["path"])
@@ -81,6 +83,20 @@ def find_module_config(module_name):
                     'path': module_path,
                     'type': 'direct-dir'
                 }
+
+def all_module_directories():
+    config = read_config()
+
+    for module_name, module_config in config["modules"].items():
+        if module_name == "repositories":
+            for repo in config["modules"]["repositories"]:
+                repo_path = os.path.expandvars(repo)
+                for module_name in os.listdir(repo_path):
+                    module_path = os.path.join(repo_path, module_name)
+                    if os.path.isdir(module_path):
+                        yield module_path
+        elif module_config['type'] == 'direct-dir':
+            yield os.path.expandvars(module_config["path"])
 
 def fetch_module(module_config, target_dir):
     print("Fetching %s" % module_config["name"])

@@ -126,14 +126,7 @@ def generate_cmdline(apps):
         else:
             print("No apps selected")
 
-if __name__ == "__main__":
-    image_configs_dir = resolve.get_images_dir()
-
-    parser = argparse.ArgumentParser(prog='module.py')
-    parser.add_argument("-c", "--image-config", action="store", default="default",
-                        help="image configuration name. Looked up in " + image_configs_dir)
-    args = parser.parse_args()
-
+def build(args):
     image_config_file = os.path.join(image_configs_dir, args.image_config + '.py')
     if os.path.exists(image_config_file):
         print("Using image config: %s" % image_config_file)
@@ -171,3 +164,34 @@ if __name__ == "__main__":
     apps_to_run = get_basic_apps(run_list)
     generate_manifests(modules, apps_to_run)
     generate_cmdline(apps_to_run)
+
+def clean(args):
+    extra_args = {}
+    if args.quiet:
+        extra_args['stdout'] = open('/dev/null', 'w')
+
+    for local_path in resolve.all_module_directories():
+        if os.path.exists(os.path.join(local_path, 'Makefile')):
+            if not args.quiet:
+                print('Cleaning ' + local_path + ' ...')
+            if subprocess.call(["make -q clean"], shell=True, cwd=local_path, stderr=subprocess.PIPE, **extra_args) != 2:
+                if subprocess.call(["make clean"], shell=True, cwd=local_path, **extra_args):
+                    raise Exception('\'make clean\' failed in ' + local_path)
+
+if __name__ == "__main__":
+    image_configs_dir = resolve.get_images_dir()
+
+    parser = argparse.ArgumentParser(prog='module.py')
+    subparsers = parser.add_subparsers(help="Command")
+
+    build_cmd = subparsers.add_parser("build", help="Build modules")
+    build_cmd.add_argument("-c", "--image-config", action="store", default="default",
+                        help="image configuration name. Looked up in " + image_configs_dir)
+    build_cmd.set_defaults(func=build)
+
+    clean_cmd = subparsers.add_parser("clean", help="Clean modules")
+    clean_cmd.add_argument("-q", "--quiet", action="store_true")
+    clean_cmd.set_defaults(func=clean)
+
+    args = parser.parse_args()
+    args.func(args)
