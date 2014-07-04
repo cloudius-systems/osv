@@ -28,7 +28,7 @@ class Fedora(object):
                 'qemu-system-x86', 'libvirt', 'maven', 'java-1.7.0-openjdk',
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
-                'gnutls-utils', 'openssl'
+                'gnutls-utils', 'openssl', 'python-requests'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
@@ -47,7 +47,7 @@ class Ubuntu(object):
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
                 'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump gdb', 'qemu-system-x86',
-                'gawk', 'gnutls-bin', 'openssl'
+                'gawk', 'gnutls-bin', 'openssl', 'python-requests'
                 ]
     ec2_packages = standard_ec2_packages + ['ec2-api-tools', 'awscli']
     test_packages = ['libssl-dev']
