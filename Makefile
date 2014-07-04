@@ -36,7 +36,7 @@ $(submake) $(modulemk): Makefile prepare-dir
 	echo 'VPATH = $(abspath .)' >> $@
 	echo 'include $(abspath build.mk)' >> $@
 
-.PHONEY: prepare-dir
+.PHONY: prepare-dir
 
 prepare-dir:
 	# transition from build/release being the output directory
