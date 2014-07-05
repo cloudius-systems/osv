@@ -26,10 +26,17 @@ class java_app(object):
     def get_jvm_args(self):
         return []
 
+def get_string_object():
+    import sys
+    if sys.version < '3':
+        return basestring
+    else:
+        return str
+
 def _to_args_list(text_or_list):
     if not text_or_list:
         return []
-    if isinstance(text_or_list, basestring):
+    if isinstance(text_or_list, get_string_object()):
         return text_or_list.split()
     return text_or_list
 
