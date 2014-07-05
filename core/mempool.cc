@@ -1097,30 +1097,17 @@ static inline void* std_malloc(size_t size, size_t alignment)
     if ((ssize_t)size < 0)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
-
-    // Currently, we can't allocate a small object with large alignment,
-    // so need to increase the allocation size.
-    auto requested_size = size;
-    if (alignment > size) {
-        if (alignment <= mmu::page_size) {
-            size = alignment;
-        } else {
-            size = std::max(size, mmu::page_size * 2);
-        }
-    }
-
-    if (size <= memory::pool::max_object_size && smp_allocator) {
+    if (size <= memory::pool::max_object_size && alignment <= size && smp_allocator) {
         size = std::max(size, memory::pool::min_object_size);
         unsigned n = ilog2_roundup(size);
         ret = memory::malloc_pools[n].alloc();
         ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,
                                  ret);
-        trace_memory_malloc_mempool(ret, requested_size, 1 << n, alignment);
-    } else if (size <= mmu::page_size) {
+        trace_memory_malloc_mempool(ret, size, 1 << n, alignment);
+    } else if (size <= mmu::page_size && alignment <= mmu::page_size) {
         ret = mmu::translate_mem_area(mmu::mem_area::main, mmu::mem_area::page,
                                        memory::alloc_page());
-        trace_memory_malloc_page(ret, requested_size, mmu::page_size,
-                                 alignment);
+        trace_memory_malloc_page(ret, size, mmu::page_size, alignment);
     } else {
         ret = memory::malloc_large(size, alignment);
     }
