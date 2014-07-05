@@ -52,16 +52,6 @@ TRACEPOINT(trace_memory_wait, "allocation size=%d", size_t);
 bool smp_allocator = false;
 unsigned char *osv_reclaimer_thread;
 
-// malloc(3) specifies that malloc(), calloc() and realloc() need to return
-// a pointer which "is suitably aligned for any kind of variable.". By "any"
-// variable they actually refer only to standard types, but the longest of
-// these is usually "long double", which is 16 bytes. Glibc's malloc(),
-// with which we intend to be compatible, takes the maximum of 2*sizeof(size_t)
-// and the alignof(long double), so we must do the same.
-static constexpr int MALLOC_ALIGNMENT =
-        (2 * sizeof(size_t) < alignof(long double)) ?
-                alignof(long double) : (2 * sizeof(size_t));
-
 namespace memory {
 
 size_t phys_mem_size;
@@ -1298,7 +1288,7 @@ void free(void* v)
 void* realloc(void* v, size_t size)
 {
     if (!v)
-        return malloc(size, MALLOC_ALIGNMENT);
+        return malloc(size, alignof(max_align_t));
     if (!size) {
         free(v);
         return nullptr;
@@ -1306,7 +1296,7 @@ void* realloc(void* v, size_t size)
     auto h = static_cast<header*>(v - pad_before);
     if (h->size >= size)
         return v;
-    void* n = malloc(size, MALLOC_ALIGNMENT);
+    void* n = malloc(size, alignof(max_align_t));
     if (!n)
         return nullptr;
     memcpy(n, v, h->size);
@@ -1319,12 +1309,12 @@ void* realloc(void* v, size_t size)
 void* malloc(size_t size)
 {
 #if CONF_debug_memory == 0
-    void* buf = std_malloc(size, MALLOC_ALIGNMENT);
+    void* buf = std_malloc(size, alignof(max_align_t));
 #else
-    void* buf = dbg::malloc(size, MALLOC_ALIGNMENT);
+    void* buf = dbg::malloc(size, alignof(max_align_t));
 #endif
 
-    trace_memory_malloc(buf, size, MALLOC_ALIGNMENT);
+    trace_memory_malloc(buf, size, alignof(max_align_t));
     return buf;
 }
 
