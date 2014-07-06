@@ -109,13 +109,15 @@ struct hash<epoll_key> : private hash<int>, hash<file*> {
 
 }
 
+struct epoll_file;
+
 struct epoll_ptr {
-    file* epoll_file;
+    epoll_file* epoll;
     epoll_key key;
 };
 
 inline bool operator==(const epoll_ptr& p1, const epoll_ptr& p2) {
-    return p1.epoll_file == p2.epoll_file && p1.key == p2.key;
+    return p1.epoll == p2.epoll && p1.key == p2.key;
 }
 
 /*

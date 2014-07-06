@@ -260,6 +260,5 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_
 
 void epoll_file_closed(epoll_ptr ptr)
 {
-    auto epoll_obj = dynamic_cast<epoll_file*>(ptr.epoll_file);
-    epoll_obj->del(ptr.key);
+    ptr.epoll->del(ptr.key);
 }
