@@ -58,8 +58,6 @@
 
 #endif
 
-__BEGIN_DECLS
-
 /*
  * File type
  */
@@ -189,6 +187,8 @@ int fdset(int fd, struct file* fp);
 void fdfree(int fd);
 int fdclose(int fd);
 
+__BEGIN_DECLS
+
 filetype_t file_type(struct file *fp);
 void* file_data(struct file *fp);
 void file_setdata(struct file *fp, void *data);
@@ -202,12 +202,12 @@ void file_setoffset(struct file *fp, off_t off);
 void fhold(struct file* fp);
 int fdrop(struct file* fp);
 
+__END_DECLS
+
 /* Get fp from fd and increment refcount */
 int fget(int fd, struct file** fp);
 
 bool is_nonblock(struct file *f);
-
-__END_DECLS
 
 #endif
 
