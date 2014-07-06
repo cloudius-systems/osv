@@ -1299,6 +1299,8 @@ void* realloc(void* v, size_t size)
 
 void* malloc(size_t size)
 {
+    static_assert(alignof(max_align_t) >= 2 * sizeof(size_t),
+                  "alignof(max_align_t) smaller than glibc alignment guarantee");
     auto alignment = alignof(max_align_t);
     if (alignment > size) {
         alignment = 1ul << ilog2_roundup(size);
