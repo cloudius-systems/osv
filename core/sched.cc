@@ -184,6 +184,59 @@ void cpu::init_idle_thread()
     idle_thread->set_priority(thread::priority_idle);
 }
 
+// Estimating a *running* thread's total cpu usage (in thread::thread_clock())
+// requires knowing a pair [running_since, cpu_time_at_running_since].
+// Since we can't read a pair of u64 values atomically, nor want to slow down
+// context switches by additional memory fences, our solution is to write
+// a single 64 bit "_cputime_estimator" which is atomically written with
+// 32 bits from each of the above values. We arrive at 32 bits by dropping
+// the cputime_shift=10 lowest bits (so we get microsec accuracy instead of ns)
+// and the 22 highest bits (so our range is reduced to about 2000 seconds, but
+// since context switches occur much more frequently than that, we're ok).
+constexpr unsigned cputime_shift = 10;
+void thread::cputime_estimator_set(
+        osv::clock::uptime::time_point running_since,
+        osv::clock::uptime::duration total_cpu_time)
+{
+    u32 rs = running_since.time_since_epoch().count() >> cputime_shift;
+    u32 tc = total_cpu_time.count() >> cputime_shift;
+    _cputime_estimator.store(rs | ((u64)tc << 32), std::memory_order_relaxed);
+}
+void thread::cputime_estimator_get(
+        osv::clock::uptime::time_point &running_since,
+        osv::clock::uptime::duration &total_cpu_time)
+{
+    u64 e = _cputime_estimator.load(std::memory_order_relaxed);
+    u64 rs = ((u64)(u32) e) << cputime_shift;
+    u64 tc = (e >> 32) << cputime_shift;
+    // Recover the (64-32-cputime_shift) high-order bits of rs and tc that we
+    // didn't save in _cputime_estimator, by taking the current values of the
+    // bits in the current time and _total_cpu_time, respectively.
+    // These high bits usually remain the same if little time has passed, but
+    // there's also the chance that the old value was close to the cutoff, and
+    // just a short passing time caused the high-order part to increase by one
+    // since we saved _cputime_estimator. We recognize this case, and
+    // decrement the high-order part when recovering the saved value. To do
+    // this correctly, we need to assume that less than 2^(32+cputime_shift-1)
+    // ns have passed since the estimator was saved. This is 2200 seconds for
+    // cputime_shift=10, way longer than our typical context switches.
+    constexpr u64 ho = (std::numeric_limits<u64>::max() &
+            ~(std::numeric_limits<u64>::max() >> (64 - 32 - cputime_shift)));
+    u64 rs_ref = osv::clock::uptime::now().time_since_epoch().count();
+    u64 tc_ref = _total_cpu_time.count();
+    u64 rs_ho = rs_ref & ho;
+    u64 tc_ho = tc_ref & ho;
+    if ((rs_ref & ~ho) < rs) {
+        rs_ho -= (1ULL << (32 + cputime_shift));
+    }
+    if ((tc_ref & ~ho) < tc) {
+        tc_ho -= (1ULL << (32 + cputime_shift));
+    }
+    running_since = osv::clock::uptime::time_point(
+            osv::clock::uptime::duration(rs_ho | rs));
+    total_cpu_time = osv::clock::uptime::duration(tc_ho | tc);
+}
+
 // Note that this is a static (class) function, which can only reschedule
 // on the current CPU, not on an arbitrary CPU. Allowing to run one CPU's
 // scheduler on a different CPU would be disastrous.
@@ -248,6 +301,7 @@ void cpu::reschedule_from_interrupt()
     auto ni = runqueue.begin();
     auto n = &*ni;
     runqueue.erase(ni);
+    n->cputime_estimator_set(now, n->_total_cpu_time);
     assert(n->_detached_state->st.load() == thread::status::queued);
     trace_sched_switch(n, p->_runtime.get_local(), n->_runtime.get_local());
     n->_detached_state->st.store(thread::status::running);
@@ -535,14 +589,25 @@ thread_runtime::duration thread::thread_clock() {
                     (osv::clock::uptime::now() - tcpu()->running_since);
         }
     } else {
-        // _total_cpu_time is the accurate answer, *unless* the thread is
-        // currently running on a different CPU. If it is running on a
-        // different CPU, correcting for the partial time slice is very tricky
-        // (and probably will require some additional memory ordering) so we
-        // will leave this as a TODO.
-        // FIXME: we assume reads/writes to _total_cpu_time are atomic.
-        // They are, but we should use std::atomic to guarantee that.
-        return _total_cpu_time;
+        auto status = _detached_state->st.load(std::memory_order_acquire);
+        if (status == thread::status::running) {
+            // The cputime_estimator set before the status is already visible.
+            // Even if the thread stops running now, cputime_estimator will
+            // remain; Our max overshoot will be the duration of this code.
+            osv::clock::uptime::time_point running_since;
+            osv::clock::uptime::duration total_cpu_time;
+            cputime_estimator_get(running_since, total_cpu_time);
+            return total_cpu_time +
+                    (osv::clock::uptime::now() - running_since);
+        } else {
+            // _total_cpu_time is set before setting status, so it is already
+            // visible. During this code, the thread might start running, but
+            // it doesn't matter, total_cpu_time will remain. Our maximum
+            // undershoot will be the duration that this code runs.
+            // FIXME: we assume reads/writes to _total_cpu_time are atomic.
+            // They are, but we should use std::atomic to guarantee that.
+            return _total_cpu_time;
+        }
     }
 }
 
@@ -563,12 +628,9 @@ osv::clock::uptime::duration process_cputime()
     for (sched::cpu *cpu : sched::cpus) {
         ret -= cpu->idle_thread->thread_clock();
     }
-    // Currently, idle_thread->thread_clock() isn't updated while that thread
-    // is running, which means that in the middle of idle time-slices, we
-    // think this time-slice has been busy. We "cover up" this error by
-    // monotonizing the return value. This is good enough when idle time-
-    // slices are relatively short (e.g., always interrupted by the load
-    // balancer waking up). In the future we should have a better fix.
+    // idle_thread->thread_clock() may make tiny (<microsecond) temporary
+    // mistakes when racing with the idle thread's starting or stopping.
+    // To ensure that process_cputime() remains monotonous, we monotonize it.
     static std::atomic<osv::clock::uptime::duration> lastret;
     auto l = lastret.load(std::memory_order_relaxed);
     while (ret > l &&

@@ -572,6 +572,13 @@ private:
     std::function<void ()> _cleanup;
     std::vector<std::unique_ptr<char[]>> _tls;
     thread_runtime::duration _total_cpu_time {0};
+    std::atomic<u64> _cputime_estimator {0}; // for thread_clock()
+    inline void cputime_estimator_set(
+            osv::clock::uptime::time_point running_since,
+            osv::clock::uptime::duration total_cpu_time);
+    inline void cputime_estimator_get(
+            osv::clock::uptime::time_point &running_since,
+            osv::clock::uptime::duration &total_cpu_time);
     void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
