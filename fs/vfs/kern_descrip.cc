@@ -194,7 +194,7 @@ void file::stop_polls()
     poll_drain(fp);
     if (f_epolls) {
         for (auto ep : *f_epolls) {
-            epoll_file_closed(ep, this);
+            epoll_file_closed(ep);
         }
     }
 }

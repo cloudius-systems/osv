@@ -177,7 +177,7 @@ static inline file::timeout_t parse_poll_timeout(int timeout_ms)
 }
 
 int do_poll(std::vector<poll_file>& pfd, file::timeout_t _timeout);
-void epoll_file_closed(file* epoller, file* client);
+void epoll_file_closed(epoll_ptr ptr);
 
 #endif
 

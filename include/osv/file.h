@@ -87,6 +87,37 @@ struct poll_link {
     int _events = 0;
 };
 
+struct file;
+struct epoll_key {
+    int _fd;
+    file* _file;
+};
+
+inline bool operator==(const epoll_key& k1, const epoll_key& k2) {
+    return k1._fd == k2._fd && k1._file == k2._file;
+}
+
+namespace std {
+
+template <>
+struct hash<epoll_key> : private hash<int>, hash<file*> {
+    size_t operator()(const epoll_key& key) const {
+        return hash<int>::operator()(key._fd)
+            ^ hash<file*>::operator()(key._file);
+    }
+};
+
+}
+
+struct epoll_ptr {
+    file* epoll_file;
+    epoll_key key;
+};
+
+inline bool operator==(const epoll_ptr& p1, const epoll_ptr& p2) {
+    return p1.epoll_file == p2.epoll_file && p1.key == p2.key;
+}
+
 /*
  * File structure
  */
@@ -135,7 +166,7 @@ struct file {
 	                       boost::intrusive::constant_time_size<false>>
 	                f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
-	std::unique_ptr<std::vector<file*>> f_epolls;
+	std::unique_ptr<std::vector<epoll_ptr>> f_epolls;
 	// poll_wake_count used for implementing epoll()'s EPOLLET using poll().
 	// Once we have a real epoll() implementation, it won't be needed.
 	int poll_wake_count = 0;
