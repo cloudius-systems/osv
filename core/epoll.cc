@@ -135,25 +135,29 @@ public:
             DROP_LOCK(f_lock) {
                 r = do_poll(pollfds, parse_poll_timeout(timeout_ms));
             }
+            int n = 0;
             if (r > 0) {
                 r = std::min(r, maxevents);
-                int remain = r;
-                for (size_t i = 0; i < pollfds.size() && remain;  i++) {
+                for (size_t i = 0; i < pollfds.size() && n < r;  i++) {
                     if (pollfds[i].revents) {
-                        --remain;
-                        assert(pollfds[i].fp);
-                        events[remain].data = map.at(keys[i]).data;
-                        events[remain].events =
-                                events_poll_to_epoll(pollfds[i].revents);
-                        trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
-                        if (pollfds[i].events & EPOLLET) {
-                            map.at(keys[i]).last_poll_wake_count =
-                                    pollfds[i].last_poll_wake_count;
+                        try {
+                            assert(pollfds[i].fp);
+                            events[n].data = map.at(keys[i]).data;
+                            events[n].events =
+                                    events_poll_to_epoll(pollfds[i].revents);
+                            trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
+                            if (pollfds[i].events & EPOLLET) {
+                                map.at(keys[i]).last_poll_wake_count =
+                                        pollfds[i].last_poll_wake_count;
+                            }
+                            ++n;
+                        } catch (std::out_of_range& e) {
+                            // raced with epoll_ctl(EPOLL_DEL); ignore
                         }
                     }
                 }
             }
-            return r;
+            return n;
         }
     }
 private:
