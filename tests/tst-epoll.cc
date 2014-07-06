@@ -143,6 +143,14 @@ int main(int ac, char** av)
     r = read(s[0], &c, 1);
     report(r == 1, "read the last byte on the pipe");
 
+    auto s2 = dup(s[0]);
+    r = epoll_ctl(ep, EPOLL_CTL_ADD, s2, &event);
+    report(r == 0, "add dup() fd");
+    r = epoll_ctl(ep, EPOLL_CTL_DEL, s2, &event);
+    report(r == 0, "del fd");
+    r = epoll_ctl(ep, EPOLL_CTL_ADD, s[0], &event);
+    report(r == -1 && errno == EEXIST, "EEXIST");
+
 
     std::cout << "SUMMARY: " << tests << ", " << fails << " failures\n";
 }

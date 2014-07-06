@@ -139,9 +139,8 @@ tcp_usr_attach(struct socket *so, int proto, struct thread *td)
 	tp = intotcpcb(inp);
 	if (tp->nc) {
 		so->so_nc = tp->nc;
-		poll_link* pl;
-		TAILQ_FOREACH(pl, &so->fp->f_poll_list, _link) {
-			so->so_nc->add_poller(*pl->_req);
+		for (auto&& pl : so->fp->f_poll_list) {
+			so->so_nc->add_poller(*pl._req);
 		}
 	}
 out:

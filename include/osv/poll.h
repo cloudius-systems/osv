@@ -152,14 +152,6 @@ struct pollreq {
 
 #endif
 
-/* linked list of pollreq links */
-struct poll_link {
-    TAILQ_ENTRY(poll_link) _link;
-    struct pollreq* _req;
-    /* Events being polled... */
-    int _events;
-};
-
 struct file;
 
 int poll_wake(struct file* fp, int events);
@@ -185,7 +177,7 @@ static inline file::timeout_t parse_poll_timeout(int timeout_ms)
 }
 
 int do_poll(std::vector<poll_file>& pfd, file::timeout_t _timeout);
-void epoll_file_closed(file* epoller, file* client);
+void epoll_file_closed(epoll_ptr ptr);
 
 #endif
 

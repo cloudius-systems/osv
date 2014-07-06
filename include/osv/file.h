@@ -54,10 +54,9 @@
 #include <osv/clock.hh>
 #include <boost/optional/optional.hpp>
 #include <osv/mmu-defs.hh>
+#include <boost/intrusive/list.hpp>
 
 #endif
-
-__BEGIN_DECLS
 
 /*
  * File type
@@ -79,6 +78,47 @@ struct pollreq;
 namespace mmu {
 class file_vma;
 };
+
+/* linked list of pollreq links */
+struct poll_link {
+    boost::intrusive::list_member_hook<> _link;
+    struct pollreq* _req = nullptr;
+    /* Events being polled... */
+    int _events = 0;
+};
+
+struct file;
+struct epoll_key {
+    int _fd;
+    file* _file;
+};
+
+inline bool operator==(const epoll_key& k1, const epoll_key& k2) {
+    return k1._fd == k2._fd && k1._file == k2._file;
+}
+
+namespace std {
+
+template <>
+struct hash<epoll_key> : private hash<int>, hash<file*> {
+    size_t operator()(const epoll_key& key) const {
+        return hash<int>::operator()(key._fd)
+            ^ hash<file*>::operator()(key._file);
+    }
+};
+
+}
+
+struct epoll_file;
+
+struct epoll_ptr {
+    epoll_file* epoll;
+    epoll_key key;
+};
+
+inline bool operator==(const epoll_ptr& p1, const epoll_ptr& p2) {
+    return p1.epoll == p2.epoll && p1.key == p2.key;
+}
 
 /*
  * File structure
@@ -121,9 +161,14 @@ struct file {
 	dentry_ref	f_dentry;	/* dentry */
 	void		*f_data;        /* file descriptor specific data */
 	filetype_t	f_type;		/* descriptor type */
-	TAILQ_HEAD(, poll_link) f_poll_list; /* poll request list */
+	boost::intrusive::list<poll_link,
+	                       boost::intrusive::member_hook<poll_link,
+	                                                     boost::intrusive::list_member_hook<>,
+	                                                     &poll_link::_link>,
+	                       boost::intrusive::constant_time_size<false>>
+	                f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
-	std::unique_ptr<std::vector<file*>> f_epolls;
+	std::unique_ptr<std::vector<epoll_ptr>> f_epolls;
 	// poll_wake_count used for implementing epoll()'s EPOLLET using poll().
 	// Once we have a real epoll() implementation, it won't be needed.
 	int poll_wake_count = 0;
@@ -175,6 +220,8 @@ int fdset(int fd, struct file* fp);
 void fdfree(int fd);
 int fdclose(int fd);
 
+__BEGIN_DECLS
+
 filetype_t file_type(struct file *fp);
 void* file_data(struct file *fp);
 void file_setdata(struct file *fp, void *data);
@@ -188,12 +235,12 @@ void file_setoffset(struct file *fp, off_t off);
 void fhold(struct file* fp);
 int fdrop(struct file* fp);
 
+__END_DECLS
+
 /* Get fp from fd and increment refcount */
 int fget(int fd, struct file** fp);
 
 bool is_nonblock(struct file *f);
-
-__END_DECLS
 
 #endif
 
