@@ -176,3 +176,13 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
     sigprocmask(SIG_SETMASK, &origmask, NULL);
     return ret;
 }
+
+#define NFDBITS (8 * sizeof(fd_mask))
+
+extern "C" unsigned long int
+__fdelt_chk (unsigned long int d)
+{
+    if (d >= FD_SETSIZE)
+        abort();
+    return d / NFDBITS;
+}
