@@ -162,6 +162,37 @@ int main(int argc, char **argv)
     report(iret == 0, "closedir");
     report(rmdir("/tmp/tst-readdir")==0, "rmdir");
 
+    // Test scandir() with alphasort() on a directory with several files
+    report(mkdir("/tmp/tst-readdir", 0777) == 0, "mkdir");
+    report(mknod("/tmp/tst-readdir/b", 0777|S_IFREG, 0) == 0, "mknod");
+    report(mknod("/tmp/tst-readdir/a", 0777|S_IFREG, 0) == 0, "mknod");
+    report(mknod("/tmp/tst-readdir/d", 0777|S_IFREG, 0) == 0, "mknod");
+    report(mknod("/tmp/tst-readdir/c", 0777|S_IFREG, 0) == 0, "mknod");
+    struct dirent **namelist;
+    int count = scandir("/tmp/tst-readdir", &namelist, NULL, alphasort);
+    report(count == 6, "scandir return 4 entries");
+    debug("count = %d\n", count);
+    for (int i = 0; i < count; i++) {
+        debug("namelist[%d] = %s\n", i, namelist[i]->d_name);
+    }
+    report(count > 0 && !strcmp(namelist[0]->d_name,"."), "scandir return .");
+    report(count > 1 && !strcmp(namelist[1]->d_name,".."), "scandir return ..");
+    report(count > 2 && !strcmp(namelist[2]->d_name,"a"), "scandir return a");
+    report(count > 3 && !strcmp(namelist[3]->d_name,"b"), "scandir return b");
+    report(count > 4 && !strcmp(namelist[4]->d_name,"c"), "scandir return c");
+    report(count > 5 && !strcmp(namelist[5]->d_name,"d"), "scandir return d");
+    for (int i = 0; i < count; i++) {
+        free(namelist[i]);
+    }
+    if (count >= 0) {
+        free(namelist);
+    }
+    report(unlink("/tmp/tst-readdir/a")==0, "unlink");
+    report(unlink("/tmp/tst-readdir/b")==0, "unlink");
+    report(unlink("/tmp/tst-readdir/c")==0, "unlink");
+    report(unlink("/tmp/tst-readdir/d")==0, "unlink");
+    report(rmdir("/tmp/tst-readdir")==0, "rmdir");
+
 
     debug("SUMMARY: %d tests, %d failures\n", tests, fails);
     return fails == 0 ? 0 : 1;

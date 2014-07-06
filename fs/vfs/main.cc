@@ -585,6 +585,8 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
             trace_vfs_readdir_ret();
         }
     }
+    // Our dirent has (like Linux) a d_reclen field, but a constant size.
+    entry->d_reclen = sizeof(*entry);
 
     if (error) {
         *result = NULL;
