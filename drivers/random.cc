@@ -34,6 +34,7 @@
  */
 
 #include "drivers/random.hh"
+#include <assert.h>
 
 #include <osv/device.h>
 #include <osv/uio.h>
@@ -117,10 +118,13 @@ struct driver random_device_driver = {
     sizeof(struct random_device_priv),
 };
 
+//
+// VIRTIO-RNG: hardware source of entropy.
+//
 static hw_rng* s_hwrng;
 static int virtio_rng_read(void *buf, int size);
 
-struct random_hardware_source rsource = {
+static struct random_hardware_source vrng = {
     "virtio-rng",
     RANDOM_PURE_VIRTIO,
     &virtio_rng_read,
@@ -134,13 +138,70 @@ static int virtio_rng_read(void *buf, int size)
     return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
 }
 
+//
+// Intel DRNG, RDRAND: hardware source of entropy.
+// Implementation based on the following Intel manual:
+// Intel(r) Digital Random Number Generator (DRNG)
+//
+#ifdef __x86_64__
+static int drng_read(void *, int);
+
+// The constant below is based on the aforementioned Intel manual.
+// It recommends that RDRAND users should retry 10 times when the
+// instruction failed to work as expected.
+static constexpr int rdrand_retries_max = 10;
+
+static struct random_hardware_source drng = {
+    "intel drng, rdrand",
+    RANDOM_PURE_RDRAND,
+    &drng_read,
+};
+
+static inline bool rdrand_with_retries(uint64_t *data)
+{
+    for (auto retry = 0; retry <= rdrand_retries_max; retry++) {
+        if (processor::rdrand(data)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int
+drng_read(void *buf, int size)
+{
+    uint64_t *dest = static_cast<uint64_t *>(buf);
+    uint64_t data;
+    unsigned qwords, qwords_to_read;
+
+    assert((size & (sizeof(uint64_t) -1)) == 0);
+    qwords_to_read = size / sizeof(uint64_t);
+
+    for (qwords = 0; qwords < qwords_to_read; qwords++) {
+        if (!rdrand_with_retries(&data)) {
+            // Handle unlikely case where RDRAND has failed after
+            // all the retries.
+            break;
+        }
+
+        *dest++ = data;
+    }
+    return qwords * sizeof(uint64_t);
+}
+#endif
+
 random_device::random_device()
 {
     struct random_device_priv *prv;
 
     if (s_hwrng) {
-        live_entropy_source_register(&rsource);
+        live_entropy_source_register(&vrng);
     }
+#ifdef __x86_64__
+    if (processor::features().rdrand) {
+        live_entropy_source_register(&drng);
+    }
+#endif
     (random_adaptor->init)();
 
     // Create random
@@ -157,8 +218,13 @@ random_device::random_device()
 random_device::~random_device()
 {
     if (s_hwrng) {
-        live_entropy_source_deregister(&rsource);
+        live_entropy_source_deregister(&vrng);
     }
+#ifdef __x86_64__
+    if (processor::features().rdrand) {
+        live_entropy_source_deregister(&drng);
+    }
+#endif
     (random_adaptor->deinit)();
 
     device_destroy(_random_dev);
