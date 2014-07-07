@@ -370,6 +370,16 @@ inline void lfence()
     asm volatile("lfence");
 }
 
+inline bool rdrand(u64* dest)
+{
+    unsigned char ok;
+    asm volatile ("rdrand %0; setc %1"
+        : "=r" (*dest), "=qm" (ok)
+        :
+        : "cc");
+    return ok;
+}
+
 struct task_state_segment {
     u32 reserved0;
     u64 rsp[3];
