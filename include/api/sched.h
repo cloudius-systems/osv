@@ -65,6 +65,70 @@ int unshare(int);
 int setns(int, int);
 #endif
 
+// Definitions specific for manipulating cpu_set_t
+// Most of these were copied from FreeBSD's _cpuset.h and cpuset.h and adapted
+// for OSv's own purposes: matching the interface used in Linux.
+#ifdef _GNU_SOURCE
+
+/* Type for array elements in 'cpu_set_t', as expected in a glibc-compatible
+ * implementation.  */
+typedef unsigned long int __cpu_mask;
+
+#define __CPU_SETSIZE	1024
+#define __NCPUBITS	(8 * sizeof (__cpu_mask))
+
+#define _NCPUWORDS	__CPU_SETSIZE / __NCPUBITS
+
+typedef	struct {
+	__cpu_mask	__bits[_NCPUWORDS];
+} cpu_set_t;
+
+inline static void CPU_ZERO(cpu_set_t *cpuset) {
+    size_t i;
+    for (i = 0; i < _NCPUWORDS; i++) {
+        cpuset->__bits[i] = 0;
+    }
+}
+
+inline static size_t __cpuset_mask(size_t n) {
+    if (_NCPUWORDS == 1) {
+        return 1L << n;
+    } else {
+        return 1L << (n % __NCPUBITS);
+    }
+}
+
+inline static size_t __cpuset_word(size_t n) {
+    if (_NCPUWORDS == 1) {
+        return 0;
+    } else {
+        return n / __NCPUBITS;
+    }
+}
+
+inline static void CPU_SET(size_t n, cpu_set_t *cpuset) {
+    cpuset->__bits[__cpuset_word(n)] |= __cpuset_mask(n);
+}
+
+inline static void CPU_CLR(size_t n, cpu_set_t *cpuset) {
+    cpuset->__bits[__cpuset_word(n)] &= ~__cpuset_mask(n);
+}
+
+inline static int CPU_ISSET(size_t n, cpu_set_t *cpuset) {
+    return (cpuset->__bits[__cpuset_word(n)] & __cpuset_mask(n)) != 0;
+}
+
+inline static int CPU_COUNT(cpu_set_t *cpuset) {
+    size_t i;
+    int count = 0;
+    for (i = 0; i < _NCPUWORDS; i++) {
+        count += __builtin_popcountl(cpuset->__bits[i]);
+    }
+    return count;
+}
+
+#endif // _GNU_SOURCE
+
 #ifdef __cplusplus
 }
 #endif
