@@ -774,3 +774,44 @@ int pthread_setname_np(pthread_t p, const char* name)
     pthread::from_libc(p)->_thread.set_name(name);
     return 0;
 }
+
+int pthread_attr_setaffinity_np(pthread_attr_t *attr, size_t cpusetsize,
+        const cpu_set_t *cpuset)
+{
+    if (sizeof(cpu_set_t) < cpusetsize) {
+        return EINVAL;
+    }
+
+    auto a = from_libc(attr);
+    if (a->cpuset == nullptr) {
+        a->cpuset = new cpu_set_t;
+    }
+
+    if (cpusetsize < sizeof(cpu_set_t)) {
+        memset(a->cpuset, 0, sizeof(cpu_set_t));
+    }
+    memcpy(a->cpuset, cpuset, cpusetsize);
+
+    return 0;
+}
+
+int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
+        cpu_set_t *cpuset)
+{
+    if (sizeof(cpu_set_t) > cpusetsize) {
+        return EINVAL;
+    }
+
+    auto a = from_libc(attr);
+    if (a->cpuset == nullptr) {
+        memset(cpuset, -1, cpusetsize);
+        return 0;
+    }
+
+    if (sizeof(cpu_set_t) < cpusetsize) {
+        memset(cpuset, 0, cpusetsize);
+    }
+    memcpy(cpuset, a->cpuset, sizeof(cpu_set_t));
+
+    return 0;
+}
