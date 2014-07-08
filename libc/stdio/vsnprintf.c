@@ -20,11 +20,7 @@ int vsnprintf(char *restrict s, size_t n, const char *restrict fmt, va_list ap)
 	char b;
 	FILE f = { .lbf = EOF, .write = sn_write, .no_locking = true };
 
-	if (n-1 > INT_MAX-1) {
-		if (n) {
-			errno = EOVERFLOW;
-			return -1;
-		}
+	if (n == 0) {
 		s = &b;
 		n = 1;
 	}
