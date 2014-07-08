@@ -201,7 +201,7 @@ public class ContextIsolator {
         } catch (FileNotFoundException e) {
             throw new IllegalArgumentException("File not found: " + jarName);
         } catch (ZipException e) {
-            throw new IllegalArgumentException("File is not a jar: " + jarName);
+            throw new IllegalArgumentException("File is not a jar: " + jarName, e);
         }
     }
 
