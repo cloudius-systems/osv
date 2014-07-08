@@ -23,7 +23,7 @@ std::vector<std::vector<std::string> >
 parse_command_line(const std::string line, bool &ok);
 
 std::string getcmdline();
-int parse_cmdline(char *p);
+int parse_cmdline(const char *p);
 void save_cmdline(std::string newcmd);
 }
 

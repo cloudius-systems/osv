@@ -92,9 +92,17 @@ std::string getcmdline()
     return std::string(osv_cmdline);
 }
 
-int parse_cmdline(char *p)
+int parse_cmdline(const char *p)
 {
     char* save;
+
+    if (args.size()) {
+        // From the strtok manpage, we see that: "The first call to strtok()
+        // sets this pointer to point to the first byte of the string." It
+        // follows from this that the first argument contains the address we
+        // should use to free the memory allocated for the string
+        free(args[0]);
+    }
 
     args.resize(0);
     if (osv_cmdline) {
@@ -105,7 +113,7 @@ int parse_cmdline(char *p)
     char* cmdline = strdup(p);
 
     while ((p = strtok_r(cmdline, " \t\n", &save)) != nullptr) {
-        args.push_back(p);
+        args.push_back(const_cast<char *>(p));
         cmdline = nullptr;
     }
     args.push_back(nullptr);
@@ -117,7 +125,7 @@ int parse_cmdline(char *p)
 
 void save_cmdline(std::string newcmd)
 {
-    if (newcmd.size() > max_cmdline) {
+    if (newcmd.size() >= max_cmdline) {
         throw std::length_error("command line too long");
     }
 
@@ -129,7 +137,7 @@ void save_cmdline(std::string newcmd)
     lseek(fd, 512, SEEK_SET);
 
     // writes to the block device must be 512-byte aligned
-    int size = align_up(std::min(max_cmdline, newcmd.size()), 512UL);
+    int size = align_up(newcmd.size() + 1, 512UL);
     int ret = write(fd, newcmd.c_str(), size);
     close(fd);
 
@@ -137,9 +145,7 @@ void save_cmdline(std::string newcmd)
         throw std::system_error(std::error_code(errno, std::system_category()), "error writing command line to disk");
     }
 
-    char buf[newcmd.size() + 1];
-    newcmd.copy((char *)buf, newcmd.size(), 0);
-    osv::parse_cmdline(buf);
+    osv::parse_cmdline(newcmd.c_str());
 }
 
 }
