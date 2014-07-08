@@ -795,6 +795,20 @@ int pthread_attr_setaffinity_np(pthread_attr_t *attr, size_t cpusetsize,
     return 0;
 }
 
+int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
+        const cpu_set_t *cpuset)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
+int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
+        cpu_set_t *cpuset)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
+
 int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
