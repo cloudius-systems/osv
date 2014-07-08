@@ -51,6 +51,8 @@ extern uint64_t get_cyclecount(void);
 
 #include "live_entropy_sources.h"
 
+#include <osv/debug.h>
+
 LIST_HEAD(les_head, live_entropy_sources);
 static struct les_head sources = LIST_HEAD_INITIALIZER(sources);
 
@@ -65,7 +67,7 @@ live_entropy_source_register(struct random_hardware_source *rsource)
 	struct live_entropy_sources *les;
 
 	KASSERT(rsource != NULL, ("invalid input to %s", __func__));
-
+	debugf("random: %s registered as a source.\n", rsource->ident);
 	les = malloc(sizeof(struct live_entropy_sources), M_ENTROPY, M_WAITOK);
 	les->rsource = rsource;
 
