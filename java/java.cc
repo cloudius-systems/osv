@@ -8,6 +8,7 @@
 #include <osv/elf.hh>
 #include <jni.h>
 #include <string.h>
+#include <thread>
 #include <osv/debug.hh>
 #include "jvm_balloon.hh"
 #include <osv/mempool.hh>
@@ -76,8 +77,7 @@ static void mark_heap_option(char **arg, int index, int &has_xms, int &has_xmx)
     }
 }
 
-extern "C"
-int main(int argc, char **argv)
+static int java_main(int argc, char **argv)
 {
     auto prog = elf::get_program();
     // The JVM library remains loaded as long as jvm_so is in scope.
@@ -144,6 +144,7 @@ int main(int argc, char **argv)
         std::cerr << "java.so: Can't create VM.\n";
         return 1;
     }
+
     jvm_heap_size = 0;
 
     java_api::set(jvm);
@@ -187,5 +188,17 @@ int main(int argc, char **argv)
     // only then destroys the JVM.
     jvm->DetachCurrentThread();
     jvm->DestroyJavaVM();
+
     return 0;
+}
+
+extern "C"
+int main(int argc, char **argv)
+{
+    int res = 0;
+    std::thread t([&res](int argc, char **argv) {
+        res = java_main(argc, argv);
+    }, argc, argv);
+    t.join();
+    return res;
 }
