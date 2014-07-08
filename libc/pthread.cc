@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <string.h>
 #include <list>
+#include <stdio.h>
 
 #include <osv/mmu.hh>
 
@@ -64,7 +65,9 @@ namespace pthread_private {
         size_t stack_size;
         size_t guard_size;
         bool detached;
-        thread_attr() : stack_begin{}, stack_size{1<<20}, guard_size{4096}, detached{false} {}
+        cpu_set_t *cpuset;
+        sched::cpu *cpu;
+        thread_attr() : stack_begin{}, stack_size{1<<20}, guard_size{4096}, detached{false}, cpuset{nullptr}, cpu{nullptr} {}
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
@@ -84,6 +87,9 @@ namespace pthread_private {
         sched::thread::attr a;
         a.stack(allocate_stack(attr));
         a.detached(attr.detached);
+        if (attr.cpu != nullptr) {
+            a.pin(attr.cpu);
+        }
         return a;
     }
 
@@ -143,9 +149,42 @@ using namespace pthread_private;
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
         void *(*start_routine) (void *), void *arg)
 {
+    pthread *t;
     sigset_t sigset;
     sigprocmask(SIG_SETMASK, nullptr, &sigset);
-    auto t = new pthread(start_routine, arg, sigset, from_libc(attr));
+
+    if (attr != nullptr) {
+        thread_attr tmp(*from_libc(attr));
+        if (tmp.cpuset != nullptr) {
+            // We have a CPU set. If we have only one bit set in the set, we
+            // pin it to the corresponding CPU. If the set exists, but has no
+            // CPUs set, we do nothing. Otherwise, warn the user, and do
+            // nothing.
+            int count = CPU_COUNT(tmp.cpuset);
+            if (count == 0) {
+                // Having a cpuset with no CPUs in it is invalid.
+                return EINVAL;
+            } else if (count == 1) {
+                for (size_t i = 0; i < __CPU_SETSIZE; i++) {
+                    if (CPU_ISSET(i, tmp.cpuset)) {
+                        if (i < sched::cpus.size()) {
+                            tmp.cpu = sched::cpus[i];
+                            break;
+                        } else {
+                            return EINVAL;
+                        }
+                    }
+                }
+            } else {
+                printf("Warning: OSv only supports cpu_set_t with at most one "
+                       "CPU set.\n The cpu_set_t provided will be ignored.\n");
+            }
+        }
+        t = new pthread(start_routine, arg, sigset, &tmp);
+    } else {
+        t = new pthread(start_routine, arg, sigset, from_libc(attr));
+    }
+
     *thread = t->to_libc();
     return 0;
 }
@@ -435,6 +474,10 @@ int pthread_attr_init(pthread_attr_t *attr)
 
 int pthread_attr_destroy(pthread_attr_t *attr)
 {
+    auto *a = from_libc(attr);
+    if (a != nullptr && a->cpuset != nullptr) {
+        delete a->cpuset;
+    }
     return 0;
 }
 
