@@ -370,17 +370,20 @@ void* do_main_thread(void *_commands)
     // run each payload in order
     // Our parse_command_line() leaves at the end of each command a delimiter,
     // can be '&' if we need to run this command in a new thread, or ';' or
-    // empty otherwise, to run in this thread.
+    // empty otherwise, to run in this thread. '&!' is the same as '&', but
+    // doesn't wait for the thread to finish before exiting OSv.
     std::vector<pthread_t> bg;
     for (auto &it : *commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
-        if (it.back() != "&") {
+        if (it.back() != "&" && it.back() != "&!") {
             run_main(newvec);
         } else {
             pthread_t t;
             pthread_create(&t, nullptr, _run_main,
                     new std::vector<std::string> (newvec));
-            bg.push_back(t);
+            if (it.back() != "&!") {
+                bg.push_back(t);
+            }
         }
     }
 
