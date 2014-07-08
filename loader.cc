@@ -31,6 +31,7 @@
 #include <osv/mempool.hh>
 #include <bsd/porting/networking.hh>
 #include <bsd/porting/shrinker.h>
+#include <bsd/porting/route.h>
 #include <osv/dhcp.hh>
 #include <osv/version.h>
 #include <osv/run.hh>
@@ -126,6 +127,8 @@ static bool opt_verbose = false;
 static std::string opt_chdir;
 static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
+static std::string opt_defaultgw;
+static std::string opt_nameserver;
 
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
@@ -162,6 +165,8 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("cwd", bpo::value<std::vector<std::string>>(), "set current working directory")
         ("bootchart", "perform a test boot measuring a time distribution of the various operations\n")
         ("ip", bpo::value<std::vector<std::string>>(), "set static IP on NIC")
+        ("defaultgw", bpo::value<std::string>(), "set default gateway address")
+        ("nameserver", bpo::value<std::string>(), "set nameserver address")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -246,6 +251,14 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("ip")) {
         opt_ip = vars["ip"].as<std::vector<std::string>>();
+    }
+
+    if (vars.count("defaultgw")) {
+        opt_defaultgw = vars["defaultgw"].as<std::string>();
+    }
+
+    if (vars.count("nameserver")) {
+        opt_nameserver = vars["nameserver"].as<std::string>();
     }
 
     av += nr_options;
@@ -382,6 +395,11 @@ void* do_main_thread(void *_commands)
                     abort("incorrect parameter on --ip");
                 if (osv::start_if(tmp[0], tmp[1], tmp[2]) != 0)
                     debug("Could not initialize network interface.\n");
+            }
+            if (opt_defaultgw.size() != 0) {
+                osv_route_add_network("0.0.0.0",
+                                      "0.0.0.0",
+                                      opt_defaultgw.c_str());
             }
         }
     }
