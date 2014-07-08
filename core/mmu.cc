@@ -1115,7 +1115,7 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     bool search = !(flags & mmu::mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto *vma = f->mmap(addr_range(start, start + size), flags, perm, offset).release();
+    auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
     WITH_LOCK(vma_list_mutex) {
         v = (void*) allocate(vma, start, size, search);

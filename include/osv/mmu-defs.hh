@@ -83,6 +83,7 @@ enum {
     mmap_jvm_heap    = 1ul << 4,
     mmap_small       = 1ul << 5,
     mmap_jvm_balloon = 1ul << 6,
+    mmap_file        = 1ul << 7,
 };
 
 enum {

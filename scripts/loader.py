@@ -422,7 +422,7 @@ def permstr(perm):
     return bits2str(perm, ['r', 'w', 'x'])
 
 def flagstr(flags):
-    return bits2str(flags, ['f', 'p', 's', 'u', 'j', 'm', 'b'])
+    return bits2str(flags, ['f', 'p', 's', 'u', 'j', 'm', 'b', 'F'])
 
 class osv_mmap(gdb.Command):
     def __init__(self):
@@ -437,6 +437,31 @@ class osv_mmap(gdb.Command):
             size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
             print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
     
+class osv_vma_find(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv vma', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+
+    def invoke(self, arg, from_tty):
+        args_list = arg.split()
+        if len(args_list) == 0:
+            gdb.write('Usage: osv vma <address> [address2...]\n')
+            return
+        vmas = vma_list()
+        for saddr in args_list:
+            addr = ulong(gdb.parse_and_eval(saddr))
+            for vma in vmas:
+                vma_addr = ulong(vma)
+                start = ulong(vma['_range']['_start'])
+                end   = ulong(vma['_range']['_end'])
+                if start <= addr and end > addr:
+                    flags =  flagstr(ulong(vma['_flags']))
+                    perm =  permstr(ulong(vma['_perm']))
+                    size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
+                    print('0x%016x -> vma 0x%016x' % (addr, vma_addr))
+                    print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
+                    break
+
+
 ulong_type = gdb.lookup_type('unsigned long')
 timer_type = gdb.lookup_type('sched::timer_base')
 thread_type = gdb.lookup_type('sched::thread')
@@ -1305,6 +1330,7 @@ osv_heap()
 osv_memory()
 osv_waiters()
 osv_mmap()
+osv_vma_find()
 osv_zfs()
 osv_syms()
 osv_load_elf()
