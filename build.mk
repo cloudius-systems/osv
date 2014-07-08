@@ -316,6 +316,7 @@ tests/tst-static-thread-variable.so: COMMON += -L./tests -lstatic-thread-variabl
 tests += tests/misc-lock-perf.so
 tests += tests/tst-uio.so
 tests += tests/tst-printf.so
+tests += tests/tst-pthread-affinity.so
 endif
 
 ifeq ($(arch),aarch64)
