@@ -175,14 +175,14 @@ def main():
     depends.write(u'%s: \\\n' % (options.output,))
 
     image_path = os.path.abspath(options.output)
-    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom /tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --noinit /tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends)
 
     osv.wait()
 
     # Disable ZFS compression; it stops taking effect from this point on.
-    osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "--norandom /zfs.so set compression=off osv"' % image_path, shell = True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "--norandom --noinit /zfs.so set compression=off osv"' % image_path, shell = True, stdout=subprocess.PIPE)
     osv.wait()
 
     depends.write(u'\n\n')

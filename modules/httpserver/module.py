@@ -10,4 +10,9 @@ usr_files.add(os.path.join(_module, 'libhttpserver.so')).to('/libhttpserver.so')
 usr_files.add(os.path.join(_module, 'api-doc')).to('/usr/mgmt/api')
 usr_files.add(os.path.join(_module, 'swagger-ui', 'dist')).to('/usr/mgmt/swagger-ui/dist')
 
-default = api.run('/libhttpserver.so')
+#default = api.run('/libhttpserver.so')
+
+# Instead of adding to the command line using api.run(...), put a command in
+# /init. This way, httpserver will run regardless of an explicit command line
+# passed with "run.py -e".
+usr_files.add(os.path.join(_module, 'cmdline')).to('/init/10-httpserver')

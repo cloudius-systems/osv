@@ -38,6 +38,9 @@
 #include <osv/commands.hh>
 #include <osv/boot.hh>
 #include <osv/sampler.hh>
+#include <dirent.h>
+#include <iostream>
+#include <fstream>
 
 #include "drivers/zfs.hh"
 #include "drivers/random.hh"
@@ -117,6 +120,7 @@ static bool opt_noshutdown = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
 static bool opt_random = true;
+static bool opt_init = true;
 static std::string opt_console = "all";
 static bool opt_verbose = false;
 static std::string opt_chdir;
@@ -150,6 +154,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("nomount", "don't mount the file system")
         ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
+        ("noinit", "don't run commands from /init")
         ("verbose", "be verbose, print debug messages")
         ("console", bpo::value<std::vector<std::string>>(), "select console driver")
         ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())")
@@ -211,6 +216,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     }
     opt_mount = !vars.count("nomount");
     opt_random = !vars.count("norandom");
+    opt_init = !vars.count("noinit");
 
     if (vars.count("console")) {
         auto v = vars["console"].as<std::vector<std::string>>();
@@ -318,6 +324,13 @@ void *_run_main(void *data)
     return nullptr;
 }
 
+static std::string read_file(std::string fn)
+{
+  std::ifstream in(fn, std::ios::in | std::ios::binary);
+  return std::string((std::istreambuf_iterator<char>(in)),
+          std::istreambuf_iterator<char>());
+}
+
 void* do_main_thread(void *_commands)
 {
     auto commands =
@@ -366,6 +379,33 @@ void* do_main_thread(void *_commands)
     }
 
     boot_time.event("Total time");
+
+    // Run command lines in /init/* before the manual command line
+    if (opt_init) {
+        std::vector<std::vector<std::string>> init_commands;
+        struct dirent **namelist;
+        int count = scandir("/init", &namelist, NULL, alphasort);
+        for (int i = 0; i < count; i++) {
+            if (!strcmp(".", namelist[i]->d_name) ||
+                    !strcmp("..", namelist[i]->d_name)) {
+                continue;
+            }
+            std::string fn("/init/");
+            fn += namelist[i]->d_name;
+            auto cmdline = read_file(fn);
+            debug("Running from %s: %s\n", fn.c_str(), cmdline.c_str());
+            bool ok;
+            auto new_commands = osv::parse_command_line(cmdline, ok);
+            free(namelist[i]);
+            if (ok) {
+                init_commands.insert(init_commands.end(),
+                        new_commands.begin(), new_commands.end());
+            }
+        }
+        free(namelist);
+        commands->insert(commands->begin(),
+                 init_commands.begin(), init_commands.end());
+    }
 
     // run each payload in order
     // Our parse_command_line() leaves at the end of each command a delimiter,
