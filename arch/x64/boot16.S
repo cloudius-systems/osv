@@ -32,6 +32,8 @@ start:
 
 # Be conservative, we should not be in the 10th byte so far, but better safe than sorry
 .org 0x10
+# count32 will be overwritten by imgedit.py setsize <int>,
+# to specify the exact loader size after it is compiled
 count32: .short 4096 # in 32k units, 4096=128MB
 
 int1342_struct:
