@@ -48,6 +48,8 @@
 #include "drivers/console.hh"
 #include "drivers/null.hh"
 
+#include "libc/network/__dns.hh"
+
 using namespace osv;
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
@@ -400,6 +402,10 @@ void* do_main_thread(void *_commands)
                 osv_route_add_network("0.0.0.0",
                                       "0.0.0.0",
                                       opt_defaultgw.c_str());
+            }
+            if (opt_nameserver.size() != 0) {
+                auto addr = boost::asio::ip::address_v4::from_string(opt_nameserver);
+                osv::set_dns_config({addr}, std::vector<std::string>());
             }
         }
     }
