@@ -348,6 +348,7 @@ libc += misc/backtrace.o
 libc += misc/uname.o
 libc += misc/lockf.o
 libc += misc/mntent.o
+libc += misc/__longjmp_chk.o
 
 libc += multibyte/btowc.o
 libc += multibyte/internal.o
