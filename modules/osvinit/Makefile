@@ -41,7 +41,7 @@ $(TARGET): $(OBJ_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
 
 $(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) $(DEPEDNDS_LIBS) -shared -o $(TARGET).so $^, LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET).so $^ $(DEPEDNDS_LIBS), LINK $@)
 
 obj/%.o: %.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $@)
