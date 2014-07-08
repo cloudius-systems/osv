@@ -125,6 +125,7 @@ static std::string opt_console = "all";
 static bool opt_verbose = false;
 static std::string opt_chdir;
 static bool opt_bootchart = false;
+static std::vector<std::string> opt_ip;
 
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
@@ -160,6 +161,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())")
         ("cwd", bpo::value<std::vector<std::string>>(), "set current working directory")
         ("bootchart", "perform a test boot measuring a time distribution of the various operations\n")
+        ("ip", bpo::value<std::vector<std::string>>(), "set static IP on NIC")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -240,6 +242,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
             printf("Ignoring '--cwd' options after the first.");
         }
         opt_chdir = v.front();
+    }
+
+    if (vars.count("ip")) {
+        opt_ip = vars["ip"].as<std::vector<std::string>>();
     }
 
     av += nr_options;
@@ -366,7 +372,18 @@ void* do_main_thread(void *_commands)
             debug("Could not initialize network interface.\n");
     });
     if (has_if) {
-        dhcp_start(true);
+        if (opt_ip.size() == 0) {
+            dhcp_start(true);
+        } else {
+            for (auto t : opt_ip) {
+                std::vector<std::string> tmp;
+                boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
+                if (tmp.size() != 3)
+                    abort("incorrect parameter on --ip");
+                if (osv::start_if(tmp[0], tmp[1], tmp[2]) != 0)
+                    debug("Could not initialize network interface.\n");
+            }
+        }
     }
 
     if (!opt_chdir.empty()) {
