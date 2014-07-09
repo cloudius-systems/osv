@@ -17,6 +17,7 @@ build_dir = os.path.dirname(gdb.current_objfile().filename)
 osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
 mgmt_dir = os.path.join(osv_dir, 'mgmt')
 external = os.path.join(osv_dir, 'external', arch)
+modules = os.path.join(osv_dir, 'modules')
 
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
@@ -121,7 +122,7 @@ def syminfo(addr):
 def translate(path):
     '''given a path, try to find it on the host OS'''
     name = os.path.basename(path)
-    for top in [build_dir, mgmt_dir, external, '/zfs']:
+    for top in [build_dir, mgmt_dir, external, modules, '/zfs']:
         for root, dirs, files in os.walk(top):
             if name in files:
                 return os.path.join(root, name)
