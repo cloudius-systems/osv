@@ -1,0 +1,3 @@
+#open httpserver for input
+- PUT: /open-rest-api
+
