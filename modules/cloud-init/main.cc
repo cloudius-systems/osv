@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "osvinit.hh"
+#include "cloud-init.hh"
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>

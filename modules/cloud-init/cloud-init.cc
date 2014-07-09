@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "osvinit.hh"
+#include "cloud-init.hh"
 #include <iostream>
 #include <fstream>
 #include "client.hh"

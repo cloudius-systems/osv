@@ -12,14 +12,14 @@ arch = x64
 boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
               $(boost-lib-dir)/libboost_filesystem-mt.so
-              
-              
+
+
 HTTPSERVER_DIR = ../../modules/httpserver
 INCLUDES += -I$(HTTPSERVER_DIR)
 
 # the build target executable:
-TARGET = osvinit
-CPP_FILES := $(wildcard *.cc) 
+TARGET = cloud-init
+CPP_FILES := $(wildcard *.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 
 STUB_HTTPSERVER_LIBS = $(HTTPSERVER_DIR)/httpserver-stub.so

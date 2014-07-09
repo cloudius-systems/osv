@@ -1,5 +1,9 @@
 {
    "modules": {
+        "osvinit": {
+            "type": "direct-dir",
+            "path": "${OSV_BASE}/modules/cloud-init/"
+        },
         "mgmt": {
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/"
