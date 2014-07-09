@@ -7,7 +7,7 @@ INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
 #  -Wall turns on most, but not all, compiler warnings
 autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend)
-src = ../..
+src = $(shell readlink -f ../..)
 
 ifndef ARCH
 	ARCH = x64
@@ -90,12 +90,12 @@ clean:
 	$(call very-quiet, $(RM) -rf autogen/*)
 
 check:
-	cd ../.. && modules/httpserver/tests/testhttpserver.py
+	cd $(src) && modules/httpserver/tests/testhttpserver.py
 
 swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib
 
 swagger-ui/.git:
-	cd ../.. && git submodule update --init -f modules/httpserver/swagger-ui
+	cd $(src) && git submodule update --init -f modules/httpserver/swagger-ui
 
 .SECONDARY:
