@@ -141,13 +141,27 @@ def build(args):
         # e.g.: mgmt.shell use's mgmt's "shell" command line.
         print("No such image configuration: " + args.image_config + ". Assuming list of modules.")
         run_list = []
+        disabled_modules = set()
         for module in args.image_config.split(","):
+            if module[0] == '-':
+                disabled_modules.add(module[1:])
+        module_names = []
+        config = resolve.read_config()
+        if "default" in config:
+            module_names +=  config["default"]
+        module_names += args.image_config.split(",")
+        for missing in list(disabled_modules - set(module_names)):
+            raise Exception("Attempt to disable module %s but not enabled" % missing)
+        module_names = [i for i in module_names if not i in disabled_modules]
+        for module in module_names:
+            if module[0] == '-':
+                continue
             a = module.split(".", 1)
             name = a[0]
             variant = a[1] if (len(a) > 1) else "default"
             mod = api.require(name)
             if hasattr(mod, variant):
-                run_list.append(getattr(mod, variant));
+                run_list.append(getattr(mod, variant))
             elif variant != "default" and variant != "none":
                 raise Exception("Attribute %s not set in module %s" % (variant, name))
 

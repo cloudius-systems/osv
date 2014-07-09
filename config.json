@@ -12,5 +12,6 @@
         "${OSV_BASE}/apps",
         "${OSV_BASE}/modules"
     ]
-   }
+   },
+   "default": [ "httpserver" ]
 }
