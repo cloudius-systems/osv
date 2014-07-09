@@ -484,7 +484,7 @@ int pthread_attr_destroy(pthread_attr_t *attr)
 int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr)
 {
     auto t = pthread::from_libc(thread);
-    auto a = from_libc(attr);
+    auto a = new (attr) thread_attr;
     a->stack_begin = t->_thread.get_stack_info().begin;
     a->stack_size = t->_thread.get_stack_info().size;
     return 0;
