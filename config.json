@@ -4,10 +4,6 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/mgmt/"
         },
-        "osvinit": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/mgmt/osvinit"
-        },
     "repositories": [
         "${OSV_BASE}/apps",
         "${OSV_BASE}/modules"
