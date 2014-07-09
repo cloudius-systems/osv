@@ -7,6 +7,7 @@
 
 #include "global_server.hh"
 #include "api/os.hh"
+#include "api/fs.hh"
 #include "api/files_mapping.hh"
 #include "api/jvm.hh"
 #include "api/file.hh"
@@ -70,6 +71,7 @@ void global_server::set_routes()
 {
     path_holder::set_routes(&_routes);
     api::os::init(_routes);
+    api::fs::init(_routes);
     api::file::init(_routes);
     api::jvm::init(_routes);
     api::trace::init(_routes);

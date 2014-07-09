@@ -1,0 +1,79 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "http://{{Host}}",
+    "resourcePath": "/fs",
+    "produces": [
+        "application/json",
+        "application/xml"
+    ],
+    "apis": [
+        {
+            "path": "/fs/df/{mount}",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "report a file system usage",
+                    "notes": "",
+                    "type": "array",
+				    "items": {
+				        "$ref": "DFStat"
+				    },
+                    "errorResponses":[
+                     {
+                         "code":404,
+                         "reason":"File system not found"
+                     }
+                    ],
+                    "nickname" : "getDFStats",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                     {
+                        "name":"mount",
+                        "description":"mount point",
+                        "required":false,
+                        "allowMultiple":true,
+                        "dataType":"string",
+                        "paramType":"path"
+                    }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        }
+    ],
+    "models" : {
+        "DFStat": {
+           "description": "Information on one file system",
+           "properties": {
+                "filesystem" : {
+                     "type": "string",
+                    "description": "fs name"
+                },
+                "mount" : {
+                     "type": "string",
+                    "description": "mount point"
+                },
+                "btotal" : {
+                    "type": "long",
+                    "description": "total data blocks in file system"
+                },
+                "bfree" : {
+                    "type": "long",
+                    "description": "free blocks in file system"
+                },
+                "ftotal" : {
+                    "type": "long",
+                    "description": "total file nodes in file system"
+                },
+                "ffree" : {
+                    "type": "long",
+                    "description": "free file nodes in file system"
+                }
+            }
+        }
+    }
+}
