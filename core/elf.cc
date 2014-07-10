@@ -783,7 +783,7 @@ dladdr_info object::lookup_addr(const void* addr)
             best = sm;
         }
     }
-    if (!best.symbol) {
+    if (!best.symbol || addr > best.relocated_addr() + best.size()) {
         return ret;
     }
     ret.fname = _pathname.c_str();
