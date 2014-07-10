@@ -260,9 +260,17 @@ extern "C" {
      * to work without requiring any class construction.
      */
 
+    // arch_early_console.write() doesn't do any \n -> \r\n translation,
+    // we need to this ourselves
     void debug_early(const char *msg)
     {
-        console::arch_early_console.write(msg, strlen(msg));
+        while (*msg) {
+            if (*msg == '\n') {
+                console::arch_early_console.write("\r", 1);
+            }
+            console::arch_early_console.write(msg++, 1);
+         }
+         console::arch_early_console.flush();
     }
 
     void debug_early_u64(const char *msg, unsigned long long val)
@@ -279,8 +287,9 @@ extern "C" {
             val >>= 4;
         }
 
-        console::arch_early_console.write(msg, strlen(msg));
+        debug_early(msg);
         console::arch_early_console.write(nr, 16);
-        console::arch_early_console.write("\n", 1);
+        console::arch_early_console.write("\r\n", 2);
+        console::arch_early_console.flush();
     }
 }
