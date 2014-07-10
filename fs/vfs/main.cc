@@ -1967,8 +1967,6 @@ void vfs_exit(void)
 
 void sys_panic(const char *str)
 {
-    kprintf("%s\n", str);
-    while (1)
-        ;
+    abort("panic: %s", str);
 }
 
