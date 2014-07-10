@@ -183,15 +183,6 @@ struct recv_fis {
     u8 reserved4[0x60];
 } __attribute__((packed));
 
-enum {
-    AHCI_VENDOR_ID_VBOX = 0x8086,
-    AHCI_DEVICE_ID_VBOX = 0x2829,
-    AHCI_VENDOR_ID_VMW = 0x15AD,
-    AHCI_DEVICE_ID_VMW = 0x07E0,
-    AHCI_VENDOR_ID_QEMU = 0x8086,
-    AHCI_DEVICE_ID_QEMU = 0x2922,
-};
-
 class port;
 
 class hba : public hw_driver {

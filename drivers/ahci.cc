@@ -602,10 +602,10 @@ bool hba::ack_irq()
 hw_driver* hba::probe(hw_device* hw_dev)
 {
     if (auto pci_dev = dynamic_cast<pci::device*>(hw_dev)) {
-        auto id = pci_dev->get_id();
-        if (id == hw_device_id(AHCI_VENDOR_ID_VBOX, AHCI_DEVICE_ID_VBOX) ||
-            id == hw_device_id(AHCI_VENDOR_ID_VMW, AHCI_DEVICE_ID_VMW) ||
-            id == hw_device_id(AHCI_VENDOR_ID_QEMU, AHCI_DEVICE_ID_QEMU)) {
+        auto base_class = pci_dev->get_base_class_code();
+        auto sub_class = pci_dev->get_sub_class_code();
+        if (base_class == pci::function::PCI_CLASS_STORAGE
+            && sub_class == pci::function::PCI_SUB_CLASS_STORAGE_AHCI) {
             return new hba(*pci_dev);
         }
     }
