@@ -106,6 +106,10 @@ void arch_init_drivers()
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
 
+void arch_init_early_console()
+{
+}
+
 bool arch_setup_console(std::string opt_console)
 {
     if (opt_console.compare("pl011") == 0) {

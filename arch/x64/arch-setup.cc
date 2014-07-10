@@ -259,6 +259,11 @@ void arch_init_drivers()
 #include "drivers/vga.hh"
 #include "early-console.hh"
 
+void arch_init_early_console()
+{
+    console::isa_serial_console::early_init();
+}
+
 bool arch_setup_console(std::string opt_console)
 {
     hw::driver_manager* drvman = hw::driver_manager::instance();

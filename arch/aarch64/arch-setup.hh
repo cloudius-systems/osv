@@ -13,6 +13,7 @@
 #include "arch-tls.hh"
 #include <string>
 
+void arch_init_early_console();
 void arch_init_premain();
 void arch_setup_tls(void *tls, void *start, size_t size);
 

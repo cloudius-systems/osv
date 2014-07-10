@@ -89,6 +89,8 @@ extern "C" {
 
 void premain()
 {
+    arch_init_early_console();
+
     /* besides reporting the OSV version, this string has the function
        to check if the early console really works early enough,
        without depending on prior initialization. */

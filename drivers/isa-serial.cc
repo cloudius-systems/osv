@@ -50,6 +50,29 @@ enum mcr {
     LOOPBACK_MODE       = 0x16,
 };
 
+void isa_serial_console::early_init()
+{
+    // Set the UART speed to to 115,200 bps, This is done by writing 1,0 to
+    // Divisor Latch registers, but to access these we need to temporarily
+    // set the Divisor Latch Access Bit (DLAB) on the LSR register, because
+    // the UART has fewer ports than registers...
+    pci::outb(lcr::LEN_8BIT | lcr::DLAB, ioport + regs::LCR);
+    pci::outb(1, ioport + regs::DLL);
+    pci::outb(0, ioport + regs::DLM);
+    pci::outb(lcr::LEN_8BIT, ioport + regs::LCR);
+
+    //  interrupt threshold
+    pci::outb(0, ioport + regs::FCR);
+
+    // disable interrupts
+    pci::outb(0, ioport + regs::IER);
+
+    // Most physical UARTs need the MCR AUX_OUTPUT_2 bit set to 1 for
+    // interrupts to be generated. QEMU doesn't bother checking this
+    // bit, but interestingly VMWare does, so we must set it.
+    pci::outb(mcr::AUX_OUTPUT_2, ioport + regs::MCR);
+}
+
 void isa_serial_console::write(const char *str, size_t len)
 {
     while (len-- > 0)
@@ -87,31 +110,15 @@ void isa_serial_console::putchar(const char ch)
     pci::outb(ch, ioport);
 }
 
-void isa_serial_console::reset() {
-    // Set the UART speed to to 115,200 bps, This is done by writing 1,0 to
-    // Divisor Latch registers, but to access these we need to temporarily
-    // set the Divisor Latch Access Bit (DLAB) on the LSR register, because
-    // the UART has fewer ports than registers...
-    pci::outb(lcr::LEN_8BIT | lcr::DLAB, ioport + regs::LCR);
-    pci::outb(1, ioport + regs::DLL);
-    pci::outb(0, ioport + regs::DLM);
-    pci::outb(lcr::LEN_8BIT, ioport + regs::LCR);
-
-    //  interrupt threshold
-    pci::outb(0, ioport + regs::FCR);
-
+void isa_serial_console::enable_interrupt()
+{
     // enable interrupts
     pci::outb(1, ioport + regs::IER);
-
-    // Most physical UARTs need the MCR AUX_OUTPUT_2 bit set to 1 for
-    // interrupts to be generated. QEMU doesn't bother checking this
-    // bit, but interestingly VMWare does, so we must set it.
-    pci::outb(mcr::AUX_OUTPUT_2, ioport + regs::MCR);
 }
 
 void isa_serial_console::dev_start() {
     _irq = new gsi_edge_interrupt(4, [&] { _thread->wake(); });
-    reset();
+    enable_interrupt();
 }
 
 }
