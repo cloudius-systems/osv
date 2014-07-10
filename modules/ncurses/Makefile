@@ -1,6 +1,7 @@
 # Directories for downloading and building
 DOWNLOAD=download
 BUILD=build
+OUT=out
 
 # Ncurses
 NCURSES_VERSION=5.9
@@ -14,9 +15,12 @@ CFLAGS=-fPIC -O2
 CONF_FLAGS=--without-debug --without-tests --without-cxx-binding \
  --without-ada --disable-tcap-names --with-termlib=tinfo --with-shared
 
-module: $(NCURSES_BUILD)/lib/libncurses.so
+MAIN=$(NCURSES_BUILD)/lib/libncurses.so
+TI_VT100=$(OUT)/terminfo/v/vt100-qemu
 
-$(NCURSES_BUILD)/lib/libncurses.so: $(NCURSES_BUILD)/Makefile
+module: $(MAIN) $(TI_VT100)
+
+$(MAIN): $(NCURSES_BUILD)/Makefile
 	cd $(NCURSES_BUILD) && $(MAKE)
 
 $(NCURSES_BUILD)/Makefile: $(NCURSES_BUILD)/configure
@@ -32,10 +36,15 @@ $(NCURSES_ARCHIVE): | $(DOWNLOAD)
 	cd $(DOWNLOAD) && \
 	 curl --remote-name --remote-time $(NCURSES_DOWNLOAD)
 
-$(DOWNLOAD) $(BUILD):
+$(TI_VT100): $(MAIN)
+	@mkdir -p $(OUT)/terminfo
+	infocmp vt100 | sed 's/cud1=^J,/cud1=\\E[B,/; s/ind=^J,/ind=\\E[S,/; s/vt100/vt100-qemu/' | \
+		tic -o $(OUT)/terminfo -
+
+$(DOWNLOAD) $(BUILD) $(OUT):
 	@mkdir -p $@
 
 clean:
-	rm -rf $(BUILD) $(DOWNLOAD)
+	rm -rf $(BUILD) $(DOWNLOAD) $(OUT)
 
 .PHONY: module clean

@@ -29,6 +29,10 @@ void      luaL_renew_cli(lua_State **L);
 lua_State *luaL_newstate_cli();
 
 int main (int argc, char* argv[]) {
+#ifdef OSV_CLI
+  putenv("TERM=vt100-qemu");
+#endif
+
   /* This holds all the state for our line editor */
   EditLine *el;
 
