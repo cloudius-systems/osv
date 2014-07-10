@@ -218,6 +218,7 @@ boost-tests += tests/tst-poll.so
 boost-tests += tests/tst-bitset-iter.so
 boost-tests += tests/tst-timer-set.so
 boost-tests += tests/tst-clock.so
+boost-tests += tests/tst-rcu-hashtable.so
 endif
 
 ifeq ($(arch),aarch64)
