@@ -83,7 +83,7 @@ void init(routes& routes)
 
     getDebugMessages.set_handler("json", [](const_req req)
     {
-        return string(debug_buffer);
+        return formatter::to_json(debug_buffer);
     });
 
     getHostname.set_handler("json", [](const_req req)
