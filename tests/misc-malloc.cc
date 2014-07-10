@@ -47,7 +47,7 @@ public:
 };
 
 thread_data::thread_data(long nthreads, std::function<long()> len, long tf)
-    : nthreads(nthreads), thread([&] { measure(len, tf); })
+    : nthreads(nthreads), thread([=] { measure(len, tf); })
 {
 }
 
