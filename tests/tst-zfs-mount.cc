@@ -21,7 +21,7 @@
 
 #define BUF_SIZE	4096
 
-int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
+int	 sys_mount(const char *dev, const char *dir, const char *fsname, int flags, void *data);
 
 static int tests = 0, fails = 0;
 

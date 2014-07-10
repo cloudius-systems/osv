@@ -327,7 +327,7 @@ static std::string procfs_stats()
 }
 
 static int
-procfs_mount(mount* mp, char *dev, int flags, void* data)
+procfs_mount(mount* mp, const char *dev, int flags, void* data)
 {
     auto* vp = mp->m_root->d_vnode;
 

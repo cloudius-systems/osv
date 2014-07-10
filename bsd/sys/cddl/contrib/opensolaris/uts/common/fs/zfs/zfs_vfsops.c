@@ -976,7 +976,7 @@ zfs_set_fuid_feature(zfsvfs_t *zfsvfs)
 }
 
 static int
-zfs_domount(vfs_t *vfsp, char *osname)
+zfs_domount(vfs_t *vfsp, const char *osname)
 {
 	uint64_t recordsize, fsid_guid;
 	int error = 0;
@@ -1419,7 +1419,7 @@ getpoolname(const char *osname, char *poolname)
 }
 
 static int
-zfs_mount(struct mount *mp, char *dev, int flags, void *data)
+zfs_mount(struct mount *mp, const char *dev, int flags, void *data)
 {
 	// If @data is present, then it is the osname, while @dev is the device
 	//    (root mount)
@@ -1427,7 +1427,7 @@ zfs_mount(struct mount *mp, char *dev, int flags, void *data)
 	// FIXME: make some sense out of this.  In FreeBSD it is communicated via a flag.
 
 	char pname[MAXNAMELEN];
-	char		*osname = dev;
+	const char		*osname = dev;
 	int		error = 0;
 
 	if (data) {

@@ -124,7 +124,7 @@ int  sys_utimensat(int dirfd, const char *pathname,
 int  sys_futimens(int fd, const struct timespec times[2]);
 int  sys_fallocate(struct file *fp, int mode, loff_t offset, loff_t len);
 
-int	 sys_mount(char *dev, char *dir, char *fsname, int flags, void *data);
+int	 sys_mount(const char *dev, const char *dir, const char *fsname, int flags, void *data);
 int	 sys_umount2(const char *path, int flags);
 int	 sys_umount(const char *path);
 int	 sys_pivot_root(const char *new_root, const char *old_put);

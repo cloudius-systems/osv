@@ -37,7 +37,7 @@
 
 extern struct vnops ramfs_vnops;
 
-static int ramfs_mount(struct mount *mp, char *dev, int flags, void *data);
+static int ramfs_mount(struct mount *mp, const char *dev, int flags, void *data);
 static int ramfs_unmount(struct mount *mp, int flags);
 #define ramfs_sync	((vfsop_sync_t)vfs_nullop)
 #define ramfs_vget	((vfsop_vget_t)vfs_nullop)
@@ -59,7 +59,7 @@ struct vfsops ramfs_vfsops = {
  * Mount a file system.
  */
 static int
-ramfs_mount(struct mount *mp, char *dev, int flags, void *data)
+ramfs_mount(struct mount *mp, const char *dev, int flags, void *data)
 {
 	struct ramfs_node *np;
 

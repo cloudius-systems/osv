@@ -67,7 +67,7 @@ static mutex_t mount_lock = MUTEX_INITIALIZER;
  * Lookup file system.
  */
 static const struct vfssw *
-fs_getfs(char *name)
+fs_getfs(const char *name)
 {
     const struct vfssw *fs;
 
@@ -92,7 +92,7 @@ fs_getfsname(vfsops* ops)
 }
 
 int
-sys_mount(char *dev, char *dir, char *fsname, int flags, void *data)
+sys_mount(const char *dev, const char *dir, const char *fsname, int flags, void *data)
 {
     const struct vfssw *fs;
     struct mount *mp;

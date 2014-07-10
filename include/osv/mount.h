@@ -112,7 +112,7 @@ struct vfssw {
  * Operations supported on virtual file system.
  */
 struct vfsops {
-	int (*vfs_mount)	(struct mount *, char *, int, void *);
+	int (*vfs_mount)	(struct mount *, const char *, int, void *);
 	int (*vfs_unmount)	(struct mount *, int flags);
 	int (*vfs_sync)		(struct mount *);
 	int (*vfs_vget)		(struct mount *, struct vnode *);
@@ -120,7 +120,7 @@ struct vfsops {
 	struct vnops	*vfs_vnops;
 };
 
-typedef int (*vfsop_mount_t)(struct mount *, char *, int, void *);
+typedef int (*vfsop_mount_t)(struct mount *, const char *, int, void *);
 typedef int (*vfsop_umount_t)(struct mount *);
 typedef int (*vfsop_sync_t)(struct mount *);
 typedef int (*vfsop_vget_t)(struct mount *, struct vnode *);
