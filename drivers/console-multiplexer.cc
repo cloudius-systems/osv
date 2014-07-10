@@ -53,7 +53,12 @@ void console_multiplexer::write_ll(const char *str, size_t len)
 {
     if (!_started) {
         if (_early_driver != nullptr) {
-            _early_driver->write(str, len);
+            while (len-- > 0) {
+                if ((*str == '\n')) {
+                    _early_driver->write("\r", 1);
+                }
+                _early_driver->write(str++, 1);
+            }
             _early_driver->flush();
         }
     } else {
