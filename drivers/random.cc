@@ -40,18 +40,10 @@
 #include <osv/uio.h>
 #include <osv/debug.hh>
 
-#include <sys/selinfo.h>
-#include <sys/random.h>
-#include <sys/param.h>
-
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
 #include <dev/random/random_adaptors.h>
-
-extern "C" {
-    void live_entropy_source_register(struct random_hardware_source *);
-    void live_entropy_source_deregister(struct random_hardware_source *);
-};
+#include <dev/random/live_entropy_sources.h>
 
 namespace randomdev {
 
