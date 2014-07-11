@@ -9,6 +9,7 @@
 #define ARCH_X86_PROCESSOR_H
 
 #include <osv/types.h>
+#include <cpuid.hh>
 
 namespace processor {
 
