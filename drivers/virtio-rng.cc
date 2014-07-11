@@ -6,11 +6,34 @@
  */
 
 #include "drivers/virtio-rng.hh"
+#include "drivers/random.hh"
+
 #include <osv/mmu.hh>
 #include <algorithm>
 #include <iterator>
 
+#include <dev/random/randomdev.h>
+#include <dev/random/live_entropy_sources.h>
+
 using namespace std;
+
+static int virtio_rng_read(void *buf, int size);
+
+static struct random_hardware_source vrng = {
+    "virtio-rng",
+    RANDOM_PURE_VIRTIO,
+    &virtio_rng_read,
+};
+
+static randomdev::hw_rng* s_hwrng;
+
+// NOTE: This function is not intended to be called directly.
+// Instead, it's registered as a callback into the structure used to register
+// virtio-rng as a hardware source of entropy, so being called whenever needed.
+static int virtio_rng_read(void *buf, int size)
+{
+    return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
+}
 
 namespace virtio {
 rng::rng(pci::device& pci_dev)
@@ -24,11 +47,14 @@ rng::rng(pci::device& pci_dev)
 
     _thread.start();
 
-    randomdev::random_device::register_source(this);
+    s_hwrng = this;
+    live_entropy_source_register(&vrng);
 }
 
 rng::~rng()
 {
+    live_entropy_source_deregister(&vrng);
+    s_hwrng = nullptr;
 }
 
 size_t rng::get_random_bytes(char* buf, size_t size)

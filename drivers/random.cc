@@ -111,26 +111,6 @@ struct driver random_device_driver = {
 };
 
 //
-// VIRTIO-RNG: hardware source of entropy.
-//
-static hw_rng* s_hwrng;
-static int virtio_rng_read(void *buf, int size);
-
-static struct random_hardware_source vrng = {
-    "virtio-rng",
-    RANDOM_PURE_VIRTIO,
-    &virtio_rng_read,
-};
-
-// NOTE: This function is not intended to be called directly.
-// Instead, it's registered as a callback into the structure used to register
-// virtio-rng as a hardware source of entropy, so being called whenever needed.
-static int virtio_rng_read(void *buf, int size)
-{
-    return s_hwrng->get_random_bytes(static_cast<char *>(buf), size);
-}
-
-//
 // Intel DRNG, RDRAND: hardware source of entropy.
 // Implementation based on the following Intel manual:
 // Intel(r) Digital Random Number Generator (DRNG)
@@ -186,9 +166,6 @@ random_device::random_device()
 {
     struct random_device_priv *prv;
 
-    if (s_hwrng) {
-        live_entropy_source_register(&vrng);
-    }
 #ifdef __x86_64__
     if (processor::features().rdrand) {
         live_entropy_source_register(&drng);
@@ -209,9 +186,6 @@ random_device::random_device()
 
 random_device::~random_device()
 {
-    if (s_hwrng) {
-        live_entropy_source_deregister(&vrng);
-    }
 #ifdef __x86_64__
     if (processor::features().rdrand) {
         live_entropy_source_deregister(&drng);
@@ -223,17 +197,10 @@ random_device::~random_device()
     device_destroy(_urandom_dev);
 }
 
-void random_device::register_source(hw_rng* hwrng)
-{
-    s_hwrng = hwrng;
-}
-
 void randomdev_init()
 {
-    if (s_hwrng) {
-        new random_device();
-        debug("random: <%s> initialized\n", random_adaptor->ident);
-    }
+    new random_device();
+    debug("random: <%s> initialized\n", random_adaptor->ident);
 }
 
 }
