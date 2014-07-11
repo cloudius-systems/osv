@@ -14,16 +14,6 @@
 
 static std::atomic<unsigned> tests_total(0), tests_failed(0);
 
-struct thread_attr {
-    void* stack_begin;
-    size_t stack_size;
-    size_t guard_size;
-    bool detached;
-    cpu_set_t *cpuset;
-    sched::cpu *cpu;
-    thread_attr() : stack_begin{}, stack_size{1<<20}, guard_size{4096}, detached{false}, cpuset{nullptr}, cpu{nullptr} {}
-};
-
 void report(const char* name, bool passed)
 {
     static const char* status[] = { "FAIL", "PASS" };
