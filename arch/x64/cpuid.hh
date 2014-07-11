@@ -8,6 +8,8 @@
 #ifndef CPUID_HH_
 #define CPUID_HH_
 
+#include <string>
+
 namespace processor {
 
 struct features_type {
@@ -37,6 +39,7 @@ struct features_type {
 };
 
 extern const features_type& features();
+extern const std::string& features_str();
 
 }
 

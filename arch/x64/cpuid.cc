@@ -118,6 +118,36 @@ void process_cpuid(features_type& features)
 
 }
 
+const std::string& features_str()
+{
+    static std::string cpuid_str;
+    if (cpuid_str.size()) {
+        return cpuid_str;
+    }
+
+    for (unsigned i = 0; i < nr_cpuid_bits; ++i) {
+        if (features().*(cpuid_bits[i].flag)) {
+            cpuid_str += std::string(cpuid_bits[i].name) + std::string(" ");
+        }
+    }
+
+    // FIXME: Even though Xen does not have its features in cpuid, there has to
+    // be a better way to do it, by creating a string map directly from the xen
+    // PV features. But since we add features here very rarely, leave it be for now.
+    if (features().xen_clocksource) {
+        cpuid_str += std::string("xen_clocksource ");
+    }
+    if (features().xen_vector_callback) {
+        cpuid_str += std::string("xen_vector_callback ");
+    }
+    if (features().xen_pci) {
+        cpuid_str += std::string("xen_pci ");
+    }
+    cpuid_str.pop_back();
+
+    return cpuid_str;
+}
+
 features_type::features_type()
 {
     process_cpuid(*this);
