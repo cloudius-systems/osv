@@ -1329,6 +1329,45 @@ blkfront_detach(device_t dev)
     return 0;
 }
 
+static void
+xb_freeze(struct xb_softc *sc, unsigned xb_flag)
+{
+    if (xb_flag != XB_NONE && (sc->xb_flags & xb_flag) != 0)
+        return;
+
+    sc->xb_flags |= xb_flag;
+    sc->xb_qfrozen_cnt++;
+}
+
+static void
+xb_thaw(struct xb_softc *sc, unsigned xb_flag)
+{
+    if (xb_flag != XB_NONE && (sc->xb_flags & xb_flag) == 0)
+        return;
+
+    sc->xb_flags &= ~xb_flag;
+    sc->xb_qfrozen_cnt--;
+}
+
+static void
+xb_cm_freeze(struct xb_softc *sc, struct xb_command *cm, unsigned cm_flag)
+{
+    if ((cm->cm_flags & XB_CMD_FROZEN) != 0)
+        return;
+
+    cm->cm_flags |= XB_CMD_FROZEN | cm_flag;
+    xb_freeze(sc, XB_NONE);
+}
+
+static void
+xb_cm_thaw(struct xb_softc *sc, struct xb_command *cm)
+{
+    if ((cm->cm_flags & XB_CMD_FROZEN) == 0)
+        return;
+
+    cm->cm_flags &= ~XB_CMD_FROZEN;
+    xb_thaw(sc, XB_NONE);
+}
 
 static inline void
 flush_requests(struct xb_softc *sc)
@@ -1460,9 +1499,26 @@ xb_bio_command(struct xb_softc *sc)
             cm->operation = BLKIF_OP_READ;
             break;
         case BIO_WRITE:
-            /* FIXME / OSV: This will be bogus if barriers are not supported, but our FS does not commonly
-            / request it anyway */
-            cm->operation = (bp->bio_flags & BIO_ORDERED) ? BLKIF_OP_WRITE_BARRIER : BLKIF_OP_WRITE;
+            cm->operation = BLKIF_OP_WRITE;
+            if ((bp->bio_flags & BIO_ORDERED) != 0) {
+                if ((sc->xb_flags & XB_BARRIER) != 0) {
+                    cm->operation = BLKIF_OP_WRITE_BARRIER;
+                } else {
+                    /*
+                     * Single step this command.
+                     */
+                    cm->cm_flags |= XB_CMD_FREEZE;
+                    if (!TAILQ_EMPTY(&sc->cm_busy)) {
+                        /*
+                         * Wait for in-flight requests to
+                         * finish.
+                         */
+                        xb_freeze(sc, XB_WAIT_IDLE);
+                        xb_requeue_ready(cm);
+                        return nullptr;
+                    }
+                }
+            }
             break;
         case BIO_FLUSH:
             if ((sc->xb_flags & XB_FLUSH) != 0)
@@ -1490,9 +1546,7 @@ blkif_queue_request(struct xb_softc *sc, struct xb_command *cm)
     error = bus_dmamap_load(sc->xb_io_dmat, cm->map, cm->data, cm->datalen,
         blkif_queue_cb, cm, 0);
     if (error == EINPROGRESS) {
-        printf("EINPROGRESS\n");
-        sc->xb_flags |= XB_FROZEN;
-        cm->cm_flags |= XB_CMD_FROZEN;
+        xb_cm_freeze(sc, cm, XB_NONE);
         return (0);
     }
 
@@ -1677,8 +1731,9 @@ xb_startio(struct xb_softc *sc)
         return;
 
     while (RING_FREE_REQUESTS(&sc->ring) >= sc->max_request_blocks) {
-        if (sc->xb_flags & XB_FROZEN)
+        if (sc->xb_qfrozen_cnt != 0) {
             break;
+        }
 
         cm = xb_dequeue_ready(sc);
 
@@ -1687,6 +1742,14 @@ xb_startio(struct xb_softc *sc)
 
         if (cm == NULL)
             break;
+
+        if ((cm->cm_flags & XB_CMD_FREEZE) != 0) {
+            /*
+             * Single step command.  Future work is
+             * held off until this command completes.
+             */
+            xb_cm_freeze(sc, cm, XB_CMD_FREEZE);
+        }
 
         if ((error = blkif_queue_request(sc, cm)) != 0) {
             printf("blkif_queue_request returned %d\n", error);
@@ -1729,7 +1792,8 @@ blkif_int(void *_xsc)
 
         if (cm->operation == BLKIF_OP_READ)
             op = BUS_DMASYNC_POSTREAD;
-        else if (cm->operation == BLKIF_OP_WRITE)
+        else if ((cm->operation == BLKIF_OP_WRITE) ||
+            (cm->operation == BLKIF_OP_WRITE_BARRIER))
             op = BUS_DMASYNC_POSTWRITE;
         else
             op = 0;
@@ -1741,7 +1805,7 @@ blkif_int(void *_xsc)
          * being freed as well.  It's a cheap assumption even when
          * wrong.
          */
-        sc->xb_flags &= ~XB_FROZEN;
+        xb_cm_thaw(sc, cm);
 
         /*
          * Directly call the i/o complete routine to save an
@@ -1765,6 +1829,10 @@ blkif_int(void *_xsc)
             goto again;
     } else {
         sc->ring.sring->rsp_event = i + 1;
+    }
+
+    if (TAILQ_EMPTY(&sc->cm_busy)) {
+        xb_thaw(sc, XB_WAIT_IDLE);
     }
 
     xb_startio(sc);

@@ -125,6 +125,8 @@ struct xb_command {
 #define XB_ON_XBQ_BUSY      (1<<4)
 #define XB_ON_XBQ_COMPLETE  (1<<5)
 #define XB_ON_XBQ_MASK      ((1<<2)|(1<<3)|(1<<4)|(1<<5))
+#define XB_CMD_FREEZE       (1<<6)
+
     bus_dmamap_t        map;
     uint64_t        id;
     grant_ref_t        *sg_refs;
@@ -166,11 +168,15 @@ struct xb_softc {
     struct disk        *xb_disk;        /* disk params */
     int            xb_unit;
     int            xb_flags;
+#define XB_NONE         (0)
 #define XB_OPEN         (1 << 0)    /* drive is open (can't shut down) */
 #define XB_BARRIER      (1 << 1)    /* backend supports barriers */
 #define XB_READY        (1 << 2)    /* Is ready */
 #define XB_FROZEN       (1 << 3)    /* Waiting for resources */
 #define XB_FLUSH        (1 << 4)    /* backend supports flushes */
+#define XB_WAIT_IDLE    (1 << 6) // no new work until outstanding work completes
+
+    int            xb_qfrozen_cnt = 0;
     int            vdevice;
     int            connected;
     u_int            ring_pages;
