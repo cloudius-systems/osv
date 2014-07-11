@@ -69,9 +69,6 @@ static int if_ioctl(struct ifnet* ifp, u_long command, caddr_t data)
 
     int error = 0;
     switch(command) {
-    case SIOCSIFMTU:
-        net_d("SIOCSIFMTU");
-        break;
     case SIOCSIFFLAGS:
         net_d("SIOCSIFFLAGS");
         /* Change status ifup, ifdown */

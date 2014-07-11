@@ -78,9 +78,6 @@ static int if_ioctl(struct ifnet *ifp, u_long command, caddr_t data)
 
     int error = 0;
     switch(command) {
-    case SIOCSIFMTU:
-        vmxnet3_d("SIOCSIFMTU");
-        break;
     case SIOCSIFFLAGS:
         vmxnet3_d("SIOCSIFFLAGS");
         /* Change status ifup, ifdown */
