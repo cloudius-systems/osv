@@ -277,9 +277,10 @@ xb_strategy(struct bio *bp)
     }
 
     if ((bp->bio_cmd == BIO_FLUSH) &&
-        !((sc->xb_flags & XB_BARRIER) || (sc->xb_flags & XB_FLUSH))) {
-        xb_quiesce(sc);
-        biodone(bp, true);
+            !((sc->xb_flags & XB_BARRIER) || (sc->xb_flags & XB_FLUSH))) {
+        bp->bio_error = EOPNOTSUPP;
+        bp->bio_resid = bp->bio_bcount;
+        biodone(bp, false);
         return;
     }
 
