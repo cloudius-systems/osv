@@ -1,0 +1,50 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "http://{{Host}}",
+    "resourcePath": "/hardware",
+    "produces": [
+        "application/json",
+        "application/xml"
+    ],
+    "apis": [
+        {
+            "path": "/hardware/processor/flags",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "list all present processor features",
+                    "notes": "",
+                    "responseClass": "string",
+                    "nickname" : "processorFeatures",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/hardware/processor/count",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "list the current number of processors",
+                    "notes": "",
+                    "responseClass": "long",
+                    "nickname" : "processorCount",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        }
+    ]
+}

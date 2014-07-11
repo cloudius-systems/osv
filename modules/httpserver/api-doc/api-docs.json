@@ -25,6 +25,11 @@
 		{
             "path": "/../listings/trace.json",
             "description": "trace API"
+        },
+        {
+            "path": "/../listings/hardware.json",
+            "description": "Hardware management API"
         }
+
     ]
 }
