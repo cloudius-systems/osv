@@ -33,6 +33,7 @@ struct cpuid_bit {
     bool features_type::*flag;
     unsigned subleaf;
     signature* sign;
+    const char *name;
 };
 
 signature kvm_signature = {
@@ -42,25 +43,25 @@ signature kvm_signature = {
 typedef features_type f;
 
 cpuid_bit cpuid_bits[] = {
-    { 1, 'c', 0, &f::sse3 },
-    { 1, 'c', 9, &f::ssse3 },
-    { 1, 'c', 13, &f::cmpxchg16b },
-    { 1, 'c', 19, &f::sse4_1 },
-    { 1, 'c', 20, &f::sse4_2 },
-    { 1, 'c', 21, &f::x2apic },
-    { 1, 'c', 24, &f::tsc_deadline },
-    { 1, 'c', 27, &f::xsave },
-    { 1, 'c', 28, &f::avx },
-    { 1, 'c', 30, &f::rdrand },
-    { 1, 'd', 19, &f::clflush },
-    { 7, 'b', 0, &f::fsgsbase, 0 },
-    { 7, 'b', 9, &f::repmovsb, 0 },
-    { 0x80000001, 'd', 26, &f::gbpage },
-    { 0x80000007, 'd', 8, &f::invariant_tsc },
-    { 0x40000001, 'a', 0, &f::kvm_clocksource, 0, &kvm_signature },
-    { 0x40000001, 'a', 3, &f::kvm_clocksource2, 0, &kvm_signature },
-    { 0x40000001, 'a', 6, &f::kvm_pv_eoi, 0, &kvm_signature },
-    { 0x40000001, 'a', 24, &f::kvm_clocksource_stable, 0, &kvm_signature },
+    { 1, 'c', 0, &f::sse3, 0, nullptr, "sse3" },
+    { 1, 'c', 9, &f::ssse3, 0, nullptr, "sse3" },
+    { 1, 'c', 13, &f::cmpxchg16b, 0, nullptr, "cmpxchg16b" },
+    { 1, 'c', 19, &f::sse4_1, 0, nullptr, "sse4.1" },
+    { 1, 'c', 20, &f::sse4_2, 0, nullptr, "sse4.2" },
+    { 1, 'c', 21, &f::x2apic, 0, nullptr, "x2apic" },
+    { 1, 'c', 24, &f::tsc_deadline, 0, nullptr, "tsc_deadline" },
+    { 1, 'c', 27, &f::xsave, 0, nullptr, "xsave" },
+    { 1, 'c', 28, &f::avx, 0, nullptr, "avx" },
+    { 1, 'c', 30, &f::rdrand, 0, nullptr, "rdrand" },
+    { 1, 'd', 19, &f::clflush, 0, nullptr, "clflush" },
+    { 7, 'b', 0, &f::fsgsbase, 0, nullptr, "fgsbase" },
+    { 7, 'b', 9, &f::repmovsb, 0, nullptr, "repmovsb" },
+    { 0x80000001, 'd', 26, &f::gbpage, 0, nullptr, "gbpage" },
+    { 0x80000007, 'd', 8, &f::invariant_tsc, 0, nullptr, "invariant_tsc"},
+    { 0x40000001, 'a', 0, &f::kvm_clocksource, 0, &kvm_signature, "kvmclock" },
+    { 0x40000001, 'a', 3, &f::kvm_clocksource2, 0, &kvm_signature, "kvmclock2" },
+    { 0x40000001, 'a', 6, &f::kvm_pv_eoi, 0, &kvm_signature, "kvm_pv_eoi" },
+    { 0x40000001, 'a', 24, &f::kvm_clocksource_stable, 0, &kvm_signature, "kvmclock_stable" },
 };
 
 constexpr unsigned nr_cpuid_bits = sizeof(cpuid_bits) / sizeof(*cpuid_bits);
