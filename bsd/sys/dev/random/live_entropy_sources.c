@@ -126,7 +126,7 @@ live_entropy_source_handler(SYSCTL_HANDLER_ARGS)
 }
 #endif
 
-static __unused void
+void
 live_entropy_sources_init(void *unused)
 {
 #ifndef __OSV__
@@ -188,7 +188,7 @@ live_entropy_sources_feed(int rounds, event_proc_f entropy_processor)
 	sx_sunlock(&les_lock);
 }
 
-static __unused void
+void
 live_entropy_sources_deinit(void *unused)
 {
 

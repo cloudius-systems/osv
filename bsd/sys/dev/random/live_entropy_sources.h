@@ -46,6 +46,8 @@ struct live_entropy_sources {
 
 extern struct mtx live_mtx;
 
+void live_entropy_sources_init(void *);
+void live_entropy_sources_deinit(void *);
 void live_entropy_source_register(struct random_hardware_source *);
 void live_entropy_source_deregister(struct random_hardware_source *);
 void live_entropy_sources_feed(int, event_proc_f);

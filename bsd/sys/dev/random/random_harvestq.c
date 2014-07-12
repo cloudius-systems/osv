@@ -239,6 +239,8 @@ random_harvestq_init(event_proc_f cb)
 	int error, i;
 	struct harvest *np;
 
+	live_entropy_sources_init(NULL);
+
 	/* Initialise the harvest fifos */
 
 	/* Contains the currently unused event structs. */
@@ -283,6 +285,8 @@ random_harvestq_deinit(void)
 	harvestfifo.count = 0;
 
 	mtx_destroy(&harvest_mtx);
+
+	live_entropy_sources_deinit(NULL);
 }
 
 /*
