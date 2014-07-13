@@ -765,7 +765,12 @@ class wait_object
 class wait_guard {
 public:
     wait_guard(thread* t) : _t(t) { t->prepare_wait(); }
-    ~wait_guard() { _t->stop_wait(); }
+    ~wait_guard() { stop(); }
+    void stop() {
+        if (_t) {
+            _t->stop_wait(); _t = nullptr;
+        }
+    }
 private:
     thread* _t;
 };
@@ -851,8 +856,12 @@ class interruptible
 public:
     static void prepare(thread* target_thread) throw()
         { target_thread->interrupted(false); }
-    static void check(thread* target_thread) throw(int)
-        { if(target_thread->interrupted()) throw int(EINTR); }
+    static void check(thread* target_thread, wait_guard& wg) throw(int) {
+        if(target_thread->interrupted()) {
+            wg.stop();
+            throw int(EINTR);
+        }
+    }
 };
 
 class noninterruptible
@@ -860,7 +869,7 @@ class noninterruptible
 public:
     static void prepare(thread* target_thread) throw()
         {}
-    static void check(thread* target_thread) throw()
+    static void check(thread* target_thread, wait_guard& wg) throw()
         {}
 };
 
@@ -882,7 +891,7 @@ void thread::do_wait_until(Mutex& mtx, Pred pred)
                 return;
             }
 
-            IntrStrategy::check(me);
+            IntrStrategy::check(me, waiter);
 
             release(mtx);
             me->wait();
