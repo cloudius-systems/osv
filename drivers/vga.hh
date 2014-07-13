@@ -44,12 +44,6 @@ private:
         OFFSET_LIMIT = 178,
         NCOLS = 80,
         NROWS = 25,
-        VGA_VENDOR_ID_VBOX = 0x80EE,
-        VGA_DEVICE_ID_VBOX = 0xBEEF,
-        VGA_VENDOR_ID_VMW = 0x15AD,
-        VGA_DEVICE_ID_VMW = 0x0405,
-        VGA_VENDOR_ID_QEMU = 0x1013,
-        VGA_DEVICE_ID_QEMU = 0x00B8,
     };
     pci::device& _pci_dev;
     unsigned _col = 0;

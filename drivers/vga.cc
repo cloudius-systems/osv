@@ -7,6 +7,7 @@
 
 #include "vga.hh"
 #include "console.hh"
+#include "pci-function.hh"
 #include <osv/mmu.hh>
 
 namespace console {
@@ -91,10 +92,8 @@ void VGAConsole::push_queue(const char *str, size_t len)
 hw_driver* VGAConsole::probe(hw_device* hw_dev)
 {
     if (auto pci_dev = dynamic_cast<pci::device*>(hw_dev)) {
-        auto id = pci_dev->get_id();
-        if (id == hw_device_id(VGA_VENDOR_ID_VBOX, VGA_DEVICE_ID_VBOX) ||
-            id == hw_device_id(VGA_VENDOR_ID_VMW, VGA_DEVICE_ID_VMW) ||
-            id == hw_device_id(VGA_VENDOR_ID_QEMU, VGA_DEVICE_ID_QEMU)) {
+        auto base_class = pci_dev->get_base_class_code();
+        if (base_class == pci::function::PCI_CLASS_DISPLAY) {
             return new VGAConsole(*pci_dev);
         }
     }
