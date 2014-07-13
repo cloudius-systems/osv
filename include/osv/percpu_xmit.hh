@@ -296,23 +296,34 @@ public:
             // because otherwise the producer may see the "old" value of the
             // PENDING state and won't wake us up.
             //
-            clear_pending();
+            // However since the StoreLoad memory barrier is expensive we'll
+            // first perform a "weak" (not ordered) clearing and only if
+            // _mg.pop() returns false we'll put an appropriate memory barrier
+            // and check the _mg.pop() again.
+            //
+            clear_pending_weak();
 
             // Check if there are elements in the heap
             if (!_mg.pop(xmit_it)) {
-                // Wake all unwoken waiters before going to sleep
-                wake_waiters_all();
 
-                // We are going to sleep - release the HW channel
-                unlock_running();
+                std::atomic_thread_fence(std::memory_order_seq_cst);
 
-                sched::thread::wait_until([this] { return has_pending(); });
+                if (!_mg.pop(xmit_it)) {
 
-                lock_running();
+                    // Wake all unwoken waiters before going to sleep
+                    wake_waiters_all();
+
+                    // We are going to sleep - release the HW channel
+                    unlock_running();
+
+                    sched::thread::wait_until([this] { return has_pending(); });
+
+                    lock_running();
 
 #ifdef DEBUG_VIRTIO_TX
-                _txq->stats.tx_worker_wakeups++;
+                    _txq->stats.tx_worker_wakeups++;
 #endif
+                }
             }
 
             while (_mg.pop(xmit_it)) {
@@ -438,8 +449,9 @@ private:
     bool test_and_set_pending() {
         return _check_empty_queues.exchange(true, std::memory_order_acq_rel);
     }
-    void clear_pending() {
-        _check_empty_queues.store(false, std::memory_order_release);
+
+    void clear_pending_weak() {
+        _check_empty_queues.store(false, std::memory_order_relaxed);
     }
 
 private:
