@@ -36,6 +36,7 @@ public:
     static hw_driver* probe(hw_device* dev);
 private:
     static constexpr int SECTOR_SIZE = 512;
+    static constexpr u8 PRIMARY_MASTER = 0xe0 | (0<<4);
 
     enum ide_register_base {
         PORT0 = 0x1f0,

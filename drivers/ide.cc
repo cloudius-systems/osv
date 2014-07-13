@@ -181,7 +181,10 @@ hw_driver* ide_drive::probe(hw_device* dev)
             sched::thread::sleep(std::chrono::nanoseconds(400));
 
             /* Select primary master */
-            reg_writeb(PORT0, REG_HDDEVSEL, 0xe0 | (0<<4));
+            reg_writeb(PORT0, REG_HDDEVSEL, PRIMARY_MASTER);
+            auto sel = reg_readb(PORT0, REG_HDDEVSEL);
+            if (sel != PRIMARY_MASTER) /* No drive */
+                return nullptr;
 
             /* Disable intterupt for primary master/slave */
             reg_writeb(PORT0, REG_CONTROL, CONTROL_NIEN);
@@ -189,8 +192,6 @@ hw_driver* ide_drive::probe(hw_device* dev)
 
             /* Send CMD_IDENTIFY */
             reg_writeb(PORT0, REG_COMMAND, CMD_IDENTIFY);
-            if (reg_readb(PORT0, REG_STATUS) == 0) /* No drive */
-                return nullptr;
             return new ide_drive(*pci_dev);
         }
     }
@@ -221,7 +222,7 @@ ide_drive::start(uint8_t cmd, u32 sector, unsigned dev, void *data, u8 cnt, bool
         reg_writeb(PORT0, REG_LBA2, (sector >> 16) & 0xff);
         /* Select primary master */
         reg_writeb(PORT0, REG_HDDEVSEL,
-            0xe0 | (0<<4) | ((sector >> 24) & 0x0f));
+            PRIMARY_MASTER | ((sector >> 24) & 0x0f));
     }
     switch (cmd) {
     case BIO_READ:
