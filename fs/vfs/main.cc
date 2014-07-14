@@ -73,6 +73,7 @@
 #include "libc/libc.hh"
 
 #include <mntent.h>
+#include <sys/mman.h>
 
 using namespace std;
 
@@ -1731,6 +1732,72 @@ int chown(const char *path, uid_t owner, gid_t group)
     WARN_STUBBED();
     return 0;
 }
+
+extern "C"
+int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
+{
+    struct file *in_fp;
+    struct file *out_fp;
+    fileref in_f{fileref_from_fd(in_fd)};
+    fileref out_f{fileref_from_fd(out_fd)};
+
+    if (!in_f || !out_f) {
+        return libc_error(EINVAL);
+    }
+
+    in_fp = in_f.get();
+    out_fp = out_f.get();
+
+    if (!in_fp->f_dentry) {
+        return libc_error(EINVAL);
+    }
+
+    if (!(in_fp->f_flags & FREAD)) {
+        return libc_error(EBADF);
+    }
+
+    if (out_fp->f_type & DTYPE_VNODE) {
+        if (!out_fp->f_dentry) {
+            return libc_error(EINVAL);
+	} else if (!(out_fp->f_flags & FWRITE)) {
+            return libc_error(EBADF);
+	}
+    }
+
+    off_t offset ;
+
+    if (_offset != nullptr) {
+        offset = *_offset;
+    } else {
+        /* if _offset is NULL, we need to read from the present position of in_fd */
+        offset = lseek(in_fd, 0, SEEK_CUR);
+    }
+
+    size_t bytes_to_mmap = count + (offset % PAGESIZE);
+    off_t offset_for_mmap =  (offset / PAGESIZE) * PAGESIZE;
+
+    char *src = static_cast<char *>(mmap(NULL, bytes_to_mmap, PROT_READ, MAP_SHARED, in_fd, offset_for_mmap));
+
+    if (src == MAP_FAILED) {
+        return -1;
+    }
+
+    auto ret = write(out_fd, src + (offset % PAGESIZE), count);
+
+    if (ret < 0) {
+        return libc_error(errno);
+    } else if(_offset == NULL) {
+        lseek(in_fd, ret, SEEK_CUR);
+    } else {
+        *_offset += ret;
+    }
+
+    assert(munmap(src, count) == 0);
+
+    return ret;
+}
+
+LFS64(sendfile);
 
 NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
