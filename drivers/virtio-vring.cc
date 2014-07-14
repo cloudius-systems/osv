@@ -269,6 +269,7 @@ namespace virtio {
 
         if (_dev->get_event_idx_cap()) {
 
+            std::atomic_thread_fence(std::memory_order_seq_cst);
             kicked = ((u16)(_avail->_idx.load(std::memory_order_relaxed) - _avail_event->load(std::memory_order_relaxed) - 1) < _avail_added_since_kick);
 
         } else if (_used->notifications_disabled())
