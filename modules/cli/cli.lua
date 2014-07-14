@@ -23,7 +23,7 @@ function cli(line)
     filename = command_filename(command)
     if file_exists(filename) then
       local cmd = dofile(filename)
-      cmd.run(split(arguments))
+      cmd.main(split(arguments))
     else
       error(command .. ": command not found")
     end

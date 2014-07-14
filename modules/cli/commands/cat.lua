@@ -1,15 +1,17 @@
-return {
-  run = function(args)
-    local optarg, optind = alt_getopt.get_opts(args, "al", {})
-    assert(optarg,optind)
+local cmd = {}
 
-    local f, err = io.open(args[optind], "r")
-    assert(f, err)
+cmd.main = function(args)
+  local optarg, optind = alt_getopt.get_opts(args, "al", {})
+  assert(optarg,optind)
 
-    for line in f:lines() do
-      print(line)
-    end
+  local f, err = io.open(args[optind], "r")
+  assert(f, err)
 
-    f:close()
+  for line in f:lines() do
+    print(line)
   end
-}
+
+  f:close()
+end
+
+return cmd

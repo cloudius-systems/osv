@@ -11,28 +11,30 @@ Display a line of text
 ]])
 end
 
-return {
-  run = function(args)
-    local line = {}
-    local with_newline = true
+local cmd = {}
 
-    local optarg, optind = alt_getopt.get_opts(args, "n", long_opts)
-    assert(optarg,optind)
+cmd.main = function(args)
+  local line = {}
+  local with_newline = true
 
-    for k, v in pairs(optarg) do
-      if k == 'n' then
-        with_newline = false
-      end
+  local optarg, optind = alt_getopt.get_opts(args, "n", long_opts)
+  assert(optarg,optind)
 
-      if k == 'help' then
-        usage()
-      end
+  for k, v in pairs(optarg) do
+    if k == 'n' then
+      with_newline = false
     end
 
-    for i = optind,#args do
-      table.insert(line, args[i])
+    if k == 'help' then
+      usage()
     end
-
-    io.write(table.concat(line, " ") .. (with_newline and "\n" or ""))
   end
-}
+
+  for i = optind,#args do
+    table.insert(line, args[i])
+  end
+
+  io.write(table.concat(line, " ") .. (with_newline and "\n" or ""))
+end
+
+return cmd

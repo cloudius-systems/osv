@@ -10,17 +10,8 @@ Editline + Lua
 The shell is based on [editline](http://thrysoee.dk/editline/) and uses Lua to
 run the commands. The commands, therefore, will be Lua scripts.
 
-Commands as Lua modules are expected to return a table with a `run` function.
-For example:
-
-```
-# Sample command
-return {
-  run = function()
-    print("I am a sample command")
-  end
-}
-```
+Commands as Lua modules are expected to return a table with a `main` function.
+For example, see `commands/hello.lua`.
 
 Wrapper
 -------
