@@ -32,6 +32,11 @@ valid_vars = {'string': 'std::string', 'int': 'int', 'double': 'double',
 current_file = ''
 
 spacing = "    "
+def getitem(d, key, name):
+    if key in d:
+        return d[key]
+    else:
+        raise Exception("'" + key + "' not found in " + name)
 
 def fprint(f, *args):
     for arg in args:
@@ -175,12 +180,18 @@ def create_c_file(data, cfile_name, hfile_name, init_method, api_name):
     open_namespace(cfile, "httpserver")
     open_namespace(cfile)
     fprint(cfile, init_method + "()\n{")
-
-    for item in data["apis"]:
+    for i, item in enumerate(data["apis"]):
         if "operations" in item:
-            trace_verbose("path: " + item["path"])
-            for oper in item["operations"]:
-                add_path(cfile, item["path"], oper)
+            try:
+                path = item["path"]
+                trace_verbose("path: " + path)
+                for oper in item["operations"]:
+                    add_path(cfile, path, oper)
+            except KeyError as e:
+                raise Exception("Missing attribute '" + e.message + "' in apis[" + str(i) + "] path " + path)
+            except:
+                type, value, tb = sys.exc_info()
+                raise Exception(value.message + " in apis[" + str(i) + "] path " + path)
     fprint(cfile, "}")
     for item in data["apis"]:
         if "operations" in item:
@@ -205,12 +216,14 @@ def create_c_file(data, cfile_name, hfile_name, init_method, api_name):
 def is_model_valid(name, model):
     if name in valid_vars:
         return ""
-    properties = model[name]["properties"]
+    properties = getitem(model[name], "properties", name)
     for var in properties:
-        type = properties[var]["type"]
+        type = getitem(properties[var], "type", name + ":" + var)
         if type == "array":
-            type = properties[var]["items"]["type"]
+            type = getitem(getitem(properties[var], "items", name + ":" + var), "type", name + ":" + var + ":items")
         if type not in valid_vars:
+            if type not in model:
+                raise Exception("Unknown type '" + type + "' in Model '" + name + "'")
             return type
     valid_vars[name] = name
     return ""
@@ -226,7 +239,7 @@ def resolve_model_order(data):
             stack = [model_name]
             while not resolved:
                 if missing in visited:
-                    trace_err ("Cyclic dependency found: ", missing)
+                    raise Exception("Cyclic dependency found: " + missing)
                 missing_depends = is_model_valid(missing, data)
                 if missing_depends == '':
                     if missing not in models:
@@ -304,7 +317,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
     for item in data["apis"]:
         if "operations" in item:
             for oper in item["operations"]:
-                fprint(hfile, 'static const path_holder ', oper["nickname"], '("', oper["nickname"], '");')
+                fprint(hfile, 'static const path_holder ', getitem(oper, "nickname", oper), '("', oper["nickname"], '");')
                 if "parameters" in oper:
                     for param in oper["parameters"]:
                         if "enum" in param:
@@ -327,22 +340,31 @@ def create_h_file(data, hfile_name, api_name, init_method):
 def parse_file(param, combined):
     global current_file
     trace_verbose("parsing ", param, " file")
-    json_data = open(param)
-    data = json.load(json_data)
-    json_data.close()
-    base_file_name = get_base_name(param)
-    current_file = base_file_name
-    hfile_name = base_file_name + ".hh"
-    api_name = base_file_name.replace('.', '_')
-    init_method = "void " + api_name + "_init_path"
-    trace_verbose("creating ", hfile_name)
+    try:
+        json_data = open(param)
+        data = json.load(json_data)
+        json_data.close()
+    except:
+        type, value, tb = sys.exc_info()
+        print "Bad formatted JSON file '" + param + "' error ", value.message
+        sys.exit(-1)
+    try:
+        base_file_name = get_base_name(param)
+        current_file = base_file_name
+        hfile_name = base_file_name + ".hh"
+        api_name = base_file_name.replace('.', '_')
+        init_method = "void " + api_name + "_init_path"
+        trace_verbose("creating ", hfile_name)
 
-    cfile_name = config.outdir + "/" + base_file_name + ".cc"
-    if (combined):
-        fprint(combined, '#include "', base_file_name, ".cc", '"')
-    create_c_file(data, cfile_name, hfile_name, init_method, api_name)
-    create_h_file(data, hfile_name, api_name, init_method)
-
+        cfile_name = config.outdir + "/" + base_file_name + ".cc"
+        if (combined):
+            fprint(combined, '#include "', base_file_name, ".cc", '"')
+        create_c_file(data, cfile_name, hfile_name, init_method, api_name)
+        create_h_file(data, hfile_name, api_name, init_method)
+    except:
+        type, value, tb = sys.exc_info()
+        print "Error while parsing JSON file '" + param + "' error ", value.message
+        sys.exit(-1)
 
 if "indir" in config and config.indir != '':
     combined = open(config.combined, "w")
