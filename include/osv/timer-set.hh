@@ -12,6 +12,7 @@
 #include <limits>
 #include <bitset>
 #include <osv/bitset-iter.hh>
+#include <osv/debug.hh>
 #include <boost/intrusive/list.hpp>
 
 namespace bi = boost::intrusive;
@@ -159,7 +160,9 @@ public:
     {
         auto timestamp = get_timestamp(now);
 
-        assert(timestamp >= _last);
+        if (timestamp < _last) {
+            abort("%ld < %ld, now=%ld\n", timestamp, _last, Clock::now().time_since_epoch().count());
+        }
 
         auto index = get_index(timestamp);
 
