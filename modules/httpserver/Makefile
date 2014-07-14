@@ -74,6 +74,6 @@ swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib
 
 swagger-ui/.git:
-	cd ../.. && git submodule update --init -f httpserver/swagger-ui
+	cd ../.. && git submodule update --init -f modules/httpserver/swagger-ui
 
 .SECONDARY:
