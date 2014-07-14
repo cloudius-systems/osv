@@ -16,6 +16,10 @@ def read_file(path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ami-id", default="ami-000000")
+    parser.add_argument("--ami-launch-index", default="1")
+    parser.add_argument("--reservation-id", default="r-00000000")
+    parser.add_argument("--local-ipv4", default="127.0.0.1")
+    parser.add_argument("--public-hostname", default="localhost")
     parser.add_argument("-u", "--user-data")
     parser.add_argument("-f", "--user-data-from-file")
     args = parser.parse_args()
@@ -25,6 +29,14 @@ if __name__ == "__main__":
         os.makedirs(dir + '/latest/meta-data')
 
         write_file(dir + "/latest/meta-data/ami-id", args.ami_id)
+
+        write_file(dir + "/latest/meta-data/ami-launch-index", args.ami_launch_index)
+
+        write_file(dir + "/latest/meta-data/reservation-id", args.reservation_id)
+
+        write_file(dir + "/latest/meta-data/local-ipv4", args.local_ipv4)
+
+        write_file(dir + "/latest/meta-data/public-hostname", args.public_hostname)
 
         if args.user_data_from_file:
             if args.user_data:
