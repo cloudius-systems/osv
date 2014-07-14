@@ -14,7 +14,6 @@
 #include <functional>
 #include <unordered_map>
 #include <osv/rcu.hh>
-#include <osv/rcu-hashtable.hh>
 #include <bsd/porting/netport.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/ip.h>
@@ -121,22 +120,10 @@ public:
 private:
     net_channel* classify_ipv4_tcp(mbuf* m);
 private:
-    struct item {
-        item(const ipv4_tcp_conn_id& key, net_channel* chan) : key(key), chan(chan) {}
-        ipv4_tcp_conn_id key;
-        net_channel* chan;
-    };
-    struct item_hash : private std::hash<ipv4_tcp_conn_id> {
-        size_t operator()(const item& i) const { return std::hash<ipv4_tcp_conn_id>::operator()(i.key); }
-    };
-    struct key_item_compare {
-        bool operator()(const ipv4_tcp_conn_id& key, const item& item) const {
-            return key == item.key;
-        }
-    };
-    using ipv4_tcp_channels = osv::rcu_hashtable<item, item_hash>;
+    using ipv4_tcp_channels = std::unordered_map<ipv4_tcp_conn_id, net_channel*>;
     mutex _mtx;
-    ipv4_tcp_channels _ipv4_tcp_channels;
+    // FIXME: use a fine-grained rcu hash table
+    osv::rcu_ptr<ipv4_tcp_channels, osv::rcu_deleter<ipv4_tcp_channels>> _ipv4_tcp_channels;
 };
 
 #endif /* NETCHANNEL_HH_ */
