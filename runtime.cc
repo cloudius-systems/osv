@@ -90,11 +90,15 @@ static void print_backtrace(void)
 
     len = backtrace_safe(addrs, 128);
 
-    /* Skip abort(const char *) and abort(void)  */
-    for (int i = 2; i < len; i++) {
+    /* Start with i=1 to skip abort(const char *)  */
+    for (int i = 1; i < len; i++) {
         char name[1024];
         void *addr = addrs[i] - INSTR_SIZE_MIN;
         osv::lookup_name_demangled(addr, name, sizeof(name));
+        if (strncmp(name, "abort+", 6) == 0) {
+            // Skip abort() (which called abort(const char*) already skipped
+            continue;
+        }
         debug_ll("0x%016lx <%s>\n", addr, name);
     }
 }
