@@ -156,7 +156,7 @@ void do_reads(osv::rcu_hashtable<test_element>& ht,
 
 BOOST_AUTO_TEST_CASE(test_rcu_hashtable) {
     static const size_t range = 10000;
-    static const size_t iterations = CONF_debug_memory ? 1000000 : 100000000;
+    static const size_t iterations = CONF_debug_memory ? 1000000 : 10000000;
     static const size_t nr_threads = 8;
     static const size_t max_size = CONF_debug_memory ? 50000 : 50000000;
     {
