@@ -14,9 +14,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <osv/poll.h>
-#include <osv/debug.hh>
-#include <osv/sched.hh>
+
+#include <thread>
+
+/* To compile on Linux: g++ tests/tst-sendfile.cc -Wall -lpthread -std=c++0x */
 
 static int tests = 0, fails = 0;
 
@@ -86,34 +87,34 @@ int test_sendfile_on_filecopy(off_t *offset, size_t count)
 
 int test_sendfile_on_socket(off_t *offset, size_t count)
 {
-    int listener_result;
+    int listener_result = 0;
     off_t last_position = offset == NULL ? lseek(testfile_readfd, 0 , SEEK_CUR) : *offset;
 
-    sched::thread *listener = new sched::thread([&] {
-	listener_result = 0;
-        char *dst = (char *) malloc(count);
-	int listenfd = socket(AF_INET, SOCK_STREAM,  0);
-	struct sockaddr_in server_addr,client_addr;
-        socklen_t client_len;
+    char *dst = (char *) malloc(count);
+    int listen_fd = socket(AF_INET, SOCK_STREAM,  0);
+    struct sockaddr_in listener_addr,client_addr;
+    socklen_t client_len;
 
-        bzero(&server_addr,sizeof(server_addr));
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.s_addr=htonl(INADDR_ANY);
-	server_addr.sin_port=htons(1337);
+    bzero(&listener_addr,sizeof(listener_addr));
+    listener_addr.sin_family = AF_INET;
+    listener_addr.sin_addr.s_addr=htonl(INADDR_ANY);
+    listener_addr.sin_port=htons(1337);
 
-	int optval = 1;
-	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
+    int optval = 1;
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
 
-	if (bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
-	    printf("could not bind. error = %s\n", strerror(errno));
-	    return;
-	}
-        if (listen(listenfd, 1) == -1) {
-	    printf("could not listen. error = %s\n", strerror(errno));
-	    return;
-	}
+    if (bind(listen_fd, (struct sockaddr *)&listener_addr, sizeof(listener_addr)) == -1) {
+	printf("could not bind. error = %s\n", strerror(errno));
+	return -1;
+    }
+    if (listen(listen_fd, 1) == -1) {
+	printf("could not listen. error = %s\n", strerror(errno));
+	return -1;
+    }
 
-	int connfd = accept(listenfd, (struct sockaddr *)&client_addr, &client_len);
+    std::thread *listener = new std::thread([&] {
+
+	int connfd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
 
 	if (connfd == -1) {
 	    printf("could not accept. error = %s\n", strerror(errno));
@@ -132,20 +133,17 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
 	    }
 	}
 	close(connfd);
-	close(listenfd);
+	close(listen_fd);
     });
 
-    listener->start();
-    usleep(200);
-
     int write_fd = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in listener_thread;
-    bzero(&listener_thread, sizeof(listener_thread));
-    listener_thread.sin_family = AF_INET;
-    listener_thread.sin_addr.s_addr=inet_addr("127.0.0.1");
-    listener_thread.sin_port=htons(1337);
+    struct sockaddr_in listener_server;
+    bzero(&listener_server, sizeof(listener_server));
+    listener_server.sin_family = AF_INET;
+    listener_server.sin_addr.s_addr=inet_addr("127.0.0.1");
+    listener_server.sin_port=htons(1337);
 
-    if (connect(write_fd, (struct sockaddr *)&listener_thread, sizeof(listener_thread)) < 0) {
+    if (connect(write_fd, (struct sockaddr *)&listener_server, sizeof(listener_server)) < 0) {
         return -1;
     }
     int ret = sendfile(write_fd, testfile_readfd, offset, count);
@@ -209,12 +207,12 @@ int main()
 
     /* force sendfile to fail in rest of test cases */
     ret = sendfile(100, testfile_readfd, NULL, 10);
-    report(ret == -1 && errno == EINVAL, "test for bad out_fd");
+    report(ret == -1 && errno == EBADF, "test for bad out_fd");
 
-    int write_fd = open("temp_file", O_WRONLY|O_CREAT);
+    int write_fd = open("temp_file", O_WRONLY|O_CREAT, 0755);
     report(write_fd > 0, "open dummy testfile in write mode");
     ret = sendfile(write_fd, 100, NULL, 100);
-    report(ret == -1 && errno == EINVAL, "test for bad in_fd");
+    report(ret == -1 && errno == EBADF, "test for bad in_fd");
     report(close(write_fd) == 0, "close the dummy testfile");
 
     write_fd = open("temp_file", O_RDONLY);
