@@ -183,6 +183,8 @@ class Guest(SupervisedProcess):
         for rule in forward:
             args.extend(['--forward', 'tcp:%s::%s' % rule])
 
+        args.extend(['--unsafe-cache'])
+
         SupervisedProcess.__init__(self, [run_script] + args,
             show_output=_verbose_output,
             show_output_on_error=show_output_on_error)
