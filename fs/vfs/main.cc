@@ -1742,14 +1742,14 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
     fileref out_f{fileref_from_fd(out_fd)};
 
     if (!in_f || !out_f) {
-        return libc_error(EINVAL);
+        return libc_error(EBADF);
     }
 
     in_fp = in_f.get();
     out_fp = out_f.get();
 
     if (!in_fp->f_dentry) {
-        return libc_error(EINVAL);
+        return libc_error(EBADF);
     }
 
     if (!(in_fp->f_flags & FREAD)) {
@@ -1758,7 +1758,7 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 
     if (out_fp->f_type & DTYPE_VNODE) {
         if (!out_fp->f_dentry) {
-            return libc_error(EINVAL);
+            return libc_error(EBADF);
 	} else if (!(out_fp->f_flags & FWRITE)) {
             return libc_error(EBADF);
 	}
@@ -1773,10 +1773,10 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
         offset = lseek(in_fd, 0, SEEK_CUR);
     }
 
-    size_t bytes_to_mmap = count + (offset % PAGESIZE);
-    off_t offset_for_mmap =  (offset / PAGESIZE) * PAGESIZE;
+    size_t bytes_to_mmap = count + (offset % mmu::page_size);
+    off_t offset_for_mmap =  align_down(offset, (off_t)mmu::page_size);
 
-    char *src = static_cast<char *>(mmap(NULL, bytes_to_mmap, PROT_READ, MAP_SHARED, in_fd, offset_for_mmap));
+    char *src = static_cast<char *>(mmap(nullptr, bytes_to_mmap, PROT_READ, MAP_SHARED, in_fd, offset_for_mmap));
 
     if (src == MAP_FAILED) {
         return -1;
