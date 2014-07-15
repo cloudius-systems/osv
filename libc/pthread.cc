@@ -28,6 +28,7 @@
 
 #include <api/time.h>
 #include <osv/spinlock.h>
+#include <osv/rwlock.h>
 
 namespace pthread_private {
 
@@ -374,6 +375,62 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
 int pthread_yield()
 {
     sched::thread::yield();
+    return 0;
+}
+
+
+typedef lazy_indirect<rwlock> indirect_rwlock;
+static_assert(sizeof(indirect_rwlock) <= sizeof(pthread_rwlock_t), "rwlock overflow");
+rwlock* from_libc(pthread_rwlock_t* rw)
+{
+    return reinterpret_cast<indirect_rwlock*>(rw)->get();
+    return 0;
+}
+
+int pthread_rwlock_init(pthread_rwlock_t *rw, const pthread_rwlockattr_t *attr)
+{
+    // FIXME: respect attr
+    new (rw) indirect_rwlock;
+    return 0;
+}
+
+int pthread_rwlock_destroy(pthread_rwlock_t *rw)
+{
+    reinterpret_cast<indirect_rwlock*>(rw)->~indirect_rwlock();
+    return 0;
+}
+
+int pthread_rwlock_trywrlock(pthread_rwlock_t *rw)
+{
+    from_libc(rw)->try_wlock();
+    return 0;
+}
+
+int pthread_rwlock_wrlock(pthread_rwlock_t *rw)
+{
+    from_libc(rw)->wlock();
+    return 0;
+}
+
+int pthread_rwlock_rdlock(pthread_rwlock_t *rw)
+{
+    from_libc(rw)->rlock();
+    return 0;
+}
+
+int pthread_rwlock_tryrdlock(pthread_rwlock_t *rw)
+{
+    return from_libc(rw)->try_rlock();
+}
+
+int pthread_rwlock_unlock(pthread_rwlock_t *rw)
+{
+    auto l = from_libc(rw);
+    if (l->wowned()) {
+        l->wunlock();
+    } else {
+        l->runlock();
+    }
     return 0;
 }
 
