@@ -371,6 +371,12 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
     return 0;
 }
 
+int pthread_yield()
+{
+    sched::thread::yield();
+    return 0;
+}
+
 int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
 {
     return sigprocmask(how, set, oldset);
