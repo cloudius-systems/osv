@@ -76,7 +76,7 @@ dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
         return NULL;
     }
 
-    vp->v_refcnt++;
+    vref(vp);
 
     dp->d_refcnt = 1;
     dp->d_vnode = vp;
