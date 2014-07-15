@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(test_dladdr)
     Dl_info info;
 
     BOOST_REQUIRE(dladdr(adj_addr(vfprintf, -2), &info) != 0);
-    BOOST_REQUIRE(std::string("vfprintf") != std::string(info.dli_sname));
+    BOOST_REQUIRE(!info.dli_sname || std::string("vfprintf") != std::string(info.dli_sname));
     BOOST_REQUIRE(vfprintf != info.dli_saddr);
 
     BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 0), &info) != 0);
