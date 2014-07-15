@@ -14,7 +14,8 @@ from operator import attrgetter
 from tests.testing import *
 
 blacklist = [
-    "tst-dns-resolver.so"
+    "tst-dns-resolver.so",
+    "tst-thread-local.so"
 ]
 
 add_tests([
