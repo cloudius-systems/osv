@@ -784,8 +784,7 @@ tcp_ccalgounload(struct cc_algo *unload_algo)
  * the specified error.  If connection is synchronized,
  * then send a RST to peer.
  */
-struct tcpcb *
-tcp_drop(struct tcpcb *tp, int errval)
+void tcp_drop_noclose(struct tcpcb *tp, int errval)
 {
 	struct socket *so = tp->t_inpcb->inp_socket;
 
@@ -801,7 +800,13 @@ tcp_drop(struct tcpcb *tp, int errval)
 	if (errval == ETIMEDOUT && tp->t_softerror)
 		errval = tp->t_softerror;
 	so->so_error = errval;
-	return (tcp_close(tp));
+}
+
+struct tcpcb *
+tcp_drop(struct tcpcb *tp, int errval)
+{
+	tcp_drop_noclose(tp, errval);
+	return tcp_close(tp);
 }
 
 void

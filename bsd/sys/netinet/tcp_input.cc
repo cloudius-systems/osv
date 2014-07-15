@@ -1892,8 +1892,10 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 			rstreason = BANDLIM_UNLIMITED;
 			goto dropwithreset;
 		}
-		if ((thflags & (TH_ACK|TH_RST)) == (TH_ACK|TH_RST))
-			tp = tcp_drop(tp, ECONNREFUSED);
+		if ((thflags & (TH_ACK|TH_RST)) == (TH_ACK|TH_RST)) {
+			tcp_drop_noclose(tp, ECONNREFUSED);
+			want_close = true;
+		}
 		if (thflags & TH_RST)
 			goto drop;
 		if (!(thflags & TH_SYN))
@@ -2298,7 +2300,8 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 		    ("tcp_do_segment: TH_SYN ti_locked %d", ti_locked));
 		INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 
-		tp = tcp_drop(tp, ECONNRESET);
+		tcp_drop_noclose(tp, ECONNRESET);
+		want_close = true;
 		rstreason = BANDLIM_UNLIMITED;
 		goto drop;
 	}
