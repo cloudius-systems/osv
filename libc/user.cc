@@ -217,3 +217,36 @@ int setgroups(size_t size, const gid_t *list)
 {
     return 0;
 }
+
+static int retpstatic = 1;
+static int retgstatic = 1;
+
+struct passwd *getpwent(void)
+{
+    if (retpstatic) {
+        retpstatic = 0;
+        return &single_user;
+    }
+    return nullptr;
+}
+
+void setpwent(void)
+{
+    retpstatic = 1;
+}
+weak_alias(setpwent, endpwent);
+
+struct group *getgrent(void)
+{
+    if (retgstatic) {
+        retgstatic = 0;
+        return &single_group;
+    }
+    return nullptr;
+}
+
+void setgrent(void)
+{
+    retgstatic = 1;
+}
+weak_alias(setgrent, endgrent);
