@@ -7,6 +7,7 @@
 
 #include <osv/sched.hh>
 #include <bsd/porting/netport.h>
+#include "processor.hh"
 
 extern "C" int get_cpuid(void)
 {
@@ -19,5 +20,5 @@ extern "C" int get_cpuid(void)
  */
 extern "C" uint64_t get_cyclecount(void)
 {
-    return get_ticks();
+    return processor::ticks();
 }
