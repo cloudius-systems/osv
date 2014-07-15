@@ -182,4 +182,5 @@ BOOST_AUTO_TEST_CASE(test_polling_on_one_socket)
     close(client_socket);
 
     t.join();
+    close(s);
 }
