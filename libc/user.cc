@@ -266,6 +266,9 @@ char *getlogin(void)
 
 int getlogin_r(char *buf, size_t bufsize)
 {
+    if (bufsize <= strlen(username)) {
+        return ERANGE;
+    }
     snprintf(buf, bufsize, "%s", username);
     return 0;
 }
