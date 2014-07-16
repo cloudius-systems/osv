@@ -250,3 +250,23 @@ void setgrent(void)
     retgstatic = 1;
 }
 weak_alias(setgrent, endgrent);
+
+char *getlogin(void)
+{
+    return username;
+}
+
+int getlogin_r(char *buf, size_t bufsize)
+{
+    snprintf(buf, bufsize, "%s", username);
+    return 0;
+}
+
+char *cuserid(char *string)
+{
+    if (string) {
+        snprintf(string, L_cuserid, "%s", username);
+        return string;
+    }
+    return username;
+}
