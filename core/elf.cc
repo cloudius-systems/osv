@@ -23,6 +23,8 @@
 #include <osv/sched.hh>
 #include <osv/trace.hh>
 #include <osv/version.hh>
+#include <osv/stubbing.hh>
+#include <sys/utsname.h>
 
 #include "arch.hh"
 
@@ -1373,4 +1375,51 @@ void* __tls_get_addr(module_and_offset* mao)
 #endif /* AARCH64_PORT_STUB */
 
     return s_program->tls_addr(mao->module) + mao->offset;
+}
+
+
+// We can just call uname, because that will copy the strings to a temporary
+// buffer, that won't be alive after this function return. We could of course
+// have a static area and copy only once. But since our uname implementation
+// also uses a static area for uname, we can just return that.
+extern utsname utsname;
+
+extern "C"
+unsigned long getauxval(unsigned long type)
+{
+    switch (type) {
+    // Implemented, and really 0
+    case AT_EUID:
+    case AT_EGID:
+    case AT_UID:
+        return 0;
+
+    // Implemented, with real value
+    case AT_BASE:
+        return program_base;
+    case AT_PLATFORM:
+        return reinterpret_cast<long>(utsname.machine);
+    case AT_PAGESZ:
+        return sysconf(_SC_PAGESIZE);
+    case AT_CLKTCK:
+        return sysconf(_SC_CLK_TCK);
+
+    // Unimplemented, man page says we should return 0
+    case AT_PHDR:
+    case AT_PHENT:
+    case AT_PHNUM:
+    case AT_DCACHEBSIZE:
+    case AT_ENTRY:
+    case AT_EXECFD:
+    case AT_EXECFN:
+    case AT_HWCAP:
+    case AT_ICACHEBSIZE:
+    case AT_RANDOM:
+    case AT_SECURE:
+    case AT_UCACHEBSIZE:
+        WARN_STUBBED();
+        return 0;
+    default:
+        return 0;
+    }
 }

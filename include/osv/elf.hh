@@ -236,6 +236,33 @@ enum {
                          // (Fortran COMMON or C tentative declaration)
 };
 
+enum {
+    AT_NULL = 0,
+    AT_IGNORE = 1,
+    AT_EXECFD = 2,
+    AT_PHDR = 3,
+    AT_PHENT = 4,
+    AT_PHNUM = 5,
+    AT_PAGESZ = 6,
+    AT_BASE = 7,
+    AT_FLAGS = 8,
+    AT_ENTRY = 9,
+    AT_NOTELF = 10,
+    AT_UID = 11,
+    AT_EUID = 12,
+    AT_GID = 13,
+    AT_EGID = 14,
+    AT_CLKTCK = 17,
+    AT_PLATFORM = 15,
+    AT_HWCAP = 16,
+    AT_DCACHEBSIZE = 19,
+    AT_ICACHEBSIZE = 20,
+    AT_UCACHEBSIZE = 21,
+    AT_SECURE = 23,
+    AT_RANDOM = 25,
+    AT_EXECFN = 31,
+};
+
 struct Elf64_Sym {
     Elf64_Word st_name; /* Symbol name */
     unsigned char st_info; /* Type and Binding attributes */
@@ -399,6 +426,9 @@ public:
     object* obj;
 };
 
+
+constexpr uintptr_t program_base = 0x100000000000UL;
+
 /**
  * The dynamic linker's view of the running program.
  *
@@ -424,7 +454,7 @@ class program {
 public:
     static const ulong core_module_index;
 
-    explicit program(void* base = reinterpret_cast<void*>(0x100000000000UL));
+    explicit program(void* base = reinterpret_cast<void*>(program_base));
     /**
      * Load a shared library, and return an interface to it.
      *
