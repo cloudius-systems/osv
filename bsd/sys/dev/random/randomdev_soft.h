@@ -52,7 +52,6 @@ struct harvest {
 	uint8_t entropy[HARVESTSIZE];	/* the harvested entropy */
 	u_int size, bits;		/* stats about the entropy */
 	enum esource source;		/* origin of the entropy */
-	STAILQ_ENTRY(harvest) next;	/* next item on the list */
 };
 
 void randomdev_init(void);
