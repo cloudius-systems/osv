@@ -32,6 +32,7 @@
 #ifdef _KERNEL
 
 #include <sys/cdefs.h>
+#include <sys/types.h>
 
 #ifndef __OSV__
 int read_random(void *, int);
