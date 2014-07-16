@@ -166,7 +166,7 @@ random_kthread(void *arg)
 	STAILQ_HEAD(, harvest) local_queue;
 	struct harvest *event = NULL;
 	int local_count;
-	event_proc_f entropy_processor = arg;
+	event_proc_f entropy_processor = reinterpret_cast<event_proc_f>(arg);
 
 	STAILQ_INIT(&local_queue);
 	local_count = 0;
@@ -246,7 +246,7 @@ random_harvestq_init(event_proc_f cb)
 	/* Contains the currently unused event structs. */
 	STAILQ_INIT(&emptyfifo.head);
 	for (i = 0; i < RANDOM_FIFO_MAX; i++) {
-		np = malloc(sizeof(struct harvest), M_ENTROPY, M_WAITOK);
+		np = new struct harvest;
 		STAILQ_INSERT_TAIL(&emptyfifo.head, np, next);
 	}
 	emptyfifo.count = RANDOM_FIFO_MAX;
@@ -258,8 +258,8 @@ random_harvestq_init(event_proc_f cb)
 	mtx_init(&harvest_mtx, "entropy harvest mutex", NULL, MTX_SPIN);
 
 	/* Start the hash/reseed thread */
-	error = kproc_create(random_kthread, cb,
-	    &random_kthread_proc, RFHIGHPID, 0, "rand_harvestq"); /* RANDOM_CSPRNG_NAME */
+	error = kproc_create(reinterpret_cast<void(*)(void*)>(random_kthread), reinterpret_cast<void*>(cb),
+		&random_kthread_proc, RFHIGHPID, 0, "rand_harvestq"); /* RANDOM_CSPRNG_NAME */
 
 	if (error != 0)
 		panic("Cannot create entropy maintenance thread.");

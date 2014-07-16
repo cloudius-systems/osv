@@ -29,14 +29,21 @@
 #ifndef SYS_DEV_RANDOM_RANDOM_HARVESTQ_H_INCLUDED
 #define SYS_DEV_RANDOM_RANDOM_HARVESTQ_H_INCLUDED
 
+#include <sys/cdefs.h>
+
 typedef void (*event_proc_f)(struct harvest *event);
+
+__BEGIN_DECLS
 
 void random_harvestq_init(event_proc_f);
 void random_harvestq_deinit(void);
 void random_harvestq_internal(u_int64_t, const void *,
     u_int, u_int, enum esource);
+void random_set_wakeup_exit(void *);
 
 extern int random_kthread_control;
 extern struct mtx harvest_mtx;
+
+__END_DECLS
 
 #endif /* SYS_DEV_RANDOM_RANDOM_HARVESTQ_H_INCLUDED */

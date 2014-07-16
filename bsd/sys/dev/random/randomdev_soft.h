@@ -62,7 +62,6 @@ void randomdev_init_harvester(void (*)(u_int64_t, const void *, u_int,
 	u_int, enum esource), int (*)(void *, int));
 void randomdev_deinit_harvester(void);
 
-void random_set_wakeup_exit(void *);
 void random_process_event(struct harvest *event);
 void randomdev_unblock(void);
 
