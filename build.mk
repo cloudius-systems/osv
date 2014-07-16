@@ -11,16 +11,20 @@ detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
 
 ifeq ($(call detect_arch, __x86_64__),1)
     host_arch = x64
+	host_arch_str = x86_64
 endif
 ifeq ($(call detect_arch, __aarch64__),1)
     host_arch = aarch64
+	host_arch_str = aarch64
 endif
 
 ifndef ARCH
   ARCH = $(host_arch)
+  ARCH_STR = $(host_arch_str)
 endif
 
 arch = $(ARCH)
+arch_str = $(ARCH)
 
 $(info build.mk:)
 $(info build.mk: building arch=$(arch), override with ARCH env)
@@ -114,7 +118,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-include $(src)/compiler/include/intrinsics.hh \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
-	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" $(EXTRA_FLAGS)
+	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh
