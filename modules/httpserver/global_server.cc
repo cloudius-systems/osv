@@ -15,7 +15,7 @@
 #include "api/env.hh"
 #include "api/hardware.hh"
 #include "path_holder.hh"
-
+#include "api/network.hh"
 #include <iostream>
 
 namespace httpserver {
@@ -71,6 +71,7 @@ global_server& global_server::set(const std::string& key,
 void global_server::set_routes()
 {
     path_holder::set_routes(&_routes);
+    api::network::init(_routes);
     api::os::init(_routes);
     api::fs::init(_routes);
     api::file::init(_routes);

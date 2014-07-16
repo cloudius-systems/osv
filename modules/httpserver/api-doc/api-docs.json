@@ -29,6 +29,10 @@
         {
             "path": "/../listings/hardware.json",
             "description": "Hardware management API"
+        },
+        {
+            "path": "/../listings/network.json",
+            "description": "Network API"
         }
 
     ]
