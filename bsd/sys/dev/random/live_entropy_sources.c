@@ -188,6 +188,16 @@ live_entropy_sources_feed(int rounds, event_proc_f entropy_processor)
 	sx_sunlock(&les_lock);
 }
 
+bool
+live_entropy_sources_empty(void)
+{
+    bool is_empty;
+    sx_xlock(&les_lock);
+    is_empty = LIST_EMPTY(&sources);
+    sx_xunlock(&les_lock);
+    return is_empty;
+}
+
 void
 live_entropy_sources_deinit(void *unused)
 {

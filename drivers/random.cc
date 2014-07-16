@@ -171,6 +171,11 @@ random_device::random_device()
         live_entropy_source_register(&drng);
     }
 #endif
+    if (live_entropy_sources_empty()) {
+        debug("Warning: No hardware source of entropy available to your "
+            "platform,\n\tCSPRNG will rely on software source of entropy to "
+            "provide high-quality randomness.\n");
+    }
     (random_adaptor->init)();
 
     // Create random

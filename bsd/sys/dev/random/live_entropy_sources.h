@@ -51,6 +51,7 @@ void live_entropy_sources_deinit(void *);
 void live_entropy_source_register(struct random_hardware_source *);
 void live_entropy_source_deregister(struct random_hardware_source *);
 void live_entropy_sources_feed(int, event_proc_f);
+bool live_entropy_sources_empty(void);
 
 #define LIVE_ENTROPY_SRC_MODULE(name, modevent, ver)		\
     static moduledata_t name##_mod = {				\
