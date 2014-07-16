@@ -28,7 +28,7 @@ struct utsname utsname = {
 	.nodename	= "osv.local",
 	.release	= str2(LINUX_MAJOR) "." str2(LINUX_MINOR) "." str2(LINUX_PATCH),
 	.version	= "#1 SMP",
-	.machine	= "x86_64",
+	.machine	= str2(ARCH_STRING),
 };
 
 int uname(struct utsname *uts)
