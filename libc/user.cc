@@ -208,6 +208,14 @@ getgrgid_r (gid_t gid, struct group *grp, char *buffer, size_t buflen,
     return 0;
 }
 
+struct group *getgrgid(gid_t gid)
+{
+    if (gid != getgid()) {
+        return NULL;
+    }
+    return &single_group;
+}
+
 int getgroups(int size, gid_t list[])
 {
     return 0;
