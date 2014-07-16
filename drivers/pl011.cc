@@ -51,9 +51,6 @@ void PL011_Console::dev_start() {
 
 void PL011_Console::write(const char *str, size_t len) {
     while (len > 0) {
-        if ((*str == '\n'))
-            uart[UARTDR] = '\r';
-
         uart[UARTDR] = *str++;
         len--;
     }
