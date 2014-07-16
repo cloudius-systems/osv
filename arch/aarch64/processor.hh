@@ -66,10 +66,17 @@ inline void write_ttbr1(u64 val) {
     asm volatile("msr ttbr1_el1, %0; isb;" :: "r"(val) : "memory");
 }
 
+/* the user of ticks() just wants a high resolution counter.
+ * We just read the virtual counter, since using the Performance
+ * Monitors to get the actual clock cycles has implications:
+ * they are an optional component of the Architecture, and they
+ * can have an impact on performance.
+ */
 inline u64 ticks()
 {
-    static u64 i;
-    return ++i;
+    u64 cntvct;
+    asm volatile ("isb; mrs %0, cntvct_el0" : "=r"(cntvct));
+    return cntvct;
 }
 
 struct fpu_state {
