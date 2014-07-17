@@ -75,12 +75,6 @@
 
 #include <machine/in_cksum.h>
 
-TRACEPOINT(trace_tso_flush_sched, "");
-TRACEPOINT(trace_tso_flush_cancel, "");
-TRACEPOINT(trace_tso_flush_fire,
-		"Going to send %d bytes, off %d, sendwin %d sb_cc "
-		"%d cur_seq %u", int, int, int, int, unsigned int);
-
 VNET_DEFINE(int, path_mtu_discovery) = 1;
 SYSCTL_VNET_INT(_net_inet_tcp, OID_AUTO, path_mtu_discovery, CTLFLAG_RW,
 	&VNET_NAME(path_mtu_discovery), 1,
@@ -132,16 +126,6 @@ cc_after_idle(struct tcpcb *tp)
 
 	if (CC_ALGO(tp)->after_idle != NULL)
 		CC_ALGO(tp)->after_idle(tp->ccv);
-}
-
-static inline void cancel_tso_flush_timer(struct tcpcb *tp)
-{
-	//
-	// Don't actually "cancel" the timer, just make it do nothing when it
-	// fires.
-	//
-	tp->t_flags &= ~((u_int)TF_TSO_NOW);
-	tp->t_flags &= ~((u_int)TF_TSO_PENDING);
 }
 
 /*
@@ -466,19 +450,15 @@ after_sack_rexmit:
 	 */
 	ipsec_optlen = ipsec_hdrsiz_tcp(tp);
 #endif
-	bool tso_capable = false;
-	if ((tp->t_flags & TF_TSO) && V_tcp_do_tso &&
+	if ((tp->t_flags & TF_TSO) && V_tcp_do_tso && len > tp->t_maxseg &&
 	    ((tp->t_flags & TF_SIGNATURE) == 0) &&
 	    tp->rcv_numsacks == 0 && sack_rxmit == 0 &&
 #ifdef IPSEC
 	    ipsec_optlen == 0 &&
 #endif
 	    tp->t_inpcb->inp_options == NULL &&
-	    tp->t_inpcb->in6p_options == NULL) {
-		tso_capable = true;
-	}
-
-	tso = !!(tso_capable && len > tp->t_maxseg);
+	    tp->t_inpcb->in6p_options == NULL)
+		tso = 1;
 
 	if (sack_rxmit) {
 		if (p->rxmit + len < tp->snd_una + so->so_snd.sb_cc)
@@ -503,26 +483,8 @@ after_sack_rexmit:
 	 *	- we need to retransmit
 	 */
 	if (len) {
-		u_int send_thresh = tp->t_maxseg;
-
-		if (tso_capable) {
-			send_thresh = bsd_min(IP_MAXPACKET, sendwin);
-		}
-
-		if (len >= send_thresh) {
+		if (len >= tp->t_maxseg)
 			goto send;
-		} else if (tp->t_flags & TF_TSO_NOW) {
-			trace_tso_flush_fire(len, off, sendwin,
-					     so->so_snd.sb_cc,
-					     tp->snd_nxt.raw() + len);
-			goto send;
-		} else if (!(tp->t_flags & TF_TSO_PENDING)) {
-			trace_tso_flush_sched();
-			tp->t_flags |= TF_TSO_PENDING;
-			// Defer sending for no longer than 2 ticks
-			tcp_timer_activate(tp, TT_TSO_FLUSH, 2);
-		}
-
 		/*
 		 * NOTE! on localhost connections an 'ack' from the remote
 		 * end may occur synchronously with the output and cause
@@ -1234,9 +1196,6 @@ timer:
 		 */
 		ip6->ip6_hlim = in6_selecthlim(tp->t_inpcb, NULL);
 
-		// We are about to send the frame - cancel the TSO_FLUSH timer
-		cancel_tso_flush_timer(tp);
-
 		/* TODO: IPv6 IP6TOS_ECT bit on */
 		error = ip6_output(m, tp->t_inpcb->in6p_outputopts, &ro,
 		    ((so->so_options & SO_DONTROUTE) ?  IP_ROUTETOIF : 0),
@@ -1270,9 +1229,6 @@ timer:
 	 */
 	if (V_path_mtu_discovery && tp->t_maxopd > V_tcp_minmss)
 		ip->ip_off |= IP_DF;
-
-	// We are about to send the frame - cancel the TSO_FLUSH timer
-	cancel_tso_flush_timer(tp);
 
 	error = ip_output(m, tp->t_inpcb->inp_options, &ro,
 	    ((so->so_options & SO_DONTROUTE) ? IP_ROUTETOIF : 0), 0,
