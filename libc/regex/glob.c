@@ -234,5 +234,11 @@ void globfree(glob_t *g)
 	g->gl_pathv = NULL;
 }
 
+int __glob_pattern_p(const char *pattern, int quote)
+{
+    return !is_literal(pattern, !quote);
+}
+
 LFS64(glob);
 LFS64(globfree);
+weak_alias(__glob_pattern_p, glob_pattern_p);
