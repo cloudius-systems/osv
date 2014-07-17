@@ -49,7 +49,10 @@ int devid_deviceid_to_nmlist(char *search_path, ddi_devid_t devid,
 void devid_str_free(char *str);
 void devid_free(ddi_devid_t devid);
 void devid_free_nmlist(devid_nmlist_t *list);
-int devid_get(int fd, ddi_devid_t *retdevid);
+static inline int devid_get(int fd, ddi_devid_t *retdevid)
+{
+    return -1;
+}
 int devid_get_minor_name(int fd, char **retminor_name);
 char *devid_str_encode(ddi_devid_t devid, char *minor_name);
 
