@@ -589,6 +589,15 @@ DIR *opendir(const char *path)
     return dir;
 }
 
+int dirfd(DIR *dirp)
+{
+    if (!dirp) {
+        return libc_error(EINVAL);
+    }
+
+    return dirp->fd;
+}
+
 int closedir(DIR *dir)
 {
     close(dir->fd);
