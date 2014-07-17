@@ -175,6 +175,11 @@ void rwlock::reader_wait_lockable()
     }
 }
 
+unsigned rwlock::readers()
+{
+    return _readers;
+}
+
 void rwlock_init(rwlock_t* rw)
 {
     new (rw) rwlock;
@@ -223,4 +228,14 @@ int rw_try_upgrade(rwlock_t* rw)
 void rw_downgrade(rwlock_t* rw)
 {
     rw->downgrade();
+}
+
+int rw_wowned(rwlock_t* rw)
+{
+    return rw->wowned();
+}
+
+int rw_rowned(rwlock_t* rw)
+{
+    return !rw->wowned() && (rw->readers() > 0);
 }

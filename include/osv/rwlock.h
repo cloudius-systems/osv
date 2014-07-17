@@ -74,6 +74,7 @@ public:
     void wunlock();
     void downgrade();
     bool wowned();
+    unsigned readers();
     rwlock_for_write& for_write() { return *this; }
 
 private:
@@ -136,6 +137,8 @@ void rw_runlock(rwlock_t* rw);
 void rw_wunlock(rwlock_t* rw);
 int rw_try_upgrade(rwlock_t* rw);
 void rw_downgrade(rwlock_t* rw);
+int rw_wowned(rwlock_t* rw);
+int rw_rowned(rwlock_t* rw);
 __END_DECLS
 
 #endif // !__RWLOCK_H__
