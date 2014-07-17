@@ -1059,7 +1059,6 @@ zpool_open_func(void *arg)
 	 */
 	if (fstat64(fd, &statbuf) != 0 ||
 	    (!S_ISREG(statbuf.st_mode) &&
-	    !S_ISCHR(statbuf.st_mode) &&
 	    !S_ISBLK(statbuf.st_mode))) {
 		(void) close(fd);
 		return;
