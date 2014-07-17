@@ -75,6 +75,10 @@
 #include <mntent.h>
 #include <sys/mman.h>
 
+#include <osv/clock.hh>
+#include <api/utime.h>
+#include <chrono>
+
 using namespace std;
 
 
@@ -1753,6 +1757,26 @@ extern "C"
 int lutimes(const char *pathname, const struct timeval times[2])
 {
     return do_utimes(pathname, times, AT_SYMLINK_NOFOLLOW);
+}
+
+extern "C"
+int utime(const char *pathname, const struct utimbuf *t)
+{
+    using namespace std::chrono;
+
+    struct timeval times[2];
+    times[0].tv_usec = 0;
+    times[1].tv_usec = 0;
+    if (!t) {
+        long int tsec = duration_cast<seconds>(osv::clock::wall::now().time_since_epoch()).count();
+        times[0].tv_sec = tsec;
+        times[1].tv_sec = tsec;
+    } else {
+        times[0].tv_sec = t->actime;
+        times[1].tv_sec = t->modtime;
+    }
+
+    return utimes(pathname, times);
 }
 
 TRACEPOINT(trace_vfs_chmod, "\"%s\" 0%0o", const char*, mode_t);

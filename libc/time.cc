@@ -119,5 +119,3 @@ clock_t clock(void)
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &ts);
     return ts.tv_sec * 1000000000L + ts.tv_nsec;
 }
-
-NO_SYS(int utime(const char *, const struct utimbuf *));
