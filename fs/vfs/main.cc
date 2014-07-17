@@ -147,6 +147,47 @@ int open(const char *pathname, int flags, ...)
 
 LFS64(open);
 
+int openat(int dirfd, const char *pathname, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, mode_t);
+        va_end(ap);
+    }
+
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return open(pathname, flags, mode);
+    }
+
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = open(p, flags, mode);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
+}
+
 int creat(const char *pathname, mode_t mode)
 {
     return open(pathname, O_CREAT|O_WRONLY|O_TRUNC, mode);
