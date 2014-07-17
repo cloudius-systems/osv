@@ -74,8 +74,12 @@ public:
     void wunlock();
     void downgrade();
     bool wowned();
-    unsigned readers();
     rwlock_for_write& for_write() { return *this; }
+
+    // has_readers() does not check whether this thread holds the read lock,
+    // but rather whether any thread holds it. Therefore, this function is
+    // inherently prone to races, and should be avoided.
+    bool has_readers();
 
 private:
 
@@ -138,7 +142,7 @@ void rw_wunlock(rwlock_t* rw);
 int rw_try_upgrade(rwlock_t* rw);
 void rw_downgrade(rwlock_t* rw);
 int rw_wowned(rwlock_t* rw);
-int rw_rowned(rwlock_t* rw);
+int rw_has_readers(rwlock_t* rw);
 __END_DECLS
 
 #endif // !__RWLOCK_H__

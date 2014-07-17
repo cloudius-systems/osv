@@ -175,7 +175,7 @@ void rwlock::reader_wait_lockable()
     }
 }
 
-unsigned rwlock::readers()
+bool rwlock::has_readers()
 {
     return _readers;
 }
@@ -235,7 +235,7 @@ int rw_wowned(rwlock_t* rw)
     return rw->wowned();
 }
 
-int rw_rowned(rwlock_t* rw)
+int rw_has_readers(rwlock_t* rw)
 {
-    return !rw->wowned() && (rw->readers() > 0);
+    return rw->has_readers();
 }

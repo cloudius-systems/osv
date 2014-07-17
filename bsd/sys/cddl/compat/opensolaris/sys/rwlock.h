@@ -44,12 +44,15 @@ typedef enum {
 	RW_READER
 } krw_t;
 
-// try to get away with simply using a mutex for now
-
-
 typedef	rwlock_t krwlock_t;
 
-#define	RW_READ_HELD(x)		(rw_rowned(x))
+// Note: While the following definition of RW_WRITE_HELD() checks if the
+// current thread is holding the write lock, RW_READ_HELD() is weaker and
+// only checks if *some* thread is holding the read lock. This makes
+// assertions using RW_READ_HELD and RW_LOCK_HELD weaker, but we really
+// don't want to slow down rwlock just for that. Moreover, FreeBSD did
+// exactly the same.
+#define	RW_READ_HELD(x)		(rw_has_readers(x))
 #define	RW_WRITE_HELD(x)	(rw_wowned(x))
 #define	RW_LOCK_HELD(x)		(RW_READ_HELD(x) || RW_WRITE_HELD(x))
 
