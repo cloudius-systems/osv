@@ -314,7 +314,7 @@ out:
  *
  * @path: full path.
  * @dpp:  pointer to dentry for directory.
- * @name: pointer to file name in path.
+ * @name: if non-null, pointer to file name in path.
  *
  * This routine returns a locked directory vnode and file name.
  */
@@ -356,10 +356,12 @@ lookup(char *path, struct dentry **dpp, char **name)
 
     *dpp = dp;
 
-    /*
-     * Get the file name
-     */
-    *name = strrchr(path, '/') + 1;
+    if (name) {
+        /*
+         * Get the file name
+         */
+        *name = strrchr(path, '/') + 1;
+    }
     return 0;
 }
 
