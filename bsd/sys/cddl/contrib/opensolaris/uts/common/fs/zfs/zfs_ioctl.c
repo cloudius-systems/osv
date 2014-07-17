@@ -1131,15 +1131,7 @@ put_nvlist(zfs_cmd_t *zc, nvlist_t *nvl)
 	VERIFY(nvlist_size(nvl, &size, NV_ENCODE_NATIVE) == 0);
 
 	if (size > zc->zc_nvlist_dst_size) {
-		/*
-		 * Solaris returns ENOMEM here, because even if an error is
-		 * returned from an ioctl(2), new zc_nvlist_dst_size will be
-		 * passed to the userland. This is not the case for FreeBSD.
-		 * We need to return 0, so the kernel will copy the
-		 * zc_nvlist_dst_size back and the userland can discover that a
-		 * bigger buffer is needed.
-		 */
-		error = 0;
+		error = ENOMEM;
 	} else {
 		packed = kmem_alloc(size, KM_SLEEP);
 		VERIFY(nvlist_pack(nvl, &packed, &size, NV_ENCODE_NATIVE,
