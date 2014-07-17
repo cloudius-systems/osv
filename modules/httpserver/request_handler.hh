@@ -58,14 +58,6 @@ private:
     httpserver::routes* routes;
 
     /**
-     * Add a parameter to the request
-     * @param req the original request
-     * @param bg the position in the url that parameter begins
-     * @param end the position in the url the parameter ends
-     */
-    static void update_param(request& req, size_t bg, size_t end);
-
-    /**
      * A helper function that reads URL parameters
      * @param req the original request, parameters that are found
      * will be added to the request headrs

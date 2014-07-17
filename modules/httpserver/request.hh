@@ -27,16 +27,23 @@ class connection;
  * A request received from a client.
  */
 struct request {
+    enum class ctclass : char {
+        other,
+        multipart,
+        app_x_www_urlencoded,
+    };
+
     std::string method;
     std::string uri;
     int http_version_major;
     int http_version_minor;
-    bool is_multi_part;
-    size_t content_length;
+    ctclass content_type_class;
+    size_t content_length = 0;
     std::vector<header> headers;
     std::vector<header> query_parameters;
     connection* connection_ptr;
     httpserver::parameters param;
+    std::string content;
 
     /**
      * Search for the first header of a given name
@@ -66,6 +73,14 @@ struct request {
     {
         return "http://" + get_header("Host") + uri;
     }
+
+    bool is_multi_part() const {
+        return content_type_class == ctclass::multipart;
+    }
+    bool is_form_post() const {
+        return content_type_class == ctclass::app_x_www_urlencoded;
+    }
+
     static std::string find_in_vector(const std::vector<header>& vec,
                                       const std::string& name)
     {

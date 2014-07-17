@@ -196,7 +196,7 @@ void connection::stop()
 
 bool connection::set_content_type()
 {
-    request_.is_multi_part = false;
+    request_.content_type_class = request::ctclass::other;
     request_.connection_ptr = this;
     auto ct = request_.get_header("Content-Type");
     if (ct == "") {
@@ -216,8 +216,10 @@ bool connection::set_content_type()
             multipart.set_boundary(boundry);
             request_.content_length -= boundry.length();
             request_.content_length -= 8; // remove eol, leading and edning slahes
-            request_.is_multi_part = true;
+            request_.content_type_class = request::ctclass::multipart;
         }
+    } else if (ct.find("application/x-www-form-urlencoded") == 0) {
+        request_.content_type_class = request::ctclass::app_x_www_urlencoded;
     }
     return true;
 }
@@ -231,6 +233,14 @@ void connection::do_read()
     {
         if (!ec)
         {
+            if (request_.content_length > 0) {
+                request_.content.append(buffer_.data(), buffer_.data() + bytes_transferred);
+                if (request_.content.size() < request_.content_length) {
+                    do_read();
+                    return;
+                }
+            }
+
             auto r = request_parser_.parse(
                          request_, buffer_.data(), buffer_.data() +
                          bytes_transferred);
@@ -238,7 +248,7 @@ void connection::do_read()
             if (result == request_parser::good)
             {
                 if (set_content_type()) {
-                    if (request_.is_multi_part) {
+                    if (request_.is_multi_part()) {
                         auto bg = std::get<1>(r);
                         multipart.set_in_message(bg, buffer_.data() +
                                                  bytes_transferred);
@@ -248,6 +258,14 @@ void connection::do_read()
                         }
                         return;
                     } else {
+                        if (request_.content_length > 0) {
+                            auto bg = std::get<1>(r);
+                            request_.content.append(bg, buffer_.data() + bytes_transferred);
+                            if (request_.content.size() < request_.content_length) {
+                                do_read();
+                                return;
+                            }
+                        }
                         request_handler_.handle_request(request_, reply_);
                     }
                 } else {
