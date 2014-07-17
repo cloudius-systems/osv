@@ -1236,7 +1236,7 @@ static void convert_timeval(struct timespec &to, const struct timeval *from)
 }
 
 int
-sys_utimes(char *path, const struct timeval times[2])
+sys_utimes(char *path, const struct timeval times[2], int flags)
 {
     int error;
     struct dentry *dp;
@@ -1251,9 +1251,25 @@ sys_utimes(char *path, const struct timeval times[2])
     convert_timeval(timespec_times[0], times ? times + 0 : nullptr);
     convert_timeval(timespec_times[1], times ? times + 1 : nullptr);
 
-    error = namei(path, &dp);
-    if (error)
-        return error;
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        struct dentry *ddp;
+        error = lookup(path, &ddp, nullptr);
+        if (error) {
+            return error;
+        }
+
+        error = namei_last_nofollow(path, ddp, &dp);
+        if (ddp != NULL) {
+            drele(ddp);
+        }
+        if (error) {
+            return error;
+        }
+    } else {
+        error = namei(path, &dp);
+        if (error)
+            return error;
+    }
 
     if (dp->d_mount->m_flags & MNT_RDONLY) {
         error = EROFS;

@@ -1719,8 +1719,7 @@ int futimens(int fd, const struct timespec times[2])
     return 0;
 }
 
-extern "C"
-int utimes(const char *pathname, const struct timeval times[2])
+static int do_utimes(const char *pathname, const struct timeval times[2], int flags)
 {
     struct task *t = main_task;
     char path[PATH_MAX];
@@ -1729,19 +1728,31 @@ int utimes(const char *pathname, const struct timeval times[2])
     trace_vfs_utimes(pathname);
 
     error = task_conv(t, pathname, 0, path);
-    if (error)
-        goto out_errno;
+    if (error) {
+        trace_vfs_utimes_err(error);
+        return libc_error(error);
+    }
 
-    error = sys_utimes(path, times);
-    if (error)
-        goto out_errno;
+    error = sys_utimes(path, times, flags);
+    if (error) {
+        trace_vfs_utimes_err(error);
+        return libc_error(error);
+    }
 
     trace_vfs_utimes_ret();
     return 0;
-    out_errno:
-    trace_vfs_utimes_err(error);
-    errno = error;
-    return -1;
+}
+
+extern "C"
+int utimes(const char *pathname, const struct timeval times[2])
+{
+    return do_utimes(pathname, times, 0);
+}
+
+extern "C"
+int lutimes(const char *pathname, const struct timeval times[2])
+{
+    return do_utimes(pathname, times, AT_SYMLINK_NOFOLLOW);
 }
 
 TRACEPOINT(trace_vfs_chmod, "\"%s\" 0%0o", const char*, mode_t);
