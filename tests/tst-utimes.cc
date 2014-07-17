@@ -17,6 +17,7 @@
 
 static int tests = 0, fails = 0;
 extern "C" int utimes(const char *, const struct timeval[2]);
+extern "C" int lutimes(const char *, const struct timeval[2]);
 
 static void report(bool ok, const char* msg)
 {
@@ -58,8 +59,9 @@ static void init_timeval(timeval &time, long tv_sec, long tv_usec)
 int main(int argc, char *argv[])
 {
     const char *path;
+    char *pathlnk;
     struct stat st;
-    timeval times[2];
+    timeval times[2], timesl[2];
     int ret;
 
     if (argc > 1) {
@@ -67,12 +69,15 @@ int main(int argc, char *argv[])
     } else {
         path = "/usr/foo";
     }
+    asprintf(&pathlnk, "%s.lnk", path);
 
     // Create a temporary file that's used in testing.
     auto fd = open(path, O_CREAT|O_TRUNC|O_RDWR, 0666);
     report(fd > 0, "create a file");
     write(fd, "test", 4);
     report(close(fd) == 0, "close the file");
+    // Create a link. utimes should follow it, lutimes should not
+    report(symlink(path, pathlnk) == 0, "create a link");
 
     report(stat(path, &st) == 0, "stat the file");
 
@@ -85,6 +90,8 @@ int main(int argc, char *argv[])
     /* Initialize atime and mtime structures */
     init_timeval(times[0], 1234, 0); /* atime */
     init_timeval(times[1], 0, 1234); /* mtime */
+    init_timeval(timesl[0], 54321, 0); /* atime link */
+    init_timeval(timesl[1], 0, 54321); /* mtime link */
 
     ret = utimes(path, times);
     report(ret == 0, "check if utimes worked successfully!");
@@ -108,6 +115,29 @@ int main(int argc, char *argv[])
         st.st_atim.tv_sec, st.st_atim.tv_nsec,
         st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
 
+    ret = lutimes(pathlnk, timesl);
+    report(ret == 0, "check if lutimes worked successfully!");
+
+    report(compare_time(times[0], st.st_atim),
+        "check if lutimes made no changes to atime");
+    report(compare_time(times[1], st.st_mtim),
+        "check if lutimes made no changes to mtime");
+
+    report(lstat(pathlnk, &st) == 0, "stat the link");
+    report(compare_time(timesl[0], st.st_atim),
+        "check if lutimes changes to link's atime");
+    report(compare_time(timesl[1], st.st_mtim),
+        "check if lutimes made changes to link's mtime");
+
+    ret = utimes(pathlnk, timesl);
+    report(ret == 0, "check if utimes followed the link!");
+    report(stat(path, &st) == 0, "stat the file again");
+    report(compare_time(timesl[0], st.st_atim),
+        "check if utimes changes to link target's atime");
+    report(compare_time(timesl[1], st.st_mtim),
+        "check if utimes made changes to link target's mtime");
+
+
     /* Force utimes to fail */
     times[0].tv_sec = -1;
     ret = utimes(path, times);
@@ -118,10 +148,12 @@ int main(int argc, char *argv[])
     ret = utimes(path, NULL);
     report(ret == 0, "utimes works with NULL as argument");
 
-    // Clean up the temporary file.
+    // Clean up the temporary files.
+    report(unlink(pathlnk) == 0, "remove the link");
     report(unlink(path) == 0, "remove the file");
 
     // Report results.
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
+    free(pathlnk);
     return fails == 0;
 }
