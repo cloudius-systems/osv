@@ -1005,3 +1005,4 @@ usr.manifest: process-modules
 -include $(shell find -name '*.d')
 
 .DELETE_ON_ERROR:
+.SECONDARY:
