@@ -34,8 +34,6 @@ void free_phys_contiguous_aligned(void* p);
 
 void setup_free_memory(void* start, size_t bytes);
 
-void debug_memory_pool(size_t *total, size_t *contig);
-
 namespace bi = boost::intrusive;
 
 struct free_object {

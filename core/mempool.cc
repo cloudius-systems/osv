@@ -1064,21 +1064,6 @@ void  __attribute__((constructor(init_prio::mempool))) setup()
     arch_setup_free_memory();
 }
 
-void debug_memory_pool(size_t *total, size_t *contig)
-{
-    *total = *contig = 0;
-
-    WITH_LOCK(free_page_ranges_lock) {
-        for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-            auto header = &*i;
-            *total += header->size;
-            if (header->size > *contig) {
-                *contig = header->size;
-            }
-        }
-    }
-}
-
 }
 
 extern "C" {
