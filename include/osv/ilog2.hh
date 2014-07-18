@@ -30,6 +30,21 @@ inline unsigned count_leading_zeros(unsigned long long n)
     return __builtin_clzll(n);
 }
 
+inline unsigned count_trailing_zeros(unsigned n)
+{
+    return __builtin_ctz(n);
+}
+
+inline unsigned count_trailing_zeros(unsigned long n)
+{
+    return __builtin_ctzl(n);
+}
+
+inline unsigned count_trailing_zeros(unsigned long long n)
+{
+    return __builtin_ctzll(n);
+}
+
 template <typename T>
 inline
 unsigned ilog2_roundup(T n)
