@@ -41,6 +41,16 @@ unsigned ilog2_roundup(T n)
 }
 
 template <typename T>
+inline
+unsigned ilog2(T n)
+{
+    if (n <= 1) {
+        return 0;
+    }
+    return sizeof(T) * 8 - count_leading_zeros(n) - 1;
+}
+
+template <typename T>
 inline constexpr
 bool is_power_of_two(T n)
 {
