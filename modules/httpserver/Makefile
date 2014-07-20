@@ -9,6 +9,13 @@ autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend)
 src = ../..
 arch = x64
+ifndef mode
+	mode = release
+endif
+
+ifndef OSV_BUILD_PATH
+	OSV_BUILD_PATH = $(src)/build/$(mode).$(arch)
+endif
 miscbase = $(src)/external/$(arch)/misc.bin
 boost-lib-dir = $(miscbase)/usr/lib64
 boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
@@ -24,6 +31,7 @@ OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
 LIBS = -lpthread -lboost_program_options-mt $(boost-libs)
+EXTRA_LIBS = -L$(OSV_BUILD_PATH)/tools -ltools
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -49,7 +57,7 @@ $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
 
 lib$(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o lib$(TARGET).so $^, LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o lib$(TARGET).so $^  $(EXTRA_LIBS), LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
