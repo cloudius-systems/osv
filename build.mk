@@ -519,6 +519,7 @@ bsd += bsd/sys/net/if_clone.o
 bsd += bsd/sys/net/if_loop.o  
 bsd += bsd/sys/net/if.o  
 bsd += bsd/sys/net/pfil.o  
+bsd += bsd/sys/net/routecache.o
 bsd += bsd/sys/netinet/in.o
 bsd += bsd/sys/netinet/in_pcb.o
 bsd += bsd/sys/netinet/in_proto.o
