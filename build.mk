@@ -878,7 +878,7 @@ ifeq ($(gcc_lib_env), host)
         $(error Error: libgcc_eh.a needs to be installed.)
     endif
 else
-    libgcc_s.a := $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
+    libgcc.a := $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
     libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 endif
 
@@ -903,7 +903,7 @@ loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(driv
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
 	    --whole-archive \
-	      $(libstdc++.a) $(libgcc_s.a) $(libgcc_eh.a) \
+	      $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) \
 	      $(boost-libs) \
 	    --no-whole-archive, \
 		LD $@)
