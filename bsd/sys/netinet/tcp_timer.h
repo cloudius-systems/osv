@@ -155,6 +155,7 @@ enum tcp_timer_type {
 	TT_PERSIST,	/* keepalive */
 	TT_KEEP,	/* 2*msl TIME_WAIT timer */
 	TT_2MSL,	/* delayed ACK timer */
+	TT_TSO_FLUSH, 	/* TSO flush timer */
 	COUNT
 };
 
