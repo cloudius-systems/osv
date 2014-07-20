@@ -167,44 +167,23 @@ LogTrace()
 # for range in free_page_ranges():
 #     pass
 #
-def free_page_ranges():
-    def free_page_ranges_tree(node):
-        if node:
-            page_range = node.cast(gdb.lookup_type('void').pointer()) - 24
-            page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
-
-            for x in free_page_ranges_tree(node['left_']):
-                yield x
-
-            yield page_range
-
-            for x in free_page_ranges_tree(node['right_']):
-                yield x
-
-    fpr = gdb.lookup_global_symbol('memory::free_page_ranges').value()
-    p = fpr['_free_huge']['tree_']['data_']['node_plus_pred_']
-    node = p['header_plus_size_']['header_']['parent_']
-    for x in free_page_ranges_tree(node):
-        yield x
-
-    for i in range(0, 16):
-        free_list = fpr['_free'][i]
-        node = free_list['data_']['root_plus_size_']['root_']
-        first_addr = node.cast(gdb.lookup_type('void').pointer())
-
-        if first_addr == free_list.address:
-            continue
-
-        while True:
-            page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
-            page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
-
-            yield page_range
-
-            node = node['next_']
-            addr = node.cast(gdb.lookup_type('void').pointer())
-            if addr == first_addr:
-                break
+def free_page_ranges(node = None):
+    if (node == None):
+        fpr = gdb.lookup_global_symbol('memory::free_page_ranges').value()
+        p = fpr['tree_']['data_']['node_plus_pred_']
+        node = p['header_plus_size_']['header_']['parent_']
+    
+    if node:
+        page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
+        page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
+        
+        for x in free_page_ranges(node['left_']):
+            yield x
+            
+        yield page_range
+        
+        for x in free_page_ranges(node['right_']):
+            yield x
 
 def vma_list(node = None):
     if (node == None):
