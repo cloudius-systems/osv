@@ -34,8 +34,6 @@ void free_phys_contiguous_aligned(void* p);
 
 void setup_free_memory(void* start, size_t bytes);
 
-void debug_memory_pool(size_t *total, size_t *contig);
-
 namespace bi = boost::intrusive;
 
 struct free_object {
@@ -91,8 +89,12 @@ public:
 
 struct page_range {
     explicit page_range(size_t size);
+    bool operator<(const page_range& pr) const {
+        return size < pr.size;
+    }
     size_t size;
-    boost::intrusive::set_member_hook<> member_hook;
+    boost::intrusive::set_member_hook<> set_hook;
+    boost::intrusive::list_member_hook<> list_hook;
 };
 
 void free_initial_memory_range(void* addr, size_t size);

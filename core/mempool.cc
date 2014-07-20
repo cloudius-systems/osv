@@ -32,6 +32,7 @@
 #include <osv/shrinker.h>
 #include <osv/defer.hh>
 #include "java/jvm_balloon.hh"
+#include <boost/dynamic_bitset.hpp>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
            size_t);
@@ -387,12 +388,6 @@ struct addr_cmp {
 namespace bi = boost::intrusive;
 
 mutex free_page_ranges_lock;
-bi::set<page_range,
-        bi::compare<addr_cmp>,
-        bi::member_hook<page_range,
-                       bi::set_member_hook<>,
-                       &page_range::member_hook>
-       > free_page_ranges __attribute__((init_priority((int)init_prio::fpranges)));
 
 // Our notion of free memory is "whatever is in the page ranges". Therefore it
 // starts at 0, and increases as we add page ranges.
@@ -522,6 +517,244 @@ void reclaimer::wait_for_memory(size_t mem)
     _oom_blocked.wait(mem);
 }
 
+class page_range_allocator {
+public:
+    static constexpr unsigned max_order = 16;
+
+    page_range_allocator() : _nobitmap(false) { }
+
+    page_range* alloc(size_t size);
+    page_range* alloc_aligned(size_t size, size_t offset, size_t alignment,
+                              bool fill = false);
+    void free(page_range* pr);
+
+    void initial_add(page_range* pr);
+
+    template<typename Func>
+    void for_each(unsigned min_order, Func f);
+    template<typename Func>
+    void for_each(Func f) {
+        for_each<Func>(0, f);
+    }
+
+    bool empty() const {
+        return _not_empty.none();
+    }
+    size_t size() const {
+        size_t size = _free_huge.size();
+        for (auto&& list : _free) {
+            size += list.size();
+        }
+        return size;
+    }
+
+private:
+    void insert(page_range& pr) {
+        auto addr = static_cast<void*>(&pr);
+        auto pr_end = static_cast<page_range**>(addr + pr.size - sizeof(page_range**));
+        *pr_end = &pr;
+        auto order = ilog2(pr.size / page_size);
+        if (order >= max_order) {
+            _free_huge.insert(pr);
+            _not_empty[max_order] = true;
+        } else {
+            _free[order].push_front(pr);
+            _not_empty[order] = true;
+        }
+        if (!_nobitmap) {
+            set_bits(pr, true);
+        }
+    }
+    void remove_huge(page_range& pr) {
+        _free_huge.erase(_free_huge.iterator_to(pr));
+        if (_free_huge.empty()) {
+            _not_empty[max_order] = false;
+        }
+    }
+    void remove_list(unsigned order, page_range& pr) {
+        _free[order].erase(_free[order].iterator_to(pr));
+        if (_free[order].empty()) {
+            _not_empty[order] = false;
+        }
+    }
+    void remove(page_range& pr) {
+        auto order = ilog2(pr.size / page_size);
+        if (order >= max_order) {
+            remove_huge(pr);
+        } else {
+            remove_list(order, pr);
+        }
+    }
+
+    unsigned get_bitmap_idx(page_range& pr) const {
+        auto idx = reinterpret_cast<uintptr_t>(&pr);
+        idx -= reinterpret_cast<uintptr_t>(mmu::phys_mem);
+        return idx / page_size;
+    }
+    void set_bits(page_range& pr, bool value, bool fill = false) {
+        auto end = pr.size / page_size - 1;
+        if (fill) {
+            for (unsigned idx = 0; idx <= end; idx++) {
+                _bitmap[get_bitmap_idx(pr) + idx] = value;
+            }
+        } else {
+            _bitmap[get_bitmap_idx(pr)] = value;
+            _bitmap[get_bitmap_idx(pr) + end] = value;
+        }
+    }
+
+    bi::multiset<page_range,
+                 bi::member_hook<page_range,
+                                 bi::set_member_hook<>,
+                                 &page_range::set_hook>,
+                 bi::constant_time_size<false>> _free_huge;
+    bi::list<page_range,
+             bi::member_hook<page_range,
+                             bi::list_member_hook<>,
+                             &page_range::list_hook>,
+             bi::constant_time_size<false>> _free[max_order];
+
+    std::bitset<max_order + 1> _not_empty;
+    boost::dynamic_bitset<> _bitmap;
+    bool _nobitmap;
+};
+
+page_range_allocator free_page_ranges
+    __attribute__((init_priority((int)init_prio::fpranges)));
+
+page_range* page_range_allocator::alloc(size_t size)
+{
+    auto exact_order = ilog2_roundup(size / page_size);
+    if (exact_order > max_order) {
+        exact_order = max_order;
+    }
+    auto bitset = _not_empty.to_ulong();
+    if (exact_order) {
+        bitset &= ~((1 << exact_order) - 1);
+    }
+    auto order = count_trailing_zeros(bitset);
+
+    page_range* range = nullptr;
+    if (!bitset) {
+        if (!exact_order || _free[exact_order - 1].empty()) {
+            return nullptr;
+        }
+        // TODO: This linear search makes worst case complexity of the allocator
+        // O(n). It would be better to fall back to non-contiguous allocation
+        // and make worst case complexity depend on the size of requested memory
+        // block and the logarithm of the number of free huge page ranges.
+        for (auto&& pr : _free[exact_order - 1]) {
+            if (pr.size >= size) {
+                range = &pr;
+                break;
+            }
+        }
+        return nullptr;
+    } else if (order == max_order) {
+        range = &*_free_huge.rbegin();
+        remove_huge(*range);
+    } else {
+        range = &_free[order].front();
+        remove_list(order, *range);
+    }
+
+    auto& pr = *range;
+    if (pr.size > size) {
+        auto& np = *new (static_cast<void*>(&pr) + size)
+                        page_range(pr.size - size);
+        insert(np);
+        pr.size = size;
+    }
+    if (!_nobitmap) {
+        set_bits(pr, false);
+    }
+    return &pr;
+}
+
+page_range* page_range_allocator::alloc_aligned(size_t size, size_t offset,
+                                                size_t alignment, bool fill)
+{
+    page_range* ret_header = nullptr;
+    for_each(std::max(ilog2(size / page_size), 1u) - 1, [&] (page_range& header) {
+        char* v = reinterpret_cast<char*>(&header);
+        auto expected_ret = v + header.size - size + offset;
+        auto alignment_shift = expected_ret - align_down(expected_ret, alignment);
+        if (header.size >= size + alignment_shift) {
+            remove(header);
+            if (alignment_shift) {
+                insert(*new (v + header.size - alignment_shift)
+                            page_range(alignment_shift));
+                header.size -= alignment_shift;
+            }
+            if (header.size == size) {
+                ret_header = &header;
+            } else {
+                header.size -= size;
+                insert(header);
+                ret_header = new (v + header.size) page_range(size);
+            }
+            set_bits(*ret_header, false, fill);
+            return false;
+        }
+        return true;
+    });
+    return ret_header;
+}
+
+void page_range_allocator::free(page_range* pr)
+{
+    if (_bitmap[get_bitmap_idx(*pr) - 1]) {
+        auto pr2 = *(reinterpret_cast<page_range**>(pr) - 1);
+        remove(*pr2);
+        pr2->size += pr->size;
+        pr = pr2;
+    }
+    if (_bitmap[get_bitmap_idx(*pr) + pr->size / page_size]) {
+        auto pr2 = static_cast<page_range*>(static_cast<void*>(pr) + pr->size);
+        remove(*pr2);
+        pr->size += pr2->size;
+    }
+    insert(*pr);
+}
+
+void page_range_allocator::initial_add(page_range* pr)
+{
+    auto idx = get_bitmap_idx(*pr) + pr->size / page_size;
+    if (idx > _bitmap.size()) {
+        _nobitmap = true;
+        auto prev_idx = get_bitmap_idx(*pr) - 1;
+        if (_bitmap.size() > prev_idx && _bitmap[prev_idx]) {
+            auto pr2 = *(reinterpret_cast<page_range**>(pr) - 1);
+            remove(*pr2);
+            pr2->size += pr->size;
+            pr = pr2;
+        }
+        insert(*pr);
+        _bitmap.resize(idx);
+        _nobitmap = false;
+        for_each([this] (page_range& pr) { set_bits(pr, true); return true; });
+    } else {
+        free(pr);
+    }
+}
+
+template<typename Func>
+void page_range_allocator::for_each(unsigned min_order, Func f)
+{
+    for (auto& pr : _free_huge) {
+        if (!f(pr)) {
+            return;
+        }
+    }
+    for (auto order = max_order; order-- > min_order;) {
+        for (auto& pr : _free[order]) {
+            if (!f(pr)) {
+                return;
+            }
+        }
+    }
+}
+
 static void* malloc_large(size_t size, size_t alignment)
 {
     auto requested_size = size;
@@ -537,38 +770,18 @@ static void* malloc_large(size_t size, size_t alignment)
     while (true) {
         WITH_LOCK(free_page_ranges_lock) {
             reclaimer_thread.wait_for_minimum_memory();
-
-            for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-                auto header = &*i;
-
-                char *v = reinterpret_cast<char*>(header);
-                auto expected_ret = v + header->size - size + page_size;
-                auto alignment_shift = expected_ret -
-                        align_down(expected_ret, alignment);
-
-                if (header->size >= size + alignment_shift) {
-                    if (alignment_shift) {
-                        // Leave "alignment_shift" bytes at the end of the
-                        // range free, so our allocation below is aligned.
-                        free_page_ranges.insert(*new(v + header->size -
-                                alignment_shift) page_range(alignment_shift));
-                        header->size -= alignment_shift;
-                    }
-                    page_range* ret_header;
-                    if (header->size == size) {
-                        free_page_ranges.erase(i);
-                        ret_header = header;
-                    } else {
-                        header->size -= size;
-                        ret_header = new (v + header->size) page_range(size);
-                    }
-                    on_alloc(size);
-                    void* obj = ret_header;
-                    obj += offset;
-                    trace_memory_malloc_large(obj, requested_size, size,
-                                              alignment);
-                    return obj;
-                }
+            page_range* ret_header;
+            if (alignment > page_size) {
+                ret_header = free_page_ranges.alloc_aligned(size, page_size, alignment);
+            } else {
+                ret_header = free_page_ranges.alloc(size);
+            }
+            if (ret_header) {
+                on_alloc(size);
+                void* obj = ret_header;
+                obj += offset;
+                trace_memory_malloc_large(obj, requested_size, size, alignment);
+                return obj;
             }
             reclaimer_thread.wait_for_memory(size);
         }
@@ -609,7 +822,7 @@ bool reclaimer_waiters::wake_waiters()
 {
     bool woken = false;
     assert(mutex_owned(&free_page_ranges_lock));
-    for (auto& fp : free_page_ranges) {
+    free_page_ranges.for_each([&] (page_range& fp) {
         // We won't do the allocations, so simulate. Otherwise we can have
         // 10Mb available in the whole system, and 4 threads that wait for
         // it waking because they all believe that memory is available
@@ -617,7 +830,8 @@ bool reclaimer_waiters::wake_waiters()
         // We expect less waiters than page ranges so the inner loop is one
         // of waiters. But we cut the whole thing short if we're out of them.
         if (_waiters.empty()) {
-            return true;
+            woken = true;
+            return false;
         }
 
         auto it = _waiters.begin();
@@ -633,7 +847,8 @@ bool reclaimer_waiters::wake_waiters()
                 woken = true;
             }
         }
-    }
+        return true;
+    });
 
     if (!_waiters.empty()) {
         reclaimer_thread.wake();
@@ -753,34 +968,12 @@ void reclaimer::_do_reclaim()
     }
 }
 
-static page_range* merge(page_range* a, page_range* b)
-{
-    void* va = a;
-    void* vb = b;
-
-    if (va + a->size == vb) {
-        a->size += b->size;
-        free_page_ranges.erase(*b);
-        return a;
-    } else {
-        return b;
-    }
-}
-
 // Return a page range back to free_page_ranges. Note how the size of the
 // page range is range->size, but its start is at range itself.
 static void free_page_range_locked(page_range *range)
 {
-    auto i = free_page_ranges.insert(*range).first;
-
     on_free(range->size);
-
-    if (i != free_page_ranges.begin()) {
-        i = free_page_ranges.iterator_to(*merge(&*boost::prior(i), &*i));
-    }
-    if (boost::next(i) != free_page_ranges.end()) {
-        merge(&*i, &*boost::next(i));
-    }
+    free_page_ranges.free(range);
 }
 
 // Return a page range back to free_page_ranges. Note how the size of the
@@ -839,22 +1032,8 @@ static void refill_page_buffer()
             auto limit = (pbuf.max + 1) / 2;
 
             while (pbuf.nr < limit) {
-                auto it = free_page_ranges.begin();
-                if (it == free_page_ranges.end())
-                    break;
-                auto p = &*it;
-                auto size = std::min(p->size, (limit - pbuf.nr) * page_size);
-                p->size -= size;
-                total_size += size;
-                void* pages = static_cast<void*>(p) + p->size;
-                if (!p->size) {
-                    free_page_ranges.erase(it);
-                }
-                while (size) {
-                    pbuf.free[pbuf.nr++] = pages;
-                    pages += page_size;
-                    size -= page_size;
-                }
+                pbuf.free[pbuf.nr++] = static_cast<void*>(free_page_ranges.alloc(page_size));
+                total_size += page_size;
             }
         }
         // That will wake up the reclaimer, we can't do that while holding the preempt_lock
@@ -905,20 +1084,8 @@ static bool free_page_local(void* v)
 static void* early_alloc_page()
 {
     WITH_LOCK(free_page_ranges_lock) {
-        if (free_page_ranges.empty()) {
-            debug_early("early_alloc_page(): out of memory\n");
-            abort();
-        }
-
-        auto begin = free_page_ranges.begin();
-        auto p = &*begin;
-        p->size -= page_size;
         on_alloc(page_size);
-        void* page = static_cast<void*>(p) + p->size;
-        if (!p->size) {
-            free_page_ranges.erase(begin);
-        }
-        return page;
+        return static_cast<void*>(free_page_ranges.alloc(page_size));
     }
 }
 
@@ -975,44 +1142,10 @@ void free_page(void* v)
 void* alloc_huge_page(size_t N)
 {
     WITH_LOCK(free_page_ranges_lock) {
-        for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-            page_range *range = &*i;
-            if (range->size < N)
-                continue;
-            intptr_t v = (intptr_t) range;
-            // Find the the beginning of the last aligned area in the given
-            // page range. This will be our return value:
-            intptr_t ret = (v+range->size-N) & ~(N-1);
-            if (ret<v)
-                continue;
-            // endsize is the number of bytes in the page range *after* the
-            // N bytes we will return. calculate it before changing header->size
-            int endsize = v+range->size-ret-N;
-            // Make the original page range smaller, pointing to the part before
-            // our ret (if there's nothing before, remove this page range)
-            size_t alloc_size;
-            if (ret==v) {
-                alloc_size = range->size;
-                free_page_ranges.erase(i);
-            } else {
-                // Note that this is is done conditionally because we are
-                // operating page ranges. That is what is left on our page
-                // ranges, so that is what we bill. It doesn't matter that we
-                // are currently allocating "N" bytes.  The difference will be
-                // later on wiped by the on_free() call that exists within
-                // free_page_range in the conditional right below us.
-                alloc_size = range->size - (ret - v);
-                range->size = ret-v;
-            }
-            on_alloc(alloc_size);
-
-            // Create a new page range for the endsize part (if there is one)
-            if (endsize > 0) {
-                void *e = (void *)(ret+N);
-                free_page_range(e, endsize);
-            }
-            // Return the middle 2MB part
-            return (void*) ret;
+        auto pr = free_page_ranges.alloc_aligned(N, 0, N, true);
+        if (pr) {
+            on_alloc(N);
+            return static_cast<void*>(pr);
             // TODO: consider using tracker.remember() for each one of the small
             // pages allocated. However, this would be inefficient, and since we
             // only use alloc_huge_page in one place, maybe not worth it.
@@ -1055,28 +1188,15 @@ void free_initial_memory_range(void* addr, size_t size)
 
     on_new_memory(size);
 
-    free_page_range(addr, size);
+    on_free(size);
 
+    auto pr = new (addr) page_range(size);
+    free_page_ranges.initial_add(pr);
 }
 
 void  __attribute__((constructor(init_prio::mempool))) setup()
 {
     arch_setup_free_memory();
-}
-
-void debug_memory_pool(size_t *total, size_t *contig)
-{
-    *total = *contig = 0;
-
-    WITH_LOCK(free_page_ranges_lock) {
-        for (auto i = free_page_ranges.begin(); i != free_page_ranges.end(); ++i) {
-            auto header = &*i;
-            *total += header->size;
-            if (header->size > *contig) {
-                *contig = header->size;
-            }
-        }
-    }
 }
 
 }

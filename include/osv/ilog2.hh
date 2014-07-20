@@ -30,6 +30,21 @@ inline unsigned count_leading_zeros(unsigned long long n)
     return __builtin_clzll(n);
 }
 
+inline unsigned count_trailing_zeros(unsigned n)
+{
+    return __builtin_ctz(n);
+}
+
+inline unsigned count_trailing_zeros(unsigned long n)
+{
+    return __builtin_ctzl(n);
+}
+
+inline unsigned count_trailing_zeros(unsigned long long n)
+{
+    return __builtin_ctzll(n);
+}
+
 template <typename T>
 inline
 unsigned ilog2_roundup(T n)
@@ -38,6 +53,16 @@ unsigned ilog2_roundup(T n)
         return 0;
     }
     return sizeof(T)*8 - count_leading_zeros(n - 1);
+}
+
+template <typename T>
+inline
+unsigned ilog2(T n)
+{
+    if (n <= 1) {
+        return 0;
+    }
+    return sizeof(T) * 8 - count_leading_zeros(n) - 1;
 }
 
 template <typename T>
