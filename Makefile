@@ -32,7 +32,7 @@ $(submake) $(modulemk): Makefile
 	mkdir -p $(dir $@)
 	# transition from build/release being the output directory
 	# to build/release being a symlink to build/release.x64
-	[ ! -L $(outlink) ] || rm -rf $(outlink)
+	[ ! -L $(outlink) ] || rm -rI $(outlink)
 	ln -nsf $(notdir $(out)) $(outlink)
 	echo 'mode = $(mode)' > $@
 	echo 'src = $(abspath .)' >> $@
