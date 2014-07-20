@@ -117,14 +117,14 @@ def upload(osv, manifest, depends):
         if hostname.startswith("->"):
             link = hostname[2:]
             cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
-            cpio_send(link)
+            cpio_send(link.encode())
         else:
             depends.write(u'\t%s \\\n' % (hostname,))
             hostname = strip_file(hostname)
             if os.path.islink(hostname):
                 link = os.readlink(hostname)
                 cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
-                cpio_send(link)
+                cpio_send(link.encode())
             elif os.path.isdir(hostname):
                 cpio_send(cpio_header(name, stat.S_IFDIR, 0))
             else:
