@@ -92,6 +92,7 @@
 
 #include <machine/in_cksum.h>
 #include <bsd/sys/sys/md5.h>
+#include <bsd/sys/net/routecache.hh>
 
 VNET_DEFINE(int, tcp_mssdflt) = TCP_MSS;
 #ifdef INET6
@@ -1673,6 +1674,7 @@ u_long
 tcp_maxmtu(struct in_conninfo *inc, int *flags)
 {
 	struct route sro;
+	struct rtentry rte_one;
 	struct bsd_sockaddr_in *dst;
 	struct ifnet *ifp;
 	u_long maxmtu = 0;
@@ -1685,7 +1687,8 @@ tcp_maxmtu(struct in_conninfo *inc, int *flags)
 		dst->sin_family = AF_INET;
 		dst->sin_len = sizeof(*dst);
 		dst->sin_addr = inc->inc_faddr;
-		in_rtalloc_ign(&sro, 0, inc->inc_fibnum);
+		route_cache::lookup(dst, inc->inc_fibnum, &rte_one);
+		sro.ro_rt = &rte_one;
 	}
 	if (sro.ro_rt != NULL) {
 		ifp = sro.ro_rt->rt_ifp;
@@ -1700,7 +1703,6 @@ tcp_maxmtu(struct in_conninfo *inc, int *flags)
 			    ifp->if_hwassist & CSUM_TSO)
 				*flags |= CSUM_TSO;
 		}
-		RTFREE(sro.ro_rt);
 	}
 	return (maxmtu);
 }

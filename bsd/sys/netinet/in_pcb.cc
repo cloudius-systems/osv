@@ -75,6 +75,8 @@
 #include <bsd/sys/netinet6/ip6_var.h>
 #endif /* INET6 */
 
+#include <bsd/sys/net/routecache.hh>
+
 
 #ifdef IPSEC
 #include <bsd/sys/netipsec/ipsec.h>
@@ -654,6 +656,7 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	struct bsd_sockaddr *sa;
 	struct bsd_sockaddr_in *sin;
 	struct route sro;
+	struct rtentry rte_one;
 	int error;
 
 	KASSERT(laddr != NULL, ("%s: laddr NULL", __func__));
@@ -673,7 +676,10 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	 * Find out route to destination.
 	 */
 	if ((inp->inp_socket->so_options & SO_DONTROUTE) == 0)
-		in_rtalloc_ign(&sro, 0, inp->inp_inc.inc_fibnum);
+	{
+	    route_cache::lookup(sin, inp->inp_inc.inc_fibnum, &rte_one);
+	    sro.ro_rt = &rte_one;
+	}
 
 	/*
 	 * If we found a route, use the address corresponding to
@@ -770,8 +776,6 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	}
 
 done:
-	if (sro.ro_rt != NULL)
-		RTFREE(sro.ro_rt);
 	return (error);
 }
 
