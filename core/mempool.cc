@@ -527,8 +527,9 @@ class page_range_allocator {
 public:
     static constexpr unsigned max_order = 16;
 
-    page_range_allocator() : _nobitmap(false) { }
+    page_range_allocator() : _deferred_free(nullptr) { }
 
+    template<bool UseBitmap = true>
     page_range* alloc(size_t size);
     page_range* alloc_aligned(size_t size, size_t offset, size_t alignment,
                               bool fill = false);
@@ -555,6 +556,7 @@ public:
     }
 
 private:
+    template<bool UseBitmap = true>
     void insert(page_range& pr) {
         auto addr = static_cast<void*>(&pr);
         auto pr_end = static_cast<page_range**>(addr + pr.size - sizeof(page_range**));
@@ -567,7 +569,7 @@ private:
             _free[order].push_front(pr);
             _not_empty[order] = true;
         }
-        if (!_nobitmap) {
+        if (UseBitmap) {
             set_bits(pr, true);
         }
     }
@@ -621,10 +623,41 @@ private:
              bi::constant_time_size<false>> _free[max_order];
 
     std::bitset<max_order + 1> _not_empty;
-    boost::dynamic_bitset<> _bitmap;
-    bool _nobitmap;
+
+    template<typename T>
+    class bitmap_allocator {
+    public:
+        typedef T value_type;
+        T* allocate(size_t n);
+        void deallocate(T* p, size_t n);
+        size_t get_size(size_t n) {
+            return align_up(sizeof(T) * n, page_size);
+        }
+    };
+    boost::dynamic_bitset<unsigned long,
+                          bitmap_allocator<unsigned long>> _bitmap;
+    page_range* _deferred_free;
 };
 
+page_range_allocator _free_page_ranges
+    __attribute__((init_priority((int)init_prio::fpranges)));
+
+template<typename T>
+T* page_range_allocator::bitmap_allocator<T>::allocate(size_t n)
+{
+    auto pr = _free_page_ranges.alloc<false>(get_size(n));
+    return reinterpret_cast<T*>(pr);
+}
+
+template<typename T>
+void page_range_allocator::bitmap_allocator<T>::deallocate(T* p, size_t n)
+{
+    auto pr = new (p) page_range(get_size(n));
+    assert(!_free_page_ranges._deferred_free);
+    _free_page_ranges._deferred_free = pr;
+}
+
+template<bool UseBitmap>
 page_range* page_range_allocator::alloc(size_t size)
 {
     auto exact_order = ilog2_roundup(size / page_size);
@@ -665,10 +698,10 @@ page_range* page_range_allocator::alloc(size_t size)
     if (pr.size > size) {
         auto& np = *new (static_cast<void*>(&pr) + size)
                         page_range(pr.size - size);
-        insert(np);
+        insert<UseBitmap>(np);
         pr.size = size;
     }
-    if (!_nobitmap) {
+    if (UseBitmap) {
         set_bits(pr, false);
     }
     return &pr;
@@ -724,7 +757,6 @@ void page_range_allocator::initial_add(page_range* pr)
 {
     auto idx = get_bitmap_idx(*pr) + pr->size / page_size;
     if (idx > _bitmap.size()) {
-        _nobitmap = true;
         auto prev_idx = get_bitmap_idx(*pr) - 1;
         if (_bitmap.size() > prev_idx && _bitmap[prev_idx]) {
             auto pr2 = *(reinterpret_cast<page_range**>(pr) - 1);
@@ -732,10 +764,15 @@ void page_range_allocator::initial_add(page_range* pr)
             pr2->size += pr->size;
             pr = pr2;
         }
-        insert(*pr);
+        insert<false>(*pr);
+        _bitmap.reset();
         _bitmap.resize(idx);
-        _nobitmap = false;
+
         for_each([this] (page_range& pr) { set_bits(pr, true); return true; });
+        if (_deferred_free) {
+            free(_deferred_free);
+            _deferred_free = nullptr;
+        }
     } else {
         free(pr);
     }
