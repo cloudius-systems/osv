@@ -180,7 +180,6 @@ inline
 void rcu_hashtable<T, Hash>::erase(iterator i)
 {
     --_size;
-    maybe_shrink();
     auto p = i._p;
     next_ptr* next = p->next.read_by_owner();
     next_ptr* prev = p->prev;
@@ -189,6 +188,7 @@ void rcu_hashtable<T, Hash>::erase(iterator i)
     }
     prev->next.assign(next);
     rcu_dispose(p);
+    maybe_shrink();
 }
 
 template <typename T, typename Hash>
