@@ -1384,8 +1384,9 @@ static inline void* std_realloc(void* object, size_t size)
     return ptr;
 }
 
-static inline void std_free(void* object)
+void free(void* object)
 {
+    trace_memory_free(object);
     if (!object) {
         return;
     }
@@ -1401,6 +1402,8 @@ static inline void std_free(void* object)
         object = mmu::translate_mem_area(mmu::mem_area::mempool,
                                          mmu::mem_area::main, object);
         return memory::pool::from_object(object)->free(object);
+    case mmu::mem_area::debug:
+        return dbg::free(object);
     default:
         abort();
     }
@@ -1474,9 +1477,6 @@ void* malloc(size_t size, size_t alignment)
 
 void free(void* v)
 {
-    if (v < debug_base) {
-        return std_free(v);
-    }
     assert(!recursed);
     recursed = true;
     auto unrecurse = defer([&] { recursed = false; });
@@ -1548,16 +1548,6 @@ void* realloc(void* obj, size_t size)
     return buf;
 }
 
-void free(void* obj)
-{
-    trace_memory_free(obj);
-#if CONF_debug_memory == 0
-    std_free(obj);
-#else
-    dbg::free(obj);
-#endif
-}
-
 size_t malloc_usable_size(void* obj)
 {
     if ( obj == nullptr ) {
@@ -1614,9 +1604,7 @@ namespace memory {
 
 void enable_debug_allocator()
 {
-#if CONF_debug_memory == 1
     dbg::enabled = true;
-#endif
 }
 
 void* alloc_phys_contiguous_aligned(size_t size, size_t align)

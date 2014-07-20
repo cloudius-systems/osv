@@ -63,7 +63,7 @@ constexpr void* translate_mem_area(mem_area from, mem_area to, void* addr)
 constexpr uintptr_t main_mem_area_base = get_mem_area_base(mem_area::main);
 static char* const phys_mem = reinterpret_cast<char*>(main_mem_area_base);
 // area for debug allocations:
-constexpr uintptr_t debug_mem_area_base = get_mem_area_base(mem_area::main);
+constexpr uintptr_t debug_mem_area_base = get_mem_area_base(mem_area::debug);
 static char* const debug_base = reinterpret_cast<char*>(debug_mem_area_base);
 
 enum {
