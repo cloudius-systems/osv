@@ -28,22 +28,20 @@ all: $(submake) $(modulemk)
 		-e -f tests/reclaim/build.xml $(if $V,,-q), ANT tests/reclaim)
 	$(MAKE) -r -C $(dir $(submake)) $@
 
-$(submake) $(modulemk): Makefile prepare-dir
+$(submake) $(modulemk): Makefile
 	mkdir -p $(dir $@)
+	# transition from build/release being the output directory
+	# to build/release being a symlink to build/release.x64
+	[ ! -L $(outlink) ] || rm -rf $(outlink)
+	ln -nsf $(notdir $(out)) $(outlink)
 	echo 'mode = $(mode)' > $@
 	echo 'src = $(abspath .)' >> $@
 	echo 'out = $(abspath $(out))' >> $@
 	echo 'VPATH = $(abspath .)' >> $@
 	echo 'include $(abspath build.mk)' >> $@
 
-.PHONY: prepare-dir
-
-prepare-dir:
-	# transition from build/release being the output directory
-	# to build/release being a symlink to build/release.x64
-	[ ! -e $(out) -o -L $(outlink) ] || rm -rf $(outlink)
+$(out):
 	mkdir -p $(out)
-	ln -nsf $(notdir $(out)) $(outlink)
 
 clean-core:
 	$(call quiet, rm -rf $(outlink) $(out), CLEAN)
