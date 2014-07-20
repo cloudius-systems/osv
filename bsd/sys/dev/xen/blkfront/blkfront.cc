@@ -220,7 +220,7 @@ blkfront_vdevice_to_unit(uint32_t vdevice, int *unit, const char **name)
 
 struct disk *disk_alloc(void)
 {
-    return (disk *)malloc(sizeof(struct disk) , 0, 0);
+    return (disk *)malloc(sizeof(struct disk) , M_WHATEVER, 0);
 }
 
 int
