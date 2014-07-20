@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <osv/shrinker.h>
 #include <osv/defer.hh>
+#include <osv/dbg-alloc.hh>
 #include "java/jvm_balloon.hh"
 #include <boost/dynamic_bitset.hpp>
 
