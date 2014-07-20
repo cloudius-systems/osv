@@ -31,7 +31,7 @@ public:
 
     class draining_iterator : public std::iterator<std::input_iterator_tag, T> {
     private:
-        int _idx;
+        unsigned _idx;
         ring_mpsc_t& _ring;
         T _element;
 
@@ -48,7 +48,7 @@ public:
             do {} while (++_idx < _ring.rings.size() && !_ring.rings[_idx].pop(_element));
         }
     public:
-        draining_iterator(ring_mpsc_t& ring, int idx = 0)
+        draining_iterator(ring_mpsc_t& ring, unsigned idx = 0)
             : _idx(idx)
             , _ring(ring)
         {
