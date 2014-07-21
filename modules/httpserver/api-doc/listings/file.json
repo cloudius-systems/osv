@@ -168,7 +168,7 @@
                   {
                      "name":"op",
                      "description":"The operation to perform",
-                     "enum":["MKDIRS", "RENAME", "COPY"],
+                     "enum":["MKDIRS", "RENAME", "COPY", "WRITE"],
                      "required":true,
                      "allowMultiple":false,
                      "dataType":"string",
@@ -196,6 +196,22 @@
                      "required":false,
                      "allowMultiple":false,
                      "dataType":"boolean",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"overwrite",
+                     "description":"If a file already exists, should it be overwritten?",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"boolean",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"content",
+                     "description":"A content to be added to a file or standard output",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"string",
                      "paramType":"query"
                   }
                ]

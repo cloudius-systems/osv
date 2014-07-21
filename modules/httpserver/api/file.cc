@@ -336,6 +336,17 @@ class put_file_handler : public handler_base {
             }
             copy(full_path, destination);
             break;
+        case ns_putFile::op::WRITE:
+        {
+            auto flags = ios::out;
+            flags |= (req.get_query_param("overwrite") == "true")? ios::trunc : ios::app;
+            ofstream f;
+            f.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
+            f.open(full_path,flags);
+            f << req.get_query_param("content");
+            f.close();
+        }
+        break;
         default:
             throw bad_param_exception("Bad op parameter " + opStr);
         }
