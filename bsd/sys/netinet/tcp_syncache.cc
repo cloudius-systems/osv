@@ -645,7 +645,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 	 * configured.
 	 */
 	inp->inp_lport = sc->sc_inc.inc_lport;
-	if ((error = in_pcbinshash_nopcbgroup(inp)) != 0) {
+	if ((error = in_pcbinshash(inp)) != 0) {
 		/*
 		 * Undo the assignments above if we failed to
 		 * put the PCB on the hash lists.
