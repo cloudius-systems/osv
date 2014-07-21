@@ -25,14 +25,14 @@ void init(routes& routes)
 {
     hardware_json_init_path();
 
-    processorFeatures.set_handler("json", [](const_req req)
+    processorFeatures.set_handler([](const_req req)
     {
-        return formatter::to_json(processor::features_str());
+        return processor::features_str();
     });
 
-    processorCount.set_handler("json", [](const_req req)
+    processorCount.set_handler([](const_req req)
     {
-        return formatter::to_json(sched::cpus.size());
+        return sched::cpus.size();
     });
 }
 

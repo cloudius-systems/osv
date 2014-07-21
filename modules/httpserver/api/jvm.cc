@@ -68,23 +68,23 @@ class set_jmx_handler : public handler_base {
 void init(routes& routes)
 {
     jvm_json_init_path();
-    getJavaVersion.set_handler("json", [](const_req req)
+    getJavaVersion.set_handler([](const_req req)
     {
         validate_jvm();
-        return formatter::to_json(java_api::instance().get_system_property("java.version") );
+        return java_api::instance().get_system_property("java.version");
     });
 
     getJMXvalue.set_handler(new get_jmx_handler());
 
     setJMXvalue.set_handler(new set_jmx_handler());
 
-    getMbeanList.set_handler("json", [](const_req req)
+    getMbeanList.set_handler([](const_req req)
     {
         validate_jvm();
-        return formatter::to_json(java_api::instance().get_all_mbean() );
+        return java_api::instance().get_all_mbean();
     });
 
-    getGCinfo.set_handler("json", [](const_req req)
+    getGCinfo.set_handler([](const_req req)
     {
         validate_jvm();
         vector<MemoryManager> res;
@@ -96,10 +96,10 @@ void init(routes& routes)
             res.back().name = gc.name;
 
         }
-        return formatter::to_json(res);
+        return res;
     });
 
-    forceGC.set_handler("json", [](const_req req)
+    forceGC.set_handler([](const_req req)
     {
         validate_jvm();
         java_api::instance().call_gc();
