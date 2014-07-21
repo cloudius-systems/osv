@@ -9,9 +9,10 @@ tmp = 0x80000
 bootsect = 0x7c00
 cmdline = 0x7e00
 target =  0x1800000
-lzentry = 24+target
+elf_entry_point_header_offset = 0x18
+lzentry = target+elf_entry_point_header_offset
 loader = 0x200000
-entry = loader+24
+entry = loader+elf_entry_point_header_offset
 
 mb_info = 0x1000
 // OSv information lays in the end of this struct, which is 88 bytes in size.
