@@ -1299,7 +1299,7 @@ class osv_runqueue(gdb.Command):
         gdb.Command.__init__(self, 'osv runqueue',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        ncpus = gdb.parse_and_eval('sched::cpus._M_impl._M_finish - sched::cpus._M_impl._M_start');
+        ncpus = to_int(gdb.parse_and_eval('sched::cpus._M_impl._M_finish - sched::cpus._M_impl._M_start'))
         for cpu in range(ncpus) :
             gdb.write("CPU %d:\n" % cpu)
             for thread in runqueue(cpu):
