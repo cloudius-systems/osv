@@ -229,7 +229,7 @@ sys_umount2(const char *path, int flags)
     struct mount *mp;
     int error, pathlen;
 
-    DPRINTF(VFSDB_SYSCALL, ("sys_umount: path=%s\n", path));
+    kprintf("VFS: unmounting %s\n", path);
 
     MOUNT_LOCK();
 
