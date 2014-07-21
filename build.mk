@@ -111,7 +111,6 @@ gcc-sysroot = $(if $(CROSS_PREFIX), --sysroot $(src)/external/$(arch)/gcc.bin) \
 #
 #   mydir/*.o EXTRA_FLAGS = <MY_STUFF>
 EXTRA_FLAGS = -D__OSV_CORE__
-EXTRA_LIBS =
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
 	$(kernel-defines) \
@@ -162,7 +161,7 @@ build-c = $(CC) $(CFLAGS) -c -o $@ $<
 q-build-c = $(call quiet, $(build-c), CC $@)
 build-s = $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<
 q-build-s = $(call quiet, $(build-s), AS $@)
-build-so = $(CC) $(CFLAGS) -o $@ $^ $(EXTRA_LIBS)
+build-so = $(CC) $(CFLAGS) -o $@ $^
 q-build-so = $(call quiet, $(build-so), CC $@)
 adjust-deps = sed -i 's! $(subst .,\.,$<)\b! !g' $(@:.o=.d)
 q-adjust-deps = $(call very-quiet, $(adjust-deps))
@@ -354,10 +353,6 @@ tools += tools/route/lsroute.so
 tools += tools/mkfs/mkfs.so
 tools += tools/cpiod/cpiod.so
 tools += tools/uush/uush.so
-
-tools += tools/libtools.so
-
-tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools
 
 ifeq ($(arch),aarch64)
 tools += tests/tst-hello.so
@@ -849,6 +844,7 @@ objects += core/net_channel.o
 objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
+objects += tools/route/route_info.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
@@ -964,9 +960,6 @@ tools/mkfs/mkfs.so: tools/mkfs/mkfs.o libzfs.so
 
 tools/cpiod/cpiod.so: tools/cpiod/cpiod.o tools/cpiod/cpio.o libzfs.so
 
-tools/libtools.so: tools/route/route_info.o
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o tools/libtools.so $^, LINK $@)
-
 runtime.o: gen/include/ctype-data.h
 
 gen/include/ctype-data.h: gen-ctype-data
@@ -1001,7 +994,7 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 ################################################################################
 
 .PHONY: process-modules
-process-modules: tools/libtools.so bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
+process-modules: bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
 	cd module \
 	  && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= $(src)/scripts/module.py build -c $(image)
 
