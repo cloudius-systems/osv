@@ -22,6 +22,7 @@ mgmt = 1
 # and then the main makefile can treat the build products (jars) as inputs
 
 all: $(submake) $(modulemk)
+	ln -nsf $(notdir $(out)) $(outlink)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/bench) \
 		-e -f tests/bench/build.xml $(if $V,,-q), ANT tests/bench)
 	$(call quiet, $(silentant) ant -Dmode=$(mode) -Dout=$(abspath $(out)/tests/reclaim) \
@@ -33,7 +34,6 @@ $(submake) $(modulemk): Makefile
 	# transition from build/release being the output directory
 	# to build/release being a symlink to build/release.x64
 	[ ! -L $(outlink) ] || rm -rf $(outlink)
-	ln -nsf $(notdir $(out)) $(outlink)
 	echo 'mode = $(mode)' > $@
 	echo 'src = $(abspath .)' >> $@
 	echo 'out = $(abspath $(out))' >> $@
