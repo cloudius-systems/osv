@@ -35,72 +35,72 @@ void init(routes& routes)
 {
     os_json_init_path();
 
-    getOSversion.set_handler("json", [](const_req req)
+    getOSversion.set_handler([](const_req req)
     {
-        return formatter::to_json(osv::version());
+        return osv::version();
     });
 
-    getOSmanufacturer.set_handler("json", [](const_req req)
+    getOSmanufacturer.set_handler([](const_req req)
     {
-        return formatter::to_json("cloudius-systems");
+        return "cloudius-systems";
     });
 
-    getLastBootUpTime.set_handler("json",[](const_req req)
+    getLastBootUpTime.set_handler([](const_req req)
     {
         struct sysinfo info;
         sysinfo(&info);
-        return formatter::to_json(info.uptime);
+        return info.uptime;
     });
 
-    getDate.set_handler("json", [](const_req req)
+    getDate.set_handler([](const_req req)
     {
         time_t t;
         time(&t);
         date_time result;
         localtime_r(&t,&result);
-        return formatter::to_json(result);
+        return result;
     });
 
-    getTotalVirtualMemorySize.set_handler("json", [](const_req req)
+    getTotalVirtualMemorySize.set_handler([](const_req req)
     {
         struct sysinfo info;
         sysinfo(&info);
-        return formatter::to_json(info.totalram);
+        return info.totalram;
     });
 
-    getFreeVirtualMemory.set_handler("json", [](const_req req)
+    getFreeVirtualMemory.set_handler([](const_req req)
     {
         struct sysinfo info;
         sysinfo(&info);
-        return formatter::to_json(info.freeram);
+        return info.freeram;
     });
 
-    os_json::shutdown.set_handler("json", [](const_req req)
+    os_json::shutdown.set_handler([](const_req req)
     {
         osv::shutdown();
-        return formatter::to_json("");
+        return "";
     });
 
-    getDebugMessages.set_handler("json", [](const_req req)
+    getDebugMessages.set_handler([](const_req req)
     {
-        return formatter::to_json(debug_buffer);
+        return debug_buffer;
     });
 
-    getHostname.set_handler("json", [](const_req req)
+    getHostname.set_handler([](const_req req)
     {
         char hostname[65];
         gethostname(hostname,65);
-        return formatter::to_json(hostname);
+        return json_return_type(hostname);
     });
 
-    setHostname.set_handler("json", [](const_req req)
+    setHostname.set_handler([](const_req req)
     {
         string hostname = req.get_query_param("name");
         sethostname(hostname.c_str(), hostname.size());
-        return formatter::to_json("");
+        return "";
     });
 
-    listThreads.set_handler("json", [](const_req req)
+    listThreads.set_handler([](const_req req)
     {
         using namespace std::chrono;
         httpserver::json::Threads threads;
@@ -113,15 +113,15 @@ void init(routes& routes)
             thread.name = t.name();
             threads.list.push(thread);
         });
-        return formatter::to_json(threads);
+        return threads;
     });
 
-    getCmdline.set_handler("json", [](const_req req)
+    getCmdline.set_handler([](const_req req)
     {
-        return formatter::to_json(osv::getcmdline());
+        return osv::getcmdline();
     });
 
-    replaceCmdline.set_handler("json", [](const_req req)
+    replaceCmdline.set_handler([](const_req req)
     {
         string newcmd = req.get_query_param("cmdline");
 
@@ -133,7 +133,7 @@ void init(routes& routes)
             throw server_error_exception(e.what());
         }
 
-        return formatter::to_json(osv::getcmdline());
+        return osv::getcmdline();
 
     });
 

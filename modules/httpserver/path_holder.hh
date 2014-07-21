@@ -62,9 +62,7 @@ public:
      * @param fun a request function
      * @return a reference to the handler that would be created
      */
-    handler_base& set_handler(const request_function& fun) const {
-        return set_handler("json", fun);
-    }
+    handler_base& set_handler(const json_request_function& fun) const;
 
     /**
      * assign a handle function to the path

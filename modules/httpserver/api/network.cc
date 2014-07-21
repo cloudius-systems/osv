@@ -33,7 +33,7 @@ void init(routes& routes)
             res.back().set(route);
             return true;
         });
-        return formatter::to_json(res);
+        return res;
     });
 }
 

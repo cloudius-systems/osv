@@ -15,6 +15,7 @@
 #include <unordered_map>
 #include <functional>
 #include "exception.hh"
+#include <json/json_elements.hh>
 
 namespace httpserver {
 
@@ -251,6 +252,13 @@ std::string(const_req req,
             http::server::reply&)> handle_function;
 
 /**
+ * A json request function is a lambda expression that gets only the request
+ * as its parameter and return a json response.
+ * Using the json response is done implicitly.
+ */
+typedef std::function<json::json_return_type(const_req req)> json_request_function;
+
+/**
  * The function handler get a lambda expression in the constructor.
  * it will call that expression to get the result
  * This is suited for very simple handlers
@@ -275,6 +283,15 @@ public:
     {
     }
 
+    function_handler(const json_request_function& _handle) :
+        f_handle([_handle](const_req req, http::server::reply& rep) {
+            json::json_return_type res = _handle(req);
+            return res.res;
+            }),
+            type("json")
+    {
+
+    }
     void handle(const std::string& path, parameters* parts,
                 const http::server::request& req, http::server::reply& rep)
     override;

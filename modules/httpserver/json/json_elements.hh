@@ -179,6 +179,26 @@ struct json_base {
     std::vector<json_base_element*> elements;
 };
 
+/**
+ * The json return type, is a helper class to return a json
+ * formatted string.
+ * It uses autoboxing in its constructor so when a function return
+ * type is json_return_type, it could return a type that would be converted
+ * ie.
+ * json_return_type foo() {
+ *     return "hello";
+ * }
+ *
+ * would return a json formatted string: "hello" (rather then hello)
+ */
+struct json_return_type {
+    std::string res;
+    template<class T>
+    json_return_type(const T& _res) {
+        res = formatter::to_json(_res);
+    }
+};
+
 }
 
 }

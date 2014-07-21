@@ -30,4 +30,9 @@ handler_base& path_holder::set_handler(const std::string& type,
     return set_handler(new function_handler(fun, type));
 }
 
+handler_base& path_holder::set_handler(const json_request_function& fun) const
+{
+    return set_handler(new function_handler(fun));
+}
+
 }
