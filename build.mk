@@ -2,9 +2,11 @@ build_env ?= external
 ifeq ($(build_env), host)
     gcc_lib_env ?= host
     cxx_lib_env ?= host
+    gcc_include_env ?= host
 else
     gcc_lib_env ?= external
     cxx_lib_env ?= external
+    gcc_include_env ?= external
 endif
 
 detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
@@ -57,8 +59,10 @@ gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/v
 gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
 gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
 
-INCLUDES += -isystem $(gcc-inc-base)
-INCLUDES += -isystem $(gcc-inc-base3)
+ifeq ($(gcc_include_env), external)
+  INCLUDES += -isystem $(gcc-inc-base)
+  INCLUDES += -isystem $(gcc-inc-base3)
+endif
 
 ifeq ($(arch),x64)
 INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
@@ -67,8 +71,10 @@ endif
 INCLUDES += -isystem $(miscbase)/usr/include
 INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/$(arch)
-# must be after include/api, since it includes some libc-style headers:
-INCLUDES += -isystem $(gcc-inc-base2)
+ifeq ($(gcc_include_env), external)
+  # must be after include/api, since it includes some libc-style headers:
+  INCLUDES += -isystem $(gcc-inc-base2)
+endif
 INCLUDES += -isystem gen/include
 INCLUDES += $(post-includes-bsd)
 
@@ -118,7 +124,10 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-include $(src)/compiler/include/intrinsics.hh \
 	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
-	$(configuration) -nostdinc -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
+	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
+ifeq ($(gcc_include_env), external)
+  COMMON += -nostdinc
+endif
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh

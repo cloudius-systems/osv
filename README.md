@@ -84,13 +84,13 @@ By default make creates image in qcow2 format. To change this pass format value 
 make img_format=raw
 ```
 
-By default make will use the static libraries of gcc in external submodule. To change this pass `host` via *_env variables:
+By default make will use the static libraries and headers of gcc in external submodule. To change this pass `host` via *_env variables:
 
 ```
 make build_env=host
 ```
 
-This will use static libraries in the system instead (make sure they are installed before run `make`),
+This will use static libraries and headers in the system instead (make sure they are installed before run `make`),
 if you only want to use C++ static libraries in the system, just set `cxx_lib_env` to `host`:
 
 ```
