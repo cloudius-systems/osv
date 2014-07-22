@@ -45,16 +45,16 @@ typedef int random_poll_func_t(int, struct thread *);
 typedef void random_reseed_func_t(void);
 
 struct random_adaptor {
-	struct selinfo		rsel;
 	const char		*ident;
-	int			seeded;
-	unsigned		priority;
 	random_init_func_t	*init;
 	random_deinit_func_t	*deinit;
 	random_block_func_t	*block;
 	random_read_func_t	*read;
 	random_poll_func_t	*poll;
 	random_reseed_func_t	*reseed;
+	int			seeded;
+	unsigned		priority;
+	struct selinfo		rsel;
 };
 
 struct random_hardware_source {
