@@ -287,7 +287,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
             fprint(hfile, "void register_params() {")
             fprint(hfile, member_init)
             fprint(hfile, '}')
-            
+
             fprint(hfile, model_name, '() {')
             fprint(hfile, '  register_params();')
             fprint(hfile, '}')
@@ -330,7 +330,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
                             fprint(hfile, 'NUM_ITEMS};')
                             fprint(hfile, enm, ' str2', enm, '(const std::string& str);')
                             close_namespace(hfile)
-                            
+
     close_namespace(hfile)
     close_namespace(hfile)
     close_namespace(hfile)
@@ -346,7 +346,7 @@ def parse_file(param, combined):
         json_data.close()
     except:
         type, value, tb = sys.exc_info()
-        print "Bad formatted JSON file '" + param + "' error ", value.message
+        print("Bad formatted JSON file '" + param + "' error ", value.message)
         sys.exit(-1)
     try:
         base_file_name = get_base_name(param)
@@ -363,7 +363,7 @@ def parse_file(param, combined):
         create_h_file(data, hfile_name, api_name, init_method)
     except:
         type, value, tb = sys.exc_info()
-        print "Error while parsing JSON file '" + param + "' error ", value.message
+        print("Error while parsing JSON file '" + param + "' error ", value.message)
         sys.exit(-1)
 
 if "indir" in config and config.indir != '':
