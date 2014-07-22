@@ -142,7 +142,7 @@ class Connect(gdb.Command):
         status_enum.waiting = gdb.parse_and_eval('sched::thread::waiting')
         status_enum.queued = gdb.parse_and_eval('sched::thread::queued')
         status_enum.waking = gdb.parse_and_eval('sched::thread::waking')
-        
+
 
 Connect()
 
@@ -253,13 +253,13 @@ class osv_memory(gdb.Command):
             end   = ulong(vma['_range']['_end'])
             size  = ulong(end - start)
             mmapmem += size
-            
+
         memsize = gdb.parse_and_eval('memory::phys_mem_size')
-        
+
         print ("Total Memory: %d Bytes" % memsize)
         print ("Mmap Memory:  %d Bytes (%.2f%%)" %
                (mmapmem, (mmapmem*100.0/memsize)))
-        print ("Free Memory:  %d Bytes (%.2f%%)" % 
+        print ("Free Memory:  %d Bytes (%.2f%%)" %
                (freemem, (freemem*100.0/memsize)))
 
 class osv_waiters(gdb.Command):
@@ -458,7 +458,7 @@ class osv_mmap(gdb.Command):
             perm =  permstr(ulong(vma['_perm']))
             size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
             print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
-    
+
 class osv_vma_find(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv vma', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
@@ -594,18 +594,30 @@ def derived_from(type, base_class):
 class unordered_map:
 
     def __init__(self, map_ref):
-        map_header = map_ref['_M_h']
-        map_type = map_header.type.strip_typedefs()
+        self.map_header = map_ref['_M_h']
+        map_type = self.map_header.type.strip_typedefs()
         self.node_type = gdb.lookup_type(str(map_type) +  '::__node_type').pointer()
-        self.begin = map_header['_M_bbegin']
+
+    def begin(self):
+        try:
+            return self.map_header['_M_bbegin']
+        except gdb.error:
+            return self.map_header['_M_before_begin']['_M_nxt']
+
+    def get_value(self, node):
+        try:
+            elem = node['_M_v']
+        except gdb.error:
+            storage = node['_M_storage']
+            elem = storage.address.cast(storage.type.template_argument(0).pointer()).dereference()
+        return elem['second']
 
     def __iter__(self):
-        begin = self.begin
-        while begin:
-            node = begin.cast(self.node_type).dereference()
-            elem = node["_M_v"]
-            yield elem["second"]
-            begin = node["_M_nxt"]
+        iterator = self.begin()
+        while iterator:
+            node = iterator.cast(self.node_type).dereference()
+            yield self.get_value(node)
+            iterator = node['_M_nxt']
 
 class intrusive_list:
     size_t = gdb.lookup_type('size_t')
@@ -835,34 +847,34 @@ class osv_info_callouts(gdb.Command):
     def invoke(self, arg, for_tty):
         c = str(gdb.lookup_global_symbol('callouts::_callouts').value())
         callouts = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', c)
-        
+
         gdb.write("%-5s%-40s%-40s%-30s%-10s\n" % ("id", "addr", "function", "abs time (ns)", "flags"))
-        
+
         # We have a valid callout frame
         for desc in callouts:
             id = int(desc[0])
             addr = desc[1]
             callout = gdb.parse_and_eval('(struct callout *)' + addr)
             fname = callout['c_fn']
-            
+
             # time
             t = int(callout['c_to_ns'])
-            
+
             # flags
             CALLOUT_ACTIVE = 0x0002
             CALLOUT_PENDING = 0x0004
             CALLOUT_COMPLETED = 0x0020
             f = int(callout['c_flags'])
-            
+
             flags = ("0x%04x " % f) + \
                     ("A" if (callout['c_flags'] & CALLOUT_ACTIVE) else "") + \
                     ("P" if (callout['c_flags'] & CALLOUT_PENDING) else "") + \
                     ("C" if (callout['c_flags'] & CALLOUT_COMPLETED) else "")
-            
+
             # dispatch time ns  ticks callout function
             gdb.write("%-5d%-40s%-40s%-30s%-10s\n" %
                       (id, callout, fname, t, flags))
-                
+
 class osv_thread(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv thread', gdb.COMMAND_USER,
@@ -1095,14 +1107,14 @@ def show_leak():
               len(allocs))
     gdb.flush();
     allocs.sort(key=lambda entry: entry[1])
-    
+
     import collections
     Record = collections.namedtuple('Record',
                                     ['bytes', 'allocations', 'minsize',
                                      'maxsize', 'avgsize', 'minbirth',
                                      'maxbirth', 'avgbirth', 'callchain'])
     records = [];
-    
+
     total_size = 0
     cur_n = 0
     cur_total_size = 0
@@ -1150,7 +1162,7 @@ def show_leak():
         cur_max_size = -1
         cur_min_size = -1
     gdb.write('generated %d records.\n' % len(records))
-        
+
     # Now sort the records by total number of bytes
     records.sort(key=lambda r: r.bytes, reverse=True)
 
