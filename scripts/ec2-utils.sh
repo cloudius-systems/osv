@@ -26,18 +26,18 @@ ec2_response_value() {
 
 get_volume_conversion_status() {
  local TASKID=$1
- $EC2_HOME/bin/ec2-describe-conversion-tasks $TASKID | tee /dev/tty | ec2_response_value IMPORTVOLUME Status
+ ec2-describe-conversion-tasks $TASKID | tee /dev/tty | ec2_response_value IMPORTVOLUME Status
 }
 
 get_created_volume_id() {
  local TASKID=$1
- $EC2_HOME/bin/ec2-describe-conversion-tasks $TASKID | tee /dev/tty | ec2_response_value DISKIMAGE VolumeId
+ ec2-describe-conversion-tasks $TASKID | tee /dev/tty | ec2_response_value DISKIMAGE VolumeId
 }
 
 rename_object() {
  local OBJID=$1
  local OBJNAME=$2
- $EC2_HOME/bin/ec2-create-tags $OBJID --tag Name="$OBJNAME"
+ ec2-create-tags $OBJID --tag Name="$OBJNAME"
 }
 
 wait_import_completion() {
@@ -182,10 +182,10 @@ wait_for_volume_attach() {
 }
 
 start_instances() {
- $EC2_HOME/bin/ec2-start-instances $*
+ ec2-start-instances $*
 }
 stop_instance_forcibly() {
- $EC2_HOME/bin/ec2-stop-instances $1 --force
+ ec2-stop-instances $1 --force
 }
 
 create_ami_by_instance() {
@@ -207,20 +207,20 @@ make_ami_public() {
  local AMI_ID=$1
  shift
 
- $EC2_HOME/bin/ec2-modify-image-attribute $AMI_ID --launch-permission --add all $*
+ ec2-modify-image-attribute $AMI_ID --launch-permission --add all $*
 }
 
 make_ami_private() {
  local AMI_ID=$1
  shift
 
- $EC2_HOME/bin/ec2-modify-image-attribute $AMI_ID --launch-permission --remove all $*
+ ec2-modify-image-attribute $AMI_ID --launch-permission --remove all $*
 }
 
 list_regions() {
 
  if test x"$REGIONS_LIST" = x""; then
-     $EC2_HOME/bin/ec2-describe-regions | ec2_response_value REGION REGION
+     ec2-describe-regions | ec2_response_value REGION REGION
  else
      for region in $REGIONS_LIST; do echo $region; done
  fi
@@ -231,14 +231,14 @@ get_own_ami_info() {
  local AMI_ID=$1
  shift
 
- $EC2_HOME/bin/ec2-describe-images $* | grep $AMI_ID
+ ec2-describe-images $* | grep $AMI_ID
 }
 
 get_public_ami_info() {
  local AMI_ID=$1
  shift
 
- $EC2_HOME/bin/ec2-describe-images -x all $* | grep $AMI_ID
+ ec2-describe-images -x all $* | grep $AMI_ID
 }
 
 # This function implements work-around for AMIs copying problem described here:

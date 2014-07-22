@@ -148,7 +148,7 @@ echo_progress() {
 }
 
 import_osv_volume() {
- $EC2_HOME/bin/ec2-import-volume $OSV_VOLUME \
+ ec2-import-volume $OSV_VOLUME \
                                  -f raw \
                                  -b $OSV_BUCKET \
                                  -z `get_availability_zone` \
@@ -156,13 +156,13 @@ import_osv_volume() {
 }
 
 launch_template_instance() {
- $EC2_HOME/bin/ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` --instance-type $TEMPLATE_INSTANCE_TYPE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
+ ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` --instance-type $TEMPLATE_INSTANCE_TYPE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
 }
 
 get_availability_zone() {
 
  if test x"$OSV_AVAILABILITY_ZONE" = x""; then
-     OSV_AVAILABILITY_ZONE=`$EC2_HOME/bin/ec2-describe-availability-zones | ec2_response_value AVAILABILITYZONE AVAILABILITYZONE | head -1`
+     OSV_AVAILABILITY_ZONE=`ec2-describe-availability-zones | ec2_response_value AVAILABILITYZONE AVAILABILITYZONE | head -1`
  fi
 
  echo $OSV_AVAILABILITY_ZONE
