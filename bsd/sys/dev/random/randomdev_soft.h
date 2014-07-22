@@ -48,6 +48,17 @@
  * buffer size is pretty arbitrary.
  */
 struct harvest {
+	harvest(uintmax_t somecounter, const void* src, u_int src_size, u_int bits, enum esource source)
+		: somecounter(somecounter)
+		, size(std::min(src_size, (u_int)HARVESTSIZE))
+		, bits(bits)
+		, source(source)
+	{
+		memcpy(entropy, src, size);
+	}
+
+	harvest() {}
+
 	uintmax_t somecounter;		/* fast counter for clock jitter */
 	uint8_t entropy[HARVESTSIZE];	/* the harvested entropy */
 	u_int size, bits;		/* stats about the entropy */

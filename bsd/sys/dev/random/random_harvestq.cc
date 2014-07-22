@@ -234,14 +234,5 @@ random_harvestq_internal(u_int64_t somecounter, const void *entropy,
 	KASSERT(origin >= RANDOM_START && origin < ENTROPYSOURCE,
 	    ("random_harvest_internal: origin %d invalid\n", origin));
 
-	ring->emplace([&] (struct harvest& event) {
-		event.somecounter = somecounter;
-		event.size = count;
-		event.bits = bits;
-		event.source = origin;
-
-		/* XXXX Come back and make this dynamic! */
-		count = MIN(count, HARVESTSIZE);
-		memcpy(event.entropy, entropy, count);
-	});
+	ring->emplace(somecounter, entropy, count, bits, origin);
 }

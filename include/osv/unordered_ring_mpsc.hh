@@ -10,6 +10,7 @@
 #include <osv/mutex.h>
 #include <osv/irqlock.hh>
 #include <vector>
+#include <utility>
 
 /**
  *
@@ -101,20 +102,20 @@ public:
     {
     }
 
-    template<typename Constructor>
-    inline bool emplace(Constructor constructor) noexcept
+    template<typename... Args>
+    inline bool emplace(Args&&... args)
     {
         irq_save_lock_type irq_lock;
         WITH_LOCK(irq_lock) {
             auto current_id = sched::cpu::current()->id;
             assert(current_id < rings.size());
-            return rings.at(current_id).emplace(constructor);
+            return rings[current_id].emplace(std::forward<Args>(args)...);
         }
     }
 
     bool push(T element)
     {
-        return emplace([&] (T& dst) { dst = element; });
+        return emplace(element);
     }
 
     draining_range drain()
