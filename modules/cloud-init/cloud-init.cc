@@ -53,11 +53,8 @@ void osvinit::load_url(const std::string& server, const std::string& path,
         c.get(server, path, atoi(port.c_str()));
     }
 
-    boost::asio::streambuf buf;
-    std::iostream os(&buf);
-    os  << c;
 
-    YAML::Node config = YAML::Load(os);
+    YAML::Node config = YAML::Load(c.text());
     do_yaml(config);
 }
 

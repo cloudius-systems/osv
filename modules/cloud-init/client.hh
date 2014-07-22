@@ -66,6 +66,13 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& os, client& c);
+
+    std::string text()
+    {
+        std::ostringstream ss;
+        ss << *this;
+        return ss.str();
+    }
 private:
     void process_headers();
     boost::asio::streambuf response;
