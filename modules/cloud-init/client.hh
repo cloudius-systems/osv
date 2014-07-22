@@ -29,6 +29,13 @@
 #include <unordered_map>
 
 namespace init {
+
+
+enum http_status {
+    OK = 200,
+    NOT_FOUND = 404
+};
+
 /**
  * Sync client implementation based on the boost asio library
  * and the sync_client example.
@@ -53,7 +60,7 @@ public:
 
     bool is_ok()
     {
-        return status_code == 200;
+        return status_code == http_status::OK;
     }
 
     unsigned int get_status()

@@ -53,6 +53,9 @@ void osvinit::load_url(const std::string& server, const std::string& path,
         c.get(server, path, atoi(port.c_str()));
     }
 
+    if (!c.is_ok()) {
+        throw std::runtime_error("Request failed: " + c.get_status());
+    }
 
     YAML::Node config = YAML::Load(c.text());
     do_yaml(config);

@@ -128,13 +128,6 @@ client& client::get(const std::string& server, const std::string& path,
         throw connection_exception(
             std::string("Bad HTTP version ") + http_version);
     }
-    if (status_code != 200)
-    {
-        done = true;
-        throw connection_exception(
-            std::string("Server return with status ")
-            + std::to_string(status_code));
-    }
     // Read the response headers, which are terminated by a blank line.
     boost::asio::read_until(_socket, response, "\r\n\r\n");
 
