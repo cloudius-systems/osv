@@ -108,12 +108,19 @@ increment_counter(void)
 		random_state.counter.qword[1]++;
 }
 
+esource operator++(esource &e, int) {
+	if (e < esource::ENTROPYSOURCE) {
+		e = static_cast<esource>(static_cast<int>(e) + 1);
+	}
+	return e;
+}
+
 /* Process a single stochastic event off the harvest queue */
 void
 random_process_event(struct harvest *event)
 {
 	u_int pl, overthreshhold[2];
-	struct source *source;
+	struct random_state::pool::source *source;
 	enum esource src;
 
 #if 0

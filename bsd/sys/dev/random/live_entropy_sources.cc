@@ -41,8 +41,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/unistd.h>
 #include <sys/bus.h>
 
-//#include <machine/cpu.h>
-extern uint64_t get_cyclecount(void);
+#include <machine/cpu.h>
 
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
@@ -68,7 +67,7 @@ live_entropy_source_register(struct random_hardware_source *rsource)
 
 	KASSERT(rsource != NULL, ("invalid input to %s", __func__));
 	debugf("random: %s registered as a source.\n", rsource->ident);
-	les = malloc(sizeof(struct live_entropy_sources), M_ENTROPY, M_WAITOK);
+	les = new live_entropy_sources();
 	les->rsource = rsource;
 
 	sx_xlock(&les_lock);
@@ -91,7 +90,7 @@ live_entropy_source_deregister(struct random_hardware_source *rsource)
 		}
 	sx_xunlock(&les_lock);
 	if (les != NULL)
-		free(les, M_ENTROPY);
+		delete les;
 }
 
 #ifndef __OSV__

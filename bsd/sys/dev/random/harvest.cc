@@ -45,13 +45,13 @@ __FBSDID("$FreeBSD$");
 
 #define log(prio, msg) do { printf(msg); } while(0)
 #define kproc_exit(v) do { kthread_exit(); } while(0)
-extern uint64_t get_cyclecount(void);
 
-#else
-#include <machine/cpu.h>
 #endif
 
+#include <machine/cpu.h>
+
 #include <dev/random/randomdev_soft.h>
+#include <dev/random/random_harvestq.h>
 
 static int read_random_phony(void *, int);
 
