@@ -9,7 +9,7 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <osv/unordered_ring_mpsc.hh>
+#include <lockfree/unordered_ring_mpsc.hh>
 #include <thread>
 #include <iostream>
 #include <unordered_set>

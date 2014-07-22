@@ -66,7 +66,7 @@ __FBSDID("$FreeBSD$");
 #ifdef __OSV__
 #include <stddef.h>
 #include <sys/bus.h>
-#include <osv/unordered_ring_mpsc.hh>
+#include <lockfree/unordered_ring_mpsc.hh>
 #endif
 
 /* <0 to end the kthread, 0 to let it run, 1 to flush the harvest queues */
