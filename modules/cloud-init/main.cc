@@ -42,7 +42,10 @@ int main(int argc, char* argv[])
             std::cerr << desc << "\n";
             return 1;
         }
+
         osvinit init(config.count("skip-error") > 0);
+        auto scripts = make_shared<script_module>();
+        init.add_module(scripts);
 
         if (config.count("file")) {
             init.load_file(config["file"].as<std::string>());
@@ -55,7 +58,7 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        init.wait();
+        scripts->wait();
     }
     catch (std::exception& e)
     {
