@@ -1,4 +1,4 @@
-from testing import *
+from tests.testing import *
 import socket
 import errno
 
@@ -17,8 +17,8 @@ def tcp_close_without_reading():
     s.connect(('localhost', host_port))
     try:
         while server.is_alive():
-            s.sendall('.' * 1024)
-    except Exception, e:
+            s.sendall(b'.' * 1024)
+    except Exception as e:
         if not is_broken_pipe_error(e):
             raise
 

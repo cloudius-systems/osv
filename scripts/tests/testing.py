@@ -192,8 +192,8 @@ class Guest(SupervisedProcess):
     def send_command(self, command):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(self.monitor_socket)
-        s.send(command)
-        s.send('\n')
+        s.send(command.encode())
+        s.send(b'\n')
         s.close()
 
     def kill(self):

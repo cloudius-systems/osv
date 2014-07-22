@@ -1,4 +1,4 @@
-from testing import *
+from tests.testing import *
 import os
 import subprocess
 
@@ -17,7 +17,7 @@ def tracing_smoke_test():
 
         assert(subprocess.call([trace_script, 'extract']) == 0)
 
-        summary_output = subprocess.check_output([trace_script, 'summary', '--timed'])
+        summary_output = subprocess.check_output([trace_script, 'summary', '--timed']).decode()
         summary, timed_summary = summary_output.split('Timed tracepoints')
 
         assert('vfs_open' in summary)
@@ -26,29 +26,29 @@ def tracing_smoke_test():
         assert('vfs_pwritev' in timed_summary)
         assert('vfs_open' in timed_summary)
 
-        samples = subprocess.check_output([trace_script, 'list'])
+        samples = subprocess.check_output([trace_script, 'list']).decode()
         assert('vfs_open             "%s" 0x0 00' % path in samples)
         assert('vfs_open_err         2' in samples)
 
-        samples = subprocess.check_output([trace_script, 'list-timed'])
+        samples = subprocess.check_output([trace_script, 'list-timed']).decode()
         assert('vfs_open             "%s" 0x0 00' % path in samples)
 
-        profile = subprocess.check_output([trace_script, 'prof-timed', '-t', 'vfs_open'])
+        profile = subprocess.check_output([trace_script, 'prof-timed', '-t', 'vfs_open']).decode()
         assert('open' in profile)
         assert('elf::program::get_library' in profile)
 
-        profile = subprocess.check_output([trace_script, 'prof-wait'])
+        profile = subprocess.check_output([trace_script, 'prof-wait']).decode()
         assert('sched::thread::wait()' in profile)
 
-        profile = subprocess.check_output([trace_script, 'prof'])
+        profile = subprocess.check_output([trace_script, 'prof']).decode()
         assert('sched::thread::wait()' in profile)
         assert('elf::program::get_library' in profile)
 
-        tcpdump = subprocess.check_output([trace_script, 'tcpdump'])
+        tcpdump = subprocess.check_output([trace_script, 'tcpdump']).decode()
         assert('0.0.0.0.68 > 255.255.255.255.67: BOOTP/DHCP, Request from' in tcpdump)
         assert('192.168.122.1.67 > 255.255.255.255.68: BOOTP/DHCP, Reply' in tcpdump)
 
-        tcpdump = subprocess.check_output([trace_script, 'list', '--tcpdump'])
+        tcpdump = subprocess.check_output([trace_script, 'list', '--tcpdump']).decode()
         assert('0.0.0.0.68 > 255.255.255.255.67: BOOTP/DHCP, Request from' in tcpdump)
         assert('192.168.122.1.67 > 255.255.255.255.68: BOOTP/DHCP, Reply' in tcpdump)
     finally:
