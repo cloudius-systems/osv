@@ -45,25 +45,20 @@ int main(int argc, char* argv[])
             return 1;
         }
         osvinit init(config.count("skip-error") > 0);
-        YAML::Node entry;
+        auto do_once = config.count("once") > 0;
 
-        entry["GET"] = "/include";
         if (config.count("file")) {
-            entry["path"] = config["file"].as<std::string>();
+            init.load_file(config["file"].as<std::string>(), do_once);
         } else if (config.count("server") > 0 && config.count("url") > 0) {
-            entry["host"] = config["server"].as<std::string>();
-            entry["url"] = config["url"].as<std::string>();
-            entry["port"] = config["port"].as<std::string>();
+            init.load_url(config["server"].as<std::string>(),
+                config["url"].as<std::string>(),
+                config["port"].as<std::string>(),
+                do_once);
         } else {
             std::cerr << desc << "\n";
             return 1;
         }
-        if (config.count("once")) {
-            entry["once"] = "True";
-        }
-        YAML::Node node;
-        node.push_back(entry);
-        init.do_yaml(node);
+
         init.wait();
     }
     catch (std::exception& e)

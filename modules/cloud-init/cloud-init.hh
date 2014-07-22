@@ -33,7 +33,7 @@ public:
      * thread.
      */
     void wait();
-private:
+
     /**
      * load a file and execute it
      * @param path a path to a file on disk
@@ -50,6 +50,7 @@ private:
     void load_url(const std::string& server, const std::string& path,
                   const std::string& port, bool once = false);
 
+private:
     void do_api(http::server::request& api);
     void do_include(http::server::request& api);
     /**
