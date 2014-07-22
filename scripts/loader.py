@@ -168,9 +168,13 @@ LogTrace()
 #     pass
 #
 def free_page_ranges():
+    pr_type = gdb.lookup_type('memory::page_range')
+    tree_offset = pr_type['set_hook'].bitpos >> 3
+    list_offset = pr_type['list_hook'].bitpos >> 3
+
     def free_page_ranges_tree(node):
         if node:
-            page_range = node.cast(gdb.lookup_type('void').pointer()) - 24
+            page_range = node.cast(gdb.lookup_type('void').pointer()) - tree_offset
             page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
 
             for x in free_page_ranges_tree(node['left_']):
@@ -196,7 +200,7 @@ def free_page_ranges():
             continue
 
         while True:
-            page_range = node.cast(gdb.lookup_type('void').pointer()) - 8
+            page_range = node.cast(gdb.lookup_type('void').pointer()) - list_offset
             page_range = page_range.cast(gdb.lookup_type('memory::page_range').pointer())
 
             yield page_range
