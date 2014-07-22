@@ -12,6 +12,7 @@
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <osv/debug.hh>
+#include <osv/exception_utils.hh>
 
 using namespace std;
 using namespace init;
@@ -75,10 +76,9 @@ int main(int argc, char* argv[])
         }
 
         scripts->wait();
-    }
-    catch (std::exception& e)
-    {
-        std::cerr << "Exception: " << e.what() << "\n";
+    } catch (...) {
+        std::cerr << "could-init failed: " << what(std::current_exception()) << "\n";
+        return 1;
     }
 
     return 0;
