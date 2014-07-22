@@ -30,9 +30,9 @@ private:
     std::string msg;
 };
 
-void osvinit::load_file(const std::string& path, bool once)
+void osvinit::load_file(const std::string& path)
 {
-    if (mark(path) && once) {
+    if (mark(path)) {
         return;
     }
     YAML::Node config = YAML::LoadFile(path);
@@ -40,10 +40,9 @@ void osvinit::load_file(const std::string& path, bool once)
 }
 
 void osvinit::load_url(const std::string& server, const std::string& path,
-                       const std::string& port,
-                       bool once)
+                       const std::string& port)
 {
-    if (mark(server + path) && once) {
+    if (mark(server + path)) {
         return;
     }
     client c;
@@ -132,12 +131,11 @@ void osvinit::do_yaml(const YAML::Node& doc)
 
 void osvinit::do_include(http::server::request& api)
 {
-    bool once = api.get_query_param("once")  == "True";
     if (api.get_query_param("path") != "") {
-        load_file(api.get_query_param("path"), once);
+        load_file(api.get_query_param("path"));
     } else {
         load_url(api.get_query_param("host"), api.get_query_param("url"),
-                 api.get_query_param("port"), once);
+                 api.get_query_param("port"));
     }
 }
 

@@ -37,18 +37,16 @@ public:
     /**
      * load a file and execute it
      * @param path a path to a file on disk
-     * @param once when true a file will be only executed once
      */
-    void load_file(const std::string& path, bool once = false);
+    void load_file(const std::string& path);
 
     /**
      * load a file from a remote url
      * @param server the server address
      * @param path a path on the server
-     * @param once when true a file will be only executed once
      */
     void load_url(const std::string& server, const std::string& path,
-                  const std::string& port, bool once = false);
+                  const std::string& port);
 
 private:
     void do_api(http::server::request& api);

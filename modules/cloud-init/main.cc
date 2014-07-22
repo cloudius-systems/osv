@@ -24,8 +24,6 @@ int main(int argc, char* argv[])
         ("help", "produce help message")
         ("skip-error",
          "do not stop on error")
-        ("once",
-         "when set, prevent a file to be read more than once")
         ("file", po::value<std::string>(),
          "an init file")
         ("server", po::value<std::string>(),
@@ -45,15 +43,13 @@ int main(int argc, char* argv[])
             return 1;
         }
         osvinit init(config.count("skip-error") > 0);
-        auto do_once = config.count("once") > 0;
 
         if (config.count("file")) {
-            init.load_file(config["file"].as<std::string>(), do_once);
+            init.load_file(config["file"].as<std::string>());
         } else if (config.count("server") > 0 && config.count("url") > 0) {
             init.load_url(config["server"].as<std::string>(),
                 config["url"].as<std::string>(),
-                config["port"].as<std::string>(),
-                do_once);
+                config["port"].as<std::string>());
         } else {
             std::cerr << desc << "\n";
             return 1;
