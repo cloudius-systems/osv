@@ -26,6 +26,7 @@
 #include <boost/asio.hpp>
 #include <streambuf>
 #include <iterator>
+#include <unordered_map>
 
 namespace init {
 /**
@@ -36,6 +37,11 @@ namespace init {
 class client {
 public:
     client();
+
+    /**
+     * Sets HTTP header which will be sent on subsequent requests.
+     */
+    void set_header(const std::string& name, const std::string& value);
 
     /**
      * open a connection to a path on a server
@@ -67,6 +73,7 @@ private:
     boost::asio::io_service io_service;
     boost::asio::ip::tcp::socket _socket;
     bool done = false;
+    std::unordered_map<std::string, std::string> _headers;
 };
 
 }

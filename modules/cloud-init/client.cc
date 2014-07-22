@@ -90,9 +90,23 @@ client& client::get(const std::string& server, const std::string& path,
     boost::asio::streambuf request;
     std::ostream request_stream(&request);
     request_stream << "GET " << path << " HTTP/1.0\r\n";
-    request_stream << "Host: " << server << "\r\n";
-    request_stream << "Accept: */*\r\n";
-    request_stream << "Connection: close\r\n\r\n";
+
+    std::unordered_map<std::string,std::string> default_headers;
+    default_headers["Host"] = server;
+    default_headers["Accept"] = "*/*";
+    default_headers["Connection"] = "close";
+
+    for (auto& e : _headers) {
+        request_stream << e.first << ": " << e.second << "\r\n";
+    }
+
+    for (auto& e : default_headers) {
+        if (!_headers.count(e.first)) {
+            request_stream << e.first << ": " << e.second << "\r\n";
+        }
+    }
+
+    request_stream << "\r\n";
 
     // Send the request.
     boost::asio::write(_socket, request);
