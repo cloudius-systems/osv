@@ -6,13 +6,28 @@
  */
 
 #include "cloud-init.hh"
+#include "data-source.hh"
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
+#include <osv/debug.hh>
 
 using namespace std;
 using namespace init;
 namespace po = boost::program_options;
+
+static void load_from_cloud(osvinit& init)
+{
+    auto& ds = get_data_source();
+    auto user_data = ds.get_user_data();
+
+    if (user_data.empty()) {
+        debug("User data is empty\n");
+        return;
+    }
+
+    init.load(user_data);
+}
 
 int main(int argc, char* argv[])
 {
@@ -54,8 +69,7 @@ int main(int argc, char* argv[])
                 config["url"].as<std::string>(),
                 config["port"].as<std::string>());
         } else {
-            std::cerr << desc << "\n";
-            return 1;
+            load_from_cloud(init);
         }
 
         scripts->wait();
