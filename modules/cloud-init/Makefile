@@ -23,8 +23,7 @@ CPP_FILES := $(wildcard *.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 
 STUB_HTTPSERVER_LIBS = $(HTTPSERVER_DIR)/httpserver-stub.so
-DEPEDNDS_LIBS = -lyaml-cpp -L$(HTTPSERVER_DIR)/ -lhttpserver -L$(boost-lib-dir)
-LIBS = -lpthread -lboost_program_options-mt $(boost-libs) $(STUB_HTTPSERVER_LIBS) $(DEPEDNDS_LIBS)
+LIBS = -lpthread $(boost-libs) $(DEPEDNDS_LIBS) -lyaml-cpp -L$(HTTPSERVER_DIR)/ -lhttpserver -L$(boost-lib-dir)
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -38,10 +37,10 @@ init:
 	$(call very-quiet, mkdir -p obj)
 
 $(TARGET): $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS) $(STUB_HTTPSERVER_LIBS), LINK $@)
 
 $(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET).so $^ $(DEPEDNDS_LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(STATIC_LIBS) -shared -o $(TARGET).so $^ $(LIBS), LINK $@)
 
 obj/%.o: %.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $@)
