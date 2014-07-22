@@ -15,6 +15,7 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/asio.hpp>
 #include "global_server.hh"
+#include <osv/exception_utils.hh>
 
 using namespace httpserver;
 
@@ -43,7 +44,12 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    global_server::run(config);
+    try {
+        global_server::run(config);
+    } catch (...) {
+        std::cerr << "httpserver failed: " << current_what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }
