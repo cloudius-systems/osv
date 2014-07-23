@@ -1,27 +1,40 @@
 # == MODIFIED VERSION OF ORIGINAL LUA MAKEFILE ==
 
-# TODO: Ask about -D_FORTIFY_SOURCE=0
-
 CC= gcc
-CFLAGS=-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -O2 -Wall -fPIC -DLUA_COMPAT_ALL -DLUA_USE_LINUX
+CFLAGS=-O2 -Wall -fPIC -DLUA_COMPAT_ALL -DLUA_USE_LINUX
 LDFLAGS=
-LIBS= -lm -ldl
+LIBS= -lm -ldl -ledit
 
+AR= ar rcu
+RANLIB= ranlib
 RM= rm -f
 
-LUA_SO= liblua.so
+LUA_A=	liblua.a
 CORE_O=	lapi.o lcode.o lctype.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o \
 	lmem.o lobject.o lopcodes.o lparser.o lstate.o lstring.o ltable.o \
 	ltm.o lundump.o lvm.o lzio.o
 LIB_O=	lauxlib.o lbaselib.o lbitlib.o lcorolib.o ldblib.o liolib.o \
 	lmathlib.o loslib.o lstrlib.o ltablib.o loadlib.o linit.o
+BASE_O= $(CORE_O) $(LIB_O)
 
-ALL_O= $(CORE_O) $(LIB_O)
-ALL_T= $(LUA_SO)
+LUA_T=	lua
+LUA_O=	lua.o
+
+LUA_SO= liblua.so
+
+ALL_O= $(BASE_O) $(LUA_O)
+ALL_T= $(LUA_SO) $(LUA_A) $(LUA_T)
 
 all:	$(ALL_T)
 
 o:	$(ALL_O)
+
+$(LUA_A): $(BASE_O)
+	$(AR) $@ $(BASE_O)
+	$(RANLIB) $@
+
+$(LUA_T): $(LUA_O) $(LUA_A)
+	$(CC) -o $@ $(LDFLAGS) $(LUA_O) $(LUA_A) $(LIBS)
 
 $(LUA_SO): $(ALL_O)
 	$(CC) $(CFLAGS) -shared -o $@ $(LDFLAGS) $? $(LIBS)

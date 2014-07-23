@@ -26,20 +26,24 @@ SRCS=$(addprefix src/, $(LUA_SRCS))
 # Lua itself
 MAIN=src/liblua.so
 
-# List of Lua modules, each LuaModule has its own target
+# Local executable used for LuaRocks
+LUA_BIN=out/bin/lua
+
+# List of Lua modules, each module has its own target
 LUA_MODULES=LuaSocket LPeg LuaJSON
+BDIR=$(OUT)/bin
 LDIR=$(OUT)/lib/lua/$(LUA_V)
 CDIR=$(OUT)/share/lua/$(LUA_V)
 
-.PHONY: module clean $(LUA_MODULES)
+.PHONY: module clean LuaRocks $(LUA_MODULES)
 
-module: $(MAIN) $(LUA_MODULES)
+module: $(MAIN) $(LUA_BIN) LuaRocks $(LUA_MODULES)
 
 $(MAIN): $(SRCS)
-	cd src && $(MAKE) liblua.so
+	cd src && $(MAKE)
 
-$(DOWNLOAD) $(BUILD) $(LDIR) $(CDIR):
-	@mkdir -p $@
+$(LUA_BIN): $(MAIN) | $(BDIR)
+	cp src/lua $(LUA_BIN)
 
 $(LUA_ARCHIVE): | $(DOWNLOAD)
 	cd $(DOWNLOAD) && \
@@ -48,70 +52,57 @@ $(LUA_ARCHIVE): | $(DOWNLOAD)
 $(SRCS): $(LUA_ARCHIVE)
 	tar -Oxzf $< $(LUA_FOLDER)/$@ > $@
 
+$(DOWNLOAD) $(BUILD) $(LDIR) $(CDIR) $(BDIR):
+	@mkdir -p $@
+
+# == LuaRocks ==
+LuaRocks_V=2.1.2
+LuaRocks_F=luarocks-$(LuaRocks_V)
+LuaRocks_A=$(LuaRocks_F).tar.gz
+LuaRocks_D=http://luarocks.org/releases/$(LuaRocks_A)
+
+LuaRocks: $(BDIR)/luarocks
+
+$(BDIR)/luarocks: $(BUILD)/$(LuaRocks_F)/src/luarocks
+	cd $(BUILD)/$(LuaRocks_F) && \
+		make install
+
+$(BUILD)/$(LuaRocks_F)/src/luarocks: $(BUILD)/$(LuaRocks_F)/Makefile
+	cd $(BUILD)/$(LuaRocks_F) && \
+		make build
+
+$(BUILD)/$(LuaRocks_F)/Makefile: $(BUILD)/$(LuaRocks_F)/configure
+	PREFIX=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+	cd $(BUILD)/$(LuaRocks_F) && \
+		./configure --prefix=$(PREFIX)/$(OUT) --force-config \
+		--with-lua-include=$(PREFIX)/src --lua-version=$(LUA_V)
+	touch $@
+
+$(BUILD)/$(LuaRocks_F)/configure: $(DOWNLOAD)/$(LuaRocks_A) | $(BUILD)
+	tar --directory $(BUILD) -xzf $<
+	touch $@
+
+$(DOWNLOAD)/$(LuaRocks_A): | $(DOWNLOAD)
+	curl --remote-time --location $(LuaRocks_D) > $@
+
 # == LuaSocket ==
-LuaSocket_V=3.0-rc1
-LuaSocket_F=luasocket-$(LuaSocket_V)
-LuaSocket_A=$(LuaSocket_F).tar.gz
-LuaSocket_D=https://github.com/diegonehab/luasocket/archive/v$(LuaSocket_V).tar.gz
 
 LuaSocket: $(LDIR)/socket/core.so
 
-$(LDIR)/socket/core.so: $(BUILD)/$(LuaSocket_F)/src/socket.so.$(LuaSocket_V)
-	cd $(BUILD)/$(LuaSocket_F) && \
-		$(MAKE) LUAV=$(LUA_V) INSTALL_TOP=../../../$(OUT) install
-
-$(BUILD)/$(LuaSocket_F)/src/socket.so.$(LuaSocket_V): $(BUILD)/$(LuaSocket_F)/makefile $(SRCS)
-	cd $(BUILD)/$(LuaSocket_F) && \
-		$(MAKE) LUAINC_linux=../../../src
-	touch $@
-
-$(BUILD)/$(LuaSocket_F)/makefile: $(DOWNLOAD)/$(LuaSocket_A) | $(BUILD)
-	tar --directory $(BUILD) -xzf $^
-	touch $@
-
-$(DOWNLOAD)/$(LuaSocket_A): | $(DOWNLOAD)
-	curl --remote-time --location $(LuaSocket_D) > $@
+$(LDIR)/socket/core.so: | LuaRocks
+	out/bin/luarocks install luasocket 3.0-rc1
 
 # == LPeg ==
-LPeg_V=0.12
-LPeg_F=lpeg-$(LPeg_V)
-LPeg_A=$(LPeg_F).tar.gz
-LPeg_D=http://www.inf.puc-rio.br/~roberto/lpeg/lpeg-0.12.tar.gz
-
 LPeg: $(LDIR)/lpeg.so
 
-$(LDIR)/lpeg.so: $(BUILD)/$(LPeg_F)/lpeg.so | $(LDIR)
-	cp $< $@
-
-$(BUILD)/$(LPeg_F)/lpeg.so: $(BUILD)/$(LPeg_F)/makefile $(SRCS)
-	cd $(BUILD)/$(LPeg_F) && \
-		$(MAKE) LUADIR=../../src COPT="-O2 -fPIC"
-
-$(BUILD)/$(LPeg_F)/makefile: $(DOWNLOAD)/$(LPeg_A) | $(BUILD)
-	tar --directory $(BUILD) -xzf $<
-	touch $@
-
-$(DOWNLOAD)/$(LPeg_A): | $(DOWNLOAD)
-	curl --remote-time --location $(LPeg_D) > $@
+$(LDIR)/lpeg.so: | LuaRocks
+	out/bin/luarocks install lpeg 0.12
 
 # == LuaJSON ==
-LuaJSON_V=1.3.3
-LuaJSON_F=luajson-$(LuaJSON_V)
-LuaJSON_A=$(LuaJSON_F).tar.gz
-LuaJSON_D=https://github.com/harningt/luajson/archive/$(LuaJSON_V).tar.gz
-
 LuaJSON: $(CDIR)/json.lua
 
-$(CDIR)/json.lua: $(BUILD)/$(LuaJSON_F)/lua/json.lua
-	cd $(BUILD)/$(LuaJSON_F) && \
-		$(MAKE) INSTALL_LMOD=../../$(CDIR) install
-
-$(BUILD)/$(LuaJSON_F)/lua/json.lua: $(DOWNLOAD)/$(LuaJSON_A) | $(BUILD)
-	tar --directory $(BUILD) -xzf $<
-	touch $@
-
-$(DOWNLOAD)/$(LuaJSON_A): | $(DOWNLOAD)
-	curl --remote-time --location $(LuaJSON_D) > $@
+$(CDIR)/json.lua: | LuaRocks
+	out/bin/luarocks install luajson 1.3.3
 
 ##
 clean:
