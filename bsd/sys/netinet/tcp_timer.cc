@@ -467,7 +467,7 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 
 	ostate = tp->get_state();
 #endif
-	INP_INFO_RLOCK(&V_tcbinfo);
+	INP_INFO_WLOCK(&V_tcbinfo);
 
 	inp = tp->t_inpcb;
 
@@ -480,14 +480,14 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 
 	if (!timer.try_fire()) {
 		INP_UNLOCK(inp);
-		INP_INFO_RUNLOCK(&V_tcbinfo);
+		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 		return;
 	}
 
 	if ((inp->inp_flags & INP_DROPPED) != 0) {
 		INP_UNLOCK(inp);
-		INP_INFO_RUNLOCK(&V_tcbinfo);
+		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 		return;
 	}
@@ -501,7 +501,7 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 		tp->t_rxtshift = TCP_MAXRXTSHIFT;
 		TCPSTAT_INC(tcps_timeoutdrop);
 		in_pcbref(inp);
-		INP_INFO_RUNLOCK(&V_tcbinfo);
+		INP_INFO_WUNLOCK(&V_tcbinfo);
 		INP_UNLOCK(inp);
 		INP_INFO_WLOCK(&V_tcbinfo);
 		INP_LOCK(inp);
@@ -522,7 +522,7 @@ tcp_timer_rexmt(serial_timer_task& timer, struct tcpcb *tp)
 		headlocked = 1;
 		goto out;
 	}
-	INP_INFO_RUNLOCK(&V_tcbinfo);
+	INP_INFO_WUNLOCK(&V_tcbinfo);
 	headlocked = 0;
 	if (tp->t_rxtshift == 1) {
 		/*

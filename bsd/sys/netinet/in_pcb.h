@@ -282,7 +282,7 @@ struct inpcbinfo {
 	/*
 	 * Global lock protecting global inpcb list, inpcb count, etc.
 	 */
-	struct rwlock		 ipi_lock;
+	mutex			 ipi_lock;
 
 	/*
 	 * Global list of inpcbs on the protocol.
@@ -373,19 +373,14 @@ void 	inp_4tuple_get(struct inpcb *inp, uint32_t *laddr, uint16_t *lp,
 #endif /* _KERNEL */
 
 #define INP_INFO_LOCK_INIT(ipi, d) \
-	rw_init_flags(&(ipi)->ipi_lock, (d), RW_RECURSE)
-#define INP_INFO_LOCK_DESTROY(ipi)  rw_destroy(&(ipi)->ipi_lock)
-#define INP_INFO_RLOCK(ipi)	rw_rlock(&(ipi)->ipi_lock)
-#define INP_INFO_WLOCK(ipi)	rw_wlock(&(ipi)->ipi_lock)
-#define INP_INFO_TRY_RLOCK(ipi)	rw_try_rlock(&(ipi)->ipi_lock)
-#define INP_INFO_TRY_WLOCK(ipi)	rw_try_wlock(&(ipi)->ipi_lock)
-#define INP_INFO_TRY_UPGRADE(ipi)	rw_try_upgrade(&(ipi)->ipi_lock)
-#define INP_INFO_RUNLOCK(ipi)	rw_runlock(&(ipi)->ipi_lock)
-#define INP_INFO_WUNLOCK(ipi)	rw_wunlock(&(ipi)->ipi_lock)
-#define	INP_INFO_LOCK_ASSERT(ipi)	rw_assert(&(ipi)->ipi_lock, RA_LOCKED)
-#define INP_INFO_RLOCK_ASSERT(ipi)	rw_assert(&(ipi)->ipi_lock, RA_RLOCKED)
-#define INP_INFO_WLOCK_ASSERT(ipi)	rw_assert(&(ipi)->ipi_lock, RA_WLOCKED)
-#define INP_INFO_UNLOCK_ASSERT(ipi)	rw_assert(&(ipi)->ipi_lock, RA_UNLOCKED)
+	mutex_init(&(ipi)->ipi_lock)
+#define INP_INFO_LOCK_DESTROY(ipi)  mutex_destroy(&(ipi)->ipi_lock)
+#define INP_INFO_WLOCK(ipi)	mutex_lock(&(ipi)->ipi_lock)
+#define INP_INFO_TRY_WLOCK(ipi)	mutex_trylock(&(ipi)->ipi_lock)
+#define INP_INFO_WUNLOCK(ipi)	mutex_unlock(&(ipi)->ipi_lock)
+#define	INP_INFO_LOCK_ASSERT(ipi)	do {} while (0)
+#define INP_INFO_WLOCK_ASSERT(ipi)	do {} while (0)
+#define INP_INFO_UNLOCK_ASSERT(ipi)	do {} while (0)
 
 #define	INP_HASH_LOCK_INIT(ipi, d) \
 	rw_init_flags(&(ipi)->ipi_hash_lock, (d), 0)

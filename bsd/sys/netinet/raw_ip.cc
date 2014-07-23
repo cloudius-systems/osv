@@ -273,7 +273,7 @@ rip_input(struct mbuf *m, int off)
 
 	hash = INP_PCBHASH_RAW(proto, ip->ip_src.s_addr,
 	    ip->ip_dst.s_addr, V_ripcbinfo.ipi_hashmask);
-	INP_INFO_RLOCK(&V_ripcbinfo);
+	INP_INFO_WLOCK(&V_ripcbinfo);
 	LIST_FOREACH(inp, &V_ripcbinfo.ipi_hashbase[hash], inp_hash) {
 		if (inp->inp_ip_p != proto)
 			continue;
@@ -366,7 +366,7 @@ rip_input(struct mbuf *m, int off)
 		INP_LOCK(inp);
 		last = inp;
 	}
-	INP_INFO_RUNLOCK(&V_ripcbinfo);
+	INP_INFO_WUNLOCK(&V_ripcbinfo);
 	if (last != NULL) {
 		if (rip_append(last, ip, m, &ripsrc) != 0)
 			IPSTAT_INC(ips_delivered);

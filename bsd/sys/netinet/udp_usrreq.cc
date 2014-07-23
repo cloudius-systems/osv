@@ -398,7 +398,7 @@ udp_input(struct mbuf *m, int off)
 		struct inpcb *last;
 		struct ip_moptions *imo;
 
-		INP_INFO_RLOCK(&V_udbinfo);
+		INP_INFO_WLOCK(&V_udbinfo);
 		last = NULL;
 		LIST_FOREACH(inp, &V_udb, inp_list) {
 			if (inp->inp_lport != uh->uh_dport)
@@ -486,12 +486,12 @@ udp_input(struct mbuf *m, int off)
 			UDPSTAT_INC(udps_noportbcast);
 			if (inp)
 				INP_UNLOCK(inp);
-			INP_INFO_RUNLOCK(&V_udbinfo);
+			INP_INFO_WUNLOCK(&V_udbinfo);
 			goto badunlocked;
 		}
 		udp_append(last, ip, m, iphlen, &udp_in);
 		INP_UNLOCK(last);
-		INP_INFO_RUNLOCK(&V_udbinfo);
+		INP_INFO_WUNLOCK(&V_udbinfo);
 		return;
 	}
 

@@ -730,7 +730,7 @@ tcp_ccalgounload(struct cc_algo *unload_algo)
 	VNET_LIST_RLOCK();
 	VNET_FOREACH(vnet_iter) {
 		CURVNET_SET(vnet_iter);
-		INP_INFO_RLOCK(&V_tcbinfo);
+		INP_INFO_WLOCK(&V_tcbinfo);
 		/*
 		 * New connections already part way through being initialised
 		 * with the CC algo we're removing will not race with this code
@@ -760,7 +760,7 @@ tcp_ccalgounload(struct cc_algo *unload_algo)
 			}
 			INP_UNLOCK(inp);
 		}
-		INP_INFO_RUNLOCK(&V_tcbinfo);
+		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 	}
 	VNET_LIST_RUNLOCK();
@@ -960,7 +960,7 @@ tcp_drain(void)
 	 *	where we're really low on mbufs, this is potentially
 	 *	usefull.
 	 */
-		INP_INFO_RLOCK(&V_tcbinfo);
+		INP_INFO_WLOCK(&V_tcbinfo);
 		LIST_FOREACH(inpb, V_tcbinfo.ipi_listhead, inp_list) {
 			if (inpb->inp_flags & INP_TIMEWAIT)
 				continue;
@@ -971,7 +971,7 @@ tcp_drain(void)
 			}
 			INP_UNLOCK(inpb);
 		}
-		INP_INFO_RUNLOCK(&V_tcbinfo);
+		INP_INFO_WUNLOCK(&V_tcbinfo);
 		CURVNET_RESTORE();
 	}
 	VNET_LIST_RUNLOCK_NOSLEEP();

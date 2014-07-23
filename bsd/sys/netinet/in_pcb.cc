@@ -1184,7 +1184,7 @@ in_pcbpurgeif0(struct inpcbinfo *pcbinfo, struct ifnet *ifp)
 	struct ip_moptions *imo;
 	int i, gap;
 
-	INP_INFO_RLOCK(pcbinfo);
+	INP_INFO_WLOCK(pcbinfo);
 	LIST_FOREACH(inp, pcbinfo->ipi_listhead, inp_list) {
 		INP_LOCK(inp);
 		imo = inp->inp_moptions;
@@ -1214,7 +1214,7 @@ in_pcbpurgeif0(struct inpcbinfo *pcbinfo, struct ifnet *ifp)
 		}
 		INP_UNLOCK(inp);
 	}
-	INP_INFO_RUNLOCK(pcbinfo);
+	INP_INFO_WUNLOCK(pcbinfo);
 }
 
 /*
