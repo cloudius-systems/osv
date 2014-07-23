@@ -313,11 +313,6 @@ void run_main(const std::vector<std::string> &vec)
     std::vector<std::string> args(b, e);
     int ret;
 
-    if (opt_leak) {
-        debug("Enabling leak detector.\n");
-        memory::tracker_enabled = true;
-    }
-
     __libc_stack_end = __builtin_frame_address(0);
     auto oldname = sched::thread::current()->name();
     sched::thread::current()->set_name(command);
@@ -419,6 +414,11 @@ void* do_main_thread(void *_commands)
             perror("chdir");
         }
         debug("chdir done\n");
+    }
+
+    if (opt_leak) {
+        debug("Enabling leak detector.\n");
+        memory::tracker_enabled = true;
     }
 
     boot_time.event("Total time");
