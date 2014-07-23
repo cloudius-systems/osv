@@ -248,8 +248,6 @@ inpcb::inpcb(struct socket *so, struct inpcbinfo *pcbinfo)
 	struct inpcb *inp = this;
 
 	INP_INFO_WLOCK_ASSERT(pcbinfo);
-	bzero(inp, inp_zero_size);
-	INP_LOCK_INIT(inp, "ignored", "ignored");
 	inp->inp_pcbinfo = pcbinfo;
 	inp->inp_socket = so;
 	inp->inp_inc.inc_fibnum = so->so_fibnum;

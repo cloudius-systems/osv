@@ -164,30 +164,30 @@ struct	icmp6_filter;
  */
 struct inpcb {
 	inpcb(struct socket* so, struct inpcbinfo* pcbinfo);
-	LIST_ENTRY(inpcb) inp_hash;	/* (i/p) hash list */
-	LIST_ENTRY(inpcb) inp_list;	/* (i/p) list for all PCBs for proto */
-	void	*inp_ppcb;		/* (i) pointer to per-protocol pcb */
-	struct	inpcbinfo *inp_pcbinfo;	/* (c) PCB list info */
-	struct	socket *inp_socket;	/* (i) back pointer to socket */
-	u_int32_t inp_flow;		/* (i) IPv6 flow information */
-	int	inp_flags;		/* (i) generic IP/datagram flags */
-	int	inp_flags2;		/* (i) generic IP/datagram flags #2*/
-	u_char	inp_vflag;		/* (i) IP version flag (v4/v6) */
-	u_char	inp_ip_ttl;		/* (i) time to live proto */
-	u_char	inp_ip_p;		/* (c) protocol proto */
-	u_char	inp_ip_minttl;		/* (i) minimum TTL or drop */
-	uint32_t inp_flowid;		/* (x) flow id / queue id */
-	u_int	inp_refcount;		/* (i) refcount */
+	LIST_ENTRY(inpcb) inp_hash = {};/* (i/p) hash list */
+	LIST_ENTRY(inpcb) inp_list = {};/* (i/p) list for all PCBs for proto */
+	void	*inp_ppcb = {};		/* (i) pointer to per-protocol pcb */
+	struct	inpcbinfo *inp_pcbinfo = {};	/* (c) PCB list info */
+	struct	socket *inp_socket = {};	/* (i) back pointer to socket */
+	u_int32_t inp_flow = {};	/* (i) IPv6 flow information */
+	int	inp_flags = {};		/* (i) generic IP/datagram flags */
+	int	inp_flags2 = {};	/* (i) generic IP/datagram flags #2*/
+	u_char	inp_vflag = {};		/* (i) IP version flag (v4/v6) */
+	u_char	inp_ip_ttl = {};	/* (i) time to live proto */
+	u_char	inp_ip_p = {};		/* (c) protocol proto */
+	u_char	inp_ip_minttl = {};	/* (i) minimum TTL or drop */
+	uint32_t inp_flowid = {};	/* (x) flow id / queue id */
+	u_int	inp_refcount = {};	/* (i) refcount */
 
 	/* Local and foreign ports, local and foreign addr. */
-	struct	in_conninfo inp_inc;	/* (i/p) list for PCB's local port */
+	struct	in_conninfo inp_inc = {};	/* (i/p) list for PCB's local port */
 
 	/* Protocol-dependent part; options. */
 	struct {
 		u_char	inp4_ip_tos;		/* (i) type of service proto */
 		struct	mbuf *inp4_options;	/* (i) IP options */
 		struct	ip_moptions *inp4_moptions; /* (i) IP mcast options */
-	} inp_depend4;
+	} inp_depend4 = {};
 	struct {
 		/* (i) IP options */
 		struct	mbuf *inp6_options;
@@ -200,10 +200,9 @@ struct inpcb {
 		/* (i) IPV6_CHECKSUM setsockopt */
 		int	inp6_cksum;
 		short	inp6_hops;
-	} inp_depend6;
-	LIST_ENTRY(inpcb) inp_portlist;	/* (i/p) */
-	struct	inpcbport *inp_phd;	/* (i/p) head of this list */
-#define inp_zero_size offsetof(struct inpcb, inp_gencnt)
+	} inp_depend6 = {};
+	LIST_ENTRY(inpcb) inp_portlist = {};	/* (i/p) */
+	struct	inpcbport *inp_phd = {};	/* (i/p) head of this list */
 	inp_gen_t	inp_gencnt;	/* (c) generation count */
 	struct llentry	*inp_lle;	/* cached L2 information */
 	struct rtentry	*inp_rt;	/* cached L3 information */
