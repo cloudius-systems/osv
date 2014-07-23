@@ -9,6 +9,8 @@ class testenv(basetest.Basetest):
         self.curl(set_path, True)
         val = self.curl(get_path)
         self.assertEqual(val, "TEST")
+        self.curl_command(get_path, "DELETE")
+        self.assertHttpError(get_path, 400)
 
     @classmethod
     def setUpClass(cls):

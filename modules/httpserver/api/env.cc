@@ -39,6 +39,15 @@ void init(routes& routes)
         }
         return "";
     });
+
+    unsetEnv.set_handler([](const_req req) {
+            string param = req.param.at("var").substr(1);
+            if (unsetenv(param.c_str()) < 0) {
+                throw bad_param_exception("Invalid parameter name " + param);
+            }
+            return "";
+        });
+
 }
 
 }
