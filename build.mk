@@ -536,7 +536,6 @@ bsd += bsd/sys/netinet/tcp_debug.o
 bsd += bsd/sys/netinet/tcp_hostcache.o
 bsd += bsd/sys/netinet/tcp_input.o
 bsd += bsd/sys/netinet/tcp_lro.o
-bsd += bsd/sys/netinet/tcp_offload.o
 bsd += bsd/sys/netinet/tcp_output.o
 bsd += bsd/sys/netinet/tcp_reass.o
 bsd += bsd/sys/netinet/tcp_sack.o

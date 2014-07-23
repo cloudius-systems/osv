@@ -69,7 +69,6 @@
 #include <bsd/sys/netinet/tcp_timer.h>
 #include <bsd/sys/netinet/tcp_var.h>
 #include <bsd/sys/netinet/tcp_syncache.h>
-#include <bsd/sys/netinet/tcp_offload.h>
 #ifdef INET6
 #include <bsd/sys/netinet6/tcp6_var.h>
 #endif
@@ -783,7 +782,7 @@ void tcp_drop_noclose(struct tcpcb *tp, int errval)
 
 	if (TCPS_HAVERCVDSYN(tp->get_state())) {
 		tp->set_state(TCPS_CLOSED);
-		(void) tcp_output_reset(tp);
+		(void) tcp_output(tp);
 		TCPSTAT_INC(tcps_drops);
 	} else
 		TCPSTAT_INC(tcps_conndrops);
@@ -872,8 +871,6 @@ tcp_discardcb(struct tcpcb *tp)
 
 	/* free the reassembly queue, if any */
 	tcp_reass_flush(tp);
-	/* Disconnect offload device, if any. */
-	tcp_offload_detach(tp);
 		
 	tcp_free_sackholes(tp);
 
@@ -922,9 +919,6 @@ tcp_close(struct tcpcb *tp)
 	INP_INFO_WLOCK_ASSERT(&V_tcbinfo);
 	INP_LOCK_ASSERT(inp);
 
-	/* Notify any offload devices of listener close */
-	if (tp->get_state() == TCPS_LISTEN)
-		tcp_offload_listen_close(tp);
 	in_pcbdrop(inp);
 	TCPSTAT_INC(tcps_closed);
 	KASSERT(inp->inp_socket != NULL, ("tcp_close: inp_socket NULL"));
@@ -1664,7 +1658,7 @@ tcp_mtudisc(struct inpcb *inp, int mtuoffer)
 	tp->snd_recover = tp->snd_max;
 	if (tp->t_flags & TF_SACK_PERMIT)
 		EXIT_FASTRECOVERY(tp->t_flags);
-	tcp_output_send(tp);
+	tcp_output(tp);
 	return (inp);
 }
 

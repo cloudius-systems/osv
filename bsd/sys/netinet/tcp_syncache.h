@@ -49,13 +49,8 @@ void	syncache_destroy(void);
 void	 syncache_unreach(struct in_conninfo *, struct tcphdr *);
 int	 syncache_expand(struct in_conninfo *, struct tcpopt *,
 	     struct tcphdr *, struct socket **, struct mbuf *);
-int	 tcp_offload_syncache_expand(struct in_conninfo *inc, struct toeopt *toeo,
-             struct tcphdr *th, struct socket **lsop, struct mbuf *m);
 void	 syncache_add(struct in_conninfo *, struct tcpopt *,
 	     struct tcphdr *, struct inpcb *, struct socket **, struct mbuf *);
-void	 tcp_offload_syncache_add(struct in_conninfo *, struct toeopt *,
-             struct tcphdr *, struct inpcb *, struct socket **,
-             struct toe_usrreqs *tu, void *toepcb);
 
 void	 syncache_chkrst(struct in_conninfo *, struct tcphdr *);
 void	 syncache_badack(struct in_conninfo *);

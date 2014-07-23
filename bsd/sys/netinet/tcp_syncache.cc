@@ -68,7 +68,6 @@
 #include <bsd/sys/netinet/tcp_timer.h>
 #include <bsd/sys/netinet/tcp_var.h>
 #include <bsd/sys/netinet/tcp_syncache.h>
-#include <bsd/sys/netinet/tcp_offload.h>
 #ifdef INET6
 #include <bsd/sys/netinet6/tcp6_var.h>
 #endif
@@ -322,10 +321,6 @@ static void syncache_drop(struct syncache *sc, struct syncache_head *sch)
 	TAILQ_REMOVE(&sch->sch_bucket, sc, sc_hash);
 	sch->sch_length--;
 
-#ifndef TCP_OFFLOAD_DISABLE
-	if (sc->sc_tu)
-		sc->sc_tu->tu_syncache_event(TOE_SC_DROP, sc->sc_toepcb);
-#endif		    
 	syncache_free(sc);
 	V_tcp_syncache.cache_count--;
 }
@@ -956,24 +951,6 @@ failed:
 	return (0);
 }
 
-int tcp_offload_syncache_expand(struct in_conninfo *inc, struct toeopt *toeo,
-	struct tcphdr *th, struct socket **lsop, struct mbuf *m)
-{
-	struct tcpopt to;
-	int rc;
-
-	bzero(&to, sizeof(struct tcpopt));
-	to.to_mss = toeo->to_mss;
-	to.to_wscale = toeo->to_wscale;
-	to.to_flags = toeo->to_flags;
-
-	INP_INFO_WLOCK(&V_tcbinfo);
-	rc = syncache_expand(inc, &to, th, lsop, m);
-	INP_INFO_WUNLOCK(&V_tcbinfo);
-
-	return (rc);
-}
-
 /*
  * Given a LISTEN socket and an inbound SYN request, add
  * this to the syn cache, and send back a segment:
@@ -1073,10 +1050,6 @@ static void _syncache_add(struct in_conninfo *inc, struct tcpopt *to,
 	sc = syncache_lookup(inc, &sch); /* returns locked entry */
 	SCH_LOCK_ASSERT(sch);
 	if (sc != NULL ) {
-#ifndef TCP_OFFLOAD_DISABLE
-		if (sc->sc_tu)
-			sc->sc_tu->tu_syncache_event(TOE_SC_ENTRY_PRESENT, sc->sc_toepcb);
-#endif		    
 		TCPSTAT_INC(tcps_sc_dupsyn);
 		if (ipopts) {
 			/*
@@ -1452,23 +1425,6 @@ void syncache_add(struct in_conninfo *inc, struct tcpopt *to, struct tcphdr *th,
 	struct inpcb *inp, struct socket **lsop, struct mbuf *m)
 {
 	_syncache_add(inc, to, th, inp, lsop, m, NULL, NULL );
-}
-
-void tcp_offload_syncache_add(struct in_conninfo *inc, struct toeopt *toeo,
-	struct tcphdr *th, struct inpcb *inp, struct socket **lsop,
-	struct toe_usrreqs *tu, void *toepcb)
-{
-	struct tcpopt to;
-
-	bzero(&to, sizeof(struct tcpopt));
-	to.to_mss = toeo->to_mss;
-	to.to_wscale = toeo->to_wscale;
-	to.to_flags = toeo->to_flags;
-
-	INP_INFO_WLOCK(&V_tcbinfo);
-	INP_LOCK(inp);
-
-	_syncache_add(inc, &to, th, inp, lsop, NULL, tu, toepcb);
 }
 
 /*

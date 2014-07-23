@@ -81,7 +81,6 @@
 #ifdef TCPDEBUG
 #include <bsd/sys/netinet/tcp_debug.h>
 #endif
-#include <bsd/sys/netinet/tcp_offload.h>
 
 #include <osv/poll.h>
 
@@ -369,7 +368,6 @@ tcp_usr_listen(struct socket *so, int backlog, struct thread *td)
 	if (error == 0) {
 		tp->set_state(TCPS_LISTEN);
 		solisten_proto(so, backlog);
-		tcp_offload_listen_open(tp);
 	}
 	SOCK_UNLOCK(so);
 
@@ -459,7 +457,7 @@ tcp_usr_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 	TCPDEBUG1();
 	if ((error = tcp_connect(tp, nam, td)) != 0)
 		goto out;
-	error = tcp_output_connect(so, nam);
+	error = tcp_output(tp);
 out:
 	TCPDEBUG2(PRU_CONNECT);
 	INP_UNLOCK(inp);
@@ -700,7 +698,7 @@ tcp_usr_shutdown(struct socket *so)
 	socantsendmore_locked(so);
 	tcp_usrclosed(tp);
 	if (!(inp->inp_flags & INP_DROPPED))
-		error = tcp_output_disconnect(tp);
+		error = tcp_output(tp);
 
 out:
 	TCPDEBUG2(PRU_SHUTDOWN);
@@ -730,7 +728,7 @@ tcp_usr_rcvd(struct socket *so, int flags)
 	}
 	tp = intotcpcb(inp);
 	TCPDEBUG1();
-	tcp_output_rcvd(tp);
+	tcp_output(tp);
 
 out:
 	TCPDEBUG2(PRU_RCVD);
@@ -826,7 +824,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		if (!(inp->inp_flags & INP_DROPPED)) {
 			if (flags & PRUS_MORETOCOME)
 				tp->t_flags |= TF_MORETOCOME;
-			error = tcp_output_send(tp);
+			error = tcp_output(tp);
 			if (flags & PRUS_MORETOCOME)
 				tp->t_flags &= ~TF_MORETOCOME;
 		}
@@ -873,7 +871,7 @@ tcp_usr_send(struct socket *so, int flags, struct mbuf *m,
 		}
 		tp->snd_up = tp->snd_una + so->so_snd.sb_cc;
 		tp->t_flags |= TF_FORCEDATA;
-		error = tcp_output_send(tp);
+		error = tcp_output(tp);
 		tp->t_flags &= ~TF_FORCEDATA;
 	}
 out:
@@ -1652,7 +1650,7 @@ tcp_disconnect(struct tcpcb *tp)
 		sbflush(so, &so->so_rcv);
 		tcp_usrclosed(tp);
 		if (!(inp->inp_flags & INP_DROPPED))
-			tcp_output_disconnect(tp);
+			tcp_output(tp);
 	}
 }
 
@@ -1677,7 +1675,6 @@ tcp_usrclosed(struct tcpcb *tp)
 
 	switch (tp->get_state()) {
 	case TCPS_LISTEN:
-		tcp_offload_listen_close(tp);
 		/* FALLTHROUGH */
 	case TCPS_CLOSED:
 		tp->set_state(TCPS_CLOSED);
