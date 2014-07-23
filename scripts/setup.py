@@ -48,9 +48,9 @@ class Ubuntu(object):
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump gdb', 'qemu-system-x86',
                 'gawk'
                 ]
-    ec2_packages = standard_ec2_packages
+    ec2_packages = standard_ec2_packages + ['ec2-api-tools', 'awscli']
     test_packages = ['libssl-dev']
-    ec2_post_install = standard_ec2_post_install
+    ec2_post_install = None
 
     class Ubuntu_14_04(object):
         packages = []
@@ -83,7 +83,7 @@ for distro in distros:
                 if cmdargs.test:
                     pkg += distro.test_packages + dver.test_packages
                 subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell = True)
-                if cmdargs.ec2:
+                if cmdargs.ec2 and distro.ec2_post_install:
                     subprocess.check_call(distro.ec2_post_install, shell = True)
                 sys.exit(0)
         print 'Your distribution version is not supported by this script'
