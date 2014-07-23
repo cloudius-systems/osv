@@ -326,10 +326,6 @@ void run_main(const std::vector<std::string> &vec)
         return;
     }
 
-    if (opt_bootchart) {
-        boot_time.print_chart();
-    }
-
     printf("run_main(): cannot execute %s. Powering off.\n", command.c_str());
     osv::poweroff();
 }
@@ -422,6 +418,10 @@ void* do_main_thread(void *_commands)
     }
 
     boot_time.event("Total time");
+
+    if (opt_bootchart) {
+        boot_time.print_chart();
+    }
 
     // Run command lines in /init/* before the manual command line
     if (opt_init) {
