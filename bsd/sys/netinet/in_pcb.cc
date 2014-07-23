@@ -204,8 +204,7 @@ SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, randomtime, CTLFLAG_RW,
 void
 in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
     struct inpcbhead *listhead, int hash_nelements, int porthash_nelements,
-    char *inpcbzone_name, uma_init inpcbzone_init, uma_fini inpcbzone_fini,
-    uint32_t inpcbzone_flags, u_int hashfields)
+    u_int hashfields)
 {
 
 	INP_INFO_LOCK_INIT(pcbinfo, name);
@@ -220,10 +219,7 @@ in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
 	    &pcbinfo->ipi_hashmask);
 	pcbinfo->ipi_porthashbase = (inpcbporthead *)hashinit(porthash_nelements, 0,
 	    &pcbinfo->ipi_porthashmask);
-	pcbinfo->ipi_zone = uma_zcreate(inpcbzone_name, sizeof(struct inpcb),
-	    NULL, NULL, inpcbzone_init, inpcbzone_fini, UMA_ALIGN_PTR,
-	    inpcbzone_flags);
-	uma_zone_set_max(pcbinfo->ipi_zone, maxsockets);
+	// FIXME: uma_zone_set_max(pcbinfo->ipi_zone, maxsockets);
 }
 
 /*
@@ -239,7 +235,6 @@ in_pcbinfo_destroy(struct inpcbinfo *pcbinfo)
 	hashdestroy(pcbinfo->ipi_hashbase, 0, pcbinfo->ipi_hashmask);
 	hashdestroy(pcbinfo->ipi_porthashbase, 0,
 	    pcbinfo->ipi_porthashmask);
-	uma_zdestroy(pcbinfo->ipi_zone);
 	INP_HASH_LOCK_DESTROY(pcbinfo);
 	INP_INFO_LOCK_DESTROY(pcbinfo);
 }
@@ -248,18 +243,13 @@ in_pcbinfo_destroy(struct inpcbinfo *pcbinfo)
  * Allocate a PCB and associate it with the socket.
  * On success return with the PCB locked.
  */
-int
-in_pcballoc(struct socket *so, struct inpcbinfo *pcbinfo)
+inpcb::inpcb(struct socket *so, struct inpcbinfo *pcbinfo)
 {
-	struct inpcb *inp;
-	int error;
+	struct inpcb *inp = this;
 
 	INP_INFO_WLOCK_ASSERT(pcbinfo);
-	error = 0;
-	inp = (inpcb *)uma_zalloc(pcbinfo->ipi_zone, M_NOWAIT);
-	if (inp == NULL)
-		return (ENOBUFS);
 	bzero(inp, inp_zero_size);
+	INP_LOCK_INIT(inp, "ignored", "ignored");
 	inp->inp_pcbinfo = pcbinfo;
 	inp->inp_socket = so;
 	inp->inp_inc.inc_fibnum = so->so_fibnum;
@@ -290,14 +280,6 @@ in_pcballoc(struct socket *so, struct inpcbinfo *pcbinfo)
 	INP_LOCK(inp);
 	inp->inp_gencnt = ++pcbinfo->ipi_gencnt;
 	refcount_init(&inp->inp_refcount, 1);	/* Reference from inpcbinfo */
-#if defined(IPSEC) || defined(MAC)
-out:
-	if (error != 0) {
-		crfree(inp->inp_cred);
-		uma_zfree(pcbinfo->ipi_zone, inp);
-	}
-#endif
-	return (error);
 }
 
 #ifdef INET
@@ -1012,7 +994,7 @@ in_pcbrele_locked(struct inpcb *inp)
 
 	INP_UNLOCK(inp);
 	pcbinfo = inp->inp_pcbinfo;
-	uma_zfree(pcbinfo->ipi_zone, inp);
+	delete inp;
 	return (1);
 }
 

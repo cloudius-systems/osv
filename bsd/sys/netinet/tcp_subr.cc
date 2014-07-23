@@ -249,18 +249,9 @@ static void
 tcp_zone_change(void *tag)
 {
 
-	uma_zone_set_max(V_tcbinfo.ipi_zone, maxsockets);
+	// FIXME: uma_zone_set_max(V_tcbinfo.ipi_zone, maxsockets);
 	uma_zone_set_max(V_tcpcb_zone, maxsockets);
 	tcp_tw_zone_change();
-}
-
-static int
-tcp_inpcb_init(void *mem, int size, int flags)
-{
-	struct inpcb *inp = (inpcb *)mem;
-
-	INP_LOCK_INIT(inp, "inp", "tcpinp");
-	return (0);
 }
 
 void
@@ -275,7 +266,6 @@ tcp_init(void)
 		hashsize = 512; /* safe default */
 	}
 	in_pcbinfo_init(&V_tcbinfo, "tcp", &V_tcb, hashsize, hashsize,
-	    "tcp_inpcb", tcp_inpcb_init, NULL, UMA_ZONE_NOFREE,
 	    IPI_HASHFIELDS_4TUPLE);
 
 	/*

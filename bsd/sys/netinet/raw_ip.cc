@@ -182,16 +182,7 @@ static void
 rip_zone_change(void *tag)
 {
 
-	uma_zone_set_max(V_ripcbinfo.ipi_zone, maxsockets);
-}
-
-static int
-rip_inpcb_init(void *mem, int size, int flags)
-{
-	struct inpcb *inp = (inpcb *)mem;
-
-	INP_LOCK_INIT(inp, "inp", "rawinp");
-	return (0);
+	// FIXME: uma_zone_set_max(V_ripcbinfo.ipi_zone, maxsockets);
 }
 
 void
@@ -199,8 +190,7 @@ rip_init(void)
 {
 
 	in_pcbinfo_init(&V_ripcbinfo, "rip", &V_ripcb, INP_PCBHASH_RAW_SIZE,
-	    1, "ripcb", rip_inpcb_init, NULL, UMA_ZONE_NOFREE,
-	    IPI_HASHFIELDS_NONE);
+	    1, IPI_HASHFIELDS_NONE);
 	EVENTHANDLER_REGISTER(maxsockets_change, (void *)rip_zone_change, NULL,
 	    EVENTHANDLER_PRI_ANY);
 }
@@ -744,12 +734,7 @@ rip_attach(struct socket *so, int proto, struct thread *td)
 	if (error)
 		return (error);
 	INP_INFO_WLOCK(&V_ripcbinfo);
-	error = in_pcballoc(so, &V_ripcbinfo);
-	if (error) {
-		INP_INFO_WUNLOCK(&V_ripcbinfo);
-		return (error);
-	}
-	inp = (struct inpcb *)so->so_pcb;
+	inp = new inpcb(so, &V_ripcbinfo);
 	inp->inp_vflag |= INP_IPV4;
 	inp->inp_ip_p = proto;
 	inp->inp_ip_ttl = V_ip_defttl;

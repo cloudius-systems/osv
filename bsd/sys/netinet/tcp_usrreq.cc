@@ -1596,12 +1596,7 @@ tcp_attach(struct socket *so)
 	so->so_rcv.sb_flags |= SB_AUTOSIZE;
 	so->so_snd.sb_flags |= SB_AUTOSIZE;
 	INP_INFO_WLOCK(&V_tcbinfo);
-	error = in_pcballoc(so, &V_tcbinfo);
-	if (error) {
-		INP_INFO_WUNLOCK(&V_tcbinfo);
-		return (error);
-	}
-	inp = sotoinpcb(so);
+	inp = new inpcb(so, &V_tcbinfo);
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6PROTO) {
 		inp->inp_vflag |= INP_IPV6;

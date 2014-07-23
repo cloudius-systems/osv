@@ -163,6 +163,7 @@ struct	icmp6_filter;
  * The inp_vflag field is overloaded, and would otherwise ideally be (c).
  */
 struct inpcb {
+	inpcb(struct socket* so, struct inpcbinfo* pcbinfo);
 	LIST_ENTRY(inpcb) inp_hash;	/* (i/p) hash list */
 	LIST_ENTRY(inpcb) inp_list;	/* (i/p) list for all PCBs for proto */
 	void	*inp_ppcb;		/* (i) pointer to per-protocol pcb */
@@ -310,11 +311,6 @@ struct inpcbinfo {
 	u_short			 ipi_lastport;		/* (x) */
 	u_short			 ipi_lastlow;		/* (x) */
 	u_short			 ipi_lasthi;		/* (x) */
-
-	/*
-	 * UMA zone from which inpcbs are allocated for this protocol.
-	 */
-	struct	uma_zone	*ipi_zone;		/* (c) */
 
 	/*
 	 * Global lock protecting hash lookup tables.
@@ -528,10 +524,9 @@ VNET_DECLARE(int, ipport_tcpallocs);
 
 void	in_pcbinfo_destroy(struct inpcbinfo *);
 void	in_pcbinfo_init(struct inpcbinfo *, const char *, struct inpcbhead *,
-	    int, int, char *, uma_init, uma_fini, uint32_t, u_int);
+	    int, int, u_int);
 
 void	in_pcbpurgeif0(struct inpcbinfo *, struct ifnet *);
-int	in_pcballoc(struct socket *, struct inpcbinfo *);
 int	in_pcbbind(struct inpcb *, struct bsd_sockaddr *, struct ucred *);
 int	in_pcb_lport(struct inpcb *, struct in_addr *, u_short *,
 	    struct ucred *, int);
