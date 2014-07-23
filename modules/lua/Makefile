@@ -30,7 +30,7 @@ MAIN=src/liblua.so
 LUA_BIN=out/bin/lua
 
 # List of Lua modules, each module has its own target
-LUA_MODULES=LuaSocket LPeg LuaJSON
+LUA_MODULES=LuaSocket LPeg LuaJSON Lua_stdlib
 BDIR=$(OUT)/bin
 LDIR=$(OUT)/lib/lua/$(LUA_V)
 CDIR=$(OUT)/share/lua/$(LUA_V)
@@ -103,6 +103,12 @@ LuaJSON: $(CDIR)/json.lua
 
 $(CDIR)/json.lua: | LuaRocks
 	out/bin/luarocks install luajson 1.3.3
+
+# == Lua_stdlib ==
+Lua_stdlib: $(CDIR)/std.lua
+
+$(CDIR)/std.lua: | LuaRocks
+	out/bin/luarocks install stdlib 40
 
 ##
 clean:
