@@ -9,6 +9,7 @@ usr_files = FileMap()
 usr_files.add(os.path.join('${OSV_BASE}', 'external/x64/misc.bin/usr/lib64/libyaml-cpp.so.0.5.1')).to('/usr/lib/libyaml-cpp.so.0.5')
 usr_files.add(os.path.join(_module, 'cloud-init.so')).to('/usr/mgmt/cloud-init.so')
 usr_files.add(os.path.join(_module, 'cloud-init.yaml')).to('/usr/mgmt/cloud-init.yaml')
+usr_files.add(os.path.join(_module, 'cmdline')).to('/init/00-cmdline')
 
 api.require('httpserver')
 

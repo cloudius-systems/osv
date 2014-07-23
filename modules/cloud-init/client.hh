@@ -26,8 +26,16 @@
 #include <boost/asio.hpp>
 #include <streambuf>
 #include <iterator>
+#include <unordered_map>
 
 namespace init {
+
+
+enum http_status {
+    OK = 200,
+    NOT_FOUND = 404
+};
+
 /**
  * Sync client implementation based on the boost asio library
  * and the sync_client example.
@@ -36,6 +44,11 @@ namespace init {
 class client {
 public:
     client();
+
+    /**
+     * Sets HTTP header which will be sent on subsequent requests.
+     */
+    void set_header(const std::string& name, const std::string& value);
 
     /**
      * open a connection to a path on a server
@@ -47,7 +60,7 @@ public:
 
     bool is_ok()
     {
-        return status_code == 200;
+        return status_code == http_status::OK;
     }
 
     unsigned int get_status()
@@ -60,6 +73,13 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& os, client& c);
+
+    std::string text()
+    {
+        std::ostringstream ss;
+        ss << *this;
+        return ss.str();
+    }
 private:
     void process_headers();
     boost::asio::streambuf response;
@@ -67,6 +87,7 @@ private:
     boost::asio::io_service io_service;
     boost::asio::ip::tcp::socket _socket;
     bool done = false;
+    std::unordered_map<std::string, std::string> _headers;
 };
 
 }

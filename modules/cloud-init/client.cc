@@ -7,10 +7,14 @@
 
 #include "client.hh"
 #include <boost/asio/ip/address.hpp>
+#include <boost/asio/deadline_timer.hpp>
 #include <fstream>
 
 namespace init {
+
 using boost::asio::ip::tcp;
+using boost::asio::deadline_timer;
+
 class connection_exception : public std::exception {
 public:
     connection_exception(const std::string& msg)
@@ -31,6 +35,34 @@ client::client()
 
 }
 
+void client::set_header(const std::string& name, const std::string& value)
+{
+    _headers[name] = value;
+}
+
+template<typename Duration>
+static void connect_with_timeout(boost::asio::io_service& io_service,
+    boost::asio::ip::tcp::socket& _socket, tcp::endpoint& _endpoint,
+    boost::system::error_code& ec, Duration duration)
+{
+    io_service.reset();
+
+    deadline_timer timeout{io_service};
+    timeout.expires_from_now(duration);
+    timeout.async_wait([&] (const boost::system::error_code& ec) {
+        if (ec != boost::asio::error::operation_aborted) {
+            _socket.close();
+        }
+    });
+
+    _socket.async_connect(_endpoint, [&] (const boost::system::error_code& error_code) {
+        timeout.cancel();
+        ec = error_code;
+    });
+
+    io_service.run();
+}
+
 client& client::get(const std::string& server, const std::string& path,
                     unsigned int port)
 {
@@ -45,7 +77,7 @@ client& client::get(const std::string& server, const std::string& path,
 
     tcp::endpoint _endpoint(address, port);
 
-    _socket.connect(_endpoint, ec);
+    connect_with_timeout(io_service, _socket, _endpoint, ec, boost::posix_time::seconds(1));
 
     if (ec != 0) {
         throw connection_exception(
@@ -58,9 +90,23 @@ client& client::get(const std::string& server, const std::string& path,
     boost::asio::streambuf request;
     std::ostream request_stream(&request);
     request_stream << "GET " << path << " HTTP/1.0\r\n";
-    request_stream << "Host: " << server << "\r\n";
-    request_stream << "Accept: */*\r\n";
-    request_stream << "Connection: close\r\n\r\n";
+
+    std::unordered_map<std::string,std::string> default_headers;
+    default_headers["Host"] = server;
+    default_headers["Accept"] = "*/*";
+    default_headers["Connection"] = "close";
+
+    for (auto& e : _headers) {
+        request_stream << e.first << ": " << e.second << "\r\n";
+    }
+
+    for (auto& e : default_headers) {
+        if (!_headers.count(e.first)) {
+            request_stream << e.first << ": " << e.second << "\r\n";
+        }
+    }
+
+    request_stream << "\r\n";
 
     // Send the request.
     boost::asio::write(_socket, request);
@@ -81,13 +127,6 @@ client& client::get(const std::string& server, const std::string& path,
         done = true;
         throw connection_exception(
             std::string("Bad HTTP version ") + http_version);
-    }
-    if (status_code != 200)
-    {
-        done = true;
-        throw connection_exception(
-            std::string("Server return with status ")
-            + std::to_string(status_code));
     }
     // Read the response headers, which are terminated by a blank line.
     boost::asio::read_until(_socket, response, "\r\n\r\n");
