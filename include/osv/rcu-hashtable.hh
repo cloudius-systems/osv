@@ -13,6 +13,23 @@
 
 namespace osv {
 
+/// rcu-protected hash table.
+///
+/// This hash table template provides insert, delete, and
+/// find operations that require external synchronization
+/// (e.g. a \ref ::mutex) and also a lookup operation that is protected
+/// by RCU (e.g. \ref osv::rcu_read_lock).
+///
+/// The hash table grows and shrinks automatically to maintain
+/// O(1) time amortized lookup, insert, and delete operations.
+///
+/// The two find operations (reader_find() and owner_find())
+/// Can be used with a key that is the same type as the data
+/// element #T (like std::unordered_set), or they can be used
+/// with a different key type (typically a field within \ref T), in
+/// which case a hash functor and a comparator must also be supplied.
+///
+/// Data elements must support copy construction.
 template <typename T, typename Hash = std::hash<T>>
 class rcu_hashtable {
     struct next_ptr {
@@ -32,14 +49,22 @@ class rcu_hashtable {
     size_t _size = 0;
     Hash _hash;
 public:
+    /// A pointer to an element.
+    ///
+    /// Iterators are invalidated by insert and delete operations.
+    /// Iterators obtained by reader_find() are only valid within
+    /// the RCU critical section.
     class iterator {
         element* _p = nullptr;
     public:
         iterator(element* p) : _p(p) {}
         iterator(const iterator&) = default;
         iterator() = default;
+        /// Access the data value.
         T& operator*() const { return _p->data; }
+        /// Access the data value.
         T* operator->() const { return &_p->data; }
+        /// Checks whether the iterator points to a valid element.
         explicit operator bool() const { return _p; }
         friend rcu_hashtable;
     };
@@ -87,34 +112,93 @@ private:
 public:
     rcu_hashtable(const rcu_hashtable&) = delete;
     void operator=(const rcu_hashtable&) = delete;
+    /// Construct an empty hash table with the given @capacity.
     explicit rcu_hashtable(size_t capacity, Hash hash = Hash())
         : _buckets(new bucket_array_type(capacity)), _hash(hash) {}
+    /// Construct an empty hash table @capacity.
     explicit rcu_hashtable(Hash hash = Hash())
         : rcu_hashtable(1, hash) {}
     ~rcu_hashtable();
+
+    /// Find an item using a given @key.
+    ///
+    /// Looks for an item in the bucket given by @key_hash(@key), and matched element e
+    /// using @kvc(@key, e) == true.
+    ///
+    /// Must be protected by RCU, and the result must be consumed
+    /// within the RCU critical section.
     template <typename Key, typename KeyHash = std::hash<Key>, typename KeyValueCompare = std::equal_to<T>>
     iterator reader_find(const Key& key, KeyHash key_hash = KeyHash(), KeyValueCompare kvc = KeyValueCompare()) {
         return find(key, key_hash, kvc, reader_traits());
     }
+
+    /// Find an item equal to another item
+    ///
+    /// Must be protected by RCU, and the result must be consumed
+    /// within the RCU critical section.
+    iterator reader_find(const T& key) {
+        return reader_find(key, _hash, std::equal_to<T>());
+    }
+
+    /// Find an item using a given @key.
+    ///
+    /// Looks for an item in the bucket given by @key_hash(@key), and matched element e
+    /// using @kvc(@key, e) == true.
+    ///
+    /// Requires external mutual exclustion.
+    /// Result must be consumed before the next modification.
     template <typename Key, typename KeyHash = std::hash<Key>, typename KeyValueCompare = std::equal_to<T>>
     iterator owner_find(const Key& key, KeyHash key_hash = KeyHash(), KeyValueCompare kvc = KeyValueCompare()) {
         return find(key, key_hash, kvc, owner_traits());
     }
+
+    /// Find an item equal to another item
+    ///
+    /// Requires external mutual exclusion.
+    /// Result must be consumed before the next modification.
+    iterator owner_find(const T& key) {
+        return owner_find(key, _hash, std::equal_to<T>());
+    }
+
+    /// Erase an item previously found by owner_find().
+    ///
+    /// Requires external mutual exclusion.
     void erase(iterator i);
+
+    /// Inserts an item
+    ///
+    /// Requires external mutual exclusion.
     void insert(const T& data) {
         insert(new element(data));
     }
+
+    /// Inserts an item, possibly destroying the source
+    ///
+    /// Requires external mutual exclusion.
     void insert(T&& data) {
         insert(new element(std::move(data)));
     }
+
+    /// Constructs a new item in place.
+    ///
+    /// Requires external mutual exclusion.
     template <typename... Arg>
     void emplace(Arg... arg) {
         insert(new element(std::forward<Arg>(arg)...));
     }
+
+    /// Executes a function on all items
+    ///
+    /// Requires external mutual exclusion.  @func may not
+    /// call erase() or insert().
     template <typename Func>
     void owner_for_each(Func func) {
         for_each(func, owner_traits());
     }
+
+    /// Executes a function on all items
+    ///
+    /// Must be run within an RCU read-side critical section.
     template <typename Func>
     void reader_for_each(Func func) {
         for_each(func, reader_traits());
