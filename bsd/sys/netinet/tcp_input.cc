@@ -461,60 +461,58 @@ tcp_input(struct mbuf *m, int off0)
 	to.to_flags = 0;
 	TCPSTAT_INC(tcps_rcvtotal);
 
-	{
-		/*
-		 * Get IP and TCP header together in first mbuf.
-		 * Note: IP leaves IP header in first mbuf.
-		 */
-		if (off0 > sizeof (struct ip)) {
-			ip_stripoptions(m, (struct mbuf *)0);
-			off0 = sizeof(struct ip);
-		}
-		if (m->m_hdr.mh_len < sizeof (struct tcpiphdr)) {
-			if ((m = m_pullup(m, sizeof (struct tcpiphdr)))
-			    == NULL) {
-				TCPSTAT_INC(tcps_rcvshort);
-				return;
-			}
-		}
-		ip = mtod(m, struct ip *);
-		ipov = (struct ipovly *)ip;
-		th = (struct tcphdr *)((caddr_t)ip + off0);
-		tlen = ip->ip_len;
-
-		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DATA_VALID) {
-			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
-				th->th_sum = m->M_dat.MH.MH_pkthdr.csum_data;
-			else
-				th->th_sum = in_pseudo(ip->ip_src.s_addr,
-						ip->ip_dst.s_addr,
-						htonl(m->M_dat.MH.MH_pkthdr.csum_data +
-							ip->ip_len +
-							IPPROTO_TCP));
-			th->th_sum ^= 0xffff;
-#ifdef TCPDEBUG
-			ipov->ih_len = (u_short)tlen;
-			ipov->ih_len = htons(ipov->ih_len);
-#endif
-		} else {
-			/*
-			 * Checksum extended TCP header and data.
-			 */
-			len = sizeof (struct ip) + tlen;
-			bzero(ipov->ih_x1, sizeof(ipov->ih_x1));
-			ipov->ih_len = (u_short)tlen;
-			ipov->ih_len = htons(ipov->ih_len);
-			th->th_sum = in_cksum(m, len);
-		}
-		if (th->th_sum) {
-			TCPSTAT_INC(tcps_rcvbadsum);
-			goto drop;
-		}
-		/* Re-initialization for later version check */
-		ip->ip_v = IPVERSION;
+	/*
+	 * Get IP and TCP header together in first mbuf.
+	 * Note: IP leaves IP header in first mbuf.
+	 */
+	if (off0 > sizeof (struct ip)) {
+		ip_stripoptions(m, (struct mbuf *)0);
+		off0 = sizeof(struct ip);
 	}
+	if (m->m_hdr.mh_len < sizeof (struct tcpiphdr)) {
+		if ((m = m_pullup(m, sizeof (struct tcpiphdr)))
+		    == NULL) {
+			TCPSTAT_INC(tcps_rcvshort);
+			return;
+		}
+	}
+	ip = mtod(m, struct ip *);
+	ipov = (struct ipovly *)ip;
+	th = (struct tcphdr *)((caddr_t)ip + off0);
+	tlen = ip->ip_len;
 
-		iptos = ip->ip_tos;
+	if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DATA_VALID) {
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_PSEUDO_HDR)
+			th->th_sum = m->M_dat.MH.MH_pkthdr.csum_data;
+		else
+			th->th_sum = in_pseudo(ip->ip_src.s_addr,
+					ip->ip_dst.s_addr,
+					htonl(m->M_dat.MH.MH_pkthdr.csum_data +
+						ip->ip_len +
+						IPPROTO_TCP));
+		th->th_sum ^= 0xffff;
+#ifdef TCPDEBUG
+		ipov->ih_len = (u_short)tlen;
+		ipov->ih_len = htons(ipov->ih_len);
+#endif
+	} else {
+		/*
+		 * Checksum extended TCP header and data.
+		 */
+		len = sizeof (struct ip) + tlen;
+		bzero(ipov->ih_x1, sizeof(ipov->ih_x1));
+		ipov->ih_len = (u_short)tlen;
+		ipov->ih_len = htons(ipov->ih_len);
+		th->th_sum = in_cksum(m, len);
+	}
+	if (th->th_sum) {
+		TCPSTAT_INC(tcps_rcvbadsum);
+		goto drop;
+	}
+	/* Re-initialization for later version check */
+	ip->ip_v = IPVERSION;
+
+	iptos = ip->ip_tos;
 
 	/*
 	 * Check that TCP offset makes sense,
@@ -527,17 +525,15 @@ tcp_input(struct mbuf *m, int off0)
 	}
 	tlen -= off;	/* tlen is used instead of ti->ti_len */
 	if (off > sizeof (struct tcphdr)) {
-		{
-			if (m->m_hdr.mh_len < sizeof(struct ip) + off) {
-				if ((m = m_pullup(m, sizeof (struct ip) + off))
-				    == NULL) {
-					TCPSTAT_INC(tcps_rcvshort);
-					return;
-				}
-				ip = mtod(m, struct ip *);
-				ipov = (struct ipovly *)ip;
-				th = (struct tcphdr *)((caddr_t)ip + off0);
+		if (m->m_hdr.mh_len < sizeof(struct ip) + off) {
+			if ((m = m_pullup(m, sizeof (struct ip) + off))
+			    == NULL) {
+				TCPSTAT_INC(tcps_rcvshort);
+				return;
 			}
+			ip = mtod(m, struct ip *);
+			ipov = (struct ipovly *)ip;
+			th = (struct tcphdr *)((caddr_t)ip + off0);
 		}
 		optlen = off - sizeof (struct tcphdr);
 		optp = (u_char *)(th + 1);
@@ -576,10 +572,10 @@ findpcb:
 	}
 #endif
 
-		inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src,
-		    th->th_sport, ip->ip_dst, th->th_dport,
-		    INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB,
-		    m->M_dat.MH.MH_pkthdr.rcvif, m);
+	inp = in_pcblookup_mbuf(&V_tcbinfo, ip->ip_src,
+	    th->th_sport, ip->ip_dst, th->th_dport,
+	    INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB,
+	    m->M_dat.MH.MH_pkthdr.rcvif, m);
 
 	/*
 	 * If the INPCB does not exist then all data in the incoming
@@ -910,26 +906,24 @@ relocked:
 				"link layer address ignored\n", s, __func__);
 			goto dropunlock;
 		}
-		{
-			if (th->th_dport == th->th_sport &&
-			    ip->ip_dst.s_addr == ip->ip_src.s_addr) {
-				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
-					"Connection attempt from/to self "
-					"ignored\n", s, __func__);
-				goto dropunlock;
-			}
-			if (IN_MULTICAST(ntohl(ip->ip_dst.s_addr)) ||
-			    IN_MULTICAST(ntohl(ip->ip_src.s_addr)) ||
-			    ip->ip_src.s_addr == htonl(INADDR_BROADCAST) ||
-			    in_broadcast(ip->ip_dst, m->M_dat.MH.MH_pkthdr.rcvif)) {
-				if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
-				    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
-					"Connection attempt from/to broad- "
-					"or multicast address ignored\n",
-					s, __func__);
-				goto dropunlock;
-			}
+		if (th->th_dport == th->th_sport &&
+		    ip->ip_dst.s_addr == ip->ip_src.s_addr) {
+			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
+			    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
+				"Connection attempt from/to self "
+				"ignored\n", s, __func__);
+			goto dropunlock;
+		}
+		if (IN_MULTICAST(ntohl(ip->ip_dst.s_addr)) ||
+		    IN_MULTICAST(ntohl(ip->ip_src.s_addr)) ||
+		    ip->ip_src.s_addr == htonl(INADDR_BROADCAST) ||
+		    in_broadcast(ip->ip_dst, m->M_dat.MH.MH_pkthdr.rcvif)) {
+			if ((s = tcp_log_addrs(&inc, th, NULL, NULL)))
+			    bsd_log(LOG_DEBUG, "%s; %s: Listen socket: "
+				"Connection attempt from/to broad- "
+				"or multicast address ignored\n",
+				s, __func__);
+			goto dropunlock;
 		}
 		/*
 		 * SYN appears to be valid.  Create compressed TCP state
