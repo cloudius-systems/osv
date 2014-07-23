@@ -307,7 +307,7 @@ void *__libc_stack_end;
 
 void run_main(const std::vector<std::string> &vec)
 {
-    auto b = std::begin(vec)++;
+    auto b = std::begin(vec);
     auto e = std::end(vec);
     std::string command = vec[0];
     std::vector<std::string> args(b, e);
