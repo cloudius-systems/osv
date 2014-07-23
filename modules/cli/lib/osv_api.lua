@@ -1,4 +1,5 @@
 local http = require("socket.http")
+local url = require("socket.url")
 local json = require("json")
 local ltn12 = require("ltn12")
 
@@ -24,21 +25,46 @@ function osv_schema()
   return schema
 end
 
+--- Perform an OSv API request
+-- Sends a request to the OSv API and returns the body of the response. By
+-- default, try to decode the response as JSON unless `do_raw` is set to true.
+--
+-- @param arguments  Table of arguments or a string to construct the path. If a
+--                   table is provided, join its fields with '/' after escaping
+--                   them. Otherwise, cast to string and don't escape.
+--                   Example: {"os", "version"} -> /os/version
+-- @param method     The method for the request (e.g. GET, POST)
+-- @param parameters The request parameters. A table of key/value where key is
+--                   param name, and value can be either array or string. If
+--                   value is a table, specify this parameter multiple times,
+--                   otherwise use as is once. Values will be escaped.
+--                   Example: {path = "/etc/hosts"} -> "?path=%2fetc%2fhosts"
+--                   Example: {foo = {"bar1", "bar2"}} -> "?foo=bar1&foo=bar2"
+-- @param do_raw     Return the raw response, without decoding (default: false)
+--
+-- @return object|string Body of the response, type depends on do_raw and
+--                       response itself if processed.
 function osv_request(arguments, method, parameters, do_raw)
   local raw = do_raw or false
 
   -- Construct path, join /arg/ume/nts ;)
   local path = type(arguments) == 'table'
-    and ("/" .. table.concat(arguments, "/")) or tostring(arguments)
+    and ("/" .. table.concat(map(url.escape, arguments), "/"))
+    or tostring(arguments)
 
   --[[ Construct query parameters:
-    `parameters` is key/value where value is table, to enable multiplicity ]]--
+    `parameters` is key/value where value is table, to enable multiplicity,
+    or a simple string ]]--
   local reqquery = ""
-  if type(parameters) == 'table' then
+  if type(parameters) == "table" then
     local tbl_reqquery = {}
     for k, a in pairs(parameters) do
-      for _, v in ipairs(a) do
-        table.insert(tbl_reqquery, k .. "=" .. v)
+      if type(a) == "table" then
+        for _, v in ipairs(a) do
+          table.insert(tbl_reqquery, k .. "=" .. url.escape(v))
+        end
+      else
+        table.insert(tbl_reqquery, k .. "=" .. url.escape(a))
       end
     end
     reqquery = table.concat(tbl_reqquery, "&")
@@ -63,7 +89,7 @@ function osv_request(arguments, method, parameters, do_raw)
   local respbody = {}
 
   -- Perform the request
-  local respcode, headers, status = http.request {
+  local respcode, status, headers = http.request {
     method = method,
     url = full_url,
     source = ltn12.source.string(reqbody),
@@ -71,10 +97,18 @@ function osv_request(arguments, method, parameters, do_raw)
   }
 
   if raw then
-    return table.concat(respbody)
+    return table.concat(respbody), status, headers
   else
-    return json.decode(table.concat(respbody))
+    return json.decode(table.concat(respbody)), status, headers
   end
+end
+
+--- Shorthand assert for response codes
+function osv_resp_assert(status, ...)
+  for _, c in ipairs({...}) do
+    if status == c then return end
+  end
+  error("Unknown response code: " .. status)
 end
 
 -- Console renderers for response classes
