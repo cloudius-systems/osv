@@ -109,6 +109,11 @@ public:
      * Can be called from a thread which is not this application's thread.
      */
     void request_termination();
+
+    /**
+     * Returns application's return code. May only be called after join() returns.
+     */
+    int get_return_code();
 };
 
 }

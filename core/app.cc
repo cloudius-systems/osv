@@ -146,6 +146,11 @@ void application::request_termination()
     }
 }
 
+int application::get_return_code()
+{
+    return _return_code;
+}
+
 namespace this_application {
 
 void on_termination_request(std::function<void()> callback)
