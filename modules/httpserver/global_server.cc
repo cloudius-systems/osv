@@ -17,6 +17,7 @@
 #include "path_holder.hh"
 #include "api/network.hh"
 #include <iostream>
+#include <osv/app.hh>
 
 namespace httpserver {
 
@@ -38,7 +39,12 @@ bool global_server::run()
     get().set("ipaddress", "0.0.0.0");
     get().set("port", "8000");
     get().s = new http::server::server(&get().config, &get()._routes);
-    get().s->run(); // never returns from here
+
+    osv::this_application::on_termination_request([&] {
+        get().s->close();
+    });
+
+    get().s->run();
     return true;
 }
 
