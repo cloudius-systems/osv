@@ -9,6 +9,7 @@
 #include <string>
 #include <osv/run.hh>
 #include <osv/power.hh>
+#include <osv/trace.hh>
 #include <functional>
 #include <thread>
 
@@ -27,23 +28,34 @@ shared_app_t application::get_current()
     return current_app;
 }
 
+TRACEPOINT(trace_app_adopt_current, "app=%p", application*);
+
 void application::adopt_current()
 {
     if (current_app) {
         current_app->abandon_current();
     }
+
+    trace_app_adopt_current(this);
     current_app = shared_from_this();
 }
 
+TRACEPOINT(trace_app_adopt, "app=%p, thread=%p", application*, sched::thread*);
+
 void application::adopt(sched::thread* thread)
 {
+    trace_app_adopt(this, thread);
+
     auto& app_ref = thread->remote_thread_local_var(current_app);
     assert(!app_ref);
     app_ref = shared_from_this();
 }
 
+TRACEPOINT(trace_app_abandon_current, "app=%p", application*);
+
 void application::abandon_current()
 {
+    trace_app_abandon_current(this);
     current_app.reset();
 }
 
@@ -85,15 +97,32 @@ void application::start()
     assert(!err);
 }
 
+TRACEPOINT(trace_app_destroy, "app=%p", application*);
+
+application::~application()
+{
+    trace_app_destroy(this);
+}
+
+TRACEPOINT(trace_app_join, "app=%p", application*);
+TRACEPOINT(trace_app_join_ret, "return_code=%d", int);
+
 int application::join()
 {
+    trace_app_join(this);
     auto err = pthread_join(_thread, NULL);
     assert(!err);
+    trace_app_join_ret(_return_code);
     return _return_code;
 }
 
+TRACEPOINT(trace_app_main, "app=%p, cmd=%s", application*, const char*);
+TRACEPOINT(trace_app_main_ret, "return_code=%d", int);
+
 void application::main()
 {
+    trace_app_main(this, _command.c_str());
+
     adopt_current();
 
     __libc_stack_end = __builtin_frame_address(0);
@@ -106,12 +135,16 @@ void application::main()
         if (_return_code) {
             debug("program %s returned %d\n", _command.c_str(), _return_code);
         }
+        trace_app_main_ret(_return_code);
         return;
     }
 
     printf("run_main(): cannot execute %s. Powering off.\n", _command.c_str());
     osv::poweroff();
 }
+
+TRACEPOINT(trace_app_termination_callback_added, "app=%p", application*);
+TRACEPOINT(trace_app_termination_callback_fired, "app=%p", application*);
 
 void application::on_termination_request(std::function<void()> callback)
 {
@@ -126,10 +159,15 @@ void application::on_termination_request(std::function<void()> callback)
     app->_termination_signal.connect(callback);
 }
 
+TRACEPOINT(trace_app_request_termination, "app=%p, requested=%d", application*, bool);
+TRACEPOINT(trace_app_request_termination_ret, "");
+
 void application::request_termination()
 {
     WITH_LOCK(_termination_mutex) {
+        trace_app_request_termination(this, _termination_requested);
         if (_termination_requested) {
+            trace_app_request_termination_ret();
             return;
         }
         _termination_requested = true;
@@ -144,6 +182,8 @@ void application::request_termination()
         });
         terminator.join();
     }
+
+    trace_app_request_termination_ret();
 }
 
 int application::get_return_code()

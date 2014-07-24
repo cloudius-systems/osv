@@ -55,6 +55,8 @@ public:
      */
     static shared_app_t run(const std::vector<std::string>& args);
 
+    ~application();
+
     /**
      * Start a new application.
      *
