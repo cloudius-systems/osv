@@ -8,10 +8,17 @@
 #ifndef _OSV_APP_HH
 #define _OSV_APP_HH
 
+#include <functional>
+
+#ifdef _KERNEL
+
 #include <memory>
 #include <vector>
 #include <osv/sched.hh>
 #include <pthread.h>
+#include <osv/mutex.h>
+#include <osv/elf.hh>
+#include <boost/signals2.hpp>
 
 namespace osv {
 
@@ -28,6 +35,12 @@ private:
     std::vector<std::string> _args;
     std::string _command;
     int _return_code;
+    bool _termination_requested;
+    mutex _termination_mutex;
+    std::shared_ptr<elf::object> _lib;
+
+    // Must be destroyed before _lib
+    boost::signals2::signal<void()> _termination_signal;
 private:
     void start();
     void main();
@@ -79,7 +92,36 @@ public:
      * Removes current thread from this application context.
      */
     void abandon_current();
+
+    /**
+     * Installs a termination callback which will be called when
+     * termination is requested or immediately if termination was
+     * already requested.
+     *
+     * The callback is called in application's context.
+     */
+    static void on_termination_request(std::function<void()> callback);
+
+    /**
+     * Will call termination request callbacks. Can be called many times but
+     * only the first call has any effect.
+     *
+     * Can be called from a thread which is not this application's thread.
+     */
+    void request_termination();
 };
+
+}
+
+#endif /* _KERNEL */
+
+namespace osv {
+
+namespace this_application {
+
+void on_termination_request(std::function<void()> callback);
+
+}
 
 }
 
