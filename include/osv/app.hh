@@ -22,7 +22,7 @@ using shared_app_t = std::shared_ptr<application>;
  * Represents an executing program.
  *
  */
-class application {
+class application : public std::enable_shared_from_this<application> {
 private:
     pthread_t _thread;
     std::vector<std::string> _args;
@@ -32,6 +32,8 @@ private:
     void start();
     void main();
 public:
+    static shared_app_t get_current();
+
     /**
      * Start a new application.
      * args[0] should specify the command.
@@ -58,6 +60,25 @@ public:
      * @return application's exit code.
      */
     int join();
+
+    /**
+     * Moves current thread under this application context
+     * Each thread can belong only to one application. If current
+     * thread is already associated with some applicaiton it is
+     * first removed from it.
+     */
+    void adopt_current();
+
+    /**
+     * Moves given thread under this application context.
+     * Should be called only from that thread's constructor
+     */
+    void adopt(sched::thread* thread);
+
+    /**
+     * Removes current thread from this application context.
+     */
+    void abandon_current();
 };
 
 }

@@ -19,6 +19,33 @@ void *__libc_stack_end;
 
 namespace osv {
 
+static thread_local shared_app_t current_app;
+
+shared_app_t application::get_current()
+{
+    return current_app;
+}
+
+void application::adopt_current()
+{
+    if (current_app) {
+        current_app->abandon_current();
+    }
+    current_app = shared_from_this();
+}
+
+void application::adopt(sched::thread* thread)
+{
+    auto& app_ref = thread->remote_thread_local_var(current_app);
+    assert(!app_ref);
+    app_ref = shared_from_this();
+}
+
+void application::abandon_current()
+{
+    current_app.reset();
+}
+
 shared_app_t application::run(const std::vector<std::string>& args)
 {
     auto app = std::make_shared<application>(args);
@@ -65,6 +92,8 @@ int application::join()
 
 void application::main()
 {
+    adopt_current();
+
     __libc_stack_end = __builtin_frame_address(0);
 
     sched::thread::current()->set_name(_command);

@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
+#include <osv/app.hh>
 
 // By taking the address of these functions, we force the compiler to generate
 // a symbol for it even when the function is inlined into all call sites. In a
@@ -722,6 +723,11 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     // do that for us instead)
     if (!main && sched::s_current) {
         remote_thread_local_var(s_current) = this;
+
+        auto app = application::get_current();
+        if (app) {
+            app->adopt(this);
+        }
     }
     init_stack();
 
@@ -942,6 +948,11 @@ void thread::stop_wait()
 
 void thread::complete()
 {
+    auto app = application::get_current();
+    if (app) {
+        app->abandon_current();
+    }
+
     auto value = detach_state::attached;
     _detach_state.compare_exchange_strong(value, detach_state::attached_complete);
     if (value == detach_state::detached) {
