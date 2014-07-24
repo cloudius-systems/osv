@@ -338,6 +338,7 @@ tests += tests/tst-printf.so
 tests += tests/tst-pthread-affinity.so
 tests += tests/tst-thread-local.so
 tests += tests/tst-seek.so
+tests += tests/tst-app.so
 endif
 
 ifeq ($(arch),aarch64)
