@@ -116,6 +116,8 @@ public:
      * Returns application's return code. May only be called after join() returns.
      */
     int get_return_code();
+
+    std::string get_command();
 };
 
 }
