@@ -25,9 +25,7 @@ void load_test(char *path, char *argv0)
 {
     printf("running %s\n", path);
     int ret;
-    if (!osv::run(path, 1, &argv0, &ret)) {
-        abort("Failed to execute or missing main()\n");
-    }
+    osv::run(path, 1, &argv0, &ret);
 
     ++nr_tests;
     if (ret) {

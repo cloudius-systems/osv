@@ -318,9 +318,7 @@ static int run_test(const kstat_t *ksp, int argc, char **argv)
 
     create_arc_data(ksp, data);
 
-    if (!osv::run(path, argc, argv, &ret)) {
-        abort("Failed to execute or missing main()\n");
-    }
+    osv::run(path, argc, argv, &ret);
 
     report_arc_data(ksp, data);
 

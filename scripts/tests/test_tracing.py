@@ -8,7 +8,7 @@ def tracing_smoke_test():
     guest = Guest(['--trace=vfs_*,net_packet*,sched_wait*', '--trace-backtrace', '-e', path],
         hold_with_poweroff=True, show_output_on_error=False)
     try:
-        wait_for_line(guest, 'run_main(): cannot execute %s. Powering off.' % path)
+        wait_for_line(guest, 'Failed to load object: %s. Powering off.' % path)
 
         trace_script = os.path.join(osv_base, 'scripts', 'trace.py')
 

@@ -12,12 +12,26 @@
 #include <osv/trace.hh>
 #include <functional>
 #include <thread>
+#include <libgen.h>
+#include <errno.h>
+#include <algorithm>
+#include <boost/range/algorithm/transform.hpp>
+
+using namespace boost::range;
+
+extern int optind;
 
 // Java uses this global variable (supplied by Glibc) to figure out
 // aproximatively where the initial thread's stack end.
-// The aproximation allow to fill the variable here instead of doing it in
-// osv::run.
 void *__libc_stack_end;
+
+// We will handle all the initialization ourselves.
+// Still, if objects are linked with the -z now flag, they may possibly
+// require this symbol to run. The symbol, though, should never be reached.
+extern "C" void __libc_start_main()
+{
+    abort("Invalid call to __libc_start_main");
+}
 
 namespace osv {
 
@@ -83,6 +97,20 @@ application::application(const std::string& command, const std::vector<std::stri
     , _command(command)
     , _termination_requested(false)
 {
+    try {
+        _lib = elf::get_program()->get_library(_command);
+    } catch(const std::exception &e) {
+        throw launch_error(e.what());
+    }
+
+    if (!_lib) {
+        throw launch_error("Failed to load object: " + command);
+    }
+
+    _main = _lib->lookup<int (int, char**)>("main");
+    if (!_main) {
+        throw launch_error("Failed looking up main");
+    }
 }
 
 void application::start()
@@ -94,7 +122,9 @@ void application::start()
         ((application*)app)->main();
         return nullptr;
     }, this);
-    assert(!err);
+    if (err) {
+        throw launch_error("Failed to create the main thread, err=" + std::to_string(err));
+    }
 }
 
 TRACEPOINT(trace_app_destroy, "app=%p", application*);
@@ -129,18 +159,60 @@ void application::main()
 
     sched::thread::current()->set_name(_command);
 
-    _lib = osv::run(_command, _args, &_return_code);
-    if (_lib) {
-        // success
-        if (_return_code) {
-            debug("program %s returned %d\n", _command.c_str(), _return_code);
-        }
-        trace_app_main_ret(_return_code);
-        return;
+    run_main();
+
+    if (_return_code) {
+        debug("program %s returned %d\n", _command.c_str(), _return_code);
     }
 
-    printf("run_main(): cannot execute %s. Powering off.\n", _command.c_str());
-    osv::poweroff();
+    trace_app_main_ret(_return_code);
+}
+
+void application::run_main(std::string path, int argc, char** argv)
+{
+    char *c_path = (char *)(path.c_str());
+    // path is guaranteed to keep existing this function
+    program_invocation_name = c_path;
+    program_invocation_short_name = basename(c_path);
+
+    auto sz = argc; // for the trailing 0's.
+    for (int i = 0; i < argc; ++i) {
+        sz += strlen(argv[i]);
+    }
+
+    std::unique_ptr<char []> argv_buf(new char[sz]);
+    char *ab = argv_buf.get();
+    char *contig_argv[argc + 1];
+
+    for (int i = 0; i < argc; ++i) {
+        size_t asize = strlen(argv[i]);
+        memcpy(ab, argv[i], asize);
+        ab[asize] = '\0';
+        contig_argv[i] = ab;
+        ab += asize + 1;
+    }
+    contig_argv[argc] = nullptr;
+
+    // make sure to have a fresh optind across calls
+    // FIXME: fails if run() is executed in parallel
+    int old_optind = optind;
+    optind = 0;
+    _return_code = _main(argc, contig_argv);
+    optind = old_optind;
+}
+
+void application::run_main()
+{
+    // C main wants mutable arguments, so we have can't use strings directly
+    std::vector<std::vector<char>> mut_args;
+    transform(_args, back_inserter(mut_args),
+            [](std::string s) { return std::vector<char>(s.data(), s.data() + s.size() + 1); });
+    std::vector<char*> argv;
+    transform(mut_args.begin(), mut_args.end(), back_inserter(argv),
+            [](std::vector<char>& s) { return s.data(); });
+    auto argc = argv.size();
+    argv.push_back(nullptr);
+    run_main(_command, argc, argv.data());
 }
 
 TRACEPOINT(trace_app_termination_callback_added, "app=%p", application*);

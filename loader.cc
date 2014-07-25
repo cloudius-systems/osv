@@ -422,13 +422,18 @@ void* do_main_thread(void *_commands)
     for (auto &it : *commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
         auto suffix = it.back();
-        auto app = application::run(newvec);
-        if (suffix == "&") {
-            bg.push_back(app);
-        } else if (suffix == "&!") {
-            detached.push_back(app);
-        } else {
-            app->join();
+        try {
+            auto app = application::run(newvec);
+            if (suffix == "&") {
+                bg.push_back(app);
+            } else if (suffix == "&!") {
+                detached.push_back(app);
+            } else {
+                app->join();
+            }
+        } catch (const launch_error& e) {
+            std::cerr << e.what() << ". Powering off.\n";
+            osv::poweroff();
         }
     }
 

@@ -62,14 +62,14 @@ std::vector<class command *> bg_tasks; /* commands running in background */
 int exec(void *arg)
 {
     auto cmd = (class command *)arg;
-    auto lib = osv::run(cmd->args[0], cmd->args, &cmd->ret);
-    if (!lib) {
-        fprintf(stderr, "\nuush: failed to execute binary %s.\n",
-                cmd->args[0].c_str());
-    } else {
-        fprintf(stderr, "\nuush: task %s ended with status %d.\n",
-                cmd->args[0].c_str(), cmd->ret);
+    try {
+        osv::run(cmd->args[0], cmd->args, &cmd->ret);
+    } catch (const osv::launch_error& e) {
+        fprintf(stderr, "\nuush: failed to execute binary %s: %s\n",
+                cmd->args[0].c_str(), e.what());
     }
+    fprintf(stderr, "\nuush: task %s ended with status %d.\n",
+            cmd->args[0].c_str(), cmd->ret);
     return cmd->ret; /* will be 0xdead if failed to execute */
 }
 
