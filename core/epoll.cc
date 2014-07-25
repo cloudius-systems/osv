@@ -15,6 +15,7 @@
 #include <sys/epoll.h>
 #include <sys/poll.h>
 #include <memory>
+#include <stdio.h>
 #include <errno.h>
 
 
@@ -64,8 +65,53 @@ struct registered_epoll : epoll_event {
 
 class epoll_file final : public special_file {
     std::unordered_map<epoll_key, registered_epoll> map;
+private:
+    fileref interrupt_in;
+    int interrupt_pipe[2];
+    bool interrupt_pending;
+
+    // call with f_lock held
+    void interrupt()
+    {
+        if (!interrupt_pending) {
+            char c;
+            assert(::write(interrupt_pipe[1], &c, 1) == 1);
+            interrupt_pending = true;
+        }
+    }
+
+    // call with f_lock held
+    void clear_interrupt()
+    {
+        if (interrupt_pending) {
+            char c;
+            assert(::read(interrupt_pipe[0], &c, 1) == 1);
+            interrupt_pending = false;
+        }
+    }
 public:
-    epoll_file() : special_file(0, DTYPE_UNSPEC) {}
+    epoll_file()
+        : special_file(0, DTYPE_UNSPEC)
+        , interrupt_pending(false)
+    {
+        if (::pipe(interrupt_pipe)) {
+            switch (errno) {
+            case EMFILE:
+            case ENFILE:
+                throw errno;
+            case EFAULT:
+            case EINVAL:
+            default:
+                perror("pipe failed");
+                abort();
+            }
+        }
+        interrupt_in = fileref_from_fd(interrupt_pipe[0]);
+    }
+    ~epoll_file() {
+        ::close(interrupt_pipe[0]);
+        ::close(interrupt_pipe[1]);
+    }
     virtual int close() override {
         for (auto& e : map) {
             remove_me(e.first);
@@ -89,6 +135,7 @@ public:
                 }
                 fp->f_epolls->push_back(epoll_ptr{this, key});
             }
+            interrupt();
             return 0;
         }
     }
@@ -100,6 +147,7 @@ public:
                 WITH_LOCK(fp->f_lock) {
                     map.at(key) = registered_epoll(*event, fp->poll_wake_count - 1);
                 }
+                interrupt();
                 return 0;
             } catch (std::out_of_range &e) {
                 return ENOENT;
@@ -111,6 +159,7 @@ public:
         WITH_LOCK(f_lock) {
             if (map.erase(key)) {
                 remove_me(key);
+                interrupt();
                 return 0;
             } else {
                 return ENOENT;
@@ -119,35 +168,49 @@ public:
     }
     int wait(struct epoll_event *events, int maxevents, int timeout_ms)
     {
-        std::vector<poll_file> pollfds;
-        std::vector<epoll_key> keys;
+        auto timeout = parse_poll_timeout(timeout_ms);
         WITH_LOCK(f_lock) {
-            pollfds.reserve(map.size());
-            keys.reserve(map.size());
-            for (auto &i : map) {
-                int eevents = i.second.events;
-                auto events = events_epoll_to_poll(eevents);
-                pollfds.emplace_back(i.first._file, events, 0,
-                        i.second.last_poll_wake_count);
-                keys.emplace_back(i.first);
-            }
-            int r;
-            DROP_LOCK(f_lock) {
-                r = do_poll(pollfds, parse_poll_timeout(timeout_ms));
-            }
-            int n = 0;
-            if (r > 0) {
-                r = std::min(r, maxevents);
-                for (size_t i = 0; i < pollfds.size() && n < r;  i++) {
-                    if (pollfds[i].revents) {
+            for (;;) {
+                clear_interrupt();
+                std::vector<poll_file> pollfds;
+                std::vector<epoll_key> keys;
+                // First entry reserved for interrupt pipe
+                pollfds.reserve(map.size() + 1);
+                keys.reserve(map.size());
+                pollfds.emplace_back(interrupt_in, EPOLLIN);
+                for (auto &i : map) {
+                    int eevents = i.second.events;
+                    auto events = events_epoll_to_poll(eevents);
+                    pollfds.emplace_back(i.first._file, events, 0,
+                            i.second.last_poll_wake_count);
+                    keys.emplace_back(i.first);
+                }
+                int r;
+                DROP_LOCK(f_lock) {
+                    r = do_poll(pollfds, timeout);
+                }
+                int n = 0;
+                if (r > 0) {
+                    if (pollfds[0].revents) {
+                        assert(interrupt_pending);
+                        continue;
+                    }
+
+                    r = std::min(r, maxevents);
+                    for (size_t i = 1; i < pollfds.size() && n < r;  i++) {
+                        if (!pollfds[i].revents) {
+                            continue;
+                        }
+
                         try {
                             assert(pollfds[i].fp);
-                            events[n].data = map.at(keys[i]).data;
+                            auto key_index = i - 1;
+                            events[n].data = map.at(keys[key_index]).data;
                             events[n].events =
                                     events_poll_to_epoll(pollfds[i].revents);
                             trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
                             if (pollfds[i].events & EPOLLET) {
-                                map.at(keys[i]).last_poll_wake_count =
+                                map.at(keys[key_index]).last_poll_wake_count =
                                         pollfds[i].last_poll_wake_count;
                             }
                             ++n;
@@ -156,8 +219,8 @@ public:
                         }
                     }
                 }
+                return n;
             }
-            return n;
         }
     }
 private:
