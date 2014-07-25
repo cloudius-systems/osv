@@ -12,12 +12,13 @@
 #include <sys/socket.h>
 
 #include <thread>
+#include <atomic>
 #include <assert.h>
 #include <iostream>
 
 void empty_handler(int sig) { abort(); }
 
-int siguser2_received = 0;
+std::atomic<int> siguser2_received { 0 };
 void handler2(int sig) { siguser2_received = 1;}
 
 int main(int ac, char** av)
