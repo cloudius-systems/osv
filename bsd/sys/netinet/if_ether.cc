@@ -60,6 +60,7 @@
 #include <bsd/sys/netinet/in_var.h>
 #include <bsd/sys/net/if_llatbl.h>
 #include <bsd/sys/netinet/if_ether.h>
+#include <bsd/sys/netinet/arpcache.hh>
 
 #define SIN(s) ((struct bsd_sockaddr_in *)s)
 #define SDL(s) ((struct bsd_sockaddr_dl *)s)
@@ -256,7 +257,7 @@ arprequest(struct ifnet *ifp, struct in_addr *sip, struct in_addr  *tip,
  */
 int
 arpresolve(struct ifnet *ifp, struct rtentry *rt0, struct mbuf *m,
-	struct bsd_sockaddr *dst, u_char *desten, struct llentry **lle)
+	struct bsd_sockaddr *dst, u_char *desten, bool& is_ifaddr)
 {
 	struct llentry *la = 0;
 	u_int flags = 0;
@@ -264,7 +265,7 @@ arpresolve(struct ifnet *ifp, struct rtentry *rt0, struct mbuf *m,
 	struct mbuf *next = NULL;
 	int error, renew;
 
-	*lle = NULL;
+	is_ifaddr = false;
 	if (m != NULL) {
 		if (m->m_hdr.mh_flags & M_BCAST) {
 			/* broadcast */
@@ -279,6 +280,17 @@ arpresolve(struct ifnet *ifp, struct rtentry *rt0, struct mbuf *m,
 		}
 	}
 retry:
+	auto* mac = reinterpret_cast<arp_cache::mac_address*>(desten);
+	u16 la_flags;
+
+	auto found = lla_lookup_fast(LLTABLE(ifp), flags, dst, *mac, la_flags);
+	if (found) {
+		if (la_flags & LLE_IFADDR) {
+			is_ifaddr = true;
+		}
+		return 0;
+	}
+
 	IF_AFDATA_RLOCK(ifp);
 	la = lla_lookup(LLTABLE(ifp), flags, dst);
 	IF_AFDATA_RUNLOCK(ifp);
@@ -314,7 +326,9 @@ retry:
 			la->la_preempt--;
 		}
 
-		*lle = la;
+		if (la != NULL && (la->la_flags & LLE_IFADDR)) {
+			is_ifaddr = true;
+		}
 		error = 0;
 		goto done;
 	}
@@ -697,6 +711,8 @@ match:
 		}
 		(void)memcpy(&la->ll_addr, ar_sha(ah), ifp->if_addrlen);
 		la->la_flags |= LLE_VALID;
+
+		arp_cache_add(la);
 
 		EVENTHANDLER_INVOKE(arp_update_event, la);
 

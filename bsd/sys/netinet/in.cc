@@ -33,6 +33,9 @@
 #include <sys/cdefs.h>
 
 #include <osv/ioctl.h>
+#include <osv/trace.hh>
+#include <osv/rcu.hh>
+#include <functional>
 
 #include <bsd/porting/netport.h>
 
@@ -57,6 +60,7 @@
 
 #include <bsd/sys/netinet/udp.h>
 #include <bsd/sys/netinet/udp_var.h>
+#include <bsd/sys/netinet/arpcache.hh>
 
 static int in_mask2len(struct in_addr *);
 static void in_len2mask(struct in_addr *, int);
@@ -69,6 +73,9 @@ static void	in_socktrim(struct bsd_sockaddr_in *);
 static int	in_ifinit(struct ifnet *,
 	    struct in_ifaddr *, struct bsd_sockaddr_in *, int);
 static void	in_purgemaddrs(struct ifnet *);
+
+TRACEPOINT(trace_in_lltable_lookup, "llt=%p, flags=%x", void *, u_int);
+TRACEPOINT(trace_in_lltable_lookup_fast, "llt=%p, flags=%x", void *, u_int);
 
 static VNET_DEFINE(int, sameprefixcarponly);
 #define	V_sameprefixcarponly		VNET(sameprefixcarponly)
@@ -1456,6 +1463,15 @@ in_lltable_rtcheck(struct ifnet *ifp, u_int flags, const struct bsd_sockaddr *l3
 	return (0);
 }
 
+static bool
+in_lltable_lookup_fast(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l3addr,
+		arp_cache::mac_address& mac, u16& la_flags)
+{
+	trace_in_lltable_lookup_fast(llt, flags);
+	auto* sin = (const struct bsd_sockaddr_in *)l3addr;
+	return arp_cache_lookup(sin->sin_addr, mac, la_flags);
+}
+
 /*
  * Return NULL if not found or marked for deletion.
  * If found return lle read locked.
@@ -1468,6 +1484,8 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 	struct llentry *lle;
 	struct llentries *lleh;
 	u_int hashkey;
+
+	trace_in_lltable_lookup(llt, flags);
 
 	IF_AFDATA_LOCK_ASSERT(ifp);
 	KASSERT(l3addr->sa_family == AF_INET,
@@ -1513,6 +1531,7 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 		lle->lle_head = lleh;
 		lle->la_flags |= LLE_LINKED;
 		LIST_INSERT_HEAD(lleh, lle, lle_next);
+		arp_cache_add(lle);
 	} else if (flags & LLE_DELETE) {
 		if (!(lle->la_flags & LLE_IFADDR) || (flags & LLE_IFADDR)) {
 			LLE_WLOCK(lle);
@@ -1523,8 +1542,8 @@ in_lltable_lookup(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l
 			bsd_log(LOG_INFO, "bsd_ifaddr cache = %p  is deleted\n", lle);
 #endif
 		}
+		arp_cache_remove(lle);
 		lle = (llentry *)(void *)-1;
-
 	}
 	if (LLE_IS_VALID(lle)) {
 		if (flags & LLE_EXCLUSIVE)
@@ -1626,6 +1645,7 @@ in_domifattach(struct ifnet *ifp)
 	if (llt != NULL) {
 		llt->llt_prefix_free = in_lltable_prefix_free;
 		llt->llt_lookup = in_lltable_lookup;
+		llt->llt_lookup_fast = in_lltable_lookup_fast;
 		llt->llt_dump = in_lltable_dump;
 	}
 	ii->ii_llt = llt;

@@ -120,7 +120,7 @@ struct bsd_ifaddr;
 
 int	arpresolve(struct ifnet *ifp, struct rtentry *rt,
 		    struct mbuf *m, struct bsd_sockaddr *dst, u_char *desten,
-		    struct llentry **lle);
+		    bool& is_ifaddr);
 void	arp_ifinit(struct ifnet *, struct bsd_ifaddr *);
 void	arp_ifinit2(struct ifnet *, struct bsd_ifaddr *, u_char *);
 __END_DECLS
