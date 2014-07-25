@@ -371,9 +371,9 @@ void* do_main_thread(void *_commands)
     boot_time.event("drivers loaded");
 
     if (opt_mount) {
+        zfsdev::zfsdev_init();
         mount_zfs_rootfs();
         bsd_shrinker_init();
-        zfsdev::zfsdev_init();
     }
     boot_time.event("ZFS mounted");
 

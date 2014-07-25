@@ -73,6 +73,10 @@ static void mkfs(void)
     // Create a zfs dataset within the pool named osv.
     run_cmd("/zfs.so", {"zfs", "create", "-o", "relatime=on", "osv/zfs"});
 
+    // Both osv and osv/zfs datasets shouldn't be mounted automatically.
+    run_cmd("/zfs.so", {"zfs", "set", "canmount=noauto", "osv"});
+    run_cmd("/zfs.so", {"zfs", "set", "canmount=noauto", "osv/zfs"});
+
     // Enable lz4 compression on the created zfs dataset
     // NOTE: Compression is disabled after image creation.
     run_cmd("/zfs.so", {"zfs", "set", "compression=lz4", "osv"});

@@ -57,6 +57,7 @@
 #include <osv/stubbing.hh>
 #include <osv/ioctl.h>
 #include <osv/trace.hh>
+#include <osv/run.hh>
 #include <drivers/console.hh>
 
 #include "vfs.h"
@@ -2005,6 +2006,29 @@ int nmount(struct iovec *iov, unsigned niov, int flags)
     return sys_mount(a.from, a.fspath, a.fstype, flags, nullptr);
 }
 
+static void import_extra_zfs_pools(void)
+{
+    struct stat st;
+    int ret;
+
+    // The file '/etc/mnttab' is a LibZFS requirement and will not
+    // exist during cpiod phase. The functionality provided by this
+    // function isn't needed during that phase, so let's skip it.
+    if (stat("/etc/mnttab" , &st) != 0) {
+        return;
+    }
+
+    // Import extra pools mounting datasets there contained.
+    // Datasets from osv pool will not be mounted here.
+    vector<string> zpool_args = {"zpool", "import", "-f", "-a" };
+    auto ok = osv::run("zpool.so", zpool_args, &ret);
+    assert(ok);
+
+    if (!ret) {
+        debug("zfs: extra ZFS pool(s) found.\n");
+    }
+}
+
 extern "C" void mount_zfs_rootfs(void)
 {
     int ret;
@@ -2046,6 +2070,8 @@ extern "C" void mount_zfs_rootfs(void)
         }
     } while (m != nullptr);
     endmntent(ent);
+
+    import_extra_zfs_pools();
 }
 
 extern "C" void unmount_rootfs(void)
