@@ -176,6 +176,7 @@ int main(int ac, char** av)
 
 
     std::cout << "SUMMARY: " << tests << ", " << fails << " failures\n";
+    return !!fails;
 }
 
 
