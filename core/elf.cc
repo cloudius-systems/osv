@@ -295,14 +295,14 @@ void file::load_segment(const Elf64_Phdr& phdr)
     if (phdr.p_flags & PF_R)
         perm |= mmu::perm_read;
 
-    auto mlock_flag = mlocked() ? mmu::mmap_populate : 0;
-    mmu::map_file(_base + vstart, filesz, mmu::mmap_fixed | mlock_flag, perm,
-                  _f, align_down(phdr.p_offset, mmu::page_size));
+    auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : 0);
+    mmu::map_file(_base + vstart, filesz, flag, perm, _f, align_down(phdr.p_offset, mmu::page_size));
     if (phdr.p_filesz != phdr.p_memsz) {
         assert(perm & mmu::perm_write);
         memset(_base + vstart + filesz_unaligned, 0, filesz - filesz_unaligned);
-        mmu::map_anon(_base + vstart + filesz, memsz - filesz,
-                      mmu::mmap_fixed | mlock_flag, perm);
+        if (memsz != filesz) {
+            mmu::map_anon(_base + vstart + filesz, memsz - filesz, flag, perm);
+        }
     }
 }
 
