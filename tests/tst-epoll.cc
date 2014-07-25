@@ -9,6 +9,7 @@
 #include <sys/poll.h>
 #include <unistd.h>
 #include <errno.h>
+#include <osv/latch.hh>
 
 #include <string>
 #include <iostream>
@@ -97,6 +98,28 @@ int main(int ac, char** av)
     auto te = std::chrono::high_resolution_clock::now();
     report(r == 0 && ((te - ts) > std::chrono::milliseconds(200)),
             "epoll timeout");
+
+    ////////////////////////////////////////////////////////////////////////////
+    event.events = EPOLLIN | EPOLLET;
+    r = epoll_ctl(ep, EPOLL_CTL_MOD, s[0], &event);
+    report(r == 0, "epoll_ctl_mod");
+
+    latch first_epoll_wait_returned;
+    std::thread t2([&] {
+        int r = epoll_wait(ep, events, MAXEVENTS, 5000);
+        report(r == 1, "epoll_wait in thread");
+        first_epoll_wait_returned.count_down();
+        r = epoll_wait(ep, events, MAXEVENTS, 5000);
+        report(r == 1, "epoll_wait in thread");
+        r = read(s[0], &c, 1);
+        report(r == 1, "read the last byte on the pipe");
+    });
+    r = write(s[1], &c, 1);
+    report(r == 1, "write single character");
+    first_epoll_wait_returned.await();
+    r = epoll_ctl(ep, EPOLL_CTL_MOD, s[0], &event);
+    report(r == 0, "epoll_ctl_mod");
+    t2.join();
 
     ////////////////////////////////////////////////////////////////////////////
     // Test EPOLLET (edge-triggered event notification)
