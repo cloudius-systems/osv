@@ -193,7 +193,7 @@ sbwait(socket* so, struct sockbuf *sb)
 int
 sblock(socket* so, struct sockbuf *sb, int flags)
 {
-   WITH_LOCK(SOCK_MTX_REF(so)) {
+	SOCK_LOCK_ASSERT(so);
 	KASSERT((flags & SBL_VALID) == flags,
 	    ("sblock: flags invalid (0x%x)", flags));
 
@@ -205,15 +205,13 @@ sblock(socket* so, struct sockbuf *sb, int flags)
 			return (EWOULDBLOCK);
 		return (0);
 	}
-   }
 }
 
 void
 sbunlock(socket* so, struct sockbuf *sb)
 {
-	WITH_LOCK(SOCK_MTX_REF(so)) {
-		sb->sb_iolock.unlock(SOCK_MTX_REF(so));
-	}
+	SOCK_LOCK_ASSERT(so);
+	sb->sb_iolock.unlock(SOCK_MTX_REF(so));
 }
 
 void so_wake_poll(struct socket *so, struct sockbuf *sb)
