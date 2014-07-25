@@ -55,7 +55,10 @@ void* dlopen(const char* filename, int flags)
 
 int dlclose(void* handle)
 {
-    delete ((std::shared_ptr<elf::object>*) handle);
+    auto program = elf::get_program();
+    if (program != handle) {
+        delete ((std::shared_ptr<elf::object>*) handle);
+    }
     return 0;
 }
 
