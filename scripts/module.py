@@ -127,6 +127,10 @@ def generate_cmdline(apps):
             print("No apps selected")
 
 def build(args):
+    add_default = True
+    if args.image_config[0] == "!":
+        add_default = False
+        args.image_config = args.image_config[1:]
     image_config_file = os.path.join(image_configs_dir, args.image_config + '.py')
     if os.path.exists(image_config_file):
         print("Using image config: %s" % image_config_file)
@@ -147,7 +151,7 @@ def build(args):
                 disabled_modules.add(module[1:])
         module_names = []
         config = resolve.read_config()
-        if "default" in config:
+        if add_default and "default" in config:
             module_names +=  config["default"]
         module_names += args.image_config.split(",")
         for missing in list(disabled_modules - set(module_names)):

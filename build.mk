@@ -43,6 +43,7 @@ STRIP=$(CROSS_PREFIX)strip
 OBJCOPY=$(CROSS_PREFIX)objcopy
 
 image ?= default
+modules ?= !$(image)
 img_format ?= qcow2
 fs_size_mb ?= 10240
 local-includes =
@@ -1013,7 +1014,7 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 .PHONY: process-modules
 process-modules: tools/libtools.so bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
 	cd module \
-	  && jdkbase=$(jdkbase) ARCH=$(arch) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= $(src)/scripts/module.py build -c $(image)
+	  && jdkbase=$(jdkbase) ARCH=$(arch) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= $(src)/scripts/module.py build -c $(modules)
 
 cmdline: process-modules
 bootfs.manifest: process-modules
