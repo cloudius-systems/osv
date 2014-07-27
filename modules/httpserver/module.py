@@ -16,3 +16,4 @@ usr_files.add(os.path.join(_module, 'swagger-ui', 'dist')).to('/usr/mgmt/swagger
 # /init. This way, httpserver will run regardless of an explicit command line
 # passed with "run.py -e".
 usr_files.add(os.path.join(_module, 'cmdline')).to('/init/10-httpserver')
+api.require('libtools')
