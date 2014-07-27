@@ -42,7 +42,7 @@ class xenfront_driver {
 public:
     explicit xenfront_driver(xenbus *bus);
 
-    const std::string get_name() { return _driver_name; }
+    std::string get_name() const { return _driver_name; }
 
     const std::string &get_type() { return _type; }
     const std::string &get_node_path() { return _node_path; }

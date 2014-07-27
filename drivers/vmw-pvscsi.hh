@@ -125,7 +125,7 @@ public:
     pvscsi(pci::device& dev);
     ~pvscsi();
 
-    virtual const std::string get_name() { return _driver_name; }
+    virtual std::string get_name() const { return _driver_name; }
     static struct pvscsi_priv *get_priv(struct bio *bio) {
         return reinterpret_cast<struct pvscsi_priv*>(bio->bio_dev->private_data);
     }

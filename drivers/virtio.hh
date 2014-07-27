@@ -108,7 +108,7 @@ public:
     explicit virtio_driver(pci::device& dev);
     virtual ~virtio_driver();
 
-    virtual const std::string get_name() = 0;
+    virtual std::string get_name() const = 0;
 
     virtual void dump_config();
 

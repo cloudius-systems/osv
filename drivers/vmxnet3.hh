@@ -92,7 +92,7 @@ public:
     explicit vmxnet3(pci::device& dev);
     virtual ~vmxnet3() {};
 
-    virtual const std::string get_name() { return std::string("vmxnet3"); }
+    virtual std::string get_name() const { return "vmxnet3"; }
 
     virtual void dump_config(void);
     int transmit(struct mbuf* m_head);

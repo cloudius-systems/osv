@@ -196,7 +196,7 @@ public:
     bool poll_mode() { return _poll_mode; }
     pci::device& pci_device() { return _pci_dev; }
     static hw_driver* probe(hw_device* hw_dev);
-    const std::string get_name() { return _driver_name; }
+    virtual std::string get_name() const { return _driver_name; }
     bool parse_pci_config();
     void dump_config();
     bool ack_irq();

@@ -30,7 +30,7 @@ public:
     void apply_offset();
     void push_queue(const char *str, size_t len);
     static hw_driver* probe(hw_device* hw_dev);
-    const std::string get_name() { return std::string("VGAConsole"); }
+    std::string get_name() const { return std::string("VGAConsole"); }
     void dump_config();
 private:
     enum {

@@ -22,7 +22,7 @@ public:
     explicit ide_drive(pci::device& dev);
     virtual ~ide_drive();
 
-    virtual const std::string get_name(void) { return _driver_name; }
+    virtual std::string get_name(void) const { return _driver_name; }
 
     virtual void dump_config(void);
 

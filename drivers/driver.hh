@@ -20,7 +20,7 @@ namespace hw {
         virtual ~hw_driver() {};
 
         // Drivers are indexed by their names
-        virtual const std::string get_name() = 0;
+        virtual std::string get_name() const = 0;
 
         // virtual bool sleep() = 0;
         // virtual bool wake() = 0;

@@ -25,7 +25,7 @@ namespace xenfront {
         bool parse_pci_config();
         void dump_config();
 
-        const std::string get_name() { return _driver_name; }
+        virtual std::string get_name() const { return _driver_name; }
         const std::string &get_node_path() { return _node_path; }
 
         int num_children() { return _children.size(); }
