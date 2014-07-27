@@ -51,9 +51,13 @@ class rcu_hashtable {
 public:
     /// A pointer to an element.
     ///
-    /// Iterators are invalidated by insert and delete operations.
+    /// Iterators obtained by owner_find() are invalidated by insert
+    /// and delete operations.
+    ///
     /// Iterators obtained by reader_find() are only valid within
-    /// the RCU critical section.
+    /// the RCU critical section.  They may not be used to modify the data
+    /// (as it may be copied concurrently with the modification, and the
+    /// original data element discarded).
     class iterator {
         element* _p = nullptr;
     public:
@@ -112,10 +116,10 @@ private:
 public:
     rcu_hashtable(const rcu_hashtable&) = delete;
     void operator=(const rcu_hashtable&) = delete;
-    /// Construct an empty hash table with the given @capacity.
+    /// Constructs an empty hash table with the given @capacity.
     explicit rcu_hashtable(size_t capacity, Hash hash = Hash())
         : _buckets(new bucket_array_type(capacity)), _hash(hash) {}
-    /// Construct an empty hash table @capacity.
+    /// Constructs an empty hash table.
     explicit rcu_hashtable(Hash hash = Hash())
         : rcu_hashtable(1, hash) {}
     ~rcu_hashtable();
@@ -145,7 +149,7 @@ public:
     /// Looks for an item in the bucket given by @key_hash(@key), and matched element e
     /// using @kvc(@key, e) == true.
     ///
-    /// Requires external mutual exclustion.
+    /// Requires external mutual exclusion.
     /// Result must be consumed before the next modification.
     template <typename Key, typename KeyHash = std::hash<Key>, typename KeyValueCompare = std::equal_to<T>>
     iterator owner_find(const Key& key, KeyHash key_hash = KeyHash(), KeyValueCompare kvc = KeyValueCompare()) {
