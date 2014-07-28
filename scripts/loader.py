@@ -437,12 +437,14 @@ class osv_zfs(gdb.Command):
 
 def bits2str(bits, chars):
     r = ''
+    empty_str = 'none'
+    width = max(len(chars), len(empty_str))
     if bits == 0:
-        return 'none'.ljust(len(chars))
+        return empty_str.ljust(width)
     for i in range(len(chars)):
         if bits & (1 << i):
             r += chars[i]
-    return r.ljust(len(chars))
+    return r.ljust(width)
 
 def permstr(perm):
     return bits2str(perm, ['r', 'w', 'x'])
