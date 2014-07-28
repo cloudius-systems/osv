@@ -58,6 +58,8 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/ip_options.h>
 
+#include <bsd/sys/net/routecache.hh>
+
 #ifdef IPSEC
 #include <netinet/ip_ipsec.h>
 #include <netipsec/ipsec.h>
@@ -111,6 +113,7 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 	struct rtentry *rte;	/* cache for ro->ro_rt */
 	struct in_addr odst;
 	struct m_tag *fwd_tag = NULL;
+	struct rtentry rte_one;
 #ifdef IPSEC
 	int no_route_but_check_spd = 0;
 #endif
@@ -125,10 +128,8 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 		}
 	}
 
-	if (ro == NULL) {
 		ro = &iproute;
 		bzero(ro, sizeof (*ro));
-	}
 
 #ifdef FLOWTABLE
 	if (ro->ro_rt == NULL) {
@@ -250,8 +251,8 @@ again:
 			    ntohl(ip->ip_src.s_addr ^ ip->ip_dst.s_addr),
 			    inp ? inp->inp_inc.inc_fibnum : M_GETFIB(m));
 #else
-			in_rtalloc_ign(ro, 0,
-			    inp ? inp->inp_inc.inc_fibnum : M_GETFIB(m));
+			route_cache::lookup(dst, inp ? inp->inp_inc.inc_fibnum : M_GETFIB(m), &rte_one);
+			ro->ro_rt = &rte_one;
 #endif
 			rte = ro->ro_rt;
 		}
@@ -653,8 +654,6 @@ passout:
 		IPSTAT_INC(ips_fragmented);
 
 done:
-	if (ro == &iproute)
-		RO_RTFREE(ro);
 	if (ia != NULL)
 		ifa_free(&ia->ia_ifa);
 	return (error);
