@@ -36,7 +36,7 @@ TRACEPOINT(trace_epoll_ready, "file=%p, event=0x%x", file*, int);
 // We implement epoll using poll(), and therefore need to convert epoll's
 // event bits to and poll(). These are mostly the same, so the conversion
 // is trivial, but we verify this here with static_asserts. We additionally
-// support the epoll-only EPOLLET, but not EPOLLONESHOT.
+// support the epoll-only EPOLLET and EPOLLONESHOT.
 static_assert(POLLIN == EPOLLIN, "POLLIN!=EPOLLIN");
 static_assert(POLLOUT == EPOLLOUT, "POLLOUT!=EPOLLOUT");
 static_assert(POLLRDHUP == EPOLLRDHUP, "POLLRDHUP!=EPOLLRDHUP");
@@ -45,7 +45,7 @@ static_assert(POLLERR == EPOLLERR, "POLLERR!=EPOLLERR");
 static_assert(POLLHUP == EPOLLHUP, "POLLHUP!=EPOLLHUP");
 constexpr int SUPPORTED_EVENTS =
         EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP |
-        EPOLLET;
+        EPOLLET | EPOLLONESHOT;
 inline uint32_t events_epoll_to_poll(uint32_t e)
 {
     assert (!(e & ~SUPPORTED_EVENTS));
@@ -58,6 +58,7 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
 }
 
 struct registered_epoll : epoll_event {
+    bool disabled = false;
     int last_poll_wake_count; // For implementing EPOLLET
     registered_epoll(epoll_event e, int c) :
         epoll_event(e), last_poll_wake_count(c) {}
@@ -179,11 +180,13 @@ public:
                 keys.reserve(map.size());
                 pollfds.emplace_back(interrupt_in, EPOLLIN);
                 for (auto &i : map) {
-                    int eevents = i.second.events;
-                    auto events = events_epoll_to_poll(eevents);
-                    pollfds.emplace_back(i.first._file, events, 0,
-                            i.second.last_poll_wake_count);
-                    keys.emplace_back(i.first);
+                    if (!i.second.disabled) {
+                        int eevents = i.second.events;
+                        auto events = events_epoll_to_poll(eevents);
+                        pollfds.emplace_back(i.first._file, events, 0,
+                                i.second.last_poll_wake_count);
+                        keys.emplace_back(i.first);
+                    }
                 }
                 int r;
                 DROP_LOCK(f_lock) {
@@ -205,15 +208,22 @@ public:
                         try {
                             assert(pollfds[i].fp);
                             auto key_index = i - 1;
-                            events[n].data = map.at(keys[key_index]).data;
-                            events[n].events =
-                                    events_poll_to_epoll(pollfds[i].revents);
-                            trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
-                            if (pollfds[i].events & EPOLLET) {
-                                map.at(keys[key_index]).last_poll_wake_count =
-                                        pollfds[i].last_poll_wake_count;
+                            auto& key = keys[key_index];
+                            auto& reg = map.at(key);
+                            if (!reg.disabled) {
+                                events[n].data = reg.data;
+                                events[n].events =
+                                        events_poll_to_epoll(pollfds[i].revents);
+                                trace_epoll_ready(pollfds[i].fp.get(), pollfds[i].revents);
+                                if (pollfds[i].events & EPOLLET) {
+                                    reg.last_poll_wake_count =
+                                            pollfds[i].last_poll_wake_count;
+                                }
+                                if (pollfds[i].events & EPOLLONESHOT) {
+                                    reg.disabled = true;
+                                }
+                                ++n;
                             }
-                            ++n;
                         } catch (std::out_of_range& e) {
                             // raced with epoll_ctl(EPOLL_DEL); ignore
                         }
