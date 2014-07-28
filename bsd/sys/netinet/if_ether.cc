@@ -886,15 +886,6 @@ arp_ifinit(struct ifnet *ifp, struct bsd_ifaddr *ifa)
 }
 
 void
-arp_ifinit2(struct ifnet *ifp, struct bsd_ifaddr *ifa, u_char *enaddr)
-{
-	if (ntohl(IA_SIN(ifa)->sin_addr.s_addr) != INADDR_ANY)
-		arprequest(ifp, &IA_SIN(ifa)->sin_addr,
-				&IA_SIN(ifa)->sin_addr, enaddr);
-	ifa->ifa_rtrequest = NULL;
-}
-
-void
 arp_init(void)
 {
 
