@@ -114,6 +114,7 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 	struct in_addr odst;
 	struct m_tag *fwd_tag = NULL;
 	struct rtentry rte_one;
+	int have_ia_ref;
 #ifdef IPSEC
 	int no_route_but_check_spd = 0;
 #endif
@@ -179,6 +180,7 @@ ip_output(struct mbuf *m, struct mbuf *opt, struct route *ro, int flags,
 	dst = (struct bsd_sockaddr_in *)&ro->ro_dst;
 again:
 	ia = NULL;
+	have_ia_ref = 0;
 	/*
 	 * If there is a cached route,
 	 * check that it is to the same destination
@@ -215,6 +217,7 @@ again:
 			error = ENETUNREACH;
 			goto bad;
 		}
+		have_ia_ref = 1;
 		ip->ip_dst.s_addr = INADDR_BROADCAST;
 		dst->sin_addr = ip->ip_dst;
 		ifp = ia->ia_ifp;
@@ -227,6 +230,7 @@ again:
 			error = ENETUNREACH;
 			goto bad;
 		}
+		have_ia_ref = 1;
 		ifp = ia->ia_ifp;
 		ip->ip_ttl = 1;
 		isbroadcast = in_broadcast(dst->sin_addr, ifp);
@@ -238,6 +242,8 @@ again:
 		 */
 		ifp = imo->imo_multicast_ifp;
 		IFP_TO_IA(ifp, ia);
+		if (ia)
+			have_ia_ref = 1;
 		isbroadcast = 0;	/* fool gcc */
 	} else {
 		/*
@@ -510,6 +516,8 @@ sendit:
 			error = netisr_queue(NETISR_IP, m);
 			goto done;
 		} else {
+			if (have_ia_ref)
+				ifa_free(&ia->ia_ifa);
 			goto again;	/* Redo the routing table lookup. */
 		}
 	}
@@ -541,6 +549,8 @@ sendit:
 		m->m_hdr.mh_flags |= M_SKIP_FIREWALL;
 		m->m_hdr.mh_flags &= ~M_IP_NEXTHOP;
 		m_tag_delete(m, fwd_tag);
+		if (have_ia_ref)
+			ifa_free(&ia->ia_ifa);
 		goto again;
 	}
 
@@ -649,6 +659,8 @@ passout:
 		IPSTAT_INC(ips_fragmented);
 
 done:
+	if (have_ia_ref)
+		ifa_free(&ia->ia_ifa);
 	return (error);
 bad:
 	m_freem(m);
