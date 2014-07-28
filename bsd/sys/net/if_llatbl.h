@@ -192,9 +192,6 @@ struct lltable *lltable_init(struct ifnet *, int);
 void		lltable_free(struct lltable *);
 void		lltable_prefix_free(int, struct bsd_sockaddr *,
 		    struct bsd_sockaddr *, u_int);
-#if 0
-void		lltable_drain(int);
-#endif
 int		lltable_sysctl_dumparp(int, struct sysctl_req *);
 
 size_t		llentry_free(struct llentry *);
