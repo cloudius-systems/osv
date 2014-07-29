@@ -9,6 +9,7 @@
 #include <osv/mutex.h>
 #include <osv/spinlock.h>
 #include <osv/clock.hh>
+#include <osv/rwlock.h>
 
 #include <string.h>
 
@@ -27,6 +28,20 @@ static void increment_thread(int id, T *m, long len, volatile long *shared)
         //assert(m->owned());
         int val = *shared;
         *shared = val+1;
+        m->unlock();
+        if((i%100000)==0){
+            std::cerr << char('A'+id);
+        }
+    }
+}
+
+// loop_thread is like increment_thread, just doesn't touch the shared
+// variable. It can be useful for bechmarking rwlock_read_lock.
+template <typename T>
+static void loop_thread(int id, T *m, long len, volatile long *shared)
+{
+    for(int i=0; i<len; i++){
+        m->lock();
         m->unlock();
         if((i%100000)==0){
             std::cerr << char('A'+id);
@@ -166,6 +181,12 @@ public:
     }
 };
 
+class rwlock_read_lock: private rwlock {
+public:
+    inline void lock() { rlock(); }
+    inline void unlock() { runlock(); }
+};
+
 int main(int argc, char **argv)
 {
     printf("Running mutex tests\n");
@@ -173,12 +194,13 @@ int main(int argc, char **argv)
     printf("\nSizes of mutual exclusion primitives:\n");
     show_size<mutex>();
     show_size<spinlock>();
+    show_size<rwlock>();
 
     printf("\n==== BENCHMARK 1 ====\nUncontended single-thread lock/unlock cycle:\n");
     measure_uncontended<mutex>(50000000);
     measure_uncontended<handoff_stressing_mutex>(50000000);
     measure_uncontended<spinlock>(50000000);
-
+    measure_uncontended<rwlock_read_lock>(50000000);
 
     // The lock-free mutex's biggest challenge is what to do in unlock() when
     // we want to wake a concurrent lock() but the wait queue is still empty
@@ -198,6 +220,11 @@ int main(int argc, char **argv)
     test<spinlock>(2, n, true, spf);
     test<spinlock>((int)sched::cpus.size(), n, true, spf);
     test<spinlock>(20, n, false, spf);
+
+    auto rwf = loop_thread<rwlock_read_lock>;
+    test<rwlock_read_lock>(2, n, true, rwf);
+    test<rwlock_read_lock>((int)sched::cpus.size(), n, true, rwf);
+    test<rwlock_read_lock>(20, n, false, rwf);
 
     printf("\n==== MISC TESTS ====\n");
     printf("\n\nTrylock tests using spinning_increment_thread:\n");
