@@ -15,7 +15,7 @@ extern "C" {
 
 typedef int mqd_t;
 struct mq_attr {
-	long mq_flags, mq_maxmsg, mq_msgsize, mq_curmsgs, __unused[4];
+	long mq_flags, mq_maxmsg, mq_msgsize, mq_curmsgs, ___unused[4];
 };
 struct sigevent;
 

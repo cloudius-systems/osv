@@ -11,8 +11,8 @@ struct ipc_perm {
     unsigned short int __pad1;
     unsigned short int __ipc_perm_seq;
     unsigned short int __pad2;
-    unsigned long long __unused1;
-    unsigned long long __unused2;
+    unsigned long long ___unused1;
+    unsigned long long ___unused2;
 };
 
 #define IPC_64 0

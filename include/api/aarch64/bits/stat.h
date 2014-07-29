@@ -19,7 +19,7 @@ struct stat {
     struct timespec st_atim;
     struct timespec st_mtim;
     struct timespec st_ctim;
-    long __unused[2];
+    long ___unused[2];
 };
 
 #endif /* OSV_BITS_STAT_H */

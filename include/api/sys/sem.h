@@ -28,12 +28,12 @@ extern "C" {
 struct semid_ds {
 	struct ipc_perm sem_perm;
 	long sem_otime;
-	unsigned long __unused1;
+	unsigned long ___unused1;
 	long sem_ctime;
-	unsigned long __unused2;
+	unsigned long ___unused2;
 	unsigned long sem_nsems;
-	unsigned long __unused3;
-	unsigned long __unused4;
+	unsigned long ___unused3;
+	unsigned long ___unused4;
 };
 
 #define _SEM_SEMUN_UNDEFINED 1

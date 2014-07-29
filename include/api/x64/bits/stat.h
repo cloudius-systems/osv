@@ -18,5 +18,5 @@ struct stat {
 	struct timespec st_atim;
 	struct timespec st_mtim;
 	struct timespec st_ctim;
-	long __unused[3];
+	long ___unused[3];
 };
