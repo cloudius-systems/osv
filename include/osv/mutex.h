@@ -103,7 +103,9 @@ struct lock_guard_for_drop_lock {
 
 
 // Like std::lock_guard<> but easier to use
+#define CONCATENATE2(x, y) x##y
+#define CONCATENATE(x, y) CONCATENATE2(x, y)
 #define SCOPE_LOCK(lock) \
-    std::lock_guard<decltype(lock)> _SCOPE_LOCK_##__COUNTER__(lock)
+    std::lock_guard<decltype(lock)> CONCATENATE(_SCOPE_LOCK, __COUNTER__) (lock)
 
 #endif /* MUTEX_H_ */

@@ -238,5 +238,14 @@ int main(int argc, char **argv)
     test<mutex>((int)sched::cpus.size(), n, true, lff);
     test<mutex>(20, n, false, lff);
 
+    // Test that SCOPE_LOCK compiles for two different mutexes in the same
+    // scope. We used to have a bug in this ;-)
+    {
+        mutex a;
+        mutex b;
+        SCOPE_LOCK(a);
+        SCOPE_LOCK(b);
+    }
+
     printf("mutex tests succeeded\n");
 }
