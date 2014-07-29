@@ -46,7 +46,7 @@ class rcu_hashtable {
     };
     using bucket_array_type = std::vector<next_ptr>;
     rcu_ptr<bucket_array_type, rcu_deleter<bucket_array_type>> _buckets;
-    size_t _size = 0;
+    std::atomic<size_t> _size = { 0 };
     Hash _hash;
 public:
     /// A pointer to an element.
@@ -100,15 +100,15 @@ private:
             }
         }
     }
-    void maybe_grow() {
+    void maybe_grow(size_t new_size) {
         auto old_capacity = _buckets.read_by_owner()->size();
-        if (old_capacity * 2 <= _size) {
+        if (old_capacity * 2 <= new_size) {
             resize(old_capacity * 2);
         }
     }
-    void maybe_shrink() {
+    void maybe_shrink(size_t new_size) {
         auto old_capacity = _buckets.read_by_owner()->size();
-        if (old_capacity / 2 > _size) {
+        if (old_capacity / 2 > new_size) {
             resize(old_capacity / 2);
         }
     }
@@ -207,6 +207,22 @@ public:
     void reader_for_each(Func func) {
         for_each(func, reader_traits());
     }
+
+    /// Determines the number of items in the hash table
+    ///
+    /// Can be called without any locks, but the value is only
+    /// stable if external mutual exclusion is provided.
+    size_t size() const {
+        return _size.load(std::memory_order_relaxed);
+    }
+
+    /// Determines whether the hash table is empty
+    ///
+    /// Can be called without any locks, but the value is only
+    /// stable if external mutual exclusion is provided.
+    bool empty() const {
+        return !size();
+    }
 };
 
 template <typename T, typename Hash>
@@ -249,8 +265,9 @@ template <typename T, typename Hash>
 inline
 void rcu_hashtable<T, Hash>::insert(element* p)
 {
-    ++_size;
-    maybe_grow();
+    auto new_size = _size.load(std::memory_order_relaxed) + 1;
+    _size.store(new_size, std::memory_order_relaxed);
+    maybe_grow(new_size);
     auto hash = _hash(p->data);
     auto& buckets = *_buckets.read_by_owner();
     next_ptr* first_ptr = &buckets[hash & (buckets.size() - 1)];
@@ -267,7 +284,8 @@ template <typename T, typename Hash>
 inline
 void rcu_hashtable<T, Hash>::erase(iterator i)
 {
-    --_size;
+    auto new_size = _size.load(std::memory_order_relaxed) - 1;
+    _size.store(new_size, std::memory_order_relaxed);
     auto p = i._p;
     next_ptr* next = p->next.read_by_owner();
     next_ptr* prev = p->prev;
@@ -276,7 +294,7 @@ void rcu_hashtable<T, Hash>::erase(iterator i)
     }
     prev->next.assign(next);
     rcu_dispose(p);
-    maybe_shrink();
+    maybe_shrink(new_size);
 }
 
 template <typename T, typename Hash>
