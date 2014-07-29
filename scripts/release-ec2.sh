@@ -16,6 +16,9 @@ PARAM_VERSION="--override-version"
 PARAM_REGIONS="--override-regions"
 PARAM_SMALL="--small-instances"
 PARAM_MODULES="--modules-list"
+PARAM_REGION="--region"
+PARAM_ZONE="--zone"
+PARAM_PLACEMENT_GROUP="--placement-group"
 
 MODULES_LIST=default
 
@@ -56,6 +59,9 @@ This script receives following command line arguments:
     $PARAM_REGIONS <regions list> - replicate to specified regions only
     $PARAM_SMALL - create AMI suitable for small and micro instances
     $PARAM_MODULES <modules list> - list of modules to build (incompatible with $PARAM_IMAGE and $PARAM_INSTANCE)
+    $PARAM_REGION <region> - AWS region to work in
+    $PARAM_ZONE <availability zone> - AWS availability zone to work in
+    $PARAM_PLACEMENT_GROUP <placement group> - Placement group for instances created by this script
 
 HLPEND
 }
@@ -93,6 +99,18 @@ do
       MODULES_LIST=$2
       shift 2
       ;;
+    "$PARAM_REGION")
+      AWS_DEFAULT_REGION=$2
+      shift 2
+      ;;
+    "$PARAM_ZONE")
+      OSV_AVAILABILITY_ZONE=$2
+      shift 2
+      ;;
+    "$PARAM_PLACEMENT_GROUP")
+      OSV_PLACEMENT_GROUP=$2
+      shift 2
+      ;;
     "$PARAM_HELP")
       print_help
       exit 0
@@ -121,7 +139,7 @@ if test x"$SMALL_INSTANCE" = x""; then
 #Use OSv-v0.09 AMI in us-east-1 as a template
 #Linux based but suitable for large instances only
 TEMPLATE_AMI_ID=ami-d6f90fbe
-TEMPLATE_INSTANCE_TYPE=m3.medium
+TEMPLATE_INSTANCE_TYPE=c3.large
 
 else
 
@@ -156,7 +174,16 @@ import_osv_volume() {
 }
 
 launch_template_instance() {
- ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` --instance-type $TEMPLATE_INSTANCE_TYPE | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
+ if test x"$OSV_PLACEMENT_GROUP" != x""; then
+  PLACEMENT="--placement-group $OSV_PLACEMENT_GROUP"
+ else
+  PLACEMENT=""
+ fi
+
+ ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` \
+                                                  --instance-type $TEMPLATE_INSTANCE_TYPE \
+                                                  $PLACEMENT \
+                                                  | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
 }
 
 get_availability_zone() {
@@ -267,6 +294,7 @@ while true; do
     fi
 
     echo_progress Creating new template instance from AMI $TEMPLATE_AMI_ID
+    echo_progress Region: $AWS_DEFAULT_REGION, Zone: $OSV_AVAILABILITY_ZONE, Group: $OSV_PLACEMENT_GROUP
     INSTANCE_ID=`launch_template_instance`
 
     if test x"$INSTANCE_ID" = x; then
