@@ -26,7 +26,7 @@ class rwlock;
 // example: WITH_LOCK(my_rwlock.for_read()) { ... }
 class rwlock_for_read {
 private:
-    rwlock_for_read() = default;
+    rwlock_for_read() {}
 public:
     void lock();
     void unlock();
@@ -40,7 +40,7 @@ public:
 // example: WITH_LOCK(my_rwlock.for_write()) { ... }
 class rwlock_for_write {
 private:
-    rwlock_for_write() = default;
+    rwlock_for_write() {}
 public:
     void lock();
     void unlock();
