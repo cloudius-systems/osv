@@ -158,7 +158,6 @@ public:
             auto netmask = ((bsd_sockaddr_in *)(ret->rt_ifa->ifa_netmask))->sin_addr.s_addr;
             auto addr = dst->sin_addr.s_addr;
             new_cache->add(addr, netmask, *(nonlockable_rtentry *)ret);
-            printf("routecache.hh: caching route for %x %x\n", addr, netmask);
             cache.assign(new_cache);
             osv::rcu_dispose(old_cache);
         }
