@@ -221,6 +221,7 @@
                     {
                 "method": "GET",
                 "summary": "get the current boot cmdline",
+                "notes": "This operation retrieves the current OSv command line. The current command line is either the command line used for the current boot, or the one written by POST.",
                 "responseClass": "string",
                 "nickname": "getCmdline",
                 "produces": [
@@ -234,6 +235,7 @@
                 {
                 "method": "POST",
                 "summary": "modify command line",
+                "notes": "This operation replaces the current OSv command line with a new one. The old command line is completely removed. Users wanting to add fields to the command line using this POST operation should first GET it, make the necessary changes, and then POST the result.",
                 "responseClass": "string",
                 "nickname": "replaceCmdline",
                 "produces": [
