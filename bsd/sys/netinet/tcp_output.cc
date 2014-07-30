@@ -175,6 +175,16 @@ static inline bool tcp_tso_send_now(struct tcpcb *tp, long len,
 		return true;
 	}
 
+	unsigned hdrlen;
+
+#ifdef INET6
+	if (tp->t_inpcb->inp_vflag & INP_IPV6)
+		hdrlen = sizeof (struct ip6_hdr) + sizeof (struct tcphdr);
+	else
+#endif
+		hdrlen = sizeof (struct tcpiphdr);
+
+
 	//
 	// Send if there is a full Tx window (but not less than MSS in order
 	// not to break the SWS) or IP_MAXPACKET of data.
@@ -185,7 +195,7 @@ static inline bool tcp_tso_send_now(struct tcpcb *tp, long len,
 	// the window size as long as the window is small and when it grows
 	// we'll start aggregating the full TSO frames.
 	//
-	u_int send_thresh = bsd_min(IP_MAXPACKET,
+	u_int send_thresh = bsd_min(IP_MAXSEGMENT - hdrlen,
 				    bsd_max(sendwin, tp->t_maxseg));
 
 	if (len >= send_thresh) {
