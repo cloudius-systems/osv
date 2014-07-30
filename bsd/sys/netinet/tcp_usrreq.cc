@@ -141,6 +141,11 @@ tcp_usr_attach(struct socket *so, int proto, struct thread *td)
 		for (auto&& pl : so->fp->f_poll_list) {
 			so->so_nc->add_poller(*pl._req);
 		}
+		if (so->fp->f_epolls) {
+		    for (auto&& ep : *so->fp->f_epolls) {
+		        so->so_nc->add_epoll(ep);
+		    }
+		}
 	}
 out:
 	TCPDEBUG2(PRU_ATTACH);

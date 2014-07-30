@@ -165,6 +165,8 @@ int poll_wake(struct file* fp, int events)
 
     fhold(fp);
 
+    fp->wake_epoll(events);
+
     FD_LOCK(fp);
     /*
      * There may be several pollreqs associated with this fd.

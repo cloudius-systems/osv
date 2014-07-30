@@ -116,8 +116,23 @@ struct epoll_ptr {
     epoll_key key;
 };
 
+void epoll_wake(const epoll_ptr& ep);
+void epoll_wake_in_rcu(const epoll_ptr& ep);
+
 inline bool operator==(const epoll_ptr& p1, const epoll_ptr& p2) {
     return p1.epoll == p2.epoll && p1.key == p2.key;
+}
+
+namespace std {
+
+template <>
+struct hash<epoll_ptr> : private hash<epoll_file*>, private hash<epoll_key> {
+    size_t operator()(const epoll_ptr& p) const {
+        return hash<epoll_file*>::operator()(p.epoll)
+            ^ hash<epoll_key>::operator()(p.key);
+    }
+};
+
 }
 
 /*
@@ -144,6 +159,8 @@ struct file {
 	virtual int stat(struct stat* buf) = 0;
 	virtual int close() = 0;
 	virtual int chmod(mode_t mode) = 0;
+	virtual void epoll_add() {}
+	virtual void epoll_del() {}
 	virtual void poll_install(pollreq& pr) {}
 	virtual void poll_uninstall(pollreq& pr) {}
 	virtual std::unique_ptr<mmu::file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) {
@@ -173,6 +190,7 @@ struct file {
 	// Once we have a real epoll() implementation, it won't be needed.
 	int poll_wake_count = 0;
 	void stop_polls();
+	void wake_epoll(int possible_events = -1);
 };
 
 

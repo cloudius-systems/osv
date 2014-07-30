@@ -3234,6 +3234,11 @@ tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf)
 			for (auto&& pl : so->fp->f_poll_list) {
 				so->so_nc->add_poller(*pl._req);
 			}
+			if (so->fp->f_epolls) {
+				for (auto&& ep : *so->fp->f_epolls) {
+					so->so_nc->add_epoll(ep);
+				}
+			}
 		}
 	}
 }

@@ -41,11 +41,19 @@ void net_channel::process_queue()
 void net_channel::wake_pollers()
 {
     WITH_LOCK(osv::rcu_read_lock) {
-        auto& pl = *_pollers.read();
-        for (pollreq* pr : pl) {
-            // net_channel is self synchronizing
-            pr->_awake.store(true, std::memory_order_relaxed);
-            pr->_poll_thread.wake();
+        auto pl = _pollers.read();
+        if (pl) {
+            for (pollreq* pr : *pl) {
+                // net_channel is self synchronizing
+                pr->_awake.store(true, std::memory_order_relaxed);
+                pr->_poll_thread.wake();
+            }
+        }
+        // can't call epoll_wake from rcu, so copy the data
+        if (!_epollers.empty()) {
+            _epollers.reader_for_each([&] (const epoll_ptr& ep) {
+                epoll_wake_in_rcu(ep);
+            });
         }
     }
 }
@@ -75,6 +83,25 @@ void net_channel::del_poller(pollreq& pr)
         neww->erase(std::remove(neww->begin(), neww->end(), &pr), neww->end());
         _pollers.assign(neww.release());
         osv::rcu_dispose(old);
+    }
+}
+
+void net_channel::add_epoll(const epoll_ptr& ep)
+{
+    WITH_LOCK(_pollers_mutex) {
+        if (!_epollers.owner_find(ep)) {
+            _epollers.insert(ep);
+        }
+    }
+}
+
+void net_channel::del_epoll(const epoll_ptr& ep)
+{
+    WITH_LOCK(_pollers_mutex) {
+        auto i = _epollers.owner_find(ep);
+        if (i) {
+            _epollers.erase(i);
+        }
     }
 }
 

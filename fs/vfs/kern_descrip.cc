@@ -160,6 +160,18 @@ file::file(unsigned flags, filetype_t type, void *opaque)
 {
 }
 
+void file::wake_epoll(int events)
+{
+    WITH_LOCK(f_lock) {
+        if (!f_epolls) {
+            return;
+        }
+        for (auto&& ep : *f_epolls) {
+            epoll_wake(ep);
+        }
+    }
+}
+
 void fhold(struct file* fp)
 {
     __sync_fetch_and_add(&fp->f_count, 1);
