@@ -691,9 +691,9 @@ void net::txq::xmit_one_locked(void* _req)
     if (try_xmit_one_locked(req)) {
         trace_virtio_net_tx_xmit_one_failed_to_post(vqueue,
                                                     vqueue->_sg_vec.size());
+        // We are going to poll - flush the pending packets
+        kick_pending();
         do {
-            // We are going to poll - flush the pending packets
-            kick_pending();
             if (!vqueue->used_ring_not_empty()) {
                 do {
                     sched::thread::yield();
