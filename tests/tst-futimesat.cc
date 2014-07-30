@@ -7,6 +7,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -82,6 +83,17 @@ int main(int argc, char *argv[])
     report(dirfd > 0, "open file bar with dirfd");
     ret = futimesat(dirfd, rel_path_bar, times);
     report(ret == -1 && errno == ENOTDIR, "check if futimesat fails when dirfd points to file");
+
+    /* But when path==NULL, it's a special case - dirfd itself is modified,
+     * even if it isn't a directory!
+     */
+    fd = open(tmp_file_bar, O_RDWR);
+    report(fd > 0, "open file bar");
+    ret = futimesat(fd, NULL, times);
+    report(ret == 0, "check if futimesat succeeds when dirfd points to file but path==NULL");
+    ret = futimes(fd, times);
+    report(ret == 0, "check if futimes succeeds");
+    report(close(fd) == 0, "close file bar");
 
     // Clean up the temporary file and folder
     report(unlink(tmp_file_bar) == 0, "remove the file bar");
