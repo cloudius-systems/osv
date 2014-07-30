@@ -11,8 +11,11 @@
 void spin_lock(spinlock_t *sl)
 {
     sched::preempt_disable();
-    while (__sync_lock_test_and_set(&sl->_lock, 1))
-        ;
+    while (__sync_lock_test_and_set(&sl->_lock, 1)) {
+        while (sl->_lock) {
+            barrier();
+        }
+    }
 }
 
 bool spin_trylock(spinlock_t *sl)
