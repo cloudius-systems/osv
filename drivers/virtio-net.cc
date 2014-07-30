@@ -652,7 +652,7 @@ int net::txq::try_xmit_one_locked(net_req* req)
 
     trace_virtio_net_tx_packet_size(vqueue, vec_sz);
 
-    if (!vqueue->avail_ring_has_room(vec_sz)) {
+    if (!vqueue->add_buf(req)) {
         if (vqueue->used_ring_not_empty()) {
             trace_virtio_net_tx_no_space_calling_gc(_parent->_ifn->if_index);
             gc();
@@ -662,6 +662,8 @@ int net::txq::try_xmit_one_locked(net_req* req)
         } else {
             return ENOBUFS;
         }
+    } else {
+        return 0;
     }
 
     if (!vqueue->add_buf(req)) {
