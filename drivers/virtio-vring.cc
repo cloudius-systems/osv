@@ -300,8 +300,12 @@ namespace virtio {
             kicked = ((u16)(avail_idx - avail_event - 1) <
                                                        _avail_added_since_kick);
 
-        } else if (_used->notifications_disabled())
-            return false;
+        } else {
+            std::atomic_thread_fence(std::memory_order_seq_cst);
+
+            if (_used->notifications_disabled())
+                return false;
+        }
 
         //
         // Kick when the avail_event has moved or at least every half u16 range
