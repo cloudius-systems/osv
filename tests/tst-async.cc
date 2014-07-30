@@ -43,48 +43,63 @@ BOOST_AUTO_TEST_CASE(test_one_shot_task_fires_soon)
 BOOST_AUTO_TEST_CASE(test_async_task_fires)
 {
     std::promise<bool> done;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
-    timer_task task([&] {
+    timer_task task(lock, [&] {
         done.set_value(true);
     });
 
     task.reschedule(100_ms);
-    assert_resolves(done, 200_ms);
+
+    DROP_LOCK(lock) {
+        assert_resolves(done, 200_ms);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_async_task_can_be_cancelled)
 {
     std::promise<bool> done;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
-    timer_task task([&] {
+    timer_task task(lock, [&] {
         done.set_value(true);
     });
 
     task.reschedule(100_ms);
     BOOST_REQUIRE(task.cancel());
 
-    assert_not_resolved(done, 200_ms);
+    DROP_LOCK(lock) {
+        assert_not_resolved(done, 200_ms);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_while_armed)
 {
     std::promise<bool> done;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
-    timer_task task([&] {
+    timer_task task(lock, [&] {
         done.set_value(true);
     });
 
     task.reschedule(100_ms);
     task.reschedule(10_ms);
 
-    assert_resolves(done, 20_ms);
+    DROP_LOCK(lock) {
+        assert_resolves(done, 20_ms);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_after_cancelled)
 {
     std::promise<bool> done;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
-    timer_task task([&] {
+    timer_task task(lock, [&] {
         done.set_value(true);
     });
 
@@ -92,40 +107,51 @@ BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_after_cancelled)
     BOOST_REQUIRE(task.cancel());
     task.reschedule(10_ms);
 
-    assert_resolves(done, 20_ms);
+    DROP_LOCK(lock) {
+        assert_resolves(done, 20_ms);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_desctructor_does_not_block_when_called_after_task_is_done)
 {
     std::promise<bool> done;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
-    timer_task task([&] {
+    timer_task task(lock, [&] {
         done.set_value(true);
     });
 
     task.reschedule(1_ms);
-    assert_resolves(done, 10_ms);
+
+    DROP_LOCK(lock) {
+        assert_resolves(done, 10_ms);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_destructor_waits_for_callback_to_finish)
 {
     std::atomic<int> counter {0};
     std::promise<bool> proceed;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
     {
-        timer_task task([&] {
-            proceed.set_value(true);
+        timer_task task(lock, [&] {
+                proceed.set_value(true);
 
-            // if destructor didn't wait for us then counter would be still 0 when
-            // it is checked later for value of 1
-            std::this_thread::sleep_for(10_ms);
+                // if destructor didn't wait for us then counter would be still 0 when
+                // it is checked later for value of 1
+                std::this_thread::sleep_for(10_ms);
 
-            counter++;
+                counter++;
         });
 
         task.reschedule(20_ms);
 
-        assert_resolves(proceed, 30_ms);
+        DROP_LOCK(lock) {
+            assert_resolves(proceed, 30_ms);
+        }
     }
 
     BOOST_REQUIRE(counter == 1);
@@ -136,9 +162,11 @@ BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_after_done)
     std::atomic<int> counter {0};
     std::promise<bool> proceed1;
     std::promise<bool> proceed2;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
     {
-        timer_task task([&] {
+        timer_task task(lock, [&] {
             if (counter++ == 0) {
                 proceed1.set_value(true);
             } else {
@@ -147,11 +175,15 @@ BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_after_done)
         });
 
         task.reschedule(1_ms);
-        assert_resolves(proceed1, 20_ms);
+        DROP_LOCK(lock) {
+            assert_resolves(proceed1, 20_ms);
+        }
         BOOST_REQUIRE(counter == 1);
 
         task.reschedule(1_ms);
-        assert_resolves(proceed2, 20_ms);
+        DROP_LOCK(lock) {
+            assert_resolves(proceed2, 20_ms);
+        }
     }
 
     BOOST_REQUIRE(counter == 2);
@@ -161,12 +193,16 @@ BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_from_the_callback)
 {
     std::atomic<int> counter {0};
     std::promise<bool> done;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
     timer_task* task;
 
-    task = new timer_task([&] {
+    task = new timer_task(lock, [&] {
         if (counter++ == 0) {
-            task->reschedule(1_ms);
+            WITH_LOCK(lock) {
+                task->reschedule(1_ms);
+            }
         } else {
             done.set_value(true);
         }
@@ -174,7 +210,9 @@ BOOST_AUTO_TEST_CASE(test_async_task_can_be_reprogrammed_from_the_callback)
 
     task->reschedule(1_ms);
 
-    assert_resolves(done, 100_ms);
+    DROP_LOCK(lock) {
+        assert_resolves(done, 100_ms);
+    }
     BOOST_REQUIRE(counter == 2);
 
     delete task;
@@ -184,12 +222,16 @@ BOOST_AUTO_TEST_CASE(test_destructor_waits_for_callbacks_which_have_rescheduled_
 {
     std::atomic<int> counter {0};
     std::promise<bool> checkpoint;
+    mutex lock;
+    SCOPE_LOCK(lock);
 
     timer_task* task;
 
-    task = new timer_task([&] {
+    task = new timer_task(lock, [&] {
         if (counter++ == 0) {
-            task->reschedule(10_s); // should never fire
+            WITH_LOCK(lock) {
+                task->reschedule(10_s); // should never fire
+            }
             checkpoint.set_value(true);
             std::this_thread::sleep_for(100_ms);
             counter++;
@@ -200,7 +242,9 @@ BOOST_AUTO_TEST_CASE(test_destructor_waits_for_callbacks_which_have_rescheduled_
 
     task->reschedule(1_ms);
 
-    assert_resolves(checkpoint, 100_ms);
+    DROP_LOCK(lock) {
+        assert_resolves(checkpoint, 100_ms);
+    }
     delete task;
 
     BOOST_REQUIRE(counter == 2);
@@ -209,32 +253,44 @@ BOOST_AUTO_TEST_CASE(test_destructor_waits_for_callbacks_which_have_rescheduled_
 BOOST_AUTO_TEST_CASE(test_a_task_which_is_set_far_in_future_does_not_block_new_task)
 {
     std::promise<bool> done;
+    mutex lock1;
+    mutex lock2;
+    SCOPE_LOCK(lock1);
+    SCOPE_LOCK(lock2);
 
-    timer_task far_task([&] {});
+    timer_task far_task(lock1, [&] {});
     far_task.reschedule(5_s);
 
-    timer_task task([&] {
+    timer_task task(lock2, [&] {
         done.set_value(true);
     });
     task.reschedule(1_ms);
 
-    assert_resolves(done, 10_ms);
+    DROP_LOCK(lock1) {
+        DROP_LOCK(lock2) {
+            assert_resolves(done, 10_ms);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(test_task_which_is_scheduled_second_but_with_sooner_expiration_time_fires_first)
 {
     mutex lock;
+    mutex lock1;
+    mutex lock2;
     std::vector<int> values;
     std::promise<bool> done;
+    SCOPE_LOCK(lock1);
+    SCOPE_LOCK(lock2);
 
-    timer_task task_1([&] {
+    timer_task task_1(lock1, [&] {
         WITH_LOCK(lock) {
             values.push_back(1);
         }
         done.set_value(true);
     });
 
-    timer_task task_2([&] {
+    timer_task task_2(lock2, [&] {
         WITH_LOCK(lock) {
             values.push_back(2);
         }
@@ -245,7 +301,11 @@ BOOST_AUTO_TEST_CASE(test_task_which_is_scheduled_second_but_with_sooner_expirat
         task_2.reschedule(1_ms);
     }
 
-    assert_resolves(done, 1000_ms);
+    DROP_LOCK(lock1) {
+        DROP_LOCK(lock2) {
+            assert_resolves(done, 1000_ms);
+        }
+    }
 
     BOOST_REQUIRE(values.size() == 2);
     BOOST_REQUIRE(values[0] == 2);
@@ -258,9 +318,14 @@ BOOST_AUTO_TEST_CASE(test_timers_with_same_expiration_time_fire_separately)
     std::atomic<int> counter {0};
     const int n_tasks = 10;
     timer_task* tasks[n_tasks];
+    mutex locks[n_tasks];
 
-    for (auto& task_ptr : tasks) {
-        task_ptr = new timer_task([&] {
+    for (auto& l : locks) {
+        l.lock();
+    }
+
+    for (int i = 0; i < n_tasks; i++) {
+        tasks[i] = new timer_task(locks[i], [&] {
             if (++counter == n_tasks) {
                 done.set_value(true);
             }
@@ -269,11 +334,18 @@ BOOST_AUTO_TEST_CASE(test_timers_with_same_expiration_time_fire_separately)
 
     auto deadline = async::clock::now() + 1_ms;
 
-    for (auto& task_ptr : tasks) {
+    for (int i = 0; i < n_tasks; i++) {
+        auto task_ptr = tasks[i];
         task_ptr->reschedule(deadline);
     }
 
+    for (auto& l : locks) {
+        l.unlock();
+    }
     assert_resolves(done, 15_ms);
+    for (auto& l : locks) {
+        l.lock();
+    }
 
     for (auto& task_ptr : tasks) {
         delete task_ptr;
@@ -282,7 +354,9 @@ BOOST_AUTO_TEST_CASE(test_timers_with_same_expiration_time_fire_separately)
 
 BOOST_AUTO_TEST_CASE(test_is_pending)
 {
-    timer_task task([&] {});
+    mutex lock;
+    SCOPE_LOCK(lock);
+    timer_task task(lock, [&] {});
     task.reschedule(1_s);
 
     BOOST_REQUIRE(task.is_pending());
@@ -320,6 +394,9 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_waits_for_callback)
         task.cancel_sync();
         BOOST_REQUIRE(counter == 1);
     }
+
+    // async::timer_task::~timer_task requires the lock locked.
+    lock.lock();
 }
 
 BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_waits_for_many_callbacks)
@@ -359,6 +436,8 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_waits_for_many_callbacks)
         task.cancel_sync();
         BOOST_REQUIRE(counter == 4);
     }
+
+    lock.lock();
 }
 
 BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_does_not_wait_if_callback_has_not_yet_fired)
@@ -376,6 +455,8 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__cancel_sync_does_not_wait_if_callback_ha
     WITH_LOCK(lock) {
         task.cancel_sync();
     }
+
+    lock.lock();
 }
 
 BOOST_AUTO_TEST_CASE(test_serial_timer__callback_fires_if_not_cancelled)
@@ -405,4 +486,6 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__callback_fires_if_not_cancelled)
     }
 
     BOOST_REQUIRE(counter == 1);
+
+    lock.lock();
 }

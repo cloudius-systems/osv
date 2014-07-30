@@ -96,7 +96,7 @@ struct percpu_timer_task {
  */
 class timer_task {
 public:
-    timer_task(callback_t&& callback);
+    timer_task(mutex& lock, callback_t&& callback);
     timer_task(const timer_task&) = delete;
     ~timer_task();
 
@@ -143,7 +143,7 @@ private:
 
     percpu_timer_task* _active_task;
 
-    mutex _mutex;
+    mutex& _mutex;
     waitqueue _registrations_drained;
 
     callback_t _callback;
