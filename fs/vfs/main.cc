@@ -1819,6 +1819,13 @@ int chown(const char *path, uid_t owner, gid_t group)
     return 0;
 }
 
+int lchown(const char *path, uid_t owner, gid_t group)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
+
 extern "C"
 int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 {
