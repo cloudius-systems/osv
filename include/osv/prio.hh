@@ -20,7 +20,6 @@ enum class init_prio : int {
     pthread,
     notifiers,
     acpi,
-    apic,
     vma_list,
     reclaimer,
     sched,
