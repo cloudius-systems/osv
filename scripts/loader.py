@@ -247,9 +247,7 @@ class osv_memory(gdb.Command):
         gdb.Command.__init__(self, 'osv memory',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        freemem = 0
-        for page_range in free_page_ranges():
-            freemem += int(page_range['size'])
+        freemem = gdb.parse_and_eval('memory::free_memory')['_M_i']
 
         mmapmem = 0
         for vma in vma_list():
