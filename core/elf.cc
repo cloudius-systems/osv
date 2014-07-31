@@ -1113,7 +1113,7 @@ symbol_module program::lookup(const char* name)
 {
     trace_elf_lookup(name);
     symbol_module ret(nullptr,nullptr);
-    elf::get_program()->with_modules([&](const elf::program::modules_list &ml)
+    with_modules([&](const elf::program::modules_list &ml)
     {
         for (auto module : ml.objects) {
             if (auto sym = module->lookup_symbol(name)) {
@@ -1141,7 +1141,7 @@ dladdr_info program::lookup_addr(const void* addr)
 {
     trace_elf_lookup_addr(addr);
     dladdr_info ret;
-    elf::get_program()->with_modules([&](const elf::program::modules_list &ml)
+    with_modules([&](const elf::program::modules_list &ml)
     {
         for (auto module : ml.objects) {
             ret = module->lookup_addr(addr);
