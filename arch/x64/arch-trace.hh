@@ -26,7 +26,27 @@ inline void tracepointv<_id, std::tuple<s_args...>(r_args...), assign>::operator
             : : [type]"i"(&typeid(*this)), [id]"i"(_id) : : slow_path);
     return;
 slow_path:
-    trace_slow_path(assign(as...));
+    // We don't want register shuffling and function calls here, so pretend
+    // to the compiler that the slow path just stores some data into local
+    // memory and executes an instruction that clobbers just a few registers
+    // (instead of lots of registers and all of memory):
+    auto data = assign(as...);
+    auto pdata = &data;
+    // encapsulate the trace_slow_path() in a function callable from asm:
+    void (*do_slow_path)(tracepointv* tp, decltype(data)* d)
+            = [](tracepointv* tp, decltype(data)* d) [[gnu::cold]] {
+        tp->trace_slow_path(*d);
+    };
+    tracepointv* tp = this;
+    // and call it, saving caller-saved registers:
+    asm volatile(
+            "sub $128, %%rsp \n\t" // avoid red zone
+            "push %%rcx; push %%rdx; push %%r8; push %%r9; push %%r10; push %%r11 \n\t"
+            "call *%%rax \n\t"
+            "pop %%r11; pop %%r10; pop %%r9; pop %%r8; pop %%rdx; pop %%rcx \n\t"
+            "add $128, %%rsp \n\t"
+            : "+a"(do_slow_path), "+D"(tp), "+S"(pdata) : "m"(data)
+            );
 }
 
 #endif /* ARCH_TRACE_HH_ */
