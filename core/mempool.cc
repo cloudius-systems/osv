@@ -687,6 +687,9 @@ page_range* page_range_allocator::alloc(size_t size)
         return nullptr;
     } else if (order == max_order) {
         range = &*_free_huge.rbegin();
+        if (range->size < size) {
+            return nullptr;
+        }
         remove_huge(*range);
     } else {
         range = &_free[order].front();
