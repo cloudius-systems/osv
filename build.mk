@@ -369,6 +369,8 @@ tools += tools/libtools.so
 
 tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools
 
+tools/ifconfig/ifconfig.so: EXTRA_LIBS = -Ltools/ -ltools
+
 ifeq ($(arch),aarch64)
 tools += tests/tst-hello.so
 cmdline = tests/tst-hello.so
