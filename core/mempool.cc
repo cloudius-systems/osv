@@ -151,22 +151,29 @@ static void garbage_collector_fn()
 
 // Memory allocation strategy
 //
-// The chief requirement is to be able to deduce the object size.
+// Bits 44:46 of the virtual address are used to determine which memory
+// allocator was used for allocation and, therefore, which one should be used
+// to free the memory block.
 //
-// Small object (< page size) are stored in pages.  The beginning of the page
-// contains a header with a pointer to a pool, consisting of all free objects
-// of that size.  Small objects are recognized by free() by the fact that
-// they are not aligned on a page boundary (since that is occupied by the
-// header).  The pool maintains a singly linked list of free objects, and adds
-// or frees pages as needed.
+// Small objects (< page size / 4) are stored in pages.  The beginning of the
+// page contains a header with a pointer to a pool, consisting of all free
+// objects of that size.  The pool maintains a singly linked list of free
+// objects, and adds or frees pages as needed.
 //
-// Large objects are rounded up to page size.  They have a page-sized header
-// in front that contains the page size.  The free list (free_page_ranges)
-// is an rbtree sorted by address.  Allocation strategy is first-fit.
+// Objects which size is in range (page size / 4, page size] are given a whole
+// page from per-CPU page buffer.  Such objects don't need header they are
+// known to be not larger than a single page.  Page buffer is refilled by
+// allocating memory from large allocator.
 //
-// Objects that are exactly page sized, and allocated by alloc_page(), come
-// from the same pool as large objects, except they don't have a header
-// (since we know the size already).
+// Large objects are rounded up to page size.  They have a header in front that
+// contains the page size.  There is gap between the header and the acutal
+// object to ensure proper alignment.  Unallocated page ranges are kept either
+// in one of 16 doubly linked lists or in a red-black tree sorted by their
+// size.  List k stores page ranges which page count is in range
+// [2^k, 2^(k + 1)).  The tree stores page ranges that are too big for any of
+// the lists.  Memory is allocated from the smallest, non empty list, that
+// contains page ranges large enough. If there is no such list then it is a
+// worst-fit allocation form the page ranges in the tree.
 
 pool::pool(unsigned size)
     : _size(size)
@@ -179,7 +186,6 @@ pool::~pool()
 {
 }
 
-// FIXME: handle larger sizes better, while preserving alignment:
 const size_t pool::max_object_size = page_size / 4;
 const size_t pool::min_object_size = sizeof(free_object);
 
@@ -1249,11 +1255,6 @@ extern "C" {
     size_t malloc_usable_size(void *object);
 }
 
-// malloc_large returns a page-aligned object as a marker that it is not
-// allocated from a pool.
-// FIXME: be less wasteful
-
-
 static inline void* std_malloc(size_t size, size_t alignment)
 {
     if ((ssize_t)size < 0)
@@ -1498,11 +1499,7 @@ size_t malloc_usable_size(void* obj)
 }
 
 // posix_memalign() and C11's aligned_alloc() return an aligned memory block
-// that can be freed with an ordinary free(). The following is a temporary
-// implementation that simply calls malloc(), aborting when the desired
-// alignment has not been achieved. In particular, for large allocations
-// our malloc() already returns page-aligned blocks, so such memalign()
-// calls will succeed.
+// that can be freed with an ordinary free().
 
 int posix_memalign(void **memptr, size_t alignment, size_t size)
 {
