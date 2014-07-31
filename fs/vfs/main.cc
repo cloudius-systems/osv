@@ -37,6 +37,7 @@
 #include <sys/param.h>
 #include <sys/statvfs.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #include <limits.h>
 #include <unistd.h>
@@ -1638,41 +1639,50 @@ TRACEPOINT(trace_vfs_utimes, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_utimes_ret, "");
 TRACEPOINT(trace_vfs_utimes_err, "%d", int);
 
-extern "C"
+int futimes(int fd, const struct timeval times[2])
+{
+    return futimesat(fd, nullptr, times);
+}
+
 int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
 {
     struct stat st;
     struct file *fp;
-    char *absolute_path;
-    int length;
     int error;
 
     if ((pathname && pathname[0] == '/') || dirfd == AT_FDCWD)
         return utimes(pathname, times);
 
-    error = fstat(dirfd, &st);
-    if (error) {
-        error = errno;
-        goto out_errno;
-    }
+    // Note: if pathname == NULL, futimesat operates on dirfd itself, and in
+    // that case it doesn't have to be a directory.
+    if (pathname) {
+        error = fstat(dirfd, &st);
+        if (error) {
+            error = errno;
+            goto out_errno;
+        }
 
-    if (!S_ISDIR(st.st_mode)){
-        error = ENOTDIR;
-        goto out_errno;
+        if (!S_ISDIR(st.st_mode)){
+            error = ENOTDIR;
+            goto out_errno;
+        }
     }
 
     error = fget(dirfd, &fp);
     if (error)
         goto out_errno;
 
-    length = strlen(fp->f_dentry->d_path) + strlen(pathname) + 2;
-    absolute_path = (char*)malloc(length);
-    if (pathname)
+    if (pathname) {
+        auto length = strlen(fp->f_dentry->d_path) + strlen(pathname) + 2;
+        auto absolute_path = (char*)malloc(length);
         snprintf(absolute_path, length, "%s/%s", fp->f_dentry->d_path, pathname);
-    else
-        strcpy(absolute_path, fp->f_dentry->d_path);
-    error = utimes(absolute_path, times);
-    free(absolute_path);
+        error = utimes(absolute_path, times);
+        free(absolute_path);
+    } else {
+        // TODO: it's really ugly how we convert the fd to path, and utimes
+        // will need to look up this path again.
+        error = utimes(fp->f_dentry->d_path, times);
+    }
     fdrop(fp);
 
     if (error)
