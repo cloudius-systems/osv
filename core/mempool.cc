@@ -640,14 +640,18 @@ page_range_allocator free_page_ranges
 template<typename T>
 T* page_range_allocator::bitmap_allocator<T>::allocate(size_t n)
 {
-    auto pr = free_page_ranges.alloc<false>(get_size(n));
+    auto size = get_size(n);
+    on_alloc(size);
+    auto pr = free_page_ranges.alloc<false>(size);
     return reinterpret_cast<T*>(pr);
 }
 
 template<typename T>
 void page_range_allocator::bitmap_allocator<T>::deallocate(T* p, size_t n)
 {
-    auto pr = new (p) page_range(get_size(n));
+    auto size = get_size(n);
+    on_free(size);
+    auto pr = new (p) page_range(size);
     assert(!free_page_ranges._deferred_free);
     free_page_ranges._deferred_free = pr;
 }
