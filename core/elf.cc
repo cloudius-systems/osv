@@ -1374,7 +1374,7 @@ void* __tls_get_addr(module_and_offset* mao)
     abort();
 #endif /* AARCH64_PORT_STUB */
 
-    return s_program->tls_addr(mao->module) + mao->offset;
+    return get_program()->tls_addr(mao->module) + mao->offset;
 }
 
 
