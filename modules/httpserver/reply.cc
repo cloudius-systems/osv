@@ -224,6 +224,13 @@ reply reply::stock_reply(reply::status_type status,
     return rep;
 }
 
+reply& reply::add_header(const std::string& h, const std::string& value) {
+    headers.push_back(header());
+    headers.back().name = h;
+    headers.back().value = value;
+    return *this;
+}
+
 } // namespace server
 
 } // namespace http

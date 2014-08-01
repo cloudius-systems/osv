@@ -79,6 +79,8 @@ struct reply {
 
     reply()
         : status(status_type::ok) {}
+
+    reply& add_header(const std::string& h, const std::string& value);
 };
 
 } // namespace server
