@@ -6,6 +6,7 @@
  */
 
 #include "fs/fs.hh"
+#include <bsd/init.hh>
 #include <bsd/net.hh>
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
@@ -86,6 +87,7 @@ extern "C" {
     void vfs_init(void);
     void mount_zfs_rootfs(void);
     void ramdisk_init(void);
+    void zfs_init(void *);
 }
 
 void premain()
@@ -482,9 +484,12 @@ void main_cont(int ac, char** av)
     }
     sched::init_detached_threads_reaper();
 
+    bsd_init();
+
     vfs_init();
     boot_time.event("VFS initialized");
     ramdisk_init();
+    zfs_init(NULL);
 
     net_init();
     boot_time.event("Network initialized");

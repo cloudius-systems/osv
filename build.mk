@@ -466,7 +466,8 @@ include $(src)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk
 include $(src)/bsd/cddl/contrib/opensolaris/cmd/zfs/build.mk
 
-bsd  = bsd/net.o  
+bsd  = bsd/init.o
+bsd += bsd/net.o
 bsd += bsd/$(arch)/machine/in_cksum.o
 bsd += bsd/sys/crypto/rijndael/rijndael-alg-fst.o
 bsd += bsd/sys/crypto/rijndael/rijndael-api.o
