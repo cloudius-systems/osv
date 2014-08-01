@@ -92,8 +92,7 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
 
     char *dst = (char *) malloc(count);
     int listen_fd = socket(AF_INET, SOCK_STREAM,  0);
-    struct sockaddr_in listener_addr,client_addr;
-    socklen_t client_len;
+    struct sockaddr_in listener_addr;
 
     bzero(&listener_addr,sizeof(listener_addr));
     listener_addr.sin_family = AF_INET;
@@ -113,8 +112,7 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
     }
 
     std::thread *listener = new std::thread([&] {
-
-        int connfd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
+        int connfd = accept(listen_fd, NULL, NULL);
 
         if (connfd == -1) {
             listener_result = -1;
