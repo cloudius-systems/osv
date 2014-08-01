@@ -25,6 +25,8 @@ int main(int argc, char* argv[])
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
+        ("access-allow",
+             "Set the Access-Control-Allow-Origin to *. Note the security risk")
         ("ipaddress", po::value<std::string>()->default_value("0.0.0.0"),
              "set the ip address")
         ("port", po::value<std::string>()->default_value("8000"),

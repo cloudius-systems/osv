@@ -61,8 +61,10 @@ size_t request_handler::update_parameters(request& req)
     return par;
 }
 
-request_handler::request_handler(httpserver::routes* routes)
-    : routes(routes)
+request_handler::request_handler(httpserver::routes* routes, const boost::program_options::variables_map& _config)
+    : routes(routes),
+      config(_config)
+
 {
 }
 
@@ -87,6 +89,9 @@ void request_handler::handle_request(request& req, reply& rep)
     }
 
     routes->handle(request_path, req, rep);
+    if (config.count("access-allow")) {
+        rep.add_header("Access-Control-Allow-Origin", "*");
+    }
 }
 
 bool request_handler::url_decode(const std::string& in, std::string& out,

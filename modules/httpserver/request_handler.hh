@@ -40,7 +40,7 @@ public:
      *
      * @param routes the routes object
      */
-    explicit request_handler(httpserver::routes* routes);
+    explicit request_handler(httpserver::routes* routes, const boost::program_options::variables_map& _config);
 
     request_handler(const request_handler&) = delete;
 
@@ -56,6 +56,7 @@ public:
 
 private:
     httpserver::routes* routes;
+    const boost::program_options::variables_map& config;
 
     /**
      * A helper function that reads URL parameters
