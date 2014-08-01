@@ -117,6 +117,7 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
         int connfd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
 
         if (connfd == -1) {
+            listener_result = -1;
             printf("could not accept. error = %s\n", strerror(errno));
             return;
         }
