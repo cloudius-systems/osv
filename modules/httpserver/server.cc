@@ -13,6 +13,7 @@
 
 #include <signal.h>
 #include <utility>
+#include <osv/app.hh>
 
 namespace http {
 
@@ -27,17 +28,6 @@ server::server(const boost::program_options::variables_map* config,
     , socket_(io_service_)
     , request_handler_(routes)
 {
-    // Register to handle the signals that indicate when the server should exit.
-    // It is safe to register for the same signal multiple times in a program,
-    // provided all registration for the specified signal is made through Asio.
-    signals_.add(SIGINT);
-    signals_.add(SIGTERM);
-#if defined(SIGQUIT)
-    signals_.add(SIGQUIT);
-#endif // defined(SIGQUIT)
-
-    do_await_stop();
-
     // Open the acceptor with the option to reuse the address (i.e. SO_REUSEADDR).
     boost::asio::ip::tcp::resolver resolver(io_service_);
     boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(
@@ -50,6 +40,15 @@ server::server(const boost::program_options::variables_map* config,
     acceptor_.listen();
 
     do_accept();
+}
+
+void server::close()
+{
+    io_service_.dispatch([&] {
+        acceptor_.close();
+        connection_manager_.stop_all();
+        io_service_.stop();
+    });
 }
 
 void server::run()
@@ -79,18 +78,6 @@ void server::do_accept()
         }
 
         do_accept();
-    });
-}
-
-void server::do_await_stop()
-{
-    signals_.async_wait([this](boost::system::error_code /*ec*/, int /*signo*/)
-    {
-        // The server is stopped by cancelling all outstanding asynchronous
-        // operations. Once all operations have finished the io_service::run()
-        // call will exit.
-        acceptor_.close();
-        connection_manager_.stop_all();
     });
 }
 

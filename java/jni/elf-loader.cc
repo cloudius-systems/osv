@@ -12,21 +12,14 @@ bool run_elf(int argc, char** argv, int *return_code)
         return (false);
     }
 
-
     debug("run_elf(): running main() in the context of thread %p\n",
         sched::thread::current());
-    int rc;
-    auto obj = osv::run(argv[0], argc, argv, &rc);
-    if (!obj) {
+    try {
+        osv::run(argv[0], argc, argv, return_code);
+    } catch (...) {
         return false;
     }
     cancel_this_thread_alarm();
-
-    /* set the return code */
-    if (return_code) {
-        *return_code = rc;
-    }
-
     return (true);
 }
 

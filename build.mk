@@ -338,6 +338,7 @@ tests += tests/tst-printf.so
 tests += tests/tst-pthread-affinity.so
 tests += tests/tst-thread-local.so
 tests += tests/tst-seek.so
+tests += tests/tst-app.so
 endif
 
 ifeq ($(arch),aarch64)
@@ -862,6 +863,7 @@ objects += core/net_channel.o
 objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
+objects += core/app.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk

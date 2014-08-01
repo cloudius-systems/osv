@@ -39,6 +39,7 @@
 #include <osv/commands.hh>
 #include <osv/boot.hh>
 #include <osv/sampler.hh>
+#include <osv/app.hh>
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
@@ -299,54 +300,6 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
     return commands;
 }
 
-// Java uses this global variable (supplied by Glibc) to figure out
-// aproximatively where the initial thread's stack end.
-// The aproximation allow to fill the variable here instead of doing it in
-// osv::run.
-void *__libc_stack_end;
-
-void run_main(const std::vector<std::string> &vec)
-{
-    auto b = std::begin(vec)++;
-    auto e = std::end(vec);
-    std::string command = vec[0];
-    std::vector<std::string> args(b, e);
-    int ret;
-
-    if (opt_leak) {
-        debug("Enabling leak detector.\n");
-        memory::tracker_enabled = true;
-    }
-
-    __libc_stack_end = __builtin_frame_address(0);
-    auto oldname = sched::thread::current()->name();
-    sched::thread::current()->set_name(command);
-    auto lib = osv::run(command, args, &ret);
-    sched::thread::current()->set_name(oldname);
-    if (lib) {
-        // success
-        if (ret) {
-            debug("program %s returned %d\n", command.c_str(), ret);
-        }
-        return;
-    }
-
-    if (opt_bootchart) {
-        boot_time.print_chart();
-    }
-
-    printf("run_main(): cannot execute %s. Powering off.\n", command.c_str());
-    osv::poweroff();
-}
-
-void *_run_main(void *data)
-{
-    auto vecp = (std::vector<std::string> *)data;
-    run_main(*vecp);
-    delete vecp;
-    return nullptr;
-}
-
 static std::string read_file(std::string fn)
 {
   std::ifstream in(fn, std::ios::in | std::ios::binary);
@@ -421,7 +374,16 @@ void* do_main_thread(void *_commands)
         debug("chdir done\n");
     }
 
+    if (opt_leak) {
+        debug("Enabling leak detector.\n");
+        memory::tracker_enabled = true;
+    }
+
     boot_time.event("Total time");
+
+    if (opt_bootchart) {
+        boot_time.print_chart();
+    }
 
     // Run command lines in /init/* before the manual command line
     if (opt_init) {
@@ -455,24 +417,35 @@ void* do_main_thread(void *_commands)
     // can be '&' if we need to run this command in a new thread, or ';' or
     // empty otherwise, to run in this thread. '&!' is the same as '&', but
     // doesn't wait for the thread to finish before exiting OSv.
-    std::vector<pthread_t> bg;
+    std::vector<shared_app_t> bg;
+    std::vector<shared_app_t> detached;
     for (auto &it : *commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
-        if (it.back() != "&" && it.back() != "&!") {
-            run_main(newvec);
-        } else {
-            pthread_t t;
-            pthread_create(&t, nullptr, _run_main,
-                    new std::vector<std::string> (newvec));
-            if (it.back() != "&!") {
-                bg.push_back(t);
+        auto suffix = it.back();
+        try {
+            auto app = application::run(newvec);
+            if (suffix == "&") {
+                bg.push_back(app);
+            } else if (suffix == "&!") {
+                detached.push_back(app);
+            } else {
+                app->join();
             }
+        } catch (const launch_error& e) {
+            std::cerr << e.what() << ". Powering off.\n";
+            osv::poweroff();
         }
     }
 
-    void* retval;
-    for (auto t : bg) {
-        pthread_join(t, &retval);
+    for (auto app : bg) {
+        app->join();
+    }
+
+    for (auto app : detached) {
+        app->request_termination();
+        debug("Requested termination of %s, waiting...\n", app->get_command());
+        app->join();
+        debug("Application terminated: %s\n", app->get_command());
     }
 
     return nullptr;

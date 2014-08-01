@@ -8,7 +8,7 @@
 #ifndef INCLUDED_OSV_RUN_H
 #define INCLUDED_OSV_RUN_H
 
-#include <osv/elf.hh>
+#include <osv/app.hh>
 #include <string>
 #include <vector>
 
@@ -73,11 +73,12 @@ namespace osv {
  *                         <TT>return_code == nulltr</TT>, main()'s return
  *                         code is ignored.
  *
- * \return \c shared pointer to the library if run, \c empty shared pointer if
- *                         couldn't run
+ * @throws osv::launch_error When application could not be launched
+ *
+ * \return \c shared pointer to the application
  */
-std::shared_ptr<elf::object> run(std::string path,
-                                 int argc, char** argv, int *return_code);
+std::shared_ptr<osv::application> run(std::string path,
+                                      int argc, char** argv, int *return_code);
 
 /**
  * Run the given executable.
@@ -128,12 +129,12 @@ std::shared_ptr<elf::object> run(std::string path,
  *                         <TT>return_code == nulltr</TT>, main()'s return
  *                         code is ignored.
  *
- * \return \c shared pointer to the library if run, \c empty shared pointer
- *                          if couldn't run
+ * @throws osv::launch_error When application could not be launched
+ *
+ * \return \c shared pointer to the application
  */
-std::shared_ptr<elf::object> run(std::string path,
-                                 std::vector<std::string> args,
-                                 int* return_code);
+std::shared_ptr<osv::application> run(std::string path,
+                                    std::vector<std::string> args, int* return_code);
 
 /**@}*/
 
