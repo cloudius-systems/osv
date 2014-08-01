@@ -144,10 +144,12 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
     listener_server.sin_port=htons(1337);
 
     if (connect(write_fd, (struct sockaddr *)&listener_server, sizeof(listener_server)) < 0) {
+        perror("connect");
         return -1;
     }
     int ret = sendfile(write_fd, testfile_readfd, offset, count);
     if (ret == -1) {
+        perror("sendfile");
         return -1;
     }
 
