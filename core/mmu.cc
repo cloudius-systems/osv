@@ -832,7 +832,7 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
     if (good_enough) {
         return good_enough;
     }
-    abort();
+    throw make_error(ENOMEM);
 }
 
 ulong evacuate(uintptr_t start, uintptr_t end)

@@ -137,8 +137,13 @@ void *mmap(void *addr, size_t length, int prot, int flags,
             mmap_flags |= mmu::mmap_jvm_heap;
             memory::return_jvm_heap(length);
         }
-        ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
-
+        try {
+            ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
+        } catch (error& err) {
+            err.to_libc(); // sets errno
+            trace_memory_mmap_err(errno);
+            return MAP_FAILED;
+        }
         // has a hint, is bigger than the heap size, and we don't request a fixed address. The heap will later on be here.
         if (addr && jvm_heap_size && (length >= jvm_heap_size) && !(mmap_flags & mmu::mmap_fixed)) {
             jvm_heap_region = ret;
