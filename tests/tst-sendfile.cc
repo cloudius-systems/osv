@@ -56,12 +56,12 @@ int test_sendfile_on_filecopy(off_t *offset, size_t count)
     int write_fd = open(out_file, O_RDWR | O_TRUNC | O_CREAT, S_IRWXU);
     if (write_fd == -1) {
         printf("\topen() failed with error message = %s\n",strerror(errno));
-	return -1;
+        return -1;
     }
     off_t last_position = offset == NULL ? lseek(testfile_readfd, 0 , SEEK_CUR) : *offset;
     int ret = sendfile(write_fd, testfile_readfd, offset, count);
     if (ret == -1) {
-	return -1;
+        return -1;
     }
 
     off_t new_position = offset == NULL ? lseek(testfile_readfd, 0 , SEEK_CUR) : *offset;
@@ -72,13 +72,13 @@ int test_sendfile_on_filecopy(off_t *offset, size_t count)
     char *dst = (char *)mmap(NULL, count, PROT_READ, MAP_SHARED, write_fd, 0);
     if (dst == MAP_FAILED) {
         printf("\tmmap on dst failed, error = %s\n",strerror(errno));
-	return -1;
+        return -1;
     }
     /* verify the contents */
     for(size_t i = 0; i < count; i++) {
         if (src[i + last_position] != dst[i]) {
             return -1;
-	}
+        }
     }
     munmap(dst, count);
     close(write_fd);
@@ -104,36 +104,36 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
     setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof optval);
 
     if (bind(listen_fd, (struct sockaddr *)&listener_addr, sizeof(listener_addr)) == -1) {
-	printf("could not bind. error = %s\n", strerror(errno));
-	return -1;
+        printf("could not bind. error = %s\n", strerror(errno));
+        return -1;
     }
     if (listen(listen_fd, 1) == -1) {
-	printf("could not listen. error = %s\n", strerror(errno));
-	return -1;
+        printf("could not listen. error = %s\n", strerror(errno));
+        return -1;
     }
 
     std::thread *listener = new std::thread([&] {
 
-	int connfd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
+        int connfd = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
 
-	if (connfd == -1) {
-	    printf("could not accept. error = %s\n", strerror(errno));
-	    return;
-	}
+        if (connfd == -1) {
+            printf("could not accept. error = %s\n", strerror(errno));
+            return;
+        }
 
-	int bytes_recv = recv(connfd, dst, count, MSG_WAITALL);
+        int bytes_recv = recv(connfd, dst, count, MSG_WAITALL);
         if (bytes_recv == -1 ) {
-	    listener_result = -1;
-	}
-	/* verify the recieved data */
-	for(size_t i = 0;i < count; i++) {
-	    if (src[i + last_position] != dst[i]) {
-	        listener_result = -1;
-		break;
-	    }
-	}
-	close(connfd);
-	close(listen_fd);
+            listener_result = -1;
+        }
+        /* verify the recieved data */
+        for(size_t i = 0;i < count; i++) {
+            if (src[i + last_position] != dst[i]) {
+                listener_result = -1;
+                break;
+            }
+        }
+        close(connfd);
+        close(listen_fd);
     });
 
     int write_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -148,7 +148,7 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
     }
     int ret = sendfile(write_fd, testfile_readfd, offset, count);
     if (ret == -1) {
-	return -1;
+        return -1;
     }
 
     listener->join();
@@ -190,19 +190,19 @@ int main()
 
     for(int i = 0; i < 2; i++){
         for(int j = 0; j < 2; j++) {
-	    offset = 0;
-	    printf("%s\n",help[i*2 +j].c_str());
+            offset = 0;
+            printf("%s\n",help[i*2 +j].c_str());
             for(unsigned k = 0; k < (sizeof(count_array)) / (sizeof(int)); k++) {
-		std::string message = std::string("out_fd is ") + (i == 0 ? "file" : "socket");
-		message += std::string(": copying ") + (k == 0 ? "first" : "next") + " " + std::to_string(count_array[k]) + " bytes";
-		message += " ,offset = " + (j == 0 ? "NULL" : std::to_string(offset));
-		report(test_functions[i](offset_p[j], count_array[k]) == count_array[k], message.c_str());
-	    }
-	    offset = 0;
+                std::string message = std::string("out_fd is ") + (i == 0 ? "file" : "socket");
+                message += std::string(": copying ") + (k == 0 ? "first" : "next") + " " + std::to_string(count_array[k]) + " bytes";
+                message += " ,offset = " + (j == 0 ? "NULL" : std::to_string(offset));
+                report(test_functions[i](offset_p[j], count_array[k]) == count_array[k], message.c_str());
+            }
+            offset = 0;
            report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
-	    report(test_functions[i](offset_p[j], size_test_file) == size_test_file, "copy entire file");
-	    printf("\n\n");
-	}
+            report(test_functions[i](offset_p[j], size_test_file) == size_test_file, "copy entire file");
+            printf("\n\n");
+        }
     }
 
     /* force sendfile to fail in rest of test cases */
