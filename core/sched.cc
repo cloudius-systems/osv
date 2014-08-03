@@ -948,9 +948,11 @@ void thread::stop_wait()
 
 void thread::complete()
 {
-    auto app = application::get_current();
-    if (app) {
-        app->abandon_current();
+    {
+        auto app = application::get_current();
+        if (app) {
+            app->abandon_current();
+        }
     }
 
     auto value = detach_state::attached;
