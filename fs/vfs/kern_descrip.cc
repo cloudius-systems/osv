@@ -60,6 +60,12 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
     return EMFILE;
 }
 
+extern "C"
+int getdtablesize(void)
+{
+    return FDMAX;
+}
+
 /*
  * Allocate a file descriptor and assign fd to it atomically.
  *
