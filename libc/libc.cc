@@ -25,6 +25,7 @@
 #include <osv/clock.hh>
 #include <osv/mempool.hh>
 #include <osv/version.h>
+#include <osv/stubbing.hh>
 
 // FIXME: If we ever support multiple different executables we will have to maybe put those
 // on a shared library
@@ -215,6 +216,12 @@ void cfmakeraw(struct termios *t)
 	t->c_cflag |= CS8;
 	t->c_cc[VMIN] = 1;
 	t->c_cc[VTIME] = 0;
+}
+
+int system(const char *command)
+{
+    WARN_STUBBED();
+    return -1;
 }
 
 extern "C" {
