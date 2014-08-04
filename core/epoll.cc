@@ -31,9 +31,9 @@
 
 #include <osv/trace.hh>
 TRACEPOINT(trace_epoll_create, "returned fd=%d", int);
-TRACEPOINT(trace_epoll_ctl, "epfd=%d, fd=%d, op=%s", int, int, const char*);
+TRACEPOINT(trace_epoll_ctl, "epfd=%d, fd=%d, op=%s event=0x%x", int, int, const char*, int);
 TRACEPOINT(trace_epoll_wait, "epfd=%d, maxevents=%d, timeout=%d", int, int, int);
-TRACEPOINT(trace_epoll_ready, "file=%p, event=0x%x", file*, int);
+TRACEPOINT(trace_epoll_ready, "fd=%d file=%p, event=0x%x", int, file*, int);
 
 // We implement epoll using poll(), and therefore need to convert epoll's
 // event bits to and poll(). These are mostly the same, so the conversion
@@ -204,7 +204,7 @@ public:
                             }
                         }
                     }
-                    trace_epoll_ready(key._file, active);
+                    trace_epoll_ready(key._fd, key._file, active);
                     events[nr].data = r_e.data;
                     events[nr].events = active;
                     ++nr;
@@ -296,7 +296,8 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
     trace_epoll_ctl(epfd, fd,
             op==EPOLL_CTL_ADD ? "EPOLL_CTL_ADD" :
             op==EPOLL_CTL_MOD ? "EPOLL_CTL_MOD" :
-            op==EPOLL_CTL_DEL ? "EPOLL_CTL_DEL" : "?");
+            op==EPOLL_CTL_DEL ? "EPOLL_CTL_DEL" : "?",
+                    event->events);
     fileref epfr(fileref_from_fd(epfd));
     if (!epfr) {
         errno = EBADF;
