@@ -15,6 +15,10 @@
 #include "tst-fs.hh"
 #include <osv/debug.hh>
 
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 namespace fs = boost::filesystem;
 
 static const char *SECRET = "Hello, world";
@@ -267,6 +271,38 @@ BOOST_AUTO_TEST_CASE(test_renaming_non_empty_directory)
 	check_file(dst / "file");
 
 	BOOST_CHECK_MESSAGE(fs::remove_all(dst), "Sould be possible to remove new directory");
+}
+
+BOOST_AUTO_TEST_CASE(test_assert_old_child_will_not_exist)
+{
+	TempDir dir;
+
+	fs::path src = dir / "sub1";
+	fs::path dst = dir / "sub2";
+
+	BOOST_REQUIRE(fs::create_directories(src));
+	BOOST_REQUIRE(fs::exists(src));
+
+	fs::path file = src / "file";
+	prepare_file(file);
+
+	// Keep dentry underlying file in hash table.
+	auto fd = open(file.string().c_str(), O_RDONLY);
+	BOOST_CHECK(fd > 0);
+
+	assert_renames(src, dst);
+
+	BOOST_CHECK(!fs::exists(src));
+
+	// Assure that file (src's child) will not be found.
+	BOOST_CHECK(!fs::exists(file));
+
+	BOOST_CHECK(fs::exists(dst));
+	check_file(dst / "file");
+
+	close(fd);
+
+	BOOST_CHECK_MESSAGE(fs::remove_all(dst), "Should be possible to remove new directory");
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_file_to_directory)

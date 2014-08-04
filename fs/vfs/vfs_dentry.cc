@@ -82,9 +82,15 @@ dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
     dp->d_vnode = vp;
     dp->d_mount = mp;
     dp->d_path = strdup(path);
+    mutex_init(&dp->d_lock);
+    LIST_INIT(&dp->d_children);
 
     if (parent_dp) {
         dref(parent_dp);
+        WITH_LOCK(parent_dp->d_lock) {
+            // Insert dp into its parent's children list.
+            LIST_INSERT_HEAD(&parent_dp->d_children, dp, d_children_link);
+        }
     }
     dp->d_parent = parent_dp;
 
@@ -113,21 +119,52 @@ dentry_lookup(struct mount *mp, char *path)
     return NULL;                /* not found */
 }
 
+static void dentry_children_remove(struct dentry *dp)
+{
+    struct dentry *entry = nullptr;
+
+    WITH_LOCK(dp->d_lock) {
+        LIST_FOREACH(entry, &dp->d_children, d_children_link) {
+            ASSERT(entry);
+            ASSERT(entry->d_refcnt > 0);
+            LIST_REMOVE(entry, d_link);
+        }
+    }
+}
+
 void
 dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
 {
     struct dentry *old_pdp = dp->d_parent;
     char *old_path = dp->d_path;
 
+    if (old_pdp) {
+        WITH_LOCK(old_pdp->d_lock) {
+            // Remove dp from its old parent's children list.
+            LIST_REMOVE(dp, d_children_link);
+        }
+    }
+
     if (parent_dp) {
         dref(parent_dp);
+        WITH_LOCK(parent_dp->d_lock) {
+            // Insert dp into its new parent's children list.
+            LIST_INSERT_HEAD(&parent_dp->d_children, dp, d_children_link);
+        }
     }
-    mutex_lock(&dentry_hash_lock);
-    LIST_REMOVE(dp, d_link);
-    dp->d_path = strdup(path);
-    dp->d_parent = parent_dp;
-    LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)], dp, d_link);
-    mutex_unlock(&dentry_hash_lock);
+
+    WITH_LOCK(dentry_hash_lock) {
+        // Remove all dp's child dentries from the hashtable.
+        dentry_children_remove(dp);
+        // Remove dp with outdated hash info from the hashtable.
+        LIST_REMOVE(dp, d_link);
+        // Update dp.
+        dp->d_path = strdup(path);
+        dp->d_parent = parent_dp;
+        // Insert dp updated hash info into the hashtable.
+        LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],
+            dp, d_link);
+    }
 
     if (old_pdp) {
         drele(old_pdp);
@@ -174,6 +211,10 @@ drele(struct dentry *dp)
     mutex_unlock(&dentry_hash_lock);
 
     if (dp->d_parent) {
+        WITH_LOCK(dp->d_parent->d_lock) {
+            // Remove dp from its parent's children list.
+            LIST_REMOVE(dp, d_children_link);
+        }
         drele(dp->d_parent);
     }
 

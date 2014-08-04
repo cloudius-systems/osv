@@ -21,6 +21,9 @@ struct dentry {
 	struct mount	*d_mount;
 	struct dentry   *d_parent; /* pointer to parent */
 	LIST_ENTRY(dentry) d_names_link; /* link fo vnode::d_names */
+	mutex_t		d_lock;
+	LIST_HEAD(, dentry) d_children;
+	LIST_ENTRY(dentry) d_children_link;
 };
 
 #ifdef __cplusplus
