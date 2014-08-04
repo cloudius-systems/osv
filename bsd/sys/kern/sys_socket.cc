@@ -277,12 +277,14 @@ socket_file::poll_sync(struct pollfd& pfd, timeout_t timeout)
 void socket_file::epoll_add()
 {
     SOCK_LOCK(so);
-    assert(f_lock.owned());
+    assert(!f_lock.owned());
     so->so_rcv.sb_flags |= SB_SEL;
     so->so_snd.sb_flags |= SB_SEL;
-    if (so->so_nc) {
-        for (auto&& ep : *f_epolls) {
-            so->so_nc->add_epoll(ep);
+    WITH_LOCK(f_lock) {
+        if (so->so_nc) {
+            for (auto&& ep : *f_epolls) {
+                so->so_nc->add_epoll(ep);
+            }
         }
     }
     SOCK_UNLOCK(so);
@@ -291,10 +293,12 @@ void socket_file::epoll_add()
 void socket_file::epoll_del()
 {
     SOCK_LOCK(so);
-    assert(f_lock.owned());
-    if (so->so_nc) {
-        for (auto&& ep : *f_epolls) {
-            so->so_nc->del_epoll(ep);
+    assert(!f_lock.owned());
+    WITH_LOCK(f_lock) {
+        if (so->so_nc) {
+            for (auto&& ep : *f_epolls) {
+                so->so_nc->del_epoll(ep);
+            }
         }
     }
     SOCK_UNLOCK(so);

@@ -99,9 +99,9 @@ public:
                     fp->f_epolls.reset(new std::vector<epoll_ptr>);
                 }
                 fp->f_epolls->push_back(epoll_ptr{this, key});
-                fp->epoll_add();
             }
         }
+        fp->epoll_add();
         if (fp->poll(events_epoll_to_poll(event->events))) {
             wake(key);
         }
@@ -114,12 +114,12 @@ public:
             WITH_LOCK(f_lock) {
                 try {
                     map.at(key) = registered_epoll(*event, fp->poll_wake_count - 1);
-                    fp->epoll_add();
                 } catch (std::out_of_range &e) {
                     return ENOENT;
                 }
             }
         }
+        fp->epoll_add();
         if (fp->poll(events_epoll_to_poll(event->events))) {
             wake(key);
         }
@@ -184,9 +184,7 @@ public:
                         activity.erase(cur);
                     } else {
                         DROP_LOCK(f_lock) {
-                            WITH_LOCK(key._file->f_lock) {
-                                key._file->epoll_add();
-                            }
+                            key._file->epoll_add();
                         }
                     }
                     if (!active) {
@@ -198,9 +196,7 @@ public:
                         if (i != map.end()) {
                             i->second.events = 0;
                             DROP_LOCK(f_lock) {
-                                WITH_LOCK(key._file->f_lock) {
-                                    key._file->epoll_del();
-                                }
+                                key._file->epoll_del();
                             }
                         }
                     }
