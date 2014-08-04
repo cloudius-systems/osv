@@ -146,7 +146,6 @@ struct file {
 
 	file(unsigned flags, filetype_t type, void *opaque = nullptr);
 	virtual ~file();
-	void operator delete(void *p) { osv::rcu_dispose(p); }
 
 	virtual int read(struct uio *uio, int flags) = 0;
 	virtual int write(struct uio *uio, int flags) = 0;

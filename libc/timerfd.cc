@@ -21,8 +21,6 @@
 class timerfd final : public special_file {
 public:
     explicit timerfd(int clockid, int flags);
-    virtual ~timerfd() override;
-
     virtual int read(uio* data, int flags) override;
     virtual int poll(int events) override;
     virtual int close() override;
@@ -65,12 +63,13 @@ timerfd::timerfd(int clockid, int oflags)
     _wakeup_thread.start();
 }
 
-timerfd::~timerfd() {
+int timerfd::close() {
     WITH_LOCK(_mutex) {
         _wakeup_thread_exit = true;
         _wakeup_change_cond.wake_one();
     }
     _wakeup_thread.join();
+    return 0;
 }
 
 void timerfd::set_timer(sched::timer &tmr, s64 t)
@@ -217,13 +216,6 @@ int timerfd::poll(int events)
             return POLLIN;
         }
     }
-}
-
-int timerfd::close()
-{
-    // No need to do anything explicit - close will delete this object,
-    // causing all its fields to be properly destructed.
-    return 0;
 }
 
 // After this long introduction, without further ado, let's implement Linux's
