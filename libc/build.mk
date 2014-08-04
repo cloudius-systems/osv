@@ -5,27 +5,27 @@ libc += internal/intscan.o
 libc += internal/libc.o
 libc += internal/shgetc.o
 
-libc += ctype/__ctype_get_mb_cur_max.o
-libc += ctype/__ctype_tolower_loc.o
-libc += ctype/__ctype_toupper_loc.o
+libc += ../musl/src/ctype/__ctype_get_mb_cur_max.o
+libc += ../musl/src/ctype/__ctype_tolower_loc.o
+libc += ../musl/src/ctype/__ctype_toupper_loc.o
 libc += ctype/isalnum.o
-libc += ctype/isalpha.o
+libc += ../musl/src/ctype/isalpha.o
 libc += ctype/isascii.o
 libc += ctype/isblank.o
 libc += ctype/iscntrl.o
-libc += ctype/isdigit.o
-libc += ctype/isgraph.o
-libc += ctype/islower.o
-libc += ctype/isprint.o
+libc += ../musl/src/ctype/isdigit.o
+libc += ../musl/src/ctype/isgraph.o
+libc += ../musl/src/ctype/islower.o
+libc += ../musl/src/ctype/isprint.o
 libc += ctype/ispunct.o
 libc += ctype/isspace.o
-libc += ctype/isupper.o
+libc += ../musl/src/ctype/isupper.o
 libc += ctype/iswalnum.o
-libc += ctype/iswalpha.o
+libc += ../musl/src/ctype/iswalpha.o
 libc += ctype/iswblank.o
 libc += ctype/iswcntrl.o
-libc += ctype/iswctype.o
-libc += ctype/iswdigit.o
+libc += ../musl/src/ctype/iswctype.o
+libc += ../musl/src/ctype/iswdigit.o
 libc += ctype/iswgraph.o
 libc += ctype/iswlower.o
 libc += ctype/iswprint.o
@@ -39,7 +39,7 @@ libc += ctype/tolower.o
 libc += ctype/toupper.o
 libc += ctype/towctrans.o
 libc += ctype/wcswidth.o
-libc += ctype/wctrans.o
+libc += ../musl/src/ctype/wctrans.o
 libc += ctype/wcwidth.o
 
 libc += dirent/alphasort.o
@@ -53,7 +53,7 @@ libc += env/putenv.o
 libc += env/setenv.o
 libc += env/unsetenv.o
 
-libc += ctype/__ctype_b_loc.o
+libc += ../musl/src/ctype/__ctype_b_loc.o
 
 libc += errno/strerror.o
 
