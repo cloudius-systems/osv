@@ -11,7 +11,6 @@
 
 #include "server.hh"
 
-#include <signal.h>
 #include <utility>
 #include <osv/app.hh>
 
@@ -22,7 +21,6 @@ namespace server {
 server::server(const boost::program_options::variables_map* config,
                httpserver::routes* routes)
     : io_service_()
-    , signals_(io_service_)
     , acceptor_(io_service_)
     , connection_manager_()
     , socket_(io_service_)
