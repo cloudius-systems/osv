@@ -32,7 +32,7 @@
 
 namespace pthread_private {
 
-    const unsigned tsd_nkeys = 100;
+    const unsigned tsd_nkeys = PTHREAD_KEYS_MAX;
 
     __thread void* tsd[tsd_nkeys];
     __thread pthread_t current_pthread;
