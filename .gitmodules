@@ -44,4 +44,4 @@
 	url = https://github.com/cloudius-systems/swagger-ui
 [submodule "musl"]
 	path = musl
-	url = ../cloudius-systems/musl.git
+	url = ../../cloudius-systems/musl.git
