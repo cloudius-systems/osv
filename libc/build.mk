@@ -57,6 +57,8 @@ libc += ../musl/src/ctype/__ctype_b_loc.o
 
 libc += errno/strerror.o
 
+libc/locale/iconv.o: CFLAGS+=-I../../musl/src/locale
+
 libc += ../musl/src/locale/catclose.o
 libc += ../musl/src/locale/catgets.o
 libc += ../musl/src/locale/catopen.o
