@@ -68,3 +68,13 @@ void makecontext(struct __ucontext *ucp, void (*func)(void), int argc, ...)
         }
     va_end(ap);
 }
+
+int swapcontext(struct __ucontext *oucp, const struct __ucontext *ucp)
+{
+    int ret;
+    ret = getcontext(oucp);
+    if (ret) {
+        return ret;
+    }
+    return setcontext(ucp);
+}
