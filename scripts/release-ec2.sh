@@ -134,22 +134,6 @@ OSV_BUCKET=osv-$OSV_VER-$USER-at-`hostname`-`timestamp`
 
 EC2_CREDENTIALS="-o $AWS_ACCESS_KEY_ID -w $AWS_SECRET_ACCESS_KEY"
 
-if test x"$SMALL_INSTANCE" = x""; then
-
-#Use OSv-v0.09 AMI in us-east-1 as a template
-#Linux based but suitable for large instances only
-TEMPLATE_AMI_ID=ami-d6f90fbe
-TEMPLATE_INSTANCE_TYPE=c3.large
-
-else
-
-#Use OSv-v0.09-small AMI in us-east-1 as a template
-#Windows based but supportes all instance types including small and micro
-TEMPLATE_AMI_ID=ami-b4f80edc
-TEMPLATE_INSTANCE_TYPE=t1.micro
-
-fi
-
 amend_rstatus() {
  echo \[`timestamp`\] $* >> $OSV_RSTATUS
 }
@@ -173,12 +157,31 @@ import_osv_volume() {
                                  $EC2_CREDENTIALS | tee /dev/tty | ec2_response_value IMPORTVOLUME TaskId
 }
 
+get_template_ami_id() {
+ if test x"$SMALL_INSTANCE" = x""; then
+  aws ec2 describe-images --filters='Name=name,Values=OSv-v*IPerf' | get_json_value '["Images"][0]["ImageId"]'
+ else
+  aws ec2 describe-images --filters='Name=name,Values=OSv-v*small' | get_json_value '["Images"][0]["ImageId"]'
+ fi
+}
+
+get_template_instance_type() {
+ if test x"$SMALL_INSTANCE" = x""; then
+  echo c3.large
+ else
+  echo t1.micro
+ fi
+}
+
 launch_template_instance() {
  if test x"$OSV_PLACEMENT_GROUP" != x""; then
   PLACEMENT="--placement-group $OSV_PLACEMENT_GROUP"
  else
   PLACEMENT=""
  fi
+
+ local TEMPLATE_AMI_ID=$1
+ local TEMPLATE_INSTANCE_TYPE=$2
 
  ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` \
                                                   --instance-type $TEMPLATE_INSTANCE_TYPE \
@@ -288,6 +291,9 @@ while true; do
     echo_progress Renaming newly created volume OSv-$OSV_VER
     rename_object $VOLUME_ID OSv-$OSV_VER
 
+    TEMPLATE_AMI_ID=`get_template_ami_id`
+    TEMPLATE_INSTANCE_TYPE=`get_template_instance_type`
+
     if test x"$?" != x"0"; then
         handle_error Failed to rename the new volume.
         break;
@@ -295,7 +301,7 @@ while true; do
 
     echo_progress Creating new template instance from AMI $TEMPLATE_AMI_ID
     echo_progress Region: $AWS_DEFAULT_REGION, Zone: $OSV_AVAILABILITY_ZONE, Group: $OSV_PLACEMENT_GROUP
-    INSTANCE_ID=`launch_template_instance`
+    INSTANCE_ID=`launch_template_instance $TEMPLATE_AMI_ID $TEMPLATE_INSTANCE_TYPE`
 
     if test x"$INSTANCE_ID" = x; then
         handle_error Failed to create template instance.
