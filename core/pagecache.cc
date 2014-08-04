@@ -481,7 +481,7 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
 
     // page is either in ARC cache or write cache or zero page or private page
 
-    if (wcp && wcp->addr() == addr) {
+    if (wcp && mmu::virt_to_phys(wcp->addr()) == old.addr()) {
         // page is in write cache
         wcp->unmap(ptep);
         if (old.dirty()) {
@@ -493,7 +493,7 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
 
     WITH_LOCK(arc_lock) {
         cached_page_arc* rcp = find_in_cache(read_cache, key);
-        if (rcp && rcp->addr() == addr) {
+        if (rcp && mmu::virt_to_phys(rcp->addr()) == old.addr()) {
             // page is in ARC
             remove_read_mapping(rcp, ptep);
             return false;
