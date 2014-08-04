@@ -66,12 +66,20 @@ struct request {
     }
 
     /**
+     * Get the request protocol name. Can be either "http" or "https".
+     */
+    std::string get_protocol_name() const
+    {
+        return "http";
+    }
+
+    /**
      * Get the request url.
      * @return the request url
      */
     std::string get_url() const
     {
-        return "http://" + get_header("Host") + uri;
+        return get_protocol_name() + "://" + get_header("Host") + uri;
     }
 
     bool is_multi_part() const {

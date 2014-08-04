@@ -1,7 +1,7 @@
 {
     "apiVersion": "0.0.1",
     "swaggerVersion": "1.2",
-    "basePath": "http://{{Host}}",
+    "basePath": "{{Protocol}}://{{Host}}",
     "resourcePath": "/os",
     "produces": [
         "application/json",
