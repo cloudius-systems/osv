@@ -12,6 +12,7 @@ LE_ARCHIVE=download/$(LE_FOLDER).tar.gz
 LE_BUILD=$(BUILD)/$(LE_FOLDER)
 
 CFLAGS:=-fPIC
+LDFLAGS:=-L$(abspath $(lastword $(wildcard ../ncurses/build/*/lib)))
 
 MAIN=$(LE_BUILD)/src/.libs/libedit.so.0
 
