@@ -58,11 +58,6 @@ public:
     void del_poller(pollreq& pr);
     void add_epoll(const epoll_ptr& ep);
     void del_epoll(const epoll_ptr& ep);
-    static void* operator new (size_t size) {
-        static_assert(sizeof(net_channel) <= 4096, "net_channel too big");
-        return memory::alloc_page();
-    }
-    void operator delete(void *ptr) { memory::free_page(ptr); }
 private:
     void wake_pollers();
 private:
