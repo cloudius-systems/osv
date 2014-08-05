@@ -8,6 +8,57 @@
       "application/xml"
    ],
    "apis":[
+   {
+         "path":"/network/ifconfig/",
+         "operations":[
+            {
+               "method":"GET",
+               "summary":"Get all interfaces",
+               "notes":"Get a list of all the interfaces configuration and data",
+               "type":"array",
+               "items": {"type": "Interface"},
+               "nickname":"listIfconfig",
+               "produces":[
+                  "application/json",
+                  "application/xml"
+               ],
+               "parameters":[
+               ]
+            }
+      ]
+      },
+      {
+         "path":"/network/ifconfig/{if}",
+         "operations":[
+            {
+               "method":"GET",
+               "summary":"Get an interface",
+               "notes":"Get an interface configuration and data",
+               "responseClass":"Interface",
+               "errorResponses":[
+                  {
+                     "code":404,
+                     "reason":"Interface not found"
+                  }
+               ],
+               "nickname":"getIfconfig",
+               "produces":[
+                  "application/json",
+                  "application/xml"
+               ],
+               "parameters":[
+                  {
+                     "name":"if",
+                     "description":"name of the interface",
+                     "required":true,
+                     "allowMultiple":false,
+                     "dataType":"string",
+                     "paramType":"path"
+                  }
+               ]
+            }
+         ]
+      },
       {
          "path":"/network/route/",
          "operations":[
@@ -30,6 +81,118 @@
       }
    ],
    "models":{
+      "interface_config":{
+         "properties":{
+            "name":{
+               "type":"string"
+            },
+            "addr":{
+               "type":"string"
+            },
+            "mask":{
+               "type":"string"
+            },
+            "broadcast":{
+               "type":"string"
+            },
+            "flags":{
+               "type":"string"
+            },
+            "mtu":{
+               "type":"string"
+            }
+         }
+      },
+      "interface_data":{
+         "properties":{
+            "ifi_type":{
+               "type":"char"
+            },
+            "ifi_physical":{
+               "type":"char"
+            },
+            "ifi_addrlen":{
+               "type":"char"
+            },
+            "ifi_hdrlen":{
+               "type":"char"
+            },
+            "ifi_link_state":{
+               "type":"char"
+            },
+            "ifi_spare_char1":{
+               "type":"char"
+            },
+            "ifi_spare_char2":{
+               "type":"char"
+            },
+            "ifi_datalen":{
+               "type":"char"
+            },
+            "ifi_mtu":{
+               "type":"long"
+            },
+            "ifi_metric":{
+               "type":"long"
+            },
+            "ifi_baudrate":{
+               "type":"long"
+            },
+            "ifi_ipackets":{
+               "type":"long"
+            },
+            "ifi_ierrors":{
+               "type":"long"
+            },
+            "ifi_opackets":{
+               "type":"long"
+            },
+            "ifi_oerrors":{
+               "type":"long"
+            },
+            "ifi_collisions":{
+               "type":"long"
+            },
+            "ifi_ibytes":{
+               "type":"long"
+            },
+            "ifi_obytes":{
+               "type":"long"
+            },
+            "ifi_imcasts":{
+               "type":"long"
+            },
+            "ifi_omcasts":{
+               "type":"long"
+            },
+            "ifi_iqdrops":{
+               "type":"long"
+            },
+            "ifi_noproto":{
+               "type":"long"
+            },
+            "ifi_hwassist":{
+               "type":"long"
+            },
+            "ifi_epoch":{
+               "type":"long"
+            }
+         }
+      },
+      "Interface":{
+         "properties":{
+            "config":{
+               "type":"interface_config"
+            },
+            "data":{
+               "type":"interface_data"
+            },
+            "time":{
+               "type":"long",
+               "description":"Time when interface information was taken (microseconds since uptime)"
+            }
+         }
+      },
       "Route":{
          "properties":{
             "destination":{
