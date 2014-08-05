@@ -10,14 +10,23 @@
 //   This file was modified from its original
 
 #include "server.hh"
+#include "connection.hh"
+#include "ssl_server.hh"
+#include "openssl-init.hh"
 #include "plain_server.hh"
 
 #include <utility>
-#include <osv/app.hh>
+#include <openssl/ssl.h>
 
 namespace http {
 
 namespace server {
+
+static bool exists(const std::string& path)
+{
+    struct stat s;
+    return stat(path.c_str(), &s) == 0;
+}
 
 server::server(const boost::program_options::variables_map* config,
                httpserver::routes* routes)
@@ -38,7 +47,32 @@ server::server(const boost::program_options::variables_map* config,
     tcp_acceptor.bind(endpoint);
     tcp_acceptor.listen();
 
-    acceptor_.reset(new plain_acceptor(io_service_, std::move(tcp_acceptor)));
+    if (config->count("ssl")) {
+        ensure_openssl_initialized();
+
+        auto ca_cert_path = (*config)["cacert"].as<std::string>();
+        auto cert_path = (*config)["cert"].as<std::string>();
+        auto key_path = (*config)["key"].as<std::string>();
+
+        bool valid = true;
+        for (auto& path : {ca_cert_path, cert_path, key_path}) {
+            if (!exists(path)) {
+                std::cerr << "Not found: " << path << "\n";
+                valid = false;
+            }
+        }
+
+        if (!valid) {
+            std::cerr << "Please visit https://github.com/cloudius-systems/osv/wiki/The-RESTful-API#configuring-ssl\n";
+            throw std::runtime_error("invalid configuration");
+        }
+
+        ssl::context ctx = make_ssl_context(ca_cert_path, cert_path, key_path);
+        acceptor_.reset(new ssl_acceptor(io_service_, std::move(ctx), std::move(tcp_acceptor)));
+    } else {
+        acceptor_.reset(new plain_acceptor(io_service_, std::move(tcp_acceptor)));
+    }
+
     acceptor_->do_accept(std::bind(&server::on_connected, this, std::placeholders::_1));
 }
 
