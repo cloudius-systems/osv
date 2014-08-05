@@ -100,12 +100,12 @@ void unwait_for_signal(int signo)
 void __attribute__((constructor)) signals_register_thread_notifier()
 {
     sched::thread::register_exit_notifier(
-        [](sched::thread *t) {
-            sigset *set = thread_signals(t);
+        []() {
+            sigset *set = thread_signals();
             if (!set->mask.any()) { return; }
             for (unsigned i = 0; i < nsignals; ++i) {
                 if (set->mask.test(i)) {
-                    unwait_for_signal(t, i);
+                    unwait_for_signal(i);
                 }
             }
         }

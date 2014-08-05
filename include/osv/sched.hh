@@ -607,14 +607,12 @@ public:
      * Registers an std::function that will be called when a thread is torn
      * down.  This is useful, for example, to run code that needs to cleanup
      * resources acquired by a given thread, about which the thread has no
-     * knowledge about
+     * knowledge about.
      *
-     * In general, this will not run in the same context as the dying thread,
-     * but rather from special scheduler methods. Therefore, one needs to be
-     * careful about stack usage in here. Do not register notifiers that use a
-     * lot of stack
+     * The function is run in the dying thread, right after its main function
+     * returns or calls thread::exit().
      */
-    static void register_exit_notifier(std::function<void (thread *)> &&n);
+    static void register_exit_notifier(std::function<void ()> &&n);
 private:
     class reaper;
     friend class reaper;

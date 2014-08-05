@@ -757,13 +757,48 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     }
 }
 
-static std::list<std::function<void (thread *)>> exit_notifiers;
-void thread::register_exit_notifier(std::function<void (thread *)> &&n)
+static osv::rcu_ptr<std::list<std::function<void ()>>> exit_notifiers
+        __attribute__((init_priority((int)init_prio::threadlist)));
+static mutex exit_notifiers_mutex;
+void thread::register_exit_notifier(std::function<void ()> &&n)
 {
-    WITH_LOCK(thread_map_mutex) {
-        exit_notifiers.push_front(std::move(n));
+    WITH_LOCK(exit_notifiers_mutex) {
+        auto old_list = exit_notifiers.read_by_owner();
+        auto new_list = old_list ?
+                        new std::list<std::function<void()>>(*old_list) :
+                        new std::list<std::function<void()>>();
+        new_list->push_front(std::move(n));
+        exit_notifiers.assign(new_list);
+        rcu_dispose(old_list);
     }
 }
+static void run_exit_notifiers()
+{
+    // Currently, exit notifiers can be added (with register_exit_notifier)
+    // but not removed, so we can use an rcu-protected list, copy it, and
+    // run the (sleepable) callbacks outside the rcu lock.
+    // If in the future we allow exit notifiers to be removed we can end up
+    // running a destroyed notifier function, so this code will need to change
+    // and run all the notifiers inside a sleepable RCU lock or a
+    // (read-mostly) rwlock.
+    std::vector<std::function<void()>> list(16);
+    WITH_LOCK(rcu_read_lock) {
+        auto notifiers = exit_notifiers.read();
+        auto needed = notifiers->size();
+        while (list.capacity() < needed) {
+            DROP_LOCK(rcu_read_lock) {
+                list.reserve(needed);
+            }
+            notifiers = exit_notifiers.read();
+            needed = notifiers->size();
+        }
+        list.assign(notifiers->begin(), notifiers->end());
+    }
+    for (auto& notifier : list) {
+        notifier();
+    }
+}
+
 
 thread::~thread()
 {
@@ -775,10 +810,6 @@ thread::~thread()
     WITH_LOCK(thread_map_mutex) {
         thread_map.erase(_id);
         total_app_time_exited += _total_cpu_time;
-
-        for (auto& notifier : exit_notifiers) {
-            notifier(this);
-        }
     }
     if (_attr._stack.deleter) {
         _attr._stack.deleter(_attr._stack);
@@ -948,6 +979,8 @@ void thread::stop_wait()
 
 void thread::complete()
 {
+    run_exit_notifiers();
+
     {
         auto app = application::get_current();
         if (app) {
