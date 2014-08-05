@@ -71,7 +71,7 @@ def upload(osv, manifest, depends):
     # hang, and so the user can see what's happening. Easiest to do this with
     # a thread.
     def consumeoutput(file):
-        for line in iter(lambda: file.readline().decode(), ''):
+        for line in iter(lambda: file.readline().decode('utf-8', 'replace'), ''):
             print(line.rstrip())
     threading.Thread(target = consumeoutput, args = (osv.stdout,)).start()
 
