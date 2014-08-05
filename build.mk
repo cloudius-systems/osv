@@ -1018,7 +1018,7 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 
 .PHONY: process-modules
 process-modules: tools/libtools.so bootfs.manifest.skel usr.manifest.skel $(src)/modules/tests/usr.manifest $(java-targets)
-	+cd module && jdkbase=$(jdkbase) ARCH=$(arch) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= \
+	+cd module && jdkbase=$(jdkbase) OSV_BASE=$(src) OSV_BUILD_PATH=$(out) MAKEFLAGS= \
 	   $(src)/scripts/module.py  $(filter --jobserver-fds=% -j, $(MAKEFLAGS)) build -c $(modules)
 
 cmdline: process-modules
