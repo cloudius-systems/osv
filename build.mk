@@ -375,8 +375,16 @@ tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools
 tools/ifconfig/ifconfig.so: EXTRA_LIBS = -Ltools/ -ltools
 
 ifeq ($(arch),aarch64)
+# note that the bootfs.manifest entry for the uush image
+# has no effect on the loader image, only on the usr image.
+# The only thing that does have an effect is the
+# bootfs.manifest.skel.
+#
+# Therefore, you need to manually add tests/tst-hello.so
+# to the bootfs.manifest.skel atm to get it to work.
+#
 tools += tests/tst-hello.so
-cmdline = tests/tst-hello.so
+cmdline = --nomount tests/tst-hello.so
 endif
 
 ifeq ($(arch),x64)
