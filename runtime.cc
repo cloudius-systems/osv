@@ -443,11 +443,13 @@ static int prio_find_thread(sched::thread **th, int which, int id)
 }
 
 // Our priority formula is osv_prio = e^(prio * k), where k is a constant.
-// We (arbitrarily) want osv_prio(20) = 5, and osv_prio(-20) = 1/5.
+// We want osv_prio(20) = 86, and osv_prio(-20) = 1/86, as this gives the
+// best agreement with Linux's current interpretation of the nice values
+// (see tests/misc-setpriority.cc).
 //
-// So e^(20 * prio_k) = 5
-//    20 * prio_k = ln(5)
-//    prio_k = ln(5) / 20
+// So e^(20 * prio_k) = 86
+//    20 * prio_k = ln(86)
+//    prio_k = ln(86) / 20
 //
 // When we are given OSv prio, obviously, the inverse formula applies:
 //
@@ -455,7 +457,7 @@ static int prio_find_thread(sched::thread **th, int which, int id)
 //    prio * prio_k = ln(osv_prio)
 //    prio = ln(osv_prio) / prio_k
 //
-static constexpr float prio_k = log(5) / 20;
+static constexpr float prio_k = log(86) / 20;
 
 int getpriority(int which, int id)
 {
