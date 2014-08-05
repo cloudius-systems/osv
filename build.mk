@@ -42,7 +42,12 @@ LD=$(CROSS_PREFIX)ld
 STRIP=$(CROSS_PREFIX)strip
 OBJCOPY=$(CROSS_PREFIX)objcopy
 
+ifeq ($(arch),aarch64)
+image ?= uush
+else
 image ?= default
+endif
+
 modules ?= !$(image)
 img_format ?= qcow2
 fs_size_mb ?= 10240
