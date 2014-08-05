@@ -359,7 +359,7 @@ trace_record* tracepoint_base::allocate_trace_record(size_t size)
     tr->time = 0;
     tr->cpu = -1;
     if (tr->thread) {
-        tr->time = clock::get()->time();
+        tr->time = clock::get()->uptime();
         tr->cpu = tr->thread->tcpu()->id;
     }
     return tr;
