@@ -84,10 +84,14 @@ unimportant_prefixes = [
     ('tracepoint_base::log_backtrace(trace_record*, unsigned char*&)',
      'log',
      'trace_slow_path',
+     'operator()',
+     '_FUN',
      'operator()'),
 
     ('log',
      'trace_slow_path',
+     'operator()',
+     '_FUN',
      'operator()'),
 ]
 
