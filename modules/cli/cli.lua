@@ -8,6 +8,21 @@ local function command_filename(name)
   return string.format('%s/%s.lua', commands_path, name)
 end
 
+--- Prints message to stderr
+local function print_cmd_err(cmd, msg)
+  io.stderr:write(cmd .. ": " .. msg .. "\n")
+end
+
+--- Removes Lua code reference in the error message and prints it
+local function print_lua_error(cmd, msg)
+  local pos, last = string.find(msg, ":[0-9]+: ")
+  if last then
+    print_cmd_err(cmd, string.sub(msg, last+1))
+  else
+    print_cmd_err(cmd, msg)
+  end
+end
+
 function cli(line)
   local command = trim(line)
   local arguments = ""
@@ -23,9 +38,12 @@ function cli(line)
     filename = command_filename(command)
     if file_exists(filename) then
       local cmd = dofile(filename)
-      cmd.main(split(arguments))
+      local status, err = pcall(function() cmd.main(split(arguments)) end)
+      if not status then
+        print_lua_error(command, err)
+      end
     else
-      error(command .. ": command not found")
+      print_cmd_err(command, "command not found")
     end
   end
 end
