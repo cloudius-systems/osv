@@ -44,6 +44,7 @@ struct request {
     connection* connection_ptr;
     httpserver::parameters param;
     std::string content;
+    std::string protocol_name;
 
     /**
      * Search for the first header of a given name
@@ -70,7 +71,7 @@ struct request {
      */
     std::string get_protocol_name() const
     {
-        return "http";
+        return protocol_name;
     }
 
     /**

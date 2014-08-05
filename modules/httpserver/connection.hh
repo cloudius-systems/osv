@@ -15,6 +15,7 @@
 #include "request_parser.hh"
 #include "request.hh"
 #include "reply.hh"
+#include "transport.hh"
 
 #include <boost/asio.hpp>
 #include <array>
@@ -132,7 +133,7 @@ public:
      * @param manager the connection manager
      * @param handler the request handler
      */
-    explicit connection(boost::asio::ip::tcp::socket socket,
+    explicit connection(std::shared_ptr<transport> transport,
                         connection_manager& manager, request_handler& handler);
 
     connection(const connection&) = delete;
@@ -203,10 +204,10 @@ private:
     void on_complete_multiplart();
 
     /**
-     * Socket for the connection.
+     * Transport for the connection.
      *
      */
-    boost::asio::ip::tcp::socket socket_;
+    std::shared_ptr<transport> transport_;
 
     /**
      * The manager for this connection.

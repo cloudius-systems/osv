@@ -15,10 +15,12 @@
 #include "connection_manager.hh"
 #include "request_handler.hh"
 #include "connection.hh"
+#include "transport.hh"
 
 #include <boost/program_options/variables_map.hpp>
 #include <boost/asio.hpp>
 #include <string>
+#include <memory>
 
 /**
  * The original server implementation was modified to get its configuration
@@ -56,11 +58,7 @@ public:
 
     void close();
 private:
-    /**
-     * Perform an asynchronous accept operation.
-     *
-     */
-    void do_accept();
+    void on_connected(std::shared_ptr<transport> t);
 
     /**
      * The io_service used to perform asynchronous operations.
@@ -72,19 +70,13 @@ private:
      * Acceptor used to listen for incoming connections.
      *
      */
-    boost::asio::ip::tcp::acceptor acceptor_;
+    std::unique_ptr<acceptor> acceptor_;
 
     /**
      * The connection manager which owns all live connections.
      *
      */
     connection_manager connection_manager_;
-
-    /**
-     * The next socket to be accepted.
-     *
-     */
-    boost::asio::ip::tcp::socket socket_;
 
     /**
      * The handler for all incoming requests.
