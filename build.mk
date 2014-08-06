@@ -872,6 +872,7 @@ include $(src)/libc/build.mk
 
 objects += $(addprefix fs/, $(fs))
 objects += $(addprefix libc/, $(libc))
+objects += $(addprefix musl/src/, $(musl))
 
 ifeq ($(cxx_lib_env), host)
     libstdc++.a := $(shell $(CXX) -print-file-name=libstdc++.a)
