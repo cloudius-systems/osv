@@ -1683,7 +1683,7 @@ int shm_file::stat(struct stat* buf)
 int shm_file::close()
 {
     for (auto& i : _pages) {
-        memory::free_page(i.second);
+        memory::free_huge_page(i.second, huge_page_size);
     }
     _pages.clear();
     return 0;
