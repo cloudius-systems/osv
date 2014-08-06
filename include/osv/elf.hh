@@ -19,7 +19,7 @@
 #include "arch-elf.hh"
 
 /// Marks a shared object as locked in memory so OSv APIs like preempt_disable() can be used
-#define OSV_ELF_MLOCK_OBJECT() asm(".pushsection .note.osv-mlock, \"a\"; .popsection")
+#define OSV_ELF_MLOCK_OBJECT() asm(".pushsection .note.osv-mlock, \"a\"; .long 0, 0, 0; .popsection")
 
 /**
  * elf namespace
