@@ -394,8 +394,8 @@ libc += prng/random.o
 
 libc += process/execve.o
 libc += process/execle.o
-libc += process/execv.o
-libc += process/execl.o
+libc += ../musl/src/process/execv.o
+libc += ../musl/src/process/execl.o
 libc += process/waitpid.o
 
 libc += arch/$(arch)/setjmp/setjmp.o
