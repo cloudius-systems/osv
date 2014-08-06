@@ -113,12 +113,6 @@ static inline constexpr u32 bar0_imask(int irq)
     return 0x000 + irq * 8;
 }
 
-struct vmxnet3_req {
-    struct mbuf *mb;
-    unsigned count;
-    int start;
-};
-
 /**
  * Initialize an array of containers with specific virtual address.
  * Takes Preallocated buffer address and splits it into chunks of required size,
@@ -158,16 +152,60 @@ template<class DescT, int NDesc>
     };
 
 class vmxnet3_txqueue : public vmxnet3_txq_shared {
+    friend osv::xmitter_functor<vmxnet3_txqueue>;
 public:
-    void init();
+    explicit vmxnet3_txqueue()
+    : task([this] { _xmitter.poll_until([] { return false; }, _xmit_it); })
+    , _xmit_it(this)
+    , _xmitter(this)
+    {}
+
+    void init(struct ifnet* ifn, pci::bar *bar0);
     void set_intr_idx(unsigned idx) { layout->intr_idx = static_cast<u8>(idx); }
+    void enable_interrupt();
+    void disable_interrupt();
+    int transmit(struct mbuf* m_head);
+    void kick_pending();
+    void kick_pending_with_thresh();
+    bool kick_hw();
+    int xmit_prep(mbuf* m_head, void*& cooky);
+    int try_xmit_one_locked(void* cooky);
+    void xmit_one_locked(void *req);
+    void wake_worker();
+
+    struct {
+        u64 tx_packets; /* if_opackets */
+        u64 tx_bytes;   /* if_obytes */
+        u64 tx_err;     /* Number of broken packets */
+        u64 tx_drops;   /* Number of dropped packets */
+        u64 tx_csum;    /* CSUM offload requests */
+        u64 tx_tso;     /* GSO/TSO packets */
+        /* u64 tx_rescheduled; */ /* TODO when we implement xoff */
+    } stats = { 0 };
+    sched::thread task;
+
+private:
+    struct vmxnet3_req {
+        struct mbuf *mb;
+        unsigned count;
+        int start;
+    };
+
+    void encap(vmxnet3_req *req);
+    int offload(vmxnet3_req *req);
+    void gc();
+    int try_xmit_one_locked(vmxnet3_req *req);
     typedef vmxnet3_ring<vmxnet3_tx_desc, VMXNET3_MAX_TX_NDESC> cmdRingT;
     typedef vmxnet3_ring<vmxnet3_tx_compdesc, VMXNET3_MAX_TX_NCOMPDESC> compRingT;
-    cmdRingT cmd_ring;
-
-    compRingT comp_ring;
-    struct mbuf *buf[VMXNET3_MAX_TX_NDESC];
-    unsigned avail = VMXNET3_MAX_TX_NDESC;
+    cmdRingT _cmd_ring;
+    compRingT _comp_ring;
+    struct mbuf *_buf[VMXNET3_MAX_TX_NDESC];
+    unsigned _avail = VMXNET3_MAX_TX_NDESC;
+    osv::tx_xmit_iterator<vmxnet3_txqueue> _xmit_it;
+    osv::xmitter<vmxnet3_txqueue, 4096> _xmitter;
+    struct ifnet* _ifn;
+    pci::bar *_bar0;
+    uma_zone_t _zone_req;
 };
 
 class vmxnet3_rxqueue : public vmxnet3_rxq_shared {
@@ -218,13 +256,6 @@ public:
 
     virtual void dump_config(void);
     int transmit(struct mbuf* m_head);
-    int xmit_prep(mbuf* m_head, void*& cooky);
-    void kick_pending();
-    void kick_pending_with_thresh();
-    bool kick_hw();
-    void wake_worker();
-    int try_xmit_one_locked(void* cooky);
-    void xmit_one_locked(void *req);
 
     static hw_driver* probe(hw_device* dev);
 
@@ -251,14 +282,10 @@ private:
     u32 read_cmd(u32 cmd);
 
     void get_mac_address(u_int8_t *macaddr);
-    void txq_encap(vmxnet3_txqueue &txq, vmxnet3_req *req);
-    int txq_offload(vmxnet3_req *req);
-    void txq_gc(vmxnet3_txqueue &txq);
     void enable_interrupts();
     void enable_interrupt(unsigned idx);
     void disable_interrupts();
     void disable_interrupt(unsigned idx);
-    int try_xmit_one_locked(vmxnet3_req *req);
 
     //maintains the vmxnet3 instance number for multiple adapters
     static int _instance;
@@ -267,16 +294,6 @@ private:
 
     pci::device& _dev;
     interrupt_manager _msi;
-
-    struct txq_stats {
-        u64 tx_packets; /* if_opackets */
-        u64 tx_bytes;   /* if_obytes */
-        u64 tx_err;     /* Number of broken packets */
-        u64 tx_drops;   /* Number of dropped packets */
-        u64 tx_csum;    /* CSUM offload requests */
-        u64 tx_tso;     /* GSO/TSO packets */
-        /* u64 tx_rescheduled; */ /* TODO when we implement xoff */
-    } _txq_stats = { 0 };
 
     //Shared memory
     pci::bar *_bar0 = nullptr;
@@ -291,12 +308,6 @@ private:
     vmxnet3_rxqueue _rxq[rx_queues];
 
     memory::phys_contiguous_memory _mcast_list;
-
-    osv::tx_xmit_iterator<vmxnet3> _xmit_it;
-    osv::xmitter<vmxnet3, 4096> _xmitter;
-    sched::thread _worker;
-
-    uma_zone_t _zone_req;
 };
 
 }
