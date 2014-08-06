@@ -78,7 +78,6 @@ public:
      */
     static shared_app_t run(const std::string& command, const std::vector<std::string>& args);
 
-    application(const std::vector<std::string>& args);
     application(const std::string& command, const std::vector<std::string>& args);
 
     /**
