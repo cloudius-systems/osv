@@ -54,6 +54,7 @@ extern char **__environ;
 #undef LFS64
 #define LFS64(x) LFS64_2(x, x##64)
 
+extern void _chk_fail(const char *func);
 __END_DECLS
 
 #endif

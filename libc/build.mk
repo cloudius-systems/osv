@@ -1,6 +1,7 @@
 libc :=
 musl =
 
+libc += internal/_chk_fail.o
 libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
