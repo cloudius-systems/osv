@@ -157,10 +157,10 @@ static void if_getinfo(struct ifnet* ifp, struct if_data* out_data)
 void vmxnet3::fill_stats(struct if_data* out_data) const
 {
     assert(!out_data->ifi_oerrors && !out_data->ifi_obytes && !out_data->ifi_opackets);
-    out_data->ifi_ipackets += _rxq_stats.rx_packets;
-    out_data->ifi_ibytes   += _rxq_stats.rx_bytes;
-    out_data->ifi_iqdrops  += _rxq_stats.rx_drops;
-    out_data->ifi_ierrors  += _rxq_stats.rx_csum_err;
+    out_data->ifi_ipackets += _rxq[0].stats.rx_packets;
+    out_data->ifi_ibytes   += _rxq[0].stats.rx_bytes;
+    out_data->ifi_iqdrops  += _rxq[0].stats.rx_drops;
+    out_data->ifi_ierrors  += _rxq[0].stats.rx_csum_err;
     out_data->ifi_opackets += _txq_stats.tx_packets;
     out_data->ifi_obytes   += _txq_stats.tx_bytes;
     out_data->ifi_oerrors  += _txq_stats.tx_err + _txq_stats.tx_drops;
@@ -188,20 +188,22 @@ void vmxnet3_txqueue::init()
     txc.clear_descs();
 }
 
-void vmxnet3_rxqueue::init()
+void vmxnet3_rxqueue::init(struct ifnet* ifn, pci::bar *bar0)
 {
+    _ifn = ifn;
+    _bar0 = bar0;
     for (unsigned i = 0; i < VMXNET3_RXRINGS_PERQ; i++) {
-        layout->cmd_ring[i] = cmd_rings[i].get_desc_pa();
-        layout->cmd_ring_len[i] = cmd_rings[i].get_desc_num();
+        layout->cmd_ring[i] = _cmd_rings[i].get_desc_pa();
+        layout->cmd_ring_len[i] = _cmd_rings[i].get_desc_num();
     }
 
-    layout->comp_ring = comp_ring.get_desc_pa();
-    layout->comp_ring_len = comp_ring.get_desc_num();
+    layout->comp_ring = _comp_ring.get_desc_pa();
+    layout->comp_ring_len = _comp_ring.get_desc_num();
     layout->driver_data = mmu::virt_to_phys(this);
     layout->driver_data_len = sizeof(*this);
 
     for (unsigned i = 0; i < VMXNET3_RXRINGS_PERQ; i++) {
-        auto &rxr = cmd_rings[i];
+        auto &rxr = _cmd_rings[i];
         rxr.fill = 0;
         rxr.gen = init_gen;
         rxr.clear_descs();
@@ -211,15 +213,17 @@ void vmxnet3_rxqueue::init()
         }
     }
 
-    auto &rxc = comp_ring;
+    auto &rxc = _comp_ring;
     rxc.next = 0;
     rxc.gen = init_gen;
     rxc.clear_descs();
+
+    task.start();
 }
 
 void vmxnet3_rxqueue::discard(int rid, int idx)
 {
-    auto &rxr = cmd_rings[rid];
+    auto &rxr = _cmd_rings[rid];
     auto rxd = rxr.get_desc(idx);
     rxd->layout->gen = rxr.gen;
     rxr.increment_fill();
@@ -227,7 +231,7 @@ void vmxnet3_rxqueue::discard(int rid, int idx)
 
 void vmxnet3_rxqueue::newbuf(int rid)
 {
-    auto &rxr = cmd_rings[rid];
+    auto &rxr = _cmd_rings[rid];
     auto idx = rxr.fill;
     auto rxd = rxr.get_desc(idx);
     int flags, clsize, type;
@@ -252,7 +256,7 @@ void vmxnet3_rxqueue::newbuf(int rid)
     }else
         m->m_hdr.mh_len = clsize;
 
-    buf[rid][idx] = m;
+    _buf[rid][idx] = m;
 
     rxd->layout->addr = mmu::virt_to_phys(m->m_hdr.mh_data);
     rxd->layout->len = std::min(static_cast<u32>(m->m_hdr.mh_len),
@@ -273,7 +277,6 @@ vmxnet3::vmxnet3(pci::device &dev)
                             vmxnet3_rxq_shared::size() * rx_queues,
                             align::queues_shared)
     , _mcast_list(multicast_max * eth_alen, align::multicast)
-    , _receive_task([&] { receive_work(); }, sched::thread::attr().name("vmxnet3-receive"))
     , _xmit_it(this)
     , _xmitter(this)
     , _worker([this] { _xmitter.poll_until([] { return false; }, _xmit_it); })
@@ -289,15 +292,6 @@ vmxnet3::vmxnet3(pci::device &dev)
     vmxnet3_i("VMXNET3 INSTANCE");
     _id = _instance++;
     _drv_shared.attach(_drv_shared_mem.get_va());
-    attach_queues_shared();
-
-    do_version_handshake();
-    allocate_interrupts();
-    fill_driver_shared();
-
-    enable_device();
-
-    dump_config();
 
     //initialize the BSD interface _if
     _ifn = if_alloc(IFT_ETHER);
@@ -307,6 +301,16 @@ vmxnet3::vmxnet3(pci::device &dev)
        vmxnet3_w("if_alloc failed!");
        return;
     }
+
+    attach_queues_shared(_ifn, _bar0);
+
+    do_version_handshake();
+    allocate_interrupts();
+    fill_driver_shared();
+
+    enable_device();
+
+    dump_config();
 
     if_initname(_ifn, "eth", _id);
     _ifn->if_mtu = ETHERMTU;
@@ -328,7 +332,6 @@ vmxnet3::vmxnet3(pci::device &dev)
 
     get_mac_address(macaddr);
     ether_ifattach(_ifn, macaddr);
-    _receive_task.start();
     _worker.start();
     enable_interrupts();
 
@@ -352,10 +355,10 @@ void vmxnet3::allocate_interrupts()
 {
     _msi.easy_register({
         { 0, [] {}, nullptr },
-        { 1, [] {}, &_receive_task }
+        { 1, [] {}, &_rxq[0].task }
     });
     _txq[0].layout->intr_idx = 0;
-    _rxq[0].layout->intr_idx = 1;
+    _rxq[0].set_intr_idx(1);
 }
 
 void vmxnet3::enable_interrupts()
@@ -379,7 +382,7 @@ void vmxnet3::disable_interrupt(unsigned idx)
     _bar0->writel(bar0_imask(idx), 1);
 }
 
-void vmxnet3::attach_queues_shared()
+void vmxnet3::attach_queues_shared(struct ifnet* ifn, pci::bar *bar0)
 {
     auto *va = _queues_shared_mem.get_va();
 
@@ -390,7 +393,7 @@ void vmxnet3::attach_queues_shared()
         q.init();
     }
     for (auto &q : _rxq) {
-        q.init();
+        q.init(ifn, bar0);
     }
 }
 
@@ -582,20 +585,6 @@ void vmxnet3::wake_worker()
     _worker.wake();
 }
 
-void vmxnet3::receive_work()
-{
-    while(1) {
-        enable_interrupt(1);
-        sched::thread::wait_until([&] {
-            return rxq_avail(_rxq[0]);
-        });
-        disable_interrupt(1);
-        do {
-            rxq_eof(_rxq[0]);
-        } while(rxq_avail(_rxq[0]));
-    }
-}
-
 void vmxnet3::txq_encap(vmxnet3_txqueue &txq, vmxnet3_req *req)
 {
     auto &txr = txq.cmd_ring;
@@ -768,9 +757,23 @@ void vmxnet3::txq_gc(vmxnet3_txqueue &txq)
     }
 }
 
-void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
+void vmxnet3_rxqueue::receive_work()
 {
-    auto &rxc = rxq.comp_ring;
+    while(1) {
+        enable_interrupt();
+        sched::thread::wait_until([&] {
+            return available();
+        });
+        disable_interrupt();
+        do {
+            receive();
+        } while(available());
+    }
+}
+
+void vmxnet3_rxqueue::receive()
+{
+    auto &rxc = _comp_ring;
 
     while(1) {
         auto rxcd = rxc.get_desc(rxc.next);
@@ -788,9 +791,9 @@ void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
         auto rid = rxcd->layout->qid;
         auto idx = rxcd->layout->rxd_idx;
         auto length = rxcd->layout->len;
-        auto &rxr = rxq.cmd_rings[rid];
+        auto &rxr = _cmd_rings[rid];
         auto rxd = rxr.get_desc(idx);
-        auto m = rxq.buf[rid][idx];
+        auto m = _buf[rid][idx];
 
         assert(m != NULL);
 
@@ -804,39 +807,39 @@ void vmxnet3::rxq_eof(vmxnet3_rxqueue &rxq)
         if (rxcd->layout->sop) {
             assert(rxd->layout->btype == btype::head);
             assert((idx % 1) == 0);
-            assert(rxq.m_currpkt_head == nullptr);
+            assert(_m_currpkt_head == nullptr);
 
             if (length == 0) {
-                rxq.discard(rid, idx);
+                discard(rid, idx);
                 goto next;
             }
 
-            rxq.newbuf(rid);
+            newbuf(rid);
 
             m->M_dat.MH.MH_pkthdr.len = length;
             m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
             m->M_dat.MH.MH_pkthdr.csum_flags = 0;
             m->m_hdr.mh_len = length;
-            rxq.m_currpkt_head = rxq.m_currpkt_tail = m;
+            _m_currpkt_head = _m_currpkt_tail = m;
         } else {
             assert(rxd->layout->btype == btype::body);
-            assert(rxq.m_currpkt_head != nullptr);
+            assert(_m_currpkt_head != nullptr);
 
-            rxq.newbuf(rid);
+            newbuf(rid);
 
             m->m_hdr.mh_len = length;
-            rxq.m_currpkt_head->M_dat.MH.MH_pkthdr.len += length;
-            rxq.m_currpkt_tail->m_hdr.mh_next = m;
-            rxq.m_currpkt_tail = m;
+            _m_currpkt_head->M_dat.MH.MH_pkthdr.len += length;
+            _m_currpkt_tail->m_hdr.mh_next = m;
+            _m_currpkt_tail = m;
         }
 
         if (rxcd->layout->eop) {
-            rxq_input(rxq, rxcd, rxq.m_currpkt_head);
-            rxq.m_currpkt_head = rxq.m_currpkt_tail = nullptr;
+            input(rxcd, _m_currpkt_head);
+            _m_currpkt_head = _m_currpkt_tail = nullptr;
         }
 
 next:
-        if (rxq.layout->update_rxhead) {
+        if (layout->update_rxhead) {
             idx = (idx + 1) % rxr.get_desc_num();
             if (rid == 0)
                 _bar0->writel(bar0::rxh1, idx);
@@ -846,16 +849,16 @@ next:
     }
 }
 
-bool vmxnet3::rxq_avail(vmxnet3_rxqueue &rxq)
+bool vmxnet3_rxqueue::available()
 {
-    auto &rxc = rxq.comp_ring;
+    auto &rxc = _comp_ring;
     auto rxcd = rxc.get_desc(rxc.next);
     assert(rxcd->layout->qid <= 2);
 
     return (rxcd->layout->gen == rxc.gen);
 }
 
-void vmxnet3::rx_csum(vmxnet3_rx_compdesc *rxcd, struct mbuf *m)
+void vmxnet3_rxqueue::checksum(vmxnet3_rx_compdesc *rxcd, struct mbuf *m)
 {
     if (rxcd->layout->ipv4) {
         m->M_dat.MH.MH_pkthdr.csum_flags |= CSUM_IP_CHECKED;
@@ -872,22 +875,32 @@ void vmxnet3::rx_csum(vmxnet3_rx_compdesc *rxcd, struct mbuf *m)
     }
 }
 
-void vmxnet3::rxq_input(vmxnet3_rxqueue &rxq, vmxnet3_rx_compdesc *rxcd,
-    struct mbuf *m)
+void vmxnet3_rxqueue::input(vmxnet3_rx_compdesc *rxcd, struct mbuf *m)
+
 {
     if (rxcd->layout->error) {
         m_freem(m);
-        _rxq_stats.rx_csum_err++;
+        stats.rx_csum_err++;
         return;
     }
     if (!rxcd->layout->no_csum)
-        rx_csum(rxcd, m);
-    _rxq_stats.rx_packets++;
-    _rxq_stats.rx_bytes += m->M_dat.MH.MH_pkthdr.len;
+        checksum(rxcd, m);
+    stats.rx_packets++;
+    stats.rx_bytes += m->M_dat.MH.MH_pkthdr.len;
     bool fast_path = _ifn->if_classifier.post_packet(m);
     if (!fast_path) {
         (*_ifn->if_input)(_ifn, m);
     }
+}
+
+void vmxnet3_rxqueue::enable_interrupt()
+{
+    _bar0->writel(bar0_imask(layout->intr_idx), 0);
+}
+
+void vmxnet3_rxqueue::disable_interrupt()
+{
+    _bar0->writel(bar0_imask(layout->intr_idx), 1);
 }
 
 void vmxnet3::get_mac_address(u_int8_t *macaddr)

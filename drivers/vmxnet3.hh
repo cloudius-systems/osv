@@ -172,20 +172,41 @@ public:
 
 class vmxnet3_rxqueue : public vmxnet3_rxq_shared {
 public:
-    void init();
+    explicit vmxnet3_rxqueue()
+    : task([this] { receive_work(); }, sched::thread::attr().name("vmxnet3-receive")) {};
+    void init(struct ifnet* ifn, pci::bar *bar0);
     void set_intr_idx(unsigned idx) { layout->intr_idx = static_cast<u8>(idx); }
+    void enable_interrupt();
+    void disable_interrupt();
+
+    struct {
+        u64 rx_packets; /* if_ipackets */
+        u64 rx_bytes;   /* if_ibytes */
+        u64 rx_drops;   /* if_iqdrops */
+        u64 rx_csum;    /* number of packets with correct csum */
+        u64 rx_csum_err;/* number of packets with a bad checksum */
+    } stats = { 0 };
+    sched::thread task;
+
+private:
+    void receive_work();
+    void receive();
+    bool available();
     void discard(int rid, int idx);
     void newbuf(int rid);
+    void input(vmxnet3_rx_compdesc *rxcd, struct mbuf *m);
+    void checksum(vmxnet3_rx_compdesc *rxcd, struct mbuf *m);
 
     typedef vmxnet3_ring<vmxnet3_rx_desc, VMXNET3_MAX_RX_NDESC> cmdRingT;
     typedef vmxnet3_ring<vmxnet3_rx_compdesc, VMXNET3_MAX_RX_NCOMPDESC> compRingT;
 
-    cmdRingT cmd_rings[VMXNET3_RXRINGS_PERQ];
-    compRingT comp_ring;
-    struct mbuf *buf[VMXNET3_RXRINGS_PERQ][VMXNET3_MAX_RX_NDESC];
-
-    struct mbuf *m_currpkt_head = nullptr;
-    struct mbuf *m_currpkt_tail = nullptr;
+    cmdRingT _cmd_rings[VMXNET3_RXRINGS_PERQ];
+    compRingT _comp_ring;
+    struct mbuf *_buf[VMXNET3_RXRINGS_PERQ][VMXNET3_MAX_RX_NDESC];
+    struct mbuf *_m_currpkt_head = nullptr;
+    struct mbuf *_m_currpkt_tail = nullptr;
+    struct ifnet* _ifn;
+    pci::bar *_bar0;
 };
 
 class vmxnet3 : public hw_driver {
@@ -197,7 +218,6 @@ public:
 
     virtual void dump_config(void);
     int transmit(struct mbuf* m_head);
-    void receive_work();
     int xmit_prep(mbuf* m_head, void*& cooky);
     void kick_pending();
     void kick_pending_with_thresh();
@@ -220,7 +240,7 @@ private:
     void stop();
     void enable_device();
     void do_version_handshake();
-    void attach_queues_shared();
+    void attach_queues_shared(struct ifnet* ifn, pci::bar *bar0);
     void fill_driver_shared();
     void allocate_interrupts();
 
@@ -234,11 +254,6 @@ private:
     void txq_encap(vmxnet3_txqueue &txq, vmxnet3_req *req);
     int txq_offload(vmxnet3_req *req);
     void txq_gc(vmxnet3_txqueue &txq);
-    void rxq_eof(vmxnet3_rxqueue &rxq);
-    bool rxq_avail(vmxnet3_rxqueue &rxq);
-    void rxq_input(vmxnet3_rxqueue &rxq, vmxnet3_rx_compdesc *rxcd,
-        struct mbuf *m);
-    void rx_csum(vmxnet3_rx_compdesc *rxcd, struct mbuf *m);
     void enable_interrupts();
     void enable_interrupt(unsigned idx);
     void disable_interrupts();
@@ -252,14 +267,6 @@ private:
 
     pci::device& _dev;
     interrupt_manager _msi;
-
-    struct rxq_stats {
-        u64 rx_packets; /* if_ipackets */
-        u64 rx_bytes;   /* if_ibytes */
-        u64 rx_drops;   /* if_iqdrops */
-        u64 rx_csum;    /* number of packets with correct csum */
-        u64 rx_csum_err;/* number of packets with a bad checksum */
-    } _rxq_stats = { 0 };
 
     struct txq_stats {
         u64 tx_packets; /* if_opackets */
@@ -284,8 +291,6 @@ private:
     vmxnet3_rxqueue _rxq[rx_queues];
 
     memory::phys_contiguous_memory _mcast_list;
-
-    sched::thread _receive_task;
 
     osv::tx_xmit_iterator<vmxnet3> _xmit_it;
     osv::xmitter<vmxnet3, 4096> _xmitter;
