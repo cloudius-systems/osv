@@ -36,38 +36,20 @@ public:
  *
  */
 class application : public std::enable_shared_from_this<application> {
-private:
-    using main_func_t = int(int, char**);
-
-    pthread_t _thread;
-    std::vector<std::string> _args;
-    std::string _command;
-    int _return_code;
-    bool _termination_requested;
-    mutex _termination_mutex;
-    std::shared_ptr<elf::object> _lib;
-    main_func_t* _main;
-
-    // Must be destroyed before _lib
-    boost::signals2::signal<void()> _termination_signal;
-private:
-    void start();
-    void main();
-    void run_main(std::string path, int argc, char** argv);
-    void run_main();
 public:
+    /**
+     * Returns application of the current thread.
+     */
     static shared_app_t get_current();
 
     /**
      * Start a new application.
-     * args[0] should specify the command.
+     * args[0] should specify the command to run.
      *
-     * \param args Parameters which will be passed to program's main().
+     * \param args Arguments passed to the program's main() function.
      * \throw launch_error
      */
     static shared_app_t run(const std::vector<std::string>& args);
-
-    ~application();
 
     /**
      * Start a new application.
@@ -79,6 +61,8 @@ public:
     static shared_app_t run(const std::string& command, const std::vector<std::string>& args);
 
     application(const std::string& command, const std::vector<std::string>& args);
+
+    ~application();
 
     /**
      * Waits until application terminates.
@@ -128,7 +112,31 @@ public:
      */
     int get_return_code();
 
+    /**
+     * Returns the invoked program executable of this application.
+     */
     std::string get_command();
+
+private:
+    void start();
+    void main();
+    void run_main(std::string path, int argc, char** argv);
+    void run_main();
+
+private:
+    using main_func_t = int(int, char**);
+
+    pthread_t _thread;
+    std::vector<std::string> _args;
+    std::string _command;
+    int _return_code;
+    bool _termination_requested;
+    mutex _termination_mutex;
+    std::shared_ptr<elf::object> _lib;
+    main_func_t* _main;
+
+    // Must be destroyed before _lib
+    boost::signals2::signal<void()> _termination_signal;
 };
 
 }
