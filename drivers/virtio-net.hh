@@ -10,8 +10,6 @@
 
 //#define DEBUG_VIRTIO_TX
 
-#include <boost/function_output_iterator.hpp>
-
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
@@ -308,35 +306,6 @@ private:
         struct rxq_stats stats = { 0 };
     };
 
-    struct txq;
-    /**
-     * @class xmitter_functor
-     *
-     * This functor (through boost::function_output_iterator) will be used as an
-     * output iterator by the nway_merger instance that will merge the per-CPU
-     * tx_cpu_queue instances.
-     */
-    struct xmitter_functor {
-        xmitter_functor(txq* txq) : _q(txq) {}
-
-        /**
-         * Push the packet downstream
-         * @param cooky opaque pointer representing the descriptor of the
-         *              current packet to be sent.
-         */
-        void operator()(void* cooky) const
-        {
-            _q->xmit_one_locked(cooky);
-#ifdef DEBUG_VIRTIO_TX
-            _q->stats.tx_worker_packets++;
-#endif
-        }
-
-        txq* _q;
-    };
-
-    typedef boost::function_output_iterator<xmitter_functor> tx_xmit_iterator;
-
     /**
      * @class txq
      * A single Tx queue object.
@@ -344,7 +313,7 @@ private:
      *  TODO: Make it a class!
      */
     struct txq {
-        friend xmitter_functor;
+        friend osv::xmitter_functor<txq>;
 
         txq(net* parent, vring* vq) :
             vqueue(vq), _parent(parent), _xmit_it(this),
@@ -465,7 +434,7 @@ private:
         void update_stats(net_req* req);
 
         net* _parent;
-        tx_xmit_iterator _xmit_it;
+        osv::tx_xmit_iterator<txq> _xmit_it;
         const int _kick_thresh;
         u16 _pkts_to_kick = 0;
         //
