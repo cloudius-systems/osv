@@ -42,6 +42,8 @@ if __name__ == '__main__':
     basetest.Basetest.set_config(parser)
     basetest.Basetest.start_image()
     del sys.argv[1:]
-    testsuite = unittest.TestLoader().discover('modules/httpserver/tests/api', pattern='*.py')
-    unittest.TextTestRunner(verbosity=2).run(testsuite)
+    api_tests = unittest.TestLoader().discover(os.path.join(module_base, 'tests', 'api'), pattern='*.py')
+    ssl_tests = unittest.TestLoader().discover(os.path.join(module_base, 'tests', 'ssl'), pattern='*.py')
+    test_suite = unittest.TestSuite((api_tests, ssl_tests))
+    unittest.TextTestRunner(verbosity=2).run(test_suite)
     basetest.Basetest.shutdown()
