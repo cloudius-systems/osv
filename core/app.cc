@@ -75,9 +75,7 @@ void application::abandon_current()
 
 shared_app_t application::run(const std::vector<std::string>& args)
 {
-    auto app = std::make_shared<application>(args[0], args);
-    app->start();
-    return app;
+    return run(args[0], args);
 }
 
 shared_app_t application::run(const std::string& command, const std::vector<std::string>& args)
