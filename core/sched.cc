@@ -37,6 +37,7 @@
 #define _MAKE_SYMBOL(name, num) __MAKE_SYMBOL(name, num)
 #define MAKE_SYMBOL(name) _MAKE_SYMBOL(name, __COUNTER__)
 MAKE_SYMBOL(sched::thread::current);
+MAKE_SYMBOL(sched::cpu::current);
 MAKE_SYMBOL(sched::get_preempt_counter);
 MAKE_SYMBOL(sched::preemptable);
 MAKE_SYMBOL(sched::preempt);

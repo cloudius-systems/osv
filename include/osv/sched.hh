@@ -1124,10 +1124,14 @@ inline thread_handle thread::handle()
     return thread_handle(*this);
 }
 
+#ifdef __OSV_CORE__
+
 inline cpu* cpu::current()
 {
     return current_cpu;
 }
+
+#endif /* __OSV_CORE__ */
 
 inline
 timer::timer(thread& t)
