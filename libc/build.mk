@@ -182,14 +182,15 @@ musl += math/coshl.o
 musl += math/cosl.o
 musl += math/erf.o
 musl += math/erff.o
-libc += math/erfl.o
+musl += math/erfl.o
 musl += math/exp.o
 musl += math/exp10.o
 musl += math/exp10f.o
 musl += math/exp10l.o
 musl += math/exp2.o
 musl += math/exp2f.o
-libc += math/exp2l.o
+musl += math/exp2l.o
+musl/src/math/exp2l.o: CFLAGS += -Wno-error=unused-variable
 musl += math/expf.o
 musl += math/expl.o
 musl += math/expm1.o
@@ -204,8 +205,8 @@ musl += math/fdiml.o
 musl += math/floor.o
 musl += math/floorf.o
 musl += math/floorl.o
-#libc += math/fma.o
-#libc += math/fmaf.o
+#musl += math/fma.o
+#musl += math/fmaf.o
 #musl += math/fmal.o
 musl += math/fmax.o
 musl += math/fmaxf.o
@@ -238,10 +239,13 @@ musl += math/ldexp.o
 musl += math/ldexpf.o
 musl += math/ldexpl.o
 musl += math/lgamma.o
-libc += math/lgamma_r.o
+musl += math/lgamma_r.o
+musl/src/math/lgamma_r.o: CFLAGS += -Wno-error=maybe-uninitialized
 musl += math/lgammaf.o
-libc += math/lgammaf_r.o
-libc += math/lgammal.o
+musl += math/lgammaf_r.o
+musl/src/math/lgammaf_r.o: CFLAGS += -Wno-error=maybe-uninitialized
+musl += math/lgammal.o
+musl/src/math/lgammal.o: CFLAGS += -Wno-error=maybe-uninitialized
 #musl += math/llrint.o
 #musl += math/llrintf.o
 #musl += math/llrintl.o
