@@ -368,6 +368,8 @@ musl += multibyte/wcstombs.o
 musl += multibyte/wctob.o
 musl += multibyte/wctomb.o
 
+libc/multibyte/mbsrtowcs.o: CFLAGS += -I $(src)/musl/src/multibyte
+
 libc += network/htonl.o
 libc += network/htons.o
 libc += network/ntohl.o
