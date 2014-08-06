@@ -48,11 +48,11 @@ libc += dirent/scandir.o
 libc += dirent/fdopendir.o
 
 libc += env/__environ.o
-libc += env/clearenv.o
+musl += env/clearenv.o
 libc += env/getenv.o
-libc += env/putenv.o
-libc += env/setenv.o
-libc += env/unsetenv.o
+musl += env/putenv.o
+musl += env/setenv.o
+musl += env/unsetenv.o
 
 musl += ctype/__ctype_b_loc.o
 
