@@ -57,7 +57,7 @@ musl += env/unsetenv.o
 
 musl += ctype/__ctype_b_loc.o
 
-libc += errno/strerror.o
+musl += errno/strerror.o
 
 musl += locale/catclose.o
 musl += locale/catgets.o
