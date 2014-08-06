@@ -17,7 +17,7 @@ class testjvm(basetest.Basetest):
     def test_force_gc(self):
         gc = self.curl(self.path_by_nick(self.jvm_api, "getGCinfo"))
         time.sleep(1)
-        self.curl(self.path_by_nick(self.jvm_api, "forceGC"), True)
+        self.curl(self.path_by_nick(self.jvm_api, "forceGC"), method='POST')
         gc1 = self.curl(self.path_by_nick(self.jvm_api, "getGCinfo"))
         self.assertGreaterEqual(len(gc), 2)
         self.assertGreater(gc1[0]["count"], gc[0]["count"])
@@ -42,7 +42,7 @@ class testjvm(basetest.Basetest):
         mbean = self.curl(path)
         usage = next((item for item in mbean if item["name"] == "UsageThreshold"), None)
         self.assertTrue(usage != None)
-        self.curl(path + "/UsageThreshold?value=" + str(usage["value"] + 1), True)
+        self.curl(path + "/UsageThreshold?value=" + str(usage["value"] + 1), method='POST')
         mbean1 = self.curl(path)
         usage1 = next((item for item in mbean1 if item["name"] == "UsageThreshold"), None)
         self.assertEqual(usage["value"] + 1, usage1["value"])

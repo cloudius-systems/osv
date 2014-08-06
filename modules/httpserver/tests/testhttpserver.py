@@ -8,12 +8,14 @@ import os
 import subprocess
 import time
 import threading
-import urllib2
+import requests
 import urllib
 import unittest
 import re
 import socket
 import basetest
+
+from osv import client
 
 parser = argparse.ArgumentParser(description="""Testing the Httpserver""")
 
@@ -25,11 +27,7 @@ parser.add_argument('--run_script', help='path to the run image script', default
 parser.add_argument('--cmd', help='the command to execute')
 parser.add_argument('--use_sudo', help='Use sudo with -n option instead of port forwarding', action='store_true')
 parser.add_argument('--jsondir', help='location of the json files', default=os.path.join(module_base, 'api-doc/listings/'))
-parser.add_argument('--port', help='set the port number', type=int,
-                    default=8000)
-parser.add_argument('--ip', help='set the ip address',
-                    default='localhost')
-
+client.Client.add_arguments(parser)
 
 class test_httpserver(basetest.Basetest):
     @classmethod

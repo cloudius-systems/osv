@@ -90,7 +90,18 @@ clean:
 	$(call very-quiet, $(RM) -rf autogen/*)
 
 check:
-	cd $(src) && modules/httpserver/tests/testhttpserver.py
+	# Test plain HTTP
+	cd $(src) && \
+	make image=httpserver.fg,mgmt.shell && \
+	PYTHONPATH=$(src)/scripts modules/httpserver/tests/testhttpserver.py
+
+	# Test SSL
+	cd $(src) && \
+	make image=httpserver.fg_ssl,mgmt.shell,certs && \
+	PYTHONPATH=$(src)/scripts modules/httpserver/tests/testhttpserver.py \
+		--cert modules/certs/build/client.pem \
+		--key modules/certs/build/client.key \
+		--cacert modules/certs/build/cacert.pem
 
 swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib

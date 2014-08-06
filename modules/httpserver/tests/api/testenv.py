@@ -6,10 +6,11 @@ class testenv(basetest.Basetest):
         param = "test-param"
         get_path = self.path_by_nick(self.env_api, "getEnv") + param
         set_path = get_path + "?val=TEST"
-        self.curl(set_path, True)
+        self.curl(set_path, method='POST')
         val = self.curl(get_path)
         self.assertEqual(val, "TEST")
-        self.curl_command(get_path, "DELETE")
+
+        self.curl(get_path, method="DELETE")
         self.assertHttpError(get_path, 400)
 
     @classmethod
