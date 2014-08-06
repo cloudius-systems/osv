@@ -9,6 +9,7 @@
 
 #include <osv/async.hh>
 #include <osv/clock.hh>
+#include <osv/elf.hh>
 #include <osv/trace.hh>
 #include <osv/preempt-lock.hh>
 #include <boost/test/unit_test.hpp>
@@ -489,3 +490,5 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__callback_fires_if_not_cancelled)
 
     lock.lock();
 }
+
+OSV_ELF_MLOCK_OBJECT();

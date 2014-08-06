@@ -19,6 +19,7 @@
 #include <thread>
 #include <iostream>
 #ifdef __OSV__
+#include <osv/elf.hh>
 #include <osv/sched.hh>
 #include <osv/clock.hh>
 #endif
@@ -134,3 +135,7 @@ int main(int ac, char** av)
     do_heap_test(true);
     std::cerr << "Passed\n";
 }
+
+#ifdef __OSV__
+OSV_ELF_MLOCK_OBJECT();
+#endif

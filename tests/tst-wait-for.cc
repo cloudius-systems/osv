@@ -9,6 +9,7 @@
 #define BOOST_TEST_MODULE tst-wait-for
 
 #include <boost/test/unit_test.hpp>
+#include <osv/elf.hh>
 #include <osv/sched.hh>
 #include <osv/waitqueue.hh>
 #include <osv/clock.hh>
@@ -121,3 +122,5 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
     waker.join();
     false_waker.join();
 }
+
+OSV_ELF_MLOCK_OBJECT();

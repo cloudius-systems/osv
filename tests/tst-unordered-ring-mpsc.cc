@@ -14,6 +14,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <osv/latch.hh>
+#include <osv/elf.hh>
 
 using value_t = int;
 using set_t = std::unordered_set<value_t>;
@@ -122,3 +123,5 @@ BOOST_AUTO_TEST_CASE(test_concurrent_access)
     t1.join();
     t2.join();
 }
+
+OSV_ELF_MLOCK_OBJECT();

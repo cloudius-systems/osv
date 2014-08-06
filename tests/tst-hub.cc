@@ -5,6 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/elf.hh>
+
 #include "tst-hub.hh"
 #include "tst-threads.hh"
 #include "tst-malloc.hh"
@@ -39,3 +41,4 @@ int main(int ac, char** av)
     return 0;
 }
 
+OSV_ELF_MLOCK_OBJECT();
