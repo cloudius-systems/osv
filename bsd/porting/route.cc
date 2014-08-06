@@ -27,7 +27,7 @@
  * SUCH DAMAGE.
  */
 
-#include "libc/stdio/stdio.h"           /* for sscanf() */
+#include <stdio.h>           /* for sscanf() */
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/route.h>

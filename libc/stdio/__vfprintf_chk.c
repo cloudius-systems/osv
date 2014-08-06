@@ -1,5 +1,6 @@
 #include "stdio_impl.h"
 #include <stdlib.h>
+#include <stdarg.h>
 
 /* Used by code compiled on Linux with -D_FORTIFY_SOURCE */
 

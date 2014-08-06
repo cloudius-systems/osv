@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <ctype.h>
 
-#include "../stdio/stdio.h"
+#include <stdio.h>
 #include "../stdio/shgetc.h"
 #include "floatscan.h"
 

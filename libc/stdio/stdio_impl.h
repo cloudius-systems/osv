@@ -1,7 +1,7 @@
 #ifndef _STDIO_IMPL_H
 #define _STDIO_IMPL_H
 
-#include "stdio.h"
+#include <stdio.h>
 #include "../internal/libc.h"
 #include <pthread.h>
 
