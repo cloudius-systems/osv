@@ -55,8 +55,8 @@ int shmdt(const void *shmaddr)
         if (s == shmmap.end()) {
             return libc_error(EINVAL);
         }
-        shmmap.erase(s);
         fd = s->second;
+        shmmap.erase(s);
     }
     fileref f(fileref_from_fd(fd));
     mmu::munmap(shmaddr, ::size(f));
