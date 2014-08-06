@@ -813,6 +813,11 @@ void vmxnet3_rxqueue::receive()
             }
         }
 
+        if (rxcd->layout->eop && rxcd->layout->error) {
+            discard(rid, idx);
+            goto next;
+        }
+
         if (rxcd->layout->sop) {
             assert(rxd->layout->btype == btype::head);
             assert((idx % 1) == 0);
