@@ -99,6 +99,7 @@ bsd/%.o: source-dialects =
 
 # libc has its own source dialect control
 libc/%.o: source-dialects =
+musl/%.o: source-dialects =
 
 kernel-defines = -D_KERNEL $(source-dialects)
 
