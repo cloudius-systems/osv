@@ -715,6 +715,10 @@ void net::txq::xmit_one_locked(void* _req)
     // packets.
     //
     _pkts_to_kick++;
+
+#ifdef DEBUG_VIRTIO_TX
+    stats.tx_worker_packets++;
+#endif
 }
 
 mbuf* net::txq::offload(mbuf* m, net_hdr* hdr)

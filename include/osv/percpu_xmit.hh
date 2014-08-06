@@ -16,6 +16,8 @@
 
 #include <bsd/sys/sys/mbuf.h>
 
+#include <boost/function_output_iterator.hpp>
+
 namespace osv {
 
 /**
@@ -468,6 +470,29 @@ private:
     std::atomic_flag                              _running    CACHELINE_ALIGNED
                                                            = ATOMIC_FLAG_INIT;
 };
+
+/**
+ * @class xmitter_functor
+ *
+ * This functor (through boost::function_output_iterator) will be used as an
+ * output iterator by the nway_merger instance that will merge the per-CPU
+ * tx_cpu_queue instances.
+ */
+template <class NetDevTxq>
+struct xmitter_functor {
+    xmitter_functor(NetDevTxq* txq) : _q(txq) {}
+
+    /**
+     * Push the packet downstream
+     * @param cooky opaque pointer representing the descriptor of the
+     *              current packet to be sent.
+     */
+    void operator()(void* cooky) const { _q->xmit_one_locked(cooky); }
+
+    NetDevTxq* _q;
+};
+template <class NetDevTxq>
+using tx_xmit_iterator = boost::function_output_iterator<xmitter_functor<NetDevTxq>>;
 
 } // namespace osv
 
