@@ -292,7 +292,6 @@ vmxnet3::vmxnet3(pci::device &dev)
     _dev.set_bus_master(true);
     _dev.msix_enable();
     assert(dev.is_msix());
-    disable_interrupts();
     stop();
     vmxnet3_i("VMXNET3 INSTANCE");
     _id = _instance++;
@@ -311,6 +310,7 @@ vmxnet3::vmxnet3(pci::device &dev)
 
     do_version_handshake();
     allocate_interrupts();
+    disable_interrupts();
     fill_driver_shared();
 
     enable_device();
@@ -364,23 +364,16 @@ void vmxnet3::allocate_interrupts()
 
 void vmxnet3::enable_interrupts()
 {
-    enable_interrupt(1);
-}
-
-void vmxnet3::enable_interrupt(unsigned idx)
-{
-    _bar0->writel(bar0_imask(idx), 0);
+    _rxq[0].enable_interrupt();
+    // Don't enable TX interrupt here, use polling instead
 }
 
 void vmxnet3::disable_interrupts()
 {
-    for (unsigned idx = 0; idx < num_intrs; idx++)
-        disable_interrupt(idx);
-}
-
-void vmxnet3::disable_interrupt(unsigned idx)
-{
-    _bar0->writel(bar0_imask(idx), 1);
+    _rxq[0].disable_interrupt();
+    // Even we don't use TX interrupt, we need to make sure TX interrupt is
+    // disabled on initialization stage
+    _txq[0].disable_interrupt();
 }
 
 void vmxnet3::attach_queues_shared(struct ifnet* ifn, pci::bar *bar0)

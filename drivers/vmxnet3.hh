@@ -283,9 +283,7 @@ private:
 
     void get_mac_address(u_int8_t *macaddr);
     void enable_interrupts();
-    void enable_interrupt(unsigned idx);
     void disable_interrupts();
-    void disable_interrupt(unsigned idx);
 
     //maintains the vmxnet3 instance number for multiple adapters
     static int _instance;
