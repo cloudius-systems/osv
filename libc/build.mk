@@ -44,8 +44,8 @@ libc += ctype/wcswidth.o
 musl += ctype/wctrans.o
 libc += ctype/wcwidth.o
 
-libc += dirent/alphasort.o
-libc += dirent/scandir.o
+musl += dirent/alphasort.o
+musl += dirent/scandir.o
 libc += dirent/fdopendir.o
 
 libc += env/__environ.o
