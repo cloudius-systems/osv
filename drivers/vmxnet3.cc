@@ -166,21 +166,6 @@ void vmxnet3::fill_stats(struct if_data* out_data) const
     out_data->ifi_oerrors  += _txq_stats.tx_err + _txq_stats.tx_drops;
 }
 
-/**
- * Initialize an array of containers with specific virtual address.
- * Takes Preallocated buffer address and splits it into chunks of required size,
- * associates each chunk with an array element.
- * @param va preallocated buffer address
- * @param holder array of containers
- */
-template<class T> void slice_memory(void *&va, T &holder)
-{
-    for (auto &e : holder) {
-        e.attach(va);
-        va += e.size();
-    }
-}
-
 void vmxnet3_txqueue::init()
 {
     layout->cmd_ring = cmd_ring.get_desc_pa();

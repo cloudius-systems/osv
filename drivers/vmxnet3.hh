@@ -28,6 +28,20 @@ struct vmxnet3_req {
     unsigned count;
     int start;
 };
+/**
+ * Initialize an array of containers with specific virtual address.
+ * Takes Preallocated buffer address and splits it into chunks of required size,
+ * associates each chunk with an array element.
+ * @param va preallocated buffer address
+ * @param holder array of containers
+ */
+template<class T> void slice_memory(void *&va, T &holder)
+{
+    for (auto &e : holder) {
+        e.attach(va);
+        va += e.size();
+    }
+}
 
 template<class DescT, int NDesc>
     class vmxnet3_ring {
