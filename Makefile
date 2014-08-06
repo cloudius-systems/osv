@@ -49,7 +49,7 @@ clean-core:
 .PHONY: clean-core
 
 clean: clean-core
-	$(call quiet, OSV_BASE=. MAKEFLAGS= scripts/module.py clean -q, MODULES CLEAN)
+	$(call quiet, OSV_BASE=`pwd` MAKEFLAGS= scripts/module.py clean -q, MODULES CLEAN)
 .PHONY: clean
 
 check: export image ?= tests
