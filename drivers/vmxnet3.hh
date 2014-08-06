@@ -9,6 +9,7 @@
 #define VMWARE3_DRIVER_H
 
 #include <bsd/porting/netport.h>
+#include <bsd/porting/uma_stub.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/sys/mbuf.h>
@@ -18,8 +19,15 @@
 #include "drivers/pci-device.hh"
 #include <osv/mempool.hh>
 #include <osv/interrupt.hh>
+#include <osv/percpu_xmit.hh>
 
 namespace vmw {
+
+struct vmxnet3_req {
+    struct mbuf *mb;
+    unsigned count;
+    int start;
+};
 
 template<class DescT, int NDesc>
     class vmxnet3_ring {
@@ -52,14 +60,13 @@ class vmxnet3_txqueue : public vmxnet3_txq_shared {
 public:
     void init();
     void set_intr_idx(unsigned idx) { layout->intr_idx = static_cast<u8>(idx); }
-    int enqueue(struct mbuf *m);
     typedef vmxnet3_ring<vmxnet3_tx_desc, VMXNET3_MAX_TX_NDESC> cmdRingT;
     typedef vmxnet3_ring<vmxnet3_tx_compdesc, VMXNET3_MAX_TX_NCOMPDESC> compRingT;
     cmdRingT cmd_ring;
 
     compRingT comp_ring;
     struct mbuf *buf[VMXNET3_MAX_TX_NDESC];
-    int avail = VMXNET3_MAX_TX_NDESC;
+    unsigned avail = VMXNET3_MAX_TX_NDESC;
 };
 
 class vmxnet3_rxqueue : public vmxnet3_rxq_shared {
@@ -97,6 +104,13 @@ public:
     virtual void dump_config(void);
     int transmit(struct mbuf* m_head);
     void receive_work();
+    int xmit_prep(mbuf* m_head, void*& cooky);
+    void kick_pending();
+    void kick_pending_with_thresh();
+    bool kick_hw();
+    void wake_worker();
+    int try_xmit_one_locked(void* cooky);
+    void xmit_one_locked(void *req);
 
     static hw_driver* probe(hw_device* dev);
 
@@ -171,7 +185,9 @@ private:
         UPT1_F_CSUM = 0x0001,
         UPT1_F_RSS = 0x0002,
         UPT1_F_VLAN = 0x0004,
-        UPT1_F_LRO = 0x0008
+        UPT1_F_LRO = 0x0008,
+
+        VMXNET3_NREQS = 256
     };
     static inline constexpr u32 VMXNET3_BAR0_IMASK(int irq)
     {
@@ -193,8 +209,8 @@ private:
     u32 read_cmd(u32 cmd);
 
     void get_mac_address(u_int8_t *macaddr);
-    int txq_encap(vmxnet3_txqueue &txq, struct mbuf *m_head);
-    int txq_offload(struct mbuf *m, int *etype, int *proto, int *start);
+    void txq_encap(vmxnet3_txqueue &txq, vmxnet3_req *req);
+    int txq_offload(vmxnet3_req *req);
     void txq_gc(vmxnet3_txqueue &txq);
     void rxq_eof(vmxnet3_rxqueue &rxq);
     bool rxq_avail(vmxnet3_rxqueue &rxq);
@@ -205,6 +221,7 @@ private:
     void enable_interrupt(unsigned idx);
     void disable_interrupts();
     void disable_interrupt(unsigned idx);
+    int try_xmit_one_locked(vmxnet3_req *req);
 
     //maintains the vmxnet3 instance number for multiple adapters
     static int _instance;
@@ -246,9 +263,13 @@ private:
 
     memory::phys_contiguous_memory _mcast_list;
 
-    mutex _txq_lock;
-
     sched::thread _receive_task;
+
+    osv::tx_xmit_iterator<vmxnet3> _xmit_it;
+    osv::xmitter<vmxnet3, 4096> _xmitter;
+    sched::thread _worker;
+
+    uma_zone_t _zone_req;
 };
 
 }
