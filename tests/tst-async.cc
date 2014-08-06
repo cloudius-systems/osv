@@ -467,13 +467,13 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__callback_fires_if_not_cancelled)
     mutex lock;
 
     serial_timer_task task(lock, [&] (serial_timer_task& timer) {
-        proceed.set_value(true);
-
         WITH_LOCK(lock) {
             if (timer.try_fire()) {
                 counter++;
             }
         }
+
+        proceed.set_value(true);
     });
 
     WITH_LOCK(lock) {
