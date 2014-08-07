@@ -38,7 +38,7 @@ string formatter::to_json(long n)
 
 string formatter::to_json(bool b)
 {
-    return (b) ? "True" : "False";
+    return (b) ? "true" : "false";
 }
 
 string formatter::to_json(const date_time& d)
