@@ -231,7 +231,7 @@ class SlidingUnpacker:
                 values.append(self.unpack_blob())
             else:
                 size = struct.calcsize(fmt)
-                val, = struct.unpack_from(fmt, self.buffer[self.offset:self.offset+size])
+                val, = struct.unpack_from(fmt, self.buffer, self.offset)
                 self.offset += size
                 values.append(val)
 
