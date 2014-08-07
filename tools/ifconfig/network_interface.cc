@@ -172,13 +172,10 @@ link_ntoa(const struct bsd_sockaddr_dl *sdl, char obuf[64])
         else
             *out++ = ':';
         i = *in++;
-        if (i > 0xf) {
-            out[1] = hexlist[i & 0xf];
-            i >>= 4;
-            out[0] = hexlist[i];
-            out += 2;
-        } else
-            *out++ = hexlist[i];
+        out[1] = hexlist[i & 0xf];
+        i >>= 4;
+        out[0] = hexlist[i];
+        out += 2;
     }
     *out = 0;
     return (obuf);
