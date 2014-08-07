@@ -16,6 +16,7 @@
 #include <osv/mmu.hh>
 #include <unordered_map>
 #include <thread>
+#include "balloon_api.hh"
 
 TRACEPOINT(trace_jvm_balloon_new, "obj=%p, aligned %p, size %d, vma_size %d",
         const unsigned char *, const unsigned char *, size_t, size_t);
@@ -131,6 +132,14 @@ private:
 
 mutex balloons_lock;
 std::list<balloon_ptr> balloons;
+
+namespace memory {
+ssize_t get_balloon_size() {
+    WITH_LOCK(balloons_lock) {
+    return balloons.size() * balloon_size;
+    }
+}
+}
 
 ulong balloon::empty_area(balloon_ptr b)
 {
