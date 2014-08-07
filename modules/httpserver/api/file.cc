@@ -217,6 +217,7 @@ class get_file_handler : public file_interaction_handler {
         res.permission = buf;
         res.replication = buffer.st_nlink;
         res.pathSuffix = name;
+        res.length = buffer.st_size;
         unsigned long lng;
         if ((buffer.st_mode & S_IFMT) == S_IFLNK
                 && (lng = readlink(path.c_str(), buf, 512)) > 0) {

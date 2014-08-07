@@ -14,6 +14,15 @@ class testfile(basetest.Basetest):
         path = "/file"
         hosts = self.curl(path + "/etc/hosts?op=GETFILESTATUS")
         self.assertEqual(hosts["type"], "FILE")
+        self.assert_between("accessTime", 1300000000, 2000000000, hosts["accessTime"])
+        self.assertEqual(hosts["blockSize"], 512)
+        self.assertEqual(hosts["group"], "osv")
+        self.assert_between(hosts["length"], 20, 40)
+        self.assert_between("modificationTime", 1300000000, 2000000000, hosts["modificationTime"])
+        self.assertEqual(hosts["owner"], "osv")
+        self.assertEqual(hosts["pathSuffix"], "hosts")
+        self.assertEqual(hosts["permission"], 666)
+        self.assertEqual(hosts["replication"], 1)
 
     def test_put_file_cmd(self):
         path = "/file"
