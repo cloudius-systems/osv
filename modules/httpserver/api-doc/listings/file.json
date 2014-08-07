@@ -97,6 +97,14 @@
                      "paramType":"path"
                   },
                   {
+                     "name":"recursive",
+                     "description":"Should the operation act on the content in the subdirectories",
+                     "required":false,
+                     "allowMultiple":false,
+                     "dataType":"boolean",
+                     "paramType":"query"
+                  },
+                  {
                      "name":"op",
                      "description":"The operation to perform: DELETE",
                      "required":true,

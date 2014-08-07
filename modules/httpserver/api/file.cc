@@ -18,6 +18,8 @@
 #include "json/formatter.hh"
 #include <system_error>
 #include "connection.hh"
+#include <boost/filesystem.hpp>
+#include <algorithm>
 
 namespace httpserver {
 
@@ -28,6 +30,19 @@ namespace file {
 using namespace json;
 using namespace std;
 using namespace file_json;
+
+static bool is_true(const http::server::request& req, const string& param)
+{
+    string val = req.get_query_param(param);
+    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    if (val == "" || val == "false") {
+        return false;
+    }
+    if (val != "true") {
+        throw bad_param_exception(string("Invalid value ") + val + " use true/false");
+    }
+    return true;
+}
 
 /**
  * A helper function to set the op and path param
@@ -258,8 +273,19 @@ class del_file_handler : public handler_base {
         set_and_validate_params(params, req, opStr, full_path);
         ns_delFile::op op = ns_delFile::str2op(opStr);
         if (op == ns_delFile::op::DELETE) {
-            validate_path(full_path);
-            remove(full_path.c_str());
+            struct stat buffer;
+            get_stat(full_path, buffer);
+            try {
+                if ((buffer.st_mode & S_IFMT) == S_IFDIR
+                        && is_true(req, "recursive")) {
+                    boost::filesystem::remove_all(full_path);
+                } else {
+                    boost::filesystem::remove(full_path);
+                }
+            } catch (const boost::filesystem::filesystem_error& e) {
+                throw bad_request_exception(
+                    string("Failed deleting ") + e.what());
+            }
         } else {
             throw bad_param_exception("Bad op parameter " + opStr);
         }
@@ -313,9 +339,13 @@ class put_file_handler : public handler_base {
 
         switch (op) {
         case ns_putFile::op::MKDIRS:
-            if (mkdir(full_path.c_str(), permission) != 0) {
+            try {
+                boost::filesystem::create_directories(full_path);
+                boost::filesystem::permissions(full_path,
+                                               static_cast<boost::filesystem::perms>(permission));
+            } catch (const boost::filesystem::filesystem_error& e) {
                 throw bad_param_exception(
-                    string("Failed creating directory ") + strerror(errno));
+                    string("Failed creating directory ") + e.what());
             }
             break;
         case ns_putFile::op::RENAME:
