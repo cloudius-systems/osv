@@ -274,29 +274,31 @@ socket_file::poll_sync(struct pollfd& pfd, timeout_t timeout)
     return !!revents;
 }
 
-void socket_file::epoll_add(epoll_ptr ep)
+void socket_file::epoll_add()
 {
     SOCK_LOCK(so);
-    file::epoll_add(ep);
     assert(!f_lock.owned());
     so->so_rcv.sb_flags |= SB_SEL;
     so->so_snd.sb_flags |= SB_SEL;
     WITH_LOCK(f_lock) {
         if (so->so_nc) {
-            so->so_nc->add_epoll(ep);
+            for (auto&& ep : *f_epolls) {
+                so->so_nc->add_epoll(ep);
+            }
         }
     }
     SOCK_UNLOCK(so);
 }
 
-void socket_file::epoll_del(epoll_ptr ep)
+void socket_file::epoll_del()
 {
     SOCK_LOCK(so);
     assert(!f_lock.owned());
-    file::epoll_del(ep);
     WITH_LOCK(f_lock) {
         if (so->so_nc) {
-            so->so_nc->del_epoll(ep);
+            for (auto&& ep : *f_epolls) {
+                so->so_nc->del_epoll(ep);
+            }
         }
     }
     SOCK_UNLOCK(so);

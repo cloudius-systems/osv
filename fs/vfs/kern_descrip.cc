@@ -14,7 +14,6 @@
 #include <osv/debug.h>
 #include <osv/mutex.h>
 #include <osv/rcu.hh>
-#include <boost/range/algorithm/find.hpp>
 
 #include <bsd/sys/sys/queue.h>
 
@@ -215,28 +214,6 @@ void file::stop_polls()
         for (auto ep : *f_epolls) {
             epoll_file_closed(ep);
         }
-    }
-}
-
-void file::epoll_add(epoll_ptr ep)
-{
-    WITH_LOCK(f_lock) {
-        if (!f_epolls) {
-            f_epolls.reset(new std::vector<epoll_ptr>);
-        }
-        if (boost::range::find(*f_epolls, ep) == f_epolls->end()) {
-            f_epolls->push_back(ep);
-        }
-    }
-}
-
-void file::epoll_del(epoll_ptr ep)
-{
-    WITH_LOCK(f_lock) {
-        assert(f_epolls);
-        auto i = boost::range::find(*f_epolls, ep);
-        assert(i != f_epolls->end());
-        f_epolls->erase(i);
     }
 }
 
