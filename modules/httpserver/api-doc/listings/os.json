@@ -104,6 +104,24 @@
             ]
         },
         {
+            "path": "/os/memory/balloon",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "return the balloon Size in bytes",
+                    "notes": "",
+                    "responseClass": "long",
+                    "nickname": "getBalloonSize",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                    ]
+                }
+            ]
+        },
+        {
             "path": "/os/memory/free",
             "operations": [
                 {

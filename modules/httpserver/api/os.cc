@@ -18,6 +18,7 @@
 #include <api/unistd.h>
 #include <osv/commands.hh>
 #include <algorithm>
+#include "java/balloon_api.hh"
 
 extern char debug_buffer[DEBUG_BUFFER_SIZE];
 
@@ -135,6 +136,10 @@ void init(routes& routes)
 
         return osv::getcmdline();
 
+    });
+    getBalloonSize.set_handler([](const_req req)
+    {
+        return memory::get_balloon_size();
     });
 
 }
