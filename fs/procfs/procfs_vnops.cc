@@ -22,6 +22,7 @@
 #include <osv/printf.hh>
 
 #include <sys/resource.h>
+#include <mntent.h>
 
 namespace procfs {
 
@@ -326,6 +327,27 @@ static std::string procfs_stats()
 
 }
 
+static std::string procfs_mounts()
+{
+	std::string rstr;
+	FILE        *fp = setmntent("/proc/mounts", "r");
+	if (!fp) {
+		return rstr;
+	}
+
+	char   *line = NULL;
+	size_t lsz   = 0;
+
+	while (getline(&line, &lsz, fp) > 0) {
+		rstr += line;
+	}
+
+	free(line);
+
+	endmntent(fp);
+	return rstr;
+}
+
 static int
 procfs_mount(mount* mp, const char *dev, int flags, void* data)
 {
@@ -338,6 +360,7 @@ procfs_mount(mount* mp, const char *dev, int flags, void* data)
     auto* root = new proc_dir_node(vp->v_ino);
     root->add("self", self);
     root->add("0", self); // our standard pid
+    root->add("mounts", inode_count++, procfs_mounts);
 
     vp->v_data = static_cast<void*>(root);
 
