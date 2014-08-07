@@ -2,6 +2,7 @@
 zpool-cmd-file-list = zpool_iter  zpool_main  zpool_util  zpool_vdev
 
 zpool-cmd-objects = $(foreach x, $(zpool-cmd-file-list), bsd/cddl/contrib/opensolaris/cmd/zpool/$x.o)
+zpool-cmd-objects += $(src)/bsd/porting/mnttab.o
 
 cflags-zpool-cmd-includes = $(cflags-libzfs-include) -I$(src)/bsd/cddl/contrib/opensolaris/cmd/stat/common
 

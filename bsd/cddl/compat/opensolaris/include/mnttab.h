@@ -27,9 +27,21 @@ struct mnttab {
 
 __BEGIN_DECLS
 
-int getmntany(FILE *fd, struct mnttab *mgetp, struct mnttab *mrefp);
+#ifdef __OSV__
+#define getmntent bsd_getmntent
+#define hasmntopt bsd_hasmntopt
+#define getmntany bsd_getmntany
+
+extern int bsd_getmntent(FILE *fp, struct mnttab *mp);
+extern char *bsd_hasmntopt(struct mnttab *mnt, char *opt);
+extern int bsd_getmntany(FILE *fd, struct mnttab *mgetp, struct mnttab *mrefp);
+extern FILE *setmntent(const char *filename, const char *type);
+
+#else
 int getmntent(FILE *fp, struct mnttab *mp);
 char *hasmntopt(struct mnttab *mnt, char *opt);
+int getmntany(FILE *fd, struct mnttab *mgetp, struct mnttab *mrefp);
+#endif
 
 void statfs2mnttab(struct statfs *sfs, struct mnttab *mp);
 

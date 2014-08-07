@@ -2,6 +2,7 @@
 zfs-cmd-file-list = zfs_iter zfs_main
 
 zfs-cmd-objects = $(foreach x, $(zfs-cmd-file-list), bsd/cddl/contrib/opensolaris/cmd/zfs/$x.o)
+zfs-cmd-objects += $(src)/bsd/porting/mnttab.o
 
 cflags-zfs-cmd-includes = $(cflags-libzfs-include)
 # -I$(src)/bsd/cddl/contrib/opensolaris/cmd/stat/common

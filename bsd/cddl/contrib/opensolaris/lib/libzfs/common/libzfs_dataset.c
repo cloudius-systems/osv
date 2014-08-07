@@ -723,9 +723,6 @@ int
 libzfs_mnttab_find(libzfs_handle_t *hdl, const char *fsname,
     struct mnttab *entry)
 {
-#ifdef __OSV__
-	return ENOENT;
-#else
 	mnttab_node_t find;
 	mnttab_node_t *mtn;
 
@@ -753,7 +750,6 @@ libzfs_mnttab_find(libzfs_handle_t *hdl, const char *fsname,
 		return (0);
 	}
 	return (ENOENT);
-#endif
 }
 
 void
