@@ -11,6 +11,8 @@
 #include <memory>
 #include "client.hh"
 #include <boost/asio.hpp>
+#include "data-source.hh"
+#include <osv/debug.hh>
 
 namespace init {
 using namespace std;
@@ -47,25 +49,68 @@ static std::string get_url(const std::string& server, const std::string& path,
     return c.text();
 }
 
-void script_module::load_file(const std::string& path)
+static string get_user_data() {
+    auto& ds = get_data_source();
+    return ds.get_user_data();
+}
+
+void include_module::load_file(const std::string& path)
 {
     if (!mark(path)) {
-        handle(YAML::LoadFile(path));
+        init.load_file(path);
     }
 }
 
-void script_module::load_url(const std::string& server, const std::string& path,
-                       const std::string& port)
+void include_module::load_url(const YAML::Node& doc)
 {
+    if (!doc["path"]) {
+        throw osvinit_exception("missing path parameter in remote include");
+    }
+    if (!doc["server"]) {
+        throw osvinit_exception("missing server parameter in remote include");
+    }
+    std::string port = (doc["port"]) ? doc["port"].as<std::string>() : "";
+    std::string path = doc["path"].as<std::string>();
+    std::string server = doc["server"].as<std::string>();
     if (!mark(server + path)) {
-        load(get_url(server, path, port));
+        init.load_url(server, path, port);
     }
 }
 
-void script_module::load(const std::string& script)
-{
-    handle(YAML::Load(script));
+std::string get_node_name(const YAML::detail::iterator_value& node) {
+    if (node.IsScalar()) {
+        return node.as<std::string>();
+    }
+    return node.begin()->first.as<std::string>();
 }
+
+void include_module::handle(const YAML::Node& doc)
+{
+    for (auto& node : doc) {
+        if (node.IsScalar()) {
+            if (node.as<std::string>() == "load-from-cloud") {
+                init.load_from_cloud();
+            } else {
+                throw osvinit_exception(
+                                        "unknown include "+ node.as<std::string>()+ " use: load-from-cloud, file or remote");
+            }
+        } else {
+            if (node["file"]) {
+                load_file(node["file"].as<std::string>());
+            } else if (node["remote"]) {
+                load_url(node["remote"]);
+            } else if (node["load-from-cloud"]) {
+                bool allow = node["load-from-cloud"].IsMap() &&  node["load-from-cloud"]["ignore-missing-source"] &&
+                        node["load-from-cloud"]["ignore-missing-source"].as<bool>();
+                init.load_from_cloud(allow);
+            } else {
+                throw osvinit_exception(
+                        "unknown include "+ get_node_name(node)+ " use: load-from-cloud, file or remote");
+            }
+        }
+    }
+}
+
 
 void script_module::yaml_to_request(const YAML::Node& node, http::server::request& req)
 {
@@ -94,16 +139,6 @@ void script_module::yaml_to_request(const YAML::Node& node, http::server::reques
     req.uri = node[method].as<string>();
 }
 
-void script_module::do_include(http::server::request& api)
-{
-    if (api.get_query_param("path") != "") {
-        load_file(api.get_query_param("path"));
-    } else {
-        load_url(api.get_query_param("host"), api.get_query_param("url"),
-                 api.get_query_param("port"));
-    }
-}
-
 void script_module::do_api(http::server::request& req)
 {
     http::server::reply rep;
@@ -120,9 +155,7 @@ void script_module::handle(const YAML::Node& doc)
     for (auto& node : doc) {
         http::server::request req;
         yaml_to_request(node, req);
-        if (req.uri == "/include") {
-            do_include (req);
-        } else if (req.uri == "/open-rest-api") {
+        if (req.uri == "/open-rest-api") {
             should_wait = true;
             t = std::thread([=] {boost::program_options::variables_map c; httpserver::global_server::run(c); });
         } else if (!req.uri.empty()) {
@@ -158,6 +191,27 @@ void osvinit::load_url(const std::string& server, const std::string& path,
 {
     load(get_url(server, path, port));
 }
+
+void osvinit::load_from_cloud(bool ignore_missing_source)
+{
+
+    std::string user_data;
+    try {
+        user_data = get_user_data();
+    } catch (const std::runtime_error& e) {
+        if (ignore_missing_source) {
+            return;
+        }
+        throw osvinit_exception("Failed getting cloud-init information "+std::string(e.what()));
+    }
+    if (user_data.empty()) {
+        debug("User data is empty\n");
+        return;
+    }
+
+    load(user_data);
+}
+
 
 /**
  * Wrap the run server command in the global server in a method

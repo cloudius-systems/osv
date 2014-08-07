@@ -6,7 +6,6 @@
  */
 
 #include "cloud-init.hh"
-#include "data-source.hh"
 #include "files-module.hh"
 #include "server-module.hh"
 #include <boost/program_options/variables_map.hpp>
@@ -18,19 +17,6 @@
 using namespace std;
 using namespace init;
 namespace po = boost::program_options;
-
-static void load_from_cloud(osvinit& init)
-{
-    auto& ds = get_data_source();
-    auto user_data = ds.get_user_data();
-
-    if (user_data.empty()) {
-        debug("User data is empty\n");
-        return;
-    }
-
-    init.load(user_data);
-}
 
 int main(int argc, char* argv[])
 {
@@ -66,6 +52,7 @@ int main(int argc, char* argv[])
         init.add_module(scripts);
         init.add_module(make_shared<files_module>());
         init.add_module(make_shared<server_module>());
+        init.add_module(make_shared<include_module>(init));
 
         if (config.count("file")) {
             init.load_file(config["file"].as<std::string>());
@@ -74,7 +61,7 @@ int main(int argc, char* argv[])
                 config["url"].as<std::string>(),
                 config["port"].as<std::string>());
         } else {
-            load_from_cloud(init);
+            init.load_from_cloud();
         }
 
         scripts->wait();
