@@ -92,7 +92,7 @@ fs_getfsname(vfsops* ops)
 }
 
 int
-sys_mount(const char *dev, const char *dir, const char *fsname, int flags, void *data)
+sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const void *data)
 {
     const struct vfssw *fs;
     struct mount *mp;

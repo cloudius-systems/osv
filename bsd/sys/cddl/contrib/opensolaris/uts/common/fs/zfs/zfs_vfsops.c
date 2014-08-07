@@ -1419,7 +1419,7 @@ getpoolname(const char *osname, char *poolname)
 }
 
 static int
-zfs_mount(struct mount *mp, const char *dev, int flags, void *data)
+zfs_mount(struct mount *mp, const char *dev, int flags, const void *data)
 {
 	// If @data is present, then it is the osname, while @dev is the device
 	//    (root mount)

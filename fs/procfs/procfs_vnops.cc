@@ -349,7 +349,7 @@ static std::string procfs_mounts()
 }
 
 static int
-procfs_mount(mount* mp, const char *dev, int flags, void* data)
+procfs_mount(mount* mp, const char *dev, int flags, const void* data)
 {
     auto* vp = mp->m_root->d_vnode;
 
