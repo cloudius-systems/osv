@@ -27,10 +27,8 @@ int main(int argc, char* argv[])
         ("help", "produce help message")
         ("access-allow",
              "Set the Access-Control-Allow-Origin to *. Note the security risk")
-        ("ipaddress", po::value<std::string>()->default_value("0.0.0.0"),
-             "set the ip address")
-        ("port", po::value<std::string>()->default_value("8000"),
-             "set the port");
+        ("ipaddress", "set the ip address")
+        ("port", "set the port");
 
     po::variables_map config;
     po::store(po::parse_command_line(argc, argv, desc), config);
@@ -41,8 +39,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    global_server::set(config);
-    global_server::run();
+    global_server::run(config);
 
     return 0;
 }

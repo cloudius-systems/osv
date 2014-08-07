@@ -35,7 +35,7 @@ OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
 LIBS = -lpthread -lboost_program_options-mt $(boost-libs)
-EXTRA_LIBS = -L$(OSV_BUILD_PATH)/tools -ltools
+EXTRA_LIBS = -L$(OSV_BUILD_PATH)/tools -ltools   -L$(boost-lib-dir) -lyaml-cpp
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)

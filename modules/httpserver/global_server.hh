@@ -38,20 +38,13 @@ public:
     }
 
     /**
-     * set configuration based on command line.
-     * @param config a variable map
-     * @return a reference to the server
-     */
-    static global_server& set(po::variables_map& config);
-
-    /**
      * start the main loop of the server
      * The first time the method is called it would loop forever
      * and would never return.
      *
      * @return false if the server already running
      */
-    static bool run();
+    static bool run(po::variables_map& config);
 
     /**
      * set an entry in the configuration
@@ -69,6 +62,13 @@ private:
     routes _routes;
     http::server::server* s;
     po::variables_map config;
+
+    /**
+     * set configuration based on command line.
+     * @param config a variable map
+     * @return a reference to the server
+     */
+    static global_server& set(po::variables_map& config);
 
 };
 

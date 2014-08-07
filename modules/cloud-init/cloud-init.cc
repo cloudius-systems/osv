@@ -124,7 +124,7 @@ void script_module::handle(const YAML::Node& doc)
             do_include (req);
         } else if (req.uri == "/open-rest-api") {
             should_wait = true;
-            t = std::thread([=] { httpserver::global_server::run(); });
+            t = std::thread([=] {boost::program_options::variables_map c; httpserver::global_server::run(c); });
         } else if (!req.uri.empty()) {
             do_api(req);
         }
