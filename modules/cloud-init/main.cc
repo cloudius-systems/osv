@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
 
         scripts->wait();
     } catch (...) {
-        std::cerr << "could-init failed: " << what(std::current_exception()) << "\n";
+        std::cerr << "cloud-init failed: " << what(std::current_exception()) << "\n";
         return 1;
     }
 
