@@ -161,7 +161,7 @@ def align_down(v, pagesize):
 def align_up(v, pagesize):
     return align_down(v + pagesize - 1, pagesize)
 
-def split_format(format_str):
+def do_split_format(format_str):
     chars = iter(format_str)
     while True:
         c = next(chars)
@@ -175,6 +175,14 @@ def split_format(format_str):
                 c = next(chars)
                 fmt += str(c)
             yield fmt
+
+_split_cache = {}
+def split_format(format_str):
+    result = _split_cache.get(format_str, None)
+    if not result:
+        result = list(do_split_format(format_str))
+        _split_cache[format_str] = result
+    return result
 
 formatters = {
     '*': lambda bytes: '{' + ' '.join('%02x' % ord(b) for b in bytes) + '}'
