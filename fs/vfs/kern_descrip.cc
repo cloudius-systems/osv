@@ -195,8 +195,8 @@ int fdrop(struct file *fp)
      */
 
     fp->f_count = INT_MIN;
-    fp->close();
     fp->stop_polls();
+    fp->close();
     rcu_dispose(fp);
     return 1;
 }
