@@ -43,6 +43,24 @@ namespace pthread_private {
     __attribute__ ((init_priority ((int)init_prio::pthread)))
                   std::vector<void (*)(void*)> tsd_dtor(tsd_nkeys);
 
+    void __attribute__((constructor)) pthread_register_tsd_dtor_notifier()
+    {
+        sched::thread::register_exit_notifier([] {
+            bool done = false;
+            for (unsigned iter = 0; !done && iter < PTHREAD_DESTRUCTOR_ITERATIONS; ++iter) {
+                done = true;
+                for (unsigned i = 0; i < tsd_nkeys; ++i) {
+                    if (tsd[i] && tsd_dtor[i]) {
+                        void *val = tsd[i];
+                        tsd[i] = nullptr;
+                        tsd_dtor[i](val);
+                        done = false;
+                    }
+                }
+            }
+        });
+    }
+
     struct thread_attr;
 
     class pthread {
