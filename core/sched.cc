@@ -960,13 +960,6 @@ void thread::complete()
 {
     run_exit_notifiers();
 
-    {
-        auto app = application::get_current();
-        if (app) {
-            app->abandon_current();
-        }
-    }
-
     auto value = detach_state::attached;
     _detach_state.compare_exchange_strong(value, detach_state::attached_complete);
     if (value == detach_state::detached) {
