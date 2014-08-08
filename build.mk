@@ -343,6 +343,7 @@ tests += tests/misc-lock-perf.so
 tests += tests/tst-uio.so
 tests += tests/tst-printf.so
 tests += tests/tst-pthread-affinity.so
+tests += tests/tst-pthread-tsd.so
 tests += tests/tst-thread-local.so
 tests += tests/tst-seek.so
 tests += tests/tst-app.so
