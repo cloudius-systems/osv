@@ -54,17 +54,6 @@ void application::adopt_current()
     current_app = shared_from_this();
 }
 
-TRACEPOINT(trace_app_adopt, "app=%p, thread=%p", application*, sched::thread*);
-
-void application::adopt(sched::thread* thread)
-{
-    trace_app_adopt(this, thread);
-
-    auto& app_ref = thread->remote_thread_local_var(current_app);
-    assert(!app_ref);
-    app_ref = shared_from_this();
-}
-
 TRACEPOINT(trace_app_abandon_current, "app=%p", application*);
 
 void application::abandon_current()

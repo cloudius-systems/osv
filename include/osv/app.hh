@@ -80,12 +80,6 @@ public:
     void adopt_current();
 
     /**
-     * Moves given thread under this application context.
-     * Should be called only from that thread's constructor
-     */
-    void adopt(sched::thread* thread);
-
-    /**
      * Removes current thread from this application context.
      */
     void abandon_current();
