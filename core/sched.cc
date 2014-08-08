@@ -726,9 +726,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     if (!main && sched::s_current) {
         remote_thread_local_var(s_current) = this;
 
-        auto app = application::get_current();
+        const auto& app = application::get_current();
         if (app) {
-            app->adopt(this);
+            _func = [app, func] {
+                app->adopt_current();
+                func();
+            };
         }
     }
     init_stack();
