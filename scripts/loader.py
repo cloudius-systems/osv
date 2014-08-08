@@ -319,7 +319,7 @@ class osv_zfs(gdb.Command):
             # Shift to inflate low size I/O request
             vdev_cache_bshift = gdb.parse_and_eval('zfs_vdev_cache_bshift')
 
-            print (":: VDEV SETTINGS ::")
+            print ("\n:: VDEV SETTINGS ::")
             print ("\tvdev_cache_max:    %d" % vdev_cache_max)
             print ("\tvdev_cache_size:   %d" % vdev_cache_size)
             print ("\tvdev_cache_bshift: %d" % vdev_cache_bshift)
@@ -332,9 +332,9 @@ class osv_zfs(gdb.Command):
             vdev_hits = get_stat_by_name(vdc_stats_struct, vdc_stats_cast, 'vdc_stat_hits')
             vdev_misses = get_stat_by_name(vdc_stats_struct, vdc_stats_cast, 'vdc_stat_misses')
 
-            print ("\t\tvdev_cache_delegations:  %d" % vdev_delegations)
-            print ("\t\tvdev_cache_hits:         %d" % vdev_hits)
-            print ("\t\tvdev_cache_misses:       %d" % vdev_misses)
+            print ("\t\tvdev_cache_delegations: %d" % vdev_delegations)
+            print ("\t\tvdev_cache_hits:        %d" % vdev_hits)
+            print ("\t\tvdev_cache_misses:      %d" % vdev_misses)
 
         # Get address of 'struct arc_stats arc_stats'
         arc_stats_struct = int(gdb.parse_and_eval('(u64) &arc_stats'))
@@ -351,58 +351,120 @@ class osv_zfs(gdb.Command):
         arc_mru_perc = 100 * (float(arc_mru_size) / arc_target_size)
         arc_mfu_perc = 100 * (float(arc_mfu_size) / arc_target_size)
 
-        print (":: ARC SIZES ::")
-        print ("\tActual ARC Size:        %d" % arc_size)
-        print ("\tTarget size of ARC:     %d" % arc_target_size)
-        print ("\tMin Target size of ARC: %d" % arc_min_size)
-        print ("\tMax Target size of ARC: %d" % arc_max_size)
-        print ("\t\tMost Recently Used (MRU) size:   %d (%.2f%%)" %
-               (arc_mru_size, arc_mru_perc))
-        print ("\t\tMost Frequently Used (MFU) size: %d (%.2f%%)" %
-               (arc_mfu_size, arc_mfu_perc))
+        print ("\n:: ARC SIZES ::")
+        print ("\tCurrent size:    %d (%d MB)" %
+               (arc_size, arc_size / 1024 / 1024))
+        print ("\tTarget size:     %d (%d MB)" %
+               (arc_target_size, arc_target_size / 1024 / 1024))
+        print ("\tMin target size: %d (%d MB)" %
+               (arc_min_size, arc_min_size / 1024 / 1024))
+        print ("\tMax target size: %d (%d MB)" %
+               (arc_max_size, arc_max_size / 1024 / 1024))
 
-        # Cache hits/misses
+        print ("\n:: ARC SIZE BREAKDOWN ::")
+        print ("\tMost recently used cache size:   %d (%d MB) (%.2f%%)" %
+               (arc_mru_size, arc_mru_size / 1024 / 1024, arc_mru_perc))
+        print ("\tMost frequently used cache size: %d (%d MB) (%.2f%%)" %
+               (arc_mfu_size, arc_mfu_size / 1024 / 1024, arc_mfu_perc))
+
+        # Cache efficiency
         arc_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_hits')
         arc_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_misses')
-        arc_ac_total = arc_hits + arc_misses;
-        arc_hits_perc = 100 * (float(arc_hits) / arc_ac_total);
-        arc_misses_perc = 100 * (float(arc_misses) / arc_ac_total);
+        arc_ac_total = arc_hits + arc_misses
 
-        print (":: ARC EFFICIENCY ::")
-        print ("Total ARC accesses: %d" % arc_ac_total)
-        print ("\tARC hits: %d (%.2f%%)" %
-               (arc_hits, arc_hits_perc))
+        arc_hits_perc = 100 * (float(arc_hits) / arc_ac_total)
+        arc_misses_perc = 100 * (float(arc_misses) / arc_ac_total)
 
         arc_mru_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_mru_hits')
         arc_mru_ghost_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_mru_ghost_hits')
-        arc_mru_hits_perc = 100 * (float(arc_mru_hits) / arc_hits);
-
-        print ("\t\tARC MRU hits: %d (%.2f%%)" %
-               (arc_mru_hits, arc_mru_hits_perc))
-        print ("\t\t\tGhost Hits: %d" % arc_mru_ghost_hits)
-
         arc_mfu_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_mfu_hits')
         arc_mfu_ghost_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_mfu_ghost_hits')
-        arc_mfu_hits_perc = 100 * (float(arc_mfu_hits) / arc_hits);
+        arc_anon_hits = arc_hits - (arc_mru_hits + arc_mru_ghost_hits + arc_mfu_hits + arc_mfu_ghost_hits)
 
-        print ("\t\tARC MFU hits: %d (%.2f%%)" %
-               (arc_mfu_hits, arc_mfu_hits_perc))
-        print ("\t\t\tGhost Hits: %d" % arc_mfu_ghost_hits)
+        arc_mru_hits_perc = 100 * (float(arc_mru_hits) / arc_hits)
+        arc_mru_ghost_hits_perc = 100 * (float(arc_mru_ghost_hits) / arc_hits)
+        arc_mfu_hits_perc = 100 * (float(arc_mfu_hits) / arc_hits)
+        arc_mfu_ghost_hits_perc = 100 * (float(arc_mfu_ghost_hits) / arc_hits)
+        arc_anon_hits_perc = 100 * (float(arc_anon_hits) / arc_hits)
 
-        print ("\tARC misses: %d (%.2f%%)" %
-               (arc_misses, arc_misses_perc))
+        arc_real_hits = arc_mru_hits + arc_mfu_hits
+        arc_real_hits_perc = 100 * (float(arc_real_hits) / arc_ac_total)
 
-        # Streaming ratio
+        demand_data_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_demand_data_hits')
+        demand_metadata_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_demand_metadata_hits')
         prefetch_data_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_prefetch_data_hits')
-        prefetch_data_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_prefetch_data_misses')
         prefetch_metadata_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_prefetch_metadata_hits')
-        prefetch_metadata_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_prefetch_metadata_misses')
-        prefetch_total = float(prefetch_data_hits + prefetch_data_misses + prefetch_metadata_hits + prefetch_metadata_misses)
 
-        print ("Prefetch workload ratio: %.4f%%" % (prefetch_total / arc_ac_total))
-        print ("Prefetch total:          %d" % prefetch_total)
-        print ("\tPrefetch hits:   %d" % (prefetch_data_hits + prefetch_metadata_hits))
-        print ("\tPrefetch misses: %d" % (prefetch_data_misses + prefetch_metadata_misses))
+        demand_data_hits_perc = 100 * (float(demand_data_hits) / arc_hits)
+        demand_metadata_hits_perc = 100 * (float(demand_metadata_hits) / arc_hits)
+        prefetch_data_hits_perc = 100 * (float(prefetch_data_hits) / arc_hits)
+        prefetch_metadata_hits_perc = 100 * (float(prefetch_metadata_hits) / arc_hits)
+
+        demand_data_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_demand_data_misses')
+        demand_metadata_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_demand_metadata_misses')
+        prefetch_data_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_prefetch_data_misses')
+        prefetch_metadata_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_prefetch_metadata_misses')
+
+        demand_data_misses_perc = 100 * (float(demand_data_misses) / arc_misses)
+        demand_metadata_misses_perc = 100 * (float(demand_metadata_misses) / arc_misses)
+        prefetch_data_misses_perc = 100 * (float(prefetch_data_misses) / arc_misses)
+        prefetch_metadata_misses_perc = 100 * (float(prefetch_metadata_misses) / arc_misses)
+
+        prefetch_data_total = (prefetch_data_hits + prefetch_data_misses)
+        prefetch_data_perc = 0
+        if prefetch_data_total > 0:
+            prefetch_data_perc = 100 * (float(prefetch_data_hits) / prefetch_data_total)
+
+        demand_data_total = (demand_data_hits + demand_data_misses)
+        demand_data_perc = 100 * (float(demand_data_hits) / demand_data_total)
+
+        print ("\n:: ARC EFFICIENCY ::")
+        print ("\tCache access total:  %d" %
+               arc_ac_total)
+        print ("\tCache hit ratio:     %d (%.2f%%)" %
+               (arc_hits, arc_hits_perc))
+        print ("\tCache miss ratio:    %d (%.2f%%)" %
+               (arc_misses, arc_misses_perc))
+        print ("\tREAL hit ratio:      %d (%.2f%%)" %
+               (arc_real_hits, arc_real_hits_perc))
+
+        print ("\n\tData demand efficiency:   %.2f%%" %
+               demand_data_perc)
+        if prefetch_data_total == 0:
+            print ("\tData prefetch efficiency: DISABLED")
+        else:
+            print ("\tData prefetch efficiency: %.2f%%" %
+                   prefetch_data_perc)
+
+        print ("\n:: CACHE HITS BY CACHE LIST ::")
+        print ("\tMost recently used:           %d (%.2f%%)" %
+               (arc_mru_hits, arc_mru_hits_perc))
+        print ("\tMost frequently used:         %d (%.2f%%)" %
+               (arc_mfu_hits, arc_mfu_hits_perc))
+        print ("\tMost recently used (Ghost):   %d (%.2f%%)" %
+               (arc_mru_ghost_hits, arc_mru_ghost_hits_perc))
+        print ("\tMost frequently used (Ghost): %d (%.2f%%)" %
+               (arc_mfu_ghost_hits, arc_mfu_ghost_hits_perc))
+
+        print ("\n:: CACHE HITS BY DATA TYPE ::")
+        print ("\tDemand data:       %d (%.2f%%)" %
+               (demand_data_hits, demand_data_hits_perc))
+        print ("\tPrefetch data:     %d (%.2f%%)" %
+               (prefetch_data_hits, prefetch_data_hits_perc))
+        print ("\tDemand metadata:   %d (%.2f%%)" %
+               (demand_metadata_hits, demand_metadata_hits_perc))
+        print ("\tPrefetch metadata: %d (%.2f%%)" %
+               (prefetch_metadata_hits, prefetch_metadata_hits_perc))
+
+        print ("\n:: CACHE MISSES BY DATA TYPE ::")
+        print ("\tDemand data:       %d (%.2f%%)" %
+               (demand_data_misses, demand_data_misses_perc))
+        print ("\tPrefetch data:     %d (%.2f%%)" %
+               (prefetch_data_misses, prefetch_data_misses_perc))
+        print ("\tDemand metadata:   %d (%.2f%%)" %
+               (demand_metadata_misses, demand_metadata_misses_perc))
+        print ("\tPrefetch metadata: %d (%.2f%%)" %
+               (prefetch_metadata_misses, prefetch_metadata_misses_perc))
 
         # Hash data
         arc_hash_elements = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_hash_elements')
@@ -410,10 +472,11 @@ class osv_zfs(gdb.Command):
         arc_hash_collisions = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_hash_collisions')
         arc_hash_chains = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_hash_chains')
 
-        print ("Total Hash elements: %d" % arc_hash_elements)
-        print ("\tMax Hash elements: %d" % arc_max_hash_elements)
-        print ("\tHash collisions:   %d" % arc_hash_collisions)
-        print ("\tHash chains:       %d" % arc_hash_chains)
+        print ("\n:: ARC HASH INFO ::")
+        print ("\tTotal hash elements: %d" % arc_hash_elements)
+        print ("\tMax hash elements:   %d" % arc_max_hash_elements)
+        print ("\tHash collisions:     %d" % arc_hash_collisions)
+        print ("\tHash chains:         %d" % arc_hash_chains)
 
         # L2ARC (not displayed if not supported)
         l2arc_size = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_l2_size')
@@ -425,12 +488,12 @@ class osv_zfs(gdb.Command):
             l2arc_hits_perc = 100 * (float(l2arc_hits) / l2arc_ac_total);
             l2arc_misses_perc = 100 * (float(l2arc_misses) / l2arc_ac_total);
 
-            print (":: L2ARC ::")
-            print ("\tActual L2ARC Size: %d" % l2arc_size)
-            print ("Total L2ARC accesses: %d" % l2arc_ac_total)
-            print ("\tL2ARC hits:   %d (%.2f%%)" %
+            print ("\n:: L2ARC ::")
+            print ("\tCurrent size:   %d" % l2arc_size)
+            print ("\tTotal accesses: %d" % l2arc_ac_total)
+            print ("\tCache hits:     %d (%.2f%%)" %
                    (l2arc_hits, l2arc_hits_perc))
-            print ("\tL2ARC misses: %d (%.2f%%)" %
+            print ("\tCache misses:   %d (%.2f%%)" %
                    (l2arc_misses, l2arc_misses_perc))
 
 def bits2str(bits, chars):
