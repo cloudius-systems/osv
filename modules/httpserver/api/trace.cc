@@ -17,9 +17,13 @@
 #include <sys/stat.h>
 #include <osv/tracecontrol.hh>
 #include <osv/sampler.hh>
+#include <osv/trace-count.hh>
 
 using namespace httpserver::json;
 using namespace httpserver::json::trace_json;
+
+static std::unordered_map<tracepoint_base*,
+    std::unique_ptr<tracepoint_counter>> counters;
 
 /**
  * Initialize the routes object with specific routes mapping
@@ -148,4 +152,42 @@ void httpserver::api::trace::init(routes & routes)
     };
 
     trace_json::getTraceBuffers.set_handler(new create_trace_dump());
+
+    trace_json::setCountEvent.set_handler([](const_req req) {
+        const auto eventid = req.param.at("eventid").substr(1);
+        const auto enabled = str2bool(req.get_query_param("enabled"));
+        bool found = false;
+        for (auto & tp : tracepoint_base::tp_list) {
+            if (eventid == std::string(tp.name)) {
+                if (enabled) {
+                    counters[&tp] = std::unique_ptr<tracepoint_counter>(
+                            new tracepoint_counter(tp));
+                } else {
+                    counters.erase(&tp);
+                }
+                found = true;
+            }
+        }
+        if (!found) {
+            throw bad_request_exception("Unknown tracepoint name");
+        }
+        return "";
+    });
+    trace_json::getCounts.set_handler([](const_req req) {
+        httpserver::json::TraceCounts ret;
+        ret.time_ms = std::chrono::duration_cast<std::chrono::milliseconds>
+            (osv::clock::uptime::now().time_since_epoch()).count();
+        for (auto &it : counters) {
+            TraceCount c;
+            c.name = it.first->name;
+            c.count = it.second->read();
+            ret.list.push(c);
+        }
+        return ret;
+    });
+    trace_json::deleteCounts.set_handler([](const_req req) {
+        counters.clear();
+        return "";
+    });
+
 }
