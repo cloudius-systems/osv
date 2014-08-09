@@ -489,7 +489,6 @@ void main_cont(int ac, char** av)
     vfs_init();
     boot_time.event("VFS initialized");
     ramdisk_init();
-    zfs_init(NULL);
 
     net_init();
     boot_time.event("Network initialized");

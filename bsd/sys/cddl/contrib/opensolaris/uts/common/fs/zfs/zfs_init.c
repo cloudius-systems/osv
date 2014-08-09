@@ -74,9 +74,10 @@ zfs_space_delta_cb(dmu_object_type_t bonustype, void *data,
 	return (error);
 }
 
-void zfs_init(void *arg)
+int zfs_init(void)
 {
 	spa_init(FREAD | FWRITE);
 	dmu_objset_register_type(DMU_OST_ZFS, zfs_space_delta_cb);
 	zfs_znode_init();
+	return 0;
 }
