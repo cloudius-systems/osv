@@ -670,6 +670,9 @@ elf64_hash(const char *name)
 
 Elf64_Sym* object::lookup_symbol_old(const char* name)
 {
+    if (!dynamic_exists(DT_SYMTAB)) {
+        return nullptr;
+    }
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto hashtab = dynamic_ptr<Elf64_Word>(DT_HASH);
@@ -781,6 +784,9 @@ dladdr_info object::lookup_addr(const void* addr)
     if (addr < _base || addr >= _end) {
         return ret;
     }
+    if (!dynamic_exists(DT_STRTAB)) {
+        return ret;
+    }
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto len = symtab_len();
@@ -835,6 +841,9 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
         std::string rpath_str = dynamic_str(DT_RPATH);
         boost::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
         boost::split(rpath, rpath_str, boost::is_any_of(":"));
+    }
+    if (!dynamic_exists(DT_NEEDED)) {
+        return;
     }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
