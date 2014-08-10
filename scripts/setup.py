@@ -29,7 +29,7 @@ class Fedora(object):
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'python-requests', 'p11-kit', 'patch', 'wget',
                 'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs',
-                'openssl-devel', 'libedit-devel'
+                'openssl-devel', 'libedit-devel', 'glibc-static'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
