@@ -57,9 +57,13 @@ while True:
 
     if idles:
         print("on %d CPUs; idle: " % (len(idles)), end='')
+        total = 0.0
         for n in sorted(idles):
             percent = 100.0*idles[n]/(newtimems - timems)
+            total += percent
             print ("%3.0f%% "%percent, end='')
+        if len(idles) > 1:
+            print(" (total %3.0f%%)" % total)
     print("")
 
     print("%5s  %s %7s %s" % ("ID", "%CPU", "TIME", "NAME"))
