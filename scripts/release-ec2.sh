@@ -19,6 +19,7 @@ PARAM_MODULES="--modules-list"
 PARAM_REGION="--region"
 PARAM_ZONE="--zone"
 PARAM_PLACEMENT_GROUP="--placement-group"
+PARAM_IMAGE_SIZE="--image-size"
 
 MODULES_LIST=default
 
@@ -62,6 +63,7 @@ This script receives following command line arguments:
     $PARAM_REGION <region> - AWS region to work in
     $PARAM_ZONE <availability zone> - AWS availability zone to work in
     $PARAM_PLACEMENT_GROUP <placement group> - Placement group for instances created by this script
+    $PARAM_IMAGE_SIZE <image size> - size of image to build (unit is MB)
 
 HLPEND
 }
@@ -109,6 +111,13 @@ do
       ;;
     "$PARAM_PLACEMENT_GROUP")
       OSV_PLACEMENT_GROUP=$2
+      shift 2
+      ;;
+    "$PARAM_IMAGE_SIZE")
+      if [ $2 -ne "" ]
+      then
+        IMAGE_SIZE="fs_size_mb=$2"
+      fi
       shift 2
       ;;
     "$PARAM_HELP")
@@ -241,7 +250,7 @@ while true; do
 
     if test x"$DONT_BUILD" != x"1"; then
         echo_progress Building from the scratch
-        make clean && git submodule update && make external && make -j `nproc` img_format=raw image=$MODULES_LIST
+        make clean && git submodule update && make external && make -j `nproc` $IMAGE_SIZE img_format=raw image=$MODULES_LIST
 
         if test x"$?" != x"0"; then
             handle_error Build failed.
