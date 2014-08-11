@@ -283,6 +283,10 @@
                     "type": "long",
                     "description": "32-bit thread id"
                 },
+                "cpu": {
+                    "type": "long",
+                    "description": "CPU the thread is running on"
+                },
                 "cpu_ms" : {
                     "type": "long",
                     "description": "Total CPU time used by the thread (in milliseconds)"
