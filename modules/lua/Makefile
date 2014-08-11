@@ -75,7 +75,8 @@ $(BUILD)/$(LuaRocks_F)/Makefile: $(BUILD)/$(LuaRocks_F)/configure
 	$(eval PREFIX=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST)))))
 	cd $(BUILD)/$(LuaRocks_F) && \
 		./configure --prefix=$(PREFIX)/$(OUT) --force-config \
-		--with-lua-include=$(PREFIX)/src --lua-version=$(LUA_V)
+		--with-lua-include=$(PREFIX)/src --lua-version=$(LUA_V) \
+		--with-lua=$(PREFIX)/$(OUT)
 	touch $@
 
 $(BUILD)/$(LuaRocks_F)/configure: $(DOWNLOAD)/$(LuaRocks_A) | $(BUILD)
