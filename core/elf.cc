@@ -464,6 +464,9 @@ bool object::dynamic_exists(unsigned tag)
 
 Elf64_Dyn* object::_dynamic_tag(unsigned tag)
 {
+    if (!_dynamic_table) {
+        return nullptr;
+    }
     for (auto p = _dynamic_table; p->d_tag != DT_NULL; ++p) {
         if (p->d_tag == tag) {
             return p;
