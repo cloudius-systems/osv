@@ -39,6 +39,8 @@ class testos(basetest.Basetest):
         idle_thread = next((item for item in val["list"] if item["name"] == "idle1"), None)
         idle = idle_thread["cpu_ms"]
         id = idle_thread["id"]
+        cpu = idle_thread["cpu"]
+        self.assertEqual(cpu,1)
         time.sleep(2)
         val = self.curl(path)
         self.assert_key_in("time_ms", val)
