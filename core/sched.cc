@@ -295,6 +295,7 @@ void cpu::reschedule_from_interrupt()
         p->_runtime.hysteresis_run_stop();
         p->_detached_state->st.store(thread::status::queued);
         enqueue(*p);
+        trace_sched_preempt();
     } else {
         // p is no longer running, so we'll switch to a different thread.
         // Return the runtime p borrowed for hysteresis.
