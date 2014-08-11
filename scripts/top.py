@@ -51,7 +51,6 @@ while True:
         if timems:
             diff[id] = cpums - prevtime[id]
         prevtime[id] = cpums
-        cpu
         name[id] = thread['name']
         # Display per-cpu idle threads differently from normal threads
         if thread['name'].startswith('idle') and timems:
