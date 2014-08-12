@@ -874,7 +874,7 @@ static error sync(const void* addr, size_t length, int flags)
     addr_range r(start, end);
     auto range = vma_list.equal_range(r, vma::addr_compare());
     for (auto i = range.first; i != range.second; ++i) {
-        err = i->sync(start, end);
+        err = i->sync(std::max(start, i->start()), std::min(end, i->end()));
         if (err.bad()) {
             break;
         }
@@ -1600,7 +1600,7 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
         return make_error(ENOMEM);
 
     try {
-        _file->sync(std::max(start, _range.start()), std::min(end, _range.end()));
+        _file->sync(_offset + start - _range.start(), _offset + end - _range.start());
     } catch (error& err) {
         return err;
     }
