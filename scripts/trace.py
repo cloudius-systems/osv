@@ -487,8 +487,9 @@ def list_timed(args):
 
         for timed in timed_traces:
             t = timed.trace
-            print '0x%016x %2d %20s %7s %-20s %s%s' % (
+            print '0x%016x %-15s %2d %20s %7s %-20s %s%s' % (
                             t.thread.ptr,
+                            t.thread.name,
                             t.cpu,
                             trace.format_time(t.time),
                             trace.format_duration(timed.duration),
