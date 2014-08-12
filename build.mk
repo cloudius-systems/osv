@@ -241,6 +241,7 @@ boost-tests += tests/tst-timer-set.so
 boost-tests += tests/tst-clock.so
 boost-tests += tests/tst-rcu-hashtable.so
 boost-tests += tests/tst-unordered-ring-mpsc.so
+boost-tests += tests/tst-seek.so
 endif
 
 ifeq ($(arch),aarch64)
@@ -345,7 +346,6 @@ tests += tests/tst-printf.so
 tests += tests/tst-pthread-affinity.so
 tests += tests/tst-pthread-tsd.so
 tests += tests/tst-thread-local.so
-tests += tests/tst-seek.so
 tests += tests/tst-app.so
 endif
 
