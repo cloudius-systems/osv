@@ -149,7 +149,7 @@ class PairTimedTraceMatcher(TimedTraceMatcher):
             return False
 
     def get_correlation_id(self, sample):
-        return sample.thread
+        return sample.thread.ptr
 
 class TimedConventionMatcher(TimedTraceMatcher):
     def __init__(self):
@@ -172,8 +172,8 @@ class TimedConventionMatcher(TimedTraceMatcher):
     def get_correlation_id(self, sample):
         ended = self.get_name_of_ended_func(sample.name)
         if ended:
-            return (sample.thread, ended)
-        return (sample.thread, sample.name)
+            return (sample.thread.ptr, ended)
+        return (sample.thread.ptr, sample.name)
 
 class timed_trace_producer(object):
     pair_matchers = [
@@ -274,11 +274,16 @@ def find_frame_index(frames, name):
     return None
 
 class GroupByThread:
-    def get_group(self, sample):
-        return sample.thread
+    def __init__(self):
+        self.name_by_ptr = {}
 
-    def format(self, group):
-        return 'Thread 0x%x' % group
+    def get_group(self, sample):
+        t = sample.thread
+        self.name_by_ptr[t.ptr] = t.name
+        return t.ptr
+
+    def format(self, ptr):
+        return 'Thread %s (0x%x)' % (self.name_by_ptr[ptr], ptr)
 
 class GroupByCpu:
     def get_group(self, sample):

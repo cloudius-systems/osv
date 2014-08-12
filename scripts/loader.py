@@ -21,7 +21,7 @@ modules = os.path.join(osv_dir, 'modules')
 
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
-from osv.trace import Trace,TracePoint,BacktraceFormatter,format_time,format_duration
+from osv.trace import Trace,Thread,TracePoint,BacktraceFormatter,format_time,format_duration
 from osv import trace, debug
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
@@ -1092,7 +1092,7 @@ def all_traces():
 
             data = unpacker.unpack(tp.signature)
             unpacker.align_up(8)
-            yield Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
+            yield Trace(tp, Thread(thread, thread_name), time, cpu, data, backtrace=backtrace)
 
     iters = map(lambda cpu: one_cpu_trace(cpu), values(state.cpu_list))
     return heapq.merge(*iters)
@@ -1113,7 +1113,7 @@ def dump_trace(out_func):
     tp_fn_exit = lookup_tp('gdb_trace_function_exit')
 
     for trace in all_traces():
-        thread = trace.thread
+        thread = trace.thread.id
         time = trace.time
         cpu = trace.cpu
         tp = trace.tp
