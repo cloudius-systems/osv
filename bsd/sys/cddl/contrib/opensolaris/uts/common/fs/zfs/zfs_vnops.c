@@ -1284,6 +1284,7 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 	if (vget(dvp->v_mount, zp->z_id, &vp)) {
 		/* found in cache */
 		*vpp = vp;
+		ZFS_EXIT(zfsvfs);
 		return 0;
 	}
 	if (!vp) {
