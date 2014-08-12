@@ -85,7 +85,8 @@ private:
         new (addr()) T();
     }
     T* addr(void* base = percpu_base) {
-        return static_cast<T*>(base + _offset);
+        auto* p = static_cast<char*>(base);
+        return reinterpret_cast<T*>(p + _offset);
     }
 private:
     size_t _offset;
