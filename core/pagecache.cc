@@ -610,7 +610,7 @@ private:
             if (buckets_scanned == bucket_count || !scanned) {
                 _cpu = _min_cpu;
             } else {
-                _cpu = std::max(_min_cpu, std::min(_max_cpu, _max_cpu * ((cleared*5.0)/scanned)));
+                _cpu = std::max(_min_cpu, std::min(_max_cpu, _cpu * ((cleared*5.0)/scanned)));
             }
 
             trace_access_scanner(scanned, cleared, _cpu);
