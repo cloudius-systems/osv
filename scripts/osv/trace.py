@@ -388,7 +388,7 @@ class TraceDumpReader :
             data = unpacker.unpack(tp.signature)
             unpacker.align_up(8)
             last_tp = tp;
-            last_trace = Trace(tp, thread, thread_name, time, cpu, data, backtrace=backtrace)
+            last_trace = Trace(tp, Thread(thread, thread_name), time, cpu, data, backtrace=backtrace)
             yield last_trace;
 
     def traces(self):
