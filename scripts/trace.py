@@ -518,7 +518,7 @@ def convert_dump(args) :
 def download_dump(args) :
     out = None;
     if args.dumpfile == None:
-        if args.convert:
+        if not args.no_convert:
             out = tempfile.NamedTemporaryFile()
             args.dumpfile = out.name
         else:
@@ -543,7 +543,7 @@ def download_dump(args) :
 
         urllib.urlretrieve(url, out.name, report)
 
-        if args.convert:
+        if not args.no_convert:
             convert_dump(args)
     finally:
         out.close()
@@ -669,8 +669,8 @@ if __name__ == "__main__":
     cmd_download_dump.add_argument("-u", "--url", action="store",
                                   help="Source URL for REST connections",
                                   default="http://192.168.122.89:8000/")
-    cmd_download_dump.add_argument("-c", "--convert", action="store_true",
-                                  help="Convert the dump to tracefile",
+    cmd_download_dump.add_argument("--no-convert", action="store_true",
+                                  help="Do not convert the dump to tracefile",
                                   )
     cmd_download_dump.add_argument("-f", "--dumpfile", action="store",
                                   help="Trace dump file",
