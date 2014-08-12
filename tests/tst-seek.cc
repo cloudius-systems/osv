@@ -14,16 +14,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <climits>
+#include "tst-fs.hh"
+
+int make_file()
+{
+    char path[PATH_MAX] = "/tmp/tmpfileXXXXXX";
+    auto fd = mkstemp(path);
+    BOOST_REQUIRE_MESSAGE(fd > 0, "open a file");
+    return fd;
+}
 
 BOOST_AUTO_TEST_CASE(test_error_codes)
 {
-    char path[PATH_MAX] = "/tmp/tmpfileXXXXXX";
-
-    mktemp(path);
-
-    auto fd = open(path, O_CREAT | O_RDWR | O_TRUNC);
-
-    BOOST_REQUIRE_MESSAGE(fd > 0, "open a file");
+    auto fd = make_file();
 
     int ret;
 
@@ -43,4 +46,52 @@ BOOST_AUTO_TEST_CASE(test_error_codes)
     BOOST_REQUIRE_MESSAGE(lseek(fd, 0, SEEK_END) == 0, "SEEK_END: zero");
 
     BOOST_REQUIRE_MESSAGE(close(fd) != -1, "close the file");
+}
+
+#define assert_reads_next(fd, c) \
+    do {                                        \
+        char buf[1];                            \
+        BOOST_REQUIRE(read(fd, buf, 1) == 1);   \
+        BOOST_REQUIRE_EQUAL(c, buf[0]);         \
+    } while (0)
+
+BOOST_AUTO_TEST_CASE(test_seek_offsets)
+{
+    auto fd = make_file();
+
+    BOOST_REQUIRE_EQUAL(write(fd, "12345678", 8), 8);
+
+    lseek(fd, 0, SEEK_SET);
+
+    assert_reads_next(fd, '1');
+    assert_reads_next(fd, '2');
+    assert_reads_next(fd, '3');
+
+    lseek(fd, 0, SEEK_SET);
+
+    assert_reads_next(fd, '1');
+    assert_reads_next(fd, '2');
+
+    lseek(fd, 3, SEEK_CUR);
+
+    assert_reads_next(fd, '6');
+    assert_reads_next(fd, '7');
+    assert_reads_next(fd, '8');
+
+    lseek(fd, -5, SEEK_CUR);
+
+    assert_reads_next(fd, '4');
+    assert_reads_next(fd, '5');
+
+    lseek(fd, -5, SEEK_END);
+
+    assert_reads_next(fd, '4');
+    assert_reads_next(fd, '5');
+
+    lseek(fd, -1, SEEK_CUR);
+
+    assert_reads_next(fd, '5');
+    assert_reads_next(fd, '6');
+
+    BOOST_REQUIRE(close(fd) == 0);
 }
