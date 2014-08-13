@@ -14,6 +14,7 @@
 #include <osv/mempool.hh>
 #include "java_api.hh"
 #include "osv/version.hh"
+#include "jni_helpers.hh"
 
 extern size_t jvm_heap_size;
 
@@ -75,6 +76,10 @@ static void mark_heap_option(char **arg, int index, int &has_xms, int &has_xmx)
     if (starts_with(arg[index], "-ms")) {
         has_xms = index;
     }
+}
+
+static void on_vm_stop(JNIEnv *env, jclass clz) {
+    attached_env::set_jvm(nullptr);
 }
 
 static int java_main(int argc, char **argv)
@@ -148,6 +153,8 @@ static int java_main(int argc, char **argv)
     jvm_heap_size = 0;
 
     java_api::set(jvm);
+    attached_env::set_jvm(jvm);
+
     auto mainclass = env->FindClass(RUNJAVA);
     if (!mainclass) {
         if (env->ExceptionOccurred()) {
@@ -158,6 +165,11 @@ static int java_main(int argc, char **argv)
             std::cerr << "java.so: Can't find class " << RUNJAVA << ".\n";
         }
         return 1;
+    }
+
+    {
+        JNINativeMethod rnm = { (char*)"onVMStop", (char*)"()V", (void *)on_vm_stop };
+        env->RegisterNatives(mainclass, &rnm, 1);
     }
 
     auto mainmethod = env->GetStaticMethodID(mainclass, "main", "([Ljava/lang/String;)V");

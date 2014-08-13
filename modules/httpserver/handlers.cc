@@ -19,13 +19,18 @@ const std::string handler_base::ERROR_500_PAGE("<h1>Something went wrong</h1>");
 const std::string handler_base::ERROR_404_PAGE(
     "<h1>We didn't find the page you were looking for</h1>");
 
-void handler_base::set_headers(http::server::reply& rep, const string& type)
+void handler_base::set_headers_explicit(http::server::reply& rep, const std::string& mime)
 {
     rep.headers.resize(2);
     rep.headers[0].name = "Content-Length";
     rep.headers[0].value = to_string(rep.content.size());
     rep.headers[1].name = "Content-Type";
-    rep.headers[1].value = http::server::mime_types::extension_to_type(type);
+    rep.headers[1].value = mime;
+}
+
+void handler_base::set_headers(http::server::reply& rep, const string& type)
+{
+    set_headers_explicit(rep, http::server::mime_types::extension_to_type(type));
 }
 
 void handler_base::set_headers(http::server::reply& rep)

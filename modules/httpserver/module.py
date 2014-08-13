@@ -9,6 +9,7 @@ usr_files = FileMap()
 usr_files.add(os.path.join(_module, 'libhttpserver.so')).to('/libhttpserver.so')
 usr_files.add(os.path.join(_module, 'api-doc')).to('/usr/mgmt/api')
 usr_files.add(os.path.join(_module, 'swagger-ui', 'dist')).to('/usr/mgmt/swagger-ui/dist')
+usr_files.add('${OSV_BASE}/java/jolokia-agent/target/jolokia-agent.jar').to('/usr/mgmt/jolokia-agent.jar')
 
 #default = api.run('/libhttpserver.so')
 
