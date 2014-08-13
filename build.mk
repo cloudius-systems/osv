@@ -74,6 +74,11 @@ ifeq ($(arch),x64)
 INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
 endif
 
+ifeq ($(arch),aarch64)
+libfdt_base = $(src)/external/$(arch)/libfdt
+INCLUDES += -isystem $(libfdt_base)
+endif
+
 INCLUDES += -isystem $(miscbase)/usr/include
 INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/$(arch)
@@ -166,7 +171,7 @@ configuration = $(foreach cf,$(configuration-defines), \
 
 include $(src)/conf/base.mk
 include $(src)/conf/$(mode).mk
-include $(src)/conf/$(ARCH).mk
+include $(src)/conf/$(arch).mk
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -454,6 +459,10 @@ $(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
 endif # x64
 
 ifeq ($(arch),aarch64)
+
+include $(libfdt_base)/Makefile.libfdt
+libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
+libfdt = $(patsubst $(src)/%.c, %.o, $(libfdt-source))
 
 all: loader.img
 
@@ -831,6 +840,7 @@ objects += arch/$(arch)/cpuid.o
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
+objects += $(libfdt)
 endif
 
 ifeq ($(arch),x64)
