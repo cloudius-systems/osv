@@ -131,7 +131,9 @@ bool classifier::post_packet(mbuf* m)
     WITH_LOCK(osv::rcu_read_lock) {
         if (auto nc = classify_ipv4_tcp(m)) {
             log_packet_in(m, NETISR_ETHER);
-            nc->push(m);
+            if (!nc->push(m)) {
+                return false;
+            }
             // FIXME: find a way to batch wakes
             nc->wake();
             return true;
