@@ -83,6 +83,33 @@ void test_memcpy(size_t size)
     free(dest);
 }
 
+void test_unaligned_memcpy(size_t size)
+{
+    void *_src = malloc(size+3);
+    void *_dest= malloc(size+6);
+    void *src = _src + 3;
+    void *dest = _dest + 6;
+    int r, i;
+
+    memset(src, 'c', size);
+
+    for (r = 0; r < RUNS; ++r) {
+        unsigned long t1 = gtime();
+        for (i= 0; i < LOOPS; ++i) {
+            memcpy(dest, src, size);
+        }
+        unsigned long t2 = gtime();
+
+        vector[r] = (float)(t2-t1) / LOOPS;
+    }
+
+    statistics("unaligned_memcpy", size);
+
+    free(_src);
+    free(_dest);
+}
+
+
 void test_memset(size_t size)
 {
     void *buf= malloc(size);
@@ -109,11 +136,15 @@ int main()
     size_t i;
     size_t sizes[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 15, 16, 17,
             31, 32, 33, 64, 128, 255, 256, 257, 512, 1024, 2048,
-            4096, 8192, 16386, 32768
+            4096, 4097, 5000, 8192, 16386, 32768
     };
     size_t nsizes = sizeof(sizes) / sizeof(*sizes);
     for (i = 0; i < nsizes; ++i) {
         test_memcpy(sizes[i]);
+    }
+
+    for (i = 0; i < nsizes; ++i) {
+        test_unaligned_memcpy(sizes[i]);
     }
 
     for (i = 0; i < nsizes; ++i) {
