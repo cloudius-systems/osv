@@ -18,10 +18,6 @@
 #include "console-multiplexer.hh"
 #include "early-console.hh"
 
-#ifdef __x86_64__
-#include "drivers/isa-serial.hh"
-#endif
-
 #include <termios.h>
 #include <signal.h>
 
