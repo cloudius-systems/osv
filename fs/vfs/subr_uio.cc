@@ -47,7 +47,7 @@ uiomove(void *cp, int n, struct uio *uio)
 
 	while (n > 0 && uio->uio_resid) {
 		struct iovec *iov = uio->uio_iov;
-		size_t cnt = iov->iov_len;
+		int cnt = iov->iov_len;
 		if (cnt == 0) {
 			uio->uio_iov++;
 			uio->uio_iovcnt--;
@@ -70,26 +70,4 @@ uiomove(void *cp, int n, struct uio *uio)
 	}
 
 	return 0;
-}
-
-/*
- * Wrapper for uiomove() that validates the arguments against a known-good
- * kernel buffer.  Currently, uiomove accepts a signed (n) argument, which
- * is almost definitely a bad thing, so we catch that here as well.  We
- * return a runtime failure, but it might be desirable to generate a runtime
- * assertion failure instead.
- */
-int
-uiomove_frombuf(void *buf, int buflen, struct uio *uio)
-{
-	size_t offset, n;
-
-	if (uio->uio_offset < 0 || uio->uio_resid < 0 ||
-	    (offset = uio->uio_offset) != uio->uio_offset)
-		return (EINVAL);
-	if (buflen <= 0 || offset >= buflen)
-		return (0);
-	if ((n = buflen - offset) > IOSIZE_MAX)
-		return (EINVAL);
-	return (uiomove((char *)buf + offset, n, uio));
 }
