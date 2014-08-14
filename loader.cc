@@ -87,7 +87,6 @@ extern "C" {
     void vfs_init(void);
     void mount_zfs_rootfs(void);
     void ramdisk_init(void);
-    void zfs_init(void *);
 }
 
 void premain()
