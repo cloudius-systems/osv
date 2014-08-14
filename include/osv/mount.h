@@ -103,7 +103,7 @@ struct mount {
  * Filesystem type switch table.
  */
 struct vfssw {
-	char		*vs_name;	/* name of file system */
+	const char      *vs_name;	/* name of file system */
 	int		(*vs_init)(void); /* initialize routine */
 	struct vfsops	*vs_op;		/* pointer to vfs operation */
 };

@@ -448,7 +448,6 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 	return 0;
 }
 
-extern "C"
 int
 ramfs_init(void)
 {

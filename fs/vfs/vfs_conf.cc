@@ -53,7 +53,7 @@ extern struct vfsops zfs_vfsops;
 extern int ramfs_init(void);
 extern int devfs_init(void);
 extern int procfs_init(void);
-extern int zfs_init(void);
+extern "C" int zfs_init(void);
 
 /*
  * VFS switch table

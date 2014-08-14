@@ -385,7 +385,6 @@ procfs_getattr(vnode *vp, vattr *attr)
 
 } // namespace procfs
 
-extern "C"
 int procfs_init(void)
 {
     return 0;

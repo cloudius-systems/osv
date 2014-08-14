@@ -208,7 +208,6 @@ devfs_unmount(struct mount *mp, int flags)
 	return 0;
 }
 
-extern "C"
 int
 devfs_init(void)
 {
