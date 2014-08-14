@@ -20,6 +20,8 @@
 #include <osv/condvar.h>
 #include <osv/semaphore.hh>
 #include <osv/mmu.hh>
+#include <boost/lockfree/stack.hpp>
+#include <boost/lockfree/policies.hpp>
 
 extern "C" void thread_mark_emergency();
 
