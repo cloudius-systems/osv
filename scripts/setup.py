@@ -49,16 +49,24 @@ class Ubuntu(object):
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump gdb', 'qemu-system-x86',
                 'gawk', 'gnutls-bin', 'openssl', 'python-requests'
                 ]
-    ec2_packages = standard_ec2_packages + ['ec2-api-tools', 'awscli']
-    test_packages = ['libssl-dev']
+    ec2_packages = standard_ec2_packages
+    test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
     class Ubuntu_14_04(object):
         packages = []
-        ec2_packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         version = '14.04'
-    versions = [Ubuntu_14_04]
+
+    class Ubuntu_13_10(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = standard_ec2_post_install
+        version = '13.10'
+
+    versions = [Ubuntu_14_04, Ubuntu_13_10]
 
 distros = [
            Fedora(),
@@ -84,8 +92,11 @@ for distro in distros:
                 if cmdargs.test:
                     pkg += distro.test_packages + dver.test_packages
                 subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell = True)
-                if cmdargs.ec2 and distro.ec2_post_install:
-                    subprocess.check_call(distro.ec2_post_install, shell = True)
+                if cmdargs.ec2:
+                    if distro.ec2_post_install:
+                        subprocess.check_call(distro.ec2_post_install, shell = True)
+                    if dver.ec2_post_install:
+                        subprocess.check_call(dver.ec2_post_install, shell = True)
                 sys.exit(0)
         print 'Your distribution version is not supported by this script'
         sys.exit(1)
