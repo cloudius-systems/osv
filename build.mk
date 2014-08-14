@@ -300,6 +300,7 @@ tests += tests/misc-tcp-hash-srv.so
 tests += tests/misc-loadbalance.so
 tests += tests/misc-scheduler.so
 tests += tests/misc-setpriority.so
+tests += tests/misc-timeslice.so
 tests += tests/tst-dns-resolver.so
 tests += tests/tst-fs-link.so
 tests += tests/tst-kill.so
