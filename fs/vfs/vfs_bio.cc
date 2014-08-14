@@ -242,14 +242,12 @@ int
 bread(struct device *dev, int blkno, struct buf **bpp)
 {
 	struct buf *bp;
-	size_t size;
 	int error;
 
 	DPRINTF(VFSDB_BIO, ("bread: dev=%x blkno=%d\n", dev, blkno));
 	bp = getblk(dev, blkno);
 
 	if (!ISSET(bp->b_flags, (B_DONE | B_DELWRI))) {
-		size = BSIZE;
 		error = rw_buf(bp, 0);
 		if (error) {
 			DPRINTF(VFSDB_BIO, ("bread: i/o error\n"));
@@ -274,7 +272,6 @@ bread(struct device *dev, int blkno, struct buf **bpp)
 int
 bwrite(struct buf *bp)
 {
-	size_t size;
 	int error;
 
 	ASSERT(ISSET(bp->b_flags, B_BUSY));
@@ -285,7 +282,6 @@ bwrite(struct buf *bp)
 	CLR(bp->b_flags, (B_READ | B_DONE | B_DELWRI));
 	BIO_UNLOCK();
 
-	size = BSIZE;
 	error = rw_buf(bp, 1);
 	if (error)
 		return error;
