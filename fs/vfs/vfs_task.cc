@@ -48,7 +48,8 @@ task_alloc(struct task **pt)
 {
 	struct task *t;
 
-	if (!(t = malloc(sizeof(struct task))))
+    // FIXME: where do we free task ?
+	if (!(t = new task))
 		return ENOMEM;
 	memset(t, 0, sizeof(struct task));
 	strlcpy(t->t_cwd, "/", sizeof(t->t_cwd));
