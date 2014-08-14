@@ -77,13 +77,15 @@ def get_counts():
     return json.loads(result_json)
 prevcount = collections.defaultdict()
 
+widths = [max(15, len(t)) for t in tracepoint_names]
+header = ' '.join('%%%ds' % w for w in widths) % tuple(tracepoint_names)
+format_string = ' '.join('%%%d.0f' % w for w in widths)
+
 nline = 0
 timems = 0
 while True:
     if (nline % 20) == 0:
-        for t in tracepoint_names:
-            print('%15s' % t, end='')
-        print();
+        print(header)
     nline = nline + 1
 
     start_refresh = time.time()
@@ -97,9 +99,7 @@ while True:
             freq[name] = (count - prevcount[name]) / ((newtimems - timems) / 1000.0)
         prevcount[name] = count
     if timems > 0:
-        for t in tracepoint_names:
-            print("%15.0f" % freq[t], end='')
-        print()
+        print(format_string % tuple(map(lambda t: freq[t], tracepoint_names)))
     time.sleep(max(0, period - (time.time() - start_refresh)))
     timems = newtimems
 
