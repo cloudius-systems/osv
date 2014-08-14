@@ -19,7 +19,7 @@
 struct bio *
 alloc_bio(void)
 {
-	struct bio *bio = malloc(sizeof(*bio));
+	struct bio *bio = new (struct bio);
 	if (!bio)
 		return NULL;
 	memset(bio, 0, sizeof(*bio));
@@ -34,7 +34,7 @@ destroy_bio(struct bio *bio)
 {
 	pthread_cond_destroy(&bio->bio_wait);
 	pthread_mutex_destroy(&bio->bio_mutex);
-	free(bio);
+	delete bio;
 }
 
 int
@@ -82,7 +82,7 @@ biofinish(struct bio *bp, struct devstat *stat, int error)
 
 static void multiplex_bio_done(struct bio *b)
 {
-	struct bio *bio = b->bio_caller1;
+	struct bio *bio = static_cast<struct bio*>(b->bio_caller1);
 	bool error = b->bio_flags & BIO_ERROR;
 	destroy_bio(b);
 
