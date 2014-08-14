@@ -7,7 +7,7 @@ INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
 #  -Wall turns on most, but not all, compiler warnings
 autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend)
-src = ../..
+src = $(shell readlink -f ../..)
 
 ifndef ARCH
 	ARCH = x64
@@ -21,9 +21,9 @@ ifndef OSV_BUILD_PATH
 	OSV_BUILD_PATH = $(src)/build/$(mode).$(ARCH)
 endif
 miscbase = $(src)/external/$(ARCH)/misc.bin
-boost-lib-dir = $(miscbase)/usr/lib64
-boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
-              $(boost-lib-dir)/libboost_filesystem-mt.so
+libs-dir = $(miscbase)/usr/lib64
+boost-libs := $(libs-dir)/libboost_system-mt.so \
+              $(libs-dir)/libboost_filesystem-mt.so
 
 # the build target executable:
 TARGET = httpserver
@@ -34,8 +34,17 @@ STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
-LIBS = -lpthread -lboost_program_options-mt $(boost-libs)
-EXTRA_LIBS = -L$(OSV_BUILD_PATH)/tools -ltools   -L$(boost-lib-dir) -lyaml-cpp
+STATIC_LIBS = $(libs-dir)/libboost_program_options-mt.a
+DYN_LIBS = -lpthread -ldl -L$(OSV_BUILD_PATH)/tools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
+
+ifeq ($(use_host),y)
+	DYN_LIBS += -lssl -lcrypto
+else
+	DYN_LIBS += $(libs-dir)/libssl.so.10 \
+		$(libs-dir)/libcrypto.so.10
+endif
+
+LIBS = $(DYN_LIBS) $(STATIC_LIBS)
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -53,15 +62,16 @@ init:
 	$(call very-quiet, mkdir -p obj/api)
 	$(call very-quiet, mkdir -p obj/autogen)
 	$(call very-quiet, mkdir -p autogen)
+.PHONY: init
 
 stub-lib: $(STUB_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $(TARGET)-stub.so $^, LINK $@)
 
 $(TARGET): $(OBJ_FILES) $(STUB_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $^ $(LIBS), LINK $@)
 
 lib$(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o lib$(TARGET).so $^  $(EXTRA_LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(DYN_LIBS), LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
@@ -80,12 +90,23 @@ clean:
 	$(call very-quiet, $(RM) -rf autogen/*)
 
 check:
-	cd ../.. && modules/httpserver/tests/testhttpserver.py
+	# Test plain HTTP
+	cd $(src) && \
+	make image=httpserver.fg,mgmt.shell && \
+	PYTHONPATH=$(src)/scripts modules/httpserver/tests/testhttpserver.py
+
+	# Test SSL
+	cd $(src) && \
+	make image=httpserver.fg_ssl,mgmt.shell,certs && \
+	PYTHONPATH=$(src)/scripts modules/httpserver/tests/testhttpserver.py \
+		--cert modules/certs/build/client.pem \
+		--key modules/certs/build/client.key \
+		--cacert modules/certs/build/cacert.pem
 
 swagger-ui-lib: swagger-ui/.git
 .PHONY: swagger-ui-lib
 
 swagger-ui/.git:
-	cd ../.. && git submodule update --init -f modules/httpserver/swagger-ui
+	cd $(src) && git submodule update --init -f modules/httpserver/swagger-ui
 
 .SECONDARY:

@@ -5,6 +5,7 @@ import os, os.path
 usr_files = FileMap()
 
 api.require('fonts')
+api.require('libz')
 
 jdkdir = os.path.basename(os.path.expandvars('${jdkbase}'))
 

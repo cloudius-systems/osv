@@ -14,7 +14,6 @@ namespace httpserver {
 
 /**
  * content_replace replaces variable in a file with a dynamic value.
- * Currently the only parameter we support is {{Host}} -> Host.
  * It would take the host from request and will replace the variable
  * in a file
  *

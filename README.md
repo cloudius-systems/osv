@@ -31,7 +31,7 @@ First, install prerequisite packages:
 **Fedora**
 
 ```
-yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool flex bison qemu-system-x86 qemu-img maven maven-shade-plugin python-dpkt tcpdump gdb
+yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool flex bison qemu-system-x86 qemu-img maven maven-shade-plugin python-dpkt tcpdump gdb gnutls-utils openssl python-requests
 ```
 
 **Debian stable(wheezy)**
@@ -45,7 +45,7 @@ More details are available on wiki page:
 
 **Debian testing(jessie)**
 ```
-apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils maven libmaven-shade-plugin-java python-dpkt tcpdump gdb qemu-system-x86 gawk
+apt-get install build-essential libboost-all-dev genromfs autoconf libtool openjdk-7-jdk ant qemu-utils maven libmaven-shade-plugin-java python-dpkt tcpdump gdb qemu-system-x86 gawk gnutls-bin openssl python-requests
 ```
 
 **Arch Linux**

@@ -1,4 +1,5 @@
 from osv.modules import resolve
+import os
 
 require = resolve.require
 
@@ -15,6 +16,23 @@ class run(basic_app):
 
     def get_launcher_args(self):
         return self.cmdline
+
+
+class run_on_init(basic_app):
+    next_sequence = 0
+
+    def __init__(self, cmdline):
+        self.cmdline = cmdline
+        self.sequence = run_on_init.next_sequence
+        run_on_init.next_sequence += 1
+
+    def prepare_manifest(self, build_dir, manifest_type, manifest):
+        if manifest_type == 'usr':
+            file_name = '30-auto-%02d' % self.sequence
+            local_path = os.path.join(resolve.get_build_path(), file_name)
+            with open(local_path, 'w') as cmdline_file:
+                cmdline_file.write(self.cmdline)
+            manifest.write('/init/%s: %s\n' % (file_name, local_path))
 
 class java_app(object):
     def __init__(self):

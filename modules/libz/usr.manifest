@@ -1,0 +1,1 @@
+/usr/lib/libz.so.1: %(miscbase)s/usr/lib64/libz.so.1

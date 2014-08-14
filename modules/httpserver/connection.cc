@@ -174,9 +174,9 @@ request_parser::result_type multipart_parser::parse(request& req,
     return request_parser::indeterminate;
 }
 
-connection::connection(boost::asio::ip::tcp::socket socket,
+connection::connection(std::shared_ptr<transport> transport,
                        connection_manager& manager, request_handler& handler)
-    : socket_(std::move(socket))
+    : transport_(transport)
     , connection_manager_(manager)
     , request_handler_(handler)
     , multipart(this)
@@ -191,7 +191,8 @@ void connection::start()
 
 void connection::stop()
 {
-    socket_.close();
+    auto self(shared_from_this());
+    transport_->close([self] (boost::system::error_code) {});
 }
 
 bool connection::set_content_type()
@@ -227,12 +228,14 @@ bool connection::set_content_type()
 void connection::do_read()
 {
     auto self(shared_from_this());
-    socket_.async_read_some(boost::asio::buffer(buffer_),
+    transport_->async_read_some(boost::asio::buffer(buffer_),
                             [this, self](boost::system::error_code ec,
                                          std::size_t bytes_transferred)
     {
         if (!ec)
         {
+            request_.protocol_name = transport_->get_protocol_name();
+
             if (request_.content_length > 0) {
                 request_.content.append(buffer_.data(), buffer_.data() + bytes_transferred);
                 if (request_.content.size() < request_.content_length) {
@@ -300,7 +303,7 @@ void connection::on_complete_multiplart()
 void connection::do_read_mp()
 {
     auto self(shared_from_this());
-    socket_.async_read_some(boost::asio::buffer(buffer_),
+    transport_->async_read_some(boost::asio::buffer(buffer_),
                             [this, self](boost::system::error_code ec,
                                          std::size_t bytes_transferred)
     {
@@ -330,20 +333,12 @@ void connection::do_read_mp()
 void connection::do_write()
 {
     auto self(shared_from_this());
-    boost::asio::async_write(socket_, reply_.to_buffers(),
+    transport_->async_write(reply_.to_buffers(),
                              [this, self](boost::system::error_code ec, std::size_t)
     {
-        if (!ec)
-        {
-            // Initiate graceful connection closure.
-            boost::system::error_code ignored_ec;
-            socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both,
-                             ignored_ec);
-        }
-
         if (ec != boost::asio::error::operation_aborted)
         {
-            connection_manager_.stop(shared_from_this());
+            connection_manager_.stop(self);
         }
     });
 }

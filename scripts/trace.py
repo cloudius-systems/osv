@@ -8,13 +8,14 @@ import math
 import subprocess
 import struct
 import tempfile
-import urllib
+import requests
 
 from itertools import ifilter
 from collections import defaultdict
 from operator import attrgetter
 
 from osv import trace, debug, prof
+from osv.client import Client
 import memory_analyzer
 
 class InvalidArgumentsException(Exception):
@@ -527,21 +528,23 @@ def download_dump(args) :
         out = open(args.dumpfile, "wb")
 
     try:
-        url = args.url
-        if not url.endswith('/'):
-            url += '/'
-        url += "trace/buffers"
+        client = Client(args)
+        url = client.get_url() + "/trace/buffers"
 
         print "Downloading %s -> %s" % (url, out.name)
 
-        def report(blocknr, blocksize, size):
-            current = min(blocknr*blocksize, size)
-            sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current/1024, size/1024, 100.0*current/size, ('='*32*(current/size)) + '>'))
-            if current >= size:
-                sys.stdout.write("\n")
-            sys.stdout.flush()
+        r = requests.get(url, stream=True, **client.get_request_kwargs())
+        size = int(r.headers['content-length'])
+        current = 0
 
-        urllib.urlretrieve(url, out.name, report)
+        with open(out.name, 'w') as out_file:
+            for chunk in r.iter_content(8192):
+                out_file.write(chunk)
+                current += len(chunk)
+                sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current/1024, size/1024, 100.0*current/size, ('='*32*(current/size)) + '>'))
+                if current >= size:
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
 
         if not args.no_convert:
             convert_dump(args)
@@ -666,9 +669,6 @@ if __name__ == "__main__":
                                              , description="""
                                              Downloads a trace dump via REST Api
                                              """)
-    cmd_download_dump.add_argument("-u", "--url", action="store",
-                                  help="Source URL for REST connections",
-                                  default="http://192.168.122.89:8000/")
     cmd_download_dump.add_argument("--no-convert", action="store_true",
                                   help="Do not convert the dump to tracefile",
                                   )
@@ -676,6 +676,7 @@ if __name__ == "__main__":
                                   help="Trace dump file",
                                   )
     add_trace_source_options(cmd_download_dump)
+    Client.add_arguments(cmd_download_dump, use_full_url=True)
     cmd_download_dump.set_defaults(func=download_dump, paginate=False)
 
 

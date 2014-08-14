@@ -1,0 +1,6 @@
+cn=osv
+ip_address=192.168.122.89
+dns_name=localhost
+dns_name=osv
+tls_www_server
+encryption_key

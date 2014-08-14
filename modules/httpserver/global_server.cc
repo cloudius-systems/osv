@@ -54,6 +54,10 @@ bool global_server::run(po::variables_map& _config)
     set(_config);
     get().set("ipaddress", "0.0.0.0");
     get().set("port", "8000");
+    get().set("cert", "/etc/pki/server.pem");
+    get().set("key", "/etc/pki/private/server.key");
+    get().set("cacert", "/etc/pki/CA/cacert.pem");
+
     get().s = new http::server::server(&get().config, &get()._routes);
 
     osv::this_application::on_termination_request([&] {

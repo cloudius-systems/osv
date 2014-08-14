@@ -13,15 +13,23 @@ import urllib
 import unittest
 import re
 import socket
+import requests
+
+from osv import client
+
+class HttpError(BaseException):
+    def __init__(self, code):
+        self.code = code
 
 class Basetest(unittest.TestCase):
     @classmethod
     def set_config(cls, parser):
         cls.config = parser.parse_args()
+        cls._client = client.Client(cls.config)
 
     @classmethod
     def get_url(cls, uri):
-        return 'http://' + cls.config.ip + ':' + str(cls.config.port) + uri
+        return cls._client.get_url() + uri
 
     @classmethod
     def get_json_api(cls, name):
@@ -52,15 +60,15 @@ class Basetest(unittest.TestCase):
     @classmethod
     def is_jvm_up(cls):
         try:
-            return cls.curl(cls.path_by_nick(cls.jvm_api, "getJavaVersion")) != ""
-        except urllib2.HTTPError:
+            return bool(cls.curl(cls.path_by_nick(cls.jvm_api, "getJavaVersion")))
+        except HttpError:
             return False
 
     @classmethod
     def is_reachable(cls):
         s = socket.socket()
         try:
-            s.connect((cls.config.ip, cls.config.port))
+            s.connect((cls._client.get_host(), cls._client.get_port()))
             s.close()
             return cls.is_jvm_up()
         except socket.error:
@@ -74,38 +82,43 @@ class Basetest(unittest.TestCase):
         path = self.path_by_nick(api_definition, nickname)
         self.assertRegexpMatches(self.curl(path), expr)
 
-
     def assertHttpError(self, url, code=404):
         try:
             self.curl(url)
-            raise Exception('The request for %s should have failed!' % url)
-        except urllib2.HTTPError as e:
+        except HttpError as e:
             if e.code != code:
                 raise Exception('Expected error code %d but got %d' % (code, e.code))
-
-
-    @classmethod
-    def curl(cls, api, post=False):
-        url = cls.get_url(api)
-        if post:
-            data = urllib.urlencode({'Fake' : 'data-to-become-post'})
-            req = urllib2.Request(url, data)
-            response = urllib2.urlopen(req)
         else:
-            response = urllib2.urlopen(url)
-
-        response_text = ''.join(response.readlines())
-
-        if response_text:
-            return json.loads(response_text)
+            raise Exception('Expected failure but request succeeded')
 
     @classmethod
-    def curl_command(cls, api, command):
+    def curl(cls, api, method='GET', data=None):
         url = cls.get_url(api)
-        opener = urllib2.build_opener(urllib2.HTTPHandler)
-        request = urllib2.Request(url, data='')
-        request.get_method = lambda: command
-        opener.open(request)
+
+        r = {
+            'GET': requests.get,
+            'POST': requests.post,
+            'DELETE': requests.delete,
+            'PUT': requests.put,
+        }[method](url, data=data, **cls._client.get_request_kwargs())
+
+        if r.status_code != 200:
+            raise HttpError(r.status_code)
+
+        if r.text:
+            return r.json()
+
+    @classmethod
+    def get_client_cert_path(cls):
+        return cls._client.get_client_cert_path()
+
+    @classmethod
+    def get_client_key_path(cls):
+        return cls._client.get_client_key_path()
+
+    @classmethod
+    def get_ca_cert_path(cls):
+        return cls._client.get_cacert_path()
 
     @classmethod
     def exec_os(cls):
@@ -113,7 +126,7 @@ class Basetest(unittest.TestCase):
         if cls.config.use_sudo:
             args += ["/usr/bin/sudo", cls.config.run_script, "-n"]
         else:
-            args += [cls.config.run_script, "--forward", "tcp:" + str(cls.config.port) + "::" + str(cls.config.port)]
+            args += [cls.config.run_script, "--forward", "tcp:" + str(cls._client.get_port()) + "::" + str(cls._client.get_port())]
 
         if cls.config.cmd:
             args += ["-e", cls.config.cmd]
@@ -124,7 +137,7 @@ class Basetest(unittest.TestCase):
     def shutdown(cls):
         path = cls.path_by_nick(cls.os_api, "shutdown")
         try:
-            cls.curl(path, True)
+            cls.curl(path, method='POST')
         except:
             pass
         retry = 10

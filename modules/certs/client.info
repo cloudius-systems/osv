@@ -1,0 +1,4 @@
+cn=osv-client
+tls_www_client
+encryption_key
+signing_key

@@ -15,6 +15,7 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/asio.hpp>
 #include "global_server.hh"
+#include <osv/exception_utils.hh>
 
 using namespace httpserver;
 
@@ -28,7 +29,11 @@ int main(int argc, char* argv[])
         ("access-allow",
              "Set the Access-Control-Allow-Origin to *. Note the security risk")
         ("ipaddress", "set the ip address")
-        ("port", "set the port");
+        ("port", "set the port")
+        ("cert", "path to server's SSL certificate")
+        ("key", "path to server's private key")
+        ("cacert", "path to CA certificate")
+        ("ssl", "enable SSL");
 
     po::variables_map config;
     po::store(po::parse_command_line(argc, argv, desc), config);
@@ -39,7 +44,12 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    global_server::run(config);
+    try {
+        global_server::run(config);
+    } catch (...) {
+        std::cerr << "httpserver failed: " << current_what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }

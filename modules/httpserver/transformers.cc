@@ -20,6 +20,7 @@ void content_replace::transform(std::string& content,
         return;
     }
     boost::replace_all(content, "{{Host}}", host);
+    boost::replace_all(content, "{{Protocol}}", req.get_protocol_name());
 }
 
 }

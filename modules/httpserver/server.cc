@@ -10,42 +10,82 @@
 //   This file was modified from its original
 
 #include "server.hh"
+#include "connection.hh"
+#include "ssl_server.hh"
+#include "openssl-init.hh"
+#include "plain_server.hh"
 
-#include <signal.h>
 #include <utility>
-#include <osv/app.hh>
+#include <openssl/ssl.h>
 
 namespace http {
 
 namespace server {
 
+static bool exists(const std::string& path)
+{
+    struct stat s;
+    return stat(path.c_str(), &s) == 0;
+}
+
 server::server(const boost::program_options::variables_map* config,
                httpserver::routes* routes)
     : io_service_()
-    , signals_(io_service_)
-    , acceptor_(io_service_)
     , connection_manager_()
-    , socket_(io_service_)
     , request_handler_(routes, *config)
 {
     // Open the acceptor with the option to reuse the address (i.e. SO_REUSEADDR).
     boost::asio::ip::tcp::resolver resolver(io_service_);
-    boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(
-    {   (*config)["ipaddress"].as<std::string>(), (*config)["port"].as<
-        std::string>()
+    boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve({
+        (*config)["ipaddress"].as<std::string>(),
+        (*config)["port"].as<std::string>()
     });
-    acceptor_.open(endpoint.protocol());
-    acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
-    acceptor_.bind(endpoint);
-    acceptor_.listen();
 
-    do_accept();
+    tcp::acceptor tcp_acceptor(io_service_);
+    tcp_acceptor.open(endpoint.protocol());
+    tcp_acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+    tcp_acceptor.bind(endpoint);
+    tcp_acceptor.listen();
+
+    if (config->count("ssl")) {
+        ensure_openssl_initialized();
+
+        auto ca_cert_path = (*config)["cacert"].as<std::string>();
+        auto cert_path = (*config)["cert"].as<std::string>();
+        auto key_path = (*config)["key"].as<std::string>();
+
+        bool valid = true;
+        for (auto& path : {ca_cert_path, cert_path, key_path}) {
+            if (!exists(path)) {
+                std::cerr << "Not found: " << path << "\n";
+                valid = false;
+            }
+        }
+
+        if (!valid) {
+            std::cerr << "Please visit https://github.com/cloudius-systems/osv/wiki/The-RESTful-API#configuring-ssl\n";
+            throw std::runtime_error("invalid configuration");
+        }
+
+        ssl::context ctx = make_ssl_context(ca_cert_path, cert_path, key_path);
+        acceptor_.reset(new ssl_acceptor(io_service_, std::move(ctx), std::move(tcp_acceptor)));
+    } else {
+        acceptor_.reset(new plain_acceptor(io_service_, std::move(tcp_acceptor)));
+    }
+
+    acceptor_->do_accept(std::bind(&server::on_connected, this, std::placeholders::_1));
+}
+
+void server::on_connected(std::shared_ptr<transport> t)
+{
+    connection_manager_.start(std::make_shared<connection>(
+        t, connection_manager_, request_handler_));
 }
 
 void server::close()
 {
     io_service_.dispatch([&] {
-        acceptor_.close();
+        acceptor_->close();
         connection_manager_.stop_all();
         io_service_.stop();
     });
@@ -58,27 +98,6 @@ void server::run()
     // asynchronous operation outstanding: the asynchronous accept call waiting
     // for new incoming connections.
     io_service_.run();
-}
-
-void server::do_accept()
-{
-    acceptor_.async_accept(socket_, [this](boost::system::error_code ec)
-    {
-        // Check whether the server was stopped by a signal before this
-        // completion handler had a chance to run.
-        if (!acceptor_.is_open())
-        {
-            return;
-        }
-
-        if (!ec)
-        {
-            connection_manager_.start(std::make_shared<connection>(
-                                          std::move(socket_), connection_manager_, request_handler_));
-        }
-
-        do_accept();
-    });
 }
 
 } // namespace server

@@ -463,6 +463,7 @@ musl += stdio/fputs.o
 musl += stdio/fputwc.o
 musl += stdio/fputws.o
 musl += stdio/fread.o
+libc += stdio/__fread_chk.o
 libc += stdio/freopen.o
 musl += stdio/fscanf.o
 musl += stdio/fseek.o

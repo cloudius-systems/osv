@@ -1,0 +1,3 @@
+/etc/pki/server.pem: ${MODULE_DIR}/build/server.pem
+/etc/pki/private/server.key: ${MODULE_DIR}/build/server.key
+/etc/pki/CA/cacert.pem: ${MODULE_DIR}/build/cacert.pem

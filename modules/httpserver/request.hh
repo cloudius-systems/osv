@@ -44,6 +44,7 @@ struct request {
     connection* connection_ptr;
     httpserver::parameters param;
     std::string content;
+    std::string protocol_name;
 
     /**
      * Search for the first header of a given name
@@ -66,12 +67,20 @@ struct request {
     }
 
     /**
+     * Get the request protocol name. Can be either "http" or "https".
+     */
+    std::string get_protocol_name() const
+    {
+        return protocol_name;
+    }
+
+    /**
      * Get the request url.
      * @return the request url
      */
     std::string get_url() const
     {
-        return "http://" + get_header("Host") + uri;
+        return get_protocol_name() + "://" + get_header("Host") + uri;
     }
 
     bool is_multi_part() const {

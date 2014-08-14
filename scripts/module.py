@@ -85,7 +85,8 @@ def format_args(args):
         return ' '.join(args)
 
 def get_command_line(basic_apps):
-    return '&'.join((format_args(app.get_launcher_args()) for app in basic_apps))
+    args = [format_args(app.get_launcher_args()) for app in basic_apps]
+    return '&'.join((a for a in args if a))
 
 def make_cmd(cmdline, jobserver):
     ret = 'make ' + cmdline
