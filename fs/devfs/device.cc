@@ -56,10 +56,9 @@
 
 #include <geom/geom_disk.h>
 
-struct mutex sched_mutex = MUTEX_INITIALIZER;
-
-#define sched_lock()	mutex_lock(&sched_mutex);
-#define sched_unlock()	mutex_unlock(&sched_mutex);
+mutex sched_mutex;
+#define sched_lock()	sched_mutex.lock()
+#define sched_unlock()	sched_mutex.unlock()
 
 
 /* list head of the devices */
@@ -112,11 +111,10 @@ void read_partition_table(struct device *dev)
 
 	sched_lock();
 	for (offset = 0x1be, index = 0; offset < 0x1fe; offset += 0x10, index++) {
-		struct partition_table_entry *entry;
 		char dev_name[MAXDEVNAME];
 		struct device *new_dev;
 
-		entry = bp->b_data + offset;
+		auto* entry = static_cast<struct partition_table_entry*>(bp->b_data + offset);
 
 		if (entry->system_id == 0) {
 			continue;
@@ -144,7 +142,7 @@ void read_partition_table(struct device *dev)
 void device_register(struct device *dev, const char *name, int flags)
 {
 	size_t len;
-	void *private = NULL;
+	void *priv = NULL;
 
 	assert(dev->driver != NULL);
 
@@ -163,9 +161,9 @@ void device_register(struct device *dev, const char *name, int flags)
 	 * Allocate a device and device private data.
 	 */
 	if (dev->driver->devsz != 0) {
-		if ((private = malloc(dev->driver->devsz)) == NULL)
+		if ((priv = malloc(dev->driver->devsz)) == NULL)
 			sys_panic("devsz");
-		memset(private, 0, dev->driver->devsz);
+		memset(priv, 0, dev->driver->devsz);
 	}
 
 	strlcpy(dev->name, name, len + 1);
@@ -173,7 +171,7 @@ void device_register(struct device *dev, const char *name, int flags)
 	dev->active = 1;
 	dev->refcnt = 1;
 	dev->offset = 0;
-	dev->private_data = private;
+	dev->private_data = priv;
 	dev->next = device_list;
 	dev->max_io_size = UINT_MAX;
 	device_list = dev;
@@ -205,7 +203,7 @@ device_create(struct driver *drv, const char *name, int flags)
 	/*
 	 * Allocate a device structure.
 	 */
-	if ((dev = malloc(sizeof(*dev))) == NULL)
+	if ((dev = new device) == NULL)
 		sys_panic("device_create");
 
     dev->driver = drv;
@@ -287,7 +285,7 @@ device_release(struct device *dev)
 			break;
 		}
 	}
-	free(dev);
+	delete dev;
 	sched_unlock();
 }
 
