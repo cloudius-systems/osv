@@ -76,7 +76,7 @@ fs_getfs(const char *name)
             break;
     }
     if (!fs->vs_name)
-        return NULL;
+        return nullptr;
     return fs;
 }
 
@@ -110,7 +110,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     if (!(fs = fs_getfs(fsname)))
         return ENODEV;  /* No such file system */
 
-    /* Open device. NULL can be specified as a device. */
+    /* Open device. nullptr can be specified as a device. */
     // Allow device_open() to fail, in which case dev is interpreted
     // by the file system mount routine (e.g zfs pools)
     device = 0;
@@ -138,7 +138,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     mp->m_op = fs->vs_op;
     mp->m_flags = flags;
     mp->m_dev = device;
-    mp->m_data = NULL;
+    mp->m_data = nullptr;
     strlcpy(mp->m_path, dir, sizeof(mp->m_path));
     strlcpy(mp->m_special, dev, sizeof(mp->m_special));
 
@@ -147,7 +147,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
      */
     if (*dir == '/' && *(dir + 1) == '\0') {
         /* Ignore if it mounts to global root directory. */
-        dp_covered = NULL;
+        dp_covered = nullptr;
     } else {
         if ((error = namei(dir, &dp_covered)) != 0) {
 
@@ -165,7 +165,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
      * Create a root vnode for this file system.
      */
     vget(mp, 0, &vp);
-    if (vp == NULL) {
+    if (vp == nullptr) {
         error = ENOMEM;
         goto err3;
     }
@@ -173,7 +173,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     vp->v_flags = VROOT;
     vp->v_mode = S_IFDIR | S_IRUSR | S_IWUSR | S_IXUSR;
 
-    mp->m_root = dentry_alloc(NULL, vp, "/");
+    mp->m_root = dentry_alloc(nullptr, vp, "/");
     if (!mp->m_root) {
         vput(vp);
         goto err3;
@@ -252,7 +252,7 @@ found:
     /*
      * Root fs can not be unmounted.
      */
-    if (mp->m_covered == NULL && !(flags & MNT_FORCE)) {
+    if (mp->m_covered == nullptr && !(flags & MNT_FORCE)) {
         error = EINVAL;
         goto out;
     }
@@ -283,7 +283,7 @@ sys_umount(const char *path)
 int
 sys_pivot_root(const char *new_root, const char *put_old)
 {
-    struct mount *mp, *newmp = NULL, *oldmp = NULL;
+    struct mount *mp, *newmp = nullptr, *oldmp = nullptr;
     int error;
 
     WITH_LOCK(mount_lock) {
@@ -316,12 +316,12 @@ sys_pivot_root(const char *new_root, const char *put_old)
         if (newmp->m_covered) {
             drele(newmp->m_covered);
         }
-        newmp->m_covered = NULL;
+        newmp->m_covered = nullptr;
 
         if (newmp->m_root->d_parent) {
             drele(newmp->m_root->d_parent);
         }
-        newmp->m_root->d_parent = NULL;
+        newmp->m_root->d_parent = nullptr;
 
         free(oldmp);
 
@@ -381,7 +381,7 @@ count_match(const char *path, char *mount_root)
 int
 vfs_findroot(const char *path, struct mount **mp, char **root)
 {
-    struct mount *m = NULL, *tmp;
+    struct mount *m = nullptr, *tmp;
     size_t len, max_len = 0;
 
     if (!path)
@@ -397,7 +397,7 @@ vfs_findroot(const char *path, struct mount **mp, char **root)
         }
     }
     MOUNT_UNLOCK();
-    if (m == NULL)
+    if (m == nullptr)
         return -1;
     *root = (char *)(path + max_len);
     if (**root == '/')

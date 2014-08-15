@@ -114,7 +114,7 @@ vn_lookup(struct mount *mp, uint64_t ino)
 			return vp;
 		}
 	}
-	return NULL;		/* not found */
+	return nullptr;		/* not found */
 }
 
 #ifdef DEBUG_VFS
@@ -171,7 +171,7 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	struct vnode *vp;
 	int error;
 
-	*vpp = NULL;
+	*vpp = nullptr;
 
 	DPRINTF(VFSDB_VNODE, ("vget %LLu\n", ino));
 

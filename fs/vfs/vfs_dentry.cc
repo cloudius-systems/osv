@@ -73,7 +73,7 @@ dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
     struct dentry *dp = (dentry*)calloc(sizeof(*dp), 1);
 
     if (!dp) {
-        return NULL;
+        return nullptr;
     }
 
     vref(vp);
@@ -116,7 +116,7 @@ dentry_lookup(struct mount *mp, char *path)
         }
     }
     mutex_unlock(&dentry_hash_lock);
-    return NULL;                /* not found */
+    return nullptr;                /* not found */
 }
 
 static void dentry_children_remove(struct dentry *dp)

@@ -176,7 +176,7 @@ namei(const char *path, struct dentry **dpp)
             dvp = ddp->d_vnode;
             vn_lock(dvp);
             dp = dentry_lookup(mp, node);
-            if (dp == NULL) {
+            if (dp == nullptr) {
                 /* Find a vnode in this directory. */
                 error = VOP_LOOKUP(dvp, name, &vp);
                 if (error) {
@@ -208,10 +208,10 @@ namei(const char *path, struct dentry **dpp)
                 drele(dp);
 
                 p       = fp.get();
-                dp      = NULL;
-                ddp     = NULL;
-                vp      = NULL;
-                dvp     = NULL;
+                dp      = nullptr;
+                ddp     = nullptr;
+                vp      = nullptr;
+                dvp     = nullptr;
                 name[0] = 0;
                 node[0] = 0;
 
@@ -261,14 +261,14 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
     struct vnode  *vp;
     std::unique_ptr<char []> node (new char[PATH_MAX]);
 
-    dvp  = NULL;
+    dvp  = nullptr;
 
     if (path[0] != '/') {
         return (ENOTDIR);
     }
 
     name = strrchr(path, '/');
-    if (name == NULL) {
+    if (name == nullptr) {
         return (ENOENT);
     }
     name++;
@@ -284,7 +284,7 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
     dvp = ddp->d_vnode;
     vn_lock(dvp);
     dp = dentry_lookup(mp, node.get());
-    if (dp == NULL) {
+    if (dp == nullptr) {
         error = VOP_LOOKUP(dvp, name, &vp);
         if (error != 0) {
             goto out;
@@ -293,7 +293,7 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
         dp = dentry_alloc(ddp, vp, node.get());
         vput(vp);
 
-        if (dp == NULL) {
+        if (dp == nullptr) {
             error = ENOMEM;
             goto out;
         }
@@ -302,7 +302,7 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
     *dpp  = dp;
     error = 0;
 out:
-    if (dvp != NULL) {
+    if (dvp != nullptr) {
         vn_unlock(dvp);
     }
     return (error);

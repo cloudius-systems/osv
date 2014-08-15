@@ -590,7 +590,7 @@ DIR *opendir(const char *path)
     dir->fd = open(path, O_RDONLY);
     if (dir->fd < 0) {
         delete dir;
-        return NULL;
+        return nullptr;
     }
     return dir;
 }
@@ -646,7 +646,7 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
     entry->d_reclen = sizeof(*entry);
 
     if (error) {
-        *result = NULL;
+        *result = nullptr;
     } else {
         *result = entry;
     }
@@ -745,7 +745,7 @@ int rmdir(const char *pathname)
 
     trace_vfs_rmdir(pathname);
     error = ENOENT;
-    if (pathname == NULL)
+    if (pathname == nullptr)
         goto out_errno;
     if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
         goto out_errno;
@@ -783,7 +783,7 @@ get_last_component(const char *path, char *dst)
 
 static bool null_or_empty(const char *str)
 {
-    return str == NULL || *str == '\0';
+    return str == nullptr || *str == '\0';
 }
 
 TRACEPOINT(trace_vfs_rename, "\"%s\" \"%s\"", const char*, const char*);
@@ -868,7 +868,7 @@ int chdir(const char *pathname)
     int error;
 
     error = ENOENT;
-    if (pathname == NULL)
+    if (pathname == nullptr)
         goto out_errno;
 
     if ((error = task_conv(t, pathname, VREAD, path)) != 0)
@@ -934,7 +934,7 @@ int link(const char *oldpath, const char *newpath)
     trace_vfs_link(oldpath, newpath);
 
     error = ENOENT;
-    if (oldpath == NULL || newpath == NULL)
+    if (oldpath == nullptr || newpath == nullptr)
         goto out_errno;
     if ((error = task_conv(t, oldpath, VWRITE, path1)) != 0)
         goto out_errno;
@@ -964,7 +964,7 @@ int symlink(const char *oldpath, const char *newpath)
     trace_vfs_symlink(oldpath, newpath);
 
     error = ENOENT;
-    if (oldpath == NULL || newpath == NULL) {
+    if (oldpath == nullptr || newpath == nullptr) {
         errno = ENOENT;
         trace_vfs_symlink_err(error);
         return (-1);
@@ -993,7 +993,7 @@ int unlink(const char *pathname)
     int error;
 
     error = ENOENT;
-    if (pathname == NULL)
+    if (pathname == nullptr)
         goto out_errno;
     if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
         goto out_errno;
@@ -1228,7 +1228,7 @@ char *getcwd(char *path, size_t size)
     out_errno:
     trace_vfs_getcwd_err(error);
     errno = error;
-    return NULL;
+    return nullptr;
 }
 
 TRACEPOINT(trace_vfs_dup, "%d", int);
@@ -1456,7 +1456,7 @@ fs_pipe(struct task *t, struct msg *msg)
     t->t_ofile[rfd] = (file_t)1; /* temp */
 
     if ((wfd = task_newfd(t)) == -1) {
-        t->t_ofile[rfd] = NULL;
+        t->t_ofile[rfd] = nullptr;
         return EMFILE;
     }
     sprintf(path, "/mnt/fifo/pipe-%x-%d", (u_int)t->t_taskid, rfd);
@@ -1476,8 +1476,8 @@ fs_pipe(struct task *t, struct msg *msg)
     msg->data[1] = wfd;
     return 0;
     out:
-    t->t_ofile[rfd] = NULL;
-    t->t_ofile[wfd] = NULL;
+    t->t_ofile[rfd] = nullptr;
+    t->t_ofile[wfd] = nullptr;
     return error;
 #else
     return ENOSYS;
@@ -1527,7 +1527,7 @@ int truncate(const char *pathname, off_t length)
     int error;
 
     error = ENOENT;
-    if (pathname == NULL)
+    if (pathname == nullptr)
         goto out_errno;
     if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
         goto out_errno;
@@ -1587,7 +1587,7 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
         goto out_errno;
 
     error = ENOENT;
-    if (pathname == NULL)
+    if (pathname == nullptr)
         goto out_errno;
     error = task_conv(t, pathname, VWRITE, path);
     if (error)
@@ -1653,7 +1653,7 @@ int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
     if ((pathname && pathname[0] == '/') || dirfd == AT_FDCWD)
         return utimes(pathname, times);
 
-    // Note: if pathname == NULL, futimesat operates on dirfd itself, and in
+    // Note: if pathname == nullptr, futimesat operates on dirfd itself, and in
     // that case it doesn't have to be a directory.
     if (pathname) {
         error = fstat(dirfd, &st);
@@ -1872,7 +1872,7 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
     if (_offset != nullptr) {
         offset = *_offset;
     } else {
-        /* if _offset is NULL, we need to read from the present position of in_fd */
+        /* if _offset is nullptr, we need to read from the present position of in_fd */
         offset = lseek(in_fd, 0, SEEK_CUR);
     }
 
@@ -1889,7 +1889,7 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 
     if (ret < 0) {
         return libc_error(errno);
-    } else if(_offset == NULL) {
+    } else if(_offset == nullptr) {
         lseek(in_fd, ret, SEEK_CUR);
     } else {
         *_offset += ret;
@@ -1988,14 +1988,14 @@ void mount_rootfs(void)
 {
     int ret;
 
-    ret = sys_mount("", "/", "ramfs", 0, NULL);
+    ret = sys_mount("", "/", "ramfs", 0, nullptr);
     if (ret)
         kprintf("failed to mount rootfs, error = %s\n", strerror(ret));
 
     if (mkdir("/dev", 0755) < 0)
         kprintf("failed to create /dev, error = %s\n", strerror(errno));
 
-    ret = sys_mount("", "/dev", "devfs", 0, NULL);
+    ret = sys_mount("", "/dev", "devfs", 0, nullptr);
     if (ret)
         kprintf("failed to mount devfs, error = %s\n", strerror(ret));
 }
@@ -2081,7 +2081,7 @@ extern "C" void mount_zfs_rootfs(void)
         }
 
         // FIXME: Right now, ignoring mntops. In the future we may have an option parser
-        ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, NULL);
+        ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, nullptr);
         if (ret) {
             printf("failed to mount %s, error = %s\n", m->mnt_type, strerror(ret));
         }

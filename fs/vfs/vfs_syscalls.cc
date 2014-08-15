@@ -67,9 +67,9 @@ open_no_follow_chk(char *path)
 	struct dentry *dp;
 	struct vnode  *vp;
 
-	ddp = NULL;
-	dp  = NULL;
-	vp  = NULL;
+	ddp = nullptr;
+	dp  = nullptr;
+	vp  = nullptr;
 
 	error = lookup(path, &ddp, &name);
 	if (error) {
@@ -90,15 +90,15 @@ open_no_follow_chk(char *path)
 
 	error = 0;
 out:
-	if (vp != NULL) {
+	if (vp != nullptr) {
 		vn_unlock(vp);
 	}
 
-	if (dp != NULL) {
+	if (dp != nullptr) {
 		drele(dp);
 	}
 
-	if (ddp != NULL) {
+	if (ddp != nullptr) {
 		drele(ddp);
 	}
 
@@ -763,7 +763,7 @@ sys_rename(char *src, char *dest)
 	}
 
 	dname = strrchr(dest, '/');
-	if (dname == NULL) {
+	if (dname == nullptr) {
 		error = ENOTDIR;
 		goto err2;
 	}
@@ -821,16 +821,16 @@ sys_symlink(const char *oldpath, const char *newpath)
 	struct dentry	*newdirdp;
 	char		*name;
 
-	if (oldpath == NULL || newpath == NULL) {
+	if (oldpath == nullptr || newpath == nullptr) {
 		return (EFAULT);
 	}
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
 				oldpath, newpath));
 
-	olddp		= NULL;
-	newdp		= NULL;
-	newdirdp	= NULL;
+	olddp		= nullptr;
+	newdp		= nullptr;
+	newdirdp	= nullptr;
 
 	error = task_conv(t, newpath, VWRITE, np);
 	if (error != 0) {
@@ -866,12 +866,12 @@ sys_symlink(const char *oldpath, const char *newpath)
 	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
 
 out:
-	if (newdirdp != NULL) {
+	if (newdirdp != nullptr) {
 		vn_unlock(newdirdp->d_vnode);
 		drele(newdirdp);
 	}
 
-	if (olddp != NULL) {
+	if (olddp != nullptr) {
 		drele(olddp);
 	}
 
@@ -950,9 +950,9 @@ sys_unlink(char *path)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_unlink: path=%s\n", path));
 
-	ddp   = NULL;
-	dp    = NULL;
-	vp    = NULL;
+	ddp   = nullptr;
+	dp    = nullptr;
+	vp    = nullptr;
 
 	error = lookup(path, &ddp, &name);
 	if (error != 0) {
@@ -989,15 +989,15 @@ sys_unlink(char *path)
 	drele(dp);
 	return error;
  out:
-	if (vp != NULL) {
+	if (vp != nullptr) {
 		vn_unlock(vp);
 	}
 
-	if (dp != NULL) {
+	if (dp != nullptr) {
 		drele(dp);
 	}
 
-	if (ddp != NULL) {
+	if (ddp != nullptr) {
 		drele(ddp);
 	}
 	return error;
@@ -1259,7 +1259,7 @@ sys_utimes(char *path, const struct timeval times[2], int flags)
         }
 
         error = namei_last_nofollow(path, ddp, &dp);
-        if (ddp != NULL) {
+        if (ddp != nullptr) {
             drele(ddp);
         }
         if (error) {

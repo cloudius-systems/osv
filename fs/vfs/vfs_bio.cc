@@ -158,7 +158,7 @@ incore(struct device *dev, int blkno)
 		    !ISSET(bp->b_flags, B_INVAL))
 			return bp;
 	}
-	return NULL;
+	return nullptr;
 }
 
 /*
@@ -178,7 +178,7 @@ getblk(struct device *dev, int blkno)
  start:
 	BIO_LOCK();
 	bp = incore(dev, blkno);
-	if (bp != NULL) {
+	if (bp != nullptr) {
 		/* Block found in cache. */
 		if (ISSET(bp->b_flags, B_BUSY)) {
 			/*

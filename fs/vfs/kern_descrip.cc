@@ -83,7 +83,7 @@ int fdclose(int fd)
     WITH_LOCK(gfdt_lock) {
 
         fp = gfdt[fd].read_by_owner();
-        if (fp == NULL) {
+        if (fp == nullptr) {
             return EBADF;
         }
 
@@ -145,7 +145,7 @@ int fget(int fd, struct file **out_fp)
 
     WITH_LOCK(rcu_read_lock) {
         fp = gfdt[fd].read();
-        if (fp == NULL) {
+        if (fp == nullptr) {
             return EBADF;
         }
 

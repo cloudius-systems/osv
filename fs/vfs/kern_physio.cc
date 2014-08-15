@@ -21,11 +21,11 @@ alloc_bio(void)
 {
 	struct bio *bio = new (struct bio);
 	if (!bio)
-		return NULL;
+		return nullptr;
 	memset(bio, 0, sizeof(*bio));
 
-	pthread_mutex_init(&bio->bio_mutex, NULL);
-	pthread_cond_init(&bio->bio_wait, NULL);
+	pthread_mutex_init(&bio->bio_mutex, nullptr);
+	pthread_cond_init(&bio->bio_wait, nullptr);
 	return bio;
 }
 
@@ -113,7 +113,7 @@ void multiplex_strategy(struct bio *bio)
 	uint64_t offset = bio->bio_offset;
 	void *buf = bio->bio_data;
 
-	assert(strategy != NULL);
+	assert(strategy != nullptr);
 
 	if (len <= dev->max_io_size) {
 		strategy(bio);

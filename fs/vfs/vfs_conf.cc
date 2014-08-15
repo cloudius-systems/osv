@@ -63,5 +63,5 @@ const struct vfssw vfssw[] = {
 	{"devfs",	devfs_init,	&devfs_vfsops},
 	{"procfs",	procfs_init,	&procfs_vfsops},
 	{"zfs",		zfs_init,	&zfs_vfsops},
-	{NULL,		fs_noop,	NULL},
+	{nullptr,	fs_noop,	nullptr},
 };
