@@ -45,7 +45,6 @@ __BEGIN_DECLS
  * Mount data
  */
 struct mount {
-	LIST_ENTRY(mount) m_link;	/* link to next mount point */
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
 	int		m_count;	/* reference count */
