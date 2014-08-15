@@ -581,26 +581,6 @@ struct socket;
 
 struct tcpcb *so_sototcpcb(struct socket *so);
 struct inpcb *so_sotoinpcb(struct socket *so);
-struct sockbuf *so_sockbuf_snd(struct socket *);
-struct sockbuf *so_sockbuf_rcv(struct socket *);
-
-int so_state_get(const struct socket *);
-void so_state_set(struct socket *, int);
-
-int so_options_get(const struct socket *);
-void so_options_set(struct socket *, int);
-
-int so_error_get(const struct socket *);
-void so_error_set(struct socket *, int);
-
-int so_linger_get(const struct socket *);
-void so_linger_set(struct socket *, int);
-
-struct protosw *so_protosw_get(const struct socket *);
-void so_protosw_set(struct socket *, struct protosw *);
-
-void so_listeners_apply_all(struct socket *so, void (*func)(struct socket *, void *), void *arg);
-
 #endif
 
 
