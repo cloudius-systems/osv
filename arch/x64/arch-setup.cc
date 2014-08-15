@@ -10,6 +10,7 @@
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
 #include "processor.hh"
+#include "processor-flags.h"
 #include "msr.hh"
 #include "xen.hh"
 #include <osv/elf.hh>
@@ -212,9 +213,20 @@ static inline void disable_pic()
     XENPV_ALTERNATIVE({ processor::outb(0xff, 0x21); processor::outb(0xff, 0xa1); }, {});
 }
 
+extern "C" void syscall_entry(void);
+
+static void setup_syscall()
+{
+    processor::wrmsr(msr::IA32_STAR,  static_cast<uint64_t>(1*8) << 32);
+    processor::wrmsr(msr::IA32_LSTAR, reinterpret_cast<uint64_t>(syscall_entry));
+    processor::wrmsr(msr::IA32_FMASK, 0);
+    processor::wrmsr(msr::IA32_EFER,  processor::rdmsr(msr::IA32_EFER) | 0x01);
+}
+
 void arch_init_premain()
 {
     disable_pic();
+    setup_syscall();
 }
 
 #include "drivers/driver.hh"

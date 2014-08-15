@@ -167,4 +167,14 @@ long syscall(long number, ...)
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
 }
+
 long __syscall(long number, ...)  __attribute__((alias("syscall")));
+
+extern "C" long syscall_wrapper(long number, ...)
+{
+    auto ret = syscall(number);
+    if (ret < 0) {
+        return -errno;
+    }
+    return 0;
+}

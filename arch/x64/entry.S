@@ -159,3 +159,23 @@ call_signal_handler_thunk:
         iretq
         .cfi_endproc
 
+.global syscall_entry
+syscall_entry:
+	# There is no ring transition and rflags are left unchanged. The only
+	# thing we need to save is the rip which is stored in rcx by the syscall
+	# instruction.
+	push %rcx
+	# FIXME: registers clobbered?
+	# FIXME: FPU state?
+	# FIXME: system call arguments?
+	movq %r10, %rcx
+	# rotate syscall arguments
+	movq %r8,  %r9
+	movq %rcx, %r8
+	movq %rdx, %rcx
+	movq %rsi, %rdx
+	movq %rdi, %rsi
+	movq %rax, %rdi
+	call syscall_wrapper
+	pop %rcx
+	jmp *%rcx
