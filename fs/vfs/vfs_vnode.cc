@@ -206,7 +206,7 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 		VNODE_UNLOCK();
 		mutex_destroy(&vp->v_lock);
 		delete vp;
-		return NULL;
+		return error;
 	}
 	vfs_busy(vp->v_mount);
 	mutex_lock(&vp->v_lock);
