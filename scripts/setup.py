@@ -38,6 +38,7 @@ class Fedora(object):
         packages = []
         ec2_packages = []
         test_packages = []
+        ec2_post_install = None
         version = '20'
     versions = [Fedora_20]
 
@@ -57,6 +58,7 @@ class Ubuntu(object):
         packages = []
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
+        ec2_post_install = None
         version = '14.04'
 
     class Ubuntu_13_10(object):
