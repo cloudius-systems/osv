@@ -140,56 +140,109 @@ struct sse_register_file;
 
 template <>
 struct sse_register_file<0> {
-    void load(const __m128i* p) {}
-    void store(__m128i* p) {}
+    void load_aligned(const __m128i* p) {}
+    void store_aligned(__m128i* p) {}
+    void load_unaligned(const __m128i* p) {}
+    void store_unaligned(__m128i* p) {}
 };
 
 template <unsigned N>
 struct sse_register_file : sse_register_file<N-1> {
     __m128i reg;
-    void load(const __m128i* p) {
-        sse_register_file<N-1>::load(p);
+    void load_aligned(const __m128i* p) {
+        sse_register_file<N-1>::load_aligned(p);
+        reg = _mm_load_si128(&p[N-1]);
+    }
+    void store_aligned(__m128i* p) {
+        sse_register_file<N-1>::store_aligned(p);
+        _mm_store_si128(&p[N-1], reg);
+    }
+    void load_unaligned(const __m128i* p) {
+        sse_register_file<N-1>::load_unaligned(p);
         reg = _mm_loadu_si128(&p[N-1]);
     }
-    void store(__m128i* p) {
-        sse_register_file<N-1>::store(p);
+    void store_unaligned(__m128i* p) {
+        sse_register_file<N-1>::store_unaligned(p);
         _mm_storeu_si128(&p[N-1], reg);
     }
 };
 
-template <unsigned N>
+template <unsigned N, typename loader, typename storer>
 __attribute__((optimize("unroll-loops"), optimize("omit-frame-pointer")))
 void do_sse_memcpy(void* dest, const void* src)
 {
+    loader load;
+    storer store;
     auto sse_dest = static_cast<__m128i*>(dest);
     auto sse_src = static_cast<const __m128i*>(src);
     sse_register_file<N> regs;
-    regs.load(sse_src);
-    regs.store(sse_dest);
+    load(regs, sse_src);
+    store(regs, sse_dest);
 }
 
-static void (* const sse_memcpy_table[16])(void*, const void*) = {
-    do_sse_memcpy<0>,
-    do_sse_memcpy<1>,
-    do_sse_memcpy<2>,
-    do_sse_memcpy<3>,
-    do_sse_memcpy<4>,
-    do_sse_memcpy<5>,
-    do_sse_memcpy<6>,
-    do_sse_memcpy<7>,
-    do_sse_memcpy<8>,
-    do_sse_memcpy<9>,
-    do_sse_memcpy<10>,
-    do_sse_memcpy<11>,
-    do_sse_memcpy<12>,
-    do_sse_memcpy<13>,
-    do_sse_memcpy<14>,
-    do_sse_memcpy<15>,
+struct load_aligned {
+    template <typename register_file, typename datum>
+    void operator()(register_file& rf, const datum* src) { rf.load_aligned(src); }
+};
+
+struct load_unaligned {
+    template <typename register_file, typename datum>
+    void operator()(register_file& rf, const datum* src) { rf.load_unaligned(src); }
+};
+
+struct store_aligned {
+    template <typename register_file, typename datum>
+    void operator()(register_file& rf, datum* dest) { rf.store_aligned(dest); }
+};
+
+struct store_unaligned {
+    template <typename register_file, typename datum>
+    void operator()(register_file& rf, datum* dest) { rf.store_unaligned(dest); }
+};
+
+// indices: [is 16-byte aligned][number of 16-byte segments]
+static void (* const sse_memcpy_table[2][16])(void*, const void*) = {
+    do_sse_memcpy<0, load_unaligned, store_unaligned>,
+    do_sse_memcpy<1, load_unaligned, store_unaligned>,
+    do_sse_memcpy<2, load_unaligned, store_unaligned>,
+    do_sse_memcpy<3, load_unaligned, store_unaligned>,
+    do_sse_memcpy<4, load_unaligned, store_unaligned>,
+    do_sse_memcpy<5, load_unaligned, store_unaligned>,
+    do_sse_memcpy<6, load_unaligned, store_unaligned>,
+    do_sse_memcpy<7, load_unaligned, store_unaligned>,
+    do_sse_memcpy<8, load_unaligned, store_unaligned>,
+    do_sse_memcpy<9, load_unaligned, store_unaligned>,
+    do_sse_memcpy<10, load_unaligned, store_unaligned>,
+    do_sse_memcpy<11, load_unaligned, store_unaligned>,
+    do_sse_memcpy<12, load_unaligned, store_unaligned>,
+    do_sse_memcpy<13, load_unaligned, store_unaligned>,
+    do_sse_memcpy<14, load_unaligned, store_unaligned>,
+    do_sse_memcpy<15, load_unaligned, store_unaligned>,
+
+    do_sse_memcpy<0, load_aligned, store_aligned>,
+    do_sse_memcpy<1, load_aligned, store_aligned>,
+    do_sse_memcpy<2, load_aligned, store_aligned>,
+    do_sse_memcpy<3, load_aligned, store_aligned>,
+    do_sse_memcpy<4, load_aligned, store_aligned>,
+    do_sse_memcpy<5, load_aligned, store_aligned>,
+    do_sse_memcpy<6, load_aligned, store_aligned>,
+    do_sse_memcpy<7, load_aligned, store_aligned>,
+    do_sse_memcpy<8, load_aligned, store_aligned>,
+    do_sse_memcpy<9, load_aligned, store_aligned>,
+    do_sse_memcpy<10, load_aligned, store_aligned>,
+    do_sse_memcpy<11, load_aligned, store_aligned>,
+    do_sse_memcpy<12, load_aligned, store_aligned>,
+    do_sse_memcpy<13, load_aligned, store_aligned>,
+    do_sse_memcpy<14, load_aligned, store_aligned>,
+    do_sse_memcpy<15, load_aligned, store_aligned>,
 };
 
 static inline void* sse_memcpy(void* dest, const void* src, size_t n)
 {
-    sse_memcpy_table[n/16](dest, src);
+    bool both_aligned
+        = ((reinterpret_cast<uintptr_t>(src)
+            | reinterpret_cast<uintptr_t>(dest)) & 15) == 0;
+    sse_memcpy_table[both_aligned][n/16](dest, src);
     small_memcpy(dest + (n & ~15), src + (n & ~15), n & 15);
     return dest;
 }
