@@ -169,8 +169,21 @@ struct sse_register_file : sse_register_file<N-1> {
 };
 
 template <unsigned N, typename loader, typename storer>
-__attribute__((optimize("unroll-loops"), optimize("omit-frame-pointer")))
-void do_sse_memcpy(void* dest, const void* src)
+inline
+void do_sse_memcpy_body(void* dest, const void* src)
+{
+    loader load;
+    storer store;
+    sse_register_file<16> sse;
+    for (unsigned i = 0; i < N; ++i) {
+        load(sse, reinterpret_cast<const __m128i*>(src) + i * 16);
+        store(sse, reinterpret_cast<__m128i*>(dest) + i * 16);
+    }
+}
+
+template <unsigned N, typename loader, typename storer>
+inline
+void do_sse_memcpy_tail(void* dest, const void* src)
 {
     loader load;
     storer store;
@@ -179,6 +192,14 @@ void do_sse_memcpy(void* dest, const void* src)
     sse_register_file<N> regs;
     load(regs, sse_src);
     store(regs, sse_dest);
+}
+
+template <unsigned N, typename loader, typename storer>
+__attribute__((optimize("unroll-loops"), optimize("omit-frame-pointer")))
+void do_sse_memcpy(void* dest, const void* src)
+{
+    do_sse_memcpy_body<N/16, loader, storer>(dest, src);
+    do_sse_memcpy_tail<N % 16, loader, storer>(dest + N/16 * 256, src + N/16 * 256);
 }
 
 struct load_aligned {
@@ -214,9 +235,9 @@ struct aligned_copier {
 };
 
 // indices: [is 16-byte aligned][number of 16-byte segments]
-static constexpr std::array<static_copier_fn, 16> sse_memcpy_table[2] = {
-        initialized_array<static_copier_fn, 16, make_index_list<16>, unaligned_copier>(),
-        initialized_array<static_copier_fn, 16, make_index_list<16>, aligned_copier>(),
+static constexpr std::array<static_copier_fn, 64> sse_memcpy_table[2] = {
+        initialized_array<static_copier_fn, 64, make_index_list<64>, unaligned_copier>(),
+        initialized_array<static_copier_fn, 64, make_index_list<64>, aligned_copier>(),
 };
 
 static inline void* sse_memcpy(void* dest, const void* src, size_t n)
@@ -235,7 +256,7 @@ void *memcpy_repmov_old(void *__restrict dest, const void *__restrict src, size_
 {
     if (n <= 15) {
         return small_memcpy(dest, src, n);
-    } else if (n < 256) {
+    } else if (n < 1024) {
         return sse_memcpy(dest, src, n);
     } else {
         auto ret = dest;
@@ -255,7 +276,7 @@ void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 {
     if (n <= 15) {
         return small_memcpy(dest, src, n);
-    } else if (n < 256) {
+    } else if (n < 1024) {
         return sse_memcpy(dest, src, n);
     } else {
         auto ret = dest;
