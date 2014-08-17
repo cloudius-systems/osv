@@ -14,6 +14,7 @@
 #include "memcpy_decode.hh"
 #include <assert.h>
 #include <x86intrin.h>
+#include <osv/initialize.hh>
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
@@ -200,41 +201,22 @@ struct store_unaligned {
     void operator()(register_file& rf, datum* dest) { rf.store_unaligned(dest); }
 };
 
-// indices: [is 16-byte aligned][number of 16-byte segments]
-static void (* const sse_memcpy_table[2][16])(void*, const void*) = {
-    do_sse_memcpy<0, load_unaligned, store_unaligned>,
-    do_sse_memcpy<1, load_unaligned, store_unaligned>,
-    do_sse_memcpy<2, load_unaligned, store_unaligned>,
-    do_sse_memcpy<3, load_unaligned, store_unaligned>,
-    do_sse_memcpy<4, load_unaligned, store_unaligned>,
-    do_sse_memcpy<5, load_unaligned, store_unaligned>,
-    do_sse_memcpy<6, load_unaligned, store_unaligned>,
-    do_sse_memcpy<7, load_unaligned, store_unaligned>,
-    do_sse_memcpy<8, load_unaligned, store_unaligned>,
-    do_sse_memcpy<9, load_unaligned, store_unaligned>,
-    do_sse_memcpy<10, load_unaligned, store_unaligned>,
-    do_sse_memcpy<11, load_unaligned, store_unaligned>,
-    do_sse_memcpy<12, load_unaligned, store_unaligned>,
-    do_sse_memcpy<13, load_unaligned, store_unaligned>,
-    do_sse_memcpy<14, load_unaligned, store_unaligned>,
-    do_sse_memcpy<15, load_unaligned, store_unaligned>,
+using static_copier_fn = void (*)(void*, const void*);
 
-    do_sse_memcpy<0, load_aligned, store_aligned>,
-    do_sse_memcpy<1, load_aligned, store_aligned>,
-    do_sse_memcpy<2, load_aligned, store_aligned>,
-    do_sse_memcpy<3, load_aligned, store_aligned>,
-    do_sse_memcpy<4, load_aligned, store_aligned>,
-    do_sse_memcpy<5, load_aligned, store_aligned>,
-    do_sse_memcpy<6, load_aligned, store_aligned>,
-    do_sse_memcpy<7, load_aligned, store_aligned>,
-    do_sse_memcpy<8, load_aligned, store_aligned>,
-    do_sse_memcpy<9, load_aligned, store_aligned>,
-    do_sse_memcpy<10, load_aligned, store_aligned>,
-    do_sse_memcpy<11, load_aligned, store_aligned>,
-    do_sse_memcpy<12, load_aligned, store_aligned>,
-    do_sse_memcpy<13, load_aligned, store_aligned>,
-    do_sse_memcpy<14, load_aligned, store_aligned>,
-    do_sse_memcpy<15, load_aligned, store_aligned>,
+template <size_t N>
+struct unaligned_copier {
+    static auto constexpr value = do_sse_memcpy<N, load_unaligned, store_unaligned>;
+};
+
+template <size_t N>
+struct aligned_copier {
+    static auto constexpr value = do_sse_memcpy<N, load_aligned, store_aligned>;
+};
+
+// indices: [is 16-byte aligned][number of 16-byte segments]
+static constexpr std::array<static_copier_fn, 16> sse_memcpy_table[2] = {
+        initialized_array<static_copier_fn, 16, make_index_list<16>, unaligned_copier>(),
+        initialized_array<static_copier_fn, 16, make_index_list<16>, aligned_copier>(),
 };
 
 static inline void* sse_memcpy(void* dest, const void* src, size_t n)
