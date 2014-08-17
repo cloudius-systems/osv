@@ -12,6 +12,7 @@
 #include <array>
 #include <initializer_list>
 #include <utility>
+#include "index-list.hh"
 
 // helper to find out the argument type of a function object
 template <typename T>
@@ -71,5 +72,15 @@ initialize_array(std::initializer_list<std::pair<size_t, val>> il)
     }
     return ret;
 }
+
+// Compile-time array initialization from a template, instead of run-time
+// function evaluation.  Useful with make_index_list<...>.
+template <typename T, size_t N, typename IndexList, template <size_t K> class Initializer>
+struct initialized_array;
+
+template <typename T, size_t N, size_t... Indices, template <size_t K> class Initializer>
+struct initialized_array<T, N, index_list<Indices...>, Initializer> : std::array<T, N> {
+    constexpr initialized_array() : std::array<T, N>{ { Initializer<Indices>::value... } } {}
+};
 
 #endif /* INITIALIZE_HH_ */
