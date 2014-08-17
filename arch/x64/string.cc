@@ -248,6 +248,7 @@ static inline void* sse_memcpy(void* dest, const void* src, size_t n)
 }
 
 extern "C"
+[[gnu::optimize("omit-frame-pointer")]]
 void *memcpy_repmov_old(void *__restrict dest, const void *__restrict src, size_t n)
 {
     if (n <= 15) {
@@ -267,6 +268,7 @@ void *memcpy_repmov_old(void *__restrict dest, const void *__restrict src, size_
 }
 
 extern "C"
+[[gnu::optimize("omit-frame-pointer")]]
 void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 {
     if (n <= 15) {
