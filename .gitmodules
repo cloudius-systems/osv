@@ -45,3 +45,6 @@
 [submodule "musl"]
 	path = musl
 	url = ../../cloudius-systems/musl.git
+[submodule "modules/httpserver/osv-gui"]
+	path = modules/httpserver/osv-gui
+	url = git@github.com:cloudius-systems/osv-gui.git
