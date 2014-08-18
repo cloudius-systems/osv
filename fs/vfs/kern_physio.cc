@@ -9,66 +9,57 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <new>
 
 #include <osv/device.h>
 #include <osv/bio.h>
 #include <sys/param.h>
 #include <assert.h>
 #include <sys/refcount.h>
+#include <osv/mutex.h>
+#include <osv/waitqueue.hh>
 
 struct bio *
 alloc_bio(void)
 {
-	struct bio *bio = new (struct bio);
-	if (!bio)
+	auto *b = new (std::nothrow) bio();
+	if (!b)
 		return nullptr;
-	memset(bio, 0, sizeof(*bio));
-
-	pthread_mutex_init(&bio->bio_mutex, nullptr);
-	pthread_cond_init(&bio->bio_wait, nullptr);
-	return bio;
+	return b;
 }
 
 void
 destroy_bio(struct bio *bio)
 {
-	pthread_cond_destroy(&bio->bio_wait);
-	pthread_mutex_destroy(&bio->bio_mutex);
 	delete bio;
 }
 
 int
 bio_wait(struct bio *bio)
 {
-	int ret = 0;
-
-	pthread_mutex_lock(&bio->bio_mutex);
-	while (!(bio->bio_flags & BIO_DONE))
-		pthread_cond_wait(&bio->bio_wait, &bio->bio_mutex);
-	if (bio->bio_flags & BIO_ERROR)
-		ret = EIO;
-	pthread_mutex_unlock(&bio->bio_mutex);
-
-	return ret;
+	SCOPE_LOCK(bio->bio_mutex);
+	while (!(bio->bio_flags & BIO_DONE)) {
+		bio->bio_wait.wait(bio->bio_mutex);
+	}
+	if (bio->bio_flags & BIO_ERROR) {
+		return EIO;
+	}
+	return 0;
 }
 
 void
 biodone(struct bio *bio, bool ok)
 {
-	void (*bio_done)(struct bio *);
-
-	pthread_mutex_lock(&bio->bio_mutex);
-	bio->bio_flags |= BIO_DONE;
-	if (!ok)
-		bio->bio_flags |= BIO_ERROR;
-	bio_done = bio->bio_done;
-	if (!bio_done) {
-		pthread_cond_signal(&bio->bio_wait);
-		pthread_mutex_unlock(&bio->bio_mutex);
-	} else {
-		pthread_mutex_unlock(&bio->bio_mutex);
-		bio_done(bio);
+	WITH_LOCK(bio->bio_mutex) {
+		bio->bio_flags |= BIO_DONE;
+		if (!ok)
+			bio->bio_flags |= BIO_ERROR;
+		if (!bio->bio_done) {
+			bio->bio_wait.wake_one(bio->bio_mutex);
+			return;
+		}
 	}
+	bio->bio_done(bio);
 }
 
 void
@@ -91,9 +82,9 @@ static void multiplex_bio_done(struct bio *b)
 	// This path gets slower because then we need to end up taking the
 	// bio_mutex twice. But that should be fine.
 	if (error) {
-		pthread_mutex_lock(&bio->bio_mutex);
-		bio->bio_flags |= BIO_ERROR;
-		pthread_mutex_lock(&bio->bio_mutex);
+		WITH_LOCK(bio->bio_mutex) {
+			bio->bio_flags |= BIO_ERROR;
+		}
 	}
 
 	// Last one releases it. We set the biodone to always be "ok", because

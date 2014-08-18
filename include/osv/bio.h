@@ -44,6 +44,8 @@
 #include <stdbool.h>
 #include <bsd/sys/sys/queue.h>
 #include <osv/device.h>
+#include <osv/mutex.h>
+#include <osv/waitqueue.hh>
 
 __BEGIN_DECLS
 
@@ -98,8 +100,8 @@ struct bio {
 	 * I/O synchronization, probably should move out of the struct to
 	 * save space.
 	 */
-	pthread_mutex_t bio_mutex;
-	pthread_cond_t	bio_wait;
+	mutex_t bio_mutex;
+	waitqueue bio_wait;
 	volatile unsigned int bio_refcnt;
 };
 
