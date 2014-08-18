@@ -105,6 +105,13 @@ static void print_backtrace(void)
 
 static std::atomic<bool> aborting { false };
 
+extern "C"
+void __cxa_thread_atexit_impl(void (*dtor)(void *), void* obj, void* dso_symbol)
+{
+    WARN_STUBBED();
+    // FIXME: implement
+}
+
 void abort()
 {
     abort("Aborted\n");
