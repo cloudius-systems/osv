@@ -93,7 +93,7 @@ constexpr thread_runtime::duration tau = 200_ms;
 // out. In particular, it can be shown that when two cpu-busy threads at equal
 // priority compete, they will alternate at time-slices of 2*thyst; Also,
 // the distance between two preemption interrupts cannot be lower than thyst.
-constexpr thread_runtime::duration thyst = 2_ms;
+constexpr thread_runtime::duration thyst = 5_ms;
 
 constexpr thread_runtime::duration context_switch_penalty = 10_us;
 
