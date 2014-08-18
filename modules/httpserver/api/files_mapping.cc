@@ -22,6 +22,10 @@ void init(routes& routes)
     directory_handler* api = new directory_handler("/usr/mgmt/api",
             new content_replace("json"));
     routes.add(GET, url("/api").remainder("path"), api);
+    routes.add(GET, url("/dashboard_static").remainder("path"),
+                       new directory_handler("/usr/mgmt/gui/dashboard_static"));
+    routes.add(GET, url("/dashboard").remainder("path"),
+                           new file_handler("/usr/mgmt/gui/dashboard/index.html"));
     routes.add(GET, url("").remainder("path"),
                    new directory_handler("/usr/mgmt/swagger-ui/dist"));
 }
