@@ -277,9 +277,39 @@ def create_h_file(data, hfile_name, api_name, init_method):
                 member = model["properties"][member_name]
                 if "description" in member:
                     print_comment(hfile, member["description"])
-                fprint(hfile, "  ", config.jsonns, "::",
-                   type_change(member["type"], member), " ",
-                   member_name, ";\n")
+                if "enum" in member:
+                    enum_name = model_name + "_" + member_name
+                    fprint(hfile, "  enum class ", enum_name," {")
+                    for enum_entry in member["enum"]:
+                        fprint(hfile, "  ",enum_entry, ", ")
+                    fprint(hfile, "NUM_ITEMS};")
+                    wrapper = member_name + "_wrapper"
+                    fprint(hfile, "  struct ", wrapper, " : public jsonable  {")
+                    fprint(hfile, "    ", wrapper, "() = default;")
+                    fprint(hfile, "    virtual std::string to_json() const {")
+                    fprint(hfile, "      switch(v) {")
+                    for enum_entry in member["enum"]:
+                        fprint(hfile, "      case ", enum_name, "::", enum_entry, ": return \"\\\"", enum_entry, "\\\"\";")
+                    fprint(hfile, "      default: return \"Unknown\";")
+                    fprint(hfile, "      }")
+                    fprint(hfile, "    }")
+                    fprint(hfile, "    template<class T>")
+                    fprint(hfile, "    ", wrapper, "(const T& _v) {")
+                    fprint(hfile, "      switch(_v) {")
+                    for enum_entry in member["enum"]:
+                        fprint(hfile, "      case T::", enum_entry, ": v = ", enum_name, "::", enum_entry, "; break;")
+                    fprint(hfile, "      default: v = ", enum_name, "::NUM_ITEMS;")
+                    fprint(hfile, "      }")
+                    fprint(hfile, "    }")
+                    fprint(hfile, "    ", enum_name, " v;")
+                    fprint(hfile, "  };")
+                    fprint(hfile, "  ", config.jsonns, "::json_element<",
+                           member_name, "_wrapper> ",
+                           member_name, ";\n")
+                else:
+                    fprint(hfile, "  ", config.jsonns, "::",
+                           type_change(member["type"], member), " ",
+                           member_name, ";\n")
                 member_init += "  add(&" + member_name + ',"'
                 member_init += member_name + '");\n'
                 member_assignment += "  " + member_name + " = " + "e." + member_name + ";\n"
