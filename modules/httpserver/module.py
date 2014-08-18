@@ -11,6 +11,7 @@ usr_files = FileMap()
 usr_files.add(os.path.join(_module, 'libhttpserver.so')).to(_exe)
 usr_files.add(os.path.join(_module, 'api-doc')).to('/usr/mgmt/api')
 usr_files.add(os.path.join(_module, 'swagger-ui', 'dist')).to('/usr/mgmt/swagger-ui/dist')
+usr_files.add(os.path.join(_module, 'osv-gui/public')).to('/usr/mgmt/gui')
 
 api.require('openssl')
 api.require('libtools')

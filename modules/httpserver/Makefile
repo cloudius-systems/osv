@@ -51,7 +51,7 @@ very-quiet = $(if $V, $1, @$1)
 
 DEPS := $(OBJ_FILES:.o=.d)
 
-module: all swagger-ui-lib
+module: all gui swagger-ui-lib
 
 all: init lib$(TARGET).so
 
@@ -108,5 +108,12 @@ swagger-ui-lib: swagger-ui/.git
 
 swagger-ui/.git:
 	cd $(src) && git submodule update --init -f modules/httpserver/swagger-ui
+
+gui: osv-gui/.git
+	$(call quiet,make -C osv-gui)
+.PHONY: gui
+
+osv-gui/.git:
+	cd $(src) && git submodule update --init -f modules/httpserver/osv-gui
 
 .SECONDARY:
