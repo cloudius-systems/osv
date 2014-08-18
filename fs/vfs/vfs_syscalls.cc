@@ -564,7 +564,7 @@ sys_rmdir(char *path)
 		error = ENOTDIR;
 		goto out;
 	}
-	if (vp->v_flags & VROOT || vcount(vp) >= 2) {
+	if (vp->v_flags & VROOT || vp->v_refcnt >= 2) {
 		error = EBUSY;
 		goto out;
 	}
