@@ -604,6 +604,7 @@ void object::relocate_pltgot()
 
 void* object::resolve_pltgot(unsigned index)
 {
+    assert(sched::preemptable());
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto slot = rel[index];
     auto info = slot.r_info;
