@@ -9,9 +9,8 @@
 
 #include <osv/async.hh>
 #include <osv/clock.hh>
-#include <osv/elf.hh>
 #include <osv/trace.hh>
-#include <osv/preempt-lock.hh>
+#include <osv/migration-lock.hh>
 #include <boost/test/unit_test.hpp>
 #include <future>
 
@@ -297,7 +296,7 @@ BOOST_AUTO_TEST_CASE(test_task_which_is_scheduled_second_but_with_sooner_expirat
         }
     });
 
-    WITH_LOCK(preempt_lock) { // So that both end up in the same async_worker
+    WITH_LOCK(migration_lock) { // So that both end up in the same async_worker
         task_1.reschedule(10_ms);
         task_2.reschedule(1_ms);
     }
@@ -491,4 +490,3 @@ BOOST_AUTO_TEST_CASE(test_serial_timer__callback_fires_if_not_cancelled)
     lock.lock();
 }
 
-OSV_ELF_MLOCK_OBJECT();
