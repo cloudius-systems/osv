@@ -558,6 +558,11 @@ float thread::priority() const
     return _runtime.priority();
 }
 
+sched::thread::status thread::get_status() const
+{
+    return _detached_state->st.load(std::memory_order_relaxed);
+}
+
 thread::stack_info::stack_info()
     : begin(nullptr), size(0), deleter(nullptr)
 {

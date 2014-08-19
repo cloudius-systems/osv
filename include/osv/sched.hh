@@ -367,6 +367,19 @@ private:
     std::atomic<detach_state> _detach_state = { detach_state::attached };
 
 public:
+    enum class status {
+        invalid,
+        prestarted,
+        unstarted,
+        waiting,
+        sending_lock,
+        running,
+        queued,
+        waking, // between waiting and queued
+        terminating, // temporary state used in complete()
+        terminated,
+    };
+
     explicit thread(std::function<void ()> func, attr attributes = attr(),
             bool main = false);
     ~thread();
@@ -417,6 +430,7 @@ public:
 #endif
     stack_info get_stack_info();
     cpu* tcpu() const __attribute__((no_instrument_function));
+    status get_status() const;
     void join();
     void detach();
     void set_cleanup(std::function<void ()> cleanup);
@@ -539,19 +553,6 @@ private:
     //   terminating   terminated   async    post context switch
     //
     // wake() on any state except waiting is discarded.
-
-    enum class status {
-        invalid,
-        prestarted,
-        unstarted,
-        waiting,
-        sending_lock,
-        running,
-        queued,
-        waking, // between waiting and queued
-        terminating, // temporary state used in complete()
-        terminated,
-    };
     thread_runtime _runtime;
     // part of the thread state is detached from the thread structure,
     // and freed by rcu, so that waking a thread and destroying it can
