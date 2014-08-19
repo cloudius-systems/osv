@@ -135,6 +135,16 @@ public:
     std::vector<T> elements;
 };
 
+class jsonable {
+public:
+    virtual ~jsonable() = default;
+    /**
+     * create a foramted string of the object.
+     * @return the object formated.
+     */
+    virtual std::string to_json() const = 0;
+};
+
 /**
  * The base class for all json objects
  * It holds a list of all the element in it,
@@ -145,7 +155,7 @@ public:
  * are known in advance and in practice mimic
  * reflection
  */
-struct json_base {
+struct json_base : public jsonable {
 
     virtual ~json_base() = default;
 

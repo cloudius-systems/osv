@@ -16,7 +16,7 @@ namespace httpserver {
 
 namespace json {
 
-struct json_base;
+struct jsonable;
 
 typedef struct tm date_time;
 
@@ -105,7 +105,7 @@ public:
      * @param obj the date_time to format
      * @return the given json object in a json format
      */
-    static std::string to_json(const json_base& obj);
+    static std::string to_json(const jsonable& obj);
 
     /**
      * return a json formated unsigned long

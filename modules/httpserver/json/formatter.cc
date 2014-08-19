@@ -63,7 +63,7 @@ string formatter::to_json(const date_time& d)
     return res + "\"";
 }
 
-string formatter::to_json(const json_base& obj) {
+string formatter::to_json(const jsonable& obj) {
     return obj.to_json();
 }
 
