@@ -291,6 +291,22 @@
                     "type": "long",
                     "description": "Total CPU time used by the thread (in milliseconds)"
                 },
+                "priority": { "type": "float" },
+                "stack_size": { "type": "long" },
+                "status": {
+                  "type": "string",
+                  "description": "thread status",
+                  "enum": [
+                  "invalid",
+                  "prestarted",
+                  "unstarted",
+                  "waiting",
+                  "running",
+                  "queued",
+                  "waking",
+                  "terminating",
+                  "terminated"
+                ]},
                 "name" : {
                      "type": "string",
                     "description": "Thread description (not necessarily unique)"
