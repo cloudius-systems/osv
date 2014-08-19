@@ -18,7 +18,8 @@
 
 #include "arch-elf.hh"
 
-/// Marks a shared object as locked in memory so OSv APIs like preempt_disable() can be used
+/// Marks a shared object as locked in memory and forces eager resolution of
+/// PLT entries so OSv APIs like preempt_disable() can be used
 #define OSV_ELF_MLOCK_OBJECT() asm(".pushsection .note.osv-mlock, \"a\"; .long 0, 0, 0; .popsection")
 
 /**
@@ -334,6 +335,7 @@ protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
     virtual void read(Elf64_Off offset, void* data, size_t len) = 0;
+    bool mlocked();
 private:
     Elf64_Sym* lookup_symbol_old(const char* name);
     Elf64_Sym* lookup_symbol_gnu(const char* name);
@@ -400,8 +402,6 @@ protected:
     virtual void load_segment(const Elf64_Phdr& phdr);
     virtual void unload_segment(const Elf64_Phdr& phdr);
     virtual void read(Elf64_Off offset, void* data, size_t size) override;
-private:
-    bool mlocked();
 private:
     ::fileref _f;
 };

@@ -306,7 +306,7 @@ void file::load_segment(const Elf64_Phdr& phdr)
     }
 }
 
-bool file::mlocked()
+bool object::mlocked()
 {
     for (auto&& s : sections()) {
         if (section_name(s) == ".note.osv-mlock") {
@@ -564,7 +564,7 @@ void object::relocate_pltgot()
 #endif /* AARCH64_PORT_STUB */
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
-    bool bind_now = dynamic_exists(DT_BIND_NOW);
+    bool bind_now = dynamic_exists(DT_BIND_NOW) || mlocked();
 
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
