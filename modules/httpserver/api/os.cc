@@ -122,6 +122,9 @@ void init(routes& routes)
             thread.migrations = t.stat_migrations.get();
             thread.preemptions = t.stat_preemptions.get();
             thread.name = t.name();
+            thread.priority = t.priority();
+            thread.stack_size = t.get_stack_info().size;
+            thread.status = t.get_status();
             threads.list.push(thread);
         });
         return threads;
