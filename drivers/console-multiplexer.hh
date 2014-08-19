@@ -24,7 +24,10 @@ public:
     void write_ll(const char *str, size_t len);
     void write(const char *str, size_t len);
     void write(struct uio *uio, int ioflag);
+    // Operations passed to the line discipline:
     int read_queue_size();
+    void discard_pending_input();
+    void take_pending_input();
 private:
     void drivers_write(const char *str, size_t len);
     void drivers_flush();

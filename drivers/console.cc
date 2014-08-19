@@ -74,7 +74,25 @@ console_ioctl(u_long request, void *arg)
         // still consulting the data. But for now, it is not terribly
         // important
         tio = *static_cast<termios*>(arg);
+        if (!(tio.c_lflag & ICANON)) {
+            // Going into raw (non-canonical) mode, so make whatever is in the
+            // edit buffer available for immediate reading. It will continue
+            // to be available even even after we return to canonical mode.
+            mux.take_pending_input();
+        }
         return 0;
+    case TCSETSF:
+        tio = *static_cast<termios*>(arg);
+        mux.discard_pending_input();
+        return 0;
+    case TCFLSH:
+        switch ((int)(intptr_t)arg) {
+        case TCIFLUSH:
+            mux.discard_pending_input();
+            return 0;
+        default:
+            return -EINVAL;
+        }
     case FIONREAD:
         // used in OpenJDK's os::available (os_linux.cpp)
         *static_cast<int*>(arg) = mux.read_queue_size();

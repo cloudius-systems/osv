@@ -171,4 +171,34 @@ void LineDiscipline::write(const char *str, size_t len,
     }
 }
 
+// take_pending_input() makes whatever input is currently in the edit buffer
+// (_line_buffer) and make it available for immediate reading (_read_queue).
+// We need to do this, for example, when switching to raw mode. Note that
+// once the pending input is "taken", it will be readable even if it didn't
+// end with a newline and even if we go back later to cooked mode.
+void LineDiscipline::take_pending_input()
+{
+    std::lock_guard<mutex> lock(_mutex);
+    if (_line_buffer.empty()) {
+        return;
+    }
+    while (!_line_buffer.empty()) {
+        _read_queue.push(_line_buffer.front());
+        _line_buffer.pop_front();
+    }
+    for (auto t : _readers) {
+        t->wake();
+    }
+}
+
+// discard_pending_input() discards all unread input, including full
+// lines already taken into _read_queue, and a partially edited line
+// in _line_buffer.
+void LineDiscipline::discard_pending_input()
+{
+    std::lock_guard<mutex> lock(_mutex);
+    _line_buffer = {};
+    _read_queue = {};
+}
+
 }

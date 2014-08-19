@@ -96,4 +96,18 @@ int console_multiplexer::read_queue_size()
     return _ldisc->read_queue_size();
 }
 
+void console_multiplexer::take_pending_input()
+{
+    if (!_started)
+        return;
+    _ldisc->take_pending_input();
+}
+
+void console_multiplexer::discard_pending_input()
+{
+    if (!_started)
+        return;
+    _ldisc->discard_pending_input();
+}
+
 }
