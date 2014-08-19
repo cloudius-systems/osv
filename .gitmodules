@@ -41,10 +41,10 @@
 	url = ../../cloudius-systems/aarch64-openjdk.bin.git
 [submodule "modules/httpserver/swagger-ui"]
 	path = modules/httpserver/swagger-ui
-	url = https://github.com/cloudius-systems/swagger-ui
+	url = ../../cloudius-systems/swagger-ui.git
 [submodule "musl"]
 	path = musl
 	url = ../../cloudius-systems/musl.git
 [submodule "modules/httpserver/osv-gui"]
 	path = modules/httpserver/osv-gui
-	url = git@github.com:cloudius-systems/osv-gui.git
+	url = ../../cloudius-systems/osv-gui.git
