@@ -28,9 +28,10 @@ public:
 
     void close(std::function<void(boost::system::error_code)> callback) override
     {
-        _socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send);
-        _socket.close();
-        callback(boost::system::error_code());
+        boost::system::error_code ec;
+        _socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
+        _socket.close(ec);
+        callback(ec);
     }
 
     void async_read_some(boost::asio::mutable_buffers_1 buf,
