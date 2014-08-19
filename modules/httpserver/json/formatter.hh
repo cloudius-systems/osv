@@ -50,6 +50,13 @@ public:
     static std::string to_json(long n);
 
     /**
+     * return a json formated float
+     * @param n the float to format
+     * @return the given float in a json format
+     */
+    static std::string to_json(float f);
+
+    /**
      * return a json formated char* (treated as string)
      * @param str the char* to foramt
      * @return the given char* in a json foramt
