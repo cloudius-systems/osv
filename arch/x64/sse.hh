@@ -42,5 +42,12 @@ struct sse_register_file : sse_register_file<N-1> {
     }
 };
 
+template <unsigned N, unsigned Regs>
+inline
+__m128i& xmm(sse_register_file<Regs>& sse)
+{
+    static_assert(N < Regs, "not enough registers");
+    return static_cast<sse_register_file<N+1>&>(sse).reg;
+}
 
 #endif /* SSE_HH_ */
