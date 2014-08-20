@@ -204,17 +204,12 @@ public:
     }
     int writeback()
     {
-        int error;
         struct iovec iov {_page, mmu::page_size};
         struct uio uio {&iov, 1, _key.offset, mmu::page_size, UIO_WRITE};
 
         _dirty = false;
 
-        vn_lock(_vp);
-        error = VOP_WRITE(_vp, &uio, 0);
-        vn_unlock(_vp);
-
-        return error;
+        return VOP_WRITE(_vp, &uio, 0);
     }
     void* release() { // called to demote a page from cache page to anonymous
         assert(boost::get<std::nullptr_t>(_ptes) == nullptr);

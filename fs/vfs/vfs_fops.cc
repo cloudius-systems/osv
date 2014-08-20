@@ -47,7 +47,6 @@ int vfs_file::read(struct uio *uio, int flags)
 
 	bytes = uio->uio_resid;
 
-	vn_lock(vp);
 	if ((flags & FOF_OFFSET) == 0)
 		uio->uio_offset = fp->f_offset;
 
@@ -57,7 +56,6 @@ int vfs_file::read(struct uio *uio, int flags)
 		if ((flags & FOF_OFFSET) == 0)
 			fp->f_offset += count;
 	}
-	vn_unlock(vp);
 
 	return error;
 }
@@ -74,8 +72,6 @@ int vfs_file::write(struct uio *uio, int flags)
 
 	bytes = uio->uio_resid;
 
-	vn_lock(vp);
-
 	if (fp->f_flags & O_APPEND)
 		ioflags |= IO_APPEND;
 	if (fp->f_flags & (O_DSYNC|O_SYNC))
@@ -91,7 +87,6 @@ int vfs_file::write(struct uio *uio, int flags)
 			fp->f_offset += count;
 	}
 
-	vn_unlock(vp);
 	return error;
 }
 
@@ -171,9 +166,7 @@ int vfs_file::get_arcbuf(void* key, off_t offset)
     data.uio_resid = mmu::page_size;
     data.uio_rw = UIO_READ;
 
-    vn_lock(vp);
     assert(VOP_CACHE(vp, this, &data) == 0);
-    vn_unlock(vp);
 
     return (data.uio_resid != 0) ? -1 : 0;
 }

@@ -147,6 +147,7 @@ static int
 procfs_read(vnode* vp, file *fp, uio* uio, int ioflags)
 {
     auto* data = static_cast<string*>(fp->f_data);
+    SCOPE_LOCK(vp->v_lock);
 
     if (vp->v_type == VDIR)
         return EISDIR;

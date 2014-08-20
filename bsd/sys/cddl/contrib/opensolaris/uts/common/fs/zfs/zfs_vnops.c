@@ -565,14 +565,15 @@ zfs_read(vnode_t *vp, struct file* fp, uio_t *uio, int ioflag)
 	xuio_t		*xuio = NULL;
 #endif
 
-	// Return EISDIR when reading from a directory, as Linux does.
-	if (vp->v_type == VDIR) {
-	    return EISDIR;
-	}
-
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 	os = zfsvfs->z_os;
+
+	// Return EISDIR when reading from a directory, as Linux does.
+	if (S_ISDIR(zp->z_mode)) {
+		ZFS_EXIT(zfsvfs);
+		return EISDIR;
+	}
 
 	if (zp->z_pflags & ZFS_AV_QUARANTINED) {
 		ZFS_EXIT(zfsvfs);
@@ -958,8 +959,11 @@ again:
 		 */
 		nbytes = MIN(n, max_blksz - P2PHASE(woff, max_blksz));
 
-		if (woff + nbytes > zp->z_size)
+		if (woff + nbytes > zp->z_size) {
+			vn_lock(vp);
 			vnode_pager_setsize(vp, woff + nbytes);
+			vn_unlock(vp);
+		}
 
 		if (abuf == NULL) {
 			tx_bytes = uio->uio_resid;

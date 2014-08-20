@@ -299,6 +299,7 @@ ramfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflag)
 {
 	struct ramfs_node *np = (ramfs_node*)vp->v_data;
 	size_t len;
+	SCOPE_LOCK(vp->v_lock);
 
 	if (vp->v_type == VDIR)
 		return EISDIR;
@@ -325,6 +326,7 @@ static int
 ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 {
 	struct ramfs_node *np = (ramfs_node*)vp->v_data;
+	SCOPE_LOCK(vp->v_lock);
 
 	if (vp->v_type == VDIR)
 		return EISDIR;
