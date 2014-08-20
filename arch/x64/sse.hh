@@ -50,4 +50,6 @@ __m128i& xmm(sse_register_file<Regs>& sse)
     return static_cast<sse_register_file<N+1>&>(sse).reg;
 }
 
+void ssse3_unaligned_copy(void* dest, const void* src, size_t n);
+
 #endif /* SSE_HH_ */

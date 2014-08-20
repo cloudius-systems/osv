@@ -838,6 +838,9 @@ objects += arch/$(arch)/dump.o
 objects += arch/$(arch)/arch-elf.o
 objects += arch/$(arch)/cpuid.o
 
+
+arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
+
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
@@ -845,6 +848,7 @@ objects += $(libfdt)
 endif
 
 ifeq ($(arch),x64)
+objects += arch/x64/string-ssse3.o
 objects += arch/x64/arch-trace.o
 objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
