@@ -191,14 +191,20 @@ void LineDiscipline::take_pending_input()
     }
 }
 
+template<typename T>
+inline void clear(T &obj)
+{
+    obj = T();
+}
+
 // discard_pending_input() discards all unread input, including full
 // lines already taken into _read_queue, and a partially edited line
 // in _line_buffer.
 void LineDiscipline::discard_pending_input()
 {
     std::lock_guard<mutex> lock(_mutex);
-    _line_buffer = {};
-    _read_queue = {};
+    clear(_line_buffer);
+    clear(_read_queue);
 }
 
 }
