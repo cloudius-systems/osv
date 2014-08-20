@@ -15,6 +15,10 @@
             "description": "JVM API"
         },
         {
+            "path": "/../listings/jolokia.json",
+            "description": "Jolokia API"
+        },
+        {
             "path": "/../listings/file.json",
             "description": "File API"
         },

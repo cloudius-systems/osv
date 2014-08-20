@@ -50,6 +50,13 @@ public:
     /**
      * set headers must be called before returning the result.
      * @param rep the reply to set
+     * @param mime is the mime content type of the message content
+     */
+    virtual void set_headers_explicit(http::server::reply& rep, const std::string& mime);
+
+    /**
+     * set headers must be called before returning the result.
+     * @param rep the reply to set
      * @param type is the type of the message content and is equivalent to the
      *        file extension that would have been used if it was a file
      *        e.g. html, json, js

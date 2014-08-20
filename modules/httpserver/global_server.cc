@@ -10,6 +10,7 @@
 #include "api/fs.hh"
 #include "api/files_mapping.hh"
 #include "api/jvm.hh"
+#include "api/jolokia.hh"
 #include "api/file.hh"
 #include "api/trace.hh"
 #include "api/env.hh"
@@ -102,6 +103,7 @@ void global_server::set_routes()
     api::fs::init(_routes);
     api::file::init(_routes);
     api::jvm::init(_routes);
+    api::jolokia::init(_routes);
     api::trace::init(_routes);
     api::env::init(_routes);
     api::files_mapping::init(_routes);

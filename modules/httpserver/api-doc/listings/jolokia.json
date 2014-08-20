@@ -1,0 +1,84 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "http://{{Host}}",
+    "resourcePath": "/jolokia",
+    "produces": [
+        "application/json",
+        "application/xml"
+    ],
+    "apis": [
+        {
+            "path": "/jolokia/{query}",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Jolokia GET request",
+                    "responseClass": "string",
+                    "nickname": "getJolokia",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                        {
+                            "name": "query",
+                            "description": "Jolokia query",
+                            "required": true,
+                            "allowMultiple": true,
+                            "dataType": "string",
+                            "paramType": "path"
+                        }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/jolokia",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Jolokia GET request (Alt)",
+                    "responseClass": "string",
+                    "nickname": "getJolokiaAlt",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                        {
+                            "name": "p",
+                            "description": "Jolokia alternate query",
+                            "required": true,
+                            "allowMultiple": false,
+                            "dataType": "string",
+                            "paramType": "query"
+                        }
+                    ],
+                    "deprecated": "false"
+                },
+                {
+                    "method": "POST",
+                    "summary": "Jolokia POST request",
+                    "responseClass": "string",
+                    "nickname": "postJolokia",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                        {
+                            "name": "body",
+                            "description": "Jolokia query",
+                            "required": true,
+                            "dataType": "string",
+                            "paramType": "body"
+                        }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        }
+    ]
+}

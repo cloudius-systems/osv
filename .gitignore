@@ -23,3 +23,4 @@ cscope.po.out
 tracefile
 
 java/runjava/dependency-reduced-pom.xml
+java/jolokia-agent/dependency-reduced-pom.xml
