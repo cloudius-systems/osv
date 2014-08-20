@@ -209,12 +209,15 @@ static constexpr std::array<static_copier_fn, 64> sse_memcpy_table[2] = {
         initialized_array<static_copier_fn, 64, make_index_list<64>, aligned_copier>(),
 };
 
+static bool both_aligned(const void* dest, const void* src, size_t align)
+{
+    return ((reinterpret_cast<uintptr_t>(src)
+        | reinterpret_cast<uintptr_t>(dest)) & (align - 1)) == 0;
+}
+
 static inline void* sse_memcpy(void* dest, const void* src, size_t n)
 {
-    bool both_aligned
-        = ((reinterpret_cast<uintptr_t>(src)
-            | reinterpret_cast<uintptr_t>(dest)) & 15) == 0;
-    sse_memcpy_table[both_aligned][n/16](dest, src);
+    sse_memcpy_table[both_aligned(dest, src, 16)][n/16](dest, src);
     small_memcpy(dest + (n & ~15), src + (n & ~15), n & 15);
     return dest;
 }
@@ -255,12 +258,62 @@ void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 }
 
 extern "C"
+[[gnu::optimize("omit-frame-pointer")]]
+void *memcpy_repmov_old_ssse3(void *__restrict dest, const void *__restrict src, size_t n)
+{
+    if (n <= 15) {
+        return small_memcpy(dest, src, n);
+    } else if (n < 1024) {
+        return sse_memcpy(dest, src, n);
+    } else if (n < 65536 && !both_aligned(dest, src, 16)) {
+        ssse3_unaligned_copy(dest, src, n);
+        return dest;
+    } else {
+        auto ret = dest;
+        auto nw = n / 8;
+        auto nb = n & 7;
+
+        repmovsq(dest, src, nw);
+        repmovsb(dest, src, nb);
+
+        return ret;
+    }
+}
+
+extern "C"
+[[gnu::optimize("omit-frame-pointer")]]
+void *memcpy_repmov_ssse3(void *__restrict dest, const void *__restrict src, size_t n)
+{
+    if (n <= 15) {
+        return small_memcpy(dest, src, n);
+    } else if (n < 1024) {
+        return sse_memcpy(dest, src, n);
+    } else if (n < 65536 && !both_aligned(dest, src, 16)) {
+        ssse3_unaligned_copy(dest, src, n);
+        return dest;
+    } else {
+        auto ret = dest;
+        repmovsb(dest, src, n);
+        return ret;
+    }
+}
+
+extern "C"
 void *(*resolve_memcpy())(void *__restrict dest, const void *__restrict src, size_t n)
 {
     if (processor::features().repmovsb) {
-        return memcpy_repmov;
+        if (processor::features().ssse3) {
+            return memcpy_repmov_ssse3;
+        } else {
+            return memcpy_repmov;
+        }
+    } else {
+        if (processor::features().ssse3) {
+            return memcpy_repmov_old_ssse3;
+        } else {
+            return memcpy_repmov_old;
+        }
     }
-    return memcpy_repmov_old;
 }
 
 void *memcpy(void *__restrict dest, const void *__restrict src, size_t n)
