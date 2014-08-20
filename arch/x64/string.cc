@@ -15,6 +15,7 @@
 #include <assert.h>
 #include <x86intrin.h>
 #include <osv/initialize.hh>
+#include "sse.hh"
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
@@ -135,38 +136,6 @@ static inline void* small_memcpy(void *dest, const void *src, size_t n)
 {
     return small_memcpy_table[n](dest, src);
 }
-
-template <unsigned N>
-struct sse_register_file;
-
-template <>
-struct sse_register_file<0> {
-    void load_aligned(const __m128i* p) {}
-    void store_aligned(__m128i* p) {}
-    void load_unaligned(const __m128i* p) {}
-    void store_unaligned(__m128i* p) {}
-};
-
-template <unsigned N>
-struct sse_register_file : sse_register_file<N-1> {
-    __m128i reg;
-    void load_aligned(const __m128i* p) {
-        sse_register_file<N-1>::load_aligned(p);
-        reg = _mm_load_si128(&p[N-1]);
-    }
-    void store_aligned(__m128i* p) {
-        sse_register_file<N-1>::store_aligned(p);
-        _mm_store_si128(&p[N-1], reg);
-    }
-    void load_unaligned(const __m128i* p) {
-        sse_register_file<N-1>::load_unaligned(p);
-        reg = _mm_loadu_si128(&p[N-1]);
-    }
-    void store_unaligned(__m128i* p) {
-        sse_register_file<N-1>::store_unaligned(p);
-        _mm_storeu_si128(&p[N-1], reg);
-    }
-};
 
 template <unsigned N, typename loader, typename storer>
 inline
