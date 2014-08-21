@@ -62,10 +62,7 @@
 /*
  * Global lock to access all buffer headers and lists.
  */
-static mutex_t bio_lock = MUTEX_INITIALIZER;
-#define BIO_LOCK()	mutex_lock(&bio_lock)
-#define BIO_UNLOCK()	mutex_unlock(&bio_lock)
-
+static mutex bio_lock;
 
 /* fixed set of buffers */
 static struct buf buf_table[NBUFS];
@@ -145,11 +142,8 @@ rw_buf(struct buf *bp, int rw)
 static struct buf *
 incore(struct device *dev, int blkno)
 {
-	struct buf *bp;
-	int i;
-
-	for (i = 0; i < NBUFS; i++) {
-		bp = &buf_table[i];
+	for (int i = 0; i < NBUFS; i++) {
+		auto* bp = &buf_table[i];
 		if (bp->b_blkno == blkno && bp->b_dev == dev &&
 		    !ISSET(bp->b_flags, B_INVAL))
 			return bp;
@@ -168,21 +162,20 @@ incore(struct device *dev, int blkno)
 struct buf *
 getblk(struct device *dev, int blkno)
 {
-	struct buf *bp;
-
 	DPRINTF(VFSDB_BIO, ("getblk: dev=%x blkno=%d\n", dev, blkno));
- start:
-	BIO_LOCK();
-	bp = incore(dev, blkno);
+	SCOPE_LOCK(bio_lock);
+start:
+	auto* bp = incore(dev, blkno);
 	if (bp != nullptr) {
 		/* Block found in cache. */
 		if (ISSET(bp->b_flags, B_BUSY)) {
 			/*
 			 * Wait buffer ready.
 			 */
-			BIO_UNLOCK();
-			mutex_lock(&bp->b_lock);
-			mutex_unlock(&bp->b_lock);
+			DROP_LOCK(bio_lock) {
+				mutex_lock(&bp->b_lock);
+				mutex_unlock(&bp->b_lock);
+			}
 			/* Scan again if it's busy */
 			goto start;
 		}
@@ -191,8 +184,9 @@ getblk(struct device *dev, int blkno)
 	} else {
 		bp = bio_remove_head();
 		if (ISSET(bp->b_flags, B_DELWRI)) {
-			BIO_UNLOCK();
-			bwrite(bp);
+			DROP_LOCK(bio_lock) {
+				bwrite(bp);
+			}
 			goto start;
 		}
 		bp->b_flags = B_BUSY;
@@ -200,7 +194,6 @@ getblk(struct device *dev, int blkno)
 		bp->b_blkno = blkno;
 	}
 	mutex_lock(&bp->b_lock);
-	BIO_UNLOCK();
 	DPRINTF(VFSDB_BIO, ("getblk: done bp=%x\n", bp));
 	return bp;
 }
@@ -215,14 +208,13 @@ brelse(struct buf *bp)
 	DPRINTF(VFSDB_BIO, ("brelse: bp=%x dev=%x blkno=%d\n",
 				bp, bp->b_dev, bp->b_blkno));
 
-	BIO_LOCK();
+	SCOPE_LOCK(bio_lock);
 	CLR(bp->b_flags, B_BUSY);
 	mutex_unlock(&bp->b_lock);
 	if (ISSET(bp->b_flags, B_INVAL))
 		bio_insert_head(bp);
 	else
 		bio_insert_tail(bp);
-	BIO_UNLOCK();
 }
 
 /*
@@ -237,14 +229,11 @@ brelse(struct buf *bp)
 int
 bread(struct device *dev, int blkno, struct buf **bpp)
 {
-	struct buf *bp;
-	int error;
-
 	DPRINTF(VFSDB_BIO, ("bread: dev=%x blkno=%d\n", dev, blkno));
-	bp = getblk(dev, blkno);
+	auto* bp = getblk(dev, blkno);
 
 	if (!ISSET(bp->b_flags, (B_DONE | B_DELWRI))) {
-		error = rw_buf(bp, 0);
+		auto error = rw_buf(bp, 0);
 		if (error) {
 			DPRINTF(VFSDB_BIO, ("bread: i/o error\n"));
 			brelse(bp);
@@ -268,22 +257,20 @@ bread(struct device *dev, int blkno, struct buf **bpp)
 int
 bwrite(struct buf *bp)
 {
-	int error;
-
 	ASSERT(ISSET(bp->b_flags, B_BUSY));
 	DPRINTF(VFSDB_BIO, ("bwrite: dev=%x blkno=%d\n", bp->b_dev,
 			    bp->b_blkno));
 
-	BIO_LOCK();
-	CLR(bp->b_flags, (B_READ | B_DONE | B_DELWRI));
-	BIO_UNLOCK();
+	WITH_LOCK(bio_lock) {
+		CLR(bp->b_flags, (B_READ | B_DONE | B_DELWRI));
+	}
 
-	error = rw_buf(bp, 1);
+	auto error = rw_buf(bp, 1);
 	if (error)
 		return error;
-	BIO_LOCK();
-	SET(bp->b_flags, B_DONE);
-	BIO_UNLOCK();
+	WITH_LOCK(bio_lock) {
+		SET(bp->b_flags, B_DONE);
+	}
 	brelse(bp);
 	return 0;
 }
@@ -299,10 +286,10 @@ void
 bdwrite(struct buf *bp)
 {
 
-	BIO_LOCK();
-	SET(bp->b_flags, B_DELWRI);
-	CLR(bp->b_flags, B_DONE);
-	BIO_UNLOCK();
+	WITH_LOCK(bio_lock) {
+		SET(bp->b_flags, B_DELWRI);
+		CLR(bp->b_flags, B_DONE);
+	}
 	brelse(bp);
 }
 
@@ -312,11 +299,10 @@ bdwrite(struct buf *bp)
 void
 bflush(struct buf *bp)
 {
-
-	BIO_LOCK();
-	if (ISSET(bp->b_flags, B_DELWRI))
-		bwrite(bp);
-	BIO_UNLOCK();
+	WITH_LOCK(bio_lock) {
+		if (ISSET(bp->b_flags, B_DELWRI))
+			bwrite(bp);
+	}
 }
 
 /*
@@ -326,12 +312,9 @@ bflush(struct buf *bp)
 void
 binval(struct device *dev)
 {
-	struct buf *bp;
-	int i;
-
-	BIO_LOCK();
-	for (i = 0; i < NBUFS; i++) {
-		bp = &buf_table[i];
+	SCOPE_LOCK(bio_lock);
+	for (auto i = 0; i < NBUFS; i++) {
+		auto* bp = &buf_table[i];
 		if (bp->b_dev == dev) {
 			if (ISSET(bp->b_flags, B_DELWRI))
 				bwrite(bp);
@@ -340,7 +323,6 @@ binval(struct device *dev)
 			bp->b_flags = B_INVAL;
 		}
 	}
-	BIO_UNLOCK();
 }
 
 /*
@@ -350,23 +332,20 @@ binval(struct device *dev)
 void
 bio_sync(void)
 {
-	struct buf *bp;
-	int i;
-
- start:
-	BIO_LOCK();
-	for (i = 0; i < NBUFS; i++) {
-		bp = &buf_table[i];
+	SCOPE_LOCK(bio_lock);
+start:
+	for (int i = 0; i < NBUFS; i++) {
+		auto* bp = &buf_table[i];
 		if (ISSET(bp->b_flags, B_BUSY)) {
-			BIO_UNLOCK();
-			mutex_lock(&bp->b_lock);
-			mutex_unlock(&bp->b_lock);
+			DROP_LOCK(bio_lock) {
+				mutex_lock(&bp->b_lock);
+				mutex_unlock(&bp->b_lock);
+			}
 			goto start;
 		}
 		if (ISSET(bp->b_flags, B_DELWRI))
 			bwrite(bp);
 	}
-	BIO_UNLOCK();
 }
 
 /*
@@ -375,11 +354,8 @@ bio_sync(void)
 void
 bio_init(void)
 {
-	struct buf *bp;
-	int i;
-
-	for (i = 0; i < NBUFS; i++) {
-		bp = &buf_table[i];
+	for (int i = 0; i < NBUFS; i++) {
+		auto* bp = &buf_table[i];
 		bp->b_flags = B_INVAL;
 		bp->b_data = malloc(BSIZE);
 		mutex_init(&bp->b_lock);
