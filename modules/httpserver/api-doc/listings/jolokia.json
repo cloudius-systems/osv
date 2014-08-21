@@ -14,6 +14,7 @@
                 {
                     "method": "GET",
                     "summary": "Jolokia GET request",
+                    "notes" : "Query JVM MBean infomration. Example query: read/java.lang:type=Memory/HeapMemoryUsage/used",
                     "responseClass": "string",
                     "nickname": "getJolokia",
                     "produces": [
@@ -23,7 +24,7 @@
                     "parameters": [
                         {
                             "name": "query",
-                            "description": "Jolokia query",
+                            "description": "Jolokia query string",
                             "required": true,
                             "allowMultiple": true,
                             "dataType": "string",
@@ -40,6 +41,7 @@
                 {
                     "method": "GET",
                     "summary": "Jolokia GET request (Alt)",
+                    "notes": "Query JVM MBean infomration. Example query: read/java.lang:type=Memory/HeapMemoryUsage/used",
                     "responseClass": "string",
                     "nickname": "getJolokiaAlt",
                     "produces": [
@@ -49,7 +51,7 @@
                     "parameters": [
                         {
                             "name": "p",
-                            "description": "Jolokia alternate query",
+                            "description": "Jolokia alternate query string",
                             "required": true,
                             "allowMultiple": false,
                             "dataType": "string",
@@ -61,6 +63,7 @@
                 {
                     "method": "POST",
                     "summary": "Jolokia POST request",
+                    "notes": "Query JVM MBean infomration. More <a href=\"http://www.jolokia.org/reference/html/protocol.html\">here</a>",
                     "responseClass": "string",
                     "nickname": "postJolokia",
                     "produces": [
