@@ -35,12 +35,12 @@
 #include <osv/mutex.h>
 
 #include <bsd/sys/sys/queue.h>
+#include <boost/intrusive/list.hpp>
 
 /*
  * Buffer header
  */
-struct buf {
-	TAILQ_ENTRY(buf) b_link;	/* link to block list */
+struct buf: boost::intrusive::list_base_hook<> {
 	int		b_flags;	/* see defines below */
 	struct device	*b_dev;		/* device */
 	int		b_blkno;	/* block # on device */

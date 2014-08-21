@@ -49,6 +49,7 @@
 #include <semaphore.h>
 
 #include "vfs.h"
+#include <boost/intrusive/list.hpp>
 
 /* number of buffer cache */
 #define NBUFS		256
@@ -68,7 +69,7 @@ static mutex_t bio_lock = MUTEX_INITIALIZER;
 
 /* fixed set of buffers */
 static struct buf buf_table[NBUFS];
-static TAILQ_HEAD(, buf) free_list = TAILQ_HEAD_INITIALIZER(free_list);
+boost::intrusive::list<struct buf, boost::intrusive::base_hook<struct buf>> free_list;
 
 static sem_t free_sem;
 
@@ -78,8 +79,7 @@ static sem_t free_sem;
 static void
 bio_insert_head(struct buf *bp)
 {
-
-	TAILQ_INSERT_HEAD(&free_list, bp, b_link);
+	free_list.push_front(*bp);
 	sem_post(&free_sem);
 }
 
@@ -89,7 +89,7 @@ bio_insert_head(struct buf *bp)
 static void
 bio_insert_tail(struct buf *bp)
 {
-	TAILQ_INSERT_TAIL(&free_list, bp, b_link);
+	free_list.push_back(*bp);
 	sem_post(&free_sem);
 }
 
@@ -100,8 +100,7 @@ static void
 bio_remove(struct buf *bp)
 {
 	sem_wait(&free_sem);
-	ASSERT(!TAILQ_EMPTY(&free_list));
-	TAILQ_REMOVE(&free_list, bp, b_link);
+	free_list.erase(free_list.iterator_to(*bp));
 }
 
 /*
@@ -110,13 +109,10 @@ bio_remove(struct buf *bp)
 static struct buf *
 bio_remove_head(void)
 {
-	struct buf *bp;
-
 	sem_wait(&free_sem);
-	ASSERT(!TAILQ_EMPTY(&free_list));
-	bp = TAILQ_FIRST(&free_list);
-	TAILQ_REMOVE(&free_list, bp, b_link);
-	return bp;
+	auto& bp = free_list.front();
+	free_list.pop_front();
+	return &bp;
 }
 
 
@@ -387,7 +383,7 @@ bio_init(void)
 		bp->b_flags = B_INVAL;
 		bp->b_data = malloc(BSIZE);
 		mutex_init(&bp->b_lock);
-		TAILQ_INSERT_TAIL(&free_list, bp, b_link);
+		free_list.push_back(*bp);
 	}
 	sem_init(&free_sem, 0, NBUFS);
 
