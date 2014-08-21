@@ -8,6 +8,7 @@
 #ifndef ARCH_HH_
 #define ARCH_HH_
 
+#include "osv/kernel-base.h"
 #include "processor.hh"
 #include "msr.hh"
 
@@ -18,7 +19,7 @@ namespace arch {
 
 #define CACHELINE_ALIGNED __attribute__((aligned(64)))
 #define INSTR_SIZE_MIN 1
-#define ELF_IMAGE_START 0x200000
+#define ELF_IMAGE_START OSV_KERNEL_BASE
 
 inline void irq_disable()
 {

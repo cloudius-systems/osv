@@ -8,7 +8,9 @@
 #include <cstddef>
 #include <stdint.h>
 
-#define BUFFER_OUT (char *)0x200000
+#include <osv/kernel-base.h>
+
+#define BUFFER_OUT (char *)OSV_KERNEL_BASE
 #define MAX_BUFFER 0x1600000
 
 extern char _binary_loader_stripped_elf_lz_start;

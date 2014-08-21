@@ -3,6 +3,8 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
+#include <osv/kernel-base.h>
+
 .code16
 
 tmp = 0x80000
@@ -11,7 +13,7 @@ cmdline = 0x7e00
 target =  0x1800000
 elf_entry_point_header_offset = 0x18
 lzentry = target+elf_entry_point_header_offset
-loader = 0x200000
+loader = OSV_KERNEL_BASE
 entry = loader+elf_entry_point_header_offset
 
 mb_info = 0x1000

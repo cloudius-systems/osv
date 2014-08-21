@@ -964,6 +964,9 @@ loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(driv
 	    --no-whole-archive, \
 		LD $@)
 
+arch/x64/loader.ld: $(src)/arch/x64/loader.ld.in
+	$(call quiet, cpp -P -I$(src)/include $< > $@, CPP $@)
+
 libosv.so: loader.elf
 	$(call quiet, readelf --dyn-syms loader.elf > osv.syms)
 	$(call quiet, $(src)/scripts/libosv.py osv.syms libosv.ld `$(src)/scripts/osv-version.sh` | $(CC) -c -o osv.o -x assembler -)

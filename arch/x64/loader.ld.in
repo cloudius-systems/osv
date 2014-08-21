@@ -5,6 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/kernel-base.h>
+
 SECTIONS
 {
 	/* Set the initial program counter to one page beyond the minimal
@@ -15,7 +17,7 @@ SECTIONS
 	 * We can't export the ELF header base as a symbol, because ld
 	 * insists on moving stuff around if we do.
 	 */
-    . = 0x201000;
+    . = OSV_KERNEL_BASE + 0x1000;
     .dynamic : { *(.dynamic) } :dynamic :text
     .text : {
         text_start = .;

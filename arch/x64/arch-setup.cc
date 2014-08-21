@@ -18,6 +18,7 @@
 #include <string.h>
 #include <osv/boot.hh>
 #include <osv/commands.hh>
+#include <osv/kernel-base.h>
 
 struct multiboot_info_type {
     u32 flags;
@@ -174,7 +175,7 @@ void arch_setup_free_memory()
     mmu::phys elf_phys = reinterpret_cast<mmu::phys>(elf_header);
     elf_start = reinterpret_cast<void*>(elf_header);
     elf_size = edata - elf_phys;
-    mmu::linear_map(elf_start, elf_phys, elf_size, 0x200000);
+    mmu::linear_map(elf_start, elf_phys, elf_size, OSV_KERNEL_BASE);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest

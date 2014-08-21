@@ -5,6 +5,8 @@
 
 #include <xen/interface/elfnote.h>
 
+#include <osv/kernel-base.h>
+
 #define elfnote(type, valtype, value) \
         .pushsection .note.xen, "a", @note; \
         .long 2f-1f; \
@@ -46,7 +48,7 @@ hypercall_page:
 .align 4096
 
 xen_start:
-    mov $0x200000, %ebp  // elf header; FIXME: determine dynamically
+    mov OSV_KERNEL_BASE, %ebp  // elf header; FIXME: determine dynamically
     mov %rsp, xen_bootstrap_end
     mov %rsi, %rdi
     call xen_init
