@@ -351,6 +351,9 @@ void* do_main_thread(void *_commands)
                 boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
                 if (tmp.size() != 3)
                     abort("incorrect parameter on --ip");
+
+                printf("%s: %s\n",tmp[0].c_str(),tmp[1].c_str());
+
                 if (osv::start_if(tmp[0], tmp[1], tmp[2]) != 0)
                     debug("Could not initialize network interface.\n");
             }
