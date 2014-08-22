@@ -47,6 +47,7 @@
 #include <osv/vnode.h>
 #include <osv/device.h>
 #include <osv/debug.h>
+#include <osv/mutex.h>
 #include "vfs.h"
 
 #include <memory>
@@ -62,9 +63,7 @@ static list<mount*> mount_list;
 /*
  * Global lock to access mount point.
  */
-static mutex_t mount_lock = MUTEX_INITIALIZER;
-#define MOUNT_LOCK()    mutex_lock(&mount_lock)
-#define MOUNT_UNLOCK()  mutex_unlock(&mount_lock)
+static std::mutex mount_lock;
 
 /*
  * Lookup file system.
@@ -120,7 +119,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     if (dev && strncmp(dev, "/dev/", 5) == 0)
         device_open(dev + 5, DO_RDWR, &device);
 
-    MOUNT_LOCK();
+    SCOPE_LOCK(mount_lock);
 
     /* Check if device or directory has already been mounted. */
     for (auto&& mp : mount_list) {
@@ -196,7 +195,6 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
      * Insert to mount list
      */
     mount_list.push_back(mp);
-    MOUNT_UNLOCK();
 
     return 0;   /* success */
  err4:
@@ -210,7 +208,6 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     if (device)
         device_close(device);
 
-    MOUNT_UNLOCK();
     return error;
 }
 
@@ -234,7 +231,7 @@ sys_umount2(const char *path, int flags)
 
     kprintf("VFS: unmounting %s\n", path);
 
-    MOUNT_LOCK();
+    SCOPE_LOCK(mount_lock);
 
     pathlen = strlen(path);
     if (pathlen >= MAXPATHLEN) {
@@ -275,7 +272,6 @@ found:
         device_close(mp->m_dev);
     delete mp;
  out:
-    MOUNT_UNLOCK();
     return error;
 }
 
@@ -337,11 +333,11 @@ int
 sys_sync(void)
 {
     /* Call each mounted file system. */
-    MOUNT_LOCK();
-    for (auto&& mp : mount_list) {
-        VFS_SYNC(mp);
+    WITH_LOCK(mount_lock) {
+        for (auto&& mp : mount_list) {
+            VFS_SYNC(mp);
+        }
     }
-    MOUNT_UNLOCK();
 #ifdef HAVE_BUFFERS
     bio_sync();
 #endif
@@ -390,7 +386,7 @@ vfs_findroot(const char *path, struct mount **mp, char **root)
         return -1;
 
     /* Find mount point from nearest path */
-    MOUNT_LOCK();
+    SCOPE_LOCK(mount_lock);
     for (auto&& tmp : mount_list) {
         len = count_match(path, tmp->m_path);
         if (len > max_len) {
@@ -398,7 +394,6 @@ vfs_findroot(const char *path, struct mount **mp, char **root)
             m = tmp;
         }
     }
-    MOUNT_UNLOCK();
     if (m == nullptr)
         return -1;
     *root = (char *)(path + max_len);
@@ -414,10 +409,8 @@ vfs_findroot(const char *path, struct mount **mp, char **root)
 void
 vfs_busy(struct mount *mp)
 {
-
-    MOUNT_LOCK();
+    SCOPE_LOCK(mount_lock);
     mp->m_count++;
-    MOUNT_UNLOCK();
 }
 
 
@@ -427,10 +420,8 @@ vfs_busy(struct mount *mp)
 void
 vfs_unbusy(struct mount *mp)
 {
-
-    MOUNT_LOCK();
+    SCOPE_LOCK(mount_lock);
     mp->m_count--;
-    MOUNT_UNLOCK();
 }
 
 int
@@ -476,7 +467,7 @@ current_mounts()
 void
 mount_dump(void)
 {
-    MOUNT_LOCK();
+    SCOPE_LOCK(mount_lock);
 
     kprintf("mount_dump\n");
     kprintf("dev      count root\n");
@@ -485,6 +476,5 @@ mount_dump(void)
     for (auto&& mp : mount_list) {
         kprintf("%8x %5d %s\n", mp->m_dev, mp->m_count, mp->m_path);
     }
-    MOUNT_UNLOCK();
 }
 #endif
