@@ -117,8 +117,7 @@ namei(const char *path, struct dentry **dpp)
     links_followed = 0;
     strlcpy(fp.get(), path, PATH_MAX);
 
-    need_continue = true;
-    while (need_continue == true) {
+    do {
         need_continue = false;
         /*
          * Convert a full path name to its mount point and
@@ -227,7 +226,7 @@ namei(const char *path, struct dentry **dpp)
                 return ENOTDIR;
             }
         }
-    }
+    } while (need_continue == true);
 
 #if 0
     /*
