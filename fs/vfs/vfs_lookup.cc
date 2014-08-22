@@ -228,15 +228,6 @@ namei(const char *path, struct dentry **dpp)
         }
     } while (need_continue == true);
 
-#if 0
-    /*
-     * Detemine X permission.
-     */
-    if (vp->v_type != VDIR && sec_vnode_permission(path) != 0) {
-        vp->v_mode &= ~(0111);
-    }
-#endif
-
     *dpp = dp;
     return 0;
 }
