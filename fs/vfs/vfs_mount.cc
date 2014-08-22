@@ -205,7 +205,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     if (dp_covered)
         drele(dp_covered);
  err2:
-    free(mp);
+    delete mp;
  err1:
     if (device)
         device_close(device);
@@ -273,7 +273,7 @@ found:
 
     if (mp->m_dev)
         device_close(mp->m_dev);
-    free(mp);
+    delete mp;
  out:
     MOUNT_UNLOCK();
     return error;
