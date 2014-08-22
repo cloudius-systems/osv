@@ -355,8 +355,11 @@ count_match(const char *path, char *mount_root)
     size_t len = 0;
 
     while (*path && *mount_root) {
-        if (*path++ != *mount_root++)
+        if (*path != *mount_root)
             break;
+
+        path++;
+        mount_root++;
         len++;
     }
     if (*mount_root != '\0')
