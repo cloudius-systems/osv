@@ -301,20 +301,6 @@ vrele(struct vnode *vp)
 }
 
 /*
- * Return reference count.
- */
-int
-vcount(struct vnode *vp)
-{
-	int count;
-
-	vn_lock(vp);
-	count = vp->v_refcnt;
-	vn_unlock(vp);
-	return count;
-}
-
-/*
  * Remove all vnode in the vnode table for unmount.
  */
 void

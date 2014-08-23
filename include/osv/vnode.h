@@ -220,7 +220,6 @@ int	 vget(struct mount *, uint64_t ino, struct vnode **vpp);
 void	 vput(struct vnode *);
 void	 vref(struct vnode *);
 void	 vrele(struct vnode *);
-int	 vcount(struct vnode *);
 void	 vflush(struct mount *);
 void vn_add_name(struct vnode *, struct dentry *);
 void vn_del_name(struct vnode *, struct dentry *);
