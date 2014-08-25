@@ -52,7 +52,7 @@
                         {
                             "name": "p",
                             "description": "Jolokia alternate query string",
-                            "required": true,
+                            "required": false,
                             "allowMultiple": false,
                             "dataType": "string",
                             "paramType": "query"
