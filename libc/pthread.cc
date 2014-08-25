@@ -390,7 +390,7 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
     return 0;
 }
 
-int pthread_yield()
+extern "C" int pthread_yield()
 {
     sched::thread::yield();
     return 0;
