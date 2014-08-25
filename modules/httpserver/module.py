@@ -16,6 +16,7 @@ usr_files.add('${OSV_BASE}/java/jolokia-agent/target/jolokia-agent.jar').to('/us
 
 api.require('openssl')
 api.require('libtools')
+api.require('libyaml')
 
 # httpserver will run regardless of an explicit command line
 # passed with "run.py -e".
