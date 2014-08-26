@@ -99,7 +99,14 @@ function osv_request(arguments, method, parameters, do_raw)
   if raw then
     return table.concat(respbody), status, headers
   else
-    return json.decode(table.concat(respbody)), status, headers
+    -- Try decoding, if it fails return string as is
+    local bodystr, decoded = table.concat(respbody), nil
+    local s, e = pcall(function() decoded = json.decode(bodystr) end)
+    if s then
+      return decoded, status, headers
+    else
+      return bodystr, status, headers
+    end
   end
 end
 
