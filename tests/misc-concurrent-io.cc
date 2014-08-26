@@ -59,6 +59,20 @@ static float to_seconds(T duration)
     return std::chrono::duration<float>(duration).count();
 }
 
+static void try_to_assign_min_max_secs(float to_min_secs, float to_max_secs)
+{
+    pthread_mutex_lock(&mutex);
+    if (to_min_secs < min_secs) {
+        min_secs = to_min_secs;
+    }
+
+    if (to_max_secs > max_secs) {
+        max_secs = to_max_secs;
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
+// Concurrently read from different file ranges.
 static void *read_function(void *arg)
 {
     struct file_range *file_range = (struct file_range *) arg;
@@ -72,15 +86,7 @@ static void *read_function(void *arg)
 
     auto test_start_to_start = to_seconds(start - test_start);
     auto test_start_to_end = to_seconds(end - test_start);
-    pthread_mutex_lock(&mutex);
-    if (test_start_to_start < min_secs) {
-        min_secs = test_start_to_start;
-    }
-
-    if (test_start_to_end > max_secs) {
-        max_secs = test_start_to_end;
-    }
-    pthread_mutex_unlock(&mutex);
+    try_to_assign_min_max_secs(test_start_to_start, test_start_to_end);
 
 #if 1
     printf("Thread %d, %d bytes read from offset %d, "
@@ -93,6 +99,34 @@ static void *read_function(void *arg)
     return nullptr;
 }
 
+// Concurrently read from the same file range.
+static void *read2_function(void *arg)
+{
+    struct file_range *file_range = (struct file_range *) arg;
+    const int fd = file_range->fd;
+    const off_t offset = 0; // ignore file_range->offset.
+
+    auto start = s_clock.now();
+    auto ret = pread(fd, buf, file_size, offset);
+    auto end = s_clock.now();
+    assert(ret == file_size);
+
+    auto test_start_to_start = to_seconds(start - test_start);
+    auto test_start_to_end = to_seconds(end - test_start);
+    try_to_assign_min_max_secs(test_start_to_start, test_start_to_end);
+
+#if 1
+    printf("Thread %d, %d bytes read from offset %d, "
+        "Duration %.2f ms : %.2f ms.\n",
+        file_range->id, file_size, offset,
+        test_start_to_start * 1000,
+        test_start_to_end * 1000);
+#endif
+
+    return nullptr;
+}
+
+// Concurrently write into different file ranges.
 static void *write_function(void *arg)
 {
     struct file_range *file_range = (struct file_range *) arg;
@@ -106,15 +140,7 @@ static void *write_function(void *arg)
 
     auto test_start_to_start = to_seconds(start - test_start);
     auto test_start_to_end = to_seconds(end - test_start);
-    pthread_mutex_lock(&mutex);
-    if (test_start_to_start < min_secs) {
-        min_secs = test_start_to_start;
-    }
-
-    if (test_start_to_end > max_secs) {
-        max_secs = test_start_to_end;
-    }
-    pthread_mutex_unlock(&mutex);
+    try_to_assign_min_max_secs(test_start_to_start, test_start_to_end);
 
 #if 1
     printf("Thread %d, %d bytes written from offset %d, "
@@ -191,6 +217,22 @@ int main(int argc, char **argv)
         run_test(fd, read_function);
         delete buf;
         printf("%s: read: Duration %.2f ms : %.2f ms = %.2fms\n",
+            argv[0], min_secs * 1000, max_secs * 1000,
+            (max_secs - min_secs) * 1000);
+
+        close(fd);
+    } else if (!strcmp(argv[1], "read2")) {
+        int oflags = O_RDONLY | O_SYNC;
+        int fd = open(fname, oflags);
+        if (fd == -1) {
+            perror("open");
+            return -1;
+        }
+
+        buf = new char[file_size];
+        run_test(fd, read2_function);
+        delete buf;
+        printf("%s: read2: Duration %.2f ms : %.2f ms = %.2fms\n",
             argv[0], min_secs * 1000, max_secs * 1000,
             (max_secs - min_secs) * 1000);
 
