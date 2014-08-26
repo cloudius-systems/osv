@@ -1,6 +1,7 @@
 CC=gcc
 CFLAGS=-O2 -g -Wall -std=gnu99
 INCLUDES=-I../lua/src \
+	-I$(lastword $(wildcard ../ncurses/build/*/include)) \
 	-I$(lastword $(wildcard ../libedit/build/*/src))
 LFLAGS=-L../lua/src \
 	-L$(lastword $(wildcard ../ncurses/build/*/lib)) \
