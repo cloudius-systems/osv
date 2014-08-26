@@ -382,6 +382,7 @@ libc += network/ntohs.o
 libc += network/gethostbyname_r.o
 musl += network/gethostbyname2_r.o
 musl += network/gethostbyaddr_r.o
+musl += network/gethostbyaddr.o
 libc += network/getaddrinfo.o
 musl += network/freeaddrinfo.o
 libc += network/getnameinfo.o
