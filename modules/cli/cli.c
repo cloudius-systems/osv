@@ -21,12 +21,13 @@
 #define CLI_COMMANDS_PATH "./commands"
 #endif
 
-char *prompt(EditLine *e) {
-  return (char *)"osv> ";
-}
+#define PROMPT_MAXLEN 128
+static char sprompt[PROMPT_MAXLEN];
 
-void      luaL_renew_cli(lua_State **L);
+static  lua_State *L;
+void      luaL_renew_cli(lua_State**);
 lua_State *luaL_newstate_cli();
+char      *prompt(EditLine*);
 
 int main (int argc, char* argv[]) {
 #ifdef OSV_CLI
@@ -67,7 +68,7 @@ int main (int argc, char* argv[]) {
   el_set(el, EL_HIST, history, cli_history);
 
   /* Lua state */
-  lua_State *L = luaL_newstate_cli();
+  L = luaL_newstate_cli();
 
   while (keepreading) {
     /* el_count is the number of characters read.
@@ -157,4 +158,25 @@ lua_State *luaL_newstate_cli() {
   lua_pop(L, 1);
 
   return L;
+}
+
+char *prompt(EditLine *e) {
+  /* Get the shell prompt from Lua */
+  lua_getglobal(L, "prompt");
+  int error = lua_pcall(L, 0, 1, 0);
+  if (error) {
+    fprintf(stderr, "%s\n", lua_tostring(L, -1));
+    lua_pop(L, 1);
+  } else {
+    if (!lua_isnil(L, -1)) {
+      const char *lprompt = lua_tostring(L, -1);
+      int len = strlen(lprompt);
+      snprintf(sprompt, len < PROMPT_MAXLEN ? len+1 : PROMPT_MAXLEN, "%s", lprompt);
+      lua_pop(L, 1);
+      return sprompt;
+    }
+  }
+
+  /* Default to an empty prompt in case of an error */
+  return (char *)"# ";
 }

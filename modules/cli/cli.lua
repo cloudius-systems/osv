@@ -2,6 +2,10 @@ require('util')
 require('osv_api')
 require('alt_getopt')
 require('data_dumper')
+
+-- Global cwd handler
+cwd = require('cwd')
+
 commands_path = "commands"
 
 local function command_filename(name)
@@ -23,6 +27,12 @@ local function print_lua_error(cmd, msg)
   end
 end
 
+--- Returns the prompt
+function prompt()
+  return (cwd.get() .. '# ')
+end
+
+--- Processes a line as a command
 function cli(line)
   local command = trim(line)
   local arguments = ""
