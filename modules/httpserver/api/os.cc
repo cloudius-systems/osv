@@ -110,6 +110,7 @@ void init(routes& routes)
         httpserver::json::Thread thread;
         sched::with_all_threads([&](sched::thread &t) {
             thread.id = t.id();
+            thread.status = t.get_status();
             auto tcpu = t.tcpu();
             thread.cpu = tcpu ? tcpu->id : -1;
             thread.cpu_ms = duration_cast<milliseconds>(t.thread_clock()).count();
