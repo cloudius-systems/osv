@@ -907,6 +907,7 @@ program::program(void* addr)
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
     static const auto supplied_modules = {
+          "libresolv.so.2",
           "libc.so.6",
           "libm.so.6",
 #ifdef __x86_64__
