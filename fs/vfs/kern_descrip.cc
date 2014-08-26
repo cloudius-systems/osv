@@ -185,16 +185,27 @@ void fhold(struct file* fp)
 
 int fdrop(struct file *fp)
 {
-    if (__sync_fetch_and_sub(&fp->f_count, 1) != 1)
+    int o = fp->f_count, n;
+    bool do_free;
+    do {
+        n = o - 1;
+        if (n == 0) {
+            /* We are about to free this file structure, but we still do things with it
+             * so set the refcount to INT_MIN, fhold/fdrop may get called again
+             * and we don't want to reach this point more than once.
+             * INT_MIN is also safe against fget() seeing this file.
+             */
+            n = INT_MIN;
+            do_free = true;
+        } else {
+            do_free = false;
+        }
+    } while (!__atomic_compare_exchange_n(&fp->f_count, &o, n, true,
+                __ATOMIC_RELAXED, __ATOMIC_RELAXED));
+
+    if (!do_free)
         return 0;
 
-    /* We are about to free this file structure, but we still do things with it
-     * so set the refcount to INT_MIN, fhold/fdrop may get called again
-     * and we don't want to reach this point more than once.
-     * INT_MIN is also safe against fget() seeing this file.
-     */
-
-    fp->f_count = INT_MIN;
     fp->stop_polls();
     fp->close();
     rcu_dispose(fp);
