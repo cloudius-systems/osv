@@ -147,7 +147,7 @@ interface::interface(const std::string& iface_name)
     bsd_ifreq ifr;
 
     if (do_ifr(sock, name, SIOCGIFFLAGS, &ifr) == 0) {
-        uflags = ((uint32_t) ifr.ifr_flagshigh << 16) | ifr.ifr_flags;
+        uflags = ((uint32_t) ifr.ifr_flagshigh << 16) | (uint16_t) ifr.ifr_flags;
         flags = flags2str(uflags);
     }
 
