@@ -18,11 +18,9 @@ class server_module : public config_module
 {
     virtual void handle(const YAML::Node& doc) override
     {
-        std::stringstream s;
-        for (auto& node : doc) {
-            s << node.first.as<std::string>() <<": " << node.second.as<std::string>() << std::endl;
-        }
-        files_module::create_file("/tmp/httpserver.conf", s.str());
+        YAML::Emitter out;
+        out << doc;
+        files_module::create_file("/tmp/httpserver.conf", out.c_str());
     }
 
     virtual std::string get_label() override
