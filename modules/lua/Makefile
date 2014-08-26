@@ -23,21 +23,22 @@ LUA_SRCS=lapi.c lapi.h lauxlib.c lauxlib.h lbaselib.c lbitlib.c lcode.c \
 
 SRCS=$(addprefix src/, $(LUA_SRCS))
 
-# Lua itself
-MAIN=src/liblua.so
-
-# Local executable used for LuaRocks
-LUA_BIN=out/bin/lua
-
-# List of Lua modules, each module has its own target
-LUA_MODULES=LuaSocket LPeg LuaJSON Lua_stdlib
+# Out sub-directories
 BDIR=$(OUT)/bin
 LDIR=$(OUT)/lib/lua/$(LUA_V)
 CDIR=$(OUT)/share/lua/$(LUA_V)
 
-.PHONY: module clean LuaRocks $(LUA_MODULES)
+# Lua itself
+MAIN=src/liblua.so
 
-module: $(MAIN) $(LUA_BIN) LuaRocks $(LUA_MODULES)
+# Local executable used for LuaRocks
+LUA_BIN=$(BDIR)/lua
+LUA_ROCKS_BIN=$(BDIR)/luarocks
+
+# List of Lua modules, each module has its own target
+LUA_MODULES=LuaSocket LuaJSON Lua_stdlib
+
+module: $(MAIN) $(LUA_MODULES)
 
 $(MAIN): $(SRCS)
 	cd src && $(MAKE)
@@ -61,9 +62,7 @@ LuaRocks_F=luarocks-$(LuaRocks_V)
 LuaRocks_A=$(LuaRocks_F).tar.gz
 LuaRocks_D=http://luarocks.org/releases/$(LuaRocks_A)
 
-LuaRocks: $(BDIR)/luarocks
-
-$(BDIR)/luarocks: $(BUILD)/$(LuaRocks_F)/src/luarocks
+$(LUA_ROCKS_BIN): $(LUA_BIN) $(BUILD)/$(LuaRocks_F)/src/luarocks
 	cd $(BUILD)/$(LuaRocks_F) && \
 		make install
 
@@ -87,28 +86,21 @@ $(DOWNLOAD)/$(LuaRocks_A): | $(DOWNLOAD)
 	curl --remote-time --location $(LuaRocks_D) > $@
 
 # == LuaSocket ==
-
 LuaSocket: $(LDIR)/socket/core.so
 
-$(LDIR)/socket/core.so: | LuaRocks
+$(LDIR)/socket/core.so: $(LUA_ROCKS_BIN)
 	out/bin/luarocks install luasocket 3.0-rc1
-
-# == LPeg ==
-LPeg: $(LDIR)/lpeg.so
-
-$(LDIR)/lpeg.so: | LuaRocks
-	out/bin/luarocks install lpeg 0.12
 
 # == LuaJSON ==
 LuaJSON: $(CDIR)/json.lua
 
-$(CDIR)/json.lua: | LuaRocks
+$(CDIR)/json.lua: $(LUA_ROCKS_BIN)
 	out/bin/luarocks install luajson 1.3.3
 
 # == Lua_stdlib ==
 Lua_stdlib: $(CDIR)/std.lua
 
-$(CDIR)/std.lua: | LuaRocks
+$(CDIR)/std.lua: $(LUA_ROCKS_BIN)
 	out/bin/luarocks install stdlib 40
 
 ##
@@ -116,3 +108,5 @@ clean:
 	rm -f $(SRCS)
 	rm -rf $(DOWNLOAD) $(BUILD) $(OUT)
 	cd src && $(MAKE) clean
+
+.PHONY: module clean $(LUA_MODULES)
