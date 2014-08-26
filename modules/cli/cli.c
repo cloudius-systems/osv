@@ -2,12 +2,16 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
+#include <signal.h>
 
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 
 #include <histedit.h>
+
+#include <sys/ioctl.h>
+#include <termios.h>
 
 #ifdef OSV_CLI
 #define CLI_LUA "/cli/cli.lua"
@@ -24,6 +28,15 @@
 #define PROMPT_MAXLEN 128
 static char sprompt[PROMPT_MAXLEN];
 
+/* Console size handling */
+static int con_height = 24;
+static int con_width = 80;
+void cli_sigwinch_handler(int);
+void cli_console_size_dirty();
+
+/* Report console size back to Lua */
+static int cli_lua_console_dim(lua_State *);
+
 static  lua_State *L;
 void      luaL_renew_cli(lua_State**);
 lua_State *luaL_newstate_cli();
@@ -32,6 +45,18 @@ char      *prompt(EditLine*);
 int main (int argc, char* argv[]) {
 #ifdef OSV_CLI
   putenv("TERM=vt100-qemu");
+
+  cli_console_size_dirty();
+#else
+  struct winsize sz;
+  ioctl(0, TIOCGWINSZ, &sz);
+
+  if (sz.ws_col > 0 && sz.ws_row > 0) {
+    con_width = sz.ws_col;
+    con_height = sz.ws_row;
+
+    signal(SIGWINCH, cli_sigwinch_handler);
+  }
 #endif
 
   /* This holds all the state for our line editor */
@@ -157,6 +182,10 @@ lua_State *luaL_newstate_cli() {
   lua_setglobal(L, "commands_path");
   lua_pop(L, 1);
 
+  /* Bind some functions into Lua */
+  lua_pushcfunction(L, cli_lua_console_dim);
+  lua_setglobal(L, "cli_console_dim");
+
   return L;
 }
 
@@ -179,4 +208,51 @@ char *prompt(EditLine *e) {
 
   /* Default to an empty prompt in case of an error */
   return (char *)"# ";
+}
+
+/* Signal handler for SIGWINCH (change in window size) */
+void cli_sigwinch_handler(int sig) {
+  struct winsize sz;
+  ioctl(0, TIOCGWINSZ, &sz);
+  con_width = sz.ws_col;
+  con_height = sz.ws_row;
+}
+
+/* Uses some ANSI sequences in raw mode to find the window size */
+void cli_console_size_dirty() {
+  /* Switch to raw and save current */
+  struct termios t_prev, t_raw;
+  tcgetattr(0, &t_prev);
+  cfmakeraw(&t_raw);
+  tcsetattr(0, TCSANOW, &t_raw);
+
+  /* Get current cursor location */
+  printf("\033[6n");
+  int cur_h, cur_w;
+  int res = scanf("\033[%d;%dR", &cur_h, &cur_w);
+  if (!res) {
+    goto giveup;
+  }
+
+  /* Set cursor location to 999x999 and query it again */
+  printf("\033[999;999H\033[6n");
+  int width, height;
+  res = scanf("\033[%d;%dR", &height, &width);
+  if (res) {
+    con_height = height;
+    con_width = width;
+  }
+
+  /* Return the cursor to its original location */
+  printf("\033[%d;%dH", cur_h, cur_w);
+
+giveup:
+  tcsetattr(0, TCSANOW, &t_prev);
+}
+
+/* Returns console size to Lua */
+static int cli_lua_console_dim(lua_State *L) {
+  lua_pushnumber(L, con_height);
+  lua_pushnumber(L, con_width);
+  return 2;
 }
