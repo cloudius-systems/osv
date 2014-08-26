@@ -14,7 +14,8 @@ if [ ! -f build/$MODE/loader.elf ]; then
 fi
 DUMPFILE=`mktemp`
 objdump -t build/$MODE/loader.elf > $DUMPFILE
-FUNCS=`objdump -T $APP | grep GLIBC|sed -e "s/.*GLIBC_[0-9.]* //"`
+FUNCS=`objdump -T $APP | grep GLIBC|sed -e "s/.*GLIBC\(XX\)\?_[0-9.]* //"`
+
 for i in $FUNCS; do
     grep -q " $i$" $DUMPFILE
     FOUND=$?
