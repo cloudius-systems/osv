@@ -5,8 +5,8 @@ cmd.main = function(args)
   assert(optarg, optind)
 
   for i = optind, #args do
-    local path = args[i]
-    local content, status = osv_request({"file", path}, "GET", {op = "GET"}, true)
+    local path, rpath = args[i], cwd.resolve(args[i])
+    local content, status = osv_request({"file", rpath}, "GET", {op = "GET"}, true)
     osv_resp_assert(status, 200, 404)
 
     if status == 404 then
