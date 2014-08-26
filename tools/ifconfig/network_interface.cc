@@ -223,8 +223,12 @@ std::string get_interface_name(struct ifnet* ifp)
 struct ifnet* get_interface_by_name(const std::string& name)
 {
     struct ifnet* ifp;
-    for (unsigned int i = 0; i < number_of_interfaces(); i++) {
+    for (unsigned int i = 0; i <= number_of_interfaces(); i++) {
         ifp = get_interface_by_index(i);
+        if (!ifp) {
+            continue;
+        }
+
         if (get_interface_name(ifp) == name) {
             return ifp;
         }
