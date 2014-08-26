@@ -141,3 +141,4 @@ long syscall(long number, ...)
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
 }
+long __syscall(long number, ...)  __attribute__((alias("syscall")));
