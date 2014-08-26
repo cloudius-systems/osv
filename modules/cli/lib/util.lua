@@ -34,6 +34,35 @@ function table_print(tt)
   end
 end
 
+-- Print a list of items
+function list_print(t)
+  local col_pad = 1
+  local col_pad_str = string.rep(" ", col_pad)
+
+  -- Find maximum length of items
+  local col_length = 0
+
+  for i = 1, #t do
+    col_length = math.max(col_length, #t[i])
+  end
+
+  local h, w = cli_console_dim()
+  local columns = math.floor(w / (col_length + col_pad))
+
+  local buf = {}
+  for i = 1, #t do
+    table.insert(buf, string.format("%-" .. col_length .. "s", t[i]))
+    if #buf == columns then
+      print(table.concat(buf, col_pad_str))
+      buf = {}
+    end
+  end
+
+  if #buf > 0 then
+    print(table.concat(buf, col_pad_str))
+  end
+end
+
 function file_exists(name)
   local f = io.open(name, "r")
   if f ~= nil then io.close(f) return true else return false end
