@@ -4,8 +4,7 @@
     "basePath": "http://{{Host}}",
     "resourcePath": "/jolokia",
     "produces": [
-        "application/json",
-        "application/xml"
+        "application/json"
     ],
     "apis": [
         {
@@ -18,8 +17,7 @@
                     "responseClass": "string",
                     "nickname": "getJolokia",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {
@@ -45,8 +43,7 @@
                     "responseClass": "string",
                     "nickname": "getJolokiaAlt",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {
@@ -67,8 +64,7 @@
                     "responseClass": "string",
                     "nickname": "postJolokia",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {

@@ -4,8 +4,7 @@
     "basePath": "{{Protocol}}://{{Host}}",
     "resourcePath": "/os",
     "produces": [
-        "application/json",
-        "application/xml"
+        "application/json"
     ],
     "apis": [
         {
@@ -18,8 +17,7 @@
                     "responseClass": "string",
                     "nickname": "getOSversion",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -37,8 +35,7 @@
                     "responseClass": "string",
                     "nickname": "getOSmanufacturer",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -56,8 +53,7 @@
                     "responseClass": "long",
                     "nickname": "getLastBootUpTime",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -75,8 +71,7 @@
                     "responseClass": "dateTime",
                     "nickname": "getDate",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -94,8 +89,7 @@
                     "responseClass": "long",
                     "nickname": "getTotalVirtualMemorySize",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -113,8 +107,7 @@
                     "responseClass": "long",
                     "nickname": "getBalloonSize",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ]
@@ -131,8 +124,7 @@
                     "responseClass": "long",
                     "nickname": "getFreeVirtualMemory",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -165,8 +157,7 @@
 		    "responseClass": "string",
 		    "nickname" : "getDebugMessages",
 		    "produces": [
-		        "application/json",
-			"application/xml"
+		        "application/json"
 		    ],
 		    "parameters": [
 		    ],
@@ -184,8 +175,7 @@
 		    "responseClass": "string",
 		    "nickname": "getHostname",
 		    "produces": [
-		        "application/json",
-		        "application/xml"
+		        "application/json"
 		    ],
 		    "parameters": [
 		    ],
@@ -197,8 +187,7 @@
 		    "responseClass": "string",
 		    "nickname": "setHostname",
 		    "produces": [
-		        "application/json",
-		        "application/xml"
+		        "application/json"
 		    ],
 		    "parameters": [
 		        {
@@ -224,8 +213,7 @@
                     "responseClass": "Threads",
                     "nickname" : "listThreads",
                     "produces": [
-                        "application/json",
-                                "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -243,8 +231,7 @@
                 "responseClass": "string",
                 "nickname": "getCmdline",
                 "produces": [
-                    "application/json",
-                    "application/xml"
+                    "application/json"
                 ],
                 "parameters": [
                 ],
@@ -257,8 +244,7 @@
                 "responseClass": "string",
                 "nickname": "replaceCmdline",
                 "produces": [
-                    "application/json",
-                    "application/xml"
+                    "application/json"
                 ],
                 "parameters": [
                     {

@@ -4,8 +4,7 @@
     "basePath": "{{Protocol}}://{{Host}}",
     "resourcePath": "/trace",
     "produces": [
-        "application/json",
-        "application/xml"
+        "application/json"
     ],
     "apis": [
         {
@@ -18,8 +17,7 @@
                     "responseClass": "List[TraceEventInfo]",
                     "nickname": "getTraceEventStatus",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {
@@ -40,8 +38,7 @@
                     "responseClass": "List[TraceEventInfo]",
                     "nickname": "setTraceEventStatus",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {
@@ -83,8 +80,7 @@
                     "responseClass": "TraceEventInfo",
                     "nickname": "getSingleTraceEventStatus",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {
@@ -105,8 +101,7 @@
                     "responseClass": "TraceEventInfo",
                     "nickname": "setSingleTraceEventStatus",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {

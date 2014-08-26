@@ -4,8 +4,7 @@
    "basePath":"{{Protocol}}://{{Host}}",
    "resourcePath":"/network",
    "produces":[
-      "application/json",
-      "application/xml"
+      "application/json"
    ],
    "apis":[
    {
@@ -19,8 +18,7 @@
                "items": {"type": "Interface"},
                "nickname":"listIfconfig",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
                ]
@@ -43,8 +41,7 @@
                ],
                "nickname":"getIfconfig",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
                   {
@@ -70,8 +67,7 @@
                "items": {"type": "Route"},
                "nickname":"getRoute",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
 

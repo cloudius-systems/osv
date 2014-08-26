@@ -4,8 +4,7 @@
     "basePath": "{{Protocol}}://{{Host}}",
     "resourcePath": "/fs",
     "produces": [
-        "application/json",
-        "application/xml"
+        "application/json"
     ],
     "apis": [
         {
@@ -27,8 +26,7 @@
                     ],
                     "nickname" : "getDFStats",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                      {

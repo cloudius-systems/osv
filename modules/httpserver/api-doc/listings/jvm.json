@@ -4,8 +4,7 @@
     "basePath": "{{Protocol}}://{{Host}}",
     "resourcePath": "/jvm",
     "produces": [
-        "application/json",
-        "application/xml"
+        "application/json"
     ],
     "apis": [
         {
@@ -18,8 +17,7 @@
                     "responseClass": "string",
                     "nickname": "getJavaVersion",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -37,8 +35,7 @@
                     "responseClass": "List[MemoryManager]",
                     "nickname": "getGCinfo",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -56,8 +53,7 @@
                     "responseClass": "void",
                     "nickname": "forceGC",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],
@@ -75,8 +71,7 @@
                     "responseClass": "object",
                     "nickname": "getJMXvalue",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                         {
@@ -102,8 +97,7 @@
                     "responseClass":  "List[String]",
                     "nickname": "getMbeanList",
                     "produces": [
-                        "application/json",
-                        "application/xml"
+                        "application/json"
                     ],
                     "parameters": [
                     ],

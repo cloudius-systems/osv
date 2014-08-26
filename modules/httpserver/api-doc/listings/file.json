@@ -4,8 +4,7 @@
    "basePath":"{{Protocol}}://{{Host}}",
    "resourcePath":"/file",
    "produces":[
-      "application/json",
-      "application/xml"
+      "application/json"
    ],
    "apis":[
       {
@@ -28,8 +27,7 @@
                ],
                "nickname":"getFile",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
                   {
@@ -84,8 +82,7 @@
                ],
                "nickname":"delFile",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
                   {
@@ -122,8 +119,7 @@
                "responseClass":"string",
                "nickname":"upload",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
                   {
@@ -161,8 +157,7 @@
                ],
                "nickname":"putFile",
                "produces":[
-                  "application/json",
-                  "application/xml"
+                  "application/json"
                ],
                "parameters":[
                   {
