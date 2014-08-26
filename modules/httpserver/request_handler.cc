@@ -66,6 +66,24 @@ request_handler::request_handler(httpserver::routes* routes, const boost::progra
       config(_config)
 
 {
+    if (config.count("access-allow")) {
+        const auto s = config["access-allow"].as<std::string>();
+        std::string::size_type b = 0;
+        do {
+            auto e = s.find_first_of(',', b);
+            auto d = s.substr(b, e - b);
+            // maintaining "true" compatibility (reluctantly).
+            // just in case, accept "false" as well. but in an actual list this makes less sense.
+            if (d == "false") {
+                allowed_domains.clear();
+                break;
+            }
+            allowed_domains.emplace_back(d == "true" ? "*" : std::move(d));
+            b = e + 1;
+        } while (b != 0);
+
+        std::sort(allowed_domains.begin(), allowed_domains.end());
+    }
 }
 
 void request_handler::handle_request(request& req, reply& rep)
@@ -89,8 +107,14 @@ void request_handler::handle_request(request& req, reply& rep)
     }
 
     routes->handle(request_path, req, rep);
-    if (config.count("access-allow")) {
-        rep.add_header("Access-Control-Allow-Origin", "*");
+
+    if (!allowed_domains.empty()) {
+        auto origin = req.get_header("Origin");
+        for (auto & s : allowed_domains) {
+            if (s == "*" || s == origin) {
+                rep.add_header("Access-Control-Allow-Origin", s);
+            }
+        }
     }
 }
 

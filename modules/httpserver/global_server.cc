@@ -44,7 +44,27 @@ bool global_server::run(po::variables_map& _config)
         try {
             YAML::Node doc = YAML::Load(f);
             for (auto node : doc) {
-                get().set(node.first.as<std::string>(), node.second.as<std::string>());
+                std::function<std::string(const YAML::Node&)> to_string;
+
+                to_string = [&](const YAML::Node & n) -> std::string {
+                    std::string s;
+                    if (n.IsSequence()) {
+                        for (auto & sn : n) {
+                            if (!s.empty()) {
+                                s += ',';
+                            }
+                            s += to_string(sn);
+                        }
+                    } else {
+                        s = n.as<std::string>();
+                    }
+                    return s;
+                };
+
+                auto key = node.first.as<std::string>();
+                auto val = to_string(node.second);
+
+                get().set(key, val);
             }
         } catch (const std::exception& e) {
             std::cout << "httpserver Failed reading the configuration file " << e.what() <<  std::endl;

@@ -56,6 +56,7 @@ public:
 
 private:
     httpserver::routes* routes;
+    std::vector<std::string> allowed_domains;
     const boost::program_options::variables_map& config;
 
     /**
