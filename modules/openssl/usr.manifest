@@ -15,3 +15,23 @@
 # From libcom_err
 /usr/lib/&/libcom_err.so.2: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libcom_err.so.2.1: %(miscbase)s/usr/lib64/&
+
+# From krb5-libs
+/&/etc/krb5.conf: %(miscbase)s/&
+/usr/lib/&/libgssapi_krb5.so.2: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libk5crypto.so.3: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libkrb5.so.3: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libkrb5.so.3.3: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libkrb5support.so.0: %(miscbase)s/usr/lib64/&
+
+# From libselinux
+/usr/lib/&/libselinux.so.1: %(miscbase)s/usr/lib64/&
+
+# From keyutils-libs
+/usr/lib/&/libkeyutils.so.1: %(miscbase)s/usr/lib64/&
+
+# From pcre
+/usr/lib/&/libpcre.so.1: %(miscbase)s/usr/lib64/&
+
+# From xz-libs
+/usr/lib/&/liblzma.so.5: %(miscbase)s/usr/lib64/&
