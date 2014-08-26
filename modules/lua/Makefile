@@ -36,7 +36,7 @@ LUA_BIN=$(BDIR)/lua
 LUA_ROCKS_BIN=$(BDIR)/luarocks
 
 # List of Lua modules, each module has its own target
-LUA_MODULES=LuaSocket LuaJSON Lua_stdlib
+LUA_MODULES=LuaSocket LuaJSON Lua_stdlib LuaFileSystem LuaPath
 
 module: $(MAIN) $(LUA_MODULES)
 
@@ -102,6 +102,18 @@ Lua_stdlib: $(CDIR)/std.lua
 
 $(CDIR)/std.lua: $(LUA_ROCKS_BIN)
 	out/bin/luarocks install stdlib 40
+
+# == LuaFileSystem ==
+LuaFileSystem: $(LDIR)/lfs.so
+
+$(LDIR)/lfs.so: $(LUA_ROCKS_BIN)
+	out/bin/luarocks install LuaFileSystem 1.6.2
+
+# == LuaPath ==
+LuaPath: $(CDIR)/path.lua
+
+$(CDIR)/path.lua: $(LUA_ROCKS_BIN)
+	out/bin/luarocks install lua-path 0.2.1
 
 ##
 clean:
