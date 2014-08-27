@@ -245,13 +245,14 @@ public:
 private:
 
     struct net_req {
-        explicit net_req(mbuf *m) : mb(m) {
+        explicit net_req(mbuf *m) : mb(m), hw_queue_was_full(0) {
             memset(&mhdr, 0, sizeof(mhdr));
         }
 
         struct net::net_hdr_mrg_rxbuf mhdr;
         mbuf* mb;
         u64 tx_bytes;
+        int hw_queue_was_full;
     };
 
     std::string _driver_name;
@@ -291,6 +292,7 @@ private:
         u64 tx_kicks;
         u64 tx_worker_wakeups;
         u64 tx_worker_packets;
+        u64 tx_hw_queue_is_full;
     };
 
      /* Single Rx queue object */

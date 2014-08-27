@@ -213,6 +213,7 @@ void net::fill_qstats(const struct txq& txq,
     out_data->ifi_oworker_wakeups = txq.stats.tx_worker_wakeups;
     out_data->ifi_oworker_packets = txq.stats.tx_worker_packets;
     out_data->ifi_okicks          = txq.stats.tx_kicks;
+    out_data->ifi_oqueue_is_full  = txq.stats.tx_hw_queue_is_full;
 }
 
 bool net::ack_irq()
@@ -646,9 +647,11 @@ int net::txq::try_xmit_one_locked(net_req* req)
             trace_virtio_net_tx_no_space_calling_gc(_parent->_ifn->if_index);
             gc();
             if (!vqueue->avail_ring_has_room(vec_sz)) {
+                req->hw_queue_was_full = 1;
                 return ENOBUFS;
             }
         } else {
+            req->hw_queue_was_full = 1;
             return ENOBUFS;
         }
     } else {
@@ -665,6 +668,7 @@ int net::txq::try_xmit_one_locked(net_req* req)
 inline void net::txq::update_stats(net_req* req)
 {
     stats.tx_bytes += req->tx_bytes;
+    stats.tx_hw_queue_is_full += req->hw_queue_was_full;
     stats.tx_packets++;
 
     if (req->mhdr.hdr.flags & net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)
@@ -680,8 +684,7 @@ void net::txq::xmit_one_locked(void* _req)
     net_req* req = static_cast<net_req*>(_req);
 
     if (try_xmit_one_locked(req)) {
-        trace_virtio_net_tx_xmit_one_failed_to_post(vqueue,
-                                                    vqueue->_sg_vec.size());
+
         // We are going to poll - flush the pending packets
         kick_pending();
         do {
