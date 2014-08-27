@@ -55,6 +55,11 @@ struct if_data {
     unsigned long int  ifi_hwassist;       /* HW offload capabilities, see IFCAP */
     time_t  ifi_epoch;      /* uptime at attach or stat reset */
     struct  timeval ifi_lastchange; /* time of last administrative change */
+    unsigned long int  ifi_ibh_wakeups;    /* number times Rx BH has been woken up */
+    unsigned long int  ifi_oworker_kicks;  /* number of kicks from Tx worker */
+    unsigned long int  ifi_oworker_wakeups;/* number times Tx worker has been woken up */
+    unsigned long int  ifi_oworker_packets;/* number of Tx packets handled by a Tx worker */
+    unsigned long int  ifi_okicks;         /* total number of Tx kicks */
 };
 
 

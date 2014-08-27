@@ -172,6 +172,21 @@
             },
             "ifi_epoch":{
                "type":"long"
+            },
+	    "ifi_ibh_wakeups":{
+               "type":"long"
+            },
+	    "ifi_oworker_kicks":{
+               "type":"long"
+            },
+	    "ifi_oworker_wakeups":{
+               "type":"long"
+            },
+	    "ifi_oworker_packets":{
+               "type":"long"
+            },
+	    "ifi_okicks":{
+               "type":"long"
             }
          }
       },
