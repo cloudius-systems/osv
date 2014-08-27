@@ -9,6 +9,7 @@
 #define VIRTIO_NET_DRIVER_H
 
 //#define DEBUG_VIRTIO_TX
+//#define DEBUG_VIRTIO_RX
 
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
@@ -278,6 +279,9 @@ private:
         u64 rx_drops;   /* if_iqdrops */
         u64 rx_csum;    /* number of packets with correct csum */
         u64 rx_csum_err;/* number of packets with a bad checksum */
+#ifdef DEBUG_VIRTIO_RX
+	u64 rx_bh_wakeups;
+#endif
     };
 
     struct txq_stats {

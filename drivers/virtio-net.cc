@@ -205,6 +205,11 @@ void net::fill_qstats(const struct rxq& rxq,
     out_data->ifi_ibytes   += rxq.stats.rx_bytes;
     out_data->ifi_iqdrops  += rxq.stats.rx_drops;
     out_data->ifi_ierrors  += rxq.stats.rx_csum_err;
+#ifdef DEBUG_VIRTIO_RX
+    printf("Rx: packet(%d)/bh wakeup(%d) %.2f\n",
+	    rxq.stats.rx_packets, rxq.stats.rx_bh_wakeups,
+	    double(rxq.stats.rx_packets)/rxq.stats.rx_bh_wakeups);
+#endif
 }
 
 void net::fill_qstats(const struct txq& txq,
@@ -216,13 +221,13 @@ void net::fill_qstats(const struct txq& txq,
     out_data->ifi_oerrors  += txq.stats.tx_err + txq.stats.tx_drops;
 
 #ifdef DEBUG_VIRTIO_TX
-    printf("packet(%d)/kick(%d) %.2f\n",
+    printf("Tx: packet(%d)/kick(%d) %.2f\n",
            txq.stats.tx_packets, txq.stats.tx_kicks,
            double(txq.stats.tx_packets)/txq.stats.tx_kicks);
-    printf("worker packet(%d)/worker_kick(%d) %.2f\n",
+    printf("Tx: worker packet(%d)/worker_kick(%d) %.2f\n",
            txq.stats.tx_worker_packets, txq.stats.tx_worker_kicks,
            double(txq.stats.tx_worker_packets)/txq.stats.tx_worker_kicks);
-    printf("worker packet(%d)/worker wakeup(%d) %.2f\n",
+    printf("Tx: worker packet(%d)/worker wakeup(%d) %.2f\n",
            txq.stats.tx_worker_packets, txq.stats.tx_worker_wakeups,
            double(txq.stats.tx_worker_packets)/txq.stats.tx_worker_wakeups);
 #endif
@@ -434,6 +439,10 @@ void net::receiver()
         // Wait for rx queue (used elements)
         virtio_driver::wait_for_queue(vq, &vring::used_ring_not_empty);
         trace_virtio_net_rx_wake();
+
+#ifdef DEBUG_VIRTIO_TX
+         _rxq.stats.rx_bh_wakeups++;
+#endif
 
         u32 len;
         int nbufs;
