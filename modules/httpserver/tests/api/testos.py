@@ -4,35 +4,35 @@ import basetest
 
 class testos(basetest.Basetest):
     def test_os_version(self):
-        path = self.path_by_nick(self.os_api, "getOSversion")
+        path = self.path_by_nick(self.os_api, "os_version")
         self.assertRegexpMatches(self.curl(path), r"v0\.\d+(-rc\d+)?(-\d+-[0-9a-z]+)?" , path)
 
-    def test_manufactor(self):
-        self.validate_path(self.os_api, "getOSmanufacturer", "cloudius-systems")
+    def test_vendor(self):
+        self.validate_path(self.os_api, "os_vendor", "cloudius-systems")
 
     def test_os_uptime(self):
-        path = self.path_by_nick(self.os_api, "getLastBootUpTime")
+        path = self.path_by_nick(self.os_api, "uptime")
         up_time = self.curl(path)
         time.sleep(2)
         self.assert_between(path, up_time + 1, up_time + 3, self.curl(path))
 
     def test_os_date(self):
-        path = self.path_by_nick(self.os_api, "getDate")
+        path = self.path_by_nick(self.os_api, "os_date")
         val = self.curl(path).encode('ascii', 'ignore')
         self.assertRegexpMatches(val, "...\\s+...\\s+\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+20..", path)
 
     def test_os_total_memory(self):
-        path = self.path_by_nick(self.os_api, "getTotalVirtualMemorySize")
+        path = self.path_by_nick(self.os_api, "os_total_memory")
         val = self.curl(path)
         self.assertGreater(val, 1024 * 1024 * 256, msg="Memory should be greater than 256Mb")
 
     def test_os_free_memory(self):
-        path = self.path_by_nick(self.os_api, "getFreeVirtualMemory")
+        path = self.path_by_nick(self.os_api, "os_free_memory")
         val = self.curl(path)
         self.assertGreater(val, 1024 * 1024 * 256, msg="Free memory should be greater than 256Mb")
 
     def test_os_threads(self):
-        path = self.path_by_nick(self.os_api, "listThreads")
+        path = self.path_by_nick(self.os_api, "os_threads")
         val = self.curl(path)
         self.assert_key_in("time_ms", val)
         ctime = val["time_ms"]

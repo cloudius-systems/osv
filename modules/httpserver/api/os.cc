@@ -36,25 +36,25 @@ void init(routes& routes)
 {
     os_json_init_path();
 
-    getOSversion.set_handler([](const_req req)
-    {
+    os_name.set_handler([](const_req req){
+        return "OSv";
+    });
+
+    os_version.set_handler([](const_req req) {
         return osv::version();
     });
 
-    getOSmanufacturer.set_handler([](const_req req)
-    {
-        return "cloudius-systems";
+    os_vendor.set_handler([](const_req req) {
+        return "Cloudius Systems";
     });
 
-    getLastBootUpTime.set_handler([](const_req req)
-    {
+    os_uptime.set_handler([](const_req req) {
         struct sysinfo info;
         sysinfo(&info);
         return info.uptime;
     });
 
-    getDate.set_handler([](const_req req)
-    {
+    os_date.set_handler([](const_req req) {
         time_t t;
         time(&t);
         date_time result;
@@ -62,47 +62,45 @@ void init(routes& routes)
         return result;
     });
 
-    getTotalVirtualMemorySize.set_handler([](const_req req)
-    {
+    os_memory_total.set_handler([](const_req req) {
         struct sysinfo info;
         sysinfo(&info);
         return info.totalram;
     });
 
-    getFreeVirtualMemory.set_handler([](const_req req)
-    {
+    os_memory_free.set_handler([](const_req req) {
         struct sysinfo info;
         sysinfo(&info);
         return info.freeram;
     });
 
-    os_json::shutdown.set_handler([](const_req req)
-    {
+    os_memory_balloon.set_handler([](const_req req) {
+        return memory::get_balloon_size();
+    });
+
+    os_shutdown.set_handler([](const_req req) {
         osv::shutdown();
         return "";
     });
 
-    getDebugMessages.set_handler([](const_req req)
-    {
+    os_dmesg.set_handler([](const_req req) {
         return debug_buffer;
     });
 
-    getHostname.set_handler([](const_req req)
+    os_get_hostname.set_handler([](const_req req)
     {
         char hostname[65];
         gethostname(hostname,65);
         return json_return_type(hostname);
     });
 
-    setHostname.set_handler([](const_req req)
-    {
+    os_set_hostname.set_handler([](const_req req) {
         string hostname = req.get_query_param("name");
         sethostname(hostname.c_str(), hostname.size());
         return "";
     });
 
-    listThreads.set_handler([](const_req req)
-    {
+    os_threads.set_handler([](const_req req) {
         using namespace std::chrono;
         httpserver::json::Threads threads;
         threads.time_ms = duration_cast<milliseconds>
@@ -120,13 +118,11 @@ void init(routes& routes)
         return threads;
     });
 
-    getCmdline.set_handler([](const_req req)
-    {
+    os_get_cmdline.set_handler([](const_req req) {
         return osv::getcmdline();
     });
 
-    replaceCmdline.set_handler([](const_req req)
-    {
+    os_set_cmdline.set_handler([](const_req req) {
         string newcmd = req.get_query_param("cmdline");
 
         try {
@@ -139,10 +135,6 @@ void init(routes& routes)
 
         return osv::getcmdline();
 
-    });
-    getBalloonSize.set_handler([](const_req req)
-    {
-        return memory::get_balloon_size();
     });
 
 }
