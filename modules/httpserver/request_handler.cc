@@ -113,6 +113,15 @@ void request_handler::handle_request(request& req, reply& rep)
         for (auto & s : allowed_domains) {
             if (s == "*" || s == origin) {
                 rep.add_header("Access-Control-Allow-Origin", s);
+                if (!req.get_header("Access-Control-Request-Method").empty()) {
+                    rep.add_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE");
+                }
+                const auto h = req.get_header("Access-Control-Request-Headers");
+                if (!h.empty()) {
+                    rep.add_header("Access-Control-Allow-Headers", h);
+                }
+                // allow caching CORS data. We won't be changing anything.
+                rep.add_header("Access-Control-Max-Age", "1000");
             }
         }
     }
