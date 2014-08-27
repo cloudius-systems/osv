@@ -1,0 +1,5 @@
+/**: ${MODULE_DIR}/build/**
+/etc/pki/tls/certs/ca-bundle.trust.crt: ->/etc/pki/ca-trust/extracted/openssl/ca-bundle.trust.crt
+/etc/pki/tls/certs/ca-bundle.crt: ->/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+/etc/pki/tls/cert.pem: ->/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+/etc/pki/java/cacerts: ->/etc/pki/ca-trust/extracted/java/cacerts
