@@ -8,10 +8,10 @@ class testos(basetest.Basetest):
         self.assertRegexpMatches(self.curl(path), r"v0\.\d+(-rc\d+)?(-\d+-[0-9a-z]+)?" , path)
 
     def test_vendor(self):
-        self.validate_path(self.os_api, "os_vendor", "cloudius-systems")
+        self.validate_path(self.os_api, "os_vendor", "Cloudius Systems")
 
     def test_os_uptime(self):
-        path = self.path_by_nick(self.os_api, "uptime")
+        path = self.path_by_nick(self.os_api, "os_uptime")
         up_time = self.curl(path)
         time.sleep(2)
         self.assert_between(path, up_time + 1, up_time + 3, self.curl(path))
@@ -22,12 +22,12 @@ class testos(basetest.Basetest):
         self.assertRegexpMatches(val, "...\\s+...\\s+\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+20..", path)
 
     def test_os_total_memory(self):
-        path = self.path_by_nick(self.os_api, "os_total_memory")
+        path = self.path_by_nick(self.os_api, "os_memory_total")
         val = self.curl(path)
         self.assertGreater(val, 1024 * 1024 * 256, msg="Memory should be greater than 256Mb")
 
     def test_os_free_memory(self):
-        path = self.path_by_nick(self.os_api, "os_free_memory")
+        path = self.path_by_nick(self.os_api, "os_memory_free")
         val = self.curl(path)
         self.assertGreater(val, 1024 * 1024 * 256, msg="Free memory should be greater than 256Mb")
 
