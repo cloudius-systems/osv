@@ -576,8 +576,6 @@ sofree(struct socket *so)
 	sbdestroy(&so->so_snd, so);
 	sbdestroy(&so->so_rcv, so);
 
-	poll_wake(so->fp, POLLSTANDARD);
-
 	sodealloc(so);
 }
 
