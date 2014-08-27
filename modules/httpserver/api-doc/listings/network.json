@@ -187,6 +187,9 @@
             },
 	    "ifi_okicks":{
                "type":"long"
+            },
+	    "ifi_oqueue_is_full":{
+               "type":"long"
             }
          }
       },

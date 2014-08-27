@@ -60,6 +60,10 @@ struct if_data {
     unsigned long int  ifi_oworker_wakeups;/* number times Tx worker has been woken up */
     unsigned long int  ifi_oworker_packets;/* number of Tx packets handled by a Tx worker */
     unsigned long int  ifi_okicks;         /* total number of Tx kicks */
+    unsigned long int  ifi_oqueue_is_full; /* number of times the packet could not
+                                            * be sent due to a lack of free space
+                                            * on a HW ring
+                                            */
 };
 
 
