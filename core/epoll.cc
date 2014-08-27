@@ -308,6 +308,10 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 
     int error = 0;
     fileref fp = fileref_from_fd(fd);
+    if (!fp) {
+        errno = EBADF;
+        return -1;
+    }
     epoll_key key{fd, fp.get()};
 
     switch (op) {
