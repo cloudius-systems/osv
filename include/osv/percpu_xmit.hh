@@ -281,9 +281,7 @@ public:
         //
         lock_running();
 
-#ifdef DEBUG_VIRTIO_TX
         _txq->stats.tx_worker_wakeups++;
-#endif
 
         // Start taking packets one-by-one and send them out
         while (!stop_pred()) {
@@ -322,9 +320,7 @@ public:
 
                     lock_running();
 
-#ifdef DEBUG_VIRTIO_TX
                     _txq->stats.tx_worker_wakeups++;
-#endif
                 }
             }
 

@@ -8,9 +8,6 @@
 #ifndef VIRTIO_NET_DRIVER_H
 #define VIRTIO_NET_DRIVER_H
 
-//#define DEBUG_VIRTIO_TX
-//#define DEBUG_VIRTIO_RX
-
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if.h>
@@ -279,9 +276,7 @@ private:
         u64 rx_drops;   /* if_iqdrops */
         u64 rx_csum;    /* number of packets with correct csum */
         u64 rx_csum_err;/* number of packets with a bad checksum */
-#ifdef DEBUG_VIRTIO_RX
-	u64 rx_bh_wakeups;
-#endif
+        u64 rx_bh_wakeups;
     };
 
     struct txq_stats {
@@ -292,12 +287,10 @@ private:
         u64 tx_csum;    /* CSUM offload requests */
         u64 tx_tso;     /* GSO/TSO packets */
         /* u64 tx_rescheduled; */ /* TODO when we implement xoff */
-#ifdef DEBUG_VIRTIO_TX
         u64 tx_worker_kicks;
         u64 tx_kicks;
         u64 tx_worker_wakeups;
         u64 tx_worker_packets;
-#endif
     };
 
      /* Single Rx queue object */
