@@ -27,7 +27,7 @@ cmd.main = function(args)
     end
 
     table.sort(file_list)
-    list_print(file_list)
+    print(list_format(file_list))
   end
 end
 

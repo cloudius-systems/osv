@@ -25,7 +25,7 @@ cmd.main = function(args)
       })
     end
 
-    table_print(tt)
+    print(table_format(tt))
   end
 end
 

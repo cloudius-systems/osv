@@ -36,7 +36,7 @@ local function resource_usage(resource)
     end
   end
 
-  table_print(tt)
+  print(table_format(tt))
 end
 
 local function api_usage(api)

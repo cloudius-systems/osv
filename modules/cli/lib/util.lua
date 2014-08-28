@@ -13,11 +13,11 @@ function split(str, pattern)
   return parts
 end
 
--- Print matrix to console
-function table_print(tt)
-  -- Find maximum length of each column
-  local tlength = {}
+-- Format matrix to be to console
+function table_format(tt)
+  local tlength, ret = {}, {}
 
+  -- Find maximum length of each column
   for i = 1, #tt do
     for j = 1, #tt[i] do
       tlength[j] = math.max(tlength[j] or 0, #tt[i][j])
@@ -25,17 +25,20 @@ function table_print(tt)
   end
 
   for i = 1, #tt do
-    local p = ""
+    local p = {}
     for j = 1, #tt[i] do
       local pad = -(tlength[j] + 1)
-      p = p .. string.format("%-" .. (pad) .. "s", tt[i][j], tlength[j])
+      table.insert(p, string.format("%-" .. (pad) .. "s", tt[i][j], tlength[j]))
     end
-    print(p)
+    table.insert(ret, table.concat(p, " "))
   end
+
+  return table.concat(ret, "\n")
 end
 
 -- Print a list of items
-function list_print(t)
+function list_format(t)
+  local ret = {}
   local col_pad = 1
   local col_pad_str = string.rep(" ", col_pad)
 
@@ -53,14 +56,16 @@ function list_print(t)
   for i = 1, #t do
     table.insert(buf, string.format("%-" .. col_length .. "s", t[i]))
     if #buf == columns then
-      print(table.concat(buf, col_pad_str))
+      table.insert(ret, table.concat(buf, col_pad_str))
       buf = {}
     end
   end
 
   if #buf > 0 then
-    print(table.concat(buf, col_pad_str))
+    table.insert(ret, table.concat(buf, col_pad_str))
   end
+
+  return table.concat(ret, "\n")
 end
 
 function file_exists(name)
