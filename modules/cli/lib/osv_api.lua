@@ -130,6 +130,19 @@ local renderer = {
   dateTime = function(response)
     return tostring(response)
   end,
+  Threads = function(response)
+    local tt = {{"id", "name", "cpu", "cpu_ms", "status"}}
+    for _, thread in ipairs(response["list"]) do
+      table.insert(tt, {
+        tostring(thread["id"]),
+        thread["name"],
+        tostring(thread["cpu"]),
+        tostring(thread["cpu_ms"]),
+        thread["status"]
+      })
+    end
+    return table_format(tt)
+  end,
   [""] = function(response)
     return response
   end
