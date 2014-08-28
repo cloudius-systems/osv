@@ -1,16 +1,17 @@
+local context = require("context")
+
 local http = require("socket.http")
 local url = require("socket.url")
 local json = require("json")
 local ltn12 = require("ltn12")
 
-local server = "127.0.0.1:8000"
 local schema = {}
 
 function osv_schema()
   if next(schema) == nil then
-    io.stderr:write("Loading OSv schema from: " .. server .. "\n")
+    io.stderr:write("Loading OSv schema from: " .. context.api .. "\n")
     schema, err = osv_request("/api/api-docs.json", "GET")
-    assert(schema, "Failed to load schema from: " .. server)
+    assert(schema, "Failed to load schema from: " .. context.api)
     for _, resource in ipairs(schema.apis) do
       api_def_url = "/api/" .. string.sub(resource.path, 5)
       resource.definition = osv_request(api_def_url, "GET")
@@ -80,7 +81,7 @@ function osv_request(arguments, method, parameters, do_raw)
   end
 
   -- Construct full URL, with query parameters if exists
-  local full_url = "http://" .. server .. path
+  local full_url = context.api .. path
   if string.len(reqquery) > 0 then
     full_url = full_url .. "?" .. reqquery
   end
@@ -143,12 +144,4 @@ function render_response(response, response_class)
   end
 
   return renderer[response_class](response)
-end
-
-function osv_setserver(s)
-  server = s
-end
-
-function osv_getserver()
-  print(server)
 end

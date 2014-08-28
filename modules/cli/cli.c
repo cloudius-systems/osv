@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <string.h>
 #include <signal.h>
+#include <getopt.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -42,6 +43,9 @@ void      luaL_renew_cli(lua_State**);
 lua_State *luaL_newstate_cli();
 char      *prompt(EditLine*);
 
+/* Context */
+static char* env_osv_api;
+
 int main (int argc, char* argv[]) {
 #ifdef OSV_CLI
   putenv("TERM=vt100-qemu");
@@ -58,6 +62,24 @@ int main (int argc, char* argv[]) {
     signal(SIGWINCH, cli_sigwinch_handler);
   }
 #endif
+
+  /* Context */
+  env_osv_api = getenv("OSV_API");
+
+  /* Process command line options */
+  int opt = 0;
+  static struct option long_options[] = {
+    {"api", optional_argument, 0, 'a'}
+  };
+
+  int long_index = 0;
+  while ((opt = getopt_long(argc, argv, "a:",
+    long_options, &long_index)) != -1) {
+    switch (opt) {
+      case 'a': env_osv_api = optarg;
+      break;
+    }
+  }
 
   /* This holds all the state for our line editor */
   EditLine *el;
@@ -179,6 +201,9 @@ lua_State *luaL_newstate_cli() {
   }
 
   cli_lua_settable(L, "context", "commands_path", CLI_COMMANDS_PATH);
+  if (env_osv_api) {
+    cli_lua_settable(L, "context", "api", env_osv_api);
+  }
 
   /* Bind some functions into Lua */
   lua_pushcfunction(L, cli_lua_console_dim);
