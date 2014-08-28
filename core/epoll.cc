@@ -7,17 +7,11 @@
 
 // Implement the Linux epoll(7) functions in OSV
 
-// NOTE: This is an inefficient implementation, in which epoll_wait() calls
-// poll(), thereby negating all the performance benefits of using epoll and
-// not poll. This is only a temporary implementation, for getting the
-// functionality of epoll which Java needs - but not its performance.
-
 #include <sys/epoll.h>
 #include <sys/poll.h>
 #include <memory>
 #include <stdio.h>
 #include <errno.h>
-
 
 #include <osv/file.h>
 #include <osv/poll.h>
