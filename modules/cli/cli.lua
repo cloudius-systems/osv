@@ -3,13 +3,12 @@ require('osv_api')
 require('alt_getopt')
 require('data_dumper')
 
--- Global cwd handler
+-- Global modules
 cwd = require('cwd')
-
-commands_path = "commands"
+context = require('context')
 
 local function command_filename(name)
-  return string.format('%s/%s.lua', commands_path, name)
+  return string.format('%s/%s.lua', context.commands_path, name)
 end
 
 --- Prints message to stderr

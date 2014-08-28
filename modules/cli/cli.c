@@ -178,9 +178,7 @@ lua_State *luaL_newstate_cli() {
     return NULL;
   }
 
-  lua_pushstring(L, CLI_COMMANDS_PATH);
-  lua_setglobal(L, "commands_path");
-  lua_pop(L, 1);
+  cli_lua_settable(L, "context", "commands_path", CLI_COMMANDS_PATH);
 
   /* Bind some functions into Lua */
   lua_pushcfunction(L, cli_lua_console_dim);
