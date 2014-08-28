@@ -59,12 +59,6 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
     return e;
 }
 
-struct registered_epoll : epoll_event {
-    int last_poll_wake_count; // For implementing EPOLLET
-    registered_epoll(epoll_event e, int c) :
-        epoll_event(e), last_poll_wake_count(c) {}
-};
-
 class epoll_file final : public special_file {
 
     // lock ordering (fp == some file being polled):
@@ -73,7 +67,7 @@ class epoll_file final : public special_file {
     // we never hold both f_lock and activity_lock.
 
     // protected by f_lock:
-    std::unordered_map<epoll_key, registered_epoll> map;
+    std::unordered_map<epoll_key, epoll_event> map;
     mutex _activity_lock;
     // below, all protected by _activity_lock:
     std::unordered_set<epoll_key> _activity;
@@ -101,10 +95,7 @@ public:
             if (map.count(key)) {
                 return EEXIST;
             }
-            // I used poll_wake_count-1, to ensure EPOLLET returns once when
-            // registering an epoll after data is already available.
-            map.emplace(key,
-                    registered_epoll(*event, fp->poll_wake_count - 1));
+            map.emplace(key, *event);
             fp->epoll_add({ this, key});
         }
         if (fp->poll(events_epoll_to_poll(event->events))) {
@@ -117,7 +108,7 @@ public:
         auto fp = key._file;
         WITH_LOCK(f_lock) {
             try {
-                map.at(key) = registered_epoll(*event, fp->poll_wake_count - 1);
+                map.at(key) = *event;
             } catch (std::out_of_range &e) {
                 return ENOENT;
             }
@@ -199,13 +190,13 @@ public:
                     activity.erase(cur);
                     continue; // raced
                 }
-                registered_epoll r_e = found->second;
+                epoll_event evt = found->second;
                 int active = 0;
-                if (r_e.events) {
-                    active = key._file->poll(events_epoll_to_poll(r_e.events));
+                if (evt.events) {
+                    active = key._file->poll(events_epoll_to_poll(evt.events));
                 }
                 active = events_poll_to_epoll(active);
-                if (!active || (r_e.events & EPOLLET)) {
+                if (!active || (evt.events & EPOLLET)) {
                     activity.erase(cur);
                 } else {
                     key._file->epoll_add({ this, key });
@@ -213,7 +204,7 @@ public:
                 if (!active) {
                     continue;
                 }
-                if (r_e.events & EPOLLONESHOT) {
+                if (evt.events & EPOLLONESHOT) {
                     // since we dropped the lock, the key may not be there anymore
                     auto i = map.find(key);
                     if (i != map.end()) {
@@ -222,7 +213,7 @@ public:
                     }
                 }
                 trace_epoll_ready(key._fd, key._file, active);
-                events[nr].data = r_e.data;
+                events[nr].data = evt.data;
                 events[nr].events = active;
                 ++nr;
             }
