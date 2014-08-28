@@ -677,8 +677,11 @@ in_pcbladdr(struct inpcb *inp, struct in_addr *faddr, struct in_addr *laddr,
 	 */
 	if ((inp->inp_socket->so_options & SO_DONTROUTE) == 0)
 	{
-	    route_cache::lookup(sin, inp->inp_inc.inc_fibnum, &rte_one);
-	    sro.ro_rt = &rte_one;
+		if (route_cache::lookup(sin, inp->inp_inc.inc_fibnum, &rte_one)) {
+			sro.ro_rt = &rte_one;
+		} else {
+			sro.ro_rt = NULL;
+		}
 	}
 
 	/*

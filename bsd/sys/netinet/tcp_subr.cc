@@ -1687,8 +1687,11 @@ tcp_maxmtu(struct in_conninfo *inc, int *flags)
 		dst->sin_family = AF_INET;
 		dst->sin_len = sizeof(*dst);
 		dst->sin_addr = inc->inc_faddr;
-		route_cache::lookup(dst, inc->inc_fibnum, &rte_one);
-		sro.ro_rt = &rte_one;
+		if (route_cache::lookup(dst, inc->inc_fibnum, &rte_one)) {
+			sro.ro_rt = &rte_one;
+		} else {
+			sro.ro_rt = NULL;
+		}
 	}
 	if (sro.ro_rt != NULL) {
 		ifp = sro.ro_rt->rt_ifp;
