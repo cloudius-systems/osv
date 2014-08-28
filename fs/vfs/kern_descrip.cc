@@ -246,8 +246,9 @@ void file::epoll_del(epoll_ptr ep)
     WITH_LOCK(f_lock) {
         assert(f_epolls);
         auto i = boost::range::find(*f_epolls, ep);
-        assert(i != f_epolls->end());
-        f_epolls->erase(i);
+        if (i != f_epolls->end()) {
+            f_epolls->erase(i);
+        }
     }
 }
 
