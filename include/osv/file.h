@@ -185,9 +185,6 @@ struct file {
 	                f_poll_list; /* poll request list */
 	mutex_t		f_lock;		/* lock */
 	std::unique_ptr<std::vector<epoll_ptr>> f_epolls;
-	// poll_wake_count used for implementing epoll()'s EPOLLET using poll().
-	// Once we have a real epoll() implementation, it won't be needed.
-	int poll_wake_count = 0;
 	void stop_polls();
 	void wake_epoll(int possible_events = -1);
 };
