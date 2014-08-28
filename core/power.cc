@@ -11,6 +11,8 @@
 #include <processor.hh>
 #include <arch.hh>
 
+#include <sys/reboot.h>
+
 #ifndef AARCH64_PORT_STUB
 extern "C" {
 #include "acpi.h"
@@ -69,3 +71,29 @@ void reboot(void)
 
 
 } /* namespace osv */
+
+extern "C" int reboot(int cmd)
+{
+    switch (cmd) {
+    case RB_POWER_OFF:
+        printf("Power down\n");
+        osv::poweroff();
+        break;
+    case RB_HALT_SYSTEM:
+        printf("System halted\n");
+        osv::halt();
+        break;
+    case RB_AUTOBOOT:
+        printf("Restarting system\n");
+        osv::reboot();
+        break;
+    case RB_SW_SUSPEND:
+    case RB_ENABLE_CAD:
+    case RB_DISABLE_CAD:
+    case RB_KEXEC:
+    default:
+        return EINVAL;
+    }
+
+    return 0;
+}
