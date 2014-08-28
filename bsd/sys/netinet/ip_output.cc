@@ -257,8 +257,11 @@ again:
 			    ntohl(ip->ip_src.s_addr ^ ip->ip_dst.s_addr),
 			    inp ? inp->inp_inc.inc_fibnum : M_GETFIB(m));
 #else
-			route_cache::lookup(dst, inp ? inp->inp_inc.inc_fibnum : M_GETFIB(m), &rte_one);
-			ro->ro_rt = &rte_one;
+			if (route_cache::lookup(dst, inp ? inp->inp_inc.inc_fibnum : M_GETFIB(m), &rte_one)) {
+				ro->ro_rt = &rte_one;
+			} else {
+				ro->ro_rt = NULL;
+			}
 #endif
 			rte = ro->ro_rt;
 		}

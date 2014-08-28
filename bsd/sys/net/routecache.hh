@@ -130,7 +130,9 @@ class route_cache {
 public:
     // Note that this returns a copy of a routing entry, *not* a pointer.
     // So the return value shouldn't be written to, nor, of course, be RTFREE'd.
-    static void lookup(struct bsd_sockaddr_in *dst, u_int fibnum, struct rtentry *ret) {
+    //
+    // Returns true when lookup succeeded, false otherwise
+    static bool lookup(struct bsd_sockaddr_in *dst, u_int fibnum, struct rtentry *ret) {
         // Only support fib 0, which is what we use anyway (see rt_numfibs in
         // route.cc).
         assert(fibnum == 0);
@@ -140,13 +142,17 @@ public:
             auto entry = c->search(dst->sin_addr.s_addr);
             if (entry) {
                 memcpy(ret, entry, sizeof(*ret));
-                return;
+                return true;
             }
         }
         // Not found in cache. Do the slow lookup
         struct route ro {};
         ro.ro_dst = *(struct bsd_sockaddr *)dst;
         in_rtalloc_ign(&ro, 0, fibnum);
+        if (!ro.ro_rt) {
+            RO_RTFREE(&ro);
+            return false;
+        }
         memcpy(ret, ro.ro_rt, sizeof(*ret));
         RO_RTFREE(&ro);
         ret->rt_refcnt = -1; // try to catch some monkey-business
@@ -161,6 +167,7 @@ public:
             cache.assign(new_cache);
             osv::rcu_dispose(old_cache);
         }
+        return true;
     }
 
     static void invalidate() {
