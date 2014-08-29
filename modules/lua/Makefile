@@ -122,3 +122,4 @@ clean:
 	cd src && $(MAKE) clean
 
 .PHONY: module clean $(LUA_MODULES)
+.NOTPARALLEL: $(LUA_MODULES)
