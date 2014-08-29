@@ -47,7 +47,7 @@ class Ubuntu(object):
     install = 'apt-get -y install'
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
                 'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
-                'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump gdb', 'qemu-system-x86',
+                'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
                 'gawk', 'gnutls-bin', 'openssl', 'python-requests'
                 ]
     ec2_packages = standard_ec2_packages
