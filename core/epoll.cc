@@ -148,9 +148,8 @@ public:
                 }
 
                 flush_activity_ring();
-                // We need to drop f_lock file calling file::poll(), so move _activity to
-                // local storage for processing.  Since _activity_mutex is internal to
-                // f_lock, we need to drop it as well.
+                // We need to drop _activity_lock and take f_lock in process_activity(),
+                // so move _activity to local storage for processing.
                 auto activity = std::move(_activity);
                 assert(_activity.empty());
                 DROP_LOCK(_activity_lock) {
