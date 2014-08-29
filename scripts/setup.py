@@ -42,6 +42,28 @@ class Fedora(object):
         version = '20'
     versions = [Fedora_20]
 
+class Debian(object):
+    name = 'debian'
+    install = 'apt-get -y install'
+    packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
+                'libtool', 'openjdk-7-jdk', 'ant', 'maven',
+                'libmaven-shade-plugin-java', 'tcpdump', 'gdb', 'gawk',
+                'gnutls-bin', 'openssl', 'python-requests', 'python-dpkt',
+                'qemu-system-x86', 'qemu-utils', 'lib32stdc++-4.9-dev',
+                'p11-kit']
+    ec2_packages = standard_ec2_packages
+    test_packages = ['libssl-dev', 'zip']
+    ec2_post_install = None
+
+    class debian(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = 'jessie/sid'
+
+    versions = [debian]
+
 class Ubuntu(object):
     name = 'Ubuntu'
     install = 'apt-get -y install'
@@ -71,6 +93,7 @@ class Ubuntu(object):
     versions = [Ubuntu_14_04, Ubuntu_13_10]
 
 distros = [
+           Debian(),
            Fedora(),
            Ubuntu()
            ]
