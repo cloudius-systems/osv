@@ -200,12 +200,8 @@ public:
                     continue;
                 }
                 if (evt.events & EPOLLONESHOT) {
-                    // since we dropped the lock, the key may not be there anymore
-                    auto i = map.find(key);
-                    if (i != map.end()) {
-                        i->second.events = 0;
-                        key._file->epoll_del({ this, key });
-                    }
+                    evt.events = 0;
+                    key._file->epoll_del({ this, key });
                 }
                 trace_epoll_ready(key._fd, key._file, active);
                 events[nr].data = evt.data;
