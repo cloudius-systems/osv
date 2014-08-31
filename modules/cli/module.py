@@ -6,7 +6,7 @@ import os, os.path
 require('lua')
 require('ncurses')
 require('libedit')
-require('httpserver')
+require_running('httpserver')
 
 usr_files = FileMap()
 usr_files.add('${OSV_BASE}/modules/cli').to('/cli') \
