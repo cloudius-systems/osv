@@ -72,7 +72,7 @@ void reboot(void)
 
 } /* namespace osv */
 
-extern "C" int reboot(int cmd)
+int reboot(int cmd)
 {
     switch (cmd) {
     case RB_POWER_OFF:
