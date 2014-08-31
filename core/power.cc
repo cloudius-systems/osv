@@ -57,7 +57,7 @@ void poweroff(void)
 }
 
 // reboot() does not normally return, but may return if the reboot magic for
-// some reson fails.
+// some reason fails.
 void reboot(void)
 {
 #ifdef __x86_64__
@@ -65,8 +65,10 @@ void reboot(void)
     // (on qemu & kvm), so let's resort to brute force...
     processor::outb(1, 0x92);
     debug("osv::reboot() did not work :(\n");
-#endif /* __x86_64__ */
+#else /* !__x86_64__ */
+    // FIXME:
     halt();
+#endif /* __x86_64__ */
 }
 
 
