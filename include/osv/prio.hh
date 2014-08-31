@@ -15,6 +15,7 @@ enum class init_prio : int {
     fpranges,
     pt_root,
     mempool,
+    routecache,
     pagecache,
     threadlist,
     pthread,

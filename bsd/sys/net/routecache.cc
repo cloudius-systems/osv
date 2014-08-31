@@ -6,6 +6,11 @@
  */
 
 #include "routecache.hh"
+#include "osv/prio.hh"
 
-osv::rcu_ptr<route_cache::routemap, osv::rcu_deleter<route_cache::routemap>> route_cache::cache (new route_cache::routemap);
-mutex route_cache::cache_mutex;
+osv::rcu_ptr<route_cache::routemap, osv::rcu_deleter<route_cache::routemap>> route_cache::cache
+    __attribute__((init_priority((int)init_prio::routecache)))
+    (new route_cache::routemap);
+
+mutex route_cache::cache_mutex
+    __attribute__((init_priority((int)init_prio::routecache)));
