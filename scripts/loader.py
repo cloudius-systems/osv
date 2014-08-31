@@ -491,6 +491,28 @@ class osv_zfs(gdb.Command):
             print ("\tCache misses:   %d (%.2f%%)" %
                    (l2arc_misses, l2arc_misses_perc))
 
+        # Get address of 'struct zfetch_stats zfetch_stats'
+        zfetch_stats_struct = int(gdb.parse_and_eval('(u64) &zfetch_stats'))
+        zfetch_stats_cast = '(struct zfetch_stats *)'
+
+        # zfetch efficiency
+        zfetch_hits = get_stat_by_name(zfetch_stats_struct, zfetch_stats_cast, 'zfetchstat_hits')
+        zfetch_misses = get_stat_by_name(zfetch_stats_struct, zfetch_stats_cast, 'zfetchstat_misses')
+        zfetch_accesses_total = zfetch_hits + zfetch_misses
+
+        if zfetch_accesses_total == 0:
+            print ("\n:: ZFETCH DISABLED ::")
+        else:
+            zfetch_hits_perc = 100 * (float(zfetch_hits) / zfetch_accesses_total)
+            zfetch_misses_perc = 100 * (float(zfetch_misses) / zfetch_accesses_total)
+
+            print ("\n:: ZFETCH EFFICIENCY ::")
+            print ("\tTotal accesses: %d" % zfetch_accesses_total)
+            print ("\tHits:           %d (%.2f%%)" %
+                   (zfetch_hits, zfetch_hits_perc))
+            print ("\tMisses:         %d (%.2f%%)" %
+                   (zfetch_misses, zfetch_misses_perc))
+
 def bits2str(bits, chars):
     r = ''
     empty_str = 'none'
