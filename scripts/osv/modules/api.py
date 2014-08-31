@@ -2,6 +2,7 @@ from osv.modules import resolve
 import os
 
 require = resolve.require
+require_running = resolve.require_running
 
 class basic_app:
     def prepare_manifest(self, build_dir, manifest_type, manifest):

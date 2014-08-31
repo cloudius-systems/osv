@@ -8,6 +8,7 @@ import collections
 
 _modules = collections.OrderedDict()
 _loading_modules = list()
+_modules_to_run = dict()
 
 class Module(object):
     def __init__(self, name, config, properties):
@@ -155,3 +156,41 @@ def require(module_name):
         for name in getattr(module, 'provides'):
             _modules[name] = module
     return module
+
+def require_running(module_name, run_config='*'):
+    """
+    run_config holds the name of required run configuration. There are two values
+    with special meaning:
+
+      '*'    wildcard represents any run configuration. If not overriden by more
+             strict requirements will yield the 'default' run configuration.
+
+      'none' represents an empty run configuration (nothing is run)
+
+    """
+    module = require(module_name)
+    old_config = _modules_to_run.get(module, None)
+    if old_config:
+        if old_config == '*':
+            _modules_to_run[module] = run_config
+        elif run_config != '*' and old_config != run_config:
+            raise Exception('Desired to run %s.%s but .%s already selected' % (module_name, run_config, old_config))
+    else:
+        _modules_to_run[module] = run_config
+
+def get_run_config(module, run_config):
+    if run_config == 'none':
+        return None
+
+    if run_config == '*':
+        attr_name = 'default'
+    else:
+        attr_name = run_config
+
+    if hasattr(module, attr_name):
+        return getattr(module, attr_name)
+    elif run_config != '*':
+        raise Exception("Attribute %s not set in module %s" % (attr_name, module.name))
+
+def get_modules_to_run():
+    return _modules_to_run
