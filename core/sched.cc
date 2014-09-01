@@ -61,6 +61,8 @@ TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
 TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
 TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_sched_ipi, "cpu %d", unsigned);
+TRACEPOINT(trace_sched_yield, "");
+TRACEPOINT(trace_sched_yield_switch, "");
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_reset, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
@@ -530,6 +532,7 @@ void cpu::notifier::fire()
 
 void thread::yield()
 {
+    trace_sched_yield();
     auto t = current();
     std::lock_guard<irq_lock_type> guard(irq_lock);
     // FIXME: drive by IPI
@@ -544,6 +547,7 @@ void thread::yield()
     if (tnext.priority() == thread::priority_idle) {
         return;
     }
+    trace_sched_yield_switch();
     t->_runtime.set_local(tnext._runtime);
     // Note that reschedule_from_interrupt will further increase t->_runtime
     // by thyst, giving the other thread 2*thyst to run before going back to t
