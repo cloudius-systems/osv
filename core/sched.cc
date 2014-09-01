@@ -63,6 +63,7 @@ TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_sched_ipi, "cpu %d", unsigned);
 TRACEPOINT(trace_sched_yield, "");
 TRACEPOINT(trace_sched_yield_switch, "");
+TRACEPOINT(trace_sched_sched, "");
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_reset, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
@@ -255,6 +256,7 @@ void cpu::schedule()
 
 void cpu::reschedule_from_interrupt()
 {
+    trace_sched_sched();
     assert(sched::exception_depth <= 1);
     need_reschedule = false;
     handle_incoming_wakeups();
