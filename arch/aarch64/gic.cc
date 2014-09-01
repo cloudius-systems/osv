@@ -38,6 +38,7 @@ void gic_driver::init_cpu(int smp_idx)
 
     if (!my_mask) {
         debug_early("gic: failed to read cpu mask, assuming uniprocessor\n");
+        this->cpu_targets[smp_idx] = 0;
     }
 
     /* disable all PPI interrupts */
