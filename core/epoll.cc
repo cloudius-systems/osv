@@ -16,7 +16,8 @@
 #include <osv/file.h>
 #include <osv/poll.h>
 #include <fs/fs.hh>
-#include <lockfree/ring.hh>
+#include <boost/lockfree/queue.hpp>
+#include <boost/lockfree/policies.hpp>
 
 #include <osv/debug.hh>
 #include <unordered_map>
@@ -66,7 +67,7 @@ class epoll_file final : public special_file {
     // below, all protected by _activity_lock:
     std::unordered_set<epoll_key> _activity;
     waitqueue _waiters;
-    ring_spsc<epoll_key, 256> _activity_ring;
+    boost::lockfree::queue<epoll_key, boost::lockfree::fixed_sized<true>> _activity_ring{512};
     std::atomic<bool> _activity_ring_overflow = { false };
     sched::thread_handle _activity_ring_owner;
 public:
@@ -231,6 +232,10 @@ public:
         _waiters.wake_all(_activity_lock);
     }
     void wake(epoll_key key) {
+        if (_activity_ring.push(key)) {
+            _activity_ring_owner.wake();
+            return;
+        }
         WITH_LOCK(_activity_lock) {
             auto ins = _activity.insert(key);
             if (ins.second) {
