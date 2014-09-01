@@ -60,6 +60,7 @@ TRACEPOINT(trace_sched_wake, "wake %p", thread*);
 TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
 TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
 TRACEPOINT(trace_sched_preempt, "");
+TRACEPOINT(trace_sched_ipi, "cpu %d", unsigned);
 TRACEPOINT(trace_timer_set, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_reset, "timer=%p time=%d", timer_base*, s64);
 TRACEPOINT(trace_timer_cancel, "timer=%p", timer_base*);
@@ -360,6 +361,7 @@ void cpu::send_wakeup_ipi()
 #ifndef AARCH64_PORT_STUB
     std::atomic_thread_fence(std::memory_order_seq_cst);
     if (!idle_poll.load(std::memory_order_relaxed)) {
+        trace_sched_ipi(id);
         wakeup_ipi.send(this);
     }
 #endif /* !AARCH64_PORT_STUB */
