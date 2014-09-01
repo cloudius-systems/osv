@@ -27,15 +27,6 @@
 #include <unistd.h>
 #include <stdio.h>
 
-void _loop(int iterations)
-{
-    for (register int i=0; i<iterations; i++) {
-        for (register int j=0; j<10000; j++) {
-            // To force gcc to not optimize this loop away
-            asm volatile("" : : : "memory");
-        }
-    }
-}
 
 void timeslice_test()
 {
