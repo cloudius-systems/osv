@@ -17,6 +17,12 @@ int __isnan(double v)
 }
 
 extern "C"
+int __isnanf(float v)
+{
+    return std::isnan(v);
+}
+
+extern "C"
 int __isnanl(long double v)
 {
     return std::isnan(v);
