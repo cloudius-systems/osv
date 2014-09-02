@@ -621,6 +621,20 @@ int pthread_attr_setinheritsched(pthread_attr_t *attr, int inheritsched)
     return 0;
 }
 
+int pthread_attr_setscope(pthread_attr_t *attr, int scope)
+{
+    if (scope == PTHREAD_SCOPE_PROCESS) {
+        return ENOTSUP;
+    }
+    return 0;
+}
+
+int pthread_attr_getscope(pthread_attr_t *attr, int *scope)
+{
+    *scope = PTHREAD_SCOPE_SYSTEM;
+    return 0;
+}
+
 int pthread_setcancelstate(int state, int *oldstate)
 {
     WARN_STUBBED();
