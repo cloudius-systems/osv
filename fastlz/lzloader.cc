@@ -8,8 +8,6 @@
 #include <cstddef>
 #include <stdint.h>
 
-#include <osv/kernel-base.h>
-
 #define BUFFER_OUT (char *)OSV_KERNEL_BASE
 #define MAX_BUFFER 0x1600000
 

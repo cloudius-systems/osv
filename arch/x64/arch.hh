@@ -8,7 +8,6 @@
 #ifndef ARCH_HH_
 #define ARCH_HH_
 
-#include "osv/kernel-base.h"
 #include "processor.hh"
 #include "msr.hh"
 

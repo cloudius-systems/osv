@@ -3,8 +3,6 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
-#include <osv/kernel-base.h>
-
 .code16
 
 tmp = 0x80000

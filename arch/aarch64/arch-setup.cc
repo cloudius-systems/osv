@@ -16,7 +16,6 @@
 #include <osv/boot.hh>
 #include <osv/debug.hh>
 #include <osv/commands.hh>
-#include <osv/kernel-base.h>
 
 #include "arch-mmu.hh"
 
@@ -54,7 +53,7 @@ void arch_setup_free_memory()
     elf_start = reinterpret_cast<void*>(elf_header);
     elf_size = (u64)edata - (u64)elf_start;
 
-    mmu::phys addr = (mmu::phys)elf_start + elf_size + OSV_KERNEL_BASE;
+    mmu::phys addr = (mmu::phys)elf_start + elf_size + 0x200000;
     addr = addr & ~0x1fffffull;
 
     /* set in stone for now, 512MB */

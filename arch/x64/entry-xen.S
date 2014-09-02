@@ -5,8 +5,6 @@
 
 #include <xen/interface/elfnote.h>
 
-#include <osv/kernel-base.h>
-
 #define elfnote(type, valtype, value) \
         .pushsection .note.xen, "a", @note; \
         .long 2f-1f; \

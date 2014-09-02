@@ -128,7 +128,7 @@ gcc-sysroot = $(if $(CROSS_PREFIX), --sysroot $(src)/external/$(arch)/gcc.bin) \
 # To add something that will *not* be part of the main kernel, you can do:
 #
 #   mydir/*.o EXTRA_FLAGS = <MY_STUFF>
-EXTRA_FLAGS = -D__OSV_CORE__
+EXTRA_FLAGS = -D__OSV_CORE__ -DOSV_KERNEL_BASE=$(kernel_base)
 EXTRA_LIBS =
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
@@ -403,6 +403,8 @@ endif
 
 ifeq ($(arch),x64)
 
+kernel_base := 0x200000
+
 all: loader.img loader.bin libosv.so usr.img
 
 boot.bin: arch/x64/boot16.ld arch/x64/boot16.o
@@ -460,6 +462,8 @@ $(acpi): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
 endif # x64
 
 ifeq ($(arch),aarch64)
+
+kernel_base := 0x40080000
 
 include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
@@ -955,7 +959,7 @@ dummy-shlib.so: dummy-shlib.o
 
 loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(drivers) \
 	$(objects) dummy-shlib.so bootfs.bin
-	$(call quiet, $(LD) -o $@ \
+	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
 	    --whole-archive \
@@ -963,9 +967,6 @@ loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(driv
 	      $(boost-libs) \
 	    --no-whole-archive, \
 		LD $@)
-
-arch/x64/loader.ld: $(src)/arch/x64/loader.ld.in
-	$(call quiet, cpp -P -I$(src)/include $< > $@, CPP $@)
 
 libosv.so: loader.elf
 	$(call quiet, readelf --dyn-syms loader.elf > osv.syms)

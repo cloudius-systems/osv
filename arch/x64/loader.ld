@@ -5,8 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/kernel-base.h>
-
 SECTIONS
 {
 	/* Set the initial program counter to one page beyond the minimal
