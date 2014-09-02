@@ -40,6 +40,15 @@ rename_object() {
  ec2-create-tags $OBJID --tag Name="$OBJNAME"
 }
 
+tag_object() {
+ local OBJID=$1
+ local TAGNAME=$2
+ local TAGVAL=$3
+ shift 3
+
+ ec2-create-tags $OBJID --tag $TAGNAME=$TAGVAL $*
+}
+
 wait_import_completion() {
  local TASKID=$1
  local STATUS="unknown"

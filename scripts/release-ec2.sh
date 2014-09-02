@@ -227,6 +227,8 @@ replicate_ami() {
          return 1;
      fi
 
+     tag_object $AMI_IN_REGION permanent . --region $REGION
+
      amend_rstatus AMI ID in region $REGION is $AMI_IN_REGION
      NL='
 '
@@ -396,6 +398,9 @@ while true; do
         amend_rstatus Private AMI created successfully.
         break;
     fi
+
+    echo_progress Tagging AMI as permanent
+    tag_object $AMI_ID permanent .
 
     echo_progress Making AMI public
     make_ami_public $AMI_ID
