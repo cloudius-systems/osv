@@ -666,6 +666,8 @@ libc += time/time.o
 libc += time/timegm.o
 libc += time/tzset.o
 libc += time/wcsftime.o
+libc += time/ftime.o # verbatim copy of the file as in 4b15d9f46a2b@musl
+libc/time/ftime.o: CFLAGS += -I $(src)/libc/include
 
 musl += unistd/sleep.o
 musl += unistd/gethostname.o
