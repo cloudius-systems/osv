@@ -88,8 +88,7 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     auto aligned_filesize = align_up(filesize, 4u);
 
     auto type = mode & 0170000;
-
-    auto prev_umask = umask(0777 & ~(mode & 0777));
+    auto perm = mode & 0777;
 
     switch (type) {
     case C_ISREG: {
@@ -97,21 +96,21 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         io::stream<decltype(file_slice)> file(file_slice);
         file.rdbuf()->pubsetbuf(nullptr, 0);
 
-        out.add_file(name, file);
+        out.add_file(name, file, perm);
         break;
     }
     case C_ISDIR: {
         if (filesize > 0) {
             throw runtime_error("bad directory size");
         }
-        out.add_dir(name);
+        out.add_dir(name, perm);
         break;
     }
     case C_ISLNK: {
         unique_ptr<char[]> targetbuf{new char[filesize]};
         is.read(targetbuf.get(), filesize);
         string target{targetbuf.get(), filesize};
-        out.add_symlink(target, name);
+        out.add_symlink(target, name, perm);
 	break;
     }
     default:
@@ -120,7 +119,6 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         break;
     }
 
-    umask(prev_umask);
     is.ignore(aligned_filesize - filesize);
     return true;
 }

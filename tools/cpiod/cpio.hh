@@ -11,15 +11,16 @@
 
 #include <istream>
 #include <string>
+#include <sys/stat.h>
 
 namespace osv {
 
 class cpio_in {
 public:
     virtual ~cpio_in();
-    virtual void add_file(std::string name, std::istream& is) = 0;
-    virtual void add_dir(std::string name) = 0;
-    virtual void add_symlink(std::string oldpath, std::string newpath) = 0;
+    virtual void add_file(std::string name, std::istream& is, mode_t mode) = 0;
+    virtual void add_dir(std::string name, mode_t mode) = 0;
+    virtual void add_symlink(std::string oldpath, std::string newpath, mode_t mode) = 0;
 public:
     static void parse(std::istream& is, cpio_in& out);
 private:

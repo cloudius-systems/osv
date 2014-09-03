@@ -15,6 +15,7 @@
 #include <sys/mount.h>
 #include <errno.h>
 #include <stdio.h>
+#include <sys/stat.h>
 
 using namespace osv;
 using namespace std;
@@ -24,30 +25,42 @@ namespace po = boost::program_options;
 // Want to use boost::filesystem, but too much effort to integrate
 extern "C" { int mkdirp(const char *d, mode_t mode); }
 
+class enforce_mode {
+public:
+    enforce_mode(mode_t mode) { _umask = umask(0777 & ~(mode & 0777)); }
+    ~enforce_mode() { umask(_umask); }
+private:
+    mode_t _umask;
+};
+
 class cpio_in_expand : public cpio_in {
 public:
     cpio_in_expand(std::string prefix): _prefix(prefix) {};
-    virtual void add_file(string name, istream& is) override {
+    virtual void add_file(string name, istream& is, mode_t mode) override {
         cout << "Adding " << name << "...\n";
         name = _prefix + name;
         auto pos = name.rfind('/');
         if (pos != name.npos) {
             mkdirp(name.substr(0, pos).c_str(), 0755);
         }
+
+        enforce_mode m(mode);
         ofstream os(name);
         os << is.rdbuf();
     }
-    virtual void add_dir(string name) override {
+    virtual void add_dir(string name, mode_t mode) override {
         cout << "Adding " << name << "...\n";
         name = _prefix + name;
+        enforce_mode m(mode);
         mkdirp(name.c_str(), 0755);
     }
-    virtual void add_symlink(string oldpath, string newpath) override {
+    virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
         cout << "Link " << newpath << " to " << oldpath << " ...\n";
         auto pos = newpath.rfind('/');
         if (pos != newpath.npos) {
             mkdirp(newpath.substr(0, pos).c_str(), 0755);
         }
+        enforce_mode m(mode);
         auto ret = symlink(oldpath.c_str(), newpath.c_str());
         if (ret == -1) {
             abort();
