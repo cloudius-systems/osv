@@ -345,7 +345,6 @@ tests += tests/tst-hostname.so
 tests += tests/tst-sendfile.so
 tests += tests/libstatic-thread-variable.so tests/tst-static-thread-variable.so
 tests/tst-static-thread-variable.so: tests/libstatic-thread-variable.so
-tests/tst-static-thread-variable.so: private COMMON += -L./tests -lstatic-thread-variable
 tests += tests/misc-lock-perf.so
 tests += tests/tst-uio.so
 tests += tests/tst-printf.so
@@ -355,12 +354,6 @@ tests += tests/tst-thread-local.so
 tests += tests/tst-app.so
 tests += tests/misc-gtod.so
 tests += tests/misc-concurrent-io.so
-endif
-
-ifeq ($(arch),aarch64)
-lib_tests :=
-else
-lib_tests := tests/libstatic-thread-variable.so
 endif
 
 tests/hello/Hello.class: javabase=tests/hello
@@ -1051,8 +1044,6 @@ $(src)/modules/tests/usr.manifest: $(src)/build.mk
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
 	@echo $(tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@
-	@echo $(lib_tests) | tr ' ' '\n' | \
-		awk '{name=$$0; name=gensub(".*/([^/]*)", "\\1", name); print "/usr/lib/" name ": ./" $$0}' >> $@
 	@echo $(java_tests) | tr ' ' '\n' | \
 	    awk '{a=$$0; sub(".*/","",a); print "/java/" a ": ./" $$0}' >> $@
 
