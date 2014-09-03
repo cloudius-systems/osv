@@ -398,6 +398,8 @@ libc += network/if_indextoname.o
 libc += network/if_nametoindex.o
 libc += network/gai_strerror.o
 libc += network/h_errno.o
+musl += network/getservbyname_r.o
+musl += network/getservbyname.o
 
 libc += prng/rand.o
 libc += prng/random.o
