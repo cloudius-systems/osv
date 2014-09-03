@@ -90,6 +90,11 @@ int	vfs_debug = VFSDB_FLAGS;
 
 std::atomic<mode_t> global_umask{S_IWGRP | S_IWOTH};
 
+static inline mode_t apply_umask(mode_t mode)
+{
+    return mode & ~global_umask.load(std::memory_order_relaxed);
+}
+
 TRACEPOINT(trace_vfs_open, "\"%s\" 0x%x 0%0o", const char*, int, mode_t);
 TRACEPOINT(trace_vfs_open_ret, "%d", int);
 TRACEPOINT(trace_vfs_open_err, "%d", int);
@@ -103,7 +108,7 @@ int open(const char *pathname, int flags, ...)
     if (flags & O_CREAT) {
         va_list ap;
         va_start(ap, flags);
-        mode = va_arg(ap, mode_t);
+        mode = apply_umask(va_arg(ap, mode_t));
         va_end(ap);
     }
 
@@ -159,7 +164,7 @@ int openat(int dirfd, const char *pathname, int flags, ...)
     if (flags & O_CREAT) {
         va_list ap;
         va_start(ap, flags);
-        mode = va_arg(ap, mode_t);
+        mode = apply_umask(va_arg(ap, mode_t));
         va_end(ap);
     }
 
@@ -717,6 +722,8 @@ mkdir(const char *pathname, mode_t mode)
     struct task *t = main_task;
     char path[PATH_MAX];
     int error;
+
+    mode = apply_umask(mode);
 
     trace_vfs_mkdir(pathname, mode);
     if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
