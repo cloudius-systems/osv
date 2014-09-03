@@ -20,6 +20,7 @@
 #include <cstring>
 #include <cpio.h>
 #include <iostream>
+#include <sys/stat.h>
 
 using namespace std;
 
@@ -87,6 +88,9 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     auto aligned_filesize = align_up(filesize, 4u);
 
     auto type = mode & 0170000;
+
+    auto prev_umask = umask(0777 & ~(mode & 0777));
+
     switch (type) {
     case C_ISREG: {
         auto file_slice = io::restrict(is, 0, filesize);
@@ -115,6 +119,8 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
         is.ignore(filesize);
         break;
     }
+
+    umask(prev_umask);
     is.ignore(aligned_filesize - filesize);
     return true;
 }
