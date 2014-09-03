@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, sys, struct, optparse, io, subprocess, shutil, socket, time, threading
+import os, optparse, io, subprocess
 try:
     import configparser
 except ImportError:

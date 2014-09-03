@@ -5,7 +5,6 @@ import glob
 import time
 import sys
 import os
-import re
 
 import tests.test_net
 import tests.test_tracing

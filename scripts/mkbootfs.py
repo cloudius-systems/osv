@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, sys, struct, optparse, io
+import os, struct, optparse, io
 try:
     import configparser
 except ImportError:

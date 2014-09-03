@@ -3,11 +3,6 @@
 import gdb
 import re
 import os, os.path
-import struct
-import json
-import math
-import itertools
-import operator
 import heapq
 from glob import glob
 from collections import defaultdict
@@ -21,7 +16,7 @@ modules = os.path.join(osv_dir, 'modules')
 
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
-from osv.trace import Trace,Thread,TracePoint,BacktraceFormatter,format_time,format_duration
+from osv.trace import Trace,Thread,TracePoint,BacktraceFormatter,format_time
 from osv import trace, debug
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')

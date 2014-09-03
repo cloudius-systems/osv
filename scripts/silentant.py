@@ -8,7 +8,7 @@
 # This script runs ant but detects this output and trims it.
 
 from __future__ import print_function
-import os, sys, subprocess
+import sys, subprocess
 
 try:
     ant = subprocess.Popen(sys.argv[1:],

@@ -1,12 +1,10 @@
 #!/usr/bin/python
 
-import sys
 import re
 import os
 import subprocess
 import operator
 import argparse
-import textwrap
 from functools import reduce
 from osv.modules import api, resolve, filemap
 

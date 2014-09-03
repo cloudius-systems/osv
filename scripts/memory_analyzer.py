@@ -1,7 +1,5 @@
-from collections import Counter
 from osv import debug, tree, prof
 import re
-import sys
 
 def is_mempool(x):
     return x.find("malloc_mempool ") > 0

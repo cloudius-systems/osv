@@ -6,13 +6,10 @@ import re
 import os
 import math
 import subprocess
-import struct
 import tempfile
 import requests
 
-from itertools import ifilter
 from collections import defaultdict
-from operator import attrgetter
 
 from osv import trace, debug, prof
 from osv.client import Client

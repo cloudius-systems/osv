@@ -3,8 +3,7 @@
 # set up a development environment for OSv.  Run as root.
 
 import sys, platform, argparse
-import os, os.path, distutils.version
-import subprocess, StringIO
+import subprocess
 
 standard_ec2_packages=['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'

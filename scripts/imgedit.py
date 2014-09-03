@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import sys, os, optparse, struct
+import sys, struct
 import subprocess
 import time
 
