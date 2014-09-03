@@ -34,8 +34,8 @@ if len(sys.argv) <= 2:
     for tracepoint in sorted(tracepoints):
         print(tracepoint)
     sys.exit()
-        
-        
+
+
 tracepoint_names= sys.argv[2:]
 
 period = 2.0  # How many seconds between refreshes
@@ -71,7 +71,7 @@ for t in tracepoint_names:
         print("Unrecognized tracepoint %s" % t)
         delete_all_counters()
         sys.exit()
-        
+
 def get_counts():
     result_json = make_request('http://' + hostport + '/trace/count', None, 'GET')
     return json.loads(result_json)
@@ -103,5 +103,5 @@ while True:
     time.sleep(max(0, period - (time.time() - start_refresh)))
     timems = newtimems
 
-    
+
 delete_all_counters()

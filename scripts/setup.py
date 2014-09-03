@@ -128,4 +128,3 @@ for distro in distros:
 
 print 'Your distribution is not supported by this script.'
 sys.exit(2)
-

@@ -357,7 +357,7 @@ def start_osv(options):
     }
     try:
         launchers[options.hypervisor](options)
-    except KeyError: 
+    except KeyError:
         print("Unrecognized hypervisor selected", file=sys.stderr)
         return
 
@@ -377,7 +377,7 @@ def main(options):
 if (__name__ == "__main__"):
     # Parse arguments
     parser = argparse.ArgumentParser(prog='run')
-    parser.add_argument("-d", "--debug", action="store_true", 
+    parser.add_argument("-d", "--debug", action="store_true",
                         help="start debug version")
     parser.add_argument("-w", "--wait", action="store_true",
                         help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")

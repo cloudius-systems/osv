@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*- 
-# 
+# -*- coding: utf-8 -*-
+#
 # Copyright (C) 2013 Nodalink, SARL.
 #
 # Simple nbd client used to connect to qemu-nbd
 #
 # author: Benoît Canet <benoit.canet@irqsave.net>
-# 
+#
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 #

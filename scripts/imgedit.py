@@ -15,7 +15,7 @@ args_offset = 512
 
 def chs(x):
     sec_per_track = 63
-    heads = 255 
+    heads = 255
 
     c = (x // sec_per_track) // heads
     h = (x // sec_per_track) % heads
