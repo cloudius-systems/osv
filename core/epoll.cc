@@ -184,7 +184,7 @@ public:
                     activity.erase(cur);
                     continue; // raced
                 }
-                epoll_event evt = found->second;
+                epoll_event& evt = found->second;
                 int active = 0;
                 if (evt.events) {
                     active = key._file->poll(events_epoll_to_poll(evt.events));
