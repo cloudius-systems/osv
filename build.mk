@@ -388,6 +388,8 @@ tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools
 
 tools/ifconfig/ifconfig.so: EXTRA_LIBS = -Ltools/ -ltools
 
+tools/ifconfig/ifconfig.so: tools/libtools.so
+
 ifeq ($(arch),aarch64)
 # note that the bootfs.manifest entry for the uush image
 # has no effect on the loader image, only on the usr image.
@@ -849,6 +851,7 @@ arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
+objects += arch/$(arch)/arch-dtb.o
 objects += $(libfdt)
 endif
 
