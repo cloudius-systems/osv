@@ -96,6 +96,9 @@
             },
             "mtu":{
                "type":"string"
+            },
+            "phys_addr":{
+               "type":"string"
             }
          }
       },

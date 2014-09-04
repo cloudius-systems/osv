@@ -30,13 +30,13 @@ static Interface get_interface(const string& name, ifnet* ifp, long time)
     Interface f;
     interface intf(name);
 
-    ifc.set(intf);
-    f.config = ifc;
+
     if_data cur_data = { 0 };
-    if (!set_interface_info(ifp, cur_data)) {
+    if (!set_interface_info(ifp, cur_data, intf)) {
         throw server_error_exception("Failed getting interface information");
     }
-
+    ifc.set(intf);
+    f.config = ifc;
     ifd.set(cur_data);
     f.data = ifd;
     f.time = time;

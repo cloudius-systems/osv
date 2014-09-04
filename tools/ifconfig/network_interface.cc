@@ -191,7 +191,7 @@ struct ifnet* get_interface_by_index(unsigned int i)
     return ifnet_byindex_ref(i);
 }
 
-bool set_interface_info(struct ifnet* ifp, if_data& data)
+bool set_interface_info(struct ifnet* ifp, if_data& data, interface& intf)
 {
     if (ifp == nullptr) {
         return false;
@@ -205,6 +205,7 @@ bool set_interface_info(struct ifnet* ifp, if_data& data)
     else {
         phys_addr[0] = '\0';
     }
+    intf.phys_addr = phys_addr;
     if (!ifp->if_getinfo) {
         return false;
     }

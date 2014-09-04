@@ -87,6 +87,9 @@ public:
     //! Get mtu
     std::string mtu;
 
+    // Mac address
+    std::string phys_addr;
+
     static std::string bytes2str(long bytes);
 
 private:
@@ -103,7 +106,7 @@ struct ifnet* get_interface_by_name(const std::string& name);
 
 std::string get_interface_name(struct ifnet* ifp);
 
-bool set_interface_info(struct ifnet* ifp, if_data& data);
+bool set_interface_info(struct ifnet* ifp, if_data& data, interface& intf);
 }
 }
 #endif /* NETWORK_INTERFACE_HH_ */
