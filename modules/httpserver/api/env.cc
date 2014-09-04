@@ -30,6 +30,16 @@ void init(routes& routes)
         }
         return val;
     });
+    list_env.set_handler([](const_req req) {
+        vector<string> res;
+
+        if (__environ) {
+            for (int i=0; __environ[i] ; i++) {
+                res.push_back(string(__environ[i]));
+            }
+        }
+        return res;
+    });
 
     setEnv.set_handler([](const_req req) {
         string param = req.param.at("var").substr(1);
