@@ -406,9 +406,23 @@ def print_summary(args, printer=sys.stdout.write):
     min_time = None
     max_time = None
 
+    class CpuTimeRange:
+        def __init__(self):
+            self.min = None
+            self.max = None
+
+        def update(self, time):
+            if self.min is None or time < self.min:
+                self.min = time
+            if self.max is None or time > self.max:
+                self.max = time
+
+    cpu_time_ranges = defaultdict(CpuTimeRange)
+
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
             if t.time in time_range:
+                cpu_time_ranges[t.cpu].update(t.time)
                 count += 1
                 count_per_tp[t.tp] += 1
 
@@ -432,6 +446,13 @@ def print_summary(args, printer=sys.stdout.write):
         return
 
     print "Collected %d samples spanning %s" % (count, prof.format_time(max_time - min_time))
+
+    print "\nTime ranges:\n"
+    for cpu, r in sorted(cpu_time_ranges.items(), key=lambda (c, r): r.min):
+        print "  CPU 0x%02d: %15s -%15s = %10s" % (cpu,
+            trace.format_time(r.min),
+            trace.format_time(r.max),
+            prof.format_time(r.max - r.min))
 
     max_name_len = reduce(max, map(lambda tp: len(tp.name), count_per_tp.iterkeys()))
     format = "  %%-%ds %%8s" % (max_name_len)
