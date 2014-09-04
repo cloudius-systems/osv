@@ -53,6 +53,8 @@ using namespace osv::clock::literals;
 
 namespace sched {
 
+TRACEPOINT(trace_sched_idle, "");
+TRACEPOINT(trace_sched_idle_ret, "");
 TRACEPOINT(trace_sched_switch, "to %p vold=%g vnew=%g", thread*, float, float);
 TRACEPOINT(trace_sched_wait, "");
 TRACEPOINT(trace_sched_wait_ret, "");
@@ -313,6 +315,11 @@ void cpu::reschedule_from_interrupt()
     n->cputime_estimator_set(now, n->_total_cpu_time);
     assert(n->_detached_state->st.load() == thread::status::queued);
     trace_sched_switch(n, p->_runtime.get_local(), n->_runtime.get_local());
+    if (n == idle_thread) {
+        trace_sched_idle();
+    } else if (p == idle_thread) {
+        trace_sched_idle_ret();
+    }
     n->_detached_state->st.store(thread::status::running);
     n->_runtime.hysteresis_run_start();
 

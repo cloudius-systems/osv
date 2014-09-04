@@ -175,9 +175,21 @@ class TimedConventionMatcher(TimedTraceMatcher):
             return (sample.thread.ptr, ended)
         return (sample.thread.ptr, sample.name)
 
+class PerCpuConventionMatcher(TimedTraceMatcher):
+    def __init__(self):
+        self.m = TimedConventionMatcher()
+        self.get_name_of_ended_func = self.m.get_name_of_ended_func
+        self.is_entry_or_exit = self.m.is_entry_or_exit
+
+    def get_correlation_id(self, sample):
+        ended = self.get_name_of_ended_func(sample.name)
+        if ended:
+            return (sample.cpu, ended)
+        return (sample.cpu, sample.name)
+
 class timed_trace_producer(object):
     pair_matchers = [
-        PairTimedTraceMatcher('mutex_lock_wait', 'mutex_lock_wake')
+        PairTimedTraceMatcher('mutex_lock_wait', 'mutex_lock_wake'),
     ]
 
     def __init__(self):
@@ -185,6 +197,9 @@ class timed_trace_producer(object):
         for m in self.pair_matchers:
             self.matcher_by_name[m.entry_trace_name] = m
             self.matcher_by_name[m.exit_trace_name] = m
+
+        self.matcher_by_name['sched_idle'] = \
+            self.matcher_by_name['sched_idle_ret'] = PerCpuConventionMatcher()
 
         self.convention_matcher = TimedConventionMatcher()
         self.open_samples = {}
