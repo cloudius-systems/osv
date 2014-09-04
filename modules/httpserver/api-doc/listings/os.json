@@ -156,6 +156,20 @@
                     "deprecated": "false"
                 }
 	    ]
+	    },
+        {
+            "path": "/os/reboot",
+            "operations": [
+                {
+                    "method": "POST",
+                    "summary": "Reboots the system",
+                    "responseClass": "",
+                    "nickname": "os_reboot",
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+	    ]
 	},
 	{
 	    "path": "/os/dmesg",

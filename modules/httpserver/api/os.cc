@@ -13,6 +13,7 @@
 #include <sys/sysinfo.h>
 #include <time.h>
 #include <osv/shutdown.hh>
+#include <osv/power.hh>
 #include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <api/unistd.h>
@@ -80,6 +81,11 @@ void init(routes& routes)
 
     os_shutdown.set_handler([](const_req req) {
         osv::shutdown();
+        return "";
+    });
+
+    os_reboot.set_handler([](const_req req) {
+        osv::reboot();
         return "";
     });
 
