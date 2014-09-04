@@ -1,6 +1,7 @@
 import sys
 from operator import attrgetter
 from osv import trace, tree, debug
+from collections import defaultdict
 import itertools
 import re
 
@@ -262,6 +263,42 @@ def get_duration_profile(traces, filter=None):
         t = timed.trace
         if (not filter or filter(t)) and t.backtrace:
             yield ProfSample(t.time, t.cpu, t.thread, t.backtrace, resident_time=timed.duration)
+
+def get_idle_profile(traces):
+    producer = timed_trace_producer()
+
+    class CpuState:
+        def __init__(self):
+            self.idle = None
+            self.waits = {}
+
+    cpus = defaultdict(CpuState)
+
+    def trim_samples(cpu, end_time):
+        if cpu.idle:
+            for w in cpu.waits.values():
+                begin = max(w.time, cpu.idle.time)
+                yield ProfSample(begin, w.cpu, w.thread, w.backtrace, resident_time=end_time - begin)
+
+    for t in traces:
+        cpu = cpus[t.cpu]
+
+        if t.name == 'sched_idle':
+            cpu.idle = t
+        elif t.name == 'sched_idle_ret':
+            for s in trim_samples(cpu, t.time):
+                yield s
+            cpu.idle = None
+        elif t.name == 'sched_wait':
+            cpu.waits[t.thread.ptr] = t
+        elif t.name == 'sched_wait_ret':
+            old = cpu.waits.pop(t.thread.ptr, None)
+
+        last = t
+
+    for cpu in cpus.values():
+        for s in trim_samples(cpu, t.time):
+            yield s
 
 def collapse_similar(node):
     while node.has_only_one_child():

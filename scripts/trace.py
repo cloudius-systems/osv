@@ -285,6 +285,9 @@ def prof_lock(args):
         return prof.get_duration_profile(traces, sample_name_is("mutex_lock_wait"))
     show_profile(args, get_profile)
 
+def prof_idle(args):
+    show_profile(args, prof.get_idle_profile)
+
 def needs_dpkt():
     global dpkt
     try:
@@ -616,6 +619,12 @@ if __name__ == "__main__":
     add_trace_source_options(cmd_prof_lock)
     add_profile_options(cmd_prof_lock)
     cmd_prof_lock.set_defaults(func=prof_lock, paginate=True)
+
+    cmd_prof_idle = subparsers.add_parser("prof-idle")
+    add_symbol_resolution_options(cmd_prof_idle)
+    add_trace_source_options(cmd_prof_idle)
+    add_profile_options(cmd_prof_idle)
+    cmd_prof_idle.set_defaults(func=prof_idle, paginate=True)
 
     cmd_prof_hit = subparsers.add_parser("prof", help="show trace hit profile", description="""
         Prints profile showing number of times given tracepoint was reached.
