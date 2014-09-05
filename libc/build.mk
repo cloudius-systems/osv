@@ -1,6 +1,12 @@
 libc :=
 musl =
 
+ifeq ($(arch),x64)
+musl_arch = x86_64
+else
+musl_arch = notsup
+endif
+
 libc += internal/_chk_fail.o
 libc += internal/floatscan.o
 libc += internal/intscan.o
@@ -702,3 +708,10 @@ libc += eventfd.o
 libc += timerfd.o
 libc += shm.o
 libc += inotify.o
+
+ifneq ($(musl_arch), notsup)
+musl += fenv/fegetexceptflag.o
+musl += fenv/feholdexcept.o
+musl += fenv/fesetexceptflag.o
+musl += fenv/$(musl_arch)/fenv.o
+endif
