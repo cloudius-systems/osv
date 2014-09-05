@@ -16,6 +16,8 @@
 #include <syscall.h>
 #include <stdarg.h>
 #include <time.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
 
 #include <unordered_map>
 
@@ -94,6 +96,18 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         return fn(arg1, arg2);              \
         } while (0)
 
+#define SYSCALL2x(fn, fn2, __t1, __t2)      \
+        case (__NR_##fn): do {              \
+        va_list args;                       \
+        __t1 arg1;                          \
+        __t2 arg2;                          \
+        va_start(args, number);             \
+        arg1 = va_arg(args, __t1);          \
+        arg2 = va_arg(args, __t2);          \
+        va_end(args);                       \
+        return fn2(arg1, arg2);             \
+        } while (0)
+
 #define SYSCALL3(fn, __t1, __t2, __t3)          \
         case (__NR_##fn): do {                  \
         va_list args;                           \
@@ -138,6 +152,9 @@ long syscall(long number, ...)
     SYSCALL2(clock_getres, clockid_t, struct timespec *);
     SYSCALL6(futex, int *, int, int, const struct timespec *, int *, int);
     SYSCALL1(close, int);
+    SYSCALL2(pipe2, int *, int);
+    SYSCALL1(epoll_create1, int);
+    SYSCALL2x(eventfd2, eventfd, unsigned int, int);
     }
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
