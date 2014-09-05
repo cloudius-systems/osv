@@ -41,6 +41,23 @@
                     "deprecated": "false"
                 }
             ]
+        },
+        {
+            "path": "/fs/df/",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Return all file systems",
+                    "type": "array",
+				    "items": {
+				        "$ref": "DFStat"
+				    },
+                    "nickname" : "list_df_stats",
+                    "produces": [
+                        "application/json"
+                    ]
+                }
+            ]
         }
     ],
     "models" : {

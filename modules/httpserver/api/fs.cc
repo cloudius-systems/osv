@@ -23,6 +23,15 @@ using namespace std;
 using namespace json;
 using namespace fs_json;
 
+static void fill_dfstat(DFStat& dfstat, const osv::mount_desc& mount, const struct statfs& st) {
+    dfstat.filesystem = mount.special;
+    dfstat.mount = mount.path;
+    dfstat.btotal = st.f_blocks;
+    dfstat.bfree = st.f_bfree;
+    dfstat.ftotal = st.f_files;
+    dfstat.ffree = st.f_ffree;
+}
+
 void init(routes& routes) {
 
     fs_json_init_path();
@@ -41,13 +50,7 @@ void init(routes& routes) {
                 if (statfs(mount.path.c_str(),&st) != 0) {
                     throw not_found_exception("mount does not exist");
                 }
-                dfstat.filesystem = mount.special;
-                dfstat.mount = mount.path;
-                dfstat.btotal = st.f_blocks;
-                dfstat.bfree = st.f_bfree;
-                dfstat.ftotal = st.f_files;
-                dfstat.ffree = st.f_ffree;
-
+                fill_dfstat(dfstat, mount, st);
                 dfstats.push_back(dfstat);
             }
         };
@@ -59,6 +62,23 @@ void init(routes& routes) {
 
         return formatter::to_json(dfstats);
     });
+
+    list_df_stats.set_handler([](const_req req)
+        {
+            struct statfs st;
+            httpserver::json::DFStat dfstat;
+            vector<httpserver::json::DFStat> res;
+
+            for (osv::mount_desc mount : osv::current_mounts()) {
+                if (mount.type == "zfs") {
+                    if (statfs(mount.path.c_str(),&st) == 0) {
+                        fill_dfstat(dfstat, mount, st);
+                        res.push_back(dfstat);
+                    }
+                }
+            }
+            return res;
+        });
 
 }
 
