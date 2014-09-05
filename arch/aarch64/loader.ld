@@ -17,7 +17,7 @@ SECTIONS
 	 * We can't export the ELF header base as a symbol, because ld
 	 * insists on moving stuff around if we do.
 	 */
-    . = OSV_KERNEL_BASE + 0x10000 + 1000;
+    . = OSV_KERNEL_BASE + 0x10000 + 0x1000;
 
     .dynamic : ALIGN(16) { *(.dynamic) } : dynamic : text
 
