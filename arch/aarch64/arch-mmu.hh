@@ -20,6 +20,7 @@ namespace mmu {
 constexpr int max_phys_addr_size = 48;
 constexpr int device_range_start = 0x8000000;
 constexpr int device_range_stop = 0x10000000;
+extern u64 mem_addr; /* set by the dtb_setup constructor */
 
 template<int N>
 class pt_element : public pt_element_common<N> {

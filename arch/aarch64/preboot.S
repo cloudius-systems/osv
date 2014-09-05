@@ -13,6 +13,7 @@ target = . + 0x10000
 
 .globl prestart
 prestart: // x4 = 0x40080000 set by qemu bootloader
+        mov     x5, x0     /* save device tree blob addr */
         adr     x4, cmdline_addr
         adr     x3, target /* elf header start */
 

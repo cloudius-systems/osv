@@ -58,6 +58,7 @@ void flush_tlb_local() {
 }
 
 static pt_element<4> page_table_root[2] __attribute__((init_priority((int)init_prio::pt_root)));
+u64 mem_addr;
 
 void switch_to_runtime_page_tables()
 {

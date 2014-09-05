@@ -18,18 +18,7 @@
 #include <osv/commands.hh>
 
 #include "arch-mmu.hh"
-
-extern elf::Elf64_Ehdr* elf_header;
-extern size_t elf_size;
-extern void* elf_start;
-extern boot_time_chart boot_time;
-
-char *cmdline;
-
-void parse_cmdline(char* cmdline)
-{
-    osv::parse_cmdline(cmdline);
-}
+#include "arch-dtb.hh"
 
 void setup_temporary_phys_map()
 {
@@ -47,17 +36,11 @@ void arch_setup_free_memory()
 {
     setup_temporary_phys_map();
 
-    register u64 edata;
-    asm ("adrp %0, .edata" : "=r"(edata));
+    /* import from loader.cc */
+    extern size_t elf_size;
+    extern void *elf_start;
 
-    elf_start = reinterpret_cast<void*>(elf_header);
-    elf_size = (u64)edata - (u64)elf_start;
-
-    mmu::phys addr = (mmu::phys)elf_start + elf_size + 0x200000;
-    addr = addr & ~0x1fffffull;
-
-    /* set in stone for now, 512MB */
-    memory::phys_mem_size = 0x20000000;
+    mmu::phys addr = (mmu::phys)elf_start + elf_size;
     mmu::free_initial_memory_range(addr, memory::phys_mem_size);
 
     /* linear_map [TTBR1] */
@@ -66,8 +49,9 @@ void arch_setup_free_memory()
         mmu::linear_map(base + addr, addr, memory::phys_mem_size);
     }
 
-    /* linear_map [TTBR0 - ELF] */
-    mmu::linear_map((void*)0x40000000, (mmu::phys)0x40000000, addr - 0x40000000);
+    /* linear_map [TTBR0 - boot, DTB and ELF] */
+    mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
+                    addr - mmu::mem_addr);
     /* linear_map [TTBR0 - UART] */
     mmu::linear_map((void *)0x9000000, (mmu::phys)0x9000000, 0x1000);
     /* linear_map [TTBR0 - GIC DIST] */
@@ -76,8 +60,6 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)0x8010000, (mmu::phys)0x8010000, 0x10000);
 
     mmu::switch_to_runtime_page_tables();
-
-    parse_cmdline(cmdline);
 }
 
 void arch_setup_tls(void *tls, void *start, size_t size)

@@ -59,12 +59,7 @@ asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".asciz \"scripts/loader.py\" \n"
     ".popsection \n");
 
-#ifdef AARCH64_PORT_STUB
-#define ALIGN_ELF_HEADER_ADDR 4096
-#else
-#define ALIGN_ELF_HEADER_ADDR 8
-#endif
-elf::Elf64_Ehdr* elf_header __attribute__ ((aligned(ALIGN_ELF_HEADER_ADDR)));
+elf::Elf64_Ehdr* elf_header __attribute__ ((aligned(8)));
 
 size_t elf_size;
 void* elf_start;

@@ -10,7 +10,7 @@
 .globl start_elf
 start_elf:
         /* elf program start address */
-        /* input: x3 = elf header address x4 = command line addr */
+        /* input: x3=elf header x4=cmdline x5=dtb */
         adrp    x0, exception_vectors
         msr     vbar_el1, x0
         isb
@@ -20,10 +20,12 @@ start_elf:
         bl      zero_bss    // initialize bss contents to 0
         bl      init_boot_cpu
 
-        adrp    x1, elf_header           // requires page alignment
-        str     x3, [x1]                 // store elf header address
-        adrp    x1, cmdline              // no align requirements
-        str     x4, [x1, #:lo12:cmdline] // store cmdline (arch-setup.cc)
+        adrp    x1, elf_header              // store elf header address
+        str     x3, [x1, #:lo12:elf_header]
+        adrp    x1, cmdline                 // store cmdline (arch-setup.cc)
+        str     x4, [x1, #:lo12:cmdline]
+        adrp    x1, dtb                     // store dtb (arch-setup.cc)
+        str     x5, [x1, #:lo12:dtb]
 
         mov     x29, xzr
         mov     x30, xzr

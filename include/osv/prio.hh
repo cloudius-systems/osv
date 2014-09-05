@@ -9,7 +9,8 @@
 #define  PRIO_HH_
 
 enum class init_prio : int {
-    console = 101,
+    dtb = 101,
+    console,
     sort,
     cpus,
     fpranges,
