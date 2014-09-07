@@ -441,6 +441,15 @@ int pthread_rwlock_tryrdlock(pthread_rwlock_t *rw)
     return from_libc(rw)->try_rlock();
 }
 
+int pthread_rwlockattr_destroy(pthread_rwlockattr_t *attr)
+{
+	return 0;
+}
+int pthread_rwlockattr_init(pthread_rwlockattr_t *attr)
+{
+	return 0;
+}
+
 int pthread_rwlock_unlock(pthread_rwlock_t *rw)
 {
     auto l = from_libc(rw);
