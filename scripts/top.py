@@ -53,7 +53,11 @@ while True:
     idles = dict()
     for thread in result['list']:
         id = thread['id']
-        cpu[id] = thread['cpu']
+        if thread['cpu'] == 0xffffffff:
+            # This thread was never run on any CPU
+            cpu[id] = '-'
+        else:
+            cpu[id] = "%d" % thread['cpu']
         cpums = thread['cpu_ms']
         if timems:
             diff[id] = cpums - prevtime[id]
@@ -78,6 +82,6 @@ while True:
     print("%5s %3s  %s %7s %s" % ("ID", "CPU", "%CPU", "TIME", "NAME"))
     for id in sorted(diff, key=lambda x : (diff[x], prevtime[x]), reverse=True)[:20]:
         percent = 100.0*diff[id]/(newtimems - timems)
-        print("%5d %3d %5.1f %7.2f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, name[id]))
+        print("%5d %3s %5.1f %7.2f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, name[id]))
     timems = newtimems
     time.sleep(max(0, period - (time.time() - start_refresh)))
