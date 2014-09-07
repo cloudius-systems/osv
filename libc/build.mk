@@ -712,6 +712,7 @@ libc += eventfd.o
 libc += timerfd.o
 libc += shm.o
 libc += inotify.o
+libc += open64_2.o
 
 ifneq ($(musl_arch), notsup)
 musl += fenv/fegetexceptflag.o
