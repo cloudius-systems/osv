@@ -286,6 +286,10 @@
                     "type": "long",
                     "description": "Total CPU time used by the thread (in milliseconds)"
                 },
+                "switches" : {
+                     "type": "long",
+                     "description": "Number of times this thread was context-switched in"
+                },
                 "priority": { "type": "float" },
                 "stack_size": { "type": "long" },
                 "status": {
