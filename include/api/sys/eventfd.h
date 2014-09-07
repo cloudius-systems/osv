@@ -15,6 +15,7 @@ typedef uint64_t eventfd_t;
 #define EFD_NONBLOCK O_NONBLOCK
 
 int eventfd(unsigned int, int);
+int eventfd2(unsigned int, int);
 int eventfd_read(int, eventfd_t *);
 int eventfd_write(int, eventfd_t);
 
