@@ -19,7 +19,7 @@ def stty_save():
     stty_params = stty_params.strip()
 
 def stty_restore():
-    if (stty_params):
+    if stty_params:
         subprocess.call(["stty", stty_params], stderr=devnull)
 
 def cleanups():
@@ -38,10 +38,10 @@ def set_imgargs(options):
     execute = options.execute
     if options.image and not execute:
         return
-    if (not execute):
+    if not execute:
         with open("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
             execute = cmdline.read()
-    if (options.verbose):
+    if options.verbose:
         execute = "--verbose " + execute
 
     if options.jvm_debug or options.jvm_suspend:
@@ -84,7 +84,7 @@ def is_direct_io_supported(path):
 
 def start_osv_qemu(options):
 
-    if (options.unsafe_cache):
+    if options.unsafe_cache:
         cache = 'unsafe'
     else:
         cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
@@ -95,21 +95,21 @@ def start_osv_qemu(options):
         "-m", options.memsize,
         "-smp", options.vcpus]
 
-    if (options.graphics):
+    if options.graphics:
         args += [
         "-display", "sdl"]
 
-    if (options.sata):
+    if options.sata:
         args += [
         "-machine", "q35",
         "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
         "-device", "ide-hd,drive=hd0,id=idehd0,bus=ide.0"]
-    elif (options.scsi):
+    elif options.scsi:
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
         "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
         "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0,bootindex=0"]
-    elif (options.ide):
+    elif options.ide:
         args += [
         "-hda", options.image_file]
     else:
@@ -117,13 +117,13 @@ def start_osv_qemu(options):
         "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
         "-drive", "file=%s,if=none,id=hd0,aio=native,cache=%s" % (options.image_file, cache)]
 
-    if (options.no_shutdown):
+    if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
 
-    if (options.wait):
+    if options.wait:
         args += ["-S"]
 
-    if (options.vmxnet3):
+    if options.vmxnet3:
         net_device_options = ['vmxnet3']
     else:
         net_device_options = ['virtio-net-pci']
@@ -131,8 +131,8 @@ def start_osv_qemu(options):
     if options.mac:
         net_device_options.append('mac=%s' % options.mac)
 
-    if (options.networking):
-        if (options.vhost):
+    if options.networking:
+        if options.vhost:
             args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
         else:
             args += ["-netdev", "bridge,id=hn0,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (options.bridge)]
@@ -152,10 +152,10 @@ def start_osv_qemu(options):
 
     if options.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
-    elif (options.hypervisor == "none") or (options.hypervisor == "qemu"):
+    elif options.hypervisor == "none" or options.hypervisor == "qemu":
         pass
 
-    if (options.detach):
+    if options.detach:
         args += ["-daemonize"]
     else:
         signal_option = ('off', 'on')[options.with_signals]
@@ -374,7 +374,7 @@ def main(options):
     set_imgargs(options)
     start_osv(options)
 
-if (__name__ == "__main__"):
+if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-d", "--debug", action="store_true",
@@ -446,7 +446,7 @@ if (__name__ == "__main__"):
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
 
-    if (cmdargs.hypervisor == "auto"):
+    if cmdargs.hypervisor == "auto":
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
     # Call main
     main(cmdargs)
