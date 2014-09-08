@@ -43,7 +43,7 @@ SECRET_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
 MAX_OBJECT_LIFE_TIME_HRS = 6
 DRY_RUN = False
 
-class BotoObject:
+class BotoObject(object):
     def __init__(self, boto_object):
         self.boto_object = boto_object
 
