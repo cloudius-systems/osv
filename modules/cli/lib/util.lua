@@ -27,10 +27,10 @@ function table_format(tt)
   for i = 1, #tt do
     local p = {}
     for j = 1, #tt[i] do
-      local pad = -(tlength[j] + 1)
+      local pad = (tlength[j] + 1)
       table.insert(p, string.format("%-" .. (pad) .. "s", tt[i][j], tlength[j]))
     end
-    table.insert(ret, table.concat(p, " "))
+    table.insert(ret, table.concat(p))
   end
 
   return table.concat(ret, "\n")
