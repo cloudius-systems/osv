@@ -366,6 +366,13 @@ inline void xrstor(const fpu_state* s, u64 mask)
     asm volatile("xrstorq %[fpu]" : : [fpu]"m"(*s), "a"(a), "d"(d));
 }
 
+inline void init_fpu()
+{
+    asm volatile ("fninit" ::: "memory");
+    unsigned int csr = 0x1f80;
+    asm volatile ("ldmxcsr %0" : : "m" (csr));
+}
+
 inline void lfence()
 {
     asm volatile("lfence");

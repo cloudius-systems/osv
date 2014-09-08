@@ -134,6 +134,9 @@ void thread_main_c(thread* t)
 #ifdef CONF_preempt
     preempt_enable();
 #endif
+    // make sure thread starts with clean fpu state instead of
+    // inheriting one from a previous running thread
+    processor::init_fpu();
     t->main();
     t->complete();
 }
