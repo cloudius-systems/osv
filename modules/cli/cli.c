@@ -81,88 +81,111 @@ int main (int argc, char* argv[]) {
     }
   }
 
-  /* This holds all the state for our line editor */
-  EditLine *el;
-
-  /* This holds the info for our history */
-  History *cli_history;
-
-  /* Temp variables */
-  int keepreading = 1;
-  HistEvent ev;
-
-  /* editline */
-  int el_count = 0;
-  char *el_line;
-
-  /* Initialize the EditLine state to use our prompt function and
-  emacs style editing. */
-  el = el_init(argv[0], stdin, stdout, stderr);
-  el_set(el, EL_PROMPT, &prompt);
-  el_set(el, EL_SIGNAL, 1);
-  el_set(el, EL_EDITOR, "emacs");
-
-  /* Initialize the history */
-  cli_history = history_init();
-  if (cli_history == 0) {
-    fprintf(stderr, "history could not be initialized\n");
-  }
-
-  /* Set the size of the history */
-  history(cli_history, &ev, H_SETSIZE, 800);
-
-  /* This sets up the call back functions for history functionality */
-  el_set(el, EL_HIST, history, cli_history);
-
   /* Lua state */
   L = luaL_newstate_cli();
 
-  while (keepreading) {
-    /* el_count is the number of characters read.
-       line is a const char* of our command line with the tailing \n */
-    el_line = (char *) el_gets(el, &el_count);
+  if (optind < argc) {
+    /* If we have more arguments, the user is running a single command */
+    if (L != NULL) {
+      lua_getglobal(L, "cli_command_single");
+      lua_createtable(L, argc, 0);
 
-    /* If lua failed to load previously, retry */
-    if (L == NULL) {
-      luaL_renew_cli(&L);
-    }
-
-    /* with zero input (^D), reset the lua state */
-    if (L != NULL && el_count == 0) {
-      luaL_renew_cli(&L);
-    } else if (L != NULL && el_count > 0) {
-      /* Remove tailing \n */
-      el_line[strlen(el_line)-1] = '\0';
-
-      /* Add commands to history. Don't add empty lines */
-      if (strlen(el_line) > 0) {
-        history(cli_history, &ev, H_ENTER, el_line);
+      for (int i=1; i<argc; i++) {
+        lua_pushinteger(L, i);
+        lua_pushstring(L, argv[i]);
+        lua_settable(L, -3);
       }
 
-      /* Typing reset is a special case which, like ^D,
-         will reset the lua state */
-      if (strcmp(el_line, "reset") == 0) {
-        luaL_renew_cli(&L);
-      } else {
-        /* Pass the line, as is, to cli() */
-        lua_getglobal(L, "cli");
-        lua_pushstring(L, el_line);
+      lua_pushinteger(L, optind - 1);
+      int error = lua_pcall(L, 2, 0, 0);
+      if (error) {
+        fprintf(stderr, "%s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
+      }
+    }
+  } else {
+    /* Start a shell */
 
-        int error = lua_pcall(L, 1, 0, 0);
-        if (error) {
-          fprintf(stderr, "%s\n", lua_tostring(L, -1));
-          lua_pop(L, 1);
+    /* This holds all the state for our line editor */
+    EditLine *el;
+
+    /* This holds the info for our history */
+    History *cli_history;
+
+    /* Temp variables */
+    int keepreading = 1;
+    HistEvent ev;
+
+    /* editline */
+    int el_count = 0;
+    char *el_line;
+
+    /* Initialize the EditLine state to use our prompt function and
+    emacs style editing. */
+    el = el_init(argv[0], stdin, stdout, stderr);
+    el_set(el, EL_PROMPT, &prompt);
+    el_set(el, EL_SIGNAL, 1);
+    el_set(el, EL_EDITOR, "emacs");
+
+    /* Initialize the history */
+    cli_history = history_init();
+    if (cli_history == 0) {
+      fprintf(stderr, "history could not be initialized\n");
+    }
+
+    /* Set the size of the history */
+    history(cli_history, &ev, H_SETSIZE, 800);
+
+    /* This sets up the call back functions for history functionality */
+    el_set(el, EL_HIST, history, cli_history);
+
+    while (keepreading) {
+      /* el_count is the number of characters read.
+         line is a const char* of our command line with the tailing \n */
+      el_line = (char *) el_gets(el, &el_count);
+
+      /* If lua failed to load previously, retry */
+      if (L == NULL) {
+        luaL_renew_cli(&L);
+      }
+
+      /* with zero input (^D), reset the lua state */
+      if (L != NULL && el_count == 0) {
+        luaL_renew_cli(&L);
+      } else if (L != NULL && el_count > 0) {
+        /* Remove tailing \n */
+        el_line[strlen(el_line)-1] = '\0';
+
+        /* Add commands to history. Don't add empty lines */
+        if (strlen(el_line) > 0) {
+          history(cli_history, &ev, H_ENTER, el_line);
+        }
+
+        /* Typing reset is a special case which, like ^D,
+           will reset the lua state */
+        if (strcmp(el_line, "reset") == 0) {
+          luaL_renew_cli(&L);
+        } else {
+          /* Pass the line, as is, to cli() */
+          lua_getglobal(L, "cli");
+          lua_pushstring(L, el_line);
+
+          int error = lua_pcall(L, 1, 0, 0);
+          if (error) {
+            fprintf(stderr, "%s\n", lua_tostring(L, -1));
+            lua_pop(L, 1);
+          }
         }
       }
     }
+
+    history_end(cli_history);
+    el_end(el);
   }
 
   if (L != NULL) {
     lua_close(L);
   }
-
-  history_end(cli_history);
-  el_end(el);
 
   return 0;
 }

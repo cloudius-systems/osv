@@ -56,3 +56,13 @@ function cli(line)
     end
   end
 end
+
+function cli_command_single(args, optind)
+  local t = {}
+  for i = optind, #args do
+    if args[i] ~= '--' then
+      table.insert(t, args[i])
+    end
+  end
+  cli(table.concat(t, " "))
+end
