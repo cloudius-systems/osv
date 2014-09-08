@@ -36,11 +36,11 @@ import os
 import time
 import calendar
 
-ACCESS_KEY=os.environ['AWS_ACCESS_KEY_ID']
-SECRET_KEY=os.environ['AWS_SECRET_ACCESS_KEY']
+ACCESS_KEY = os.environ['AWS_ACCESS_KEY_ID']
+SECRET_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
 
-MAX_OBJECT_LIFE_TIME_HRS=6
-DRY_RUN=False
+MAX_OBJECT_LIFE_TIME_HRS = 6
+DRY_RUN = False
 
 class BotoObject:
     def __init__(self, boto_object):
@@ -56,8 +56,8 @@ class BotoObject:
         return 'permanent' in self.boto_object.tags
 
     def time_since_amazon_time(self, amazon_time):
-        now_utc=time.gmtime(time.time())
-        start_utc=time.strptime(amazon_time[:19],'%Y-%m-%dT%H:%M:%S')
+        now_utc = time.gmtime(time.time())
+        start_utc = time.strptime(amazon_time[:19], '%Y-%m-%dT%H:%M:%S')
         return float(calendar.timegm(now_utc) - calendar.timegm(start_utc))
 
     def get_tag(self, tag_name):
@@ -174,7 +174,7 @@ class Instance(BotoObject):
         if not DRY_RUN:
             self.boto_instance.stop()
 
-def process_instance( instance ):
+def process_instance(instance):
     if instance.boto_instance.state == 'running':
         print "Running instance found: %s (%s)" % (instance.boto_instance.id, instance.name())
         print "Run time: %d hour(s)" % (instance.life_time() / 3600)
@@ -182,27 +182,27 @@ def process_instance( instance ):
             print "Stopping instance %s" % instance.boto_instance.id
             instance.stop()
 
-def process_image( image ):
+def process_image(image):
     if not image.permanent():
         print "Deregistering AMI %s (%s)" % (image.boto_image.id, image.name())
         image.deregister()
 
-def process_volume( volume ):
+def process_volume(volume):
     if volume.old_and_unused():
         print "Deleting volume %s (%s)" % (volume.boto_volume.id, volume.name())
         volume.delete()
 
-def process_snapshot( snapshot ):
+def process_snapshot(snapshot):
     if snapshot.old_and_unused():
         print "Deleting snapshot %s (%s)" % (snapshot.boto_snapshot.id, snapshot.name())
         snapshot.delete()
 
-def process_bucket( bucket ):
+def process_bucket(bucket):
     if bucket.too_old():
         print "Deleting bucket %s" % (bucket.name())
         bucket.delete()
 
-def process_region( region ):
+def process_region(region):
     print "Processing region %s" % region.name
 
     ec2 = region.connect()
@@ -244,7 +244,7 @@ for region in regions:
         print "\nFailed to process region %s\n" % region.name
 
 from boto.s3.connection import OrdinaryCallingFormat
-s3  = boto.connect_s3(ACCESS_KEY, SECRET_KEY, calling_format=OrdinaryCallingFormat())
+s3 = boto.connect_s3(ACCESS_KEY, SECRET_KEY, calling_format=OrdinaryCallingFormat())
 
 print "\nScanning buckets...\n"
 
