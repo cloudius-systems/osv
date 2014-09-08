@@ -29,7 +29,6 @@ parser = argparse.ArgumentParser(description="""
     the list of threads getting most CPU time, similarly to the Linux top(1)
     command.""")
 Client.add_arguments(parser)
-parser.add_argument('-s','--switches', help='show context-switch information', action="store_true")
 
 args = parser.parse_args()
 client = Client(args)
@@ -40,7 +39,6 @@ ssl_kwargs = client.get_request_kwargs()
 period = 2.0  # How many seconds between refreshes
 
 prevtime = collections.defaultdict(int)
-prevswitches = collections.defaultdict(int)
 cpu = dict()
 name = dict()
 timems = 0
@@ -53,7 +51,6 @@ while True:
     print("%d threads " % (len(result['list'])), end='')
     diff = dict()
     idles = dict()
-    switches_diff = dict()
     for thread in result['list']:
         id = thread['id']
         if thread['cpu'] == 0xffffffff:
@@ -62,12 +59,9 @@ while True:
         else:
             cpu[id] = "%d" % thread['cpu']
         cpums = thread['cpu_ms']
-        switches = thread['switches']
         if timems:
             diff[id] = cpums - prevtime[id]
-            switches_diff[id] = switches - prevswitches[id]
         prevtime[id] = cpums
-        prevswitches[id] = switches
         name[id] = thread['name']
         # Display per-cpu idle threads differently from normal threads
         if thread['name'].startswith('idle') and timems:
@@ -85,21 +79,9 @@ while True:
             print(" (total %3.0f%%)" % total)
     print("")
 
-    if args.switches:
-        print("%5s %3s %5s %7s %6s %8s %5s %s" % ("ID", "CPU", "%CPU", "TIME", "sw", "sw/s", "us/sw", "NAME"))
-    else:
-        print("%5s %3s %5s %7s %s" % ("ID", "CPU", "%CPU", "TIME", "NAME"))
-
+    print("%5s %3s  %s %7s %s" % ("ID", "CPU", "%CPU", "TIME", "NAME"))
     for id in sorted(diff, key=lambda x : (diff[x], prevtime[x]), reverse=True)[:20]:
         percent = 100.0*diff[id]/(newtimems - timems)
-        if args.switches:
-            switches_rate = switches_diff[id]*1000.0/(newtimems - timems)
-            if diff[id]:
-                us_per_switch = diff[id]*1000/switches_diff[id]
-            else:
-                us_per_switch = 0
-            print("%5d %3s %5.1f %7.2f %6d %8.1f %5d %s" % (id, cpu[id], percent, prevtime[id]/1000.0, prevswitches[id], switches_rate, us_per_switch, name[id]))
-        else:
-            print("%5d %3s %5.1f %7.2f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, name[id]))
+        print("%5d %3s %5.1f %7.2f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, name[id]))
     timems = newtimems
     time.sleep(max(0, period - (time.time() - start_refresh)))
