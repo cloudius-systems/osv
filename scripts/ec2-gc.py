@@ -29,12 +29,13 @@
 #    Script configuration:
 #      AWS credentials passed via environment
 #      variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
-
-import boto
-import boto.ec2
 import os
 import time
 import calendar
+
+import boto
+import boto.ec2
+from boto.s3.connection import OrdinaryCallingFormat
 
 ACCESS_KEY = os.environ['AWS_ACCESS_KEY_ID']
 SECRET_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
@@ -235,20 +236,20 @@ def process_region(region):
     for snapshot in snapshots:
         process_snapshot(Snapshot(snapshot))
 
-conn = boto.connect_ec2(ACCESS_KEY, SECRET_KEY)
-regions = boto.ec2.regions()
+if __name__ == '__main__':
+    conn = boto.connect_ec2(ACCESS_KEY, SECRET_KEY)
+    regions = boto.ec2.regions()
 
-for region in regions:
-    try:
-        process_region(region)
-    except:
-        print '\nFailed to process region %s\n' % region.name
+    for region in regions:
+        try:
+            process_region(region)
+        except:
+            print '\nFailed to process region %s\n' % region.name
 
-from boto.s3.connection import OrdinaryCallingFormat
-s3 = boto.connect_s3(ACCESS_KEY, SECRET_KEY, calling_format=OrdinaryCallingFormat())
+    s3 = boto.connect_s3(ACCESS_KEY, SECRET_KEY, calling_format=OrdinaryCallingFormat())
 
-print '\nScanning buckets...\n'
+    print '\nScanning buckets...\n'
 
-buckets = s3.get_all_buckets()
-for bucket in buckets:
-    process_bucket(Bucket(bucket))
+    buckets = s3.get_all_buckets()
+    for bucket in buckets:
+        process_bucket(Bucket(bucket))
