@@ -24,7 +24,7 @@
 #      instances instead of deleting.
 #    AMIs:
 #      Since AWS doesn't track AMI creation date script deletes all AMIs
-#      that do not have "permanent" tag.
+#      that do not have 'permanent' tag.
 #
 #    Script configuration:
 #      AWS credentials passed via environment
@@ -50,7 +50,7 @@ class BotoObject:
         if 'Name' in self.boto_object.tags:
             return self.boto_object.tags['Name']
         else:
-            return "unnamed"
+            return 'unnamed'
 
     def permanent(self):
         return 'permanent' in self.boto_object.tags
@@ -93,7 +93,7 @@ class Snapshot(BotoObject):
             try:
                 self.boto_snapshot.delete()
             except:
-                print "The snapshot is in use."
+                print 'The snapshot is in use.'
 
     def old_and_unused(self):
         if self.boto_snapshot.status != 'completed':
@@ -176,59 +176,60 @@ class Instance(BotoObject):
 
 def process_instance(instance):
     if instance.boto_instance.state == 'running':
-        print "Running instance found: %s (%s)" % (instance.boto_instance.id, instance.name())
-        print "Run time: %d hour(s)" % (instance.life_time() / 3600)
+        print 'Running instance found: %s (%s)' % (
+            instance.boto_instance.id, instance.name())
+        print 'Run time: %d hour(s)' % (instance.life_time() / 3600)
         if instance.runs_for_too_long():
-            print "Stopping instance %s" % instance.boto_instance.id
+            print 'Stopping instance %s' % instance.boto_instance.id
             instance.stop()
 
 def process_image(image):
     if not image.permanent():
-        print "Deregistering AMI %s (%s)" % (image.boto_image.id, image.name())
+        print 'Deregistering AMI %s (%s)' % (image.boto_image.id, image.name())
         image.deregister()
 
 def process_volume(volume):
     if volume.old_and_unused():
-        print "Deleting volume %s (%s)" % (volume.boto_volume.id, volume.name())
+        print 'Deleting volume %s (%s)' % (volume.boto_volume.id, volume.name())
         volume.delete()
 
 def process_snapshot(snapshot):
     if snapshot.old_and_unused():
-        print "Deleting snapshot %s (%s)" % (snapshot.boto_snapshot.id, snapshot.name())
+        print 'Deleting snapshot %s (%s)' % (snapshot.boto_snapshot.id, snapshot.name())
         snapshot.delete()
 
 def process_bucket(bucket):
     if bucket.too_old():
-        print "Deleting bucket %s" % (bucket.name())
+        print 'Deleting bucket %s' % (bucket.name())
         bucket.delete()
 
 def process_region(region):
-    print "Processing region %s" % region.name
+    print 'Processing region %s' % region.name
 
     ec2 = region.connect()
 
-    print "Scanning instances...\n"
+    print 'Scanning instances...\n'
 
     instances = ec2.get_only_instances()
     for inst in instances:
         inst_accessor = Instance(inst)
         process_instance(inst_accessor)
 
-    print "\nScanning images...\n"
+    print '\nScanning images...\n'
 
     images = ec2.get_all_images(None, ('self'))
     for image in images:
         image_accessor = Image(image)
         process_image(image_accessor)
 
-    print "\nScanning volumes...\n"
+    print '\nScanning volumes...\n'
 
     volumes = ec2.get_all_volumes()
     for volume in volumes:
         volume_accessor = Volume(volume)
         process_volume(volume_accessor)
 
-    print "\nScanning snapshots...\n"
+    print '\nScanning snapshots...\n'
 
     snapshots = ec2.get_all_snapshots(owner='self')
     for snapshot in snapshots:
@@ -241,12 +242,12 @@ for region in regions:
     try:
         process_region(region)
     except:
-        print "\nFailed to process region %s\n" % region.name
+        print '\nFailed to process region %s\n' % region.name
 
 from boto.s3.connection import OrdinaryCallingFormat
 s3 = boto.connect_s3(ACCESS_KEY, SECRET_KEY, calling_format=OrdinaryCallingFormat())
 
-print "\nScanning buckets...\n"
+print '\nScanning buckets...\n'
 
 buckets = s3.get_all_buckets()
 for bucket in buckets:
