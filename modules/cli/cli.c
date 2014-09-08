@@ -39,9 +39,9 @@ void cli_console_size_dirty();
 static int cli_lua_console_dim(lua_State *);
 
 static  lua_State *L;
-void      luaL_renew_cli(lua_State**);
-lua_State *luaL_newstate_cli();
-char      *prompt(EditLine*);
+lua_State *cli_luaL_newstate();
+void       cli_luaL_renewstate(lua_State**);
+char      *cli_prompt(EditLine*);
 
 /* Context */
 static char* env_osv_api;
@@ -82,7 +82,7 @@ int main (int argc, char* argv[]) {
   }
 
   /* Lua state */
-  L = luaL_newstate_cli();
+  L = cli_luaL_newstate();
 
   if (optind < argc) {
     /* If we have more arguments, the user is running a single command */
@@ -123,7 +123,7 @@ int main (int argc, char* argv[]) {
     /* Initialize the EditLine state to use our prompt function and
     emacs style editing. */
     el = el_init(argv[0], stdin, stdout, stderr);
-    el_set(el, EL_PROMPT, &prompt);
+    el_set(el, EL_PROMPT, &cli_prompt);
     el_set(el, EL_SIGNAL, 1);
     el_set(el, EL_EDITOR, "emacs");
 
@@ -146,12 +146,12 @@ int main (int argc, char* argv[]) {
 
       /* If lua failed to load previously, retry */
       if (L == NULL) {
-        luaL_renew_cli(&L);
+        cli_luaL_renewstate(&L);
       }
 
       /* with zero input (^D), reset the lua state */
       if (L != NULL && el_count == 0) {
-        luaL_renew_cli(&L);
+        cli_luaL_renewstate(&L);
       } else if (L != NULL && el_count > 0) {
         /* Remove tailing \n */
         el_line[strlen(el_line)-1] = '\0';
@@ -164,10 +164,10 @@ int main (int argc, char* argv[]) {
         /* Typing reset is a special case which, like ^D,
            will reset the lua state */
         if (strcmp(el_line, "reset") == 0) {
-          luaL_renew_cli(&L);
+          cli_luaL_renewstate(&L);
         } else {
           /* Pass the line, as is, to cli() */
-          lua_getglobal(L, "cli");
+          lua_getglobal(L, "cli_command");
           lua_pushstring(L, el_line);
 
           int error = lua_pcall(L, 1, 0, 0);
@@ -190,13 +190,13 @@ int main (int argc, char* argv[]) {
   return 0;
 }
 
-void luaL_renew_cli(lua_State **L) {
+void cli_luaL_renewstate(lua_State **L) {
   fprintf(stderr, "\nRestarting shell\n");
   if (*L != NULL) {
     lua_close(*L);
   }
 
-  *L = luaL_newstate_cli();
+  *L = cli_luaL_newstate();
 }
 
 void cli_lua_settable(lua_State *L, char *table, char *key, const char *value) {
@@ -207,7 +207,7 @@ void cli_lua_settable(lua_State *L, char *table, char *key, const char *value) {
   lua_pop(L, 1);
 }
 
-lua_State *luaL_newstate_cli() {
+lua_State *cli_luaL_newstate() {
   lua_State *L = luaL_newstate();
   luaL_openlibs(L);
 
@@ -235,7 +235,7 @@ lua_State *luaL_newstate_cli() {
   return L;
 }
 
-char *prompt(EditLine *e) {
+char *cli_prompt(EditLine *e) {
   /* Get the shell prompt from Lua */
   lua_getglobal(L, "prompt");
   int error = lua_pcall(L, 0, 1, 0);

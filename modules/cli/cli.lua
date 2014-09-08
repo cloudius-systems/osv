@@ -53,7 +53,7 @@ end
 --
 -- @param args String or table of arguments. If string, processed and splitted
 --             to arguments.
-function cli(args)
+function cli_command(args)
   local command = ""
   local arguments = args
 
@@ -85,5 +85,5 @@ function cli_command_single(args, optind)
       table.insert(t, args[i])
     end
   end
-  cli(t)
+  cli_command(t)
 end
