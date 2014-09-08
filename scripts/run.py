@@ -8,7 +8,7 @@ import tempfile
 import errno
 import re
 
-stty_params=None
+stty_params = None
 
 devnull = open('/dev/null', 'w')
 
@@ -39,7 +39,7 @@ def set_imgargs(options):
     if options.image and not execute:
         return
     if (not execute):
-        with open ("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
+        with open("build/%s/cmdline" % (options.opt_path), "r") as cmdline:
             execute = cmdline.read()
     if (options.verbose):
         execute = "--verbose " + execute
@@ -178,12 +178,12 @@ def start_osv_qemu(options):
         if options.dry_run:
             print(format_args(cmdline))
         else:
-            subprocess.call(cmdline, env = qemu_env)
+            subprocess.call(cmdline, env=qemu_env)
     except OSError as e:
         if e.errno == errno.ENOENT:
-          print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
+            print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
         else:
-          print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
+            print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
                 format(e.errno, e.strerror, " ".join(args)))
     finally:
         cleanups()
@@ -198,7 +198,7 @@ def start_osv_xen(options):
             "boot='c'",
         ]
     else:
-        args = [ "kernel='%s/build/%s/loader.elf'" % (os.getcwd(), options.opt_path) ]
+        args = ["kernel='%s/build/%s/loader.elf'" % (os.getcwd(), options.opt_path)]
 
     try:
         memory = int(options.memsize)
@@ -223,10 +223,10 @@ def start_osv_xen(options):
         raise Exception('Invalid vnc option format: \"' + options.vnc + "\"")
 
     if vncoptions.group("vncaddr"):
-        args += [ "vnclisten=%s" % (vncoptions.group("vncaddr")) ]
+        args += ["vnclisten=%s" % (vncoptions.group("vncaddr"))]
 
     if vncoptions.group("vncdisplay"):
-        args += [ "vncdisplay=%s" % (vncoptions.group("vncdisplay")) ]
+        args += ["vncdisplay=%s" % (vncoptions.group("vncdisplay"))]
 
     args += [
         "memory=%d" % (memory),
@@ -240,12 +240,12 @@ def start_osv_xen(options):
     ]
 
     if options.networking:
-        args += [ "vif=['bridge=%s']" % (options.bridge)]
+        args += ["vif=['bridge=%s']" % (options.bridge)]
 
     # Using xm would allow us to get away with creating the file, but it comes
     # with its set of problems as well. Stick to xl.
     xenfile = tempfile.NamedTemporaryFile(mode="w")
-    xenfile.writelines( "%s\n" % item for item in args )
+    xenfile.writelines("%s\n" % item for item in args)
     xenfile.flush()
 
     try:
@@ -255,10 +255,10 @@ def start_osv_xen(options):
         #create a loop device backed by image file
         subprocess.call(["losetup", "/dev/loop%s" % os.getpid(), options.image_file])
         # Launch qemu
-        cmdline = ["xl", "create" ]
+        cmdline = ["xl", "create"]
         if not options.detach:
-            cmdline += [ "-c" ]
-        cmdline += [ xenfile.name ]
+            cmdline += ["-c"]
+        cmdline += [xenfile.name]
         if options.dry_run:
             print(format_args(cmdline))
         else:
@@ -322,7 +322,7 @@ def start_osv_vmware(options):
     ]
 
     vmxfile = open("build/%s/osv.vmx" % options.opt_path, "w")
-    vmxfile.writelines( "%s\n" % item for item in args )
+    vmxfile.writelines("%s\n" % item for item in args)
     vmxfile.flush()
 
     try:
@@ -417,22 +417,22 @@ if (__name__ == "__main__"):
                         help="Enable graphics mode.")
     parser.add_argument("-V", "--verbose", action="store_true",
                         help="pass --verbose to OSv, to display more debugging information on the console")
-    parser.add_argument("--forward", metavar = "RULE", action = "append", default = [],
-                        help = "add network forwarding RULE (QEMU syntax)")
+    parser.add_argument("--forward", metavar="RULE", action="append", default=[],
+                        help="add network forwarding RULE (QEMU syntax)")
     parser.add_argument("--dry-run", action="store_true",
-                        help = "do not run, just print the command line")
+                        help="do not run, just print the command line")
     parser.add_argument("--jvm-debug", action="store_true",
-                        help = "start JVM with a debugger server")
+                        help="start JVM with a debugger server")
     parser.add_argument("--jvm-suspend", action="store_true",
-                        help = "start JVM with a suspended debugger server")
+                        help="start JVM with a suspended debugger server")
     parser.add_argument("--mac", action="store",
-                        help = "set MAC address for NIC")
+                        help="set MAC address for NIC")
     parser.add_argument("--vnc", action="store", default=":1",
                         help="specify vnc port number")
-    parser.add_argument("--api", action = "store_true",
-                        help = "redirect the API port (8000) for user-mode networking")
+    parser.add_argument("--api", action="store_true",
+                        help="redirect the API port (8000) for user-mode networking")
     parser.add_argument("--pass-args", action="append",
-                        help = "pass arguments to underlying hypervisor (e.g. qemu)")
+                        help="pass arguments to underlying hypervisor (e.g. qemu)")
     parser.add_argument("--trace", default=[], action='append',
                         help="enable tracepoints")
     parser.add_argument("--trace-backtrace", action="store_true",
@@ -446,7 +446,7 @@ if (__name__ == "__main__"):
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
 
-    if(cmdargs.hypervisor == "auto"):
+    if (cmdargs.hypervisor == "auto"):
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
     # Call main
     main(cmdargs)
