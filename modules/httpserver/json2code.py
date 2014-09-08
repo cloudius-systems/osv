@@ -326,7 +326,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
             fprint(hfile, member_assignment)
             fprint(hfile, '}')
             fprint(hfile,"template<class T>")
-            fprint(hfile,model_name,"& set(const T& e) {")
+            fprint(hfile,model_name,"& operator=(const ", "T& e) {")
             fprint(hfile,member_assignment)
             fprint(hfile,"  return *this;")
             fprint(hfile,"}")

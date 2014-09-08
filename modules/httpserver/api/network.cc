@@ -35,9 +35,9 @@ static Interface get_interface(const string& name, ifnet* ifp, long time)
     if (!set_interface_info(ifp, cur_data, intf)) {
         throw server_error_exception("Failed getting interface information");
     }
-    ifc.set(intf);
+    ifc = intf;
     f.config = ifc;
-    ifd.set(cur_data);
+    ifd = cur_data;
     f.data = ifd;
     f.time = time;
     return f;
@@ -79,7 +79,7 @@ void init(routes& routes)
         vector<Route> res;
         osv::foreach_route([&res](const osv::route_info& route) {
             res.push_back(Route());
-            res.back().set(route);
+            res.back() = route;
             return true;
         });
         return res;

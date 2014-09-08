@@ -83,7 +83,19 @@ public:
         set = true;
         return *this;
     }
-
+    /**
+     * the assignment operator also set
+     * the set value to true.
+     * @param new_value the new value
+     * @return the value itself
+     */
+    template<class C>
+    json_element &operator=(const C& new_value)
+    {
+        value = new_value;
+        set = true;
+        return *this;
+    }
     /**
      * The brackets operator
      * @return the value
