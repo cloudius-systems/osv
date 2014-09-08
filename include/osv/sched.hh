@@ -572,14 +572,6 @@ private:
     std::atomic<bool> _interrupted;
     std::function<void ()> _cleanup;
     std::vector<std::unique_ptr<char[]>> _tls;
-    thread_runtime::duration _total_cpu_time {0};
-    std::atomic<u64> _cputime_estimator {0}; // for thread_clock()
-    inline void cputime_estimator_set(
-            osv::clock::uptime::time_point running_since,
-            osv::clock::uptime::duration total_cpu_time);
-    inline void cputime_estimator_get(
-            osv::clock::uptime::time_point &running_since,
-            osv::clock::uptime::duration &total_cpu_time);
     void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
@@ -596,7 +588,6 @@ private:
     friend void init(std::function<void ()> cont);
 public:
     std::atomic<thread *> _joiner;
-    thread_runtime::duration thread_clock();
     bi::set_member_hook<> _runqueue_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
@@ -620,6 +611,19 @@ private:
     friend class thread_handle;
     static reaper* _s_reaper;
     friend void init_detached_threads_reaper();
+
+    // Some per-thread statistics
+public:
+    thread_runtime::duration thread_clock();
+private:
+    thread_runtime::duration _total_cpu_time {0};
+    std::atomic<u64> _cputime_estimator {0}; // for thread_clock()
+    inline void cputime_estimator_set(
+            osv::clock::uptime::time_point running_since,
+            osv::clock::uptime::duration total_cpu_time);
+    inline void cputime_estimator_get(
+            osv::clock::uptime::time_point &running_since,
+            osv::clock::uptime::duration &total_cpu_time);
 };
 
 class thread_handle {
