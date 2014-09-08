@@ -204,6 +204,7 @@ int eventfd(unsigned int initval, int flags)
         return libc_error(error);
     }
 }
+weak_alias(eventfd, eventfd2);
 
 int eventfd_read(int fd, eventfd_t *value)
 {
