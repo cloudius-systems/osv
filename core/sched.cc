@@ -320,6 +320,7 @@ void cpu::reschedule_from_interrupt()
     } else if (p == idle_thread) {
         trace_sched_idle_ret();
     }
+    n->stat_switches.incr();
     n->_detached_state->st.store(thread::status::running);
     n->_runtime.hysteresis_run_start();
 

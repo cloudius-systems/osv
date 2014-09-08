@@ -615,6 +615,22 @@ private:
     // Some per-thread statistics
 public:
     thread_runtime::duration thread_clock();
+    // a stat_counter is a per-thread statistics counter which can have
+    // multiple readers, but only a single concurrent writer (the
+    // scheduler on the CPU running this thread).
+    class stat_counter {
+    public:
+        inline u64 get() { return _counter.load(std::memory_order_relaxed); }
+    private:
+        std::atomic<u64> _counter {0};
+        inline void incr(u64 delta = 1) {
+            // When single writer, we can avoid the slow atomic fetch_add:
+            _counter.store(_counter.load(std::memory_order_relaxed) + delta,
+                    std::memory_order_relaxed);
+        }
+        friend class cpu;
+    };
+    stat_counter stat_switches;
 private:
     thread_runtime::duration _total_cpu_time {0};
     std::atomic<u64> _cputime_estimator {0}; // for thread_clock()
