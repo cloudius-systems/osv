@@ -7,6 +7,9 @@ require('data_dumper')
 cwd = require('cwd')
 context = require('context')
 
+-- Local modules
+local lpeg = require('lpeg')
+
 local function command_filename(name)
   return string.format('%s/%s.lua', context.commands_path, name)
 end
@@ -26,28 +29,46 @@ local function print_lua_error(cmd, msg)
   end
 end
 
+--- Splits a string command line to arguments
+--
+-- @param line String to be splitted
+-- @return List of arguments as a table
+local cla_singlequoted_arg = lpeg.P("'") * lpeg.Cs(((1 - lpeg.S("'\\")) + (lpeg.P("\\'") / "'")) ^ 0) * "'"
+local cla_doublequoted_arg = lpeg.P('"') * lpeg.Cs(((1 - lpeg.S('"\\')) + (lpeg.P('\\"') / '"')) ^ 0) * '"'
+local cla_free_arg         = lpeg.C((1 - lpeg.S(' \t'))^0)
+local cla_arg              = cla_singlequoted_arg + cla_doublequoted_arg + cla_free_arg
+local cla_complete         = lpeg.Ct(cla_arg * (lpeg.S(' \t')^1 * cla_arg)^0)
+local function command_line_argv(line)
+  local s = string.gsub(line, '\\\\', '\\')
+  return lpeg.match(cla_complete, s)
+end
+
 --- Returns the prompt
 function prompt()
   return (cwd.get() .. '# ')
 end
 
---- Processes a line as a command
-function cli(line)
-  local command = trim(line)
-  local arguments = ""
+--- Processes a command
+-- Executes a command in a protected call (pcall).
+--
+-- @param args String or table of arguments. If string, processed and splitted
+--             to arguments.
+function cli(args)
+  local command = ""
+  local arguments = args
 
-  if command:len() > 0 then
-    local s, e = command:find(" ")
+  if type(args) == "string" then
+    arguments = command_line_argv(args)
+  end
 
-    if s then
-      arguments = trim(command:sub(s))
-      command = trim(command:sub(0, s))
-    end
+  if #arguments > 0 then
+    command = arguments[1]
+    table.remove(arguments, 1)
 
     filename = command_filename(command)
     if file_exists(filename) then
       local cmd = dofile(filename)
-      local status, err = pcall(function() cmd.main(split(arguments)) end)
+      local status, err = pcall(function() cmd.main(arguments) end)
       if not status then
         print_lua_error(command, err)
       end
@@ -64,5 +85,5 @@ function cli_command_single(args, optind)
       table.insert(t, args[i])
     end
   end
-  cli(table.concat(t, " "))
+  cli(t)
 end
