@@ -37,9 +37,6 @@ import boto
 import boto.ec2
 from boto.s3.connection import OrdinaryCallingFormat
 
-ACCESS_KEY = os.environ['AWS_ACCESS_KEY_ID']
-SECRET_KEY = os.environ['AWS_SECRET_ACCESS_KEY']
-
 MAX_OBJECT_LIFE_TIME_HRS = 6
 DRY_RUN = False
 
@@ -237,7 +234,10 @@ def process_region(region):
         process_snapshot(Snapshot(snapshot))
 
 if __name__ == '__main__':
-    conn = boto.connect_ec2(ACCESS_KEY, SECRET_KEY)
+    access_key = os.environ['AWS_ACCESS_KEY_ID']
+    secret_key = os.environ['AWS_SECRET_ACCESS_KEY']
+
+    conn = boto.connect_ec2(access_key, secret_key)
     regions = boto.ec2.regions()
 
     for region in regions:
@@ -246,7 +246,7 @@ if __name__ == '__main__':
         except:
             print '\nFailed to process region %s\n' % region.name
 
-    s3 = boto.connect_s3(ACCESS_KEY, SECRET_KEY, calling_format=OrdinaryCallingFormat())
+    s3 = boto.connect_s3(access_key, secret_key, calling_format=OrdinaryCallingFormat())
 
     print '\nScanning buckets...\n'
 
