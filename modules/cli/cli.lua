@@ -42,6 +42,13 @@ local function command_line_argv(line)
   return lpeg.match(cla_complete, s)
 end
 
+--- Overrides OptParse:parse()
+-- Used when parsing will be done in cli_command()
+-- to avoid it being parsed twice
+local function optparse_parse(self)
+  return self.unrecognised, self.opts
+end
+
 --- Returns the prompt
 function prompt()
   return (cwd.get() .. '# ')
@@ -67,9 +74,25 @@ function cli_command(args)
     filename = command_filename(command)
     if file_exists(filename) then
       local cmd = dofile(filename)
-      local status, err = pcall(function() cmd.main(arguments) end)
-      if not status then
-        print_lua_error(command, err)
+      local cmd_run = true
+
+      -- Override --help implementation (by default it uses os.exit())
+      if cmd.parser then
+        cmd.parser:on({"--help"}, function(self, arglist, i, value)
+          cmd_run = false
+          io.stderr:write(self.helptext .. '\n')
+          return i + 1
+        end)
+
+        local args, opts = cmd.parser:parse(arguments)
+        cmd.parser.parse = optparse_parse
+      end
+
+      if cmd_run then
+        local status, err = pcall(function() cmd.main(arguments) end)
+        if not status then
+          print_lua_error(command, err)
+        end
       end
     else
       print_cmd_err(command, "command not found")
