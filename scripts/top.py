@@ -31,6 +31,8 @@ parser = argparse.ArgumentParser(description="""
 Client.add_arguments(parser)
 parser.add_argument('-s','--switches', help='show context-switch information', action="store_true")
 parser.add_argument('-l','--lines', help='number of top threads to show', type=int, default=20)
+parser.add_argument('-i','--idle', help='show idle threads as normal threads', action="store_true")
+parser.add_argument('-p','--period', help='refresh period (in seconds)', type=float, default=2.0)
 
 args = parser.parse_args()
 client = Client(args)
@@ -38,14 +40,98 @@ client = Client(args)
 url = client.get_url() + "/os/threads"
 ssl_kwargs = client.get_request_kwargs()
 
-period = 2.0  # How many seconds between refreshes
+# Definition of all possible columns that top.py supports - and how to
+# calculate them. We'll later pick which columns we really want to show.
+columns = [
+  {
+    'name': 'ID',
+    'width': 5,
+    'source': 'id',
+  },
+  {
+    'name': 'CPU',
+    'width': 3,
+    'source': 'cpu',
+  },
+  {
+    'name': '%CPU',
+    'width': 5,
+    'format': '%5.1f',
+    'source': 'cpu_ms',
+    'rate': True,
+    'multiplier': 0.1,
+  },
+  {
+    'name': 'TIME',
+    'width': 7,
+    'format': '%7.2f',
+    'source': 'cpu_ms',
+    'multiplier': 0.001,
+  },
+  {
+    'name': 'NAME',
+    'source': 'name',
+  },
+  {
+    'name': 'sw',
+    'width': '7',
+    'source': 'switches',
+  },
+  {
+    'name': 'sw/s',
+    'width': '7',
+    'format': '%7.1f',
+    'source': 'switches',
+    'rate': True,
+  },
+  {
+    'name': 'us/sw',
+    'width': '5',
+    'format': '%5.0f',
+    'source': 'cpu_ms',
+    'multiplier': 1000.0,
+    'rateby': 'switches'
+  },
+  {
+    'name': 'preempt',
+    'width': '7',
+    'source': 'preemptions',
+  },
+  {
+    'name': 'pre/s',
+    'width': '7',
+    'format': '%7.1f',
+    'source': 'preemptions',
+    'rate': True,
+  },
+  {
+    'name': 'mig',
+    'width': '6',
+    'source': 'migrations',
+  },
+  {
+    'name': 'mig/s',
+    'width': '5',
+    'format': '%5.1f',
+    'source': 'migrations',
+    'rate': True,
+  },
+]
 
-prevtime = collections.defaultdict(int)
-prevswitches = collections.defaultdict(int)
-prevpreemptions = collections.defaultdict(int)
-prevmigrations = collections.defaultdict(int)
-cpu = dict()
-name = dict()
+# Choose, according to command line parameters, which columns we really
+# want to show. In the future we can easily extend this to make the choice
+# more flexible.
+cols = ['ID', 'CPU', '%CPU', 'TIME']
+if args.switches:
+    cols += ['sw', 'sw/s', 'us/sw', 'preempt', 'pre/s', 'mig', 'mig/s']
+cols += ['NAME']
+
+
+# Extract from "columns" only the columns requested by "cols", in that order
+requested_columns = [next(col for col in columns if col['name'] == name) for name in cols]
+
+prev = dict();
+previdles = dict();
 timems = 0
 while True:
     start_refresh = time.time()
@@ -54,65 +140,76 @@ while True:
     newtimems = result['time_ms']
 
     print("%d threads " % (len(result['list'])), end='')
-    diff = dict()
+
+    cur = collections.defaultdict(dict);
     idles = dict()
-    switches_diff = dict()
-    preemptions_diff = dict()
-    migrations_diff = dict()
+
     for thread in result['list']:
         id = thread['id']
-        if thread['cpu'] == 0xffffffff:
+        for col in requested_columns:
+            cur[id][col['source']] = thread[col['source']]
+
+        # Some silly fixes
+        if cur[id]['cpu'] == 0xffffffff:
             # This thread was never run on any CPU
-            cpu[id] = '-'
-        else:
-            cpu[id] = "%d" % thread['cpu']
-        cpums = thread['cpu_ms']
-        switches = thread['switches']
-        preemptions = thread['preemptions']
-        migrations = thread['migrations']
-        if timems:
-            diff[id] = cpums - prevtime[id]
-            switches_diff[id] = switches - prevswitches[id]
-            preemptions_diff[id] = preemptions - prevpreemptions[id]
-            migrations_diff[id] = migrations - prevmigrations[id]
-        prevtime[id] = cpums
-        prevswitches[id] = switches
-        prevpreemptions[id] = preemptions
-        prevmigrations[id] = migrations
-        name[id] = thread['name']
-        # Display per-cpu idle threads differently from normal threads
-        if thread['name'].startswith('idle') and timems:
-            idles[thread['name']] = diff[id]
-            del diff[id]
+            cur[id]['cpu'] = '-'
+
+        # If -i (--idle) option is not given, remove idle threads from the
+        # normal list, and instead display just idle percentage:
+        if not args.idle and thread['name'].startswith('idle'):
+            idles[thread['name']] = cur[id]['cpu_ms']
+            del cur[id]
 
     if idles:
-        print("on %d CPUs; idle: " % (len(idles)), end='')
-        total = 0.0
-        for n in sorted(idles):
-            percent = 100.0*idles[n]/(newtimems - timems)
-            total += percent
-            print ("%3.0f%% "%percent, end='')
-        if len(idles) > 1:
-            print(" (total %3.0f%%)" % total, end='')
-    print("")
+        if timems:
+            print("on %d CPUs; idle: " % (len(idles)), end='')
+            total = 0.0
+            for n in sorted(idles):
+                percent = 100.0*(idles[n]-previdles[n])/(newtimems - timems)
+                total += percent
+                print ("%3.0f%% "%percent, end='')
+            if len(idles) > 1:
+                print(" (total %3.0f%%)" % total, end='')
+        previdles = idles
+    print()
 
-    if args.switches:
-        print("%5s %3s %5s %7s %7s %7s %5s %7s %7s %6s %5s %s" % ("ID", "CPU", "%CPU", "TIME", "sw", "sw/s", "us/sw", "preempt", "pre/s", "mig", "mig/s", "NAME"))
-    else:
-        print("%5s %3s %5s %7s %s" % ("ID", "CPU", "%CPU", "TIME", "NAME"))
-
-    for id in sorted(diff, key=lambda x : (diff[x], prevtime[x]), reverse=True)[:args.lines]:
-        percent = 100.0*diff[id]/(newtimems - timems)
-        if args.switches:
-            switches_rate = switches_diff[id]*1000.0/(newtimems - timems)
-            preemptions_rate = preemptions_diff[id]*1000.0/(newtimems - timems)
-            migrations_rate = migrations_diff[id]*1000.0/(newtimems - timems)
-            if diff[id]:
-                us_per_switch = diff[id]*1000/switches_diff[id]
-            else:
-                us_per_switch = 0
-            print("%5d %3s %5.1f %7.2f %7d %7.1f %5d %7d %7.1f %6d %5.1f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, prevswitches[id], switches_rate, us_per_switch, prevpreemptions[id], preemptions_rate, prevmigrations[id], migrations_rate, name[id]))
+    # Print title line
+    for col in requested_columns:
+        if 'width' in col:
+            print(("%"+str(col['width'])+"s ") % col['name'], end='')
         else:
-            print("%5d %3s %5.1f %7.2f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, name[id]))
+            print(col['name']+" ", end='')
+    print()
+
+    if timems:
+        # We now have for all threads the current and previous measurements,
+        # so can can sort the threads and calculate the data to display
+        for id in sorted(cur, key=lambda x : (cur[x]['cpu_ms']-prev[x].get('cpu_ms',0), prev[x].get('cpu_ms',0)), reverse=True)[:args.lines]:
+            if not 'cpu_ms' in prev[id]:
+                # A new thread.
+                continue
+            for col in requested_columns:
+                val = cur[id][col['source']]
+                if 'rate' in col and col['rate']:
+                    val -= prev[id][col['source']]
+                    val /= (newtimems - timems) / 1000.0
+                elif 'rateby' in col:
+                    val -= prev[id][col['source']]
+                    if val:
+                        val /= cur[id][col['rateby']] - prev[id][col['rateby']]
+
+                if 'multiplier' in col:
+                    val *= col['multiplier']
+
+                if 'format' in col:
+                    format = col['format']+" "
+                elif 'width' in col:
+                    format = "%" + str(col['width']) + "s "
+                else:
+                    format = "%s "
+                print(format % val, end='')
+            print()
+
     timems = newtimems
-    time.sleep(max(0, period - (time.time() - start_refresh)))
+    prev = cur
+    time.sleep(max(0, args.period - (time.time() - start_refresh)))
