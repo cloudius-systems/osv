@@ -388,6 +388,30 @@ inline bool rdrand(u64* dest)
     return ok;
 }
 
+inline uint32_t stmxcsr()
+{
+    uint32_t addr;
+    asm volatile ("stmxcsr %0" : "=m" (addr));
+    return addr;
+}
+
+inline void ldmxcsr(uint32_t addr)
+{
+    asm volatile ("ldmxcsr %0" : : "m" (addr));
+}
+
+inline uint16_t fnstcw()
+{
+    uint16_t addr;
+    asm volatile ("fnstcw %0" : "=m" (addr));
+    return addr;
+}
+
+inline void fldcw(uint16_t addr)
+{
+    asm volatile ("fldcw %0" : : "m" (addr));
+}
+
 struct task_state_segment {
     u32 reserved0;
     u64 rsp[3];

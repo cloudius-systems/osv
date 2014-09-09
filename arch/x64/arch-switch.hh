@@ -55,6 +55,8 @@ void thread::switch_to()
     old->_state.exception_stack = c->arch.get_exception_stack();
     c->arch.set_interrupt_stack(&_arch);
     c->arch.set_exception_stack(_state.exception_stack);
+    auto fpucw = processor::fnstcw();
+    auto mxcsr = processor::stmxcsr();
     asm volatile
         ("mov %%rbp, %c[rbp](%0) \n\t"
          "movq $1f, %c[rip](%0) \n\t"
@@ -70,6 +72,8 @@ void thread::switch_to()
            [rip]"i"(offsetof(thread_state, rip))
          : "rbx", "rdx", "rsi", "rdi", "r8", "r9",
            "r10", "r11", "r12", "r13", "r14", "r15", "memory");
+    processor::fldcw(fpucw);
+    processor::ldmxcsr(mxcsr);
 }
 
 void thread::switch_to_first()
