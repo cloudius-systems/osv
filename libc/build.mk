@@ -594,6 +594,7 @@ libc += string/stpncpy.o
 musl += string/strcasecmp.o
 musl += string/strcasestr.o
 libc += string/strcat.o
+libc += string/__strcat_chk.o
 libc += string/strchr.o
 libc += string/strchrnul.o
 libc += string/strcmp.o
@@ -713,6 +714,8 @@ libc += timerfd.o
 libc += shm.o
 libc += inotify.o
 libc += open64_2.o
+libc += __pread64_chk.o
+libc += __read_chk.o
 
 ifneq ($(musl_arch), notsup)
 musl += fenv/fegetexceptflag.o
