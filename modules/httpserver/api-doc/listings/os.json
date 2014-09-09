@@ -308,6 +308,10 @@
                      "type": "long",
                      "description": "Number of times this thread was migrated between CPUs"
                 },
+                "preemptions" : {
+                     "type": "long",
+                     "description": "Number of times this thread was preempted (still runnable, but switched out)"
+                },
                 "priority": { "type": "float" },
                 "stack_size": { "type": "long" },
                 "status": {
