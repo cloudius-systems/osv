@@ -83,7 +83,7 @@ while True:
             total += percent
             print ("%3.0f%% "%percent, end='')
         if len(idles) > 1:
-            print(" (total %3.0f%%)" % total)
+            print(" (total %3.0f%%)" % total, end='')
     print("")
 
     if args.switches:
