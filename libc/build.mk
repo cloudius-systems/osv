@@ -724,3 +724,11 @@ musl += fenv/feholdexcept.o
 musl += fenv/fesetexceptflag.o
 musl += fenv/$(musl_arch)/fenv.o
 endif
+
+musl += crypt/crypt_blowfish.o
+musl += crypt/crypt.o
+musl += crypt/crypt_des.o
+musl += crypt/crypt_md5.o
+musl += crypt/crypt_r.o
+musl += crypt/crypt_sha256.o
+musl += crypt/crypt_sha512.o
