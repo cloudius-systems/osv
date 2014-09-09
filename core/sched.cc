@@ -507,6 +507,7 @@ void cpu::load_balance()
             mig._runtime.export_runtime();
             mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
             mig.remote_thread_local_var(current_cpu) = min;
+            mig.stat_migrations.incr();
             min->incoming_wakeups[id].push_back(mig);
             min->incoming_wakeups_mask.set(id);
             // FIXME: avoid if the cpu is alive and if the priority does not

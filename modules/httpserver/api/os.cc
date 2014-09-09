@@ -119,6 +119,7 @@ void init(routes& routes)
             thread.cpu = tcpu ? tcpu->id : -1;
             thread.cpu_ms = duration_cast<milliseconds>(t.thread_clock()).count();
             thread.switches = t.stat_switches.get();
+            thread.migrations = t.stat_migrations.get();
             thread.name = t.name();
             threads.list.push(thread);
         });

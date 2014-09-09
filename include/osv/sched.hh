@@ -631,6 +631,7 @@ public:
         friend class cpu;
     };
     stat_counter stat_switches;
+    stat_counter stat_migrations;
 private:
     thread_runtime::duration _total_cpu_time {0};
     std::atomic<u64> _cputime_estimator {0}; // for thread_clock()

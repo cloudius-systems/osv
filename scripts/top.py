@@ -42,6 +42,7 @@ period = 2.0  # How many seconds between refreshes
 
 prevtime = collections.defaultdict(int)
 prevswitches = collections.defaultdict(int)
+prevmigrations = collections.defaultdict(int)
 cpu = dict()
 name = dict()
 timems = 0
@@ -55,6 +56,7 @@ while True:
     diff = dict()
     idles = dict()
     switches_diff = dict()
+    migrations_diff = dict()
     for thread in result['list']:
         id = thread['id']
         if thread['cpu'] == 0xffffffff:
@@ -64,11 +66,14 @@ while True:
             cpu[id] = "%d" % thread['cpu']
         cpums = thread['cpu_ms']
         switches = thread['switches']
+        migrations = thread['migrations']
         if timems:
             diff[id] = cpums - prevtime[id]
             switches_diff[id] = switches - prevswitches[id]
+            migrations_diff[id] = migrations - prevmigrations[id]
         prevtime[id] = cpums
         prevswitches[id] = switches
+        prevmigrations[id] = migrations
         name[id] = thread['name']
         # Display per-cpu idle threads differently from normal threads
         if thread['name'].startswith('idle') and timems:
@@ -87,7 +92,7 @@ while True:
     print("")
 
     if args.switches:
-        print("%5s %3s %5s %7s %6s %8s %5s %s" % ("ID", "CPU", "%CPU", "TIME", "sw", "sw/s", "us/sw", "NAME"))
+        print("%5s %3s %5s %7s %7s %7s %5s %6s %5s %s" % ("ID", "CPU", "%CPU", "TIME", "sw", "sw/s", "us/sw", "mig", "mig/s", "NAME"))
     else:
         print("%5s %3s %5s %7s %s" % ("ID", "CPU", "%CPU", "TIME", "NAME"))
 
@@ -95,11 +100,12 @@ while True:
         percent = 100.0*diff[id]/(newtimems - timems)
         if args.switches:
             switches_rate = switches_diff[id]*1000.0/(newtimems - timems)
+            migrations_rate = migrations_diff[id]*1000.0/(newtimems - timems)
             if diff[id]:
                 us_per_switch = diff[id]*1000/switches_diff[id]
             else:
                 us_per_switch = 0
-            print("%5d %3s %5.1f %7.2f %6d %8.1f %5d %s" % (id, cpu[id], percent, prevtime[id]/1000.0, prevswitches[id], switches_rate, us_per_switch, name[id]))
+            print("%5d %3s %5.1f %7.2f %7d %7.1f %5d %6d %5.1f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, prevswitches[id], switches_rate, us_per_switch, prevmigrations[id], migrations_rate, name[id]))
         else:
             print("%5d %3s %5.1f %7.2f %s" % (id, cpu[id], percent, prevtime[id]/1000.0, name[id]))
     timems = newtimems

@@ -304,6 +304,10 @@
                      "type": "long",
                      "description": "Number of times this thread was context-switched in"
                 },
+                "migrations" : {
+                     "type": "long",
+                     "description": "Number of times this thread was migrated between CPUs"
+                },
                 "priority": { "type": "float" },
                 "stack_size": { "type": "long" },
                 "status": {
