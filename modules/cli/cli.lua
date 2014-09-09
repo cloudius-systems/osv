@@ -1,6 +1,5 @@
 require('util')
 require('osv_api')
-require('alt_getopt')
 require('data_dumper')
 
 -- Global modules

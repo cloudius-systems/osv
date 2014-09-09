@@ -1,11 +1,5 @@
+local OptionParser = require('std.optparse')
 local json = require("json")
-
-local sh_opts = "hrm:"
-local long_opts = {
-  method = "m",
-  help = "h",
-  raw = "r"
-}
 
 local function main_usage(schema)
   print("Available commands:")
@@ -81,38 +75,36 @@ local function find_api(resource, arguments)
   return nil
 end
 
---[[
-Synopsis:
-
-osv [OPTIONS] <api> <action-word [action-word, ...]> [parameter=value, ...]
-]]--
-
 local cmd = {}
 
+cmd.parser = OptionParser [[
+osv
+
+Usage: osv [OPTION]... API ACTION-WORD [ACTION-WORD]... [PARAMETER=value]...
+
+Execute arbitrary OSv API operations according to the defined schema.
+
+Options:
+
+  -m, --method=[METHOD]  The method to use (Default: GET)
+  -r, --raw              Do not process the response
+  -h, --help             Show this help
+]]
+
 cmd.main = function(args)
+  local args, opts = cmd.parser:parse(args)
+
   -- Local variables
-  local do_help = false
-  local do_raw = false
-  local selected_method = "GET"
+  local do_raw = opts.raw
+  local selected_method = opts.method and opts.method or "GET"
 
   -- Load the schema
   local schema = osv_schema()
 
-  -- Scan the args
-  local optarg, optind = alt_getopt.get_opts(args, sh_opts, long_opts)
-  assert(optarg, optind)
-
-  -- Register flags
-  for k, v in pairs(optarg) do
-    if k == "h" then do_help = true end
-    if k == "m" then selected_method = v end
-    if k == "r" then do_raw = true end
-  end
-
   -- Separate arguments and parameters
   local arguments = {} -- Real arguments
   local parameters = {} -- Parameters for the request, can be multiple
-  for i = optind, #args do
+  for i = 1, #args do
     local s, e = string.find(args[i], '=')
     if s then
       local param = string.sub(args[i], 1, s-1)

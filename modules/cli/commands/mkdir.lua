@@ -1,26 +1,27 @@
-local long_opts = {
-  parents = 'p'
-}
+local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.parser = OptionParser [[
+mkdir
+
+Usage: mkdir [OPTION]... DIRECTORY...
+
+Create the DIRECTORY(ies).
+
+Options:
+
+  -p, --parents  make parent directories as needed
+]]
+
 cmd.main = function(args)
-  local do_parents = "false"
-
-  local optarg, optind = alt_getopt.get_opts(args, "p", {})
-  assert(optarg, optind)
-
-  for k, v in pairs(optarg) do
-    if k == 'p' then
-      do_parents = "true"
-    end
-  end
+  local args, opts = cmd.parser:parse(args)
 
   for i = optind, #args do
     osv_request({"file", args[i]}, "PUT", {
       op = "MKDIRS",
       permission = "0755", -- TODO: umask?
-      createParent = do_parents
+      createParent = (opts.p and "true" or "false")
     })
   end
 end

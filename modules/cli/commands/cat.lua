@@ -1,11 +1,20 @@
+local OptionParser = require('std.optparse')
+
 local cmd = {}
 
-cmd.main = function(args)
-  local optarg, optind = alt_getopt.get_opts(args, "", {})
-  assert(optarg, optind)
+cmd.parser = OptionParser [[
+cat - concatenate files and print on the standard output
 
-  for i = optind, #args do
-    local path, rpath = args[i], cwd.resolve(args[i])
+Usage: cat [FILE]...
+
+Concatenate FILE(s), or standard input, to standard output.
+]]
+
+cmd.main = function(args)
+  local args, opts = cmd.parser:parse(args)
+
+  for _, arg in ipairs(args) do
+    local path, rpath = arg, cwd.resolve(arg)
     local content, status = osv_request({"file", rpath}, "GET", {op = "GET"}, true)
     osv_resp_assert(status, 200, 404)
 

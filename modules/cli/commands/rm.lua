@@ -1,10 +1,17 @@
+local OptionParser = require('std.optparse')
+
 local cmd = {}
 
-cmd.main = function(args)
-  local optarg, optind = alt_getopt.get_opts(args, "", {})
-  assert(optarg, optind)
+cmd.parser = OptionParser [[
+rm - remove files or directories
 
-  for i = optind, #args do
+Usage: rm FILE...
+]]
+
+cmd.main = function(args)
+  local args, opts = cmd.parser:parse(args)
+
+  for i = 1, #args do
     osv_request({"file", args[i]}, "DELETE", {op = "DELETE"})
   end
 end
