@@ -716,6 +716,7 @@ libc += inotify.o
 libc += open64_2.o
 libc += __pread64_chk.o
 libc += __read_chk.o
+libc += syslog.o
 
 ifneq ($(musl_arch), notsup)
 musl += fenv/fegetexceptflag.o
