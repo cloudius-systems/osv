@@ -104,6 +104,7 @@ repmovsb(void *__restrict &dest, const void *__restrict &src, size_t &n)
 
 template <size_t N>
 __attribute__((optimize("omit-frame-pointer")))
+__attribute__((optimize("unroll-loops")))
 void* do_small_memcpy(void *dest, const void *src)
 {
     struct [[gnu::packed]] data {
@@ -113,24 +114,17 @@ void* do_small_memcpy(void *dest, const void *src)
     return dest;
 }
 
-static void* (* const small_memcpy_table[16])(void*, const void*) = {
-    do_small_memcpy<0>,
-    do_small_memcpy<1>,
-    do_small_memcpy<2>,
-    do_small_memcpy<3>,
-    do_small_memcpy<4>,
-    do_small_memcpy<5>,
-    do_small_memcpy<6>,
-    do_small_memcpy<7>,
-    do_small_memcpy<8>,
-    do_small_memcpy<9>,
-    do_small_memcpy<10>,
-    do_small_memcpy<11>,
-    do_small_memcpy<12>,
-    do_small_memcpy<13>,
-    do_small_memcpy<14>,
-    do_small_memcpy<15>,
+static constexpr int small_memcpy_lim = 64;
+
+using memcpy_fn = void *(*)(void* dest, const void* src);
+
+template <size_t Width>
+struct init_small_copier {
+    static constexpr memcpy_fn value = do_small_memcpy<Width>;
 };
+
+initialized_array<memcpy_fn, small_memcpy_lim,
+    make_index_list<small_memcpy_lim>, init_small_copier> small_memcpy_table;
 
 static inline void* small_memcpy(void *dest, const void *src, size_t n)
 {
@@ -226,7 +220,7 @@ extern "C"
 [[gnu::optimize("omit-frame-pointer")]]
 void *memcpy_repmov_old(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    if (n <= 15) {
+    if (n < small_memcpy_lim) {
         return small_memcpy(dest, src, n);
     } else if (n < 1024) {
         return sse_memcpy(dest, src, n);
@@ -246,7 +240,7 @@ extern "C"
 [[gnu::optimize("omit-frame-pointer")]]
 void *memcpy_repmov(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    if (n <= 15) {
+    if (n < small_memcpy_lim) {
         return small_memcpy(dest, src, n);
     } else if (n < 1024) {
         return sse_memcpy(dest, src, n);
@@ -261,7 +255,7 @@ extern "C"
 [[gnu::optimize("omit-frame-pointer")]]
 void *memcpy_repmov_old_ssse3(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    if (n <= 15) {
+    if (n < small_memcpy_lim) {
         return small_memcpy(dest, src, n);
     } else if (n < 1024) {
         return sse_memcpy(dest, src, n);
@@ -284,7 +278,7 @@ extern "C"
 [[gnu::optimize("omit-frame-pointer")]]
 void *memcpy_repmov_ssse3(void *__restrict dest, const void *__restrict src, size_t n)
 {
-    if (n <= 15) {
+    if (n < small_memcpy_lim) {
         return small_memcpy(dest, src, n);
     } else if (n < 1024) {
         return sse_memcpy(dest, src, n);
