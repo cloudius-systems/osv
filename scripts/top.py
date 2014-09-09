@@ -30,6 +30,7 @@ parser = argparse.ArgumentParser(description="""
     command.""")
 Client.add_arguments(parser)
 parser.add_argument('-s','--switches', help='show context-switch information', action="store_true")
+parser.add_argument('-l','--lines', help='number of top threads to show', type=int, default=20)
 
 args = parser.parse_args()
 client = Client(args)
@@ -90,7 +91,7 @@ while True:
     else:
         print("%5s %3s %5s %7s %s" % ("ID", "CPU", "%CPU", "TIME", "NAME"))
 
-    for id in sorted(diff, key=lambda x : (diff[x], prevtime[x]), reverse=True)[:20]:
+    for id in sorted(diff, key=lambda x : (diff[x], prevtime[x]), reverse=True)[:args.lines]:
         percent = 100.0*diff[id]/(newtimems - timems)
         if args.switches:
             switches_rate = switches_diff[id]*1000.0/(newtimems - timems)
