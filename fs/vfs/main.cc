@@ -199,6 +199,16 @@ int openat(int dirfd, const char *pathname, int flags, ...)
     return error;
 }
 
+// open() has an optional third argument, "mode", which is only needed in
+// some cases (when the O_CREAT mode is used). As a safety feature, recent
+// versions of Glibc add a feature where open() with two arguments is replaced
+// by a call to __open_2(), which verifies it isn't called with O_CREATE.
+extern "C" int __open_2(const char *pathname, int flags)
+{
+    assert(!(flags & O_CREAT));
+    return open(pathname, flags, 0);
+}
+
 int creat(const char *pathname, mode_t mode)
 {
     return open(pathname, O_CREAT|O_WRONLY|O_TRUNC, mode);
