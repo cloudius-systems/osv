@@ -60,6 +60,8 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)0x8010000, (mmu::phys)0x8010000, 0x10000);
 
     mmu::switch_to_runtime_page_tables();
+
+    osv::parse_cmdline(cmdline);
 }
 
 void arch_setup_tls(void *tls, void *start, size_t size)
