@@ -121,7 +121,7 @@ def upload(osv, manifest, depends):
         else:
             depends.write(u'\t%s \\\n' % (hostname,))
             hostname = strip_file(hostname)
-            perm = os.stat(hostname).st_mode & 0777
+            perm = os.stat(hostname).st_mode & 0o777
             if os.path.islink(hostname):
                 link = os.readlink(hostname)
                 cpio_send(cpio_header(name, perm | stat.S_IFLNK, len(link)))
