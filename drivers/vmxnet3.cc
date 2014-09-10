@@ -164,6 +164,9 @@ void vmxnet3::fill_stats(struct if_data* out_data) const
     out_data->ifi_opackets += _txq[0].stats.tx_packets;
     out_data->ifi_obytes   += _txq[0].stats.tx_bytes;
     out_data->ifi_oerrors  += _txq[0].stats.tx_err + _txq[0].stats.tx_drops;
+
+    out_data->ifi_iwakeup_stats = _rxq[0].stats.rx_wakeup_stats;
+    out_data->ifi_owakeup_stats = _txq[0].stats.tx_wakeup_stats;
 }
 
 void vmxnet3_txqueue::init(struct ifnet* ifn, pci::bar *bar0)
@@ -768,8 +771,15 @@ void vmxnet3_txqueue::disable_interrupt()
 
 void vmxnet3_rxqueue::receive_work()
 {
+    u64 prev_rx_packets = stats.rx_packets;
+
     while(1) {
         enable_interrupt();
+
+        if_update_wakeup_stats(stats.rx_wakeup_stats,
+                               stats.rx_packets - prev_rx_packets);
+        prev_rx_packets = stats.rx_packets;
+
         sched::thread::wait_until([&] {
             return available();
         });

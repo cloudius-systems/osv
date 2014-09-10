@@ -172,7 +172,10 @@ public:
     int try_xmit_one_locked(void* cooky);
     void xmit_one_locked(void *req);
     void wake_worker();
-    void update_wakeup_stats(const u64 wakeup_packets) {/*TODO*/}
+    void update_wakeup_stats(const u64 wakeup_packets)
+    {
+        if_update_wakeup_stats(stats.tx_wakeup_stats, wakeup_packets);
+    }
 
     struct {
         u64 tx_packets; /* if_opackets */
@@ -186,6 +189,7 @@ public:
         u64 tx_kicks;
         u64 tx_worker_wakeups;
         u64 tx_worker_packets;
+        wakeup_stats tx_wakeup_stats;
     } stats = { 0 };
     sched::thread task;
 
@@ -228,6 +232,7 @@ public:
         u64 rx_drops;   /* if_iqdrops */
         u64 rx_csum;    /* number of packets with correct csum */
         u64 rx_csum_err;/* number of packets with a bad checksum */
+        wakeup_stats rx_wakeup_stats;
     } stats = { 0 };
     sched::thread task;
 
