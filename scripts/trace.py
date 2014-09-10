@@ -493,6 +493,42 @@ def print_summary(args, printer=sys.stdout.write):
 
     print
 
+def list_cpu_load(args):
+    load_per_cpu = {}
+    max_cpu = 0
+    n_defined = 0
+
+    with get_trace_reader(args) as reader:
+        for t in reader.get_traces():
+            if t.name == "sched_load":
+                if not t.cpu in load_per_cpu:
+                    n_defined += 1
+
+                load_per_cpu[t.cpu] = t.data[0]
+                max_cpu = max(max_cpu, t.cpu)
+
+                if args.cpus:
+                    if n_defined < args.cpus:
+                        continue
+
+                    if max_cpu >= args.cpus:
+                        raise Exception('Encountered CPU with id=%d but user claimed there are %d CPUs' % (max_cpu, args.cpus))
+
+                if args.format == 'csv':
+                    sys.stdout.write(trace.format_time(t.time))
+                    for id in range(max_cpu + 1):
+                        sys.stdout.write(',');
+                        if id in load_per_cpu:
+                            sys.stdout.write('%d' % load_per_cpu[id])
+                else:
+                    sys.stdout.write('%-20s' % trace.format_time(t.time))
+                    for id in range(max_cpu + 1):
+                        if id in load_per_cpu:
+                            sys.stdout.write('%3d' % load_per_cpu[id])
+                        else:
+                            sys.stdout.write('%3s' % '')
+                sys.stdout.write('\n')
+
 def list_timed(args):
     bt_formatter = get_backtrace_formatter(args)
     time_range = get_time_range(args)
@@ -629,6 +665,13 @@ if __name__ == "__main__":
     cmd_wakeup_latency = subparsers.add_parser("wakeup-latency")
     add_trace_listing_options(cmd_wakeup_latency)
     cmd_wakeup_latency.set_defaults(func=list_wakeup_latency, paginate=True)
+
+    cmd_load = subparsers.add_parser("cpu-load")
+    cmd_load.add_argument('--format', '-f', action="store", choices=['csv', 'text'], default='text')
+    cmd_load.add_argument('--cpus', '-c', action="store", type=int,
+        help="shows data only when load is known on all CPUs. user must specify the number of CPUs.")
+    add_trace_listing_options(cmd_load)
+    cmd_load.set_defaults(func=list_cpu_load, paginate=True)
 
     cmd_list_timed = subparsers.add_parser("list-timed", help="list timed traces", description="""
         Prints block samples along with their duration in seconds with nanosecond precision. The duration
