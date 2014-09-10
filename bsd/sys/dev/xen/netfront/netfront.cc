@@ -167,6 +167,7 @@ static int  xn_assemble_tx_request(struct netfront_info *sc,
                    struct mbuf *m_head);
 static void xn_start_locked(struct ifnet *);
 static void xn_start(struct ifnet *);
+static void xn_getinfo(struct ifnet *, struct if_data *);
 static int  xn_ioctl(struct ifnet *, u_long, caddr_t);
 static void xn_ifinit_locked(struct netfront_info *);
 static void xn_ifinit(void *);
@@ -1720,6 +1721,26 @@ xn_start(struct ifnet *ifp)
     XN_TX_UNLOCK(sc);
 }
 
+static void xn_getinfo(struct ifnet *ifp, struct if_data *out_data)
+{
+    netfront_info *sc = (netfront_info *)ifp->if_softc;
+    net_device_stats *stats = &sc->stats;
+
+    // First - take the ifnet data
+    memcpy(out_data, &ifp->if_data, sizeof(*out_data));
+
+    out_data->ifi_ipackets       += stats->rx_packets;
+    out_data->ifi_ibytes         += stats->rx_bytes;
+    out_data->ifi_iqdrops        += stats->rx_dropped;
+    out_data->ifi_ierrors        += stats->rx_errors;
+    out_data->ifi_ibh_wakeups     = stats->rx_bh_wakeups;
+    out_data->ifi_iwakeup_stats   = stats->rx_wakeup_stats;
+
+    out_data->ifi_opackets       += stats->tx_packets;
+    out_data->ifi_obytes         += stats->tx_bytes;
+    out_data->ifi_oerrors        += stats->tx_errors + stats->tx_dropped;
+}
+
 /* equivalent of network_open() in Linux */
 static void
 xn_ifinit_locked(struct netfront_info *sc)
@@ -2138,6 +2159,7 @@ create_netdev(device_t dev)
         ifp->if_ioctl = xn_ioctl;
         ifp->if_output = ether_output;
         ifp->if_start = xn_start;
+        ifp->if_getinfo = xn_getinfo;
 #ifdef notyet
         ifp->if_watchdog = xn_watchdog;
 #endif
