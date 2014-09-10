@@ -27,6 +27,7 @@
 #include <osv/file.h>
 #include "dump.hh"
 #include <osv/rcu.hh>
+#include <osv/rwlock.h>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -71,9 +72,11 @@ struct vma_list_type : vma_list_base {
 __attribute__((init_priority((int)init_prio::vma_list)))
 vma_list_type vma_list;
 
-// A fairly coarse-grained mutex serializing modifications to both
-// vma_list and the page table itself.
-mutex vma_list_mutex;
+// protects vma list and page table modifications.
+// anything that may add, remove, split vma, zaps pte or changes pte permission
+// should hold the lock for write
+rwlock_t vma_list_mutex;
+
 // A mutex serializing modifications to the high part of the page table
 // (linear map, etc.) which are not part of vma_list.
 mutex page_table_high_mutex;
@@ -149,7 +152,9 @@ void allocate_intermediate_level(hw_ptep<N> ptep)
     phys pt_page = allocate_intermediate_level<N>([](int i) {
         return make_empty_pte<N>();
     });
-    ptep.write(make_intermediate_pte(ptep, pt_page));
+    if (!ptep.compare_exchange(make_empty_pte<N>(), make_intermediate_pte(ptep, pt_page))) {
+        memory::free_page(phys_to_virt(pt_page));
+    }
 }
 
 // only 4k can be cow for now
@@ -211,7 +216,7 @@ struct page_allocator {
 
 unsigned long all_vmas_size()
 {
-    SCOPE_LOCK(vma_list_mutex);
+    SCOPE_LOCK(vma_list_mutex.for_read());
     return std::accumulate(vma_list.begin(), vma_list.end(), size_t(0), [](size_t s, vma& v) { return s + v.size(); });
 }
 
@@ -892,7 +897,7 @@ private:
         if (!addr) {
             throw std::exception();
         }
-        if (!write_pte(addr, ptep, pte)) {
+        if (!write_pte(addr, ptep, make_empty_pte<N>(), pte)) {
             if (pt_level_traits<N>::large_capable::value) {
                 memory::free_huge_page(addr, pt_level_traits<N>::size::value);
             } else {
@@ -1059,7 +1064,7 @@ static void nohugepage(void* addr, size_t length)
 
 error advise(void* addr, size_t size, int advice)
 {
-    WITH_LOCK(vma_list_mutex) {
+    WITH_LOCK(vma_list_mutex.for_write()) {
         if (!ismapped(addr, size)) {
             return make_error(ENOMEM);
         }
@@ -1091,7 +1096,7 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
-    std::lock_guard<mutex> guard(vma_list_mutex);
+    SCOPE_LOCK(vma_list_mutex.for_write());
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
         populate_vma(vma, v, size);
@@ -1117,7 +1122,7 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
-    WITH_LOCK(vma_list_mutex) {
+    WITH_LOCK(vma_list_mutex.for_write()) {
         v = (void*) allocate(vma, start, size, search);
         if (flags & mmap_populate) {
             populate_vma(vma, v, std::min(size, align_up(::size(f), page_size)));
@@ -1207,7 +1212,7 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
         return;
     }
     addr = align_down(addr, mmu::page_size);
-    WITH_LOCK(vma_list_mutex) {
+    WITH_LOCK(vma_list_mutex.for_read()) {
         auto vma = vma_list.find(addr_range(addr, addr+1), vma::addr_compare());
         if (vma == vma_list.end() || access_fault(*vma, ef->get_error())) {
             vm_sigsegv(addr, ef);
@@ -1274,7 +1279,7 @@ unsigned vma::flags() const
 
 void vma::update_flags(unsigned flag)
 {
-    assert(mutex_owned(&vma_list_mutex));
+    assert(vma_list_mutex.wowned());
     _flags |= flag;
 }
 
@@ -1466,7 +1471,7 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
     auto start = reinterpret_cast<uintptr_t>(addr);
 
     vma* v;
-    WITH_LOCK(vma_list_mutex) {
+    WITH_LOCK(vma_list_mutex.for_read()) {
         u64 a = reinterpret_cast<u64>(addr);
         v = &*vma_list.find(addr_range(a, a+1), vma::addr_compare());
         // It has to be somewhere!
@@ -1483,7 +1488,7 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
 
     auto* vma = new mmu::jvm_balloon_vma(jvm_addr, start, start + size, b, v->perm(), v->flags());
 
-    WITH_LOCK(vma_list_mutex) {
+    WITH_LOCK(vma_list_mutex.for_write()) {
         // This means that the mapping that we had before was a balloon mapping
         // that was laying around and wasn't updated to an anon mapping. If we
         // allow it to split it would significantly complicate our code, since
@@ -1705,7 +1710,7 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
 
 error mprotect(const void *addr, size_t len, unsigned perm)
 {
-    std::lock_guard<mutex> guard(vma_list_mutex);
+    SCOPE_LOCK(vma_list_mutex.for_write());
 
     if (!ismapped(addr, len)) {
         return make_error(ENOMEM);
@@ -1716,7 +1721,7 @@ error mprotect(const void *addr, size_t len, unsigned perm)
 
 error munmap(const void *addr, size_t length)
 {
-    std::lock_guard<mutex> guard(vma_list_mutex);
+    SCOPE_LOCK(vma_list_mutex.for_write());
 
     length = align_up(length, mmu::page_size);
     if (!ismapped(addr, length)) {
@@ -1729,7 +1734,7 @@ error munmap(const void *addr, size_t length)
 
 error msync(const void* addr, size_t length, int flags)
 {
-    std::lock_guard<mutex> guard(vma_list_mutex);
+    SCOPE_LOCK(vma_list_mutex.for_read());
 
     if (!ismapped(addr, length)) {
         return make_error(ENOMEM);
@@ -1741,7 +1746,7 @@ error mincore(const void *addr, size_t length, unsigned char *vec)
 {
     char *end = align_up((char *)addr + length, page_size);
     char tmp;
-    std::lock_guard<mutex> guard(vma_list_mutex);
+    SCOPE_LOCK(vma_list_mutex.for_read());
     if (!is_linear_mapped(addr, length) && !ismapped(addr, length)) {
         return make_error(ENOMEM);
     }
@@ -1758,7 +1763,7 @@ error mincore(const void *addr, size_t length, unsigned char *vec)
 std::string procfs_maps()
 {
     std::ostringstream os;
-    WITH_LOCK(vma_list_mutex) {
+    WITH_LOCK(vma_list_mutex.for_read()) {
         for (auto& vma : vma_list) {
             char read    = vma.perm() & perm_read  ? 'r' : '-';
             char write   = vma.perm() & perm_write ? 'w' : '-';

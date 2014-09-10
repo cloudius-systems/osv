@@ -292,7 +292,8 @@ std::unordered_multimap<arc_buf_t*, cached_page_arc*> cached_page_arc::arc_cache
 static std::unordered_map<hashkey, cached_page_arc*> read_cache;
 static std::unordered_map<hashkey, cached_page_write*> write_cache;
 static std::deque<cached_page_write*> write_lru;
-static mutex arc_lock; // protects against parallel eviction, parallel creation impossible due to vma_list_lock
+static mutex arc_lock; // protects against parallel access to the read cache
+static mutex write_lock; // protect against parallel access to the write cache
 
 template<typename T>
 static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
@@ -419,6 +420,7 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
+    SCOPE_LOCK(write_lock);
     cached_page_write* wcp = find_in_cache(write_cache, key);
 
     if (write) {
@@ -470,20 +472,23 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, offset};
-    cached_page_write* wcp = find_in_cache(write_cache, key);
 
     auto old = clear_pte(ptep);
 
     // page is either in ARC cache or write cache or zero page or private page
 
-    if (wcp && mmu::virt_to_phys(wcp->addr()) == old.addr()) {
-        // page is in write cache
-        wcp->unmap(ptep);
-        if (old.dirty()) {
-            // unmapped pte was dirty, mark page dirty for writeback
-            wcp->mark_dirty();
+    WITH_LOCK(write_lock) {
+        cached_page_write* wcp = find_in_cache(write_cache, key);
+
+        if (wcp && mmu::virt_to_phys(wcp->addr()) == old.addr()) {
+            // page is in write cache
+            wcp->unmap(ptep);
+            if (old.dirty()) {
+                // unmapped pte was dirty, mark page dirty for writeback
+                wcp->mark_dirty();
+            }
+            return false;
         }
-        return false;
     }
 
     WITH_LOCK(arc_lock) {
@@ -501,10 +506,12 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
 
 void sync(vfs_file* fp, off_t start, off_t end)
 {
-    static std::stack<cached_page_write*> dirty; // protected by vma_list_mutex
+    static std::stack<cached_page_write*> dirty; // protected by write_lock
     struct stat st;
     fp->stat(&st);
     hashkey key {st.st_dev, st.st_ino, 0};
+    SCOPE_LOCK(write_lock);
+
     for (key.offset = start; key.offset < end; key.offset += mmu::page_size) {
         cached_page_write* cp = find_in_cache(write_cache, key);
         if (cp && cp->clear_dirty()) {

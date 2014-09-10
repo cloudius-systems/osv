@@ -249,6 +249,13 @@ public:
 void virt_visit_pte_rcu(uintptr_t virt, virt_pte_visitor& visitor);
 
 template<int N>
+inline bool write_pte(void *addr, hw_ptep<N> ptep, pt_element<N> old_pte, pt_element<N> new_pte)
+{
+    new_pte.mod_addr(virt_to_phys(addr));
+    return ptep.compare_exchange(old_pte, new_pte);
+}
+
+template<int N>
 inline bool write_pte(void *addr, hw_ptep<N> ptep, pt_element<N> pte)
 {
     pte.mod_addr(virt_to_phys(addr));
