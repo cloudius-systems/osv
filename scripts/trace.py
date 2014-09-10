@@ -519,11 +519,55 @@ def list_timed(args):
                             trace.Trace.format_data(t),
                             bt_formatter(t.backtrace))
 
+def list_wakeup_latency(args):
+    bt_formatter = get_backtrace_formatter(args)
+    time_range = get_time_range(args)
+
+    class WaitingThread:
+        def __init__(self):
+            self.wait = None
+            self.wake = None
+
+    waiting = defaultdict(WaitingThread)
+
+    def format_wakeup_latency(nanos):
+        return "%4.6f" % (float(nanos) / 1e6)
+
+    if not args.no_header:
+        print '%-18s %-15s %3s %20s %13s %9s %s' % (
+            "THREAD", "THREAD-NAME", "CPU", "TIMESTAMP[s]", "WAKEUP[ms]", "WAIT[ms]", "BACKTRACE"
+        )
+
+    with get_trace_reader(args) as reader:
+        for t in reader.get_traces():
+            if t.name == "sched_wait":
+                waiting[t.thread.ptr].wait = t
+            elif t.name == "sched_wake":
+                thread_id = t.data[0]
+                if waiting[thread_id].wait:
+                    waiting[thread_id].wake = t
+            elif t.name == "sched_wait_ret":
+                waiting_thread = waiting.pop(t.thread.ptr, None)
+                if waiting_thread and waiting_thread.wake:
+                    # See https://github.com/cloudius-systems/osv/issues/295
+                    if t.cpu == waiting_thread.wait.cpu:
+                        wakeup_delay = t.time - waiting_thread.wake.time
+                        wait_time = t.time - waiting_thread.wait.time
+                        print '0x%016x %-15s %3d %20s %13s %9s %s' % (
+                                    t.thread.ptr,
+                                    t.thread.name,
+                                    t.cpu,
+                                    trace.format_time(t.time),
+                                    format_wakeup_latency(wakeup_delay),
+                                    trace.format_duration(wait_time),
+                                    bt_formatter(t.backtrace))
+
 def add_trace_listing_options(parser):
     add_time_slicing_options(parser)
     add_trace_source_options(parser)
     add_symbol_resolution_options(parser)
     parser.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
+    parser.add_argument("--no-header", action="store_true", help="do not show the header")
 
 def convert_dump(args) :
     if os.path.isfile(args.dumpfile):
@@ -581,6 +625,10 @@ if __name__ == "__main__":
     add_trace_listing_options(cmd_list)
     cmd_list.add_argument("--tcpdump", action="store_true")
     cmd_list.set_defaults(func=list_trace, paginate=True)
+
+    cmd_wakeup_latency = subparsers.add_parser("wakeup-latency")
+    add_trace_listing_options(cmd_wakeup_latency)
+    cmd_wakeup_latency.set_defaults(func=list_wakeup_latency, paginate=True)
 
     cmd_list_timed = subparsers.add_parser("list-timed", help="list timed traces", description="""
         Prints block samples along with their duration in seconds with nanosecond precision. The duration
