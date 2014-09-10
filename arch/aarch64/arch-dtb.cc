@@ -176,3 +176,19 @@ size_t dtb_get_phys_memory(u64 *addr)
     retval = dtb_get_reg(node, addr);
     return retval;
 }
+
+u64 dtb_get_uart_base()
+{
+    u64 retval;
+    int node; size_t len __attribute__((unused));
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "pl011");
+    if (node < 0)
+        return 0;
+
+    len = dtb_get_reg(node, &retval);
+    return retval;
+}

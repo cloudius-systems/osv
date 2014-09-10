@@ -19,6 +19,9 @@ public:
     virtual void flush();
     virtual bool input_ready();
     virtual char readch();
+
+    void set_base_addr(u64 addr);
+
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }

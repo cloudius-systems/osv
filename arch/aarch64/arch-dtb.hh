@@ -41,4 +41,10 @@ extern char *cmdline;
  */
 size_t dtb_get_phys_memory(u64 *addr);
 
+/* u64 dtb_get_uart_base()
+ *
+ * return the base address of the uart, or NULL on failure.
+ */
+u64 dtb_get_uart_base();
+
 #endif /* ARCH_DTB_HH */
