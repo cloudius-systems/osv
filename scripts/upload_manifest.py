@@ -1,10 +1,18 @@
 #!/usr/bin/python
 
-import os, optparse, io, subprocess, socket, threading, stat
+import os, optparse, io, subprocess, socket, threading, stat, sys
 try:
     import configparser
 except ImportError:
     import ConfigParser as configparser
+
+try:
+    import StringIO
+    # This works on Python 2
+    StringIO = StringIO.StringIO
+except:
+    # This works on Python 3
+    StringIO = io.StringIO
 
 defines = {}
 
@@ -59,10 +67,10 @@ def upload(osv, manifest, depends):
 
     # Wait for the guest to come up and tell us it's listening
     while True:
-        line = osv.stdout.readline().decode()
-        if not line or line.find("Waiting for connection")>=0:
-            break;
-        print(line.rstrip())
+        line = osv.stdout.readline()
+        if not line or line.find(b"Waiting for connection")>=0:
+            break
+        os.write(sys.stdout.fileno(), line)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect(("127.0.0.1", 10000));
@@ -71,8 +79,8 @@ def upload(osv, manifest, depends):
     # hang, and so the user can see what's happening. Easiest to do this with
     # a thread.
     def consumeoutput(file):
-        for line in iter(lambda: file.readline().decode('utf-8', 'replace'), ''):
-            print(line.rstrip())
+        for line in iter(lambda: file.readline(), b''):
+            os.write(sys.stdout.fileno(), line)
     threading.Thread(target = consumeoutput, args = (osv.stdout,)).start()
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
@@ -84,6 +92,8 @@ def upload(osv, manifest, depends):
     def cpio_field(number, length):
         return ("%.*x" % (length, number)).encode()
     def cpio_header(filename, mode, filesize):
+        if sys.version_info >= (3, 0, 0):
+            filename = filename.encode("utf-8")
         return (b"070701"                         # magic
                 + cpio_field(0, 8)                # inode
                 + cpio_field(mode, 8)             # mode
@@ -98,7 +108,7 @@ def upload(osv, manifest, depends):
                 + cpio_field(0, 8)                # rdevminor
                 + cpio_field(len(filename)+1, 8)  # namesize
                 + cpio_field(0, 8)                # check
-                + filename.encode() + b'\0')
+                + filename + b'\0')
 
     def strip_file(filename):
         stripped_filename = filename
@@ -119,7 +129,7 @@ def upload(osv, manifest, depends):
             cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
             cpio_send(link.encode())
         else:
-            depends.write(u'\t%s \\\n' % (hostname,))
+            depends.write('\t%s \\\n' % (hostname,))
             hostname = strip_file(hostname)
             perm = os.stat(hostname).st_mode & 0o777
             if os.path.islink(hostname):
@@ -166,14 +176,14 @@ def main():
 
     (options, args) = opt.parse_args()
 
-    depends = io.StringIO()
+    depends = StringIO()
     if options.depends:
         depends = file(options.depends, 'w')
     manifest = configparser.SafeConfigParser()
     manifest.optionxform = str # avoid lowercasing
     manifest.read(options.manifest)
 
-    depends.write(u'%s: \\\n' % (options.output,))
+    depends.write('%s: \\\n' % (options.output,))
 
     image_path = os.path.abspath(options.output)
     osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --noinit /tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
@@ -186,7 +196,7 @@ def main():
     osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "--norandom --noinit /zfs.so set compression=off osv"' % image_path, shell = True, stdout=subprocess.PIPE)
     osv.wait()
 
-    depends.write(u'\n\n')
+    depends.write('\n\n')
     depends.close()
 
 if __name__ == "__main__":
