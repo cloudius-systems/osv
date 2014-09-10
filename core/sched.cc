@@ -61,6 +61,7 @@ TRACEPOINT(trace_sched_wait_ret, "");
 TRACEPOINT(trace_sched_wake, "wake %p", thread*);
 TRACEPOINT(trace_sched_migrate, "thread=%p cpu=%d", thread*, unsigned);
 TRACEPOINT(trace_sched_queue, "thread=%p", thread*);
+TRACEPOINT(trace_sched_load, "load=%d", size_t);
 TRACEPOINT(trace_sched_preempt, "");
 TRACEPOINT(trace_sched_ipi, "cpu %d", unsigned);
 TRACEPOINT(trace_sched_yield, "");
@@ -322,6 +323,9 @@ void cpu::reschedule_from_interrupt()
         trace_sched_idle_ret();
     }
     n->stat_switches.incr();
+
+    trace_sched_load(runqueue.size());
+
     n->_detached_state->st.store(thread::status::running);
     n->_runtime.hysteresis_run_start();
 
@@ -450,6 +454,8 @@ void cpu::handle_incoming_wakeups()
             }
         }
     }
+
+    trace_sched_load(runqueue.size());
 }
 
 void cpu::enqueue(thread& t)
