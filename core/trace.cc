@@ -26,6 +26,7 @@
 #include <osv/ilog2.hh>
 #include <osv/semaphore.hh>
 #include <osv/elf.hh>
+#include <cxxabi.h>
 
 using namespace std;
 
@@ -799,35 +800,89 @@ trace::create_trace_dump()
         }
 
         { // Module list
-            chunk mods(out, "MODS");
             elf::get_program()->with_modules(
                     [&](const elf::program::modules_list &ml)
                     {
-                        out.write(uint32_t(ml.objects.size()));
-                        for (auto module : ml.objects) {
-                            out.swrite(module->pathname());
-                            out.write(uint64_t(module->base()));
-                            out.write(uint64_t(module->end()) -  uint64_t(module->base()));
+                        {
+                            chunk mods(out, "MODS");
+                            out.write(uint32_t(ml.objects.size()));
+                            for (auto module : ml.objects) {
+                                out.swrite(module->pathname());
+                                out.write(uint64_t(module->base()));
+                                out.write(uint64_t(module->end()) - uint64_t(module->base()));
 
-                            if (module->module_index() == elf::program::core_module_index) {
-                                out.write(uint32_t(0));
+                                if (module->module_index() == elf::program::core_module_index) {
+                                    out.write(uint32_t(0));
+                                    continue;
+                                }
+                                // Sections
+                                auto sections = module->sections();
+                                out.write(uint32_t(sections.size()));
+                                for (auto & section : sections) {
+                                    out.swrite(module->section_name(section));
+                                    out.write(uint32_t(section.sh_type));
+                                    out.write(uint32_t(section.sh_info));
+                                    out.write(uint64_t(section.sh_flags));
+                                    out.write(uint64_t(section.sh_addr));
+                                    out.write(uint64_t(section.sh_offset));
+                                    out.write(uint64_t(section.sh_size));
+                                }
+                            }
+                        }
+
+                        struct demangler {
+                            demangler()
+                            {}
+                            ~demangler()
+                            {
+                                if (buf) {
+                                    free(buf);
+                                }
+                            }
+                            const char * operator()(const char * name) {
+                                int status;
+                                auto * demangled = abi::__cxa_demangle(name, buf, &len, &status);
+                                if (demangled) {
+                                    buf = demangled;
+                                    return buf;
+                                }
+                                return name;
+                            }
+                        private:
+                            char * buf = nullptr;
+                            size_t len = 0;
+                        };
+
+                        demangler demangle;
+
+                        for (auto module : ml.objects) {
+                            auto syms = module->symbols();
+                            if (syms.empty()) {
                                 continue;
                             }
-                            // Sections
-                            auto sections = module->sections();
-                            out.write(uint32_t(sections.size()));
-                            for (auto & section : sections) {
-                                out.swrite(module->section_name(section));
-                                out.write(uint32_t(section.sh_type));
-                                out.write(uint32_t(section.sh_info));
-                                out.write(uint64_t(section.sh_flags));
-                                out.write(uint64_t(section.sh_addr));
-                                out.write(uint64_t(section.sh_offset));
-                                out.write(uint64_t(section.sh_size));
+                            chunk mods(out, "SYMB");
+                            length<> len(out);
+                            for (auto & es : syms) {
+                                auto t = es.st_info & elf::STT_HIPROC;
+                                if (t != elf::STT_FUNC && t != elf::STT_OBJECT) {
+                                    continue;
+                                }
+                                auto * n = module->symbol_name(&es);
+                                if (n && *n) {
+                                    elf::symbol_module m(&es, module);
+                                    ++len.value;
+                                    out.swrite(demangle(n));
+                                    out.write(uint64_t(m.relocated_addr()));
+                                    out.write(uint64_t(m.size()));
+                                    out.swrite(nullptr);
+                                    out.write(uint32_t(0));
+                                }
                             }
+
                         }
                     });
         }
+
 
         {
             // Symbol tables

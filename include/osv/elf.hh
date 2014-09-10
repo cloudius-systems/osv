@@ -331,6 +331,8 @@ public:
     void* tls_addr();
     std::vector<Elf64_Shdr> sections();
     std::string section_name(const Elf64_Shdr& shdr);
+    std::vector<Elf64_Sym> symbols();
+    const char * symbol_name(const Elf64_Sym *);
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;

@@ -168,6 +168,17 @@ std::string object::section_name(const Elf64_Shdr& shdr)
     return _section_names_cache.get() + shdr.sh_name;
 }
 
+std::vector<Elf64_Sym> object::symbols() {
+    auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+    auto len = symtab_len();
+    return std::vector<Elf64_Sym>(symtab, symtab + len);
+}
+
+const char * object::symbol_name(const Elf64_Sym * sym) {
+    auto strtab = dynamic_ptr<char>(DT_STRTAB);
+    return strtab + sym->st_name;
+}
+
 file::file(program& prog, ::fileref f, std::string pathname)
     : object(prog, pathname)
     , _f(f)
