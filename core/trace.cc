@@ -13,6 +13,7 @@
 #include <atomic>
 #include <regex>
 #include <fstream>
+#include <unordered_map>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/range/algorithm/remove.hpp>
 #include <sys/types.h>
@@ -492,6 +493,28 @@ trace::set_event_state(tracepoint_base & tp, bool enable, bool backtrace)
     }
 }
 
+static std::unordered_map<trace::generator_id, trace::generate_symbol_table_func> symbol_functions;
+static std::mutex symbol_func_mutex;
+static trace::generator_id symbol_ids;
+
+trace::generator_id
+trace::add_symbol_callback(const generate_symbol_table_func & f) {
+    WITH_LOCK(symbol_func_mutex) {
+        auto id = ++symbol_ids;
+        symbol_functions[id] = f;
+        return id;
+    }
+}
+
+void
+trace::remove_symbol_callback(generator_id id) {
+    WITH_LOCK(symbol_func_mutex) {
+        if (symbol_functions.count(id) > 0) {
+            symbol_functions.erase(id);
+        }
+    }
+}
+
 // Helper type to build trace dump binary files
 class trace_out: public std::ofstream {
 public:
@@ -543,7 +566,7 @@ public:
         return *this;
     }
     trace_out & swrite(const char * s) {
-        size_t len = strlen(s);
+        size_t len = s != nullptr ? strlen(s) : 0;
         write(u16(len));
         write(s, len);
         return *this;
@@ -553,6 +576,25 @@ public:
         write(s.c_str(), s.size());
         return *this;
     }
+};
+
+template<typename T = uint32_t>
+struct length {
+public:
+    length(trace_out & out, T v = T()) :
+            value(v), _out(out), _pos(out.tellp()) {
+        out.write(T());
+    }
+    ~length() {
+        auto p = _out.tellp();
+        _out.seekp(_pos);
+        _out.write(value);
+        _out.seekp(p);
+    }
+    T value;
+private:
+    trace_out & _out;
+    trace_out::pos_type _pos;
 };
 
 /*
@@ -632,6 +674,12 @@ dump = <chunk> {
       string name;
       uint64_t address;
       uint64_t size;
+      string filename;
+      uint32_t n_locations;
+      struct {
+          uint32_t offset;
+          int32_t line;
+      } [n_locations];
     } [n_symbols];
   } *; // zero or more, may repeat
 
@@ -759,6 +807,7 @@ trace::create_trace_dump()
                         for (auto module : ml.objects) {
                             out.swrite(module->pathname());
                             out.write(uint64_t(module->base()));
+                            out.write(uint64_t(module->end()) -  uint64_t(module->base()));
 
                             if (module->module_index() == elf::program::core_module_index) {
                                 out.write(uint32_t(0));
@@ -778,6 +827,29 @@ trace::create_trace_dump()
                             }
                         }
                     });
+        }
+
+        {
+            // Symbol tables
+            WITH_LOCK(symbol_func_mutex) {
+                for (auto & p : symbol_functions) {
+                    chunk symb(out, "SYMB");
+                    length<> len(out);
+                    p.second([&](const symbol & s) {
+                        ++len.value;
+                        out.swrite(s.name);
+                        out.write(uint64_t(s.addr));
+                        out.write(uint64_t(s.size));
+                        out.swrite(s.filename);
+                        out.write(s.n_locations);
+                        for (uint32_t i = 0; i < s.n_locations; ++i) {
+                            auto loc = s.location(i);
+                            out.write(loc.first);
+                            out.write(loc.second);
+                        }
+                    });
+                }
+            }
         }
 
         // Trace data, one chunk for each cpu buffer

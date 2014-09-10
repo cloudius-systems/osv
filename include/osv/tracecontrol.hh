@@ -57,6 +57,28 @@ set_event_state(tracepoint_base &, bool enable, bool stacktrace = false);
 std::string
 create_trace_dump();
 
+struct symbol {
+    std::string name;
+    const void * addr;
+    size_t size;
+    const char * filename = 0;
+    uint32_t n_locations = 0;
+
+    virtual std::pair<uint32_t, int32_t> location(uint32_t) const {
+        throw std::runtime_error("no locations");
+    }
+};
+
+typedef std::function<void(const symbol &)> add_symbol_func;
+typedef std::function<void(const add_symbol_func &)> generate_symbol_table_func;
+typedef long generator_id;
+
+generator_id
+add_symbol_callback(const generate_symbol_table_func &);
+
+void
+remove_symbol_callback(generator_id);
+
 }
 
 #endif // TRACECONTROL_HH
