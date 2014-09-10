@@ -379,6 +379,8 @@ tools += tools/libtools.so
 
 tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools
 
+tools/route/lsroute.so: tools/libtools.so
+
 tools/ifconfig/ifconfig.so: EXTRA_LIBS = -Ltools/ -ltools
 
 tools/ifconfig/ifconfig.so: tools/libtools.so
