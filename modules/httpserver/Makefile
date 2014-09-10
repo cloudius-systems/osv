@@ -1,5 +1,5 @@
 
-INCLUDES = -isystem $(miscbase)/usr/include
+INCLUDES = -isystem $(miscbase)/usr/include -I$(src)/build/$(mode)/gen/include
 INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
 INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
 

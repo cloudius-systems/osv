@@ -9,7 +9,7 @@
 #define NETWORK_INTERFACE_HH_
 
 #include <string>
-
+#include <bsd/sys/net/if_data.h>
 
 struct bsd_ifreq;
 struct socket;
@@ -18,53 +18,6 @@ struct ifnet;
 
 namespace osv {
 namespace network {
-struct timeval {
-    long int tv_sec;
-    long tv_usec;
-};
-
-/*
- * Structure describing information about an interface
- * which may be of interest to management entities.
- */
-struct if_data {
-    /* generic interface information */
-    unsigned char  ifi_type;       /* ethernet, tokenring, etc */
-    unsigned char  ifi_physical;       /* e.g., AUI, Thinnet, 10base-T, etc */
-    unsigned char  ifi_addrlen;        /* media address length */
-    unsigned char  ifi_hdrlen;     /* media header length */
-    unsigned char  ifi_link_state;     /* current link state */
-    unsigned char  ifi_spare_char1;    /* spare byte */
-    unsigned char  ifi_spare_char2;    /* spare byte */
-    unsigned char  ifi_datalen;        /* length of this data struct */
-    unsigned long int  ifi_mtu;        /* maximum transmission unit */
-    unsigned long int  ifi_metric;     /* routing metric (external only) */
-    unsigned long int  ifi_baudrate;       /* linespeed */
-    /* volatile statistics */
-    unsigned long int  ifi_ipackets;       /* packets received on interface */
-    unsigned long int  ifi_ierrors;        /* input errors on interface */
-    unsigned long int  ifi_opackets;       /* packets sent on interface */
-    unsigned long int  ifi_oerrors;        /* output errors on interface */
-    unsigned long int  ifi_collisions;     /* collisions on csma interfaces */
-    unsigned long int  ifi_ibytes;     /* total number of octets received */
-    unsigned long int  ifi_obytes;     /* total number of octets sent */
-    unsigned long int  ifi_imcasts;        /* packets received via multicast */
-    unsigned long int  ifi_omcasts;        /* packets sent via multicast */
-    unsigned long int  ifi_iqdrops;        /* dropped on input, this interface */
-    unsigned long int  ifi_noproto;        /* destined for unsupported protocol */
-    unsigned long int  ifi_hwassist;       /* HW offload capabilities, see IFCAP */
-    time_t  ifi_epoch;      /* uptime at attach or stat reset */
-    struct  timeval ifi_lastchange; /* time of last administrative change */
-    unsigned long int  ifi_ibh_wakeups;    /* number times Rx BH has been woken up */
-    unsigned long int  ifi_oworker_kicks;  /* number of kicks from Tx worker */
-    unsigned long int  ifi_oworker_wakeups;/* number times Tx worker has been woken up */
-    unsigned long int  ifi_oworker_packets;/* number of Tx packets handled by a Tx worker */
-    unsigned long int  ifi_okicks;         /* total number of Tx kicks */
-    unsigned long int  ifi_oqueue_is_full; /* number of times the packet could not
-                                            * be sent due to a lack of free space
-                                            * on a HW ring
-                                            */
-};
 
 
 class interface
