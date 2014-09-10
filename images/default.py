@@ -1,4 +1,4 @@
 from osv.modules.api import *
 
-_mgmt = require('mgmt')
-run = [ _mgmt.full ]
+_cli = require('cli')
+run = [ _cli.full ]
