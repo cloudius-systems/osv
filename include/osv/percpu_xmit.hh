@@ -267,6 +267,7 @@ public:
     void poll_until(StopPollingPred stop_pred, XmitIterator& xmit_it) {
         // Create a collection of a per-CPU queues
         std::list<cpu_queue_type*> all_cpuqs;
+        u64 cur_worker_packets = 0;
 
         for (auto c : sched::cpus) {
             all_cpuqs.push_back(_cpuq.for_cpu(c)->get());
@@ -321,6 +322,10 @@ public:
                     lock_running();
 
                     _txq->stats.tx_worker_wakeups++;
+                    cur_worker_packets = _txq->stats.tx_worker_packets -
+                                                             cur_worker_packets;
+                    _txq->update_wakeup_stats(cur_worker_packets);
+                    cur_worker_packets = _txq->stats.tx_worker_packets;
                 }
             }
 

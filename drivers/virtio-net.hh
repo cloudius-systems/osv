@@ -278,6 +278,8 @@ private:
         u64 rx_csum;    /* number of packets with correct csum */
         u64 rx_csum_err;/* number of packets with a bad checksum */
         u64 rx_bh_wakeups;
+
+        wakeup_stats rx_wakeup_stats;
     };
 
     struct txq_stats {
@@ -293,9 +295,11 @@ private:
         u64 tx_worker_wakeups;
         u64 tx_worker_packets;
         u64 tx_hw_queue_is_full;
+
+        wakeup_stats tx_wakeup_stats;
     };
 
-     /* Single Rx queue object */
+    /* Single Rx queue object */
     struct rxq {
         rxq(vring* vq, std::function<void ()> poll_func)
             : vqueue(vq), poll_task(poll_func, sched::thread::attr().
@@ -303,6 +307,10 @@ private:
         vring* vqueue;
         sched::thread  poll_task;
         struct rxq_stats stats = { 0 };
+
+        void update_wakeup_stats(const u64 wakeup_packets) {
+            if_update_wakeup_stats(stats.rx_wakeup_stats, wakeup_packets);
+        }
     };
 
     /**
@@ -381,6 +389,10 @@ private:
         void wake_worker();
 
         int xmit(mbuf* m_head);
+
+        void update_wakeup_stats(const u64 wakeup_packets) {
+            if_update_wakeup_stats(stats.tx_wakeup_stats, wakeup_packets);
+        }
 
         /* TODO: drain the per-cpu rings in ~txq() and in if_qflush() */
 
