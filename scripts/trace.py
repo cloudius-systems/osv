@@ -452,7 +452,7 @@ def print_summary(args, printer=sys.stdout.write):
 
     print "\nTime ranges:\n"
     for cpu, r in sorted(cpu_time_ranges.items(), key=lambda (c, r): r.min):
-        print "  CPU 0x%02d: %15s -%15s = %10s" % (cpu,
+        print "  CPU 0x%02d: %s - %s = %10s" % (cpu,
             trace.format_time(r.min),
             trace.format_time(r.max),
             prof.format_time(r.max - r.min))
