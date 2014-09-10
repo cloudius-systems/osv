@@ -9,6 +9,8 @@
 #include <jni.h>
 #include <string.h>
 #include <thread>
+#include <unistd.h>
+#include <regex>
 #include <osv/debug.hh>
 #include "jvm_balloon.hh"
 #include <osv/mempool.hh>
@@ -99,6 +101,25 @@ static int java_main(int argc, char **argv)
     options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
     options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
     options.push_back(mkoption("-Dosv.version=" + osv::version()));
+
+    {
+        const std::string path("/usr/lib/jvm/agents/autoload");
+
+        std::shared_ptr<DIR> dir(opendir(path.c_str()), [](DIR * d) {
+            if (d != 0) {
+                closedir(d);
+            }
+        });
+
+        std::regex sox(".*\\.so");
+
+        dirent d, *e = nullptr;
+        while (dir && !readdir_r(dir.get(), &d, &e) && e) {
+            if (std::regex_match(e->d_name, sox)) {
+                options.push_back(mkoption("-agentpath:" + path + "/" + e->d_name));
+            }
+        }
+    }
 
     int orig_argc = argc;
     int has_xms = 0, has_xmx = 0;
