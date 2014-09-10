@@ -231,6 +231,7 @@ struct net_device_stats
     u_long    tx_dropped;        /* no space available in linux    */
     u_long    multicast;        /* multicast packets received    */
     u_long    collisions;
+    u_long    rx_bh_wakeups;    /* Number of times rx BH has been woken up */
 
     /* detailed rx_errors: */
     u_long    rx_length_errors;
@@ -250,6 +251,9 @@ struct net_device_stats
     /* for cslip etc */
     u_long    rx_compressed;
     u_long    tx_compressed;
+
+    /* Rx BH wakeup stats */
+    wakeup_stats rx_wakeup_stats;
 };
 
 struct netfront_info {
@@ -1228,7 +1232,11 @@ xn_intr(void *xsc)
     }
 
     XN_RX_LOCK(np);
+    u64 prev_rx_packets = np->stats.rx_packets;
     xn_rxeof(np);
+    if_update_wakeup_stats(np->stats.rx_wakeup_stats,
+                           np->stats.rx_packets - prev_rx_packets);
+    np->stats.rx_bh_wakeups++;
     XN_RX_UNLOCK(np);
 
     if (ifp->if_drv_flags & IFF_DRV_RUNNING &&
