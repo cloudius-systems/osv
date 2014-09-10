@@ -3,6 +3,7 @@ import mmap
 import struct
 import sys
 import heapq
+import bisect
 
 from osv import debug
 
@@ -288,24 +289,24 @@ class WritingPacker:
                 raise Exception('Should be string but is %s' % type(arg))
             self.pack_blob(arg.encode())
 
-class TraceDumpReader :
+class NotATraceDumpFile(Exception):
+    pass
+
+class TraceDumpReaderBase :
     def __init__(self, filename):
-        self.tracepoints = {}
-        self.trace_buffers = []
         self.endian = '<'
-        self.backtrace_len = 10
         self.file = open(filename, 'rb')
         try:
             tag = self.file.read(4)
             if tag == "OSVT":
                 endian = '>'
             elif tag != "TVSO":
-                raise SyntaxError("Not a trace dump file")
+                raise NotATraceDumpFile("Not a trace dump file")
             self.read('Q') # size. ignore, do not support embedded yet.
             if self.read('I') != 1: #endian check. verify tag check
                 raise SyntaxError
             self.read('I') # version. should check
-            while self.readStruct():
+            while self.readStruct0():
                 pass
         finally:
             self.file.close()
@@ -314,21 +315,46 @@ class TraceDumpReader :
         while (self.file.tell() & (a - 1)) != 0:
             self.file.seek(1, 1)
 
-    def read(self, type):
+    def read0(self, type):
         siz = struct.calcsize(type)
         self.align(siz)
         val = self.file.read(siz)
         if len(val) != siz:
             raise EOFError(str(len(val)) + "!=" + str(siz))
-        return struct.unpack(self.endian + type, val)[0]
+        return val
 
-    def readStruct(self):
+    def read(self, type):
+        return struct.unpack(self.endian + type, self.read0(type))[0]
+
+    def skip(self, types):
+        for type in types:
+            self.read0(type)
+
+    def readStruct(self, tag, size):
+        return False
+
+    def readStruct0(self):
         self.align(8)
         try:
             tag = self.read('I')
         except EOFError:
             return False
         size = self.read('Q')
+        if not self.readStruct(tag, size):
+            self.file.seek(size, 1)
+        return True
+
+    def readString(self):
+        len = self.read('H')
+        return self.file.read(len)
+
+class TraceDumpReader(TraceDumpReaderBase) :
+    def __init__(self, filename):
+        self.tracepoints = {}
+        self.trace_buffers = []
+        TraceDumpReaderBase.__init__(self, filename)
+
+    def readStruct(self, tag, size):
         if tag == 0x54524344: # 'TRCD'
             return self.readTraceDict(size)
         elif tag == 0x54524353: #'TRCS'
@@ -336,12 +362,7 @@ class TraceDumpReader :
             self.trace_buffers.append(data)
             return True
         else:
-            self.file.seek(size, 1)
-            return True
-
-    def readString(self):
-        len = self.read('H')
-        return self.file.read(len)
+            return False
 
     def readTraceDict(self, size):
         self.backtrace_len = self.read('I');
@@ -383,7 +404,7 @@ class TraceDumpReader :
 
             backtrace = None
             if flags & 1:
-                backtrace = unpacker.unpack('Q' * self.backtrace_len)
+                backtrace = filter(None, unpacker.unpack('Q' * self.backtrace_len))
 
             data = unpacker.unpack(tp.signature)
             unpacker.align_up(8)
@@ -394,6 +415,86 @@ class TraceDumpReader :
     def traces(self):
         iters = map(lambda data: self.oneTrace(data), self.trace_buffers)
         return heapq.merge(*iters)
+
+
+class Symbol:
+    def __init__(self, addr, size, name=None, filename=None, line=None):
+        self.addr = addr
+        self.size = size
+        self.name = name
+        self.filename = filename
+        self.size = size
+        self.line = line
+
+    def __lt__(self, b):
+        return self.addr < b.addr
+
+
+class TraceDumpSymbols(TraceDumpReaderBase) :
+    def __init__(self, filename, delegate = debug.DummyResolver()):
+        self.delegate = delegate
+        self.symbols = []
+        self.modules = []
+        self.segments = []
+        self.cache = {}
+        TraceDumpReaderBase.__init__(self, filename)
+        self.symbols.sort()
+        self.modules.sort()
+        self.segments.sort()
+
+    def readStruct(self, tag, size):
+        if tag == 0x53594D42: # 'SYMB'
+            return self.readSymbols(size)
+        elif tag == 0x4D4F4453: #'MODS'
+            return self.readModules(size)
+        else:
+            return False
+
+    def readSymbols(self, size):
+        n_symbols = self.read('I')
+        for i in range(0, n_symbols):
+            name = self.readString()
+            addr = self.read('Q')
+            size = self.read('Q')
+            file = self.readString()
+            n_lines = self.read('I')
+            for j in range(0, n_lines):
+                offs = self.read('I')
+                line = self.read('I')
+            self.symbols.append(Symbol(addr, size, name, file))
+        return True;
+
+    def readModules(self, size):
+        n_modules = self.read('I')
+        for i in range(0, n_modules):
+            file = self.readString()
+            base = self.read('Q')
+            size = self.read('Q')
+            self.modules.append(Symbol(base, size, file))
+            n_segments = self.read('I')
+            for j in range(0, n_segments):
+                name = self.readString()
+                self.skip('IIQ')
+                addr = self.read('Q')
+                offs = self.read('Q')
+                size = self.read('Q')
+                self.segments.append(Symbol(addr, size, name, file))
+        return True;
+
+    def __call__(self, addr):
+        result = self.cache.get(addr, None)
+        if not result:
+            x = debug.SourceAddress(addr, 0)
+            for a in [self.symbols, self.segments, self.modules]:
+                index = bisect.bisect_left(a, x) - 1
+                if index > 0 and index < len(a):
+                    s = a[index]
+                    if s.addr <= addr and (s.addr + s.size) > addr:
+                        result = [debug.SourceAddress(addr, ('%s+0x%x (%#08x)' % (s.name, addr - s.addr, addr)), s.filename, s.line)]
+                        self.cache[addr] = result
+                        return result
+        return self.delegate(addr)
+
 
 class Thread(object):
     def __init__(self, ptr, name):
@@ -457,18 +558,25 @@ class read_file:
     def __init__(self, filename):
         self.filename = filename
         self.map = None
+        self.dumpreader = None
 
     def __enter__(self):
-        self.file = open(self.filename, 'r+b')
-        self.map = mmap.mmap(self.file.fileno(), 0)
+        try:
+            self.dumpreader = TraceDumpReader(self.filename)
+        except NotATraceDumpFile:
+            self.file = open(self.filename, 'r+b')
+            self.map = mmap.mmap(self.file.fileno(), 0)
+
         return self
 
     def __exit__(self, *args):
         if self.map:
             self.map.close()
-        self.file.close()
+            self.file.close()
 
     def get_traces(self):
+        if self.dumpreader:
+            return self.dumpreader.traces()
         return read(self.map)
 
 def write_to_file(filename, traces):

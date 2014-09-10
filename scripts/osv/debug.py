@@ -31,10 +31,11 @@ class DummyResolver(object):
 class SymbolResolver(object):
     inline_prefix = ' (inlined by) '
 
-    def __init__(self, object_path, show_inline=True):
+    def __init__(self, object_path, fallback_resolver=DummyResolver(), show_inline=True):
         if not os.path.exists(object_path):
             raise Exception('File not found: ' + object_path)
         self.show_inline = show_inline
+        self.fallback_resolver = fallback_resolver
         flags = '-Cfp'
         if show_inline:
             flags += 'i'
@@ -61,18 +62,19 @@ class SymbolResolver(object):
 
     def parse_line(self, addr, line):
         if self.consume_unknown(line):
-            return SourceAddress(addr)
+            return self.fallback_resolver(addr)
 
         m = re.match(r'(?P<name>.*) at ((?P<file>.*?)|\?+):((?P<line>\d+)|\?+)', line)
         if not m:
             raise Exception('addr2line response not matched: ' + line)
-        return SourceAddress(addr, m.group('name'), m.group('file'), m.group('line'))
+        return [SourceAddress(addr, m.group('name'), m.group('file'), m.group('line'))]
 
     def __call__(self, addr):
         """
         Returns an iterable of SourceAddress objects for given addr.
 
         """
+
         result = self.cache.get(addr, None)
         if result:
             return result
@@ -82,12 +84,12 @@ class SymbolResolver(object):
         if self.show_inline:
             self.addr2line.stdin.write('0\n')
 
-        result = [self.parse_line(addr, self.next_line())]
+        result = self.parse_line(addr, self.next_line())
 
         if self.show_inline:
             line = self.next_line()
             while line.startswith(self.inline_prefix):
-                result.append(self.parse_line(addr, line[len(self.inline_prefix):]))
+                result.extend(self.parse_line(addr, line[len(self.inline_prefix):]))
                 line = self.next_line()
             self.consume_unknown(line)
 

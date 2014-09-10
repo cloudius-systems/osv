@@ -89,14 +89,20 @@ def symbol_resolver(args):
     else:
         elf_path = 'build/release/loader.elf'
 
-    return BeautifyingResolver(debug.SymbolResolver(elf_path, show_inline=not args.no_inlined_by))
+    base = debug.DummyResolver()
+    try:
+        base = trace.TraceDumpSymbols(args.tracefile, base)
+    except trace.NotATraceDumpFile:
+        # not a trace dump file. Assume trace buffer file, continue as usual
+        pass
+
+    return BeautifyingResolver(debug.SymbolResolver(elf_path, base, show_inline=not args.no_inlined_by))
 
 def get_backtrace_formatter(args):
     if not args.backtrace:
         return lambda backtrace: ''
 
-    return trace.BacktraceFormatter(
-        symbol_resolver(args), src_addr_formatter(args))
+    return trace.BacktraceFormatter(symbol_resolver(args), src_addr_formatter(args))
 
 def list_trace(args):
     def data_formatter(sample):
@@ -618,39 +624,28 @@ def convert_dump(args) :
         sys.exit(1)
 
 def download_dump(args) :
-    out = None;
-    if args.dumpfile == None:
-        if not args.no_convert:
-            out = tempfile.NamedTemporaryFile()
-            args.dumpfile = out.name
-        else:
-            args.dumpfile = "buffers"
-    if out == None:
-        out = open(args.dumpfile, "wb")
+    if os.path.exists(args.tracefile):
+        os.remove(args.tracefile)
+        assert(not os.path.exists(args.tracefile))
 
-    try:
-        client = Client(args)
-        url = client.get_url() + "/trace/buffers"
+    file = args.tracefile
+    client = Client(args)
+    url = client.get_url() + "/trace/buffers"
 
-        print "Downloading %s -> %s" % (url, out.name)
+    print "Downloading %s -> %s" % (url, file)
 
-        r = requests.get(url, stream=True, **client.get_request_kwargs())
-        size = int(r.headers['content-length'])
-        current = 0
+    r = requests.get(url, stream=True, **client.get_request_kwargs())
+    size = int(r.headers['content-length'])
+    current = 0
 
-        with open(out.name, 'w') as out_file:
-            for chunk in r.iter_content(8192):
-                out_file.write(chunk)
-                current += len(chunk)
-                sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current/1024, size/1024, 100.0*current/size, ('='*32*(current/size)) + '>'))
-                if current >= size:
-                    sys.stdout.write("\n")
-                sys.stdout.flush()
-
-        if not args.no_convert:
-            convert_dump(args)
-    finally:
-        out.close()
+    with open(file, 'wb') as out_file:
+        for chunk in r.iter_content(8192):
+            out_file.write(chunk)
+            current += len(chunk)
+            sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current/1024, size/1024, 100.0*current/size, ('='*32*(current/size)) + '>'))
+            if current >= size:
+                sys.stdout.write("\n")
+            sys.stdout.flush()
 
 
 if __name__ == "__main__":
@@ -787,12 +782,6 @@ if __name__ == "__main__":
                                              , description="""
                                              Downloads a trace dump via REST Api
                                              """)
-    cmd_download_dump.add_argument("--no-convert", action="store_true",
-                                  help="Do not convert the dump to tracefile",
-                                  )
-    cmd_download_dump.add_argument("-f", "--dumpfile", action="store",
-                                  help="Trace dump file",
-                                  )
     add_trace_source_options(cmd_download_dump)
     Client.add_arguments(cmd_download_dump, use_full_url=True)
     cmd_download_dump.set_defaults(func=download_dump, paginate=False)
