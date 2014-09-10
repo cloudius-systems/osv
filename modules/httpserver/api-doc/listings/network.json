@@ -102,6 +102,29 @@
             }
          }
       },
+      "wakeup_stats":{
+         "id": "wakeup_stats",
+         "properties":{
+            "packets_8":{
+               "type":"long"
+            },
+            "packets_16":{
+               "type":"long"
+            },
+            "packets_32":{
+               "type":"long"
+            },
+            "packets_64":{
+                "type":"long"
+            },
+            "packets_128":{
+                "type":"long"
+            },
+            "packets_256":{
+                "type":"long"
+            }
+        }
+      },
       "interface_data":{
          "properties":{
             "ifi_type":{
@@ -193,6 +216,12 @@
             },
 	    "ifi_oqueue_is_full":{
                "type":"long"
+            },
+            "ifi_iwakeup_stats":{
+                "type": "wakeup_stats"
+            },
+            "ifi_owakeup_stats":{
+                "type": "wakeup_stats"
             }
          }
       },
