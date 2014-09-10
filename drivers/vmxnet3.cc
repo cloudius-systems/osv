@@ -784,6 +784,9 @@ void vmxnet3_rxqueue::receive_work()
             return available();
         });
         disable_interrupt();
+
+        stats.rx_bh_wakeups++;
+
         do {
             receive();
         } while(available());
