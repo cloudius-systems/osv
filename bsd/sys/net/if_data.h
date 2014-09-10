@@ -10,6 +10,16 @@
 #include <bits/alltypes.h>
 #include <api/sys/types.h>
 
+struct wakeup_stats {
+    /* Count the number of wakeups when more than X packets were handled */
+    u_long packets_8;
+    u_long packets_16;
+    u_long packets_32;
+    u_long packets_64;
+    u_long packets_128;
+    u_long packets_256;
+};
+
 /*
  * Structure describing information about an interface
  * which may be of interest to management entities.
@@ -52,7 +62,25 @@ struct if_data {
                                 * be sent due to a lack of free space
                                 * on a HW ring
                                 */
+    wakeup_stats ifi_iwakeup_stats; /* Rx BH wakeup statistics */
+    wakeup_stats ifi_owakeup_stats; /* Tx BH wakeup statistics */
 };
+
+/**
+ * Increment the appropriate counters in wakeup_stats
+ * @param stats wakeup_stats struct to update
+ * @param wakeup_packets number of packets handled in the current wakeup cycle
+ */
+static inline void if_update_wakeup_stats(wakeup_stats& stats,
+                                          u_long wakeup_packets)
+{
+    stats.packets_8   += (wakeup_packets >= 8);
+    stats.packets_16  += (wakeup_packets >= 16);
+    stats.packets_32  += (wakeup_packets >= 32);
+    stats.packets_64  += (wakeup_packets >= 64);
+    stats.packets_128 += (wakeup_packets >= 128);
+    stats.packets_256 += (wakeup_packets >= 256);
+}
 
 
 #endif /* _NET_IF_DATA_H */
