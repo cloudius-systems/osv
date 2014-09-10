@@ -446,6 +446,7 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
             return mmu::write_pte(page, ptep, pte);
         }
     } else if (!wcp) {
+        int ret;
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
         do {
             WITH_LOCK(arc_lock) {
@@ -455,10 +456,24 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
                     return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
                 }
             }
-            // page is not in cache yet, create and try again
-        } while (create_read_cached_page(fp, key) != -1);
 
-        // try to access a hole in a file, map by zero_page
+            DROP_LOCK(write_lock) {
+                // page is not in cache yet, create and try again
+                // function may sleep so drop write lock while executing it
+                ret = create_read_cached_page(fp, key);
+            }
+
+            // we dropped write lock, need to re-check write cache again
+            wcp = find_in_cache(write_cache, key);
+            if (wcp) {
+                // write cache page appeared while we were creating a read cache page from ARC
+                // return will cause faulting thread to re-fault and we will try again
+                return false;
+            }
+
+        } while (ret != -1);
+
+        // try to access a hole in a file, map by zero_page            }
         return mmu::write_pte(zero_page, ptep, mmu::pte_mark_cow(pte, true));
     }
 
