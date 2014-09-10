@@ -209,6 +209,16 @@ extern "C" int __open_2(const char *pathname, int flags)
     return open(pathname, flags, 0);
 }
 
+extern "C" int __open64_2(const char *file, int flags)
+{
+    if (flags & O_CREAT) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return open64(file, flags);
+}
+
 int creat(const char *pathname, mode_t mode)
 {
     return open(pathname, O_CREAT|O_WRONLY|O_TRUNC, mode);
