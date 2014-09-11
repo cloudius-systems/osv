@@ -109,3 +109,20 @@ function cli_command_single(args, optind)
   end
   cli_command(t)
 end
+
+function cli_command_test(command)
+  require('testing')
+
+  -- Set the test subject
+  local filename = command_filename(command)
+  assert(file_exists(filename), command .. ": Command not found")
+  t_subject(dofile(filename))
+
+  -- Load the test module
+  local testfile = command_test_filename(command)
+  assert(file_exists(testfile), command .. ": No test file found")
+
+  -- Run the test
+  local test = dofile(testfile)
+  test.run()
+end
