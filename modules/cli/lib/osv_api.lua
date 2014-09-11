@@ -7,6 +7,43 @@ local ltn12 = require("ltn12")
 
 local schema = {}
 
+--- Constructs the path, join /arg/ume/nts ;)
+local function construct_path(arguments)
+  return type(arguments) == 'table'
+    and ("/" .. table.concat(map(url.escape, arguments), "/"))
+    or tostring(arguments)
+end
+
+--- Construct query parameters
+-- `parameters` is key/value where value is table, to enable multiplicity,
+-- or a simple string
+local function construct_query_params(parameters)
+  local ret = ""
+  if type(parameters) == "table" then
+    local tbl_reqquery = {}
+    for k, a in pairs(parameters) do
+      if type(a) == "table" then
+        for _, v in ipairs(a) do
+          table.insert(tbl_reqquery, k .. "=" .. url.escape(v))
+        end
+      else
+        table.insert(tbl_reqquery, k .. "=" .. url.escape(a))
+      end
+    end
+    ret = table.concat(tbl_reqquery, "&")
+  end
+  return ret
+end
+
+--- Construct full URL, with query parameters if exists
+local function construct_full_url(path, reqquery)
+  local ret = context.api .. path
+  if reqquery and string.len(reqquery) > 0 then
+    ret = ret .. "?" .. reqquery
+  end
+  return ret
+end
+
 function osv_schema()
   if next(schema) == nil then
     io.stderr:write("Loading OSv schema from: " .. context.api .. "\n")
@@ -48,28 +85,9 @@ end
 function osv_request(arguments, method, parameters, do_raw)
   local raw = do_raw or false
 
-  -- Construct path, join /arg/ume/nts ;)
-  local path = type(arguments) == 'table'
-    and ("/" .. table.concat(map(url.escape, arguments), "/"))
-    or tostring(arguments)
-
-  --[[ Construct query parameters:
-    `parameters` is key/value where value is table, to enable multiplicity,
-    or a simple string ]]--
-  local reqquery = ""
-  if type(parameters) == "table" then
-    local tbl_reqquery = {}
-    for k, a in pairs(parameters) do
-      if type(a) == "table" then
-        for _, v in ipairs(a) do
-          table.insert(tbl_reqquery, k .. "=" .. url.escape(v))
-        end
-      else
-        table.insert(tbl_reqquery, k .. "=" .. url.escape(a))
-      end
-    end
-    reqquery = table.concat(tbl_reqquery, "&")
-  end
+  local path = construct_path(arguments)
+  local reqquery = construct_query_params(parameters)
+  local full_url = construct_full_url(path, reqquery)
 
   -- TODO: Construct body (POST) parameters, not usable with current API anyway
   local reqbody = ""
@@ -78,12 +96,6 @@ function osv_request(arguments, method, parameters, do_raw)
   local reqheaders = {}
   if method == 'POST' then
     reqheaders['content-type'] = 'application/x-www-form-urlencoded'
-  end
-
-  -- Construct full URL, with query parameters if exists
-  local full_url = context.api .. path
-  if string.len(reqquery) > 0 then
-    full_url = full_url .. "?" .. reqquery
   end
 
   -- Response body sink
