@@ -17,11 +17,11 @@ Options:
 cmd.main = function(args)
   local args, opts = cmd.parser:parse(args)
 
-  for i = optind, #args do
+  for i = 1, #args do
     osv_request({"file", args[i]}, "PUT", {
       op = "MKDIRS",
       permission = "0755", -- TODO: umask?
-      createParent = (opts.p and "true" or "false")
+      createParent = (opts.parents and "true" or "false")
     })
   end
 end
