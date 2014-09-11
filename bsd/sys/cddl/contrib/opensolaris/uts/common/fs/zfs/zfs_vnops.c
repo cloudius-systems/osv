@@ -782,6 +782,7 @@ static int
 zfs_write(vnode_t *vp, uio_t *uio, int ioflag)
 {
 	znode_t		*zp = VTOZ(vp);
+	rlim64_t        limit = MAXOFFSET_T;
 	ssize_t		start_resid = uio->uio_resid;
 	ssize_t		tx_bytes;
 	uint64_t	end_size;
@@ -866,6 +867,15 @@ zfs_write(vnode_t *vp, uio_t *uio, int ioflag)
 		 */
 		rl = zfs_range_lock(zp, woff, n, RL_WRITER);
 	}
+
+	if (woff >= limit) {
+		zfs_range_unlock(rl);
+		ZFS_EXIT(zfsvfs);
+		return (EFBIG);
+	}
+
+	if ((woff + n) > limit || woff > (limit - n))
+		n = limit - woff;
 
 	/* Will this write extend the file length? */
 	write_eof = (woff + n > zp->z_size);

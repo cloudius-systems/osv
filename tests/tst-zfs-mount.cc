@@ -163,6 +163,7 @@ int main(int argc, char **argv)
 	report(fd > 0, "create /usr/foo");
 
 	report(write(fd, &foo, sizeof(foo)) == sizeof(foo), "write sizeof(foo) bytes to fd");
+	report(pwrite(fd, &foo, sizeof(foo), LONG_MAX) == -1 && errno == EFBIG, "check for maximum allowed offset");
 	report(fsync(fd) == 0, "fsync fd");
 	report(fstat(fd, &s) == 0, "fstat fd");
 
