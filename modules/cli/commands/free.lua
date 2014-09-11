@@ -7,10 +7,10 @@ cmd.main = function()
   local free, status = osv_request({"os", "memory", "free"}, "GET")
   osv_resp_assert(status, 200)
 
-  print(table_format({
+  io.write(table_format({
     {"", "total", "used", "free"},
     {"Mem:", tostring(total), tostring(total - free), tostring(free)}
-  }))
+  }), '\n')
 end
 
 return cmd
