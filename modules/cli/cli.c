@@ -66,17 +66,23 @@ int main (int argc, char* argv[]) {
   /* Context */
   env_osv_api = getenv("OSV_API");
 
+  /* Flags */
+  char *test_command = NULL;
+
   /* Process command line options */
   int opt = 0;
   static struct option long_options[] = {
-    {"api", optional_argument, 0, 'a'}
+    {"api", optional_argument, 0, 'a'},
+    {"test", optional_argument, 0, 'T'}
   };
 
   int long_index = 0;
-  while ((opt = getopt_long(argc, argv, "a:",
+  while ((opt = getopt_long(argc, argv, "T:a:",
     long_options, &long_index)) != -1) {
     switch (opt) {
       case 'a': env_osv_api = optarg;
+      break;
+      case 'T': test_command = optarg;
       break;
     }
   }
@@ -84,7 +90,24 @@ int main (int argc, char* argv[]) {
   /* Lua state */
   L = cli_luaL_newstate();
 
-  if (optind < argc) {
+  if (test_command != NULL) {
+    if (L == NULL) {
+      exit(2);
+    }
+
+    /* Set console height and width to 24x80 */
+    con_height = 24;
+    con_width = 80;
+
+    lua_getglobal(L, "cli_command_test");
+    lua_pushstring(L, test_command);
+    int error = lua_pcall(L, 1, 0, 0);
+    if (error) {
+      fprintf(stderr, "%s\n", lua_tostring(L, -1));
+      lua_pop(L, 1);
+      exit(1);
+    }
+  } else if (optind < argc) {
     /* If we have more arguments, the user is running a single command */
     if (L != NULL) {
       lua_getglobal(L, "cli_command_single");
