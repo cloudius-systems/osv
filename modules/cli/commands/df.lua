@@ -43,7 +43,7 @@ cmd.main = function(args)
     })
   end
 
-  print(table_format(tt))
+  io.write(table_format(tt), '\n')
 end
 
 return cmd
