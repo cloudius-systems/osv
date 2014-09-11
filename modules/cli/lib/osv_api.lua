@@ -170,3 +170,30 @@ function render_response(response, response_class)
 
   return renderer[response_class](response)
 end
+
+-- Testing
+
+--- Overrides http.request with mock responses
+local osv_request_mocked = false
+local osv_request_mocks = {}
+function osv_request_mock(response, arguments, method, parameters)
+  if not method then method = "GET" end
+  if not parameters then parameters = {} end
+
+  osv_request_mocks[method .. ' '
+    .. construct_full_url(construct_path(arguments),
+        construct_query_params(parameters))] = response
+
+  if not osv_request_mocked then
+    http.request = function(opts)
+      local res = osv_request_mocks[opts.method .. ' ' .. opts.url]
+      if res then
+        opts.sink(res)
+        return 1, 200, {}
+      else
+        error("Mock for '" .. opts.url .. "' not found")
+      end
+    end
+    osv_request_mocked = true
+  end
+end
