@@ -208,7 +208,7 @@ private:
     typedef vmxnet3_ring<vmxnet3_tx_compdesc, VMXNET3_MAX_TX_NCOMPDESC> compRingT;
     cmdRingT _cmd_ring;
     compRingT _comp_ring;
-    struct mbuf *_buf[VMXNET3_MAX_TX_NDESC];
+    struct mbuf *_buf[VMXNET3_MAX_TX_NDESC] = {};
     unsigned _avail = VMXNET3_MAX_TX_NDESC;
     osv::tx_xmit_iterator<vmxnet3_txqueue> _xmit_it;
     osv::xmitter<vmxnet3_txqueue, 4096> _xmitter;
@@ -251,7 +251,7 @@ private:
 
     cmdRingT _cmd_rings[VMXNET3_RXRINGS_PERQ];
     compRingT _comp_ring;
-    struct mbuf *_buf[VMXNET3_RXRINGS_PERQ][VMXNET3_MAX_RX_NDESC];
+    struct mbuf *_buf[VMXNET3_RXRINGS_PERQ][VMXNET3_MAX_RX_NDESC] = {};
     struct mbuf *_m_currpkt_head = nullptr;
     struct mbuf *_m_currpkt_tail = nullptr;
     struct ifnet* _ifn;
