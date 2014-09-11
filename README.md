@@ -31,7 +31,7 @@ First, install prerequisite packages:
 **Fedora**
 
 ```
-yum install ant autoconf automake boost-static gcc-c++ genromfs libvirt libtool flex bison qemu-system-x86 qemu-img maven maven-shade-plugin python-dpkt tcpdump gdb gnutls-utils openssl python-requests
+scripts/setup.py
 ```
 
 **Debian stable(wheezy)**
