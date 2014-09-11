@@ -21,7 +21,7 @@ cmd.main = function(args)
     if status == 404 then
       io.stderr:write(path .. ": File not found" .. "\n")
     else
-      print(content)
+      io.write(content, '\n')
     end
   end
 end
