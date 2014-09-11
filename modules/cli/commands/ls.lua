@@ -87,14 +87,14 @@ cmd.main = function(args)
   if #file_list > 0 then
     -- Print the files
     if flag_l then
-      print(table_format(file_list))
+      io.write(table_format(file_list), '\n')
     else
-      print(list_format(file_list))
+      io.write(list_format(file_list), '\n')
     end
 
     -- Empty line if we have more arguments
     if print_counter < #rargs then
-      print()
+      io.write('\n')
     end
   end
 
@@ -121,20 +121,20 @@ cmd.main = function(args)
 
       -- Print label of current folder listing
       if #rargs > 1 then
-        print(rarg.arg .. ":")
+        io.write(rarg.arg, ":", "\n")
       end
 
       -- Format accordingly
       if flag_l then
-        print("total " .. tostring(total_blocks))
-        print(table_format(file_list))
+        io.write("total ", tostring(total_blocks), "\n")
+        io.write(table_format(file_list), "\n")
       else
-        print(list_format(file_list))
+        io.write(list_format(file_list), "\n")
       end
 
       -- Empty line after folder listing
       if print_counter < #rargs then
-        print()
+        io.write("\n")
       end
     end
   end
