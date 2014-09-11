@@ -23,8 +23,8 @@ ifndef OSV_BUILD_PATH
 endif
 miscbase = $(src)/external/$(ARCH)/misc.bin
 libs-dir = $(miscbase)/usr/lib64
-boost-libs := $(libs-dir)/libboost_system-mt.so \
-              $(libs-dir)/libboost_filesystem-mt.so
+boost-libs := $(libs-dir)/libboost_system.so \
+              $(libs-dir)/libboost_filesystem.so
 
 # the build target executable:
 TARGET = httpserver
@@ -35,7 +35,7 @@ STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
-STATIC_LIBS = $(libs-dir)/libboost_program_options-mt.a
+STATIC_LIBS = $(libs-dir)/libboost_program_options.a
 DYN_LIBS = -lpthread -ldl -L$(OSV_BUILD_PATH)/tools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
 
 ifeq ($(use_host),y)

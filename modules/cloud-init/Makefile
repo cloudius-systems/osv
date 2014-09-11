@@ -11,8 +11,8 @@ src = ../..
 arch = x64
 
 boost-lib-dir = $(miscbase)/usr/lib64
-boost-libs := $(boost-lib-dir)/libboost_system-mt.so \
-              $(boost-lib-dir)/libboost_filesystem-mt.so
+boost-libs := $(boost-lib-dir)/libboost_system.so \
+              $(boost-lib-dir)/libboost_filesystem.so
 
 
 HTTPSERVER_DIR = ../../modules/httpserver

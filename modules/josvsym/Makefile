@@ -24,8 +24,8 @@ endif
 
 #miscbase = $(src)/external/$(ARCH)/misc.bin
 #libs-dir = $(miscbase)/usr/lib64
-#boost-libs := $(libs-dir)/libboost_system-mt.so \
-#              $(libs-dir)/libboost_filesystem-mt.so
+#boost-libs := $(libs-dir)/libboost_system.so \
+#              $(libs-dir)/libboost_filesystem.so
 
 MODULE		= josvsym
 OUTDIR		:= $(OSV_BUILD_PATH)/modules/$(MODULE)
