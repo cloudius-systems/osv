@@ -483,18 +483,20 @@ class TraceDumpSymbols(TraceDumpReaderBase) :
 
     def __call__(self, addr):
         result = self.cache.get(addr, None)
-        if not result:
-            x = debug.SourceAddress(addr, 0)
-            for a in [self.symbols, self.segments, self.modules]:
-                index = bisect.bisect_left(a, x) - 1
-                if index > 0 and index < len(a):
-                    s = a[index]
-                    if s.addr <= addr and (s.addr + s.size) > addr:
-                        result = [debug.SourceAddress(addr, ('%s+0x%x (%#08x)' % (s.name, addr - s.addr, addr)), s.filename, s.line)]
-                        self.cache[addr] = result
-                        return result
-        return self.delegate(addr)
-
+        if result:
+            return result
+        x = debug.SourceAddress(addr, 0)
+        for a in [self.symbols, self.segments, self.modules]:
+            index = bisect.bisect_left(a, x) - 1
+            if index > 0 and index < len(a):
+                s = a[index]
+                if s.addr <= addr and (s.addr + s.size) > addr:
+                    result = [debug.SourceAddress(addr, ('%s+0x%x (%#08x)' % (s.name, addr - s.addr, addr)), s.filename, s.line)]
+                    self.cache[addr] = result
+                    return result
+        result = self.delegate(addr)
+        self.cache[addr] = result
+        return result
 
 class Thread(object):
     def __init__(self, ptr, name):
