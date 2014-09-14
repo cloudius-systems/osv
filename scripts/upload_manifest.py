@@ -112,12 +112,12 @@ def upload(osv, manifest, depends):
 
     def strip_file(filename):
         stripped_filename = filename
-        if(filename.endswith(".so") and \
-                (filename[0] != "/" or filename.startswith(os.getcwd()))):
+        if filename.endswith(".so") and \
+                (filename[0] != "/" or filename.startswith(os.getcwd())):
             stripped_filename = filename[:-3] + "-stripped.so"
-            if(not os.path.exists(stripped_filename) \
+            if not os.path.exists(stripped_filename) \
                     or (os.path.getmtime(stripped_filename) < \
-                        os.path.getmtime(filename))):
+                        os.path.getmtime(filename)):
                 subprocess.call(["strip", "-o", stripped_filename, filename])
         return stripped_filename
 
