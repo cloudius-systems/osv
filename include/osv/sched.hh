@@ -381,7 +381,7 @@ public:
     };
 
     explicit thread(std::function<void ()> func, attr attributes = attr(),
-            bool main = false);
+            bool main = false, bool app = false);
     ~thread();
     void start();
     template <class Pred>
@@ -434,6 +434,7 @@ public:
     void join();
     void detach();
     void set_cleanup(std::function<void ()> cleanup);
+    bool is_app() const { return _app; }
     /**
      * Return thread's numeric id
      *
@@ -573,6 +574,7 @@ private:
     std::atomic<bool> _interrupted;
     std::function<void ()> _cleanup;
     std::vector<std::unique_ptr<char[]>> _tls;
+    bool _app;
     void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
@@ -715,6 +717,11 @@ struct cpu : private timer_base::client {
     thread* idle_thread;
     // if true, cpu is now polling incoming_wakeups_mask
     std::atomic<bool> idle_poll = { false };
+    // there is a data dependency between next two fields
+    // two cpus can access/modify them simultaneously and
+    // they should observe changes in the same order
+    std::atomic<bool> lazy_flush_tlb = { false };
+    std::atomic<bool> app_thread = {false};
     // for each cpu, a list of threads that are migrating into this cpu:
     typedef lockless_queue<thread, &thread::_wakeup_link> incoming_wakeup_queue;
     cpu_set incoming_wakeups_mask;

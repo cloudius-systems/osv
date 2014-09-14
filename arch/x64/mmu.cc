@@ -66,6 +66,8 @@ inter_processor_interrupt tlb_flush_ipi{[] {
 
 void flush_tlb_all()
 {
+    static std::vector<sched::cpu*> ipis(sched::max_cpus);
+
     if (sched::cpus.size() <= 1) {
         mmu::flush_tlb_local();
         return;
@@ -75,8 +77,36 @@ void flush_tlb_all()
     mmu::flush_tlb_local();
     std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_waiter.reset(*sched::thread::current());
-    tlb_flush_pendingconfirms.store((int)sched::cpus.size() - 1);
-    tlb_flush_ipi.send_allbutself();
+    int count;
+    if (sched::thread::current()->is_app()) {
+        ipis.clear();
+        std::copy_if(sched::cpus.begin(), sched::cpus.end(), ipis.begin(),
+                [](sched::cpu* c) {
+            if (c == sched::cpu::current()) {
+                return false;
+            }
+
+            c->lazy_flush_tlb.store(true, std::memory_order_relaxed);
+            if (!c->app_thread.load(std::memory_order_seq_cst)) {
+                return false;
+            }
+            if (!c->lazy_flush_tlb.exchange(false, std::memory_order_relaxed)) {
+                return false;
+            }
+            return true;
+        });
+        count = ipis.size();
+    } else {
+        count = sched::cpus.size() - 1;
+    }
+    tlb_flush_pendingconfirms.store(count);
+    if (count == (int)sched::cpus.size() - 1) {
+        tlb_flush_ipi.send_allbutself();
+    } else {
+        for (auto&& c: ipis) {
+            tlb_flush_ipi.send(c);
+        }
+    }
     sched::thread::wait_until([] {
             return tlb_flush_pendingconfirms.load() == 0;
     });

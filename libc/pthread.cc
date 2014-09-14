@@ -95,7 +95,7 @@ namespace pthread_private {
                 current_pthread = to_libc();
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
-            }, attributes(attr ? *attr : thread_attr()))
+            }, attributes(attr ? *attr : thread_attr()), false, true)
     {
         _thread.set_cleanup([=] { delete this; });
         _thread.start();

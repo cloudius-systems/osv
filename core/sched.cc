@@ -343,6 +343,13 @@ void cpu::reschedule_from_interrupt()
             preemption_timer.set(now + delta);
         }
     }
+
+    if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
+        app_thread.store(n->_app, std::memory_order_relaxed);
+    }
+    if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
+        mmu::flush_tlb_local();
+    }
     n->switch_to();
     if (p->_detached_state->_cpu->terminating_thread) {
         p->_detached_state->_cpu->terminating_thread->destroy();
@@ -716,7 +723,7 @@ void* thread::do_remote_thread_local_var(void* var)
     return tls_this + offset;
 }
 
-thread::thread(std::function<void ()> func, attr attr, bool main)
+thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     : _func(func)
     , _runtime(thread::priority_default)
     , _detached_state(new detached_state(this))
@@ -724,6 +731,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main)
     , _migration_lock_counter(0)
     , _id(0)
     , _cleanup([this] { delete this; })
+    , _app(app)
     , _joiner(nullptr)
 {
     trace_thread_create(this);
