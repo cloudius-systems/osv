@@ -10,7 +10,7 @@ try:
     import StringIO
     # This works on Python 2
     StringIO = StringIO.StringIO
-except:
+except ImportError:
     # This works on Python 3
     StringIO = io.StringIO
 
