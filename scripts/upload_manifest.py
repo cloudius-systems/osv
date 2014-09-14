@@ -28,7 +28,7 @@ def expand(items):
             for dirpath, dirnames, filenames in os.walk(hostname):
                 for filename in filenames:
                     relpath = dirpath[len(hostname):]
-                    if relpath != "" :
+                    if relpath != "":
                         relpath += "/"
                     yield (name + relpath + filename,
                            hostname + relpath + filename)
@@ -59,7 +59,7 @@ def unsymlink(f):
         return f
 
 def upload(osv, manifest, depends):
-    files = dict([(f, manifest.get('manifest', f, vars = defines))
+    files = dict([(f, manifest.get('manifest', f, vars=defines))
                   for f in manifest.options('manifest')])
 
     files = list(expand(files.items()))
@@ -68,7 +68,7 @@ def upload(osv, manifest, depends):
     # Wait for the guest to come up and tell us it's listening
     while True:
         line = osv.stdout.readline()
-        if not line or line.find(b"Waiting for connection")>=0:
+        if not line or line.find(b"Waiting for connection") >= 0:
             break
         os.write(sys.stdout.fileno(), line)
 
@@ -81,7 +81,7 @@ def upload(osv, manifest, depends):
     def consumeoutput(file):
         for line in iter(lambda: file.readline(), b''):
             os.write(sys.stdout.fileno(), line)
-    threading.Thread(target = consumeoutput, args = (osv.stdout,)).start()
+    threading.Thread(target=consumeoutput, args=(osv.stdout,)).start()
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
     def cpio_send(data):
@@ -152,26 +152,26 @@ def upload(osv, manifest, depends):
 def main():
     make_option = optparse.make_option
 
-    opt = optparse.OptionParser(option_list = [
+    opt = optparse.OptionParser(option_list=[
             make_option('-o',
-                        dest = 'output',
-                        help = 'write to FILE',
-                        metavar = 'FILE'),
+                        dest='output',
+                        help='write to FILE',
+                        metavar='FILE'),
             make_option('-d',
-                        dest = 'depends',
-                        help = 'write dependencies to FILE',
-                        metavar = 'FILE',
-                        default = None),
+                        dest='depends',
+                        help='write dependencies to FILE',
+                        metavar='FILE',
+                        default=None),
             make_option('-m',
-                        dest = 'manifest',
-                        help = 'read manifest from FILE',
-                        metavar = 'FILE'),
+                        dest='manifest',
+                        help='read manifest from FILE',
+                        metavar='FILE'),
             make_option('-D',
-                        type = 'string',
-                        help = 'define VAR=DATA',
-                        metavar = 'VAR=DATA',
-                        action = 'callback',
-                        callback = add_var),
+                        type='string',
+                        help='define VAR=DATA',
+                        metavar='VAR=DATA',
+                        action='callback',
+                        callback=add_var),
     ])
 
     (options, args) = opt.parse_args()
@@ -186,14 +186,14 @@ def main():
     depends.write('%s: \\\n' % (options.output,))
 
     image_path = os.path.abspath(options.output)
-    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --noinit /tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell = True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --noinit /tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends)
 
     osv.wait()
 
     # Disable ZFS compression; it stops taking effect from this point on.
-    osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "--norandom --noinit /zfs.so set compression=off osv"' % image_path, shell = True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "--norandom --noinit /zfs.so set compression=off osv"' % image_path, shell=True, stdout=subprocess.PIPE)
     osv.wait()
 
     depends.write('\n\n')
