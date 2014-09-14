@@ -73,7 +73,7 @@ def upload(osv, manifest, depends):
         os.write(sys.stdout.fileno(), line)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("127.0.0.1", 10000));
+    s.connect(("127.0.0.1", 10000))
 
     # We'll want to read the rest of the guest's output, so that it doesn't
     # hang, and so the user can see what's happening. Easiest to do this with
