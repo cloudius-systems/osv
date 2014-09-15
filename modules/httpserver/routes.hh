@@ -156,7 +156,7 @@ private:
      * @param param_part will hold the string with the parameters
      * @return the url from the request without the last /
      */
-    std::string normalize_url(const std::string& url, std::string& param_part);
+    std::string normalize_url(const std::string& url);
 
     std::unordered_map<std::string, handler_base*> map[NUM_OPERATION];
     std::vector<match_rule*> rules[NUM_OPERATION];

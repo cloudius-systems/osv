@@ -65,10 +65,8 @@ routes::~routes()
 void routes::handle(const string& path, http::server::request& req,
                     http::server::reply& rep)
 {
-    string param_str;
-
     handler_base* handler = get_handler(str2type(req.method),
-                                        normalize_url(path, param_str), req.param);
+                                        normalize_url(path), req.param);
     if (handler != nullptr) {
         try {
             for (auto& i : handler->mandatory_param) {
@@ -94,16 +92,8 @@ void routes::handle(const string& path, http::server::request& req,
     }
 }
 
-std::string routes::normalize_url(const std::string& url,
-                                  std::string& param_part)
+std::string routes::normalize_url(const std::string& url)
 {
-    int param = url.find('?');
-    if (param > 0) {
-        param_part = url.substr(param, url.length() - param - 1);
-        return (url.at(param - 1) == '/') ?
-               url.substr(0, param - 2) :
-               url.substr(0, param - 1);
-    }
     return (url.length() < 2 || url.at(url.length() - 1) != '/') ?
            url : url.substr(0, url.length() - 1);
 }
