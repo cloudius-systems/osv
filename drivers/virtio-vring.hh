@@ -45,7 +45,6 @@ class virtio_driver;
             VRING_DESC_F_INDIRECT=4
         };
 
-        u64 get_paddr();
         u32 get_len() { return _len; }
         u16 next_idx() { return _next; }
 
