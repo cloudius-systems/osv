@@ -15,8 +15,6 @@
 #include <osv/mutex.h>
 #include <osv/debug.hh>
 #include <osv/mmu.hh>
-#include <typeinfo>
-#include <cxxabi.h>
 #include <api/dlfcn.h>
 
 namespace vmw {

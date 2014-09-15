@@ -57,8 +57,6 @@
 #include <bsd/sys/netinet/tcp.h>
 #include <bsd/x64/machine/atomic.h>
 #include <bsd/x64/machine/in_cksum.h>
-#include <typeinfo>
-#include <cxxabi.h>
 
 using namespace memory;
 
