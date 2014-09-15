@@ -148,7 +148,7 @@ void vfs_file::sync(off_t start, off_t end)
     pagecache::sync(this, start, end);
 }
 
-// Locking: vn_lock will call into the filesystem, and that can trigger an
+// Locking: VOP_CACHE will call into the filesystem, and that can trigger an
 // eviction that will hold the mmu-side lock that protects the mappings
 // Always follow that order. We however can't just get rid of the mmu-side lock,
 // because not all invalidations will be synchronous.
