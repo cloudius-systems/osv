@@ -64,7 +64,7 @@ class virtio_driver;
     public:
         enum {
             // Mark that we do not need an interrupt for consuming a descriptor
-            // from the ring. Unrelieable so it's simply an optimization
+            // from the ring. Unreliable so it's simply an optimization
             VRING_AVAIL_F_NO_INTERRUPT=1
         };
 
@@ -269,7 +269,7 @@ class virtio_driver;
         vring_used* _used;
         // cookies to store access to the upper layer pointers
         void** _cookie;
-        //protects parallel get_bug /add_buf access, mainly the _avail_head variable
+        //protects parallel get_buf/add_buf access, mainly the _avail_head variable
         mutex _lock;
         // pointer to the end of the used ring to get a glimpse of the host avail idx
         std::atomic<u16>* _avail_event;
