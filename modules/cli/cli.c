@@ -175,6 +175,8 @@ int main (int argc, char* argv[]) {
       /* with zero input (^D), reset the lua state */
       if (L != NULL && el_count == 0) {
         cli_luaL_renewstate(&L);
+      } else if (el_count == 1) {
+        /* Ignore empty line */
       } else if (L != NULL && el_count > 0) {
         /* Remove tailing \n */
         el_line[strlen(el_line)-1] = '\0';
