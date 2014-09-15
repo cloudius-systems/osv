@@ -482,6 +482,7 @@ public:
 private:
     static void wake_impl(detached_state* st,
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
+    static void sleep_impl(timer &tmr);
     void main();
     void switch_to();
     void switch_to_first();
@@ -1115,7 +1116,7 @@ void thread::sleep(std::chrono::duration<Rep, Period> duration)
 {
     timer t(*current());
     t.set(duration);
-    wait_until([&] { return t.expired(); });
+    sleep_impl(t);
 }
 
 template <class Action>

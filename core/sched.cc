@@ -1129,6 +1129,11 @@ void* thread::setup_tls(ulong module, const void* tls_template,
     return p;
 }
 
+void thread::sleep_impl(timer &t)
+{
+    wait_until([&] { return t.expired(); });
+}
+
 void thread_handle::wake()
 {
     WITH_LOCK(rcu_read_lock) {
