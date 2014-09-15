@@ -57,11 +57,6 @@ void lookup_name_demangled(void *addr, char *buf, size_t len)
         - reinterpret_cast<uintptr_t>(ei.addr));
 }
 
-// demangle(const char *name) returns the demangled symbol name, if the
-// given name is a mangled name of a C++ symbol, or null otherwise.
-// The return value is a std::unique_ptr<char> pointing to newly allocated
-// memory, and will automatically be freed by the caller by virtue of using
-// unique_ptr.
 std::unique_ptr<char> demangle(const char *name)
 {
     int status;
@@ -70,6 +65,22 @@ std::unique_ptr<char> demangle(const char *name)
     // need to use free() to free it. Here we're assuming that unique_ptr's
     // default deallocator, "delete", is the same thing as free().
     return std::unique_ptr<char>(demangled);
+}
+
+demangler::~demangler()
+{
+    free(_buf);
+}
+const char *demangler::operator()(const char * name)
+{
+    int status;
+    auto *demangled = abi::__cxa_demangle(name, _buf, &_len, &status);
+    if (demangled) {
+        _buf = demangled;
+        return _buf;
+    } else {
+        return nullptr;
+    }
 }
 
 }
