@@ -13,6 +13,8 @@
 #include <osv/debug.hh>
 #include <osv/prio.hh>
 
+#include "arch-dtb.hh"
+
 using namespace processor;
 
 #define NANO_PER_SEC 1000000000
@@ -88,9 +90,8 @@ public:
 
 arm_clock_events::arm_clock_events()
 {
-    /* XXX hardcoded, and also note that on the hardware it's
-       level-sensitive, but kvm/qemu make it edge for the guest */
-    this->irqid = 27;
+    int res = dtb_get_timer_irq();
+    this->irqid = res ? res : 16 + 11; /* default PPI 11 */
     idt.register_handler(this, this->irqid, &arm_clock_events::irq_handler,
                          gic::irq_type::IRQ_TYPE_EDGE);
 }

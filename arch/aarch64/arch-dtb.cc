@@ -24,6 +24,11 @@ extern "C" {
 void *dtb;
 char *cmdline;
 
+struct dtb_int_spec {
+    int irq_id;
+    unsigned int flags;
+};
+
 static bool dtb_getprop_u32(int node, const char *name, u32 *retval)
 {
     u32 *prop;
@@ -78,6 +83,37 @@ static size_t dtb_get_reg(int node, u64 *addr)
     }
 
     return retval;
+}
+
+/* NB: assumes #interrupt-cells = 3 */
+static bool dtb_get_int_spec(int node, struct dtb_int_spec *s, int n)
+{
+    int size;
+    u32 *ints = (u32 *)fdt_getprop(dtb, node, "interrupts", &size);
+    int required = (3 * n) * sizeof(u32);
+
+    if (!ints || size < required)
+        return false;
+
+    for (int i = 0; i < n; i++, ints += 3) {
+        u32 value = fdt32_to_cpu(ints[0]);
+        switch (value) {
+        case 0:
+            s[i].irq_id = 32;
+            break;
+        case 1:
+            s[i].irq_id = 16;
+            break;
+        default:
+            return false;
+        }
+        value = fdt32_to_cpu(ints[1]);
+        s[i].irq_id += value;
+        value = fdt32_to_cpu(ints[2]);
+        s[i].flags = value;
+    }
+
+    return true;
 }
 
 void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
@@ -191,4 +227,26 @@ u64 dtb_get_uart_base()
 
     len = dtb_get_reg(node, &retval);
     return retval;
+}
+
+/* this gets the virtual timer irq, we are not interested
+ * about the other timers.
+ */
+
+int dtb_get_timer_irq()
+{
+    int node;
+    struct dtb_int_spec int_spec[4];
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_path_offset(dtb, "/timer");
+    if (node < 0)
+        return 0;
+
+    if (!dtb_get_int_spec(node, int_spec, 4))
+        return 0;
+
+    return int_spec[2].irq_id;
 }

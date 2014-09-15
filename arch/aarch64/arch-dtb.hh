@@ -47,4 +47,11 @@ size_t dtb_get_phys_memory(u64 *addr);
  */
 u64 dtb_get_uart_base();
 
+/* int gdb_get_timer_irq()
+ *
+ * returns the irqid of the virtual timer from the dtb,
+ * or 0 on failure. 0 is safe since PPIs start from 16.
+ */
+int dtb_get_timer_irq();
+
 #endif /* ARCH_DTB_HH */
