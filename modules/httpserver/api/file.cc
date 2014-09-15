@@ -20,6 +20,11 @@
 #include "connection.hh"
 #include <boost/filesystem.hpp>
 #include <algorithm>
+#include <vector>
+#include "boost/filesystem/path.hpp"
+#include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
+#include <boost/algorithm/string/replace.hpp>
 
 namespace httpserver {
 
@@ -239,27 +244,84 @@ class get_file_handler : public file_interaction_handler {
         return res;
     }
 
+    string global_to_regexp(string regex)
+    {
+        boost::replace_all(regex, "\\", "\\\\");
+        boost::replace_all(regex, "^", "\\^");
+        boost::replace_all(regex, ".", "\\.");
+        boost::replace_all(regex, "$", "\\$");
+        boost::replace_all(regex, "|", "\\|");
+        boost::replace_all(regex, "(", "\\(");
+        boost::replace_all(regex, ")", "\\)");
+        boost::replace_all(regex, "[", "\\[");
+        boost::replace_all(regex, "]", "\\]");
+        boost::replace_all(regex, "*", ".*");
+        boost::replace_all(regex, "+", "\\+");
+        boost::replace_all(regex, "?", ".");
+        boost::replace_all(regex, "{", "\\{");
+        boost::replace_all(regex, "}", "\\}");
+        return regex;
+    }
+
+    bool list_directory_using_wildcard(const vector<string> strs,
+                                       size_t pos,
+                                       boost::filesystem::directory_iterator& itr,
+                                       vector<FileStatusProperties>& res) {
+        if (pos >= strs.size()) {
+            return true;
+        }
+
+        struct stat buffer;
+        auto reg = global_to_regexp(strs[pos]);
+        boost::regex pattern(reg, boost::regex::normal);
+        boost::filesystem::directory_iterator end_itr;
+        for (; itr != end_itr; ++itr) {
+            if (pos + 1 == strs.size()) {
+                if (boost::regex_match(itr->path().filename().string(), pattern) && stat((*itr).path().string().c_str(), &buffer) == 0) {
+                    res.push_back(get_file_status(itr->path().string(), itr->path().filename().string(), buffer));
+                }
+            } else {
+                if (boost::filesystem::is_directory(itr->status()) && boost::regex_match(itr->path().filename().string(), pattern)) {
+                    boost::filesystem::directory_iterator subdir_itr(itr->path());
+                    list_directory_using_wildcard(strs, pos + 1, subdir_itr,res);
+                }
+            }
+        }
+        return true;
+    }
+
     bool list_directory(const string& path, const http::server::request& req,
                         http::server::reply& rep)
     {
         vector<FileStatusProperties> res;
-        validate_path(path);
-        auto dirp = opendir(path.c_str());
-        if (dirp == nullptr) {
-            throw bad_param_exception(
-                "Failed listing '" + path + "' " + strerror(errno));
-        }
-        struct dirent entry;
-        struct dirent *result;
-        while (readdir_r(dirp, &entry, &result) == 0 && result != nullptr) {
-            struct stat buffer;
-            string name = path + "/" + entry.d_name;
-            if (stat(name.c_str(), &buffer) == 0) {
-                res.push_back(get_file_status(name, entry.d_name, buffer));
+        size_t asterisk = path.find_first_of("*?");
+        if (asterisk != string::npos) {
+            size_t base = path.rfind('/', asterisk);
+            auto base_dir = path.substr(0, base+1);
+            boost::filesystem::directory_iterator itr(base_dir);
+            vector<string> strs;
+            auto remind = path.substr(base + 1);
+            boost::split(strs,remind ,boost::is_any_of("/"));
+            list_directory_using_wildcard(strs, 0, itr, res);
+        } else {
+            validate_path(path);
+            auto dirp = opendir(path.c_str());
+            if (dirp == nullptr) {
+                throw bad_param_exception(
+                    "Failed listing '" + path + "' " + strerror(errno));
             }
-        }
+            struct dirent entry;
+            struct dirent *result;
+            while (readdir_r(dirp, &entry, &result) == 0 && result != nullptr) {
+                struct stat buffer;
+                string name = path + "/" + entry.d_name;
+                if (stat(name.c_str(), &buffer) == 0) {
+                    res.push_back(get_file_status(name, entry.d_name, buffer));
+                }
+            }
 
-        (void) closedir(dirp);
+            (void) closedir(dirp);
+        }
         rep.content = formatter::to_json(res);
         set_headers(rep, "json");
         return true;

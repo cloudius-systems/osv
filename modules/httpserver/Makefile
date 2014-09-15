@@ -24,7 +24,8 @@ endif
 miscbase = $(src)/external/$(ARCH)/misc.bin
 libs-dir = $(miscbase)/usr/lib64
 boost-libs := $(libs-dir)/libboost_system.so \
-              $(libs-dir)/libboost_filesystem.so
+              $(libs-dir)/libboost_filesystem.so \
+              $(libs-dir)/libboost_regex.so
 
 # the build target executable:
 TARGET = httpserver

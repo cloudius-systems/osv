@@ -23,6 +23,12 @@ class testfile(basetest.Basetest):
         hosts = next((item for item in lst if item["pathSuffix"] == "hosts"), None)
         self.assertEqual(hosts["owner"], "osv")
 
+    def test_list_astrik_file_cmd(self):
+        path = "/file"
+        lst = self.curl(path + "/et%3F/hos*?op=LISTSTATUS")
+        hosts = next((item for item in lst if item["pathSuffix"] == "hosts"), None)
+        self.assertEqual(hosts["owner"], "osv")
+
     def test_file_status_cmd(self):
         path = "/file"
         hosts = self.curl(path + "/etc/hosts?op=GETFILESTATUS")
