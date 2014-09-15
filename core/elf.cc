@@ -18,13 +18,13 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/range/algorithm/find.hpp>
 #include <functional>
-#include <cxxabi.h>
 #include <iterator>
 #include <osv/sched.hh>
 #include <osv/trace.hh>
 #include <osv/version.hh>
 #include <osv/stubbing.hh>
 #include <sys/utsname.h>
+#include <osv/demangle.hh>
 
 #include "arch.hh"
 
@@ -498,15 +498,12 @@ object::dynamic_str_array(unsigned tag)
 }
 
 static std::string demangle(const char *name) {
-    int status;
-    char *demangled = abi::__cxa_demangle(name, nullptr, 0, &status);
+    auto demangled = osv::demangle(name);
     std::string ret(name);
     if (demangled) {
         ret += " (";
-        ret += demangled;
+        ret += demangled.get();
         ret += ")";
-        // "demangled" was allocated with malloc() by __cxa_demangle
-        free(demangled);
     }
     return ret;
 }

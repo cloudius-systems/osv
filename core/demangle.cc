@@ -8,6 +8,9 @@
 #include <string.h>
 #include <algorithm>
 #include <osv/elf.hh>
+#include <cxxabi.h>
+
+#include <osv/demangle.hh>
 
 namespace osv {
 
@@ -52,6 +55,21 @@ void lookup_name_demangled(void *addr, char *buf, size_t len)
     snprintf(buf + funclen, len - funclen, "+%d",
         reinterpret_cast<uintptr_t>(addr)
         - reinterpret_cast<uintptr_t>(ei.addr));
+}
+
+// demangle(const char *name) returns the demangled symbol name, if the
+// given name is a mangled name of a C++ symbol, or null otherwise.
+// The return value is a std::unique_ptr<char> pointing to newly allocated
+// memory, and will automatically be freed by the caller by virtue of using
+// unique_ptr.
+std::unique_ptr<char> demangle(const char *name)
+{
+    int status;
+    char *demangled = abi::__cxa_demangle(name, nullptr, 0, &status);
+    // Note: __cxa_demangle used malloc() to allocate demangled, and we'll
+    // need to use free() to free it. Here we're assuming that unique_ptr's
+    // default deallocator, "delete", is the same thing as free().
+    return std::unique_ptr<char>(demangled);
 }
 
 }
