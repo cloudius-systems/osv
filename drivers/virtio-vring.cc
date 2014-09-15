@@ -293,13 +293,11 @@ namespace virtio {
             u16 avail_idx = _avail->_idx.load(std::memory_order_relaxed);
             u16 avail_event = _avail_event->load(std::memory_order_relaxed);
 
-            trace_virtio_kicked_event_idx(this, kicked, _q_index,
-                                          avail_idx, avail_event,
-                                          _avail_added_since_kick);
-
             kicked = ((u16)(avail_idx - avail_event - 1) <
                                                        _avail_added_since_kick);
 
+            trace_virtio_kicked_event_idx(this, kicked, _q_index,
+                    avail_idx, avail_event, _avail_added_since_kick);
         } else {
             std::atomic_thread_fence(std::memory_order_seq_cst);
 
