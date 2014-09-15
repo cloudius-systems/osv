@@ -21,6 +21,7 @@ public:
     virtual char readch();
 
     void set_base_addr(u64 addr);
+    u64 get_base_addr();
 
 private:
     virtual void dev_start();

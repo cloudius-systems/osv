@@ -221,7 +221,7 @@ u64 dtb_get_uart_base()
     if (!dtb)
         return 0;
 
-    node = fdt_node_offset_by_compatible(dtb, -1, "pl011");
+    node = fdt_node_offset_by_compatible(dtb, -1, "arm,pl011");
     if (node < 0)
         return 0;
 

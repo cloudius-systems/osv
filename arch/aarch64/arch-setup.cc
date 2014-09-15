@@ -20,6 +20,10 @@
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
 
+#include "drivers/console.hh"
+#include "drivers/pl011.hh"
+#include "early-console.hh"
+
 void setup_temporary_phys_map()
 {
     // duplicate 1:1 mapping into phys_mem
@@ -52,8 +56,11 @@ void arch_setup_free_memory()
     /* linear_map [TTBR0 - boot, DTB and ELF] */
     mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
                     addr - mmu::mem_addr);
+
     /* linear_map [TTBR0 - UART] */
-    mmu::linear_map((void *)0x9000000, (mmu::phys)0x9000000, 0x1000);
+    addr = (mmu::phys)console::arch_early_console.get_base_addr();
+    mmu::linear_map((void *)addr, addr, 0x1000);
+
     /* linear_map [TTBR0 - GIC DIST] */
     mmu::linear_map((void *)0x8000000, (mmu::phys)0x8000000, 0x10000);
     /* linear_map [TTBR0 - GIC CPU interface] */
@@ -86,10 +93,6 @@ void arch_init_premain()
 void arch_init_drivers()
 {
 }
-
-#include "drivers/console.hh"
-#include "drivers/pl011.hh"
-#include "early-console.hh"
 
 void arch_init_early_console()
 {

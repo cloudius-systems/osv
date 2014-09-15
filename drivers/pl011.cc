@@ -25,6 +25,11 @@ void PL011_Console::set_base_addr(u64 addr)
     uart = (char *)addr;
 }
 
+u64 PL011_Console::get_base_addr()
+{
+    return (u64)uart;
+}
+
 void PL011_Console::flush() {
     return;
 }
