@@ -61,10 +61,18 @@ void arch_setup_free_memory()
     addr = (mmu::phys)console::arch_early_console.get_base_addr();
     mmu::linear_map((void *)addr, addr, 0x1000);
 
-    /* linear_map [TTBR0 - GIC DIST] */
-    mmu::linear_map((void *)0x8000000, (mmu::phys)0x8000000, 0x10000);
-    /* linear_map [TTBR0 - GIC CPU interface] */
-    mmu::linear_map((void *)0x8010000, (mmu::phys)0x8010000, 0x10000);
+    /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
+    u64 dist, cpu;
+    size_t dist_len, cpu_len;
+    if (!dtb_get_gic_v2(&dist, &dist_len, &cpu, &cpu_len)) {
+        dist = 0x8000000;
+        dist_len = 0x10000;
+        cpu = 0x8010000;
+        cpu_len = 0x10000;
+    }
+    gic::gic = new gic::gic_driver(dist, cpu);
+    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len);
+    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len);
 
     mmu::switch_to_runtime_page_tables();
 

@@ -54,4 +54,11 @@ u64 dtb_get_uart_base();
  */
 int dtb_get_timer_irq();
 
+/* bool dtb_get_gic_v2(u64 *dist, u64 *cpu)
+ *
+ * gets the GIC v2 distributor and cpu interface.
+ * return false on failure.
+ */
+bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len);
+
 #endif /* ARCH_DTB_HH */

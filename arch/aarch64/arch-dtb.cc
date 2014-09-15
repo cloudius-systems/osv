@@ -85,6 +85,37 @@ static size_t dtb_get_reg(int node, u64 *addr)
     return retval;
 }
 
+static bool dtb_get_reg_n(int node, u64 *addr, size_t *len, int n)
+{
+    u32 addr_cells, size_cells;
+    memset(addr, 0, sizeof(u64) * n);
+    memset(len, 0, sizeof(size_t) * n);
+
+    if (!dtb_getprop_u32_cascade(node, "#address-cells", &addr_cells))
+        return false;
+
+    if (!dtb_getprop_u32_cascade(node, "#size-cells", &size_cells))
+        return false;
+
+    int size;
+    u32 *reg = (u32 *)fdt_getprop(dtb, node, "reg", &size);
+    int required = ((addr_cells + size_cells) * sizeof(u32)) * n;
+
+    if (!reg || size < required)
+        return false;
+
+    for (int x = 0; x < n; x++) {
+        for (u32 i = 0; i < addr_cells; i++, reg++) {
+            addr[x] = addr[x] << 32 | fdt32_to_cpu(*reg);
+        }
+        for (u32 i = 0; i < size_cells; i++, reg++) {
+            len[x] = len[x] << 32 | fdt32_to_cpu(*reg);
+        }
+    }
+
+    return true;
+}
+
 /* NB: assumes #interrupt-cells = 3 */
 static bool dtb_get_int_spec(int node, struct dtb_int_spec *s, int n)
 {
@@ -249,4 +280,28 @@ int dtb_get_timer_irq()
         return 0;
 
     return int_spec[2].irq_id;
+}
+
+/* this gets the GIC distributor and cpu interface addresses */
+bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
+{
+    u64 addr[2], len[2];
+    int node;
+
+    if (!dtb)
+        return false;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "arm,cortex-a15-gic");
+    if (node < 0)
+        return false;
+
+    if (!dtb_get_reg_n(node, addr, len, 2))
+        return false;
+
+    *dist = addr[0];
+    *dist_len = len[0];
+    *cpu = addr[1];
+    *cpu_len = len[1];
+
+    return true;
 }
