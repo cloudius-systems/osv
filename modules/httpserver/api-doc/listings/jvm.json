@@ -14,7 +14,7 @@
                     "method": "GET",
                     "summary": "JAVA version",
                     "notes": "return the version of the JAVA runtime",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "getJavaVersion",
                     "produces": [
                         "application/json"
@@ -32,7 +32,7 @@
                     "method": "GET",
                     "summary": "get GC related information",
                     "notes": "return a list of Memory Managers, each with its related information",
-                    "responseClass": "List[MemoryManager]",
+                    "type": "List[MemoryManager]",
                     "nickname": "getGCinfo",
                     "produces": [
                         "application/json"
@@ -49,8 +49,7 @@
                 {
                     "method": "POST",
                     "summary": "Force GC",
-                    "notes": "",
-                    "responseClass": "void",
+                    "type": "void",
                     "nickname": "forceGC",
                     "produces": [
                         "application/json"
@@ -68,7 +67,7 @@
                     "method": "GET",
                     "summary": "get a runtime MBean value",
                     "notes": "get a runtime Mbean value",
-                    "responseClass": "object",
+                    "type": "object",
                     "nickname": "getJMXvalue",
                     "produces": [
                         "application/json"
@@ -79,7 +78,7 @@
                             "description": "JMX path to probe",
                             "required": true,
                             "allowMultiple": false,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "path"
                         }
                     ],
@@ -93,8 +92,7 @@
                 {
                     "method": "GET",
                     "summary": "get a list of all MBean names",
-                    "notes": "",
-                    "responseClass":  "List[String]",
+                    "type":  "List[String]",
                     "nickname": "getMbeanList",
                     "produces": [
                         "application/json"
@@ -111,8 +109,7 @@
                 {
                     "method": "POST",
                     "summary": "set a configuration MBean value",
-                    "notes": "",
-                    "responseClass": "void",
+                    "type": "void",
                     "nickname": "setJMXvalue",
                     "parameters": [
                         {
@@ -120,7 +117,7 @@
                             "description": "JMX path to update",
                             "required": true,
                             "allowMultiple": false,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "path"
                         },
                         {
@@ -128,7 +125,7 @@
                             "description": "the attribute name to set",
                             "required": true,
                             "allowMultiple": true,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "path"
                         },
                         {
@@ -136,7 +133,7 @@
                             "description": "value to set",
                             "required": true,
                             "allowMultiple": false,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "query"
                         }
                     ],
@@ -147,6 +144,7 @@
     ],
     "models" : {
         "Balloon": {
+            "id": "Balloon",
             "properties": {
                 "size": {
                     "type": "long"
@@ -154,6 +152,7 @@
             }
         },
         "MemoryManager" : {
+            "id": "MemoryManager",
             "description" : "memory manager",
             "properties": {
                 "name":  {

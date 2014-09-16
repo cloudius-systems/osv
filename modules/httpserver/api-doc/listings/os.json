@@ -13,7 +13,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns name of the operating system",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "os_name",
                     "produces": [
                         "application/json"
@@ -30,7 +30,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns version of the operating system",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "os_version",
                     "produces": [
                         "application/json"
@@ -47,7 +47,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns the vendor of the operating system",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "os_vendor",
                     "produces": [
                         "application/json"
@@ -64,7 +64,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns the number of seconds since the system was booted",
-                    "responseClass": "long",
+                    "type": "long",
                     "nickname": "os_uptime",
                     "produces": [
                         "application/json"
@@ -81,7 +81,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns the current date and time",
-                    "responseClass": "dateTime",
+                    "type": "dateTime",
                     "nickname": "os_date",
                     "produces": [
                         "application/json"
@@ -98,7 +98,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns total amount of memory usable by the system (in bytes)",
-                    "responseClass": "long",
+                    "type": "long",
                     "nickname": "os_memory_total",
                     "produces": [
                         "application/json"
@@ -115,7 +115,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns the amount of free memory in the system (in bytes)",
-                    "responseClass": "long",
+                    "type": "long",
                     "nickname": "os_memory_free",
                     "produces": [
                         "application/json"
@@ -132,8 +132,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns the JVM balloon size (in bytes)",
-                    "notes": "",
-                    "responseClass": "long",
+                    "type": "long",
                     "nickname": "os_memory_balloon",
                     "produces": [
                         "application/json"
@@ -149,7 +148,7 @@
                 {
                     "method": "POST",
                     "summary": "Shuts down the system",
-                    "responseClass": "",
+                    "type": "void",
                     "nickname": "os_shutdown",
                     "parameters": [
                     ],
@@ -163,7 +162,7 @@
                 {
                     "method": "POST",
                     "summary": "Reboots the system",
-                    "responseClass": "",
+                    "type": "void",
                     "nickname": "os_reboot",
                     "parameters": [
                     ],
@@ -177,8 +176,7 @@
 		{
 		    "method": "GET",
 		    "summary": "Returns the operating system boot log",
-		    "notes": "",
-		    "responseClass": "string",
+		    "type": "string",
 		    "nickname" : "os_dmesg",
 		    "produces": [
 		        "application/json"
@@ -196,7 +194,7 @@
                 {
 		    "method": "GET",
 		    "summary": "Returns the system host name",
-		    "responseClass": "string",
+		    "type": "string",
 		    "nickname": "os_get_hostname",
 		    "produces": [
 		        "application/json"
@@ -208,7 +206,7 @@
 	        {
 		    "method": "POST",
 		    "summary": "Sets the system host name",
-		    "responseClass": "string",
+		    "type": "string",
 		    "nickname": "os_set_hostname",
 		    "produces": [
 		        "application/json"
@@ -219,7 +217,7 @@
 			    "description": "new hostname",
 			    "required": true,
 			    "allowMultiple":false,
-			    "dataType":"string",
+			    "type":"string",
 			    "paramType":"query"
 		        }
 		    ],
@@ -233,7 +231,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns a list of threads in the system",
-                    "responseClass": "Threads",
+                    "type": "Threads",
                     "nickname" : "os_threads",
                     "produces": [
                         "application/json"
@@ -251,7 +249,7 @@
                 "method": "GET",
                 "summary": "Returns the current boot command line",
                 "notes": "This operation retrieves the current OSv command line. The current command line is either the command line used for the current boot, or the one written by POST.",
-                "responseClass": "string",
+                "type": "string",
                 "nickname": "os_get_cmdline",
                 "produces": [
                     "application/json"
@@ -264,7 +262,7 @@
                 "method": "POST",
                 "summary": "Sets the current boot command line",
                 "notes": "This operation replaces the current OSv command line with a new one. The old command line is completely removed. Users wanting to add fields to the command line using this POST operation should first GET it, make the necessary changes, and then POST the result.",
-                "responseClass": "string",
+                "type": "string",
                 "nickname": "os_set_cmdline",
                 "produces": [
                     "application/json"
@@ -275,7 +273,7 @@
                     "description": "new cmdline",
                     "required": true,
                     "allowMultiple":false,
-                    "dataType":"string",
+                    "type":"string",
                     "paramType":"query"
                     }
                 ],
@@ -286,6 +284,7 @@
     ],
     "models" : {
         "Thread": {
+           "id": "Thread",
            "description": "Information on one thread",
                "properties": {
                 "id": {
@@ -335,7 +334,8 @@
             }
         },
         "Threads": {
-           "description": "List of threads",
+               "id":"Threads",
+               "description": "List of threads",
                "properties": {
                 "list": {
                     "type": "array",

@@ -13,8 +13,7 @@
                 {
                     "method": "GET",
                     "summary": "list all present processor features",
-                    "notes": "",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname" : "processorFeatures",
                     "produces": [
                         "application/json"
@@ -31,8 +30,7 @@
                 {
                     "method": "GET",
                     "summary": "list the current number of processors",
-                    "notes": "",
-                    "responseClass": "long",
+                    "type": "long",
                     "nickname" : "processorCount",
                     "produces": [
                         "application/json"

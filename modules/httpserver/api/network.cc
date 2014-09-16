@@ -65,7 +65,7 @@ void init(routes& routes)
     });
 
     network_json::getIfconfig.set_handler([](const_req req) {
-        string name = req.param.at("if").substr(1);
+        string name = req.param.at("intf").substr(1);
         interface intf(name);
         ifnet* ifp = get_interface_by_name(name);
         if (ifp == nullptr) {

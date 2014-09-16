@@ -14,7 +14,7 @@
                "method":"GET",
                "summary":"Get File/Directory information",
                "notes":"return File or Directory related information",
-               "responseClass":"Object",
+               "type":"Object",
                "errorResponses":[
                   {
                      "code":404,
@@ -35,7 +35,7 @@
                      "description":"Full path of file or directory",
                      "required":true,
                      "allowMultiple":true,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"path"
                   },
                   {
@@ -43,7 +43,7 @@
                      "description":"The operation to perform",
                      "required":true,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"query",
                      "enum":["GET", "LISTSTATUS", "GETFILESTATUS"]
                   },
@@ -52,7 +52,7 @@
                      "description":"Offset in a file",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"long",
+                     "type":"long",
                      "paramType":"query"
                   },
                   {
@@ -60,7 +60,7 @@
                      "description":"The number of bytes to be processed.",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"long",
+                     "type":"long",
                      "paramType":"query"
                   }
                ]
@@ -69,7 +69,7 @@
                "method":"DELETE",
                "summary":"Del File/Directory",
                "notes":"Delete a File or Directory",
-               "responseClass":"Object",
+               "type":"Object",
                "errorResponses":[
                   {
                      "code":404,
@@ -90,7 +90,7 @@
                      "description":"Full path of file or directory to delete",
                      "required":true,
                      "allowMultiple":true,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"path"
                   },
                   {
@@ -98,7 +98,7 @@
                      "description":"Should the operation act on the content in the subdirectories",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"boolean",
+                     "type":"boolean",
                      "paramType":"query"
                   },
                   {
@@ -106,7 +106,7 @@
                      "description":"The operation to perform: DELETE",
                      "required":true,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"query",
                      "enum":["DELETE"]
                   }
@@ -116,7 +116,7 @@
                "method":"POST",
                "summary":"Upload a file",
                "notes":"Upload a file",
-               "responseClass":"string",
+               "type":"string",
                "nickname":"upload",
                "produces":[
                   "application/json"
@@ -127,7 +127,7 @@
                      "description":"Full path to the uploaded file",
                      "required":true,
                      "allowMultiple":true,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"path"
                   },
                   {
@@ -144,7 +144,7 @@
                "method":"PUT",
                "summary":"Create or change File/Directory",
                "notes":"Operation that create or change a file, directory or symbolic link",
-               "responseClass":"Object",
+               "type":"Object",
                "errorResponses":[
                   {
                      "code":404,
@@ -165,7 +165,7 @@
                      "description":"Full path of file or directory",
                      "required":true,
                      "allowMultiple":true,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"path"
                   },
                   {
@@ -174,7 +174,7 @@
                      "enum":["MKDIRS", "RENAME", "COPY", "WRITE"],
                      "required":true,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"query"
                   },
                   {
@@ -182,7 +182,7 @@
                      "description":"The permission of a file/directory as a octal string.",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"query"
                   },
                   {
@@ -190,7 +190,7 @@
                      "description":"The destination path.",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"query"
                   },
                   {
@@ -198,7 +198,7 @@
                      "description":"If the parent directories do not exist, should they be created",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"boolean",
+                     "type":"boolean",
                      "paramType":"query"
                   },
                   {
@@ -206,7 +206,7 @@
                      "description":"If a file already exists, should it be overwritten?",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"boolean",
+                     "type":"boolean",
                      "paramType":"query"
                   },
                   {
@@ -214,7 +214,7 @@
                      "description":"A content to be added to a file or standard output",
                      "required":false,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"query"
                   }
                ]
@@ -224,6 +224,7 @@
    ],
    "models":{
       "ContentSummary":{
+         "id": "ContentSummary",
          "properties":{
             "directoryCount":{
                "description":"The number of directories.",
@@ -258,6 +259,7 @@
          }
       },
       "FileChecksum":{
+         "id": "FileChecksum",
          "properties":{
             "algorithm":{
                "description":"The name of the checksum algorithm.",
@@ -277,6 +279,7 @@
          }
       },
       "FileStatusProperties":{
+         "id": "FileStatusProperties",
          "properties":{
             "accessTime":{
                "description":"The access time.",

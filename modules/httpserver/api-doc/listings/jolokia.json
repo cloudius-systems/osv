@@ -14,7 +14,7 @@
                     "method": "GET",
                     "summary": "Jolokia GET request",
                     "notes" : "Query JVM MBean infomration. Example query: read/java.lang:type=Memory/HeapMemoryUsage/used",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "getJolokia",
                     "produces": [
                         "application/json"
@@ -25,7 +25,7 @@
                             "description": "Jolokia query string",
                             "required": true,
                             "allowMultiple": true,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "path"
                         }
                     ],
@@ -40,7 +40,7 @@
                     "method": "GET",
                     "summary": "Jolokia GET request (Alt)",
                     "notes": "Query JVM MBean infomration. Example query: read/java.lang:type=Memory/HeapMemoryUsage/used",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "getJolokiaAlt",
                     "produces": [
                         "application/json"
@@ -51,7 +51,7 @@
                             "description": "Jolokia alternate query string",
                             "required": false,
                             "allowMultiple": false,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "query"
                         }
                     ],
@@ -61,7 +61,7 @@
                     "method": "POST",
                     "summary": "Jolokia POST request",
                     "notes": "Query JVM MBean infomration. More <a href=\"http://www.jolokia.org/reference/html/protocol.html\">here</a>",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "postJolokia",
                     "produces": [
                         "application/json"
@@ -71,7 +71,7 @@
                             "name": "body",
                             "description": "Jolokia query",
                             "required": true,
-                            "dataType": "string",
+                            "type": "string",
                             "paramType": "body"
                         }
                     ],

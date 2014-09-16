@@ -13,10 +13,9 @@
                 {
                     "method": "GET",
                     "summary": "report a file system usage",
-                    "notes": "",
                     "type": "array",
 				    "items": {
-				        "$ref": "DFStat"
+				        "type": "DFStat"
 				    },
                     "errorResponses":[
                      {
@@ -34,7 +33,7 @@
                         "description":"mount point",
                         "required":false,
                         "allowMultiple":true,
-                        "dataType":"string",
+                        "type":"string",
                         "paramType":"path"
                     }
                     ],
@@ -63,6 +62,7 @@
     "models" : {
         "DFStat": {
            "description": "Information on one file system",
+           "id": "DFStat",
            "properties": {
                 "filesystem" : {
                      "type": "string",

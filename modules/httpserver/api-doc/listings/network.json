@@ -26,13 +26,13 @@
       ]
       },
       {
-         "path":"/network/ifconfig/{if}",
+         "path":"/network/ifconfig/{intf}",
          "operations":[
             {
                "method":"GET",
                "summary":"Get an interface",
                "notes":"Get an interface configuration and data",
-               "responseClass":"Interface",
+               "type":"Interface",
                "errorResponses":[
                   {
                      "code":404,
@@ -45,11 +45,11 @@
                ],
                "parameters":[
                   {
-                     "name":"if",
+                     "name":"intf",
                      "description":"name of the interface",
                      "required":true,
                      "allowMultiple":false,
-                     "dataType":"string",
+                     "type":"string",
                      "paramType":"path"
                   }
                ]
@@ -78,6 +78,7 @@
    ],
    "models":{
       "interface_config":{
+         "id": "interface_config",
          "properties":{
             "name":{
                "type":"string"
@@ -126,6 +127,7 @@
         }
       },
       "interface_data":{
+         "id": "interface_data",
          "properties":{
             "ifi_type":{
                "type":"char"
@@ -226,6 +228,7 @@
          }
       },
       "Interface":{
+         "id":"Interface",
          "properties":{
             "config":{
                "type":"interface_config"
@@ -240,6 +243,7 @@
          }
       },
       "Route":{
+         "id":"Route",
          "properties":{
             "destination":{
                "type":"string"
