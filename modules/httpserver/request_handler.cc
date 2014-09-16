@@ -68,6 +68,7 @@ request_handler::request_handler(httpserver::routes* routes, const boost::progra
 {
     if (config.count("access-allow")) {
         const auto s = config["access-allow"].as<std::string>();
+
         std::string::size_type b = 0;
         do {
             auto e = s.find_first_of(',', b);
@@ -76,6 +77,9 @@ request_handler::request_handler(httpserver::routes* routes, const boost::progra
             // just in case, accept "false" as well. but in an actual list this makes less sense.
             if (d == "false") {
                 allowed_domains.clear();
+                break;
+            }
+            if (d.empty()) {
                 break;
             }
             allowed_domains.emplace_back(d == "true" ? "*" : std::move(d));
