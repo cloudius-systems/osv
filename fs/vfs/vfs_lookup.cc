@@ -271,6 +271,13 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
     strlcpy(node.get(), "/", PATH_MAX);
     strlcat(node.get(), p, PATH_MAX);
 
+    // We want to treat things like /tmp/ the same as /tmp. Best way to do that
+    // is to ignore the last character, except when we're stating the root.
+    auto l = strlen(node.get()) - 1;
+    if (l && node.get()[l] == '/') {
+        node.get()[l] = '\0';
+    }
+
     dvp = ddp->d_vnode;
     vn_lock(dvp);
     dp = dentry_lookup(mp, node.get());
