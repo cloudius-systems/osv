@@ -22,9 +22,19 @@ BOOST_AUTO_TEST_CASE(test_mkdir_fails_if_file_exists)
     assert_exists(file);
 
     assert_stat_error(file / "/", ENOTDIR);
+    assert_lstat_error(file / "/", ENOTDIR);
 
     // Once again to check the path which uses dentry from cache.
     assert_stat_error(file / "/", ENOTDIR);
 
     assert_stat_error(file / "x", ENOTDIR);
+
+    assert_stat_ok("/tmp");
+    assert_stat_ok("/tmp/");
+
+    assert_lstat_ok("/tmp");
+    assert_lstat_ok("/tmp/");
+
+    assert_stat_ok("/");
+    assert_lstat_ok("/");
 }

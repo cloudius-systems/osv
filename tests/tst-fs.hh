@@ -52,4 +52,28 @@ void assert_stat_error(const fs::path path, int expected_errno)
 	BOOST_REQUIRE_EQUAL(errno, expected_errno);
 }
 
+
+void assert_stat_ok(const fs::path path)
+{
+	struct stat buf;
+	int error = stat(path.c_str(), &buf);
+	BOOST_REQUIRE_MESSAGE(error == 0, fmt("Stat on %s should succeed") % path.string());
+}
+
+void assert_lstat_error(const fs::path path, int expected_errno)
+{
+	struct stat buf;
+	int error = lstat(path.c_str(), &buf);
+	BOOST_REQUIRE_MESSAGE(error == -1, fmt("lstat on %s should fail") % path.string());
+	BOOST_REQUIRE_EQUAL(errno, expected_errno);
+}
+
+
+void assert_lstat_ok(const fs::path path)
+{
+	struct stat buf;
+	int error = lstat(path.c_str(), &buf);
+	BOOST_REQUIRE_MESSAGE(error == 0, fmt("lstat on %s should succeed") % path.string());
+}
+
 #endif
