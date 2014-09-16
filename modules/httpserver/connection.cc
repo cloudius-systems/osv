@@ -199,17 +199,12 @@ bool connection::set_content_type()
 {
     request_.content_type_class = request::ctclass::other;
     request_.connection_ptr = this;
-    auto ct = request_.get_header("Content-Type");
-    if (ct == "") {
-        return true;
-    }
-    std::string lng = request_.get_header("Content-Length");
-    if (lng == "") {
-        return false;
-    } else {
+    auto lng = request_.get_header("Content-Length");
+    if (lng != "") {
         std::stringstream strm(lng);
         strm >> request_.content_length;
     }
+    auto ct = request_.get_header("Content-Type");
     if (ct.find("multipart/form-data;") == 0) {
         auto p = ct.find("boundary=");
         if (p > 0) {
