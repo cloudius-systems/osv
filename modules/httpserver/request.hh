@@ -15,6 +15,7 @@
 
 #include <string>
 #include <vector>
+#include <strings.h>
 #include "common.hh"
 
 namespace http {
@@ -53,7 +54,7 @@ struct request {
      */
     std::string get_header(const std::string& name) const
     {
-        return find_in_vector(headers, name);
+        return find_in_vector(headers, name, false); // http headers are case insensitive
     }
 
     /**
@@ -91,10 +92,18 @@ struct request {
     }
 
     static std::string find_in_vector(const std::vector<header>& vec,
-                                      const std::string& name)
+                                      const std::string& name,
+                                      bool case_sensitive = true)
     {
         for (auto h : vec) {
-            if (h.name == name) {
+            auto eq =
+                    case_sensitive ?
+                            h.name == name :
+                            h.name.size() == name.size()
+                                    && !::strcasecmp(h.name.c_str(),
+                                            name.c_str())
+                      ;
+            if (eq) {
                 return h.value;
             }
         }
