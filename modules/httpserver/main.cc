@@ -26,13 +26,13 @@ int main(int argc, char* argv[])
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
-        ("access-allow",
+        ("access-allow", po::value<std::string>(),
              "Set the Access-Control-Allow-Origin to *. Note the security risk")
-        ("ipaddress", "set the ip address")
-        ("port", "set the port")
-        ("cert", "path to server's SSL certificate")
-        ("key", "path to server's private key")
-        ("cacert", "path to CA certificate")
+        ("ipaddress", po::value<std::string>(), "set the ip address")
+        ("port", po::value<std::string>(), "set the port")
+        ("cert", po::value<std::string>(), "path to server's SSL certificate")
+        ("key", po::value<std::string>(), "path to server's private key")
+        ("cacert", po::value<std::string>(), "path to CA certificate")
         ("ssl", "enable SSL");
 
     po::variables_map config;
