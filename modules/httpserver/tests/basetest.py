@@ -135,6 +135,9 @@ class Basetest(unittest.TestCase):
 
     @classmethod
     def shutdown(cls):
+        if cls.config.connect:
+            return
+
         path = cls.path_by_nick(cls.os_api, "os_shutdown")
         try:
             cls.curl(path, method='POST')
