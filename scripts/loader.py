@@ -212,7 +212,7 @@ def vma_list(node = None):
         node = p['header_plus_size_']['header_']['parent_']
 
     if node:
-        offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook");
+        offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook")
         vma = node.cast(gdb.lookup_type('void').pointer()) - offset
         vma = vma.cast(gdb.lookup_type('mmu::vma').pointer())
 
@@ -479,9 +479,9 @@ class osv_zfs(gdb.Command):
         if l2arc_size != 0:
             l2arc_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_l2_hits')
             l2arc_misses = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_l2_misses')
-            l2arc_ac_total = l2arc_hits + l2arc_misses;
-            l2arc_hits_perc = 100 * (float(l2arc_hits) / l2arc_ac_total);
-            l2arc_misses_perc = 100 * (float(l2arc_misses) / l2arc_ac_total);
+            l2arc_ac_total = l2arc_hits + l2arc_misses
+            l2arc_hits_perc = 100 * (float(l2arc_hits) / l2arc_ac_total)
+            l2arc_misses_perc = 100 * (float(l2arc_misses) / l2arc_ac_total)
 
             print ("\n:: L2ARC ::")
             print ("\tCurrent size:   %d" % l2arc_size)
@@ -660,7 +660,7 @@ class cpu(object):
         self.obj = g_cpus + self.id
 
 def template_arguments(gdb_type):
-    n = 0;
+    n = 0
     while True:
         try:
             yield gdb_type.template_argument(n)
@@ -872,7 +872,7 @@ def unique_ptr_get(u):
 
 def thread_cpu(t):
     d = unique_ptr_get(t['_detached_state'])
-    return d['_cpu'];
+    return d['_cpu']
 
 def thread_status(t):
     d = unique_ptr_get(t['_detached_state'])
@@ -1060,7 +1060,7 @@ def all_traces():
     backtrace_len = ulong(gdb.parse_and_eval('tracepoint_base::backtrace_len'))
     tracepoints = {}
 
-    state = vmstate();
+    state = vmstate()
 
     trace_buffer_offset = ulong(gdb.parse_and_eval('&percpu_trace_buffer._var'))
 
@@ -1173,16 +1173,16 @@ def show_leak():
     allocations = tracker['allocations']
     # Build a list of allocations to be sorted lexicographically by call chain
     # and summarize allocations with the same call chain:
-    percent='   ';
-    gdb.write('Fetching data from qemu/osv: %s' % percent);
-    gdb.flush();
-    allocs = [];
+    percent='   '
+    gdb.write('Fetching data from qemu/osv: %s' % percent)
+    gdb.flush()
+    allocs = []
     for i in range(size_allocations) :
-        newpercent = '%2d%%' % round(100.0*i/(size_allocations-1));
+        newpercent = '%2d%%' % round(100.0*i/(size_allocations-1))
         if newpercent != percent :
-            percent = newpercent;
-            gdb.write('\b\b\b%s' % newpercent);
-            gdb.flush();
+            percent = newpercent
+            gdb.write('\b\b\b%s' % newpercent)
+            gdb.flush()
         a = allocations[i]
         addr = ulong(a['addr'])
         if addr == 0 :
@@ -1193,11 +1193,11 @@ def show_leak():
         for j in range(nbacktrace) :
             callchain.append(ulong(backtrace[nbacktrace-1-j]))
         allocs.append((i, callchain))
-    gdb.write('\n');
+    gdb.write('\n')
 
     gdb.write('Merging %d allocations by identical call chain... ' %
               len(allocs))
-    gdb.flush();
+    gdb.flush()
     allocs.sort(key=lambda entry: entry[1])
 
     import collections
@@ -1205,7 +1205,7 @@ def show_leak():
                                     ['bytes', 'allocations', 'minsize',
                                      'maxsize', 'avgsize', 'minbirth',
                                      'maxbirth', 'avgbirth', 'callchain'])
-    records = [];
+    records = []
 
     total_size = 0
     cur_n = 0
@@ -1234,7 +1234,7 @@ def show_leak():
             cur_max_size = size
         # If the next entry has the same call chain, just continue summing
         if k!=len(allocs)-1 and callchain==allocs[k+1][1] :
-            continue;
+            continue
         # We're done with a bunch of allocations with same call chain:
         r = Record(bytes = cur_total_size,
                    allocations = cur_n,
@@ -1386,7 +1386,7 @@ def runqueue(cpuid, node = None):
         node = p['header_plus_size_']['header_']['parent_']
 
     if node:
-        offset = gdb.parse_and_eval('(int)&((sched::thread *)0)->_runqueue_link');
+        offset = gdb.parse_and_eval('(int)&((sched::thread *)0)->_runqueue_link')
         thread = node.cast(gdb.lookup_type('void').pointer()) - offset
         thread = thread.cast(gdb.lookup_type('sched::thread').pointer())
 

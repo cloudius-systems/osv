@@ -350,7 +350,7 @@ def format_packet_sample(sample):
     return packet_line
 
 def is_net_packet_sample(sample):
-    return sample.name.startswith('net_packet_');
+    return sample.name.startswith('net_packet_')
 
 def is_input_net_packet_sample(sample):
     return sample.name == "net_packet_in"
@@ -523,7 +523,7 @@ def list_cpu_load(args):
                 if args.format == 'csv':
                     sys.stdout.write(trace.format_time(t.time))
                     for id in range(max_cpu + 1):
-                        sys.stdout.write(',');
+                        sys.stdout.write(',')
                         if id in load_per_cpu:
                             sys.stdout.write('%d' % load_per_cpu[id])
                 else:

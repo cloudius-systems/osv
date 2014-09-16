@@ -365,7 +365,7 @@ class TraceDumpReader(TraceDumpReaderBase) :
             return False
 
     def readTraceDict(self, size):
-        self.backtrace_len = self.read('I');
+        self.backtrace_len = self.read('I')
         n_types = self.read('I')
         for i in range(0, n_types):
             tp_key = self.read('Q')
@@ -383,11 +383,11 @@ class TraceDumpReader(TraceDumpReaderBase) :
                 sig += arg_sig
             tp = TracePoint(tp_key, name, sig, fmt)
             self.tracepoints[tp_key] = tp
-        return True;
+        return True
 
     def oneTrace(self, trace_log):
-        last_tp = None;
-        last_trace = None;
+        last_tp = None
+        last_trace = None
         unpacker = SlidingUnpacker(trace_log)
         while unpacker:
             tp_key, = unpacker.unpack('Q')
@@ -408,9 +408,9 @@ class TraceDumpReader(TraceDumpReaderBase) :
 
             data = unpacker.unpack(tp.signature)
             unpacker.align_up(8)
-            last_tp = tp;
+            last_tp = tp
             last_trace = Trace(tp, Thread(thread, thread_name), time, cpu, data, backtrace=backtrace)
-            yield last_trace;
+            yield last_trace
 
     def traces(self):
         iters = map(lambda data: self.oneTrace(data), self.trace_buffers)
@@ -462,7 +462,7 @@ class TraceDumpSymbols(TraceDumpReaderBase) :
                 offs = self.read('I')
                 line = self.read('I')
             self.symbols.append(Symbol(addr, size, name, file))
-        return True;
+        return True
 
     def readModules(self, size):
         n_modules = self.read('I')
@@ -479,7 +479,7 @@ class TraceDumpSymbols(TraceDumpReaderBase) :
                 offs = self.read('Q')
                 size = self.read('Q')
                 self.segments.append(Symbol(addr, size, name, file))
-        return True;
+        return True
 
     def __call__(self, addr):
         result = self.cache.get(addr, None)

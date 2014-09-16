@@ -79,7 +79,7 @@ def is_direct_io_supported(path):
         return True
     except OSError as e:
         if e.errno == errno.EINVAL:
-            return False;
+            return False
         raise
 
 def start_osv_qemu(options):
@@ -215,7 +215,7 @@ def start_osv_xen(options):
             memory = 1024 * int(memory[:-2])
         else:
             print("Unrecognized memory size", file=sys.stderr)
-            return;
+            return
 
     vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
 
@@ -313,7 +313,7 @@ def start_osv_vmware(options):
             memory = 1024 * int(memory[:-2])
         else:
             print("Unrecognized memory size", file=sys.stderr)
-            return;
+            return
 
     args += [
         'memsize = "%d"' % (memory),
@@ -447,6 +447,6 @@ if __name__ == "__main__":
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
 
     if cmdargs.hypervisor == "auto":
-        cmdargs.hypervisor = choose_hypervisor(cmdargs.networking);
+        cmdargs.hypervisor = choose_hypervisor(cmdargs.networking)
     # Call main
     main(cmdargs)

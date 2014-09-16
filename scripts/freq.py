@@ -93,8 +93,8 @@ while True:
     newtimems = result['time_ms']
     freq = dict()
     for i in result['list']:
-        name = i['name'];
-        count = i['count'];
+        name = i['name']
+        count = i['count']
         if timems > 0:
             freq[name] = (count - prevcount[name]) / ((newtimems - timems) / 1000.0)
         prevcount[name] = count

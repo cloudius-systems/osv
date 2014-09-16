@@ -163,8 +163,8 @@ elif cmd == 'setpartition':
 
     fsize = f.size()
 
-    cyl, head, sec = chs(start // 512);
-    cyl_end, head_end, sec_end = chs((start + size) // 512);
+    cyl, head, sec = chs(start // 512)
+    cyl_end, head_end, sec_end = chs((start + size) // 512)
 
     f.seek(partition + 1)
     f.write(struct.pack('B', head))

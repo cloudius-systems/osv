@@ -130,8 +130,8 @@ cols += ['NAME']
 # Extract from "columns" only the columns requested by "cols", in that order
 requested_columns = [next(col for col in columns if col['name'] == name) for name in cols]
 
-prev = dict();
-previdles = dict();
+prev = dict()
+previdles = dict()
 timems = 0
 while True:
     start_refresh = time.time()
@@ -141,7 +141,7 @@ while True:
 
     print("%d threads " % (len(result['list'])), end='')
 
-    cur = collections.defaultdict(dict);
+    cur = collections.defaultdict(dict)
     idles = dict()
 
     for thread in result['list']:
