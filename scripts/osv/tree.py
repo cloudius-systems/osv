@@ -64,7 +64,7 @@ def print_tree(root_node,
 
         is_last = not is_last_history or is_last_history[-1]
         if not is_last:
-           printer("%s%s\n" % (prefix_without_branch, stems[False]))
+            printer("%s%s\n" % (prefix_without_branch, stems[False]))
 
     if not node_filter or node_filter(root_node):
         print_node(root_node, [])

@@ -856,7 +856,7 @@ def traverse_resolved_frames(frame):
 
 def strip_dotdot(path):
     if path[:6] == "../../":
-           return path[6:]
+        return path[6:]
     return path
 
 def find_or_give_last(predicate, seq):

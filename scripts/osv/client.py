@@ -49,7 +49,7 @@ class Client(object):
         return _pass_if_exists(self.args.cacert)
 
     def get_host(self):
-       return urlparse(self.get_url()).hostname
+        return urlparse(self.get_url()).hostname
 
     def get_port(self):
         return urlparse(self.get_url()).port

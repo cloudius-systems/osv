@@ -485,17 +485,17 @@ def print_summary(args, printer=sys.stdout.write):
             print format % ("----", "-----", "---", "---", "---", "---", "-----", "---", "-----")
 
             for name, traces in get_timed_traces_per_function(timed_samples).iteritems():
-                    samples = sorted(list((t.time_range.intersection(time_range).length() for t in traces)))
-                    print format % (
-                        name,
-                        len(samples),
-                        format_duration(get_percentile(samples, 0)),
-                        format_duration(get_percentile(samples, 0.5)),
-                        format_duration(get_percentile(samples, 0.9)),
-                        format_duration(get_percentile(samples, 0.99)),
-                        format_duration(get_percentile(samples, 0.999)),
-                        format_duration(get_percentile(samples, 1)),
-                        format_duration(sum(samples)))
+                samples = sorted(list((t.time_range.intersection(time_range).length() for t in traces)))
+                print format % (
+                    name,
+                    len(samples),
+                    format_duration(get_percentile(samples, 0)),
+                    format_duration(get_percentile(samples, 0.5)),
+                    format_duration(get_percentile(samples, 0.9)),
+                    format_duration(get_percentile(samples, 0.99)),
+                    format_duration(get_percentile(samples, 0.999)),
+                    format_duration(get_percentile(samples, 1)),
+                    format_duration(sum(samples)))
 
     print
 
