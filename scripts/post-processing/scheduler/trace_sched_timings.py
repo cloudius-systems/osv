@@ -15,10 +15,10 @@ for tr in l:
     sec = int(sec)
     microsec = int(microsec)
 
-    if (event == "sched_switch"):
+    if event == "sched_switch":
         fromm = threadp
-        if (sched.has_key(fromm)):
-            if (not threads.has_key(fromm)):
+        if sched.has_key(fromm):
+            if not threads.has_key(fromm):
                 threads[fromm] = []
 
             threads[fromm] += [(sec - sched[fromm][0], microsec - sched[fromm][1])]

@@ -206,7 +206,7 @@ def free_page_ranges():
                 break
 
 def vma_list(node = None):
-    if (node == None):
+    if node == None:
         fpr = gdb.lookup_global_symbol('mmu::vma_list').value()
         p = fpr['tree_']['data_']['node_plus_pred_']
         node = p['header_plus_size_']['header_']['parent_']
@@ -1378,7 +1378,7 @@ class osv_pagetable_walk(gdb.Command):
             ptep = pte + pt_index(addr, level) * 8
 
 def runqueue(cpuid, node = None):
-    if (node == None):
+    if node == None:
         cpus = gdb.lookup_global_symbol('sched::cpus').value()
         cpu = cpus['_M_impl']['_M_start'][cpuid]
         rq = cpu['runqueue']

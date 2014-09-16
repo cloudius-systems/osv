@@ -50,7 +50,7 @@ def run_zfsmount_bench(total_samples):
         print "%d\t%.1f\t%.1f\t%.1f\t%.1f\t%.1f" % (sample, mount_time, stats_min, stats_max, stats_avg, stats_stdev)
         osv.wait()
 
-if (__name__ == "__main__"):
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='zfs_mount')
     parser.add_argument("-s", "--samples", action="store", default="5",
                         help="specify number of samples")
