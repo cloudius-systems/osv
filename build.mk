@@ -1,4 +1,4 @@
-build_env ?= external
+build_env ?= host
 ifeq ($(build_env), host)
     gcc_lib_env ?= host
     cxx_lib_env ?= host
