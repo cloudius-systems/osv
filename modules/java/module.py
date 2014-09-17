@@ -7,6 +7,7 @@ usr_files = FileMap()
 api.require('fonts')
 api.require('ca-certificates')
 api.require('libz')
+api.require('josvsym')
 
 jdkdir = os.path.basename(os.path.expandvars('${jdkbase}'))
 
