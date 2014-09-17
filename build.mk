@@ -1,14 +1,3 @@
-build_env ?= host
-ifeq ($(build_env), host)
-    gcc_lib_env ?= host
-    cxx_lib_env ?= host
-    gcc_include_env ?= host
-else
-    gcc_lib_env ?= external
-    cxx_lib_env ?= external
-    gcc_include_env ?= external
-endif
-
 detect_arch=$(shell echo $(1) | $(CC) -E -xc - | tail -n 1)
 
 ifeq ($(call detect_arch, __x86_64__),1)
@@ -27,6 +16,19 @@ endif
 
 arch = $(ARCH)
 arch_str = $(ARCH)
+
+build_env ?= $(if $(filter $(host_arch), $(arch)),host,external)
+
+ifeq ($(build_env), host)
+    gcc_lib_env ?= host
+    cxx_lib_env ?= host
+    gcc_include_env ?= host
+else
+    gcc_lib_env ?= external
+    cxx_lib_env ?= external
+    gcc_include_env ?= external
+endif
+
 
 $(info build.mk:)
 $(info build.mk: building arch=$(arch), override with ARCH env)
