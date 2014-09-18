@@ -6,16 +6,16 @@ local function sleep(sec)
   socket.select(nil, nil, sec)
 end
 
-local function time_millis()
-  return socket.gettime()*1000
+local function time()
+  return socket.gettime()
 end
 
 local columns = {
-  ID = {
+  ["ID"] = {
     name = "ID",
     source = "id"
   },
-  CPU = {
+  ["CPU"] = {
     name = "CPU",
     source = "cpu"
   },
@@ -26,17 +26,17 @@ local columns = {
     rate = true,
     multiplier = 0.1
   },
-  TIME = {
+  ["TIME"] = {
     name = "TIME",
     format = "%.2f",
     source = "cpu_ms",
     multiplier = 0.001
   },
-  NAME = {
+  ["NAME"] = {
     name = "NAME",
     source = "name"
   },
-  sw = {
+  ["sw"] = {
     name = "sw",
     source = "switches",
   },
@@ -53,7 +53,7 @@ local columns = {
     multiplier = 1000.0,
     rateby = 'switches'
   },
-  preempt = {
+  ["preempt"] = {
     name = 'preempt',
     source = 'preemptions',
   },
@@ -63,7 +63,7 @@ local columns = {
     source = 'preemptions',
     rate = true,
   },
-  mig = {
+  ["mig"] = {
     name = 'mig',
     source = 'migrations',
   },
@@ -111,23 +111,22 @@ cmd.main = function(args)
             "pre/s", "mig", "mig/s", "NAME"}
   end
 
-  local interval = 2000
+  local interval = 2
   if opts.period then
-    interval = opts.period * 1000
+    interval = opts.period
   end
 
   -- Column header
-  local thead = {}
-  for _, col in ipairs(cols) do
-    table.insert(thead, col)
-  end
+  local thead = cols
 
   -- CPU count
   local cpu_count, status = osv_request("/hardware/processor/count")
   osv_resp_assert(status, 200)
 
-  local prev, current = nil, {time_ms = 0, list = {}}
-  local prev_i, current_i = nil, {}
+  local prev = nil
+  local current = {time_ms = 0, list = {}}
+  local prev_i = nil
+  local current_i = {}
 
   -- Sorts threads by cpu_ms
   local function sort_threads(a, b)
@@ -143,7 +142,7 @@ cmd.main = function(args)
 
   -- TODO: Stop somehow
   while true do
-    local start_time_ms = time_millis()
+    local start_time_ms = time()
     local threads, status = osv_request("/os/threads", "GET")
     osv_resp_assert(status, 200)
 
@@ -181,7 +180,9 @@ cmd.main = function(args)
     local thread_status = {#threads.list, " threads on ", cpu_count, " CPUs"}
     if prev_i and prev then
       -- Idle status
-      local idles, total = {}, 0
+      local idles = {}
+      local total = 0
+
       for id in pairs(current_i) do
         local idle = 100 * (current_i[id].cpu_ms - prev_i[id].cpu_ms) /
                            (current.time_ms - prev.time_ms)
@@ -197,8 +198,6 @@ cmd.main = function(args)
     -- Build the list to be printed
     local tt = {thead}
     for _, id in ipairs(thread_ids) do
-      local is_idle = string.find(current.list[id].name, "idle") == 1
-
       local tline = {}
       for _, col in ipairs(cols) do
         local column = columns[col]
@@ -242,9 +241,11 @@ cmd.main = function(args)
     io.write(thread_status)
     io.write(table_format(tt))
 
-    prev, current = current, {time_ms = 0, list = {}}
-    prev_i, current_i = current_i, {}
-    sleep(math.max(0, (interval - (time_millis() - start_time_ms)) / 1000))
+    prev = current
+    current = {time_ms = 0, list = {}}
+    prev_i = current_i
+    current_i = {}
+    sleep(math.max(0, (interval - (time() - start_time_ms))))
   end
 end
 
