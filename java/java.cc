@@ -141,6 +141,7 @@ static int java_main(int argc, char **argv)
     }
 
     size_t auto_heap = 0;
+#if 0
     // Do not use total(), since that won't reflect the whole memory for the
     // machine. It then becomes counterintuitive to tell the user what is the
     // minimum he has to set to balloon
@@ -153,6 +154,7 @@ static int java_main(int argc, char **argv)
         auto_heap <<= 20;
         jvm_heap_size = auto_heap;
     }
+#endif
 
     vm_args.nOptions = options.size();
     vm_args.options = options.data();
