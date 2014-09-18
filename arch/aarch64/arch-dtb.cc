@@ -45,12 +45,11 @@ static bool dtb_getprop_u32(int node, const char *name, u32 *retval)
 
 static bool dtb_getprop_u32_cascade(int node, const char *name, u32 *retval)
 {
-    while (node >= 0) {
+    while ((node = fdt_parent_offset(dtb, node)) >= 0) {
         bool status = dtb_getprop_u32(node, name, retval);
         if (status == true) {
             return true;
         }
-        node = fdt_parent_offset(dtb, node);
     }
     return false;
 }
