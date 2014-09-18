@@ -459,6 +459,7 @@ void main_cont(int ac, char** av)
     std::tie(ac, av) = parse_options(ac, av);
 
     smp_launch();
+    setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");
     memory::enable_debug_allocator();
 
