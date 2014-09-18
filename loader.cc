@@ -457,8 +457,6 @@ void main_cont(int ac, char** av)
     std::vector<std::vector<std::string> > cmds;
 
     std::tie(ac, av) = parse_options(ac, av);
-    // multiple programs can be run -> separate their arguments
-    cmds = prepare_commands(ac, av);
 
     smp_launch();
     boot_time.event("SMP launched");
@@ -498,6 +496,9 @@ void main_cont(int ac, char** av)
         prof::start_sampler(config);
     }
 #endif /* !AARCH64_PORT_STUB */
+
+    // multiple programs can be run -> separate their arguments
+    cmds = prepare_commands(ac, av);
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
