@@ -283,7 +283,16 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
 
     // concatenate everything
     for (auto i = 0; i < ac; i++) {
-        line += std::string(av[i]) + " ";
+        std::string arg("");
+        if (av[i] && (*av[i] == '$')) {
+            auto tmp = getenv(av[i] + 1);
+            if (tmp) {
+                arg += tmp;
+            }
+        } else {
+            arg = av[i];
+        }
+        line += arg + " ";
     }
 
     commands = osv::parse_command_line(line, ok);
