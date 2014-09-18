@@ -80,7 +80,7 @@ void flush_tlb_all()
     int count;
     if (sched::thread::current()->is_app()) {
         ipis.clear();
-        std::copy_if(sched::cpus.begin(), sched::cpus.end(), ipis.begin(),
+        std::copy_if(sched::cpus.begin(), sched::cpus.end(), std::back_inserter(ipis),
                 [](sched::cpu* c) {
             if (c == sched::cpu::current()) {
                 return false;
