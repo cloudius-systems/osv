@@ -174,6 +174,11 @@ zfs_open(struct file *fp)
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(zp);
 
+	if (file_flags(fp) & O_DIRECT) {
+		ZFS_EXIT(zfsvfs);
+		return (EINVAL);
+	}
+
 	if ((file_flags(fp) & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
 	    ((file_flags(fp) & O_APPEND) == 0)) {
 		ZFS_EXIT(zfsvfs);
