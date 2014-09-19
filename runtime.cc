@@ -534,3 +534,11 @@ int daemon(int nochdir, int noclose)
     WARN_STUBBED();
     return -1;
 }
+
+extern "C"
+int sysctl(int *, int, void *, size_t *, void *, size_t)
+{
+    WARN_STUBBED();
+    errno = ENOTDIR;
+    return -1;
+}
