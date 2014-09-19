@@ -212,15 +212,16 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	dp = nullptr;
 
 	error = VOP_OPEN(vp, fp);
-	if (error)
-		goto out_free_fp;
+	if (error) {
+		vn_unlock(vp);
+		fdrop(fp);
+		return error;
+	}
 	vn_unlock(vp);
 
 	*fpp = fp;
 	return 0;
 
-out_free_fp:
-	fdrop(fp);
 out_vn_unlock:
 	vn_unlock(vp);
 out_drele:
