@@ -392,6 +392,7 @@ musl += network/gethostbyaddr.o
 libc += network/getaddrinfo.o
 musl += network/freeaddrinfo.o
 musl += network/in6addr_any.o
+musl += network/in6addr_loopback.o
 libc += network/getnameinfo.o
 libc += network/__dns.o
 libc += network/__ipparse.o
