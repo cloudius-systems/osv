@@ -4,6 +4,7 @@ local http = require("socket.http")
 local url = require("socket.url")
 local json = require("json")
 local ltn12 = require("ltn12")
+local socket = require("socket")
 
 local schema = {}
 
@@ -63,6 +64,12 @@ function osv_schema()
   return schema
 end
 
+function create_socket()
+  s = socket.tcp()
+  s:setoption('tcp-nodelay', true)
+  return s
+end
+
 --- Perform an OSv API request
 -- Sends a request to the OSv API and returns the body of the response. By
 -- default, try to decode the response as JSON unless `do_raw` is set to true.
@@ -106,7 +113,8 @@ function osv_request(arguments, method, parameters, do_raw)
     method = method,
     url = full_url,
     source = ltn12.source.string(reqbody),
-    sink = ltn12.sink.table(respbody)
+    sink = ltn12.sink.table(respbody),
+    create = create_socket
   }
 
   if raw then
