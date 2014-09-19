@@ -1,4 +1,5 @@
 #include <string.h>
+#include <libc.h>
 
 #undef strtok_r
 char *strtok_r(char *__restrict s, const char *__restrict sep, char **__restrict p)
@@ -11,3 +12,5 @@ char *strtok_r(char *__restrict s, const char *__restrict sep, char **__restrict
 	else *p = 0;
 	return s;
 }
+
+weak_alias(strtok_r, __strtok_r);
