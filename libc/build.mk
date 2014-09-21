@@ -414,6 +414,14 @@ musl += network/if_freenameindex.o
 
 libc += prng/rand.o
 libc += prng/random.o
+musl += prng/__rand48_step.o
+musl += prng/__seed48.o
+musl += prng/drand48.o
+musl += prng/lcong48.o
+musl += prng/lrand48.o
+musl += prng/mrand48.o
+musl += prng/seed48.o
+musl += prng/srand48.o
 
 libc += process/execve.o
 libc += process/execle.o
