@@ -14,7 +14,8 @@
                     "method": "GET",
                     "summary": "All/matching trace event status",
                     "notes": "return info and status of the matching trace events",
-                    "type": "List[TraceEventInfo]",
+                    "type": "array",
+                    "items":{"type":"TraceEventInfo"},
                     "nickname": "getTraceEventStatus",
                     "produces": [
                         "application/json"
@@ -35,7 +36,8 @@
                     "method": "POST",
                     "summary": "Change all/matching trace event status",
                     "notes": "Modify status for matching events and return previous state",
-                    "type": "List[TraceEventInfo]",
+                    "type": "array",
+                    "items":{"type":"TraceEventInfo"},
                     "nickname": "setTraceEventStatus",
                     "produces": [
                         "application/json"
@@ -230,7 +232,7 @@
                     "method": "GET",
                     "summary": "Retrieve the trace buffer contents and associated meta data",
                     "notes": "returns binary file in the OSv trace dump format",
-                    "type": "Object",
+                    "type": "string",
                     "nickname": "getTraceBuffers",
                     "produces": [
                         "application/octect-stream"
@@ -238,7 +240,7 @@
                     "deprecated": "false"
                 }
             ]
-        }        
+        }
     ],
     "models" : {
         "TraceEventInfo" : {

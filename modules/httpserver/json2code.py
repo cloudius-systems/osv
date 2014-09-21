@@ -88,7 +88,7 @@ def type_change(param, member):
             trace_err("array items with no type or ref declaration ", param)
             return ""
         return "json_list< " + valid_type(t) + " >"
-    return "json_element< " + valid_type(param.lower()) + " >"
+    return "json_element< " + valid_type(param) + " >"
 
 
 

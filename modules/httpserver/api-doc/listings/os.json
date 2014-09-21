@@ -81,7 +81,7 @@
                 {
                     "method": "GET",
                     "summary": "Returns the current date and time",
-                    "type": "dateTime",
+                    "type": "string",
                     "nickname": "os_date",
                     "produces": [
                         "application/json"

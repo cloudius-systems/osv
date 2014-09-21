@@ -32,7 +32,8 @@
                     "method": "GET",
                     "summary": "get GC related information",
                     "notes": "return a list of Memory Managers, each with its related information",
-                    "type": "List[MemoryManager]",
+                    "type": "array",
+                    "items":{"type":"MemoryManager"},
                     "nickname": "getGCinfo",
                     "produces": [
                         "application/json"
@@ -67,7 +68,7 @@
                     "method": "GET",
                     "summary": "get a runtime MBean value",
                     "notes": "get a runtime Mbean value",
-                    "type": "object",
+                    "type": "string",
                     "nickname": "getJMXvalue",
                     "produces": [
                         "application/json"
@@ -92,7 +93,8 @@
                 {
                     "method": "GET",
                     "summary": "get a list of all MBean names",
-                    "type":  "List[String]",
+                    "type": "array",
+                    "items":{"type":"string"},
                     "nickname": "getMbeanList",
                     "produces": [
                         "application/json"

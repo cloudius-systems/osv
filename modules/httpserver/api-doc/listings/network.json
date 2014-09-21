@@ -77,8 +77,8 @@
       }
    ],
    "models":{
-      "interface_config":{
-         "id": "interface_config",
+      "Interface_config":{
+         "id": "Interface_config",
          "properties":{
             "name":{
                "type":"string"
@@ -103,8 +103,8 @@
             }
          }
       },
-      "wakeup_stats":{
-         "id": "wakeup_stats",
+      "Wakeup_stats":{
+         "id": "Wakeup_stats",
          "properties":{
             "packets_8":{
                "type":"long"
@@ -126,8 +126,8 @@
             }
         }
       },
-      "interface_data":{
-         "id": "interface_data",
+      "Interface_data":{
+         "id": "Interface_data",
          "properties":{
             "ifi_type":{
                "type":"char"
@@ -220,10 +220,10 @@
                "type":"long"
             },
             "ifi_iwakeup_stats":{
-                "type": "wakeup_stats"
+                "type": "Wakeup_stats"
             },
             "ifi_owakeup_stats":{
-                "type": "wakeup_stats"
+                "type": "Wakeup_stats"
             }
          }
       },
@@ -231,10 +231,10 @@
          "id":"Interface",
          "properties":{
             "config":{
-               "type":"interface_config"
+               "type":"Interface_config"
             },
             "data":{
-               "type":"interface_data"
+               "type":"Interface_data"
             },
             "time":{
                "type":"long",

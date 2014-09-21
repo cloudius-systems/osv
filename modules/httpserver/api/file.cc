@@ -56,7 +56,7 @@ static void set_and_validate_params(parameters* params,
                                     const http::server::request& req, string& op, string& path)
 {
     op = req.get_query_param("op");
-    path = (*params)["path"];
+    path = (*params)["path-par"];
     if (op == "" || path == "") {
         throw bad_param_exception("missing mandatory parameters");
     }

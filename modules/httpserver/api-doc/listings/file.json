@@ -8,13 +8,13 @@
    ],
    "apis":[
       {
-         "path":"/file/{path}",
+         "path":"/file/{path-par}",
          "operations":[
             {
                "method":"GET",
                "summary":"Get File/Directory information",
                "notes":"return File or Directory related information",
-               "type":"Object",
+               "type":"string",
                "errorResponses":[
                   {
                      "code":404,
@@ -31,7 +31,7 @@
                ],
                "parameters":[
                   {
-                     "name":"path",
+                     "name":"path-par",
                      "description":"Full path of file or directory",
                      "required":true,
                      "allowMultiple":true,
@@ -69,7 +69,7 @@
                "method":"DELETE",
                "summary":"Del File/Directory",
                "notes":"Delete a File or Directory",
-               "type":"Object",
+               "type":"string",
                "errorResponses":[
                   {
                      "code":404,
@@ -86,7 +86,7 @@
                ],
                "parameters":[
                   {
-                     "name":"path",
+                     "name":"path-par",
                      "description":"Full path of file or directory to delete",
                      "required":true,
                      "allowMultiple":true,
@@ -123,7 +123,7 @@
                ],
                "parameters":[
                   {
-                     "name":"path",
+                     "name":"path-par",
                      "description":"Full path to the uploaded file",
                      "required":true,
                      "allowMultiple":true,
@@ -144,7 +144,7 @@
                "method":"PUT",
                "summary":"Create or change File/Directory",
                "notes":"Operation that create or change a file, directory or symbolic link",
-               "type":"Object",
+               "type":"string",
                "errorResponses":[
                   {
                      "code":404,
@@ -161,7 +161,7 @@
                ],
                "parameters":[
                   {
-                     "name":"path",
+                     "name":"path-par",
                      "description":"Full path of file or directory",
                      "required":true,
                      "allowMultiple":true,

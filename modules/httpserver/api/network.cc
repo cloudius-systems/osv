@@ -25,8 +25,8 @@ using namespace std::chrono;
 
 static Interface get_interface(const string& name, ifnet* ifp, long time)
 {
-    interface_config ifc;
-    interface_data ifd;
+    Interface_config ifc;
+    Interface_data ifd;
     Interface f;
     interface intf(name);
 
