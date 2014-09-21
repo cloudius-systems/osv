@@ -118,4 +118,6 @@ void debug(boost::format& fmt, args... as)
 
 void abort(const char *fmt, ...) __attribute__((noreturn));
 
+void fill_debug_buffer(const char *msg, size_t len);
+
 #endif // DEBUG_H
