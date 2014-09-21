@@ -22,7 +22,7 @@ $(MAIN): $(LE_BUILD)/Makefile
 	cd $(LE_BUILD) && make
 
 $(LE_BUILD)/Makefile: $(LE_BUILD)/configure
-	cd $(LE_BUILD) && ./configure
+	cd $(LE_BUILD) && CFLAGS=$(CFLAGS) LDFLAGS=$(LDFLAGS) ./configure
 
 $(LE_BUILD)/configure: $(LE_ARCHIVE) | $(BUILD)
 	cd $(BUILD) && tar xzf ../$(LE_ARCHIVE)
