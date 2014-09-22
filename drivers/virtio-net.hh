@@ -324,11 +324,11 @@ private:
 
         txq(net* parent, vring* vq) :
             vqueue(vq), _parent(parent), _xmit_it(this),
-            _kick_thresh(vqueue->size()), _xmitter(this),
-            worker([this] {
-                // TODO: implement a proper StopPred when we fix a SP code
-                _xmitter.poll_until([] { return false; }, _xmit_it);
-            }, sched::thread::attr().name("virtio-tx-worker"))
+            _kick_thresh(vqueue->size()),
+            _xmitter(this,
+                     // TODO: implement a proper StopPred when we fix a SP code
+                     [] { return false; },
+                     _xmit_it, "virtio-tx")
         {
             //
             // Kick at least every full ring of packets (see _kick_thresh
@@ -383,16 +383,13 @@ private:
          */
         bool kick_hw();
 
-        /**
-         * Inform the Txq that there is a new pending work
-         */
-        void wake_worker();
-
         int xmit(mbuf* m_head);
 
         void update_wakeup_stats(const u64 wakeup_packets) {
             if_update_wakeup_stats(stats.tx_wakeup_stats, wakeup_packets);
         }
+
+        void start() { _xmitter.start(); }
 
         /* TODO: drain the per-cpu rings in ~txq() and in if_qflush() */
 
@@ -455,10 +452,10 @@ private:
         //
         // Currently this gives us ~16 pages per one CPU ring.
         //
-        osv::xmitter<txq, 4096> _xmitter;
+        osv::xmitter<txq, 4096,
+                     std::function<bool ()>,
+                     osv::tx_xmit_iterator<txq>> _xmitter;
 
-    public:
-        sched::thread worker;
     };
 
     /**

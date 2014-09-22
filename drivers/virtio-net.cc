@@ -158,12 +158,6 @@ inline void net::txq::kick_pending(u16 thresh)
     }
 }
 
-inline void net::txq::wake_worker()
-{
-    worker.wake();
-}
-
-
 static void if_init(void* xsc)
 {
     net_d("Virtio-net init");
@@ -235,7 +229,6 @@ net::net(pci::device& dev)
       _txq(this, get_virt_queue(1))
 {
     sched::thread* poll_task = &_rxq.poll_task;
-    sched::thread* tx_worker_task = &_txq.worker;
 
     _driver_name = "virtio-net";
     virtio_i("VIRTIO NET INSTANCE");
@@ -286,9 +279,7 @@ net::net(pci::device& dev)
 
     //Start the polling thread before attaching it to the Rx interrupt
     poll_task->start();
-
-    // TODO: What if_init() is for?
-    tx_worker_task->start();
+    _txq.start();
 
     ether_ifattach(_ifn, _config.mac);
 

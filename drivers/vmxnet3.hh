@@ -155,9 +155,8 @@ class vmxnet3_txqueue : public vmxnet3_txq_shared {
     friend osv::xmitter_functor<vmxnet3_txqueue>;
 public:
     explicit vmxnet3_txqueue()
-    : task([this] { _xmitter.poll_until([] { return false; }, _xmit_it); })
-    , _xmit_it(this)
-    , _xmitter(this)
+    : _xmit_it(this)
+    , _xmitter(this, [] { return false; }, _xmit_it, "vmxnet3-tx")
     {}
 
     void init(struct ifnet* ifn, pci::bar *bar0);
@@ -171,7 +170,6 @@ public:
     int xmit_prep(mbuf* m_head, void*& cooky);
     int try_xmit_one_locked(void* cooky);
     void xmit_one_locked(void *req);
-    void wake_worker();
     void update_wakeup_stats(const u64 wakeup_packets)
     {
         if_update_wakeup_stats(stats.tx_wakeup_stats, wakeup_packets);
@@ -191,7 +189,6 @@ public:
         u64 tx_worker_packets;
         wakeup_stats tx_wakeup_stats;
     } stats = { 0 };
-    sched::thread task;
 
 private:
     struct vmxnet3_req {
@@ -211,7 +208,8 @@ private:
     struct mbuf *_buf[VMXNET3_MAX_TX_NDESC] = {};
     unsigned _avail = VMXNET3_MAX_TX_NDESC;
     osv::tx_xmit_iterator<vmxnet3_txqueue> _xmit_it;
-    osv::xmitter<vmxnet3_txqueue, 4096> _xmitter;
+    osv::xmitter<vmxnet3_txqueue, 4096, std::function<bool ()>,
+                 osv::tx_xmit_iterator<vmxnet3_txqueue>> _xmitter;
     struct ifnet* _ifn;
     pci::bar *_bar0;
     uma_zone_t _zone_req;

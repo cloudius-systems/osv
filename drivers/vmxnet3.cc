@@ -194,7 +194,7 @@ void vmxnet3_txqueue::init(struct ifnet* ifn, pci::bar *bar0)
     _zone_req = uma_zcreate("vmxnet3_req", sizeof(vmxnet3_req), NULL, NULL, NULL,
         NULL, UMA_ALIGN_PTR, UMA_ZONE_MAXBUCKET);
 
-    task.start();
+    _xmitter.start();
 }
 
 void vmxnet3_rxqueue::init(struct ifnet* ifn, pci::bar *bar0)
@@ -578,11 +578,6 @@ bool vmxnet3_txqueue::kick_hw()
     layout->npending = 0;
     _bar0->writel(bar0::txh, txr.head);
     return true;
-}
-
-void vmxnet3_txqueue::wake_worker()
-{
-    task.wake();
 }
 
 void vmxnet3_txqueue::encap(vmxnet3_req *req)
