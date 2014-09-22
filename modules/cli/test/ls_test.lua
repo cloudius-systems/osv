@@ -79,14 +79,13 @@ t.run = function()
     "/etc/hosts\n")
 
   -- Long list a directory
-  assert(t_main({"-l", "/etc"}) == [[total 6
-drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .
-drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..
--rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab
--rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts
--rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc
--rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab
-]])
+  assert(t_main({"-l", "/etc"}) == table.concat({"total 6",
+  "drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .       ",
+  "drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..      ",
+  "-rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab   ",
+  "-rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts   ",
+  "-rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc ",
+  "-rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab  ", ""}, "\n"))
 
   -- List reverse order
   assert(t_main({"-r", "/etc"}) ==
@@ -101,48 +100,44 @@ drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..
     "mnttab  inputrc fstab   ./      hosts   ../    \n")
 
   -- Long list reverse order
-  assert(t_main({"-lr", "/etc"}) == [[total 6
--rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab
--rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc
--rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts
--rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab
-drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..
-drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .
-]])
+  assert(t_main({"-lr", "/etc"}) == table.concat({"total 6",
+  "-rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab  ",
+  "-rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc ",
+  "-rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts   ",
+  "-rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab   ",
+  "drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..      ",
+  "drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .       ", ""}, "\n"))
 
   -- Long list by time
-  assert(t_main({"-lt", "/etc"}) == [[total 6
-drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..
-drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .
--rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab
--rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts
--rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc
--rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab
-]])
+  assert(t_main({"-lt", "/etc"}) == table.concat({"total 6",
+"drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..      ",
+"drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .       ",
+"-rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab   ",
+"-rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts   ",
+"-rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc ",
+"-rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab  ", ""}, "\n"))
 
   -- Long list reverse order by time
-  assert(t_main({"-lrt", "/etc"}) == [[total 6
--rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab
--rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc
--rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab
-drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .
--rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts
-drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..
-]])
+  assert(t_main({"-lrt", "/etc"}) == table.concat({"total 6",
+"-rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab  ",
+"-rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc ",
+"-rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab   ",
+"drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .       ",
+"-rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts   ",
+"drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..      ", ""}, "\n"))
 
   -- Long list multiple arguments
-  assert(t_main({"-l", "/etc", "/etc/hosts"}) == [[
--rwxrwxrwx 1 osv osv 30 Sep 10 12:29 /etc/hosts
-
-/etc:
-total 6
-drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .
-drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..
--rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab
--rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts
--rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc
--rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab
-]])
+  assert(t_main({"-l", "/etc", "/etc/hosts"}) == table.concat({
+"-rwxrwxrwx 1 osv osv 30 Sep 10 12:29 /etc/hosts ",
+"",
+"/etc:",
+"total 6",
+"drwxrwxrwx 4  osv osv 10   Sep 10 12:29 .       ",
+"drwxrwxrwx 11 osv osv 18   Sep 10 12:35 ..      ",
+"-rwxrwxrwx 1  osv osv 141  Sep 10 12:29 fstab   ",
+"-rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts   ",
+"-rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc ",
+"-rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab  ", ""}, "\n"))
 end
 
 return t
