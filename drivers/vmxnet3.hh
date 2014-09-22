@@ -170,6 +170,7 @@ public:
     int xmit_prep(mbuf* m_head, void*& cooky);
     int try_xmit_one_locked(void* cooky);
     void xmit_one_locked(void *req);
+    int qsize() { return VMXNET3_MAX_TX_NDESC; }
     void update_wakeup_stats(const u64 wakeup_packets)
     {
         if_update_wakeup_stats(stats.tx_wakeup_stats, wakeup_packets);

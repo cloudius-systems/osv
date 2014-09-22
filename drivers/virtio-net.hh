@@ -391,6 +391,8 @@ private:
 
         void start() { _xmitter.start(); }
 
+        int qsize() { return vqueue->size(); }
+
         /* TODO: drain the per-cpu rings in ~txq() and in if_qflush() */
 
         vring* vqueue;
