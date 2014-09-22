@@ -807,6 +807,11 @@ dladdr_info object::lookup_addr(const void* addr)
     return ret;
 }
 
+bool object::contains_addr(const void* addr)
+{
+    return addr >= _base && addr < _end;
+}
+
 static std::string dirname(std::string path)
 {
     auto pos = path.rfind('/');
@@ -1164,6 +1169,23 @@ dladdr_info program::lookup_addr(const void* addr)
         }
         ret = {};
     });
+    return ret;
+}
+
+object *program::object_containing_addr(const void *addr)
+{
+    object *ret = nullptr;
+    module_delete_disable();
+    WITH_LOCK(osv::rcu_read_lock) {
+         const auto &modules = _modules_rcu.read()->objects;
+         for (object *module : modules) {
+             if (module->contains_addr(addr)) {
+                 ret = module;
+                 break;
+             }
+         }
+    }
+    module_delete_enable();
     return ret;
 }
 

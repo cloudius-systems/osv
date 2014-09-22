@@ -327,6 +327,7 @@ public:
     template <typename T = void>
     T* lookup(const char* name);
     dladdr_info lookup_addr(const void* addr);
+    bool contains_addr(const void* addr);
     ulong module_index() const;
     void* tls_addr();
     std::vector<Elf64_Shdr> sections();
@@ -518,6 +519,7 @@ public:
     template <typename functor>
     void with_modules(functor f);
     dladdr_info lookup_addr(const void* addr);
+    elf::object *object_containing_addr(const void *addr);
     void* tls_addr(ulong module);
 private:
     void add_debugger_obj(object* obj);
