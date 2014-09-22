@@ -6,7 +6,7 @@ local json = require("json")
 local ltn12 = require("ltn12")
 local socket = require("socket")
 
-local schema = {}
+local schema = nil
 
 --- Constructs the path, join /arg/ume/nts ;)
 local function construct_path(arguments)
@@ -46,12 +46,12 @@ local function construct_full_url(path, reqquery)
 end
 
 function osv_schema()
-  if next(schema) == nil then
-    io.stderr:write("Loading OSv schema from: " .. context.api .. "\n")
-    schema, err = osv_request("/api/api-docs.json", "GET")
-    assert(schema, "Failed to load schema from: " .. context.api)
-    for _, resource in ipairs(schema.apis) do
-      api_def_url = "/api/" .. string.sub(resource.path, 5)
+  if not schema then
+    local schm, status = osv_request("/api/api-docs.json", "GET")
+    assert(status == 200, "Failed to load schema from: " .. context.api)
+
+    for _, resource in ipairs(schm.apis) do
+      local api_def_url = "/api/" .. string.sub(resource.path, 5)
       resource.definition = osv_request(api_def_url, "GET")
       resource.cli_alias = string.sub(resource.definition.resourcePath, 2)
 
@@ -59,13 +59,15 @@ function osv_schema()
         api.cli_alias = split(string.sub(api.path, 2), "[^/]+")
       end
     end
+
+    schema = schm
   end
 
   return schema
 end
 
-function create_socket()
-  s = socket.tcp()
+local function create_socket()
+  local s = socket.tcp()
   s:setoption('tcp-nodelay', true)
   return s
 end
@@ -96,9 +98,6 @@ function osv_request(arguments, method, parameters, do_raw)
   local reqquery = construct_query_params(parameters)
   local full_url = construct_full_url(path, reqquery)
 
-  -- TODO: Construct body (POST) parameters, not usable with current API anyway
-  local reqbody = ""
-
   -- Construct headers
   local reqheaders = {}
   if method == 'POST' then
@@ -112,7 +111,6 @@ function osv_request(arguments, method, parameters, do_raw)
   local respcode, status, headers = http.request {
     method = method,
     url = full_url,
-    source = ltn12.source.string(reqbody),
     sink = ltn12.sink.table(respbody),
     create = create_socket
   }
@@ -169,14 +167,29 @@ local renderer = {
 }
 
 -- Translates a response to console representation
-function render_response(response, response_class)
-  if not renderer[response_class] then
-    io.stderr:write("Missing renderer for response class: "
-      .. response_class .. "\n")
-    return DataDumper(response)
-  end
+function render_response(response, rsc, api, op)
+  if op.type then
+    local otype = op.type
+    if op.type == "array" and op.items then
+      if op.items.type then
+        otype = "array::" .. op.items.type
+      elseif op.items['$ref'] then
+        otype = "array::" .. op.items['$ref']
+      end
+    end
+    if string.find(op.type, "^List%[.*%]$") then
+      otype = "array::" .. string.sub(op.type, 6, -2)
+    end
 
-  return renderer[response_class](response)
+    if not renderer[otype] then
+      io.stderr:write("Missing renderer (", otype, ") for operation: ", op.method,
+        " ", api.path, "\n")
+      return DataDumper(response)
+    else
+      return renderer[otype](response)
+    end
+  end
+  return ""
 end
 
 -- Testing
