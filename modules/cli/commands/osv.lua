@@ -2,40 +2,64 @@ local OptionParser = require('std.optparse')
 local json = require("json")
 
 local function main_usage(schema)
-  print("Available commands:")
+  local tt = {{"API", "DESCRIPTION"}}
   for _, resource in ipairs(schema.apis) do
-    print(resource.cli_alias, resource.description)
+    table.insert(tt, {resource.cli_alias, resource.description})
   end
+  io.write(table_format(tt), "\n")
 end
 
 local function resource_usage(resource)
-  print("Available commands:")
-
-  local tt = {}
+  local tt = {{"COMMAND", "DESCRIPTION"}}
   for _, api in ipairs(resource.definition.apis) do
     local cli_alias = table.concat(api.cli_alias, ' ')
-    if #api.operations == 1 then
+
+    for i = 1, #api.operations do
       table.insert(tt, {
-        cli_alias,
-        (api.operations[1].method == "GET" and ""
-          or "(" .. api.operations[1].method .. ") ") ..
-        api.operations[1].summary
+        (i == 1 and cli_alias or ""),
+        (api.operations[i].method == "GET" and ""
+          or "[" .. api.operations[i].method .. "] ") ..
+        api.operations[i].summary
       })
-    else
-      table.insert(tt, {cli_alias, "", ""})
-      for i = 1, #api.operations do
-        table.insert(tt,
-          {"", api.operations[i].method, api.operations[i].summary})
-      end
     end
   end
 
-  print(table_format(tt))
+  io.write(table_format(tt), "\n")
 end
 
-local function api_usage(api)
-  -- TODO
-  print(api.path)
+local function api_usage(resource, show_api)
+  io.write("Resource: ", resource.description, "\n")
+  for iapi, api in ipairs(resource.definition.apis) do
+    if show_api.path == api.path then
+      io.write("API: ", api.path, "\n")
+      io.write("Operations:\n")
+      for iop, op in ipairs(api.operations) do
+        io.write("  Method:  ", op.method, "\n")
+        io.write("  Summary: ", op.summary, "\n")
+        if op.parameters and #op.parameters > 0 then
+          io.write("  Parameters:\n")
+          for iparam, param in ipairs(op.parameters) do
+            io.write("    Name:         ", param.name, "\n")
+            io.write("    Description:  ", param.description, "\n")
+            io.write("    Required:     ", tostring(param.required), "\n")
+            io.write("    Multiplicity: ", tostring(param.allowMultiple), "\n")
+            io.write("    Type:         ", param.type, "\n")
+            io.write("    ParamType:    ", param.paramType, "\n")
+            if param.enum and #param.enum > 0 then
+              io.write("    Values:       ", table.concat(param.enum, ", "), "\n")
+            end
+            if iparam < #op.parameters then
+              io.write("\n")
+            end
+          end
+        end
+
+        if iop < #api.operations then
+          io.write("\n")
+        end
+      end
+    end
+  end
 end
 
 -- Finds resource by arguments. Assumes 1-word resource path (/os, /jvm, etc.)
@@ -49,25 +73,38 @@ local function find_resource(schema, str)
 end
 
 -- Determines if arguments match an api path
-local function args_api_matches(arguments, api_path)
+local function args_api_matches(arguments, parameters, api_path)
   local api_args = split(api_path, "[^/]+")
-  if #arguments ~= #api_args then
-    return false
-  else
-    for i = 1, #arguments do
-      if not string.match(api_args[i], "^{.*}$") and
-        arguments[i] ~= api_args[i] then
-        return false
-      end
+  local move_parameters = {}
+
+  for i = 1, #api_args do
+    local name_arg = string.match(api_args[i], "^{.*}$") and
+      string.sub(api_args[i], 2, -2)
+
+    -- If this is not a name_arg and the order of the arguments don't match
+    if not name_arg and arguments[i] ~= api_args[i] then
+      return false
+    -- If this is a name_arg but there's no parameter or argument for it
+    elseif name_arg and (not parameters[name_arg] and not arguments[i]) then
+      return false
+    elseif name_arg and parameters[name_arg] then
+      move_parameters[i] = name_arg
     end
+  end
+
+  for i in pairs(move_parameters) do
+    if #parameters[move_parameters[i]] >= 1 then
+      arguments[i] = parameters[move_parameters[i]][1]
+    end
+    parameters[move_parameters[i]] = nil
   end
 
   return true
 end
 
-local function find_api(resource, arguments)
+local function find_api(resource, arguments, parameters)
   for _, api in ipairs(resource.definition.apis) do
-    if args_api_matches(arguments, api.path) then
+    if args_api_matches(arguments, parameters, api.path) then
       return api
     end
   end
@@ -88,14 +125,22 @@ Options:
 
   -m, --method=[METHOD]  The method to use (Default: GET)
   -r, --raw              Do not process the response
-  -h, --help             Show this help
+  -h                     Show help of command or sub-command
+      --help             Show this help
 ]]
+
+-- Remove file method from parser or it won't accept "file" as an argument
+local tmp = getmetatable(cmd.parser)
+tmp.__index.file = nil
+setmetatable(cmd.parser, tmp)
+tmp = nil
 
 cmd.main = function(args)
   local args, opts = cmd.parser:parse(args)
 
   -- Local variables
   local do_raw = opts.raw
+  local do_help = opts.h
   local selected_method = opts.method and opts.method or "GET"
 
   -- Load the schema
@@ -125,78 +170,94 @@ cmd.main = function(args)
     return
   end
 
-  -- Find selected resource
-  local selected_resource
+  -- Find selected resource and API
+  local selected_resource, selected_api
   if #arguments >= 1 then
     selected_resource = find_resource(schema, arguments[1])
     if not selected_resource then
-      print("Unknown command: " .. arguments[1])
+      io.stderr:write("Unknown API: ", arguments[1], "\n")
       main_usage(schema)
       return
     end
 
-    if #arguments == 1 then
-      resource_usage(selected_resource)
-    end
-  end
-
-  -- Find selected API
-  local selected_api
-  if #arguments >= 2 then
-    selected_api = find_api(selected_resource, arguments)
+    selected_api = find_api(selected_resource, arguments, parameters)
     if not selected_api then
-      print("Unknown command: " .. table.concat(arguments))
       resource_usage(selected_resource)
       return
     end
+  end
 
-    if do_help then
-      api_usage(selected_api)
+  -- Find selected operation
+  local selected_operation
+  for _, op in ipairs(selected_api.operations) do
+    if op.method == selected_method then
+      selected_operation = op
+    end
+  end
+
+  -- Verify that this action is supported (or display help)
+  if not selected_operation or do_help then
+    if not selected_operation then
+      io.stderr:write("Unsupported method: ", selected_method, "\n")
     end
 
-    -- Find selected operation
-    local selected_operation
-    for _, op in ipairs(selected_api.operations) do
-      if op.method == selected_method then
-        selected_operation = op
-      end
-    end
+    api_usage(selected_resource, selected_api)
+    return
+  end
 
-    -- Verify that this action is supported
-    assert(selected_operation,
-      "Unsupported action method: " .. selected_method)
+  -- Collect parameters
+  local op_params = {}
 
-    -- Collect parameters
-    local op_params = {}
-
-    -- Validate parameters in operation
+  -- Validate parameters in operation
+  if selected_operation.parameters then
     for _, param in ipairs(selected_operation.parameters) do
-      if param.required and not parameters[param.name] then
-        error("Required parameter not supplied: " .. param.name)
+      if param.paramType and param.paramType == "path" then
+        -- Skip; taken care of in args_api_matches()
+      else
+        if param.required and not parameters[param.name] then
+          error("Required parameter not supplied: " .. param.name)
+        end
+
+        if not param.allowMultiple and parameters[param.name] and
+           #parameters[param.name] > 1 then
+          error("Parameter multiplicity not supported for: " .. param.name)
+        end
+
+        op_params[param.name] = true
       end
+    end
+  end
 
-      if not param.allowMultiple and #parameters[param.name] > 1 then
-        error("Parameter multiplicity not supported for: " .. param.name)
+  -- Find wrong parameters
+  for param, values in pairs(parameters) do
+    assert(op_params[param], "Unknown parameter supplied: " .. param)
+  end
+
+  -- Now that we know everything is ok, perform the requested operation
+  -- and print the result
+  local response, status = osv_request(arguments, selected_method,
+    parameters, do_raw)
+
+  if status == 404 then
+    if response.message then
+      error(response.message)
+    elseif selected_operation.errorResponses then
+      for _, err in selected_operation.errorResponses do
+        if err.code == status then
+          error(err.reason)
+        end
       end
-
-      -- TODO: Validate parameter types
-
-      op_params[param.name] = true
     end
 
-    -- Find wrong parameters
-    for param, values in pairs(parameters) do
-      assert(op_params[param], "Unknown parameter supplied: " .. param)
-    end
+    -- Fallback
+    error("HTTP 404: Not found")
+  end
 
-    -- Now that we know everything is ok, perform the requested operation
-    -- and print the result
-    local response = osv_request(arguments, selected_method, parameters, do_raw)
-    if do_raw then
-      print(response)
-    else
-      print(render_response(response, selected_operation.responseClass))
-    end
+  if do_raw then
+    io.write(response, "\n")
+  else
+    io.write(render_response(response, selected_resource, selected_api,
+      selected_operation), "\n")
   end
 end
 
