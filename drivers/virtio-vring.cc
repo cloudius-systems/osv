@@ -253,12 +253,6 @@ namespace virtio {
         return effective_avail_count > 0;
     }
 
-    bool vring::refill_ring_cond()
-    {
-        u16 effective_avail_count = effective_avail_ring_count();
-        return effective_avail_count >= _num/2;
-    }
-
     bool vring::avail_ring_has_room(int descriptors)
     {
         u16 effective_avail_count = effective_avail_ring_count();

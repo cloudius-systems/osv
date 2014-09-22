@@ -176,7 +176,6 @@ class virtio_driver;
         // when the available ring has x descriptors as room it means that
         // x descriptors can be allocated while _num-x are available for the host
         bool avail_ring_has_room(int n);
-        bool refill_ring_cond();
         bool use_indirect(int desc_needed);
         void set_use_indirect(bool flag) { _use_indirect = flag;}
         bool get_use_indirect() { return _use_indirect;}

@@ -418,6 +418,7 @@ void net::receiver()
     std::vector<iovec> packet;
     u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
     u64 csum_err = 0, rx_bytes = 0;
+    static const u16 refill_thresh = 16;
 
     while (1) {
 
@@ -441,7 +442,7 @@ void net::receiver()
 
             vq->get_buf_finalize();
 
-            if (vq->refill_ring_cond())
+            if (vq->effective_avail_ring_count() >= refill_thresh)
                 fill_rx_ring();
 
             // Bad packet/buffer - discard and continue to the next one
