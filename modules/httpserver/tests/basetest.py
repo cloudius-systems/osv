@@ -9,7 +9,7 @@ import requests
 
 from osv import client
 
-class HttpError(BaseException):
+class HttpError(Exception):
     def __init__(self, code):
         self.code = code
 
