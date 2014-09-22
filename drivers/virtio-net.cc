@@ -439,8 +439,10 @@ void net::receiver()
 
         while (void* page = vq->get_buf_elem(&len)) {
 
-            // TODO: should get out of the loop
             vq->get_buf_finalize();
+
+            if (vq->refill_ring_cond())
+                fill_rx_ring();
 
             // Bad packet/buffer - discard and continue to the next one
             if (len < _hdr_size + ETHER_HDR_LEN) {
@@ -502,9 +504,6 @@ void net::receiver()
             if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
                 break;
         }
-
-        if (vq->refill_ring_cond())
-            fill_rx_ring();
 
         // Update the stats
         _rxq.stats.rx_drops      += rx_drops;
