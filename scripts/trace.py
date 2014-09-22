@@ -6,7 +6,6 @@ import re
 import os
 import math
 import subprocess
-import tempfile
 import requests
 
 from collections import defaultdict

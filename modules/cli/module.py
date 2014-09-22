@@ -1,7 +1,6 @@
 from osv.modules.api import *
 from osv.modules.filemap import FileMap
 from osv.modules import api
-import os, os.path
 
 require('lua')
 require('ncurses')

@@ -1,9 +1,7 @@
 import os
 import re
 import subprocess
-import threading
 import itertools
-import select
 
 class SourceAddress:
     def __init__(self, addr, name=None, filename=None, line=None):

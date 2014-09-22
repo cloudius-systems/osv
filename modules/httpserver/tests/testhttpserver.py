@@ -1,18 +1,8 @@
 #!/usr/bin/env python
-import json
 import sys
-import re
-import glob
 import argparse
 import os
-import subprocess
-import time
-import threading
-import requests
-import urllib
 import unittest
-import re
-import socket
 import basetest
 
 from osv import client

@@ -1,7 +1,5 @@
-import os
 import mmap
 import struct
-import sys
 import heapq
 import bisect
 

@@ -2,7 +2,6 @@ import sys
 from operator import attrgetter
 from osv import trace, tree, debug
 from collections import defaultdict
-import itertools
 import re
 
 class ProfNode(tree.TreeNode):

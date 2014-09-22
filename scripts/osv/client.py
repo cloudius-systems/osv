@@ -1,10 +1,8 @@
 import os
 try:
-    from urllib.request import urlopen
     from urllib.parse import urlparse
 except ImportError:
     from urlparse import urlparse
-    from urllib import urlopen
 
 _osv_base = '.'
 _default_cert_base = os.path.join(_osv_base, 'modules', 'certs', 'build')

@@ -1,6 +1,4 @@
 import re
-import os
-import sys
 
 l = file("gdb.txt", "rt").readlines()
 
