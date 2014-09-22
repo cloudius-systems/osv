@@ -9,7 +9,7 @@
 #define INCLUDED_LOCKFREE_QUEUE_MPSC
 // A lock-free multiple-producer single-consumer queue implementation.
 //
-// Multiple-Consumer means that many push()s may be in progress concurrently.
+// Multiple-Producer means that many push()s may be in progress concurrently.
 // Single-Consumer means we assume that only a single pop() attempt may be in
 // progress - potentially concurrently with push()s.
 //
@@ -18,12 +18,9 @@
 // logic guarantees that in no case do two pop()s get called concurrently,
 // and the caller is responsible to ensure the appropriate memory ordering.
 //
-// This is one of the simplest, and most well-known (and often
-// reinvented) lock-free algorithm, and we actually have another
-// implementation of the same algorithm - with a different API - in
-// include/osv/lockless-queue.hh. TODO: merge these two header files.
-// Boost also happens to use this algorithm as an example in their
-// documentation: see
+// This is one of the simplest, and most well-known (and often reinvented)
+// lock-free algorithm. Boost also happens to use this algorithm as an example
+// in their documentation: see
 // http://www.boost.org/doc/libs/1_53_0/doc/html/atomic/usage_examples.html
 // #boost_atomic.usage_examples.mp_queue
 
@@ -87,7 +84,7 @@ public:
             // is imporant) and then at our leisure, reverse this list (so
             // oldest first) into poplist. We can do this at our leisure
             // because there are no competing pops. Note we need "consume"
-            // memory orderinf (because we only access memory via the pointer
+            // memory ordering (because we only access memory via the pointer
             // loaded from the atomic variable), but it appears gcc doesn't
             // support memory_order_consume so we use memory_order_acquire.
             LT *r = pushlist.exchange(nullptr,
