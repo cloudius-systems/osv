@@ -412,7 +412,8 @@ musl += network/getifaddrs.o
 musl += network/if_nameindex.o
 musl += network/if_freenameindex.o
 
-libc += prng/rand.o
+musl += prng/rand.o
+musl += prng/rand_r.o
 libc += prng/random.o
 libc += prng/__rand48_step.o
 musl += prng/__seed48.o
