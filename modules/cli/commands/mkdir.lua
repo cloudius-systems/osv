@@ -2,8 +2,10 @@ local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.desc = [[make directories]]
+
 cmd.parser = OptionParser [[
-mkdir
+mkdir - make directories
 
 Usage: mkdir [OPTION]... DIRECTORY...
 

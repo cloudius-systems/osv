@@ -3,6 +3,8 @@ local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.desc = [[report file system disk space usage]]
+
 cmd.parser = OptionParser [[
 df - report file system disk space usage
 

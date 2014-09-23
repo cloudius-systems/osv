@@ -2,6 +2,8 @@ local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.desc = [[remove files or directories]]
+
 cmd.parser = OptionParser [[
 rm - remove files or directories
 

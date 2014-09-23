@@ -79,6 +79,8 @@ local clear_page = '\27[H\27[2J'
 
 local cmd = {}
 
+cmd.desc = [[display OSv threads]]
+
 cmd.parser = OptionParser [[
 top
 

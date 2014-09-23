@@ -114,10 +114,12 @@ end
 
 local cmd = {}
 
-cmd.parser = OptionParser [[
-osv
+cmd.desc = [[execute arbitrary OSv API operations as defined by the schema]]
 
-Usage: osv [OPTION]... API ACTION-WORD [ACTION-WORD]... [PARAMETER=value]...
+cmd.parser = OptionParser [[
+api - execute arbitrary OSv API operations as defined by the schema
+
+Usage: api [OPTION]... API ACTION-WORD [ACTION-WORD]... [PARAMETER=value]...
 
 Execute arbitrary OSv API operations according to the defined schema.
 

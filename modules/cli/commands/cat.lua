@@ -2,6 +2,8 @@ local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.desc = [[concatenate files and print on the standard output]]
+
 cmd.parser = OptionParser [[
 cat - concatenate files and print on the standard output
 

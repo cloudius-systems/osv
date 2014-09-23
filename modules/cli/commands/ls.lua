@@ -13,6 +13,8 @@ local year_after = 0
 
 local cmd = {}
 
+cmd.desc = [[list directory contents]]
+
 cmd.parser = OptionParser [[
 ls - list directory contents
 

@@ -2,6 +2,8 @@ local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.desc = [[display a line of text]]
+
 cmd.parser = OptionParser [[
 echo - display a line of text
 

@@ -2,8 +2,10 @@ local OptionParser = require('std.optparse')
 
 local cmd = {}
 
+cmd.desc = [[change the shell working directory]]
+
 cmd.parser = OptionParser [[
-cd
+cd - change the shell working directory
 
 Usage: cd <path>
 ]]
