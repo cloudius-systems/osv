@@ -31,7 +31,7 @@ virtio_driver::virtio_driver(pci::device& dev)
     for (unsigned i = 0; i < max_virtqueues_nr; i++) {
         _queues[i] = nullptr;
     }
-    parse_pci_config();
+    assert(parse_pci_config() == true);
 
     _dev.set_bus_master(true);
 
