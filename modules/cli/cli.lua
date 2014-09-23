@@ -9,10 +9,6 @@ context = require('context')
 -- Local modules
 local lpeg = require('lpeg')
 
-local function command_filename(name)
-  return string.format('%s/%s.lua', context.commands_path, name)
-end
-
 --- Prints message to stderr
 local function print_cmd_err(cmd, msg)
   io.stderr:write(cmd .. ": " .. msg .. "\n")

@@ -73,6 +73,10 @@ function file_exists(name)
   if f ~= nil then io.close(f) return true else return false end
 end
 
+function command_filename(name)
+  return string.format('%s/%s.lua', context.commands_path, name)
+end
+
 -- Map with func
 function map(func, array)
   local new_array = {}
