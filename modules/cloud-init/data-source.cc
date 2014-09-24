@@ -19,21 +19,19 @@ const std::string metadata_service = "169.254.169.254";
 
 class gce : public data_source {
 public:
+    virtual std::string external_ip()
+    {
+        return get("/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip");
+    }
+
+    virtual std::string internal_ip()
+    {
+        return get("instance/network-interfaces/0/ip");
+    }
+
     virtual std::string get_user_data()
     {
-        client c;
-        c.set_header("Metadata-Flavor", "Google");
-        c.get(metadata_service, "/computeMetadata/v1/instance/attributes/user-data");
-
-        if (c.get_status() == http_status::NOT_FOUND) {
-            return "";
-        }
-
-        if (!c.is_ok()) {
-            throw std::runtime_error("Request failed: " + c.get_status());
-        }
-
-        return c.text();
+        return get("/computeMetadata/v1/instance/attributes/user-data");
     }
 
     virtual std::string get_name()
@@ -50,10 +48,43 @@ public:
             throw std::runtime_error("Request failed: " + c.get_status());
         }
     }
+
+private:
+    virtual std::string get(std::string url)
+    {
+        client c;
+        c.set_header("Metadata-Flavor", "Google");
+        c.get(metadata_service, url);
+
+        if (c.get_status() == http_status::NOT_FOUND) {
+            return "";
+        }
+
+        if (!c.is_ok()) {
+            throw std::runtime_error("Request failed: " + c.get_status());
+        }
+
+        return c.text();
+    }
+
 };
 
 class ec2 : public data_source {
 public:
+    virtual std::string external_ip()
+    {
+        client c;
+        c.get(metadata_service, "/latest/meta-data/public-ipv4");
+        return c.text();
+    }
+
+    virtual std::string internal_ip()
+    {
+        client c;
+        c.get(metadata_service, "/latest/meta-data/local-ipv4");
+        return c.text();
+    }
+
     virtual std::string get_user_data()
     {
         client c;

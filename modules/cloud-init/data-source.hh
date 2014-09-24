@@ -12,6 +12,8 @@ class data_source {
 public:
     virtual ~data_source() {}
 
+    virtual std::string external_ip() = 0;
+    virtual std::string internal_ip() = 0;
     virtual std::string get_user_data() = 0;
     virtual std::string get_name() = 0;
 
