@@ -19,6 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--ami-launch-index", default="1")
     parser.add_argument("--reservation-id", default="r-00000000")
     parser.add_argument("--local-ipv4", default="127.0.0.1")
+    parser.add_argument("--public-ipv4", default="127.0.0.1")
     parser.add_argument("--public-hostname", default="localhost")
     parser.add_argument("-u", "--user-data")
     parser.add_argument("-f", "--user-data-from-file")
@@ -35,6 +36,8 @@ if __name__ == "__main__":
         write_file(dir + "/latest/meta-data/reservation-id", args.reservation_id)
 
         write_file(dir + "/latest/meta-data/local-ipv4", args.local_ipv4)
+
+        write_file(dir + "/latest/meta-data/public-ipv4", args.public_ipv4)
 
         write_file(dir + "/latest/meta-data/public-hostname", args.public_hostname)
 
