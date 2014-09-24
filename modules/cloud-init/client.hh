@@ -58,6 +58,8 @@ public:
      */
     client& get(const std::string& server, const std::string& path, unsigned int port = 80);
 
+    boost::asio::ip::address getaddr(const std::string& server);
+
     bool is_ok()
     {
         return status_code == http_status::OK;

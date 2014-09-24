@@ -67,13 +67,7 @@ client& client::get(const std::string& server, const std::string& path,
                     unsigned int port)
 {
     boost::system::error_code ec;
-    boost::asio::ip::address_v4 v4_address =
-        boost::asio::ip::address_v4::from_string(server, ec);
-    if (ec) {
-        throw connection_exception(
-            std::string("Bad address ") + server + ec.message());
-    }
-    boost::asio::ip::address address(v4_address);
+    auto address = getaddr(server);
 
     tcp::endpoint _endpoint(address, port);
 
@@ -136,6 +130,16 @@ client& client::get(const std::string& server, const std::string& path,
     while (std::getline(response_stream, header) && header != "\r");
 
     return *this;
+}
+
+boost::asio::ip::address client::getaddr(const std::string& server) {
+    boost::asio::ip::tcp::resolver resolver(io_service);
+    boost::asio::ip::tcp::resolver::query query(server, "80");
+    boost::system::error_code error;
+    boost::asio::ip::tcp::resolver::iterator it(resolver.resolve(query, error));
+    if (error == boost::asio::error::host_not_found)
+        throw connection_exception(std::string("Unable to resolve address for ") + server);
+    return it->endpoint().address();
 }
 
 std::ostream& operator<<(std::ostream& os, client& c)
