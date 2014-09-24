@@ -7,6 +7,7 @@
 
 #include "cassandra-module.hh"
 
+#include "data-source.hh"
 #include "template.hh"
 
 #include <fstream>
@@ -20,8 +21,15 @@ void cassandra_module::handle(const YAML::Node& doc)
     constexpr auto config_filename   = "/usr/cassandra/conf/cassandra.yaml";
     constexpr auto template_filename = "/usr/cassandra/conf/cassandra.yaml.template";
 
-    cout << "cloud-init: Cassandra configuration:" << endl;
+    // User config:
     auto dict = to_map(doc);
+
+    // Instance config:
+    auto& ds = get_data_source();
+    dict.insert({"external-ip", ds.external_ip()});
+    dict.insert({"internal-ip", ds.internal_ip()});
+
+    cout << "cloud-init: Cassandra configuration:" << endl;
     for (auto&& kv : dict) {
         cout << "  '" << kv.first << "' => '" << kv.second << "'" << endl;
     }
