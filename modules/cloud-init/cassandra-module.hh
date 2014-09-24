@@ -9,6 +9,7 @@
 #define CLOUDINIT_CASSANDRA_HH_
 
 #include "cloud-init.hh"
+#include "json.hh"
 #include <map>
 
 namespace init {
@@ -20,6 +21,10 @@ public:
     virtual std::string get_label() {
         return "cassandra";
     }
+private:
+    std::string reflector_seeds(std::map<std::string, std::string> dict);
+    json11::Json wait_for_seeds(std::map<std::string, std::string> dict);
+
 private:
     std::map<std::string, std::string> to_map(const YAML::Node& doc) const;
 };
