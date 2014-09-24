@@ -21,6 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--local-ipv4", default="127.0.0.1")
     parser.add_argument("--public-ipv4", default="127.0.0.1")
     parser.add_argument("--public-hostname", default="localhost")
+    parser.add_argument("--availability-zone", default="us-east-1d")
     parser.add_argument("-u", "--user-data")
     parser.add_argument("-f", "--user-data-from-file")
     args = parser.parse_args()
@@ -28,6 +29,7 @@ if __name__ == "__main__":
     dir = tempfile.mkdtemp()
     try:
         os.makedirs(dir + '/latest/meta-data')
+        os.makedirs(dir + '/latest/meta-data/placement')
 
         write_file(dir + "/latest/meta-data/ami-id", args.ami_id)
 
@@ -40,6 +42,8 @@ if __name__ == "__main__":
         write_file(dir + "/latest/meta-data/public-ipv4", args.public_ipv4)
 
         write_file(dir + "/latest/meta-data/public-hostname", args.public_hostname)
+
+        write_file(dir + "/latest/meta-data/placement/availability-zone", args.availability_zone)
 
         if args.user_data_from_file:
             if args.user_data:
