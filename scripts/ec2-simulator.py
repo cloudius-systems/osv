@@ -16,7 +16,7 @@ def read_file(path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ami-id", default="ami-000000")
-    parser.add_argument("--ami-launch-index", default="1")
+    parser.add_argument("--ami-launch-index", default="0")
     parser.add_argument("--reservation-id", default="r-00000000")
     parser.add_argument("--local-ipv4", default="127.0.0.1")
     parser.add_argument("--public-ipv4", default="127.0.0.1")
