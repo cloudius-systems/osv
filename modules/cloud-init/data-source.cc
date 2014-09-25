@@ -19,6 +19,16 @@ const std::string metadata_service = "169.254.169.254";
 
 class gce : public data_source {
 public:
+    virtual std::string launch_index()
+    {
+        throw std::runtime_error("Launch index not supported on GCE.");
+    }
+
+    virtual std::string reservation_id()
+    {
+        throw std::runtime_error("Reservation ID not supported on GCE.");
+    }
+
     virtual std::string external_ip()
     {
         return get("/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip");
@@ -27,6 +37,11 @@ public:
     virtual std::string internal_ip()
     {
         return get("instance/network-interfaces/0/ip");
+    }
+
+    virtual std::string external_hostname()
+    {
+        return get("/computeMetadata/v1/instance/hostname");
     }
 
     virtual std::string get_user_data()
@@ -71,6 +86,20 @@ private:
 
 class ec2 : public data_source {
 public:
+    virtual std::string launch_index()
+    {
+        client c;
+        c.get(metadata_service, "/latest/meta-data/ami-launch-index");
+        return c.text();
+    }
+
+    virtual std::string reservation_id()
+    {
+        client c;
+        c.get(metadata_service, "/latest/meta-data/reservation-id");
+        return c.text();
+    }
+
     virtual std::string external_ip()
     {
         client c;
@@ -82,6 +111,13 @@ public:
     {
         client c;
         c.get(metadata_service, "/latest/meta-data/local-ipv4");
+        return c.text();
+    }
+
+    virtual std::string external_hostname()
+    {
+        client c;
+        c.get(metadata_service, "/latest/meta-data/public-hostname");
         return c.text();
     }
 
