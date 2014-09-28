@@ -26,12 +26,16 @@ cmd.main = function(args)
     osv_resp_assert(status, 200, 404)
 
     if status == 404 then
-      io.stderr:write(path .. ": Mount point not found\n")
+      io.stderr:write("df: ", arg, ": Mount point not found\n")
     else
       for _, fs in ipairs(res) do
         table.insert(df, fs)
       end
     end
+  end
+
+  if #df == 0 then
+    return
   end
 
   local tt = {{"Filesystem", "Total", "Used", "Use%", "Mounted on"}}
