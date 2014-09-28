@@ -7,6 +7,9 @@ For more on Lua modules, see: http://lua-users.org/wiki/ModulesTutorial
 local cmd = {}
 
 cmd.desc = [[a command example]]
+cmd.hello = [[Usage: hello
+
+A command example.]]
 
 --- Called when the command is executed
 -- @param args List of arguments from the command line

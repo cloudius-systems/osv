@@ -1,6 +1,9 @@
 local cmd = {}
 
 cmd.desc = [[display amount of free and used memory in system]]
+cmd.help = [[Usage: free
+
+Print OSv memory usage.]]
 
 cmd.main = function()
   local total, status = osv_request({"os", "memory", "total"}, "GET")
