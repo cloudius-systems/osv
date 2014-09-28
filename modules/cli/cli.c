@@ -4,6 +4,7 @@
 #include <string.h>
 #include <signal.h>
 #include <getopt.h>
+#include <signal.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -42,6 +43,11 @@ static  lua_State *L;
 lua_State *cli_luaL_newstate();
 void       cli_luaL_renewstate(lua_State**);
 char      *cli_prompt(EditLine*);
+
+/* Command execution interrupt */
+static int  cli_interrupted = 0;
+static int  cli_lua_interrupted(lua_State *);
+static void signal_handler(int sig);
 
 /* Context */
 static char* env_osv_api;
@@ -129,6 +135,12 @@ int main (int argc, char* argv[]) {
   } else {
     /* Start a shell */
 
+    /* Install signal handler only in interactive */
+    struct sigaction act, oldact;
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = &signal_handler;
+    sigaction(SIGINT, &act, &oldact);
+
     /* This holds all the state for our line editor */
     EditLine *el;
 
@@ -195,6 +207,8 @@ int main (int argc, char* argv[]) {
           lua_getglobal(L, "cli_command");
           lua_pushstring(L, el_line);
 
+          /* Reset "interrupted" state */
+          cli_interrupted = 0;
           int error = lua_pcall(L, 1, 0, 0);
           if (error) {
             fprintf(stderr, "%s\n", lua_tostring(L, -1));
@@ -256,6 +270,8 @@ lua_State *cli_luaL_newstate() {
   /* Bind some functions into Lua */
   lua_pushcfunction(L, cli_lua_console_dim);
   lua_setglobal(L, "cli_console_dim");
+  lua_pushcfunction(L, cli_lua_interrupted);
+  lua_setglobal(L, "cli_interrupted");
 
   return L;
 }
@@ -326,4 +342,16 @@ static int cli_lua_console_dim(lua_State *L) {
   lua_pushnumber(L, con_height);
   lua_pushnumber(L, con_width);
   return 2;
+}
+
+/* Interrupt a running command */
+static int  cli_lua_interrupted(lua_State *L) {
+  lua_pushboolean(L, cli_interrupted);
+  return 1;
+}
+
+static void signal_handler(int sig) {
+  if (sig == SIGINT) {
+    cli_interrupted = 1;
+  }
 }
