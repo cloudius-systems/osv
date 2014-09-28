@@ -145,7 +145,7 @@ cmd.main = function(args)
   end
 
   -- TODO: Stop somehow
-  while true do
+  while not cli_interrupted() do
     local start_time_ms = time()
     local threads, status = osv_request("/os/threads", "GET")
     osv_resp_assert(status, 200)
@@ -251,6 +251,9 @@ cmd.main = function(args)
     current_i = {}
     sleep(math.max(0, (interval - (time() - start_time_ms))))
   end
+
+  -- Feed newline
+  io.write('\n')
 end
 
 return cmd
