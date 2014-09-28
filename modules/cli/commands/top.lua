@@ -98,6 +98,8 @@ Options:
   -h, --help              Display this help and exit
 ]]
 
+cmd.help_flags = {"-h", "--help"}
+
 cmd.main = function(args)
   local args, opts = cmd.parser:parse(args)
 

@@ -74,7 +74,8 @@ function cli_command(args)
 
       -- Override --help implementation (by default it uses os.exit())
       if cmd.parser then
-        cmd.parser:on({"--help"}, function(self, arglist, i, value)
+        local hflags = cmd.help_flags and cmd.help_flags or {"--help"}
+        cmd.parser:on(hflags, function(self, arglist, i, value)
           cmd_run = false
           io.stderr:write(self.helptext .. '\n')
           return i + 1
