@@ -209,8 +209,13 @@ function osv_request_mock(response, arguments, method, parameters)
     http.request = function(opts)
       local res = osv_request_mocks[opts.method .. ' ' .. opts.url]
       if res then
-        opts.sink(res)
-        return 1, 200, {}
+        if type(res) == "table" then
+          opts.sink(res.response)
+          return 1, res.status, {}
+        else
+          opts.sink(res)
+          return 1, 200, {}
+        end
       else
         error("Mock for '" .. opts.url .. "' not found")
       end
