@@ -58,9 +58,9 @@ cmd.main = function(args)
     osv_resp_assert(status, 200, 404, 400)
 
     if status == 404 then
-      io.stderr:write(arg .. ": no such file or directory")
+      io.stderr:write("ls: ", arg, ": no such file or directory\n")
     elseif status == 400 then
-      io.stderr:write(arg .. ": failed to fetch data")
+      io.stderr:write("ls: ", arg, ": failed to fetch data\n")
     else
       table.insert(rargs, {file=content, arg=arg})
     end
