@@ -60,9 +60,20 @@ local dir_list_response = [[
 ]]
 
 t.run = function()
-  osv_request_mock(file_stat_response, {"file", "/etc/hosts"}, "GET", {op = "GETFILESTATUS"})
-  osv_request_mock(dir_stat_response, {"file", "/etc"}, "GET", {op = "GETFILESTATUS"})
-  osv_request_mock(dir_list_response, {"file", "/etc"}, "GET", {op = "LISTSTATUS"})
+  osv_request_mock(file_stat_response,
+    {"file", "/etc/hosts"}, "GET", {op = "GETFILESTATUS"})
+
+  osv_request_mock(dir_stat_response,
+    {"file", "/etc"}, "GET", {op = "GETFILESTATUS"})
+
+  osv_request_mock(dir_list_response,
+    {"file", "/etc"}, "GET", {op = "LISTSTATUS"})
+
+  osv_request_mock({response="none", status=404},
+    {"file", "/foo"}, "GET", {op = "GETFILESTATUS"})
+
+  osv_request_mock({response="none", status=400},
+    {"file", "/bar"}, "GET", {op = "GETFILESTATUS"})
 
   cwd.set("/etc")
 
@@ -138,6 +149,14 @@ t.run = function()
 "-rwxrwxrwx 1  osv osv 30   Sep 10 12:29 hosts   ",
 "-rwxrwxrwx 1  osv osv 1021 Sep 10 12:29 inputrc ",
 "-rwxrwxrwx 0  osv osv 0    Jan 01 1970  mnttab  ", ""}, "\n"))
+
+  -- Non-existent file
+  local out, err = t_main({"/foo"})
+  assert(err == "ls: /foo: no such file or directory\n")
+
+  -- Failed to fetch data
+  local out, err = t_main({"/bar"})
+  assert(err == "ls: /bar: failed to fetch data\n")
 end
 
 return t

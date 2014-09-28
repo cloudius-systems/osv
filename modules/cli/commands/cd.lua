@@ -21,9 +21,9 @@ cmd.main = function(args)
     osv_resp_assert(status, 200, 404)
 
     if status == 404 then
-      error(path .. ": no such file or directory")
+      io.stderr:write(path, ": no such file or directory\n")
     elseif content.type ~= "DIRECTORY" then
-      error(path .. ": Not a directory")
+      io.stderr:write(path, ": Not a directory\n")
     else
       cwd.set(rpath)
     end
