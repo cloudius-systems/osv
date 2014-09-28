@@ -99,6 +99,10 @@ local function args_api_matches(arguments, parameters, api_path)
     parameters[move_parameters[i]] = nil
   end
 
+  if #api_args ~= #arguments then
+    return false
+  end
+
   return true
 end
 
