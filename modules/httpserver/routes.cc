@@ -61,7 +61,10 @@ void routes::handle(const string& path, http::server::request& req,
             return;
         }
     } else {
-        rep = http::server::reply::stock_reply(http::server::reply::not_found);
+        json_exception e(not_found_exception("Not found"));
+        rep.content = e.to_json();
+        rep.status = http::server::reply::not_found;
+        handler_base::set_headers(rep, "json");
     }
 }
 

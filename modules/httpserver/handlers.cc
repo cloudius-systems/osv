@@ -93,8 +93,7 @@ void file_interaction_handler::read(const string& file,
 {
     ifstream is(file, ios::in | ios::binary);
     if (!is) {
-        reply400(rep);
-        return;
+        throw not_found_exception("Page not found");
     }
 
     string extension = get_extension(file);
