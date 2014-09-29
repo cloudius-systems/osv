@@ -45,7 +45,7 @@ void cassandra_module::handle(const YAML::Node& doc)
 
     debug("cloud-init: cassandra: Configuration:\n");
     for (auto&& kv : dict) {
-        debug("  '%s' => '%s\n", kv.first, kv.second);
+        debug("  '%s' => '%s'\n", kv.first, kv.second);
     }
 
     ifstream input(template_filename);
