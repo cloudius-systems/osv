@@ -212,18 +212,6 @@ void osvinit::load_from_cloud(bool ignore_missing_source)
     load(user_data);
 }
 
-
-/**
- * Wrap the run server command in the global server in a method
- * that can be passed to pthred_create
- */
-/*
-static void run_server()
-{
-    httpserver::global_server::run();
-}
-*/
-
 void osvinit::do_yaml(const YAML::Node& doc)
 {
     for (auto& node : doc) {
