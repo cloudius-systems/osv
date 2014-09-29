@@ -52,7 +52,7 @@ public:
      * @param rep the reply to set
      * @param mime is the mime content type of the message content
      */
-    virtual void set_headers_explicit(http::server::reply& rep, const std::string& mime);
+    static void set_headers_explicit(http::server::reply& rep, const std::string& mime);
 
     /**
      * set headers must be called before returning the result.
@@ -61,12 +61,12 @@ public:
      *        file extension that would have been used if it was a file
      *        e.g. html, json, js
      */
-    virtual void set_headers(http::server::reply& rep, const std::string& type);
+    static void set_headers(http::server::reply& rep, const std::string& type);
 
     /**
      * call set_headers with "html" as content type
      */
-    virtual void set_headers(http::server::reply& rep);
+    static void set_headers(http::server::reply& rep);
 
     /**
      * set the reply with a not found message.
