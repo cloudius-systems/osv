@@ -22,6 +22,7 @@
 #include <memory>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 namespace http {
 
@@ -84,6 +85,7 @@ public:
         func[mode] = fun;
     }
 
+    std::stringstream stream;
 private:
     connection_function func[CLOSED + 1] = { };
     void set_original_file(request& req, const std::string val);
@@ -118,6 +120,7 @@ private:
 
     connection& connect;
 
+    bool use_file;
 };
 
 /**

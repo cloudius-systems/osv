@@ -70,7 +70,8 @@ multipart_parser::multipart_parser(connection* connect)
     pos_in_file(0),
     header_length(0),
     end(nullptr),
-    connect(*connect)
+    connect(*connect),
+    use_file(false)
 
 {
 
@@ -84,6 +85,9 @@ void multipart_parser::set_boundary(const std::string& _boundary)
 void multipart_parser::set_original_file(request& req, const std::string val)
 {
     auto p = val.find("filename=\"") + 10;
+    if (p == std::string::npos) {
+        return;
+    }
     auto end_name = val.find("\"", p + 1);
     std::string orig_fname = val.substr(p, end_name - p);
 
@@ -94,6 +98,7 @@ void multipart_parser::set_original_file(request& req, const std::string val)
 
 void multipart_parser::open_tmp_file(request& req)
 {
+    use_file = true;
     req.headers.push_back(header());
     req.headers.back().name = "file_name";
     req.headers.back().value = name;
@@ -133,7 +138,9 @@ request_parser::result_type multipart_parser::parse(request& req,
             if ((cur = buf_str(bg, end)).find("Content-Disposition")
                     != std::string::npos) {
                 set_original_file(req, cur);
-                open_tmp_file(req);
+                if (use_file) {
+                    open_tmp_file(req);
+                }
                 set_mode(WAIT_EMPTY);
                 empty_lines = 0;
             }
@@ -160,7 +167,11 @@ request_parser::result_type multipart_parser::parse(request& req,
             }
             {
                 char c = *bg;
-                upload_file << c;
+                if (use_file) {
+                    upload_file << c;
+                } else {
+                    stream << c;
+                }
                 bg++;
                 pos_in_file++;
             }
