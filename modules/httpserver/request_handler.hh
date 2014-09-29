@@ -53,12 +53,6 @@ public:
      * @param rep the reply
      */
     void handle_request(request& req, reply& rep);
-
-private:
-    httpserver::routes* routes;
-    std::vector<std::string> allowed_domains;
-    const boost::program_options::variables_map& config;
-
     /**
      * A helper function that reads URL parameters
      * @param req the original request, parameters that are found
@@ -76,6 +70,12 @@ private:
      */
     static bool url_decode(const std::string& in, std::string& out,
             std::size_t max = std::string::npos);
+
+private:
+    httpserver::routes* routes;
+    std::vector<std::string> allowed_domains;
+    const boost::program_options::variables_map& config;
+
 };
 
 } // namespace server
