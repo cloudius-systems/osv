@@ -12,6 +12,8 @@
 #include "client.hh"
 #include "json.hh"
 
+#include <osv/debug.hh>
+
 #include <fstream>
 #include <chrono>
 #include <thread>
@@ -41,14 +43,14 @@ void cassandra_module::handle(const YAML::Node& doc)
     // Runtime config:
     dict.insert({"seeds", reflector_seeds(dict)});
 
-    cout << "cloud-init: cassandra: Configuration:" << endl;
+    debug("cloud-init: cassandra: Configuration:\n");
     for (auto&& kv : dict) {
-        cout << "  '" << kv.first << "' => '" << kv.second << "'" << endl;
+        debug("  '%s' => '%s\n", kv.first, kv.second);
     }
 
     ifstream input(template_filename);
     if (!input.is_open()) {
-        cout << "cloud-init: cassandra: warning: '" << template_filename << "' template not found." << endl;
+        debug("cloud-init: cassandra: warning: '%s' template not found.\n", template_filename);
         return;
     }
     template_source source(input);
@@ -56,7 +58,7 @@ void cassandra_module::handle(const YAML::Node& doc)
 
     ofstream output(config_filename, ios::out);
     if (!output.is_open()) {
-        cout << "cloud-init: cassandra: warning: unable to open '" << config_filename << "'. Configuration failed." << endl;
+        debug("cloud-init: cassandra: warning: unable to open '%s'. Configuration failed.", config_filename);
         return;
     }
     output << source.expand(dict);
@@ -83,7 +85,7 @@ Json cassandra_module::wait_for_seeds(map<string, string> dict)
 
     constexpr auto reflector_service = "reflector2.datastax.com";
 
-    cout << "cloud-init: cassandra: Using " << reflector_service << " as reflector." << endl;
+    debug("cloud-init: cassandra: Using %s as reflector.\n", reflector_service);
 
     string url = string("/reflector2.php")
                + "?indexid="           + dict["launch-index"]
@@ -111,7 +113,7 @@ Json cassandra_module::wait_for_seeds(map<string, string> dict)
             return response;
         }
         constexpr auto seconds = 5;
-        cout << "No seeds, retrying in " << seconds << " seconds ..." << endl;
+        debug("No seeds, retrying in %d seconds ...\n", seconds);
         this_thread::sleep_for(chrono::seconds(seconds));
     }
 }
