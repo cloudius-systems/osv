@@ -13,33 +13,6 @@
 namespace httpserver {
 
 using namespace std;
-class json_exception : public json::json_base {
-public:
-    json::json_element<std::string> msg;
-    json::json_element<int> code;
-    void register_params()
-    {
-        add(&msg, "message");
-        add(&code, "code");
-    }
-
-    json_exception(const base_exception & e)
-    {
-        set(e.what(), e.status());
-    }
-
-    json_exception(const exception& e)
-    {
-        set(e.what(), http::server::reply::internal_server_error);
-    }
-private:
-    void set(const string& _msg, int _code)
-    {
-        register_params();
-        msg = _msg;
-        code = _code;
-    }
-};
 
 void verify_param(const http::server::request& req, const std::string& param) {
     if (req.get_query_param(param) == "") {
