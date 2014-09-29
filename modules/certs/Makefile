@@ -19,21 +19,21 @@ build:
 certs: build/.certs-tag
 
 build/.certs-tag: build
-	umask 077 && certtool --generate-privkey > build/cakey.pem
+	umask 077 && openssl genrsa 2048 > build/cakey.pem
 	certtool --generate-self-signed --load-privkey build/cakey.pem \
 		--template ca.info --outfile build/cacert.pem 2> /dev/null
 
 	# We must get unique serial numbers, which are time-based by default !
 	sleep 1
 
-	umask 077 && certtool --generate-privkey > build/server.key
+	umask 077 && openssl genrsa 2048 > build/server.key
 	certtool --generate-certificate --load-privkey build/server.key \
 		--load-ca-certificate build/cacert.pem --load-ca-privkey build/cakey.pem \
 		--template server.info --outfile build/server.pem 2> /dev/null
 
 	sleep 1
 
-	umask 077 && certtool --generate-privkey > build/client.key
+	umask 077 &&  openssl genrsa 2048 > build/client.key
 	certtool --generate-certificate --load-privkey build/client.key \
 		--load-ca-certificate build/cacert.pem --load-ca-privkey build/cakey.pem \
 		--template client.info --outfile build/client.pem 2> /dev/null
