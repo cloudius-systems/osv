@@ -11,20 +11,30 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
-#include <osv/sched.hh>
-#include <osv/debug.hh>
+#include <string.h>
+#include <signal.h>
 
-int tests = 0, fails = 0;
+#include <string>
+#include <thread>
+#include <iostream>
+#include <vector>
 
-static void report(bool ok, const char* msg)
+static int tests = 0, fails = 0;
+
+static void report(bool ok, std::string msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    std::cout << (ok ? "PASS" : "FAIL") << ": " << msg << "\n";
 }
 
 int main(int ac, char** av)
 {
+    // OSv doesn't support SIGPIPE generation, but Linux does, and we want
+    // to disable it to check pipe errors where they occur, instead of through
+    // a signal handler.
+    signal(SIGPIPE, SIG_IGN);
+
     int s[2];
 
     int r = pipe(s);
@@ -45,11 +55,10 @@ int main(int ac, char** av)
     memcpy(msg, "snafu", 5);
     memset(reply, 0, 5);
     int r2;
-    sched::thread t1([&] {
+    std::thread t1([&] {
         r2 = read(s[0], reply, 5);
         report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read before write");
     });
-    t1.start();
     sleep(1);
     r = write(s[1], msg, 5);
     t1.join();
@@ -71,14 +80,13 @@ int main(int ac, char** av)
 
     memcpy(msg, "smeg!", 5);
     memset(reply, 0, 5);
-    sched::thread t2([&] {
+    std::thread t2([&] {
         poller.revents = 0;
         r2 = poll(&poller, 1, 5000);
         report(r2 == 1 && poller.revents == POLLIN, "waiting poll");
         r2 = read(s[0], reply, 5);
         report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read after waiting poll");
     });
-    t2.start();
     sleep(1);
     r = write(s[1], msg, 5);
     t2.join();
@@ -92,14 +100,21 @@ int main(int ac, char** av)
     report(r == 0, "poll() (no input on write end)");
 
 
-    // test atomic writes. Assumes our af_local_buffer size is 8192 bytes -
+    // test atomic writes.
+#ifdef __OSV__
+    // Assumes our af_local_buffer size is 8192 bytes -
     // if this changes we need to change this test!
-#define TSTBUFSIZE 8192*3
+#define PIPE_BUFFER_SIZE 8192
+#else
+    // The pipe buffer size since Linux 2.6.11 was dramatically increased to 64K.
+#define PIPE_BUFFER_SIZE 65536
+#endif
+#define TSTBUFSIZE PIPE_BUFFER_SIZE*3
     char *buf1 = (char *)calloc(1,TSTBUFSIZE);
     char *buf2 = (char *)calloc(1,TSTBUFSIZE);
-    sched::thread t3([&] {
-        r = write(s[1], buf1, 8100);
-        report(r == 8100, "write 8100 bytes to empty pipe");
+    std::thread t3([&] {
+        r = write(s[1], buf1, PIPE_BUFFER_SIZE-100);
+        report(r == PIPE_BUFFER_SIZE-100, "write size-100 bytes to empty pipe");
         // this write() should block, not partially succeed:
         r = write(s[1], buf1, 400);
         report(r == 400, "write 400 bytes is atomic");
@@ -111,17 +126,16 @@ int main(int ac, char** av)
         // even if it takes several waits
 
     });
-    t3.start();
     sleep(1);
-    r2 = read(s[0], buf2, 8100); // 1 second should be enough for this to be available
-    report(r2 == 8100, "read 8100 bytes from pipe");
+    r2 = read(s[0], buf2, PIPE_BUFFER_SIZE-100); // 1 second should be enough for this to be available
+    report(r2 == PIPE_BUFFER_SIZE-100, "read size-100 bytes from pipe");
     r2 = read(s[0], buf2, 400);
     report(r2 == 400, "read 400 bytes written atomicly");
     int count=20000;
     while(count>0) {
         r2 = read(s[0], buf2, count);
         report (r2>0, "partial read of the 20000 bytes");
-        debug("(read %d)\n", r2);
+        std::cout << "(read " << r2 << ")\n";
         count -= r2;
     }
     t3.join();
@@ -142,7 +156,6 @@ int main(int ac, char** av)
     iov[2].iov_len = 2;
     r = writev(s[1], iov, sizeof(iov)/sizeof(iov[0]));
     report(r == 5, "writev");
-//    debug("r=%d\n",r);
     if (r == 5) {
         r = read(s[0], bout, 5);
         report(r == 5 && memcmp(bout, "hello", 5) == 0, "read after writev");
@@ -160,7 +173,7 @@ int main(int ac, char** av)
 #define LARGE2 2345678
     buf1 = (char *)calloc(1, LARGE1);
     buf2 = (char *)calloc(1, LARGE2);
-    char *buf3 = (char *)calloc(1, 8192);
+    char *buf3 = (char *)calloc(1, LARGE1 + LARGE2);
     iov[0].iov_base = buf1;
     iov[0].iov_len = LARGE1;
     iov[1].iov_base = buf2;
@@ -170,11 +183,10 @@ int main(int ac, char** av)
         buf1[i] = c++;
     for (int i = 0; i < LARGE2; i++)
         buf2[i] = c++;
-    sched::thread t4([&] {
+    std::thread t4([&] {
         r = writev(s[1], iov, 2);
         report(r == LARGE1+LARGE2, "large writev");;
     });
-    t4.start();
     c = 0;
     count = LARGE1 + LARGE2;
     while(count > 0) {
@@ -231,11 +243,12 @@ int main(int ac, char** av)
     report(r == 5, "small write to non-empty nonblocking pipe");
     buf1 = (char*) calloc(1, TSTBUFSIZE);
     r = write(s[1], buf1, TSTBUFSIZE);
-    report(r == (8192 - 10), "partial write to nonblocking pipe");
+    report(r < PIPE_BUFFER_SIZE, "partial write to nonblocking pipe");
+    auto written = 5 + 5 + r;
     r = write(s[1], buf1, TSTBUFSIZE);
     report(r == -1 && errno == EAGAIN, "write to full nonblocking pipe");
     r = read(s[0], buf1, TSTBUFSIZE);
-    report(r == 8192, "read entire nonblocking pipe");
+    report(r == written, "read entire nonblocking pipe");
     free(buf1);
     r = close(s[0]);
     report(r == 0, "close read side");
@@ -252,7 +265,7 @@ int main(int ac, char** av)
     for (int fd : fds) {
         close(fd);
     }
-    debug("n=%d\n",n);
+    std::cout << "n=" << n << "\n";
     report(n > 100, "create many pipes");
 
 
@@ -276,13 +289,12 @@ int main(int ac, char** av)
     // the no-longer existing write-side file descriptor.
     r = pipe(s);
     report(r == 0, "pipe call");
-    sched::thread t5([&] {
+    std::thread t5([&] {
         r2 = read(s[0], reply, 5);
         report(r2 == 5 && memcmp(msg, reply, 5) == 0, "blocking read, may wake up with write side closed");
         r2 = close(s[0]);
         report(r2 == 0, "close also read side");
     });
-    t5.start();
     sleep(1);
     r = write(s[1], msg, 5);
     report(r == 5, "write to empty socket");
@@ -293,12 +305,11 @@ int main(int ac, char** av)
     // Test waiting poll() on read side, when write side closes (POLLHUP expected)
     r = pipe(s);
     report(r == 0, "pipe call");
-    sched::thread t6([&] {
+    std::thread t6([&] {
         sleep(1);
         r2 = close(s[1]);
         report(r2 == 0, "close write side");
     });
-    t6.start();
     poller = { s[0], POLLIN, 0 };
     r = poll(&poller, 1, 5000);
     report(r==1, "wait for pipe to be readable");
@@ -316,7 +327,6 @@ int main(int ac, char** av)
     r = poll(&poller, 1, 0);
     report(r==1, "pipe is readable");
     report(poller.revents & POLLHUP, "POLLHUP signaled");
-    t6.join();
     r = close(s[0]);
     report(r == 0, "close also read side");
 
@@ -339,12 +349,11 @@ int main(int ac, char** av)
     r = poll(&poller, 1, 0);
     report(r==0, "full pipe is not ready for write");
 
-    sched::thread t7([&] {
+    std::thread t7([&] {
         sleep(1);
         r2 = close(s[0]);
         report(r2 == 0, "close read side");
     });
-    t7.start();
     r = poll(&poller, 1, 5000);
     report(r==1, "wait for pipe to be ready for write");
     report(poller.revents & POLLERR, "POLLERR signaled"); // Following Linux, we return POLLERR|POLLOUT.
@@ -365,7 +374,7 @@ int main(int ac, char** av)
     report(r == 0, "close also write side");
 
 
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
 }
 
