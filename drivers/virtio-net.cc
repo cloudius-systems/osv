@@ -625,7 +625,7 @@ int net::txq::try_xmit_one_locked(net_req* req)
         int frag_len = m->m_hdr.mh_len;
 
         if (frag_len != 0) {
-            net_d("Frag len=%d:", frag_len);
+            net_d("Frag len=%d", frag_len);
             tx_bytes += frag_len;
             vqueue->add_out_sg(m->m_hdr.mh_data, m->m_hdr.mh_len);
         }
