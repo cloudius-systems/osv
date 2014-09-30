@@ -77,6 +77,13 @@ int select (int nfds,
                 events |= POLLOUT;
         }
 
+        if (exceptfds) {
+            /* exception_fds */
+            if (FD_ISSET(i, exceptfds))
+                events |= POLLPRI;
+        }
+
+
         if (events) {
             req[poll_fd_idx].fd = i;
             req[poll_fd_idx].events = events;
