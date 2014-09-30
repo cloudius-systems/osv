@@ -18,6 +18,7 @@
 #include <string.h>
 #include <osv/boot.hh>
 #include <osv/commands.hh>
+#include "dmi.hh"
 
 struct multiboot_info_type {
     u32 flags;

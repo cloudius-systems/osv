@@ -41,6 +41,7 @@
 #include <osv/boot.hh>
 #include <osv/sampler.hh>
 #include <osv/app.hh>
+#include <osv/firmware.hh>
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
@@ -461,6 +462,10 @@ void* do_main_thread(void *_commands)
 
 void main_cont(int ac, char** av)
 {
+    osv::firmware_probe();
+
+    debug("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
+
     new elf::program();
     elf::get_program()->set_search_path({"/", "/usr/lib"});
     std::vector<std::vector<std::string> > cmds;

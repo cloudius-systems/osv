@@ -844,6 +844,7 @@ objects += arch/$(arch)/exceptions.o
 objects += arch/$(arch)/dump.o
 objects += arch/$(arch)/arch-elf.o
 objects += arch/$(arch)/cpuid.o
+objects += arch/$(arch)/firmware.o
 
 
 arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
@@ -856,6 +857,7 @@ objects += $(libfdt)
 endif
 
 ifeq ($(arch),x64)
+objects += arch/x64/dmi.o
 objects += arch/x64/string-ssse3.o
 objects += arch/x64/arch-trace.o
 objects += arch/x64/ioapic.o
