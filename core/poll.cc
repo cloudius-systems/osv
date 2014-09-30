@@ -122,7 +122,7 @@ int poll_scan(std::vector<poll_file>& _pfd)
             continue;
         }
 
-        entry->revents = fp->poll(entry->events);
+        entry->revents = fp->poll(entry->events | ~POLL_REQUESTABLE);
 
         if (entry->revents) {
             nr_events++;

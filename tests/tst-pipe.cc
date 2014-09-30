@@ -370,6 +370,13 @@ int main(int ac, char** av)
     r = poll(&poller, 1, 0);
     report(r==1, "closed pipe is ready for write");
     report(poller.revents & POLLERR, "POLLERR signaled");
+    // See that we can get this POLLERR even if we don't specify any events
+    // to poll for/ This agrees with the SUS definition of poll(), and Linux's
+    // behavior in practice.
+    poller = { s[1], 0, 0 };
+    r = poll(&poller, 1, 0);
+    report(r==1, "closed pipe has a non-user-requested event");
+    report(poller.revents & POLLERR, "POLLERR signaled");
     r = close(s[1]);
     report(r == 0, "close also write side");
 

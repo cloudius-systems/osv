@@ -66,18 +66,12 @@ int pipe_file::write(uio *data, int flags)
 
 int pipe_file::poll(int events)
 {
-    int revents = 0;
     // One end of the pipe is read-only, the other write-only:
     if (f_flags & FWRITE) {
-        if (events & POLLOUT) {
-            revents |= writer->buf->write_events();
-        }
+        return writer->buf->write_events() & events;
     } else {
-        if (events & POLLIN) {
-            revents |= reader->buf->read_events();
-        }
+        return reader->buf->read_events() & events;
     }
-    return revents;
 }
 
 int pipe_file::close()

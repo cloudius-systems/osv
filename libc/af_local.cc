@@ -72,14 +72,7 @@ int af_local::write(uio* data, int flags)
 
 int af_local::poll(int events)
 {
-    int revents = 0;
-    if (events & POLLIN) {
-        revents |= receive->read_events();
-    }
-    if (events & POLLOUT) {
-        revents |= send->write_events();
-    }
-    return revents;
+    return (receive->read_events() | send->write_events()) & events;
 }
 
 int af_local::close()
