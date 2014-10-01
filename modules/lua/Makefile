@@ -36,7 +36,7 @@ LUA_BIN=$(BDIR)/lua
 LUA_ROCKS_BIN=$(BDIR)/luarocks
 
 # List of Lua modules, each module has its own target
-LUA_MODULES=LuaSocket LuaJSON Lua_stdlib LuaFileSystem LuaPath
+LUA_MODULES=LuaSocket LuaJSON Lua_stdlib LuaFileSystem LuaPath LuaSec
 
 module: $(MAIN) $(LUA_MODULES)
 
@@ -114,6 +114,12 @@ LuaPath: $(CDIR)/path.lua
 
 $(CDIR)/path.lua: $(LUA_ROCKS_BIN)
 	out/bin/luarocks install lua-path 0.2.1
+
+# == LuaSec ==
+LuaSec: $(CDIR)/ssl.lua
+
+$(CDIR)/ssl.lua: $(LUA_ROCKS_BIN)
+	out/bin/luarocks install LuaSec 0.5
 
 ##
 clean:
