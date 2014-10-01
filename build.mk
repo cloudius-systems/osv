@@ -845,6 +845,7 @@ objects += arch/$(arch)/dump.o
 objects += arch/$(arch)/arch-elf.o
 objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
+objects += arch/$(arch)/hypervisor.o
 
 
 arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
