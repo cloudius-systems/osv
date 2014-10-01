@@ -871,8 +871,12 @@ std::string object::pathname()
 // Run the object's static constructors or similar initialization
 void object::run_init_funcs()
 {
-    // FIXME: may also need to run DT_INIT here (before DT_INIT_ARRAY), but
-    // on modern gcc it seems it doesn't work (and isn't needed).
+    if (dynamic_exists(DT_INIT)) {
+        auto func = dynamic_ptr<void>(DT_INIT);
+        if (func) {
+            reinterpret_cast<void(*)()>(func)();
+        }
+    }
     if (dynamic_exists(DT_INIT_ARRAY)) {
         auto funcs = dynamic_ptr<void (*)()>(DT_INIT_ARRAY);
         auto nr = dynamic_val(DT_INIT_ARRAYSZ) / sizeof(*funcs);
@@ -893,8 +897,12 @@ void object::run_fini_funcs()
             funcs[i]();
         }
     }
-    // FIXME: may also need to run DT_FINI here (after DT_FINI_ARRAY), but
-    // on modern gcc it seems it doesn't work (and isn't needed).
+    if (dynamic_exists(DT_FINI)) {
+        auto func = dynamic_ptr<void>(DT_FINI);
+        if (func) {
+            reinterpret_cast<void(*)()>(func)();
+        }
+    }
 }
 
 void* object::tls_addr()
