@@ -54,3 +54,10 @@ uintmax_t strtoumax(const char *restrict s, char **restrict p, int base)
 {
 	return strtoull(s, p, base);
 }
+
+weak_alias(strtol, __strtol_internal);
+weak_alias(strtoul, __strtoul_internal);
+weak_alias(strtoll, __strtoll_internal);
+weak_alias(strtoull, __strtoull_internal);
+weak_alias(strtoimax, __strtoimax_internal);
+weak_alias(strtoumax, __strtoumax_internal);
