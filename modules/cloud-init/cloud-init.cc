@@ -13,6 +13,8 @@
 #include <boost/asio.hpp>
 #include "data-source.hh"
 #include <osv/debug.hh>
+#include <osv/firmware.hh>
+#include <osv/hypervisor.hh>
 
 namespace init {
 using namespace std;
@@ -194,6 +196,9 @@ void osvinit::load_url(const std::string& server, const std::string& path,
 
 void osvinit::load_from_cloud(bool ignore_missing_source)
 {
+    if (!_force_probe && osv::hypervisor() != osv::hypervisor_type::xen && osv::firmware_vendor() != "Google") {
+        return;
+    }
 
     std::string user_data;
     try {

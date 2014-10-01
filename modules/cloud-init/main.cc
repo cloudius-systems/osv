@@ -26,6 +26,7 @@ int main(int argc, char* argv[])
         desc.add_options()
             ("help", "produce help message")
             ("skip-error", "do not stop on error")
+            ("force-probe", "force data source probing")
             ("file", po::value<std::string>(), "an init file")
             ("server", po::value<std::string>(), "a server to read the file from. must come with a --url")
             ("url", po::value<std::string>(), "a url at the server")
@@ -41,7 +42,7 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        osvinit init(config.count("skip-error") > 0);
+        osvinit init(config.count("skip-error") > 0, config.count("force-probe") > 0);
         auto scripts = make_shared<script_module>();
         init.add_module(scripts);
         init.add_module(make_shared<files_module>());

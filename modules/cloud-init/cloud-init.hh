@@ -31,8 +31,9 @@ public:
  */
 class osvinit {
 public:
-    osvinit(bool skip_error)
+    osvinit(bool skip_error, bool force_probe)
         : halt_on_error(!skip_error)
+        , _force_probe(force_probe)
     {
     }
 
@@ -45,6 +46,7 @@ public:
     void add_module(std::shared_ptr<config_module> module);
 private:
     bool halt_on_error;
+    bool _force_probe;
     std::unordered_map<std::string,std::shared_ptr<config_module>> _modules;
 private:
     void do_yaml(const YAML::Node& node);
