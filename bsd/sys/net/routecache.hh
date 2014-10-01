@@ -108,7 +108,7 @@ class silly_rtable {
 public:
     void add(u32 a, u32 n, const nonlockable_rtentry &r) {
         while (entries.size() >= max_entries) {
-            entries.erase(entries.end());
+            entries.pop_back();
         }
         entries.emplace_front(a, n, r);
     }
