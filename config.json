@@ -13,5 +13,5 @@
         "${OSV_BASE}/modules"
     ]
    },
-   "default": [ "httpserver" ]
+   "default": [ "cloud-init", "httpserver" ]
 }
