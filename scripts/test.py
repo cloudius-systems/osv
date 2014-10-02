@@ -73,12 +73,11 @@ def pluralize(word, count):
 def run_tests():
     start = time.time()
 
-    if cmdargs.test:
-        test = next((t for t in tests if t.name == cmdargs.test), None)
-        if not test:
-            print('No such test: ' + cmdargs.test)
+    if cmdargs.name:
+        tests_to_run = list((t for t in tests if re.match('^' + cmdargs.name + '$', t.name)))
+        if not tests_to_run:
+            print('No test matches: ' + cmdargs.name)
             exit(1)
-        tests_to_run = [test]
     else:
         tests_to_run = tests
 
@@ -106,7 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
     parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
     parser.add_argument("-s", "--single", action="store_true", help="run as much tests as possible in a single OSv instance")
-    parser.add_argument("--test", action="store", help="run a single test")
+    parser.add_argument("--name", action="store", help="run all tests whose names match given regular expression")
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
     main()
