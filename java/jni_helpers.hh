@@ -39,6 +39,9 @@ public:
     }
 
     static void set_jvm(JavaVM *);
+    static bool is_jvm_running() {
+        return global_jvm != nullptr;
+    }
 private:
     std::lock_guard<rwlock_for_read>
         _guard;

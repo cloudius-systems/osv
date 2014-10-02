@@ -15,10 +15,16 @@
 #include <memory>
 #include <regex>
 #include <java/jni_helpers.hh>
+#include "exception.hh"
 
 using namespace httpserver::json;
 using namespace httpserver::json::jolokia_json;
 
+static void verify_jvm() {
+    if (!jvm_getter::is_jvm_running()) {
+        throw httpserver::not_found_exception("JVM not running");
+    }
+}
 /**
  * Initialize the routes object with specific routes mapping
  * @param routes - the routes object to fill
@@ -88,6 +94,7 @@ void httpserver::api::jolokia::init(routes & routes)
                 const http::server::request& req, http::server::reply& rep)
                         override
                         {
+            verify_jvm();
             attached_env aenv;
 
             _clz->init();
