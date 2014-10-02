@@ -62,10 +62,15 @@ std::unordered_set<mmu::hw_ptep<0>>::iterator end(std::unique_ptr<std::unordered
 
 namespace pagecache {
 
+static unsigned lru_max_length = 100;
+static unsigned lru_free_count = 20;
+constexpr unsigned max_lru_free_count = 200;
 static void* zero_page;
 
 void  __attribute__((constructor(init_prio::pagecache))) setup()
 {
+    lru_max_length = std::max(memory::phys_mem_size / memory::page_size / 100, size_t(100));
+    lru_free_count = std::min(lru_max_length/5, max_lru_free_count);
     zero_page = memory::alloc_page();
     memset(zero_page, 0, mmu::page_size);
 }
@@ -290,9 +295,6 @@ static bool operator==(const cached_page_arc::arc_map::value_type& l, const cach
     return l.second == r;
 }
 
-constexpr unsigned lru_max_length = 100;
-constexpr unsigned lru_free_count = 20;
-
 std::unordered_multimap<arc_buf_t*, cached_page_arc*> cached_page_arc::arc_cache_map;
 static std::unordered_map<hashkey, cached_page_arc*> read_cache;
 static std::unordered_map<hashkey, cached_page_write*> write_cache;
@@ -398,7 +400,7 @@ static std::unique_ptr<cached_page_write> create_write_cached_page(vfs_file* fp,
 
 TRACEPOINT(trace_drop_write_cached_page, "addr=%p", void*);
 static void insert(cached_page_write* cp) {
-    static cached_page_write* tofree[lru_free_count];
+    static cached_page_write* tofree[max_lru_free_count];
     write_cache.emplace(cp->key(), cp);
     write_lru.push_front(cp);
 
