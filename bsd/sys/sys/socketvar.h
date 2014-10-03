@@ -356,6 +356,8 @@ int	soreceive_dgram(struct socket *so, struct bsd_sockaddr **paddr,
 int	soreceive_generic(struct socket *so, struct bsd_sockaddr **paddr,
 	    struct uio *uio, struct mbuf **mp0, struct mbuf **controlp,
 	    int *flagsp);
+int	zreceive(struct socket *so, struct bsd_sockaddr **paddr,
+	    struct zmsghdr *zm, int *flagsp, ssize_t *bytes);
 int	soreserve(struct socket *so, u_long sndcc, u_long rcvcc);
 int	soreserve_internal(struct socket *so, u_long sndcc, u_long rcvcc);
 void	sorflush(struct socket *so);

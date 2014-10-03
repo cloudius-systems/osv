@@ -256,6 +256,13 @@ m_getm2_zcopy(struct mbuf *m, struct uio *uio, int len, int how, short type,
 	return (m);
 }
 
+int zcopy_rxgc(struct zmsghdr *zm)
+{
+    auto m = reinterpret_cast<mbuf *>(zm->zm_rxhandle);
+    m_freem(m);
+    return 0;
+}
+
 /*
  * Free an entire chain of mbufs and associated external buffers, if
  * applicable.
