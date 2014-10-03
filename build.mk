@@ -241,6 +241,7 @@ boost-tests += tests/tst-wait-for.so
 boost-tests += tests/tst-bsd-tcp1.so
 boost-tests += tests/tst-bsd-tcp1-zsnd.so
 boost-tests += tests/tst-bsd-tcp1-zrcv.so
+boost-tests += tests/tst-bsd-tcp1-zsndrcv.so
 boost-tests += tests/tst-async.so
 boost-tests += tests/tst-rcu-list.so
 boost-tests += tests/tst-tcp-listen.so
