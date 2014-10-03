@@ -57,6 +57,11 @@
 #include <memory>
 #include <fs/fs.hh>
 
+#include <osv/mempool.hh>
+#include <osv/pagealloc.hh>
+#include <osv/zcopy.hh>
+#include <sys/eventfd.h>
+
 using namespace std;
 
 /* FIXME: OSv - implement... */
@@ -1001,3 +1006,64 @@ sockargs(struct mbuf **mp, caddr_t buf, int buflen, int type)
 	}
 	return (error);
 }
+
+ssize_t
+zcopy_tx(int s, struct zmsghdr *zm)
+{
+	struct file *fp;
+	struct uio auio = {};
+	struct iovec *iov;
+	struct socket *so;
+	int i, error, efd;
+	ssize_t len;
+	ssize_t bytes = 0;
+	auto mp = &zm->zm_msg;
+	struct ztx_handle *zh = new ztx_handle();
+
+	zm->zm_txhandle = zh;
+	error = getsock_cap(s, &fp, NULL);
+	if (error)
+		return (error);
+	so = (struct socket *)file_data(fp);
+	// Create a local copy of the user's iovec - sosend() is going to change it!
+	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
+
+	auio.uio_iov = uio_iov.data();
+	auio.uio_iovcnt = uio_iov.size();
+	auio.uio_rw = UIO_WRITE;
+	auio.uio_offset = 0;
+	auio.uio_resid = 0;
+	iov = mp->msg_iov;
+	for (i = 0; i < mp->msg_iovlen; i++, iov++) {
+		if ((auio.uio_resid += iov->iov_len) < 0) {
+			error = EINVAL;
+			goto bad;
+		}
+	}
+	len = auio.uio_resid;
+	zh->zh_remained = len;
+	error = zsend(so, &auio, zm, MSG_DONTWAIT);
+	if (error) {
+		if (auio.uio_resid != len && (error == ERESTART ||
+		    error == EINTR || error == EWOULDBLOCK))
+			error = 0;
+		bytes = error;
+	}
+	if (error == 0)
+	    bytes = len - auio.uio_resid;
+bad:
+	fdrop(fp);
+	efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	if (efd < 0)
+		return (efd);
+	zm->zm_txfd = efd;
+
+	return (bytes);
+}
+
+void
+zcopy_txclose(struct zmsghdr *zm)
+{
+	close(zm->zm_txfd);
+}
+

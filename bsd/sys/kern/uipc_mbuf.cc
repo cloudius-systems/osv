@@ -35,6 +35,9 @@
 #include <bsd/porting/uma_stub.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <machine/atomic.h>
+#include <osv/mmu.hh>
+#include <bsd/sys/sys/socket.h>
+#include <osv/zcopy.hh>
 
 int	max_linkhdr;
 int	max_protohdr;
@@ -115,6 +118,122 @@ m_getm2(struct mbuf *m, int len, int how, short type, int flags)
 		/* Book keeping. */
 		len -= (mb->m_hdr.mh_flags & M_EXT) ? mb->M_dat.MH.MH_dat.MH_ext.ext_size :
 			((mb->m_hdr.mh_flags & M_PKTHDR) ? MHLEN : MLEN);
+		if (mtail != NULL)
+			mtail->m_hdr.mh_next = mb;
+		else
+			nm = mb;
+		mtail = mb;
+		flags &= ~M_PKTHDR;	/* Only valid on the first mbuf. */
+	}
+	if (flags & M_EOR)
+		mtail->m_hdr.mh_flags |= M_EOR;  /* Only valid on the last mbuf. */
+
+	/* If mbuf was supplied, append new chain to the end of it. */
+	if (m != NULL) {
+		for (mtail = m; mtail->m_hdr.mh_next != NULL; mtail = mtail->m_hdr.mh_next)
+			;
+		mtail->m_hdr.mh_next = nm;
+		mtail->m_hdr.mh_flags &= ~M_EOR;
+	} else
+		m = nm;
+
+	return (m);
+}
+
+static void
+ztx_release(void *arg1, void *arg2)
+{
+	auto zm = reinterpret_cast<struct zmsghdr *>(arg1);
+	auto len = reinterpret_cast<size_t>(arg2);
+        KASSERT(zm->zm_txhandle, ("zm->zm_txhandle == null"));
+	auto zh = reinterpret_cast<ztx_handle *>(zm->zm_txhandle);
+	auto remained = zh->zh_remained.fetch_sub(len);
+        remained -= len;
+
+	if (remained == 0 && zm->zm_txfd) {
+		zm->zm_txhandle = nullptr;
+		delete zh;
+		write(zm->zm_txfd, arg1, sizeof(arg1));
+	}
+}
+
+struct mbuf *
+m_getm2_zcopy(struct mbuf *m, struct uio *uio, int len, int how, short type,
+		    int flags, struct zmsghdr *zm)
+{
+	struct mbuf *mb, *nm = NULL, *mtail = NULL;
+
+	KASSERT(len >= 0, ("%s: len is < 0", __func__));
+
+	/* Validate flags. */
+	flags &= (M_PKTHDR | M_EOR);
+
+	/* Packet header mbuf must be first in chain. */
+	if ((flags & M_PKTHDR) && m != NULL)
+		flags &= ~M_PKTHDR;
+
+	/* Loop and append maximum sized mbufs to the chain tail. */
+	while (len > 0 && uio->uio_resid) {
+		auto iov = uio->uio_iov;
+		auto vbase = align_down(iov->iov_base, mmu::page_size);
+		auto pbase = mmu::virt_to_phys(vbase);
+		auto offset = reinterpret_cast<uintptr_t>(iov->iov_base) 
+		    - reinterpret_cast<uintptr_t>(vbase);
+		auto page_end = mmu::page_size - offset;
+		size_t cnt;
+
+		if (iov->iov_len < page_end) {
+			cnt = iov->iov_len;
+		} else {
+			/* split mbuf on page boundary by default */
+			cnt = page_end;
+
+			/* but if pages are physically contiguous, don't split */
+			while(1) {
+				auto next_vbase = vbase + mmu::page_size;
+				auto next_pbase = mmu::virt_to_phys(next_vbase);
+				if (next_pbase == pbase + mmu::page_size) {
+					cnt += mmu::page_size;
+					if (cnt >= iov->iov_len) {
+						cnt = iov->iov_len;
+						break;
+					}
+				} else {
+					break;
+				}
+				vbase = next_vbase;
+				pbase = next_pbase;
+			}
+		}
+		if (cnt == 0) {
+			uio->uio_iov++;
+			uio->uio_iovcnt--;
+			continue;
+		}
+
+		if (cnt > len)
+			cnt = len;
+
+		if (flags & M_PKTHDR)
+			mb = m_gethdr(how, type);
+		else
+			mb = m_get(how, type);
+
+		/* Fail the whole operation if one mbuf can't be allocated. */
+		if (mb == NULL) {
+			if (nm != NULL)
+				m_freem(nm);
+			return (NULL);
+		}
+
+		MEXTADD(mb, iov->iov_base, cnt, ztx_release, reinterpret_cast<void *>(zm), reinterpret_cast<void*>(cnt), 0, EXT_MOD_TYPE);
+
+		iov->iov_base = (char *)iov->iov_base + cnt;
+		iov->iov_len -= cnt;
+		uio->uio_resid -= cnt;
+		uio->uio_offset += cnt;
+		len -= cnt;
+
 		if (mtail != NULL)
 			mtail->m_hdr.mh_next = mb;
 		else
@@ -1733,6 +1852,53 @@ m_uiotombuf(struct uio *uio, int how, int len, int align, int min_size,
 	return (m);
 }
 
+struct mbuf *
+m_uiotombuf_zcopy(struct uio *uio, int how, int len, int align, int min_size,
+		    int flags, struct zmsghdr *zm)
+{
+	struct mbuf *m, *mb;
+	int length;
+	ssize_t total;
+	int progress = 0;
+
+	/*
+	 * len can be zero or an arbitrary large value bound by
+	 * the total data supplied by the uio.
+	 */
+	if (len > 0)
+		total = bsd_min(uio->uio_resid, len);
+	else
+		total = uio->uio_resid;
+
+	/*
+	 * The smallest unit returned by m_getm2() is a single mbuf
+	 * with pkthdr.  We can't align past it.
+	 */
+	if (align >= MHLEN)
+		return (NULL);
+
+	/*
+	 * Give us the full allocation or nothing.
+	 * If len is zero return the smallest empty mbuf.
+	 */
+	m = m_getm2_zcopy(NULL, uio, bsd_max(total + align, min_size), how, MT_DATA, flags, zm);
+	if (m == NULL)
+		return (NULL);
+	m->m_hdr.mh_data += align;
+
+	/* Fill all mbufs with uio data and update header information. */
+	for (mb = m; mb != NULL; mb = mb->m_hdr.mh_next) {
+		length = bsd_min(M_TRAILINGSPACE(mb), total - progress);
+
+		mb->m_hdr.mh_len = length;
+		progress += length;
+		if (flags & M_PKTHDR)
+			m->M_dat.MH.MH_pkthdr.len += length;
+	}
+	KASSERT(progress == total, ("%s: progress != total", __func__));
+
+	return (m);
+}
 /*
  * Copy an mbuf chain into a uio limited by len if set.
  */

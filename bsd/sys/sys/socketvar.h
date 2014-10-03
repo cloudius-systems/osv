@@ -368,6 +368,8 @@ int	sosend_dgram(struct socket *so, struct bsd_sockaddr *addr,
 int	sosend_generic(struct socket *so, struct bsd_sockaddr *addr,
 	    struct uio *uio, struct mbuf *top, struct mbuf *control,
 	    int flags, struct thread *td);
+int	zsend(struct socket *so, struct uio *uio, struct zmsghdr *zm,
+	    int flags);
 int	soshutdown(struct socket *so, int how);
 void	sotoxsocket(struct socket *so, struct xsocket *xso);
 void	soupcall_clear(struct socket *so, int which);

@@ -870,6 +870,8 @@ u_int		 m_fixhdr(struct mbuf *);
 struct mbuf	*m_fragment(struct mbuf *, int, int);
 void		 m_freem(struct mbuf *);
 struct mbuf	*m_getm2(struct mbuf *, int, int, short, int);
+struct mbuf	*m_getm2_zcopy(struct mbuf *, struct uio *, int, int, short,
+		    int, struct zmsghdr *);
 struct mbuf	*m_getptr(struct mbuf *, int, int *);
 u_int		 m_length(struct mbuf *, struct mbuf **);
 int		 m_mbuftouio(struct uio *, struct mbuf *, int);
@@ -880,6 +882,7 @@ struct mbuf	*m_pullup(struct mbuf *, int);
 int		m_sanity(struct mbuf *, int);
 struct mbuf	*m_split(struct mbuf *, int, int);
 struct mbuf	*m_uiotombuf(struct uio *, int, int, int, int, int);
+struct mbuf	*m_uiotombuf_zcopy(struct uio *, int, int, int, int, int, struct zmsghdr *);
 struct mbuf	*m_unshare(struct mbuf *, int how);
 
 /*-

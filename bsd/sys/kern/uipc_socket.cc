@@ -1104,6 +1104,172 @@ out_unlocked:
 }
 
 int
+zsend(struct socket *so, struct uio *uio, struct zmsghdr *zm, int flags)
+{
+	long space;
+	ssize_t resid;
+	int clen = 0, error, dontroute;
+	struct mbuf *top = NULL;
+	int atomic = sosendallatonce(so) || top;
+
+	if (uio != NULL)
+		resid = uio->uio_resid;
+	else
+		resid = top->M_dat.MH.MH_pkthdr.len;
+
+	KASSERT(uio->uio_iov, ("iov is null on MSG_ZCOPY"));
+
+	/*
+	 * In theory resid should be unsigned.  However, space must be
+	 * signed, as it might be less than 0 if we over-committed, and we
+	 * must use a signed comparison of space and resid.  On the other
+	 * hand, a negative resid causes us to loop sending 0-length
+	 * segments to the protocol.
+	 *
+	 * Also check to make sure that MSG_EOR isn't used on SOCK_STREAM
+	 * type sockets since that's an error.
+	 */
+	if (resid < 0 || (so->so_type == SOCK_STREAM && (flags & MSG_EOR))) {
+		error = EINVAL;
+		goto out_unlocked;
+	}
+
+	dontroute =
+	    (flags & MSG_DONTROUTE) && (so->so_options & SO_DONTROUTE) == 0 &&
+	    (so->so_proto->pr_flags & PR_ATOMIC);
+
+	SOCK_LOCK(so);
+	error = sblock(so, &so->so_snd, SBLOCKWAIT(flags));
+	if (error)
+		goto out;
+
+restart:
+	flush_net_channel(so);
+	do {
+		if (so->so_snd.sb_state & SBS_CANTSENDMORE) {
+			error = EPIPE;
+			goto release;
+		}
+		if (so->so_error) {
+			error = so->so_error;
+			so->so_error = 0;
+			goto release;
+		}
+		if ((so->so_state & SS_ISCONNECTED) == 0) {
+			/*
+			 * `sendto' and `sendmsg' is allowed on a connection-
+			 * based socket if it supports implied connect.
+			 * Return ENOTCONN if not connected and no address is
+			 * supplied.
+			 */
+			if ((so->so_proto->pr_flags & PR_CONNREQUIRED) &&
+			    (so->so_proto->pr_flags & PR_IMPLOPCL) == 0) {
+				if ((so->so_state & SS_ISCONFIRMING) == 0 &&
+				    !(resid == 0 && clen != 0)) {
+					error = ENOTCONN;
+					goto release;
+				}
+			}
+			if (so->so_proto->pr_flags & PR_CONNREQUIRED)
+				error = ENOTCONN;
+			else
+				error = EDESTADDRREQ;
+			goto release;
+		}
+		space = sbspace(&so->so_snd);
+		if (flags & MSG_OOB)
+			space += 1024;
+		if ((atomic && resid > so->so_snd.sb_hiwat) ||
+		    (u_int)clen > so->so_snd.sb_hiwat) {
+			error = EMSGSIZE;
+			goto release;
+		}
+		if (space < resid + clen &&
+		    (atomic || space < so->so_snd.sb_lowat || space < clen)) {
+			if ((so->so_state & SS_NBIO) || (flags & MSG_NBIO)) {
+				error = EWOULDBLOCK;
+				goto release;
+			}
+			error = sbwait(so, &so->so_snd);
+			if (error)
+				goto release;
+			goto restart;
+		}
+		space -= clen;
+		do {
+			if (uio == NULL) {
+				resid = 0;
+				if (flags & MSG_EOR)
+					top->m_hdr.mh_flags |= M_EOR;
+			} else {
+				/*
+				 * Copy the data from userland into a mbuf
+				 * chain.  If no data is to be copied in,
+				 * a single empty mbuf is returned.
+				 */
+				top = m_uiotombuf_zcopy(uio, M_WAITOK, space,
+				    (atomic ? max_hdr : 0), MCLBYTES,
+				    (atomic ? M_PKTHDR : 0) |
+				    ((flags & MSG_EOR) ? M_EOR : 0),
+				    zm);
+				if (top == NULL) {
+					error = EFAULT; /* only possible error */
+					goto release;
+				}
+				space -= resid - uio->uio_resid;
+				resid = uio->uio_resid;
+			}
+			if (dontroute) {
+				so->so_options |= SO_DONTROUTE;
+			}
+			/*
+			 * XXX all the SBS_CANTSENDMORE checks previously
+			 * done could be out of date.  We could have recieved
+			 * a reset packet in an interrupt or maybe we slept
+			 * while doing page faults in uiomove() etc.  We
+			 * could probably recheck again inside the locking
+			 * protection here, but there are probably other
+			 * places that this also happens.  We must rethink
+			 * this.
+			 */
+			VNET_SO_ASSERT(so);
+			SOCK_UNLOCK(so);
+			error = (*so->so_proto->pr_usrreqs->pru_send)(so,
+			    (flags & MSG_OOB) ? PRUS_OOB :
+			/*
+			 * If the user set MSG_EOF, the protocol understands
+			 * this flag and nothing left to send then use
+			 * PRU_SEND_EOF instead of PRU_SEND.
+			 */
+			    ((flags & MSG_EOF) &&
+			     (so->so_proto->pr_flags & PR_IMPLOPCL) &&
+			     (resid <= 0)) ?
+				PRUS_EOF :
+			/* If there is more to send set PRUS_MORETOCOME. */
+			    (resid > 0 && space > 0) ? PRUS_MORETOCOME : 0,
+			    top, NULL, NULL, NULL);
+			SOCK_LOCK(so);
+			if (dontroute) {
+				so->so_options &= ~SO_DONTROUTE;
+			}
+			clen = 0;
+			top = NULL;
+			if (error)
+				goto release;
+		} while (resid && space > 0);
+	} while (resid);
+
+release:
+	sbunlock(so, &so->so_snd);
+out:
+	SOCK_UNLOCK(so);
+out_unlocked:
+	if (top != NULL)
+		m_freem(top);
+	return (error);
+}
+
+int
 sosend(struct socket *so, struct bsd_sockaddr *addr, struct uio *uio,
     struct mbuf *top, struct mbuf *control, int flags, struct thread *td)
 {
