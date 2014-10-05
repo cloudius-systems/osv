@@ -945,6 +945,7 @@ program::program(void* addr)
           "libdl.so.2",
           "librt.so.1",
           "libstdc++.so.6",
+          "libaio.so.1",
     };
     auto ml = new modules_list();
     ml->objects.push_back(_core.get());

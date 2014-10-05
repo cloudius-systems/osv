@@ -904,6 +904,7 @@ objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
 objects += core/app.o
+objects += core/libaio.o
 
 include $(src)/fs/build.mk
 include $(src)/libc/build.mk
