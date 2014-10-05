@@ -28,7 +28,7 @@ class Fedora(object):
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'python-requests', 'p11-kit', 'patch', 'wget',
-                'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static',
+                'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
@@ -50,7 +50,7 @@ class Debian(object):
                 'libmaven-shade-plugin-java', 'tcpdump', 'gdb', 'gawk',
                 'gnutls-bin', 'openssl', 'python-requests', 'python-dpkt',
                 'qemu-system-x86', 'qemu-utils', 'lib32stdc++-4.9-dev',
-                'p11-kit']
+                'p11-kit', 'libssl-dev']
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
@@ -71,6 +71,7 @@ class Ubuntu(object):
                 'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
                 'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib'
+                'libssl-dev'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
