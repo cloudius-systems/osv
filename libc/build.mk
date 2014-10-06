@@ -728,6 +728,8 @@ libc += __read_chk.o
 libc += syslog.o
 libc += cxa_thread_atexit.o
 
+libc += linux/makedev.o
+
 ifneq ($(musl_arch), notsup)
 musl += fenv/fegetexceptflag.o
 musl += fenv/feholdexcept.o
