@@ -623,6 +623,15 @@ int pthread_attr_getstack(const pthread_attr_t * __restrict attr,
     return 0;
 }
 
+int pthread_attr_setstack(pthread_attr_t *attr,
+        void *stackaddr, size_t stacksize)
+{
+    auto a = from_libc(attr);
+    a->stack_begin = stackaddr;
+    a->stack_size = stacksize;
+    return 0;
+}
+
 int pthread_attr_setinheritsched(pthread_attr_t *attr, int inheritsched)
 {
     if (inheritsched != PTHREAD_INHERIT_SCHED && inheritsched != PTHREAD_EXPLICIT_SCHED)
