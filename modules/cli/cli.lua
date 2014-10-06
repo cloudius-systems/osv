@@ -100,9 +100,7 @@ end
 function cli_command_single(args, optind)
   local t = {}
   for i = optind, #args do
-    if args[i] ~= '--' then
-      table.insert(t, args[i])
-    end
+    table.insert(t, args[i])
   end
   cli_command(t)
 end

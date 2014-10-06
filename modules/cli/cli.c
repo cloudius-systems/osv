@@ -50,7 +50,20 @@ static int  cli_lua_interrupted(lua_State *);
 static void signal_handler(int sig);
 
 /* Context */
-static char* env_osv_api;
+#define CTXC 5
+static char* ctxv[CTXC];
+static struct {
+  char* name; char* env; struct option lopt;
+} ctx[CTXC] = {
+  {"api", "OSV_API", {"api", required_argument, 0, 'a'}},
+  {"ssl_key", "OSV_SSL_KEY", {"key", required_argument, 0, 'k'}},
+  {"ssl_cert", "OSV_SSL_CERT", {"cert", required_argument, 0, 'c'}},
+  {"ssl_cacert", "OSV_SSL_CACERT", {"cacert", required_argument, 0, 'C'}},
+  {"ssl_verify", "OSV_SSL_VERIFY", {"verify", required_argument, 0, 'V'}}
+};
+
+/* Misc */
+void print_usage();
 
 int main (int argc, char* argv[]) {
 #ifdef OSV_CLI
@@ -69,26 +82,54 @@ int main (int argc, char* argv[]) {
   }
 #endif
 
-  /* Context */
-  env_osv_api = getenv("OSV_API");
+  int i;
+
+  /* Context from environment variables */
+  for (i=0; i<CTXC; i++) {
+    ctxv[i] = getenv(ctx[i].env);
+  }
 
   /* Flags */
   char *test_command = NULL;
 
-  /* Process command line options */
+  /* Build options for getopt_long() */
   int opt = 0;
-  static struct option long_options[] = {
-    {"api", optional_argument, 0, 'a'},
-    {"test", optional_argument, 0, 'T'}
+  static struct option long_options[2 + CTXC + 1] = {
+    {"test",   required_argument, 0, 'T'},
+    {"help",   no_argument, 0, 'h'}
   };
+  for (i=0; i<CTXC; i++) {
+    long_options[i + 2] = ctx[i].lopt;
+  }
+  long_options[2 + CTXC] = (struct option){0};
 
+  /* Scan command line options */
   int long_index = 0;
-  while ((opt = getopt_long(argc, argv, "T:a:",
+  while ((opt = getopt_long(argc, argv, "+:hT:a:",
     long_options, &long_index)) != -1) {
+
+    /* Check if this option belongs to ctx (context) */
+    for (i=0; i<CTXC; i++) {
+      if (ctx[i].lopt.val == opt) {
+        ctxv[i] = optarg;
+        break;
+      }
+    }
+    if (i<CTXC) { continue; } /* long opt found, skip rest */
+
+    /* Other options */
     switch (opt) {
-      case 'a': env_osv_api = optarg;
-      break;
       case 'T': test_command = optarg;
+      break;
+      case 'h':
+        print_usage(argv[0]);
+        exit(0);
+      break;
+      case '?':
+      default:
+        fprintf(stderr, "%s: unknown option `%s' is invalid\n",
+          argv[0], argv[optind-1]);
+        exit(2);
       break;
     }
   }
@@ -119,13 +160,13 @@ int main (int argc, char* argv[]) {
       lua_getglobal(L, "cli_command_single");
       lua_createtable(L, argc, 0);
 
-      for (int i=1; i<argc; i++) {
+      for (i=1; i<argc; i++) {
         lua_pushinteger(L, i);
         lua_pushstring(L, argv[i]);
         lua_settable(L, -3);
       }
 
-      lua_pushinteger(L, optind - 1);
+      lua_pushinteger(L, optind);
       int error = lua_pcall(L, 2, 0, 0);
       if (error) {
         fprintf(stderr, "%s\n", lua_tostring(L, -1));
@@ -263,8 +304,10 @@ lua_State *cli_luaL_newstate() {
   }
 
   cli_lua_settable(L, "context", "commands_path", CLI_COMMANDS_PATH);
-  if (env_osv_api) {
-    cli_lua_settable(L, "context", "api", env_osv_api);
+  for (int i=0; i<CTXC; i++) {
+    if (ctxv[i]) {
+      cli_lua_settable(L, "context", ctx[i].name, ctxv[i]);
+    }
   }
 
   /* Bind some functions into Lua */
@@ -354,4 +397,27 @@ static void signal_handler(int sig) {
   if (sig == SIGINT) {
     cli_interrupted = 1;
   }
+}
+
+void print_usage(char* program) {
+  printf(
+"Usage: %s [OPTIONS] [COMMAND [OPTIONS]] \n\n"
+"Options:\n\n"
+"-a, --api=[URL]       OSv API URL (default: http://127.0.0.1:8000)\n"
+"                        environment variable: OSV_API\n"
+"    --key=[FILE]      private key filename, if using HTTPS\n"
+"                        environment variable: OSV_SSL_KEY\n"
+"    --cert=[FILE]     certificate filename, if using HTTPS\n"
+"                        environment variable: OSV_SSL_CERT\n"
+"    --cacert=[FILE]   CA certificate filename, if using HTTPS\n"
+"                        environment variable: OSV_SSL_CACERT\n"
+"    --verify=[MODE]   peer certificate verification, if using HTTPS\n"
+"                        possible modes: none, peer, fail_if_no_peer_cert,\n"
+"                                        client_once. default: peer.\n"
+"                        environment variable: OSV_SSL_VERIFY\n"
+"-T, --test=[COMMAND]  run tests for a specifiec command\n"
+"-h, --help            print this help and exit\n\n"
+"For more help on the CLI, see "
+"https://github.com/cloudius-systems/osv/wiki/Command-line-interface\n",
+  program);
 }

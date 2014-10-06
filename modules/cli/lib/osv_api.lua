@@ -1,6 +1,7 @@
 local context = require("context")
 
 local http = require("socket.http")
+local ssl = require("ssl")
 local url = require("socket.url")
 local json = require("json")
 local ltn12 = require("ltn12")
@@ -66,11 +67,60 @@ function osv_schema()
   return schema
 end
 
+local function reg(conn)
+   local mt = getmetatable(conn.sock).__index
+   for name, method in pairs(mt) do
+      if type(method) == "function" then
+         conn[name] = function (self, ...)
+                         return method(self.sock, ...)
+                      end
+      end
+   end
+end
+
 local function create_socket()
-  local s = socket.tcp()
+  local s = socket.try(socket.tcp())
   s:setoption('tcp-nodelay', true)
   return s
 end
+
+local function create_ssl_socket()
+  local conn = {}
+  conn.sock = socket.try(socket.tcp())
+  conn.sock:setoption('tcp-nodelay', true)
+
+  local params = {
+    mode = "client",
+    protocol = "tlsv1",
+    key = context.ssl_key,
+    certificate = context.ssl_cert,
+    cafile = context.ssl_cacert,
+    verify = context.ssl_verify,
+    options = "all"
+  }
+
+  local st = getmetatable(conn.sock).__index.settimeout
+  function conn:settimeout(...)
+    return st(self.sock, ...)
+  end
+
+  function conn:connect(host, port)
+    socket.try(self.sock:connect(host, port))
+    self.sock = socket.try(ssl.wrap(self.sock, params))
+    socket.try(self.sock:dohandshake())
+    reg(self, getmetatable(self.sock))
+    return 1
+  end
+
+  return conn
+end
+
+local ssl_ok   = false
+local ssl_keys = {
+  ssl_key = 'client key',
+  ssl_cert = 'certificate',
+  ssl_cacert = 'CA certificate'
+}
 
 --- Perform an OSv API request
 -- Sends a request to the OSv API and returns the body of the response. By
@@ -94,6 +144,17 @@ end
 function osv_request(arguments, method, parameters, do_raw)
   local raw = do_raw or false
 
+  -- Some preliminary checks
+  local is_https = string.sub(context.api, 1, 5) == "https"
+  if is_https and not ssl_ok then
+    for t in pairs(ssl_keys) do
+      assert(context[t], "SSL " .. ssl_keys[t] .. " not specified")
+      assert(file_exists(context[t]), context[t] .. ": file not found")
+    end
+    ssl_ok = true
+  end
+
+  -- Construct full URL
   local path = construct_path(arguments)
   local reqquery = construct_query_params(parameters)
   local full_url = construct_full_url(path, reqquery)
@@ -112,7 +173,8 @@ function osv_request(arguments, method, parameters, do_raw)
     method = method,
     url = full_url,
     sink = ltn12.sink.table(respbody),
-    create = create_socket
+    create = (string.sub(full_url, 1, 5) == "https" and
+              create_ssl_socket or create_socket)
   }
 
   if raw then
