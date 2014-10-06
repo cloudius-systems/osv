@@ -14,3 +14,4 @@ $build cloudius/osv-openjdk       java,httpserver            "OpenJDK 7/OSv base
 $build cloudius/osv-openjdk8      openjdk8-fedora,httpserver "OpenJDK 8/OSv base image for developers"
 $build cloudius/osv-redis-memonly redis-memonly,httpserver   "Redis (in-memory only)"
 $build cloudius/osv-node          node,httpserver            "Node/OSv"
+$build cloudius/osv-crash         mgmt,httpserver            "OSv/CRaSH shell for developers"
