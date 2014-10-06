@@ -188,15 +188,12 @@ class Guest(SupervisedProcess):
             show_output=_verbose_output,
             show_output_on_error=show_output_on_error)
 
-    def send_command(self, command):
+    def kill(self):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(self.monitor_socket)
-        s.send(command.encode())
-        s.send(b'\n')
+        s.send('quit\n'.encode())
+        self.join()
         s.close()
-
-    def kill(self):
-        self.send_command('quit')
 
 def wait_for_line(guest, text):
     for line in guest.read_lines():
