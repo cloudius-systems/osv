@@ -172,11 +172,14 @@ public class ContextIsolator {
             } else if (args[i].startsWith("-D")) {
                 int eq = args[i].indexOf('=');
                 if (eq < 0) {
-                    throw new IllegalArgumentException("Missing '=' in parameter '" + args[i] + "'");
+                    /* -Dfoo is a special case for -Dfoo=true */
+                    String key = args[i].substring(2);
+                    properties.put(key, "true");
+                } else {
+                    String key = args[i].substring(2, eq);
+                    String value = args[i].substring(eq + 1, args[i].length());
+                    properties.put(key, value);
                 }
-                String key = args[i].substring(2, eq);
-                String value = args[i].substring(eq + 1, args[i].length());
-                properties.put(key, value);
             } else if (!args[i].startsWith("-")) {
                 return runClass(args[i], java.util.Arrays.copyOfRange(args, i + 1, args.length), classpath, properties);
             } else {
