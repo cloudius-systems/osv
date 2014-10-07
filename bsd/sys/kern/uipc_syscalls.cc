@@ -1088,6 +1088,8 @@ zcopy_rx(int s, struct zmsghdr *zm)
 	if (error)
 		return (error);
 	so = (socket*)file_data(fp);
+	if (so->so_type != SOCK_STREAM)
+		return (EINVAL);
 
 	error = zreceive(so, &fromsa, zm, &flags, &bytes);
 	fdrop(fp);
