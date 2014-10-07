@@ -21,22 +21,15 @@ namespace po = boost::program_options;
 
 int main(int argc, char* argv[])
 {
-    try
-    {
-
+    try {
         po::options_description desc("Allowed options");
         desc.add_options()
-        ("help", "produce help message")
-        ("skip-error",
-         "do not stop on error")
-        ("file", po::value<std::string>(),
-         "an init file")
-        ("server", po::value<std::string>(),
-         "a server to read the file from. must come with a --url")
-        ("url", po::value<std::string>(),
-         "a url at the server")
-        ("port", po::value<std::string>()->default_value("80"),
-         "a port at the server")
+            ("help", "produce help message")
+            ("skip-error", "do not stop on error")
+            ("file", po::value<std::string>(), "an init file")
+            ("server", po::value<std::string>(), "a server to read the file from. must come with a --url")
+            ("url", po::value<std::string>(), "a url at the server")
+            ("port", po::value<std::string>()->default_value("80"), "a port at the server")
         ;
 
         po::variables_map config;
