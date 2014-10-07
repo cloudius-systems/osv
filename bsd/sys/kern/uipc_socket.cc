@@ -2153,7 +2153,7 @@ out:
 	SOCK_UNLOCK(so);
 	if (error)
 		KASSERT(!zm->zm_rxhandle, ("error && zm->zm_rxhandle != null"));
-	else
+	else if (*bytes > 0)
 		KASSERT(zm->zm_rxhandle, ("zm->zm_rxhandle == null"));
 	return (error);
 }
