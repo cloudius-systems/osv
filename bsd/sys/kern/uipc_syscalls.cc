@@ -1032,6 +1032,8 @@ zcopy_tx(int s, struct zmsghdr *zm)
 	if (error)
 		return (error);
 	so = (struct socket *)file_data(fp);
+	if (so->so_type != SOCK_STREAM)
+		return (EINVAL);
 	// Create a local copy of the user's iovec - sosend() is going to change it!
 	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
 
