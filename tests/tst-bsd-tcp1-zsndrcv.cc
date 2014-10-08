@@ -132,7 +132,7 @@ public:
             }
 
             pfd[0].fd = zm.zm_txfd;
-            pfd[0].events = POLLOUT;
+            pfd[0].events = POLLIN;
             if (poll(pfd, 1, -1) < 0) {
                 dbg_d("server: poll() failed!");
                 close(client_s);
@@ -232,7 +232,7 @@ public:
             }
 
             pfd[0].fd = zm.zm_txfd;
-            pfd[0].events = POLLOUT;
+            pfd[0].events = POLLIN;
             if (poll(pfd, 1, -1) < 0) {
                 dbg_d("client: poll() failed!");
                 close(s);
