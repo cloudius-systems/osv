@@ -57,6 +57,7 @@
 #include <memory>
 #include <fs/fs.hh>
 
+#include <osv/defer.hh>
 #include <osv/mempool.hh>
 #include <osv/pagealloc.hh>
 #include <osv/zcopy.hh>
@@ -1021,6 +1022,12 @@ zcopy_tx(int s, struct zmsghdr *zm)
 	struct ztx_handle *zh = new ztx_handle();
 
 	zm->zm_txhandle = zh;
+	efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+	if (efd < 0)
+		return (efd);
+	auto close_efd = defer([efd] { close(efd); });
+	zm->zm_txfd = efd;
+
 	error = getsock_cap(s, &fp, NULL);
 	if (error)
 		return (error);
@@ -1036,7 +1043,7 @@ zcopy_tx(int s, struct zmsghdr *zm)
 	iov = mp->msg_iov;
 	for (i = 0; i < mp->msg_iovlen; i++, iov++) {
 		if ((auio.uio_resid += iov->iov_len) < 0) {
-			error = EINVAL;
+			bytes = EINVAL;
 			goto bad;
 		}
 	}
@@ -1053,11 +1060,9 @@ zcopy_tx(int s, struct zmsghdr *zm)
 	    bytes = len - auio.uio_resid;
 bad:
 	fdrop(fp);
-	efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-	if (efd < 0)
-		return (efd);
-	zm->zm_txfd = efd;
-
+	if (bytes >= 0) {
+		close_efd.cancel();
+	}
 	return (bytes);
 }
 
