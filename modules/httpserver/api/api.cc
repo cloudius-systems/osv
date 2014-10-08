@@ -13,6 +13,7 @@
 #include "exception.hh"
 #include "connection.hh"
 #include "request_handler.hh"
+#include "global_server.hh"
 
 namespace httpserver {
 
@@ -244,6 +245,10 @@ void init(routes& routes)
     api_json_init_path("Advanced API options");
 
     api_batch.set_handler(new api_param_handler(routes));
+    stop_api.set_handler([](const_req req){
+        global_server::stop();
+        return "";
+    });
 
 }
 

@@ -35,6 +35,21 @@
                ]
             }
          ]
+      },
+      {
+         "path":"/api/stop",
+         "operations":[
+            {
+               "method":"POST",
+               "summary":"Stop the API server",
+               "notes":"Stopping the API server causing it to terminate. If the API server runs as the main application, it would cause the system to terminate",
+               "type":"string",               
+               "nickname":"stop_api",
+               "produces":[
+                  "application/json"
+               ]
+            }
+         ]
       }
    ]
 }
