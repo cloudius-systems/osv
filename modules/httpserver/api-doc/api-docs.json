@@ -7,6 +7,10 @@
             "description": "OS core API"
         },
         {
+            "path": "/../listings/api.json",
+            "description": "API related API"
+        },
+        {
             "path": "/../listings/fs.json",
             "description": "FS core API"
         },
