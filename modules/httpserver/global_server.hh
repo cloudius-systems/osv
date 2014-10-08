@@ -54,6 +54,13 @@ public:
      */
     global_server& set(const std::string& key, const std::string& value);
 
+    /**
+     * Stop the httpserver
+     */
+    static void stop() {
+        get().s->close();
+    }
+
 private:
 
     global_server();
