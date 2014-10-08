@@ -153,7 +153,8 @@ ztx_release(void *arg1, void *arg2)
 	if (remained == 0 && zm->zm_txfd) {
 		zm->zm_txhandle = nullptr;
 		delete zh;
-		write(zm->zm_txfd, arg1, sizeof(arg1));
+		uint64_t v = 1;
+		write(zm->zm_txfd, &v, sizeof(v));
 	}
 }
 
