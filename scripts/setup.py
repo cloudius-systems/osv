@@ -28,7 +28,8 @@ class Fedora(object):
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'python-requests', 'p11-kit', 'patch', 'wget',
-                'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs'
+                'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs',
+                'openssl-devel'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
