@@ -238,6 +238,9 @@ devfs_getattr(struct vnode *vnode, struct vattr *attr)
 #define devfs_inactive	((vnop_inactive_t)vop_nullop)
 #define devfs_truncate	((vnop_truncate_t)vop_nullop)
 #define devfs_link	((vnop_link_t)vop_eperm)
+#define devfs_fallocate ((vnop_fallocate_t)vop_nullop)
+#define devfs_readlink	((vnop_readlink_t)vop_nullop)
+#define devfs_symlink	((vnop_symlink_t)vop_nullop)
 
 /*
  * vnode operations
@@ -262,6 +265,10 @@ struct vnops devfs_vnops = {
 	devfs_inactive,		/* inactive */
 	devfs_truncate,		/* truncate */
 	devfs_link,		/* link */
+	(vnop_cache_t) nullptr, /* arc */
+	devfs_fallocate,	/* fallocate */
+	devfs_readlink,		/* read link */
+	devfs_symlink,		/* symbolic link */
 };
 
 /*

@@ -410,6 +410,10 @@ vnops procfs_vnops = {
     (vnop_inactive_t) vop_nullop, // vop_inactive
     (vnop_truncate_t) vop_nullop, // vop_truncate
     (vnop_link_t)     vop_eperm,  // vop_link
+    (vnop_cache_t)     nullptr,   // vop_arc
+    (vnop_fallocate_t) vop_nullop, // vop_fallocate
+    (vnop_readlink_t)  vop_nullop, // vop_readlink
+    (vnop_symlink_t)   vop_nullop, // vop_symlink
 };
 
 vfsops procfs_vfsops = {

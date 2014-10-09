@@ -470,6 +470,9 @@ ramfs_getattr(struct vnode *vnode, struct vattr *attr)
 #define ramfs_setattr	((vnop_setattr_t)vop_eperm)
 #define ramfs_inactive	((vnop_inactive_t)vop_nullop)
 #define ramfs_link	((vnop_link_t)vop_eperm)
+#define ramfs_fallocate ((vnop_fallocate_t)vop_nullop)
+#define ramfs_readlink	((vnop_readlink_t)vop_nullop)
+#define ramfs_symlink	((vnop_symlink_t)vop_nullop)
 
 /*
  * vnode operations
@@ -494,5 +497,9 @@ struct vnops ramfs_vnops = {
 	ramfs_inactive,		/* inactive */
 	ramfs_truncate,		/* truncate */
 	ramfs_link,		/* link */
+	(vnop_cache_t) nullptr, /* arc */
+	ramfs_fallocate,	/* fallocate */
+	ramfs_readlink,		/* read link */
+	ramfs_symlink,		/* symbolic link */
 };
 
