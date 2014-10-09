@@ -14,6 +14,8 @@ enum class hypervisor_type {
     unknown,
     kvm,
     xen,
+    vmware_workstation,
+    vmware_esxi
 };
 
 hypervisor_type hypervisor();
