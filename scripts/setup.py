@@ -41,7 +41,15 @@ class Fedora(object):
         test_packages = []
         ec2_post_install = None
         version = '20'
-    versions = [Fedora_20]
+
+    class Fedora_21(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '21'
+
+    versions = [Fedora_20, Fedora_21]
 
 class Debian(object):
     name = 'debian'
