@@ -6,6 +6,7 @@
  */
 #include "line-discipline.hh"
 #include <osv/sched.hh>
+#include <osv/poll.h>
 #include <signal.h>
 
 namespace console {
@@ -113,6 +114,9 @@ void LineDiscipline::read_poll(console_driver *driver)
                 for (auto t : _readers) {
                     t->wake();
                 }
+                if (_fp) {
+                    poll_wake(_fp, POLLIN);
+                }
                 continue; // already echoed
             } else if (c == _tio->c_cc[VERASE]) {
                 if (_line_buffer.empty()) {
@@ -146,6 +150,9 @@ void LineDiscipline::read_poll(console_driver *driver)
             _read_queue.push(c);
             for (auto t : _readers) {
                 t->wake();
+            }
+            if (_fp) {
+                poll_wake(_fp, POLLIN);
             }
         }
         if (_tio->c_lflag & ECHO) {
@@ -189,6 +196,9 @@ void LineDiscipline::take_pending_input()
     for (auto t : _readers) {
         t->wake();
     }
+    if (_fp) {
+        poll_wake(_fp, POLLIN);
+    }
 }
 
 template<typename T>
@@ -205,6 +215,12 @@ void LineDiscipline::discard_pending_input()
     std::lock_guard<mutex> lock(_mutex);
     clear(_line_buffer);
     clear(_read_queue);
+}
+
+void LineDiscipline::set_fp(file *fp)
+{
+    std::lock_guard<mutex> lock(_mutex);
+    _fp = fp;
 }
 
 }

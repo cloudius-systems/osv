@@ -155,6 +155,7 @@ public:
     virtual int ioctl(u_long com, void *data) override;
     virtual int stat(struct stat* buf) override;
     virtual int close() override;
+    virtual int poll(int events) override;
 };
 
 // The above allows opening /dev/console to use the console. We currently
@@ -195,11 +196,30 @@ int console_file::close()
     return 0;
 }
 
+int console_file::poll(int events) {
+    // We do not support flow-control (so the console is always writable)
+    // and do not support hangup on the console.
+    int ret = POLLOUT;
+    if (mux.read_queue_size() > 0) {
+        ret |= POLLIN;
+    }
+    return ret & events;
+}
+
 int open() {
     try {
-        fileref f = make_file<console_file>();
-        fdesc fd(f);
-        return fd.release();
+        // Keep a single file structure for the console, even if opened
+        // multiple times (we can still have multiple fds, of course).
+        static fileref console_fr;
+        static mutex open_mutex;
+        WITH_LOCK(open_mutex) {
+            if (!console_fr) {
+                console_fr = make_file<console_file>();
+                mux.set_fp(console_fr.get());
+            }
+            fdesc fd(console_fr);
+            return fd.release();
+        }
     } catch (int error) {
         errno = error;
         return -1;

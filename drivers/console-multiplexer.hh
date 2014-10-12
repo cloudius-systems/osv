@@ -28,6 +28,7 @@ public:
     int read_queue_size();
     void discard_pending_input();
     void take_pending_input();
+    void set_fp(file *fp);
 private:
     void drivers_write(const char *str, size_t len);
     void drivers_flush();

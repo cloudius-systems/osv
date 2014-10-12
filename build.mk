@@ -359,6 +359,7 @@ tests += tests/tst-thread-local.so
 tests += tests/tst-app.so
 tests += tests/misc-gtod.so
 tests += tests/misc-concurrent-io.so
+tests += tests/tst-console.so
 endif
 
 tests/hello/Hello.class: javabase=tests/hello
