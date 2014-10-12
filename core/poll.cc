@@ -122,7 +122,7 @@ int poll_scan(std::vector<poll_file>& _pfd)
             continue;
         }
 
-        entry->revents = fp->poll(entry->events | ~POLL_REQUESTABLE);
+        entry->revents = fp->poll(entry->events | (POLLSTANDARD & ~POLL_REQUESTABLE));
 
         if (entry->revents) {
             nr_events++;
@@ -201,7 +201,7 @@ void poll_install(struct pollreq* p)
         pl->_req = p;
         // In addition to the user's requested events, also allow events which
         // cannot be requested by the user (e.g., POLLHUP).
-        pl->_events = entry->events | ~POLL_REQUESTABLE;
+        pl->_events = entry->events | (POLLSTANDARD & ~POLL_REQUESTABLE);
 
         fp->poll_install(*p);
         FD_LOCK(fp);
