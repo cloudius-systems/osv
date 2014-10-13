@@ -26,9 +26,6 @@ class event_fd final : public special_file {
         virtual int write(struct uio *uio, int flags) override;
         virtual int poll(int events) override;
 
-        virtual void poll_install(pollreq& pr) override;
-        virtual void poll_uninstall(pollreq& pr) override;
-
     private:
         mutable mutex _mutex;
         uint64_t      _count;
@@ -36,13 +33,9 @@ class event_fd final : public special_file {
         condvar       _blocked_reader;
         condvar       _blocked_writer;
 
-        std::list<pollreq*> _pollers;
-
     private:
         size_t copy_to_uio(uint64_t value, uio *uio);
         size_t copy_from_uio(uio *uio, uint64_t *value);
-
-        void wake_pollers();
 };
 
 size_t event_fd::copy_to_uio(uint64_t value, uio *uio)
@@ -119,7 +112,7 @@ int event_fd::read(uio *data, int flags)
 
         data->uio_resid -= copy_to_uio(v, data);
         _blocked_writer.wake_all();
-        wake_pollers();
+        poll_wake(this, POLLOUT);
     }
 
     return 0;
@@ -152,7 +145,7 @@ int event_fd::write(uio *data, int flags)
         }
 
         _blocked_reader.wake_all();
-        wake_pollers();
+        poll_wake(this, POLLIN);
     }
 
     /* update uio_resid only when count is updated. */
@@ -183,28 +176,6 @@ int event_fd::poll(int events)
     }
 
     return rc;
-}
-
-void event_fd::poll_install(pollreq& pr)
-{
-    WITH_LOCK(_mutex) {
-        _pollers.push_back(&pr);
-    }
-}
-
-void event_fd::poll_uninstall(pollreq& pr)
-{
-    WITH_LOCK(_mutex) {
-        _pollers.remove(&pr);
-    }
-}
-
-void event_fd::wake_pollers()
-{
-    for (auto&& pr : _pollers) {
-        pr->_awake.store(true, std::memory_order_relaxed);
-        pr->_poll_thread.wake();
-    }
 }
 
 int eventfd(unsigned int initval, int flags)
