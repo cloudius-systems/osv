@@ -13,6 +13,7 @@
 #include <histedit.h>
 
 #include <sys/ioctl.h>
+#include <sys/poll.h>
 #include <termios.h>
 
 #ifdef OSV_CLI
@@ -358,6 +359,13 @@ void cli_console_size_dirty() {
 
   /* Get current cursor location */
   printf("\033[6n");
+  fflush(stdout);
+
+  struct pollfd pfd = {0, POLLIN, 0};
+  if (!(poll(&pfd, 1, 500))) {
+    goto giveup;
+  }
+
   int cur_h, cur_w;
   int res = scanf("\033[%d;%dR", &cur_h, &cur_w);
   if (!res) {
@@ -366,6 +374,7 @@ void cli_console_size_dirty() {
 
   /* Set cursor location to 999x999 and query it again */
   printf("\033[999;999H\033[6n");
+  fflush(stdout);
   int width, height;
   res = scanf("\033[%d;%dR", &height, &width);
   if (res) {
@@ -375,6 +384,7 @@ void cli_console_size_dirty() {
 
   /* Return the cursor to its original location */
   printf("\033[%d;%dH", cur_h, cur_w);
+  fflush(stdout);
 
 giveup:
   tcsetattr(0, TCSANOW, &t_prev);
