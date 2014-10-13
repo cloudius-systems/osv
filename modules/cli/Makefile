@@ -11,8 +11,9 @@ SRCS=cli.c
 MAIN=cli.so
 
 # For compiling executable running locally
-LOC_INCLUDES=-I/usr/include/lua5.2
-LOC_LIBS=-ledit -ltinfo -llua5.2
+LOC_INCLUDES=-I../lua/src
+LOC_LFLAGS=-L../lua/src
+LOC_LDFLAGS=-Wl,-rpath,$(abspath ../lua/src)
 LOC_MAIN=cli
 
 module: $(MAIN)
@@ -21,7 +22,7 @@ $(MAIN): $(SRCS)
 	$(CC) -DOSV_CLI $(CFLAGS) $(INCLUDES) -fPIC -shared -o $@ $(SRCS) $(LFLAGS) $(LIBS)
 
 $(LOC_MAIN): $(SRCS)
-	$(CC) $(CFLAGS) $(LOC_INCLUDES) $^ -o $@ $(LOC_LIBS)
+	$(CC) $(CFLAGS) $(LOC_INCLUDES) $^ -o $@ $(LOC_LDFLAGS) $(LOC_LFLAGS) $(LIBS)
 
 clean:
 	rm -f $(MAIN) $(LOC_MAIN)
