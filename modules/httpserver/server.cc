@@ -63,7 +63,7 @@ server::server(const boost::program_options::variables_map* config,
         }
 
         if (!valid) {
-            std::cerr << "Please visit https://github.com/cloudius-systems/osv/wiki/The-RESTful-API#configuring-ssl\n";
+            std::cerr << "Please visit https://github.com/cloudius-systems/osv/wiki/Configuring-SSL\n";
             throw std::runtime_error("invalid configuration");
         }
 
