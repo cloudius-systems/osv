@@ -79,7 +79,7 @@ class Ubuntu(object):
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
                 'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
-                'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib'
+                'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib',
                 'libssl-dev'
                 ]
     ec2_packages = standard_ec2_packages
