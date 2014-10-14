@@ -17,45 +17,6 @@
 
 uint64_t target_time = 10; // seconds
 
-#ifdef __OSV__
-
-#include <osv/sched.hh>
-
-class pinned_thread {
-public:
-    explicit pinned_thread(std::function<void ()> f);
-    void pin(unsigned cpu);
-    void start();
-    void join();
-private:
-    std::function<void ()> _f;
-    sched::thread::attr _attr;
-    std::unique_ptr<sched::thread> _thread;
-};
-
-pinned_thread::pinned_thread(std::function<void ()> f)
-    : _f(f)
-{
-}
-
-void pinned_thread::pin(unsigned cpu)
-{
-    _attr.pin(sched::cpus[cpu]);
-}
-
-void pinned_thread::start()
-{
-    _thread.reset(new sched::thread(_f, _attr));
-    _thread->start();
-}
-
-void pinned_thread::join()
-{
-    _thread->join();
-}
-
-#else
-
 #include <thread>
 #include <sched.h>
 
@@ -105,7 +66,6 @@ void pinned_thread::join()
     _thread->join();
 }
 
-#endif
 
 pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
