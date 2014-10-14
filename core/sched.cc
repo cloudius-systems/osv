@@ -482,6 +482,45 @@ unsigned cpu::load()
     return runqueue.size();
 }
 
+void thread::pin(cpu *target_cpu)
+{
+    thread &t = *current();
+    // We want to wake this thread on the target CPU, but can't do this while
+    // it is still running on this CPU. So we need a different thread to
+    // complete the wakeup. We could re-used an existing thread (e.g., the
+    // load balancer thread) but a "good-enough" dirty solution is to
+    // temporarily create a new ad-hoc thread, "wakeme"
+    if (!t._migration_lock_counter) {
+        migrate_disable();
+    }
+    cpu *source_cpu = cpu::current();
+    if (source_cpu == target_cpu) {
+        return;
+    }
+    bool do_wakeme = false;
+    thread wakeme([&] () {
+        wait_until([&] { return do_wakeme; });
+        t.wake();
+    }, sched::thread::attr().pin(source_cpu));
+    wakeme.start();
+    WITH_LOCK(irq_lock) {
+        trace_sched_migrate(&t, target_cpu->id);
+        t.stat_migrations.incr();
+        t.suspend_timers();
+        t._runtime.export_runtime();
+        t._detached_state->_cpu = target_cpu;
+        percpu_base = target_cpu->percpu_base;
+        current_cpu = target_cpu;
+        t._runtime.update_after_sleep();
+        t._detached_state->st.store(thread::status::waiting);
+        // Note that wakeme is on the same CPU, and irq is disabled,
+        // so it will not actually run until we stop running.
+        wakeme.wake_with([&] { do_wakeme = true; });
+        source_cpu->reschedule_from_interrupt();
+    }
+    // wakeme will be implicitly join()ed here.
+}
+
 void cpu::load_balance()
 {
     notifier::fire();

@@ -423,6 +423,17 @@ public:
     static void sleep(std::chrono::duration<Rep, Period> duration);
     static void yield();
     static void exit() __attribute__((__noreturn__));
+    /**
+     * Pin the current thread to the target CPU.
+     *
+     * This will migrate the current thread to the target CPU. When this
+     * function returns, the thread will be running on the target CPU,
+     * and pinned to it.
+     *
+     * Note that this is a static function, which operates on the calling
+     * thread (it cannot operate on an arbitrary thread).
+     */
+    static void pin(cpu *target_cpu);
 #ifdef __OSV_CORE__
     static inline thread* current() { return s_current; };
 #else
@@ -632,6 +643,7 @@ public:
                     std::memory_order_relaxed);
         }
         friend class cpu;
+        friend class thread;
     };
     stat_counter stat_switches;
     stat_counter stat_preemptions;
