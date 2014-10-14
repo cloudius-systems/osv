@@ -6,6 +6,7 @@
  */
 
 #include <osv/sched.hh>
+#include <api/sched.h>
 #include "signal.hh"
 #include <pthread.h>
 #include <errno.h>
@@ -911,8 +912,41 @@ int pthread_attr_setaffinity_np(pthread_attr_t *attr, size_t cpusetsize,
 int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
         const cpu_set_t *cpuset)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    if (thread != pthread_self()) {
+        WARN_STUBBED();
+        return EINVAL;
+    }
+    int count = CPU_COUNT(cpuset);
+    if (count == 0) {
+        // Having a cpuset with no CPUs in it is invalid.
+        return EINVAL;
+    } else if (count == 1) {
+        for (size_t i = 0; i < __CPU_SETSIZE; i++) {
+            if (CPU_ISSET(i, cpuset)) {
+                if (i < sched::cpus.size()) {
+                    sched::thread::pin(sched::cpus[i]);
+                    break;
+                } else {
+                    return EINVAL;
+                }
+            }
+        }
+    } else {
+        WARN_ONCE("Warning: OSv only supports cpu_set_t with at most one "
+                "CPU set.\n pthread_setaffinity_np or sched_setaffinity ignored.\n");
+        return EINVAL;
+    }
+    return 0;
+}
+
+int sched_setaffinity(pid_t pid, size_t cpusetsize,
+        cpu_set_t *cpuset)
+{
+    if (pid != 0) {
+        WARN_STUBBED();
+        return EINVAL;
+    }
+    return pthread_setaffinity_np(pthread_self(), cpusetsize, cpuset);
 }
 
 int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
