@@ -114,11 +114,11 @@ inline static void CPU_CLR(size_t n, cpu_set_t *cpuset) {
     cpuset->__bits[__cpuset_word(n)] &= ~__cpuset_mask(n);
 }
 
-inline static int CPU_ISSET(size_t n, cpu_set_t *cpuset) {
+inline static int CPU_ISSET(size_t n, const cpu_set_t *cpuset) {
     return (cpuset->__bits[__cpuset_word(n)] & __cpuset_mask(n)) != 0;
 }
 
-inline static int CPU_COUNT(cpu_set_t *cpuset) {
+inline static int CPU_COUNT(const cpu_set_t *cpuset) {
     size_t i;
     int count = 0;
     for (i = 0; i < _NCPUWORDS; i++) {
