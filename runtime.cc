@@ -140,7 +140,11 @@ void abort(const char *fmt, ...)
     panic::pvpanic::panicked();
 #endif /* !AARCH64_PORT_STUB */
 
-    osv::halt();
+    if (opt_nohalt) {
+        osv::poweroff();
+    } else {
+        osv::halt();
+    }
 }
 
 // __assert_fail() is used by the assert() macros

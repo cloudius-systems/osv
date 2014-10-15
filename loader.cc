@@ -120,6 +120,7 @@ int main(int ac, char **av)
 
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
+bool opt_nohalt = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
 static bool opt_random = true;
@@ -160,6 +161,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("nomount", "don't mount the file system")
         ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
+	("nohalt", "use poweroff instead of halt if it's aborted")
         ("noinit", "don't run commands from /init")
         ("verbose", "be verbose, print debug messages")
         ("console", bpo::value<std::vector<std::string>>(), "select console driver")
@@ -193,6 +195,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("noshutdown")) {
         opt_noshutdown = true;
+    }
+
+    if (vars.count("nohalt")) {
+        opt_nohalt = true;
     }
 
     if (vars.count("trace-backtrace")) {

@@ -116,6 +116,7 @@ void debug(boost::format& fmt, args... as)
     debug(osv::sprintf(fmt, as...));
 }
 
+extern bool opt_nohalt;
 void abort(const char *fmt, ...) __attribute__((noreturn));
 
 void fill_debug_buffer(const char *msg, size_t len);
