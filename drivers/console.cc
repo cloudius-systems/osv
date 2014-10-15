@@ -42,6 +42,11 @@ termios tio = {
             /*VLNEXT*/0, /*VEOL2*/0},
 };
 
+struct winsize ws = {
+    .ws_row = 25,
+    .ws_col = 80,
+};
+
 console_multiplexer mux __attribute__((init_priority((int)init_prio::console)))
     (&tio, &arch_early_console);
 
@@ -93,6 +98,9 @@ console_ioctl(u_long request, void *arg)
         default:
             return -EINVAL;
         }
+    case TIOCGWINSZ:
+        *static_cast<struct winsize*>(arg) = ws;
+        return 0;
     case FIONREAD:
         // used in OpenJDK's os::available (os_linux.cpp)
         *static_cast<int*>(arg) = mux.read_queue_size();
