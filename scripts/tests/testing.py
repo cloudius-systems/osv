@@ -64,7 +64,7 @@ def scan_errors(s):
         "Assertion failed",
         "Aborted",
 	"Error",
-	"[BUG]",
+	"\[BUG\]",
 	"Failed looking up symbol",
 	"Failure",
         "program exited with status",
