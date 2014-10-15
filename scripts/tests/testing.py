@@ -63,6 +63,10 @@ def scan_errors(s):
         # supported in the future.
         "Assertion failed",
         "Aborted",
+	"Error",
+	"[BUG]",
+	"Failed looking up symbol",
+	"Failure",
         "program exited with status",
         r"program tests/(.*?) returned",
         "Exception was caught while running",
