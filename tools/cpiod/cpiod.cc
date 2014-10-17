@@ -52,7 +52,9 @@ public:
         cout << "Adding " << name << "...\n";
         name = _prefix + name;
         enforce_mode m(mode);
-        mkdirp(name.c_str(), 0755);
+        if (mkdirp(name.c_str(), 0755) < 0) {
+            cout << "mkdir: " << strerror(errno) << "\n";
+        }
     }
     virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
         cout << "Link " << newpath << " to " << oldpath << " ...\n";
