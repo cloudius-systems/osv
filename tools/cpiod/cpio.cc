@@ -73,7 +73,7 @@ bool cpio_in::parse_one(istream& is, cpio_in& out)
     is.read(header.data, sizeof(header));
     auto& h = header.header;
     if (strncmp(cpio_magic, h.c_magic, 6) != 0) {
-        throw runtime_error("bad cpio magic");
+        throw runtime_error(string("bad cpio magic: '") + string(h.c_magic, 6) + "'");
     }
     auto namesize = convert(h.c_namesize);
     auto aligned = align_up(sizeof(header) + namesize, sizeof(uint32_t)) - sizeof(header);
