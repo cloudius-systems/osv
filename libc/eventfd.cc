@@ -112,8 +112,8 @@ int event_fd::read(uio *data, int flags)
 
         data->uio_resid -= copy_to_uio(v, data);
         _blocked_writer.wake_all();
-        poll_wake(this, POLLOUT);
     }
+    poll_wake(this, POLLOUT);
 
     return 0;
 }
@@ -145,8 +145,8 @@ int event_fd::write(uio *data, int flags)
         }
 
         _blocked_reader.wake_all();
-        poll_wake(this, POLLIN);
     }
+    poll_wake(this, POLLIN);
 
     /* update uio_resid only when count is updated. */
     data->uio_resid -= bc;
