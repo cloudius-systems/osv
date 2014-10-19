@@ -383,6 +383,22 @@ void* do_main_thread(void *_main_args)
         }
     }
 
+    int count_ip(0);
+    const char* if_ip;
+    osv::for_each_if([&count_ip,&if_ip] (std::string if_name) {
+        if (if_name == "lo0")
+            return;
+        const char* tmp_ip = osv::if_ip(if_name).c_str();
+        if (tmp_ip) {
+           count_ip++;
+           if_ip = tmp_ip;
+        }
+    });
+    if (count_ip==1) {
+       setenv("OSV_IP",if_ip,1);
+    }
+
+
     if (!opt_chdir.empty()) {
         debug("Chdir to: '%s'\n", opt_chdir.c_str());
 
