@@ -26,20 +26,30 @@ namespace po = boost::program_options;
 // Want to use boost::filesystem, but too much effort to integrate
 extern "C" { int mkdirp(const char *d, mode_t mode); }
 
-class enforce_mode {
-public:
-    enforce_mode(mode_t mode) { _umask = umask(0777 & ~(mode & 0777)); }
-    ~enforce_mode() { umask(_umask); }
-private:
-    mode_t _umask;
-};
 
 static void make_directories(std::string path) {
     if (mkdirp(path.c_str(), 0755) < 0 && errno != EEXIST) {
         throw std::system_error(errno, std::system_category(), "mkdir");
     }
-
 }
+
+// Truncates /a/b/c to /a/b/, and also /a/b/c/// to /a/b/.
+std::string parent_path(std::string path)
+{
+    auto i = path.rbegin();
+    while (*i == '/') {
+        ++i;
+    }
+    path.erase(std::find(i, path.rend(), '/').base(), path.end());
+    return path;
+}
+
+static void change_mode(std::string path, mode_t mode) {
+    if (chmod(path.c_str(), mode) < 0) {
+        throw std::system_error(errno, std::system_category(), "chmod");
+    }
+}
+
 
 class cpio_in_expand : public cpio_in {
 public:
@@ -47,20 +57,16 @@ public:
     virtual void add_file(string name, istream& is, mode_t mode) override {
         cout << "Adding " << name << "...\n";
         name = _prefix + name;
-        auto pos = name.rfind('/');
-        if (pos != name.npos) {
-            make_directories(name.substr(0, pos));
-        }
-
-        enforce_mode m(mode);
+        make_directories(parent_path(name));
         ofstream os(name);
         os << is.rdbuf();
+        change_mode(name, mode);
     }
     virtual void add_dir(string name, mode_t mode) override {
         cout << "Adding " << name << "...\n";
         name = _prefix + name;
-        enforce_mode m(mode);
         make_directories(name);
+        change_mode(name, mode);
     }
     virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
         cout << "Link " << newpath << " to " << oldpath << " ...\n";
@@ -68,7 +74,6 @@ public:
         if (pos != newpath.npos) {
             make_directories(newpath.substr(0, pos));
         }
-        enforce_mode m(mode);
         auto ret = symlink(oldpath.c_str(), newpath.c_str());
         if (ret == -1) {
             throw std::system_error(errno, std::system_category(), "symlink");
