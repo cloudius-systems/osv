@@ -319,10 +319,9 @@ static std::string read_file(std::string fn)
           std::istreambuf_iterator<char>());
 }
 
-void* do_main_thread(void *_commands)
+void* do_main_thread(void *_main_args)
 {
-    auto commands =
-         static_cast<std::vector<std::vector<std::string> > *>(_commands);
+    auto main_args = static_cast<std::tuple<int,char**> *>(_main_args);
 
     if (!arch_setup_console(opt_console)) {
         abort("Unknown console:%s\n", opt_console.c_str());
@@ -400,6 +399,8 @@ void* do_main_thread(void *_commands)
         boot_time.print_chart();
     }
 
+    auto commands = prepare_commands(std::get<0>(*main_args), std::get<1>(*main_args));
+
     // Run command lines in /init/* before the manual command line
     if (opt_init) {
         std::vector<std::vector<std::string>> init_commands;
@@ -423,7 +424,7 @@ void* do_main_thread(void *_commands)
             }
         }
         free(namelist);
-        commands->insert(commands->begin(),
+        commands.insert(commands.begin(),
                  init_commands.begin(), init_commands.end());
     }
 
@@ -434,7 +435,7 @@ void* do_main_thread(void *_commands)
     // doesn't wait for the thread to finish before exiting OSv.
     std::vector<shared_app_t> bg;
     std::vector<shared_app_t> detached;
-    for (auto &it : *commands) {
+    for (auto &it : commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
         auto suffix = it.back();
         try {
@@ -519,11 +520,11 @@ void main_cont(int ac, char** av)
 #endif /* !AARCH64_PORT_STUB */
 
     // multiple programs can be run -> separate their arguments
-    cmds = prepare_commands(ac, av);
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
-    pthread_create(&pthread, nullptr, do_main_thread, (void *) &cmds);
+    std::tuple<int,char**> main_args = std::make_tuple(ac,av);
+    pthread_create(&pthread, nullptr, do_main_thread, (void *) &main_args);
     void* retval;
     pthread_join(pthread, &retval);
 
