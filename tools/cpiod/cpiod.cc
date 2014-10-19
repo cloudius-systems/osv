@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <system_error>
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
 #include "cpio.hh"
@@ -33,6 +34,13 @@ private:
     mode_t _umask;
 };
 
+static void make_directories(std::string path) {
+    if (mkdirp(path.c_str(), 0755) < 0 && errno != EEXIST) {
+        throw std::system_error(errno, std::system_category(), "mkdir");
+    }
+
+}
+
 class cpio_in_expand : public cpio_in {
 public:
     cpio_in_expand(std::string prefix): _prefix(prefix) {};
@@ -41,7 +49,7 @@ public:
         name = _prefix + name;
         auto pos = name.rfind('/');
         if (pos != name.npos) {
-            mkdirp(name.substr(0, pos).c_str(), 0755);
+            make_directories(name.substr(0, pos));
         }
 
         enforce_mode m(mode);
@@ -52,20 +60,18 @@ public:
         cout << "Adding " << name << "...\n";
         name = _prefix + name;
         enforce_mode m(mode);
-        if (mkdirp(name.c_str(), 0755) < 0) {
-            cout << "mkdir: " << strerror(errno) << "\n";
-        }
+        make_directories(name);
     }
     virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
         cout << "Link " << newpath << " to " << oldpath << " ...\n";
         auto pos = newpath.rfind('/');
         if (pos != newpath.npos) {
-            mkdirp(newpath.substr(0, pos).c_str(), 0755);
+            make_directories(newpath.substr(0, pos));
         }
         enforce_mode m(mode);
         auto ret = symlink(oldpath.c_str(), newpath.c_str());
         if (ret == -1) {
-            abort();
+            throw std::system_error(errno, std::system_category(), "symlink");
         }
     }
 
