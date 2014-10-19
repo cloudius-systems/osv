@@ -291,8 +291,12 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
     // concatenate everything
     for (auto i = 0; i < ac; i++) {
         std::string arg("");
-        if (av[i] && (*av[i] == '$')) {
-            auto tmp = getenv(av[i] + 1);
+        char* env = strchr(av[i],'$');
+        if (av[i] && env) {
+            *env = '\0';
+            env++;
+            auto tmp = getenv(env);
+            arg = av[i];
             if (tmp) {
                 arg += tmp;
             }
