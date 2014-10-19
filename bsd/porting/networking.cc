@@ -139,4 +139,21 @@ int ifup(std::string if_name)
     error = ifioctl(NULL, SIOCSIFFLAGS, (caddr_t)&ifr, NULL);
     return (error);
 }
+
+std::string if_ip(std::string if_name) {
+    struct ifnet *ifp;
+    ifp = ifunit_ref(if_name.c_str());
+    if (!ifp) {
+        return ("");
+    }
+
+    struct bsd_ifreq addr;
+    int error=in_control(NULL, SIOCGIFADDR, (caddr_t)&addr, ifp, NULL);
+    if_rele(ifp);
+
+    if (error) {
+       return ("");
+    }
+    return inet_ntoa(((bsd_sockaddr_in*)&(addr.ifr_addr))->sin_addr);
+}
 }

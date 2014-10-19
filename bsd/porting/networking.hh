@@ -20,6 +20,7 @@ namespace osv {
     int start_if(std::string if_name, std::string ip_addr,
         std::string mask_addr);
     int ifup(std::string if_name);
+    std::string if_ip(std::string if_name);
 }
 
 #endif /* __NETWORKING_H__ */
