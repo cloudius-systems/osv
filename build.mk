@@ -332,6 +332,7 @@ tests += tests/tst-memmove.so
 tests += tests/tst-pthread-clock.so
 tests += tests/misc-procfs.so
 tests += tests/tst-chdir.so
+tests += tests/tst-chmod.so
 tests += tests/tst-hello.so
 tests += tests/tst-concurrent-init.so
 tests += tests/tst-ring-spsc-wraparound.so

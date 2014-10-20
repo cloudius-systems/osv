@@ -215,6 +215,7 @@ void	 vn_lock(struct vnode *);
 void	 vn_unlock(struct vnode *);
 int	 vn_stat(struct vnode *, struct stat *);
 int	 vn_settimes(struct vnode *, struct timespec[2]);
+int	 vn_setmode(struct vnode *, mode_t mode);
 int	 vn_access(struct vnode *, int);
 int	 vget(struct mount *, uint64_t ino, struct vnode **vpp);
 void	 vput(struct vnode *);

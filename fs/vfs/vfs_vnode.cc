@@ -396,6 +396,22 @@ vn_settimes(struct vnode *vp, struct timespec times[2])
 }
 
 /*
+ * Set chmod permissions on the vnode.
+ */
+int
+vn_setmode(struct vnode *vp, mode_t mode)
+{
+    struct vattr vattr;
+    memset(&vattr, 0, sizeof(vattr));
+    vattr.va_mode = mode;
+    vattr.va_mask = AT_MODE;
+    vn_lock(vp);
+    int error = VOP_SETATTR(vp, &vattr);
+    vn_unlock(vp);
+    return error;
+}
+
+/*
  * Check permission on vnode pointer.
  */
 int

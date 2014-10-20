@@ -1441,3 +1441,21 @@ ret:
     vn_unlock(vp);
     return error;
 }
+
+int
+sys_chmod(const char *path, mode_t mode)
+{
+    int error;
+    struct dentry *dp;
+    DPRINTF(VFSDB_SYSCALL, ("sys_chmod: path=%s\n", path));
+    error = namei(path, &dp);
+    if (error)
+        return error;
+    if (dp->d_mount->m_flags & MNT_RDONLY) {
+        error = EROFS;
+    } else {
+        error = vn_setmode(dp->d_vnode, mode);
+    }
+    drele(dp);
+    return error;
+}

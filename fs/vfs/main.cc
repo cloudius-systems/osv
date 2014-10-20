@@ -1819,13 +1819,27 @@ int utime(const char *pathname, const struct utimbuf *t)
 
 TRACEPOINT(trace_vfs_chmod, "\"%s\" 0%0o", const char*, mode_t);
 TRACEPOINT(trace_vfs_chmod_ret, "");
+TRACEPOINT(trace_vfs_chmod_err, "%d", int);
 
 int chmod(const char *pathname, mode_t mode)
 {
     trace_vfs_chmod(pathname, mode);
-    debug("stub chmod\n");
+    struct task *t = main_task;
+    char path[PATH_MAX];
+    int error = ENOENT;
+    if (pathname == nullptr)
+        goto out_errno;
+    if ((error = task_conv(t, pathname, VWRITE, path)) != 0)
+        goto out_errno;
+    error = sys_chmod(path, mode & ALLPERMS);
+    if (error)
+        goto out_errno;
     trace_vfs_chmod_ret();
     return 0;
+out_errno:
+    trace_vfs_chmod_err(error);
+    errno = error;
+    return -1;
 }
 
 TRACEPOINT(trace_vfs_fchmod, "\"%d\" 0%0o", int, mode_t);
