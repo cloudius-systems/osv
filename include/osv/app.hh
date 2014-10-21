@@ -20,6 +20,9 @@
 #include <osv/elf.hh>
 #include <boost/signals2.hpp>
 
+extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
+    void(*)(), void(*)(), void*);
+
 namespace osv {
 
 class application;
@@ -116,6 +119,8 @@ private:
     void main();
     void run_main(std::string path, int argc, char** argv);
     void run_main();
+    friend void ::__libc_start_main(int(*)(int, char**), int, char**, void(*)(),
+        void(*)(), void(*)(), void*);
 
 private:
     using main_func_t = int(int, char**);
@@ -128,6 +133,7 @@ private:
     mutex _termination_mutex;
     std::shared_ptr<elf::object> _lib;
     main_func_t* _main;
+    void (*_entry_point)();
 
     // Must be destroyed before _lib
     boost::signals2::signal<void()> _termination_signal;

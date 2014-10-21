@@ -25,12 +25,15 @@ extern int optind;
 // aproximatively where the initial thread's stack end.
 void *__libc_stack_end;
 
-// We will handle all the initialization ourselves.
-// Still, if objects are linked with the -z now flag, they may possibly
-// require this symbol to run. The symbol, though, should never be reached.
-extern "C" void __libc_start_main()
+extern "C" void __libc_start_main(int (*main)(int, char**), int, char**,
+    void(*)(), void(*)(), void(*)(), void*)
 {
-    abort("Invalid call to __libc_start_main");
+    auto app = osv::application::get_current();
+    assert(app->_entry_point);
+    app->_main = main;
+    app->run_main();
+    app.reset();
+    pthread_exit(nullptr);
 }
 
 namespace osv {
@@ -91,6 +94,9 @@ application::application(const std::string& command, const std::vector<std::stri
 
     _main = _lib->lookup<int (int, char**)>("main");
     if (!_main) {
+        _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
+    }
+    if (!_entry_point && !_main) {
         throw launch_error("Failed looking up main");
     }
 }
@@ -133,21 +139,25 @@ TRACEPOINT(trace_app_main_ret, "return_code=%d", int);
 
 void application::main()
 {
-    trace_app_main(this, _command.c_str());
-
     adopt_current();
 
     __libc_stack_end = __builtin_frame_address(0);
 
     sched::thread::current()->set_name(_command);
 
-    run_main();
-
-    if (_return_code) {
-        debug("program %s returned %d\n", _command.c_str(), _return_code);
+    if (_main) {
+        run_main();
+    } else {
+        // The application is expected not to initialize the environment in
+        // which it runs on its owns but to call __libc_start_main(). If that's
+        // not the case bad things may happen: constructors of global objects
+        // may be called twice, TLS may be overriden and the program may not
+        // received correct arguments, environment variables and auxiliary
+        // vector.
+        _entry_point();
     }
 
-    trace_app_main_ret(_return_code);
+    // _entry_point() doesn't return
 }
 
 void application::run_main(std::string path, int argc, char** argv)
@@ -185,6 +195,8 @@ void application::run_main(std::string path, int argc, char** argv)
 
 void application::run_main()
 {
+    trace_app_main(this, _command.c_str());
+
     // C main wants mutable arguments, so we have can't use strings directly
     std::vector<std::vector<char>> mut_args;
     transform(_args, back_inserter(mut_args),
@@ -195,6 +207,12 @@ void application::run_main()
     auto argc = argv.size();
     argv.push_back(nullptr);
     run_main(_command, argc, argv.data());
+
+    if (_return_code) {
+        debug("program %s returned %d\n", _command.c_str(), _return_code);
+    }
+
+    trace_app_main_ret(_return_code);
 }
 
 TRACEPOINT(trace_app_termination_callback_added, "app=%p", application*);
