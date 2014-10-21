@@ -61,7 +61,7 @@ static void dmi_table(u32 base, u16 len, u16 num)
 
     auto idx = 0;
 
-    while (idx < num && p+4 < start+len) {
+    while (idx++ < num && p+4 < start+len) {
         dmi_header header;
         header.type   = read_u8 (p, 0x00);
         header.length = read_u8 (p, 0x01);
@@ -86,6 +86,15 @@ static void dmi_table(u32 base, u16 len, u16 num)
             break;
         }
         p += header.length;
+        do {
+            auto left = start + len - p;
+            p = static_cast<char*>(memchr(p, '\0', left));
+            if (!p) {
+                debug_ll("DMI: error\n");
+                return;
+            }
+            p++;
+        } while (*p++);
     }
 }
 
