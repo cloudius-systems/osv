@@ -21,7 +21,7 @@ using namespace env_json;
 
 void init(routes& routes)
 {
-    env_json_init_path();
+    env_json_init_path("Environment variables API");
     getEnv.set_handler([](const_req req) {
         string param = req.param.at("var").substr(1);
         char* val = getenv(param.c_str());

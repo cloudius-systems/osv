@@ -49,7 +49,7 @@ static Interface get_interface(const string& name, ifnet* ifp, long time)
  */
 void init(routes& routes)
 {
-    network_json_init_path();
+    network_json_init_path("Hardware management API");
     network_json::listIfconfig.set_handler([](const_req req) {
         vector<Interface> res;
         auto time = duration_cast<microseconds>

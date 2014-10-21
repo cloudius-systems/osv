@@ -67,7 +67,7 @@ class set_jmx_handler : public handler_base {
  */
 void init(routes& routes)
 {
-    jvm_json_init_path();
+    jvm_json_init_path("JVM API");
     getJavaVersion.set_handler([](const_req req)
     {
         validate_jvm();

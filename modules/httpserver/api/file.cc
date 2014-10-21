@@ -387,7 +387,7 @@ class put_file_handler : public handler_base {
 
 void init(routes& routes)
 {
-    file_json_init_path();
+    file_json_init_path("file API");
     getFile.set_handler(new get_file_handler());
     delFile.set_handler(new del_file_handler());
     putFile.set_handler(new put_file_handler());

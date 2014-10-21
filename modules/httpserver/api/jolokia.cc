@@ -170,7 +170,7 @@ void httpserver::api::jolokia::init(routes & routes)
         std::shared_ptr<classes> _clz;
     };
 
-    jolokia_json_init_path();
+    jolokia_json_init_path("Jolokia API");
 
     std::shared_ptr<classes> clz = std::make_shared<classes>();
 

@@ -34,7 +34,7 @@ static void fill_dfstat(DFStat& dfstat, const osv::mount_desc& mount, const stru
 
 void init(routes& routes) {
 
-    fs_json_init_path();
+    fs_json_init_path("FS core API");
 
     getDFStats.set_handler("json",
                            [](const_req req)

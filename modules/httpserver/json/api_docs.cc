@@ -34,7 +34,7 @@ public:
     void reg(const std::string& api, const std::string& description) {
         api_doc doc;
         doc.description = description;
-        doc.path = api;
+        doc.path = "/" + api;
         docs.apis.push(doc);
         file_handler* index = new file_handler("/usr/mgmt/api/listings/" + api + ".json", new content_replace("json"));
         _routes.put(GET, base_path + "/" + api,index);

@@ -35,7 +35,7 @@ using namespace os_json;
 
 void init(routes& routes)
 {
-    os_json_init_path();
+    os_json_init_path("OS core API");
 
     os_name.set_handler([](const_req req){
         return "OSv";

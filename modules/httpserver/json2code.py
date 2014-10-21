@@ -172,14 +172,15 @@ def add_path(f, path, details):
 def get_base_name(param):
     return os.path.basename(param)
 
-def create_c_file(data, cfile_name, hfile_name, init_method, api_name):
+def create_c_file(data, cfile_name, hfile_name, init_method, api_name, base_api):
     cfile = open(cfile_name, "w")
     print_copyrights(cfile)
     add_include(cfile, ['"' + hfile_name + '"' , '"' + config.jsoninc +
-                        'json_path.hh"'])
+                        'json_path.hh"', '"json/api_docs.hh"'])
     open_namespace(cfile, "httpserver")
     open_namespace(cfile)
-    fprint(cfile, init_method + "()\n{")
+    fprint(cfile, init_method + "(const std::string& description)\n{")
+    fprint(cfile, 'register_api("' + base_api + '", description);')
     for i, item in enumerate(data["apis"]):
         if "operations" in item:
             try:
@@ -342,7 +343,7 @@ def create_h_file(data, hfile_name, api_name, init_method):
             fprint(hfile, "};\n\n")
 
     print_ind_comment(hfile, "", "Initialize the path")
-    fprint(hfile, init_method + "();")
+    fprint(hfile, init_method + "(const std::string& description);")
     open_namespace(hfile, api_name)
     for item in data["apis"]:
         if "operations" in item:
@@ -383,13 +384,14 @@ def parse_file(param, combined):
         current_file = base_file_name
         hfile_name = base_file_name + ".hh"
         api_name = base_file_name.replace('.', '_')
+        base_api = base_file_name.replace('.json', '')
         init_method = "void " + api_name + "_init_path"
         trace_verbose("creating ", hfile_name)
 
         cfile_name = config.outdir + "/" + base_file_name + ".cc"
         if (combined):
             fprint(combined, '#include "', base_file_name, ".cc", '"')
-        create_c_file(data, cfile_name, hfile_name, init_method, api_name)
+        create_c_file(data, cfile_name, hfile_name, init_method, api_name, base_api)
         create_h_file(data, hfile_name, api_name, init_method)
     except:
         type, value, tb = sys.exc_info()

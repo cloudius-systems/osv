@@ -22,6 +22,7 @@
 #include <osv/app.hh>
 #include <fstream>
 #include "yaml-cpp/yaml.h"
+#include "json/api_docs.hh"
 
 namespace httpserver {
 
@@ -118,7 +119,9 @@ global_server& global_server::set(const std::string& key,
 
 void global_server::set_routes()
 {
+
     path_holder::set_routes(&_routes);
+    json::api_doc_init(_routes);
     api::network::init(_routes);
     api::os::init(_routes);
     api::fs::init(_routes);

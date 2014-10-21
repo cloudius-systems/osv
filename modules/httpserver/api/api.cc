@@ -241,7 +241,7 @@ private:
 
 void init(routes& routes)
 {
-    api_json_init_path();
+    api_json_init_path("Advanced API options");
 
     api_batch.set_handler(new api_param_handler(routes));
 

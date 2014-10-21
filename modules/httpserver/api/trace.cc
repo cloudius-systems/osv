@@ -58,7 +58,7 @@ void httpserver::api::trace::init(routes & routes)
         bool value;
     };
 
-    trace_json_init_path();
+    trace_json_init_path("Trace API");
 
     trace_json::getTraceEventStatus.set_handler([](const_req req) {
         std::vector<jstrace_event_info> res;

@@ -23,7 +23,7 @@ using namespace hardware_json;
 
 void init(routes& routes)
 {
-    hardware_json_init_path();
+    hardware_json_init_path("Hardware management API");
 
     processorFeatures.set_handler([](const_req req)
     {
