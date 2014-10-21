@@ -27,6 +27,10 @@
                ],
                "parameters":[
                   {
+                  "name":"batch",
+                  "paramType":"form",
+                  "type":"string",
+                  "required":true
                   }
                ]
             }
