@@ -1007,7 +1007,7 @@ usr.img: bare.img usr.manifest cmdline
 	$(src)/scripts/upload_manifest.py -o $@ -m usr.manifest \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase)
-	$(call quiet, $(src)/scripts/imgedit.py setargs $@ "$(shell cat cmdline)", IMGEDIT $@)
+	$(call quiet, $(src)/scripts/imgedit.py setargs $@ '$(shell cat cmdline)', IMGEDIT $@)
 
 osv.vmdk osv.vdi:
 	$(call quiet, echo Creating $@ as $(subst osv.,,$@))
