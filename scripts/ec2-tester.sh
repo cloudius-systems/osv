@@ -90,7 +90,7 @@ do
       exit 0
       ;;
     *)
-      if test x"$TESTS" == x""; then
+      if test x"$TESTS" = x""; then
          TESTS="$1"
       else
          TESTS="$TESTS $1"
@@ -100,7 +100,7 @@ do
     esac
 done
 
-if test x"$TESTS" == x""; then
+if test x"$TESTS" = x""; then
    print_help
    echo "no tests specified"
    exit 0
@@ -127,7 +127,7 @@ handle_test_error() {
 }
 
 prepare_instance_for_test() {
- if test x"$OSV_VERSION" == ""; then
+ if test x"$OSV_VERSION" = x""; then
     OSV_VERSION=`$SCRIPTS_ROOT/osv-version.sh`
  fi
  local TEST_OSV_VER=$OSV_VERSION-ec2-tester-`timestamp`
@@ -174,8 +174,6 @@ echo "=== Run tester ==="
 $SCRIPTS_ROOT/tester.py run --config_param sut.ip:$TEST_INSTANCE_IP --config_param tester.ip:127.0.0.1 $TESTS || handle_test_error
 
 ec2-get-console-output $TEST_INSTANCE_ID
-
-#python3 apps/tomcat/jenkins/tomcat-xml.py -o tomcat-perf.xml -m tps $WRK_OUT_FILE || handle_test_error
 
 echo "=== Cleaning up ==="
 post_test_cleanup
