@@ -334,6 +334,7 @@ public:
     std::string section_name(const Elf64_Shdr& shdr);
     std::vector<Elf64_Sym> symbols();
     const char * symbol_name(const Elf64_Sym *);
+    void* entry_point() const;
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -368,6 +369,7 @@ protected:
     Elf64_Dyn* _dynamic_table;
     ulong _module_index;
     std::unique_ptr<char[]> _section_names_cache;
+    bool _is_executable;
 
     // Keep list of references to other modules, to prevent them from being
     // unloaded. When this object is unloaded, the reference count of all

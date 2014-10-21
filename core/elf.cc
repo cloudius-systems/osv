@@ -104,6 +104,7 @@ object::object(program& prog, std::string pathname)
     , _tls_uninit_size()
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
+    , _is_executable(false)
     , _visibility(nullptr)
 {
 }
@@ -177,6 +178,13 @@ std::vector<Elf64_Sym> object::symbols() {
 const char * object::symbol_name(const Elf64_Sym * sym) {
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     return strtab + sym->st_name;
+}
+
+void* object::entry_point() const {
+    if (!_is_executable) {
+        return nullptr;
+    }
+    return _base + _ehdr.e_entry;
 }
 
 file::file(program& prog, ::fileref f, std::string pathname)
@@ -345,7 +353,6 @@ Elf64_Note::Elf64_Note(void *_base, char *str)
 
 void object::load_segments()
 {
-    bool is_executable = false;
     for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
         auto &phdr = _phdrs[i];
         switch (phdr.p_type) {
@@ -358,8 +365,8 @@ void object::load_segments()
             _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
             break;
         case PT_INTERP:
-	    is_executable = true;
-	    break;
+            _is_executable = true;
+            break;
         case PT_NOTE: {
             if (phdr.p_memsz < 16) {
                 /* we have the PT_NOTE segment in the linker scripts,
@@ -407,7 +414,7 @@ void object::load_segments()
     }
     // As explained in issue #352, we currently don't correctly support TLS
     // used in PIEs.
-    if (is_executable && _tls_segment) {
+    if (_is_executable && _tls_segment) {
         std::cout << "WARNING: " << pathname() << " is a PIE using TLS. This "
                   << "is currently unsupported (see issue #352). Link with "
                   << "'-shared' instead of '-pie'.\n";
