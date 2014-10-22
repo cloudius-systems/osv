@@ -231,9 +231,10 @@ public:
      * @param file the full path to the file on the disk
      */
     explicit file_handler(const std::string& file,
-                          file_transformer* transformer = nullptr)
+                          file_transformer* transformer = nullptr,
+                          bool force_path = true)
         : file_interaction_handler(transformer),
-          file(file)
+          file(file), force_path(force_path)
     {
     }
 
@@ -243,6 +244,7 @@ public:
 
 private:
     std::string file;
+    bool force_path;
 };
 
 /**

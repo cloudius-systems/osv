@@ -128,6 +128,9 @@ bool file_interaction_handler::redirect_if_needed(
 void file_handler::handle(const string& path, parameters* parts,
                           const http::server::request& req, http::server::reply& rep)
 {
+    if (force_path && redirect_if_needed(req, rep)) {
+        return;
+    }
     read(file, req, rep);
 }
 
