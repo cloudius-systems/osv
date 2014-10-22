@@ -240,7 +240,10 @@ def start_osv_xen(options):
     ]
 
     if options.networking:
-        args += ["vif=['bridge=%s']" % (options.bridge)]
+       net_device_options = "bridge=%s" % options.bridge
+       if options.mac:
+          net_device_options += ",mac=%s" % options.mac
+       args += ["vif=['%s']" % (net_device_options)]
 
     # Using xm would allow us to get away with creating the file, but it comes
     # with its set of problems as well. Stick to xl.
