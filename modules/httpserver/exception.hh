@@ -69,6 +69,20 @@ private:
 };
 
 /**
+ * Throwing this exception will result in a redirect to the given url
+ */
+class redirect_exception : public base_exception {
+public:
+    redirect_exception(const std::string& url)
+        : base_exception("",
+                         http::server::reply::status_type::moved_permanently), url(
+                             url)
+    {
+    }
+    std::string url;
+};
+
+/**
  * Throwing this exception will result in a 404 not found result
  */
 class not_found_exception : public base_exception

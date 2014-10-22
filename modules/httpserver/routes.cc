@@ -46,6 +46,13 @@ void routes::handle(const string& path, http::server::request& req,
                 verify_param(req, i);
             }
             handler->handle(path, &req.param, req, rep);
+        } catch (const redirect_exception& _e) {
+            handler->set_headers(rep, "json");
+            rep.headers.push_back(http::server::header());
+            rep.headers.back().name = "Location";
+            rep.headers.back().value = _e.url;
+            rep.status = _e.status();
+            return;
         } catch (const base_exception& _e) {
             json_exception e(_e);
             rep.content = e.to_json();
