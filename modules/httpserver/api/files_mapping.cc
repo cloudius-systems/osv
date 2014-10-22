@@ -16,18 +16,29 @@ namespace files_mapping {
 
 void init(routes& routes)
 {
-    file_handler* index = new file_handler("/usr/mgmt/swagger-ui/dist/index.html");
-    routes.put(GET,"/",index);
+    function_handler* redirect =
+        new function_handler(
+    [](const_req req) {
+        throw redirect_exception(req.get_protocol_name() + "://" +
+                req.get_header("Host") + "/dashboard/");
+        // The return is required so the lambda expression would have
+        // the right signature
+        return "";
+    });
+    routes.put(GET, "/", redirect);
+    file_handler* index = new file_handler(
+        "/usr/mgmt/swagger-ui/dist/index.html", nullptr, true);
+    routes.put(GET, "/api-gui", index);
 
     directory_handler* api = new directory_handler("/usr/mgmt/api",
             new content_replace("json"));
     routes.add(GET, url("/api").remainder("path"), api);
     routes.add(GET, url("/dashboard_static").remainder("path"),
-                       new directory_handler("/usr/mgmt/gui/dashboard_static"));
+               new directory_handler("/usr/mgmt/gui/dashboard_static"));
     routes.add(GET, url("/dashboard").remainder("path"),
-                           new file_handler("/usr/mgmt/gui/dashboard/index.html"));
-    routes.add(GET, url("").remainder("path"),
-                   new directory_handler("/usr/mgmt/swagger-ui/dist"));
+               new file_handler("/usr/mgmt/gui/dashboard/index.html"));
+    routes.add(GET, url("/api-gui").remainder("path"),
+               new directory_handler("/usr/mgmt/swagger-ui/dist"));
 }
 
 }
