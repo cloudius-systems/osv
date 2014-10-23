@@ -113,7 +113,7 @@ static void set_client_CA_list(ssl::context& ctx, const std::string& cert_path)
 ssl::context make_ssl_context(const std::string& ca_cert_path,
     const std::string& cert_path, const std::string& key_path)
 {
-    ssl::context ctx(ssl::context::sslv23);
+    ssl::context ctx(ssl::context::tlsv12);
 
     ctx.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
     ctx.load_verify_file(ca_cert_path);
