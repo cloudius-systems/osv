@@ -58,7 +58,15 @@ static bool is_jvm_option(const char *arg) {
            starts_with(arg, "-D") ||
            starts_with(arg, "-X") ||
            starts_with(arg, "-javaagent") ||
-           starts_with(arg, "-agentlib");
+           starts_with(arg, "-agentlib") ||
+           starts_with(arg, "-disableassertions") ||
+           starts_with(arg, "-enableeassertions") ||
+           starts_with(arg, "-da") ||
+           starts_with(arg, "-ea") ||
+           starts_with(arg, "-disablesystemassertions") ||
+           starts_with(arg, "-enableesystemassertions") ||
+           starts_with(arg, "-dsa") ||
+           starts_with(arg, "-esa");
 }
 
 static void mark_heap_option(char **arg, int index, int &has_xms, int &has_xmx)
