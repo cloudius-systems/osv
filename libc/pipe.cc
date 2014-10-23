@@ -102,8 +102,8 @@ int pipe2(int pipefd[2], int flags) {
 
         // O_CLOEXEC ignored by now
         if (flags & O_NONBLOCK) {
-            f1->f_flags &= FNONBLOCK;
-            f2->f_flags &= FNONBLOCK;
+            f1->f_flags |= FNONBLOCK;
+            f2->f_flags |= FNONBLOCK;
         }
 
         // all went well, user owns descriptors now
