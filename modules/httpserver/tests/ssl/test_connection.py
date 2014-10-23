@@ -22,3 +22,23 @@ class test_connection(basetest.Basetest):
             pass # expected
         else:
             raise Exception('The command should fail!')
+
+    def test_tls_v1_2_is_accepted(self):
+        subprocess.check_call(['echo "" | openssl s_client -quiet -connect %s:%s -tls1_2 -cert %s -key %s' % (
+                test_connection._client.get_host(),
+                str(test_connection._client.get_port()),
+                self.get_client_cert_path(),
+                self.get_client_key_path()
+            )], shell=True)
+
+    def test_ssl_v3_is_rejected(self):
+        try:
+            subprocess.check_call(['echo "" | openssl s_client -quiet -connect %s:%s -ssl3 -cert %s -key %s' % (
+                test_connection._client.get_host(),
+                str(test_connection._client.get_port()),
+                self.get_client_cert_path(),
+                self.get_client_key_path()
+            )], shell=True)
+            self.fail('The command should fail!')
+        except subprocess.CalledProcessError:
+            pass
