@@ -77,10 +77,10 @@ struct tm *__time_to_tm(time_t t, struct tm *tm)
 	tm->tm_wday= wday;
 	tm->tm_yday= yday;
 #ifdef __USE_BSD
-    tm->tm_zone = 0;
+    tm->tm_zone = "GMT";
     tm->tm_gmtoff = 0;
 #else
-    tm->__tm_zone = 0;
+    tm->__tm_zone = "GMT";
     tm->__tm_gmtoff = 0;
 #endif
 
