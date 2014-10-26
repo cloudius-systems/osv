@@ -581,3 +581,10 @@ extern "C" int __sigsetjmp(sigjmp_buf env, int savemask)
     WARN_STUBBED();
     return 0;
 }
+
+extern "C" int signalfd(int fd, const sigset_t *mask, int flags)
+{
+    WARN_STUBBED();
+    errno = ENOSYS;
+    return -1;
+}
