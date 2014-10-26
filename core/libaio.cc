@@ -22,3 +22,9 @@ int io_setup(int nr_events, io_context_t *ctxp_idp) {
     }
     return 0;
 }
+
+UNIMPL(int io_submit(io_context_t ctx, long nr, struct iocb *ios[]))
+UNIMPL(int io_getevents(io_context_t ctx_id, long min_nr, long nr,
+        struct io_event *events, struct timespec *timeout))
+UNIMPL(int io_destroy(io_context_t ctx))
+UNIMPL(int io_cancel(io_context_t ctx, struct iocb *iocb, struct io_event *evt))

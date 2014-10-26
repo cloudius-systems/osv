@@ -18,6 +18,11 @@ extern "C" {
 typedef struct io_context *io_context_t;
 
 int io_setup(int nr_events, io_context_t *ctxp_idp);
+int io_submit(io_context_t ctx, long nr, struct iocb *ios[]);
+int io_getevents(io_context_t ctx_id, long min_nr, long nr,
+        struct io_event *events, struct timespec *timeout);
+int io_destroy(io_context_t ctx);
+int io_cancel(io_context_t ctx, struct iocb *iocb, struct io_event *evt);
 
 #ifdef __cplusplus
 }
