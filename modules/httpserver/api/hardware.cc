@@ -11,6 +11,7 @@
 #include "processor.hh"
 #include <osv/sched.hh>
 #include <osv/firmware.hh>
+#include <osv/hypervisor.hh>
 
 namespace httpserver {
 
@@ -38,6 +39,18 @@ void init(routes& routes)
 
     firmware_vendor.set_handler([](const_req) {
         return osv::firmware_vendor();
+    });
+
+    get_hypervisor.set_handler([](const_req) {
+        switch (osv::hypervisor()) {
+        case osv::hypervisor_type::kvm: return "kvm";
+        case osv::hypervisor_type::xen: return "xen";
+        case osv::hypervisor_type::vmware_workstation: return "vmware_workstation";
+        case osv::hypervisor_type::vmware_esxi: return "vmware_esxi";
+        default:
+            return "Unknown";
+        }
+
     });
 }
 
