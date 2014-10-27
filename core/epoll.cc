@@ -276,7 +276,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
             op==EPOLL_CTL_ADD ? "EPOLL_CTL_ADD" :
             op==EPOLL_CTL_MOD ? "EPOLL_CTL_MOD" :
             op==EPOLL_CTL_DEL ? "EPOLL_CTL_DEL" : "?",
-                    event->events);
+                    event ? event->events : 0);
     fileref epfr(fileref_from_fd(epfd));
     if (!epfr) {
         errno = EBADF;
