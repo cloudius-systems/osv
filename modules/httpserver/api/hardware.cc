@@ -10,6 +10,7 @@
 #include "autogen/hardware.json.hh"
 #include "processor.hh"
 #include <osv/sched.hh>
+#include <osv/firmware.hh>
 
 namespace httpserver {
 
@@ -33,6 +34,10 @@ void init(routes& routes)
     processorCount.set_handler([](const_req req)
     {
         return sched::cpus.size();
+    });
+
+    firmware_vendor.set_handler([](const_req) {
+        return osv::firmware_vendor();
     });
 }
 
