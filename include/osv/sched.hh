@@ -483,7 +483,9 @@ public:
      */
     void set_priority(float priority);
     static constexpr float priority_idle = std::numeric_limits<float>::infinity();
-    static constexpr float priority_default = 1.0;
+    static constexpr float priority_default  = 1.0;
+    // This is an "infinitelly" high priority (see above)
+    static constexpr float priority_infinity = 0.00001;
     /**
      * Get thread's priority
      *

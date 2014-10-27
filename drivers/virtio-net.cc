@@ -230,6 +230,8 @@ net::net(pci::device& dev)
 {
     sched::thread* poll_task = &_rxq.poll_task;
 
+    poll_task->set_priority(sched::thread::priority_infinity);
+
     _driver_name = "virtio-net";
     virtio_i("VIRTIO NET INSTANCE");
     _id = _instance++;
