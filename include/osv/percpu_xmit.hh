@@ -404,12 +404,20 @@ lock:
                                                              cur_worker_packets;
                     _txq->update_wakeup_stats(cur_worker_packets);
                     cur_worker_packets = _txq->stats.tx_worker_packets;
-                } else {
-                    --budget;
+
+                    //
+                    // If we've got here then we haven't handled any packet
+                    // since we entered this "if-else" block.
+                    //
+                    // Incrementing a "budget" here allows simplifying the code:
+                    // keeps the "budget" value consistent and saves us two
+                    // extra "else" blocks.
+                    //
+                    ++budget;
                 }
-            } else {
-                --budget;
             }
+
+            --budget;
 
             while (_mg.pop(_xmit_it) && (!smp || --budget > 0)) {
                 _txq->kick_pending_with_thresh();
