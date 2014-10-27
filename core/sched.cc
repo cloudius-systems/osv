@@ -597,22 +597,20 @@ void thread::yield(thread_runtime::duration preempt_after)
     auto t = current();
     std::lock_guard<irq_lock_type> guard(irq_lock);
     // FIXME: drive by IPI
-    t->_detached_state->_cpu->handle_incoming_wakeups();
+    cpu::current()->handle_incoming_wakeups();
     // FIXME: what about other cpus?
-    if (t->_detached_state->_cpu->runqueue.empty()) {
+    if (cpu::current()->runqueue.empty()) {
         return;
     }
     assert(t->_detached_state->st.load() == status::running);
     // Do not yield to a thread with idle priority
-    thread &tnext = *(t->_detached_state->_cpu->runqueue.begin());
+    thread &tnext = *(cpu::current()->runqueue.begin());
     if (tnext.priority() == thread::priority_idle) {
         return;
     }
     trace_sched_yield_switch();
 
-    // Note that reschedule_from_interrupt will further increase t->_runtime
-    // by thyst, giving the other thread 2*thyst to run before going back to t
-    t->_detached_state->_cpu->reschedule_from_interrupt(true, preempt_after);
+    cpu::current()->reschedule_from_interrupt(true, preempt_after);
 }
 
 void thread::set_priority(float priority)
