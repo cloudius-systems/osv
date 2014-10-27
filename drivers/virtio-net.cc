@@ -686,7 +686,14 @@ void net::txq::xmit_one_locked(void* _req)
         do {
             if (!vqueue->used_ring_not_empty()) {
                 do {
-                    sched::thread::yield();
+                    using namespace osv::clock::literals;
+                    //
+                    // The standard default configuration for Tx coalescing
+                    // timeout in NICs is about 50us. Wait for twice this time
+                    // to ensure that there is at least one Tx interrupt while
+                    // we are not running.
+                    //
+                    sched::thread::yield(100_us);
                 } while (!vqueue->used_ring_not_empty());
             }
             gc();

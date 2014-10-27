@@ -279,13 +279,6 @@ public:
         return _priority;
     }
 
-    // set runtime from another thread's runtime. The other thread must
-    // be on the same CPU's runqueue.
-    void set_local(thread_runtime &other) {
-        _Rtt = other._Rtt;
-        _renormalize_count = other._renormalize_count;
-    }
-
     // When _Rtt=0, multiplicative normalization doesn't matter, so it doesn't
     // matter what we set for _renormalize_count. We can't set it properly
     // in the constructor (it doesn't run from the scheduler, or know which
@@ -301,6 +294,25 @@ private:
     // (i.e., export_runtime() was called, or this is a new thread).
     int _renormalize_count;
 };
+
+// "tau" controls the length of the history we consider for scheduling,
+// or more accurately the rate of decay of an exponential moving average.
+// In particular, it can be seen that if a thread has been monopolizing the
+// CPU, and a long-sleeping thread wakes up (or new thread is created),
+// the new thread will get to run for ln2*tau. (ln2 is roughly 0.7).
+constexpr thread_runtime::duration tau = std::chrono::milliseconds(200);
+
+// "thyst" controls the hysteresis algorithm which temporarily gives a
+// running thread some extra runtime before preempting it. We subtract thyst
+// when the thread is switched in, and add it back when the thread is switched
+// out. In particular, it can be shown that when two cpu-busy threads at equal
+// priority compete, they will alternate at time-slices of 2*thyst; Also,
+// the distance between two preemption interrupts cannot be lower than thyst.
+constexpr thread_runtime::duration thyst = std::chrono::milliseconds(5);
+
+constexpr thread_runtime::duration context_switch_penalty =
+                                           std::chrono::microseconds(10);
+
 
 /**
  * OSv thread
@@ -421,7 +433,18 @@ public:
     inline void wake_with_from_mutex(Action action);
     template <class Rep, class Period>
     static void sleep(std::chrono::duration<Rep, Period> duration);
-    static void yield();
+    /**
+     * Let the other thread on the current CPU run if there is any.
+     *
+     * If there isn't any other runnable thread on the current CPU (except for
+     * the idle thread) the calling thread will continue to run.
+     *
+     * The peemption timer will be set to fire after "preempt_after" time
+     * period.
+     *
+     * @param preempt_after Time period to set a preemption timer to
+     */
+    static void yield(thread_runtime::duration preempt_after = thyst);
     static void exit() __attribute__((__noreturn__));
     /**
      * Pin the current thread to the target CPU.
@@ -755,7 +778,22 @@ struct cpu : private timer_base::client {
     void send_wakeup_ipi();
     void load_balance();
     unsigned load();
-    void reschedule_from_interrupt();
+    /**
+     * Try to reschedule.
+     *
+     * Tries to choose a different thread to run instead of the current one
+     * based on the runtime of the runnable threads on the current CPU.
+     *
+     * When called from the sched::yield(), ensures that if there are other
+     * runnable threads on the current CPU (except for the idle thread) there
+     * will be a context switch.
+     *
+     * @param called_from_yield TRUE when called from sched::yield()
+     * @param preempt_after fire the preemption timer after this time period
+     *                      (relevant only when "called_from_yield" is TRUE)
+     */
+    void reschedule_from_interrupt(bool called_from_yield = false,
+                                thread_runtime::duration preempt_after = thyst);
     void enqueue(thread& t);
     void init_idle_thread();
     virtual void timer_fired() override;
