@@ -440,7 +440,7 @@ lock:
                     // CPUs.
                     //
                     _worker->next->wake();
-
+                    sched::thread::yield();
                     goto lock;
                 } else {
                     budget = qsize;
