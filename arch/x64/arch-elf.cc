@@ -84,7 +84,10 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
         break;
     case R_X86_64_TPOFF64:
-        *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
+        if (sym)
+            *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
+        else
+            *static_cast<void**>(addr) = _base + addend - get_tls_size();
         break;
     default:
         return false;
