@@ -431,9 +431,6 @@ hw_driver* vmxnet3::probe(hw_device* dev)
 
 void vmxnet3::parse_pci_config()
 {
-    if (!_dev.parse_pci_config()) {
-        throw std::runtime_error("_dev cannot parse PCI config");
-    }
     _bar0 = _dev.get_bar(1);
     _bar0->map();
     if (_bar0 == nullptr) {

@@ -553,10 +553,6 @@ void hba::dump_config()
 
 bool hba::parse_pci_config()
 {
-    if (!_pci_dev.parse_pci_config()) {
-        return false;
-    }
-
     // Test whether bar6 is present
     _bar6 = _pci_dev.get_bar(6);
     if (_bar6 == nullptr) {

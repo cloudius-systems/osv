@@ -145,10 +145,6 @@ void pvscsi::dump_config()
 
 bool pvscsi::parse_pci_config()
 {
-    if (!_pci_dev.parse_pci_config()) {
-        return false;
-    }
-
     for (int i = 1; i <= 6; i++) {
         _bar = _pci_dev.get_bar(i);
         // Find the first mmio bar

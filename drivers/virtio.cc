@@ -94,10 +94,6 @@ void virtio_driver::dump_config()
 
 bool virtio_driver::parse_pci_config()
 {
-    if (!_dev.parse_pci_config()) {
-        return false;
-    }
-
     // Test whether bar1 is present
     _bar1 = _dev.get_bar(1);
     if (_bar1 == nullptr) {
