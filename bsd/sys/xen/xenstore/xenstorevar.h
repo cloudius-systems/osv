@@ -34,6 +34,12 @@
 #ifndef _XEN_XENSTORE_XENSTOREVAR_H
 #define _XEN_XENSTORE_XENSTOREVAR_H
 
+struct xs_transaction
+{
+    uint32_t id;
+};
+
+
 __BEGIN_DECLS
 #include <sys/queue.h>
 #include <sys/bus.h>
@@ -49,6 +55,22 @@ __BEGIN_DECLS
 #include <xen/interface/io/xs_wire.h>
 
 #include "xenbus_if.h"
+
+int xs_directory(void *h, struct xs_transaction t, const char *path, unsigned int *num, const char ***result);
+
+char *xs_read(void *h, struct xs_transaction t, const char *path, unsigned int *len);
+
+int xs_write(void *h, struct xs_transaction t, const char *path, const char *string);
+
+int xs_rm(void *h, struct xs_transaction t, const char *path);
+
+int xs_transaction_start(void *h);
+
+int xs_transaction_end(void *h, struct xs_transaction t, int abort);
+
+void *xs_daemon_open();
+void xs_close(void *);
+__END_DECLS
 
 /* XenStore allocations including XenStore data returned to clients. */
 MALLOC_DECLARE(M_XENSTORE);
@@ -77,11 +99,6 @@ struct xs_watch
 LIST_HEAD(xs_watch_list, xs_watch);
 
 typedef int (*xs_event_handler_t)(void *);
-
-struct xs_transaction
-{
-	uint32_t id;
-};
 
 #define XST_NIL ((struct xs_transaction) { 0 })
 
@@ -338,5 +355,4 @@ void xs_unregister_watch(struct xs_watch *watch);
  * \return  A buffer containing the joined path.
  */
 struct sbuf *xs_join(const char *, const char *);
-__END_DECLS
 #endif /* _XEN_XENSTORE_XENSTOREVAR_H */

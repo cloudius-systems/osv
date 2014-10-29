@@ -1306,27 +1306,38 @@ SYSCTL_INT(_dev_xen, OID_AUTO, xsd_port, CTLFLAG_RD, &xs.evtchn, 0, "");
 SYSCTL_ULONG(_dev_xen, OID_AUTO, xsd_kva, CTLFLAG_RD, (u_long *) &xen_store, 0, "");
 #endif
 
+class xs_sbuf {
+	struct sbuf *_path;
+public:
+	xs_sbuf(const char *d, const char *n) : _path(xs_join(d, n)) { }
+	~xs_sbuf() { sbuf_delete(_path); }
+	const char *data() { return sbuf_data(_path); }
+};
+
 /*-------------------------------- Public API --------------------------------*/
 /*------- API comments for these methods can be found in xenstorevar.h -------*/
 int
-xs_directory(struct xs_transaction t, const char *dir, const char *node,
-    u_int *num, const char ***result)
+xs_directory(void *op, struct xs_transaction t, const char *path, u_int *num, const char ***result)
 {
-	struct sbuf *path;
 	char *strings;
 	u_int len = 0;
 	int error;
 
-	path = xs_join(dir, node);
-	error = xs_single(t, XS_DIRECTORY, sbuf_data(path), &len,
-	    (void **)&strings);
-	sbuf_delete(path);
+	error = xs_single(t, XS_DIRECTORY, path, &len, (void **)&strings);
 	if (error)
 		return (error);
 
 	*result = split(strings, len, num);
 
 	return (0);
+}
+
+int
+xs_directory(struct xs_transaction t, const char *dir, const char *node,
+    u_int *num, const char ***result)
+{
+	xs_sbuf path(dir, node);
+	return xs_directory(nullptr, t, path.data(), num, result);
 }
 
 int
@@ -1343,42 +1354,64 @@ xs_exists(struct xs_transaction t, const char *dir, const char *node)
 	return (1);
 }
 
+char *
+xs_read(void *op, struct xs_transaction t, const char *path, u_int *len)
+{
+	char *ret;
+	int error;
+
+	error = xs_single(t, XS_READ, path, len, (void **)&ret);
+	if (error)
+		return nullptr;
+	return ret;
+}
+
 int
 xs_read(struct xs_transaction t, const char *dir, const char *node,
     u_int *len, void **result)
 {
-	struct sbuf *path;
+	xs_sbuf path(dir, node);
 	void *ret;
 	int error;
 
-	path = xs_join(dir, node);
-	error = xs_single(t, XS_READ, sbuf_data(path), len, &ret);
-	sbuf_delete(path);
+	error = xs_single(t, XS_READ, path.data(), len, &ret);
 	if (error)
 		return (error);
 	*result = ret;
-	return (0);
+	return 0;
+}
+
+int
+xs_write(void *op, struct xs_transaction t, const char *path, const char *string)
+{
+	struct iovec iovec[2];
+	int error;
+
+	iovec[0].iov_base = (void *)path;
+	iovec[0].iov_len = strlen(path) + 1;
+	iovec[1].iov_base = (void *)(uintptr_t) string;
+	iovec[1].iov_len = strlen(string);
+
+	error = xs_talkv(t, XS_WRITE, iovec, 2, NULL, NULL);
+
+	return (error);
+}
+
+void *xs_daemon_open()
+{
+	return nullptr;
+}
+
+void xs_close(void *h)
+{
 }
 
 int
 xs_write(struct xs_transaction t, const char *dir, const char *node,
     const char *string)
 {
-	struct sbuf *path;
-	struct iovec iovec[2];
-	int error;
-
-	path = xs_join(dir, node);
-
-	iovec[0].iov_base = (void *)(uintptr_t) sbuf_data(path);
-	iovec[0].iov_len = sbuf_len(path) + 1;
-	iovec[1].iov_base = (void *)(uintptr_t) string;
-	iovec[1].iov_len = strlen(string);
-
-	error = xs_talkv(t, XS_WRITE, iovec, 2, NULL, NULL);
-	sbuf_delete(path);
-
-	return (error);
+	xs_sbuf path(dir, node);
+	return xs_write(nullptr, t, path.data(), string);
 }
 
 int
@@ -1394,17 +1427,23 @@ xs_mkdir(struct xs_transaction t, const char *dir, const char *node)
 	return (ret);
 }
 
+
+int
+xs_rm(void *op, struct xs_transaction t, const char *path)
+{
+
+	int ret;
+
+	ret = xs_single(t, XS_RM, path, NULL, NULL);
+
+	return (ret);
+}
+
 int
 xs_rm(struct xs_transaction t, const char *dir, const char *node)
 {
-	struct sbuf *path;
-	int ret;
-
-	path = xs_join(dir, node);
-	ret = xs_single(t, XS_RM, sbuf_data(path), NULL, NULL);
-	sbuf_delete(path);
-
-	return (ret);
+	xs_sbuf path(dir, node);
+	return xs_rm(nullptr, t, path.data());
 }
 
 int
@@ -1518,6 +1557,14 @@ xs_transaction_start(struct xs_transaction *t)
 }
 
 int
+xs_transaction_start(void *h)
+{
+	struct xs_transaction t;
+	xs_transaction_start(&t);
+	return t.id;
+}
+
+int
 xs_transaction_end(struct xs_transaction t, int abort)
 {
 	char abortstr[2];
@@ -1528,6 +1575,12 @@ xs_transaction_end(struct xs_transaction t, int abort)
 		strcpy(abortstr, "T");
 
 	return (xs_single(t, XS_TRANSACTION_END, abortstr, NULL, NULL));
+}
+
+int
+xs_transaction_end(void *h, struct xs_transaction t, int abort)
+{
+	return xs_transaction_end(t, abort);
 }
 
 int

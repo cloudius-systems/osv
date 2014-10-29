@@ -953,6 +953,7 @@ program::program(void* addr)
           "librt.so.1",
           "libstdc++.so.6",
           "libaio.so.1",
+          "libxenstore.so.3.0",
     };
     auto ml = new modules_list();
     ml->objects.push_back(_core.get());
