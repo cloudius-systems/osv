@@ -19,6 +19,7 @@
 #include <osv/mutex.h>
 #include <osv/elf.hh>
 #include <boost/signals2.hpp>
+#include <list>
 
 extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
     void(*)(), void(*)(), void*);
@@ -32,6 +33,22 @@ class launch_error : public std::runtime_error
 {
 public:
     launch_error(std::string msg) : std::runtime_error(msg) {}
+};
+
+class multiple_join_error : public std::runtime_error
+{
+public:
+    multiple_join_error() : std::runtime_error("Join was called more than once") {}
+};
+
+class app_registry {
+public:
+    void join();
+    void push(shared_app_t app);
+    bool remove(application* app);
+private:
+    std::list<shared_app_t> apps;
+    mutex lock;
 };
 
 /**
@@ -62,6 +79,10 @@ public:
      * \throw launch_error
      */
     static shared_app_t run(const std::string& command, const std::vector<std::string>& args);
+
+    static void join_all() {
+        apps.join();
+    }
 
     application(const std::string& command, const std::vector<std::string>& args);
 
@@ -134,6 +155,7 @@ private:
     std::shared_ptr<elf::object> _lib;
     main_func_t* _main;
     void (*_entry_point)();
+    static app_registry apps;
 
     // Must be destroyed before _lib
     boost::signals2::signal<void()> _termination_signal;
@@ -144,6 +166,11 @@ private:
 #endif /* _KERNEL */
 
 namespace osv {
+/**
+ * Creates a new app
+ * args Arguments passed to the program's main() function.
+ */
+void run(const std::vector<std::string>& args);
 
 namespace this_application {
 
