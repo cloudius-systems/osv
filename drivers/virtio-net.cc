@@ -86,6 +86,8 @@ static int if_ioctl(struct ifnet* ifp, u_long command, caddr_t data)
         }
         break;
     case SIOCADDMULTI:
+        net_d("SIOCADDMULTI");
+        break;
     case SIOCDELMULTI:
         net_d("SIOCDELMULTI");
         break;
