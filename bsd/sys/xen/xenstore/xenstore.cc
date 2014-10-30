@@ -1316,28 +1316,34 @@ public:
 
 /*-------------------------------- Public API --------------------------------*/
 /*------- API comments for these methods can be found in xenstorevar.h -------*/
-int
-xs_directory(void *op, struct xs_transaction t, const char *path, u_int *num, const char ***result)
+const char **
+xs_directory(void *op, struct xs_transaction t, const char *path, u_int *num)
 {
 	char *strings;
 	u_int len = 0;
 	int error;
 
 	error = xs_single(t, XS_DIRECTORY, path, &len, (void **)&strings);
-	if (error)
-		return (error);
-
-	*result = split(strings, len, num);
-
-	return (0);
+	if (!error) {
+		return split(strings, len, num);
+	}
+	return nullptr;
 }
 
 int
 xs_directory(struct xs_transaction t, const char *dir, const char *node,
     u_int *num, const char ***result)
 {
+	char *strings;
+	u_int len = 0;
 	xs_sbuf path(dir, node);
-	return xs_directory(nullptr, t, path.data(), num, result);
+
+	int error = xs_single(t, XS_DIRECTORY, path.data(), &len, (void **)&strings);
+	if (error)
+		return (error);
+
+	*result = split(strings, len, num);
+	return (0);
 }
 
 int

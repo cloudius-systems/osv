@@ -56,7 +56,7 @@ __BEGIN_DECLS
 
 #include "xenbus_if.h"
 
-int xs_directory(void *h, struct xs_transaction t, const char *path, unsigned int *num, const char ***result);
+const char **xs_directory(void *h, struct xs_transaction t, const char *path, unsigned int *num);
 
 char *xs_read(void *h, struct xs_transaction t, const char *path, unsigned int *len);
 
