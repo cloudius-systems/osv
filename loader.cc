@@ -453,18 +453,16 @@ void* do_main_thread(void *_main_args)
     // can be '&' if we need to run this command in a new thread, or ';' or
     // empty otherwise, to run in this thread. '&!' is the same as '&', but
     // doesn't wait for the thread to finish before exiting OSv.
-    std::vector<shared_app_t> bg;
     std::vector<shared_app_t> detached;
     for (auto &it : commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
         auto suffix = it.back();
         try {
+            bool background = (suffix == "&") || (suffix == "&!");
             auto app = application::run(newvec);
-            if (suffix == "&") {
-                bg.push_back(app);
-            } else if (suffix == "&!") {
+            if (suffix == "&!") {
                 detached.push_back(app);
-            } else {
+            } else if (!background) {
                 app->join();
             }
         } catch (const launch_error& e) {
@@ -473,17 +471,12 @@ void* do_main_thread(void *_main_args)
         }
     }
 
-    for (auto app : bg) {
-        app->join();
-    }
-
     for (auto app : detached) {
         app->request_termination();
         debug("Requested termination of %s, waiting...\n", app->get_command());
-        app->join();
-        debug("Application terminated: %s\n", app->get_command());
     }
 
+    application::join_all();
     return nullptr;
 }
 

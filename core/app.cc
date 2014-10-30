@@ -40,6 +40,46 @@ namespace osv {
 
 static thread_local shared_app_t current_app;
 
+void app_registry::join() {
+    while (true) {
+        shared_app_t p;
+        WITH_LOCK(lock) {
+            if (apps.empty()) {
+                return;
+            }
+            p = apps.front();
+        }
+        try {
+            p->join();
+        } catch (const multiple_join_error& e) {
+            // At the clean up stage even if join was called before
+            // it will be ignore allowing to complete the join
+        }
+    }
+}
+
+bool app_registry::remove(application* app) {
+    bool found = false;
+    WITH_LOCK(lock) {
+        apps.remove_if([app, &found](shared_app_t a){
+            if (a.get() == app) {
+                found = true;
+                return true;
+            }
+            return false;
+        });
+    }
+    return found;
+}
+
+void app_registry::push(shared_app_t app) {
+    WITH_LOCK(lock) {
+        apps.push_back(app);
+    }
+}
+
+app_registry application::apps;
+
 shared_app_t application::get_current()
 {
     return current_app;
@@ -74,7 +114,12 @@ shared_app_t application::run(const std::string& command, const std::vector<std:
 {
     auto app = std::make_shared<application>(command, args);
     app->start();
+    apps.push(app);
     return app;
+}
+
+void run(const std::vector<std::string>& args) {
+    application::run(args);
 }
 
 application::application(const std::string& command, const std::vector<std::string>& args)
@@ -127,6 +172,9 @@ TRACEPOINT(trace_app_join_ret, "return_code=%d", int);
 
 int application::join()
 {
+    if (!apps.remove(this)) {
+        throw multiple_join_error();
+    }
     trace_app_join(this);
     auto err = pthread_join(_thread, NULL);
     assert(!err);
