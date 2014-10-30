@@ -35,6 +35,10 @@
             "description": "Hardware management API"
         },
         {
+            "path": "/../listings/app.json",
+            "description": "app API"
+        },
+        {
             "path": "/../listings/network.json",
             "description": "Network API"
         }
