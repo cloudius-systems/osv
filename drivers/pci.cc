@@ -63,7 +63,7 @@ void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
 
 void pci_device_print(u8 bus, u8 slot, u8 func)
 {
-    pci_d("Config space of: %02x:%02x:%02x",
+    pci_d("Config space of: %02x:%02x.%x",
         (unsigned int)bus, (unsigned int)slot, (unsigned int)func);
 
     for (u8 i = 0; i < 16; i++) {
@@ -128,13 +128,13 @@ bool check_bus(u16 bus)
 
             bool parse_ok = dev->parse_pci_config();
             if (!parse_ok) {
-                pci_e("Error: couldn't parse device config space %x:%x.%x",
+                pci_e("Error: couldn't parse device config space %02x:%02x.%x",
                         bus, slot, func);
                 break;
             }
 
             if (!device_manager::instance()->register_device(dev)) {
-                pci_e("Error: couldn't register device %x:%x.%x",
+                pci_e("Error: couldn't register device %02x:%02x.%x",
                         bus, slot, func);
                 //TODO: Need to beautify it as multiple instances of the device may exist
                 delete dev;
