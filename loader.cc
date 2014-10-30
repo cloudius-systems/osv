@@ -132,6 +132,7 @@ static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
 static std::string opt_defaultgw;
 static std::string opt_nameserver;
+bool opt_assign_net = false;
 
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
@@ -159,6 +160,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("trace-backtrace", "log backtraces in the tracepoint log")
         ("leak", "start leak detector after boot")
         ("nomount", "don't mount the file system")
+        ("assign-net", "assign virtio network to the application")
         ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
 	("nohalt", "use poweroff instead of halt if it's aborted")
@@ -199,6 +201,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("nohalt")) {
         opt_nohalt = true;
+    }
+
+    if (vars.count("assign-net")) {
+        opt_assign_net = true;
     }
 
     if (vars.count("trace-backtrace")) {
