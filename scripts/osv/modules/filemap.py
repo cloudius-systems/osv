@@ -68,13 +68,13 @@ class FileMap(object):
         """
         guest_to_host = {}
 
-        def add(guest, host):
+        def add(guest, host, allow_symlink):
             if guest in guest_to_host:
                 old_mapping = guest_to_host[guest]
                 if old_mapping != host:
                     raise Exception("Guest path '%s' already mapped to '%s', tried to remap to '%s'"
                         % (guest, old_mapping, host))
-            if os.path.islink(host):
+            if allow_symlink and os.path.islink(host):
                 host = '!' + host
             guest_to_host[guest] = host
 
@@ -95,14 +95,14 @@ class FileMap(object):
                     raise Exception('Filters only allowed when adding directory')
                 if m._allow_symlink:
                     root = '!' + root
-                add(m.guest_path, root)
+                add(m.guest_path, root, m._allow_symlink)
             else:
                 for dirpath, dirnames, filenames in os.walk(root):
                     for filename in filenames:
                         host_path = os.path.join(dirpath, filename)
                         rel_path = os.path.relpath(host_path, root)
                         if m.includes_path(rel_path):
-                            add(os.path.join(m.guest_path, rel_path), host_path)
+                            add(os.path.join(m.guest_path, rel_path), host_path, m._allow_symlink)
 
         for mapping in guest_to_host.items():
             yield mapping
