@@ -74,6 +74,8 @@ class FileMap(object):
                 if old_mapping != host:
                     raise Exception("Guest path '%s' already mapped to '%s', tried to remap to '%s'"
                         % (guest, old_mapping, host))
+            if os.path.islink(host):
+                host = '!' + host
             guest_to_host[guest] = host
 
         for m in self.mappings:
