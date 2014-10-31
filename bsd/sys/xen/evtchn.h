@@ -57,7 +57,7 @@ clear_evtchn(int port)
 	synch_clear_bit(port, &s->evtchn_pending[0]);
 }
 
-static inline void 
+inline void
 notify_remote_via_evtchn(int port)
 {
         struct evtchn_send send = { .port = port };

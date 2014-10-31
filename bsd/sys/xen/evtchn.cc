@@ -41,6 +41,8 @@ __FBSDID("$FreeBSD$");
 #include <xen/xen_intr.h>
 #include <xen/evtchn.h>
 
+#include <osv/symbols.hh>
+
 //XXX: This may not be safe in general. Right now, given their uses (most of them
 //are commented out, this should be okay
 // FIXME: preempt
@@ -826,6 +828,7 @@ notify_remote_via_irq(int irq)
 	else
 		panic("invalid evtchn %d", irq);
 }
+MAKE_SYMBOL(notify_remote_via_evtchn);
 
 /* required for support of physical devices */
 static inline void 
