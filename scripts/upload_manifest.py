@@ -131,14 +131,16 @@ def upload(osv, manifest, depends):
         else:
             depends.write('\t%s \\\n' % (hostname,))
             hostname = strip_file(hostname)
-            perm = os.stat(hostname).st_mode & 0o777
             if os.path.islink(hostname):
+                perm = os.lstat(hostname).st_mode & 0o777
                 link = os.readlink(hostname)
                 cpio_send(cpio_header(name, perm | stat.S_IFLNK, len(link)))
                 cpio_send(link.encode())
             elif os.path.isdir(hostname):
+                perm = os.stat(hostname).st_mode & 0o777
                 cpio_send(cpio_header(name, perm | stat.S_IFDIR, 0))
             else:
+                perm = os.stat(hostname).st_mode & 0o777
                 cpio_send(cpio_header(name, perm | stat.S_IFREG, os.stat(hostname).st_size))
                 with open(hostname, 'rb') as f:
                     cpio_send(f.read())
