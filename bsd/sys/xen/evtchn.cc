@@ -333,7 +333,7 @@ bind_local_port_to_irq(unsigned int local_port, int * port)
         return irq;
 }
 
-static int
+int
 bind_listening_port_to_irq(unsigned int remote_domain, int * port)
 {
         struct evtchn_alloc_unbound alloc_unbound;
