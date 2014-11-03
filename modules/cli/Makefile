@@ -26,5 +26,9 @@ $(LOC_MAIN): $(SRCS)
 
 clean:
 	rm -f $(MAIN) $(LOC_MAIN)
+	make -f rpmbuild/Makefile clean
 
-.PHONY: module clean
+rpm: $(LOC_MAIN)
+	make -C rpmbuild
+
+.PHONY: module clean rpm

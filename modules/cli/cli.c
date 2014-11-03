@@ -23,8 +23,8 @@
 #define CLI_COMMANDS_PATH "/cli/commands"
 #else
 #define CLI_LUA "cli.lua"
-#define CLI_LUA_PATH "lib/?.lua;../lua/out/share/lua/5.2/?.lua"
-#define CLI_LUA_CPATH "../lua/out/lib/lua/5.2/?.so"
+#define CLI_LUA_PATH "lib/?.lua;../lua/out/share/lua/5.2/?.lua;./lib/share/lua/5.2/?.lua"
+#define CLI_LUA_CPATH "../lua/out/lib/lua/5.2/?.so;./lib/lib/lua/5.2/?.so"
 #define CLI_COMMANDS_PATH "./commands"
 #endif
 
