@@ -1,0 +1,4 @@
+#!/bin/sh
+cd modules/cli/ && make rpm
+cd ../../
+s3cmd put modules/cli/rpmbuild/RPMS/x86_64/osv-cli-1.0-1.fc20.x86_64.rpm s3://downloads.osv.io/osv-cli/
