@@ -5,12 +5,12 @@ program=$(basename $0)
 set -e
 
 if [ $# -lt 2 ]; then
-    echo "usage: $program [name] [image] [description]"
+    echo "usage: $program [name] [modules] [description]"
     exit 1
 fi
 
 name=$1
-image=$2
+modules=$2
 description=$3
 
 version=$(scripts/osv-version.sh)
@@ -22,7 +22,7 @@ vboximage=build/release/usr.vdi
 gceimage=build/release/osv.tar.gz
 vmwimage=build/release/usr.vmdk
 index=$out/index.yaml
-build="make image=$image"
+build="make modules=$modules"
 
 mkdir -p $out
 
