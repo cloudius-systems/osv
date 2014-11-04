@@ -435,18 +435,18 @@ arch/x64/boot32.o: loader.elf
 
 fastlz/fastlz.o:
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/fastlz.cc, CXX $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c $(src)/fastlz/fastlz.cc, CXX $@)
 
 fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLASG) -O2 -o $@ $(filter %.cc, $^), CXX $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -o $@ $(filter %.cc, $^), CXX $@)
 
 loader-stripped.elf.lz.o: loader-stripped.elf fastlz/lz
 	$(call quiet, fastlz/lz loader-stripped.elf, LZ $@)
 	$(call quiet, objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz $@, OBJCOPY $@)
 
 fastlz/lzloader.o: fastlz/lzloader.cc
-	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -o $@ -c $(src)/fastlz/lzloader.cc, CXX $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c $(src)/fastlz/lzloader.cc, CXX $@)
 
 lzloader.elf: loader-stripped.elf.lz.o fastlz/lzloader.o arch/x64/lzloader.ld \
 	fastlz/fastlz.o
