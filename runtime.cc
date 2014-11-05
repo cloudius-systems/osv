@@ -140,7 +140,7 @@ void abort(const char *fmt, ...)
     panic::pvpanic::panicked();
 #endif /* !AARCH64_PORT_STUB */
 
-    if (opt_nohalt) {
+    if (opt_power_off_on_abort) {
         osv::poweroff();
     } else {
         osv::halt();
