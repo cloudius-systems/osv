@@ -5,12 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-// This awkward "#define" works around a problem in <x86intrin.h>. It uses the
-// archaic idiom "extern inline" together with __gnu_inline__, to ensure that
-// the function is only inline and never generated as stand-alone function.
-// But such functions must also not be instrumented, or compilation with
-// -finstrument-functions won't work with these functions.
-#define __gnu_inline__ __gnu_inline__,no_instrument_function
 #include "sse.hh"
 #include <x86intrin.h>
 #include <osv/initialize.hh>

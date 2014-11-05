@@ -6,12 +6,6 @@
  */
 
 
-// This awkward "#define" works around a problem in <x86intrin.h>. It uses the
-// archaic idiom "extern inline" together with __gnu_inline__, to ensure that
-// the function is only inline and never generated as stand-alone function.
-// But such functions must also not be instrumented, or compilation with
-// -finstrument-functions won't work with these functions.
-#define __gnu_inline__ __gnu_inline__,no_instrument_function
 #include <string.h>
 #include <stdint.h>
 #include "cpuid.hh"
@@ -19,9 +13,9 @@
 #include <osv/prio.hh>
 #include "memcpy_decode.hh"
 #include <assert.h>
-#include <x86intrin.h>
 #include <osv/initialize.hh>
 #include "sse.hh"
+#include <x86intrin.h>
 
 extern "C"
 void *memcpy_base(void *__restrict dest, const void *__restrict src, size_t n);
