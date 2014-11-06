@@ -65,6 +65,7 @@ public:
      */
     void set_tmp_file(const std::string& name)
     {
+        use_file = true;
         this->name = name;
     }
 

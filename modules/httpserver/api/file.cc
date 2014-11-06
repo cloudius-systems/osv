@@ -360,23 +360,14 @@ class post_file_handler : public handler_base {
     virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
     {
-        string full_path = (*params)["path"];
-
-        http::server::connection_function set_name =
-            [full_path](http::server::connection& conn)
-        {
-            conn.get_multipart_parser().set_tmp_file(tmp_name(full_path));
-        };
-        req.connection_ptr->get_multipart_parser().set_call_back(
-            http::server::multipart_parser::WAIT_CONTENT_DISPOSITION,
-            set_name);
+        string full_path = (*params)["path-par"];
+        string tmp_file = tmp_name(full_path);
+        req.connection_ptr->get_multipart_parser().set_tmp_file(tmp_file);
 
         http::server::connection_function when_done =
-            [full_path](http::server::connection& conn)
+            [full_path, tmp_file](http::server::connection& conn)
         {
-            auto target = full_path;
-            string from = conn.get_request().get_header("file_name");
-            rename(from.c_str(), target.c_str());
+            rename(tmp_file.c_str(), full_path.c_str());
         };
         req.connection_ptr->get_multipart_parser().set_call_back(
             http::server::multipart_parser::CLOSED, when_done);
