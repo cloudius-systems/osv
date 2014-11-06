@@ -98,8 +98,26 @@ static void dmi_table(u32 base, u16 len, u16 num)
     }
 }
 
+static u8 smbios_checksum(const char* p, size_t size)
+{
+    u8 sum = 0;
+    for (size_t i = 0; i < size; i++) {
+        sum += p[i];
+    }
+    return sum;
+}
+
 static void smbios_decode(const char* p)
 {
+    auto entry_len = read_u8(p, 0x05);
+    // Entry point checksum:
+    if (smbios_checksum(p, entry_len) != 0) {
+        return;
+    }
+    // Intermediate anchor string:
+    if (memcmp(p + 0x10, "_DMI_", 5) != 0) {
+        return;
+    }
     auto base = read_u32(p, 0x18);
     auto len  = read_u16(p, 0x16);
     auto num  = read_u16(p, 0x1c);
