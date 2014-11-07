@@ -1455,7 +1455,13 @@ void thread_runtime::ran_for(thread_runtime::duration time)
     }
     curcpu->c = cnew;
 
-    _Rtt += _priority * (cnew - cold);
+    if (_priority == inf) {
+        // The only reason we need this special case is when time is
+        // tiny, resulting in cnew-cold==0, when we can end up with inf*0
+        _Rtt = inf;
+    } else {
+        _Rtt += _priority * (cnew - cold);
+    }
 
     assert (_renormalize_count != -1); // forgot to update_after_sleep?
 
