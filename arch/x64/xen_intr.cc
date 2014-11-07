@@ -39,6 +39,11 @@ void xen_irq::register_irq(int evtchn, driver_intr_t handler, void *arg)
     xen_allocated_irqs[evtchn] = { handler , arg };
 }
 
+void xen_irq::unregister_irq(int evtchn)
+{
+    xen_allocated_irqs[evtchn] = { nullptr , nullptr };
+}
+
 // Note that after this is run, every channel that is pending and is valid for this cpu
 // will be masked. Because the update of evtchn_mask is atomic, in case of shared event
 // channels only one of them will be present in the final mask. That event channel is
@@ -132,6 +137,9 @@ intr_add_handler(const char *name, int vector, driver_filter_t filter,
     driver_intr_t handler, void *arg, enum intr_type flags, void **cookiep)
 {
     xen::xen_irq::register_irq(evtchn_from_irq(vector), handler, arg);
+    if (cookiep) {
+        *((unsigned long *)cookiep) = evtchn_from_irq(vector);
+    }
     return 0;
 }
 
@@ -166,7 +174,8 @@ intr_register_pic(struct pic *pic)
 int
 intr_remove_handler(void *cookie)
 {
-    // Not yet
-    abort();
+    if (cookie) {
+        xen::xen_irq::unregister_irq((long)cookie);
+    }
     return 0;
 }

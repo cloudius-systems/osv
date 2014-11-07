@@ -17,6 +17,7 @@ public:
     explicit xen_irq();
     void wake() { (*_thread)->wake(); }
     static void register_irq(int vector, driver_intr_t handler, void *arg);
+    static void unregister_irq(int vector);
 private:
     void do_irq();
     void cpu_init() { _cpu_init(sched::cpu::current()); };
