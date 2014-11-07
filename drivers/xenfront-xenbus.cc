@@ -31,6 +31,17 @@ int xenbusb_front_probe(device_t dev);
 int xenbusb_front_attach(device_t dev);
 int xenbusb_add_device(device_t dev, const char *type, const char *id);
 
+void xenbus_detach_device(std::string dev)
+{
+    auto xenbus = xenfront::xenbus::instance();
+
+    xenbus->for_each_child([=](xenfront::xenfront_driver *d) {
+        if (*d == dev) {
+            d->detach();
+        }
+    });
+}
+
 namespace xenfront {
 
 xenbus *xenbus::_instance = nullptr;

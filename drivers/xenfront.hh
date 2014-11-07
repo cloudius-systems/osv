@@ -59,6 +59,7 @@ public:
     void probe();
     void finished();
 
+    bool operator==(std::string str) { return _node_path == str; }
     static xenfront_driver *from_device(struct device *dev) { return bsd_to_dev<xenfront_driver>(dev); }
     struct device _bsd_dev;
 protected:
