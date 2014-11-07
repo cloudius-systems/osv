@@ -35,6 +35,14 @@ void xenfront_driver::probe()
         _probe(&_bsd_dev);
 }
 
+int xenfront_driver::detach()
+{
+    if (_detach) {
+        return _detach(&_bsd_dev);
+    }
+    return 0;
+}
+
 int xenfront_driver::attach()
 {
     if (_attach)
@@ -84,6 +92,8 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
             _probe = reinterpret_cast<xenfront::probe>(dm[i].func);
         if (dm[i].id == bus_device_attach)
             _attach = reinterpret_cast<xenfront::attach>(dm[i].func);
+        if (dm[i].id == bus_device_detach)
+            _detach = reinterpret_cast<xenfront::detach>(dm[i].func);
         if (dm[i].id == bus_xenbus_otherend_changed)
             _backend_changed = reinterpret_cast<xenfront::backend_changed>(dm[i].func);
     }

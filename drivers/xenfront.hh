@@ -33,6 +33,7 @@ namespace xenfront {
 
 typedef void (*probe)(device_t dev);
 typedef int  (*attach)(device_t dev);
+typedef int  (*detach)(device_t dev);
 typedef void (*backend_changed)(device_t dev, XenbusState backend_state);
 
 class xenbus;
@@ -54,6 +55,7 @@ public:
     void localend_changed(std::string local) { };
     void otherend_changed(XenbusState state);
     int attach();
+    int detach();
     void probe();
     void finished();
 
@@ -71,6 +73,7 @@ protected:
 
     xenfront::probe _probe = nullptr;
     xenfront::attach _attach = nullptr;
+    xenfront::detach _detach = nullptr;
     xenfront::backend_changed _backend_changed = nullptr;
 };
 }
