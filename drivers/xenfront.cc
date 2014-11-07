@@ -17,6 +17,7 @@
 #include <osv/bio.h>
 #include "sys/xen/gnttab.h"
 #include "sys/dev/xen/blkfront/block.h"
+#include <boost/algorithm/string.hpp>
 
 extern driver_t netfront_driver;
 extern driver_t blkfront_driver;
@@ -50,12 +51,6 @@ int xenfront_driver::attach()
     return 0;
 }
 
-// No need to have a counter for disks, because unit number for disks are not an
-// increasing counter, but rather it position in the bus. For the network, we could
-// hash the mac address if we would really care, to make sure that those are stable
-// This will do for now.
-static std::atomic<int> net_unit;
-
 void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
 {
     driver_t *table;
@@ -69,9 +64,14 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
     if (!strcmp(ivars->xd_type, "vif")) {
         table = &netfront_driver;
         _irq_type = INTR_TYPE_NET,
-        ss << "xenfront-net";
+        ss << "vif";
+
+        std::vector<std::string> node_info;
+        boost::split(node_info, _node_path, boost::is_any_of("/"));
+        assert(node_info.size() == 3);
+
         // Very unfrequent, so don't care about how expensive and full of barriers this is
-        _bsd_dev.unit = net_unit++;
+        _bsd_dev.unit = stoi(node_info[2]);
 
         _bsd_dev.softc = malloc(table->size);
         // Simpler and we don't expect driver loading to fail anyway
