@@ -808,6 +808,34 @@ netif_release_tx_bufs(struct netfront_info *np)
 }
 
 static void
+netif_release_rx_bufs(struct netfront_info *np)
+{
+    int i;
+
+    for (i = 1; i <= NET_RX_RING_SIZE; i++) {
+        struct mbuf *m;
+
+        m = np->rx_mbufs[i];
+        /*
+         * We assume that no kernel addresses are
+         * less than NET_TX_RING_SIZE.  Any entry
+         * in the table that is below this number
+         * must be an index from free-list tracking.
+         */
+        if (((uintptr_t)m) <= NET_RX_RING_SIZE)
+            continue;
+
+        gnttab_end_foreign_access_ref(np->grant_rx_ref[i]);
+        gnttab_release_grant_reference(&np->gref_rx_head,
+            np->grant_rx_ref[i]);
+        np->grant_rx_ref[i] = GRANT_REF_INVALID;
+        add_id_to_freelist(np->rx_mbufs, i);
+        m_free(m);
+    }
+}
+
+
+static void
 network_alloc_rx_buffers(struct netfront_info *sc)
 {
     int otherend_id = xenbus_get_otherend_id(sc->xbdev);
@@ -2205,11 +2233,19 @@ netfront_closing(device_t dev)
 static int
 netfront_detach(device_t dev)
 {
+    xenbus_set_state(dev, XenbusStateClosed);
+
     struct netfront_info *info = (netfront_info *)device_get_softc(dev);
+    XN_LOCK(info);
+    xn_stop(info);
+
+    netif_release_tx_bufs(info);
+    netif_release_rx_bufs(info);
 
     DPRINTK("%s\n", xenbus_get_node(dev));
 
     netif_free(info);
+    XN_UNLOCK(info);
 
     return 0;
 }
