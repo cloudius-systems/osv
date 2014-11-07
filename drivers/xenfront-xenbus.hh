@@ -34,9 +34,11 @@ namespace xenfront {
         void remove_pending(xenfront_driver *dev);
         void add_pending(xenfront_driver *dev);
 
+        static xenbus *instance() { return _instance; }
         static xenbus *from_device(struct device *dev) { return bsd_to_dev<xenbus>(dev); }
         struct device _bsd_dev;
     private:
+        static struct xenbus *_instance;
         void wait_for_devices();
         pci::device& _dev;
         std::unique_ptr<gsi_level_interrupt> _pgsi;

@@ -33,18 +33,19 @@ int xenbusb_add_device(device_t dev, const char *type, const char *id);
 
 namespace xenfront {
 
+xenbus *xenbus::_instance = nullptr;
+
 xenbus::xenbus(pci::device& pci_dev)
     : hw_driver()
     , _dev(pci_dev)
 {
-    static int initialized;
     int irqno = pci_dev.get_interrupt_line();
 
-    if (!irqno)
+    if (_instance) {
         return;
-
-    if (initialized++)
-        return;
+    } else {
+        _instance = this;
+    }
 
     parse_pci_config();
 
