@@ -39,7 +39,7 @@ find_all_archs()
 
 # Detect if ALLSOURCE_ARCHS is set. If not, we assume SRCARCH
 if [ "${ALLSOURCE_ARCHS}" = "" ]; then
-	ALLSOURCE_ARCHS=${SRCARCH}
+	ALLSOURCE_ARCHS="${SRCARCH} common"
 elif [ "${ALLSOURCE_ARCHS}" = "all" ]; then
 	find_all_archs
 fi
@@ -51,7 +51,8 @@ find_arch_sources()
 		prune="$prune -wholename $i -prune -o"
 	done
 	find ${tree}arch/$1 $ignore $subarchprune $prune -name "$2" \
-		-print -o -name '*.hh' -print -o -name '*.cc' -print -not -type l -print;
+		-print -o -name '*.cc' -print -o -name '*.hh' -print
+
 }
 
 # find sources in arch/$1/include
