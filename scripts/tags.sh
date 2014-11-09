@@ -51,7 +51,7 @@ find_arch_sources()
 		prune="$prune -wholename $i -prune -o"
 	done
 	find ${tree}arch/$1 $ignore $subarchprune $prune -name "$2" \
-		-not -type l -print;
+		-print -o -name '*.hh' -print -o -name '*.cc' -print -not -type l -print;
 }
 
 # find sources in arch/$1/include

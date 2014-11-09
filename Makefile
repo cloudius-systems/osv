@@ -3,6 +3,8 @@ mode=release
 ARCH := $(subst x86_64,x64,$(shell uname -m))
 SRCARCH := $(ARCH)
 
+export SRCARCH
+
 outlink = build/$(mode)
 out = build/$(mode).$(ARCH)
 submake = $(out)/Makefile
