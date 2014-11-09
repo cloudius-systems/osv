@@ -1,6 +1,9 @@
 
 mode=release
 ARCH := $(subst x86_64,x64,$(shell uname -m))
+SRCARCH := $(ARCH)
+
+export SRCARCH
 
 outlink = build/$(mode)
 out = build/$(mode).$(ARCH)
@@ -69,7 +72,7 @@ tags TAGS:
 .PHONY: tags TAGS
 
 cscope:
-	find -name '*.[chS]' -o -name "*.cc" -o -name "*.hh" | cscope -bq -i-
+	./scripts/tags.sh cscope
 	@echo cscope index created
 .PHONY: cscpoe
 
