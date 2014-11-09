@@ -104,8 +104,8 @@ make cxx_lib_env=host
 ```
 
 By default, this runs OSv under KVM, with 4 VCPUs and 2GB of memory,
-and runs the default management application (containing a shell, Web
-server, and SSH server).
+and runs the default management application containing a shell, a
+REST API server and a browser base dashboard (at port 8000).
 
 If running under KVM you can terminate by hitting Ctrl+A X.
 
