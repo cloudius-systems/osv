@@ -1,1 +1,1 @@
-/usr/mgmt/monitoring-agent.so;
+/usr/mgmt/monitoring-agent.so &;
