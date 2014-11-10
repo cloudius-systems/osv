@@ -35,7 +35,7 @@ CPP_FILES := main.cc monitor-agent.cc client.cc
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 DEPS := $(OBJ_FILES:.o=.d)
 
-LIBS = -lpthread $(boost-libs) $(DEPEDNDS_LIBS) -L$(boost-lib-dir)
+LIBS = -lpthread $(boost-libs) -lyaml-cpp $(DEPEDNDS_LIBS) -L$(boost-lib-dir)
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)

@@ -13,10 +13,13 @@
 
 namespace monitoring_agent {
 
-struct configuration {
+class configuration {
+public:
+    configuration() : enable(true) {};
     std::string bucket;
     std::string user_id;
     std::string local_file_name;
+    bool enable;
 };
 
 class monitor_agent {
@@ -24,8 +27,8 @@ public:
     monitor_agent(const boost::program_options::variables_map& _conf);
 
     void run();
-
 private:
+    void load_config();
     configuration config;
 };
 

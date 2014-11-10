@@ -22,6 +22,9 @@
 #include <osv/clock.hh>
 #include "java_api.hh"
 #include <osv/debug.hh>
+#include "yaml-cpp/yaml.h"
+
+extern char debug_buffer[DEBUG_BUFFER_SIZE];
 
 using namespace std;
 
@@ -59,6 +62,10 @@ static void fill_data(data_container& data, const string& uuid)
 {
     using namespace std::chrono;
     struct sysinfo info;
+
+    std::string debug_buffer_str(debug_buffer);
+    std::replace( debug_buffer_str.begin(), debug_buffer_str.end(), '\n', ';');
+
     sysinfo(&info);
     data("uuid", uuid)
         ("/os/name", "OSv")
@@ -67,6 +74,7 @@ static void fill_data(data_container& data, const string& uuid)
         ("/os/memory/total", to_string(info.totalram))
         ("/os/memory/free", to_string(info.freeram))
         ("/os/cmdline", osv::getcmdline())
+        ("/os/dmesg", debug_buffer_str)
         ("/hardware/hypervisor", osv::firmware_vendor())
         ("/hardware/processor/count", to_string(sched::cpus.size()));
     if (java_api::instance().is_valid()) {
@@ -83,8 +91,30 @@ static void store_local(data_container& data, const string& file_name)
     f << data.str();
 }
 
+void monitor_agent::load_config() {
+    std::ifstream f("/tmp/monitor-agent.conf");
+    if (f) {
+        try {
+            YAML::Node conf_yaml = YAML::Load(f);
+            if (conf_yaml["enable"].as<std::string>() == "false") {
+               config.enable = false;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "monitoring agent Failed reading the configuration file " << e.what() <<  std::endl;
+            throw e;
+        }
+    }
+}
+
+
 void monitor_agent::run()
 {
+    load_config();
+
+    if (!config.enable) {
+       return;
+    }
+
     client c;
     string s = (config.user_id == "") ? get_uuid() : config.user_id;
 
@@ -94,7 +124,7 @@ void monitor_agent::run()
     c.upload(config.bucket + ".s3.amazonaws.com", "/", 80, s + ".txt", "", data.str());
 
     store_local(data, config.local_file_name);
-    debug("This is a beta build of OSv. This version will send a report "
+    debug("This version of OSv will send a report "
           "each time it is booted to Cloudius Systems.  For more on "
           "information collected, how and why it is stored, and how to "
           "disable reporting, see osv.io/osv-stat\n");
