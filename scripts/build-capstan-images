@@ -4,14 +4,19 @@ set -e
 
 build=./scripts/build-capstan-img
 
-$build cloudius/osv-base          httpserver                 "OSv base image for developers"
-$build cloudius/osv               default                    "OSv with shell for users"
-$build cloudius/osv-cassandra     cassandra,httpserver       "Apache Cassandra/OSv"
-$build cloudius/osv-tomcat        tomcat,httpserver          "Apache Tomcat/OSv"
-$build cloudius/osv-iperf         iperf,httpserver           "iperf/OSv"
-$build cloudius/osv-memcached-opt osv-memcached,httpserver   "OSv memcached server (optimized)"
-$build cloudius/osv-openjdk       java,httpserver            "OpenJDK 7/OSv base image for developers"
-$build cloudius/osv-openjdk8      openjdk8-fedora,httpserver "OpenJDK 8/OSv base image for developers"
-$build cloudius/osv-redis-memonly redis-memonly,httpserver   "Redis (in-memory only)"
-$build cloudius/osv-node          node,httpserver            "Node/OSv"
-$build cloudius/osv-crash         mgmt,httpserver            "OSv/CRaSH shell for developers"
+# Base images:
+
+$build cloudius/osv-base          httpserver,cloud-init                 "OSv base image for developers"
+$build cloudius/osv-openjdk       java,httpserver,cloud-init            "OpenJDK 7/OSv base image for developers"
+$build cloudius/osv-openjdk8      openjdk8-fedora,httpserver,cloud-init "OpenJDK 8/OSv base image for developers"
+$build cloudius/osv-node          node,httpserver,cloud-init            "Node/OSv"
+$build cloudius/osv-crash         mgmt,httpserver,cloud-init            "OSv/CRaSH shell for developers"
+
+# Appliances:
+
+$build cloudius/osv               cli,httpserver,cloud-init,monitoring-agent           "OSv with shell for users"
+$build cloudius/osv-cassandra     cassandra,httpserver,cloud-init,monitoring-agent     "Apache Cassandra/OSv"
+$build cloudius/osv-tomcat        tomcat,httpserver,cloud-init,monitoring-agent        "Apache Tomcat/OSv"
+$build cloudius/osv-iperf         iperf,httpserver,cloud-init,monitoring-agent         "iperf/OSv"
+$build cloudius/osv-memcached-opt osv-memcached,httpserver,cloud-init,monitoring-agent "OSv memcached server (optimized)"
+$build cloudius/osv-redis-memonly redis-memonly,httpserver,cloud-init,monitoring-agent "Redis (in-memory only)"
