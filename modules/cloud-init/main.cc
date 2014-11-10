@@ -9,6 +9,7 @@
 #include "files-module.hh"
 #include "server-module.hh"
 #include "cassandra-module.hh"
+#include "monitor-agent-module.hh"
 #include <boost/program_options/variables_map.hpp>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
@@ -49,6 +50,7 @@ int main(int argc, char* argv[])
         init.add_module(make_shared<server_module>());
         init.add_module(make_shared<include_module>(init));
         init.add_module(make_shared<cassandra_module>());
+        init.add_module(make_shared<monitor_agent_module>());
 
         if (config.count("file")) {
             init.load_file(config["file"].as<std::string>());
