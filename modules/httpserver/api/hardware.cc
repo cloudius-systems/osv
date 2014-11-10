@@ -9,6 +9,7 @@
 #include "json/formatter.hh"
 #include "autogen/hardware.json.hh"
 #include "processor.hh"
+#include "cpuid.hh"
 #include <osv/sched.hh>
 #include <osv/firmware.hh>
 #include <osv/hypervisor.hh>
