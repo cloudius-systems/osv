@@ -18,6 +18,7 @@
 #include <sys/sysinfo.h>
 #include <fstream>
 #include <osv/firmware.hh>
+#include <osv/hypervisor.hh>
 #include <osv/sched.hh>
 #include <osv/clock.hh>
 #include "java_api.hh"
@@ -75,7 +76,7 @@ static void fill_data(data_container& data, const string& uuid)
         ("/os/memory/free", to_string(info.freeram))
         ("/os/cmdline", osv::getcmdline())
         ("/os/dmesg", debug_buffer_str)
-        ("/hardware/hypervisor", osv::firmware_vendor())
+        ("/hardware/hypervisor", osv::hypervisor_name())
         ("/hardware/processor/count", to_string(sched::cpus.size()));
     if (java_api::instance().is_valid()) {
         data("/jvm/version", java_api::instance().get_system_property("java.version"));
