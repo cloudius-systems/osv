@@ -13,5 +13,5 @@
         "${OSV_BASE}/modules"
     ]
    },
-   "default": [ "cloud-init", "httpserver" ]
+   "default": [ "cloud-init", "httpserver", "monitoring-agent" ]
 }
