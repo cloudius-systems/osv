@@ -14,4 +14,9 @@ hypervisor_type hypervisor()
     return hypervisor_type::unknown;
 }
 
+std::string hypervisor_name()
+{
+    return "Unknown";
+}
+
 }

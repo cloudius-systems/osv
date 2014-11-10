@@ -8,6 +8,8 @@
 #ifndef OSV_HYPERVISOR_HH
 #define OSV_HYPERVISOR_HH
 
+#include <string>
+
 namespace osv {
 
 enum class hypervisor_type {
@@ -19,6 +21,8 @@ enum class hypervisor_type {
 };
 
 hypervisor_type hypervisor();
+
+std::string hypervisor_name();
 
 }
 

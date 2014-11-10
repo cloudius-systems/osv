@@ -43,9 +43,9 @@
             "operations": [
                 {
                     "method": "GET",
-                    "summary": "Return the Hypervisor type",
+                    "summary": "Returns name of the hypervisor OSv is running on.",
                     "type": "string",
-                    "nickname" : "get_hypervisor",
+                    "nickname" : "hypervisor_name",
                     "produces": [
                         "application/json"
                     ]
