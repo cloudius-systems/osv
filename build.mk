@@ -977,10 +977,10 @@ loader.elf: arch/$(arch)/boot.o arch/$(arch)/loader.ld loader.o runtime.o $(driv
 	      $(boost-libs) \
 	    --no-whole-archive, \
 		LD $@)
-	# Build libosv.so matching this loader.elf. This is not a separate
-	# rule because that caused bug #545.
-	$(call quiet, readelf --dyn-syms loader.elf > osv.syms)
-	$(call quiet, $(src)/scripts/libosv.py osv.syms libosv.ld `$(src)/scripts/osv-version.sh` | $(CC) -c -o osv.o -x assembler -)
+	@# Build libosv.so matching this loader.elf. This is not a separate
+	@# rule because that caused bug #545.
+	@readelf --dyn-syms loader.elf > osv.syms
+	@$(src)/scripts/libosv.py osv.syms libosv.ld `$(src)/scripts/osv-version.sh` | $(CC) -c -o osv.o -x assembler -
 	$(call quiet, $(CC) osv.o -nostdlib -shared -o libosv.so -T libosv.ld, LIBOSV.SO)
 
 bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
