@@ -28,7 +28,7 @@
 #include <iterator>
 #include <unordered_map>
 
-namespace monitoring_agenet {
+namespace monitoring_agent {
 
 
 enum http_status {

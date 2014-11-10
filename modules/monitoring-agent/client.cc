@@ -11,7 +11,7 @@
 #include <fstream>
 #include <sstream>
 
-namespace monitoring_agenet {
+namespace monitoring_agent {
 
 using boost::asio::ip::tcp;
 using boost::asio::deadline_timer;
@@ -20,10 +20,9 @@ class connection_exception : public std::exception {
 public:
     connection_exception(const std::string& msg)
         : msg(msg)
-    {
-    }
-    virtual const char* what() const throw ()
-    {
+    { }
+
+    virtual const char* what() const throw () {
         return msg.c_str();
     }
 private:
@@ -31,10 +30,10 @@ private:
 };
 
 client::client(int _time_out)
-    : status_code(0), _socket(io_service), time_out(_time_out)
-{
-
-}
+    : status_code(0)
+    , _socket(io_service)
+    , time_out(_time_out)
+{ }
 
 template<typename Duration>
 static void connect_with_timeout(boost::asio::io_service& io_service,
@@ -51,8 +50,7 @@ static void connect_with_timeout(boost::asio::io_service& io_service,
         }
     });
 
-    _socket.async_connect(_endpoint,
-    [&] (const boost::system::error_code& error_code) {
+    _socket.async_connect(_endpoint, [&](const boost::system::error_code& error_code) {
         timeout.cancel();
         ec = error_code;
     });

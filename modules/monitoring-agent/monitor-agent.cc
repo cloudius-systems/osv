@@ -1,10 +1,12 @@
 /*
- * monitor-agent.cc
+ * Copyright (C) 2014 Cloudius Systems, Ltd.
  *
- *  Created on: Nov 4, 2014
- *      Author: amnon
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
  */
+
 #include "monitor-agent.hh"
+
 #include "client.hh"
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -23,10 +25,9 @@
 
 using namespace std;
 
-namespace monitoring_agenet {
+namespace monitoring_agent {
 
-monitor_agent::monitor_agent(
-        const boost::program_options::variables_map& _conf)
+monitor_agent::monitor_agent(const boost::program_options::variables_map& _conf)
 {
     config.bucket = _conf["bucket"].as<std::string>();
     config.local_file_name = _conf["file"].as<std::string>();
@@ -43,13 +44,11 @@ static string get_uuid()
 
 class data_container {
 public:
-    data_container& operator()(const string& key, const string& value)
-    {
+    data_container& operator()(const string& key, const string& value) {
         data << key << ":" << value << endl;
         return *this;
     }
-    string str() const
-    {
+    string str() const {
         return data.str();
     }
 private:
@@ -62,18 +61,16 @@ static void fill_data(data_container& data, const string& uuid)
     struct sysinfo info;
     sysinfo(&info);
     data("uuid", uuid)
-    ("/os/name", "OSv")
-    ("/os/version", osv::version())
-    ("/os/date", to_string(duration_cast<milliseconds>
-            (osv::clock::wall::now().time_since_epoch()).count()))
-    ("/os/memory/total", to_string(info.totalram))
-    ("/os/memory/free", to_string(info.freeram))
-    ("/os/cmdline", osv::getcmdline())
-    ("/hardware/hypervisor", osv::firmware_vendor())
-    ("/hardware/processor/count", to_string(sched::cpus.size()));
+        ("/os/name", "OSv")
+        ("/os/version", osv::version())
+        ("/os/date", to_string(duration_cast<milliseconds>(osv::clock::wall::now().time_since_epoch()).count()))
+        ("/os/memory/total", to_string(info.totalram))
+        ("/os/memory/free", to_string(info.freeram))
+        ("/os/cmdline", osv::getcmdline())
+        ("/hardware/hypervisor", osv::firmware_vendor())
+        ("/hardware/processor/count", to_string(sched::cpus.size()));
     if (java_api::instance().is_valid()) {
-        data("/jvm/version",
-                java_api::instance().get_system_property("java.version"));
+        data("/jvm/version", java_api::instance().get_system_property("java.version"));
     }
 }
 
@@ -93,13 +90,14 @@ void monitor_agent::run()
 
     data_container data;
     fill_data(data, s);
-    c.upload(config.bucket + ".s3.amazonaws.com", "/", 80, s + ".txt", "",
-            data.str());
+
+    c.upload(config.bucket + ".s3.amazonaws.com", "/", 80, s + ".txt", "", data.str());
+
     store_local(data, config.local_file_name);
     debug("This is a beta build of OSv. This version will send a report "
-                    "each time it is booted to Cloudius Systems.  For more on "
-                    "information collected, how and why it is stored, and how to "
-                    "disable reporting, see osv.io/osv-stat\n");
+          "each time it is booted to Cloudius Systems.  For more on "
+          "information collected, how and why it is stored, and how to "
+          "disable reporting, see osv.io/osv-stat\n");
 }
 
 }
