@@ -407,7 +407,7 @@ endif
 
 ifeq ($(arch),x64)
 
-kernel_base := 0x200000
+kernel_base := 0x2000000
 
 all: loader.img loader.bin usr.img
 
