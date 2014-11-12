@@ -56,7 +56,8 @@ libc += dirent/fdopendir.o
 
 libc += env/__environ.o
 musl += env/clearenv.o
-libc += env/getenv.o
+musl += env/getenv.o
+libc += env/secure_getenv.o
 musl += env/putenv.o
 musl += env/setenv.o
 musl += env/unsetenv.o
