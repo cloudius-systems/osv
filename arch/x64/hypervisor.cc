@@ -7,6 +7,8 @@
 
 #include <osv/hypervisor.hh>
 
+#include <osv/firmware.hh>
+
 #include "cpuid.hh"
 
 namespace osv {
@@ -16,7 +18,7 @@ hypervisor_type hypervisor()
     if (processor::features().kvm_clocksource || processor::features().kvm_clocksource2) {
         return hypervisor_type::kvm;
     }
-    if (processor::features().xen_clocksource) {
+    if (processor::features().xen_clocksource || firmware_vendor() == "Xen") {
         return hypervisor_type::xen;
     }
     return hypervisor_type::unknown;
