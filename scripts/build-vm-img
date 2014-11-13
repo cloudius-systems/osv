@@ -3,14 +3,14 @@ set -e
 
 version=$(`dirname $0`/osv-version.sh)
 name=$1
-modules=$2
+image=$2
 description=$3
 out=build/standalone/$name
-build="make modules=$modules"
+build="make image=$image"
 
 function usage()
 {
-	echo "Usage: scripts/build-standalone-img [name] [modules] [description]"
+	echo "Usage: scripts/build-standalone-img [name] [image] [description]"
 	exit 1
 }
 
