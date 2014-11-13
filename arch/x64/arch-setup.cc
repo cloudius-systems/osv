@@ -196,11 +196,12 @@ void arch_setup_free_memory()
     });
 }
 
-void arch_setup_tls(void *tls, void *start, size_t size)
+void arch_setup_tls(void *tls, const elf::tls_data& info)
 {
     struct thread_control_block *tcb;
-    memcpy(tls, start, size);
-    tcb = (struct thread_control_block *)(tls + size);
+    memcpy(tls, info.start, info.filesize);
+    memset(tls + info.filesize, 0, info.size - info.filesize);
+    tcb = (struct thread_control_block *)(tls + info.size);
     tcb->self = tcb;
     processor::wrmsr(msr::IA32_FS_BASE, reinterpret_cast<uint64_t>(tcb));
 }

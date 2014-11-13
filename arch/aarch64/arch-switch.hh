@@ -94,7 +94,7 @@ void thread::setup_tcb()
 
     _tcb = (thread_control_block *)p;
     _tcb[0].tls_base = &_tcb[1];
-    memcpy(&_tcb[1], sched::tls.start, sched::tls.size);
+    memcpy(&_tcb[1], sched::tls.start, sched::tls.filesize);
 }
 
 void thread::free_tcb()

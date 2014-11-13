@@ -121,7 +121,8 @@ void thread::setup_tcb()
     assert(tls.size);
     // FIXME: respect alignment
     void* p = malloc(sched::tls.size + sizeof(*_tcb));
-    memcpy(p, sched::tls.start, sched::tls.size);
+    memcpy(p, sched::tls.start, sched::tls.filesize);
+    memset(p + sched::tls.filesize, 0, sched::tls.size - sched::tls.filesize);
     _tcb = static_cast<thread_control_block*>(p + tls.size);
     _tcb->self = _tcb;
     _tcb->tls_base = p;

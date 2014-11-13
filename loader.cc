@@ -72,10 +72,9 @@ void setup_tls(elf::init_table inittab)
 {
     tls_data = inittab.tls;
     sched::init_tls(tls_data);
-    memset(tls_data.start + tls_data.filesize, 0, tls_data.size - tls_data.filesize);
 
     extern char tcb0[]; // defined by linker script
-    arch_setup_tls(tcb0, inittab.tls.start, inittab.tls.size);
+    arch_setup_tls(tcb0, tls_data);
 }
 
 extern "C" {

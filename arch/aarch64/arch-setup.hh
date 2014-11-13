@@ -13,9 +13,11 @@
 #include "arch-tls.hh"
 #include <string>
 
+#include <osv/elf.hh>
+
 void arch_init_early_console();
 void arch_init_premain();
-void arch_setup_tls(void *tls, void *start, size_t size);
+void arch_setup_tls(void *tls, const elf::tls_data& info);
 
 void arch_setup_free_memory();
 void arch_init_drivers();

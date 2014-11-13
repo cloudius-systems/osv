@@ -79,15 +79,15 @@ void arch_setup_free_memory()
     osv::parse_cmdline(cmdline);
 }
 
-void arch_setup_tls(void *tls, void *start, size_t size)
+void arch_setup_tls(void *tls, const elf::tls_data& info)
 {
     struct thread_control_block *tcb;
-    memset(tls, 0, size + 1024);
+    memset(tls, 0, info.size + 1024);
 
     tcb = (thread_control_block *)tls;
     tcb[0].tls_base = &tcb[1];
 
-    memcpy(&tcb[1], start, size);
+    memcpy(&tcb[1], info.start, info.filesize);
     asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(tcb) : "memory");
 
     /* check that the tls variable preempt_counter is correct */
