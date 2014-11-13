@@ -1697,7 +1697,7 @@ void* realloc(void* v, size_t size)
     if (!v)
         return malloc(size, alignment);
     if (!size) {
-        free(v);
+        ::free(v);
         return nullptr;
     }
     auto h = static_cast<header*>(v - pad_before);
@@ -1707,7 +1707,7 @@ void* realloc(void* v, size_t size)
     if (!n)
         return nullptr;
     memcpy(n, v, h->size);
-    free(v);
+    ::free(v);
     return n;
 }
 
