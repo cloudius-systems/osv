@@ -54,6 +54,12 @@ TRACEPOINT(trace_memory_huge_failure, "page ranges=%d", unsigned long);
 TRACEPOINT(trace_memory_reclaim, "shrinker %s, target=%d, delta=%d", const char *, long, long);
 TRACEPOINT(trace_memory_wait, "allocation size=%d", size_t);
 
+namespace dbg {
+
+static size_t object_size(void* v);
+
+}
+
 std::atomic<unsigned int> smp_allocator_cnt{};
 bool smp_allocator = false;
 unsigned char *osv_reclaimer_thread;
@@ -1554,6 +1560,8 @@ static size_t object_size(void *object)
         return memory::pool::from_object(object)->get_size();
     case mmu::mem_area::page:
         return mmu::page_size;
+    case mmu::mem_area::debug:
+        return dbg::object_size(object);
     default:
         abort();
     }
@@ -1688,27 +1696,9 @@ void free(void* v)
     }
 }
 
-void* realloc(void* v, size_t size)
+static inline size_t object_size(void* v)
 {
-    auto alignment = alignof(max_align_t);
-    if (alignment > size) {
-        alignment = 1ul << ilog2_roundup(size);
-    }
-    if (!v)
-        return malloc(size, alignment);
-    if (!size) {
-        ::free(v);
-        return nullptr;
-    }
-    auto h = static_cast<header*>(v - pad_before);
-    if (h->size >= size)
-        return v;
-    void* n = malloc(size, alignment);
-    if (!n)
-        return nullptr;
-    memcpy(n, v, h->size);
-    ::free(v);
-    return n;
+    return static_cast<header*>(v - pad_before)->size;
 }
 
 }
@@ -1733,12 +1723,7 @@ void* malloc(size_t size)
 
 void* realloc(void* obj, size_t size)
 {
-#if CONF_debug_memory == 0
     void* buf = std_realloc(obj, size);
-#else
-    void* buf = dbg::realloc(obj, size);
-#endif
-
     trace_memory_realloc(obj, size, buf);
     return buf;
 }
