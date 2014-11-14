@@ -1081,7 +1081,9 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         loaded_objects.push_back(ef);
         ef->load_needed(loaded_objects);
         ef->relocate();
-        ef->fix_permissions();
+        if (ef->is_dynamic()) {
+            ef->fix_permissions();
+        }
         _files[name] = ef;
         _files[ef->soname()] = ef;
         return ef;
