@@ -188,6 +188,11 @@ void* object::entry_point() const {
     return nullptr;
 }
 
+bool object::is_dynamic() const
+{
+    return _ehdr.e_type == ET_DYN;
+}
+
 file::file(program& prog, ::fileref f, std::string pathname)
     : object(prog, pathname)
     , _f(f)
@@ -278,6 +283,15 @@ void object::set_base(void* base)
                                   { return a.p_type == PT_LOAD
                                         && a.p_vaddr > b.p_vaddr; });
     _end = _base + q->p_vaddr + q->p_memsz;
+}
+
+Elf64_Addr object::base_addr() const
+{
+    auto p = std::min_element(_phdrs.begin(), _phdrs.end(),
+                              [](Elf64_Phdr a, Elf64_Phdr b)
+                                  { return a.p_type == PT_LOAD
+                                        && a.p_vaddr < b.p_vaddr; });
+    return p->p_vaddr;
 }
 
 void* object::base() const
@@ -1040,7 +1054,12 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         trace_elf_load(name.c_str());
         auto ef = std::shared_ptr<object>(new file(*this, f, name),
                 [=](object *obj) { remove_object(obj); });
-        ef->set_base(_next_alloc);
+        if (ef->is_dynamic()) {
+            ef->set_base(_next_alloc);
+        } else {
+            auto base = ef->base_addr();
+            ef->set_base(reinterpret_cast<void*>(base));
+        }
         ef->setprivate(true);
         // We need to push the object at the end of the list (so that the main
         // shared object gets searched before the shared libraries it uses),
@@ -1055,7 +1074,9 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         _modules_rcu.assign(new_modules.release());
         osv::rcu_dispose(old_modules);
         ef->load_segments();
-        _next_alloc = ef->end();
+        if (ef->is_dynamic()) {
+            _next_alloc = ef->end();
+        }
         add_debugger_obj(ef.get());
         loaded_objects.push_back(ef);
         ef->load_needed(loaded_objects);
