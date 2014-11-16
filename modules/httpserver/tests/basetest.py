@@ -130,7 +130,7 @@ class Basetest(unittest.TestCase):
         if cls.config.connect:
             return
 
-        path = cls.path_by_nick(cls.os_api, "os_shutdown")
+        path = cls.path_by_nick(cls.os_api, "os_poweroff")
         try:
             cls.curl(path, method='POST')
         except:
