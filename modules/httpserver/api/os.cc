@@ -84,6 +84,11 @@ void init(routes& routes)
         return "";
     });
 
+    os_poweroff.set_handler([](const_req req) {
+            osv::poweroff();
+            return "";
+        });
+
     os_reboot.set_handler([](const_req req) {
         osv::reboot();
         return "";

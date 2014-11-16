@@ -143,6 +143,20 @@
             ]
         },
         {
+            "path": "/os/poweroff",
+            "operations": [
+                {
+                    "method": "POST",
+                    "summary": "Power off the system",
+                    "type": "void",
+                    "nickname": "os_poweroff",
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+	    ]
+	    },
+        {
             "path": "/os/shutdown",
             "operations": [
                 {
