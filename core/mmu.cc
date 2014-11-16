@@ -702,10 +702,15 @@ public:
             }
             ptep.write(make_empty_pte<1>());
             osv::rcu_defer([](void *page) { memory::free_page(page); }, phys_to_virt(old.addr()));
+            do_flush = true;
         }
     }
+    bool tlb_flush_needed() { return do_flush; }
+    void finalize() {}
+    ulong account_results(void) { return 0; }
 private:
     unsigned live_ptes;
+    bool do_flush = false;
 };
 
 class virt_to_pte_map_rcu :
@@ -1030,8 +1035,7 @@ void vcleanup(void* addr, size_t size)
     assert(!in_vma_range(addr));
     WITH_LOCK(page_table_high_mutex) {
         cleanup_intermediate_pages cleaner;
-        map_range(reinterpret_cast<uintptr_t>(addr), reinterpret_cast<uintptr_t>(addr), size,
-                cleaner, huge_page_size);
+        operate_range(cleaner, addr, addr, size);
     }
 }
 
