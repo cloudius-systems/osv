@@ -15,7 +15,7 @@
                     "method": "PUT",
                     "summary": "Start an application",
                     "notes": "Run an application with its command line parameters",
-                    "responseClass": "string",
+                    "type": "string",
                     "nickname": "run_app",
                     "produces": [
                         "application/json",
@@ -27,7 +27,7 @@
                                      "description": "command with its parameters",
                                      "required": true,
                                      "allowMultiple":false,
-                                     "dataType":"string",
+                                     "type":"string",
                                      "paramType":"query"
                                }
                     ]
