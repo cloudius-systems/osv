@@ -38,14 +38,18 @@ extern "C" long gettid()
 static std::unordered_map<void*, waitqueue> queues;
 static mutex queues_mutex;
 enum {
-    FUTEX_WAIT = 0,
-    FUTEX_WAKE = 1,
+    FUTEX_WAIT           = 0,
+    FUTEX_WAKE           = 1,
+    FUTEX_PRIVATE_FLAG   = 128,
+    FUTEX_CLOCK_REALTIME = 256,
+    FUTEX_CMD_MASK       = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
 };
 
 int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         int *uaddr2, int val3)
 {
-    switch (op) {
+    auto cmd = op & FUTEX_CMD_MASK;
+    switch (cmd) {
     case FUTEX_WAIT:
         assert(timeout == 0);
         WITH_LOCK(queues_mutex) {
